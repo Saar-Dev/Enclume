@@ -1655,10 +1655,10 @@ export default function Editor3D({
   }, [surfaceConnectorPanel, surfaceTool?.mode])
 
   useEffect(() => {
-    const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
-      && surfaceTool?.connectorType === 'door'
+    const placingOpeningOnSelectedWall = surfaceTool?.mode === 'connector'
+      && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
-    if (surfaceTool?.mode === 'select' || placingDoorOnSelectedWall) return
+    if (surfaceTool?.mode === 'select' || placingOpeningOnSelectedWall) return
     setSurfaceRoomPanel(null)
     setSurfaceWallPanel(null)
   }, [surfaceTool?.connectorType, surfaceTool?.connectorWallEdgeKeys, surfaceTool?.mode])

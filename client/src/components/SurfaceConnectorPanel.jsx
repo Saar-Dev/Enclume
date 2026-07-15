@@ -38,6 +38,9 @@ function connectorBlockingForState(type, state) {
 
 function connectorTypeLabel(type) {
   if (type === 'door') return 'Porte'
+  if (type === 'window') return 'Fenêtre'
+  if (type === 'screen-window') return 'Fenêtre écran'
+  if (type === 'skylight') return 'Verrière'
   if (type === 'elevator') return 'Ascenseur'
   if (type === 'ladder') return 'Échelle'
   return type
@@ -111,6 +114,7 @@ export default function SurfaceConnectorPanel({
   onClose,
   runtimeState = null,
   onElevatorCommand = null,
+  onWindowStateChange = null,
   canEdit = true,
   canAdminElevator = canEdit,
 }) {
@@ -135,6 +139,19 @@ export default function SurfaceConnectorPanel({
     onPatch?.(connector.id, {
       modelMaterialOverrides: clearMaterialSlotOverride(materialOverrides, slot),
     })
+  }
+
+  const isWindow = ['window', 'screen-window'].includes(connector.type)
+  const allowedWindowStates = Array.isArray(connector.allowedStates)
+    ? connector.allowedStates
+    : ['transparent', ...(connector.type === 'screen-window' ? ['opaque', 'mirror'] : [])]
+  const currentWindowState = runtimeState?.state || connector.state || 'transparent'
+  const toggleAllowedState = state => {
+    if (state === 'transparent') return
+    const next = allowedWindowStates.includes(state)
+      ? allowedWindowStates.filter(item => item !== state)
+      : [...allowedWindowStates, state]
+    onPatch?.(connector.id, { allowedStates: ['transparent', ...next.filter(item => item !== 'transparent')] })
   }
 
   const patchState = (state) => {
@@ -178,6 +195,42 @@ export default function SurfaceConnectorPanel({
               <option value="locked">Verrouillée</option>
             </select>
           </label>
+        )}
+
+        {isWindow && (
+          <div style={S.field}>
+            <span style={S.label}>États disponibles</span>
+            {[
+              ['transparent', 'Transparent'],
+              ['opaque', 'Opaque'],
+              ['mirror', 'Miroir'],
+            ].map(([state, label]) => {
+              const locked = state === 'transparent' || connector.type === 'window'
+              const enabled = state === 'transparent' || (connector.type === 'screen-window' && allowedWindowStates.includes(state))
+              if (connector.type === 'window' && state !== 'transparent') return null
+              return (
+                <label key={state} style={{ ...S.stateRow, ...(locked ? S.stateRowLocked : {}) }}>
+                  <input type="checkbox" checked={enabled} disabled={!canEdit || locked} onChange={() => toggleAllowedState(state)} />
+                  <span>{label}</span>
+                </label>
+              )
+            })}
+            {!canEdit && connector.type === 'screen-window' && (
+              <div style={S.runtimeActions}>
+                {allowedWindowStates.map(state => (
+                  <button
+                    key={state}
+                    type="button"
+                    disabled={!onWindowStateChange || currentWindowState === state}
+                    onClick={() => onWindowStateChange(connector.worldId || connector.id, state)}
+                    style={{ ...S.runtimeBtn, ...(currentWindowState === state ? S.runtimeBtnCurrent : {}) }}
+                  >
+                    {state === 'transparent' ? 'Transparent' : state === 'opaque' ? 'Opaque' : 'Miroir'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {connector.type === 'elevator' && (
@@ -321,6 +374,8 @@ const S = {
     flexDirection: 'column',
     gap: '5px',
   },
+  stateRow: { display: 'flex', alignItems: 'center', gap: '8px', color: '#cbd5e1', fontSize: '12px' },
+  stateRowLocked: { opacity: 0.55 },
   label: {
     fontSize: '11px',
     color: '#64748b',

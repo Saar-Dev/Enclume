@@ -719,3 +719,77 @@ test('une passerelle est découpée par l arc canonique de la salle', () => {
   assert.ok(bridge.point.x >= bridge.bounds.min.x && bridge.point.x <= bridge.bounds.max.x)
   assert.ok(bridge.point.z >= bridge.bounds.min.z && bridge.point.z <= bridge.bounds.max.z)
 })
+
+test('une fenêtre transparente découpe le mur sans créer de traversée et laisse passer la vue', () => {
+  const featureId = '11111111-1111-5111-8111-111111111111'
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-window',
+    surfaceData: emptySurface({
+      rooms: { roomA: room('roomA', 0, 1) },
+      connectors: {
+        window: {
+          id: 'window', worldId: featureId, type: 'window', axis: 'x', level: 0,
+          x0: 2, x1: 6, z0: 0, z1: 0, alongCenter: 4, y: 0.5,
+          width: 1, depth: 0.08, height: 1.5, thickness: 1,
+          modelGeometry: { openingWidth: 1, wallCutWidth: 1, height: 1.5 },
+          state: 'transparent',
+        },
+      },
+    }),
+  })
+  const windowBarrier = snapshot.spatial.barriers.find(item => item.kind === 'window')
+
+  assert.ok(windowBarrier)
+  assert.deepEqual(windowBarrier.blocks, { movement: true, sight: false, water: true, gas: true })
+  assert.equal(snapshot.spatial.traversals.some(item => item.sourceId === featureId), false)
+  assert.equal(snapshot.spatial.occluders.some(item => item.sourceId === featureId), false)
+})
+
+test('les états opaque et miroir d’une fenêtre-écran bloquent la vue via l’état runtime', () => {
+  const featureId = '22222222-2222-5222-8222-222222222222'
+  const surfaceData = emptySurface({
+    rooms: { roomA: room('roomA', 0, 1) },
+    connectors: {
+      screen: {
+        id: 'screen', worldId: featureId, type: 'screen-window', axis: 'x', level: 0,
+        x0: 2, x1: 6, z0: 0, z1: 0, alongCenter: 4, y: 0.5,
+        width: 1, depth: 0.1, height: 1.5, thickness: 1,
+        modelGeometry: { openingWidth: 1, wallCutWidth: 1, height: 1.5 },
+        state: 'transparent', allowedStates: ['transparent', 'opaque', 'mirror'],
+      },
+    },
+  })
+  for (const state of ['opaque', 'mirror']) {
+    const snapshot = compileSurfaceWorld({
+      battlemapId: `map-screen-${state}`,
+      surfaceData,
+      runtimeState: { featureStates: { [featureId]: { state } } },
+    })
+    const barrier = snapshot.spatial.barriers.find(item => item.kind === 'screen-window')
+    assert.equal(barrier.blocks.sight, true)
+    assert.ok(snapshot.spatial.occluders.some(item => item.sourceId === featureId))
+  }
+})
+
+test('une verrière remplace la dalle opaque par un support transparent praticable', () => {
+  const featureId = '33333333-3333-5333-8333-333333333333'
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-skylight',
+    surfaceData: emptySurface({
+      rooms: { roomA: room('roomA', 0, 1, 0, 1) },
+      connectors: {
+        skylight: {
+          id: 'skylight', worldId: featureId, type: 'skylight',
+          x: 0, z: 0, y: 0, width: 2, depth: 2, height: 0.1,
+        },
+      },
+    }),
+  })
+  const support = snapshot.spatial.supports.find(item => item.kind === 'skylight')
+  const barrier = snapshot.spatial.barriers.find(item => item.kind === 'skylight')
+
+  assert.ok(support?.walkable)
+  assert.deepEqual(barrier.blocks, { movement: true, sight: false, water: true, gas: true })
+  assert.equal(snapshot.spatial.occluders.some(item => item.sourceId === featureId), false)
+  assert.equal(snapshot.spatial.supports.filter(item => item.kind === 'floor').length, 0)
+})

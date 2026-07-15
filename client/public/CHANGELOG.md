@@ -1,3 +1,16 @@
+## v186 — 2026-07-15 — Fenêtres structurelles, fenêtres-écrans et verrières
+
+### Éditeur de monde
+- [feat] Un mur sélectionné peut recevoir une fenêtre fixe ou une fenêtre-écran avec aperçu 3D avant
+  la pose, y compris sur un mur courbe et sur plusieurs étages.
+- [feat] Les fenêtres-écrans proposent trois états : transparent, opaque et miroir. Leur état est
+  sauvegardé et modifie réellement la ligne de vue.
+- [feat] Les salles peuvent recevoir une verrière de sol ou de plafond sur une interface réelle.
+- [fix] Une fenêtre conserve correctement le mur sous son allège et au-dessus de son linteau ; une
+  baie haute n'efface plus les tranches de mur qu'elle ne traverse pas.
+- [fix] Le panneau du mur reste ouvert lors du choix et de la pose d'une fenêtre, avec la sélection
+  et l'aperçu visibles.
+
 ## v185 — 2026-07-13 — Nouvelle apparence : connexion, tableau de bord et paramètres de campagne
 
 ### Client
@@ -1319,4 +1332,3 @@
 - [add] Roster de combat avec vérification équipement pré-combat
 - [add] Fenêtre déclaration PJ (21 actions, multi-select, INI delta)
 - [fix] Distinction PJ / PNJ / Entité de décor (PC27)
-

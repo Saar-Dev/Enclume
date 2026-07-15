@@ -12,6 +12,7 @@ import {
   applyElevatorConnector,
   applyFloorSelection,
   applyLadderConnector,
+  applySkylightConnector,
   applyRoomSelectionWithResult,
   applyStairSelection,
   applyWallDrag,
@@ -32,6 +33,7 @@ import {
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
   makeLadderConnectorFromCell,
+  makeSkylightConnectorFromCell,
   makeWallsFromDrag,
   normalizeSurfaceData,
   parseFloorKey,
@@ -476,14 +478,16 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
     )
   }, [surfaceData])
   if (!drag) return null
-  const connector = surfaceTool?.connectorType === 'door'
+  const connector = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
     ? makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)
+    : surfaceTool?.connectorType === 'skylight'
+      ? makeSkylightConnectorFromCell(surfaceData, drag.end, surfaceTool)
     : surfaceTool?.connectorType === 'ladder'
       ? makeLadderConnectorFromCell(surfaceData, drag.end, surfaceTool)
       : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
   if (!connector) return null
 
-  if (connector.type === 'door') {
+  if (['door', 'window', 'screen-window', 'skylight'].includes(connector.type)) {
     return (
       <ConnectorSegment
         connector={{ id: 'connector-preview', ...connector }}
@@ -720,7 +724,7 @@ export default function SurfaceEditorScene({
       let maxX
       let minZ
       let maxZ
-      if (connector?.type === 'door') {
+      if (['door', 'window', 'screen-window'].includes(connector?.type)) {
         const depth = Math.max(
           0.24,
           Number(connector?.modelGeometry?.depth) || Number(connector?.depth) || (Number(connector?.thickness) || 1) / SURFACE_FINE,
@@ -858,7 +862,7 @@ export default function SurfaceEditorScene({
         return
       }
       const mode = surfaceTool?.mode || 'select'
-      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const placesDoor = mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       const start = placesDoor
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
         : mode === 'wall'
@@ -883,7 +887,7 @@ export default function SurfaceEditorScene({
     const handleMouseMove = (e) => {
       if (!dragRef.current) {
         if (surfaceTool?.mode === 'connector') {
-          const placesDoor = surfaceTool?.connectorType === 'door'
+          const placesDoor = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
           const point = placesDoor
             ? getSelectedDoorWallPoint(e.clientX, e.clientY)
             : getFloorCell(e.clientX, e.clientY)
@@ -903,7 +907,7 @@ export default function SurfaceEditorScene({
       setHoverPreview(prev => (prev ? null : prev))
       if ((e.buttons & 2) !== 0 && cancelDrag(e)) return
       const mode = dragRef.current.mode
-      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const placesDoor = mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       const end = placesDoor
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
         : mode === 'wall'
@@ -911,7 +915,7 @@ export default function SurfaceEditorScene({
           : getFloorCell(e.clientX, e.clientY)
       if (!end) return
       const previousEnd = dragRef.current.end
-      const usesFinePoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
+      const usesFinePoint = mode === 'wall' || (mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType))
       const unchanged = usesFinePoint
         ? previousEnd.fx === end.fx && previousEnd.fz === end.fz
         : previousEnd.x === end.x && previousEnd.z === end.z
@@ -928,7 +932,7 @@ export default function SurfaceEditorScene({
       if (!currentDrag) return
 
       const mode = currentDrag.mode
-      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const placesDoor = mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       const end = placesDoor
         ? (getSelectedDoorWallPoint(e.clientX, e.clientY) || currentDrag.end)
         : mode === 'wall'
@@ -1035,15 +1039,17 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'connector') {
-        const nextData = surfaceTool?.connectorType === 'door'
+        const nextData = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
           ? applyDoorConnector(surfaceData, finalDrag.end, surfaceTool)
+          : surfaceTool?.connectorType === 'skylight'
+            ? applySkylightConnector(surfaceData, finalDrag.end, surfaceTool)
           : surfaceTool?.connectorType === 'ladder'
             ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
             : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
         if (nextData === surfaceData) {
           onSurfaceToolChange?.({
             ...surfaceTool,
-            roomArcError: surfaceTool?.connectorType === 'door'
+            roomArcError: ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
               ? 'La porte doit être posée sur le mur sélectionné.'
               : 'Ce connecteur ne peut pas être posé ici.',
           })
@@ -1153,7 +1159,7 @@ export default function SurfaceEditorScene({
       ? hoverPreview
       : null
   const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
-    && surfaceTool?.connectorType === 'door'
+    && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
     && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
 
   return (

@@ -1362,16 +1362,21 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
+  const [runtimeFeatureStates, setRuntimeFeatureStates] = useState({})
   const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
 
   const refreshRuntimeEffects = useCallback(async () => {
-    if (!battlemap?.id) return setRuntimeEffectRegions([])
+    if (!battlemap?.id) {
+      setRuntimeEffectRegions([])
+      return setRuntimeFeatureStates({})
+    }
     try {
       const { data } = await api.get(`/battlemaps/${battlemap.id}/world-effects`)
       setRuntimeEffectRegions(data.worldEffects?.regions || [])
+      setRuntimeFeatureStates(data.worldEffects?.featureStates || {})
     } catch (error) {
       console.error('[Canvas3D] Erreur chargement effets monde :', error)
     }
@@ -1568,7 +1573,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
-    if (connector?.type !== 'elevator') return
+    if (!['elevator', 'window', 'screen-window'].includes(connector?.type)) return
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
     setSurfaceConnectorPanel({
       connectorId,
@@ -1582,6 +1587,12 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
     await refreshRuntimeElevators()
   }, [battlemap?.id, refreshRuntimeElevators])
+
+  const handleWindowStateChange = useCallback(async (featureId, state) => {
+    if (!battlemap?.id || !featureId) return
+    await api.patch(`/battlemaps/${battlemap.id}/world-windows/${featureId}/state`, { state })
+    await refreshRuntimeEffects()
+  }, [battlemap?.id, refreshRuntimeEffects])
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
@@ -1604,7 +1615,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           runtimeEffectRegions={runtimeEffectRegions}
-          runtimeFeatureStates={runtimeElevatorStates}
+          runtimeFeatureStates={{ ...runtimeFeatureStates, ...runtimeElevatorStates }}
           socket={socket}
           battlemapId={battlemap?.id}
           selectedTokenId={selectedTokenId}
@@ -1641,8 +1652,9 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         connector={selectedSurfaceConnector}
         x={surfaceConnectorPanel.x}
         y={surfaceConnectorPanel.y}
-        runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
+        runtimeState={(selectedSurfaceConnector.type === 'elevator' ? runtimeElevatorStates : runtimeFeatureStates)[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
         onElevatorCommand={handleElevatorCommand}
+        onWindowStateChange={handleWindowStateChange}
         canEdit={false}
         canAdminElevator={isGm}
         onClose={() => setSurfaceConnectorPanel(null)}

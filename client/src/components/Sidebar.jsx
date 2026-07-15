@@ -633,6 +633,15 @@ export default function Sidebar({
         || text.includes('sas')
     })
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const windowConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => blueprint?.geometry?.connectorType === 'window')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const screenWindowConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => blueprint?.geometry?.connectorType === 'screen-window')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const skylightConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => blueprint?.geometry?.connectorType === 'skylight')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
   const elevatorConnectorBlueprints = connectorBlueprints
     .filter(blueprint => {
       const text = normalizedBlueprintText(blueprint)
@@ -660,6 +669,12 @@ export default function Sidebar({
   }
   const connectorChoices = surfaceToolState.connectorType === 'door'
     ? doorConnectorBlueprints
+    : surfaceToolState.connectorType === 'window'
+      ? windowConnectorBlueprints
+      : surfaceToolState.connectorType === 'screen-window'
+        ? screenWindowConnectorBlueprints
+        : surfaceToolState.connectorType === 'skylight'
+          ? skylightConnectorBlueprints
     : surfaceToolState.connectorType === 'ladder'
       ? [...ladderConnectorBlueprints, genericLadderChoice]
       : [...elevatorConnectorBlueprints, genericElevatorChoice]
@@ -1474,11 +1489,28 @@ export default function Sidebar({
                       </label>
                       </div>
                     )}
+                    {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'skylight' && (
+                      <button
+                        type="button"
+                        onClick={() => updateSurfaceTool({
+                          connectorRotationQuarterTurns: ((Number(surfaceToolState.connectorRotationQuarterTurns) || 0) + 1) % 2,
+                        })}
+                        style={styles.roomToolModeBtn}
+                      >
+                        Rotation 90°
+                      </button>
+                    )}
                     {surfaceToolState.mode === 'connector' && (
                       <div style={styles.connectorPicker}>
                         <div style={styles.connectorPickerTitle}>
                           {surfaceToolState.connectorType === 'door'
                             ? t('surfaceEditor.doorModel')
+                            : surfaceToolState.connectorType === 'window'
+                              ? 'Modèle de fenêtre'
+                              : surfaceToolState.connectorType === 'screen-window'
+                                ? 'Modèle de fenêtre écran'
+                                : surfaceToolState.connectorType === 'skylight'
+                                  ? 'Modèle de verrière'
                             : surfaceToolState.connectorType === 'ladder'
                               ? 'Modèle d’échelle'
                               : t('surfaceEditor.elevatorModel')}

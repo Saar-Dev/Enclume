@@ -609,6 +609,31 @@ router.patch('/:id/world-features/:featureId/state', requireAuth, async (req, re
   }
 })
 
+router.patch('/:id/world-windows/:featureId/state', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap } = await battlemapAndMember(req.params.id, req.user.id)
+    const connectors = Object.values(battlemap.surface_data?.connectors || {})
+    const connector = connectors.find(item => String(item?.worldId) === String(req.params.featureId))
+    if (!connector || connector.type !== 'screen-window') throw new AppError(404, 'Fenêtre écran inconnue')
+    const requested = String(req.body?.state || '')
+    const allowedStates = Array.isArray(connector.allowedStates) ? connector.allowedStates : ['transparent']
+    if (!allowedStates.includes(requested)) throw new AppError(400, 'État de fenêtre non autorisé')
+    const outcome = await setWorldFeatureState({
+      battlemapId: battlemap.id,
+      featureId: req.params.featureId,
+      state: { state: requested },
+      userId: req.user.id,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'feature-state',
+      featureId: req.params.featureId,
+    })
+    res.json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
 // GET /api/battlemaps/:id — carte complète avec tokens
 router.get('/:id', requireAuth, async (req, res) => {
   const battlemap = await db('battlemaps')

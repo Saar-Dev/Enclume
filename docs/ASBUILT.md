@@ -1,5 +1,28 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Fenêtres structurelles et verrières (2026-07-15)
+
+L'éditeur Surface v12 possède désormais trois ouvertures structurelles : fenêtre fixe, fenêtre-écran
+à état runtime et verrière horizontale. Elles sont enregistrées comme connecteurs avec UUID stable ;
+leurs GLB restent des apparences et ne deviennent jamais la source de vérité physique.
+
+- les murs droits et courbes sont découpés sur l'intervalle vertical exact de la baie, y compris sur
+  plusieurs niveaux, en conservant allège et linteau ;
+- les fenêtres bloquent mouvement et fluides ; la vue traverse une vitre fixe ou un écran
+  `transparent`, mais pas un écran `opaque` ou `mirror` ;
+- l'état des fenêtres-écrans est persisté dans `world_feature_states`, révisé et diffusé par
+  WebSocket ;
+- les verrières remplacent uniquement un vrai sol/plafond, fournissent un support praticable,
+  laissent passer la vue et bloquent déplacement vertical et fluides ;
+- le pack `output/structural_windows` fournit 20 modèles intégrés : 8 fenêtres, 8 écrans et
+  4 verrières, générables par `tools/generate-structural-windows.mjs`.
+
+Validation : 31 tests Surface, suite monde/serveur complète, configuration serveur, build Vite,
+smoke Playwright et scénario réel création/sauvegarde/état runtime/pose avec aperçu GLB. Le scénario
+refuse également un état non autorisé et une verrière flottant dans une tranche vide.
+
+---
+
 ## Création de l'instance de fusion commune (2026-07-15)
 
 La fusion dispose désormais d'un troisième environnement indépendant. Les deux environnements de

@@ -11,6 +11,7 @@ import {
   computeSurfaceWaterCells,
   deleteRoomBoundaryWalls,
   deleteSurfaceRoom,
+  eraseSurfaceSelection,
   expandRoomsToSurface,
   findRoomAtCell,
   getRoomFootprintCells,
@@ -18,10 +19,12 @@ import {
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
   makeDoorConnectorFromWallPoint,
+  makeSkylightConnectorFromCell,
   makeWallsFromDrag,
   roomFootprintRectangles,
   roomsWallRenderPaths,
   roomsWallSegments,
+  wallOpeningVerticalRange,
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
 import {
@@ -279,7 +282,7 @@ test('une porte rigide bloque le changement de profil vertical de son mur', () =
     { type: 'curved', depth: 0.6, direction: 1 },
   )
 
-  assert.match(result.error, /porte/i)
+  assert.match(result.error, /ouverture rigide/i)
   assert.equal(result.surfaceData.rooms.guarded.wallElevationProfiles, undefined)
 })
 
@@ -425,7 +428,7 @@ test('une porte existante empêche de courber son mur porteur', () => {
     },
   }), 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
-  assert.match(result.error, /porte/)
+  assert.match(result.error, /ouverture rigide/i)
 })
 
 test('une coupe qui separe une ancienne salle cree des composantes independantes', () => {
@@ -671,6 +674,33 @@ test('une porte sur un arc utilise le point, la tangente et la normale du mur ca
   ) - Number(curvePanel.curveRadius)) < 1e-6)
   assert.equal(roomsWallRenderPaths(surface.rooms).filter(wall => wall.axis === 'arc').length, 1)
 
+  const screenWindow = makeDoorConnectorFromWallPoint(surface, wallPoint, {
+    selectedRoomId: 'rounded',
+    level: 0,
+    connectorType: 'screen-window',
+    connectorWallEdgeKeys: selected,
+    connectorModelGeometry: { width: 0.8, depth: 0.12, height: 1.5, openingBottom: 0.5 },
+  })
+  assert.equal(screenWindow.type, 'screen-window')
+  assert.equal(screenWindow.y, 0.5)
+  assert.deepEqual(screenWindow.allowedStates, ['transparent'])
+
+  const configuredScreenWindow = makeDoorConnectorFromWallPoint(surface, wallPoint, {
+    selectedRoomId: 'rounded',
+    level: 0,
+    connectorType: 'screen-window',
+    connectorWallEdgeKeys: selected,
+    connectorModelGeometry: {
+      width: 0.8,
+      depth: 0.12,
+      height: 1.5,
+      openingBottom: 0,
+      allowedStates: ['transparent', 'opaque', 'mirror', 'unsupported'],
+    },
+  })
+  assert.equal(configuredScreenWindow.y, 0)
+  assert.deepEqual(configuredScreenWindow.allowedStates, ['transparent', 'opaque', 'mirror'])
+
   const unrelatedWall = getRoomBoundaryWallRuns(rounded)
     .find(wall => wall.side === 'east')
   assert.equal(makeDoorConnectorFromWallPoint(surface, wallPoint, {
@@ -710,4 +740,65 @@ test('les tranches verticales d un mur partagent une façade de rendu unique', (
   }
   assert.equal(byFacade.size, 4)
   assert.ok([...byFacade.values()].every(walls => walls.length === 3))
+})
+
+test('une ouverture murale ne découpe que les tranches verticales réellement traversées', () => {
+  const twoLevelWindow = { y: 1, height: 3, modelGeometry: { height: 3 } }
+  assert.deepEqual(wallOpeningVerticalRange(twoLevelWindow, { y: 0, height: 2.5 }), {
+    wallBottom: 0,
+    wallTop: 2.5,
+    bottom: 1,
+    top: 2.5,
+  })
+  assert.deepEqual(wallOpeningVerticalRange(twoLevelWindow, { y: 2.5, height: 2.5 }), {
+    wallBottom: 2.5,
+    wallTop: 5,
+    bottom: 2.5,
+    top: 4,
+  })
+  assert.equal(wallOpeningVerticalRange(twoLevelWindow, { y: 5, height: 2.5 }), null)
+
+  const door = { y: 0, height: 2 }
+  assert.ok(wallOpeningVerticalRange(door, { y: 0, height: 2.5 }))
+  assert.equal(wallOpeningVerticalRange(door, { y: 2.5, height: 2.5 }), null)
+})
+
+test('la gomme d étage supprime une fenêtre surélevée sans toucher un connecteur hors zone', () => {
+  const surface = emptySurface({
+    connectors: {
+      window: {
+        type: 'window', level: 0, y: 0.5, axis: 'x',
+        x0: 0, x1: 4, z0: 0, z1: 0, width: 1, depth: 0.1,
+      },
+      remote: {
+        type: 'screen-window', level: 0, y: 0.5, axis: 'x',
+        x0: 20, x1: 24, z0: 20, z1: 20, width: 1, depth: 0.1,
+      },
+    },
+  })
+  const erased = eraseSurfaceSelection(
+    surface,
+    { start: { x: 0, z: 0 }, end: { x: 0, z: 0 } },
+    { level: 0 },
+  )
+
+  assert.equal(erased.connectors.window, undefined)
+  assert.ok(erased.connectors.remote)
+})
+
+test('une verrière exige une vraie interface horizontale et jamais un niveau vide d une salle haute', () => {
+  const tallRoom = { ...room('well', 0, 2), cells: ['0:0'] }
+  const surface = emptySurface({ rooms: { well: tallRoom } })
+  const tool = {
+    selectedRoomId: 'well',
+    connectorType: 'skylight',
+    connectorModelGeometry: { width: 1, depth: 1, height: 0.1 },
+  }
+
+  assert.ok(makeSkylightConnectorFromCell(surface, { x: 0, z: 0 }, { ...tool, level: 0 }))
+  assert.equal(makeSkylightConnectorFromCell(surface, { x: 0, z: 0 }, { ...tool, level: 1 }), null)
+  const ceilingSkylight = makeSkylightConnectorFromCell(surface, { x: 0, z: 0 }, { ...tool, level: 2 })
+  assert.ok(ceilingSkylight)
+  assert.equal(ceilingSkylight.y, 5)
+  assert.deepEqual(ceilingSkylight.roomIds, ['well'])
 })

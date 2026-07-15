@@ -53,10 +53,17 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
       roomArcError: null,
     })
   }
-  const startDoorPlacement = () => onPatch?.({
+  const startWallOpeningPlacement = connectorType => onPatch?.({
     mode: 'connector',
-    connectorType: 'door',
+    connectorType,
     connectorWallEdgeKeys: [...selectedKeys],
+    connectorBlueprintId: null,
+    connectorModelLabel: null,
+    connectorModelCategory: null,
+    connectorModelGlbUrl: null,
+    connectorModelBuiltinKey: null,
+    connectorModelGeometry: null,
+    connectorMaterialOverrides: {},
   })
 
   return (
@@ -187,10 +194,26 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           <button
             type="button"
             disabled={selectedRuns.length !== 1}
-            onClick={startDoorPlacement}
+            onClick={() => startWallOpeningPlacement('door')}
             style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 ? S.disabled : {}) }}
           >
             Ajouter une porte
+          </button>
+          <button
+            type="button"
+            disabled={selectedRuns.length !== 1}
+            onClick={() => startWallOpeningPlacement('window')}
+            style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 ? S.disabled : {}) }}
+          >
+            Ajouter une fenêtre
+          </button>
+          <button
+            type="button"
+            disabled={selectedRuns.length !== 1}
+            onClick={() => startWallOpeningPlacement('screen-window')}
+            style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 ? S.disabled : {}) }}
+          >
+            Ajouter une fenêtre écran
           </button>
           {selectedRuns.length !== 1 && <p style={S.hint}>Sélectionne un seul mur pour y ajouter une porte.</p>}
         </FloatingPanelSection>

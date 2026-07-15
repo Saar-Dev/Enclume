@@ -359,9 +359,10 @@ Les couleurs de composants GLB sont également une apparence de connecteur. Les 
 
 En mode sélection, cliquer sur un connecteur 3D ouvre un panneau flottant avec ses caractéristiques métier et ses options d’apparence : type, étage, dimensions, état de porte et couleurs exposées par les slots du modèle.
 
-### Découpe de mur par une porte
+### Découpe de mur par une ouverture rigide
 
-Une porte ne supprime pas un panneau de mur complet. Elle crée une ouverture limitée à son emprise :
+Une porte ou une fenêtre ne supprime pas un panneau de mur complet. Elle crée une ouverture limitée
+à son emprise :
 
 - largeur/profondeur/hauteur prises depuis la géométrie déclarée du modèle, sans conversion axe par axe avec la grille ;
 - distinction entre `openingWidth` (passage/panneau utile) et `wallCutWidth` / empreinte extérieure (cadre complet à dégager dans le mur) ;
@@ -389,9 +390,29 @@ ses UV avancent selon la longueur de l'arc. Une texture traverse ainsi la courbe
 chaque ancien segment. Le nombre de subdivisions du mesh reste un détail de rendu réglable et ne
 change jamais la géométrie du monde.
 
-Important : la découpe de porte doit être appliquée à toutes les familles de murs rendues
+Important : la découpe d'ouverture doit être appliquée à toutes les familles de murs rendues
 (`roomsWallRenderPaths(...)` et `surface.walls`). Sinon un mur persistant non découpé peut rester
 affiché derrière le connecteur et donner l’impression que le trou n’a pas changé.
+
+Pour `window` et `screen-window`, `openingBottom` définit l'allège et `openingHeight` la hauteur de
+baie. La découpe conserve donc le mur sous la fenêtre et le linteau au-dessus. Si la baie traverse
+plusieurs étages, chaque tranche verticale ne reçoit que l'intersection avec ce même intervalle
+continu : le profil n'est ni répété par étage, ni appliqué à une tranche qu'il ne touche pas.
+
+`window` est une vitre fixe. `screen-window` conserve ses états autorisés dans le blueprint et son
+état courant dans `world_feature_states` ; `transparent` laisse passer la vue, `opaque` et `mirror`
+l'occultent. Dans tous les cas la baie reste bloquante pour le déplacement et les fluides, sans
+traversée de navigation.
+
+### Verrières de sol et de plafond
+
+Une verrière `skylight` se pose depuis une salle, mais doit remplacer une interface horizontale
+réelle : sol de la salle, plafond de la salle ou interface commune entre deux salles superposées.
+La validation refuse une verrière flottant au milieu du volume vide d'une salle multi-hauteur.
+L'empreinte canonique, en cases, sert simultanément à la découpe de dalle, au support praticable et
+à l'occlusion. Une verrière laisse passer la ligne de vue tout en bloquant la traversée verticale et
+les fluides. Les interfaces courbes ou déjà découpées restent refusées tant que la découpe
+polygonale des dalles ne peut pas être produite depuis la même géométrie canonique.
 
 ## Connecteurs d’étages longs
 

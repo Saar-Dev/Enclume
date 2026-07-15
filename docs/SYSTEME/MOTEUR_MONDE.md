@@ -428,6 +428,24 @@ et sa cabine appartiennent à l'état runtime.
 - les anciennes cartes ne justifient aucun mode de compatibilité. Une fixture legacy peut rester
   uniquement si elle ne modifie pas les contrats du monde canonique.
 
+### Ouvertures vitrées structurelles
+
+Les fenêtres murales appartiennent à `surface_data.connectors` : le modèle GLB n'est que leur
+apparence. `window` est une ouverture vitrée fixe ; `screen-window` possède un état runtime parmi
+`transparent`, `opaque` et `mirror`. Elles ne créent aucune traversée de navigation : mouvement et
+fluides restent bloqués par leur barrière, tandis que leur canal de vision dépend de l'état courant.
+
+La découpe murale utilise l'intervalle vertical réel
+`[openingBottom, openingBottom + openingHeight]`. Elle ne touche que les tranches verticales qu'elle
+intersecte et conserve séparément le mur sous l'allège et au-dessus du linteau. Une baie couvrant
+plusieurs niveaux forme donc une ouverture continue, sans être répétée à chaque étage ni supprimer
+les portions de façade hors de son volume.
+
+Une verrière horizontale `skylight` remplace une interface structurelle existante entre sol et
+plafond. Elle peut occuper la base ou le sommet d'une salle haute, ou l'interface réellement partagée
+par deux salles superposées ; elle ne peut pas flotter dans une tranche intermédiaire vide. Son
+support reste praticable et bloque mouvement vertical et fluides, mais laisse passer la vision.
+
 ---
 
 ## 7. Collisions, occupation et entités `[EXISTANT]`
@@ -649,6 +667,11 @@ Canaux indépendants obligatoires :
 | Verre | bloqué | permise ou atténuée | bloqués |
 | Grille | bloqué | permise | permis selon réglage |
 | Ouverture | permis | permise | permis |
+
+Une fenêtre structurelle compile ces canaux indépendamment de son mesh : `window` laisse passer la
+vision ; `screen-window` la laisse passer uniquement dans l'état `transparent`. Les états `opaque`
+et `mirror` occultent la ligne de vue sans transformer la baie en mur plein ni modifier son identité.
+Une verrière horizontale laisse également passer la vision tout en conservant son support physique.
 
 La couverture utilise plusieurs échantillons corporels issus de la pose canonique. La posture ne
 doit pas exister uniquement dans `combat_roster` si elle affecte le monde physique.

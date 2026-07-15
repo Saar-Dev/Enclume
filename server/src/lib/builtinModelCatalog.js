@@ -77,6 +77,14 @@ function dimensions(asset, packName, manifest = {}) {
     placementMode,
     origin: asset.origin || (!hasAssetPlacementMode ? manifest.origin_default : null) || defaultOrigin,
   }
+  if (asset.connector_type) geometry.connectorType = String(asset.connector_type)
+  if (Number.isFinite(Number(asset.opening_bottom_m))) geometry.openingBottom = Number(asset.opening_bottom_m)
+  if (Number.isFinite(Number(asset.opening_width_m))) geometry.openingWidth = Number(asset.opening_width_m)
+  if (Number.isFinite(Number(asset.wall_cut_width_m))) geometry.wallCutWidth = Number(asset.wall_cut_width_m)
+  if (Number.isFinite(Number(asset.wall_cut_height_m))) geometry.wallCutHeight = Number(asset.wall_cut_height_m)
+  if (Number.isFinite(Number(asset.span_levels))) geometry.spanLevels = Number(asset.span_levels)
+  if (Array.isArray(asset.allowed_states)) geometry.allowedStates = asset.allowed_states.map(String)
+  if (asset.skylight_size) geometry.skylightSize = String(asset.skylight_size)
   const wallMount = asset.wall_mount || manifest.wall_mount_default
   if (placementMode === 'wall' && wallMount && typeof wallMount === 'object') {
     geometry.wallMount = {

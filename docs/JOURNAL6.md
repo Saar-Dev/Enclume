@@ -3578,3 +3578,45 @@ supprimables ont été ajoutés à `La Beta-test Company` pour permettre des ess
 Les sommes SHA-256 des objets MinIO correspondent exactement aux fichiers sources et les deux
 ressources répondent en HTTP 200 via le proxy d'assets. Cette opération ajoute uniquement des
 données de test ; aucune bibliothèque ni logique de sélection de modèle n'a été introduite.
+
+---
+
+## Session 142 (Codex) — 2026-07-15 — Fenêtres structurelles et verrières ✅ CLOS
+
+Le chantier ajoute des ouvertures vitrées natives au document Surface v12, sans les réduire à des
+objets 3D décoratifs. `window`, `screen-window` et `skylight` reçoivent un UUID stable, une géométrie
+métier validée et les canaux physiques compilés dans le snapshot commun.
+
+**Architecture et correctifs de fond** :
+
+- le catalogue intégré copie les métadonnées d'ouverture du manifeste dans
+  `blueprint.geometry` ; 20 GLB déterministes sont fournis dans `output/structural_windows` ;
+- la découpe murale utilise un intervalle vertical absolu et ne traite que les tranches réellement
+  intersectées. Elle conserve l'allège, le linteau et les portions hors baie, pour murs droits comme
+  courbes ;
+- `screen-window` limite ses états runtime à ceux déclarés par le modèle. La route dédiée persiste
+  l'état dans `world_feature_states`, incrémente la révision et diffuse la mutation ;
+- mouvement, vision et fluides sont compilés séparément : une vitre n'est jamais praticable, et la
+  vue dépend de l'état de l'écran ;
+- une verrière ne peut remplacer qu'une vraie interface sol/plafond. Elle conserve un support
+  praticable, ouvre la vue et bloque la traversée verticale ainsi que les fluides ;
+- l'effaceur et les tests d'intersection traitent les fenêtres comme des ouvertures murales, et non
+  comme des objets de grille ;
+- la pose depuis le panneau du mur conserve sélection, panneau et aperçu GLB jusqu'à une validation
+  effective.
+
+**Testé** : 31/31 tests Surface ; suite `test:world` ; 3/3 tests de configuration serveur ; build
+Vite de production ; validation du générateur et des 20 manifests/GLB ; smoke Playwright sans erreur
+JavaScript ; scénario Playwright complet avec création d'une carte multi-niveau, sauvegarde d'une
+fenêtre, d'un écran deux niveaux et d'une verrière, rejet HTTP 400 d'un état interdit, persistance de
+l'état `mirror`, chargement des assets, puis sélection salle → mur → « Ajouter une fenêtre » avec
+aperçu réel. Les données de campagne et de compte créées par ce scénario ont été supprimées.
+
+**Non testé** : validation esthétique finale par le MJ sur ses propres textures et cartes. La
+géométrie, la persistance et l'interaction ont été contrôlées sur une carte éphémère dédiée.
+
+**Données** : le pack intégré est synchronisé au démarrage comme les autres builtins. Aucune donnée
+de campagne existante n'est migrée et aucune rétrocompatibilité spéciale n'est ajoutée.
+
+**Retour arrière** : revert du commit de session ; la sauvegarde complète du WIP antérieur reste
+dans `/home/codex/backups/windows-wip-20260715-2115` (bundle, patch, archive et empreintes).

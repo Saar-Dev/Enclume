@@ -452,7 +452,7 @@ function wallPieceFromCandidate(wall) {
   }
 }
 
-function doorGeometry(connector, surface, runtimeState) {
+function wallOpeningGeometry(connector, surface, runtimeState) {
   const axis = connector.axis
   const geometry = connector.modelGeometry || {}
   const explicitOpening = number(geometry.openingWidth || geometry.doorPanelWidth || geometry.door_panel_width_m)
@@ -463,7 +463,7 @@ function doorGeometry(connector, surface, runtimeState) {
   ) / surface.fine
   const cutWidth = positive(explicitCut, positive(storedWidth, positive(connector.width, positive(geometry.width, 1))))
   const openingWidth = positive(explicitOpening, Math.max(0.25, cutWidth - 0.02))
-  const state = runtimeState?.state || connector.state || 'closed'
+  const state = runtimeState?.state || connector.state || (connector.type === 'door' ? 'closed' : 'transparent')
   const bottom = number(connector.y)
   const height = positive(geometry.height, positive(connector.height, 2))
   const thickness = Math.max(
@@ -755,12 +755,27 @@ function slabIsInsideElevatorShaft(elevators, slab, topY) {
   })
 }
 
+function skylightCoveringSlab(surface, slab, y) {
+  return Object.values(surface.connectors).find(connector => {
+    if (connector.type !== 'skylight' || Math.abs(number(connector.y) - number(y)) > EPSILON) return false
+    const minX = number(connector.x)
+    const minZ = number(connector.z)
+    const maxX = minX + positive(connector.width, 1)
+    const maxZ = minZ + positive(connector.depth, 1)
+    const centerX = number(slab.x) + 0.5
+    const centerZ = number(slab.z) + 0.5
+    return centerX > minX + EPSILON && centerX < maxX - EPSILON
+      && centerZ > minZ + EPSILON && centerZ < maxZ - EPSILON
+  })
+}
+
 function addSlabs(surface, runtimeStates, battlemapId, spatial) {
   const elevators = surfaceElevators(surface)
   for (const [legacyId, floor] of roomFloorEntries(surface, battlemapId)) {
     const parsed = parseFloor(legacyId, floor)
     const thickness = positive(floor.thickness, 0.25)
     if (slabIsInsideElevatorShaft(elevators, parsed, parsed.y + thickness / 2)) continue
+    if (skylightCoveringSlab(surface, parsed, parsed.y)) continue
     let slabFootprint = null
     if (floor.clipRoomId && surface.rooms[floor.clipRoomId]) {
       const room = { id: floor.clipRoomId, ...surface.rooms[floor.clipRoomId] }
@@ -824,6 +839,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const parsed = parseCeiling(legacyId, ceiling)
     const thickness = positive(ceiling.thickness, 0.25)
     if (slabIsInsideElevatorShaft(elevators, parsed, parsed.y + thickness / 2)) continue
+    if (skylightCoveringSlab(surface, parsed, parsed.y)) continue
     addBarrierOutputs(spatial, {
       id: `barrier:ceiling:${ceiling.worldId}`,
       sourceId: ceiling.worldId,
@@ -836,12 +852,40 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
       blocks: blockingChannels(ceiling),
     })
   }
+
+  for (const connector of Object.values(surface.connectors)) {
+    if (connector.type !== 'skylight') continue
+    const x = number(connector.x)
+    const y = number(connector.y)
+    const z = number(connector.z)
+    const width = positive(connector.width, 1)
+    const depth = positive(connector.depth, 1)
+    const thickness = positive(connector.height, 0.1)
+    const glassBounds = bounds(x, y - thickness / 2, z, x + width, y + thickness / 2, z + depth)
+    spatial.supports.push({
+      id: `support:skylight:${connector.worldId}`,
+      sourceId: connector.worldId,
+      kind: 'skylight',
+      bounds: glassBounds,
+      y: clean(y + thickness / 2),
+      walkable: true,
+      movementMultiplier: 1,
+    })
+    addBarrierOutputs(spatial, {
+      id: `barrier:skylight:${connector.worldId}`,
+      sourceId: connector.worldId,
+      kind: 'skylight',
+      axis: 'horizontal',
+      bounds: glassBounds,
+      blocks: { movement: true, sight: false, water: true, gas: true },
+    })
+  }
 }
 
 function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDocument) {
   const doors = Object.values(surface.connectors)
-    .filter(connector => connector.type === 'door')
-    .map(connector => doorGeometry(connector, surface, runtimeStates[connector.worldId]))
+    .filter(connector => ['door', 'window', 'screen-window'].includes(connector.type))
+    .map(connector => wallOpeningGeometry(connector, surface, runtimeStates[connector.worldId]))
     .sort((a, b) => a.alongMin - b.alongMin || a.worldId.localeCompare(b.worldId))
 
   for (const wall of roomWallCandidates(surface, battlemapId)) {
@@ -864,10 +908,13 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
   const roomWorldIds = new Map(Object.entries(surface.rooms).map(([legacyId, room]) => [legacyId, room.worldId]))
   for (const door of doors) {
     const connector = door.connector
-    const isOpen = door.state === 'open'
+    const isDoor = connector.type === 'door'
+    const isOpen = isDoor && door.state === 'open'
     const blocks = isOpen
       ? { movement: false, sight: false, water: false, gas: false }
-      : blockingChannels(connector, 'door')
+      : isDoor
+        ? blockingChannels(connector, 'door')
+        : { movement: true, sight: door.state !== 'transparent', water: true, gas: true }
     const half = door.thickness / 2
     const doorFrom = door.axis === 'segment'
       ? {
@@ -894,9 +941,9 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
       ? bounds(door.alongMin, door.bottom, door.line - half, door.alongMax, door.top, door.line + half)
       : bounds(door.line - half, door.bottom, door.alongMin, door.line + half, door.top, door.alongMax)
     addBarrierOutputs(spatial, {
-      id: `barrier:door:${door.worldId}`,
+      id: `barrier:${connector.type}:${door.worldId}`,
       sourceId: door.worldId,
-      kind: 'door',
+      kind: connector.type,
       axis: door.axis,
       state: door.state,
       bounds: doorBounds,
@@ -913,6 +960,7 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
       blocks,
     })
 
+    if (!isDoor) continue
     const center = (door.alongMin + door.alongMax) / 2
     const feetY = door.bottom
     const margin = half + 0.05
