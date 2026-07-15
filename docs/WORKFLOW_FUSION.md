@@ -9,7 +9,7 @@
 
 | Rôle | Dépôt serveur | Branche | Client/API | PostgreSQL | Services |
 |---|---|---|---|---|---|
-| Travail du cousin | `/home/didier/Enclume` | `dev/cousin` | `8193/8194` | `vtt` | `enclume-client`, `enclume-server` |
+| Travail règles / Claude | `/home/didier/Enclume` | `dev/Saar` | `8193/8194` | `vtt` | `enclume-client`, `enclume-server` |
 | Travail moteur monde | `/home/codex/Enclume-integrated` | `dev/monde` | `8293/8294` | `vtt_codex` | `enclume-codex-client`, `enclume-codex-server` |
 | Intégration commune | `/home/codex/Enclume-fusion` | `integration` | `8393/8394` | `vtt_fusion` | `enclume-fusion-client`, `enclume-fusion-server` |
 
@@ -17,7 +17,7 @@ Les trois copies utilisent le dépôt distant `https://github.com/Saar-Dev/Enclu
 développeur ne travaille directement dans le dépôt de l'autre. L'instance `8393/8394` est un sas de
 validation commun, pas un troisième espace de développement fonctionnel.
 
-Après chaque intégration validée, `dev/cousin` et `dev/monde` doivent repartir du même commit
+Après chaque intégration validée, `dev/Saar` et `dev/monde` doivent repartir du même commit
 `integration`. La synchronisation porte sur l'historique Git et les fichiers versionnés seulement :
 elle ne copie jamais les `.env`, bases PostgreSQL, états Redis, buckets MinIO ou `node_modules`.
 
@@ -61,7 +61,7 @@ relations de campagne.
 
 ## 3. Cycle de travail
 
-1. Le cousin développe et commit sur `dev/cousin`, depuis `/home/didier/Enclume`.
+1. Claude / règles développe et commit sur `dev/Saar`, depuis `/home/didier/Enclume`.
 2. Le moteur monde développe et commit sur `dev/monde`, depuis `/home/codex/Enclume-integrated`.
 3. Avant fusion, noter les deux commits de tête et créer un tag de restauration sur la tête monde.
 4. Sauvegarder le code, PostgreSQL et MinIO de la source choisie pour initialiser l'intégration.
@@ -73,7 +73,7 @@ relations de campagne.
 8. Déployer le commit validé sur `8393/8394`. Ne jamais déployer un index en conflit ou un worktree
    sale.
 9. Publier `integration` sur le dépôt distant afin que les deux développeurs repartent du même commit.
-10. Une fois toutes les contributions absorbées et validées, replacer `dev/cousin` et `dev/monde`
+10. Une fois toutes les contributions absorbées et validées, replacer `dev/Saar` et `dev/monde`
     sur ce commit exact. Créer d'abord un tag de restauration pour chaque ancienne tête ; ne jamais
     réinitialiser une branche contenant encore un commit non fusionné.
 11. Promouvoir ensuite un commit validé vers `master` uniquement lorsqu'il devient la référence du
@@ -101,7 +101,7 @@ anciennes têtes restent accessibles par `backup/pre-common-baseline-cousin-2026
 
 - ne jamais fusionner `origin/fusion-kiwi` dans le moteur v12 : cette branche contient l'ancien
   éditeur Surface v2 et supprimerait des collections canoniques lors d'une sauvegarde ;
-- importer les nouvelles versions du cousin depuis `dev/cousin` ou depuis une branche explicitement
+- importer les nouvelles versions des règles depuis `dev/Saar` ou depuis une branche explicitement
   annoncée comme sa nouvelle tête ;
 - ne jamais résoudre un conflit spatial en réintroduisant le pathfinder, les collisions ou la LOS
   voxel ;
