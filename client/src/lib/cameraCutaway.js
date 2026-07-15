@@ -31,6 +31,18 @@ function roomsAtDisplayLevel(rooms, displayLevel, storyHeight) {
 
 export function cameraRoomContextId({ rooms, displayLevel, camera, focus, storyHeight = 2.5 }) {
   const candidates = roomsAtDisplayLevel(rooms, displayLevel, storyHeight)
+  const focusX = Number(focus?.x)
+  const focusZ = Number(focus?.z)
+
+  // Le volume regardé est l'autorité du mode coupe. La caméra peut tourner autour de cette cible,
+  // traverser un mur ou même entrer dans une salle voisine sans changer le volume affiché.
+  if ([focusX, focusZ].every(Number.isFinite)) {
+    for (const { roomId, slice } of candidates) {
+      if (multiPolygonContainsPoint(slice.footprint, { x: focusX, z: focusZ })) return roomId
+    }
+  }
+
+  // La position de caméra ne sert que de secours (caméra libre/à la troisième personne sans cible).
   const cameraX = Number(camera?.x)
   const cameraY = Number(camera?.y)
   const cameraZ = Number(camera?.z)
@@ -46,12 +58,6 @@ export function cameraRoomContextId({ rooms, displayLevel, camera, focus, storyH
     }
   }
 
-  const focusX = Number(focus?.x)
-  const focusZ = Number(focus?.z)
-  if (![focusX, focusZ].every(Number.isFinite)) return null
-  for (const { roomId, slice } of candidates) {
-    if (multiPolygonContainsPoint(slice.footprint, { x: focusX, z: focusZ })) return roomId
-  }
   return null
 }
 

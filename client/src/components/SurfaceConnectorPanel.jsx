@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
   clearMaterialSlotOverride,
+  connectorModelMaterialSlots,
   materialSlotDisplayValue,
-  normalizeModelMaterialSlots,
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
@@ -125,7 +125,7 @@ export default function SurfaceConnectorPanel({
     height: PANEL_H_EST,
   })
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)
+  const materialSlots = connectorModelMaterialSlots(connector)
   const materialOverrides = connector?.modelMaterialOverrides || {}
   if (!connector) return null
 
@@ -233,6 +233,24 @@ export default function SurfaceConnectorPanel({
           </div>
         )}
 
+        {canEdit && connector.type === 'screen-window' && (
+          <div style={S.field}>
+            <span style={S.label}>Côté du boîtier</span>
+            <button
+              type="button"
+              onClick={() => onPatch?.(connector.id, {
+                modelFacing: connector.modelFacing === 'back' ? 'front' : 'back',
+              })}
+              style={S.button}
+            >
+              ↻ Retourner la fenêtre
+            </button>
+            <span style={S.hint}>
+              Le boîtier est actuellement sur la face {connector.modelFacing === 'back' ? 'B' : 'A'}.
+            </span>
+          </div>
+        )}
+
         {connector.type === 'elevator' && (
           <ElevatorRuntimeControls
             connector={connector}
@@ -267,7 +285,7 @@ export default function SurfaceConnectorPanel({
                 return (
                   <label key={slot.code} style={S.slotRow}>
                     <span style={S.slotLabel}>
-                      {MODEL_SLOT_LABELS[slot.code] || slot.label}
+                      {slot.label || MODEL_SLOT_LABELS[slot.code]}
                       <small>{slot.code}</small>
                     </span>
                     <input

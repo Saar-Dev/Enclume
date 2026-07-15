@@ -1,5 +1,37 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Fenêtres continues, pose depuis Objets 3D et contexte de caméra stable (2026-07-15)
+
+Les fenêtres structurelles sont désormais présentées dans **Objets 3D > Fenêtres**. Elles se
+choisissent et se prévisualisent comme les autres modèles 3D, mais leur pose sur un mur crée toujours
+un connecteur `window` ou `screen-window` dans le document Surface. Le panneau de mur ne propose
+plus que l'ajout d'une porte.
+
+- les 16 fenêtres murales utilisent une vitre continue, sans traverse ni meneau intérieur ;
+- les 8 fenêtres-écrans exposent une couleur **Charnières** indépendante ; leurs boîtiers restent
+  fixes et ne sont pas recolorés avec elles ;
+- chaque fenêtre-écran possède un seul boîtier. **Retourner la fenêtre** persiste une orientation
+  `front`/`back` et applique le demi-tour autour de l'ancrage structurel ;
+- le halo jaune des objets GLB est calculé depuis leurs vraies bornes locales. Il suit donc le
+  modèle et ses axes réels sous toutes les rotations, au lieu de réutiliser une boîte de blueprint
+  parfois orientée autrement ;
+- la pose depuis le catalogue raycast tout mur valide du niveau, affiche le vrai GLB en aperçu et
+  revient au mode sélection après validation ;
+- le contexte d'une salle multi-niveau est choisi par le token suivi en jeu joueur, et par la cible
+  stable de la caméra pour le MJ et l'éditeur ;
+- la position réelle de la caméra ne pilote que la transparence des façades avant. Elle ne peut plus
+  faire disparaître les étages supérieurs en traversant une salle voisine pendant un zoom ou une
+  orbite.
+- l'eau extérieure utilise la face supérieure physique du toit global, épaisseur de plafond
+  comprise, puis un léger décalage positif ; elle ne traverse plus la dalle supérieure.
+
+Validation : 40 tests ciblés caméra/Surface, suite monde complète, build Vite, contrôle du
+générateur et des 20 GLB, synchronisation du catalogue serveur et parcours réel dans le navigateur
+intégré avec présence de la catégorie **Fenêtres** et aperçu mural. Les éventuelles poses du parcours
+ont été annulées avant de quitter la carte.
+
+---
+
 ## Fenêtres structurelles et verrières (2026-07-15)
 
 L'éditeur Surface v12 possède désormais trois ouvertures structurelles : fenêtre fixe, fenêtre-écran

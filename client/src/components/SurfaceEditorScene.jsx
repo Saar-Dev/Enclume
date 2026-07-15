@@ -523,6 +523,7 @@ export default function SurfaceEditorScene({
   runtimeEffectRegions = [],
   runtimeFeatureStates = {},
   onRuntimeEffectCreate,
+  onConnectorPlaced,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -659,7 +660,9 @@ export default function SurfaceEditorScene({
     const allowedEdgeKeys = new Set(
       (surfaceTool?.connectorWallEdgeKeys || surfaceTool?.selectedRoomWallKeys || []).map(String),
     )
-    if (!selectedRoomId || allowedEdgeKeys.size === 0) return null
+    const canPickAnyWall = ['window', 'screen-window'].includes(surfaceTool?.connectorType)
+      && surfaceTool?.connectorPlacementSource === 'object-palette'
+    if (!canPickAnyWall && (!selectedRoomId || allowedEdgeKeys.size === 0)) return null
 
     const ray = setPointerRay(clientX, clientY)
     const levelY = getToolElevation(surfaceTool)
@@ -667,8 +670,9 @@ export default function SurfaceEditorScene({
 
     for (const panel of roomWallPanels) {
       if (!sameLevel(panel.y, levelY)) continue
-      if (!panel.roomIds?.includes(selectedRoomId)) continue
-      if (!(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
+      if (!canPickAnyWall && !panel.roomIds?.includes(selectedRoomId)) continue
+      if (!canPickAnyWall
+        && !(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
 
       const x0 = Number(panel.x0) / SURFACE_FINE
       const z0 = Number(panel.z0) / SURFACE_FINE
@@ -1047,10 +1051,13 @@ export default function SurfaceEditorScene({
             ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
             : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
         if (nextData === surfaceData) {
+          const openingError = ['window', 'screen-window'].includes(surfaceTool?.connectorType)
+            ? 'La fenêtre doit être posée sur un mur.'
+            : 'La porte doit être posée sur le mur sélectionné.'
           onSurfaceToolChange?.({
             ...surfaceTool,
             roomArcError: ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
-              ? 'La porte doit être posée sur le mur sélectionné.'
+              ? openingError
               : 'Ce connecteur ne peut pas être posé ici.',
           })
           e.preventDefault()
@@ -1059,6 +1066,7 @@ export default function SurfaceEditorScene({
         }
         onSurfaceDataChange(nextData)
         onSurfaceToolChange?.({ ...surfaceTool, mode: 'select', roomArcError: null })
+        onConnectorPlaced?.()
         setHoverPreview(null)
         e.preventDefault()
         e.stopPropagation()
@@ -1128,6 +1136,7 @@ export default function SurfaceEditorScene({
     onSurfaceRoomSelect,
     onSurfaceDataChange,
     onSurfaceToolChange,
+    onConnectorPlaced,
   ])
 
   useEffect(() => {

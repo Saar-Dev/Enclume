@@ -78,7 +78,19 @@ test('la surface extérieure de l eau utilise le sommet global de la carte', () 
   }))
 
   assert.ok(result.waterCells.length > 0)
-  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.5])
+  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.625])
+})
+
+test('la surface extérieure de l eau reste au-dessus du toit d une salle multi-niveau', () => {
+  const result = computeSurfaceWaterCells(emptySurface({
+    rooms: {
+      tower: room('tower', 0, 3),
+      annex: room('annex', 0, 1),
+    },
+  }))
+
+  assert.ok(result.waterCells.length > 0)
+  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.625])
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
@@ -684,6 +696,7 @@ test('une porte sur un arc utilise le point, la tangente et la normale du mur ca
   assert.equal(screenWindow.type, 'screen-window')
   assert.equal(screenWindow.y, 0.5)
   assert.deepEqual(screenWindow.allowedStates, ['transparent'])
+  assert.equal(screenWindow.modelFacing, 'front')
 
   const configuredScreenWindow = makeDoorConnectorFromWallPoint(surface, wallPoint, {
     selectedRoomId: 'rounded',
@@ -700,6 +713,15 @@ test('une porte sur un arc utilise le point, la tangente et la normale du mur ca
   })
   assert.equal(configuredScreenWindow.y, 0)
   assert.deepEqual(configuredScreenWindow.allowedStates, ['transparent', 'opaque', 'mirror'])
+
+  const catalogWindow = makeDoorConnectorFromWallPoint(surface, wallPoint, {
+    level: 0,
+    connectorType: 'window',
+    connectorPlacementSource: 'object-palette',
+    connectorModelGeometry: { width: 0.8, depth: 0.12, height: 1.5, openingBottom: 0.5 },
+  })
+  assert.equal(catalogWindow.type, 'window')
+  assert.equal(catalogWindow.roomIds.includes('rounded'), true)
 
   const unrelatedWall = getRoomBoundaryWallRuns(rounded)
     .find(wall => wall.side === 'east')

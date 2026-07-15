@@ -51,6 +51,26 @@ export function normalizeModelMaterialSlots(geometryOrSlots) {
     .filter(Boolean)
 }
 
+export function connectorModelMaterialSlots(connector) {
+  const slots = normalizeModelMaterialSlots(connector?.modelGeometry)
+  const modelIdentity = `${connector?.modelBuiltinKey || ''} ${connector?.modelGlbUrl || ''}`.toLowerCase()
+  const isBuiltinScreenWindow = connector?.type === 'screen-window'
+    && modelIdentity.includes('structural_windows')
+    && modelIdentity.includes('screen_window')
+  if (!isBuiltinScreenWindow || slots.some(slot => slot.code === 'SLOT_03')) return slots
+  return [
+    ...slots,
+    {
+      id: 'hinges',
+      code: 'SLOT_03',
+      label: 'Charnières',
+      defaultHex: '#070c10',
+      transparent: false,
+      materialNames: [],
+    },
+  ].sort((left, right) => left.code.localeCompare(right.code))
+}
+
 export function materialSlotDisplayValue(overrides, slot) {
   const raw = overrides?.[slot.code] ?? overrides?.[slot.id] ?? overrides?.[slot.code.toLowerCase()]
   if (typeof raw === 'string') return { color: normalizeHex(raw, slot.defaultHex) }

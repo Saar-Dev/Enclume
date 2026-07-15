@@ -8,7 +8,7 @@
       "name": "window_1pan_1level",
       "label": "Fenêtre 1 pan · 1 étage",
       "catalog_file": "window_1pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -50,7 +50,7 @@
       "name": "window_2pan_1level",
       "label": "Fenêtre 2 pans · 1 étage",
       "catalog_file": "window_2pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -92,7 +92,7 @@
       "name": "window_3pan_1level",
       "label": "Fenêtre 3 pans · 1 étage",
       "catalog_file": "window_3pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -134,7 +134,7 @@
       "name": "window_4pan_1level",
       "label": "Fenêtre 4 pans · 1 étage",
       "catalog_file": "window_4pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -176,7 +176,7 @@
       "name": "window_1pan_2level",
       "label": "Fenêtre 1 pan · 2 étages",
       "catalog_file": "window_1pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -218,7 +218,7 @@
       "name": "window_2pan_2level",
       "label": "Fenêtre 2 pans · 2 étages",
       "catalog_file": "window_2pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -260,7 +260,7 @@
       "name": "window_3pan_2level",
       "label": "Fenêtre 3 pans · 2 étages",
       "catalog_file": "window_3pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -302,7 +302,7 @@
       "name": "window_4pan_2level",
       "label": "Fenêtre 4 pans · 2 étages",
       "catalog_file": "window_4pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "window",
@@ -344,7 +344,7 @@
       "name": "screen_window_1pan_1level",
       "label": "Fenêtre écran 1 pan · 1 étage",
       "catalog_file": "screen_window_1pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -373,6 +373,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_1pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -388,7 +398,7 @@
       "name": "screen_window_2pan_1level",
       "label": "Fenêtre écran 2 pans · 1 étage",
       "catalog_file": "screen_window_2pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -417,6 +427,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_2pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -432,7 +452,7 @@
       "name": "screen_window_3pan_1level",
       "label": "Fenêtre écran 3 pans · 1 étage",
       "catalog_file": "screen_window_3pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -461,6 +481,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_3pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -476,7 +506,7 @@
       "name": "screen_window_4pan_1level",
       "label": "Fenêtre écran 4 pans · 1 étage",
       "catalog_file": "screen_window_4pan_1level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -505,6 +535,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_4pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -520,7 +560,7 @@
       "name": "screen_window_1pan_2level",
       "label": "Fenêtre écran 1 pan · 2 étages",
       "catalog_file": "screen_window_1pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -549,6 +589,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_1pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -564,7 +614,7 @@
       "name": "screen_window_2pan_2level",
       "label": "Fenêtre écran 2 pans · 2 étages",
       "catalog_file": "screen_window_2pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -593,6 +643,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_2pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -608,7 +668,7 @@
       "name": "screen_window_3pan_2level",
       "label": "Fenêtre écran 3 pans · 2 étages",
       "catalog_file": "screen_window_3pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -637,6 +697,16 @@
           ]
         },
         {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_3pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
           "id": "glass",
           "code": "SLOT_05",
           "label": "Verre",
@@ -652,7 +722,7 @@
       "name": "screen_window_4pan_2level",
       "label": "Fenêtre écran 4 pans · 2 étages",
       "catalog_file": "screen_window_4pan_2level.glb",
-      "category": "structural_windows",
+      "category": "Fenêtres",
       "placement_mode": "connector",
       "origin": "floor-center",
       "connector_type": "screen-window",
@@ -678,6 +748,16 @@
           "transparent": false,
           "material_names": [
             "screen_window_4pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_4pan_2level__SLOT_03__Hinges"
           ]
         },
         {

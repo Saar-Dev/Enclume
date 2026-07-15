@@ -391,6 +391,9 @@ function validateFeature(collection, id, item, errors) {
           errors.push(`${path}.allowedStates contient un état incompatible avec ${item.type}`)
         }
       }
+      if (item.modelFacing !== undefined && !['front', 'back'].includes(item.modelFacing)) {
+        errors.push(`${path}.modelFacing doit valoir front ou back`)
+      }
     } else if (item.type === 'skylight') {
       validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth'], path, errors)
       if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une largeur et une profondeur positives`)

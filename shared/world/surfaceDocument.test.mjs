@@ -331,6 +331,7 @@ test('les fenêtres et verrières structurelles sont validées comme connecteurs
     z1: 0,
     y: 0.5,
     allowedStates: ['transparent', 'opaque', 'mirror'],
+    modelFacing: 'back',
   }
   surface.connectors.skylight = {
     type: 'skylight',
@@ -344,11 +345,15 @@ test('les fenêtres et verrières structurelles sont validées comme connecteurs
   const prepared = prepareSurfaceData(surface, { battlemapId: 'map-structural-windows' })
   assert.equal(validateSurfaceData(prepared.surfaceData).valid, true)
   assert.match(prepared.surfaceData.connectors.screen.worldId, /^[0-9a-f-]{36}$/)
+  assert.equal(prepared.surfaceData.connectors.screen.modelFacing, 'back')
   assert.match(prepared.surfaceData.connectors.skylight.worldId, /^[0-9a-f-]{36}$/)
 
   surface.connectors.screen.allowedStates = ['transparent', 'open']
   assert.equal(validateSurfaceData(surface).valid, false)
   surface.connectors.screen.allowedStates = ['transparent']
+  surface.connectors.screen.modelFacing = 'sideways'
+  assert.equal(validateSurfaceData(surface).valid, false)
+  surface.connectors.screen.modelFacing = 'front'
   surface.connectors.skylight.width = 0
   assert.equal(validateSurfaceData(surface).valid, false)
 })

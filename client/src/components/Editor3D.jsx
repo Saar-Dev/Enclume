@@ -235,6 +235,8 @@ function EntityEditorScene({
   displayLevel = 0,
   selectedEntityId = null,
   onEntitySelect,
+  selectedSurfaceConnectorId = null,
+  onSurfaceConnectorSelect,
   onBlueprintPlaced,
 }) {
   const { camera, gl, scene } = useThree()
@@ -250,6 +252,12 @@ function EntityEditorScene({
   const [ghostR, setGhostR] = useState(0)
   const [moveGhost, setMoveGhost] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
+  const handleSurfaceConnectorPointer = useCallback((connectorId, connector, event) => {
+    const nativeEvent = event?.nativeEvent || event?.sourceEvent || event || {}
+    const clientX = Number.isFinite(Number(nativeEvent.clientX)) ? Number(nativeEvent.clientX) : 24
+    const clientY = Number.isFinite(Number(nativeEvent.clientY)) ? Number(nativeEvent.clientY) : 24
+    onSurfaceConnectorSelect?.(connectorId, clientX, clientY)
+  }, [onSurfaceConnectorSelect])
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -731,6 +739,8 @@ function EntityEditorScene({
           displayLevel={displayLevel}
           cameraControlsRef={orbitRef}
           onCameraRoomIdChange={setCameraVolumeRoomId}
+          selectedConnectorId={selectedSurfaceConnectorId}
+          onConnectorSelect={handleSurfaceConnectorPointer}
         />
       ) : (
         <CulledVoxelScene voxels={voxels} textureMaterials={textureMaterials} />
@@ -1539,6 +1549,22 @@ export default function Editor3D({
     setSurfaceConnectorPanel({ connectorId, x: clientX, y: clientY })
   }, [])
 
+  const handleEntitySurfaceConnectorSelect = useCallback((connectorId, clientX, clientY) => {
+    if (!connectorId) return
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'select',
+      selectedRoomId: null,
+      selectedRoomIds: [],
+      selectedConnectorId: connectorId,
+      roomWallEdit: false,
+      selectedRoomWallKeys: [],
+      selectedRoomWallCount: 0,
+      roomArcError: null,
+    })
+    handleSurfaceConnectorSelect(connectorId, clientX, clientY)
+  }, [handleSurfaceConnectorSelect, onSurfaceToolChange, surfaceTool])
+
   const handleSurfaceRoomSelect = useCallback((roomId, clientX, clientY) => {
     setSurfaceConnectorPanel(null)
     setSurfaceWallPanel(null)
@@ -1862,6 +1888,10 @@ export default function Editor3D({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [availableBlocks, onActiveMaterialChange, activeMaterial])
 
+  const activeStructuralConnectorType = activeBlueprint?.geometry?.connectorType
+  const placingStructuralObject = activeEditorTab === 'entity'
+    && ['window', 'screen-window'].includes(activeStructuralConnectorType)
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas
@@ -1869,7 +1899,7 @@ export default function Editor3D({
         style={{ width: '100%', height: '100%', background: '#0f172a' }}
         onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
       >
-        {blocksReady && activeEditorTab === 'entity' && (
+        {blocksReady && activeEditorTab === 'entity' && !placingStructuralObject && (
           <EntityEditorScene
             key={activeBlueprint?.id || 'no-blueprint'}
             voxels={voxels}
@@ -1882,10 +1912,12 @@ export default function Editor3D({
             displayLevel={displayLevel}
             selectedEntityId={selectedEntityId}
             onEntitySelect={onEntitySelect}
+            selectedSurfaceConnectorId={surfaceConnectorPanel?.connectorId || surfaceTool?.selectedConnectorId || null}
+            onSurfaceConnectorSelect={handleEntitySurfaceConnectorSelect}
             onBlueprintPlaced={onBlueprintPlaced}
           />
         )}
-        {blocksReady && activeEditorTab !== 'entity' && (
+        {blocksReady && (activeEditorTab !== 'entity' || placingStructuralObject) && (
           <SurfaceEditorScene
             surfaceData={surfaceData}
             onSurfaceDataChange={handleSurfaceDataChange}
@@ -1902,6 +1934,7 @@ export default function Editor3D({
             runtimeEffectRegions={runtimeEffectRegions}
             runtimeFeatureStates={runtimeElevatorStates}
             onRuntimeEffectCreate={handleRuntimeEffectCreate}
+            onConnectorPlaced={placingStructuralObject ? onBlueprintPlaced : null}
           />
         )}
       </Canvas>

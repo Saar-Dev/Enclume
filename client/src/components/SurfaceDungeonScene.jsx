@@ -6,7 +6,7 @@ import { SkeletonUtils } from 'three-stdlib'
 import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
-import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
+import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
 import {
@@ -87,7 +87,7 @@ const BOLT_WASHER_MATERIAL = new THREE.MeshStandardMaterial({
 })
 const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
 
-function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
+function useCameraRoomId(surface, displayLevel, cameraControlsRef = null, roomContextAnchor = null) {
   const { camera } = useThree()
   const [roomId, setRoomId] = useState(null)
   const elapsedRef = useRef(0)
@@ -102,11 +102,15 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
     if (elapsedRef.current < 0.12) return
     elapsedRef.current = 0
 
+    const hasAuthoritativeAnchor = roomContextAnchor
+      && [roomContextAnchor.x, roomContextAnchor.y, roomContextAnchor.z].every(value => Number.isFinite(Number(value)))
     const controlsTarget = cameraControlsRef?.current?.target
     const hasControlsTarget = controlsTarget
       && [controlsTarget.x, controlsTarget.y, controlsTarget.z].every(Number.isFinite)
-    const focus = hasControlsTarget
-      ? controlsTarget.clone()
+    const focus = hasAuthoritativeAnchor
+      ? new THREE.Vector3(Number(roomContextAnchor.x), Number(roomContextAnchor.y), Number(roomContextAnchor.z))
+      : hasControlsTarget
+        ? controlsTarget.clone()
       : (() => {
         const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
         const planeY = Number(displayLevel) * STORY_HEIGHT + 0.04
@@ -118,16 +122,21 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
           : camera.position.clone().addScaledVector(direction, 4)
       })()
     const previous = lastCameraRef.current
+    const cameraContextIsStable = hasAuthoritativeAnchor || hasControlsTarget || (
+      previous && previous.cameraPosition.distanceToSquared(camera.position) < 0.0009
+    )
     if (previous
       && previous.displayLevel === displayLevel
       && previous.focus.distanceToSquared(focus) < 0.0009
-      && previous.cameraPosition.distanceToSquared(camera.position) < 0.0009
+      && cameraContextIsStable
+      && previous.usesAuthoritativeAnchor === Boolean(hasAuthoritativeAnchor)
       && previous.usesControlsTarget === Boolean(hasControlsTarget)
       && previous.rooms === surface.rooms) return
     lastCameraRef.current = {
       displayLevel,
       focus,
       cameraPosition: camera.position.clone(),
+      usesAuthoritativeAnchor: Boolean(hasAuthoritativeAnchor),
       usesControlsTarget: Boolean(hasControlsTarget),
       rooms: surface.rooms,
     }
@@ -135,7 +144,7 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
     const nextRoomId = cameraRoomContextId({
       rooms: surface.rooms,
       displayLevel,
-      camera: camera.position,
+      camera: hasAuthoritativeAnchor ? null : camera.position,
       focus,
       storyHeight: STORY_HEIGHT,
     })
@@ -1568,11 +1577,12 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   const connectorNormalX = connector.normalX
   const connectorNormalZ = connector.normalZ
   const materialSlots = useMemo(
-    () => normalizeModelMaterialSlots(connector?.modelGeometry),
-    [connector?.modelGeometry],
+    () => connectorModelMaterialSlots(connector),
+    [connector],
   )
   const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
   const windowState = connector?.runtimeState?.state || connector?.state || 'transparent'
+  const facingRotationY = connector?.modelFacing === 'back' ? Math.PI : 0
   const preserveAuthoredOrigin = connector?.modelGeometry?.origin === 'floor-center' || Boolean(connector?.modelBuiltinKey)
   const { scene: sourceScene } = useGLTF(url)
   const { scene, offset, uniformScale } = useMemo(() => {
@@ -1651,7 +1661,7 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   if (!url || !box || !scene) return null
 
   return (
-    <group position={box.floorPosition} rotation={[0, box.rotationY, 0]} scale={uniformScale} renderOrder={31}>
+    <group position={box.floorPosition} rotation={[0, box.rotationY + facingRotationY, 0]} scale={uniformScale} renderOrder={31}>
       <primitive object={scene} position={offset} />
     </group>
   )
@@ -2043,7 +2053,7 @@ function WaterSheets({ waterCells, opacity = 0.16 }) {
         return (
           <mesh
             key={`${rect.baseY}:${rect.topY}:${rect.x}:${rect.z}:${index}`}
-            position={[rect.x + rect.width / 2, rect.topY - 0.02, rect.z + rect.depth / 2]}
+            position={[rect.x + rect.width / 2, rect.topY + 0.02, rect.z + rect.depth / 2]}
             rotation={[-Math.PI / 2, 0, 0]}
             renderOrder={20}
           >
@@ -2182,6 +2192,7 @@ function SurfaceDungeonScene({
   onConnectorSelect = null,
   runtimeFeatureStates = {},
   cameraControlsRef = null,
+  roomContextAnchor = null,
   onCameraRoomIdChange = null,
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
@@ -2189,7 +2200,7 @@ function SurfaceDungeonScene({
     () => Object.values(surface.connectors).filter(connector => connector?.type === 'skylight'),
     [surface.connectors],
   )
-  const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef)
+  const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef, roomContextAnchor)
   useEffect(() => {
     onCameraRoomIdChange?.(cameraVolumeRoomId)
   }, [cameraVolumeRoomId, onCameraRoomIdChange])

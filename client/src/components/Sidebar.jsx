@@ -622,6 +622,10 @@ export default function Sidebar({
     blueprint?.glb_url,
   ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
   const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
+  const structuralWindowType = (blueprint) => {
+    const type = blueprint?.geometry?.connectorType
+    return ['window', 'screen-window'].includes(type) ? type : null
+  }
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
     .filter(blueprint => {
@@ -697,6 +701,41 @@ export default function Sidebar({
     connectorModelBuiltinKey: blueprint?.builtin_key || null,
     connectorModelGeometry: blueprint?.geometry || null,
   })
+  const selectObjectBlueprint = (blueprint) => {
+    const isActive = String(activeBlueprint?.id || '') === String(blueprint?.id || '')
+    const connectorType = structuralWindowType(blueprint)
+    onBlueprintSelect?.(isActive ? null : blueprint)
+
+    if (connectorType && !isActive) {
+      onSurfaceToolChange?.({
+        ...surfaceToolState,
+        mode: 'connector',
+        connectorType,
+        connectorPlacementSource: 'object-palette',
+        connectorWallEdgeKeys: [],
+        selectedRoomId: null,
+        selectedRoomIds: [],
+        selectedRoomWallKeys: [],
+        selectedRoomWallCount: 0,
+        selectedConnectorId: null,
+        connectorMaterialOverrides: {},
+        roomArcError: null,
+        ...connectorModelPatch(blueprint),
+      })
+      return
+    }
+
+    if (['window', 'screen-window'].includes(surfaceToolState.connectorType)
+      && surfaceToolState.connectorPlacementSource === 'object-palette') {
+      onSurfaceToolChange?.({
+        ...surfaceToolState,
+        mode: 'select',
+        connectorPlacementSource: null,
+        connectorWallEdgeKeys: [],
+        roomArcError: null,
+      })
+    }
+  }
   const selectConnectorModel = (blueprint) => updateSurfaceTool({
     mode: 'connector',
     connectorType: surfaceToolState.connectorType || 'door',
@@ -1866,10 +1905,10 @@ export default function Sidebar({
             const query = objectSearch.trim().toLocaleLowerCase()
             const bpList = Object.values(blueprints)
               .filter(bp => !bp.deprecated)
-              .filter(bp => blueprintPlacementMode(bp) !== 'connector')
+              .filter(bp => blueprintPlacementMode(bp) !== 'connector' || structuralWindowType(bp))
               .filter(bp => !query || bp.label.toLocaleLowerCase().includes(query) || (bp.category || '').toLocaleLowerCase().includes(query))
             const grouped = bpList.reduce((groups, bp) => {
-              const category = bp.category || t('sidebar.customObjects')
+              const category = structuralWindowType(bp) ? 'Fenêtres' : (bp.category || t('sidebar.customObjects'))
               if (!groups[category]) groups[category] = []
               groups[category].push(bp)
               return groups
@@ -1920,7 +1959,7 @@ export default function Sidebar({
                       return (
                         <button
                           key={bp.id}
-                          onClick={() => onBlueprintSelect?.(isActive ? null : bp)}
+                          onClick={() => selectObjectBlueprint(bp)}
                           title={t('sidebar.clickThenPlace')}
                           style={{ display: 'block', width: '100%', padding: '7px 10px', background: isActive ? 'rgba(91,141,238,0.18)' : 'none', border: 'none', borderBottom: '1px solid #1a1a2e', borderLeft: isActive ? '2px solid #5b8dee' : '2px solid transparent', color: isActive ? '#5b8dee' : '#c0c0d0', fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.1s' }}
                         >

@@ -1930,6 +1930,7 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
       state,
       ...(connectorType === 'screen-window' ? {
         allowedStates: allowedWindowStates,
+        modelFacing: 'front',
       } : {}),
       movementMultiplier: getToolMovementMultiplier(tool),
       ...connectorModelFromTool(tool),
@@ -1977,6 +1978,7 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
     state,
     ...(connectorType === 'screen-window' ? {
       allowedStates: allowedWindowStates,
+      modelFacing: 'front',
     } : {}),
     movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),
@@ -3409,10 +3411,22 @@ export function computeSurfaceWaterCells(data, margin = 2) {
     }
   }
 
-  // La nappe extérieure représente la surface de l'eau autour de toute la
-  // carte, pas le plafond de chaque étage pris séparément.
+  // La nappe extérieure représente le sommet physique de toute la carte.
+  // Les coordonnées de plafond sont au centre de la dalle : il faut donc
+  // inclure sa demi-épaisseur pour ne pas dessiner l'eau à l'intérieur du toit.
   const mapTopY = Math.max(
-    ...[...levels.values()].map(level => level.topY),
+    ...Object.entries(surface.floors).map(([id, floor]) => (
+      parseFloorKey(id, floor).y + getFloorThickness(floor) / 2
+    )),
+    ...Object.entries(surface.ceilings).map(([id, ceiling]) => (
+      parseCeilingKey(id, ceiling).y + getCeilingThickness(ceiling) / 2
+    )),
+    ...Object.values(surface.walls).map(wall => (
+      getWallBaseY(wall) + Math.max(0.5, Number(wall?.height) || DEFAULT_CEILING_HEIGHT)
+    )),
+    ...Object.values(surface.stairs).map(stair => (
+      Number(stair?.topY) || (Number(stair?.y) || 0) + DEFAULT_CEILING_HEIGHT
+    )),
     0,
   )
 

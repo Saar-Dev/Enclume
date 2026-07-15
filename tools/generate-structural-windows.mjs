@@ -51,7 +51,8 @@ function wallWindowScene({ key, pans, levels, screen }) {
   const height = levels * 1.5
   const frameDepth = screen ? 0.12 : 0.09
   const frame = material(`${key}__SLOT_01__Primary_Frame`, screen ? '#142b36' : '#17252d', { metalness: 0.72, roughness: 0.3 })
-  const hardware = material(`${key}__SLOT_03__Dark_Hardware`, '#070c10', { metalness: 0.82, roughness: 0.24 })
+  const hinges = material(`${key}__SLOT_03__Hinges`, '#070c10', { metalness: 0.82, roughness: 0.24 })
+  const hardware = material(`${key}__FIXED__Dark_Hardware`, '#070c10', { metalness: 0.82, roughness: 0.24 })
   const glass = material(`${key}__SLOT_05__Transparent_Glass`, '#6edcff', {
     transparent: true, opacity: 0.3, metalness: 0.08, roughness: 0.14,
     depthWrite: false, side: THREE.DoubleSide,
@@ -61,42 +62,31 @@ function wallWindowScene({ key, pans, levels, screen }) {
   })
   const accent = material(`${key}__SLOT_04__Accent`, '#2dd4bf', { emissive: '#0b5751', emissiveIntensity: 0.45, metalness: 0.45, roughness: 0.3 })
   const border = 0.1
-  const mullion = 0.065
   box(scene, 'Frame_Bottom', [width, border, frameDepth], [0, border / 2, 0], frame)
   box(scene, 'Frame_Top', [width, border, frameDepth], [0, height - border / 2, 0], frame)
   box(scene, 'Frame_Left', [border, height - border * 2, frameDepth], [-width / 2 + border / 2, height / 2, 0], frame)
   box(scene, 'Frame_Right', [border, height - border * 2, frameDepth], [width / 2 - border / 2, height / 2, 0], frame)
-  for (let index = 1; index < pans; index += 1) {
-    const x = -width / 2 + index * (width / pans)
-    box(scene, `Mullion_${index}`, [mullion, height - border * 2, frameDepth * 0.92], [x, height / 2, 0], frame)
-  }
-  const paneWidth = (width - border * 2 - mullion * (pans - 1)) / pans
-  for (let index = 0; index < pans; index += 1) {
-    const x = -width / 2 + border + paneWidth / 2 + index * (paneWidth + mullion)
-    box(scene, `Glass_Pane_${index + 1}`, [paneWidth, height - border * 2, 0.025], [x, height / 2, 0], glass)
-    const stripeWidth = Math.max(0.035, paneWidth * 0.08)
-    const stripe = box(scene, `Reflection_Stripe_${index + 1}`, [stripeWidth, height * 0.62, 0.008], [x - paneWidth * 0.22, height * 0.56, frameDepth * 0.18], reflection)
-    stripe.rotation.z = -0.18
-  }
+  box(scene, 'Glass_Surface', [width - border * 2, height - border * 2, 0.025], [0, height / 2, 0], glass)
+  const stripeWidth = Math.max(0.035, width * 0.08)
+  const stripe = box(scene, 'Reflection_Stripe', [stripeWidth, height * 0.62, 0.008], [-width * 0.22, height * 0.56, frameDepth * 0.18], reflection)
+  stripe.rotation.z = -0.18
   if (screen) {
     const hingeRadius = 0.07
     for (const side of [-1, 1]) {
       for (const ratio of [0.2, 0.5, 0.8]) {
         cylinder(scene, `Hinge_${side < 0 ? 'Left' : 'Right'}_${ratio}`, hingeRadius, 0.22,
-          [side * (width / 2 + hingeRadius * 0.35), height * ratio, 0], [0, 0, 0], hardware)
+          [side * (width / 2 + hingeRadius * 0.35), height * ratio, 0], [0, 0, 0], hinges)
         box(scene, `Hinge_Brace_${side}_${ratio}`, [0.16, 0.07, 0.17],
-          [side * (width / 2 - 0.025), height * ratio, 0], hardware)
+          [side * (width / 2 - 0.025), height * ratio, 0], hinges)
       }
     }
     box(scene, 'Control_Front_Box', [0.16, 0.24, 0.11], [width / 2 + 0.16, height * 0.34, frameDepth * 0.62], hardware)
     box(scene, 'Control_Front_Status', [0.045, 0.045, 0.008], [width / 2 + 0.16, height * 0.39, frameDepth * 1.22], accent)
-    box(scene, 'Control_Back_Box', [0.16, 0.24, 0.11], [width / 2 + 0.16, height * 0.34, -frameDepth * 0.62], hardware)
-    box(scene, 'Control_Back_Status', [0.045, 0.045, 0.008], [width / 2 + 0.16, height * 0.39, -frameDepth * 1.22], accent)
   }
   return { scene, width, height, depth: screen ? 0.16 : 0.1 }
 }
 
-function skylightScene({ key, width, depth, panelsX, panelsZ }) {
+function skylightScene({ key, width, depth }) {
   const scene = new THREE.Scene()
   scene.name = key
   const frameHeight = 0.1
@@ -110,8 +100,6 @@ function skylightScene({ key, width, depth, panelsX, panelsZ }) {
   box(scene, 'Frame_South', [width, frameHeight, border], [0, 0, depth / 2 - border / 2], frame)
   box(scene, 'Frame_West', [border, frameHeight, depth - border * 2], [-width / 2 + border / 2, 0, 0], frame)
   box(scene, 'Frame_East', [border, frameHeight, depth - border * 2], [width / 2 - border / 2, 0, 0], frame)
-  for (let x = 1; x < panelsX; x += 1) box(scene, `Mullion_X_${x}`, [0.055, frameHeight, depth - border * 2], [-width / 2 + x * width / panelsX, 0, 0], frame)
-  for (let z = 1; z < panelsZ; z += 1) box(scene, `Mullion_Z_${z}`, [width - border * 2, frameHeight, 0.055], [0, 0, -depth / 2 + z * depth / panelsZ], frame)
   box(scene, 'Glass_Surface', [width - border * 2, 0.025, depth - border * 2], [0, 0.015, 0], glass)
   const stripe = box(scene, 'Reflection_Stripe', [width * 0.12, 0.008, depth * 0.72], [-width * 0.2, 0.035, 0], reflection)
   stripe.rotation.y = -0.22
@@ -134,7 +122,7 @@ for (const screen of [false, true]) {
       const model = wallWindowScene({ key, pans, levels, screen })
       await exportGlb(model.scene, path.join(glbRoot, fileName))
       assets.push({
-        name: key, label, catalog_file: fileName, category: 'structural_windows',
+        name: key, label, catalog_file: fileName, category: 'Fenêtres',
         placement_mode: 'connector', origin: 'floor-center', connector_type: screen ? 'screen-window' : 'window',
         footprint_width_m: model.width, footprint_depth_m: model.depth, height_m: model.height,
         opening_width_m: model.width, wall_cut_width_m: model.width, wall_cut_height_m: model.height,
@@ -142,6 +130,7 @@ for (const screen of [false, true]) {
         allowed_states: screen ? ['transparent', 'opaque', 'mirror'] : ['transparent'],
         editor_color_slots: [
           { id: 'frame', code: 'SLOT_01', label: 'Cadre', default_hex: '#17252D', transparent: false, material_names: [`${key}__SLOT_01__Primary_Frame`] },
+          ...(screen ? [{ id: 'hinges', code: 'SLOT_03', label: 'Charnières', default_hex: '#070C10', transparent: false, material_names: [`${key}__SLOT_03__Hinges`] }] : []),
           { id: 'glass', code: 'SLOT_05', label: 'Verre', default_hex: '#6EDCFF', transparent: true, material_names: [`${key}__SLOT_05__Transparent_Glass`] },
         ],
       })
@@ -149,10 +138,10 @@ for (const screen of [false, true]) {
   }
 }
 
-for (const [size, width, depth, panelsX, panelsZ] of [['1x1', 1, 1, 1, 1], ['2x1', 2, 1, 2, 1], ['2x2', 2, 2, 2, 2], ['3x3', 3, 3, 3, 3]]) {
+for (const [size, width, depth] of [['1x1', 1, 1], ['2x1', 2, 1], ['2x2', 2, 2], ['3x3', 3, 3]]) {
   const key = `skylight_${size}`
   const fileName = `${key}.glb`
-  const model = skylightScene({ key, width, depth, panelsX, panelsZ })
+  const model = skylightScene({ key, width, depth })
   await exportGlb(model.scene, path.join(glbRoot, fileName))
   assets.push({
     name: key, label: `Verrière ${size}`, catalog_file: fileName, category: 'structural_windows',

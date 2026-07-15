@@ -1,3 +1,24 @@
+## v187 — 2026-07-15 — Fenêtres continues et affichage multi-étages stable
+
+### Éditeur de monde
+- [ux] Les fenêtres fixes et fenêtres-écrans se placent désormais depuis **Objets 3D > Fenêtres**,
+  avec aperçu direct sur le mur ; elles ne figurent plus dans le tooltip du mur.
+- [feat] Les charnières des fenêtres-écrans disposent de leur propre couleur, sans recolorer les
+  boîtiers de commande.
+- [feat] Une fenêtre-écran ne possède plus qu'un boîtier et peut être retournée depuis son tooltip
+  pour choisir la face du mur qui le reçoit.
+- [fix] Les fenêtres et verrières n'ont plus aucune traverse intérieure : chaque baie utilise une
+  surface vitrée continue.
+- [fix] Le halo jaune d'un objet suit maintenant les bornes réelles de son GLB, y compris après une
+  rotation ; il ne part plus dans l'axe déclaré par erreur dans certains blueprints.
+- [fix] Les salles multi-niveaux ne changent plus de contexte au gré d'un zoom ou d'une rotation :
+  le joueur suit son token, tandis que le MJ et l'éditeur suivent la cible stable de la caméra.
+- [fix] Les passerelles, connecteurs, objets 3D, tokens et effets des niveaux supérieurs restent
+  visibles dans tout le volume actif ; seule la façade située entre la caméra et le sol devient
+  transparente.
+- [fix] La surface de l'eau extérieure est placée au-dessus de la face supérieure du toit global,
+  épaisseur de plafond comprise, et non à l'intérieur de la dalle.
+
 ## v186 — 2026-07-15 — Fenêtres structurelles, fenêtres-écrans et verrières
 
 ### Éditeur de monde

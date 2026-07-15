@@ -561,6 +561,7 @@ function Scene({
     return null
   }, [tokens, characters, user?.id, selectedTokenId, isGm])
   const thirdPersonCameraActive = cameraMode === 'play' && !!followToken
+  const playerRoomContextAnchor = !isGm && followToken ? tokenFeetPoint(followToken) : null
 
   // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
   const combatMoveModeRef = useRef(null)
@@ -1059,6 +1060,7 @@ function Scene({
           textureMaterials={textureMaterials}
           displayLevel={displayLevel}
           cameraControlsRef={thirdPersonCameraActive ? null : orbitRef}
+          roomContextAnchor={playerRoomContextAnchor}
           onCameraRoomIdChange={setCameraVolumeRoomId}
           runtimeFeatureStates={runtimeFeatureStates}
           selectedConnectorId={selectedSurfaceConnectorId}

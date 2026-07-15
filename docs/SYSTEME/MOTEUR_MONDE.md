@@ -435,6 +435,15 @@ apparence. `window` est une ouverture vitrée fixe ; `screen-window` possède un
 `transparent`, `opaque` et `mirror`. Elles ne créent aucune traversée de navigation : mouvement et
 fluides restent bloqués par leur barrière, tandis que leur canal de vision dépend de l'état courant.
 
+Dans l'éditeur, elles sont découvertes et choisies dans **Objets 3D > Fenêtres**, mais cette entrée
+de catalogue ne change pas leur nature. La pose raycast un mur, prévisualise le GLB et crée le
+connecteur structurel avec sa géométrie déclarée ; elle ne crée jamais une `entity`. Les modèles
+générés emploient une vitre continue sans traverse intérieure. Les fenêtres-écrans exposent un slot
+de couleur **Charnières**, séparé de leur unique boîtier `FIXED`. Le champ d'apparence
+`modelFacing: front|back` retourne le GLB de 180° autour de son ancrage sans toucher la découpe ni
+les canaux physiques. La convention `__SLOT_03__Hinges` reste détectable sur une instance intégrée
+déjà posée, même si son instantané de manifeste ne contenait pas encore le libellé du slot.
+
 La découpe murale utilise l'intervalle vertical réel
 `[openingBottom, openingBottom + openingHeight]`. Elle ne touche que les tranches verticales qu'elle
 intersecte et conserve séparément le mur sous l'allège et au-dessus du linteau. Une baie couvrant
@@ -476,13 +485,19 @@ de l'éditeur ne sont qu'une commande par pas de 90°.
 opaques : leur présence graphique ne les rend pas sélectionnables comme supports du niveau courant.
 Les niveaux supérieurs restent masqués en temps normal.
 
-Une salle haute de plusieurs étages est l'exception locale. Le renderer détermine la salle
-multi-hauteur sous le point central visé par la caméra. Il conserve alors son véritable sol de base,
-toutes ses parois jusqu'au fond ainsi que les murs de ses tranches au-dessus de N, afin d'en montrer
-le volume complet. Une salle adjacente ou empilée qui ne fait pas partie de ce volume n'est pas
-révélée. Aucun plancher intermédiaire n'est inventé et le plafond n'existe que dans la tranche
-supérieure. Les connecteurs verticaux sont découpés par tranche ou exposent uniquement leur palier
-courant. Les règles de picking et de placement continuent d'interroger leur tranche réelle.
+Une salle haute de plusieurs étages est l'exception locale. Le renderer conserve son véritable sol
+de base, toutes ses parois jusqu'au fond ainsi que les murs et le contenu spatial de ses tranches
+au-dessus de N — passerelles, connecteurs, objets 3D, tokens et effets — afin d'en montrer le volume
+complet. Une salle adjacente ou empilée qui ne fait pas partie de ce volume n'est pas révélée. Aucun
+plancher intermédiaire n'est inventé et le plafond n'existe que dans la tranche supérieure. Les
+règles de picking et de placement continuent d'interroger la tranche réelle des éléments.
+
+L'identité du volume actif et l'occlusion des façades ont deux autorités séparées. Pour un joueur,
+le volume actif vient de la position monde du token suivi. Pour le MJ et l'éditeur, il vient de la
+cible de `MapControls`, stable pendant un zoom ou une orbite. La position physique de la caméra ne
+choisit plus le volume dès qu'une de ces autorités existe ; elle sert seulement au test de côté des
+façades. Traverser accidentellement une salle voisine avec l'œil ne peut donc plus masquer tout le
+contenu supérieur du volume réellement observé.
 
 Le calcul graphique des murs situés devant la caméra reçoit l'identité de ce volume. Il teste donc
 toutes ses tranches visibles contre l'empreinte de son vrai sol, et pas uniquement les murs du
@@ -732,6 +747,11 @@ existante sans la réimplémenter.
 
 Le calcul d'eau actuel de l'éditeur constitue une preuve de concept topologique, pas une simulation
 runtime autoritaire.
+
+Sa nappe extérieure utilise néanmoins une hauteur géométrique stricte : maximum des faces
+supérieures de sols, plafonds, murs et connecteurs praticables de la carte. Un plafond stocke son
+plan médian ; sa demi-épaisseur est donc ajoutée avant de placer la nappe légèrement au-dessus. Une
+salle haute ne peut plus afficher l'eau au milieu de sa dalle de toit.
 
 Le compilateur doit produire des compartiments reliés par des passages ayant des canaux de
 perméabilité séparés. Eau, gaz et éventuellement pression peuvent ensuite se propager sur ce graphe

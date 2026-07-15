@@ -121,6 +121,13 @@ fixes, 8 fenêtres-écrans et 4 verrières horizontales. Son manifeste déclare 
 `allowed_states` et `skylight_size`. Ces métadonnées sont copiées dans `blueprint.geometry` ; le
 compilateur physique ne déduit jamais une ouverture de la seule boîte englobante du GLB.
 
+Chaque baie utilise une surface vitrée continue : le nombre de pans décrit sa largeur structurelle,
+pas des carreaux séparés, et le générateur n'ajoute aucune traverse ni aucun meneau intérieur. Les
+fenêtres-écrans exposent en plus `SLOT_03` sous le libellé **Charnières**. Un seul boîtier de
+commande est généré, sur une seule face ; il reste en matériau `FIXED`, afin qu'une couleur de
+charnière ne recolore pas le matériel voisin. Son côté de montage est choisi par le connecteur, pas
+par un second boîtier dupliqué dans le GLB.
+
 Le pack est régénéré de manière déterministe avec :
 
 ```bash
@@ -128,8 +135,8 @@ node tools/generate-structural-windows.mjs
 ```
 
 Les fenêtres-écrans exposent les états `transparent`, `opaque` et `mirror`. Les slots de matériaux
-restent des options d'apparence d'instance et ne modifient ni la découpe, ni les collisions, ni les
-canaux de ligne de vue.
+— dont les charnières — restent des options d'apparence d'instance et ne modifient ni la découpe,
+ni les collisions, ni les canaux de ligne de vue.
 
 ### Slots couleur GLB
 Les modèles intégrés peuvent exposer `editor_color_slots` dans leur manifest. Le serveur les copie dans `blueprint.geometry.materialSlots`.

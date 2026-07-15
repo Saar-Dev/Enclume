@@ -15,6 +15,7 @@ import {
 } from '../lib/waterMaterials';
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js';
 import { normalizeEntityScale } from '../../../shared/world/entityTransform.js';
+import { entitySelectionBounds } from '../lib/entitySelectionBounds.js';
 
 // --- Constantes ---
 const ICON_INTERACTION = '⚙';
@@ -34,9 +35,9 @@ function emitEntityClick(event, entity, onEntityClick) {
   );
 }
 
-function EntitySelectionHalo({ width, height, depth, y = 0 }) {
+function EntitySelectionHalo({ width, height, depth, position = [0, 0, 0] }) {
   return (
-    <group position={[0, y, 0]} raycast={DISABLE_RAYCAST}>
+    <group position={position} raycast={DISABLE_RAYCAST}>
       <mesh renderOrder={1000} scale={[1.06, 1.06, 1.06]} raycast={DISABLE_RAYCAST}>
         <boxGeometry args={[Math.max(0.05, width), Math.max(0.05, height), Math.max(0.05, depth)]} />
         <meshBasicMaterial
@@ -220,6 +221,9 @@ function EntityMeshGlb({
     });
     return materials;
   }, [scene, blueprint.name]);
+  const selectionBounds = useMemo(() => {
+    return entitySelectionBounds(scene, { width, height, depth });
+  }, [scene, width, height, depth]);
 
   useEffect(() => () => {
     waterMaterials.forEach(material => material.dispose());
@@ -341,10 +345,10 @@ function EntityMeshGlb({
 
       {!isPreview && isSelected && (
         <EntitySelectionHalo
-          width={width}
-          height={height}
-          depth={depth}
-          y={blueprint.geometry?.origin === 'floor-center' || blueprint.geometry?.origin === 'wall-back-center' ? height / 2 : 0}
+          width={selectionBounds.size[0]}
+          height={selectionBounds.size[1]}
+          depth={selectionBounds.size[2]}
+          position={selectionBounds.center}
         />
       )}
 

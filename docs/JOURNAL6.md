@@ -3620,3 +3620,61 @@ de campagne existante n'est migrée et aucune rétrocompatibilité spéciale n'e
 
 **Retour arrière** : revert du commit de session ; la sauvegarde complète du WIP antérieur reste
 dans `/home/codex/backups/windows-wip-20260715-2115` (bundle, patch, archive et empreintes).
+
+---
+
+## Session 142 (Codex — suite) — 2026-07-15 — Fenêtres continues et contexte multi-étages stable ✅ CLOS
+
+Cette suite retire la dernière dépendance UX des fenêtres au panneau de mur et corrige la cause du
+clignotement des niveaux supérieurs. Les fenêtres restent des connecteurs structurels ; seul leur
+point d'entrée dans l'éditeur rejoint le catalogue des objets 3D.
+
+**Architecture et UX** :
+
+- les `window` et `screen-window` intégrés sont regroupés sous **Objets 3D > Fenêtres** ; les choisir
+  active un rayon de pose sur tout mur valide du niveau et non l'éditeur d'entité libre ;
+- la pose conserve les métadonnées de découpe et crée `surface_data.connectors`, puis revient au
+  mode sélection ; le panneau de mur ne contient plus que **Ajouter une porte** ;
+- le générateur produit une seule vitre continue par baie, quel que soit le nombre de pans, sans
+  traverse ni meneau intérieur ;
+- `SLOT_03` des fenêtres-écrans est désormais libellé **Charnières**. Les boîtiers de commande ont
+  un matériau `FIXED` séparé et ne suivent pas cette couleur ;
+- chaque GLB de fenêtre-écran ne contient plus qu'un seul boîtier. Le champ validé
+  `modelFacing: front|back` et le bouton **Retourner la fenêtre** choisissent sa face sans toucher au
+  connecteur physique ;
+- la convention de matériau `__SLOT_03__Hinges` complète le manifeste d'une fenêtre intégrée déjà
+  posée : elle reçoit elle aussi le réglage **Charnières**, sans migration de carte ;
+- le halo d'entité lit les bornes locales réelles du GLB après ses transformations internes, puis
+  reçoit la même rotation d'instance que le modèle. Les dimensions déclaratives du blueprint ne
+  peuvent plus l'envoyer dans un axe différent ;
+- le volume actif ne dépend plus simultanément de la cible et de la position de caméra. Le joueur
+  utilise la position de son token suivi ; le MJ et l'éditeur utilisent la cible de `MapControls` ;
+- la position de caméra reste l'autorité exclusive du test avant/arrière des façades. Une salle
+  voisine traversée par l'œil ne peut donc plus masquer les passerelles, connecteurs, objets 3D,
+  tokens ou effets des niveaux supérieurs de la salle réellement observée.
+
+**Cause racine reproduite** : un test place la caméra dans une salle voisine tout en gardant sa cible
+dans une tour multi-niveau. L'ancien calcul choisissait la voisine et faisait disparaître la tour ;
+le nouveau contrat conserve la tour comme contexte et utilise séparément la caméra pour l'occlusion.
+
+L'audit de l'eau a également écarté le dernier nettoyage Saar de `Canvas3D` : ce commit retire des
+props mortes et ajoute uniquement un fallback de déplacement MJ. La vraie erreur était dans la
+hauteur géométrique de la nappe : `7,5 m` désignait le plan médian d'un plafond épais de `0,25 m`, et
+le renderer retirait encore `0,02 m`. Sur la carte réelle à trois niveaux, l'eau traversait donc la
+dalle. Elle utilise désormais sa face supérieure à `7,625 m`, puis un décalage positif de `0,02 m`.
+
+**Testé** : 62/62 tests ciblés `cameraCutaway`, `surfaceData`, contrat Surface, bornes de sélection et
+slots de matériaux ; build Vite ; contrôle syntaxique et exécution du générateur ; inspection des
+20 GLB (aucun `Mullion`, huit slots de charnières, huit boîtiers avant et aucun boîtier arrière) ;
+synchronisation serveur de 92 modèles ; health API ; calcul de la carte réelle donnant une nappe
+unique à `7,625 m` ; puis parcours navigateur réel. La catégorie **Fenêtres** contient les 16 modèles
+muraux, l'aperçu n'affiche qu'un boîtier, et le panneau d'une ancienne fenêtre-écran expose
+**Retourner la fenêtre** et **Charnières**. La fenêtre créée pour le contrôle a été supprimée ; la
+carte a retrouvé ses cinq connecteurs initiaux.
+
+**Données** : aucune carte n'est migrée. Le démarrage serveur resynchronise seulement les manifests
+et URLs des modèles intégrés. Les fenêtres déjà posées conservent leur connecteur et leur état ; le
+nouveau GLB est repris par le cachebuster `mtime-size`.
+
+**Retour arrière** : revert du commit de cette suite, puis redémarrage de
+`enclume-codex-server.service` pour resynchroniser le manifeste précédent.

@@ -59,6 +59,28 @@ test('la cible stable active la salle quand la camera reste a l exterieur', () =
   assert.equal(roomId, 'tower')
 })
 
+test('la cible regardee garde le volume actif quand la camera traverse une salle voisine', () => {
+  const roomId = cameraRoomContextId({
+    rooms: {
+      ...multiLevelRooms,
+      neighbour: {
+        id: 'neighbour',
+        minX: 4,
+        maxX: 7,
+        minZ: 0,
+        maxZ: 3,
+        y: 0,
+        level: 0,
+        heightLevels: 3,
+      },
+    },
+    displayLevel: 0,
+    camera: { x: 5.5, y: 1.2, z: 1.5 },
+    focus: { x: 1.5, y: 0, z: 1.5 },
+  })
+  assert.equal(roomId, 'tower')
+})
+
 test('une camera et une cible hors de la salle ne creent aucun contexte', () => {
   const roomId = cameraRoomContextId({
     rooms: multiLevelRooms,
