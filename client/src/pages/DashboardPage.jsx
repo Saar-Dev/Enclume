@@ -22,7 +22,6 @@ export default function DashboardPage() {
   const [editingName, setEditingName] = useState('')
   const [showCreateChar, setShowCreateChar] = useState(false)
   const [createCharCampaignId, setCreateCharCampaignId] = useState('')
-  const [deletingCampaignId, setDeletingCampaignId] = useState(null)
   const coverInputRef = useRef(null)
   const pendingCoverIdRef = useRef(null)
   const createInputRef = useRef(null)
@@ -114,23 +113,6 @@ export default function DashboardPage() {
       setTimeout(() => setCopiedId(null), 1500)
     } catch {
       setError(t('dashboard.copyError'))
-    }
-  }
-
-  const handleDeleteCampaign = async (campaign) => {
-    if (!campaign?.id) return
-    const confirmed = window.confirm(t('settings.deleteCampaignConfirm', { name: campaign.name }))
-    if (!confirmed) return
-
-    setDeletingCampaignId(campaign.id)
-    setError(null)
-    try {
-      await api.delete(`/campaigns/${campaign.id}`)
-      setCampaigns(prev => prev.filter(c => c.id !== campaign.id))
-    } catch (err) {
-      setError(err.response?.data?.error?.message || t('settings.deleteCampaignError'))
-    } finally {
-      setDeletingCampaignId(null)
     }
   }
 
@@ -322,14 +304,6 @@ export default function DashboardPage() {
                     >
                       {t('dashboard.merchants')}
                     </button>
-                    <button
-                      className="btn btn-ghost"
-                      style={styles.cardDeleteBtn}
-                      onClick={() => handleDeleteCampaign(campaign)}
-                      disabled={deletingCampaignId === campaign.id}
-                    >
-                      {deletingCampaignId === campaign.id ? t('settings.deletingCampaign') : t('settings.deleteCampaign')}
-                    </button>
                   </div>
                 )}
 
@@ -482,11 +456,6 @@ const styles = {
     borderTop: '1px solid var(--border-subtle)',
     paddingTop: '12px',
   },
-  cardDeleteBtn: {
-    color: 'var(--color-danger)',
-    borderColor: 'rgba(224,92,92,0.45)',
-  },
-
   inviteCode: {
     fontSize: '12px',
     fontFamily: 'monospace',
