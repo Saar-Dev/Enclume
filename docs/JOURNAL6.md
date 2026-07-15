@@ -3800,7 +3800,7 @@ créées avec `wizard_locked_at` vide. Question de backfill général laissée o
 
 ---
 
-## Session 145 (Saar) — 2026-07-15 — Récupération des commits orphelins Sessions 143-144 ✅ CLOS PARTIEL
+## Session 145 (Saar) — 2026-07-15 — Récupération des commits orphelins Sessions 143-144 ✅ CLOS
 
 **Incident** : les Sessions 143 et 144 ont été codées sur `fusion-kiwi-v2` (worktree
 `Enclume-fk2-worktree`) au lieu de `dev/Saar`. Un rollback de `dev/Saar` vers `origin/dev/Saar`
@@ -3825,14 +3825,17 @@ application ou non sur décision Saar :
 | 4 | `795bf0c` | Réécriture contrat `CLAUDE.md`/`AGENTS.md`/`.claude/rules/*` | ❌ Ignoré — doublon quasi total d'un travail déjà fait sur `dev/Saar` (`c38ec70`, `5d7c86b`) ; le seul delta réel (clarification rôles Kiwi/deux assistants Saar + `README_INSTALLATION.md`) sera repris par Saar depuis une archive séparée |
 | 5 | `be3bc95` | `docs/PLAN_FUSION.md` — audit 8 lots réconciliation fusion Kiwi | ✅ Appliqué (`44cfd43`) — comblait un lien cassé déjà référencé par `2488e7f` (Lot 8, déjà sur `dev/Saar`) |
 | 6 | `e7873a1` | Fix création atomique fiche perso (course StrictMode + `wizard_locked_at` jamais posé) | ✅ Appliqué (`4605817`), SR confirmé Saar |
-| 7 | `9caeb30` | GM déclare l'état initial combat des PNJ | ⏳ Non encore revu |
+| 7 | `9caeb30` | GM déclare l'état initial combat des PNJ | ❌ Écarté — seul des 7 sans section "Testé" dans son message (repéré par Saar après ma recommandation initiale d'application, erreur de ma part de ne pas l'avoir signalé avant) ; correction jamais finie, sera refaite proprement |
 
 **Effet de bord traité** : 9 processus Node dupliqués (4 nodemon + 5 npm) accumulés dans le dossier
 de travail par des relances successives en arrière-plan — nettoyés, un seul triplet
 npm/nodemon/node reste actif.
 
-**Non testé** : commit 7 (`9caeb30`) pas encore analysé. Backfill des personnages orphelins
-pré-existants (mentionné dans l'entrée `e7873a1` ci-dessus) resté hors scope.
+**Bilan final** : 5/7 appliqués, 2/7 écartés (doublon et travail inachevé). Tri des 7 commits
+orphelins clos.
+
+**Non testé** : backfill des personnages orphelins pré-existants (mentionné dans l'entrée `e7873a1`
+ci-dessus) resté hors scope.
 
 **Retour arrière** : `backup/orphan-session143-144-20260715` (origin) conserve les 7 commits
-originaux intacts, y compris ceux ignorés ou pas encore traités.
+originaux intacts, y compris les 2 écartés, en cas de besoin futur.
