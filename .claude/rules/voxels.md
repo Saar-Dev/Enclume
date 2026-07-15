@@ -1,42 +1,19 @@
 ---
+description: Rendu voxel historique, strictement non autoritaire
 paths:
-  - "client/src/components/Canvas3D.jsx"
-  - "client/src/components/CulledVoxelScene.jsx"
-  - "client/src/components/Editor3D.jsx"
-  - "client/src/components/Voxel.jsx"
-  - "client/src/lib/buildCulledMesh.js"
-  - "client/src/lib/voxelTextures.js"
-  - "server/src/lib/voxelTextures.js"
-  - "server/src/routes/battlemaps.js"
+  - "client/src/**/*Voxel*.jsx"
+  - "client/src/**/*voxel*.js"
+  - "client/src/**/voxelTextures*"
 ---
-# Domaine : Voxels, 3D & Canvas
 
-**Spec technique → `docs/SYSTEME/VOXELS.md`**
+# Voxels legacy / rendu
 
-## Pièges critiques
-
-**PE14 — coordonnées voxels**
-`pos_y` DB = profondeur (Z Three.js). `pos_z` DB = altitude (Y Three.js).
-Voxels Redis convertis Three.js→PE14 dans buildCollisionMap/add/remove.
-Coordonnées **brutes en base** — `+0.5` uniquement dans le rendu visuel, jamais en DB.
-
-**P32 — Ordre faces BoxGeometry**
-east(0), west(1), top(2), bottom(3), south(4), north(5).
-`buildCulledMesh` groupe par `(texId × physIdx)` — ordre strict.
-
-**ROTATION_FACE_MAP — cubes r≠0**
-`ROTATION_FACE_MAP[r][physIdx]→origPhysIdx` pour textures multi-faces correctes sur cubes tournés.
-Ajouté Session 77 Phase B.
-
-**VX1 — getVoxelSurfaceTop : cas manquants**
-Pas de gestion slope/wedge en V1. `slab_bottom → y+0.5` uniquement. Connu et documenté.
-
-**buildCulledMesh — fonction pure**
-Pas d'import Three.js. Pas d'accès DOM. Groupement par `(texId × physIdx P32)`.
-
-**CulledVoxelScene — dispose**
-`dispose` via `useEffect` cleanup — ne pas omettre pour éviter les fuites mémoire GPU.
-Non-cubes → `<Voxel>` individuel (pas dans le mesh fusionné).
-
-**colTopSurface — useMemo O(1)**
-Remplace `getColumnTopY O(N)` — ne pas revenir au parcours linéaire.
+- `voxel_data` est un format historique ou visuel; il ne contraint jamais le monde canonique.
+- Aucun calcul de collision, navigation, occupation, LOS, couverture ou portée ne dépend des voxels.
+- Toute conversion voxel vers rendu est un adaptateur à sens unique, pas un second modèle métier.
+- Le décalage de centre de cube (`+0.5`) appartient uniquement à la conversion de rendu si nécessaire.
+- Respecter l'ordre des faces attendu par Three.js et documenter la correspondance des matériaux.
+- Une texture utilisée sur plusieurs faces n'est chargée qu'une fois puis partagée consciemment.
+- Disposer géométries, matériaux et textures créés lorsque le rendu est détruit, sans disposer une
+  ressource encore partagée.
+- Toute nouvelle fonctionnalité monde est ajoutée à `surface_data`/`WorldSnapshot`, jamais ici.

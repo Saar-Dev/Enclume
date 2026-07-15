@@ -1,64 +1,42 @@
 ---
+description: Combat, FSM, actions, portée et contrat spatial avec le moteur monde
 paths:
-  - "server/src/socket/index.js"
-  - "server/src/lib/damageService.js"
-  - "server/src/lib/woundService.js"
-  - "server/src/lib/woundUtils.js"
-  - "server/src/lib/statusService.js"
-  - "server/src/lib/charStats.js"
-  - "server/src/lib/socketUtils.js"
-  - "client/src/components/Combat*.jsx"
-  - "client/src/components/MeleeCombatPanel.jsx"
-  - "client/src/components/AssaultRangedPanel.jsx"
-  - "client/src/components/DroneWeaponPanel.jsx"
-  - "client/src/components/combatSections.js"
-  - "client/src/lib/useCombatSocket.js"
-  - "client/src/stores/combatStore.js"
-  - "shared/armorConstants.js"
-  - "shared/woundConstants.js"
-  - "shared/polarisUtils.js"
+  - "server/src/services/combat*.js"
+  - "server/src/services/*Combat*.js"
+  - "server/src/routes/combat*.js"
+  - "client/src/**/*Combat*.jsx"
+  - "client/src/stores/*combat*.js"
+  - "shared/**/*combat*.js"
 ---
-# Domaine : Combat
 
-**Spec technique → `docs/SYSTEME/COMBAT.md`**
-**Règles mécaniques (source absolue) → `docs/REGLESYSCOMBAT.md`**
-**Synthèse technique séquences/pipeline → `docs/MANUELSYSCOMBAT.md`**
-**Reworks en cours (REWORK-08 prochain) → `docs/ARCHI_REWORK.md`**
-**Reworks achevés (01/02/03/05/07/09) → `docs/ARCHI_REWORK_DONE.md`**
-**Bugs identifiés → `docs/BUGIDENTIFIE.md`**
+# Combat
 
-## Pièges critiques
+Lire `docs/REGLES/REGLESYSCOMBAT.md`, `docs/SYSTEME/COMBAT.md` et les règles spécialisées utiles.
 
-**BUG C — weapon_inv_id ≠ item_id**
-`weapon_inv_id → char_inventory.equipment_id → ref_equipment_skill_assoc WHERE item_id = equipment_id`
-(`ref_equipment_skill_assoc.item_id` FK → `ref_equipment.id`, pas `char_inventory.id`)
-Erreur → skillTotal = 0, assaut toujours raté.
+## Autorité
 
-**P51 — effectiveMalus formule exacte**
-```js
-effectiveMalus = calcWoundPenalty(wounds) - calcEncumbrancePenalty(weight, FOR)  // ≤ 0
-chancesDeReussite = skillTotal + totalDiffMod + effectiveMalus
-```
+- La FSM combat orchestre initiative, compétences, actions, dégâts, armures et états non spatiaux.
+- Toute décision spatiale utilise les services `world*` et `movementBudgetService`.
+- Le combat ne lit directement ni `surface_data`, ni Three.js, ni `voxel_data`.
+- Le client envoie une intention; serveur et FSM décident du résultat et publient l'état accepté.
+- Sous verrou, recalculer le mouvement puis distance, portée, LOS, couverture et effets depuis la
+  position réellement atteinte.
+- `confirmedModifiers` décrit un choix confirmé; il ne devient pas une autorité de portée ou distance.
 
-**PC27 — Entité ≠ PNJ**
-`!token.character_id` = entité de décor — jamais un PNJ.
-PNJ = `character.type === 'pnj'`. Entité exclue du combat.
+## Invariants sensibles
 
-**PC39 — state_character JSONB : merge obligatoire**
-`db.raw('state_character || ?::jsonb', [JSON.stringify({ is_stunned: true })])`
-Jamais `UPDATE SET state_character = '{"is_stunned":true}'` — écrase tous les autres flags.
+- Conserver l'ordre du roster et l'identité des acteurs pendant toutes les transitions.
+- Les fusions JSONB sont explicites et ne doivent pas effacer les champs frères.
+- Distinguer valeur absente, zéro valide et valeur calculée; ne pas utiliser un test de vérité ambigu.
+- Les payloads REST et Socket.IO partagent un schéma stable et incluent les identifiants nécessaires
+  à la déduplication et à la reprise.
+- Les transitions sont idempotentes sous répétition réseau et refusent les états impossibles.
+- Une blessure, armure ou conséquence persistante est écrite dans la transaction prévue avant
+  publication aux clients.
+- Les erreurs connues ne sont pas conservées comme compatibilité: corriger l'autorité ou la migration.
 
-**PC28 — state_character : source correcte**
-Lire depuis `combat_roster`, jamais depuis `combat_actions`.
+## Validation minimale
 
-**PC29 — activeSlotIdx indexe le roster trié**
-`const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)`
-`activeSlotIdx` indexe ce roster TRIÉ — pas le roster brut.
-
-**fire_mode_bonus_dmg — portée courte seulement**
-`fire_mode_bonus_dmg` appliqué uniquement si portée ∈ `{bout_portant, courte}`, sinon 0.
-
-**PC-CaC1 — skill mains nues**
-`COMBAT_A_MAINS_NUES` (FOR/COO) — jamais `COMBAT_CONTACT` (n'existe pas dans ref_skills).
-
-**Implémenter mécanique combat → STOP. `docs/REGLESYSCOMBAT.md` lu dans cette session ?**
+- Tester chaque transition touchée, refus de droits, répétition, reconnexion et concurrence.
+- Tester le transport réel du payload, pas seulement le service isolé.
+- Pour mouvement, portée ou cible, ajouter un scénario monde réel avec budget insuffisant et LOS.
