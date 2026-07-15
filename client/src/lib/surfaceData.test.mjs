@@ -696,3 +696,15 @@ test('un profil de mur multi étage est continu sur toute la hauteur', () => {
   assert.ok(walls.every(wall => wall.elevationProfileOriginY === 0))
   assert.ok(walls.every(wall => wall.elevationProfileHeight === 5))
 })
+
+test('les tranches verticales d un mur partagent une façade de rendu unique', () => {
+  const rendered = roomsWallRenderPaths({ tower: room('tower', 0, 3) })
+  const byFacade = new Map()
+  for (const wall of rendered) {
+    assert.ok(wall.facadeId)
+    if (!byFacade.has(wall.facadeId)) byFacade.set(wall.facadeId, [])
+    byFacade.get(wall.facadeId).push(wall)
+  }
+  assert.equal(byFacade.size, 4)
+  assert.ok([...byFacade.values()].every(walls => walls.length === 3))
+})

@@ -95,12 +95,14 @@ volume ouvert. Tous les étages inférieurs au niveau de coupe sont rendus, sans
 le point visé par la caméra se trouve dans une salle multi-hauteur, les murs de toutes ses tranches,
 y compris au-dessus du niveau courant, sont rendus pour montrer le volume complet ; les autres
 salles supérieures restent masquées. Ces murs ne deviennent pas transparents simplement parce
-qu'ils sont « devant » dans le plan : chaque tranche verticale est testée contre les rayons allant
-de la caméra aux points praticables du vrai sol de la salle. Seules les tranches effectivement
-traversées entre caméra et sol reçoivent l'opacité de coupe ; murs arrière, latéraux, supérieurs non
-traversés et murs des autres niveaux restent opaques. Une salle profonde conserve ses murs
-descendants et son vide continu : un puits doit donc paraître profond. Aucun plancher intermédiaire
-n'est créé automatiquement. Une future trappe doit
+qu'ils sont « devant » dans le plan. Le moteur groupe d'abord toutes les tranches verticales et les
+découpes de porte qui appartiennent à une même façade. Pour chaque rayon allant de la caméra à un
+point praticable du vrai sol, seule la première façade rencontrée peut recevoir l'opacité de coupe.
+La décision s'applique ensuite à la façade complète, sur toute sa hauteur : elle ne produit jamais
+une alternance opaque/transparente entre étages. Une façade située au fond de la salle est derrière
+le sol visé ou derrière une première façade ; elle reste donc opaque. Une salle profonde conserve
+ses murs descendants et son vide continu : un puits doit donc paraître profond. Aucun plancher
+intermédiaire n'est créé automatiquement. Une future trappe doit
 être portée par un connecteur vertical —
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.

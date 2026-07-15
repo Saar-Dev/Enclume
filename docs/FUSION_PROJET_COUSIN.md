@@ -84,10 +84,10 @@ combat ne doit reconstruire cette interface depuis les meshes.
 - seul le plafond qui ferme le niveau courant utilise l'opacité de coupe ;
 - une salle multi-hauteur conserve son vide et ses murs descendants, sans plancher implicite ;
 - les connecteurs inférieurs restent visibles ;
-- la transparence de caméra est décidée par tranche verticale à partir des intersections
-  caméra→vrai sol. Elle s'applique alors au mur logique de cette tranche, pas à ses triangles ni aux
-  morceaux créés par une porte. Ne pas réintroduire un simple test « face avant » qui rendrait
-  transparentes toutes les tranches d'un mur multi-hauteur ;
+- la transparence de caméra est décidée par façade complète. Toutes les tranches verticales et les
+  morceaux créés par une porte partagent un `facadeId` de rendu. Pour chaque rayon caméra→vrai sol,
+  seule la première façade rencontrée peut devenir transparente ; une façade du fond ne doit jamais
+  être masquée parce qu'un autre point de sol se trouve devant elle ;
 - les bouchons internes des découpes de porte ne sont pas rendus.
 
 La visibilité graphique d'un étage inférieur ne lui donne pas l'autorité de support de placement
@@ -215,8 +215,8 @@ Scénarios manuels indispensables :
 - niveau supérieur : tous les étages inférieurs opaques ;
 - mur droit et arc avec porte : transparence monobloc sans bouchons visibles ;
 - salle multi-hauteur : profil vertical unique sur toute la hauteur et murs supérieurs visibles
-  uniquement lorsque la caméra vise ce volume ; seules les tranches coupant réellement un rayon
-  caméra→sol deviennent transparentes ;
+  uniquement lorsque la caméra vise ce volume ; la première façade coupant les rayons caméra→sol
+  devient transparente sur toute sa hauteur, les façades du fond restent opaques ;
 - passerelle le long d'un arc profilé : aucune dalle visible ou praticable hors de la salle ;
 - objet redimensionné : même emprise au rendu, au placement/collision et en LOS après rechargement ;
 - panneau de mur : identifiant copiable, halo complet, porte contrainte au mur actif ;

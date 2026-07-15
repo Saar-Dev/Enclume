@@ -8,7 +8,7 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
-import { evenlySampleTargets, wallSliceOccludesFloorTargets } from '../lib/cameraCutaway.js'
+import { evenlySampleTargets, nearestOccludingFacadeIds, wallFacadeKey } from '../lib/cameraCutaway.js'
 import {
   multiPolygonContours,
   multiPolygonContainsPoint,
@@ -1961,22 +1961,28 @@ function sameStringSet(left, right) {
   return true
 }
 
-function wallOccludesDisplayedFloor(wall, camera, floorTargets, displayLevel, cameraVolumeRoomId = null) {
-  if (!wall || displayLevel === null) return false
-  const belongsToCameraVolume = cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId)
-  if (!belongsToCameraVolume && yToLevel(wallOpacityY(wall)) !== displayLevel) return false
-  if (floorTargets.length === 0) return false
-
-  const path = profiledWallPath(wall)
-  const bottom = Number(wall.y) || 0
-  return wallSliceOccludesFloorTargets({
-    camera: camera.position,
-    wallPath: path,
-    wallBottom: bottom,
-    wallTop: bottom + Math.max(0.01, Number(wall.height) || STORY_HEIGHT),
-    targets: floorTargets,
-    wallRoomIds: wall.roomIds || [],
-  })
+function displayedWallFacades(walls, displayLevel, cameraVolumeRoomId = null) {
+  if (displayLevel === null) return []
+  const groups = new Map()
+  for (const wall of walls) {
+    const belongsToCameraVolume = cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId)
+    if (!belongsToCameraVolume && yToLevel(wallOpacityY(wall)) !== displayLevel) continue
+    const facadeId = wallFacadeKey(wall)
+    if (!groups.has(facadeId)) {
+      groups.set(facadeId, {
+        id: facadeId,
+        surfaces: [],
+        logicalWallIds: new Set(),
+      })
+    }
+    const group = groups.get(facadeId)
+    group.surfaces.push({
+      path: profiledWallPath(wall),
+      roomIds: wall.roomIds || [],
+    })
+    group.logicalWallIds.add(wall.logicalWallId || wall.id)
+  }
+  return [...groups.values()]
 }
 
 function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = null) {
@@ -1985,10 +1991,20 @@ function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = n
     () => displayedFloorTargets(surface, displayLevel, cameraVolumeRoomId),
     [cameraVolumeRoomId, displayLevel, surface],
   )
+  const cutawayTargets = useMemo(
+    () => cameraVolumeRoomId
+      ? floorTargets.filter(target => target.roomId === cameraVolumeRoomId)
+      : floorTargets,
+    [cameraVolumeRoomId, floorTargets],
+  )
+  const facades = useMemo(
+    () => displayedWallFacades(walls, displayLevel, cameraVolumeRoomId),
+    [cameraVolumeRoomId, displayLevel, walls],
+  )
   const [occludedIds, setOccludedIds] = useState(() => new Set())
   const elapsedRef = useRef(0)
   const lastViewRef = useRef(null)
-  const inputsRef = useRef({ walls: null, floorTargets: null, displayLevel: null, cameraVolumeRoomId: null })
+  const inputsRef = useRef({ facades: null, cutawayTargets: null })
 
   useFrame((_, delta) => {
     elapsedRef.current += delta
@@ -2001,23 +2017,25 @@ function useOccludedWallIds(walls, surface, displayLevel, cameraVolumeRoomId = n
     const cameraMoved = !previous
       || previous.position.distanceToSquared(position) > 0.0004
       || 1 - Math.abs(previous.quaternion.dot(quaternion)) > 0.00002
-    const inputsChanged = inputsRef.current.walls !== walls
-      || inputsRef.current.floorTargets !== floorTargets
-      || inputsRef.current.displayLevel !== displayLevel
-      || inputsRef.current.cameraVolumeRoomId !== cameraVolumeRoomId
+    const inputsChanged = inputsRef.current.facades !== facades
+      || inputsRef.current.cutawayTargets !== cutawayTargets
     if (!cameraMoved && !inputsChanged) return
 
     lastViewRef.current = {
       position: position.clone(),
       quaternion: quaternion.clone(),
     }
-    inputsRef.current = { walls, floorTargets, displayLevel, cameraVolumeRoomId }
+    inputsRef.current = { facades, cutawayTargets }
 
     const next = new Set()
-    for (const wall of walls) {
-      if (wallOccludesDisplayedFloor(wall, camera, floorTargets, displayLevel, cameraVolumeRoomId)) {
-        next.add(wall.logicalWallId || wall.id)
-      }
+    const occludingFacadeIds = nearestOccludingFacadeIds({
+      camera: camera.position,
+      targets: cutawayTargets,
+      facades,
+    })
+    for (const facade of facades) {
+      if (!occludingFacadeIds.has(facade.id)) continue
+      for (const logicalWallId of facade.logicalWallIds) next.add(logicalWallId)
     }
     setOccludedIds(current => (sameStringSet(current, next) ? current : next))
   })

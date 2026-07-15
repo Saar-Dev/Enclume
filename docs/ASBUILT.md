@@ -418,13 +418,14 @@ monde que la FSM doit appeler, les zones de conflit manuel et la matrice de vali
   plan du sol ;
 - l'aperçu de porte réutilise `ConnectorSegment` et affiche le vrai GLB choisi, sa tangente locale et
   ses matériaux. Une pose refusée ne quitte plus le mode connecteur et ne désélectionne plus le mur ;
-- la coupe caméra des salles multi-hauteur échantillonne leur sol réel puis teste l'intersection
-  caméra→sol avec chaque chemin et chaque tranche verticale. Seules les tranches qui cachent
-  effectivement le sol deviennent transparentes ; les murs arrière, latéraux ou supérieurs non
-  traversés restent visibles ;
+- `roomsWallRenderPaths(...)` attribue un `facadeId` indépendant de l'étage à chaque façade droite
+  ou arrondie. Les tranches verticales et les morceaux autour d'une porte partagent cette identité ;
+- la coupe caméra échantillonne le sol réel et ne conserve que la première façade rencontrée sur
+  chaque rayon caméra→sol. La décision est appliquée à la façade complète : aucun damier vertical
+  n'est possible et les façades du fond restent opaques ;
 - les panneaux contextuels utilisent un écart latéral de 56 px, basculent à gauche si nécessaire et
   conservent leur recalage dynamique dans le viewport ;
-- état validé : 158 tests monde/serveur/client passent, build Vite de production valide et ESLint
+- état validé : 160 tests monde/serveur/client passent, build Vite de production valide et ESLint
   ciblé sans erreur. Le lint global garde son passif connu dans les fichiers combat non modifiés.
 
 ---

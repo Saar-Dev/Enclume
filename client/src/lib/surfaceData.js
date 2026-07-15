@@ -1542,10 +1542,12 @@ function mergeStraightWallPanels(panels) {
         ...first,
         id,
         logicalWallId: id,
+        facadeId: `room-wall:facade:${axis}:${formatLevel(axis === 'x' ? first.z0 : first.x0)}:${formatLevel(run.min)}:${formatLevel(run.max)}`,
         ...(axis === 'x' ? { x0: start, x1: end } : { z0: start, z1: end }),
         roomIds: [...new Set(run.panels.flatMap(panel => panel.roomIds || []))],
         frontRoomIds: [...new Set(run.panels.flatMap(panel => panel.frontRoomIds || []))],
         backRoomIds: [...new Set(run.panels.flatMap(panel => panel.backRoomIds || []))],
+        sourceEdgeKeys: [...new Set(run.panels.flatMap(panel => panel.sourceEdgeKeys || []))],
       })
     }
   }
@@ -1617,6 +1619,7 @@ export function roomsWallRenderPaths(rooms) {
         ...first,
         id: `room-wall:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}`,
         logicalWallId: `room-wall:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}:${formatLevel(first.y)}`,
+        facadeId: `room-wall:facade:arc:${first.curveId}:${formatLevel(run.min)}:${formatLevel(run.max)}`,
         axis: 'arc',
         curveOffset0: run.min,
         curveOffset1: run.max,

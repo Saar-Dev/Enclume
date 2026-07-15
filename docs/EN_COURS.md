@@ -63,8 +63,9 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 > profils verticaux continus, volume multi-hauteur complet à la caméra et passerelles découpées par
 > l'intérieur réel des murs courbes/profilés.
 > Correctifs de finition du même jour : toutes les tranches d'une salle multi-hauteur restent
-> affichées, mais seules celles réellement traversées entre la caméra et le vrai sol deviennent
-> transparentes. La pose de porte conserve les arêtes canoniques du mur, vise directement sa surface
+> affichées. Les tranches d'une même façade partagent maintenant une décision unique : seule la
+> première façade entre caméra et vrai sol devient transparente, tandis que les murs du fond restent
+> opaques. La pose de porte conserve les arêtes canoniques du mur, vise directement sa surface
 > verticale et prévisualise le modèle 3D choisi. Rotation/échelle disposent aussi d'une
 > prévisualisation locale, les passerelles sont rebranchées sur Sol/Plafond et les panneaux sont
 > décalés de l'objet puis recalés verticalement à l'ouverture d'un accordéon.

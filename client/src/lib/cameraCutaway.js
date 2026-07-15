@@ -22,33 +22,53 @@ export function segmentIntersectionRatio2D(from, to, segmentFrom, segmentTo) {
   return Math.max(0, Math.min(1, rayRatio))
 }
 
-export function wallSliceOccludesFloorTargets({
-  camera,
-  wallPath,
-  wallBottom,
-  wallTop,
-  targets,
-  wallRoomIds = [],
-}) {
-  if (!camera || !Array.isArray(wallPath) || wallPath.length < 2 || !Array.isArray(targets)) return false
-  const bottom = Math.min(Number(wallBottom), Number(wallTop))
-  const top = Math.max(Number(wallBottom), Number(wallTop))
-  if (![Number(camera.x), Number(camera.y), Number(camera.z), bottom, top].every(Number.isFinite)) return false
-  const roomIds = new Set((wallRoomIds || []).map(String))
+export function wallFacadeKey(wall) {
+  if (wall?.facadeId) return String(wall.facadeId)
+  if (wall?.curveId) return `wall-facade:curve:${wall.curveId}`
+  if (wall?.logicalWallId) return `wall-facade:logical:${wall.logicalWallId}`
+  if (wall?.id) return `wall-facade:id:${wall.id}`
+  const from = `${Number(wall?.x0) || 0}:${Number(wall?.z0) || 0}`
+  const to = `${Number(wall?.x1) || 0}:${Number(wall?.z1) || 0}`
+  return from.localeCompare(to) <= 0
+    ? `wall-facade:segment:${from}:${to}`
+    : `wall-facade:segment:${to}:${from}`
+}
+
+export function nearestOccludingFacadeIds({ camera, targets, facades }) {
+  const result = new Set()
+  if (!camera || !Array.isArray(targets) || !Array.isArray(facades)) return result
+  if (![Number(camera.x), Number(camera.z)].every(Number.isFinite)) return result
 
   for (const target of targets) {
-    const targetY = Number(target?.y)
-    if (![Number(target?.x), targetY, Number(target?.z)].every(Number.isFinite)) continue
-    if (target?.roomId != null && roomIds.size > 0 && !roomIds.has(String(target.roomId))) continue
+    if (![Number(target?.x), Number(target?.z)].every(Number.isFinite)) continue
+    let closestRatio = Infinity
+    const closestFacadeIds = new Set()
 
-    for (let index = 0; index < wallPath.length - 1; index += 1) {
-      const ratio = segmentIntersectionRatio2D(camera, target, wallPath[index], wallPath[index + 1])
-      if (ratio === null) continue
-      const hitY = Number(camera.y) + (targetY - Number(camera.y)) * ratio
-      if (hitY >= bottom - EPSILON && hitY <= top + EPSILON) return true
+    for (const facade of facades) {
+      if (!facade?.id || !Array.isArray(facade.surfaces)) continue
+      let facadeRatio = Infinity
+      for (const surface of facade.surfaces) {
+        const path = surface?.path
+        if (!Array.isArray(path) || path.length < 2) continue
+        for (let index = 0; index < path.length - 1; index += 1) {
+          const ratio = segmentIntersectionRatio2D(camera, target, path[index], path[index + 1])
+          if (ratio === null || ratio <= EPSILON || ratio >= 1 - EPSILON) continue
+          facadeRatio = Math.min(facadeRatio, ratio)
+        }
+      }
+      if (!Number.isFinite(facadeRatio)) continue
+      if (facadeRatio < closestRatio - EPSILON) {
+        closestRatio = facadeRatio
+        closestFacadeIds.clear()
+        closestFacadeIds.add(facade.id)
+      } else if (Math.abs(facadeRatio - closestRatio) <= EPSILON) {
+        closestFacadeIds.add(facade.id)
+      }
     }
+
+    for (const facadeId of closestFacadeIds) result.add(facadeId)
   }
-  return false
+  return result
 }
 
 export function evenlySampleTargets(targets, maximum = 256) {

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 
 import {
   evenlySampleTargets,
+  nearestOccludingFacadeIds,
   segmentIntersectionRatio2D,
-  wallSliceOccludesFloorTargets,
+  wallFacadeKey,
 } from './cameraCutaway.js'
 
 test('une intersection 2D conserve la position du mur sur le rayon caméra-sol', () => {
@@ -16,35 +17,60 @@ test('une intersection 2D conserve la position du mur sur le rayon caméra-sol',
   ), 0.5)
 })
 
-test('seule la tranche verticale traversée entre la caméra et le sol devient transparente', () => {
-  const input = {
-    camera: { x: -4, y: 7.5, z: 0 },
-    wallPath: [{ x: 0, z: -2 }, { x: 0, z: 2 }],
-    targets: [{ x: 4, y: 0, z: 0, roomId: 'tower' }],
-    wallRoomIds: ['tower'],
-  }
-  assert.equal(wallSliceOccludesFloorTargets({ ...input, wallBottom: 2.5, wallTop: 5 }), true)
-  assert.equal(wallSliceOccludesFloorTargets({ ...input, wallBottom: 0, wallTop: 2.5 }), false)
-  assert.equal(wallSliceOccludesFloorTargets({ ...input, wallBottom: 5, wallTop: 7.5 }), false)
+function rectangularFacades() {
+  return [
+    { id: 'front', surfaces: [{ roomIds: ['tower'], path: [{ x: 0, z: 0 }, { x: 4, z: 0 }] }] },
+    { id: 'right', surfaces: [{ roomIds: ['tower'], path: [{ x: 4, z: 0 }, { x: 4, z: 4 }] }] },
+    { id: 'back', surfaces: [{ roomIds: ['tower'], path: [{ x: 4, z: 4 }, { x: 0, z: 4 }] }] },
+    { id: 'left', surfaces: [{ roomIds: ['tower'], path: [{ x: 0, z: 4 }, { x: 0, z: 0 }] }] },
+  ]
+}
+
+test('une vue de face masque la façade avant complète mais jamais le mur du fond', () => {
+  const result = nearestOccludingFacadeIds({
+    camera: { x: 2, z: -6 },
+    targets: [
+      { x: 0.5, z: 0.5, roomId: 'tower' },
+      { x: 2, z: 2, roomId: 'tower' },
+      { x: 3.5, z: 3.5, roomId: 'tower' },
+    ],
+    facades: rectangularFacades(),
+  })
+  assert.deepEqual([...result], ['front'])
 })
 
-test('un mur arrière ou appartenant à une autre salle reste opaque', () => {
-  const common = {
-    camera: { x: -4, y: 7.5, z: 0 },
-    targets: [{ x: 4, y: 0, z: 0, roomId: 'tower' }],
-    wallBottom: 2.5,
-    wallTop: 5,
+test('une vue en diagonale masque seulement les deux façades les plus proches', () => {
+  const result = nearestOccludingFacadeIds({
+    camera: { x: -6, z: -6 },
+    targets: [
+      { x: 0.5, z: 3.5, roomId: 'tower' },
+      { x: 3.5, z: 0.5, roomId: 'tower' },
+      { x: 3.5, z: 3.5, roomId: 'tower' },
+    ],
+    facades: rectangularFacades(),
+  })
+  assert.deepEqual([...result].sort(), ['front', 'left'])
+  assert.equal(result.has('back'), false)
+  assert.equal(result.has('right'), false)
+})
+
+test('les tranches et découpes d une façade partagent une seule décision', () => {
+  const facade = {
+    id: 'front',
+    surfaces: [
+      { roomIds: ['tower'], path: [{ x: 0, z: 0 }, { x: 1.5, z: 0 }] },
+      { roomIds: ['tower'], path: [{ x: 2.5, z: 0 }, { x: 4, z: 0 }] },
+      { roomIds: ['tower'], path: [{ x: 0, z: 0 }, { x: 4, z: 0 }] },
+    ],
   }
-  assert.equal(wallSliceOccludesFloorTargets({
-    ...common,
-    wallPath: [{ x: 6, z: -2 }, { x: 6, z: 2 }],
-    wallRoomIds: ['tower'],
-  }), false)
-  assert.equal(wallSliceOccludesFloorTargets({
-    ...common,
-    wallPath: [{ x: 0, z: -2 }, { x: 0, z: 2 }],
-    wallRoomIds: ['other-room'],
-  }), false)
+  const result = nearestOccludingFacadeIds({
+    camera: { x: 2, z: -6 },
+    targets: [{ x: 2, z: 3, roomId: 'tower' }],
+    facades: [facade, rectangularFacades()[2]],
+  })
+  assert.deepEqual([...result], ['front'])
+  assert.equal(wallFacadeKey({ facadeId: 'front', logicalWallId: 'slice:0' }), 'front')
+  assert.equal(wallFacadeKey({ facadeId: 'front', logicalWallId: 'slice:1' }), 'front')
 })
 
 test('l échantillonnage des grands sols reste borné et réparti', () => {
