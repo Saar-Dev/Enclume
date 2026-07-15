@@ -24,6 +24,11 @@ Les unités versionnées `deploy/enclume-fusion-client.service` et
 `--strictPort` sur 8393 et l'API écoute sur 8394. Les services historiques n'ont pas été arrêtés ou
 redémarrés par ce déploiement.
 
+UFW autorise les deux ports de fusion depuis le seul sous-réseau local `192.168.1.0/24`. Avant cette
+règle, les services répondaient localement mais les connexions du poste client expiraient, alors que
+`8193/8194` et `8293/8294` restaient accessibles. Le contrôle final depuis le poste Windows retourne
+HTTP 200 sur `8393` et `{ status: "ok" }` sur `8394/api/health`.
+
 La validation du merge a détecté puis corrigé deux défauts de la tête importée : une fermeture de
 commentaire `*/` incluse dans le texte d'un commentaire CSS empêchait la minification Lightning CSS,
 et `CampaignSettingsPage.jsx` conservait une variable `catch` inutilisée ainsi qu'une dépendance de

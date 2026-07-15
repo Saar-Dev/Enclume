@@ -17,6 +17,11 @@ Les trois copies utilisent le dépôt distant `https://github.com/Saar-Dev/Enclu
 développeur ne travaille directement dans le dépôt de l'autre. L'instance `8393/8394` est un sas de
 validation commun, pas un troisième espace de développement fonctionnel.
 
+Le pare-feu UFW autorise `8393/tcp` et `8394/tcp` uniquement depuis `192.168.1.0/24`. Cette règle est
+nécessaire même lorsque Vite écoute correctement sur `0.0.0.0`. Une exposition Internet demanderait
+une décision séparée, les règles NAT de la box et une règle UFW explicitement adaptée ; elle ne doit
+pas être déduite de l'accès LAN.
+
 ## 2. Isolation des données
 
 - chaque instance possède sa propre base PostgreSQL et applique ses migrations uniquement à cette

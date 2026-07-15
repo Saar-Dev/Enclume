@@ -3530,3 +3530,8 @@ Workflow durable : `docs/WORKFLOW_FUSION.md`. Autorités combat/monde :
 **Publication distante différée** : le push HTTPS de `integration` a été refusé car le compte
 système `codex` ne possède pas d'authentification GitHub non interactive. La branche et le
 déploiement restent valides localement ; aucun identifiant du cousin n'a été réutilisé.
+
+**Correctif d'accès LAN** : les services écoutaient correctement sur `0.0.0.0:8393` et `*:8394`,
+mais UFW ne connaissait que les anciens ports. Deux règles limitées à `192.168.1.0/24` autorisent
+désormais `8393/tcp` et `8394/tcp`. Vérification depuis le poste Windows : deux connexions TCP
+ouvertes, HTTP 200 côté client et health API `ok`.
