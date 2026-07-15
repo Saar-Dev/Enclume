@@ -3797,3 +3797,42 @@ créées avec `wizard_locked_at` vide. Question de backfill général laissée o
 
 **Fichiers touchés** : `server/src/services/charSheetService.js` (NOUVEAU),
 `server/src/routes/characters.js`, `server/src/routes/character/char-sheet.js`. Aucun fichier client.
+
+---
+
+## Session 145 (Saar) — 2026-07-15 — Récupération des commits orphelins Sessions 143-144 ✅ CLOS PARTIEL
+
+**Incident** : les Sessions 143 et 144 ont été codées sur `fusion-kiwi-v2` (worktree
+`Enclume-fk2-worktree`) au lieu de `dev/Saar`. Un rollback de `dev/Saar` vers `origin/dev/Saar`
+(reflog : `dev/Saar@{2}` `0f32fc2` → `dev/Saar@{1}` `60056b3`) a ensuite laissé une chaîne de 7
+commits (`56a1dea`…`9caeb30`, base commune `ce739aa`) sans branche pour les porter — objets Git
+valides mais non protégés contre un `gc`.
+
+**Sauvegarde immédiate** : branche `backup/orphan-session143-144-20260715` créée sur `9caeb30` (tip
+de la chaîne) et poussée sur `origin` avant tout autre travail — les 7 commits sont désormais
+permanents quel que soit le sort donné à chacun.
+
+**Revue pas à pas** (exigence Saar : "sûr à 100%", un commit à la fois, décision explicite avant
+chaque cherry-pick) — pour chacun : vérification de non-divergence des fichiers touchés entre
+`ce739aa` et `dev/Saar` actuel (Fusion Kiwi `caaf1af` incluse), lecture du diff complet, avis, puis
+application ou non sur décision Saar :
+
+| # | Commit | Contenu | Décision |
+|---|---|---|---|
+| 1 | `56a1dea` | PLAN_MUTATION2 Lot 6 Identité (`identityService.js`, sex/is_fertile/hand_pref) | ✅ Appliqué (`b5a9df7`) |
+| 2 | `0ac114e` | Archive `docs/PLAN_MUTATION2.md` → `docs/Old/` | ✅ Appliqué (`d08d8ab`) |
+| 3 | `d4e78d1` | Dette HP1 — `hand_pref` lu sur `char_sheet` au lieu de `char_identity` (inventaire + défense CaC) | ✅ Appliqué (`cb75201`) |
+| 4 | `795bf0c` | Réécriture contrat `CLAUDE.md`/`AGENTS.md`/`.claude/rules/*` | ❌ Ignoré — doublon quasi total d'un travail déjà fait sur `dev/Saar` (`c38ec70`, `5d7c86b`) ; le seul delta réel (clarification rôles Kiwi/deux assistants Saar + `README_INSTALLATION.md`) sera repris par Saar depuis une archive séparée |
+| 5 | `be3bc95` | `docs/PLAN_FUSION.md` — audit 8 lots réconciliation fusion Kiwi | ✅ Appliqué (`44cfd43`) — comblait un lien cassé déjà référencé par `2488e7f` (Lot 8, déjà sur `dev/Saar`) |
+| 6 | `e7873a1` | Fix création atomique fiche perso (course StrictMode + `wizard_locked_at` jamais posé) | ✅ Appliqué (`4605817`), SR confirmé Saar |
+| 7 | `9caeb30` | GM déclare l'état initial combat des PNJ | ⏳ Non encore revu |
+
+**Effet de bord traité** : 9 processus Node dupliqués (4 nodemon + 5 npm) accumulés dans le dossier
+de travail par des relances successives en arrière-plan — nettoyés, un seul triplet
+npm/nodemon/node reste actif.
+
+**Non testé** : commit 7 (`9caeb30`) pas encore analysé. Backfill des personnages orphelins
+pré-existants (mentionné dans l'entrée `e7873a1` ci-dessus) resté hors scope.
+
+**Retour arrière** : `backup/orphan-session143-144-20260715` (origin) conserve les 7 commits
+originaux intacts, y compris ceux ignorés ou pas encore traités.
