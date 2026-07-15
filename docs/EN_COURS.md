@@ -4,6 +4,10 @@
 > et `dev/monde`. Seul le code versionné est synchronisé ; les configurations, bases et assets ne
 > sont jamais recopiés entre instances. Le détail et le retour arrière sont dans
 > `docs/WORKFLOW_FUSION.md` et `/home/codex/backups/enclume-common-baseline-20260715-125308`.
+> Synchronisation validée : les trois arbres Git sont identiques, les buckets actifs sont désormais
+> `enclume-assets-cousin`, `enclume-assets-monde` et `enclume-assets-fusion`, et les trois couples
+> client/API répondent avec leur proxy same-origin. Tests : 124 monde + 3 configuration, deux builds
+> Vite et quatre handshakes Socket.IO.
 >
 > **2026-07-15 — première fusion commune déployée** : les environnements historiques restent séparés
 > sur `8193/8194` et `8293/8294`. Le worktree `/home/codex/Enclume-fusion`, branche `integration`,

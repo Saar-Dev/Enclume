@@ -74,9 +74,20 @@ résolu avant que les deux développeurs puissent repartir de la branche distant
 Après validation de la fusion, les deux espaces de développement sont remis à niveau sur le tag
 `baseline/common-20260715`, puis divergent uniquement par leurs nouveaux commits : `dev/cousin`
 sur `8193/8194` et `dev/monde` sur `8293/8294`. Le code versionné est identique au départ, tandis que
-les `.env`, les bases `vtt`/`vtt_codex`, Redis et MinIO restent isolés. La sauvegarde préalable
+les `.env`, les bases `vtt`/`vtt_codex`, Redis et MinIO restent isolés. Les 23 objets historiques
+(64 060 053 octets) ont été clonés et contrôlés dans `enclume-assets-cousin` et
+`enclume-assets-monde` ; aucune instance active n'écrit plus dans le bucket partagé historique.
+La sauvegarde préalable
 `/home/codex/backups/enclume-common-baseline-20260715-125308` contient deux bundles Git, les trois
 bases, les configurations et les buckets, tous contrôlés par SHA-256.
+
+Les deux clients de développement utilisent eux aussi l'API et Socket.IO en same-origin :
+`API_PROXY_TARGET` vise respectivement `8194` et `8294`, tandis que `VITE_API_URL` reste vide. Le
+serveur cousin a appliqué les migrations monde restantes à `vtt` puis synchronisé les 72 modèles 3D
+intégrés. Les messages de migration 144 signalent uniquement l'absence de textures legacy qui
+n'existaient déjà pas dans le bucket source ; le batch s'est terminé et les deux serveurs sont
+actifs. Validation finale : 124 tests monde, 3 tests de configuration, deux builds Vite, health
+checks et handshakes Socket.IO sur les trois instances.
 
 ---
 

@@ -41,6 +41,8 @@ reverse proxy de production.
 
 - chaque instance possède sa propre base PostgreSQL et applique ses migrations uniquement à cette
   base ;
+- le cousin utilise exclusivement le bucket `enclume-assets-cousin` ;
+- le moteur monde utilise exclusivement le bucket `enclume-assets-monde` ;
 - l'intégration utilise la base logique Redis `2` ou, si ce mécanisme change, un préfixe exclusivement
   réservé à `fusion` ;
 - l'intégration utilise le bucket MinIO `enclume-assets-fusion` ;
@@ -48,9 +50,9 @@ reverse proxy de production.
   ne doivent pas revenir vers `vtt_codex` ou son bucket ;
 - Redis n'est jamais une sauvegarde durable. Les états durables restent dans PostgreSQL.
 
-Les environnements historiques `8193` et `8293` ne sont pas reconfigurés lors de la création de
-l'intégration. Leur partage historique éventuel de Redis ou d'assets ne doit pas être reproduit par
-le nouvel environnement.
+Le bucket historique `enclume-assets` n'est plus utilisé en écriture par une instance active. Son
+contenu initial a été cloné vers les deux buckets de développement lors de la première remise à
+niveau commune. Il reste une source de restauration historique, pas un espace de travail partagé.
 
 La fusion du code ne fusionne pas automatiquement les données vivantes des deux bases. La première
 `vtt_fusion` a été restaurée depuis `vtt_codex`. Les créations effectuées uniquement dans `vtt`
