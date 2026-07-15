@@ -3553,3 +3553,15 @@ Le correctif est complété par un proxy same-origin dans Vite : `VITE_API_URL` 
 `/socket.io` relayés vers `API_PROXY_TARGET` `127.0.0.1:8394`. Les requêtes de login, health checks et
 handshakes Socket.IO restent sur le port `8393` vu du navigateur, aussi bien par l'adresse LAN que
 publique. Les cookies `SameSite=Lax` ne dépendent donc plus d'un trajet LAN → API publique.
+
+**Modèles de tokens de test importés depuis le poste de Saar** : les deux fichiers GLB 2.0 locaux
+`Jon_Polaris_Realistic.glb` et `Jon_Polaris_Figurine.glb` ont été copiés dans le bucket
+`enclume-assets-fusion`, sans remplacer le modèle du personnage Jon existant. Deux PNJ visibles et
+supprimables ont été ajoutés à `La Beta-test Company` pour permettre des essais immédiats :
+
+- `Test Jon réaliste` (`bfa678cf-52e8-4606-a061-3b8886f933f4`) ;
+- `Test Jon figurine` (`837e7d98-bb66-40ef-ac69-902d0b49d43e`).
+
+Les sommes SHA-256 des objets MinIO correspondent exactement aux fichiers sources et les deux
+ressources répondent en HTTP 200 via le proxy d'assets. Cette opération ajoute uniquement des
+données de test ; aucune bibliothèque ni logique de sélection de modèle n'a été introduite.
