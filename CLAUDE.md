@@ -1,5 +1,5 @@
 # CLAUDE.md — Projet Enclume
-> Session 141 (suite 30) — 2026-07-13
+> Session 141 (suite 31) — 2026-07-13
 
 ---
 
@@ -24,7 +24,7 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 
 - `docs/EN_COURS.md` [[docs/EN_COURS|EN_COURS]] → si la prochaine étape n'est pas claire depuis `## ÉTAT COURANT` ci-dessous.
 - `docs/ASBUILT.md` [[docs/ASBUILT|ASBUILT]] → si la tâche touche à l'architecture (nouvelles routes, migrations, nouveaux services).
-- `docs/JOURNAL5.md` [[JOURNAL5]] (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
+- `docs/JOURNAL6.md` [[JOURNAL6]] (dernier `## Session N` uniquement) → si un bug précis nécessite l'historique d'une décision.
 - **Fichiers domaine → chargés automatiquement** via `.claude/rules/` quand les fichiers source sont ouverts.
 
 ### Avant de coder
@@ -35,10 +35,10 @@ CODE > conversation. Jamais travailler de mémoire. Lire les fichiers.
 
 ### Pendant le développement
 - **Run à vide autocentré obligatoire** à la fin de chaque étape.
-- **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad. Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL5.md en fin de session.
+- **Sessions analytiques (audit, investigation, debug) :** utiliser `docs/JOURNALTEMP.md` comme scratch pad. Contenu périssable — ne jamais inclure dans la lecture obligatoire. Consolider vers JOURNAL6.md en fin de session.
 
 ### Après chaque tâche confirmée fonctionnelle
-- Appender [[JOURNAL5]]
+- Appender [[JOURNAL6]]
 - Mettre à jour le header date de tout fichier `.md` modifié.
 - Proposer un scénario de test (étapes + résultat attendu) avant de passer à la suite.
 - Fin de session : mettre à jour [[docs/EN_COURS|EN_COURS]], [[docs/ROADMAP|ROADMAP]], [[docs/ASBUILT|ASBUILT]], [[CLAUDE]]
@@ -112,8 +112,50 @@ Serveur Alpha "Kiwi" : `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANT
 
 ---
 
-## ÉTAT COURANT — Session 141 (suite 30) (2026-07-13)
+## ÉTAT COURANT — Session 141 (suite 31) (2026-07-13)
 
+- **Session 141 (suite 31) — Transfert du skin Wizard (Section 12, sci-fi premium/glassmorphism)
+  vers le reste de l'interface ✅ CLOS, fonctionnel confirmé Saar ("testé et magnifique").** Demande
+  hors chantiers en cours, exigence répétée deux fois par Saar : "architecture propre, pas de
+  bricolage" / "tu peux coder UNIQUEMENT si architecture propre". **Constat avant tout code** : 3
+  systèmes visuels coexistaient dans `client/src/index.css` — Section 3 (tokens de base, bleu
+  désaturé `#5b8dee`), Section 10 (HUD chamfré `.btn`/`.badge`, grep confirme 25 fichiers
+  consommateurs dont les fenêtres de combat — pas un système propre au Dashboard), Section 11
+  (Combat Window System, palette tactique délibérément distincte, non touchée), Section 12 (skin
+  Wizard, `--wiz-*` redéclarées en double sous `.wiz-page`/`.wiz-shell`). **Architecture retenue**
+  (pattern primitives + alias sémantiques, pas de renommage massif) : les `--wiz-*` montent dans
+  `:root` une seule fois ; les tokens génériques déjà consommés par des centaines de points dans
+  toute l'app (`--bg-app`, `--color-primary`, `--text-primary/secondary/muted`, `--border-subtle/
+  strong`, etc.) deviennent des **alias** vers ces primitives — zéro renommage ailleurs dans l'app.
+  `.card`/`button`/`input` (Section 7) et `.btn`/`.btn-ghost`/`.btn-danger`/`.btn-gold`/`.btn-
+  success`/`.badge`+variantes/`.btn-toggle` (Section 10) reskinnés : retrait du chamfer (`clip-
+  path`), glass (`backdrop-filter: blur`) + halo cyan. Nouvelle classe **`.app-shell`** (fond dégradé
+  + halo pulsé, réutilise l'animation `wizPulse` déjà existante) partagée par `.dashboard` et
+  `CampaignSettingsPage.jsx` — pas une 3ᵉ duplication du même effet (Login garde son propre bloc,
+  légitimement différent : filigrane logo occupant `::before`). **Étendu en 2 temps, chacun validé
+  par Saar avant le suivant** : (1) `LoginPage.jsx`+`DashboardPage.jsx` (test) ; (2)
+  `CampaignSettingsPage.jsx` + 5 `Section*.jsx` + `sharedStyles.js` (pages de configuration
+  campagne). **6 vrais bugs trouvés et corrigés en marchant** (pas des features) : `--border-normal`
+  inexistant (`DashboardPage.jsx` + `sharedStyles.js` ×4 — inputs sans bordure visible) ; `--bg-card`
+  inexistant (`sharedStyles.js`) ; `.login-error` référencée en JSX mais jamais stylée ; `.login-
+  title` avec un var CSS mort (`--font-family`) ; 6 occurrences de bleu `#5b8dee`/
+  `rgba(91,141,238,...)` figées en dur, désynchronisées du token `--color-primary` dès le 1er lot.
+  **Nettoyage architectural additionnel (lot Settings)** : suppression de `sharedStyles.section`/
+  `optionBtn`/`optionBtnActive`/`btnSecondary`/`btnDanger` — dupliquaient `.card`/`.btn`/`.btn-
+  ghost`/`.btn-danger`/`.btn-toggle` déjà existants ; un seul système de boutons/cartes dans toute
+  l'app désormais. **Incident évité** : 2ᵉ serveur Vite de test lancé pour une vérification visuelle
+  automatisée (Playwright) a produit une erreur `EPERM` sur `node_modules/.vite/deps` (signal de
+  contention avec un serveur potentiellement déjà en cours) — process arrêté immédiatement plutôt
+  que d'insister, `git status` reconfirmé propre. Vérification visuelle laissée à Saar en navigateur
+  réel. **Hors scope confirmé/différé** : Section 11 (combat) intacte ; `ChangelogPanel.jsx` (100%
+  styles inline hex, zéro token — reskin = réécriture complète) laissé tel quel ; `RegisterPage.jsx`
+  (même bug `--border-normal`, fichier séparé sans classe partagée) non touché — candidats naturels
+  d'une suite. **Testé** : équilibre CSS, ESLint sur les 9 fichiers touchés (0 nouvelle erreur,
+  `git stash`/`git stash pop` à 2 reprises), grep de sweep, **parcours navigateur confirmé
+  fonctionnel par Saar** sur les 3 zones (Login, Dashboard, CampaignSettingsPage 5 onglets). **Non
+  testé** : chaque toggle de `SectionCharacterSheet.jsx` (11 options) cliqué individuellement — rendu
+  visuel global confirmé, pas chaque interaction isolément. Détail complet : item "73."
+  `docs/EN_COURS.md`, `docs/JOURNAL6.md` "Session 141 (suite 31)".
 - **Session 141 (suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS,
   fonctionnel confirmé Saar.** Suite de Groupe 1 (suite 28, clos). Plan déjà entièrement rédigé et
   tranché en amont — session de codage, tous les fichiers concernés relus avant code (dont

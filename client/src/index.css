@@ -29,33 +29,48 @@ padding: 0;
 3. DESIGN TOKENS
 ========================= */
 :root {
-/* === COLORS === */
---bg-app: #0f1115;
---bg-surface: #151923;
---bg-panel: #10131b;
---bg-elevated: #1b2232;
+/* === WIZ PRIMITIVES — Sci-Fi Premium (source unique, promues depuis .wiz-page/.wiz-shell) === */
+--wiz-bg-1: #061223;
+--wiz-bg-2: #0A1830;
+--wiz-bg-3: #102744;
+--wiz-blue-bright: #2FD7FF;
+--wiz-blue-mid: #55CFFF;
+--wiz-cyan: #16B9F5;
+--wiz-white: #FFFFFF;
+--wiz-metal-1: #A8B5C7;
+--wiz-metal-3: #7F8A99;
+--wiz-shadow: rgba(20,80,140,.45);
+--wiz-glass: rgba(255,255,255,.06);
+--wiz-glass-border: rgba(255,255,255,.12);
+--wiz-radius: 12px;
 
---bg-input: #0c0f16;
---bg-button: #121826;
---bg-button-primary: #1a2340;
+/* === COLORS (alias sémantiques vers les primitives wiz-*) === */
+--bg-app: var(--wiz-bg-1);
+--bg-surface: var(--wiz-bg-2);
+--bg-panel: var(--wiz-bg-1);
+--bg-elevated: var(--wiz-bg-3);
 
---color-primary: #5b8dee;
---color-primary-muted: rgba(91,141,238,0.18);
+--bg-input: rgba(6,18,35,.6);
+--bg-button: var(--wiz-glass);
+--bg-button-primary: var(--wiz-blue-bright);
+
+--color-primary: var(--wiz-blue-bright);
+--color-primary-muted: rgba(47,215,255,0.18);
 
 --color-success: #1dd1a1;
 --color-danger: #ff6b6b;
 --color-warning: #f0a04b;
 
---text-primary: #e8eef7;
---text-secondary: #9aa4b2;
---text-muted: #6b7280;
+--text-primary: var(--wiz-white);
+--text-secondary: var(--wiz-metal-1);
+--text-muted: var(--wiz-metal-3);
 
---border-subtle: #252b3a;
---border-strong: #2f374a;
+--border-subtle: var(--wiz-glass-border);
+--border-strong: rgba(255,255,255,0.22);
 
 /* === ELEVATION === */
---shadow-sm: 0 2px 8px rgba(0,0,0,.2);
---shadow-md: 0 10px 30px rgba(0,0,0,.35);
+--shadow-sm: 0 2px 8px rgba(0,0,0,.25);
+--shadow-md: 0 12px 35px var(--wiz-shadow);
 
 /* === RADIUS === */
 --radius-sm: 8px;
@@ -225,11 +240,13 @@ gap: var(--space-md);
 
 /* CARD */
 .card {
-background: linear-gradient(180deg, var(--bg-surface), var(--bg-panel));
-border: 1px solid var(--border-subtle);
+background: var(--wiz-glass);
+border: 1px solid var(--wiz-glass-border);
 border-radius: var(--radius-lg);
 padding: var(--space-md);
 box-shadow: var(--shadow-md);
+-webkit-backdrop-filter: blur(12px);
+backdrop-filter: blur(12px);
 }
 
 /* INPUTS */
@@ -244,6 +261,14 @@ border: 1px solid var(--border-subtle);
 border-radius: var(--radius-md);
 padding: 8px 10px;
 outline: none;
+transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+border-color: var(--wiz-blue-bright);
+box-shadow: 0 0 0 2px rgba(47,215,255,.15);
 }
 
 textarea {
@@ -270,11 +295,13 @@ color: var(--text-primary);
 border: 1px solid var(--border-subtle);
 border-radius: var(--radius-md);
 padding: 8px 12px;
-transition: transform .08s ease, filter .08s ease;
+transition: transform .08s ease, filter .08s ease, box-shadow .15s ease, border-color .15s ease;
 }
 
 button:hover {
-filter: brightness(1.08);
+filter: brightness(1.15);
+border-color: rgba(47,215,255,.4);
+box-shadow: 0 0 12px rgba(47,215,255,.15);
 }
 
 button:active {
@@ -283,7 +310,14 @@ transform: scale(.98);
 
 button.primary {
 background: var(--bg-button-primary);
-border-color: var(--border-strong);
+border-color: var(--wiz-blue-bright);
+color: #fff;
+box-shadow: 0 0 14px rgba(47,215,255,.3);
+}
+
+button.primary:hover {
+filter: brightness(1.08);
+box-shadow: 0 0 20px rgba(47,215,255,.45);
 }
 
 button.success {
@@ -346,17 +380,17 @@ LOGIN — VISUAL UPGRADE
 
 /* PAGE */
 .login-page {
+  position: relative;
   min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
 
-  /* FOND AVEC PROFONDEUR */
-  background:
-    radial-gradient(circle at 20% 20%, #1a2340 0%, transparent 40%),
-    radial-gradient(circle at 80% 80%, #0b0e14 0%, transparent 50%),
-    var(--bg-app);
+  /* FOND — dégradé skin Wizard */
+  background: linear-gradient(180deg, var(--wiz-bg-3) 0%, var(--wiz-bg-1) 100%);
 }
 
 /* LOGO EN BACKGROUND (clé) */
@@ -364,6 +398,7 @@ LOGIN — VISUAL UPGRADE
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 0;
 
   background: url('/logo.svg') no-repeat;
   background-size: 700px;
@@ -376,17 +411,33 @@ LOGIN — VISUAL UPGRADE
   pointer-events: none;
 }
 
+/* HALO RADIAL PULSÉ (pattern .wiz-page) */
+.login-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 18% 15%, rgba(90,240,255,.18), transparent 40%),
+    radial-gradient(circle at 85% 75%, rgba(47,215,255,.14), transparent 45%);
+  animation: wizPulse 6s ease-in-out infinite;
+}
+
 /* CARD PLUS COMPACTE */
 .login-card {
   position: relative;
+  z-index: 2;
   width: 100%;
   max-width: 340px;
 
-  background: linear-gradient(180deg, var(--bg-surface), var(--bg-panel));
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--wiz-radius);
   padding: var(--space-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 12px 35px var(--wiz-shadow);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 /* HEADER */
@@ -397,7 +448,13 @@ LOGIN — VISUAL UPGRADE
 
 /* TITRE — IDENTITÉ */
 .login-title {
-  font-family: 'Venus Rising', var(--font-family, sans-serif);
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: 24px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--wiz-white);
+  text-shadow: 0 0 10px rgba(255,255,255,.6), 0 0 24px rgba(47,215,255,.35);
 }
 
 /* Sous-titre */
@@ -405,6 +462,16 @@ LOGIN — VISUAL UPGRADE
   font-size: 13px;
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+/* ERREUR — pattern .wiz-error */
+.login-error {
+  color: #e05c5c;
+  font-size: 12px;
+  padding: 8px 16px;
+  background: rgba(224, 92, 92, 0.08);
+  border-left: 3px solid #e05c5c;
+  margin-bottom: 8px;
 }
 
 /* FORM */
@@ -438,8 +505,27 @@ LOGIN — VISUAL UPGRADE
 DASHBOARD EXTENSION
 ========================= */
 
-.dashboard {
+/* ── .app-shell — fond dégradé + halo pulsé, réutilisable (skin Wizard) ─── */
+.app-shell {
   position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--wiz-bg-3) 0%, var(--wiz-bg-1) 100%);
+}
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(90,240,255,.10), transparent 38%),
+    radial-gradient(circle at 88% 80%, rgba(47,215,255,.08), transparent 42%);
+  animation: wizPulse 6s ease-in-out infinite;
+}
+
+.dashboard {
+  height: 100vh;
 }
 
 /* GRID */
@@ -478,7 +564,7 @@ DASHBOARD EXTENSION
 .campaign-cover-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #1a2340, #0b0e14);
+  background: linear-gradient(135deg, var(--wiz-bg-3), var(--wiz-bg-1));
   opacity: 0.6;
 }
 
@@ -679,18 +765,18 @@ DASHBOARD EXTENSION
 }
 
 /* =========================
-10. DESIGN SYSTEM — HARD-SF HUD
+10. DESIGN SYSTEM — glass (skin Wizard, promu depuis Section 12 — Session 141 suite 26/27)
 Convention :
-  .btn            = bouton HUD chamfré (base bleue)
+  .btn            = bouton glass (accent cyan)
   .btn.btn-ghost  = variante fantôme
   .btn.btn-danger = variante rouge
   .btn.btn-gold   = variante or (Agir GM)
   .btn.btn-success= variante verte
-  .btn-icon       = petit utilitaire, pas de chamfer (×, ?, ➤)
+  .btn-icon       = petit utilitaire, sans bordure (×, ?, ➤)
   .btn-toggle     = sélecteur segmenté + [data-active="true"]
-  .btn-tool       = outil sidebar (column, icon+label)
+  .btn-tool       = outil sidebar (column, icon+label) — hors scope reskin, session/combat
 
-  .badge              = badge chamfré (base)
+  .badge              = badge glass (base)
   .badge.badge-gm     = MJ bleu
   .badge.badge-player = Joueur vert
   .badge.badge-success= résultat succès vert
@@ -701,80 +787,81 @@ Convention :
   .doc-row = ligne liste document (card-row, pas chamfré)
 ========================= */
 
-/* ── .btn — bouton HUD chamfré ─────────────────────────────────── */
+/* ── .btn — bouton glass (skin Wizard) ─────────────────────────── */
 .btn {
   font: 600 11px/1 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: .13em;
-  color: #c8d4ee;
-  background: linear-gradient(180deg, #141a2a, #0e1320);
-  border: none;
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  box-shadow: inset 0 0 0 1px rgba(91,141,238,0.55),
-              inset 0 0 14px rgba(91,141,238,0.12);
+  color: var(--wiz-metal-1);
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: 7px;
+  box-shadow: none;
   padding: 8px 16px;
   cursor: pointer;
-  transition: filter .1s, box-shadow .1s;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: filter .1s, box-shadow .15s, border-color .15s, color .15s;
 }
 .btn:hover {
-  filter: brightness(1.12);
-  box-shadow: inset 0 0 0 1px #5b8dee,
-              inset 0 0 18px rgba(91,141,238,0.22);
+  color: var(--wiz-white);
+  border-color: var(--wiz-blue-bright);
+  box-shadow: 0 0 14px rgba(47,215,255,.25);
+  filter: none;
 }
 .btn:active { filter: brightness(.95); transform: none; }
-.btn:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+.btn:disabled { opacity: .4; cursor: not-allowed; filter: none; box-shadow: none; }
 
 /* ── .btn.btn-ghost ─────────────────────────────────────────────── */
 .btn.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
-  box-shadow: inset 0 0 0 1px #2a3550;
+  border-color: rgba(255,255,255,.10);
+  box-shadow: none;
 }
 .btn.btn-ghost:hover {
   color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px #3a4a6a;
+  border-color: rgba(255,255,255,.22);
+  box-shadow: none;
   filter: none;
 }
 .btn.btn-ghost[data-active="true"] {
   background: var(--color-primary-muted);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
+  border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
 /* ── .btn.btn-danger ────────────────────────────────────────────── */
 .btn.btn-danger {
-  background: linear-gradient(180deg, #1a0f0f, #100a0a);
+  background: rgba(224,91,91,.06);
   color: #f0c4c4;
-  box-shadow: inset 0 0 0 1px rgba(224,91,91,0.55),
-              inset 0 0 14px rgba(224,91,91,0.12);
+  border-color: rgba(224,91,91,.45);
 }
 .btn.btn-danger:hover {
-  box-shadow: inset 0 0 0 1px #e05b5b,
-              inset 0 0 18px rgba(224,91,91,0.22);
+  border-color: #e05b5b;
+  box-shadow: 0 0 14px rgba(224,91,91,.25);
 }
 
 /* ── .btn.btn-gold ──────────────────────────────────────────────── */
 .btn.btn-gold {
-  background: linear-gradient(180deg, #1a1500, #100e00);
+  background: rgba(245,197,66,.06);
   color: #f5c542;
-  box-shadow: inset 0 0 0 1px rgba(245,197,66,0.55),
-              inset 0 0 14px rgba(245,197,66,0.12);
+  border-color: rgba(245,197,66,.45);
 }
 .btn.btn-gold:hover {
-  box-shadow: inset 0 0 0 1px #f5c542,
-              inset 0 0 18px rgba(245,197,66,0.22);
+  border-color: #f5c542;
+  box-shadow: 0 0 14px rgba(245,197,66,.25);
 }
 
 /* ── .btn.btn-success ───────────────────────────────────────────── */
 .btn.btn-success {
-  background: linear-gradient(180deg, #0f1f17, #0a1410);
+  background: rgba(76,175,119,.06);
   color: #bdebcf;
-  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.55),
-              inset 0 0 14px rgba(76,175,119,0.12);
+  border-color: rgba(76,175,119,.45);
 }
 .btn.btn-success:hover {
-  box-shadow: inset 0 0 0 1px #4caf77,
-              inset 0 0 18px rgba(76,175,119,0.22);
+  border-color: #4caf77;
+  box-shadow: 0 0 14px rgba(76,175,119,.25);
 }
 
 /* ── .btn-icon — utilitaire sans chamfer ────────────────────────── */
@@ -799,9 +886,9 @@ Convention :
   flex: 1;
   padding: 5px 8px;
   background: rgba(255,255,255,0.04);
-  border: 1px solid #2a2a3e;
-  border-radius: 3px;
-  color: #8888a8;
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: 5px;
+  color: var(--wiz-metal-1);
   font: 600 10px/1.2 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -810,9 +897,9 @@ Convention :
   transition: background .1s, border-color .1s, color .1s;
 }
 .btn-toggle[data-active="true"] {
-  background: rgba(91,141,238,0.18);
-  border-color: #5b8dee;
-  color: #c8d4ee;
+  background: var(--color-primary-muted);
+  border-color: var(--color-primary);
+  color: var(--wiz-white);
 }
 
 /* ── .btn-tool — outil sidebar (icon + label column) ───────────── */
@@ -836,7 +923,7 @@ Convention :
   color: var(--color-primary);
 }
 
-/* ── .badge — base chamfré ──────────────────────────────────────── */
+/* ── .badge — base glass (skin Wizard) ────────────────────────────── */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -844,44 +931,44 @@ Convention :
   font: 600 10px/1 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: .08em;
-  padding: 2px 8px;
-  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  padding: 3px 9px;
+  border-radius: 4px;
 }
 .badge .num { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0; }
 
 /* ── .badge.badge-gm ────────────────────────────────────────────── */
 .badge.badge-gm {
   color: var(--color-primary);
-  background: rgba(91,141,238,0.12);
-  box-shadow: inset 0 0 0 1px rgba(91,141,238,0.45);
+  background: rgba(47,215,255,0.12);
+  border: 1px solid rgba(47,215,255,0.45);
 }
 
 /* ── .badge.badge-player ────────────────────────────────────────── */
 .badge.badge-player {
   color: var(--color-success-soft);
   background: rgba(76,175,119,0.12);
-  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.45);
+  border: 1px solid rgba(76,175,119,0.45);
 }
 
 /* ── .badge.badge-success ───────────────────────────────────────── */
 .badge.badge-success {
   color: var(--color-success-soft);
   background: rgba(76,175,119,0.12);
-  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.45);
+  border: 1px solid rgba(76,175,119,0.45);
 }
 
 /* ── .badge.badge-fail ──────────────────────────────────────────── */
 .badge.badge-fail {
   color: var(--color-danger-soft);
   background: rgba(224,91,91,0.12);
-  box-shadow: inset 0 0 0 1px rgba(224,91,91,0.45);
+  border: 1px solid rgba(224,91,91,0.45);
 }
 
 /* ── .badge.badge-mode — mode CaC actif ─────────────────────────── */
 .badge.badge-mode {
   color: var(--color-success-soft);
   background: rgba(76,175,119,0.12);
-  box-shadow: inset 0 0 0 1px rgba(76,175,119,0.45);
+  border: 1px solid rgba(76,175,119,0.45);
   cursor: pointer;
 }
 
@@ -889,7 +976,7 @@ Convention :
 .badge.badge-mode-off {
   color: #2a6040;
   background: rgba(42,96,64,0.08);
-  box-shadow: inset 0 0 0 1px rgba(42,96,64,0.3);
+  border: 1px solid rgba(42,96,64,0.3);
   cursor: pointer;
 }
 
@@ -1631,24 +1718,13 @@ Convention :
 
 /* =========================
 12. WIZARD CREATION — SCI-FI PREMIUM
-   Scope : client/src/components/creation/ uniquement.
-   Variables --wiz-* déclarées sous .wiz-page — aucune fuite globale.
+   Classes .wiz1-*/.wiz2-*/.wiz3-*/.wiz4-* : scope client/src/components/creation/ uniquement.
+   Variables --wiz-* : promues globalement en Section 3 (skin app-wide, Session 141 suite 26/27) —
+   .wiz-page/.wiz-shell ne les redéclarent plus.
 ========================= */
 
 .wiz-page {
-  --wiz-bg-1: #061223;
-  --wiz-bg-2: #0A1830;
-  --wiz-bg-3: #102744;
-  --wiz-blue-bright: #2FD7FF;
-  --wiz-blue-mid: #55CFFF;
-  --wiz-cyan: #16B9F5;
-  --wiz-white: #FFFFFF;
-  --wiz-metal-1: #A8B5C7;
-  --wiz-metal-3: #7F8A99;
-  --wiz-shadow: rgba(20,80,140,.45);
-  --wiz-glass: rgba(255,255,255,.06);
-  --wiz-glass-border: rgba(255,255,255,.12);
-  --wiz-radius: 12px;
+  /* --wiz-* : voir Section 3 (promues globalement) */
 
   position: relative;
   min-height: 100vh;
@@ -1892,19 +1968,7 @@ Convention :
 
 /* ── Wizard shell (steps 1-5, sans image de fond) ────────────────── */
 .wiz-shell {
-  --wiz-bg-1: #061223;
-  --wiz-bg-2: #0A1830;
-  --wiz-bg-3: #102744;
-  --wiz-blue-bright: #2FD7FF;
-  --wiz-blue-mid: #55CFFF;
-  --wiz-cyan: #16B9F5;
-  --wiz-white: #FFFFFF;
-  --wiz-metal-1: #A8B5C7;
-  --wiz-metal-3: #7F8A99;
-  --wiz-shadow: rgba(20,80,140,.45);
-  --wiz-glass: rgba(255,255,255,.06);
-  --wiz-glass-border: rgba(255,255,255,.12);
-  --wiz-radius: 12px;
+  /* --wiz-* : voir Section 3 (promues globalement) */
 
   position: relative;
   display: flex;

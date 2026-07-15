@@ -58,7 +58,7 @@ export default function SectionPlayers({ campaignId }) {
   }
 
   return (
-    <section style={styles.section}>
+    <section className="card">
       <h2 style={styles.sectionTitle}>{t('settings.transferRequestsTitle')}</h2>
 
       {error && <p style={{ ...styles.placeholderText, color: 'var(--color-danger)' }}>{error}</p>}
@@ -80,12 +80,12 @@ export default function SectionPlayers({ campaignId }) {
               </div>
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                 <button
-                  style={styles.btnSecondary}
+                  className="btn btn-ghost"
                   onClick={() => handleApprove(request.id)}
                   disabled={processingId === request.id}
                 >{t('settings.transferRequestApprove')}</button>
                 <button
-                  style={styles.btnDanger}
+                  className="btn btn-danger"
                   onClick={() => handleReject(request.id)}
                   disabled={processingId === request.id}
                 >{t('settings.transferRequestReject')}</button>

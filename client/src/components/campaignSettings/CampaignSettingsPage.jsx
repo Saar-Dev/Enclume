@@ -87,15 +87,15 @@ export default function CampaignSettingsPage() {
   }, [campaignId, formData])
 
   if (loading) return (
-    <div style={s.loadingScreen}>
-      <p style={s.loadingText}>{t('common.loading')}</p>
+    <div className="app-shell" style={s.loadingScreen}>
+      <p style={{ ...s.loadingText, position: 'relative', zIndex: 1 }}>{t('common.loading')}</p>
     </div>
   )
 
   if (error) return (
-    <div style={s.loadingScreen}>
-      <p style={{ color: 'var(--color-danger)', marginBottom: '16px' }}>{error}</p>
-      <button style={s.btnGhost} onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
+    <div className="app-shell" style={s.loadingScreen}>
+      <p style={{ color: 'var(--color-danger)', marginBottom: '16px', position: 'relative', zIndex: 1 }}>{error}</p>
+      <button className="btn-icon" style={{ position: 'relative', zIndex: 1 }} onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
     </div>
   )
 
@@ -108,14 +108,14 @@ export default function CampaignSettingsPage() {
   ]
 
   return (
-    <div style={s.container}>
+    <div className="app-shell" style={s.container}>
       <div style={s.header}>
-        <button style={s.backBtn} onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
+        <button className="btn-icon" onClick={() => navigate('/dashboard')}>{t('settings.back')}</button>
         <h1 style={s.pageTitle}>{t('settings.pageTitle')}</h1>
         <div style={s.headerRight}>
           {saveStatus === 'saved' && <span style={s.saveSuccess}>{t('settings.saved')}</span>}
           {saveStatus === 'error' && <span style={s.saveError}>{t('settings.errorSave')}</span>}
-          <button style={s.btnPrimary} onClick={handleSave} disabled={saving}>
+          <button className="btn" onClick={handleSave} disabled={saving}>
             {saving ? t('settings.saving') : t('common.save')}
           </button>
         </div>
@@ -126,11 +126,9 @@ export default function CampaignSettingsPage() {
           {sections.map(({ key, label, enabled }) => (
             <button
               key={key}
-              style={{
-                ...s.navItem,
-                ...(activeSection === key ? s.navItemActive : {}),
-                ...(!enabled ? s.navItemDisabled : {}),
-              }}
+              className="btn-toggle"
+              data-active={activeSection === key}
+              style={{ flex: '0 0 auto', textAlign: 'left', opacity: !enabled ? 0.5 : 1 }}
               onClick={() => enabled && setActiveSection(key)}
               disabled={!enabled}
             >
@@ -160,21 +158,15 @@ export default function CampaignSettingsPage() {
 }
 
 const s = {
-  container: { minHeight: '100vh', backgroundColor: 'var(--bg-app)', display: 'flex', flexDirection: 'column' },
-  loadingScreen: { minHeight: '100vh', backgroundColor: 'var(--bg-app)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+  container: { minHeight: '100vh', display: 'flex', flexDirection: 'column' },
+  loadingScreen: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
   loadingText: { color: 'var(--text-muted)', fontSize: '14px' },
-  header: { display: 'flex', alignItems: 'center', gap: '16px', padding: '0 32px', height: '56px', backgroundColor: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 },
-  backBtn: { background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer', padding: '4px 0', flexShrink: 0 },
+  header: { position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '16px', padding: '0 32px', height: '56px', backgroundColor: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 },
   pageTitle: { fontSize: '16px', fontWeight: '500', color: 'var(--text-primary)', flex: 1, margin: 0 },
   headerRight: { display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 },
-  saveSuccess: { fontSize: '13px', color: '#4caf77' },
+  saveSuccess: { fontSize: '13px', color: 'var(--color-success-soft)' },
   saveError: { fontSize: '13px', color: 'var(--color-danger)' },
-  body: { display: 'flex', flex: 1, maxWidth: '960px', margin: '0 auto', width: '100%', padding: '32px', gap: '32px', boxSizing: 'border-box' },
+  body: { position: 'relative', zIndex: 1, display: 'flex', flex: 1, maxWidth: '960px', margin: '0 auto', width: '100%', padding: '32px', gap: '32px', boxSizing: 'border-box' },
   nav: { display: 'flex', flexDirection: 'column', gap: '4px', width: '160px', flexShrink: 0, paddingTop: '4px' },
-  navItem: { background: 'none', border: 'none', textAlign: 'left', padding: '8px 12px', borderRadius: '6px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' },
-  navItemActive: { backgroundColor: 'rgba(91,141,238,0.12)', color: '#5b8dee', fontWeight: '500' },
-  navItemDisabled: { color: 'var(--text-muted)', cursor: 'default', opacity: 0.5 },
   content: { flex: 1, display: 'flex', flexDirection: 'column', gap: '32px' },
-  btnPrimary: { backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 18px', fontWeight: '500', fontSize: '13px', cursor: 'pointer' },
-  btnGhost: { background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '13px', padding: '8px', cursor: 'pointer' },
 }

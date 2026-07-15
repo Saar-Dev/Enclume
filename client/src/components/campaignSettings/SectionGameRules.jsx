@@ -21,7 +21,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
 
   return (
-    <section style={styles.section}>
+    <section className="card">
       <h2 style={styles.sectionTitle}>{t('settings.sectionRules')}</h2>
 
       <label style={styles.toggleRow}>

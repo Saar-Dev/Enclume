@@ -73,7 +73,7 @@ export default function SectionCharacterSheet({ initialData, onChange }) {
 }
 
   return (
-    <section style={styles.section}>
+    <section className="card">
       <h2 style={styles.sectionTitle}>{t('settings.sectionSheet')}</h2>
 
       {/* OPT-01 — Ambiance */}
@@ -86,10 +86,9 @@ export default function SectionCharacterSheet({ initialData, onChange }) {
           {['REALISTE', 'INTERMEDIAIRE', 'HEROIQUE'].map(amb => (
             <button
               key={amb}
-              style={{
-                ...styles.optionBtn,
-                ...(ambiance === amb ? styles.optionBtnActive : {}),
-              }}
+              className="btn-toggle"
+              data-active={ambiance === amb}
+              style={{ flex: '0 0 auto', padding: '8px 18px' }}
               onClick={() => handleAmbiance(amb)}
             >
               {t(`settings.ambiance${amb}`)}

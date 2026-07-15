@@ -1,5 +1,8 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> Dernière mise à jour : 2026-07-13 — Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
+> Dernière mise à jour : 2026-07-13 — Session 141 (suite 31) : Transfert du skin Wizard (Section 12,
+> sci-fi premium/glassmorphism) vers le reste de l'interface — Login/Dashboard puis pages de
+> configuration de campagne — ✅ clos, fonctionnel confirmé Saar ("magnifique") (item 73) ; Session 141
+> (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 > (Lunette de visée) — ✅ clos, fonctionnel confirmé Saar (item 72) ; Session 141 (suite 29) : Interface d'ajout Avantage/
 > Désavantage (octroi MJ narratif) + bug DELETE 500 pré-existant corrigé — ✅ clos, fonctionnel
 > confirmé Saar (item 71) ; Session 141 (suite 27) : bug GENOTYPE "Hybride" visible pour un
@@ -34,6 +37,42 @@
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 73 (Session 141 suite 31) — Transfert du skin Wizard (Section 12) vers le reste de
+> l'interface ✅ CLOS, fonctionnel confirmé Saar.** Demande Saar hors chantiers en cours : le skin
+> "Sci-Fi Premium" du Wizard de création (glassmorphism, dégradé bleu-nuit `#061223→#102744`, halo
+> radial pulsé, accent cyan `#2FD7FF`, `Venus Rising`) était scopé à `.wiz-page`/`.wiz-shell`
+> (`client/src/components/creation/` uniquement) — 3 systèmes visuels coexistaient dans
+> `index.css` (tokens de base Section 3, HUD chamfré Section 10 partagé par 25 fichiers dont les
+> fenêtres combat, skin Wizard Section 12). **Exigence explicite Saar : "architecture propre, pas de
+> bricolage"** — migration en alias sémantiques (les `--wiz-*` montent dans `:root`, les anciens
+> tokens `--bg-app`/`--color-primary`/`--text-primary`/`--border-subtle` deviennent des alias vers
+> ces primitives au lieu d'un renommage massif dans toute l'app) plutôt qu'un simple copier-coller de
+> valeurs. `.card`/`button`/`input` (Section 7) et `.btn`/`.btn-ghost`/`.btn-danger`/`.btn-gold`/
+> `.btn-success`/`.badge*`/`.btn-toggle` (Section 10) reskinnés : retrait du chamfer (`clip-path`),
+> glass + halo cyan. Nouvelle classe **`.app-shell`** (fond dégradé + halo pulsé, réutilise l'animation
+> `wizPulse` déjà existante) partagée par `.dashboard` et `CampaignSettingsPage` — pas une 3ᵉ
+> duplication du même effet. **Étendu en 2 temps** (validé par Saar à chaque étape) : (1) Login +
+> Dashboard, (2) pages de configuration de campagne (`CampaignSettingsPage.jsx` + 5 `Section*.jsx` +
+> `sharedStyles.js`). **6 vrais bugs trouvés et corrigés en chemin** (pas des features) : `--border-
+> normal` inexistant (`DashboardPage.jsx` + `sharedStyles.js` ×4 — inputs sans bordure visible),
+> `--bg-card` inexistant (`sharedStyles.js`), `.login-error` jamais stylée (classe manquante),
+> `.login-title` avec un var CSS mort (`--font-family`), 6 occurrences de bleu `#5b8dee`/
+> `rgba(91,141,238,...)` figées en dur (désynchronisées du token `--color-primary` dès mon 1er lot).
+> **Nettoyage architectural additionnel (pages Settings)** : suppression de `sharedStyles.section`/
+> `optionBtn`/`optionBtnActive`/`btnSecondary`/`btnDanger` — dupliquaient `.card`/`.btn`/`.btn-ghost`/
+> `.btn-danger`/`.btn-toggle` déjà existants, un seul système de boutons/cartes dans toute l'app
+> désormais. **Hors scope confirmé/différé** : Section 11 (fenêtres combat, palette tactique
+> délibérément distincte, commentaire code explicite) intacte ; `ChangelogPanel.jsx` (100% styles
+> inline hex, zéro token — reskin = réécriture complète, pas une simple retouche) laissé tel quel ;
+> `RegisterPage.jsx` (même bug `--border-normal` trouvé au passage, mais fichier séparé sans classe
+> partagée, jamais dans le périmètre validé) non touché. Testé : équilibre CSS (script Node), ESLint
+> sur les 9 fichiers touchés (0 nouvelle erreur introduite, confirmé `git stash`/`git stash pop` à 2
+> reprises), grep de sweep (aucune référence résiduelle aux clés supprimées ni aux couleurs figées),
+> **parcours navigateur réel confirmé fonctionnel par Saar** sur les 3 zones (Login, Dashboard,
+> CampaignSettingsPage 5 onglets — "magnifique"). Non testé : chaque toggle de
+> `SectionCharacterSheet.jsx` (11 options) cliqué individuellement — rendu visuel global confirmé, pas
+> chaque interaction isolément. Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 31)".
 
 > **Item 72 (Session 141 suite 30) — `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée
 > ✅ CLOS, fonctionnel confirmé Saar.** Suite de Groupe 1 (item 68, clos). **Trou d'architecture
@@ -495,6 +534,72 @@
 > chantier mais antérieur à lui et sans rapport — cosmétique, non corrigé. Détail complet :
 > `docs/PLAN_VAULT.md` (toutes les étapes documentées avec leurs tests), `docs/JOURNAL6.md` "Session
 > Coffre (Vault)".
+
+**73. Transfert du skin Wizard (Section 12) vers le reste de l'interface ✅ CLOS — Session 141 (suite 31) (2026-07-13)**
+   → Demande Saar hors chantiers en cours, en 2 conversations : "transférer le skin du Wizard sur le
+     reste de l'interface", exigence explicite répétée deux fois — "architecture propre, pas de
+     bricolage", "tu peux coder UNIQUEMENT si architecture propre".
+   → **Constat avant tout code** : 3 systèmes visuels coexistaient dans `index.css` — Section 3
+     (tokens de base, bleu désaturé `#5b8dee`), Section 10 (HARD-SF HUD chamfré `.btn`/`.badge`,
+     utilisé dans 25 fichiers dont les fenêtres de combat — vérifié par grep avant de toucher quoi
+     que ce soit), Section 12 (skin Wizard, variables `--wiz-*` scopées à `.wiz-page`/`.wiz-shell`,
+     dupliquées entre les deux).
+   → **Architecture retenue (alias sémantiques, pas de renommage massif)** : les `--wiz-*` montent
+     dans `:root` (déclarées une seule fois, `.wiz-page`/`.wiz-shell` ne les redéclarent plus) ; les
+     tokens génériques existants (`--bg-app`, `--bg-surface`, `--bg-panel`, `--bg-elevated`,
+     `--color-primary`, `--text-primary/secondary/muted`, `--border-subtle/strong`) deviennent des
+     **alias** vers ces primitives — pattern standard de migration de design tokens (primitives +
+     alias sémantiques), évite de renommer des centaines de points d'usage dans toute l'app.
+   → `.card`/`button`/`input` (Section 7) et `.btn`/`.btn-ghost`/`.btn-danger`/`.btn-gold`/
+     `.btn-success`/`.badge`+variantes/`.btn-toggle` (Section 10) reskinnés : retrait du chamfer
+     (`clip-path`), glass (`backdrop-filter: blur`) + halo cyan au survol/focus.
+   → Nouvelle classe **`.app-shell`** (fond dégradé `var(--wiz-bg-3)→var(--wiz-bg-1)` + halo radial
+     pulsé, réutilise l'animation `wizPulse` déjà existante) — `.dashboard` et
+     `CampaignSettingsPage.jsx` la partagent, pas de 3ᵉ copie du même effet (Login garde son propre
+     bloc, légitimement différent : il a un filigrane logo en plus occupant le pseudo-élément
+     `::before`).
+   → **Étendu en 2 temps, chacun validé par Saar avant le suivant** : (1) `LoginPage.jsx` +
+     `DashboardPage.jsx` (test) ; (2) `CampaignSettingsPage.jsx` + `SectionDice.jsx`/
+     `SectionGameRules.jsx`/`SectionTokens.jsx`/`SectionPlayers.jsx`/`SectionCharacterSheet.jsx`/
+     `sharedStyles.js` (pages de configuration de campagne).
+   → **6 vrais bugs trouvés et corrigés en marchant** (pas des features, trouvés en lisant avant de
+     coder) : `--border-normal` inexistant dans `index.css` (`DashboardPage.jsx` `cardInput.border` +
+     `sharedStyles.js` ×4 — inputs sans aucune bordure visible) ; `--bg-card` inexistant
+     (`sharedStyles.js` `section.backgroundColor`) ; `.login-error` référencée en JSX mais jamais
+     stylée (message d'erreur de connexion sans style) ; `.login-title` avec un var CSS mort
+     (`--font-family`, fonctionnait par accident car `'Venus Rising'` cité en premier) ; 6 occurrences
+     de bleu `#5b8dee`/`rgba(91,141,238,...)` figées en dur (checkbox, boutons actifs, liens),
+     désynchronisées du token `--color-primary` dès le 1er lot puisque jamais des vraies variables.
+   → **Nettoyage architectural additionnel (lot pages Settings)** : suppression de
+     `sharedStyles.section`/`optionBtn`/`optionBtnActive`/`btnSecondary`/`btnDanger` — ces styles
+     inline dupliquaient `.card`/`.btn`/`.btn-ghost`/`.btn-danger`/`.btn-toggle` déjà existants dans
+     `index.css`. Un seul système de boutons/cartes dans toute l'app désormais, pas deux en parallèle.
+   → **Hors scope confirmé/différé** : Section 11 (fenêtres combat, palette tactique délibérément
+     distincte — commentaire code explicite "vocabulaire visuel distinct") intacte, non touchée ;
+     `ChangelogPanel.jsx` (100% styles inline en hex littéral, zéro token CSS — un reskin propre
+     signifierait une réécriture complète, pas une retouche de valeurs) laissé tel quel ;
+     `RegisterPage.jsx` (même bug `--border-normal` trouvé au passage par grep, mais fichier
+     entièrement séparé sans classe CSS partagée, jamais dans le périmètre validé par Saar) non
+     touché.
+   → **Incident évité en cours de route** : une 1ʳᵉ tentative de vérification visuelle automatisée
+     (Playwright, second serveur Vite de test sur le même `node_modules`) a produit une erreur
+     `EPERM` sur `node_modules/.vite/deps` — signal de contention possible avec un serveur déjà en
+     cours sur ce dossier. Process arrêté immédiatement (`TaskStop`) plutôt que d'insister ;
+     `git status` reconfirmé propre (seuls les fichiers attendus modifiés). Vérification finale
+     laissée à Saar en navigateur réel, conforme à l'usage établi de ce projet.
+   → **Testé** : équilibre des accolades CSS (script Node), ESLint sur les 9 fichiers touchés à
+     chaque lot (0 nouvelle erreur introduite, confirmé par `git stash`/`git stash pop` à 2 reprises),
+     grep de sweep (aucune référence résiduelle aux clés `sharedStyles` supprimées, aucune couleur
+     bleue figée résiduelle), **parcours navigateur réel confirmé fonctionnel par Saar** sur les 3
+     zones (Login, Dashboard, CampaignSettingsPage 5 onglets — "testé et magnifique").
+   → **Non testé** : chaque toggle de `SectionCharacterSheet.jsx` (11 options de campagne) cliqué
+     individuellement — rendu visuel global confirmé par Saar, pas chaque interaction isolément ;
+     fenêtres de combat/session (Section 11, hors scope) — non affectées par construction, pas
+     re-vérifiées visuellement.
+   → **Prochain candidat si Saar souhaite poursuivre** : `ChangelogPanel.jsx` (réécriture complète
+     requise, hors petite retouche) et/ou `RegisterPage.jsx` (même bug `--border-normal`, aucune
+     classe partagée avec Login pour l'instant).
+   → Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 31)".
 
 **72. `docs/PLAN_MODING_PHASEB.md` Groupe 2 : Lunette de visée ✅ CLOS — Session 141 (suite 30) (2026-07-13)**
    → Suite de Groupe 1 (item 68, clos). Plan déjà entièrement rédigé et tranché en amont ("prêt à
