@@ -151,7 +151,7 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> **Item 75 (Session 143) — `docs/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref)
+> **Item 75 (Session 143) — `docs/Old/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref)
 > ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 5 (item 69, clos). Diagnostic
 > initial du plan ("Mutations déjà câblé, rien à faire") élargi en lisant le code avant tout code :
 > faux au retrait — `mutationService.removeMutation` marquait la mutation `removed` sans jamais
@@ -176,7 +176,8 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > Fécondité, retravail Wizard Step3/Step5 avec désélection) — confirmé globalement, pas chaque cas
 > limite isolément. **Chantier suivant identifié : Lot 7 (Narratif/économie, priorité basse)** quand
 > Saar voudra enchaîner, ou Modding Groupe 4 (`docs/PLAN_MODING_PHASEB.md`, slot `logiciel`,
-> structuré mais pas détaillé). Détail complet : `docs/PLAN_MUTATION2.md` Lot 6, `docs/JOURNAL6.md`
+> structuré mais pas détaillé). Détail complet : `docs/Old/PLAN_MUTATION2.md` Lot 6 (archivé, chantier
+> clos), `docs/JOURNAL6.md`
 > "Session 143".
 
 > **Item 74 (Session 142) — Migration 158 (CASCADE `battlemap_texture_usage`) réintégrée sur
@@ -1571,7 +1572,7 @@ Projet en cours et priorité user :
 | **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
-| **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-5 (attributs, résistances, armure/arme naturelle, déblocage de compétences) ✅ clos et fonctionnels. Restent Lot 6 (Identité, `mod_identity` avantages jamais lu génériquement) et Lot 7 (Narratif/économie, priorité basse) — `docs/PLAN_MUTATION2.md` | Lot 6 à détailler quand Saar voudra enchaîner |
+| **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-6 (attributs, résistances, armure/arme naturelle, déblocage de compétences, identité sex/is_fertile/hand_pref) ✅ clos et fonctionnels. Reste Lot 7 (Narratif/économie, priorité basse) — `docs/Old/PLAN_MUTATION2.md` (archivé, chantier clos) | Lot 7 à détailler quand Saar voudra enchaîner |
 | **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
 | **COM23** | ~~Label token : fixe, ne rentre pas dans les murs~~ | ✅ Session 127 |
