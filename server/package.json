@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon --exec 'node --env-file=../.env --es-module-specifier-resolution=node' src/index.js"
+    "dev": "nodemon --exec \"node --env-file=../.env --es-module-specifier-resolution=node\" src/index.js"
   },
   "keywords": [],
   "author": "",
