@@ -1,7 +1,8 @@
 # CLAUDE.md — Contrat commun du projet Enclume
 
 > Version proposée : 2026-07-15.
-> Ce contrat s'applique à Saar/Codex et Kiwi/Claude après validation et installation dans le dépôt.
+> Ce contrat s'applique aux espaces Claude/règles et Codex/moteur monde après validation et
+> installation dans le dépôt.
 
 ---
 
@@ -88,7 +89,7 @@ git fetch origin
 
 ### Migrations
 
-- Numéros pairs : Saar/Codex ; numéros impairs : Kiwi.
+- Numéros pairs : Codex / moteur monde ; numéros impairs : Claude / règles.
 - Vérifier les fichiers présents et `knex_migrations` avant de choisir un numéro.
 - Une migration doit être rétrocompatible avec le code encore déployé pendant la fusion.
 - Migration, test et éventuel script de réparation forment un commit isolé sur la branche de travail.
