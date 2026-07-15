@@ -1,35 +1,23 @@
 ---
+description: Assets 3D, packs, MinIO, cache et séparation apparence/physique
 paths:
-  - "server/src/lib/minio.js"
-  - "server/src/routes/assets.js"
-  - "server/src/routes/texture-packs.js"
-  - "server/src/routes/entity-blueprints.js"
-  - "client/src/pages/WorkshopPage.jsx"
-  - "client/src/lib/voxelTextures.js"
+  - "server/src/**/*asset*.js"
+  - "server/src/**/*Asset*.js"
+  - "client/src/**/*Asset*.jsx"
+  - "client/src/**/*asset*.js"
+  - "shared/**/*asset*.js"
 ---
-# Domaine : MinIO, Assets & Atelier GM
 
-**Spec technique → `docs/SYSTEME/ASSETS.md`**
+# Assets
 
-## Pièges critiques
-
-**P43 — MinIO textures : chemin par pack_uuid**
-Le chemin MinIO inclut le `pack_uuid` — pas uniquement le nom de texture.
-Bucket unique — pas de sous-buckets par campagne.
-
-**P44 — name pack immuable**
-Le nom d'un texture pack ne peut pas changer après création (clé référencée en DB).
-
-**P47 — pack_id dans SELECT JOIN entities**
-`pack_id` doit figurer dans le SELECT du GET `/battlemaps/:id/entities`
-et dans le payload `ENTITY_CREATED` socket — sinon `blueprint.pack_id` null côté client (PE18).
-
-**P19 — GLB URL avec ?v=timestamp**
-`glb_url` servi avec `?v=timestamp` pour forcer le rechargement du cache navigateur.
-
-**P46 — route spécifique avant paramétrique**
-Express : déclarer `/specific` avant `/:id` — sinon la route paramétrique capture silencieusement.
-
-**WorkshopPage — crash import invalide (WS1)**
-`err.response?.data?.error` → peut throw si `err.response` est undefined.
-Guard : `err?.response?.data?.error ?? err.message` (dette active basse priorité).
+- Chaque instance utilise son propre bucket MinIO; ne jamais partager implicitement les assets vivants.
+- Un pack possède un UUID stable et des chemins déterministes; son nom affiché n'est pas son identité.
+- Après publication, un nom ou chemin d'asset référencé reste immuable; créer une nouvelle version.
+- Les URL GLB incluent la version/cache key prévue (`?v=` ou équivalent centralisé).
+- Les routes statiques de packs précèdent les routes paramétrées qui pourraient les intercepter.
+- Valider type, taille, chemin, droits et intégrité avant stockage ou import.
+- Un import est idempotent ou détecte explicitement les doublons; il ne remplace pas silencieusement.
+- Le GLB, la texture et l'icône décrivent l'apparence. Collision, support, coût, occlusion et capacités
+  sont déclarés séparément dans le modèle monde.
+- Nettoyer les fichiers orphelins seulement après preuve qu'aucune donnée durable ne les référence.
+- Ne jamais copier `.env`, identifiants MinIO ou secrets avec un pack ou dans la documentation.
