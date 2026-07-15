@@ -9,6 +9,9 @@
 > `/home/codex/backups/enclume-pre-fusion-20260715-110349`.
 > Validation : 124 tests monde/serveur, 28 tests Surface, ESLint ciblé, build Vite et smoke
 > Playwright Chromium passent ; les six services historiques et de fusion sont actifs.
+> Reste opérationnel : publier `integration` et son tag de sauvegarde sur GitHub dès qu'une
+> authentification propre est disponible pour le compte `codex`. Ne pas détourner les identifiants
+> du dépôt du cousin pour contourner ce point.
 >
 > **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
 > 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de

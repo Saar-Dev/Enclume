@@ -11,6 +11,7 @@
 - branche d'intégration commune : `integration`, worktree `/home/codex/Enclume-fusion` ;
 - tête cousin importée : `bad0190` depuis `origin/master` ;
 - premier merge commun : `1f048cd` ;
+- publication de `integration` sur `origin` : en attente de l'authentification GitHub de `codex` ;
 - branche Surface v2 exclue : `37703bf` depuis `origin/fusion-kiwi` ;
 - première fusion combat/monde : `8276086` ;
 - parent combat historique : `255736d` ;

@@ -3526,3 +3526,7 @@ Résolution et validation :
 
 Workflow durable : `docs/WORKFLOW_FUSION.md`. Autorités combat/monde :
 `docs/FUSION_PROJET_COUSIN.md`.
+
+**Publication distante différée** : le push HTTPS de `integration` a été refusé car le compte
+système `codex` ne possède pas d'authentification GitHub non interactive. La branche et le
+déploiement restent valides localement ; aucun identifiant du cousin n'a été réutilisé.

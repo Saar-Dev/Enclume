@@ -30,6 +30,9 @@ et `CampaignSettingsPage.jsx` conservait une variable `catch` inutilisée ainsi 
 hook manquante. Après correction : 124 tests monde/serveur, 28 tests Surface, ESLint ciblé sans
 erreur et build Vite de production passent.
 Le smoke Playwright Chromium passe également sur `http://127.0.0.1:8393` sans exception JavaScript.
+La branche `integration` reste locale au serveur à cette étape : le push HTTPS a été refusé faute
+d'identifiants GitHub non interactifs pour `codex`. Cela ne bloque pas le déploiement, mais doit être
+résolu avant que les deux développeurs puissent repartir de la branche distante commune.
 
 ---
 
