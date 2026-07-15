@@ -25,6 +25,10 @@ dans `docs/WORKFLOW_FUSION.md`. La première intégration possède le point de r
 `backup/pre-fusion-20260715-110349` et l'archive
 `/home/codex/backups/enclume-pre-fusion-20260715-110349`.
 
+La fusion Git et la fusion des données sont deux opérations distinctes. `vtt_fusion` provient
+initialement de `vtt_codex` ; aucune ligne créée seulement dans la base vivante `vtt` ne doit être
+recopiée sans audit des UUID, campagnes, personnages, fiches et objets MinIO associés.
+
 Ces identifiants servent de repères, pas de branches à réécrire. Avant une nouvelle fusion, noter
 les deux nouveaux commits de tête et créer un tag de sauvegarde sur l'intégration actuelle.
 

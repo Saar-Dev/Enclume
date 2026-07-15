@@ -3531,7 +3531,20 @@ Workflow durable : `docs/WORKFLOW_FUSION.md`. Autorités combat/monde :
 système `codex` ne possède pas d'authentification GitHub non interactive. La branche et le
 déploiement restent valides localement ; aucun identifiant du cousin n'a été réutilisé.
 
-**Correctif d'accès LAN** : les services écoutaient correctement sur `0.0.0.0:8393` et `*:8394`,
-mais UFW ne connaissait que les anciens ports. Deux règles limitées à `192.168.1.0/24` autorisent
-désormais `8393/tcp` et `8394/tcp`. Vérification depuis le poste Windows : deux connexions TCP
-ouvertes, HTTP 200 côté client et health API `ok`.
+**Correctif d'accès public** : les services écoutaient correctement sur `0.0.0.0:8393` et `*:8394`,
+mais UFW ne connaissait que les anciens ports. `8393/tcp` et `8394/tcp` sont désormais autorisés
+publiquement, les URL client/API utilisent `89.92.219.211` et la redirection de la box répond sur les
+deux ports. Vérification : HTTP 200 côté client et health API `ok`.
+
+**Audit des modèles de personnages** : les 9 objets MinIO `characters/`, dont cinq GLB, sont
+identiques entre les buckets source et fusion. Quatre personnages de `vtt_fusion` référencent leur
+GLB. `vtt` possède en plus `Drone 1`, dont le GLB est bien copié mais dont la ligne personnage et les
+relations ne sont pas dans `vtt_fusion`, ainsi que `Mechant` sans GLB. Aucune ligne vivante n'a été
+importée implicitement depuis la base du cousin.
+
+**Correctif CORS et audit compte** : après bascule vers l'URL publique, une page ouverte par l'URL
+LAN ne pouvait plus envoyer son login car `CLIENT_URL` ne portait qu'une origine. Le nouveau
+`CLIENT_URLS` est parsé par `server/src/lib/clientOrigins.js` et partagé entre Express et Socket.IO,
+sans wildcard. Trois tests purs et deux parcours Playwright (LAN/public) passent. Les empreintes des
+e-mails et hashes de mots de passe sont identiques dans `vtt`, `vtt_codex` et `vtt_fusion` : aucun
+compte n'avait été supprimé ou réinitialisé.

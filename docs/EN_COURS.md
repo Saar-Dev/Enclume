@@ -12,6 +12,12 @@
 > Reste opérationnel : publier `integration` et son tag de sauvegarde sur GitHub dès qu'une
 > authentification propre est disponible pour le compte `codex`. Ne pas détourner les identifiants
 > du dépôt du cousin pour contourner ce point.
+> Données cousin non fusionnées automatiquement : `vtt` contient actuellement `Drone 1` (GLB déjà
+> copié dans MinIO fusion) et `Mechant` en plus de la campagne commune. Leur éventuel import doit
+> inclure les relations de fiche/personnage et faire l'objet d'un chantier de données explicite.
+> Accès `8393` : UFW public, NAT active, origines LAN et publique autorisées explicitement par
+> `CLIENT_URLS`. Les comptes et hashes de mots de passe sont identiques dans les trois bases ; aucun
+> compte n'a été supprimé pendant la fusion.
 >
 > **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
 > 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de

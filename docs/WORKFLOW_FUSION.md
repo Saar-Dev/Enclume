@@ -17,10 +17,15 @@ Les trois copies utilisent le dépôt distant `https://github.com/Saar-Dev/Enclu
 développeur ne travaille directement dans le dépôt de l'autre. L'instance `8393/8394` est un sas de
 validation commun, pas un troisième espace de développement fonctionnel.
 
-Le pare-feu UFW autorise `8393/tcp` et `8394/tcp` uniquement depuis `192.168.1.0/24`. Cette règle est
-nécessaire même lorsque Vite écoute correctement sur `0.0.0.0`. Une exposition Internet demanderait
-une décision séparée, les règles NAT de la box et une règle UFW explicitement adaptée ; elle ne doit
-pas être déduite de l'accès LAN.
+Le pare-feu UFW autorise publiquement `8393/tcp` et `8394/tcp`. La box redirige ces ports vers le
+serveur et l'instance utilise `http://89.92.219.211:8393` comme origine client et
+`http://89.92.219.211:8394` comme API. Les deux services doivent rester protégés par les contrôles
+d'authentification applicatifs ; l'ouverture UFW ne remplace jamais ces contrôles.
+
+`CLIENT_URLS` contient explicitement les deux origines autorisées : l'adresse publique et
+`http://192.168.1.46:8393`. `server/src/lib/clientOrigins.js` valide et déduplique cette liste pour
+Express et Socket.IO. Ne pas remplacer cette liste par `*` : les cookies d'authentification exigent
+des origines explicites avec `credentials: true`.
 
 ## 2. Isolation des données
 
@@ -36,6 +41,11 @@ pas être déduite de l'accès LAN.
 Les environnements historiques `8193` et `8293` ne sont pas reconfigurés lors de la création de
 l'intégration. Leur partage historique éventuel de Redis ou d'assets ne doit pas être reproduit par
 le nouvel environnement.
+
+La fusion du code ne fusionne pas automatiquement les données vivantes des deux bases. La première
+`vtt_fusion` a été restaurée depuis `vtt_codex`. Les créations effectuées uniquement dans `vtt`
+après leur divergence nécessitent un import de données explicite, avec contrôle des UUID et des
+relations de campagne.
 
 ## 3. Cycle de travail
 

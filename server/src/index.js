@@ -34,14 +34,17 @@ import { merchantsRouter, tradeLogRouter } from './routes/tradeRoutes.js'
 import creationRouter from './routes/creation.js'
 import vaultRouter from './routes/vault.js'
 import { BUILTIN_MODELS_ROOT, syncBuiltinModels } from './lib/builtinModelCatalog.js'
+import { createCorsOriginValidator, parseClientOrigins } from './lib/clientOrigins.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 const httpServer = createServer(app)
+const clientOrigins = parseClientOrigins(process.env.CLIENT_URLS || process.env.CLIENT_URL)
+const validateClientOrigin = createCorsOriginValidator(clientOrigins)
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: clientOrigins,
     credentials: true,
   }
 })
@@ -51,7 +54,7 @@ const io = new Server(httpServer, {
 app.set('io', io)
 
 // Middlewares de base
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }))
+app.use(cors({ origin: validateClientOrigin, credentials: true }))
 app.use(express.json({ limit: '50mb' }))
 app.use(cookieParser())
 app.use(express.static(path.join(__dirname, '..', 'public')))

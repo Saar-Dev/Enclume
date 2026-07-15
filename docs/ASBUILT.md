@@ -24,10 +24,34 @@ Les unités versionnées `deploy/enclume-fusion-client.service` et
 `--strictPort` sur 8393 et l'API écoute sur 8394. Les services historiques n'ont pas été arrêtés ou
 redémarrés par ce déploiement.
 
-UFW autorise les deux ports de fusion depuis le seul sous-réseau local `192.168.1.0/24`. Avant cette
-règle, les services répondaient localement mais les connexions du poste client expiraient, alors que
-`8193/8194` et `8293/8294` restaient accessibles. Le contrôle final depuis le poste Windows retourne
-HTTP 200 sur `8393` et `{ status: "ok" }` sur `8394/api/health`.
+UFW autorise publiquement les deux ports de fusion. L'instance utilise les URL
+`http://89.92.219.211:8393` et `http://89.92.219.211:8394`; la redirection de la box répond sur les
+deux ports. Le contrôle final retourne HTTP 200 sur `8393` et `{ status: "ok" }` sur
+`8394/api/health`. Une copie privée de l'ancien `.env` précède cette bascule dans
+`/home/codex/backups/enclume-fusion-public-20260715-115110`.
+
+L'adresse LAN et l'adresse publique sont simultanément autorisées par une liste CORS stricte
+(`CLIENT_URLS`). Le validateur partagé refuse les URL avec chemin, les protocoles non HTTP et toute
+origine non déclarée ; Socket.IO consomme la même liste. Trois tests purs passent, puis deux parcours
+Playwright du formulaire de connexion, LAN et public, atteignent tous deux l'API et affichent
+correctement l'erreur 401 de diagnostic sans exception JavaScript.
+
+Les comptes n'ont pas été remplacés lors de cette correction. La somme cryptographique des couples
+e-mail/hash de mot de passe est identique dans `vtt`, `vtt_codex` et `vtt_fusion`. Le refus observé
+depuis le LAN provenait de l'ancienne configuration CORS à origine publique unique.
+
+### Modèles de personnages lors de la première fusion
+
+- 72 modèles intégrés d'objets/décor sont synchronisés comme `entity_blueprints` ; ils ne doivent
+  pas être confondus avec les modèles de tokens de personnages ;
+- les 9 objets MinIO sous `characters/` présents dans le bucket source ont été copiés à l'identique
+  dans `enclume-assets-fusion`, dont les cinq fichiers GLB de personnages ;
+- quatre personnages de `vtt_fusion` référencent actuellement leur GLB ;
+- la base active du cousin `vtt` contient deux personnages supplémentaires absents de la base de
+  fusion initialisée depuis `vtt_codex` : `Drone 1`, dont le fichier GLB est déjà copié, et
+  `Mechant`, sans GLB ;
+- aucun import implicite de ces lignes n'a été réalisé : importer un personnage exige aussi ses
+  relations de campagne et de fiche, pas uniquement son URL de modèle.
 
 La validation du merge a détecté puis corrigé deux défauts de la tête importée : une fermeture de
 commentaire `*/` incluse dans le texte d'un commentaire CSS empêchait la minification Lightning CSS,
