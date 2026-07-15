@@ -3578,3 +3578,96 @@ supprimables ont été ajoutés à `La Beta-test Company` pour permettre des ess
 Les sommes SHA-256 des objets MinIO correspondent exactement aux fichiers sources et les deux
 ressources répondent en HTTP 200 via le proxy d'assets. Cette opération ajoute uniquement des
 données de test ; aucune bibliothèque ni logique de sélection de modèle n'a été introduite.
+
+---
+
+## Session 142 (Saar) — 2026-07-15 — Migration 158 (CASCADE `battlemap_texture_usage`) réintégrée sur `master` ✅ CLOS
+
+Crash serveur au démarrage (`Error: The migration directory is corrupt, the following files are
+missing: 158_battlemap_texture_usage_cascade.js`) rencontré en lançant `.\start.ps1` en pleine session
+Lot 6 (`PLAN_MUTATION2.md`, entrée suivante) — sans rapport avec ce chantier, aucune migration touchée
+par Lot 6.
+
+**Root-cause `[VÉRIFIÉ]`** (git `merge-base`, `git worktree list`, `git reflog`, contenu du commit) :
+le fichier n'a **jamais existé sur `master`** — commit unique `92cd8a4` (Session 142, "Migration 158 :
+CASCADE manquant battlemap_texture_usage"), écrit et appliqué le 2026-07-15 pendant une session sur
+`dev/Saar`/`fusion-kiwi-v2`, jamais mergé dans `master`. Ce même worktree (`Enclume/`) a servi
+indifféremment à `master` **et** `fusion-kiwi` ce jour-là (allers-retours visibles au reflog), sur le
+même Postgres local (`postgresql://vtt@localhost:5432/vtt`) — la règle "chaque instance garde sa
+propre base" (`CLAUDE.md` §3) n'a pas été respectée dans les faits pour ces branches de travail
+locales. La migration s'est appliquée à la base commune (batch 108) ; revenu sur `master`, le fichier
+correspondant n'existe pas dans son arbre — `knex_migrations` et le dossier `migrations/` divergent.
+
+**Correction** : le correctif lui-même est réel et isolé (1 seul fichier dans tout le commit —
+`battlemap_texture_usage.battlemap_id` sans `ON DELETE CASCADE`, bloquait `DELETE /api/campaigns/:id`
+dès qu'une battlemap de la campagne a des textures posées). `git cherry-pick 92cd8a4` → `80e75e0` sur
+`master`, propre, aucun conflit (aucun recoupement avec les fichiers Lot 6 en cours). Déjà appliqué en
+base (batch 108) — aucune ré-exécution nécessaire.
+
+**Testé** : `knex_migrations` vérifiée (`name = '158_battlemap_texture_usage_cascade.js'`, exact),
+`db.migrate.latest()` rejoué directement — `log: []` (rien à appliquer, cohérent), SR confirmé
+(redémarrage `.\start.ps1` sans erreur, confirmé Saar).
+**Non testé** : re-suppression réelle d'une campagne avec battlemap texturée (le scénario d'origine
+qui avait motivé le correctif Session 142 initiale) — pas re-rejoué ici, hors scope de cette
+réconciliation.
+
+## Session 143 (Saar) — 2026-07-15 — `docs/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref) ✅ CLOS
+
+Suite du Lot 5 (item 69, clos). Diagnostic initial du plan ("Mutations déjà câblé, rien à faire")
+élargi en lisant le code avant tout code : **faux au retrait** —
+`mutationService.removeMutation` marquait la mutation `removed` sans jamais annuler l'override
+`sex`/`is_fertile` posé à l'ajout (asymétrie trouvée par lecture, pas supposée). Creusé plus loin :
+`is_fertile` a **deux sources indépendantes** (mutation `mod_fertility` et avantage `adv_076`
+Fécondité) qui s'écrasaient l'une l'autre sans jamais se consulter — trou croisé pré-existant, pas
+introduit par ce lot. **Décision Saar : "on ne bricole jamais, même si cela implique plus de
+travail"** — un seul résolveur pour les deux catalogues plutôt que deux correctifs isolés.
+
+**NOUVEAU `server/src/services/identityService.js`** : `applyIdentityGrant` (avantages, écriture
+directe des clés `mod_identity` déclarées — généralise 3 sites `if (advantageId === 'adv_076')` codés
+en dur, corrige au passage `adv_002` Ambidextre, en base depuis la migration 92 mais **jamais
+appliqué depuis sa création**) ; `applyMutationIdentityGrant` (mutations, même principe pour
+`mod_sex`/`mod_fertility`) ; `recomputeIdentity(trx, sheetId, fields)` (retrait ou réinsertion
+Wizard — recalcule uniquement les champs passés en paramètre à partir des sources actives restantes,
+mutations puis avantages, l'avantage l'emporte en cas de conflit — seul cas réel du catalogue :
+`is_fertile`, déjà protégé côté avantage par `not_if_sterile` — défaut fixe si plus aucune source ne
+couvre le champ, décisions Saar : `hand_pref` `'R'` [80% population droitière], `is_fertile` `false`,
+`sex` `'homme'` ; aucun snapshot, aucune restauration d'une "valeur d'avant", tradeoff assumé
+identique aux deux catalogues).
+
+**Piège trouvé en concevant, avant tout code** : un recompute inconditionnel des 3 champs à chaque
+retrait aurait écrasé un `sex`/`hand_pref` choisi au Step1 dès qu'aucune mutation/avantage actif ne le
+concerne — régression bien plus grave que le bug d'origine. Corrigé par un paramètre `fields`
+explicite (jamais un recompute en bloc) : chaque appelant ne passe que les champs réellement
+concernés par la source ajoutée/retirée.
+
+**Extension de scope décidée par Saar** ("pas de bricolage") : même bug latent trouvé dans
+`creationService.js` STEP3 **et** STEP5 (Wizard "retravail") — wipe-and-reinsert complet à chaque
+resoumission (`char_mutations`/`char_advantages` supprimés puis réinsérés), aucun revert de
+`sex`/`is_fertile`/`hand_pref` si la mutation/l'avantage qui les déclarait est désélectionné en cours
+d'édition. Corrigé aux deux endroits avec le même résolveur : capture des champs concernés par les
+sources actives **avant** le `.del()`, réinsertion inchangée (écriture directe déjà branchée via
+`applyMutationIdentityGrant`/`addAdvantage`), puis `recomputeIdentity` final sur les champs capturés.
+
+**Fichiers touchés** : `mutationService.js` (`addMutation` → `applyMutationIdentityGrant` ;
+`removeMutation` passé en transaction, joint `ref_mutations` pour savoir si la mutation retirée
+déclarait `mod_sex`/`mod_fertility`) ; `advantageService.js` (`addAdvantage`/`grantAdvantage` →
+`applyIdentityGrant` ; `removeAdvantage` sélectionne `mod_identity`, appelle `recomputeIdentity` sur
+les clés déclarées) ; `creationService.js` (STEP3 + STEP5, garde + recompute final). Aucune migration
+(colonnes déjà existantes depuis la migration 92/36) — aucun fichier client (mêmes colonnes déjà lues
+par `CharacterSheet.jsx`).
+
+**Testé** : `node --check` sur les 4 fichiers, 9 scénarios en base réelle (**transaction annulée**,
+état restauré à l'identique vérifié après coup) — écriture directe avantage/mutation, défauts fixes
+sans aucune source active, champ non demandé jamais touché (test dédié de la régression Step1 trouvée
+en analyse à charge), mutation seule, conflit mutation/avantage sur `is_fertile` avec l'avantage qui
+l'emporte, retrait mutation avec avantage encore actif (ferme le trou croisé), retrait avantage seul
+(dernière source). **SR + fonctionnel confirmé Saar en navigateur.**
+
+**Non testé** : parcours navigateur détaillé scénario par scénario (octroi/retrait Ambidextre et
+Fécondité via `AdvantagesPanel.jsx`, retravail Wizard Step3/Step5 avec désélection d'une mutation à
+sexe/fécondité) — confirmé fonctionnel globalement par Saar, pas chaque cas limite isolément.
+
+**Effet de bord, sans lien avec Lot 6** : crash serveur au démarrage rencontré en cours de session,
+diagnostiqué et résolu séparément — voir "Session 142" ci-dessus.
+
+Détail complet : `docs/PLAN_MUTATION2.md` Lot 6, `server/src/services/identityService.js` (NOUVEAU).

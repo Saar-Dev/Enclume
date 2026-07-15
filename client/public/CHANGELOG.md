@@ -1,3 +1,16 @@
+## v186 — 2026-07-15 — Ambidextre et Fécondité produisent enfin un effet réel
+
+### Serveur
+- [fix] L'Avantage "Ambidextre" applique désormais réellement la latéralité sur la fiche — jamais
+  câblé depuis sa création malgré la donnée déjà présente en base.
+- [fix] L'Avantage "Fécondité" et les mutations affectant le sexe/la fécondité (Androgyne, Asexué,
+  Autofécondation) restent cohérents entre eux : retirer l'un ne fait plus perdre l'effet encore
+  actif de l'autre.
+- [fix] Retirer une mutation ou un avantage affectant la latéralité/le sexe/la fécondité restaure
+  correctement la fiche — l'ancienne valeur ne restait plus bloquée après un retrait.
+- [fix] La suppression d'une campagne ne bloque plus lorsqu'une de ses battlemaps a des textures
+  posées.
+
 ## v185 — 2026-07-13 — Nouvelle apparence : connexion, tableau de bord et paramètres de campagne
 
 ### Client
