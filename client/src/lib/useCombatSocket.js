@@ -23,7 +23,6 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const [meleeResult,         setMeleeResult]          = useState(null)
   const [stunPayload,         setStunPayload]          = useState(null)
   const [pendingSurpriseRoll, setPendingSurpriseRoll]  = useState(null)
-  const [announcementMarker,  setAnnouncementMarker]   = useState(null)
   const [pjPreview,           setPjPreview]            = useState(null)
 
   const socket = useSocket()
@@ -79,7 +78,6 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       if (combatState.phase) setMode('combat')  // F-R9-6 : troisième callsite setMode
     }
     const onPhaseChanged = ({ phase, roster, actions }) => {
-      setAnnouncementMarker(null)
       setPjPreview(null)
       onModeReset()
       setPhase(phase)
@@ -98,7 +96,6 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onAnnouncePreview = (preview) => { setPjPreview(preview) }
     const onActionDeclared  = ({ tokenId, actionType, initiative, moveTarget, attackTargetId }) => {
       markTokenAnnounced(tokenId, initiative)
-      setAnnouncementMarker({ tokenId, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
       setPjPreview(null)
       addAnnouncedAction({ tokenId, actionType, initiative, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
     }
@@ -196,7 +193,6 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     meleeResult,         setMeleeResult,
     stunPayload,         setStunPayload,
     pendingSurpriseRoll, setPendingSurpriseRoll,
-    announcementMarker,  setAnnouncementMarker,
     pjPreview,           setPjPreview,
   }
 }

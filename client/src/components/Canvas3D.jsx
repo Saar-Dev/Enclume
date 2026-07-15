@@ -22,7 +22,6 @@ import {
   levelToY,
   normalizeSurfaceData,
   surfaceTextureIds,
-  yToLevel,
 } from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
@@ -502,14 +501,13 @@ function Scene({
   selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
-  altPressed, onEntityClick, onTokenRotate, onTokenSetRotation,
-  moveTarget, onMoveCancel, moveLabels,
+  altPressed, onEntityClick, onTokenSetRotation,
+  moveTarget, onMoveCancel,
   dicePayload, onDiceDone,
   combatCameraCenter,
   combatMoveMode,
   pendingMoveSelection,
   combatTargetMode,
-  announcementMarker,
   defaultTokenGlbUrl,
   losMode,
   onLosCancel,
@@ -839,7 +837,12 @@ function Scene({
       dragRef.current.hasMoved = true
     }
 
-    const destination = raycastWorldSupport(e.clientX, e.clientY)
+    // 8.C — MJ uniquement : si aucun support de sol sous le curseur, retomber sur le
+    // plan Y=0 infini plutôt que d'abandonner le drag (permet de planquer un token
+    // hors de toute géométrie construite). Joueur : comportement inchangé (raycast
+    // sol strict).
+    let destination = raycastWorldSupport(e.clientX, e.clientY)
+    if (!destination && isGm) destination = raycastGround(e.clientX, e.clientY)
     if (!destination) return
 
     let tiltX = 0
@@ -1339,23 +1342,14 @@ function Scene({
 
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Canvas3D — lecture seule (mode jeu).
-// Props : onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel
-// onTokenRotate  : callback → SessionPage émet WS.TOKEN_ROTATE
+// Props : onTokenDoubleClick, socket, onEntityClick, moveTarget, onMoveCancel
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenRotate, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
-  const { t } = useTranslation()
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
-
-  // Labels i18n pour le ghost — calculés ici où t() est accessible, passés en prop à Scene
-  const moveLabels = {
-    push:       t('entity.movePush'),
-    pull:       t('entity.movePull'),
-    impossible: t('entity.moveImpossible'),
-  }
 
   const [voxels, setVoxels] = useState({})
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
@@ -1626,18 +1620,15 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           justSelectedRef={justSelectedRef}
           altPressed={altPressed}
           onEntityClick={onEntityClick}
-          onTokenRotate={onTokenRotate}
           onTokenSetRotation={onTokenSetRotation}
           moveTarget={moveTarget}
           onMoveCancel={onMoveCancel}
-          moveLabels={moveLabels}
           dicePayload={dicePayload}
           onDiceDone={onDiceDone}
           combatCameraCenter={combatCameraCenter}
           combatMoveMode={combatMoveMode}
           pendingMoveSelection={pendingMoveSelection}
           combatTargetMode={combatTargetMode}
-          announcementMarker={announcementMarker}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
           losMode={losMode}
           onLosCancel={onLosCancel}

@@ -476,13 +476,6 @@ function SessionContent({ campaignId }) {
     socket?.emit(WS.ENTITY_ACTION_RESOLVE, { requestId, isApproved, autoSuccess, gmModifier })
   }, [socket])
 
-  // ─── Rotation token (joueur/GM → serveur) ─────────────────────────────────
-  // Appelé par Canvas3D au clic court sur un token propriétaire.
-  // Le serveur incrémente r et broadcast TOKEN_UPDATED — PE21.
-  const handleTokenRotate = useCallback((tokenId) => {
-    socket?.emit(WS.TOKEN_ROTATE, { tokenId })
-  }, [socket])
-
   const handleTokenSetRotation = useCallback((tokenId, r) => {
     socket?.emit(WS.TOKEN_SET_ROTATION, { tokenId, r })
   }, [socket])
@@ -598,7 +591,6 @@ function SessionContent({ campaignId }) {
               onTokenDoubleClick={handleTokenDoubleClick}
               socket={socket}
               onEntityClick={handleEntityClick}
-              onTokenRotate={handleTokenRotate}
               onTokenSetRotation={handleTokenSetRotation}
               moveTarget={moveTarget}
               onMoveCancel={handleMoveCancel}
@@ -608,7 +600,6 @@ function SessionContent({ campaignId }) {
               combatMoveMode={combatMoveMode}
               pendingMoveSelection={pendingMoveSelection}
               combatTargetMode={combatTargetMode}
-              announcementMarker={combatSocket.announcementMarker}
               losMode={losMode}
               onLosCancel={handleLosCancel}
               onLosResult={handleLosResult}
