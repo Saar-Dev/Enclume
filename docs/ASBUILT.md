@@ -36,6 +36,12 @@ origine non déclarée ; Socket.IO consomme la même liste. Trois tests purs pas
 Playwright du formulaire de connexion, LAN et public, atteignent tous deux l'API et affichent
 correctement l'erreur 401 de diagnostic sans exception JavaScript.
 
+Le client utilise désormais une origine unique du point de vue du navigateur. `VITE_API_URL` reste
+vide et `client/vite.config.js` relaie `/api` et `/socket.io` vers l'API interne `8394`. Les réponses
+de login observées par Playwright restent donc respectivement sur `192.168.1.46:8393` et
+`89.92.219.211:8393`, ce qui préserve les cookies `SameSite=Lax`. Les deux health checks et les deux
+handshakes Socket.IO répondent en HTTP 200.
+
 Les comptes n'ont pas été remplacés lors de cette correction. La somme cryptographique des couples
 e-mail/hash de mot de passe est identique dans `vtt`, `vtt_codex` et `vtt_fusion`. Le refus observé
 depuis le LAN provenait de l'ancienne configuration CORS à origine publique unique.

@@ -18,6 +18,8 @@
 > Accès `8393` : UFW public, NAT active, origines LAN et publique autorisées explicitement par
 > `CLIENT_URLS`. Les comptes et hashes de mots de passe sont identiques dans les trois bases ; aucun
 > compte n'a été supprimé pendant la fusion.
+> Le navigateur utilise toujours une API et un Socket.IO same-origin sur `8393` ; Vite relaie en
+> interne vers `8394`. Ne pas remettre une URL API publique figée dans les 34 consommateurs client.
 >
 > **2026-07-13 — transition instance Codex** : ajout des marqueurs de migrations historiques
 > 75-83 et idempotence des migrations 143/149. Objectif : basculer l'instance de test 8293 de

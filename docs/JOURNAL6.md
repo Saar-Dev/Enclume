@@ -3548,3 +3548,8 @@ LAN ne pouvait plus envoyer son login car `CLIENT_URL` ne portait qu'une origine
 sans wildcard. Trois tests purs et deux parcours Playwright (LAN/public) passent. Les empreintes des
 e-mails et hashes de mots de passe sont identiques dans `vtt`, `vtt_codex` et `vtt_fusion` : aucun
 compte n'avait été supprimé ou réinitialisé.
+
+Le correctif est complété par un proxy same-origin dans Vite : `VITE_API_URL` vide, `/api` et
+`/socket.io` relayés vers `API_PROXY_TARGET` `127.0.0.1:8394`. Les requêtes de login, health checks et
+handshakes Socket.IO restent sur le port `8393` vu du navigateur, aussi bien par l'adresse LAN que
+publique. Les cookies `SameSite=Lax` ne dépendent donc plus d'un trajet LAN → API publique.

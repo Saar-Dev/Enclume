@@ -1,6 +1,7 @@
 {
   "scripts": {
     "test:world": "node --test shared/world/*.test.mjs server/src/services/*.test.mjs",
+    "test:server-config": "node --test server/src/lib/clientOrigins.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:remote": "powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/run-remote.ps1"

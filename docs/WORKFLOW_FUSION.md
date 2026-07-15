@@ -27,6 +27,12 @@ d'authentification applicatifs ; l'ouverture UFW ne remplace jamais ces contrôl
 Express et Socket.IO. Ne pas remplacer cette liste par `*` : les cookies d'authentification exigent
 des origines explicites avec `credentials: true`.
 
+Le client n'encode aucune adresse API pour l'instance de fusion : `VITE_API_URL` est vide. Vite
+relaie `/api` et `/socket.io` vers `API_PROXY_TARGET=http://127.0.0.1:8394`. Le navigateur reste donc
+sur le même hôte et le même port que la page, que celle-ci soit ouverte par l'adresse LAN ou
+publique. Cette règle évite les cookies cross-site et constitue aussi le contrat attendu d'un futur
+reverse proxy de production.
+
 ## 2. Isolation des données
 
 - chaque instance possède sa propre base PostgreSQL et applique ses migrations uniquement à cette
@@ -102,6 +108,7 @@ Une livraison commune doit au minimum réussir :
 
 ```bash
 npm run test:world
+npm run test:server-config
 node --test client/src/lib/surfaceData.test.mjs
 cd client && npm run build
 ```
