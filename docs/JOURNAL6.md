@@ -4271,3 +4271,52 @@ existent déjà (migrations 56/58). Effet runtime limité aux nouveaux combats d
 correctif (défaut `drawn` PNJ).
 
 **Retour arrière** : commit isolé sur `dev/Saar`, revert simple si besoin.
+
+---
+
+## Session 151 (Codex) — 2026-07-16 — Fusion monde Session 150 + règles Session 146 ✅ CLOS
+
+**Sources** : moteur monde `72743e8` (`dev/monde`) et règles `1af7d78`
+(`origin/dev/Saar`). Le worktree du cousin `/home/didier/Enclume` est inaccessible en écriture au
+compte `codex` et n'a pas été modifié. Sa tête a été lue via le dépôt distant.
+
+**Audit avant fusion** : sauvegarde complète et sommes SHA-256 vérifiées dans
+`/home/codex/backups/enclume-pre-fusion-20260716-144903` : bundle Git, dump `vtt_fusion`, volume
+MinIO complet et configuration runtime. Trois tags protègent les têtes précédentes :
+`backup/pre-fusion-integration-20260716-144903`, `backup/pre-fusion-world-20260716-144903` et
+`backup/pre-fusion-saar-20260716-144903`.
+
+Un merge brut a révélé 31 conflits : `dev/Saar` transportait encore l'ancien Surface « Fusion
+Kiwi », incompatible avec le moteur canonique. Résolution architecturale : merge intégral de
+`72743e8` (`3e337f1`), puis enregistrement de `1af7d78` comme parent et application du seul delta
+règles `60056b3..1af7d78` (`eec54df`). Aucun fichier Surface, caméra, géométrie, persistance monde
+ou service spatial historique n'a été repris. Les appels des sockets combat vers les services
+monde sont conservés.
+
+**Apports règles absorbés** : résolveur d'identité commun aux mutations/avantages, autorité
+`char_identity.hand_pref`, création transactionnelle personnage + fiche, filet de création de
+fiche idempotent, nettoyage du journal/plan Mutation, plan de fusion et état initial combat des
+PNJ dans le roster.
+
+**Validation automatisée** : 131/131 tests monde/serveur, 3/3 configuration, 59/59 tests ciblés
+Surface/caméra/géométrie, `node --check` sur les fichiers serveur/partagés modifiés, ESLint ciblé,
+build Vite et smoke Playwright Chromium 1/1. `npm ci` a été exécuté à la racine, dans `server` et
+dans `client`. Les audits npm signalent le passif existant (racine : 1 high ; client : 12 dont
+7 high ; serveur : 0) ; aucun `npm audit fix` automatique n'a été lancé.
+
+**Validation réelle 8393** : health client et API à 200, 92 modèles synchronisés, migrations à
+jour et bucket `enclume-assets-fusion`. Un Chromium authentifié a chargé le dashboard puis la
+session GM `7c585d1c-999c-42fc-8bb1-4fb31fbe0d1e` avec son canvas 3D multi-étages et son combat
+actif aux niveaux 0 et 1, sans erreur JavaScript ni requête échouée. Un PNJ temporaire a été créé
+par l'API (201), sa fiche était immédiatement disponible (200), le POST de sécurité a renvoyé la
+même fiche (200), puis le personnage a été supprimé. Requête directe finale : zéro personnage de
+test restant.
+
+**Déploiement** : services `enclume-fusion-client` et `enclume-fusion-server` actifs sur
+`8393/8394`, base `vtt_fusion`, bucket `enclume-assets-fusion`. Les services cousin `8193/8194`
+n'ont pas été touchés.
+
+**Publication** : `git push --dry-run origin integration` échoue faute d'authentification GitHub
+pour le compte système `codex`. Ce blocage est documenté ; aucun identifiant de l'autre développeur
+n'est détourné. La branche commune reste protégée sur le serveur et peut être publiée dès qu'une
+authentification propre est installée.

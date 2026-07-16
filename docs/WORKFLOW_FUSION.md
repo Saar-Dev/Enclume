@@ -1,6 +1,6 @@
 # WORKFLOW_FUSION.md — espaces de développement et instance commune
 
-> Dernière mise à jour : 2026-07-15.
+> Dernière mise à jour : 2026-07-16.
 >
 > But : permettre aux deux développeurs de travailler indépendamment, puis de valider ensemble une
 > fusion déployée sans écraser leurs dépôts, leurs bases de données ou leurs états de partie.
@@ -129,7 +129,47 @@ monde v12, ses routes de persistance, ses migrations et ses services spatiaux re
 La résolution initiale conserve aussi la suppression du gitlink historique `Enclume-codex` et
 écarte `.obsidian/workspace.json`, qui est un état de poste personnel et non un livrable partagé.
 
-## 6. Validation et retour arrière
+## 6. Intégration du 2026-07-16
+
+Cette livraison réunit la dernière tête monde et la dernière tête règles disponible sans modifier
+le worktree du cousin :
+
+- tête moteur monde : `72743e8` (`dev/monde`, Session 150) ;
+- tête règles lue depuis le dépôt distant : `1af7d78` (`origin/dev/Saar`, Session 146) ;
+- dernier point sémantiquement commun côté cousin : `60056b3` ;
+- merge monde : `3e337f1` ;
+- merge règles : `eec54df` ;
+- worktree et instance de validation : `/home/codex/Enclume-fusion`, `8393/8394`, `vtt_fusion`,
+  bucket `enclume-assets-fusion`.
+
+`dev/Saar` contenait encore dans son ascendance l'ancien Surface « Fusion Kiwi ». Un merge brut
+aurait produit 31 conflits et réintroduit des fichiers monde obsolètes. L'intégration a donc
+enregistré `1af7d78` comme parent Git, puis appliqué uniquement son delta règles postérieur à
+`60056b3`. L'autorité monde de `72743e8` a été conservée intégralement. Aucun fichier Surface,
+géométrie, caméra, persistance monde ou service spatial n'a été repris depuis l'ancienne branche.
+
+Point de restauration complet :
+
+- archive : `/home/codex/backups/enclume-pre-fusion-20260716-144903` ;
+- tags : `backup/pre-fusion-integration-20260716-144903`,
+  `backup/pre-fusion-world-20260716-144903` et `backup/pre-fusion-saar-20260716-144903` ;
+- contenus vérifiés par SHA-256 : bundle Git, dump `vtt_fusion`, volume MinIO complet et
+  configuration runtime.
+
+Validation réellement exécutée : 131 tests monde/serveur, 3 tests de configuration, 59 tests
+ciblés Surface/caméra/géométrie, lint ciblé, build Vite, smoke Playwright Chromium, health HTTP
+du client et de l'API. Sur `8393`, un Chromium authentifié a chargé le dashboard puis une vraie
+session avec carte 3D multi-étages et combat actif aux niveaux 0 et 1, sans erreur de page ni
+requête échouée. Un PNJ temporaire a été créé par l'API : sa fiche atomique existait immédiatement,
+le filet `POST /char-sheet/:id` a renvoyé la même fiche de façon idempotente, puis le personnage a
+été supprimé ; une lecture directe de la base confirme zéro donnée de test restante.
+
+La publication vers `origin` reste bloquée tant que le compte système `codex` ne possède pas une
+authentification GitHub propre. Ne jamais employer les identifiants du cousin pour contourner ce
+blocage. Le worktree `/home/didier/Enclume` et les services `8193/8194` n'ont pas été modifiés ; le
+cousin devra faire repartir sa prochaine branche depuis la tête `integration` publiée.
+
+## 7. Validation et retour arrière
 
 Une livraison commune doit au minimum réussir :
 

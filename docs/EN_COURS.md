@@ -1,4 +1,16 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — deuxième fusion commune validée** : `integration` réunit le moteur monde
+> `72743e8` et les règles `1af7d78` via les merges `3e337f1` et `eec54df`. L'ancien Surface présent
+> dans l'ascendance de `dev/Saar` n'a pas été importé : seul le delta règles
+> `60056b3..1af7d78` a été appliqué, le moteur Session 150 restant l'autorité spatiale. L'instance
+> `8393/8394` est active sur `vtt_fusion` et `enclume-assets-fusion`. Validation : 131 tests
+> monde/serveur, 3 configuration, 59 ciblés, lint, build, smoke Playwright, carte 3D/combat
+> multi-étages réellement chargée aux niveaux 0 et 1, et création HTTP atomique d'un PNJ avec
+> suppression et contrôle de base. Retour arrière :
+> `/home/codex/backups/enclume-pre-fusion-20260716-144903` et tags
+> `backup/pre-fusion-*-20260716-144903`. Publication GitHub encore bloquée par l'absence
+> d'authentification du compte système `codex` ; le dépôt du cousin n'a pas été modifié.
+>
 > **2026-07-16 — surface océanique continue et garde sous-marine** : le rendu de l'océan ne
 > réutilise plus les colonnes physiques, volontairement absentes dans les salles étanches. La
 > surface visible est un plan continu sur l'emprise globale et se trouve cinq hauteurs d'étage
@@ -191,8 +203,9 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
   monde 3D canonique.
 - Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
   des cartes anciennes n'est exigée.
-- Prochaine étape : validation fonctionnelle Playwright et manuelle sur une carte canonique
-  multi-étages, puis revue d'intégration avec la prochaine tête du projet combat.
+- Intégration du 2026-07-16 validée sur `8393` avec une carte multi-étages, un combat actif et un
+  parcours HTTP authentifié de personnage. Prochaine étape monde : connecteurs verticaux
+  paramétriques (escaliers puis échelles), sur les contrats canoniques déjà en place.
 
 Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 

@@ -1,5 +1,29 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Base commune monde + règles validée (2026-07-16)
+
+La branche `integration` réunit le moteur monde `72743e8` et la tête règles `1af7d78` par les
+merges `3e337f1` et `eec54df`. Le moteur monde Session 150 reste l'unique autorité pour la
+géométrie, les étages, les interfaces sol/plafond, l'océan, le déplacement, la collision et la
+visibilité. Les apports règles postérieurs au point commun `60056b3` ajoutent notamment le
+résolveur d'identité, la lecture canonique de la main directrice, la création atomique des fiches
+de personnage et l'état initial des PNJ dans le roster combat.
+
+L'ancien Surface contenu dans l'ascendance de `dev/Saar` n'est pas présent dans le résultat. Git
+enregistre cependant `1af7d78` comme parent absorbé, ce qui évite de rejouer cette contribution à
+la fusion suivante. Les sockets combat conservent leurs appels aux services monde pour le
+déplacement, la distance et la LOS.
+
+Validation sur l'instance réelle `8393/8394` : 131 tests monde/serveur, 3 tests configuration,
+59 tests Surface/caméra/géométrie, lint ciblé, build Vite et smoke Playwright. Un Chromium
+authentifié a affiché une carte multi-étages et un combat actif aux niveaux 0 et 1 sans erreur de
+page ni requête échouée. La création HTTP d'un PNJ a produit sa fiche dans la même transaction ;
+l'appel de sécurité est resté idempotent et la suppression finale a été confirmée directement en
+base. L'archive de restauration complète est
+`/home/codex/backups/enclume-pre-fusion-20260716-144903`.
+
+---
+
 ## Surface océanique continue au-dessus du monde (2026-07-16)
 
 Le rendu distingue désormais deux géométries qui avaient été confondues. Les colonnes d'eau

@@ -1,11 +1,38 @@
 # FUSION_PROJET_COUSIN.md — contrat d'intégration combat / moteur monde
 
-> Dernière mise à jour : 2026-07-15 — première intégration commune sur `8393/8394`.
+> Dernière mise à jour : 2026-07-16 — intégration de `dev/monde` et `dev/Saar` validée sur
+> `8393/8394`.
 >
 > But : fusionner une nouvelle version du projet combat sans modifier le dépôt de l'autre
 > développeur, sans réintroduire les anciennes cartes et sans dupliquer les décisions spatiales.
 
 ## 1. Points de départ vérifiés
+
+État de la deuxième intégration commune :
+
+- monde : `72743e8` depuis `dev/monde` ;
+- règles : `1af7d78` depuis `origin/dev/Saar` ;
+- merges : `3e337f1` puis `eec54df` sur `integration` ;
+- sauvegarde : `/home/codex/backups/enclume-pre-fusion-20260716-144903` et les trois tags
+  `backup/pre-fusion-*-20260716-144903` ;
+- déploiement : `8393/8394`, base `vtt_fusion`, bucket `enclume-assets-fusion` ;
+- résultat : moteur monde Session 150 et règles combat/personnages Session 146 réunis, sans
+  réintroduire l'ancien Surface porté dans l'ascendance de `dev/Saar` ;
+- publication distante : impossible depuis le compte système `codex` faute d'identifiants GitHub ;
+  aucune authentification appartenant à l'autre développeur n'a été utilisée.
+
+Le merge brut de `dev/monde` et `dev/Saar` présentait 31 conflits parce que la branche règles
+transportait encore un ancien historique Surface. La résolution canonique n'est pas une liste de
+rustines fichier par fichier : `72743e8` reste l'autorité complète du monde et seul le delta règles
+`60056b3..1af7d78` est importé. `1af7d78` demeure un parent du merge, ce qui permet à Git de savoir
+que cette contribution est absorbée. Le dépôt `/home/didier/Enclume` est resté en lecture seule.
+
+La validation commune comprend les suites monde, configuration et Surface, le lint des fichiers
+touchés, le build client, le smoke Playwright, les health checks, une session 3D/combat réellement
+chargée dans Chromium et un parcours HTTP authentifié de création atomique de PNJ avec nettoyage
+confirmé en base.
+
+### Repères historiques de la première intégration
 
 - branche monde source : `codex/world-engine-integration`, tête `92ae9a9` ;
 - branche d'intégration commune : `integration`, worktree `/home/codex/Enclume-fusion` ;
@@ -189,8 +216,9 @@ Redis ou une LOS voxel pour « dépanner » un conflit de merge.
 1. sauvegarder les têtes des deux projets, PostgreSQL, MinIO et la configuration d'exécution ;
 2. créer ou remettre à jour le worktree `/home/codex/Enclume-fusion` sur `integration` depuis la
    dernière intégration monde validée ;
-3. importer la tête combat active avec `git merge --no-commit --no-ff origin/master` ; ne jamais
-   importer `origin/fusion-kiwi` dans le moteur v12 ;
+3. importer la tête combat active depuis `origin/dev/Saar` ; si son ascendance porte un ancien
+   moteur monde, enregistrer la tête comme parent puis appliquer seulement son delta règles depuis
+   le dernier point commun vérifié ; ne jamais importer `origin/fusion-kiwi` dans le moteur v12 ;
 4. résoudre d'abord les contrats partagés et migrations, puis le serveur, puis le client ;
 5. rechercher les anciens champs et anciens moteurs avant de lancer l'application ;
 6. exécuter les tests purs, le build, le lint ciblé et Playwright ;
