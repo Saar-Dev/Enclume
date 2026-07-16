@@ -849,6 +849,26 @@ Les modificateurs dérivés sont calculés par le serveur. Une dérogation du MJ
 explicite, auditée et accompagnée d'une raison ; elle ne remplace pas silencieusement le résultat du
 moteur.
 
+### Validation navigateur de l'autorité de déplacement
+
+Le scénario de recette de l'intégration a été exécuté sur `8393` avec deux identités réelles, une
+campagne temporaire isolée et une carte `surface_data` v12 à deux salles. Il confirme le contrat
+suivant :
+
+- un joueur qui déplace son token sur un support valide passe par `world-move`, avec trajet et
+  budget recalculés par le serveur ;
+- un budget insuffisant arrête le token au dernier support stable au lieu d'accepter la destination
+  demandée ;
+- un mur fermé rend la destination de la salle voisine inaccessible et produit un 409 journalisé,
+  sans état optimiste persistant dans le client ;
+- une destination sans support n'émet aucun mouvement côté joueur ;
+- le MJ peut volontairement contourner la navigation avec `teleport` et poser le token sur le plan
+  libre hors de la structure.
+
+Le scénario est contrôlé dans un vrai Chromium, positions PostgreSQL comprises. Toutes les données
+temporaires sont supprimées après validation. Cette différence `world-move` joueur / `teleport` MJ
+est un contrat permanent, pas une règle d'affichage.
+
 ---
 
 ## 12. Invariants à ne pas casser

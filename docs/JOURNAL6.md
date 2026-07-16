@@ -4202,7 +4202,7 @@ application ou non sur décision Saar :
 | 2 | `0ac114e` | Archive `docs/PLAN_MUTATION2.md` → `docs/Old/` | ✅ Appliqué (`d08d8ab`) |
 | 3 | `d4e78d1` | Dette HP1 — `hand_pref` lu sur `char_sheet` au lieu de `char_identity` (inventaire + défense CaC) | ✅ Appliqué (`cb75201`) |
 | 4 | `795bf0c` | Réécriture contrat `CLAUDE.md`/`AGENTS.md`/`.claude/rules/*` | ❌ Ignoré — doublon quasi total d'un travail déjà fait sur `dev/Saar` (`c38ec70`, `5d7c86b`) ; le seul delta réel (clarification rôles Kiwi/deux assistants Saar + `README_INSTALLATION.md`) sera repris par Saar depuis une archive séparée |
-| 5 | `be3bc95` | `docs/PLAN_FUSION.md` — audit 8 lots réconciliation fusion Kiwi | ✅ Appliqué (`44cfd43`) — comblait un lien cassé déjà référencé par `2488e7f` (Lot 8, déjà sur `dev/Saar`) |
+| 5 | `be3bc95` | `docs/Old/PLAN_FUSION.md` — audit 8 lots réconciliation fusion Kiwi | ✅ Appliqué (`44cfd43`) — comblait un lien cassé déjà référencé par `2488e7f` (Lot 8, déjà sur `dev/Saar`) |
 | 6 | `e7873a1` | Fix création atomique fiche perso (course StrictMode + `wizard_locked_at` jamais posé) | ✅ Appliqué (`4605817`), SR confirmé Saar |
 | 7 | `9caeb30` | GM déclare l'état initial combat des PNJ | ❌ Écarté — seul des 7 sans section "Testé" dans son message (repéré par Saar après ma recommandation initiale d'application, erreur de ma part de ne pas l'avoir signalé avant) ; correction jamais finie, sera refaite proprement |
 
@@ -4323,3 +4323,48 @@ Chromium 1/1 sur 8293.
 pour le compte système `codex`. Ce blocage est documenté ; aucun identifiant de l'autre développeur
 n'est détourné. La branche commune reste protégée sur le serveur et peut être publiée dès qu'une
 authentification propre est installée.
+
+---
+
+## Session 152 (Codex) — 2026-07-16 — Clôture du plan de fusion et recette joueur/MJ ✅ CLOS
+
+**Origine** : Saar signale que `PLAN_FUSION.md` porte encore les lots 4, 5 et 8.F comme inachevés.
+Audit du document et contrôle du serveur effectués avant toute modification.
+
+**Lot 4 — systemd** : le « doublon » supposé correspond en réalité à la topologie officielle des
+trois environnements. Les unités cousin `enclume-client/server`, monde `enclume-codex-*` et fusion
+`enclume-fusion-*` pointent vers trois worktrees distincts et écoutent respectivement
+`8193/8194`, `8293/8294` et `8393/8394`. Les six unités sont actives et les six endpoints répondent
+HTTP 200. Aucun service du cousin n'a été modifié.
+
+**Lot 5 — Python** : les trois scripts hydroponiques importent `bpy`/`mathutils`, écrivent dans
+`output/futuristic_hydroponics` et ne sont référencés par aucun package npm, service, déploiement,
+test, CI ou chemin runtime. Ce sont des outils Blender dev-only ; Python/Blender n'est pas requis
+en production. Le contrat définitif est ajouté à `docs/SYSTEME/ASSETS.md`.
+
+**Lot 8.F — recette réelle sur 8393** :
+
+- campagne isolée créée par l'API, compte `Ladj` joint comme joueur, carte v12 à deux salles,
+  personnage PJ et token temporaires ;
+- drag joueur dans la salle : `world-move` 200, trajet serveur, budget moyen 8 m et position
+  persistée ;
+- trajet supérieur au budget : arrêt au dernier support stable avec destination non atteinte ;
+- drag vers la salle voisine à travers le mur fermé : 409 `Destination unreachable`, aucune
+  position optimiste conservée, aucun message UI, log serveur 409 confirmé ;
+- drag direct vers la grille vide : aucun appel mouvement et aucun déplacement côté joueur ;
+- même geste côté MJ : `teleport` 200, position libre `x=14.4304905`, `z=1.2941859`, token
+  visuellement confirmé hors de la structure ;
+- aucune erreur de page, aucune erreur de props supprimées, aucune requête échouée hors du 409
+  attendu et journalisé.
+
+**Nettoyage** : suppression de la campagne temporaire par la vraie route API. Contrôle direct
+PostgreSQL final : campagne 0, adhésions 0, cartes 0, personnages 0, tokens 0.
+
+**Documentation** : décision systemd déjà autoritaire dans `WORKFLOW_FUSION`, pipeline Blender
+documenté dans `SYSTEME/ASSETS`, contrat de mouvement joueur/MJ transféré dans
+`SYSTEME/MOTEUR_MONDE`, état résumé dans `EN_COURS`. Le plan est déplacé vers
+`docs/Old/PLAN_FUSION.md` conformément à la règle documentaire 10.
+
+**Dette séparée conservée** : `ioredis` reste une dépendance déclarée mais sans import runtime.
+Son retrait et l'arrêt éventuel d'une infrastructure Redis partagée ne sont pas mélangés à cette
+clôture documentaire ; `INFRA-R1` l'enregistre explicitement dans `EN_COURS`.

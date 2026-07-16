@@ -138,6 +138,18 @@ Les fenêtres-écrans exposent les états `transparent`, `opaque` et `mirror`. L
 — dont les charnières — restent des options d'apparence d'instance et ne modifient ni la découpe,
 ni les collisions, ni les canaux de ligne de vue.
 
+### Outils Blender de fabrication intégrés au dépôt
+
+Les scripts Python sous `tools/`, notamment `generate_futuristic_hydroponics.py`,
+`render_algae_key_models.py` et `validate_hydroponics_geometry.py`, sont des outils **dev-only**.
+Ils s'exécutent avec l'interpréteur Python embarqué de Blender et utilisent `bpy`/`mathutils` pour
+générer ou contrôler les fichiers sous `output/`.
+
+Ils ne font partie ni du démarrage serveur, ni du build Vite, ni de npm, ni des services systemd,
+ni du déploiement. Python et Blender ne sont donc pas des dépendances de production d'Enclume. Un
+pack déjà généré est consommé depuis son manifeste et ses GLB versionnés ; sa régénération reste
+une opération explicite de fabrication d'assets sur un poste équipé de Blender.
+
 ### Slots couleur GLB
 Les modèles intégrés peuvent exposer `editor_color_slots` dans leur manifest. Le serveur les copie dans `blueprint.geometry.materialSlots`.
 

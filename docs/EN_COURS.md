@@ -1,4 +1,13 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — plan historique de fusion clos** : les lots 4 et 5 étaient déjà résolus dans
+> l'architecture courante mais n'avaient pas été reportés dans le plan. La topologie systemd
+> `8193/8293/8393` est volontairement isolée et les scripts Python hydroponiques sont des outils
+> Blender dev-only. Le scénario 8.F a maintenant été exécuté dans Chromium sur `8393` avec un vrai
+> compte joueur et un GM : mouvement valide, arrêt par budget, mur fermé refusé en 409, vide refusé
+> au joueur et téléportation libre réservée au MJ. Toutes les données temporaires ont été supprimées
+> et contrôlées à zéro en base. Les contrats définitifs vivent dans `WORKFLOW_FUSION`,
+> `SYSTEME/MOTEUR_MONDE` et `SYSTEME/ASSETS` ; le plan est archivé sous `docs/Old/`.
+>
 > **2026-07-16 — deuxième fusion commune validée** : `integration` réunit le moteur monde
 > `72743e8` et les règles `1af7d78` via les merges `3e337f1` et `eec54df`. L'ancien Surface présent
 > dans l'ascendance de `dev/Saar` n'a pas été importé : seul le delta règles
@@ -1615,6 +1624,7 @@ Projet en cours et priorité user :
 
 | ID | Description | Priorité |
 |---|---|---|
+| INFRA-R1 | `ioredis` reste déclaré dans `server/package.json` sans aucun import runtime. Son retrait du lockfile et l'arrêt éventuel de l'infrastructure Redis doivent être traités séparément après vérification des autres consommateurs du serveur ; aucun service partagé n'est coupé dans la clôture documentaire de la fusion. | Basse — nettoyage infrastructure |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |

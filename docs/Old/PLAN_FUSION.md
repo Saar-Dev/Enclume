@@ -1,5 +1,10 @@
 # PLAN_FUSION.md — Intégration du moteur de monde Kiwi
 > Créé Session 142 (suite) — 2026-07-15
+>
+> **Clos et archivé Session 152 — 2026-07-16.** Les décisions définitives vivent dans
+> `docs/WORKFLOW_FUSION.md`, `docs/FUSION_PROJET_COUSIN.md`,
+> `docs/SYSTEME/MOTEUR_MONDE.md` et `docs/SYSTEME/ASSETS.md`. Ce fichier conserve seulement
+> l'audit historique qui a mené à l'intégration commune.
 
 ---
 
@@ -121,7 +126,7 @@ Kiwi (ou l'inverse).
 - [ ] Tester `npm run test:world` (nouveau script, `shared/world/*.test.mjs` +
       `server/src/services/*.test.mjs`) une fois les dépendances installées.
 
-### Lot 4 — Services systemd distants (doublon)
+### Lot 4 — Services systemd distants ✅ CLOS
 
 **Constat vérifié** : `fusion-kiwi-v2` ajoute `deploy/enclume-codex-client.service`,
 `deploy/enclume-codex-server.service`, `deploy/enclume-fusion-client.service`,
@@ -129,23 +134,30 @@ Kiwi (ou l'inverse).
 distant actuel tourne déjà sous `enclume-server.service`/`enclume-client.service`
 (noms différents, découverts lors du dépannage de cette session).
 
-**À faire :**
-- [ ] Clarifier avec Kiwi lequel des 4 fichiers est destiné à la vraie prod (probable :
-      `enclume-fusion-*`, à confirmer, pas à deviner).
-- [ ] Réconcilier/renommer pour n'avoir qu'un seul jeu de services actifs sur le serveur
-      distant — éviter deux services démarrant le même port en parallèle.
+**Résolution vérifiée Session 152 :**
+- [x] La topologie officielle n'est pas un doublon mais trois environnements isolés : cousin
+      `enclume-client/server` sur `8193/8194`, monde `enclume-codex-*` sur `8293/8294`, fusion
+      `enclume-fusion-*` sur `8393/8394`.
+- [x] Les six unités réellement chargées pointent vers trois worktrees distincts et aucun port
+      n'est partagé. Les six services sont actifs et les six endpoints répondent HTTP 200.
 
-### Lot 5 — Scripts Python (pipeline d'assets)
+La source de vérité est `docs/WORKFLOW_FUSION.md`. Les quatre unités versionnées sous `deploy/`
+concernent les deux environnements gérés par le compte `codex` ; les unités historiques du cousin
+restent propres à son espace et n'ont pas été modifiées.
+
+### Lot 5 — Scripts Python (pipeline d'assets) ✅ CLOS
 
 **Constat vérifié** : `tools/generate_futuristic_hydroponics.py`,
 `tools/render_algae_key_models.py`, `tools/validate_hydroponics_geometry.py` — génération/
 validation de modèles GLB, hors stack Node/JS du projet.
 
-**À faire :**
-- [ ] Confirmer avec Kiwi : outils ponctuels dev-only (déjà exécutés, GLB déjà commités
-      dans `output/`) ou étape requise du pipeline de build/déploiement ?
-- [ ] Si dev-only : aucune action requise côté serveur (pas besoin de Python en prod).
-- [ ] Si requis : documenter la dépendance Python (version, libs) avant tout déploiement.
+**Résolution vérifiée Session 152 :**
+- [x] Ce sont des outils ponctuels de fabrication et de diagnostic exécutés par Blender ; ils
+      importent `bpy`/`mathutils` et écrivent dans `output/futuristic_hydroponics`.
+- [x] Aucun `package.json`, service systemd, déploiement, test, CI ou code runtime ne les appelle.
+      Python et Blender ne sont donc pas requis sur le serveur Enclume.
+- [x] Leur statut dev-only et leur dépendance à l'interpréteur Python embarqué de Blender sont
+      documentés dans `docs/SYSTEME/ASSETS.md`.
 
 ### Lot 6 — Combat : mouvement et portée
 
@@ -311,17 +323,17 @@ existe sous le curseur, l'accroche précise actuelle reste prioritaire.
 
 **À faire :**
 - [x] Coder le changement ci-dessus.
-- [ ] Scénario de test : MJ drag un token hors de toute géométrie (zone vide au-delà
+- [x] Scénario de test : MJ drag un token hors de toute géométrie (zone vide au-delà
       des murs construits) → le token doit suivre le curseur et se poser au sol Y=0 à
       cet endroit ; un joueur faisant la même chose doit voir le drag s'arrêter net
-      comme aujourd'hui. (reporté à 8.F, nécessite une carte réelle)
+      comme aujourd'hui. Exécuté dans 8.F sur `8393`, comptes joueur et MJ distincts.
 
 **Testé** : `eslint` (0 nouvelle erreur/warning près des lignes touchées), `eslint`
 complet client (113 problèmes, identique au point de contrôle 8.D — aucune
 régression), `vite build` propre. `raycastGround`/`isGm` déjà présents dans le
 tableau de dépendances de `handlePointerMove`, aucun ajustement nécessaire.
-**Non testé** : parcours navigateur réel (scénario prévu dans 8.F, nécessite une
-battlemap avec `surface_data`, donc après 8.A).
+**Test navigateur Session 152** : distinction joueur/MJ confirmée sur une battlemap
+`surface_data` v12 ; aucune donnée temporaire conservée.
 
 #### 8.D — Nettoyage props mortes `Canvas3D.jsx` — décision : supprimer les 4 ✅ CODÉ
 **Constat vérifié** : `onTokenRotate`, `moveLabels`, `announcementMarker` déclarés
@@ -377,7 +389,7 @@ dans l'immédiat. Lacune connue mais non prioritaire, pas fermée par une vérif
 
 **À faire :** aucun pour l'instant.
 
-#### 8.F — Validation par scénario de test manuel (décision Saar)
+#### 8.F — Validation par scénario de test manuel (décision Saar) ✅ EXÉCUTÉ
 **Constat vérifié** : le seul test automatique existant (`tests/e2e/smoke.spec.mjs`)
 est un smoke test générique (page charge sans exception JS) — il ne teste rien du
 déplacement/de la collision. Écrire un test Playwright dédié serait disproportionné
@@ -400,6 +412,27 @@ déplacement/de la collision. Écrire un test Playwright dédié serait dispropo
 7. Vérifier au passage (8.D) qu'aucune erreur console liée aux props supprimées
    n'apparaît pendant tout le scénario.
 
+**Exécution réelle Session 152 sur `8393` :** une campagne temporaire isolée a été créée par
+l'API authentifiée, rejointe par un vrai compte joueur, puis alimentée avec une carte canonique
+`surface_data` v12 de deux salles et un token PJ temporaire.
+
+- déplacement joueur dans la salle : HTTP 200, destination atteinte, trajet et budget serveur
+  persistés ;
+- trajet plus long que le budget : arrêt réel au dernier support stable (`stopReason` budget),
+  sans téléportation à la destination demandée ;
+- glisser vers le sol de la salle voisine à travers le mur fermé : HTTP 409
+  `Destination unreachable`, token revenu/resté à sa position confirmée, aucun message affiché
+  dans l'interface et log serveur `[409] ... Destination unreachable` ;
+- glisser directement vers la grille vide en joueur : aucun appel mouvement, aucun déplacement,
+  aucune erreur de page ;
+- même geste en MJ : fallback sur le plan libre, appel `/tokens/:id/teleport` HTTP 200 et token
+  visiblement posé hors de toute géométrie construite ;
+- aucune erreur liée aux props supprimées, aucune requête réseau échouée hors du 409 attendu.
+
+Après les captures et contrôles visuels, la campagne, son adhésion joueur, sa carte, son personnage
+et son token ont été supprimés. Une lecture directe finale de PostgreSQL confirme cinq compteurs à
+zéro : aucune donnée de test ne subsiste.
+
 ---
 
 ## Ordre de traitement proposé
@@ -417,9 +450,11 @@ Un lot à la fois, chacun confirmé fonctionnel avant le suivant (protocole habi
    8.B à 8.F suivent le Lot 6/7 (nécessitent une carte réelle en `surface_data` pour
    être testés).
 
-Une fois les 8 lots clos : merge de `fusion-kiwi-v2` dans `master`, tag de sauvegarde
-avant merge, mise à jour `ASBUILT.md`/`CLAUDE.md`/`EN_COURS.md`, archivage de ce plan
-selon `docs/RegleDocumentaire.md` Règle 10.
+La réconciliation finale a été réalisée sur la branche commune `integration`, avec sauvegarde
+complète préalable, autorité monde conservée et delta règles importé. Après validation des
+environnements `8393/8394` puis `8293/8294`, les informations définitives ont été transférées dans
+les documents d'autorité et ce plan a été archivé conformément à
+`docs/RegleDocumentaire.md`, règle 10.
 
 ---
 
