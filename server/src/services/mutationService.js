@@ -9,6 +9,7 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { applyMutationIdentityGrant, recomputeIdentity } from './identityService.js'
 
 // Agrégat mod_FOR..PRE + résistances + identité de toutes les mutations actives d'un personnage —
 // char_mutation_effects_view fait déjà la somme + le stacking (migration 109). Null si aucune
@@ -66,22 +67,34 @@ export async function addMutation(sheetId, mutationId, subtypeId = null) {
 
     // Overrides sexe/fécondité (mirrors STEP3) — garantit la cohérence avec la contrainte
     // not_if_sterile (advantageConstraints.js) même pour une mutation octroyée post-création.
-    const archetypeUpdate = {}
-    if (mutRef.mod_sex) archetypeUpdate.sex = mutRef.mod_sex
-    if (mutRef.mod_fertility) archetypeUpdate.is_fertile = mutRef.mod_fertility === 'self_fertile'
-    if (Object.keys(archetypeUpdate).length > 0) {
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update(archetypeUpdate)
-    }
+    await applyMutationIdentityGrant(trx, sheetId, mutRef)
 
     return { ...row, name: mutRef.name, description: mutRef.description, subtype_name: subtypeRef?.name ?? null }
   })
 }
 
 export async function removeMutation(sheetId, charMutationId) {
-  const [updated] = await db('char_mutations')
-    .where({ id: charMutationId, char_sheet_id: sheetId })
-    .update({ status: 'removed' })
-    .returning('*')
-  if (!updated) throw new AppError(404, 'Mutation non trouvée')
-  return updated
+  return db.transaction(async (trx) => {
+    // Jointure ref_mutations pour savoir si CETTE mutation retirée déclarait mod_sex/mod_fertility —
+    // sert de garde à recomputeIdentity (Lot 6) : ne recalcule jamais sex/is_fertile si la mutation
+    // retirée n'y touchait pas.
+    const charMut = await trx('char_mutations as cm')
+      .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+      .where({ 'cm.id': charMutationId, 'cm.char_sheet_id': sheetId })
+      .select('cm.id', 'rm.mod_sex', 'rm.mod_fertility')
+      .first()
+    if (!charMut) throw new AppError(404, 'Mutation non trouvée')
+
+    const [updated] = await trx('char_mutations')
+      .where({ id: charMutationId, char_sheet_id: sheetId })
+      .update({ status: 'removed' })
+      .returning('*')
+
+    const fields = []
+    if (charMut.mod_sex) fields.push('sex')
+    if (charMut.mod_fertility) fields.push('is_fertile')
+    if (fields.length) await recomputeIdentity(trx, sheetId, fields)
+
+    return updated
+  })
 }

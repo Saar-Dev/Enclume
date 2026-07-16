@@ -1339,6 +1339,24 @@ Convention :
   outline: none;
   font-family: var(--font-ui);
 }
+/* ── État initial PNJ (posture/arme/mode de tir) — roster GM ────────── */
+.combat-chip-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 2px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  border-radius: 2px;
+  user-select: none;
+  cursor: pointer;
+  background: var(--combat-chip-pnj-bg);
+  color: var(--combat-chip-pnj-fg);
+  border: 1px solid var(--combat-chip-pnj-border);
+}
+.combat-chip-state:hover { filter: brightness(1.25); }
 
 /* ── Arme équipée ─────────────────────────────────────────────────── */
 .combat-equip-ok {

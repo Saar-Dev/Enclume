@@ -3957,3 +3957,317 @@ vue dérivée du document v12 existant.
 
 **Retour arrière** : revert du commit de Session 150, redémarrage des services 8293/8294, puis
 contrôle visuel aux niveaux 0 et 7 sur la même session.
+
+---
+
+## Session 142 (Saar) — 2026-07-15 — Migration 158 (CASCADE `battlemap_texture_usage`) réintégrée sur `master` ✅ CLOS
+
+Crash serveur au démarrage (`Error: The migration directory is corrupt, the following files are
+missing: 158_battlemap_texture_usage_cascade.js`) rencontré en lançant `.\start.ps1` en pleine session
+Lot 6 (`PLAN_MUTATION2.md`, entrée suivante) — sans rapport avec ce chantier, aucune migration touchée
+par Lot 6.
+
+**Root-cause `[VÉRIFIÉ]`** (git `merge-base`, `git worktree list`, `git reflog`, contenu du commit) :
+le fichier n'a **jamais existé sur `master`** — commit unique `92cd8a4` (Session 142, "Migration 158 :
+CASCADE manquant battlemap_texture_usage"), écrit et appliqué le 2026-07-15 pendant une session sur
+`dev/Saar`/`fusion-kiwi-v2`, jamais mergé dans `master`. Ce même worktree (`Enclume/`) a servi
+indifféremment à `master` **et** `fusion-kiwi` ce jour-là (allers-retours visibles au reflog), sur le
+même Postgres local (`postgresql://vtt@localhost:5432/vtt`) — la règle "chaque instance garde sa
+propre base" (`CLAUDE.md` §3) n'a pas été respectée dans les faits pour ces branches de travail
+locales. La migration s'est appliquée à la base commune (batch 108) ; revenu sur `master`, le fichier
+correspondant n'existe pas dans son arbre — `knex_migrations` et le dossier `migrations/` divergent.
+
+**Correction** : le correctif lui-même est réel et isolé (1 seul fichier dans tout le commit —
+`battlemap_texture_usage.battlemap_id` sans `ON DELETE CASCADE`, bloquait `DELETE /api/campaigns/:id`
+dès qu'une battlemap de la campagne a des textures posées). `git cherry-pick 92cd8a4` → `80e75e0` sur
+`master`, propre, aucun conflit (aucun recoupement avec les fichiers Lot 6 en cours). Déjà appliqué en
+base (batch 108) — aucune ré-exécution nécessaire.
+
+**Testé** : `knex_migrations` vérifiée (`name = '158_battlemap_texture_usage_cascade.js'`, exact),
+`db.migrate.latest()` rejoué directement — `log: []` (rien à appliquer, cohérent), SR confirmé
+(redémarrage `.\start.ps1` sans erreur, confirmé Saar).
+**Non testé** : re-suppression réelle d'une campagne avec battlemap texturée (le scénario d'origine
+qui avait motivé le correctif Session 142 initiale) — pas re-rejoué ici, hors scope de cette
+réconciliation.
+
+## Session 143 (Saar) — 2026-07-15 — `docs/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref) ✅ CLOS
+
+Suite du Lot 5 (item 69, clos). Diagnostic initial du plan ("Mutations déjà câblé, rien à faire")
+élargi en lisant le code avant tout code : **faux au retrait** —
+`mutationService.removeMutation` marquait la mutation `removed` sans jamais annuler l'override
+`sex`/`is_fertile` posé à l'ajout (asymétrie trouvée par lecture, pas supposée). Creusé plus loin :
+`is_fertile` a **deux sources indépendantes** (mutation `mod_fertility` et avantage `adv_076`
+Fécondité) qui s'écrasaient l'une l'autre sans jamais se consulter — trou croisé pré-existant, pas
+introduit par ce lot. **Décision Saar : "on ne bricole jamais, même si cela implique plus de
+travail"** — un seul résolveur pour les deux catalogues plutôt que deux correctifs isolés.
+
+**NOUVEAU `server/src/services/identityService.js`** : `applyIdentityGrant` (avantages, écriture
+directe des clés `mod_identity` déclarées — généralise 3 sites `if (advantageId === 'adv_076')` codés
+en dur, corrige au passage `adv_002` Ambidextre, en base depuis la migration 92 mais **jamais
+appliqué depuis sa création**) ; `applyMutationIdentityGrant` (mutations, même principe pour
+`mod_sex`/`mod_fertility`) ; `recomputeIdentity(trx, sheetId, fields)` (retrait ou réinsertion
+Wizard — recalcule uniquement les champs passés en paramètre à partir des sources actives restantes,
+mutations puis avantages, l'avantage l'emporte en cas de conflit — seul cas réel du catalogue :
+`is_fertile`, déjà protégé côté avantage par `not_if_sterile` — défaut fixe si plus aucune source ne
+couvre le champ, décisions Saar : `hand_pref` `'R'` [80% population droitière], `is_fertile` `false`,
+`sex` `'homme'` ; aucun snapshot, aucune restauration d'une "valeur d'avant", tradeoff assumé
+identique aux deux catalogues).
+
+**Piège trouvé en concevant, avant tout code** : un recompute inconditionnel des 3 champs à chaque
+retrait aurait écrasé un `sex`/`hand_pref` choisi au Step1 dès qu'aucune mutation/avantage actif ne le
+concerne — régression bien plus grave que le bug d'origine. Corrigé par un paramètre `fields`
+explicite (jamais un recompute en bloc) : chaque appelant ne passe que les champs réellement
+concernés par la source ajoutée/retirée.
+
+**Extension de scope décidée par Saar** ("pas de bricolage") : même bug latent trouvé dans
+`creationService.js` STEP3 **et** STEP5 (Wizard "retravail") — wipe-and-reinsert complet à chaque
+resoumission (`char_mutations`/`char_advantages` supprimés puis réinsérés), aucun revert de
+`sex`/`is_fertile`/`hand_pref` si la mutation/l'avantage qui les déclarait est désélectionné en cours
+d'édition. Corrigé aux deux endroits avec le même résolveur : capture des champs concernés par les
+sources actives **avant** le `.del()`, réinsertion inchangée (écriture directe déjà branchée via
+`applyMutationIdentityGrant`/`addAdvantage`), puis `recomputeIdentity` final sur les champs capturés.
+
+**Fichiers touchés** : `mutationService.js` (`addMutation` → `applyMutationIdentityGrant` ;
+`removeMutation` passé en transaction, joint `ref_mutations` pour savoir si la mutation retirée
+déclarait `mod_sex`/`mod_fertility`) ; `advantageService.js` (`addAdvantage`/`grantAdvantage` →
+`applyIdentityGrant` ; `removeAdvantage` sélectionne `mod_identity`, appelle `recomputeIdentity` sur
+les clés déclarées) ; `creationService.js` (STEP3 + STEP5, garde + recompute final). Aucune migration
+(colonnes déjà existantes depuis la migration 92/36) — aucun fichier client (mêmes colonnes déjà lues
+par `CharacterSheet.jsx`).
+
+**Testé** : `node --check` sur les 4 fichiers, 9 scénarios en base réelle (**transaction annulée**,
+état restauré à l'identique vérifié après coup) — écriture directe avantage/mutation, défauts fixes
+sans aucune source active, champ non demandé jamais touché (test dédié de la régression Step1 trouvée
+en analyse à charge), mutation seule, conflit mutation/avantage sur `is_fertile` avec l'avantage qui
+l'emporte, retrait mutation avec avantage encore actif (ferme le trou croisé), retrait avantage seul
+(dernière source). **SR + fonctionnel confirmé Saar en navigateur.**
+
+**Non testé** : parcours navigateur détaillé scénario par scénario (octroi/retrait Ambidextre et
+Fécondité via `AdvantagesPanel.jsx`, retravail Wizard Step3/Step5 avec désélection d'une mutation à
+sexe/fécondité) — confirmé fonctionnel globalement par Saar, pas chaque cas limite isolément.
+
+**Effet de bord, sans lien avec Lot 6** : crash serveur au démarrage rencontré en cours de session,
+diagnostiqué et résolu séparément — voir "Session 142" ci-dessus.
+
+Détail complet : `docs/PLAN_MUTATION2.md` Lot 6, `server/src/services/identityService.js` (NOUVEAU).
+
+## Session 143 (suite) — 2026-07-15 — Dette HP1 : `hand_pref` lu sur la mauvaise table (2 sites) ✅ CLOS
+
+Signalé par Saar en clôturant Lot 6 : *"pourquoi `char_sheet` existe si vide ?"* — question qui a
+mené à réexaminer la dette **HP1** déjà tracée (`hand_pref` toujours `'R'` en combat, quel que soit
+le choix réel). Exigence explicite Saar avant tout code : *"architecture pérenne et adaptative, pas
+de bricolage, pas de zone d'ombre, sûr à 100%"*.
+
+**Diagnostic `[VÉRIFIÉ]`, pas supposé** : `char_sheet` n'est **pas** une table vide/inutile — 6
+colonnes réelles (`chc`, `xp_total`, `xp_available`, `creation_state`, `wizard_locked_at` + la
+pivot elle-même) et **10 fichiers de migration** créent des tables qui la référencent en FK
+(`char_identity`, `char_archetype`, `char_attributes`, `char_skills`, `char_pc_ledger`,
+`char_advantages`, `character_wounds`, `char_advantage_notes`, etc.) — colonne vertébrale du modèle
+de données personnage, pas une table candidate à la fusion. `hand_pref` vit sur `char_identity`
+("description physique + identité", migration 36) — placement délibéré et cohérent avec le reste du
+schéma normalisé (chaque table = une responsabilité), pas un oubli de placement. Fusionner les
+tables pour ce bug aurait cassé une architecture correcte pour compenser une requête qui ne suit pas
+sa propre convention — l'inverse de robuste.
+
+**Vraie cause racine, confirmée par lecture exhaustive** : 2 sites font `db('char_sheet').where(...)`
+puis lisent `.hand_pref` dessus — table sans cette colonne, toujours `undefined` → toujours `'R'` par
+défaut (`?? 'R'`/`|| 'R'` déjà présents, mais protègent le mauvais fallback). Le pattern correct
+(`db('char_identity').where({ char_sheet_id })`) est **déjà utilisé à 4 endroits dans ce même
+projet** (`char-sheet.js:103`, `vault.js:49`, `creationService.js:306`, `identityService.js:44`) —
+la correction aligne les 2 sites déviants sur la convention déjà établie, elle n'en invente aucune
+nouvelle.
+
+**Garantie 1:1 vérifiée avant de coder** (pas supposée) : `char-sheet.js:129-150` (`POST
+/:characterId`) insère `char_sheet` + `char_identity` + `char_archetype` + 8 `char_attributes` dans
+la **même transaction** — aucun chemin de code ne crée un `char_sheet` sans `char_identity`. Aucune
+suppression indépendante de `char_identity` trouvée (grep exhaustif) — seulement `CASCADE` avec
+`char_sheet`. `identity?.hand_pref` ne nécessite donc pas de garde supplémentaire au-delà du fallback
+déjà en place.
+
+**Fichiers touchés** :
+- `server/src/services/inventoryService.js` (`getInventory`, seul consommateur `WeaponPanel.jsx`,
+  relu en entier — aucune autre source de `hand_pref` côté client) : `char_identity` ajoutée au
+  `Promise.all` déjà présent (à côté d'`archetype`), `hand_pref: identity?.hand_pref || 'R'` remplace
+  `sheet?.hand_pref`. Bug visible côté joueur : `WeaponPanel.jsx` affichait toujours "Main
+  directrice"/"Main secondaire" comme un droitier, quel que soit le choix réel ou l'Avantage
+  Ambidextre.
+- `server/src/socket/socketCombatHelpers.js` (résolution défenseur CaC, seule occurrence de
+  `slotPriority` dans tout le fichier — vérifié pas de site attaquant équivalent, l'attaquant déclare
+  son arme lui-même) : même ajout au `Promise.all` existant (à côté d'`archetypeCible`),
+  `(identityCible?.hand_pref ?? 'R')` remplace `sheetCible.hand_pref`. Bug mécanique invisible :
+  priorité de main toujours droitière pour choisir l'arme de défense automatique du défenseur.
+
+**Testé** : `node --check` (2 fichiers), **vérification en base réelle** — `getInventory()` réellement
+appelé (pas simulé) avec `char_identity.hand_pref` basculé sur 'L'/'A'/'R' successivement sur un
+personnage de scratch, résultat confirmé correct à chaque valeur, valeur d'origine restaurée et
+vérifiée après coup. Requête identique testée en transaction annulée pour le pattern utilisé côté
+`socketCombatHelpers.js`.
+**Non testé** : parcours navigateur réel (`WeaponPanel.jsx` avec un personnage gaucher/Ambidextre) ;
+scénario CaC réel en session avec un défenseur gaucher ayant des armes différentes dans chaque main.
+
+Détail complet : `docs/EN_COURS.md` dette `HP1` (close).
+
+---
+## Session 144 (Saar) — 2026-07-15 — Bug fiche perso sidebar : "Impossible de charger la fiche" + disparition silencieuse ✅ CLOS
+
+> Session de correction de bugs en série (plusieurs à suivre) — commit groupé différé, journal tenu
+> à jour au fil de l'eau (demande explicite Saar).
+
+**Symptôme rapporté** : personnage créé via la sidebar (GM, hors Assistant de création) OK, mais
+message d'erreur `charSheet.errorLoad` ("Impossible de charger la fiche") à la première ouverture.
+
+**Diagnostic — deux bugs distincts trouvés sur le même chemin, tous deux vérifiés en base réelle
+(pas supposés)** :
+
+1. **Course de création** : un personnage créé depuis la sidebar (`characters.js`) n'a volontairement
+   pas de `char_sheet` — contrairement au Wizard (`creationService.startCreation`, transaction unique)
+   et aux drones (`drone_sheet` créé au même moment). La fiche était créée "à la volée" à la première
+   ouverture (`CharacterSheet.jsx` : `GET` → si `sheet: null` → `POST` → `GET`). L'app tourne sous
+   `<StrictMode>` (`main.jsx`), qui double-invoque délibérément les effets en dev : les deux `GET`
+   voient tous deux `sheet: null`, les deux `POST` partent en course. Le premier réussit, le second
+   heurte la contrainte `UNIQUE(character_id)` (migration 132) — erreur non rattrapée, remontée telle
+   quelle au client. **Reproduit à l'identique en base réelle** (2 appels concurrents sur un
+   personnage jetable → `duplicate key value violates unique constraint "uq_char_sheet_character_id"`,
+   code `23505`).
+2. **Disparition silencieuse (trouvé en vérifiant l'architecture avant de coder, pas rapporté par
+   Saar)** : la liste des personnages (`characters.js`, `whereNotExists`) cache tout personnage dont
+   le `char_sheet` a `wizard_locked_at` vide — mécanisme prévu pour masquer les brouillons Wizard en
+   cours (voir migration 119/133). Or la route de création à la volée ne posait jamais
+   `wizard_locked_at`. **Confirmé sur les personnages "Civil" créés par Saar pendant le diagnostic** :
+   présents en base avec une fiche déjà créée, mais absents de la vraie requête serveur de la liste —
+   ce que Saar voyait dans sa sidebar venait de l'état local du navigateur (`addCharacter` optimiste
+   à la création), pas d'un rafraîchissement serveur. Les deux lignes de test ont été supprimées après
+   diagnostic (décision Saar : "Supprimer les deux").
+
+**Fix — architecture, pas rustine** : la fiche naît désormais **avec** le personnage, en une seule
+transaction, pour tout type (pnj/pj/drone) — aligne la sidebar sur ce qui existe déjà et fonctionne
+pour le Wizard et les drones. Autorité unique factorisée pour éviter la duplication déjà présente
+entre `characters.js` et `char-sheet.js`.
+- **NOUVEAU `server/src/services/charSheetService.js`** : `createEmptySheet(trx, characterId)` —
+  crée `char_sheet` (`wizard_locked_at = now()` posé immédiatement : ces fiches n'ont jamais été un
+  brouillon Wizard, même règle que le backfill historique de la migration 133) + `char_identity` +
+  `char_archetype` + les 8 `char_attributes`.
+- `server/src/routes/characters.js` : `POST /:campaignId/characters` passe en transaction unique —
+  `createEmptySheet` pour pnj/pj, `drone_sheet` inchangé pour drone.
+- `server/src/routes/character/char-sheet.js` : `POST /:characterId` conservée comme filet de
+  sécurité pour d'éventuels personnages orphelins déjà en base (créés avant ce correctif), rendue
+  idempotente — renvoie la fiche existante (200) au lieu d'échouer (409 supprimé, seul appelant
+  identifié était `CharacterSheet.jsx`, aucune dépendance à l'ancienne sémantique stricte), y compris
+  en cas de vraie course concurrente (capture `23505`, re-fetch, 200).
+
+**Testé** : 3 scénarios exécutés directement contre la base réelle (personnages jetables, supprimés
+après coup, même code que les routes — pas de logique dupliquée pour le test) :
+(A) création atomique → `wizard_locked_at` posé, `char_identity`/`char_archetype`/8 attributs créés,
+personnage visible immédiatement dans la vraie requête de liste ; (B) 2 appels concurrents sur
+`POST /char-sheet/:id` → 201 puis 200, aucune erreur, une seule fiche en base ; (C) régression drone
+→ `drone_sheet` inchangé, aucun `char_sheet` parasite. **Confirmé fonctionnel par Saar en navigateur**
+(création + ouverture immédiate, sans erreur).
+
+**Non testé** : parcours HTTP authentifié complet (les vérifications ci-dessus appellent la même
+transaction que les routes, directement, pas via une requête HTTP authentifiée) ; Wizard (PJ via
+l'Assistant de création) — non touché par ce correctif.
+
+**Données** : aucune migration — le correctif ne s'applique qu'aux créations futures. Personnages
+orphelins déjà existants en base (créés avant ce correctif, sans `char_sheet` ou avec
+`wizard_locked_at` resté vide) non balayés — le filet de sécurité `char-sheet.js` les répare
+individuellement à leur prochaine ouverture, mais ne corrige pas rétroactivement les fiches déjà
+créées avec `wizard_locked_at` vide. Question de backfill général laissée ouverte, pas tranchée
+(pas d'accès `knex_migrations` vérifié pour choisir un numéro de migration).
+
+**Fichiers touchés** : `server/src/services/charSheetService.js` (NOUVEAU),
+`server/src/routes/characters.js`, `server/src/routes/character/char-sheet.js`. Aucun fichier client.
+
+---
+
+## Session 145 (Saar) — 2026-07-15 — Récupération des commits orphelins Sessions 143-144 ✅ CLOS
+
+**Incident** : les Sessions 143 et 144 ont été codées sur `fusion-kiwi-v2` (worktree
+`Enclume-fk2-worktree`) au lieu de `dev/Saar`. Un rollback de `dev/Saar` vers `origin/dev/Saar`
+(reflog : `dev/Saar@{2}` `0f32fc2` → `dev/Saar@{1}` `60056b3`) a ensuite laissé une chaîne de 7
+commits (`56a1dea`…`9caeb30`, base commune `ce739aa`) sans branche pour les porter — objets Git
+valides mais non protégés contre un `gc`.
+
+**Sauvegarde immédiate** : branche `backup/orphan-session143-144-20260715` créée sur `9caeb30` (tip
+de la chaîne) et poussée sur `origin` avant tout autre travail — les 7 commits sont désormais
+permanents quel que soit le sort donné à chacun.
+
+**Revue pas à pas** (exigence Saar : "sûr à 100%", un commit à la fois, décision explicite avant
+chaque cherry-pick) — pour chacun : vérification de non-divergence des fichiers touchés entre
+`ce739aa` et `dev/Saar` actuel (Fusion Kiwi `caaf1af` incluse), lecture du diff complet, avis, puis
+application ou non sur décision Saar :
+
+| # | Commit | Contenu | Décision |
+|---|---|---|---|
+| 1 | `56a1dea` | PLAN_MUTATION2 Lot 6 Identité (`identityService.js`, sex/is_fertile/hand_pref) | ✅ Appliqué (`b5a9df7`) |
+| 2 | `0ac114e` | Archive `docs/PLAN_MUTATION2.md` → `docs/Old/` | ✅ Appliqué (`d08d8ab`) |
+| 3 | `d4e78d1` | Dette HP1 — `hand_pref` lu sur `char_sheet` au lieu de `char_identity` (inventaire + défense CaC) | ✅ Appliqué (`cb75201`) |
+| 4 | `795bf0c` | Réécriture contrat `CLAUDE.md`/`AGENTS.md`/`.claude/rules/*` | ❌ Ignoré — doublon quasi total d'un travail déjà fait sur `dev/Saar` (`c38ec70`, `5d7c86b`) ; le seul delta réel (clarification rôles Kiwi/deux assistants Saar + `README_INSTALLATION.md`) sera repris par Saar depuis une archive séparée |
+| 5 | `be3bc95` | `docs/PLAN_FUSION.md` — audit 8 lots réconciliation fusion Kiwi | ✅ Appliqué (`44cfd43`) — comblait un lien cassé déjà référencé par `2488e7f` (Lot 8, déjà sur `dev/Saar`) |
+| 6 | `e7873a1` | Fix création atomique fiche perso (course StrictMode + `wizard_locked_at` jamais posé) | ✅ Appliqué (`4605817`), SR confirmé Saar |
+| 7 | `9caeb30` | GM déclare l'état initial combat des PNJ | ❌ Écarté — seul des 7 sans section "Testé" dans son message (repéré par Saar après ma recommandation initiale d'application, erreur de ma part de ne pas l'avoir signalé avant) ; correction jamais finie, sera refaite proprement |
+
+**Effet de bord traité** : 9 processus Node dupliqués (4 nodemon + 5 npm) accumulés dans le dossier
+de travail par des relances successives en arrière-plan — nettoyés, un seul triplet
+npm/nodemon/node reste actif.
+
+**Bilan final** : 5/7 appliqués, 2/7 écartés (doublon et travail inachevé). Tri des 7 commits
+orphelins clos.
+
+**Non testé** : backfill des personnages orphelins pré-existants (mentionné dans l'entrée `e7873a1`
+ci-dessus) resté hors scope.
+
+**Retour arrière** : `backup/orphan-session143-144-20260715` (origin) conserve les 7 commits
+originaux intacts, y compris les 2 écartés, en cas de besoin futur.
+
+---
+
+## Session 146 (Saar) — 2026-07-16 — État initial combat des PNJ dans le ROSTER ✅ CLOS
+
+**Contexte** : reprise propre du travail écarté en Session 145 (commit orphelin `9caeb30`, "GM
+déclare l'état initial combat des PNJ" — jamais testé). La fenêtre ROSTER (phase ROSTER) affichait
+une colonne ÉTAT INIT valable uniquement pour les PJ (✓/· de confirmation) ; les PNJ n'avaient aucun
+moyen de recevoir une posture/arme/mode de tir initiaux, faute de fenêtre joueur dédiée (pas de
+`user_id`).
+
+**Décisions de conception** (discussion avec Saar avant code) :
+- État initial PNJ = posture + arme (état tactique rangée/main dessus/au clair, distinct de la
+  colonne ARME existante qui montre l'*équipement*) + mode de tir — les 3 mêmes champs que la
+  fenêtre Joueur (`CombatInitStateWindow.jsx`), pas seulement 2.
+- Contrôle : chips cliquables (`StateChip` réutilisé en mode `compact`, cycle au clic) plutôt que
+  des `<select>` — écarté après un premier essai fonctionnel mais jugé peu cohérent avec le HUD
+  sombre (chrome natif du select) et plus lourd que nécessaire pour 3 valeurs fixes par attribut.
+- Défaut PNJ à `COMBAT_START` : arme posée explicitement sur `drawn` (Au clair) plutôt que le défaut
+  colonne `holstered` (Rangée) — PNJ déjà en alerte au début du combat. PJ inchangés (Rangée,
+  choix au joueur). Posture/mode de tir PNJ restent sur le défaut colonne (déjà Debout/Coup par
+  coup).
+- Badge token `PN` → `PNJ` (cellule TOKEN du roster).
+
+**Fichiers touchés** :
+- `server/src/socket/socketCombatState.js` — `COMBAT_INIT_STATE` : le garde `if (isGm) return`
+  est remplacé par une autorisation GM limitée aux tokens PNJ (`character.type === 'pnj'`) ; PJ
+  inchangés (ownership joueur), drones exclus (ni PJ ni PNJ → refusé). `COMBAT_START` : ajout de
+  `state_weapon: 'drawn'` explicite pour les lignes PNJ construites dans `rosterRows`.
+- `client/src/components/CombatInitStateWindow.jsx` — `StateChip` exporté, mode `compact` ajouté
+  (chip inline avec tooltip complet).
+- `client/src/components/combatSections.js` — labels courts (`short`) sur `position`/`weapon`/
+  `fire_mode` pour l'affichage compact.
+- `client/src/components/CombatRosterWindow.jsx` — colonne ÉTAT INIT : ligne PNJ affiche 3
+  `StateChip` compacts (posture/arme/mode de tir), `handleSetPnjState` émet `COMBAT_INIT_STATE`
+  avec l'état complet (un seul champ modifié à la fois, validation immédiate, pas de brouillon
+  local contrairement à la fenêtre Joueur). Badge `PN`→`PNJ`.
+- `client/src/index.css` — classe `.combat-chip-state` (palette PNJ existante, cohérente avec
+  `.combat-chip-pnj`).
+- `shared/events.js` — commentaire `COMBAT_INIT_STATE` mis à jour (joueur PJ ou GM PNJ).
+
+**Testé** : `node --check` sur le fichier serveur, `eslint` sur les 3 fichiers client modifiés
+(aucun warning), relecture complète des diffs. **Confirmé fonctionnel par Saar en navigateur**
+(retour : "moche mais fonctionnel" — polish visuel non demandé, laissé tel quel).
+
+**Non testé** : scénario multi-PNJ (plusieurs PNJ réglés simultanément), reconnexion en cours de
+phase ROSTER, transport WebSocket sous charge concurrente.
+
+**Données** : aucune migration — les colonnes `state_position`/`state_weapon`/`state_fire_mode`
+existent déjà (migrations 56/58). Effet runtime limité aux nouveaux combats démarrés après ce
+correctif (défaut `drawn` PNJ).
+
+**Retour arrière** : commit isolé sur `dev/Saar`, revert simple si besoin.

@@ -102,9 +102,10 @@ export async function getInventory(characterId, campaignId) {
   // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), pas la valeur brute
   // — corrige PI4 (docs/PLAN_MUTATION2.md Lot 1). encumbrance_enabled/multiplier : options de
   // campagne, la mécanique existait déjà sans gate (défauts true/3 = comportement préservé).
-  const [attrs, archetype, mutationEffects, settings] = await Promise.all([
+  const [attrs, archetype, identity, mutationEffects, settings] = await Promise.all([
     db('char_attributes').where({ char_sheet_id: sheet.id }).select('*'),
     db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
+    db('char_identity').where({ char_sheet_id: sheet.id }).first(),
     getMutationEffects(sheet.id),
     getCampaignSettings(db, campaignId),
   ])
@@ -178,7 +179,7 @@ export async function getInventory(characterId, campaignId) {
     total_weight: totalWeight,
     ini_penalty:  iniPenalty,
     threshold,
-    hand_pref:    sheet?.hand_pref || 'R',
+    hand_pref:    identity?.hand_pref || 'R',
   }
 }
 

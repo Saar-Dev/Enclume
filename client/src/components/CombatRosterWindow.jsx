@@ -4,6 +4,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useDraggable } from '../lib/useDraggable.js'
 import api from '../lib/api'
+import { StateChip } from './CombatInitStateWindow.jsx'
 
 const SLOT_LABELS = { MG: 'MG', MD: 'MD', '2M': '2M', Tr: 'Tr' }
 
@@ -114,6 +115,21 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
     }
   }
 
+  // ── État initial PNJ (GM) ──────────────────────────────────────────────────
+  // Émet l'état complet du roster (posture/arme/mode de tir) avec un champ modifié ;
+  // le serveur confirme et rebroadcast COMBAT_ROSTER_UPDATED. Pas de brouillon local :
+  // chaque clic sur un chip vaut réglage ET validation immédiate côté GM.
+  const handleSetPnjState = (tokenId, field, nextValue) => {
+    if (!socket) return
+    const rEntry = roster.find(e => e.token_id === tokenId)
+    socket.emit(WS.COMBAT_INIT_STATE, {
+      tokenId,
+      position:  field === 'position'  ? nextValue : (rEntry?.state_position  ?? 'standing'),
+      weapon:    field === 'weapon'    ? nextValue : (rEntry?.state_weapon    ?? 'drawn'),
+      fire_mode: field === 'fire_mode' ? nextValue : (rEntry?.state_fire_mode ?? 'cc'),
+    })
+  }
+
   // ── Helpers identification ─────────────────────────────────────────────────
   const getCharType = tokenId => {
     const token = tokens.find(t => t.id === tokenId)
@@ -204,7 +220,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                       <div style={S.tokenCell}>
                         {charType && (
                           <span className={isDrone ? 'combat-badge-drone' : isPnj ? 'combat-badge-pnj' : 'combat-badge-pj'}>
-                            {isDrone ? 'DR' : isPnj ? 'PN' : 'PJ'}
+                            {isDrone ? 'DR' : isPnj ? 'PNJ' : 'PJ'}
                           </span>
                         )}
                         <span style={S.tokenLabel}>{row.label}</span>
@@ -305,6 +321,14 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                           ? (initConfirmed
                             ? <span style={S.initConfirmed}>✓</span>
                             : <span style={S.initPending}>·</span>)
+                          : charType === 'pnj'
+                          ? (
+                            <div style={S.pnjStateRow}>
+                              <StateChip compact defKey="position"  current={rEntry?.state_position  ?? 'standing'} onChange={v => handleSetPnjState(row.tokenId, 'position',  v)} />
+                              <StateChip compact defKey="weapon"    current={rEntry?.state_weapon    ?? 'drawn'}    onChange={v => handleSetPnjState(row.tokenId, 'weapon',    v)} />
+                              <StateChip compact defKey="fire_mode" current={rEntry?.state_fire_mode ?? 'cc'}       onChange={v => handleSetPnjState(row.tokenId, 'fire_mode', v)} />
+                            </div>
+                          )
                           : <span style={S.initNA}>—</span>
                         }
                       </td>
@@ -457,5 +481,6 @@ const S = {
   initConfirmed:    { color: '#50c878', fontWeight: 700 },
   initPending:      { color: '#3a4a5a', fontSize: 16, lineHeight: 1 },
   initNA:           { color: '#2a3a4a' },
+  pnjStateRow:      { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, flexWrap: 'wrap' },
   empty:            { padding: '14px', color: '#3a4a5a', fontSize: 12, margin: 0 },
 }

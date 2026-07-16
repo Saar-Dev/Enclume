@@ -8,6 +8,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { validateAdvantage } from './advantageConstraints.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
+import { applyIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
 
 export async function getAdvantages(sheetId) {
   return db('char_advantages as ca')
@@ -75,9 +76,7 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).increment('pc_gained_desavantages', Math.abs(refAdv.cost_pc))
     }
 
-    if (advantageId === 'adv_076') {
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: true })
-    }
+    await applyIdentityGrant(trx, sheetId, refAdv.mod_identity)
 
     return row
   }
@@ -92,7 +91,7 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
       .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
       .where({ 'ca.id': charAdvantageId, 'ca.char_sheet_id': sheetId })
       .whereNull('ca.removed_at')
-      .select('ca.id', 'ca.advantage_id', 'ca.acquired_during', 'ra.type', 'ra.cost_pc')
+      .select('ca.id', 'ca.advantage_id', 'ca.acquired_during', 'ra.type', 'ra.cost_pc', 'ra.mod_identity')
       .first()
     if (!charAdv) throw new AppError(404, 'Avantage non trouvé ou déjà supprimé.')
 
@@ -113,8 +112,9 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
       }
     }
 
-    if (charAdv.advantage_id === 'adv_076') {
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: false })
+    const modIdentity = normalizeModIdentity(charAdv.mod_identity)
+    if (modIdentity) {
+      await recomputeIdentity(trx, sheetId, Object.keys(modIdentity))
     }
 
     return updated
@@ -167,9 +167,7 @@ export async function grantAdvantage(sheetId, advantageId, acquiredDuring) {
       throw err
     }
 
-    if (advantageId === 'adv_076') {
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ is_fertile: true })
-    }
+    await applyIdentityGrant(trx, sheetId, refAdv.mod_identity)
 
     // Forme identique à getAdvantages() (JOIN ref_advantages) — le client pousse directement ce
     // retour dans charAdvantages sans re-fetch, il doit porter les mêmes champs (name/type/...)

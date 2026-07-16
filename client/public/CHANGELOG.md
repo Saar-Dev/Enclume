@@ -1,3 +1,21 @@
+## v190 — 2026-07-16 — Fusion monde, personnages et état initial des PNJ
+
+### Personnages et combat
+- [fix] Les personnages PJ/PNJ créés par le MJ reçoivent leur fiche complète dans la même
+  transaction ; une double ouverture concurrente ne peut plus produire deux fiches ni masquer le
+  personnage.
+- [fix] Ambidextre, Fécondité et les mutations d'identité partagent désormais un résolveur unique ;
+  leurs effets sont appliqués et retirés sans écraser une autre source encore active.
+- [fix] L'inventaire et la défense au corps-à-corps lisent la main directrice depuis
+  `char_identity`, son autorité réelle.
+- [feat] Dans le roster, le MJ peut régler directement la posture, l'arme et le mode de tir initiaux
+  des PNJ. Un PNJ commence par défaut avec son arme au clair.
+
+### Moteur de monde
+- [fix] La fusion conserve intégralement `surface_data` v12, le snapshot monde et la surface
+  océanique continue cinq étages au-dessus de la station ; aucun moteur spatial historique de la
+  branche combat n'est réintroduit.
+
 ## v189 — 2026-07-16 — Surface océanique continue et station réellement immergée
 
 ### Moteur de monde
@@ -71,7 +89,6 @@
   baie haute n'efface plus les tranches de mur qu'elle ne traverse pas.
 - [fix] Le panneau du mur reste ouvert lors du choix et de la pose d'une fenêtre, avec la sélection
   et l'aperçu visibles.
-
 ## v185 — 2026-07-13 — Nouvelle apparence : connexion, tableau de bord et paramètres de campagne
 
 ### Client

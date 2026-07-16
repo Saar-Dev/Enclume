@@ -1,9 +1,10 @@
 # PLAN_MUTATION2 — Effets mécaniques des Mutations et Avantages jamais appliqués
-> Session 141 (suite 26) — 2026-07-12 (Lot 5 clos — Lot 4 clos suite 25, Lot 3 clos suite 23,
-> Lot 2 clos suite 6/RESNAT, Lot 1 clos suite 13, voir aussi suite 10, diagnostic/architecture initiale)
-> Statut : **Lots 1-5 codés et clos, fonctionnels confirmés Saar.** Découpé en 7 lots (mécanique visée,
+> Session 143 (Saar) — 2026-07-15 (Lot 6 clos — Lot 5 clos suite 26, Lot 4 clos suite 25, Lot 3 clos
+> suite 23, Lot 2 clos suite 6/RESNAT, Lot 1 clos suite 13, voir aussi suite 10, diagnostic/architecture
+> initiale)
+> Statut : **Lots 1-6 codés et clos, fonctionnels confirmés Saar.** Découpé en 7 lots (mécanique visée,
 > pas catalogue source). Chaque lot est détaillé ligne-à-ligne au moment de l'attaquer (règle "un
-> sujet à la fois") — les lots non encore attaqués (6, 7) ne fixent que le périmètre et l'ordre.
+> sujet à la fois") — le lot non encore attaqué (7) ne fixe que le périmètre et l'ordre.
 
 ---
 
@@ -1125,11 +1126,63 @@ serveur `AppError` via une vraie requête HTTP forgée (vérifié seulement en t
 Détail complet : `docs/JOURNAL6.md` "Session 141 (suite 26)".
 
 ### Lot 6 — Identité (`mod_sex`/`mod_fertility` mutations vs `mod_identity` avantages)
-- Mutations : **déjà câblé** (`mutationService.js`/`creationService.js` STEP3, override
-  `sex`/`is_fertile` à l'ajout) — rien à faire ici, juste noté pour mémoire de cohérence.
-- Avantages : `mod_identity` toujours lu en dur par ID (`adv_076`→`is_fertile`, `adv_002` jamais
-  appliqué malgré `mod_identity: {hand_pref: "A"}` déclaré) — généraliser vers une lecture générique
-  de la colonne JSONB, cohérente avec ce que les mutations font déjà.
+
+**Lot 6 ✅ CLOS — Session 143 (Saar), 2026-07-15, fonctionnel confirmé Saar (SR + navigateur).**
+Diagnostic initial élargi en creusant avant tout code : "Mutations déjà câblé, rien à faire" était
+**faux au retrait** — `mutationService.removeMutation` marquait la mutation `removed` sans jamais
+annuler l'override `sex`/`is_fertile` posé à l'ajout (asymétrie trouvée en lisant le code, pas
+supposée). Trouvé aussi : `is_fertile` a **deux sources indépendantes** (mutation `mod_fertility` et
+avantage `adv_076`) qui s'écrasaient l'une l'autre sans se voir. **Décision Saar : "pas de bricolage,
+même si ça implique plus de travail"** — un seul résolveur pour les deux catalogues plutôt que deux
+correctifs isolés.
+
+**NOUVEAU `server/src/services/identityService.js`** — `applyIdentityGrant` (avantages, écriture
+directe des clés `mod_identity` déclarées — généralise l'ancien `if (advantageId === 'adv_076')`
+codé en dur 3 fois, corrige au passage `adv_002` Ambidextre : donnée en base depuis la migration 92,
+**jamais appliquée depuis sa création**) ; `applyMutationIdentityGrant` (mutations, même principe pour
+`mod_sex`/`mod_fertility`) ; `recomputeIdentity(trx, sheetId, fields)` (retrait ou réinsertion Wizard
+— recalcule uniquement les champs passés en paramètre à partir des mutations + avantages actifs
+restants, mutations d'abord puis avantages — l'avantage l'emporte en cas de conflit sur le même champ,
+seul cas réel du catalogue actuel : `is_fertile`, déjà protégé côté avantage par la contrainte
+`not_if_sterile` — défaut fixe si plus aucune source ne couvre le champ, décisions Saar : `hand_pref`
+`'R'` (80% population droitière), `is_fertile` `false`, `sex` `'homme'` — aucun snapshot, aucune
+restauration d'une "valeur d'avant", tradeoff assumé identique aux deux catalogues).
+
+**Piège trouvé en concevant (avant tout code)** : un recompute inconditionnel des 3 champs à chaque
+retrait aurait écrasé un `sex`/`hand_pref` choisi au Step1 dès qu'aucune mutation/avantage ne le
+concerne (régression bien pire que le bug d'origine) — corrigé par un paramètre `fields` explicite,
+jamais un recompute en bloc.
+
+**Extension de scope décidée par Saar** ("pas de bricolage") : même bug latent trouvé dans
+`creationService.js` STEP3 **et** STEP5 (Wizard "retravail") — wipe-and-reinsert complet à chaque
+resoumission, aucun revert de `sex`/`is_fertile`/`hand_pref` si la mutation/l'avantage qui les
+déclarait est désélectionné. Corrigé aux deux endroits par le même résolveur : capture des champs
+concernés par les sources actives **avant** le `.del()`, réinsertion inchangée (écriture directe déjà
+branchée via `applyMutationIdentityGrant`/`addAdvantage`), puis `recomputeIdentity` final sur les
+champs capturés.
+
+**`mutationService.js`** : `addMutation` utilise `applyMutationIdentityGrant` ; `removeMutation`
+passe en transaction, joint `ref_mutations` pour savoir si la mutation retirée déclarait
+`mod_sex`/`mod_fertility`, appelle `recomputeIdentity` si oui.
+**`advantageService.js`** : `addAdvantage`/`grantAdvantage` utilisent `applyIdentityGrant` ;
+`removeAdvantage` sélectionne `mod_identity`, appelle `recomputeIdentity` sur les clés déclarées.
+**`creationService.js`** : STEP3 et STEP5 gagnent la garde "champs concernés avant `.del()`" +
+`recomputeIdentity` final.
+
+**Testé** : `node --check` sur les 4 fichiers, 9 scénarios en base réelle (**transaction annulée**,
+vérifiée restaurée à l'identique après coup) — écriture directe avantage/mutation, défauts fixes sans
+aucune source active, champ non demandé jamais touché (test dédié de la régression Step1 trouvée en
+analyse à charge), mutation seule, conflit mutation/avantage sur `is_fertile` avec l'avantage qui
+l'emporte, retrait mutation avec avantage encore actif (ferme le trou croisé), retrait avantage seul.
+**SR + fonctionnel confirmé Saar en navigateur.**
+Aucune migration (colonnes déjà existantes) — aucun fichier client (mêmes colonnes déjà lues par
+`CharacterSheet.jsx`).
+
+**Effet de bord signalé au passage, sans lien avec Lot 6** : crash serveur au démarrage
+(`knex_migrations` référençait `158_battlemap_texture_usage_cascade.js`, absent de `master`) —
+root-cause : ce worktree a partagé la même base Postgres locale que la branche `fusion-kiwi-v2`
+pendant une session antérieure, migration jamais mergée dans `master`. Résolu par cherry-pick isolé
+du commit d'origine (`92cd8a4` → `80e75e0`), correctif déjà appliqué en base, aucune ré-exécution.
 
 ### Lot 7 — Narratif / économie (avantages uniquement, priorité basse)
 - `mod_savings`, `mod_monthly_income`/`mod_monthly_income_formula`, `mod_gauges`, `mod_conditions`,
@@ -1149,12 +1202,12 @@ fonctionnalité, pas un bug qui casse quelque chose de fonctionnel.
 
 **Lot 1 ✅ CLOS — Session 141 (suite 13)** / **Lot 2 ✅ CLOS — Session 141 (suite 6/RESNAT)** /
 **Lot 3 ✅ CLOS — Session 141 (suite 23)** / **Lot 4 ✅ CLOS — Session 141 (suite 25)** / **Lot 5
-✅ CLOS — Session 141 (suite 26), fonctionnel confirmé Saar en navigateur** (voir détail de clôture
-en fin de section Lot 5 ci-dessus). Gaps différés documentés en cours de route : **`[CHOC1]`**
-(bonus Choc de Corne si tête, Lot 4) ; **`docs/BUGIDENTIFIE.md` POL1** (tirage aléatoire 2 pouvoirs
-`adv_078`, Lot 5). **2 sujets trouvés par Saar en testant le Lot 5, hors périmètre `PLAN_MUTATION2`,
-à traiter en sessions séparées** : bug GENOTYPE ("Hybride" visible pour un personnage humain) et
-nouvelle interface d'ajout d'Avantage/Désavantage générique (bouton "+" actuellement incomplet).
-**Lots 6 (Identité) et 7 (Narratif/économie) restent à détailler** quand Saar voudra enchaîner sur
-ce plan — même méthode (plan ligne-à-ligne, analyse à charge, vérification instrumentée avant tout
+✅ CLOS — Session 141 (suite 26)** / **Lot 6 ✅ CLOS — Session 143, fonctionnel confirmé Saar en
+navigateur** (voir détail de clôture en fin de section Lot 6 ci-dessus). Gaps différés documentés en
+cours de route : **`[CHOC1]`** (bonus Choc de Corne si tête, Lot 4) ; **`docs/BUGIDENTIFIE.md` POL1**
+(tirage aléatoire 2 pouvoirs `adv_078`, Lot 5). **2 sujets trouvés par Saar en testant le Lot 5, hors
+périmètre `PLAN_MUTATION2`, traités en sessions séparées** : bug GENOTYPE ("Hybride" visible pour un
+personnage humain, item 70) et nouvelle interface d'ajout d'Avantage/Désavantage générique (item 71).
+**Lot 7 (Narratif/économie, priorité basse) reste à détailler** quand Saar voudra enchaîner sur ce
+plan — même méthode (plan ligne-à-ligne, analyse à charge, vérification instrumentée avant tout
 code).

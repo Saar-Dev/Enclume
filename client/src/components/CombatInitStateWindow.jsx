@@ -4,12 +4,23 @@ import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { STATE_DEFS } from './combatSections.js'
 
-function StateChip({ defKey, current, onChange }) {
+export function StateChip({ defKey, current, onChange, compact = false }) {
   const def = STATE_DEFS[defKey]
   const cur = def.states.find(s => s.k === current)
   const handleClick = () => {
     const idx = def.states.findIndex(s => s.k === current)
     onChange(def.states[(idx + 1) % def.states.length].k)
+  }
+  if (compact) {
+    return (
+      <span
+        onClick={handleClick}
+        title={`${def.label} : ${cur?.l ?? current} (cliquer pour changer)`}
+        className="combat-chip-state"
+      >
+        {cur?.short ?? cur?.l ?? current}
+      </span>
+    )
   }
   return (
     <div onClick={handleClick} style={S.chip}>

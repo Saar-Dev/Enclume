@@ -9,6 +9,7 @@ import { WS } from '../../../shared/events.js'
 import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import { initDamages } from '../../../shared/droneConstants.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
+import { createEmptySheet } from '../services/charSheetService.js'
 
 // ─── Router imbriqué ──────────────────────────────────────────────────────────
 // Monté sous /api/campaigns/:campaignId/characters
@@ -112,18 +113,27 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
 
   const type = typeOverride === 'drone' ? 'drone' : (user_id ? 'pj' : 'pnj')
 
-  const [character] = await db('characters')
-    .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible, type })
-    .returning([
-      'id', 'campaign_id', 'user_id', 'type', 'name', 'color',
-      'visible', 'glb_url', 'portrait_url',
-      'description', 'gm_notes', 'created_at', 'updated_at',
-    ])
+  // Transaction unique : le personnage et sa fiche (char_sheet ou drone_sheet) naissent
+  // ensemble — jamais de personnage sans fiche, jamais de fenêtre de course à la
+  // création lazy (cf. commentaire migration 132_char_sheet_dedupe_and_unique.js).
+  const character = await db.transaction(async (trx) => {
+    const [character] = await trx('characters')
+      .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible, type })
+      .returning([
+        'id', 'campaign_id', 'user_id', 'type', 'name', 'color',
+        'visible', 'glb_url', 'portrait_url',
+        'description', 'gm_notes', 'created_at', 'updated_at',
+      ])
 
-  if (type === 'drone') {
-    const damages = initDamages('corps', WOUND_MAX_COUNTS)
-    await db('drone_sheet').insert({ character_id: character.id, damages: JSON.stringify(damages) })
-  }
+    if (type === 'drone') {
+      const damages = initDamages('corps', WOUND_MAX_COUNTS)
+      await trx('drone_sheet').insert({ character_id: character.id, damages: JSON.stringify(damages) })
+    } else {
+      await createEmptySheet(trx, character.id)
+    }
+
+    return character
+  })
 
   res.status(201).json({ character })
 })
