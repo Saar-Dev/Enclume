@@ -4368,3 +4368,51 @@ documenté dans `SYSTEME/ASSETS`, contrat de mouvement joueur/MJ transféré dan
 **Dette séparée conservée** : `ioredis` reste une dépendance déclarée mais sans import runtime.
 Son retrait et l'arrêt éventuel d'une infrastructure Redis partagée ne sont pas mélangés à cette
 clôture documentaire ; `INFRA-R1` l'enregistre explicitement dans `EN_COURS`.
+
+---
+
+## Session 153 (Codex) — 2026-07-16 — Escalier droit paramétrique canonique ✅ CLOS
+
+**Objectif** : reprendre les connecteurs entre étages par l'escalier, sans conserver l'ancien
+outil de connecteur ni ajouter une géométrie décorative désynchronisée de la physique.
+
+**Contrat** : `surface_data` passe en v13. Un escalier droit enregistre origine basse, arrivée
+haute, axe, sens, largeur, giron, nombre de marches, épaisseur et garde-corps. Le nouveau module
+partagé `stairGeometry.js` dérive marches, rails, emprise, trémie et ancrages. Cette même sortie
+alimente le renderer, l'éditeur et le compilateur monde.
+
+**Moteur** : chaque marche compile un support, un collider et un occluder. La dalle à `topY` est
+soustraite par la trémie exacte. La traversée utilise un ancrage par marche et peut donc être
+tronquée par le budget du token. Le graphe ignore le collider de l'escalier uniquement pour
+raccorder ses deux extrémités ; les arêtes de coût zéro nécessaires au raccord restent dans A* mais
+ne sont pas envoyées comme segments de mouvement.
+
+**Éditeur** : **Objets 3D > Escaliers > Escalier droit paramétrique** remplace l'outil direct. Le
+survol prévisualise la structure, le clic la crée et revient en sélection. Le popup **Objet 3D**
+affiche `0 → 1`, dimensions et métrique des marches, puis permet rotation immédiate, garde-corps,
+coût de déplacement et apparence procédurale. La configuration standard fait 3,75 m de haut,
+6,30 m de long et 1,50 m de large, avec 21 marches de 17,9 cm et un giron de 30 cm.
+
+**Échelle** : **Objets 3D > Échelles** remplace aussi son ancien bouton direct. La prévisualisation
+utilise ses vrais rails et barreaux ; la pose crée la traversée, repasse en sélection, ouvre le
+popup **Échelle structurelle** et permet sa rotation immédiate.
+
+**Testé** : 133/133 tests monde/serveur, 3/3 configuration, 89 tests ciblés avant recette, build
+Vite de production et ESLint ciblé sans erreur. Le lint global reste bloqué par 66 erreurs
+préexistantes dans les fichiers règles/combat hors scope.
+
+**Validation navigateur réelle 8293** : campagne isolée à deux salles superposées, Chromium
+Playwright 1600×1000. Confirmation visuelle de l'entrée dans Objets 3D, de la prévisualisation, de
+la pose, des 21 marches et garde-corps, du popup, de la rotation `x → z` persistée et du trou de
+trémie dans le sol du niveau 1. Une seconde campagne isolée confirme visuellement l'aperçu réel de
+l'échelle, son popup `0 → 1` et sa rotation persistée. Aucun résultat visuel n'a été déduit d'un
+calcul ou d'un test DOM.
+
+**Données** : aucune carte utilisateur ni aucun compte existant modifié. La campagne, la carte et
+le compte temporaires de recette ont été supprimés après validation, puis leur absence contrôlée.
+
+**Retour arrière** : commit Session 153 isolé sur `dev/monde`. Revert du commit restaure v12 et
+l'ancien rendu ; aucune migration SQL ni donnée utilisateur v13 ne reste après retour arrière.
+
+**Suite** : ajouter la trappe liée à l'échelle lorsque le palier traverse une dalle, puis les
+variantes d'escalier sans second moteur.

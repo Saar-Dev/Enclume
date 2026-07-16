@@ -83,7 +83,6 @@ function edgeFactors(mode, surfaceMultiplier = 1, traversalMultiplier = null) {
 
 function makeEdge({ id, fromNode, toNode, mode, allowPartial, sourceId, metrics, factors, effectRegions = [] }) {
   const distanceM = distanceBetweenWorldPointsM(fromNode.point, toNode.point, metrics)
-  if (distanceM <= EPSILON) return null
   const environment = effectMovementFactorsForSegment(effectRegions, fromNode.point, toNode.point)
   const resolvedFactors = environment.length > 0
     ? { ...factors, environment: [...(factors.environment || []), ...environment] }
@@ -148,14 +147,21 @@ export function buildNavigationGraph(snapshot, {
     if (traversal.enabled === false) continue
     const from = normalizeWorldPoint(traversal.from, `${traversal.id}.from`)
     const to = normalizeWorldPoint(traversal.to, `${traversal.id}.to`)
+    const explicitAnchors = Array.isArray(traversal.anchors) && traversal.anchors.length >= 2
+      ? traversal.anchors.map((anchor, index) => normalizeWorldPoint(anchor, `${traversal.id}.anchors[${index}]`))
+      : null
     const distanceWorld = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z)
     const sampleSpacing = Number(traversal.anchorSpacing || snapshot.metrics.worldUnitsPerCell || 1)
-    const sampleCount = Math.max(1, Math.ceil(distanceWorld / sampleSpacing))
+    const sampleCount = explicitAnchors ? explicitAnchors.length - 1 : Math.max(1, Math.ceil(distanceWorld / sampleSpacing))
+    const sampledAnchors = explicitAnchors || Array.from(
+      { length: sampleCount + 1 },
+      (_, index) => pointAtRatio(from, to, index / sampleCount),
+    )
     const group = []
-    for (let index = 0; index <= sampleCount; index++) {
+    for (let index = 0; index < sampledAnchors.length; index++) {
       group.push(addNode({
         id: `nav:traversal:${traversal.id}:${index}`,
-        point: pointAtRatio(from, to, index / sampleCount),
+        point: sampledAnchors[index],
         kind: 'traversal',
         traversalId: traversal.id,
         sourceId: traversal.sourceId,
@@ -251,7 +257,9 @@ export function buildNavigationGraph(snapshot, {
           supportNode.point.z - connectorNode.point.z,
         )
         if (horizontal > 0.8 || Math.abs(supportNode.point.y - connectorNode.point.y) > actor.maxStepHeight) continue
-        if (!spatialIndex.isSegmentClear(connectorNode.point, supportNode.point, actor)) continue
+        if (!spatialIndex.isSegmentClear(connectorNode.point, supportNode.point, actor, {
+          ignoreSourceIds: [traversal.sourceId],
+        })) continue
         const connectorFactors = edgeFactors(mode, traversal.movementMultiplier, traversalFactors[mode])
         addEdge({
           id: `edge:${supportNode.id}>${connectorNode.id}`,
@@ -457,8 +465,9 @@ export function findNavigationPath(graph, {
     outgoing.set(edge.from, list)
   }
   const nodeById = new Map(workingGraph.nodes.map(node => [node.id, node]))
-  const minFactor = workingGraph.edges.length
-    ? Math.min(...workingGraph.edges.map(edge => edge.costM / edge.distanceM))
+  const distanceEdges = workingGraph.edges.filter(edge => edge.distanceM > EPSILON)
+  const minFactor = distanceEdges.length
+    ? Math.min(...distanceEdges.map(edge => edge.costM / edge.distanceM))
     : 1
   const heuristic = node => distanceBetweenWorldPointsM(node.point, destination.point, workingGraph.metrics) * minFactor
   const heap = new MinHeap()
@@ -530,7 +539,7 @@ export function planWorldPath({
     plan: null,
   })
 
-  const segments = route.edges.map(edge => ({
+  const segments = route.edges.filter(edge => edge.distanceM > EPSILON).map(edge => ({
     id: edge.id,
     from: edge.fromPoint,
     to: edge.toPoint,

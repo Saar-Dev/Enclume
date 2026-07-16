@@ -36,6 +36,23 @@ const MODEL_SLOT_LABELS = {
   SLOT_05: 'Verre',
 }
 
+const PARAMETRIC_STRUCTURAL_OBJECTS = Object.freeze([
+  {
+    id: '__parametric_stair_straight__',
+    label: 'Escalier droit paramétrique',
+    category: 'Escaliers',
+    builtin_key: 'surface_stair_straight',
+    geometry: { placementMode: 'connector', connectorType: 'stairs' },
+  },
+  {
+    id: '__generic_ladder__',
+    label: 'Échelle structurelle',
+    category: 'Échelles',
+    builtin_key: 'surface_ladder_straight',
+    geometry: { placementMode: 'connector', connectorType: 'ladder' },
+  },
+])
+
 // ─── Icônes ───────────────────────────────────────────────────────────────────
 const IconEdit = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -549,7 +566,16 @@ export default function Sidebar({
     wallHeight: 2.5,
     wallShape: 'straight',
     wallCurveOffset: 1.5,
-    stairRise: 2.5,
+    stairQuarterTurns: 0,
+    stairWidthM: 1.5,
+    stairTreadDepthM: 0.3,
+    stairMaxRiserHeightM: 0.18,
+    stairHeadClearanceM: 2.05,
+    stairOpeningMarginM: 0.06,
+    stairRailingLeft: true,
+    stairRailingRight: true,
+    stairRailingHeightM: 1.05,
+    stairRailingThicknessM: 0.05,
     movementMultiplier: 1,
     ladderAxis: 'x',
     ladderWidth: 0.7,
@@ -624,7 +650,7 @@ export default function Sidebar({
   const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
   const structuralObjectConnectorType = (blueprint) => {
     const type = blueprint?.geometry?.connectorType
-    return ['window', 'screen-window', 'skylight'].includes(type) ? type : null
+    return ['window', 'screen-window', 'skylight', 'stairs', 'ladder'].includes(type) ? type : null
   }
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
@@ -707,6 +733,21 @@ export default function Sidebar({
     onBlueprintSelect?.(isActive ? null : blueprint)
 
     if (connectorType && !isActive) {
+      if (connectorType === 'stairs') {
+        onSurfaceToolChange?.({
+          ...surfaceToolState,
+          mode: 'stair',
+          stairPlacementSource: 'object-palette',
+          stairQuarterTurns: 0,
+          selectedRoomId: null,
+          selectedRoomIds: [],
+          selectedRoomWallKeys: [],
+          selectedRoomWallCount: 0,
+          selectedConnectorId: null,
+          roomArcError: null,
+        })
+        return
+      }
       onSurfaceToolChange?.({
         ...surfaceToolState,
         mode: 'connector',
@@ -725,8 +766,9 @@ export default function Sidebar({
       return
     }
 
-    if (['window', 'screen-window', 'skylight'].includes(surfaceToolState.connectorType)
-      && surfaceToolState.connectorPlacementSource === 'object-palette') {
+    if ((['window', 'screen-window', 'skylight', 'ladder'].includes(surfaceToolState.connectorType)
+      && surfaceToolState.connectorPlacementSource === 'object-palette')
+      || (surfaceToolState.mode === 'stair' && surfaceToolState.stairPlacementSource === 'object-palette')) {
       onSurfaceToolChange?.({
         ...surfaceToolState,
         mode: 'select',
@@ -1237,16 +1279,6 @@ export default function Sidebar({
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateSurfaceTool({ mode: 'stair' })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'stair' ? styles.roomToolModeBtnActive : {}),
-                    }}
-                  >
-                    Escalier
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => updateSurfaceTool({ mode: 'bridge' })}
                     style={{
                       ...styles.roomToolModeBtn,
@@ -1267,21 +1299,6 @@ export default function Sidebar({
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateSurfaceTool({
-                      mode: 'connector',
-                      connectorType: 'ladder',
-                      connectorToLevel: Number(surfaceToolState.level || 0) + 1,
-                      ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
-                    })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
-                    }}
-                  >
-                    Échelle
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => updateSurfaceTool({ mode: 'erase' })}
                     style={{
                       ...styles.roomToolModeBtn,
@@ -1291,33 +1308,6 @@ export default function Sidebar({
                     {t('surfaceEditor.erase')}
                   </button>
                 </div>
-                {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
-                  <div style={styles.roomToolGrid}>
-                    <label style={styles.roomToolLabel}>
-                      <span>Étage d’arrivée</span>
-                      <select
-                        value={surfaceToolState.connectorToLevel}
-                        onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
-                        style={styles.roomToolSelect}
-                      >
-                        {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
-                          <option key={level} value={level}>{level}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label style={styles.roomToolLabel}>
-                      <span>Orientation</span>
-                      <select
-                        value={surfaceToolState.ladderAxis || 'x'}
-                        onChange={e => updateSurfaceTool({ ladderAxis: e.target.value })}
-                        style={styles.roomToolSelect}
-                      >
-                        <option value="x">Est / Ouest</option>
-                        <option value="z">Nord / Sud</option>
-                      </select>
-                    </label>
-                  </div>
-                )}
                 {surfaceToolState.mode === 'effect' && (
                   <div style={styles.connectorPicker}>
                     <div style={styles.connectorPickerTitle}>Région environnementale</div>
@@ -1462,21 +1452,6 @@ export default function Sidebar({
                         }}
                       >
                         {t('surfaceEditor.addElevator')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateSurfaceTool({
-                          mode: 'connector',
-                          connectorType: 'ladder',
-                          connectorToLevel: Number(surfaceToolState.level || 0) + 1,
-                          ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
-                        })}
-                        style={{
-                          ...styles.roomToolModeBtn,
-                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
-                        }}
-                      >
-                        Échelle
                       </button>
                     </div>
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
@@ -1903,7 +1878,7 @@ export default function Sidebar({
           {/* ── Onglet Entités — palette blueprints ── */}
           {activeEditorTab === 'entity' && (() => {
             const query = objectSearch.trim().toLocaleLowerCase()
-            const bpList = Object.values(blueprints)
+            const bpList = [...Object.values(blueprints), ...PARAMETRIC_STRUCTURAL_OBJECTS]
               .filter(bp => !bp.deprecated)
               .filter(bp => blueprintPlacementMode(bp) !== 'connector' || structuralObjectConnectorType(bp))
               .filter(bp => !query || bp.label.toLocaleLowerCase().includes(query) || (bp.category || '').toLocaleLowerCase().includes(query))
@@ -1911,7 +1886,11 @@ export default function Sidebar({
               const connectorType = structuralObjectConnectorType(bp)
               const category = connectorType === 'skylight'
                 ? 'Dalles en verre'
-                : connectorType ? 'Fenêtres' : (bp.category || t('sidebar.customObjects'))
+                : connectorType === 'stairs'
+                  ? 'Escaliers'
+                  : connectorType === 'ladder'
+                    ? 'Échelles'
+                    : connectorType ? 'Fenêtres' : (bp.category || t('sidebar.customObjects'))
               if (!groups[category]) groups[category] = []
               groups[category].push(bp)
               return groups

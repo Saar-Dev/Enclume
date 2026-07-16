@@ -28,6 +28,9 @@ import {
   withWallCornerJoins,
 } from '../../../shared/world/roomGeometry.js'
 import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
+import {
+  straightStairGeometry,
+} from '../../../shared/world/stairGeometry.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
@@ -39,7 +42,6 @@ const STATION_USED_PACK_ID = '6f3916a6-7c7b-45f7-a020-7d63b7a74176'
 const STATION_USED_SPECIAL_RATE = 12
 const DEFAULT_FLOOR_THICKNESS = 0.25
 const DEFAULT_CEILING_HEIGHT = 2.5
-const STAIR_STEPS_PER_CELL = 4
 export const DEFAULT_SURFACE_DATA = {
   version: SURFACE_DATA_VERSION,
   fine: SURFACE_FINE,
@@ -104,10 +106,6 @@ export function getToolCeilingThickness(tool) {
 
 export function getToolCeilingHeight(tool) {
   return clampNumber(tool?.ceilingHeight ?? tool?.wallHeight, 0.25, 16, DEFAULT_CEILING_HEIGHT)
-}
-
-export function getToolStairRise(tool) {
-  return clampNumber(tool?.stairRise, 0.25, 12, 2.5)
 }
 
 export function getToolMovementMultiplier(tool) {
@@ -2989,24 +2987,23 @@ export function applyWallDrag(surfaceData, start, end, tool, activeMaterial, ava
   return changed ? { ...next, walls: nextWalls } : surfaceData
 }
 
-export function makeStairFromSelection(selection, tool, activeMaterial, availableBlocks) {
-  const area = normalizeCellSelection(selection)
-  if (!area) return null
-
-  const dx = selection.end.x - selection.start.x
-  const dz = selection.end.z - selection.start.z
-  const axis = Math.abs(dx) >= Math.abs(dz) ? 'x' : 'z'
-  const dir = axis === 'x'
-    ? (dx >= 0 ? 1 : -1)
-    : (dz >= 0 ? 1 : -1)
-  const run = axis === 'x' ? area.width : area.depth
-  const width = axis === 'x' ? area.depth : area.width
-  const steps = Math.max(1, Math.min(32, Number.parseInt(tool?.stairSteps, 10) || run))
+export function makeStraightStairFromCell(surfaceData, cell, tool, activeMaterial, availableBlocks) {
+  if (!cell || !Number.isFinite(Number(cell.x)) || !Number.isFinite(Number(cell.z))) return null
+  const surface = normalizeSurfaceData(surfaceData)
+  const metersPerWorldUnit = (Number(surfaceData?.metersPerCell) || 1.5) / (Number(surfaceData?.worldUnitsPerCell) || 1)
   const y = getToolElevation(tool)
-  const rise = getToolStairRise(tool)
-  const topY = y + rise
+  const topY = y + (Number(surface.storyHeight) || STORY_HEIGHT)
+  const width = clampNumber(tool?.stairWidthM, 0.6, 4.5, 1.5) / metersPerWorldUnit
+  const treadDepth = clampNumber(tool?.stairTreadDepthM, 0.2, 0.6, 0.3) / metersPerWorldUnit
+  const maxRiserHeight = clampNumber(tool?.stairMaxRiserHeightM, 0.12, 0.25, 0.18) / metersPerWorldUnit
+  const stepCount = Math.max(1, Math.ceil((topY - y) / maxRiserHeight))
+  const quarterTurns = ((Number.parseInt(tool?.stairQuarterTurns, 10) || 0) % 4 + 4) % 4
+  const axis = quarterTurns % 2 === 0 ? 'x' : 'z'
+  const dir = quarterTurns < 2 ? 1 : -1
+  const x = Number(cell.x) + 0.5
+  const z = Number(cell.z) + 0.5
   const supportThickness = getToolFloorThickness(tool)
-  const id = `stair:${axis}:${dir}:${area.minX}:${area.minZ}:${area.maxX}:${area.maxZ}:${formatLevel(y)}:${formatLevel(topY)}`
+  const id = `stair:straight:${formatLevel(x)}:${formatLevel(z)}:${formatLevel(y)}:${formatLevel(topY)}:${axis}:${dir}`
   const { tex, material } = materialOrTextureForTool({
     tool,
     packId: tool?.stairPackId || tool?.floorPackId,
@@ -3019,21 +3016,25 @@ export function makeStairFromSelection(selection, tool, activeMaterial, availabl
 
   return {
     id,
+    kind: 'straight',
     axis,
     dir,
-    minX: area.minX,
-    maxX: area.maxX,
-    minZ: area.minZ,
-    maxZ: area.maxZ,
+    x,
+    z,
     width,
-    run,
-    steps,
-    visualSteps: steps * STAIR_STEPS_PER_CELL,
-    riseSteps: steps * STAIR_STEPS_PER_CELL,
+    treadDepth,
+    stepCount,
     y,
     topY,
-    rise,
     supportThickness,
+    headClearance: clampNumber(tool?.stairHeadClearanceM, 1.6, 3, 2.05) / metersPerWorldUnit,
+    openingMargin: clampNumber(tool?.stairOpeningMarginM, 0, 0.5, 0.06) / metersPerWorldUnit,
+    railings: {
+      left: tool?.stairRailingLeft !== false,
+      right: tool?.stairRailingRight !== false,
+      height: clampNumber(tool?.stairRailingHeightM, 0.7, 1.4, 1.05) / metersPerWorldUnit,
+      thickness: clampNumber(tool?.stairRailingThicknessM, 0.02, 0.15, 0.05) / metersPerWorldUnit,
+    },
     walkable: true,
     connectsLevels: true,
     movementMode: 'stairs',
@@ -3046,44 +3047,15 @@ export function makeStairFromSelection(selection, tool, activeMaterial, availabl
 
 export function stairStepBoxes(stair) {
   if (!stair) return []
-  const steps = Math.max(1, Number.parseInt(stair.steps, 10) || 1)
-  const visualSteps = Math.max(steps, Number.parseInt(stair.visualSteps, 10) || steps * STAIR_STEPS_PER_CELL)
-  const riseSteps = Math.max(steps, Number.parseInt(stair.riseSteps, 10) || visualSteps)
-  const baseY = (Number(stair.y) || 0) + getSupportThickness(stair.supportThickness) / 2
-  const rise = Math.max(0.01, Number(stair.rise) || ((Number(stair.topY) || 0) - baseY) || 0.25)
-  const run = Math.max(1, Number(stair.run) || (stair.axis === 'x'
-    ? (stair.maxX - stair.minX + 1)
-    : (stair.maxZ - stair.minZ + 1)))
-  const stepRun = run / visualSteps
-  const boxes = []
-
-  for (let i = 0; i < visualSteps; i += 1) {
-    const heightIndex = Math.min(riseSteps, Math.ceil(((i + 1) / visualSteps) * riseSteps))
-    const top = baseY + (heightIndex / riseSteps) * rise
-    const height = Math.max(0.05, top - baseY)
-    const alongStart = stair.dir >= 0
-      ? (stair.axis === 'x' ? stair.minX : stair.minZ) + i * stepRun
-      : (stair.axis === 'x' ? stair.maxX + 1 : stair.maxZ + 1) - (i + 1) * stepRun
-    const alongCenter = alongStart + stepRun / 2
-
-    if (stair.axis === 'x') {
-      boxes.push({
-        position: [alongCenter, baseY + height / 2, stair.minZ + (stair.maxZ - stair.minZ + 1) / 2],
-        args: [stepRun, height, stair.maxZ - stair.minZ + 1],
-      })
-    } else {
-      boxes.push({
-        position: [stair.minX + (stair.maxX - stair.minX + 1) / 2, baseY + height / 2, alongCenter],
-        args: [stair.maxX - stair.minX + 1, height, stepRun],
-      })
-    }
-  }
-
-  return boxes
+  return straightStairGeometry(stair).steps.map(step => ({
+    position: [step.position.x, step.position.y, step.position.z],
+    args: step.size,
+    bounds: step.bounds,
+  }))
 }
 
-export function applyStairSelection(surfaceData, selection, tool, activeMaterial, availableBlocks) {
-  const stair = makeStairFromSelection(selection, tool, activeMaterial, availableBlocks)
+export function applyStraightStairPlacement(surfaceData, cell, tool, activeMaterial, availableBlocks) {
+  const stair = makeStraightStairFromCell(surfaceData, cell, tool, activeMaterial, availableBlocks)
   if (!stair) return surfaceData
 
   const next = normalizeSurfaceData(surfaceData)
@@ -3098,11 +3070,6 @@ export function applyStairSelection(surfaceData, selection, tool, activeMaterial
 
 function rangesIntersect(aMin, aMax, bMin, bMax) {
   return aMax >= bMin && bMax >= aMin
-}
-
-function cellAreaIntersectsBounds(bounds, area) {
-  return rangesIntersect(bounds.minX, bounds.maxX + 1, area.minX, area.maxX + 1)
-    && rangesIntersect(bounds.minZ, bounds.maxZ + 1, area.minZ, area.maxZ + 1)
 }
 
 function wallIntersectsCellArea(wall, area) {
@@ -3199,8 +3166,11 @@ export function eraseSurfaceSelection(surfaceData, selection, tool) {
   }
 
   for (const [id, stair] of Object.entries(next.stairs)) {
+    const footprint = straightStairGeometry(stair, { storyHeight: next.storyHeight }).footprint
     const sameStartOrEnd = sameLevel(stair?.y, targetY) || sameLevel(stair?.topY, targetY)
-    if (sameStartOrEnd && cellAreaIntersectsBounds(stair, area)) {
+    const intersects = rangesIntersect(footprint.minX, footprint.maxX, area.minX, area.maxX + 1)
+      && rangesIntersect(footprint.minZ, footprint.maxZ, area.minZ, area.maxZ + 1)
+    if (sameStartOrEnd && intersects) {
       delete stairs[id]
       changed = true
     }
@@ -3423,8 +3393,9 @@ export function computeSurfaceWaterCells(data, margin = 2) {
   for (const stair of Object.values(surface.stairs)) {
     const baseY = Number(stair?.y) || 0
     const topY = Number(stair?.topY) || baseY + DEFAULT_CEILING_HEIGHT
-    for (let x = Number(stair.minX) || 0; x <= (Number(stair.maxX) || 0); x += 1) {
-      for (let z = Number(stair.minZ) || 0; z <= (Number(stair.maxZ) || 0); z += 1) {
+    const footprint = straightStairGeometry(stair, { storyHeight: surface.storyHeight }).footprint
+    for (let x = Math.floor(footprint.minX); x < Math.ceil(footprint.maxX); x += 1) {
+      for (let z = Math.floor(footprint.minZ); z < Math.ceil(footprint.maxZ); z += 1) {
         includeWaterCell(levels, baseY, x, z, topY)
       }
     }

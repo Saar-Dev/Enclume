@@ -1,4 +1,15 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — escalier droit paramétrique livré sur 8293** : `surface_data` v13 impose une
+> définition structurelle stricte dont `stairGeometry` dérive marches, garde-corps, trémie,
+> colliders, occluders et ancrages praticables. La pose se fait depuis **Objets 3D > Escaliers** et
+> crée automatiquement la traversée verticale ; l'ancien outil direct n'est plus exposé. La
+> rotation, les rails, le coût et l'apparence sont éditables dans le popup. Validation : 133 tests
+> monde/serveur, 3 configuration, build, lint ciblé et recette Playwright Chromium réelle :
+> prévisualisation, pose de 21 marches, rotation persistée et trémie visible au niveau 1. L'échelle
+> suit la même UX dans **Objets 3D > Échelles** : vrai aperçu, connecteur automatique, sélection,
+> popup et rotation, également confirmés dans Chromium. Prochaines extensions : trappe liée à
+> l'échelle et variantes d'escalier, sans dupliquer le moteur.
+>
 > **2026-07-16 — plan historique de fusion clos** : les lots 4 et 5 étaient déjà résolus dans
 > l'architecture courante mais n'avaient pas été reportés dans le plan. La topologie systemd
 > `8193/8293/8393` est volontairement isolée et les scripts Python hydroponiques sont des outils
@@ -191,12 +202,13 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 > prévisualisation locale, les passerelles sont rebranchées sur Sol/Plafond et les panneaux sont
 > décalés de l'objet puis recalés verticalement à l'ouverture d'un accordéon.
 
-- Phases 0 à 14 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
+- Phases 0 à 16 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
   LOS/couverture, structures verticales, régions/effets runtime, cabine d'ascenseur mobile et
   branchement spatial complet du combat, tranches d'étage isolées avec profondeur visible dans les
   seuls volumes multniveau, murs courbes physiques, empreintes exclusives de salles non
   rectangulaires, fusion de volumes à hauteurs différentes et profils verticaux de murs.
-- `surface_data` v12 porte tranches verticales, arcs et apparences intérieures canoniques. Salle,
+- `surface_data` v13 porte tranches verticales, arcs, apparences intérieures canoniques et escaliers
+  paramétriques stricts. Salle,
   mur et objet sélectionnés utilisent des panneaux contextuels déplaçables ; les réglages longs sont
   repliables et la barre latérale d'édition ne conserve que les outils réellement actifs.
 - Un profil de mur couvre la hauteur totale de la salle. Une passerelle liée par `clipRoomId` est
@@ -213,8 +225,8 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 - Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
   des cartes anciennes n'est exigée.
 - Intégration du 2026-07-16 validée sur `8393` avec une carte multi-étages, un combat actif et un
-  parcours HTTP authentifié de personnage. Prochaine étape monde : connecteurs verticaux
-  paramétriques (escaliers puis échelles), sur les contrats canoniques déjà en place.
+  parcours HTTP authentifié de personnage. Prochaine étape monde : trappe structurelle liée à
+  l'échelle, puis variantes d'escalier, sur les contrats canoniques déjà en place.
 
 Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 

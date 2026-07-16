@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-16 — moteur v12 conservé comme autorité dans l'intégration commune.
+> Dernière mise à jour : 2026-07-16 — `surface_data` v13 et premier escalier paramétrique canonique.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -56,7 +56,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 12 contient actuellement :
+`battlemaps.surface_data` version 13 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -135,13 +135,16 @@ Le dossier `shared/world/` fournit désormais :
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
+- `stairGeometry.js` : définition géométrique unique de l'escalier droit, de ses marches, de ses
+  garde-corps, de ses ancrages praticables et de sa trémie ;
 - `entityTransform.js` : échelle uniforme canonique des entités, bornée de `0.25` à `4` et partagée
   par client, routes et services spatiaux ;
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
-- soixante-dix-sept tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
-  placement sur support, les canaux de matériaux, la couverture et les occluders dynamiques.
+- cent trente-trois tests monde/serveur, dont Jon, les portes, les occupants multiples, les budgets
+  partiels, le placement sur support, les canaux de matériaux, la couverture, les occluders
+  dynamiques et l'escalier paramétrique.
 
 La route Surface compile le document avant de le valider en base et
 `GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. La
@@ -362,13 +365,42 @@ Un connecteur possède :
 
 ### Escalier
 
-Parcours continu ou échantillonné de type marche. Les tokens peuvent s'y arrêter et y combattre si
-la règle de surface le permet.
+L'escalier droit v13 est un objet structurel paramétrique, pas un GLB qui masquerait une
+téléportation. Sa donnée minimale est `kind: straight`, une origine basse `x/z/y`, une arrivée
+`topY`, un axe et un sens, une largeur, un giron, un nombre de marches, une épaisseur de support et
+les deux garde-corps optionnels. La configuration standard créée par l'éditeur relie exactement un
+étage de 3,75 m : 21 contremarches de 17,9 cm et un giron de 30 cm.
+
+`straightStairGeometry(...)` dérive de cette seule définition :
+
+- les boîtes de marche rendues et leurs surfaces praticables ;
+- les poteaux et mains courantes ;
+- l'empreinte et la trémie exacte découpée dans le plafond bas et le sol haut ;
+- les colliders de mouvement et occluders de vue de chaque marche ;
+- un ancrage stable par marche pour la navigation et l'arrêt d'un token.
+
+Le renderer, l'éditeur et `worldCompiler` ne recalculent donc jamais chacun leur propre escalier.
+Le connecteur de graphe est produit automatiquement par la pose de l'objet et n'est pas exposé
+comme un outil séparé. Les liaisons d'entrée/sortie ignorent uniquement les colliders appartenant
+à ce même escalier ; elles continuent de respecter toutes les autres barrières. Les alias de coût
+zéro entre un support et le premier ou dernier ancrage restent dans le graphe, mais sont retirés du
+plan de mouvement rendu au client.
+
+Dans l'éditeur, l'entrée se trouve sous **Objets 3D > Escaliers**. Un clic choisit l'objet, le survol
+prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. Le popup
+permet une rotation par quart de tour, l'activation de chaque garde-corps, le multiplicateur de
+déplacement et l'apparence procédurale. Une texture ou un futur modèle décoratif ne remplace jamais
+la géométrie physique dérivée.
 
 ### Échelle
 
 Parcours vertical de type grimpe. Il contient assez d'ancrages pour persister un token entre deux
 étages. Le mode course n'y est pas disponible par défaut.
+
+L'UX suit désormais le même principe que l'escalier : **Objets 3D > Échelles** affiche la vraie
+géométrie structurelle en prévisualisation, puis la pose crée automatiquement le connecteur
+`ladder`, repasse en sélection et ouvre son popup. Celui-ci expose les niveaux, la rotation et le
+coût. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
 
 ### Passerelle
 
@@ -405,8 +437,9 @@ et sa cabine appartiennent à l'état runtime.
   puis scinde l'arête : reprendre au tour suivant ne donne aucun déplacement gratuit ;
 - `bridge` est une dalle de support structurelle. Son UUID est l'identité utilisée par l'état
   runtime pour la désactiver ou la marquer détruite sans réécrire sa définition ;
-- l'éditeur construit la physique depuis des outils dédiés. Le rendu générique d'une échelle ou un
-  futur GLB n'est qu'une apparence ;
+- l'éditeur construit la physique depuis les objets structurels de la bibliothèque 3D. L'escalier
+  crée sa traversée automatiquement ; le rendu générique d'une échelle ou un futur GLB n'est
+  qu'une apparence ;
 - les labels du chemin présentent `distance × facteur = coût` pour les segments pondérés.
 
 ### Implémentation Phase 6
@@ -679,8 +712,8 @@ motif, usure, saleté, relief et mode de relief réel.
 Cette donnée appartient au mur logique, pas à la tessellation de son mesh. `roomBoundaryPaths`
 résout le profil à partir des arêtes sources et le propage aux chemins droits comme aux arcs ; le
 renderer l'applique ensuite à chaque panneau dérivé. Une fusion de salles conserve les profils des
-arêtes restantes et retire ceux de la séparation supprimée. Le validateur v12 contrôle les clés,
-les textures et les valeurs d'apparence entre 0 et 100. Le contrat v12 refuse les anciennes
+arêtes restantes et retire ceux de la séparation supprimée. Le validateur v13 contrôle les clés,
+les textures et les valeurs d'apparence entre 0 et 100. Le contrat v13 refuse les anciennes
 apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`.
 
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions

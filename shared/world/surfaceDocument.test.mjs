@@ -30,14 +30,17 @@ function surfaceFixture() {
     stairs: {
       'stair:legacy': {
         id: 'stair:legacy',
+        kind: 'straight',
         axis: 'x',
         dir: 1,
-        minX: 0,
-        maxX: 1,
-        minZ: 0,
-        maxZ: 0,
+        x: 0.5,
+        z: 0.5,
         y: 0,
         topY: 2.5,
+        width: 1,
+        treadDepth: 0.2,
+        stepCount: 21,
+        supportThickness: 0.25,
         tex: 12,
       },
     },
@@ -57,7 +60,7 @@ test('les identités legacy deviennent des UUID déterministes et persistables',
   assert.equal(first.worldDocument.features.rooms[roomId].legacyId, 'room:legacy')
 })
 
-test('les escaliers legacy deviennent des connecteurs canoniques', () => {
+test('un escalier structurel devient un connecteur canonique du document monde', () => {
   const prepared = prepareSurfaceData(surfaceFixture(), { battlemapId: 'map-a' })
   const stairId = prepared.surfaceData.stairs['stair:legacy'].worldId
   assert.equal(prepared.worldDocument.features.connectors[stairId].type, 'stairs')

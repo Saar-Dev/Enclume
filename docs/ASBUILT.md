@@ -1,5 +1,36 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Escalier droit paramétrique canonique (2026-07-16)
+
+`surface_data` v13 livre le premier escalier construit comme un objet structurel complet. Il se
+choisit dans **Objets 3D > Escaliers**, se prévisualise sur le sol et crée automatiquement sa
+traversée entre le niveau courant et le niveau supérieur. L'ancien bouton de connecteur escalier
+n'est plus exposé.
+
+Une seule fonction partagée, `straightStairGeometry`, transforme la définition enregistrée en
+marches, garde-corps, emprise, trémie et ancrages. Le renderer et `worldCompiler` consomment cette
+même sortie : chaque marche est à la fois visible, praticable, collisionnable et occultante ; la
+dalle haute possède une vraie ouverture ; le graphe peut arrêter un token sur n'importe quelle
+marche sans déplacement gratuit à la reprise. La configuration standard représente 3,75 m de
+hauteur avec 21 marches de 17,9 cm et un giron de 30 cm.
+
+Le popup **Objet 3D — Escalier droit paramétrique** affiche les niveaux reliés, permet la rotation
+immédiate, chaque garde-corps, le coût de déplacement et l'apparence procédurale. La rotation met à
+jour simultanément le mesh, l'emprise et la trémie.
+
+L'échelle existante est elle aussi posée depuis **Objets 3D > Échelles**. Son vrai maillage de rails
+et barreaux remplace la boîte de prévisualisation, la pose crée son connecteur vertical puis ouvre
+le popup **Échelle structurelle**, et la rotation y est appliquée immédiatement. L'ancien bouton
+direct d'échelle n'est plus exposé.
+
+Validation : 133 tests monde/serveur, 3 tests de configuration, tests Surface/navigation ciblés,
+build Vite et Playwright Chromium réel sur `8293`. La recette a confirmé visuellement la
+prévisualisation, la pose, les 21 marches, la rotation `x → z` persistée et la trémie dans le sol de
+l'étage 1. Une seconde recette confirme l'aperçu réel, la pose, le popup `0 → 1` et la rotation
+persistée de l'échelle. Les campagnes et comptes temporaires ont été supprimés après contrôle.
+
+---
+
 ## Base commune monde + règles validée (2026-07-16)
 
 La branche `integration` réunit le moteur monde `72743e8` et la tête règles `1af7d78` par les

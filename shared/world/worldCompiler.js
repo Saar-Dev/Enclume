@@ -27,6 +27,11 @@ import {
   wallCornerIntersectionPoint,
   withWallCornerJoins,
 } from './roomGeometry.js'
+import {
+  rectangularSlabFragments,
+  stairOpeningBounds,
+  straightStairGeometry,
+} from './stairGeometry.js'
 
 const EPSILON = 1e-6
 
@@ -769,6 +774,22 @@ function skylightCoveringSlab(surface, slab, y) {
   })
 }
 
+function rectangleMultiPolygon(rectangle) {
+  return [[[
+    [rectangle.minX, rectangle.minZ],
+    [rectangle.maxX, rectangle.minZ],
+    [rectangle.maxX, rectangle.maxZ],
+    [rectangle.minX, rectangle.maxZ],
+    [rectangle.minX, rectangle.minZ],
+  ]]]
+}
+
+function stairOpeningsAtY(surface, y) {
+  return Object.values(surface.stairs)
+    .filter(stair => Math.abs(number(stair.topY) - number(y)) <= EPSILON)
+    .map(stair => stairOpeningBounds(stair, { storyHeight: surface.storyHeight }))
+}
+
 function addSlabs(surface, runtimeStates, battlemapId, spatial) {
   const elevators = surfaceElevators(surface)
   for (const [legacyId, floor] of roomFloorEntries(surface, battlemapId)) {
@@ -776,63 +797,73 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const thickness = positive(floor.thickness, 0.25)
     if (slabIsInsideElevatorShaft(elevators, parsed, parsed.y + thickness / 2)) continue
     if (skylightCoveringSlab(surface, parsed, parsed.y)) continue
-    let slabFootprint = null
+    let sourceFootprint = null
     if (floor.clipRoomId && surface.rooms[floor.clipRoomId]) {
       const room = { id: floor.clipRoomId, ...surface.rooms[floor.clipRoomId] }
       const tile = [[[[parsed.x, parsed.z], [parsed.x + 1, parsed.z], [parsed.x + 1, parsed.z + 1], [parsed.x, parsed.z + 1], [parsed.x, parsed.z]]]]
-      slabFootprint = intersectMultiPolygons(
+      sourceFootprint = intersectMultiPolygons(
         tile,
         roomInteriorFootprintAtY(room, parsed.y, surface.rooms, surface.storyHeight),
       )
-      if (slabFootprint.length === 0) continue
+      if (sourceFootprint.length === 0) continue
     }
-    const footprintBounds = slabFootprint ? multiPolygonBounds(slabFootprint) : null
-    const slabBounds = bounds(
-      footprintBounds?.minX ?? parsed.x, parsed.y - thickness / 2, footprintBounds?.minZ ?? parsed.z,
-      footprintBounds?.maxX ?? parsed.x + 1, parsed.y + thickness / 2, footprintBounds?.maxZ ?? parsed.z + 1,
-    )
     const sourceId = floor.worldId
     const runtime = runtimeStates[sourceId]
     if (floor.runtimeSupport && (runtime?.enabled === false || runtime?.state === 'destroyed')) continue
     const kind = floor.kind || 'floor'
-    const supportPoint = slabFootprint
-      ? (() => {
-          const candidates = []
-          for (let iz = 0; iz <= 8; iz += 1) {
-            for (let ix = 0; ix <= 8; ix += 1) {
-              candidates.push({
-                x: slabBounds.min.x + (slabBounds.max.x - slabBounds.min.x) * ix / 8,
-                z: slabBounds.min.z + (slabBounds.max.z - slabBounds.min.z) * iz / 8,
-              })
-            }
-          }
-          const center = {
-            x: (slabBounds.min.x + slabBounds.max.x) / 2,
-            z: (slabBounds.min.z + slabBounds.max.z) / 2,
-          }
-          const inside = [center, ...candidates]
-            .find(candidate => multiPolygonContainsPoint(slabFootprint, candidate)) || center
-          return { ...inside, y: clean(parsed.y + thickness / 2) }
-        })()
-      : null
-    spatial.supports.push({
-      id: `support:${sourceId}`,
-      sourceId,
-      kind,
-      bounds: slabBounds,
-      ...(slabFootprint ? { footprint: slabFootprint, point: supportPoint } : {}),
-      y: clean(parsed.y + thickness / 2),
-      walkable: floor.walkable !== false,
-      movementMultiplier: movementMultiplier(floor),
-    })
-    addBarrierOutputs(spatial, {
-      id: `barrier:floor:${sourceId}`,
-      sourceId,
-      kind,
-      axis: 'horizontal',
-      bounds: slabBounds,
-      blocks: blockingChannels(floor),
-    })
+    const fragments = rectangularSlabFragments({
+      minX: parsed.x,
+      maxX: parsed.x + 1,
+      minZ: parsed.z,
+      maxZ: parsed.z + 1,
+    }, stairOpeningsAtY(surface, parsed.y))
+    for (const [fragmentIndex, fragment] of fragments.entries()) {
+      const fragmentFootprint = rectangleMultiPolygon(fragment)
+      const slabFootprint = sourceFootprint
+        ? intersectMultiPolygons(sourceFootprint, fragmentFootprint)
+        : fragmentFootprint
+      if (slabFootprint.length === 0) continue
+      const footprintBounds = multiPolygonBounds(slabFootprint)
+      const slabBounds = bounds(
+        footprintBounds.minX, parsed.y - thickness / 2, footprintBounds.minZ,
+        footprintBounds.maxX, parsed.y + thickness / 2, footprintBounds.maxZ,
+      )
+      const candidates = []
+      for (let iz = 0; iz <= 8; iz += 1) {
+        for (let ix = 0; ix <= 8; ix += 1) {
+          candidates.push({
+            x: slabBounds.min.x + (slabBounds.max.x - slabBounds.min.x) * ix / 8,
+            z: slabBounds.min.z + (slabBounds.max.z - slabBounds.min.z) * iz / 8,
+          })
+        }
+      }
+      const center = {
+        x: (slabBounds.min.x + slabBounds.max.x) / 2,
+        z: (slabBounds.min.z + slabBounds.max.z) / 2,
+      }
+      const inside = [center, ...candidates]
+        .find(candidate => multiPolygonContainsPoint(slabFootprint, candidate)) || center
+      const suffix = fragments.length > 1 ? `:${fragmentIndex}` : ''
+      spatial.supports.push({
+        id: `support:${sourceId}${suffix}`,
+        sourceId,
+        kind,
+        bounds: slabBounds,
+        footprint: slabFootprint,
+        point: { ...inside, y: clean(parsed.y + thickness / 2) },
+        y: clean(parsed.y + thickness / 2),
+        walkable: floor.walkable !== false,
+        movementMultiplier: movementMultiplier(floor),
+      })
+      addBarrierOutputs(spatial, {
+        id: `barrier:floor:${sourceId}${suffix}`,
+        sourceId,
+        kind,
+        axis: 'horizontal',
+        bounds: slabBounds,
+        blocks: blockingChannels(floor),
+      })
+    }
   }
 
   for (const [legacyId, ceiling] of roomCeilingEntries(surface, battlemapId)) {
@@ -840,17 +871,26 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const thickness = positive(ceiling.thickness, 0.25)
     if (slabIsInsideElevatorShaft(elevators, parsed, parsed.y + thickness / 2)) continue
     if (skylightCoveringSlab(surface, parsed, parsed.y)) continue
-    addBarrierOutputs(spatial, {
-      id: `barrier:ceiling:${ceiling.worldId}`,
-      sourceId: ceiling.worldId,
-      kind: 'ceiling',
-      axis: 'horizontal',
-      bounds: bounds(
-        parsed.x, parsed.y - thickness / 2, parsed.z,
-        parsed.x + 1, parsed.y + thickness / 2, parsed.z + 1,
-      ),
-      blocks: blockingChannels(ceiling),
-    })
+    const fragments = rectangularSlabFragments({
+      minX: parsed.x,
+      maxX: parsed.x + 1,
+      minZ: parsed.z,
+      maxZ: parsed.z + 1,
+    }, stairOpeningsAtY(surface, parsed.y))
+    for (const [fragmentIndex, fragment] of fragments.entries()) {
+      const suffix = fragments.length > 1 ? `:${fragmentIndex}` : ''
+      addBarrierOutputs(spatial, {
+        id: `barrier:ceiling:${ceiling.worldId}${suffix}`,
+        sourceId: ceiling.worldId,
+        kind: 'ceiling',
+        axis: 'horizontal',
+        bounds: bounds(
+          fragment.minX, parsed.y - thickness / 2, fragment.minZ,
+          fragment.maxX, parsed.y + thickness / 2, fragment.maxZ,
+        ),
+        blocks: blockingChannels(ceiling),
+      })
+    }
   }
 
   for (const connector of Object.values(surface.connectors)) {
@@ -994,22 +1034,9 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
 
 function addVerticalTraversals(surface, runtimeStates, spatial) {
   for (const stair of Object.values(surface.stairs)) {
-    const supportOffset = positive(stair.supportThickness, 0.25) / 2
-    const centerCross = stair.axis === 'x'
-      ? (number(stair.minZ) + number(stair.maxZ) + 1) / 2
-      : (number(stair.minX) + number(stair.maxX) + 1) / 2
-    const startAlong = stair.axis === 'x'
-      ? (number(stair.dir, 1) >= 0 ? number(stair.minX) : number(stair.maxX) + 1)
-      : (number(stair.dir, 1) >= 0 ? number(stair.minZ) : number(stair.maxZ) + 1)
-    const endAlong = stair.axis === 'x'
-      ? (number(stair.dir, 1) >= 0 ? number(stair.maxX) + 1 : number(stair.minX))
-      : (number(stair.dir, 1) >= 0 ? number(stair.maxZ) + 1 : number(stair.minZ))
-    const from = stair.axis === 'x'
-      ? point(startAlong, number(stair.y) + supportOffset, centerCross)
-      : point(centerCross, number(stair.y) + supportOffset, startAlong)
-    const to = stair.axis === 'x'
-      ? point(endAlong, number(stair.topY) + supportOffset, centerCross)
-      : point(centerCross, number(stair.topY) + supportOffset, endAlong)
+    const geometry = straightStairGeometry(stair, { storyHeight: surface.storyHeight })
+    const from = geometry.anchors[0]
+    const to = geometry.anchors.at(-1)
     spatial.traversals.push({
       id: `traversal:stairs:${stair.worldId}`,
       sourceId: stair.worldId,
@@ -1020,20 +1047,42 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       enabled: runtimeStates[stair.worldId]?.enabled !== false,
       allowPartial: true,
       movementMultiplier: movementMultiplier(stair),
+      anchors: geometry.anchors,
     })
     spatial.supports.push({
       id: `support:stairs:${stair.worldId}`,
       sourceId: stair.worldId,
       kind: 'stairs',
       bounds: bounds(
-        number(stair.minX), Math.min(number(stair.y), number(stair.topY)), number(stair.minZ),
-        number(stair.maxX) + 1, Math.max(number(stair.y), number(stair.topY)), number(stair.maxZ) + 1,
+        geometry.footprint.minX, geometry.baseSurfaceY, geometry.footprint.minZ,
+        geometry.footprint.maxX, geometry.topSurfaceY, geometry.footprint.maxZ,
       ),
       from,
       to,
+      anchors: geometry.anchors,
       walkable: stair.walkable !== false,
       movementMultiplier: movementMultiplier(stair),
     })
+    for (const step of geometry.steps) {
+      addBarrierOutputs(spatial, {
+        id: `barrier:stairs:${stair.worldId}:step:${step.index}`,
+        sourceId: stair.worldId,
+        kind: 'stairs-solid',
+        axis: 'box',
+        bounds: step.bounds,
+        blocks: blockingChannels(stair),
+      })
+    }
+    for (const rail of geometry.railParts) {
+      addBarrierOutputs(spatial, {
+        id: `barrier:stairs:${stair.worldId}:rail:${rail.side}:${rail.kind}:${rail.index}`,
+        sourceId: stair.worldId,
+        kind: 'stairs-railing',
+        axis: 'box',
+        bounds: rail.bounds,
+        blocks: { movement: true, sight: false, water: false, gas: false },
+      })
+    }
   }
 
   for (const connector of Object.values(surface.connectors)) {

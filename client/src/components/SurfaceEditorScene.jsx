@@ -14,7 +14,7 @@ import {
   applyLadderConnector,
   applySkylightConnector,
   applyRoomSelectionWithResult,
-  applyStairSelection,
+  applyStraightStairPlacement,
   applyWallDrag,
   eraseSurfaceSelection,
   findRoomAtCell,
@@ -29,7 +29,7 @@ import {
   getWallRenderBox,
   isWorldInteriorPointVisibleAtLevel,
   levelToY,
-  makeStairFromSelection,
+  makeStraightStairFromCell,
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
   makeLadderConnectorFromCell,
@@ -51,6 +51,7 @@ import {
   roomSliceContours,
   sampleRoomBoundaryArc,
 } from '../../../shared/world/roomGeometry.js'
+import { straightStairGeometry } from '../../../shared/world/stairGeometry.js'
 
 const GRID_SIZE = 50
 const WALL_STICKY_THRESHOLD = 0.18
@@ -457,8 +458,8 @@ function WallPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
   )
 }
 
-function StairPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
-  const stair = makeStairFromSelection(drag, surfaceTool, activeMaterial, availableBlocks)
+function StairPreview({ drag, surfaceData, surfaceTool, activeMaterial, availableBlocks }) {
+  const stair = makeStraightStairFromCell(surfaceData, drag?.end, surfaceTool, activeMaterial, availableBlocks)
   if (!stair) return null
 
   return (
@@ -492,7 +493,7 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
       : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
   if (!connector) return null
 
-  if (['door', 'window', 'screen-window', 'skylight'].includes(connector.type)) {
+  if (['door', 'window', 'screen-window', 'skylight', 'ladder'].includes(connector.type)) {
     return (
       <ConnectorSegment
         connector={{ id: 'connector-preview', ...connector }}
@@ -724,6 +725,23 @@ export default function SurfaceEditorScene({
     if (!point) return null
     const surface = normalizeSurfaceData(surfaceData)
     let best = null
+    for (const [id, stair] of Object.entries(surface.stairs || {})) {
+      const fromLevel = yToLevel(stair?.y)
+      const toLevel = yToLevel(stair?.topY)
+      if (level < Math.min(fromLevel, toLevel) || level > Math.max(fromLevel, toLevel)) continue
+      const geometry = straightStairGeometry(stair, { storyHeight: surface.storyHeight })
+      const footprint = geometry.footprint
+      if (point.x < footprint.minX || point.x > footprint.maxX
+        || point.z < footprint.minZ || point.z > footprint.maxZ) continue
+      const centerX = (footprint.minX + footprint.maxX) / 2
+      const centerZ = (footprint.minZ + footprint.maxZ) / 2
+      const distance = Math.hypot(point.x - centerX, point.z - centerZ)
+      best = {
+        id,
+        connector: { id, ...stair, type: 'stairs' },
+        distance,
+      }
+    }
     for (const [id, connector] of Object.entries(surface.connectors || {})) {
       const connectorLevel = Number.isFinite(Number(connector?.level))
         ? Number(connector.level)
@@ -909,6 +927,13 @@ export default function SurfaceEditorScene({
               : prev?.end?.x === point.x && prev?.end?.z === point.z
             return same ? prev : next
           })
+        } else if (surfaceTool?.mode === 'stair') {
+          const point = getFloorCell(e.clientX, e.clientY)
+          setHoverPreview(prev => {
+            if (!point) return prev ? null : prev
+            const next = { mode: 'stair', start: point, end: point }
+            return prev?.end?.x === point.x && prev?.end?.z === point.z ? prev : next
+          })
         } else {
           setHoverPreview(prev => (prev ? null : prev))
         }
@@ -1049,6 +1074,9 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'connector') {
+        const placedLadder = surfaceTool?.connectorType === 'ladder'
+          ? makeLadderConnectorFromCell(surfaceData, finalDrag.end, surfaceTool)
+          : null
         const nextData = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
           ? applyDoorConnector(surfaceData, finalDrag.end, surfaceTool)
           : surfaceTool?.connectorType === 'skylight'
@@ -1071,8 +1099,54 @@ export default function SurfaceEditorScene({
           return
         }
         onSurfaceDataChange(nextData)
-        onSurfaceToolChange?.({ ...surfaceTool, mode: 'select', roomArcError: null })
+        onSurfaceToolChange?.({
+          ...surfaceTool,
+          mode: 'select',
+          selectedConnectorId: placedLadder?.id || null,
+          roomArcError: null,
+        })
+        if (placedLadder) {
+          onSurfaceConnectorSelect?.(
+            placedLadder.id,
+            e.clientX,
+            e.clientY,
+            placedLadder,
+          )
+        }
         onConnectorPlaced?.()
+        setHoverPreview(null)
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
+      if (mode === 'stair') {
+        const stair = makeStraightStairFromCell(
+          surfaceData,
+          finalDrag.end,
+          surfaceTool,
+          activeMaterial,
+          availableBlocks,
+        )
+        const nextData = stair
+          ? applyStraightStairPlacement(surfaceData, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
+          : surfaceData
+        if (nextData !== surfaceData && stair) {
+          onSurfaceDataChange(nextData)
+          onSurfaceToolChange?.({
+            ...surfaceTool,
+            mode: 'select',
+            selectedRoomId: null,
+            selectedRoomIds: [],
+            selectedConnectorId: stair.id,
+            roomWallEdit: false,
+            selectedRoomWallKeys: [],
+            selectedRoomWallCount: 0,
+            roomArcError: null,
+          })
+          onSurfaceConnectorSelect?.(stair.id, e.clientX, e.clientY, { ...stair, type: 'stairs' })
+          onConnectorPlaced?.()
+        }
         setHoverPreview(null)
         e.preventDefault()
         e.stopPropagation()
@@ -1103,8 +1177,6 @@ export default function SurfaceEditorScene({
 
       const nextData = mode === 'wall'
         ? applyWallDrag(surfaceData, finalDrag.start, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
-        : mode === 'stair'
-          ? applyStairSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'bridge'
           ? applyBridgeSelection(surfaceData, finalDrag, surfaceTool, activeMaterial, availableBlocks)
         : mode === 'ceiling'
@@ -1171,6 +1243,11 @@ export default function SurfaceEditorScene({
   const connectorPreview = drag?.mode === 'connector'
     ? drag
     : surfaceTool?.mode === 'connector' && hoverPreview?.mode === 'connector'
+      ? hoverPreview
+      : null
+  const stairPreview = drag?.mode === 'stair'
+    ? drag
+    : surfaceTool?.mode === 'stair' && hoverPreview?.mode === 'stair'
       ? hoverPreview
       : null
   const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
@@ -1253,8 +1330,6 @@ export default function SurfaceEditorScene({
       )}
       {drag?.mode === 'wall' ? (
         <WallPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
-      ) : drag?.mode === 'stair' ? (
-        <StairPreview drag={drag} surfaceTool={surfaceTool} activeMaterial={activeMaterial} availableBlocks={availableBlocks} />
       ) : drag?.mode === 'ceiling' ? (
         <CeilingPreview selection={drag} surfaceTool={surfaceTool} />
       ) : drag?.mode === 'effect' ? (
@@ -1270,6 +1345,15 @@ export default function SurfaceEditorScene({
       )}
       {connectorPreview && (
         <ConnectorPreview drag={connectorPreview} surfaceData={surfaceData} surfaceTool={surfaceTool} />
+      )}
+      {stairPreview && (
+        <StairPreview
+          drag={stairPreview}
+          surfaceData={surfaceData}
+          surfaceTool={surfaceTool}
+          activeMaterial={activeMaterial}
+          availableBlocks={availableBlocks}
+        />
       )}
     </>
   )

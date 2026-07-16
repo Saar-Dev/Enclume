@@ -27,8 +27,10 @@ import {
 } from '../lib/horizontalSurfaceOpacity.js'
 import { useModelStateAnimation } from '../lib/useModelStateAnimation.js'
 import {
+  differenceMultiPolygons,
   multiPolygonContours,
   intersectMultiPolygons,
+  roomBoundaryMultiPolygon,
   roomBoundaryContours,
   roomHorizontalInterfaces,
   roomInteriorFootprintAtY,
@@ -36,6 +38,10 @@ import {
   sampleWallArcGeometry,
   wallCornerIntersectionPoint,
 } from '../../../shared/world/roomGeometry.js'
+import {
+  stairOpeningMultiPolygon,
+  straightStairGeometry,
+} from '../../../shared/world/stairGeometry.js'
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
@@ -54,7 +60,6 @@ import {
   parseFloorKey,
   roomFootprintRectangles,
   roomsWallRenderPaths,
-  stairStepBoxes,
   wallOpeningVerticalRange,
   wallProfileVerticalProgresses,
   yToLevel,
@@ -582,8 +587,10 @@ function RoomSlab({
   opacity = 1,
   showDetails = true,
   footprintContours = null,
+  footprint = null,
   yOverride = null,
   skylights = [],
+  stairs = [],
 }) {
   const sourceRectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
@@ -603,19 +610,21 @@ function RoomSlab({
           && Number(connector.z) + Number(connector.depth || 1) > rectangle.minZ
       ))
   ))
-  const skylightAtCell = (x, z) => slabSkylights.some(connector => (
-    x >= Number(connector.x) && x < Number(connector.x) + Number(connector.width || 1)
-      && z >= Number(connector.z) && z < Number(connector.z) + Number(connector.depth || 1)
-  ))
-  const rectangles = slabSkylights.length === 0 ? sourceRectangles : sourceRectangles.flatMap(rectangle => {
-    const cells = []
-    for (let z = rectangle.minZ; z < rectangle.minZ + rectangle.depth; z += 1) {
-      for (let x = rectangle.minX; x < rectangle.minX + rectangle.width; x += 1) {
-        if (!skylightAtCell(x, z)) cells.push({ minX: x, minZ: z, width: 1, depth: 1 })
-      }
-    }
-    return cells
-  })
+  const slabStairs = stairs.filter(stair => Math.abs(Number(stair?.topY) - y) < 0.01)
+  const sourceFootprint = footprint || roomBoundaryMultiPolygon(room, roomLookup)
+  const skylightOpenings = slabSkylights.map(connector => [[[
+    [Number(connector.x), Number(connector.z)],
+    [Number(connector.x) + Number(connector.width || 1), Number(connector.z)],
+    [Number(connector.x) + Number(connector.width || 1), Number(connector.z) + Number(connector.depth || 1)],
+    [Number(connector.x), Number(connector.z) + Number(connector.depth || 1)],
+    [Number(connector.x), Number(connector.z)],
+  ]]])
+  const stairOpenings = slabStairs.map(stair => stairOpeningMultiPolygon(stair, { storyHeight: STORY_HEIGHT }))
+  const openings = [...skylightOpenings, ...stairOpenings]
+  const clippedFootprint = openings.length > 0
+    ? differenceMultiPolygons(sourceFootprint, ...openings)
+    : sourceFootprint
+  const rectangles = sourceRectangles
   const materialDescriptor = isCeiling ? room.ceilingMaterial : room.floorMaterial
   const topMaterialDescriptor = materialDescriptor
   const bottomMaterialDescriptor = materialDescriptor
@@ -631,15 +640,16 @@ function RoomSlab({
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   if (!top) return null
 
-  const hasCurvedBoundary = slabSkylights.length === 0 && (Array.isArray(footprintContours)
+  const hasCurvedBoundary = openings.length > 0 || (Array.isArray(footprintContours)
     || (Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0)
     || (Array.isArray(room.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0))
   if (hasCurvedBoundary) {
+    if (clippedFootprint.length === 0) return null
     return (
       <CurvedRoomSlab
         room={room}
         roomLookup={roomLookup}
-        contours={footprintContours}
+        contours={multiPolygonContours(clippedFootprint)}
         kind={kind}
         y={y}
         thickness={thickness}
@@ -1986,34 +1996,96 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
   return null
 }
 
-function StairSegment({ stair, textureMaterials, opacity = 1, showDetails = true }) {
+function StairRailBeam({ part, material, selected = false }) {
+  const transform = useMemo(() => {
+    const from = new THREE.Vector3(part.from.x, part.from.y, part.from.z)
+    const to = new THREE.Vector3(part.to.x, part.to.y, part.to.z)
+    const direction = to.clone().sub(from)
+    const length = Math.max(0.001, direction.length())
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      direction.normalize(),
+    )
+    return {
+      position: from.add(to).multiplyScalar(0.5).toArray(),
+      quaternion,
+      length,
+    }
+  }, [part])
+  return (
+    <mesh
+      position={transform.position}
+      quaternion={transform.quaternion}
+      material={material}
+      castShadow
+      receiveShadow
+    >
+      <boxGeometry args={[part.thickness, transform.length, part.thickness]} />
+      {selected && (
+        <mesh scale={1.16} renderOrder={44}>
+          <boxGeometry args={[part.thickness, transform.length, part.thickness]} />
+          <meshBasicMaterial color="#facc15" transparent opacity={0.32} depthWrite={false} />
+        </mesh>
+      )}
+    </mesh>
+  )
+}
+
+function StairSegment({
+  stair,
+  textureMaterials,
+  opacity = 1,
+  showDetails = true,
+  selected = false,
+  onPointerSelect = null,
+}) {
   const procedural = surfaceMaterialAt(stair.material, showDetails)
   const top = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
   const side = procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || top
   const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || top
   const relief = showDetails ? (procedural?.relief || reliefAt(textureMaterials, stair.tex)) : null
   const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
+  const geometry = straightStairGeometry(stair, { storyHeight: STORY_HEIGHT })
   if (!top) return null
 
   return (
-    <>
-      {stairStepBoxes(stair).map((step, index) => (
+    <group
+      onPointerDown={onPointerSelect ? event => {
+        event.stopPropagation()
+        onPointerSelect(stair.id, { ...stair, type: 'stairs' }, event)
+      } : undefined}
+    >
+      {geometry.steps.map(step => (
         <mesh
-          key={index}
-          position={step.position}
+          key={step.index}
+          position={[step.position.x, step.position.y, step.position.z]}
           material={materials}
           castShadow
           receiveShadow
           userData={{ worldSupport: true }}
         >
           <ReliefBoxGeometry
-            args={step.args}
+            args={step.size}
             faceProfiles={[null, null, relief, null, null, null]}
             faceMask={[false, false, true, false, false, false]}
           />
+          {selected && (
+            <mesh scale={[1.025, 1.012, 1.025]} renderOrder={43}>
+              <boxGeometry args={step.size} />
+              <meshBasicMaterial color="#facc15" transparent opacity={0.2} depthWrite={false} />
+            </mesh>
+          )}
         </mesh>
       ))}
-    </>
+      {geometry.railParts.map(part => (
+        <StairRailBeam
+          key={`${part.side}:${part.kind}:${part.index}`}
+          part={part}
+          material={side}
+          selected={selected}
+        />
+      ))}
+    </group>
   )
 }
 
@@ -2119,7 +2191,7 @@ function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null) {
   return occludedIds
 }
 
-function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, skylights }) {
+function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, skylights, stairs }) {
   const hasVerticalProfile = Array.isArray(room?.verticalProfile?.slices)
     && room.verticalProfile.slices.length > 0
   const floorSlice = hasVerticalProfile ? roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT) : null
@@ -2133,12 +2205,14 @@ function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, sky
       opacity={1}
       showDetails={showDetails}
       footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
+      footprint={floorSlice?.footprint || roomBoundaryMultiPolygon(room, roomLookup)}
       skylights={skylights}
+      stairs={stairs}
     />
   )
 }
 
-function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails, skylights }) {
+function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails, skylights, stairs }) {
   return (
     <RoomSlab
       room={room}
@@ -2148,8 +2222,10 @@ function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMa
       opacity={opacity}
       showDetails={showDetails}
       footprintContours={multiPolygonContours(horizontalInterface.footprint)}
+      footprint={horizontalInterface.footprint}
       yOverride={horizontalInterface.y}
       skylights={skylights}
+      stairs={stairs}
     />
   )
 }
@@ -2174,6 +2250,7 @@ function SurfaceDungeonScene({
     () => Object.values(surface.connectors).filter(connector => connector?.type === 'skylight'),
     [surface.connectors],
   )
+  const stairs = useMemo(() => Object.values(surface.stairs), [surface.stairs])
   const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef, roomContextAnchor)
   useEffect(() => {
     onCameraRoomIdChange?.(cameraVolumeRoomId)
@@ -2289,6 +2366,7 @@ function SurfaceDungeonScene({
               textureMaterials={textureMaterials}
               showDetails={showDetails}
               skylights={skylights}
+              stairs={stairs}
             />
           )
         }
@@ -2308,6 +2386,7 @@ function SurfaceDungeonScene({
             opacity={opacity}
             showDetails={showDetails}
             skylights={skylights}
+            stairs={stairs}
           />
         )
       })}
@@ -2363,20 +2442,31 @@ function SurfaceDungeonScene({
       {Object.entries(surface.stairs).map(([id, stair]) => {
         const fromLevel = yToLevel(stair?.y)
         const toLevel = yToLevel(stair?.topY)
+        const stairGeometry = straightStairGeometry(stair, { storyHeight: surface.storyHeight })
+        const centerX = (stairGeometry.footprint.minX + stairGeometry.footprint.maxX) / 2
+        const centerZ = (stairGeometry.footprint.minZ + stairGeometry.footprint.maxZ) / 2
         const visible = displayLevel === null
           || (displayLevel >= Math.min(fromLevel, toLevel) && displayLevel <= Math.max(fromLevel, toLevel))
           || worldInteriorPointIsVisible(
-            (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
-            (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
+            centerX,
+            centerZ,
             stair?.y,
           )
           || worldInteriorPointIsVisible(
-            (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
-            (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
+            centerX,
+            centerZ,
             stair?.topY,
           )
         return visible ? (
-        <StairSegment key={id} stair={stair} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
+          <StairSegment
+            key={id}
+            stair={{ id, ...stair }}
+            textureMaterials={textureMaterials}
+            opacity={1}
+            showDetails={showDetails}
+            selected={id === selectedConnectorId || stair?.id === selectedConnectorId}
+            onPointerSelect={onConnectorSelect}
+          />
         ) : null
       })}
       {Object.entries(surface.connectors).map(([id, connector]) => connectorIsVisible(connector) ? (

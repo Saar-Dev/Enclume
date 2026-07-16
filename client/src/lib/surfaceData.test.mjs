@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  SURFACE_DATA_VERSION,
   applyRoomBoundaryArc,
   applyBridgeSelection,
   applyRoomWallAppearance,
@@ -21,6 +22,7 @@ import {
   isWorldInteriorPointVisibleAtLevel,
   entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
+  makeStraightStairFromCell,
   makeSkylightConnectorFromCell,
   makeWallsFromDrag,
   roomFootprintRectangles,
@@ -35,6 +37,7 @@ import {
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
 import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
+import { straightStairGeometry } from '../../../shared/world/stairGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -112,6 +115,25 @@ test('la surface océanique reste un rectangle continu au-dessus des salles sèc
     y: 15.125,
   })
   assert.ok(result.dryCellKeys.size > 0)
+})
+
+test('un escalier droit calcule des marches réalistes sans dépendre de la longueur tracée', () => {
+  const stair = makeStraightStairFromCell(
+    emptySurface(),
+    { x: 2, z: 3 },
+    { level: 0, stairWidthM: 1.5, stairTreadDepthM: 0.3, stairMaxRiserHeightM: 0.18 },
+    null,
+    [],
+  )
+  const geometry = straightStairGeometry(stair)
+
+  assert.equal(stair.kind, 'straight')
+  assert.equal(stair.stepCount, 21)
+  assert.equal(geometry.run, 4.2)
+  assert.ok(geometry.riserHeight * 1.5 <= 0.18)
+  assert.equal(geometry.anchors.length, 22)
+  assert.deepEqual(geometry.start, { x: 2.5, y: 0.125, z: 3.5 })
+  assert.deepEqual(geometry.end, { x: 6.7, y: 2.625, z: 3.5 })
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
@@ -365,7 +387,7 @@ test('une apparence de mur reste attachée aux arêtes sélectionnées sans modi
   )
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 12)
+  assert.equal(result.surfaceData.version, SURFACE_DATA_VERSION)
   assert.deepEqual(result.surfaceData.rooms.styled.wallAppearanceProfiles[0].edgeKeys, west.edgeKeys)
   const walls = roomsWallSegments(result.surfaceData.rooms)
   const westWall = walls.find(wall => wall.x0 === 0 && wall.x1 === 0)
@@ -426,7 +448,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 12)
+  assert.equal(result.version, SURFACE_DATA_VERSION)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -451,7 +473,7 @@ test('la création d’une salle retourne son identité pour passer immédiateme
   assert.equal(result.roomId, 'room:3:4:4:5:0:1')
   const createdRoom = result.surfaceData.rooms[result.roomId]
   assert.ok(createdRoom)
-  assert.equal(result.surfaceData.version, 12)
+  assert.equal(result.surfaceData.version, SURFACE_DATA_VERSION)
   assert.ok(createdRoom.floorMaterial)
   assert.ok(createdRoom.ceilingMaterial)
   assert.ok(createdRoom.wallInteriorMaterial)
@@ -467,7 +489,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 12)
+  assert.equal(result.surfaceData.version, SURFACE_DATA_VERSION)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })

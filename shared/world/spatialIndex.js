@@ -309,10 +309,11 @@ export function createSpatialIndex(snapshot, options = {}) {
   const colliderIndex = createBoundsIndex(snapshot.spatial.colliders, options)
   const supportIndex = createBoundsIndex(snapshot.spatial.supports, options)
 
-  const segmentBlockers = (from, to, actorProfile = {}) => {
+  const segmentBlockers = (from, to, actorProfile = {}, { ignoreSourceIds = [] } = {}) => {
     const start = normalizeWorldPoint(from, 'from')
     const end = normalizeWorldPoint(to, 'to')
     const actor = normalizeActorProfile(actorProfile)
+    const ignoredSources = new Set(ignoreSourceIds)
     const sweptBounds = {
       min: {
         x: Math.min(start.x, end.x) - actor.radius,
@@ -326,6 +327,7 @@ export function createSpatialIndex(snapshot, options = {}) {
       },
     }
     return Object.freeze(colliderIndex.queryBounds(sweptBounds).filter(collider => {
+      if (ignoredSources.has(collider.sourceId)) return false
       // Le support touché par les pieds n'est pas un obstacle ; un mur qui monte au-dessus l'est.
       if (collider.bounds.max.y <= Math.min(start.y, end.y) + EPSILON) return false
       const expanded = {
@@ -358,7 +360,9 @@ export function createSpatialIndex(snapshot, options = {}) {
     queryColliders: colliderIndex.queryBounds,
     querySupports: supportIndex.queryBounds,
     segmentBlockers,
-    isSegmentClear: (from, to, actorProfile) => segmentBlockers(from, to, actorProfile).length === 0,
+    isSegmentClear: (from, to, actorProfile, queryOptions) => (
+      segmentBlockers(from, to, actorProfile, queryOptions).length === 0
+    ),
   })
 }
 
