@@ -11,7 +11,8 @@ test('une interface partagée est le plafond bas au niveau 0 puis le sol haut au
     floorDisplayLevel: 1,
     hasCeiling: true,
     ceilingDisplayLevel: 0,
-    belongsToCameraVolume: false,
+    floorBelongsToCameraVolume: false,
+    ceilingBelongsToCameraVolume: false,
   }
 
   assert.equal(horizontalInterfaceRenderKind({
@@ -25,7 +26,7 @@ test('une interface partagée est le plafond bas au niveau 0 puis le sol haut au
   assert.equal(horizontalInterfaceRenderKind({
     ...sharedInterface,
     displayLevel: 2,
-  }), 'floor')
+  }), null)
 })
 
 test('le sol d un étage supérieur sans plafond inférieur reste caché avant son étage', () => {
@@ -43,8 +44,18 @@ test('un plafond supérieur du volume multi-niveau actif reste affiché', () => 
     hasCeiling: true,
     ceilingDisplayLevel: 2,
     displayLevel: 0,
-    belongsToCameraVolume: true,
+    ceilingBelongsToCameraVolume: true,
   }), 'ceiling')
+})
+
+test('le sol bas du volume multi-niveau actif reste visible', () => {
+  assert.equal(horizontalInterfaceRenderKind({
+    hasFloor: true,
+    floorDisplayLevel: 0,
+    floorBelongsToCameraVolume: true,
+    hasCeiling: false,
+    displayLevel: 1,
+  }), 'floor')
 })
 
 test('depuis le niveau bas, une interface partagée reste le plafond découpé de la salle basse', () => {
@@ -54,15 +65,6 @@ test('depuis le niveau bas, une interface partagée reste le plafond découpé d
     belongsToCameraVolume: false,
     ceilingOpacity: 0.18,
   }), 0.18)
-})
-
-test('le plafond d un niveau inférieur reste entièrement opaque', () => {
-  assert.equal(horizontalInterfaceOpacity({
-    displayLevel: 1,
-    ceilingDisplayLevel: 0,
-    belongsToCameraVolume: false,
-    ceilingOpacity: 0.18,
-  }), 1)
 })
 
 test('le plafond courant d un volume multi-niveau actif conserve la coupe', () => {

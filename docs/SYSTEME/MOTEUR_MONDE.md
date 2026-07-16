@@ -495,9 +495,18 @@ leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel
 
 ### 7.1 Tranche d'étage affichée
 
-`displayLevel = N` rend la tranche N et toutes les tranches inférieures. Les niveaux inférieurs sont
-opaques : leur présence graphique ne les rend pas sélectionnables comme supports du niveau courant.
-Les niveaux supérieurs restent masqués en temps normal.
+`displayLevel = N` rend tout l'intérieur de la tranche N. Pour les tranches strictement inférieures,
+seule l'enveloppe murale extérieure reste rendue et opaque, avec les connecteurs et entités dont le
+mode de pose est mural (portes, fenêtres, écrans et décor mural). Leurs sols, plafonds, escaliers,
+effets, tokens et objets posés à l'intérieur ne sont pas rendus. Leur présence graphique ne les rend
+pas sélectionnables comme supports du niveau courant. Les niveaux supérieurs restent masqués en
+temps normal.
+
+Cette distinction est un contrat du moteur, pas une règle propre au renderer. La visibilité
+« enveloppe » accepte les points des niveaux inférieurs ; la visibilité « intérieur » n'accepte que
+le niveau courant. `entityUsesWallPlacement` choisit explicitement le premier régime pour une
+entité murale et le second pour une entité libre. Tous les consommateurs — jeu, éditeur, picking,
+tokens, effets et structures horizontales — utilisent ces mêmes prédicats.
 
 Une salle haute de plusieurs étages est l'exception locale. Le renderer conserve son véritable sol
 de base, toutes ses parois jusqu'au fond ainsi que les murs et le contenu spatial de ses tranches
@@ -673,12 +682,13 @@ de plafond. Si un plafond et un sol coïncident, une seule interface est rendue 
 niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
 conserve l'opacité de coupe du plafond courant, même si une salle possède un sol au-dessus. Depuis
 le niveau supérieur, le plafond inférieur n'est plus rendu et le sol supérieur, opaque, occupe
-l'interface. Les sols, plafonds et murs de tous les niveaux inférieurs au plan de coupe restent
-opaques.
+l'interface. Les sols et plafonds strictement inférieurs sont omis ; seule leur enveloppe murale et
+ce qui y est fixé restent opaques.
 
 `roomHorizontalInterfaces` est l'unique autorité de rendu des dalles de salle. Le renderer ne
 dessine plus les sols dans une boucle indépendante : chaque interface choisit exactement une face
-et un propriétaire (`ceilingRoomId` ou `floorRoomId`) selon l'étage affiché. Cette règle interdit
+et un propriétaire (`ceilingRoomId` ou `floorRoomId`) lorsque cette face appartient au niveau
+courant ou au volume multi-niveau actif ; sinon elle ne rend rien. Cette règle interdit
 qu'un plafond bas et un sol haut concurrents occupent le même plan ou que le matériau de la salle
 basse soit conservé après le passage à l'étage supérieur.
 

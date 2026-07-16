@@ -11,7 +11,9 @@
 - [ux] Les verrières sont disponibles et réellement posables sous **Objets 3D > Dalles en verre**
   en quatre formats.
 - [fix] Le plan commun entre deux salles superposées est le plafond découpé depuis l'étage bas, puis
-  le sol opaque depuis l'étage haut. Les murs, sols et plafonds des étages inférieurs restent opaques.
+  le sol opaque depuis l'étage haut.
+- [fix] Aux étages inférieurs, seuls l'enveloppe murale opaque et les objets fixés dessus restent
+  visibles. Les sols, plafonds, objets libres, tokens et effets intérieurs sont masqués.
 - [fix] Les sols et plafonds empilés passent désormais par une seule interface de rendu. En montant
   d'un étage, le moteur remplace réellement le plafond bas par le sol de la salle haute au lieu de
   conserver deux chemins concurrents.

@@ -1,5 +1,24 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Enveloppe des étages inférieurs sans leur intérieur (2026-07-16)
+
+Le moteur distingue désormais deux régimes de visibilité. Au niveau affiché, la salle est complète.
+Aux niveaux strictement inférieurs, seuls les murs opaques et les connecteurs ou objets fixés dessus
+restent visibles. Les sols, plafonds, escaliers, objets libres, tokens et effets inférieurs sont
+omis. Une salle multi-niveau actuellement visée reste l'exception : son intérieur est conservé sur
+toute sa hauteur afin de montrer son volume réel.
+
+Cette règle est partagée par le jeu, l'éditeur, le picking et les interfaces horizontales. Une
+entité est classée comme murale depuis son mode de pose canonique, jamais depuis son nom ou son
+modèle. Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, le plan bas à `y = 0` choisit
+`floor` au niveau 0 puis ne rend plus rien au niveau 1 ; l'interface commune à `y = 2,5 m` choisit
+`ceiling` au niveau 0 puis le `floor` de la salle haute au niveau 1.
+
+Validation : 51 tests ciblés de visibilité/coupe, 131 tests monde/serveur, 3 tests de configuration,
+ESLint ciblé sans nouvelle erreur et build Vite. Aucune carte n'est modifiée ou migrée.
+
+---
+
 ## Une seule autorité pour les sols et plafonds empilés (2026-07-16)
 
 Les sols de salle ne sont plus rendus indépendamment des interfaces horizontales. Le renderer
@@ -8,7 +27,7 @@ chaque altitude, une unique représentation :
 
 - avant l'étage de la salle haute : plafond de la salle basse, avec sa règle de coupe ;
 - à partir de l'étage de la salle haute : sol opaque de cette salle haute ;
-- pour les étages strictement inférieurs : la face choisie reste entièrement opaque ;
+- pour les étages strictement inférieurs : aucune face horizontale intérieure n'est rendue ;
 - dans un volume multi-niveau actif : un plafond supérieur peut rester visible selon la coupe du
   volume, sans rendre visible un sol appartenant à un étage encore caché.
 
@@ -25,8 +44,9 @@ niveau 1 sans erreur de rendu dans la console.
 Le rendu des interfaces horizontales suit désormais l'étage affiché, et non la simple présence
 d'une salle au-dessus. Une interface partagée est le plafond découpé de la salle basse lorsque son
 étage est courant, puis le sol opaque de la salle haute lorsque l'étage supérieur est affiché. Les
-murs, sols et plafonds de tous les étages inférieurs restent opaques. Une façade ne participe à la
-coupe que si elle appartient au niveau courant ou au volume multi-niveau actif.
+murs des étages inférieurs restent opaques, tandis que leurs sols, plafonds et contenus intérieurs
+sont omis. Une façade ne participe à la coupe que si elle appartient au niveau courant ou au volume
+multi-niveau actif.
 
 Les portes et fenêtres GLB utilisent maintenant le même halo attaché aux meshes que les objets
 libres. Le surlignage hérite directement de la rotation, des pivots et des animations du modèle ;
@@ -58,7 +78,8 @@ temps local de l'animation.
 - les quatre `skylight` sont rangées sous **Objets 3D > Dalles en verre** et se posent par le rayon
   structurel existant. L'ancien bouton de salle en doublon a été retiré ;
 - une interface commune est découpée comme plafond depuis l'étage inférieur, puis rendue comme sol
-  opaque dès que l'étage supérieur est affiché. Les niveaux strictement inférieurs restent opaques ;
+  opaque dès que l'étage supérieur est affiché. La nouvelle règle d'enveloppe détaillée ci-dessus
+  remplace l'ancienne conservation de tout l'intérieur des niveaux inférieurs ;
 - la configuration de campagne remplace **Zone dangereuse** par l'onglet rouge **Supprimer**. Le
   panneau de droite porte l'avertissement complet et l'unique action **Confirmer la suppression**,
   sans dialogue natif superposé.

@@ -27,7 +27,7 @@ import {
   getToolRoomHeightLevels,
   getToolWallThicknessFine,
   getWallRenderBox,
-  isWorldPointVisibleAtLevel,
+  isWorldInteriorPointVisibleAtLevel,
   levelToY,
   makeStairFromSelection,
   makeDoorConnectorFromWallPoint,
@@ -404,7 +404,7 @@ function EffectVolumePreview({ selection, surfaceTool }) {
   )
 }
 
-function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
+function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0, cameraVolumeRoomId = null }) {
   return regions.map(region => {
     const bounds = region?.bounds
     const sliceBottom = levelToY(displayLevel)
@@ -413,10 +413,15 @@ function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
     const centerX = (bounds.min.x + bounds.max.x) / 2
     const centerZ = (bounds.min.z + bounds.max.z) / 2
     const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
-    const visibleInOpenRoom = bounds.max.y <= sliceBottom
-      && yToLevel(bounds.min.y) < displayLevel
-      && isWorldPointVisibleAtLevel(surfaceData, displayLevel, centerX, centerZ, bounds.min.y)
-    if (!intersectsSlice && !visibleInOpenRoom) return null
+    const visibleInActiveVolume = !intersectsSlice && isWorldInteriorPointVisibleAtLevel(
+      surfaceData,
+      displayLevel,
+      centerX,
+      centerZ,
+      (bounds.min.y + bounds.max.y) / 2,
+      cameraVolumeRoomId,
+    )
+    if (!intersectsSlice && !visibleInActiveVolume) return null
     const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
     const center = [
       centerX,
@@ -540,6 +545,7 @@ export default function SurfaceEditorScene({
   const skipNextCanvasMouseDownRef = useRef(false)
   const [drag, setDrag] = useState(null)
   const [hoverPreview, setHoverPreview] = useState(null)
+  const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -1205,12 +1211,18 @@ export default function SurfaceEditorScene({
         ceilingOpacity={0.35}
         displayLevel={displayLevel}
         cameraControlsRef={orbitRef}
+        onCameraRoomIdChange={setCameraVolumeRoomId}
         showDetails
         selectedConnectorId={selectedConnectorId || surfaceTool?.selectedConnectorId}
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}
         runtimeFeatureStates={runtimeFeatureStates}
       />
-      <RuntimeEffectRegions regions={runtimeEffectRegions} surfaceData={surfaceData} displayLevel={displayLevel} />
+      <RuntimeEffectRegions
+        regions={runtimeEffectRegions}
+        surfaceData={surfaceData}
+        displayLevel={displayLevel}
+        cameraVolumeRoomId={cameraVolumeRoomId}
+      />
       {selectedRooms.map(room => (
         <SelectedRoomOverlay
           key={room.id}

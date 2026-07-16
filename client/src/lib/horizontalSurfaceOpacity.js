@@ -1,22 +1,24 @@
 export function horizontalInterfaceRenderKind({
   hasFloor = false,
   floorDisplayLevel = null,
+  floorBelongsToCameraVolume = false,
   hasCeiling = false,
   ceilingDisplayLevel = null,
+  ceilingBelongsToCameraVolume = false,
   displayLevel = null,
-  belongsToCameraVolume = false,
 }) {
   const showsEveryLevel = displayLevel === null || displayLevel === undefined
   const floorIsVisible = hasFloor && (
     showsEveryLevel
-      || (Number.isFinite(Number(floorDisplayLevel)) && Number(floorDisplayLevel) <= Number(displayLevel))
+      || floorBelongsToCameraVolume
+      || (Number.isFinite(Number(floorDisplayLevel)) && Number(floorDisplayLevel) === Number(displayLevel))
   )
   if (floorIsVisible) return 'floor'
 
   const ceilingIsVisible = hasCeiling && (
     showsEveryLevel
-      || belongsToCameraVolume
-      || (Number.isFinite(Number(ceilingDisplayLevel)) && Number(ceilingDisplayLevel) <= Number(displayLevel))
+      || ceilingBelongsToCameraVolume
+      || (Number.isFinite(Number(ceilingDisplayLevel)) && Number(ceilingDisplayLevel) === Number(displayLevel))
   )
   return ceilingIsVisible ? 'ceiling' : null
 }

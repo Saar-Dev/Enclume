@@ -1050,14 +1050,32 @@ export function getRoomSlice(room, displayLevel, roomLookup = {}) {
 export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRoomId = null) {
   if (displayLevel === null || displayLevel === undefined) return true
   if (yToLevel(y) <= displayLevel) return true
-  const room = cameraRoomId ? data?.rooms?.[cameraRoomId] : null
+  return pointBelongsToRoomVolume(data, cameraRoomId, x, z, y)
+}
+
+export function isWorldInteriorPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRoomId = null) {
+  if (displayLevel === null || displayLevel === undefined) return true
+  if (yToLevel(y) === Number(displayLevel)) return true
+  return pointBelongsToRoomVolume(data, cameraRoomId, x, z, y)
+}
+
+function pointBelongsToRoomVolume(data, roomId, x, z, y) {
+  const room = roomId ? data?.rooms?.[roomId] : null
   if (!room) return false
   return roomVolumeContainsPoint(
-    { id: cameraRoomId, ...room },
+    { id: roomId, ...room },
     { x, y, z },
     data.rooms,
     STORY_HEIGHT,
   )
+}
+
+export function entityUsesWallPlacement(entity, blueprint) {
+  const instanceMode = entity?.state && typeof entity.state === 'object'
+    ? entity.state?.placement?.mode
+    : null
+  const blueprintMode = blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode
+  return instanceMode === 'wall' || blueprintMode === 'wall'
 }
 
 export function getRoomHeight(room) {

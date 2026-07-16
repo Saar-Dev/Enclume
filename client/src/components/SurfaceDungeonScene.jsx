@@ -45,7 +45,9 @@ import {
   getRoomFloorThickness,
   getRoomTopY,
   getWallRenderBox,
+  isWorldInteriorPointVisibleAtLevel,
   isWorldPointVisibleAtLevel,
+  levelToY,
   normalizeSurfaceData,
   parseCeilingKey,
   parseFloorKey,
@@ -2267,6 +2269,9 @@ function SurfaceDungeonScene({
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)
   )
+  const worldInteriorPointIsVisible = (x, z, y) => (
+    isWorldInteriorPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)
+  )
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
     || (cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId))
   const connectorIsVisible = connector => {
@@ -2290,7 +2295,7 @@ function SurfaceDungeonScene({
     if (Number.isFinite(Number(connector?.y))) levels.push(yToLevel(connector.y))
     if (Number.isFinite(Number(connector?.topY))) levels.push(yToLevel(connector.topY))
     if (levels.length === 0) return false
-    if (displayLevel >= Math.min(...levels)) return true
+    if (displayLevel >= Math.min(...levels) && displayLevel <= Math.max(...levels)) return true
     const centerX = (Number(connector?.x) || 0) + (Number(connector?.width) || 1) / 2
     const centerZ = (Number(connector?.z) || 0) + (Number(connector?.depth) || 1) / 2
     const heights = [
@@ -2300,11 +2305,25 @@ function SurfaceDungeonScene({
       connector?.toY,
       ...(connector?.stops || []).map(stop => stop?.y),
     ].filter(value => Number.isFinite(Number(value)))
-    return heights.some(y => worldPointIsVisible(centerX, centerZ, Number(y)))
+    return heights.some(y => worldInteriorPointIsVisible(centerX, centerZ, Number(y)))
   }
   const visibleWaterCells = useMemo(
-    () => water?.waterCells || [],
-    [water?.waterCells],
+    () => (water?.waterCells || []).filter((cell) => {
+      if (displayLevel === null || displayLevel === undefined) return true
+      const sliceBottom = levelToY(displayLevel)
+      const sliceTop = levelToY(displayLevel + 1)
+      if (Number(cell.topY) > sliceBottom && Number(cell.baseY) < sliceTop) return true
+      const centerY = (Number(cell.baseY) + Number(cell.topY)) / 2
+      return isWorldInteriorPointVisibleAtLevel(
+        surface,
+        displayLevel,
+        Number(cell.x) + 0.5,
+        Number(cell.z) + 0.5,
+        centerY,
+        cameraVolumeRoomId,
+      )
+    }),
+    [cameraVolumeRoomId, displayLevel, surface, water?.waterCells],
   )
   const renderedFloorRoomIds = new Set()
 
@@ -2317,14 +2336,16 @@ function SurfaceDungeonScene({
         const ceilingRoom = horizontalInterface.ceilingRoomId
           ? surface.rooms[horizontalInterface.ceilingRoomId]
           : null
-        const belongsToCameraVolume = horizontalInterface.ceilingRoomId === cameraVolumeRoomId
+        const floorBelongsToCameraVolume = horizontalInterface.floorRoomId === cameraVolumeRoomId
+        const ceilingBelongsToCameraVolume = horizontalInterface.ceilingRoomId === cameraVolumeRoomId
         const renderKind = horizontalInterfaceRenderKind({
           hasFloor: Boolean(floorRoom),
           floorDisplayLevel: floorRoom ? yToLevel(getRoomBaseY(floorRoom)) : null,
+          floorBelongsToCameraVolume,
           hasCeiling: Boolean(ceilingRoom),
           ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
+          ceilingBelongsToCameraVolume,
           displayLevel,
-          belongsToCameraVolume,
         })
         const room = renderKind === 'floor' ? floorRoom : ceilingRoom
         if (!renderKind || !room) return null
@@ -2346,7 +2367,7 @@ function SurfaceDungeonScene({
         const opacity = horizontalInterfaceOpacity({
           displayLevel,
           ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
-          belongsToCameraVolume,
+          belongsToCameraVolume: ceilingBelongsToCameraVolume,
           ceilingOpacity,
         })
         return (
@@ -2376,8 +2397,7 @@ function SurfaceDungeonScene({
         if (skylights.some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
           && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
           && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
-        const belongsToCameraVolume = cameraVolumeRoomId && floor?.clipRoomId === cameraVolumeRoomId
-        if (!belongsToCameraVolume && !worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
+        if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
         return <FloorTile key={id} id={id} floor={floor} surface={surface} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
       {surfaceWallSegments.map(wall => {
@@ -2399,9 +2419,8 @@ function SurfaceDungeonScene({
         if (skylights.some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
           && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
           && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
-        if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
-        const ceilingLevel = yToLevel(parsed.y) - 1
-        const opacity = displayLevel === null || ceilingLevel === displayLevel ? ceilingOpacity : 1
+        if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
+        const opacity = ceilingOpacity
         return (
           <CeilingTile
             key={id}
@@ -2418,12 +2437,12 @@ function SurfaceDungeonScene({
         const toLevel = yToLevel(stair?.topY)
         const visible = displayLevel === null
           || (displayLevel >= Math.min(fromLevel, toLevel) && displayLevel <= Math.max(fromLevel, toLevel))
-          || worldPointIsVisible(
+          || worldInteriorPointIsVisible(
             (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
             (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
             stair?.y,
           )
-          || worldPointIsVisible(
+          || worldInteriorPointIsVisible(
             (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
             (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
             stair?.topY,

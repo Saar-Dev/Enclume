@@ -22,10 +22,12 @@ import {
   applyRoomToolUpdate,
   deleteRoomBoundaryWalls,
   deleteSurfaceRoom,
+  entityUsesWallPlacement,
   expandRoomsToSurface,
   getFloorTopY,
   getWallRenderBox,
   hasSurfaceContent,
+  isWorldInteriorPointVisibleAtLevel,
   isWorldPointVisibleAtLevel,
   levelToY,
   normalizeSurfaceData,
@@ -525,7 +527,11 @@ function EntityEditorScene({
     for (const hit of hits) {
       const entityId = hit.object.userData.entityId
       const entity = entities.find(item => item.id === entityId)
-      if (entity && isWorldPointVisibleAtLevel(
+      const blueprint = entity ? blueprints[entity.blueprint_id] : null
+      const visibilityTest = entityUsesWallPlacement(entity, blueprint)
+        ? isWorldPointVisibleAtLevel
+        : isWorldInteriorPointVisibleAtLevel
+      if (entity && visibilityTest(
         surfaceData,
         displayLevel,
         (Number(entity.pos_x) || 0) + 0.5,
@@ -535,7 +541,7 @@ function EntityEditorScene({
       )) return entityId
     }
     return null
-  }, [camera, cameraVolumeRoomId, displayLevel, entities, gl, scene, surfaceData])
+  }, [blueprints, camera, cameraVolumeRoomId, displayLevel, entities, gl, scene, surfaceData])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -748,7 +754,10 @@ function EntityEditorScene({
       {entities.map(entity => {
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
-        if (!isWorldPointVisibleAtLevel(
+        const visibilityTest = entityUsesWallPlacement(entity, blueprint)
+          ? isWorldPointVisibleAtLevel
+          : isWorldInteriorPointVisibleAtLevel
+        if (!visibilityTest(
           surfaceData,
           displayLevel,
           (Number(entity.pos_x) || 0) + 0.5,

@@ -18,6 +18,8 @@ import {
   getRoomBoundaryWallRuns,
   getWallRenderBox,
   isWorldPointVisibleAtLevel,
+  isWorldInteriorPointVisibleAtLevel,
+  entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
   makeSkylightConnectorFromCell,
   makeWallsFromDrag,
@@ -353,7 +355,7 @@ test('une apparence de mur reste attachée aux arêtes sélectionnées sans modi
   assert.equal([northWall.frontMaterial, northWall.backMaterial].some(material => material?.paint === '#ff0000'), false)
 })
 
-test('un niveau affiche tout le monde inferieur sans transparence contextuelle', () => {
+test('l enveloppe extérieure conserve les niveaux inférieurs sans transparence contextuelle', () => {
   const surface = emptySurface({
     rooms: {
       well: room('well', 0, 3),
@@ -366,6 +368,27 @@ test('un niveau affiche tout le monde inferieur sans transparence contextuelle',
   assert.equal(isWorldPointVisibleAtLevel(surface, 2, 4.5, 4.5, 5), true)
   assert.equal(isWorldPointVisibleAtLevel(surface, 0, 0.5, 0.5, 5, 'well'), true)
   assert.equal(isWorldPointVisibleAtLevel(surface, 0, 4.5, 4.5, 5, 'well'), false)
+})
+
+test('le contenu intérieur reste limité au niveau courant ou au volume multi-niveau actif', () => {
+  const surface = emptySurface({
+    rooms: {
+      well: room('well', 0, 3),
+    },
+  })
+
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), false)
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 5), true)
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 0.5, 0.5, 0, 'well'), true)
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 0, 0.5, 0.5, 5, 'well'), true)
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 0, 4.5, 4.5, 5, 'well'), false)
+})
+
+test('un objet mural est reconnu par son instance ou son blueprint', () => {
+  assert.equal(entityUsesWallPlacement({ state: { placement: { mode: 'wall' } } }, null), true)
+  assert.equal(entityUsesWallPlacement({}, { geometry: { placementMode: 'wall' } }), true)
+  assert.equal(entityUsesWallPlacement({}, { geometry: { placement_mode: 'wall' } }), true)
+  assert.equal(entityUsesWallPlacement({ state: { placement: { mode: 'free' } } }, { geometry: {} }), false)
 })
 
 test('une nouvelle salle transfere ses cases et redessine le contour de la salle englobante', () => {

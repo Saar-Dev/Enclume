@@ -16,7 +16,9 @@ import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import {
+  entityUsesWallPlacement,
   hasSurfaceContent,
+  isWorldInteriorPointVisibleAtLevel,
   isWorldPointVisibleAtLevel,
   levelToY,
   normalizeSurfaceData,
@@ -1081,7 +1083,7 @@ function Scene({
         const centerZ = (bounds.min.z + bounds.max.z) / 2
         const centerY = (bounds.min.y + bounds.max.y) / 2
         const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
-        const visibleInWorldContext = isWorldPointVisibleAtLevel(
+        const visibleInWorldContext = isWorldInteriorPointVisibleAtLevel(
           surfaceData,
           displayLevel,
           centerX,
@@ -1110,7 +1112,10 @@ function Scene({
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
         if (entity.gm_only && !isGm) return null
-        if (!isWorldPointVisibleAtLevel(
+        const visibilityTest = entityUsesWallPlacement(entity, blueprint)
+          ? isWorldPointVisibleAtLevel
+          : isWorldInteriorPointVisibleAtLevel
+        if (!visibilityTest(
           surfaceData,
           displayLevel,
           (Number(entity.pos_x) || 0) + 0.5,
@@ -1151,7 +1156,7 @@ function Scene({
 
       {tokens.filter(token => (
         (isGm || token.layer !== 'gm')
-        && isWorldPointVisibleAtLevel(
+        && isWorldInteriorPointVisibleAtLevel(
           surfaceData,
           displayLevel,
           (Number(token.pos_x) || 0) + 0.5,

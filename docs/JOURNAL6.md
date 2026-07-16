@@ -3797,3 +3797,44 @@ salle de test n'a été créée.
 
 **Retour arrière** : revert du commit de Session 145, puis redémarrage de
 `enclume-codex-client.service` et vérification du client 8293.
+
+---
+
+## Session 146 (Codex) — 2026-07-16 — Enveloppe basse sans intérieur ✅ CLOS
+
+La règle précédente « tous les niveaux inférieurs restent opaques » était trop grossière : elle
+conservait aussi leurs sols, plafonds et objets intérieurs. Le contrat a été séparé à la racine en
+deux prédicats. La visibilité d'enveloppe conserve les structures des niveaux inférieurs ; la
+visibilité d'intérieur n'accepte que le niveau affiché, sauf à l'intérieur du volume multi-niveau
+actif.
+
+Les murs continuent donc d'utiliser la visibilité d'enveloppe. Les portes, fenêtres, écrans et
+entités dont le mode de pose canonique est `wall` la suivent également. Les interfaces horizontales,
+escaliers, eaux et effets, entités libres et tokens utilisent la visibilité d'intérieur. Le même
+choix est appliqué dans le renderer de jeu, l'éditeur et le picking : un contenu caché ne peut pas
+rester sélectionnable.
+
+`horizontalInterfaceRenderKind` ne choisit plus une face parce qu'elle se trouve simplement sous
+le niveau courant. Il rend uniquement la face du niveau courant ou d'un volume multi-niveau actif.
+Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, le sol bas à `y = 0` choisit `floor` au
+niveau 0 puis `null` au niveau 1 ; l'interface à `y = 2,5 m` choisit `ceiling` au niveau 0 puis le
+`floor` de la salle haute au niveau 1 ; la toiture à `y = 5 m` reste cachée au niveau 0 puis devient
+le plafond découpé au niveau 1.
+
+**Testé** : 51/51 tests ciblés (`surfaceData`, interfaces horizontales et coupe caméra), 131/131
+tests monde/serveur, 3/3 tests de configuration et build Vite. ESLint ciblé ne signale aucune
+nouvelle erreur ; `Editor3D` conserve 9 avertissements de dépendances de hooks déjà présents et
+`Canvas3D` 3 avertissements déjà présents lorsque la règle `react-hooks/refs`, également antérieure,
+est neutralisée.
+
+**Non testé** : contrôle visuel automatisé après modification, le pilote du navigateur intégré
+n'étant plus disponible au moment de la validation finale. Le scénario exact et ses données ont
+été contrôlés en lecture seule avant la modification, puis son plan de rendu a été recalculé avec
+le nouveau moteur.
+
+**Données** : aucune carte n'est modifiée ou migrée. La distinction enveloppe/intérieur est une
+règle de rendu et de picking dérivée des données v12 existantes.
+
+**Retour arrière** : revert du commit de Session 146, redémarrage de
+`enclume-codex-client.service` et `enclume-codex-server.service`, puis vérification du healthcheck
+sur 8293/8294.
