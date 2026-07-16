@@ -1,5 +1,25 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Surface océanique continue au-dessus du monde (2026-07-16)
+
+Le rendu distingue désormais deux géométries qui avaient été confondues. Les colonnes d'eau
+physiques servent à déterminer les volumes extérieurs et les compartiments secs : elles peuvent
+donc exclure une salle étanche. La surface visible de l'océan est, elle, un plan rectangulaire
+continu calculé sur l'emprise globale de la carte. Une pièce sèche ne peut plus percer un trou dans
+la texture de l'eau située au-dessus de la station.
+
+L'altitude de cette surface part du sommet structurel réel de la carte, demi-épaisseur des sols et
+plafonds comprise, puis ajoute cinq hauteurs d'étage canoniques. Avec la hauteur standard de
+2,5 mètres, la garde minimale est donc de 12,5 mètres au-dessus du point le plus haut. Ce calcul est
+dérivé à l'affichage et ne modifie aucun document Surface ni aucune carte.
+
+Validation : 59 tests ciblés, 131 tests monde/serveur, 3 tests de configuration, ESLint et build
+Vite. Sur la session réelle `b27cbed4-fd59-4530-b43b-dae57c33f092`, une capture Chromium au niveau
+0 confirme que la nappe ne traverse plus la station ; une seconde au niveau 7 montre une unique
+surface animée continue au-dessus de toutes les salles, sans découpe sur leur empreinte.
+
+---
+
 ## Toitures exposées sur le plan affiché (2026-07-16)
 
 Une interface horizontale qui possède un plafond mais aucun sol au-dessus est classée comme toiture

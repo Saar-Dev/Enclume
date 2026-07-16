@@ -3926,3 +3926,34 @@ ne reste en base.
 
 **Retour arrière** : revert du commit de Session 149, redémarrage des services 8293/8294, puis
 contrôle du niveau 1 avec une salle basse exposée et une salle haute côte à côte.
+
+---
+
+## Session 150 (Codex) — 2026-07-16 — Surface océanique continue et garde sous-marine ✅ CLOS
+
+Les trous visibles dans la texture d'eau provenaient d'une confusion d'autorité. Le calcul
+topologique exclut volontairement les colonnes situées dans les salles étanches ; le renderer
+réutilisait ensuite ces mêmes colonnes pour fabriquer la nappe extérieure. Chaque compartiment sec
+devenait donc, à tort, un trou dans la surface de l'océan.
+
+`computeSurfaceWaterCells` expose désormais séparément les colonnes physiques et une
+`exteriorSurface` continue. Le renderer dessine cette dernière avec un seul plan animé couvrant
+l'emprise globale de la carte. L'étanchéité des salles reste inchangée pour la future propagation
+physique, sans influencer la continuité visuelle de l'océan.
+
+L'altitude de la nappe est dérivée du sommet structurel global, épaisseur réelle des dalles
+comprise, auquel sont ajoutées cinq hauteurs d'étage canoniques. Avec les 2,5 mètres actuels, la
+station conserve au minimum 12,5 mètres d'eau au-dessus de son point le plus élevé.
+
+**Testé** : 59/59 tests ciblés (`surfaceData`, interfaces horizontales, coupe caméra et géométrie),
+131/131 tests monde/serveur, 3/3 tests de configuration, ESLint ciblé sans erreur et build Vite.
+Dans Chromium Playwright authentifié sur la session réelle
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, le niveau 0 montre la station sans nappe parasite ; au
+niveau 7, une unique surface animée continue couvre toutes les salles sans trou. Aucune exception
+JavaScript n'est remontée.
+
+**Données** : aucune carte, salle, entité ou connexion n'est créée ou modifiée. La surface est une
+vue dérivée du document v12 existant.
+
+**Retour arrière** : revert du commit de Session 150, redémarrage des services 8293/8294, puis
+contrôle visuel aux niveaux 0 et 7 sur la même session.

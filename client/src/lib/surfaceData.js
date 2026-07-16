@@ -31,6 +31,7 @@ import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
+export const EXTERIOR_WATER_CLEARANCE_LEVELS = 5
 export { SURFACE_DATA_VERSION }
 export const getRoomBoundaryEdges = roomBoundaryEdges
 export const getRoomBoundaryWallRuns = roomBoundaryWallRuns
@@ -3429,9 +3430,9 @@ export function computeSurfaceWaterCells(data, margin = 2) {
     }
   }
 
-  // La nappe extérieure représente le sommet physique de toute la carte.
-  // Les coordonnées de plafond sont au centre de la dalle : il faut donc
-  // inclure sa demi-épaisseur pour ne pas dessiner l'eau à l'intérieur du toit.
+  // Le sommet structurel sert de référence à la surface océanique extérieure.
+  // Les coordonnées de plafond sont au centre de la dalle : il faut inclure
+  // sa demi-épaisseur avant d'ajouter la garde sous-marine en hauteurs d'étage.
   const mapTopY = Math.max(
     ...Object.entries(surface.floors).map(([id, floor]) => (
       parseFloorKey(id, floor).y + getFloorThickness(floor) / 2
@@ -3448,6 +3449,22 @@ export function computeSurfaceWaterCells(data, margin = 2) {
     0,
   )
 
+  const surfaceSourceCells = [...levels.values()].flatMap(level => [...level.cells.values()])
+  const waterClearance = EXTERIOR_WATER_CLEARANCE_LEVELS * (Number(surface.storyHeight) || STORY_HEIGHT)
+  const exteriorSurface = surfaceSourceCells.length > 0 ? (() => {
+    const minX = Math.min(...surfaceSourceCells.map(cell => cell.x)) - margin
+    const maxX = Math.max(...surfaceSourceCells.map(cell => cell.x)) + margin
+    const minZ = Math.min(...surfaceSourceCells.map(cell => cell.z)) - margin
+    const maxZ = Math.max(...surfaceSourceCells.map(cell => cell.z)) + margin
+    return {
+      x: minX,
+      z: minZ,
+      width: maxX - minX + 1,
+      depth: maxZ - minZ + 1,
+      y: mapTopY + waterClearance,
+    }
+  })() : null
+  const exteriorSurfaceY = exteriorSurface?.y ?? mapTopY
   const dryCellKeys = new Set()
   const waterCellsByPosition = new Map()
 
@@ -3515,11 +3532,15 @@ export function computeSurfaceWaterCells(data, margin = 2) {
           x,
           z,
           baseY: Math.min(existing?.baseY ?? level.baseY, level.baseY),
-          topY: mapTopY,
+          topY: exteriorSurfaceY,
         })
       }
     }
   }
 
-  return { dryCellKeys, waterCells: [...waterCellsByPosition.values()] }
+  return {
+    dryCellKeys,
+    waterCells: [...waterCellsByPosition.values()],
+    exteriorSurface,
+  }
 }

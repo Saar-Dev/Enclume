@@ -800,12 +800,19 @@ existante sans la réimplémenter.
 ## 10. Eau, gaz et compartiments `[EXISTANT — PROPAGATION PHASE 5]`
 
 Le calcul d'eau actuel de l'éditeur constitue une preuve de concept topologique, pas une simulation
-runtime autoritaire.
+runtime autoritaire. Il sépare néanmoins deux responsabilités qui ne doivent jamais partager la
+même géométrie :
 
-Sa nappe extérieure utilise néanmoins une hauteur géométrique stricte : maximum des faces
-supérieures de sols, plafonds, murs et connecteurs praticables de la carte. Un plafond stocke son
-plan médian ; sa demi-épaisseur est donc ajoutée avant de placer la nappe légèrement au-dessus. Une
-salle haute ne peut plus afficher l'eau au milieu de sa dalle de toit.
+- les colonnes d'eau physiques représentent les volumes extérieurs et excluent les compartiments
+  étanches ;
+- la surface océanique visible est un plan continu sur l'emprise globale de la carte et ne possède
+  donc aucun trou au-dessus d'une salle sèche.
+
+La nappe extérieure utilise une hauteur géométrique stricte : maximum des faces supérieures de
+sols, plafonds, murs et escaliers de la carte. Un plafond stocke son plan médian ; sa
+demi-épaisseur est ajoutée, puis une garde de cinq hauteurs d'étage canoniques place l'océan loin
+au-dessus de la station. Une salle haute ne peut donc ni afficher l'eau dans sa toiture, ni découper
+la surface de l'océan.
 
 Le compilateur doit produire des compartiments reliés par des passages ayant des canaux de
 perméabilité séparés. Eau, gaz et éventuellement pression peuvent ensuite se propager sur ce graphe

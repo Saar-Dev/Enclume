@@ -71,7 +71,7 @@ function room(id, level, heightLevels = 1) {
   }
 }
 
-test('la surface extérieure de l eau utilise le sommet global de la carte', () => {
+test('la surface extérieure de l eau reste cinq étages au-dessus du sommet global', () => {
   const result = computeSurfaceWaterCells(emptySurface({
     rooms: {
       low: room('low', 0),
@@ -80,7 +80,8 @@ test('la surface extérieure de l eau utilise le sommet global de la carte', () 
   }))
 
   assert.ok(result.waterCells.length > 0)
-  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.625])
+  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [20.125])
+  assert.equal(result.exteriorSurface.y, 20.125)
 })
 
 test('la surface extérieure de l eau reste au-dessus du toit d une salle multi-niveau', () => {
@@ -92,7 +93,25 @@ test('la surface extérieure de l eau reste au-dessus du toit d une salle multi-
   }))
 
   assert.ok(result.waterCells.length > 0)
-  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.625])
+  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [20.125])
+  assert.equal(result.exteriorSurface.y, 20.125)
+})
+
+test('la surface océanique reste un rectangle continu au-dessus des salles sèches', () => {
+  const result = computeSurfaceWaterCells(emptySurface({
+    rooms: {
+      sealed: room('sealed', 0),
+    },
+  }))
+
+  assert.deepEqual(result.exteriorSurface, {
+    x: -3,
+    z: -3,
+    width: 8,
+    depth: 8,
+    y: 15.125,
+  })
+  assert.ok(result.dryCellKeys.size > 0)
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {

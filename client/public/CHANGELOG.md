@@ -1,3 +1,13 @@
+## v189 — 2026-07-16 — Surface océanique continue et station réellement immergée
+
+### Moteur de monde
+- [fix] La surface extérieure de l'eau est désormais un plan continu indépendant des volumes
+  d'eau physiques. Les salles étanches restent sèches sans découper de trous dans la texture de
+  l'océan au-dessus d'elles.
+- [fix] La surface océanique est placée cinq hauteurs d'étage au-dessus du point structurel le plus
+  haut de la carte, épaisseur des dalles comprise. La station est donc réellement immergée au lieu
+  d'affleurer sous la surface.
+
 ## v188 — 2026-07-16 — Objets ouvrables, aperçu couleur et dalles en verre
 
 ### Éditeur de monde

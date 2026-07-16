@@ -1,4 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — surface océanique continue et garde sous-marine** : le rendu de l'océan ne
+> réutilise plus les colonnes physiques, volontairement absentes dans les salles étanches. La
+> surface visible est un plan continu sur l'emprise globale et se trouve cinq hauteurs d'étage
+> au-dessus du sommet structurel réel. Vérifié sur la session 8293 exacte : station dégagée au
+> niveau 0, nappe animée sans trous au niveau 7. Validation : 59 tests ciblés, 131 monde/serveur,
+> 3 configuration, lint et build.
+>
 > **2026-07-16 — toitures exposées au niveau affiché** : un plafond sans sol supérieur est désormais
 > traité comme une toiture extérieure. Il reste opaque sur le plan du niveau sélectionné, tandis
 > qu'une interface partagée privilégie le sol de la salle haute. Les salles multi-étages ne créent
