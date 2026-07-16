@@ -1890,7 +1890,7 @@ export default function Editor3D({
 
   const activeStructuralConnectorType = activeBlueprint?.geometry?.connectorType
   const placingStructuralObject = activeEditorTab === 'entity'
-    && ['window', 'screen-window'].includes(activeStructuralConnectorType)
+    && ['window', 'screen-window', 'skylight'].includes(activeStructuralConnectorType)
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

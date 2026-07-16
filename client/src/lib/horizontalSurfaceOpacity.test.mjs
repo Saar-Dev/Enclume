@@ -2,22 +2,29 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { horizontalInterfaceOpacity } from './horizontalSurfaceOpacity.js'
 
-test('une interface qui est aussi le sol de la salle supérieure reste opaque', () => {
+test('depuis le niveau bas, une interface partagée reste le plafond découpé de la salle basse', () => {
   assert.equal(horizontalInterfaceOpacity({
-    hasFloor: true,
     displayLevel: 0,
+    ceilingDisplayLevel: 0,
+    belongsToCameraVolume: false,
+    ceilingOpacity: 0.18,
+  }), 0.18)
+})
+
+test('le plafond d un niveau inférieur reste entièrement opaque', () => {
+  assert.equal(horizontalInterfaceOpacity({
+    displayLevel: 1,
     ceilingDisplayLevel: 0,
     belongsToCameraVolume: false,
     ceilingOpacity: 0.18,
   }), 1)
 })
 
-test('un plafond sans salle au-dessus conserve la règle de coupe de caméra', () => {
+test('le plafond courant d un volume multi-niveau actif conserve la coupe', () => {
   assert.equal(horizontalInterfaceOpacity({
-    hasFloor: false,
     displayLevel: 0,
-    ceilingDisplayLevel: 0,
-    belongsToCameraVolume: false,
+    ceilingDisplayLevel: 2,
+    belongsToCameraVolume: true,
     ceilingOpacity: 0.18,
   }), 0.18)
 })

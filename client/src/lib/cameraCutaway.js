@@ -73,6 +73,15 @@ export function wallFacadeKey(wall) {
     : `wall-facade:segment:${to}:${from}`
 }
 
+export function wallParticipatesInCameraCutaway({
+  wallLevel,
+  displayLevel,
+  belongsToActiveRoomVolume = false,
+}) {
+  if (displayLevel === null || displayLevel === undefined) return false
+  return Boolean(belongsToActiveRoomVolume) || Number(wallLevel) === Number(displayLevel)
+}
+
 export function cameraFacingFacadeIds({ camera, roomId, facades }) {
   const result = new Set()
   const cameraX = Number(camera?.x)

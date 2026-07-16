@@ -3725,3 +3725,42 @@ n'est migré et aucun mode de rétrocompatibilité n'est ajouté.
 
 **Retour arrière** : revert du commit de session, redémarrage des services 8293/8294, puis
 rafraîchissement du catalogue pour rétablir les états du commit précédent.
+
+---
+
+## Session 144 (Codex) — 2026-07-16 — Coupe d'étage, halo des portes et pose des verrières ✅ CLOS
+
+La régression de rendu ne venait pas du principe des interfaces partagées, mais d'une attente
+erronée introduite en Session 143 : `hasFloor` forçait toute interface portant un sol supérieur à
+rester opaque, quel que soit l'étage affiché. Le contrat est désormais piloté uniquement par le
+contexte d'affichage. Depuis l'étage bas, l'interface conserve l'opacité de coupe du plafond
+courant ; depuis l'étage haut, le plafond inférieur est omis et le sol supérieur est opaque. Les
+sols, plafonds et murs des étages strictement inférieurs restent toujours opaques.
+
+La coupe des murs possède maintenant son propre garde-fou d'architecture : une façade ne peut
+participer à la transparence que si son niveau est le niveau affiché ou si elle appartient au
+volume multi-niveau actif. La règle de façade logique complète reste inchangée.
+
+Le décalage jaune des portes avait une autre cause : `DoorConnectorModel` utilisait encore un
+`ConnectorSelectionOutline` déclaratif, distinct du GLB, alors que les objets libres avaient déjà
+adopté les coques attachées aux meshes. Les portes, fenêtres et fenêtres-écrans GLB utilisent
+désormais ces mêmes coques et héritent donc directement des rotations, pivots et animations.
+
+Enfin, le choix d'un `skylight` activait bien le mode connecteur, mais `Editor3D` ne conservait le
+renderer structurel que pour `window` et `screen-window`. Il montait alors la scène des entités
+libres, qui ne sait pas poser une interface horizontale. `skylight` est maintenant routé vers
+`SurfaceEditorScene`, comme l'exige sa nature de connecteur structurel.
+
+**Testé** : 65/65 tests ciblés (`horizontalSurfaceOpacity`, `cameraCutaway`, halo, document Surface
+et géométrie des salles), 131/131 tests monde/serveur, 3/3 tests de configuration, ESLint ciblé sans
+erreur et build Vite. Dans le navigateur intégré : étage 0 visible sans sol supérieur parasite, sol
+supérieur opaque à l'étage 1, niveaux inférieurs opaques, halo d'une porte vitrée aligné sur son GLB,
+puis pose et suppression d'une dalle en verre.
+
+**Données** : la dalle de contrôle `connector:skylight:6:6:1:1x1` a été supprimée ; aucun connecteur
+de test ne reste. Aucun document Surface n'est migré et l'état de la porte inspectée n'a pas été
+modifié.
+
+**Retour arrière** : revert du commit de Session 144, redémarrage de
+`enclume-codex-client.service` et `enclume-codex-server.service`, puis vérification du healthcheck
+sur 8293/8294.

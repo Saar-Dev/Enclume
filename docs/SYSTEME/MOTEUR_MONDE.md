@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-15 — moteur v12 conservé comme autorité dans l'intégration commune.
+> Dernière mise à jour : 2026-07-16 — moteur v12 conservé comme autorité dans l'intégration commune.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -670,13 +670,16 @@ apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`
 
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
 de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
-niveau inférieur, sol dès que le niveau supérieur est visible. Cette interface reste opaque dès
-qu'un sol existe au-dessus ; l'opacité de coupe ne s'applique qu'à un plafond sans salle supérieure.
-Tous les niveaux inférieurs au plan
-de coupe restent opaques. Les murs supérieurs du seul volume multi-hauteur actuellement visé sont
-également rendus, sans révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant et au mur
-logique complet ; les morceaux créés par une porte partagent le même groupe d'opacité et leurs faces
-de coupe internes ne sont pas dessinées.
+niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
+conserve l'opacité de coupe du plafond courant, même si une salle possède un sol au-dessus. Depuis
+le niveau supérieur, le plafond inférieur n'est plus rendu et le sol supérieur, opaque, occupe
+l'interface. Les sols, plafonds et murs de tous les niveaux inférieurs au plan de coupe restent
+opaques.
+
+Les murs supérieurs du seul volume multi-hauteur actuellement visé sont également rendus, sans
+révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant
+ou à ce volume actif, et toujours au mur logique complet ; les morceaux créés par une porte
+partagent le même groupe d'opacité et leurs faces de coupe internes ne sont pas dessinées.
 
 ---
 

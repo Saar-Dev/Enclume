@@ -1,10 +1,16 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-16 — interactions 3D et interfaces horizontales stabilisées** : les clips GLB intégrés
-> alimentent désormais des états Fermé/Ouvert partagés par entités et portes ; la sélection suit la
-> géométrie animée réelle ; les tooltips colorables possèdent un aperçu compact ; les `skylight`
-> sont accessibles sous **Objets 3D > Dalles en verre** ; une interface portant un sol supérieur
-> reste opaque. La suppression de campagne possède un panneau d'avertissement dédié. Validation :
-> 131 tests monde/serveur, 3 configuration, 6 ciblés, lint, build et navigateur réel.
+> **2026-07-16 — coupe d'étage, halo des portes et verrières corrigés** : une interface partagée est
+> le plafond découpé de l'étage bas, puis le sol opaque de l'étage haut ; les murs, sols et plafonds
+> de tous les étages inférieurs restent opaques. Le halo des portes est attaché au GLB réel et suit
+> sa rotation. Les **Dalles en verre** utilisent bien le renderer structurel et sont posables depuis
+> **Objets 3D**. Validation : 65 tests ciblés, 131 monde/serveur, 3 configuration, lint, build et
+> parcours navigateur réel avec nettoyage de la dalle de test.
+>
+> **2026-07-16 — interactions 3D et interfaces horizontales** : les clips GLB intégrés alimentent
+> désormais des états Fermé/Ouvert partagés par entités et portes ; les tooltips colorables possèdent
+> un aperçu compact ; les `skylight` sont accessibles sous **Objets 3D > Dalles en verre**. La
+> suppression de campagne possède un panneau d'avertissement dédié. Validation : 131 tests
+> monde/serveur, 3 configuration, 6 ciblés, lint, build et navigateur réel.
 >
 > **2026-07-15 — base commune de travail** : après sauvegarde complète, les espaces `8193/8194` et
 > `8293/8294` repartent du tag `baseline/common-20260715` sur les branches distinctes `dev/cousin`

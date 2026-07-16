@@ -8,7 +8,17 @@ import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
-import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
+import {
+  cameraFacingFacadeIds,
+  cameraRoomContextId,
+  wallFacadeKey,
+  wallParticipatesInCameraCutaway,
+} from '../lib/cameraCutaway.js'
+import {
+  attachEntitySelectionHalo,
+  disposeEntitySelectionHalo,
+  setEntitySelectionHaloVisible,
+} from '../lib/entitySelectionHalo.js'
 import { horizontalInterfaceOpacity } from '../lib/horizontalSurfaceOpacity.js'
 import { useModelStateAnimation } from '../lib/useModelStateAnimation.js'
 import {
@@ -1567,7 +1577,7 @@ function mountDoorControlsOnCurvedWall(
   }
 }
 
-function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
+function DoorConnectorModel({ connector, curveWall = null, opacity = 1, selected = false }) {
   const url = connectorAssetUrl(connector)
   const box = connectorDoorBox(connector)
   const geometry = connector.modelGeometry || {}
@@ -1660,7 +1670,14 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
     }
   }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides, geometryHeight, connectorHeight, connector.type, windowState,
     connectorAxis, connectorAnchorX, connectorAnchorZ, connectorNormalX, connectorNormalZ, curveWall])
+  const selectionHalos = useMemo(() => attachEntitySelectionHalo(scene), [scene])
   useModelStateAnimation(scene, animations, modelState)
+
+  useEffect(() => {
+    setEntitySelectionHaloVisible(selectionHalos, selected)
+  }, [selected, selectionHalos])
+
+  useEffect(() => () => disposeEntitySelectionHalo(selectionHalos), [selectionHalos])
 
   if (!url || !box || !scene) return null
 
@@ -1733,9 +1750,8 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
         <group {...pointerProps}>
           <WindowEmbrasure connector={connector} opacity={opacity} />
           <Suspense fallback={<DoorConnectorFallback connector={connector} opacity={opacity} />}>
-            <DoorConnectorModel connector={connector} curveWall={curveWall} opacity={opacity} />
+            <DoorConnectorModel connector={connector} curveWall={curveWall} opacity={opacity} selected={selected} />
           </Suspense>
-          {selected && <ConnectorSelectionOutline connector={connector} />}
         </group>
       )
     }
@@ -2081,7 +2097,11 @@ function displayedWallFacades(walls, displayLevel, cameraVolumeRoomId = null) {
   const groups = new Map()
   for (const wall of walls) {
     const belongsToCameraVolume = cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId)
-    if (!belongsToCameraVolume && yToLevel(wallOpacityY(wall)) !== displayLevel) continue
+    if (!wallParticipatesInCameraCutaway({
+      wallLevel: yToLevel(wallOpacityY(wall)),
+      displayLevel,
+      belongsToActiveRoomVolume: belongsToCameraVolume,
+    })) continue
     const facadeId = wallFacadeKey(wall)
     if (!groups.has(facadeId)) {
       groups.set(facadeId, {
@@ -2316,7 +2336,6 @@ function SurfaceDungeonScene({
         const room = surface.rooms[horizontalInterface.ceilingRoomId]
         if (!room) return null
         const opacity = horizontalInterfaceOpacity({
-          hasFloor: Boolean(horizontalInterface.floorRoomId),
           displayLevel,
           ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
           belongsToCameraVolume,

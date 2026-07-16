@@ -1,7 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from './cameraCutaway.js'
+import {
+  cameraFacingFacadeIds,
+  cameraRoomContextId,
+  wallFacadeKey,
+  wallParticipatesInCameraCutaway,
+} from './cameraCutaway.js'
 import { SURFACE_FINE, roomsWallRenderPaths } from './surfaceData.js'
 
 function rectangularFacades() {
@@ -145,6 +150,27 @@ test('une façade d une autre salle ne participe jamais à la coupe active', () 
     }],
   })
   assert.equal(result.size, 0)
+})
+
+test('les murs d un étage inférieur restent opaques hors volume multi-niveau actif', () => {
+  assert.equal(wallParticipatesInCameraCutaway({
+    wallLevel: 0,
+    displayLevel: 1,
+    belongsToActiveRoomVolume: false,
+  }), false)
+  assert.equal(wallParticipatesInCameraCutaway({
+    wallLevel: 1,
+    displayLevel: 1,
+    belongsToActiveRoomVolume: false,
+  }), true)
+})
+
+test('une façade du volume multi-niveau actif partage la coupe sur toute sa hauteur', () => {
+  assert.equal(wallParticipatesInCameraCutaway({
+    wallLevel: 2,
+    displayLevel: 0,
+    belongsToActiveRoomVolume: true,
+  }), true)
 })
 
 test('les normales dérivées des vraies salles distinguent façade avant et mur du fond', () => {

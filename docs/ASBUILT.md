@@ -1,6 +1,27 @@
 # ASBUILT — Ce qui est codé et stable
 
-## Objets 3D animables, aperçus couleur et interfaces empilées opaques (2026-07-16)
+## Coupe d'étage, halo des portes et pose des verrières corrigés (2026-07-16)
+
+Le rendu des interfaces horizontales suit désormais l'étage affiché, et non la simple présence
+d'une salle au-dessus. Une interface partagée est le plafond découpé de la salle basse lorsque son
+étage est courant, puis le sol opaque de la salle haute lorsque l'étage supérieur est affiché. Les
+murs, sols et plafonds de tous les étages inférieurs restent opaques. Une façade ne participe à la
+coupe que si elle appartient au niveau courant ou au volume multi-niveau actif.
+
+Les portes et fenêtres GLB utilisent maintenant le même halo attaché aux meshes que les objets
+libres. Le surlignage hérite directement de la rotation, des pivots et des animations du modèle ;
+l'ancienne boîte indépendante n'est plus rendue pour ces connecteurs. Enfin, choisir une
+**Dalle en verre** conserve le renderer structurel actif : le clic sur une surface crée réellement
+le connecteur `skylight`, au lieu de basculer dans l'éditeur des objets libres.
+
+Validation : 65 tests ciblés monde/rendu, les 131 tests monde/serveur et les 3 tests de configuration
+passent, ainsi qu'ESLint ciblé et le build Vite. Dans le navigateur réel, l'étage 0 reste ouvert sous
+le plafond découpé, l'étage 1 affiche son sol opaque, le halo d'une porte vitrée épouse son GLB et
+une dalle en verre a été posée puis supprimée. Aucune donnée de test ne reste dans la carte.
+
+---
+
+## Objets 3D animables, aperçus couleur et interfaces empilées (2026-07-16)
 
 Le catalogue 3D intégré lit maintenant directement les clips contenus dans chaque GLB. Un modèle
 qui expose une animation d'ouverture reçoit deux états système, **Fermé** et **Ouvert**, avec une
@@ -16,8 +37,8 @@ temps local de l'animation.
   modèle expose des couleurs. Toute modification de slot est visible immédiatement dans cet aperçu ;
 - les quatre `skylight` sont rangées sous **Objets 3D > Dalles en verre** et se posent par le rayon
   structurel existant. L'ancien bouton de salle en doublon a été retiré ;
-- une interface commune qui est le plafond de la salle basse et le sol d'une salle haute reste
-  toujours opaque. Seul un plafond sans salle au-dessus peut recevoir l'opacité de coupe ;
+- une interface commune est découpée comme plafond depuis l'étage inférieur, puis rendue comme sol
+  opaque dès que l'étage supérieur est affiché. Les niveaux strictement inférieurs restent opaques ;
 - la configuration de campagne remplace **Zone dangereuse** par l'onglet rouge **Supprimer**. Le
   panneau de droite porte l'avertissement complet et l'unique action **Confirmer la suppression**,
   sans dialogue natif superposé.
@@ -25,9 +46,9 @@ temps local de l'animation.
 Validation : 131 tests monde/serveur, 3 tests de configuration, 6 tests ciblés animation/halo/dalle,
 ESLint ciblé, build Vite et parcours navigateur réel. Le catalogue contient bien 43 blueprints à
 deux états ; une porte vitrée coulissante a été ouverte, maintenue puis refermée ; les aperçus
-couleur d'une entité et d'une fenêtre-écran ont été contrôlés ; la carte réelle contient deux salles
-simples empilées et rend leur interface opaque. La campagne n'a pas été supprimée et la porte de
-test a retrouvé son état fermé.
+couleur d'une entité et d'une fenêtre-écran ont été contrôlés. La campagne n'a pas été supprimée et
+la porte de test a retrouvé son état fermé. L'attente initiale d'une interface toujours opaque a été
+corrigée par la section ci-dessus : son apparence dépend bien de l'étage affiché.
 
 ---
 
