@@ -1,6 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getMrTable, getModifier } from '../lib/mrTable.js'
 import * as statusService from '../lib/statusService.js'
@@ -62,12 +63,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       }
       // 2. Guard stun — avant tout check LOS/range (STUN2)
       // Si assommé : auto-skip serveur + { ok: false, stunned: true } — débloque le slot figé
+      // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
-        const stunnedStatus = await db('token_statuses')
-          .where({ token_id: tokenId })
-          .whereIn('status_code', ['stunned', 'unconscious'])
-          .first()
-        const pendingStun = !stunnedStatus
+        const { status_effects_mode: statusEffectsModePrecheck } = await getCampaignSettings(db, campaignId)
+        const enforcedPrecheck = statusEffectsModePrecheck === 'enforced'
+        const stunnedStatus = enforcedPrecheck
+          ? await db('token_statuses')
+              .where({ token_id: tokenId })
+              .whereIn('status_code', ['stunned', 'unconscious'])
+              .first()
+          : null
+        const pendingStun = (enforcedPrecheck && !stunnedStatus)
           ? await db('combat_pending')
               .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
               .first()
@@ -172,12 +178,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       }
 
       // Guard is_stunned (STUN2) — filet de sécurité si PRECHECK n'a pas été émis (move/reload/micro)
+      // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
-        const stunnedStatus = await db('token_statuses')
-          .where({ token_id: tokenId })
-          .whereIn('status_code', ['stunned', 'unconscious'])
-          .first()
-        const pendingStun = !stunnedStatus
+        const { status_effects_mode: statusEffectsModeConfirm } = await getCampaignSettings(db, campaignId)
+        const enforcedConfirm = statusEffectsModeConfirm === 'enforced'
+        const stunnedStatus = enforcedConfirm
+          ? await db('token_statuses')
+              .where({ token_id: tokenId })
+              .whereIn('status_code', ['stunned', 'unconscious'])
+              .first()
+          : null
+        const pendingStun = (enforcedConfirm && !stunnedStatus)
           ? await db('combat_pending')
               .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
               .first()

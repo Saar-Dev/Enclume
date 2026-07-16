@@ -1636,9 +1636,12 @@ Projet en cours et priorité user :
 - **Sprint Drones 2d** — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 2e** — resolveDroneAutoAction
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
-- **Sprint PLAN 14-1** — Menu contextuel token (right-click → ajouter/retirer statuts)
-- **Sprint PLAN 14-2** — Affichage badges (SVGs `docs/Character/Statuts/`, Canvas3D)
-- **Sprint PLAN 14-3** — FIX-D + mécaniques enforced (bypass défense stunned/surprised)
+- ~~**Sprint PLAN 14-1**~~ ✅ — Menu contextuel token codé (`TokenRadialMenu.jsx`/`TokenStatusPanel.jsx`)
+- ~~**Sprint PLAN 14-2**~~ ✅ — Badges codés (`Canvas3D.jsx`) — reste `ST1`/`ST3` (dettes actives)
+- ~~**Sprint PLAN 14-3**~~ ✅ — Option campagne `status_effects_mode` (`off`/`icon_only`/`enforced`,
+  défaut `enforced`) codée 2026-07-16 — voir `docs/ROADMAP.md` §PLAN 14 pour le détail des 3 sites
+  serveur gatés + menu/badges client. FIX-D abandonné (aucune base dans `REGLESYSCOMBAT.md`).
+  **PLAN 14 entièrement clos.**
 - ~~**Sprint stunted_until_turn**~~ ✅ — supplanté par Sprint 14-0 — voir PLAN 14
 - **Sprint CaC 4b** — validation fonctionnelle requise avant
 - **Sprint Annonce v2** — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)

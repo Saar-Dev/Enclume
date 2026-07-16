@@ -328,22 +328,39 @@ Source unique : `token_statuses` + colonne `expires_at_turn INT NULLABLE`.
 | `applyStunWithDuration` | `socket/index.js` | Écrit dans `token_statuses` uniquement — supprime les writes JSONB `is_stunned`/`stunned_until_turn` |
 | `checkStunExpiry` | `socket/index.js` | Lit `token_statuses` + supprime rows expirés — supprime purge JSONB |
 | Stun guard `COMBAT_ACTION_DECLARE` | `socket/index.js` | Lit `token_statuses WHERE status_code='stunned'` au lieu de `state_character?.is_stunned` |
-| `COMBAT_START` surprise | `socket/index.js` | Insert `token_statuses { status_code:'surprised', expires_at_turn: current_turn+1 }` au lieu de `is_surprised=true` colonne |
 | `endTurn` | `socket/index.js` | `DELETE token_statuses WHERE expires_at_turn <= current_turn` — universel, remplace purge spécifique |
 | Nettoyage JSONB | `socket/index.js` | Retirer toute lecture/écriture `is_stunned`/`stunned_until_turn` du JSONB `state_character` |
 
-**Sprint 14-1 — Menu contextuel token** (right-click → ajouter/retirer statuts, GM + propriétaire)
+**Sprint 14-1 — Menu contextuel token** ✅ codé (right-click → ajouter/retirer statuts, GM + propriétaire) —
+`TokenRadialMenu.jsx` secteur `statuts`, `TokenStatusPanel.jsx`, `socketToken.js` handler `TOKEN_STATUS_TOGGLE`.
 
-**Sprint 14-2 — Affichage badges** (Html drei sous le nom, SVGs `docs/Character/Statuts/`, couleurs par catégorie, overflow +N)
+**Sprint 14-2 — Affichage badges** ✅ codé (Html drei sous le nom, SVGs `docs/Character/Statuts/`, couleurs par
+catégorie, overflow +N) — `Canvas3D.jsx`. Reste 2 bugs de finition en dette : `ST1`/`ST3` (voir dettes actives).
 
-**Sprint 14-3 — FIX-D + mécaniques enforced**
-- FIX-D : bypass défense `resolveMeleeAction` si cible `stunned`/`surprised` → test simple +5 (query unique `token_statuses`)
-- `unconscious` : passe son tour (`COMBAT_ACTION_DECLARE` guard)
-- Option campagne `status_effects_mode`
+**Sprint 14-3 — mécaniques enforced**
+- ~~FIX-D : bypass défense `resolveMeleeAction` si cible `stunned`/`surprised`~~ — **abandonné (2026-07-16)**.
+  Vérifié contre `docs/REGLES/REGLESYSCOMBAT.md` L.172-260 (section Surprise) : aucune règle ne retire la
+  défense à une cible `stunned` ; le "sans défense" du LdB ne couvre que l'attaque gratuite d'une embuscade
+  initiale (avant Tour 1), pas un état persistant interrogeable en cours de combat. Décision Saar : FIX-D saute.
+- `unconscious` : passe son tour ✅ déjà couvert — le guard `COMBAT_ACTION_DECLARE` bloque `stunned`
+  ET `unconscious` (même `whereIn` sur `token_statuses`).
+- Option campagne `status_effects_mode` ✅ codée (2026-07-16) : `off` / `icon_only` / `enforced`,
+  défaut `enforced` (aucun changement rétroactif). 3 sites serveur gatés (même valeur lue une fois par
+  handler via `getCampaignSettings`) :
+  - `socketCombatAnnouncement.js` (guard Déclaration, attaque bloquée + plafond allure)
+  - `socketCombatResolution.js` PRECHECK (filet de sécurité résolution)
+  - `socketCombatResolution.js` CONFIRM (filet de sécurité miroir)
+  Client : `campaign?.settings?.status_effects_mode` lu une fois dans `SessionPage.jsx`, propagé en
+  prop à `TokenRadialMenu` (secteur `statuts` désactivé si `off`) et `Canvas3D`→`Scene`→`TokenMesh`
+  (badges masqués si `off`). UI : `SectionGameRules.jsx` (onglet Options de campagne), 3 boutons même
+  pattern que `ambiance`. **PLAN 14 clos.**
+
+**`is_surprised` reste une colonne `combat_roster`** (pas de migration vers `token_statuses`) — décision
+confirmée : sans FIX-D, aucun besoin d'un statut `surprised` persistant/interrogeable ; `is_surprised` ne sert
+que le flow ponctuel `COMBAT_SURPRISE_ROLL` en tout début de combat (effacé après le jet).
 
 **Ce qui disparaît après Sprint 14-0 :**
 - `is_stunned` + `stunned_until_turn` du JSONB `state_character`
-- `is_surprised` comme colonne gameplay (`combat_roster.is_surprised` reste uniquement pour le flow `COMBAT_SURPRISE_ROLL` — effacé après le jet)
 
 ### Chantier Arts Martiaux 🔲
 

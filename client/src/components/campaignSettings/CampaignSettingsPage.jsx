@@ -51,6 +51,7 @@ export default function CampaignSettingsPage() {
             action_timer_sec: s.action_timer_sec ?? 0,
             shock_auto_stun: s.shock_auto_stun ?? true,
             allow_los_cancel: s.allow_los_cancel ?? false,
+            status_effects_mode: s.status_effects_mode ?? 'enforced',
           },
         }
         setFormData(data)

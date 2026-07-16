@@ -95,6 +95,7 @@ export default function TokenRadialMenu({
   onViser,
   onOpenExchange,
   onClose,
+  statusEffectsMode = 'enforced',
 }) {
   const { t } = useTranslation()
   const menuRef = useRef(null)
@@ -176,7 +177,7 @@ export default function TokenRadialMenu({
     { id: 'retirer',   label: t('tokenRadial.retirer'),   enabled: true  },
     { id: 'echange',   label: t('tokenRadial.echange'),   enabled: !isGm },
     { id: 'viser',     label: t('tokenRadial.viser'),     enabled: true  },
-    { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: true  },
+    { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: statusEffectsMode !== 'off' },
   ]
 
   const handleSliceClick = (a) => {

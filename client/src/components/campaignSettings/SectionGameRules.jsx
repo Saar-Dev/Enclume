@@ -10,6 +10,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [reloadMode, setReloadMode] = useState(initialData.reload_mode ?? 'magazine')
   const [actionTimerSec, setActionTimerSec] = useState(initialData.action_timer_sec ?? 0)
   const [shockAutoStun, setShockAutoStun] = useState(initialData.shock_auto_stun ?? true)
+  const [statusEffectsMode, setStatusEffectsMode] = useState(initialData.status_effects_mode ?? 'enforced')
   const [encumbranceEnabled, setEncumbranceEnabled] = useState(initialData.encumbrance_enabled ?? true)
   const [encumbranceMultiplier, setEncumbranceMultiplier] = useState(initialData.encumbrance_multiplier ?? 3)
 
@@ -17,6 +18,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleReloadMode = (val) => { setReloadMode(val); onChange({ reload_mode: val }) }
   const handleActionTimerSec = (val) => { setActionTimerSec(val); onChange({ action_timer_sec: val }) }
   const handleShockAutoStun = (val) => { setShockAutoStun(val); onChange({ shock_auto_stun: val }) }
+  const handleStatusEffectsMode = (val) => { setStatusEffectsMode(val); onChange({ status_effects_mode: val }) }
   const handleEncumbranceEnabled = (val) => { setEncumbranceEnabled(val); onChange({ encumbrance_enabled: val }) }
   const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
 
@@ -72,6 +74,25 @@ export default function SectionGameRules({ initialData, onChange }) {
         <span style={styles.toggleLabel}>{t('settings.shockAutoStunLabel')}</span>
         <span style={styles.toggleHint}>{t('settings.shockAutoStunHint')}</span>
       </label>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={styles.toggleLabel}>{t('settings.statusEffectsModeLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.statusEffectsModeHint')}</span>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          {['off', 'icon_only', 'enforced'].map(mode => (
+            <button
+              key={mode}
+              type="button"
+              className="btn-toggle"
+              data-active={statusEffectsMode === mode}
+              style={{ flex: '0 0 auto', padding: '8px 18px' }}
+              onClick={() => handleStatusEffectsMode(mode)}
+            >
+              {t(`settings.statusEffectsMode${mode === 'off' ? 'Off' : mode === 'icon_only' ? 'IconOnly' : 'Enforced'}`)}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <label style={{ ...styles.toggleRow, marginTop: 12 }}>
         <input type="checkbox" checked={encumbranceEnabled}

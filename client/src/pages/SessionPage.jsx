@@ -58,6 +58,7 @@ function SessionContent({ campaignId }) {
   const { phase: combatPhase } = useCombatStore()
   const { setDocuments } = useLibraryStore()
   const { campaign, setCampaign } = useCampaignStore()
+  const statusEffectsMode = campaign?.settings?.status_effects_mode ?? 'enforced'
   const myCharId = characters.find(c => c.user_id === user?.id)?.id ?? null
   const [loading, setLoading] = useState(true)
   const [statusPanel, setStatusPanel] = useState(null)
@@ -607,6 +608,7 @@ function SessionContent({ campaignId }) {
                 ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
                 : null}
               displayLevel={displayLevel}
+              statusEffectsMode={statusEffectsMode}
             />
         )}
         {!canvasVisible && (
@@ -729,6 +731,7 @@ function SessionContent({ campaignId }) {
             onRemoveToken={handleRemoveContextToken}
             onSetRotation={handleSetContextTokenRotation}
             onOpenStatusPanel={() => setStatusPanel({ tokenId: contextMenu.token.id, x: contextMenu.x, y: contextMenu.y })}
+            statusEffectsMode={statusEffectsMode}
             onViser={handleViser}
             onOpenExchange={() => {
               setExchangeContext({ toCharId: contextMenu.token.character_id ?? null })

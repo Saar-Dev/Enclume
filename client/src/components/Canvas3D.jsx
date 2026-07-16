@@ -270,7 +270,7 @@ function TokenLabel({ label, color, isGmLayer }) {
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
-function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1 }) {
+function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1, statusEffectsMode = 'enforced' }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
@@ -345,7 +345,7 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
           </Text>
         </Billboard>
       )}
-      {(token.statuses?.length > 0) && (
+      {(token.statuses?.length > 0 && statusEffectsMode !== 'off') && (
         <Html position={[0, 2.1, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
           <div style={{ display: 'flex', gap: 2 }}>
             {(token.statuses.length > 4
@@ -514,6 +514,7 @@ function Scene({
   onLosResult,
   cameraMode,
   displayLevel = 0,
+  statusEffectsMode = 'enforced',
 }) {
   const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
@@ -1175,6 +1176,7 @@ function Scene({
             dragState={dragState?.tokenId === token.id ? dragState : null}
             isGmLayer={token.layer === 'gm'}
             sceneOpacity={1}
+            statusEffectsMode={statusEffectsMode}
           />
         )
       })}
@@ -1346,7 +1348,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced' }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
@@ -1622,6 +1624,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           losMode={losMode}
           onLosCancel={onLosCancel}
           onLosResult={onLosResult}
+          statusEffectsMode={statusEffectsMode}
           cameraMode={mode}
           displayLevel={displayLevel}
         />

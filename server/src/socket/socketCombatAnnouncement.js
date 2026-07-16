@@ -117,7 +117,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // Stun guard — is_stunned lit depuis token_statuses (source unique post-Sprint 14-0)
-      const stunRow = await db('token_statuses').where({ token_id: tokenId, status_code: 'stunned' }).first()
+      // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
+      const { status_effects_mode: statusEffectsMode } = await getCampaignSettings(db, campaignId)
+      const stunRow = statusEffectsMode === 'enforced'
+        ? await db('token_statuses').where({ token_id: tokenId, status_code: 'stunned' }).first()
+        : null
       if (stunRow) {
         if (mapActions?.attack) {
           socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — ne peut pas attaquer" })
