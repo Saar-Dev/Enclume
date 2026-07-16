@@ -3897,3 +3897,32 @@ dalle, entité ou connecteur de test n'est créé.
 
 **Retour arrière** : revert du commit de Session 148, redémarrage des services 8293/8294, puis
 contrôle visuel 0 → 1 sur la même session.
+
+---
+
+## Session 149 (Codex) — 2026-07-16 — Toitures exposées au niveau affiché ✅ CLOS
+
+La règle « masquer l'intérieur des niveaux inférieurs » omettait aussi les plafonds sans salle
+au-dessus. Or ces faces sont l'enveloppe extérieure de la carte : au niveau 1, le toit d'une salle
+simple du niveau 0 doit rester visible sur le même plan que le sol d'une salle réellement présente
+au niveau 1.
+
+`horizontalInterfaceRenderKind` reçoit maintenant le niveau géométrique de l'interface. Une
+interface avec plafond mais sans sol supérieur devient visible lorsque ce plan correspond au niveau
+affiché. `horizontalInterfaceOpacity` la laisse alors opaque. Si un sol supérieur existe sur cette
+empreinte, il conserve la priorité. Les régions de plafond des salles multi-étages étant uniquement
+produites à leur vrai sommet, aucun plancher ou toit intermédiaire n'est créé par cette règle.
+
+**Testé** : cas purs du toit exposé, du plan hors niveau, de la priorité du sol partagé et de
+l'opacité ; tests de géométrie et coupe ; suites monde/serveur et configuration ; lint et build.
+Après redémarrage complet, une copie isolée de la carte a reçu une salle simple témoin. Au niveau 1,
+son toit opaque et le sol de la salle haute sont visibles simultanément et à la même altitude, en
+mode édition comme en mode jeu. La copie est ensuite supprimée. Le contrôle final est refait sur la
+carte originale, dont la salle simple voisine montre également son toit à côté du sol supérieur.
+
+**Données** : la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66` reste inchangée. La battlemap de
+validation et sa salle témoin ont été supprimées ; aucune carte nommée `TEST TEMPORAIRE TOIT CODEX`
+ne reste en base.
+
+**Retour arrière** : revert du commit de Session 149, redémarrage des services 8293/8294, puis
+contrôle du niveau 1 avec une salle basse exposée et une salle haute côte à côte.

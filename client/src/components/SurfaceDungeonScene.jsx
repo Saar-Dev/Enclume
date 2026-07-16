@@ -2355,6 +2355,7 @@ function SurfaceDungeonScene({
           floorBelongsToCameraVolume,
           hasCeiling: Boolean(ceilingRoom),
           ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
+          interfaceDisplayLevel: yToLevel(horizontalInterface.y),
           ceilingBelongsToCameraVolume,
           displayLevel,
         })

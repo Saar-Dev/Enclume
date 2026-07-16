@@ -49,6 +49,43 @@ test('un plafond supérieur du volume multi-niveau actif reste affiché', () => 
   }), 'ceiling')
 })
 
+test('le toit exposé d une salle basse occupe le plan du niveau affiché', () => {
+  assert.equal(horizontalInterfaceRenderKind({
+    hasFloor: false,
+    hasCeiling: true,
+    ceilingDisplayLevel: 0,
+    interfaceDisplayLevel: 1,
+    displayLevel: 1,
+  }), 'ceiling')
+  assert.equal(horizontalInterfaceRenderKind({
+    hasFloor: false,
+    hasCeiling: true,
+    ceilingDisplayLevel: 0,
+    interfaceDisplayLevel: 1,
+    displayLevel: 2,
+  }), null)
+})
+
+test('un sol supérieur reste prioritaire sur le plafond partagé', () => {
+  assert.equal(horizontalInterfaceRenderKind({
+    hasFloor: true,
+    floorDisplayLevel: 1,
+    hasCeiling: true,
+    ceilingDisplayLevel: 0,
+    interfaceDisplayLevel: 1,
+    displayLevel: 1,
+  }), 'floor')
+})
+
+test('un toit exposé est opaque depuis son propre plan', () => {
+  assert.equal(horizontalInterfaceOpacity({
+    displayLevel: 1,
+    ceilingDisplayLevel: 0,
+    belongsToCameraVolume: false,
+    ceilingOpacity: 0.18,
+  }), 1)
+})
+
 test('le sol bas du volume multi-niveau actif reste visible', () => {
   assert.equal(horizontalInterfaceRenderKind({
     hasFloor: true,

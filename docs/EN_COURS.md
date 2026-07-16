@@ -1,4 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — toitures exposées au niveau affiché** : un plafond sans sol supérieur est désormais
+> traité comme une toiture extérieure. Il reste opaque sur le plan du niveau sélectionné, tandis
+> qu'une interface partagée privilégie le sol de la salle haute. Les salles multi-étages ne créent
+> toujours aucun plan intermédiaire. Vérifié dans le navigateur avec, au niveau 1, le sol supérieur
+> et le toit d'une salle simple affichés côte à côte. La copie de validation a été supprimée, puis
+> le même résultat a été confirmé directement sur les salles existantes de la carte originale.
+>
 > **2026-07-16 — altitude canonique des interfaces horizontales** : l'absence de `yOverride` n'est
 > plus convertie en `0`. Un sol de salle sans surcharge utilise donc réellement `room.y`, tandis
 > qu'un plafond utilise le haut de la salle ; une surcharge explicite égale à zéro reste valide.

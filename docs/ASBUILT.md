@@ -1,5 +1,26 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Toitures exposées sur le plan affiché (2026-07-16)
+
+Une interface horizontale qui possède un plafond mais aucun sol au-dessus est classée comme toiture
+extérieure. Elle reste visible et opaque lorsque son altitude correspond au niveau affiché. À la
+même altitude, une interface partagée continue de rendre en priorité le sol de la salle supérieure.
+Le niveau 1 peut ainsi montrer côte à côte le plancher d'une salle superposée et le toit d'une salle
+du niveau 0 qui n'a rien au-dessus.
+
+La règle ne fabrique aucun plan intermédiaire. Une salle multi-étage conserve son volume continu et
+ne produit une toiture qu'au sommet réel calculé par `roomCeilingRegions`. Depuis l'étage intérieur
+courant, ce plafond conserve la coupe habituelle ; il ne devient opaque qu'une fois son propre plan
+atteint.
+
+Validation : tests des interfaces exposées et partagées, suites monde/serveur, configuration, lint
+et build. Le scénario est contrôlé visuellement après redémarrage sur une copie temporaire isolée,
+entièrement supprimée ensuite, puis directement sur la carte originale : son sol supérieur et le
+toit de sa salle basse voisine sont tous deux visibles au niveau 1. La carte originale n'est pas
+modifiée par la validation.
+
+---
+
 ## Altitude canonique des sols et plafonds de salle (2026-07-16)
 
 `RoomSlab` résout désormais son altitude avec une règle explicite. `null` et `undefined` signifient

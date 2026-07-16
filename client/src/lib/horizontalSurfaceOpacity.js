@@ -4,6 +4,7 @@ export function horizontalInterfaceRenderKind({
   floorBelongsToCameraVolume = false,
   hasCeiling = false,
   ceilingDisplayLevel = null,
+  interfaceDisplayLevel = null,
   ceilingBelongsToCameraVolume = false,
   displayLevel = null,
 }) {
@@ -15,9 +16,15 @@ export function horizontalInterfaceRenderKind({
   )
   if (floorIsVisible) return 'floor'
 
+  const exposedRoofIsVisible = !hasFloor
+    && interfaceDisplayLevel !== null
+    && interfaceDisplayLevel !== undefined
+    && Number.isFinite(Number(interfaceDisplayLevel))
+    && Number(interfaceDisplayLevel) === Number(displayLevel)
   const ceilingIsVisible = hasCeiling && (
     showsEveryLevel
       || ceilingBelongsToCameraVolume
+      || exposedRoofIsVisible
       || (Number.isFinite(Number(ceilingDisplayLevel)) && Number(ceilingDisplayLevel) === Number(displayLevel))
   )
   return ceilingIsVisible ? 'ceiling' : null

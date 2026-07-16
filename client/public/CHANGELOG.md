@@ -14,6 +14,8 @@
   le sol opaque depuis l'étage haut.
 - [fix] Les sols de salle sans surcharge d'altitude utilisent désormais leur véritable `y` au lieu
   d'être replacés à l'étage 0 par la conversion de `null` en zéro.
+- [fix] Au niveau affiché, le toit opaque d'une salle inférieure sans salle au-dessus reste visible
+  à côté des sols du niveau courant. Les salles multi-étages gardent leur volume sans dalle intermédiaire.
 - [fix] Aux étages inférieurs, seuls l'enveloppe murale opaque et les objets fixés dessus restent
   visibles. Les sols, plafonds, objets libres, tokens et effets intérieurs sont masqués.
 - [fix] Le contexte de caméra est désormais lié à l'étage qui l'a produit. En changeant d'étage,

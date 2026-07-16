@@ -705,6 +705,12 @@ le haut de la salle ». Une surcharge explicite `0` reste valide. Il est interdi
 surcharge par `Number.isFinite(Number(value))` sans avoir d'abord exclu `null`, puisque JavaScript
 convertit `null` en `0` et replacerait silencieusement tout plancher à l'étage zéro.
 
+Un plafond sans sol au-dessus est une toiture extérieure, pas un contenu intérieur du niveau bas.
+Lorsque son altitude correspond au plan du niveau affiché, cette toiture reste donc rendue et
+opaque. Sur le même plan, une interface qui possède un `floorRoomId` privilégie toujours le sol de
+la salle supérieure. Une salle multi-niveau ne crée aucune toiture intermédiaire : seule la région
+de plafond produite par `roomCeilingRegions` à son véritable sommet peut devenir une toiture.
+
 Les murs supérieurs du seul volume multi-hauteur actuellement visé sont également rendus, sans
 révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant
 ou à ce volume actif, et toujours au mur logique complet ; les morceaux créés par une porte
