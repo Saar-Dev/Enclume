@@ -169,6 +169,11 @@ authentification GitHub propre. Ne jamais employer les identifiants du cousin po
 blocage. Le worktree `/home/didier/Enclume` et les services `8193/8194` n'ont pas été modifiés ; le
 cousin devra faire repartir sa prochaine branche depuis la tête `integration` publiée.
 
+Après cette validation, `/home/codex/Enclume-integrated` a été avancé sans réécriture de
+`dev/monde` vers la tête finale `integration`. Les dépendances verrouillées ont été réinstallées,
+les services `8293/8294` redémarrés, les migrations confirmées à jour et le smoke Chromium validé.
+Les `.env`, `vtt_codex` et le bucket `enclume-assets-monde` sont restés propres à cette instance.
+
 ## 7. Validation et retour arrière
 
 Une livraison commune doit au minimum réussir :

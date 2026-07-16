@@ -4314,7 +4314,10 @@ test restant.
 
 **Déploiement** : services `enclume-fusion-client` et `enclume-fusion-server` actifs sur
 `8393/8394`, base `vtt_fusion`, bucket `enclume-assets-fusion`. Les services cousin `8193/8194`
-n'ont pas été touchés.
+n'ont pas été touchés. Après validation commune, `dev/monde` a été avancée sans réécriture vers la
+tête `integration`, les dépendances verrouillées ont été réinstallées et `8293/8294` ont redémarré
+sur `vtt_codex` et `enclume-assets-monde`. Health client/API à 200, migrations à jour et smoke
+Chromium 1/1 sur 8293.
 
 **Publication** : `git push --dry-run origin integration` échoue faute d'authentification GitHub
 pour le compte système `codex`. Ce blocage est documenté ; aucun identifiant de l'autre développeur
