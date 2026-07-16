@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   cameraFacingFacadeIds,
+  cameraRoomIdForDisplayLevel,
   cameraRoomContextId,
   wallFacadeKey,
   wallParticipatesInCameraCutaway,
@@ -43,6 +44,13 @@ const multiLevelRooms = {
     heightLevels: 3,
   },
 }
+
+test('un contexte camera ne survit jamais au changement d etage', () => {
+  const context = { displayLevel: 0, roomId: 'lower-room' }
+  assert.equal(cameraRoomIdForDisplayLevel(context, 0), 'lower-room')
+  assert.equal(cameraRoomIdForDisplayLevel(context, 1), null)
+  assert.equal(cameraRoomIdForDisplayLevel(null, 0), null)
+})
 
 test('la position 3D de la camera active la salle meme si sa cible reste dehors', () => {
   const roomId = cameraRoomContextId({

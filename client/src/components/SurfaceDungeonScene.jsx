@@ -10,6 +10,7 @@ import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModel
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import {
   cameraFacingFacadeIds,
+  cameraRoomIdForDisplayLevel,
   cameraRoomContextId,
   wallFacadeKey,
   wallParticipatesInCameraCutaway,
@@ -106,13 +107,16 @@ const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
 
 function useCameraRoomId(surface, displayLevel, cameraControlsRef = null, roomContextAnchor = null) {
   const { camera } = useThree()
-  const [roomId, setRoomId] = useState(null)
+  const [roomContext, setRoomContext] = useState({ displayLevel: null, roomId: null })
+  const roomId = cameraRoomIdForDisplayLevel(roomContext, displayLevel)
   const elapsedRef = useRef(0)
   const lastCameraRef = useRef(null)
 
   useFrame((_, delta) => {
     if (displayLevel === null || displayLevel === undefined) {
-      if (roomId !== null) setRoomId(null)
+      if (roomContext.roomId !== null || roomContext.displayLevel !== null) {
+        setRoomContext({ displayLevel: null, roomId: null })
+      }
       return
     }
     elapsedRef.current += delta
@@ -165,7 +169,10 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null, roomCo
       focus,
       storyHeight: STORY_HEIGHT,
     })
-    if (nextRoomId !== roomId) setRoomId(nextRoomId)
+    const normalizedDisplayLevel = Number(displayLevel)
+    if (nextRoomId !== roomId || roomContext.displayLevel !== normalizedDisplayLevel) {
+      setRoomContext({ displayLevel: normalizedDisplayLevel, roomId: nextRoomId })
+    }
   })
 
   return roomId

@@ -1,4 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — contexte caméra strictement lié à son étage** : le volume actif de l'ancien niveau
+> est invalidé dès le changement de `displayLevel`, sans attendre une frame 3D. Le sol inférieur ne
+> peut plus survivre au passage vers l'étage haut dans un onglet ralenti. Vérifié visuellement sur
+> la session réelle en mode jeu et en mode édition.
+>
 > **2026-07-16 — enveloppe basse sans intérieur** : au niveau courant, l'intérieur est complet ;
 > aux niveaux inférieurs, seuls les murs opaques et les portes, fenêtres ou objets fixés dessus
 > restent visibles. Sols, plafonds, objets libres, tokens et effets inférieurs sont masqués. Le

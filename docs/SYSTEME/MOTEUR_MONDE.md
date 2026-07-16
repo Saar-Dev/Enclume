@@ -522,6 +522,12 @@ choisit plus le volume dès qu'une de ces autorités existe ; elle sert seulemen
 façades. Traverser accidentellement une salle voisine avec l'œil ne peut donc plus masquer tout le
 contenu supérieur du volume réellement observé.
 
+Le contexte caméra est indexé par `displayLevel`. Dès que l'étage affiché change, le contexte de
+l'ancien étage devient synchroniquement nul, avant même le recalcul 3D suivant. Il ne peut donc pas
+conserver temporairement — ou indéfiniment dans un onglet ralenti — le sol et le contenu intérieur
+d'une salle simple de l'étage précédent. Le nouveau contexte n'est réactivé qu'après résolution
+d'une salle appartenant réellement à la nouvelle tranche.
+
 Le calcul graphique des murs situés devant la caméra reçoit l'identité de ce volume. Il teste donc
 toutes ses tranches visibles contre l'empreinte de son vrai sol, et pas uniquement les murs du
 `displayLevel`. Les parois avant deviennent transparentes comme dans une salle simple, tandis que

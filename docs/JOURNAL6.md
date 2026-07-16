@@ -3838,3 +3838,32 @@ règle de rendu et de picking dérivée des données v12 existantes.
 **Retour arrière** : revert du commit de Session 146, redémarrage de
 `enclume-codex-client.service` et `enclume-codex-server.service`, puis vérification du healthcheck
 sur 8293/8294.
+
+---
+
+## Session 147 (Codex) — 2026-07-16 — Contexte caméra lié à l'étage ✅ CLOS
+
+Le navigateur réel a révélé ce que les tests de plan de rendu ne montraient pas : au passage du
+niveau 0 au niveau 1, `useCameraRoomId` conservait encore l'identité de la salle basse pendant que
+son recalcul attendait 120 ms de frames 3D. Cette ancienne salle restait donc l'exception de volume
+actif et autorisait son sol intérieur en même temps que le sol supérieur. Dans un onglet ralenti ou
+sans assez de frames, cet état transitoire pouvait durer indéfiniment.
+
+Le contexte persistant contient maintenant `{ displayLevel, roomId }`. Le renderer ne lit le
+`roomId` que si son niveau correspond exactement au niveau actuellement affiché. Le changement de
+niveau invalide donc l'ancien volume synchroniquement ; le calcul caméra peut ensuite résoudre la
+salle du nouvel étage sans jamais réintroduire l'intérieur précédent. Cette règle corrige en même
+temps le jeu, l'éditeur, les objets, tokens, effets et surfaces horizontales qui consomment ce
+contexte.
+
+**Testé** : 52/52 tests ciblés de caméra, coupe et géométrie ; ESLint ciblé sans erreur ; build
+Vite. Dans le navigateur authentifié, sur la session
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, le passage réel de 0 à 1 affiche le plancher à `y = 2,5 m`
+au sommet des murs inférieurs et ne conserve plus le plancher à `y = 0`. Le même résultat est
+contrôlé en mode jeu puis en mode édition, sans erreur console.
+
+**Données** : lecture seule de la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66`. Ses deux salles et
+ses trois interfaces horizontales restent inchangées ; aucun objet ni connecteur de test n'est créé.
+
+**Retour arrière** : revert du commit de Session 147, redémarrage des services 8293/8294, puis
+contrôle du passage 0 → 1 sur la même session.

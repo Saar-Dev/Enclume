@@ -8,6 +8,10 @@ restent visibles. Les sols, plafonds, escaliers, objets libres, tokens et effets
 omis. Une salle multi-niveau actuellement visée reste l'exception : son intérieur est conservé sur
 toute sa hauteur afin de montrer son volume réel.
 
+Le volume caméra qui autorise cette exception porte maintenant son étage d'origine. Changer
+`displayLevel` l'invalide immédiatement : le renderer ne peut plus afficher simultanément le sol de
+l'ancien étage et celui du nouveau pendant que la boucle 3D recalcule la salle visée.
+
 Cette règle est partagée par le jeu, l'éditeur, le picking et les interfaces horizontales. Une
 entité est classée comme murale depuis son mode de pose canonique, jamais depuis son nom ou son
 modèle. Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, le plan bas à `y = 0` choisit

@@ -14,6 +14,8 @@
   le sol opaque depuis l'étage haut.
 - [fix] Aux étages inférieurs, seuls l'enveloppe murale opaque et les objets fixés dessus restent
   visibles. Les sols, plafonds, objets libres, tokens et effets intérieurs sont masqués.
+- [fix] Le contexte de caméra est désormais lié à l'étage qui l'a produit. En changeant d'étage,
+  l'ancien sol est retiré immédiatement au lieu de rester affiché jusqu'à une prochaine frame 3D.
 - [fix] Les sols et plafonds empilés passent désormais par une seule interface de rendu. En montant
   d'un étage, le moteur remplace réellement le plafond bas par le sol de la salle haute au lieu de
   conserver deux chemins concurrents.

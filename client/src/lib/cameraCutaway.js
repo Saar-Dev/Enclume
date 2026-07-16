@@ -29,6 +29,12 @@ function roomsAtDisplayLevel(rooms, displayLevel, storyHeight) {
   return candidates
 }
 
+export function cameraRoomIdForDisplayLevel(context, displayLevel) {
+  const level = Number(displayLevel)
+  if (!Number.isFinite(level) || Number(context?.displayLevel) !== level) return null
+  return context?.roomId || null
+}
+
 export function cameraRoomContextId({ rooms, displayLevel, camera, focus, storyHeight = 2.5 }) {
   const candidates = roomsAtDisplayLevel(rooms, displayLevel, storyHeight)
   const focusX = Number(focus?.x)
