@@ -2,7 +2,6 @@ import { useRef, useState, useEffect, useCallback, useMemo, Component } from 're
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { MapControls, Grid, Text, Billboard, Html } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
-import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import api from '../lib/api.js'
@@ -17,12 +16,13 @@ import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import {
+  entityUsesWallPlacement,
   hasSurfaceContent,
+  isWorldInteriorPointVisibleAtLevel,
   isWorldPointVisibleAtLevel,
   levelToY,
   normalizeSurfaceData,
   surfaceTextureIds,
-  yToLevel,
 } from '../lib/surfaceData.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
@@ -502,14 +502,13 @@ function Scene({
   selectedSurfaceConnectorId, onSurfaceConnectorSelect,
   selectedTokenId, onTokenSelect,
   onTokenDoubleClick, justSelectedRef,
-  altPressed, onEntityClick, onTokenRotate, onTokenSetRotation,
-  moveTarget, onMoveCancel, moveLabels,
+  altPressed, onEntityClick, onTokenSetRotation,
+  moveTarget, onMoveCancel,
   dicePayload, onDiceDone,
   combatCameraCenter,
   combatMoveMode,
   pendingMoveSelection,
   combatTargetMode,
-  announcementMarker,
   defaultTokenGlbUrl,
   losMode,
   onLosCancel,
@@ -517,7 +516,6 @@ function Scene({
   cameraMode,
   displayLevel = 0,
 }) {
-  const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
   const orbitRef = useRef()
   const previousDisplayLevelRef = useRef(displayLevel)
@@ -565,6 +563,7 @@ function Scene({
     return null
   }, [tokens, characters, user?.id, selectedTokenId, isGm])
   const thirdPersonCameraActive = cameraMode === 'play' && !!followToken
+  const playerRoomContextAnchor = !isGm && followToken ? tokenFeetPoint(followToken) : null
 
   // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
   const combatMoveModeRef = useRef(null)
@@ -839,7 +838,12 @@ function Scene({
       dragRef.current.hasMoved = true
     }
 
-    const destination = raycastWorldSupport(e.clientX, e.clientY)
+    // 8.C — MJ uniquement : si aucun support de sol sous le curseur, retomber sur le
+    // plan Y=0 infini plutôt que d'abandonner le drag (permet de planquer un token
+    // hors de toute géométrie construite). Joueur : comportement inchangé (raycast
+    // sol strict).
+    let destination = raycastWorldSupport(e.clientX, e.clientY)
+    if (!destination && isGm) destination = raycastGround(e.clientX, e.clientY)
     if (!destination) return
 
     let tiltX = 0
@@ -1058,6 +1062,7 @@ function Scene({
           textureMaterials={textureMaterials}
           displayLevel={displayLevel}
           cameraControlsRef={thirdPersonCameraActive ? null : orbitRef}
+          roomContextAnchor={playerRoomContextAnchor}
           onCameraRoomIdChange={setCameraVolumeRoomId}
           runtimeFeatureStates={runtimeFeatureStates}
           selectedConnectorId={selectedSurfaceConnectorId}
@@ -1078,7 +1083,7 @@ function Scene({
         const centerZ = (bounds.min.z + bounds.max.z) / 2
         const centerY = (bounds.min.y + bounds.max.y) / 2
         const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
-        const visibleInWorldContext = isWorldPointVisibleAtLevel(
+        const visibleInWorldContext = isWorldInteriorPointVisibleAtLevel(
           surfaceData,
           displayLevel,
           centerX,
@@ -1107,7 +1112,10 @@ function Scene({
         const blueprint = blueprints[entity.blueprint_id]
         if (!blueprint) return null
         if (entity.gm_only && !isGm) return null
-        if (!isWorldPointVisibleAtLevel(
+        const visibilityTest = entityUsesWallPlacement(entity, blueprint)
+          ? isWorldPointVisibleAtLevel
+          : isWorldInteriorPointVisibleAtLevel
+        if (!visibilityTest(
           surfaceData,
           displayLevel,
           (Number(entity.pos_x) || 0) + 0.5,
@@ -1148,7 +1156,7 @@ function Scene({
 
       {tokens.filter(token => (
         (isGm || token.layer !== 'gm')
-        && isWorldPointVisibleAtLevel(
+        && isWorldInteriorPointVisibleAtLevel(
           surfaceData,
           displayLevel,
           (Number(token.pos_x) || 0) + 0.5,
@@ -1339,39 +1347,35 @@ function Scene({
 
 // ─── Composant principal exporté ──────────────────────────────────────────────
 // Canvas3D — lecture seule (mode jeu).
-// Props : onTokenDoubleClick, socket, onEntityClick, onTokenRotate, moveTarget, onMoveCancel
-// onTokenRotate  : callback → SessionPage émet WS.TOKEN_ROTATE
+// Props : onTokenDoubleClick, socket, onEntityClick, moveTarget, onMoveCancel
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenRotate, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, announcementMarker, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
-  const { t } = useTranslation()
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
-
-  // Labels i18n pour le ghost — calculés ici où t() est accessible, passés en prop à Scene
-  const moveLabels = {
-    push:       t('entity.movePush'),
-    pull:       t('entity.movePull'),
-    impossible: t('entity.moveImpossible'),
-  }
 
   const [voxels, setVoxels] = useState({})
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
+  const [runtimeFeatureStates, setRuntimeFeatureStates] = useState({})
   const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
 
   const refreshRuntimeEffects = useCallback(async () => {
-    if (!battlemap?.id) return setRuntimeEffectRegions([])
+    if (!battlemap?.id) {
+      setRuntimeEffectRegions([])
+      return setRuntimeFeatureStates({})
+    }
     try {
       const { data } = await api.get(`/battlemaps/${battlemap.id}/world-effects`)
       setRuntimeEffectRegions(data.worldEffects?.regions || [])
+      setRuntimeFeatureStates(data.worldEffects?.featureStates || {})
     } catch (error) {
       console.error('[Canvas3D] Erreur chargement effets monde :', error)
     }
@@ -1568,7 +1572,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
-    if (connector?.type !== 'elevator') return
+    if (!['elevator', 'window', 'screen-window'].includes(connector?.type)) return
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
     setSurfaceConnectorPanel({
       connectorId,
@@ -1582,6 +1586,12 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
     await refreshRuntimeElevators()
   }, [battlemap?.id, refreshRuntimeElevators])
+
+  const handleWindowStateChange = useCallback(async (featureId, state) => {
+    if (!battlemap?.id || !featureId) return
+    await api.patch(`/battlemaps/${battlemap.id}/world-windows/${featureId}/state`, { state })
+    await refreshRuntimeEffects()
+  }, [battlemap?.id, refreshRuntimeEffects])
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
@@ -1604,7 +1614,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
           runtimeEffectRegions={runtimeEffectRegions}
-          runtimeFeatureStates={runtimeElevatorStates}
+          runtimeFeatureStates={{ ...runtimeFeatureStates, ...runtimeElevatorStates }}
           socket={socket}
           battlemapId={battlemap?.id}
           selectedTokenId={selectedTokenId}
@@ -1615,18 +1625,15 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           justSelectedRef={justSelectedRef}
           altPressed={altPressed}
           onEntityClick={onEntityClick}
-          onTokenRotate={onTokenRotate}
           onTokenSetRotation={onTokenSetRotation}
           moveTarget={moveTarget}
           onMoveCancel={onMoveCancel}
-          moveLabels={moveLabels}
           dicePayload={dicePayload}
           onDiceDone={onDiceDone}
           combatCameraCenter={combatCameraCenter}
           combatMoveMode={combatMoveMode}
           pendingMoveSelection={pendingMoveSelection}
           combatTargetMode={combatTargetMode}
-          announcementMarker={announcementMarker}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
           losMode={losMode}
           onLosCancel={onLosCancel}
@@ -1641,8 +1648,9 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         connector={selectedSurfaceConnector}
         x={surfaceConnectorPanel.x}
         y={surfaceConnectorPanel.y}
-        runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
+        runtimeState={(selectedSurfaceConnector.type === 'elevator' ? runtimeElevatorStates : runtimeFeatureStates)[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
         onElevatorCommand={handleElevatorCommand}
+        onWindowStateChange={handleWindowStateChange}
         canEdit={false}
         canAdminElevator={isGm}
         onClose={() => setSurfaceConnectorPanel(null)}

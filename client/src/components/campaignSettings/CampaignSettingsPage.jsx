@@ -8,6 +8,7 @@ import SectionGameRules from './SectionGameRules'
 import SectionTokens from './SectionTokens'
 import SectionPlayers from './SectionPlayers'
 import SectionCharacterSheet from './SectionCharacterSheet'
+import SectionDanger from './SectionDanger'
 
 export default function CampaignSettingsPage() {
   const { campaignId } = useParams()
@@ -30,6 +31,7 @@ export default function CampaignSettingsPage() {
         const { campaign } = res.data
         const s = campaign.settings || {}
         const data = {
+          name: campaign.name,
           dice_config: campaign.dice_config,
           default_token_glb_url: campaign.default_token_glb_url ?? null,
           settings: {
@@ -105,6 +107,7 @@ export default function CampaignSettingsPage() {
     { key: 'tokens', label: t('settings.sectionTokens'), enabled: true },
     { key: 'players', label: t('settings.sectionPlayers'), enabled: true },
     { key: 'sheet', label: t('settings.sectionSheet'), enabled: true },
+    { key: 'danger', label: t('settings.dangerTitle'), enabled: true },
   ]
 
   return (
@@ -128,7 +131,16 @@ export default function CampaignSettingsPage() {
               key={key}
               className="btn-toggle"
               data-active={activeSection === key}
-              style={{ flex: '0 0 auto', textAlign: 'left', opacity: !enabled ? 0.5 : 1 }}
+              style={{
+                flex: '0 0 auto',
+                textAlign: 'left',
+                opacity: !enabled ? 0.5 : 1,
+                ...(key === 'danger' ? {
+                  color: 'var(--color-danger)',
+                  border: `1px solid ${activeSection === key ? 'var(--color-danger)' : 'rgba(239,68,68,0.28)'}`,
+                  backgroundColor: activeSection === key ? 'rgba(239,68,68,0.13)' : 'transparent',
+                } : {}),
+              }}
               onClick={() => enabled && setActiveSection(key)}
               disabled={!enabled}
             >
@@ -150,6 +162,9 @@ export default function CampaignSettingsPage() {
           {activeSection === 'players' && <SectionPlayers campaignId={campaignId} />}
           {activeSection === 'sheet' && formData && (
             <SectionCharacterSheet initialData={formData.settings} onChange={(p) => handleSectionChange({ settings: p })} />
+          )}
+          {activeSection === 'danger' && formData && (
+            <SectionDanger campaignId={campaignId} campaignName={formData.name} />
           )}
         </div>
       </div>

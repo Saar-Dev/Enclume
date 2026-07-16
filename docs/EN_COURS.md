@@ -1,4 +1,57 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — surface océanique continue et garde sous-marine** : le rendu de l'océan ne
+> réutilise plus les colonnes physiques, volontairement absentes dans les salles étanches. La
+> surface visible est un plan continu sur l'emprise globale et se trouve cinq hauteurs d'étage
+> au-dessus du sommet structurel réel. Vérifié sur la session 8293 exacte : station dégagée au
+> niveau 0, nappe animée sans trous au niveau 7. Validation : 59 tests ciblés, 131 monde/serveur,
+> 3 configuration, lint et build.
+>
+> **2026-07-16 — toitures exposées au niveau affiché** : un plafond sans sol supérieur est désormais
+> traité comme une toiture extérieure. Il reste opaque sur le plan du niveau sélectionné, tandis
+> qu'une interface partagée privilégie le sol de la salle haute. Les salles multi-étages ne créent
+> toujours aucun plan intermédiaire. Vérifié dans le navigateur avec, au niveau 1, le sol supérieur
+> et le toit d'une salle simple affichés côte à côte. La copie de validation a été supprimée, puis
+> le même résultat a été confirmé directement sur les salles existantes de la carte originale.
+>
+> **2026-07-16 — altitude canonique des interfaces horizontales** : l'absence de `yOverride` n'est
+> plus convertie en `0`. Un sol de salle sans surcharge utilise donc réellement `room.y`, tandis
+> qu'un plafond utilise le haut de la salle ; une surcharge explicite égale à zéro reste valide.
+> Sur la session réelle `b27cbed4-fd59-4530-b43b-dae57c33f092`, le sol de la salle haute est
+> désormais rendu à `y = 2,5 m`, opaque, sur toute son empreinte. Le passage réel 0 → 1 a été
+> contrôlé après redémarrage complet dans le navigateur.
+>
+> **2026-07-16 — contexte caméra strictement lié à son étage** : le volume actif de l'ancien niveau
+> est invalidé dès le changement de `displayLevel`, sans attendre une frame 3D. Cette correction
+> supprime l'exception de visibilité périmée, mais ne déterminait pas l'altitude physique du sol ;
+> la validation visuelle initialement inscrite ici est remplacée par celle de l'altitude canonique
+> ci-dessus.
+>
+> **2026-07-16 — enveloppe basse sans intérieur** : au niveau courant, l'intérieur est complet ;
+> aux niveaux inférieurs, seuls les murs opaques et les portes, fenêtres ou objets fixés dessus
+> restent visibles. Sols, plafonds, objets libres, tokens et effets inférieurs sont masqués. Le
+> volume multi-niveau actif conserve son intérieur sur toute sa hauteur. Validation : 51 tests
+> ciblés, 131 monde/serveur, 3 configuration, lint ciblé et build.
+>
+> **2026-07-16 — autorité unique des interfaces horizontales** : les sols de salle ne possèdent plus
+> de chemin de rendu indépendant. Chaque `roomHorizontalInterface` choisit la face plafond au niveau
+> bas puis la face sol, opaque et appartenant à la salle haute, dès son étage. Les trois interfaces
+> empilées de la carte réelle basculent bien de `ceiling` au niveau 0 vers `floor` au niveau 1.
+> Validation : 24 tests ciblés, 131 monde/serveur, 3 configuration, lint, build et carte réelle
+> chargée au niveau 1.
+>
+> **2026-07-16 — coupe d'étage, halo des portes et verrières corrigés** : une interface partagée est
+> le plafond découpé de l'étage bas, puis le sol opaque de l'étage haut ; seuls les murs et objets
+> muraux des étages inférieurs restent opaques, leur intérieur étant masqué. Le halo des portes est attaché au GLB réel et suit
+> sa rotation. Les **Dalles en verre** utilisent bien le renderer structurel et sont posables depuis
+> **Objets 3D**. Validation : 65 tests ciblés, 131 monde/serveur, 3 configuration, lint, build et
+> parcours navigateur réel avec nettoyage de la dalle de test.
+>
+> **2026-07-16 — interactions 3D et interfaces horizontales** : les clips GLB intégrés alimentent
+> désormais des états Fermé/Ouvert partagés par entités et portes ; les tooltips colorables possèdent
+> un aperçu compact ; les `skylight` sont accessibles sous **Objets 3D > Dalles en verre**. La
+> suppression de campagne possède un panneau d'avertissement dédié. Validation : 131 tests
+> monde/serveur, 3 configuration, 6 ciblés, lint, build et navigateur réel.
+>
 > **2026-07-15 — base commune de travail** : après sauvegarde complète, les espaces `8193/8194` et
 > `8293/8294` repartent du tag `baseline/common-20260715` sur les branches distinctes `dev/cousin`
 > et `dev/monde`. Seul le code versionné est synchronisé ; les configurations, bases et assets ne

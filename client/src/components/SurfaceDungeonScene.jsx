@@ -6,9 +6,26 @@ import { SkeletonUtils } from 'three-stdlib'
 import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
-import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
+import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
-import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
+import {
+  cameraFacingFacadeIds,
+  cameraRoomIdForDisplayLevel,
+  cameraRoomContextId,
+  wallFacadeKey,
+  wallParticipatesInCameraCutaway,
+} from '../lib/cameraCutaway.js'
+import {
+  attachEntitySelectionHalo,
+  disposeEntitySelectionHalo,
+  setEntitySelectionHaloVisible,
+} from '../lib/entitySelectionHalo.js'
+import {
+  horizontalInterfaceOpacity,
+  horizontalInterfaceRenderKind,
+  horizontalSurfaceY,
+} from '../lib/horizontalSurfaceOpacity.js'
+import { useModelStateAnimation } from '../lib/useModelStateAnimation.js'
 import {
   multiPolygonContours,
   intersectMultiPolygons,
@@ -30,6 +47,7 @@ import {
   getRoomFloorThickness,
   getRoomTopY,
   getWallRenderBox,
+  isWorldInteriorPointVisibleAtLevel,
   isWorldPointVisibleAtLevel,
   normalizeSurfaceData,
   parseCeilingKey,
@@ -37,6 +55,7 @@ import {
   roomFootprintRectangles,
   roomsWallRenderPaths,
   stairStepBoxes,
+  wallOpeningVerticalRange,
   wallProfileVerticalProgresses,
   yToLevel,
 } from '../lib/surfaceData.js'
@@ -86,26 +105,33 @@ const BOLT_WASHER_MATERIAL = new THREE.MeshStandardMaterial({
 })
 const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
 
-function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
+function useCameraRoomId(surface, displayLevel, cameraControlsRef = null, roomContextAnchor = null) {
   const { camera } = useThree()
-  const [roomId, setRoomId] = useState(null)
+  const [roomContext, setRoomContext] = useState({ displayLevel: null, roomId: null })
+  const roomId = cameraRoomIdForDisplayLevel(roomContext, displayLevel)
   const elapsedRef = useRef(0)
   const lastCameraRef = useRef(null)
 
   useFrame((_, delta) => {
     if (displayLevel === null || displayLevel === undefined) {
-      if (roomId !== null) setRoomId(null)
+      if (roomContext.roomId !== null || roomContext.displayLevel !== null) {
+        setRoomContext({ displayLevel: null, roomId: null })
+      }
       return
     }
     elapsedRef.current += delta
     if (elapsedRef.current < 0.12) return
     elapsedRef.current = 0
 
+    const hasAuthoritativeAnchor = roomContextAnchor
+      && [roomContextAnchor.x, roomContextAnchor.y, roomContextAnchor.z].every(value => Number.isFinite(Number(value)))
     const controlsTarget = cameraControlsRef?.current?.target
     const hasControlsTarget = controlsTarget
       && [controlsTarget.x, controlsTarget.y, controlsTarget.z].every(Number.isFinite)
-    const focus = hasControlsTarget
-      ? controlsTarget.clone()
+    const focus = hasAuthoritativeAnchor
+      ? new THREE.Vector3(Number(roomContextAnchor.x), Number(roomContextAnchor.y), Number(roomContextAnchor.z))
+      : hasControlsTarget
+        ? controlsTarget.clone()
       : (() => {
         const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
         const planeY = Number(displayLevel) * STORY_HEIGHT + 0.04
@@ -117,16 +143,21 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
           : camera.position.clone().addScaledVector(direction, 4)
       })()
     const previous = lastCameraRef.current
+    const cameraContextIsStable = hasAuthoritativeAnchor || hasControlsTarget || (
+      previous && previous.cameraPosition.distanceToSquared(camera.position) < 0.0009
+    )
     if (previous
       && previous.displayLevel === displayLevel
       && previous.focus.distanceToSquared(focus) < 0.0009
-      && previous.cameraPosition.distanceToSquared(camera.position) < 0.0009
+      && cameraContextIsStable
+      && previous.usesAuthoritativeAnchor === Boolean(hasAuthoritativeAnchor)
       && previous.usesControlsTarget === Boolean(hasControlsTarget)
       && previous.rooms === surface.rooms) return
     lastCameraRef.current = {
       displayLevel,
       focus,
       cameraPosition: camera.position.clone(),
+      usesAuthoritativeAnchor: Boolean(hasAuthoritativeAnchor),
       usesControlsTarget: Boolean(hasControlsTarget),
       rooms: surface.rooms,
     }
@@ -134,11 +165,14 @@ function useCameraRoomId(surface, displayLevel, cameraControlsRef = null) {
     const nextRoomId = cameraRoomContextId({
       rooms: surface.rooms,
       displayLevel,
-      camera: camera.position,
+      camera: hasAuthoritativeAnchor ? null : camera.position,
       focus,
       storyHeight: STORY_HEIGHT,
     })
-    if (nextRoomId !== roomId) setRoomId(nextRoomId)
+    const normalizedDisplayLevel = Number(displayLevel)
+    if (nextRoomId !== roomId || roomContext.displayLevel !== normalizedDisplayLevel) {
+      setRoomContext({ displayLevel: normalizedDisplayLevel, roomId: nextRoomId })
+    }
   })
 
   return roomId
@@ -549,13 +583,39 @@ function RoomSlab({
   showDetails = true,
   footprintContours = null,
   yOverride = null,
+  skylights = [],
 }) {
-  const rectangles = roomFootprintRectangles(room)
+  const sourceRectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
-  const y = Number.isFinite(Number(yOverride))
-    ? Number(yOverride)
-    : isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
+  const y = horizontalSurfaceY({
+    yOverride,
+    kind,
+    roomBaseY: getRoomBaseY(room),
+    roomTopY: getRoomTopY(room),
+  })
   const thickness = isCeiling ? getRoomCeilingThickness(room) : getRoomFloorThickness(room)
+  const slabSkylights = skylights.filter(connector => (
+    Math.abs(Number(connector.y) - y) < 0.01
+      && sourceRectangles.some(rectangle => (
+        Number(connector.x) < rectangle.minX + rectangle.width
+          && Number(connector.x) + Number(connector.width || 1) > rectangle.minX
+          && Number(connector.z) < rectangle.minZ + rectangle.depth
+          && Number(connector.z) + Number(connector.depth || 1) > rectangle.minZ
+      ))
+  ))
+  const skylightAtCell = (x, z) => slabSkylights.some(connector => (
+    x >= Number(connector.x) && x < Number(connector.x) + Number(connector.width || 1)
+      && z >= Number(connector.z) && z < Number(connector.z) + Number(connector.depth || 1)
+  ))
+  const rectangles = slabSkylights.length === 0 ? sourceRectangles : sourceRectangles.flatMap(rectangle => {
+    const cells = []
+    for (let z = rectangle.minZ; z < rectangle.minZ + rectangle.depth; z += 1) {
+      for (let x = rectangle.minX; x < rectangle.minX + rectangle.width; x += 1) {
+        if (!skylightAtCell(x, z)) cells.push({ minX: x, minZ: z, width: 1, depth: 1 })
+      }
+    }
+    return cells
+  })
   const materialDescriptor = isCeiling ? room.ceilingMaterial : room.floorMaterial
   const topMaterialDescriptor = materialDescriptor
   const bottomMaterialDescriptor = materialDescriptor
@@ -571,9 +631,9 @@ function RoomSlab({
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   if (!top) return null
 
-  const hasCurvedBoundary = Array.isArray(footprintContours)
+  const hasCurvedBoundary = slabSkylights.length === 0 && (Array.isArray(footprintContours)
     || (Array.isArray(room.boundaryArcs) && room.boundaryArcs.length > 0)
-    || (Array.isArray(room.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0)
+    || (Array.isArray(room.geometryClipRoomIds) && room.geometryClipRoomIds.length > 0))
   if (hasCurvedBoundary) {
     return (
       <CurvedRoomSlab
@@ -1081,10 +1141,6 @@ function CurvedWallSegment({ wall, textureMaterials, opacity = 1, showDetails = 
   )
 }
 
-function clampValue(value, min, max) {
-  return Math.max(min, Math.min(max, value))
-}
-
 function cloneWallPiece(wall, suffix, patch) {
   return {
     ...wall,
@@ -1143,12 +1199,9 @@ function doorOpeningInterval(connector, center) {
 }
 
 function doorOpeningForConnector(connector, wall) {
-  if (!connector || connector.type !== 'door' || !wall) return null
-  const connectorLevel = Number.isFinite(Number(connector.level))
-    ? Math.trunc(Number(connector.level))
-    : yToLevel(connector.y)
-  const wallLevel = yToLevel(wallOpacityY(wall))
-  if (connectorLevel !== wallLevel) return null
+  if (!connector || !['door', 'window', 'screen-window'].includes(connector.type) || !wall) return null
+  const verticalRange = wallOpeningVerticalRange(connector, wall)
+  if (!verticalRange) return null
 
   if (wall.axis === 'arc') {
     if (connector.axis !== 'segment' || !connector.curveId || connector.curveId !== wall.curveId) return null
@@ -1162,22 +1215,13 @@ function doorOpeningForConnector(connector, wall) {
     const min = Math.max(wallMin, opening.min)
     const max = Math.min(wallMax, opening.max)
     if (max <= min + 1e-6) return null
-    const wallBottom = Number(wall.y) || 0
-    const wallHeight = Math.max(0.5, Number(wall.height) || STORY_HEIGHT)
-    const wallTop = wallBottom + wallHeight
-    const doorBottom = Number(connector.y) || wallBottom
-    const modelGeometry = connector.modelGeometry || {}
-    const modelHeight = Number(modelGeometry.height) || Number(connector.height) || 2
-    const doorTop = clampValue(doorBottom + Math.max(0.5, modelHeight), wallBottom, wallTop)
     return {
       curve: true,
       min,
       max,
       startT: (min - wallOffset0) / (wallOffset1 - wallOffset0),
       endT: (max - wallOffset0) / (wallOffset1 - wallOffset0),
-      bottom: wallBottom,
-      top: doorTop,
-      wallTop,
+      ...verticalRange,
     }
   }
 
@@ -1202,7 +1246,6 @@ function doorOpeningForConnector(connector, wall) {
     : (connectorStart + connectorEnd) / 2
   const connectorCenterWorld = connectorCenterFine / fine
 
-  const modelGeometry = connector.modelGeometry || {}
   const openingInterval = doorOpeningInterval(connector, connectorCenterWorld)
   const cutMin = openingInterval.min * fine
   const cutMax = openingInterval.max * fine
@@ -1210,20 +1253,10 @@ function doorOpeningForConnector(connector, wall) {
   const adjustedMax = Math.min(wallMax, cutMax)
   if (adjustedMax <= adjustedMin + 0.01) return null
 
-  const wallBottom = Number(wall.y) || 0
-  const wallHeight = Math.max(0.5, Number(wall.height) || STORY_HEIGHT)
-  const wallTop = wallBottom + wallHeight
-  const doorBottom = Number(connector.y) || wallBottom
-  const modelHeight = Number(modelGeometry.height) || Number(connector.height) || 2
-  const doorTop = clampValue(doorBottom + Math.max(0.5, modelHeight), wallBottom, wallTop)
-  if (doorTop <= wallBottom + 0.01) return null
-
   return {
     min: adjustedMin,
     max: adjustedMax,
-    bottom: wallBottom,
-    top: doorTop,
-    wallTop,
+    ...verticalRange,
   }
 }
 
@@ -1263,12 +1296,26 @@ function splitWallForDoorConnector(wall, connector) {
       profileJoinStart: null,
       profileJoinStartMiter: null,
     }))
+    if (opening.bottom > opening.wallBottom + 0.01 && toT > fromT + epsilon) {
+      pieces.push(cloneWallPiece(wall, `bottom:${opening.min}:${opening.max}`, {
+        ...curvePatch(fromT, toT),
+        capStart: false,
+        capEnd: false,
+        opacityY: wallOpacityY(wall),
+        y: opening.wallBottom,
+        height: opening.bottom - opening.wallBottom,
+        profileJoinStart: null,
+        profileJoinEnd: null,
+        profileJoinStartMiter: null,
+        profileJoinEndMiter: null,
+      }))
+    }
     if (opening.wallTop > opening.top + 0.01 && toT > fromT + epsilon) {
       pieces.push(cloneWallPiece(wall, `top:${opening.min}:${opening.max}`, {
         ...curvePatch(fromT, toT),
         capStart: false,
         capEnd: false,
-        opacityY: opening.bottom,
+        opacityY: wallOpacityY(wall),
         y: opening.top,
         height: opening.wallTop - opening.top,
         profileJoinStart: null,
@@ -1313,12 +1360,26 @@ function splitWallForDoorConnector(wall, connector) {
       profileJoinEndMiter: forward ? wall.profileJoinEndMiter : null,
     }))
   }
+  if (opening.bottom > opening.wallBottom + epsilon && opening.max > opening.min + epsilon) {
+    pieces.push(cloneWallPiece(wall, `bottom:${opening.min}:${opening.max}`, {
+      ...segmentPatch(opening.min, opening.max),
+      capStart: false,
+      capEnd: false,
+      opacityY: wallOpacityY(wall),
+      y: opening.wallBottom,
+      height: opening.bottom - opening.wallBottom,
+      profileJoinStart: null,
+      profileJoinEnd: null,
+      profileJoinStartMiter: null,
+      profileJoinEndMiter: null,
+    }))
+  }
   if (opening.wallTop > opening.top + epsilon && opening.max > opening.min + epsilon) {
     pieces.push(cloneWallPiece(wall, `top:${opening.min}:${opening.max}`, {
       ...segmentPatch(opening.min, opening.max),
       capStart: false,
       capEnd: false,
-      opacityY: opening.bottom,
+      opacityY: wallOpacityY(wall),
       y: opening.top,
       height: opening.wallTop - opening.top,
       profileJoinStart: null,
@@ -1334,7 +1395,7 @@ function splitWallForDoorConnector(wall, connector) {
 // Co-localise avec les helpers geometriques prives utilises pour decouper les murs.
 // eslint-disable-next-line react-refresh/only-export-components
 export function cutWallsForDoorConnectors(walls, connectors) {
-  const doors = Object.values(connectors || {}).filter(connector => connector?.type === 'door')
+  const doors = Object.values(connectors || {}).filter(connector => ['door', 'window', 'screen-window'].includes(connector?.type))
   if (doors.length === 0) return walls
 
   let pieces = walls
@@ -1414,6 +1475,29 @@ function ConnectorSelectionOutline({ connector }) {
       ]} />
       <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
     </mesh>
+  )
+}
+
+function WindowEmbrasure({ connector, opacity = 1 }) {
+  const box = connectorDoorBox(connector)
+  if (!box || !['window', 'screen-window'].includes(connector?.type)) return null
+  const profileDepth = Math.max(
+    Math.abs(Number(connector.mountElevationProfile?.depth) || 0),
+    Math.abs(Number(connector.mountFrontElevationProfile?.depth) || 0),
+    Math.abs(Number(connector.mountBackElevationProfile?.depth) || 0),
+  )
+  const revealDepth = Math.max(box.wallDepth, box.modelDepth + profileDepth)
+  const width = box.alongLength
+  const height = box.args[1]
+  const edge = Math.min(0.08, Math.max(0.035, width * 0.035))
+  const color = connector.type === 'screen-window' ? '#090f13' : '#15252d'
+  return (
+    <group position={box.floorPosition} rotation={[0, box.rotationY, 0]} renderOrder={29}>
+      <mesh position={[0, edge / 2, 0]}><boxGeometry args={[width + edge * 2, edge, revealDepth]} /><meshStandardMaterial color={color} metalness={0.62} roughness={0.34} transparent={opacity < 0.999} opacity={opacity} /></mesh>
+      <mesh position={[0, height - edge / 2, 0]}><boxGeometry args={[width + edge * 2, edge, revealDepth]} /><meshStandardMaterial color={color} metalness={0.62} roughness={0.34} transparent={opacity < 0.999} opacity={opacity} /></mesh>
+      <mesh position={[-width / 2 - edge / 2, height / 2, 0]}><boxGeometry args={[edge, height, revealDepth]} /><meshStandardMaterial color={color} metalness={0.62} roughness={0.34} transparent={opacity < 0.999} opacity={opacity} /></mesh>
+      <mesh position={[width / 2 + edge / 2, height / 2, 0]}><boxGeometry args={[edge, height, revealDepth]} /><meshStandardMaterial color={color} metalness={0.62} roughness={0.34} transparent={opacity < 0.999} opacity={opacity} /></mesh>
+    </group>
   )
 }
 
@@ -1508,7 +1592,7 @@ function mountDoorControlsOnCurvedWall(
   }
 }
 
-function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
+function DoorConnectorModel({ connector, curveWall = null, opacity = 1, selected = false }) {
   const url = connectorAssetUrl(connector)
   const box = connectorDoorBox(connector)
   const geometry = connector.modelGeometry || {}
@@ -1520,12 +1604,15 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
   const connectorNormalX = connector.normalX
   const connectorNormalZ = connector.normalZ
   const materialSlots = useMemo(
-    () => normalizeModelMaterialSlots(connector?.modelGeometry),
-    [connector?.modelGeometry],
+    () => connectorModelMaterialSlots(connector),
+    [connector],
   )
   const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
+  const modelState = connector?.runtimeState?.state || connector?.state || 'closed'
+  const windowState = ['window', 'screen-window'].includes(connector.type) ? modelState : 'transparent'
+  const facingRotationY = connector?.modelFacing === 'back' ? Math.PI : 0
   const preserveAuthoredOrigin = connector?.modelGeometry?.origin === 'floor-center' || Boolean(connector?.modelBuiltinKey)
-  const { scene: sourceScene } = useGLTF(url)
+  const { scene: sourceScene, animations } = useGLTF(url)
   const { scene, offset, uniformScale } = useMemo(() => {
     const clone = SkeletonUtils.clone(sourceScene)
     clone.traverse((child) => {
@@ -1535,9 +1622,33 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
       const materials = Array.isArray(child.material) ? child.material : [child.material]
       const cloned = materials.map(material => {
         const next = applyMaterialSlotOverrides(material.clone(), materialSlots, materialOverrides)
+        const isGlass = /glass|verre|vitre/i.test(next.name || material.name || '')
+        if (isGlass && ['window', 'screen-window'].includes(connector.type)) {
+          if (windowState === 'transparent') {
+            next.transparent = true
+            next.opacity = Math.min(Number(next.opacity) || 0.3, 0.34)
+            next.metalness = 0.08
+            next.roughness = 0.16
+            next.depthWrite = false
+          } else if (windowState === 'mirror') {
+            next.transparent = false
+            next.opacity = 1
+            next.color?.set?.('#b9c7d5')
+            next.metalness = 1
+            next.roughness = 0.08
+            next.depthWrite = true
+          } else {
+            next.transparent = false
+            next.opacity = 1
+            next.color?.set?.('#182432')
+            next.metalness = 0.35
+            next.roughness = 0.32
+            next.depthWrite = true
+          }
+        }
         next.transparent = opacity < 0.999 || next.transparent
         next.opacity = Math.min(next.opacity ?? 1, opacity)
-        next.depthWrite = opacity >= 0.999
+        next.depthWrite = opacity >= 0.999 && !next.transparent
         next.needsUpdate = true
         return next
       })
@@ -1572,15 +1683,68 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
       offset: modelOffset,
       uniformScale: scale,
     }
-  }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides, geometryHeight, connectorHeight,
+  }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides, geometryHeight, connectorHeight, connector.type, windowState,
     connectorAxis, connectorAnchorX, connectorAnchorZ, connectorNormalX, connectorNormalZ, curveWall])
+  const selectionHalos = useMemo(() => attachEntitySelectionHalo(scene), [scene])
+  useModelStateAnimation(scene, animations, modelState)
+
+  useEffect(() => {
+    setEntitySelectionHaloVisible(selectionHalos, selected)
+  }, [selected, selectionHalos])
+
+  useEffect(() => () => disposeEntitySelectionHalo(selectionHalos), [selectionHalos])
 
   if (!url || !box || !scene) return null
 
   return (
-    <group position={box.floorPosition} rotation={[0, box.rotationY, 0]} scale={uniformScale} renderOrder={31}>
+    <group position={box.floorPosition} rotation={[0, box.rotationY + facingRotationY, 0]} scale={uniformScale} renderOrder={31}>
       <primitive object={scene} position={offset} />
     </group>
+  )
+}
+
+function SkylightConnectorModel({ connector, opacity = 1 }) {
+  const url = connectorAssetUrl(connector)
+  const { scene: sourceScene } = useGLTF(url)
+  const materialSlots = useMemo(() => normalizeModelMaterialSlots(connector?.modelGeometry), [connector?.modelGeometry])
+  const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
+  const scene = useMemo(() => {
+    const clone = SkeletonUtils.clone(sourceScene)
+    clone.traverse(child => {
+      if (!child.isMesh || !child.material) return
+      child.castShadow = opacity >= 0.999
+      child.receiveShadow = true
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      const next = materials.map(material => {
+        const value = applyMaterialSlotOverrides(material.clone(), materialSlots, materialOverrides)
+        value.transparent = value.transparent || opacity < 0.999
+        value.opacity = Math.min(value.opacity ?? 1, opacity)
+        if (value.transparent) value.depthWrite = false
+        value.needsUpdate = true
+        return value
+      })
+      child.material = Array.isArray(child.material) ? next : next[0]
+    })
+    return clone
+  }, [sourceScene, materialSlots, materialOverrides, opacity])
+  const width = Math.max(1, Number(connector.width) || 1)
+  const depth = Math.max(1, Number(connector.depth) || 1)
+  return (
+    <group position={[Number(connector.x) + width / 2, Number(connector.y) || 0, Number(connector.z) + depth / 2]} rotation={[0, Number(connector.rotationY) || 0, 0]} renderOrder={31}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+
+function SkylightSelectionOutline({ connector }) {
+  const width = Math.max(1, Number(connector.width) || 1)
+  const depth = Math.max(1, Number(connector.depth) || 1)
+  const height = Math.max(0.08, Number(connector.height) || 0.1)
+  return (
+    <mesh position={[Number(connector.x) + width / 2, (Number(connector.y) || 0) + height / 2, Number(connector.z) + depth / 2]} renderOrder={45}>
+      <boxGeometry args={[width + 0.08, height + 0.08, depth + 0.08]} />
+      <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
+    </mesh>
   )
 }
 
@@ -1594,22 +1758,42 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
 
   if (!connector) return null
   const pointerProps = onPointerSelect ? { onPointerDown: handlePointerDown } : {}
-  if (connector.type === 'door') {
+  if (['door', 'window', 'screen-window'].includes(connector.type)) {
     const url = connectorAssetUrl(connector)
     if (url) {
       return (
         <group {...pointerProps}>
+          <WindowEmbrasure connector={connector} opacity={opacity} />
           <Suspense fallback={<DoorConnectorFallback connector={connector} opacity={opacity} />}>
-            <DoorConnectorModel connector={connector} curveWall={curveWall} opacity={opacity} />
+            <DoorConnectorModel connector={connector} curveWall={curveWall} opacity={opacity} selected={selected} />
           </Suspense>
-          {selected && <ConnectorSelectionOutline connector={connector} />}
         </group>
       )
     }
     return (
       <group {...pointerProps}>
+        <WindowEmbrasure connector={connector} opacity={opacity} />
         <DoorConnectorFallback connector={connector} opacity={opacity} />
         {selected && <ConnectorSelectionOutline connector={connector} />}
+      </group>
+    )
+  }
+
+  if (connector.type === 'skylight') {
+    const url = connectorAssetUrl(connector)
+    const width = Math.max(1, Number(connector.width) || 1)
+    const depth = Math.max(1, Number(connector.depth) || 1)
+    return (
+      <group {...pointerProps}>
+        {url ? (
+          <Suspense fallback={null}><SkylightConnectorModel connector={connector} opacity={opacity} /></Suspense>
+        ) : (
+          <mesh position={[Number(connector.x) + width / 2, Number(connector.y) || 0, Number(connector.z) + depth / 2]}>
+            <boxGeometry args={[width, 0.08, depth]} />
+            <meshPhysicalMaterial color="#6edcff" transparent opacity={0.3} roughness={0.12} metalness={0.08} depthWrite={false} />
+          </mesh>
+        )}
+        {selected && <SkylightSelectionOutline connector={connector} />}
       </group>
     )
   }
@@ -1833,65 +2017,7 @@ function StairSegment({ stair, textureMaterials, opacity = 1, showDetails = true
   )
 }
 
-function mergeWaterCells(waterCells) {
-  const groups = new Map()
-  for (const cell of waterCells) {
-    const key = `${Math.round(cell.baseY * 1000)}:${Math.round(cell.topY * 1000)}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(cell)
-  }
-
-  const rectangles = []
-  for (const cells of groups.values()) {
-    const cellMap = new Map(cells.map(cell => [`${cell.x}:${cell.z}`, cell]))
-    const used = new Set()
-    const sorted = [...cells].sort((a, b) => a.z - b.z || a.x - b.x)
-
-    for (const cell of sorted) {
-      const startKey = `${cell.x}:${cell.z}`
-      if (used.has(startKey)) continue
-
-      let width = 1
-      while (cellMap.has(`${cell.x + width}:${cell.z}`) && !used.has(`${cell.x + width}:${cell.z}`)) {
-        width += 1
-      }
-
-      let depth = 1
-      let canExtend = true
-      while (canExtend) {
-        const nextZ = cell.z + depth
-        for (let dx = 0; dx < width; dx += 1) {
-          const key = `${cell.x + dx}:${nextZ}`
-          if (!cellMap.has(key) || used.has(key)) {
-            canExtend = false
-            break
-          }
-        }
-        if (canExtend) depth += 1
-      }
-
-      for (let dz = 0; dz < depth; dz += 1) {
-        for (let dx = 0; dx < width; dx += 1) {
-          used.add(`${cell.x + dx}:${cell.z + dz}`)
-        }
-      }
-
-      rectangles.push({
-        x: cell.x,
-        z: cell.z,
-        width,
-        depth,
-        baseY: cell.baseY,
-        topY: cell.topY,
-      })
-    }
-  }
-
-  return rectangles
-}
-
-function WaterSheets({ waterCells, opacity = 0.16 }) {
-  const rectangles = useMemo(() => mergeWaterCells(waterCells), [waterCells])
+function ExteriorWaterSurface({ surface, opacity = 0.16 }) {
   const material = useMemo(() => createWaterMaterial({ opacity: Math.max(opacity, 0.38) }), [opacity])
 
   useFrame((state) => updateWaterMaterial(material, state.clock.elapsedTime))
@@ -1899,21 +2025,14 @@ function WaterSheets({ waterCells, opacity = 0.16 }) {
   useEffect(() => () => material.dispose(), [material])
 
   return (
-    <>
-      {rectangles.map((rect, index) => {
-        return (
-          <mesh
-            key={`${rect.baseY}:${rect.topY}:${rect.x}:${rect.z}:${index}`}
-            position={[rect.x + rect.width / 2, rect.topY - 0.02, rect.z + rect.depth / 2]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            renderOrder={20}
-          >
-            <planeGeometry args={[rect.width, rect.depth, 16, 16]} />
-            <primitive object={material} attach="material" />
-          </mesh>
-        )
-      })}
-    </>
+    <mesh
+      position={[surface.x + surface.width / 2, surface.y, surface.z + surface.depth / 2]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={20}
+    >
+      <planeGeometry args={[surface.width, surface.depth, 32, 32]} />
+      <primitive object={material} attach="material" />
+    </mesh>
   )
 }
 
@@ -1928,7 +2047,11 @@ function displayedWallFacades(walls, displayLevel, cameraVolumeRoomId = null) {
   const groups = new Map()
   for (const wall of walls) {
     const belongsToCameraVolume = cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId)
-    if (!belongsToCameraVolume && yToLevel(wallOpacityY(wall)) !== displayLevel) continue
+    if (!wallParticipatesInCameraCutaway({
+      wallLevel: yToLevel(wallOpacityY(wall)),
+      displayLevel,
+      belongsToActiveRoomVolume: belongsToCameraVolume,
+    })) continue
     const facadeId = wallFacadeKey(wall)
     if (!groups.has(facadeId)) {
       groups.set(facadeId, {
@@ -1996,7 +2119,7 @@ function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null) {
   return occludedIds
 }
 
-function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails }) {
+function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, skylights }) {
   const hasVerticalProfile = Array.isArray(room?.verticalProfile?.slices)
     && room.verticalProfile.slices.length > 0
   const floorSlice = hasVerticalProfile ? roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT) : null
@@ -2010,11 +2133,12 @@ function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails }) {
       opacity={1}
       showDetails={showDetails}
       footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
+      skylights={skylights}
     />
   )
 }
 
-function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails }) {
+function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails, skylights }) {
   return (
     <RoomSlab
       room={room}
@@ -2025,6 +2149,7 @@ function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMa
       showDetails={showDetails}
       footprintContours={multiPolygonContours(horizontalInterface.footprint)}
       yOverride={horizontalInterface.y}
+      skylights={skylights}
     />
   )
 }
@@ -2041,10 +2166,15 @@ function SurfaceDungeonScene({
   onConnectorSelect = null,
   runtimeFeatureStates = {},
   cameraControlsRef = null,
+  roomContextAnchor = null,
   onCameraRoomIdChange = null,
 }) {
   const surface = useMemo(() => normalizeSurfaceData(surfaceData), [surfaceData])
-  const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef)
+  const skylights = useMemo(
+    () => Object.values(surface.connectors).filter(connector => connector?.type === 'skylight'),
+    [surface.connectors],
+  )
+  const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef, roomContextAnchor)
   useEffect(() => {
     onCameraRoomIdChange?.(cameraVolumeRoomId)
   }, [cameraVolumeRoomId, onCameraRoomIdChange])
@@ -2084,15 +2214,15 @@ function SurfaceDungeonScene({
   const worldPointIsVisible = (x, z, y) => (
     isWorldPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)
   )
+  const worldInteriorPointIsVisible = (x, z, y) => (
+    isWorldInteriorPointVisibleAtLevel(surface, displayLevel, x, z, y, cameraVolumeRoomId)
+  )
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
     || (cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId))
-  const roomFloorIsVisible = room => (
-    displayLevel === null || yToLevel(getRoomBaseY(room)) <= displayLevel
-  )
   const connectorIsVisible = connector => {
     if (displayLevel === null) return true
     if (cameraVolumeRoomId && connector?.roomIds?.includes(cameraVolumeRoomId)) return true
-    if (connector?.type === 'door' || connector?.type === 'legacy-door-placeholder') {
+    if (['door', 'window', 'screen-window', 'legacy-door-placeholder'].includes(connector?.type)) {
       const centerX = Number.isFinite(Number(connector?.x))
         ? Number(connector.x)
         : ((Number(connector?.x0) || 0) + (Number(connector?.x1) || 0)) / (2 * SURFACE_FINE)
@@ -2110,7 +2240,7 @@ function SurfaceDungeonScene({
     if (Number.isFinite(Number(connector?.y))) levels.push(yToLevel(connector.y))
     if (Number.isFinite(Number(connector?.topY))) levels.push(yToLevel(connector.topY))
     if (levels.length === 0) return false
-    if (displayLevel >= Math.min(...levels)) return true
+    if (displayLevel >= Math.min(...levels) && displayLevel <= Math.max(...levels)) return true
     const centerX = (Number(connector?.x) || 0) + (Number(connector?.width) || 1) / 2
     const centerZ = (Number(connector?.z) || 0) + (Number(connector?.depth) || 1) / 2
     const heights = [
@@ -2120,45 +2250,54 @@ function SurfaceDungeonScene({
       connector?.toY,
       ...(connector?.stops || []).map(stop => stop?.y),
     ].filter(value => Number.isFinite(Number(value)))
-    return heights.some(y => worldPointIsVisible(centerX, centerZ, Number(y)))
+    return heights.some(y => worldInteriorPointIsVisible(centerX, centerZ, Number(y)))
   }
-  const visibleWaterCells = useMemo(
-    () => water?.waterCells || [],
-    [water?.waterCells],
-  )
+  const renderedFloorRoomIds = new Set()
 
   return (
     <>
-      {Object.entries(surface.rooms).map(([id, room]) => {
-        if (!roomFloorIsVisible(room)) return null
-        return (
-          <RoomFloorSurface
-            key={id}
-            room={{ id, ...room }}
-            roomLookup={surface.rooms}
-            textureMaterials={textureMaterials}
-            showDetails={showDetails}
-          />
-        )
-      })}
       {horizontalInterfaces.map(horizontalInterface => {
-        if (!horizontalInterface.ceilingRoomId) return null
         const floorRoom = horizontalInterface.floorRoomId
           ? surface.rooms[horizontalInterface.floorRoomId]
           : null
-        const floorIsDrawn = Boolean(floorRoom && roomFloorIsVisible(floorRoom))
-        const belongsToCameraVolume = horizontalInterface.ceilingRoomId === cameraVolumeRoomId
-        const ceilingIsVisible = displayLevel === null
-          || horizontalInterface.ceilingDisplayLevel <= displayLevel
-          || belongsToCameraVolume
-        if (floorIsDrawn || !ceilingIsVisible) return null
-        const room = surface.rooms[horizontalInterface.ceilingRoomId]
-        if (!room) return null
-        const opacity = displayLevel === null
-          || horizontalInterface.ceilingDisplayLevel === displayLevel
-          || belongsToCameraVolume
-          ? ceilingOpacity
-          : 1
+        const ceilingRoom = horizontalInterface.ceilingRoomId
+          ? surface.rooms[horizontalInterface.ceilingRoomId]
+          : null
+        const floorBelongsToCameraVolume = horizontalInterface.floorRoomId === cameraVolumeRoomId
+        const ceilingBelongsToCameraVolume = horizontalInterface.ceilingRoomId === cameraVolumeRoomId
+        const renderKind = horizontalInterfaceRenderKind({
+          hasFloor: Boolean(floorRoom),
+          floorDisplayLevel: floorRoom ? yToLevel(getRoomBaseY(floorRoom)) : null,
+          floorBelongsToCameraVolume,
+          hasCeiling: Boolean(ceilingRoom),
+          ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
+          interfaceDisplayLevel: yToLevel(horizontalInterface.y),
+          ceilingBelongsToCameraVolume,
+          displayLevel,
+        })
+        const room = renderKind === 'floor' ? floorRoom : ceilingRoom
+        if (!renderKind || !room) return null
+        if (renderKind === 'floor') {
+          const roomId = horizontalInterface.floorRoomId
+          if (renderedFloorRoomIds.has(roomId)) return null
+          renderedFloorRoomIds.add(roomId)
+          return (
+            <RoomFloorSurface
+              key={`floor:${roomId}`}
+              room={{ id: roomId, ...room }}
+              roomLookup={surface.rooms}
+              textureMaterials={textureMaterials}
+              showDetails={showDetails}
+              skylights={skylights}
+            />
+          )
+        }
+        const opacity = horizontalInterfaceOpacity({
+          displayLevel,
+          ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
+          belongsToCameraVolume: ceilingBelongsToCameraVolume,
+          ceilingOpacity,
+        })
         return (
           <RoomCeilingInterface
             key={horizontalInterface.id}
@@ -2168,6 +2307,7 @@ function SurfaceDungeonScene({
             textureMaterials={textureMaterials}
             opacity={opacity}
             showDetails={showDetails}
+            skylights={skylights}
           />
         )
       })}
@@ -2182,8 +2322,10 @@ function SurfaceDungeonScene({
       ) : null)}
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
-        const belongsToCameraVolume = cameraVolumeRoomId && floor?.clipRoomId === cameraVolumeRoomId
-        if (!belongsToCameraVolume && !worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
+        if (skylights.some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
+          && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
+          && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
+        if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
         return <FloorTile key={id} id={id} floor={floor} surface={surface} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
       {surfaceWallSegments.map(wall => {
@@ -2202,9 +2344,11 @@ function SurfaceDungeonScene({
       })}
       {Object.entries(surface.ceilings).map(([id, ceiling]) => {
         const parsed = parseCeilingKey(id, ceiling)
-        if (!worldPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
-        const ceilingLevel = yToLevel(parsed.y) - 1
-        const opacity = displayLevel === null || ceilingLevel === displayLevel ? ceilingOpacity : 1
+        if (skylights.some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
+          && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
+          && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
+        if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
+        const opacity = ceilingOpacity
         return (
           <CeilingTile
             key={id}
@@ -2221,12 +2365,12 @@ function SurfaceDungeonScene({
         const toLevel = yToLevel(stair?.topY)
         const visible = displayLevel === null
           || (displayLevel >= Math.min(fromLevel, toLevel) && displayLevel <= Math.max(fromLevel, toLevel))
-          || worldPointIsVisible(
+          || worldInteriorPointIsVisible(
             (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
             (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
             stair?.y,
           )
-          || worldPointIsVisible(
+          || worldInteriorPointIsVisible(
             (Number(stair?.minX) + Number(stair?.maxX) + 1) / 2,
             (Number(stair?.minZ) + Number(stair?.maxZ) + 1) / 2,
             stair?.topY,
@@ -2250,7 +2394,9 @@ function SurfaceDungeonScene({
           displayLevel={displayLevel}
         />
       ) : null)}
-      {showWater && visibleWaterCells.length > 0 && <WaterSheets waterCells={visibleWaterCells} opacity={waterOpacity} />}
+      {showWater && water?.exteriorSurface && (
+        <ExteriorWaterSurface surface={water.exteriorSurface} opacity={waterOpacity} />
+      )}
     </>
   )
 }

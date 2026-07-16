@@ -1,0 +1,928 @@
+{
+  "format_version": 1,
+  "unit": "enclume_world_unit",
+  "placement_mode_default": "connector",
+  "origin_default": "floor-center",
+  "assets": [
+    {
+      "name": "window_1pan_1level",
+      "label": "Fenêtre 1 pan · 1 étage",
+      "catalog_file": "window_1pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 0.1,
+      "height_m": 1.5,
+      "opening_width_m": 1,
+      "wall_cut_width_m": 1,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_1pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_1pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_2pan_1level",
+      "label": "Fenêtre 2 pans · 1 étage",
+      "catalog_file": "window_2pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 0.1,
+      "height_m": 1.5,
+      "opening_width_m": 2,
+      "wall_cut_width_m": 2,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_2pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_2pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_3pan_1level",
+      "label": "Fenêtre 3 pans · 1 étage",
+      "catalog_file": "window_3pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 3,
+      "footprint_depth_m": 0.1,
+      "height_m": 1.5,
+      "opening_width_m": 3,
+      "wall_cut_width_m": 3,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_3pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_3pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_4pan_1level",
+      "label": "Fenêtre 4 pans · 1 étage",
+      "catalog_file": "window_4pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 4,
+      "footprint_depth_m": 0.1,
+      "height_m": 1.5,
+      "opening_width_m": 4,
+      "wall_cut_width_m": 4,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_4pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_4pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_1pan_2level",
+      "label": "Fenêtre 1 pan · 2 étages",
+      "catalog_file": "window_1pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 0.1,
+      "height_m": 3,
+      "opening_width_m": 1,
+      "wall_cut_width_m": 1,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_1pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_1pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_2pan_2level",
+      "label": "Fenêtre 2 pans · 2 étages",
+      "catalog_file": "window_2pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 0.1,
+      "height_m": 3,
+      "opening_width_m": 2,
+      "wall_cut_width_m": 2,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_2pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_2pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_3pan_2level",
+      "label": "Fenêtre 3 pans · 2 étages",
+      "catalog_file": "window_3pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 3,
+      "footprint_depth_m": 0.1,
+      "height_m": 3,
+      "opening_width_m": 3,
+      "wall_cut_width_m": 3,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_3pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_3pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "window_4pan_2level",
+      "label": "Fenêtre 4 pans · 2 étages",
+      "catalog_file": "window_4pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "window",
+      "footprint_width_m": 4,
+      "footprint_depth_m": 0.1,
+      "height_m": 3,
+      "opening_width_m": 4,
+      "wall_cut_width_m": 4,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "window_4pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "window_4pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_1pan_1level",
+      "label": "Fenêtre écran 1 pan · 1 étage",
+      "catalog_file": "screen_window_1pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 0.16,
+      "height_m": 1.5,
+      "opening_width_m": 1,
+      "wall_cut_width_m": 1,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_1pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_1pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_1pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_2pan_1level",
+      "label": "Fenêtre écran 2 pans · 1 étage",
+      "catalog_file": "screen_window_2pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 0.16,
+      "height_m": 1.5,
+      "opening_width_m": 2,
+      "wall_cut_width_m": 2,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_2pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_2pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_2pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_3pan_1level",
+      "label": "Fenêtre écran 3 pans · 1 étage",
+      "catalog_file": "screen_window_3pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 3,
+      "footprint_depth_m": 0.16,
+      "height_m": 1.5,
+      "opening_width_m": 3,
+      "wall_cut_width_m": 3,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_3pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_3pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_3pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_4pan_1level",
+      "label": "Fenêtre écran 4 pans · 1 étage",
+      "catalog_file": "screen_window_4pan_1level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 4,
+      "footprint_depth_m": 0.16,
+      "height_m": 1.5,
+      "opening_width_m": 4,
+      "wall_cut_width_m": 4,
+      "wall_cut_height_m": 1.5,
+      "opening_bottom_m": 0.5,
+      "span_levels": 1,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_4pan_1level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_4pan_1level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_4pan_1level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_1pan_2level",
+      "label": "Fenêtre écran 1 pan · 2 étages",
+      "catalog_file": "screen_window_1pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 0.16,
+      "height_m": 3,
+      "opening_width_m": 1,
+      "wall_cut_width_m": 1,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_1pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_1pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_1pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_2pan_2level",
+      "label": "Fenêtre écran 2 pans · 2 étages",
+      "catalog_file": "screen_window_2pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 0.16,
+      "height_m": 3,
+      "opening_width_m": 2,
+      "wall_cut_width_m": 2,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_2pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_2pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_2pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_3pan_2level",
+      "label": "Fenêtre écran 3 pans · 2 étages",
+      "catalog_file": "screen_window_3pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 3,
+      "footprint_depth_m": 0.16,
+      "height_m": 3,
+      "opening_width_m": 3,
+      "wall_cut_width_m": 3,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_3pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_3pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_3pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "screen_window_4pan_2level",
+      "label": "Fenêtre écran 4 pans · 2 étages",
+      "catalog_file": "screen_window_4pan_2level.glb",
+      "category": "Fenêtres",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "screen-window",
+      "footprint_width_m": 4,
+      "footprint_depth_m": 0.16,
+      "height_m": 3,
+      "opening_width_m": 4,
+      "wall_cut_width_m": 4,
+      "wall_cut_height_m": 3,
+      "opening_bottom_m": 1,
+      "span_levels": 2,
+      "allowed_states": [
+        "transparent",
+        "opaque",
+        "mirror"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "screen_window_4pan_2level__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "hinges",
+          "code": "SLOT_03",
+          "label": "Charnières",
+          "default_hex": "#070C10",
+          "transparent": false,
+          "material_names": [
+            "screen_window_4pan_2level__SLOT_03__Hinges"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "screen_window_4pan_2level__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "skylight_1x1",
+      "label": "Verrière 1x1",
+      "catalog_file": "skylight_1x1.glb",
+      "category": "structural_windows",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "skylight",
+      "skylight_size": "1x1",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 1,
+      "height_m": 0.1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "skylight_1x1__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "skylight_1x1__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "skylight_2x1",
+      "label": "Verrière 2x1",
+      "catalog_file": "skylight_2x1.glb",
+      "category": "structural_windows",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "skylight",
+      "skylight_size": "2x1",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 1,
+      "height_m": 0.1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "skylight_2x1__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "skylight_2x1__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "skylight_2x2",
+      "label": "Verrière 2x2",
+      "catalog_file": "skylight_2x2.glb",
+      "category": "structural_windows",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "skylight",
+      "skylight_size": "2x2",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 2,
+      "height_m": 0.1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "skylight_2x2__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "skylight_2x2__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "skylight_3x3",
+      "label": "Verrière 3x3",
+      "catalog_file": "skylight_3x3.glb",
+      "category": "structural_windows",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "connector_type": "skylight",
+      "skylight_size": "3x3",
+      "footprint_width_m": 3,
+      "footprint_depth_m": 3,
+      "height_m": 0.1,
+      "allowed_states": [
+        "transparent"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "frame",
+          "code": "SLOT_01",
+          "label": "Cadre",
+          "default_hex": "#17252D",
+          "transparent": false,
+          "material_names": [
+            "skylight_3x3__SLOT_01__Primary_Frame"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#6EDCFF",
+          "transparent": true,
+          "material_names": [
+            "skylight_3x3__SLOT_05__Transparent_Glass"
+          ]
+        }
+      ]
+    }
+  ]
+}

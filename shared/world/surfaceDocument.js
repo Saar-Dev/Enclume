@@ -372,7 +372,7 @@ function validateFeature(collection, id, item, errors) {
     validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ', 'y', 'topY'], path, errors)
   } else if (collection === 'connectors') {
     if (typeof item.type !== 'string' || !item.type.trim()) errors.push(`${path}.type est obligatoire`)
-    if (item.type === 'door') {
+    if (['door', 'window', 'screen-window'].includes(item.type)) {
       if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
       validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1', 'y'], path, errors)
       if (item.axis === 'segment') {
@@ -380,6 +380,23 @@ function validateFeature(collection, id, item, errors) {
         if (typeof item.curveId !== 'string' || !item.curveId) errors.push(`${path}.curveId est obligatoire sur un mur courbe`)
         if (!Number.isFinite(Number(item.curveOffset))) errors.push(`${path}.curveOffset doit être un nombre fini`)
       }
+      if (item.allowedStates !== undefined) {
+        const allowedStates = Array.isArray(item.allowedStates) ? item.allowedStates.map(String) : []
+        const validStates = item.type === 'screen-window'
+          ? ['transparent', 'opaque', 'mirror']
+          : item.type === 'window' ? ['transparent'] : ['open', 'closed', 'locked']
+        if (!Array.isArray(item.allowedStates)
+          || !allowedStates.includes(item.type === 'door' ? 'closed' : 'transparent')
+          || allowedStates.some(state => !validStates.includes(state))) {
+          errors.push(`${path}.allowedStates contient un état incompatible avec ${item.type}`)
+        }
+      }
+      if (item.modelFacing !== undefined && !['front', 'back'].includes(item.modelFacing)) {
+        errors.push(`${path}.modelFacing doit valoir front ou back`)
+      }
+    } else if (item.type === 'skylight') {
+      validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth'], path, errors)
+      if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une largeur et une profondeur positives`)
     } else if (item.type === 'elevator') {
       validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
     }

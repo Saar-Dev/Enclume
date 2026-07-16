@@ -319,3 +319,41 @@ test('la v8 valide une porte ancree dans le repere parametrique d un arc', () =>
   delete surface.connectors.curvedDoor.curveOffset
   assert.equal(validateSurfaceData(surface).valid, false)
 })
+
+test('les fenêtres et verrières structurelles sont validées comme connecteurs canoniques', () => {
+  const surface = surfaceFixture()
+  surface.connectors.screen = {
+    type: 'screen-window',
+    axis: 'x',
+    x0: 0,
+    x1: 4,
+    z0: 0,
+    z1: 0,
+    y: 0.5,
+    allowedStates: ['transparent', 'opaque', 'mirror'],
+    modelFacing: 'back',
+  }
+  surface.connectors.skylight = {
+    type: 'skylight',
+    x: 0,
+    z: 0,
+    y: 0,
+    width: 2,
+    depth: 1,
+  }
+
+  const prepared = prepareSurfaceData(surface, { battlemapId: 'map-structural-windows' })
+  assert.equal(validateSurfaceData(prepared.surfaceData).valid, true)
+  assert.match(prepared.surfaceData.connectors.screen.worldId, /^[0-9a-f-]{36}$/)
+  assert.equal(prepared.surfaceData.connectors.screen.modelFacing, 'back')
+  assert.match(prepared.surfaceData.connectors.skylight.worldId, /^[0-9a-f-]{36}$/)
+
+  surface.connectors.screen.allowedStates = ['transparent', 'open']
+  assert.equal(validateSurfaceData(surface).valid, false)
+  surface.connectors.screen.allowedStates = ['transparent']
+  surface.connectors.screen.modelFacing = 'sideways'
+  assert.equal(validateSurfaceData(surface).valid, false)
+  surface.connectors.screen.modelFacing = 'front'
+  surface.connectors.skylight.width = 0
+  assert.equal(validateSurfaceData(surface).valid, false)
+})

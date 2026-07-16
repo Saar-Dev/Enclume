@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   clearMaterialSlotOverride,
+  connectorModelMaterialSlots,
   materialSlotDisplayValue,
-  normalizeModelMaterialSlots,
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
+import Object3DPreview from './Object3DPreview.jsx'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -38,6 +39,9 @@ function connectorBlockingForState(type, state) {
 
 function connectorTypeLabel(type) {
   if (type === 'door') return 'Porte'
+  if (type === 'window') return 'Fenêtre'
+  if (type === 'screen-window') return 'Fenêtre écran'
+  if (type === 'skylight') return 'Dalle en verre'
   if (type === 'elevator') return 'Ascenseur'
   if (type === 'ladder') return 'Échelle'
   return type
@@ -111,6 +115,7 @@ export default function SurfaceConnectorPanel({
   onClose,
   runtimeState = null,
   onElevatorCommand = null,
+  onWindowStateChange = null,
   canEdit = true,
   canAdminElevator = canEdit,
 }) {
@@ -121,8 +126,13 @@ export default function SurfaceConnectorPanel({
     height: PANEL_H_EST,
   })
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const materialSlots = normalizeModelMaterialSlots(connector?.modelGeometry)
+  const materialSlots = connectorModelMaterialSlots(connector)
   const materialOverrides = connector?.modelMaterialOverrides || {}
+  const previewBlueprint = useMemo(() => ({
+    glb_url: connector?.modelGlbUrl || null,
+    geometry: connector?.modelGeometry || {},
+    label: connector?.modelLabel || connectorTypeLabel(connector?.type),
+  }), [connector?.modelGlbUrl, connector?.modelGeometry, connector?.modelLabel, connector?.type])
   if (!connector) return null
 
   const patchMaterialSlot = (slot, patch) => {
@@ -135,6 +145,19 @@ export default function SurfaceConnectorPanel({
     onPatch?.(connector.id, {
       modelMaterialOverrides: clearMaterialSlotOverride(materialOverrides, slot),
     })
+  }
+
+  const isWindow = ['window', 'screen-window'].includes(connector.type)
+  const allowedWindowStates = Array.isArray(connector.allowedStates)
+    ? connector.allowedStates
+    : ['transparent', ...(connector.type === 'screen-window' ? ['opaque', 'mirror'] : [])]
+  const currentWindowState = runtimeState?.state || connector.state || 'transparent'
+  const toggleAllowedState = state => {
+    if (state === 'transparent') return
+    const next = allowedWindowStates.includes(state)
+      ? allowedWindowStates.filter(item => item !== state)
+      : [...allowedWindowStates, state]
+    onPatch?.(connector.id, { allowedStates: ['transparent', ...next.filter(item => item !== 'transparent')] })
   }
 
   const patchState = (state) => {
@@ -180,6 +203,60 @@ export default function SurfaceConnectorPanel({
           </label>
         )}
 
+        {isWindow && (
+          <div style={S.field}>
+            <span style={S.label}>États disponibles</span>
+            {[
+              ['transparent', 'Transparent'],
+              ['opaque', 'Opaque'],
+              ['mirror', 'Miroir'],
+            ].map(([state, label]) => {
+              const locked = state === 'transparent' || connector.type === 'window'
+              const enabled = state === 'transparent' || (connector.type === 'screen-window' && allowedWindowStates.includes(state))
+              if (connector.type === 'window' && state !== 'transparent') return null
+              return (
+                <label key={state} style={{ ...S.stateRow, ...(locked ? S.stateRowLocked : {}) }}>
+                  <input type="checkbox" checked={enabled} disabled={!canEdit || locked} onChange={() => toggleAllowedState(state)} />
+                  <span>{label}</span>
+                </label>
+              )
+            })}
+            {!canEdit && connector.type === 'screen-window' && (
+              <div style={S.runtimeActions}>
+                {allowedWindowStates.map(state => (
+                  <button
+                    key={state}
+                    type="button"
+                    disabled={!onWindowStateChange || currentWindowState === state}
+                    onClick={() => onWindowStateChange(connector.worldId || connector.id, state)}
+                    style={{ ...S.runtimeBtn, ...(currentWindowState === state ? S.runtimeBtnCurrent : {}) }}
+                  >
+                    {state === 'transparent' ? 'Transparent' : state === 'opaque' ? 'Opaque' : 'Miroir'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {canEdit && connector.type === 'screen-window' && (
+          <div style={S.field}>
+            <span style={S.label}>Côté du boîtier</span>
+            <button
+              type="button"
+              onClick={() => onPatch?.(connector.id, {
+                modelFacing: connector.modelFacing === 'back' ? 'front' : 'back',
+              })}
+              style={S.button}
+            >
+              ↻ Retourner la fenêtre
+            </button>
+            <span style={S.hint}>
+              Le boîtier est actuellement sur la face {connector.modelFacing === 'back' ? 'B' : 'A'}.
+            </span>
+          </div>
+        )}
+
         {connector.type === 'elevator' && (
           <ElevatorRuntimeControls
             connector={connector}
@@ -207,14 +284,17 @@ export default function SurfaceConnectorPanel({
 
         {canEdit && (materialSlots.length > 0 ? (
           <div style={S.field}>
-            <span style={S.label}>Couleurs</span>
+            <span style={S.label}>Apparence</span>
+            {previewBlueprint.glb_url && (
+              <Object3DPreview blueprint={previewBlueprint} materialOverrides={materialOverrides} compact />
+            )}
             <div style={S.slotList}>
               {materialSlots.map(slot => {
                 const slotValue = materialSlotDisplayValue(materialOverrides, slot)
                 return (
                   <label key={slot.code} style={S.slotRow}>
                     <span style={S.slotLabel}>
-                      {MODEL_SLOT_LABELS[slot.code] || slot.label}
+                      {slot.label || MODEL_SLOT_LABELS[slot.code]}
                       <small>{slot.code}</small>
                     </span>
                     <input
@@ -321,6 +401,8 @@ const S = {
     flexDirection: 'column',
     gap: '5px',
   },
+  stateRow: { display: 'flex', alignItems: 'center', gap: '8px', color: '#cbd5e1', fontSize: '12px' },
+  stateRowLocked: { opacity: 0.55 },
   label: {
     fontSize: '11px',
     color: '#64748b',

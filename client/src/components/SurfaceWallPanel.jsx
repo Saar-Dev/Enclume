@@ -56,7 +56,15 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
   const startDoorPlacement = () => onPatch?.({
     mode: 'connector',
     connectorType: 'door',
+    connectorPlacementSource: 'wall-panel',
     connectorWallEdgeKeys: [...selectedKeys],
+    connectorBlueprintId: null,
+    connectorModelLabel: null,
+    connectorModelCategory: null,
+    connectorModelGlbUrl: null,
+    connectorModelBuiltinKey: null,
+    connectorModelGeometry: null,
+    connectorMaterialOverrides: {},
   })
 
   return (

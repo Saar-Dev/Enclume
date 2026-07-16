@@ -1,5 +1,216 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Surface océanique continue au-dessus du monde (2026-07-16)
+
+Le rendu distingue désormais deux géométries qui avaient été confondues. Les colonnes d'eau
+physiques servent à déterminer les volumes extérieurs et les compartiments secs : elles peuvent
+donc exclure une salle étanche. La surface visible de l'océan est, elle, un plan rectangulaire
+continu calculé sur l'emprise globale de la carte. Une pièce sèche ne peut plus percer un trou dans
+la texture de l'eau située au-dessus de la station.
+
+L'altitude de cette surface part du sommet structurel réel de la carte, demi-épaisseur des sols et
+plafonds comprise, puis ajoute cinq hauteurs d'étage canoniques. Avec la hauteur standard de
+2,5 mètres, la garde minimale est donc de 12,5 mètres au-dessus du point le plus haut. Ce calcul est
+dérivé à l'affichage et ne modifie aucun document Surface ni aucune carte.
+
+Validation : 59 tests ciblés, 131 tests monde/serveur, 3 tests de configuration, ESLint et build
+Vite. Sur la session réelle `b27cbed4-fd59-4530-b43b-dae57c33f092`, une capture Chromium au niveau
+0 confirme que la nappe ne traverse plus la station ; une seconde au niveau 7 montre une unique
+surface animée continue au-dessus de toutes les salles, sans découpe sur leur empreinte.
+
+---
+
+## Toitures exposées sur le plan affiché (2026-07-16)
+
+Une interface horizontale qui possède un plafond mais aucun sol au-dessus est classée comme toiture
+extérieure. Elle reste visible et opaque lorsque son altitude correspond au niveau affiché. À la
+même altitude, une interface partagée continue de rendre en priorité le sol de la salle supérieure.
+Le niveau 1 peut ainsi montrer côte à côte le plancher d'une salle superposée et le toit d'une salle
+du niveau 0 qui n'a rien au-dessus.
+
+La règle ne fabrique aucun plan intermédiaire. Une salle multi-étage conserve son volume continu et
+ne produit une toiture qu'au sommet réel calculé par `roomCeilingRegions`. Depuis l'étage intérieur
+courant, ce plafond conserve la coupe habituelle ; il ne devient opaque qu'une fois son propre plan
+atteint.
+
+Validation : tests des interfaces exposées et partagées, suites monde/serveur, configuration, lint
+et build. Le scénario est contrôlé visuellement après redémarrage sur une copie temporaire isolée,
+entièrement supprimée ensuite, puis directement sur la carte originale : son sol supérieur et le
+toit de sa salle basse voisine sont tous deux visibles au niveau 1. La carte originale n'est pas
+modifiée par la validation.
+
+---
+
+## Altitude canonique des sols et plafonds de salle (2026-07-16)
+
+`RoomSlab` résout désormais son altitude avec une règle explicite. `null` et `undefined` signifient
+« aucune surcharge » : un sol prend `getRoomBaseY(room)` et un plafond `getRoomTopY(room)`. Seule
+une valeur numérique fournie, y compris `0`, remplace cette altitude. Le moteur ne s'appuie donc
+plus sur la coercition JavaScript de `null` en zéro.
+
+Cette règle corrige la cause racine du plancher supérieur absent. L'interface horizontale choisissait
+bien le `floorRoomId` de la salle de niveau 1, mais son maillage était ensuite replacé à `y = 0` par
+le composant de dalle. Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, l'interface
+commune est maintenant rendue comme plafond à l'étage 0 puis comme sol opaque de la salle haute à
+`y = 2,5 m` à l'étage 1.
+
+Validation : tests unitaires dédiés aux valeurs `null`, `undefined`, `0` et au plafond ; tests de
+coupe caméra ; build Vite ; passage 0 → 1 et capture visuelle dans le navigateur après redémarrage
+des services. Aucune donnée de carte n'est modifiée.
+
+---
+
+## Enveloppe des étages inférieurs sans leur intérieur (2026-07-16)
+
+Le moteur distingue désormais deux régimes de visibilité. Au niveau affiché, la salle est complète.
+Aux niveaux strictement inférieurs, seuls les murs opaques et les connecteurs ou objets fixés dessus
+restent visibles. Les sols, plafonds, escaliers, objets libres, tokens et effets inférieurs sont
+omis. Une salle multi-niveau actuellement visée reste l'exception : son intérieur est conservé sur
+toute sa hauteur afin de montrer son volume réel.
+
+Le volume caméra qui autorise cette exception porte maintenant son étage d'origine. Changer
+`displayLevel` l'invalide immédiatement : le renderer ne peut plus afficher simultanément le sol de
+l'ancien étage et celui du nouveau pendant que la boucle 3D recalcule la salle visée.
+
+Cette règle est partagée par le jeu, l'éditeur, le picking et les interfaces horizontales. Une
+entité est classée comme murale depuis son mode de pose canonique, jamais depuis son nom ou son
+modèle. Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, le plan bas à `y = 0` choisit
+`floor` au niveau 0 puis ne rend plus rien au niveau 1 ; l'interface commune à `y = 2,5 m` choisit
+`ceiling` au niveau 0 puis le `floor` de la salle haute au niveau 1.
+
+Validation : 51 tests ciblés de visibilité/coupe, 131 tests monde/serveur, 3 tests de configuration,
+ESLint ciblé sans nouvelle erreur et build Vite. Aucune carte n'est modifiée ou migrée.
+
+---
+
+## Une seule autorité pour les sols et plafonds empilés (2026-07-16)
+
+Les sols de salle ne sont plus rendus indépendamment des interfaces horizontales. Le renderer
+consomme maintenant exclusivement `roomHorizontalInterfaces` et choisit, pour chaque empreinte et
+chaque altitude, une unique représentation :
+
+- avant l'étage de la salle haute : plafond de la salle basse, avec sa règle de coupe ;
+- à partir de l'étage de la salle haute : sol opaque de cette salle haute ;
+- pour les étages strictement inférieurs : aucune face horizontale intérieure n'est rendue ;
+- dans un volume multi-niveau actif : un plafond supérieur peut rester visible selon la coupe du
+  volume, sans rendre visible un sol appartenant à un étage encore caché.
+
+Le contrôle a été exécuté sur les données réelles de la carte `dazdazd`. Ses trois interfaces
+partagées à `y = 2,5 m` choisissent toutes `ceiling` au niveau 0 puis `floor` au niveau 1, avec les
+identifiants exacts des salles supérieures. Validation : 24 tests ciblés, 131 tests monde/serveur,
+3 tests de configuration, ESLint ciblé sans erreur, build Vite et chargement de la carte réelle au
+niveau 1 sans erreur de rendu dans la console.
+
+---
+
+## Coupe d'étage, halo des portes et pose des verrières corrigés (2026-07-16)
+
+Le rendu des interfaces horizontales suit désormais l'étage affiché, et non la simple présence
+d'une salle au-dessus. Une interface partagée est le plafond découpé de la salle basse lorsque son
+étage est courant, puis le sol opaque de la salle haute lorsque l'étage supérieur est affiché. Les
+murs des étages inférieurs restent opaques, tandis que leurs sols, plafonds et contenus intérieurs
+sont omis. Une façade ne participe à la coupe que si elle appartient au niveau courant ou au volume
+multi-niveau actif.
+
+Les portes et fenêtres GLB utilisent maintenant le même halo attaché aux meshes que les objets
+libres. Le surlignage hérite directement de la rotation, des pivots et des animations du modèle ;
+l'ancienne boîte indépendante n'est plus rendue pour ces connecteurs. Enfin, choisir une
+**Dalle en verre** conserve le renderer structurel actif : le clic sur une surface crée réellement
+le connecteur `skylight`, au lieu de basculer dans l'éditeur des objets libres.
+
+Validation : 65 tests ciblés monde/rendu, les 131 tests monde/serveur et les 3 tests de configuration
+passent, ainsi qu'ESLint ciblé et le build Vite. Dans le navigateur réel, l'étage 0 reste ouvert sous
+le plafond découpé, l'étage 1 affiche son sol opaque, le halo d'une porte vitrée épouse son GLB et
+une dalle en verre a été posée puis supprimée. Aucune donnée de test ne reste dans la carte.
+
+---
+
+## Objets 3D animables, aperçus couleur et interfaces empilées (2026-07-16)
+
+Le catalogue 3D intégré lit maintenant directement les clips contenus dans chaque GLB. Un modèle
+qui expose une animation d'ouverture reçoit deux états système, **Fermé** et **Ouvert**, avec une
+pose normalisée de `0` à `1`. Le renderer partage un seul pilote d'animation entre les entités libres
+et les connecteurs de porte : une transition est jouée dans les deux sens, puis la pose terminale
+reste maintenue. Les règles physiques continuent d'utiliser l'état canonique du monde, jamais le
+temps local de l'animation.
+
+- 43 des 92 modèles intégrés sont actuellement reconnus comme ouvrables, dont les 8 portes ;
+- le halo de sélection d'un GLB n'est plus une boîte englobante. Deux coques additives reprennent la
+  géométrie réelle de chaque mesh et héritent de sa hiérarchie, de sa rotation et de son animation ;
+- les tooltips d'entité et de connecteur affichent un petit rendu 3D dans **Apparence** dès que le
+  modèle expose des couleurs. Toute modification de slot est visible immédiatement dans cet aperçu ;
+- les quatre `skylight` sont rangées sous **Objets 3D > Dalles en verre** et se posent par le rayon
+  structurel existant. L'ancien bouton de salle en doublon a été retiré ;
+- une interface commune est découpée comme plafond depuis l'étage inférieur, puis rendue comme sol
+  opaque dès que l'étage supérieur est affiché. La nouvelle règle d'enveloppe détaillée ci-dessus
+  remplace l'ancienne conservation de tout l'intérieur des niveaux inférieurs ;
+- la configuration de campagne remplace **Zone dangereuse** par l'onglet rouge **Supprimer**. Le
+  panneau de droite porte l'avertissement complet et l'unique action **Confirmer la suppression**,
+  sans dialogue natif superposé.
+
+Validation : 131 tests monde/serveur, 3 tests de configuration, 6 tests ciblés animation/halo/dalle,
+ESLint ciblé, build Vite et parcours navigateur réel. Le catalogue contient bien 43 blueprints à
+deux états ; une porte vitrée coulissante a été ouverte, maintenue puis refermée ; les aperçus
+couleur d'une entité et d'une fenêtre-écran ont été contrôlés. La campagne n'a pas été supprimée et
+la porte de test a retrouvé son état fermé. L'attente initiale d'une interface toujours opaque a été
+corrigée par la section ci-dessus : son apparence dépend bien de l'étage affiché.
+
+---
+
+## Fenêtres continues, pose depuis Objets 3D et contexte de caméra stable (2026-07-15)
+
+Les fenêtres structurelles sont désormais présentées dans **Objets 3D > Fenêtres**. Elles se
+choisissent et se prévisualisent comme les autres modèles 3D, mais leur pose sur un mur crée toujours
+un connecteur `window` ou `screen-window` dans le document Surface. Le panneau de mur ne propose
+plus que l'ajout d'une porte.
+
+- les 16 fenêtres murales utilisent une vitre continue, sans traverse ni meneau intérieur ;
+- les 8 fenêtres-écrans exposent une couleur **Charnières** indépendante ; leurs boîtiers restent
+  fixes et ne sont pas recolorés avec elles ;
+- chaque fenêtre-écran possède un seul boîtier. **Retourner la fenêtre** persiste une orientation
+  `front`/`back` et applique le demi-tour autour de l'ancrage structurel ;
+- le halo jaune des objets GLB suit désormais leur géométrie réelle et sa hiérarchie, y compris sous
+  rotation et animation, au lieu d'une boîte englobante orientée séparément ;
+- la pose depuis le catalogue raycast tout mur valide du niveau, affiche le vrai GLB en aperçu et
+  revient au mode sélection après validation ;
+- le contexte d'une salle multi-niveau est choisi par le token suivi en jeu joueur, et par la cible
+  stable de la caméra pour le MJ et l'éditeur ;
+- la position réelle de la caméra ne pilote que la transparence des façades avant. Elle ne peut plus
+  faire disparaître les étages supérieurs en traversant une salle voisine pendant un zoom ou une
+  orbite.
+- l'eau extérieure utilise la face supérieure physique du toit global, épaisseur de plafond
+  comprise, puis un léger décalage positif ; elle ne traverse plus la dalle supérieure.
+
+Validation : 40 tests ciblés caméra/Surface, suite monde complète, build Vite, contrôle du
+générateur et des 20 GLB, synchronisation du catalogue serveur et parcours réel dans le navigateur
+intégré avec présence de la catégorie **Fenêtres** et aperçu mural. Les éventuelles poses du parcours
+ont été annulées avant de quitter la carte.
+
+---
+
+## Fenêtres structurelles et verrières (2026-07-15)
+
+L'éditeur Surface v12 possède désormais trois ouvertures structurelles : fenêtre fixe, fenêtre-écran
+à état runtime et verrière horizontale. Elles sont enregistrées comme connecteurs avec UUID stable ;
+leurs GLB restent des apparences et ne deviennent jamais la source de vérité physique.
+
+- les murs droits et courbes sont découpés sur l'intervalle vertical exact de la baie, y compris sur
+  plusieurs niveaux, en conservant allège et linteau ;
+- les fenêtres bloquent mouvement et fluides ; la vue traverse une vitre fixe ou un écran
+  `transparent`, mais pas un écran `opaque` ou `mirror` ;
+- l'état des fenêtres-écrans est persisté dans `world_feature_states`, révisé et diffusé par
+  WebSocket ;
+- les verrières remplacent uniquement un vrai sol/plafond, fournissent un support praticable,
+  laissent passer la vue et bloquent déplacement vertical et fluides ;
+- le pack `output/structural_windows` fournit 20 modèles intégrés : 8 fenêtres, 8 écrans et
+  4 verrières, générables par `tools/generate-structural-windows.mjs`.
+
+Validation : 31 tests Surface, suite monde/serveur complète, configuration serveur, build Vite,
+smoke Playwright et scénario réel création/sauvegarde/état runtime/pose avec aperçu GLB. Le scénario
+refuse également un état non autorisé et une verrière flottant dans une tranche vide.
+
+---
+
 ## Création de l'instance de fusion commune (2026-07-15)
 
 La fusion dispose désormais d'un troisième environnement indépendant. Les deux environnements de

@@ -12,6 +12,7 @@ import {
   applyElevatorConnector,
   applyFloorSelection,
   applyLadderConnector,
+  applySkylightConnector,
   applyRoomSelectionWithResult,
   applyStairSelection,
   applyWallDrag,
@@ -26,12 +27,13 @@ import {
   getToolRoomHeightLevels,
   getToolWallThicknessFine,
   getWallRenderBox,
-  isWorldPointVisibleAtLevel,
+  isWorldInteriorPointVisibleAtLevel,
   levelToY,
   makeStairFromSelection,
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
   makeLadderConnectorFromCell,
+  makeSkylightConnectorFromCell,
   makeWallsFromDrag,
   normalizeSurfaceData,
   parseFloorKey,
@@ -402,7 +404,7 @@ function EffectVolumePreview({ selection, surfaceTool }) {
   )
 }
 
-function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
+function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0, cameraVolumeRoomId = null }) {
   return regions.map(region => {
     const bounds = region?.bounds
     const sliceBottom = levelToY(displayLevel)
@@ -411,10 +413,15 @@ function RuntimeEffectRegions({ regions = [], surfaceData, displayLevel = 0 }) {
     const centerX = (bounds.min.x + bounds.max.x) / 2
     const centerZ = (bounds.min.z + bounds.max.z) / 2
     const intersectsSlice = bounds.max.y > sliceBottom && bounds.min.y < sliceTop
-    const visibleInOpenRoom = bounds.max.y <= sliceBottom
-      && yToLevel(bounds.min.y) < displayLevel
-      && isWorldPointVisibleAtLevel(surfaceData, displayLevel, centerX, centerZ, bounds.min.y)
-    if (!intersectsSlice && !visibleInOpenRoom) return null
+    const visibleInActiveVolume = !intersectsSlice && isWorldInteriorPointVisibleAtLevel(
+      surfaceData,
+      displayLevel,
+      centerX,
+      centerZ,
+      (bounds.min.y + bounds.max.y) / 2,
+      cameraVolumeRoomId,
+    )
+    if (!intersectsSlice && !visibleInActiveVolume) return null
     const size = [bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y, bounds.max.z - bounds.min.z]
     const center = [
       centerX,
@@ -476,14 +483,16 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
     )
   }, [surfaceData])
   if (!drag) return null
-  const connector = surfaceTool?.connectorType === 'door'
+  const connector = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
     ? makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)
+    : surfaceTool?.connectorType === 'skylight'
+      ? makeSkylightConnectorFromCell(surfaceData, drag.end, surfaceTool)
     : surfaceTool?.connectorType === 'ladder'
       ? makeLadderConnectorFromCell(surfaceData, drag.end, surfaceTool)
       : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
   if (!connector) return null
 
-  if (connector.type === 'door') {
+  if (['door', 'window', 'screen-window', 'skylight'].includes(connector.type)) {
     return (
       <ConnectorSegment
         connector={{ id: 'connector-preview', ...connector }}
@@ -519,6 +528,7 @@ export default function SurfaceEditorScene({
   runtimeEffectRegions = [],
   runtimeFeatureStates = {},
   onRuntimeEffectCreate,
+  onConnectorPlaced,
 }) {
   const { camera, gl } = useThree()
   const orbitRef = useRef()
@@ -535,6 +545,7 @@ export default function SurfaceEditorScene({
   const skipNextCanvasMouseDownRef = useRef(false)
   const [drag, setDrag] = useState(null)
   const [hoverPreview, setHoverPreview] = useState(null)
+  const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -655,7 +666,9 @@ export default function SurfaceEditorScene({
     const allowedEdgeKeys = new Set(
       (surfaceTool?.connectorWallEdgeKeys || surfaceTool?.selectedRoomWallKeys || []).map(String),
     )
-    if (!selectedRoomId || allowedEdgeKeys.size === 0) return null
+    const canPickAnyWall = ['window', 'screen-window'].includes(surfaceTool?.connectorType)
+      && surfaceTool?.connectorPlacementSource === 'object-palette'
+    if (!canPickAnyWall && (!selectedRoomId || allowedEdgeKeys.size === 0)) return null
 
     const ray = setPointerRay(clientX, clientY)
     const levelY = getToolElevation(surfaceTool)
@@ -663,8 +676,9 @@ export default function SurfaceEditorScene({
 
     for (const panel of roomWallPanels) {
       if (!sameLevel(panel.y, levelY)) continue
-      if (!panel.roomIds?.includes(selectedRoomId)) continue
-      if (!(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
+      if (!canPickAnyWall && !panel.roomIds?.includes(selectedRoomId)) continue
+      if (!canPickAnyWall
+        && !(panel.sourceEdgeKeys || []).some(key => allowedEdgeKeys.has(String(key)))) continue
 
       const x0 = Number(panel.x0) / SURFACE_FINE
       const z0 = Number(panel.z0) / SURFACE_FINE
@@ -720,7 +734,7 @@ export default function SurfaceEditorScene({
       let maxX
       let minZ
       let maxZ
-      if (connector?.type === 'door') {
+      if (['door', 'window', 'screen-window'].includes(connector?.type)) {
         const depth = Math.max(
           0.24,
           Number(connector?.modelGeometry?.depth) || Number(connector?.depth) || (Number(connector?.thickness) || 1) / SURFACE_FINE,
@@ -858,7 +872,7 @@ export default function SurfaceEditorScene({
         return
       }
       const mode = surfaceTool?.mode || 'select'
-      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const placesDoor = mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       const start = placesDoor
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
         : mode === 'wall'
@@ -883,7 +897,7 @@ export default function SurfaceEditorScene({
     const handleMouseMove = (e) => {
       if (!dragRef.current) {
         if (surfaceTool?.mode === 'connector') {
-          const placesDoor = surfaceTool?.connectorType === 'door'
+          const placesDoor = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
           const point = placesDoor
             ? getSelectedDoorWallPoint(e.clientX, e.clientY)
             : getFloorCell(e.clientX, e.clientY)
@@ -903,7 +917,7 @@ export default function SurfaceEditorScene({
       setHoverPreview(prev => (prev ? null : prev))
       if ((e.buttons & 2) !== 0 && cancelDrag(e)) return
       const mode = dragRef.current.mode
-      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const placesDoor = mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       const end = placesDoor
         ? getSelectedDoorWallPoint(e.clientX, e.clientY)
         : mode === 'wall'
@@ -911,7 +925,7 @@ export default function SurfaceEditorScene({
           : getFloorCell(e.clientX, e.clientY)
       if (!end) return
       const previousEnd = dragRef.current.end
-      const usesFinePoint = mode === 'wall' || (mode === 'connector' && surfaceTool?.connectorType === 'door')
+      const usesFinePoint = mode === 'wall' || (mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType))
       const unchanged = usesFinePoint
         ? previousEnd.fx === end.fx && previousEnd.fz === end.fz
         : previousEnd.x === end.x && previousEnd.z === end.z
@@ -928,7 +942,7 @@ export default function SurfaceEditorScene({
       if (!currentDrag) return
 
       const mode = currentDrag.mode
-      const placesDoor = mode === 'connector' && surfaceTool?.connectorType === 'door'
+      const placesDoor = mode === 'connector' && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
       const end = placesDoor
         ? (getSelectedDoorWallPoint(e.clientX, e.clientY) || currentDrag.end)
         : mode === 'wall'
@@ -1035,16 +1049,21 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'connector') {
-        const nextData = surfaceTool?.connectorType === 'door'
+        const nextData = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
           ? applyDoorConnector(surfaceData, finalDrag.end, surfaceTool)
+          : surfaceTool?.connectorType === 'skylight'
+            ? applySkylightConnector(surfaceData, finalDrag.end, surfaceTool)
           : surfaceTool?.connectorType === 'ladder'
             ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
             : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
         if (nextData === surfaceData) {
+          const openingError = ['window', 'screen-window'].includes(surfaceTool?.connectorType)
+            ? 'La fenêtre doit être posée sur un mur.'
+            : 'La porte doit être posée sur le mur sélectionné.'
           onSurfaceToolChange?.({
             ...surfaceTool,
-            roomArcError: surfaceTool?.connectorType === 'door'
-              ? 'La porte doit être posée sur le mur sélectionné.'
+            roomArcError: ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
+              ? openingError
               : 'Ce connecteur ne peut pas être posé ici.',
           })
           e.preventDefault()
@@ -1053,6 +1072,7 @@ export default function SurfaceEditorScene({
         }
         onSurfaceDataChange(nextData)
         onSurfaceToolChange?.({ ...surfaceTool, mode: 'select', roomArcError: null })
+        onConnectorPlaced?.()
         setHoverPreview(null)
         e.preventDefault()
         e.stopPropagation()
@@ -1122,6 +1142,7 @@ export default function SurfaceEditorScene({
     onSurfaceRoomSelect,
     onSurfaceDataChange,
     onSurfaceToolChange,
+    onConnectorPlaced,
   ])
 
   useEffect(() => {
@@ -1153,7 +1174,7 @@ export default function SurfaceEditorScene({
       ? hoverPreview
       : null
   const placingDoorOnSelectedWall = surfaceTool?.mode === 'connector'
-    && surfaceTool?.connectorType === 'door'
+    && ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
     && (surfaceTool?.connectorWallEdgeKeys || []).length > 0
 
   return (
@@ -1190,12 +1211,18 @@ export default function SurfaceEditorScene({
         ceilingOpacity={0.35}
         displayLevel={displayLevel}
         cameraControlsRef={orbitRef}
+        onCameraRoomIdChange={setCameraVolumeRoomId}
         showDetails
         selectedConnectorId={selectedConnectorId || surfaceTool?.selectedConnectorId}
         onConnectorSelect={surfaceTool?.mode === 'select' ? handleConnectorPointerSelect : null}
         runtimeFeatureStates={runtimeFeatureStates}
       />
-      <RuntimeEffectRegions regions={runtimeEffectRegions} surfaceData={surfaceData} displayLevel={displayLevel} />
+      <RuntimeEffectRegions
+        regions={runtimeEffectRegions}
+        surfaceData={surfaceData}
+        displayLevel={displayLevel}
+        cameraVolumeRoomId={cameraVolumeRoomId}
+      />
       {selectedRooms.map(room => (
         <SelectedRoomOverlay
           key={room.id}

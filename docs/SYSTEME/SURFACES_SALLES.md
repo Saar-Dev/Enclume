@@ -94,13 +94,16 @@ les mêmes coordonnées `x:z`.
 Une salle `heightLevels > 1` est un unique `RoomVolume` solidaire. Ses tranches verticales sont un
 détail de construction des maillages, collisions et surfaces praticables ; elles ne constituent pas
 des salles ni des contextes de visibilité séparés. Tous les étages inférieurs au niveau de coupe sont
-rendus, sans transparence. Quand la caméra entre réellement dans un `RoomVolume`, toutes ses
-façades et tout son contenu spatial sont rendus sur sa hauteur complète, y compris au-dessus du
-niveau courant : passerelles, escaliers, connecteurs, objets 3D, tokens et effets. Quand la caméra
-reste à l'extérieur, la cible réelle de `MapControls` sert de repli stable pour déterminer le volume
-observé. Le niveau courant continue de filtrer le reste du monde. La position et la cible sont deux
-autorités distinctes : un zoom qui fait entrer la caméra recalcule le volume, tandis qu'une simple
-rotation autour d'une cible fixe ne peut pas changer de salle active.
+rendus, sans transparence. Toutes les façades et tout le contenu spatial du volume actif sont rendus
+sur sa hauteur complète, y compris au-dessus du niveau courant : passerelles, escaliers,
+connecteurs, objets 3D, tokens et effets. Le niveau courant continue de filtrer le reste du monde.
+
+L'autorité qui choisit ce volume dépend du rôle. En jeu joueur, la position monde du token suivi
+fait foi. En mode MJ et dans l'éditeur, la cible réelle de `MapControls` fait foi : zoomer ou tourner
+autour d'un même point ne peut donc plus faire apparaître et disparaître les étages supérieurs parce
+que la caméra traverse une salle voisine. La position physique de la caméra reste une donnée
+distincte, utilisée uniquement pour déterminer les façades situées entre l'œil et le sol de la
+pièce. Ce partage d'autorité prépare le jeu piloté par token sans imposer au MJ un faux token caméra.
 
 Ces murs ne deviennent pas transparents simplement parce qu'ils sont « devant » dans le plan. Le
 moteur groupe d'abord toutes les tranches verticales et les découpes de porte qui appartiennent à
@@ -118,6 +121,11 @@ intermédiaire n'est créé automatiquement. Une future trappe doit
 être portée par un connecteur vertical —
 typiquement une échelle — avec son propre état ouvert/fermé ; elle ne révèle jamais l'étage inférieur
 entier.
+
+La nappe d'eau extérieure est placée au sommet physique global de la carte, et non au centre du
+plafond du niveau observé. Le calcul inclut la demi-épaisseur de la dalle de toit, puis le renderer
+décale la surface légèrement au-dessus : elle ne traverse ni ne z-fighte avec le plafond d'une salle
+multi-niveau.
 
 Après fusion de salles de même sol mais de hauteurs différentes, la salle résultante n'est pas
 aplatie à une hauteur unique. Sa tranche basse est l'union des deux empreintes ; les tranches hautes
@@ -278,6 +286,10 @@ L’outil Salle est l’outil de référence.
   **Vers l'extérieur**, commun à tout le contour. Il contient l'apparence intérieure, un identifiant
   technique sélectionnable mais non modifiable, **Ajouter une porte** pour le mur unique actif et
   **Sélectionner tous les murs de la salle**. La barre latérale reste réservée aux outils de création.
+- Les fenêtres fixes et fenêtres-écrans ne figurent plus dans le panneau du mur. Elles sont rangées
+  dans **Objets 3D > Fenêtres** et se choisissent comme un modèle 3D ; leur aperçu se projette sur
+  tout mur valide du niveau courant. Le clic de pose crée toutefois un connecteur structurel, jamais
+  une entité libre, puis rend automatiquement la main au mode sélection.
 - Les familles de réglages longues sont regroupées en sections repliables. Les panneaux de salle,
   mur, objet et connecteur 3D restent déplaçables après leur placement automatique. Un
   `ResizeObserver` mesure leur taille réelle : ouvrir une section recale le panneau vers le haut si
@@ -335,6 +347,12 @@ pose et la sélection afin de pouvoir corriger le curseur. Le placement garde le
 ce mur comme contrainte et ne peut donc pas sauter sur un autre côté de la salle. La construction des
 panneaux physiques doit agréger et conserver ces clés : les perdre au rendu rendrait tout placement
 contraint impossible, même si l'interface conserve visuellement la sélection.
+
+Une fenêtre se choisit au contraire dans **Objets 3D > Fenêtres**, sans sélection préalable d'une
+salle ou d'un mur. Le rayon 3D cherche le mur valide sous le pointeur, affiche le vrai GLB comme
+aperçu puis crée `window` ou `screen-window` dans `surface_data.connectors`. Cette différence est
+uniquement une règle d'UX : la baie conserve son UUID, sa découpe, ses collisions, ses canaux de vue
+et son état runtime structurels. Le catalogue ne doit jamais la convertir en `entity` libre.
 Le mur peut être droit ou arrondi. Sur un arc, le connecteur conserve son abscisse curviligne, son
 point d'ancrage exact, la tangente et la normale locales. La porte rigide s'aligne sur la tangente et
 s'ouvre du côté de la normale ; elle ne dépend donc ni d'une corde d'approximation ni du sens dans
@@ -351,17 +369,23 @@ mobile. Toutes les portes palières restent bloquantes lorsque la cabine est abs
 embarqués sont attachés à son repère local durable et suivent sa hauteur sans déplacement gratuit.
 
 Le modèle 3D d'une porte est choisi dans le flux lancé depuis le mur ; celui d'un ascenseur reste
-choisi depuis la configuration de la salle. Ils ne viennent pas de l'onglet des objets libres. Ils
-sont attachés au connecteur comme apparence (`modelBlueprintId`, label, catégorie, GLB), mais ils ne
-doivent pas redevenir la source de vérité.
+choisi depuis la configuration de la salle. Les fenêtres sont présentées dans le catalogue d'objets
+pour la commodité de pose, mais toutes ces apparences sont attachées au connecteur
+(`modelBlueprintId`, label, catégorie, GLB) et ne doivent pas redevenir la source de vérité.
 
-Les couleurs de composants GLB sont également une apparence de connecteur. Les overrides sont stockés dans `modelMaterialOverrides`, indexés par slot (`SLOT_01`, `SLOT_02`, etc.). Le renderer ne recolore que les matériaux déclarés en `SLOT_xx`; les matériaux `FIXED` du modèle restent intacts.
+Les couleurs de composants GLB sont également une apparence de connecteur. Les overrides sont stockés dans `modelMaterialOverrides`, indexés par slot (`SLOT_01`, `SLOT_02`, etc.). Le renderer ne recolore que les matériaux déclarés en `SLOT_xx`; les matériaux `FIXED` du modèle restent intacts. Sur une fenêtre-écran, `SLOT_03` est libellé **Charnières** et ne recolore pas le boîtier fixe. Les modèles intégrés suivent cette convention par leur nom de matériau, ce qui permet également à une instance déjà posée de découvrir le slot ajouté au catalogue.
+
+Une fenêtre-écran ne possède qu'un seul boîtier. Son champ d'apparence `modelFacing` vaut `front` ou
+`back` et applique un demi-tour local au GLB sans modifier l'ancrage, la découpe ou les canaux
+physiques du connecteur. Le bouton **Retourner la fenêtre** prévisualise et persiste ce choix depuis
+son panneau.
 
 En mode sélection, cliquer sur un connecteur 3D ouvre un panneau flottant avec ses caractéristiques métier et ses options d’apparence : type, étage, dimensions, état de porte et couleurs exposées par les slots du modèle.
 
-### Découpe de mur par une porte
+### Découpe de mur par une ouverture rigide
 
-Une porte ne supprime pas un panneau de mur complet. Elle crée une ouverture limitée à son emprise :
+Une porte ou une fenêtre ne supprime pas un panneau de mur complet. Elle crée une ouverture limitée
+à son emprise :
 
 - largeur/profondeur/hauteur prises depuis la géométrie déclarée du modèle, sans conversion axe par axe avec la grille ;
 - distinction entre `openingWidth` (passage/panneau utile) et `wallCutWidth` / empreinte extérieure (cadre complet à dégager dans le mur) ;
@@ -389,9 +413,29 @@ ses UV avancent selon la longueur de l'arc. Une texture traverse ainsi la courbe
 chaque ancien segment. Le nombre de subdivisions du mesh reste un détail de rendu réglable et ne
 change jamais la géométrie du monde.
 
-Important : la découpe de porte doit être appliquée à toutes les familles de murs rendues
+Important : la découpe d'ouverture doit être appliquée à toutes les familles de murs rendues
 (`roomsWallRenderPaths(...)` et `surface.walls`). Sinon un mur persistant non découpé peut rester
 affiché derrière le connecteur et donner l’impression que le trou n’a pas changé.
+
+Pour `window` et `screen-window`, `openingBottom` définit l'allège et `openingHeight` la hauteur de
+baie. La découpe conserve donc le mur sous la fenêtre et le linteau au-dessus. Si la baie traverse
+plusieurs étages, chaque tranche verticale ne reçoit que l'intersection avec ce même intervalle
+continu : le profil n'est ni répété par étage, ni appliqué à une tranche qu'il ne touche pas.
+
+`window` est une vitre fixe. `screen-window` conserve ses états autorisés dans le blueprint et son
+état courant dans `world_feature_states` ; `transparent` laisse passer la vue, `opaque` et `mirror`
+l'occultent. Dans tous les cas la baie reste bloquante pour le déplacement et les fluides, sans
+traversée de navigation.
+
+### Verrières de sol et de plafond
+
+Une verrière `skylight` se pose depuis une salle, mais doit remplacer une interface horizontale
+réelle : sol de la salle, plafond de la salle ou interface commune entre deux salles superposées.
+La validation refuse une verrière flottant au milieu du volume vide d'une salle multi-hauteur.
+L'empreinte canonique, en cases, sert simultanément à la découpe de dalle, au support praticable et
+à l'occlusion. Une verrière laisse passer la ligne de vue tout en bloquant la traversée verticale et
+les fluides. Les interfaces courbes ou déjà découpées restent refusées tant que la découpe
+polygonale des dalles ne peut pas être produite depuis la même géométrie canonique.
 
 ## Connecteurs d’étages longs
 

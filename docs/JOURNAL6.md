@@ -3578,3 +3578,382 @@ supprimables ont été ajoutés à `La Beta-test Company` pour permettre des ess
 Les sommes SHA-256 des objets MinIO correspondent exactement aux fichiers sources et les deux
 ressources répondent en HTTP 200 via le proxy d'assets. Cette opération ajoute uniquement des
 données de test ; aucune bibliothèque ni logique de sélection de modèle n'a été introduite.
+
+---
+
+## Session 142 (Codex) — 2026-07-15 — Fenêtres structurelles et verrières ✅ CLOS
+
+Le chantier ajoute des ouvertures vitrées natives au document Surface v12, sans les réduire à des
+objets 3D décoratifs. `window`, `screen-window` et `skylight` reçoivent un UUID stable, une géométrie
+métier validée et les canaux physiques compilés dans le snapshot commun.
+
+**Architecture et correctifs de fond** :
+
+- le catalogue intégré copie les métadonnées d'ouverture du manifeste dans
+  `blueprint.geometry` ; 20 GLB déterministes sont fournis dans `output/structural_windows` ;
+- la découpe murale utilise un intervalle vertical absolu et ne traite que les tranches réellement
+  intersectées. Elle conserve l'allège, le linteau et les portions hors baie, pour murs droits comme
+  courbes ;
+- `screen-window` limite ses états runtime à ceux déclarés par le modèle. La route dédiée persiste
+  l'état dans `world_feature_states`, incrémente la révision et diffuse la mutation ;
+- mouvement, vision et fluides sont compilés séparément : une vitre n'est jamais praticable, et la
+  vue dépend de l'état de l'écran ;
+- une verrière ne peut remplacer qu'une vraie interface sol/plafond. Elle conserve un support
+  praticable, ouvre la vue et bloque la traversée verticale ainsi que les fluides ;
+- l'effaceur et les tests d'intersection traitent les fenêtres comme des ouvertures murales, et non
+  comme des objets de grille ;
+- la pose depuis le panneau du mur conserve sélection, panneau et aperçu GLB jusqu'à une validation
+  effective.
+
+**Testé** : 31/31 tests Surface ; suite `test:world` ; 3/3 tests de configuration serveur ; build
+Vite de production ; validation du générateur et des 20 manifests/GLB ; smoke Playwright sans erreur
+JavaScript ; scénario Playwright complet avec création d'une carte multi-niveau, sauvegarde d'une
+fenêtre, d'un écran deux niveaux et d'une verrière, rejet HTTP 400 d'un état interdit, persistance de
+l'état `mirror`, chargement des assets, puis sélection salle → mur → « Ajouter une fenêtre » avec
+aperçu réel. Les données de campagne et de compte créées par ce scénario ont été supprimées.
+
+**Non testé** : validation esthétique finale par le MJ sur ses propres textures et cartes. La
+géométrie, la persistance et l'interaction ont été contrôlées sur une carte éphémère dédiée.
+
+**Données** : le pack intégré est synchronisé au démarrage comme les autres builtins. Aucune donnée
+de campagne existante n'est migrée et aucune rétrocompatibilité spéciale n'est ajoutée.
+
+**Retour arrière** : revert du commit de session ; la sauvegarde complète du WIP antérieur reste
+dans `/home/codex/backups/windows-wip-20260715-2115` (bundle, patch, archive et empreintes).
+
+---
+
+## Session 142 (Codex — suite) — 2026-07-15 — Fenêtres continues et contexte multi-étages stable ✅ CLOS
+
+Cette suite retire la dernière dépendance UX des fenêtres au panneau de mur et corrige la cause du
+clignotement des niveaux supérieurs. Les fenêtres restent des connecteurs structurels ; seul leur
+point d'entrée dans l'éditeur rejoint le catalogue des objets 3D.
+
+**Architecture et UX** :
+
+- les `window` et `screen-window` intégrés sont regroupés sous **Objets 3D > Fenêtres** ; les choisir
+  active un rayon de pose sur tout mur valide du niveau et non l'éditeur d'entité libre ;
+- la pose conserve les métadonnées de découpe et crée `surface_data.connectors`, puis revient au
+  mode sélection ; le panneau de mur ne contient plus que **Ajouter une porte** ;
+- le générateur produit une seule vitre continue par baie, quel que soit le nombre de pans, sans
+  traverse ni meneau intérieur ;
+- `SLOT_03` des fenêtres-écrans est désormais libellé **Charnières**. Les boîtiers de commande ont
+  un matériau `FIXED` séparé et ne suivent pas cette couleur ;
+- chaque GLB de fenêtre-écran ne contient plus qu'un seul boîtier. Le champ validé
+  `modelFacing: front|back` et le bouton **Retourner la fenêtre** choisissent sa face sans toucher au
+  connecteur physique ;
+- la convention de matériau `__SLOT_03__Hinges` complète le manifeste d'une fenêtre intégrée déjà
+  posée : elle reçoit elle aussi le réglage **Charnières**, sans migration de carte ;
+- le halo d'entité lit les bornes locales réelles du GLB après ses transformations internes, puis
+  reçoit la même rotation d'instance que le modèle. Les dimensions déclaratives du blueprint ne
+  peuvent plus l'envoyer dans un axe différent ;
+- le volume actif ne dépend plus simultanément de la cible et de la position de caméra. Le joueur
+  utilise la position de son token suivi ; le MJ et l'éditeur utilisent la cible de `MapControls` ;
+- la position de caméra reste l'autorité exclusive du test avant/arrière des façades. Une salle
+  voisine traversée par l'œil ne peut donc plus masquer les passerelles, connecteurs, objets 3D,
+  tokens ou effets des niveaux supérieurs de la salle réellement observée.
+
+**Cause racine reproduite** : un test place la caméra dans une salle voisine tout en gardant sa cible
+dans une tour multi-niveau. L'ancien calcul choisissait la voisine et faisait disparaître la tour ;
+le nouveau contrat conserve la tour comme contexte et utilise séparément la caméra pour l'occlusion.
+
+L'audit de l'eau a également écarté le dernier nettoyage Saar de `Canvas3D` : ce commit retire des
+props mortes et ajoute uniquement un fallback de déplacement MJ. La vraie erreur était dans la
+hauteur géométrique de la nappe : `7,5 m` désignait le plan médian d'un plafond épais de `0,25 m`, et
+le renderer retirait encore `0,02 m`. Sur la carte réelle à trois niveaux, l'eau traversait donc la
+dalle. Elle utilise désormais sa face supérieure à `7,625 m`, puis un décalage positif de `0,02 m`.
+
+**Testé** : 62/62 tests ciblés `cameraCutaway`, `surfaceData`, contrat Surface, bornes de sélection et
+slots de matériaux ; build Vite ; contrôle syntaxique et exécution du générateur ; inspection des
+20 GLB (aucun `Mullion`, huit slots de charnières, huit boîtiers avant et aucun boîtier arrière) ;
+synchronisation serveur de 92 modèles ; health API ; calcul de la carte réelle donnant une nappe
+unique à `7,625 m` ; puis parcours navigateur réel. La catégorie **Fenêtres** contient les 16 modèles
+muraux, l'aperçu n'affiche qu'un boîtier, et le panneau d'une ancienne fenêtre-écran expose
+**Retourner la fenêtre** et **Charnières**. La fenêtre créée pour le contrôle a été supprimée ; la
+carte a retrouvé ses cinq connecteurs initiaux.
+
+**Données** : aucune carte n'est migrée. Le démarrage serveur resynchronise seulement les manifests
+et URLs des modèles intégrés. Les fenêtres déjà posées conservent leur connecteur et leur état ; le
+nouveau GLB est repris par le cachebuster `mtime-size`.
+
+**Retour arrière** : revert du commit de cette suite, puis redémarrage de
+`enclume-codex-server.service` pour resynchroniser le manifeste précédent.
+
+---
+
+## Session 143 (Codex) — 2026-07-16 — Interactions 3D cohérentes et dalles empilées opaques ✅ CLOS
+
+La capture d'une entité tournée a confirmé que la correction par boîte englobante restait
+conceptuellement mauvaise : elle évaluait une orientation distincte du modèle et produisait encore
+un volume jaune à 90°. La sélection GLB utilise désormais deux coques additives attachées à chaque
+mesh. Elles héritent de toute la hiérarchie du modèle, y compris les pivots et animations, et ne
+participent ni au raycast ni aux matériaux d'eau.
+
+Le catalogue intégré inspecte aussi le chunk JSON de chaque GLB et copie ses noms de clips dans
+`geometry.animationClips`. Les modèles possédant une animation d'ouverture reçoivent deux états
+système (`closed`/`open`) avec une progression explicite. Le hook commun
+`useModelStateAnimation.js` joue tous les clips dans le sens demandé, force la pose exacte au terme
+et la maintient. Il équipe `EntityMesh` et `DoorConnectorModel`; l'état physique de la porte reste
+le même état canonique déjà consommé par collision, navigation et LOS. Après resynchronisation,
+43/92 blueprints sont ouvrables, dont 8/8 portes.
+
+Les réglages couleur d'une entité libre ou d'un connecteur affichent maintenant un
+`Object3DPreview` compact dans **Apparence**. Les quatre connecteurs horizontaux ont été renommés
+**Dalle en verre 1x1/2x1/2x2/3x3**, rangés sous **Objets 3D > Dalles en verre** et retirés du panneau
+de salle afin de conserver un seul parcours de pose structurelle.
+
+Le défaut des salles empilées venait de la branche de rendu du plafond inférieur : lorsque le sol
+supérieur était hors du niveau affiché, l'interface commune recevait encore `ceilingOpacity`. Le
+contrat est maintenant explicite dans `horizontalInterfaceOpacity` : toute interface possédant un
+`floorRoomId` est opaque ; seule une vraie toiture sans salle supérieure peut être découpée en
+transparence.
+
+Enfin, la configuration de campagne remplace **Zone dangereuse** par l'onglet rouge **Supprimer**.
+Son panneau de droite contient l'avertissement irréversible et le bouton
+**Confirmer la suppression** ; le `window.confirm` natif a été retiré.
+
+**Testé** : 131/131 tests monde/serveur, 3/3 configuration, 6/6 tests ciblés animation/halo/opacité,
+ESLint ciblé sans erreur et build Vite. Dans le navigateur intégré : 4 dalles visibles dans la
+bonne catégorie, aperçus couleur d'une cuve et d'une fenêtre-écran, halo calé sur la cuve, porte
+vitrée coulissante fermée → ouverte et maintenue → refermée, sol de la salle simple superposée
+opaque, panneau de suppression et bouton de confirmation présents sans déclencher la suppression.
+La porte utilisée a été remise dans son état fermé et aucune donnée de test n'a été laissée.
+
+**Données** : le rafraîchissement du catalogue met à jour les états et les métadonnées d'animation
+des blueprints système. Les instances existantes restent à l'état `0` fermé. Aucun document Surface
+n'est migré et aucun mode de rétrocompatibilité n'est ajouté.
+
+**Retour arrière** : revert du commit de session, redémarrage des services 8293/8294, puis
+rafraîchissement du catalogue pour rétablir les états du commit précédent.
+
+---
+
+## Session 144 (Codex) — 2026-07-16 — Coupe d'étage, halo des portes et pose des verrières ✅ CLOS
+
+La régression de rendu ne venait pas du principe des interfaces partagées, mais d'une attente
+erronée introduite en Session 143 : `hasFloor` forçait toute interface portant un sol supérieur à
+rester opaque, quel que soit l'étage affiché. Le contrat est désormais piloté uniquement par le
+contexte d'affichage. Depuis l'étage bas, l'interface conserve l'opacité de coupe du plafond
+courant ; depuis l'étage haut, le plafond inférieur est omis et le sol supérieur est opaque. Les
+sols, plafonds et murs des étages strictement inférieurs restent toujours opaques.
+
+La coupe des murs possède maintenant son propre garde-fou d'architecture : une façade ne peut
+participer à la transparence que si son niveau est le niveau affiché ou si elle appartient au
+volume multi-niveau actif. La règle de façade logique complète reste inchangée.
+
+Le décalage jaune des portes avait une autre cause : `DoorConnectorModel` utilisait encore un
+`ConnectorSelectionOutline` déclaratif, distinct du GLB, alors que les objets libres avaient déjà
+adopté les coques attachées aux meshes. Les portes, fenêtres et fenêtres-écrans GLB utilisent
+désormais ces mêmes coques et héritent donc directement des rotations, pivots et animations.
+
+Enfin, le choix d'un `skylight` activait bien le mode connecteur, mais `Editor3D` ne conservait le
+renderer structurel que pour `window` et `screen-window`. Il montait alors la scène des entités
+libres, qui ne sait pas poser une interface horizontale. `skylight` est maintenant routé vers
+`SurfaceEditorScene`, comme l'exige sa nature de connecteur structurel.
+
+**Testé** : 65/65 tests ciblés (`horizontalSurfaceOpacity`, `cameraCutaway`, halo, document Surface
+et géométrie des salles), 131/131 tests monde/serveur, 3/3 tests de configuration, ESLint ciblé sans
+erreur et build Vite. Dans le navigateur intégré : étage 0 visible sans sol supérieur parasite, sol
+supérieur opaque à l'étage 1, niveaux inférieurs opaques, halo d'une porte vitrée aligné sur son GLB,
+puis pose et suppression d'une dalle en verre.
+
+**Données** : la dalle de contrôle `connector:skylight:6:6:1:1x1` a été supprimée ; aucun connecteur
+de test ne reste. Aucun document Surface n'est migré et l'état de la porte inspectée n'a pas été
+modifié.
+
+**Retour arrière** : revert du commit de Session 144, redémarrage de
+`enclume-codex-client.service` et `enclume-codex-server.service`, puis vérification du healthcheck
+sur 8293/8294.
+
+---
+
+## Session 145 (Codex) — 2026-07-16 — Autorité unique des interfaces horizontales ✅ CLOS
+
+Le scénario utilisateur restait incorrect après la Session 144 : créer une salle au niveau 0,
+monter au niveau 1 puis créer une salle par-dessus pouvait encore laisser voir le sol inférieur.
+La correction d'opacité précédente ne traitait que le symptôme. La cause racine était une double
+autorité de rendu : `roomHorizontalInterfaces` décidait des plafonds, tandis qu'une boucle séparée
+dessinait tous les sols visibles directement depuis `surface.rooms`.
+
+Le renderer ne possède plus de chemin spécial pour les sols de salle. Chaque interface horizontale
+canonique choisit maintenant une unique face par contexte : `ceiling` tant que le niveau de son
+`floorRoomId` n'est pas affiché, puis `floor` dès cet étage. Le même composant reçoit l'empreinte,
+l'altitude et le propriétaire choisis ; un plan partagé ne peut donc plus conserver la matière ou
+la géométrie de la salle basse après le changement d'étage.
+
+Le choix est isolé dans `horizontalInterfaceRenderKind`, testé indépendamment de React. Il couvre
+les interfaces partagées, les sols supérieurs sans plafond inférieur, les niveaux déjà dépassés et
+les plafonds d'un volume multi-niveau actif. `horizontalInterfaceOpacity` ne s'applique plus qu'au
+cas où l'interface a effectivement choisi la face plafond.
+
+**Testé** : 24/24 tests ciblés (`horizontalSurfaceOpacity` et géométrie des salles), 131/131 tests
+monde/serveur, 3/3 tests de configuration, ESLint ciblé sans erreur et build Vite. Une lecture de la
+carte réelle `dazdazd` confirme trois interfaces à `y = 2,5 m` : chacune choisit la salle basse comme
+plafond au niveau 0, puis son `floorRoomId` de niveau 1 comme sol au niveau 1. La session réelle a été
+chargée au niveau 1 dans le navigateur sans erreur de rendu.
+
+**Données** : aucune carte n'est modifiée ou migrée. Le diagnostic est en lecture seule et aucune
+salle de test n'a été créée.
+
+**Retour arrière** : revert du commit de Session 145, puis redémarrage de
+`enclume-codex-client.service` et vérification du client 8293.
+
+---
+
+## Session 146 (Codex) — 2026-07-16 — Enveloppe basse sans intérieur ✅ CLOS
+
+La règle précédente « tous les niveaux inférieurs restent opaques » était trop grossière : elle
+conservait aussi leurs sols, plafonds et objets intérieurs. Le contrat a été séparé à la racine en
+deux prédicats. La visibilité d'enveloppe conserve les structures des niveaux inférieurs ; la
+visibilité d'intérieur n'accepte que le niveau affiché, sauf à l'intérieur du volume multi-niveau
+actif.
+
+Les murs continuent donc d'utiliser la visibilité d'enveloppe. Les portes, fenêtres, écrans et
+entités dont le mode de pose canonique est `wall` la suivent également. Les interfaces horizontales,
+escaliers, eaux et effets, entités libres et tokens utilisent la visibilité d'intérieur. Le même
+choix est appliqué dans le renderer de jeu, l'éditeur et le picking : un contenu caché ne peut pas
+rester sélectionnable.
+
+`horizontalInterfaceRenderKind` ne choisit plus une face parce qu'elle se trouve simplement sous
+le niveau courant. Il rend uniquement la face du niveau courant ou d'un volume multi-niveau actif.
+Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, le sol bas à `y = 0` choisit `floor` au
+niveau 0 puis `null` au niveau 1 ; l'interface à `y = 2,5 m` choisit `ceiling` au niveau 0 puis le
+`floor` de la salle haute au niveau 1 ; la toiture à `y = 5 m` reste cachée au niveau 0 puis devient
+le plafond découpé au niveau 1.
+
+**Testé** : 51/51 tests ciblés (`surfaceData`, interfaces horizontales et coupe caméra), 131/131
+tests monde/serveur, 3/3 tests de configuration et build Vite. ESLint ciblé ne signale aucune
+nouvelle erreur ; `Editor3D` conserve 9 avertissements de dépendances de hooks déjà présents et
+`Canvas3D` 3 avertissements déjà présents lorsque la règle `react-hooks/refs`, également antérieure,
+est neutralisée.
+
+**Non testé** : contrôle visuel automatisé après modification, le pilote du navigateur intégré
+n'étant plus disponible au moment de la validation finale. Le scénario exact et ses données ont
+été contrôlés en lecture seule avant la modification, puis son plan de rendu a été recalculé avec
+le nouveau moteur.
+
+**Données** : aucune carte n'est modifiée ou migrée. La distinction enveloppe/intérieur est une
+règle de rendu et de picking dérivée des données v12 existantes.
+
+**Retour arrière** : revert du commit de Session 146, redémarrage de
+`enclume-codex-client.service` et `enclume-codex-server.service`, puis vérification du healthcheck
+sur 8293/8294.
+
+---
+
+## Session 147 (Codex) — 2026-07-16 — Contexte caméra lié à l'étage ✅ CLOS
+
+Le navigateur réel a révélé ce que les tests de plan de rendu ne montraient pas : au passage du
+niveau 0 au niveau 1, `useCameraRoomId` conservait encore l'identité de la salle basse pendant que
+son recalcul attendait 120 ms de frames 3D. Cette ancienne salle restait donc l'exception de volume
+actif et autorisait son sol intérieur en même temps que le sol supérieur. Dans un onglet ralenti ou
+sans assez de frames, cet état transitoire pouvait durer indéfiniment.
+
+Le contexte persistant contient maintenant `{ displayLevel, roomId }`. Le renderer ne lit le
+`roomId` que si son niveau correspond exactement au niveau actuellement affiché. Le changement de
+niveau invalide donc l'ancien volume synchroniquement ; le calcul caméra peut ensuite résoudre la
+salle du nouvel étage sans jamais réintroduire l'intérieur précédent. Cette règle corrige en même
+temps le jeu, l'éditeur, les objets, tokens, effets et surfaces horizontales qui consomment ce
+contexte.
+
+**Testé** : 52/52 tests ciblés de caméra, coupe et géométrie ; ESLint ciblé sans erreur ; build
+Vite. **Rectificatif Session 148** : la validation visuelle inscrite lors de cette session était
+fausse. Le navigateur choisissait bien la salle haute, mais son plancher restait physiquement à
+`y = 0` à cause d'une seconde faute indépendante dans la résolution de `yOverride`. La capture
+n'établissait donc pas ce qui avait été affirmé. La vérification visuelle valide et reproductible
+est celle de la Session 148 après correction de l'altitude et redémarrage complet.
+
+**Données** : lecture seule de la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66`. Ses deux salles et
+ses trois interfaces horizontales restent inchangées ; aucun objet ni connecteur de test n'est créé.
+
+**Retour arrière** : revert du commit de Session 147, redémarrage des services 8293/8294, puis
+contrôle du passage 0 → 1 sur la même session.
+
+---
+
+## Session 148 (Codex) — 2026-07-16 — Altitude canonique des planchers ✅ CLOS
+
+Le diagnostic visuel a coloré séparément les sols bas et haut sans modifier la carte. Le plan de
+rendu choisissait correctement `room:-3:0:5:6:1:1` au niveau 1, mais l'instrumentation du maillage
+montrait `{ roomId: room:-3:0:5:6:1:1, y: 0 }`. La cause se trouvait dans `RoomSlab` : son paramètre
+optionnel `yOverride` valait `null`, puis `Number(null)` produisait `0` et satisfaisait le test
+`Number.isFinite`. Tous les sols de salle appelés sans surcharge étaient donc placés à l'altitude
+zéro, quelle que soit leur salle propriétaire.
+
+La résolution de hauteur est désormais une fonction pure et testée. `null` et `undefined`
+retombent sur la base de la salle pour un sol et sur son sommet pour un plafond ; `0` n'est accepté
+que lorsqu'il est fourni explicitement. Le renderer conserve l'interface horizontale comme autorité
+du propriétaire et applique ensuite cette altitude canonique au maillage rectangulaire comme au
+maillage courbe.
+
+**Testé** : tests unitaires des interfaces, de la coupe caméra et des trois cas de hauteur ; suites
+monde/serveur et configuration ; ESLint ciblé ; build Vite. Dans le navigateur authentifié, sur la
+session `b27cbed4-fd59-4530-b43b-dae57c33f092`, le niveau 0 affiche son propre sol et le niveau 1
+affiche une dalle opaque complète à `y = 2,5 m`, qui masque l'intérieur inférieur. Le contrôle est
+refait après redémarrage des services et rechargement de la page, sans matériau de diagnostic.
+
+**Données** : lecture seule de la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66`. Aucune salle,
+dalle, entité ou connecteur de test n'est créé.
+
+**Retour arrière** : revert du commit de Session 148, redémarrage des services 8293/8294, puis
+contrôle visuel 0 → 1 sur la même session.
+
+---
+
+## Session 149 (Codex) — 2026-07-16 — Toitures exposées au niveau affiché ✅ CLOS
+
+La règle « masquer l'intérieur des niveaux inférieurs » omettait aussi les plafonds sans salle
+au-dessus. Or ces faces sont l'enveloppe extérieure de la carte : au niveau 1, le toit d'une salle
+simple du niveau 0 doit rester visible sur le même plan que le sol d'une salle réellement présente
+au niveau 1.
+
+`horizontalInterfaceRenderKind` reçoit maintenant le niveau géométrique de l'interface. Une
+interface avec plafond mais sans sol supérieur devient visible lorsque ce plan correspond au niveau
+affiché. `horizontalInterfaceOpacity` la laisse alors opaque. Si un sol supérieur existe sur cette
+empreinte, il conserve la priorité. Les régions de plafond des salles multi-étages étant uniquement
+produites à leur vrai sommet, aucun plancher ou toit intermédiaire n'est créé par cette règle.
+
+**Testé** : cas purs du toit exposé, du plan hors niveau, de la priorité du sol partagé et de
+l'opacité ; tests de géométrie et coupe ; suites monde/serveur et configuration ; lint et build.
+Après redémarrage complet, une copie isolée de la carte a reçu une salle simple témoin. Au niveau 1,
+son toit opaque et le sol de la salle haute sont visibles simultanément et à la même altitude, en
+mode édition comme en mode jeu. La copie est ensuite supprimée. Le contrôle final est refait sur la
+carte originale, dont la salle simple voisine montre également son toit à côté du sol supérieur.
+
+**Données** : la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66` reste inchangée. La battlemap de
+validation et sa salle témoin ont été supprimées ; aucune carte nommée `TEST TEMPORAIRE TOIT CODEX`
+ne reste en base.
+
+**Retour arrière** : revert du commit de Session 149, redémarrage des services 8293/8294, puis
+contrôle du niveau 1 avec une salle basse exposée et une salle haute côte à côte.
+
+---
+
+## Session 150 (Codex) — 2026-07-16 — Surface océanique continue et garde sous-marine ✅ CLOS
+
+Les trous visibles dans la texture d'eau provenaient d'une confusion d'autorité. Le calcul
+topologique exclut volontairement les colonnes situées dans les salles étanches ; le renderer
+réutilisait ensuite ces mêmes colonnes pour fabriquer la nappe extérieure. Chaque compartiment sec
+devenait donc, à tort, un trou dans la surface de l'océan.
+
+`computeSurfaceWaterCells` expose désormais séparément les colonnes physiques et une
+`exteriorSurface` continue. Le renderer dessine cette dernière avec un seul plan animé couvrant
+l'emprise globale de la carte. L'étanchéité des salles reste inchangée pour la future propagation
+physique, sans influencer la continuité visuelle de l'océan.
+
+L'altitude de la nappe est dérivée du sommet structurel global, épaisseur réelle des dalles
+comprise, auquel sont ajoutées cinq hauteurs d'étage canoniques. Avec les 2,5 mètres actuels, la
+station conserve au minimum 12,5 mètres d'eau au-dessus de son point le plus élevé.
+
+**Testé** : 59/59 tests ciblés (`surfaceData`, interfaces horizontales, coupe caméra et géométrie),
+131/131 tests monde/serveur, 3/3 tests de configuration, ESLint ciblé sans erreur et build Vite.
+Dans Chromium Playwright authentifié sur la session réelle
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, le niveau 0 montre la station sans nappe parasite ; au
+niveau 7, une unique surface animée continue couvre toutes les salles sans trou. Aucune exception
+JavaScript n'est remontée.
+
+**Données** : aucune carte, salle, entité ou connexion n'est créée ou modifiée. La surface est une
+vue dérivée du document v12 existant.
+
+**Retour arrière** : revert du commit de Session 150, redémarrage des services 8293/8294, puis
+contrôle visuel aux niveaux 0 et 7 sur la même session.

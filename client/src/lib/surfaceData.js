@@ -31,6 +31,7 @@ import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
+export const EXTERIOR_WATER_CLEARANCE_LEVELS = 5
 export { SURFACE_DATA_VERSION }
 export const getRoomBoundaryEdges = roomBoundaryEdges
 export const getRoomBoundaryWallRuns = roomBoundaryWallRuns
@@ -1050,14 +1051,32 @@ export function getRoomSlice(room, displayLevel, roomLookup = {}) {
 export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRoomId = null) {
   if (displayLevel === null || displayLevel === undefined) return true
   if (yToLevel(y) <= displayLevel) return true
-  const room = cameraRoomId ? data?.rooms?.[cameraRoomId] : null
+  return pointBelongsToRoomVolume(data, cameraRoomId, x, z, y)
+}
+
+export function isWorldInteriorPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRoomId = null) {
+  if (displayLevel === null || displayLevel === undefined) return true
+  if (yToLevel(y) === Number(displayLevel)) return true
+  return pointBelongsToRoomVolume(data, cameraRoomId, x, z, y)
+}
+
+function pointBelongsToRoomVolume(data, roomId, x, z, y) {
+  const room = roomId ? data?.rooms?.[roomId] : null
   if (!room) return false
   return roomVolumeContainsPoint(
-    { id: cameraRoomId, ...room },
+    { id: roomId, ...room },
     { x, y, z },
     data.rooms,
     STORY_HEIGHT,
   )
+}
+
+export function entityUsesWallPlacement(entity, blueprint) {
+  const instanceMode = entity?.state && typeof entity.state === 'object'
+    ? entity.state?.placement?.mode
+    : null
+  const blueprintMode = blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode
+  return instanceMode === 'wall' || blueprintMode === 'wall'
 }
 
 export function getRoomHeight(room) {
@@ -1686,6 +1705,20 @@ export function wallProfileVerticalProgresses(wall, start = 0, end = 1) {
   return [...new Set(levels)].sort((left, right) => left - right)
 }
 
+export function wallOpeningVerticalRange(connector, wall) {
+  if (!connector || !wall) return null
+  const wallBottom = Number.isFinite(Number(wall.y)) ? Number(wall.y) : 0
+  const wallHeight = Math.max(0.5, Number(wall.height) || STORY_HEIGHT)
+  const wallTop = wallBottom + wallHeight
+  const connectorBottom = Number.isFinite(Number(connector.y)) ? Number(connector.y) : wallBottom
+  const geometry = connector.modelGeometry || {}
+  const connectorHeight = Math.max(0.5, Number(geometry.height) || Number(connector.height) || 2)
+  const bottom = Math.max(wallBottom, connectorBottom)
+  const top = Math.min(wallTop, connectorBottom + connectorHeight)
+  if (top <= bottom + 0.01) return null
+  return { wallBottom, wallTop, bottom, top }
+}
+
 function connectorCommonBlocking(type, state = 'closed') {
   if (type === 'elevator') {
     return {
@@ -1829,11 +1862,27 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
 
   if (!best?.panel) return null
   const panel = best.panel
-  const state = tool?.connectorState || 'closed'
+  const connectorType = ['window', 'screen-window'].includes(tool?.connectorType) ? tool.connectorType : 'door'
+  const state = tool?.connectorState || (connectorType === 'door' ? 'closed' : 'transparent')
   const modelGeometry = connectorModelGeometryFromTool(tool)
   const modelWidth = connectorModelOuterWidthFromTool(tool, modelGeometry)
   const modelDepth = Math.max(0.05, Number(modelGeometry.depth) || 0.25)
   const modelHeight = Math.max(0.5, Number(modelGeometry.height) || Math.min(2, STORY_HEIGHT * 0.9))
+  const declaredOpeningBottom = Number(modelGeometry.openingBottom ?? modelGeometry.opening_bottom_m)
+  const openingBottom = connectorType === 'door'
+    ? 0
+    : Math.max(0, Number.isFinite(declaredOpeningBottom) ? declaredOpeningBottom : STORY_HEIGHT * 0.2)
+  const connectorY = panel.y + openingBottom
+  const declaredWindowStates = Array.isArray(modelGeometry.allowedStates)
+    ? modelGeometry.allowedStates.map(String)
+    : []
+  const allowedWindowStates = connectorType === 'screen-window'
+    ? ['transparent', ...['opaque', 'mirror'].filter(windowState => (
+        declaredWindowStates.includes(windowState)
+          || (windowState === 'opaque' && tool?.windowOpaqueEnabled === true)
+          || (windowState === 'mirror' && tool?.windowMirrorEnabled === true)
+      ))]
+    : null
   const doorLengthFine = modelWidth * SURFACE_FINE
   if (panel.axis === 'segment') {
     const curveOffset = Number.isFinite(Number(panel.curveOffset0)) && Number.isFinite(Number(panel.curveOffset1))
@@ -1868,9 +1917,9 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
     const id = `connector:door:segment:${formatLevel(centerX)}:${formatLevel(centerZ)}:${formatLevel(panel.y)}`
     return {
       id,
-      type: 'door',
+      type: connectorType,
       level,
-      y: panel.y,
+      y: connectorY,
       axis: 'segment',
       x0,
       x1,
@@ -1883,6 +1932,10 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
       normalX,
       normalZ,
       rotationY,
+      mountElevationProfileMode: panel.elevationProfileMode || null,
+      mountElevationProfile: panel.elevationProfile || null,
+      mountFrontElevationProfile: panel.frontElevationProfile || null,
+      mountBackElevationProfile: panel.backElevationProfile || null,
       curveId: panel.curveId || null,
       curveArcId: panel.curveArcId || null,
       curveOffset,
@@ -1894,9 +1947,15 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
       roomId: selectedRoomId || panel.roomIds?.[0] || null,
       roomIds: panel.roomIds || [],
       state,
+      ...(connectorType === 'screen-window' ? {
+        allowedStates: allowedWindowStates,
+        modelFacing: 'front',
+      } : {}),
       movementMultiplier: getToolMovementMultiplier(tool),
       ...connectorModelFromTool(tool),
-      ...connectorCommonBlocking('door', state),
+      ...(connectorType === 'door'
+        ? connectorCommonBlocking('door', state)
+        : { blocksMovement: true, blocksSight: false, blocksWater: true, blocksGas: true, barrierType: 'glass' }),
     }
   }
   const panelMin = panel.axis === 'x'
@@ -1916,9 +1975,9 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
   const id = `connector:door:${panel.axis}:${formatLevel(x0)}:${formatLevel(z0)}:${formatLevel(x1)}:${formatLevel(z1)}:${formatLevel(panel.y)}`
   return {
     id,
-    type: 'door',
+    type: connectorType,
     level,
-    y: panel.y,
+    y: connectorY,
     axis: panel.axis,
     x0,
     x1,
@@ -1926,15 +1985,25 @@ export function makeDoorConnectorFromWallPoint(surfaceData, wallPoint, tool = {}
     z1,
     alongCenter: center,
     thickness: panel.thickness,
+    mountElevationProfileMode: panel.elevationProfileMode || null,
+    mountElevationProfile: panel.elevationProfile || null,
+    mountFrontElevationProfile: panel.frontElevationProfile || null,
+    mountBackElevationProfile: panel.backElevationProfile || null,
     width: modelWidth,
     depth: modelDepth,
     height: modelHeight,
     roomId: selectedRoomId || panel.roomIds?.[0] || null,
     roomIds: panel.roomIds || [],
     state,
+    ...(connectorType === 'screen-window' ? {
+      allowedStates: allowedWindowStates,
+      modelFacing: 'front',
+    } : {}),
     movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),
-    ...connectorCommonBlocking('door', state),
+    ...(connectorType === 'door'
+      ? connectorCommonBlocking('door', state)
+      : { blocksMovement: true, blocksSight: false, blocksWater: true, blocksGas: true, barrierType: 'glass' }),
   }
 }
 
@@ -1949,6 +2018,77 @@ export function applyDoorConnector(surfaceData, wallPoint, tool = {}) {
       ...next.connectors,
       [connector.id]: connector,
     },
+  }
+}
+
+function horizontalSurfaceRoomsAtCell(surface, cell, y) {
+  return Object.entries(surface.rooms).flatMap(([id, room]) => {
+    if (!roomIncludesCell(room, cell.x, cell.z)) return []
+    const ownsFloor = room.floorEnabled !== false && sameLevel(getRoomBaseY(room), y)
+    const ownsCeiling = room.ceilingEnabled !== false && sameLevel(getRoomTopY(room), y)
+    return ownsFloor || ownsCeiling ? [{ id, room }] : []
+  })
+}
+
+export function makeSkylightConnectorFromCell(surfaceData, cell, tool = {}) {
+  if (!cell) return null
+  const surface = normalizeSurfaceData(surfaceData)
+  const level = getToolLevel(tool)
+  const y = levelToY(level)
+  const geometry = connectorModelGeometryFromTool(tool)
+  let width = Math.max(1, Math.round(Number(geometry.width) || 1))
+  let depth = Math.max(1, Math.round(Number(geometry.depth) || 1))
+  const rotated = Boolean(tool?.connectorRotationQuarterTurns % 2)
+  if (rotated) [width, depth] = [depth, width]
+  const x = Math.trunc(Number(cell.x))
+  const z = Math.trunc(Number(cell.z))
+  const ownerRooms = new Map()
+  for (let dz = 0; dz < depth; dz += 1) {
+    for (let dx = 0; dx < width; dx += 1) {
+      const hits = horizontalSurfaceRoomsAtCell(surface, { x: x + dx, z: z + dz }, y)
+      if (hits.length === 0) return null
+      for (const hit of hits) {
+        if ((hit.room.boundaryArcs || []).length > 0 || (hit.room.geometryClipRoomIds || []).length > 0) return null
+        ownerRooms.set(hit.id, hit.room)
+      }
+    }
+  }
+  const selectedRoomId = tool?.selectedRoomId
+  const ownerRoomIds = [...ownerRooms.keys()]
+  const primaryRoomId = ownerRooms.has(selectedRoomId) ? selectedRoomId : ownerRoomIds[0]
+  const id = `connector:skylight:${x}:${z}:${level}:${width}x${depth}`
+  return {
+    id,
+    type: 'skylight',
+    level,
+    x,
+    z,
+    y,
+    width,
+    depth,
+    height: Math.max(0.04, Number(geometry.height) || 0.1),
+    rotationY: rotated ? Math.PI / 2 : 0,
+    roomId: primaryRoomId,
+    roomIds: ownerRoomIds,
+    state: 'transparent',
+    allowedStates: ['transparent'],
+    ...connectorModelFromTool(tool),
+    blocksMovement: true,
+    blocksSight: false,
+    blocksWater: true,
+    blocksGas: true,
+    barrierType: 'glass',
+  }
+}
+
+export function applySkylightConnector(surfaceData, cell, tool = {}) {
+  const connector = makeSkylightConnectorFromCell(surfaceData, cell, tool)
+  if (!connector) return surfaceData
+  const next = normalizeSurfaceData(surfaceData)
+  return {
+    ...next,
+    version: SURFACE_DATA_VERSION,
+    connectors: { ...next.connectors, [connector.id]: connector },
   }
 }
 
@@ -2253,7 +2393,7 @@ function clipIntersectingRoomsAgainstOwners(inputRooms, ownerRoomIds) {
 }
 
 function doorConnectorTouchesBoundaryEdges(connector, room, selectedEdges) {
-  if (connector?.type !== 'door') return false
+  if (!['door', 'window', 'screen-window'].includes(connector?.type)) return false
   const doorY = Number(connector.y)
   const roomBaseY = getRoomBaseY(room)
   const roomTopY = roomBaseY + getRoomHeightLevels(room) * STORY_HEIGHT
@@ -2299,7 +2439,7 @@ export function applyRoomBoundaryArc(surfaceData, roomId, edgeKeys, angleDegrees
   const doorOnSelection = Object.values(next.connectors || {})
     .some(connector => doorConnectorTouchesBoundaryEdges(connector, room, selectedEdges))
   if (doorOnSelection) {
-    return { surfaceData, error: 'Déplace ou supprime d’abord la porte placée sur ces murs.' }
+    return { surfaceData, error: 'Déplace ou supprime d’abord l’ouverture rigide placée sur ces murs.' }
   }
 
   const ownerships = selectedKeys.map(key => roomIdsForBoundaryEdge(next.rooms, key, getRoomBaseY(room)))
@@ -2368,7 +2508,7 @@ export function applyRoomWallElevationProfile(surfaceData, roomId, edgeKeys, pro
     const doorOnSelection = Object.values(next.connectors || {})
       .some(connector => doorConnectorTouchesBoundaryEdges(connector, selectedRoom, selectedEdges))
     if (doorOnSelection) {
-      return { surfaceData, error: 'Déplace ou supprime la porte avant de modifier le profil vertical de ce mur.' }
+      return { surfaceData, error: 'Déplace ou supprime l’ouverture rigide avant de modifier le profil vertical de ce mur.' }
     }
   }
   const profileId = `wall-elevation:${selected.slice().sort().join('|')}`
@@ -2980,7 +3120,7 @@ function wallIntersectsCellArea(wall, area) {
 
 function connectorIntersectsCellArea(connector, area) {
   if (!connector) return false
-  if (connector.type === 'door') {
+  if (['door', 'window', 'screen-window'].includes(connector.type)) {
     return wallIntersectsCellArea(connector, area)
   }
   const x = Math.trunc(Number(connector.x) || 0)
@@ -3067,9 +3207,13 @@ export function eraseSurfaceSelection(surfaceData, selection, tool) {
   }
 
   for (const [id, connector] of Object.entries(next.connectors)) {
-    const sameStartOrEnd = sameLevel(connector?.y, targetY)
-      || sameLevel(levelToY(connector?.fromLevel), targetY)
-      || sameLevel(levelToY(connector?.toLevel), targetY)
+    const wallOpeningLevelMatches = ['door', 'window', 'screen-window'].includes(connector?.type)
+      && Number.isFinite(Number(connector?.level))
+      && sameLevel(levelToY(connector.level), targetY)
+    const sameStartOrEnd = wallOpeningLevelMatches
+      || (Number.isFinite(Number(connector?.y)) && sameLevel(connector.y, targetY))
+      || (Number.isFinite(Number(connector?.fromLevel)) && sameLevel(levelToY(connector.fromLevel), targetY))
+      || (Number.isFinite(Number(connector?.toLevel)) && sameLevel(levelToY(connector.toLevel), targetY))
     if (sameStartOrEnd && connectorIntersectsCellArea(connector, area)) {
       delete connectors[id]
       changed = true
@@ -3286,13 +3430,41 @@ export function computeSurfaceWaterCells(data, margin = 2) {
     }
   }
 
-  // La nappe extérieure représente la surface de l'eau autour de toute la
-  // carte, pas le plafond de chaque étage pris séparément.
+  // Le sommet structurel sert de référence à la surface océanique extérieure.
+  // Les coordonnées de plafond sont au centre de la dalle : il faut inclure
+  // sa demi-épaisseur avant d'ajouter la garde sous-marine en hauteurs d'étage.
   const mapTopY = Math.max(
-    ...[...levels.values()].map(level => level.topY),
+    ...Object.entries(surface.floors).map(([id, floor]) => (
+      parseFloorKey(id, floor).y + getFloorThickness(floor) / 2
+    )),
+    ...Object.entries(surface.ceilings).map(([id, ceiling]) => (
+      parseCeilingKey(id, ceiling).y + getCeilingThickness(ceiling) / 2
+    )),
+    ...Object.values(surface.walls).map(wall => (
+      getWallBaseY(wall) + Math.max(0.5, Number(wall?.height) || DEFAULT_CEILING_HEIGHT)
+    )),
+    ...Object.values(surface.stairs).map(stair => (
+      Number(stair?.topY) || (Number(stair?.y) || 0) + DEFAULT_CEILING_HEIGHT
+    )),
     0,
   )
 
+  const surfaceSourceCells = [...levels.values()].flatMap(level => [...level.cells.values()])
+  const waterClearance = EXTERIOR_WATER_CLEARANCE_LEVELS * (Number(surface.storyHeight) || STORY_HEIGHT)
+  const exteriorSurface = surfaceSourceCells.length > 0 ? (() => {
+    const minX = Math.min(...surfaceSourceCells.map(cell => cell.x)) - margin
+    const maxX = Math.max(...surfaceSourceCells.map(cell => cell.x)) + margin
+    const minZ = Math.min(...surfaceSourceCells.map(cell => cell.z)) - margin
+    const maxZ = Math.max(...surfaceSourceCells.map(cell => cell.z)) + margin
+    return {
+      x: minX,
+      z: minZ,
+      width: maxX - minX + 1,
+      depth: maxZ - minZ + 1,
+      y: mapTopY + waterClearance,
+    }
+  })() : null
+  const exteriorSurfaceY = exteriorSurface?.y ?? mapTopY
   const dryCellKeys = new Set()
   const waterCellsByPosition = new Map()
 
@@ -3360,11 +3532,15 @@ export function computeSurfaceWaterCells(data, margin = 2) {
           x,
           z,
           baseY: Math.min(existing?.baseY ?? level.baseY, level.baseY),
-          topY: mapTopY,
+          topY: exteriorSurfaceY,
         })
       }
     }
   }
 
-  return { dryCellKeys, waterCells: [...waterCellsByPosition.values()] }
+  return {
+    dryCellKeys,
+    waterCells: [...waterCellsByPosition.values()],
+    exteriorSurface,
+  }
 }

@@ -2,13 +2,21 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import db from '../db/knex.js'
+import {
+  builtinOpenableStates,
+  modelHasOpenAnimation,
+  normalizeModelAnimationNames,
+} from '../../../shared/world/modelAnimation.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const BUILTIN_MODELS_ROOT = path.resolve(__dirname, '..', '..', '..', 'output')
 
 function friendlyName(asset) {
-  if (asset.label) return asset.label
-  return asset.name.replace(/^\d+_/, '').replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+  const label = asset.label
+    || asset.name.replace(/^\d+_/, '').replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+  return asset.connector_type === 'skylight'
+    ? label.replace(/^Verri[eè]re/i, 'Dalle en verre')
+    : label
 }
 
 function futuristicDoorBorder(asset) {
@@ -57,7 +65,27 @@ function editorMaterialSlots(asset) {
   })
 }
 
-function dimensions(asset, packName, manifest = {}) {
+function glbAnimationNames(filePath) {
+  try {
+    const bytes = fs.readFileSync(filePath)
+    if (bytes.length < 20 || bytes.toString('ascii', 0, 4) !== 'glTF') return []
+    let offset = 12
+    while (offset + 8 <= bytes.length) {
+      const length = bytes.readUInt32LE(offset)
+      const type = bytes.toString('ascii', offset + 4, offset + 8)
+      if (type === 'JSON') {
+        const document = JSON.parse(bytes.toString('utf8', offset + 8, offset + 8 + length).replace(/[\0\s]+$/, ''))
+        return normalizeModelAnimationNames((document.animations || []).map(animation => animation?.name))
+      }
+      offset += 8 + length
+    }
+  } catch (error) {
+    console.warn(`Animations GLB illisibles pour ${filePath}:`, error.message)
+  }
+  return []
+}
+
+function dimensions(asset, packName, manifest = {}, animationNames = []) {
   const doorPanelWidth = Number(asset.door_panel_width_m || 0)
   const doorPanelHeight = Number(asset.door_panel_height_m || 0)
   const border = packName === 'futuristic_doors' ? futuristicDoorBorder(asset) : 0
@@ -77,6 +105,17 @@ function dimensions(asset, packName, manifest = {}) {
     placementMode,
     origin: asset.origin || (!hasAssetPlacementMode ? manifest.origin_default : null) || defaultOrigin,
   }
+  if (asset.connector_type) geometry.connectorType = String(asset.connector_type)
+  if (Number.isFinite(Number(asset.opening_bottom_m))) geometry.openingBottom = Number(asset.opening_bottom_m)
+  if (Number.isFinite(Number(asset.opening_width_m))) geometry.openingWidth = Number(asset.opening_width_m)
+  if (Number.isFinite(Number(asset.wall_cut_width_m))) geometry.wallCutWidth = Number(asset.wall_cut_width_m)
+  if (Number.isFinite(Number(asset.wall_cut_height_m))) geometry.wallCutHeight = Number(asset.wall_cut_height_m)
+  if (Number.isFinite(Number(asset.span_levels))) geometry.spanLevels = Number(asset.span_levels)
+  if (Array.isArray(asset.allowed_states)) geometry.allowedStates = asset.allowed_states.map(String)
+  if (asset.skylight_size) geometry.skylightSize = String(asset.skylight_size)
+  if (animationNames.length > 0) geometry.animationClips = animationNames
+  const explicitOpenable = Boolean(asset.openable || asset.animation || asset.opening || asset.animation_frame_open)
+  if (modelHasOpenAnimation(animationNames, explicitOpenable)) geometry.openable = true
   const wallMount = asset.wall_mount || manifest.wall_mount_default
   if (placementMode === 'wall' && wallMount && typeof wallMount === 'object') {
     geometry.wallMount = {
@@ -111,12 +150,15 @@ export function readBuiltinModels() {
       if (!fs.existsSync(filePath)) continue
       const fileStat = fs.statSync(filePath)
       const cacheVersion = `${Math.trunc(fileStat.mtimeMs)}-${fileStat.size}`
+      const animationNames = glbAnimationNames(filePath)
+      const explicitOpenable = Boolean(asset.openable || asset.animation || asset.opening || asset.animation_frame_open)
       models.push({
         key: `${packName}/${asset.name}`,
         label: friendlyName(asset),
         category: packName,
         glbUrl: `builtin-models/${packName}/glb/${fileName}?v=${cacheVersion}`,
-        geometry: dimensions(asset, packName, manifest),
+        geometry: dimensions(asset, packName, manifest, animationNames),
+        states: builtinOpenableStates(animationNames, explicitOpenable),
       })
     }
   }
@@ -131,7 +173,7 @@ export async function syncBuiltinModels() {
       label: model.label,
       glb_url: model.glbUrl,
       geometry: JSON.stringify(model.geometry),
-      states: JSON.stringify([]),
+      states: JSON.stringify(model.states),
       interactions: JSON.stringify([]),
       deprecated: false,
       builtin_key: model.key,
@@ -140,6 +182,7 @@ export async function syncBuiltinModels() {
       label: model.label,
       glb_url: model.glbUrl,
       geometry: JSON.stringify(model.geometry),
+      states: JSON.stringify(model.states),
       category: model.category,
       deprecated: false,
       updated_at: db.fn.now(),

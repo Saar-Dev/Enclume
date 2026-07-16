@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-15 — moteur v12 conservé comme autorité dans l'intégration commune.
+> Dernière mise à jour : 2026-07-16 — moteur v12 conservé comme autorité dans l'intégration commune.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -428,6 +428,35 @@ et sa cabine appartiennent à l'état runtime.
 - les anciennes cartes ne justifient aucun mode de compatibilité. Une fixture legacy peut rester
   uniquement si elle ne modifie pas les contrats du monde canonique.
 
+### Ouvertures vitrées structurelles
+
+Les fenêtres murales appartiennent à `surface_data.connectors` : le modèle GLB n'est que leur
+apparence. `window` est une ouverture vitrée fixe ; `screen-window` possède un état runtime parmi
+`transparent`, `opaque` et `mirror`. Elles ne créent aucune traversée de navigation : mouvement et
+fluides restent bloqués par leur barrière, tandis que leur canal de vision dépend de l'état courant.
+
+Dans l'éditeur, elles sont découvertes et choisies dans **Objets 3D > Fenêtres**, mais cette entrée
+de catalogue ne change pas leur nature. La pose raycast un mur, prévisualise le GLB et crée le
+connecteur structurel avec sa géométrie déclarée ; elle ne crée jamais une `entity`. Les modèles
+générés emploient une vitre continue sans traverse intérieure. Les fenêtres-écrans exposent un slot
+de couleur **Charnières**, séparé de leur unique boîtier `FIXED`. Le champ d'apparence
+`modelFacing: front|back` retourne le GLB de 180° autour de son ancrage sans toucher la découpe ni
+les canaux physiques. La convention `__SLOT_03__Hinges` reste détectable sur une instance intégrée
+déjà posée, même si son instantané de manifeste ne contenait pas encore le libellé du slot.
+
+La découpe murale utilise l'intervalle vertical réel
+`[openingBottom, openingBottom + openingHeight]`. Elle ne touche que les tranches verticales qu'elle
+intersecte et conserve séparément le mur sous l'allège et au-dessus du linteau. Une baie couvrant
+plusieurs niveaux forme donc une ouverture continue, sans être répétée à chaque étage ni supprimer
+les portions de façade hors de son volume.
+
+Une verrière horizontale `skylight` remplace une interface structurelle existante entre sol et
+plafond. Elle peut occuper la base ou le sommet d'une salle haute, ou l'interface réellement partagée
+par deux salles superposées ; elle ne peut pas flotter dans une tranche intermédiaire vide. Son
+support reste praticable et bloque mouvement vertical et fluides, mais laisse passer la vision.
+Dans l'éditeur, les quatre formats sont exposés exclusivement sous **Objets 3D > Dalles en verre**.
+Le choix d'un modèle active le rayon de pose structurel ; aucune `entity` décorative n'est créée.
+
 ---
 
 ## 7. Collisions, occupation et entités `[EXISTANT]`
@@ -452,19 +481,52 @@ blueprint. Agrandir ou réduire un objet modifie donc ensemble son apparence, so
 volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité ; les boutons
 de l'éditeur ne sont qu'une commande par pas de 90°.
 
+Les animations GLB sont une capacité visuelle dérivée. `builtinModelCatalog` lit les noms de clips
+dans le chunk JSON du GLB et inscrit `geometry.animationClips`; un modèle ouvrable reçoit les états
+`closed`/`open` et une `visual_override.animationProgress` normalisée. `useModelStateAnimation`
+applique les mêmes clips à l'entité libre ou au modèle d'un connecteur, joue la transition vers la
+nouvelle pose puis la fige exactement à son terme. Le temps d'animation ne modifie ni collision ni
+LOS : celles-ci lisent l'état métier persistant.
+
+La sélection GLB suit la géométrie, pas une AABB. Chaque mesh non skinné reçoit deux coques additives
+enfants ; elles héritent donc automatiquement des pivots, rotations et animations internes. Les
+objets à slots de matériau affichent également un rendu compact dans la section **Apparence** de
+leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel.
+
 ### 7.1 Tranche d'étage affichée
 
-`displayLevel = N` rend la tranche N et toutes les tranches inférieures. Les niveaux inférieurs sont
-opaques : leur présence graphique ne les rend pas sélectionnables comme supports du niveau courant.
-Les niveaux supérieurs restent masqués en temps normal.
+`displayLevel = N` rend tout l'intérieur de la tranche N. Pour les tranches strictement inférieures,
+seule l'enveloppe murale extérieure reste rendue et opaque, avec les connecteurs et entités dont le
+mode de pose est mural (portes, fenêtres, écrans et décor mural). Leurs sols, plafonds, escaliers,
+effets, tokens et objets posés à l'intérieur ne sont pas rendus. Leur présence graphique ne les rend
+pas sélectionnables comme supports du niveau courant. Les niveaux supérieurs restent masqués en
+temps normal.
 
-Une salle haute de plusieurs étages est l'exception locale. Le renderer détermine la salle
-multi-hauteur sous le point central visé par la caméra. Il conserve alors son véritable sol de base,
-toutes ses parois jusqu'au fond ainsi que les murs de ses tranches au-dessus de N, afin d'en montrer
-le volume complet. Une salle adjacente ou empilée qui ne fait pas partie de ce volume n'est pas
-révélée. Aucun plancher intermédiaire n'est inventé et le plafond n'existe que dans la tranche
-supérieure. Les connecteurs verticaux sont découpés par tranche ou exposent uniquement leur palier
-courant. Les règles de picking et de placement continuent d'interroger leur tranche réelle.
+Cette distinction est un contrat du moteur, pas une règle propre au renderer. La visibilité
+« enveloppe » accepte les points des niveaux inférieurs ; la visibilité « intérieur » n'accepte que
+le niveau courant. `entityUsesWallPlacement` choisit explicitement le premier régime pour une
+entité murale et le second pour une entité libre. Tous les consommateurs — jeu, éditeur, picking,
+tokens, effets et structures horizontales — utilisent ces mêmes prédicats.
+
+Une salle haute de plusieurs étages est l'exception locale. Le renderer conserve son véritable sol
+de base, toutes ses parois jusqu'au fond ainsi que les murs et le contenu spatial de ses tranches
+au-dessus de N — passerelles, connecteurs, objets 3D, tokens et effets — afin d'en montrer le volume
+complet. Une salle adjacente ou empilée qui ne fait pas partie de ce volume n'est pas révélée. Aucun
+plancher intermédiaire n'est inventé et le plafond n'existe que dans la tranche supérieure. Les
+règles de picking et de placement continuent d'interroger la tranche réelle des éléments.
+
+L'identité du volume actif et l'occlusion des façades ont deux autorités séparées. Pour un joueur,
+le volume actif vient de la position monde du token suivi. Pour le MJ et l'éditeur, il vient de la
+cible de `MapControls`, stable pendant un zoom ou une orbite. La position physique de la caméra ne
+choisit plus le volume dès qu'une de ces autorités existe ; elle sert seulement au test de côté des
+façades. Traverser accidentellement une salle voisine avec l'œil ne peut donc plus masquer tout le
+contenu supérieur du volume réellement observé.
+
+Le contexte caméra est indexé par `displayLevel`. Dès que l'étage affiché change, le contexte de
+l'ancien étage devient synchroniquement nul, avant même le recalcul 3D suivant. Il ne peut donc pas
+conserver temporairement — ou indéfiniment dans un onglet ralenti — le sol et le contenu intérieur
+d'une salle simple de l'étage précédent. Le nouveau contexte n'est réactivé qu'après résolution
+d'une salle appartenant réellement à la nouvelle tranche.
 
 Le calcul graphique des murs situés devant la caméra reçoit l'identité de ce volume. Il teste donc
 toutes ses tranches visibles contre l'empreinte de son vrai sol, et pas uniquement les murs du
@@ -623,11 +685,36 @@ apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`
 
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
 de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
-niveau inférieur, sol dès que le niveau supérieur est visible. Tous les niveaux inférieurs au plan
-de coupe restent opaques. Les murs supérieurs du seul volume multi-hauteur actuellement visé sont
-également rendus, sans révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant et au mur
-logique complet ; les morceaux créés par une porte partagent le même groupe d'opacité et leurs faces
-de coupe internes ne sont pas dessinées.
+niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
+conserve l'opacité de coupe du plafond courant, même si une salle possède un sol au-dessus. Depuis
+le niveau supérieur, le plafond inférieur n'est plus rendu et le sol supérieur, opaque, occupe
+l'interface. Les sols et plafonds strictement inférieurs sont omis ; seule leur enveloppe murale et
+ce qui y est fixé restent opaques.
+
+`roomHorizontalInterfaces` est l'unique autorité de rendu des dalles de salle. Le renderer ne
+dessine plus les sols dans une boucle indépendante : chaque interface choisit exactement une face
+et un propriétaire (`ceilingRoomId` ou `floorRoomId`) lorsque cette face appartient au niveau
+courant ou au volume multi-niveau actif ; sinon elle ne rend rien. Cette règle interdit
+qu'un plafond bas et un sol haut concurrents occupent le même plan ou que le matériau de la salle
+basse soit conservé après le passage à l'étage supérieur.
+
+La face choisie et son altitude sont deux décisions distinctes. Une interface fournit un
+`yOverride` numérique lorsqu'elle impose son plan exact. Pour un sol de salle rendu sans surcharge,
+`null` ou `undefined` signifie obligatoirement « utiliser `room.y` » ; pour un plafond, « utiliser
+le haut de la salle ». Une surcharge explicite `0` reste valide. Il est interdit de tester une
+surcharge par `Number.isFinite(Number(value))` sans avoir d'abord exclu `null`, puisque JavaScript
+convertit `null` en `0` et replacerait silencieusement tout plancher à l'étage zéro.
+
+Un plafond sans sol au-dessus est une toiture extérieure, pas un contenu intérieur du niveau bas.
+Lorsque son altitude correspond au plan du niveau affiché, cette toiture reste donc rendue et
+opaque. Sur le même plan, une interface qui possède un `floorRoomId` privilégie toujours le sol de
+la salle supérieure. Une salle multi-niveau ne crée aucune toiture intermédiaire : seule la région
+de plafond produite par `roomCeilingRegions` à son véritable sommet peut devenir une toiture.
+
+Les murs supérieurs du seul volume multi-hauteur actuellement visé sont également rendus, sans
+révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant
+ou à ce volume actif, et toujours au mur logique complet ; les morceaux créés par une porte
+partagent le même groupe d'opacité et leurs faces de coupe internes ne sont pas dessinées.
 
 ---
 
@@ -649,6 +736,11 @@ Canaux indépendants obligatoires :
 | Verre | bloqué | permise ou atténuée | bloqués |
 | Grille | bloqué | permise | permis selon réglage |
 | Ouverture | permis | permise | permis |
+
+Une fenêtre structurelle compile ces canaux indépendamment de son mesh : `window` laisse passer la
+vision ; `screen-window` la laisse passer uniquement dans l'état `transparent`. Les états `opaque`
+et `mirror` occultent la ligne de vue sans transformer la baie en mur plein ni modifier son identité.
+Une verrière horizontale laisse également passer la vision tout en conservant son support physique.
 
 La couverture utilise plusieurs échantillons corporels issus de la pose canonique. La posture ne
 doit pas exister uniquement dans `combat_roster` si elle affecte le monde physique.
@@ -708,7 +800,19 @@ existante sans la réimplémenter.
 ## 10. Eau, gaz et compartiments `[EXISTANT — PROPAGATION PHASE 5]`
 
 Le calcul d'eau actuel de l'éditeur constitue une preuve de concept topologique, pas une simulation
-runtime autoritaire.
+runtime autoritaire. Il sépare néanmoins deux responsabilités qui ne doivent jamais partager la
+même géométrie :
+
+- les colonnes d'eau physiques représentent les volumes extérieurs et excluent les compartiments
+  étanches ;
+- la surface océanique visible est un plan continu sur l'emprise globale de la carte et ne possède
+  donc aucun trou au-dessus d'une salle sèche.
+
+La nappe extérieure utilise une hauteur géométrique stricte : maximum des faces supérieures de
+sols, plafonds, murs et escaliers de la carte. Un plafond stocke son plan médian ; sa
+demi-épaisseur est ajoutée, puis une garde de cinq hauteurs d'étage canoniques place l'océan loin
+au-dessus de la station. Une salle haute ne peut donc ni afficher l'eau dans sa toiture, ni découper
+la surface de l'océan.
 
 Le compilateur doit produire des compartiments reliés par des passages ayant des canaux de
 perméabilité séparés. Eau, gaz et éventuellement pression peuvent ensuite se propager sur ce graphe

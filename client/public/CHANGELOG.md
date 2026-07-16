@@ -1,3 +1,77 @@
+## v189 — 2026-07-16 — Surface océanique continue et station réellement immergée
+
+### Moteur de monde
+- [fix] La surface extérieure de l'eau est désormais un plan continu indépendant des volumes
+  d'eau physiques. Les salles étanches restent sèches sans découper de trous dans la texture de
+  l'océan au-dessus d'elles.
+- [fix] La surface océanique est placée cinq hauteurs d'étage au-dessus du point structurel le plus
+  haut de la carte, épaisseur des dalles comprise. La station est donc réellement immergée au lieu
+  d'affleurer sous la surface.
+
+## v188 — 2026-07-16 — Objets ouvrables, aperçu couleur et dalles en verre
+
+### Éditeur de monde
+- [fix] Le halo jaune des objets libres et des portes épouse maintenant la forme réelle du GLB. Il
+  suit ses pivots, sa rotation et ses parties animées au lieu d'afficher une boîte indépendante.
+- [feat] Le champ **Ouverte** des portes joue réellement l'animation du GLB et maintient la porte en
+  position ouverte. Les autres modèles animés (casiers, armoires, coffres, tiroirs, etc.) reçoivent
+  également les états **Fermé** et **Ouvert**.
+- [feat] La section **Apparence** des objets et connecteurs colorables contient désormais une petite
+  prévisualisation 3D mise à jour avec les couleurs choisies.
+- [ux] Les verrières sont disponibles et réellement posables sous **Objets 3D > Dalles en verre**
+  en quatre formats.
+- [fix] Le plan commun entre deux salles superposées est le plafond découpé depuis l'étage bas, puis
+  le sol opaque depuis l'étage haut.
+- [fix] Les sols de salle sans surcharge d'altitude utilisent désormais leur véritable `y` au lieu
+  d'être replacés à l'étage 0 par la conversion de `null` en zéro.
+- [fix] Au niveau affiché, le toit opaque d'une salle inférieure sans salle au-dessus reste visible
+  à côté des sols du niveau courant. Les salles multi-étages gardent leur volume sans dalle intermédiaire.
+- [fix] Aux étages inférieurs, seuls l'enveloppe murale opaque et les objets fixés dessus restent
+  visibles. Les sols, plafonds, objets libres, tokens et effets intérieurs sont masqués.
+- [fix] Le contexte de caméra est désormais lié à l'étage qui l'a produit. En changeant d'étage,
+  l'ancien sol est retiré immédiatement au lieu de rester affiché jusqu'à une prochaine frame 3D.
+- [fix] Les sols et plafonds empilés passent désormais par une seule interface de rendu. En montant
+  d'un étage, le moteur remplace réellement le plafond bas par le sol de la salle haute au lieu de
+  conserver deux chemins concurrents.
+
+### Campagnes
+- [ux] **Zone dangereuse** devient l'onglet rouge **Supprimer**. Son panneau affiche l'avertissement
+  complet et le bouton **Confirmer la suppression**, sans popup système supplémentaire.
+
+## v187 — 2026-07-15 — Fenêtres continues et affichage multi-étages stable
+
+### Éditeur de monde
+- [ux] Les fenêtres fixes et fenêtres-écrans se placent désormais depuis **Objets 3D > Fenêtres**,
+  avec aperçu direct sur le mur ; elles ne figurent plus dans le tooltip du mur.
+- [feat] Les charnières des fenêtres-écrans disposent de leur propre couleur, sans recolorer les
+  boîtiers de commande.
+- [feat] Une fenêtre-écran ne possède plus qu'un boîtier et peut être retournée depuis son tooltip
+  pour choisir la face du mur qui le reçoit.
+- [fix] Les fenêtres et verrières n'ont plus aucune traverse intérieure : chaque baie utilise une
+  surface vitrée continue.
+- [fix] Le halo jaune d'un objet suit maintenant les bornes réelles de son GLB, y compris après une
+  rotation ; il ne part plus dans l'axe déclaré par erreur dans certains blueprints.
+- [fix] Les salles multi-niveaux ne changent plus de contexte au gré d'un zoom ou d'une rotation :
+  le joueur suit son token, tandis que le MJ et l'éditeur suivent la cible stable de la caméra.
+- [fix] Les passerelles, connecteurs, objets 3D, tokens et effets des niveaux supérieurs restent
+  visibles dans tout le volume actif ; seule la façade située entre la caméra et le sol devient
+  transparente.
+- [fix] La surface de l'eau extérieure est placée au-dessus de la face supérieure du toit global,
+  épaisseur de plafond comprise, et non à l'intérieur de la dalle.
+
+## v186 — 2026-07-15 — Fenêtres structurelles, fenêtres-écrans et verrières
+
+### Éditeur de monde
+- [feat] Un mur sélectionné peut recevoir une fenêtre fixe ou une fenêtre-écran avec aperçu 3D avant
+  la pose, y compris sur un mur courbe et sur plusieurs étages.
+- [feat] Les fenêtres-écrans proposent trois états : transparent, opaque et miroir. Leur état est
+  sauvegardé et modifie réellement la ligne de vue.
+- [feat] Les salles peuvent recevoir une verrière de sol ou de plafond sur une interface réelle.
+- [fix] Une fenêtre conserve correctement le mur sous son allège et au-dessus de son linteau ; une
+  baie haute n'efface plus les tranches de mur qu'elle ne traverse pas.
+- [fix] Le panneau du mur reste ouvert lors du choix et de la pose d'une fenêtre, avec la sélection
+  et l'aperçu visibles.
+
 ## v185 — 2026-07-13 — Nouvelle apparence : connexion, tableau de bord et paramètres de campagne
 
 ### Client
@@ -1319,4 +1393,3 @@
 - [add] Roster de combat avec vérification équipement pré-combat
 - [add] Fenêtre déclaration PJ (21 actions, multi-select, INI delta)
 - [fix] Distinction PJ / PNJ / Entité de décor (PC27)
-

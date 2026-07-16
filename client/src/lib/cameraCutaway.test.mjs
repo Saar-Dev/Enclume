@@ -1,7 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from './cameraCutaway.js'
+import {
+  cameraFacingFacadeIds,
+  cameraRoomIdForDisplayLevel,
+  cameraRoomContextId,
+  wallFacadeKey,
+  wallParticipatesInCameraCutaway,
+} from './cameraCutaway.js'
 import { SURFACE_FINE, roomsWallRenderPaths } from './surfaceData.js'
 
 function rectangularFacades() {
@@ -39,6 +45,13 @@ const multiLevelRooms = {
   },
 }
 
+test('un contexte camera ne survit jamais au changement d etage', () => {
+  const context = { displayLevel: 0, roomId: 'lower-room' }
+  assert.equal(cameraRoomIdForDisplayLevel(context, 0), 'lower-room')
+  assert.equal(cameraRoomIdForDisplayLevel(context, 1), null)
+  assert.equal(cameraRoomIdForDisplayLevel(null, 0), null)
+})
+
 test('la position 3D de la camera active la salle meme si sa cible reste dehors', () => {
   const roomId = cameraRoomContextId({
     rooms: multiLevelRooms,
@@ -54,6 +67,28 @@ test('la cible stable active la salle quand la camera reste a l exterieur', () =
     rooms: multiLevelRooms,
     displayLevel: 0,
     camera: { x: 1.5, y: 12, z: -8 },
+    focus: { x: 1.5, y: 0, z: 1.5 },
+  })
+  assert.equal(roomId, 'tower')
+})
+
+test('la cible regardee garde le volume actif quand la camera traverse une salle voisine', () => {
+  const roomId = cameraRoomContextId({
+    rooms: {
+      ...multiLevelRooms,
+      neighbour: {
+        id: 'neighbour',
+        minX: 4,
+        maxX: 7,
+        minZ: 0,
+        maxZ: 3,
+        y: 0,
+        level: 0,
+        heightLevels: 3,
+      },
+    },
+    displayLevel: 0,
+    camera: { x: 5.5, y: 1.2, z: 1.5 },
     focus: { x: 1.5, y: 0, z: 1.5 },
   })
   assert.equal(roomId, 'tower')
@@ -123,6 +158,27 @@ test('une façade d une autre salle ne participe jamais à la coupe active', () 
     }],
   })
   assert.equal(result.size, 0)
+})
+
+test('les murs d un étage inférieur restent opaques hors volume multi-niveau actif', () => {
+  assert.equal(wallParticipatesInCameraCutaway({
+    wallLevel: 0,
+    displayLevel: 1,
+    belongsToActiveRoomVolume: false,
+  }), false)
+  assert.equal(wallParticipatesInCameraCutaway({
+    wallLevel: 1,
+    displayLevel: 1,
+    belongsToActiveRoomVolume: false,
+  }), true)
+})
+
+test('une façade du volume multi-niveau actif partage la coupe sur toute sa hauteur', () => {
+  assert.equal(wallParticipatesInCameraCutaway({
+    wallLevel: 2,
+    displayLevel: 0,
+    belongsToActiveRoomVolume: true,
+  }), true)
 })
 
 test('les normales dérivées des vraies salles distinguent façade avant et mur du fond', () => {
