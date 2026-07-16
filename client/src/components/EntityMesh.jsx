@@ -15,7 +15,8 @@ import {
 } from '../lib/waterMaterials';
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js';
 import { normalizeEntityScale } from '../../../shared/world/entityTransform.js';
-import { entitySelectionBounds } from '../lib/entitySelectionBounds.js';
+import { attachEntitySelectionHalo, setEntitySelectionHaloVisible } from '../lib/entitySelectionHalo.js';
+import { useModelStateAnimation } from '../lib/useModelStateAnimation.js';
 
 // --- Constantes ---
 const ICON_INTERACTION = '⚙';
@@ -171,7 +172,7 @@ function EntityMeshGlb({
   const leaveTimerRef = useRef(null);
 
   // Chargement du GLB avec l'URL absolue
-  const { scene: sourceScene } = useGLTF(glbUrl);
+  const { scene: sourceScene, animations } = useGLTF(glbUrl);
   const materialSlots = useMemo(() => normalizeModelMaterialSlots(blueprint?.geometry), [blueprint?.geometry]);
   const materialOverrides = useMemo(() => ({
     ...(currentState?.visual_override?.materialOverrides || currentState?.visual_override?.material_overrides || {}),
@@ -203,7 +204,7 @@ function EntityMeshGlb({
   const waterMaterials = useMemo(() => {
     const materials = [];
     scene.traverse((child) => {
-      if (!child.isMesh || !isWaterMeshName(child)) return;
+      if (!child.isMesh || child.userData?.entitySelectionHalo || !isWaterMeshName(child)) return;
       const material = createWaterMaterial({
         algae: child.userData?.editor_water_medium === 'algae'
           || /algae/i.test(child.name)
@@ -221,9 +222,12 @@ function EntityMeshGlb({
     });
     return materials;
   }, [scene, blueprint.name]);
-  const selectionBounds = useMemo(() => {
-    return entitySelectionBounds(scene, { width, height, depth });
-  }, [scene, width, height, depth]);
+  const selectionHalos = useMemo(() => attachEntitySelectionHalo(scene), [scene]);
+  useModelStateAnimation(scene, animations, currentState);
+
+  useEffect(() => {
+    setEntitySelectionHaloVisible(selectionHalos, !isPreview && isSelected);
+  }, [selectionHalos, isPreview, isSelected]);
 
   useEffect(() => () => {
     waterMaterials.forEach(material => material.dispose());
@@ -237,6 +241,7 @@ function EntityMeshGlb({
   if (scene) {
     scene.traverse((child) => {
       if (child.isMesh) {
+        if (child.userData?.entitySelectionHalo) return;
         if (child.material) {
           if (Array.isArray(child.material)) {
             const opacity = stateOpacity * (isGmOnly ? 0.5 : 1);
@@ -341,15 +346,6 @@ function EntityMeshGlb({
           <boxGeometry args={[width, height, depth]} />
           <meshBasicMaterial color="#a855f7" side={THREE.BackSide} wireframe />
         </mesh>
-      )}
-
-      {!isPreview && isSelected && (
-        <EntitySelectionHalo
-          width={selectionBounds.size[0]}
-          height={selectionBounds.size[1]}
-          depth={selectionBounds.size[2]}
-          position={selectionBounds.center}
-        />
       )}
 
       {/* Icône Html */}

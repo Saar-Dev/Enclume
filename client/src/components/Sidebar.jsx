@@ -622,9 +622,9 @@ export default function Sidebar({
     blueprint?.glb_url,
   ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
   const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
-  const structuralWindowType = (blueprint) => {
+  const structuralObjectConnectorType = (blueprint) => {
     const type = blueprint?.geometry?.connectorType
-    return ['window', 'screen-window'].includes(type) ? type : null
+    return ['window', 'screen-window', 'skylight'].includes(type) ? type : null
   }
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
@@ -703,7 +703,7 @@ export default function Sidebar({
   })
   const selectObjectBlueprint = (blueprint) => {
     const isActive = String(activeBlueprint?.id || '') === String(blueprint?.id || '')
-    const connectorType = structuralWindowType(blueprint)
+    const connectorType = structuralObjectConnectorType(blueprint)
     onBlueprintSelect?.(isActive ? null : blueprint)
 
     if (connectorType && !isActive) {
@@ -725,7 +725,7 @@ export default function Sidebar({
       return
     }
 
-    if (['window', 'screen-window'].includes(surfaceToolState.connectorType)
+    if (['window', 'screen-window', 'skylight'].includes(surfaceToolState.connectorType)
       && surfaceToolState.connectorPlacementSource === 'object-palette') {
       onSurfaceToolChange?.({
         ...surfaceToolState,
@@ -1549,7 +1549,7 @@ export default function Sidebar({
                               : surfaceToolState.connectorType === 'screen-window'
                                 ? 'Modèle de fenêtre écran'
                                 : surfaceToolState.connectorType === 'skylight'
-                                  ? 'Modèle de verrière'
+                                  ? 'Modèle de dalle en verre'
                             : surfaceToolState.connectorType === 'ladder'
                               ? 'Modèle d’échelle'
                               : t('surfaceEditor.elevatorModel')}
@@ -1905,10 +1905,13 @@ export default function Sidebar({
             const query = objectSearch.trim().toLocaleLowerCase()
             const bpList = Object.values(blueprints)
               .filter(bp => !bp.deprecated)
-              .filter(bp => blueprintPlacementMode(bp) !== 'connector' || structuralWindowType(bp))
+              .filter(bp => blueprintPlacementMode(bp) !== 'connector' || structuralObjectConnectorType(bp))
               .filter(bp => !query || bp.label.toLocaleLowerCase().includes(query) || (bp.category || '').toLocaleLowerCase().includes(query))
             const grouped = bpList.reduce((groups, bp) => {
-              const category = structuralWindowType(bp) ? 'Fenêtres' : (bp.category || t('sidebar.customObjects'))
+              const connectorType = structuralObjectConnectorType(bp)
+              const category = connectorType === 'skylight'
+                ? 'Dalles en verre'
+                : connectorType ? 'Fenêtres' : (bp.category || t('sidebar.customObjects'))
               if (!groups[category]) groups[category] = []
               groups[category].push(bp)
               return groups

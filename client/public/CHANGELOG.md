@@ -1,3 +1,21 @@
+## v188 — 2026-07-16 — Objets ouvrables, aperçu couleur et dalles en verre
+
+### Éditeur de monde
+- [fix] Le halo jaune épouse maintenant la forme réelle du modèle sélectionné. Il suit ses pivots,
+  sa rotation et ses parties animées au lieu d'afficher une boîte tournée dans un autre sens.
+- [feat] Le champ **Ouverte** des portes joue réellement l'animation du GLB et maintient la porte en
+  position ouverte. Les autres modèles animés (casiers, armoires, coffres, tiroirs, etc.) reçoivent
+  également les états **Fermé** et **Ouvert**.
+- [feat] La section **Apparence** des objets et connecteurs colorables contient désormais une petite
+  prévisualisation 3D mise à jour avec les couleurs choisies.
+- [ux] Les verrières sont disponibles sous **Objets 3D > Dalles en verre** en quatre formats.
+- [fix] Le plan commun entre deux salles simples superposées reste opaque : le plafond inférieur ne
+  rend plus transparent le sol de la salle supérieure.
+
+### Campagnes
+- [ux] **Zone dangereuse** devient l'onglet rouge **Supprimer**. Son panneau affiche l'avertissement
+  complet et le bouton **Confirmer la suppression**, sans popup système supplémentaire.
+
 ## v187 — 2026-07-15 — Fenêtres continues et affichage multi-étages stable
 
 ### Éditeur de monde

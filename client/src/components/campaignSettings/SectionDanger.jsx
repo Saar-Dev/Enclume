@@ -16,9 +16,6 @@ export default function SectionDanger({ campaignId, campaignName }) {
   const [error, setError] = useState(null)
 
   const handleDelete = async () => {
-    const confirmed = window.confirm(t('settings.deleteCampaignConfirm', { name: campaignName }))
-    if (!confirmed) return
-
     setDeleting(true)
     setError(null)
     try {
@@ -31,10 +28,13 @@ export default function SectionDanger({ campaignId, campaignName }) {
   }
 
   return (
-    <section className="card">
-      <h2 style={styles.sectionTitle}>{t('settings.dangerTitle')}</h2>
+    <section className="card" style={{ border: '1px solid rgba(239,68,68,0.45)' }}>
+      <h2 style={{ ...styles.sectionTitle, color: 'var(--color-danger)' }}>{t('settings.deleteCampaignTitle')}</h2>
 
-      <p style={styles.placeholderText}>{t('settings.deleteCampaignHint')}</p>
+      <div style={warningStyle} role="alert">
+        <strong>{t('settings.deleteCampaignWarningTitle')}</strong>
+        <p>{t('settings.deleteCampaignWarning', { name: campaignName })}</p>
+      </div>
 
       {error && <p style={{ ...styles.placeholderText, color: 'var(--color-danger)' }}>{error}</p>}
 
@@ -43,8 +43,18 @@ export default function SectionDanger({ campaignId, campaignName }) {
         onClick={handleDelete}
         disabled={deleting}
       >
-        {deleting ? t('settings.deletingCampaign') : t('settings.deleteCampaign')}
+        {deleting ? t('settings.deletingCampaign') : t('settings.confirmDeleteCampaign')}
       </button>
     </section>
   )
+}
+
+const warningStyle = {
+  margin: '0 0 18px',
+  padding: '14px 16px',
+  border: '1px solid rgba(239,68,68,0.42)',
+  borderRadius: '8px',
+  backgroundColor: 'rgba(127,29,29,0.16)',
+  color: 'var(--text-primary)',
+  lineHeight: 1.45,
 }

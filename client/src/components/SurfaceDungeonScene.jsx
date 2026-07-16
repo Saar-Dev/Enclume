@@ -9,6 +9,8 @@ import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js
 import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import { cameraFacingFacadeIds, cameraRoomContextId, wallFacadeKey } from '../lib/cameraCutaway.js'
+import { horizontalInterfaceOpacity } from '../lib/horizontalSurfaceOpacity.js'
+import { useModelStateAnimation } from '../lib/useModelStateAnimation.js'
 import {
   multiPolygonContours,
   intersectMultiPolygons,
@@ -1581,10 +1583,11 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
     [connector],
   )
   const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
-  const windowState = connector?.runtimeState?.state || connector?.state || 'transparent'
+  const modelState = connector?.runtimeState?.state || connector?.state || 'closed'
+  const windowState = ['window', 'screen-window'].includes(connector.type) ? modelState : 'transparent'
   const facingRotationY = connector?.modelFacing === 'back' ? Math.PI : 0
   const preserveAuthoredOrigin = connector?.modelGeometry?.origin === 'floor-center' || Boolean(connector?.modelBuiltinKey)
-  const { scene: sourceScene } = useGLTF(url)
+  const { scene: sourceScene, animations } = useGLTF(url)
   const { scene, offset, uniformScale } = useMemo(() => {
     const clone = SkeletonUtils.clone(sourceScene)
     clone.traverse((child) => {
@@ -1657,6 +1660,7 @@ function DoorConnectorModel({ connector, curveWall = null, opacity = 1 }) {
     }
   }, [sourceScene, opacity, preserveAuthoredOrigin, materialSlots, materialOverrides, geometryHeight, connectorHeight, connector.type, windowState,
     connectorAxis, connectorAnchorX, connectorAnchorZ, connectorNormalX, connectorNormalZ, curveWall])
+  useModelStateAnimation(scene, animations, modelState)
 
   if (!url || !box || !scene) return null
 
@@ -2311,11 +2315,13 @@ function SurfaceDungeonScene({
         if (floorIsDrawn || !ceilingIsVisible) return null
         const room = surface.rooms[horizontalInterface.ceilingRoomId]
         if (!room) return null
-        const opacity = displayLevel === null
-          || horizontalInterface.ceilingDisplayLevel === displayLevel
-          || belongsToCameraVolume
-          ? ceilingOpacity
-          : 1
+        const opacity = horizontalInterfaceOpacity({
+          hasFloor: Boolean(horizontalInterface.floorRoomId),
+          displayLevel,
+          ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
+          belongsToCameraVolume,
+          ceilingOpacity,
+        })
         return (
           <RoomCeilingInterface
             key={horizontalInterface.id}

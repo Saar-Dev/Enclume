@@ -1,5 +1,36 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Objets 3D animables, aperçus couleur et interfaces empilées opaques (2026-07-16)
+
+Le catalogue 3D intégré lit maintenant directement les clips contenus dans chaque GLB. Un modèle
+qui expose une animation d'ouverture reçoit deux états système, **Fermé** et **Ouvert**, avec une
+pose normalisée de `0` à `1`. Le renderer partage un seul pilote d'animation entre les entités libres
+et les connecteurs de porte : une transition est jouée dans les deux sens, puis la pose terminale
+reste maintenue. Les règles physiques continuent d'utiliser l'état canonique du monde, jamais le
+temps local de l'animation.
+
+- 43 des 92 modèles intégrés sont actuellement reconnus comme ouvrables, dont les 8 portes ;
+- le halo de sélection d'un GLB n'est plus une boîte englobante. Deux coques additives reprennent la
+  géométrie réelle de chaque mesh et héritent de sa hiérarchie, de sa rotation et de son animation ;
+- les tooltips d'entité et de connecteur affichent un petit rendu 3D dans **Apparence** dès que le
+  modèle expose des couleurs. Toute modification de slot est visible immédiatement dans cet aperçu ;
+- les quatre `skylight` sont rangées sous **Objets 3D > Dalles en verre** et se posent par le rayon
+  structurel existant. L'ancien bouton de salle en doublon a été retiré ;
+- une interface commune qui est le plafond de la salle basse et le sol d'une salle haute reste
+  toujours opaque. Seul un plafond sans salle au-dessus peut recevoir l'opacité de coupe ;
+- la configuration de campagne remplace **Zone dangereuse** par l'onglet rouge **Supprimer**. Le
+  panneau de droite porte l'avertissement complet et l'unique action **Confirmer la suppression**,
+  sans dialogue natif superposé.
+
+Validation : 131 tests monde/serveur, 3 tests de configuration, 6 tests ciblés animation/halo/dalle,
+ESLint ciblé, build Vite et parcours navigateur réel. Le catalogue contient bien 43 blueprints à
+deux états ; une porte vitrée coulissante a été ouverte, maintenue puis refermée ; les aperçus
+couleur d'une entité et d'une fenêtre-écran ont été contrôlés ; la carte réelle contient deux salles
+simples empilées et rend leur interface opaque. La campagne n'a pas été supprimée et la porte de
+test a retrouvé son état fermé.
+
+---
+
 ## Fenêtres continues, pose depuis Objets 3D et contexte de caméra stable (2026-07-15)
 
 Les fenêtres structurelles sont désormais présentées dans **Objets 3D > Fenêtres**. Elles se
@@ -12,9 +43,8 @@ plus que l'ajout d'une porte.
   fixes et ne sont pas recolorés avec elles ;
 - chaque fenêtre-écran possède un seul boîtier. **Retourner la fenêtre** persiste une orientation
   `front`/`back` et applique le demi-tour autour de l'ancrage structurel ;
-- le halo jaune des objets GLB est calculé depuis leurs vraies bornes locales. Il suit donc le
-  modèle et ses axes réels sous toutes les rotations, au lieu de réutiliser une boîte de blueprint
-  parfois orientée autrement ;
+- le halo jaune des objets GLB suit désormais leur géométrie réelle et sa hiérarchie, y compris sous
+  rotation et animation, au lieu d'une boîte englobante orientée séparément ;
 - la pose depuis le catalogue raycast tout mur valide du niveau, affiche le vrai GLB en aperçu et
   revient au mode sélection après validation ;
 - le contexte d'une salle multi-niveau est choisi par le token suivi en jeu joueur, et par la cible

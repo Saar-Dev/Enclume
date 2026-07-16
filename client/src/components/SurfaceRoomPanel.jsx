@@ -208,11 +208,6 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
           </div>
         </FloatingPanelSection>
 
-        <FloatingPanelSection title="Verrières sol / plafond">
-          <button type="button" onClick={() => startConnector('skylight')} style={S.action}>Ajouter une verrière</button>
-          <p style={S.hint}>La verrière forme une interface transparente unique entre le sol supérieur et le plafond inférieur.</p>
-        </FloatingPanelSection>
-
         {onDelete && (!confirmDelete ? (
           <button type="button" onClick={() => setConfirmDelete(true)} style={{ ...S.action, ...S.danger }}>
             Supprimer la salle

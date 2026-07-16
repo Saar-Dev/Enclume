@@ -1,4 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — interactions 3D et interfaces horizontales stabilisées** : les clips GLB intégrés
+> alimentent désormais des états Fermé/Ouvert partagés par entités et portes ; la sélection suit la
+> géométrie animée réelle ; les tooltips colorables possèdent un aperçu compact ; les `skylight`
+> sont accessibles sous **Objets 3D > Dalles en verre** ; une interface portant un sol supérieur
+> reste opaque. La suppression de campagne possède un panneau d'avertissement dédié. Validation :
+> 131 tests monde/serveur, 3 configuration, 6 ciblés, lint, build et navigateur réel.
+>
 > **2026-07-15 — base commune de travail** : après sauvegarde complète, les espaces `8193/8194` et
 > `8293/8294` repartent du tag `baseline/common-20260715` sur les branches distinctes `dev/cousin`
 > et `dev/monde`. Seul le code versionné est synchronisé ; les configurations, bases et assets ne

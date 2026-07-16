@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   clearMaterialSlotOverride,
   connectorModelMaterialSlots,
@@ -6,6 +6,7 @@ import {
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
+import Object3DPreview from './Object3DPreview.jsx'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -40,7 +41,7 @@ function connectorTypeLabel(type) {
   if (type === 'door') return 'Porte'
   if (type === 'window') return 'Fenêtre'
   if (type === 'screen-window') return 'Fenêtre écran'
-  if (type === 'skylight') return 'Verrière'
+  if (type === 'skylight') return 'Dalle en verre'
   if (type === 'elevator') return 'Ascenseur'
   if (type === 'ladder') return 'Échelle'
   return type
@@ -127,6 +128,11 @@ export default function SurfaceConnectorPanel({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const materialSlots = connectorModelMaterialSlots(connector)
   const materialOverrides = connector?.modelMaterialOverrides || {}
+  const previewBlueprint = useMemo(() => ({
+    glb_url: connector?.modelGlbUrl || null,
+    geometry: connector?.modelGeometry || {},
+    label: connector?.modelLabel || connectorTypeLabel(connector?.type),
+  }), [connector?.modelGlbUrl, connector?.modelGeometry, connector?.modelLabel, connector?.type])
   if (!connector) return null
 
   const patchMaterialSlot = (slot, patch) => {
@@ -278,7 +284,10 @@ export default function SurfaceConnectorPanel({
 
         {canEdit && (materialSlots.length > 0 ? (
           <div style={S.field}>
-            <span style={S.label}>Couleurs</span>
+            <span style={S.label}>Apparence</span>
+            {previewBlueprint.glb_url && (
+              <Object3DPreview blueprint={previewBlueprint} materialOverrides={materialOverrides} compact />
+            )}
             <div style={S.slotList}>
               {materialSlots.map(slot => {
                 const slotValue = materialSlotDisplayValue(materialOverrides, slot)

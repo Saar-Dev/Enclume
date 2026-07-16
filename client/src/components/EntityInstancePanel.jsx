@@ -10,6 +10,7 @@ import {
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
+import Object3DPreview from './Object3DPreview.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import {
   ENTITY_SCALE_MAX,
@@ -105,6 +106,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     posY: Number(entity.pos_y) || 0,
     posZ: Number(entity.pos_z) || 0,
     rotation: Number(entity.r) || 0,
+    currentStateId: entity.current_state_id ?? 0,
     state: entity.state,
   })
   const previewRef = useRef({ active: false })
@@ -118,6 +120,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
       pos_y: persisted.posY,
       pos_z: persisted.posZ,
       r: persisted.rotation,
+      current_state_id: persisted.currentStateId,
       state: persisted.state,
     })
   }, [entity.id, updateEntity])
@@ -127,8 +130,9 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     setPosY(String(entity.pos_y ?? 0))
     setPosZ(String(entity.pos_z ?? 0))
     setRotation(Number(entity.r) || 0)
+    setCurrentStateId(entity.current_state_id ?? 0)
     setScale(normalizeEntityScale(entity.state))
-  }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r, entity.state])
+  }, [entity.id, entity.pos_x, entity.pos_y, entity.pos_z, entity.r, entity.current_state_id, entity.state])
 
   const previewTransform = useCallback((nextRotation, nextScale) => {
     previewRef.current.active = true
@@ -153,6 +157,13 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
     )
     setScale(next)
     previewTransform(rotation, next)
+  }
+
+  const previewCurrentState = value => {
+    const next = Number(value)
+    setCurrentStateId(next)
+    previewRef.current.active = true
+    updateEntity({ id: entity.id, current_state_id: next })
   }
 
   const toggleInteraction = (id) => {
@@ -198,6 +209,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
         posY: Number(res.data.entity.pos_y) || 0,
         posZ: Number(res.data.entity.pos_z) || 0,
         rotation: Number(res.data.entity.r) || 0,
+        currentStateId: res.data.entity.current_state_id ?? 0,
         state: res.data.entity.state,
       }
       previewRef.current.active = false
@@ -348,7 +360,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
             <select
               style={{ ...S.input, cursor: 'pointer' }}
               value={currentStateId}
-              onChange={e => setCurrentStateId(Number(e.target.value))}
+              onChange={e => previewCurrentState(e.target.value)}
             >
               {blueprint.states.map(state => (
                 <option key={state.id} value={state.id}>
@@ -449,6 +461,7 @@ export default function EntityInstancePanel({ entity, x, y, onClose, socket = nu
           <FloatingPanelSection title="Apparence">
           <div style={S.field}>
             <label style={S.label}>Couleurs du modèle 3D</label>
+            <Object3DPreview blueprint={blueprint} materialOverrides={materialOverrides} compact />
             <div style={S.slotList}>
               {materialSlots.map(slot => {
                 const slotValue = materialSlotDisplayValue(materialOverrides, slot)

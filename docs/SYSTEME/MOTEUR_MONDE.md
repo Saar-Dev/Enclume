@@ -454,6 +454,8 @@ Une verrière horizontale `skylight` remplace une interface structurelle existan
 plafond. Elle peut occuper la base ou le sommet d'une salle haute, ou l'interface réellement partagée
 par deux salles superposées ; elle ne peut pas flotter dans une tranche intermédiaire vide. Son
 support reste praticable et bloque mouvement vertical et fluides, mais laisse passer la vision.
+Dans l'éditeur, les quatre formats sont exposés exclusivement sous **Objets 3D > Dalles en verre**.
+Le choix d'un modèle active le rayon de pose structurel ; aucune `entity` décorative n'est créée.
 
 ---
 
@@ -478,6 +480,18 @@ normalise avec `shared/world/entityTransform.js`, puis le socket rediffuse l'ét
 blueprint. Agrandir ou réduire un objet modifie donc ensemble son apparence, son occupation et son
 volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité ; les boutons
 de l'éditeur ne sont qu'une commande par pas de 90°.
+
+Les animations GLB sont une capacité visuelle dérivée. `builtinModelCatalog` lit les noms de clips
+dans le chunk JSON du GLB et inscrit `geometry.animationClips`; un modèle ouvrable reçoit les états
+`closed`/`open` et une `visual_override.animationProgress` normalisée. `useModelStateAnimation`
+applique les mêmes clips à l'entité libre ou au modèle d'un connecteur, joue la transition vers la
+nouvelle pose puis la fige exactement à son terme. Le temps d'animation ne modifie ni collision ni
+LOS : celles-ci lisent l'état métier persistant.
+
+La sélection GLB suit la géométrie, pas une AABB. Chaque mesh non skinné reçoit deux coques additives
+enfants ; elles héritent donc automatiquement des pivots, rotations et animations internes. Les
+objets à slots de matériau affichent également un rendu compact dans la section **Apparence** de
+leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel.
 
 ### 7.1 Tranche d'étage affichée
 
@@ -656,7 +670,9 @@ apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`
 
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
 de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
-niveau inférieur, sol dès que le niveau supérieur est visible. Tous les niveaux inférieurs au plan
+niveau inférieur, sol dès que le niveau supérieur est visible. Cette interface reste opaque dès
+qu'un sol existe au-dessus ; l'opacité de coupe ne s'applique qu'à un plafond sans salle supérieure.
+Tous les niveaux inférieurs au plan
 de coupe restent opaques. Les murs supérieurs du seul volume multi-hauteur actuellement visé sont
 également rendus, sans révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant et au mur
 logique complet ; les morceaux créés par une porte partagent le même groupe d'opacité et leurs faces

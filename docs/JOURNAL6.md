@@ -3678,3 +3678,50 @@ nouveau GLB est repris par le cachebuster `mtime-size`.
 
 **Retour arrière** : revert du commit de cette suite, puis redémarrage de
 `enclume-codex-server.service` pour resynchroniser le manifeste précédent.
+
+---
+
+## Session 143 (Codex) — 2026-07-16 — Interactions 3D cohérentes et dalles empilées opaques ✅ CLOS
+
+La capture d'une entité tournée a confirmé que la correction par boîte englobante restait
+conceptuellement mauvaise : elle évaluait une orientation distincte du modèle et produisait encore
+un volume jaune à 90°. La sélection GLB utilise désormais deux coques additives attachées à chaque
+mesh. Elles héritent de toute la hiérarchie du modèle, y compris les pivots et animations, et ne
+participent ni au raycast ni aux matériaux d'eau.
+
+Le catalogue intégré inspecte aussi le chunk JSON de chaque GLB et copie ses noms de clips dans
+`geometry.animationClips`. Les modèles possédant une animation d'ouverture reçoivent deux états
+système (`closed`/`open`) avec une progression explicite. Le hook commun
+`useModelStateAnimation.js` joue tous les clips dans le sens demandé, force la pose exacte au terme
+et la maintient. Il équipe `EntityMesh` et `DoorConnectorModel`; l'état physique de la porte reste
+le même état canonique déjà consommé par collision, navigation et LOS. Après resynchronisation,
+43/92 blueprints sont ouvrables, dont 8/8 portes.
+
+Les réglages couleur d'une entité libre ou d'un connecteur affichent maintenant un
+`Object3DPreview` compact dans **Apparence**. Les quatre connecteurs horizontaux ont été renommés
+**Dalle en verre 1x1/2x1/2x2/3x3**, rangés sous **Objets 3D > Dalles en verre** et retirés du panneau
+de salle afin de conserver un seul parcours de pose structurelle.
+
+Le défaut des salles empilées venait de la branche de rendu du plafond inférieur : lorsque le sol
+supérieur était hors du niveau affiché, l'interface commune recevait encore `ceilingOpacity`. Le
+contrat est maintenant explicite dans `horizontalInterfaceOpacity` : toute interface possédant un
+`floorRoomId` est opaque ; seule une vraie toiture sans salle supérieure peut être découpée en
+transparence.
+
+Enfin, la configuration de campagne remplace **Zone dangereuse** par l'onglet rouge **Supprimer**.
+Son panneau de droite contient l'avertissement irréversible et le bouton
+**Confirmer la suppression** ; le `window.confirm` natif a été retiré.
+
+**Testé** : 131/131 tests monde/serveur, 3/3 configuration, 6/6 tests ciblés animation/halo/opacité,
+ESLint ciblé sans erreur et build Vite. Dans le navigateur intégré : 4 dalles visibles dans la
+bonne catégorie, aperçus couleur d'une cuve et d'une fenêtre-écran, halo calé sur la cuve, porte
+vitrée coulissante fermée → ouverte et maintenue → refermée, sol de la salle simple superposée
+opaque, panneau de suppression et bouton de confirmation présents sans déclencher la suppression.
+La porte utilisée a été remise dans son état fermé et aucune donnée de test n'a été laissée.
+
+**Données** : le rafraîchissement du catalogue met à jour les états et les métadonnées d'animation
+des blueprints système. Les instances existantes restent à l'état `0` fermé. Aucun document Surface
+n'est migré et aucun mode de rétrocompatibilité n'est ajouté.
+
+**Retour arrière** : revert du commit de session, redémarrage des services 8293/8294, puis
+rafraîchissement du catalogue pour rétablir les états du commit précédent.
