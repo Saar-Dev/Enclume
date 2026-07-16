@@ -3839,3 +3839,56 @@ ci-dessus) resté hors scope.
 
 **Retour arrière** : `backup/orphan-session143-144-20260715` (origin) conserve les 7 commits
 originaux intacts, y compris les 2 écartés, en cas de besoin futur.
+
+---
+
+## Session 146 (Saar) — 2026-07-16 — État initial combat des PNJ dans le ROSTER ✅ CLOS
+
+**Contexte** : reprise propre du travail écarté en Session 145 (commit orphelin `9caeb30`, "GM
+déclare l'état initial combat des PNJ" — jamais testé). La fenêtre ROSTER (phase ROSTER) affichait
+une colonne ÉTAT INIT valable uniquement pour les PJ (✓/· de confirmation) ; les PNJ n'avaient aucun
+moyen de recevoir une posture/arme/mode de tir initiaux, faute de fenêtre joueur dédiée (pas de
+`user_id`).
+
+**Décisions de conception** (discussion avec Saar avant code) :
+- État initial PNJ = posture + arme (état tactique rangée/main dessus/au clair, distinct de la
+  colonne ARME existante qui montre l'*équipement*) + mode de tir — les 3 mêmes champs que la
+  fenêtre Joueur (`CombatInitStateWindow.jsx`), pas seulement 2.
+- Contrôle : chips cliquables (`StateChip` réutilisé en mode `compact`, cycle au clic) plutôt que
+  des `<select>` — écarté après un premier essai fonctionnel mais jugé peu cohérent avec le HUD
+  sombre (chrome natif du select) et plus lourd que nécessaire pour 3 valeurs fixes par attribut.
+- Défaut PNJ à `COMBAT_START` : arme posée explicitement sur `drawn` (Au clair) plutôt que le défaut
+  colonne `holstered` (Rangée) — PNJ déjà en alerte au début du combat. PJ inchangés (Rangée,
+  choix au joueur). Posture/mode de tir PNJ restent sur le défaut colonne (déjà Debout/Coup par
+  coup).
+- Badge token `PN` → `PNJ` (cellule TOKEN du roster).
+
+**Fichiers touchés** :
+- `server/src/socket/socketCombatState.js` — `COMBAT_INIT_STATE` : le garde `if (isGm) return`
+  est remplacé par une autorisation GM limitée aux tokens PNJ (`character.type === 'pnj'`) ; PJ
+  inchangés (ownership joueur), drones exclus (ni PJ ni PNJ → refusé). `COMBAT_START` : ajout de
+  `state_weapon: 'drawn'` explicite pour les lignes PNJ construites dans `rosterRows`.
+- `client/src/components/CombatInitStateWindow.jsx` — `StateChip` exporté, mode `compact` ajouté
+  (chip inline avec tooltip complet).
+- `client/src/components/combatSections.js` — labels courts (`short`) sur `position`/`weapon`/
+  `fire_mode` pour l'affichage compact.
+- `client/src/components/CombatRosterWindow.jsx` — colonne ÉTAT INIT : ligne PNJ affiche 3
+  `StateChip` compacts (posture/arme/mode de tir), `handleSetPnjState` émet `COMBAT_INIT_STATE`
+  avec l'état complet (un seul champ modifié à la fois, validation immédiate, pas de brouillon
+  local contrairement à la fenêtre Joueur). Badge `PN`→`PNJ`.
+- `client/src/index.css` — classe `.combat-chip-state` (palette PNJ existante, cohérente avec
+  `.combat-chip-pnj`).
+- `shared/events.js` — commentaire `COMBAT_INIT_STATE` mis à jour (joueur PJ ou GM PNJ).
+
+**Testé** : `node --check` sur le fichier serveur, `eslint` sur les 3 fichiers client modifiés
+(aucun warning), relecture complète des diffs. **Confirmé fonctionnel par Saar en navigateur**
+(retour : "moche mais fonctionnel" — polish visuel non demandé, laissé tel quel).
+
+**Non testé** : scénario multi-PNJ (plusieurs PNJ réglés simultanément), reconnexion en cours de
+phase ROSTER, transport WebSocket sous charge concurrente.
+
+**Données** : aucune migration — les colonnes `state_position`/`state_weapon`/`state_fire_mode`
+existent déjà (migrations 56/58). Effet runtime limité aux nouveaux combats démarrés après ce
+correctif (défaut `drawn` PNJ).
+
+**Retour arrière** : commit isolé sur `dev/Saar`, revert simple si besoin.

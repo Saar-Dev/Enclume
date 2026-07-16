@@ -92,7 +92,7 @@ export const WS = {
   COMBAT_SURPRISE_RESULT:'combat:surprise_result',  // joueur → serveur
   // Annonce (Sprint 2)
   COMBAT_ANNOUNCE_START:  'combat:announce_start',  // GM → serveur : transition ROSTER→ANNOUNCEMENT
-  COMBAT_INIT_STATE:      'combat:init_state',       // joueur → serveur : état initial (phase ROSTER)
+  COMBAT_INIT_STATE:      'combat:init_state',       // joueur (son PJ) ou GM (un PNJ) → serveur : état initial (phase ROSTER)
   COMBAT_ACTION_DECLARE: 'combat:action_declare',   // joueur → serveur
   COMBAT_ACTION_DECLARED:'combat:action_declared',  // serveur → room
   COMBAT_SKIP_PLAYER:    'combat:skip_player',      // GM → serveur

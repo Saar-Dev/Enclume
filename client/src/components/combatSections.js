@@ -7,9 +7,9 @@ export const STATE_DEFS = {
   position: {
     label: 'POSTURE',
     states: [
-      { k: 'standing',  l: 'Debout'    },
-      { k: 'crouching', l: 'Accroupi'  },
-      { k: 'prone',     l: 'Couché'    },
+      { k: 'standing',  l: 'Debout',   short: 'Deb.'  },
+      { k: 'crouching', l: 'Accroupi', short: 'Acc.'  },
+      { k: 'prone',     l: 'Couché',   short: 'Couc.' },
     ],
     cost: {
       standing:  { crouching: -3, prone:     -5  },
@@ -20,9 +20,9 @@ export const STATE_DEFS = {
   weapon: {
     label: 'ARME',
     states: [
-      { k: 'holstered', l: 'Rangée'           },
-      { k: 'ready',     l: "Main sur l'arme"  },
-      { k: 'drawn',     l: 'Au clair'         },
+      { k: 'holstered', l: 'Rangée',          short: 'Rang.' },
+      { k: 'ready',     l: "Main sur l'arme", short: 'Main'  },
+      { k: 'drawn',     l: 'Au clair',        short: 'Clair' },
     ],
     cost: {
       holstered: { ready: -3, drawn:    -5  },
@@ -33,9 +33,9 @@ export const STATE_DEFS = {
   fire_mode: {
     label: 'MODE DE TIR',
     states: [
-      { k: 'cc', l: 'Coup par coup'  },
-      { k: 'rc', l: 'Rafale courte'  },
-      { k: 'rl', l: 'Rafale longue'  },
+      { k: 'cc', l: 'Coup par coup', short: 'CC' },
+      { k: 'rc', l: 'Rafale courte', short: 'RC' },
+      { k: 'rl', l: 'Rafale longue', short: 'RL' },
     ],
     // Tout changement: -3
     cost: {
