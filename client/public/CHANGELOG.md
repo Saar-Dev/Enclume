@@ -1,3 +1,32 @@
+## v188 — 2026-07-16 — Compétences réservées/difficiles, attributs et fenêtre de combat
+
+### Serveur
+- [fix] Débloquer une compétence réservée `(X)` coûte désormais 1 point d'Expérience (au lieu de 3)
+  et la place au niveau -3, conformément à la règle — elle peut ensuite être développée normalement.
+- [fix] Le malus des compétences difficiles `(-3)` (ex. Analyse empathique) est enfin appliqué — il
+  n'avait jamais d'effet réel depuis la création du système d'Expérience.
+- [fix] Le Niveau de base et le Modificateur PC d'un attribut ne peuvent plus être modifiés
+  directement par un joueur (GM uniquement) — faille de sécurité corrigée côté serveur.
+- [feat] Le Modificateur PC d'un attribut peut être augmenté en dépensant de l'Expérience (5 XP par
+  point, jusqu'à +5).
+
+### Client
+- [feat] La fenêtre de déclaration de combat (joueur et MJ) affiche désormais en permanence l'arme
+  équipée, ses munitions restantes (couleur selon le niveau) et la compétence utilisée pour la tirer.
+- [fix] Les lignes de catégorie de la fiche de compétences (Arts martiaux, Expression artistique...)
+  n'ont plus de fond sombre parasite.
+- [ux] En Mode Progression, l'achat d'un point de Modif. PC affiche un bouton "+1 / 5 PE" plus clair
+  qu'un simple "+5" ambigu, avec un badge "MAX" une fois le plafond atteint.
+
+## v187 — 2026-07-16 — Un personnage assigné au MJ n'est plus considéré comme un Joueur
+
+### Serveur
+- [fix] Un personnage assigné au compte du MJ lui-même (création, réassignation, ou via
+  l'Assistant de création) était classé Personnage Joueur (PJ) au lieu de Personnage Non-Joueur
+  (PNJ) — visible notamment dans le badge du roster de combat. La classification dépend
+  désormais du rôle réel du propriétaire dans la campagne, pas de la simple présence d'un
+  propriétaire.
+
 ## v186 — 2026-07-15 — Ambidextre et Fécondité produisent enfin un effet réel
 
 ### Serveur

@@ -22,6 +22,22 @@ import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 
 // ---------------------------------------------------------------------------
+// Statut munitions d'une arme équipée (COM20) — 'empty' | 'low' (≤25%) | 'ok' | null (pas d'arme
+// à feu, ex. arme de contact sans ref_ammo_count). ref_ammo_count est un texte libre (ex. "15") —
+// même parsing que resolveAmmoInit (server/src/services/inventoryService.js).
+// ---------------------------------------------------------------------------
+function weaponAmmoStatus(remaining, capacityRaw) {
+  if (capacityRaw == null) return null
+  const m = String(capacityRaw).match(/\d+/)
+  const capacity = m ? parseInt(m[0], 10) : 0
+  if (!capacity) return null
+  const rem = remaining ?? 0
+  if (rem <= 0) return 'empty'
+  if (rem / capacity <= 0.25) return 'low'
+  return 'ok'
+}
+
+// ---------------------------------------------------------------------------
 // Composant StateSelector
 // Affiche un segmented control pour un etat avec cout de transition visible.
 // ---------------------------------------------------------------------------
@@ -339,6 +355,10 @@ export default function CombatActionWindow({
   const forceCC       = hasTwoWeapons && !sameFirMode
   const selectedWeapon = weaponMg || weaponMd || null
   const assaultWeaponId = selectedWeapon?.id ?? null
+  // Arme(s) équipée(s) MG/MD, distant ou contact — affichage ARMEMENT (COM20). weaponMg/weaponMd
+  // ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item slotté MG/MD.
+  const equippedMg = allInventoryItems.find(item => item.slot === 'MG') || null
+  const equippedMd = allInventoryItems.find(item => item.slot === 'MD') || null
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
@@ -847,6 +867,21 @@ export default function CombatActionWindow({
           {!isDrone && (
             <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
               <div style={W.sectionTitle}>ARMEMENT</div>
+              {(equippedMg || equippedMd) && (
+                <div style={W.weaponInfo}>
+                  {[['MG', equippedMg], ['MD', equippedMd]].filter(([, w]) => w).map(([hand, w]) => {
+                    const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
+                    const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
+                    return (
+                      <span key={w.id} className={cls} style={W.weaponInfoLine} title={w.skill_label ?? undefined}>
+                        <span className="combat-equip-dot" />
+                        {equippedMg && equippedMd ? `${hand} · ` : ''}{w.custom_name || w.ref_name || '?'}
+                        {status && <span style={W.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
               <StateSelector
                 stateKey="weapon" def={STATE_DEFS.weapon}
                 current={decl.weapon} initial={initialStates.current.weapon}
@@ -902,11 +937,10 @@ export default function CombatActionWindow({
                   )
                 }
 
-                // Rechargement — label dynamique, grisé si plein ou sans arme
+                // Rechargement — munitions déjà visibles en permanence dans ARMEMENT (COM20),
+                // label statique ici. Grisé si plein ou sans arme.
                 if (a.k === 'reload') {
-                  const reloadLabel = selectedWeapon && ammoCount !== null
-                    ? `Rechargement ${ammoRemaining ?? 0}/${ammoCount}`
-                    : 'Recharger'
+                  const reloadLabel = 'Recharger'
                   if (isAmmoFull || !selectedWeapon) {
                     return (
                       <div key={a.k} title={a.tooltip} style={{ ...W.itemGreyed, ...span2 }}>
@@ -1329,6 +1363,21 @@ const W = {
     color: 'var(--combat-section)',
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
+  },
+  weaponInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: '0 10px 4px',
+  },
+  weaponInfoLine: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  weaponInfoAmmo: {
+    fontWeight: 700,
   },
   itemsGrid: {
     display: 'grid',

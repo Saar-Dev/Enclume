@@ -3892,3 +3892,181 @@ existent déjà (migrations 56/58). Effet runtime limité aux nouveaux combats d
 correctif (défaut `drawn` PNJ).
 
 **Retour arrière** : commit isolé sur `dev/Saar`, revert simple si besoin.
+
+---
+
+## Session 148 (Saar) — 2026-07-16 — Fiche perso (compétences (X)/(-3), attributs) + COM20 (affichage arme combat) ✅ CLOS
+
+**Contexte** : suite de la Session 145 (tri commits orphelins). Reprise du triage `docs/BUGIDENTIFIE.md`
+— 4 bugs distincts trouvés/corrigés dans la foulée d'une correction demandée par Saar sur les
+compétences réservées, plus COM20 traité séparément en fin de session.
+
+### A. Compétence `(X)` réservée — coût de déblocage et niveau de départ faux
+
+**Symptôme (signalé par Saar)** : débloquer une compétence `(X)` imposait de payer 3 PE d'un coup
+pour atteindre le niveau 0, alors que la règle (`REGLECOMPETENCE.md:22-25`) dit qu'1 PE suffit pour
+l'ouvrir, et que son nouveau niveau est alors -3 (pas 0).
+
+**Cause racine [VÉRIFIÉ]** : `getCoutDeblocageX()` (`server/src/lib/charStats.js`) retournait un
+coût fixe de 3 PE et laissait `mastery` à 0 après déblocage — décision délibérée pour respecter PC11
+(`mastery >= 0` toujours, `CHARACTER.md:662`), mais contraire au texte LdB.
+
+**Décision Saar** : suivre le LdB à la lettre — PC11 amendé (exception documentée : `mastery` peut
+descendre à -3, uniquement pour les compétences `(X)` débloquées).
+
+**Correctif** : `getCoutDeblocageX()` → 1 PE ; route `POST /skills/buy` (`char-sheet.js`) — `newMastery
+= -3` au lieu de rester à `currentMastery` ; `SkillsPanel.jsx` — `COUT_DEBLOCAGE_X` 3→1, input GM
+(saisie directe) plancher -3 pour `(X)` au lieu de 0 partout ; `CHARACTER.md` PC11 réécrit.
+
+### B. Compétence `(-3)` difficile — malus jamais câblé (Q4 `PLAN_XP.md` close enfin)
+
+**Trouvé en vérifiant A** : Saar a testé "Analyse empathique" en pensant que c'était une compétence
+`(X)` — vérifié en base : marker `(-3)`, pas `(X)`. En creusant : le malus `(-3)` ("difficile à
+apprendre, réduit le niveau de base") n'a **jamais été câblé mécaniquement**, ni côté client ni
+serveur, depuis la création du module XP (Session 37) — `docs/Old/PLAN_XP.md` listait déjà la
+question en 2026-04 (**Q4** : "Les compétences (-3) coûtent-elles plus cher ?"), jamais répondue
+(`git log --all --grep="Q4"` : 0 résultat).
+
+**Correctif** : `calcSkillTotal` (`charStats.js`, autorité serveur unique — combat, dés, mouvement,
+tout en dépend) et `calcBase` (`SkillsPanel.jsx`, miroir client) appliquent désormais `-3` au Base
+si `marker === '(-3)'`. Aucun changement de coût (pas de "coût doublé" pour `(-3)` dans le texte LdB,
+contrairement à `(X)` hors profession — Q4 tranchée). Vérifié en base réelle (Loulou, Analyse
+empathique, Base 1 → Total -2 jamais achetée, Total 1 à mastery=3 = parité avec une compétence
+normale).
+
+### C. Fiche perso — Attributs : édition joueur à corriger + achat XP du Modif. PC
+
+**Symptôme (signalé par Saar)** : en Mode Progression, un joueur pouvait éditer directement son
+Niveau de base et son Modif. PC — normalement réservé au GM. Corrigé, puis Saar a demandé l'ajout
+symétrique : le Modif. PC doit pouvoir être acheté avec de l'XP (5 PE/point, max 5).
+
+**Cause racine [VÉRIFIÉ]** : `readOnly={!canEdit}` (= `isGm || isOwner`) au lieu de `!isGm` sur les
+inputs `base`/`pc` de `CharacterSheet.jsx` ; **et** la route serveur `PUT /attributes` n'avait
+**aucun** guard GM — un joueur pouvait modifier ses attributs par requête directe, contournement UI
+inclus.
+
+**Itérations UX (2 corrections demandées par Saar après premier essai)** :
+1. `readOnly` sur `<input type="number">` n'empêche pas les flèches natives du navigateur d'apparaître
+   (juste la frappe) — remplacé par un `<span>` en lecture seule pour le joueur (même pattern déjà
+   utilisé par `SkillsPanel.jsx` pour la maîtrise des compétences), jamais d'`<input>` du tout hors GM.
+2. Le mécanisme d'achat est passé d'un bouton "+5" ambigu (gain ou coût ?) à un bouton 2 lignes
+   "+1" (vert, gras) / "5 PE" (gris, petit) — séparation visuelle gain/coût — avec badge "MAX" statique
+   au plafond plutôt qu'un bouton grisé en permanence.
+
+**Correctif final** : `charStats.js` (`getCoutAttributPc()` 5 PE, `MAX_PC_MODIFIER` 5) ; nouvelle
+route `POST /attributes/buy` (`char-sheet.js`, incrémente `pc_modifier`, débite XP, plafond serveur) ;
+`PUT /attributes` gagne `if (!req.isGm) throw 403` ; `CharacterSheet.jsx` — GM : input libre inchangé ;
+joueur : `<span>` + bouton 2 lignes en Mode Progression uniquement ; clés i18n `character.xp.attrMax`
+ajoutées (fr+en).
+
+**Testé (A+B+C)** : `node --check`/ESLint sur tous les fichiers touchés (0 nouvelle erreur, `git
+stash`/`git stash pop` comparatif systématique) ; scénarios réels en base (transaction annulée) pour
+chaque route (déblocage `(X)`, malus `(-3)`, achat `Modif. PC` jusqu'au plafond, rejet XP
+insuffisant/plafond dépassé) ; **C confirmé fonctionnel par Saar en navigateur** ("Fonctionnel et
+validé").
+
+### D. Bug COM20 — Fenêtre de déclaration combat sans info arme/munitions/compétence
+
+**Symptôme** (`BUGIDENTIFIE.md`, cluster N) : en phase ANNONCE, ni PJ ni GM ne voyaient l'arme
+équipée, ses munitions ou sa compétence liée avant de choisir une action — seul le nom apparaissait,
+et seulement après avoir déjà cliqué "Assaut" (`AssaultRangedPanel.weaponDisplay`).
+
+**Incident de méthode signalé par Saar en cours de route** : premier passage codé directement après
+lecture, sans présenter le plan (§6.5 CLAUDE.md) — corrections annulées (`git restore`) et reprises
+à la lettre : lecture → hypothèse explicite → plan (fichiers/invariant/changements/hors périmètre)
+→ go → code. Puis réflexion UX demandée avant un 2ᵉ essai (voir ci-dessous).
+
+**Cause racine [HYPOTHÈSE, lecture seule]** : les données (nom, calibre, munitions) étaient déjà
+récupérées côté client mais jamais affichées hors du sous-panneau Assaut ; la compétence liée
+(`ref_equipment_skill_assoc`, peuplée migration 135) n'était jamais requêtée pour l'affichage.
+
+**Réflexion UX (avant code)** : éviter la redondance avec le label dynamique du bouton "Recharger" ;
+prioriser les munitions (info qui change à chaque tour) avec code couleur plutôt qu'un texte neutre ;
+compétence liée en tooltip plutôt qu'en texte permanent (fenêtre déjà dense) ; étiqueter la main
+(MG/MD) seulement si les deux sont occupées ; réutiliser l'idiome visuel déjà existant
+(`.combat-equip-ok`/`.combat-equip-dot`, `CombatRosterWindow.jsx`) plutôt qu'en inventer un nouveau.
+
+**Correctif** : `inventoryService.js`/`battlemaps.js` — sous-requête `skill_label` (+ champs
+munitions/calibre manquants côté GM) ajoutée aux `select()` existants, aucune nouvelle route.
+`index.css` — extension de `.combat-equip-ok` en 3 variantes (`-ok`/`-low`/`-empty`, seuil 25%),
+dot en `currentColor` (rétrocompatible, aucun changement visuel pour l'usage existant dans
+`CombatRosterWindow.jsx`). `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` — bloc arme(s)
+équipée(s) dans ARMEMENT (nom, munitions colorées, compétence en tooltip), bouton "Recharger"
+simplifié (munitions déjà visibles ailleurs, suffixe dynamique retiré).
+
+**Testé** : `node --check`, ESLint (4 fichiers, 0 nouvelle erreur, comparatif `git stash`) ;
+sous-requêtes SQL vérifiées sur donnée réelle (Scorpion, 9mm, 24/24, "Armes de poing" résolu
+correctement côté PJ et GM, y compris double-arme) ; seuils `weaponAmmoStatus` vérifiés en isolation
+(plein/25%/<25%/vide/jamais chargée/arme de contact). **Confirmé fonctionnel par Saar en navigateur**
+("All ok").
+
+**Non testé** : parcours navigateur détaillé de A/B (déblocage `(X)` et malus `(-3)` en jeu réel,
+au-delà des scénarios en base).
+
+**Données** : aucune migration sur l'ensemble de la session — réutilise uniquement des colonnes et
+tables déjà existantes (`char_attributes.pc_modifier`, `ref_equipment_skill_assoc`).
+
+**Retour arrière** : aucun commit encore créé — diff dans le worktree `dev/Saar` uniquement.
+
+---
+
+## Session 147 (Saar) — 2026-07-16 — Autorité unique type/couleur personnage ✅ CLOS
+
+**Bug rapporté** : "Mr sourire" (campagne LOCAL) classé PJ alors que son propriétaire est le
+compte GM de Saar.
+
+**Cause racine** : `type` ('pj'/'pnj') dérivé de la simple présence d'un `user_id`, jamais du
+rôle réel du propriétaire dans `campaign_members` — le GM a lui aussi un `user_id`. Audit complet
+du repo (pas supposé) : **3 endroits** réimplémentaient indépendamment cette dérivation —
+`characters.js` POST (création), `characters.js` PUT (réassignation), et
+`creationService.js:startCreation` (Assistant de création — trouvé en auditant tout le repo,
+absent du diagnostic initial). `color` suit le même défaut (dérivée à 2 endroits, absente au
+3ᵉ). `campaign_members.role` n'est jamais modifié après insertion (aucune route de mise à
+jour) — confirmé qu'il n'y a pas de 4ᵉ chemin de désynchronisation.
+
+**Processus notable** : 2 tours de plan rejetés par Saar avant validation ("bricolage digne d'un
+amateur", migration jugée disproportionnée pour 2 lignes de données de test). Recherche externe
+effectuée (denormalization patterns) avant de retenir un service applicatif unique plutôt qu'un
+trigger Postgres (aucun précédent trigger/fonction SQL dans les 176 migrations du projet). Plan
+posé sur papier (`docs/PLAN_CHARACTER_SERVICE.md`) puis soumis à 2 passes d'auto-critique
+adversariale avant codage — plusieurs bugs potentiels trouvés et corrigés avant tout code :
+`type`/`color` ne doivent pas partager la même garde "drone" (le code existant les traite
+différemment) ; `color` ne doit jamais être conditionnée par le type (un drone avec propriétaire
+hérite de sa couleur, comportement préservé) ; `campaign_members.role` n'a aucune contrainte
+CHECK en base → liste blanche explicite (`role==='player'` → pj) plutôt qu'une liste noire
+(`role==='gm'` → pnj), pour qu'un rôle futur/imprévu tombe du côté sûr (pnj). 3 hypothèses
+vérifiées empiriquement plutôt que supposées (valeurs de rôle en base, absence de `pj` orphelin
+sans propriétaire, `users.color` jamais `NULL`).
+
+**Design retenu** : `server/src/services/characterOwnershipService.js` (NOUVEAU) —
+`resolveOwnership(db, {campaignId, userId})`, seul point d'écriture pour type/couleur dérivés de
+l'appartenance, utilisé par les 3 call sites. `PUT /characters/:id` gagne au passage une
+vérification d'appartenance à la campagne sur réassignation (absente jusqu'ici) — effet de bord
+identifié explicitement et validé par Saar avant codage plutôt que glissé silencieusement.
+
+**Testé** : `node --check` sur les 3 fichiers serveur modifiés. `resolveOwnership()` appelée
+directement contre la base réelle (campagne LOCAL, pas un mock) : propriétaire GM → `pnj` ;
+propriétaire joueur → `pj` (non-régression) ; sans propriétaire → `pnj` + couleur défaut
+(non-régression) ; utilisateur inconnu → `404` levée correctement. **Confirmé "All ok" par Saar**
+après vérification navigateur (création PNJ auto-assigné GM, réassignation, Assistant de
+création).
+
+**Non testé** : les 3 flux via HTTP authentifié complet (vérifié le service directement contre
+la DB, pas le transport Express/auth de bout en bout) ; concurrence (TOCTOU entre lecture
+ownership et écriture — documenté et assumé, pas la cause du bug rapporté, corriger aurait
+élargi le scope) ; campagnes multi-GM (un seul rôle 'gm' par campagne observé en base).
+
+**Données** : pas de migration (données de test locales, pas un changement de schéma à
+propager). Correction ponctuelle par `UPDATE` à condition générale (pas d'UUID en dur) exécutée
+après le déploiement du fix code : "Mr sourire" (LOCAL) et "sdfdsf" (La Forêt Maudite) —
+2 personnages, tous deux appartenant au compte GM de Saar — corrigés en `pnj`, confirmé par
+`RETURNING` avant/après.
+
+**Fichiers touchés** : `server/src/services/characterOwnershipService.js` (NOUVEAU),
+`server/src/routes/characters.js`, `server/src/services/creationService.js`. Aucun fichier
+client. Documentation : `docs/PLAN_CHARACTER_SERVICE.md` (à archiver dans `docs/Old/`),
+`docs/ASBUILT.md`, `client/public/CHANGELOG.md` (v187).
+
+**Retour arrière** : rien à committer n'est encore poussé au moment de la clôture — commit isolé
+sur `dev/Saar` à venir. Le `UPDATE` de données n'est pas rejouable automatiquement (IDs notés
+ci-dessus si retour arrière nécessaire).

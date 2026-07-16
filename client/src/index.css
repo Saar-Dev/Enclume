@@ -1358,15 +1358,17 @@ Convention :
 }
 .combat-chip-state:hover { filter: brightness(1.25); }
 
-/* ── Arme équipée ─────────────────────────────────────────────────── */
-.combat-equip-ok {
+/* ── Arme équipée (état munitions : ok/low/empty partagent la mise en page) ── */
+.combat-equip-ok, .combat-equip-low, .combat-equip-empty {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 10px;
-  color: var(--combat-equip-ok);
 }
-.combat-equip-dot::before { content: '●'; color: var(--combat-equip-dot); font-size: 8px; }
+.combat-equip-ok    { color: var(--combat-equip-ok); }
+.combat-equip-low   { color: var(--combat-ini-neg); }
+.combat-equip-empty { color: var(--combat-danger-fg); }
+.combat-equip-dot::before { content: '●'; color: currentColor; font-size: 8px; }
 
 /* ── btn-tac-confirm — footer vert "DÉCLARER / CONFIRMER" ────────── */
 .btn-tac-confirm {

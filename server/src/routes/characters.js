@@ -10,6 +10,7 @@ import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
 import { initDamages } from '../../../shared/droneConstants.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
 import { createEmptySheet } from '../services/charSheetService.js'
+import { resolveOwnership } from '../services/characterOwnershipService.js'
 
 // ─── Router imbriqué ──────────────────────────────────────────────────────────
 // Monté sous /api/campaigns/:campaignId/characters
@@ -90,8 +91,9 @@ router.get('/', requireAuth, async (req, res) => {
 })
 
 // POST /api/campaigns/:campaignId/characters
-// GM uniquement. La couleur est héritée du user_id si fourni (PJ),
-// sinon couleur par défaut (PNJ/entité GM).
+// GM uniquement. type/couleur dérivés de l'appartenance réelle du propriétaire
+// (resolveOwnership — docs/PLAN_CHARACTER_SERVICE.md) : un personnage assigné
+// au GM lui-même reste PNJ, seul un membre role='player' donne PJ.
 // visible = false par défaut — le GM choisit quand révéler le personnage aux joueurs.
 router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
   const { campaignId } = req.params
@@ -99,26 +101,16 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
 
   if (!name) throw new AppError(400, 'Character name is required')
 
-  let color = '#4A90D9'
-  if (user_id) {
-    const owner = await db('users').where({ id: user_id }).select('color').first()
-    if (!owner) throw new AppError(404, 'User not found')
-    color = owner.color
-
-    const ownerMember = await db('campaign_members')
-      .where({ campaign_id: campaignId, user_id })
-      .first()
-    if (!ownerMember) throw new AppError(400, 'This user is not a member of this campaign')
-  }
-
-  const type = typeOverride === 'drone' ? 'drone' : (user_id ? 'pj' : 'pnj')
+  const ownership = await resolveOwnership(db, { campaignId, userId: user_id })
+  const color = ownership.color
+  const type = typeOverride === 'drone' ? 'drone' : ownership.type
 
   // Transaction unique : le personnage et sa fiche (char_sheet ou drone_sheet) naissent
   // ensemble — jamais de personnage sans fiche, jamais de fenêtre de course à la
   // création lazy (cf. commentaire migration 132_char_sheet_dedupe_and_unique.js).
   const character = await db.transaction(async (trx) => {
     const [character] = await trx('characters')
-      .insert({ campaign_id: campaignId, user_id: user_id || null, name, color, visible, type })
+      .insert({ campaign_id: campaignId, user_id: ownership.user_id, name, color, visible, type })
       .returning([
         'id', 'campaign_id', 'user_id', 'type', 'name', 'color',
         'visible', 'glb_url', 'portrait_url',
@@ -180,20 +172,14 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
     throw new AppError(400, 'No valid fields to update')
   }
 
-  // Recalcul color si user_id change — GM uniquement (user_id absent des updates joueur)
-  // Désassignation (null) → couleur PNJ par défaut
-  // Nouvelle assignation → couleur du nouveau propriétaire
-  // Les drones gardent leur type 'drone' quelle que soit l'assignation
+  // Recalcul type/color si user_id change — GM uniquement (user_id absent des updates joueur).
+  // resolveOwnership dérive depuis campaign_members.role (docs/PLAN_CHARACTER_SERVICE.md) :
+  // color toujours réappliquée, type seulement si le personnage n'est pas un drone (un drone
+  // garde son type quelle que soit l'assignation).
   if ('user_id' in updates) {
-    if (updates.user_id === null) {
-      updates.color = '#4A90D9'
-      if (character.type !== 'drone') updates.type = 'pnj'
-    } else {
-      const owner = await db('users').where({ id: updates.user_id }).select('color').first()
-      if (!owner) throw new AppError(404, 'User not found')
-      updates.color = owner.color
-      if (character.type !== 'drone') updates.type = 'pj'
-    }
+    const ownership = await resolveOwnership(db, { campaignId: character.campaign_id, userId: updates.user_id })
+    updates.color = ownership.color
+    if (character.type !== 'drone') updates.type = ownership.type
   }
 
   // updated_at systématique sur tout PUT

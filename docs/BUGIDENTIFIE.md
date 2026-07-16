@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-12 Session 141 (suite 25)
+> Dernière mise à jour : 2026-07-16 Session 147
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -37,7 +37,6 @@
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
-| **N — UI combat** | COM20 | `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` | Moyenne / Haute |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
 | **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 
@@ -241,20 +240,6 @@ ce cas).
 **Prochaine étape** : à investiguer avant ou en parallèle du chantier Tir visé (décision Saar) —
 instrumenter `[DBG-INI3]` sur un scénario réel (Préparations cumulées ramenant `initiative` ≤ 0)
 avant de coder un correctif.
-
----
-
-## Bugs UI combat — Cluster N
-
-### Bug COM20 — Phase 1 : arme affichée sans munition dans la fenêtre de déclaration
-
-**Symptôme** : En phase ANNONCE, la fenêtre de déclaration PJ/PNJ n'affiche pas l'arme courante équipée, les munitions restantes ni le type d'arme (compétence liée).
-
-**Code impliqué** : `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` — section affichage arme absente ou incomplète.
-
-**Cause racine** [INCONNU] : Non investigué.
-
-**Prochaine étape** : Cluster N — lire les deux composants, identifier où et comment afficher l'arme.
 
 ---
 

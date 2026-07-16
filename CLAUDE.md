@@ -1,8 +1,7 @@
 # CLAUDE.md — Contrat commun du projet Enclume
 
 > Version proposée : 2026-07-15.
-> Ce contrat s'applique aux espaces Claude/règles et Codex/moteur monde après validation et
-> installation dans le dépôt.
+> Ce contrat s'applique à Saar/Codex et Kiwi/Claude après validation et installation dans le dépôt.
 
 ---
 
@@ -40,8 +39,8 @@ règles domaine > `MANUEL` > `PLAN`.
 
 | Développeur | Branche | Dépôt serveur | Client/API |
 |---|---|---|---|
-| Claude / règles | `dev/Saar` | `/home/didier/Enclume` | `8193/8194` |
-| Codex / moteur monde | `dev/monde` | `/home/codex/Enclume-integrated` | `8293/8294` |
+| Kiwi | `dev/cousin` | `/home/didier/Enclume` | `8193/8194` |
+| Saar/Codex | `dev/monde` | `/home/codex/Enclume-integrated` | `8293/8294` |
 | Validation commune | `integration` | `/home/codex/Enclume-fusion` | `8393/8394` |
 
 - Ne jamais développer directement dans `integration` ou `master`.
@@ -89,7 +88,7 @@ git fetch origin
 
 ### Migrations
 
-- Numéros pairs : Codex / moteur monde ; numéros impairs : Claude / règles.
+- Numéros pairs : Saar/Codex ; numéros impairs : Kiwi.
 - Vérifier les fichiers présents et `knex_migrations` avant de choisir un numéro.
 - Une migration doit être rétrocompatible avec le code encore déployé pendant la fusion.
 - Migration, test et éventuel script de réparation forment un commit isolé sur la branche de travail.
@@ -196,7 +195,7 @@ Toute clôture indique :
 
 Le détail courant vit uniquement dans `docs/EN_COURS.md`.
 
-Base commune initiale : tag `baseline/common-20260715`, branches `dev/Saar`, `dev/monde` et
+Base commune initiale : tag `baseline/common-20260715`, branches `dev/cousin`, `dev/monde` et
 `integration`, trois arbres identiques au commit documenté par le workflow. L'instance commune est
 un sas de validation, jamais un espace de développement direct.
 

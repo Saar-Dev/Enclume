@@ -24,6 +24,7 @@
  *
  * Règles de calcul :
  *   Base  = AN(attr_1) + AN(attr_2)   — si attr_2 null : AN(attr_1) × 2 (PC4)
+ *           marker='(-3)' : Base -3 (REGLECOMPETENCE.md:10-13, Q4 PLAN_XP.md close)
  *   Total = Base + mastery             — jamais clampé, peut être négatif (PC11)
  *
  * Algorithme de visibilité (ordre strict, source CHARACTER.md) :
@@ -40,7 +41,7 @@
  *   Clic → POST /api/char-sheet/:characterId/skills/buy → onSkillBought()
  *   Bouton désactivé si xpAvailable < coût ou si compétence (X) déjà apprise
  *   et mastery à 0 (cas non bloquant mais coût = 1).
- *   Le coût de déblocage (X) est 3 PE (affiché "Débloquer 3 PE").
+ *   Le coût de déblocage (X) est 1 PE (mastery → -3, affiché "Débloquer 1 PE").
  *
  * Sauvegarde directe (hors mode Progression) :
  *   Debounce 500ms par skill_id dans onChange — UPSERT via PUT /skills.
@@ -67,7 +68,7 @@ function getCoutAugmentation(currentMastery) {
   return 11
 }
 
-const COUT_DEBLOCAGE_X = 3
+const COUT_DEBLOCAGE_X = 1
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -153,7 +154,9 @@ export default function SkillsPanel({
   const calcBase = useCallback((skill) => {
     const an1 = anMap[skill.attr_1] ?? 0
     const an2 = skill.attr_2 ? (anMap[skill.attr_2] ?? 0) : an1
-    return an1 + an2
+    // (-3) Compétence difficile — miroir de charStats.js:calcSkillTotal
+    const malus = skill.marker === '(-3)' ? -3 : 0
+    return an1 + an2 + malus
   }, [anMap])
 
   // ─── Calcul Total d'une compétence (base + mastery locale) ───────────────
@@ -339,7 +342,10 @@ export default function SkillsPanel({
               type="number"
               value={mastery}
               onChange={e => {
-                const val = Math.max(0, parseInt(e.target.value) || 0)
+                // PC11 amendé (CHARACTER.md §9) : plancher -3 pour une compétence (X)
+                // débloquée (REGLECOMPETENCE.md:22-25), 0 pour les autres.
+                const floor = isX ? -3 : 0
+                const val = Math.max(floor, parseInt(e.target.value) || 0)
                 const next = { ...localMasteryRef.current, [skill.id]: val }
                 localMasteryRef.current = next
                 setLocalMastery(next)
@@ -544,9 +550,7 @@ const s = {
   row: {},
 
   // Sous-en-tête groupe CHC
-  groupHeader: {
-    backgroundColor: '#12121f',
-  },
+  groupHeader: {},
   groupHeaderTd: {
     padding: '4px 10px',
     color: '#4a4a7a',

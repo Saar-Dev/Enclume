@@ -327,7 +327,8 @@
       "buy": "Achat",
       "cost": "{{count}} PE",
       "unlock": "Débloquer ({{count}} PE)",
-      "noXp": "XP insuffisants"
+      "noXp": "XP insuffisants",
+      "attrMax": "MAX"
     }
   },
   "profile": {

@@ -43,6 +43,11 @@ import {
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
+// Miroir client de charStats.js (getCoutAttributPc/MAX_PC_MODIFIER) — affichage/guard bouton
+// uniquement, le serveur recalcule indépendamment et est source de vérité.
+const COUT_ATTR_PC = 5
+const MAX_PC_MODIFIER = 5
+
 const ATTR_DESCRIPTIONS = {
   FOR: "La Force est une mesure de la puissance brute d'un individu, sa capacité musculaire.",
   CON: "La Constitution caractérise l'endurance d'un individu, sa santé, sa résistance à l'effort physique, aux poisons, aux maladies, aux traumatismes, aux conditions extrêmes.",
@@ -272,6 +277,9 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const [xpAvailable, setXpAvailable] = useState(0)
   // Mode Progression — toggle activé par le joueur ou le GM
   const [progressionMode, setProgressionMode] = useState(false)
+  // Achat attribut (Modif. PC) en cours — même pattern que buyingSkillId (SkillsPanel.jsx)
+  const [buyingAttrId, setBuyingAttrId] = useState(null)
+  const isBuyingAttrRef = useRef(false)
   const [woundPenalty,       setWoundPenalty]       = useState(0)
   const [encumbrancePenalty, setEncumbrancePenalty] = useState(0)
   // Debounce pour la saisie XP par le GM
@@ -552,6 +560,30 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     onSaved?.()
   }, [onSaved])
 
+  // Achat d'un point de modificateur PC (attribut) contre 5 XP — Mode Progression, joueur.
+  const handleBuyAttrPc = useCallback(async (attrId) => {
+    if (isBuyingAttrRef.current) return
+    const currentPc = attrsRef.current[attrId]?.pc ?? 0
+    if (currentPc >= MAX_PC_MODIFIER || xpAvailable < COUT_ATTR_PC) return
+
+    isBuyingAttrRef.current = true
+    setBuyingAttrId(attrId)
+    try {
+      const res = await api.post(`/char-sheet/${characterId}/attributes/buy`, { attr_id: attrId })
+      const { pc_modifier, xp_available } = res.data
+      const next = { ...attrsRef.current, [attrId]: { ...attrsRef.current[attrId], pc: pc_modifier } }
+      attrsRef.current = next
+      setAttrs(next)
+      setXpAvailable(xp_available)
+      onSaved?.()
+    } catch (err) {
+      console.error('Erreur achat attribut :', err)
+    } finally {
+      isBuyingAttrRef.current = false
+      setBuyingAttrId(null)
+    }
+  }, [characterId, xpAvailable, onSaved])
+
   const handlePolarisToggled = useCallback((skill_id, is_learned) => {
     setCharSkills(prev => {
       const existing = prev.find(s => s.skill_id === skill_id)
@@ -825,21 +857,24 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
               <td style={s.tdLabel}>{t('charSheet.attrRowBase')}</td>
               {ATTR_IDS.map(id => (
                 <td key={id} style={s.td}>
-                  <input
-                    style={s.attrInput}
-                    type="number"
-                    min="1"
-                    value={attrs[id]?.base ?? 7}
-                    readOnly={!canEdit}
-                    onChange={e => {
-                      const val = parseInt(e.target.value) || 1
-                      const next = { ...attrsRef.current, [id]: { ...attrsRef.current[id], base: val } }
-                      attrsRef.current = next
-                      setAttrs(next)
-                      if (attrDebounceTimer.current) clearTimeout(attrDebounceTimer.current)
-                      attrDebounceTimer.current = setTimeout(() => saveAttributes(attrsRef.current), 500)
-                    }}
-                  />
+                  {isGm ? (
+                    <input
+                      style={s.attrInput}
+                      type="number"
+                      min="1"
+                      value={attrs[id]?.base ?? 7}
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 1
+                        const next = { ...attrsRef.current, [id]: { ...attrsRef.current[id], base: val } }
+                        attrsRef.current = next
+                        setAttrs(next)
+                        if (attrDebounceTimer.current) clearTimeout(attrDebounceTimer.current)
+                        attrDebounceTimer.current = setTimeout(() => saveAttributes(attrsRef.current), 500)
+                      }}
+                    />
+                  ) : (
+                    <span style={s.attrReadonly}>{attrs[id]?.base ?? 7}</span>
+                  )}
                 </td>
               ))}
               <td style={{ ...s.td, borderLeft: '2px solid #2a2a3e' }} rowSpan={5}>
@@ -876,24 +911,50 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
             {/* Modif. PC */}
             <tr>
               <td style={s.tdLabel}>{t('charSheet.attrRowModPc')}</td>
-              {ATTR_IDS.map(id => (
-                <td key={id} style={s.td}>
-                  <input
-                    style={s.attrInput}
-                    type="number"
-                    value={attrs[id]?.pc ?? 0}
-                    readOnly={!canEdit}
-                    onChange={e => {
-                      const val = parseInt(e.target.value) || 0
-                      const next = { ...attrsRef.current, [id]: { ...attrsRef.current[id], pc: val } }
-                      attrsRef.current = next
-                      setAttrs(next)
-                      if (attrDebounceTimer.current) clearTimeout(attrDebounceTimer.current)
-                      attrDebounceTimer.current = setTimeout(() => saveAttributes(attrsRef.current), 500)
-                    }}
-                  />
-                </td>
-              ))}
+              {ATTR_IDS.map(id => {
+                const pc = attrs[id]?.pc ?? 0
+                const canBuy = pc < MAX_PC_MODIFIER && xpAvailable >= COUT_ATTR_PC && buyingAttrId !== id
+                return (
+                  <td key={id} style={s.td}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                      {isGm ? (
+                        <input
+                          style={s.attrInput}
+                          type="number"
+                          value={pc}
+                          onChange={e => {
+                            const val = parseInt(e.target.value) || 0
+                            const next = { ...attrsRef.current, [id]: { ...attrsRef.current[id], pc: val } }
+                            attrsRef.current = next
+                            setAttrs(next)
+                            if (attrDebounceTimer.current) clearTimeout(attrDebounceTimer.current)
+                            attrDebounceTimer.current = setTimeout(() => saveAttributes(attrsRef.current), 500)
+                          }}
+                        />
+                      ) : (
+                        <span style={s.attrReadonly}>{pc}</span>
+                      )}
+                      {!isGm && progressionMode && (
+                        pc >= MAX_PC_MODIFIER ? (
+                          <span style={s.attrMaxBadge}>{t('character.xp.attrMax')}</span>
+                        ) : (
+                          <button
+                            style={{ ...s.attrBuyBtn, ...(!canBuy ? s.attrBuyBtnDisabled : {}) }}
+                            disabled={!canBuy}
+                            onClick={() => handleBuyAttrPc(id)}
+                            title={xpAvailable < COUT_ATTR_PC ? t('character.xp.noXp') : t('character.xp.cost', { count: COUT_ATTR_PC })}
+                          >
+                            <span style={{ ...s.attrBuyBtnGain, ...(!canBuy ? s.attrBuyBtnGainDisabled : {}) }}>
+                              {buyingAttrId === id ? '…' : '+1'}
+                            </span>
+                            <span style={s.attrBuyBtnCost}>{t('character.xp.cost', { count: COUT_ATTR_PC })}</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </td>
+                )
+              })}
             </tr>
 
             {/* Niveau actuel */}
@@ -1383,6 +1444,47 @@ const s = {
     fontSize: '12px',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  attrBuyBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    lineHeight: '1.1',
+    padding: '2px 4px',
+    border: '1px solid #2a4a2a',
+    borderRadius: '3px',
+    background: 'rgba(29,168,110,0.15)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  attrBuyBtnDisabled: {
+    border: '1px solid #2a2a3e',
+    background: '#0c0c14',
+    cursor: 'default',
+  },
+  attrBuyBtnGain: {
+    color: '#1da86e',
+    fontSize: '11px',
+    fontWeight: '700',
+  },
+  attrBuyBtnGainDisabled: {
+    color: '#3a3a5e',
+  },
+  attrBuyBtnCost: {
+    color: '#5a5a7a',
+    fontSize: '8px',
+    fontWeight: '600',
+  },
+  attrMaxBadge: {
+    display: 'inline-block',
+    padding: '2px 6px',
+    borderRadius: '3px',
+    background: '#0c0c14',
+    border: '1px solid #2a2a3e',
+    color: '#5a5a7a',
+    fontSize: '9px',
+    fontWeight: '700',
+    letterSpacing: '0.5px',
   },
   chcCell: {
     display: 'flex',

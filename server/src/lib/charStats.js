@@ -159,7 +159,10 @@ export function calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutat
     ? calcAttributeAN(attrs, refSkill.attr_2, genotypeRow, mutationEffectsRow)
     : an1
 
-  const base = an1 + an2
+  // (-3) Compétence difficile — REGLECOMPETENCE.md:10-13 : malus sur le niveau de base,
+  // les premiers points de mastery achetés le compensent avant de devenir positifs.
+  const malus = refSkill.marker === '(-3)' ? -3 : 0
+  const base = an1 + an2 + malus
   const mastery = charSkillRow?.mastery ?? 0
   return base + mastery
 }
@@ -223,12 +226,28 @@ export function getCoutAugmentation(currentMastery) {
 }
 
 /**
- * Retourne le coût fixe de déblocage d'une compétence (X).
- * Correspond aux 3 niveaux -3→0 (3 × 1 PE). mastery reste 0 (PC11).
- * @returns {number} 3 PE
+ * Retourne le coût de déblocage d'une compétence (X) — REGLECOMPETENCE.md:22-25 :
+ * "Il suffit d'acheter un niveau ... Son nouveau niveau est alors de -3."
+ * 1 PE, mastery → -3 (exception PC11 documentée, CHARACTER.md §9).
+ * @returns {number} 1 PE
  */
 export function getCoutDeblocageX() {
-  return 3
+  return 1
+}
+
+// ─── Coût XP — modificateur PC d'un attribut ──────────────────────────────────
+// Ligne "Modif. PC" de la fiche perso, hors création — le joueur monte pc_modifier
+// via XP en Mode Progression (le GM garde l'édition directe libre, sans coût).
+
+/** Plafond du modificateur PC d'un attribut. */
+export const MAX_PC_MODIFIER = 5
+
+/**
+ * Retourne le coût en PE pour augmenter le modificateur PC d'un attribut de +1.
+ * @returns {number} 5 PE
+ */
+export function getCoutAttributPc() {
+  return 5
 }
 
 /**

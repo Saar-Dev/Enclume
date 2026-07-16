@@ -159,6 +159,14 @@ export async function getInventory(characterId, campaignId) {
           AND re2.mod_slot = 'optique' AND re2.mod_requires_aim = true
         LIMIT 1
       ) as lunette_niveau`),
+      // Compétence liée à l'arme (COM20, docs/BUGIDENTIFIE.md) — même table que
+      // socketCombatHelpers.js (résolution), affichage uniquement ici (tooltip fenêtre déclaration).
+      db.raw(`(
+        SELECT rs.label FROM ref_equipment_skill_assoc rea
+        JOIN ref_skills rs ON rs.id = rea.skill_id
+        WHERE rea.item_id = char_inventory.equipment_id
+        LIMIT 1
+      ) as skill_label`),
     )
     .orderBy('char_inventory.created_at', 'asc')
 

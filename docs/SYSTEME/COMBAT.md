@@ -136,6 +136,28 @@ Maîtrise cible 15 : 11 PE
 
 ---
 
+## Compétences réservées (X) — accessibilité (P55)
+
+`calcSkillCost` (`shared/polarisUtils.js`) bloque (`cost: Infinity`) toute compétence marquée `(X)` si
+`!isLearned && target > 0`. `isLearned` doit couvrir **trois** cas, tous confirmés par la règle LdB
+(`docs/REGLES/REGLECOMPETENCE.md` — « on ne peut apprendre une telle Compétence que par le biais d'une
+Profession... ou d'une Formation ») :
+1. `openedSkills.includes(skillId)` — déblocage explicite (Avantage Formation).
+2. `(baseMastery[skillId] ?? 0) > 0` — un bonus d'origine positif prouve que le personnage la pratique déjà.
+3. `isPro` — listée par une carrière retenue.
+
+Oublier le cas (3) reproduit le bug Session 139 (Lot 2) : une `(X)` professionnelle sans bonus d'origine
+plante en `-Infinity`. Le malus « base -3 » du premier point investi s'applique quand même dans les
+trois cas — ce n'est pas un blocage, juste un coût de départ plus élevé (1pt pour atteindre -3, avant de
+grimper normalement).
+
+**Piège wiring associé** : `computeSkillAllocation` (`shared/careerSkills.js`) ne doit recevoir QUE les
+`skill_id` réellement modifiés par le joueur — jamais un remplissage de toutes les compétences affichées
+avec leur valeur de base, sinon le calcul est déclenché inutilement pour des compétences jamais touchées.
+Le plafond d'une ligne non touchée se calcule séparément via `getSkillCap(skillId, ctx)`.
+
+---
+
 ## Données nécessaires par rôle en combat
 
 **Tireur :**

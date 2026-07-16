@@ -66,6 +66,11 @@
 | P49 | Promotion blessures : `promoted===true` → GET /wounds complet — jamais append local | BLESSURES.md |
 | P50 | toggle Polaris : ne jamais dupliquer `charSkills` — lift state up obligatoire | CONVENTIONS.md |
 | P51 | Malus santé non-cumulatif (pire seul), encombrement cumulatif (règle maison) | BLESSURES.md |
+| P52 | CLI knex trie les migrations par ordre lexical, pas par `knex_migrations` — round-trip up/down via import direct du module, jamais la CLI brute | CORE.md |
+| P53 | nodemon réapplique les migrations à chaque écriture de fichier sous `server/` — scripts de vérif en `node -e` inline uniquement | CORE.md |
+| P54 | Toujours vérifier `knex_migrations` avant un appel manuel à `up()`/`down()` — jamais deux `up()` sans `down()` entre les deux | CORE.md |
+| P55 | Compétence réservée `(X)` : `isLearned` doit couvrir 3 cas (déblocage, bonus d'origine, `isPro`) — oublier `isPro` plante en `-Infinity` | COMBAT.md |
+| P56 | `DICE_RESULT` ne porte jamais `dieType` — tout consommateur hors SessionPage doit le reconstruire lui-même | DICE.md |
 | PE2 | `socket.data.role` pour `fetchSockets()` | CORE.md |
 | PE4 | face null = invisible | ASSETS.md |
 | PE11 | fallback `states[0]` si `current_state_id` invalide | ENTITES.md |

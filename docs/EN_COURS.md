@@ -57,7 +57,9 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-15 — Session 144 : bascule `dev/Saar` en branche
+> Dernière mise à jour (dev/Saar) : 2026-07-16 — Session 148 : fiche perso (compétences (X)/(-3),
+> attributs) + `BUGIDENTIFIE.md` COM20 (affichage arme combat) — ✅ clos, item 76 ; Session 144 :
+> bascule `dev/Saar` en branche
 > exclusive de tout nouveau travail Claude (voir `CLAUDE.md` §3) ; Session 143 : `PLAN_MUTATION2.md`
 > Lot 6 (Identité — sex/is_fertile/hand_pref, mutations et avantages unifiés dans
 > `identityService.js`) — ✅ clos, fonctionnel confirmé Saar en navigateur (item 75) ; Session 142 :
@@ -150,6 +152,29 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 🔒 En cours : — (aucune session active)
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 76 (Session 148) — Fiche perso (compétences (X)/(-3), attributs) + `BUGIDENTIFIE.md` COM20
+> ✅ CLOS.** Triage `BUGIDENTIFIE.md` repris (suite Session 145). **A.** Compétence `(X)` réservée :
+> coût de déblocage 3→1 PE (`REGLECOMPETENCE.md:22-25` — 1 PE suffit), `mastery` → -3 au lieu de
+> rester à 0 — amende PC11 (`CHARACTER.md`, exception documentée, pas une suppression). **B.**
+> Compétence `(-3)` difficile : malus jamais câblé depuis la création du module XP (Session 37) —
+> question **Q4** de `docs/Old/PLAN_XP.md` (2026-04, jamais répondue, confirmé par `git log --grep`)
+> enfin tranchée : Base -3 dans `calcSkillTotal` (autorité serveur unique), pas de coût doublé (ça,
+> c'est la règle `(X)` hors profession, pas `(-3)`). **C.** Attributs fiche perso : joueur pouvait
+> éditer Niveau de base/Modif. PC directement (bug + route `PUT /attributes` sans guard GM,
+> contournement UI possible) — verrouillé GM uniquement ; ajout symétrique demandé par Saar : achat
+> du Modif. PC contre XP (5 PE/point, max 5), bouton "+1 / 5 PE" (2 lignes, gain/coût séparés après
+> un 1er essai "+5" jugé ambigu), badge "MAX" au plafond. **D.** COM20 : fenêtre de déclaration
+> combat (PJ+GM) n'affichait ni arme équipée, ni munitions, ni compétence liée avant action —
+> ajouté dans la section ARMEMENT existante (nom, munitions avec code couleur ok/low/empty réutilisant
+> `.combat-equip-*` déjà existant, compétence en tooltip). **Incident de méthode (D)** : 1er passage
+> codé sans présenter le plan (§6.5 CLAUDE.md) — annulé (`git restore`), repris à la lettre
+> (hypothèse → plan → go → code), puis réflexion UX dédiée avant le code définitif. **Testé** :
+> `node --check`/ESLint sur tous les fichiers (0 nouvelle erreur, comparatif `git stash` systématique),
+> scénarios réels en base (transaction annulée) pour A/B/C/D, requêtes SQL D vérifiées sur donnée
+> réelle. **C et D confirmés fonctionnels par Saar en navigateur** ("Fonctionnel et validé" / "All
+> ok"). **Non testé** : parcours navigateur A/B au-delà des scénarios en base. Aucune migration.
+> Détail complet : `docs/JOURNAL6.md` "Session 148".
 
 > **Item 75 (Session 143) — `docs/Old/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref)
 > ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 5 (item 69, clos). Diagnostic

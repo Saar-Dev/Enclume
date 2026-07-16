@@ -200,6 +200,7 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .whereIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr'])
         .select(
           'char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot', 'ref_equipment.fire_mode as ref_fire_mode',
+          'char_inventory.ammo_remaining', 'ref_equipment.ammo_count as ref_ammo_count', 'ref_equipment.caliber as ref_caliber',
           // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — même sous-requête que
           // inventoryService.getInventory (fenêtre PJ), fenêtre MJ batchée par token (pas de N+1).
           db.raw(`(
@@ -209,6 +210,13 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
               AND re2.mod_slot = 'optique' AND re2.mod_requires_aim = true
             LIMIT 1
           ) as lunette_niveau`),
+          // Compétence liée à l'arme (COM20) — même sous-requête que inventoryService.getInventory.
+          db.raw(`(
+            SELECT rs.label FROM ref_equipment_skill_assoc rea
+            JOIN ref_skills rs ON rs.id = rea.skill_id
+            WHERE rea.item_id = char_inventory.equipment_id
+            LIMIT 1
+          ) as skill_label`),
         ),
 
       db('char_inventory')

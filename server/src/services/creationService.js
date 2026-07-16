@@ -15,6 +15,7 @@ import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../..
 import { addAdvantage } from './advantageService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { applyMutationIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
+import { resolveOwnership } from './characterOwnershipService.js'
 
 // ─── Résolution background avec parent nullable (single-query) ────────────────
 
@@ -242,8 +243,11 @@ const ATTR_IDS_START = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
 export async function startCreation(campaignId, userId) {
   return db.transaction(async (trx) => {
+    // type/color dérivés de l'appartenance réelle (docs/PLAN_CHARACTER_SERVICE.md) — un GM
+    // utilisant le Wizard pour lui-même obtient un PNJ, pas un PJ codé en dur.
+    const ownership = await resolveOwnership(trx, { campaignId, userId })
     const [character] = await trx('characters')
-      .insert({ campaign_id: campaignId, user_id: userId, name: 'Brouillon', type: 'pj', visible: false })
+      .insert({ campaign_id: campaignId, user_id: ownership.user_id, name: 'Brouillon', type: ownership.type, color: ownership.color, visible: false })
       .returning(['id'])
 
     const [sheet] = await trx('char_sheet')
