@@ -1,3 +1,8 @@
+> Statut : ⚠️ ARCHITECTURE API OBSOLÈTE — routes step-by-step (`POST /step1`, `/step2`,
+> `/rollback-to-step1`) remplacées par `POST /:sheetId/reconcile` (`reconcileCreation`). Fondations
+> DB construites puis renumérotées (migration 097). Détail : `docs/JOURNAL6.md` "Session 149".
+> Archivé dans `docs/Old/` — Session 149
+
 TAPES 1 & 2 CRÉATION DE PERSONNAGE
 
     Vérifié contre LdB p.117-122 + migrations 33 et 36 + polarisUtils.js existant.

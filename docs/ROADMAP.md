@@ -365,6 +365,8 @@ Toute la section Arts martiaux du LdB (p.523-640) — non implémentée.
 
 Prérequis : statut `grappled` (PLAN14) pour la Lutte. Techniques offensives/défensives peuvent être un sprint indépendant.
 
+Note (Saar) : certaines mutations facilitent probablement l'Agrippé/Lutte (corne, griffe, etc.) — à vérifier au moment de l'implantation.
+
 ---
 
 ### Chantier CaC — Corps à Corps Polaris ✅ (sessions 67-68)
@@ -496,6 +498,63 @@ l'équipement automatiquement.
 - Retiré de `PLAN_MODING_PHASEB.md` (Groupe 3) — ce n'est pas un effet de mod sur une arme portée,
   hors responsabilité de ce document. Complexité estimée : élevée (nouveau type d'entité + mécanique
   d'équipement temporaire liée au déplacement, au-delà d'un ajustement de mod).
+
+### LOS & Raycast — à replanifier de zéro avec le nouveau builder
+`docs/Old/PLAN_LOS.md` archivé Session 149 : l'ancien plan décrivait un raycast voxel, architecture
+disparue avec le remplacement complet du builder (Kiwi). Le sujet entier (ligne de vue, raycast,
+localisation) est à repenser depuis zéro sur l'architecture WorldSnapshot actuelle
+(`shared/world/visibility.js`, `worldVisibilityService.js`) — pas une extension de l'ancien plan.
+Deux besoins identifiés au passage, à réintégrer dans la replanification plutôt qu'à traiter
+isolément :
+- **Table de localisation D20 contrainte aux zones exposées** — exclure les zones couvertes
+  (tête/corps/jambes) du tirage de localisation selon la couverture réellement calculée par
+  `checkWorldCoverage`.
+- **Postures tokens** (debout/accroupi/couché) — impact sur hauteur d'œil et zones exposées ; aucune
+  colonne `tokens.posture`/`tokens.height` n'existe.
+Complexité estimée : élevée — nouvelle planification complète, pas une extension.
+
+### Export PDF fiche personnage
+`docs/PLAN_EXPORTPDF.md` — toujours à l'état proposition (`🔶`, jamais codé, confirmé Session 149).
+Architecture recommandée par la recherche déjà faite : Puppeteer (vue HTML dédiée `@media print`,
+un seul layout source de vérité) plutôt que `@react-pdf/renderer` (dupliquerait le layout de
+`CharacterSheet.jsx`, 1184 lignes, encore en évolution active).
+4 points à trancher avant Lot 0 : confirmation architecture, déclencheur (fiche seule / liste / fin
+de Wizard), fidélité visuelle à la fiche officielle, disponibilité pour fiches GM/PNJ. Détail complet
+dans le plan.
+
+### Moding Groupe 4 — slot `logiciel`
+`docs/PLAN_MODING_PHASEB.md` Groupe 4, confirmé toujours manquant (Session 149) : 4 mécaniques
+distinctes partageant le même slot exclusif, chacune mérite sa propre session de planification
+(le plan lui-même le dit) :
+- **Mémoire de cibles Mémo** — Test de reconnaissance, évite un tir sur cible amie préenregistrée.
+- **Projecteur de mouvement** — Test réduisant le malus de cible en mouvement lors d'un Tir visé.
+- **Système réactif autonome** — IA de tir autonome, probablement hors périmètre "mod" (nécessite une
+  automatisation de tour complète).
+- **Analyseur tactique** — bonus/malus croissant par round contre une cible, nécessite un état
+  persistant par combat/cible non stocké aujourd'hui.
+
+### Wizard — création à deux (GM + joueur)
+Idée Saar : permettre à un joueur et son GM de créer un personnage ensemble dans le Wizard, avec
+droit d'écriture du GM supérieur à celui du joueur (arbitrage/correction en direct). Nécessite de
+déterminer un modèle de session partagée (verrou par étape ? présence simultanée ?) — non exploré.
+
+### Matériel — conversion en objets réels
+Idée Saar : permettre au GM de convertir les points de matériel ou l'argent d'un personnage en
+objets concrets, via un menu de création d'item directement dans l'inventaire (`InventoryPanel.jsx`).
+Distinct de l'admin catalogue existante (`equipment-admin.html`) qui gère `ref_equipment`, pas
+`char_inventory` d'un personnage précis.
+
+### Chat persistant
+Idée Saar, distincte de "Chat MP" ci-dessous (qui est la messagerie *privée*, pas la persistance).
+Vérifié : l'event `CHAT_MESSAGE` (`shared/events.js`) existe côté socket mais aucune table ne
+persiste l'historique côté serveur — le chat est volatile aujourd'hui (perdu à la reconnexion/au
+redémarrage). À planifier : table de messages, endpoint de relecture, pagination.
+
+### Exo-armures (PLAN_EXOARMURE)
+`docs/MANUELEXOARMURE.md` existe déjà comme manuel technique complet (SSOT), avec schémas détaillés
+`ref_exo_templates`/`EXO_ARMURE_STATE` — mais aucune migration ni code trouvés (`grep` exo_armure/
+ref_exo_templates sur `server/src` : aucun résultat). Jamais implanté. À vérifier/valider avant
+implantation (le manuel peut avoir dérivé depuis sa rédaction).
 
 ### Chat MP
 Messagerie privée entre joueurs/GM.

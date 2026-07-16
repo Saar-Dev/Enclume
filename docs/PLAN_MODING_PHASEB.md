@@ -1,6 +1,6 @@
 # PLAN_MODING_PHASEB.md — Effets mécaniques des mods d'armes en combat
 > Rédaction initiale : Session 141 (suite 21 suite), 2026-07-12 — mis à jour Session 141 (suite 29), 2026-07-13
-> Fait suite à `docs/PLAN_MODING.md` (Phase A — rangement pur, terminée). Ce document couvre
+> Fait suite à `docs/Old/PLAN_MODING.md` (Phase A — rangement pur, terminée, archivé Session 149). Ce document couvre
 > exclusivement la Phase B : l'effet mécanique en combat des mods déjà installables depuis la
 > Phase A. Responsabilité unique de ce fichier : planifier Phase B, ne duplique pas Phase A.
 > **État (2026-07-13, Session 141 suite 29)** : **Groupe 1 (bonus fixes optique) ET Groupe 2 (Lunette

@@ -57,7 +57,7 @@
 - Pour le test round-trip (même rigueur que migration 105), `npx knex migrate:down` a été lancé sans argument. Cette commande cible la migration par **tri lexical des noms de fichiers**, pas par la table `knex_migrations` : `99_char_advantages_v2.js` trie *après* `100_...` à `106_...` (le caractère `9` > `1`), donc c'est **cette migration qui a été rollback** au lieu de 106.
 - `down()` de 99 fait `dropTableIfExists('char_advantages')` + `dropColumn('pc_postcreation')` sur `char_pc_ledger` → table et colonne supprimées. Table vide au moment de l'incident, confirmé par Saar (`Aucune perte n'est à déplorer`) — aucune donnée réelle perdue.
 - Remédiation immédiate : schéma recréé à l'identique (code exact de la migration 99), bookkeeping `knex_migrations` réparé (ligne réinsérée), vérifié `char_advantages` + `pc_postcreation` restaurés, `knex migrate:list` propre.
-- **Méthode de test corrigée** : round-trip down/up de la migration 106 refait via **appel direct des fonctions `up`/`down` du module** (import ESM du fichier de migration, pas la CLI `knex migrate:down`/`migrate:latest`) — élimine le risque de mauvaise cible. Nouveau piège consigné dans `CLAUDE.md` (P52).
+- **Méthode de test corrigée** : round-trip down/up de la migration 106 refait via **appel direct des fonctions `up`/`down` du module** (import ESM du fichier de migration, pas la CLI `knex migrate:down`/`migrate:latest`) — élimine le risque de mauvaise cible. Nouveau piège consigné dans `docs/SYSTEME/CORE.md` (P52).
 - Note : le serveur dev (`src/index.js:103`, `db.migrate.latest()` au démarrage) applique automatiquement toute nouvelle migration dès que le fichier est créé et que nodemon redémarre — la migration 106 était donc déjà appliquée avant même le lancement manuel des tests.
 
 ### Testé ✅
@@ -209,7 +209,7 @@
   colonnes en échec sur un round-trip decode→encode complet des 3 tables).
 - `up()` corrige les 3 tables ; `down()` restaure le texte corrompu d'origine à l'identique.
 
-### Incident et remédiation (à conserver — piège pour les sessions futures, voir P53 dans `CLAUDE.md`)
+### Incident et remédiation (à conserver — piège pour les sessions futures, voir P53 dans `docs/SYSTEME/CORE.md`)
 - Écrire le fichier de migration a déclenché un restart `nodemon` → `db.migrate.latest()` au boot a
   **auto-appliqué la migration correctement**, avant même mon premier test manuel (mécanisme déjà
   connu depuis la session 134 suite, mais pas assez internalisé ici).
@@ -4070,3 +4070,84 @@ client. Documentation : `docs/PLAN_CHARACTER_SERVICE.md` (à archiver dans `docs
 **Retour arrière** : rien à committer n'est encore poussé au moment de la clôture — commit isolé
 sur `dev/Saar` à venir. Le `UPDATE` de données n'est pas rejouable automatiquement (IDs notés
 ci-dessus si retour arrière nécessaire).
+
+---
+
+## Session 149 (Saar) — 2026-07-16 — Audit des 11 PLAN actifs (hors `docs/Old/`) ✅ CLOS
+
+Demande Saar : les 11 fichiers `PLAN_*.md` restés hors `docs/Old/` se recoupaient avec la question
+de la roadmap backend — pour chacun, trancher "implémenté ou pas" revient au même geste que
+clarifier la prochaine étape réelle. Vérifié un par un contre le code réel (grep, lecture des
+migrations, exécution de `npm run test:world`), jamais sur la seule lecture du plan.
+
+**PLAN_LOS.md** — Architecture obsolète : `shared/losUtils.js` (raycast voxel multi-rayons décrit
+par le plan) n'existe plus, remplacé par `shared/world/visibility.js`/`worldVisibilityService.js`
+(WorldSnapshot). Objectifs 1 (LOS binaire) et 2 (% couverture → modificateur, `checkWorldCoverage`)
+✅ faits, mais via la nouvelle architecture. Objectif 3 (table D20 contrainte aux zones exposées) et
+Phase 2 (postures tokens) : jamais faits, aucune trace (`exposedZones`/`rollHitLocation` introuvables,
+aucune migration `tokens.posture`). → Archivé ; objectif 3 + postures repris comme idée roadmap
+(`docs/ROADMAP.md` "LOS avancé").
+
+**PLAN_GEOMETRIE.md** (alias `PLAN_FORMES_ENTITES.md`, Session 138) — Recherche Three.js
+(`ExtrudeGeometry`+`UVGenerator`) jamais suivie de code : aucun `shape`/`EntityMeshExtruded` dans
+`EntityBuilderTab.jsx`/`EntityMesh.jsx`. Saar : plus pertinent avec le nouveau builder (Kiwi) — à
+proposer à Codex pour d'éventuels fragments réutilisables avant archivage/suppression. → **Non
+archivé**, question posée à Codex dans `docs/EN_COURS.md` (Dettes actives).
+
+**PLAN_EXPORTPDF.md** — Toujours à l'état `🔶 PROPOSITION` déclaré par le document lui-même,
+confirmé par le code (zéro `puppeteer`, zéro route `export-pdf`). Rien d'obsolète, juste jamais
+démarré. → Repris comme idée roadmap (`docs/ROADMAP.md`), pas archivé.
+
+**PLAN_MODING.md** (Phase A) — ✅ Terminé et vérifié (migration `137_char_inventory_mods.js`,
+`modingService.js`, `ModingWindow.jsx`, event `MOD_INSTALLED`, tests service/HTTP/Playwright déjà
+documentés dans ce journal Session 141 suite 21). → Archivé.
+
+**PLAN_MODING_PHASEB.md** — Document vivant, à jour avec le code : Groupe 1 (bonus fixes optique)
+et Groupe 2 (Lunette de visée) ✅ codés (migrations 141/142), Groupe 3 (Trépied/Harnais) retiré vers
+`docs/ROADMAP.md`, **Groupe 4 (slot `logiciel`, 4 mécaniques) confirmé toujours manquant** (aucune
+trace dans `server/src`, aucune migration après 142 le concernant — vérifié à la demande explicite
+de Saar). → Reste actif, Groupe 4 repris comme idée roadmap.
+
+**PLAN_MOTEUR_MONDE.md** — Document de référence exact : les 13 fichiers `shared/world/*.js`
+cités existent, migrations 152-157 présentes, `redis.js`/`socketVoxel.js`/`pathfinder.js`/
+`losUtils.js` bien supprimés comme annoncé Phase 7. `npm run test:world` exécuté réellement :
+124/124 tests passent. → Laissé tel quel ; en-tête corrigé ("Phases 0 à 8" → "0 à 15", oubli de
+mise à jour du résumé, le corps du document va jusqu'à Phase 15).
+
+**PLAN_FUSION.md** — La fusion qu'il planifie a déjà eu lieu (tout le code vérifié cette session
+vit dans le monde post-fusion). Reliquat concret trouvé : `ioredis` toujours dans
+`server/package.json` alors que le plan le déclare lui-même mort (Lot 1) → retiré. Lots 4/5/8.F
+(services systemd distants, scripts Python, scénario de test manuel navigateur) restent à confirmer
+avec Saar/Kiwi, hors portée d'une vérification par le seul code source. → Laissé actif tant que ces
+points ne sont pas fermés.
+
+**PLAN_CREATION_E1+2.md, E3.md, E4.md** (`docs/Character/Creation/`) — Même profil : l'architecture
+API step-by-step qu'ils décrivent (`POST /step1`, `/step2`, `/step3`, `/step4`, `rollback-to-stepN`,
+état `creation_state='draft_stepN'`) n'existe plus dans `server/src/routes/creation.js` — remplacée
+par l'endpoint unique `POST /:sheetId/reconcile` (`reconcileCreation`, déjà documenté comme
+référence dans `VOCABULARY.md`). Fondations DB en partie construites puis renumérotées/retravaillées
+(migrations 97-138 selon le plan) ; le mécanisme de rollback par snapshot décrit dans E4
+(`char_creation_snapshot`) n'a même jamais été construit — `reconcileCreation` n'en a pas besoin,
+étant idempotent. → Archivés.
+
+**PLAN_CREATION_E5.md** — Profil mixte : le modèle de données (`char_advantages` avec
+`snapshot_data`/`acquired_during`/`removal_reason`, `pc_postcreation`) et le registre de contraintes
+(`server/src/services/advantageConstraints.js` — `exists`/`not_already_owned`/`unique_absolute`/
+`family_limit`/`max_desavantage_pc`/`sufficient_pc`) correspondent quasiment mot pour mot à la
+migration 99 réelle et au code réel. Seule la couche API (routes step-by-step) est morte, comme les
+trois précédents. → Archivé, mais le modèle de données qu'il documente reste correct aujourd'hui.
+
+**Fichiers touchés** : `docs/Old/PLAN_LOS.md`, `docs/Old/PLAN_MODING.md`,
+`docs/Old/PLAN_CREATION_E1+2.md`, `E3.md`, `E4.md`, `E5.md` (déplacés depuis `docs/` et
+`docs/Character/Creation/`, ligne Statut ajoutée à chacun) ; `docs/EN_COURS.md` (question Codex
+GEOMETRIE) ; `docs/ROADMAP.md` (3 idées : LOS avancé, Export PDF, Moding Groupe 4) ;
+`server/package.json` (`ioredis` retiré) ; `docs/PLAN_MOTEUR_MONDE.md` (en-tête corrigé).
+
+**Testé** : chaque verdict ci-dessus est appuyé par une vérification directe (grep code source,
+lecture de migrations, ou exécution réelle de `npm run test:world` — pas une déduction depuis le
+seul texte des plans).
+**Non testé** : Lots 4/5/8.F de `PLAN_FUSION.md` (nécessitent accès à l'exploitation distante ou un
+navigateur réel, hors portée de cette session).
+**Données** : aucune migration, aucun changement runtime — travail 100% documentaire.
+**Retour arrière** : déplacements de fichiers réversibles par `git mv` inverse ; commit isolé à
+faire sur `dev/Saar`.

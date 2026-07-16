@@ -1624,6 +1624,7 @@ Projet en cours et priorité user :
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
 | **CHOC1** | Mutation Corne — bonus LdB "+1D6 dommages de Choc si le coup porte à la tête" non câblé. `calcResistanceArmure` calcule déjà un `prt` (protection_shock) jamais consommé par `damageService.js` — aucun pool de "dommages de Choc" distinct des dégâts physiques n'existe dans le pipeline actuel | Moyenne — chantier séparé, non trivial |
+| **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
 
 ---
 
@@ -1679,6 +1680,6 @@ Projet en cours et priorité user :
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
-- P53 — nodemon auto-applique les migrations dès l'écriture du fichier + numéro "disponible" d'`EN_COURS.md` peut être obsolète (travail parallèle non resynchronisé) — détail complet dans `CLAUDE.md`
-- P54 — ne jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable (nodemon peut l'avoir déjà appliquée) — un second appel traite des données déjà correctes comme corrompues et peut les détruire silencieusement — détail complet dans `CLAUDE.md`
-- P56 — `DICE_RESULT` (socketDice.js) n'inclut jamais `dieType` dans son payload — tout composant qui anime un jet hors `SessionPage` doit le fournir lui-même (constante si formule fixe) sous peine de retomber sur un D6 par défaut — détail complet dans `CLAUDE.md`
+- P53 — nodemon auto-applique les migrations dès l'écriture du fichier + numéro "disponible" d'`EN_COURS.md` peut être obsolète (travail parallèle non resynchronisé) — détail complet dans `docs/SYSTEME/CORE.md`
+- P54 — ne jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable (nodemon peut l'avoir déjà appliquée) — un second appel traite des données déjà correctes comme corrompues et peut les détruire silencieusement — détail complet dans `docs/SYSTEME/CORE.md`
+- P56 — `DICE_RESULT` (socketDice.js) n'inclut jamais `dieType` dans son payload — tout composant qui anime un jet hors `SessionPage` doit le fournir lui-même (constante si formule fixe) sous peine de retomber sur un D6 par défaut — détail complet dans `docs/SYSTEME/DICE.md`

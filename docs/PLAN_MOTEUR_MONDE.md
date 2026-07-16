@@ -2,7 +2,7 @@
 
 > Dernière mise à jour : 2026-07-15 — moteur achevé, première fusion commune engagée.
 >
-> Statut : **Phases 0 à 8 codées et vérifiées ; moteur monde autoritaire branché au combat**.
+> Statut : **Phases 0 à 15 codées et vérifiées ; moteur monde autoritaire branché au combat**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.

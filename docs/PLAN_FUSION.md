@@ -121,31 +121,35 @@ Kiwi (ou l'inverse).
 - [ ] Tester `npm run test:world` (nouveau script, `shared/world/*.test.mjs` +
       `server/src/services/*.test.mjs`) une fois les dépendances installées.
 
-### Lot 4 — Services systemd distants (doublon)
+### Lot 4 — Services systemd distants ✅ CLOS
 
-**Constat vérifié** : `fusion-kiwi-v2` ajoute `deploy/enclume-codex-client.service`,
-`deploy/enclume-codex-server.service`, `deploy/enclume-fusion-client.service`,
-`deploy/enclume-fusion-server.service` — 4 nouveaux fichiers, alors que le serveur
-distant actuel tourne déjà sous `enclume-server.service`/`enclume-client.service`
-(noms différents, découverts lors du dépannage de cette session).
+**Constat initial** (doublon supposé) : `deploy/enclume-codex-{client,server}.service` +
+`deploy/enclume-fusion-{client,server}.service` — 4 fichiers, alors que le serveur
+distant tournait à l'époque sous d'anciens noms `enclume-server.service`/
+`enclume-client.service`.
 
-**À faire :**
-- [ ] Clarifier avec Kiwi lequel des 4 fichiers est destiné à la vraie prod (probable :
-      `enclume-fusion-*`, à confirmer, pas à deviner).
-- [ ] Réconcilier/renommer pour n'avoir qu'un seul jeu de services actifs sur le serveur
-      distant — éviter deux services démarrant le même port en parallèle.
+**Vérifié Session 142 suite (Claude) + confirmé indépendamment par Codex** : ce n'est pas
+un doublon. Les 4 fichiers ciblent deux environnements distincts et légitimes, cohérents
+avec le tableau `CLAUDE.md` §3 : `enclume-codex-*` → `/home/codex/Enclume-integrated`,
+port 8293 (instance Saar/Codex) ; `enclume-fusion-*` → `/home/codex/Enclume-fusion`,
+port 8393 (instance `integration`). Aucun service ne dispute le même port — le troisième
+environnement (cousin, 8193/8194) est géré hors de ce dépôt par Kiwi. Les deux paires
+sont actives et activées au démarrage (`docs/JOURNAL6.md` "Intégration commune —
+2026-07-15"). Lot fermé, aucune action de code ou de renommage requise.
 
-### Lot 5 — Scripts Python (pipeline d'assets)
+### Lot 5 — Scripts Python (pipeline d'assets) ✅ CLOS
 
-**Constat vérifié** : `tools/generate_futuristic_hydroponics.py`,
+**Constat** : `tools/generate_futuristic_hydroponics.py`,
 `tools/render_algae_key_models.py`, `tools/validate_hydroponics_geometry.py` — génération/
-validation de modèles GLB, hors stack Node/JS du projet.
+validation de modèles GLB via Blender, hors stack Node/JS du projet.
 
-**À faire :**
-- [ ] Confirmer avec Kiwi : outils ponctuels dev-only (déjà exécutés, GLB déjà commités
-      dans `output/`) ou étape requise du pipeline de build/déploiement ?
-- [ ] Si dev-only : aucune action requise côté serveur (pas besoin de Python en prod).
-- [ ] Si requis : documenter la dépendance Python (version, libs) avant tout déploiement.
+**Vérifié Session 142 suite (Claude) + confirmé indépendamment par Codex** : outils
+ponctuels dev-only, zéro référence dans `package.json`/CI/déploiement/runtime (grep
+exhaustif). Les GLB générés sont déjà commités sous `output/futuristic_hydroponics/` et
+sont consommés en production par le scanner générique
+`server/src/lib/builtinModelCatalog.js` (scan de tout `output/*/manifest.json`) — Python/
+Blender n'est pas requis côté serveur de production, seulement pour régénérer les assets
+en amont si besoin. Lot fermé.
 
 ### Lot 6 — Combat : mouvement et portée
 
@@ -363,6 +367,10 @@ worktree` (branche `fusion-kiwi-v2` réelle), commit à faire.
 **Non testé** : parcours navigateur réel (suppression de code mort sans changement de
 comportement visible — risque jugé faible, mais pas confirmé humainement).
 
+**Point d'étape Codex** : chargement visuel confirmé d'une carte multi-étages et du
+combat sur l'instance `integration` (8393) — mais le scénario exact ci-dessous (8.F) pas
+rejoué pas à pas.
+
 #### 8.E — Indicateur visuel de blocage des entités — reporté, pas de code
 **Constat vérifié** : `EntityMesh.jsx` ne rend aucun indicateur visuel du champ
 `is_blocking` (utilisé côté serveur par `dynamicOccupantsFromRows` pour
@@ -377,7 +385,7 @@ dans l'immédiat. Lacune connue mais non prioritaire, pas fermée par une vérif
 
 **À faire :** aucun pour l'instant.
 
-#### 8.F — Validation par scénario de test manuel (décision Saar)
+#### 8.F — Validation par scénario de test manuel (décision Saar) — 🔓 OUVERT, seul point bloquant restant du plan
 **Constat vérifié** : le seul test automatique existant (`tests/e2e/smoke.spec.mjs`)
 est un smoke test générique (page charge sans exception JS) — il ne teste rien du
 déplacement/de la collision. Écrire un test Playwright dédié serait disproportionné

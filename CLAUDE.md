@@ -32,6 +32,9 @@ règles domaine > `MANUEL` > `PLAN`.
 - Pour le monde 3D, lire `docs/SYSTEME/MOTEUR_MONDE.md` et `.claude/rules/world.md`.
 - Pour le combat, lire `docs/REGLES/REGLESYSCOMBAT.md`, `docs/SYSTEME/COMBAT.md` et
   `.claude/rules/combat.md`.
+- Avant de conclure qu'aucun piège connu ne couvre un sujet, vérifier `docs/SYSTEME/CONVENTIONS.md`
+  §19 (index maître des codes P/PE/PC/PI) — les `rules/` routées ne pointent qu'une partie du domaine,
+  l'index est la source complète.
 
 ---
 
@@ -108,6 +111,7 @@ git fetch origin
 5. Présenter le plan exact : fichiers, invariant, changements et hors périmètre.
 6. Si l'utilisateur a déjà demandé la modification, coder sans redemander une autorisation identique.
 7. Demander une décision uniquement si elle change réellement le produit, les données ou le scope.
+8. Un plan ne couvre qu'un seul bug ou problème à la fois ; le suivant attend la validation du précédent.
 
 Termes interdits sans preuve : « probablement », « certainement », « évidemment ». Employer
 `[INCONNU]`, formuler l'hypothèse et définir l'instrumentation qui la tranche.
@@ -131,31 +135,19 @@ Termes interdits sans preuve : « probablement », « certainement », « évide
 
 ## 8. Autorité du moteur monde
 
-- `surface_data` v12 est validé puis compilé par `shared/world/worldCompiler.js`.
-- Le `WorldSnapshot` immuable est l'autorité des supports, barrières, traversées, colliders,
-  occluders, compartiments, régions, navigation, collision, occupation, LOS et couverture.
-- PostgreSQL est durable ; Redis n'est jamais l'autorité spatiale.
-- `voxel_data` est legacy/rendu et ne contraint jamais le moteur canonique.
-- Les règles utilisent des mètres via `WorldMetrics`; une case vaut 1,5 m par défaut.
-- Le serveur recalcule chemin, coût, position atteinte, distance, LOS et effets.
-- Le GLB est une apparence ; la physique provient des capacités déclarées.
-- Document statique et état runtime restent séparés.
-- Les canaux mouvement, vision et fluides sont indépendants.
-- Un token peut s'arrêter au milieu d'un escalier ou d'une échelle.
-- Un ascenseur est une cabine mobile avec passagers, jamais une téléportation verticale.
-- Les anciennes cartes ne justifient ni fallback approximatif ni second moteur.
+Le `WorldSnapshot` (compilé depuis `surface_data` v12 par `worldCompiler.js`) est l'autorité unique
+des supports, barrières, collision, occupation, LOS et navigation ; PostgreSQL est durable, Redis et
+`voxel_data` ne sont jamais l'autorité spatiale. Détail complet et invariants actifs, auto-chargés dès
+qu'un fichier du périmètre est touché : `.claude/rules/world.md` + `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ---
 
 ## 9. Contrat avec le combat
 
-- La FSM combat orchestre initiative, compétences, actions, dégâts, armures et états non spatiaux.
-- Toute décision spatiale passe par les services `world*` et `movementBudgetService`.
-- Le combat ne lit directement ni `surface_data`, ni Three.js, ni `voxel_data`.
-- Le client envoie une destination, jamais une position finale ou une portée imposée.
-- À la résolution, le mouvement est recalculé sous verrou puis distance, portée, LOS, couverture et
-  effets sont réévalués depuis la position réellement atteinte.
-- Une fusion qui réintroduit pathfinder combat, collision Redis ou LOS voxel est refusée.
+La FSM combat orchestre le non-spatial (initiative, compétences, actions, dégâts, armures) ; toute
+décision spatiale passe par les services `world*`, jamais une lecture directe de `surface_data`,
+Three.js ou `voxel_data`. Détail complet et invariants actifs, auto-chargés dès qu'un fichier du
+périmètre est touché : `.claude/rules/combat.md` + `docs/SYSTEME/COMBAT.md`.
 
 ---
 
@@ -206,11 +198,20 @@ un sas de validation, jamais un espace de développement direct.
 STOP si l'une de ces situations apparaît :
 
 - diagnostic sans lecture ni instrumentation ;
-- second moteur spatial, fallback legacy ou patch de symptôme ;
+- correctif proposé sur une cause `[HYPOTHÈSE]` non instrumentée, ou bug non reproductible analysé
+  sans documenter d'abord les conditions ;
+- solution « temporaire »/« pour l'instant », second moteur ou fallback legacy — sur tout domaine,
+  pas seulement spatial ;
 - nouvel événement, service ou composant sans recherche d'un équivalent ;
+- nouveau terme métier ou mécanique nommée sans vérification de `docs/VOCABULARY.md` ;
+- nouveau fichier `docs/*.md` créé sans vérifier sa responsabilité unique (`docs/RegleDocumentaire.md`) ;
+- mécanique de combat implémentée sans avoir lu `docs/REGLES/REGLESYSCOMBAT.md` dans la session ;
 - migration sans audit du numéro, du journal et du redémarrage automatique ;
+- « Je code ? » posé une deuxième fois sur le même sujet — plan complet, coder directement ;
+- plan couvrant deux bugs ou problèmes ou plus ;
 - modification du dépôt, de la base ou des assets de l'autre développeur ;
 - push direct vers `master` ou `integration` ;
 - clôture sans « Testé / Non testé » ;
 - dette copiée dans plusieurs documents ;
-- résumé utilisé pour refaire ou oublier un travail déjà terminé.
+- résumé utilisé pour refaire, oublier un travail déjà terminé, ou sauter la lecture de reprise de
+  session.

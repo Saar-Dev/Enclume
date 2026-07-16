@@ -17,9 +17,14 @@ paths:
 - Une ouverture de panneau ou tooltip ne doit pas provoquer la perte de la sélection qu'il édite.
 - Les tooltips restent intégralement dans le viewport, se repositionnent après redimensionnement et
   peuvent être déplacés si le composant le prévoit.
-- Tout texte utilisateur passe par i18n; conserver les clés existantes et ajouter toutes les langues
-  requises par le projet.
-- Réutiliser les composants et styles du design existant; éviter les styles inline dupliqués.
+- Tout texte utilisateur passe par `useTranslation` → `t('section.cle')`; source unique
+  `client/src/locales/fr.json`, ajouter la clé (toutes langues du projet) avant de l'utiliser — jamais
+  de string UI codée en dur.
+- Bouton → `className="btn"` ou variante (`.btn-ghost`, `.btn-danger`, `.btn-gold`, `.btn-icon`,
+  `.btn-toggle`, `.btn-tool`). Badge → `className="badge badge-gm"` etc. Classes centralisées dans
+  `index.css` — modifier une classe change tous ses usages.
+- `style={}` = layout/position calculé uniquement (width, flex, margin, top) — jamais une valeur
+  visuelle. Une valeur visuelle dynamique passe par une CSS custom property.
 - Avec Three.js, cloner un matériau avant de modifier une instance et disposer géométries, matériaux
   et textures uniquement lorsqu'ils ne sont plus partagés.
 - Les aperçus de rotation, échelle et pose sont réversibles jusqu'à confirmation serveur.
