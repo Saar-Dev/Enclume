@@ -698,6 +698,13 @@ courant ou au volume multi-niveau actif ; sinon elle ne rend rien. Cette règle 
 qu'un plafond bas et un sol haut concurrents occupent le même plan ou que le matériau de la salle
 basse soit conservé après le passage à l'étage supérieur.
 
+La face choisie et son altitude sont deux décisions distinctes. Une interface fournit un
+`yOverride` numérique lorsqu'elle impose son plan exact. Pour un sol de salle rendu sans surcharge,
+`null` ou `undefined` signifie obligatoirement « utiliser `room.y` » ; pour un plafond, « utiliser
+le haut de la salle ». Une surcharge explicite `0` reste valide. Il est interdit de tester une
+surcharge par `Number.isFinite(Number(value))` sans avoir d'abord exclu `null`, puisque JavaScript
+convertit `null` en `0` et replacerait silencieusement tout plancher à l'étage zéro.
+
 Les murs supérieurs du seul volume multi-hauteur actuellement visé sont également rendus, sans
 révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant
 ou à ce volume actif, et toujours au mur logique complet ; les morceaux créés par une porte

@@ -23,6 +23,7 @@ import {
 import {
   horizontalInterfaceOpacity,
   horizontalInterfaceRenderKind,
+  horizontalSurfaceY,
 } from '../lib/horizontalSurfaceOpacity.js'
 import { useModelStateAnimation } from '../lib/useModelStateAnimation.js'
 import {
@@ -587,9 +588,12 @@ function RoomSlab({
 }) {
   const sourceRectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
-  const y = Number.isFinite(Number(yOverride))
-    ? Number(yOverride)
-    : isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
+  const y = horizontalSurfaceY({
+    yOverride,
+    kind,
+    roomBaseY: getRoomBaseY(room),
+    roomTopY: getRoomTopY(room),
+  })
   const thickness = isCeiling ? getRoomCeilingThickness(room) : getRoomFloorThickness(room)
   const slabSkylights = skylights.filter(connector => (
     Math.abs(Number(connector.y) - y) < 0.01

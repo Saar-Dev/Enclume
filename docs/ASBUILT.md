@@ -1,5 +1,24 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Altitude canonique des sols et plafonds de salle (2026-07-16)
+
+`RoomSlab` résout désormais son altitude avec une règle explicite. `null` et `undefined` signifient
+« aucune surcharge » : un sol prend `getRoomBaseY(room)` et un plafond `getRoomTopY(room)`. Seule
+une valeur numérique fournie, y compris `0`, remplace cette altitude. Le moteur ne s'appuie donc
+plus sur la coercition JavaScript de `null` en zéro.
+
+Cette règle corrige la cause racine du plancher supérieur absent. L'interface horizontale choisissait
+bien le `floorRoomId` de la salle de niveau 1, mais son maillage était ensuite replacé à `y = 0` par
+le composant de dalle. Sur la carte réelle `ddfa2f40-d30f-4cff-a30d-891f7d448e66`, l'interface
+commune est maintenant rendue comme plafond à l'étage 0 puis comme sol opaque de la salle haute à
+`y = 2,5 m` à l'étage 1.
+
+Validation : tests unitaires dédiés aux valeurs `null`, `undefined`, `0` et au plafond ; tests de
+coupe caméra ; build Vite ; passage 0 → 1 et capture visuelle dans le navigateur après redémarrage
+des services. Aucune donnée de carte n'est modifiée.
+
+---
+
 ## Enveloppe des étages inférieurs sans leur intérieur (2026-07-16)
 
 Le moteur distingue désormais deux régimes de visibilité. Au niveau affiché, la salle est complète.

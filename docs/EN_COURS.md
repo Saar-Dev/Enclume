@@ -1,8 +1,16 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — altitude canonique des interfaces horizontales** : l'absence de `yOverride` n'est
+> plus convertie en `0`. Un sol de salle sans surcharge utilise donc réellement `room.y`, tandis
+> qu'un plafond utilise le haut de la salle ; une surcharge explicite égale à zéro reste valide.
+> Sur la session réelle `b27cbed4-fd59-4530-b43b-dae57c33f092`, le sol de la salle haute est
+> désormais rendu à `y = 2,5 m`, opaque, sur toute son empreinte. Le passage réel 0 → 1 a été
+> contrôlé après redémarrage complet dans le navigateur.
+>
 > **2026-07-16 — contexte caméra strictement lié à son étage** : le volume actif de l'ancien niveau
-> est invalidé dès le changement de `displayLevel`, sans attendre une frame 3D. Le sol inférieur ne
-> peut plus survivre au passage vers l'étage haut dans un onglet ralenti. Vérifié visuellement sur
-> la session réelle en mode jeu et en mode édition.
+> est invalidé dès le changement de `displayLevel`, sans attendre une frame 3D. Cette correction
+> supprime l'exception de visibilité périmée, mais ne déterminait pas l'altitude physique du sol ;
+> la validation visuelle initialement inscrite ici est remplacée par celle de l'altitude canonique
+> ci-dessus.
 >
 > **2026-07-16 — enveloppe basse sans intérieur** : au niveau courant, l'intérieur est complet ;
 > aux niveaux inférieurs, seuls les murs opaques et les portes, fenêtres ou objets fixés dessus

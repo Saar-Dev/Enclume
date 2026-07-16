@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   horizontalInterfaceOpacity,
   horizontalInterfaceRenderKind,
+  horizontalSurfaceY,
 } from './horizontalSurfaceOpacity.js'
 
 test('une interface partagée est le plafond bas au niveau 0 puis le sol haut au niveau 1', () => {
@@ -74,4 +75,37 @@ test('le plafond courant d un volume multi-niveau actif conserve la coupe', () =
     belongsToCameraVolume: true,
     ceilingOpacity: 0.18,
   }), 0.18)
+})
+
+test('un sol sans surcharge de hauteur utilise la base de sa salle', () => {
+  assert.equal(horizontalSurfaceY({
+    yOverride: null,
+    kind: 'floor',
+    roomBaseY: 2.5,
+    roomTopY: 5,
+  }), 2.5)
+  assert.equal(horizontalSurfaceY({
+    yOverride: undefined,
+    kind: 'floor',
+    roomBaseY: 2.5,
+    roomTopY: 5,
+  }), 2.5)
+})
+
+test('une surcharge explicite a zero reste une hauteur valide', () => {
+  assert.equal(horizontalSurfaceY({
+    yOverride: 0,
+    kind: 'floor',
+    roomBaseY: 2.5,
+    roomTopY: 5,
+  }), 0)
+})
+
+test('un plafond sans surcharge utilise le haut de sa salle', () => {
+  assert.equal(horizontalSurfaceY({
+    yOverride: null,
+    kind: 'ceiling',
+    roomBaseY: 2.5,
+    roomTopY: 5,
+  }), 5)
 })

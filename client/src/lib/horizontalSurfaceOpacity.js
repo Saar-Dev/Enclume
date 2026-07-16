@@ -36,3 +36,14 @@ export function horizontalInterfaceOpacity({
     ? ceilingOpacity
     : 1
 }
+
+export function horizontalSurfaceY({
+  yOverride = null,
+  kind,
+  roomBaseY,
+  roomTopY,
+}) {
+  const hasOverride = yOverride !== null && yOverride !== undefined
+  if (hasOverride && Number.isFinite(Number(yOverride))) return Number(yOverride)
+  return kind === 'ceiling' ? Number(roomTopY) : Number(roomBaseY)
+}

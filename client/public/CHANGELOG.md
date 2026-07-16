@@ -12,6 +12,8 @@
   en quatre formats.
 - [fix] Le plan commun entre deux salles superposées est le plafond découpé depuis l'étage bas, puis
   le sol opaque depuis l'étage haut.
+- [fix] Les sols de salle sans surcharge d'altitude utilisent désormais leur véritable `y` au lieu
+  d'être replacés à l'étage 0 par la conversion de `null` en zéro.
 - [fix] Aux étages inférieurs, seuls l'enveloppe murale opaque et les objets fixés dessus restent
   visibles. Les sols, plafonds, objets libres, tokens et effets intérieurs sont masqués.
 - [fix] Le contexte de caméra est désormais lié à l'étage qui l'a produit. En changeant d'étage,

@@ -3857,13 +3857,43 @@ temps le jeu, l'éditeur, les objets, tokens, effets et surfaces horizontales qu
 contexte.
 
 **Testé** : 52/52 tests ciblés de caméra, coupe et géométrie ; ESLint ciblé sans erreur ; build
-Vite. Dans le navigateur authentifié, sur la session
-`b27cbed4-fd59-4530-b43b-dae57c33f092`, le passage réel de 0 à 1 affiche le plancher à `y = 2,5 m`
-au sommet des murs inférieurs et ne conserve plus le plancher à `y = 0`. Le même résultat est
-contrôlé en mode jeu puis en mode édition, sans erreur console.
+Vite. **Rectificatif Session 148** : la validation visuelle inscrite lors de cette session était
+fausse. Le navigateur choisissait bien la salle haute, mais son plancher restait physiquement à
+`y = 0` à cause d'une seconde faute indépendante dans la résolution de `yOverride`. La capture
+n'établissait donc pas ce qui avait été affirmé. La vérification visuelle valide et reproductible
+est celle de la Session 148 après correction de l'altitude et redémarrage complet.
 
 **Données** : lecture seule de la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66`. Ses deux salles et
 ses trois interfaces horizontales restent inchangées ; aucun objet ni connecteur de test n'est créé.
 
 **Retour arrière** : revert du commit de Session 147, redémarrage des services 8293/8294, puis
 contrôle du passage 0 → 1 sur la même session.
+
+---
+
+## Session 148 (Codex) — 2026-07-16 — Altitude canonique des planchers ✅ CLOS
+
+Le diagnostic visuel a coloré séparément les sols bas et haut sans modifier la carte. Le plan de
+rendu choisissait correctement `room:-3:0:5:6:1:1` au niveau 1, mais l'instrumentation du maillage
+montrait `{ roomId: room:-3:0:5:6:1:1, y: 0 }`. La cause se trouvait dans `RoomSlab` : son paramètre
+optionnel `yOverride` valait `null`, puis `Number(null)` produisait `0` et satisfaisait le test
+`Number.isFinite`. Tous les sols de salle appelés sans surcharge étaient donc placés à l'altitude
+zéro, quelle que soit leur salle propriétaire.
+
+La résolution de hauteur est désormais une fonction pure et testée. `null` et `undefined`
+retombent sur la base de la salle pour un sol et sur son sommet pour un plafond ; `0` n'est accepté
+que lorsqu'il est fourni explicitement. Le renderer conserve l'interface horizontale comme autorité
+du propriétaire et applique ensuite cette altitude canonique au maillage rectangulaire comme au
+maillage courbe.
+
+**Testé** : tests unitaires des interfaces, de la coupe caméra et des trois cas de hauteur ; suites
+monde/serveur et configuration ; ESLint ciblé ; build Vite. Dans le navigateur authentifié, sur la
+session `b27cbed4-fd59-4530-b43b-dae57c33f092`, le niveau 0 affiche son propre sol et le niveau 1
+affiche une dalle opaque complète à `y = 2,5 m`, qui masque l'intérieur inférieur. Le contrôle est
+refait après redémarrage des services et rechargement de la page, sans matériau de diagnostic.
+
+**Données** : lecture seule de la carte `ddfa2f40-d30f-4cff-a30d-891f7d448e66`. Aucune salle,
+dalle, entité ou connecteur de test n'est créé.
+
+**Retour arrière** : revert du commit de Session 148, redémarrage des services 8293/8294, puis
+contrôle visuel 0 → 1 sur la même session.
