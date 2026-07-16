@@ -1,5 +1,25 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Une seule autorité pour les sols et plafonds empilés (2026-07-16)
+
+Les sols de salle ne sont plus rendus indépendamment des interfaces horizontales. Le renderer
+consomme maintenant exclusivement `roomHorizontalInterfaces` et choisit, pour chaque empreinte et
+chaque altitude, une unique représentation :
+
+- avant l'étage de la salle haute : plafond de la salle basse, avec sa règle de coupe ;
+- à partir de l'étage de la salle haute : sol opaque de cette salle haute ;
+- pour les étages strictement inférieurs : la face choisie reste entièrement opaque ;
+- dans un volume multi-niveau actif : un plafond supérieur peut rester visible selon la coupe du
+  volume, sans rendre visible un sol appartenant à un étage encore caché.
+
+Le contrôle a été exécuté sur les données réelles de la carte `dazdazd`. Ses trois interfaces
+partagées à `y = 2,5 m` choisissent toutes `ceiling` au niveau 0 puis `floor` au niveau 1, avec les
+identifiants exacts des salles supérieures. Validation : 24 tests ciblés, 131 tests monde/serveur,
+3 tests de configuration, ESLint ciblé sans erreur, build Vite et chargement de la carte réelle au
+niveau 1 sans erreur de rendu dans la console.
+
+---
+
 ## Coupe d'étage, halo des portes et pose des verrières corrigés (2026-07-16)
 
 Le rendu des interfaces horizontales suit désormais l'étage affiché, et non la simple présence

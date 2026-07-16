@@ -676,6 +676,12 @@ le niveau supérieur, le plafond inférieur n'est plus rendu et le sol supérieu
 l'interface. Les sols, plafonds et murs de tous les niveaux inférieurs au plan de coupe restent
 opaques.
 
+`roomHorizontalInterfaces` est l'unique autorité de rendu des dalles de salle. Le renderer ne
+dessine plus les sols dans une boucle indépendante : chaque interface choisit exactement une face
+et un propriétaire (`ceilingRoomId` ou `floorRoomId`) selon l'étage affiché. Cette règle interdit
+qu'un plafond bas et un sol haut concurrents occupent le même plan ou que le matériau de la salle
+basse soit conservé après le passage à l'étage supérieur.
+
 Les murs supérieurs du seul volume multi-hauteur actuellement visé sont également rendus, sans
 révéler les salles supérieures voisines. La transparence des murs ne s'applique qu'au niveau courant
 ou à ce volume actif, et toujours au mur logique complet ; les morceaux créés par une porte

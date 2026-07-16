@@ -12,6 +12,9 @@
   en quatre formats.
 - [fix] Le plan commun entre deux salles superposées est le plafond découpé depuis l'étage bas, puis
   le sol opaque depuis l'étage haut. Les murs, sols et plafonds des étages inférieurs restent opaques.
+- [fix] Les sols et plafonds empilés passent désormais par une seule interface de rendu. En montant
+  d'un étage, le moteur remplace réellement le plafond bas par le sol de la salle haute au lieu de
+  conserver deux chemins concurrents.
 
 ### Campagnes
 - [ux] **Zone dangereuse** devient l'onglet rouge **Supprimer**. Son panneau affiche l'avertissement

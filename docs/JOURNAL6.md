@@ -3764,3 +3764,36 @@ modifié.
 **Retour arrière** : revert du commit de Session 144, redémarrage de
 `enclume-codex-client.service` et `enclume-codex-server.service`, puis vérification du healthcheck
 sur 8293/8294.
+
+---
+
+## Session 145 (Codex) — 2026-07-16 — Autorité unique des interfaces horizontales ✅ CLOS
+
+Le scénario utilisateur restait incorrect après la Session 144 : créer une salle au niveau 0,
+monter au niveau 1 puis créer une salle par-dessus pouvait encore laisser voir le sol inférieur.
+La correction d'opacité précédente ne traitait que le symptôme. La cause racine était une double
+autorité de rendu : `roomHorizontalInterfaces` décidait des plafonds, tandis qu'une boucle séparée
+dessinait tous les sols visibles directement depuis `surface.rooms`.
+
+Le renderer ne possède plus de chemin spécial pour les sols de salle. Chaque interface horizontale
+canonique choisit maintenant une unique face par contexte : `ceiling` tant que le niveau de son
+`floorRoomId` n'est pas affiché, puis `floor` dès cet étage. Le même composant reçoit l'empreinte,
+l'altitude et le propriétaire choisis ; un plan partagé ne peut donc plus conserver la matière ou
+la géométrie de la salle basse après le changement d'étage.
+
+Le choix est isolé dans `horizontalInterfaceRenderKind`, testé indépendamment de React. Il couvre
+les interfaces partagées, les sols supérieurs sans plafond inférieur, les niveaux déjà dépassés et
+les plafonds d'un volume multi-niveau actif. `horizontalInterfaceOpacity` ne s'applique plus qu'au
+cas où l'interface a effectivement choisi la face plafond.
+
+**Testé** : 24/24 tests ciblés (`horizontalSurfaceOpacity` et géométrie des salles), 131/131 tests
+monde/serveur, 3/3 tests de configuration, ESLint ciblé sans erreur et build Vite. Une lecture de la
+carte réelle `dazdazd` confirme trois interfaces à `y = 2,5 m` : chacune choisit la salle basse comme
+plafond au niveau 0, puis son `floorRoomId` de niveau 1 comme sol au niveau 1. La session réelle a été
+chargée au niveau 1 dans le navigateur sans erreur de rendu.
+
+**Données** : aucune carte n'est modifiée ou migrée. Le diagnostic est en lecture seule et aucune
+salle de test n'a été créée.
+
+**Retour arrière** : revert du commit de Session 145, puis redémarrage de
+`enclume-codex-client.service` et vérification du client 8293.

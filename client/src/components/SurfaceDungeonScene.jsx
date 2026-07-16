@@ -19,7 +19,10 @@ import {
   disposeEntitySelectionHalo,
   setEntitySelectionHaloVisible,
 } from '../lib/entitySelectionHalo.js'
-import { horizontalInterfaceOpacity } from '../lib/horizontalSurfaceOpacity.js'
+import {
+  horizontalInterfaceOpacity,
+  horizontalInterfaceRenderKind,
+} from '../lib/horizontalSurfaceOpacity.js'
 import { useModelStateAnimation } from '../lib/useModelStateAnimation.js'
 import {
   multiPolygonContours,
@@ -2266,9 +2269,6 @@ function SurfaceDungeonScene({
   )
   const roomWallIsVisible = wall => structureIsVisible(wallOpacityY(wall))
     || (cameraVolumeRoomId && wall.roomIds?.includes(cameraVolumeRoomId))
-  const roomFloorIsVisible = room => (
-    displayLevel === null || yToLevel(getRoomBaseY(room)) <= displayLevel
-  )
   const connectorIsVisible = connector => {
     if (displayLevel === null) return true
     if (cameraVolumeRoomId && connector?.roomIds?.includes(cameraVolumeRoomId)) return true
@@ -2306,35 +2306,43 @@ function SurfaceDungeonScene({
     () => water?.waterCells || [],
     [water?.waterCells],
   )
+  const renderedFloorRoomIds = new Set()
 
   return (
     <>
-      {Object.entries(surface.rooms).map(([id, room]) => {
-        if (!roomFloorIsVisible(room)) return null
-        return (
-          <RoomFloorSurface
-            key={id}
-            room={{ id, ...room }}
-            roomLookup={surface.rooms}
-            textureMaterials={textureMaterials}
-            showDetails={showDetails}
-            skylights={skylights}
-          />
-        )
-      })}
       {horizontalInterfaces.map(horizontalInterface => {
-        if (!horizontalInterface.ceilingRoomId) return null
         const floorRoom = horizontalInterface.floorRoomId
           ? surface.rooms[horizontalInterface.floorRoomId]
           : null
-        const floorIsDrawn = Boolean(floorRoom && roomFloorIsVisible(floorRoom))
+        const ceilingRoom = horizontalInterface.ceilingRoomId
+          ? surface.rooms[horizontalInterface.ceilingRoomId]
+          : null
         const belongsToCameraVolume = horizontalInterface.ceilingRoomId === cameraVolumeRoomId
-        const ceilingIsVisible = displayLevel === null
-          || horizontalInterface.ceilingDisplayLevel <= displayLevel
-          || belongsToCameraVolume
-        if (floorIsDrawn || !ceilingIsVisible) return null
-        const room = surface.rooms[horizontalInterface.ceilingRoomId]
-        if (!room) return null
+        const renderKind = horizontalInterfaceRenderKind({
+          hasFloor: Boolean(floorRoom),
+          floorDisplayLevel: floorRoom ? yToLevel(getRoomBaseY(floorRoom)) : null,
+          hasCeiling: Boolean(ceilingRoom),
+          ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,
+          displayLevel,
+          belongsToCameraVolume,
+        })
+        const room = renderKind === 'floor' ? floorRoom : ceilingRoom
+        if (!renderKind || !room) return null
+        if (renderKind === 'floor') {
+          const roomId = horizontalInterface.floorRoomId
+          if (renderedFloorRoomIds.has(roomId)) return null
+          renderedFloorRoomIds.add(roomId)
+          return (
+            <RoomFloorSurface
+              key={`floor:${roomId}`}
+              room={{ id: roomId, ...room }}
+              roomLookup={surface.rooms}
+              textureMaterials={textureMaterials}
+              showDetails={showDetails}
+              skylights={skylights}
+            />
+          )
+        }
         const opacity = horizontalInterfaceOpacity({
           displayLevel,
           ceilingDisplayLevel: horizontalInterface.ceilingDisplayLevel,

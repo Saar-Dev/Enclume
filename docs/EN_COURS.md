@@ -1,4 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-16 — autorité unique des interfaces horizontales** : les sols de salle ne possèdent plus
+> de chemin de rendu indépendant. Chaque `roomHorizontalInterface` choisit la face plafond au niveau
+> bas puis la face sol, opaque et appartenant à la salle haute, dès son étage. Les trois interfaces
+> empilées de la carte réelle basculent bien de `ceiling` au niveau 0 vers `floor` au niveau 1.
+> Validation : 24 tests ciblés, 131 monde/serveur, 3 configuration, lint, build et carte réelle
+> chargée au niveau 1.
+>
 > **2026-07-16 — coupe d'étage, halo des portes et verrières corrigés** : une interface partagée est
 > le plafond découpé de l'étage bas, puis le sol opaque de l'étage haut ; les murs, sols et plafonds
 > de tous les étages inférieurs restent opaques. Le halo des portes est attaché au GLB réel et suit
