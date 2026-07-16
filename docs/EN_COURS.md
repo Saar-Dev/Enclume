@@ -153,6 +153,52 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **2026-07-16 — Chantier 11 Étape 2 (Module Armes DSL), Lots A et B ✅ CODÉS ET TESTÉS.** Plan en 3
+> lots (A: parseur DSL + branchement DMG ; B: dégâts de Choc, ferme partiellement `[CHOC1]` ; C: tags
+> qualitatifs, affichage seul — détail complet `docs/PLAN_ARMES_DSL.md`). **Lot A livré** :
+> `shared/weaponAmmoDsl.js` (NOUVEAU, `parseAmmoEffects`/`resolveDmgEffect`, registre `DMG_ACTIONS`),
+> `damageService.getEffectiveWeaponDamage` (point de résolution unique), rebranchement
+> `resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM` (chemins PJ/PNJ tir à distance, CaC et armement drone
+> confirmés hors scope et non touchés). **Écart trouvé en codant** : `parseDice` n'accepte qu'un seul
+> type de dé par formule — le dégât `ADD` munition ne peut jamais être précalculé à la Déclaration,
+> résolution différée jusqu'au jet réel (`combat_pending` porte désormais `weaponInvId`, pas qu'une
+> `formula` figée). **Testé** : parseur pur (8 scénarios + rejoué sans crash sur les 26 chaînes DSL
+> réelles uniques du catalogue), scénario réel en base (arme "Cougar" 4D10, munition standard vs SLAP
+> `DMG=SET(3D10+5)` → dégât effectivement différent constaté, transaction annulée, 0 résidu vérifié),
+> `node --check` 0 erreur. **Non testé** : parcours navigateur réel, round-trip Socket.IO complet — à
+> confirmer par Saar en navigateur. **Analyse à charge demandée par Saar → 2 correctifs appliqués au
+> Lot A** : garde null manquante sur `getEffectiveWeaponDamage` (arme désequipée entre Déclaration et
+> Confirmation → échec muet auparavant, repli explicite + log désormais) ; aperçu
+> `COMBAT_DAMAGE_PROMPT` incohérent avec le jet réel (nouvelle `getEffectiveWeaponFormulaPreview`, sans
+> jet de dé gaspillé). Les deux corrections testées en base réelle.
+>
+> **Lot B ✅ CODÉ ET TESTÉ (2026-07-16), même session.** Mécanique sourcée intégralement
+> (`docs/Character/Statuts/REGLESTATUT.txt:90-121`, LdB p.243) — RD confirmée par Saar,
+> `protection_shock`/`prt` confirmé (réduit le Choc uniquement, symétrique à `etq`/physique),
+> restriction Tête confirmée intentionnelle (dépend de l'action "Tir visé sur localisation" `COM9`,
+> jamais codée, ajoutée à `docs/ROADMAP.md`). **Correction de scope actée avant code** : le cas "arme
+> qui ne cause que du Choc" (armes électriques, `ref_equipment.shock`) n'est couvert par aucun Lot de ce
+> plan — mécanisme distinct de `ammo_effects`, explicitement hors périmètre ; `CHOC=ADD(...)` (munitions
+> explosives, toujours avec scaling) reste également hors scope, jamais une résolution partielle.
+> **Livré** : `shared/weaponAmmoDsl.js` (`resolveChocFormula`, `RANGE_BAND_TO_CHOC_CODE`) ;
+> `damageService.getEffectiveWeaponDamage` expose `choc` ; `resolveTargetHit` étendu (`chocDsl`/
+> `rangeBand`, extraction `prt`, étape 3bis `chocDegatsNets`, sévérité extraite dans
+> `_severityForDamage`, étape 5 restructurée en Test de Choc **exclusif** — combiné physique+Choc
+> remplace le test natif, jamais les deux) ; les 2 sites concernés (`resolveAssaultAction` PNJ,
+> `COMBAT_DAMAGE_CONFIRM` PJ) rebranchés, CaC/drone non touchés. **Testé** : 6 scénarios purs
+> `resolveChocFormula` + non-régression Lot A (10/10), scénario réel en base (munition "Balle
+> assommante" sur une arme réelle en inventaire, transaction annulée, 0 résidu) : gate localisation
+> Tête vérifié (0 fuite sur 40 tirs), décroissance Choc par bande de portée observée (BP≈24-25 vs
+> E≈2-9), non-régression sans munition Choc (0 fuite sur 15 tirs), **Dommages virtuels confirmés** (cas
+> observé : dégât physique 4, aucune blessure, Choc combiné 31 → Test de Choc déclenché, 0 nouvelle
+> ligne `character_wounds`), `node --check` 0 erreur. **Non testé** : parcours navigateur réel,
+> round-trip Socket.IO complet — à confirmer par Saar en navigateur. Ferme partiellement `[CHOC1]`
+> (infrastructure du pool de Choc désormais réelle ; reste non câblé : bonus mutation Corne en CaC,
+> hors scope Lot B). Détail complet : `docs/PLAN_ARMES_DSL.md` section "Lot B — ✅ CODÉ ET TESTÉ".
+>
+> **Lot C non codé** (tags qualitatifs `TXT=FX=`, affichage seul, aucune mécanique) — reste à faire si
+> Saar le souhaite, non bloquant.
+
 > **Item 76 (Session 148) — Fiche perso (compétences (X)/(-3), attributs) + `BUGIDENTIFIE.md` COM20
 > ✅ CLOS.** Triage `BUGIDENTIFIE.md` repris (suite Session 145). **A.** Compétence `(X)` réservée :
 > coût de déblocage 3→1 PE (`REGLECOMPETENCE.md:22-25` — 1 PE suffit), `mastery` → -3 au lieu de
@@ -1574,6 +1620,7 @@ Projet en cours et priorité user :
 
 | ID | Description | Priorité |
 |---|---|---|
+| **COM25** | Arme sans munition restante (`ammo_remaining=0`) continue de tirer — aucun garde dans `resolveAssaultAction` (`socketCombatHelpers.js:1468-1480`), le décompte clampe à 0 mais ne bloque jamais l'attaque. Trouvé en marge du Lot A `docs/PLAN_ARMES_DSL.md` | 🔴 **Urgent — priorité Saar** |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
@@ -1623,7 +1670,7 @@ Projet en cours et priorité user :
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
-| **CHOC1** | Mutation Corne — bonus LdB "+1D6 dommages de Choc si le coup porte à la tête" non câblé. `calcResistanceArmure` calcule déjà un `prt` (protection_shock) jamais consommé par `damageService.js` — aucun pool de "dommages de Choc" distinct des dégâts physiques n'existe dans le pipeline actuel | Moyenne — chantier séparé, non trivial |
+| **CHOC1** | ⚠️ Partiellement clos (Session 2026-07-16, Chantier 11 Étape 2 Lot B, `docs/PLAN_ARMES_DSL.md`) : le pool de "dommages de Choc" distinct des dégâts physiques existe désormais dans `damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc exclusif) — mais **uniquement pour les munitions `ammo_effects` CHOC=, tir à distance** (`resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM`). **Reste non câblé** : le bonus LdB propre à la mutation Corne ("+1D6 Choc si le coup porte à la tête" en CaC) — `resolveMeleeAction` ne passe toujours pas `chocDsl`/`rangeBand`, explicitement hors scope de Lot B (mécanisme mutation, pas munition) | Basse — reste un chantier séparé, mais l'infrastructure existe désormais |
 | **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
 
 ---

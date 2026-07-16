@@ -8,11 +8,90 @@ import { getAdvantages }                    from '../services/advantageService.j
 import * as woundService                    from './woundService.js'
 import * as statusService                   from './statusService.js'
 import { LOC_TABLE, SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
+import { parseAmmoEffects, resolveDmgEffect, resolveChocFormula } from '../../../shared/weaponAmmoDsl.js'
+
+// ─── _fetchWeaponAndAmmo (interne) ─────────────────────────────────────────────
+// Fetch commun arme + munition chargée (current_ammo) en une passe — partagé par
+// getEffectiveWeaponDamage et getEffectiveWeaponFormulaPreview, jamais dupliqué.
+async function _fetchWeaponAndAmmo(db, weaponInvId) {
+  return db('char_inventory')
+    .leftJoin('ref_equipment as weapon_ref', 'char_inventory.equipment_id', 'weapon_ref.id')
+    .leftJoin('ref_equipment as ammo_ref', 'char_inventory.current_ammo', 'ammo_ref.id')
+    .where({ 'char_inventory.id': weaponInvId })
+    .select('weapon_ref.damage_h as weapon_formula', 'ammo_ref.ammo_effects as ammo_effects')
+    .first()
+}
+
+// ─── getEffectiveWeaponDamage — Chantier 11 Étape 2 Lot A (docs/PLAN_ARMES_DSL.md) ────────────────
+// Point de résolution unique du dégât effectif d'une arme à munitions : fetch arme + munition
+// chargée (current_ammo) en une passe, parse le DSL de la munition, lance les dés réels. Réutilisé
+// par tous les appelants (PNJ immédiat et PJ différé via combat_pending) — jamais une 2ᵉ copie.
+// Fail-safe : munition sans DSL/DSL malformé/formule invalide → repli sur damage_h brut de l'arme
+// (comportement historique), jamais un throw qui bloque un tour de combat.
+// Retourne null si l'arme elle-même n'a pas de damage_h (même garde que le code historique) — TOUS
+// les appelants doivent vérifier ce cas avant d'utiliser le retour (arme désequipée/transférée entre
+// la Déclaration et la Confirmation côté PJ différé — fenêtre réelle, pas seulement théorique).
+export async function getEffectiveWeaponDamage(db, weaponInvId) {
+  const row = await _fetchWeaponAndAmmo(db, weaponInvId)
+  if (!row?.weapon_formula) return null
+
+  const parsed = parseAmmoEffects(row.ammo_effects)
+  if (parsed.unknown.length) {
+    console.warn(`[damageService] getEffectiveWeaponDamage — DSL non reconnu ignoré : ${parsed.unknown.join(' | ')} (weaponInvId:${weaponInvId})`)
+  }
+  const { baseFormula, extraFormula, mulFactor } = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+
+  try {
+    const base  = await parseDice(baseFormula.replace(/\s/g, ''))
+    const extra = extraFormula ? await parseDice(extraFormula.replace(/\s/g, '')) : null
+    return {
+      total:   Math.round((base.total + (extra?.total ?? 0)) * mulFactor),
+      rolls:   extra ? [...base.rolls, ...extra.rolls] : base.rolls,
+      formula: extra ? `${base.formula}+${extra.formula}` : base.formula,
+      tags:    parsed.tags,
+      choc:    parsed.choc,
+    }
+  } catch (err) {
+    console.warn(`[damageService] getEffectiveWeaponDamage — formule DSL invalide (${err.message}), repli sur damage_h brut. weaponInvId:${weaponInvId}`)
+    const base = await parseDice(row.weapon_formula.replace(/\s/g, ''))
+    return { total: base.total, rolls: base.rolls, formula: base.formula, tags: {}, choc: parsed.choc }
+  }
+}
+
+// ─── getEffectiveWeaponFormulaPreview — Chantier 11 Étape 2 Lot A (correctif affichage) ────────────
+// Aperçu Phase 1 (COMBAT_DAMAGE_PROMPT) : formule effective affichée au joueur AVANT le jet réel, sans
+// jamais lancer de dé (parseDice serait non déterministe et gaspillerait un jet juste pour l'affichage
+// — aperçu non engageant, `.claude/rules/combat.md`). Retourne une chaîne lisible ("3d10+5",
+// "4d10+1d6", "4d10 ×0.5") ou null si l'arme n'a pas de damage_h.
+export async function getEffectiveWeaponFormulaPreview(db, weaponInvId) {
+  const row = await _fetchWeaponAndAmmo(db, weaponInvId)
+  if (!row?.weapon_formula) return null
+
+  const parsed = parseAmmoEffects(row.ammo_effects)
+  const { baseFormula, extraFormula, mulFactor } = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+  const withExtra = extraFormula ? `${baseFormula}+${extraFormula}` : baseFormula
+  return mulFactor !== 1 ? `${withExtra} ×${mulFactor}` : withExtra
+}
+
+// _severityForDamage — table de sévérité (LdB p.114, 5/10/15/20/25/30) extraite en fonction interne
+// (Lot B, docs/PLAN_ARMES_DSL.md) pour être appelée à la fois sur le dégât physique seul et sur le
+// total combiné physique+Choc, sans dupliquer les seuils.
+function _severityForDamage(net) {
+  if      (net >= 30) return { severity: 'mortelle', is_lethal: true }
+  else if (net >= 25) return { severity: 'mortelle', is_lethal: false }
+  else if (net >= 20) return { severity: 'critique',  is_lethal: false }
+  else if (net >= 15) return { severity: 'grave',     is_lethal: false }
+  else if (net >= 10) return { severity: 'moyenne',   is_lethal: false }
+  else if (net >=  5) return { severity: 'legere',    is_lethal: false }
+  return { severity: null, is_lethal: false }
+}
 
 // Résolution complète côté cible : localisation D20 → armure → dégâts nets → sévérité → blessure → shock.
 // degautsBruts calculé AVANT l'appel par le caller (contexte MR/modDom varie selon le handler).
 // Retourne null si cibleType === 'drone' — le caller gère resolveDroneIntegrityLoss lui-même.
 // Émet WOUND_ADDED via woundService (effet DB + WS inclus).
+// chocDsl/rangeBand (Lot B, docs/PLAN_ARMES_DSL.md) : optionnels, null par défaut — resolveMeleeAction
+// et les branches drone ne les passent jamais, comportement strictement inchangé pour elles.
 export async function resolveTargetHit(io, db, campaignId, {
   degautsBruts,
   characterIdCible,
@@ -21,6 +100,8 @@ export async function resolveTargetHit(io, db, campaignId, {
   for_na_cible,
   con_na_cible,
   vol_na_cible,
+  chocDsl = null,
+  rangeBand = null,
 }) {
   if (cibleType === 'drone') return null
 
@@ -32,7 +113,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   // 2. Armures + résistances (mutations/avantages) de la cible — seul point d'insertion pour toute
   // la résolution de combat (docs/PLAN_MUTATION2.md Lot 3) : les 4 appelants de resolveTargetHit
   // n'ont plus besoin de fetcher mutations/avantages eux-mêmes.
-  let etq = null
+  let etq = null, prt = null
   let mutationEffectsCible = null, advantagesCible = []
   if (char_sheet_id_cible && characterIdCible) {
     const [armuresCible, mutEff, adv] = await Promise.all([
@@ -47,7 +128,9 @@ export async function resolveTargetHit(io, db, campaignId, {
     const armuresSlot = armuresCible.filter(a =>
       a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')  // PI8
     )
-    etq = calcResistanceArmure(armuresSlot).etq
+    const resistanceArmure = calcResistanceArmure(armuresSlot)
+    etq = resistanceArmure.etq
+    prt = resistanceArmure.prt
     mutationEffectsCible = mutEff
     advantagesCible = adv
   }
@@ -62,25 +145,47 @@ export async function resolveTargetHit(io, db, campaignId, {
   )
   const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) + rd)
 
-  // 4. Sévérité
-  let severity = null, is_lethal = false
-  if      (degatsNets >= 30) { severity = 'mortelle'; is_lethal = true }
-  else if (degatsNets >= 25) { severity = 'mortelle' }
-  else if (degatsNets >= 20) { severity = 'critique' }
-  else if (degatsNets >= 15) { severity = 'grave'    }
-  else if (degatsNets >= 10) { severity = 'moyenne'  }
-  else if (degatsNets >=  5) { severity = 'legere'   }
+  // 3bis. Dommages de Choc (Lot B, LdB p.243) — uniquement munition avec CHOC applicable + coup en
+  // Tête (restriction confirmée Saar, dépendante de l'action "Tir visé sur localisation" COM9 pour
+  // être déclenchée de façon fiable). Réduits par prt (armure Choc) + RD, jamais par etq. Dommages
+  // virtuels : jamais de character_wounds créée, seulement une comparaison de sévérité (étape 5).
+  let chocDegatsNets = null
+  if (chocDsl && localisation === 'tete') {
+    const chocFormula = resolveChocFormula(chocDsl, rangeBand)
+    if (chocFormula) {
+      try {
+        const chocRoll = await parseDice(chocFormula.replace(/\s/g, ''))
+        chocDegatsNets = Math.max(0, chocRoll.total - (prt ?? 0) + rd)
+      } catch (err) {
+        console.warn(`[damageService] resolveTargetHit — formule Choc invalide (${err.message}), Choc ignoré`)
+      }
+    }
+  }
 
-  // 5. Blessure + shock test
+  // 4. Sévérité (physique seul — pilote toujours la blessure, étape 5)
+  const { severity, is_lethal } = _severityForDamage(degatsNets)
+
+  // 5. Blessure + shock test — la blessure reste basée uniquement sur le dégât physique (jamais gonflée
+  // par du Choc virtuel). Le Test de Choc, lui, utilise le total combiné physique+Choc s'il y a lieu,
+  // en remplacement exclusif du test natif (jamais les deux — invariant Lot B, un seul test par coup).
   let finalSeverity = severity
   let shockResult   = null
   const woundResult = await woundService.applyWound(io, db, campaignId, {
     charSheetId: char_sheet_id_cible, characterId: characterIdCible,
     localisation, severity,
   })
-  if (woundResult) {
-    finalSeverity = woundResult.finalSeverity
-    shockResult   = await statusService.resolveShockTest({
+  if (woundResult) finalSeverity = woundResult.finalSeverity
+
+  if (chocDegatsNets !== null) {
+    const { severity: combinedSeverity, is_lethal: combinedIsLethal } = _severityForDamage(degatsNets + chocDegatsNets)
+    shockResult = await statusService.resolveShockTest({
+      finalSeverity: combinedSeverity, localisation, is_lethal: combinedIsLethal,
+      for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
+      mod_mutation_shock:  getMutationModForResistance(mutationEffectsCible, 'shock'),
+      mod_advantage_shock: getAdvantageModForResistance(advantagesCible, 'shock'),
+    })
+  } else if (woundResult) {
+    shockResult = await statusService.resolveShockTest({
       finalSeverity, localisation, is_lethal,
       for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
       mod_mutation_shock:  getMutationModForResistance(mutationEffectsCible, 'shock'),
@@ -91,8 +196,9 @@ export async function resolveTargetHit(io, db, campaignId, {
   return {
     rollLoc, locRolls, locSeed,
     slotCode, localisation,
-    etq, rd,
+    etq, prt, rd,
     degatsNets,
+    chocDegatsNets,
     severity, is_lethal,
     finalSeverity,
     shockResult,

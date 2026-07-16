@@ -168,14 +168,14 @@ ref_equipment (catalogue) ← ✅ 636 items
 char_inventory (possessions joueur) ← ✅ Chantier 10 sprint 2 (session 51)
     ↓
 Module Armures (UI + mille-feuille) ← ✅ Chantier 10 sprint 3 (session 53-54)
-Module Armes ← 🔲 Chantier 11 Étape 2
+Module Armes ← ⚙️ Chantier 11 Étape 2 (Lots A+B codés, Lot C restant)
 ```
 
 | Étape | Contenu | Prérequis | État |
 |---|---|---|---|
 | Étape 1 | `character_wounds` DB + routes + WoundManager UI + intégration `charStats.js` | — | ✅ session 49 |
 | Étape 1b | Intégration `effectiveMalus` dans jets (socket) + Initiative fiche | — | ✅ session 52 |
-| Étape 2 | Module Armes — DSL effets/munitions, parseur, résolution dommages par localisation | Chantier 10 sprint 4 | 🔲 |
+| Étape 2 | Module Armes — DSL effets munitions, parseur | Chantier 10 sprint 4 | ⚙️ Lots A (dégâts)+B (Choc) codés/testés, Lot C (tags) restant — `docs/PLAN_ARMES_DSL.md` |
 | Étape 3 | Module Armures — ArmorWoundPanel + LocationPanel mille-feuille + SilhouettePanel | Chantier 10 sprint 2 | ✅ session 53-54 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
 
@@ -230,7 +230,22 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
   tag `(LdB)` d'origine n'a jamais cité de page. Colonne `ref_equipment.min_str` conservée (donnée
   brute), calcul et application retirés du pipeline combat.
 
-- **DSL effets armes/munitions (Étape 2 Module Armes)** — `ref_equipment.effects` contient un DSL type `DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Syntaxe : `TYPE=ACTION(VALEUR)` séparés par `;`. Actions : `SET` (écrase), `ADD` (ajoute), `TXT=FX=` (tag qualitatif). Chargement d'une munition → override des stats de l'arme via ce parseur. Fail-safe : si DSL malformé → console.warn + stats de base de l'arme.
+- **DSL effets munitions (Étape 2 Module Armes)** — `ref_equipment.ammo_effects` (munitions
+  uniquement, pas les armes elles-mêmes — vérifié dans les données réelles) contient un DSL type
+  `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Lot A (dégâts DMG=) et Lot B (Choc
+  CHOC=, Test d'Étourdissement/Inconscience) codés et testés (2026-07-16). Lot C (tags qualitatifs
+  `TXT=FX=`, affichage seul) restant. Plan détaillé (vocabulaire complet, découpage en lots,
+  invariants, sites rebranchés) : `docs/PLAN_ARMES_DSL.md`.
+
+- **Tir visé sur localisation (`COM9`, non planifié avant 2026-07-16)** — action manquante :
+  actuellement le D20 de localisation est toujours purement aléatoire, aucun moyen pour un joueur de
+  viser délibérément une zone. Dépendance directe avec le Lot B du DSL munitions
+  (`docs/PLAN_ARMES_DSL.md`) : le bonus de Choc d'une munition assommante n'est déclenché que sur un
+  coup à la Tête pour une arme "normale" (dégât physique + Choc additionnel) — sans cette action, ce
+  déclenchement reste soumis au seul hasard de la table de localisation. Malus LdB : Corps −3 /
+  Jambes −5 / Tête+Bras −7. Détail : `docs/BUGIDENTIFIE.md` COM9. Ne pas confondre avec Tir visé
+  (bonus au Test de tir, déjà livré) ni "Changer le mode de tir" — trois mécaniques distinctes
+  (`docs/VOCABULARY.md`).
 
 ### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
 

@@ -87,6 +87,8 @@ Concepts n'existant pas dans Polaris mais créés par le projet.
 | `reconcileCreation` | Endpoint unique et idempotent du Wizard (remplace l'ancien `finalizeCreation`) — accepte un payload partiel `{step1..step5, finalize}`, rejouable à volonté tant que `wizard_locked_at` n'est pas posé. | `server/src/services/creationService.js`, `routes/creation.js` |
 | `wizard_locked_at` | Marque la bascule "fiche assistant (rejouable)" → "fiche runtime (éditable librement en jeu)". | `char_sheet.wizard_locked_at` (migration 119) |
 | Actions Exclusives (registre) | Pattern générique pour une action qui interdit toute autre action/transition d'état le même tour (ex. Tir visé). Extensible (Charge/Rafale longue à venir). | `shared/combatExclusiveActions.js` (`isExclusiveDeclaration`) |
+| DSL effets munitions | Syntaxe `TYPE=ACTION(VALEUR)` stockée dans `ref_equipment.ammo_effects` (uniquement `family='Munitions'`), encode les variantes de dégâts/Choc/tags par type de munition transcrites du Livre de Base. Non encore parsée en combat — Chantier 11 Étape 2, voir `docs/PLAN_ARMES_DSL.md`. | `server/src/db/migrations/48_ref_equipment.js` (colonne) |
+| Échange | Déplacement d'un item ou d'un montant de sols entre deux personnages appartenant à des joueurs différents, avec acceptation du destinataire (double validation). **Jamais "Transfert"** — ce mot désigne déjà la copie Coffre→campagne (voir entrée Coffre, ambiguïté trouvée en cadrant Chantier 10 Sprint 6). Un déplacement entre personnages du **même** joueur (ex. drone→PJ propriétaire, `drone/cargo/drop`) reste un déplacement direct, hors du circuit Échange. | `docs/PLAN_ECHANGE.md` |
 
 ---
 
@@ -128,7 +130,9 @@ Anciennes conventions encore présentes dans le code.
 | Tir visé | Localisation précise (`COM9`) / Changer le mode de tir | Voir entrée Concepts métier Polaris ci-dessus — trois mécaniques distinctes de `REGLESYSCOMBAT.md`, jamais la même règle malgré la proximité des pages. |
 | "Seuil" (UI) | "CDR" (interne) | Même valeur, deux noms selon l'audience — ne jamais afficher "CDR" à un joueur. |
 | Vault (nom de code) | Coffre (nom produit) | Le code/DB garde `vault*`, tout texte utilisateur dit "Coffre". |
+| "Coma" (`docs/ROADMAP.md` Chantier 11 Étape 4) | "Inconscient" (statut réel) | Synonyme informel, pas un 3ᵉ état santé — `token_statuses.status_code` ne connaît que `stunned`/`unconscious` (`statusService.js`). Confirmé Saar 2026-07-16. |
 | PLAN (dossier `docs/`) | DOMAIN/SYSTEM (`docs/SYSTEME/`) | Un PLAN est temporaire (`docs/RegleDocumentaire.md` Règle 10) : une fois le chantier clos, archiver vers `docs/Old/` — la doc durable vit dans `docs/SYSTEME/*.md`/`.claude/rules/`, pas dans le PLAN. |
+| Échange (PJ↔PJ) | Transfert (Coffre→campagne) | Deux mots différents pour deux mécaniques différentes : Échange = déplacement réel entre personnages vivants, double validation, jamais de copie. Transfert = copie Coffre→campagne, jamais de déplacement, validation MJ seule. Ne jamais employer l'un pour l'autre dans le code ou l'UI. |
 
 ---
 

@@ -350,19 +350,40 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
 
     const {
       campaignId: pendingCampaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
-      mr, portee, fire_mode_bonus_dmg, formula,
+      mr, portee, fire_mode_bonus_dmg, formula, weaponInvId,
       for_na_cible, con_na_cible, vol_na_cible,
       tireurUsername, tireurColor, userId, targetName,
       type: pendingType, modDom, combatModeBonus,
     } = pending
 
     try {
-      // Calcul dégâts (branche melee vs assault)
-      const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula.replace(/\s/g, ''))
-      let degautsBruts
+      // Calcul dégâts (branche melee vs assault). Assault : DSL munition (Chantier 11 Étape 2 Lot A,
+      // docs/PLAN_ARMES_DSL.md) résolu ici, au moment du jet réel — jamais précalculé à la
+      // Déclaration (un ADD munition peut nécessiter 2 jets de dés de types différents, parseDice
+      // n'accepte qu'un seul type par formule).
+      let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null
       if (pendingType === 'melee') {
+        const rolled = await parseDice(formula.replace(/\s/g, ''))
+        dmgRolls = rolled.rolls; dmgSeed = rolled.seed; rawDice = rolled.total
+        resolvedFormula = formula
         degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
       } else {
+        // getEffectiveWeaponDamage peut renvoyer null si l'arme a été désequipée/transférée entre la
+        // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
+        // repli sur la formule brute stockée à la Déclaration plutôt qu'un échec muet (le combat_pending
+        // est déjà supprimé et la FSM déjà repassée à SLOT_ACTIVE avant ce bloc, cf. plus haut).
+        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, weaponInvId)
+        if (!effectiveDamage) {
+          console.warn(`[WS] COMBAT_DAMAGE_CONFIRM — arme introuvable pour weaponInvId:${weaponInvId}, repli sur formule stockée à la Déclaration`)
+        }
+        const rolled = effectiveDamage ? null : await parseDice(formula.replace(/\s/g, ''))
+        dmgRolls = effectiveDamage ? effectiveDamage.rolls : rolled.rolls
+        dmgSeed  = effectiveDamage ? dmgRolls.reduce((a, b) => a ^ b, 0) : rolled.seed
+        rawDice  = effectiveDamage ? effectiveDamage.total : rolled.total
+        resolvedFormula = effectiveDamage ? effectiveDamage.formula : rolled.formula
+        // effectiveDamage null (repli formule stockée) → chocDsl null aussi : jamais reconstruire un
+        // Choc depuis une donnée partielle (docs/PLAN_ARMES_DSL.md Lot B, §4).
+        effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
         const mrTable = await getMrTable()
         const modDomAttaque = getModifier(mrTable, mr)
         const isShortRange = ['bout_portant', 'courte'].includes(portee)
@@ -383,7 +404,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           const now = new Date().toISOString()
           io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
             userId, username: tireurUsername, color: tireurColor,
-            formula, rolls: dmgRolls, total: degautsBruts,
+            formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
             isCriticalSuccess: false, isCriticalFail: false,
             seed: dmgSeed, timestamp: now,
             skillLabel: `Dégâts — drone`,
@@ -405,6 +426,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       const hitResult = await damageService.resolveTargetHit(io, db, pendingCampaignId, {
         degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
+        chocDsl: effectiveChocDsl, rangeBand: portee,
       })
       if (hitResult === null) return
       const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
@@ -450,7 +472,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       })
       io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
         userId, username: tireurUsername, color: tireurColor,
-        formula, rolls: dmgRolls, total: degautsBruts,
+        formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
         isCriticalSuccess: false, isCriticalFail: false,
         seed: dmgSeed, timestamp: now,
         skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,

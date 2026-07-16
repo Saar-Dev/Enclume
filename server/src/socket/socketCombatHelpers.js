@@ -1532,6 +1532,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             portee: authoritativeRangeBand,
             fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
             formula: weapon.ref_damage_h,
+            // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet
+            // réel côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
+            // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents,
+            // parseDice n'accepte qu'un seul type de dé par formule).
+            weaponInvId: action.weapon_inv_id,
             for_na_cible,
             con_na_cible,
             vol_na_cible,
@@ -1542,9 +1547,13 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           },
         })
         await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+        // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
+        // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
+        // effectué à la confirmation dès qu'une munition modifie les dégâts.
+        const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, action.weapon_inv_id)
         emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
           tokenId: action.token_id,
-          formula: weapon.ref_damage_h,
+          formula: formulaPreview ?? weapon.ref_damage_h,
           targetName,
         } })
       } else {
@@ -1553,7 +1562,15 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         const modDomAttaque = getModifier(mrTable, mr)
         const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
         const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
-        const { total: rawDice } = await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))
+        // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution
+        // unique, repli automatique sur damage_h brut si aucune munition/DSL malformé. Repli
+        // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
+        // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
+        // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
+        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id)
+        const rawDice = effectiveDamage
+          ? effectiveDamage.total
+          : (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
         const degautsBruts = rawDice + modDomAttaque + modDegatsMode
 
         // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
@@ -1579,6 +1596,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           cibleType:        cibleCharacter?.type ?? null,
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
+          chocDsl:   effectiveDamage ? effectiveDamage.choc : null,
+          rangeBand: authoritativeRangeBand,
         })
         if (hitResult === null) return { suspend: false, emissions }
         const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
