@@ -41,7 +41,9 @@ export default function LocationPanel({
   const [equipError,       setEquipError]       = useState(null)
 
   // ── Armures équipées à ce slot ─────────────────────────────────────────────
-  const equippedItems = items.filter(i => i.slot?.split('/')?.includes(slotCode))
+  // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau, déjà éclaté côté serveur) remplace le
+  // parsing manuel `slot.split('/')` — plus de logique de découpage de chaîne côté client.
+  const equippedItems = items.filter(i => i.slots?.includes(slotCode))
   const hasNonS       = equippedItems.some(i => i.ref_malus_cat && i.ref_malus_cat !== 'S')
 
   // P58 : un item à ref_location simple (brassard, jambière...) ne couvre qu'un seul côté à la
@@ -52,8 +54,8 @@ export default function LocationPanel({
   const availableItems = items.filter(i =>
     i.ref_location?.split('/').includes(refCode) &&
     i.container === 'Sac' &&
-    !(i.slot?.split('/')?.includes(slotCode)) &&
-    !(pairSlot && !i.ref_location.includes('/') && i.slot?.split('/')?.includes(pairSlot)) &&
+    !(i.slots?.includes(slotCode)) &&
+    !(pairSlot && !i.ref_location.includes('/') && i.slots?.includes(pairSlot)) &&
     (!hasNonS || i.ref_malus_cat === 'S' || i.ref_malus_cat == null),
   )
 
@@ -70,7 +72,7 @@ export default function LocationPanel({
   const handleEquip = useCallback(async (itemId) => {
     setEquipError(null)
     const item = items.find(i => i.id === itemId)
-    const existingParts = item?.slot ? item.slot.split('/') : []
+    const existingParts = item?.slots ?? []
     const newSlot = [...new Set([...existingParts, slotCode])].join('/')
     try {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
@@ -83,7 +85,7 @@ export default function LocationPanel({
   const handleUnequip = useCallback(async (itemId) => {
     setEquipError(null)
     const item = items.find(i => i.id === itemId)
-    const remaining = (item?.slot || '').split('/').filter(s => s !== slotCode)
+    const remaining = (item?.slots ?? []).filter(s => s !== slotCode)
     const newSlot = remaining.length > 0 ? remaining.join('/') : null
     try {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })

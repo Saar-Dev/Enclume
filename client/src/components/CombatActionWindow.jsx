@@ -264,7 +264,7 @@ export default function CombatActionWindow({
       if (cancelled) return
       const items = res.data.items || []
       setAssaultWeapons(items.filter(
-        item => (item.slot === 'MG' || item.slot === 'MD') && item.ref_fire_mode
+        item => (item.slots?.includes('MG') || item.slots?.includes('MD')) && item.ref_fire_mode
       ))
       setAllInventoryItems(items)
     }).catch(() => {})
@@ -286,8 +286,8 @@ export default function CombatActionWindow({
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
-    const wMg = assaultWeapons.find(w => w.slot === 'MG') || null
-    const wMd = assaultWeapons.find(w => w.slot === 'MD') || null
+    const wMg = assaultWeapons.find(w => w.slots?.includes('MG')) || null
+    const wMd = assaultWeapons.find(w => w.slots?.includes('MD')) || null
     const selected = wMg || wMd
     if (!selected) return
     const forceCCNow = !!(wMg && wMd) && wMg.ref_fire_mode !== wMd.ref_fire_mode
@@ -348,8 +348,8 @@ export default function CombatActionWindow({
   )
 
   // --- derives assaut -------------------------------------------------------
-  const weaponMg = assaultWeapons.find(w => w.slot === 'MG') || null
-  const weaponMd = assaultWeapons.find(w => w.slot === 'MD') || null
+  const weaponMg = assaultWeapons.find(w => w.slots?.includes('MG')) || null
+  const weaponMd = assaultWeapons.find(w => w.slots?.includes('MD')) || null
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   const forceCC       = hasTwoWeapons && !sameFirMode
@@ -357,8 +357,8 @@ export default function CombatActionWindow({
   const assaultWeaponId = selectedWeapon?.id ?? null
   // Arme(s) équipée(s) MG/MD, distant ou contact — affichage ARMEMENT (COM20). weaponMg/weaponMd
   // ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item slotté MG/MD.
-  const equippedMg = allInventoryItems.find(item => item.slot === 'MG') || null
-  const equippedMd = allInventoryItems.find(item => item.slot === 'MD') || null
+  const equippedMg = allInventoryItems.find(item => item.slots?.includes('MG')) || null
+  const equippedMd = allInventoryItems.find(item => item.slots?.includes('MD')) || null
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
@@ -382,7 +382,7 @@ export default function CombatActionWindow({
   const reloadAmmoItems = (selectedWeapon?.ref_caliber && allInventoryItems.length)
     ? allInventoryItems.filter(item =>
         item.ref_caliber === selectedWeapon.ref_caliber &&
-        !item.slot &&
+        item.slots == null &&
         item.container !== 'Coffre'
       )
     : []
@@ -408,7 +408,7 @@ export default function CombatActionWindow({
 
   // Armes de contact équipées (slots MG/MD/2M, catégorie 'Arme de contact')
   const meleeWeapons = allInventoryItems.filter(item =>
-    (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
+    (item.slots?.includes('MG') || item.slots?.includes('MD') || item.slots?.includes('2M')) &&
     item.ref_category === 'Arme de contact'
   )
   // undefined=auto, null=mains nues explicite, id=choix explicite
@@ -1099,7 +1099,7 @@ export default function CombatActionWindow({
               {selectedWeapon ? (
                 <div style={W.assaultInfoText}>
                   {selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'}
-                  <span style={W.assaultInfoSub}> ({selectedWeapon.slot}) — {selectedWeapon.ref_caliber}</span>
+                  <span style={W.assaultInfoSub}> ({selectedWeapon.slots?.[0]}) — {selectedWeapon.ref_caliber}</span>
                 </div>
               ) : (
                 <div style={W.assaultNoWeapon}>Aucune arme équipée (MG/MD)</div>
@@ -1156,7 +1156,7 @@ export default function CombatActionWindow({
               availableWeapons={meleeWeapons.map(item => ({
                 id: item.id,
                 label: item.custom_name || item.ref_name || 'Arme',
-                slot: item.slot,
+                slot: item.slots?.[0],
                 damage: item.ref_damage_h || '—',
                 allonge: parseInt(item.ref_range) || 0,
               }))}
@@ -1205,8 +1205,8 @@ export default function CombatActionWindow({
         {showAssault && !isDrone && (
           <div style={W.assaultPanel}>
             <AssaultRangedPanel
-              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slot})` : null}
-              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slot})` : null}
+              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slots?.[0]})` : null}
+              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slots?.[0]})` : null}
               assaultTargetId={assaultPendingTokenId}
               getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
               onChooseTarget={handleChooseTarget}

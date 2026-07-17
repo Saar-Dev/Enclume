@@ -41,16 +41,21 @@ export async function getModingState(characterId, trxOrDb = db) {
 // toujours NULL pour cette catégorie, vérifié en base réelle 2026-07-12). Container Coffre :
 // toujours disponible (isContainerAvailable), pas de dépendance à un Sac déjà équipé.
 async function returnModToInventory(characterId, equipmentId, trx) {
+  // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : char_inventory.slot retiré — ces accessoires ne sont
+  // jamais équipables (aucune ligne char_inventory_slots possible pour eux), whereNotExists remplace
+  // whereNull('slot').
   const existing = await trx('char_inventory')
     .where({ character_id: characterId, equipment_id: equipmentId, container: 'Coffre' })
-    .whereNull('slot')
+    .whereNotExists(function () {
+      this.select(1).from('char_inventory_slots').whereRaw('char_inventory_id = char_inventory.id')
+    })
     .first()
   if (existing) {
     await trx('char_inventory').where({ id: existing.id })
       .update({ quantity: existing.quantity + 1, updated_at: trx.fn.now() })
   } else {
     await trx('char_inventory').insert({
-      character_id: characterId, equipment_id: equipmentId, container: 'Coffre', slot: null, quantity: 1,
+      character_id: characterId, equipment_id: equipmentId, container: 'Coffre', quantity: 1,
     })
   }
 }

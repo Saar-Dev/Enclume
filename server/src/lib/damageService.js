@@ -118,18 +118,19 @@ export async function resolveTargetHit(io, db, campaignId, {
   let etq = null
   let mutationEffectsCible = null, advantagesCible = []
   if (char_sheet_id_cible && characterIdCible) {
-    const [armuresCible, mutEff, adv] = await Promise.all([
-      db('char_inventory')
+    // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lecture directe de char_inventory_slots — remplace le
+    // filtre substring PI8 (`'/' + slot + '/' includes`) par une égalité exacte sur slot_code, plus
+    // besoin de post-filtrer en JS.
+    const [armuresSlot, mutEff, adv] = await Promise.all([
+      db('char_inventory_slots as cis')
+        .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where({ 'char_inventory.character_id': characterIdCible })
-        .whereNotNull('char_inventory.slot')
-        .select('char_inventory.slot', 'ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock'),
+        .where('char_inventory.character_id', characterIdCible)
+        .where('cis.slot_code', slotCode)
+        .select('ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock'),
       getMutationEffects(char_sheet_id_cible),
       getAdvantages(char_sheet_id_cible),
     ])
-    const armuresSlot = armuresCible.filter(a =>
-      a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')  // PI8
-    )
     etq = calcResistanceArmure(armuresSlot).etq
     mutationEffectsCible = mutEff
     advantagesCible = adv

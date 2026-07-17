@@ -193,13 +193,17 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
   for (const token of tokens) {
     if (!token.character_id) continue
 
+    // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité stricte/
+    // exclusion sur char_inventory.slot — composite-safe (un futur objet occupant à la fois une main
+    // et une localisation, ex. bouclier, apparaîtra correctement dans les deux listes ci-dessous).
     const [weaponRows, armorRows, naturalWeaponRows] = await Promise.all([
-      db('char_inventory')
+      db('char_inventory_slots as cis')
+        .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where('char_inventory.character_id', token.character_id)
-        .whereIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr'])
+        .whereIn('cis.slot_code', ['MG', 'MD', '2M', 'Tr'])
         .select(
-          'char_inventory.id as inv_id', 'ref_equipment.name', 'char_inventory.slot', 'ref_equipment.fire_mode as ref_fire_mode',
+          'char_inventory.id as inv_id', 'ref_equipment.name', 'cis.slot_code as slot', 'ref_equipment.fire_mode as ref_fire_mode',
           'char_inventory.ammo_remaining', 'ref_equipment.ammo_count as ref_ammo_count', 'ref_equipment.caliber as ref_caliber',
           // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — même sous-requête que
           // inventoryService.getInventory (fenêtre PJ), fenêtre MJ batchée par token (pas de N+1).
@@ -223,8 +227,11 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where('char_inventory.character_id', token.character_id)
         .where('ref_equipment.family', 'Protections')
-        .whereNotNull('char_inventory.slot')
-        .whereNotIn('char_inventory.slot', ['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
+        .whereExists(function () {
+          this.select(1).from('char_inventory_slots as cis')
+            .whereRaw('cis.char_inventory_id = char_inventory.id')
+            .whereNotIn('cis.slot_code', ['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
+        })
         .select('char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.location'),
 
       // Armes naturelles actives (mutations) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Bridge

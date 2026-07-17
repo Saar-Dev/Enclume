@@ -1440,9 +1440,15 @@ router.post('/:characterId/drone/cargo/:invId/drop', async (req, res, next) => {
 
     const container = await inventoryService.getDefaultContainer(ownerChar.id)
 
-    const updated = await db('char_inventory')
-      .where({ id: req.params.invId, character_id: drone.id })
-      .update({ character_id: ownerChar.id, container, slot: null })
+    const updated = await db.transaction(async (trx) => {
+      const count = await trx('char_inventory')
+        .where({ id: req.params.invId, character_id: drone.id })
+        .update({ character_id: ownerChar.id, container })
+      // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : un transfert de propriété déséquipe toujours l'item —
+      // plus de `slot: null` (colonne retirée), vider char_inventory_slots à la place.
+      if (count) await trx('char_inventory_slots').where({ char_inventory_id: req.params.invId }).del()
+      return count
+    })
     if (!updated) throw new AppError(404, 'Item introuvable dans le cargo')
 
     res.json({ ok: true })

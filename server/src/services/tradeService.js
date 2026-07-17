@@ -207,7 +207,6 @@ export async function buyFromMerchant(campaignId, { merchantId, charId, items = 
         equipment_id: equipmentId,
         quantity:     rowQty,
         container:    'Coffre',
-        slot:         null,
         created_at:   new Date(),
         updated_at:   new Date(),
       }))
@@ -268,8 +267,10 @@ export async function acceptTransfer(campaignId, { offerId, acceptingCharId }) {
       await trx('char_inventory').where({ id: item.char_inventory_id }).update({
         character_id: offer.to_char_id,
         container:    'Coffre',
-        slot:         null,
       })
+      // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : un transfert de propriété déséquipe toujours l'item —
+      // plus de `slot: null` (colonne retirée), vider char_inventory_slots à la place.
+      await trx('char_inventory_slots').where({ char_inventory_id: item.char_inventory_id }).del()
     }
 
     await trx('trade_offers').where({ id: offerId }).update({ status: 'ACCEPTED', updated_at: trx.fn.now() })

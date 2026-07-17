@@ -389,8 +389,11 @@ export function registerTradeHandlers(io, socket, context) {
         for (const invId of items) {
           const updated = await trx('char_inventory')
             .where({ id: invId, character_id: fromChar.id })
-            .update({ character_id: droneCharId, container: 'Coffre', slot: null })
+            .update({ character_id: droneCharId, container: 'Coffre' })
           if (!updated) throw new Error('ITEM_UNAVAILABLE')
+          // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : un transfert de propriété déséquipe toujours
+          // l'item — plus de `slot: null` (colonne retirée), vider char_inventory_slots à la place.
+          await trx('char_inventory_slots').where({ char_inventory_id: invId }).del()
         }
         await trx('trade_log').insert({
           campaign_id:  campaignId,

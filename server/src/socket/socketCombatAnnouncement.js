@@ -169,13 +169,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const weapon = await db('char_inventory')
             .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
             .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
-            .select('char_inventory.slot', 'char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
+            .select('char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
             .first()
           if (!weapon) {
             socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
             return
           }
-          if (!['MG', 'MD', '2M', 'Tr'].includes(weapon.slot)) {
+          // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
+          // stricte sur char_inventory.slot — composite-safe.
+          const weaponInHand = await db('char_inventory_slots')
+            .where({ char_inventory_id: weaponInvId })
+            .whereIn('slot_code', ['MG', 'MD', '2M', 'Tr'])
+            .first()
+          if (!weaponInHand) {
             socket.emit('error', { message: "L'arme doit être équipée (slot arme) (PC22)" })
             return
           }

@@ -272,9 +272,9 @@ export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId
           const targetChar = exTargetId ? characters.find(c => c.id === exTargetId) : null
           const isDrone    = targetChar?.type === 'drone'
           const actorReady = !isGm || !!gmActingAsId
-          // Un item équipé (slot non null) n'est pas échangeable tel quel — même convention que
-          // ContainerPanel.jsx (items disponibles = slot === null, en container).
-          const availableItems = myInventory.filter(item => item.slot === null)
+          // Un item équipé (slots non null) n'est pas échangeable tel quel — même convention que
+          // ContainerPanel.jsx (items disponibles = slots == null, en container).
+          const availableItems = myInventory.filter(item => item.slots == null)
           return (
           <>
             <div style={S.playerSection}>

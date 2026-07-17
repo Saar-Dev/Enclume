@@ -57,7 +57,9 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 153 : `docs/PLAN_ECHANGE.md` — correction
+> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
+> Session 153 : `docs/PLAN_ECHANGE.md` — correction
 > du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
 > confirmé Saar en navigateur (parcours complet, item 79) ; Session 148 : fiche perso (compétences (X)/(-3),
 > attributs) + `BUGIDENTIFIE.md` COM20 (affichage arme combat) — ✅ clos, item 76 ; Session 144 :
@@ -155,6 +157,50 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
+> ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; `docs/PLAN_BOUCLIER.md` prêt, Lot A pas encore codé.**
+> Réflexion sur l'implantation des règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : plan rédigé,
+> analyse à charge, puis **run à vide du Lot A** a exposé un anti-pattern préexistant dans
+> `char_inventory.slot` (liste `/`-délimitée à la place d'une table d'intersection — « Jaywalking »,
+> Karwin, *SQL Antipatterns*) : un item à slot composite (futur bouclier `MG/BG/C`) échappait aux
+> contrôles de conflit à égalité stricte, permettant un double-équipement non détecté. **Exigence
+> Saar** : architecture robuste/pérenne/adaptative, aucun bricolage même temporaire, aucune zone
+> d'ombre avant de coder, temps non contraint — décision : refonte complète avant de reprendre le
+> bouclier, plutôt qu'un patch local.
+> **`docs/PLAN_INVENTORY_SLOTS.md` livré en 3 lots** : **A** — nouvelle table `char_inventory_slots`
+> (migration `162`, contrainte `UNIQUE` partielle slots main/contenant, `CHECK` codes valides, index
+> perf, backfill + vérification round-trip auto), double-écriture dans `inventoryService.js`
+> (`_writeSlots`, transactionnel). **B** — bascule de tous les lecteurs réels (serveur :
+> `inventoryService.js`, `socketCombatHelpers.js` (4 consommateurs, plus que prévu), `battlemaps.js`
+> (bug confirmé et corrigé — un item composite était invisible côté « main »),
+> `socketCombatAnnouncement.js`, `damageService.js` ; API `getItemWithRef`/`getInventory` → `slots`
+> tableau ; 6 fichiers client réellement concernés sur 9 audités, 3 faux positifs confirmés avant de
+> conclure). **C** — retrait complet de `char_inventory.slot` (migration `166`, réversible,
+> `down()` reconstruit depuis `char_inventory_slots`).
+> **Run à vide post-implémentation demandé par Saar** avant clôture : recherche élargie
+> (`['"]slot['"]|slot\s*:`, angle mort du premier audit qui ne cherchait que `.slot` en accès de
+> propriété) → **4 fichiers réels encore cassés par le retrait de la colonne**, trouvés et corrigés :
+> `modingService.js` (`returnModToInventory`), `tradeService.js` (achat marchand + `acceptTransfer`),
+> `socketTrade.js` (cargo drone), `char-sheet.js` (largage cargo drone) — les 3 derniers transfèrent
+> la propriété d'un item et devaient en plus vider `char_inventory_slots` de l'ancien propriétaire
+> (identifié dans l'analyse critique mais pas appliqué du premier coup). **Testé en base réelle** à
+> chaque lot (personnages jetables, 0 résidu) + **`tradeService.acceptTransfer` exercé de bout en
+> bout** (transfert réel, slots bien vidés côté receveur). **Confirmé fonctionnel par Saar en
+> navigateur** après un faux-négatif initial (voir ci-dessous) : équipement/déséquipement fiche
+> perso, assaut à distance, corps à corps, filtrage du matériel équipé côté Échange.
+> **Incident de méthode, sans rapport avec le code** : écran blanc puis comportements incohérents
+> signalés en cours de validation (`ContainerPanel.jsx` "no export default", assaut/CaC/échange
+> semblant cassés) — fichiers vérifiés syntaxiquement corrects (`esbuild`) et données réelles
+> cohérentes en base au moment du signalement ; redémarrage complet des deux serveurs n'a rien
+> changé, confirmant un cache **navigateur** (pas processus) — probablement lié au grand nombre de
+> fichiers modifiés coup sur coup pendant que les serveurs de dev tournaient. Résolu côté Saar.
+> **Trouvé en marge, hors scope** : `docs/BUGIDENTIFIE.md` dette TRADE2 — logique « Agir en tant
+> que »/« Destinataire » de la fenêtre Échange MJ ne correspond pas à l'usage attendu par Saar
+> (PNJ→PJ), le système livré Session 151 fait PJ→PJ au nom du MJ — décision produit non tranchée.
+> **Non testé** : parcours HTTP/Socket.IO isolé de `socketTrade.js`/`char-sheet.js` (cargo drone) —
+> même correctif que `tradeService.js` (prouvé), pas ré-exercé indépendamment. **Prochaine étape** :
+> `docs/PLAN_BOUCLIER.md` Lot A (fondations données + slot composite main+armure), prérequis levé.
+>
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token
 > cliqué devenait la source au lieu de la cible — trouvé par Saar en relisant, avant tout test

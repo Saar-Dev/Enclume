@@ -446,6 +446,31 @@ matériel), mais un vrai trou d'autorisation.
 
 ---
 
+### Dette TRADE2 — Échange MJ : logique "Agir en tant que" / "Destinataire" pas alignée avec l'usage attendu
+
+**Symptôme** : Testé par Saar en tant que MJ (2026-07-17, validation du chantier refonte slots). La
+logique actuelle de la fenêtre Échange (`ExchangeWindow.jsx`) n'est pas celle attendue côté MJ.
+Attendu par Saar : "Agir en tant que X" → incarner un **PNJ** ; "Destinataire" → cibler un **Joueur**
+(PJ). Comportement livré : le court-circuit MJ (Session 151) fait agir le MJ au nom d'un **PJ**, vers
+un autre **PJ** — transfert PJ↔PJ sans double validation, jamais PNJ→PJ.
+
+**Décision d'origine** : `docs/Old/PLAN_TRADE.md` (Sessions 124-141) + extension Session 151 —
+étendre le système Échange PJ↔PJ existant pour que le MJ puisse « proposer au nom d'un PJ », scope
+volontairement réduit à ce seul côté au moment de la décision.
+
+**Code impliqué** : `client/src/components/ExchangeWindow.jsx` (bandeau « MJ — agit au nom de »,
+prop `isGm`) ; `server/src/socket/socketTrade.js` (`TRADE_TRANSFER_OFFER`, résolution `fromChar` sans
+filtre `user_id` quand `socket.data.role === 'gm'`).
+
+**Cause racine** : pas un bug — comportement délibérément scopé ainsi en Session 151. Écart entre
+l'usage attendu par Saar (PNJ→PJ) et ce qui a été livré (PJ→PJ au nom du MJ).
+
+**Prochaine étape** : décision produit à prendre — un flux PNJ→PJ est-il un **ajout** à côté de
+l'existant PJ→PJ, ou son **remplacement** ? Non tranché, hors scope de la tâche qui a fait remonter
+le sujet (validation fonctionnelle du chantier `docs/PLAN_INVENTORY_SLOTS.md`).
+
+---
+
 ## Bugs mutations
 
 ### Dette MUT4 — Griffes : bonus Escalade +3 / malus dextérité manuelle -3 jamais câblés

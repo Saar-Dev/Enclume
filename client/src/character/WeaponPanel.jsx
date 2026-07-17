@@ -28,12 +28,12 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
   return (
     <div style={s.weaponCard}>
       <div style={s.weaponHeader}>
-        <span style={s.slotBadge}>{SLOT_LABELS[weapon.slot] || weapon.slot}</span>
+        <span style={s.slotBadge}>{SLOT_LABELS[weapon.slots?.[0]] || weapon.slots?.[0]}</span>
         <span style={s.weaponName}>{weapon.custom_name || weapon.ref_name || '—'}</span>
         {weapon.ref_description && (
           <span className="has-tooltip" data-tooltip={weapon.ref_description} style={s.infoIcon}>ⓘ</span>
         )}
-        {weapon.slot === 'Tr' && (
+        {weapon.slots?.includes('Tr') && (
           <span
             style={s.trWarning}
             title="Arme lourde sur trépied. Si le personnage n'est pas en position stable, la compétence est divisée par 2."
@@ -138,8 +138,11 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
 
   // ── Données dérivées ────────────────────────────────────────────────────────
 
+  // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau) remplace `slot` (texte) côté lecture —
+  // les armes n'occupent qu'un seul slot aujourd'hui, mais `.includes`/`.some` reste correct dans
+  // tous les cas plutôt qu'une égalité stricte sur une valeur qui pourrait un jour être composite.
   const equippedWeapons = useMemo(
-    () => items.filter(i => i.slot && WEAPON_SLOTS.includes(i.slot)),
+    () => items.filter(i => i.slots?.some(s => WEAPON_SLOTS.includes(s))),
     [items],
   )
 
@@ -149,7 +152,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       i.ref_location &&
       ['M', '2M', 'Tr'].some(loc => i.ref_location.split('/').includes(loc)) &&
       i.container !== 'Coffre' &&
-      !i.slot,
+      i.slots == null,
     ),
     [items],
   )
@@ -158,9 +161,9 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
   const dirSlot = handPref === 'L' ? 'MG' : 'MD'
   const secSlot = handPref === 'L' ? 'MD' : 'MG'
 
-  const weaponDir = equippedWeapons.find(w => w.slot === dirSlot)
-  const weaponSec = equippedWeapons.find(w => w.slot === secSlot)
-  const weapon2M  = equippedWeapons.find(w => w.slot === '2M' || w.slot === 'Tr')
+  const weaponDir = equippedWeapons.find(w => w.slots?.includes(dirSlot))
+  const weaponSec = equippedWeapons.find(w => w.slots?.includes(secSlot))
+  const weapon2M  = equippedWeapons.find(w => w.slots?.includes('2M') || w.slots?.includes('Tr'))
 
   const hasTrepied = useMemo(() => items.some(i =>
     i.container !== 'Coffre' &&
@@ -240,7 +243,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
     if (!itemId || !slot) return
     const isTwoHand     = slot === '2M' || slot === 'Tr'
     const conflictSlots = isTwoHand ? ['MG', 'MD', '2M', 'Tr'] : [slot, '2M', 'Tr']
-    const conflicts     = equippedWeapons.filter(w => w.id !== itemId && conflictSlots.includes(w.slot))
+    const conflicts     = equippedWeapons.filter(w => w.id !== itemId && w.slots?.some(s => conflictSlots.includes(s)))
     setEquipping(true)
     try {
       for (const c of conflicts) {
@@ -302,10 +305,10 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             onUnequip={handleUnequip}
             error={errors[weapon2M.id]}
           />
-          {weapon2M.slot === 'Tr' && !hasTrepied && (
+          {weapon2M.slots?.includes('Tr') && !hasTrepied && (
             <div style={s.warning}>⚠ Trépied absent du sac — malus actif</div>
           )}
-          {weapon2M.slot === '2M' && hasTrepied &&
+          {weapon2M.slots?.includes('2M') && hasTrepied &&
            getSlotInfo(weapon2M.ref_location).type === '2M_Tr' && (
             <div style={s.info}>Trépied disponible dans le sac</div>
           )}

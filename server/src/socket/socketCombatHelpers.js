@@ -414,19 +414,27 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
       db('ref_skills').where({ id: skillId }).first(),
       db('character_wounds').where({ char_sheet_id: sheetAttaquant.id }),
+      // in_hand_slot (Lot B, docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une
+      // égalité stricte sur char_inventory.slot — un item à slot composite (armure multi-localisation,
+      // futur bouclier) occupant MG/MD reste détecté, contrairement à l'ancienne comparaison exacte.
       db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.character_id': character.id })
-        .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+        .select('char_inventory.container', 'char_inventory.quantity',
                 'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
-                'ref_equipment.category as ref_category'),
+                'ref_equipment.category as ref_category',
+                db.raw(`EXISTS (
+                  SELECT 1 FROM char_inventory_slots cis
+                  WHERE cis.char_inventory_id = char_inventory.id AND cis.slot_code IN ('MG', 'MD')
+                ) as in_hand_slot`)),
       // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
       // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
       db('tokens as t')
         .join('combat_roster as cr', 'cr.token_id', 't.id')
         .join('characters as c', 'c.id', 't.character_id')
-        .leftJoin('char_inventory as ci',
-          db.raw(`ci.character_id = c.id AND ci.slot IN ('MG', 'MD', '2M')`))
+        .leftJoin('char_inventory_slots as cis',
+          db.raw(`cis.character_id = c.id AND cis.slot_code IN ('MG', 'MD', '2M')`))
+        .leftJoin('char_inventory as ci', 'ci.id', 'cis.char_inventory_id')
         .leftJoin('ref_equipment as re',
           db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
         .where('cr.campaign_id', campaignId)
@@ -481,7 +489,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     const multiAttackMalus = totalMeleeCount === 2 ? -5 : totalMeleeCount >= 3 ? -7 : 0
 
     // Mods situation CaC (§6.2)
-    const deuxArmesSlots = invAttaquant.filter(i => ['MD', 'MG'].includes(i.slot) && i.ref_category === 'Arme de contact')
+    const deuxArmesSlots = invAttaquant.filter(i => i.in_hand_slot && i.ref_category === 'Arme de contact')
     const deuxArmesBonus = deuxArmesSlots.length >= 2 ? 3 : 0
     const footingRequiresBalance = measurement.sourceEffectRegions.some(region => (
       region.hooks.some(hook => (
@@ -586,14 +594,17 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         db('char_inventory')
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': defenderCharacter.id })
-          .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+          .select('char_inventory.container', 'char_inventory.quantity',
                   'ref_equipment.weight as ref_weight'),
-        db('char_inventory')
-          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
+        // stricte sur char_inventory.slot — composite-safe.
+        db('char_inventory_slots as cis')
+          .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+          .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': defenderCharacter.id })
-          .whereIn('char_inventory.slot', ['MD', 'MG', '2M'])
+          .whereIn('cis.slot_code', ['MD', 'MG', '2M'])
           .where('ref_equipment.category', 'Arme de contact')
-          .select('char_inventory.slot', 'char_inventory.equipment_id'),
+          .select('cis.slot_code as slot', 'char_inventory.equipment_id'),
         getMutationEffects(sheetCible.id),
       ])
 
@@ -880,10 +891,12 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
       .first()
     weapons = w ? [w] : []
   } else {
-    weapons = await db('char_inventory')
+    // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : composite-safe (voir _handSlotConflict, inventoryService.js).
+    weapons = await db('char_inventory_slots as cis')
+      .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
       .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
       .where({ 'char_inventory.character_id': characterId })
-      .whereIn('char_inventory.slot', ['MG', 'MD'])
+      .whereIn('cis.slot_code', ['MG', 'MD'])
       .whereNotNull('ref_equipment.caliber')
       .select(weaponSelect)
   }
@@ -1376,7 +1389,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': character.id })
           .select(
-            'char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+            'char_inventory.container', 'char_inventory.quantity',
             'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
           ),
         getMutationEffects(sheetTireur.id),
