@@ -101,12 +101,21 @@ export async function resolveTargetHit(io, db, campaignId, {
   con_na_cible,
   vol_na_cible,
   chocDsl = null,
+  forcedSlotCode = null,
 }) {
   if (cibleType === 'drone') return null
 
-  // 1. Localisation D20
-  const { total: rollLoc, rolls: locRolls, seed: locSeed } = await parseDice('1d20')
-  const slotCode    = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+  // 1. Localisation — visée (COM9, docs/PLAN_TIRVISE v2.md) ou 1D20 aléatoire (comportement
+  // historique inchangé). rollLoc/locRolls/locSeed restent null quand visée — jamais un jet
+  // gaspillé pour l'affichage (même convention que getEffectiveWeaponFormulaPreview).
+  let rollLoc = null, locRolls = null, locSeed = null, slotCode
+  if (forcedSlotCode) {
+    slotCode = forcedSlotCode
+  } else {
+    const rolled = await parseDice('1d20')
+    rollLoc = rolled.total; locRolls = rolled.rolls; locSeed = rolled.seed
+    slotCode = (LOC_TABLE.find(r => rollLoc <= r.max) ?? LOC_TABLE[LOC_TABLE.length - 1]).slot
+  }
   const localisation = SLOT_TO_WOUND_LOCATION[slotCode] ?? 'corps'
 
   // 2. Armures + résistances (mutations/avantages) de la cible — seul point d'insertion pour toute

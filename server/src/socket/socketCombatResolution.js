@@ -11,7 +11,7 @@ import { getMutationEffects } from '../services/mutationService.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
-import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
   advanceSlot, endTurn,
@@ -354,6 +354,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       for_na_cible, con_na_cible, vol_na_cible,
       tireurUsername, tireurColor, userId, targetName,
       type: pendingType, modDom, combatModeBonus,
+      aimedLocation,
     } = pending
 
     try {
@@ -427,6 +428,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
         chocDsl: effectiveChocDsl,
+        forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
       })
       if (hitResult === null) return
       const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
@@ -460,16 +462,20 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
 
       // 7. DICE_RESULT broadcast chat
       const now = new Date().toISOString()
-      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-        userId, username: tireurUsername, color: tireurColor,
-        formula: '1d20', rolls: locRolls, total: rollLoc,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: locSeed, timestamp: now,
-        skillLabel: 'Localisation — Distance',
-        mechanicalTotal: rollLoc, diffLabel: '',
-        chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
-        isSuccess: true,
-      })
+      // Localisation visée (COM9) — rollLoc/locRolls/locSeed sont null, pas de carte de jet à
+      // afficher (aucun jet n'a eu lieu, jamais un jet gaspillé pour l'affichage).
+      if (rollLoc !== null) {
+        io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+          userId, username: tireurUsername, color: tireurColor,
+          formula: '1d20', rolls: locRolls, total: rollLoc,
+          isCriticalSuccess: false, isCriticalFail: false,
+          seed: locSeed, timestamp: now,
+          skillLabel: 'Localisation — Distance',
+          mechanicalTotal: rollLoc, diffLabel: '',
+          chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
+          isSuccess: true,
+        })
+      }
       io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
         userId, username: tireurUsername, color: tireurColor,
         formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,

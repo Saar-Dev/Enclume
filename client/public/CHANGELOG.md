@@ -1,3 +1,15 @@
+## v190 — 2026-07-17 — Viser une localisation précise en tir à distance
+
+### Client
+- [feat] Lors d'un tir à distance, une nouvelle section "Viser une localisation" permet de choisir
+  soi-même la zone visée (Tête, Corps, Bras, Jambes) sur une silhouette cliquable, au lieu de laisser
+  le hasard décider. Chaque zone affiche son malus au Test. Disponible pour les joueurs et le MJ
+  (PNJ), cumulable avec Tir visé.
+
+### Serveur
+- [feat] Une fois une zone visée déclarée, la localisation de l'impact n'est plus tirée au hasard :
+  le coup touche la zone choisie, en échange du malus indiqué.
+
 ## v189 — 2026-07-17 — Le MJ peut proposer un Échange au nom d'un joueur
 
 ### Client

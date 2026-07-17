@@ -121,6 +121,7 @@ export default function CombatActionWindow({
   const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
   const [isDualWield, setIsDualWield]             = useState(false)
   const [aimTranches, setAimTranches]             = useState(0)
+  const [aimedLocation, setAimedLocation]         = useState(null)
   const [inMoveMode, setInMoveMode]               = useState(false)
   // --- etat assaut drone -------------------------------------------------------
   const [inTargetMode, setInTargetMode]           = useState(false)
@@ -437,6 +438,7 @@ export default function CombatActionWindow({
           setAssaultVariantAB('A')
           setIsDualWield(false)
           setAimTranches(0)
+          setAimedLocation(null)
           setInTargetMode(false)
         }
         if (k === 'melee') {
@@ -574,6 +576,7 @@ export default function CombatActionWindow({
           dualWieldBonusComp: dualWieldBonusComp,
           cover_shot:         decl.cover !== 'exposed',
           aimTranches:        aimTranches,
+          aimedLocation:      aimedLocation,
         } : null,
         // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
         melee:    (meleeSelected && !meleeDefensif)
@@ -1226,6 +1229,8 @@ export default function CombatActionWindow({
               onAimTranchesChange={(n) => setAimTranches(n)}
               aimIneligibilityReasons={aimIneligibilityReasons}
               lunetteNiveau={lunetteNiveau}
+              aimedLocation={aimedLocation}
+              onAimedLocationChange={(loc) => setAimedLocation(loc)}
             />
           </div>
         )}

@@ -1,5 +1,6 @@
 import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
 import { AIM_MAX_TRANCHES, getAimBonusComp, getAimIniCost } from '../../../shared/combatExclusiveActions.js'
+import AimedLocationPicker from './AimedLocationPicker.jsx'
 
 const P = {
   section: {
@@ -87,6 +88,8 @@ export default function AssaultRangedPanel({
   onAimTranchesChange,  // (n) => void
   aimIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
   lunetteNiveau,        // number — niveau de la Lunette installée sur l'arme sélectionnée (0/undefined = aucune)
+  aimedLocation,        // string | null — Viser une Localisation précise (COM9, docs/PLAN_TIRVISE v2.md)
+  onAimedLocationChange, // (loc | null) => void
 }) {
   const aimSliderMax = Math.max(AIM_MAX_TRANCHES, lunetteNiveau ?? 0)
   const fireModeLabel = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode
@@ -290,6 +293,16 @@ export default function AssaultRangedPanel({
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Section Viser une localisation (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — malus au
+          Test pour choisir la zone au lieu du 1D20 aléatoire. Aucune condition d'éligibilité
+          (contrairement à Tir visé) : toujours sélectionnable, cumulable avec le reste. */}
+      {weaponDisplay && (
+        <div style={P.section}>
+          <div style={P.sectionTitle}>Viser une localisation</div>
+          <AimedLocationPicker aimedLocation={aimedLocation} onChange={onAimedLocationChange} />
         </div>
       )}
     </>

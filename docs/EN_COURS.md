@@ -383,12 +383,15 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > encore à définir, Saar fournira la règle le moment venu) ; **C3** zone d'effet Shrapnel (cône 3m
 > multi-cibles, aucun ciblage de zone existant dans le pipeline combat — le plus gros morceau des 3).
 > Obus canon d'assaut/uranium confirmés hors scope (pas d'exo-armure/navire). **Aucun sous-lot codé.**
-> **⏸️ Pause validation navigateur (2026-07-17)** : test "tir visé en Tête" impossible sans l'action
-> "Tir visé sur localisation" (`COM9`, jamais codée) — la localisation est aujourd'hui purement
-> aléatoire (D20), aucun moyen de forcer un coup en Tête pour valider isolément ce cas. Correctif
-> techniquement testé en base réelle (voir ci-dessus), mais confirmation navigateur contrôlée
-> suspendue tant que `COM9` n'existe pas. Prochaine étape : à la reprise, soit `COM9` d'abord (débloque
-> une validation propre), soit démarrer C1 directement (indépendant de ce blocage).
+> **✅ `COM9` codé (2026-07-17)** : "Viser une Localisation précise" (LdB p.229-230) — annoncée en
+> phase ANNONCE (`AssaultRangedPanel.jsx`, même patron que Tir visé, `combat_actions.aimed_location`,
+> migration 164), malus + bypass du D20 (`forcedSlotCode`) appliqués en RÉSOLUTION
+> (`damageService.resolveTargetHit`). Détail complet : `docs/Old/PLAN_TIRVISE v2.md`. **Testé** :
+> `node --check` (4 fichiers serveur), ESLint client (0 nouvelle erreur vs baseline), test réel
+> `resolveTargetHit` (bypass confirmé + non-régression du tirage aléatoire sur 20 jets, side-effect-free).
+> **✅ Parcours navigateur confirmé fonctionnel par Saar (2026-07-17)** — le blocage initial ("tir
+> visé en Tête" impossible à forcer pour valider isolément le Lot B) est levé. Prochaine étape :
+> reprendre la validation navigateur du Lot B (`PLAN_ARMES_DSL.md`) en s'appuyant sur `COM9`.
 
 > **Item 76 (Session 148) — Fiche perso (compétences (X)/(-3), attributs) + `BUGIDENTIFIE.md` COM20
 > ✅ CLOS.** Triage `BUGIDENTIFIE.md` repris (suite Session 145). **A.** Compétence `(X)` réservée :
@@ -1819,7 +1822,7 @@ Projet en cours et priorité user :
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
-| COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
+| ~~**COM9**~~ | ~~Viser une localisation précise — non implémenté~~ | ✅ Session 155 (Saar) |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | ~~**TIRVISE**~~ | ~~Tir visé — non implémenté, bloquait le Lot B2 de `docs/PLAN_MODING.md`~~ | ✅ Session 141 (suite 17) |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |

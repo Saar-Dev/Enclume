@@ -49,3 +49,12 @@ export const LOC_TABLE = [
   { max: 17, slot: 'JD' },
   { max: 20, slot: 'JG' },
 ]
+
+// Viser une Localisation précise (LdB p.229-230, docs/BUGIDENTIFIE.md COM9) — malus au Test pour
+// choisir la zone touchée au lieu du 1D20 aléatoire. Clés = mêmes que SLOT_TO_WOUND_LOCATION/
+// LOCATION_TO_SLOT/LOCATION_LABELS (réutilisés tels quels, pas de nouvelle table de zones).
+export const AIMED_LOCATION_MALUS = {
+  tete: -7, corps: -3,
+  bras_droit: -7, bras_gauche: -7,
+  jambe_droite: -5, jambe_gauche: -5,
+}

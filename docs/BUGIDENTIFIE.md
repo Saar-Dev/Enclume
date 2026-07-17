@@ -153,20 +153,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Ajout COM9 — Viser une Localisation précise — non implémenté
-
-**Symptôme** : Dans `CombatModifiersWindow`, aucune option ne permet de viser une localisation précise. Le D20 de localisation est toujours aléatoire.
-
-**Règle** : LdB §"Viser une Localisation précise" — Corps −3 / Jambes −5 / Tête+Bras −7.
-
-**Code impliqué** :
-- `CombatModifiersWindow.jsx` — section manquante + state `aimedLocation` absent
-- `socketCombatResolution.js` — pas de champ `aimedLocation` dans `confirmedModifiers`, pas de bypass du D20
-
-**Prochaine étape** : Sprint dédié — NE PAS bricoler dans un autre sprint.
-
----
-
 ### Bug COM16 — Phase ANNONCE : traits liaison attaquant↔cible disparaissent
 
 **Symptôme** : Les traits visuels reliant attaquant à sa cible déclarée disparaissent au fur et à mesure des déclarations.

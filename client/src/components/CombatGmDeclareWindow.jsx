@@ -108,6 +108,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
   const [isDualWield,         setIsDualWield]         = useState(false)
   const [aimTranches,         setAimTranches]         = useState(0)
+  const [aimedLocation,       setAimedLocation]       = useState(null)
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
   // Arme naturelle (mutation PNJ) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B.
@@ -135,6 +136,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAssaultVariantAB('A')
     setIsDualWield(false)
     setAimTranches(0)
+    setAimedLocation(null)
     setSelectedGmMeleeWeaponId(undefined)
     setIsSelectingOnMap(false)
     setIniPopoverOpen(false)
@@ -447,6 +449,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
           aimTranches:        aimTranches,
+          aimedLocation:      aimedLocation,
         } : null,
         melee:    meleeCaC.length > 0 ? meleeCaC : null,
         reload:   mapAction === 'reload',
@@ -573,6 +576,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setAssaultBulletCount(null)
                               setAssaultVariantAB('A')
                               setAimTranches(0)
+                              setAimedLocation(null)
                               return
                             }
                             if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
@@ -888,6 +892,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               onAimTranchesChange={(n) => setAimTranches(n)}
               aimIneligibilityReasons={aimIneligibilityReasons}
               lunetteNiveau={weapon?.lunette_niveau ?? 0}
+              aimedLocation={aimedLocation}
+              onAimedLocationChange={(loc) => setAimedLocation(loc)}
             />
           </div>
         )}

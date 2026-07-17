@@ -18,7 +18,7 @@ import {
   calcWoundPenalty, calcEncumbrancePenalty,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
-import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
 
 
@@ -1432,7 +1432,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const lunetteNiveau    = getLunetteNiveau(installedMods)
     const aimBonusComp     = getEffectiveAimBonus(action.aim_bonus_comp ?? 0, { lunetteNiveau, portee: authoritativeRangeBand })
     const { total: weaponModComp, breakdown: weaponModBreakdown } = calcWeaponModBonus(installedMods)
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp
+    // Viser une Localisation précise (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — annoncé en
+    // Phase 1 (action.aimed_location), malus appliqué ici comme Tir visé l'est pour son bonus.
+    const aimedLocationKey   = action.aimed_location ?? null
+    const aimedLocationMalus = AIMED_LOCATION_MALUS[aimedLocationKey] ?? 0
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
@@ -1445,6 +1449,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(fireModeComp - dualWieldComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' }] : []),
       ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
       ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
+      ...(aimedLocationMalus !== 0 ? [{ label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' }] : []),
       ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
         const v = SITUATION_MODS[k] ?? 0
@@ -1543,6 +1548,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             char_sheet_id_cible,
             mr,
             portee: authoritativeRangeBand,
+            aimedLocation: aimedLocationKey,
             fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
             formula: weapon.ref_damage_h,
             // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet
@@ -1610,6 +1616,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
           chocDsl: effectiveDamage ? effectiveDamage.choc : null,
+          forcedSlotCode: aimedLocationKey ? LOCATION_TO_SLOT[aimedLocationKey] : null,
         })
         if (hitResult === null) return { suspend: false, emissions }
         const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
