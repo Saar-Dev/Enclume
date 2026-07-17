@@ -36,8 +36,13 @@ export function registerTradeHandlers(io, socket, context) {
       return
     }
     try {
+      // MJ : peut proposer au nom de n'importe quel personnage de la campagne (test/orchestration
+      // — décision Saar 2026-07-16). Le destinataire garde l'obligation d'accepter lui-même,
+      // inchangé ci-dessous — cette relaxation ne couvre que le côté proposant.
+      const isGm = socket.data.role === 'gm'
       const fromChar = await db('characters')
-        .where({ campaign_id: campaignId, id: fromCharId, user_id: user.id })
+        .where({ campaign_id: campaignId, id: fromCharId })
+        .modify((qb) => { if (!isGm) qb.where({ user_id: user.id }) })
         .select('id', 'name')
         .first()
       if (!fromChar) {

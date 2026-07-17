@@ -427,6 +427,25 @@ autres items du catalogue ont un `price_modifier` non-null et sont donc potentie
 
 ---
 
+### Dette TRADE1 — `TRADE_TRANSFER_DECLINED` : aucune vérification d'ownership côté serveur
+
+**Trouvé en marge** (Session 151, en réactivant le secteur "Échange" du menu radial pour le MJ —
+sans rapport direct, pas d'instrumentation dédiée, `[HYPOTHÈSE]` par lecture seule).
+
+**Code concerné** : `server/src/socket/socketTrade.js`, handler `WS.TRADE_TRANSFER_DECLINED` —
+contrairement à `TRADE_TRANSFER_OFFER`/`TRADE_TRANSFER_ACCEPTED`/`TRADE_TRANSFER_CANCELLED`, ce
+handler ne vérifie jamais que le socket appelant correspond réellement au `to_char_id` de l'offre : il
+se contente de `db('trade_offers').where({ id: offerId, campaign_id: campaignId, status: 'PENDING'
+}).first()` puis passe l'offre à `DECLINED`. En pratique le client (`ExchangeWindow.jsx`) n'appelle
+ça que sur une offre déjà reçue via `TRADE_OFFER_RECEIVED` (ciblée), donc pas exploitable en usage
+normal — mais un client modifié ou un `offerId` deviné/observé permettrait à n'importe quel membre de
+la campagne de refuser l'offre d'un autre. Sévérité faible (nuisance, pas de perte de données ni gain
+matériel), mais un vrai trou d'autorisation.
+
+**Non traité maintenant** — hors scope de la tâche en cours (activation MJ), un problème à la fois.
+
+---
+
 ## Bugs mutations
 
 ### Dette MUT4 — Griffes : bonus Escalade +3 / malus dextérité manuelle -3 jamais câblés

@@ -1,3 +1,14 @@
+## v189 — 2026-07-17 — Le MJ peut proposer un Échange au nom d'un joueur
+
+### Client
+- [feat] Le secteur "Échange" du menu radial est désormais utilisable par le MJ : clic sur un token
+  pour le cibler, choix du personnage au nom duquel agir, puis composition de l'offre (objets
+  disponibles, sols) comme un joueur normal.
+- [fix] Un objet actuellement équipé n'apparaît plus dans la liste des objets proposables à
+  l'échange.
+- [fix] Le champ Destinataire affiche maintenant le nom du personnage ciblé depuis le menu radial
+  au lieu de rester vide.
+
 ## v188 — 2026-07-16 — Compétences réservées/difficiles, attributs et fenêtre de combat
 
 ### Serveur

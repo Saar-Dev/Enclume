@@ -972,6 +972,10 @@ router.get('/:characterId/weapon-skill/:weaponInvId', async (req, res, next) => 
 
 // ─── PUT /api/char-sheet/:characterId/sols ────────────────────────────────────
 // P46 : déclarée AVANT PUT /:characterId/inventory/:itemId
+// Garde asymétrique (docs/PLAN_ECHANGE.md Lot A0, décision Saar 2026-07-16) : un joueur peut toujours
+// dépenser (diminuer) ses propres sols librement, mais seul le MJ peut en faire apparaître (augmenter
+// la valeur existante) — évite qu'un joueur restaure par cette route ce qu'un Échange (docs/PLAN_
+// ECHANGE.md) vient de lui débiter ailleurs.
 router.put('/:characterId/sols', async (req, res, next) => {
   try {
     const { sols } = req.body
@@ -982,6 +986,10 @@ router.put('/:characterId/sols', async (req, res, next) => {
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId }).first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    if (sols > sheet.sols && !req.isGm) {
+      throw new AppError(403, 'Seul le MJ peut augmenter le total de sols')
+    }
 
     const [updated] = await db('char_sheet')
       .where({ id: sheet.id })

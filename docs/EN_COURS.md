@@ -57,7 +57,9 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-16 — Session 148 : fiche perso (compétences (X)/(-3),
+> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 153 : `docs/PLAN_ECHANGE.md` — correction
+> du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
+> confirmé Saar en navigateur (parcours complet, item 79) ; Session 148 : fiche perso (compétences (X)/(-3),
 > attributs) + `BUGIDENTIFIE.md` COM20 (affichage arme combat) — ✅ clos, item 76 ; Session 144 :
 > bascule `dev/Saar` en branche
 > exclusive de tout nouveau travail Claude (voir `CLAUDE.md` §3) ; Session 143 : `PLAN_MUTATION2.md`
@@ -153,6 +155,132 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
+> Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token
+> cliqué devenait la source au lieu de la cible — trouvé par Saar en relisant, avant tout test
+> navigateur, détail complet `docs/PLAN_ECHANGE.md` §2). **Retiré** : `server/src/services/
+> echangeService.js` (Lot A0, jamais branché à une UI, redondant avec `tradeService.js`) et la route
+> `POST /:characterId/echanges/admin` (`char-sheet.js`) ; `inventoryService.js` — paramètre `trxOrDb`
+> de `getDefaultContainer`/`getItemWithRef` retiré (plus aucun appelant après la suppression du
+> service, code mort sinon). **Corrigé** : `SessionPage.jsx` — `onOpenExchange` redevient
+> inconditionnel (token cliqué = toujours la cible, MJ ou joueur) ; `ExchangeWindow.jsx` — nouvelle
+> autorité unique `effectiveCharId` (`isGm ? gmActingAsId : myCharId`), substituée à `myCharId` dans
+> `loadInventory`, l'effet de chargement (reset + rechargement à chaque changement d'identité, pas
+> seulement quand l'inventaire est vide), `handleProposeOffer`, `handleAcceptOffer`, le filtre de
+> recherche de cible et la désactivation du bouton proposer ; bandeau MJ devenu un vrai `<select>`
+> (liste des PJ de la campagne hors cible déjà fixée) tant qu'aucun acteur n'est choisi, persistant
+> ensuite tant que la fenêtre reste ouverte ; catalogue et zone de sols masqués tant que le MJ n'a pas
+> choisi son acteur (évite le faux "inventaire vide") ; cas dégénéré (0 autre PJ dans la campagne)
+> couvert par un message dédié. `fr.json` : 4 nouvelles clés (`ex_acting_as_select`,
+> `ex_acting_as_placeholder`, `ex_no_other_pj`, `ex_select_actor_first`). **Hors scope confirmé
+> (plan §5)** : `socketTrade.js`/`TokenRadialMenu.jsx` inchangés (déjà corrects) ; `handleCancelOffer`
+> volontairement laissé sur `myCharId` — annulation MJ reste la limite déjà documentée item 78 (offre
+> expire seule en 120s), pas une régression de ce correctif.
+> **2 correctifs supplémentaires trouvés en testant en navigateur réel (Saar)** : (1) le catalogue
+> d'offre listait aussi les items **équipés** (`slot` non null) — filtré via `availableItems`
+> (`slot === null`), même convention que `ContainerPanel.jsx`. (2) le champ Destinataire restait
+> visuellement vide même quand le clic sur un token pré-remplissait `exTargetId` — `searchText`
+> n'était jamais synchronisé ; corrigé dans l'effet `initialContext` (résout le nom du personnage
+> ciblé et l'affiche). **Signalement Saar investigué en navigateur réel, confirmé comportement
+> voulu (pas un bug)** : la recherche manuelle de cible ne trouvait aucune suggestion — root cause
+> `[VÉRIFIÉ]` par instrumentation temporaire (`console.log` retiré après diagnostic) : un joueur ne
+> peut pas cibler un personnage qui lui est invisible (`characters.visible=false`), la liste reçue du
+> serveur les exclut déjà à la source (`GET /campaigns/:id/characters`, comportement pré-existant,
+> hors scope de ce correctif) — confirmé logique par Saar, aucun changement de code.
+> **Audit d'architecture demandé par Saar avant clôture** : diff entier relu, recherche exhaustive de
+> références orphelines à `echangeService`/`adminEchange`/`fromCharId` (une seule référence restante,
+> légitime — commentaire expliquant la garde `PUT /sols`). **1 dernier résidu trouvé** : `campaignId`
+> était déclaré en prop de `ExchangeWindow.jsx` mais jamais utilisé — hérité par copier-coller de
+> `TradeWindow.jsx` (dont les routes sont scopées par campagne ; celles d'`ExchangeWindow` le sont
+> toutes par personnage). Retiré de la signature du composant et du call site `SessionPage.jsx` —
+> referme la dernière erreur ESLint du fichier. **Testé** : `node --check` (`char-sheet.js`,
+> `inventoryService.js`, `socketTrade.js`) ; ESLint sur les 3 fichiers client touchés, **0 erreur, 0
+> nouvelle** (`ExchangeWindow.jsx` propre après retrait de `campaignId`, `TokenRadialMenu.jsx`/
+> `SessionPage.jsx` ne portent que des avertissements/l'erreur `doClose` pré-existants, confirmés par
+> `git stash`) ; `fr.json` validé JSON ; relecture ciblée confirmant que pour `isGm=false`,
+> `effectiveCharId === myCharId` sur 100% des chemins (priorité de test explicite du plan §7) ;
+> **parcours navigateur complet confirmé fonctionnel par Saar** (ciblage MJ, catalogue filtré,
+> comportement de visibilité, proposition, acceptation par un second compte joueur réel). **Non
+> testé** : rien d'identifié en dehors de ce qui précède. **Données** : aucune migration, aucun effet
+> runtime hors le retrait du service/route. **Retour arrière** : pas encore committé au moment de la
+> rédaction ; voir commit de clôture pour le hash. `docs/PLAN_ECHANGE.md` archivé vers `docs/Old/`
+> (Règle 10, `docs/RegleDocumentaire.md` — un PLAN terminé est archivé, pas laissé actif).
+
+> **Item 78 (Session 151, suite) — Doublon découvert : le système Échange PJ↔PJ existait déjà
+> (`docs/Old/PLAN_TRADE.md`, sessions 124-141) ; secteur MJ activé dans le menu radial ✅ CODÉ ET
+> TESTÉ.** Demande Saar : ajouter "Échange" au menu Radial pour pouvoir tester le Lot A0 (item 77).
+> **Erreur de méthode trouvée en cherchant le fichier `RadialMenu.jsx`** : `TokenRadialMenu.jsx` a
+> déjà un secteur `echange` (ligne 178) qui ouvre `ExchangeWindow.jsx`, lui-même branché sur un
+> système complet et fonctionnel — `server/src/services/tradeService.js`/`socketTrade.js`, table
+> `trade_offers` (migrations 84-91), marchands, vente PJ→GM avec contre-offres, transfert drone
+> immédiat (`trade:drone_transfer`, exactement l'idée "même propriétaire" du Lot A0). Livré et clos
+> Sessions 124-141 sous `docs/Old/PLAN_TRADE.md` — jamais trouvé avant d'écrire `docs/PLAN_ECHANGE.md`
+> (item 77) faute d'avoir cherché dans `docs/Old/` avant de concevoir un nouveau plan ; `docs/
+> ROADMAP.md` Chantier 10 Sprint 6 était resté marqué 🔲 par erreur documentaire, corrigé cette
+> session. **Root cause du "je ne l'ai jamais vu"** : le secteur `echange` est `enabled: !isGm`
+> (masqué dès que l'acteur est MJ, quel que soit le personnage ciblé) — Saar étant toujours MJ dans sa
+> propre campagne, il ne pouvait physiquement jamais le voir ni le cliquer. **Décision Saar** : plutôt
+> qu'ajouter un bouton séparé pour le Lot A0, étendre le vrai système existant pour que le MJ puisse
+> l'utiliser — "proposer au nom d'un PJ", scope volontairement réduit à ce seul côté (accepter/
+> annuler restent inchangés, décision explicite pour limiter la surface touchée). **Codé** :
+> `socketTrade.js` (`TRADE_TRANSFER_OFFER`) — `fromChar` résolu sans filtrer `user_id` quand
+> `socket.data.role === 'gm'`, inchangé sinon ; `TokenRadialMenu.jsx` — secteur `echange` toujours
+> `enabled: true`, prop `isGm` devenue inutile retirée (0 nouvelle erreur ESLint, comparé `git stash`) ;
+> `SessionPage.jsx` — `onOpenExchange` distingue MJ (token cliqué devient `fromCharId`, cible à choisir
+> dans la fenêtre) vs joueur (comportement historique inchangé, token cliqué = cible pré-remplie) ;
+> `ExchangeWindow.jsx` — prop `isGm`, bandeau "MJ — agit au nom de : {name}" (nouvelle clé `fr.json`
+> `ex_acting_as`, `en.json` toujours sans le namespace `trade` — préexistant, pas notre scope).
+> **Limite assumée, non traitée** : le MJ ne peut pas encore annuler une proposition faite au nom d'un
+> PJ (annulation reste réservée au vrai propriétaire) — l'offre expire seule en 120s, non bloquant.
+> **Trouvé en marge, hors scope, loggé séparément** : `docs/BUGIDENTIFIE.md` dette `TRADE1` —
+> `TRADE_TRANSFER_DECLINED` n'a aucune vérification d'ownership serveur (n'importe quel membre de la
+> campagne pourrait refuser l'offre d'un autre s'il devine l'`offerId`), sévérité faible, non corrigé
+> ici. **Testé** : requête knex relaxée vérifiée en base réelle (transaction annulée) — MJ résout un
+> personnage qui n'est pas le sien, joueur non-propriétaire toujours bloqué (inchangé), propriétaire
+> réel toujours résolu (non-régression) ; `node --check` (`socketTrade.js`) ; ESLint sur les 3 fichiers
+> client touchés, 0 nouvelle erreur (comparé `git stash` à chaque fichier). **Non testé** : parcours
+> navigateur réel (clic MJ sur un token → secteur Échange → proposition → acceptation par un vrai
+> compte joueur) — à confirmer par Saar en navigateur, c'est l'objet même de sa demande. **Devenir du
+> Lot A0 non tranché** : `echangeService.js`/`adminEchange` (item 77) reste codé et testé mais non
+> branché à aucune route UI — fait probablement double emploi avec le système ci-dessus (le
+> court-circuit MJ existant, `trade:drone_transfer`, ne couvre que "même propriétaire" ; un vrai
+> "MJ déplace instantanément entre deux joueurs différents, sans double validation" n'existe nulle
+> part ailleurs) — à décider avec Saar : garder comme action admin séparée, ou retirer comme code mort.
+> Documents corrigés cette session (attribution erronée du terme "Échange" à Session 151) :
+> `docs/VOCABULARY.md`, `docs/ROADMAP.md`, `docs/PLAN_ECHANGE.md` (bandeau d'avertissement ajouté).
+
+> **Item 77 (Session 151) — Chantier 10 Sprint 6 (Échange), Lot A0 : court-circuit MJ ✅ CODÉ ET
+> TESTÉ (2026-07-16).** Plan écrit après recherche externe (FoundryVTT Item Piles, `lets-trade-5e`,
+> patterns de ledger atomique/réservation d'inventaire) puis auto-critique demandée par Saar avant
+> tout code — détail complet `docs/PLAN_ECHANGE.md`. **Terminologie tranchée avant code** : le mot
+> "Transfert" était déjà pris par le Coffre (copie Coffre→campagne) — la nouvelle mécanique s'appelle
+> **"Échange"** (`docs/VOCABULARY.md`, ambiguïté trouvée en cadrant ce chantier). **Livré** : nouveau
+> `server/src/services/echangeService.js` (`executeEchange` — seul point d'exécution atomique
+> item/sols, réutilisé par les lots suivants ; `adminEchange` — court-circuit MJ, aucune table, aucune
+> négociation), route `POST /:characterId/echanges/admin` (MJ uniquement) dans `char-sheet.js`,
+> correctif `PUT /:characterId/sols` (garde asymétrique : le joueur peut toujours diminuer, seul le MJ
+> peut augmenter). **3 bugs réels trouvés en auto-critique avant code** (jamais coder tant qu'un doute
+> subsiste) : `user_id` NULL comparé à NULL aurait fait matcher deux PNJ sans propriétaire comme "même
+> joueur" ; débit de sols par lecture-puis-écriture séparées au lieu d'une update conditionnelle
+> atomique (course possible) ; aucun garde d'autorisation explicite sur "qui peut proposer depuis ce
+> personnage" — résolu en réutilisant le `router.param('characterId')` déjà en place (même stratégie
+> que `clone-to-vault`) plutôt qu'une nouvelle vérification. **1 bug réel trouvé en testant** (pas
+> seulement en relisant) : `getItemWithRef`/`getDefaultContainer` (`inventoryService.js`) lisaient via
+> la connexion `db` par défaut au lieu de la transaction en cours — sans garantie de voir l'écriture
+> pas encore commitée. Corrigé en étendant le paramètre `trxOrDb` déjà utilisé par `removeItem` à ces
+> deux fonctions, plutôt qu'un contournement local. **Testé** : 16 scénarios réels en base (transaction
+> imbriquée par appel — SAVEPOINT via `trx.transaction()` —, exactement le comportement de
+> `adminEchange` en production) : déplacement d'item (déséquipé, container par défaut destinataire),
+> item déjà déplacé rejeté sans duplication, sols (débit/crédit, conservation stricte du total), sols
+> insuffisants rejeté sans effet, auto-transfert rejeté, campagnes différentes rejetées, fiche
+> destinataire introuvable rejetée avec annulation réelle du débit (atomicité vérifiée, pas supposée),
+> `kind` invalide rejeté ; 0 résidu confirmé après coup ; `node --check` 0 erreur (3 fichiers touchés).
+> **Non testé** : appel HTTP réel de bout en bout (route Express + guard `req.isGm` + émission WS),
+> parcours navigateur — aucune UI dans ce lot. **Prochaine étape : Lot A1** (proposition/acceptation
+> joueur↔joueur, réutilise `executeEchange` tel quel) — `docs/PLAN_ECHANGE.md`.
+> **Retrait Session 153 (item 79)** : `echangeService.js` et la route `echanges/admin` retirés,
+> redondants avec `tradeService.js` et jamais branchés à une UI — voir item 79.
+
 > **2026-07-16 — Chantier 11 Étape 2 (Module Armes DSL), Lots A et B ✅ CODÉS ET TESTÉS.** Plan en 3
 > lots (A: parseur DSL + branchement DMG ; B: dégâts de Choc, ferme partiellement `[CHOC1]` ; C: tags
 > qualitatifs, affichage seul — détail complet `docs/PLAN_ARMES_DSL.md`). **Lot A livré** :
@@ -209,7 +337,12 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > encore à définir, Saar fournira la règle le moment venu) ; **C3** zone d'effet Shrapnel (cône 3m
 > multi-cibles, aucun ciblage de zone existant dans le pipeline combat — le plus gros morceau des 3).
 > Obus canon d'assaut/uranium confirmés hors scope (pas d'exo-armure/navire). **Aucun sous-lot codé.**
-> Prochaine étape : confirmation navigateur du correctif Lot B par Saar, puis démarrer C1.
+> **⏸️ Pause validation navigateur (2026-07-17)** : test "tir visé en Tête" impossible sans l'action
+> "Tir visé sur localisation" (`COM9`, jamais codée) — la localisation est aujourd'hui purement
+> aléatoire (D20), aucun moyen de forcer un coup en Tête pour valider isolément ce cas. Correctif
+> techniquement testé en base réelle (voir ci-dessus), mais confirmation navigateur contrôlée
+> suspendue tant que `COM9` n'existe pas. Prochaine étape : à la reprise, soit `COM9` d'abord (débloque
+> une validation propre), soit démarrer C1 directement (indépendant de ce blocage).
 
 > **Item 76 (Session 148) — Fiche perso (compétences (X)/(-3), attributs) + `BUGIDENTIFIE.md` COM20
 > ✅ CLOS.** Triage `BUGIDENTIFIE.md` repris (suite Session 145). **A.** Compétence `(X)` réservée :

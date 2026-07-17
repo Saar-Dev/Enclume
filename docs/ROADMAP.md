@@ -126,7 +126,7 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | Sprint 3 | Codes slots indépendants (BG/BD/JG/JD) + armures multi-couches + poids | ✅ session 54 |
 | Sprint 4 | Module Armes équipées (WeaponPanel, current_ammo, nettoyage nomenclature munitions) | ✅ session 55 |
 | Sprint 5 | Mille-feuille protection serveur + polarisRound unifié + ref_min_str exposé | ✅ session 56 |
-| Sprint 6 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
+| Sprint 6 | Échange items/sols (WS bidirectionnel, double validation) | ✅ livré sessions 124-141 sous `docs/Old/PLAN_TRADE.md` (`tradeService.js`, secteur `echange` du menu radial) + extension MJ (proposer au nom d'un PJ) session 153, `docs/Old/PLAN_ECHANGE.md`, parcours complet testé et confirmé |
 | — | Split pile, capacity sac, custom_props UI, malus_cat dans jets Polaris | 🔲 selon besoin |
 
 **Sprint 1 livré :**

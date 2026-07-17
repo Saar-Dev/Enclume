@@ -726,7 +726,6 @@ function SessionContent({ campaignId }) {
             y={contextMenu.y}
             token={contextMenu.token}
             character={character}
-            isGm={isGm}
             onOpenCharacterSheet={() => openSheet(character)}
             onRemoveToken={handleRemoveContextToken}
             onSetRotation={handleSetContextTokenRotation}
@@ -1009,9 +1008,9 @@ function SessionContent({ campaignId }) {
       {/* ─── ExchangeWindow — fenêtre d'échange PJ↔PJ (RadialMenu) ─────── */}
       {exchangeWindowOpen && (
         <ExchangeWindow
-          campaignId={campaignId}
           socket={socket}
           onClose={() => setExchangeWindowOpen(false)}
+          isGm={isGm}
           myCharId={myCharId}
           characters={characters}
           initialContext={exchangeContext}

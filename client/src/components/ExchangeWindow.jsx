@@ -6,7 +6,7 @@ import { useDraggable } from '../lib/useDraggable.js'
 
 const PANEL_W = 400
 
-export default function ExchangeWindow({ campaignId, socket, onClose, myCharId = null, characters = [], initialContext = null }) {
+export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId = null, characters = [], initialContext = null }) {
   const { t } = useTranslation()
   const { pos, onHeaderMouseDown } = useDraggable(
     'exchange-window-pos',
@@ -15,6 +15,7 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
   )
 
   const [exTargetId,    setExTargetId]    = useState(null)
+  const [gmActingAsId,  setGmActingAsId]  = useState(null)
   const [myInventory,   setMyInventory]   = useState([])
   const [invLoading,    setInvLoading]    = useState(false)
   const [offerItems,    setOfferItems]    = useState([])
@@ -27,19 +28,28 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
   const [showSuggestions, setShowSuggestions] = useState(false)
   const comboRef = useRef(null)
 
+  // MJ : agit au nom d'un PJ choisi dans la fenêtre (gmActingAsId) — n'a pas de personnage propre.
+  // Joueur : agit toujours en tant que lui-même (myCharId fixe). Seule autorité d'identité de la
+  // fenêtre, substituée à myCharId partout où l'ancien code lisait l'acteur courant.
+  const effectiveCharId = isGm ? gmActingAsId : myCharId
+
   const loadInventory = useCallback(async () => {
-    if (!myCharId) return
+    if (!effectiveCharId) return
     setInvLoading(true)
     try {
-      const res = await api.get(`/char-sheet/${myCharId}/inventory`)
+      const res = await api.get(`/char-sheet/${effectiveCharId}/inventory`)
       setMyInventory(res.data.items ?? [])
     } catch (err) { console.error('[ExchangeWindow] inventory load:', err.message) }
     finally { setInvLoading(false) }
-  }, [myCharId])
+  }, [effectiveCharId])
 
+  // Rechargement à chaque changement d'identité agissante (montage inclus) — pas seulement quand
+  // l'inventaire est vide, sinon un changement de effectiveCharId après un 1er chargement (MJ change
+  // de personnage) ne relancerait jamais loadInventory.
   useEffect(() => {
-    if (myCharId && myInventory.length === 0 && !invLoading) loadInventory()
-  }, [myCharId, myInventory.length, invLoading, loadInventory])
+    setMyInventory([])
+    if (effectiveCharId) loadInventory()
+  }, [effectiveCharId, loadInventory])
 
   // Timer expiration
   useEffect(() => {
@@ -90,6 +100,8 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
     if (!initialContext) return
     if (initialContext.toCharId) {
       setExTargetId(initialContext.toCharId)
+      const targetC = characters.find(c => c.id === initialContext.toCharId)
+      if (targetC) setSearchText(targetC.name)
     }
     if (initialContext.incomingOffer) setIncomingOffer(initialContext.incomingOffer)
   }, [initialContext, characters])
@@ -104,12 +116,12 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
   }
 
   const handleProposeOffer = useCallback(() => {
-    if (!socket || !myCharId || !exTargetId || exTargetId === myCharId) return
+    if (!socket || !effectiveCharId || !exTargetId || exTargetId === effectiveCharId) return
     const targetC = characters.find(c => c.id === exTargetId)
     if (targetC?.type === 'drone') {
       if (offerItems.length === 0) return
       socket.emit(WS.TRADE_DRONE_TRANSFER,
-        { fromCharId: myCharId, droneCharId: exTargetId, items: offerItems.map(o => o.invId) },
+        { fromCharId: effectiveCharId, droneCharId: exTargetId, items: offerItems.map(o => o.invId) },
         (ack) => {
           if (ack?.ok) {
             setExStatusMsg({ ok: true, text: t('trade.window.drone_transferred') })
@@ -123,7 +135,7 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
     }
     if (offerItems.length === 0 && offerSols === 0) return
     socket.emit(WS.TRADE_TRANSFER_OFFER, {
-      fromCharId: myCharId,
+      fromCharId: effectiveCharId,
       toCharId:   exTargetId,
       items:      offerItems.map(o => ({ char_inventory_id: o.invId, equipment_id: o.equipId, name: o.name, qty: o.qty })),
       solsOffer:  offerSols,
@@ -135,7 +147,7 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
         setExStatusMsg({ ok: false, text: t('trade.window.ex_send_error') })
       }
     })
-  }, [socket, myCharId, exTargetId, offerItems, offerSols, characters, t, loadInventory])
+  }, [socket, effectiveCharId, exTargetId, offerItems, offerSols, characters, t, loadInventory])
 
   const handleCancelOffer = useCallback(() => {
     if (!socket || !outboundOffer || !myCharId) return
@@ -146,10 +158,10 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
 
   const handleAcceptOffer = useCallback(() => {
     if (!socket || !incomingOffer || timeLeft === 0) return
-    const acceptingCharId = incomingOffer.toCharId ?? myCharId
+    const acceptingCharId = incomingOffer.toCharId ?? effectiveCharId
     if (!acceptingCharId) return
     socket.emit(WS.TRADE_TRANSFER_ACCEPTED, { offerId: incomingOffer.offerId, acceptingCharId })
-  }, [socket, myCharId, incomingOffer, timeLeft])
+  }, [socket, effectiveCharId, incomingOffer, timeLeft])
 
   const handleDeclineOffer = useCallback(() => {
     if (!socket || !incomingOffer) return
@@ -164,6 +176,34 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
         <span className="combat-win-title">{t('trade.window.tab_exchange').toUpperCase()}</span>
         <button className="btn btn-icon" onClick={onClose} title={t('common.close')}>✕</button>
       </div>
+
+      {isGm && !gmActingAsId && (() => {
+        const gmPjOptions = characters.filter(c => c.type === 'pj' && c.id !== exTargetId)
+        return (
+          <div style={S.gmActingAsRow}>
+            <span style={S.modLabel}>{t('trade.window.ex_acting_as_select')}</span>
+            {gmPjOptions.length > 0 ? (
+              <div style={{ flex: 1 }}>
+                <select
+                  style={S.merchantSelect}
+                  value=""
+                  onChange={e => { if (e.target.value) setGmActingAsId(e.target.value) }}
+                >
+                  <option value="">{t('trade.window.ex_acting_as_placeholder')}</option>
+                  {gmPjOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            ) : (
+              <span style={S.exTimer}>{t('trade.window.ex_no_other_pj')}</span>
+            )}
+          </div>
+        )
+      })()}
+      {isGm && gmActingAsId && (
+        <p style={S.gmActingAs}>
+          {t('trade.window.ex_acting_as', { name: characters.find(c => c.id === gmActingAsId)?.name ?? '—' })}
+        </p>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
 
@@ -228,9 +268,13 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
 
         {/* Cas D — Formulaire composition */}
         {!outboundOffer && !incomingOffer && !exStatusMsg && (() => {
-          const myUserId   = characters.find(c => c.id === myCharId)?.user_id ?? null
+          const myUserId   = characters.find(c => c.id === effectiveCharId)?.user_id ?? null
           const targetChar = exTargetId ? characters.find(c => c.id === exTargetId) : null
           const isDrone    = targetChar?.type === 'drone'
+          const actorReady = !isGm || !!gmActingAsId
+          // Un item équipé (slot non null) n'est pas échangeable tel quel — même convention que
+          // ContainerPanel.jsx (items disponibles = slot === null, en container).
+          const availableItems = myInventory.filter(item => item.slot === null)
           return (
           <>
             <div style={S.playerSection}>
@@ -251,7 +295,7 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
                   />
                   {showSuggestions && (() => {
                     const suggestions = characters
-                      .filter(c => c.id !== myCharId
+                      .filter(c => c.id !== effectiveCharId
                                && (c.type !== 'drone' || c.user_id === myUserId)
                                && c.name.toLowerCase().includes(searchText.toLowerCase()))
                       .slice(0, 3)
@@ -273,52 +317,58 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
               </div>
             </div>
 
-            <div style={S.catalogList}>
-              {invLoading && <p style={S.empty}>{t('trade.window.ex_loading_inv')}</p>}
-              {!invLoading && myInventory.length === 0 && <p style={S.empty}>{t('trade.window.ex_no_items')}</p>}
-              {myInventory.map(item => {
-                const name       = item.custom_name || item.ref_name || '?'
-                const isSelected = offerItems.some(o => o.invId === item.id)
-                return (
-                  <div
-                    key={item.id}
-                    style={{ ...S.catalogItem, background: isSelected ? '#1a1a2e' : 'transparent', cursor: 'pointer' }}
-                    onClick={() => toggleOfferItem(item)}
-                  >
-                    <div style={S.catalogItemHeader}>
-                      <span style={S.catalogItemName}>{name}</span>
-                      {item.quantity > 1 && <span style={{ fontSize: '12px', color: '#888' }}>×{item.quantity}</span>}
-                      {isSelected && <span style={{ color: '#3aaa6a', fontSize: '13px', flexShrink: 0 }}>✓</span>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div style={S.cartSection}>
-              {!isDrone && (
-                <div style={S.modRow}>
-                  <span style={S.modLabel}>{t('trade.window.ex_sols_label')}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    style={{ ...S.modInput, width: '80px' }}
-                    value={offerSols}
-                    onChange={e => setOfferSols(Math.max(0, parseInt(e.target.value) || 0))}
-                  />
-                  <span style={S.modUnit}>S</span>
+            {actorReady ? (
+              <>
+                <div style={S.catalogList}>
+                  {invLoading && <p style={S.empty}>{t('trade.window.ex_loading_inv')}</p>}
+                  {!invLoading && availableItems.length === 0 && <p style={S.empty}>{t('trade.window.ex_no_items')}</p>}
+                  {availableItems.map(item => {
+                    const name       = item.custom_name || item.ref_name || '?'
+                    const isSelected = offerItems.some(o => o.invId === item.id)
+                    return (
+                      <div
+                        key={item.id}
+                        style={{ ...S.catalogItem, background: isSelected ? '#1a1a2e' : 'transparent', cursor: 'pointer' }}
+                        onClick={() => toggleOfferItem(item)}
+                      >
+                        <div style={S.catalogItemHeader}>
+                          <span style={S.catalogItemName}>{name}</span>
+                          {item.quantity > 1 && <span style={{ fontSize: '12px', color: '#888' }}>×{item.quantity}</span>}
+                          {isSelected && <span style={{ color: '#3aaa6a', fontSize: '13px', flexShrink: 0 }}>✓</span>}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              )}
-              <button
-                className="btn btn-gold"
-                style={{ ...S.checkoutBtn, marginTop: '6px', width: '100%' }}
-                disabled={!exTargetId || exTargetId === myCharId
-                  || (isDrone ? offerItems.length === 0 : (offerItems.length === 0 && offerSols === 0))}
-                onClick={handleProposeOffer}
-              >
-                {isDrone ? t('trade.window.drone_transfer') : t('trade.window.ex_propose')}
-              </button>
-            </div>
+
+                <div style={S.cartSection}>
+                  {!isDrone && (
+                    <div style={S.modRow}>
+                      <span style={S.modLabel}>{t('trade.window.ex_sols_label')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        style={{ ...S.modInput, width: '80px' }}
+                        value={offerSols}
+                        onChange={e => setOfferSols(Math.max(0, parseInt(e.target.value) || 0))}
+                      />
+                      <span style={S.modUnit}>S</span>
+                    </div>
+                  )}
+                  <button
+                    className="btn btn-gold"
+                    style={{ ...S.checkoutBtn, marginTop: '6px', width: '100%' }}
+                    disabled={!exTargetId || exTargetId === effectiveCharId
+                      || (isDrone ? offerItems.length === 0 : (offerItems.length === 0 && offerSols === 0))}
+                    onClick={handleProposeOffer}
+                  >
+                    {isDrone ? t('trade.window.drone_transfer') : t('trade.window.ex_propose')}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p style={S.empty}>{t('trade.window.ex_select_actor_first')}</p>
+            )}
           </>
           )
         })()}
@@ -329,6 +379,8 @@ export default function ExchangeWindow({ campaignId, socket, onClose, myCharId =
 }
 
 const S = {
+  gmActingAs:        { margin: '4px 8px 0', fontSize: '11px', color: '#c8a84b', fontWeight: 600 },
+  gmActingAsRow:     { display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 8px 0' },
   empty:             { color: '#888', textAlign: 'center', padding: '20px 0', fontSize: '13px', margin: 0 },
   playerSection:     { padding: '8px 8px 4px', flexShrink: 0 },
   merchantSelect:    { width: '100%', fontSize: '13px', padding: '5px 8px', background: '#12121c', color: '#ddd', border: '1px solid #2a2a3a', borderRadius: '4px' },
