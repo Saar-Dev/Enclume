@@ -426,7 +426,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       const hitResult = await damageService.resolveTargetHit(io, db, pendingCampaignId, {
         degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
-        chocDsl: effectiveChocDsl, rangeBand: portee,
+        chocDsl: effectiveChocDsl,
       })
       if (hitResult === null) return
       const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,

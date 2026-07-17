@@ -1596,8 +1596,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           cibleType:        cibleCharacter?.type ?? null,
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
-          chocDsl:   effectiveDamage ? effectiveDamage.choc : null,
-          rangeBand: authoritativeRangeBand,
+          chocDsl: effectiveDamage ? effectiveDamage.choc : null,
         })
         if (hitResult === null) return { suspend: false, emissions }
         const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult

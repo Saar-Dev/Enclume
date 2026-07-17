@@ -31,9 +31,8 @@ function parseStatement(raw) {
 // Fail-safe permanent : clé ou action non reconnue → poussée dans `unknown`, jamais un throw.
 // L'appelant serveur décide du repli (toujours : stats de base de l'arme).
 //
-// `choc` reste un statement brut non résolu ici (action + value tel quel, ex. value =
-// "BP:5D10,C:4D10,M:3D10,L:2D10,E:1D10") — la résolution par bande de portée est un chantier séparé
-// (Lot B, docs/PLAN_ARMES_DSL.md), pas construite dans ce Lot A.
+// `choc` reste un statement brut non résolu ici (action + value tel quel, ex. value = "1D10+2") —
+// résolu par `resolveChocFormula` (correctif Lot B, docs/PLAN_ARMES_DSL.md).
 export function parseAmmoEffects(raw) {
   const result = { dmg: null, choc: null, tags: {}, unknown: [] }
   if (!raw || typeof raw !== 'string') return result
@@ -84,32 +83,15 @@ export function resolveDmgEffect(weaponFormula, dmg) {
   }
 }
 
-// RANGE_BAND_TO_CHOC_CODE — mêmes bandes que shared/combatRange.js (RANGE_BANDS), pas une 2ᵉ table de
-// portée : correspondance vers les codes courts utilisés par le DSL CHOC=SET(BP:...,C:...,...).
-const RANGE_BAND_TO_CHOC_CODE = {
-  bout_portant: 'BP', courte: 'C', moyenne: 'M', longue: 'L', extreme: 'E',
-}
-
-// resolveChocFormula — statement `choc` parsé + bande de portée → formule de dégât de Choc à lancer
-// (ou null si aucune ne s'applique). Pure, ne lance aucun dé (docs/PLAN_ARMES_DSL.md Lot B).
+// resolveChocFormula — statement `choc` parsé → formule de dégât de Choc à lancer (ou null si aucune
+// ne s'applique). Pure, ne lance aucun dé (docs/PLAN_ARMES_DSL.md, correctif Lot B 2026-07-16).
 //
-// N'implémente QUE CHOC=SET(BAND:FORMULE,...) — les données réelles "propres" (munitions Assommante).
-// CHOC=ADD(...) (munitions Explosive, toujours avec scaling type "+1/5D10_ARME") reste hors scope :
-// aucune munition réelle actuelle ne combine ADD sans scaling, donc pas de repli partiel à inventer —
-// `null` (aucun Choc), jamais une tentative de résolution partielle. Contrairement à `resolveDmgEffect`
-// (Lot A), une virgule dans la valeur ici est NORMALE (elle sépare les entrées BP/C/M/L/E) — ne pas
-// réutiliser l'heuristique "virgule = scaling ambigu" de Lot A, elle ne s'applique pas à ce statement.
-export function resolveChocFormula(chocDsl, rangeBand) {
+// N'implémente QUE CHOC=SET(FORMULE) — valeur fixe (LdB `docs/REGLES/REGLESMUNITIONS.md` : "Balles
+// assommantes"/"Balles explosives" donnent un bonus de Choc fixe, jamais une table par bande de
+// portée — la table BP/C/M/L/E d'une version précédente de ce fichier n'existait dans aucune règle,
+// c'était une donnée catalogue inventée). CHOC=ADD(...) (munitions Explosive, toujours avec scaling
+// type "+1/5D10_ARME") reste hors scope : `null`, jamais une résolution partielle.
+export function resolveChocFormula(chocDsl) {
   if (!chocDsl || chocDsl.action !== 'SET') return null
-  const code = RANGE_BAND_TO_CHOC_CODE[rangeBand]
-  if (!code) return null
-
-  for (const segment of chocDsl.value.split(',')) {
-    const colon = segment.indexOf(':')
-    if (colon < 0) continue
-    const key   = segment.slice(0, colon).trim()
-    const value = segment.slice(colon + 1).trim()
-    if (key === code) return value || null
-  }
-  return null
+  return chocDsl.value || null
 }

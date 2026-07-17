@@ -90,8 +90,8 @@ function _severityForDamage(net) {
 // degautsBruts calculé AVANT l'appel par le caller (contexte MR/modDom varie selon le handler).
 // Retourne null si cibleType === 'drone' — le caller gère resolveDroneIntegrityLoss lui-même.
 // Émet WOUND_ADDED via woundService (effet DB + WS inclus).
-// chocDsl/rangeBand (Lot B, docs/PLAN_ARMES_DSL.md) : optionnels, null par défaut — resolveMeleeAction
-// et les branches drone ne les passent jamais, comportement strictement inchangé pour elles.
+// chocDsl (Lot B, docs/PLAN_ARMES_DSL.md) : optionnel, null par défaut — resolveMeleeAction et les
+// branches drone ne le passent jamais, comportement strictement inchangé pour elles.
 export async function resolveTargetHit(io, db, campaignId, {
   degautsBruts,
   characterIdCible,
@@ -101,7 +101,6 @@ export async function resolveTargetHit(io, db, campaignId, {
   con_na_cible,
   vol_na_cible,
   chocDsl = null,
-  rangeBand = null,
 }) {
   if (cibleType === 'drone') return null
 
@@ -113,7 +112,10 @@ export async function resolveTargetHit(io, db, campaignId, {
   // 2. Armures + résistances (mutations/avantages) de la cible — seul point d'insertion pour toute
   // la résolution de combat (docs/PLAN_MUTATION2.md Lot 3) : les 4 appelants de resolveTargetHit
   // n'ont plus besoin de fetcher mutations/avantages eux-mêmes.
-  let etq = null, prt = null
+  // `prt` (protection_shock) n'est pas consommé ici : le Choc de munition (Lot B) n'est pas réduit par
+  // l'armure (LdB p.243 littéral + `docs/REGLES/REGLESMUNITIONS.md`) — `prt` reste réservé au futur
+  // mécanisme arme (`ref_equipment.shock`, catégories 1/2, `docs/VOCABULARY.md` "Dommages de Choc").
+  let etq = null
   let mutationEffectsCible = null, advantagesCible = []
   if (char_sheet_id_cible && characterIdCible) {
     const [armuresCible, mutEff, adv] = await Promise.all([
@@ -128,9 +130,7 @@ export async function resolveTargetHit(io, db, campaignId, {
     const armuresSlot = armuresCible.filter(a =>
       a.slot && ('/' + a.slot + '/').includes('/' + slotCode + '/')  // PI8
     )
-    const resistanceArmure = calcResistanceArmure(armuresSlot)
-    etq = resistanceArmure.etq
-    prt = resistanceArmure.prt
+    etq = calcResistanceArmure(armuresSlot).etq
     mutationEffectsCible = mutEff
     advantagesCible = adv
   }
@@ -145,17 +145,16 @@ export async function resolveTargetHit(io, db, campaignId, {
   )
   const degatsNets = Math.max(0, degautsBruts - (etq ?? 0) + rd)
 
-  // 3bis. Dommages de Choc (Lot B, LdB p.243) — uniquement munition avec CHOC applicable + coup en
-  // Tête (restriction confirmée Saar, dépendante de l'action "Tir visé sur localisation" COM9 pour
-  // être déclenchée de façon fiable). Réduits par prt (armure Choc) + RD, jamais par etq. Dommages
-  // virtuels : jamais de character_wounds créée, seulement une comparaison de sévérité (étape 5).
-  let chocDegatsNets = null
-  if (chocDsl && localisation === 'tete') {
-    const chocFormula = resolveChocFormula(chocDsl, rangeBand)
+  // 3bis. Dommages de Choc (Lot B, LdB p.243 + `docs/REGLES/REGLESMUNITIONS.md`) — munition avec CHOC
+  // applicable, quelle que soit la localisation touchée (catégorie 3, `docs/VOCABULARY.md`, aucune
+  // restriction dans les munitions spéciales). Brut, jamais réduit (ni armure, ni RD) — confirmé Saar.
+  // Dommages virtuels : jamais de character_wounds créée, seulement une comparaison de sévérité (étape 5).
+  let chocTotal = null
+  if (chocDsl) {
+    const chocFormula = resolveChocFormula(chocDsl)
     if (chocFormula) {
       try {
-        const chocRoll = await parseDice(chocFormula.replace(/\s/g, ''))
-        chocDegatsNets = Math.max(0, chocRoll.total - (prt ?? 0) + rd)
+        chocTotal = (await parseDice(chocFormula.replace(/\s/g, ''))).total
       } catch (err) {
         console.warn(`[damageService] resolveTargetHit — formule Choc invalide (${err.message}), Choc ignoré`)
       }
@@ -166,8 +165,9 @@ export async function resolveTargetHit(io, db, campaignId, {
   const { severity, is_lethal } = _severityForDamage(degatsNets)
 
   // 5. Blessure + shock test — la blessure reste basée uniquement sur le dégât physique (jamais gonflée
-  // par du Choc virtuel). Le Test de Choc, lui, utilise le total combiné physique+Choc s'il y a lieu,
-  // en remplacement exclusif du test natif (jamais les deux — invariant Lot B, un seul test par coup).
+  // par du Choc virtuel). Le Test de Choc, lui, utilise le total combiné physique+Choc brut s'il y a
+  // lieu (LdB p.243 : "Ajoutez ces Dommages additionnels au total de Dommages physiques obtenu
+  // précédemment"), en remplacement exclusif du test natif (jamais les deux — un seul test par coup).
   let finalSeverity = severity
   let shockResult   = null
   const woundResult = await woundService.applyWound(io, db, campaignId, {
@@ -176,8 +176,8 @@ export async function resolveTargetHit(io, db, campaignId, {
   })
   if (woundResult) finalSeverity = woundResult.finalSeverity
 
-  if (chocDegatsNets !== null) {
-    const { severity: combinedSeverity, is_lethal: combinedIsLethal } = _severityForDamage(degatsNets + chocDegatsNets)
+  if (chocTotal !== null) {
+    const { severity: combinedSeverity, is_lethal: combinedIsLethal } = _severityForDamage(degatsNets + chocTotal)
     shockResult = await statusService.resolveShockTest({
       finalSeverity: combinedSeverity, localisation, is_lethal: combinedIsLethal,
       for_na: for_na_cible, con_na: con_na_cible, vol_na: vol_na_cible,
@@ -196,9 +196,9 @@ export async function resolveTargetHit(io, db, campaignId, {
   return {
     rollLoc, locRolls, locSeed,
     slotCode, localisation,
-    etq, prt, rd,
+    etq, rd,
     degatsNets,
-    chocDegatsNets,
+    chocTotal,
     severity, is_lethal,
     finalSeverity,
     shockResult,

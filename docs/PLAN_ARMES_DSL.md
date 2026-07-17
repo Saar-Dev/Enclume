@@ -1,7 +1,12 @@
 # PLAN_ARMES_DSL.md — Chantier 11 (Blessures), Étape 2 : Module Armes DSL
 
-> Créé : 2026-07-16 (dev/Saar). Statut : **Lot A codé et testé**, **Lot B codé et testé** (2026-07-16,
-> mécanique sourcée LdB p.243, `docs/Character/Statuts/REGLESTATUT.txt:90-121`). Lot C non codé.
+> Créé : 2026-07-16 (dev/Saar). Statut : **Lot A codé et testé**. **Lot B codé et testé, correctif
+> appliqué** (2026-07-17) — mécanique de gate initialement câblée sur la mauvaise règle (voir §Lot B
+> ci-dessous), corrigée + migration `160` appliquée. **Lot C recadré** (2026-07-16) — plus un lot
+> d'affichage seul, désormais 3 sous-lots mécaniques (C1 Pénétration/Armure, C2 Test de panne, C3 Zone
+> d'effet Shrapnel), aucun codé, méthode pas-à-pas imposée par Saar : un sous-lot à la fois, code
+> seulement une fois le sous-lot entièrement tranché.
+> Voir `docs/VOCABULARY.md` "Dommages de Choc" pour la distinction à 3 catégories qui a révélé le bug B.
 > Prérequis Chantier 10 sprint 4 : ✅ livré session 55.
 > Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois
 > le chantier clos, contenu durable transféré vers `docs/SYSTEME/BLESSURES.md`/`COMBAT.md`.
@@ -361,7 +366,7 @@ antérieure) : `prt` réduit le Choc, jamais le physique.
 3 points ci-dessus à intégrer à la conception avant d'écrire le code (pas des blocages nécessitant
 Saar — des précisions d'implémentation déjà tranchées par les données et les invariants existants).
 
-### Lot B — ✅ CODÉ ET TESTÉ (2026-07-16)
+### Lot B — ✅ CODÉ ET TESTÉ, CORRECTIF APPLIQUÉ (2026-07-16/17)
 
 **Livré**, conforme à la conception verrouillée ci-dessous, avec un seul écart délibéré documenté :
 
@@ -414,6 +419,141 @@ directement contre la vraie base avec un `io` stub, pas via le transport WS comp
 anti-double-Test-de-Choc observé en base réelle spécifiquement (garanti par construction du code —
 `if/else if` mutuellement exclusif — mais pas exercé par un test dédié qui espionne le nombre d'appels
 à `resolveShockTest`) — à confirmer par Saar en navigateur avant clôture définitive du Chantier.
+
+#### Bug trouvé après livraison (2026-07-16) — mauvaise règle appliquée à la mauvaise donnée — ✅ corrigé
+
+**Confirmé par Saar, `[VÉRIFIÉ]`** contre `docs/Character/Statuts/REGLESTATUT.txt:90-121` (LdB p.243) et
+`docs/REGLES/REGLESMUNITIONS.md` : ces deux textes décrivent **deux mécaniques distinctes**, jamais
+mentionné comme tel avant la conception de Lot B (voir `docs/VOCABULARY.md` "Dommages de Choc" pour la
+définition officielle, 3 catégories) :
+
+1. **Arme normale à `shock`** (lourde/contondante, `ref_equipment.shock`) — Choc **uniquement sur coup
+   en Tête**, en plus du dégât physique. C'est la règle p.243 "arme normale".
+2. **Arme à Choc pur** (électrique, `ref_equipment.shock`) — aucun dégât physique, Choc partout, aucun
+   gate de localisation. Toujours p.243, "arme qui ne cause que du Choc".
+3. **Munition spéciale** (Assommante/Explosive, `ammo_effects` DSL `CHOC=`) — Choc partout, **aucun
+   gate de localisation**, valeurs fixes. C'est `REGLESMUNITIONS.md`, un texte séparé qui ne mentionne
+   aucune restriction de Tête.
+
+**Lot B, tel que codé, a implémenté la catégorie 3 (DSL munitions) avec le gate de localisation de la
+catégorie 1** (règle p.243, "arme normale") — erreur de conception confirmée par Saar. La table par
+bande de portée (5D10 bout portant → 1D10 extrême) utilisée par le code livré **n'existe dans aucun des
+deux textes sources** ; elle provenait de la colonne `description` du catalogue (`ref_equipment`),
+laquelle s'est révélée porter plusieurs formules inventées lors du peuplement (Shrapnel, HP, Explosive,
+IEM — voir §Lot C ci-dessous) — cinquième cas du même type, pas une exception.
+
+**Correction requise (non codée à ce stade)** :
+- Retirer la restriction `localisation === 'tete'` du chemin munition (`resolveTargetHit`, étape 3bis).
+- Remplacer `resolveChocFormula` (table par bande de portée) par les valeurs fixes de
+  `REGLESMUNITIONS.md` : Assommante `+1D10+2`, Explosive `+1D10` (+ dégât physique `+1D10`, armure
+  cible `×2` — relève en fait du sous-lot C1 "modification d'armure", voir plus bas — donc Explosive
+  ne sera vraiment complet qu'une fois C1 câblé).
+- La catégorie 1/2 (`ref_equipment.shock`, armes) reste un chantier séparé, non commencé — c'est elle
+  qui fermera vraiment `[CHOC1]` (bonus Corne, catégorie 1) une fois construite. Le Lot B corrigé ne
+  fermera que la partie munition de la dette, comme documenté dans `docs/EN_COURS.md`.
+- Tests déjà écrits (scénarios purs + réel en base) à refaire : le gate localisation et la table de
+  portée testés ne seront plus les bons comportements après correction.
+
+#### Correctif Lot B — Conception verrouillée (2026-07-16, run à vide + analyse à charge, confirmée par Saar : "Oui c'est ça")
+
+**Erreur corrigée en route** : une première version de cette conception (severité Choc indépendante,
+"le pire des deux") s'est révélée fausse à l'analyse à charge — avec les vraies plages de dés
+(Assommante Choc 3-12, jamais ≥15 "Grave"), un Choc jamais combiné au physique ne déclencherait
+quasiment jamais de Test de Choc, ce qui viderait la munition de son intérêt. Saar a confirmé revenir à
+la procédure p.243 littérale (jet physique + jet Choc **additionnés**, un seul total comparé une seule
+fois), avec une seule différence par rapport à p.243 : le Choc n'est pas réduit par `prt`/RD avant
+d'être additionné (`REGLESMUNITIONS.md` ne mentionne aucune réduction pour les munitions).
+
+**Procédure verrouillée** :
+1. **Dégât physique** : pipeline inchangé (`etq` + `rd` → `degatsNets`, blessure appliquée normalement
+   via `woundService.applyWound`, `finalSeverity` post-promotion **utilisée uniquement pour la
+   blessure**, jamais pour le Choc).
+2. **Dégât Choc** : `chocTotal = (await parseDice(chocDsl.value)).total`, **brut, aucune réduction**
+   (ni `etq`/`prt`, ni `rd`).
+3. **Total combiné** (uniquement pour piloter le Test de Choc, jamais la blessure) :
+   `combined = degatsNets + chocTotal` — nombres bruts, pas les sévérités.
+4. **Une seule sévérité** pour le Choc : `_severityForDamage(combined)` (fonction déjà codée, table
+   5/10/15/20/25/30 réutilisée telle quelle).
+5. **Un seul `resolveShockTest`** : si `chocTotal !== null` → utilise la sévérité du total combiné
+   (étape 4) ; sinon → comportement natif inchangé (sévérité post-promotion du physique seul, comme
+   aujourd'hui). Jamais les deux appels pour un même coup.
+6. **Gate de localisation** : supprimé côté munition — s'applique quelle que soit la localisation
+   touchée (catégorie 3, aucune restriction dans `REGLESMUNITIONS.md`).
+7. **`is_lethal`** : dérivé du total combiné comme aujourd'hui pour le physique seul — aucun changement
+   de `resolveShockTest`/`getShockMalus` (code existant, testé, hors périmètre de ce correctif). Une
+   éventuelle règle "on épargne le Test de Choc si `is_lethal`" reste une amélioration séparée, non
+   traitée ici.
+8. **`resolveChocFormula`** : simplifié — n'a plus besoin de `rangeBand` ni de table BP/C/M/L/E, lit
+   directement `chocDsl.value` quand `action === 'SET'`.
+9. **Donnée catalogue** : les 8 lignes "Munition assommante" (`ammo_effects`) corrigées de
+   `CHOC=SET(BP:5D10,C:4D10,M:3D10,L:2D10,E:1D10)` vers `CHOC=SET(1D10+2)`. Explosive laissé de côté
+   pour l'instant (son DSL réel utilise `ADD` avec scaling `_ARME` pour DMG et CHOC, plus son armure
+   `×2` qui attend C1 — correction groupée avec C1, pas ici, pour ne pas laisser une munition
+   à moitié corrigée).
+
+Pseudo-code (`resolveTargetHit`, étapes 3bis/4/5) :
+```js
+// 3bis — Choc, brut, aucun gate de localisation
+let chocTotal = null
+if (chocDsl?.action === 'SET') {
+  try { chocTotal = (await parseDice(chocDsl.value.replace(/\s/g, ''))).total }
+  catch (err) { console.warn(...) }
+}
+
+// 4 — sévérité physique inchangée (pilote la blessure, jamais le Choc)
+const { severity, is_lethal } = _severityForDamage(degatsNets)
+
+// 5 — blessure (physique seul, inchangé) + Test de Choc unique
+...woundService.applyWound comme aujourd'hui → finalSeverity post-promotion...
+let shockResult = null
+if (chocTotal !== null) {
+  const { severity: combinedSeverity, is_lethal: combinedIsLethal } = _severityForDamage(degatsNets + chocTotal)
+  shockResult = await statusService.resolveShockTest({ finalSeverity: combinedSeverity, localisation, is_lethal: combinedIsLethal, ... })
+} else if (woundResult) {
+  shockResult = await statusService.resolveShockTest({ finalSeverity, localisation, is_lethal, ... })
+}
+```
+
+**✅ Codé et testé (2026-07-17)** :
+- `shared/weaponAmmoDsl.js` : `resolveChocFormula(chocDsl)` simplifié (formule fixe, plus de table de
+  portée/`RANGE_BAND_TO_CHOC_CODE`, plus de paramètre `rangeBand`).
+- `server/src/lib/damageService.js` : `resolveTargetHit` — gate `localisation === 'tete'` retiré,
+  extraction `prt` retirée (plus consommée), `chocTotal` brut (aucune réduction), total combiné
+  `degatsNets + chocTotal` piloté par `_severityForDamage`, un seul `resolveShockTest` (combiné si
+  Choc présent, natif sinon). Retour : `chocDegatsNets` renommé `chocTotal` (plus honnête — n'est plus
+  "net" puisque non réduit), `prt` retiré du retour (inutilisé).
+- `socketCombatHelpers.js`/`socketCombatResolution.js` : `rangeBand`/`portee` ne sont plus transmis à
+  `resolveTargetHit` (paramètre supprimé, plus nécessaire).
+- **Migration `160_fix_ref_equipment_choc_assommante.js`** (appliquée) : corrige `ammo_effects`
+  (`CHOC=SET(BP:...)` → `CHOC=SET(1D10+2)`) et `description` sur les 12 munitions Assommante réelles
+  du catalogue (10 calibres + 2 Darts). **2 items exclus** (`Darts 7.62mm ST - Projectile SAP`,
+  `Flèche - Projectile IEM`) — même DSL par erreur de copié-collé mais description totalement
+  différente, nouveau bug documenté `docs/BUGIDENTIFIE.md` COM26, pas corrigé ici (hors scope).
+
+**Testé** :
+- Purs (`resolveChocFormula` v2, 5 scénarios) : formule fixe, aucun choc, `chocDsl` null, `CHOC=ADD`
+  hors scope, valeur vide.
+- Non-régression Lot A (10/10).
+- Réel en base (transaction annulée, migration 160 vérifiée appliquée puis rollback testé séparément
+  sans résidu) : munition "7.65 mm - Munition assommante" corrigée (`CHOC=SET(1D10+2)` confirmé) sur
+  une arme réelle en inventaire —
+  - Choc appliqué **quelle que soit la localisation** (constaté en tête ET hors tête, gate bien retiré).
+  - `chocTotal` toujours dans `[3,12]` (plage réelle de `1D10+2`), jamais réduit.
+  - Non-régression sans munition Choc : `chocTotal` toujours `null` (15 tirs, 0 fuite).
+  - **Scénario clé** : `degatsNets=4` (aucune blessure seule, `severity: null`) + `chocTotal=12` →
+    total combiné 16 → `resolveShockTest` déclenché (`isShockTestRequired` faux pour le physique seul,
+    vrai pour le combiné) — confirme que le Choc peut déclencher un Test que le physique seul n'aurait
+    jamais déclenché, et qu'aucune `character_wounds` n'est créée par cette combinaison (delta wounds
+    = uniquement ce que le physique seul aurait produit).
+  - `node --check` : 0 erreur sur les 5 fichiers touchés (`weaponAmmoDsl.js`, `damageService.js`,
+    `socketCombatHelpers.js`, `socketCombatResolution.js`, migration `160`).
+
+**Non testé** : parcours navigateur réel (déclaration → confirmation d'un tir avec munition assommante
+en conditions de jeu), round-trip Socket.IO complet — à confirmer par Saar en navigateur.
+
+**Données** : migration `160` appliquée en base réelle (12 lignes `ref_equipment` corrigées, vérifiée
+par requête directe après application). Bug de données séparé trouvé et documenté (`COM26`), pas
+corrigé (hors scope).
 
 ### Lot B — Conception finale verrouillée (2026-07-16, avant code — zéro zone d'ombre restante)
 
@@ -523,22 +663,120 @@ Choc depuis une donnée partielle.
 **Aucune décision restante.** Tout point encore ouvert à ce stade serait un point à découvrir en
 codant (implémentation), pas une question de conception.
 
-### Lot C — Tags qualitatifs `TXT=FX=…` — affichage informatif seul
+### Lot C — Effets mécaniques réels des tags qualitatifs (remplace l'ancien Lot C "affichage seul")
 
-Objectif minimal et sûr : exposer les tags (`FX=SAP`, `FX=APHC`, `FX=ASSOMMANTE`…) dans le payload
-WS de résultat de combat (`COMBAT_ATTACK_RESULT`/`COMBAT_DAMAGE_*`) pour affichage texte (ex. tooltip
-"Munition : Perforante"). **Aucune mécanique de jeu attachée** dans ce lot.
+**Recadrage (2026-07-16)** : l'ancien Lot C ("juste afficher les tags, aucune mécanique") est abandonné.
+Saar souhaite coder les effets réels autant que possible. Recherche menée le même jour : croisement de
+`docs/REGLES/REGLESMUNITIONS.md` (extrait LdB, **source de vérité confirmée par Saar**) contre les 25
+valeurs DSL uniques réellement présentes en catalogue (101 lignes `ref_equipment.family='Munitions'`)
+et la colonne `description` de chaque item (déjà établie comme source la plus précise — voir §0 —
+donne souvent une formule à l'échelle des dés de l'arme là où `REGLESMUNITIONS.md` résume en valeur
+fixe générique ; les deux ne se contredisent pas dans ce cas, l'item est juste plus précis).
 
-**Explicitement hors scope de ce PLAN** (chacun nécessiterait sa propre conception + probablement sa
-propre dette dans `docs/BUGIDENTIFIE.md` une fois identifié en pratique) :
+**Méthode imposée par Saar : pas à pas, un sous-lot à la fois, tout noté ici avant de coder.** Pas de
+lot combiné, pas de code avant que le sous-lot en cours soit entièrement tranché.
 
-| Tag | Pourquoi hors scope |
-|---|---|
-| `PEN=` | Modifierait `etq` dans `resolveTargetHit` — mécanique de pénétration d'armure à concevoir. |
-| `ARMOR=TARGET_PLUS/PASS=PLUS/CHOC_IGNORE_SIMPLE` | Interaction directe avec `calcResistanceArmure`, scaling `_ARME` non trivial. |
-| `RANGE=AIR_X2/X3`, `DEPTH=>500M_X0.5\|>=1000M_DISABLE` | Portée aérienne/sous-marine — hors du système de portée actuel (`shared/combatRange.js`), probablement lié aux munitions de drones/navires (`REGLEDRONE.md`), périmètre distinct. |
-| `DMG_DROP=-1D10/RANGE`, `AREA=CONE_3M`, `FX=SHRAPNEL` | Dégâts dégressifs par portée + zone d'effet multi-cibles — aucune mécanique de ciblage de zone n'existe dans le pipeline combat actuel. |
-| `FX=IEM(TEST_PANNE:...)` | Test de panne d'arme — mécanique inexistante. |
+**Correction de méthode (2026-07-16)** — la colonne `description`/`ammo_effects` du catalogue s'est
+révélée peu fiable comme source de règle exacte : **5 cas confirmés** de formule inventée ou erronée
+pendant cette seule session (Shrapnel — armure inversée ; HP, Explosive, IEM — mise à l'échelle `_ARME`
+introuvable dans le LdB ; Assommante — gate de localisation + table de portée empruntés à la mauvaise
+règle, voir §Lot B ci-dessus). **Décision : à partir de maintenant, `docs/REGLES/REGLESMUNITIONS.md`
+est la seule source de règle pour le Lot C, la donnée catalogue est ignorée sauf pour les valeurs déjà
+vérifiées cohérentes** (ex. `PEN=SET(n)` d'APHC/SAP/SLAP, correctement alignées une fois retraduites —
+voir tableau ci-dessous).
+
+**Confirmé hors scope définitivement** : obus anti-armures (uranium appauvri, canon d'assaut) —
+**zéro munition seedée dans le catalogue, confirmé par Saar intentionnel** ("inutile actuellement, il
+faut implanter exo-armure et navire pour les rendre utilisables"). Pas une dette, un vrai hors-scope
+tant que ces deux systèmes n'existent pas.
+
+#### Traduction complète de `REGLESMUNITIONS.md` (2026-07-16, source unique)
+
+Notation : `degautsBruts` = jet brut, `etq`/`prt` = armure physique/Choc déjà calculées
+(`calcResistanceArmure`), `rd` = Résistance aux Dommages (déjà ajoutée), `degatsNets = max(0,
+degautsBruts - etq + rd)` = pipeline existant, inchangé sauf mention contraire.
+
+| Munition | Dégâts | Armure cible | Autre effet |
+|---|---|---|---|
+| **Expansives (HP)** | `+5` fixe | `× 1.5` (arrondi inférieur) | — |
+| **Assommantes** | `1D6+2` (déjà codé) | inchangée | Choc `+1D10+2` fixe, **aucun gate de localisation** (catégorie 3, `docs/VOCABULARY.md`) |
+| **Explosives** | `+1D10` | `× 2` | Choc `+1D10` (nouveau jet), aucun gate de localisation mentionné |
+| **IEM** | `× 0.5` (déjà codé) | inchangée | Test de panne, malus **-3** fixe, "équipements électroniques" |
+| **Perforantes (APHC)** | inchangés | `× 2/3` (arrondi inférieur, "réduite d'un tiers") | — |
+| **Perforantes à sabot (SAP/SLAP)** | **-1 dé** sur la formule de l'arme (4D10→3D10) | `× 0.5` (arrondi inférieur) | — |
+| **Shrapnel** | bout portant inchangé, courte/moyenne `-1D10`, longue `-2D10`, extrême `-3D10` | `× 1.5` (`polarisRound`, voir D) | Zone cône 3m, multi-cibles |
+| Uranium légère / obus canon d'assaut | — | — | **Hors scope confirmé** (exo-armure/navire non construits) |
+
+**Décisions verrouillées par Saar (2026-07-16), les 3 points restés ouverts après la première
+traduction** :
+- **A. Ordre bonus/armure** `[VÉRIFIÉ]` : le bonus de dégât fixe (+5 HP, +1D10 Explosive) fait partie
+  du jet brut, donc soumis à l'armure durcie — pas un ajout garanti après coup. Formule verrouillée :
+  `degatsNets = max(0, (degautsBruts + bonus) - etq_effectif + rd)`. Cohérent avec le pattern déjà en
+  place pour `rd` (ajouté dans le même `max()`) et avec la logique munition "soft target" (HP est
+  justement mauvais contre une cible blindée).
+- **B. Choc Assommante/Explosive = catégorie 3** `[VÉRIFIÉ]`, voir `docs/VOCABULARY.md` "Dommages de
+  Choc" : aucun gate de localisation, valeurs fixes de `REGLESMUNITIONS.md`. Ferme le bug du §Lot B
+  ci-dessus.
+- **C. SAP/SLAP nécessite une transformation de formule** `[VÉRIFIÉ]`, confirmé morceau à part : lire
+  `weapon_formula` (`NdX+M`), décrémenter `N` de 1, garder `X`/`M` inchangés — pas une opération sur un
+  nombre, sur la formule elle-même. Nouvelle fonction pure à prévoir dans `shared/weaponAmmoDsl.js` ou
+  `diceParser.js`.
+- **D. Arrondi** `[VÉRIFIÉ]` : Perforantes/SAP/SLAP/HP/uranium ont un "arrondissez à l'inférieur"
+  **explicite** dans le texte → `Math.floor()` pur, littéral. Shrapnel n'a aucune mention d'arrondi →
+  Saar tranche : règle d'arrondi Polaris standard du projet, soit `polarisRound(x) = Math.floor(x +
+  0.4)` (`shared/polarisUtils.js:2-4`, déjà utilisée pour le mille-feuille d'armure) — **différente**
+  d'un floor pur au-delà de `x.5` (arrondit vers le haut à partir de `x.6`), ne pas confondre les deux
+  formules en codant.
+
+**Correction Choc, run à vide du 2026-07-16** `[VÉRIFIÉ]` : le Choc de munition (Assommante/Explosive)
+**n'est réduit ni par `prt` ni par `rd`** — la mention "la Résistance aux blessures s'applique" venait
+du texte p.243 (catégorie 1/2, armes), pas de `REGLESMUNITIONS.md`. Le Test de Choc est **indépendant**
+du physique ("pur") : sévérité dérivée du Choc brut seul via `_severityForDamage` (déjà codé, table
+5/10/15/20/25/30), jamais combinée au total physique. Un seul `resolveShockTest` par coup — le pire des
+deux sévérités (physique post-promotion vs Choc pur) si les deux sont non-nulles. Détail complet et
+pseudo-code : §"Correctif Lot B — Conception verrouillée" ci-dessus. `prt` reste donc sans usage réel
+pour l'instant (l'hypothèse initiale du plan — `prt` réduit le Choc — est invalidée).
+
+**Reste ouvert avant de coder quoi que ce soit** : `PEN=BASE` (Perforantes standards catalogue, sans
+valeur chiffrée) — probablement neutre (`PEN=0`, dégâts et armure inchangés, cohérent avec "Les
+Dommages sont normaux" + aucune mention de réduction pour la version "de base"), à confirmer en codant.
+
+**Découpage en 3 sous-lots** (C1/C2/C3 — Saar n'a pas de préférence de priorité, mais impose l'ordre
+séquentiel une fois choisi, un seul à la fois) :
+
+#### Lot C1 — Modification d'armure (Perforantes/SAP/SLAP/HP/Explosive/Shrapnel)
+
+Un seul point d'insertion technique (`etq`/`prt` dans `resolveTargetHit`, déjà étendu par Lot B) pour
+6 munitions : `× 2/3` (APHC), `× 0.5` (SAP/SLAP, + transformation formule dégâts), `× 1.5` (HP, +
+dégâts durs à l'armure), `× 2` (Explosive), `× 1.5` (Shrapnel — mais Shrapnel a aussi la zone d'effet,
+donc son armure peut être câblée ici même si le ciblage de zone (C3) attend). Toutes les valeurs sont
+désormais des **multiplicateurs** (`× fraction`), jamais un `PEN=` flat — la règle "1 point de
+Pénétration = 1 point d'armure" du message précédent est **remplacée** par cette traduction directe de
+`REGLESMUNITIONS.md`, plus fidèle. `PEN=BASE`/`PEN=SET(n)` du catalogue ne sont plus la source
+numérique — seule la fraction du tableau ci-dessus l'est.
+
+**Non commencé.**
+
+#### Lot C2 — Test de panne (munitions IEM)
+
+Mi-dégâts (déjà codé `MUL(0.5)`) + malus **-3** fixe à un "Test de panne" sur "équipements
+électroniques" — valeur maintenant confirmée par `REGLESMUNITIONS.md` (plus de mise à l'échelle
+`_ARME`, c'était une invention catalogue). **Mécanique "Test de panne" elle-même inexistante dans le
+code** (`grep` exhaustif, 0 résultat) : reste à savoir comment un Test de panne se résout (quel jet,
+quel seuil, quel effet en cas d'échec) — Saar fournira ce complément le moment venu, pas nécessaire
+tant que C1 n'est pas clos.
+
+**Non commencé — bloqué sur C1 (ordre séquentiel) et sur la mécanique Test de panne elle-même.**
+
+#### Lot C3 — Zone d'effet Shrapnel (cône 3m, multi-cibles)
+
+Aucun ciblage de zone dans le pipeline combat actuel (cible unique partout). Le plus gros morceau des
+3 — nouvelle UI de ciblage + nouvelle boucle serveur multi-cibles. L'armure Shrapnel (`× 1.5`) est
+tranchée (tableau ci-dessus, confirmée par `REGLESMUNITIONS.md` — la donnée catalogue `PEN=SET(5)`
+était fautive) ; ce qui reste réellement à concevoir pour C3 est uniquement le ciblage de zone et la
+dégression de dégâts par portée, pas l'armure.
+
+**Non commencé — bloqué sur C1 (ordre séquentiel).**
 
 ---
 
@@ -556,11 +794,18 @@ propre dette dans `docs/BUGIDENTIFIE.md` une fois identifié en pratique) :
   formules, c'est l'appelant serveur qui les lance), testable en isolation.
 - Nouvelle action DSL future (Lot C ou au-delà) = une entrée dans `DMG_ACTIONS` (ou son équivalent
   Choc), jamais une branche supplémentaire dans le dispatcher ou les appelants.
-- Lot B : `prt` (protection_shock) et `etq` (protection physique) restent deux réductions
-  indépendantes — jamais additionnées dans un seul total, jamais l'une utilisée à la place de l'autre.
-- Lot B : un seul `resolveShockTest` par coup — si la munition chargée porte un Choc applicable
-  (localisation tête, cf. §2), le Test de Choc de l'étape 1 (physique seul) est sauté, remplacé par
-  celui de l'étape 4 (total combiné). Jamais deux Tests de Choc pour un seul coup.
+- Lot B (corrigé) : le Choc de munition n'est réduit **ni par `etq` ni par `prt` ni par `rd`** — brut,
+  comparé tel quel. `prt`/`protection_shock` n'a, à ce stade, aucun usage réel dans le pipeline combat
+  (invariant précédent invalidé par le run à vide du 2026-07-16, voir §Lot B correctif).
+  Corollaire : la fraction "hors périmètre" du texte p.243 — armes qui causent leur Choc via
+  `ref_equipment.shock` (catégories 1/2, `docs/VOCABULARY.md`) — est un chantier séparé, distinct de
+  `ammo_effects`, et c'est probablement **elle** qui utilisera `prt` un jour.
+- Lot B (corrigé) : un seul `resolveShockTest` par coup — si une munition Choc est chargée, la
+  sévérité qui pilote le test vient du total combiné **brut** `degatsNets + chocTotal` (p.243, "Ajoutez
+  ces Dommages additionnels au total de Dommages physiques obtenu précédemment"), jamais de deux
+  sévérités séparées comparées entre elles. Sans munition Choc, comportement natif inchangé (sévérité
+  physique post-promotion). Jamais deux Tests de Choc pour un seul coup. La blessure, elle, reste
+  toujours basée sur `degatsNets` seul, jamais le total combiné.
 
 ## 4. Tests prévus
 
@@ -572,7 +817,10 @@ propre dette dans `docs/BUGIDENTIFIE.md` une fois identifié en pratique) :
   bande de portée), scénario confirmant qu'aucune ligne `character_wounds` n'est créée par le Choc,
   scénario dédié anti-double-Test-de-Choc (dégât physique + Choc combinés franchissant un seuil →
   un seul `resolveShockTest` appelé, pas deux), scénario coup hors tête → aucun Choc appliqué.
-- **Lot C** : vérifier que les tags apparaissent dans le payload WS sans altérer `degatsNets`.
+- **Lot C** (tests à écrire une fois chaque sous-lot tranché, pas avant) : **C1** scénarios purs
+  `etq_effectif = max(0, etq - PEN)`, non-régression munitions sans `PEN=`, scénario réel APHC/SAP/SLAP
+  en base (armure réduite constatée, dégât inchangé) ; **C2** à définir une fois la règle LdB fournie ;
+  **C3** à définir une fois le ciblage de zone conçu + la correction de données appliquée.
 
 ## 5. Hors périmètre de ce PLAN
 

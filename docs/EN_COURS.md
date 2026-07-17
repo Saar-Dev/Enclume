@@ -172,32 +172,44 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > `COMBAT_DAMAGE_PROMPT` incohérent avec le jet réel (nouvelle `getEffectiveWeaponFormulaPreview`, sans
 > jet de dé gaspillé). Les deux corrections testées en base réelle.
 >
-> **Lot B ✅ CODÉ ET TESTÉ (2026-07-16), même session.** Mécanique sourcée intégralement
-> (`docs/Character/Statuts/REGLESTATUT.txt:90-121`, LdB p.243) — RD confirmée par Saar,
-> `protection_shock`/`prt` confirmé (réduit le Choc uniquement, symétrique à `etq`/physique),
-> restriction Tête confirmée intentionnelle (dépend de l'action "Tir visé sur localisation" `COM9`,
-> jamais codée, ajoutée à `docs/ROADMAP.md`). **Correction de scope actée avant code** : le cas "arme
-> qui ne cause que du Choc" (armes électriques, `ref_equipment.shock`) n'est couvert par aucun Lot de ce
-> plan — mécanisme distinct de `ammo_effects`, explicitement hors périmètre ; `CHOC=ADD(...)` (munitions
-> explosives, toujours avec scaling) reste également hors scope, jamais une résolution partielle.
-> **Livré** : `shared/weaponAmmoDsl.js` (`resolveChocFormula`, `RANGE_BAND_TO_CHOC_CODE`) ;
-> `damageService.getEffectiveWeaponDamage` expose `choc` ; `resolveTargetHit` étendu (`chocDsl`/
-> `rangeBand`, extraction `prt`, étape 3bis `chocDegatsNets`, sévérité extraite dans
-> `_severityForDamage`, étape 5 restructurée en Test de Choc **exclusif** — combiné physique+Choc
-> remplace le test natif, jamais les deux) ; les 2 sites concernés (`resolveAssaultAction` PNJ,
-> `COMBAT_DAMAGE_CONFIRM` PJ) rebranchés, CaC/drone non touchés. **Testé** : 6 scénarios purs
-> `resolveChocFormula` + non-régression Lot A (10/10), scénario réel en base (munition "Balle
-> assommante" sur une arme réelle en inventaire, transaction annulée, 0 résidu) : gate localisation
-> Tête vérifié (0 fuite sur 40 tirs), décroissance Choc par bande de portée observée (BP≈24-25 vs
-> E≈2-9), non-régression sans munition Choc (0 fuite sur 15 tirs), **Dommages virtuels confirmés** (cas
-> observé : dégât physique 4, aucune blessure, Choc combiné 31 → Test de Choc déclenché, 0 nouvelle
-> ligne `character_wounds`), `node --check` 0 erreur. **Non testé** : parcours navigateur réel,
-> round-trip Socket.IO complet — à confirmer par Saar en navigateur. Ferme partiellement `[CHOC1]`
-> (infrastructure du pool de Choc désormais réelle ; reste non câblé : bonus mutation Corne en CaC,
-> hors scope Lot B). Détail complet : `docs/PLAN_ARMES_DSL.md` section "Lot B — ✅ CODÉ ET TESTÉ".
+> **Lot B ✅ CODÉ ET TESTÉ, correctif appliqué (2026-07-16/17).** Bug trouvé après la 1ère livraison,
+> confirmé par Saar : la restriction "Tête uniquement" venait de la règle p.243
+> (`docs/Character/Statuts/REGLESTATUT.txt:90-121`), qui décrit en fait le Choc **des armes**
+> (`ref_equipment.shock`, lourdes/contondantes ou électriques), pas celui des **munitions**. Le Choc de
+> munition (Assommante/Explosive, `ammo_effects` DSL) relève d'un texte séparé
+> (`docs/REGLES/REGLESMUNITIONS.md`) qui ne mentionne **aucune restriction de localisation** — 3
+> catégories distinctes formalisées dans `docs/VOCABULARY.md` ("Dommages de Choc"). La table par bande
+> de portée codée initialement (5D10→1D10) n'existait dans aucun des deux textes — invention de la
+> donnée catalogue (`description`), 5ᵉ cas du même type que Shrapnel/HP/Explosive/IEM (§Lot C).
+> **Correctif livré** : gate Tête retiré, formule fixe (`CHOC=SET(1D10+2)` Assommante), **Choc non
+> réduit du tout** (ni `etq`, ni `prt`, ni `rd`), total **combiné** `degatsNets + chocTotal` (brut,
+> jamais les sévérités séparées) pilote un **unique** `resolveShockTest` (natif si pas de Choc, combiné
+> sinon) — la blessure reste basée sur le physique seul, jamais gonflée par le Choc virtuel.
+> `shared/weaponAmmoDsl.js` (`resolveChocFormula` simplifié, formule fixe) ; `damageService.js`
+> (`resolveTargetHit`, `chocDegatsNets`→`chocTotal`, `prt` retiré car inutilisé) ; les 2 callers
+> (`socketCombatHelpers.js`/`socketCombatResolution.js`) simplifiés (`rangeBand` retiré). **Migration
+> `160_fix_ref_equipment_choc_assommante.js`** appliquée : 12 munitions Assommante corrigées en base
+> (DSL + description) ; 2 items exclus (DSL copié-collé par erreur, description totalement différente)
+> → nouvelle dette **`COM26`**. **Testé** : purs (5 scénarios `resolveChocFormula`) + non-régression
+> Lot A (10/10) + réel en base (transaction annulée) : Choc appliqué en tête ET hors tête (gate
+> confirmé retiré), `chocTotal` toujours dans `[3,12]` jamais réduit, non-régression sans munition,
+> scénario clé confirmé (physique seul insuffisant pour un test, total combiné 16 déclenche bien un
+> Test de Choc sans créer de blessure). `node --check` 0 erreur (5 fichiers). **Non testé** : parcours
+> navigateur réel, round-trip Socket.IO complet. Ferme partiellement `[CHOC1]` (reste non câblé : bonus
+> mutation Corne, catégorie arme/`ref_equipment.shock`, hors scope de ce Lot). Détail complet :
+> `docs/PLAN_ARMES_DSL.md` section "Lot B — ✅ CODÉ ET TESTÉ, CORRECTIF APPLIQUÉ".
 >
-> **Lot C non codé** (tags qualitatifs `TXT=FX=`, affichage seul, aucune mécanique) — reste à faire si
-> Saar le souhaite, non bloquant.
+> **Lot C recadré (2026-07-16) : effets mécaniques réels, plus un lot d'affichage.** Saar veut coder
+> les effets des munitions spéciales autant que possible. Traduction complète de
+> `docs/REGLES/REGLESMUNITIONS.md` faite et verrouillée (formules armure/dégâts pour Expansives,
+> Assommantes, Explosives, IEM, Perforantes, SAP/SLAP, Shrapnel — table complète dans
+> `docs/PLAN_ARMES_DSL.md`). Découpé en 3 sous-lots séquentiels (méthode pas-à-pas imposée par Saar,
+> un seul à la fois) : **C1** modification d'armure (6 munitions, un seul point d'insertion `etq`/`prt`
+> déjà étendu par Lot B) ; **C2** Test de panne (munitions IEM, mécanique "Test de panne" elle-même
+> encore à définir, Saar fournira la règle le moment venu) ; **C3** zone d'effet Shrapnel (cône 3m
+> multi-cibles, aucun ciblage de zone existant dans le pipeline combat — le plus gros morceau des 3).
+> Obus canon d'assaut/uranium confirmés hors scope (pas d'exo-armure/navire). **Aucun sous-lot codé.**
+> Prochaine étape : confirmation navigateur du correctif Lot B par Saar, puis démarrer C1.
 
 > **Item 76 (Session 148) — Fiche perso (compétences (X)/(-3), attributs) + `BUGIDENTIFIE.md` COM20
 > ✅ CLOS.** Triage `BUGIDENTIFIE.md` repris (suite Session 145). **A.** Compétence `(X)` réservée :
@@ -1621,6 +1633,7 @@ Projet en cours et priorité user :
 | ID | Description | Priorité |
 |---|---|---|
 | **COM25** | Arme sans munition restante (`ammo_remaining=0`) continue de tirer — aucun garde dans `resolveAssaultAction` (`socketCombatHelpers.js:1468-1480`), le décompte clampe à 0 mais ne bloque jamais l'attaque. Trouvé en marge du Lot A `docs/PLAN_ARMES_DSL.md` | 🔴 **Urgent — priorité Saar** |
+| **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |

@@ -279,6 +279,31 @@ confirmer l'hypothèse avant de coder.
 
 ---
 
+### Bug COM26 — 2 munitions catalogue avec un `ammo_effects` copié-collé d'une autre munition
+
+**Symptôme** : `ref_equipment` — "Darts 7.62 mm ST - Projectile SAP" (id `30985a34-876d-4c0e-89d0-
+5f49cab10809`) et "Flèche - Projectile IEM" (id `4795d390-04ee-4697-8d9c-d8eb77480ccd`) portent toutes
+deux `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10,M:3D10,L:2D10,E:1D10);TXT=FX=ASSOMMANTE` — le DSL exact
+d'une munition Assommante — alors que leur propre colonne `description` décrit un mécanisme totalement
+différent (SAP : dégâts normaux + pénétration d'armure ; IEM : mi-dégâts + Test de panne). En l'état,
+ces deux items infligeraient les dégâts/Choc d'une munition Assommante en jeu, pas ceux annoncés par
+leur description/nom.
+
+**Trouvé pendant** : migration `160_fix_ref_equipment_choc_assommante.js` (Chantier 11 Étape 2, Lot B,
+`docs/PLAN_ARMES_DSL.md`) — ces 2 lignes correspondaient au filtre `CHOC=SET(BP%` mais ont été
+explicitement exclues de la correction (leur description ne parlant pas d'Assommante, les corriger
+vers `CHOC=SET(1D10+2)` aurait entériné l'erreur au lieu de la réparer).
+
+**Cause `[HYPOTHÈSE]`** : erreur de copier-coller lors du peuplement initial du catalogue (script
+d'extraction Excel, `docs/Old/script Extraction Excel/equipement/`), non instrumentée en jeu.
+
+**Prochaine étape** : reconstruire le bon `ammo_effects` pour ces 2 items à partir de leur description
+réelle (SAP : `DMG=SET(...);TXT=PEN=SET(...)|FX=SAP` cohérent avec les autres munitions SAP du
+catalogue ; IEM : `DMG=MUL(0.5);TXT=FX=IEM(TEST_PANNE:-3)` une fois le Lot C2 tranché) — probablement
+en même temps que le Lot C1/C2 puisque ces deux mécaniques y seront de toute façon retravaillées.
+
+---
+
 ### Bug COM25 — Arme sans munition restante continue de tirer (ammo_remaining=0 non bloqué) 🔴 URGENT
 
 **Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de code (question de Saar
