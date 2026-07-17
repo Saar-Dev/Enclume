@@ -16,6 +16,11 @@ export const SLOT_TO_REF_LOCATION = {
   '2M': 'M', Tr: 'M',
 }
 
+// Bras couvert par la main portant un Bouclier (docs/PLAN_BOUCLIER.md §3.2) — sert au serveur à
+// composer le slot composite (main + bras + shield_extra_locations) à l'équipement, jamais un choix
+// joueur/MJ.
+export const HAND_TO_ARM_SLOT = { MG: 'BG', MD: 'BD' }
+
 // Slots symétriques gauche/droite partageant le même ref_location générique (SLOT_TO_REF_LOCATION).
 // Un item à ref_location simple (ex. 'B' — brassard) ne couvre qu'un seul côté à la fois : un
 // second exemplaire est nécessaire pour l'autre côté. Un item à ref_location composée (ex.

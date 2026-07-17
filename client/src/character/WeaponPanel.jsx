@@ -1,8 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
 import api from '../lib/api.js'
 
 const WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
 const SLOT_LABELS  = { MG: 'Main G', MD: 'Main D', '2M': '2 mains', Tr: 'Trépied' }
+
+// Composite (Bouclier) : slots[0] n'est plus fiable pour retrouver la main (tri alphabétique côté
+// serveur, ex. ['BG','C','MG']) — chercher explicitement le code main/2M/Tr.
+const handSlotOf = (slots) => slots?.find(s => WEAPON_SLOTS.includes(s)) ?? slots?.[0]
+
+function shieldExtraLocationLabels(refShieldExtraLocations) {
+  if (!refShieldExtraLocations) return []
+  return refShieldExtraLocations.split('/').map(code => LOCATION_LABELS[SLOT_TO_WOUND_LOCATION[code]] ?? code)
+}
 
 function parseAmmoCount(ammoCount) {
   if (!ammoCount) return 0
@@ -28,7 +38,7 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
   return (
     <div style={s.weaponCard}>
       <div style={s.weaponHeader}>
-        <span style={s.slotBadge}>{SLOT_LABELS[weapon.slots?.[0]] || weapon.slots?.[0]}</span>
+        <span style={s.slotBadge}>{SLOT_LABELS[handSlotOf(weapon.slots)] || handSlotOf(weapon.slots)}</span>
         <span style={s.weaponName}>{weapon.custom_name || weapon.ref_name || '—'}</span>
         {weapon.ref_description && (
           <span className="has-tooltip" data-tooltip={weapon.ref_description} style={s.infoIcon}>ⓘ</span>
@@ -50,6 +60,13 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
         {weapon.ref_range     && <span style={s.stat}><span style={s.statKey}>PTÉ</span> {weapon.ref_range}</span>}
         {weapon.ref_fire_mode && <span style={s.stat}><span style={s.statKey}>TIR</span> {weapon.ref_fire_mode}</span>}
         {weapon.ref_caliber   && <span style={s.stat}><span style={s.statKey}>CAL</span> {weapon.ref_caliber}</span>}
+        {weapon.ref_category === 'Bouclier' && (
+          <>
+            {weapon.ref_shield_atk_malus != null && <span style={s.stat}><span style={s.statKey}>Malus CaC adverse</span> {weapon.ref_shield_atk_malus}</span>}
+            {weapon.ref_protection != null && <span style={s.stat}><span style={s.statKey}>Protection (dist.)</span> {weapon.ref_protection}</span>}
+            <span style={s.stat}><span style={s.statKey}>Couvre</span> Bras{shieldExtraLocationLabels(weapon.ref_shield_extra_locations).map(l => `, ${l}`).join('')}</span>
+          </>
+        )}
       </div>
 
       {weapon.ref_caliber && (
@@ -148,7 +165,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
 
   const availableWeapons = useMemo(
     () => items.filter(i =>
-      i.ref_family === 'Armes' &&
+      (i.ref_family === 'Armes' || i.ref_category === 'Bouclier') &&
       i.ref_location &&
       ['M', '2M', 'Tr'].some(loc => i.ref_location.split('/').includes(loc)) &&
       i.container !== 'Coffre' &&

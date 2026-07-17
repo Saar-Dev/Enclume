@@ -57,7 +57,9 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 156 : `docs/PLAN_BOUCLIER.md` Lots A+B+C
+> — ✅ codés et testés, Lot A/B fonctionnel confirmé Saar en combat réel, Lot C navigateur non encore
+> testé, item 81 ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
 > (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
 > Session 153 : `docs/PLAN_ECHANGE.md` — correction
 > du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
@@ -158,7 +160,7 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
-> ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; `docs/PLAN_BOUCLIER.md` prêt, Lot A pas encore codé.**
+> ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
 > Réflexion sur l'implantation des règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : plan rédigé,
 > analyse à charge, puis **run à vide du Lot A** a exposé un anti-pattern préexistant dans
 > `char_inventory.slot` (liste `/`-délimitée à la place d'une table d'intersection — « Jaywalking »,
@@ -198,8 +200,48 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > que »/« Destinataire » de la fenêtre Échange MJ ne correspond pas à l'usage attendu par Saar
 > (PNJ→PJ), le système livré Session 151 fait PJ→PJ au nom du MJ — décision produit non tranchée.
 > **Non testé** : parcours HTTP/Socket.IO isolé de `socketTrade.js`/`char-sheet.js` (cargo drone) —
-> même correctif que `tradeService.js` (prouvé), pas ré-exercé indépendamment. **Prochaine étape** :
-> `docs/PLAN_BOUCLIER.md` Lot A (fondations données + slot composite main+armure), prérequis levé.
+> même correctif que `tradeService.js` (prouvé), pas ré-exercé indépendamment.
+>
+> **Item 81 (Session 156) — `docs/PLAN_BOUCLIER.md` Lot A + Lot B ✅ CODÉS ET TESTÉS, fonctionnel
+> confirmé Saar en combat réel.** Suite directe de l'item 80 (prérequis levé). **Lot A** : migration
+> `168` (`ref_equipment.shield_atk_malus`/`shield_extra_locations`), `HAND_TO_ARM_SLOT`
+> (`shared/armorConstants.js`), nouvelle branche composite dans `inventoryService.updateItem` (le
+> client envoie la main, le serveur compose main+bras+localisations catalogue et réutilise
+> `_handSlotConflict`/`_armorSlotOccupants` tels quels — décision §3.10), entrée VOCABULARY.md.
+> **Incident de données réel pendant le codage, réparé** : la migration 168 a d'abord découvert que 3
+> lignes catalogue "Bouclier" existaient déjà en base (import Excel de mai, jamais tracké en
+> migration, une équipée par un personnage réel) — 1ʳᵉ version de la migration a créé des doublons
+> puis, en testant son `down()`, supprimé les 3 vraies lignes par erreur (`DELETE WHERE
+> category='Bouclier'` non discriminant), cassant la FK d'un personnage réel. Repéré immédiatement,
+> réparé byte-for-byte depuis les données capturées avant l'incident, ré-attaché. Migration réécrite
+> en `UPDATE` en place (jamais `INSERT`/`DELETE` par catégorie), cycle up/down/up revalidé. **Lot B** :
+> `damageService.resolveTargetHit` — nouveau paramètre `treatAsContact` (exclut le bouclier de la
+> résolution armure au contact/jet-trait — **découverte non anticipée par le plan** : le RAW sépare
+> strictement malus [contact/jet-trait] et protection [armes à feu], sans garde-fou la requête armure
+> existante aurait accordé la protection même à un coup au contact) + Test de Chance du Petit bouclier
+> (`1d20 ≤ char_sheet.chc`, Corps/Tête uniquement, résultat retourné mais affichage repoussé Lot C).
+> `resolveMeleeAction`/`resolveAssaultAction` : malus CaC de la cible plié dans le Seuil d'attaque
+> avant le jet (nouvelle requête ajoutée aux `Promise.all` existants — le jet a lieu avant le fetch
+> cible habituel dans ces deux fonctions), `treatAsContact` transporté aussi dans le payload différé
+> PJ (`socketCombatResolution.js`, dérivé automatiquement pour tout `pendingType==='melee'`). Distinction
+> arme à feu/jet-trait via `ref_equipment.category` (`'Armes de jet'`/`'Arme de trait'`, valeurs
+> catalogue confirmées, §3.9 tranché). Hors scope confirmé : `resolveDroneAssaultAction` (armes de
+> drone) laissé en comportement arme à feu par défaut. **Testé** : 9 assertions Lot A + 12 assertions
+> Lot B sur personnages/tokens jetables (0 résidu à chaque fois) + **confirmé fonctionnel en combat
+> réel par Saar**.
+> **Lot C (UI)** : confirmé sans code neuf que `battlemaps.js`/fenêtres combat/`DiceBreakdownPopover`
+> affichent déjà le bouclier et son malus génériquement. Ajouté : 2 colonnes au SELECT
+> `inventoryService.js` (stats bouclier absentes côté API jusqu'ici) ; `WeaponPanel.jsx` — bouclier
+> désormais équipable dans l'emplacement main dédié (corrige le bug original signalé par Saar), badge
+> de main corrigé pour un slot composite, stats dédiées affichées ; **bug réel trouvé en codant Lot C**
+> — `LocationPanel.jsx` appelait un retrait partiel de slot sur le bouton « × », que le serveur rejette
+> pour un Bouclier (tout-ou-rien) — corrigé, tag visuel ajouté ; diffusion `DICE_RESULT` du Test de
+> Chance ajoutée (même patron que `rollLoc`). **Tension signalée, non tranchée seul** : ces 4 fichiers
+> character-sheet n'utilisent `useTranslation` nulle part (zone legacy antérieure au rollout i18n) —
+> nouveau texte Lot C écrit en dur par cohérence locale, contraire à la règle générale i18n ; retrofit
+> complet explicitement hors scope. **Testé** : colonnes SELECT vérifiées réel (0 résidu), ESLint 0
+> erreur. **Non testé** : parcours navigateur réel — nécessaire avant clôture définitive. **Prochaine
+> étape** : test navigateur de Lot C par Saar, puis clôture du chantier Bouclier.
 >
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token

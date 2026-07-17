@@ -10,7 +10,7 @@ import { calcEncumbrancePenalty, calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { isEquippableLocation } from '../lib/inventoryRules.js'
-import { SYMMETRIC_SLOT_PAIRS } from '../../../shared/armorConstants.js'
+import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 
 export const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
 export const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce', 'MG', 'MD', '2M', 'Tr']
@@ -42,9 +42,8 @@ export async function getDefaultContainer(characterId) {
   return hasSac ? 'Sac' : 'Coffre'
 }
 
-// Double-écriture (docs/PLAN_INVENTORY_SLOTS.md Lot A) — char_inventory.slot reste l'autorité lue par
-// tout le code existant ; char_inventory_slots est alimentée en parallèle pour permettre la bascule
-// progressive des lecteurs (Lot B) sans jamais casser un chemin non encore migré. Supprime puis
+// Écrit l'état réel dans char_inventory_slots, seule autorité depuis la clôture du chantier
+// (docs/PLAN_INVENTORY_SLOTS.md, char_inventory.slot retiré migration 166). Supprime puis
 // réinsère (jamais un diff) : plus simple qu'un calcul d'ajout/retrait, coût négligible (au plus
 // quelques lignes par item). slotValue null (déséquipement) ne fait que vider.
 async function _writeSlots(trx, charInventoryId, characterId, slotValue) {
@@ -105,6 +104,10 @@ export async function getItemWithRef(itemId) {
       'ref_equipment.protection as ref_protection',
       'ref_equipment.protection_shock as ref_protection_shock',
       'ref_equipment.malus_cat as ref_malus_cat',
+      // Bouclier (docs/PLAN_BOUCLIER.md Lot C) — affichage fiche perso (malus CaC, localisations
+      // couvertes en plus du bras). null pour tout item non-Bouclier.
+      'ref_equipment.shield_atk_malus as ref_shield_atk_malus',
+      'ref_equipment.shield_extra_locations as ref_shield_extra_locations',
       'ref_equipment.min_str as ref_min_str',
       'ref_equipment.capacity as ref_capacity',
       'ref_equipment.waterproof as ref_waterproof',
@@ -178,6 +181,10 @@ export async function getInventory(characterId, campaignId) {
       'ref_equipment.protection as ref_protection',
       'ref_equipment.protection_shock as ref_protection_shock',
       'ref_equipment.malus_cat as ref_malus_cat',
+      // Bouclier (docs/PLAN_BOUCLIER.md Lot C) — affichage fiche perso (malus CaC, localisations
+      // couvertes en plus du bras). null pour tout item non-Bouclier.
+      'ref_equipment.shield_atk_malus as ref_shield_atk_malus',
+      'ref_equipment.shield_extra_locations as ref_shield_extra_locations',
       'ref_equipment.min_str as ref_min_str',
       'ref_equipment.capacity as ref_capacity',
       'ref_equipment.waterproof as ref_waterproof',
@@ -410,10 +417,48 @@ export async function updateItem(characterId, itemId, payload) {
 
   // Validation slot
   if (updates.slot !== undefined && updates.slot !== null) {
+    // Bouclier (docs/PLAN_BOUCLIER.md §3.10, décision verrouillée) : le client envoie uniquement la
+    // main choisie (MG/MD) — le serveur complète ici la chaîne composite (main + bras +
+    // shield_extra_locations catalogue) avant toute validation. Composition faite une seule fois,
+    // ici, jamais côté client ni dans addItem/quickEquip (qui ne gèrent qu'un slot atomique).
+    const equipRefForSlot = existing.equipment_id
+      ? await db('ref_equipment').where({ id: existing.equipment_id })
+          .select('category', 'malus_cat', 'shield_extra_locations').first()
+      : null
+    const isShield = equipRefForSlot?.category === 'Bouclier'
+    if (isShield) {
+      if (!['MG', 'MD'].includes(updates.slot)) {
+        throw new AppError(400, `Bouclier : choisir la main (MG ou MD), reçu : ${updates.slot}`)
+      }
+      const extraCodes = (equipRefForSlot.shield_extra_locations ?? '').split('/').filter(Boolean)
+      updates.slot = [updates.slot, HAND_TO_ARM_SLOT[updates.slot], ...extraCodes].join('/')
+    }
+
     const isContainerSlotPut = updates.slot === 'D' || updates.slot === 'Ce'
     if (isContainerSlotPut) {
       const conflict = await _handSlotConflict(characterId, [updates.slot], itemId)
       if (conflict) throw new AppError(409, 'Slot déjà occupé')
+    } else if (isShield) {
+      // Main + localisations armure composées en un seul contrôle — pas de P58 (un bouclier ne
+      // couvre jamais BG et BD à la fois, cf. addItem : structurellement inapplicable) ni de
+      // branche WEAPON_SLOTS/armure générique (le slot n'est déjà plus un code atomique).
+      if (!(await isContainerAvailable(characterId, 'Sac'))) {
+        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un bouclier')
+      }
+      const [hand, ...armorParts] = updates.slot.split('/')
+      const handConflict = await _handSlotConflict(characterId, [hand], itemId)
+      if (handConflict) throw new AppError(409, `Slot ${hand} déjà occupé`)
+      for (const code of armorParts) {
+        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId)
+        if (existingAtSlot.length >= 3) {
+          throw new AppError(409, `Slot ${code} complet — maximum 3 couches`)
+        }
+        const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
+        if (equipRefForSlot.malus_cat && equipRefForSlot.malus_cat !== 'S' && existingNonS.length >= 1) {
+          throw new AppError(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`)
+        }
+      }
+      updates.container = 'Sac'
     } else if (WEAPON_SLOTS.has(updates.slot)) {
       if (!(await isContainerAvailable(characterId, 'Sac'))) {
         throw new AppError(400, 'Sac non disponible — impossible d\'équiper une arme')

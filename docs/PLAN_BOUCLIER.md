@@ -1,8 +1,18 @@
 # PLAN_BOUCLIER.md — Implantation des règles de Bouclier (LdB, `docs/REGLES/REGLEBOUCLIER.md`)
 
-> Créé : 2026-07-17 (dev/Saar). Statut : **prérequis levé — `docs/PLAN_INVENTORY_SLOTS.md` est
-> intégralement clos (Lots A/B/C), `char_inventory_slots` est désormais l'autorité unique des slots
-> d'équipement. Prêt pour le Lot A de ce plan.**
+> Créé : 2026-07-17 (dev/Saar). Statut : **Lots A, B et C codés et testés. Chantier fonctionnellement
+> complet — reste la validation navigateur de Lot C par Saar avant clôture définitive.**
+>
+> ⚠️ **Correction post-code** : §0 affirmait à tort "jamais seedée en base" pour la catégorie
+> Bouclier — faux, vérifié en pratique (pas en lecture seule) au moment de coder la migration : 3
+> lignes catalogue existaient déjà (créées 2026-05-06, import Excel historique jamais tracké en
+> migration), l'une équipée par un personnage réel. Un premier essai de migration a créé des
+> doublons puis, en testant son `down()`, supprimé par erreur les 3 lignes d'origine (`DELETE WHERE
+> category='Bouclier'` sans distinguo) — repéré et réparé immédiatement (réinsertion byte-for-byte
+> depuis les données capturées avant coup, ré-attachement du `char_inventory.equipment_id` cassé,
+> vérifié). Migration 168 finale : `UPDATE` en place des 3 lignes existantes (même patron que
+> `142_ref_equipment_lunette_niveaux.js`), jamais un `INSERT`/`DELETE` par catégorie. Cycle
+> up/down/up revalidé après coup, aucune perte résiduelle.
 > Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois
 > le chantier clos, contenu durable transféré vers `docs/SYSTEME/COMBAT.md`/`docs/VOCABULARY.md`.
 
@@ -30,36 +40,69 @@ erroné en session) :
   que la brique `protection`/`etq` déjà câblée est la bonne base, pas une nouvelle mécanique de
   protection à inventer.
 
+**⚠️ Architecture des slots refondue depuis la rédaction initiale de ce plan (2026-07-17,
+`docs/PLAN_INVENTORY_SLOTS.md`, clos et testé — commit `857becc`).** Tout ce qui suit reflète l'état
+réel **après** cette refonte — l'ancienne description (colonne `char_inventory.slot`, requêtes `LIKE`,
+branches `WEAPON_SLOTS.has`/`ARMOR_SLOTS.every`) n'existe plus du tout, ne pas coder dessus.
+
 **Ce qui existe déjà et sera réutilisé** `[VÉRIFIÉ]` par lecture directe :
 
-- `server/src/services/inventoryService.js:16-18` — `VALID_SLOTS`/`ARMOR_SLOTS` (`T,C,BG,BD,JG,JD`)
-  / `WEAPON_SLOTS` (`MG,MD,2M,Tr`), deux familles aujourd'hui strictement disjointes et validées par
-  deux branches étanches (`updateItem`, lignes 376-458) : `WEAPON_SLOTS.has(slot)` exact-match pour
-  les armes, sinon split `/` + `every ARMOR_SLOTS.has` pour l'armure. **Un slot composite mêlant les
-  deux familles (ex. `"MG/BG/C"`) est aujourd'hui rejeté** par cette 2ᵉ branche (`MG` ∉ `ARMOR_SLOTS`)
-  — extension nécessaire, voir Lot A.
-- `inventoryService.js:412-435` — mécanisme multi-slot déjà mature (`slot.split('/')`, requête `LIKE`
-  PI8, règle P58 « un item à `ref_location` simple ne couvre qu'un seul côté symétrique », règle
-  « 1+S+S » anti-cumul de couches) : directement réutilisable pour la partie « protection localisée »
-  du bouclier, aucune nouvelle logique de protection à écrire.
+- **`char_inventory_slots`** (migration `162`, table, pas colonne) — une ligne par `(char_inventory_id,
+  slot_code)`. Contrainte `UNIQUE` partielle sur les slots main/contenant (`MG,MD,2M,Tr,D,Ce` — un seul
+  occupant possible) ; aucune contrainte d'unicité sur les slots armure (`T,C,BG,BD,JG,JD` — jusqu'à 3
+  couches, règle 1+S+S toujours applicative, pas déclarative). `character_id` dénormalisé pour la
+  contrainte. Index simple `(character_id, slot_code)` pour les lectures armure (perf combat).
+- `server/src/services/inventoryService.js` — `VALID_SLOTS`/`ARMOR_SLOTS`/`WEAPON_SLOTS` (constantes
+  de vocabulaire, inchangées). Trois nouvelles fonctions internes réutilisables telles quelles :
+  - `_handSlotConflict(characterId, slotCodes, excludeItemId)` — un occupant existe-t-il déjà sur l'un
+    de ces codes (main/contenant) ? Composite-safe (lit `char_inventory_slots`, plus d'égalité stricte
+    sur une chaîne). **Le contrôle « main déjà occupée » du bouclier doit appeler cette fonction avec
+    `['MG']` ou `['MD']`, pas réinventer une requête.**
+  - `_armorSlotOccupants(characterId, slotCode, excludeItemId)` — occupants actuels d'un slot armure
+    (pour la règle 1+S+S). **Le contrôle « localisation déjà pleine » du bouclier (Corps/Tête) doit
+    appeler cette fonction pour chaque code de `shield_extra_locations`.**
+  - `_writeSlots(trx, charInventoryId, characterId, slotValue)` — écrit l'état réel dans
+    `char_inventory_slots` (supprime puis réinsère). Prend toujours une **chaîne `/`-jointe** en entrée
+    (ex. `"MG/BG/C"`) et la découpe elle-même — le contrat d'entrée « chaîne composite » n'a donc pas
+    changé, seul le stockage interne est normalisé. Appelée automatiquement par `addItem`/`updateItem`/
+    `quickEquip` dans leur transaction — **aucun appel direct nécessaire depuis le code du bouclier**,
+    juste construire la bonne chaîne avant l'appel à `updateItem`/`addItem` existant.
+  - `getItemWithRef`/`getInventory` renvoient **`slots` (tableau)** — `char_inventory.slot` (texte)
+    n'existe plus du tout (retiré migration `166`). Client déjà basculé sur `.slots` partout
+    (`InventoryPanel`/`WeaponPanel`/`LocationPanel`/`ContainerPanel`/`CombatActionWindow`/
+    `ExchangeWindow`).
+- **Bonne nouvelle pour le Lot C (affichage combat)** : `battlemaps.js` (`/equipment`),
+  `CombatGmDeclareWindow.jsx`, `CombatRosterWindow.jsx`, `MeleeCombatPanel.jsx` lisent déjà
+  `char_inventory_slots` de façon générique et composite-safe (vérifié et testé pendant la refonte,
+  y compris avec un objet `"MG/BG/C"` simulé — apparaît correctement à la fois comme occupant de main
+  et comme pièce d'armure). Un bouclier catalogué devrait donc **déjà s'afficher correctement** dans
+  ces fenêtres sans code supplémentaire, à vérifier en priorité avant d'écrire quoi que ce soit de
+  neuf côté Lot C — seuls les filtres explicites `ref_category === 'Arme de contact'` continueront, à
+  raison, d'exclure le bouclier des rôles « arme ».
 - `shared/armorConstants.js` — fichier responsable de la topologie des slots/localisations
   (`SYMMETRIC_SLOT_PAIRS`, `SLOT_TO_REF_LOCATION`, `SLOT_TO_WOUND_LOCATION`, `LOC_TABLE`...). C'est
   ici, et pas dans `shared/polarisUtils.js` (formules numériques pures, aucune notion de slot), que
-  vivra la table de correspondance main→bras.
+  vivra la table de correspondance main→bras (`HAND_TO_ARM_SLOT`, toujours pas encore ajoutée).
 - `damageService.resolveTargetHit` (`server/src/lib/damageService.js:95-206`) — point d'insertion
   unique déjà en place pour toute résolution de dégâts côté cible (localisation D20 → armure → RD →
   sévérité → blessure → Choc). La protection à distance du bouclier s'y branche exactement comme une
-  armure de plus (même requête `armuresCible`, ligne 121-126).
+  armure de plus — `[VÉRIFIÉ]` pendant la refonte : la requête `armuresSlot` (désormais sur
+  `char_inventory_slots`, ligne ~121) ressort déjà tout item dont un `slot_code` correspond, **aucune
+  modification nécessaire** dans ce fichier pour le bouclier.
 - `server/src/socket/socketCombatHelpers.js:29-43` — `SITUATION_MODS`, liste fermée de modificateurs
   fixes appliqués au Seuil d'attaque (ex. `cac_position_avantageuse: 3`). Le malus CaC du bouclier
   n'y rentre **pas** tel quel : ce n'est pas un choix du MJ à la Déclaration, c'est une donnée dérivée
   automatiquement de l'équipement de **la cible** — nouveau point d'insertion à identifier avec
-  précision dans le chemin de résolution CaC (voir Lot B).
+  précision dans le chemin de résolution CaC (voir Lot B). Ce même fichier contient déjà, depuis la
+  refonte, plusieurs requêtes de ce type exact (`defContactWeapons` ~ligne 599, jointure
+  `char_inventory_slots as cis` + `ref_equipment`, filtrée par catégorie) — **modèle direct à copier**
+  pour la requête « bouclier de la cible » du Lot B.
 - Catalogue historique `docs/Old/script Extraction Excel/equipement/ref_equipments_data.js:9775-9836`
-  — 3 lignes `EQ_00350/351/352`, famille `Protections`, catégorie `Bouclier`, jamais seedées en base
-  (aucune trace dans `server/src/db/migrations`). Valeurs de prix/poids réutilisables comme point de
-  départ, mais **pas** les valeurs mécaniques (jamais chiffrées côté malus/protection dans ces
-  lignes) — celles-ci viennent du RAW ci-dessus.
+  — 3 lignes `EQ_00350/351/352`, famille `Protections`, catégorie `Bouclier`. **Correction (§ statut
+  en tête de document) : ces 3 lignes sont bel et bien déjà en base** (créées 2026-05-06, hors
+  migration trackée), pas un catalogue à créer — migration 168 les a **mises à jour en place**
+  (`location: 'B' → 'M'`, ajout `shield_atk_malus`/`shield_extra_locations`), jamais insérées à neuf.
+  Prix/poids/rareté/min_str/description d'origine déjà identiques à la source Excel, non retouchés.
 
 **Absent aujourd'hui** `[VÉRIFIÉ]` par recherche exhaustive (grep `bouclier` sur `server/src` et
 `shared/`) : aucune trace de mécanique bouclier dans le code. Terrain neuf, aucun piège connu
@@ -92,11 +135,14 @@ table des 3 paliers (Petit/Moyen/Grand) avec leurs deux valeurs (malus CaC fixe,
 
 ## 3. Décisions verrouillées cette session
 
-1. **Un seul objet, un seul `char_inventory.slot` composite** — pas deux entités séparées (item-arme
+1. **Un seul objet, plusieurs lignes `char_inventory_slots`** — pas deux entités séparées (item-arme
    + item-armure liés par une contrainte). Le bouclier occupe une main **et** protège une/des
-   localisation(s) sous la même ligne d'inventaire, ex. `"MG/BG/C"`. Choix motivé : évite de dupliquer
-   la logique de protection dans un 2ᵉ chemin de code (viole §1.4 CLAUDE.md — autorité unique) et
-   colle à la réalité RAW (un seul objet physique).
+   localisation(s) sous la même ligne `char_inventory` (un seul `char_inventory_id`, plusieurs
+   `slot_code` — `MG`, `BG`, `C`). Choix motivé : évite de dupliquer la logique de protection dans un
+   2ᵉ chemin de code (viole §1.4 CLAUDE.md — autorité unique) et colle à la réalité RAW (un seul objet
+   physique). Mécaniquement inchangé depuis la refonte : le contrat d'entrée (`updateItem`/`addItem`
+   reçoivent toujours une chaîne `/`-jointe, ex. `"MG/BG/C"`) est identique, seul le stockage interne
+   (`char_inventory_slots` au lieu d'une colonne texte) a changé — voir §0.
 2. **Table de correspondance main→bras** : nouvelle constante `shared/armorConstants.js`, aux côtés
    de `SYMMETRIC_SLOT_PAIRS` (même fichier, même responsabilité), ex. `HAND_TO_ARM_SLOT = { MG: 'BG',
    MD: 'BD' }`.
@@ -134,10 +180,12 @@ table des 3 paliers (Petit/Moyen/Grand) avec leurs deux valeurs (malus CaC fixe,
    le catalogue au moment du Lot B, plus une question de conception).
 10. **Composition du slot composite : dans `updateItem` (`inventoryService.js`).** Décision technique
     tranchée (déléguée par Saar) : le client envoie uniquement le choix de main (`MG`/`MD`) — quand
-    `category === 'Bouclier'`, le serveur complète automatiquement le `slot` avec `HAND_TO_ARM_SLOT`
-    + `shield_extra_locations` du catalogue avant validation. Aucune logique de composition côté
-    client — cohérent avec « le serveur reste autoritaire » et « pas de logique métier dupliquée »
-    (`CLAUDE.md` §7).
+    `category === 'Bouclier'`, le serveur complète automatiquement la chaîne `/`-jointe avec
+    `HAND_TO_ARM_SLOT` + `shield_extra_locations` du catalogue **avant** de la passer au flux existant
+    (validation puis `_writeSlots` s'en charge, aucun nouvel appel à écrire). Aucune logique de
+    composition côté client — cohérent avec « le serveur reste autoritaire » et « pas de logique
+    métier dupliquée » (`CLAUDE.md` §7). Le contrôle de conflit qui suit doit réutiliser
+    `_handSlotConflict`/`_armorSlotOccupants` (§0) — ne pas écrire une 3ᵉ variante de ces contrôles.
 11. **`resolveMeleeAction` confirmé attaquant uniquement.** `[VÉRIFIÉ]` (lecture complète,
     `socketCombatHelpers.js:327-546`) : `character` est bien l'attaquant (`sheetAttaquant`,
     `invAttaquant` ligne 417-422) ; aucune donnée de la cible n'y est fetchée aujourd'hui hormis sa
@@ -153,53 +201,137 @@ table des 3 paliers (Petit/Moyen/Grand) avec leurs deux valeurs (malus CaC fixe,
 Tous les points soulevés par l'analyse à charge (§7) ont été tranchés en session (§3, points 8-12).
 Ne reste qu'un point routine, jamais une vraie question de conception :
 
-- **Prochain numéro de migration** (pair, Saar) — non fixé ici, à auditer (`server/src/db/migrations`
-  + `knex_migrations`) au moment du code (`CLAUDE.md` §5).
+- **Prochain numéro de migration** (pair, Saar) — non fixé ici. `[VÉRIFIÉ]` 2026-07-17 : dernières
+  migrations réelles `162`/`164` (parallèle)/`166` — **168** libre au moment de la rédaction, mais
+  ré-auditer (`server/src/db/migrations` + `knex_migrations`) au moment du code (`CLAUDE.md` §5), la
+  session parallèle (Tir visé) peut avoir avancé entre-temps.
 
 ---
 
 ## 5. Lots séquentiels proposés (un seul codé à la fois, validé avant le suivant)
 
-**Lot A — Fondations données.**
-- Migration (numéro à auditer) : colonnes `ref_equipment.shield_atk_malus` (int, CaC), réutilisation
-  de `ref_equipment.protection` existant (valeur à distance), nouvelle `shield_extra_locations`
-  (texte, `null`/`'C'`/`'C/T'`). Seed des 3 lignes catalogue (Petit/Moyen/Grand), `category =
-  'Bouclier'`, `malus_cat = 'S'`, valeurs RAW : malus CaC -3/-5/-7, Protection **Petit 10, Moyen 10,
-  Grand 15**.
-- `shared/armorConstants.js` : ajout `HAND_TO_ARM_SLOT = { MG: 'BG', MD: 'BD' }`.
-- `inventoryService.js` (`updateItem`) : nouveau cas de validation slot composite pour
-  `category === 'Bouclier'` — le client envoie uniquement la main choisie (`MG`/`MD`), le serveur
-  construit `[MG|MD] + HAND_TO_ARM_SLOT + shield_extra_locations` avant validation, applique les
-  contrôles de conflit des deux familles (main occupée comme une arme, 1+S+S côté localisations).
-- `docs/VOCABULARY.md` : entrée Bouclier.
+**Lot A — Fondations données. ✅ Codé et testé réel (2026-07-17).**
+- Migration `168_ref_equipment_bouclier.js` : colonnes `ref_equipment.shield_atk_malus` (int, CHECK
+  `< 0`) et `shield_extra_locations` (texte, CHECK `IN ('C','C/T')`). **Pas un seed** — `UPDATE` en
+  place des 3 lignes déjà existantes (voir correction §0/statut) : `location: 'B' → 'M'`,
+  `shield_atk_malus`/`shield_extra_locations` renseignés. `protection` déjà correct en base (10/10/15),
+  non retouché. `down()` restaure `location='B'` et vide les 2 colonnes (jamais de `DELETE` par
+  catégorie — a causé un incident data en session, réparé, voir statut en tête de document).
+- `shared/armorConstants.js` : `HAND_TO_ARM_SLOT = { MG: 'BG', MD: 'BD' }` ajouté.
+- `inventoryService.js` (`updateItem`) : nouvelle branche dédiée avant le `if/else` slot existant —
+  détecte `ref_equipment.category === 'Bouclier'` sur l'item, exige que le client envoie uniquement
+  `MG`/`MD` (400 sinon), compose la chaîne `/`-jointe `[main, HAND_TO_ARM_SLOT[main], ...
+  shield_extra_locations]`, puis réutilise tel quel `_handSlotConflict` (main) et
+  `_armorSlotOccupants` (chaque localisation supplémentaire, règle 1+S+S) — branche séparée de
+  `WEAPON_SLOTS`/armure générique (P58 structurellement inapplicable : un bouclier ne couvre jamais
+  BG **et** BD à la fois). `addItem`/`quickEquip` volontairement non touchés (décision §3.10) : un
+  bouclier ne peut donc être équipé qu'en pose manuelle post-ajout (`updateItem`), jamais en un seul
+  appel équiper-à-l'achat — cohérent avec le comportement déjà existant de tout item multi-slot.
+- `docs/VOCABULARY.md` : entrée Bouclier ajoutée.
+- **Testé** (personnage jetable, nettoyé, 0 résidu) : Petit→MG (BG+MG), conflit main (MG déjà
+  occupé), Moyen→MD (BD+C+MD), conflit main (MD déjà occupé), déséquipement, Grand→MD (BD+C+MD+T),
+  slot C complet à 3 couches (409), main invalide (400), ré-équipement libre avec S+S (deux boucliers
+  cumulant `C`). 9/9 scénarios OK. **Non testé** : parcours navigateur (aucune UI dédiée avant Lot C —
+  seul `updateItem` via un appel direct/`InventoryPanel` générique a été exercé).
 
-**Lot B — Résolution combat (les 3 paliers, y compris le Test de Chance du Petit bouclier).**
-- Malus CaC à l'adversaire : nouvelle requête dans `resolveMeleeAction`
-  (`socketCombatHelpers.js:327`, `[VÉRIFIÉ]` aucune donnée cible n'y existe aujourd'hui — §3.11) —
-  `targetTokenId` → `character_id` → bouclier équipé (`category='Bouclier'`, slot `MG`/`MD`),
-  application au Seuil d'attaque de l'attaquant, breakdown affiché (même pattern que
-  `deuxArmesBonus`/`SITUATION_MODS`).
-- Protection à distance (Moyen/Grand) : branchement dans `resolveTargetHit` — `[VÉRIFIÉ]` (§7) : le
-  bouclier de la cible ressort déjà naturellement de la requête `armuresCible` existante (ligne
-  121-126), aucune modification de cette requête nécessaire.
-- **Petit bouclier — Test de Chance** : mécanique simple, confirmée en session — `1d20 ≤
-  char_sheet.chc` (`[VÉRIFIÉ]` colonne existante, `36_char_sheet.js:30`, « Chance 1-20, aucun
-  calcul »), jet automatique côté serveur au même titre que le jet de Localisation déjà présent dans
-  `resolveTargetHit` (`damageService.js:108`) — aucune interaction joueur à attendre, aucun impact
-  FSM (correction de l'analyse à charge §7.1, qui surestimait la complexité). Déclenché quand la
-  Localisation tombe sur Corps/Tête et que la cible porte un Petit bouclier : succès → applique la
-  Protection du bouclier à ce coup ; échec → aucune protection sur ce coup.
-- Distinction arme à feu / jet-trait (§3.9, `ref_equipment.category`) tranchée et câblée.
-- Non-régression à vérifier explicitement : un bouclier en `MG` bloque bien l'équipement d'une arme
-  dans `MG` et d'une arme à 2 mains (conséquence naturelle de l'occupation de slot, pas une règle à
-  coder séparément) — donc aucune interaction possible avec le bonus « Combat à deux armes ».
+**Lot B — Résolution combat. ✅ Codé et testé réel (2026-07-17).**
 
-**Lot C — UI équipement/combat.**
-- Affichage bouclier dans les panneaux d'inventaire existants (`InventoryPanel.jsx`/`WeaponPanel.jsx`/
-  `LocationPanel.jsx` — à confirmer lesquels sont pertinents en lisant leur contenu avant modification).
-- Affichage du malus/protection dans les fenêtres de déclaration/résolution combat existantes (même
-  pattern que les autres breakdowns de Seuil), y compris le résultat du Test de Chance du Petit
-  bouclier (même pattern d'affichage que le jet de Localisation).
+⚠️ **Découverte en codant, pas anticipée par la rédaction initiale** : le RAW sépare strictement les
+deux effets par TYPE d'attaque, pas par fonction de résolution — « au contact » = malus seul, jamais
+de protection ; « à distance (armes à feu) » = protection seule, jamais de malus. Sans garde-fou,
+la requête `armuresSlot` déjà existante dans `resolveTargetHit` aurait accordé la Protection du
+bouclier même à un coup au contact tombant sur le Bras (elle ne distingue pas le type d'attaque).
+Nouveau paramètre `treatAsContact` (booléen, défaut `false`) ajouté à `resolveTargetHit` : exclut le
+bouclier de la résolution armure quand `true`. `true` pour tout CaC, et pour toute arme à distance de
+catégorie `'Armes de jet'`/`'Arme de trait'` (§3.9 — RAW : jet/trait "traité comme au contact") ;
+`false` (comportement historique) pour les armes à feu.
+
+- **Malus CaC à l'adversaire** — `resolveMeleeAction` (`socketCombatHelpers.js`) : nouvelle requête
+  ajoutée au `Promise.all` existant (`targetTokenId` → bouclier équipé via `char_inventory_slots` +
+  `tokens`, catégorie `'Bouclier'`), calculée AVANT le jet d'attaque (le jet et son émission
+  `DICE_RESULT` ont lieu immédiatement après `chancesAttaque`, pas après le fetch cible habituel) —
+  pliée dans `chancesAttaque` + breakdown (« Bouclier adverse »). `treatAsContact: true` passé aux 2
+  appels `resolveTargetHit` liés au CaC (PNJ auto-résolu + `COMBAT_MELEE_DEFENSE_CONFIRM` PNJ-attaquant
+  dans `socketCombatResolution.js`).
+- **Malus jet/trait à l'adversaire + exclusion protection** — `resolveAssaultAction` : même malus,
+  seulement quand `ref_equipment.category` de l'arme tirée est `'Armes de jet'` ou `'Arme de trait'`
+  (valeurs catalogue réelles confirmées en session, remplaçant le point ouvert §3.9). Aucun malus pour
+  une arme à feu. `treatAsContact: isJetOuTrait` passé à `resolveTargetHit` (branche PNJ immédiate) et
+  ajouté au payload `combat_pending` (branche PJ différée, relu et transporté par
+  `socketCombatResolution.js` `COMBAT_DAMAGE_CONFIRM`, qui dérive aussi `treatAsContact: true`
+  automatiquement pour tout `pendingType === 'melee'`).
+- **Protection à distance (armes à feu, Bras automatique + Moyen/Grand)** : confirmé sans modification
+  — la requête `armuresSlot` existante ressort déjà le bouclier quand `treatAsContact` est `false`.
+- **Petit bouclier — Test de Chance** : implanté dans `resolveTargetHit`, `1d20 ≤ char_sheet.chc`,
+  déclenché uniquement quand `!treatAsContact` ET localisation Corps/Tête ET un Petit bouclier
+  (`shield_extra_locations IS NULL`, le distingue de Moyen/Grand) est équipé — succès → sa Protection
+  rejoint le calcul `calcResistanceArmure` comme une couche d'armure de plus ; échec → rien. Résultat
+  du jet (`rollChance`/`chanceRolls`/`chanceSeed`/`chanceSuccess`) retourné par `resolveTargetHit`
+  mais **pas encore diffusé** en `DICE_RESULT` (même sort que `rollLoc` — l'émission se fait dans les
+  handlers appelants, pas dans `damageService.js` — affichage repoussé au Lot C, comme
+  `damageService.js` le fait déjà pour `rollLoc`).
+- **Hors scope confirmé, non traité** : `resolveDroneAssaultAction` (armes de drone) — jamais
+  `treatAsContact`, toujours traité comme arme à feu par défaut. Aucune arme de jet/trait connue côté
+  drone à ce jour ; à revoir seulement si un cas réel apparaît.
+- Non-régression déjà vraie sans code dédié : un bouclier en `MG` bloque l'équipement d'une arme dans
+  `MG`/`2M` (occupation de slot ordinaire) — aucune interaction avec « Combat à deux armes ».
+
+**Testé** (personnage + token jetables, nettoyés, 0 résidu) : Petit bouclier protège le Bras sans Test
+de Chance ; Test de Chance Corps réussi (`chc=20`) applique la Protection ; Test de Chance Corps
+échoué (`chc=0`) n'applique rien ; `treatAsContact=true` exclut totalement le bouclier (Bras compris) ;
+Moyen bouclier protège Corps automatiquement sans Test de Chance ; requête du malus CaC retourne la
+bonne valeur pour un bouclier équipé. 12/12 assertions OK.
+**Testé en combat réel, confirmé fonctionnel par Saar (2026-07-17)** — scénario de bout en bout via
+Socket.IO/FSM validé en jeu, en complément des 12 assertions unitaires ci-dessus.
+
+**Lot C — UI équipement/combat. ✅ Codé et vérifié (2026-07-17), navigateur non testé.**
+
+- **Confirmé sans code neuf** : `battlemaps.js` (`weaponRows`/`armorRows`, `[VÉRIFIÉ]` lu en détail) —
+  un bouclier apparaît déjà naturellement dans les deux listes (main via `weaponRows`, corps via
+  `armorRows` qui inclut tout item `family='Protections'` ayant au moins un `slot_code` hors main/
+  contenant) ; `CombatGmDeclareWindow.jsx`/`CombatRosterWindow.jsx`/`MeleeCombatPanel.jsx` affichent
+  ces listes génériquement, aucune hypothèse `ref_family==='Armes'` qui exclurait un bouclier. Le
+  malus CaC/jet-trait (breakdown Lot B) s'affiche déjà aussi sans code neuf : `DiceBreakdownPopover`
+  (`Sidebar.jsx`) rend n'importe quel `msg.breakdown` générique — l'entrée « Bouclier adverse » ajoutée
+  en Lot B y apparaît automatiquement.
+- **`inventoryService.js`** : `getItemWithRef`/`getInventory` — 2 colonnes ajoutées au SELECT
+  (`ref_shield_atk_malus`, `ref_shield_extra_locations`), absentes jusqu'ici, nécessaires pour tout
+  affichage client des stats bouclier.
+- **`WeaponPanel.jsx`** — corrigeait le bug original (« pas équipable dans l'emplacement dédié ») :
+  `availableWeapons` élargi (`ref_family==='Armes' OU ref_category==='Bouclier'`, `ref_location`
+  reste `'M'` donc `getSlotInfo` route déjà correctement vers `1H`/`MG`/`MD` sans changement). Badge de
+  main corrigé (`slots[0]` n'est plus fiable pour un slot composite trié alphabétiquement, ex.
+  `['BG','C','MG']` — nouveau helper `handSlotOf` qui cherche explicitement le code main). Stats
+  dédiées ajoutées (malus CaC adverse, Protection à distance, localisations couvertes). `handleEquipItem`
+  et l'unequip (`slot: null`) déjà composite-safe sans changement (opèrent uniquement sur des codes de
+  main, jamais sur le détail des localisations).
+- **`LocationPanel.jsx`** — bug réel trouvé en concevant Lot C, pas dans le plan initial : un bouclier
+  équipé apparaît normalement dans les panneaux Bras/Corps/Tête concernés (affichage générique déjà
+  suffisant), mais son bouton « × » y appelait `handleUnequip` avec un retrait partiel d'un seul
+  `slot_code` — rejeté par le serveur (`updateItem` n'accepte que `MG`/`MD`/`null` pour un Bouclier,
+  jamais une chaîne composite partielle). Corrigé : `handleUnequip` détecte `ref_category==='Bouclier'`
+  et envoie toujours `slot: null` (déséquipement complet, main comprise) ; tag visuel « (bouclier) » +
+  tooltip explicatif ajoutés pour que le comportement tout-ou-rien ne surprenne pas.
+- **Test de Chance du Petit bouclier** : diffusion `DICE_RESULT` ajoutée dans
+  `socketCombatResolution.js` (`COMBAT_DAMAGE_CONFIRM`), même patron exact que la carte `rollLoc`
+  existante (`rollChance`/`chanceRolls`/`chanceSeed` retournés par `resolveTargetHit`, nouveau
+  `chanceThreshold` ajouté au retour pour afficher le seuil réel testé).
+- **`ContainerPanel.jsx`** : confirmé non concerné (slots `D`/`Ce`, aucun rapport avec le bouclier).
+- **Tension i18n non résolue, signalée plutôt que tranchée seul** : `WeaponPanel.jsx`/`LocationPanel.jsx`/
+  `InventoryPanel.jsx`/`ContainerPanel.jsx` n'utilisent `useTranslation` nulle part (`[VÉRIFIÉ]` grep,
+  contrairement à `AdvantagesPanel.jsx`/`SkillsPanel.jsx` et consorts qui l'utilisent) — zone legacy
+  antérieure au rollout i18n. Nouveau texte de ce Lot C écrit en dur, cohérent avec la convention
+  locale de ces 4 fichiers précis, mais contraire à la règle générale `.claude/rules/react.md`
+  (« jamais de string codée en dur »). Retrofit i18n de ces 4 fichiers explicitement hors scope de ce
+  chantier (des dizaines de chaînes déjà en dur, chantier séparé) — signalé pour arbitrage, pas décidé
+  unilatéralement.
+- **Testé** : `getItemWithRef` renvoie bien les 2 nouvelles colonnes après équipement réel (personnage
+  jetable, 0 résidu) ; ESLint 0 erreur sur les 3 fichiers client touchés ; lecture complète confirmant
+  qu'aucun autre consommateur (`battlemaps.js`, fenêtres combat) ne suppose `ref_family==='Armes'` de
+  façon excluante.
+- **Non testé** : parcours navigateur réel (équiper un bouclier via `WeaponPanel`, vérifier son
+  affichage dans `LocationPanel`, le déséquiper depuis chaque endroit, observer le breakdown CaC et la
+  carte Test de Chance en combat réel) — nécessaire avant clôture définitive du chantier.
 
 ---
 

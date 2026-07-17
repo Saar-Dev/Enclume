@@ -92,6 +92,12 @@ function _severityForDamage(net) {
 // Émet WOUND_ADDED via woundService (effet DB + WS inclus).
 // chocDsl (Lot B, docs/PLAN_ARMES_DSL.md) : optionnel, null par défaut — resolveMeleeAction et les
 // branches drone ne le passent jamais, comportement strictement inchangé pour elles.
+// treatAsContact (docs/PLAN_BOUCLIER.md Lot B) : true pour tout coup au contact OU arme de jet/trait
+// (RAW : "traité comme au contact") — exclut la protection localisée d'un Bouclier (Bras et Test de
+// Chance) de la résolution armure, qui ne vaut RAW que face aux armes à feu à distance. Le malus au
+// Test d'attaque de l'adversaire (effet symétrique, contact/jet-trait) est un mécanisme séparé,
+// appliqué en amont par l'appelant (resolveMeleeAction/resolveAssaultAction) sur chancesAttaque,
+// jamais ici — resolveTargetHit ne connaît que la résolution côté cible.
 export async function resolveTargetHit(io, db, campaignId, {
   degautsBruts,
   characterIdCible,
@@ -102,6 +108,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   vol_na_cible,
   chocDsl = null,
   forcedSlotCode = null,
+  treatAsContact = false,
 }) {
   if (cibleType === 'drone') return null
 
@@ -126,20 +133,48 @@ export async function resolveTargetHit(io, db, campaignId, {
   // mécanisme arme (`ref_equipment.shock`, catégories 1/2, `docs/VOCABULARY.md` "Dommages de Choc").
   let etq = null
   let mutationEffectsCible = null, advantagesCible = []
+  let rollChance = null, chanceRolls = null, chanceSeed = null, chanceSuccess = null, chanceThreshold = null
   if (char_sheet_id_cible && characterIdCible) {
     // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lecture directe de char_inventory_slots — remplace le
     // filtre substring PI8 (`'/' + slot + '/' includes`) par une égalité exacte sur slot_code, plus
     // besoin de post-filtrer en JS.
-    const [armuresSlot, mutEff, adv] = await Promise.all([
-      db('char_inventory_slots as cis')
-        .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
-        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where('char_inventory.character_id', characterIdCible)
-        .where('cis.slot_code', slotCode)
-        .select('ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock'),
+    // Bouclier (docs/PLAN_BOUCLIER.md Lot B) : exclu de la protection normale au contact/jet-trait
+    // (treatAsContact) — RAW ne lui accorde une valeur de Protection que face aux armes à feu.
+    const armorQuery = db('char_inventory_slots as cis')
+      .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where('char_inventory.character_id', characterIdCible)
+      .where('cis.slot_code', slotCode)
+      .select('ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
+    if (treatAsContact) armorQuery.where((q) => q.whereNot('ref_equipment.category', 'Bouclier').orWhereNull('ref_equipment.category'))
+
+    const [armuresSlot, mutEff, adv, shieldPetit] = await Promise.all([
+      armorQuery,
       getMutationEffects(char_sheet_id_cible),
       getAdvantages(char_sheet_id_cible),
+      // Bouclier Petit (docs/PLAN_BOUCLIER.md Lot B, RAW REGLEBOUCLIER.md) — protection localisée à
+      // distance uniquement, jamais couverte par le slot composite (shield_extra_locations NULL pour
+      // le Petit) : Corps/Tête ne sont protégés que si le Test de Chance réussit sur CE coup précis.
+      (!treatAsContact && (localisation === 'corps' || localisation === 'tete'))
+        ? db('char_inventory_slots as cis')
+            .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+            .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+            .where('char_inventory.character_id', characterIdCible)
+            .whereIn('cis.slot_code', ['MG', 'MD'])
+            .where('ref_equipment.category', 'Bouclier')
+            .whereNull('ref_equipment.shield_extra_locations')
+            .select('ref_equipment.protection as ref_protection', 'ref_equipment.protection_shock as ref_protection_shock')
+            .first()
+        : null,
     ])
+    if (shieldPetit) {
+      const sheetCible = await db('char_sheet').where({ id: char_sheet_id_cible }).select('chc').first()
+      const rolled = await parseDice('1d20')
+      rollChance = rolled.total; chanceRolls = rolled.rolls; chanceSeed = rolled.seed
+      chanceThreshold = sheetCible?.chc ?? 11
+      chanceSuccess = rollChance <= chanceThreshold
+      if (chanceSuccess) armuresSlot.push(shieldPetit)
+    }
     etq = calcResistanceArmure(armuresSlot).etq
     mutationEffectsCible = mutEff
     advantagesCible = adv
@@ -212,5 +247,8 @@ export async function resolveTargetHit(io, db, campaignId, {
     severity, is_lethal,
     finalSeverity,
     shockResult,
+    // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot B/C) — null quand non applicable
+    // (pas de Petit bouclier en jeu sur ce coup).
+    rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold,
   }
 }

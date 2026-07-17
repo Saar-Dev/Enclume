@@ -354,7 +354,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       for_na_cible, con_na_cible, vol_na_cible,
       tireurUsername, tireurColor, userId, targetName,
       type: pendingType, modDom, combatModeBonus,
-      aimedLocation,
+      aimedLocation, treatAsContact,
     } = pending
 
     try {
@@ -429,10 +429,14 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         for_na_cible, con_na_cible, vol_na_cible,
         chocDsl: effectiveChocDsl,
         forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
+        // Bouclier (docs/PLAN_BOUCLIER.md Lot B) — CaC toujours "au contact" ; à distance, dérivé de
+        // la nature de l'arme (armes de jet/trait, calculé côté resolveAssaultAction et transporté ici).
+        treatAsContact: pendingType === 'melee' ? true : (treatAsContact ?? false),
       })
       if (hitResult === null) return
       const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-              is_lethal, finalSeverity, shockResult } = hitResult
+              is_lethal, finalSeverity, shockResult,
+              rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
 
       if (shockResult) {
         statusService.emitShockDiceResult(io, pendingCampaignId, shockResult, userId, tireurUsername, tireurColor)
@@ -474,6 +478,20 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           mechanicalTotal: rollLoc, diffLabel: '',
           chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
           isSuccess: true,
+        })
+      }
+      // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot C) — même patron que rollLoc :
+      // null quand non applicable (pas de Petit bouclier en jeu), rien à afficher.
+      if (rollChance !== null) {
+        io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+          userId, username: tireurUsername, color: tireurColor,
+          formula: '1d20', rolls: chanceRolls, total: rollChance,
+          isCriticalSuccess: false, isCriticalFail: false,
+          seed: chanceSeed, timestamp: now,
+          skillLabel: `Test de Chance — Bouclier (${LOCATION_LABELS[localisation] ?? localisation})`,
+          mechanicalTotal: rollChance, diffLabel: '',
+          chancesDeReussite: chanceThreshold,
+          isSuccess: chanceSuccess,
         })
       }
       io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
@@ -679,6 +697,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             degautsBruts, characterIdCible, cibleType: 'pj',
             char_sheet_id_cible,
             for_na_cible, con_na_cible, vol_na_cible,
+            treatAsContact: true,
           })
           if (hitResult === null) return
           const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
