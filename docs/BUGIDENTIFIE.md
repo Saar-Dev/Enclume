@@ -229,6 +229,39 @@ avant de coder un correctif.
 
 ---
 
+### Dette DEP1 — Allure Maximale accessible même chargé/encombré (sac, armure, arme > pistolet)
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de règle (Saar,
+2026-07-18), en creusant le système d'Allures pour `docs/PLAN_COMBAT_TIMELINE.md`. Un personnage
+portant un sac, une armure, ou une arme plus grosse qu'un pistolet peut aujourd'hui se voir proposer
+l'Allure Maximale exactement comme un personnage totalement dégagé.
+
+**Règle** : `docs/REGLES/REGLESYSCOMBAT.md:773-786` (Allures de déplacement, p.220) — *« Allure
+rapide [...] C'est aussi la vitesse d'un personnage qui tente de courir tout en étant chargé et/ou
+encombré (armure, sacs, armes militaire de type fusil d'assaut, matériel divers…). »* puis *« Allure
+maximale : c'est l'Allure d'un personnage qui court le plus vite possible [...] sans être encombré
+d'aucune manière. »* — l'Allure Maximale est donc réservée à un personnage sans sac, sans armure et
+sans arme plus grosse qu'un pistolet ; au-delà, le plafond RAW est l'Allure Rapide.
+
+**Code impliqué** : `shared/polarisUtils.js:201-205` (`calcAllures`) — calcule les 4 Allures à partir
+de la seule Coordination/Athlétisme, aucun paramètre d'encombrement. `server/src/services/
+movementBudgetService.js:33-61` (`getCharacterMovementBudget`) — ne lit ni `char_inventory`, ni
+l'équipement porté, avant d'exposer le budget `max`.
+
+**Cause racine [HYPOTHÈSE]** : lecture de code uniquement, non instrumentée ni reproduite en jeu réel
+— aucun filtre d'éligibilité à l'Allure Maximale n'existe nulle part dans la chaîne de calcul.
+
+**Trouvé pendant** : discussion `docs/PLAN_COMBAT_TIMELINE.md` sur le rattachement du malus
+Précision/Équilibre/Furtivité/Vigilance à l'Allure choisie pour une Action combinée avec un
+déplacement (§6bis/6ter de ce plan) — sans lien direct avec la Timeline elle-même.
+
+**Prochaine étape** : définir précisément le critère « encombré » (poids total ? présence d'un sac
+équipé en slot D/Ce ? armure portée ? catégorie d'arme équipée > pistolet ?) avant de coder un garde
+dans `calcAllures`/`getCharacterMovementBudget` — session dédiée, hors scope immédiat de
+`docs/PLAN_COMBAT_TIMELINE.md`.
+
+---
+
 
 ### Bug COM24 — Bonus "deux armes" (+3 CaC) déconnecté de l'arme réellement déclarée
 

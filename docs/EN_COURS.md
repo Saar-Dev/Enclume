@@ -59,7 +59,10 @@
 
 > Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 156 : `docs/PLAN_BOUCLIER.md` Lots A+B+C
 > — ✅ codés et testés, Lot A/B fonctionnel confirmé Saar en combat réel, Lot C navigateur non encore
-> testé, item 81 ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> testé, item 81 ; **Session 157 (2026-07-18) : Sprint Tir Multi → refonte complète du moteur de tours
+> combat, planification uniquement (aucun code) — `docs/PLAN_COMBAT_TIMELINE.md` intégralement conçu
+> (4 Lots + analyses à charge + audit indépendant), correctif isolé `combat_pending` conçu et prêt à
+> coder en premier, item 82** ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
 > (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
 > Session 153 : `docs/PLAN_ECHANGE.md` — correction
 > du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
@@ -159,6 +162,11 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> ⚡ **Prochaine étape immédiate : voir Item 82 (Session 157) ci-dessous** — correctif isolé
+> `combat_pending` (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) d'abord, puis Lot A de
+> `docs/PLAN_COMBAT_TIMELINE.md` (§5). Item 82 est plus bas dans ce fichier (ordre antéchronologique,
+> il suit l'item 81) — ne pas le manquer en lisant seulement le haut de ce bloc.
+
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
 > Réflexion sur l'implantation des règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : plan rédigé,
@@ -240,8 +248,64 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > character-sheet n'utilisent `useTranslation` nulle part (zone legacy antérieure au rollout i18n) —
 > nouveau texte Lot C écrit en dur par cohérence locale, contraire à la règle générale i18n ; retrofit
 > complet explicitement hors scope. **Testé** : colonnes SELECT vérifiées réel (0 résidu), ESLint 0
-> erreur. **Non testé** : parcours navigateur réel — nécessaire avant clôture définitive. **Prochaine
-> étape** : test navigateur de Lot C par Saar, puis clôture du chantier Bouclier.
+> erreur, **parcours navigateur réel confirmé fonctionnel par Saar** (test mené en parallèle du
+> développement, avant le commit de clôture — confirmé 2026-07-18). **CHANTIER BOUCLIER CLOS**
+> (commit `1733aaa`, Session 156) : `docs/PLAN_BOUCLIER.md` archivé vers `docs/Old/`, détail durable
+> transféré dans `docs/ASBUILT.md` (Règle 10, `docs/RegleDocumentaire.md`).
+>
+> **Item 82 (Session 157, dev/Saar) — Chantier Sprint Tir Multi → refonte complète du moteur de tours
+> ⚠️ PLANIFICATION UNIQUEMENT, AUCUN CODE ÉCRIT. Prochain agent : lire les 3 documents ci-dessous
+> intégralement avant toute action, ils sont conçus pour être auto-suffisants.**
+> Point de départ : Saar demande le Sprint Tir Multi (`docs/ROADMAP.md`, Chantier CaC). Plan rédigé
+> (`docs/PLAN_TIRMULTI.md`), 8 points ouverts (D1-D8) discutés avec Saar — D4/D5 (comment enchaîner
+> plusieurs tirs sans jet de défense opposé) révèlent que le mécanisme existant de chaînage
+> multi-attaque CaC (`resolveMeleeAction` récursif) contient un bug réel de collision de clé primaire
+> sur `combat_pending`, déjà vivant en production aujourd'hui (pas hypothétique — toute attaque
+> multiple CaC touchant 2 défenseurs PJ distincts le déclenche silencieusement, la 2e/3e attaque
+> disparaît sans erreur visible). Prérequis rédigé (`docs/PLAN_COMBAT_ACTION_QUEUE.md`). Puis une
+> question de Saar (« la timeline peut-elle afficher plusieurs portraits par personnage à chaque
+> action ? ») révèle que l'architecture de résolution actuelle (liste statique résolue en une passe,
+> pas de vraie notion de phases) ne peut structurellement pas le faire — et que ce qui manque recoupe
+> une règle RAW jamais implémentée, « Retarder son Action » (LdB p.218). **Décision Saar (Option A,
+> « des bases saines seront toujours plus pertinentes »)** : refonte complète du moteur de tours en
+> timeline à phases avant de reprendre quoi que ce soit d'autre — `docs/PLAN_COMBAT_TIMELINE.md`,
+> désormais racine des 3 chantiers combat.
+> **État de la conception** (`docs/PLAN_COMBAT_TIMELINE.md`) : cadrage RAW complet (6 règles du
+> sous-système Initiative citées une seule fois, autorité unique), 4 Lots séquentiels intégralement
+> conçus (A — nouvelle table `combat_timeline_entries` + additions `combat_actions`, schéma exact en
+> §5 ; B — moteur de résolution générique + 2 nouveaux sous-états FSM `AWAITING_REACTION_WINDOW` + tour
+> obligatoire ; C — `CombatTimeline.jsx` sur l'échelle, portrait = déclencheur « Agir maintenant » ; D —
+> généralisation de l'outil MJ existant, reprise de `PLAN_TIRMULTI.md`), chacun passé par une analyse
+> à charge dédiée, plus une analyse à charge globale (10 points), un audit indépendant demandé par
+> Saar pour limiter le biais de confirmation (8 points, citations RAW et code revérifiées
+> indépendamment, toutes confirmées exactes), et une relecture finale de cohérence (3 décalages de
+> propagation trouvés et corrigés). Un seul point reste ouvert (§6 point 5 du document — mécanisme de
+> secours du Lot B), sans impact sur le démarrage du Lot A, à trancher au moment de coder ce Lot précis.
+> **Décision de jeu prise en cours de route, à répercuter dans `PLAN_TIRMULTI.md` à sa reprise (Lot
+> D)** : CaC et Tir sont désormais mutuellement exclusifs à la déclaration (nouvelle règle, RAW « Types
+> d'Actions » les range dans une seule catégorie « Action de combat » — vérifié
+> `CombatActionWindow.jsx:404-408`, permissif aujourd'hui, à corriger).
+> **Dettes annexes trouvées et documentées séparément, non traitées** : `BUGIDENTIFIE.md` DEP1 (Allure
+> Maximale accessible même chargé/encombré, aucun filtre dans `calcAllures`/`getCharacterMovementBudget`)
+> ; `shared/polarisUtils.js` — `DEPLACEMENT_ACTION_MALUS` ajouté (table RAW malus Précision/Équilibre/
+> Furtivité/Vigilance selon l'Allure combinée à une Action, LdB p.220) pour ne pas perdre la donnée,
+> non branchée à la résolution combat (aucune Action combinée n'est câblée à ce jour).
+> **Codé** : rien. **Documenté** : conception complète des 3 plans + 2 fichiers annexes. **Non
+> committé** (`git status`, branche `dev/Saar`) : `docs/PLAN_TIRMULTI.md`,
+> `docs/PLAN_COMBAT_ACTION_QUEUE.md`, `docs/PLAN_COMBAT_TIMELINE.md` (nouveaux) ;
+> `docs/BUGIDENTIFIE.md`, `shared/polarisUtils.js` (modifiés).
+> **Prochaine étape exacte, dans l'ordre, pas d'ambiguïté** :
+> 1. **Correctif isolé `combat_pending`** — conception complète et prête dans
+>    `docs/PLAN_COMBAT_ACTION_QUEUE.md` §3 (clé primaire propre par ligne, plusieurs entrées
+>    `type='damage'` possibles par personnage, `melee_defense`/`stun` restent singuliers). Migration +
+>    patch des points d'insertion/lecture. Livrer avant toute chose — bug de production connu,
+>    indépendant de la Timeline. Une fois livré et testé : archiver `docs/PLAN_COMBAT_ACTION_QUEUE.md`
+>    dans `docs/Old/` (son contenu de conception « file plate » reste obsolète, absorbé par le Lot B de
+>    `PLAN_COMBAT_TIMELINE.md` — seul le correctif en est extrait).
+> 2. **Lot A de `docs/PLAN_COMBAT_TIMELINE.md`** (§5) — schéma `combat_timeline_entries` détaillé
+>    colonne par colonne, migration `combat_actions`, numéro de migration pair à auditer au moment du
+>    code (`CLAUDE.md` §5).
+> Lots B, C, D suivent dans cet ordre une fois A validé — ne pas paralléliser (`CLAUDE.md` §6.8).
 >
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token

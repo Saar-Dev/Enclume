@@ -207,6 +207,19 @@ export function calcAllures(coo_na, athletisme_total) {
 // Allures de repli pour PNJs sans stats (équivalent COO=10)
 export const DEFAULT_PNJ_ALLURES = { lente: 4, moyenne: 8, rapide: 16, max: 24 }
 
+// Malus dus aux Déplacements — Actions combinées (LdB p.220, section "Combiner plusieurs Actions"
+// p.217). Malus au Test selon l'Allure choisie pour le déplacement combiné à l'Action ; null = Action
+// impossible à cette Allure. Combat (CaC ou Tir) = "précision" ; terrain risqué sous les pieds =
+// "équilibre" ; tentative de discrétion = "furtivité" ; rester attentif en bougeant = "vigilance".
+// Non encore consommé par la résolution combat serveur (aucune Action combinée câblée à ce jour,
+// docs/PLAN_COMBAT_TIMELINE.md) — conservé ici pour ne pas perdre la donnée RAW avant son branchement.
+export const DEPLACEMENT_ACTION_MALUS = {
+  precision: { lente: -3, moyenne: -5, rapide: -7, max: null },
+  equilibre: { lente:  0, moyenne: -5, rapide: -10, max: null },
+  furtivite: { lente:  0, moyenne: -5, rapide: -10, max: null },
+  vigilance: { lente:  0, moyenne: -3, rapide: -5,  max: -7 },
+}
+
 // Nombre de Points de Création (PC) en fonction de l'ambiance
 export const POOL_AMBIANCE = {
   REALISTE: 30,
