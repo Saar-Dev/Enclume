@@ -175,6 +175,12 @@ conceptuel court ; le détail fait foi en §5 et les sous-sections §6bis/6ter/6
 
 ## 5. Lots séquentiels proposés (un seul codé à la fois, validé avant le suivant)
 
+> **Avant de coder chaque Lot** (exigence Saar, 2026-07-18) : rechercher activement documentation,
+> bonnes pratiques et dépôts GitHub établis pour le mécanisme concerné (moteurs de tours à phases de
+> jeux tactiques, VTT open-source type Foundry, patterns FSM pour systèmes de combat) — ne jamais
+> partir d'une page blanche sur un mécanisme non trivial sans avoir cherché comment des projets pro le
+> résolvent déjà. Aucune contrainte de temps ; la robustesse et la certitude architecturale priment.
+
 **Lot A — Modèle de données de l'échelle de phases.**
 
 **Schéma concret proposé** (2026-07-18, synthèse du run à vide §6bis) :
@@ -645,12 +651,15 @@ A (correctif isolé `combat_pending`) — voir §7.
 
 ## 7. Chantiers dépendants
 
-- **`docs/PLAN_COMBAT_ACTION_QUEUE.md` — correctif isolé du bug `combat_pending` à livrer avant le Lot
-  A** (§6sexies point 2, tranché Saar 2026-07-18) : bug déjà vivant en production, conception déjà
-  complète dans ce document §3, migration + patch des points d'insertion/lecture, indépendant de la
-  Timeline. Une fois livré, `docs/PLAN_COMBAT_ACTION_QUEUE.md` est archivé dans `docs/Old/` (Règle 10) —
-  son contenu de conception « file plate » reste obsolète pour la suite (absorbé par le Lot B de ce
-  plan), seul le correctif `combat_pending` en est extrait et livré maintenant.
+- **`docs/PLAN_COMBAT_ACTION_QUEUE.md` — correctif isolé du bug `combat_pending` ✅ LIVRÉ ET CONFIRMÉ
+  FONCTIONNEL (Session 158, 2026-07-18)**, avant le Lot A comme prévu (§6sexies point 2) : migration
+  `170_combat_pending_multi_damage.js` + FIFO + guard prompt aux 3 points d'insertion, testé en base
+  réelle puis confirmé par Saar en navigateur (attaque CaC multiple touchant 2 défenseurs PJ, dégâts
+  confirmés un par un). `docs/PLAN_COMBAT_ACTION_QUEUE.md` archivé dans `docs/Old/` (Règle 10) — son
+  contenu de conception « file plate » reste obsolète pour la suite (absorbé par le Lot B de ce plan).
+  **Bug non lié trouvé et corrigé en route** : `BUGIDENTIFIE.md` COM7 (déclaration CaC multi-cibles
+  bloquée par un `isMountedRef` StrictMode jamais réarmé, `CombatGmDeclareWindow.jsx`) — sans rapport
+  avec `combat_pending`, mais bloquait le test navigateur de ce correctif.
 - `docs/PLAN_TIRMULTI.md` — en pause, reprend une fois ce moteur en place (Tir Multi devient une
   déclinaison directe du modèle échelle/attaques multiples). CaC et Tir désormais mutuellement
   exclusifs à la déclaration (§6sexies point 5) — à répercuter dans ce plan à sa reprise.

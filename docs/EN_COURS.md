@@ -166,11 +166,11 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
 > ⚡ **Prochaine étape immédiate : Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le correctif isolé
-> `combat_pending` (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) est **codé et testé en base réelle** (voir
-> Item 83 ci-dessous), il ne reste que la confirmation navigateur de Saar avant d'archiver
-> `docs/PLAN_COMBAT_ACTION_QUEUE.md`. Lot A peut démarrer dès que Saar confirme. Item 83 est plus bas
-> dans ce fichier (ordre antéchronologique, il suit l'item 82) — ne pas le manquer en lisant seulement
-> le haut de ce bloc.
+> `combat_pending` est **codé, testé et confirmé fonctionnel par Saar en navigateur** (Item 83
+> ci-dessous), `docs/PLAN_COMBAT_ACTION_QUEUE.md` archivé dans `docs/Old/` (Règle 10). Rien ne bloque
+> plus le démarrage du Lot A (schéma `combat_timeline_entries`, détaillé §5 du plan). Item 83 est plus
+> bas dans ce fichier (ordre antéchronologique, il suit l'item 82) — ne pas le manquer en lisant
+> seulement le haut de ce bloc.
 
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
@@ -361,10 +361,17 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > réapparaître le bug à l'identique (2ᵉ test Saar : "Non fonctionnel") — correspondance exacte entre
 > les deux tests et le diff, cause confirmée sans ambiguïté. **Corrigé** : `isMountedRef.current = true`
 > déplacé dans le corps de l'effet (pattern "StrictMode-safe" standard, seul point d'usage de ce
-> pattern dans le client, grep confirmé). **Testé** : build Vite propre (0 erreur/warning). **Non
-> testé** : parcours navigateur/Socket.IO de bout en bout du correctif `combat_pending` lui-même (2
-> attaques CaC touchant 2 défenseurs PJ, dégâts confirmés un par un) — bloqué jusqu'ici par COM7, à
-> reprendre par Saar maintenant que la déclaration multi-cibles fonctionne.
+> pattern dans le client, grep confirmé). **Testé** : build Vite propre (0 erreur/warning), committé et
+> poussé par Saar (`412a318`, puis correctif COM7 committé séparément).
+> **Parcours navigateur du correctif `combat_pending` confirmé fonctionnel par Saar** (2026-07-18) :
+> attaque CaC multiple touchant 2 défenseurs PJ, dégâts confirmés un par un sans blocage ni collision —
+> objet réel de Session 158 validé de bout en bout. **CHANTIER `combat_pending` CLOS.** **2 points
+> trouvés en marge pendant ce test, documentés séparément (`BUGIDENTIFIE.md`), non traités ici** :
+> **COM27** (nouveau, `[INCONNU]`) — Saar observe le jet de défense affiché avant le jet d'attaque en
+> CaC multi-attaque ; lecture du code (`resolveMeleeAction` roll attaque avant l'insertion
+> `melee_defense`) semble contredire le symptôme — à instrumenter avant toute conclusion, non bloquant
+> pour la suite. **FEAT4** (nouveau) — demande Saar d'une aura visuelle (3m + allonge arme) autour du
+> personnage actif en CaC pour visualiser sa portée — sprint futur, hors scope Timeline.
 > **Dette trouvée en marge, non corrigée (hors scope, un seul problème par plan)** :
 > `server/src/socket/index.js`, sync reconnexion `pendingDmgDrone` (recherche d'un dégât de drone en
 > attente pour le joueur qui se reconnecte) utilise `.first()` sans tri, filtré uniquement par
@@ -2002,6 +2009,8 @@ Projet en cours et priorité user :
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
+| COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque (signalé Saar, non instrumenté) | À investiguer |
+| FEAT4 | Aura de portée CaC (3m + allonge arme) autour du personnage actif | Basse — sprint futur |
 | ~~**COM9**~~ | ~~Viser une localisation précise — non implémenté~~ | ✅ Session 155 (Saar) |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | ~~**TIRVISE**~~ | ~~Tir visé — non implémenté, bloquait le Lot B2 de `docs/PLAN_MODING.md`~~ | ✅ Session 141 (suite 17) |

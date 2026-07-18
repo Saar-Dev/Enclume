@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-16 Session 147
+> Dernière mise à jour : 2026-07-18 Session 158
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -345,6 +345,50 @@ d'insertion du garde (Phase 1 Déclaration vs Phase 2 Résolution — cohérence
 combat, qui valide plutôt tôt) et du message d'erreur (réutiliser le pattern `COMBAT_DECLARE_ERROR`
 déjà existant). Exclure explicitement les armes de corps à corps (jamais de munitions) et le cas
 `pnj_unlimited_ammo=true` (option campagne déjà gérée ailleurs dans ce même bloc).
+
+---
+
+### Dette COM27 — CaC multi-attaque : le jet de défense semble se lancer avant le jet d'attaque
+
+**Symptôme** : signalé par Saar (2026-07-18) en validant le correctif `combat_pending` (Session 158,
+scénario attaque CaC multiple PJ touchant 2 défenseurs PJ) — le jet de défense apparaît lancé/affiché
+avant le jet d'attaque, alors que l'ordre attendu est attaque puis défense.
+
+**Code impliqué** : `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction` (jet d'attaque
+`rollAttaque`, ~ligne 533, émis en `DICE_RESULT` immédiatement) précède structurellement l'insertion
+`combat_pending(type:'melee_defense')` et l'attente du jet de défense côté
+`COMBAT_MELEE_DEFENSE_CONFIRM` (`socketCombatResolution.js`, jet `rollDefense` ~ligne 579) — le code
+lu semble donc déjà conforme à l'ordre attendu.
+
+**Cause racine [INCONNU]** : pas encore investigué en instrumentant — lecture seule, contradictoire
+avec le symptôme rapporté. Pistes à vérifier : ordre d'affichage dans le chat (Sidebar) vs ordre réel
+d'émission serveur ; scénario précis testé par Saar (nombre de défenseurs PJ, qui contrôlait quel
+personnage) non capturé en détail.
+
+**Prochaine étape** : reproduire avec la séquence exacte de Saar, instrumenter `[DBG-COM27]` sur les
+points d'émission `DICE_RESULT` (attaque vs défense) pour confirmer l'ordre réel serveur avant de
+soupçonner un problème d'affichage client.
+
+---
+
+### FEAT4 — Aura de portée CaC (3m + allonge de l'arme)
+
+**Besoin** (Saar, 2026-07-18) : afficher une aura/cercle autour d'un personnage qui attaque au corps à
+corps, indiquant sa portée réelle (3m de base + allonge de l'arme équipée, cf. `resolveMeleeAction`
+`allonge = parseInt(weapon?.ref_range) || 0`, même valeur que le garde-fou serveur `distanceMChk > 3 +
+allonge`) — retour visuel pour savoir qui est à portée avant de déclarer/valider une cible.
+
+**Code impliqué (pistes)** : `Canvas3D.jsx` — `TokenActiveDisk` (ring doré token actif, FEAT3 ci-dessus)
+est le précédent le plus proche (cercle centré sur un token, rayon fixe) ; ce besoin demande un rayon
+variable selon l'arme équipée du personnage actif. Donnée `allonge` déjà calculée côté serveur
+(`resolveMeleeAction`) mais pas exposée au client aujourd'hui pour l'affichage — à vérifier si
+`equipment[tokenId]` (fetch `/battlemaps/:id/combat-equipment`, déjà utilisé par
+`CombatGmDeclareWindow.jsx`) porte déjà `ref_range` ou s'il faut l'ajouter.
+
+**Prochaine étape** : session dédiée — définir le déclencheur d'affichage (permanent sur le token actif
+en phase Résolution CaC ? uniquement pendant le mode ciblage `combatTargetMode`, mode `'melee'` ?),
+sourcer `allonge` correctement (arme équipée réelle, mains nues = 0), portée = `WorldMetrics` (1 case =
+1,5m, cf. `.claude/rules/world.md`) plutôt qu'une valeur écran arbitraire.
 
 ---
 
