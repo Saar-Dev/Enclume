@@ -4,6 +4,7 @@ import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau } from '../../../shared/combatExclusiveActions.js'
+import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
@@ -117,7 +118,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // Stun guard — is_stunned lit depuis token_statuses (source unique post-Sprint 14-0)
-      const stunRow = await db('token_statuses').where({ token_id: tokenId, status_code: 'stunned' }).first()
+      // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
+      const { status_effects_mode: statusEffectsMode } = await getCampaignSettings(db, campaignId)
+      const stunRow = statusEffectsMode === 'enforced'
+        ? await db('token_statuses').where({ token_id: tokenId, status_code: 'stunned' }).first()
+        : null
       if (stunRow) {
         if (mapActions?.attack) {
           socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — ne peut pas attaquer" })
@@ -165,13 +170,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const weapon = await db('char_inventory')
             .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
             .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
-            .select('char_inventory.slot', 'char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
+            .select('char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
             .first()
           if (!weapon) {
             socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
             return
           }
-          if (!['MG', 'MD', '2M', 'Tr'].includes(weapon.slot)) {
+          // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
+          // stricte sur char_inventory.slot — composite-safe.
+          const weaponInHand = await db('char_inventory_slots')
+            .where({ char_inventory_id: weaponInvId })
+            .whereIn('slot_code', ['MG', 'MD', '2M', 'Tr'])
+            .first()
+          if (!weaponInHand) {
             socket.emit('error', { message: "L'arme doit être équipée (slot arme) (PC22)" })
             return
           }
@@ -223,6 +234,15 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Tir visé (LdB p.227-228, docs/PLAN_TIRVISE.md) — calculé une fois, réutilisé pour
       // iniDelta ci-dessous ET pour la ligne combat_actions (aim_bonus_comp) plus bas.
       const aimTranches = mapActions?.attack?.aimTranches ?? 0
+      // Viser une Localisation précise (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — annoncée ici
+      // (même patron que Tir visé), aucun coût d'Initiative (contrairement à aimTranches). Validée
+      // contre les clés réelles de AIMED_LOCATION_MALUS — jamais un slot forcé depuis une valeur
+      // arbitraire envoyée par le client ; invalide → ignorée silencieusement (null), jamais un tour
+      // de combat cassé.
+      const declaredAimedLocation = mapActions?.attack?.aimedLocation ?? null
+      const aimedLocationKey = declaredAimedLocation && AIMED_LOCATION_MALUS[declaredAimedLocation] !== undefined
+        ? declaredAimedLocation
+        : null
       // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — re-dérivée serveur depuis l'arme
       // déclarée, jamais transmise par le client. Fetch conditionnel (aimTranches>0) : la Lunette
       // n'affecte que le Tir visé, pas la peine d'interroger char_inventory_mods sinon.
@@ -310,6 +330,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           fire_mode_bonus_comp: fireModeBonusComp ?? null,
           fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
           aim_bonus_comp:       isDrone ? null : (getAimBonusComp(aimTranches, { lunetteNiveau }) || null),
+          aimed_location:       isDrone ? null : aimedLocationKey,
           modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
           status:               'pending',
         })

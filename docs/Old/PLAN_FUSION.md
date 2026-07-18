@@ -128,11 +128,10 @@ Kiwi (ou l'inverse).
 
 ### Lot 4 — Services systemd distants ✅ CLOS
 
-**Constat vérifié** : `fusion-kiwi-v2` ajoute `deploy/enclume-codex-client.service`,
-`deploy/enclume-codex-server.service`, `deploy/enclume-fusion-client.service`,
-`deploy/enclume-fusion-server.service` — 4 nouveaux fichiers, alors que le serveur
-distant actuel tourne déjà sous `enclume-server.service`/`enclume-client.service`
-(noms différents, découverts lors du dépannage de cette session).
+**Constat initial** (doublon supposé) : `deploy/enclume-codex-{client,server}.service` +
+`deploy/enclume-fusion-{client,server}.service` — 4 fichiers, alors que le serveur
+distant tournait à l'époque sous d'anciens noms `enclume-server.service`/
+`enclume-client.service`.
 
 **Résolution vérifiée Session 152 :**
 - [x] La topologie officielle n'est pas un doublon mais trois environnements isolés : cousin
@@ -147,9 +146,9 @@ restent propres à son espace et n'ont pas été modifiées.
 
 ### Lot 5 — Scripts Python (pipeline d'assets) ✅ CLOS
 
-**Constat vérifié** : `tools/generate_futuristic_hydroponics.py`,
+**Constat** : `tools/generate_futuristic_hydroponics.py`,
 `tools/render_algae_key_models.py`, `tools/validate_hydroponics_geometry.py` — génération/
-validation de modèles GLB, hors stack Node/JS du projet.
+validation de modèles GLB via Blender, hors stack Node/JS du projet.
 
 **Résolution vérifiée Session 152 :**
 - [x] Ce sont des outils ponctuels de fabrication et de diagnostic exécutés par Blender ; ils
@@ -374,6 +373,10 @@ résiduelle aux 4 identifiants supprimés). Codé dans le worktree `../Enclume-f
 worktree` (branche `fusion-kiwi-v2` réelle), commit à faire.
 **Non testé** : parcours navigateur réel (suppression de code mort sans changement de
 comportement visible — risque jugé faible, mais pas confirmé humainement).
+
+**Point d'étape Codex** : chargement visuel confirmé d'une carte multi-étages et du
+combat sur l'instance `integration` (8393) — mais le scénario exact ci-dessous (8.F) pas
+rejoué pas à pas.
 
 #### 8.E — Indicateur visuel de blocage des entités — reporté, pas de code
 **Constat vérifié** : `EntityMesh.jsx` ne rend aucun indicateur visuel du champ

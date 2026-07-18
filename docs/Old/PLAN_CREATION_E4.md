@@ -1,3 +1,9 @@
+> Statut : ⚠️ ARCHITECTURE API OBSOLÈTE — routes step-by-step remplacées par `reconcileCreation`.
+> `ref_backgrounds`/`ref_setbacks` existent mais créées par des migrations bien plus tardives (98,
+> 126) que celle proposée ici. Le mécanisme de rollback par snapshot (`char_creation_snapshot`)
+> n'a jamais été construit. Détail : `docs/JOURNAL6.md` "Session 149".
+> Archivé dans `docs/Old/` — Session 149
+
 SOMMAIRE
 
     Architecture données

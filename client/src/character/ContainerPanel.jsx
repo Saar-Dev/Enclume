@@ -5,8 +5,10 @@ import api from '../lib/api.js'
 export default function ContainerPanel({ type, label, items, characterId, canEdit, onInventoryChange }) {
   const [equipError, setEquipError] = useState(null)
 
-  const equippedItem   = items.find(i => i.slot === type)
-  const availableItems = items.filter(i => i.ref_location === type && i.slot === null)
+  // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau) remplace `slot` (texte) côté lecture —
+  // D/Ce ne sont jamais composites, mais `.includes` reste correct pour ce cas comme pour les autres.
+  const equippedItem   = items.find(i => i.slots?.includes(type))
+  const availableItems = items.filter(i => i.ref_location === type && i.slots == null)
 
   const handleEquip = useCallback(async (itemId) => {
     setEquipError(null)

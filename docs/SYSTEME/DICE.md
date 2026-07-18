@@ -63,6 +63,17 @@ Dés V1 Html overlay : D10, D10_tens, D10_units (UV kite = V2 Blender)
 **PE33 — D10 UV kite = V2 Blender uniquement**
 Ne pas tenter de calculer les UVs kite en code pur. V1 = Html overlay `position={[0,0,0]}` — ne pas déplacer.
 
+**P56 — `DICE_RESULT` ne porte jamais `dieType`**
+`socketDice.js` calcule `dieType` via `parseDice()` mais ne l'inclut pas dans le payload émis (voir
+liste des champs complets ci-dessus — absent). `SessionPage` fonctionne quand même parce que
+`client/src/lib/useSessionSocket.js` **reconstruit `dieType` côté client depuis le texte de la formule**
+avant de le passer à `DiceRoller`. Sans `dieType`, `DiceMesh.jsx` retombe silencieusement sur
+`DIE_GEOMETRY['d6']` (fallback explicite `diceMath.js`) — aucune erreur levée, juste le mauvais dé
+affiché (vécu Session 140 : un tirage 1D10 affichait un D6). **Procédure sûre** : tout nouveau composant
+qui monte `<DiceRoller>` hors de `SessionPage`/`Canvas3D.jsx` doit ajouter `dieType` lui-même au payload
+reçu de `DICE_RESULT` — en dur si la formule à cet endroit est fixe, sinon en le dérivant de `formula`
+comme `useSessionSocket.js`.
+
 ## Jets de combat (intégration DICE_RESULT)
 Les jets de résolution d'assaut (attaque + dégâts) émettent aussi `DICE_RESULT` vers la room.
 `skillLabel` absent → animation 3D déclenchée pour tous les participants.

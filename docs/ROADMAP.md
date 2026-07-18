@@ -126,7 +126,7 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | Sprint 3 | Codes slots indépendants (BG/BD/JG/JD) + armures multi-couches + poids | ✅ session 54 |
 | Sprint 4 | Module Armes équipées (WeaponPanel, current_ammo, nettoyage nomenclature munitions) | ✅ session 55 |
 | Sprint 5 | Mille-feuille protection serveur + polarisRound unifié + ref_min_str exposé | ✅ session 56 |
-| Sprint 6 | Transfert items + échange sols (WS bidirectionnel, double validation) | 🔲 |
+| Sprint 6 | Échange items/sols (WS bidirectionnel, double validation) | ✅ livré sessions 124-141 sous `docs/Old/PLAN_TRADE.md` (`tradeService.js`, secteur `echange` du menu radial) + extension MJ (proposer au nom d'un PJ) session 153, `docs/Old/PLAN_ECHANGE.md`, parcours complet testé et confirmé |
 | — | Split pile, capacity sac, custom_props UI, malus_cat dans jets Polaris | 🔲 selon besoin |
 
 **Sprint 1 livré :**
@@ -168,14 +168,14 @@ ref_equipment (catalogue) ← ✅ 636 items
 char_inventory (possessions joueur) ← ✅ Chantier 10 sprint 2 (session 51)
     ↓
 Module Armures (UI + mille-feuille) ← ✅ Chantier 10 sprint 3 (session 53-54)
-Module Armes ← 🔲 Chantier 11 Étape 2
+Module Armes ← ⚙️ Chantier 11 Étape 2 (Lots A+B codés, Lot C restant)
 ```
 
 | Étape | Contenu | Prérequis | État |
 |---|---|---|---|
 | Étape 1 | `character_wounds` DB + routes + WoundManager UI + intégration `charStats.js` | — | ✅ session 49 |
 | Étape 1b | Intégration `effectiveMalus` dans jets (socket) + Initiative fiche | — | ✅ session 52 |
-| Étape 2 | Module Armes — DSL effets/munitions, parseur, résolution dommages par localisation | Chantier 10 sprint 4 | 🔲 |
+| Étape 2 | Module Armes — DSL effets munitions, parseur | Chantier 10 sprint 4 | ⚙️ Lots A (dégâts)+B (Choc) codés/testés, Lot C (tags) restant — `docs/PLAN_ARMES_DSL.md` |
 | Étape 3 | Module Armures — ArmorWoundPanel + LocationPanel mille-feuille + SilhouettePanel | Chantier 10 sprint 2 | ✅ session 53-54 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
 
@@ -230,7 +230,22 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
   tag `(LdB)` d'origine n'a jamais cité de page. Colonne `ref_equipment.min_str` conservée (donnée
   brute), calcul et application retirés du pipeline combat.
 
-- **DSL effets armes/munitions (Étape 2 Module Armes)** — `ref_equipment.effects` contient un DSL type `DMG_H=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Syntaxe : `TYPE=ACTION(VALEUR)` séparés par `;`. Actions : `SET` (écrase), `ADD` (ajoute), `TXT=FX=` (tag qualitatif). Chargement d'une munition → override des stats de l'arme via ce parseur. Fail-safe : si DSL malformé → console.warn + stats de base de l'arme.
+- **DSL effets munitions (Étape 2 Module Armes)** — `ref_equipment.ammo_effects` (munitions
+  uniquement, pas les armes elles-mêmes — vérifié dans les données réelles) contient un DSL type
+  `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Lot A (dégâts DMG=) et Lot B (Choc
+  CHOC=, Test d'Étourdissement/Inconscience) codés et testés (2026-07-16). Lot C (tags qualitatifs
+  `TXT=FX=`, affichage seul) restant. Plan détaillé (vocabulaire complet, découpage en lots,
+  invariants, sites rebranchés) : `docs/PLAN_ARMES_DSL.md`.
+
+- **Tir visé sur localisation (`COM9`, non planifié avant 2026-07-16)** — action manquante :
+  actuellement le D20 de localisation est toujours purement aléatoire, aucun moyen pour un joueur de
+  viser délibérément une zone. Dépendance directe avec le Lot B du DSL munitions
+  (`docs/PLAN_ARMES_DSL.md`) : le bonus de Choc d'une munition assommante n'est déclenché que sur un
+  coup à la Tête pour une arme "normale" (dégât physique + Choc additionnel) — sans cette action, ce
+  déclenchement reste soumis au seul hasard de la table de localisation. Malus LdB : Corps −3 /
+  Jambes −5 / Tête+Bras −7. Détail : `docs/BUGIDENTIFIE.md` COM9. Ne pas confondre avec Tir visé
+  (bonus au Test de tir, déjà livré) ni "Changer le mode de tir" — trois mécaniques distinctes
+  (`docs/VOCABULARY.md`).
 
 ### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
 
@@ -328,22 +343,39 @@ Source unique : `token_statuses` + colonne `expires_at_turn INT NULLABLE`.
 | `applyStunWithDuration` | `socket/index.js` | Écrit dans `token_statuses` uniquement — supprime les writes JSONB `is_stunned`/`stunned_until_turn` |
 | `checkStunExpiry` | `socket/index.js` | Lit `token_statuses` + supprime rows expirés — supprime purge JSONB |
 | Stun guard `COMBAT_ACTION_DECLARE` | `socket/index.js` | Lit `token_statuses WHERE status_code='stunned'` au lieu de `state_character?.is_stunned` |
-| `COMBAT_START` surprise | `socket/index.js` | Insert `token_statuses { status_code:'surprised', expires_at_turn: current_turn+1 }` au lieu de `is_surprised=true` colonne |
 | `endTurn` | `socket/index.js` | `DELETE token_statuses WHERE expires_at_turn <= current_turn` — universel, remplace purge spécifique |
 | Nettoyage JSONB | `socket/index.js` | Retirer toute lecture/écriture `is_stunned`/`stunned_until_turn` du JSONB `state_character` |
 
-**Sprint 14-1 — Menu contextuel token** (right-click → ajouter/retirer statuts, GM + propriétaire)
+**Sprint 14-1 — Menu contextuel token** ✅ codé (right-click → ajouter/retirer statuts, GM + propriétaire) —
+`TokenRadialMenu.jsx` secteur `statuts`, `TokenStatusPanel.jsx`, `socketToken.js` handler `TOKEN_STATUS_TOGGLE`.
 
-**Sprint 14-2 — Affichage badges** (Html drei sous le nom, SVGs `docs/Character/Statuts/`, couleurs par catégorie, overflow +N)
+**Sprint 14-2 — Affichage badges** ✅ codé (Html drei sous le nom, SVGs `docs/Character/Statuts/`, couleurs par
+catégorie, overflow +N) — `Canvas3D.jsx`. Reste 2 bugs de finition en dette : `ST1`/`ST3` (voir dettes actives).
 
-**Sprint 14-3 — FIX-D + mécaniques enforced**
-- FIX-D : bypass défense `resolveMeleeAction` si cible `stunned`/`surprised` → test simple +5 (query unique `token_statuses`)
-- `unconscious` : passe son tour (`COMBAT_ACTION_DECLARE` guard)
-- Option campagne `status_effects_mode`
+**Sprint 14-3 — mécaniques enforced**
+- ~~FIX-D : bypass défense `resolveMeleeAction` si cible `stunned`/`surprised`~~ — **abandonné (2026-07-16)**.
+  Vérifié contre `docs/REGLES/REGLESYSCOMBAT.md` L.172-260 (section Surprise) : aucune règle ne retire la
+  défense à une cible `stunned` ; le "sans défense" du LdB ne couvre que l'attaque gratuite d'une embuscade
+  initiale (avant Tour 1), pas un état persistant interrogeable en cours de combat. Décision Saar : FIX-D saute.
+- `unconscious` : passe son tour ✅ déjà couvert — le guard `COMBAT_ACTION_DECLARE` bloque `stunned`
+  ET `unconscious` (même `whereIn` sur `token_statuses`).
+- Option campagne `status_effects_mode` ✅ codée (2026-07-16) : `off` / `icon_only` / `enforced`,
+  défaut `enforced` (aucun changement rétroactif). 3 sites serveur gatés (même valeur lue une fois par
+  handler via `getCampaignSettings`) :
+  - `socketCombatAnnouncement.js` (guard Déclaration, attaque bloquée + plafond allure)
+  - `socketCombatResolution.js` PRECHECK (filet de sécurité résolution)
+  - `socketCombatResolution.js` CONFIRM (filet de sécurité miroir)
+  Client : `campaign?.settings?.status_effects_mode` lu une fois dans `SessionPage.jsx`, propagé en
+  prop à `TokenRadialMenu` (secteur `statuts` désactivé si `off`) et `Canvas3D`→`Scene`→`TokenMesh`
+  (badges masqués si `off`). UI : `SectionGameRules.jsx` (onglet Options de campagne), 3 boutons même
+  pattern que `ambiance`. **PLAN 14 clos.**
+
+**`is_surprised` reste une colonne `combat_roster`** (pas de migration vers `token_statuses`) — décision
+confirmée : sans FIX-D, aucun besoin d'un statut `surprised` persistant/interrogeable ; `is_surprised` ne sert
+que le flow ponctuel `COMBAT_SURPRISE_ROLL` en tout début de combat (effacé après le jet).
 
 **Ce qui disparaît après Sprint 14-0 :**
 - `is_stunned` + `stunned_until_turn` du JSONB `state_character`
-- `is_surprised` comme colonne gameplay (`combat_roster.is_surprised` reste uniquement pour le flow `COMBAT_SURPRISE_ROLL` — effacé après le jet)
 
 ### Chantier Arts Martiaux 🔲
 
@@ -364,6 +396,8 @@ Toute la section Arts martiaux du LdB (p.523-640) — non implémentée.
 | Lutte : Saisie → Clé / Étranglement / Projection | élevée |
 
 Prérequis : statut `grappled` (PLAN14) pour la Lutte. Techniques offensives/défensives peuvent être un sprint indépendant.
+
+Note (Saar) : certaines mutations facilitent probablement l'Agrippé/Lutte (corne, griffe, etc.) — à vérifier au moment de l'implantation.
 
 ---
 
@@ -496,6 +530,63 @@ l'équipement automatiquement.
 - Retiré de `PLAN_MODING_PHASEB.md` (Groupe 3) — ce n'est pas un effet de mod sur une arme portée,
   hors responsabilité de ce document. Complexité estimée : élevée (nouveau type d'entité + mécanique
   d'équipement temporaire liée au déplacement, au-delà d'un ajustement de mod).
+
+### LOS & Raycast — à replanifier de zéro avec le nouveau builder
+`docs/Old/PLAN_LOS.md` archivé Session 149 : l'ancien plan décrivait un raycast voxel, architecture
+disparue avec le remplacement complet du builder (Kiwi). Le sujet entier (ligne de vue, raycast,
+localisation) est à repenser depuis zéro sur l'architecture WorldSnapshot actuelle
+(`shared/world/visibility.js`, `worldVisibilityService.js`) — pas une extension de l'ancien plan.
+Deux besoins identifiés au passage, à réintégrer dans la replanification plutôt qu'à traiter
+isolément :
+- **Table de localisation D20 contrainte aux zones exposées** — exclure les zones couvertes
+  (tête/corps/jambes) du tirage de localisation selon la couverture réellement calculée par
+  `checkWorldCoverage`.
+- **Postures tokens** (debout/accroupi/couché) — impact sur hauteur d'œil et zones exposées ; aucune
+  colonne `tokens.posture`/`tokens.height` n'existe.
+Complexité estimée : élevée — nouvelle planification complète, pas une extension.
+
+### Export PDF fiche personnage
+`docs/PLAN_EXPORTPDF.md` — toujours à l'état proposition (`🔶`, jamais codé, confirmé Session 149).
+Architecture recommandée par la recherche déjà faite : Puppeteer (vue HTML dédiée `@media print`,
+un seul layout source de vérité) plutôt que `@react-pdf/renderer` (dupliquerait le layout de
+`CharacterSheet.jsx`, 1184 lignes, encore en évolution active).
+4 points à trancher avant Lot 0 : confirmation architecture, déclencheur (fiche seule / liste / fin
+de Wizard), fidélité visuelle à la fiche officielle, disponibilité pour fiches GM/PNJ. Détail complet
+dans le plan.
+
+### Moding Groupe 4 — slot `logiciel`
+`docs/PLAN_MODING_PHASEB.md` Groupe 4, confirmé toujours manquant (Session 149) : 4 mécaniques
+distinctes partageant le même slot exclusif, chacune mérite sa propre session de planification
+(le plan lui-même le dit) :
+- **Mémoire de cibles Mémo** — Test de reconnaissance, évite un tir sur cible amie préenregistrée.
+- **Projecteur de mouvement** — Test réduisant le malus de cible en mouvement lors d'un Tir visé.
+- **Système réactif autonome** — IA de tir autonome, probablement hors périmètre "mod" (nécessite une
+  automatisation de tour complète).
+- **Analyseur tactique** — bonus/malus croissant par round contre une cible, nécessite un état
+  persistant par combat/cible non stocké aujourd'hui.
+
+### Wizard — création à deux (GM + joueur)
+Idée Saar : permettre à un joueur et son GM de créer un personnage ensemble dans le Wizard, avec
+droit d'écriture du GM supérieur à celui du joueur (arbitrage/correction en direct). Nécessite de
+déterminer un modèle de session partagée (verrou par étape ? présence simultanée ?) — non exploré.
+
+### Matériel — conversion en objets réels
+Idée Saar : permettre au GM de convertir les points de matériel ou l'argent d'un personnage en
+objets concrets, via un menu de création d'item directement dans l'inventaire (`InventoryPanel.jsx`).
+Distinct de l'admin catalogue existante (`equipment-admin.html`) qui gère `ref_equipment`, pas
+`char_inventory` d'un personnage précis.
+
+### Chat persistant
+Idée Saar, distincte de "Chat MP" ci-dessous (qui est la messagerie *privée*, pas la persistance).
+Vérifié : l'event `CHAT_MESSAGE` (`shared/events.js`) existe côté socket mais aucune table ne
+persiste l'historique côté serveur — le chat est volatile aujourd'hui (perdu à la reconnexion/au
+redémarrage). À planifier : table de messages, endpoint de relecture, pagination.
+
+### Exo-armures (PLAN_EXOARMURE)
+`docs/MANUELEXOARMURE.md` existe déjà comme manuel technique complet (SSOT), avec schémas détaillés
+`ref_exo_templates`/`EXO_ARMURE_STATE` — mais aucune migration ni code trouvés (`grep` exo_armure/
+ref_exo_templates sur `server/src` : aucun résultat). Jamais implanté. À vérifier/valider avant
+implantation (le manuel peut avoir dérivé depuis sa rédaction).
 
 ### Chat MP
 Messagerie privée entre joueurs/GM.

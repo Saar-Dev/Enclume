@@ -215,3 +215,30 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | COMBAT_DAMAGE_CONFIRM | client PJ | serveur | Déclenche calcul dégâts serveur |
 | COMBAT_DAMAGE_RESULT | serveur | socket tireur PJ | Résultats pour affichage fenêtre |
 | COMBAT_ATTACK_RESULT | serveur | room | Résumé dégâts broadcast |
+
+---
+
+## Migrations — pièges (P52-P54)
+
+### P52 — CLI knex trie les fichiers par ordre lexical, pas par `knex_migrations`
+Des numéros à largeur inégale (`99_...` vs `100_...`-`106_...`) trient mal en lexical (`'9' > '1'`) :
+`knex migrate:down`/`migrate:latest` sans argument peut cibler la mauvaise migration silencieusement
+(vécu Session 134 : `99_char_advantages_v2.js` droppé au lieu de `106_...`).
+**Pour tester un round-trip `up`/`down` d'une migration précise** : importer le module et appeler
+`await mig.up(knex)` / `await mig.down(knex)` directement — jamais la CLI knex brute sur ce projet.
+
+### P53 — `nodemon` réapplique les migrations à chaque écriture de fichier sous `server/`
+`server/src/index.js` appelle `db.migrate.latest()` au démarrage. `nodemon` watch tout `server/` par
+défaut (aucun `nodemonConfig` dans `package.json`) → écrire n'importe quel fichier de test dans
+`server/` déclenche un restart qui auto-applique les migrations en attente avant tout test contrôlé.
+**Procédure sûre** : écrire les scripts de vérification en `node -e` inline (Bash), jamais de fichier
+sous `server/`. Avant de choisir un numéro de migration libre, toujours `ls server/src/db/migrations/`
+(ne pas se fier uniquement à `EN_COURS.md`, qui peut être en retard sur un travail parallèle).
+
+### P54 — ne jamais rappeler `mig.up(knex)` sans vérifier `knex_migrations` au préalable
+Conséquence directe de P53 : si nodemon a déjà auto-appliqué la migration entre son écriture et un test
+manuel, un second appel direct à `up()` traite des données déjà correctes comme si elles étaient
+corrompues (vécu Session 135 : `decodeMojibake()` rappelée sur du texte déjà décodé → corruption
+silencieuse, aucune erreur levée). **Procédure sûre** : `SELECT` la table `knex_migrations`
+(`WHERE name = '...'`) avant tout appel manuel à `up()`/`down()` ; pour un round-trip, ne jamais
+enchaîner deux `up()` sans `down()` entre les deux.

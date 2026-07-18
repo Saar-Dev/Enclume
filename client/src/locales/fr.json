@@ -327,7 +327,8 @@
       "buy": "Achat",
       "cost": "{{count}} PE",
       "unlock": "Débloquer ({{count}} PE)",
-      "noXp": "XP insuffisants"
+      "noXp": "XP insuffisants",
+      "attrMax": "MAX"
     }
   },
   "profile": {
@@ -413,6 +414,11 @@
     "actionTimerHint": "Délai avant skip automatique par joueur · 0 = infini (désactivé)",
     "shockAutoStunLabel": "Appliquer l'étourdissement automatiquement",
     "shockAutoStunHint": "Désactivez pour que le MJ arbitre manuellement les étourdissements après un Test de Choc raté",
+    "statusEffectsModeLabel": "Statuts des tokens",
+    "statusEffectsModeHint": "Contrôle le menu Statuts, les badges sous les tokens et l'application automatique des effets (Étourdi/Inconscient)",
+    "statusEffectsModeOff": "Désactivé",
+    "statusEffectsModeIconOnly": "Visuel seul",
+    "statusEffectsModeEnforced": "Appliqué",
     "encumbranceEnabledLabel": "Limite de poids porté (règle maison)",
     "encumbranceEnabledHint": "Désactivez pour retirer tout malus d'Initiative lié au poids porté",
     "encumbranceMultiplierLabel": "Multiplicateur de charge (× Force)",
@@ -966,6 +972,11 @@
       "cart_success": "Achat confirmé !",
       "tab_catalogue": "Catalogue",
       "tab_exchange": "Échange",
+      "ex_acting_as": "MJ — agit au nom de : {{name}}",
+      "ex_acting_as_select": "MJ — agir en tant que :",
+      "ex_acting_as_placeholder": "— Choisir un personnage —",
+      "ex_no_other_pj": "Aucun autre personnage joueur dans la campagne",
+      "ex_select_actor_first": "Choisissez d'abord le personnage pour qui vous agissez",
       "ex_target_label": "Destinataire",
       "ex_no_target": "— Choisissez un personnage —",
       "ex_loading_inv": "Chargement inventaire...",

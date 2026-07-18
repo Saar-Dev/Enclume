@@ -10,7 +10,7 @@ import { calcEncumbrancePenalty, calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { isEquippableLocation } from '../lib/inventoryRules.js'
-import { SYMMETRIC_SLOT_PAIRS } from '../../../shared/armorConstants.js'
+import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 
 export const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
 export const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce', 'MG', 'MD', '2M', 'Tr']
@@ -42,6 +42,44 @@ export async function getDefaultContainer(characterId) {
   return hasSac ? 'Sac' : 'Coffre'
 }
 
+// Écrit l'état réel dans char_inventory_slots, seule autorité depuis la clôture du chantier
+// (docs/PLAN_INVENTORY_SLOTS.md, char_inventory.slot retiré migration 166). Supprime puis
+// réinsère (jamais un diff) : plus simple qu'un calcul d'ajout/retrait, coût négligible (au plus
+// quelques lignes par item). slotValue null (déséquipement) ne fait que vider.
+async function _writeSlots(trx, charInventoryId, characterId, slotValue) {
+  await trx('char_inventory_slots').where({ char_inventory_id: charInventoryId }).del()
+  if (!slotValue) return
+  const codes = slotValue.split('/')
+  await trx('char_inventory_slots').insert(
+    codes.map(slot_code => ({ char_inventory_id: charInventoryId, character_id: characterId, slot_code }))
+  )
+}
+
+// Lot B (docs/PLAN_INVENTORY_SLOTS.md) — lit char_inventory_slots au lieu de char_inventory.slot en
+// égalité stricte : un item à slot composite (ex. futur bouclier "MG/BG/C") occupe bien MG pour ce
+// contrôle, alors que l'ancienne comparaison exacte sur la colonne texte le manquait (trouvé au run
+// à vide du chantier Bouclier). Utilisé pour tout slot à occupant unique (main/contenant), et pour
+// le contrôle simple d'un slot armure côté quickEquip (qui ne gère pas le layering).
+async function _handSlotConflict(characterId, slotCodes, excludeItemId = null) {
+  let q = db('char_inventory_slots')
+    .where({ character_id: characterId })
+    .whereIn('slot_code', slotCodes)
+  if (excludeItemId) q = q.whereNot({ char_inventory_id: excludeItemId })
+  return q.first()
+}
+
+// Occupants actuels d'un slot armure (règle 1+S+S) — même correction que ci-dessus, remplace le
+// `LIKE '/'+slot+'/'` sur la colonne texte par une lecture directe de char_inventory_slots.
+async function _armorSlotOccupants(characterId, slotCode, excludeItemId = null) {
+  let q = db('char_inventory_slots')
+    .join('char_inventory', 'char_inventory.id', 'char_inventory_slots.char_inventory_id')
+    .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+    .where('char_inventory_slots.character_id', characterId)
+    .where('char_inventory_slots.slot_code', slotCode)
+  if (excludeItemId) q = q.whereNot('char_inventory_slots.char_inventory_id', excludeItemId)
+  return q.select('char_inventory.id as id', 'ref_equipment.malus_cat as malus_cat')
+}
+
 export async function getItemWithRef(itemId) {
   return db('char_inventory')
     .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
@@ -50,7 +88,9 @@ export async function getItemWithRef(itemId) {
       'char_inventory.id',
       'char_inventory.equipment_id',
       'char_inventory.container',
-      'char_inventory.slot',
+      // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau) remplace `slot` (texte, colonne
+      // retirée) — seule source d'affichage désormais.
+      db.raw(`(SELECT array_agg(slot_code ORDER BY slot_code) FROM char_inventory_slots WHERE char_inventory_id = char_inventory.id) as slots`),
       'char_inventory.quantity',
       'char_inventory.custom_name',
       'char_inventory.custom_desc',
@@ -64,6 +104,10 @@ export async function getItemWithRef(itemId) {
       'ref_equipment.protection as ref_protection',
       'ref_equipment.protection_shock as ref_protection_shock',
       'ref_equipment.malus_cat as ref_malus_cat',
+      // Bouclier (docs/PLAN_BOUCLIER.md Lot C) — affichage fiche perso (malus CaC, localisations
+      // couvertes en plus du bras). null pour tout item non-Bouclier.
+      'ref_equipment.shield_atk_malus as ref_shield_atk_malus',
+      'ref_equipment.shield_extra_locations as ref_shield_extra_locations',
       'ref_equipment.min_str as ref_min_str',
       'ref_equipment.capacity as ref_capacity',
       'ref_equipment.waterproof as ref_waterproof',
@@ -122,7 +166,8 @@ export async function getInventory(characterId, campaignId) {
       'char_inventory.id',
       'char_inventory.equipment_id',
       'char_inventory.container',
-      'char_inventory.slot',
+      // Lot C (docs/PLAN_INVENTORY_SLOTS.md) — voir getItemWithRef.
+      db.raw(`(SELECT array_agg(slot_code ORDER BY slot_code) FROM char_inventory_slots WHERE char_inventory_id = char_inventory.id) as slots`),
       'char_inventory.quantity',
       'char_inventory.custom_name',
       'char_inventory.custom_desc',
@@ -136,6 +181,10 @@ export async function getInventory(characterId, campaignId) {
       'ref_equipment.protection as ref_protection',
       'ref_equipment.protection_shock as ref_protection_shock',
       'ref_equipment.malus_cat as ref_malus_cat',
+      // Bouclier (docs/PLAN_BOUCLIER.md Lot C) — affichage fiche perso (malus CaC, localisations
+      // couvertes en plus du bras). null pour tout item non-Bouclier.
+      'ref_equipment.shield_atk_malus as ref_shield_atk_malus',
+      'ref_equipment.shield_extra_locations as ref_shield_extra_locations',
       'ref_equipment.min_str as ref_min_str',
       'ref_equipment.capacity as ref_capacity',
       'ref_equipment.waterproof as ref_waterproof',
@@ -159,6 +208,14 @@ export async function getInventory(characterId, campaignId) {
           AND re2.mod_slot = 'optique' AND re2.mod_requires_aim = true
         LIMIT 1
       ) as lunette_niveau`),
+      // Compétence liée à l'arme (COM20, docs/BUGIDENTIFIE.md) — même table que
+      // socketCombatHelpers.js (résolution), affichage uniquement ici (tooltip fenêtre déclaration).
+      db.raw(`(
+        SELECT rs.label FROM ref_equipment_skill_assoc rea
+        JOIN ref_skills rs ON rs.id = rea.skill_id
+        WHERE rea.item_id = char_inventory.equipment_id
+        LIMIT 1
+      ) as skill_label`),
     )
     .orderBy('char_inventory.created_at', 'asc')
 
@@ -188,18 +245,18 @@ export async function quickEquip(characterId, equipment_id, slot) {
   if (!equipment_id) throw new AppError(400, 'equipment_id requis')
   if (!VALID_SLOTS.includes(slot)) throw new AppError(400, `slot invalide : ${slot}`)
 
-  const conflict = await db('char_inventory')
-    .where({ character_id: characterId, slot })
-    .first()
+  const conflict = await _handSlotConflict(characterId, [slot])
   if (conflict) throw new AppError(409, `Slot ${slot} déjà occupé`)
 
-  const quickInsertData = { character_id: characterId, equipment_id, container: 'Sac', slot, quantity: 1 }
+  const quickInsertData = { character_id: characterId, equipment_id, container: 'Sac', quantity: 1 }
   const autoAmmo = await resolveAmmoInit(equipment_id, slot)
   if (autoAmmo !== null) quickInsertData.ammo_remaining = autoAmmo
 
-  const [inserted] = await db('char_inventory')
-    .insert(quickInsertData)
-    .returning('*')
+  const inserted = await db.transaction(async (trx) => {
+    const [row] = await trx('char_inventory').insert(quickInsertData).returning('*')
+    await _writeSlots(trx, row.id, characterId, slot)
+    return row
+  })
 
   return getItemWithRef(inserted.id)
 }
@@ -245,9 +302,7 @@ export async function addItem(characterId, payload) {
     }
     const isContainerSlotPost = resolvedSlot === 'D' || resolvedSlot === 'Ce'
     if (isContainerSlotPost) {
-      const conflict = await db('char_inventory')
-        .where({ character_id: characterId, slot: resolvedSlot })
-        .first()
+      const conflict = await _handSlotConflict(characterId, [resolvedSlot])
       if (conflict) throw new AppError(409, 'Slot déjà occupé')
     } else if (WEAPON_SLOTS.has(resolvedSlot)) {
       if (!(await isContainerAvailable(characterId, 'Sac'))) {
@@ -255,20 +310,12 @@ export async function addItem(characterId, payload) {
       }
       const isTwoHand = resolvedSlot === '2M' || resolvedSlot === 'Tr'
       if (isTwoHand) {
-        const conflict = await db('char_inventory')
-          .where({ character_id: characterId })
-          .whereIn('slot', ['MG', 'MD', '2M', 'Tr'])
-          .first()
+        const conflict = await _handSlotConflict(characterId, ['MG', 'MD', '2M', 'Tr'])
         if (conflict) throw new AppError(409, 'Mains déjà occupées — impossible d\'équiper une arme à 2 mains')
       } else {
-        const conflictTwoHand = await db('char_inventory')
-          .where({ character_id: characterId })
-          .whereIn('slot', ['2M', 'Tr'])
-          .first()
+        const conflictTwoHand = await _handSlotConflict(characterId, ['2M', 'Tr'])
         if (conflictTwoHand) throw new AppError(409, 'Arme à 2 mains déjà équipée — choisissez une seule main')
-        const conflict = await db('char_inventory')
-          .where({ character_id: characterId, slot: resolvedSlot })
-          .first()
+        const conflict = await _handSlotConflict(characterId, [resolvedSlot])
         if (conflict) throw new AppError(409, `Slot ${resolvedSlot} déjà occupé`)
       }
       container = 'Sac'
@@ -276,11 +323,7 @@ export async function addItem(characterId, payload) {
       if (!(await isContainerAvailable(characterId, 'Sac'))) {
         throw new AppError(400, 'Sac non disponible — impossible d\'équiper un item')
       }
-      const existingAtSlot = await db('char_inventory')
-        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where('char_inventory.character_id', characterId)
-        .whereRaw("'/' || COALESCE(char_inventory.slot, '') || '/' LIKE ?", [`%/${resolvedSlot}/%`])
-        .select('char_inventory.id as id', 'ref_equipment.malus_cat as malus_cat')
+      const existingAtSlot = await _armorSlotOccupants(characterId, resolvedSlot)
       if (existingAtSlot.length >= 3) throw new AppError(409, 'Slot complet — maximum 3 couches')
       const newItemCat = equipRef?.malus_cat ?? null
       const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
@@ -291,12 +334,14 @@ export async function addItem(characterId, payload) {
     }
   }
 
-  // Stacking : même equipment_id + même container + slot IS NULL
+  // Stacking : même equipment_id + même container + non équipé (aucune ligne char_inventory_slots).
   // Jamais pour un item équipable (P57) — chaque exemplaire reste une ligne indépendante.
   if (equipment_id && resolvedSlot === null && !equippable) {
     const existing = await db('char_inventory')
       .where({ character_id: characterId, equipment_id, container })
-      .whereNull('slot')
+      .whereNotExists(function () {
+        this.select(1).from('char_inventory_slots').whereRaw('char_inventory_id = char_inventory.id')
+      })
       .first()
     if (existing) {
       const [updated] = await db('char_inventory')
@@ -312,7 +357,6 @@ export async function addItem(characterId, payload) {
     character_id: characterId,
     equipment_id: equipment_id ?? null,
     container,
-    slot: resolvedSlot,
     quantity,
   }
   if (custom_name !== undefined) insertData.custom_name = custom_name
@@ -326,19 +370,26 @@ export async function addItem(characterId, payload) {
   }
 
   // P57 : un item équipable n'a jamais quantity > 1 — chaque exemplaire devient sa
-  // propre ligne (seul le 1er reçoit le slot demandé, les suivants restent non équipés).
+  // propre ligne (seul le 1er reçoit le slot demandé, les suivants restent non équipés). Lot C
+  // (docs/PLAN_INVENTORY_SLOTS.md) : le slot voulu par ligne n'existe plus en colonne — porté à
+  // part (`intendedSlots`, même ordre que `rows`) puis appliqué via `_writeSlots` après l'insert.
   if (equippable && quantity > 1) {
-    const rows = Array.from({ length: quantity }, (_, i) => ({
-      ...insertData,
-      quantity: 1,
-      slot: i === 0 ? resolvedSlot : null,
-    }))
-    const inserted = await db('char_inventory').insert(rows).returning('*')
+    const rows = Array.from({ length: quantity }, () => ({ ...insertData, quantity: 1 }))
+    const intendedSlots = Array.from({ length: quantity }, (_, i) => i === 0 ? resolvedSlot : null)
+    const inserted = await db.transaction(async (trx) => {
+      const insertedRows = await trx('char_inventory').insert(rows).returning('*')
+      await Promise.all(insertedRows.map((r, i) => _writeSlots(trx, r.id, characterId, intendedSlots[i])))
+      return insertedRows
+    })
     const items = await Promise.all(inserted.map(r => getItemWithRef(r.id)))
     return { type: 'multi', items }
   }
 
-  const [inserted] = await db('char_inventory').insert(insertData).returning('*')
+  const inserted = await db.transaction(async (trx) => {
+    const [row] = await trx('char_inventory').insert(insertData).returning('*')
+    await _writeSlots(trx, row.id, characterId, resolvedSlot)
+    return row
+  })
   const item = await getItemWithRef(inserted.id)
   return { type: 'single', item }
 }
@@ -366,36 +417,60 @@ export async function updateItem(characterId, itemId, payload) {
 
   // Validation slot
   if (updates.slot !== undefined && updates.slot !== null) {
+    // Bouclier (docs/PLAN_BOUCLIER.md §3.10, décision verrouillée) : le client envoie uniquement la
+    // main choisie (MG/MD) — le serveur complète ici la chaîne composite (main + bras +
+    // shield_extra_locations catalogue) avant toute validation. Composition faite une seule fois,
+    // ici, jamais côté client ni dans addItem/quickEquip (qui ne gèrent qu'un slot atomique).
+    const equipRefForSlot = existing.equipment_id
+      ? await db('ref_equipment').where({ id: existing.equipment_id })
+          .select('category', 'malus_cat', 'shield_extra_locations').first()
+      : null
+    const isShield = equipRefForSlot?.category === 'Bouclier'
+    if (isShield) {
+      if (!['MG', 'MD'].includes(updates.slot)) {
+        throw new AppError(400, `Bouclier : choisir la main (MG ou MD), reçu : ${updates.slot}`)
+      }
+      const extraCodes = (equipRefForSlot.shield_extra_locations ?? '').split('/').filter(Boolean)
+      updates.slot = [updates.slot, HAND_TO_ARM_SLOT[updates.slot], ...extraCodes].join('/')
+    }
+
     const isContainerSlotPut = updates.slot === 'D' || updates.slot === 'Ce'
     if (isContainerSlotPut) {
-      const conflict = await db('char_inventory')
-        .where({ character_id: characterId, slot: updates.slot })
-        .whereNot({ id: itemId })
-        .first()
+      const conflict = await _handSlotConflict(characterId, [updates.slot], itemId)
       if (conflict) throw new AppError(409, 'Slot déjà occupé')
+    } else if (isShield) {
+      // Main + localisations armure composées en un seul contrôle — pas de P58 (un bouclier ne
+      // couvre jamais BG et BD à la fois, cf. addItem : structurellement inapplicable) ni de
+      // branche WEAPON_SLOTS/armure générique (le slot n'est déjà plus un code atomique).
+      if (!(await isContainerAvailable(characterId, 'Sac'))) {
+        throw new AppError(400, 'Sac non disponible — impossible d\'équiper un bouclier')
+      }
+      const [hand, ...armorParts] = updates.slot.split('/')
+      const handConflict = await _handSlotConflict(characterId, [hand], itemId)
+      if (handConflict) throw new AppError(409, `Slot ${hand} déjà occupé`)
+      for (const code of armorParts) {
+        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId)
+        if (existingAtSlot.length >= 3) {
+          throw new AppError(409, `Slot ${code} complet — maximum 3 couches`)
+        }
+        const existingNonS = existingAtSlot.filter(i => i.malus_cat && i.malus_cat !== 'S')
+        if (equipRefForSlot.malus_cat && equipRefForSlot.malus_cat !== 'S' && existingNonS.length >= 1) {
+          throw new AppError(409, `Slot ${code} déjà occupé par une armure principale (règle 1+S+S)`)
+        }
+      }
+      updates.container = 'Sac'
     } else if (WEAPON_SLOTS.has(updates.slot)) {
       if (!(await isContainerAvailable(characterId, 'Sac'))) {
         throw new AppError(400, 'Sac non disponible — impossible d\'équiper une arme')
       }
       const isTwoHand = updates.slot === '2M' || updates.slot === 'Tr'
       if (isTwoHand) {
-        const conflict = await db('char_inventory')
-          .where({ character_id: characterId })
-          .whereIn('slot', ['MG', 'MD', '2M', 'Tr'])
-          .whereNot({ id: itemId })
-          .first()
+        const conflict = await _handSlotConflict(characterId, ['MG', 'MD', '2M', 'Tr'], itemId)
         if (conflict) throw new AppError(409, 'Mains déjà occupées — impossible d\'équiper une arme à 2 mains')
       } else {
-        const conflictTwoHand = await db('char_inventory')
-          .where({ character_id: characterId })
-          .whereIn('slot', ['2M', 'Tr'])
-          .whereNot({ id: itemId })
-          .first()
+        const conflictTwoHand = await _handSlotConflict(characterId, ['2M', 'Tr'], itemId)
         if (conflictTwoHand) throw new AppError(409, 'Arme à 2 mains déjà équipée — choisissez une seule main')
-        const conflict = await db('char_inventory')
-          .where({ character_id: characterId, slot: updates.slot })
-          .whereNot({ id: itemId })
-          .first()
+        const conflict = await _handSlotConflict(characterId, [updates.slot], itemId)
         if (conflict) throw new AppError(409, `Slot ${updates.slot} déjà occupé`)
       }
       updates.container = 'Sac'
@@ -405,8 +480,10 @@ export async function updateItem(characterId, itemId, payload) {
       if (!newParts.every(p => ARMOR_SLOTS.has(p))) {
         throw new AppError(400, `slot invalide : ${updates.slot}`)
       }
-      // Codes nouvellement ajoutés (absents du slot actuel de l'item)
-      const existingParts = new Set(existing.slot ? existing.slot.split('/') : [])
+      // Codes nouvellement ajoutés (absents du slot actuel de l'item) — Lot C
+      // (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots, plus char_inventory.slot (retiré).
+      const existingRows  = await db('char_inventory_slots').where({ char_inventory_id: itemId }).select('slot_code')
+      const existingParts = new Set(existingRows.map(r => r.slot_code))
       const addedCodes = newParts.filter(c => !existingParts.has(c))
       // malus_cat + location de l'item (malus_cat commun à tous les slots, location pour P58)
       const newItemRef = existing.equipment_id
@@ -427,12 +504,7 @@ export async function updateItem(characterId, itemId, payload) {
       }
       // 1+S+S : vérifier chaque code nouvellement ajouté
       for (const code of addedCodes) {
-        const existingAtSlot = await db('char_inventory')
-          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-          .where('char_inventory.character_id', characterId)
-          .whereRaw("'/' || COALESCE(char_inventory.slot, '') || '/' LIKE ?", [`%/${code}/%`])
-          .whereNot('char_inventory.id', itemId)
-          .select('char_inventory.id as id', 'ref_equipment.malus_cat as malus_cat')
+        const existingAtSlot = await _armorSlotOccupants(characterId, code, itemId)
         if (existingAtSlot.length >= 3) {
           throw new AppError(409, `Slot ${code} complet — maximum 3 couches`)
         }
@@ -493,7 +565,18 @@ export async function updateItem(characterId, itemId, payload) {
   // P13 — updated_at APRÈS le guard
   updates.updated_at = db.fn.now()
 
-  await db('char_inventory').where({ id: itemId }).update(updates)
+  // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : `slot` n'est plus une colonne — utilisé ci-dessus pour
+  // toute la validation, retiré juste avant l'update, appliqué à part via _writeSlots.
+  const slotToWrite  = updates.slot
+  const slotProvided = updates.slot !== undefined
+  delete updates.slot
+
+  await db.transaction(async (trx) => {
+    await trx('char_inventory').where({ id: itemId }).update(updates)
+    if (slotProvided) {
+      await _writeSlots(trx, itemId, characterId, slotToWrite)
+    }
+  })
   return getItemWithRef(itemId)
 }
 

@@ -1,12 +1,32 @@
 # FUSION_PROJET_COUSIN.md — contrat d'intégration combat / moteur monde
 
-> Dernière mise à jour : 2026-07-16 — intégration de `dev/monde` et `dev/Saar` validée sur
-> `8393/8394`.
+> Dernière mise à jour : 2026-07-18 — troisième intégration de `dev/monde` et `dev/Saar` préparée
+> sur `integration` ; validation réelle `8393/8394` consignée dans le journal de clôture.
 >
 > But : fusionner une nouvelle version du projet combat sans modifier le dépôt de l'autre
 > développeur, sans réintroduire les anciennes cartes et sans dupliquer les décisions spatiales.
 
 ## 1. Points de départ vérifiés
+
+État de la troisième intégration commune :
+
+- intégration précédente : `ee3302c` ;
+- monde : `1255b37` depuis `dev/monde` (Session 158) ;
+- règles : `1733aaa` lu depuis `origin/dev/Saar` (Session 156) ;
+- merge monde intermédiaire : `6b01220` ;
+- sauvegarde : `/home/codex/backups/enclume-pre-fusion-20260718-095537` et les trois tags
+  `backup/pre-fusion-*-20260718-095537` ;
+- contenus sauvegardés et vérifiés SHA-256 : bundle Git complet, dump `vtt_fusion`, volume MinIO
+  complet et configuration runtime ;
+- le worktree Saar `/home/didier/Enclume`, resté sur une tête locale plus ancienne, n'a pas été
+  modifié : la contribution a été lue depuis la branche distante fraîche.
+
+Cette intégration est un merge Git normal, car `1af7d78` est désormais le dernier ancêtre commun
+avec Saar et l'ancien historique Surface a déjà été absorbé proprement. Les cinq conflits
+rencontrés portent uniquement sur les journaux et plans ; aucun fichier source n'a nécessité de
+choisir entre l'ancien monde et les nouvelles règles. Les auto-merges du canvas, des routes et des
+sockets ont néanmoins été relus puis testés : le combat appelle toujours les services spatiaux du
+monde et aucune clé d'apparence Surface obsolète n'est redevenue valide.
 
 État de la deuxième intégration commune :
 

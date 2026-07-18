@@ -252,7 +252,8 @@
       "buy": "Achat",
       "cost": "{{count}} PE",
       "unlock": "Débloquer ({{count}} PE)",
-      "noXp": "XP insuffisants"
+      "noXp": "XP insuffisants",
+      "attrMax": "MAX"
     }
   },
   "profile": {
@@ -330,6 +331,11 @@
     "actionTimerHint": "Delay before auto-skip per player · 0 = infinite (disabled)",
     "shockAutoStunLabel": "Apply stun automatically",
     "shockAutoStunHint": "Disable for the GM to manually adjudicate stuns after a failed Shock Test",
+    "statusEffectsModeLabel": "Token statuses",
+    "statusEffectsModeHint": "Controls the Statuses menu, token badges, and automatic effect enforcement (Stunned/Unconscious)",
+    "statusEffectsModeOff": "Disabled",
+    "statusEffectsModeIconOnly": "Visual only",
+    "statusEffectsModeEnforced": "Enforced",
     "sectionTokens": "3D Tokens",
     "defaultTokenLabel": "Default token",
     "defaultTokenHint": "GLB model used for characters without an assigned 3D token",

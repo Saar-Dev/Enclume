@@ -75,7 +75,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
     try {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
       const updated = res.data.item
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, slot: updated.slot, container: updated.container } : i))
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, slots: updated.slots, container: updated.container } : i))
       onInventoryMutated()
     } catch (err) {
       console.error('Erreur équipement :', err)
@@ -364,7 +364,7 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
       <span style={s.itemName}>
         {name}
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
-        {item.slot && <span style={s.itemSlot}> [{item.slot}]</span>}
+        {item.slots?.length > 0 && <span style={s.itemSlot}> [{item.slots.join('/')}]</span>}
       </span>
       {item.ref_weight != null && (
         <span style={s.itemWeight}>{(item.ref_weight * item.quantity).toFixed(1)} kg</span>
@@ -382,9 +382,9 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
           </select>
           {item.container === 'Sac' && (
             <select
-              value={item.slot || ''}
+              value={item.slots?.length === 1 ? item.slots[0] : ''}
               onChange={e => onEquip(item.id, e.target.value || null)}
-              style={{ ...s.selectSmall, color: item.slot ? '#5b8dee' : '#4a4a60' }}
+              style={{ ...s.selectSmall, color: item.slots?.length > 0 ? '#5b8dee' : '#4a4a60' }}
             >
               <option value="">— slot —</option>
               {VALID_SLOTS.map(sl => (

@@ -174,7 +174,34 @@ Après cette validation, `/home/codex/Enclume-integrated` a été avancé sans r
 les services `8293/8294` redémarrés, les migrations confirmées à jour et le smoke Chromium validé.
 Les `.env`, `vtt_codex` et le bucket `enclume-assets-monde` sont restés propres à cette instance.
 
-## 7. Validation et retour arrière
+## 7. Intégration du 2026-07-18
+
+Cette livraison part de `integration` `ee3302c` et réunit :
+
+- `dev/monde` `1255b37` (Session 158, escaliers droits et en colimaçon validés) ;
+- `origin/dev/Saar` `1733aaa` (Session 156, règles personnages/combat) ;
+- merge monde intermédiaire `6b01220` ;
+- worktree cible `/home/codex/Enclume-fusion`, services `8393/8394`, base `vtt_fusion` et bucket
+  `enclume-assets-fusion`.
+
+Avant toute mutation, la sauvegarde `/home/codex/backups/enclume-pre-fusion-20260718-095537` a
+été créée avec bundle Git, dump PostgreSQL, volume MinIO et configuration runtime. Les trois têtes
+sont aussi protégées par `backup/pre-fusion-integration-20260718-095537`,
+`backup/pre-fusion-world-20260718-095537` et `backup/pre-fusion-saar-20260718-095537`. Le fichier
+`SHA256SUMS` a été vérifié intégralement.
+
+Le worktree `/home/didier/Enclume` et les services `8193/8194` ne sont jamais modifiés. La branche
+Saar fraîche est lue depuis `origin/dev/Saar`, car son worktree local peut être en retard. Les
+conflits documentaires conservent les deux historiques ; `docs/Old/PLAN_FUSION.md` reste archivé
+et clos. Le manifeste et le lockfile serveur retirent ensemble `ioredis`, absent du runtime.
+
+Validation pré-déploiement réellement exécutée : 138 tests monde/serveur, 3 tests de configuration,
+78 tests client ciblés, vérification syntaxique de tous les fichiers serveur et build Vite. Le lint
+ciblé reproduit exactement le passif de la tête précédente (22 erreurs, 21 avertissements) sans
+nouvelle erreur sur les lignes Saar. Le résultat du déploiement, des migrations, du smoke et de la
+recette visuelle est ajouté par le commit documentaire de clôture, avec la tête finale exacte.
+
+## 8. Validation et retour arrière
 
 Une livraison commune doit au minimum réussir :
 

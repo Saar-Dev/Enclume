@@ -1,6 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getMrTable, getModifier } from '../lib/mrTable.js'
 import * as statusService from '../lib/statusService.js'
@@ -10,7 +11,7 @@ import { getMutationEffects } from '../services/mutationService.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
-import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
   advanceSlot, endTurn,
@@ -62,12 +63,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       }
       // 2. Guard stun — avant tout check LOS/range (STUN2)
       // Si assommé : auto-skip serveur + { ok: false, stunned: true } — débloque le slot figé
+      // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
-        const stunnedStatus = await db('token_statuses')
-          .where({ token_id: tokenId })
-          .whereIn('status_code', ['stunned', 'unconscious'])
-          .first()
-        const pendingStun = !stunnedStatus
+        const { status_effects_mode: statusEffectsModePrecheck } = await getCampaignSettings(db, campaignId)
+        const enforcedPrecheck = statusEffectsModePrecheck === 'enforced'
+        const stunnedStatus = enforcedPrecheck
+          ? await db('token_statuses')
+              .where({ token_id: tokenId })
+              .whereIn('status_code', ['stunned', 'unconscious'])
+              .first()
+          : null
+        const pendingStun = (enforcedPrecheck && !stunnedStatus)
           ? await db('combat_pending')
               .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
               .first()
@@ -172,12 +178,17 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       }
 
       // Guard is_stunned (STUN2) — filet de sécurité si PRECHECK n'a pas été émis (move/reload/micro)
+      // Gaté par status_effects_mode (PLAN 14 Sprint 14-3) — 'enforced' uniquement
       {
-        const stunnedStatus = await db('token_statuses')
-          .where({ token_id: tokenId })
-          .whereIn('status_code', ['stunned', 'unconscious'])
-          .first()
-        const pendingStun = !stunnedStatus
+        const { status_effects_mode: statusEffectsModeConfirm } = await getCampaignSettings(db, campaignId)
+        const enforcedConfirm = statusEffectsModeConfirm === 'enforced'
+        const stunnedStatus = enforcedConfirm
+          ? await db('token_statuses')
+              .where({ token_id: tokenId })
+              .whereIn('status_code', ['stunned', 'unconscious'])
+              .first()
+          : null
+        const pendingStun = (enforcedConfirm && !stunnedStatus)
           ? await db('combat_pending')
               .where({ campaign_id: campaignId, token_id: tokenId, type: 'stun' })
               .first()
@@ -339,19 +350,41 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
 
     const {
       campaignId: pendingCampaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
-      mr, portee, fire_mode_bonus_dmg, formula,
+      mr, portee, fire_mode_bonus_dmg, formula, weaponInvId,
       for_na_cible, con_na_cible, vol_na_cible,
       tireurUsername, tireurColor, userId, targetName,
       type: pendingType, modDom, combatModeBonus,
+      aimedLocation, treatAsContact,
     } = pending
 
     try {
-      // Calcul dégâts (branche melee vs assault)
-      const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula.replace(/\s/g, ''))
-      let degautsBruts
+      // Calcul dégâts (branche melee vs assault). Assault : DSL munition (Chantier 11 Étape 2 Lot A,
+      // docs/PLAN_ARMES_DSL.md) résolu ici, au moment du jet réel — jamais précalculé à la
+      // Déclaration (un ADD munition peut nécessiter 2 jets de dés de types différents, parseDice
+      // n'accepte qu'un seul type par formule).
+      let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null
       if (pendingType === 'melee') {
+        const rolled = await parseDice(formula.replace(/\s/g, ''))
+        dmgRolls = rolled.rolls; dmgSeed = rolled.seed; rawDice = rolled.total
+        resolvedFormula = formula
         degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
       } else {
+        // getEffectiveWeaponDamage peut renvoyer null si l'arme a été désequipée/transférée entre la
+        // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
+        // repli sur la formule brute stockée à la Déclaration plutôt qu'un échec muet (le combat_pending
+        // est déjà supprimé et la FSM déjà repassée à SLOT_ACTIVE avant ce bloc, cf. plus haut).
+        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, weaponInvId)
+        if (!effectiveDamage) {
+          console.warn(`[WS] COMBAT_DAMAGE_CONFIRM — arme introuvable pour weaponInvId:${weaponInvId}, repli sur formule stockée à la Déclaration`)
+        }
+        const rolled = effectiveDamage ? null : await parseDice(formula.replace(/\s/g, ''))
+        dmgRolls = effectiveDamage ? effectiveDamage.rolls : rolled.rolls
+        dmgSeed  = effectiveDamage ? dmgRolls.reduce((a, b) => a ^ b, 0) : rolled.seed
+        rawDice  = effectiveDamage ? effectiveDamage.total : rolled.total
+        resolvedFormula = effectiveDamage ? effectiveDamage.formula : rolled.formula
+        // effectiveDamage null (repli formule stockée) → chocDsl null aussi : jamais reconstruire un
+        // Choc depuis une donnée partielle (docs/PLAN_ARMES_DSL.md Lot B, §4).
+        effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
         const mrTable = await getMrTable()
         const modDomAttaque = getModifier(mrTable, mr)
         const isShortRange = ['bout_portant', 'courte'].includes(portee)
@@ -372,7 +405,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           const now = new Date().toISOString()
           io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
             userId, username: tireurUsername, color: tireurColor,
-            formula, rolls: dmgRolls, total: degautsBruts,
+            formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
             isCriticalSuccess: false, isCriticalFail: false,
             seed: dmgSeed, timestamp: now,
             skillLabel: `Dégâts — drone`,
@@ -394,10 +427,16 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       const hitResult = await damageService.resolveTargetHit(io, db, pendingCampaignId, {
         degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
+        chocDsl: effectiveChocDsl,
+        forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
+        // Bouclier (docs/PLAN_BOUCLIER.md Lot B) — CaC toujours "au contact" ; à distance, dérivé de
+        // la nature de l'arme (armes de jet/trait, calculé côté resolveAssaultAction et transporté ici).
+        treatAsContact: pendingType === 'melee' ? true : (treatAsContact ?? false),
       })
       if (hitResult === null) return
       const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-              is_lethal, finalSeverity, shockResult } = hitResult
+              is_lethal, finalSeverity, shockResult,
+              rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
 
       if (shockResult) {
         statusService.emitShockDiceResult(io, pendingCampaignId, shockResult, userId, tireurUsername, tireurColor)
@@ -427,19 +466,37 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
 
       // 7. DICE_RESULT broadcast chat
       const now = new Date().toISOString()
+      // Localisation visée (COM9) — rollLoc/locRolls/locSeed sont null, pas de carte de jet à
+      // afficher (aucun jet n'a eu lieu, jamais un jet gaspillé pour l'affichage).
+      if (rollLoc !== null) {
+        io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+          userId, username: tireurUsername, color: tireurColor,
+          formula: '1d20', rolls: locRolls, total: rollLoc,
+          isCriticalSuccess: false, isCriticalFail: false,
+          seed: locSeed, timestamp: now,
+          skillLabel: 'Localisation — Distance',
+          mechanicalTotal: rollLoc, diffLabel: '',
+          chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
+          isSuccess: true,
+        })
+      }
+      // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot C) — même patron que rollLoc :
+      // null quand non applicable (pas de Petit bouclier en jeu), rien à afficher.
+      if (rollChance !== null) {
+        io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+          userId, username: tireurUsername, color: tireurColor,
+          formula: '1d20', rolls: chanceRolls, total: rollChance,
+          isCriticalSuccess: false, isCriticalFail: false,
+          seed: chanceSeed, timestamp: now,
+          skillLabel: `Test de Chance — Bouclier (${LOCATION_LABELS[localisation] ?? localisation})`,
+          mechanicalTotal: rollChance, diffLabel: '',
+          chancesDeReussite: chanceThreshold,
+          isSuccess: chanceSuccess,
+        })
+      }
       io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
         userId, username: tireurUsername, color: tireurColor,
-        formula: '1d20', rolls: locRolls, total: rollLoc,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: locSeed, timestamp: now,
-        skillLabel: 'Localisation — Distance',
-        mechanicalTotal: rollLoc, diffLabel: '',
-        chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
-        isSuccess: true,
-      })
-      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-        userId, username: tireurUsername, color: tireurColor,
-        formula, rolls: dmgRolls, total: degautsBruts,
+        formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
         isCriticalSuccess: false, isCriticalFail: false,
         seed: dmgSeed, timestamp: now,
         skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
@@ -640,6 +697,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             degautsBruts, characterIdCible, cibleType: 'pj',
             char_sheet_id_cible,
             for_na_cible, con_na_cible, vol_na_cible,
+            treatAsContact: true,
           })
           if (hitResult === null) return
           const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult

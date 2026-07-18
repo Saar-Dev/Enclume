@@ -1,4 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-18 — troisième fusion commune préparée** : le moteur monde `1255b37` et les règles
+> Saar `1733aaa` sont réunis depuis la tête commune `ee3302c`, sans modifier les worktrees
+> `dev/monde` ou `/home/didier/Enclume`. La sauvegarde complète se trouve dans
+> `/home/codex/backups/enclume-pre-fusion-20260718-095537`. Les 138 tests monde/serveur, 3 tests
+> de configuration, 78 tests client, la syntaxe serveur et le build Vite passent. Le déploiement
+> et la recette réelle `8393` sont l'étape de clôture de cette intégration.
+>
 > **2026-07-18 — palier haut du colimaçon livré sur 8293** : la trémie n'est plus le carré
 > englobant de l'escalier. Elle suit le secteur de volée qui exige réellement de la garde au
 > plafond et conserve le secteur suivant comme palier praticable devant la dernière marche.
@@ -177,7 +184,15 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-15 — Session 144 : bascule `dev/Saar` en branche
+> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 156 : `docs/PLAN_BOUCLIER.md` Lots A+B+C
+> — ✅ codés et testés, Lot A/B fonctionnel confirmé Saar en combat réel, Lot C navigateur non encore
+> testé, item 81 ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
+> Session 153 : `docs/PLAN_ECHANGE.md` — correction
+> du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
+> confirmé Saar en navigateur (parcours complet, item 79) ; Session 148 : fiche perso (compétences (X)/(-3),
+> attributs) + `BUGIDENTIFIE.md` COM20 (affichage arme combat) — ✅ clos, item 76 ; Session 144 :
+> bascule `dev/Saar` en branche
 > exclusive de tout nouveau travail Claude (voir `CLAUDE.md` §3) ; Session 143 : `PLAN_MUTATION2.md`
 > Lot 6 (Identité — sex/is_fertile/hand_pref, mutations et avantages unifiés dans
 > `identityService.js`) — ✅ clos, fonctionnel confirmé Saar en navigateur (item 75) ; Session 142 :
@@ -272,6 +287,305 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 🔒 En cours : — (aucune session active)
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
+> ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
+> Réflexion sur l'implantation des règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : plan rédigé,
+> analyse à charge, puis **run à vide du Lot A** a exposé un anti-pattern préexistant dans
+> `char_inventory.slot` (liste `/`-délimitée à la place d'une table d'intersection — « Jaywalking »,
+> Karwin, *SQL Antipatterns*) : un item à slot composite (futur bouclier `MG/BG/C`) échappait aux
+> contrôles de conflit à égalité stricte, permettant un double-équipement non détecté. **Exigence
+> Saar** : architecture robuste/pérenne/adaptative, aucun bricolage même temporaire, aucune zone
+> d'ombre avant de coder, temps non contraint — décision : refonte complète avant de reprendre le
+> bouclier, plutôt qu'un patch local.
+> **`docs/PLAN_INVENTORY_SLOTS.md` livré en 3 lots** : **A** — nouvelle table `char_inventory_slots`
+> (migration `162`, contrainte `UNIQUE` partielle slots main/contenant, `CHECK` codes valides, index
+> perf, backfill + vérification round-trip auto), double-écriture dans `inventoryService.js`
+> (`_writeSlots`, transactionnel). **B** — bascule de tous les lecteurs réels (serveur :
+> `inventoryService.js`, `socketCombatHelpers.js` (4 consommateurs, plus que prévu), `battlemaps.js`
+> (bug confirmé et corrigé — un item composite était invisible côté « main »),
+> `socketCombatAnnouncement.js`, `damageService.js` ; API `getItemWithRef`/`getInventory` → `slots`
+> tableau ; 6 fichiers client réellement concernés sur 9 audités, 3 faux positifs confirmés avant de
+> conclure). **C** — retrait complet de `char_inventory.slot` (migration `166`, réversible,
+> `down()` reconstruit depuis `char_inventory_slots`).
+> **Run à vide post-implémentation demandé par Saar** avant clôture : recherche élargie
+> (`['"]slot['"]|slot\s*:`, angle mort du premier audit qui ne cherchait que `.slot` en accès de
+> propriété) → **4 fichiers réels encore cassés par le retrait de la colonne**, trouvés et corrigés :
+> `modingService.js` (`returnModToInventory`), `tradeService.js` (achat marchand + `acceptTransfer`),
+> `socketTrade.js` (cargo drone), `char-sheet.js` (largage cargo drone) — les 3 derniers transfèrent
+> la propriété d'un item et devaient en plus vider `char_inventory_slots` de l'ancien propriétaire
+> (identifié dans l'analyse critique mais pas appliqué du premier coup). **Testé en base réelle** à
+> chaque lot (personnages jetables, 0 résidu) + **`tradeService.acceptTransfer` exercé de bout en
+> bout** (transfert réel, slots bien vidés côté receveur). **Confirmé fonctionnel par Saar en
+> navigateur** après un faux-négatif initial (voir ci-dessous) : équipement/déséquipement fiche
+> perso, assaut à distance, corps à corps, filtrage du matériel équipé côté Échange.
+> **Incident de méthode, sans rapport avec le code** : écran blanc puis comportements incohérents
+> signalés en cours de validation (`ContainerPanel.jsx` "no export default", assaut/CaC/échange
+> semblant cassés) — fichiers vérifiés syntaxiquement corrects (`esbuild`) et données réelles
+> cohérentes en base au moment du signalement ; redémarrage complet des deux serveurs n'a rien
+> changé, confirmant un cache **navigateur** (pas processus) — probablement lié au grand nombre de
+> fichiers modifiés coup sur coup pendant que les serveurs de dev tournaient. Résolu côté Saar.
+> **Trouvé en marge, hors scope** : `docs/BUGIDENTIFIE.md` dette TRADE2 — logique « Agir en tant
+> que »/« Destinataire » de la fenêtre Échange MJ ne correspond pas à l'usage attendu par Saar
+> (PNJ→PJ), le système livré Session 151 fait PJ→PJ au nom du MJ — décision produit non tranchée.
+> **Non testé** : parcours HTTP/Socket.IO isolé de `socketTrade.js`/`char-sheet.js` (cargo drone) —
+> même correctif que `tradeService.js` (prouvé), pas ré-exercé indépendamment.
+>
+> **Item 81 (Session 156) — `docs/PLAN_BOUCLIER.md` Lot A + Lot B ✅ CODÉS ET TESTÉS, fonctionnel
+> confirmé Saar en combat réel.** Suite directe de l'item 80 (prérequis levé). **Lot A** : migration
+> `168` (`ref_equipment.shield_atk_malus`/`shield_extra_locations`), `HAND_TO_ARM_SLOT`
+> (`shared/armorConstants.js`), nouvelle branche composite dans `inventoryService.updateItem` (le
+> client envoie la main, le serveur compose main+bras+localisations catalogue et réutilise
+> `_handSlotConflict`/`_armorSlotOccupants` tels quels — décision §3.10), entrée VOCABULARY.md.
+> **Incident de données réel pendant le codage, réparé** : la migration 168 a d'abord découvert que 3
+> lignes catalogue "Bouclier" existaient déjà en base (import Excel de mai, jamais tracké en
+> migration, une équipée par un personnage réel) — 1ʳᵉ version de la migration a créé des doublons
+> puis, en testant son `down()`, supprimé les 3 vraies lignes par erreur (`DELETE WHERE
+> category='Bouclier'` non discriminant), cassant la FK d'un personnage réel. Repéré immédiatement,
+> réparé byte-for-byte depuis les données capturées avant l'incident, ré-attaché. Migration réécrite
+> en `UPDATE` en place (jamais `INSERT`/`DELETE` par catégorie), cycle up/down/up revalidé. **Lot B** :
+> `damageService.resolveTargetHit` — nouveau paramètre `treatAsContact` (exclut le bouclier de la
+> résolution armure au contact/jet-trait — **découverte non anticipée par le plan** : le RAW sépare
+> strictement malus [contact/jet-trait] et protection [armes à feu], sans garde-fou la requête armure
+> existante aurait accordé la protection même à un coup au contact) + Test de Chance du Petit bouclier
+> (`1d20 ≤ char_sheet.chc`, Corps/Tête uniquement, résultat retourné mais affichage repoussé Lot C).
+> `resolveMeleeAction`/`resolveAssaultAction` : malus CaC de la cible plié dans le Seuil d'attaque
+> avant le jet (nouvelle requête ajoutée aux `Promise.all` existants — le jet a lieu avant le fetch
+> cible habituel dans ces deux fonctions), `treatAsContact` transporté aussi dans le payload différé
+> PJ (`socketCombatResolution.js`, dérivé automatiquement pour tout `pendingType==='melee'`). Distinction
+> arme à feu/jet-trait via `ref_equipment.category` (`'Armes de jet'`/`'Arme de trait'`, valeurs
+> catalogue confirmées, §3.9 tranché). Hors scope confirmé : `resolveDroneAssaultAction` (armes de
+> drone) laissé en comportement arme à feu par défaut. **Testé** : 9 assertions Lot A + 12 assertions
+> Lot B sur personnages/tokens jetables (0 résidu à chaque fois) + **confirmé fonctionnel en combat
+> réel par Saar**.
+> **Lot C (UI)** : confirmé sans code neuf que `battlemaps.js`/fenêtres combat/`DiceBreakdownPopover`
+> affichent déjà le bouclier et son malus génériquement. Ajouté : 2 colonnes au SELECT
+> `inventoryService.js` (stats bouclier absentes côté API jusqu'ici) ; `WeaponPanel.jsx` — bouclier
+> désormais équipable dans l'emplacement main dédié (corrige le bug original signalé par Saar), badge
+> de main corrigé pour un slot composite, stats dédiées affichées ; **bug réel trouvé en codant Lot C**
+> — `LocationPanel.jsx` appelait un retrait partiel de slot sur le bouton « × », que le serveur rejette
+> pour un Bouclier (tout-ou-rien) — corrigé, tag visuel ajouté ; diffusion `DICE_RESULT` du Test de
+> Chance ajoutée (même patron que `rollLoc`). **Tension signalée, non tranchée seul** : ces 4 fichiers
+> character-sheet n'utilisent `useTranslation` nulle part (zone legacy antérieure au rollout i18n) —
+> nouveau texte Lot C écrit en dur par cohérence locale, contraire à la règle générale i18n ; retrofit
+> complet explicitement hors scope. **Testé** : colonnes SELECT vérifiées réel (0 résidu), ESLint 0
+> erreur. **Non testé** : parcours navigateur réel — nécessaire avant clôture définitive. **Prochaine
+> étape** : test navigateur de Lot C par Saar, puis clôture du chantier Bouclier.
+>
+> **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
+> Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token
+> cliqué devenait la source au lieu de la cible — trouvé par Saar en relisant, avant tout test
+> navigateur, détail complet `docs/PLAN_ECHANGE.md` §2). **Retiré** : `server/src/services/
+> echangeService.js` (Lot A0, jamais branché à une UI, redondant avec `tradeService.js`) et la route
+> `POST /:characterId/echanges/admin` (`char-sheet.js`) ; `inventoryService.js` — paramètre `trxOrDb`
+> de `getDefaultContainer`/`getItemWithRef` retiré (plus aucun appelant après la suppression du
+> service, code mort sinon). **Corrigé** : `SessionPage.jsx` — `onOpenExchange` redevient
+> inconditionnel (token cliqué = toujours la cible, MJ ou joueur) ; `ExchangeWindow.jsx` — nouvelle
+> autorité unique `effectiveCharId` (`isGm ? gmActingAsId : myCharId`), substituée à `myCharId` dans
+> `loadInventory`, l'effet de chargement (reset + rechargement à chaque changement d'identité, pas
+> seulement quand l'inventaire est vide), `handleProposeOffer`, `handleAcceptOffer`, le filtre de
+> recherche de cible et la désactivation du bouton proposer ; bandeau MJ devenu un vrai `<select>`
+> (liste des PJ de la campagne hors cible déjà fixée) tant qu'aucun acteur n'est choisi, persistant
+> ensuite tant que la fenêtre reste ouverte ; catalogue et zone de sols masqués tant que le MJ n'a pas
+> choisi son acteur (évite le faux "inventaire vide") ; cas dégénéré (0 autre PJ dans la campagne)
+> couvert par un message dédié. `fr.json` : 4 nouvelles clés (`ex_acting_as_select`,
+> `ex_acting_as_placeholder`, `ex_no_other_pj`, `ex_select_actor_first`). **Hors scope confirmé
+> (plan §5)** : `socketTrade.js`/`TokenRadialMenu.jsx` inchangés (déjà corrects) ; `handleCancelOffer`
+> volontairement laissé sur `myCharId` — annulation MJ reste la limite déjà documentée item 78 (offre
+> expire seule en 120s), pas une régression de ce correctif.
+> **2 correctifs supplémentaires trouvés en testant en navigateur réel (Saar)** : (1) le catalogue
+> d'offre listait aussi les items **équipés** (`slot` non null) — filtré via `availableItems`
+> (`slot === null`), même convention que `ContainerPanel.jsx`. (2) le champ Destinataire restait
+> visuellement vide même quand le clic sur un token pré-remplissait `exTargetId` — `searchText`
+> n'était jamais synchronisé ; corrigé dans l'effet `initialContext` (résout le nom du personnage
+> ciblé et l'affiche). **Signalement Saar investigué en navigateur réel, confirmé comportement
+> voulu (pas un bug)** : la recherche manuelle de cible ne trouvait aucune suggestion — root cause
+> `[VÉRIFIÉ]` par instrumentation temporaire (`console.log` retiré après diagnostic) : un joueur ne
+> peut pas cibler un personnage qui lui est invisible (`characters.visible=false`), la liste reçue du
+> serveur les exclut déjà à la source (`GET /campaigns/:id/characters`, comportement pré-existant,
+> hors scope de ce correctif) — confirmé logique par Saar, aucun changement de code.
+> **Audit d'architecture demandé par Saar avant clôture** : diff entier relu, recherche exhaustive de
+> références orphelines à `echangeService`/`adminEchange`/`fromCharId` (une seule référence restante,
+> légitime — commentaire expliquant la garde `PUT /sols`). **1 dernier résidu trouvé** : `campaignId`
+> était déclaré en prop de `ExchangeWindow.jsx` mais jamais utilisé — hérité par copier-coller de
+> `TradeWindow.jsx` (dont les routes sont scopées par campagne ; celles d'`ExchangeWindow` le sont
+> toutes par personnage). Retiré de la signature du composant et du call site `SessionPage.jsx` —
+> referme la dernière erreur ESLint du fichier. **Testé** : `node --check` (`char-sheet.js`,
+> `inventoryService.js`, `socketTrade.js`) ; ESLint sur les 3 fichiers client touchés, **0 erreur, 0
+> nouvelle** (`ExchangeWindow.jsx` propre après retrait de `campaignId`, `TokenRadialMenu.jsx`/
+> `SessionPage.jsx` ne portent que des avertissements/l'erreur `doClose` pré-existants, confirmés par
+> `git stash`) ; `fr.json` validé JSON ; relecture ciblée confirmant que pour `isGm=false`,
+> `effectiveCharId === myCharId` sur 100% des chemins (priorité de test explicite du plan §7) ;
+> **parcours navigateur complet confirmé fonctionnel par Saar** (ciblage MJ, catalogue filtré,
+> comportement de visibilité, proposition, acceptation par un second compte joueur réel). **Non
+> testé** : rien d'identifié en dehors de ce qui précède. **Données** : aucune migration, aucun effet
+> runtime hors le retrait du service/route. **Retour arrière** : pas encore committé au moment de la
+> rédaction ; voir commit de clôture pour le hash. `docs/PLAN_ECHANGE.md` archivé vers `docs/Old/`
+> (Règle 10, `docs/RegleDocumentaire.md` — un PLAN terminé est archivé, pas laissé actif).
+
+> **Item 78 (Session 151, suite) — Doublon découvert : le système Échange PJ↔PJ existait déjà
+> (`docs/Old/PLAN_TRADE.md`, sessions 124-141) ; secteur MJ activé dans le menu radial ✅ CODÉ ET
+> TESTÉ.** Demande Saar : ajouter "Échange" au menu Radial pour pouvoir tester le Lot A0 (item 77).
+> **Erreur de méthode trouvée en cherchant le fichier `RadialMenu.jsx`** : `TokenRadialMenu.jsx` a
+> déjà un secteur `echange` (ligne 178) qui ouvre `ExchangeWindow.jsx`, lui-même branché sur un
+> système complet et fonctionnel — `server/src/services/tradeService.js`/`socketTrade.js`, table
+> `trade_offers` (migrations 84-91), marchands, vente PJ→GM avec contre-offres, transfert drone
+> immédiat (`trade:drone_transfer`, exactement l'idée "même propriétaire" du Lot A0). Livré et clos
+> Sessions 124-141 sous `docs/Old/PLAN_TRADE.md` — jamais trouvé avant d'écrire `docs/PLAN_ECHANGE.md`
+> (item 77) faute d'avoir cherché dans `docs/Old/` avant de concevoir un nouveau plan ; `docs/
+> ROADMAP.md` Chantier 10 Sprint 6 était resté marqué 🔲 par erreur documentaire, corrigé cette
+> session. **Root cause du "je ne l'ai jamais vu"** : le secteur `echange` est `enabled: !isGm`
+> (masqué dès que l'acteur est MJ, quel que soit le personnage ciblé) — Saar étant toujours MJ dans sa
+> propre campagne, il ne pouvait physiquement jamais le voir ni le cliquer. **Décision Saar** : plutôt
+> qu'ajouter un bouton séparé pour le Lot A0, étendre le vrai système existant pour que le MJ puisse
+> l'utiliser — "proposer au nom d'un PJ", scope volontairement réduit à ce seul côté (accepter/
+> annuler restent inchangés, décision explicite pour limiter la surface touchée). **Codé** :
+> `socketTrade.js` (`TRADE_TRANSFER_OFFER`) — `fromChar` résolu sans filtrer `user_id` quand
+> `socket.data.role === 'gm'`, inchangé sinon ; `TokenRadialMenu.jsx` — secteur `echange` toujours
+> `enabled: true`, prop `isGm` devenue inutile retirée (0 nouvelle erreur ESLint, comparé `git stash`) ;
+> `SessionPage.jsx` — `onOpenExchange` distingue MJ (token cliqué devient `fromCharId`, cible à choisir
+> dans la fenêtre) vs joueur (comportement historique inchangé, token cliqué = cible pré-remplie) ;
+> `ExchangeWindow.jsx` — prop `isGm`, bandeau "MJ — agit au nom de : {name}" (nouvelle clé `fr.json`
+> `ex_acting_as`, `en.json` toujours sans le namespace `trade` — préexistant, pas notre scope).
+> **Limite assumée, non traitée** : le MJ ne peut pas encore annuler une proposition faite au nom d'un
+> PJ (annulation reste réservée au vrai propriétaire) — l'offre expire seule en 120s, non bloquant.
+> **Trouvé en marge, hors scope, loggé séparément** : `docs/BUGIDENTIFIE.md` dette `TRADE1` —
+> `TRADE_TRANSFER_DECLINED` n'a aucune vérification d'ownership serveur (n'importe quel membre de la
+> campagne pourrait refuser l'offre d'un autre s'il devine l'`offerId`), sévérité faible, non corrigé
+> ici. **Testé** : requête knex relaxée vérifiée en base réelle (transaction annulée) — MJ résout un
+> personnage qui n'est pas le sien, joueur non-propriétaire toujours bloqué (inchangé), propriétaire
+> réel toujours résolu (non-régression) ; `node --check` (`socketTrade.js`) ; ESLint sur les 3 fichiers
+> client touchés, 0 nouvelle erreur (comparé `git stash` à chaque fichier). **Non testé** : parcours
+> navigateur réel (clic MJ sur un token → secteur Échange → proposition → acceptation par un vrai
+> compte joueur) — à confirmer par Saar en navigateur, c'est l'objet même de sa demande. **Devenir du
+> Lot A0 non tranché** : `echangeService.js`/`adminEchange` (item 77) reste codé et testé mais non
+> branché à aucune route UI — fait probablement double emploi avec le système ci-dessus (le
+> court-circuit MJ existant, `trade:drone_transfer`, ne couvre que "même propriétaire" ; un vrai
+> "MJ déplace instantanément entre deux joueurs différents, sans double validation" n'existe nulle
+> part ailleurs) — à décider avec Saar : garder comme action admin séparée, ou retirer comme code mort.
+> Documents corrigés cette session (attribution erronée du terme "Échange" à Session 151) :
+> `docs/VOCABULARY.md`, `docs/ROADMAP.md`, `docs/PLAN_ECHANGE.md` (bandeau d'avertissement ajouté).
+
+> **Item 77 (Session 151) — Chantier 10 Sprint 6 (Échange), Lot A0 : court-circuit MJ ✅ CODÉ ET
+> TESTÉ (2026-07-16).** Plan écrit après recherche externe (FoundryVTT Item Piles, `lets-trade-5e`,
+> patterns de ledger atomique/réservation d'inventaire) puis auto-critique demandée par Saar avant
+> tout code — détail complet `docs/PLAN_ECHANGE.md`. **Terminologie tranchée avant code** : le mot
+> "Transfert" était déjà pris par le Coffre (copie Coffre→campagne) — la nouvelle mécanique s'appelle
+> **"Échange"** (`docs/VOCABULARY.md`, ambiguïté trouvée en cadrant ce chantier). **Livré** : nouveau
+> `server/src/services/echangeService.js` (`executeEchange` — seul point d'exécution atomique
+> item/sols, réutilisé par les lots suivants ; `adminEchange` — court-circuit MJ, aucune table, aucune
+> négociation), route `POST /:characterId/echanges/admin` (MJ uniquement) dans `char-sheet.js`,
+> correctif `PUT /:characterId/sols` (garde asymétrique : le joueur peut toujours diminuer, seul le MJ
+> peut augmenter). **3 bugs réels trouvés en auto-critique avant code** (jamais coder tant qu'un doute
+> subsiste) : `user_id` NULL comparé à NULL aurait fait matcher deux PNJ sans propriétaire comme "même
+> joueur" ; débit de sols par lecture-puis-écriture séparées au lieu d'une update conditionnelle
+> atomique (course possible) ; aucun garde d'autorisation explicite sur "qui peut proposer depuis ce
+> personnage" — résolu en réutilisant le `router.param('characterId')` déjà en place (même stratégie
+> que `clone-to-vault`) plutôt qu'une nouvelle vérification. **1 bug réel trouvé en testant** (pas
+> seulement en relisant) : `getItemWithRef`/`getDefaultContainer` (`inventoryService.js`) lisaient via
+> la connexion `db` par défaut au lieu de la transaction en cours — sans garantie de voir l'écriture
+> pas encore commitée. Corrigé en étendant le paramètre `trxOrDb` déjà utilisé par `removeItem` à ces
+> deux fonctions, plutôt qu'un contournement local. **Testé** : 16 scénarios réels en base (transaction
+> imbriquée par appel — SAVEPOINT via `trx.transaction()` —, exactement le comportement de
+> `adminEchange` en production) : déplacement d'item (déséquipé, container par défaut destinataire),
+> item déjà déplacé rejeté sans duplication, sols (débit/crédit, conservation stricte du total), sols
+> insuffisants rejeté sans effet, auto-transfert rejeté, campagnes différentes rejetées, fiche
+> destinataire introuvable rejetée avec annulation réelle du débit (atomicité vérifiée, pas supposée),
+> `kind` invalide rejeté ; 0 résidu confirmé après coup ; `node --check` 0 erreur (3 fichiers touchés).
+> **Non testé** : appel HTTP réel de bout en bout (route Express + guard `req.isGm` + émission WS),
+> parcours navigateur — aucune UI dans ce lot. **Prochaine étape : Lot A1** (proposition/acceptation
+> joueur↔joueur, réutilise `executeEchange` tel quel) — `docs/PLAN_ECHANGE.md`.
+> **Retrait Session 153 (item 79)** : `echangeService.js` et la route `echanges/admin` retirés,
+> redondants avec `tradeService.js` et jamais branchés à une UI — voir item 79.
+
+> **2026-07-16 — Chantier 11 Étape 2 (Module Armes DSL), Lots A et B ✅ CODÉS ET TESTÉS.** Plan en 3
+> lots (A: parseur DSL + branchement DMG ; B: dégâts de Choc, ferme partiellement `[CHOC1]` ; C: tags
+> qualitatifs, affichage seul — détail complet `docs/PLAN_ARMES_DSL.md`). **Lot A livré** :
+> `shared/weaponAmmoDsl.js` (NOUVEAU, `parseAmmoEffects`/`resolveDmgEffect`, registre `DMG_ACTIONS`),
+> `damageService.getEffectiveWeaponDamage` (point de résolution unique), rebranchement
+> `resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM` (chemins PJ/PNJ tir à distance, CaC et armement drone
+> confirmés hors scope et non touchés). **Écart trouvé en codant** : `parseDice` n'accepte qu'un seul
+> type de dé par formule — le dégât `ADD` munition ne peut jamais être précalculé à la Déclaration,
+> résolution différée jusqu'au jet réel (`combat_pending` porte désormais `weaponInvId`, pas qu'une
+> `formula` figée). **Testé** : parseur pur (8 scénarios + rejoué sans crash sur les 26 chaînes DSL
+> réelles uniques du catalogue), scénario réel en base (arme "Cougar" 4D10, munition standard vs SLAP
+> `DMG=SET(3D10+5)` → dégât effectivement différent constaté, transaction annulée, 0 résidu vérifié),
+> `node --check` 0 erreur. **Non testé** : parcours navigateur réel, round-trip Socket.IO complet — à
+> confirmer par Saar en navigateur. **Analyse à charge demandée par Saar → 2 correctifs appliqués au
+> Lot A** : garde null manquante sur `getEffectiveWeaponDamage` (arme désequipée entre Déclaration et
+> Confirmation → échec muet auparavant, repli explicite + log désormais) ; aperçu
+> `COMBAT_DAMAGE_PROMPT` incohérent avec le jet réel (nouvelle `getEffectiveWeaponFormulaPreview`, sans
+> jet de dé gaspillé). Les deux corrections testées en base réelle.
+>
+> **Lot B ✅ CODÉ ET TESTÉ, correctif appliqué (2026-07-16/17).** Bug trouvé après la 1ère livraison,
+> confirmé par Saar : la restriction "Tête uniquement" venait de la règle p.243
+> (`docs/Character/Statuts/REGLESTATUT.txt:90-121`), qui décrit en fait le Choc **des armes**
+> (`ref_equipment.shock`, lourdes/contondantes ou électriques), pas celui des **munitions**. Le Choc de
+> munition (Assommante/Explosive, `ammo_effects` DSL) relève d'un texte séparé
+> (`docs/REGLES/REGLESMUNITIONS.md`) qui ne mentionne **aucune restriction de localisation** — 3
+> catégories distinctes formalisées dans `docs/VOCABULARY.md` ("Dommages de Choc"). La table par bande
+> de portée codée initialement (5D10→1D10) n'existait dans aucun des deux textes — invention de la
+> donnée catalogue (`description`), 5ᵉ cas du même type que Shrapnel/HP/Explosive/IEM (§Lot C).
+> **Correctif livré** : gate Tête retiré, formule fixe (`CHOC=SET(1D10+2)` Assommante), **Choc non
+> réduit du tout** (ni `etq`, ni `prt`, ni `rd`), total **combiné** `degatsNets + chocTotal` (brut,
+> jamais les sévérités séparées) pilote un **unique** `resolveShockTest` (natif si pas de Choc, combiné
+> sinon) — la blessure reste basée sur le physique seul, jamais gonflée par le Choc virtuel.
+> `shared/weaponAmmoDsl.js` (`resolveChocFormula` simplifié, formule fixe) ; `damageService.js`
+> (`resolveTargetHit`, `chocDegatsNets`→`chocTotal`, `prt` retiré car inutilisé) ; les 2 callers
+> (`socketCombatHelpers.js`/`socketCombatResolution.js`) simplifiés (`rangeBand` retiré). **Migration
+> `160_fix_ref_equipment_choc_assommante.js`** appliquée : 12 munitions Assommante corrigées en base
+> (DSL + description) ; 2 items exclus (DSL copié-collé par erreur, description totalement différente)
+> → nouvelle dette **`COM26`**. **Testé** : purs (5 scénarios `resolveChocFormula`) + non-régression
+> Lot A (10/10) + réel en base (transaction annulée) : Choc appliqué en tête ET hors tête (gate
+> confirmé retiré), `chocTotal` toujours dans `[3,12]` jamais réduit, non-régression sans munition,
+> scénario clé confirmé (physique seul insuffisant pour un test, total combiné 16 déclenche bien un
+> Test de Choc sans créer de blessure). `node --check` 0 erreur (5 fichiers). **Non testé** : parcours
+> navigateur réel, round-trip Socket.IO complet. Ferme partiellement `[CHOC1]` (reste non câblé : bonus
+> mutation Corne, catégorie arme/`ref_equipment.shock`, hors scope de ce Lot). Détail complet :
+> `docs/PLAN_ARMES_DSL.md` section "Lot B — ✅ CODÉ ET TESTÉ, CORRECTIF APPLIQUÉ".
+>
+> **Lot C recadré (2026-07-16) : effets mécaniques réels, plus un lot d'affichage.** Saar veut coder
+> les effets des munitions spéciales autant que possible. Traduction complète de
+> `docs/REGLES/REGLESMUNITIONS.md` faite et verrouillée (formules armure/dégâts pour Expansives,
+> Assommantes, Explosives, IEM, Perforantes, SAP/SLAP, Shrapnel — table complète dans
+> `docs/PLAN_ARMES_DSL.md`). Découpé en 3 sous-lots séquentiels (méthode pas-à-pas imposée par Saar,
+> un seul à la fois) : **C1** modification d'armure (6 munitions, un seul point d'insertion `etq`/`prt`
+> déjà étendu par Lot B) ; **C2** Test de panne (munitions IEM, mécanique "Test de panne" elle-même
+> encore à définir, Saar fournira la règle le moment venu) ; **C3** zone d'effet Shrapnel (cône 3m
+> multi-cibles, aucun ciblage de zone existant dans le pipeline combat — le plus gros morceau des 3).
+> Obus canon d'assaut/uranium confirmés hors scope (pas d'exo-armure/navire). **Aucun sous-lot codé.**
+> **✅ `COM9` codé (2026-07-17)** : "Viser une Localisation précise" (LdB p.229-230) — annoncée en
+> phase ANNONCE (`AssaultRangedPanel.jsx`, même patron que Tir visé, `combat_actions.aimed_location`,
+> migration 164), malus + bypass du D20 (`forcedSlotCode`) appliqués en RÉSOLUTION
+> (`damageService.resolveTargetHit`). Détail complet : `docs/Old/PLAN_TIRVISE v2.md`. **Testé** :
+> `node --check` (4 fichiers serveur), ESLint client (0 nouvelle erreur vs baseline), test réel
+> `resolveTargetHit` (bypass confirmé + non-régression du tirage aléatoire sur 20 jets, side-effect-free).
+> **✅ Parcours navigateur confirmé fonctionnel par Saar (2026-07-17)** — le blocage initial ("tir
+> visé en Tête" impossible à forcer pour valider isolément le Lot B) est levé. Prochaine étape :
+> reprendre la validation navigateur du Lot B (`PLAN_ARMES_DSL.md`) en s'appuyant sur `COM9`.
+
+> **Item 76 (Session 148) — Fiche perso (compétences (X)/(-3), attributs) + `BUGIDENTIFIE.md` COM20
+> ✅ CLOS.** Triage `BUGIDENTIFIE.md` repris (suite Session 145). **A.** Compétence `(X)` réservée :
+> coût de déblocage 3→1 PE (`REGLECOMPETENCE.md:22-25` — 1 PE suffit), `mastery` → -3 au lieu de
+> rester à 0 — amende PC11 (`CHARACTER.md`, exception documentée, pas une suppression). **B.**
+> Compétence `(-3)` difficile : malus jamais câblé depuis la création du module XP (Session 37) —
+> question **Q4** de `docs/Old/PLAN_XP.md` (2026-04, jamais répondue, confirmé par `git log --grep`)
+> enfin tranchée : Base -3 dans `calcSkillTotal` (autorité serveur unique), pas de coût doublé (ça,
+> c'est la règle `(X)` hors profession, pas `(-3)`). **C.** Attributs fiche perso : joueur pouvait
+> éditer Niveau de base/Modif. PC directement (bug + route `PUT /attributes` sans guard GM,
+> contournement UI possible) — verrouillé GM uniquement ; ajout symétrique demandé par Saar : achat
+> du Modif. PC contre XP (5 PE/point, max 5), bouton "+1 / 5 PE" (2 lignes, gain/coût séparés après
+> un 1er essai "+5" jugé ambigu), badge "MAX" au plafond. **D.** COM20 : fenêtre de déclaration
+> combat (PJ+GM) n'affichait ni arme équipée, ni munitions, ni compétence liée avant action —
+> ajouté dans la section ARMEMENT existante (nom, munitions avec code couleur ok/low/empty réutilisant
+> `.combat-equip-*` déjà existant, compétence en tooltip). **Incident de méthode (D)** : 1er passage
+> codé sans présenter le plan (§6.5 CLAUDE.md) — annulé (`git restore`), repris à la lettre
+> (hypothèse → plan → go → code), puis réflexion UX dédiée avant le code définitif. **Testé** :
+> `node --check`/ESLint sur tous les fichiers (0 nouvelle erreur, comparatif `git stash` systématique),
+> scénarios réels en base (transaction annulée) pour A/B/C/D, requêtes SQL D vérifiées sur donnée
+> réelle. **C et D confirmés fonctionnels par Saar en navigateur** ("Fonctionnel et validé" / "All
+> ok"). **Non testé** : parcours navigateur A/B au-delà des scénarios en base. Aucune migration.
+> Détail complet : `docs/JOURNAL6.md` "Session 148".
 
 > **Item 75 (Session 143) — `docs/Old/PLAN_MUTATION2.md` Lot 6 : Identité (sex/is_fertile/hand_pref)
 > ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Suite du Lot 5 (item 69, clos). Diagnostic
@@ -1671,14 +1985,15 @@ Projet en cours et priorité user :
 
 | ID | Description | Priorité |
 |---|---|---|
-| INFRA-R1 | `ioredis` reste déclaré dans `server/package.json` sans aucun import runtime. Son retrait du lockfile et l'arrêt éventuel de l'infrastructure Redis doivent être traités séparément après vérification des autres consommateurs du serveur ; aucun service partagé n'est coupé dans la clôture documentaire de la fusion. | Basse — nettoyage infrastructure |
+| **COM25** | Arme sans munition restante (`ammo_remaining=0`) continue de tirer — aucun garde dans `resolveAssaultAction` (`socketCombatHelpers.js:1468-1480`), le décompte clampe à 0 mais ne bloque jamais l'attaque. Trouvé en marge du Lot A `docs/PLAN_ARMES_DSL.md` | 🔴 **Urgent — priorité Saar** |
+| **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
 | COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
-| COM9 | Viser une localisation précise — non implémenté | Moyenne — sprint dédié |
+| ~~**COM9**~~ | ~~Viser une localisation précise — non implémenté~~ | ✅ Session 155 (Saar) |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | ~~**TIRVISE**~~ | ~~Tir visé — non implémenté, bloquait le Lot B2 de `docs/PLAN_MODING.md`~~ | ✅ Session 141 (suite 17) |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
@@ -1721,7 +2036,8 @@ Projet en cours et priorité user :
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
-| **CHOC1** | Mutation Corne — bonus LdB "+1D6 dommages de Choc si le coup porte à la tête" non câblé. `calcResistanceArmure` calcule déjà un `prt` (protection_shock) jamais consommé par `damageService.js` — aucun pool de "dommages de Choc" distinct des dégâts physiques n'existe dans le pipeline actuel | Moyenne — chantier séparé, non trivial |
+| **CHOC1** | ⚠️ Partiellement clos (Session 2026-07-16, Chantier 11 Étape 2 Lot B, `docs/PLAN_ARMES_DSL.md`) : le pool de "dommages de Choc" distinct des dégâts physiques existe désormais dans `damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc exclusif) — mais **uniquement pour les munitions `ammo_effects` CHOC=, tir à distance** (`resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM`). **Reste non câblé** : le bonus LdB propre à la mutation Corne ("+1D6 Choc si le coup porte à la tête" en CaC) — `resolveMeleeAction` ne passe toujours pas `chocDsl`/`rangeBand`, explicitement hors scope de Lot B (mécanisme mutation, pas munition) | Basse — reste un chantier séparé, mais l'infrastructure existe désormais |
+| **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
 
 ---
 
@@ -1733,9 +2049,12 @@ Projet en cours et priorité user :
 - **Sprint Drones 2d** — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md`
 - **Sprint Drones 2e** — resolveDroneAutoAction
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
-- **Sprint PLAN 14-1** — Menu contextuel token (right-click → ajouter/retirer statuts)
-- **Sprint PLAN 14-2** — Affichage badges (SVGs `docs/Character/Statuts/`, Canvas3D)
-- **Sprint PLAN 14-3** — FIX-D + mécaniques enforced (bypass défense stunned/surprised)
+- ~~**Sprint PLAN 14-1**~~ ✅ — Menu contextuel token codé (`TokenRadialMenu.jsx`/`TokenStatusPanel.jsx`)
+- ~~**Sprint PLAN 14-2**~~ ✅ — Badges codés (`Canvas3D.jsx`) — reste `ST1`/`ST3` (dettes actives)
+- ~~**Sprint PLAN 14-3**~~ ✅ — Option campagne `status_effects_mode` (`off`/`icon_only`/`enforced`,
+  défaut `enforced`) codée 2026-07-16 — voir `docs/ROADMAP.md` §PLAN 14 pour le détail des 3 sites
+  serveur gatés + menu/badges client. FIX-D abandonné (aucune base dans `REGLESYSCOMBAT.md`).
+  **PLAN 14 entièrement clos.**
 - ~~**Sprint stunted_until_turn**~~ ✅ — supplanté par Sprint 14-0 — voir PLAN 14
 - **Sprint CaC 4b** — validation fonctionnelle requise avant
 - **Sprint Annonce v2** — actions précédentes en lecture seule (GmDeclareWindow + ActionWindow)
@@ -1777,6 +2096,6 @@ Projet en cours et priorité user :
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect
 - PL-Q4 — `editor.destroy()` n'existe pas en Quill 2.0 public API
-- P53 — nodemon auto-applique les migrations dès l'écriture du fichier + numéro "disponible" d'`EN_COURS.md` peut être obsolète (travail parallèle non resynchronisé) — détail complet dans `CLAUDE.md`
-- P54 — ne jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable (nodemon peut l'avoir déjà appliquée) — un second appel traite des données déjà correctes comme corrompues et peut les détruire silencieusement — détail complet dans `CLAUDE.md`
-- P56 — `DICE_RESULT` (socketDice.js) n'inclut jamais `dieType` dans son payload — tout composant qui anime un jet hors `SessionPage` doit le fournir lui-même (constante si formule fixe) sous peine de retomber sur un D6 par défaut — détail complet dans `CLAUDE.md`
+- P53 — nodemon auto-applique les migrations dès l'écriture du fichier + numéro "disponible" d'`EN_COURS.md` peut être obsolète (travail parallèle non resynchronisé) — détail complet dans `docs/SYSTEME/CORE.md`
+- P54 — ne jamais rappeler `mig.up(knex)` manuellement sans vérifier `knex_migrations` au préalable (nodemon peut l'avoir déjà appliquée) — un second appel traite des données déjà correctes comme corrompues et peut les détruire silencieusement — détail complet dans `docs/SYSTEME/CORE.md`
+- P56 — `DICE_RESULT` (socketDice.js) n'inclut jamais `dieType` dans son payload — tout composant qui anime un jet hors `SessionPage` doit le fournir lui-même (constante si formule fixe) sous peine de retomber sur un D6 par défaut — détail complet dans `docs/SYSTEME/DICE.md`

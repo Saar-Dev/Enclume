@@ -1,3 +1,8 @@
+> Statut : ⚠️ ARCHITECTURE API OBSOLÈTE — routes step-by-step remplacées par `reconcileCreation`.
+> `char_mutations` retouchée par 8 migrations depuis (109, 125, 127, 128, 132, 136, 138) — schéma
+> décrit ici très antérieur. Détail : `docs/JOURNAL6.md` "Session 149".
+> Archivé dans `docs/Old/` — Session 149
+
 PLAN ÉTAPE 3 — CAPACITÉS SPÉCIALES (MUTATIONS) • VERSION FINALE v3
 
 Vérifié contre : LdB p.117-125 + migrations 091 v2, 095, 096 + plan étapes 1-2 + correctifs session 127

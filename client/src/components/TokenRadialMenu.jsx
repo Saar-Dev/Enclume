@@ -76,7 +76,6 @@ const SIZE = 370
 //   x, y                 — coordonnées écran (clientX/clientY du clic)
 //   token                — objet token (id, character_id, r)
 //   character            — objet character (worst_wound_severity, user_id, id)
-//   isGm                 — boolean
 //   onOpenCharacterSheet — callback() → ouvre CharacterWindow
 //   onRemoveToken        — callback() → supprime le token (doClose gère la fermeture)
 //   onSetRotation        — callback(r: 0..7) → oriente le token
@@ -87,7 +86,6 @@ export default function TokenRadialMenu({
   x, y,
   token,
   character,
-  isGm,
   onOpenCharacterSheet,
   onRemoveToken,
   onSetRotation,
@@ -95,6 +93,7 @@ export default function TokenRadialMenu({
   onViser,
   onOpenExchange,
   onClose,
+  statusEffectsMode = 'enforced',
 }) {
   const { t } = useTranslation()
   const menuRef = useRef(null)
@@ -174,9 +173,9 @@ export default function TokenRadialMenu({
     { id: 'recharger', label: t('tokenRadial.recharger'), enabled: false },
     { id: 'deplacer',  label: t('tokenRadial.deplacer'),  enabled: false },
     { id: 'retirer',   label: t('tokenRadial.retirer'),   enabled: true  },
-    { id: 'echange',   label: t('tokenRadial.echange'),   enabled: !isGm },
+    { id: 'echange',   label: t('tokenRadial.echange'),   enabled: true  },
     { id: 'viser',     label: t('tokenRadial.viser'),     enabled: true  },
-    { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: true  },
+    { id: 'statuts',   label: t('tokenRadial.statuts'),   enabled: statusEffectsMode !== 'off' },
   ]
 
   const handleSliceClick = (a) => {

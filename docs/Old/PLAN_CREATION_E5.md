@@ -1,3 +1,9 @@
+> Statut : ⚠️ ROUTES API OBSOLÈTES mais MODÈLE DE DONNÉES TOUJOURS EXACT — `char_advantages`
+> (migration 99 réelle) et `server/src/services/advantageConstraints.js` correspondent quasiment
+> mot pour mot à ce plan. Seules les routes step-by-step (`POST /step5/:sheetId`) sont mortes,
+> remplacées par `reconcileCreation`. Détail : `docs/JOURNAL6.md` "Session 149".
+> Archivé dans `docs/Old/` — Session 149
+
 PLAN TECHNIQUE — Étape 5 Wizard + Module 6 Fiche
 SECTION 1 — MIGRATIONS
 Migration 097 : Nettoyage + création char_advantages + pc_postcreation

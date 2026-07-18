@@ -1,4 +1,6 @@
 # PLAN_MODING.md — Système de Moding (installation de modules sur armes)
+> Archivé dans `docs/Old/` — Session 149 (Phase A confirmée terminée, voir statut ci-dessous). La
+> Phase B vit dans `docs/PLAN_MODING_PHASEB.md` (document actif, pas archivé).
 > Rédaction initiale : Session 120 — 2026-06-24
 > **✅ PHASE A TERMINÉE — Session 141 (suite 21), 2026-07-12.** Pause levée (Tir visé clos Session
 > 141 suite 17, dette `TIRVISE` close) → 8/8 étapes codées et testées (service : 10 scénarios réels

@@ -18,7 +18,7 @@ import {
   calcWoundPenalty, calcEncumbrancePenalty,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
-import { LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
 
 
@@ -408,25 +408,33 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       if (skillAssoc) skillId = skillAssoc.skill_id
     }
 
-    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant, rosterTokens, mutationEffectsAttaquant, settings] = await Promise.all([
+    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant, rosterTokens, mutationEffectsAttaquant, settings, targetShield] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheetAttaquant.id }),
       db('char_archetype').where({ char_sheet_id: sheetAttaquant.id }).first(),
       db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
       db('ref_skills').where({ id: skillId }).first(),
       db('character_wounds').where({ char_sheet_id: sheetAttaquant.id }),
+      // in_hand_slot (Lot B, docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une
+      // égalité stricte sur char_inventory.slot — un item à slot composite (armure multi-localisation,
+      // futur bouclier) occupant MG/MD reste détecté, contrairement à l'ancienne comparaison exacte.
       db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.character_id': character.id })
-        .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+        .select('char_inventory.container', 'char_inventory.quantity',
                 'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
-                'ref_equipment.category as ref_category'),
+                'ref_equipment.category as ref_category',
+                db.raw(`EXISTS (
+                  SELECT 1 FROM char_inventory_slots cis
+                  WHERE cis.char_inventory_id = char_inventory.id AND cis.slot_code IN ('MG', 'MD')
+                ) as in_hand_slot`)),
       // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
       // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
       db('tokens as t')
         .join('combat_roster as cr', 'cr.token_id', 't.id')
         .join('characters as c', 'c.id', 't.character_id')
-        .leftJoin('char_inventory as ci',
-          db.raw(`ci.character_id = c.id AND ci.slot IN ('MG', 'MD', '2M')`))
+        .leftJoin('char_inventory_slots as cis',
+          db.raw(`cis.character_id = c.id AND cis.slot_code IN ('MG', 'MD', '2M')`))
+        .leftJoin('char_inventory as ci', 'ci.id', 'cis.char_inventory_id')
         .leftJoin('ref_equipment as re',
           db.raw(`re.id = ci.equipment_id AND re.category = 'Arme de contact'`))
         .where('cr.campaign_id', campaignId)
@@ -443,7 +451,21 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         ),
       getMutationEffects(sheetAttaquant.id),
       getCampaignSettings(db, campaignId),
+      // Bouclier de la CIBLE (docs/PLAN_BOUCLIER.md Lot B) — malus au Test d'attaque de l'attaquant,
+      // dérivé automatiquement de l'équipement de la cible, jamais un choix MJ (§3.3). Doit être connu
+      // AVANT le jet d'attaque (chancesAttaque ci-dessous) — remonté ici, pas avec les données cible
+      // (§2) qui n'arrivent qu'après le jet.
+      db('char_inventory_slots as cis')
+        .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+        .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .join('tokens', 'tokens.character_id', 'char_inventory.character_id')
+        .where('tokens.id', targetTokenId)
+        .whereIn('cis.slot_code', ['MG', 'MD'])
+        .where('ref_equipment.category', 'Bouclier')
+        .select('ref_equipment.shield_atk_malus as malus')
+        .first(),
     ])
+    const shieldAtkMalus = targetShield?.malus ?? 0
     const genoAttaquant = archetypeAttaquant?.genotype_id
       ? await db('ref_genotypes').where({ id: archetypeAttaquant.genotype_id }).first()
       : null
@@ -481,7 +503,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
     const multiAttackMalus = totalMeleeCount === 2 ? -5 : totalMeleeCount >= 3 ? -7 : 0
 
     // Mods situation CaC (§6.2)
-    const deuxArmesSlots = invAttaquant.filter(i => ['MD', 'MG'].includes(i.slot) && i.ref_category === 'Arme de contact')
+    const deuxArmesSlots = invAttaquant.filter(i => i.in_hand_slot && i.ref_category === 'Arme de contact')
     const deuxArmesBonus = deuxArmesSlots.length >= 2 ? 3 : 0
     const footingRequiresBalance = measurement.sourceEffectRegions.some(region => (
       region.hooks.some(hook => (
@@ -505,7 +527,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
 
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus + shieldAtkMalus
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -528,10 +550,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       ...(tailleMod !== 0 ? [{ label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' }] : []),
       ...(terrainInstableMod !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' }] : []),
       ...(deuxArmesBonus !== 0 ? [{ label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' }] : []),
+      ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesAttaque, type: 'total' },
     ]
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
-    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} → seuil:${chancesAttaque}`)
+    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
@@ -586,14 +609,17 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         db('char_inventory')
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': defenderCharacter.id })
-          .select('char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+          .select('char_inventory.container', 'char_inventory.quantity',
                   'ref_equipment.weight as ref_weight'),
-        db('char_inventory')
-          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
+        // stricte sur char_inventory.slot — composite-safe.
+        db('char_inventory_slots as cis')
+          .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+          .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': defenderCharacter.id })
-          .whereIn('char_inventory.slot', ['MD', 'MG', '2M'])
+          .whereIn('cis.slot_code', ['MD', 'MG', '2M'])
           .where('ref_equipment.category', 'Arme de contact')
-          .select('char_inventory.slot', 'char_inventory.equipment_id'),
+          .select('cis.slot_code as slot', 'char_inventory.equipment_id'),
         getMutationEffects(sheetCible.id),
       ])
 
@@ -743,6 +769,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
           cibleType:        defenderCharacter.type,
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
+          treatAsContact: true,
         })
 
         if (hitResult) {
@@ -880,10 +907,12 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
       .first()
     weapons = w ? [w] : []
   } else {
-    weapons = await db('char_inventory')
+    // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : composite-safe (voir _handSlotConflict, inventoryService.js).
+    weapons = await db('char_inventory_slots as cis')
+      .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
       .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
       .where({ 'char_inventory.character_id': characterId })
-      .whereIn('char_inventory.slot', ['MG', 'MD'])
+      .whereIn('cis.slot_code', ['MG', 'MD'])
       .whereNotNull('ref_equipment.caliber')
       .select(weaponSelect)
   }
@@ -1315,6 +1344,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           'char_inventory.ammo_remaining',
           'ref_equipment.ammo_count as ref_ammo_count',
           'ref_equipment.range as ref_range',
+          'ref_equipment.category as ref_category',
         )
         .first(),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
@@ -1331,6 +1361,22 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       console.warn(`[WS] resolveAssaultAction — arme sans damage_h. weapon_inv_id:${action.weapon_inv_id}`)
       return { suspend: false, emissions }
     }
+
+    // Bouclier (docs/PLAN_BOUCLIER.md Lot B, §3.9) — RAW traite les armes de jet/trait (arcs,
+    // arbalètes, lances) comme le contact pour un Bouclier : malus à l'attaquant, jamais de
+    // protection localisée à la cible. Armes à feu (tout le reste) : l'inverse (comportement
+    // historique inchangé, treatAsContact reste false).
+    const isJetOuTrait = weapon.ref_category === 'Armes de jet' || weapon.ref_category === 'Arme de trait'
+    const targetShield = await db('char_inventory_slots as cis')
+      .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
+      .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .join('tokens', 'tokens.character_id', 'char_inventory.character_id')
+      .where('tokens.id', action.target_token_id)
+      .whereIn('cis.slot_code', ['MG', 'MD'])
+      .where('ref_equipment.category', 'Bouclier')
+      .select('ref_equipment.shield_atk_malus as malus')
+      .first()
+    const shieldAtkMalus = isJetOuTrait ? (targetShield?.malus ?? 0) : 0
 
     const measurement = await measureBattlemapTokenDistance({
       sourceTokenId: action.token_id,
@@ -1376,7 +1422,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
           .where({ 'char_inventory.character_id': character.id })
           .select(
-            'char_inventory.container', 'char_inventory.slot', 'char_inventory.quantity',
+            'char_inventory.container', 'char_inventory.quantity',
             'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
           ),
         getMutationEffects(sheetTireur.id),
@@ -1419,7 +1465,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const lunetteNiveau    = getLunetteNiveau(installedMods)
     const aimBonusComp     = getEffectiveAimBonus(action.aim_bonus_comp ?? 0, { lunetteNiveau, portee: authoritativeRangeBand })
     const { total: weaponModComp, breakdown: weaponModBreakdown } = calcWeaponModBonus(installedMods)
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp
+    // Viser une Localisation précise (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — annoncé en
+    // Phase 1 (action.aimed_location), malus appliqué ici comme Tir visé l'est pour son bonus.
+    const aimedLocationKey   = action.aimed_location ?? null
+    const aimedLocationMalus = AIMED_LOCATION_MALUS[aimedLocationKey] ?? 0
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus + shieldAtkMalus
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
@@ -1432,6 +1482,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(fireModeComp - dualWieldComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' }] : []),
       ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
       ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
+      ...(aimedLocationMalus !== 0 ? [{ label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' }] : []),
+      ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
       ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
         const v = SITUATION_MODS[k] ?? 0
@@ -1530,8 +1582,14 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             char_sheet_id_cible,
             mr,
             portee: authoritativeRangeBand,
+            aimedLocation: aimedLocationKey,
             fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
             formula: weapon.ref_damage_h,
+            // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet
+            // réel côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
+            // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents,
+            // parseDice n'accepte qu'un seul type de dé par formule).
+            weaponInvId: action.weapon_inv_id,
             for_na_cible,
             con_na_cible,
             vol_na_cible,
@@ -1539,12 +1597,17 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             tireurColor,
             userId: character.user_id,
             targetName,
+            treatAsContact: isJetOuTrait,
           },
         })
         await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+        // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
+        // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
+        // effectué à la confirmation dès qu'une munition modifie les dégâts.
+        const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, action.weapon_inv_id)
         emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
           tokenId: action.token_id,
-          formula: weapon.ref_damage_h,
+          formula: formulaPreview ?? weapon.ref_damage_h,
           targetName,
         } })
       } else {
@@ -1553,7 +1616,15 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         const modDomAttaque = getModifier(mrTable, mr)
         const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
         const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
-        const { total: rawDice } = await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))
+        // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution
+        // unique, repli automatique sur damage_h brut si aucune munition/DSL malformé. Repli
+        // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
+        // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
+        // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
+        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id)
+        const rawDice = effectiveDamage
+          ? effectiveDamage.total
+          : (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
         const degautsBruts = rawDice + modDomAttaque + modDegatsMode
 
         // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
@@ -1579,6 +1650,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           cibleType:        cibleCharacter?.type ?? null,
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
+          chocDsl: effectiveDamage ? effectiveDamage.choc : null,
+          forcedSlotCode: aimedLocationKey ? LOCATION_TO_SLOT[aimedLocationKey] : null,
+          treatAsContact: isJetOuTrait,
         })
         if (hitResult === null) return { suspend: false, emissions }
         const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult

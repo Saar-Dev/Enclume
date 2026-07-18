@@ -41,7 +41,9 @@ export default function LocationPanel({
   const [equipError,       setEquipError]       = useState(null)
 
   // ── Armures équipées à ce slot ─────────────────────────────────────────────
-  const equippedItems = items.filter(i => i.slot?.split('/')?.includes(slotCode))
+  // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau, déjà éclaté côté serveur) remplace le
+  // parsing manuel `slot.split('/')` — plus de logique de découpage de chaîne côté client.
+  const equippedItems = items.filter(i => i.slots?.includes(slotCode))
   const hasNonS       = equippedItems.some(i => i.ref_malus_cat && i.ref_malus_cat !== 'S')
 
   // P58 : un item à ref_location simple (brassard, jambière...) ne couvre qu'un seul côté à la
@@ -52,8 +54,8 @@ export default function LocationPanel({
   const availableItems = items.filter(i =>
     i.ref_location?.split('/').includes(refCode) &&
     i.container === 'Sac' &&
-    !(i.slot?.split('/')?.includes(slotCode)) &&
-    !(pairSlot && !i.ref_location.includes('/') && i.slot?.split('/')?.includes(pairSlot)) &&
+    !(i.slots?.includes(slotCode)) &&
+    !(pairSlot && !i.ref_location.includes('/') && i.slots?.includes(pairSlot)) &&
     (!hasNonS || i.ref_malus_cat === 'S' || i.ref_malus_cat == null),
   )
 
@@ -70,7 +72,7 @@ export default function LocationPanel({
   const handleEquip = useCallback(async (itemId) => {
     setEquipError(null)
     const item = items.find(i => i.id === itemId)
-    const existingParts = item?.slot ? item.slot.split('/') : []
+    const existingParts = item?.slots ?? []
     const newSlot = [...new Set([...existingParts, slotCode])].join('/')
     try {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
@@ -83,8 +85,15 @@ export default function LocationPanel({
   const handleUnequip = useCallback(async (itemId) => {
     setEquipError(null)
     const item = items.find(i => i.id === itemId)
-    const remaining = (item?.slot || '').split('/').filter(s => s !== slotCode)
-    const newSlot = remaining.length > 0 ? remaining.join('/') : null
+    // Bouclier (docs/PLAN_BOUCLIER.md Lot C) : slot composite tout-ou-rien, composé côté serveur à
+    // partir de la seule main (updateItem) — jamais de retrait partiel d'un seul code (le serveur le
+    // rejette, il n'accepte que MG/MD ou null en entrée pour cette catégorie).
+    const newSlot = item?.ref_category === 'Bouclier'
+      ? null
+      : (() => {
+          const remaining = (item?.slots ?? []).filter(s => s !== slotCode)
+          return remaining.length > 0 ? remaining.join('/') : null
+        })()
     try {
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
       onInventoryChange(res.data.item)
@@ -147,8 +156,14 @@ export default function LocationPanel({
         {/* Couches individuelles */}
         {equippedItems.map(item => (
           <div key={item.id} style={s.equippedRow}>
-            <div style={s.equippedName} title={item.custom_name || item.ref_name}>
+            <div
+              style={s.equippedName}
+              title={item.ref_category === 'Bouclier'
+                ? `${item.custom_name || item.ref_name} — retirer déséquipe le bouclier entièrement (main comprise)`
+                : (item.custom_name || item.ref_name)}
+            >
               {item.custom_name || item.ref_name || '—'}
+              {item.ref_category === 'Bouclier' && <span style={s.shieldTag}> (bouclier)</span>}
             </div>
             <div style={s.equippedStats}>
               {item.ref_protection       != null && <span>E{item.ref_protection}</span>}
@@ -337,6 +352,11 @@ const s = {
   equipError: {
     fontSize: 10,
     color: '#e05c5c',
+  },
+  shieldTag: {
+    fontSize: 9,
+    color: '#5a5a7a',
+    fontStyle: 'italic',
   },
   woundGrid: {
     display: 'flex',

@@ -1,3 +1,73 @@
+## v201 — 2026-07-18 — Escaliers validés et règles Saar réunis sur la base monde commune
+
+### Éditeur et moteur de monde
+- [feat] Les escaliers droits et en colimaçon, leurs garde-corps, trémies, paliers et traversées
+  verticales sont maintenant réunis dans le moteur monde canonique ; la pose structurelle crée le
+  connecteur et la molette oriente l'aperçu avant placement.
+- [engine] Déplacement, occupation, collision et ligne de vue continuent d'être décidés par les
+  services monde autoritaires après l'intégration des règles de combat.
+
+### Personnages et combat
+- [feat] Intégration des options d'effets de statut, des emplacements d'inventaire multiples, de
+  l'échange piloté par le MJ, de la visée localisée et des règles de munitions/boucliers livrées par
+  Saar jusqu'à sa Session 156.
+- [fix] Le retrait de `ioredis`, déjà inutilisé au runtime, est maintenant cohérent dans le
+  manifeste et le lockfile serveur.
+
+## v200 — 2026-07-17 — Viser une localisation précise en tir à distance
+
+### Client
+- [feat] Lors d'un tir à distance, une nouvelle section "Viser une localisation" permet de choisir
+  soi-même la zone visée (Tête, Corps, Bras, Jambes) sur une silhouette cliquable, au lieu de laisser
+  le hasard décider. Chaque zone affiche son malus au Test. Disponible pour les joueurs et le MJ
+  (PNJ), cumulable avec Tir visé.
+
+### Serveur
+- [feat] Une fois une zone visée déclarée, la localisation de l'impact n'est plus tirée au hasard :
+  le coup touche la zone choisie, en échange du malus indiqué.
+
+## v199 — 2026-07-17 — Le MJ peut proposer un Échange au nom d'un joueur
+
+### Client
+- [feat] Le secteur "Échange" du menu radial est désormais utilisable par le MJ : clic sur un token
+  pour le cibler, choix du personnage au nom duquel agir, puis composition de l'offre (objets
+  disponibles, sols) comme un joueur normal.
+- [fix] Un objet actuellement équipé n'apparaît plus dans la liste des objets proposables à
+  l'échange.
+- [fix] Le champ Destinataire affiche maintenant le nom du personnage ciblé depuis le menu radial
+  au lieu de rester vide.
+
+## v198 — 2026-07-16 — Compétences réservées/difficiles, attributs et fenêtre de combat
+
+### Serveur
+- [fix] Débloquer une compétence réservée `(X)` coûte désormais 1 point d'Expérience (au lieu de 3)
+  et la place au niveau -3, conformément à la règle — elle peut ensuite être développée normalement.
+- [fix] Le malus des compétences difficiles `(-3)` (ex. Analyse empathique) est enfin appliqué — il
+  n'avait jamais d'effet réel depuis la création du système d'Expérience.
+- [fix] Le Niveau de base et le Modificateur PC d'un attribut ne peuvent plus être modifiés
+  directement par un joueur (GM uniquement) — faille de sécurité corrigée côté serveur.
+- [feat] Le Modificateur PC d'un attribut peut être augmenté en dépensant de l'Expérience (5 XP par
+  point, jusqu'à +5).
+
+### Client
+- [feat] La fenêtre de déclaration de combat (joueur et MJ) affiche désormais en permanence l'arme
+  équipée, ses munitions restantes (couleur selon le niveau) et la compétence utilisée pour la tirer.
+- [fix] Les lignes de catégorie de la fiche de compétences (Arts martiaux, Expression artistique...)
+  n'ont plus de fond sombre parasite.
+- [ux] En Mode Progression, l'achat d'un point de Modif. PC affiche un bouton "+1 / 5 PE" plus clair
+  qu'un simple "+5" ambigu, avec un badge "MAX" une fois le plafond atteint.
+
+## v197 — 2026-07-16 — Un personnage assigné au MJ n'est plus considéré comme un Joueur
+
+### Serveur
+- [fix] Un personnage assigné au compte du MJ lui-même (création, réassignation, ou via
+  l'Assistant de création) était classé Personnage Joueur (PJ) au lieu de Personnage Non-Joueur
+  (PNJ) — visible notamment dans le badge du roster de combat. La classification dépend
+  désormais du rôle réel du propriétaire dans la campagne, pas de la simple présence d'un
+  propriétaire.
+
+## v196 — 2026-07-15 — Ambidextre et Fécondité produisent enfin un effet réel
+
 ## v195 — 2026-07-18 — Palier haut praticable du colimaçon
 
 ### Éditeur et moteur de monde

@@ -405,6 +405,45 @@ Si saisie réussie → choix : Clé/Immobilisation / Étranglement / Projection.
 
 ---
 
+### 6.10 Viser une Localisation précise (LdB p.229-230, `COM9`) — ✅ Implémenté (2026-07-17, distance uniquement)
+
+Un combattant peut choisir la zone touchée au lieu de la déterminer par 1D20 aléatoire, contre un
+malus au Test. **Distincte** de Tir visé (§6.4, bonus au Test via sacrifice d'Initiative) et de
+"Changer le mode de tir" (dette non implémentée) — trois mécaniques voisines mais différentes.
+
+**Malus LdB** :
+| Zone | Malus |
+|---|---|
+| Corps | −3 |
+| Jambes (droite ou gauche) | −5 |
+| Tête / Bras (droit ou gauche) | −7 |
+| Zone très spécifique (épaule, ventre, main, genou…) | −7 à −10 |
+
+Le dernier palier (zone très spécifique) **n'est pas géré** — le système de blessures ne connaît que
+6 zones générales (`shared/armorConstants.js` `SLOT_TO_WOUND_LOCATION`), pas de sous-localisation par
+membre. Reste à la discrétion narrative du MJ.
+
+**Implémentation** — même patron que Tir visé (déclaration en phase 1, affinement en phase 2) :
+1. **ANNONCE** (`AssaultRangedPanel.jsx`, picker silhouette interactif) : le joueur choisit une zone
+   (ou aucune = comportement aléatoire inchangé), stockée sur `combat_actions.aimed_location`
+   (migration 164, colonne texte nullable, même convention que `fire_mode`). **Aucun coût
+   d'Initiative** (contrairement à Tir visé).
+2. **RÉSOLUTION** (`resolveAssaultAction`, `socketCombatHelpers.js`) : le malus (`shared/
+   armorConstants.js` `AIMED_LOCATION_MALUS`) est ajouté au Seuil, et le slot correspondant
+   (`LOCATION_TO_SLOT`) est transmis à `damageService.resolveTargetHit` comme `forcedSlotCode` — qui
+   bypasse alors le jet `1D20` de localisation (aucun jet gaspillé pour l'affichage).
+3. **PJ différé** (`COMBAT_DAMAGE_CONFIRM`, `socketCombatResolution.js`) : la zone visée voyage dans
+   le `payload` du `combat_pending` type `'damage'` (même mécanisme que `mr`/`portee`).
+
+**Cumul avec Tir visé** : autorisé (additif, pas de garde d'exclusivité) — les deux modificateurs
+tirent en sens opposé sur le même Test (bonus INI vs malus précision), pas un cumul de puissance.
+
+**Hors scope** : corps-à-corps (`resolveMeleeAction`), drones tireurs (`resolveDroneAssaultAction` —
+non listé dans les modificateurs standard §7.3). Détail complet et recherche externe :
+`docs/Old/PLAN_TIRVISE v2.md`.
+
+---
+
 ## §7 — DRONES EN COMBAT
 
 > ⚠️ **SECTION DRONES UNIQUEMENT** (`character.type === 'drone'`). Si la tâche en cours ne concerne pas les drones, arrêter la lecture ici.

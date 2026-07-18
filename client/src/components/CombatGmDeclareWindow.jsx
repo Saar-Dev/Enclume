@@ -29,6 +29,20 @@ const STATE_DEFAULTS = {
   vitesse:   'normal',
 }
 
+// ---------------------------------------------------------------------------
+// Statut munitions d'une arme équipée (COM20) — miroir de CombatActionWindow.jsx.
+// ---------------------------------------------------------------------------
+function weaponAmmoStatus(remaining, capacityRaw) {
+  if (capacityRaw == null) return null
+  const m = String(capacityRaw).match(/\d+/)
+  const capacity = m ? parseInt(m[0], 10) : 0
+  if (!capacity) return null
+  const rem = remaining ?? 0
+  if (rem <= 0) return 'empty'
+  if (rem / capacity <= 0.25) return 'low'
+  return 'ok'
+}
+
 function nextKey(stateKey, currentKey, availableKeys) {
   const allStates = STATE_DEFS[stateKey].states
   const states    = availableKeys ? allStates.filter(s => availableKeys.includes(s.k)) : allStates
@@ -94,6 +108,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
   const [isDualWield,         setIsDualWield]         = useState(false)
   const [aimTranches,         setAimTranches]         = useState(0)
+  const [aimedLocation,       setAimedLocation]       = useState(null)
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
   // Arme naturelle (mutation PNJ) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B.
@@ -121,6 +136,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAssaultVariantAB('A')
     setIsDualWield(false)
     setAimTranches(0)
+    setAimedLocation(null)
     setSelectedGmMeleeWeaponId(undefined)
     setIsSelectingOnMap(false)
     setIniPopoverOpen(false)
@@ -433,6 +449,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
           aimTranches:        aimTranches,
+          aimedLocation:      aimedLocation,
         } : null,
         melee:    meleeCaC.length > 0 ? meleeCaC : null,
         reload:   mapAction === 'reload',
@@ -496,6 +513,21 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               {/* ARMEMENT */}
               <div className="combat-win-section">
                 <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>ARMEMENT</span>
+                {(weaponMg || weaponMd) && (
+                  <div style={S.weaponInfo}>
+                    {[['MG', weaponMg], ['MD', weaponMd]].filter(([, w]) => w).map(([hand, w]) => {
+                      const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
+                      const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
+                      return (
+                        <span key={w.inv_id} className={cls} style={S.weaponInfoLine} title={w.skill_label ?? undefined}>
+                          <span className="combat-equip-dot" />
+                          {weaponMg && weaponMd ? `${hand} · ` : ''}{w.name || '?'}
+                          {status && <span style={S.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
                 <div style={S.chips}>
                   {['weapon', 'fire_mode'].map(k => (
                     <InlineChip key={k} stateKey={k}
@@ -544,6 +576,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setAssaultBulletCount(null)
                               setAssaultVariantAB('A')
                               setAimTranches(0)
+                              setAimedLocation(null)
                               return
                             }
                             if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
@@ -859,6 +892,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               onAimTranchesChange={(n) => setAimTranches(n)}
               aimIneligibilityReasons={aimIneligibilityReasons}
               lunetteNiveau={weapon?.lunette_niveau ?? 0}
+              aimedLocation={aimedLocation}
+              onAimedLocationChange={(loc) => setAimedLocation(loc)}
             />
           </div>
         )}
@@ -937,6 +972,9 @@ const S = {
 
   controls: { flexShrink: 0, borderBottom: '1px solid #15212e' },
 
+  weaponInfo: { display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 4 },
+  weaponInfoLine: { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  weaponInfoAmmo: { fontWeight: 700 },
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap' },
   chip: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', background: '#0a1018', border: '1px solid #1a2a38', borderRadius: 2, cursor: 'pointer', userSelect: 'none' },
   chipLabel: { fontSize: 7, color: '#456575', letterSpacing: '0.1em', fontFamily: 'monospace' },

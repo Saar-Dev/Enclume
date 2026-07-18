@@ -22,6 +22,22 @@ import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 
 // ---------------------------------------------------------------------------
+// Statut munitions d'une arme équipée (COM20) — 'empty' | 'low' (≤25%) | 'ok' | null (pas d'arme
+// à feu, ex. arme de contact sans ref_ammo_count). ref_ammo_count est un texte libre (ex. "15") —
+// même parsing que resolveAmmoInit (server/src/services/inventoryService.js).
+// ---------------------------------------------------------------------------
+function weaponAmmoStatus(remaining, capacityRaw) {
+  if (capacityRaw == null) return null
+  const m = String(capacityRaw).match(/\d+/)
+  const capacity = m ? parseInt(m[0], 10) : 0
+  if (!capacity) return null
+  const rem = remaining ?? 0
+  if (rem <= 0) return 'empty'
+  if (rem / capacity <= 0.25) return 'low'
+  return 'ok'
+}
+
+// ---------------------------------------------------------------------------
 // Composant StateSelector
 // Affiche un segmented control pour un etat avec cout de transition visible.
 // ---------------------------------------------------------------------------
@@ -105,6 +121,7 @@ export default function CombatActionWindow({
   const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
   const [isDualWield, setIsDualWield]             = useState(false)
   const [aimTranches, setAimTranches]             = useState(0)
+  const [aimedLocation, setAimedLocation]         = useState(null)
   const [inMoveMode, setInMoveMode]               = useState(false)
   // --- etat assaut drone -------------------------------------------------------
   const [inTargetMode, setInTargetMode]           = useState(false)
@@ -248,7 +265,7 @@ export default function CombatActionWindow({
       if (cancelled) return
       const items = res.data.items || []
       setAssaultWeapons(items.filter(
-        item => (item.slot === 'MG' || item.slot === 'MD') && item.ref_fire_mode
+        item => (item.slots?.includes('MG') || item.slots?.includes('MD')) && item.ref_fire_mode
       ))
       setAllInventoryItems(items)
     }).catch(() => {})
@@ -270,8 +287,8 @@ export default function CombatActionWindow({
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
-    const wMg = assaultWeapons.find(w => w.slot === 'MG') || null
-    const wMd = assaultWeapons.find(w => w.slot === 'MD') || null
+    const wMg = assaultWeapons.find(w => w.slots?.includes('MG')) || null
+    const wMd = assaultWeapons.find(w => w.slots?.includes('MD')) || null
     const selected = wMg || wMd
     if (!selected) return
     const forceCCNow = !!(wMg && wMd) && wMg.ref_fire_mode !== wMd.ref_fire_mode
@@ -332,13 +349,17 @@ export default function CombatActionWindow({
   )
 
   // --- derives assaut -------------------------------------------------------
-  const weaponMg = assaultWeapons.find(w => w.slot === 'MG') || null
-  const weaponMd = assaultWeapons.find(w => w.slot === 'MD') || null
+  const weaponMg = assaultWeapons.find(w => w.slots?.includes('MG')) || null
+  const weaponMd = assaultWeapons.find(w => w.slots?.includes('MD')) || null
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   const forceCC       = hasTwoWeapons && !sameFirMode
   const selectedWeapon = weaponMg || weaponMd || null
   const assaultWeaponId = selectedWeapon?.id ?? null
+  // Arme(s) équipée(s) MG/MD, distant ou contact — affichage ARMEMENT (COM20). weaponMg/weaponMd
+  // ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item slotté MG/MD.
+  const equippedMg = allInventoryItems.find(item => item.slots?.includes('MG')) || null
+  const equippedMd = allInventoryItems.find(item => item.slots?.includes('MD')) || null
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
@@ -362,7 +383,7 @@ export default function CombatActionWindow({
   const reloadAmmoItems = (selectedWeapon?.ref_caliber && allInventoryItems.length)
     ? allInventoryItems.filter(item =>
         item.ref_caliber === selectedWeapon.ref_caliber &&
-        !item.slot &&
+        item.slots == null &&
         item.container !== 'Coffre'
       )
     : []
@@ -388,7 +409,7 @@ export default function CombatActionWindow({
 
   // Armes de contact équipées (slots MG/MD/2M, catégorie 'Arme de contact')
   const meleeWeapons = allInventoryItems.filter(item =>
-    (item.slot === 'MG' || item.slot === 'MD' || item.slot === '2M') &&
+    (item.slots?.includes('MG') || item.slots?.includes('MD') || item.slots?.includes('2M')) &&
     item.ref_category === 'Arme de contact'
   )
   // undefined=auto, null=mains nues explicite, id=choix explicite
@@ -417,6 +438,7 @@ export default function CombatActionWindow({
           setAssaultVariantAB('A')
           setIsDualWield(false)
           setAimTranches(0)
+          setAimedLocation(null)
           setInTargetMode(false)
         }
         if (k === 'melee') {
@@ -554,6 +576,7 @@ export default function CombatActionWindow({
           dualWieldBonusComp: dualWieldBonusComp,
           cover_shot:         decl.cover !== 'exposed',
           aimTranches:        aimTranches,
+          aimedLocation:      aimedLocation,
         } : null,
         // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
         melee:    (meleeSelected && !meleeDefensif)
@@ -847,6 +870,21 @@ export default function CombatActionWindow({
           {!isDrone && (
             <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
               <div style={W.sectionTitle}>ARMEMENT</div>
+              {(equippedMg || equippedMd) && (
+                <div style={W.weaponInfo}>
+                  {[['MG', equippedMg], ['MD', equippedMd]].filter(([, w]) => w).map(([hand, w]) => {
+                    const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
+                    const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
+                    return (
+                      <span key={w.id} className={cls} style={W.weaponInfoLine} title={w.skill_label ?? undefined}>
+                        <span className="combat-equip-dot" />
+                        {equippedMg && equippedMd ? `${hand} · ` : ''}{w.custom_name || w.ref_name || '?'}
+                        {status && <span style={W.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
               <StateSelector
                 stateKey="weapon" def={STATE_DEFS.weapon}
                 current={decl.weapon} initial={initialStates.current.weapon}
@@ -902,11 +940,10 @@ export default function CombatActionWindow({
                   )
                 }
 
-                // Rechargement — label dynamique, grisé si plein ou sans arme
+                // Rechargement — munitions déjà visibles en permanence dans ARMEMENT (COM20),
+                // label statique ici. Grisé si plein ou sans arme.
                 if (a.k === 'reload') {
-                  const reloadLabel = selectedWeapon && ammoCount !== null
-                    ? `Rechargement ${ammoRemaining ?? 0}/${ammoCount}`
-                    : 'Recharger'
+                  const reloadLabel = 'Recharger'
                   if (isAmmoFull || !selectedWeapon) {
                     return (
                       <div key={a.k} title={a.tooltip} style={{ ...W.itemGreyed, ...span2 }}>
@@ -1065,7 +1102,7 @@ export default function CombatActionWindow({
               {selectedWeapon ? (
                 <div style={W.assaultInfoText}>
                   {selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'}
-                  <span style={W.assaultInfoSub}> ({selectedWeapon.slot}) — {selectedWeapon.ref_caliber}</span>
+                  <span style={W.assaultInfoSub}> ({selectedWeapon.slots?.[0]}) — {selectedWeapon.ref_caliber}</span>
                 </div>
               ) : (
                 <div style={W.assaultNoWeapon}>Aucune arme équipée (MG/MD)</div>
@@ -1122,7 +1159,7 @@ export default function CombatActionWindow({
               availableWeapons={meleeWeapons.map(item => ({
                 id: item.id,
                 label: item.custom_name || item.ref_name || 'Arme',
-                slot: item.slot,
+                slot: item.slots?.[0],
                 damage: item.ref_damage_h || '—',
                 allonge: parseInt(item.ref_range) || 0,
               }))}
@@ -1171,8 +1208,8 @@ export default function CombatActionWindow({
         {showAssault && !isDrone && (
           <div style={W.assaultPanel}>
             <AssaultRangedPanel
-              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slot})` : null}
-              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slot})` : null}
+              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slots?.[0]})` : null}
+              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slots?.[0]})` : null}
               assaultTargetId={assaultPendingTokenId}
               getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
               onChooseTarget={handleChooseTarget}
@@ -1192,6 +1229,8 @@ export default function CombatActionWindow({
               onAimTranchesChange={(n) => setAimTranches(n)}
               aimIneligibilityReasons={aimIneligibilityReasons}
               lunetteNiveau={lunetteNiveau}
+              aimedLocation={aimedLocation}
+              onAimedLocationChange={(loc) => setAimedLocation(loc)}
             />
           </div>
         )}
@@ -1329,6 +1368,21 @@ const W = {
     color: 'var(--combat-section)',
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
+  },
+  weaponInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: '0 10px 4px',
+  },
+  weaponInfoLine: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  weaponInfoAmmo: {
+    fontWeight: 700,
   },
   itemsGrid: {
     display: 'grid',

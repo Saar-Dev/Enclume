@@ -12,7 +12,8 @@
  *   POST   /api/char-sheet/:characterId              — crée une fiche vide
  *   PUT    /api/char-sheet/:characterId/identity     — sauvegarde identité
  *   PUT    /api/char-sheet/:characterId/archetype    — sauvegarde archétype
- *   PUT    /api/char-sheet/:characterId/attributes   — sauvegarde attributs (bulk upsert)
+ *   PUT    /api/char-sheet/:characterId/attributes   — sauvegarde attributs (bulk upsert, GM uniquement)
+ *   POST   /api/char-sheet/:characterId/attributes/buy — dépense 5 XP pour +1 modificateur PC (plafond 5)
  *   PUT    /api/char-sheet/:characterId/skills                      — sauvegarde compétences (bulk upsert)
  *   PUT    /api/char-sheet/:characterId/skills/toggle-learned      — toggle is_learned pouvoir Polaris (owner ou GM)
  *   PUT    /api/char-sheet/:characterId/chc          — sauvegarde Chance
@@ -37,7 +38,7 @@ import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
-import { getCoutAugmentation, getCoutDeblocageX, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
+import { getCoutAugmentation, getCoutDeblocageX, getCoutAttributPc, MAX_PC_MODIFIER, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
 import {
   calcREA, getAdvantageModForAttr, getAdvantageModForResistance, getMutationModForResistance,
   calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle, calcResistanceDommages,
@@ -234,8 +235,11 @@ router.put('/:characterId/archetype', async (req, res, next) => {
 })
 
 // ─── PUT /api/char-sheet/:characterId/attributes ─────────────────────────────
+// GM uniquement — le niveau de base et le modificateur PC sont hors contrôle joueur.
 router.put('/:characterId/attributes', async (req, res, next) => {
   try {
+    if (!req.isGm) throw new AppError(403, 'Only the GM can modify attributes')
+
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
       .first()
@@ -277,6 +281,69 @@ router.put('/:characterId/attributes', async (req, res, next) => {
       .select('*')
 
     res.json({ attributes: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /api/char-sheet/:characterId/attributes/buy ────────────────────────
+// Dépense 5 XP pour augmenter le modificateur PC d'un attribut de +1 (plafond
+// MAX_PC_MODIFIER). Le GM édite librement pc_modifier via PUT /attributes,
+// sans coût — cette route est le chemin joueur (Mode Progression).
+router.post('/:characterId/attributes/buy', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet')
+      .where({ character_id: req.params.characterId })
+      .first()
+    if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
+
+    const { attr_id } = req.body
+    const VALID_ATTRS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
+    if (!VALID_ATTRS.includes(attr_id)) {
+      throw new AppError(400, `Invalid attr_id: ${attr_id}`)
+    }
+
+    const attrRow = await db('char_attributes')
+      .where({ char_sheet_id: sheet.id, attr_id })
+      .first()
+    const currentPc = attrRow?.pc_modifier ?? 0
+
+    if (currentPc >= MAX_PC_MODIFIER) {
+      throw new AppError(400, `Modificateur PC déjà au maximum (${MAX_PC_MODIFIER})`)
+    }
+
+    const cout = getCoutAttributPc()
+    if (sheet.xp_available < cout) {
+      throw new AppError(400, `XP insuffisants : ${sheet.xp_available} disponibles, ${cout} requis`)
+    }
+
+    const newPc = currentPc + 1
+
+    await db.transaction(async (trx) => {
+      await trx('char_attributes')
+        .insert({
+          char_sheet_id: sheet.id,
+          attr_id,
+          base_level:    attrRow?.base_level ?? 7,
+          pc_modifier:   newPc,
+        })
+        .onConflict(['char_sheet_id', 'attr_id'])
+        .merge(['pc_modifier'])
+
+      await trx('char_sheet')
+        .where({ id: sheet.id })
+        .update({
+          xp_available: sheet.xp_available - cout,
+          updated_at:   trx.fn.now(),
+        })
+    })
+
+    res.json({
+      attr_id,
+      pc_modifier:  newPc,
+      xp_available: sheet.xp_available - cout,
+      cout,
+    })
   } catch (err) {
     next(err)
   }
@@ -443,12 +510,12 @@ router.put('/:characterId/xp', async (req, res, next) => {
 
 // ─── POST /api/char-sheet/:characterId/skills/buy ────────────────────────────
 // Dépense des XP pour augmenter d'un niveau la maîtrise d'une compétence,
-// ou débloquer une compétence (X) (coût fixe 3 PE, is_learned → true).
+// ou débloquer une compétence (X) (coût 1 PE, mastery → -3, is_learned → true).
 //
 // Logique :
 //   1. Charger char_skills pour ce skill_id (mastery, is_learned)
 //   2. Charger ref_skills pour ce skill_id (marker)
-//   3. Si marker='(X)' et is_learned=false → coût fixe 3 PE, is_learned → true
+//   3. Si marker='(X)' et is_learned=false → coût 1 PE, mastery → -3, is_learned → true
 //   4. Sinon → coût = getCoutAugmentation(mastery), mastery += 1
 //   5. Vérifier xp_available >= coût
 //   6. UPSERT char_skills + UPDATE char_sheet xp_available
@@ -543,6 +610,7 @@ router.post('/:characterId/skills/buy', async (req, res, next) => {
 
     if (isXReserved && !currentLearned) {
       cout         = getCoutDeblocageX()
+      newMastery   = -3
       newIsLearned = true
     } else {
       cout       = getCoutAugmentation(currentMastery)
@@ -904,6 +972,10 @@ router.get('/:characterId/weapon-skill/:weaponInvId', async (req, res, next) => 
 
 // ─── PUT /api/char-sheet/:characterId/sols ────────────────────────────────────
 // P46 : déclarée AVANT PUT /:characterId/inventory/:itemId
+// Garde asymétrique (docs/PLAN_ECHANGE.md Lot A0, décision Saar 2026-07-16) : un joueur peut toujours
+// dépenser (diminuer) ses propres sols librement, mais seul le MJ peut en faire apparaître (augmenter
+// la valeur existante) — évite qu'un joueur restaure par cette route ce qu'un Échange (docs/PLAN_
+// ECHANGE.md) vient de lui débiter ailleurs.
 router.put('/:characterId/sols', async (req, res, next) => {
   try {
     const { sols } = req.body
@@ -914,6 +986,10 @@ router.put('/:characterId/sols', async (req, res, next) => {
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId }).first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    if (sols > sheet.sols && !req.isGm) {
+      throw new AppError(403, 'Seul le MJ peut augmenter le total de sols')
+    }
 
     const [updated] = await db('char_sheet')
       .where({ id: sheet.id })
@@ -1364,9 +1440,15 @@ router.post('/:characterId/drone/cargo/:invId/drop', async (req, res, next) => {
 
     const container = await inventoryService.getDefaultContainer(ownerChar.id)
 
-    const updated = await db('char_inventory')
-      .where({ id: req.params.invId, character_id: drone.id })
-      .update({ character_id: ownerChar.id, container, slot: null })
+    const updated = await db.transaction(async (trx) => {
+      const count = await trx('char_inventory')
+        .where({ id: req.params.invId, character_id: drone.id })
+        .update({ character_id: ownerChar.id, container })
+      // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : un transfert de propriété déséquipe toujours l'item —
+      // plus de `slot: null` (colonne retirée), vider char_inventory_slots à la place.
+      if (count) await trx('char_inventory_slots').where({ char_inventory_id: req.params.invId }).del()
+      return count
+    })
     if (!updated) throw new AppError(404, 'Item introuvable dans le cargo')
 
     res.json({ ok: true })

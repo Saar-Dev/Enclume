@@ -245,7 +245,7 @@ PK composite `(char_sheet_id, skill_id)`. FK `char_sheet_id → char_sheet.id CA
 |---|---|---|
 | char_sheet_id | UUID | PK FK NOT NULL |
 | skill_id | TEXT | PK FK NOT NULL |
-| mastery | INT | DEFAULT 0 — toujours ≥ 0 (PC11) |
+| mastery | INT | DEFAULT 0 — ≥ 0, sauf compétence (X) débloquée : plancher -3 (PC11) |
 | is_learned | BOOLEAN | DEFAULT false |
 
 `is_learned = true` : débloque les compétences `(X)` Réservées ET les pouvoirs Polaris sélectionnés via AdvantagesPanel.
@@ -659,7 +659,7 @@ Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3
 
 **PC10** — Visibilité SKILL_MIN évalue le Total (Base + localMastery), pas la Base seule.
 
-**PC11** — `mastery >= 0` toujours. Total peut être négatif. Ne jamais clamp.
+**PC11** — `mastery >= 0` sauf compétence `(X)` débloquée : plancher `-3` (REGLECOMPETENCE.md:22-25 — "acheter un niveau ... nouveau niveau -3", `getCoutDeblocageX()`/`SkillsPanel.jsx` input GM). Total peut être négatif. Ne jamais clamp le Total.
 
 **PC12** — Debounce 500ms sur numériques, onBlur sur texte. Refs miroirs mis à jour synchroniquement dans onChange.
 

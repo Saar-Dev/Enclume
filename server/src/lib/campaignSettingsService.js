@@ -18,6 +18,10 @@ export const SETTINGS_SCHEMA = {
   action_timer_sec:      { type: 'number',  default: 0 },
   shock_auto_stun:       { type: 'boolean', default: true },
   allow_los_cancel:      { type: 'boolean', default: false },
+  // PLAN 14 Sprint 14-3 — défaut 'enforced' : le guard stunned/unconscious tournait déjà sans
+  // condition sur toutes les campagnes existantes, un défaut différent changerait silencieusement
+  // leur comportement (même raisonnement que encumbrance_enabled ci-dessus).
+  status_effects_mode:   { type: 'string',  default: 'enforced', enum: ['off', 'icon_only', 'enforced'] },
   // Encombrement (règle maison, docs/PLAN_MUTATION2.md Lot 1) — défauts à true/3 : la mécanique
   // est déjà active sans aucun gate aujourd'hui, un défaut différent changerait silencieusement
   // le comportement de toutes les campagnes existantes.

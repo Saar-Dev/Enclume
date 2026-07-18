@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-12 Session 141 (suite 25)
+> Dernière mise à jour : 2026-07-16 Session 147
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -37,7 +37,6 @@
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
 | **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
-| **N — UI combat** | COM20 | `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` | Moyenne / Haute |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
 | **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 
@@ -154,20 +153,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
-### Ajout COM9 — Viser une Localisation précise — non implémenté
-
-**Symptôme** : Dans `CombatModifiersWindow`, aucune option ne permet de viser une localisation précise. Le D20 de localisation est toujours aléatoire.
-
-**Règle** : LdB §"Viser une Localisation précise" — Corps −3 / Jambes −5 / Tête+Bras −7.
-
-**Code impliqué** :
-- `CombatModifiersWindow.jsx` — section manquante + state `aimedLocation` absent
-- `socketCombatResolution.js` — pas de champ `aimedLocation` dans `confirmedModifiers`, pas de bypass du D20
-
-**Prochaine étape** : Sprint dédié — NE PAS bricoler dans un autre sprint.
-
----
-
 ### Bug COM16 — Phase ANNONCE : traits liaison attaquant↔cible disparaissent
 
 **Symptôme** : Les traits visuels reliant attaquant à sa cible déclarée disparaissent au fur et à mesure des déclarations.
@@ -244,20 +229,6 @@ avant de coder un correctif.
 
 ---
 
-## Bugs UI combat — Cluster N
-
-### Bug COM20 — Phase 1 : arme affichée sans munition dans la fenêtre de déclaration
-
-**Symptôme** : En phase ANNONCE, la fenêtre de déclaration PJ/PNJ n'affiche pas l'arme courante équipée, les munitions restantes ni le type d'arme (compétence liée).
-
-**Code impliqué** : `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` — section affichage arme absente ou incomplète.
-
-**Cause racine** [INCONNU] : Non investigué.
-
-**Prochaine étape** : Cluster N — lire les deux composants, identifier où et comment afficher l'arme.
-
----
-
 
 ### Bug COM24 — Bonus "deux armes" (+3 CaC) déconnecté de l'arme réellement déclarée
 
@@ -291,6 +262,68 @@ console.log('[DBG-COM24]', { weaponInvId, deuxArmesSlots: deuxArmesSlots.map(s =
 **Prochaine étape** : instrumenter avant tout correctif — reproduire en jeu réel (personnage avec
 deux épées équipées, déclarer une attaque "Mains nues", vérifier si +3 s'applique quand même) pour
 confirmer l'hypothèse avant de coder.
+
+---
+
+### Bug COM26 — 2 munitions catalogue avec un `ammo_effects` copié-collé d'une autre munition
+
+**Symptôme** : `ref_equipment` — "Darts 7.62 mm ST - Projectile SAP" (id `30985a34-876d-4c0e-89d0-
+5f49cab10809`) et "Flèche - Projectile IEM" (id `4795d390-04ee-4697-8d9c-d8eb77480ccd`) portent toutes
+deux `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10,M:3D10,L:2D10,E:1D10);TXT=FX=ASSOMMANTE` — le DSL exact
+d'une munition Assommante — alors que leur propre colonne `description` décrit un mécanisme totalement
+différent (SAP : dégâts normaux + pénétration d'armure ; IEM : mi-dégâts + Test de panne). En l'état,
+ces deux items infligeraient les dégâts/Choc d'une munition Assommante en jeu, pas ceux annoncés par
+leur description/nom.
+
+**Trouvé pendant** : migration `160_fix_ref_equipment_choc_assommante.js` (Chantier 11 Étape 2, Lot B,
+`docs/PLAN_ARMES_DSL.md`) — ces 2 lignes correspondaient au filtre `CHOC=SET(BP%` mais ont été
+explicitement exclues de la correction (leur description ne parlant pas d'Assommante, les corriger
+vers `CHOC=SET(1D10+2)` aurait entériné l'erreur au lieu de la réparer).
+
+**Cause `[HYPOTHÈSE]`** : erreur de copier-coller lors du peuplement initial du catalogue (script
+d'extraction Excel, `docs/Old/script Extraction Excel/equipement/`), non instrumentée en jeu.
+
+**Prochaine étape** : reconstruire le bon `ammo_effects` pour ces 2 items à partir de leur description
+réelle (SAP : `DMG=SET(...);TXT=PEN=SET(...)|FX=SAP` cohérent avec les autres munitions SAP du
+catalogue ; IEM : `DMG=MUL(0.5);TXT=FX=IEM(TEST_PANNE:-3)` une fois le Lot C2 tranché) — probablement
+en même temps que le Lot C1/C2 puisque ces deux mécaniques y seront de toute façon retravaillées.
+
+---
+
+### Bug COM25 — Arme sans munition restante continue de tirer (ammo_remaining=0 non bloqué) 🔴 URGENT
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de code (question de Saar
+sur le comportement d'une arme sans munition chargée, en testant le Lot A `docs/PLAN_ARMES_DSL.md`).
+Une arme dont le chargeur est déjà vide (`ammo_remaining = 0`) peut continuer à être déclarée et
+résolue en combat comme si elle avait des munitions — aucun blocage du jet de toucher ni de la
+résolution des dégâts.
+
+**Règle** : pas de citation LdB précise identifiée — attente métier implicite (une arme sans munition
+ne peut pas tirer), à confirmer/sourcer si besoin, mais le comportement actuel est de toute façon
+incohérent avec le décompte de munitions déjà en place (qui n'aurait aucun sens si le tir n'était
+jamais bloqué à 0).
+
+**Code impliqué** : `server/src/socket/socketCombatHelpers.js:1468-1480` (bloc "Décompte munitions"
+dans `resolveAssaultAction`) — décrémente `ammo_remaining` avec `Math.max(0, ...)` (clampé, jamais
+négatif) et **saute le décompte entièrement si `ammo_remaining` est `NULL`** ("arme non initialisée
+= pas encore suivie"), mais aucun garde nulle part dans le fichier n'empêche l'attaque de se dérouler
+quand `ammo_remaining` vaut déjà 0 avant le tir.
+
+**Cause racine [HYPOTHÈSE]** : lecture de code uniquement, non instrumentée ni reproduite en jeu réel
+(cf. méthode ci-dessus — lecture seule = `[HYPOTHÈSE]`, jamais `[VÉRIFIÉ]` sans exécution observée).
+Aucun `if (weapon.ammo_remaining === 0) return ...` ni équivalent trouvé dans `resolveAssaultAction`
+ni dans la Phase 1 Déclaration (`socketCombatAnnouncement.js`, non vérifié en détail).
+
+**Trouvé pendant** : test réel en base du Lot A (Chantier 11 Étape 2, DSL munitions,
+`docs/PLAN_ARMES_DSL.md`) — question de Saar sur le sens de "sans munition chargée" dans mon scénario
+de test a motivé une relecture du code existant, sans rapport direct avec le DSL lui-même.
+
+**Prochaine étape** — **urgent, priorité Saar** : reproduire en jeu réel (arme avec `ammo_remaining=0`,
+tenter une déclaration d'assaut), instrumenter `[DBG-COM25]` avant tout correctif. Décider du point
+d'insertion du garde (Phase 1 Déclaration vs Phase 2 Résolution — cohérence avec le reste du FSM
+combat, qui valide plutôt tôt) et du message d'erreur (réutiliser le pattern `COMBAT_DECLARE_ERROR`
+déjà existant). Exclure explicitement les armes de corps à corps (jamais de munitions) et le cas
+`pnj_unlimited_ammo=true` (option campagne déjà gérée ailleurs dans ce même bloc).
 
 ---
 
@@ -377,6 +410,50 @@ comment modéliser le prix de la Lunette de visée pour `docs/PLAN_MODING_PHASEB
 (la Lunette de visée sera modélisée en 10 lignes catalogue distinctes avec prix littéral précalculé,
 contournement propre pour Groupe 2 sans dépendre de ce correctif). Vérifier l'étendue réelle : quels
 autres items du catalogue ont un `price_modifier` non-null et sont donc potentiellement concernés.
+
+---
+
+### Dette TRADE1 — `TRADE_TRANSFER_DECLINED` : aucune vérification d'ownership côté serveur
+
+**Trouvé en marge** (Session 151, en réactivant le secteur "Échange" du menu radial pour le MJ —
+sans rapport direct, pas d'instrumentation dédiée, `[HYPOTHÈSE]` par lecture seule).
+
+**Code concerné** : `server/src/socket/socketTrade.js`, handler `WS.TRADE_TRANSFER_DECLINED` —
+contrairement à `TRADE_TRANSFER_OFFER`/`TRADE_TRANSFER_ACCEPTED`/`TRADE_TRANSFER_CANCELLED`, ce
+handler ne vérifie jamais que le socket appelant correspond réellement au `to_char_id` de l'offre : il
+se contente de `db('trade_offers').where({ id: offerId, campaign_id: campaignId, status: 'PENDING'
+}).first()` puis passe l'offre à `DECLINED`. En pratique le client (`ExchangeWindow.jsx`) n'appelle
+ça que sur une offre déjà reçue via `TRADE_OFFER_RECEIVED` (ciblée), donc pas exploitable en usage
+normal — mais un client modifié ou un `offerId` deviné/observé permettrait à n'importe quel membre de
+la campagne de refuser l'offre d'un autre. Sévérité faible (nuisance, pas de perte de données ni gain
+matériel), mais un vrai trou d'autorisation.
+
+**Non traité maintenant** — hors scope de la tâche en cours (activation MJ), un problème à la fois.
+
+---
+
+### Dette TRADE2 — Échange MJ : logique "Agir en tant que" / "Destinataire" pas alignée avec l'usage attendu
+
+**Symptôme** : Testé par Saar en tant que MJ (2026-07-17, validation du chantier refonte slots). La
+logique actuelle de la fenêtre Échange (`ExchangeWindow.jsx`) n'est pas celle attendue côté MJ.
+Attendu par Saar : "Agir en tant que X" → incarner un **PNJ** ; "Destinataire" → cibler un **Joueur**
+(PJ). Comportement livré : le court-circuit MJ (Session 151) fait agir le MJ au nom d'un **PJ**, vers
+un autre **PJ** — transfert PJ↔PJ sans double validation, jamais PNJ→PJ.
+
+**Décision d'origine** : `docs/Old/PLAN_TRADE.md` (Sessions 124-141) + extension Session 151 —
+étendre le système Échange PJ↔PJ existant pour que le MJ puisse « proposer au nom d'un PJ », scope
+volontairement réduit à ce seul côté au moment de la décision.
+
+**Code impliqué** : `client/src/components/ExchangeWindow.jsx` (bandeau « MJ — agit au nom de »,
+prop `isGm`) ; `server/src/socket/socketTrade.js` (`TRADE_TRANSFER_OFFER`, résolution `fromChar` sans
+filtre `user_id` quand `socket.data.role === 'gm'`).
+
+**Cause racine** : pas un bug — comportement délibérément scopé ainsi en Session 151. Écart entre
+l'usage attendu par Saar (PNJ→PJ) et ce qui a été livré (PJ→PJ au nom du MJ).
+
+**Prochaine étape** : décision produit à prendre — un flux PNJ→PJ est-il un **ajout** à côté de
+l'existant PJ→PJ, ou son **remplacement** ? Non tranché, hors scope de la tâche qui a fait remonter
+le sujet (validation fonctionnelle du chantier `docs/PLAN_INVENTORY_SLOTS.md`).
 
 ---
 

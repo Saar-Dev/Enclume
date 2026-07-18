@@ -16,6 +16,11 @@ export const SLOT_TO_REF_LOCATION = {
   '2M': 'M', Tr: 'M',
 }
 
+// Bras couvert par la main portant un Bouclier (docs/PLAN_BOUCLIER.md §3.2) — sert au serveur à
+// composer le slot composite (main + bras + shield_extra_locations) à l'équipement, jamais un choix
+// joueur/MJ.
+export const HAND_TO_ARM_SLOT = { MG: 'BG', MD: 'BD' }
+
 // Slots symétriques gauche/droite partageant le même ref_location générique (SLOT_TO_REF_LOCATION).
 // Un item à ref_location simple (ex. 'B' — brassard) ne couvre qu'un seul côté à la fois : un
 // second exemplaire est nécessaire pour l'autre côté. Un item à ref_location composée (ex.
@@ -49,3 +54,12 @@ export const LOC_TABLE = [
   { max: 17, slot: 'JD' },
   { max: 20, slot: 'JG' },
 ]
+
+// Viser une Localisation précise (LdB p.229-230, docs/BUGIDENTIFIE.md COM9) — malus au Test pour
+// choisir la zone touchée au lieu du 1D20 aléatoire. Clés = mêmes que SLOT_TO_WOUND_LOCATION/
+// LOCATION_TO_SLOT/LOCATION_LABELS (réutilisés tels quels, pas de nouvelle table de zones).
+export const AIMED_LOCATION_MALUS = {
+  tete: -7, corps: -3,
+  bras_droit: -7, bras_gauche: -7,
+  jambe_droite: -5, jambe_gauche: -5,
+}
