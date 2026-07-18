@@ -4932,3 +4932,7 @@ réellement les niveaux 0 puis 1. Le passage en édition et l'ouverture d'**Obje
 catégories **Escaliers (2)** — droit paramétrique et colimaçon paramétrique — ainsi qu'**Échelles
 (1)**. Aucune erreur navigateur n'est capturée. Les services `8193/8194` et `8293/8294`, le
 worktree Saar et le worktree monde n'ont pas été modifiés.
+
+**Publication** : `git push origin integration baseline/common-20260718` a été tenté avec les
+prompts désactivés et a échoué avant transfert, faute d'identifiant GitHub pour le compte système
+`codex`. Aucune authentification de Saar n'a été utilisée ; la branche et le tag restent locaux.

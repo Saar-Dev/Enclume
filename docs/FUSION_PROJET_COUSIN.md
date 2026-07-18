@@ -28,6 +28,9 @@ Le client et l'API fusionnés répondent 200. Les migrations `160/162/164/166/16
 éditeur où apparaissent l'escalier droit paramétrique, le colimaçon paramétrique et l'échelle
 structurelle. Aucune erreur navigateur n'a été capturée.
 
+La publication de `integration` et `baseline/common-20260718` reste locale : la tentative HTTPS a
+échoué avant transfert parce que le compte système `codex` ne possède pas d'identifiants GitHub.
+
 Cette intégration est un merge Git normal, car `1af7d78` est désormais le dernier ancêtre commun
 avec Saar et l'ancien historique Surface a déjà été absorbé proprement. Les cinq conflits
 rencontrés portent uniquement sur les journaux et plans ; aucun fichier source n'a nécessité de

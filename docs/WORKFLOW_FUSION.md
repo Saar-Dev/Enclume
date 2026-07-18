@@ -209,6 +209,11 @@ paramétrique et l'échelle structurelle. Aucune erreur navigateur n'est enregis
 `dev/monde` et `/home/didier/Enclume` restent volontairement intacts ; la prochaine remise à niveau
 doit partir du tag commun validé, sans réécrire un travail local non publié.
 
+La publication de `integration` et `baseline/common-20260718` a été tentée depuis le compte système
+`codex`, puis refusée avant toute écriture distante : l'URL HTTPS GitHub n'a aucun identifiant
+configuré. Le commit et le tag restent donc protégés localement sur le serveur ; ne jamais utiliser
+les identifiants personnels de Saar pour contourner ce blocage.
+
 ## 8. Validation et retour arrière
 
 Une livraison commune doit au minimum réussir :
