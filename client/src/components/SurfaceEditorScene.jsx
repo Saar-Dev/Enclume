@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Grid, Line, MapControls } from '@react-three/drei'
+import { Grid, Html, Line, MapControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import SurfaceDungeonScene, { ConnectorSegment } from './SurfaceDungeonScene.jsx'
@@ -458,18 +458,115 @@ function WallPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
   )
 }
 
-function StairPreview({ drag, surfaceData, surfaceTool, activeMaterial, availableBlocks }) {
+const normalizedQuarterTurns = value => ((Number.parseInt(value, 10) || 0) % 4 + 4) % 4
+
+function previewTooltipScreenPosition(element, camera, size) {
+  const projected = new THREE.Vector3().setFromMatrixPosition(element.matrixWorld).project(camera)
+  const left = projected.x * size.width / 2 + size.width / 2 + 18
+  const top = -projected.y * size.height / 2 + size.height / 2 - 38
+  return [
+    Math.min(Math.max(12, left), Math.max(12, size.width - 238)),
+    Math.min(Math.max(12, top), Math.max(12, size.height - 112)),
+  ]
+}
+
+function PreviewOrientationTooltip({ position, angle, onRotate }) {
+  const stopPropagation = event => event.stopPropagation()
+  const rotate = delta => event => {
+    event.preventDefault()
+    event.stopPropagation()
+    onRotate?.(delta)
+  }
+  const buttonStyle = {
+    flex: 1,
+    border: '1px solid #5575a5',
+    borderRadius: '5px',
+    background: '#18253a',
+    color: '#e4f2ff',
+    padding: '6px 8px',
+    fontSize: '12px',
+    fontWeight: 700,
+    cursor: 'pointer',
+  }
+  return (
+    <Html
+      position={position}
+      calculatePosition={previewTooltipScreenPosition}
+      zIndexRange={[100, 100]}
+      style={{ pointerEvents: 'auto' }}
+    >
+      <div
+        data-testid="structural-preview-tooltip"
+        onPointerDown={stopPropagation}
+        onMouseDown={stopPropagation}
+        onMouseUp={stopPropagation}
+        style={{
+          width: '210px',
+          boxSizing: 'border-box',
+          border: '1px solid #5b8dee',
+          borderRadius: '7px',
+          background: 'rgba(9, 15, 27, 0.96)',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.48)',
+          color: '#dbeafe',
+          padding: '8px',
+          fontFamily: 'system-ui, sans-serif',
+        }}
+      >
+        <div style={{ marginBottom: '6px', color: '#8fc5ff', fontSize: '12px', fontWeight: 800 }}>
+          Prévisualisation · {angle}°
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button type="button" onClick={rotate(-1)} aria-label="Tourner la prévisualisation à gauche" style={buttonStyle}>
+            ↶ Gauche
+          </button>
+          <button type="button" onClick={rotate(1)} aria-label="Tourner la prévisualisation à droite" style={buttonStyle}>
+            Droite ↷
+          </button>
+        </div>
+        <div style={{ marginTop: '5px', color: '#8ca0ba', fontSize: '10px' }}>
+          Clique ensuite sur la carte pour poser.
+        </div>
+      </div>
+    </Html>
+  )
+}
+
+function stairPreviewTooltipPosition(stepBoxes) {
+  const bounds = stepBoxes.reduce((result, step) => {
+    const [x, y, z] = step.position
+    const [width, height, depth] = step.args
+    return {
+      maxX: Math.max(result.maxX, x + width / 2),
+      maxY: Math.max(result.maxY, y + height / 2),
+      minZ: Math.min(result.minZ, z - depth / 2),
+      maxZ: Math.max(result.maxZ, z + depth / 2),
+    }
+  }, { maxX: -Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity })
+  return [bounds.maxX + 0.25, bounds.maxY + 0.15, (bounds.minZ + bounds.maxZ) / 2]
+}
+
+function StairPreview({ drag, surfaceData, surfaceTool, activeMaterial, availableBlocks, onSurfaceToolChange }) {
   const stair = makeStraightStairFromCell(surfaceData, drag?.end, surfaceTool, activeMaterial, availableBlocks)
   if (!stair) return null
+  const stepBoxes = stairStepBoxes(stair)
+  const quarterTurns = normalizedQuarterTurns(surfaceTool?.stairQuarterTurns)
 
   return (
     <>
-      {stairStepBoxes(stair).map((step, index) => (
+      {stepBoxes.map((step, index) => (
         <mesh key={index} position={step.position}>
           <boxGeometry args={step.args} />
           <meshBasicMaterial color="#7dd3fc" transparent opacity={0.3} depthWrite={false} />
         </mesh>
       ))}
+      <PreviewOrientationTooltip
+        position={stairPreviewTooltipPosition(stepBoxes)}
+        angle={quarterTurns * 90}
+        onRotate={delta => onSurfaceToolChange?.({
+          ...surfaceTool,
+          stairQuarterTurns: normalizedQuarterTurns(quarterTurns + delta),
+        })}
+      />
     </>
   )
 }
@@ -515,7 +612,20 @@ function SkylightPlacementPreview({ connector }) {
   )
 }
 
-function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
+function connectorPreviewTooltipPosition(connector) {
+  const width = Math.max(0.1, Number(connector?.width) || 1)
+  const depth = Math.max(0.1, Number(connector?.depth) || 1)
+  const baseY = Number(connector?.y) || 0
+  const topY = Number(connector?.topY)
+  const height = Number.isFinite(topY) ? Math.max(0.1, topY - baseY) : Math.max(0.1, Number(connector?.height) || 1)
+  return [
+    (Number(connector?.x) || 0) + width + 0.25,
+    baseY + height * 0.7,
+    (Number(connector?.z) || 0) + depth / 2,
+  ]
+}
+
+function ConnectorPreview({ drag, surfaceData, surfaceTool, onSurfaceToolChange }) {
   const curveWallsById = useMemo(() => {
     const rooms = normalizeSurfaceData(surfaceData).rooms
     return new Map(
@@ -535,6 +645,7 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
   if (!connector) return null
 
   if (connector.type === 'skylight') {
+    const quarterTurns = normalizedQuarterTurns(surfaceTool?.connectorRotationQuarterTurns)
     return (
       <group>
         <ConnectorSegment
@@ -543,11 +654,40 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
           displayLevel={Number(connector.level) || 0}
         />
         <SkylightPlacementPreview connector={connector} />
+        <PreviewOrientationTooltip
+          position={connectorPreviewTooltipPosition(connector)}
+          angle={quarterTurns * 90}
+          onRotate={delta => onSurfaceToolChange?.({
+            ...surfaceTool,
+            connectorRotationQuarterTurns: normalizedQuarterTurns(quarterTurns + delta),
+          })}
+        />
       </group>
     )
   }
 
-  if (['door', 'window', 'screen-window', 'ladder'].includes(connector.type)) {
+  if (connector.type === 'ladder') {
+    const quarterTurns = surfaceTool?.ladderAxis === 'z' ? 1 : 0
+    return (
+      <group>
+        <ConnectorSegment
+          connector={{ id: 'connector-preview', ...connector }}
+          opacity={0.68}
+          displayLevel={Number(connector.level) || 0}
+        />
+        <PreviewOrientationTooltip
+          position={connectorPreviewTooltipPosition(connector)}
+          angle={quarterTurns * 90}
+          onRotate={() => onSurfaceToolChange?.({
+            ...surfaceTool,
+            ladderAxis: surfaceTool?.ladderAxis === 'z' ? 'x' : 'z',
+          })}
+        />
+      </group>
+    )
+  }
+
+  if (['door', 'window', 'screen-window'].includes(connector.type)) {
     return (
       <ConnectorSegment
         connector={{ id: 'connector-preview', ...connector }}
@@ -1398,7 +1538,12 @@ export default function SurfaceEditorScene({
         null
       )}
       {connectorPreview && (
-        <ConnectorPreview drag={connectorPreview} surfaceData={surfaceData} surfaceTool={surfaceTool} />
+        <ConnectorPreview
+          drag={connectorPreview}
+          surfaceData={surfaceData}
+          surfaceTool={surfaceTool}
+          onSurfaceToolChange={onSurfaceToolChange}
+        />
       )}
       {stairPreview && (
         <StairPreview
@@ -1407,6 +1552,7 @@ export default function SurfaceEditorScene({
           surfaceTool={surfaceTool}
           activeMaterial={activeMaterial}
           availableBlocks={availableBlocks}
+          onSurfaceToolChange={onSurfaceToolChange}
         />
       )}
     </>

@@ -4466,3 +4466,39 @@ sa carte et son adhésion ont été supprimées ; le contrôle PostgreSQL final 
 **Retour arrière** : revert du commit Session 154. Aucun schéma SQL ni document monde utilisateur
 n'a été migré ; le retour arrière rétablit seulement l'ancien aperçu, le filtrage intérieur bas et
 le décalage visuel du token.
+
+---
+
+## Session 155 (Codex) — 2026-07-18 — Rotation attachée au fantôme de pose ✅ CLOS
+
+**Objectif** : rendre la rotation avant pose immédiatement découvrable. Les commandes présentes
+dans la bibliothèque d'objets restaient invisibles dès que l'utilisateur regardait la carte pour
+placer précisément sa structure.
+
+**UX** : le fantôme d'un escalier, d'une échelle ou d'une dalle en verre porte désormais son propre
+tooltip **Prévisualisation**. Il affiche l'angle courant et les boutons **Gauche / Droite**. Cliquer
+sur ces boutons tourne le fantôme sans créer d'objet ; le clic suivant sur la carte conserve cette
+orientation pour la pose. Le tooltip est projeté depuis l'objet puis borné aux quatre côtés du
+canvas afin de rester entièrement visible près des bords.
+
+**Architecture** : `PreviewOrientationTooltip` est partagé par les trois prévisualisations et ne
+maintient aucun angle parallèle. Il modifie les champs canoniques déjà consommés par les fabriques
+de pose : `stairQuarterTurns` pour l'escalier, `connectorRotationQuarterTurns` pour la verrière et
+`ladderAxis` pour l'échelle. Les événements pointeur du tooltip sont stoppés avant d'atteindre le
+canvas, ce qui évite toute pose accidentelle.
+
+**Testé** : ESLint ciblé sur `Sidebar.jsx` et `SurfaceEditorScene.jsx`, build Vite de production,
+service client actif et HTTP 8293 à 200. Recette visuelle réelle dans Chromium sur la session
+utilisateur `b27cbed4-fd59-4530-b43b-dae57c33f092` : tooltip visible à côté de l'escalier, rotation
+visuelle et libellé `0° → 90°`, puis même transition vérifiée pour la dalle en verre 2×1 et
+l'échelle structurelle. Le bouton **Annuler** est resté désactivé après ces rotations, confirmant
+qu'aucun objet n'a été posé. Retour en mode jeu effectué à la fin de la recette.
+
+**Non testé** : interaction tactile/mobile ; l'éditeur bureau et les clics souris sont couverts.
+
+**Données** : aucune carte, salle, structure ni session utilisateur sauvegardée n'a été modifiée.
+La recette a uniquement sélectionné des outils, déplacé leur fantôme et utilisé leurs commandes de
+rotation.
+
+**Retour arrière** : revert du commit Session 155. Aucun changement de schéma SQL, migration ou
+conversion de `surface_data` ; le retour arrière retire uniquement le tooltip attaché au fantôme.

@@ -1,3 +1,10 @@
+## v192 — 2026-07-18 — Rotation avant pose visible au bon endroit
+
+### Éditeur de monde
+- [fix] Dès que le fantôme d'un escalier, d'une échelle ou d'une dalle en verre apparaît sur la
+  carte, un tooltip **Prévisualisation** affiche directement **Gauche / Droite** et l'angle. Le
+  tooltip reste contenu dans l'écran et l'orientation visible est celle qui sera posée.
+
 ## v191 — 2026-07-18 — Placement structurel orientable et vision verticale
 
 ### Éditeur de monde

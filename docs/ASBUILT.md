@@ -1,5 +1,13 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Commandes de rotation attachées à la prévisualisation (2026-07-18)
+
+Dans **Objets 3D**, sélectionner un escalier, une échelle ou une dalle en verre puis survoler la
+carte fait apparaître un tooltip directement à côté du fantôme. Il expose **Gauche / Droite** et
+l'angle courant, et sa projection est bornée aux quatre bords du canvas. Les commandes agissent sur
+la même orientation canonique que le fantôme et la pose ; elles ne dépendent plus de la position de
+l'objet dans la bibliothèque.
+
 ## Placement structurel orientable et vision verticale naturelle (2026-07-18)
 
 Les objets structurels orientables peuvent être réglés avant leur pose sans perdre le fantôme sous
