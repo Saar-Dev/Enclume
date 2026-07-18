@@ -1,10 +1,12 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-18 — troisième fusion commune préparée** : le moteur monde `1255b37` et les règles
+> **2026-07-18 — troisième fusion commune livrée sur 8393/8394** : le moteur monde `1255b37` et les règles
 > Saar `1733aaa` sont réunis depuis la tête commune `ee3302c`, sans modifier les worktrees
 > `dev/monde` ou `/home/didier/Enclume`. La sauvegarde complète se trouve dans
 > `/home/codex/backups/enclume-pre-fusion-20260718-095537`. Les 138 tests monde/serveur, 3 tests
-> de configuration, 78 tests client, la syntaxe serveur et le build Vite passent. Le déploiement
-> et la recette réelle `8393` sont l'étape de clôture de cette intégration.
+> de configuration, 78 tests client, la syntaxe serveur, le build Vite et le smoke Playwright
+> passent. Le commit `a8a8846` est déployé, les migrations `160/162/164/166/168` sont en base et
+> la recette navigateur réelle confirme dashboard v201, session 3D/combat, niveaux 0/1 et les deux
+> escaliers paramétriques dans **Objets 3D**, sans erreur console.
 >
 > **2026-07-18 — palier haut du colimaçon livré sur 8293** : la trémie n'est plus le carré
 > englobant de l'escalier. Elle suit le secteur de volée qui exige réellement de la garde au

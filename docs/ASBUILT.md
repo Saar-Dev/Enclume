@@ -18,11 +18,14 @@ restent les seules autorités spatiales consommées par le combat. Les cinq migr
 de la géométrie par les règles. Le retrait de `ioredis` est répercuté dans `server/package.json` et
 `server/package-lock.json`.
 
-Validation automatisée avant déploiement : 138 tests monde/serveur, 3 tests de configuration,
-78 tests client ciblés, syntaxe de tous les fichiers serveur et build Vite. Les 22 erreurs et
-21 avertissements du lint ciblé sont strictement identiques à la tête commune précédente ; aucune
-nouvelle erreur ESLint n'est introduite par le delta Saar. La recette réelle sur `8393` et son
-commit documentaire de clôture sont consignés dans `docs/JOURNAL6.md`.
+Validation complète : 138 tests monde/serveur, 3 tests de configuration, 78 tests client ciblés,
+syntaxe de tous les fichiers serveur, build Vite et smoke Playwright. Les 22 erreurs et 21
+avertissements du lint ciblé sont strictement identiques à la tête commune précédente ; aucune
+nouvelle erreur ESLint n'est introduite par le delta Saar. Le commit `a8a8846` est déployé sur
+`8393/8394`, les migrations `160/162/164/166/168` sont inscrites dans `vtt_fusion` et les deux
+health checks répondent 200. Une recette réelle dans le navigateur a chargé le dashboard v201,
+une session 3D avec combat actif, les niveaux 0 et 1 puis le catalogue **Objets 3D** contenant les
+deux escaliers paramétriques et l'échelle, sans erreur console.
 
 ## Trémie de colimaçon avec palier haut praticable (2026-07-18)
 

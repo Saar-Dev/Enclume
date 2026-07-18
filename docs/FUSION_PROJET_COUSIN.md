@@ -1,7 +1,7 @@
 # FUSION_PROJET_COUSIN.md — contrat d'intégration combat / moteur monde
 
-> Dernière mise à jour : 2026-07-18 — troisième intégration de `dev/monde` et `dev/Saar` préparée
-> sur `integration` ; validation réelle `8393/8394` consignée dans le journal de clôture.
+> Dernière mise à jour : 2026-07-18 — troisième intégration de `dev/monde` et `dev/Saar` validée
+> sur `8393/8394`.
 >
 > But : fusionner une nouvelle version du projet combat sans modifier le dépôt de l'autre
 > développeur, sans réintroduire les anciennes cartes et sans dupliquer les décisions spatiales.
@@ -14,12 +14,19 @@
 - monde : `1255b37` depuis `dev/monde` (Session 158) ;
 - règles : `1733aaa` lu depuis `origin/dev/Saar` (Session 156) ;
 - merge monde intermédiaire : `6b01220` ;
+- merge règles et tête runtime validée : `a8a8846` ;
 - sauvegarde : `/home/codex/backups/enclume-pre-fusion-20260718-095537` et les trois tags
   `backup/pre-fusion-*-20260718-095537` ;
 - contenus sauvegardés et vérifiés SHA-256 : bundle Git complet, dump `vtt_fusion`, volume MinIO
   complet et configuration runtime ;
 - le worktree Saar `/home/didier/Enclume`, resté sur une tête locale plus ancienne, n'a pas été
   modifié : la contribution a été lue depuis la branche distante fraîche.
+
+Le client et l'API fusionnés répondent 200. Les migrations `160/162/164/166/168` ont été appliquées
+à `vtt_fusion`; le smoke Chromium passe. La recette réelle a ouvert le dashboard v201, la session
+`7c585d1c-999c-42fc-8bb1-4fb31fbe0d1e` avec combat actif, les niveaux 0 et 1 puis le catalogue
+éditeur où apparaissent l'escalier droit paramétrique, le colimaçon paramétrique et l'échelle
+structurelle. Aucune erreur navigateur n'a été capturée.
 
 Cette intégration est un merge Git normal, car `1af7d78` est désormais le dernier ancêtre commun
 avec Saar et l'ancien historique Surface a déjà été absorbé proprement. Les cinq conflits

@@ -4920,6 +4920,15 @@ Le retrait de `ioredis` est répercuté mécaniquement dans le lockfile.
   nouvelle erreur apportée par le delta Saar ;
 - `git diff --check` : succès après nettoyage des espaces finaux de deux transcriptions de règles.
 
-**Déploiement et recette réelle** : à compléter dans le commit documentaire de clôture après
-redémarrage exclusif de `enclume-fusion-*`. Aucun service `8193/8194` ou `8293/8294` ne doit être
-touché.
+**Déploiement et recette réelle** : le merge `a8a8846` est déployé après redémarrage exclusif de
+`enclume-fusion-server` et `enclume-fusion-client`. Client `8393` et API `8394` répondent 200 ; le
+serveur journalise base connectée, 92 modèles 3D synchronisés, migrations à jour et bucket
+`enclume-assets-fusion` accessible. La table `knex_migrations` contient effectivement
+`160/162/164/166/168`. Le smoke Playwright Chromium passe 1/1.
+
+Dans le navigateur intégré authentifié, le dashboard v201 est rendu puis la vraie session
+`7c585d1c-999c-42fc-8bb1-4fb31fbe0d1e` charge un canvas 3D avec combat actif. Le sélecteur affiche
+réellement les niveaux 0 puis 1. Le passage en édition et l'ouverture d'**Objets 3D** montrent les
+catégories **Escaliers (2)** — droit paramétrique et colimaçon paramétrique — ainsi qu'**Échelles
+(1)**. Aucune erreur navigateur n'est capturée. Les services `8193/8194` et `8293/8294`, le
+worktree Saar et le worktree monde n'ont pas été modifiés.

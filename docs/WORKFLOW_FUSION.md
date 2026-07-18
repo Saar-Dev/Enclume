@@ -181,6 +181,7 @@ Cette livraison part de `integration` `ee3302c` et réunit :
 - `dev/monde` `1255b37` (Session 158, escaliers droits et en colimaçon validés) ;
 - `origin/dev/Saar` `1733aaa` (Session 156, règles personnages/combat) ;
 - merge monde intermédiaire `6b01220` ;
+- merge règles et tête runtime validée `a8a8846` ;
 - worktree cible `/home/codex/Enclume-fusion`, services `8393/8394`, base `vtt_fusion` et bucket
   `enclume-assets-fusion`.
 
@@ -195,11 +196,18 @@ Saar fraîche est lue depuis `origin/dev/Saar`, car son worktree local peut êtr
 conflits documentaires conservent les deux historiques ; `docs/Old/PLAN_FUSION.md` reste archivé
 et clos. Le manifeste et le lockfile serveur retirent ensemble `ioredis`, absent du runtime.
 
-Validation pré-déploiement réellement exécutée : 138 tests monde/serveur, 3 tests de configuration,
-78 tests client ciblés, vérification syntaxique de tous les fichiers serveur et build Vite. Le lint
-ciblé reproduit exactement le passif de la tête précédente (22 erreurs, 21 avertissements) sans
-nouvelle erreur sur les lignes Saar. Le résultat du déploiement, des migrations, du smoke et de la
-recette visuelle est ajouté par le commit documentaire de clôture, avec la tête finale exacte.
+Validation réellement exécutée : 138 tests monde/serveur, 3 tests de configuration, 78 tests client
+ciblés, vérification syntaxique de tous les fichiers serveur, build Vite et smoke Playwright. Le
+lint ciblé reproduit exactement le passif de la tête précédente (22 erreurs, 21 avertissements)
+sans nouvelle erreur sur les lignes Saar. `a8a8846` est déployé sur `8393/8394`; les migrations
+`160/162/164/166/168` sont inscrites dans `vtt_fusion` et les deux health checks répondent 200.
+
+Dans le navigateur intégré authentifié, le dashboard affiche v201 puis la session
+`7c585d1c-999c-42fc-8bb1-4fb31fbe0d1e` charge son canvas, son combat actif et les niveaux 0 et 1.
+En mode édition, **Objets 3D** expose visuellement l'escalier droit paramétrique, le colimaçon
+paramétrique et l'échelle structurelle. Aucune erreur navigateur n'est enregistrée. Les worktrees
+`dev/monde` et `/home/didier/Enclume` restent volontairement intacts ; la prochaine remise à niveau
+doit partir du tag commun validé, sans réécrire un travail local non publié.
 
 ## 8. Validation et retour arrière
 
