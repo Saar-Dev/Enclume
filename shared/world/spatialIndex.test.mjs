@@ -152,6 +152,29 @@ test('les marches courbes et la colonne utilisent leur volume réel pour la lign
   ), null)
 })
 
+test('un plancher découpé suit son multipolygone au lieu de sa boîte englobante', () => {
+  const slab = {
+    type: 'horizontal-multipolygon',
+    multiPolygon: [[
+      [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]],
+      [[0.75, 0.75], [0.75, 1.25], [1.25, 1.25], [1.25, 0.75], [0.75, 0.75]],
+    ]],
+    minY: 1,
+    maxY: 1.1,
+  }
+
+  assert.ok(segmentGeometryInterval(
+    { x: 0.25, y: 0.5, z: 1 },
+    { x: 0.25, y: 1.5, z: 1 },
+    slab,
+  ))
+  assert.equal(segmentGeometryInterval(
+    { x: 1, y: 0.5, z: 1 },
+    { x: 1, y: 1.5, z: 1 },
+    slab,
+  ), null)
+})
+
 test('le narrow phase suit le profil vertical et l épaisseur variable d un mur', () => {
   const base = {
     type: 'wall-segment',

@@ -2,10 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { compileSurfaceWorld } from './worldCompiler.js'
+import { stairGeometry } from './stairGeometry.js'
 import {
   buildMergedRoomVerticalProfile,
   makeRoomBoundaryArc,
   multiPolygonArea,
+  multiPolygonContainsPoint,
   roomBoundaryPaths,
   roomBoundaryWallRuns,
 } from './roomGeometry.js'
@@ -612,6 +614,35 @@ test('la trémie paramétrique retire les colliders de sol et plafond au-dessus 
       && pointInsideOpening.z <= item.bounds.max.z
   ))
   assert.deepEqual(horizontalBlockers, [])
+})
+
+test('le palier du colimaçon reste un support physique tandis que la volée haute reste ouverte', () => {
+  const lower = room('lower', 0, 5, 0, 5)
+  const upper = { ...room('upper', 0, 5, 0, 5), level: 1, y: 2.5 }
+  const stair = {
+    id: 'spiralA', kind: 'spiral', x: 2.5, z: 3.5, y: 0, topY: 2.5,
+    outerRadius: 1.25, innerRadius: 0.22, totalTurns: 1.25,
+    rotationQuarterTurns: 0, clockwise: false, stepCount: 21,
+    supportThickness: 0.25, treadThickness: 0.055,
+  }
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-spiral-landing',
+    surfaceData: emptySurface({ rooms: { lower, upper }, stairs: { spiralA: stair } }),
+  })
+  const geometry = stairGeometry(stair)
+  const endAngle = geometry.startAngle + geometry.sweep
+  const tangent = { x: -Math.sin(endAngle), z: Math.cos(endAngle) }
+  const landing = { x: geometry.end.x + tangent.x * 0.2, z: geometry.end.z + tangent.z * 0.2 }
+  const upperFlight = { x: geometry.end.x - tangent.x * 0.2, z: geometry.end.z - tangent.z * 0.2 }
+  const upperFloorSupports = snapshot.spatial.supports.filter(item => (
+    item.kind === 'floor' && Math.abs(item.y - 2.625) < 1e-9
+  ))
+
+  assert.equal(upperFloorSupports.some(item => multiPolygonContainsPoint(item.footprint, landing)), true)
+  assert.equal(upperFloorSupports.some(item => multiPolygonContainsPoint(item.footprint, upperFlight)), false)
+  assert.equal(snapshot.spatial.colliders
+    .filter(item => item.kind === 'floor' && Math.abs(item.bounds.max.y - 2.625) < 1e-9)
+    .every(item => item.geometry?.type === 'horizontal-multipolygon'), true)
 })
 
 test('une échelle compile une traversée climb fractionnable avec des ancrages fins', () => {

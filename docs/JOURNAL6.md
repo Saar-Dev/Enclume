@@ -4586,3 +4586,44 @@ son absence a été contrôlée visuellement. Aucun schéma SQL ni migration de 
 
 **Retour arrière** : revert du commit Session 157. Le document accepte à nouveau uniquement
 `kind: straight`, la palette perd le colimaçon et les tokens retrouvent l'ancien décalage commun.
+
+---
+
+## Session 158 (Codex) — 2026-07-18 — Palier haut canonique du colimaçon ✅ CLOS
+
+**Cause racine** : le colimaçon partageait déjà ses marches et son parcours entre rendu et moteur,
+mais `stairOpeningMultiPolygon` réduisait encore toute trémie au rectangle de `openingBounds`.
+Cette boîte englobante supprimait donc aussi la dalle située devant la dernière marche : l'escalier
+arrivait à la bonne altitude, mais débouchait dans le vide.
+
+**Géométrie** : `spiralStairGeometry` calcule maintenant le début de la trémie depuis la sous-face
+de la dalle haute, la garde au plafond et la progression verticale. La trémie est le secteur allant
+de ce seuil à la marche haute. Le secteur qui suit la marche reste plein et forme naturellement le
+palier d'arrivée. Rotation et sens horaire/antihoraire transforment la même primitive ; aucune
+coordonnée « bas gauche » ou orientation d'écran n'est codée.
+
+**Physique commune** : `worldCompiler` ne découpe plus les sols et plafonds par quatre fragments
+rectangulaires. Il soustrait les multipolygones de trémie aux vraies empreintes de dalle, conserve
+les fragments comme supports et publie une primitive `horizontal-multipolygon` pour leurs
+barrières. `spatialIndex` et `visibility` prennent en charge ses contours et trous au narrow phase.
+Le palier conservé est donc praticable et occultant ; la volée ouverte reste sans collider caché.
+
+**Testé** : 138/138 tests monde/serveur et 39/39 tests Surface. Les nouveaux tests couvrent les
+quatre rotations dans les deux sens, la continuité du support au palier, l'absence de support au
+dessus de la volée et le narrow phase d'un multipolygone à trou. Build Vite local et serveur réussi,
+ESLint ciblé vert. Le lint global reste rouge sur 65 erreurs et 47 avertissements React/personnage
+préexistants, sans erreur issue des fichiers de production modifiés dans cette session.
+
+**Validation navigateur réelle 8293** : sur la session utilisateur
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, l'étage 1 montre la dalle rejoindre la dernière marche. Les
+quatre rotations ont été appliquées successivement, puis le sens horaire a été activé : à chaque
+fois, la trémie et le palier ont suivi la sortie visible. Quatre rotations supplémentaires au total
+et la désactivation du sens horaire ont restauré la définition initiale. Après rechargement et
+retour à l'étage 1, le palier est toujours présent.
+
+**Données** : aucune structure n'a été ajoutée ou supprimée. L'escalier existant a été modifié
+temporairement pour la recette puis remis exactement dans son orientation et son sens initiaux.
+Aucun schéma SQL, migration ou conversion de `surface_data` n'est ajouté.
+
+**Retour arrière** : revert du commit Session 158, rebuild puis redémarrage de 8293/8294. Le retour
+arrière restaure la trémie rectangulaire ; aucune donnée persistée ne nécessite de conversion.

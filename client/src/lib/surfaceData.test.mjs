@@ -33,6 +33,7 @@ import {
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
 import {
+  multiPolygonContainsPoint,
   multiPolygonGridCells,
   roomGeometryArea,
   roomGeometryIntersectionArea,
@@ -180,6 +181,36 @@ test('un colimaçon dérive ses marches, son entrée et sa trémie depuis une se
   assert.ok(geometry.start.z > 3.5)
   assert.deepEqual(geometry.end.y, 2.625)
   assert.ok(geometry.column.bounds.max.y > geometry.topSurfaceY)
+})
+
+test('la trémie d un colimaçon conserve le palier dans les deux sens et quatre orientations', () => {
+  for (const clockwise of [false, true]) {
+    for (let rotationQuarterTurns = 0; rotationQuarterTurns < 4; rotationQuarterTurns += 1) {
+      const geometry = spiralStairGeometry({
+        kind: 'spiral', x: 2.5, z: 3.5, y: 0, topY: 2.5,
+        outerRadius: 1.25, innerRadius: 0.22, totalTurns: 1.25,
+        rotationQuarterTurns, clockwise, stepCount: 21,
+        supportThickness: 0.25, treadThickness: 0.055,
+      })
+      const endAngle = geometry.startAngle + geometry.sweep
+      const directionSign = Math.sign(geometry.sweep)
+      const tangent = {
+        x: -Math.sin(endAngle) * directionSign,
+        z: Math.cos(endAngle) * directionSign,
+      }
+      const landing = {
+        x: geometry.end.x + tangent.x * 0.2,
+        z: geometry.end.z + tangent.z * 0.2,
+      }
+      const upperFlight = {
+        x: geometry.end.x - tangent.x * 0.2,
+        z: geometry.end.z - tangent.z * 0.2,
+      }
+
+      assert.equal(multiPolygonContainsPoint(geometry.openingMultiPolygon, landing), false)
+      assert.equal(multiPolygonContainsPoint(geometry.openingMultiPolygon, upperFlight), true)
+    }
+  }
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {

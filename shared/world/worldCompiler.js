@@ -15,6 +15,7 @@ import {
 } from './elevatorRuntime.js'
 import {
   roomCeilingRegions,
+  differenceMultiPolygons,
   intersectMultiPolygons,
   multiPolygonBounds,
   multiPolygonContainsPoint,
@@ -28,9 +29,8 @@ import {
   withWallCornerJoins,
 } from './roomGeometry.js'
 import {
-  rectangularSlabFragments,
   stairGeometry,
-  stairOpeningBounds,
+  stairOpeningMultiPolygon,
 } from './stairGeometry.js'
 
 const EPSILON = 1e-6
@@ -787,7 +787,7 @@ function rectangleMultiPolygon(rectangle) {
 function stairOpeningsAtY(surface, y) {
   return Object.values(surface.stairs)
     .filter(stair => Math.abs(number(stair.topY) - number(y)) <= EPSILON)
-    .map(stair => stairOpeningBounds(stair, { storyHeight: surface.storyHeight }))
+    .map(stair => stairOpeningMultiPolygon(stair, { storyHeight: surface.storyHeight }))
 }
 
 function addSlabs(surface, runtimeStates, battlemapId, spatial) {
@@ -811,18 +811,19 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const runtime = runtimeStates[sourceId]
     if (floor.runtimeSupport && (runtime?.enabled === false || runtime?.state === 'destroyed')) continue
     const kind = floor.kind || 'floor'
-    const fragments = rectangularSlabFragments({
+    const tileFootprint = rectangleMultiPolygon({
       minX: parsed.x,
       maxX: parsed.x + 1,
       minZ: parsed.z,
       maxZ: parsed.z + 1,
-    }, stairOpeningsAtY(surface, parsed.y))
-    for (const [fragmentIndex, fragment] of fragments.entries()) {
-      const fragmentFootprint = rectangleMultiPolygon(fragment)
-      const slabFootprint = sourceFootprint
-        ? intersectMultiPolygons(sourceFootprint, fragmentFootprint)
-        : fragmentFootprint
-      if (slabFootprint.length === 0) continue
+    })
+    const baseFootprint = sourceFootprint || tileFootprint
+    const clippedFootprint = differenceMultiPolygons(
+      baseFootprint,
+      ...stairOpeningsAtY(surface, parsed.y),
+    )
+    for (const [fragmentIndex, polygon] of clippedFootprint.entries()) {
+      const slabFootprint = [polygon]
       const footprintBounds = multiPolygonBounds(slabFootprint)
       const slabBounds = bounds(
         footprintBounds.minX, parsed.y - thickness / 2, footprintBounds.minZ,
@@ -843,7 +844,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
       }
       const inside = [center, ...candidates]
         .find(candidate => multiPolygonContainsPoint(slabFootprint, candidate)) || center
-      const suffix = fragments.length > 1 ? `:${fragmentIndex}` : ''
+      const suffix = clippedFootprint.length > 1 ? `:${fragmentIndex}` : ''
       spatial.supports.push({
         id: `support:${sourceId}${suffix}`,
         sourceId,
@@ -861,6 +862,12 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
         kind,
         axis: 'horizontal',
         bounds: slabBounds,
+        geometry: {
+          type: 'horizontal-multipolygon',
+          multiPolygon: slabFootprint,
+          minY: clean(parsed.y - thickness / 2),
+          maxY: clean(parsed.y + thickness / 2),
+        },
         blocks: blockingChannels(floor),
       })
     }
@@ -871,23 +878,32 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const thickness = positive(ceiling.thickness, 0.25)
     if (slabIsInsideElevatorShaft(elevators, parsed, parsed.y + thickness / 2)) continue
     if (skylightCoveringSlab(surface, parsed, parsed.y)) continue
-    const fragments = rectangularSlabFragments({
+    const clippedFootprint = differenceMultiPolygons(rectangleMultiPolygon({
       minX: parsed.x,
       maxX: parsed.x + 1,
       minZ: parsed.z,
       maxZ: parsed.z + 1,
-    }, stairOpeningsAtY(surface, parsed.y))
-    for (const [fragmentIndex, fragment] of fragments.entries()) {
-      const suffix = fragments.length > 1 ? `:${fragmentIndex}` : ''
+    }), ...stairOpeningsAtY(surface, parsed.y))
+    for (const [fragmentIndex, polygon] of clippedFootprint.entries()) {
+      const slabFootprint = [polygon]
+      const footprintBounds = multiPolygonBounds(slabFootprint)
+      const suffix = clippedFootprint.length > 1 ? `:${fragmentIndex}` : ''
+      const slabBounds = bounds(
+        footprintBounds.minX, parsed.y - thickness / 2, footprintBounds.minZ,
+        footprintBounds.maxX, parsed.y + thickness / 2, footprintBounds.maxZ,
+      )
       addBarrierOutputs(spatial, {
         id: `barrier:ceiling:${ceiling.worldId}${suffix}`,
         sourceId: ceiling.worldId,
         kind: 'ceiling',
         axis: 'horizontal',
-        bounds: bounds(
-          fragment.minX, parsed.y - thickness / 2, fragment.minZ,
-          fragment.maxX, parsed.y + thickness / 2, fragment.maxZ,
-        ),
+        bounds: slabBounds,
+        geometry: {
+          type: 'horizontal-multipolygon',
+          multiPolygon: slabFootprint,
+          minY: clean(parsed.y - thickness / 2),
+          maxY: clean(parsed.y + thickness / 2),
+        },
         blocks: blockingChannels(ceiling),
       })
     }

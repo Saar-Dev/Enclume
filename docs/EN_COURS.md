@@ -1,4 +1,13 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-18 — palier haut du colimaçon livré sur 8293** : la trémie n'est plus le carré
+> englobant de l'escalier. Elle suit le secteur de volée qui exige réellement de la garde au
+> plafond et conserve le secteur suivant comme palier praticable devant la dernière marche.
+> Rotation et sens horaire/antihoraire transforment la même géométrie canonique. Le renderer et le
+> snapshot physique découpent le même multipolygone. Validation : 138 tests monde/serveur,
+> 39 tests Surface, build Vite, ESLint ciblé et recette visuelle réelle sur 8293 aux quatre
+> orientations puis avec le sens inversé, et après rechargement ; l'escalier utilisateur a été remis
+> exactement dans son état initial.
+>
 > **2026-07-18 — colimaçon canonique et tokens réellement au sol livrés sur 8293** :
 > **Objets 3D > Escaliers** propose maintenant un colimaçon paramétrique de 3,75 m de diamètre.
 > Sa définition unique dérive 21 marches courbes, colonne centrale, garde-corps, trémie, collisions,

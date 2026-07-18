@@ -1,5 +1,26 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Trémie de colimaçon avec palier haut praticable (2026-07-18)
+
+La trémie d'un colimaçon n'est plus son carré englobant. `spiralStairGeometry(...)` utilise la
+hauteur de dalle, la garde au plafond et la progression verticale pour dériver le secteur de volée
+qui doit rester ouvert. Le secteur immédiatement après la dernière marche demeure une dalle : il
+forme le palier haut. Cette forme tourne avec `rotationQuarterTurns` et s'inverse avec `clockwise` ;
+aucun palier n'est codé pour une orientation particulière.
+
+`stairOpeningMultiPolygon(...)` expose cette découpe canonique au renderer et au compilateur.
+`worldCompiler` soustrait le même multipolygone aux sols et plafonds et publie les fragments sous
+la primitive `horizontal-multipolygon`. `spatialIndex` et `visibility` effectuent le narrow phase
+sur ses contours et ses trous. La dalle conservée est donc à la fois visible, praticable,
+collidable et occultante ; la partie ouverte reste réellement ouverte pour la vue verticale.
+
+Validation : 138 tests monde/serveur et 39 tests Surface, dont les quatre orientations dans les
+deux sens, présence physique du palier et absence de plancher au-dessus de la volée haute. Build
+Vite et ESLint ciblé réussis. La recette réelle sur `8293` a contrôlé les quatre rotations, le sens
+inverse et la persistance après rechargement, puis restauré l'escalier utilisateur à l'identique.
+
+---
+
 ## Escalier en colimaçon canonique et ancrage visuel des tokens (2026-07-18)
 
 La bibliothèque **Objets 3D > Escaliers** contient désormais un colimaçon structurel paramétrique.
@@ -10,7 +31,7 @@ horaire/antihoraire, le garde-corps extérieur, le multiplicateur de déplacemen
 `stairGeometry(...)` distribue la définition vers `straightStairGeometry(...)` ou
 `spiralStairGeometry(...)`. Pour le colimaçon standard, la même sortie canonique contient le disque
 de 3,75 m de diamètre, 21 marches en prismes de secteurs courbes, la colonne centrale, le
-garde-corps, la trémie carrée, les volumes physiques et les 22 ancrages de parcours. Le renderer,
+garde-corps, la trémie sectorielle, les volumes physiques et les 22 ancrages de parcours. Le renderer,
 l'éditeur, le compilateur, la collision et la visibilité consomment ces primitives. Les marches
 emploient un narrow phase `horizontal-prism` et la colonne un `vertical-cylinder` : leur boîte
 englobante ne devient pas une fausse obstruction rectangulaire pour la ligne de vue.

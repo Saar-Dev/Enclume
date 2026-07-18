@@ -106,6 +106,21 @@ function annularSectorPolygon(center, innerRadius, outerRadius, startAngle, endA
   return [...outer, ...inner]
 }
 
+function circularSectorMultiPolygon(center, radius, startAngle, sweep, segments = 48) {
+  const fullTurn = Math.PI * 2
+  const clampedSweep = Math.sign(sweep || 1) * Math.min(Math.abs(sweep), fullTurn)
+  const count = Math.max(3, Math.ceil(Math.abs(clampedSweep) / fullTurn * segments))
+  const arc = Array.from({ length: count + 1 }, (_, index) => {
+    const angle = startAngle + clampedSweep * index / count
+    return [
+      clean(center.x + Math.cos(angle) * radius),
+      clean(center.z + Math.sin(angle) * radius),
+    ]
+  })
+  const centerPoint = [clean(center.x), clean(center.z)]
+  return [[[centerPoint, ...arc, centerPoint]]]
+}
+
 export function straightStairGeometry(stair, { storyHeight = 2.5 } = {}) {
   const axis = stair?.axis === 'z' ? 'z' : 'x'
   const dir = Number(stair?.dir) < 0 ? -1 : 1
@@ -433,6 +448,19 @@ export function spiralStairGeometry(stair, { storyHeight = 2.5 } = {}) {
 
   const openingMargin = Math.max(0, finite(stair?.openingMargin, SPIRAL_STAIR_DEFAULTS.openingMargin))
   const openingRadius = outerRadius + openingMargin
+  const headClearance = positive(stair?.headClearance, SPIRAL_STAIR_DEFAULTS.headClearance)
+  const upperSlabUnderside = topY - supportThickness / 2
+  const openingStartRatio = Math.max(0, Math.min(1,
+    (upperSlabUnderside - headClearance - baseSurfaceY) / rise,
+  ))
+  const openingStartAngle = startAngle + sweep * openingStartRatio
+  const openingSweep = sweep * (1 - openingStartRatio)
+  const openingMultiPolygon = circularSectorMultiPolygon(
+    center,
+    openingRadius,
+    openingStartAngle,
+    openingSweep,
+  )
   const footprint = {
     minX: clean(center.x - outerRadius),
     maxX: clean(center.x + outerRadius),
@@ -473,6 +501,10 @@ export function spiralStairGeometry(stair, { storyHeight = 2.5 } = {}) {
     end: anchors.at(-1),
     footprint,
     openingBounds,
+    openingMultiPolygon,
+    openingStartRatio: clean(openingStartRatio),
+    openingStartAngle: clean(openingStartAngle),
+    openingSweep: clean(openingSweep),
     steps,
     anchors,
     railings,
@@ -492,7 +524,9 @@ export function stairOpeningBounds(stair, options) {
 }
 
 export function stairOpeningMultiPolygon(stair, options) {
-  const opening = stairOpeningBounds(stair, options)
+  const geometry = stairGeometry(stair, options)
+  if (geometry.openingMultiPolygon) return geometry.openingMultiPolygon
+  const opening = geometry.openingBounds
   return [[[
     [opening.minX, opening.minZ],
     [opening.maxX, opening.minZ],

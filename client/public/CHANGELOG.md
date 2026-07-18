@@ -1,3 +1,13 @@
+## v195 — 2026-07-18 — Palier haut praticable du colimaçon
+
+### Éditeur et moteur de monde
+- [fix] La trémie du colimaçon suit désormais la volée qui exige réellement de la garde au plafond
+  au lieu de supprimer tout le carré autour de l'escalier.
+- [fix] Le sol est conservé immédiatement après la marche haute : l'arrivée possède un vrai palier
+  qui tourne et s'inverse avec l'orientation et le sens de montée.
+- [engine] Sols et plafonds découpés utilisent le même multipolygone dans le rendu, les supports,
+  les collisions et les lignes de vue ; aucun sol seulement visuel n'est ajouté.
+
 ## v194 — 2026-07-18 — Escalier en colimaçon et tokens ancrés par leur socle
 
 ### Éditeur et moteur de monde

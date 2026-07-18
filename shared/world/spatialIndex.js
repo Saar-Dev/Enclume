@@ -250,6 +250,82 @@ function polygonHorizontalInterval(from, to, polygon) {
   }
 }
 
+function pointInMultiPolygon2d(point, multiPolygon) {
+  return multiPolygon.some(polygon => (
+    Array.isArray(polygon)
+      && polygon.length > 0
+      && pointInPolygon2d(point, polygon[0])
+      && !polygon.slice(1).some(hole => pointInPolygon2d(point, hole))
+  ))
+}
+
+function multiPolygonHorizontalInterval(from, to, multiPolygon) {
+  const cuts = [0, 1]
+  for (const polygon of multiPolygon) {
+    for (const ring of polygon) {
+      for (let index = 0; index < ring.length; index += 1) {
+        const t = segmentEdgeParameter(from, to, ring[index], ring[(index + 1) % ring.length])
+        if (t !== null) cuts.push(t)
+      }
+    }
+  }
+  const ordered = [...new Set(cuts.map(value => Math.round(value * 1e12) / 1e12))].sort((a, b) => a - b)
+  const intervals = []
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const near = ordered[index]
+    const far = ordered[index + 1]
+    const middle = (near + far) / 2
+    if (pointInMultiPolygon2d({
+      x: from.x + (to.x - from.x) * middle,
+      z: from.z + (to.z - from.z) * middle,
+    }, multiPolygon)) intervals.push({ near, far })
+  }
+  if (intervals.length === 0) return null
+  return {
+    near: Math.min(...intervals.map(value => value.near)),
+    far: Math.max(...intervals.map(value => value.far)),
+  }
+}
+
+function horizontalMultiPolygonGeometryInterval(from, to, geometry, {
+  horizontalPadding = 0,
+  verticalBottomPadding = 0,
+  verticalTopInset = 0,
+} = {}) {
+  if (geometry?.type !== 'horizontal-multipolygon' || !Array.isArray(geometry.multiPolygon)) return null
+  const start = normalizeWorldPoint(from, 'segment.from')
+  const end = normalizeWorldPoint(to, 'segment.to')
+  const multiPolygon = geometry.multiPolygon.map((polygon, polygonIndex) => (
+    polygon.map((ring, ringIndex) => ring.map((value, pointIndex) => ({
+      x: finiteNumber(value?.[0] ?? value?.x, `geometry.multiPolygon[${polygonIndex}][${ringIndex}][${pointIndex}].x`),
+      z: finiteNumber(value?.[1] ?? value?.z, `geometry.multiPolygon[${polygonIndex}][${ringIndex}][${pointIndex}].z`),
+    })))
+  ))
+  const vertical = scalarInterval(
+    start.y,
+    end.y,
+    finiteNumber(geometry.minY, 'geometry.minY') - verticalBottomPadding,
+    finiteNumber(geometry.maxY, 'geometry.maxY') - verticalTopInset,
+  )
+  if (!vertical) return null
+  if (horizontalPadding > EPSILON) {
+    const clippedFrom = {
+      x: start.x + (end.x - start.x) * vertical.near,
+      z: start.z + (end.z - start.z) * vertical.near,
+    }
+    const clippedTo = {
+      x: start.x + (end.x - start.x) * vertical.far,
+      z: start.z + (end.z - start.z) * vertical.far,
+    }
+    if (pointInMultiPolygon2d(clippedFrom, multiPolygon)
+      || pointInMultiPolygon2d(clippedTo, multiPolygon)) return vertical
+    return multiPolygon.some(polygon => polygon.some(ring => (
+      segmentNearPolygon(clippedFrom, clippedTo, ring, horizontalPadding)
+    ))) ? vertical : null
+  }
+  return intersectIntervals(vertical, multiPolygonHorizontalInterval(start, end, multiPolygon))
+}
+
 function horizontalPrismGeometryInterval(from, to, geometry, {
   horizontalPadding = 0,
   verticalBottomPadding = 0,
@@ -378,6 +454,9 @@ function wallElevationBands(geometry) {
 export function segmentGeometryInterval(from, to, geometry, options = {}) {
   if (geometry?.type === 'horizontal-prism') {
     return horizontalPrismGeometryInterval(from, to, geometry, options)
+  }
+  if (geometry?.type === 'horizontal-multipolygon') {
+    return horizontalMultiPolygonGeometryInterval(from, to, geometry, options)
   }
   if (geometry?.type === 'vertical-cylinder') {
     return verticalCylinderGeometryInterval(from, to, geometry, options)
@@ -512,7 +591,7 @@ export function createSpatialIndex(snapshot, options = {}) {
           z: collider.bounds.max.z + actor.radius,
         },
       }
-      if (['wall-segment', 'wall-arc', 'horizontal-prism', 'vertical-cylinder'].includes(collider.geometry?.type)) {
+      if (['wall-segment', 'wall-arc', 'horizontal-prism', 'horizontal-multipolygon', 'vertical-cylinder'].includes(collider.geometry?.type)) {
         return !!segmentGeometryInterval(start, end, collider.geometry, {
           horizontalPadding: actor.radius,
           verticalBottomPadding: actor.height - EPSILON,

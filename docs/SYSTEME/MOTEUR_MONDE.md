@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-18 — rotation des prévisualisations à la molette.
+> Dernière mise à jour : 2026-07-18 — trémie de colimaçon et palier haut canoniques.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -385,6 +385,17 @@ garde-corps extérieur. Les configurations standard relient exactement un étage
 Les secteurs courbes conservent leur polygone dans le snapshot sous la primitive
 `horizontal-prism` et la colonne utilise `vertical-cylinder`. L'index spatial et la visibilité
 effectuent leur narrow phase sur ces volumes réels au lieu de considérer leur seule AABB.
+
+Pour un colimaçon, la trémie n'est jamais son carré englobant. La hauteur de dalle, la garde au
+plafond et la progression de la volée déterminent le premier angle qui doit rester ouvert ; la
+découpe se poursuit jusqu'à la dernière marche. Le secteur suivant reste plein et devient le
+palier haut, exactement dans le sens de sortie. `rotationQuarterTurns` et `clockwise` transforment
+ce même secteur : aucune orientation spéciale n'existe dans le renderer.
+
+Les dalles découpées sont compilées comme `horizontal-multipolygon`, avec leurs contours et trous.
+Leur AABB sert seulement à l'index large ; collisions et visibilité utilisent le multipolygone au
+narrow phase. Ainsi, une zone de palier conservée visuellement est aussi un support physique, et
+la trémie visible ne garde aucun collider rectangulaire invisible.
 
 Le renderer, l'éditeur et `worldCompiler` ne recalculent donc jamais chacun leur propre escalier.
 Le connecteur de graphe est produit automatiquement par la pose de l'objet et n'est pas exposé
