@@ -15,6 +15,7 @@ import {
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
 import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
@@ -264,9 +265,10 @@ export default function CombatActionWindow({
     api.get(`/char-sheet/${charId}/inventory`).then(res => {
       if (cancelled) return
       const items = res.data.items || []
-      setAssaultWeapons(items.filter(
-        item => (item.slots?.includes('MG') || item.slots?.includes('MD')) && item.ref_fire_mode
-      ))
+      // shared/weaponSlots.js — inclut le deux-mains (2M), pas seulement MG/MD (Session 158, Loulou/
+      // Breather non détecté). assaultWeapons reste volontairement filtré aux armes à FEU (ref_fire_mode)
+      // uniquement — le panneau CaC a son propre filtre pour les armes de contact.
+      setAssaultWeapons(flattenItemsBySlot(items).filter(item => item.ref_fire_mode))
       setAllInventoryItems(items)
     }).catch(() => {})
     return () => { cancelled = true }
@@ -287,9 +289,7 @@ export default function CombatActionWindow({
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
   useEffect(() => {
-    const wMg = assaultWeapons.find(w => w.slots?.includes('MG')) || null
-    const wMd = assaultWeapons.find(w => w.slots?.includes('MD')) || null
-    const selected = wMg || wMd
+    const { weaponMg: wMg, weaponMd: wMd, primaryWeapon: selected } = resolveHandWeapons(assaultWeapons)
     if (!selected) return
     const forceCCNow = !!(wMg && wMd) && wMg.ref_fire_mode !== wMd.ref_fire_mode
     const modes = forceCCNow
@@ -349,17 +349,17 @@ export default function CombatActionWindow({
   )
 
   // --- derives assaut -------------------------------------------------------
-  const weaponMg = assaultWeapons.find(w => w.slots?.includes('MG')) || null
-  const weaponMd = assaultWeapons.find(w => w.slots?.includes('MD')) || null
-  const hasTwoWeapons = !!(weaponMg && weaponMd)
+  // shared/weaponSlots.js — inclut le deux-mains (2M) dans la priorité de sélection (Session 158).
+  const { weaponMg, weaponMd, hasTwoWeapons, primaryWeapon: selectedWeapon } = resolveHandWeapons(assaultWeapons)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   const forceCC       = hasTwoWeapons && !sameFirMode
-  const selectedWeapon = weaponMg || weaponMd || null
   const assaultWeaponId = selectedWeapon?.id ?? null
-  // Arme(s) équipée(s) MG/MD, distant ou contact — affichage ARMEMENT (COM20). weaponMg/weaponMd
-  // ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item slotté MG/MD.
-  const equippedMg = allInventoryItems.find(item => item.slots?.includes('MG')) || null
-  const equippedMd = allInventoryItems.find(item => item.slots?.includes('MD')) || null
+  // Arme(s) équipée(s) MG/MD/2M, distant ou contact — affichage ARMEMENT (COM20). weaponMg/weaponMd
+  // ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item slotté, arme ou non.
+  const equippedSlotRows = flattenItemsBySlot(allInventoryItems)
+  const equippedMg = equippedSlotRows.find(item => item.slot === 'MG') ?? null
+  const equippedMd = equippedSlotRows.find(item => item.slot === 'MD') ?? null
+  const equipped2M = equippedSlotRows.find(item => item.slot === '2M') ?? null
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
@@ -870,15 +870,15 @@ export default function CombatActionWindow({
           {!isDrone && (
             <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
               <div style={W.sectionTitle}>ARMEMENT</div>
-              {(equippedMg || equippedMd) && (
+              {(equippedMg || equippedMd || equipped2M) && (
                 <div style={W.weaponInfo}>
-                  {[['MG', equippedMg], ['MD', equippedMd]].filter(([, w]) => w).map(([hand, w]) => {
+                  {[['MG', equippedMg], ['MD', equippedMd], ['2M', equipped2M]].filter(([, w]) => w).map(([hand, w]) => {
                     const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
                     const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
                     return (
                       <span key={w.id} className={cls} style={W.weaponInfoLine} title={w.skill_label ?? undefined}>
                         <span className="combat-equip-dot" />
-                        {equippedMg && equippedMd ? `${hand} · ` : ''}{w.custom_name || w.ref_name || '?'}
+                        {(equippedMg && equippedMd) || equipped2M ? `${hand} · ` : ''}{w.custom_name || w.ref_name || '?'}
                         {status && <span style={W.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
                       </span>
                     )

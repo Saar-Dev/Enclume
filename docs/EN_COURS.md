@@ -165,12 +165,15 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> ⚡ **Prochaine étape immédiate : Lot B de `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le Lot A (modèle de
-> données de l'échelle de phases) est **codé et testé en base réelle** (Item 84 ci-dessous), reste la
-> **validation navigateur d'un Tour de combat complet** (rien de visuel ne change encore — Lot A
-> n'alimente que la donnée, le moteur de résolution actuel reste inchangé jusqu'au Lot B) avant
-> d'attaquer le moteur de résolution générique. Item 84 est plus bas dans ce fichier (ordre
-> antéchronologique, il suit l'item 83) — ne pas le manquer en lisant seulement le haut de ce bloc.
+> ⚡ **Prochaine étape immédiate : confirmation navigateur Saar, puis Lot B de
+> `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le Lot A (modèle de données de l'échelle de phases) est codé
+> et testé en base réelle (Item 84). En le validant, Saar a trouvé un bug bloquant réel mais **sans
+> rapport avec le Lot A** (préexistant, Session 154) : détection de l'arme en main cassée pour tout
+> personnage avec une arme deux-mains ou un Bouclier — corrigé le même jour (Item 85, `shared/
+> weaponSlots.js`, nouvelle autorité unique client/serveur). Reste la **validation navigateur** des deux
+> (Tour de combat complet + Loulou/Mr sourire/Bourrin) avant d'attaquer le moteur de résolution
+> générique du Lot B. Items 84/85 sont plus bas dans ce fichier (ordre antéchronologique, ils suivent
+> l'item 83) — ne pas les manquer en lisant seulement le haut de ce bloc.
 
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
@@ -421,10 +424,46 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > introduite sur le flux existant (déclaration, résolution, fin de Tour) par les 6 sites scopés et le
 > retrait du DELETE. **Données** : migration `172` appliquée en base locale de développement (`vtt`).
 > **Retour arrière** : `down()` testé (drop table + drop colonne, round-trip validé).
-> **Prochaine étape** : confirmation navigateur Saar (un Tour de combat complet, sans régression), puis
-> Lot B de `docs/PLAN_COMBAT_TIMELINE.md` (moteur de résolution générique consommant réellement
-> `combat_timeline_entries` — remplace `advanceSlot`/`active_slot_idx`, absorbe le mécanisme "Retarder
-> son Action", cf. §5/§6ter du plan).
+> **Prochaine étape** : voir Item 85 (ci-dessous) — bug bloquant trouvé en testant le Tour de combat
+> demandé par cet item, corrigé le même jour.
+>
+> **Item 85 (Session 158, dev/Saar) — Détection de l'arme en main : Bouclier confondu avec une arme,
+> arme deux-mains (2M) ignorée ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Trouvé par Saar en jouant le Tour de
+> combat demandé pour valider l'Item 84 (aucun rapport avec le Lot A lui-même — confirmé par
+> `git log`/`git blame` : dernière modification des lignes fautives Session 154, `857becc` "Refonte
+> char_inventory_slots", avant toute intervention de cette session). 3 symptômes, une seule cause
+> racine par site : Loulou (PJ, Breather chargé en slot `2M`) détecté sans arme ; Mr sourire (PNJ,
+> Bouclier en `MG` + Scorpion chargé en `MD`) détecté incapable de tirer ; Bourrin (PNJ, Matraque Mao
+> CaC pure) — "Recharger" cliquable et silencieusement sans effet. **Root cause `[VÉRIFIÉ]`** (reproduit
+> avec les données réelles des 3 personnages, cf. ci-dessous) : deux implémentations indépendantes de
+> "quelle est l'arme en main" (`server/src/routes/battlemaps.js` route `combat-equipment`,
+> `client/src/components/CombatActionWindow.jsx` fetch `assaultWeapons`) — aucune des deux ne gérait le
+> slot deux-mains `2M`, et la route serveur ne filtrait en plus **aucune catégorie** (n'importe quel
+> objet occupant `MG`/`MD` était pris pour "l'arme", donc le Bouclier de Mr sourire avant son Scorpion).
+> **Exigence Saar avant de corriger** : aucun bricolage, architecture robuste/pérenne/adaptative.
+> **Corrigé** : nouveau module `shared/weaponSlots.js` (`isWeaponItem` — discriminant `fire_mode` OU
+> `damage_h`, volontairement indépendant de `ref_equipment.category`, liste ouverte d'une trentaine de
+> catégories d'armes ; `resolveHandWeapons` — priorité RAW deux-mains > trépied > main directrice ;
+> `flattenItemsBySlot` — normalise la forme `slots: []` de l'API client vers une ligne par slot,
+> miroir du format déjà renvoyé par la jointure `char_inventory_slots` côté serveur), **autorité
+> unique réutilisée aux deux endroits** (`core.md` — pas de logique dupliquée client/serveur) :
+> `battlemaps.js` (ajout `ref_equipment.damage_h` au SELECT, `weaponMg`/`weaponMd`/`weapon` dérivés via
+> `resolveHandWeapons`, constante locale `WEAPON_SLOTS_SET` dupliquée retirée au profit de
+> `HAND_WEAPON_SLOTS` importé) ; `CombatActionWindow.jsx` (3 sites : fetch `assaultWeapons`, effet reset
+> `fire_mode`, dérives `weaponMg`/`weaponMd`/`selectedWeapon`/`equippedMg`/`equippedMd` — `equipped2M`
+> ajouté à l'affichage ARMEMENT/COM20). **Gap connexe corrigé dans le même geste** (même cause racine,
+> même correctif) : `CombatGmDeclareWindow.jsx` — bouton "Recharger" n'était gardé par aucune condition
+> (contrairement à "Tirer", déjà grisé sans arme à distance) ; ajout `noReloadWeapon = a.k==='reload' &&
+> !rangedActive`, même garde que côté Joueur (`isAmmoFull || !selectedWeapon`), cohérence entre les deux
+> fenêtres. **Testé** : 8 tests unitaires purs (`shared/weaponSlots.test.mjs`, `node --test`) — dont les
+> 3 scénarios réels exacts (Breather 2M, Bouclier+Scorpion, Matraque Mao) reproduits avec des données
+> synthétiques ; **rejoué avec les données réelles des 4 personnages du combat de Saar** (Loulou, Mr
+> sourire, Bourrin, Civil) via le nouveau module — `primaryWeapon`/`isRanged` corrects pour les 4,
+> Civil (déjà correct avant, double Scorpion MG+MD) non régressé ; build Vite propre (0 erreur/warning)
+> après chaque édition client ; `node --check` propre sur `battlemaps.js`. **Non testé** : parcours
+> navigateur réel (Saar doit rejouer Loulou/Mr sourire/Bourrin dans le combat en cours pour confirmer
+> visuellement). **Données** : aucune migration, correctif de lecture uniquement. **Retour arrière** :
+> aucun schéma touché, revert du commit suffit si besoin.
 >
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token

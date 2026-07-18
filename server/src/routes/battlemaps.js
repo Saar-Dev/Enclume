@@ -7,6 +7,7 @@ import { requireRole } from '../middleware/role.js'
 import { multerUpload, uploadToMinio } from '../middleware/upload.js'
 import { calcAttributeNA } from '../lib/charStats.js'
 import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
+import { resolveHandWeapons, HAND_WEAPON_SLOTS } from '../../../shared/weaponSlots.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
 import { getAdvantages } from '../services/advantageService.js'
 import {
@@ -175,7 +176,6 @@ router.get('/:id/combat-ini', requireAuth, async (req, res) => {
 })
 
 // GET /api/battlemaps/:id/combat-equipment — équipement arme+armure par token (CombatRosterWindow)
-const WEAPON_SLOTS_SET = new Set(['MG', 'MD', '2M', 'Tr'])
 const NON_ARMOR_SLOTS  = new Set(['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
 
 router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
@@ -201,9 +201,12 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .join('char_inventory', 'char_inventory.id', 'cis.char_inventory_id')
         .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where('char_inventory.character_id', token.character_id)
-        .whereIn('cis.slot_code', ['MG', 'MD', '2M', 'Tr'])
+        .whereIn('cis.slot_code', HAND_WEAPON_SLOTS)
         .select(
           'char_inventory.id as inv_id', 'ref_equipment.name', 'cis.slot_code as slot', 'ref_equipment.fire_mode as ref_fire_mode',
+          // shared/weaponSlots.js resolveHandWeapons() a besoin de damage_h pour distinguer une arme
+          // de contact (Matraque Mao) d'un objet non-arme occupant la main (Bouclier) — Session 158.
+          'ref_equipment.damage_h as ref_damage_h',
           'char_inventory.ammo_remaining', 'ref_equipment.ammo_count as ref_ammo_count', 'ref_equipment.caliber as ref_caliber',
           // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — même sous-requête que
           // inventoryService.getInventory (fenêtre PJ), fenêtre MJ batchée par token (pas de N+1).
@@ -245,12 +248,14 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .select('cm.id', 'rm.name', 'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple'),
     ])
 
-    const weaponMg = weaponRows.find(w => w.slot === 'MG') ?? null
-    const weaponMd = weaponRows.find(w => w.slot === 'MD') ?? null
+    // shared/weaponSlots.js — autorité unique, partagée avec le fetch client PJ
+    // (CombatActionWindow.jsx) : filtre les objets non-armes (Bouclier) occupant une main et gère le
+    // deux-mains (2M), les deux gaps trouvés Session 158 (Loulou/Breather, Mr sourire/Bouclier).
+    const { weaponMg, weaponMd, primaryWeapon } = resolveHandWeapons(weaponRows)
 
     equipment[token.id] = {
       characterId:    token.character_id,
-      weapon:         weaponMg ?? weaponMd ?? weaponRows[0] ?? null,
+      weapon:         primaryWeapon,
       weaponMg,
       weaponMd,
       armorPieces:    armorRows,

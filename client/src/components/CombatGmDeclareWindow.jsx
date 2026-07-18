@@ -556,9 +556,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
                     const noRangedWeapon = a.k === 'attack' && !rangedActive
+                    // Rien à recharger sans arme à munitions — même garde que le panneau Joueur
+                    // (CombatActionWindow.jsx, `isAmmoFull || !selectedWeapon`) : sans elle, "Recharger"
+                    // reste cliquable pour un personnage CaC pur et ne fait rien, sans retour (Session 158,
+                    // Bourrin/Matraque Mao).
+                    const noReloadWeapon = a.k === 'reload' && !rangedActive
                     const weaponNotDrawn = a.k === 'attack' && rangedActive && decl.weapon !== 'drawn'
                     const stunDisabled   = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
-                    const disabled = noRangedWeapon || stunDisabled
+                    const disabled = noRangedWeapon || noReloadWeapon || stunDisabled
                     const grayed   = weaponNotDrawn || disabled
                     const active   = !disabled && (
                       a.k === 'attack' ? isAttackActive :
