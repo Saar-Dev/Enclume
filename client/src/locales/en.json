@@ -214,12 +214,6 @@
 "importCustomObject": "+ Import custom GLB",
 "refreshObjects": "Refresh",
 "refreshObjectsHint": "Rescan the 3D model folders",
-"placementOrientation": "Orientation before placement",
-"rotatePreviewLeft": "Rotate the preview to the left",
-"rotatePreviewRight": "Rotate the preview to the right",
-"rotateLeft": "Left",
-"rotateRight": "Right",
-"previewRotationHint": "The preview rotates immediately and keeps this orientation when placed.",
 
 "macroSuccess": "Success",
 "macroFail": "Failure",

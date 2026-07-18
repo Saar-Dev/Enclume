@@ -1,3 +1,12 @@
+## v193 — 2026-07-18 — Rotation des fantômes à la molette
+
+### Éditeur de monde
+- [change] Tant qu'un objet orientable est prévisualisé sur la carte, la molette le tourne par
+  quarts de tour sans déplacer la caméra. Cela couvre les objets 3D libres, les escaliers, les
+  échelles et les dalles en verre.
+- [fix] Le tooltip mobile de rotation a été retiré : il suivait le pointeur et ses boutons ne
+  pouvaient donc pas être atteints.
+
 ## v192 — 2026-07-18 — Rotation avant pose visible au bon endroit
 
 ### Éditeur de monde

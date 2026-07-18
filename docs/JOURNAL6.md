@@ -4502,3 +4502,42 @@ rotation.
 
 **Retour arrière** : revert du commit Session 155. Aucun changement de schéma SQL, migration ou
 conversion de `surface_data` ; le retour arrière retire uniquement le tooltip attaché au fantôme.
+
+---
+
+## Session 156 (Codex) — 2026-07-18 — Rotation des prévisualisations à la molette ✅ CLOS
+
+**Cause racine** : le tooltip de Session 155 utilisait le fantôme comme ancre alors que ce fantôme
+suivait le pointeur. Déplacer la souris vers un bouton déplaçait donc aussi le bouton ; cette cible
+interactive ne pouvait pas être atteinte de manière fiable.
+
+**UX** : le tooltip de prévisualisation est supprimé. Tant qu'un fantôme orientable est présent sur
+le canvas, faire rouler la molette vers le bas tourne à droite et vers le haut tourne à gauche. Le
+geste agit sur les objets 3D libres, escaliers, échelles et dalles en verre. La molette est capturée
+avant `MapControls` durant ce seul état, de sorte que la caméra ne zoome pas en même temps. Les
+objets muraux restent alignés par leur face d'ancrage et ne reçoivent pas de rotation libre.
+
+**Architecture** : `usePlacementWheelRotation` constitue l'unique adaptation du geste de molette.
+Il transforme un cran de souris en un quart de tour, accumule les petits deltas de pavé tactile et
+filtre le momentum rapproché. Les deux éditeurs l'emploient ensuite pour modifier leurs autorités
+existantes : `r` pour une entité libre, `stairQuarterTurns`, `connectorRotationQuarterTurns` ou
+`ladderAxis` pour les objets structurels. La prévisualisation et la pose continuent donc de lire le
+même état ; aucun angle de rendu parallèle n'est introduit.
+
+**Testé** : JSON des deux locales, ESLint ciblé sur `Editor3D.jsx`, `SurfaceEditorScene.jsx` et le
+nouveau hook, build Vite de production, service client actif et HTTP 8293 à 200. Recette visuelle
+réelle dans Chromium sur la session utilisateur `b27cbed4-fd59-4530-b43b-dae57c33f092` : molette
+bas puis haut sur l'escalier, changement d'axe de l'échelle, rotation de la dalle en verre 2×1 et
+rotation d'une caisse longue libre. Les captures avant/après montrent la géométrie tournée sans
+changement de caméra. Le tooltip reste absent et le bouton **Annuler** reste désactivé : aucun objet
+n'a été posé. Retour en mode jeu effectué après la recette.
+
+**Non testé** : pavé tactile physique et écran tactile. L'accumulation des petits deltas est codée,
+mais la recette utilise une vraie séquence d'événements de molette du navigateur.
+
+**Données** : aucune carte, salle, structure, entité ni session utilisateur sauvegardée n'a été
+modifiée. Aucun clic de pose n'a été effectué pendant la recette.
+
+**Retour arrière** : revert du commit Session 156. Aucun schéma SQL, migration ni conversion de
+`surface_data` ; le retour arrière restaure seulement le tooltip de Session 155 et l'ancien geste
+de zoom pendant une prévisualisation.

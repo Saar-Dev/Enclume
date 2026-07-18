@@ -1,8 +1,8 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-18 — commandes de rotation attachées à la prévisualisation** : dès que le fantôme d'un
-> escalier, d'une échelle ou d'une dalle en verre est sur la carte, un tooltip borné à l'écran
-> affiche **Gauche / Droite** et l'angle courant. Les commandes modifient la définition canonique
-> consommée à la pose ; aucun panneau séparé ne reste caché dans la bibliothèque.
+> **2026-07-18 — rotation à la molette livrée sur 8293** : tout fantôme orientable se tourne par
+> quarts de tour avec la molette sans zoomer la caméra. Cela couvre les objets 3D libres, escaliers,
+> échelles et dalles en verre. Le tooltip mobile de rotation a été supprimé. Les objets muraux
+> conservent l'orientation imposée par leur face d'ancrage.
 >
 > **2026-07-18 — orientation avant pose et vision verticale livrées sur 8293** : la palette tourne
 > désormais l'aperçu des escaliers, échelles et dalles en verre avant le clic ; la même orientation

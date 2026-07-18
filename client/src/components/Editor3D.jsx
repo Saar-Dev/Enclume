@@ -15,6 +15,7 @@ import SurfaceWallPanel from './SurfaceWallPanel.jsx'
 import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
+import { usePlacementWheelRotation } from '../hooks/usePlacementWheelRotation.js'
 import {
   applyRoomBoundaryArc,
   applyRoomWallAppearance,
@@ -252,6 +253,7 @@ function EntityEditorScene({
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const [ghostPos, setGhostPos] = useState(null)
   const [ghostR, setGhostR] = useState(0)
+  const ghostRRef = useRef(0)
   const [moveGhost, setMoveGhost] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
   const handleSurfaceConnectorPointer = useCallback((connectorId, connector, event) => {
@@ -514,6 +516,29 @@ function EntityEditorScene({
     }
   }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, gl, surfaceData])
 
+  const rotateGhostPreview = useCallback(direction => {
+    if (!activeBlueprint?.id || blueprintPlacementMode(activeBlueprint) === 'wall') return
+    const nextRotation = (ghostRRef.current + direction + 4) % 4
+    ghostRRef.current = nextRotation
+    setGhostR(nextRotation)
+    setGhostPos(calcPreciseEntityPos(
+      mousePosRef.current.x,
+      mousePosRef.current.y,
+      activeBlueprint,
+      nextRotation,
+    ))
+  }, [activeBlueprint, calcPreciseEntityPos])
+
+  usePlacementWheelRotation({
+    element: gl.domElement,
+    enabled: Boolean(
+      ghostPos
+      && activeBlueprint?.id
+      && blueprintPlacementMode(activeBlueprint) !== 'wall',
+    ),
+    onRotate: rotateGhostPreview,
+  })
+
   const getEntityUnderCursor = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
@@ -681,12 +706,12 @@ function EntityEditorScene({
           .catch(err => console.error('[EntityEditor] Erreur rotation :', err))
       } else {
         if (blueprintPlacementMode(activeBlueprint) === 'wall') return
-        setGhostR(prev => (prev + 1) % 4)
+        rotateGhostPreview(1)
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, socket, updateEntity])
+  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, rotateGhostPreview, socket, updateEntity])
 
   // ─── Suppression entité — touche Delete/Backspace ───────────────────────
   // Entité sous le curseur → DELETE REST → removeEntity + WS.

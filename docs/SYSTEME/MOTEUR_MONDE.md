@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-18 — orientation avant pose et vision verticale par ouvertures réelles.
+> Dernière mise à jour : 2026-07-18 — rotation des prévisualisations à la molette.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -387,10 +387,10 @@ zéro entre un support et le premier ou dernier ancrage restent dans le graphe, 
 plan de mouvement rendu au client.
 
 Dans l'éditeur, l'entrée se trouve sous **Objets 3D > Escaliers**. Un clic choisit l'objet, le survol
-prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. La palette
-permet de tourner ce même aperçu par quarts de tour avant le clic : l'orientation affichée est donc
-exactement celle transmise à la définition canonique lors de la pose. Le popup permet ensuite une
-rotation par quart de tour, l'activation de chaque garde-corps, le multiplicateur de
+prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. La molette
+tourne ce même aperçu par quarts de tour avant le clic sans zoomer la caméra : l'orientation affichée
+est donc exactement celle transmise à la définition canonique lors de la pose. Le popup permet
+ensuite une rotation par quart de tour, l'activation de chaque garde-corps, le multiplicateur de
 déplacement et l'apparence procédurale. Une texture ou un futur modèle décoratif ne remplace jamais
 la géométrie physique dérivée.
 
@@ -515,8 +515,10 @@ La transformation uniforme appartient à `entity.state.transform.scale`. La rout
 normalise avec `shared/world/entityTransform.js`, puis le socket rediffuse l'état complet. Le rendu,
 `worldMovementService` et `worldVisibilityService` appliquent le même facteur aux dimensions du
 blueprint. Agrandir ou réduire un objet modifie donc ensemble son apparence, son occupation et son
-volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité ; les boutons
-de l'éditeur ne sont qu'une commande par pas de 90°.
+volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité. La molette
+modifie cette valeur par pas de 90° pendant la prévisualisation d'une pose libre ; les boutons du
+popup modifient la même valeur après la pose. Un objet mural conserve l'orientation dérivée de sa
+face d'ancrage.
 
 Les animations GLB sont une capacité visuelle dérivée. `builtinModelCatalog` lit les noms de clips
 dans le chunk JSON du GLB et inscrit `geometry.animationClips`; un modèle ouvrable reçoit les états

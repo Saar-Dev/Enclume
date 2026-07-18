@@ -1,12 +1,17 @@
 # ASBUILT — Ce qui est codé et stable
 
-## Commandes de rotation attachées à la prévisualisation (2026-07-18)
+## Rotation des prévisualisations à la molette (2026-07-18)
 
-Dans **Objets 3D**, sélectionner un escalier, une échelle ou une dalle en verre puis survoler la
-carte fait apparaître un tooltip directement à côté du fantôme. Il expose **Gauche / Droite** et
-l'angle courant, et sa projection est bornée aux quatre bords du canvas. Les commandes agissent sur
-la même orientation canonique que le fantôme et la pose ; elles ne dépendent plus de la position de
-l'objet dans la bibliothèque.
+Dans **Objets 3D**, la molette tourne par quarts de tour tout fantôme dont l'orientation est libre :
+objets 3D génériques posés au sol, escaliers, échelles et dalles en verre. Pendant ce geste, la
+molette est capturée avant les contrôles de caméra ; elle ne zoome donc pas la scène. Les crans de
+souris tournent une fois et les petits deltas d'un pavé tactile sont accumulés. Le tooltip mobile de
+rotation n'existe plus. Les objets muraux ne sont pas concernés, puisque leur orientation provient
+de la face canonique du mur.
+
+La molette modifie directement l'état canonique déjà consommé par la prévisualisation et la pose :
+rotation `r` des entités libres, `stairQuarterTurns`, `connectorRotationQuarterTurns` ou
+`ladderAxis`. Aucun angle propre au renderer n'est entretenu en parallèle.
 
 ## Placement structurel orientable et vision verticale naturelle (2026-07-18)
 
