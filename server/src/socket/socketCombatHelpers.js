@@ -98,9 +98,10 @@ export async function startAnnouncementTimers(io, campaignId, timerSec, gmUserId
 // Race condition guard : re-vérifie has_announced avant d'agir.
 export async function skipPlayer(io, campaignId, tokenId, pendingMaps) {
   try {
-    const entry = await db('combat_roster')
-      .where({ campaign_id: campaignId, token_id: tokenId })
-      .first()
+    const [entry, combatSt] = await Promise.all([
+      db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).first(),
+      db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first(),
+    ])
     if (!entry || entry.has_announced) return
 
     await db('combat_roster')
@@ -115,6 +116,7 @@ export async function skipPlayer(io, campaignId, tokenId, pendingMaps) {
       action_key: 'skip',
       sequence: 99,
       status: 'skipped',
+      turn_number: combatSt?.current_turn ?? 1,
     })
 
     // Bug 2 fix : tokenLabel dans le payload — évite stale closure client
@@ -150,9 +152,11 @@ export async function skipPlayer(io, campaignId, tokenId, pendingMaps) {
 // Sprint 3/4 : résolution pas-à-pas par initiative_score DESC.
 export async function startResolutionPhase(io, campaignId, pendingMaps) {
   try {
-    await db('combat_state')
+    const [updatedState] = await db('combat_state')
       .where({ campaign_id: campaignId })
       .update({ phase: 'RESOLUTION', active_slot_idx: 0, updated_at: db.fn.now() })
+      .returning('current_turn')
+    const currentTurn = updatedState?.current_turn ?? 1
     await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
 
     const [announcedRoster, pendingActions, fullRoster] = await Promise.all([
@@ -160,12 +164,14 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
         .where({ campaign_id: campaignId, status: 'active', has_announced: true })
         .orderBy('initiative', 'desc'),
       db('combat_actions')
-        .where({ campaign_id: campaignId, status: 'pending' })
+        .where({ campaign_id: campaignId, status: 'pending', turn_number: currentTurn })
         .orderBy('sequence', 'asc'),
       db('combat_roster')
         .where({ campaign_id: campaignId })
         .orderBy('initiative', 'desc'),
     ])
+
+    await buildTimelineEntries(campaignId, currentTurn, pendingActions, announcedRoster)
 
     const broadcastRoster = fullRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
@@ -186,6 +192,59 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
   } catch (err) {
     console.error('[WS] startResolutionPhase error:', err.message)
   }
+}
+
+// ─── Construction de l'échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot A, §5) ─────────────────
+// Une entrée par action complexe déclarée (CaC/Tir uniquement — décor/grenade pas encore des types
+// réels) ; move/reload/micro/skip n'en génèrent pas (taxonomie RAW, §6 point 6 du plan). Espacement
+// ×100 par rapport à l'Initiative brute (§6ter point 2, laisse la place aux insertions futures du Lot
+// B). Décalage RAW -5 Initiative par attaque supplémentaire d'une série CaC (§0.1 point 6, jamais
+// câblé avant ce Lot) : 2ᵉ attaque -500, 3ᵉ -1000 dans cette échelle ×100 — position ≤ 0 → 'lost'
+// immédiat (§6bis point 7 / §6sexies point 1). Le moteur de résolution actuel (advanceSlot/
+// active_slot_idx) ne consomme pas encore cette table — bascule réelle au Lot B, cette fonction ne
+// fait qu'alimenter les données.
+async function buildTimelineEntries(campaignId, turnNumber, pendingActions, roster) {
+  const initiativeByToken = new Map(roster.map(r => [r.token_id, r.initiative]))
+  const rows = []
+
+  const meleeByToken = new Map()
+  for (const action of pendingActions) {
+    if (action.type !== 'melee') continue
+    if (!meleeByToken.has(action.token_id)) meleeByToken.set(action.token_id, [])
+    meleeByToken.get(action.token_id).push(action)
+  }
+  for (const [tokenId, actions] of meleeByToken) {
+    const basePosition = (initiativeByToken.get(tokenId) ?? 0) * 100
+    const groupId = crypto.randomUUID()
+    actions.forEach((action, idx) => {
+      const position = basePosition - idx * 500
+      rows.push({
+        campaign_id: campaignId,
+        turn_number: turnNumber,
+        token_id: tokenId,
+        combat_action_id: action.id,
+        declaration_group_id: groupId,
+        phase_position: position,
+        status: position <= 0 ? 'lost' : 'scheduled',
+      })
+    })
+  }
+
+  for (const action of pendingActions) {
+    if (action.type !== 'assault') continue
+    const position = (initiativeByToken.get(action.token_id) ?? 0) * 100
+    rows.push({
+      campaign_id: campaignId,
+      turn_number: turnNumber,
+      token_id: action.token_id,
+      combat_action_id: action.id,
+      declaration_group_id: null,
+      phase_position: position,
+      status: position <= 0 ? 'lost' : 'scheduled',
+    })
+  }
+
+  if (rows.length > 0) await db('combat_timeline_entries').insert(rows)
 }
 
 // ─── Helper — avancer au slot suivant pendant la phase RÉSOLUTION ─────────────
@@ -209,9 +268,12 @@ export async function advanceSlot(io, campaignId, slots, nextIdx, pendingMaps) {
   }
 }
 
-// ─── Helper — fin de tour : reset roster + actions, retour ANNOUNCEMENT ──────
+// ─── Helper — fin de tour : reset roster, clôture actions, retour ANNOUNCEMENT ──────
 // PC18 : 1 seul UPDATE bulk sur combat_roster.
-// PC28 : DELETE combat_actions — queue nettoyée entre chaque tour.
+// docs/PLAN_COMBAT_TIMELINE.md §6bis point 5 — combat_actions n'est plus vidée à chaque Tour (le
+// DELETE inconditionnel PC28 est retiré) : l'historique reste en base jusqu'à COMBAT_START d'un
+// nouveau combat, la file "en cours" se filtre par turn_number. Toute ligne encore 'pending' à la
+// clôture du Tour est marquée 'skipped' explicitement (le joueur n'a pas confirmé son action à temps).
 export async function endTurn(io, campaignId, pendingMaps) {
   try {
     // PC18 — reset announced/resolved + états per-tour (position/cover/vitesse)
@@ -227,8 +289,11 @@ export async function endTurn(io, campaignId, pendingMaps) {
         updated_at:        db.fn.now(),
       })
 
-    // PC28 — vider la queue des actions
-    await db('combat_actions').where({ campaign_id: campaignId }).delete()
+    // Clôture explicite — seul le Tour en cours peut encore avoir des lignes 'pending' (invariant :
+    // les Tours précédents sont déjà intégralement résolus/skippés avant qu'endTurn() soit rappelé).
+    await db('combat_actions')
+      .where({ campaign_id: campaignId, status: 'pending' })
+      .update({ status: 'skipped', updated_at: db.fn.now() })
 
     // Incrémenter le tour, retour à ANNOUNCEMENT
     const [updatedState] = await db('combat_state')

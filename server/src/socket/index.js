@@ -82,7 +82,10 @@ const initSocket = (io) => {
           if (activeCombat) {
             const [roster, actions] = await Promise.all([
               db('combat_roster').where({ campaign_id: campaignId }),
-              db('combat_actions').where({ campaign_id: campaignId }),
+              // Bornée au Tour en cours (docs/PLAN_COMBAT_TIMELINE.md §6bis point 5) — combat_actions
+              // n'est plus vidée à chaque Tour, l'historique des Tours précédents ne doit pas fuiter
+              // dans la sync de reconnexion.
+              db('combat_actions').where({ campaign_id: campaignId, turn_number: activeCombat.current_turn }),
             ])
             socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })
             // Sync preview Ã©phÃ©mÃ¨re si un joueur est en train de dÃ©clarer

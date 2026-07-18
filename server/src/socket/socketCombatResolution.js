@@ -85,7 +85,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             .orderBy('initiative', 'desc')
             .select('token_id', 'initiative')
           await db('combat_actions')
-            .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
+            .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: state.current_turn })
             .update({ status: 'resolved' })
           socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: stunnedStatus?.status_code ?? 'stunned' })
           await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1, pendingMaps)
@@ -95,7 +95,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // 3. Range check CaC — colonne 'type' (cohérent L.907 serveur)
       if (actionKey === 'melee') {
         const action = await db('combat_actions')
-          .where({ campaign_id: campaignId, token_id: tokenId, type: 'melee', status: 'pending' })
+          .where({ campaign_id: campaignId, token_id: tokenId, type: 'melee', status: 'pending', turn_number: state.current_turn })
           .first()
         if (action?.target_token_id) {
           // allonge XOR : weapon_inv_id (humanoïde) ou drone_weapon_inv_id (drone) — contrainte migration 76
@@ -196,7 +196,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         if (stunnedStatus || pendingStun) {
           console.log(`[STUN2] CONFIRM token ${tokenId} assommé — slot auto-skipé`)
           await db('combat_actions')
-            .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
+            .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: state.current_turn })
             .update({ status: 'resolved' })
           socket.emit(WS.COMBAT_DECLARE_ERROR, { stunned: true, statusCode: stunnedStatus?.status_code ?? 'stunned' })
           await advanceSlot(io, campaignId, slots, state.active_slot_idx + 1, pendingMaps)
@@ -204,9 +204,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         }
       }
 
-      // Lire les actions pendantes pour ce token, dans l'ordre d'exécution
+      // Lire les actions pendantes pour ce token, dans l'ordre d'exécution — bornées au Tour en cours
+      // (docs/PLAN_COMBAT_TIMELINE.md §6bis point 5 : combat_actions n'est plus vidée à chaque Tour)
       const actions = await db('combat_actions')
-        .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending' })
+        .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: state.current_turn })
         .orderBy('sequence', 'asc')
 
       // Séparer melee (traitement séquentiel multi-attaque) du reste

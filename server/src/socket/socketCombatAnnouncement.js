@@ -428,7 +428,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
 
       const updatedInitiative = updated.initiative
 
-      if (actionRows.length > 0) await db('combat_actions').insert(actionRows)
+      // turn_number (docs/PLAN_COMBAT_TIMELINE.md §6bis point 5) — porté par chaque ligne pour que la
+      // file "en cours" se filtre sur le Tour plutôt que sur le contenu total de la table, maintenant
+      // que endTurn() ne vide plus combat_actions.
+      if (actionRows.length > 0) {
+        await db('combat_actions').insert(actionRows.map(row => ({ ...row, turn_number: announceState.current_turn })))
+      }
 
       // Dériver actionType pour le broadcast
       let actionType = 'micro'

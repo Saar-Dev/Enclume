@@ -298,7 +298,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
   // Payload : { tokenId }
   socket.on(WS.COMBAT_SURPRISE_RESULT, async ({ tokenId }) => {
     try {
-      const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+      const { phase: _gPhase, sub_phase: _gSubPhase, current_turn: _gCurrentTurn } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
       if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_SURPRISE_RESULT')) {
         console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_SURPRISE_RESULT`)
         return
@@ -358,6 +358,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           action_key: 'skip',
           sequence: 99,
           status: 'skipped',
+          turn_number: _gCurrentTurn ?? 1,
         })
         // PC13 — tous annoncés → phase Résolution
         const [{ count }] = await db('combat_roster')
