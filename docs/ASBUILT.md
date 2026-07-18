@@ -1,5 +1,117 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Trémie de colimaçon avec palier haut praticable (2026-07-18)
+
+La trémie d'un colimaçon n'est plus son carré englobant. `spiralStairGeometry(...)` utilise la
+hauteur de dalle, la garde au plafond et la progression verticale pour dériver le secteur de volée
+qui doit rester ouvert. Le secteur immédiatement après la dernière marche demeure une dalle : il
+forme le palier haut. Cette forme tourne avec `rotationQuarterTurns` et s'inverse avec `clockwise` ;
+aucun palier n'est codé pour une orientation particulière.
+
+`stairOpeningMultiPolygon(...)` expose cette découpe canonique au renderer et au compilateur.
+`worldCompiler` soustrait le même multipolygone aux sols et plafonds et publie les fragments sous
+la primitive `horizontal-multipolygon`. `spatialIndex` et `visibility` effectuent le narrow phase
+sur ses contours et ses trous. La dalle conservée est donc à la fois visible, praticable,
+collidable et occultante ; la partie ouverte reste réellement ouverte pour la vue verticale.
+
+Validation : 138 tests monde/serveur et 39 tests Surface, dont les quatre orientations dans les
+deux sens, présence physique du palier et absence de plancher au-dessus de la volée haute. Build
+Vite et ESLint ciblé réussis. La recette réelle sur `8293` a contrôlé les quatre rotations, le sens
+inverse et la persistance après rechargement, puis restauré l'escalier utilisateur à l'identique.
+
+---
+
+## Escalier en colimaçon canonique et ancrage visuel des tokens (2026-07-18)
+
+La bibliothèque **Objets 3D > Escaliers** contient désormais un colimaçon structurel paramétrique.
+Le clic de pose choisit son centre ; la molette oriente l'entrée avant le clic. Le popup d'un
+colimaçon posé conserve les rotations par quarts de tour et ajoute le choix du sens de montée
+horaire/antihoraire, le garde-corps extérieur, le multiplicateur de déplacement et l'apparence.
+
+`stairGeometry(...)` distribue la définition vers `straightStairGeometry(...)` ou
+`spiralStairGeometry(...)`. Pour le colimaçon standard, la même sortie canonique contient le disque
+de 3,75 m de diamètre, 21 marches en prismes de secteurs courbes, la colonne centrale, le
+garde-corps, la trémie sectorielle, les volumes physiques et les 22 ancrages de parcours. Le renderer,
+l'éditeur, le compilateur, la collision et la visibilité consomment ces primitives. Les marches
+emploient un narrow phase `horizontal-prism` et la colonne un `vertical-cylinder` : leur boîte
+englobante ne devient pas une fausse obstruction rectangulaire pour la ligne de vue.
+
+La position persistée d'un token reste son point de contact monde. Le renderer ne lui ajoute plus
+une constante de hauteur supposant que tous les GLB partagent le même pivot. Après clonage, la
+boîte englobante propre au modèle fournit `-minY`, appliqué uniquement au mesh : le point le plus
+bas du socle rejoint exactement le support sans modifier déplacement, collision ou sauvegarde.
+
+Validation : 136 tests monde/serveur, 38 tests Surface, build Vite de production et recette réelle
+sur `8293`. La recette a montré le fantôme, la rotation à la molette, la pose, le retournement du
+sens de montée, la rotation après pose et la persistance après rechargement. L'objet de test a été
+supprimé et la carte utilisateur contrôlée visuellement sans ce colimaçon temporaire.
+
+---
+
+## Rotation des prévisualisations à la molette (2026-07-18)
+
+Dans **Objets 3D**, la molette tourne par quarts de tour tout fantôme dont l'orientation est libre :
+objets 3D génériques posés au sol, escaliers, échelles et dalles en verre. Pendant ce geste, la
+molette est capturée avant les contrôles de caméra ; elle ne zoome donc pas la scène. Les crans de
+souris tournent une fois et les petits deltas d'un pavé tactile sont accumulés. Le tooltip mobile de
+rotation n'existe plus. Les objets muraux ne sont pas concernés, puisque leur orientation provient
+de la face canonique du mur.
+
+La molette modifie directement l'état canonique déjà consommé par la prévisualisation et la pose :
+rotation `r` des entités libres, `stairQuarterTurns`, `connectorRotationQuarterTurns` ou
+`ladderAxis`. Aucun angle propre au renderer n'est entretenu en parallèle.
+
+## Placement structurel orientable et vision verticale naturelle (2026-07-18)
+
+Les objets structurels orientables peuvent être réglés avant leur pose sans perdre le fantôme sous
+la souris. Pour l'escalier, les quarts de tour modifient directement la géométrie paramétrique
+prévisualisée ; la définition créée au clic reprend exactement ce même `stairQuarterTurns`. Les
+échelles et les dalles en verre utilisent le même geste. Les verrières disposent en plus d'une
+surimpression cyan non occultée qui rend leur emprise lisible sur une dalle existante.
+
+Le rendu vertical ne simule pas une ouverture en rendant les murs transparents. Les intérieurs des
+niveaux inférieurs restent dans la scène avec leurs matériaux normaux ; les dalles et murs
+canoniques les cachent par profondeur. La trémie dérivée d'un escalier ou la surface transparente
+d'une verrière sont donc de vraies fenêtres sur le niveau inférieur. Les murs bas restent opaques
+et hors de la coupe caméra du niveau courant.
+
+Le point d'ancrage d'un token demeure le contact canonique de ses pieds avec un support. La
+constante visuelle provisoire de cette livraison a été remplacée par l'ancrage propre à chaque GLB
+décrit dans la section ci-dessus.
+
+---
+
+## Escalier droit paramétrique canonique (2026-07-16)
+
+`surface_data` v13 livre le premier escalier construit comme un objet structurel complet. Il se
+choisit dans **Objets 3D > Escaliers**, se prévisualise sur le sol et crée automatiquement sa
+traversée entre le niveau courant et le niveau supérieur. L'ancien bouton de connecteur escalier
+n'est plus exposé.
+
+Une seule fonction partagée, `straightStairGeometry`, transforme la définition enregistrée en
+marches, garde-corps, emprise, trémie et ancrages. Le renderer et `worldCompiler` consomment cette
+même sortie : chaque marche est à la fois visible, praticable, collisionnable et occultante ; la
+dalle haute possède une vraie ouverture ; le graphe peut arrêter un token sur n'importe quelle
+marche sans déplacement gratuit à la reprise. La configuration standard représente 3,75 m de
+hauteur avec 21 marches de 17,9 cm et un giron de 30 cm.
+
+Le popup **Objet 3D — Escalier droit paramétrique** affiche les niveaux reliés, permet la rotation
+immédiate, chaque garde-corps, le coût de déplacement et l'apparence procédurale. La rotation met à
+jour simultanément le mesh, l'emprise et la trémie.
+
+L'échelle existante est elle aussi posée depuis **Objets 3D > Échelles**. Son vrai maillage de rails
+et barreaux remplace la boîte de prévisualisation, la pose crée son connecteur vertical puis ouvre
+le popup **Échelle structurelle**, et la rotation y est appliquée immédiatement. L'ancien bouton
+direct d'échelle n'est plus exposé.
+
+Validation : 133 tests monde/serveur, 3 tests de configuration, tests Surface/navigation ciblés,
+build Vite et Playwright Chromium réel sur `8293`. La recette a confirmé visuellement la
+prévisualisation, la pose, les 21 marches, la rotation `x → z` persistée et la trémie dans le sol de
+l'étage 1. Une seconde recette confirme l'aperçu réel, la pose, le popup `0 → 1` et la rotation
+persistée de l'échelle. Les campagnes et comptes temporaires ont été supprimés après contrôle.
+
+---
+
 ## Base commune monde + règles validée (2026-07-16)
 
 La branche `integration` réunit le moteur monde `72743e8` et la tête règles `1af7d78` par les

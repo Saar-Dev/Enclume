@@ -12,7 +12,7 @@ export function horizontalInterfaceRenderKind({
   const floorIsVisible = hasFloor && (
     showsEveryLevel
       || floorBelongsToCameraVolume
-      || (Number.isFinite(Number(floorDisplayLevel)) && Number(floorDisplayLevel) === Number(displayLevel))
+      || (Number.isFinite(Number(floorDisplayLevel)) && Number(floorDisplayLevel) <= Number(displayLevel))
   )
   if (floorIsVisible) return 'floor'
 

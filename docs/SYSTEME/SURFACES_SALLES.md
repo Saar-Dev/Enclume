@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-14 — édition contextuelle, profils continus et passerelles découpées.
+> Dernière mise à jour : 2026-07-18 — orientation avant pose et vision verticale par ouvertures réelles.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -9,15 +9,16 @@
 > Fusion avec le projet combat : `docs/FUSION_PROJET_COUSIN.md`.
 > Environnements et déploiement commun : `docs/WORKFLOW_FUSION.md`.
 
-## Statut au 2026-07-14
+## Statut au 2026-07-16
 
-L'éditeur Surface/Salle et son rendu existent. `surface_data` version 12 sait décrire des salles,
+L'éditeur Surface/Salle et son rendu existent. `surface_data` version 13 sait décrire des salles,
 sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de monde, ce document est
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
 le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
-portées, interactions et terrain instable. L'affichage de coupe conserve désormais tous les étages
-inférieurs opaques et ne rend transparent que ce qui ferme le niveau courant. Depuis la Phase 10,
+portées, interactions et terrain instable. L'affichage de coupe conserve désormais les étages
+inférieurs rendus et opaques derrière leurs vraies dalles ; une ouverture structurelle ou une
+verrière révèle la scène inférieure sans rendre ses murs transparents. Depuis la Phase 10,
 les murs courbes de salle sont des arcs structurés de leur contour,
 partagés par le rendu, les collisions et la LOS. Depuis la Phase 11, supprimer un mur ouvre la
 salle ou fusionne ses deux volumes, et une nouvelle salle est découpée par les contours courbes
@@ -29,6 +30,16 @@ mur vus en coupe et déplace les réglages de sélection dans des panneaux conte
 les anciennes faces d'apparence par `floorMaterial`, `ceilingMaterial` et `wallInteriorMaterial` et
 conserve les profils d'apparence intérieure liés aux arêtes logiques des murs. Elle ne migre pas les
 anciens champs `top/bottom`, `front/back` ou `exterior`.
+
+La v13 rend le schéma de `stairs` strict et ajoute le premier objet structurel paramétrique de la
+bibliothèque 3D. Un escalier droit est défini une fois ; ses marches, garde-corps, trémie,
+colliders, occluders, supports et ancrages de navigation sont tous dérivés de cette définition.
+L'éditeur ne propose plus d'outil « connecteur escalier » indépendant : **Objets 3D > Escaliers**
+crée l'objet et sa traversée verticale atomiquement.
+
+L'échelle structurelle existante suit la même UX sous **Objets 3D > Échelles** : aperçu de ses
+rails et barreaux, pose du connecteur entre les deux niveaux, sélection automatique, popup et
+rotation immédiate. Son ancien bouton direct est supprimé.
 
 Un arc conserve toujours les extrémités exactes enregistrées par le contour. Centre, rayon et angles
 servent à générer les points intermédiaires, jamais à reconstruire les ancrages. Le renderer reprend
@@ -77,7 +88,8 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - apparence de mur : `wallAppearanceProfiles[]` associe les mêmes arêtes logiques au matériau ou à
   la texture de la face intérieure. L'apparence survit donc à l'arrondi horizontal, au
   profil vertical, à la sauvegarde et à la fusion d'une salle ;
-- connecteurs : portes, escaliers, échelles, passerelles et ascenseurs entre salles/étages.
+- objets structurels verticaux : `stairs` pour les escaliers paramétriques ; `connectors` pour les
+  portes, fenêtres, échelles, verrières et ascenseurs ;
 - passerelle ajustée à une salle : un sol `kind: bridge` peut porter `clipRoomId`. Ce lien demande au
   renderer et au compilateur d'intersecter sa dalle avec l'emprise intérieure réelle de la salle à
   sa hauteur ; la courbe horizontale et le retrait d'un profil vertical ne sont pas aplatis en AABB.
@@ -317,9 +329,9 @@ L’outil Salle est l’outil de référence.
   recalculé depuis l'union des empreintes au lieu de conserver une frontière invisible.
 - Un mur déjà ouvert ne conserve aucune zone de sélection invisible.
 
-Les anciens outils Dalle, Mur et Escalier peuvent rester temporairement visibles comme aides de test,
-mais aucune compatibilité de carte ne justifie de dupliquer le nouveau modèle. La conception cible
-passe par des objets Salle et des connecteurs d'étages.
+L'ancien outil direct **Escalier** est supprimé. Il ne doit pas réapparaître comme raccourci ni
+dupliquer la pose depuis **Objets 3D**. Aucune compatibilité de carte ne justifie deux chemins de
+création concurrents pour une même structure.
 
 ## Connecteurs
 
@@ -429,29 +441,37 @@ traversée de navigation.
 
 ### Verrières de sol et de plafond
 
-Une verrière `skylight` se pose depuis une salle, mais doit remplacer une interface horizontale
+Une verrière `skylight` se pose depuis **Objets 3D > Dalles en verre**, mais doit remplacer une interface horizontale
 réelle : sol de la salle, plafond de la salle ou interface commune entre deux salles superposées.
 La validation refuse une verrière flottant au milieu du volume vide d'une salle multi-hauteur.
 L'empreinte canonique, en cases, sert simultanément à la découpe de dalle, au support praticable et
 à l'occlusion. Une verrière laisse passer la ligne de vue tout en bloquant la traversée verticale et
 les fluides. Les interfaces courbes ou déjà découpées restent refusées tant que la découpe
 polygonale des dalles ne peut pas être produite depuis la même géométrie canonique.
+Pendant la pose, un fantôme cyan toujours lisible montre l'emprise exacte et suit la rotation de la
+palette. La scène de l'étage inférieur est réellement rendue derrière le verre ; ses murs restent
+opaques et ne rejoignent pas la coupe caméra du niveau courant.
 
-## Connecteurs d’étages longs
+## Structures entre étages
 
-Les escaliers doivent évoluer vers de vrais connecteurs entre étages :
+L'escalier droit v13 relie un étage de départ à l'étage immédiatement supérieur. Son origine, son
+axe et son sens déterminent son emprise ; `topY`, `stepCount` et `treadDepth` déterminent sa montée.
+La trémie est soustraite de l'interface horizontale au niveau exact de `topY`. La palette tourne
+l'aperçu avant le placement et transmet cette orientation à la création. Une rotation ultérieure
+dans le popup modifie immédiatement l'objet, son emprise et cette ouverture ; la sauvegarde persiste
+la même définition, sans connecteur caché éditable séparément. L'étage inférieur reste rendu derrière
+la trémie et n'apparaît que dans l'ouverture, grâce aux dalles et murs opaques qui l'occultent ailleurs.
 
-- étage de départ ;
-- étage d’arrivée ;
-- emprise au sol ;
-- sens d’entrée/sortie ;
-- règles de collision et de navigation.
+Les variantes futures (quart tournant, demi-tour, colimaçon) doivent fournir le même contrat dérivé
+— marches, supports, garde-corps, trémie, colliders, occluders et ancrages — au lieu d'ajouter un
+second moteur de déplacement.
 
 Les ascenseurs suivent la même logique de connecteur vertical, avec un volume, plusieurs arrêts et
 un automate persistant, plutôt qu’un simple décor posé sur la carte.
 
-Les escaliers et échelles doivent exposer des ancrages intermédiaires. Un token dont le budget est
-épuisé termine son déplacement sur le connecteur, et non automatiquement à sa sortie.
+Les escaliers exposent déjà un ancrage par marche. Les échelles doivent conserver leurs ancrages
+intermédiaires lors de leur prochaine refonte en objet structurel. Un token dont le budget est
+épuisé termine son déplacement sur la structure, et non automatiquement à sa sortie.
 
 Une passerelle fixe est une surface praticable en hauteur. Une passerelle mobile ou destructible est
 une feature runtime possédant une capacité de support praticable ; son modèle 3D reste une apparence.

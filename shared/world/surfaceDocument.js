@@ -1,5 +1,5 @@
 // shared/world/surfaceDocument.js
-// Contrat surface_data v12 du moteur de monde canonique.
+// Contrat surface_data v13 du moteur de monde canonique.
 
 import { createWorldDocument } from './worldContracts.js'
 import {
@@ -7,7 +7,7 @@ import {
   selectedRoomBoundaryChain,
 } from './roomGeometry.js'
 
-export const SURFACE_DATA_VERSION = 12
+export const SURFACE_DATA_VERSION = 13
 export const SURFACE_FINE_DEFAULT = 4
 export const SURFACE_STORY_HEIGHT_DEFAULT = 2.5
 
@@ -202,7 +202,7 @@ function validateFeature(collection, id, item, errors) {
     validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ'], path, errors)
     for (const field of OBSOLETE_ROOM_APPEARANCE_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(item, field)) {
-        errors.push(`${path}.${field} n'existe plus dans surface_data v12`)
+        errors.push(`${path}.${field} n'existe plus dans surface_data v13`)
       }
     }
     for (const textureField of ['floorTex', 'ceilingTex', 'wallInteriorTex']) {
@@ -253,7 +253,7 @@ function validateFeature(collection, id, item, errors) {
           }
           if (Object.prototype.hasOwnProperty.call(entry, 'exteriorTex')
             || Object.prototype.hasOwnProperty.call(entry, 'exteriorMaterial')) {
-            errors.push(`${entryPath} ne peut décrire que la face intérieure en v12`)
+            errors.push(`${entryPath} ne peut décrire que la face intérieure en v13`)
           }
           validateWallElevationProfile(entry.profile, `${entryPath}.profile`, errors)
         })
@@ -368,8 +368,42 @@ function validateFeature(collection, id, item, errors) {
     if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
     validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1'], path, errors)
   } else if (collection === 'stairs') {
-    if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
-    validateFiniteFields(item, ['minX', 'maxX', 'minZ', 'maxZ', 'y', 'topY'], path, errors)
+    if (!['straight', 'spiral'].includes(item.kind)) errors.push(`${path}.kind doit valoir straight ou spiral`)
+    const dimensionalFields = item.kind === 'spiral'
+      ? ['x', 'z', 'y', 'topY', 'outerRadius', 'innerRadius', 'supportThickness', 'totalTurns', 'treadThickness']
+      : ['x', 'z', 'y', 'topY', 'width', 'treadDepth', 'supportThickness']
+    validateFiniteFields(item, dimensionalFields, path, errors)
+    if (Number(item.topY) <= Number(item.y)) errors.push(`${path}.topY doit être supérieur à y`)
+    if (item.kind === 'straight') {
+      if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+      if (![1, -1].includes(Number(item.dir))) errors.push(`${path}.dir doit valoir 1 ou -1`)
+    }
+    for (const field of dimensionalFields.filter(field => !['x', 'z', 'y', 'topY'].includes(field))) {
+      if (Number(item[field]) <= 0) errors.push(`${path}.${field} doit être strictement positif`)
+    }
+    if (item.kind === 'spiral' && Number(item.innerRadius) >= Number(item.outerRadius)) {
+      errors.push(`${path}.innerRadius doit être inférieur à outerRadius`)
+    }
+    if (!Number.isInteger(Number(item.stepCount)) || Number(item.stepCount) < 1) {
+      errors.push(`${path}.stepCount doit être un entier positif`)
+    }
+    if (item.railings != null) {
+      if (!isPlainObject(item.railings)) {
+        errors.push(`${path}.railings doit être un objet`)
+      } else {
+        for (const side of ['left', 'right']) {
+          if (item.railings[side] != null && typeof item.railings[side] !== 'boolean') {
+            errors.push(`${path}.railings.${side} doit être un booléen`)
+          }
+        }
+        for (const field of ['height', 'thickness']) {
+          if (item.railings[field] != null
+            && (!Number.isFinite(Number(item.railings[field])) || Number(item.railings[field]) <= 0)) {
+            errors.push(`${path}.railings.${field} doit être strictement positif`)
+          }
+        }
+      }
+    }
   } else if (collection === 'connectors') {
     if (typeof item.type !== 'string' || !item.type.trim()) errors.push(`${path}.type est obligatoire`)
     if (['door', 'window', 'screen-window'].includes(item.type)) {

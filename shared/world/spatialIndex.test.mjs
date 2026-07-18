@@ -113,6 +113,68 @@ test('un collider en arc tesselle la primitive canonique seulement pour le narro
   assert.equal(index.isSegmentClear({ x: 0.1, y: 0, z: 0.5 }, { x: 1.2, y: 0, z: 0.5 }, actor), false)
 })
 
+test('les marches courbes et la colonne utilisent leur volume réel pour la ligne de vue', () => {
+  const tread = {
+    type: 'horizontal-prism',
+    polygon: [
+      { x: 0.2, z: 0 }, { x: 1, z: 0 }, { x: 1, z: 0.25 }, { x: 0.2, z: 0.1 },
+    ],
+    minY: 1,
+    maxY: 1.08,
+  }
+  assert.ok(segmentGeometryInterval(
+    { x: 0.5, y: 0.5, z: 0.05 },
+    { x: 0.5, y: 1.5, z: 0.05 },
+    tread,
+  ))
+  assert.equal(segmentGeometryInterval(
+    { x: 0.05, y: 0.5, z: 0.2 },
+    { x: 0.05, y: 1.5, z: 0.2 },
+    tread,
+  ), null)
+
+  const column = {
+    type: 'vertical-cylinder',
+    center: { x: 0, z: 0 },
+    radius: 0.2,
+    minY: 0,
+    maxY: 3,
+  }
+  assert.ok(segmentGeometryInterval(
+    { x: -1, y: 1, z: 0 },
+    { x: 1, y: 1, z: 0 },
+    column,
+  ))
+  assert.equal(segmentGeometryInterval(
+    { x: -1, y: 1, z: 0.3 },
+    { x: 1, y: 1, z: 0.3 },
+    column,
+  ), null)
+})
+
+test('un plancher découpé suit son multipolygone au lieu de sa boîte englobante', () => {
+  const slab = {
+    type: 'horizontal-multipolygon',
+    multiPolygon: [[
+      [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]],
+      [[0.75, 0.75], [0.75, 1.25], [1.25, 1.25], [1.25, 0.75], [0.75, 0.75]],
+    ]],
+    minY: 1,
+    maxY: 1.1,
+  }
+
+  assert.ok(segmentGeometryInterval(
+    { x: 0.25, y: 0.5, z: 1 },
+    { x: 0.25, y: 1.5, z: 1 },
+    slab,
+  ))
+  assert.equal(segmentGeometryInterval(
+    { x: 1, y: 0.5, z: 1 },
+    { x: 1, y: 1.5, z: 1 },
+    slab,
+  ), null)
+})
+
 test('le narrow phase suit le profil vertical et l épaisseur variable d un mur', () => {
   const base = {
     type: 'wall-segment',

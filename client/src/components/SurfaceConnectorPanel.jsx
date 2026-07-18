@@ -7,6 +7,7 @@ import {
 } from '../lib/modelMaterialSlots.js'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import Object3DPreview from './Object3DPreview.jsx'
+import { stairGeometry } from '../../../shared/world/stairGeometry.js'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -44,7 +45,23 @@ function connectorTypeLabel(type) {
   if (type === 'skylight') return 'Dalle en verre'
   if (type === 'elevator') return 'Ascenseur'
   if (type === 'ladder') return 'Échelle'
+  if (type === 'stairs') return 'Escalier'
   return type
+}
+
+function stairQuarterTurns(stair) {
+  if (stair?.kind === 'spiral') return ((Number(stair?.rotationQuarterTurns) || 0) % 4 + 4) % 4
+  if (stair?.axis === 'z') return Number(stair?.dir) < 0 ? 3 : 1
+  return Number(stair?.dir) < 0 ? 2 : 0
+}
+
+function rotatedStairPatch(stair, delta) {
+  const quarterTurns = (stairQuarterTurns(stair) + delta + 4) % 4
+  if (stair?.kind === 'spiral') return { rotationQuarterTurns: quarterTurns }
+  return {
+    axis: quarterTurns % 2 === 0 ? 'x' : 'z',
+    dir: quarterTurns < 2 ? 1 : -1,
+  }
 }
 
 const ELEVATOR_PHASE_LABELS = {
@@ -152,6 +169,18 @@ export default function SurfaceConnectorPanel({
     ? connector.allowedStates
     : ['transparent', ...(connector.type === 'screen-window' ? ['opaque', 'mirror'] : [])]
   const currentWindowState = runtimeState?.state || connector.state || 'transparent'
+  const stairShape = connector.type === 'stairs'
+    ? stairGeometry(connector)
+    : null
+  const connectorTitle = connector.modelLabel
+    || (connector.type === 'stairs'
+      ? connector.kind === 'spiral' ? 'Escalier en colimaçon paramétrique' : 'Escalier droit paramétrique'
+      : connectorTypeLabel(connector.type))
+  const connectorLevelLabel = stairShape
+    ? `${Math.round(Number(connector.y || 0) / 2.5)} → ${Math.round(Number(connector.topY || 2.5) / 2.5)}`
+    : connector.fromLevel !== undefined && connector.toLevel !== undefined
+      ? `${connector.fromLevel} → ${connector.toLevel}`
+      : connector.level ?? 0
   const toggleAllowedState = state => {
     if (state === 'transparent') return
     const next = allowedWindowStates.includes(state)
@@ -176,8 +205,8 @@ export default function SurfaceConnectorPanel({
     >
       <div style={S.header} onPointerDown={beginDrag} data-testid="surface-connector-panel-handle">
         <div>
-          <p style={S.kicker}>Connecteur 3D</p>
-          <p style={S.title}>{connector.modelLabel || connector.type || 'Objet 3D'}</p>
+          <p style={S.kicker}>Objet 3D</p>
+          <p style={S.title}>{connectorTitle}</p>
         </div>
         <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
@@ -187,10 +216,88 @@ export default function SurfaceConnectorPanel({
           <span>Type</span>
           <strong>{connectorTypeLabel(connector.type)}</strong>
           <span>Étage</span>
-          <strong>{connector.fromLevel !== undefined && connector.toLevel !== undefined ? `${connector.fromLevel} → ${connector.toLevel}` : connector.level ?? 0}</strong>
+          <strong>{connectorLevelLabel}</strong>
           <span>Dimensions</span>
-          <strong>{connector.width ?? connector.modelGeometry?.width ?? 1} × {connector.depth ?? connector.modelGeometry?.depth ?? 1} × {connector.height ?? connector.modelGeometry?.height ?? 1} m</strong>
+          <strong>{stairShape
+            ? stairShape.type === 'spiral'
+              ? `Ø ${(stairShape.diameter * 1.5).toFixed(2)} × ${(stairShape.rise * 1.5).toFixed(2)} m`
+              : `${(stairShape.width * 1.5).toFixed(2)} × ${(stairShape.run * 1.5).toFixed(2)} × ${(stairShape.rise * 1.5).toFixed(2)} m`
+            : `${connector.width ?? connector.modelGeometry?.width ?? 1} × ${connector.depth ?? connector.modelGeometry?.depth ?? 1} × ${connector.height ?? connector.modelGeometry?.height ?? 1} m`}</strong>
         </div>
+
+        {canEdit && connector.type === 'stairs' && stairShape && (
+          <div style={S.field}>
+            <span style={S.label}>Orientation</span>
+            <div style={S.rotationActions}>
+              <button type="button" onClick={() => onPatch?.(connector.id, rotatedStairPatch(connector, -1))} style={S.button}>
+                ↶ Rotation gauche
+              </button>
+              <button type="button" onClick={() => onPatch?.(connector.id, rotatedStairPatch(connector, 1))} style={S.button}>
+                Rotation droite ↷
+              </button>
+            </div>
+            {connector.kind === 'spiral' && (
+              <label style={S.stateRow}>
+                <input
+                  type="checkbox"
+                  checked={connector.clockwise === true}
+                  onChange={event => onPatch?.(connector.id, { clockwise: event.target.checked })}
+                />
+                <span>Montée dans le sens horaire</span>
+              </label>
+            )}
+            <span style={S.hint}>
+              {stairShape.stepCount} marches de {(stairShape.riserHeight * 1.5 * 100).toFixed(1)} cm,
+              giron {(stairShape.treadDepth * 1.5 * 100).toFixed(0)} cm.
+            </span>
+          </div>
+        )}
+
+        {canEdit && connector.type === 'ladder' && (
+          <div style={S.field}>
+            <span style={S.label}>Orientation</span>
+            <div style={S.rotationActions}>
+              <button
+                type="button"
+                onClick={() => onPatch?.(connector.id, { axis: connector.axis === 'z' ? 'x' : 'z' })}
+                style={S.button}
+              >
+                ↶ Rotation gauche
+              </button>
+              <button
+                type="button"
+                onClick={() => onPatch?.(connector.id, { axis: connector.axis === 'z' ? 'x' : 'z' })}
+                style={S.button}
+              >
+                Rotation droite ↷
+              </button>
+            </div>
+          </div>
+        )}
+
+        {canEdit && connector.type === 'stairs' && (
+          <div style={S.field}>
+            <span style={S.label}>Garde-corps</span>
+            {(connector.kind === 'spiral'
+              ? [['outer', 'Côté extérieur']]
+              : [['left', 'Côté gauche'], ['right', 'Côté droit']]
+            ).map(([side, label]) => (
+              <label key={side} style={S.stateRow}>
+                <input
+                  type="checkbox"
+                  checked={connector.railings?.[side] !== false}
+                  onChange={event => onPatch?.(connector.id, {
+                    railings: {
+                      ...(connector.railings || {}),
+                      [side]: event.target.checked,
+                    },
+                  })}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        )}
 
         {canEdit && connector.type === 'door' && (
           <label style={S.field}>
@@ -281,6 +388,43 @@ export default function SurfaceConnectorPanel({
           />
           <span style={S.hint}>×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.</span>
         </label>}
+
+        {canEdit && connector.type === 'stairs' && connector.material && (
+          <div style={S.field}>
+            <span style={S.label}>Apparence procédurale</span>
+            <label style={S.appearanceRow}>
+              <span>Couleur</span>
+              <input
+                type="color"
+                value={connector.material.paint || '#6f7f8e'}
+                onChange={event => onPatch?.(connector.id, {
+                  material: { ...connector.material, paint: event.target.value },
+                })}
+                style={S.colorInput}
+              />
+            </label>
+            {[
+              ['wear', 'Usure'],
+              ['dirt', 'Saleté'],
+              ['relief', 'Relief'],
+            ].map(([field, label]) => (
+              <label key={field} style={S.appearanceRow}>
+                <span>{label}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Number(connector.material[field]) || 0}
+                  onChange={event => onPatch?.(connector.id, {
+                    material: { ...connector.material, [field]: Number(event.target.value) },
+                  })}
+                />
+                <strong>{Number(connector.material[field]) || 0}</strong>
+              </label>
+            ))}
+          </div>
+        )}
 
         {canEdit && (materialSlots.length > 0 ? (
           <div style={S.field}>
@@ -403,6 +547,19 @@ const S = {
   },
   stateRow: { display: 'flex', alignItems: 'center', gap: '8px', color: '#cbd5e1', fontSize: '12px' },
   stateRowLocked: { opacity: 0.55 },
+  rotationActions: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '6px',
+  },
+  appearanceRow: {
+    display: 'grid',
+    gridTemplateColumns: '72px minmax(0, 1fr) 28px',
+    gap: '7px',
+    alignItems: 'center',
+    color: '#cbd5e1',
+    fontSize: '11px',
+  },
   label: {
     fontSize: '11px',
     color: '#64748b',

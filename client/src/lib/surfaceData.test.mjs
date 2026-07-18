@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  SURFACE_DATA_VERSION,
   applyRoomBoundaryArc,
   applyBridgeSelection,
   applyRoomWallAppearance,
@@ -21,6 +22,8 @@ import {
   isWorldInteriorPointVisibleAtLevel,
   entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
+  makeSpiralStairFromCell,
+  makeStraightStairFromCell,
   makeSkylightConnectorFromCell,
   makeWallsFromDrag,
   roomFootprintRectangles,
@@ -30,11 +33,13 @@ import {
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
 import {
+  multiPolygonContainsPoint,
   multiPolygonGridCells,
   roomGeometryArea,
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
 import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
+import { spiralStairGeometry, straightStairGeometry } from '../../../shared/world/stairGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -112,6 +117,100 @@ test('la surface océanique reste un rectangle continu au-dessus des salles sèc
     y: 15.125,
   })
   assert.ok(result.dryCellKeys.size > 0)
+})
+
+test('un escalier droit calcule des marches réalistes sans dépendre de la longueur tracée', () => {
+  const stair = makeStraightStairFromCell(
+    emptySurface(),
+    { x: 2, z: 3 },
+    { level: 0, stairWidthM: 1.5, stairTreadDepthM: 0.3, stairMaxRiserHeightM: 0.18 },
+    null,
+    [],
+  )
+  const geometry = straightStairGeometry(stair)
+
+  assert.equal(stair.kind, 'straight')
+  assert.equal(stair.stepCount, 21)
+  assert.equal(geometry.run, 4.2)
+  assert.ok(geometry.riserHeight * 1.5 <= 0.18)
+  assert.equal(geometry.anchors.length, 22)
+  assert.deepEqual(geometry.start, { x: 2.5, y: 0.125, z: 3.5 })
+  assert.deepEqual(geometry.end, { x: 6.7, y: 2.625, z: 3.5 })
+})
+
+test('la rotation avant pose utilise exactement les quatre orientations de l escalier sauvegardé', () => {
+  const orientations = [
+    { stairQuarterTurns: 0, axis: 'x', dir: 1 },
+    { stairQuarterTurns: 1, axis: 'z', dir: 1 },
+    { stairQuarterTurns: 2, axis: 'x', dir: -1 },
+    { stairQuarterTurns: 3, axis: 'z', dir: -1 },
+  ]
+
+  for (const expected of orientations) {
+    const stair = makeStraightStairFromCell(
+      emptySurface(),
+      { x: 2, z: 3 },
+      { level: 0, stairQuarterTurns: expected.stairQuarterTurns },
+      null,
+      [],
+    )
+    assert.equal(stair.axis, expected.axis)
+    assert.equal(stair.dir, expected.dir)
+  }
+})
+
+test('un colimaçon dérive ses marches, son entrée et sa trémie depuis une seule définition', () => {
+  const stair = makeSpiralStairFromCell(
+    emptySurface(),
+    { x: 2, z: 3 },
+    { level: 0, stairQuarterTurns: 1, stairOuterDiameterM: 3.75 },
+    null,
+    [],
+  )
+  const geometry = spiralStairGeometry(stair)
+
+  assert.equal(stair.kind, 'spiral')
+  assert.equal(stair.rotationQuarterTurns, 1)
+  assert.equal(geometry.stepCount, 21)
+  assert.equal(geometry.anchors.length, 22)
+  assert.equal(geometry.steps.every(step => step.polygon.length === 10), true)
+  assert.equal(geometry.diameter, 2.5)
+  assert.equal(geometry.openingBounds.minX, 1.21)
+  assert.equal(geometry.openingBounds.maxX, 3.79)
+  assert.ok(Math.abs(geometry.start.x - 2.5) < 1e-9)
+  assert.ok(geometry.start.z > 3.5)
+  assert.deepEqual(geometry.end.y, 2.625)
+  assert.ok(geometry.column.bounds.max.y > geometry.topSurfaceY)
+})
+
+test('la trémie d un colimaçon conserve le palier dans les deux sens et quatre orientations', () => {
+  for (const clockwise of [false, true]) {
+    for (let rotationQuarterTurns = 0; rotationQuarterTurns < 4; rotationQuarterTurns += 1) {
+      const geometry = spiralStairGeometry({
+        kind: 'spiral', x: 2.5, z: 3.5, y: 0, topY: 2.5,
+        outerRadius: 1.25, innerRadius: 0.22, totalTurns: 1.25,
+        rotationQuarterTurns, clockwise, stepCount: 21,
+        supportThickness: 0.25, treadThickness: 0.055,
+      })
+      const endAngle = geometry.startAngle + geometry.sweep
+      const directionSign = Math.sign(geometry.sweep)
+      const tangent = {
+        x: -Math.sin(endAngle) * directionSign,
+        z: Math.cos(endAngle) * directionSign,
+      }
+      const landing = {
+        x: geometry.end.x + tangent.x * 0.2,
+        z: geometry.end.z + tangent.z * 0.2,
+      }
+      const upperFlight = {
+        x: geometry.end.x - tangent.x * 0.2,
+        z: geometry.end.z - tangent.z * 0.2,
+      }
+
+      assert.equal(multiPolygonContainsPoint(geometry.openingMultiPolygon, landing), false)
+      assert.equal(multiPolygonContainsPoint(geometry.openingMultiPolygon, upperFlight), true)
+    }
+  }
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
@@ -365,7 +464,7 @@ test('une apparence de mur reste attachée aux arêtes sélectionnées sans modi
   )
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 12)
+  assert.equal(result.surfaceData.version, SURFACE_DATA_VERSION)
   assert.deepEqual(result.surfaceData.rooms.styled.wallAppearanceProfiles[0].edgeKeys, west.edgeKeys)
   const walls = roomsWallSegments(result.surfaceData.rooms)
   const westWall = walls.find(wall => wall.x0 === 0 && wall.x1 === 0)
@@ -389,14 +488,14 @@ test('l enveloppe extérieure conserve les niveaux inférieurs sans transparence
   assert.equal(isWorldPointVisibleAtLevel(surface, 0, 4.5, 4.5, 5, 'well'), false)
 })
 
-test('le contenu intérieur reste limité au niveau courant ou au volume multi-niveau actif', () => {
+test('le contenu inférieur reste rendu derrière les parois opaques et le volume actif révèle aussi son sommet', () => {
   const surface = emptySurface({
     rooms: {
       well: room('well', 0, 3),
     },
   })
 
-  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), false)
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), true)
   assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 5), true)
   assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 0.5, 0.5, 0, 'well'), true)
   assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 0, 0.5, 0.5, 5, 'well'), true)
@@ -426,7 +525,7 @@ test('une nouvelle salle transfere ses cases et redessine le contour de la salle
   )
   const nestedId = 'room:1:1:2:2:0:1'
 
-  assert.equal(result.version, 12)
+  assert.equal(result.version, SURFACE_DATA_VERSION)
   assert.equal(getRoomFootprintCells(result.rooms.outer).length, 12)
   assert.equal(getRoomFootprintCells(result.rooms[nestedId]).length, 4)
   assert.equal(findRoomAtCell(result, { x: 1, z: 1 }, 0).id, nestedId)
@@ -451,7 +550,7 @@ test('la création d’une salle retourne son identité pour passer immédiateme
   assert.equal(result.roomId, 'room:3:4:4:5:0:1')
   const createdRoom = result.surfaceData.rooms[result.roomId]
   assert.ok(createdRoom)
-  assert.equal(result.surfaceData.version, 12)
+  assert.equal(result.surfaceData.version, SURFACE_DATA_VERSION)
   assert.ok(createdRoom.floorMaterial)
   assert.ok(createdRoom.ceilingMaterial)
   assert.ok(createdRoom.wallInteriorMaterial)
@@ -467,7 +566,7 @@ test('un arrondi de salle remplace une chaîne de murs dans le rendu de la salle
   const result = applyRoomBoundaryArc(surface, 'rounded', selected.flatMap(wall => wall.edgeKeys), 90)
 
   assert.equal(result.error, null)
-  assert.equal(result.surfaceData.version, 12)
+  assert.equal(result.surfaceData.version, SURFACE_DATA_VERSION)
   assert.equal(result.surfaceData.rooms.rounded.boundaryArcs.length, 1)
   assert.ok(roomsWallSegments(result.surfaceData.rooms).some(wall => wall.axis === 'segment'))
 })

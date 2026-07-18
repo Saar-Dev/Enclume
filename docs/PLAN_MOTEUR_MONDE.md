@@ -1,8 +1,8 @@
 # PLAN_MOTEUR_MONDE.md — reconstruction progressive du moteur de monde
 
-> Dernière mise à jour : 2026-07-15 — moteur achevé, première fusion commune engagée.
+> Dernière mise à jour : 2026-07-16 — moteur commun fusionné, escalier droit paramétrique livré.
 >
-> Statut : **Phases 0 à 8 codées et vérifiées ; moteur monde autoritaire branché au combat**.
+> Statut : **Phases 0 à 16 codées et vérifiées ; moteur monde autoritaire branché au combat**.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -715,7 +715,36 @@ Phase 7.
 
 ---
 
-## 19. Matrice de non-régression minimale
+## 19. Phase 16 — premier escalier paramétrique ✅
+
+### Contrat `surface_data` v13
+
+- `stairs` accepte uniquement une géométrie droite explicite et complète ;
+- `shared/world/stairGeometry.js` dérive marches, rails, trémie, empreinte et ancrages ;
+- rendu, compilateur, collision, LOS et navigation consomment ces mêmes dérivés ;
+- les dalles d'interface sont réellement soustraites autour de la trémie ;
+- le graphe conserve un arrêt stable sur chaque marche et ignore le collider de l'escalier
+  uniquement lors du raccordement de ses propres extrémités.
+
+### Interface
+
+- pose depuis **Objets 3D > Escaliers**, sans outil de connecteur escalier séparé ;
+- prévisualisation au sol, création en un clic puis retour automatique en sélection ;
+- popup déplaçable avec rotation immédiate, garde-corps, coût et apparence procédurale ;
+- l'échelle rejoint **Objets 3D > Échelles** avec son vrai aperçu, création automatique de sa
+  traversée, sélection, popup et rotation, sans bouton direct concurrent ;
+- prochaines extensions : trappe liée à l'échelle, puis variantes d'escalier.
+
+### Validation
+
+- 133 tests monde/serveur et 3 tests de configuration passent ;
+- build Vite valide et ESLint ciblé sans erreur ;
+- Playwright Chromium sur `8293` confirme la bibliothèque, la prévisualisation, la pose, les
+  21 marches, la rotation persistée et la trémie visible au niveau supérieur.
+
+---
+
+## 20. Matrice de non-régression minimale
 
 Chaque phase doit conserver ou ajouter ces scénarios :
 

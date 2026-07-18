@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-16 — moteur v12 conservé comme autorité dans l'intégration commune.
+> Dernière mise à jour : 2026-07-18 — trémie de colimaçon et palier haut canoniques.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -56,7 +56,7 @@ Principes obligatoires :
 
 ### 2.1 Éditeur Surface `[EXISTANT]`
 
-`battlemaps.surface_data` version 12 contient actuellement :
+`battlemaps.surface_data` version 13 contient actuellement :
 
 - `rooms`, `floors`, `walls`, `ceilings`, `stairs`, `connectors` ;
 - les drapeaux `walkable`, `blocksMovement`, `blocksSight` ;
@@ -135,13 +135,16 @@ Le dossier `shared/world/` fournit désormais :
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
+- `stairGeometry.js` : définition géométrique unique de l'escalier droit, de ses marches, de ses
+  garde-corps, de ses ancrages praticables et de sa trémie ;
 - `entityTransform.js` : échelle uniforme canonique des entités, bornée de `0.25` à `4` et partagée
   par client, routes et services spatiaux ;
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
-- soixante-dix-sept tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
-  placement sur support, les canaux de matériaux, la couverture et les occluders dynamiques.
+- cent trente-trois tests monde/serveur, dont Jon, les portes, les occupants multiples, les budgets
+  partiels, le placement sur support, les canaux de matériaux, la couverture, les occluders
+  dynamiques et l'escalier paramétrique.
 
 La route Surface compile le document avant de le valider en base et
 `GET /api/battlemaps/:id/world-snapshot` expose le résultat mis en cache par carte/révision. La
@@ -362,13 +365,62 @@ Un connecteur possède :
 
 ### Escalier
 
-Parcours continu ou échantillonné de type marche. Les tokens peuvent s'y arrêter et y combattre si
-la règle de surface le permet.
+Un escalier v13 est un objet structurel paramétrique, pas un GLB qui masquerait une téléportation.
+`kind: straight` porte une origine basse `x/z/y`, une arrivée `topY`, un axe et un sens, une
+largeur, un giron, un nombre de marches, une épaisseur de support et deux garde-corps optionnels.
+`kind: spiral` porte le centre `x/z`, les mêmes altitudes, les rayons intérieur/extérieur, le nombre
+de tours, le sens horaire, l'orientation de l'entrée, l'épaisseur des marches, la colonne et le
+garde-corps extérieur. Les configurations standard relient exactement un étage de 3,75 m avec
+21 contremarches de 17,9 cm ; le colimaçon possède un diamètre de 3,75 m.
+
+`stairGeometry(...)` distribue la définition vers `straightStairGeometry(...)` ou
+`spiralStairGeometry(...)` et dérive :
+
+- les boîtes droites ou prismes de secteurs courbes rendus et leurs surfaces praticables ;
+- les poteaux, mains courantes et la colonne centrale éventuelle ;
+- l'empreinte et la trémie exacte découpée dans le plafond bas et le sol haut ;
+- les colliders de mouvement et occluders de vue de chaque marche ;
+- un ancrage stable par marche pour la navigation et l'arrêt d'un token.
+
+Les secteurs courbes conservent leur polygone dans le snapshot sous la primitive
+`horizontal-prism` et la colonne utilise `vertical-cylinder`. L'index spatial et la visibilité
+effectuent leur narrow phase sur ces volumes réels au lieu de considérer leur seule AABB.
+
+Pour un colimaçon, la trémie n'est jamais son carré englobant. La hauteur de dalle, la garde au
+plafond et la progression de la volée déterminent le premier angle qui doit rester ouvert ; la
+découpe se poursuit jusqu'à la dernière marche. Le secteur suivant reste plein et devient le
+palier haut, exactement dans le sens de sortie. `rotationQuarterTurns` et `clockwise` transforment
+ce même secteur : aucune orientation spéciale n'existe dans le renderer.
+
+Les dalles découpées sont compilées comme `horizontal-multipolygon`, avec leurs contours et trous.
+Leur AABB sert seulement à l'index large ; collisions et visibilité utilisent le multipolygone au
+narrow phase. Ainsi, une zone de palier conservée visuellement est aussi un support physique, et
+la trémie visible ne garde aucun collider rectangulaire invisible.
+
+Le renderer, l'éditeur et `worldCompiler` ne recalculent donc jamais chacun leur propre escalier.
+Le connecteur de graphe est produit automatiquement par la pose de l'objet et n'est pas exposé
+comme un outil séparé. Les liaisons d'entrée/sortie ignorent uniquement les colliders appartenant
+à ce même escalier ; elles continuent de respecter toutes les autres barrières. Les alias de coût
+zéro entre un support et le premier ou dernier ancrage restent dans le graphe, mais sont retirés du
+plan de mouvement rendu au client.
+
+Dans l'éditeur, l'entrée se trouve sous **Objets 3D > Escaliers**. Un clic choisit l'objet, le survol
+prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. La molette
+tourne ce même aperçu par quarts de tour avant le clic sans zoomer la caméra : l'orientation affichée
+est donc exactement celle transmise à la définition canonique lors de la pose. Le popup permet
+ensuite une rotation par quart de tour, l'activation des garde-corps, le multiplicateur de
+déplacement et l'apparence procédurale. Le colimaçon ajoute le retournement horaire/antihoraire.
+Une texture ou un futur modèle décoratif ne remplace jamais la géométrie physique dérivée.
 
 ### Échelle
 
 Parcours vertical de type grimpe. Il contient assez d'ancrages pour persister un token entre deux
 étages. Le mode course n'y est pas disponible par défaut.
+
+L'UX suit désormais le même principe que l'escalier : **Objets 3D > Échelles** affiche la vraie
+géométrie structurelle en prévisualisation, puis la pose crée automatiquement le connecteur
+`ladder`, repasse en sélection et ouvre son popup. Celui-ci expose les niveaux, la rotation et le
+coût. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
 
 ### Passerelle
 
@@ -405,8 +457,9 @@ et sa cabine appartiennent à l'état runtime.
   puis scinde l'arête : reprendre au tour suivant ne donne aucun déplacement gratuit ;
 - `bridge` est une dalle de support structurelle. Son UUID est l'identité utilisée par l'état
   runtime pour la désactiver ou la marquer détruite sans réécrire sa définition ;
-- l'éditeur construit la physique depuis des outils dédiés. Le rendu générique d'une échelle ou un
-  futur GLB n'est qu'une apparence ;
+- l'éditeur construit la physique depuis les objets structurels de la bibliothèque 3D. L'escalier
+  crée sa traversée automatiquement ; le rendu générique d'une échelle ou un futur GLB n'est
+  qu'une apparence ;
 - les labels du chemin présentent `distance × facteur = coût` pour les segments pondérés.
 
 ### Implémentation Phase 6
@@ -455,7 +508,9 @@ plafond. Elle peut occuper la base ou le sommet d'une salle haute, ou l'interfac
 par deux salles superposées ; elle ne peut pas flotter dans une tranche intermédiaire vide. Son
 support reste praticable et bloque mouvement vertical et fluides, mais laisse passer la vision.
 Dans l'éditeur, les quatre formats sont exposés exclusivement sous **Objets 3D > Dalles en verre**.
-Le choix d'un modèle active le rayon de pose structurel ; aucune `entity` décorative n'est créée.
+Le choix d'un modèle active le rayon de pose structurel et un fantôme cyan non occulté matérialise
+l'emprise exacte avant le clic. La rotation de ce fantôme modifie la même orientation que celle
+persistée ; aucune `entity` décorative n'est créée.
 
 ---
 
@@ -478,8 +533,10 @@ La transformation uniforme appartient à `entity.state.transform.scale`. La rout
 normalise avec `shared/world/entityTransform.js`, puis le socket rediffuse l'état complet. Le rendu,
 `worldMovementService` et `worldVisibilityService` appliquent le même facteur aux dimensions du
 blueprint. Agrandir ou réduire un objet modifie donc ensemble son apparence, son occupation et son
-volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité ; les boutons
-de l'éditeur ne sont qu'une commande par pas de 90°.
+volume occultant. La rotation continue d'utiliser la rotation canonique de l'entité. La molette
+modifie cette valeur par pas de 90° pendant la prévisualisation d'une pose libre ; les boutons du
+popup modifient la même valeur après la pose. Un objet mural conserve l'orientation dérivée de sa
+face d'ancrage.
 
 Les animations GLB sont une capacité visuelle dérivée. `builtinModelCatalog` lit les noms de clips
 dans le chunk JSON du GLB et inscrit `geometry.animationClips`; un modèle ouvrable reçoit les états
@@ -495,18 +552,19 @@ leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel
 
 ### 7.1 Tranche d'étage affichée
 
-`displayLevel = N` rend tout l'intérieur de la tranche N. Pour les tranches strictement inférieures,
-seule l'enveloppe murale extérieure reste rendue et opaque, avec les connecteurs et entités dont le
-mode de pose est mural (portes, fenêtres, écrans et décor mural). Leurs sols, plafonds, escaliers,
-effets, tokens et objets posés à l'intérieur ne sont pas rendus. Leur présence graphique ne les rend
-pas sélectionnables comme supports du niveau courant. Les niveaux supérieurs restent masqués en
-temps normal.
+`displayLevel = N` rend tout l'intérieur de la tranche N. Les intérieurs strictement inférieurs
+restent eux aussi rendus avec leurs matériaux opaques, mais les vraies interfaces horizontales et
+les vraies parois les occultent naturellement. Ils ne deviennent donc visibles que par une
+ouverture géométrique réelle : trémie d'escalier, future trappe ouverte ou dalle vitrée. Les murs
+inférieurs ne participent pas à la coupe caméra du niveau courant et restent opaques. Les niveaux
+supérieurs restent masqués en temps normal.
 
-Cette distinction est un contrat du moteur, pas une règle propre au renderer. La visibilité
-« enveloppe » accepte les points des niveaux inférieurs ; la visibilité « intérieur » n'accepte que
-le niveau courant. `entityUsesWallPlacement` choisit explicitement le premier régime pour une
-entité murale et le second pour une entité libre. Tous les consommateurs — jeu, éditeur, picking,
-tokens, effets et structures horizontales — utilisent ces mêmes prédicats.
+Cette occlusion est un contrat du moteur, pas un masque visuel ajouté par objet. La visibilité
+« enveloppe » et la visibilité « intérieur » acceptent les points des niveaux inférieurs ; la
+différence porte sur la coupe caméra, réservée à l'enveloppe du niveau courant ou au volume
+multi-niveau actif. Le depth buffer tranche ensuite avec les dalles et parois canoniques. Tous les
+consommateurs — jeu, éditeur, picking, tokens, effets et structures horizontales — utilisent les
+mêmes altitudes, sans rendre les murs inférieurs transparents ni inventer une seconde scène.
 
 Une salle haute de plusieurs étages est l'exception locale. Le renderer conserve son véritable sol
 de base, toutes ses parois jusqu'au fond ainsi que les murs et le contenu spatial de ses tranches
@@ -679,8 +737,8 @@ motif, usure, saleté, relief et mode de relief réel.
 Cette donnée appartient au mur logique, pas à la tessellation de son mesh. `roomBoundaryPaths`
 résout le profil à partir des arêtes sources et le propage aux chemins droits comme aux arcs ; le
 renderer l'applique ensuite à chaque panneau dérivé. Une fusion de salles conserve les profils des
-arêtes restantes et retire ceux de la séparation supprimée. Le validateur v12 contrôle les clés,
-les textures et les valeurs d'apparence entre 0 et 100. Le contrat v12 refuse les anciennes
+arêtes restantes et retire ceux de la séparation supprimée. Le validateur v13 contrôle les clés,
+les textures et les valeurs d'apparence entre 0 et 100. Le contrat v13 refuse les anciennes
 apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`.
 
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
@@ -688,8 +746,8 @@ de plafond. Si un plafond et un sol coïncident, une seule interface est rendue 
 niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
 conserve l'opacité de coupe du plafond courant, même si une salle possède un sol au-dessus. Depuis
 le niveau supérieur, le plafond inférieur n'est plus rendu et le sol supérieur, opaque, occupe
-l'interface. Les sols et plafonds strictement inférieurs sont omis ; seule leur enveloppe murale et
-ce qui y est fixé restent opaques.
+l'interface. Les sols inférieurs restent rendus derrière les interfaces plus hautes afin de devenir
+visibles par une trémie ou une verrière ; les plafonds concurrents restent dédupliqués.
 
 `roomHorizontalInterfaces` est l'unique autorité de rendu des dalles de salle. Le renderer ne
 dessine plus les sols dans une boucle indépendante : chaque interface choisit exactement une face
@@ -741,6 +799,8 @@ Une fenêtre structurelle compile ces canaux indépendamment de son mesh : `wind
 vision ; `screen-window` la laisse passer uniquement dans l'état `transparent`. Les états `opaque`
 et `mirror` occultent la ligne de vue sans transformer la baie en mur plein ni modifier son identité.
 Une verrière horizontale laisse également passer la vision tout en conservant son support physique.
+Le client rend alors réellement la scène du dessous derrière le verre. Cette propriété ne change
+ni l'opacité des murs inférieurs ni les occluders compilés qui les représentent.
 
 La couverture utilise plusieurs échantillons corporels issus de la pose canonique. La posture ne
 doit pas exister uniquement dans `combat_roster` si elle affecte le monde physique.

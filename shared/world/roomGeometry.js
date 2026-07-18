@@ -963,6 +963,14 @@ export function intersectMultiPolygons(...values) {
   return cloneMultiPolygon(polygonClipping.intersection(...polygons))
 }
 
+export function differenceMultiPolygons(subject, ...clips) {
+  if (!Array.isArray(subject) || subject.length === 0) return []
+  const polygons = clips.filter(value => Array.isArray(value) && value.length > 0)
+  return cloneMultiPolygon(polygons.length > 0
+    ? polygonClipping.difference(subject, ...polygons)
+    : subject)
+}
+
 export function multiPolygonBounds(multiPolygon) {
   const points = multiPolygonToContours(multiPolygon).flatMap(contour => contour.points)
   if (points.length === 0) return null

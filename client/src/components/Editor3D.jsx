@@ -15,6 +15,7 @@ import SurfaceWallPanel from './SurfaceWallPanel.jsx'
 import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
+import { usePlacementWheelRotation } from '../hooks/usePlacementWheelRotation.js'
 import {
   applyRoomBoundaryArc,
   applyRoomWallAppearance,
@@ -252,6 +253,7 @@ function EntityEditorScene({
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const [ghostPos, setGhostPos] = useState(null)
   const [ghostR, setGhostR] = useState(0)
+  const ghostRRef = useRef(0)
   const [moveGhost, setMoveGhost] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
   const handleSurfaceConnectorPointer = useCallback((connectorId, connector, event) => {
@@ -514,6 +516,29 @@ function EntityEditorScene({
     }
   }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, gl, surfaceData])
 
+  const rotateGhostPreview = useCallback(direction => {
+    if (!activeBlueprint?.id || blueprintPlacementMode(activeBlueprint) === 'wall') return
+    const nextRotation = (ghostRRef.current + direction + 4) % 4
+    ghostRRef.current = nextRotation
+    setGhostR(nextRotation)
+    setGhostPos(calcPreciseEntityPos(
+      mousePosRef.current.x,
+      mousePosRef.current.y,
+      activeBlueprint,
+      nextRotation,
+    ))
+  }, [activeBlueprint, calcPreciseEntityPos])
+
+  usePlacementWheelRotation({
+    element: gl.domElement,
+    enabled: Boolean(
+      ghostPos
+      && activeBlueprint?.id
+      && blueprintPlacementMode(activeBlueprint) !== 'wall',
+    ),
+    onRotate: rotateGhostPreview,
+  })
+
   const getEntityUnderCursor = useCallback((clientX, clientY) => {
     const rect = gl.domElement.getBoundingClientRect()
     const mouse = new THREE.Vector2(
@@ -681,12 +706,12 @@ function EntityEditorScene({
           .catch(err => console.error('[EntityEditor] Erreur rotation :', err))
       } else {
         if (blueprintPlacementMode(activeBlueprint) === 'wall') return
-        setGhostR(prev => (prev + 1) % 4)
+        rotateGhostPreview(1)
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, socket, updateEntity])
+  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, rotateGhostPreview, socket, updateEntity])
 
   // ─── Suppression entité — touche Delete/Backspace ───────────────────────
   // Entité sous le curseur → DELETE REST → removeEntity + WS.
@@ -1541,8 +1566,10 @@ export default function Editor3D({
     const connectorId = surfaceConnectorPanel?.connectorId
     if (!connectorId) return null
     const connector = surfaceData.connectors?.[connectorId]
-    return connector ? { id: connectorId, ...connector } : null
-  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
+    if (connector) return { id: connectorId, ...connector }
+    const stair = surfaceData.stairs?.[connectorId]
+    return stair ? { id: connectorId, ...stair, type: 'stairs' } : null
+  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors, surfaceData.stairs])
 
   const selectedSurfaceRoom = useMemo(() => {
     const roomId = surfaceWallPanel?.roomId || surfaceRoomPanel?.roomId
@@ -1595,7 +1622,23 @@ export default function Editor3D({
     if (!connectorId || !patch) return
     const currentSurfaceData = surfaceDataRef.current
     const connector = currentSurfaceData.connectors?.[connectorId]
-    if (!connector) return
+    const stair = currentSurfaceData.stairs?.[connectorId]
+    if (!connector && !stair) return
+
+    if (stair) {
+      handleSurfaceDataChange({
+        ...currentSurfaceData,
+        version: SURFACE_DATA_VERSION,
+        stairs: {
+          ...(currentSurfaceData.stairs || {}),
+          [connectorId]: {
+            ...stair,
+            ...patch,
+          },
+        },
+      })
+      return
+    }
 
     handleSurfaceDataChange({
       ...currentSurfaceData,
@@ -1613,6 +1656,16 @@ export default function Editor3D({
   const handleSurfaceConnectorDelete = useCallback(connectorId => {
     if (!connectorId) return
     const currentSurfaceData = surfaceDataRef.current
+    if (currentSurfaceData.stairs?.[connectorId]) {
+      const stairs = { ...(currentSurfaceData.stairs || {}) }
+      delete stairs[connectorId]
+      handleSurfaceDataChange({ ...currentSurfaceData, version: SURFACE_DATA_VERSION, stairs })
+      setSurfaceConnectorPanel(null)
+      if (surfaceTool?.selectedConnectorId === connectorId) {
+        onSurfaceToolChange?.({ ...surfaceTool, selectedConnectorId: null })
+      }
+      return
+    }
     if (!currentSurfaceData.connectors?.[connectorId]) return
     const connectors = { ...(currentSurfaceData.connectors || {}) }
     delete connectors[connectorId]
@@ -1679,9 +1732,9 @@ export default function Editor3D({
   useEffect(() => {
     const connectorId = surfaceConnectorPanel?.connectorId
     if (!connectorId) return
-    if (surfaceData.connectors?.[connectorId]) return
+    if (surfaceData.connectors?.[connectorId] || surfaceData.stairs?.[connectorId]) return
     setSurfaceConnectorPanel(null)
-  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
+  }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors, surfaceData.stairs])
 
   useEffect(() => {
     if (!surfaceConnectorPanel) return
@@ -1899,7 +1952,7 @@ export default function Editor3D({
 
   const activeStructuralConnectorType = activeBlueprint?.geometry?.connectorType
   const placingStructuralObject = activeEditorTab === 'entity'
-    && ['window', 'screen-window', 'skylight'].includes(activeStructuralConnectorType)
+    && ['window', 'screen-window', 'skylight', 'stairs', 'ladder'].includes(activeStructuralConnectorType)
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

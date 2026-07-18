@@ -4368,3 +4368,262 @@ documenté dans `SYSTEME/ASSETS`, contrat de mouvement joueur/MJ transféré dan
 **Dette séparée conservée** : `ioredis` reste une dépendance déclarée mais sans import runtime.
 Son retrait et l'arrêt éventuel d'une infrastructure Redis partagée ne sont pas mélangés à cette
 clôture documentaire ; `INFRA-R1` l'enregistre explicitement dans `EN_COURS`.
+
+---
+
+## Session 153 (Codex) — 2026-07-16 — Escalier droit paramétrique canonique ✅ CLOS
+
+**Objectif** : reprendre les connecteurs entre étages par l'escalier, sans conserver l'ancien
+outil de connecteur ni ajouter une géométrie décorative désynchronisée de la physique.
+
+**Contrat** : `surface_data` passe en v13. Un escalier droit enregistre origine basse, arrivée
+haute, axe, sens, largeur, giron, nombre de marches, épaisseur et garde-corps. Le nouveau module
+partagé `stairGeometry.js` dérive marches, rails, emprise, trémie et ancrages. Cette même sortie
+alimente le renderer, l'éditeur et le compilateur monde.
+
+**Moteur** : chaque marche compile un support, un collider et un occluder. La dalle à `topY` est
+soustraite par la trémie exacte. La traversée utilise un ancrage par marche et peut donc être
+tronquée par le budget du token. Le graphe ignore le collider de l'escalier uniquement pour
+raccorder ses deux extrémités ; les arêtes de coût zéro nécessaires au raccord restent dans A* mais
+ne sont pas envoyées comme segments de mouvement.
+
+**Éditeur** : **Objets 3D > Escaliers > Escalier droit paramétrique** remplace l'outil direct. Le
+survol prévisualise la structure, le clic la crée et revient en sélection. Le popup **Objet 3D**
+affiche `0 → 1`, dimensions et métrique des marches, puis permet rotation immédiate, garde-corps,
+coût de déplacement et apparence procédurale. La configuration standard fait 3,75 m de haut,
+6,30 m de long et 1,50 m de large, avec 21 marches de 17,9 cm et un giron de 30 cm.
+
+**Échelle** : **Objets 3D > Échelles** remplace aussi son ancien bouton direct. La prévisualisation
+utilise ses vrais rails et barreaux ; la pose crée la traversée, repasse en sélection, ouvre le
+popup **Échelle structurelle** et permet sa rotation immédiate.
+
+**Testé** : 133/133 tests monde/serveur, 3/3 configuration, 89 tests ciblés avant recette, build
+Vite de production et ESLint ciblé sans erreur. Le lint global reste bloqué par 66 erreurs
+préexistantes dans les fichiers règles/combat hors scope.
+
+**Validation navigateur réelle 8293** : campagne isolée à deux salles superposées, Chromium
+Playwright 1600×1000. Confirmation visuelle de l'entrée dans Objets 3D, de la prévisualisation, de
+la pose, des 21 marches et garde-corps, du popup, de la rotation `x → z` persistée et du trou de
+trémie dans le sol du niveau 1. Une seconde campagne isolée confirme visuellement l'aperçu réel de
+l'échelle, son popup `0 → 1` et sa rotation persistée. Aucun résultat visuel n'a été déduit d'un
+calcul ou d'un test DOM.
+
+**Données** : aucune carte utilisateur ni aucun compte existant modifié. La campagne, la carte et
+le compte temporaires de recette ont été supprimés après validation, puis leur absence contrôlée.
+
+**Retour arrière** : commit Session 153 isolé sur `dev/monde`. Revert du commit restaure v12 et
+l'ancien rendu ; aucune migration SQL ni donnée utilisateur v13 ne reste après retour arrière.
+
+**Suite** : ajouter la trappe liée à l'échelle lorsque le palier traverse une dalle, puis les
+variantes d'escalier sans second moteur.
+
+---
+
+## Session 154 (Codex) — 2026-07-18 — Orientation avant pose et vision verticale naturelle ✅ CLOS
+
+**Objectif** : conserver la précision du placement par fantôme, permettre de tourner les structures
+avant le clic, rétablir l'aperçu absent des dalles en verre, poser les tokens au contact du support et
+voir le niveau inférieur par les vraies ouvertures sans rendre ses murs transparents.
+
+**Placement** : la palette **Objets 3D** expose deux commandes de rotation tant qu'un escalier, une
+échelle ou une dalle en verre est actif. Pour l'escalier, les quatre quarts de tour modifient le
+`stairQuarterTurns` déjà consommé par `makeStraightStairFromCell` : aperçu et objet créé partagent
+donc la même définition, sans conversion parallèle. L'échelle commute son axe canonique et la
+verrière utilise `connectorRotationQuarterTurns`. La pose déjà effectuée reste rotative depuis son
+popup.
+
+**Aperçu verrière** : `ConnectorPreview` conserve le vrai `ConnectorSegment` et lui superpose une
+emprise cyan non occultée. Le fantôme reste ainsi visible même lorsqu'il coïncide exactement avec la
+dalle qu'il remplacera ; le clic continue de créer le connecteur structurel, pas une entité décorative.
+
+**Vision verticale** : la scène ne fabrique ni masque par objet ni transparence de secours. La
+visibilité intérieure garde les niveaux inférieurs rendus, et les interfaces horizontales gardent
+leurs sols inférieurs. Les dalles et murs opaques les occultent naturellement par profondeur. Une
+trémie ou une verrière est donc une vraie fenêtre sur le dessous. `wallParticipatesInCameraCutaway`
+reste inchangé : un mur inférieur hors volume multi-niveau actif ne prend jamais la transparence du
+niveau courant.
+
+**Token** : l'ancrage persistant reste le point monde des pieds. Seul le décalage visuel commun des
+GLB passe de `0,50` à `0,47`, ce qui retire le petit jour sans modifier mouvement, collision, budget
+ou sauvegarde.
+
+**Testé** : 61/61 tests ciblés Surface/interfaces/coupe caméra, 133/133 tests monde/serveur, 3/3
+tests de configuration, `git diff --check`, JSON des deux locales, ESLint ciblé sur la scène de
+prévisualisation et les helpers, puis build Vite de production sur le serveur. Les règles React
+Compiler déjà signalées dans `Canvas3D`/`Sidebar` restent une dette préexistante hors de ces lignes.
+
+**Validation navigateur réelle 8293** : dans la session utilisateur
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, Chromium a montré l'escalier fantôme à 0°, puis sa rotation
+réelle à 90° au même point, et le contour cyan 2×2 de la verrière sur le sol. Un zoom en mode jeu a
+confirmé le contact visuel du token avec sa passerelle. Une campagne isolée, copiée uniquement pour
+la recette et dotée de couleurs distinctes, a montré au niveau 1 le contenu inférieur à travers la
+trémie et la verrière, tandis que la façade inférieure colorée restait opaque.
+
+**Données** : aucune sauvegarde de la carte utilisateur n'a été modifiée. La campagne de recette,
+sa carte et son adhésion ont été supprimées ; le contrôle PostgreSQL final retourne respectivement
+`0 / 0 / 0`.
+
+**Retour arrière** : revert du commit Session 154. Aucun schéma SQL ni document monde utilisateur
+n'a été migré ; le retour arrière rétablit seulement l'ancien aperçu, le filtrage intérieur bas et
+le décalage visuel du token.
+
+---
+
+## Session 155 (Codex) — 2026-07-18 — Rotation attachée au fantôme de pose ✅ CLOS
+
+**Objectif** : rendre la rotation avant pose immédiatement découvrable. Les commandes présentes
+dans la bibliothèque d'objets restaient invisibles dès que l'utilisateur regardait la carte pour
+placer précisément sa structure.
+
+**UX** : le fantôme d'un escalier, d'une échelle ou d'une dalle en verre porte désormais son propre
+tooltip **Prévisualisation**. Il affiche l'angle courant et les boutons **Gauche / Droite**. Cliquer
+sur ces boutons tourne le fantôme sans créer d'objet ; le clic suivant sur la carte conserve cette
+orientation pour la pose. Le tooltip est projeté depuis l'objet puis borné aux quatre côtés du
+canvas afin de rester entièrement visible près des bords.
+
+**Architecture** : `PreviewOrientationTooltip` est partagé par les trois prévisualisations et ne
+maintient aucun angle parallèle. Il modifie les champs canoniques déjà consommés par les fabriques
+de pose : `stairQuarterTurns` pour l'escalier, `connectorRotationQuarterTurns` pour la verrière et
+`ladderAxis` pour l'échelle. Les événements pointeur du tooltip sont stoppés avant d'atteindre le
+canvas, ce qui évite toute pose accidentelle.
+
+**Testé** : ESLint ciblé sur `Sidebar.jsx` et `SurfaceEditorScene.jsx`, build Vite de production,
+service client actif et HTTP 8293 à 200. Recette visuelle réelle dans Chromium sur la session
+utilisateur `b27cbed4-fd59-4530-b43b-dae57c33f092` : tooltip visible à côté de l'escalier, rotation
+visuelle et libellé `0° → 90°`, puis même transition vérifiée pour la dalle en verre 2×1 et
+l'échelle structurelle. Le bouton **Annuler** est resté désactivé après ces rotations, confirmant
+qu'aucun objet n'a été posé. Retour en mode jeu effectué à la fin de la recette.
+
+**Non testé** : interaction tactile/mobile ; l'éditeur bureau et les clics souris sont couverts.
+
+**Données** : aucune carte, salle, structure ni session utilisateur sauvegardée n'a été modifiée.
+La recette a uniquement sélectionné des outils, déplacé leur fantôme et utilisé leurs commandes de
+rotation.
+
+**Retour arrière** : revert du commit Session 155. Aucun changement de schéma SQL, migration ou
+conversion de `surface_data` ; le retour arrière retire uniquement le tooltip attaché au fantôme.
+
+---
+
+## Session 156 (Codex) — 2026-07-18 — Rotation des prévisualisations à la molette ✅ CLOS
+
+**Cause racine** : le tooltip de Session 155 utilisait le fantôme comme ancre alors que ce fantôme
+suivait le pointeur. Déplacer la souris vers un bouton déplaçait donc aussi le bouton ; cette cible
+interactive ne pouvait pas être atteinte de manière fiable.
+
+**UX** : le tooltip de prévisualisation est supprimé. Tant qu'un fantôme orientable est présent sur
+le canvas, faire rouler la molette vers le bas tourne à droite et vers le haut tourne à gauche. Le
+geste agit sur les objets 3D libres, escaliers, échelles et dalles en verre. La molette est capturée
+avant `MapControls` durant ce seul état, de sorte que la caméra ne zoome pas en même temps. Les
+objets muraux restent alignés par leur face d'ancrage et ne reçoivent pas de rotation libre.
+
+**Architecture** : `usePlacementWheelRotation` constitue l'unique adaptation du geste de molette.
+Il transforme un cran de souris en un quart de tour, accumule les petits deltas de pavé tactile et
+filtre le momentum rapproché. Les deux éditeurs l'emploient ensuite pour modifier leurs autorités
+existantes : `r` pour une entité libre, `stairQuarterTurns`, `connectorRotationQuarterTurns` ou
+`ladderAxis` pour les objets structurels. La prévisualisation et la pose continuent donc de lire le
+même état ; aucun angle de rendu parallèle n'est introduit.
+
+**Testé** : JSON des deux locales, ESLint ciblé sur `Editor3D.jsx`, `SurfaceEditorScene.jsx` et le
+nouveau hook, build Vite de production, service client actif et HTTP 8293 à 200. Recette visuelle
+réelle dans Chromium sur la session utilisateur `b27cbed4-fd59-4530-b43b-dae57c33f092` : molette
+bas puis haut sur l'escalier, changement d'axe de l'échelle, rotation de la dalle en verre 2×1 et
+rotation d'une caisse longue libre. Les captures avant/après montrent la géométrie tournée sans
+changement de caméra. Le tooltip reste absent et le bouton **Annuler** reste désactivé : aucun objet
+n'a été posé. Retour en mode jeu effectué après la recette.
+
+**Non testé** : pavé tactile physique et écran tactile. L'accumulation des petits deltas est codée,
+mais la recette utilise une vraie séquence d'événements de molette du navigateur.
+
+**Données** : aucune carte, salle, structure, entité ni session utilisateur sauvegardée n'a été
+modifiée. Aucun clic de pose n'a été effectué pendant la recette.
+
+**Retour arrière** : revert du commit Session 156. Aucun schéma SQL, migration ni conversion de
+`surface_data` ; le retour arrière restaure seulement le tooltip de Session 155 et l'ancien geste
+de zoom pendant une prévisualisation.
+
+---
+
+## Session 157 (Codex) — 2026-07-18 — Colimaçon canonique et token posé par son socle ✅ CLOS
+
+**Objectif** : ajouter le premier autre type d'escalier sans créer un objet décoratif parallèle au
+moteur monde, puis supprimer le décalage vertical encore visible sous certains modèles de token.
+
+**Escalier** : la palette contient **Escalier en colimaçon paramétrique**. Le clic désigne le centre
+d'une emprise standard de 3,75 m ; la molette oriente l'entrée avant pose. La définition persistée
+porte `kind: spiral`, les rayons, 1,25 tour par défaut, le sens horaire, l'orientation d'entrée,
+21 marches, leur épaisseur, la colonne et le garde-corps extérieur. Le popup permet rotation,
+retournement du sens, garde-corps, coût de déplacement et apparence procédurale.
+
+**Géométrie commune** : `stairGeometry` est le seul point de distribution entre escalier droit et
+colimaçon. `spiralStairGeometry` produit les secteurs de marche, la colonne, le rail, la trémie,
+l'emprise et les 22 ancrages de parcours. Les deux scènes React extrudent les polygones partagés ;
+`worldCompiler` compile ces mêmes marches comme `horizontal-prism` et la colonne comme
+`vertical-cylinder`. `spatialIndex` et `visibility` possèdent le narrow phase correspondant. Les
+boîtes englobantes servent à l'index large, pas de géométrie physique de remplacement.
+
+**Token** : la coordonnée persistée reste le point de contact monde. L'ancien `Y_OFFSET = 0.47`
+supposait un pivot identique pour tous les GLB et faisait flotter ceux dont le socle commençait à
+`y = 0`. Chaque clone calcule maintenant sa boîte englobante et applique uniquement au rendu
+`-bounds.min.y`. Le fallback procédural part directement du plan local zéro.
+
+**Testé** : 136/136 tests monde/serveur et 38/38 tests Surface, dont validation du document spiral,
+traversée courbe fractionnable, 21 colliders de marche, colonne occultante et intersections exactes
+des nouvelles primitives. Build Vite de production réussi localement et sur le serveur ; services
+8293/8294 actifs. Le lint global reste rouge sur 66 erreurs React/personnage préexistantes ; le seul
+nouveau avertissement Fast Refresh de `StairPrismGeometry` a été corrigé avant livraison.
+
+**Validation navigateur réelle 8293** : sur la session utilisateur
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, le navigateur intégré a affiché les deux entrées de la
+catégorie Escaliers, le fantôme cyan du colimaçon, sa pose complète, le popup `0 → 1`, les
+21 marches, puis le changement horaire et la rotation droite. Après rechargement, le colimaçon et
+ses réglages étaient toujours visibles. Le modèle de token de la carte apparaissait avec son socle
+sur le sol, sans le vide important de la capture d'origine.
+
+**Données** : un colimaçon a été créé temporairement sur la carte utilisateur pour vérifier la
+sauvegarde réelle. Il a ensuite été sélectionné après rechargement, supprimé avec confirmation et
+son absence a été contrôlée visuellement. Aucun schéma SQL ni migration de carte n'a été ajouté.
+
+**Retour arrière** : revert du commit Session 157. Le document accepte à nouveau uniquement
+`kind: straight`, la palette perd le colimaçon et les tokens retrouvent l'ancien décalage commun.
+
+---
+
+## Session 158 (Codex) — 2026-07-18 — Palier haut canonique du colimaçon ✅ CLOS
+
+**Cause racine** : le colimaçon partageait déjà ses marches et son parcours entre rendu et moteur,
+mais `stairOpeningMultiPolygon` réduisait encore toute trémie au rectangle de `openingBounds`.
+Cette boîte englobante supprimait donc aussi la dalle située devant la dernière marche : l'escalier
+arrivait à la bonne altitude, mais débouchait dans le vide.
+
+**Géométrie** : `spiralStairGeometry` calcule maintenant le début de la trémie depuis la sous-face
+de la dalle haute, la garde au plafond et la progression verticale. La trémie est le secteur allant
+de ce seuil à la marche haute. Le secteur qui suit la marche reste plein et forme naturellement le
+palier d'arrivée. Rotation et sens horaire/antihoraire transforment la même primitive ; aucune
+coordonnée « bas gauche » ou orientation d'écran n'est codée.
+
+**Physique commune** : `worldCompiler` ne découpe plus les sols et plafonds par quatre fragments
+rectangulaires. Il soustrait les multipolygones de trémie aux vraies empreintes de dalle, conserve
+les fragments comme supports et publie une primitive `horizontal-multipolygon` pour leurs
+barrières. `spatialIndex` et `visibility` prennent en charge ses contours et trous au narrow phase.
+Le palier conservé est donc praticable et occultant ; la volée ouverte reste sans collider caché.
+
+**Testé** : 138/138 tests monde/serveur et 39/39 tests Surface. Les nouveaux tests couvrent les
+quatre rotations dans les deux sens, la continuité du support au palier, l'absence de support au
+dessus de la volée et le narrow phase d'un multipolygone à trou. Build Vite local et serveur réussi,
+ESLint ciblé vert. Le lint global reste rouge sur 65 erreurs et 47 avertissements React/personnage
+préexistants, sans erreur issue des fichiers de production modifiés dans cette session.
+
+**Validation navigateur réelle 8293** : sur la session utilisateur
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, l'étage 1 montre la dalle rejoindre la dernière marche. Les
+quatre rotations ont été appliquées successivement, puis le sens horaire a été activé : à chaque
+fois, la trémie et le palier ont suivi la sortie visible. Quatre rotations supplémentaires au total
+et la désactivation du sens horaire ont restauré la définition initiale. Après rechargement et
+retour à l'étage 1, le palier est toujours présent.
+
+**Données** : aucune structure n'a été ajoutée ou supprimée. L'escalier existant a été modifié
+temporairement pour la recette puis remis exactement dans son orientation et son sens initiaux.
+Aucun schéma SQL, migration ou conversion de `surface_data` n'est ajouté.
+
+**Retour arrière** : revert du commit Session 158, rebuild puis redémarrage de 8293/8294. Le retour
+arrière restaure la trémie rectangulaire ; aucune donnée persistée ne nécessite de conversion.

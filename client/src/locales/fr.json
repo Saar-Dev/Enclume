@@ -285,7 +285,7 @@
     "hintDoorConnector": "Clique sur un mur de la salle sélectionnée pour y ajouter une porte-connecteur.",
     "hintElevatorConnector": "Clique dans la salle sélectionnée pour y ajouter un ascenseur-connecteur.",
     "hintWall": "Maintiens le clic gauche et tire pour poser un mur sur l’étage choisi.",
-    "hintStairs": "Dessine l’escalier depuis son entrée vers sa sortie.",
+    "hintStairs": "Oriente la prévisualisation, puis clique sur sa case de départ pour poser l’escalier.",
     "hintErase": "Dessine une zone pour supprimer les éléments de l’étage choisi.",
     "hintSlab": "Maintiens le clic gauche et tire pour dessiner une dalle recto-verso."
   },

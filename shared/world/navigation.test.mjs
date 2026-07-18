@@ -227,6 +227,58 @@ test('une traversée de grimpe reste fractionnable et applique le facteur ×2', 
   assert.ok(Math.abs(continuation.routeCostM - (27.75 - result.plan.spentM)) < 1e-9)
 })
 
+test('un escalier utilise ses ancrages de marche et ignore son propre volume aux paliers', () => {
+  const snapshot = createWorldSnapshot({
+    battlemapId: 'stairs-anchors',
+    worldRevision: 1,
+    spatial: {
+      supports: [
+        {
+          id: 'support:bottom', sourceId: 'bottom', kind: 'floor', walkable: true,
+          movementMultiplier: 1, y: 0,
+          bounds: { min: { x: -0.5, y: -0.1, z: 0 }, max: { x: 0.5, y: 0, z: 1 } },
+        },
+        {
+          id: 'support:top', sourceId: 'top', kind: 'floor', walkable: true,
+          movementMultiplier: 1, y: 1,
+          bounds: { min: { x: 1, y: 0.9, z: 0 }, max: { x: 2, y: 1, z: 1 } },
+        },
+      ],
+      barriers: [],
+      colliders: [{
+        id: 'collider:stairs', sourceId: 'stairs', kind: 'stairs-solid',
+        bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 1.5, y: 1, z: 1 } },
+      }],
+      occluders: [], compartments: [], regions: [],
+      traversals: [{
+        id: 'traversal:stairs', sourceId: 'stairs', kind: 'stairs', mode: 'stairs',
+        from: { x: 0, y: 0, z: 0.5 },
+        to: { x: 1.5, y: 1, z: 0.5 },
+        anchors: [
+          { x: 0, y: 0, z: 0.5 },
+          { x: 0.5, y: 0.34, z: 0.5 },
+          { x: 1, y: 0.67, z: 0.5 },
+          { x: 1.5, y: 1, z: 0.5 },
+        ],
+        enabled: true, allowPartial: true, movementMultiplier: 1,
+      }],
+    },
+  })
+  const graph = buildNavigationGraph(snapshot)
+  const stairNodes = graph.nodes.filter(node => node.traversalId === 'traversal:stairs')
+  assert.deepEqual(stairNodes.map(node => node.point), snapshot.spatial.traversals[0].anchors)
+
+  const result = planWorldPath({
+    snapshot,
+    graph,
+    from: { x: 0, y: 0, z: 0.5 },
+    to: { x: 1.5, y: 1, z: 0.5 },
+    budgetM: 20,
+  })
+  assert.equal(result.status, 'destination')
+  assert.ok(result.plan.segments.some(segment => segment.mode === 'stairs'))
+})
+
 test('un occupant dynamique bloque une destination sans écraser les autres occupants', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-occupancy',

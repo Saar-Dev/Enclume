@@ -1,3 +1,51 @@
+## v195 — 2026-07-18 — Palier haut praticable du colimaçon
+
+### Éditeur et moteur de monde
+- [fix] La trémie du colimaçon suit désormais la volée qui exige réellement de la garde au plafond
+  au lieu de supprimer tout le carré autour de l'escalier.
+- [fix] Le sol est conservé immédiatement après la marche haute : l'arrivée possède un vrai palier
+  qui tourne et s'inverse avec l'orientation et le sens de montée.
+- [engine] Sols et plafonds découpés utilisent le même multipolygone dans le rendu, les supports,
+  les collisions et les lignes de vue ; aucun sol seulement visuel n'est ajouté.
+
+## v194 — 2026-07-18 — Escalier en colimaçon et tokens ancrés par leur socle
+
+### Éditeur et moteur de monde
+- [feat] **Objets 3D > Escaliers** propose un colimaçon paramétrique complet : marches courbes,
+  colonne centrale, garde-corps, trémie, rotation et sens de montée horaire/antihoraire.
+- [feat] Les marches, collisions, volumes de ligne de vue et ancrages intermédiaires du colimaçon
+  proviennent d'une seule géométrie canonique ; un token peut donc s'arrêter pendant la montée.
+- [fix] Chaque modèle de token est désormais posé par le point le plus bas de sa propre boîte
+  englobante. Les GLB dont le pivot diffère ne flottent plus au-dessus du sol.
+
+## v193 — 2026-07-18 — Rotation des fantômes à la molette
+
+### Éditeur de monde
+- [change] Tant qu'un objet orientable est prévisualisé sur la carte, la molette le tourne par
+  quarts de tour sans déplacer la caméra. Cela couvre les objets 3D libres, les escaliers, les
+  échelles et les dalles en verre.
+- [fix] Le tooltip mobile de rotation a été retiré : il suivait le pointeur et ses boutons ne
+  pouvaient donc pas être atteints.
+
+## v192 — 2026-07-18 — Rotation avant pose visible au bon endroit
+
+### Éditeur de monde
+- [fix] Dès que le fantôme d'un escalier, d'une échelle ou d'une dalle en verre apparaît sur la
+  carte, un tooltip **Prévisualisation** affiche directement **Gauche / Droite** et l'angle. Le
+  tooltip reste contenu dans l'écran et l'orientation visible est celle qui sera posée.
+
+## v191 — 2026-07-18 — Placement structurel orientable et vision verticale
+
+### Éditeur de monde
+- [feat] L'escalier, l'échelle et la dalle en verre peuvent être tournés directement pendant leur
+  prévisualisation ; l'objet posé conserve exactement l'orientation affichée.
+- [fix] Les dalles en verre affichent désormais un fantôme cyan lisible avant le clic au lieu de se
+  poser sans aucun retour visuel sur la carte.
+- [fix] Les tokens reposent légèrement plus bas sur leur support, sans modifier leur altitude monde
+  ni les règles de déplacement.
+- [fix] Les trémies d'escalier et les verrières montrent réellement le niveau inférieur. Les dalles
+  opaques continuent de le cacher ailleurs et les murs inférieurs restent entièrement opaques.
+
 ## v190 — 2026-07-16 — Fusion monde, personnages et état initial des PNJ
 
 ### Personnages et combat
