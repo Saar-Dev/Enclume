@@ -1,7 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
-import { skipPlayer, startResolutionPhase } from './socketCombatHelpers.js'
+import { skipPlayer, startResolutionPhase, forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau } from '../../../shared/combatExclusiveActions.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
@@ -61,6 +61,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
       for (const [k, vals] of Object.entries(VALID_STATES)) {
         if (state[k] && !vals.includes(state[k])) return
+      }
+
+      // CaC et Tir mutuellement exclusifs à la déclaration — une seule « Action de combat » par Tour
+      // (LdB « Types d'Actions », docs/PLAN_COMBAT_TIMELINE.md §6sexies point 5). Le client empêche déjà
+      // la double sélection, mais le serveur reste l'autorité — jamais confiance à une validation
+      // client seule (`core.md`). Sans ce guard, un token avec les deux types d'action génère deux
+      // familles d'entrées d'échelle simultanées côté Lot B, ce qui a fait planter le client à la
+      // résolution de la première (trouvé par Saar en testant le Lot B/C, Session 158).
+      if (mapActions?.attack && Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, {
+          message: 'Corps à corps et Assaut (tir) sont mutuellement exclusifs — une seule Action de combat par Tour',
+        })
+        return
       }
 
       // La forme PE14 du payload n'est qu'un adaptateur client ; les décimales monde sont valides.
@@ -147,7 +160,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // Drone : validation droneWeaponInvId contre drone_weapons
           const { droneWeaponInvId } = mapActions.attack
           if (!droneWeaponInvId) {
-            socket.emit('error', { message: 'Arme drone requise pour un assaut (PC22-D)' })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut drone impossible — aucune arme drone sélectionnée' })
             return
           }
           const droneWeapon = await db('drone_weapons')
@@ -156,7 +169,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             .select('drone_weapons.*', 'ref_equipment.range as ref_range')
             .first()
           if (!droneWeapon) {
-            socket.emit('error', { message: "Arme drone introuvable (PC22-D)" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut drone impossible — l'arme drone sélectionnée est introuvable (désinstallée entre-temps ?)" })
             return
           }
           assaultWeaponRefRange = droneWeapon.ref_range ?? null
@@ -164,7 +177,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // Humanoïde : validation char_inventory + PC23
           const { weaponInvId } = mapActions.attack
           if (!weaponInvId) {
-            socket.emit('error', { message: 'Arme requise pour un assaut (PC22)' })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut impossible — aucune arme sélectionnée' })
             return
           }
           const weapon = await db('char_inventory')
@@ -173,7 +186,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             .select('char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
             .first()
           if (!weapon) {
-            socket.emit('error', { message: "Arme introuvable dans l'inventaire (PC22)" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme sélectionnée est introuvable dans l'inventaire (transférée entre-temps ?)" })
             return
           }
           // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
@@ -183,13 +196,13 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             .whereIn('slot_code', ['MG', 'MD', '2M', 'Tr'])
             .first()
           if (!weaponInHand) {
-            socket.emit('error', { message: "L'arme doit être équipée (slot arme) (PC22)" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
             return
           }
           // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
           const fireMode = (state.fire_mode ?? 'cc').toUpperCase()
           if (weapon.ref_fire_mode && !weapon.ref_fire_mode.toUpperCase().includes(fireMode)) {
-            socket.emit('error', { message: `Mode de tir ${fireMode} non disponible pour cette arme` })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: `Mode de tir ${fireMode} non disponible pour cette arme (modes compatibles : ${weapon.ref_fire_mode})` })
             return
           }
           assaultWeaponRefRange = weapon.ref_range ?? null
@@ -200,7 +213,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
               ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUES' }).first()
               : null
             if (!autoSkill) {
-              socket.emit('error', { message: 'Compétence Tir Automatique requise (PC23)' })
+              socket.emit(WS.COMBAT_DECLARE_ERROR, {
+                username: character.name,
+                message: `Rafale (${fireMode}) impossible — la compétence Tir Automatique n'est pas acquise sur cette fiche. Repassez en Coup par coup (CC), ou ajoutez la compétence sur la fiche du personnage.`,
+              })
               return
             }
           }
@@ -261,9 +277,6 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
           iniDelta += -3
           if (mapActions.melee.length > 1) iniDelta += -5
-        }
-        if (mapActions?.attack?.cover_shot) {
-          iniDelta += state.cover === 'important' ? -5 : -3
         }
         // Tir visé — validé/recalculé serveur, jamais confiance au client. isAimEligible bloque
         // déjà toute combinaison avec le CaC ou une transition d'état (règle "aucune autre action
@@ -494,14 +507,20 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
   })
 
   // ─── COMBAT:SKIP_PLAYER ───────────────────────────────────────────────
-  // GM passe le tour d'un joueur pendant la phase ANNOUNCEMENT.
-  // Payload : { tokenId }
+  // GM passe le tour d'un joueur pendant la phase ANNOUNCEMENT, ou force la suite de l'étape en cours
+  // pendant la RÉSOLUTION (docs/PLAN_COMBAT_TIMELINE.md Lot D — même bouton, même événement, comportement
+  // qui dépend du sous-état bloqué : voir forceAdvanceResolution). Payload : { tokenId } — tokenId n'est
+  // utile qu'en ANNONCE, ignoré en Résolution (le serveur dérive lui-même ce qui bloque).
   socket.on(WS.COMBAT_SKIP_PLAYER, async ({ tokenId }) => {
     if (!isGm) return
     try {
       const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
       if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_SKIP_PLAYER')) {
         console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_SKIP_PLAYER`)
+        return
+      }
+      if (_gPhase === 'RESOLUTION') {
+        await forceAdvanceResolution(io, campaignId, pendingMaps)
         return
       }
       // Nettoyer le timer auto-skip si actif

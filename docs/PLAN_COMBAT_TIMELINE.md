@@ -1,7 +1,20 @@
 # PLAN_COMBAT_TIMELINE.md — Refonte du moteur de tours en timeline à phases (LdB p.212-219)
 
-> Créé : 2026-07-18 (dev/Saar). Statut : **Lot A codé et testé en base réelle (Session 158) — reste la
-> confirmation navigateur avant d'attaquer le Lot B (moteur de résolution générique).** Conception
+> Créé : 2026-07-18 (dev/Saar). Statut : **Lot A + correctif arme en main confirmés fonctionnels en
+> navigateur (Session 158). Lots B (moteur de résolution générique), C (timeline client) et D (contrôle
+> du temps MJ) : codés intégralement, serveur testé par fixtures jetables, client par build Vite propre
+> — décision Saar d'enchaîner sans attendre de validation navigateur intermédiaire (temps de test
+> limité), reste la validation navigateur groupée par Saar (`docs/EN_COURS.md` Items 86-87 pour le
+> détail complet, les fichiers exacts et les bugs trouvés en route — dont un bug réel du Lot B trouvé en
+> testant le Lot D, fenêtre de réaction en boucle infinie).**
+> **Refonte (Session 159, 2026-07-18)** : §6ter point 3 (fenêtre de réaction temporisée,
+> `AWAITING_REACTION_WINDOW`) **retiré et remplacé** par une règle unique conforme au RAW (§0.1 point 4 —
+> aucun minuteur n'existe dans le texte) après que 3 bugs réels en une journée de test navigateur se
+> soient tous révélés causés par ce même sous-état. « Agir maintenant » (`COMBAT_ACT_NOW`) est désormais
+> valable à tout moment de `SLOT_ACTIVE`, bloqué uniquement si le pas qu'il court-circuiterait est déjà
+> en cours de résolution (`AWAITING_DEFENSE`/`AWAITING_DAMAGE`) — détail complet : `docs/EN_COURS.md`
+> Item 88. §6ter point 3 ci-dessous reste comme trace de la décision originale (2026-07-18, avant
+> refonte) ; ne plus l'implémenter tel quel. Conception
 > complète des 4 Lots (A/B/C/D, §5), chacun analysé à charge séparément puis recroisés (§6quinquies).
 > Décidé Option A
 > (« des bases saines seront toujours plus pertinentes ») après que la discussion de
@@ -443,8 +456,9 @@ point 3, qui touche au ressenti de jeu) :
 2. **Espacement large des positions dès la construction de l'échelle** (ex. ×100 par rapport à
    l'Initiative brute) pour laisser de la place aux insertions « Agir maintenant » sans avoir besoin
    d'un type décimal.
-3. **Fenêtre de réaction courte après chaque entrée résolue — modélisée comme un sous-état propre du
-   FSM central, pas comme un minuteur externe.** Confirmé Saar, avec deux corrections issues de
+3. **[RETIRÉ Session 159, cf. statut en tête de document — conservé ici comme trace historique, ne pas
+   réimplémenter] Fenêtre de réaction courte après chaque entrée résolue — modélisée comme un sous-état
+   propre du FSM central, pas comme un minuteur externe.** Confirmé Saar, avec deux corrections issues de
    l'analyse à charge (2026-07-18) :
    - **Correction 1 — orchestrateur unique.** Proposition initiale erronée : réutiliser tel quel
      `startAnnouncementTimers`/`skipPlayer` (`socketCombatHelpers.js:78-94`) aurait recréé le problème

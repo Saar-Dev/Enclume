@@ -98,7 +98,7 @@ export function getAimIneligibilityReasons({ mapActions, state, quick, entry, is
   if (state?.weapon !== entry?.state_weapon) reasons.push('changement d\'arme')
   if (state?.fire_mode !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
   if (state?.cover !== entry?.state_cover) reasons.push('changement de couverture')
-  if (state?.vitesse !== entry?.state_vitesse) reasons.push('précipitation')
+  if (state?.vitesse !== entry?.state_vitesse) reasons.push('changement de vitesse')
   // Aucune autre mapAction / quick action ce tour.
   if (mapActions?.move) reasons.push('déplacement')
   if (mapActions?.interact) reasons.push('interaction')

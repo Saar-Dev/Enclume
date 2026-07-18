@@ -19,6 +19,7 @@ import {
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
+import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
 
 
@@ -154,7 +155,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
   try {
     const [updatedState] = await db('combat_state')
       .where({ campaign_id: campaignId })
-      .update({ phase: 'RESOLUTION', active_slot_idx: 0, updated_at: db.fn.now() })
+      .update({ phase: 'RESOLUTION', updated_at: db.fn.now() })
       .returning('current_turn')
     const currentTurn = updatedState?.current_turn ?? 1
     await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
@@ -183,10 +184,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
       actions: pendingActions,
     })
 
-    io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, {
-      activeSlotIdx: 0,
-      tokenId: announcedRoster[0]?.token_id ?? null,
-    })
+    await advanceTimeline(io, campaignId, pendingMaps)
 
     console.log(`[WS] startResolutionPhase — campagne ${campaignId}`)
   } catch (err) {
@@ -194,17 +192,22 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
   }
 }
 
-// ─── Construction de l'échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot A, §5) ─────────────────
+// ─── Construction de l'échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot A §5, Lot B §5/§6bis) ──
 // Une entrée par action complexe déclarée (CaC/Tir uniquement — décor/grenade pas encore des types
 // réels) ; move/reload/micro/skip n'en génèrent pas (taxonomie RAW, §6 point 6 du plan). Espacement
-// ×100 par rapport à l'Initiative brute (§6ter point 2, laisse la place aux insertions futures du Lot
-// B). Décalage RAW -5 Initiative par attaque supplémentaire d'une série CaC (§0.1 point 6, jamais
-// câblé avant ce Lot) : 2ᵉ attaque -500, 3ᵉ -1000 dans cette échelle ×100 — position ≤ 0 → 'lost'
-// immédiat (§6bis point 7 / §6sexies point 1). Le moteur de résolution actuel (advanceSlot/
-// active_slot_idx) ne consomme pas encore cette table — bascule réelle au Lot B, cette fonction ne
-// fait qu'alimenter les données.
+// ×100 par rapport à l'Initiative brute (§6ter point 2, laisse la place aux insertions du Lot B).
+// Décalage RAW -5 Initiative par attaque supplémentaire d'une série CaC (§0.1 point 6) : 2ᵉ attaque
+// -500, 3ᵉ -1000 dans cette échelle ×100 — position ≤ 0 → 'lost' immédiat (§6bis point 7 / §6sexies
+// point 1). Un token dont l'Allure déclarée (state_vitesse) vaut 'delayed' — Retarder son Action,
+// §1/§0.1 point 4 — reçoit ses entrées sans position (delayed_waiting), positionnées plus tard par
+// COMBAT_ACT_NOW (§6bis point 2 : Retarder porte sur le Tour entier de l'action, jamais une attaque
+// isolée d'une série — la série entière bascule ensemble).
+function computeSeriesPositions(basePosition, count) {
+  return Array.from({ length: count }, (_, idx) => basePosition - idx * 500)
+}
+
 async function buildTimelineEntries(campaignId, turnNumber, pendingActions, roster) {
-  const initiativeByToken = new Map(roster.map(r => [r.token_id, r.initiative]))
+  const rosterByToken = new Map(roster.map(r => [r.token_id, r]))
   const rows = []
 
   const meleeByToken = new Map()
@@ -214,25 +217,27 @@ async function buildTimelineEntries(campaignId, turnNumber, pendingActions, rost
     meleeByToken.get(action.token_id).push(action)
   }
   for (const [tokenId, actions] of meleeByToken) {
-    const basePosition = (initiativeByToken.get(tokenId) ?? 0) * 100
+    const isDelayed = rosterByToken.get(tokenId)?.state_vitesse === 'delayed'
     const groupId = crypto.randomUUID()
+    const positions = isDelayed ? null : computeSeriesPositions((rosterByToken.get(tokenId)?.initiative ?? 0) * 100, actions.length)
     actions.forEach((action, idx) => {
-      const position = basePosition - idx * 500
       rows.push({
         campaign_id: campaignId,
         turn_number: turnNumber,
         token_id: tokenId,
         combat_action_id: action.id,
         declaration_group_id: groupId,
-        phase_position: position,
-        status: position <= 0 ? 'lost' : 'scheduled',
+        phase_position: isDelayed ? null : positions[idx],
+        status: isDelayed ? 'delayed_waiting' : (positions[idx] <= 0 ? 'lost' : 'scheduled'),
       })
     })
   }
 
   for (const action of pendingActions) {
     if (action.type !== 'assault') continue
-    const position = (initiativeByToken.get(action.token_id) ?? 0) * 100
+    const rosterEntry = rosterByToken.get(action.token_id)
+    const isDelayed = rosterEntry?.state_vitesse === 'delayed'
+    const position = isDelayed ? null : (rosterEntry?.initiative ?? 0) * 100
     rows.push({
       campaign_id: campaignId,
       turn_number: turnNumber,
@@ -240,31 +245,730 @@ async function buildTimelineEntries(campaignId, turnNumber, pendingActions, rost
       combat_action_id: action.id,
       declaration_group_id: null,
       phase_position: position,
-      status: position <= 0 ? 'lost' : 'scheduled',
+      status: isDelayed ? 'delayed_waiting' : (position <= 0 ? 'lost' : 'scheduled'),
     })
   }
 
   if (rows.length > 0) await db('combat_timeline_entries').insert(rows)
+
+  // [DBG] Session 159 (retour Saar, « Action retardée n'a pas fonctionné ») — Retarder ne porte
+  // aucun effet visible sur un personnage sans action complexe (assault/melee) déclarée ce Tour :
+  // move/reload/micro n'ont structurellement jamais d'entrée d'échelle (§5 « portée des entrées »,
+  // conception d'origine du Lot B), donc rien à repositionner via Agir maintenant. Log explicite pour
+  // distinguer ce cas RAW-conforme mais peu visible d'un bug.
+  const delayedTokenIds = roster.filter(r => r.state_vitesse === 'delayed').map(r => r.token_id)
+  for (const tokenId of delayedTokenIds) {
+    const hasEntry = rows.some(r => r.token_id === tokenId)
+    console.log(`[DBG] buildTimelineEntries — token:${tokenId} déclaré delayed, ${hasEntry ? 'a' : "N'A PAS"} d'entrée d'échelle (assault/melee)`)
+  }
 }
 
-// ─── Helper — avancer au slot suivant pendant la phase RÉSOLUTION ─────────────
-// nextIdx >= slots.length → fin de tour (endTurn).
-// Sinon : met à jour active_slot_idx en DB + broadcast COMBAT_SLOT_ADVANCED.
-export async function advanceSlot(io, campaignId, slots, nextIdx, pendingMaps) {
+// ─── Moteur de résolution générique (Lot B §5/§6ter) ───────────────────────────────────────────────
+// Remplace advanceSlot/active_slot_idx : pas de curseur dupliqué (§6ter point 1), le « pas » courant
+// se relit en direct à chaque appel, fusion de deux sources triées par position DESC :
+//   - entrées 'scheduled' de combat_timeline_entries (actions complexes) ;
+//   - membres du roster annoncés sans AUCUNE entrée ce Tour et pas encore résolus (has_resolved=false,
+//     colonne combat_roster existante depuis la migration 54, jamais câblée jusqu'ici) — leurs actions
+//     simples (move/reload/micro) n'ont structurellement pas d'entrée (§5 « portée des entrées ») mais
+//     doivent tout de même occuper leur propre phase dans l'échelle, à leur Initiative brute.
+// Un token qui a AU MOINS une entrée ce Tour voit ses actions simples résolues avec sa première entrée
+// (has_resolved coché à ce moment-là) — CaC et Tir sont mutuellement exclusifs à la déclaration
+// (§6sexies point 5), donc un token n'a jamais qu'une seule « famille » d'entrées ce Tour.
+export async function pickNextTimelineStep(campaignId, turnNumber) {
+  const [nextEntry, tokensWithEntries] = await Promise.all([
+    db('combat_timeline_entries')
+      .where({ campaign_id: campaignId, turn_number: turnNumber, status: 'scheduled' })
+      .whereNotNull('phase_position')
+      .orderBy('phase_position', 'desc')
+      .first(),
+    db('combat_timeline_entries')
+      .where({ campaign_id: campaignId, turn_number: turnNumber })
+      .distinct('token_id').pluck('token_id'),
+  ])
+  const nextSimple = await db('combat_roster')
+    .where({ campaign_id: campaignId, status: 'active', has_announced: true, has_resolved: false })
+    .modify(qb => { if (tokensWithEntries.length > 0) qb.whereNotIn('token_id', tokensWithEntries) })
+    .orderBy('initiative', 'desc')
+    .first()
+
+  if (!nextEntry && !nextSimple) return null
+  if (!nextEntry) return { kind: 'simple', tokenId: nextSimple.token_id, position: nextSimple.initiative * 100 }
+  if (!nextSimple) return { kind: 'entry', tokenId: nextEntry.token_id, entry: nextEntry, position: nextEntry.phase_position }
+  const simplePosition = nextSimple.initiative * 100
+  return simplePosition > nextEntry.phase_position
+    ? { kind: 'simple', tokenId: nextSimple.token_id, position: simplePosition }
+    : { kind: 'entry', tokenId: nextEntry.token_id, entry: nextEntry, position: nextEntry.phase_position }
+}
+
+// Groupe delayed_waiting suivant pour le tour obligatoire de fin de Tour (§6 point 2) : ordre croissant
+// d'Initiative (le plus lent en premier), aucun minuteur — réponse explicite requise (Agir maintenant
+// ou Passer, COMBAT_DELAYED_PASS). N'est consulté que lorsque pickNextTimelineStep ne renvoie plus rien.
+async function pickNextObligatoryDelayed(campaignId, turnNumber) {
+  const entry = await db('combat_timeline_entries as cte')
+    .join('combat_roster as cr', function() {
+      this.on('cr.campaign_id', '=', 'cte.campaign_id').andOn('cr.token_id', '=', 'cte.token_id')
+    })
+    .where({ 'cte.campaign_id': campaignId, 'cte.turn_number': turnNumber, 'cte.status': 'delayed_waiting' })
+    .orderBy('cr.initiative', 'asc')
+    .select('cte.token_id', 'cte.declaration_group_id')
+    .first()
+  return entry ?? null
+}
+
+// Position d'insertion d'un « Agir maintenant » (§6ter point 3 / §0.1 point 4-5 / §6 point 8) :
+// strictement au-dessus de la référence (le pas qui allait résoudre ensuite) — priorité RAW sur une
+// action normale à la même phase — avec l'Initiative du personnage en second départage pour deux
+// déclenchements « Agir maintenant » quasi simultanés (le plus rapide gagne, cohérent avec le reste du
+// moteur). +100 reste sous l'espacement ×100 entre deux Initiatives de base, jamais de collision avec
+// une entrée existante plus haute (référence = pas le plus haut restant, par construction).
+function computeActNowPosition(referencePosition, initiative) {
+  return referencePosition + 100 + initiative
+}
+
+// [BUG RÉEL, Session 159, retour Saar — « Agir maintenant devrait apparaître immédiatement »] :
+// `sub_phase` n'était jamais poussé au client normalement — seulement restauré à la reconnexion
+// (`COMBAT_STATE_SYNC`, socket/index.js). `subPhase` restait donc figé à `null` côté client pendant
+// toute une session de jeu normale, rendant systématiquement fausses toutes les conditions
+// `subPhase === 'SLOT_ACTIVE'` ajoutées cette session (panneau Agir maintenant mi-Tour, retry precheck,
+// panneau MJ Forcer) — jamais détecté car le flux principal (bouton Agir normal) ne dépend pas de
+// `subPhase`. Corrigé à la source unique : `broadcastTimelineState` relit et inclut désormais toujours
+// le `sub_phase` courant, pour tous ses appelants sans exception.
+async function broadcastTimelineState(io, campaignId, turnNumber, currentStep) {
+  const [entries, state] = await Promise.all([
+    db('combat_timeline_entries')
+      .where({ campaign_id: campaignId, turn_number: turnNumber })
+      .orderBy('phase_position', 'desc'),
+    db('combat_state').where({ campaign_id: campaignId }).first(),
+  ])
+  io.to(campaignId).emit(WS.COMBAT_TIMELINE_UPDATED, { turnNumber, entries, currentStep, subPhase: state?.sub_phase ?? null })
+}
+
+// Rediffuse l'état courant (même pas, nouveau sub_phase) après un `setFSMSubPhase(..., 'AWAITING_DEFENSE'
+// | 'AWAITING_DAMAGE')` qui ne passe pas par `advanceTimeline` (résolution suspendue en attendant un
+// joueur, pas un changement de pas) — sans quoi ce changement de sub_phase, bien qu'écrit en base,
+// n'atteint jamais les autres clients (panneau MJ « Forcer », retry precheck).
+async function broadcastCurrentSubPhase(io, campaignId) {
+  const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+  if (!state) return
+  const turnNumber = state.current_turn
+  const step = await pickNextTimelineStep(campaignId, turnNumber)
+  await broadcastTimelineState(io, campaignId, turnNumber, step)
+}
+
+// ─── advanceTimeline — remplace advanceSlot, seul point d'entrée « fais avancer la résolution » ────
+// Pas de fenêtre de réaction temporisée (retirée Session 159, retour Saar — cf. commentaire en tête de
+// `combatFSM.js`) : dès qu'un pas normal existe, on le présente directement en SLOT_ACTIVE.
+// `triggerActNow` reste utilisable à tout moment pendant SLOT_ACTIVE pour un personnage en délai — le
+// RAW ne prévoit aucun minuteur, seulement une priorité sur l'action normale à la même phase.
+export async function advanceTimeline(io, campaignId, pendingMaps) {
   try {
-    if (nextIdx >= slots.length) {
-      await endTurn(io, campaignId, pendingMaps)
+    const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+    const turnNumber = state.current_turn
+
+    const step = await pickNextTimelineStep(campaignId, turnNumber)
+    if (step) {
+      await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+      await broadcastTimelineState(io, campaignId, turnNumber, step)
       return
     }
-    await db('combat_state')
-      .where({ campaign_id: campaignId })
-      .update({ active_slot_idx: nextIdx, updated_at: db.fn.now() })
-    io.to(campaignId).emit(WS.COMBAT_SLOT_ADVANCED, {
-      activeSlotIdx: nextIdx,
-      tokenId: slots[nextIdx].token_id,
+
+    const obligatoryDelayed = await pickNextObligatoryDelayed(campaignId, turnNumber)
+    if (obligatoryDelayed) {
+      await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+      await broadcastTimelineState(io, campaignId, turnNumber,
+        { kind: 'delayed_turn', tokenId: obligatoryDelayed.token_id, groupId: obligatoryDelayed.declaration_group_id })
+      return
+    }
+
+    await endTurn(io, campaignId, pendingMaps)
+  } catch (err) {
+    console.error('[WS] advanceTimeline error:', err.message)
+  }
+}
+
+// Force-résolution d'un token hors du parcours normal (étourdissement — STUN2) : ses actions et
+// entrées encore en jeu ce Tour sont clôturées (resolved/lost), jamais laissées 'scheduled'/
+// 'delayed_waiting' orphelines — sinon pickNextTimelineStep les resélectionnerait indéfiniment.
+export async function forfeitToken(campaignId, tokenId, turnNumber) {
+  await db('combat_actions')
+    .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: turnNumber })
+    .update({ status: 'resolved', updated_at: db.fn.now() })
+  await db('combat_timeline_entries')
+    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber })
+    .whereIn('status', ['scheduled', 'delayed_waiting'])
+    .update({ status: 'lost', updated_at: db.fn.now() })
+  await db('combat_roster')
+    .where({ campaign_id: campaignId, token_id: tokenId })
+    .update({ has_resolved: true, updated_at: db.fn.now() })
+}
+
+// ─── « Agir maintenant » (docs/PLAN_COMBAT_TIMELINE.md §1, refonte Session 159) ────────────────────
+// Repositionne TOUTE la série delayed_waiting d'un token (§6bis point 2 : Retarder porte sur le Tour
+// entier de l'action, jamais une attaque isolée) au-dessus du prochain pas normal restant — priorité
+// RAW sur une action normale à la même phase (§0.1 points 4-5) — ou, s'il n'en reste plus (tour
+// obligatoire de fin de Tour, §6 point 2), juste sous la dernière entrée résolue ce Tour.
+export async function triggerActNow(io, campaignId, tokenId, pendingMaps) {
+  const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+  const turnNumber = state.current_turn
+  const entries = await db('combat_timeline_entries')
+    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber, status: 'delayed_waiting' })
+    .orderBy('created_at', 'asc')
+  if (entries.length === 0) return
+
+  const rosterEntry = await db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).first()
+
+  // Guard RAW (REGLESYSCOMBAT.md:554-567) : « agir à n'importe quelle phase d'Action » — mais « plus
+  // tard dans le Tour » que sa propre Initiative (retour Saar, Session 159 : Retarder décale l'Action
+  // vers plus tard, jamais plus tôt — sinon ce serait Précipiter). Actif seulement une fois que le pas
+  // normal à résoudre a atteint (ou dépassé) sa propre phase d'origine (`initiative × 100`, même unité
+  // que `buildTimelineEntries`) — jamais avant, quel que soit le sous-état. Reste actif ensuite jusqu'à
+  // la fin du Tour. Bloqué aussi si ce pas est déjà en cours de résolution (AWAITING_DEFENSE/
+  // AWAITING_DAMAGE, dés déjà lancés — §6ter point 3, « explicitement écarté »), ou si c'est le tour
+  // obligatoire d'un AUTRE personnage en délai (§6 point 2, ordre croissant d'Initiative — pas de resquille).
+  const ownPosition = (rosterEntry?.initiative ?? 0) * 100
+  const referenceStep = await pickNextTimelineStep(campaignId, turnNumber)
+  if (referenceStep) {
+    if (state.sub_phase !== 'SLOT_ACTIVE') return 'busy'
+    if (referenceStep.position > ownPosition) return 'too_early'
+  } else {
+    const obligatoryDelayed = await pickNextObligatoryDelayed(campaignId, turnNumber)
+    if (obligatoryDelayed?.token_id !== tokenId) return 'not_your_turn'
+  }
+
+  let base
+  if (referenceStep) {
+    base = computeActNowPosition(referenceStep.position, rosterEntry?.initiative ?? 0)
+  } else {
+    // Tour obligatoire (§6 point 2) : plus de pas normal en référence — la position n'a alors qu'une
+    // valeur d'audit/affichage (l'ordre réel de ce cas vient de pickNextObligatoryDelayed, pas de
+    // phase_position, §6ter point 1 étendu). Ancrée sur la dernière entrée résolue chronologiquement
+    // (resolved_at, pas la plus haute position — sinon une série d'attaques multiples déjà résolue
+    // plus tôt dans le Tour redeviendrait la référence au lieu de ce qui vient de se passer).
+    const lastResolved = await db('combat_timeline_entries')
+      .where({ campaign_id: campaignId, turn_number: turnNumber, status: 'resolved' })
+      .orderBy('resolved_at', 'desc')
+      .first()
+    base = (lastResolved?.phase_position ?? 0) - 1
+  }
+
+  const positions = computeSeriesPositions(base, entries.length)
+  for (let idx = 0; idx < entries.length; idx++) {
+    await db('combat_timeline_entries').where({ id: entries[idx].id }).update({
+      phase_position: positions[idx],
+      status: positions[idx] <= 0 ? 'lost' : 'scheduled',
+      updated_at: db.fn.now(),
+    })
+  }
+
+  await advanceTimeline(io, campaignId, pendingMaps)
+  return 'ok'
+}
+
+// ─── « Passer » consciemment au tour obligatoire de fin de Tour (§6 point 2) ────────────────────────
+// Distinct d'une action perdue (cible invalide/étourdissement, statut 'lost') : ici le joueur choisit
+// délibérément de ne rien faire — statut 'skipped', cohérent avec le CHECK de combat_timeline_entries.
+export async function triggerDelayedPass(io, campaignId, tokenId, pendingMaps) {
+  const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+  const turnNumber = state.current_turn
+
+  // Guard — uniquement au tour obligatoire de ce token précis (§6 point 2), jamais pendant une simple
+  // fenêtre de réaction (Passer n'a de sens que quand c'est effectivement son tour, pas avant).
+  const referenceStep = await pickNextTimelineStep(campaignId, turnNumber)
+  if (referenceStep) return
+  const obligatoryDelayed = await pickNextObligatoryDelayed(campaignId, turnNumber)
+  if (obligatoryDelayed?.token_id !== tokenId) return
+
+  const updated = await db('combat_timeline_entries')
+    .where({ campaign_id: campaignId, token_id: tokenId, turn_number: turnNumber, status: 'delayed_waiting' })
+    .update({ status: 'skipped', updated_at: db.fn.now() })
+  if (updated === 0) return
+  await db('combat_roster')
+    .where({ campaign_id: campaignId, token_id: tokenId })
+    .update({ has_resolved: true, updated_at: db.fn.now() })
+  await advanceTimeline(io, campaignId, pendingMaps)
+}
+
+// ─── confirmMeleeDefense / confirmDamage (docs/PLAN_COMBAT_TIMELINE.md Lot D) ──────────────────────
+// Extraits des handlers socket COMBAT_MELEE_DEFENSE_CONFIRM/COMBAT_DAMAGE_CONFIRM (socketCombatResolution.js)
+// — même code exact, appelable aussi depuis le déclenchement générique MJ (COMBAT_SKIP_PLAYER, « le
+// serveur lance les dés à sa place — il devient PNJ pour le Tour ») sans dupliquer le moindre calcul.
+// `forced=true` : pas de vérification de propriétaire (déjà vérifiée en amont — c'est le MJ qui
+// déclenche), jet affiché sous l'identité du personnage plutôt que celle du MJ (même patron que les
+// PNJ ailleurs dans ce fichier).
+export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, socket, { requesterUserId, requesterUsername, isGm, forced = false } = {}) {
+  const row = await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).first()
+  if (!row) {
+    console.warn(`[WS] confirmMeleeDefense — pas de pending pour defender:${tokenId}`)
+    return
+  }
+  const pending = row.payload
+  if (!forced && pending.defenderUserId !== requesterUserId && !isGm) return
+  await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).delete()
+  await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+
+  const {
+    campaignId: meleeCampaignId,
+    attackerTokenId, attackerCharacter,
+    attackerUsername, attackerColor,
+    rollAttaque, chancesAttaque,
+    defenderSkillTotal, defenderEffectiveMalus,
+    multiMalusDefenseur,
+    damageFormula, modDom, combatModeBonus,
+    characterIdCible, char_sheet_id_cible,
+    for_na_cible, con_na_cible, vol_na_cible,
+    targetName, userId,
+    situationDef: pendingSituationDef = [],
+  } = pending
+
+  try {
+    // 1. Roll défense D20 (serveur)
+    const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
+    // Mode combat du défenseur PJ — Offensif/Charge → pénalité, Défensif/Retraite → bonus (CaC3)
+    const rosterDef = await db('combat_roster').where({ campaign_id: meleeCampaignId, token_id: tokenId }).first()
+    const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
+    let chanceDefense = defenderSkillTotal + defenderEffectiveMalus + (multiMalusDefenseur ?? 0)
+    if      (defCombatMode === 'offensif') chanceDefense -= 5
+    else if (defCombatMode === 'charge')   chanceDefense -= 7
+    else if (defCombatMode === 'defensif') chanceDefense += 3
+    else if (defCombatMode === 'retraite') chanceDefense += 5
+
+    // Terrain instable défenseur PJ — compétence limitative ACROBATIE_EQUILIBRE
+    let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
+    if (pendingSituationDef.includes('cac_terrain_instable') && char_sheet_id_cible) {
+      const [attrsCibleDef, archetypeCibleDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsCibleDef] = await Promise.all([
+        db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
+        db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
+        db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
+        db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+        getMutationEffects(char_sheet_id_cible),
+      ])
+      const genoCibleDef = archetypeCibleDef?.genotype_id
+        ? await db('ref_genotypes').where({ id: archetypeCibleDef.genotype_id }).first() : null
+      acrobatieDefTotal = acrobatieRefDef
+        ? calcSkillTotal(attrsCibleDef, acrobatieCharDef, acrobatieRefDef, genoCibleDef, mutationEffectsCibleDef)
+        : defenderSkillTotal
+      terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
+      chanceDefense += terrainInstableModDef
+    }
+
+    // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
+    const mrAttaque      = chancesAttaque - rollAttaque
+    const mrDefense      = chanceDefense  - rollDefense
+    const attackSuccess  = rollAttaque  <= chancesAttaque
+    const defenseSuccess = rollDefense  <= chanceDefense
+    const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
+
+    const modeCombatDefPj = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
+    const breakdownDefPj = [
+      { label: 'Compétence', value: defenderSkillTotal, type: 'base' },
+      ...(modeCombatDefPj !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' }] : []),
+      ...((multiMalusDefenseur ?? 0) !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
+      ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
+      ...(terrainInstableModDef !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' }] : []),
+      { label: 'Seuil', value: chanceDefense, type: 'total' },
+    ]
+    console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
+
+    // Broadcast roll défense au chat — identité du défenseur si forcé par le MJ (§ « devient PNJ
+    // pour le Tour », docs/PLAN_COMBAT_TIMELINE.md Lot D), sinon celle du joueur qui a cliqué.
+    const now = new Date().toISOString()
+    io.to(meleeCampaignId).emit(WS.DICE_RESULT, {
+      userId: forced ? null : requesterUserId,
+      username: forced ? (targetName ?? 'PNJ') : requesterUsername,
+      color: forced ? '#808080' : '#6060c0',
+      formula: '1d20', rolls: defRolls, total: rollDefense,
+      isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
+      seed: defSeed, timestamp: now,
+      skillLabel:        'Jet pour défendre (contact)',
+      mechanicalTotal:   defenderSkillTotal,
+      diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
+      chancesDeReussite: chanceDefense,
+      isSuccess:         defenseSuccess,
+      mr:                chanceDefense - rollDefense,
+      breakdown:         breakdownDefPj,
+    })
+
+    // 3. Résultat opposition → room
+    io.to(meleeCampaignId).emit(WS.COMBAT_MELEE_RESULT, {
+      attaquantId: attackerTokenId,
+      defenseurId: tokenId,
+      rollAttaque, chancesAttaque,
+      rollDefense, chanceDefense,
+      hit,
+      multiMalusAttaquant: pending.multiMalusAttaquant ?? 0,
+      multiMalusDefenseur: pending.multiMalusDefenseur ?? 0,
+    })
+
+    // 4. Dégâts si touche
+    if (hit) {
+      if (attackerCharacter.type === 'pj') {
+        // PJ attaquant : invite à lancer les dés de dégâts (CombatDamageWindow existant). Plusieurs
+        // entrées peuvent désormais coexister pour le même attaquant (attaques multiples CaC touchant
+        // chacune un défenseur PJ distinct, docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO
+        // par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre entrée n'attendait
+        // déjà (sinon le joueur perdrait de vue le prompt encore non résolu de la précédente).
+        await db('combat_pending').insert({
+          campaign_id: meleeCampaignId,
+          token_id: attackerTokenId,
+          type: 'damage',
+          payload: {
+            type: 'melee',
+            campaignId: meleeCampaignId,
+            targetTokenId: tokenId,
+            characterIdCible,
+            char_sheet_id_cible,
+            modDom,
+            combatModeBonus,
+            formula: damageFormula,
+            for_na_cible,
+            con_na_cible,
+            vol_na_cible,
+            tireurUsername: attackerUsername,
+            tireurColor: attackerColor,
+            userId,
+            targetName,
+          },
+        })
+        await setFSMSubPhase(db, meleeCampaignId, 'AWAITING_DAMAGE')
+        await broadcastCurrentSubPhase(io, meleeCampaignId)
+        const [{ count: pendingDamageCount }] = await db('combat_pending')
+          .where({ campaign_id: meleeCampaignId, token_id: attackerTokenId, type: 'damage' })
+          .count('* as count')
+        if (parseInt(pendingDamageCount, 10) === 1) {
+          // Trouver le socket de l'attaquant PJ
+          const sockets = await io.fetchSockets()
+          const attackerSocket = sockets.find(s =>
+            s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
+          )
+          const prompt = { tokenId: attackerTokenId, formula: damageFormula, targetName }
+          if (attackerSocket) {
+            attackerSocket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)
+          } else if (socket) {
+            socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
+          }
+        }
+      } else {
+        // PNJ attaquant : résolution auto des dégâts
+        const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+        const degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
+        const hitResult = await damageService.resolveTargetHit(io, db, meleeCampaignId, {
+          degautsBruts, characterIdCible, cibleType: 'pj',
+          char_sheet_id_cible,
+          for_na_cible, con_na_cible, vol_na_cible,
+          treatAsContact: true,
+        })
+        if (hitResult === null) return
+        const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+
+        if (shockResult) {
+          statusService.emitShockDiceResult(io, meleeCampaignId, shockResult, userId, attackerUsername, attackerColor)
+        }
+
+        io.to(meleeCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+          tireurId:    attackerTokenId,
+          cibleId:     tokenId,
+          localisation,
+          degautsBruts,
+          degatsNets,
+          severity:    finalSeverity,
+          is_lethal,
+          isSuccess:   true,
+          isPnj:       true,
+          roll:        rollAttaque,
+          chancesDeReussite: chancesAttaque,
+          shockResult,
+        })
+        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+          statusService.applyStun(io, db, meleeCampaignId, {
+            targetTokenId: tokenId, outcome: shockResult.outcome,
+            userId, username: attackerUsername, color: attackerColor,
+          }).catch(err => console.error('[WS] applyStun error:', err.message))
+        }
+      }
+    }
+
+    // 5. Pas suivant de l'échelle — l'entrée elle-même est déjà marquée 'resolved' (COMBAT_ACTION_CONFIRM,
+    // avant l'appel à resolveMeleeAction) ; une éventuelle attaque suivante de la même série est une
+    // entrée distincte, reprise plus tard par advanceTimeline() (§5 Lot B, plus de récursion ici).
+    await advanceTimeline(io, meleeCampaignId, pendingMaps)
+  } catch (err) {
+    console.error('[WS] confirmMeleeDefense error:', err.message)
+  }
+}
+
+// Extrait de COMBAT_DAMAGE_CONFIRM (docs/PLAN_COMBAT_TIMELINE.md Lot D) — même code exact. Aucune
+// identité à substituer ici : les broadcasts DICE_RESULT utilisent déjà `tireurUsername`/`tireurColor`
+// (figés dans `pending` au moment de l'attaque), jamais l'identité de qui clique confirmer — seule la
+// vérification de propriétaire a besoin du contournement `forced` (MJ déclenche pour un tireur PJ
+// injoignable, § « devient PNJ pour le Tour »). N'appelle jamais advanceTimeline (comportement
+// préexistant inchangé : la confirmation de dégâts est asynchrone, ne retient pas l'échelle).
+export async function confirmDamage(io, campaignId, tokenId, socket, { requesterUserId, isGm, forced = false } = {}) {
+  // FIFO — plusieurs dégâts peuvent être en attente pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
+  // §3, correctif combat_pending) : la plus ancienne entrée d'abord, supprimée par son id propre
+  // (jamais par le filtre composite — supprimerait aussi les entrées plus récentes du même type).
+  const row = await db('combat_pending')
+    .where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' })
+    .orderBy('created_at', 'asc')
+    .first()
+  if (!row) {
+    console.warn(`[WS] confirmDamage — pas de pending pour token:${tokenId}`)
+    return
+  }
+  const pending = row.payload
+  if (!forced && pending.userId !== requesterUserId && pending.targetUserId !== requesterUserId && !isGm) return
+  await db('combat_pending').where({ id: row.id }).delete()
+  const nextRow = await db('combat_pending')
+    .where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' })
+    .orderBy('created_at', 'asc')
+    .first()
+  if (nextRow) {
+    // File non vide — attaques multiples ayant chacune touché un défenseur distinct : sub_phase
+    // reste AWAITING_DAMAGE, nouveau prompt émis pour la suivante (§3 du plan cité ci-dessus).
+    await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+    await broadcastCurrentSubPhase(io, campaignId)
+    if (socket) socket.emit(WS.COMBAT_DAMAGE_PROMPT, { tokenId, formula: nextRow.payload.formula, targetName: nextRow.payload.targetName })
+  } else {
+    await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+    await broadcastCurrentSubPhase(io, campaignId)
+  }
+
+  const {
+    campaignId: pendingCampaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
+    mr, portee, fire_mode_bonus_dmg, formula, weaponInvId,
+    for_na_cible, con_na_cible, vol_na_cible,
+    tireurUsername, tireurColor, userId, targetName,
+    type: pendingType, modDom, combatModeBonus,
+    aimedLocation, treatAsContact,
+  } = pending
+
+  try {
+    // Calcul dégâts (branche melee vs assault). Assault : DSL munition (Chantier 11 Étape 2 Lot A,
+    // docs/PLAN_ARMES_DSL.md) résolu ici, au moment du jet réel — jamais précalculé à la
+    // Déclaration (un ADD munition peut nécessiter 2 jets de dés de types différents, parseDice
+    // n'accepte qu'un seul type par formule).
+    let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null
+    if (pendingType === 'melee') {
+      const rolled = await parseDice(formula.replace(/\s/g, ''))
+      dmgRolls = rolled.rolls; dmgSeed = rolled.seed; rawDice = rolled.total
+      resolvedFormula = formula
+      degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
+    } else {
+      // getEffectiveWeaponDamage peut renvoyer null si l'arme a été désequipée/transférée entre la
+      // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
+      // repli sur la formule brute stockée à la Déclaration plutôt qu'un échec muet (le combat_pending
+      // est déjà supprimé et la FSM déjà repassée à SLOT_ACTIVE avant ce bloc, cf. plus haut).
+      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, weaponInvId)
+      if (!effectiveDamage) {
+        console.warn(`[WS] confirmDamage — arme introuvable pour weaponInvId:${weaponInvId}, repli sur formule stockée à la Déclaration`)
+      }
+      const rolled = effectiveDamage ? null : await parseDice(formula.replace(/\s/g, ''))
+      dmgRolls = effectiveDamage ? effectiveDamage.rolls : rolled.rolls
+      dmgSeed  = effectiveDamage ? dmgRolls.reduce((a, b) => a ^ b, 0) : rolled.seed
+      rawDice  = effectiveDamage ? effectiveDamage.total : rolled.total
+      resolvedFormula = effectiveDamage ? effectiveDamage.formula : rolled.formula
+      // effectiveDamage null (repli formule stockée) → chocDsl null aussi : jamais reconstruire un
+      // Choc depuis une donnée partielle (docs/PLAN_ARMES_DSL.md Lot B, §4).
+      effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
+      const mrTable = await getMrTable()
+      const modDomAttaque = getModifier(mrTable, mr)
+      const isShortRange = ['bout_portant', 'courte'].includes(portee)
+      const modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0
+      degautsBruts = rawDice + modDomAttaque + modDegatsMode
+    }
+    // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
+    if (cibleType === 'drone' && characterIdCible) {
+      const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
+      if (droneSheet) {
+        const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
+        await resolveDroneIntegrityLoss(io, pendingCampaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+        if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
+          rollLoc: null, locLabel: null,
+          degautsBruts, degatsNets: degatsNetsDrone,
+          dmgRolls, severity: null, severityColor: tireurColor, shockResult: null,
+        })
+        const now = new Date().toISOString()
+        io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+          userId, username: tireurUsername, color: tireurColor,
+          formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
+          isCriticalSuccess: false, isCriticalFail: false,
+          seed: dmgSeed, timestamp: now,
+          skillLabel: `Dégâts — drone`,
+          mechanicalTotal: rawDice,
+          diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
+          chancesDeReussite: degatsNetsDrone,
+          isSuccess: degatsNetsDrone > 0,
+        })
+        io.to(pendingCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+          tireurId: tokenId, cibleId: targetTokenId,
+          localisation: null,
+          degautsBruts, degatsNets: degatsNetsDrone,
+          severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+        })
+      }
+      return
+    }
+
+    const hitResult = await damageService.resolveTargetHit(io, db, pendingCampaignId, {
+      degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
+      for_na_cible, con_na_cible, vol_na_cible,
+      chocDsl: effectiveChocDsl,
+      forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
+      // Bouclier (docs/PLAN_BOUCLIER.md Lot B) — CaC toujours "au contact" ; à distance, dérivé de
+      // la nature de l'arme (armes de jet/trait, calculé côté resolveAssaultAction et transporté ici).
+      treatAsContact: pendingType === 'melee' ? true : (treatAsContact ?? false),
+    })
+    if (hitResult === null) return
+    const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
+            is_lethal, finalSeverity, shockResult,
+            rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
+
+    if (shockResult) {
+      statusService.emitShockDiceResult(io, pendingCampaignId, shockResult, userId, tireurUsername, tireurColor)
+    }
+
+    const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
+
+    // 6. COMBAT_DAMAGE_RESULT → socket tireur uniquement (affichage fenêtre)
+    if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
+      rollLoc,
+      locLabel: LOCATION_LABELS[localisation] ?? localisation,
+      degautsBruts,
+      degatsNets,
+      dmgRolls,
+      severity: finalSeverity,
+      severityColor,
+      shockResult,
+    })
+
+    // Stun — applyStun après l'émission pour ne pas bloquer l'affichage des dégâts
+    if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+      statusService.applyStun(io, db, pendingCampaignId, {
+        targetTokenId, outcome: shockResult.outcome,
+        userId, username: tireurUsername, color: tireurColor,
+      }).catch(err => console.error('[WS] applyStun error:', err.message))
+    }
+
+    // 7. DICE_RESULT broadcast chat
+    const now = new Date().toISOString()
+    // Localisation visée (COM9) — rollLoc/locRolls/locSeed sont null, pas de carte de jet à
+    // afficher (aucun jet n'a eu lieu, jamais un jet gaspillé pour l'affichage).
+    if (rollLoc !== null) {
+      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+        userId, username: tireurUsername, color: tireurColor,
+        formula: '1d20', rolls: locRolls, total: rollLoc,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: locSeed, timestamp: now,
+        skillLabel: 'Localisation — Distance',
+        mechanicalTotal: rollLoc, diffLabel: '',
+        chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
+        isSuccess: true,
+      })
+    }
+    // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot C) — même patron que rollLoc :
+    // null quand non applicable (pas de Petit bouclier en jeu), rien à afficher.
+    if (rollChance !== null) {
+      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+        userId, username: tireurUsername, color: tireurColor,
+        formula: '1d20', rolls: chanceRolls, total: rollChance,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: chanceSeed, timestamp: now,
+        skillLabel: `Test de Chance — Bouclier (${LOCATION_LABELS[localisation] ?? localisation})`,
+        mechanicalTotal: rollChance, diffLabel: '',
+        chancesDeReussite: chanceThreshold,
+        isSuccess: chanceSuccess,
+      })
+    }
+    io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+      userId, username: tireurUsername, color: tireurColor,
+      formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: dmgSeed, timestamp: now,
+      skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
+      mechanicalTotal: rawDice,
+      diffLabel: `ETQ:${etq ?? 0} RD:${rd}`,
+      chancesDeReussite: degatsNets,
+      isSuccess: degatsNets > 0,
+    })
+
+    // 8. Message narratif combat_damage
+    if (finalSeverity) {
+      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
+        userId, username: tireurUsername, color: severityColor,
+        formula: '', rolls: [], total: degatsNets,
+        isCriticalSuccess: false, isCriticalFail: false,
+        seed: '', timestamp: now,
+        interactionType: 'combat_damage',
+        skillLabel: `${tireurUsername} inflige ${degatsNets} dégâts`,
+        targetName,
+        localisation: LOCATION_LABELS[localisation] ?? localisation,
+        severity: finalSeverity,
+        severityColor,
+        isSuccess: true,
+      })
+    }
+
+    io.to(pendingCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+      tireurId:    tokenId,
+      cibleId:     targetTokenId,
+      localisation,
+      degautsBruts,
+      degatsNets,
+      severity:    finalSeverity,
+      is_lethal,
+      isSuccess:   true,
+      shockResult: shockResult ?? null,
     })
   } catch (err) {
-    console.error('[WS] advanceSlot error:', err.message)
+    console.error('[WS] confirmDamage error:', err.message)
+  }
+}
+
+// ─── forceAdvanceResolution — outil MJ générique (docs/PLAN_COMBAT_TIMELINE.md Lot D) ──────────────
+// Généralise le bouton « Passer » (COMBAT_SKIP_PLAYER) à n'importe quel sous-état d'attente de la
+// Résolution — un seul outil, un seul événement, une seule intention (« forcer la suite de l'étape en
+// cours », §6quinquies point 4) ; le comportement exact dépend du sous-état, jamais un nouvel échec ou
+// une nouvelle logique de résolution :
+//   - AWAITING_DEFENSE/AWAITING_DAMAGE : le serveur lance les dés à la place du joueur injoignable
+//     (« il devient PNJ pour le Tour ») — réutilise tel quel confirmMeleeDefense/confirmDamage,
+//     même formule, même code, `forced:true` contourne uniquement la vérification de propriétaire.
+//   - SLOT_ACTIVE, tour obligatoire d'un token en délai : équivalent à COMBAT_DELAYED_PASS.
+//   - SLOT_ACTIVE, entrée normale ou pas simple bloqué : marqué 'skipped'/résolu de force, l'échelle avance.
+export async function forceAdvanceResolution(io, campaignId, pendingMaps) {
+  const state = await db('combat_state').where({ campaign_id: campaignId }).first()
+  if (!state || state.phase !== 'RESOLUTION') return
+  const turnNumber = state.current_turn
+
+  if (state.sub_phase === 'AWAITING_DEFENSE') {
+    const row = await db('combat_pending').where({ campaign_id: campaignId, type: 'melee_defense' }).first()
+    if (!row) { await advanceTimeline(io, campaignId, pendingMaps); return }
+    await confirmMeleeDefense(io, campaignId, row.token_id, pendingMaps, null, { forced: true })
+    return
+  }
+
+  if (state.sub_phase === 'AWAITING_DAMAGE') {
+    const row = await db('combat_pending').where({ campaign_id: campaignId, type: 'damage' }).orderBy('created_at', 'asc').first()
+    if (!row) { await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE'); await advanceTimeline(io, campaignId, pendingMaps); return }
+    await confirmDamage(io, campaignId, row.token_id, null, { forced: true })
+    return
+  }
+
+  if (state.sub_phase !== 'SLOT_ACTIVE') return
+
+  const step = await pickNextTimelineStep(campaignId, turnNumber)
+  if (step) {
+    if (step.kind === 'entry') {
+      await db('combat_timeline_entries').where({ id: step.entry.id }).update({ status: 'skipped', updated_at: db.fn.now() })
+      await db('combat_actions').where({ id: step.entry.combat_action_id }).update({ status: 'skipped', updated_at: db.fn.now() })
+    } else if (step.kind === 'simple') {
+      await db('combat_roster').where({ campaign_id: campaignId, token_id: step.tokenId }).update({ has_resolved: true, updated_at: db.fn.now() })
+    }
+    await advanceTimeline(io, campaignId, pendingMaps)
+    return
+  }
+
+  const obligatoryDelayed = await pickNextObligatoryDelayed(campaignId, turnNumber)
+  if (obligatoryDelayed) {
+    await triggerDelayedPass(io, campaignId, obligatoryDelayed.token_id, pendingMaps)
   }
 }
 
@@ -295,13 +999,20 @@ export async function endTurn(io, campaignId, pendingMaps) {
       .where({ campaign_id: campaignId, status: 'pending' })
       .update({ status: 'skipped', updated_at: db.fn.now() })
 
+    // Filet de sécurité — advanceTimeline ne rappelle endTurn() que lorsque plus aucune entrée
+    // 'scheduled'/'delayed_waiting' ne subsiste ce Tour ; ce cas ne devrait jamais matcher de ligne,
+    // gardé pour ne jamais laisser une entrée orpheline survivre à la clôture du Tour (§6bis point 5).
+    await db('combat_timeline_entries')
+      .where({ campaign_id: campaignId })
+      .whereIn('status', ['scheduled', 'delayed_waiting'])
+      .update({ status: 'skipped', updated_at: db.fn.now() })
+
     // Incrémenter le tour, retour à ANNOUNCEMENT
     const [updatedState] = await db('combat_state')
       .where({ campaign_id: campaignId })
       .update({
         phase: 'ANNOUNCEMENT',
         current_turn: db.raw('current_turn + 1'),
-        active_slot_idx: 0,
         updated_at: db.fn.now(),
       })
       .returning(['action_timer_sec', 'current_turn'])
@@ -386,10 +1097,14 @@ export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType, m
   return count
 }
 
-// ─── RÉSOLUTION RECHARGEMENT ────────────────────────────────────────────────
-// Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='melee'.
-// Retourne true si le slot doit rester bloqué (défenseur PJ en attente), false sinon.
-export async function resolveMeleeAction(io, campaignId, action, character, remainingMeleeActions = [], totalMeleeCount = 1, confirmedModifiers = null, pendingMaps) {
+// ─── RÉSOLUTION CORPS À CORPS ───────────────────────────────────────────────
+// Appelée depuis COMBAT_ACTION_CONFIRM (une seule entrée de l'échelle à la fois, Lot B) quand
+// action.type==='melee'. Retourne { suspend: true } si le défenseur est un PJ (attend
+// COMBAT_MELEE_DEFENSE_CONFIRM) — l'attaque suivante de la même série, s'il y en a une, n'est plus
+// résolue ici par récursion (§5 Lot B : « la récursion ad hoc disparaît ») : c'est une entrée séparée
+// de combat_timeline_entries, reprise par advanceTimeline() à son tour, potentiellement entrelacée
+// avec d'autres personnages entre-temps.
+export async function resolveMeleeAction(io, campaignId, action, character, confirmedModifiers = null, pendingMaps) {
   try {
     const emissions = []
     const weaponInvId   = action.weapon_inv_id ?? null
@@ -564,7 +1279,18 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType, measurement.metrics)
     )
 
-    // CaC 4b — malus attaque multiple (LdB p.218) : −5 pour 2 attaques, −7 pour 3+
+    // CaC 4b — malus attaque multiple (LdB p.218) : −5 pour 2 attaques, −7 pour 3+. Recalculé sur le
+    // nombre réel de sœurs non perdues à CET instant (§6bis point 3) — pas figé à la déclaration : une
+    // sœur déjà 'lost' (décalage au-delà de la phase 1, cible invalide, étourdissement) ne compte plus.
+    const timelineEntry = await db('combat_timeline_entries').where({ combat_action_id: action.id }).first()
+    let totalMeleeCount = 1
+    if (timelineEntry?.declaration_group_id) {
+      const [{ count: siblingCount }] = await db('combat_timeline_entries')
+        .where({ declaration_group_id: timelineEntry.declaration_group_id })
+        .whereNotIn('status', ['lost', 'skipped'])
+        .count('* as count')
+      totalMeleeCount = parseInt(siblingCount, 10) || 1
+    }
     const multiAttackMalus = totalMeleeCount === 2 ? -5 : totalMeleeCount >= 3 ? -7 : 0
 
     // Mods situation CaC (§6.2)
@@ -746,9 +1472,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
       targetName,
       userId: character.user_id,
       defenderUserId: defenderCharacter.user_id,
-      // CaC 4b — attaque multiple
-      remainingMeleeActions,
-      totalMeleeCount,
       confirmedModifiers,
       situationDef: confirmedModifiers?.situationDef ?? [],
     }
@@ -859,16 +1582,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
         }
       }
 
-      // CaC 4b — attaque suivante si multi-attack
-      if (remainingMeleeActions.length > 0) {
-        const nextResult = await resolveMeleeAction(
-          io, campaignId,
-          remainingMeleeActions[0], character,
-          remainingMeleeActions.slice(1), totalMeleeCount, confirmedModifiers, pendingMaps
-        )
-        return { ...nextResult, emissions: [...emissions, ...nextResult.emissions] }
-      }
-      return { suspend: false, emissions }  // slot avance immédiatement
+      return { suspend: false, emissions }  // entrée résolue, advanceTimeline() enchaîne (§5 Lot B)
     } else if (defenderCharacter.type === 'drone') {
       // §7.4 : sans programme esquive, le drone ne peut pas se défendre — test simple
       const hit = rollAttaque <= chancesAttaque
@@ -892,17 +1606,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, rema
           } })
         }
       }
-      if (remainingMeleeActions.length > 0) {
-        const nextResult = await resolveMeleeAction(io, campaignId,
-          remainingMeleeActions[0], character, remainingMeleeActions.slice(1), totalMeleeCount, confirmedModifiers, pendingMaps)
-        return { ...nextResult, emissions: [...emissions, ...nextResult.emissions] }
-      }
       return { suspend: false, emissions }
     }
 
     // ── 5. PJ défenseur : bloquer le slot, émettre le prompt ─────────────────
     await db('combat_pending').insert({ campaign_id: campaignId, token_id: targetTokenId, type: 'melee_defense', payload: commonPending })
     await setFSMSubPhase(db, campaignId, 'AWAITING_DEFENSE')
+    await broadcastCurrentSubPhase(io, campaignId)
 
     // Cibler le socket du défenseur PJ
     const prompt = {
@@ -1067,6 +1777,7 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
 // §7.3 MANUELSYSCOMBAT : D20 ≤ programme.level, modificateurs situationnels standard,
 // pas de malus blessures/encombrement, pas de Test de Choc.
 export async function resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+  console.log(`[DBG] resolveDroneAssaultAction — début token:${action.token_id} drone_weapon:${action.drone_weapon_inv_id} target:${action.target_token_id}`)
   try {
     const emissions = []
     // 1. Arme drone
@@ -1118,10 +1829,12 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     }
 
     if (!isCaCWeapon) {
+      console.log(`[DBG] resolveDroneAssaultAction — avant measureBattlemapTokenDistance (portée)`)
       const measurement = await measureBattlemapTokenDistance({
         sourceTokenId: action.token_id,
         targetTokenId: action.target_token_id,
       })
+      console.log(`[DBG] resolveDroneAssaultAction — après measureBattlemapTokenDistance, status:${measurement.status}`)
       const range = measurement.status === 'ok'
         ? resolveWeaponRangeBand(measurement.distanceM, weapon.ref_range)
         : { status: measurement.status, band: null }
@@ -1139,7 +1852,9 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 
     // ── LOS check (distance uniquement) ────────────────────────────────────────
     if (!isCaCWeapon && !options.skipLos) {
+      console.log(`[DBG] resolveDroneAssaultAction — avant checkCombatLOS`)
       const los = await checkCombatLOS(io, db, campaignId, action, character)
+      console.log(`[DBG] resolveDroneAssaultAction — après checkCombatLOS, result:${los.result}`)
       if (los.result === 'blocked') {
         return { suspend: false, emissions }
       }
@@ -1151,11 +1866,13 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       options.coverageModifier = los.coverageModifier ?? 0
     }
 
+    console.log(`[DBG] resolveDroneAssaultAction — avant fetch programme drone`)
     const category = isCaCWeapon ? 'armement_contact' : 'armement_distance'
     const programme = await db('drone_programs')
       .where({ character_id: character.id, category })
       .orderBy('level', 'desc')
       .first()
+    console.log(`[DBG] resolveDroneAssaultAction — après fetch programme, trouvé:${!!programme}`)
 
     if (!programme) {
       console.warn(`[WS] resolveDroneAssaultAction — programme ${category} introuvable pour drone ${character.id}`)
@@ -1181,7 +1898,9 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     const chancesDeReussite = programme.level + totalModComp + coverageModifier
 
     // 4. Jet D20
+    console.log(`[DBG] resolveDroneAssaultAction — avant parseDice`)
     const { total: roll, rolls: attRolls, seed: attSeed } = await parseDice('1d20')
+    console.log(`[DBG] resolveDroneAssaultAction — après parseDice, roll:${roll}`)
     const isSuccess = roll <= chancesDeReussite
     const mr        = chancesDeReussite - roll
 
@@ -1370,6 +2089,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       },
     })
     await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+    await broadcastCurrentSubPhase(io, campaignId)
     const [{ count: pendingDamageCount }] = await db('combat_pending')
       .where({ campaign_id: campaignId, token_id: action.token_id, type: 'damage' })
       .count('* as count')
@@ -1386,6 +2106,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 }
 
 export async function resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+  console.log(`[DBG] resolveAssaultAction — début token:${action.token_id} type_perso:${character.type}`)
   try {
     const emissions = []
     // Branchement drone — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT)
@@ -1396,7 +2117,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
 
     // ── LOS check ─────────────────────────────────────────────────────────────
     if (!options.skipLos) {
+      console.log(`[DBG] resolveAssaultAction — avant checkCombatLOS`)
       const los = await checkCombatLOS(io, db, campaignId, action, character)
+      console.log(`[DBG] resolveAssaultAction — après checkCombatLOS, result:${los.result}`)
       if (los.result === 'blocked') return { suspend: false, emissions }
       if (los.result === 'intercepted') {
         return resolveAssaultAction(io, campaignId,
@@ -1676,6 +2399,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           },
         })
         await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+        await broadcastCurrentSubPhase(io, campaignId)
         const [{ count: pendingDamageCount }] = await db('combat_pending')
           .where({ campaign_id: campaignId, token_id: action.token_id, type: 'damage' })
           .count('* as count')

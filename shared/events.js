@@ -118,6 +118,11 @@ export const WS = {
   COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ ou GM : prompt D6 durée { tokenId, outcome }
   COMBAT_STUN_CONFIRM:           'combat:stun_confirm',            // PJ ou GM → serveur : lancer le D6 { tokenId }
 
+  // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B)
+  COMBAT_TIMELINE_UPDATED:       'combat:timeline_updated',        // serveur → room : entrées du Tour en cours + étape courante { turnNumber, entries, currentStep }
+  COMBAT_ACT_NOW:                'combat:act_now',                 // PJ ou GM → serveur : « Agir maintenant » pour un token en delayed_waiting { tokenId }
+  COMBAT_DELAYED_PASS:           'combat:delayed_pass',            // PJ ou GM → serveur : « Passer » consciemment au tour obligatoire de fin de Tour { tokenId }
+
   // Drones
   DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated',  // serveur → room : intégrité drone mise à jour (combat)
 

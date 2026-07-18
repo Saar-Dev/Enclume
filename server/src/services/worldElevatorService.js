@@ -182,16 +182,33 @@ export async function reconcileElevatorStatesInTransaction({
   })
 }
 
+// [DBG] Session 159 (retour Saar, « Crash combat » sans aucun message) — verrou pessimiste
+// (`forUpdate`) sur `battlemaps`, appelé très fréquemment (Canvas3D/Editor3D pollent toutes les
+// 300ms tant qu'un ascenseur est en transition, `elevatorsAreTransitioning` — donc un ascenseur
+// resté bloqué en 'moving'/'opening'/'closing' produit un flot continu sans rapport avec le combat).
+// Ne logue que les acquisitions anormalement lentes (>100ms d'attente) pour ne pas noyer les vrais
+// logs de combat sous du bruit — silence total en usage normal.
+const SLOW_LOCK_MS = 100
 export async function reconcileBattlemapElevators({
   battlemapId,
   now = Date.now(),
   database = db,
 } = {}) {
-  return database.transaction(async trx => {
+  const startedAt = Date.now()
+  const result = await database.transaction(async trx => {
     const battlemap = await trx('battlemaps').where({ id: battlemapId }).forUpdate().first()
+    const waitedMs = Date.now() - startedAt
+    if (waitedMs > SLOW_LOCK_MS) {
+      console.warn(`[DBG] reconcileBattlemapElevators — verrou lent (${waitedMs}ms d'attente) battlemap:${battlemapId}`)
+    }
     if (!battlemap) throw new RangeError('Battlemap inconnue')
     return reconcileElevatorStatesInTransaction({ trx, battlemap, now })
   })
+  const totalMs = Date.now() - startedAt
+  if (totalMs > SLOW_LOCK_MS) {
+    console.warn(`[DBG] reconcileBattlemapElevators — transaction lente (${totalMs}ms au total) battlemap:${battlemapId}`)
+  }
+  return result
 }
 
 export async function listBattlemapElevators({

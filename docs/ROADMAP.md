@@ -1,8 +1,13 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-12 Session 141 (suite 21 suite) — ajout idée Tourelles/armes
-> lourdes fixes (voir `docs/PLAN_MODING_PHASEB.md`, Groupe 3 retiré) ; 2026-07-11 Session 141
-> (suite 18) — point documentaire, voir `CLAUDE.md` dettes `[DOC1]`/`[DOC2]` pour le suivi
-> (archivage PLAN_*.md, VOCABULARY.md, REGLES_LdB.md)
+> Dernière mise à jour : 2026-07-18 (dev/Saar) — retrait du chantier Bouclier, intégralement clos
+> session 156 (Lots A+B+C codés et testés en combat réel + navigateur, historique dans
+> `docs/ASBUILT.md`/`docs/Old/PLAN_BOUCLIER.md`) ; 2026-07-17 — actualisation : retrait des chantiers
+> intégralement clos (PLAN 14 Statuts — session 150 — et Chantier 10 Sprint 6 Échange — session 153 —
+> historique dans `docs/JOURNAL6.md`/`docs/Old/`, ROADMAP ne garde que ce qui reste à faire), Chantier
+> `PLAN_MUTATION2.md` réduit à son seul reliquat (Lot 7), Chantier 11 Étape 2 (DSL Armes) Lot B clos/
+> Lot C recadré ; historique antérieur ci-dessous conservé tel quel (2026-07-12 Session 141 suite 21
+> suite — idée Tourelles/armes lourdes fixes ; 2026-07-11 Session 141 suite 18 — point documentaire,
+> `CLAUDE.md` dettes `[DOC1]`/`[DOC2]`, archivage PLAN_*.md/VOCABULARY.md/REGLES_LdB.md)
 
 ---
 
@@ -126,7 +131,6 @@ Pas de DiceOverlay HTML séparé — décision session 44.
 | Sprint 3 | Codes slots indépendants (BG/BD/JG/JD) + armures multi-couches + poids | ✅ session 54 |
 | Sprint 4 | Module Armes équipées (WeaponPanel, current_ammo, nettoyage nomenclature munitions) | ✅ session 55 |
 | Sprint 5 | Mille-feuille protection serveur + polarisRound unifié + ref_min_str exposé | ✅ session 56 |
-| Sprint 6 | Échange items/sols (WS bidirectionnel, double validation) | ✅ livré sessions 124-141 sous `docs/Old/PLAN_TRADE.md` (`tradeService.js`, secteur `echange` du menu radial) + extension MJ (proposer au nom d'un PJ) session 153, `docs/Old/PLAN_ECHANGE.md`, parcours complet testé et confirmé |
 | — | Split pile, capacity sac, custom_props UI, malus_cat dans jets Polaris | 🔲 selon besoin |
 
 **Sprint 1 livré :**
@@ -175,9 +179,15 @@ Module Armes ← ⚙️ Chantier 11 Étape 2 (Lots A+B codés, Lot C restant)
 |---|---|---|---|
 | Étape 1 | `character_wounds` DB + routes + WoundManager UI + intégration `charStats.js` | — | ✅ session 49 |
 | Étape 1b | Intégration `effectiveMalus` dans jets (socket) + Initiative fiche | — | ✅ session 52 |
-| Étape 2 | Module Armes — DSL effets munitions, parseur | Chantier 10 sprint 4 | ⚙️ Lots A (dégâts)+B (Choc) codés/testés, Lot C (tags) restant — `docs/PLAN_ARMES_DSL.md` |
+| Étape 2 | Module Armes — DSL effets munitions, parseur | Chantier 10 sprint 4 | ⚙️ Lots A (dégâts)+B (Choc) ✅ codés/testés (correctif Lot B session 152) ; Lot C recadré en 3 sous-lots C1 (armure)/C2 (Test de panne IEM)/C3 (zone Shrapnel), aucun sous-lot codé ; `COM9` ✅ codé et confirmé fonctionnel (débloque la validation navigateur du Lot B, à rejouer) — `docs/PLAN_ARMES_DSL.md` |
 | Étape 3 | Module Armures — ArmorWoundPanel + LocationPanel mille-feuille + SilhouettePanel | Chantier 10 sprint 2 | ✅ session 53-54 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
+
+### Chantier `PLAN_MUTATION2.md` — Mutations & Avantages 🔲
+
+Lots 1-6 (attributs primaires, RD+Choc, armure/arme naturelle, déblocage compétences `[CS7]`,
+Identité) clos sessions 141-143 — historique complet : `docs/Old/PLAN_MUTATION2.md`. Reste **Lot 7**
+(Narratif/économie), priorité basse, non planifié.
 
 ### Chantier 11 — Système de Combat Polaris
 
@@ -232,19 +242,22 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 
 - **DSL effets munitions (Étape 2 Module Armes)** — `ref_equipment.ammo_effects` (munitions
   uniquement, pas les armes elles-mêmes — vérifié dans les données réelles) contient un DSL type
-  `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Lot A (dégâts DMG=) et Lot B (Choc
-  CHOC=, Test d'Étourdissement/Inconscience) codés et testés (2026-07-16). Lot C (tags qualitatifs
-  `TXT=FX=`, affichage seul) restant. Plan détaillé (vocabulaire complet, découpage en lots,
+  `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Lot A (dégâts DMG=) codé et testé
+  (2026-07-16). Lot B (Choc `CHOC=`) codé et testé, correctif appliqué session 152 (gate Tête retiré,
+  formule fixe `CHOC=SET(1D10+2)` Assommante, total combiné non réduit — migration 160). Lot C
+  recadré (2026-07-16, effets mécaniques réels demandés par Saar, plus un lot d'affichage) en 3
+  sous-lots séquentiels : **C1** modification d'armure, **C2** Test de panne (munitions IEM, mécanique
+  elle-même encore à définir), **C3** zone d'effet Shrapnel (aucun ciblage de zone existant dans le
+  pipeline combat) — aucun sous-lot codé. Plan détaillé (vocabulaire complet, découpage en lots,
   invariants, sites rebranchés) : `docs/PLAN_ARMES_DSL.md`.
 
-- **Tir visé sur localisation (`COM9`, non planifié avant 2026-07-16)** — action manquante :
-  actuellement le D20 de localisation est toujours purement aléatoire, aucun moyen pour un joueur de
-  viser délibérément une zone. Dépendance directe avec le Lot B du DSL munitions
-  (`docs/PLAN_ARMES_DSL.md`) : le bonus de Choc d'une munition assommante n'est déclenché que sur un
-  coup à la Tête pour une arme "normale" (dégât physique + Choc additionnel) — sans cette action, ce
-  déclenchement reste soumis au seul hasard de la table de localisation. Malus LdB : Corps −3 /
-  Jambes −5 / Tête+Bras −7. Détail : `docs/BUGIDENTIFIE.md` COM9. Ne pas confondre avec Tir visé
-  (bonus au Test de tir, déjà livré) ni "Changer le mode de tir" — trois mécaniques distinctes
+- **Viser une Localisation précise (`COM9`) ✅ codé et confirmé fonctionnel (2026-07-17)** — déclarée
+  en phase ANNONCE (`AssaultRangedPanel.jsx`, même patron que Tir visé), malus + bypass du D20
+  aléatoire (`damageService.resolveTargetHit`) en RÉSOLUTION. Débloque le Lot B du DSL munitions
+  (`docs/PLAN_ARMES_DSL.md`) : le bonus de Choc d'une munition assommante peut désormais être
+  déclenché de façon fiable sur un coup en Tête plutôt que par le seul hasard de la table de
+  localisation. Détail complet (archivé) : `docs/Old/PLAN_TIRVISE v2.md`. Ne pas confondre avec Tir
+  visé (bonus au Test de tir, déjà livré) ni "Changer le mode de tir" — trois mécaniques distinctes
   (`docs/VOCABULARY.md`).
 
 ### PC22 — Fix 403 toggle is_learned MUTATION/POLARIS ✅ (session 50)
@@ -287,95 +300,6 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
 | Toggle visible character temps réel (Bug A) | ✅ session 44 |
 | Bibliothèque documents (Sprint 1 : éditeur Quill, permissions, temps réel) | ✅ session 75 |
 | Bibliothèque documents (Sprint 2 : images uploadées MinIO) | ✅ session 80 |
-
-### PLAN 14 — Système de Statuts (Status Effects) 🔲
-
-Mockup visuel : `docs/Status innacheve.html` — 15 icônes SVG déjà conçues, 3 variantes d'affichage testées (Row / Arc / Single+compteur). **Le bloqueur SVG est levé.**
-
-| Statut | Code | Catégorie | Priorité |
-|---|---|---|---|
-| Étourdi | `stunned` | sens (violet) | 7 |
-| Inconscient | `unconscious` | sens (violet) | 10 |
-| Saisi | `grappled` | entrave (ambre) | 5 |
-| Entravé | `restrained` | entrave (ambre) | 5 |
-| Déséquilibré | `off_balance` | entrave (ambre) | 3 |
-| Enflammé | `burning` | dot (rouge) | 8 |
-| Corrodé | `acid` | dot (rouge) | 7 |
-| Asphyxie | `asphyxia` | dot (rouge) | 9 |
-| Décompression | `decompression` | dot (rouge) | 9 |
-| Électrocuté | `electrocuted` | dot (rouge) | 6 |
-| Aveuglé | `blinded` | sens (violet) | 6 |
-| Hypothermie | `hypothermia` | chronique (cyan) | 4 |
-| Infecté | `infected` | chronique (cyan) | 4 |
-| Empoisonné | `poisoned` | chronique (cyan) | 4 |
-| Irradié | `irradiated` | chronique (cyan) | 4 |
-
-Plan complet : `docs/Character/PLAN_STATUT.md`
-
-**Décisions actées :**
-- SVGs dans `docs/Character/Statuts/` (2 typos à corriger : axphyxia→asphyxia, hypodermia→hypothermia)
-- Affichage : rangée sous le nom du token (Variante A + overflow +N)
-- Expiration : manuelle par GM ou propriétaire du token uniquement (V1)
-- Seuls `stunned` + `unconscious` ont des effets mécaniques (optionnel via `status_effects_mode`)
-- stunned : −5 toutes actions + no attack + allure max moyenne (LdB p.237)
-- unconscious : passe son tour
-
-**Ordre des sprints (voir PLAN_STATUT.md §9) :**
-1. **Prérequis — Menu contextuel token** (right-click → ajouter/retirer statuts, GM + propriétaire)
-2. **Affichage badges** (Html drei sous le nom, SVGs, couleurs par catégorie)
-3. **Option campagne + Flux Choc PJ + Mécaniques enforced** (migration, CombatShockWindow, enforcement)
-
-**Architecture V2 — acté Session 93-2**
-
-Source unique : `token_statuses` + colonne `expires_at_turn INT NULLABLE`.
-- Actif : `expires_at_turn IS NULL OR expires_at_turn > current_turn`
-- Cleanup : `DELETE WHERE expires_at_turn <= current_turn`
-- `NULL` = permanent (clear manuel GM)
-- `UNIQUE(token_id, status_code)` existant → re-stun étend la durée (`.onConflict().merge(['expires_at_turn'])`)
-
-**Sprints PLAN 14 :**
-
-**Sprint 14-0 — Architecture statuts (prérequis tout le reste)**
-
-| Tâche | Fichier | Description |
-|---|---|---|
-| Migration 79 | `migrations/79_token_statuses_expiry.js` | `ALTER TABLE token_statuses ADD expires_at_turn INT` |
-| `applyStunWithDuration` | `socket/index.js` | Écrit dans `token_statuses` uniquement — supprime les writes JSONB `is_stunned`/`stunned_until_turn` |
-| `checkStunExpiry` | `socket/index.js` | Lit `token_statuses` + supprime rows expirés — supprime purge JSONB |
-| Stun guard `COMBAT_ACTION_DECLARE` | `socket/index.js` | Lit `token_statuses WHERE status_code='stunned'` au lieu de `state_character?.is_stunned` |
-| `endTurn` | `socket/index.js` | `DELETE token_statuses WHERE expires_at_turn <= current_turn` — universel, remplace purge spécifique |
-| Nettoyage JSONB | `socket/index.js` | Retirer toute lecture/écriture `is_stunned`/`stunned_until_turn` du JSONB `state_character` |
-
-**Sprint 14-1 — Menu contextuel token** ✅ codé (right-click → ajouter/retirer statuts, GM + propriétaire) —
-`TokenRadialMenu.jsx` secteur `statuts`, `TokenStatusPanel.jsx`, `socketToken.js` handler `TOKEN_STATUS_TOGGLE`.
-
-**Sprint 14-2 — Affichage badges** ✅ codé (Html drei sous le nom, SVGs `docs/Character/Statuts/`, couleurs par
-catégorie, overflow +N) — `Canvas3D.jsx`. Reste 2 bugs de finition en dette : `ST1`/`ST3` (voir dettes actives).
-
-**Sprint 14-3 — mécaniques enforced**
-- ~~FIX-D : bypass défense `resolveMeleeAction` si cible `stunned`/`surprised`~~ — **abandonné (2026-07-16)**.
-  Vérifié contre `docs/REGLES/REGLESYSCOMBAT.md` L.172-260 (section Surprise) : aucune règle ne retire la
-  défense à une cible `stunned` ; le "sans défense" du LdB ne couvre que l'attaque gratuite d'une embuscade
-  initiale (avant Tour 1), pas un état persistant interrogeable en cours de combat. Décision Saar : FIX-D saute.
-- `unconscious` : passe son tour ✅ déjà couvert — le guard `COMBAT_ACTION_DECLARE` bloque `stunned`
-  ET `unconscious` (même `whereIn` sur `token_statuses`).
-- Option campagne `status_effects_mode` ✅ codée (2026-07-16) : `off` / `icon_only` / `enforced`,
-  défaut `enforced` (aucun changement rétroactif). 3 sites serveur gatés (même valeur lue une fois par
-  handler via `getCampaignSettings`) :
-  - `socketCombatAnnouncement.js` (guard Déclaration, attaque bloquée + plafond allure)
-  - `socketCombatResolution.js` PRECHECK (filet de sécurité résolution)
-  - `socketCombatResolution.js` CONFIRM (filet de sécurité miroir)
-  Client : `campaign?.settings?.status_effects_mode` lu une fois dans `SessionPage.jsx`, propagé en
-  prop à `TokenRadialMenu` (secteur `statuts` désactivé si `off`) et `Canvas3D`→`Scene`→`TokenMesh`
-  (badges masqués si `off`). UI : `SectionGameRules.jsx` (onglet Options de campagne), 3 boutons même
-  pattern que `ambiance`. **PLAN 14 clos.**
-
-**`is_surprised` reste une colonne `combat_roster`** (pas de migration vers `token_statuses`) — décision
-confirmée : sans FIX-D, aucun besoin d'un statut `surprised` persistant/interrogeable ; `is_surprised` ne sert
-que le flow ponctuel `COMBAT_SURPRISE_ROLL` en tout début de combat (effacé après le jet).
-
-**Ce qui disparaît après Sprint 14-0 :**
-- `is_stunned` + `stunned_until_turn` du JSONB `state_character`
 
 ### Chantier Arts Martiaux 🔲
 

@@ -16,8 +16,18 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
-  const { phase, roster, activeSlotIdx, activeTokenId, actions } = useCombatStore()
+  const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
+  const myTokenIds = isGm ? null : characters.filter(c => c.user_id === user?.id).map(c => tokens.find(t => t.character_id === c.id)?.id).filter(Boolean)
+  // Retarder décale l'Action vers plus tard, jamais plus tôt (RAW REGLESYSCOMBAT.md:554-567, retour
+  // Saar Session 159) — n'afficher le panneau « Agir maintenant » que si le pas normal à résoudre a
+  // atteint (ou dépassé) la propre phase d'Initiative d'origine du personnage en délai.
+  const myControllableDelayedTokenIds = [...new Set(timelineEntries.filter(e => e.status === 'delayed_waiting').map(e => e.token_id))]
+    .filter(tokenId => isGm || (myTokenIds?.includes(tokenId) ?? false))
+    .filter(tokenId => {
+      const ownPosition = (roster.find(r => r.token_id === tokenId)?.initiative ?? 0) * 100
+      return currentStep?.position != null && currentStep.position <= ownPosition
+    })
   const [showGmPanel, setShowGmPanel] = useState(false)
   const [stunDialog, setStunDialog] = useState(null) // null | { tokenId, outcome }
   const [stunDialogDuration, setStunDialogDuration] = useState('')
@@ -45,24 +55,37 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const gmActiveEntry = roster.find(e => e.token_id === activeTokenId) ?? null
   const gmActiveToken = gmActiveEntry ? tokens.find(t => t.id === gmActiveEntry.token_id) : null
   const gmActiveCharacter = gmActiveToken ? characters.find(c => c.id === gmActiveToken.character_id) : null
-  const activeAssaultAction = gmActiveEntry
+  // `currentStep?.kind !== 'delayed_turn'` (Session 159, retour Saar — « Plantage, pas d'action du
+  // joueur ») : `activeTokenId` dérive de `currentStep.tokenId` quel que soit son `kind`, y compris au
+  // tour obligatoire de fin de Tour d'un personnage en délai — sans cette garde (déjà présente côté
+  // CaC ci-dessous, jamais portée côté Tir), la fenêtre de modificateurs d'assaut s'ouvrait par-dessus
+  // le panneau dédié Agir maintenant/Passer. Un clic sur « Valider » envoyait un `COMBAT_ACTION_CONFIRM`
+  // pour une entrée toujours `delayed_waiting` (jamais repositionnée par Agir maintenant) — rejeté par
+  // le garde serveur (`step.tokenId !== tokenId`) sans que rien ne se passe à l'écran, indiscernable
+  // d'un blocage réel.
+  const activeAssaultAction = (gmActiveEntry && currentStep?.kind !== 'delayed_turn')
     ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'assault')
     : null
-  // Action melee PNJ/drone active (GM) — CombatCacModifiersWindow remplace le bouton "Agir" bare
-  const activeMeleeAction = gmActiveEntry
-    ? actions.find(a => a.token_id === gmActiveEntry.token_id && a.action_key === 'melee')
+  // Action melee PNJ/drone active (GM) — CombatCacModifiersWindow remplace le bouton "Agir" bare.
+  // docs/PLAN_COMBAT_TIMELINE.md Lot B : un token peut avoir plusieurs lignes combat_actions type=melee
+  // encore 'pending' simultanément (série CaC non intégralement résolue, chaque attaque étant sa propre
+  // entrée d'échelle) — .find() sur token_id+action_key seul prendrait la première de l'array, pas
+  // forcément celle réellement due. currentStep.entry.combat_action_id désigne l'entrée exacte en cours.
+  const activeMeleeAction = (gmActiveEntry && currentStep?.kind === 'entry' && currentStep.tokenId === gmActiveEntry.token_id)
+    ? actions.find(a => a.id === currentStep.entry.combat_action_id && a.action_key === 'melee')
     : null
 
   // Slot actif PJ — fenêtre modificateurs côté joueur
   const playerCharacter = !isGm ? characters.find(c => c.user_id === user?.id) : null
   const playerToken = playerCharacter ? tokens.find(t => t.character_id === playerCharacter.id) : null
   const playerRosterEntry = playerToken ? sortedRoster.find(e => e.token_id === playerToken.id) : null
-  const playerActiveAssaultAction = (phase === 'RESOLUTION' && activeTokenId === playerToken?.id)
+  const playerActiveAssaultAction = (phase === 'RESOLUTION' && activeTokenId === playerToken?.id && currentStep?.kind !== 'delayed_turn')
     ? actions.find(a => a.token_id === playerToken?.id && a.action_key === 'assault')
     : null
-  // Action melee PJ active — CombatCacModifiersWindow remplace CombatActionWindow
-  const playerActiveMeleeAction = (phase === 'RESOLUTION' && activeTokenId === playerToken?.id)
-    ? actions.find(a => a.token_id === playerToken?.id && a.action_key === 'melee')
+  // Action melee PJ active — CombatCacModifiersWindow remplace CombatActionWindow. Même garde que côté
+  // GM ci-dessus (currentStep.entry.combat_action_id, pas token_id+action_key seul).
+  const playerActiveMeleeAction = (phase === 'RESOLUTION' && currentStep?.kind === 'entry' && currentStep.tokenId === playerToken?.id)
+    ? actions.find(a => a.id === currentStep.entry.combat_action_id && a.action_key === 'melee')
     : null
 
   // Pre-validation CaC — REWORK-16
@@ -80,8 +103,11 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       setPrecheckOk(err ? false : (ok ?? false))
     })
     return () => { cancelled = true }
+  // subPhase en dépendance (pas seulement precheckRetryKey/COMBAT_ATTACK_RESULT) : un precheck rejeté
+  // en `awaiting` par une fenêtre de réaction/défense/dégâts transitoire (Session 159) doit se retenter
+  // dès la fermeture de cette fenêtre, pas seulement après une attaque effectivement confirmée.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meleePrecheckId, socket, precheckRetryKey])
+  }, [meleePrecheckId, socket, precheckRetryKey, subPhase])
 
   // Pre-validation assaut distance — REWORK-16 extension
   const assaultPrecheckId = activeAssaultAction?.id ?? playerActiveAssaultAction?.id ?? null
@@ -98,8 +124,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       setAssaultPrecheckOk(err ? false : (ok ?? false))
     })
     return () => { cancelled = true }
+  // subPhase en dépendance — même raison que meleePrecheckId ci-dessus.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assaultPrecheckId, socket, precheckRetryKey])
+  }, [assaultPrecheckId, socket, precheckRetryKey, subPhase])
 
   return (
     <div style={{ ...styles.overlay, '--sidebar-w': sidebarWidth + 'px' }}>
@@ -111,6 +138,9 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           topOffset={isGm ? 40 : 0}
           onPortraitClick={isGm && phase === 'ANNOUNCEMENT' ? () => setShowGmPanel(p => !p) : undefined}
           actionTimerSec={actionTimerSec ?? 0}
+          socket={socket}
+          isGm={isGm}
+          myTokenIds={myTokenIds}
         />
       )}
 
@@ -152,8 +182,10 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       )}
 
       {/* ANNOUNCEMENT + RÉSOLUTION — fenêtre d'action pour les joueurs
-          Masquée pendant la résolution d'un assaut PJ (CombatModifiersWindow prend le relais) */}
-      {!isGm && (phase === 'ANNOUNCEMENT' || (phase === 'RESOLUTION' && !playerActiveAssaultAction && !playerActiveMeleeAction && !attackResult)) && (
+          Masquée pendant la résolution d'un assaut PJ (CombatModifiersWindow prend le relais) et
+          pendant le tour obligatoire d'un token en délai (panneau Agir maintenant/Passer dédié
+          ci-dessus, docs/PLAN_COMBAT_TIMELINE.md §6 point 2). */}
+      {!isGm && (phase === 'ANNOUNCEMENT' || (phase === 'RESOLUTION' && !playerActiveAssaultAction && !playerActiveMeleeAction && !attackResult && currentStep?.kind !== 'delayed_turn')) && (
         <CombatActionWindow
           socket={socket}
           user={user}
@@ -165,8 +197,81 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut distance LOS ok, ou drone CaC qui suit le même flow que CaC humanoïde) */}
-      {isGm && phase === 'RESOLUTION' && gmActiveEntry && (!activeAssaultAction || assaultPrecheckOk === false) && (!activeMeleeAction || precheckOk === false) && (
+      {/* Phase RÉSOLUTION — tour obligatoire de fin de Tour pour un personnage en délai (docs/
+          PLAN_COMBAT_TIMELINE.md §6 point 2) : réponse explicite requise, Agir maintenant ou Passer,
+          jamais d'expiration silencieuse. Le MJ peut déclencher pour n'importe lequel de ses tokens
+          (comme COMBAT_ACTION_CONFIRM), le joueur uniquement pour le sien. */}
+      {phase === 'RESOLUTION' && currentStep?.kind === 'delayed_turn' && (isGm || currentStep.tokenId === playerToken?.id) && (
+        <div style={styles.gmResolution}>
+          <div style={styles.gmResolutionLabel}>
+            <strong>{tokens.find(t => t.id === currentStep.tokenId)?.label ?? '?'}</strong> — action retardée
+          </div>
+          <button
+            className="btn btn-gold"
+            style={{ flexShrink: 0 }}
+            onClick={() => socket?.emit(WS.COMBAT_ACT_NOW, { tokenId: currentStep.tokenId })}
+          >
+            Agir maintenant
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ flexShrink: 0 }}
+            onClick={() => socket?.emit(WS.COMBAT_DELAYED_PASS, { tokenId: currentStep.tokenId })}
+          >
+            Passer
+          </button>
+        </div>
+      )}
+
+      {/* Phase RÉSOLUTION — Retarder son Action en plein Tour (RAW REGLESYSCOMBAT.md:554-567, refonte
+          Session 159 : « agir à n'importe quelle phase d'Action », pas de minuteur). Un ou plusieurs
+          personnages en délai peuvent agir immédiatement avant que le pas normal suivant ne se
+          résolve, tant que la Résolution est en SLOT_ACTIVE — un panneau explicite, un par personnage
+          contrôlé par ce viewer, comme le tour obligatoire ci-dessus. Exclu pendant le tour obligatoire
+          (currentStep.kind === 'delayed_turn', panneau dédié ci-dessus) pour ne pas dupliquer le
+          bouton. Pas de bouton Passer ici — Passer n'a de sens qu'au tour obligatoire
+          (triggerDelayedPass rejette sinon). */}
+      {phase === 'RESOLUTION' && subPhase === 'SLOT_ACTIVE' && currentStep?.kind !== 'delayed_turn' && myControllableDelayedTokenIds.map(tokenId => (
+        <div key={tokenId} style={styles.gmResolution}>
+          <div style={styles.gmResolutionLabel}>
+            <strong>{tokens.find(t => t.id === tokenId)?.label ?? '?'}</strong> — action retardée : agir maintenant, avant la suite ?
+          </div>
+          <button
+            className="btn btn-gold"
+            style={{ flexShrink: 0 }}
+            onClick={() => socket?.emit(WS.COMBAT_ACT_NOW, { tokenId })}
+          >
+            Agir maintenant
+          </button>
+        </div>
+      ))}
+
+      {/* Phase RÉSOLUTION — outil MJ générique « forcer la suite de l'étape en cours » (docs/
+          PLAN_COMBAT_TIMELINE.md Lot D, §6quinquies point 4) : un joueur ne répond pas à un prompt de
+          défense/dégâts (le MJ n'a aujourd'hui aucune visibilité sur ces prompts, envoyés uniquement au
+          joueur concerné). Même événement que Passer (COMBAT_SKIP_PLAYER), le serveur décide seul du
+          comportement exact selon le sous-état. */}
+      {isGm && phase === 'RESOLUTION' && ['AWAITING_DEFENSE', 'AWAITING_DAMAGE'].includes(subPhase) && (
+        <div style={styles.gmResolution}>
+          <div style={styles.gmResolutionLabel}>
+            {subPhase === 'AWAITING_DEFENSE' && 'En attente du jet de défense d’un joueur…'}
+            {subPhase === 'AWAITING_DAMAGE' && 'En attente du jet de dégâts d’un joueur…'}
+          </div>
+          <button
+            className="btn btn-ghost"
+            style={{ flexShrink: 0 }}
+            title="Le serveur lance les dés à la place du joueur injoignable"
+            onClick={() => socket?.emit(WS.COMBAT_SKIP_PLAYER, {})}
+          >
+            Forcer
+          </button>
+        </div>
+      )}
+
+      {/* Phase RÉSOLUTION — panneau GM : confirmer le slot actif (hors assaut distance LOS ok, drone CaC
+          qui suit le même flow que CaC humanoïde, ou tour obligatoire d'un token en délai — panneau
+          dédié ci-dessus) */}
+      {isGm && phase === 'RESOLUTION' && gmActiveEntry && currentStep?.kind !== 'delayed_turn' && (!activeAssaultAction || assaultPrecheckOk === false) && (!activeMeleeAction || precheckOk === false) && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
             Slot actif : <strong>{gmActiveToken?.label ?? '?'}</strong>

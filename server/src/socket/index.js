@@ -5,6 +5,7 @@ import { registerTokenHandlers } from './socketToken.js'
 import { registerDiceHandlers } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerCombatHandlers } from './socketCombat.js'
+import { pickNextTimelineStep } from './socketCombatHelpers.js'
 import { registerTradeHandlers } from './socketTrade.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
@@ -94,6 +95,18 @@ const initSocket = (io) => {
 
             // C3 — restauration combat_pending sur reconnexion en phase RESOLUTION
             if (activeCombat.phase === 'RESOLUTION') {
+              // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B) — un reconnectant doit revoir
+              // l'état courant de la timeline, pas seulement roster/actions ci-dessus.
+              const timelineEntries = await db('combat_timeline_entries')
+                .where({ campaign_id: campaignId, turn_number: activeCombat.current_turn })
+                .orderBy('phase_position', 'desc')
+              const currentStep = await pickNextTimelineStep(campaignId, activeCombat.current_turn)
+              socket.emit(WS.COMBAT_TIMELINE_UPDATED, {
+                turnNumber: activeCombat.current_turn,
+                entries: timelineEntries,
+                currentStep,
+              })
+
               const userToken = await db('tokens')
                 .join('characters', 'tokens.character_id', 'characters.id')
                 .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })

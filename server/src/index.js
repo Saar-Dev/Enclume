@@ -38,6 +38,21 @@ import { createCorsOriginValidator, parseClientOrigins } from './lib/clientOrigi
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Filet de sécurité process-wide (Session 159, retour Saar — « Crash combat » sans aucun message
+// serveur derrière) : sans handler, une rejection non attrapée quelque part dans le graphe async d'un
+// event socket termine tout le process Node (comportement par défaut depuis Node 15+), invisible dans
+// les logs applicatifs — le symptôme observé (plus aucune ligne après le dernier COMBAT_ACTION_CONFIRM)
+// est cohérent avec ce mécanisme. Logue la stack complète et laisse le serveur vivant — un bug dans une
+// résolution de combat ne doit jamais tuer tout le process pour toutes les campagnes en cours.
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] unhandledRejection — process non terminé, mais cause réelle à corriger :', reason)
+  if (reason?.stack) console.error(reason.stack)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] uncaughtException — process non terminé, mais cause réelle à corriger :', err)
+  if (err?.stack) console.error(err.stack)
+})
+
 const app = express()
 const httpServer = createServer(app)
 const clientOrigins = parseClientOrigins(process.env.CLIENT_URLS || process.env.CLIENT_URL)

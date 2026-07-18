@@ -42,7 +42,7 @@ function weaponAmmoStatus(remaining, capacityRaw) {
 // Composant StateSelector
 // Affiche un segmented control pour un etat avec cout de transition visible.
 // ---------------------------------------------------------------------------
-function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
+export function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
   return (
     <div style={ss.row}>
       <span style={ss.label}>{def.label}</span>
@@ -86,7 +86,7 @@ export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
   onEnterMoveMode, onEnterTargetMode,
 }) {
-  const { roster, phase, activeSlotIdx, actions, activeTokenId, currentTurn } = useCombatStore()
+  const { roster, phase, actions, activeTokenId, currentTurn } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   // Multi-personnage : tous les persos contrôlés par ce joueur
@@ -326,8 +326,9 @@ export default function CombatActionWindow({
   if (playerTokensInRoster.length === 0) return null
 
   // --- derives resolution --------------------------------------------------
-  const sorted = [...roster].sort((a, b) => b.initiative - a.initiative)
-  const resolveSlotTid = phase === 'RESOLUTION' ? sorted[activeSlotIdx]?.token_id : null
+  // docs/PLAN_COMBAT_TIMELINE.md Lot B — activeTokenId dérive désormais de currentStep.tokenId (le pas
+  // courant de l'échelle), plus de active_slot_idx/roster trié (colonne supprimée, migration 174).
+  const resolveSlotTid = phase === 'RESOLUTION' ? activeTokenId : null
   const isMyTurnInResolution = resolveSlotTid != null
     && playerTokensInRoster.some(t => t.id === resolveSlotTid)
 
@@ -425,6 +426,28 @@ export default function CombatActionWindow({
   // Armes de contact en inventaire (tous slots/containers) — pour message d'état
   const hasMeleeInInventory = allInventoryItems.some(item => item.ref_category === 'Arme de contact')
 
+  // CaC et Tir sont mutuellement exclusifs à la déclaration — une seule « Action de combat » par Tour
+  // (LdB « Types d'Actions », docs/PLAN_COMBAT_TIMELINE.md §6sexies point 5 : décidé pendant la
+  // conception du Lot B mais jamais câblé — gap qui laissait déclarer les deux, provoquant un plantage
+  // à la résolution, trouvé par Saar en testant le Lot B/C). Sélectionner l'un efface l'autre.
+  const clearAttackState = () => {
+    setAssaultPendingTokenId(null)
+    setAssaultBulletCount(null)
+    setAssaultVariantAB('A')
+    setIsDualWield(false)
+    setAimTranches(0)
+    setAimedLocation(null)
+    setInTargetMode(false)
+  }
+  const clearMeleeState = () => {
+    setMeleePendingTokenIds([])
+    setMeleeCount(1)
+    setSelectedMeleeWeaponId(undefined)
+    setInMeleeTargetMode(false)
+    if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
+    dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
+  }
+
   const handleMapToggle = (k) => {
     setMapSelected(prev => {
       const next = new Set(prev)
@@ -432,28 +455,20 @@ export default function CombatActionWindow({
       if (next.has(k)) {
         // Désélection
         next.delete(k)
-        if (k === 'attack') {
-          setAssaultPendingTokenId(null)
-          setAssaultBulletCount(null)
-          setAssaultVariantAB('A')
-          setIsDualWield(false)
-          setAimTranches(0)
-          setAimedLocation(null)
-          setInTargetMode(false)
-        }
-        if (k === 'melee') {
-          setMeleePendingTokenIds([])
-          setMeleeCount(1)
-          setSelectedMeleeWeaponId(undefined)
-          setInMeleeTargetMode(false)
-          if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
-          dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
-        }
+        if (k === 'attack') clearAttackState()
+        if (k === 'melee') clearMeleeState()
         if (k === 'move') setMoveSelection(null)
         if (k === 'reload') setSelectedAmmoId(null)
       } else {
         next.add(k)
-        if (k === 'attack') dispatch({ type: 'SELECT_ATTACK' })
+        if (k === 'attack') {
+          if (next.has('melee')) { next.delete('melee'); clearMeleeState() }
+          dispatch({ type: 'SELECT_ATTACK' })
+        }
+        if (k === 'melee' && next.has('attack')) {
+          next.delete('attack')
+          clearAttackState()
+        }
       }
 
       return next
@@ -491,7 +506,7 @@ export default function CombatActionWindow({
   const reloadSelected = mapSelected.has('reload')
   const mapActionsObj = {
     move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
-    attack: attackSelected ? { cover_shot: !!(attackSelected && decl.cover !== 'exposed'), aimTranches, lunetteNiveau } : null,
+    attack: attackSelected ? { aimTranches, lunetteNiveau } : null,
     // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
     // Charge : toujours 1 attaque (exclusive multi-attack LdB)
     melee:  (meleeSelected && !meleeDefensif)
@@ -554,7 +569,6 @@ export default function CombatActionWindow({
         position:    decl.position,
         weapon:      decl.weapon,
         fire_mode:   decl.fire_mode,
-        cover:       decl.cover,
         vitesse:     decl.vitesse,
         combat_mode: decl.combatMode,
       },
@@ -574,7 +588,6 @@ export default function CombatActionWindow({
           fireModeBonusDmg:   currentVariant?.bonusDmg ?? null,
           isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
           dualWieldBonusComp: dualWieldBonusComp,
-          cover_shot:         decl.cover !== 'exposed',
           aimTranches:        aimTranches,
           aimedLocation:      aimedLocation,
         } : null,
@@ -852,11 +865,6 @@ export default function CombatActionWindow({
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })}
               />
             )}
-            <StateSelector
-              stateKey="cover" def={STATE_DEFS.cover}
-              current={decl.cover} initial={initialStates.current.cover}
-              onChange={v => dispatch({ type: 'SET_FIELD', key: 'cover', value: v })}
-            />
             {!isDrone && (
               <StateSelector
                 stateKey="vitesse" def={STATE_DEFS.vitesse}
@@ -1021,24 +1029,6 @@ export default function CombatActionWindow({
             </div>
             }
 
-            {/* Toggle cover_shot conditionnel (assault + cover != exposed) */}
-            {!isDrone && attackSelected && decl.cover !== 'exposed' && (
-              <div
-                style={{
-                  ...W.item,
-                  gridColumn: 'span 2',
-                  marginTop: 4,
-                  background: 'rgba(180,80,80,0.08)',
-                  borderColor: '#c05050',
-                }}
-                onClick={() => {/* toggle gere via decl.cover dans le payload */}}
-              >
-                <span style={{ ...W.itemLabel, color: '#e07070' }}>Tirer depuis ma couverture</span>
-                <span style={{ ...W.itemMod, color: '#e07070' }}>
-                  {decl.cover === 'important' ? '-5' : '-3'}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* ACTIONS RAPIDES */}

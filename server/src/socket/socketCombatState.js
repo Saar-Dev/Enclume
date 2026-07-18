@@ -123,7 +123,6 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         battlemap_id,
         phase: 'ROSTER',
         current_turn: 1,
-        active_slot_idx: 0,
         action_timer_sec: actionTimerSec,
       })
       const insertedRoster = await db('combat_roster').insert(rosterRows).returning('*')

@@ -17,6 +17,7 @@ import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
+import { StateSelector } from './CombatActionWindow.jsx'
 
 // ---------------------------------------------------------------------------
 // Etat par défaut (= DEFAULT colonne DB)
@@ -362,11 +363,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   }
 
   // ── Melee direct ────────────────────────────────────────────────────────
-  const handleStartMelee = () => {
+  // startIdx : emplacement à (re)cibler. Ne ré-enchaîne les N sélections que si on redémarre depuis 0
+  // (premier réglage) — reciblage d'un seul emplacement (startIdx>0, bouton "Changer" par slot) ne
+  // touche plus les autres. Correctif rapide de test (Saar, Session 158) : le MJ devait auparavant tout
+  // resélectionner à chaque changement, un seul bouton « Cibler » repartant toujours de zéro.
+  const handleStartMelee = (startIdx = 0) => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
-    setMeleeTargets([])
+    if (startIdx === 0) setMeleeTargets([])
     setIsSelectingOnMap(true)
-    // Pour N attaques, on enchaîne N sélections
     const selectNext = (idx) => {
       onEnterTargetMode(
         activeTokenId,
@@ -377,7 +381,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             next[idx] = targetId
             return next
           })
-          if (idx + 1 < effectiveMeleeCountRef.current) {
+          if (startIdx === 0 && idx + 1 < effectiveMeleeCountRef.current) {
             setTimeout(() => { if (isMountedRef.current) selectNext(idx + 1) }, 0)
           } else {
             setIsSelectingOnMap(false)
@@ -387,7 +391,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         'melee'
       )
     }
-    selectNext(0)
+    selectNext(startIdx)
   }
 
   // ── Charge (move court gratuit → cible CaC) ─────────────────────────────
@@ -442,7 +446,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         position:    decl.position,
         weapon:      decl.weapon,
         fire_mode:   decl.fire_mode,
-        cover:       decl.cover,
         vitesse:     decl.vitesse,
         combat_mode: decl.combatMode,
       },
@@ -509,13 +512,20 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               <div className="combat-win-section">
                 <span className="combat-win-section-title">TACTIQUE</span>
                 <div style={S.chips}>
-                  {['position', 'cover', 'vitesse'].map(k => (
-                    <InlineChip key={k} stateKey={k}
-                      initial={initialStates[k]}
-                      current={decl[k]}
-                      onChange={v => dispatch({ type: 'SET_FIELD', key: k, value: v })} />
-                  ))}
+                  <InlineChip stateKey="position"
+                    initial={initialStates.position}
+                    current={decl.position}
+                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })} />
                 </div>
+                {/* Retarder/Précipiter — segmented control (pas la puce à cycle : Session 158, retour
+                    Saar « pas de bouton pour Action retardée pour les PNJ » — la puce à cycle masquait
+                    les 3 choix derrière des clics successifs sans repère visuel, StateSelector montre
+                    les 3 en même temps comme côté joueur). */}
+                <StateSelector
+                  stateKey="vitesse" def={STATE_DEFS.vitesse}
+                  current={decl.vitesse} initial={initialStates.vitesse}
+                  onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
+                />
               </div>
 
               {/* ARMEMENT */}
@@ -592,6 +602,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setAimedLocation(null)
                               return
                             }
+                            // CaC et Tir mutuellement exclusifs à la déclaration (LdB « Types
+                            // d'Actions », docs/PLAN_COMBAT_TIMELINE.md §6sexies point 5) — sélectionner
+                            // Tir efface un CaC en cours de configuration, jamais les deux ensemble.
+                            if (isMeleeSetup) {
+                              setMeleePendingMode(false)
+                              setMeleeTargets([])
+                              setChargeSelection(null)
+                              dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
+                            }
                             if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
                             handleStartAttack()
                           } else if (a.k === 'melee') {
@@ -601,6 +620,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setChargeSelection(null)
                               dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             } else {
+                              // Même exclusivité que ci-dessus, dans l'autre sens.
+                              if (isAttackActive) {
+                                setAssaultTarget(null)
+                                setAssaultBulletCount(null)
+                                setAssaultVariantAB('A')
+                                setAimTranches(0)
+                                setAimedLocation(null)
+                              }
                               handleStartMelee()
                             }
                           } else {
@@ -870,11 +897,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               meleeCount={meleeAttackCount}
               effectiveMeleeCount={effectiveMeleeCount}
               onMeleeCountChange={(n) => { setMeleeAttackCount(n); setMeleeTargets(prev => prev.slice(0, n)) }}
-              perSlotTargeting={false}
+              perSlotTargeting={true}
               targetIds={chargeSelection?.targetTokenId ? [chargeSelection.targetTokenId] : meleeTargets}
               isInTargetMode={combatTargetMode?.tokenId === activeTokenId && !chargeSelection?.targetTokenId}
               tokens={tokens}
-              onChooseTarget={() => handleStartMelee()}
+              onChooseTarget={(i) => handleStartMelee(i)}
               showReadyBadge={false}
             />
           </div>

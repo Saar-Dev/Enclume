@@ -1098,6 +1098,93 @@ Malus encombrement : règle maison, s'additionne au malus santé.
 
 ---
 
+## Échange / Commerce (tradeService.js) — sessions 124-153 ✅
+
+Système complet PJ↔PJ ("Échange") et PJ↔GM (marchands, revente) — un seul service, une seule table
+d'offres, pas de doublon avec l'ancien Lot A0 (`echangeService.js`, retiré session 153, jamais
+branché à une UI).
+
+### Serveur
+- `server/src/services/tradeService.js` — `getMerchants`/`upsertMerchant`/`deleteMerchant`,
+  `getCatalog`, `buyFromMerchant`, `acceptTransfer` (exécution atomique Échange PJ↔PJ),
+  `executeSell`/`getMyActiveSellOffer` (revente PJ→GM), `getTradeLog`.
+- `server/src/socket/socketTrade.js` — handlers WS (voir events ci-dessous), résolution MJ agissant
+  au nom d'un PJ (`fromChar` non filtré par `user_id` quand `socket.data.role === 'gm'`).
+- Migrations `84_merchants` / `85_trade_log` / `86_trade_offers` / `88_trade_offers_sell` /
+  `89_trade_log_sell` / `90_trade_offers_counter` (+ `87`/`91` sans rapport direct, mêmes numéros).
+
+### Client
+- `client/src/components/ExchangeWindow.jsx` — fenêtre Échange PJ↔PJ, `effectiveCharId`
+  (`isGm ? gmActingAsId : myCharId`) comme autorité unique d'identité agissante.
+- `client/src/components/TradeWindow.jsx` — marchands/revente (scope campagne).
+- `client/src/components/TokenRadialMenu.jsx` — secteur `echange` (`enabled: true` depuis session
+  151, ouvre `ExchangeWindow`).
+
+### Events WS (`shared/events.js`)
+`TRADE_TRANSFER_OFFER/ACCEPTED/DECLINED/CANCELLED`, `TRADE_SELL_PROPOSED/ACCEPTED/DECLINED/
+COUNTER*`, `TRADE_OFFER_RECEIVED/ACCEPTED/DECLINED/CANCELLED/EXPIRED`, `TRADE_MERCHANT_UPDATED`,
+`TRADE_LOG_UPDATED`, `TRADE_ERROR`, `TRADE_DRONE_TRANSFER(RED)` (transfert immédiat même
+propriétaire, ex. drone).
+
+### État
+Parcours complet confirmé fonctionnel en navigateur (ciblage MJ, catalogue filtré sur les items
+déséquipés, proposition, acceptation par un second compte joueur réel) — session 153. Dette connue
+non bloquante : `TRADE1` (`TRADE_TRANSFER_DECLINED` sans vérification d'ownership serveur, sévérité
+faible) — voir `docs/BUGIDENTIFIE.md`.
+
+---
+
+## Bouclier (`damageService.js`, `inventoryService.js`) — session 156 ✅
+
+Implante les règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : deux effets RAW distincts portés
+par un seul objet à slot composite (`char_inventory_slots`, réutilise le mécanisme multi-slot
+existant — aucune nouvelle mécanique de protection) — malus au Test d'attaque de l'adversaire au
+contact/jet-trait (jamais aux armes à feu), protection localisée automatique à distance (jamais au
+contact), jamais les deux effets cumulés sur un même coup (`treatAsContact`).
+
+### Serveur
+- Migration `168_ref_equipment_bouclier.js` — `ref_equipment.shield_atk_malus`/
+  `shield_extra_locations`, mise à jour en place des 3 lignes catalogue historiques déjà en base
+  (pas un seed neuf).
+- `shared/armorConstants.js` — `HAND_TO_ARM_SLOT` (MG→BG, MD→BD).
+- `inventoryService.js` (`updateItem`) — branche composite dédiée pour
+  `ref_equipment.category==='Bouclier'` : le client envoie la main (MG/MD), le serveur compose
+  `[main, bras, ...shield_extra_locations]` et réutilise `_handSlotConflict`/`_armorSlotOccupants`
+  tels quels.
+- `damageService.js` (`resolveTargetHit`) — nouveau paramètre `treatAsContact` : exclut le bouclier
+  de la résolution armure au contact/jet-trait. Test de Chance du Petit bouclier (`1d20 ≤
+  char_sheet.chc`, Corps/Tête uniquement — Moyen/Grand toujours protégés sans jet, Bras toujours
+  automatique).
+- `resolveMeleeAction`/`resolveAssaultAction` (`socketCombatHelpers.js`) — malus CaC/jet-trait de la
+  cible plié dans le Seuil d'attaque avant le jet ; distinction arme à feu (jamais de malus) vs
+  jet/trait (`ref_equipment.category`, valeurs catalogue réelles). `treatAsContact` transporté dans
+  le payload différé PJ (`socketCombatResolution.js`, `COMBAT_DAMAGE_CONFIRM`).
+- Hors scope confirmé : `resolveDroneAssaultAction` (armes de drone) toujours traité comme arme à
+  feu par défaut.
+
+### Client
+- `WeaponPanel.jsx` — bouclier équipable dans l'emplacement main dédié (corrige le bug original
+  signalé par Saar), badge de main corrigé pour un slot composite, stats dédiées affichées (malus
+  CaC adverse, Protection à distance, localisations couvertes).
+- `LocationPanel.jsx` — déséquipement toujours total (`slot: null`) pour un Bouclier, tag visuel +
+  tooltip explicatif.
+- Test de Chance du Petit bouclier diffusé en `DICE_RESULT` (`socketCombatResolution.js`), même
+  patron que la carte `rollLoc` existante.
+- Confirmé sans code neuf : `battlemaps.js` et les fenêtres de déclaration combat affichent déjà le
+  bouclier génériquement (aucune hypothèse `ref_family==='Armes'` excluante), `DiceBreakdownPopover`
+  rend l'entrée « Bouclier adverse » automatiquement.
+
+### État
+Lots A+B+C ✅ codés et testés (21 assertions unitaires Lot A+B, 0 résidu sur personnages/tokens
+jetables) — confirmé fonctionnel en combat réel et en navigateur par Saar (session 156, test du
+Lot C mené en parallèle du développement). **Chantier clos.** Dette connue, non bloquante : les 4
+fichiers character-sheet concernés (`WeaponPanel.jsx`/`LocationPanel.jsx`/`InventoryPanel.jsx`/
+`ContainerPanel.jsx`) n'utilisent `useTranslation` nulle part (zone legacy antérieure au rollout
+i18n) — texte Lot C écrit en dur par cohérence locale, retrofit i18n hors scope. Détail complet
+(archivé) : `docs/Old/PLAN_BOUCLIER.md`.
+
+---
+
 ## Pièges actifs — tous domaines
 
 | Code | Description |

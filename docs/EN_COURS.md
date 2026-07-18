@@ -64,8 +64,11 @@
 > (4 Lots + analyses à charge + audit indépendant), correctif isolé `combat_pending` conçu et prêt à
 > coder en premier, item 82** ; **Session 158 (2026-07-18) : correctif isolé `combat_pending`
 > (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) — ✅ codé et testé en base réelle (migration 170 + FIFO +
-> guard prompt), confirmation navigateur Saar en attente avant Lot A `docs/PLAN_COMBAT_TIMELINE.md`,
-> item 83** ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> guard prompt), item 83 ; Lot A (item 84) + correctif détection arme en main (item 85) — ✅ codés,
+> testés, confirmés fonctionnels par Saar en navigateur ; Lots B+C+D (items 86-87) — ✅ codés (serveur
+> testé par fixtures, client par build Vite propre — Lot D a trouvé et corrigé un bug réel du Lot B,
+> fenêtre de réaction en boucle infinie), validation navigateur groupée encore à faire par Saar, rien
+> committé** ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
 > (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
 > Session 153 : `docs/PLAN_ECHANGE.md` — correction
 > du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
@@ -165,16 +168,413 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> ⚡ **Prochaine étape immédiate : confirmation navigateur Saar, puis Lot B de
-> `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le Lot A (modèle de données de l'échelle de phases) est codé
-> et testé en base réelle (Item 84). En le validant, Saar a trouvé un bug bloquant réel mais **sans
-> rapport avec le Lot A** (préexistant, Session 154) : détection de l'arme en main cassée pour tout
-> personnage avec une arme deux-mains ou un Bouclier — corrigé le même jour (Item 85, `shared/
-> weaponSlots.js`, nouvelle autorité unique client/serveur). Reste la **validation navigateur** des deux
-> (Tour de combat complet + Loulou/Mr sourire/Bourrin) avant d'attaquer le moteur de résolution
-> générique du Lot B. Items 84/85 sont plus bas dans ce fichier (ordre antéchronologique, ils suivent
-> l'item 83) — ne pas les manquer en lisant seulement le haut de ce bloc.
+> ⚡ **Statut au 2026-07-18 fin de session : mécanisme central Retarder/Agir maintenant validé en
+> navigateur par Saar, après une longue série de correctifs (Items 86-88 + refonte ci-dessous).**
+> Validé en vrai (plusieurs Tours, plusieurs configurations Précipiter/Retarder croisées) : Agir
+> maintenant actif exactement à partir de la propre phase d'Initiative du personnage retardé (jamais
+> avant — vérifié explicitement contre un cas où un PNJ précipité passe légitimement devant), priorité
+> RAW correcte à l'interruption, tous les participants résolvent dans le bon ordre sur plusieurs tests
+> d'affilée. **Encore non testé avant de considérer le chantier clos** : le tour obligatoire de fin de
+> Tour lui-même (aucun test récent n'a laissé un personnage retardé être le dernier debout — tous les
+> tests l'ont fait interrompre en plein Tour) ; Passer consciemment ; deux personnages retardés
+> simultanés (départage Initiative égale, RAW §0.1 point 5) ; un CaC retardé (seul le Tir a été retesté
+> après les derniers correctifs) ; Retarder d'un Tour sur l'autre (RAW l'autorise explicitement, jamais
+> exercé). ⚠️ **Rien n'est committé malgré une indication contraire de Saar** — `git status` au moment de
+> la rédaction montre encore les 28 fichiers modifiés/nouveaux de toute la session (Lots B/C/D, refonte
+> Item 88, tous les correctifs qui suivent) ; le dernier commit réel (`bb1bfef`) est antérieur à ce
+> chantier. À vérifier par Saar avant toute autre action (mauvaise branche, mauvais dossier, échec
+> silencieux) — ne pas supposer une sauvegarde qui n'existe pas.
+> **Premier passage navigateur de Saar (2026-07-18)** — 3 correctifs additionnels appliqués avant de
+> continuer les tests : CaC et Assaut n'étaient pas mutuellement exclusifs à la déclaration (plantait à
+> la résolution — gap identifié mais jamais câblé pendant la conception du Lot B, corrigé client+serveur) ;
+> couverture manuelle retirée (vestige déconnecté du vrai calcul de couverture, déjà auto-géré par le
+> moteur monde — sera repris différemment par le futur builder) ; MJ devait resélectionner les 3 cibles
+> d'une série CaC à chaque changement (un seul bouton relançait toute la chaîne) — corrigé au minimum
+> (réutilise le pattern déjà correct côté joueur, un bouton par emplacement) pour ne pas bloquer les
+> tests. **Chantier UI/UX dédié explicitement reporté** (décision Saar) : nettoyage CSS (classes de base
+> `index.css` existantes mais contournées par du style en dur dans `StateSelector`/`MAP_ACTIONS`/
+> `MeleeCombatPanel`) et refonte de l'affichage Retarder/Précipiter (actuellement fonctionnel mais peu
+> lisible) — à lancer une fois les Lots B/C validés et stabilisés en jeu réel, pas maintenant.
+> Détail complet, fichiers exacts et 2 bugs réels trouvés en
+> auditant (dont un qui aurait cassé tout `COMBAT_START`) : Item 86 ci-dessous.
+> **Troisième passage (2026-07-18)** — label « précipitation » du Tir visé faux pour Retarder (corrigé,
+> renommé) ; motif racine du blocage « fenêtre de modificateur non validable, Tour planté » identifié
+> (deux gardes silencieuses de `COMBAT_ACTION_CONFIRM`, jamais de message — corrigé, `COMBAT_DECLARE_ERROR`
+> explicite) ; affordance « Agir maintenant » ajoutée pour un personnage en délai pendant une fenêtre de
+> réaction ouverte (avant, seul le tour obligatoire l'affichait clairement). Détail complet : paragraphe
+> dédié entre Items 86 et 87 ci-dessous.
+> **Refonte architecturale (2026-07-18, Item 88)** — un 2ᵉ log de blocage a mené Saar à demander une
+> réflexion de fond plutôt qu'un patch de plus : `AWAITING_REACTION_WINDOW` (sous-état FSM temporisé du
+> Lot B) est **entièrement retiré**, remplacé par une règle unique conforme au RAW (« agir à n'importe
+> quelle phase d'Action », aucun minuteur) — 3 bugs réels en une journée venaient tous de ce même
+> sous-état. Detail complet : Item 88 ci-dessous, juste avant Item 87 (qui documente encore l'ancien
+> comportement — lire Item 88 en premier pour l'état actuel).
+> **Deuxième passage navigateur de Saar (2026-07-18)** — rapport de 6 points, tous traités :
+> **bug racine réel corrigé** : `COMBAT_ACTION_CONFIRM` marquait l'entrée d'échelle `resolved` **avant**
+> d'appeler `resolveMeleeAction`/`resolveAssaultAction` ; si le resolver levait une exception, le
+> `catch` englobant l'avalait côté serveur uniquement (`console.error`) sans jamais appeler
+> `advanceTimeline` — le Tour restait gelé en silence (symptôme "plantage sur Civil, aucun message"),
+> et un `COMBAT_TIMELINE_UPDATED` de reconnexion ultérieur pouvait ensuite désigner directement le
+> prochain token légitime, donnant l'impression qu'un personnage en délai « shuntait » tout le monde
+> alors que c'était juste la suite normale d'une échelle où l'entrée cassée avait été traitée comme
+> résolue. **Corrigé** : le bloc resolveur est isolé dans son propre `try/catch`, qui émet désormais un
+> `COMBAT_DECLARE_ERROR` explicite en chat et appelle `advanceTimeline` dans tous les cas — l'échelle
+> ne peut plus rester bloquée en silence. **Cause exacte de l'exception d'origine (Civil, double
+> Scorpion) non identifiée avec certitude — `[INCONNU]`**, code relu sans trouver de suspect évident
+> (dual-wield structurellement identique aux deux fenêtres) ; le filet de sécurité posé rendra l'erreur
+> visible en chat si ça se reproduit, avec le message exact nécessaire à un vrai diagnostic.
+> **Autres correctifs** : (1) sous-état `AWAITING_REACTION_WINDOW` absent de la table de transitions
+> pour `COMBAT_ACTION_CONFIRM` — un joueur cliquant « Agir » pendant une fenêtre de réaction ouverte
+> recevait le message générique « Action non autorisée dans cet état de combat » (cause du symptôme LOS
+> rapporté, plausible mais pas certaine sans reproduction exacte) ; message désormais explicite par
+> sous-état + bouton « Agir » désactivé côté client (`CombatActionWindow.jsx`, `CombatOverlay.jsx`)
+> tant que la fenêtre est ouverte, plutôt qu'un clic voué à échouer. (2) Redirection d'interception LOS
+> (§6 point 3, Item 86) vérifiée correcte par relecture — `checkCombatLOS`/`redirectToInterceptor`
+> fonctionnent comme conçus, aucune correction nécessaire là. (3) MJ n'avait structurellement aucun
+> bouton dédié Retarder/Précipiter — `InlineChip` est une puce à cycle (un seul clic fait défiler
+> normal→précipité→retardé sans jamais montrer les 3 choix), contrairement à `StateSelector` côté
+> joueur (3 boutons visibles). `StateSelector` exporté depuis `CombatActionWindow.jsx` et réutilisé tel
+> quel dans `CombatGmDeclareWindow.jsx` pour la ligne vitesse. (4) Messages d'erreur de déclaration
+> assaut (arme manquante, mode de tir incompatible, **compétence Tir Automatique manquante**, arme
+> drone introuvable) routés vers l'événement générique `error` → bannière flottante isolée
+> (`gmSocketError`) au lieu du fil de chat — convertis vers `COMBAT_DECLARE_ERROR` (même patron que
+> « Tir visé : ... », explicitement salué par Saar comme le bon format) avec plus de détail
+> (`socketCombatAnnouncement.js`, bloc PC22/PC23). **Testé** : `node --check` propre sur les 3 fichiers
+> serveur touchés, build Vite complet propre, fixture de fumée (construction + pas courant) rejouée
+> sans régression. **Non testé** : navigateur réel (à nouveau la charge de Saar) ; la cause exacte du
+> crash Civil reste à confirmer par le message désormais visible en chat s'il se reproduit.
 
+> **Troisième passage navigateur de Saar (2026-07-18)** — 4 points rapportés sur le Lot D/fenêtre de
+> réaction, tous traités : (1) le motif d'inéligibilité « précipitation » du Tir visé
+> (`shared/combatExclusiveActions.js` `getAimIneligibilityReasons`) s'affichait même quand le joueur
+> venait de choisir Retarder — la clé compare `state.vitesse` à l'état persisté sans distinguer la
+> direction du changement (normal→retardé/précipité/normal), le libellé « précipitation » était donc
+> faux pour 2 des 3 transitions possibles. Renommé en « changement de vitesse » (générique, correct dans
+> les 3 cas). (2) Bug racine réel identifié derrière « fenêtre de modificateur non validable, Tour
+> planté » : `COMBAT_ACTION_CONFIRM` (`socketCombatResolution.js`) a deux gardes qui existaient déjà
+> (garde FSM `canTransition` + garde `step.tokenId !== tokenId` re-vérifiant le pas courant au moment du
+> clic) mais aucune des deux n'émettait de message en cas de rejet — retour silencieux (`return` nu).
+> Scénario reconstitué : le MJ ouvre la fenêtre de modificateurs d'un PNJ (passe le PRECHECK, à ce
+> moment légitime) puis, avant de cliquer Confirmer, un personnage en délai déclenche « Agir maintenant »
+> (légitime aussi — priorité RAW sur l'action normale, §6ter point 3) : l'échelle est réordonnée sous les
+> pieds du MJ, son clic Confirmer arrive ensuite sur un pas qui n'est plus le pas courant et échoue sans
+> aucun retour — la fenêtre reste affichée, semble ne plus répondre, indiscernable d'un plantage. Ce
+> n'est pas un bug de concurrence à éliminer (la priorité du personnage en délai est voulue) mais un
+> silence à combler — même famille que le correctif Item 86 (Civil/Scorpion) généralisée ici aux deux
+> gardes de `COMBAT_ACTION_CONFIRM` : message `COMBAT_DECLARE_ERROR` explicite (qui a pris la main,
+> pourquoi la fenêtre n'est plus valide) au lieu d'un no-op muet. (3) L'unique affordance du joueur en
+> délai pendant une fenêtre de réaction ouverte (pas le tour obligatoire de fin de Tour, un cas différent
+> déjà bien traité) était un simple portrait cliquable dans la timeline, sans texte ni bouton — beaucoup
+> trop discret (« la fenêtre Agir maintenant n'est apparue chez le joueur qu'au tour obligatoire, plus
+> tard »). Ajouté : panneau explicite « <Perso> — action retardée : agir maintenant, avant la suite ? »
+> avec bouton doré, un par personnage en délai contrôlé par ce viewer, même patron visuel que le panneau
+> du tour obligatoire (sans bouton Passer — non valide pendant une fenêtre de réaction,
+> `triggerDelayedPass` le rejetterait). (4) Message MJ/acteur bloqué pendant la fenêtre reformulé (texte
+> plus explicite sur qui/pourquoi) — clarification minimale seulement, la refonte complète du panneau
+> reste dans le chantier UI/UX différé (décision Saar, cf. plus haut). **Testé** : `node --check` propre
+> sur `socketCombatResolution.js`, `esbuild` propre sur `CombatOverlay.jsx`, build Vite complet propre (0
+> erreur, seul l'avertissement pré-existant de taille de chunk). **Non testé** : navigateur réel (à la
+> charge de Saar) — en particulier le scénario exact qui a produit le blocage rapporté n'a pas pu être
+> rejoué (pas de fixture dédiée à cette race précise, la garde touchée est un ajout de message sur un
+> chemin de code par ailleurs inchangé). **Données** : aucune migration. **Retour arrière** : aucun
+> schéma touché.
+
+> **Analyse de log (2026-07-18, même journée)** — Saar a fourni les logs serveur d'un Tour test sans
+> savoir interpréter un blocage ; bug racine réel trouvé en lisant le log (pas en reproduisant) :
+> `[DBG] COMBAT_ACTION_CONFIRM — tokenId:238cb98c... mods:null` suivi de
+> `[WS] COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers` — l'assaut d'un PNJ a été marqué résolu
+> sans jamais lancer de dé, aucun message. Cause : `COMBAT_ACTION_PRECHECK` traitait
+> `AWAITING_REACTION_WINDOW` (et `AWAITING_DEFENSE`) comme un rejet dur (`callback({ ok:false })`,
+> exactement le même traitement qu'un blocage LOS définitif) au lieu d'une attente transitoire comme
+> `AWAITING_DAMAGE` (`callback({ awaiting:true })`, pattern déjà existant). Le PNJ de ce test avait son
+> assaut présenté juste après le premier tir raté du Tour, au moment exact où le personnage retardé
+> (Joueur 3) ouvrait une fenêtre de réaction — precheck rejeté en dur, `assaultPrecheckOk` passait à
+> `false`, le bouton générique « Agir » (sans fenêtre de modificateurs) s'affichait à la place de
+> `CombatModifiersWindow`, clic MJ, confirm sans `confirmedModifiers`, assaut ignoré en silence côté
+> serveur. Corrigé : `AWAITING_REACTION_WINDOW`/`AWAITING_DEFENSE` rejoignent `AWAITING_DAMAGE` dans la
+> branche `awaiting:true` (`socketCombatResolution.js`) ; le retry côté client (`CombatOverlay.jsx`,
+> effets `meleePrecheckOk`/`assaultPrecheckOk`) dépendait uniquement de `precheckRetryKey`
+> (`COMBAT_ATTACK_RESULT`) — ajouté `subPhase` aux dépendances pour retenter dès la fermeture de la
+> fenêtre, pas seulement après une attaque déjà confirmée. Filet de sécurité ajouté en plus (double
+> protection, pas un correctif du symptôme) : le cas `assault sans confirmedModifiers` émettait un
+> `console.warn` serveur seul — émet désormais aussi `COMBAT_DECLARE_ERROR` en chat, au cas où ce chemin
+> se reproduirait pour une autre raison. Non confirmé/hors scope : le log montre aussi une déclaration
+> d'action (4e participant, INI 12) dont la ligne de log apparaît après celle de `startResolutionPhase` —
+> pourrait indiquer une course entre deux `COMBAT_ACTION_DECLARE` concurrents autour du comptage « tout
+> le monde a annoncé » (pré-existant, aucun lien avec les Lots B/C/D), mais les 4 participants ont bien
+> été résolus dans la suite du log — pas de perte de donnée confirmée, seulement un ordre de log
+> surprenant. `[INCONNU]`, non creusé (hors du signalement de Saar, à surveiller si un vrai symptôme
+> apparaît). **Testé** : `node --check` propre, `esbuild` propre, build Vite complet propre. **Non
+> testé** : navigateur réel (le scénario exact — assaut PNJ présenté pendant une fenêtre de réaction —
+> n'a pas de fixture dédiée ; la relecture du log est la seule preuve disponible pour l'instant).
+
+> **Item 88 (Session 159, dev/Saar) — Retrait de la fenêtre de réaction temporisée (refonte
+> architecturale, demandée explicitement par Saar après un 2ᵉ log de blocage : « qu'est-ce que tu
+> essaies de faire ? Est-ce qu'on est vraiment alignés sur le fonctionnement souhaité d'un tour de
+> combat ? Réflexion profonde. »).** Trois bugs réels en une seule journée de test (boucle infinie
+> Item 87, confirmation silencieuse Item 87, precheck en rejet dur — paragraphe « analyse de log »
+> ci-dessus) tous causés par le même sous-état FSM ajouté au Lot B (`AWAITING_REACTION_WINDOW`, minuteur
+> 15s), jamais par Retarder lui-même. Relecture RAW à froid (`REGLESYSCOMBAT.md:554-567`) : « Le
+> personnage peut alors agir à n'importe quelle phase d'Action » — **aucun minuteur dans le texte**, la
+> fenêtre était une invention (actée avec Saar au moment du plan, §6ter point 3, mais dont le coût réel
+> n'était pas visible avant de la tester en conditions réelles). Le tour obligatoire de fin de Tour (§6
+> point 2, déjà codé au Lot B) faisait déjà, sans minuteur, ce que le RAW demande — la fenêtre de
+> réaction était une couche redondante qui n'apportait rien de plus. **Décision (validée par Saar,
+> "Ok, go") : supprimer entièrement `AWAITING_REACTION_WINDOW`, son minuteur, `justClosedReactionWindow`
+> et tout leur câblage — unifier « Agir maintenant » en une seule règle valable à tout moment de
+> `SLOT_ACTIVE` pendant la Résolution.**
+> **Codé** : `combatFSM.js` — sous-état retiré du `TRANSITIONS` table (commentaire de tête réécrit,
+> explique le retrait) ; `socketCombatHelpers.js` — `advanceTimeline` simplifiée (plus de
+> `delayedCount`/`resolvedCount`/timer/`justClosedReactionWindow`, présente directement le pas suivant
+> en `SLOT_ACTIVE`) ; `triggerActNow` unifiée (un seul chemin : si un pas normal existe, bloqué
+> uniquement si `sub_phase !== 'SLOT_ACTIVE'` — c'est-à-dire si ce pas est déjà en cours de résolution,
+> `AWAITING_DEFENSE`/`AWAITING_DAMAGE`, dés déjà lancés, cf. §6ter point 3 « explicitement écarté » du
+> plan original ; sinon, tour obligatoire inchangé) ; `forceAdvanceResolution` — branche
+> `AWAITING_REACTION_WINDOW` retirée (devenue impossible) ; `REACTION_WINDOW_MS`/
+> `clearReactionWindowTimer`/`pendingMaps.reactionWindows` supprimés, ainsi que leur initialisation dans
+> `socket/index.js` (`combatReactionWindows`) et le champ `reactionWindow` du payload
+> `COMBAT_TIMELINE_UPDATED` (reconnexion comprise). `socketCombatResolution.js` — precheck et confirm
+> perdent leurs branches `AWAITING_REACTION_WINDOW` (celles pour `AWAITING_DEFENSE`/`AWAITING_DAMAGE`,
+> légitimes et pré-existantes, restent). **Client** : `combatStore.js` perd le champ `reactionWindow` ;
+> `CombatTimeline.jsx` perd le minuteur dédié et la clé `isReactive` devient `subPhase === 'SLOT_ACTIVE'`
+> (au lieu de `reactionWindow?.open`) — les cartes « en délai » restent cliquables en continu, plus
+> seulement pendant une fenêtre ; `CombatOverlay.jsx` — le panneau « Agir maintenant » ajouté à la
+> session précédente pour la fenêtre devient valable à tout moment de `SLOT_ACTIVE` (exclu pendant le
+> tour obligatoire pour ne pas dupliquer son propre panneau) ; le panneau MJ « Forcer » perd la branche
+> `AWAITING_REACTION_WINDOW` (ne reste que `AWAITING_DEFENSE`/`AWAITING_DAMAGE`, cas où un joueur ne
+> répond vraiment pas) ; le bouton « Agir » du MJ et celui du joueur (`CombatActionWindow.jsx`) perdent
+> leur état désactivé dédié à la fenêtre — une interruption reste possible à tout instant mais se résout
+> proprement via le message d'erreur déjà en place (Item « analyse de log » ci-dessus, `step.tokenId !==
+> tokenId`) plutôt que d'être pré-empêchée par un état de plus à synchroniser. Migration `174` non
+> retouchée — son `CHECK` autorise encore `'AWAITING_REACTION_WINDOW'` en base, valeur simplement
+> jamais plus écrite (permissif et inoffensif, pas de nouvelle migration pour un nettoyage cosmétique
+> d'une valeur inutilisée). **Testé** : fixture jetable dédiée (10/10, campagne + 4 tokens + échelle
+> construite à la main, 0 résidu après suppression) — Agir maintenant en plein `SLOT_ACTIVE` sans
+> minuteur, retour naturel au pas suivant sans jamais passer par `AWAITING_REACTION_WINDOW`, blocage
+> confirmé pendant `AWAITING_DEFENSE`, tour obligatoire toujours fonctionnel (Agir maintenant et Passer).
+> `node --check` propre sur les 5 fichiers serveur touchés, build Vite complet propre (0 erreur, seul
+> l'avertissement pré-existant de taille de chunk). **Non testé** : navigateur réel (à la charge de
+> Saar) — la régression complète du Lot B (construction/interleaving/attaques multiples/`endTurn`) n'a
+> pas été rejouée dans cette session (aucun de ces chemins n'a été touché par ce retrait, risque jugé
+> faible, mais non vérifié empiriquement). **Données** : aucune migration. **Retour arrière** : aucun
+> schéma touché, revert du commit suffit.
+> **Correction (même session) — retour Saar, faute de compréhension réelle repérée par lui** : la
+> première version de ce retrait autorisait « Agir maintenant » à *tout instant* de `SLOT_ACTIVE`, sans
+> aucune borne — un personnage retardé avec une Initiative basse aurait pu interrompre un acteur avec
+> une Initiative bien plus haute, ce qui contredit le sens même de Retarder (« plus tard dans le Tour »,
+> jamais plus tôt — RAW `REGLESYSCOMBAT.md:554-567`). Saar a reformulé la règle en 3 points clairs et j'ai
+> confirmé/corrigé chacun ; le point manquant était que « Agir maintenant » ne devient actif qu'une fois
+> que le pas normal à résoudre atteint (ou dépasse) la **propre phase d'Initiative d'origine** du
+> personnage en délai (`initiative × 100`), jamais avant — reste ensuite actif jusqu'à la fin du Tour.
+> **Corrigé** : `triggerActNow` (`socketCombatHelpers.js`) compare désormais `referenceStep.position` à
+> `rosterEntry.initiative × 100` et refuse (`return 'too_early'`) tant que ce n'est pas atteint ; la
+> fonction retourne maintenant un statut (`'ok'`/`'too_early'`/`'busy'`/`'not_your_turn'`) au lieu d'un
+> `undefined` muet, et `COMBAT_ACT_NOW` (`socketCombatResolution.js`) émet un `COMBAT_DECLARE_ERROR`
+> explicite sur `'too_early'`. **Client** : `CombatTimeline.jsx` (cartes « en délai » cliquables) et le
+> panneau dédié de `CombatOverlay.jsx` appliquent la même borne — le personnage n'apparaît plus cliquable
+> avant sa propre phase, cohérent avec le retour Saar (« la fenêtre doit être active dès que… »).
+> **Bug annexe trouvé en testant cette correction** : `endTurn` appelait encore
+> `clearReactionWindowTimer`, fonction supprimée au retrait précédent — jamais détecté par le grep
+> textuel (casse différente, `ReactionWindowTimer` vs le motif `reactionWindow` cherché), révélé
+> uniquement en poussant une fixture jusqu'à la fin du Tour. Corrigé (appel retiré). **Testé** : nouvelle
+> fixture jetable dédiée à la borne d'Initiative (9/9, campagne à 4 tokens Initiative 12/11/9/7, vérifie
+> le refus tant que le pas courant n'a pas atteint 9, l'autorisation une fois atteint, et la priorité RAW
+> à Initiative croisée) + fixture de régression complète Agir maintenant/tour obligatoire/Passer/`endTurn`
+> (8/8, 0 résidu, a révélé le bug `clearReactionWindowTimer`) ; `node --check` et build Vite complet
+> propres après correction. **Non testé** : navigateur réel.
+
+> **Suite (même session, 2026-07-18) — bug réel trouvé au tour obligatoire d'un personnage en délai
+> ayant déclaré un Tir (pas un CaC)** : `activeAssaultAction`/`playerActiveAssaultAction`
+> (`CombatOverlay.jsx`) ne vérifiaient jamais `currentStep?.kind !== 'delayed_turn'`, contrairement à
+> `activeMeleeAction`/`playerActiveMeleeAction` qui l'avaient déjà — asymétrie jamais remarquée. Résultat
+> : dès que le tour obligatoire de fin de Tour présentait un personnage en délai ayant déclaré un
+> assaut, la fenêtre de modificateurs de tir s'ouvrait quand même par-dessus le panneau dédié « Agir
+> maintenant/Passer ». Cliquer « Valider » envoyait un `COMBAT_ACTION_CONFIRM` complet, rejeté en
+> silence par le garde serveur (`step.tokenId !== tokenId`, l'entrée restant `delayed_waiting` puisque
+> jamais repositionnée par un vrai Agir maintenant) — vécu comme un plantage total (« Crash combat, pas
+> d'action du joueur ») alors que le serveur attendait légitimement. Root-caused via les logs de
+> breadcrumbs ajoutés cette session : la dernière ligne visible était toujours le `COMBAT_ACTION_CONFIRM`
+> initial, jamais la ligne juste avant la résolution — signature exacte d'un rejet précoce par ce garde.
+> **Corrigé** : ajout de la même garde `currentStep?.kind !== 'delayed_turn'` aux deux variables assaut.
+> **Testé** : `esbuild` + build Vite complets propres. **Non testé** : navigateur — scénario exact
+> (personnage en délai avec un Tir déclaré, atteignant le tour obligatoire) à revalider par Saar.
+> **Note annexe** : les logs de breadcrumbs `reconcileBattlemapElevators` ajoutés pour chasser un faux
+> soupçon de deadlock se sont révélés bruyants (poll 300ms de `Canvas3D.jsx`/`Editor3D.jsx` tant qu'un
+> ascenseur transite) — rendus silencieux sauf acquisition >100ms. `useCombatSocket.js` : `COMBAT_ENDED`
+> ne réinitialisait que 2 états sur ~10 (retour Saar « mauvaise réinitialisation »), corrigé — tous les
+> états de fenêtre/résultat sont désormais purgés à la fin d'un combat.
+
+> **Bug racine réel, cause de toute la confusion « Agir maintenant » depuis le début de cette refonte
+> (même session, 2026-07-18)** — Saar a demandé de vérifier la RAW pas à pas (déclaration croissante,
+> résolution décroissante, dernier déclarant = plus rapide = premier à agir, donc un personnage retardé
+> avec la PLUS HAUTE Initiative devrait pouvoir agir dès le tout début de la Résolution). Vérification :
+> le raisonnement RAW de Saar est exact, et le code serveur (borne d'Initiative d'origine, item
+> précédent) l'implémentait déjà correctement — **mais le client ne recevait jamais l'information pour
+> l'afficher**. `combat_state.sub_phase` n'était diffusé aux clients qu'à la reconnexion
+> (`COMBAT_STATE_SYNC`) — jamais pendant une partie normale. `subPhase` restait donc figé à `null` côté
+> client du début à la fin d'une session de jeu, rendant fausses en permanence toutes les conditions
+> `subPhase === 'SLOT_ACTIVE'` ajoutées cette session (panneau Agir maintenant mi-Tour, retry precheck,
+> panneau MJ Forcer) — jamais détecté avant car le flux principal (bouton Agir normal, résolution pas à
+> pas) ne dépend pas de `subPhase`, seulement `phase` et `currentStep`. **Corrigé à la source unique** :
+> `broadcastTimelineState` (`socketCombatHelpers.js`) relit et inclut désormais toujours le `sub_phase`
+> courant dans `COMBAT_TIMELINE_UPDATED` ; nouvel helper `broadcastCurrentSubPhase(io, campaignId)`
+> ajouté aux 5 endroits où `setFSMSubPhase(..., 'AWAITING_DEFENSE'/'AWAITING_DAMAGE'/'SLOT_ACTIVE')` était
+> appelé hors du chemin `advanceTimeline` (résolution suspendue en attendant un jet de dégâts/défense) et
+> ne rediffusait donc jamais rien. **Client** : `combatStore.js` — `setTimelineState` ignorait
+> silencieusement tout champ `subPhase` reçu (ne déstructurait que `turnNumber`/`entries`/`currentStep`)
+> — LE bug exact qui annulait le fix serveur : même corrigé côté serveur, le client aurait continué à
+> l'ignorer. Corrigé. **Testé** : fixture jetable dédiée (3/3 — premier broadcast de Résolution inclut
+> bien `subPhase:'SLOT_ACTIVE'`, et `currentStep.position <= ownPosition` du personnage retardé à
+> Initiative la plus haute dès ce tout premier broadcast, confirmant le scénario exact décrit par Saar).
+> `node --check` + build Vite complets propres. **Non testé** : navigateur — c'est la pièce qui manquait
+> à TOUTES les vérifications précédentes de cette session sur Agir maintenant ; à confirmer en vrai.
+
+> **Item 87 (Session 158, dev/Saar) — Lot D de `docs/PLAN_COMBAT_TIMELINE.md` (§5, « Contrôle du temps
+> MJ ») — ✅ CODÉ ET TESTÉ PAR FIXTURES.** Implanté avant tout retour navigateur sur les Lots B/C (Saar
+> manque de temps pour tester dans l'immédiat, décision explicite : enchaîner plutôt que bloquer —
+> risque accepté : si un test futur du Lot C révèle un bug du moteur central, le Lot D qui s'appuie
+> dessus pourrait avoir besoin d'un ajustement mineur). **Généralisation de l'outil MJ existant** —
+> même bouton, même événement `COMBAT_SKIP_PLAYER` (`socketCombatAnnouncement.js`), désormais autorisé
+> par la FSM (`combatFSM.js`) depuis `AWAITING_DEFENSE`/`AWAITING_DAMAGE`/`AWAITING_REACTION_WINDOW` en
+> plus de `SLOT_ACTIVE`/Annonce. Comportement par sous-état (`forceAdvanceResolution`,
+> `socketCombatHelpers.js`) : `AWAITING_REACTION_WINDOW` → fermeture immédiate, comme une expiration
+> normale ; `AWAITING_DEFENSE`/`AWAITING_DAMAGE` → « le serveur lance les dés à la place du joueur
+> injoignable, il devient PNJ pour le Tour » — **découverte en implantant** : ces deux confirmations
+> acceptaient déjà le MJ comme déclencheur autorisé (`!isGm` déjà présent dans leur garde de propriétaire,
+> bien avant ce Lot) ; la seule pièce manquante était l'accès — `confirmMeleeDefense`/`confirmDamage`
+> extraites des handlers `COMBAT_MELEE_DEFENSE_CONFIRM`/`COMBAT_DAMAGE_CONFIRM` vers des fonctions
+> exportées de `socketCombatHelpers.js` (même code exact, aucune formule dupliquée — `forced:true`
+> contourne uniquement la vérification de propriétaire et affiche le jet sous l'identité du personnage
+> plutôt que celle du MJ) ; `SLOT_ACTIVE` — tour obligatoire d'un délai → équivaut à `COMBAT_DELAYED_PASS` ;
+> entrée normale/pas simple bloqué → marqué `skipped`, l'échelle avance (le MJ dispose déjà par ailleurs
+> du bouton « Agir » existant pour exécuter réellement l'action à la place d'un joueur silencieux — cette
+> branche est un dernier recours, pas le chemin principal). **Client** : nouveau panneau MJ générique
+> « Forcer » (`CombatOverlay.jsx`) visible pendant `AWAITING_DEFENSE`/`AWAITING_DAMAGE`/
+> `AWAITING_REACTION_WINDOW`. **Bug réel du Lot B trouvé et corrigé en testant le Lot D** (pas en
+> navigateur — par fixture, avant tout risque réel) : la fenêtre de réaction se rouvrait indéfiniment
+> pour le même pas tant qu'un personnage restait en délai — `delayedCount>0 && resolvedCount>0` reste
+> vrai en continu une fois la première entrée résolue, et rien ne distinguait « ce pas vient d'avoir sa
+> fenêtre, ne pas la rouvrir » de « nouveau pas, fenêtre méritée » ; le minuteur naturel (15s) avait
+> exactement le même défaut — **le Tour combat se serait bloqué pour de bon dès qu'un personnage
+> retardait son Action**, jamais détecté par les fixtures du Lot B (qui ne poussaient jamais la fenêtre
+> jusqu'à sa fermeture). Corrigé : `advanceTimeline` accepte un paramètre interne
+> `justClosedReactionWindow` (jamais exposé à un event socket), positionné par le minuteur ET par
+> `forceAdvanceResolution` — n'empêche l'ouverture que pour le pas qui vient d'être fermé, laisse les
+> pas suivants légitimement candidats. **Testé** : `node --check` propre sur les 4 fichiers serveur
+> touchés, `esbuild`/build Vite propres côté client, 2 scénarios de fixtures jetables (10/10 assertions,
+> 0 résidu — fermeture de fenêtre sans boucle, entrée normale forcée, tour obligatoire forcé, no-op hors
+> Résolution) + rejeu complet du scénario de régression Lot B (construction/interleaving/delay/act-now/
+> endTurn, 7/7, 0 résidu) confirmant l'absence de régression du correctif `justClosedReactionWindow`.
+> **Non testé** : navigateur réel (à la charge de Saar, comme Items 84-86) ; le cas à 2+ personnages
+> delayed simultanés pendant un `COMBAT_ACT_NOW` (nuance mineure documentée dans le code, pas un bug
+> confirmé). **Données** : aucune migration. **Retour arrière** : aucun schéma touché, revert du commit
+> suffit si besoin.
+
+> **Item 86 (Session 158, dev/Saar) — Lots B+C de `docs/PLAN_COMBAT_TIMELINE.md` (§5/§6ter/§6quater) :
+> moteur de résolution générique + timeline client — ✅ CODÉS (serveur testé par fixtures, client par
+> build Vite propre), ⚠️ AUCUNE VALIDATION NAVIGATEUR ENCORE OBTENUE.**
+> Recherche best-practices faite avant code (exigence Saar) : FSM à sous-états explicites + parcours
+> relu en direct sans curseur dupliqué (patron Foundry VTT `Combat.nextTurn`/lifecycle events, *Event
+> Queue* de Game Programming Patterns) — confirme la conception déjà actée dans le plan, rien à
+> corriger. **2 découvertes non anticipées par le plan, tranchées en codant** : (1) « Précipiter son
+> Action » (+3 INI, -5 Action) était déjà presque entièrement câblé avant ce Lot
+> (`combatSections.js`/`socketCombatAnnouncement.js` `iniDelta`, `resolveMeleeAction` `isRushedMod`) —
+> Lot A capture déjà son effet sur `phase_position` du simple fait de l'ordre des étapes (iniDelta
+> appliqué à `combat_roster.initiative` avant `buildTimelineEntries`) ; seul le guard RAW « précipité
+> jamais retardable » restait à vérifier — **déjà garanti gratuitement** par le sélecteur `vitesse`
+> exclusif à un seul choix (delayed/normal/rushed), rien à coder. (2) Un token sans aucune action
+> complexe (juste déplacement/rechargement) n'a structurellement aucune entrée d'échelle (§5 « portée
+> des entrées ») — le parcours générique doit donc fusionner deux sources triées ensemble : les entrées
+> `scheduled` ET les membres du roster sans entrée ce Tour (`has_resolved`, colonne `combat_roster`
+> existante depuis la migration 54, jamais câblée avant ce Lot).
+> **Codé** (`server/src/lib/combatFSM.js`, `server/src/socket/socketCombatHelpers.js`,
+> `server/src/socket/socketCombatResolution.js`, `server/src/socket/index.js`, `server/src/lib/
+> losService.js`, `shared/events.js`) : nouveau sous-état FSM `AWAITING_REACTION_WINDOW` (minuteur en
+> mémoire déclencheur, le FSM seul décide qu'on attend — corrige la proposition initiale erronée du
+> plan §6ter point 3 correction 1) ; `pickNextTimelineStep`/`advanceTimeline` remplacent
+> `advanceSlot`/`active_slot_idx` (fusion scheduled+simple ci-dessus, position DESC, relu en direct à
+> chaque appel) ; `pickNextObligatoryDelayed` (tour obligatoire de fin de Tour, ascendant Initiative,
+> §6 point 2) ; `triggerActNow`/`triggerDelayedPass` (nouveaux events `COMBAT_ACT_NOW`/
+> `COMBAT_DELAYED_PASS`) — guard strict : Agir maintenant/Passer refusés hors fenêtre de réaction ou
+> tour obligatoire de CE token précis (pas de resquille) ; position d'insertion Agir maintenant
+> `référence + 100 + initiative` (priorité RAW sur l'action normale à la même phase + départage
+> Initiative décroissante entre deux déclenchements simultanés, §6 point 8) ; `resolveMeleeAction`
+> allégée (`remainingMeleeActions`/`totalMeleeCount` retirés, malus recalculé en direct depuis les
+> entrées sœurs non `lost`/`skipped` du même `declaration_group_id`, §6bis point 3) ; `forfeitToken`
+> (étourdissement — clôture aussi les entrées d'échelle orphelines, pas seulement `combat_actions`, sans
+> quoi `pickNextTimelineStep` les resélectionnerait indéfiniment — piège trouvé en concevant, pas en
+> testant) ; `COMBAT_ACTION_CONFIRM` résout désormais **une seule entrée à la fois** (plus « toutes les
+> actions restantes » d'un token) ; extension LOS §6 point 3 (`losService.js` — un tir dont la cible
+> devient hors de portée redirige vers un intercepteur sur le vecteur au lieu d'échouer muet, même
+> patron que l'interposition déjà fonctionnelle). **Migration `174_combat_timeline_resolution.js`** :
+> `combat_state.sub_phase` CHECK étendu (+`AWAITING_REACTION_WINDOW`) + colonne `active_slot_idx`
+> supprimée (dernier lecteur retiré dans ce Lot, colonne réellement morte) — up/down/up testé en base
+> réelle. **Bug de conception trouvé et corrigé en testant** (fixtures) : la position de référence d'un
+> Agir-maintenant hors fenêtre (tour obligatoire) pointait vers la plus haute `phase_position` déjà
+> résolue au lieu de la plus récente chronologiquement (`resolved_at` au lieu de `phase_position` pour
+> trier) — sans impact gameplay (l'ordre réel de ce cas vient de `pickNextObligatoryDelayed`, pas de
+> cette position, purement cosmétique/audit) mais corrigé par cohérence avec l'intention du code.
+> **Testé** : `node --check` propre sur les 6 fichiers serveur touchés ; 2 scénarios de fixtures
+> jetables en base réelle (campagne/battlemap/tokens disposables, 0 résidu confirmé après coup) — (1)
+> construction + interleaving 3 personnages (série CaC ×3 normale, assault normal, CaC retardé),
+> positions exactes vérifiées, tour obligatoire + Agir maintenant + `endTurn` (roster réinitialisé,
+> aucune entrée orpheline) ; (2) fenêtre de réaction réelle de bout en bout via `advanceTimeline`
+> (ouverture après la 1ʳᵉ résolution seulement, jamais avant, minuteur bien enregistré/nettoyé, position
+> d'insertion Agir-maintenant-en-fenêtre exacte `référence+100+initiative`). **Non testé, volontairement
+> reporté** : `resolveMeleeAction`/`resolveAssaultAction` eux-mêmes (jets de dés, dégâts, armure) —
+> logique métier inchangée par ce Lot (changement de signature uniquement), déjà couverte par l'usage
+> réel antérieur ; parcours HTTP/Socket.IO réel (aucun client ne peut encore déclencher Retarder/Agir
+> maintenant/Passer, cf. ci-dessous) ; scénario à 2+ personnages en délai simultané.
+> **Pourquoi pas de bouton temporaire pour valider le Lot B seul** : décision explicite Saar (2026-07-18,
+> discussion directe hors questionnaire) — enchaîner Lot B et Lot C sans étape de validation
+> intermédiaire plutôt que construire un bouton jetable (aurait été le genre de travail à double emploi
+> explicitement interdit cette session).
+> **Lot C — codé** (`client/src/stores/combatStore.js`, `client/src/lib/useCombatSocket.js`,
+> `client/src/components/CombatTimeline.jsx`, `client/src/components/CombatOverlay.jsx`,
+> `client/src/components/CombatActionWindow.jsx`) : nouvelles données de store `timelineEntries`/
+> `currentStep`/`reactionWindow`, alimentées par `COMBAT_TIMELINE_UPDATED` (un seul event, poussé à
+> chaque changement de l'échelle, y compris à la reconnexion — `server/src/socket/index.js`) ;
+> `CombatTimeline.jsx` branche RÉSOLUTION reconstruite : une carte par entrée (clé `entry.id`, pas
+> `token_id` — le piège déjà identifié au plan §6quater), carte éphémère non persistée pour un token
+> sans entrée dont c'est le tour (actions simples seules, sinon il disparaîtrait de la timeline pendant
+> son tour — régression non voulue, ajout au-delà du plan) ; nouvelle zone « en attente » — une carte
+> par personnage `delayed_waiting`, portrait = déclencheur `COMBAT_ACT_NOW`, cliquable seulement si ce
+> viewer contrôle le token ET (fenêtre de réaction ouverte OU c'est son tour obligatoire) ; `TimelineCard.jsx`
+> réutilisé tel quel (déjà purement visuel). Nouveau panneau `CombatOverlay.jsx` dédié au tour obligatoire
+> (« Agir maintenant » / « Passer », `COMBAT_DELAYED_PASS`) — portée volontairement limitée à ce cas
+> précis, ne généralise pas l'outil MJ (ça, c'est le Lot D, « forcer la suite de l'étape en cours » sur
+> n'importe quel sous-état bloqué). **2 bugs réels trouvés en écrivant le client, corrigés** : (1)
+> `CombatOverlay.jsx` (`activeMeleeAction`/`playerActiveMeleeAction`) utilisait `actions.find(a =>
+> a.token_id === X && a.action_key === 'melee')` — plusieurs lignes `combat_actions` du même token
+> peuvent désormais rester `pending` simultanément (série CaC non intégralement résolue), `.find()`
+> aurait pris la première de l'array au lieu de celle réellement due — remplacé par une correspondance
+> sur `currentStep.entry.combat_action_id`. (2) `CombatActionWindow.jsx` `resolveSlotTid =
+> sorted[activeSlotIdx]?.token_id` — `activeSlotIdx` n'existe plus côté RÉSOLUTION (colonne supprimée
+> par la migration 174) — remplacé par `activeTokenId` (dérivé de `currentStep.tokenId` dans le store).
+> **1 bug serveur supplémentaire trouvé en auditant après coup (grep exhaustif `active_slot_idx`), avant
+> tout test navigateur — aurait cassé COMBAT_START** : `socketCombatState.js` insérait encore
+> `active_slot_idx: 0` dans `combat_state` à la création d'un combat — colonne supprimée par la
+> migration 174, l'INSERT aurait levé une erreur SQL au tout premier `COMBAT_START` suivant ce Lot.
+> Corrigé (ligne retirée). **Simplification documentée, non construite** : survol MJ d'une carte « en
+> attente » pour mettre en surbrillance le jeton sur la carte de bataille (§6quater) — micro-interaction
+> non essentielle au mécanisme, reportée pour ne pas alourdir davantage un chantier déjà volumineux ; le
+> clic seul (sans confirmation visuelle préalable) suffit à valider le mécanisme.
+> **Testé** : `node --check` propre sur tous les fichiers serveur touchés (dont le correctif
+> `socketCombatState.js`) ; `esbuild` propre sur les 6 fichiers client touchés ; **build Vite complet du
+> client réussi (0 erreur)** ; grep exhaustif `active_slot_idx`/`activeSlotIdx` sur tout le dépôt (client
+> + serveur) confirmant plus aucune lecture/écriture orpheline ; grep croisé confirmant que chaque
+> nouvel event (`COMBAT_ACT_NOW`, `COMBAT_DELAYED_PASS`, `COMBAT_TIMELINE_UPDATED`) est bien émis ET
+> consommé des deux côtés, aucun câblage orphelin. **Non testé** : aucun test navigateur réel (Claude ne
+> pilote pas de navigateur, cf. mémoire projet) — c'est la prochaine étape, à la charge de Saar. Scénario
+> à couvrir : Tour normal (non-régression), série CaC entrelacée avec un tir, un personnage Retarder +
+> Agir maintenant pendant une fenêtre de réaction réelle, un Passer volontaire au tour obligatoire,
+> reconnexion en cours de RÉSOLUTION (timeline resynchronisée). Survol MJ « en attente » non construit
+> (voir ci-dessus).
+> **Données** : migration `174` appliquée en base locale de développement (`vtt`), aucun effet sur les
+> données de campagne existantes (colonne supprimée jamais lue par aucune donnée métier). **Retour
+> arrière** : `down()` de la migration 174 testé et fonctionnel (round-trip up/down/up confirmé). Rien
+> n'est committé à ce stade — voir rappel `git add`/`commit`/`push` en tête de session suivante.
+>
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
 > Réflexion sur l'implantation des règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : plan rédigé,
