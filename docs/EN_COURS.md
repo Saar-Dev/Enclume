@@ -165,12 +165,12 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> ⚡ **Prochaine étape immédiate : Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le correctif isolé
-> `combat_pending` est **codé, testé et confirmé fonctionnel par Saar en navigateur** (Item 83
-> ci-dessous), `docs/PLAN_COMBAT_ACTION_QUEUE.md` archivé dans `docs/Old/` (Règle 10). Rien ne bloque
-> plus le démarrage du Lot A (schéma `combat_timeline_entries`, détaillé §5 du plan). Item 83 est plus
-> bas dans ce fichier (ordre antéchronologique, il suit l'item 82) — ne pas le manquer en lisant
-> seulement le haut de ce bloc.
+> ⚡ **Prochaine étape immédiate : Lot B de `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le Lot A (modèle de
+> données de l'échelle de phases) est **codé et testé en base réelle** (Item 84 ci-dessous), reste la
+> **validation navigateur d'un Tour de combat complet** (rien de visuel ne change encore — Lot A
+> n'alimente que la donnée, le moteur de résolution actuel reste inchangé jusqu'au Lot B) avant
+> d'attaquer le moteur de résolution générique. Item 84 est plus bas dans ce fichier (ordre
+> antéchronologique, il suit l'item 83) — ne pas le manquer en lisant seulement le haut de ce bloc.
 
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
@@ -384,9 +384,47 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > développement (`vtt`), aucun effet sur les données de campagne existantes (table `combat_pending`
 > vide au moment de la migration). **Retour arrière** : `down()` de la migration 170 testé et fonctionnel
 > (dédoublonnage défensif inclus).
-> **Prochaine étape** : confirmation navigateur Saar (combat réel avec attaque multiple CaC PJ contre 2
-> défenseurs PJ), puis archivage de `docs/PLAN_COMBAT_ACTION_QUEUE.md` dans `docs/Old/` (Règle 10), puis
-> démarrage du Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5).
+> **Prochaine étape** : voir Item 84 (Lot A, ci-dessous) — codé et testé le jour même.
+>
+> **Item 84 (Session 158, dev/Saar) — Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5) : modèle de données
+> de l'échelle de phases ✅ CODÉ ET TESTÉ EN BASE RÉELLE.** Migration `172_combat_timeline_entries.js` :
+> `combat_actions.turn_number` (backfill trivial, table vide en pratique) + nouvelle table
+> `combat_timeline_entries` (schéma exact du plan — `id`, `campaign_id`, `turn_number`, `token_id`,
+> `combat_action_id` FK, `declaration_group_id`, `phase_position`, `status` CHECK 5 valeurs,
+> `resolved_at`, `resolution_snapshot`, 2 index). **6 sites scopés sur `turn_number`** (audit complet,
+> exactement ceux listés au plan + `index.js`) : insertion déclaration (`socketCombatAnnouncement.js`),
+> insertion skip (`skipPlayer` + `COMBAT_SURPRISE_RESULT`), lecture `startResolutionPhase`, 2 lectures
+> `COMBAT_ACTION_PRECHECK`/`COMBAT_ACTION_CONFIRM` (guard stun ×2 + range CaC + lecture principale),
+> sync reconnexion (`index.js`). `COMBAT_END` (wipe complet campagne) inchangé, cohérent avec
+> "suppression réelle seulement à COMBAT_START". **`endTurn()`** : `DELETE combat_actions`
+> inconditionnel (PC28) retiré — les lignes encore `pending` à la clôture du Tour sont marquées
+> `skipped` explicitement, l'historique reste en base. **Construction de l'échelle**
+> (`startResolutionPhase`, seul point de transition ANNONCE→RÉSOLUTION, nouvelle fonction
+> `buildTimelineEntries`) : une entrée par action `type IN ('melee','assault')` déclarée ce Tour ;
+> `phase_position = combat_roster.initiative × 100` pour la 1ʳᵉ attaque d'un token — **le décalage RAW
+> -5 Initiative par attaque supplémentaire d'une série CaC multi-attaque (LdB p.218-219, jamais câblé
+> avant ce Lot, cf. `PLAN_TIRMULTI.md` §0.1 point 1) devient réel** : 2ᵉ attaque `-500`, 3ᵉ `-1000`
+> (même échelle ×100) ; position ≤ 0 → `status:'lost'` immédiat. `declaration_group_id` : un uuid par
+> token ayant ≥1 action `melee` ce Tour (les 1-3 attaques d'une même déclaration partagent le même
+> groupe) ; `null` pour `assault` (pas encore de Tir Multi, toujours singulier). Cette construction
+> **alimente la table sans rien changer au moteur de résolution actuel** (`advanceSlot`/
+> `active_slot_idx` inchangés) — bascule réelle de consommation au Lot B. **Testé** : migration
+> up/down/up (round-trip complet, schéma vérifié colonne par colonne) ; 2 scénarios réels en base
+> (fixture jetable — campagne/battlemap/tokens disposables, 0 résidu confirmé après coup) : (1)
+> construction — 1 token 3 attaques CaC + 1 token 1 tir, positions `1500/1000/500`/`800` exactes,
+> `declaration_group_id` partagé pour les 3 CaC et `null` pour le tir, décoy `turn_number` différent
+> jamais ramassé et resté intact ; (2) `endTurn()` — ligne `pending` marquée `skipped` (pas supprimée),
+> ligne déjà `resolved` intacte, aucune ligne supprimée, Tour incrémenté, phase repassée à
+> `ANNOUNCEMENT`. `node --check` 0 erreur sur les 6 fichiers touchés. **Non testé** : parcours
+> navigateur d'un Tour de combat complet — aucun changement visuel attendu (le moteur de résolution
+> actif ne lit pas encore `combat_timeline_entries`), mais à confirmer qu'aucune régression n'a été
+> introduite sur le flux existant (déclaration, résolution, fin de Tour) par les 6 sites scopés et le
+> retrait du DELETE. **Données** : migration `172` appliquée en base locale de développement (`vtt`).
+> **Retour arrière** : `down()` testé (drop table + drop colonne, round-trip validé).
+> **Prochaine étape** : confirmation navigateur Saar (un Tour de combat complet, sans régression), puis
+> Lot B de `docs/PLAN_COMBAT_TIMELINE.md` (moteur de résolution générique consommant réellement
+> `combat_timeline_entries` — remplace `advanceSlot`/`active_slot_idx`, absorbe le mécanisme "Retarder
+> son Action", cf. §5/§6ter du plan).
 >
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token

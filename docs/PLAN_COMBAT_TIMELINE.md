@@ -1,7 +1,9 @@
 # PLAN_COMBAT_TIMELINE.md — Refonte du moteur de tours en timeline à phases (LdB p.212-219)
 
-> Créé : 2026-07-18 (dev/Saar). Statut : **conception complète des 4 Lots (A/B/C/D, §5), chacun analysé
-> à charge séparément puis recroisés (§6quinquies) — prêt à démarrer le code du Lot A.** Décidé Option A
+> Créé : 2026-07-18 (dev/Saar). Statut : **Lot A codé et testé en base réelle (Session 158) — reste la
+> confirmation navigateur avant d'attaquer le Lot B (moteur de résolution générique).** Conception
+> complète des 4 Lots (A/B/C/D, §5), chacun analysé à charge séparément puis recroisés (§6quinquies).
+> Décidé Option A
 > (« des bases saines seront toujours plus pertinentes ») après que la discussion de
 > `docs/PLAN_COMBAT_ACTION_QUEUE.md` (prérequis initial pour `docs/PLAN_TIRMULTI.md`, lui-même une
 > demande de Saar) a révélé que l'architecture de résolution combat actuelle (liste statique résolue en
