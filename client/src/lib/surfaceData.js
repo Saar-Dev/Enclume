@@ -1054,7 +1054,10 @@ export function isWorldPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRo
 
 export function isWorldInteriorPointVisibleAtLevel(data, displayLevel, x, z, y, cameraRoomId = null) {
   if (displayLevel === null || displayLevel === undefined) return true
-  if (yToLevel(y) === Number(displayLevel)) return true
+  // Les intérieurs inférieurs restent rendus, mais sont naturellement cachés par les dalles et
+  // les murs opaques. Une vraie trémie ou une verrière révèle ainsi le niveau du dessous sans
+  // transformer son enveloppe en coupe transparente.
+  if (yToLevel(y) <= Number(displayLevel)) return true
   return pointBelongsToRoomVolume(data, cameraRoomId, x, z, y)
 }
 

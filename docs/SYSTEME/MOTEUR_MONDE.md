@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-16 — `surface_data` v13 et premier escalier paramétrique canonique.
+> Dernière mise à jour : 2026-07-18 — orientation avant pose et vision verticale par ouvertures réelles.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -387,8 +387,10 @@ zéro entre un support et le premier ou dernier ancrage restent dans le graphe, 
 plan de mouvement rendu au client.
 
 Dans l'éditeur, l'entrée se trouve sous **Objets 3D > Escaliers**. Un clic choisit l'objet, le survol
-prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. Le popup
-permet une rotation par quart de tour, l'activation de chaque garde-corps, le multiplicateur de
+prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. La palette
+permet de tourner ce même aperçu par quarts de tour avant le clic : l'orientation affichée est donc
+exactement celle transmise à la définition canonique lors de la pose. Le popup permet ensuite une
+rotation par quart de tour, l'activation de chaque garde-corps, le multiplicateur de
 déplacement et l'apparence procédurale. Une texture ou un futur modèle décoratif ne remplace jamais
 la géométrie physique dérivée.
 
@@ -488,7 +490,9 @@ plafond. Elle peut occuper la base ou le sommet d'une salle haute, ou l'interfac
 par deux salles superposées ; elle ne peut pas flotter dans une tranche intermédiaire vide. Son
 support reste praticable et bloque mouvement vertical et fluides, mais laisse passer la vision.
 Dans l'éditeur, les quatre formats sont exposés exclusivement sous **Objets 3D > Dalles en verre**.
-Le choix d'un modèle active le rayon de pose structurel ; aucune `entity` décorative n'est créée.
+Le choix d'un modèle active le rayon de pose structurel et un fantôme cyan non occulté matérialise
+l'emprise exacte avant le clic. La rotation de ce fantôme modifie la même orientation que celle
+persistée ; aucune `entity` décorative n'est créée.
 
 ---
 
@@ -528,18 +532,19 @@ leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel
 
 ### 7.1 Tranche d'étage affichée
 
-`displayLevel = N` rend tout l'intérieur de la tranche N. Pour les tranches strictement inférieures,
-seule l'enveloppe murale extérieure reste rendue et opaque, avec les connecteurs et entités dont le
-mode de pose est mural (portes, fenêtres, écrans et décor mural). Leurs sols, plafonds, escaliers,
-effets, tokens et objets posés à l'intérieur ne sont pas rendus. Leur présence graphique ne les rend
-pas sélectionnables comme supports du niveau courant. Les niveaux supérieurs restent masqués en
-temps normal.
+`displayLevel = N` rend tout l'intérieur de la tranche N. Les intérieurs strictement inférieurs
+restent eux aussi rendus avec leurs matériaux opaques, mais les vraies interfaces horizontales et
+les vraies parois les occultent naturellement. Ils ne deviennent donc visibles que par une
+ouverture géométrique réelle : trémie d'escalier, future trappe ouverte ou dalle vitrée. Les murs
+inférieurs ne participent pas à la coupe caméra du niveau courant et restent opaques. Les niveaux
+supérieurs restent masqués en temps normal.
 
-Cette distinction est un contrat du moteur, pas une règle propre au renderer. La visibilité
-« enveloppe » accepte les points des niveaux inférieurs ; la visibilité « intérieur » n'accepte que
-le niveau courant. `entityUsesWallPlacement` choisit explicitement le premier régime pour une
-entité murale et le second pour une entité libre. Tous les consommateurs — jeu, éditeur, picking,
-tokens, effets et structures horizontales — utilisent ces mêmes prédicats.
+Cette occlusion est un contrat du moteur, pas un masque visuel ajouté par objet. La visibilité
+« enveloppe » et la visibilité « intérieur » acceptent les points des niveaux inférieurs ; la
+différence porte sur la coupe caméra, réservée à l'enveloppe du niveau courant ou au volume
+multi-niveau actif. Le depth buffer tranche ensuite avec les dalles et parois canoniques. Tous les
+consommateurs — jeu, éditeur, picking, tokens, effets et structures horizontales — utilisent les
+mêmes altitudes, sans rendre les murs inférieurs transparents ni inventer une seconde scène.
 
 Une salle haute de plusieurs étages est l'exception locale. Le renderer conserve son véritable sol
 de base, toutes ses parois jusqu'au fond ainsi que les murs et le contenu spatial de ses tranches
@@ -721,8 +726,8 @@ de plafond. Si un plafond et un sol coïncident, une seule interface est rendue 
 niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
 conserve l'opacité de coupe du plafond courant, même si une salle possède un sol au-dessus. Depuis
 le niveau supérieur, le plafond inférieur n'est plus rendu et le sol supérieur, opaque, occupe
-l'interface. Les sols et plafonds strictement inférieurs sont omis ; seule leur enveloppe murale et
-ce qui y est fixé restent opaques.
+l'interface. Les sols inférieurs restent rendus derrière les interfaces plus hautes afin de devenir
+visibles par une trémie ou une verrière ; les plafonds concurrents restent dédupliqués.
 
 `roomHorizontalInterfaces` est l'unique autorité de rendu des dalles de salle. Le renderer ne
 dessine plus les sols dans une boucle indépendante : chaque interface choisit exactement une face
@@ -774,6 +779,8 @@ Une fenêtre structurelle compile ces canaux indépendamment de son mesh : `wind
 vision ; `screen-window` la laisse passer uniquement dans l'état `transparent`. Les états `opaque`
 et `mirror` occultent la ligne de vue sans transformer la baie en mur plein ni modifier son identité.
 Une verrière horizontale laisse également passer la vision tout en conservant son support physique.
+Le client rend alors réellement la scène du dessous derrière le verre. Cette propriété ne change
+ni l'opacité des murs inférieurs ni les occluders compilés qui les représentent.
 
 La couverture utilise plusieurs échantillons corporels issus de la pose canonique. La posture ne
 doit pas exister uniquement dans `combat_roster` si elle affecte le monde physique.

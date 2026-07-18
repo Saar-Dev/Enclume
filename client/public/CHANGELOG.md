@@ -1,3 +1,15 @@
+## v191 — 2026-07-18 — Placement structurel orientable et vision verticale
+
+### Éditeur de monde
+- [feat] L'escalier, l'échelle et la dalle en verre peuvent être tournés directement pendant leur
+  prévisualisation ; l'objet posé conserve exactement l'orientation affichée.
+- [fix] Les dalles en verre affichent désormais un fantôme cyan lisible avant le clic au lieu de se
+  poser sans aucun retour visuel sur la carte.
+- [fix] Les tokens reposent légèrement plus bas sur leur support, sans modifier leur altitude monde
+  ni les règles de déplacement.
+- [fix] Les trémies d'escalier et les verrières montrent réellement le niveau inférieur. Les dalles
+  opaques continuent de le cacher ailleurs et les murs inférieurs restent entièrement opaques.
+
 ## v190 — 2026-07-16 — Fusion monde, personnages et état initial des PNJ
 
 ### Personnages et combat

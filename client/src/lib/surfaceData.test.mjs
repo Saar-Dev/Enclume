@@ -136,6 +136,27 @@ test('un escalier droit calcule des marches réalistes sans dépendre de la long
   assert.deepEqual(geometry.end, { x: 6.7, y: 2.625, z: 3.5 })
 })
 
+test('la rotation avant pose utilise exactement les quatre orientations de l escalier sauvegardé', () => {
+  const orientations = [
+    { stairQuarterTurns: 0, axis: 'x', dir: 1 },
+    { stairQuarterTurns: 1, axis: 'z', dir: 1 },
+    { stairQuarterTurns: 2, axis: 'x', dir: -1 },
+    { stairQuarterTurns: 3, axis: 'z', dir: -1 },
+  ]
+
+  for (const expected of orientations) {
+    const stair = makeStraightStairFromCell(
+      emptySurface(),
+      { x: 2, z: 3 },
+      { level: 0, stairQuarterTurns: expected.stairQuarterTurns },
+      null,
+      [],
+    )
+    assert.equal(stair.axis, expected.axis)
+    assert.equal(stair.dir, expected.dir)
+  }
+})
+
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
   const surface = emptySurface()
   const next = applyBridgeSelection(surface, {
@@ -411,14 +432,14 @@ test('l enveloppe extérieure conserve les niveaux inférieurs sans transparence
   assert.equal(isWorldPointVisibleAtLevel(surface, 0, 4.5, 4.5, 5, 'well'), false)
 })
 
-test('le contenu intérieur reste limité au niveau courant ou au volume multi-niveau actif', () => {
+test('le contenu inférieur reste rendu derrière les parois opaques et le volume actif révèle aussi son sommet', () => {
   const surface = emptySurface({
     rooms: {
       well: room('well', 0, 3),
     },
   })
 
-  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), false)
+  assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 0), true)
   assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 4.5, 4.5, 5), true)
   assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 2, 0.5, 0.5, 0, 'well'), true)
   assert.equal(isWorldInteriorPointVisibleAtLevel(surface, 0, 0.5, 0.5, 5, 'well'), true)

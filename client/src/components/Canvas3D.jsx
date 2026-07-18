@@ -134,7 +134,10 @@ function TokenRing({ color, isSelected, isDragging, opacity }) {
 }
 
 // ─── Token individuel ─────────────────────────────────────────────────────────
-const Y_OFFSET = 0.5
+// Les GLB de token sont centrés autour de leur origine et descendent légèrement sous celle-ci.
+// Le point parent est déjà le contact canonique des pieds avec le support : 0,47 pose la semelle
+// sur la dalle sans conserver le petit jour visuel de l'ancien décalage d'une demi-unité.
+const Y_OFFSET = 0.47
 
 // Filet de sécurité : si useGLTF échoue (404, GLB invalide, etc.), rend la capsule
 // au lieu de noircir le canvas entier. La capsule est le dernier recours, pas le fallback normal.

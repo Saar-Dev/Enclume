@@ -1,4 +1,15 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-18 — orientation avant pose et vision verticale livrées sur 8293** : la palette tourne
+> désormais l'aperçu des escaliers, échelles et dalles en verre avant le clic ; la même orientation
+> alimente la définition structurelle posée. Les verrières disposent d'un fantôme cyan visible. Les
+> intérieurs inférieurs restent rendus derrière les vraies dalles : trémies et verre les révèlent,
+> sans appliquer la coupe transparente aux murs inférieurs. Le petit jour sous le token est retiré
+> par un ajustement visuel de 3 cm qui ne touche pas sa position monde. Validation : 61 tests ciblés,
+> 133 monde/serveur, 3 configuration, build Vite et contrôle visuel réel dans Chromium sur 8293.
+> L'aperçu de l'escalier a été observé à 0° puis 90°, celui de la dalle a été observé sur le sol, et
+> une copie temporaire colorée a montré l'étage bas dans la trémie et derrière la verrière avec ses
+> murs opaques. Campagne, carte et adhésion temporaires supprimées puis contrôlées à zéro.
+>
 > **2026-07-16 — escalier droit paramétrique livré sur 8293** : `surface_data` v13 impose une
 > définition structurelle stricte dont `stairGeometry` dérive marches, garde-corps, trémie,
 > colliders, occluders et ancrages praticables. La pose se fait depuis **Objets 3D > Escaliers** et

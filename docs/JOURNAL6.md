@@ -4416,3 +4416,53 @@ l'ancien rendu ; aucune migration SQL ni donnée utilisateur v13 ne reste après
 
 **Suite** : ajouter la trappe liée à l'échelle lorsque le palier traverse une dalle, puis les
 variantes d'escalier sans second moteur.
+
+---
+
+## Session 154 (Codex) — 2026-07-18 — Orientation avant pose et vision verticale naturelle ✅ CLOS
+
+**Objectif** : conserver la précision du placement par fantôme, permettre de tourner les structures
+avant le clic, rétablir l'aperçu absent des dalles en verre, poser les tokens au contact du support et
+voir le niveau inférieur par les vraies ouvertures sans rendre ses murs transparents.
+
+**Placement** : la palette **Objets 3D** expose deux commandes de rotation tant qu'un escalier, une
+échelle ou une dalle en verre est actif. Pour l'escalier, les quatre quarts de tour modifient le
+`stairQuarterTurns` déjà consommé par `makeStraightStairFromCell` : aperçu et objet créé partagent
+donc la même définition, sans conversion parallèle. L'échelle commute son axe canonique et la
+verrière utilise `connectorRotationQuarterTurns`. La pose déjà effectuée reste rotative depuis son
+popup.
+
+**Aperçu verrière** : `ConnectorPreview` conserve le vrai `ConnectorSegment` et lui superpose une
+emprise cyan non occultée. Le fantôme reste ainsi visible même lorsqu'il coïncide exactement avec la
+dalle qu'il remplacera ; le clic continue de créer le connecteur structurel, pas une entité décorative.
+
+**Vision verticale** : la scène ne fabrique ni masque par objet ni transparence de secours. La
+visibilité intérieure garde les niveaux inférieurs rendus, et les interfaces horizontales gardent
+leurs sols inférieurs. Les dalles et murs opaques les occultent naturellement par profondeur. Une
+trémie ou une verrière est donc une vraie fenêtre sur le dessous. `wallParticipatesInCameraCutaway`
+reste inchangé : un mur inférieur hors volume multi-niveau actif ne prend jamais la transparence du
+niveau courant.
+
+**Token** : l'ancrage persistant reste le point monde des pieds. Seul le décalage visuel commun des
+GLB passe de `0,50` à `0,47`, ce qui retire le petit jour sans modifier mouvement, collision, budget
+ou sauvegarde.
+
+**Testé** : 61/61 tests ciblés Surface/interfaces/coupe caméra, 133/133 tests monde/serveur, 3/3
+tests de configuration, `git diff --check`, JSON des deux locales, ESLint ciblé sur la scène de
+prévisualisation et les helpers, puis build Vite de production sur le serveur. Les règles React
+Compiler déjà signalées dans `Canvas3D`/`Sidebar` restent une dette préexistante hors de ces lignes.
+
+**Validation navigateur réelle 8293** : dans la session utilisateur
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, Chromium a montré l'escalier fantôme à 0°, puis sa rotation
+réelle à 90° au même point, et le contour cyan 2×2 de la verrière sur le sol. Un zoom en mode jeu a
+confirmé le contact visuel du token avec sa passerelle. Une campagne isolée, copiée uniquement pour
+la recette et dotée de couleurs distinctes, a montré au niveau 1 le contenu inférieur à travers la
+trémie et la verrière, tandis que la façade inférieure colorée restait opaque.
+
+**Données** : aucune sauvegarde de la carte utilisateur n'a été modifiée. La campagne de recette,
+sa carte et son adhésion ont été supprimées ; le contrôle PostgreSQL final retourne respectivement
+`0 / 0 / 0`.
+
+**Retour arrière** : revert du commit Session 154. Aucun schéma SQL ni document monde utilisateur
+n'a été migré ; le retour arrière rétablit seulement l'ancien aperçu, le filtrage intérieur bas et
+le décalage visuel du token.

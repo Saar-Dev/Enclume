@@ -6,7 +6,7 @@ import {
   horizontalSurfaceY,
 } from './horizontalSurfaceOpacity.js'
 
-test('une interface partagée est le plafond bas au niveau 0 puis le sol haut au niveau 1', () => {
+test('une interface partagée est le plafond bas au niveau 0 puis le sol haut à partir du niveau 1', () => {
   const sharedInterface = {
     hasFloor: true,
     floorDisplayLevel: 1,
@@ -27,7 +27,7 @@ test('une interface partagée est le plafond bas au niveau 0 puis le sol haut au
   assert.equal(horizontalInterfaceRenderKind({
     ...sharedInterface,
     displayLevel: 2,
-  }), null)
+  }), 'floor')
 })
 
 test('le sol d un étage supérieur sans plafond inférieur reste caché avant son étage', () => {

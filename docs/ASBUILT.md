@@ -1,5 +1,25 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Placement structurel orientable et vision verticale naturelle (2026-07-18)
+
+Les objets structurels orientables peuvent être réglés avant leur pose sans perdre le fantôme sous
+la souris. Pour l'escalier, les quarts de tour modifient directement la géométrie paramétrique
+prévisualisée ; la définition créée au clic reprend exactement ce même `stairQuarterTurns`. Les
+échelles et les dalles en verre utilisent le même geste. Les verrières disposent en plus d'une
+surimpression cyan non occultée qui rend leur emprise lisible sur une dalle existante.
+
+Le rendu vertical ne simule pas une ouverture en rendant les murs transparents. Les intérieurs des
+niveaux inférieurs restent dans la scène avec leurs matériaux normaux ; les dalles et murs
+canoniques les cachent par profondeur. La trémie dérivée d'un escalier ou la surface transparente
+d'une verrière sont donc de vraies fenêtres sur le niveau inférieur. Les murs bas restent opaques
+et hors de la coupe caméra du niveau courant.
+
+Le point d'ancrage d'un token demeure le contact canonique de ses pieds avec un support. Le petit
+jour résiduel des modèles centrés est supprimé par un ajustement visuel commun, sans modifier la
+coordonnée monde persistée, le pathfinding ou le coût du déplacement.
+
+---
+
 ## Escalier droit paramétrique canonique (2026-07-16)
 
 `surface_data` v13 livre le premier escalier construit comme un objet structurel complet. Il se

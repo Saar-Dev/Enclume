@@ -474,6 +474,47 @@ function StairPreview({ drag, surfaceData, surfaceTool, activeMaterial, availabl
   )
 }
 
+function SkylightPlacementPreview({ connector }) {
+  const width = Math.max(1, Number(connector?.width) || 1)
+  const depth = Math.max(1, Number(connector?.depth) || 1)
+  const height = Math.max(0.08, Number(connector?.height) || 0.1)
+  const y = (Number(connector?.y) || 0) + height / 2 + 0.035
+  const x = Number(connector?.x) || 0
+  const z = Number(connector?.z) || 0
+  const position = [x + width / 2, y, z + depth / 2]
+  const outlineY = y + height / 2 + 0.02
+
+  return (
+    <group renderOrder={60}>
+      <mesh position={position}>
+        <boxGeometry args={[width, height, depth]} />
+        <meshBasicMaterial
+          color="#54ddff"
+          transparent
+          opacity={0.42}
+          depthTest={false}
+          depthWrite={false}
+        />
+      </mesh>
+      <Line
+        points={[
+          [x, outlineY, z],
+          [x + width, outlineY, z],
+          [x + width, outlineY, z + depth],
+          [x, outlineY, z + depth],
+          [x, outlineY, z],
+        ]}
+        color="#d8f8ff"
+        lineWidth={2}
+        transparent
+        opacity={0.95}
+        depthTest={false}
+        renderOrder={61}
+      />
+    </group>
+  )
+}
+
 function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
   const curveWallsById = useMemo(() => {
     const rooms = normalizeSurfaceData(surfaceData).rooms
@@ -493,7 +534,20 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
       : makeElevatorConnectorFromCell(surfaceData, drag.end, surfaceTool)
   if (!connector) return null
 
-  if (['door', 'window', 'screen-window', 'skylight', 'ladder'].includes(connector.type)) {
+  if (connector.type === 'skylight') {
+    return (
+      <group>
+        <ConnectorSegment
+          connector={{ id: 'connector-preview', ...connector }}
+          opacity={0.68}
+          displayLevel={Number(connector.level) || 0}
+        />
+        <SkylightPlacementPreview connector={connector} />
+      </group>
+    )
+  }
+
+  if (['door', 'window', 'screen-window', 'ladder'].includes(connector.type)) {
     return (
       <ConnectorSegment
         connector={{ id: 'connector-preview', ...connector }}

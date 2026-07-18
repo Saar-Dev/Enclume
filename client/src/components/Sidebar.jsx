@@ -652,6 +652,37 @@ export default function Sidebar({
     const type = blueprint?.geometry?.connectorType
     return ['window', 'screen-window', 'skylight', 'stairs', 'ladder'].includes(type) ? type : null
   }
+  const activeStructuralObjectType = structuralObjectConnectorType(activeBlueprint)
+  const activeRotatableStructuralObjectType = ['stairs', 'skylight', 'ladder'].includes(activeStructuralObjectType)
+    ? activeStructuralObjectType
+    : null
+  const normalizedQuarterTurns = value => ((Number.parseInt(value, 10) || 0) % 4 + 4) % 4
+  const activeStructuralObjectRotation = activeRotatableStructuralObjectType === 'stairs'
+    ? normalizedQuarterTurns(surfaceToolState.stairQuarterTurns)
+    : activeRotatableStructuralObjectType === 'skylight'
+      ? normalizedQuarterTurns(surfaceToolState.connectorRotationQuarterTurns)
+      : activeRotatableStructuralObjectType === 'ladder' && surfaceToolState.ladderAxis === 'z'
+        ? 1
+        : 0
+  const rotateStructuralObjectPreview = delta => {
+    if (activeRotatableStructuralObjectType === 'stairs') {
+      updateSurfaceTool({
+        stairQuarterTurns: normalizedQuarterTurns(normalizedQuarterTurns(surfaceToolState.stairQuarterTurns) + delta),
+      })
+      return
+    }
+    if (activeRotatableStructuralObjectType === 'skylight') {
+      updateSurfaceTool({
+        connectorRotationQuarterTurns: normalizedQuarterTurns(
+          normalizedQuarterTurns(surfaceToolState.connectorRotationQuarterTurns) + delta,
+        ),
+      })
+      return
+    }
+    if (activeRotatableStructuralObjectType === 'ladder') {
+      updateSurfaceTool({ ladderAxis: surfaceToolState.ladderAxis === 'z' ? 'x' : 'z' })
+    }
+  }
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
     .filter(blueprint => {
@@ -1926,6 +1957,34 @@ export default function Sidebar({
                   style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
                 />
                 {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
+                {activeRotatableStructuralObjectType && (
+                  <div style={{ ...styles.connectorPicker, marginBottom: '10px' }}>
+                    <div style={styles.connectorPickerTitle}>
+                      {t('sidebar.placementOrientation')} · {activeStructuralObjectRotation * 90}°
+                    </div>
+                    <div style={styles.roomToolModes}>
+                      <button
+                        type="button"
+                        onClick={() => rotateStructuralObjectPreview(-1)}
+                        title={t('sidebar.rotatePreviewLeft')}
+                        aria-label={t('sidebar.rotatePreviewLeft')}
+                        style={styles.roomToolModeBtn}
+                      >
+                        ↶ {t('sidebar.rotateLeft')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rotateStructuralObjectPreview(1)}
+                        title={t('sidebar.rotatePreviewRight')}
+                        aria-label={t('sidebar.rotatePreviewRight')}
+                        style={styles.roomToolModeBtn}
+                      >
+                        {t('sidebar.rotateRight')} ↷
+                      </button>
+                    </div>
+                    <div style={styles.roomToolHint}>{t('sidebar.previewRotationHint')}</div>
+                  </div>
+                )}
                 {bpList.length === 0 && (
                   <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
                     {t('sidebar.noBlueprints')}
@@ -2698,7 +2757,7 @@ const styles = {
   },
   roomToolToggleActive: {
     color: '#dbeafe',
-    borderColor: '#5b8dee',
+    border: '1px solid #5b8dee',
     background: 'rgba(91,141,238,0.16)',
   },
   roomToolToggleState: {
@@ -2724,7 +2783,7 @@ const styles = {
   },
   roomToolModeBtnActive: {
     color: '#dbeafe',
-    borderColor: '#5b8dee',
+    border: '1px solid #5b8dee',
     background: 'rgba(91,141,238,0.14)',
   },
   roomToolGrid: {
@@ -3264,8 +3323,8 @@ const styles = {
   },
   editorTabActive: {
     color: '#9090a8',
-    borderColor: '#5b8dee',
-    backgroundColor: 'rgba(91,141,238,0.08)',
+    border: '1px solid #5b8dee',
+    background: 'rgba(91,141,238,0.08)',
   },
   undoRow: {
     display: 'flex',
@@ -3286,7 +3345,7 @@ const styles = {
   },
   undoBtnDisabled: {
     background: '#0f0f1a',
-    borderColor: '#1e1e2e',
+    border: '1px solid #1e1e2e',
     color: '#3f4658',
     cursor: 'not-allowed',
   },

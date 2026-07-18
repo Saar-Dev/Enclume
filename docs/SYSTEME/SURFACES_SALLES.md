@@ -1,6 +1,6 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-16 — `surface_data` v13 et escalier droit paramétrique.
+> Dernière mise à jour : 2026-07-18 — orientation avant pose et vision verticale par ouvertures réelles.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -16,8 +16,9 @@ sols, murs, plafonds, escaliers et connecteurs. Depuis la Phase 1 du moteur de m
 validé et compilé côté serveur en snapshot physique. Depuis la Phase 2, les collisions et la
 navigation de session lisent ce snapshot. Depuis la Phase 3, la LOS, la couverture et l'interposition
 le lisent également ; depuis la Phase 7, la FSM combat lui délègue aussi déplacements, distances,
-portées, interactions et terrain instable. L'affichage de coupe conserve désormais tous les étages
-inférieurs opaques et ne rend transparent que ce qui ferme le niveau courant. Depuis la Phase 10,
+portées, interactions et terrain instable. L'affichage de coupe conserve désormais les étages
+inférieurs rendus et opaques derrière leurs vraies dalles ; une ouverture structurelle ou une
+verrière révèle la scène inférieure sans rendre ses murs transparents. Depuis la Phase 10,
 les murs courbes de salle sont des arcs structurés de leur contour,
 partagés par le rendu, les collisions et la LOS. Depuis la Phase 11, supprimer un mur ouvre la
 salle ou fusionne ses deux volumes, et une nouvelle salle est découpée par les contours courbes
@@ -440,21 +441,26 @@ traversée de navigation.
 
 ### Verrières de sol et de plafond
 
-Une verrière `skylight` se pose depuis une salle, mais doit remplacer une interface horizontale
+Une verrière `skylight` se pose depuis **Objets 3D > Dalles en verre**, mais doit remplacer une interface horizontale
 réelle : sol de la salle, plafond de la salle ou interface commune entre deux salles superposées.
 La validation refuse une verrière flottant au milieu du volume vide d'une salle multi-hauteur.
 L'empreinte canonique, en cases, sert simultanément à la découpe de dalle, au support praticable et
 à l'occlusion. Une verrière laisse passer la ligne de vue tout en bloquant la traversée verticale et
 les fluides. Les interfaces courbes ou déjà découpées restent refusées tant que la découpe
 polygonale des dalles ne peut pas être produite depuis la même géométrie canonique.
+Pendant la pose, un fantôme cyan toujours lisible montre l'emprise exacte et suit la rotation de la
+palette. La scène de l'étage inférieur est réellement rendue derrière le verre ; ses murs restent
+opaques et ne rejoignent pas la coupe caméra du niveau courant.
 
 ## Structures entre étages
 
 L'escalier droit v13 relie un étage de départ à l'étage immédiatement supérieur. Son origine, son
 axe et son sens déterminent son emprise ; `topY`, `stepCount` et `treadDepth` déterminent sa montée.
-La trémie est soustraite de l'interface horizontale au niveau exact de `topY`. Une rotation dans le
-popup modifie immédiatement l'objet, son emprise et cette ouverture ; la sauvegarde persiste la
-même définition, sans connecteur caché éditable séparément.
+La trémie est soustraite de l'interface horizontale au niveau exact de `topY`. La palette tourne
+l'aperçu avant le placement et transmet cette orientation à la création. Une rotation ultérieure
+dans le popup modifie immédiatement l'objet, son emprise et cette ouverture ; la sauvegarde persiste
+la même définition, sans connecteur caché éditable séparément. L'étage inférieur reste rendu derrière
+la trémie et n'apparaît que dans l'ouverture, grâce aux dalles et murs opaques qui l'occultent ailleurs.
 
 Les variantes futures (quart tournant, demi-tour, colimaçon) doivent fournir le même contrat dérivé
 — marches, supports, garde-corps, trémie, colliders, occluders et ancrages — au lieu d'ajouter un
