@@ -556,6 +556,34 @@ test('un escalier compile une traversée fractionnable entre deux hauteurs', () 
   assert.equal(snapshot.spatial.occluders.filter(item => item.kind === 'stairs-solid').length, 21)
 })
 
+test('un colimaçon compile une traversée courbe, des marches prismatiques et sa colonne centrale', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-spiral-stairs',
+    surfaceData: emptySurface({
+      stairs: {
+        spiralA: {
+          id: 'spiralA', kind: 'spiral', x: 2.5, z: 3.5, y: 0, topY: 2.5,
+          outerRadius: 1.25, innerRadius: 0.22, totalTurns: 1.25,
+          rotationQuarterTurns: 0, stepCount: 21, supportThickness: 0.25,
+          treadThickness: 0.055, railings: { outer: true }, movementMultiplier: 1.25,
+        },
+      },
+    }),
+  })
+  const traversal = snapshot.spatial.traversals.find(item => item.kind === 'stairs')
+  const stepColliders = snapshot.spatial.colliders.filter(item => item.kind === 'stairs-solid')
+  const column = snapshot.spatial.colliders.find(item => item.kind === 'stairs-column')
+
+  assert.equal(traversal.anchors.length, 22)
+  assert.equal(traversal.allowPartial, true)
+  assert.equal(traversal.movementMultiplier, 1.25)
+  assert.ok(new Set(traversal.anchors.map(anchor => `${anchor.x}:${anchor.z}`)).size > 8)
+  assert.equal(stepColliders.length, 21)
+  assert.equal(stepColliders.every(item => item.geometry?.type === 'horizontal-prism'), true)
+  assert.equal(column.geometry.type, 'vertical-cylinder')
+  assert.equal(snapshot.spatial.occluders.some(item => item.kind === 'stairs-column'), true)
+})
+
 test('la trémie paramétrique retire les colliders de sol et plafond au-dessus des marches', () => {
   const lower = room('lower', 0, 5)
   const upper = { ...room('upper', 0, 5), level: 1, y: 2.5 }

@@ -22,6 +22,7 @@ import {
   isWorldInteriorPointVisibleAtLevel,
   entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
+  makeSpiralStairFromCell,
   makeStraightStairFromCell,
   makeSkylightConnectorFromCell,
   makeWallsFromDrag,
@@ -37,7 +38,7 @@ import {
   roomGeometryIntersectionArea,
 } from '../../../shared/world/roomGeometry.js'
 import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
-import { straightStairGeometry } from '../../../shared/world/stairGeometry.js'
+import { spiralStairGeometry, straightStairGeometry } from '../../../shared/world/stairGeometry.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -155,6 +156,30 @@ test('la rotation avant pose utilise exactement les quatre orientations de l esc
     assert.equal(stair.axis, expected.axis)
     assert.equal(stair.dir, expected.dir)
   }
+})
+
+test('un colimaçon dérive ses marches, son entrée et sa trémie depuis une seule définition', () => {
+  const stair = makeSpiralStairFromCell(
+    emptySurface(),
+    { x: 2, z: 3 },
+    { level: 0, stairQuarterTurns: 1, stairOuterDiameterM: 3.75 },
+    null,
+    [],
+  )
+  const geometry = spiralStairGeometry(stair)
+
+  assert.equal(stair.kind, 'spiral')
+  assert.equal(stair.rotationQuarterTurns, 1)
+  assert.equal(geometry.stepCount, 21)
+  assert.equal(geometry.anchors.length, 22)
+  assert.equal(geometry.steps.every(step => step.polygon.length === 10), true)
+  assert.equal(geometry.diameter, 2.5)
+  assert.equal(geometry.openingBounds.minX, 1.21)
+  assert.equal(geometry.openingBounds.maxX, 3.79)
+  assert.ok(Math.abs(geometry.start.x - 2.5) < 1e-9)
+  assert.ok(geometry.start.z > 3.5)
+  assert.deepEqual(geometry.end.y, 2.625)
+  assert.ok(geometry.column.bounds.max.y > geometry.topSurfaceY)
 })
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {

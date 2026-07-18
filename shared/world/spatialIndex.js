@@ -158,6 +158,170 @@ function wallSegmentGeometryInterval(from, to, geometry, {
   return far >= 0 && near <= 1 ? { near: Math.max(0, near), far: Math.min(1, far) } : null
 }
 
+function scalarInterval(start, end, min, max) {
+  const delta = end - start
+  if (Math.abs(delta) <= EPSILON) return start >= min && start <= max ? { near: 0, far: 1 } : null
+  let near = (min - start) / delta
+  let far = (max - start) / delta
+  if (near > far) [near, far] = [far, near]
+  near = Math.max(0, near)
+  far = Math.min(1, far)
+  return near <= far ? { near, far } : null
+}
+
+function intersectIntervals(...intervals) {
+  if (intervals.some(value => !value)) return null
+  const near = Math.max(...intervals.map(value => value.near))
+  const far = Math.min(...intervals.map(value => value.far))
+  return near <= far ? { near, far } : null
+}
+
+function pointInPolygon2d(point, polygon) {
+  let inside = false
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const a = polygon[index]
+    const b = polygon[previous]
+    const crosses = (a.z > point.z) !== (b.z > point.z)
+      && point.x < (b.x - a.x) * (point.z - a.z) / ((b.z - a.z) || EPSILON) + a.x
+    if (crosses) inside = !inside
+  }
+  return inside
+}
+
+function segmentEdgeParameter(from, to, edgeFrom, edgeTo) {
+  const dx = to.x - from.x
+  const dz = to.z - from.z
+  const ex = edgeTo.x - edgeFrom.x
+  const ez = edgeTo.z - edgeFrom.z
+  const denominator = dx * ez - dz * ex
+  if (Math.abs(denominator) <= EPSILON) return null
+  const rx = edgeFrom.x - from.x
+  const rz = edgeFrom.z - from.z
+  const t = (rx * ez - rz * ex) / denominator
+  const u = (rx * dz - rz * dx) / denominator
+  return t >= -EPSILON && t <= 1 + EPSILON && u >= -EPSILON && u <= 1 + EPSILON
+    ? Math.max(0, Math.min(1, t))
+    : null
+}
+
+function pointSegmentDistance2d(point, from, to) {
+  const dx = to.x - from.x
+  const dz = to.z - from.z
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared <= EPSILON) return Math.hypot(point.x - from.x, point.z - from.z)
+  const ratio = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.z - from.z) * dz) / lengthSquared))
+  return Math.hypot(point.x - (from.x + dx * ratio), point.z - (from.z + dz * ratio))
+}
+
+function segmentNearPolygon(from, to, polygon, padding) {
+  if (pointInPolygon2d(from, polygon) || pointInPolygon2d(to, polygon)) return true
+  for (let index = 0; index < polygon.length; index += 1) {
+    const edgeFrom = polygon[index]
+    const edgeTo = polygon[(index + 1) % polygon.length]
+    if (segmentEdgeParameter(from, to, edgeFrom, edgeTo) !== null) return true
+    if (pointSegmentDistance2d(edgeFrom, from, to) <= padding + EPSILON) return true
+    if (pointSegmentDistance2d(from, edgeFrom, edgeTo) <= padding + EPSILON) return true
+    if (pointSegmentDistance2d(to, edgeFrom, edgeTo) <= padding + EPSILON) return true
+  }
+  return false
+}
+
+function polygonHorizontalInterval(from, to, polygon) {
+  const cuts = [0, 1]
+  for (let index = 0; index < polygon.length; index += 1) {
+    const t = segmentEdgeParameter(from, to, polygon[index], polygon[(index + 1) % polygon.length])
+    if (t !== null) cuts.push(t)
+  }
+  const ordered = [...new Set(cuts.map(value => Math.round(value * 1e12) / 1e12))].sort((a, b) => a - b)
+  const intervals = []
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const near = ordered[index]
+    const far = ordered[index + 1]
+    const middle = (near + far) / 2
+    if (pointInPolygon2d({
+      x: from.x + (to.x - from.x) * middle,
+      z: from.z + (to.z - from.z) * middle,
+    }, polygon)) intervals.push({ near, far })
+  }
+  if (intervals.length === 0) return null
+  return {
+    near: Math.min(...intervals.map(value => value.near)),
+    far: Math.max(...intervals.map(value => value.far)),
+  }
+}
+
+function horizontalPrismGeometryInterval(from, to, geometry, {
+  horizontalPadding = 0,
+  verticalBottomPadding = 0,
+  verticalTopInset = 0,
+} = {}) {
+  if (geometry?.type !== 'horizontal-prism' || !Array.isArray(geometry.polygon) || geometry.polygon.length < 3) return null
+  const start = normalizeWorldPoint(from, 'segment.from')
+  const end = normalizeWorldPoint(to, 'segment.to')
+  const polygon = geometry.polygon.map((value, index) => ({
+    x: finiteNumber(value?.x, `geometry.polygon[${index}].x`),
+    z: finiteNumber(value?.z, `geometry.polygon[${index}].z`),
+  }))
+  const vertical = scalarInterval(
+    start.y,
+    end.y,
+    finiteNumber(geometry.minY, 'geometry.minY') - verticalBottomPadding,
+    finiteNumber(geometry.maxY, 'geometry.maxY') - verticalTopInset,
+  )
+  if (!vertical) return null
+  if (horizontalPadding > EPSILON) {
+    const clippedFrom = {
+      x: start.x + (end.x - start.x) * vertical.near,
+      z: start.z + (end.z - start.z) * vertical.near,
+    }
+    const clippedTo = {
+      x: start.x + (end.x - start.x) * vertical.far,
+      z: start.z + (end.z - start.z) * vertical.far,
+    }
+    return segmentNearPolygon(clippedFrom, clippedTo, polygon, horizontalPadding) ? vertical : null
+  }
+  return intersectIntervals(vertical, polygonHorizontalInterval(start, end, polygon))
+}
+
+function verticalCylinderGeometryInterval(from, to, geometry, {
+  horizontalPadding = 0,
+  verticalBottomPadding = 0,
+  verticalTopInset = 0,
+} = {}) {
+  if (geometry?.type !== 'vertical-cylinder') return null
+  const start = normalizeWorldPoint(from, 'segment.from')
+  const end = normalizeWorldPoint(to, 'segment.to')
+  const centerX = finiteNumber(geometry.center?.x, 'geometry.center.x')
+  const centerZ = finiteNumber(geometry.center?.z, 'geometry.center.z')
+  const radius = positiveNumber(geometry.radius, 'geometry.radius') + horizontalPadding
+  const dx = end.x - start.x
+  const dz = end.z - start.z
+  const ox = start.x - centerX
+  const oz = start.z - centerZ
+  const a = dx * dx + dz * dz
+  let horizontal
+  if (a <= EPSILON) {
+    horizontal = ox * ox + oz * oz <= radius * radius ? { near: 0, far: 1 } : null
+  } else {
+    const b = 2 * (ox * dx + oz * dz)
+    const c = ox * ox + oz * oz - radius * radius
+    const discriminant = b * b - 4 * a * c
+    horizontal = discriminant < 0 ? null : scalarInterval(
+      0,
+      1,
+      (-b - Math.sqrt(discriminant)) / (2 * a),
+      (-b + Math.sqrt(discriminant)) / (2 * a),
+    )
+  }
+  const vertical = scalarInterval(
+    start.y,
+    end.y,
+    finiteNumber(geometry.minY, 'geometry.minY') - verticalBottomPadding,
+    finiteNumber(geometry.maxY, 'geometry.maxY') - verticalTopInset,
+  )
+  return intersectIntervals(horizontal, vertical)
+}
+
 function elevationProfileOffset(profile, progress) {
   const depth = Math.max(0, Number(profile?.depth) || 0)
   const direction = Number(profile?.direction) < 0 ? -1 : 1
@@ -212,6 +376,12 @@ function wallElevationBands(geometry) {
 }
 
 export function segmentGeometryInterval(from, to, geometry, options = {}) {
+  if (geometry?.type === 'horizontal-prism') {
+    return horizontalPrismGeometryInterval(from, to, geometry, options)
+  }
+  if (geometry?.type === 'vertical-cylinder') {
+    return verticalCylinderGeometryInterval(from, to, geometry, options)
+  }
   const elevationBands = wallElevationBands(geometry)
   if (geometry?.type === 'wall-arc' || elevationBands) {
     const points = geometry.type === 'wall-arc'
@@ -342,7 +512,7 @@ export function createSpatialIndex(snapshot, options = {}) {
           z: collider.bounds.max.z + actor.radius,
         },
       }
-      if (collider.geometry?.type === 'wall-segment' || collider.geometry?.type === 'wall-arc') {
+      if (['wall-segment', 'wall-arc', 'horizontal-prism', 'vertical-cylinder'].includes(collider.geometry?.type)) {
         return !!segmentGeometryInterval(start, end, collider.geometry, {
           horizontalPadding: actor.radius,
           verticalBottomPadding: actor.height - EPSILON,

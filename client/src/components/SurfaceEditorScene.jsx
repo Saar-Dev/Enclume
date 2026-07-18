@@ -3,6 +3,7 @@ import { Grid, Line, MapControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import SurfaceDungeonScene, { ConnectorSegment } from './SurfaceDungeonScene.jsx'
+import StairPrismGeometry from './StairPrismGeometry.jsx'
 import { usePlacementWheelRotation } from '../hooks/usePlacementWheelRotation.js'
 import {
   SURFACE_FINE,
@@ -15,7 +16,7 @@ import {
   applyLadderConnector,
   applySkylightConnector,
   applyRoomSelectionWithResult,
-  applyStraightStairPlacement,
+  applyStairPlacement,
   applyWallDrag,
   eraseSurfaceSelection,
   findRoomAtCell,
@@ -30,7 +31,7 @@ import {
   getWallRenderBox,
   isWorldInteriorPointVisibleAtLevel,
   levelToY,
-  makeStraightStairFromCell,
+  makeStairFromCell,
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
   makeLadderConnectorFromCell,
@@ -52,7 +53,7 @@ import {
   roomSliceContours,
   sampleRoomBoundaryArc,
 } from '../../../shared/world/roomGeometry.js'
-import { straightStairGeometry } from '../../../shared/world/stairGeometry.js'
+import { stairGeometry } from '../../../shared/world/stairGeometry.js'
 
 const GRID_SIZE = 50
 const WALL_STICKY_THRESHOLD = 0.18
@@ -462,18 +463,39 @@ function WallPreview({ drag, surfaceTool, activeMaterial, availableBlocks }) {
 const normalizedQuarterTurns = value => ((Number.parseInt(value, 10) || 0) % 4 + 4) % 4
 
 function StairPreview({ drag, surfaceData, surfaceTool, activeMaterial, availableBlocks }) {
-  const stair = makeStraightStairFromCell(surfaceData, drag?.end, surfaceTool, activeMaterial, availableBlocks)
+  const stair = makeStairFromCell(surfaceData, drag?.end, surfaceTool, activeMaterial, availableBlocks)
   if (!stair) return null
   const stepBoxes = stairStepBoxes(stair)
+  const geometry = stairGeometry(stair, { storyHeight: STORY_HEIGHT })
 
   return (
     <>
-      {stepBoxes.map((step, index) => (
+      {stepBoxes.map((step, index) => step.polygon ? (
+        <mesh key={index}>
+          <StairPrismGeometry part={step} />
+          <meshBasicMaterial color="#7dd3fc" transparent opacity={0.34} depthWrite={false} />
+        </mesh>
+      ) : (
         <mesh key={index} position={step.position}>
           <boxGeometry args={step.args} />
           <meshBasicMaterial color="#7dd3fc" transparent opacity={0.3} depthWrite={false} />
         </mesh>
       ))}
+      {geometry.column && (
+        <mesh position={[
+          geometry.column.center.x,
+          geometry.column.minY + (geometry.column.maxY - geometry.column.minY) / 2,
+          geometry.column.center.z,
+        ]}>
+          <cylinderGeometry args={[
+            geometry.column.radius,
+            geometry.column.radius,
+            geometry.column.maxY - geometry.column.minY,
+            24,
+          ]} />
+          <meshBasicMaterial color="#38bdf8" transparent opacity={0.42} depthWrite={false} />
+        </mesh>
+      )}
     </>
   )
 }
@@ -832,7 +854,7 @@ export default function SurfaceEditorScene({
       const fromLevel = yToLevel(stair?.y)
       const toLevel = yToLevel(stair?.topY)
       if (level < Math.min(fromLevel, toLevel) || level > Math.max(fromLevel, toLevel)) continue
-      const geometry = straightStairGeometry(stair, { storyHeight: surface.storyHeight })
+      const geometry = stairGeometry(stair, { storyHeight: surface.storyHeight })
       const footprint = geometry.footprint
       if (point.x < footprint.minX || point.x > footprint.maxX
         || point.z < footprint.minZ || point.z > footprint.maxZ) continue
@@ -1224,7 +1246,7 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'stair') {
-        const stair = makeStraightStairFromCell(
+        const stair = makeStairFromCell(
           surfaceData,
           finalDrag.end,
           surfaceTool,
@@ -1232,7 +1254,7 @@ export default function SurfaceEditorScene({
           availableBlocks,
         )
         const nextData = stair
-          ? applyStraightStairPlacement(surfaceData, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
+          ? applyStairPlacement(surfaceData, finalDrag.end, surfaceTool, activeMaterial, availableBlocks)
           : surfaceData
         if (nextData !== surfaceData && stair) {
           onSurfaceDataChange(nextData)

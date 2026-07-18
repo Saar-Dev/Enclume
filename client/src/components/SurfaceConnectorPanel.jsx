@@ -7,7 +7,7 @@ import {
 } from '../lib/modelMaterialSlots.js'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import Object3DPreview from './Object3DPreview.jsx'
-import { straightStairGeometry } from '../../../shared/world/stairGeometry.js'
+import { stairGeometry } from '../../../shared/world/stairGeometry.js'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -50,12 +50,14 @@ function connectorTypeLabel(type) {
 }
 
 function stairQuarterTurns(stair) {
+  if (stair?.kind === 'spiral') return ((Number(stair?.rotationQuarterTurns) || 0) % 4 + 4) % 4
   if (stair?.axis === 'z') return Number(stair?.dir) < 0 ? 3 : 1
   return Number(stair?.dir) < 0 ? 2 : 0
 }
 
 function rotatedStairPatch(stair, delta) {
   const quarterTurns = (stairQuarterTurns(stair) + delta + 4) % 4
+  if (stair?.kind === 'spiral') return { rotationQuarterTurns: quarterTurns }
   return {
     axis: quarterTurns % 2 === 0 ? 'x' : 'z',
     dir: quarterTurns < 2 ? 1 : -1,
@@ -167,12 +169,14 @@ export default function SurfaceConnectorPanel({
     ? connector.allowedStates
     : ['transparent', ...(connector.type === 'screen-window' ? ['opaque', 'mirror'] : [])]
   const currentWindowState = runtimeState?.state || connector.state || 'transparent'
-  const stairGeometry = connector.type === 'stairs'
-    ? straightStairGeometry(connector)
+  const stairShape = connector.type === 'stairs'
+    ? stairGeometry(connector)
     : null
   const connectorTitle = connector.modelLabel
-    || (connector.type === 'stairs' ? 'Escalier droit paramétrique' : connectorTypeLabel(connector.type))
-  const connectorLevelLabel = stairGeometry
+    || (connector.type === 'stairs'
+      ? connector.kind === 'spiral' ? 'Escalier en colimaçon paramétrique' : 'Escalier droit paramétrique'
+      : connectorTypeLabel(connector.type))
+  const connectorLevelLabel = stairShape
     ? `${Math.round(Number(connector.y || 0) / 2.5)} → ${Math.round(Number(connector.topY || 2.5) / 2.5)}`
     : connector.fromLevel !== undefined && connector.toLevel !== undefined
       ? `${connector.fromLevel} → ${connector.toLevel}`
@@ -214,12 +218,14 @@ export default function SurfaceConnectorPanel({
           <span>Étage</span>
           <strong>{connectorLevelLabel}</strong>
           <span>Dimensions</span>
-          <strong>{stairGeometry
-            ? `${(stairGeometry.width * 1.5).toFixed(2)} × ${(stairGeometry.run * 1.5).toFixed(2)} × ${(stairGeometry.rise * 1.5).toFixed(2)} m`
+          <strong>{stairShape
+            ? stairShape.type === 'spiral'
+              ? `Ø ${(stairShape.diameter * 1.5).toFixed(2)} × ${(stairShape.rise * 1.5).toFixed(2)} m`
+              : `${(stairShape.width * 1.5).toFixed(2)} × ${(stairShape.run * 1.5).toFixed(2)} × ${(stairShape.rise * 1.5).toFixed(2)} m`
             : `${connector.width ?? connector.modelGeometry?.width ?? 1} × ${connector.depth ?? connector.modelGeometry?.depth ?? 1} × ${connector.height ?? connector.modelGeometry?.height ?? 1} m`}</strong>
         </div>
 
-        {canEdit && connector.type === 'stairs' && stairGeometry && (
+        {canEdit && connector.type === 'stairs' && stairShape && (
           <div style={S.field}>
             <span style={S.label}>Orientation</span>
             <div style={S.rotationActions}>
@@ -230,9 +236,19 @@ export default function SurfaceConnectorPanel({
                 Rotation droite ↷
               </button>
             </div>
+            {connector.kind === 'spiral' && (
+              <label style={S.stateRow}>
+                <input
+                  type="checkbox"
+                  checked={connector.clockwise === true}
+                  onChange={event => onPatch?.(connector.id, { clockwise: event.target.checked })}
+                />
+                <span>Montée dans le sens horaire</span>
+              </label>
+            )}
             <span style={S.hint}>
-              {stairGeometry.stepCount} marches de {(stairGeometry.riserHeight * 1.5 * 100).toFixed(1)} cm,
-              giron {(stairGeometry.treadDepth * 1.5 * 100).toFixed(0)} cm.
+              {stairShape.stepCount} marches de {(stairShape.riserHeight * 1.5 * 100).toFixed(1)} cm,
+              giron {(stairShape.treadDepth * 1.5 * 100).toFixed(0)} cm.
             </span>
           </div>
         )}
@@ -262,10 +278,10 @@ export default function SurfaceConnectorPanel({
         {canEdit && connector.type === 'stairs' && (
           <div style={S.field}>
             <span style={S.label}>Garde-corps</span>
-            {[
-              ['left', 'Côté gauche'],
-              ['right', 'Côté droit'],
-            ].map(([side, label]) => (
+            {(connector.kind === 'spiral'
+              ? [['outer', 'Côté extérieur']]
+              : [['left', 'Côté gauche'], ['right', 'Côté droit']]
+            ).map(([side, label]) => (
               <label key={side} style={S.stateRow}>
                 <input
                   type="checkbox"

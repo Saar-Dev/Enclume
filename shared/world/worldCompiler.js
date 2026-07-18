@@ -29,8 +29,8 @@ import {
 } from './roomGeometry.js'
 import {
   rectangularSlabFragments,
+  stairGeometry,
   stairOpeningBounds,
-  straightStairGeometry,
 } from './stairGeometry.js'
 
 const EPSILON = 1e-6
@@ -1034,7 +1034,7 @@ function addWallsAndDoors(surface, runtimeStates, battlemapId, spatial, worldDoc
 
 function addVerticalTraversals(surface, runtimeStates, spatial) {
   for (const stair of Object.values(surface.stairs)) {
-    const geometry = straightStairGeometry(stair, { storyHeight: surface.storyHeight })
+    const geometry = stairGeometry(stair, { storyHeight: surface.storyHeight })
     const from = geometry.anchors[0]
     const to = geometry.anchors.at(-1)
     spatial.traversals.push({
@@ -1070,6 +1070,31 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
         kind: 'stairs-solid',
         axis: 'box',
         bounds: step.bounds,
+        ...(step.polygon ? {
+          geometry: {
+            type: 'horizontal-prism',
+            polygon: step.polygon,
+            minY: step.minY,
+            maxY: step.maxY,
+          },
+        } : {}),
+        blocks: blockingChannels(stair),
+      })
+    }
+    if (geometry.column) {
+      addBarrierOutputs(spatial, {
+        id: `barrier:stairs:${stair.worldId}:column`,
+        sourceId: stair.worldId,
+        kind: 'stairs-column',
+        axis: 'cylinder',
+        bounds: geometry.column.bounds,
+        geometry: {
+          type: 'vertical-cylinder',
+          center: { x: geometry.column.center.x, z: geometry.column.center.z },
+          radius: geometry.column.radius,
+          minY: geometry.column.minY,
+          maxY: geometry.column.maxY,
+        },
         blocks: blockingChannels(stair),
       })
     }

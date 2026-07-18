@@ -1,4 +1,14 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-18 — colimaçon canonique et tokens réellement au sol livrés sur 8293** :
+> **Objets 3D > Escaliers** propose maintenant un colimaçon paramétrique de 3,75 m de diamètre.
+> Sa définition unique dérive 21 marches courbes, colonne centrale, garde-corps, trémie, collisions,
+> occlusion et ancrages intermédiaires. L'entrée tourne à la molette avant pose ; le popup permet
+> ensuite rotation, sens horaire/antihoraire, garde-corps, coût et apparence. Les GLB de token ne
+> reçoivent plus un décalage vertical commun : chacun est recalé par sa boîte englobante sur le
+> point de contact monde. Validation : 136 tests monde/serveur, 38 tests Surface, build Vite et
+> recette réelle 8293 avec aperçu, pose, rotation, inversion du sens, sauvegarde/recharge et
+> suppression finale de l'objet de test.
+>
 > **2026-07-18 — rotation à la molette livrée sur 8293** : tout fantôme orientable se tourne par
 > quarts de tour avec la molette sans zoomer la caméra. Cela couvre les objets 3D libres, escaliers,
 > échelles et dalles en verre. Le tooltip mobile de rotation a été supprimé. Les objets muraux

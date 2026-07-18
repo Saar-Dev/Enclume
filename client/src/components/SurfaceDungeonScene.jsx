@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
 import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
+import StairPrismGeometry from './StairPrismGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
@@ -39,8 +40,8 @@ import {
   wallCornerIntersectionPoint,
 } from '../../../shared/world/roomGeometry.js'
 import {
+  stairGeometry,
   stairOpeningMultiPolygon,
-  straightStairGeometry,
 } from '../../../shared/world/stairGeometry.js'
 import {
   SURFACE_FINE,
@@ -2045,7 +2046,7 @@ function StairSegment({
   const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || top
   const relief = showDetails ? (procedural?.relief || reliefAt(textureMaterials, stair.tex)) : null
   const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
-  const geometry = straightStairGeometry(stair, { storyHeight: STORY_HEIGHT })
+  const geometry = stairGeometry(stair, { storyHeight: STORY_HEIGHT })
   if (!top) return null
 
   return (
@@ -2055,7 +2056,19 @@ function StairSegment({
         onPointerSelect(stair.id, { ...stair, type: 'stairs' }, event)
       } : undefined}
     >
-      {geometry.steps.map(step => (
+      {geometry.steps.map(step => step.polygon ? (
+        <group key={step.index}>
+          <mesh material={top} castShadow receiveShadow userData={{ worldSupport: true }}>
+            <StairPrismGeometry part={step} />
+          </mesh>
+          {selected && (
+            <mesh renderOrder={43}>
+              <StairPrismGeometry part={step} />
+              <meshBasicMaterial color="#facc15" wireframe transparent opacity={0.42} depthWrite={false} />
+            </mesh>
+          )}
+        </group>
+      ) : (
         <mesh
           key={step.index}
           position={[step.position.x, step.position.y, step.position.z]}
@@ -2077,6 +2090,25 @@ function StairSegment({
           )}
         </mesh>
       ))}
+      {geometry.column && (() => {
+        const height = geometry.column.maxY - geometry.column.minY
+        return (
+          <mesh
+            position={[geometry.column.center.x, geometry.column.minY + height / 2, geometry.column.center.z]}
+            material={side}
+            castShadow
+            receiveShadow
+          >
+            <cylinderGeometry args={[geometry.column.radius, geometry.column.radius, height, 32]} />
+            {selected && (
+              <mesh scale={1.035} renderOrder={43}>
+                <cylinderGeometry args={[geometry.column.radius, geometry.column.radius, height, 32]} />
+                <meshBasicMaterial color="#facc15" transparent opacity={0.25} depthWrite={false} />
+              </mesh>
+            )}
+          </mesh>
+        )
+      })()}
       {geometry.railParts.map(part => (
         <StairRailBeam
           key={`${part.side}:${part.kind}:${part.index}`}
@@ -2442,9 +2474,9 @@ function SurfaceDungeonScene({
       {Object.entries(surface.stairs).map(([id, stair]) => {
         const fromLevel = yToLevel(stair?.y)
         const toLevel = yToLevel(stair?.topY)
-        const stairGeometry = straightStairGeometry(stair, { storyHeight: surface.storyHeight })
-        const centerX = (stairGeometry.footprint.minX + stairGeometry.footprint.maxX) / 2
-        const centerZ = (stairGeometry.footprint.minZ + stairGeometry.footprint.maxZ) / 2
+        const geometry = stairGeometry(stair, { storyHeight: surface.storyHeight })
+        const centerX = (geometry.footprint.minX + geometry.footprint.maxX) / 2
+        const centerZ = (geometry.footprint.minZ + geometry.footprint.maxZ) / 2
         const visible = displayLevel === null
           || (displayLevel >= Math.min(fromLevel, toLevel) && displayLevel <= Math.max(fromLevel, toLevel))
           || worldInteriorPointIsVisible(

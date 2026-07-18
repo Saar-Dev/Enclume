@@ -1,5 +1,32 @@
 # ASBUILT — Ce qui est codé et stable
 
+## Escalier en colimaçon canonique et ancrage visuel des tokens (2026-07-18)
+
+La bibliothèque **Objets 3D > Escaliers** contient désormais un colimaçon structurel paramétrique.
+Le clic de pose choisit son centre ; la molette oriente l'entrée avant le clic. Le popup d'un
+colimaçon posé conserve les rotations par quarts de tour et ajoute le choix du sens de montée
+horaire/antihoraire, le garde-corps extérieur, le multiplicateur de déplacement et l'apparence.
+
+`stairGeometry(...)` distribue la définition vers `straightStairGeometry(...)` ou
+`spiralStairGeometry(...)`. Pour le colimaçon standard, la même sortie canonique contient le disque
+de 3,75 m de diamètre, 21 marches en prismes de secteurs courbes, la colonne centrale, le
+garde-corps, la trémie carrée, les volumes physiques et les 22 ancrages de parcours. Le renderer,
+l'éditeur, le compilateur, la collision et la visibilité consomment ces primitives. Les marches
+emploient un narrow phase `horizontal-prism` et la colonne un `vertical-cylinder` : leur boîte
+englobante ne devient pas une fausse obstruction rectangulaire pour la ligne de vue.
+
+La position persistée d'un token reste son point de contact monde. Le renderer ne lui ajoute plus
+une constante de hauteur supposant que tous les GLB partagent le même pivot. Après clonage, la
+boîte englobante propre au modèle fournit `-minY`, appliqué uniquement au mesh : le point le plus
+bas du socle rejoint exactement le support sans modifier déplacement, collision ou sauvegarde.
+
+Validation : 136 tests monde/serveur, 38 tests Surface, build Vite de production et recette réelle
+sur `8293`. La recette a montré le fantôme, la rotation à la molette, la pose, le retournement du
+sens de montée, la rotation après pose et la persistance après rechargement. L'objet de test a été
+supprimé et la carte utilisateur contrôlée visuellement sans ce colimaçon temporaire.
+
+---
+
 ## Rotation des prévisualisations à la molette (2026-07-18)
 
 Dans **Objets 3D**, la molette tourne par quarts de tour tout fantôme dont l'orientation est libre :
@@ -27,9 +54,9 @@ canoniques les cachent par profondeur. La trémie dérivée d'un escalier ou la 
 d'une verrière sont donc de vraies fenêtres sur le niveau inférieur. Les murs bas restent opaques
 et hors de la coupe caméra du niveau courant.
 
-Le point d'ancrage d'un token demeure le contact canonique de ses pieds avec un support. Le petit
-jour résiduel des modèles centrés est supprimé par un ajustement visuel commun, sans modifier la
-coordonnée monde persistée, le pathfinding ou le coût du déplacement.
+Le point d'ancrage d'un token demeure le contact canonique de ses pieds avec un support. La
+constante visuelle provisoire de cette livraison a été remplacée par l'ancrage propre à chaque GLB
+décrit dans la section ci-dessus.
 
 ---
 

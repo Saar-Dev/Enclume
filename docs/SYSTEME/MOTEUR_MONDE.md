@@ -365,19 +365,26 @@ Un connecteur possède :
 
 ### Escalier
 
-L'escalier droit v13 est un objet structurel paramétrique, pas un GLB qui masquerait une
-téléportation. Sa donnée minimale est `kind: straight`, une origine basse `x/z/y`, une arrivée
-`topY`, un axe et un sens, une largeur, un giron, un nombre de marches, une épaisseur de support et
-les deux garde-corps optionnels. La configuration standard créée par l'éditeur relie exactement un
-étage de 3,75 m : 21 contremarches de 17,9 cm et un giron de 30 cm.
+Un escalier v13 est un objet structurel paramétrique, pas un GLB qui masquerait une téléportation.
+`kind: straight` porte une origine basse `x/z/y`, une arrivée `topY`, un axe et un sens, une
+largeur, un giron, un nombre de marches, une épaisseur de support et deux garde-corps optionnels.
+`kind: spiral` porte le centre `x/z`, les mêmes altitudes, les rayons intérieur/extérieur, le nombre
+de tours, le sens horaire, l'orientation de l'entrée, l'épaisseur des marches, la colonne et le
+garde-corps extérieur. Les configurations standard relient exactement un étage de 3,75 m avec
+21 contremarches de 17,9 cm ; le colimaçon possède un diamètre de 3,75 m.
 
-`straightStairGeometry(...)` dérive de cette seule définition :
+`stairGeometry(...)` distribue la définition vers `straightStairGeometry(...)` ou
+`spiralStairGeometry(...)` et dérive :
 
-- les boîtes de marche rendues et leurs surfaces praticables ;
-- les poteaux et mains courantes ;
+- les boîtes droites ou prismes de secteurs courbes rendus et leurs surfaces praticables ;
+- les poteaux, mains courantes et la colonne centrale éventuelle ;
 - l'empreinte et la trémie exacte découpée dans le plafond bas et le sol haut ;
 - les colliders de mouvement et occluders de vue de chaque marche ;
 - un ancrage stable par marche pour la navigation et l'arrêt d'un token.
+
+Les secteurs courbes conservent leur polygone dans le snapshot sous la primitive
+`horizontal-prism` et la colonne utilise `vertical-cylinder`. L'index spatial et la visibilité
+effectuent leur narrow phase sur ces volumes réels au lieu de considérer leur seule AABB.
 
 Le renderer, l'éditeur et `worldCompiler` ne recalculent donc jamais chacun leur propre escalier.
 Le connecteur de graphe est produit automatiquement par la pose de l'objet et n'est pas exposé
@@ -390,9 +397,9 @@ Dans l'éditeur, l'entrée se trouve sous **Objets 3D > Escaliers**. Un clic cho
 prévisualise la géométrie complète et le clic au sol la crée puis repasse en sélection. La molette
 tourne ce même aperçu par quarts de tour avant le clic sans zoomer la caméra : l'orientation affichée
 est donc exactement celle transmise à la définition canonique lors de la pose. Le popup permet
-ensuite une rotation par quart de tour, l'activation de chaque garde-corps, le multiplicateur de
-déplacement et l'apparence procédurale. Une texture ou un futur modèle décoratif ne remplace jamais
-la géométrie physique dérivée.
+ensuite une rotation par quart de tour, l'activation des garde-corps, le multiplicateur de
+déplacement et l'apparence procédurale. Le colimaçon ajoute le retournement horaire/antihoraire.
+Une texture ou un futur modèle décoratif ne remplace jamais la géométrie physique dérivée.
 
 ### Échelle
 

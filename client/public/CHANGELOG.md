@@ -1,3 +1,13 @@
+## v194 — 2026-07-18 — Escalier en colimaçon et tokens ancrés par leur socle
+
+### Éditeur et moteur de monde
+- [feat] **Objets 3D > Escaliers** propose un colimaçon paramétrique complet : marches courbes,
+  colonne centrale, garde-corps, trémie, rotation et sens de montée horaire/antihoraire.
+- [feat] Les marches, collisions, volumes de ligne de vue et ancrages intermédiaires du colimaçon
+  proviennent d'une seule géométrie canonique ; un token peut donc s'arrêter pendant la montée.
+- [fix] Chaque modèle de token est désormais posé par le point le plus bas de sa propre boîte
+  englobante. Les GLB dont le pivot diffère ne flottent plus au-dessus du sol.
+
 ## v193 — 2026-07-18 — Rotation des fantômes à la molette
 
 ### Éditeur de monde

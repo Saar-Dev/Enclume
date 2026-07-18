@@ -368,13 +368,21 @@ function validateFeature(collection, id, item, errors) {
     if (!['x', 'z', 'segment'].includes(item.axis)) errors.push(`${path}.axis doit valoir x, z ou segment`)
     validateFiniteFields(item, ['x0', 'x1', 'z0', 'z1'], path, errors)
   } else if (collection === 'stairs') {
-    if (item.kind !== 'straight') errors.push(`${path}.kind doit valoir straight`)
-    if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
-    if (![1, -1].includes(Number(item.dir))) errors.push(`${path}.dir doit valoir 1 ou -1`)
-    validateFiniteFields(item, ['x', 'z', 'y', 'topY', 'width', 'treadDepth', 'supportThickness'], path, errors)
+    if (!['straight', 'spiral'].includes(item.kind)) errors.push(`${path}.kind doit valoir straight ou spiral`)
+    const dimensionalFields = item.kind === 'spiral'
+      ? ['x', 'z', 'y', 'topY', 'outerRadius', 'innerRadius', 'supportThickness', 'totalTurns', 'treadThickness']
+      : ['x', 'z', 'y', 'topY', 'width', 'treadDepth', 'supportThickness']
+    validateFiniteFields(item, dimensionalFields, path, errors)
     if (Number(item.topY) <= Number(item.y)) errors.push(`${path}.topY doit être supérieur à y`)
-    for (const field of ['width', 'treadDepth', 'supportThickness']) {
+    if (item.kind === 'straight') {
+      if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+      if (![1, -1].includes(Number(item.dir))) errors.push(`${path}.dir doit valoir 1 ou -1`)
+    }
+    for (const field of dimensionalFields.filter(field => !['x', 'z', 'y', 'topY'].includes(field))) {
       if (Number(item[field]) <= 0) errors.push(`${path}.${field} doit être strictement positif`)
+    }
+    if (item.kind === 'spiral' && Number(item.innerRadius) >= Number(item.outerRadius)) {
+      errors.push(`${path}.innerRadius doit être inférieur à outerRadius`)
     }
     if (!Number.isInteger(Number(item.stepCount)) || Number(item.stepCount) < 1) {
       errors.push(`${path}.stepCount doit être un entier positif`)

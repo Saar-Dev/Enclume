@@ -67,6 +67,20 @@ test('un escalier structurel devient un connecteur canonique du document monde',
   assert.equal(prepared.worldDocument.features.connectors[stairId].sourceCollection, 'stairs')
 })
 
+test('un escalier en colimaçon est une définition structurelle valide', () => {
+  const surface = surfaceFixture()
+  surface.stairs['stair:legacy'] = {
+    id: 'stair:spiral', kind: 'spiral', x: 2.5, z: 3.5, y: 0, topY: 2.5,
+    outerRadius: 1.25, innerRadius: 0.22, totalTurns: 1.25,
+    rotationQuarterTurns: 0, stepCount: 21, supportThickness: 0.25,
+    treadThickness: 0.055,
+  }
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.stairs['stair:legacy'].innerRadius = 2
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
 test('un segment orienté est un mur canonique valide', () => {
   const surface = surfaceFixture()
   surface.walls.curve = {

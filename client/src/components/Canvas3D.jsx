@@ -134,10 +134,8 @@ function TokenRing({ color, isSelected, isDragging, opacity }) {
 }
 
 // ─── Token individuel ─────────────────────────────────────────────────────────
-// Les GLB de token sont centrés autour de leur origine et descendent légèrement sous celle-ci.
-// Le point parent est déjà le contact canonique des pieds avec le support : 0,47 pose la semelle
-// sur la dalle sans conserver le petit jour visuel de l'ancien décalage d'une demi-unité.
-const Y_OFFSET = 0.47
+// Le point parent est le contact canonique avec le support. Chaque GLB est donc recalé d'après
+// sa propre boîte englobante : l'origine interne du fichier ne doit jamais faire flotter le token.
 
 // Filet de sécurité : si useGLTF échoue (404, GLB invalide, etc.), rend la capsule
 // au lieu de noircir le canvas entier. La capsule est le dernier recours, pas le fallback normal.
@@ -164,7 +162,7 @@ class TokenGlbErrorBoundary extends Component {
 function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
   const { scene: gltfScene } = useGLTF(glbUrl)
 
-  const clonedScene = useMemo(() => {
+  const groundedModel = useMemo(() => {
     if (!gltfScene) return null
     const clone = SkeletonUtils.clone(gltfScene)
     clone.traverse((child) => {
@@ -193,15 +191,20 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
         }
       }
     })
-    return clone
+    clone.updateMatrixWorld(true)
+    const modelBounds = new THREE.Box3().setFromObject(clone, true)
+    const groundOffsetY = modelBounds.isEmpty() || !Number.isFinite(modelBounds.min.y)
+      ? 0
+      : -modelBounds.min.y
+    return { scene: clone, groundOffsetY }
   }, [gltfScene, isGmLayer, sceneOpacity])
 
-  if (!clonedScene) return null
+  if (!groundedModel) return null
 
   return (
     <primitive
-      object={clonedScene}
-      position={[0, Y_OFFSET, 0]}
+      object={groundedModel.scene}
+      position={[0, groundedModel.groundOffsetY, 0]}
       scale={[1, 1, 1]}
       rotation={[tiltX, 0, tiltZ]}
     />
@@ -212,7 +215,7 @@ function TokenGlbBody({ glbUrl, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
 // Rendu quand le personnage n'a pas de glb_url et qu'aucun token par défaut de campagne n'est défini.
 function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 }) {
   return (
-    <group position={[0, Y_OFFSET, 0]} rotation={[tiltX, 0, tiltZ]}>
+    <group rotation={[tiltX, 0, tiltZ]}>
       <mesh position={[0, 0.8, 0]}>
         <capsuleGeometry args={[0.28, 1.0, 4, 8]} />
         <meshLambertMaterial

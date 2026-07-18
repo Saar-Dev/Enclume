@@ -4541,3 +4541,48 @@ modifiée. Aucun clic de pose n'a été effectué pendant la recette.
 **Retour arrière** : revert du commit Session 156. Aucun schéma SQL, migration ni conversion de
 `surface_data` ; le retour arrière restaure seulement le tooltip de Session 155 et l'ancien geste
 de zoom pendant une prévisualisation.
+
+---
+
+## Session 157 (Codex) — 2026-07-18 — Colimaçon canonique et token posé par son socle ✅ CLOS
+
+**Objectif** : ajouter le premier autre type d'escalier sans créer un objet décoratif parallèle au
+moteur monde, puis supprimer le décalage vertical encore visible sous certains modèles de token.
+
+**Escalier** : la palette contient **Escalier en colimaçon paramétrique**. Le clic désigne le centre
+d'une emprise standard de 3,75 m ; la molette oriente l'entrée avant pose. La définition persistée
+porte `kind: spiral`, les rayons, 1,25 tour par défaut, le sens horaire, l'orientation d'entrée,
+21 marches, leur épaisseur, la colonne et le garde-corps extérieur. Le popup permet rotation,
+retournement du sens, garde-corps, coût de déplacement et apparence procédurale.
+
+**Géométrie commune** : `stairGeometry` est le seul point de distribution entre escalier droit et
+colimaçon. `spiralStairGeometry` produit les secteurs de marche, la colonne, le rail, la trémie,
+l'emprise et les 22 ancrages de parcours. Les deux scènes React extrudent les polygones partagés ;
+`worldCompiler` compile ces mêmes marches comme `horizontal-prism` et la colonne comme
+`vertical-cylinder`. `spatialIndex` et `visibility` possèdent le narrow phase correspondant. Les
+boîtes englobantes servent à l'index large, pas de géométrie physique de remplacement.
+
+**Token** : la coordonnée persistée reste le point de contact monde. L'ancien `Y_OFFSET = 0.47`
+supposait un pivot identique pour tous les GLB et faisait flotter ceux dont le socle commençait à
+`y = 0`. Chaque clone calcule maintenant sa boîte englobante et applique uniquement au rendu
+`-bounds.min.y`. Le fallback procédural part directement du plan local zéro.
+
+**Testé** : 136/136 tests monde/serveur et 38/38 tests Surface, dont validation du document spiral,
+traversée courbe fractionnable, 21 colliders de marche, colonne occultante et intersections exactes
+des nouvelles primitives. Build Vite de production réussi localement et sur le serveur ; services
+8293/8294 actifs. Le lint global reste rouge sur 66 erreurs React/personnage préexistantes ; le seul
+nouveau avertissement Fast Refresh de `StairPrismGeometry` a été corrigé avant livraison.
+
+**Validation navigateur réelle 8293** : sur la session utilisateur
+`b27cbed4-fd59-4530-b43b-dae57c33f092`, le navigateur intégré a affiché les deux entrées de la
+catégorie Escaliers, le fantôme cyan du colimaçon, sa pose complète, le popup `0 → 1`, les
+21 marches, puis le changement horaire et la rotation droite. Après rechargement, le colimaçon et
+ses réglages étaient toujours visibles. Le modèle de token de la carte apparaissait avec son socle
+sur le sol, sans le vide important de la capture d'origine.
+
+**Données** : un colimaçon a été créé temporairement sur la carte utilisateur pour vérifier la
+sauvegarde réelle. Il a ensuite été sélectionné après rechargement, supprimé avec confirmation et
+son absence a été contrôlée visuellement. Aucun schéma SQL ni migration de carte n'a été ajouté.
+
+**Retour arrière** : revert du commit Session 157. Le document accepte à nouveau uniquement
+`kind: straight`, la palette perd le colimaçon et les tokens retrouvent l'ancien décalage commun.
