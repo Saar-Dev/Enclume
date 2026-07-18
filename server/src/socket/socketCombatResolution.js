@@ -338,15 +338,32 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_DAMAGE_CONFIRM`)
       return
     }
-    const row = await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' }).first()
+    // FIFO — plusieurs dégâts peuvent être en attente pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
+    // §3, correctif combat_pending) : la plus ancienne entrée d'abord, supprimée par son id propre
+    // (jamais par le filtre composite — supprimerait aussi les entrées plus récentes du même type).
+    const row = await db('combat_pending')
+      .where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' })
+      .orderBy('created_at', 'asc')
+      .first()
     if (!row) {
       console.warn(`[WS] COMBAT_DAMAGE_CONFIRM — pas de pending pour token:${tokenId}`)
       return
     }
     const pending = row.payload
     if (pending.userId !== user.id && pending.targetUserId !== user.id && !isGm) return
-    await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' }).delete()
-    await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+    await db('combat_pending').where({ id: row.id }).delete()
+    const nextRow = await db('combat_pending')
+      .where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' })
+      .orderBy('created_at', 'asc')
+      .first()
+    if (nextRow) {
+      // File non vide — attaques multiples ayant chacune touché un défenseur distinct : sub_phase
+      // reste AWAITING_DAMAGE, nouveau prompt émis pour la suivante (§3 du plan cité ci-dessus).
+      await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+      socket.emit(WS.COMBAT_DAMAGE_PROMPT, { tokenId, formula: nextRow.payload.formula, targetName: nextRow.payload.targetName })
+    } else {
+      await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+    }
 
     const {
       campaignId: pendingCampaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
@@ -654,7 +671,11 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // 4. Dégâts si touche
       if (hit) {
         if (attackerCharacter.type === 'pj') {
-          // PJ attaquant : invite à lancer les dés de dégâts (CombatDamageWindow existant)
+          // PJ attaquant : invite à lancer les dés de dégâts (CombatDamageWindow existant). Plusieurs
+          // entrées peuvent désormais coexister pour le même attaquant (attaques multiples CaC touchant
+          // chacune un défenseur PJ distinct, docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO
+          // par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre entrée n'attendait
+          // déjà (sinon le joueur perdrait de vue le prompt encore non résolu de la précédente).
           await db('combat_pending').insert({
             campaign_id: meleeCampaignId,
             token_id: attackerTokenId,
@@ -678,16 +699,21 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             },
           })
           await setFSMSubPhase(db, meleeCampaignId, 'AWAITING_DAMAGE')
-          // Trouver le socket de l'attaquant PJ
-          const sockets = await io.fetchSockets()
-          const attackerSocket = sockets.find(s =>
-            s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
-          )
-          const prompt = { tokenId: attackerTokenId, formula: damageFormula, targetName }
-          if (attackerSocket) {
-            attackerSocket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)
-          } else {
-            socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
+          const [{ count: pendingDamageCount }] = await db('combat_pending')
+            .where({ campaign_id: meleeCampaignId, token_id: attackerTokenId, type: 'damage' })
+            .count('* as count')
+          if (parseInt(pendingDamageCount, 10) === 1) {
+            // Trouver le socket de l'attaquant PJ
+            const sockets = await io.fetchSockets()
+            const attackerSocket = sockets.find(s =>
+              s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
+            )
+            const prompt = { tokenId: attackerTokenId, formula: damageFormula, targetName }
+            if (attackerSocket) {
+              attackerSocket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)
+            } else {
+              socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
+            }
           }
         } else {
           // PNJ attaquant : résolution auto des dégâts

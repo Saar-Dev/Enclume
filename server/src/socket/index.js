@@ -99,8 +99,14 @@ const initSocket = (io) => {
               const userTokenId = userToken?.token_id
 
               if (userTokenId) {
+                // Plusieurs entrées 'damage' peuvent désormais coexister pour le même token
+                // (docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO côté serveur, un seul prompt
+                // visible à la fois côté client : ordonner par ancienneté et ne restaurer que la plus
+                // ancienne, cohérent avec ce que COMBAT_DAMAGE_CONFIRM affiche déjà en jeu normal.
                 const rows = await db('combat_pending')
                   .where({ campaign_id: campaignId, token_id: userTokenId })
+                  .orderBy('created_at', 'asc')
+                let damagePromptSent = false
                 for (const row of rows) {
                   const p = row.payload
                   if (row.type === 'melee_defense') {
@@ -114,11 +120,13 @@ const initSocket = (io) => {
                       multiMalusDefenseur: p.multiMalusDefenseur,
                     })
                   } else if (row.type === 'damage') {
+                    if (damagePromptSent) continue
                     socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
                       tokenId:    row.token_id,
                       formula:    p.formula,
                       targetName: p.targetName,
                     })
+                    damagePromptSent = true
                   } else if (row.type === 'stun') {
                     socket.emit(WS.COMBAT_STUN_PROMPT, {
                       tokenId: row.token_id,

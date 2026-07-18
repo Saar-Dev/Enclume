@@ -1280,6 +1280,9 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       : { for_na: 8, con_na: 8, vol_na: 8 }
     const targetName = cibleCharacter.name ?? 'Cible'
 
+    // Plusieurs entrées peuvent désormais coexister pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
+    // §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre
+    // entrée n'attendait déjà.
     await db('combat_pending').insert({
       campaign_id: campaignId,
       token_id: action.token_id,
@@ -1302,9 +1305,13 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       },
     })
     await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
-
-    const damagePayload = { tokenId: action.token_id, formula, targetName }
-    emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
+    const [{ count: pendingDamageCount }] = await db('combat_pending')
+      .where({ campaign_id: campaignId, token_id: action.token_id, type: 'damage' })
+      .count('* as count')
+    if (parseInt(pendingDamageCount, 10) === 1) {
+      const damagePayload = { tokenId: action.token_id, formula, targetName }
+      emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
+    }
     return { suspend: false, emissions }
 
   } catch (err) {
@@ -1570,6 +1577,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           tireurTokenId: action.token_id,
           cibleTokenId: action.target_token_id,
         } })
+        // Plusieurs entrées peuvent désormais coexister pour le même tireur (attaques multiples,
+        // docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt
+        // n'est émis ici que si aucune autre entrée n'attendait déjà.
         await db('combat_pending').insert({
           campaign_id: campaignId,
           token_id: action.token_id,
@@ -1601,15 +1611,20 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           },
         })
         await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
-        // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
-        // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
-        // effectué à la confirmation dès qu'une munition modifie les dégâts.
-        const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, action.weapon_inv_id)
-        emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
-          tokenId: action.token_id,
-          formula: formulaPreview ?? weapon.ref_damage_h,
-          targetName,
-        } })
+        const [{ count: pendingDamageCount }] = await db('combat_pending')
+          .where({ campaign_id: campaignId, token_id: action.token_id, type: 'damage' })
+          .count('* as count')
+        if (parseInt(pendingDamageCount, 10) === 1) {
+          // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
+          // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
+          // effectué à la confirmation dès qu'une munition modifie les dégâts.
+          const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, action.weapon_inv_id)
+          emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
+            tokenId: action.token_id,
+            formula: formulaPreview ?? weapon.ref_damage_h,
+            targetName,
+          } })
+        }
       } else {
         // PNJ — calcul complet immédiat, invisible aux joueurs
         const mrTable = await getMrTable()

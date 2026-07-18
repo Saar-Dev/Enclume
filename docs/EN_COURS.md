@@ -62,7 +62,10 @@
 > testé, item 81 ; **Session 157 (2026-07-18) : Sprint Tir Multi → refonte complète du moteur de tours
 > combat, planification uniquement (aucun code) — `docs/PLAN_COMBAT_TIMELINE.md` intégralement conçu
 > (4 Lots + analyses à charge + audit indépendant), correctif isolé `combat_pending` conçu et prêt à
-> coder en premier, item 82** ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> coder en premier, item 82** ; **Session 158 (2026-07-18) : correctif isolé `combat_pending`
+> (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) — ✅ codé et testé en base réelle (migration 170 + FIFO +
+> guard prompt), confirmation navigateur Saar en attente avant Lot A `docs/PLAN_COMBAT_TIMELINE.md`,
+> item 83** ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
 > (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
 > Session 153 : `docs/PLAN_ECHANGE.md` — correction
 > du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
@@ -162,10 +165,12 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
-> ⚡ **Prochaine étape immédiate : voir Item 82 (Session 157) ci-dessous** — correctif isolé
-> `combat_pending` (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) d'abord, puis Lot A de
-> `docs/PLAN_COMBAT_TIMELINE.md` (§5). Item 82 est plus bas dans ce fichier (ordre antéchronologique,
-> il suit l'item 81) — ne pas le manquer en lisant seulement le haut de ce bloc.
+> ⚡ **Prochaine étape immédiate : Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5)** — le correctif isolé
+> `combat_pending` (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) est **codé et testé en base réelle** (voir
+> Item 83 ci-dessous), il ne reste que la confirmation navigateur de Saar avant d'archiver
+> `docs/PLAN_COMBAT_ACTION_QUEUE.md`. Lot A peut démarrer dès que Saar confirme. Item 83 est plus bas
+> dans ce fichier (ordre antéchronologique, il suit l'item 82) — ne pas le manquer en lisant seulement
+> le haut de ce bloc.
 
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
@@ -294,6 +299,11 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > committé** (`git status`, branche `dev/Saar`) : `docs/PLAN_TIRMULTI.md`,
 > `docs/PLAN_COMBAT_ACTION_QUEUE.md`, `docs/PLAN_COMBAT_TIMELINE.md` (nouveaux) ;
 > `docs/BUGIDENTIFIE.md`, `shared/polarisUtils.js` (modifiés).
+> **Exigence explicite de Saar avant de coder quoi que ce soit ci-dessous** : se documenter, chercher
+> des dépôts GitHub inspirants et des patterns éprouvés (moteurs de tours à phases de jeux tactiques,
+> VTT open-source type Foundry, implémentations de FSM pour systèmes de combat) avant d'écrire la
+> moindre ligne — ne jamais coder from scratch un mécanisme non trivial sans avoir d'abord regardé
+> comment des projets pro le résolvent. Aucune urgence de temps, la certitude architecturale prime.
 > **Prochaine étape exacte, dans l'ordre, pas d'ambiguïté** :
 > 1. **Correctif isolé `combat_pending`** — conception complète et prête dans
 >    `docs/PLAN_COMBAT_ACTION_QUEUE.md` §3 (clé primaire propre par ligne, plusieurs entrées
@@ -306,6 +316,50 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 >    colonne par colonne, migration `combat_actions`, numéro de migration pair à auditer au moment du
 >    code (`CLAUDE.md` §5).
 > Lots B, C, D suivent dans cet ordre une fois A validé — ne pas paralléliser (`CLAUDE.md` §6.8).
+>
+> **Item 83 (Session 158, dev/Saar) — Correctif isolé `combat_pending` ✅ CODÉ ET TESTÉ EN BASE RÉELLE
+> (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3, prérequis Lot A `docs/PLAN_COMBAT_TIMELINE.md`).** Migration
+> `170_combat_pending_multi_damage.js` : PK composite `(campaign_id, token_id, type)` remplacée par un
+> `id` uuid propre + index unique **partiel** `WHERE type <> 'damage'` (melee_defense/stun restent
+> singuliers, seule `damage` autorise désormais plusieurs lignes par personnage) + index FIFO
+> `(campaign_id, token_id, type, created_at)`. **Audit complet des points de lecture/écriture**
+> (`combat_pending` grep exhaustif, 6 fichiers serveur) : `COMBAT_DAMAGE_CONFIRM`
+> (`socketCombatResolution.js`) — sélectionne désormais la plus ancienne entrée (FIFO), supprime par
+> `id` propre (jamais par le filtre composite, qui aurait supprimé toutes les entrées du même type),
+> et si la file n'est pas vide après suppression, `sub_phase` reste `AWAITING_DAMAGE` + nouveau prompt
+> émis pour la suivante (conception déjà écrite dans le plan, §3). **Piège trouvé en traçant
+> l'enchaînement CaC 4b réel** (non anticipé par le plan d'origine) : le 2ᵉ/3ᵉ `INSERT` de
+> `type='damage'` pour le même attaquant peut survenir alors que le 1ᵉʳ prompt n'a pas encore été
+> confirmé par le joueur (le défenseur B confirme sa défense avant que l'attaquant ait cliqué "Lancer
+> les dés" pour l'attaque contre le défenseur A) — émettre le prompt à chaque `INSERT` aurait fait
+> perdre au joueur la visibilité du prompt encore non résolu. Corrigé aux 3 points d'insertion
+> (`COMBAT_MELEE_DEFENSE_CONFIRM` et `resolveAssaultAction`/`resolveDroneAssaultAction` dans
+> `socketCombatHelpers.js`) : le prompt n'est émis que si c'est la seule entrée en attente pour ce
+> token (`COUNT` après insertion) — sinon il sera émis plus tard par `COMBAT_DAMAGE_CONFIRM` une fois
+> la file FIFO consommée jusqu'à cette entrée. Sync reconnexion (`index.js`) alignée sur la même
+> règle : ordonnée par `created_at`, ne restaure qu'**un seul** prompt `damage` (le plus ancien) au lieu
+> d'en émettre un par ligne trouvée. **Testé** : migration (`up`/fonctionnel — 2 lignes `damage`
+> coexistent sans erreur, 2ᵉ ligne `melee_defense` rejetée par la contrainte partielle —
+> `down`/dédoublonnage défensif/`up` à nouveau, cycle complet validé en base locale) ; `node --check`
+> 0 erreur sur les 4 fichiers touchés ; scénario réel simulé en transaction annulée (2 attaques CaC du
+> même attaquant PJ touchant 2 défenseurs PJ distincts — plus de collision, ordre FIFO confirmé, un
+> seul prompt visible à la fois à chaque étape), 0 résidu. **Non testé** : parcours navigateur/Socket.IO
+> de bout en bout (déclaration réelle d'une attaque multiple CaC en combat réel) — à confirmer par
+> Saar. **Dette trouvée en marge, non corrigée (hors scope, un seul problème par plan)** :
+> `server/src/socket/index.js`, sync reconnexion `pendingDmgDrone` (recherche d'un dégât de drone en
+> attente pour le joueur qui se reconnecte) utilise `.first()` sans tri, filtré uniquement par
+> `payload->>'targetUserId'` (pas par `token_id`) — si 2 drones distincts ont chacun un dégât en
+> attente contre le même PJ cible au moment de sa reconnexion, un seul est restauré. Préexistant à ce
+> correctif (différents `token_id` ne collisionnaient déjà pas sur l'ancienne PK), non aggravé par ce
+> changement — noté pour un futur audit, pas ajouté à `BUGIDENTIFIE.md` (portée trop étroite pour
+> justifier une entrée dédiée à ce stade, à relier si `docs/PLAN_TIRMULTI.md` fait un jour intervenir
+> plusieurs drones tireurs sur la même cible). **Données** : migration `170` appliquée en base locale de
+> développement (`vtt`), aucun effet sur les données de campagne existantes (table `combat_pending`
+> vide au moment de la migration). **Retour arrière** : `down()` de la migration 170 testé et fonctionnel
+> (dédoublonnage défensif inclus).
+> **Prochaine étape** : confirmation navigateur Saar (combat réel avec attaque multiple CaC PJ contre 2
+> défenseurs PJ), puis archivage de `docs/PLAN_COMBAT_ACTION_QUEUE.md` dans `docs/Old/` (Règle 10), puis
+> démarrage du Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5).
 >
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token
