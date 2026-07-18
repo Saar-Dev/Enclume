@@ -119,8 +119,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
 
+  // StrictMode (main.jsx) double-invoque les effets de montage en dev (mount → cleanup → mount) —
+  // sans ce réarmement dans le corps de l'effet, isMountedRef.current reste bloqué à false après ce
+  // cycle synthétique (seul le cleanup le mettait à false, rien ne le repassait à true), et la chaîne
+  // de sélection multi-cibles (selectNext ci-dessous) s'arrêtait alors systématiquement après la
+  // première cible — COM7.
   const isMountedRef = useRef(true)
-  useEffect(() => () => { isMountedRef.current = false }, [])
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
 
   // ── Reset complet quand le slot actif change ─────────────────────────────
   useEffect(() => {

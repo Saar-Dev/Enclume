@@ -343,9 +343,29 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > `down`/dédoublonnage défensif/`up` à nouveau, cycle complet validé en base locale) ; `node --check`
 > 0 erreur sur les 4 fichiers touchés ; scénario réel simulé en transaction annulée (2 attaques CaC du
 > même attaquant PJ touchant 2 défenseurs PJ distincts — plus de collision, ordre FIFO confirmé, un
-> seul prompt visible à la fois à chaque étape), 0 résidu. **Non testé** : parcours navigateur/Socket.IO
-> de bout en bout (déclaration réelle d'une attaque multiple CaC en combat réel) — à confirmer par
-> Saar. **Dette trouvée en marge, non corrigée (hors scope, un seul problème par plan)** :
+> seul prompt visible à la fois à chaque étape), 0 résidu.
+> **Bug réel trouvé en testant en navigateur (bloquait ce parcours), corrigé séparément —
+> `BUGIDENTIFIE.md` COM7 (Multi-attaque CaC : bouton "Déclarer" grisé) ✅ CLOS.** Root cause
+> `[VÉRIFIÉ]` : `CombatGmDeclareWindow.jsx:122-123`, `isMountedRef` initialisé à `true` via
+> `useRef(true)` mais seul le cleanup de son `useEffect` le repassait à `false` — rien ne le réarmait à
+> `true`. `StrictMode` (`main.jsx:8`, actif) double-invoque les effets de montage en dev (mount →
+> cleanup → mount) pour détecter exactement ce cas : après ce cycle synthétique, `isMountedRef.current`
+> restait bloqué à `false` pour toute la durée de vie du composant. La chaîne de sélection multi-cibles
+> CaC (`selectNext`, ligne 373, `if (isMountedRef.current) selectNext(idx + 1)`) s'arrêtait donc
+> systématiquement après la première cible — expliquant à la fois le bouton "Déclarer" grisé
+> (`meleeTargets.length` ne pouvait jamais atteindre `effectiveMeleeCount`) et la sortie du mode de
+> ciblage après une seule cible. **Preuve obtenue par instrumentation temporaire** (`[DBG-COM7]`,
+> retirée après diagnostic) : le code de debug ajoutait par inadvertance
+> `isMountedRef.current = true` dans le corps de l'effet — ce qui réarmait le ref après le double-mount
+> StrictMode et corrigeait le bug par effet de bord (1er test Saar : "Fonctionnel") ; son retrait a fait
+> réapparaître le bug à l'identique (2ᵉ test Saar : "Non fonctionnel") — correspondance exacte entre
+> les deux tests et le diff, cause confirmée sans ambiguïté. **Corrigé** : `isMountedRef.current = true`
+> déplacé dans le corps de l'effet (pattern "StrictMode-safe" standard, seul point d'usage de ce
+> pattern dans le client, grep confirmé). **Testé** : build Vite propre (0 erreur/warning). **Non
+> testé** : parcours navigateur/Socket.IO de bout en bout du correctif `combat_pending` lui-même (2
+> attaques CaC touchant 2 défenseurs PJ, dégâts confirmés un par un) — bloqué jusqu'ici par COM7, à
+> reprendre par Saar maintenant que la déclaration multi-cibles fonctionne.
+> **Dette trouvée en marge, non corrigée (hors scope, un seul problème par plan)** :
 > `server/src/socket/index.js`, sync reconnexion `pendingDmgDrone` (recherche d'un dégât de drone en
 > attente pour le joueur qui se reconnecte) utilise `.first()` sans tri, filtré uniquement par
 > `payload->>'targetUserId'` (pas par `token_id`) — si 2 drones distincts ont chacun un dégât en
@@ -1981,7 +2001,7 @@ Projet en cours et priorité user :
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
 | COM2 | Vérif statut arme absente côté GM | Moyenne |
-| COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
+| ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
 | ~~**COM9**~~ | ~~Viser une localisation précise — non implémenté~~ | ✅ Session 155 (Saar) |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | ~~**TIRVISE**~~ | ~~Tir visé — non implémenté, bloquait le Lot B2 de `docs/PLAN_MODING.md`~~ | ✅ Session 141 (suite 17) |

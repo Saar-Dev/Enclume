@@ -32,7 +32,7 @@
 
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
-| **E — Arme et statuts** | COM2 + COM7 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
+| **E — Arme et statuts** | COM2 | `CombatGmDeclareWindow.jsx` + `CombatActionWindow.jsx` | Moyenne |
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
@@ -138,18 +138,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 **Code impliqué** : `client/src/pages/SessionPage.jsx` — state messages. `server/src/socket/index.js` — handler `SESSION_JOIN`.
 
 **Prochaine étape** : Sprint persistance chat — vérifier d'abord si table `chat_messages` existe en DB. Si non → sprint dédié (modèle, migration, API, sync SESSION_JOIN).
-
----
-
-### Bug COM7 — Multi-attaque CaC : duplicata / "Déclarer" grisé
-
-**Symptôme** : L'option "multi-attaque" CaC semble un duplicata de "Attaque multiple". Quand sélectionnée, le bouton "Déclarer" reste grisé (fonctionnalité non implantée ?).
-
-**Règle à vérifier** : §6.2 MANUELSYSCOMBAT — attaque multiple melee.
-
-**Code impliqué** : `CombatGmDeclareWindow.jsx` — `meleeAttackCount` / `meleePendingMode`. Guard `canDeclare`.
-
-**Prochaine étape** : Audit règles Polaris §6.2 — si identiques, supprimer le duplicata. Sinon corriger `canDeclare`.
 
 ---
 
