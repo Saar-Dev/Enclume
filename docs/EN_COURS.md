@@ -338,6 +338,42 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > migration `176`, nullable et rétrocompatible. **Retour arrière** : `down()` de la migration retire la
 > colonne ; revert du commit pour le reste.
 >
+> **Item 92 (Session 163, dev/Saar) — PLAN_CAC_BATTERIE.md Lot A : munition générique "Charge
+> électrique" ✅ CLOS (Lot A uniquement).** Suite directe de COM28 — Saar a rejeté le correctif
+> d'affichage seul (« la Matraque Mao a des munitions, un correctif serait l'inverse de cacher la
+> misère ») et demandé une vraie mécanique de recharge, indépendante CaC/tir. Investigation confirmée
+> `[VÉRIFIÉ]` : `caliber` est déjà l'unique champ de liaison arme/munition du projet
+> (`docs/Old/JARMES.md` §2.5, « Aucune exception : Toujours utiliser caliber »), utilisé par égalité de
+> chaîne sans distinction de catégorie — rien à changer côté code, seulement de la donnée manquante sur
+> 19 armes (`ammo_count` réel, `caliber` resté `NULL`). Piège évité en cours de route : `GP-*`
+> (`GP-A1`…`GP-D4`, retrouvé lié à 13 armes à énergie + Poing Kryss) est une classification de sources
+> d'énergie de **drones** (`docs/REGLES/REGLEDRONE.md`), réutilisée intentionnellement pour un domaine
+> différent (confirmé `docs/Old/JOURNAL2.md:4587`, « enrichissement intentionnel... conservé ») — ne pas
+> y raccrocher ce chantier. **Décision produit (Saar)** : munition générique unique "Charge électrique",
+> `family='Munitions'`, `category='Charges électriques'`, `caliber='Charge électrique'`, 10 sols/charge
+> (aligné sur `9 mm - Munition standard`) ; scope limité au Lot A (19 armes à charge numérique propre :
+> 7 armes de contact + Flex + 11 armes étourdissantes/soniques) — Lots B (armes à durée, "1
+> heure"/"1h de gaz", mécanique de jauge temporelle distincte), C (armes de trait, déjà liées à
+> Flèche/Carreau, juste un lien à poser) et D (lanceurs, Capsule existe déjà pour Lance-capsules, les
+> autres nécessitent un item dédié par type de projectile) volontairement reportés — root cause
+> distincte par lot. **Correctif** : migration `178` (`server/src/db/migrations/178_ammo_charge_electrique.js`,
+> 176 pris entre-temps par COM29) — INSERT munition + UPDATE `caliber` sur les 19 armes, idempotent
+> (patron migration 75), échec net (`throw`) plutôt qu'état partiel silencieux si le nombre d'armes
+> mises à jour ne correspond pas exactement. Aucun code applicatif touché : `resolveAmmoInit`/
+> `reloadWeapon`/`weaponAmmoStatus` (COM28) fonctionnent immédiatement dès `caliber` peuplé. **Testé** :
+> migration appliquée en base réelle (20/20 lignes liées, vérifié par requête) ; premier essai a échoué
+> proprement sur `tech_level NOT NULL` manqué, transaction Postgres a tout annulé (aucune ligne
+> orpheline), corrigé et réappliqué ; `node --test shared/ammoRules.test.mjs shared/dualWieldRules.test.mjs`
+> → 15/15 (non-régression COM25/COM28/COM29) ; **scénario réel navigateur confirmé fonctionnel par
+> Saar** (équiper/recharger une arme du Lot A, affichage munitions correct en combat). **Anomalie infra
+> découverte en testant `down()`** (hors scope, signalée séparément) : `knex migrate:rollback` CLI
+> n'exécute rien de constatable sur ce projet (bookkeeping et données inchangés malgré un message de
+> succès) — `down()` lui-même vérifié fonctionnel par appel direct (20→0 lignes, 0 exception), donc pas
+> en cause ; piste non creusée : `NaturalMigrationSource`. Détail complet : `docs/PLAN_CAC_BATTERIE.md`
+> (reste actif — Lots B/C/D non fermés). **Retour arrière** : `down()` de la migration 178 fonctionnel
+> (vérifié par appel direct, pas via la CLI cassée) ; aucune perte possible (`current_ammo` de ces armes
+> n'a jamais pu être posé avant cette migration).
+>
 > **Item 90 (Session 160, dev/Saar) — COM25 + COM28 : munitions insuffisantes bloque le tir, statut
 > munitions Matraque Mao ✅ CLOS** (session parallèle, code déjà présent au moment d'ouvrir Item 91
 > ci-dessus — entrée reconstituée a posteriori depuis le diff réel, pas depuis une note prise en
