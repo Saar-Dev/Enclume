@@ -223,7 +223,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // résolues une seule fois par Tour pour ce token, groupées avec son premier pas (has_resolved,
       // combat_roster — colonne existante depuis la migration 54, jamais câblée avant ce Lot).
       const rosterEntry = await db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).first()
-      let needsDefenseWait = false
+      // Renommé (était needsDefenseWait) — couvre désormais AWAITING_DEFENSE (CaC) ET AWAITING_DAMAGE
+      // (tir, docs/PLAN_TIRMULTI.md correctif) : les deux sont des sous-états FSM bloquants au même
+      // titre, jamais un cas particulier de l'autre.
+      let resolutionSuspended = false
       if (!rosterEntry?.has_resolved) {
       const simpleActions = await db('combat_actions')
         .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: state.current_turn })
@@ -339,20 +342,27 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             } else {
               const assaultResult = await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
               console.log(`[DBG] COMBAT_ACTION_CONFIRM — resolveAssaultAction terminé token:${tokenId}`)
-              if (assaultResult) await flushEmissions(io, socket, campaignId, assaultResult.emissions)
+              if (assaultResult) {
+                await flushEmissions(io, socket, campaignId, assaultResult.emissions)
+                // Correctif (Saar, 2026-07-19, testé en base réelle) : un tireur PJ qui touche pose
+                // AWAITING_DAMAGE (sous-état FSM bloquant, combatFSM.js) — advanceTimeline() ne doit
+                // pas s'exécuter juste après, sous peine de l'écraser en SLOT_ACTIVE dès qu'un autre
+                // combattant a un pas suivant, rendant COMBAT_DAMAGE_CONFIRM rejeté par le garde FSM.
+                resolutionSuspended = assaultResult.suspend
+              }
             }
-            // Pas de blocage : l'attaque à distance elle-même est complète, la confirmation des dégâts
-            // (AWAITING_DAMAGE) est asynchrone et ne retient pas la suite de l'échelle (comportement
-            // préexistant, inchangé par ce Lot).
           } else if (action.type === 'melee') {
             if (character.type === 'drone') {
               const droneResult = await resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
-              if (droneResult) await flushEmissions(io, socket, campaignId, droneResult.emissions)
+              if (droneResult) {
+                await flushEmissions(io, socket, campaignId, droneResult.emissions)
+                resolutionSuspended = droneResult.suspend
+              }
             } else {
               const meleeResult = await resolveMeleeAction(io, campaignId, action, character, confirmedModifiers, pendingMaps)
               if (meleeResult) {
                 await flushEmissions(io, socket, campaignId, meleeResult.emissions)
-                needsDefenseWait = meleeResult.suspend
+                resolutionSuspended = meleeResult.suspend
               }
             }
           }
@@ -366,9 +376,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         console.log(`[DBG] COMBAT_ACTION_CONFIRM — bloc résolution entrée ${step.entry.id} terminé (avec ou sans erreur), token:${tokenId}`)
       }
 
-      // Pas suivant — sauf si on attend le jet de défense d'un PJ (le pas courant reste dû). Toujours
-      // exécuté même après une erreur de résolution ci-dessus : l'échelle ne doit jamais rester bloquée.
-      if (!needsDefenseWait) {
+      // Pas suivant — sauf si on attend un jet de défense CaC ou une confirmation de dégâts tir (le pas
+      // courant reste dû dans les deux cas). Toujours exécuté même après une erreur de résolution
+      // ci-dessus : l'échelle ne doit jamais rester bloquée.
+      if (!resolutionSuspended) {
         console.log(`[DBG] COMBAT_ACTION_CONFIRM — avant advanceTimeline final, token:${tokenId}`)
         await advanceTimeline(io, campaignId, pendingMaps)
         console.log(`[DBG] COMBAT_ACTION_CONFIRM — après advanceTimeline final, token:${tokenId}`)
@@ -385,7 +396,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_DAMAGE_CONFIRM`)
       return
     }
-    await confirmDamage(io, campaignId, tokenId, socket, { requesterUserId: user.id, isGm })
+    await confirmDamage(io, campaignId, tokenId, pendingMaps, socket, { requesterUserId: user.id, isGm })
   })
 
   // ─── COMBAT_MELEE_DEFENSE_CONFIRM — défenseur PJ valide son jet ───────────

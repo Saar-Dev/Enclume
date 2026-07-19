@@ -515,6 +515,12 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
   if (!forced && pending.defenderUserId !== requesterUserId && !isGm) return
   await db('combat_pending').where({ campaign_id: campaignId, token_id: tokenId, type: 'melee_defense' }).delete()
   await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
+  // Bug réel jumeau de celui trouvé côté Tir Multi (Saar, 2026-07-19, même cause racine — voir
+  // resolveAssaultAction) : un attaquant PJ qui touche pose AWAITING_DAMAGE plus bas (sous-état FSM
+  // bloquant) pour qu'il lance ses dégâts — appeler advanceTimeline juste après l'écraserait en
+  // SLOT_ACTIVE dès qu'un autre combattant a un pas suivant, rendant COMBAT_DAMAGE_CONFIRM rejeté par
+  // le garde FSM.
+  let suspendForDamage = false
 
   const {
     campaignId: meleeCampaignId,
@@ -657,6 +663,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
             socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
           }
         }
+        suspendForDamage = true
       } else {
         // PNJ attaquant : résolution auto des dégâts
         const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
@@ -700,7 +707,11 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     // 5. Pas suivant de l'échelle — l'entrée elle-même est déjà marquée 'resolved' (COMBAT_ACTION_CONFIRM,
     // avant l'appel à resolveMeleeAction) ; une éventuelle attaque suivante de la même série est une
     // entrée distincte, reprise plus tard par advanceTimeline() (§5 Lot B, plus de récursion ici).
-    await advanceTimeline(io, meleeCampaignId, pendingMaps)
+    // Sauf si l'attaquant PJ vient de poser AWAITING_DAMAGE ci-dessus (suspendForDamage) — le pas
+    // courant reste dû jusqu'à COMBAT_DAMAGE_CONFIRM, comme AWAITING_DEFENSE le fait déjà ailleurs.
+    if (!suspendForDamage) {
+      await advanceTimeline(io, meleeCampaignId, pendingMaps)
+    }
   } catch (err) {
     console.error('[WS] confirmMeleeDefense error:', err.message)
   }
@@ -710,9 +721,10 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
 // identité à substituer ici : les broadcasts DICE_RESULT utilisent déjà `tireurUsername`/`tireurColor`
 // (figés dans `pending` au moment de l'attaque), jamais l'identité de qui clique confirmer — seule la
 // vérification de propriétaire a besoin du contournement `forced` (MJ déclenche pour un tireur PJ
-// injoignable, § « devient PNJ pour le Tour »). N'appelle jamais advanceTimeline (comportement
-// préexistant inchangé : la confirmation de dégâts est asynchrone, ne retient pas l'échelle).
-export async function confirmDamage(io, campaignId, tokenId, socket, { requesterUserId, isGm, forced = false } = {}) {
+// injoignable, § « devient PNJ pour le Tour »). Appelle `advanceTimeline()` une fois sa file vidée
+// (correctif Session 165, voir plus bas) — la confirmation de dégâts suspend la Résolution le temps du
+// jet (comme AWAITING_DEFENSE côté CaC), elle ne l'esquive plus.
+export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket, { requesterUserId, isGm, forced = false } = {}) {
   // FIFO — plusieurs dégâts peuvent être en attente pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
   // §3, correctif combat_pending) : la plus ancienne entrée d'abord, supprimée par son id propre
   // (jamais par le filtre composite — supprimerait aussi les entrées plus récentes du même type).
@@ -738,8 +750,12 @@ export async function confirmDamage(io, campaignId, tokenId, socket, { requester
     await broadcastCurrentSubPhase(io, campaignId)
     if (socket) socket.emit(WS.COMBAT_DAMAGE_PROMPT, { tokenId, formula: nextRow.payload.formula, targetName: nextRow.payload.targetName })
   } else {
-    await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE')
-    await broadcastCurrentSubPhase(io, campaignId)
+    // File vide — la résolution était suspendue (AWAITING_DAMAGE) le temps de ce jet, exactement comme
+    // AWAITING_DEFENSE (confirmMeleeDefense). advanceTimeline() ici, pas un simple
+    // setFSMSubPhase+broadcastCurrentSubPhase : sans lui, si ce jet de dégâts était la toute dernière
+    // action à résoudre du Tour, plus rien n'appelle jamais endTurn() (bug jumeau trouvé en corrigeant
+    // le suspend manquant, Saar 2026-07-19).
+    await advanceTimeline(io, campaignId, pendingMaps)
   }
 
   const {
@@ -961,7 +977,7 @@ export async function forceAdvanceResolution(io, campaignId, pendingMaps) {
   if (state.sub_phase === 'AWAITING_DAMAGE') {
     const row = await db('combat_pending').where({ campaign_id: campaignId, type: 'damage' }).orderBy('created_at', 'asc').first()
     if (!row) { await setFSMSubPhase(db, campaignId, 'SLOT_ACTIVE'); await advanceTimeline(io, campaignId, pendingMaps); return }
-    await confirmDamage(io, campaignId, row.token_id, null, { forced: true })
+    await confirmDamage(io, campaignId, row.token_id, pendingMaps, null, { forced: true })
     return
   }
 
@@ -2100,7 +2116,10 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       const damagePayload = { tokenId: action.token_id, formula, targetName }
       emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
     }
-    return { suspend: false, emissions }
+    // Même correctif que resolveAssaultAction/confirmMeleeDefense (Saar, 2026-07-19) — AWAITING_DAMAGE
+    // vient d'être posé juste au-dessus, sous-état FSM bloquant : ne jamais laisser advanceTimeline
+    // s'exécuter juste après côté appelant.
+    return { suspend: true, emissions }
 
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
@@ -2505,6 +2524,17 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             targetName,
           } })
         }
+        // Bug réel trouvé en testant Tir Multi (Saar, 2026-07-19) : AWAITING_DAMAGE est un sous-état
+        // FSM bloquant (combatFSM.js, garde exclusive sur COMBAT_DAMAGE_CONFIRM), au même titre que
+        // AWAITING_DEFENSE côté CaC (ligne ~1633, `suspend:true`). Cette branche tombait auparavant
+        // dans le `return { suspend: false, emissions }` générique de fin de fonction — l'appelant
+        // (`socketCombatResolution.js`) appelait alors `advanceTimeline` juste après, qui écrase
+        // sub_phase en 'SLOT_ACTIVE' dès qu'un autre combattant a un pas suivant dans l'échelle,
+        // rendant `COMBAT_DAMAGE_CONFIRM` définitivement rejeté par le garde FSM (observé :
+        // `[FSM] guard bloqué : RESOLUTION|SLOT_ACTIVE + COMBAT_DAMAGE_CONFIRM`). Corrigé en alignant
+        // sur le même patron que le CaC : suspendre explicitement ici, jamais laisser le comportement
+        // par défaut trancher pour une branche qui vient de poser un sous-état bloquant.
+        return { suspend: true, emissions }
       } else {
         // PNJ — calcul complet immédiat, invisible aux joueurs
         const mrTable = await getMrTable()
