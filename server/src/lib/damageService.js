@@ -2,13 +2,17 @@ import { parseDice }                        from './diceParser.js'
 import { calcResistanceArmure }             from './charStats.js'
 import {
   calcResistanceDommages, getMutationModForResistance, getAdvantageModForResistance, getNaturalArmorMod,
+  polarisRound,
 } from '../../../shared/polarisUtils.js'
 import { getMutationEffects }               from '../services/mutationService.js'
 import { getAdvantages }                    from '../services/advantageService.js'
 import * as woundService                    from './woundService.js'
 import * as statusService                   from './statusService.js'
 import { LOC_TABLE, SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
-import { parseAmmoEffects, resolveDmgEffect, resolveChocFormula } from '../../../shared/weaponAmmoDsl.js'
+import {
+  parseAmmoEffects, resolveDmgEffect, resolveChocFormula,
+  resolveAmmoMechanic, resolveMechanicDamageFormula,
+} from '../../../shared/weaponAmmoDsl.js'
 
 // ─── _fetchWeaponAndAmmo (interne) ─────────────────────────────────────────────
 // Fetch commun arme + munition chargée (current_ammo) en une passe — partagé par
@@ -22,7 +26,7 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
     .first()
 }
 
-// ─── getEffectiveWeaponDamage — Chantier 11 Étape 2 Lot A (docs/PLAN_ARMES_DSL.md) ────────────────
+// ─── getEffectiveWeaponDamage — Chantier 11 Étape 2 Lot A+C1 (docs/PLAN_ARMES_DSL.md) ─────────────
 // Point de résolution unique du dégât effectif d'une arme à munitions : fetch arme + munition
 // chargée (current_ammo) en une passe, parse le DSL de la munition, lance les dés réels. Réutilisé
 // par tous les appelants (PNJ immédiat et PJ différé via combat_pending) — jamais une 2ᵉ copie.
@@ -31,25 +35,57 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
 // Retourne null si l'arme elle-même n'a pas de damage_h (même garde que le code historique) — TOUS
 // les appelants doivent vérifier ce cas avant d'utiliser le retour (arme désequipée/transférée entre
 // la Déclaration et la Confirmation côté PJ différé — fenêtre réelle, pas seulement théorique).
-export async function getEffectiveWeaponDamage(db, weaponInvId) {
+// `rangeBand` (Lot C1, optionnel) : uniquement consommé par la dégression Shrapnel — sans lien avec
+// le Choc (retiré du pipeline Choc au correctif Lot B, réintroduit ici pour un usage différent).
+export async function getEffectiveWeaponDamage(db, weaponInvId, { rangeBand = null } = {}) {
   const row = await _fetchWeaponAndAmmo(db, weaponInvId)
   if (!row?.weapon_formula) return null
 
-  const parsed = parseAmmoEffects(row.ammo_effects)
+  const parsed   = parseAmmoEffects(row.ammo_effects)
   if (parsed.unknown.length) {
     console.warn(`[damageService] getEffectiveWeaponDamage — DSL non reconnu ignoré : ${parsed.unknown.join(' | ')} (weaponInvId:${weaponInvId})`)
   }
-  const { baseFormula, extraFormula, mulFactor } = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+  // Lot C1 : dès que tags.FX correspond à une des 6 familles mécaniques, le registre devient la seule
+  // autorité de dégât/armure/Choc — les clauses DMG=/CHOC= catalogue de CETTE ligne sont ignorées
+  // (voir shared/weaponAmmoDsl.js, tête du registre AMMO_MECHANIC_ACTIONS, pour la justification).
+  const mechanic = resolveAmmoMechanic(parsed.tags.FX)
 
   try {
-    const base  = await parseDice(baseFormula.replace(/\s/g, ''))
-    const extra = extraFormula ? await parseDice(extraFormula.replace(/\s/g, '')) : null
+    let baseFormula, bonusFormula, flatBonus, dropoffFormula, mulFactor, choc
+    if (mechanic) {
+      const resolved = resolveMechanicDamageFormula(row.weapon_formula, mechanic, rangeBand)
+      baseFormula    = resolved.baseFormula
+      bonusFormula   = resolved.bonusFormula
+      flatBonus      = resolved.flatBonus
+      dropoffFormula = resolved.dropoffFormula
+      mulFactor      = 1
+      choc           = mechanic.chocFixed ? { action: 'SET', value: mechanic.chocFixed } : parsed.choc
+    } else {
+      const resolved = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+      baseFormula    = resolved.baseFormula
+      bonusFormula   = resolved.extraFormula
+      flatBonus      = 0
+      dropoffFormula = null
+      mulFactor      = resolved.mulFactor
+      choc           = parsed.choc
+    }
+
+    const base    = await parseDice(baseFormula.replace(/\s/g, ''))
+    const bonus   = bonusFormula   ? await parseDice(bonusFormula.replace(/\s/g, ''))   : null
+    const dropoff = dropoffFormula ? await parseDice(dropoffFormula.replace(/\s/g, '')) : null
+    const total   = Math.round((base.total + (bonus?.total ?? 0) + flatBonus - (dropoff?.total ?? 0)) * mulFactor)
+    const rolls   = [...base.rolls, ...(bonus?.rolls ?? []), ...(dropoff?.rolls ?? [])]
+    const formulaParts = [
+      base.formula,
+      bonus ? `+${bonus.formula}` : '',
+      dropoff ? `-${dropoff.formula}` : '',
+      flatBonus ? `${flatBonus > 0 ? '+' : ''}${flatBonus}` : '',
+    ]
     return {
-      total:   Math.round((base.total + (extra?.total ?? 0)) * mulFactor),
-      rolls:   extra ? [...base.rolls, ...extra.rolls] : base.rolls,
-      formula: extra ? `${base.formula}+${extra.formula}` : base.formula,
+      total, rolls,
+      formula: formulaParts.join(''),
       tags:    parsed.tags,
-      choc:    parsed.choc,
+      choc,
     }
   } catch (err) {
     console.warn(`[damageService] getEffectiveWeaponDamage — formule DSL invalide (${err.message}), repli sur damage_h brut. weaponInvId:${weaponInvId}`)
@@ -63,13 +99,36 @@ export async function getEffectiveWeaponDamage(db, weaponInvId) {
 // jamais lancer de dé (parseDice serait non déterministe et gaspillerait un jet juste pour l'affichage
 // — aperçu non engageant, `.claude/rules/combat.md`). Retourne une chaîne lisible ("3d10+5",
 // "4d10+1d6", "4d10 ×0.5") ou null si l'arme n'a pas de damage_h.
-export async function getEffectiveWeaponFormulaPreview(db, weaponInvId) {
+export async function getEffectiveWeaponFormulaPreview(db, weaponInvId, { rangeBand = null } = {}) {
   const row = await _fetchWeaponAndAmmo(db, weaponInvId)
   if (!row?.weapon_formula) return null
 
-  const parsed = parseAmmoEffects(row.ammo_effects)
-  const { baseFormula, extraFormula, mulFactor } = resolveDmgEffect(row.weapon_formula, parsed.dmg)
-  const withExtra = extraFormula ? `${baseFormula}+${extraFormula}` : baseFormula
+  const parsed   = parseAmmoEffects(row.ammo_effects)
+  const mechanic = resolveAmmoMechanic(parsed.tags.FX)
+
+  let baseFormula, bonusFormula, flatBonus, dropoffFormula, mulFactor
+  if (mechanic) {
+    const resolved = resolveMechanicDamageFormula(row.weapon_formula, mechanic, rangeBand)
+    baseFormula    = resolved.baseFormula
+    bonusFormula   = resolved.bonusFormula
+    flatBonus      = resolved.flatBonus
+    dropoffFormula = resolved.dropoffFormula
+    mulFactor      = 1
+  } else {
+    const resolved = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+    baseFormula    = resolved.baseFormula
+    bonusFormula   = resolved.extraFormula
+    flatBonus      = 0
+    dropoffFormula = null
+    mulFactor      = resolved.mulFactor
+  }
+
+  const withExtra = [
+    baseFormula,
+    bonusFormula   ? `+${bonusFormula}` : '',
+    dropoffFormula ? `-${dropoffFormula}` : '',
+    flatBonus      ? `${flatBonus > 0 ? '+' : ''}${flatBonus}` : '',
+  ].join('')
   return mulFactor !== 1 ? `${withExtra} ×${mulFactor}` : withExtra
 }
 
@@ -107,6 +166,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   con_na_cible,
   vol_na_cible,
   chocDsl = null,
+  ammoFx = null,
   forcedSlotCode = null,
   treatAsContact = false,
 }) {
@@ -178,6 +238,18 @@ export async function resolveTargetHit(io, db, campaignId, {
     etq = calcResistanceArmure(armuresSlot).etq
     mutationEffectsCible = mutEff
     advantagesCible = adv
+
+    // Lot C1 (docs/PLAN_ARMES_DSL.md) — armure de la cible modifiée par la munition (fraction fixe,
+    // jamais un PEN= flat catalogue — voir shared/weaponAmmoDsl.js). Même registre que le dégât côté
+    // getEffectiveWeaponDamage, jamais une 2ᵉ table dupliquée. Ne s'applique que si une armure réelle
+    // a pu être calculée (etq non nul) — multiplier une absence d'armure n'a pas de sens.
+    if (etq != null) {
+      const mechanic = ammoFx ? resolveAmmoMechanic(ammoFx) : null
+      if (mechanic?.armorMulFactor != null) {
+        const scaled = etq * mechanic.armorMulFactor
+        etq = mechanic.armorRound === 'polaris' ? polarisRound(scaled) : Math.floor(scaled)
+      }
+    }
   }
 
   // 3. RD + dégâts nets — RD_TABLE encode le modificateur tel qu'imprimé au LdB p.114 (positif pour

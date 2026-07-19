@@ -744,7 +744,7 @@ Dommages sont normaux" + aucune mention de réduction pour la version "de base")
 **Découpage en 3 sous-lots** (C1/C2/C3 — Saar n'a pas de préférence de priorité, mais impose l'ordre
 séquentiel une fois choisi, un seul à la fois) :
 
-#### Lot C1 — Modification d'armure (Perforantes/SAP/SLAP/HP/Explosive/Shrapnel)
+#### Lot C1 — Modification d'armure (Perforantes/SAP/SLAP/HP/Explosive/Shrapnel) — ✅ CODÉ (2026-07-19)
 
 Un seul point d'insertion technique (`etq`/`prt` dans `resolveTargetHit`, déjà étendu par Lot B) pour
 6 munitions : `× 2/3` (APHC), `× 0.5` (SAP/SLAP, + transformation formule dégâts), `× 1.5` (HP, +
@@ -755,7 +755,70 @@ Pénétration = 1 point d'armure" du message précédent est **remplacée** par 
 `REGLESMUNITIONS.md`, plus fidèle. `PEN=BASE`/`PEN=SET(n)` du catalogue ne sont plus la source
 numérique — seule la fraction du tableau ci-dessus l'est.
 
-**Non commencé.**
+**Recherche menée avant conception (demande explicite Saar : documentation + inspiration pros avant
+tout code)** : rule element `DamageDice` de PF2e/Foundry (déjà cité §1bis) — son objet `override`
+(`diceNumber`/`dieSize`/`downgrade`) modifie un jet par une **transformation calculée**, jamais une
+valeur pré-écrite par objet ; confirme que "-1 dé" (SAP/SLAP) doit être calculé depuis la formule
+réelle de l'arme, pas lu depuis une chaîne catalogue par munition×arme. Recherche design RPG général
+(dégâts par calibre + armor-piercing) confirme aussi que l'AP doit réduire l'armure de la cible plutôt
+que gonfler le dé de dégât brut — valide la fraction déjà verrouillée ci-dessus plutôt qu'un flat.
+
+**Écart découvert en codant `[VÉRIFIÉ]`** (relecture des vraies chaînes DSL du seed,
+`STEP1_cleaned_data.js`, pas seulement le tableau LdB) : 3 des 6 familles ont un DSL catalogue
+incompatible avec `REGLESMUNITIONS.md`, même famille de défaut que les 5 cas déjà confirmés fautifs
+(dont Assommante/Choc, corrigé migration 160) :
+- **HP** : `DMG=BASE;TXT=ARMOR=TARGET_PLUS(1+1/D10_ARME)|PASS=PLUS(2+1/D10_ARME)|FX=HP` — aucun bonus
+  de dégât réel, `ARMOR=`/`PASS=` avec mise à l'échelle `_ARME` inventée.
+- **EXPLOSIVE** : `DMG=ADD(1D10,+1/5D10_ARME)` — scaling, tombe dans le repli "hors scope" du Lot A
+  (bonus ignoré silencieusement aujourd'hui, jamais +1D10 fixe).
+- **SHRAPNEL** : `DMG_DROP=-1D10/RANGE` jamais parsé, `PEN=SET(5)` flat au lieu du `× 1.5` verrouillé.
+- APHC/SAP/SLAP : `DMG=SET(...)` déjà littéral (pas de scaling), mais dépend d'une saisie manuelle
+  correcte par arme — même fragilité de principe.
+
+**Décision d'architecture (recherche + jugement technique, pas une question produit)** : plutôt que
+corriger ces 3 familles par une nouvelle migration (qui devrait être répétée à chaque nouvelle
+munition mal saisie — déjà arrivé 5 fois), le registre `AMMO_MECHANIC_ACTIONS`
+(`shared/weaponAmmoDsl.js`) devient la **seule autorité** dès que `tags.FX` correspond à une des 6
+familles — les clauses `DMG=`/`CHOC=`/`TXT=PEN=`/`ARMOR=`/`PASS=`/`DMG_DROP=` catalogue de ces lignes
+deviennent cosmétiques, jamais lues pour le calcul. Une nouvelle munition SAP/HP/etc. ajoutée au
+catalogue fonctionne automatiquement dès que `FX=` est posé, sans dépendre d'une valeur numérique
+saisie à la main ni d'une migration de plus. Aucune migration de données nécessaire pour ce Lot.
+
+**Codé** :
+- `shared/weaponAmmoDsl.js` : `reduceDiceCount` (transformation pure `NdX+M` → `(N-1)dX+M`, jamais sous
+  1 dé), `AMMO_MECHANIC_ACTIONS` (registre par FX), `resolveAmmoMechanic(fx)`, `resolveMechanicDamageFormula`.
+- `server/src/lib/damageService.js` : `getEffectiveWeaponDamage`/`getEffectiveWeaponFormulaPreview`
+  gagnent un paramètre `rangeBand` (uniquement pour la dégression Shrapnel — sans lien avec le Choc,
+  qui n'en a plus besoin depuis le correctif Lot B) et dispatchent sur le registre quand `tags.FX` est
+  connu, sinon comportement Lot A/B strictement inchangé. `resolveTargetHit` gagne `ammoFx` (défaut
+  `null`) : armure de la cible multipliée par la fraction du registre (`Math.floor` ou `polarisRound`
+  selon la famille), seulement si `etq` a pu être calculé.
+- `server/src/socket/socketCombatHelpers.js` : les 2 sites déjà rebranchés Lot A/B (PNJ immédiat,
+  PJ différé `COMBAT_DAMAGE_CONFIRM`) transmettent désormais `rangeBand`/`ammoFx` — `resolveMeleeAction`
+  et les branches drone non touchés (paramètres optionnels, comportement inchangé par construction).
+
+**Testé** : 16 scénarios purs (`shared/weaponAmmoDsl.test.mjs`, nouveau fichier — aucun test permanent
+n'existait pour ce module avant cette session malgré les scénarios Lot A/B documentés plus haut) :
+`reduceDiceCount` (décrément, plancher à 1 dé, formule mixte non reconnue inchangée), les 6 familles
+`resolveAmmoMechanic`/`resolveMechanicDamageFormula` (APHC/SAP/SLAP/HP/EXPLOSIVE/SHRAPNEL par bande de
+portée y compris bande inconnue), FX inconnu/absent → `null` (Assommante/IEM non affectés) ; suite
+complète `shared/*.test.mjs` rejouée : 49/49, aucune régression (dual-wield, ammoRules, weaponSlots).
+`node --check` propre sur les 3 fichiers touchés/créés.
+
+**Non testé** : scénario réel en base (aucune connexion PostgreSQL disponible depuis cet
+environnement — les scénarios "transaction annulée" des Lots précédents ont été exécutés ailleurs),
+build Vite (aucun fichier client touché par ce Lot, scope strictement serveur/partagé), parcours
+navigateur réel — **à la charge de Saar avant de considérer C1 clos**, notamment : vérifier que les
+chaînes `FX=` réelles en base correspondent bien aux clés du registre (`APHC`/`SAP`/`SLAP`/`HP`/
+`EXPLOSIVE`/`SHRAPNEL`, sensible à la casse), et qu'aucune variante orthographique inattendue n'existe
+en base (le fichier d'extraction historique consulté peut différer de la base réellement seedée).
+
+**Données** : aucune migration — décision explicite de ce Lot (voir ci-dessus), le registre code
+contourne les valeurs catalogue plutôt que de les corriger.
+
+**Hors scope de ce Lot (rappel)** : le ciblage de zone Shrapnel (cône 3m, multi-cibles) reste C3 ; le
+dégât Shrapnel/l'armure calculés ici s'appliquent à la cible unique déjà gérée par `resolveTargetHit`,
+sans boucle multi-cibles.
 
 #### Lot C2 — Test de panne (munitions IEM)
 

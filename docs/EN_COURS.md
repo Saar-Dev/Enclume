@@ -168,6 +168,53 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 93 (Session 164, dev/Saar) — Chantier 11 Étape 2 (Module Armes DSL) ✅ CLOS.** Lot C1 (armure
+> APHC/SAP/SLAP/HP/Explosive/Shrapnel) codé. Recherche menée avant conception (demande explicite Saar :
+> documentation + inspiration pros, pas de rush) : rule element `DamageDice` de PF2e/Foundry confirme
+> le pattern "transformation calculée" pour SAP/SLAP (-1 dé recalculé depuis la formule réelle de
+> l'arme, jamais lu depuis une chaîne catalogue par munition×arme) ; design RPG général confirme que
+> l'AP doit réduire l'armure de la cible plutôt que gonfler le dé de dégât. **Écart trouvé en codant** :
+> 3 des 6 familles (HP/EXPLOSIVE/SHRAPNEL) ont un DSL catalogue incompatible avec
+> `docs/REGLES/REGLESMUNITIONS.md` (scaling `_ARME` inventé, `DMG_DROP=` jamais parsé) — même défaut que
+> les 5 cas déjà confirmés fautifs ce chantier (dont Assommante/Choc, migration 160). **Décision
+> d'architecture** : plutôt qu'une migration de plus (répétée à chaque nouvelle munition mal saisie),
+> `AMMO_MECHANIC_ACTIONS` (`shared/weaponAmmoDsl.js`, nouveau registre par `tags.FX`) devient la seule
+> autorité pour ces 6 familles — le catalogue devient cosmétique, aucune migration nécessaire, une
+> nouvelle munition fonctionne automatiquement dès que `FX=` est posé. **Codé** :
+> `reduceDiceCount`/`resolveAmmoMechanic`/`resolveMechanicDamageFormula` (`shared/weaponAmmoDsl.js`) ;
+> `getEffectiveWeaponDamage`/`getEffectiveWeaponFormulaPreview` gagnent `rangeBand` (Shrapnel
+> uniquement) et dispatchent sur le registre ; `resolveTargetHit` gagne `ammoFx` (armure cible
+> multipliée par la fraction du registre) ; 2 sites `socketCombatHelpers.js` déjà rebranchés Lot A/B
+> transmettent les nouveaux paramètres. **Testé** : 16 scénarios purs nouveaux
+> (`shared/weaponAmmoDsl.test.mjs`, aucun fichier de test n'existait avant pour ce module), suite
+> `shared/*.test.mjs` complète rejouée (49/49, 0 régression), `node --check` propre. **Non testé** :
+> aucune connexion PostgreSQL disponible depuis cet environnement (scénario réel en base impossible
+> ici), build Vite (aucun fichier client touché, hors scope), navigateur réel — à la charge de Saar, en
+> particulier vérifier que les chaînes `FX=` réelles en base correspondent aux clés du registre
+> (sensible à la casse). **Données** : aucune migration (décision explicite de ce Lot).
+>
+> **C2 (Test de panne IEM) — clôturé narratif, décision Saar.** Recherche de la règle exacte
+> (`docs/REGLES/REGLEMATERIEL.md` p.273-274, "Test de panne" : 1D20 sous l'Intégrité de l'objet, échec
+> = -1 Intégrité, Catastrophe = -1D6 Intégrité + réparation experte). Saar a précisé que les munitions
+> IEM ciblent des systèmes électroniques (exo-armure, vaisseaux) qui n'existent pas encore dans le
+> projet — construire le mécanisme maintenant serait "une brique dans le désert", assumé et volontaire.
+> Blocage annexe identifié en creusant : le seuil numérique de "Catastrophe" (terme transversal utilisé
+> partout dans le LdB — combat, tests, blessures, pouvoirs Polaris) n'est formalisé nulle part dans le
+> projet, ni dans les extraits de règles disponibles. Saar a fourni le texte "Catastrophes en combat"
+> (table 1D10 de conséquences), mais pas le seuil de déclenchement lui-même. **Décision explicite de
+> Saar : pas la priorité, ne pas ouvrir de chantier dédié maintenant.** `DMG=MUL(0.5)` (mi-dégâts IEM)
+> reste codé et actif (Lot A) — seul le malus Test de panne reste narratif/MJ. Aucune ligne de code
+> ajoutée pour C2.
+>
+> **C3 (zone Shrapnel) — différé, décision Saar.** Le ciblage n'est pas une sélection MJ mais des cases
+> adjacentes calculées par le futur builder — nécessite une collaboration avec Kiwi (monde/builder),
+> hors périmètre solo. Armure/dégression par portée de Shrapnel déjà câblées par C1 ; seul le
+> ciblage multi-cibles reste à faire, plus tard.
+>
+> **Clôture documentaire** : `docs/PLAN_ARMES_DSL.md` archivé vers `docs/Old/` (Règle 10,
+> `docs/RegleDocumentaire.md`) — contenu durable (registre, invariants, décisions actées ci-dessus)
+> transféré dans `docs/SYSTEME/COMBAT.md` §Munitions. `docs/ROADMAP.md` mis à jour (Étape 2 ✅ clos).
+
 > ⚡ **Statut au 2026-07-18 fin de session : mécanisme central Retarder/Agir maintenant validé en
 > navigateur par Saar, après une longue série de correctifs (Items 86-88 + refonte ci-dessous).**
 > Validé en vrai (plusieurs Tours, plusieurs configurations Précipiter/Retarder croisées) : Agir

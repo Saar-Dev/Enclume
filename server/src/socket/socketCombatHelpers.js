@@ -748,7 +748,7 @@ export async function confirmDamage(io, campaignId, tokenId, socket, { requester
     // docs/PLAN_ARMES_DSL.md) résolu ici, au moment du jet réel — jamais précalculé à la
     // Déclaration (un ADD munition peut nécessiter 2 jets de dés de types différents, parseDice
     // n'accepte qu'un seul type par formule).
-    let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null
+    let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null, effectiveAmmoFx = null
     if (pendingType === 'melee') {
       const rolled = await parseDice(formula.replace(/\s/g, ''))
       dmgRolls = rolled.rolls; dmgSeed = rolled.seed; rawDice = rolled.total
@@ -759,7 +759,7 @@ export async function confirmDamage(io, campaignId, tokenId, socket, { requester
       // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
       // repli sur la formule brute stockée à la Déclaration plutôt qu'un échec muet (le combat_pending
       // est déjà supprimé et la FSM déjà repassée à SLOT_ACTIVE avant ce bloc, cf. plus haut).
-      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, weaponInvId)
+      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, weaponInvId, { rangeBand: portee })
       if (!effectiveDamage) {
         console.warn(`[WS] confirmDamage — arme introuvable pour weaponInvId:${weaponInvId}, repli sur formule stockée à la Déclaration`)
       }
@@ -769,8 +769,10 @@ export async function confirmDamage(io, campaignId, tokenId, socket, { requester
       rawDice  = effectiveDamage ? effectiveDamage.total : rolled.total
       resolvedFormula = effectiveDamage ? effectiveDamage.formula : rolled.formula
       // effectiveDamage null (repli formule stockée) → chocDsl null aussi : jamais reconstruire un
-      // Choc depuis une donnée partielle (docs/PLAN_ARMES_DSL.md Lot B, §4).
+      // Choc depuis une donnée partielle (docs/PLAN_ARMES_DSL.md Lot B, §4). Même garde pour l'armure
+      // (Lot C1) : ammoFx reste null dans ce repli, jamais reconstruit depuis une donnée partielle.
       effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
+      effectiveAmmoFx  = effectiveDamage ? effectiveDamage.tags?.FX ?? null : null
       const mrTable = await getMrTable()
       const modDomAttaque = getModifier(mrTable, mr)
       const isShortRange = ['bout_portant', 'courte'].includes(portee)
@@ -814,6 +816,7 @@ export async function confirmDamage(io, campaignId, tokenId, socket, { requester
       degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
       for_na_cible, con_na_cible, vol_na_cible,
       chocDsl: effectiveChocDsl,
+      ammoFx: effectiveAmmoFx,
       forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
       // Bouclier (docs/PLAN_BOUCLIER.md Lot B) — CaC toujours "au contact" ; à distance, dérivé de
       // la nature de l'arme (armes de jet/trait, calculé côté resolveAssaultAction et transporté ici).
@@ -2492,7 +2495,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
           // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
           // effectué à la confirmation dès qu'une munition modifie les dégâts.
-          const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, effectiveWeaponInvId)
+          const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
           emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
             tokenId: action.token_id,
             formula: formulaPreview ?? weapon.ref_damage_h,
@@ -2510,7 +2513,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
         // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
         // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
-        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId)
+        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
         const rawDice = effectiveDamage
           ? effectiveDamage.total
           : (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
@@ -2540,6 +2543,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
           chocDsl: effectiveDamage ? effectiveDamage.choc : null,
+          ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
           forcedSlotCode: aimedLocationKey ? LOCATION_TO_SLOT[aimedLocationKey] : null,
           treatAsContact: isJetOuTrait,
         })

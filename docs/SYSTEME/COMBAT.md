@@ -266,7 +266,7 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 - interdit `move_rapide` et `move_max`
 
 **Purge / cycle de vie `is_stunned` :**
-- `checkStunExpiry` (appelé dans `advanceSlot`) : purge automatique quand `stunned_until_turn <= current_turn` → efface `is_stunned` + `stunned_until_turn` du JSONB + retire badge `token_statuses`.
+- Purge automatique dans `endTurn` quand `expires_at_turn <= current_turn` (`token_statuses`) → efface `is_stunned` + `stunned_until_turn` du JSONB + retire badge, émet `COMBAT_STUN_EXPIRED`.
 - `COMBAT_APPLY_STUN` : handler GM pour application manuelle avec durée.
 
 **`is_surprised` — lifecycle absent ⚠️**
@@ -299,16 +299,19 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
 
 // ANNOUNCEMENT → RESOLUTION (startResolutionPhase, auto quand tous déclarés)
 { phase: 'RESOLUTION', roster: RosterEntry[], actions: CombatAction[] }
-// suivi immédiatement de COMBAT_SLOT_ADVANCED { activeSlotIdx: 0, tokenId }
+// suivi immédiatement de COMBAT_TIMELINE_UPDATED (échelle de phases, cf. section dédiée ci-dessous) —
+// COMBAT_SLOT_ADVANCED n'est plus émis à ce stade depuis la refonte Session 159.
 
-// RESOLUTION → ANNOUNCEMENT (endTurn, fin de tous les slots)
-{ phase: 'ANNOUNCEMENT', roster: RosterEntry[] }  // actions déjà nettoyées
+// RESOLUTION → ANNOUNCEMENT (endTurn, échelle du Tour intégralement résolue)
+{ phase: 'ANNOUNCEMENT', roster: RosterEntry[] }
 ```
 
-### COMBAT_SLOT_ADVANCED payload
+### COMBAT_SLOT_ADVANCED payload — ANNOUNCEMENT uniquement
 ```javascript
 { activeSlotIdx: number, tokenId: string }
-// Émis par : startResolutionPhase (idx=0), advanceSlot (idx+1), endTurn (→ annonce)
+// Émis par : skipPlayer (phase ANNOUNCEMENT). Ne concerne jamais la RÉSOLUTION depuis la refonte
+// Session 159 (échelle de phases, `combat_timeline_entries`) — la colonne `active_slot_idx` et la
+// fonction `advanceSlot` ont été retirées (migration 174).
 ```
 
 ### endTurn — comportement serveur
@@ -324,9 +327,9 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
   // state_weapon, state_fire_mode : inchangés (persistent combat)
   // state_character : is_stunned persiste intentionnellement (non per-turn)
 })
-// 2. Vider toutes les actions du tour :
-await db('combat_actions').where({ campaign_id }).delete()
-// 3. Incrémenter current_turn, reset active_slot_idx=0, phase='ANNOUNCEMENT'
+// 2. combat_actions N'EST PLUS vidée (Session 159, §6bis point 5 du plan archivé) — chaque ligne porte
+//    turn_number, la file « en cours » se filtre dessus ; suppression réelle seulement à COMBAT_START.
+// 3. Incrémenter current_turn, sub_phase → null, phase='ANNOUNCEMENT'
 // 4. Broadcast COMBAT_PHASE_CHANGED { phase: 'ANNOUNCEMENT', roster }
 // 5. Émettre COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: firstAnnounceSlot }
 // 6. Relancer les timers auto-skip (startAnnouncementTimers)
@@ -359,7 +362,88 @@ GET /battlemaps/:battlemapId/combat-ini → { iniPreview: [{ token_id, base_ini 
 - **PJ surpris** → `COMBAT_SURPRISE_ROLL` émis au socket joueur ; le joueur lance lui-même puis émet `COMBAT_SURPRISE_RESULT`
 - **PC25** : `surprise_roll` n'est **jamais** dans le broadcast `COMBAT_STARTED` (roster sans ce champ)
 - **Entités** (token sans `character_id`) → ignorées, jamais insérées en `combat_roster`
-- **combat_state** insérée : `{ campaign_id, battlemap_id, phase: 'ROSTER', current_turn: 1, active_slot_idx: 0, action_timer_sec: 0 }`
+- **combat_state** insérée : `{ campaign_id, battlemap_id, phase: 'ROSTER', current_turn: 1, action_timer_sec: 0 }`
+  (colonne `active_slot_idx` retirée — migration 174, Session 159 ; `sub_phase` nullable, non posé ici)
+
+---
+
+## Échelle de phases (Résolution) — combat_timeline_entries (Session 159)
+
+Remplace le parcours `combat_roster` trié par `active_slot_idx` (retiré, migration 174). La Résolution
+avance entrée par entrée sur une échelle de phases réelle (LdB p.212-219), pas une liste de personnages
+parcourue une fois — un personnage avec une série d'attaques multiples occupe plusieurs entrées
+entrelacées avec les autres, pas un bloc résolu d'un coup.
+
+### Table `combat_timeline_entries`
+```javascript
+{
+  id,
+  campaign_id,
+  turn_number,             // filtre la file « en cours » (historique conservé jusqu'à COMBAT_START)
+  token_id,
+  combat_action_id,        // FK combat_actions — jamais de duplication des données de l'action
+  declaration_group_id,    // regroupe une série d'attaques multiples déclarée ensemble (recalcul du malus)
+  phase_position,          // null tant que non positionnée (Retarder en attente) ; ×100 vs Initiative brute
+  status,                  // 'delayed_waiting' | 'scheduled' | 'resolved' | 'lost' | 'skipped'
+  resolved_at,
+  resolution_snapshot,     // trace durable de ce qui a changé à la résolution
+}
+```
+Une seule entrée par action complexe déclarée (`assault`/`melee`) — `move`/`reload`/`micro`/`skip` n'en
+génèrent jamais, résolues via `combat_roster.has_resolved` au passage du premier pas du token ce Tour.
+
+### Moteur — `pickNextTimelineStep` / `advanceTimeline` (`socketCombatHelpers.js`)
+`pickNextTimelineStep(campaignId, turnNumber)` fusionne deux sources triées par position DESC : entrées
+`scheduled` + membres du roster sans aucune entrée ce Tour (`has_resolved=false`). Retourne
+`{kind:'entry', tokenId, entry, position}` | `{kind:'simple', tokenId, position}` | `null`.
+`advanceTimeline(io, campaignId, pendingMaps)` — seul point d'entrée « fais avancer la résolution » :
+présente le pas suivant (`sub_phase='SLOT_ACTIVE'`), ou le tour obligatoire s'il ne reste que des
+personnages en délai (`{kind:'delayed_turn', tokenId, groupId}`), ou appelle `endTurn` si l'échelle est
+intégralement résolue.
+
+### Retarder son Action / Agir maintenant — RAW `docs/REGLES/REGLESYSCOMBAT.md:554-567`
+Aucun minuteur (retiré Session 159 après 3 bugs réels causés par un sous-état FSM temporisé
+`AWAITING_REACTION_WINDOW` — cf. `docs/EN_COURS.md` Item 88 pour l'historique). Règle unique :
+- `state_vitesse='delayed'` à la déclaration → l'entrée est créée `phase_position:null`,
+  `status:'delayed_waiting'`.
+- `COMBAT_ACT_NOW` (`triggerActNow`) repositionne **toute** la série `delayed_waiting` du token
+  au-dessus du pas normal courant (`referencePosition + 100 + initiative` — priorité RAW à Initiative
+  égale/dépassée) — **valide à tout moment de `sub_phase='SLOT_ACTIVE'`, mais seulement une fois que le
+  pas normal courant a atteint (ou dépassé) la propre phase d'Initiative d'origine du personnage**
+  (`referenceStep.position <= rosterEntry.initiative * 100`, sinon rejet `'too_early'` avec message
+  explicite) — un personnage retardé ne peut jamais agir plus tôt que sa propre Initiative, seulement
+  plus tard (sinon ce serait Précipiter). Bloqué aussi si le pas courant est déjà en cours de résolution
+  (`AWAITING_DEFENSE`/`AWAITING_DAMAGE`, dés déjà lancés).
+- **Tour obligatoire de fin de Tour** (§6 point 2 du plan archivé) : une fois plus aucun pas normal,
+  les personnages encore `delayed_waiting` sont présentés un par un, ordre croissant d'Initiative (le
+  plus lent en premier) — réponse explicite requise, `COMBAT_ACT_NOW` ou `COMBAT_DELAYED_PASS`
+  (`status:'skipped'`), jamais d'expiration silencieuse.
+- **Précipiter son Action** (`vitesse='rushed'`, +3 Initiative / -5 Action) réutilise le mécanisme
+  `iniDelta` préexistant (`combat_roster.initiative` ajusté à la déclaration, avant construction de
+  l'échelle) — aucune construction dédiée, l'échelle en hérite via la position de base. RAW : une action
+  précipitée ne peut jamais être retardée (guard à la déclaration).
+- **CaC et Tir mutuellement exclusifs à la déclaration** (RAW « Types d'Actions », une seule Action de
+  combat par Tour) — guard client (toggle) + serveur (`COMBAT_ACTION_DECLARE`).
+
+### `COMBAT_TIMELINE_UPDATED` — payload (broadcast à chaque changement de l'échelle)
+```javascript
+{
+  turnNumber,
+  entries: TimelineEntry[],    // toutes les entrées du Tour en cours, triées phase_position DESC
+  currentStep,                 // { kind:'entry'|'simple'|'delayed_turn', tokenId, ... } | null
+  subPhase,                    // 'SLOT_ACTIVE' | 'AWAITING_DEFENSE' | 'AWAITING_DAMAGE' | null
+}
+```
+`subPhase` est le seul canal qui pousse `combat_state.sub_phase` aux clients en jeu normal (aucun autre
+événement ne le fait hors reconnexion, `COMBAT_STATE_SYNC`) — omettre ce champ dans un futur broadcast
+casse silencieusement toute UI qui en dépend (piège réel rencontré Session 159).
+
+### Lot D — outil MJ générique « Forcer » (`COMBAT_SKIP_PLAYER` en phase RESOLUTION)
+Généralise le bouton déjà existant en ANNOUNCEMENT (`skipPlayer`) — même événement, comportement décidé
+par `forceAdvanceResolution` selon `sub_phase` : `AWAITING_DEFENSE`/`AWAITING_DAMAGE` → le serveur lance
+les dés à la place du joueur injoignable (réutilise `confirmMeleeDefense`/`confirmDamage`, `forced:true`,
+identité affichée = celle du personnage, pas du MJ) ; `SLOT_ACTIVE` au tour obligatoire → équivaut à
+`COMBAT_DELAYED_PASS` ; `SLOT_ACTIVE` sur un pas normal bloqué → marqué `skipped`, l'échelle avance.
 
 ---
 
@@ -369,11 +453,12 @@ GET /battlemaps/:battlemapId/combat-ini → { iniPreview: [{ token_id, base_ini 
 {
   campaign_id,
   token_id,
-  action_key,           // 'assault' | 'move_lente' | 'move_moyenne' | 'rushed' | etc.
-  type,                 // 'assault' | 'move_short' | 'move_long' | 'micro' | 'skip'
-  sequence,             // 1=moves, 2=micro, 3=assault — ordre d'exécution par slot
+  turn_number,           // Session 159 — filtre la file « en cours » ; combat_actions n'est plus vidée à endTurn
+  action_key,           // 'assault' | 'melee' | 'move_lente' | 'move_moyenne' | 'rushed' | etc.
+  type,                 // 'assault' | 'melee' | 'move_short' | 'move_long' | 'micro' | 'skip' | 'reload'
+  sequence,             // 1=moves, 2=micro, 3=assault/melee — ordre d'exécution par slot
   weapon_inv_id,        // char_inventory.id (assault uniquement)
-  target_token_id,      // token cible (assault uniquement)
+  target_token_id,      // token cible (assault/melee uniquement)
   fire_mode,            // 'CC' | 'RC' | 'RL'
   bullet_count,         // nombre de balles
   fire_mode_bonus_comp, // bonus Compétence mode de tir
@@ -384,11 +469,12 @@ GET /battlemaps/:battlemapId/combat-ini → { iniPreview: [{ token_id, base_ini 
     dual_wield: bool,
     dual_wield_bonus_comp: number,
   },
-  status,               // 'pending' | 'resolved'
+  status,               // 'pending' | 'resolved' | 'skipped'
 }
 ```
 
-**Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`. **Melee** → `'melee'` (migration 63).
+**Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`. **Melee** → `'melee'` (migration 63). CaC et Tir sont mutuellement exclusifs à la déclaration depuis Session 159 (`docs/REGLES/REGLESYSCOMBAT.md`, « Types d'Actions » — une seule Action de combat par Tour).
+**Une action complexe (`assault`/`melee`) déclarée génère aussi une ligne `combat_timeline_entries`** — voir « Échelle de phases » ci-dessous ; `move`/`reload`/`micro`/`skip` n'en génèrent jamais.
 **PC32 :** sequence attribuée serveur — jamais calculée côté client.
 **PC22 :** arme assault doit être en slot `'MG'` ou `'MD'` — rejeté sinon.
 **PC23 :** `'RC'` / `'RL'` nécessitent `is_learned=true` pour `TIR_AUTOMATIQUE`.
@@ -411,16 +497,16 @@ RESOLUTION (COMBAT_ACTION_CONFIRM) :
   → calcul skillTotal attaquant (weapon → ref_equipment_skill_assoc → skill_id, ou COMBAT_A_MAINS_NUES si mains nues)
   → roll D20 attaquant côté serveur
   → fetch skillTotal défenseur (toujours COMBAT_A_MAINS_NUES en V1)
-  → défenseur PNJ → roll D20 auto → résolution → COMBAT_MELEE_RESULT → advanceSlot (slot non bloqué)
-  → défenseur PJ → stocke pendingMeleeDefense → COMBAT_MELEE_DEFENSE_PROMPT → return true (slot BLOQUÉ)
+  → défenseur PNJ → roll D20 auto → résolution → COMBAT_MELEE_RESULT → advanceTimeline (pas suivant de l'échelle)
+  → défenseur PJ → stocke pendingMeleeDefense → COMBAT_MELEE_DEFENSE_PROMPT → sub_phase='AWAITING_DEFENSE' (pas BLOQUÉ)
 
-COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ clique "Défendre") :
+COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ clique "Défendre", ou MJ via confirmMeleeDefense forcé) :
   → roll D20 défenseur côté serveur
   → hit = (rollAtk ≤ CDRatk) AND NOT (rollDef ≤ CDRdef)
   → COMBAT_MELEE_RESULT → room
   → si hit + PJ attaquant → COMBAT_DAMAGE_PROMPT → PJ roule dégâts (CombatDamageWindow existant)
   → si hit + PNJ attaquant → auto dégâts → COMBAT_ATTACK_RESULT
-  → advanceSlot (slot débloqué)
+  → sub_phase='SLOT_ACTIVE', advanceTimeline (pas suivant de l'échelle)
 ```
 
 ### Formules
@@ -513,10 +599,12 @@ Skill mains nues = `COMBAT_A_MAINS_NUES` (FOR/COO). Skill armes de contact = `CO
 Lance (range=3) → peut attaquer à 3+3=6m. Couteau (range=null) → portée de base 3m.
 Les armes à distance ont range en format `"10/50/100/200 (300)"` — le filtre `category='Arme de contact'` suffit.
 
-**PC-CaC3 — Slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ).**
-`needsDefenseWait = true` → `advanceSlot` non appelé dans COMBAT_ACTION_CONFIRM.
-`advanceSlot` appelé depuis COMBAT_MELEE_DEFENSE_CONFIRM uniquement.
-Perte du pending (restart serveur) → slot bloqué indéfiniment — à gérer en V2.
+**PC-CaC3 — Pas de l'échelle suspendu jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM (défenseur PJ).**
+`needsDefenseWait = true` → `advanceTimeline` non appelé dans COMBAT_ACTION_CONFIRM, `sub_phase='AWAITING_DEFENSE'`.
+`advanceTimeline` appelé depuis `confirmMeleeDefense` (COMBAT_MELEE_DEFENSE_CONFIRM) uniquement.
+**Résolu (Lot D, Session 159)** : un joueur injoignable ne bloque plus indéfiniment — le MJ dispose du
+bouton générique « Forcer » (`COMBAT_SKIP_PLAYER` en Résolution → `forceAdvanceResolution`), qui lance
+le jet à la place du défenseur (« il devient PNJ pour le Tour »).
 
 **PC-CaC4 — `pendingMeleeDefense` keyed par `defenderTokenId` (pas attaquant).**
 COMBAT_MELEE_DEFENSE_CONFIRM payload = `{ tokenId: defenderTokenId }`.
@@ -793,6 +881,68 @@ const tirAutoRow = await db('char_skills')
 const hasTirAuto = tirAutoRow?.is_learned === true
 // Guard COMBAT_ACTION_DECLARE : si AUTO sélectionné ET !hasTirAuto → reject
 ```
+
+---
+
+## Munitions — DSL effets (`ref_equipment.ammo_effects`)
+
+> Chantier 11 Étape 2, clos 2026-07-19. Historique complet (recherche, écarts trouvés en codant,
+> tests) archivé : `docs/Old/PLAN_ARMES_DSL.md`.
+
+`ammo_effects` (colonne texte, munitions uniquement — jamais les armes elles-mêmes) porte un DSL
+`CLE=ACTION(VALEUR)` séparé par `;`, ex. `DMG=SET(1D6+2);CHOC=SET(1D10+2);TXT=FX=ASSOMMANTE`.
+Parseur pur : `shared/weaponAmmoDsl.js` (`parseAmmoEffects`, aucune query DB, aucun `parseDice`).
+Point de résolution unique (fetch + jet réel) : `damageService.getEffectiveWeaponDamage(db,
+weaponInvId, { rangeBand })`, consommé par `resolveTargetHit` — jamais une 2ᵉ copie du parseur ou
+de la requête. `resolveMeleeAction` et les branches drone ne passent jamais ces paramètres
+(comportement historique inchangé, armes CaC/drone hors DSL munitions).
+
+**`DMG=`** (BASE/SET/ADD/MUL) : dégât effectif de l'arme. `ADD` avec scaling (virgule dans la
+valeur, type `+1/5D10_ARME`) reste hors scope — repli sur la formule de base (2 jets de dés de types
+différents impossibles à sommer via `diceParser.parseDice`, qui n'accepte qu'un seul type de dé par
+formule).
+
+**`CHOC=SET(FORMULE)`** : Dommages de Choc catégorie 3 (munition spéciale, `docs/VOCABULARY.md`) —
+brut, **jamais réduit** (ni armure, ni RD), **aucun gate de localisation** (s'applique quelle que
+soit la zone touchée). Un seul `resolveShockTest` par coup : si Choc présent, la sévérité qui pilote
+le test vient du total combiné brut `degatsNets + chocTotal` ; sinon comportement natif (sévérité
+physique seule). La blessure, elle, reste toujours basée sur `degatsNets` seul. `CHOC=ADD(...)`
+(scaling) hors scope, `null`.
+
+**Registre `AMMO_MECHANIC_ACTIONS`** (`shared/weaponAmmoDsl.js`) — dispatch sur `tags.FX`, seule
+autorité pour 6 familles de munitions dont le catalogue s'est révélé peu fiable (valeurs inventées
+type mise à l'échelle `_ARME` jamais présente au LdB — même défaut trouvé 5+ fois pendant ce
+chantier) : pour ces lignes, `DMG=`/`CHOC=`/`TXT=PEN=`/`ARMOR=`/`PASS=`/`DMG_DROP=` du catalogue sont
+cosmétiques, jamais lus pour le calcul.
+
+| FX | Dégât | Armure cible (`etq`) | Autre |
+|---|---|---|---|
+| `APHC` | inchangé | `× 2/3` (floor) | — |
+| `SAP` / `SLAP` | `-1 dé` sur la formule de l'arme (`reduceDiceCount`) | `× 0.5` (floor) | — |
+| `HP` | `+5` fixe (jamais lancé) | `× 1.5` (floor) | — |
+| `EXPLOSIVE` | `+1D10` (jet séparé) | `× 2` (floor) | Choc fixe `+1D10`, remplace le `CHOC=` catalogue |
+| `SHRAPNEL` | dégression par bande de portée (BP inchangé, C/M `-1D10`, L `-2D10`, E `-3D10`) | `× 1.5` (`polarisRound`) | Zone cône 3m/multi-cibles **non câblée** (voir C3 ci-dessous) |
+
+`resolveAmmoMechanic(fx)` retourne la config ou `null` (munition sans mécanique C1 : Assommante/IEM/
+inconnu — comportement Lot A/B strictement inchangé). Armure : appliquée dans `resolveTargetHit`
+juste après `etq = calcResistanceArmure(...).etq`, seulement si `etq` non nul. `rangeBand`
+(uniquement pour la dégression Shrapnel — sans lien avec le Choc, qui n'en a plus besoin) est transmis
+par les 2 sites `socketCombatHelpers.js` qui appellent `getEffectiveWeaponDamage` (PNJ immédiat,
+PJ différé `COMBAT_DAMAGE_CONFIRM`).
+
+**Hors scope, décisions actées (ne pas rouvrir sans nouvelle demande produit)** :
+- **IEM / Test de panne** : le DSL `DMG=MUL(0.5)` (mi-dégâts) reste codé et actif. Le reste de l'effet
+  IEM (malus -3 à un Test de panne sur "équipements électroniques") est **laissé narratif** — les
+  munitions IEM ciblent des systèmes électroniques (exo-armure, vaisseaux) qui n'existent pas encore
+  dans le projet ; construire le mécanisme maintenant reviendrait à câbler une brique sans aucun
+  consommateur réel. Le Test de panne lui-même (1D20 sous l'Intégrité de l'objet, `docs/REGLES/
+  REGLEMATERIEL.md` p.273-274) dépend aussi d'un seuil "Catastrophe" jamais formalisé numériquement
+  dans le projet — mécanique transversale (combat, tests, blessures, pouvoirs Polaris), candidate à un
+  chantier dédié séparé, pas à improviser ici.
+- **Shrapnel — zone d'effet** : armure/dégression par portée câblées (tableau ci-dessus), mais le
+  ciblage multi-cibles (cône 3m) n'existe pas dans le pipeline combat (cible unique partout). Décision
+  Saar : le ciblage se fera par cases adjacentes calculées par le futur builder monde, pas par
+  sélection MJ — nécessite une collaboration avec Kiwi, hors périmètre d'une session solo.
 
 ---
 

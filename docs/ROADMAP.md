@@ -172,14 +172,14 @@ ref_equipment (catalogue) ← ✅ 636 items
 char_inventory (possessions joueur) ← ✅ Chantier 10 sprint 2 (session 51)
     ↓
 Module Armures (UI + mille-feuille) ← ✅ Chantier 10 sprint 3 (session 53-54)
-Module Armes ← ⚙️ Chantier 11 Étape 2 (Lots A+B codés, Lot C restant)
+Module Armes ← ✅ Chantier 11 Étape 2 clos (Lots A+B+C1 codés, C2 narratif, C3 différé — collab Kiwi)
 ```
 
 | Étape | Contenu | Prérequis | État |
 |---|---|---|---|
 | Étape 1 | `character_wounds` DB + routes + WoundManager UI + intégration `charStats.js` | — | ✅ session 49 |
 | Étape 1b | Intégration `effectiveMalus` dans jets (socket) + Initiative fiche | — | ✅ session 52 |
-| Étape 2 | Module Armes — DSL effets munitions, parseur | Chantier 10 sprint 4 | ⚙️ Lots A (dégâts)+B (Choc) ✅ codés/testés (correctif Lot B session 152) ; Lot C recadré en 3 sous-lots C1 (armure)/C2 (Test de panne IEM)/C3 (zone Shrapnel), aucun sous-lot codé ; `COM9` ✅ codé et confirmé fonctionnel (débloque la validation navigateur du Lot B, à rejouer) — `docs/PLAN_ARMES_DSL.md` |
+| Étape 2 | Module Armes — DSL effets munitions, parseur | Chantier 10 sprint 4 | ✅ **clos (2026-07-19)** — Lots A (dégâts) + B (Choc) + C1 (armure APHC/SAP/SLAP/HP/Explosive/Shrapnel) codés/testés. C2 (Test de panne IEM) **laissé narratif volontairement** (aucun système électronique — exo-armure/vaisseau — implémenté à ce jour, décision Saar). C3 (zone Shrapnel) **différé** — ciblage par cases adjacentes du futur builder, nécessite collaboration Kiwi. Détail archivé : `docs/Old/PLAN_ARMES_DSL.md` ; durable transféré `docs/SYSTEME/COMBAT.md` |
 | Étape 3 | Module Armures — ArmorWoundPanel + LocationPanel mille-feuille + SilhouettePanel | Chantier 10 sprint 2 | ✅ session 53-54 |
 | Étape 4 | Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) | Étapes 1-3 | 🔲 |
 
@@ -240,16 +240,19 @@ Remplacé par `LocationPanel` (grille de blessures intégrée par localisation d
   tag `(LdB)` d'origine n'a jamais cité de page. Colonne `ref_equipment.min_str` conservée (donnée
   brute), calcul et application retirés du pipeline combat.
 
-- **DSL effets munitions (Étape 2 Module Armes)** — `ref_equipment.ammo_effects` (munitions
-  uniquement, pas les armes elles-mêmes — vérifié dans les données réelles) contient un DSL type
-  `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Lot A (dégâts DMG=) codé et testé
+- **DSL effets munitions (Étape 2 Module Armes) ✅ CLOS (2026-07-19)** — `ref_equipment.ammo_effects`
+  (munitions uniquement, pas les armes elles-mêmes — vérifié dans les données réelles) contient un DSL
+  type `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10);TXT=FX=ASSOMMANTE`. Lot A (dégâts DMG=) codé et testé
   (2026-07-16). Lot B (Choc `CHOC=`) codé et testé, correctif appliqué session 152 (gate Tête retiré,
-  formule fixe `CHOC=SET(1D10+2)` Assommante, total combiné non réduit — migration 160). Lot C
-  recadré (2026-07-16, effets mécaniques réels demandés par Saar, plus un lot d'affichage) en 3
-  sous-lots séquentiels : **C1** modification d'armure, **C2** Test de panne (munitions IEM, mécanique
-  elle-même encore à définir), **C3** zone d'effet Shrapnel (aucun ciblage de zone existant dans le
-  pipeline combat) — aucun sous-lot codé. Plan détaillé (vocabulaire complet, découpage en lots,
-  invariants, sites rebranchés) : `docs/PLAN_ARMES_DSL.md`.
+  formule fixe `CHOC=SET(1D10+2)` Assommante, total combiné non réduit — migration 160). Lot C1
+  (armure APHC/SAP/SLAP/HP/Explosive/Shrapnel, registre `AMMO_MECHANIC_ACTIONS` par `tags.FX`, catalogue
+  ignoré pour ces 6 familles — 3 valeurs invérifiables trouvées en base) codé et testé session 164.
+  **C2 (Test de panne IEM) laissé narratif** : les munitions IEM visent des systèmes électroniques
+  (exo-armure, vaisseaux) qui n'existent pas encore dans le projet — décision Saar de ne pas construire
+  un mécanisme sans consommateur réel plutôt que d'inventer une cible fictive. **C3 (zone Shrapnel)
+  différé** : le ciblage se fait par cases adjacentes du futur builder, pas par sélection MJ — nécessite
+  une collaboration avec Kiwi (monde/builder), hors périmètre solo. Détail complet archivé :
+  `docs/Old/PLAN_ARMES_DSL.md`. Contenu durable (registre, invariants) : `docs/SYSTEME/COMBAT.md`.
 
 - **Viser une Localisation précise (`COM9`) ✅ codé et confirmé fonctionnel (2026-07-17)** — déclarée
   en phase ANNONCE (`AssaultRangedPanel.jsx`, même patron que Tir visé), malus + bypass du D20
