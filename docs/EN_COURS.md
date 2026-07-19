@@ -330,11 +330,13 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > Client : `offhandWeaponInvId` ajouté au payload `mapActions.attack` (`CombatActionWindow.jsx` +
 > `CombatGmDeclareWindow.jsx`, main non directrice = `weaponMg` quand `hasTwoWeapons`).
 > **Testé** : 7 tests unitaires `shared/dualWieldRules.test.mjs` (4 combinaisons dual-wield + 3 cas
-> tir simple) ✅ ; `node --check` sur les 2 fichiers serveur touchés ✅ ; build Vite complet propre ✅.
-> **Non testé** : scénario réel en base (dual-wield avec une main vidée en cours de combat, vérifier
-> bonus/décompte/message privé reçu uniquement par le bon joueur) — à la charge de Saar, aucune fixture
-> dédiée montée cette session. **Données** : migration `176`, nullable et rétrocompatible. **Retour
-> arrière** : `down()` de la migration retire la colonne ; revert du commit pour le reste.
+> tir simple) ✅ ; `node --check` sur les 2 fichiers serveur touchés ✅ ; build Vite complet propre ✅ ;
+> **scénario réel en base confirmé fonctionnel par Saar** — dual-wield complet (bonus + double décompte),
+> main non directrice à sec (tir simple, décompte MD seule, message privé reçu uniquement par le
+> propriétaire), main directrice à sec (symétrique), les deux à sec (blocage inchangé), message absent
+> chez les autres joueurs connectés. **Chantier clos complet**, plus de réserve. **Données** :
+> migration `176`, nullable et rétrocompatible. **Retour arrière** : `down()` de la migration retire la
+> colonne ; revert du commit pour le reste.
 >
 > **Item 90 (Session 160, dev/Saar) — COM25 + COM28 : munitions insuffisantes bloque le tir, statut
 > munitions Matraque Mao ✅ CLOS** (session parallèle, code déjà présent au moment d'ouvrir Item 91
