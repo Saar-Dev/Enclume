@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E)
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -40,6 +40,147 @@
 | **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
+
+---
+
+## Dettes combat — issues confirmées par l'audit COMPARATIF (2026-07-19)
+
+> Triage de `docs/COMPARATIF.md` (audit ponctuel 2026-07-17, `MANUELSYSCOMBAT.md` vs code réel) — ces
+> 6 dettes étaient citées dans l'audit mais n'avaient pas d'entrée dédiée ici, contrairement à la règle
+> d'hygiène du fichier (« Détail technique de chaque bug → `BUGIDENTIFIE.md` »). `COMPARATIF.md` est
+> archivé vers `docs/Old/` une fois ce triage fait — ne plus le traiter comme registre vivant.
+
+### Dette INI4 — `initiative` jamais remise à `base_ini` en fin de tour
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — trouvé par audit de code, pas par reproduction.
+Les modificateurs d'Initiative (Précipiter +3, Dégainer -5, S'accroupir -3, etc.) s'accumulent tour
+après tour au lieu d'être réinitialisés, contrairement à `docs/REGLES/REGLESYSCOMBAT.md` p.213 (voir
+`MANUELSYSCOMBAT.md` §6.7, qui décrit déjà l'exigence).
+
+**Code impliqué** : `endTurn` (`server/src/socket/socketCombatHelpers.js:215-301`) — ne touche jamais
+`initiative`, confirmé aussi par `docs/STRUCTURE_SYSCOMBAT.md:626`.
+
+**Cause racine [VÉRIFIÉ]** : lecture complète de `endTurn`, aucun `UPDATE ... SET initiative = base_ini`
+présent.
+
+**Prochaine étape** : correctif isolé — ajouter le reset dans `endTurn`, avant le passage en phase
+ANNOUNCEMENT du tour suivant (spec déjà écrite dans `MANUELSYSCOMBAT.md` §6.7). Instrumenter un
+scénario réel (plusieurs tours avec Précipiter/Dégainer répétés) pour confirmer la dérive avant de
+corriger.
+
+---
+
+### Dette MELEE-MR — Dégâts CaC calculés sans le Marge de Réussite (dette Session 67, jamais close)
+
+**Symptôme** : Aucun cas observé en jeu signalé — écart de règle confirmé par lecture, le tir à
+distance applique une vraie table MR→ModDom, le CaC non.
+
+**Règle** : `Dommages_Bruts = Arme + MR + ModDom(FOR)` attendu (voir `MANUELSYSCOMBAT.md` §6.2).
+
+**Code impliqué** : `resolveMeleeAction`/`resolveMeleeAction` PJ défenseur
+(`server/src/socket/socketCombatHelpers.js:765,819`, `socketCombatResolution.js:370,695`) — calcule
+`rawDice + ModDom(FOR_attaquant)`, sans jamais intégrer le MR (marge de réussite du jet d'attaque).
+
+**Cause racine [VÉRIFIÉ]** : lecture de code, dette déjà notée dans l'ancien manuel comme « impl V1 »
+depuis la Session 67, jamais reprise depuis.
+
+**Prochaine étape** : porter la même table `mrTable`/`getModifier` déjà utilisée côté tir
+(`socketCombatHelpers.js` pipeline assaut) vers `resolveMeleeAction` — un seul cluster CaC, ne pas
+mélanger avec MELEE-MR et d'autres chantiers CaC en cours.
+
+---
+
+### Dette DEF5 — « Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC
+
+**Symptôme** : Aucun cas observé en jeu signalé — écart de règle confirmé par lecture.
+
+**Règle** : Une cible surprise/inconsciente/sans défense possible doit bénéficier d'un test simple **+5**
+pour l'attaquant, sans test d'opposition (tir : `MANUELSYSCOMBAT.md` §4 ; CaC : §6.2).
+
+**Code impliqué** : `resolveAssaultAction` et `resolveMeleeAction`
+(`server/src/socket/socketCombatHelpers.js`) — `is_surprised` existe comme colonne mais ne sert qu'à
+neutraliser l'initiative du personnage surpris (ordre de résolution), jamais consulté pour accorder un
+bonus +5 ou bypasser l'opposition.
+
+**Cause racine [VÉRIFIÉ]** : grep confirmé, aucun `+5` ni logique de bypass liée à `is_surprised` dans
+les deux resolvers.
+
+**Prochaine étape** : un seul correctif pour les deux mécanismes (même cause : `is_surprised` sous-exploité)
+— définir le critère exact de « sans défense » (surprise totale uniquement ? + inconscient/stun ?) avant
+de coder, une seule cause racine mais deux points d'insertion (tir + CaC), donc deux commits si les
+resolvers divergent trop pour un patch commun.
+
+---
+
+### Dette TIRIMP — Garde serveur absent sur « Tir impossible » (allure/couverture/éclairage Totale)
+
+**Symptôme** : Aucun cas observé en jeu signalé — écart de sécurité serveur confirmé par lecture.
+
+**Règle** : Allure maximale (tireur), Couverture Totale et Éclairage Totale doivent rendre le tir
+impossible (`MANUELSYSCOMBAT.md` §6.1).
+
+**Code impliqué** : `CombatModifiersWindow.jsx` — `hasTirImpossible` désactive le bouton côté client
+(malus `-99` codé) ; **aucune vérification équivalente côté serveur** dans `resolveAssaultAction`.
+
+**Cause racine [VÉRIFIÉ]** : grep confirmé, le blocage n'existe que dans le composant client, contournable
+par un client modifié ou un payload forgé.
+
+**Prochaine étape** : ajouter un garde serveur miroir dans `resolveAssaultAction` avant le jet — rejeter
+la déclaration/résolution si un des 3 modificateurs `-99` est présent, plutôt que de faire confiance au
+client. Ne pas coder en même temps le mécanisme « tir en aveugle + Test Observation » (absent, plus gros
+morceau, chantier séparé si Saar le priorise).
+
+---
+
+### Dette WNDMORT — Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests
+
+**Symptôme** : Aucun cas observé en jeu signalé — écart de règle confirmé par lecture.
+
+**Règle** : Une blessure « mortelle » devrait interdire tout Test (pas un simple malus numérique) selon
+le LdB.
+
+**Code impliqué** : `shared/woundConstants.js` — `WOUND_PENALTIES.mortelle = -20`, appliqué comme un
+malus parmi d'autres par `calcWoundPenalty` (`server/src/lib/charStats.js:273-281`).
+
+**Cause racine [VÉRIFIÉ]** : aucun garde-fou trouvé qui empêche un Test en cas de blessure mortelle —
+le -20 se comporte comme n'importe quel autre malus de gravité.
+
+**Prochaine étape** : décision produit à trancher avec Saar avant de coder — bloquer réellement les
+Tests change le comportement en jeu (un personnage avec blessure mortelle ne pourrait plus rien tenter),
+vs garder le malus -20 comme approximation VTT volontaire. Ne pas coder sans cette décision explicite.
+
+---
+
+### Dette CHOC1 — Choc étourdissant structurellement limité aux munitions à distance
+
+**Symptôme** : Aucun cas observé en jeu signalé pour le manque CaC — infrastructure Choc existe et
+fonctionne pour le tir (validée Session 152).
+
+**Règle** (LdB p.243) : le Choc est réservé aux **armes lourdes/contondantes de mêlée touchant la
+Tête** (ou armes purement électriques, sans restriction) — deux jets séparés (dégâts physiques normaux,
+PUIS jet additionnel de Choc ajouté à la Difficulté du Test de Choc), jamais transformé en blessure
+physique.
+
+**Code impliqué** : `damageService.js:193-239`, `shared/weaponAmmoDsl.js:34-96`.
+
+**Cause racine [VÉRIFIÉ]** : le Choc n'est déclenché que par la DSL munitions à distance (`chocDsl`) —
+les chemins de résolution CaC (`socketCombatResolution.js:696-701`, `socketCombatHelpers.js:1230-1236`)
+n'y ont pas accès. Un total combiné unique (`degatsNets + chocTotal`) pilote un seul Test de Choc, au
+lieu des deux jets séparés du RAW — restriction « Tête uniquement » délibérément retirée pour les
+munitions (correctif Session 141, cohérent avec `docs/Old/PLAN_ARMES_DSL.md`).
+**Champ mort trouvé en marge** : `ref_equipment.protection_shock` (colonne réelle, migration 48) est
+récupérée par `inventoryService.js` mais **jamais consommée** dans `damageService.js:178` (seul `.etq`
+est extrait, `.prt` est jeté) — confirme qu'aucune distinction armure anti-Choc n'a d'implémentation.
+
+**Travail partiel** : le pool de dommages de Choc distinct existe désormais dans
+`damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc
+exclusif) — Lot B Chantier 11 Étape 2, Session 2026-07-16. Reste non câblé : bonus mutation Corne
+(« +1D6 Choc si le coup porte à la tête » en CaC) — hors scope de ce Lot (mécanisme mutation, pas
+munition).
+
+**Prochaine étape** : chantier séparé — décider si le Choc CaC (armes lourdes/contondantes touchant la
+Tête, RAW strict) doit être construit maintenant, ou rester différé tant qu'aucune arme de mêlée
+lourde/contondante n'est un cas d'usage réel en jeu.
 
 ---
 

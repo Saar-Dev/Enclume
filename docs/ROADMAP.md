@@ -1,5 +1,8 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-18 (dev/Saar) — retrait du chantier Bouclier, intégralement clos
+> Dernière mise à jour : 2026-07-19 (dev/Saar) — triage `docs/COMPARATIF.md` : dette
+> `pendingDamageActions` corrigée (obsolète), notes LOS/Kiwi ajoutées (Shrapnel/Tir de couverture/
+> couverture géométrique), chantiers Catastrophes + Saisie/Lutte (Arts Martiaux) documentés ;
+> 2026-07-18 (dev/Saar) — retrait du chantier Bouclier, intégralement clos
 > session 156 (Lots A+B+C codés et testés en combat réel + navigateur, historique dans
 > `docs/ASBUILT.md`/`docs/Old/PLAN_BOUCLIER.md`) ; 2026-07-17 — actualisation : retrait des chantiers
 > intégralement clos (PLAN 14 Statuts — session 150 — et Chantier 10 Sprint 6 Échange — session 153 —
@@ -326,6 +329,11 @@ Prérequis : statut `grappled` (PLAN14) pour la Lutte. Techniques offensives/dé
 
 Note (Saar) : certaines mutations facilitent probablement l'Agrippé/Lutte (corne, griffe, etc.) — à vérifier au moment de l'implantation.
 
+**Saisie/Lutte — spec déjà écrite** : `docs/MANUELSYSCOMBAT.md` §6.6 documente la mécanique attendue
+(Préparation -3 INI, déclarée en ANNOUNCEMENT, résolue à l'initiative résultante) — 0% codé, confirmé
+par `docs/COMPARATIF.md` §6.6. Peut être le premier sprint isolé d'Arts Martiaux (prérequis du reste de
+la Lutte : Clé/Étranglement/Projection).
+
 ---
 
 ### Chantier CaC — Corps à Corps Polaris ✅ (sessions 67-68)
@@ -372,7 +380,7 @@ Spec originale archivée dans `docs/Old/PLAN_12_CONTACT.md`. Implémentation doc
 | Bug surprise | roll=1 → initiative=1 (agit en dernier) — sémantique PJ surpris à revoir | 🔲 |
 | Dette | EntityEditorOLD.jsx commité par erreur — à supprimer | ✅ session 44 |
 | Dette | .gitattributes:3 attribut invalide — à corriger | 🔲 |
-| Dette arch. | `pendingDamageActions` Map in-memory — données perdues si redémarrage serveur entre ATTACK_PLAYER_RESULT et DAMAGE_CONFIRM — persister en DB ou Redis | 🔲 |
+| ~~Dette arch.~~ | ~~`pendingDamageActions` Map in-memory...~~ — **obsolète, corrigé 2026-07-19** : le mécanisme réel est `combat_pending`, une table Postgres durable, jamais une Map in-memory. Voir `docs/SYSTEME/COMBAT.md` §combat_pending | ✅ doc corrigée, aucun code à changer |
 | Bug CL1 | Portraits PNJ non visibles dans timeline joueur (absent du characterStore joueur) | 🔲 session 92 |
 | Bug CL2 | Design CombatDeclareLog mauvais + divergence GM/joueur — référence = version GM | 🔲 session 92 |
 | Bug CL3 | Ghosts de déplacement d'annonce disparus (régression announcementMarker) | 🔲 session 92 |
@@ -470,7 +478,31 @@ isolément :
   `checkWorldCoverage`.
 - **Postures tokens** (debout/accroupi/couché) — impact sur hauteur d'œil et zones exposées ; aucune
   colonne `tokens.posture`/`tokens.height` n'existe.
+
+**Notes ajoutées (2026-07-19, besoins combat à transmettre à Kiwi, moteur monde hors scope Saar) :**
+- **Munition Shrapnel** — nécessite un ciblage par zone (cases adjacentes à la cible), pas une
+  sélection MJ d'une cible unique. Déjà identifié comme bloqueur C3 du DSL munitions
+  (`docs/Old/PLAN_ARMES_DSL.md`, différé pour cette raison exacte) — armure/dégression par portée déjà
+  câblées côté combat, seul le ciblage multi-cases dépend du futur builder.
+- **Action « Tir de couverture »** — action en zone (suppression, LdB p.228) plutôt que sur cible
+  unique. Actuellement un stub client mort (`combatSections.js`, bouton `rl_mc` jamais branché) —
+  nécessite un modèle de ciblage de zone côté monde avant d'être implémentable côté combat.
+- **Couverture géométrique** — le mécanisme actuel est un `coverageModifier` par ratio de surface
+  occluse (`shared/world/visibility.js:179-209`, -5/-3), pas un système à 4 raycasts par token. À
+  confirmer avec Kiwi si un modèle à raycasts multiples est prévu ou si le ratio actuel reste
+  l'autorité côté monde.
+
 Complexité estimée : élevée — nouvelle planification complète, pas une extension.
+
+### Catastrophes — seuil de déclenchement non formalisé
+Trouvé en creusant le blocage C2 (Test de panne IEM, `docs/Old/PLAN_ARMES_DSL.md`) : le terme
+« Catastrophe » est utilisé transversalement dans tout le LdB (combat, tests, blessures, pouvoirs
+Polaris) mais **son seuil numérique de déclenchement n'est formalisé nulle part** dans le projet, ni
+dans les extraits de règles disponibles. Saar a fourni le texte « Catastrophes en combat » (table 1D10
+de conséquences), mais pas le seuil lui-même. Nécessaire avant de pouvoir coder tout mécanisme qui en
+dépend (Test de panne IEM, Balayage Arts martiaux §6.9 `MANUELSYSCOMBAT.md`, etc.).
+Complexité estimée : faible une fois le seuil obtenu (probablement une constante + une table de
+lookup) — le travail réel est la recherche de la règle exacte, pas l'implémentation.
 
 ### Export PDF fiche personnage
 `docs/PLAN_EXPORTPDF.md` — toujours à l'état proposition (`🔶`, jamais codé, confirmé Session 149).

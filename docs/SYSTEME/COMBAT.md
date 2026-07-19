@@ -580,7 +580,7 @@ COMBAT_ACTION_CONFIRM (Phase 2) :
   resolveMeleeAction fires → fetch token positions (post-move) → check dist ≤ 3+allonge
     read rosterAttaquant.state_combat_mode → attackModeBonus (+3 offensif/charge)
     read rosterDefendeur.state_combat_mode → chanceDefense ajustée
-    combatModeBonus = charge ? 3 : 0 → stocké dans commonPending → pendingDamageActions
+    combatModeBonus = charge ? 3 : 0 → stocké dans commonPending → combat_pending (table Postgres durable, voir §combat_pending)
 
 COMBAT_DAMAGE_CONFIRM : degautsBruts = rawDice + modDom + combatModeBonus
 ```
@@ -996,8 +996,13 @@ rd = calcResistanceDommages(for_na_cible, con_na_cible)
 }
 ```
 
-### pendingDamageActions
-Map in-memory (`new Map()`) — stocke les paramètres bruts entre COMBAT_ATTACK_PLAYER_RESULT et COMBAT_DAMAGE_CONFIRM. **Perd son contenu si le serveur redémarre entre les deux événements.**
+### combat_pending
+> **Corrigé (2026-07-19, audit `docs/PLAN_TIRMULTI.md` §0.1)** : ce paragraphe décrivait à tort une
+> Map in-memory (`pendingDamageActions`, `new Map()`). Grep exhaustif confirmé : ce nom n'existe nulle
+> part dans le code actuel. Le mécanisme réel est **`combat_pending`, une table Postgres durable** —
+> stocke les paramètres bruts entre COMBAT_ATTACK_PLAYER_RESULT et COMBAT_DAMAGE_CONFIRM (type
+> `'damage'`) ainsi que la queue d'attaques CaC restantes entre jets de défense (type `'melee_defense'`).
+> Ne perd pas son contenu à un redémarrage serveur, contrairement à ce qui était documenté ici.
 
 ---
 

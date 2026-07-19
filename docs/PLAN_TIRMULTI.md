@@ -1,14 +1,16 @@
 # PLAN_TIRMULTI.md — Sprint Tir Multi : Attaque multiple à distance (LdB p.218, `docs/REGLES/REGLESYSCOMBAT.md`)
 
-> Créé : 2026-07-17 (dev/Saar). Statut : **⚠️ EN PAUSE — chantier de fond en cours,
-> `docs/PLAN_COMBAT_TIMELINE.md` (décidé 2026-07-18, Option A : « des bases saines seront toujours plus
-> pertinentes »).** Ce qui a commencé comme un simple prérequis (`docs/PLAN_COMBAT_ACTION_QUEUE.md`,
-> réparer un bug de chaînage) a révélé un besoin plus profond : une vraie timeline de combat à phases
-> (une carte = une action, entrelacée entre tous les combattants), qui rend aussi implémentable
-> « Retarder son Action » (LdB p.218, jamais câblé). Une fois `PLAN_COMBAT_TIMELINE.md` en place, le Tir
-> Multi devient une déclinaison quasi directe de son modèle (une attaque supplémentaire = une carte
-> supplémentaire dans la timeline) — D3/D4/D5/D8 ci-dessous seront répondus par cette architecture, pas
-> par une conception séparée. Ne pas reprendre ce plan isolément avant `PLAN_COMBAT_TIMELINE.md`.**
+> Créé : 2026-07-17 (dev/Saar). Statut : **⚠️ EN PAUSE, mais débloqué (2026-07-19)** — le chantier de
+> fond dont ce plan dépendait est terminé et archivé : `docs/Old/PLAN_COMBAT_TIMELINE.md`, contenu
+> durable dans `docs/SYSTEME/COMBAT.md` (section « Échelle de phases »). Ce qui a commencé comme un
+> simple prérequis (`docs/Old/PLAN_COMBAT_ACTION_QUEUE.md`, réparer un bug de chaînage) a révélé un
+> besoin plus profond : une vraie timeline de combat à phases (une carte = une action, entrelacée entre
+> tous les combattants), qui a aussi rendu implémentable « Retarder son Action » (LdB p.218). Le Tir
+> Multi devient désormais une déclinaison quasi directe de ce modèle (une attaque supplémentaire = une
+> carte supplémentaire dans la timeline) — D3/D4/D5 sont absorbés par cette architecture ; **D8 devient
+> sans objet** : CaC et Tir sont désormais mutuellement exclusifs à la déclaration (nouvelle règle
+> ajoutée en cours de route, plus fidèle au RAW — à répercuter explicitement dans ce plan à sa reprise,
+> pas une simple conséquence automatique à assumer). **Prêt à être repris**, pas encore fait.
 > Nom de fichier choisi `PLAN_TIRMULTI` plutôt que le terme littéral demandé (« attaqueMultiple ») : ce
 > dernier désigne déjà, dans le code et les logs, le mécanisme **CaC** (`multiAttackMalus`, breakdown
 > `'Attaque multiple'`, `socketCombatHelpers.js:502-503/547`) — garder deux chantiers distincts sous deux

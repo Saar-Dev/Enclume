@@ -1,35 +1,46 @@
 # Manuel Technique de Référence — Système de Combat Polaris V1
 
 > Source de vérité unique (SSOT) — règles LdB + implémentation WS. Fige les comportements, élimine les régressions croisées.
+> Dernière mise à jour : 2026-07-19 (dev/Saar) — triage `docs/COMPARATIF.md` (audit 2026-07-17) :
+> nomenclature §1/§2 corrigée, pipeline §4 aligné sur le DSL munitions/WorldSnapshot, §6.1 « à
+> intégrer » retiré (déjà livré), §6.5 Retarder mis à jour (implémenté Sessions 157-159, remplace
+> l'ancienne spec jamais construite), §7.1/§7.7 3 lignes drones passées à ✅, liens REGLEDRONE/PLAN_DRONE
+> corrigés.
 
 ---
 
 ## 1. Modèle de Données (PostgreSQL)
 
+> **Nomenclature vérifiée contre le code réel** (`docs/COMPARATIF.md`, audit 2026-07-17) — les noms
+> ci-dessous sont les colonnes réelles, pas les noms de travail d'origine.
+
 ### combat_state — 1 ligne par campaign_id active
 | Champ | Type | Valeurs |
 |---|---|---|
 | campaign_id | PK UUID | — |
-| round | INT | — |
-| current_phase | TEXT | `'ROSTER'` / `'ANNOUNCEMENT'` / `'RESOLUTION'` |
+| current_turn | INT | Nom réel de la colonne (anciennement documenté « round ») |
+| phase | TEXT | `'ROSTER'` / `'ANNOUNCEMENT'` / `'RESOLUTION'` (nom réel de la colonne, anciennement documenté « current_phase ») |
+| sub_phase | TEXT | Non documenté à l'origine : `'SLOT_ACTIVE'`/`'AWAITING_DEFENSE'`/`'AWAITING_DAMAGE'` (migration 81, consommé par `combatFSM.js`) |
 | active_slot_idx | INT | Index slot courant (RESOLUTION) |
 
 ### combat_roster — 1 ligne par token inscrit
 | Champ | Type | Note |
 |---|---|---|
-| base_initiative | INT | Fixée au COMBAT_START via `calcREA`. Armure méca : `MIN(REA, Manœuvre_armure)`. |
-| current_initiative | INT | Variable intra-tour — modifiée par les déclarations d'annonce. |
-| state_position | ENUM | `'standing'` / `'crouching'` / `'prone'` |
-| state_weapon | ENUM | `'holstered'` / `'ready'` / `'drawn'` |
-| state_character | JSONB | Flags volatils (`is_rushed`, `is_surprised`, `is_stunned`). **Merge obligatoire — jamais remplacement.** |
+| base_ini | INT | Nom réel de la colonne (anciennement documenté « base_initiative »). Fixée au COMBAT_START via `calcREA`. **« Armure méca : MIN(REA, Manœuvre_armure) » n'a aucune trace dans le code — à traiter comme non implémenté, pas comme un fait.** |
+| initiative | INT | Nom réel de la colonne (anciennement documenté « current_initiative »). Variable intra-tour — modifiée par les déclarations d'annonce. |
+| state_position | TEXT + CHECK | `'standing'` / `'crouching'` / `'prone'` (pas un ENUM SQL natif) |
+| state_weapon | TEXT + CHECK | `'holstered'` / `'ready'` / `'drawn'` (pas un ENUM SQL natif) |
+| is_surprised | BOOLEAN | Colonne dédiée (plus dans `state_character`) |
+| state_vitesse | ENUM | Porte désormais `is_rushed`/précipité/retardé (migration 58) — plus dans `state_character` |
+| state_character | JSONB | Ne contient plus que `init_state_confirmed` — `is_rushed` a migré vers `state_vitesse`, `is_stunned` est tracké par `token_statuses`. **Merge obligatoire — jamais remplacement** (`state_character || ?::jsonb`). |
 
 ### combat_actions — actions séquencées pour la RESOLUTION
 | Champ | Type | Note |
 |---|---|---|
-| roster_id | FK | → combat_roster |
+| token_id + campaign_id | FK | Nom réel (anciennement documenté « roster_id ») — **pas de FK directe vers `combat_roster`** |
 | action_key | TEXT | Type d'action déclarée |
-| sequence | SMALLINT | **1** = Mouvement / **2** = Micro-actions / **3** = Assaut. Index composite (roster_id, sequence). |
-| payload | JSONB | Données spécifiques à l'action |
+| sequence | SMALLINT | **1** = Mouvement / **2** = Micro-actions / **3** = Assaut/CaC/Reload, valeurs codées en dur côté serveur. **Aucune contrainte DB** sur l'ordre (1<2<3) — convention purement applicative. Index réels : `idx_actions_token(campaign_id, token_id)`, `idx_actions_key(campaign_id, action_key)` — aucun sur `sequence` |
+| weapon_inv_id / target_token_id / fire_mode / bullet_count / aimed_location / modifiers (JSONB) | colonnes typées | Pas de colonne `payload` unique — les données sont réparties dans des colonnes typées + un JSONB `modifiers` distinct pour les mods INI/contexte annexe |
 
 ---
 
@@ -41,15 +52,15 @@ ROSTER ──(COMBAT_START)──> ANNOUNCEMENT ──(tous validés)──> RES
   └──────────────(COMBAT_END / fin file actions)─────────────────┘
 ```
 
-| Phase | Déclencheur | Actions serveur | Émis |
+| Phase | Déclencheur | Actions serveur | Émis réellement |
 |---|---|---|---|
-| ROSTER | `COMBAT_START` | `calcREA` chaque token, résout surprise | `COMBAT_STARTED`, `COMBAT_SURPRISE_PROMPT` |
-| ANNOUNCEMENT | `COMBAT_ACTION_DECLARE` | Insère `combat_actions`, applique mod INI sur `current_initiative` | `COMBAT_ACTION_DECLARED` |
+| ROSTER | `COMBAT_START` | `calcREA` chaque token, résout surprise | `COMBAT_STARTED` + `COMBAT_SURPRISE_ROLL` (nom réel, event ciblé socket par socket, pas broadcast — anciennement documenté « COMBAT_SURPRISE_PROMPT ») |
+| ANNOUNCEMENT | `COMBAT_ACTION_DECLARE` | Insère `combat_actions`, applique mod INI sur `initiative` | `COMBAT_ACTION_DECLARED` |
 | ANNOUNCEMENT | Dernier slot validé | Screening SQL complétion, tri final roster | `COMBAT_PHASE_CHANGED` |
-| RESOLUTION | `COMBAT_NEXT_SLOT` | Consomme `combat_actions` ORDER BY sequence ASC | `COMBAT_SLOT_ACTIVATED` |
-| RESOLUTION | Fin file actions | +round, purge `combat_actions`, `endTurn`, reset `current_initiative = base_initiative` → ANNOUNCEMENT | `COMBAT_ROUND_INCREMENTED` |
+| RESOLUTION | Avancement interne (`advanceSlot`, déclenché par les confirmations `COMBAT_ACTION_CONFIRM` etc.) | Consomme `combat_actions` ORDER BY sequence ASC — **aucun event `COMBAT_NEXT_SLOT` n'existe** | `COMBAT_SLOT_ADVANCED` (nom réel, anciennement documenté « COMBAT_SLOT_ACTIVATED ») |
+| RESOLUTION | Fin file actions | +`current_turn`, purge `combat_actions`, `endTurn` → ANNOUNCEMENT. **Reset `initiative = base_ini` ABSENT — dette confirmée, voir `BUGIDENTIFIE.md` INI4** | `COMBAT_PHASE_CHANGED` réémis — **aucun event `COMBAT_ROUND_INCREMENTED` n'existe** |
 
-> ⚠️ **Alerte conformité :** `COMBAT_ACTION_DECLARE` doit être bloqué tant que le slot actif (ordre croissant) n'a pas atteint le token du joueur. Déclaration désordonnée = destruction de l'avantage tactique des hautes initiatives.
+> ⚠️ **Alerte conformité :** `COMBAT_ACTION_DECLARE` doit être bloqué tant que le slot actif (ordre croissant) n'a pas atteint le token du joueur. Déclaration désordonnée = destruction de l'avantage tactique des hautes initiatives. **Vérifié conforme** : le garde existe bien (`socketCombatAnnouncement.js:98-108`, rejet `COMBAT_DECLARE_ERROR` hors tour).
 
 ---
 
@@ -58,8 +69,9 @@ ROSTER ──(COMBAT_START)──> ANNOUNCEMENT ──(tous validés)──> RES
 **Ordre annonce :** croissant — lents déclarent en premier, rapides s'adaptent.
 **Ordre résolution :** décroissant — rapides résolvent en premier.
 **Départage :** 1. REA nette > 2. ADA > 3. Simultanat (`Math.random()` V1 — dette connue, acceptable VTT).
+**Réalité du code** : le niveau ADA n'est pas implémenté — tri `base_ini DESC || Math.random()-0.5`, aucune comparaison ADA intermédiaire (`socketCombatState.js:92`).
 
-> ⚠️ **Écart V1 :** `current_initiative ≤ 0` → action reportée tour suivant. Non implémenté — risque de traitement en fin de boucle de résolution au lieu de migration.
+> ⚠️ **Écart V1 :** `initiative ≤ 0` → action reportée tour suivant. Non implémenté — voir `BUGIDENTIFIE.md` INI3.
 
 ### Modificateurs current_initiative (appliqués immédiatement à l'annonce)
 
@@ -71,34 +83,51 @@ ROSTER ──(COMBAT_START)──> ANNOUNCEMENT ──(tous validés)──> RES
 | Changer mode de tir | −3 | — |
 | S'accroupir | −3 | — |
 | Se jeter à terre | −5 | — |
-| Se relever | −10 | Gratuit si mouvement se termine à la fin d'un déplacement long |
+| Se relever | −10 | **Divergent** : coût -10 codé, mais l'exception « gratuit si fin de déplacement long » n'est implémentée nulle part (`socketCombatAnnouncement.js` — seul `freeMove` existant concerne `combat_mode` charge/retraite, pas la posture) |
 
 ---
 
 ## 4. Pipeline Balistique (RESOLUTION — type Assaut distance)
 
+> **Corrigé contre le code réel** (`docs/COMPARATIF.md` §4) — trois écarts structurants avec la version
+> d'origine de ce pipeline, au-delà des noms de champs.
+
 ```
 [1] Vérifications
-    LOS : DDA Raycast 3D sur Redis (source_pos_z + hauteur_posture → target_pos_z + hauteur_posture)
+    LOS : WorldSnapshot (checkCombatLOS → evaluateWorldVisibility, losService.js/worldVisibilityService.js)
+          — PAS de raycast Redis. Autorité = moteur monde (CLAUDE.md §8), conforme.
     Distance : palier portée depuis ref_equipment.range (Courte/Moyenne/Longue/Extrême)
-    Munitions : quantity ≥ bullet_count (sauf is_infinite) → sinon rejet immédiat
+    Munitions : ammo_remaining ≥ bullet_count (sauf pnj_unlimited_ammo, réglage de campagne).
+          Contrôle en ANNONCE (rejet immédiat) — PAS en RÉSOLUTION (décrément sans second contrôle,
+          clampé à 0)
 
 [2] Seuil
     = compétence tir ± portée − malus blessures − carence FOR − précipitation(−5)
+      + mods circonstances (§6.1) + Tir visé + Viser localisation + mods d'arme + bouclier adverse
     Cible sans défense (surprise totale) → test simple +5, pas d'opposition
+      ⚠️ ABSENT du code réel côté tir à distance — voir BUGIDENTIFIE.md DEF5
 
 [3] Jet D20
     MR = Seuil − jet. Si jet > Seuil → échec → step 5 (munitions)
 
 [4] Localisation & Dommages
     1D20 → table localisation distance → calcResistanceArmure(localisation)
-    Dommages_Bruts = dommages_arme + MR
-    Dommages_Nets  = Bruts − (Protection_localisation + RD_Naturelle) → gravité par tranche de 5
+    rawDice = getEffectiveWeaponDamage(...) — DSL munitions (shared/weaponAmmoDsl.js), PAS juste damage_h
+    modDomAttaque = getModifier(mrTable, mr) — lookup table MR→ModDom, PAS une simple addition du MR brut
+    Dommages_Bruts = rawDice + modDomAttaque + modDegatsMode (bonus mode de tir)
+    Dommages_Nets  = Bruts − Protection_localisation + RD_Naturelle (RD **ajouté**, peut être négatif —
+                     fidèle au LdB ; l'ancienne formule « − (Protection + RD) » avait le signe faux)
+    Gravité par tranche de 5
 
 [5] Altérations & Ressources
     Test de Choc si Grave(Tête/Corps) ou Critique/Mortelle → is_stunned si échec
-    char_inventory.quantity -= bullet_count → INVENTORY_UPDATED
+    ammo_remaining -= bullet_count — INVENTORY_UPDATED n'est PAS émis à cet endroit (contrairement au
+    rechargement, qui lui l'émet bien)
 ```
+
+Le module DSL munitions (`shared/weaponAmmoDsl.js`, `getEffectiveWeaponDamage`, Choc combiné) est
+central au calcul réel de dégâts — voir `docs/SYSTEME/COMBAT.md` §Munitions pour le détail complet du
+registre.
 
 ---
 
@@ -110,7 +139,7 @@ ROSTER ──(COMBAT_START)──> ANNOUNCEMENT ──(tous validés)──> RES
 | `combatStore.js` | Anneaux déplacement, boutons modale | État 'combat' fige canvas ; opacité correcte mode édition |
 | Schéma `combat_actions` | File attente, ordre résolution | Aucune insertion ne viole la contrainte sequence (1 < 2 < 3) |
 | Handler `COMBAT_ACTION_DECLARE` | Timeline, mod INI | Action précipitée reordonne roster DB + push tous clients |
-| Routine `endTurn` | Nettoyage fin de round | `- 'is_rushed'` ne supprime pas `is_stunned` ni malus multi-rounds |
+| Routine `endTurn` | Nettoyage fin de round | **Nomenclature obsolète** : `is_rushed` ne vit plus dans `state_character` (migré vers `state_vitesse`, migration 58) et `is_stunned` vit dans `token_statuses`, pas dans ce JSONB — cette ligne visait une architecture qui n'existe plus telle quelle. Reste vrai sur le fond : vérifier que `endTurn` nettoie bien les 3 mécanismes réels (`state_vitesse`, `token_statuses`, `state_character.init_state_confirmed`) |
 
 ### Statut d'adéquation Polaris
 
@@ -176,7 +205,16 @@ Le pipeline balistique doit appliquer ces modificateurs AVANT le jet de tir :
 | Enorme (~7 m) | +10 |
 | Gigantesque (10 m et +) | +15 |
 
-**Implementation :** Ces modificateurs sont a integrer dans `resolveAssaultAction` (serveur) et dans `CombatModifiersWindow.jsx` (client). Les allures du tireur et de la cible sont disponibles via `state_vitesse` (combat_roster) et le deplacement declare (combat_actions).
+**Implémenté des deux côtés** (`socketCombatHelpers.js:26-70` + `CombatModifiersWindow.jsx`) — cette
+section décrivait à tort un besoin « à intégrer ». Réserves confirmées :
+- « Allure maximale » (tireur) et « Couverture/Éclairage Totale » sont codées en malus `-99`, mais
+  **bloquées côté client uniquement** (`hasTirImpossible` désactive le bouton) — **aucun garde
+  serveur**, contournable par un client modifié.
+- Le mécanisme « tir en aveugle + Test Observation opposé » (exception couverture/éclairage Totale)
+  **n'existe nulle part** dans le code.
+- Un `coverageModifier` géométrique séparé existe (`shared/world/visibility.js:179-209`, -5/-3 par
+  ratio de couverture) — l'effet du palier « Totale » passe indirectement par le statut LOS `blocked`,
+  pas par une entrée dédiée de cette table.
 
 ---
 
@@ -200,7 +238,7 @@ Contrairement au combat a distance (test simple), le CaC utilise un **test d'opp
    Les deux reussissent => Meilleure marge de reussite l'emporte. Egalite = rien.
 
 [4. Dommages (si attaque passe)]
-   Dommages_Bruts = rawDice + ModDom(FOR_attaquant)         ← impl V1 (règle LdB : Arme + MR + ModDom — dette Session 67)
+   Dommages_Bruts = rawDice + ModDom(FOR_attaquant)         ← impl V1 (règle LdB : Arme + MR + ModDom — dette Session 67, toujours active, voir BUGIDENTIFIE.md MELEE-MR)
    Dommages_Nets  = max(0, Dommages_Bruts - etq + rd)
      etq = calcResistanceArmure(armures équipées, localisation touchée).etq   [mille-feuille]
      rd  = calcResistanceDommages(FOR_na_cible, CON_na_cible)                 [table RD_TABLE, positif ou négatif]
@@ -212,6 +250,8 @@ Contrairement au combat a distance (test simple), le CaC utilise un **test d'opp
 
 #### Cible sans defense
 Si la cible ne peut pas se defendre (surprise totale, inconsciente) : test simple avec **+5** au lieu du test d'opposition.
+⚠️ **ABSENT du code réel** — aucun bonus +5 ni bypass trouvé dans `resolveMeleeAction` (même écart que
+côté tir, voir BUGIDENTIFIE.md DEF5). Cette section décrit la règle LdB attendue, pas l'état codé.
 
 #### Modificateurs de situation CaC
 | Situation | Mod |
@@ -314,19 +354,33 @@ Immobilite est une contrainte propre a Tir vise, geree separement de l'exclusivi
 
 ---
 
-### 6.5 Retarder son Action (LdB p.218)
+### 6.5 Retarder son Action (LdB p.218) — ✅ Implémenté (Sessions 157-159, refonte sans minuteur)
+
+> Cette section décrivait initialement une spec (`action_key: 'delayed'` + `target_initiative`) jamais
+> construite ainsi. **Le mécanisme réel est différent et déjà livré** — détail complet et invariants
+> dans `docs/SYSTEME/COMBAT.md` §« Échelle de phases (Résolution) — `combat_timeline_entries` ».
 
 Un joueur peut ne pas agir a sa phase d'initiative et attendre.
 
-- Peut agir a **n'importe quelle phase ulterieure** dans le meme tour.
-- Si action retardee vs action normale a la meme phase => **action retardee prioritaire** (resolue en premier).
-- Si deux actions retardees a la meme phase => regles normales d'egalite d'initiative.
-- Report d'un tour entier possible : agit **des la 1ere phase du tour suivant** quelle que soit son initiative.
+- Peut agir a **n'importe quelle phase ulterieure** dans le meme tour (`state_vitesse='delayed'`,
+  aucun minuteur — un premier design à sous-état FSM temporisé `AWAITING_REACTION_WINDOW` a été
+  **entièrement retiré** en cours de chantier après avoir causé 3 bugs racines réels en une journée,
+  remplacé par une règle unique conforme au RAW : « agir à n'importe quelle phase d'Action »).
+- Si action retardee vs action normale a la meme phase => **action retardee prioritaire** (resolue en premier) — validé en navigateur sur plusieurs Tours/configurations.
+- Si deux actions retardees a la meme phase => regles normales d'egalite d'initiative — **non testé en navigateur à ce jour**.
+- Report d'un tour entier possible : agit **des la 1ere phase du tour suivant** quelle que soit son initiative — **non testé en navigateur à ce jour**.
 - **Une action precipitee ne peut pas etre retardee.**
 
-**Implementation :**
-- `COMBAT_ACTION_DECLARE` avec `action_key: 'delayed'` + `target_initiative` (phase choisie).
-- `startResolutionPhase` integre ces slots avec la regle de priorite.
+**Implémentation réelle** : `combat_timeline_entries` (une carte = une action, entrelacée entre tous
+les combattants) porte l'échelle de phases ; l'affordance « Agir maintenant » (panneau dédié par
+personnage en délai) permet d'interrompre au bon moment ; le tour obligatoire de fin de Tour force la
+résolution d'un personnage encore en délai. `StateSelector` (3 boutons normal/précipité/retardé,
+`CombatActionWindow.jsx`, réutilisé côté MJ dans `CombatGmDeclareWindow.jsx`).
+
+**Non testé avant clôture complète** : le tour obligatoire de fin de Tour avec un personnage retardé
+qui se retrouve dernier debout, Passer consciemment, deux personnages retardés simultanés (départage
+Initiative égale), un CaC retardé (seul le Tir a été retesté après les derniers correctifs), Retarder
+d'un Tour sur l'autre.
 
 ---
 
@@ -448,12 +502,20 @@ non listé dans les modificateurs standard §7.3). Détail complet et recherche 
 
 > ⚠️ **SECTION DRONES UNIQUEMENT** (`character.type === 'drone'`). Si la tâche en cours ne concerne pas les drones, arrêter la lecture ici.
 
-**Sources :** `docs/REGLEDRONE.md` (LdB p.319-320 + Guide Technique p.245-253)
-**Voir aussi :** `shared/droneConstants.js`, `docs/PLAN_DRONE.md`
+**Sources :** `docs/REGLES/REGLEDRONE.md` (LdB p.319-320 + Guide Technique p.245-253) — chemin corrigé,
+déplacé depuis `docs/REGLEDRONE.md`.
+**Voir aussi :** `shared/droneConstants.js`, `docs/Old/PLAN_DRONE.md` — chantier clos, déplacé depuis
+`docs/PLAN_DRONE.md`.
 
 ---
 
 ### 7.1 Modes de contrôle
+
+> ⚠️ **État réel** : seul le mode `autonome` à INI 12 fixe est implémenté (`socketCombatState.js:62-66`,
+> ✅ CONFORME, plus avancé que cette section ne le suggère). Tout le reste de cette section (colonne
+> `state_control_mode`, mode `télépiloté`, distinction INI pilote/drone) est une **spec non construite** :
+> `state_control_mode` n'existe pas comme colonne, tous les drones sont traités en INI 12 fixe sans
+> distinction de mode.
 
 **`state_control_mode`** — état persistant stocké sur la ligne du drone dans `combat_roster`.
 Défini en phase Roster (état initial). Modifiable en ANNOUNCEMENT via l'action **"Télépiloter"** du character propriétaire (toggle). Persiste d'un tour à l'autre jusqu'à toggle explicite.
@@ -602,12 +664,12 @@ degats_nets = max(0, degats_bruts - blindage - rd)
 
 | Aspect | Règle LdB | Statut |
 |---|---|---|
-| INI autonome = 12 | LdB p.320 "Armes automatisées" | À implémenter |
+| INI autonome = 12 | LdB p.320 "Armes automatisées" | ✅ Implémenté (`socketCombatState.js:62-66`) |
 | INI télépiloté = INI pilote | LdB p.319 "Drones et Initiative" | À implémenter (télépilotage) |
 | Séquence Détection → Ami/Ennemi → Armement | LdB p.320 | À implémenter |
 | Retry détection à −5 INI (12→7→2) | LdB p.320 | À implémenter |
 | Cible acquise persistante | LdB p.320 | À implémenter |
-| Programmes = compétences directes (D20 ≤ niveau) | LdB p.281 | À implémenter |
+| Programmes = compétences directes (D20 ≤ niveau) | LdB p.281 | ✅ Implémenté (`programme.level + totalModComp + coverageModifier`, `socketCombatHelpers.js:1089-1120`) |
 | Télépilotage : `min(programme_armement_drone, TELEPILOTAGE_proprio)` | LdB p.319 | À implémenter (sprint télépilotage) |
 | Télépilotage : pas de Détection/Ami-Ennemi — cible directe | LdB p.319 | À implémenter (sprint télépilotage) |
 | Esquive programme (défense CaC) | LdB p.100 (drones de combat) | À implémenter |

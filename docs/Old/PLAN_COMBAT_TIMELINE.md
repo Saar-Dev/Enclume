@@ -1,5 +1,15 @@
 # PLAN_COMBAT_TIMELINE.md — Refonte du moteur de tours en timeline à phases (LdB p.212-219)
 
+> **ARCHIVÉ (2026-07-19, `RegleDocumentaire.md` Règle 10).** Mécanisme central (échelle de phases,
+> Retarder/Agir maintenant, Précipiter, tour obligatoire, outil MJ Forcer) validé en navigateur par
+> Saar après la refonte Session 159. Contenu durable transféré dans `docs/SYSTEME/COMBAT.md`, section
+> « Échelle de phases (Résolution) ». **Angles encore non testés en vrai à la clôture** (voir
+> `docs/EN_COURS.md` pour le détail) : le tour obligatoire de fin de Tour lui-même, Passer
+> consciemment, deux personnages retardés simultanés (départage Initiative égale), un CaC retardé,
+> Retarder d'un Tour sur l'autre — à surveiller si un bug touche ces chemins précis. Ce document reste
+> comme trace de conception (décisions, analyses à charge, alternatives écartées) ; ne plus le modifier,
+> ne plus le citer comme source de vérité (`docs/SYSTEME/COMBAT.md` fait foi).
+
 > Créé : 2026-07-18 (dev/Saar). Statut : **Lot A + correctif arme en main confirmés fonctionnels en
 > navigateur (Session 158). Lots B (moteur de résolution générique), C (timeline client) et D (contrôle
 > du temps MJ) : codés intégralement, serveur testé par fixtures jetables, client par build Vite propre
