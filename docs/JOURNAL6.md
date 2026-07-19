@@ -4151,3 +4151,31 @@ navigateur réel, hors portée de cette session).
 **Données** : aucune migration, aucun changement runtime — travail 100% documentaire.
 **Retour arrière** : déplacements de fichiers réversibles par `git mv` inverse ; commit isolé à
 faire sur `dev/Saar`.
+
+---
+
+## Session 163 (Saar) — 2026-07-19 — Anomalie infra notée : `knex migrate:rollback` inopérant ⚠️ NON INVESTIGUÉ
+
+**Contexte** : en validant le retour arrière de la migration `178_ammo_charge_electrique.js`
+(`docs/PLAN_CAC_BATTERIE.md`), `knex migrate:rollback` (CLI) annonce un succès (« Batch rolled
+back ») mais ne modifie ni la ligne `knex_migrations` correspondante ni les données — vérifié :
+`migration_time` identique avant/après l'appel, aucune ligne `ref_equipment` revenue en arrière.
+
+**Isolé `[VÉRIFIÉ]`** : le `down()` de la migration n'est pas en cause — appelé directement en
+Node (import du fichier de migration, `migMod.down(db)`, en contournant la CLI), il s'exécute
+correctement (20 lignes → 0, aucune exception). Le problème est donc dans le chemin rollback de
+Knex lui-même sur ce projet, pas dans une migration précise.
+
+**Piste non creusée** : `server/src/db/naturalMigrationSource.cjs` (chargeur de migrations custom
+du projet, `NaturalMigrationSource`) — jamais vérifié spécifiquement côté rollback jusqu'ici.
+`migrate:latest` fonctionne correctement avec ce même chargeur (vérifié à plusieurs reprises), donc
+si la cause est bien là, elle est spécifique au chemin de lecture/exécution du rollback.
+
+**Décision (Saar)** : ne pas investiguer maintenant — noter et enquêter seulement si le besoin de
+rollback se reproduit en pratique.
+
+**Contournement utilisé cette session** (fiable, vérifié deux fois) : suppression manuelle de la
+ligne `knex_migrations` concernée puis `migrate:latest` normal, plutôt que `migrate:rollback`.
+
+**Non testé** : cause racine réelle de l'anomalie CLI. **Retour arrière** : sans objet (rien codé,
+constat uniquement).
