@@ -447,6 +447,65 @@ identité affichée = celle du personnage, pas du MJ) ; `SLOT_ACTIVE` au tour ob
 
 ---
 
+## Attaques multiples — CaC 4b et Tir Multi (Session 165)
+
+RAW générique (LdB p.218-219, `docs/REGLES/REGLESYSCOMBAT.md:604-618`) : un personnage peut effectuer
+jusqu'à 3 Attaques par Tour, malus -5 (2 attaques) ou -7 (3 attaques) à **toutes** les Attaques du Tour,
+décalage de phase -5/-10 par attaque supplémentaire (seul coût RAW chiffré — pas de forfait Initiative de
+déclaration séparé). Cibles distinctes non exigées par le texte. **Deux implémentations de la même
+mécanique**, qui partagent désormais toute leur infrastructure (groupement d'échelle, calcul du malus) :
+CaC 4b (`resolveMeleeAction`, en production depuis la Session 74) et Tir Multi (`resolveAssaultAction`,
+Tir simple/Tir à répétition CC uniquement, PJ/PNJ humanoïde, jamais RC/RL ni tireur-drone — RAW muet sur
+ces cas, exclu par défaut). CaC et Tir restent mutuellement exclusifs à la déclaration (une seule Action
+de combat par Tour, cf. ci-dessus) — jamais les deux compteurs cumulés dans le même Tour.
+
+**Déclaration** — `mapActions.attack` est un array (1 à 3 éléments), même contrat que `mapActions.melee` :
+une seule arme pour toute la série (pas de changement d'arme entre deux tirs), cible par défaut identique
+sur toute la série au premier choix (UX : un seul clic remplit les N slots, "Changer" par tir pour
+diverger). Exclusifs avec Tir Multi dès que la série dépasse 1 tir (forcés à leur valeur neutre côté
+serveur, jamais confiance au seul masquage UI) : Tir visé, Tir à deux armes, Viser une Localisation
+précise — chacun exigerait soit l'exclusivité totale du Tour (Tir visé), soit dépasserait le plafond RAW
+de 3 Attaques (dual-wield doublerait les Tests), soit n'a simplement pas de sens à varier par tir (D9/D10,
+tranchés Saar). `socketCombatAnnouncement.js` : cap serveur à 3 (jamais eu d'équivalent côté CaC — dette
+pré-existante, pas répliquée), munitions vérifiées sur le total de la série (`bulletCount × longueur`),
+deux messages d'erreur distincts (`shared/ammoRules.js::parseAmmoCapacity`) : « Action impossible — la
+capacité du chargeur ne permet pas ce tir » si la capacité MAX du chargeur ne suffirait même pas une fois
+plein, « Munitions insuffisantes, recharger d'abord » sinon.
+
+**Échelle de phases** — `buildTimelineEntries` groupe par `(token_id, type)` : CaC et Tir Multi partagent
+la même fonction de groupement/étalement (`declaration_group_id` commun, positions étalées de 500 en 500
+via `computeSeriesPositions`) — une seule implémentation, jamais deux copies divergentes.
+
+**Résolution** — `computeMultiAttackMalus(actionId)` (fonction partagée) recompte les sœurs vivantes du
+même `declaration_group_id` (une sœur `'lost'`/`'skipped'` ne compte plus) et retourne le malus RAW
+(-5/-7). Câblée dans `resolveMeleeAction` (CaC, comportement inchangé) et `resolveAssaultAction` (Tir
+Multi, nouveau — ligne de breakdown `'Attaque multiple'`, même patron que le CaC).
+
+**Chaînage des dégâts** — aucune récursion : chaque tir de la série est sa propre `combat_timeline_entries`,
+résolue individuellement par `advanceTimeline()`, potentiellement entrelacée avec d'autres combattants.
+Un tireur PJ qui touche pose `AWAITING_DAMAGE` (sous-état FSM bloquant) et **suspend** la résolution
+(`suspend:true` — comme `AWAITING_DEFENSE` côté CaC) ; `confirmDamage` (file FIFO partagée CaC/Tir,
+`docs/Old/PLAN_COMBAT_ACTION_QUEUE.md` §3) appelle `advanceTimeline()` dès que sa file se vide, reprenant
+proprement la Résolution sur le combattant suivant (ou `endTurn()` si plus rien ne reste). Voir
+« Bug réel — AWAITING_DAMAGE écrasé » ci-dessous pour l'historique du correctif.
+
+### Bug réel — `AWAITING_DAMAGE` écrasé par un `advanceTimeline()` inconditionnel (corrigé Session 165)
+
+Défaut préexistant de la refonte de l'échelle de phases (Session 159), trouvé en validant Tir Multi mais
+touchant aussi le CaC et les drones — pas spécifique à Tir Multi. Symptôme : un tireur PJ qui touche pose
+`AWAITING_DAMAGE`, mais `advanceTimeline()`, appelé sans condition juste après dans 4 fonctions,
+l'écrasait en `SLOT_ACTIVE` dès qu'un autre combattant avait un pas suivant — `COMBAT_DAMAGE_CONFIRM`
+rejeté à jamais par le garde FSM (`combatFSM.js`). Corrigé en alignant les 4 endroits sur le patron déjà
+en place pour `AWAITING_DEFENSE` (`suspend:true`, jamais un retour générique en fin de fonction) :
+`resolveAssaultAction` (branche PJ-touche), `resolveDroneAssaultAction` (branche cible PJ),
+`confirmMeleeDefense` (branche attaquant PJ-touche, flag local `suspendForDamage`), `confirmDamage`
+(appelle désormais `advanceTimeline()` — pas un simple `setFSMSubPhase`+broadcast — quand sa file se
+vide, sans quoi une confirmation de dégâts terminant le Tour n'aurait jamais déclenché `endTurn()`).
+`socketCombatResolution.js` : `needsDefenseWait` renommé `resolutionSuspended` (couvre `AWAITING_DEFENSE`
+et `AWAITING_DAMAGE`, plus seulement la défense CaC).
+
+---
+
 ## combat_actions — shape complète (DB)
 
 ```javascript

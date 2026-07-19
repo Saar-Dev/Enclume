@@ -168,6 +168,66 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 95 (Session 165, dev/Saar) — Correctif FSM `AWAITING_DAMAGE` (bug préexistant, trouvé en
+> validant Tir Multi) ✅ CLOS.** Un tireur PJ qui touche pose `AWAITING_DAMAGE` (sous-état FSM bloquant,
+> `combatFSM.js`) puis, dans 4 fonctions, un `advanceTimeline()` inconditionnel juste après l'écrasait
+> en `SLOT_ACTIVE` dès qu'un autre combattant avait un pas suivant dans l'échelle — `COMBAT_DAMAGE_CONFIRM`
+> était alors rejeté à jamais par le garde FSM (observé : `[FSM] guard bloqué : RESOLUTION|SLOT_ACTIVE +
+> COMBAT_DAMAGE_CONFIRM`). Cause racine distincte de Tir Multi (préexistante depuis la refonte de
+> l'échelle de phases, session 159), touche aussi le CaC et les drones — commit séparé du chantier Tir
+> Multi. **Corrigé** : `resolveAssaultAction` (branche PJ-touche) et `resolveDroneAssaultAction` (branche
+> cible PJ) retournent désormais `suspend:true` ; `confirmMeleeDefense` (branche attaquant PJ-touche)
+> gagne un flag local `suspendForDamage` qui bloque son propre `advanceTimeline()` final ; `confirmDamage`
+> (FIFO partagée CaC/Tir) appelle `advanceTimeline()` au lieu d'un simple `setFSMSubPhase`+broadcast
+> quand sa file se vide — sans ça, une confirmation de dégâts terminant le Tour n'aurait jamais déclenché
+> `endTurn()`. `socketCombatResolution.js` : `needsDefenseWait` renommé `resolutionSuspended` (couvre
+> désormais `AWAITING_DEFENSE` et `AWAITING_DAMAGE`, plus seulement la défense CaC), capture le `suspend`
+> des 3 résolveurs concernés (assault/drone/melee). **Testé** : en navigateur par Saar, base réelle — un
+> PJ touche deux fois dans le même Tour (Tir Multi 2 tirs), les deux confirmations de dégâts se sont
+> enchaînées correctement (log vérifié explicitement : absence des lignes `avant/après advanceTimeline
+> final` juste après chaque TOUCHE, confirmant la suspension ; reprise propre sur le combattant suivant
+> après chaque confirmation ; aucun `[FSM] guard bloqué` dans le log). **Non testé** : le même mécanisme
+> côté CaC (`confirmMeleeDefense`, attaquant PJ qui touche) et côté drone (`resolveDroneAssaultAction`)
+> n'a pas été explicitement revérifié en jeu avec ce correctif — seul le chemin Tir Multi l'a été,
+> le correctif y étant strictement identique par construction (même patron `suspend`/`resolutionSuspended`).
+> **Données** : aucune migration.
+
+> **Item 94 (Session 165, dev/Saar) — `docs/PLAN_TIRMULTI.md` : Lots A+B+C ✅ CLOS.** Chantier repris
+> après déblocage par la refonte de l'échelle de phases (session 159, `docs/Old/PLAN_COMBAT_TIMELINE.md`)
+> — vérification RAW complète des points ouverts avant de coder (`docs/REGLES/REGLESYSCOMBAT.md`
+> p.218-219/223/227-230), tranchés avec Saar : D2 cibles distinctes permissif (RAW muet), D3 aucun
+> forfait Initiative de déclaration supplémentaire (le seul coût RAW chiffré — le décalage de phase
+> -5/-10 — était déjà implémenté par `computeSeriesPositions`), D6 CC uniquement (jamais RC/RL ni
+> tireur-drone, RAW muet + Rafale longue déjà action exclusive), D9 une seule arme pour toute la série,
+> D10 Tir visé/Tir à deux armes/Viser une Localisation tous trois exclusifs avec Tir Multi. **Écart
+> trouvé en vérifiant D3** : le forfait Initiative CaC existant (`-3`/`-5` fixe à la déclaration,
+> `socketCombatAnnouncement.js`) semble redondant avec le décalage de phase RAW déjà porté par l'échelle
+> — dette **INI5** ajoutée à `docs/BUGIDENTIFIE.md`, audit demandé par Saar, non traitée dans ce chantier.
+> **Codé** : `mapActions.attack` singulier → array partout (client
+> `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`/`AssaultRangedPanel.jsx`/`useDroneDeclare.js`/
+> `combatSections.js`, shared `combatExclusiveActions.js` + `getMultiShotIneligibilityReasons` nouveau,
+> serveur `socketCombatAnnouncement.js` boucle validation/insertion + cap serveur à 3 + munitions
+> totales de la série + garde uniformité arme + deux messages d'erreur munitions distincts (capacité
+> chargeur insuffisante vs chargeur pas assez rempli, `shared/ammoRules.js::parseAmmoCapacity`
+> nouveau) ; `buildTimelineEntries` généralisé (CaC et Tir Multi partagent la même fonction de
+> groupement `declaration_group_id`/étalement de phase) ; `computeMultiAttackMalus` extrait en fonction
+> partagée, câblée dans `resolveAssaultAction` (nouvelle) et `resolveMeleeAction` (déjà là, inchangée
+> fonctionnellement) ; cible par défaut UX — un seul clic pose la même cible sur toute la série,
+> "Changer" par tir pour diverger (retour Saar) ; Lot C — stub mort `combatSections.js` (`k:'multi'`,
+> jamais câblé) retiré, GM ET joueur. Aucune migration DB nécessaire (schéma déjà générique). **Testé**
+> en navigateur par Saar, base réelle : déclaration Tir Multi 2 tirs (compteur, cible par défaut sur les
+> deux slots), malus cohérent sur les deux entrées d'échelle (même Seuil), entrelacement confirmé avec
+> les autres combattants dans la Résolution, un tir à 3 déclaré et résolu (3 entrées distinctes,
+> interleaved), messages munitions différenciés, stub mort confirmé disparu. Voir Item 95 pour la
+> validation du chaînage dégâts PJ. **Non testé** : série à 3 tirs avec au moins un TOUCHE (le seul essai
+> à 3 tirs observé a fait 3 ratés — la déclaration/le malus/l'entrelacement sont validés, pas le
+> chaînage dégâts à 3) ; déclaration Tir Multi côté MJ pour un PNJ jusqu'à résolution complète (le
+> panneau "Nombre de tirs" est confirmé apparaître côté MJ, mais aucune résolution PNJ multi-tir
+> observée dans les logs partagés) ; rejets serveur (>3 tirs, RC/RL, tireur-drone — gardes codés,
+> jamais déclenchés en test). **Reste à faire** : dette doc `docs/SYSTEME/COMBAT.md:850`
+> (`pendingDamageActions` obsolète, déjà notée comme hors scope de ce plan) — correction séparée si
+> Saar la priorise.
+
 > **Item 93 (Session 164, dev/Saar) — Chantier 11 Étape 2 (Module Armes DSL) ✅ CLOS.** Lot C1 (armure
 > APHC/SAP/SLAP/HP/Explosive/Shrapnel) codé. Recherche menée avant conception (demande explicite Saar :
 > documentation + inspiration pros, pas de rush) : rule element `DamageDice` de PF2e/Foundry confirme

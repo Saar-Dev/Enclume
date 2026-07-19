@@ -1,5 +1,12 @@
 # PLAN_TIRMULTI.md — Sprint Tir Multi : Attaque multiple à distance (LdB p.218, `docs/REGLES/REGLESYSCOMBAT.md`)
 
+> **✅ CHANTIER CLOS (2026-07-19, Session 165, dev/Saar).** Archivé conformément à `docs/RegleDocumentaire.md`
+> Règle 10 — contenu durable transféré vers `docs/SYSTEME/COMBAT.md` (section « Attaques multiples —
+> Tir Multi ») et `docs/VOCABULARY.md` (entrée « Attaques multiples »). Détail Testé/Non testé complet :
+> `docs/EN_COURS.md` Items 94/95 (archive, pas mis à jour ici après clôture). Reste ouvert et non traité
+> par ce chantier : dette **INI5** (`docs/BUGIDENTIFIE.md`, audit forfait Initiative CaC demandé par
+> Saar) et dette doc `docs/SYSTEME/COMBAT.md:850` (`pendingDamageActions` obsolète).
+>
 > Créé : 2026-07-17 (dev/Saar). Statut : **⚠️ EN PAUSE, mais débloqué (2026-07-19)** — le chantier de
 > fond dont ce plan dépendait est terminé et archivé : `docs/Old/PLAN_COMBAT_TIMELINE.md`, contenu
 > durable dans `docs/SYSTEME/COMBAT.md` (section « Échelle de phases »). Ce qui a commencé comme un
@@ -185,18 +192,24 @@ principe.
 
 ---
 
-## 1. Scope tranché (provisoire — dépend des réponses à §4)
+## 1. Scope tranché (2026-07-19, confirmé Saar — voir §4 pour le détail RAW)
 
 **Inclus** : porter le mécanisme RAW « Attaques multiples » (p.218-219, malus -5/2 attaques ou -7/3
-attaques) au tir, pour un tireur PJ ou PNJ utilisant une arme à feu en mode Tir simple/Tir à répétition
-(CC) — décliner jusqu'à 3 tirs dans le même Tour, cibles au choix (distinctes ou non, voir D2).
+attaques) au tir, pour un tireur PJ ou PNJ **humanoïde** utilisant une arme à feu en mode Tir simple/Tir
+à répétition (CC) uniquement — décliner jusqu'à 3 tirs dans le même Tour, cibles distinctes ou non
+(RAW muet sur ce point, D2).
 
-**Exclus (confirmé §0)** : Rafale longue sur plusieurs adversaires (p.228, stub `rl_mc` existant,
-mécanique distincte) ; Combat à deux armes / dual-wield deux cibles (p.223, déjà livré) ; malus
-multi-adversaires (p.224, CaC uniquement, confirmé par le RAW) ; Rafale courte/longue elles-mêmes
-(bonus déjà câblés, inchangés).
+**Exclus (confirmé §0 + §4)** : Rafale courte/longue et tireurs-drones (RAW p.218-219 ne les couvre
+pas — Rafale longue est de toute façon une action exclusive, structurellement incompatible ; RC et les
+tireurs-drones restent hors scope par défaut faute de texte RAW, D6) ; Rafale longue sur plusieurs
+adversaires (p.228, stub `rl_mc` existant, mécanique distincte) ; Combat à deux armes / dual-wield deux
+cibles (p.223, déjà livré) ; malus multi-adversaires (p.224, CaC uniquement, confirmé par le RAW) ;
+Rafale courte/longue elles-mêmes (bonus déjà câblés, inchangés).
 
-**À trancher avant de figer ce scope** : tireurs-drones (§0.1, dernier point), interaction avec RC/RL
+**Arme** : une seule arme pour toute la série, jamais de changement d'arme entre deux tirs du même Tour
+Multi (D9, tranché Saar).
+
+**§4 entièrement tranché — prêt pour le Lot A.**
 (le malus -5/-7 « Attaques multiples » a-t-il un sens en Rafale, ou est-il réservé au Tir simple/CC
 comme le CaC est réservé aux armes de contact ?) — voir §4.
 
@@ -232,82 +245,109 @@ Aucune entrée existante pour ce mécanisme, ni CaC ni Tir (`[VÉRIFIÉ]`, grep 
 
 ---
 
-## 4. Points ouverts — décisions à trancher avec Saar avant le Lot A
+## 4. Points ouverts — état après vérification code réelle + arbitrage RAW (2026-07-19)
 
-Contrairement à `PLAN_BOUCLIER.md` (où l'essentiel avait déjà été tranché en session avant rédaction),
-ce plan est un premier jet : les 8 points suivants changent réellement l'architecture ou le
-comportement produit (`CLAUDE.md` §6.7) et ne sont pas tranchés unilatéralement ici.
+`docs/EN_COURS.md` Item 82/88 : entre la rédaction initiale de ce plan (session 157) et sa reprise
+(session 164+), la refonte de l'échelle de phases (`docs/Old/PLAN_COMBAT_TIMELINE.md`, session 159) a
+changé la donne — plusieurs points ci-dessous ne sont plus des décisions produit, mais des constats de
+code vérifiés `[VÉRIFIÉ]` (2026-07-19, lecture directe, pas le souvenir de la session 157).
 
-- **D1 — Forme du payload `mapActions.attack`.** (a) le transformer en array systématiquement, comme
-  `mapActions.melee` — cohérent, mais casse le contrat actuel : tous les lecteurs actuels de
-  `mapActions.attack` comme objet singulier (`socketCombatAnnouncement.js:145`, `:265`, `:320`, `:494`,
-  côté client `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`) doivent être ré-audités et adaptés.
-  (b) garder `mapActions.attack` singulier, ajouter un nouveau champ array dédié (ex.
-  `mapActions.attackMulti`) peuplé seulement quand « Tir Multi » est choisi, chemin de code parallèle.
-  Recommandation : (a) par cohérence avec le précédent CaC et l'autorité unique (`CLAUDE.md` §1.4) —
-  mais c'est un changement de contrat plus large que ce que (b) impliquerait, à evaluer avant de lancer
-  le Lot A.
-- **D2 — Cibles distinctes obligatoires ou non ?** Le RAW p.218 ne l'exige pas ; le CaC 4b actuel ne le
-  vérifie pas non plus (gap pré-existant, ni client ni serveur). Répliquer ce comportement permissif
-  pour le tir (fidèle RAW + cohérent CaC), ou profiter de ce chantier pour introduire la vérification
-  dans les deux mécaniques à la fois (aligné avec la formulation ROADMAP actuelle « cibles séparées »,
-  qui est une reformulation Saar, pas une exigence RAW littérale) ?
-- **D3 — Coût Initiative de déclaration.** Le CaC paye un forfait fixe (-3 engagement CaC, -5
-  supplémentaire fixe si 2 ou 3 attaques). Le tir simple ne paye aujourd'hui aucun coût Initiative de
-  base dans ce bloc. Faut-il un forfait équivalent pour Tir Multi (et si oui, lequel — même -5 fixe,
-  ou un forfait propre au tir), ou le malus au jet (-5/-7) suffit-il seul, sans coût d'engagement
-  Initiative séparé ?
-- **D4 — Mécanisme de chaînage « tir suivant ».** Le point le plus structurant du Lot B. Pas de jet de
-  défense opposé en tir (contrairement au CaC) : pour un tireur PNJ ou en cas de miss, le chaînage peut
-  s'insérer immédiatement dans `resolveAssaultAction` (comme le fait déjà le CaC pour PNJ/drone). Pour
-  un tireur **PJ qui touche**, la résolution crée un `combat_pending(type:'damage')` et attend
-  `COMBAT_DAMAGE_CONFIRM` — il faut décider où accrocher le tir suivant : dans `COMBAT_DAMAGE_CONFIRM`
-  lui-même (après le calcul des dégâts du tir N, déclencher la résolution du tir N+1), ce qui suppose
-  de transporter la queue restante dans le payload du pending `damage` (comme le CaC le fait pour
-  `melee_defense`).
-- **D5 — `suspend`/`needsDefenseWait` côté tir.** Aujourd'hui le slot d'un tireur PJ avance dès la fin
-  de `COMBAT_ACTION_CONFIRM`, sans attendre `COMBAT_DAMAGE_CONFIRM`. Un Tir Multi cohérent avec le CaC
-  (slot bloqué tant que toute la séquence n'est pas résolue) demande d'introduire un vrai `suspend` côté
-  tir — extension d'architecture FSM, pas un simple ajout de formule. Alternative plus légère : laisser
-  le slot avancer comme aujourd'hui et enchaîner les tirs en tâche de fond (paie le prix d'un état
-  transitoire plus complexe à suivre pour le MJ, mais ne touche pas à la FSM). À trancher explicitement.
-- **D6 — RC/RL et tireurs-drones inclus ou non ?** Voir §1 « à trancher ».
-- **D7 — Nettoyage du stub `k:'multi'` mort** (`combatSections.js:132`) — le retirer maintenant (code
-  mort confirmé, jamais rendu) ou le laisser (risque de confusion future avec ce chantier, déjà noté
-  dans ce document comme vestige) ?
-- **D8 — Interaction avec une déclaration CaC simultanée.** `[VÉRIFIÉ]` : `mapActions.melee` et
-  `mapActions.attack` peuvent aujourd'hui coexister dans la même déclaration (`mapSelected` est un
-  `Set`, `attackSelected`/`meleeSelected` non mutuellement exclusifs,
-  `CombatActionWindow.jsx:404-408`) — un personnage peut déjà tirer **et** frapper au contact dans le
-  même Tour s'il a le budget Initiative. Le RAW « jusqu'à trois Attaques par Tour » semble viser un
-  pool global (toutes attaques confondues), pas 3 CaC + 3 Tirs indépendamment cumulables. Ce plan
-  suppose par défaut que **Tir Multi et CaC 4b restent deux compteurs indépendants** (comme c'est déjà
-  implicitement le cas entre l'action CaC normale et l'action de tir normale aujourd'hui) — à confirmer
-  explicitement, sinon un vrai pool global à 3 (toutes attaques confondues) serait un chantier plus
-  large que ce plan.
+- **D1 — Forme du payload `mapActions.attack`.** **Tranché : (a) array**, comme `mapActions.melee`.
+  Cohérent avec le seul précédent existant (CaC 4b) et avec la façon dont `buildTimelineEntries` va
+  devoir traiter les deux types de façon symétrique (voir Lot A/B ci-dessous) — (b) aurait dupliqué la
+  logique de groupement pour un gain nul.
+- **D2 — Cibles distinctes obligatoires ou non ?** RAW p.218 ne l'exige pas (`[VÉRIFIÉ]`,
+  `REGLESYSCOMBAT.md:604-618`, aucune mention de distinctness). **Tranché : permissif**, comme le CaC
+  4b actuel (aucune vérification, ni client ni serveur) — fidèle RAW + cohérent avec le précédent.
+- **D3 — Coût Initiative de déclaration.** RAW p.218-219 décrit **un seul** mécanisme chiffré : le
+  décalage de phase de -5 Initiative par attaque supplémentaire (« Deuxième Action : score d'Initiative
+  -5 », `REGLESYSCOMBAT.md:611-618`) — **déjà entièrement implémenté** par `computeSeriesPositions`
+  (`socketCombatHelpers.js:207-209`, `basePosition - idx * 500` à l'échelle ×100). Aucun autre malus
+  Initiative chiffré n'existe dans le texte RAW pour la déclaration elle-même. **Tranché : aucun forfait
+  supplémentaire pour Tir Multi** — le décalage de phase EST le coût RAW, il ne s'ajoute à rien.
+  **Note hors scope** : le CaC actuel applique en plus un `-3` d'engagement CaC + `-5` fixe si
+  `mapActions.melee.length > 1` (`socketCombatAnnouncement.js:305-308`) — un forfait qui semble
+  redondant avec le décalage de phase déjà RAW, mais c'est un comportement CaC pré-existant, hors
+  périmètre de ce plan (un plan = un problème, `CLAUDE.md` §13) ; à signaler séparément si Saar veut
+  l'auditer.
+- **D4/D5 — Chaînage « tir suivant » / suspend de slot.** **Devenus sans objet** — l'ancienne conception
+  (recursion `remainingAssaultActions`, `suspend` dédié) appartenait au modèle `combat_roster` /
+  `active_slot_idx`, retiré migration 174. Avec l'échelle de phases : chaque tir déclaré devient sa
+  propre `combat_timeline_entries` (comme chaque attaque CaC), résolue individuellement par
+  `advanceTimeline` — aucune récursion à écrire. Le chaînage du calcul de dégâts PJ est déjà générique
+  et déjà testé en prod : `confirmDamage` (`socketCombatHelpers.js:707-736`) consomme une file FIFO de
+  `combat_pending(type:'damage')` par token (`docs/Old/PLAN_COMBAT_ACTION_QUEUE.md` §3, item 83 —
+  codé et validé en base réelle avant ce chantier). `resolveAssaultAction` ne suspend déjà jamais le
+  slot (`suspend:false` dans toutes ses branches) — rien à changer sur ce point.
+- **D6 — RC/RL et tireurs-drones inclus ou non ?** RAW p.218-219 (« Attaques multiples ») ne mentionne
+  ni mode de tir automatique ni drones. Rafale longue est de toute façon une **action exclusive**
+  (`REGLESYSCOMBAT.md:1510-1511`, registre `shared/combatExclusiveActions.js`) — structurellement
+  incompatible avec une deuxième Action dans le même Tour, donc exclue de fait. Rafale courte n'est pas
+  couverte par le texte RAW de ce paragraphe. **Tranché (défaut Saar : RAW muet → interdit) : Tir Multi
+  couvre uniquement Tir simple/Tir à répétition (CC), personnage humanoïde (PJ/PNJ), pas RC/RL, pas de
+  tireur-drone.**
+- **D7 — Nettoyage du stub `k:'multi'` mort** (`combatSections.js:132`) — **tranché : retiré en Lot C**
+  (code mort confirmé `[VÉRIFIÉ]`, `active:false`, jamais rendu — le garder ne fait qu'entretenir un
+  risque de confusion avec ce chantier).
+- **D8 — Interaction avec une déclaration CaC simultanée.** **Devenu sans objet** — CaC et Tir sont
+  désormais mutuellement exclusifs à la déclaration, guard serveur ajouté session 159
+  (`socketCombatAnnouncement.js:86-97`, `COMBAT_DECLARE_ERROR` si `mapActions.attack` ET
+  `mapActions.melee` non vide). Le pool à 3 Attaques reste donc bien deux compteurs indépendants CaC/Tir
+  de fait, puisqu'un seul des deux peut être déclaré par Tour.
+- **D9 — Une arme différente par tir de la série, ou une seule arme pour toute la série ?** RAW muet.
+  **Tranché (Saar, 2026-07-19) : une seule arme pour toute la série** — changer d'arme entre deux tirs
+  du même Tour Multi n'est pas envisageable. Contrairement au CaC (`mapActions.melee[i].weaponInvId`
+  par slot, mais toujours peuplé de la même valeur en pratique — `CombatActionWindow.jsx:589`, aucun
+  vrai précédent de changement d'arme par slot), le payload `mapActions.attack[]` porte donc une arme
+  unique au niveau de la série — pas de `weaponInvId` par élément.
+- **D10 — Tir visé / Tir à deux armes / Viser une Localisation, cumulables avec Tir Multi ?**
+  - **Tir visé** (LdB p.227-228) : **exclu**, mécanique — `isAimEligible`
+    (`shared/combatExclusiveActions.js:89-111`) exige déjà « aucune autre action ce Tour », une série de
+    2-3 tirs en est une par construction. Extension directe d'une règle d'exclusivité déjà en place, pas
+    une nouvelle décision produit.
+  - **Tir à deux armes / dual-wield** (LdB p.223) : **exclu**, RAW — cumuler dual-wield (2 Tests par tir)
+    avec 3 Attaques multiples donnerait jusqu'à 6 Tests dans le même Tour, alors que le RAW plafonne
+    explicitement à trois Attaques par Tour (« c'est le maximum autorisé », p.218).
+  - **Viser une Localisation précise** (LdB p.229-230, malus -3/-5/-7/-7 à -10 selon la zone) — RAW
+    officiel, pas une mécanique maison (correction : je l'avais qualifiée à tort de « maison » en
+    session). **Tranché (Saar, 2026-07-19) : exclu, non cumulable avec Tir Multi** — comme Tir visé et
+    le dual-wield, un seul de ces trois raffinements de tir à la fois, jamais combiné avec une série de
+    plusieurs attaques.
 
 ---
 
-## 5. Lots séquentiels proposés (provisoire, dépend de §4 — un seul codé à la fois, validé avant le suivant)
+## 5. Lots séquentiels proposés (2026-07-19, resserré après vérification code — un seul codé à la fois, validé avant le suivant)
+
+Principe directeur (`CLAUDE.md` §1.4, autorité unique) : le CaC 4b a déjà résolu le même problème une
+fois (groupement par `declaration_group_id`, étalement de position, calcul du malus par comptage de
+sœurs vivantes). Ne pas dupliquer cette logique pour le tir — l'**extraire en fonctions partagées**
+utilisées par les deux mécaniques, plutôt que copier-coller une seconde implémentation qui divergerait
+avec le temps.
 
 **Lot A — Déclaration.**
-- Selon D1 : adaptation du payload `mapActions.attack` (array ou nouveau champ), UI compteur 1/2/3 +
-  sélection de cible(s) sur `AssaultRangedPanel.jsx`/`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`
-  (motif `MeleeCombatPanel.jsx`, pas nécessairement le même composant).
-- Handler `COMBAT_ACTION_DECLARE` (`socketCombatAnnouncement.js`) : boucle d'insertion `combat_actions`
-  (comme `mapActions.melee` aujourd'hui), validation arme/munitions par tir déclaré (chaque tir
-  consomme potentiellement une balle différente — vérifier le total de munitions requises AVANT
-  d'insérer, pas tir par tir), coût Initiative selon D3.
+- D1 : `mapActions.attack` devient un array (comme `mapActions.melee`). Tous les lecteurs actuels en
+  objet singulier ré-audités : `socketCombatAnnouncement.js` (lignes 92, 160, 178, 238, 280, 286, 296,
+  305 zone tir, 316, 323, 361-379, 482, 501), client `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`.
+- UI compteur 1/2/3 + sélection de cible(s) (et d'arme si D9 le confirme) sur
+  `AssaultRangedPanel.jsx`/`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (motif
+  `MeleeCombatPanel.jsx`, pas nécessairement le même composant).
+- Handler `COMBAT_ACTION_DECLARE` : boucle d'insertion `combat_actions` (comme `mapActions.melee`
+  aujourd'hui), validation arme/munitions par tir déclaré (total de munitions requises vérifié AVANT
+  d'insérer, pas tir par tir). Pas de coût Initiative de déclaration à ajouter (D3 tranché).
+- `buildTimelineEntries` (`socketCombatHelpers.js:211-266`) : généraliser la boucle de groupement
+  actuellement spécifique à `type==='melee'` (lignes 215-236) pour couvrir aussi `type==='assault'` —
+  une seule fonction de groupement/étalement paramétrée par type, pas deux copies.
 - `docs/VOCABULARY.md` : entrées §2.
 
-**Lot B — Résolution (le plus structurant, dépend de D4/D5).**
-- `resolveAssaultAction` : nouveau(x) paramètre(s) équivalents `remainingMeleeActions`/`totalMeleeCount`,
-  `multiAttackMalus` inséré dans `totalModComp`, ligne de breakdown.
-- Chaînage « tir suivant » selon D4 (branches PNJ/miss immédiates, branche PJ-touché via le pending
-  `damage`) et blocage de slot selon D5.
+**Lot B — Résolution.**
+- Extraire le calcul `multiAttackMalus` de `resolveMeleeAction` (`socketCombatHelpers.js:1290-1299`)
+  en fonction partagée (ex. `computeMultiAttackMalus(actionId)`), réutilisée par `resolveAssaultAction`
+  — même formule RAW (-5/2, -7/3+), même patron de ligne de breakdown, une seule implémentation.
+  Aucun autre changement structurel requis (D4/D5 sans objet — voir §4) : `resolveAssaultAction` garde
+  son flux actuel (`suspend:false`, pending `damage` FIFO déjà générique).
 
 **Lot C — Nettoyage et polish.**
-- D7 (stub mort) si tranché en ce sens.
+- D7 : retrait du stub mort `combatSections.js:132`.
 - Vérification de l'affichage combat existant (`CombatGmDeclareWindow.jsx`, roster, logs) avec un
   Tir Multi réel — probablement déjà correct par générécité (comme confirmé pour le Bouclier,
   `docs/PLAN_BOUCLIER.md` Lot C), à vérifier avant d'écrire du code neuf.

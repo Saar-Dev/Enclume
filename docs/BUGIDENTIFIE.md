@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -67,6 +67,49 @@ présent.
 ANNOUNCEMENT du tour suivant (spec déjà écrite dans `MANUELSYSCOMBAT.md` §6.7). Instrumenter un
 scénario réel (plusieurs tours avec Précipiter/Dégainer répétés) pour confirmer la dérive avant de
 corriger.
+
+---
+
+### Dette INI5 — CaC : forfait Initiative de déclaration (-3/-5) potentiellement redondant avec le décalage de phase RAW
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — trouvé en vérifiant le RAW pour
+`docs/PLAN_TIRMULTI.md` (2026-07-19), pas encore instrumenté ni reproduit en jeu.
+
+**Règle** : RAW p.218-219 (`docs/REGLES/REGLESYSCOMBAT.md:604-618`, « Effectuer plusieurs Attaques par
+Tour ») ne décrit qu'**un seul** coût chiffré pour les Attaques multiples : le décalage de phase de -5
+Initiative par attaque supplémentaire (« Deuxième Action : Initiative -5, Troisième Action :
+Initiative -10 »). Aucun forfait d'engagement ni malus de déclaration distinct n'est mentionné dans ce
+paragraphe.
+
+**Code impliqué** : `server/src/socket/socketCombatAnnouncement.js:305-308` — à la déclaration d'un
+CaC, `iniDelta += -3` s'applique systématiquement dès qu'une attaque CaC est déclarée, puis
+`iniDelta += -5` supplémentaire si `mapActions.melee.length > 1` (2 ET 3 attaques payent le même -5
+fixe). Ce coût réduit directement `combat_roster.initiative` (donc décale la position du personnage
+sur toute l'échelle), **en plus** du décalage de phase déjà appliqué séparément par
+`computeSeriesPositions` (`server/src/socket/socketCombatHelpers.js:207-209`, -500/attaque à l'échelle
+×100 = -5/-10 RAW) au moment de `buildTimelineEntries`.
+
+**Cause racine [HYPOTHÈSE]** : lecture de code uniquement, non instrumentée. Deux hypothèses à
+départager avant tout correctif :
+1. Le `-3` est un forfait « engagement CaC » générique, indépendant des Attaques multiples (règle
+   maison sans lien avec le RAW cité) — dans ce cas seul le `-5` additionnel (si `length > 1`) serait le
+   doublon suspect.
+2. Le `-3` et le `-5` modélisaient tous deux, avant la refonte de l'échelle de phases (session 159), le
+   coût RAW « à la main » via `combat_roster.initiative` — devenus redondants depuis que
+   `computeSeriesPositions` calcule le vrai décalage RAW au niveau de l'échelle elle-même, ce qui
+   pénaliserait aujourd'hui un CaC multi-attaque deux fois pour le même effet.
+
+**Trouvé pendant** : vérification RAW pour `docs/PLAN_TIRMULTI.md` §4 D3 (2026-07-19) — en évaluant si
+Tir Multi devait payer un forfait Initiative équivalent au CaC, constat que le seul coût RAW chiffré
+(le décalage de phase) est déjà couvert par l'architecture de l'échelle, ce qui a fait remonter la
+question du forfait CaC existant.
+
+**Prochaine étape** : **audit demandé par Saar (2026-07-19)** — reconstituer l'historique de ce `-3`/`-5`
+(git blame, `docs/JOURNAL6.md`/journaux archivés, avant/après la refonte session 159) pour établir s'il
+a été conçu comme un forfait CaC indépendant du RAW p.218, ou comme une modélisation aujourd'hui
+redondante du même décalage de phase, avant de décider de le retirer, le garder ou le redéfinir. Ne pas
+coder tant que l'audit n'a pas tranché — dette indépendante du chantier Tir Multi en cours, traitée
+séparément (`CLAUDE.md` §13, un plan = un problème).
 
 ---
 

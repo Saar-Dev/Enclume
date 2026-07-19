@@ -69,10 +69,12 @@ export function useDroneDeclare({ charId, tokenId, allures, onEnterMoveMode, onE
     const explicitFm    = weapon?.fire_mode
     const isCaC         = explicitFm ? explicitFm === 'cc' : !weapon?.ref_fire_mode
     const stateFireMode = hasAttack ? (isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()) : 'cc'
+    // mapActions.attack est toujours un array (docs/PLAN_TIRMULTI.md D1, contrat unique côté serveur)
+    // — un drone reste hors scope Tir Multi (D6), donc toujours longueur 1 ici.
     const attackPayload = hasAttack
       ? (isCaC
           ? { melee: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId }] }
-          : { attack: { droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId } })
+          : { attack: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId }] })
       : {}
     return {
       stateFireMode,

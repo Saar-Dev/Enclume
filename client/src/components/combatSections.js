@@ -99,14 +99,20 @@ export function calcIniBreakdown(prevStates, nextStates, mapActions, quick) {
     lines.push({ label: 'Corps à corps', value: -3 })
     if (mapActions.melee.length > 1) lines.push({ label: 'CaC cibles supp.', value: -5 })
   }
-  if (mapActions.attack?.cover_shot) {
+  // mapActions.attack est un array (docs/PLAN_TIRMULTI.md D1) — Tir visé/cover_shot sont mutuellement
+  // exclusifs avec Tir Multi (D10), donc jamais présents que sur le seul élément possible quand actifs.
+  const singleAttack = Array.isArray(mapActions.attack) ? mapActions.attack[0] : mapActions.attack
+  if (singleAttack?.cover_shot) {
     lines.push({ label: 'Tirer depuis couverture', value: nextStates.cover === 'important' ? -5 : -3 })
   }
-  const aimTranches = mapActions.attack?.aimTranches ?? 0
+  const aimTranches = singleAttack?.aimTranches ?? 0
   if (aimTranches > 0) {
-    const lunetteNiveau = mapActions.attack?.lunetteNiveau ?? 0
+    const lunetteNiveau = singleAttack?.lunetteNiveau ?? 0
     lines.push({ label: `Tir visé ×${aimTranches}`, value: getAimIniCost(aimTranches, { lunetteNiveau }) })
   }
+  // Tir Multi (docs/PLAN_TIRMULTI.md D3) : RAW ne décrit qu'un seul coût chiffré pour les Attaques
+  // multiples — le décalage de phase (-5/-10), déjà porté par l'échelle de phases côté serveur
+  // (computeSeriesPositions). Aucun forfait Initiative de déclaration supplémentaire ici.
 
   const obs = quick?.observer ?? 0
   if (obs > 0) lines.push({ label: `Observer ×${obs}`, value: obs * -5 })
@@ -129,7 +135,6 @@ export const MAP_ACTIONS = [
   { k: 'attack',   l: 'Assaut (tir)',       tooltip: 'Attaque à distance. Tirer depuis une couverture -3 à -5.',                                    hint: 'cliquer cible',                requireWeapon: true },
   { k: 'melee',    l: 'Corps à corps',      tooltip: 'Venir au corps à corps pour saisir son adversaire -3.',                                       hint: 'cliquer adversaire', ini: -3                      },
   { k: 'reload',   l: 'Rechargement',       tooltip: 'Recharger son arme — aucun tir ni corps à corps possible ce tour. Coût INI : 0.',                                                                      span2: true          },
-  { k: 'multi',    l: 'Attaque multiple',   tooltip: 'Attaque sur plusieurs cibles -5.',                                                            hint: '',                   ini: -5,  active: false       },
   { k: 'interact', l: 'Interagir',          tooltip: 'Utiliser un mécanisme simple (actionner un interrupteur, ouvrir une porte, saisir un objet) -3 à -5.', hint: 'sprint suivant',    active: false       },
 ]
 

@@ -14,7 +14,7 @@ import {
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
-import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { flattenItemsBySlot, resolveHandWeapons, handSlotDisplayRows } from '../../../shared/weaponSlots.js'
 import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -102,7 +102,8 @@ export default function CombatActionWindow({
   const [assaultWeapons, setAssaultWeapons]       = useState([])
   const [allInventoryItems, setAllInventoryItems] = useState([])
   const [selectedAmmoId, setSelectedAmmoId]       = useState(null)
-  const [assaultPendingTokenId, setAssaultPendingTokenId] = useState(null)
+  const [assaultPendingTokenIds, setAssaultPendingTokenIds] = useState([])  // [id1, id2?, id3?] — docs/PLAN_TIRMULTI.md
+  const [assaultCount, setAssaultCount]                     = useState(1)   // 1|2|3
   const [assaultBulletCount, setAssaultBulletCount]       = useState(null)
   const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
   const [isDualWield, setIsDualWield]             = useState(false)
@@ -164,7 +165,8 @@ export default function CombatActionWindow({
     initialStates.current = snap
     dispatch({ type: 'RESET', payload: { ...snap } })
     setMapSelected(new Set())
-    setAssaultPendingTokenId(null)
+    setAssaultPendingTokenIds([])
+    setAssaultCount(1)
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setIsDualWield(false)
@@ -230,7 +232,7 @@ export default function CombatActionWindow({
     if (wasAnnounced && !isAnnounced) {
       dispatch({ type: 'RESET_NEW_TURN' })
       setMapSelected(new Set())
-      setAssaultPendingTokenId(null)
+      setAssaultPendingTokenIds([])
       setAssaultBulletCount(null)
       setAssaultVariantAB('A')
       setIsDualWield(false)
@@ -295,9 +297,9 @@ export default function CombatActionWindow({
     const timer = setTimeout(() => {
       socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, {
         tokenId,
-        actions:         [...mapSelected],
-        assaultTargetId: assaultPendingTokenId ?? null,
-        meleeTargetIds:  [...meleePendingTokenIds],
+        actions:          [...mapSelected],
+        assaultTargetIds: [...assaultPendingTokenIds],
+        meleeTargetIds:   [...meleePendingTokenIds],
         moveDestination: moveSelection
           ? { x: moveSelection.targetPosX, y: moveSelection.targetPosY }
           : null,
@@ -306,7 +308,7 @@ export default function CombatActionWindow({
     }, 150)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, phase, activeTokenId, mapSelected, assaultPendingTokenId, meleePendingTokenIds, moveSelection, decl.combatMode])
+  }, [socket, phase, activeTokenId, mapSelected, assaultPendingTokenIds, meleePendingTokenIds, moveSelection, decl.combatMode])
 
   if (playerTokensInRoster.length === 0) return null
 
@@ -386,14 +388,17 @@ export default function CombatActionWindow({
     ? (currentFireMode === 'RL' ? 5 : 3)
     : 0
 
-  const pendingTargetToken = assaultPendingTokenId
-    ? tokens.find(t => t.id === assaultPendingTokenId)
-    : null
-
   const attackSelected = mapSelected.has('attack')
   const meleeSelected  = mapSelected.has('melee')
   const meleeDefensif  = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
   const weaponLocked   = attackSelected || meleeSelected
+
+  // Tir Multi (docs/PLAN_TIRMULTI.md D6) — CC uniquement, jamais RC/RL
+  const effectiveAssaultCount = currentFireMode === 'CC' ? assaultCount : 1
+  // D10 — Tir visé / deux armes / Viser une localisation sont chacun exclusifs avec Tir Multi
+  const multiShotIneligibilityReasons = getMultiShotIneligibilityReasons({
+    currentFireMode, aimTranches, isDualWield, aimedLocation,
+  })
 
   // Armes de contact équipées (slots MG/MD/2M, catégorie 'Arme de contact')
   const meleeWeapons = allInventoryItems.filter(item =>
@@ -418,7 +423,8 @@ export default function CombatActionWindow({
   // conception du Lot B mais jamais câblé — gap qui laissait déclarer les deux, provoquant un plantage
   // à la résolution, trouvé par Saar en testant le Lot B/C). Sélectionner l'un efface l'autre.
   const clearAttackState = () => {
-    setAssaultPendingTokenId(null)
+    setAssaultPendingTokenIds([])
+    setAssaultCount(1)
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setIsDualWield(false)
@@ -477,14 +483,24 @@ export default function CombatActionWindow({
     )
   }
 
-  // --- choix cible assaut --------------------------------------------------
-  const handleChooseTarget = () => {
+  // --- choix cible assaut (index = slot dans la série Tir Multi) -----------
+  // UX (retour Saar) : tant qu'aucune cible n'a encore été choisie pour cette déclaration, le premier
+  // choix remplit toute la série (comportement par défaut — pas de clic répété sur la même cible pour
+  // le cas courant) ; une fois au moins une cible posée, un choix ultérieur ne touche que son slot.
+  const handleChooseTarget = (index) => {
     setInTargetMode(true)
-    setAssaultPendingTokenId(null)
     onEnterTargetMode(
       playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
-      (tokenId) => { setAssaultPendingTokenId(tokenId); setInTargetMode(false) },
+      (tokenId) => {
+        setAssaultPendingTokenIds(prev => {
+          if (!prev.some(Boolean)) return Array(effectiveAssaultCount).fill(tokenId)
+          const next = [...prev]
+          next[index] = tokenId
+          return next
+        })
+        setInTargetMode(false)
+      },
       () => { setInTargetMode(false) }
     )
   }
@@ -493,7 +509,9 @@ export default function CombatActionWindow({
   const reloadSelected = mapSelected.has('reload')
   const mapActionsObj = {
     move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
-    attack: attackSelected ? { aimTranches, lunetteNiveau } : null,
+    // Tir Multi (docs/PLAN_TIRMULTI.md D1) : array systématique, comme melee ci-dessous. aimTranches
+    // n'est jamais non-nul que sur un seul élément (D10 — Tir visé exclusif avec Tir Multi).
+    attack: attackSelected ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau }) : null,
     // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
     // Charge : toujours 1 attaque (exclusive multi-attack LdB)
     melee:  (meleeSelected && !meleeDefensif)
@@ -515,7 +533,7 @@ export default function CombatActionWindow({
   // --- validite declaration ------------------------------------------------
   const assaultValid = !attackSelected || (
     assaultWeaponId != null &&
-    assaultPendingTokenId != null &&
+    assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length === effectiveAssaultCount &&
     currentVariant != null &&
     (aimTranches === 0 || aimIneligibilityReasons.length === 0)
   )
@@ -567,21 +585,25 @@ export default function CombatActionWindow({
               ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod,
               action_key: moveSelection.action_key }
           : null,
-        attack: attackSelected ? {
-          weaponInvId:        assaultWeaponId,
-          // Main non directrice (COM29) — seulement si le dual-wield est effectivement actif
-          // (mêmes conditions que isDualWield ci-dessous) ; weaponMg = main non directrice quand
-          // hasTwoWeapons (resolveHandWeapons : primaryWeapon = weaponMd en dual-wield MG+MD).
-          offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.id ?? null) : null,
-          targetTokenId:      assaultPendingTokenId,
-          bulletCount:        currentVariant?.bulletCount ?? null,
-          fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : null,
-          fireModeBonusDmg:   currentVariant?.bonusDmg ?? null,
-          isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
-          dualWieldBonusComp: dualWieldBonusComp,
-          aimTranches:        aimTranches,
-          aimedLocation:      aimedLocation,
-        } : null,
+        // Tir Multi (docs/PLAN_TIRMULTI.md) : array d'1 à 3 tirs, même arme pour toute la série (D9)
+        // — seule la cible varie par élément.
+        attack: attackSelected
+          ? assaultPendingTokenIds.slice(0, effectiveAssaultCount).map(targetTokenId => ({
+              weaponInvId:        assaultWeaponId,
+              // Main non directrice (COM29) — seulement si le dual-wield est effectivement actif
+              // (mêmes conditions que isDualWield ci-dessous) ; weaponMg = main non directrice quand
+              // hasTwoWeapons (resolveHandWeapons : primaryWeapon = weaponMd en dual-wield MG+MD).
+              offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.id ?? null) : null,
+              targetTokenId,
+              bulletCount:        currentVariant?.bulletCount ?? null,
+              fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : null,
+              fireModeBonusDmg:   currentVariant?.bonusDmg ?? null,
+              isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
+              dualWieldBonusComp: dualWieldBonusComp,
+              aimTranches:        aimTranches,
+              aimedLocation:      aimedLocation,
+            }))
+          : null,
         // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
         melee:    (meleeSelected && !meleeDefensif)
           ? meleePendingTokenIds.slice(0, effectiveMeleeCount).map(id => ({
@@ -591,7 +613,6 @@ export default function CombatActionWindow({
             }))
           : null,
         reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
-        multi:    false,
         interact: mapSelected.has('interact'),
       },
       quick: {
@@ -1195,7 +1216,7 @@ export default function CombatActionWindow({
             <AssaultRangedPanel
               weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slots?.[0]})` : null}
               weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slots?.[0]})` : null}
-              assaultTargetId={assaultPendingTokenId}
+              targetIds={assaultPendingTokenIds}
               getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
               onChooseTarget={handleChooseTarget}
               showDualWieldSection={hasTwoWeapons && sameFirMode}
@@ -1216,6 +1237,20 @@ export default function CombatActionWindow({
               lunetteNiveau={lunetteNiveau}
               aimedLocation={aimedLocation}
               onAimedLocationChange={(loc) => setAimedLocation(loc)}
+              assaultCount={assaultCount}
+              effectiveAssaultCount={effectiveAssaultCount}
+              onAssaultCountChange={(n) => {
+                setAssaultCount(n)
+                // En augmentant le nombre de tirs, propage la cible déjà choisie aux nouveaux slots
+                // (même défaut "toute la série sur la même cible" — pas de slot vide surprise).
+                setAssaultPendingTokenIds(prev => {
+                  const truncated = prev.slice(0, n)
+                  if (truncated.length >= n) return truncated
+                  const fillValue = truncated.find(Boolean) ?? null
+                  return Array.from({ length: n }, (_, i) => truncated[i] ?? fillValue)
+                })
+              }}
+              multiShotIneligibilityReasons={multiShotIneligibilityReasons}
             />
           </div>
         )}

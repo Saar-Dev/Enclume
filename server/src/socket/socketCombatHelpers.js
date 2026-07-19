@@ -198,9 +198,9 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
 // Une entrée par action complexe déclarée (CaC/Tir uniquement — décor/grenade pas encore des types
 // réels) ; move/reload/micro/skip n'en génèrent pas (taxonomie RAW, §6 point 6 du plan). Espacement
 // ×100 par rapport à l'Initiative brute (§6ter point 2, laisse la place aux insertions du Lot B).
-// Décalage RAW -5 Initiative par attaque supplémentaire d'une série CaC (§0.1 point 6) : 2ᵉ attaque
-// -500, 3ᵉ -1000 dans cette échelle ×100 — position ≤ 0 → 'lost' immédiat (§6bis point 7 / §6sexies
-// point 1). Un token dont l'Allure déclarée (state_vitesse) vaut 'delayed' — Retarder son Action,
+// Décalage RAW -5 Initiative par attaque supplémentaire d'une série CaC ou Tir Multi (§0.1 point 6,
+// docs/PLAN_TIRMULTI.md) : 2ᵉ attaque -500, 3ᵉ -1000 dans cette échelle ×100 — position ≤ 0 → 'lost'
+// immédiat (§6bis point 7 / §6sexies point 1). Un token dont l'Allure déclarée (state_vitesse) vaut 'delayed' — Retarder son Action,
 // §1/§0.1 point 4 — reçoit ses entrées sans position (delayed_waiting), positionnées plus tard par
 // COMBAT_ACT_NOW (§6bis point 2 : Retarder porte sur le Tour entier de l'action, jamais une attaque
 // isolée d'une série — la série entière bascule ensemble).
@@ -208,17 +208,41 @@ function computeSeriesPositions(basePosition, count) {
   return Array.from({ length: count }, (_, idx) => basePosition - idx * 500)
 }
 
+// Malus « Attaques multiples » (LdB p.218) : −5 pour 2 attaques, −7 pour 3+. Partagé entre CaC
+// (resolveMeleeAction) et Tir Multi (resolveAssaultAction, docs/PLAN_TIRMULTI.md) — même RAW, même
+// mécanique d'échelle de phases, une seule implémentation. Recalculé sur le nombre réel de sœurs non
+// perdues à CET instant (pas figé à la déclaration) : une sœur déjà 'lost' (décalage au-delà de la
+// phase 1, cible invalide, étourdissement) ou 'skipped' ne compte plus.
+async function computeMultiAttackMalus(actionId) {
+  const timelineEntry = await db('combat_timeline_entries').where({ combat_action_id: actionId }).first()
+  let totalCount = 1
+  if (timelineEntry?.declaration_group_id) {
+    const [{ count: siblingCount }] = await db('combat_timeline_entries')
+      .where({ declaration_group_id: timelineEntry.declaration_group_id })
+      .whereNotIn('status', ['lost', 'skipped'])
+      .count('* as count')
+    totalCount = parseInt(siblingCount, 10) || 1
+  }
+  return { totalCount, malus: totalCount === 2 ? -5 : totalCount >= 3 ? -7 : 0 }
+}
+
+// Groupement par (token, type) — CaC et Tir Multi (docs/PLAN_TIRMULTI.md) partagent exactement le même
+// traitement : une série d'attaques déclarées ensemble devient un groupe d'entrées d'échelle étalées
+// de 500 en 500 (RAW -5 Initiative par attaque supplémentaire), avec un `declaration_group_id` commun
+// utilisé à la résolution pour recompter les sœurs vivantes (computeMultiAttackMalus). Une seule
+// implémentation pour les deux mécaniques — jamais deux copies divergentes du même calcul.
 async function buildTimelineEntries(campaignId, turnNumber, pendingActions, roster) {
   const rosterByToken = new Map(roster.map(r => [r.token_id, r]))
   const rows = []
 
-  const meleeByToken = new Map()
+  const seriesByTokenAndType = new Map()
   for (const action of pendingActions) {
-    if (action.type !== 'melee') continue
-    if (!meleeByToken.has(action.token_id)) meleeByToken.set(action.token_id, [])
-    meleeByToken.get(action.token_id).push(action)
+    if (action.type !== 'melee' && action.type !== 'assault') continue
+    const key = `${action.token_id}:${action.type}`
+    if (!seriesByTokenAndType.has(key)) seriesByTokenAndType.set(key, { tokenId: action.token_id, actions: [] })
+    seriesByTokenAndType.get(key).actions.push(action)
   }
-  for (const [tokenId, actions] of meleeByToken) {
+  for (const { tokenId, actions } of seriesByTokenAndType.values()) {
     const isDelayed = rosterByToken.get(tokenId)?.state_vitesse === 'delayed'
     const groupId = crypto.randomUUID()
     const positions = isDelayed ? null : computeSeriesPositions((rosterByToken.get(tokenId)?.initiative ?? 0) * 100, actions.length)
@@ -232,22 +256,6 @@ async function buildTimelineEntries(campaignId, turnNumber, pendingActions, rost
         phase_position: isDelayed ? null : positions[idx],
         status: isDelayed ? 'delayed_waiting' : (positions[idx] <= 0 ? 'lost' : 'scheduled'),
       })
-    })
-  }
-
-  for (const action of pendingActions) {
-    if (action.type !== 'assault') continue
-    const rosterEntry = rosterByToken.get(action.token_id)
-    const isDelayed = rosterEntry?.state_vitesse === 'delayed'
-    const position = isDelayed ? null : (rosterEntry?.initiative ?? 0) * 100
-    rows.push({
-      campaign_id: campaignId,
-      turn_number: turnNumber,
-      token_id: action.token_id,
-      combat_action_id: action.id,
-      declaration_group_id: null,
-      phase_position: position,
-      status: isDelayed ? 'delayed_waiting' : (position <= 0 ? 'lost' : 'scheduled'),
     })
   }
 
@@ -1284,19 +1292,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       countAdversaires(myTokenPos, rosterTokens, action.token_id, atkEnemyType, measurement.metrics)
     )
 
-    // CaC 4b — malus attaque multiple (LdB p.218) : −5 pour 2 attaques, −7 pour 3+. Recalculé sur le
-    // nombre réel de sœurs non perdues à CET instant (§6bis point 3) — pas figé à la déclaration : une
-    // sœur déjà 'lost' (décalage au-delà de la phase 1, cible invalide, étourdissement) ne compte plus.
-    const timelineEntry = await db('combat_timeline_entries').where({ combat_action_id: action.id }).first()
-    let totalMeleeCount = 1
-    if (timelineEntry?.declaration_group_id) {
-      const [{ count: siblingCount }] = await db('combat_timeline_entries')
-        .where({ declaration_group_id: timelineEntry.declaration_group_id })
-        .whereNotIn('status', ['lost', 'skipped'])
-        .count('* as count')
-      totalMeleeCount = parseInt(siblingCount, 10) || 1
-    }
-    const multiAttackMalus = totalMeleeCount === 2 ? -5 : totalMeleeCount >= 3 ? -7 : 0
+    // CaC 4b — malus attaque multiple (LdB p.218), fonction partagée avec le Tir Multi (voir
+    // computeMultiAttackMalus, docs/PLAN_TIRMULTI.md).
+    const { malus: multiAttackMalus } = await computeMultiAttackMalus(action.id)
 
     // Mods situation CaC (§6.2)
     const deuxArmesSlots = invAttaquant.filter(i => i.in_hand_slot && i.ref_category === 'Arme de contact')
@@ -2324,7 +2322,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // Phase 1 (action.aimed_location), malus appliqué ici comme Tir visé l'est pour son bonus.
     const aimedLocationKey   = action.aimed_location ?? null
     const aimedLocationMalus = AIMED_LOCATION_MALUS[aimedLocationKey] ?? 0
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus + shieldAtkMalus
+    // Tir Multi (docs/PLAN_TIRMULTI.md) — malus « Attaques multiples » (LdB p.218), fonction partagée
+    // avec le CaC (computeMultiAttackMalus). Recalculé sur les sœurs vivantes à CET instant, pas figé
+    // à la déclaration — même principe que le CaC.
+    const { malus: multiAttackMalus } = await computeMultiAttackMalus(action.id)
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus + shieldAtkMalus + multiAttackMalus
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
@@ -2338,6 +2340,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
       ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
       ...(aimedLocationMalus !== 0 ? [{ label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' }] : []),
+      ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
       ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
       ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
