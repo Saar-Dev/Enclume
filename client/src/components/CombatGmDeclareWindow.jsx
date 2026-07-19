@@ -9,6 +9,8 @@ import {
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { handSlotDisplayRows } from '../../../shared/weaponSlots.js'
+import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -28,20 +30,6 @@ const STATE_DEFAULTS = {
   fire_mode: 'cc',
   cover:     'exposed',
   vitesse:   'normal',
-}
-
-// ---------------------------------------------------------------------------
-// Statut munitions d'une arme équipée (COM20) — miroir de CombatActionWindow.jsx.
-// ---------------------------------------------------------------------------
-function weaponAmmoStatus(remaining, capacityRaw) {
-  if (capacityRaw == null) return null
-  const m = String(capacityRaw).match(/\d+/)
-  const capacity = m ? parseInt(m[0], 10) : 0
-  if (!capacity) return null
-  const rem = remaining ?? 0
-  if (rem <= 0) return 'empty'
-  if (rem / capacity <= 0.25) return 'low'
-  return 'ok'
 }
 
 function nextKey(stateKey, currentKey, availableKeys) {
@@ -251,6 +239,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const rangedActive = isActivePnj && isRanged(activeTokenId)
   const weaponMg      = isActivePnj ? (equipment[activeTokenId]?.weaponMg ?? null) : null
   const weaponMd      = isActivePnj ? (equipment[activeTokenId]?.weaponMd ?? null) : null
+  const weapon2M      = isActivePnj ? (equipment[activeTokenId]?.weapon2M ?? null) : null
+  const weaponTr      = isActivePnj ? (equipment[activeTokenId]?.weaponTr ?? null) : null
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
 
@@ -531,21 +521,25 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               {/* ARMEMENT */}
               <div className="combat-win-section">
                 <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>ARMEMENT</span>
-                {(weaponMg || weaponMd) && (
-                  <div style={S.weaponInfo}>
-                    {[['MG', weaponMg], ['MD', weaponMd]].filter(([, w]) => w).map(([hand, w]) => {
-                      const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
-                      const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
-                      return (
-                        <span key={w.inv_id} className={cls} style={S.weaponInfoLine} title={w.skill_label ?? undefined}>
-                          <span className="combat-equip-dot" />
-                          {weaponMg && weaponMd ? `${hand} · ` : ''}{w.name || '?'}
-                          {status && <span style={S.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
+                {(() => {
+                  const { rows, showSlotLabel } = handSlotDisplayRows({ MG: weaponMg, MD: weaponMd, '2M': weapon2M, Tr: weaponTr })
+                  if (rows.length === 0) return null
+                  return (
+                    <div style={S.weaponInfo}>
+                      {rows.map(({ slot, weapon: w }) => {
+                        const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count, w.ref_caliber)
+                        const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
+                        return (
+                          <span key={w.inv_id} className={cls} style={S.weaponInfoLine} title={w.skill_label ?? undefined}>
+                            <span className="combat-equip-dot" />
+                            {showSlotLabel ? `${slot} · ` : ''}{w.name || '?'}
+                            {status && <span style={S.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
                 <div style={S.chips}>
                   {['weapon', 'fire_mode'].map(k => (
                     <InlineChip key={k} stateKey={k}

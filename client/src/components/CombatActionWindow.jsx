@@ -15,28 +15,13 @@ import {
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
 import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
-import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
+import { flattenItemsBySlot, resolveHandWeapons, handSlotDisplayRows } from '../../../shared/weaponSlots.js'
+import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
-
-// ---------------------------------------------------------------------------
-// Statut munitions d'une arme équipée (COM20) — 'empty' | 'low' (≤25%) | 'ok' | null (pas d'arme
-// à feu, ex. arme de contact sans ref_ammo_count). ref_ammo_count est un texte libre (ex. "15") —
-// même parsing que resolveAmmoInit (server/src/services/inventoryService.js).
-// ---------------------------------------------------------------------------
-function weaponAmmoStatus(remaining, capacityRaw) {
-  if (capacityRaw == null) return null
-  const m = String(capacityRaw).match(/\d+/)
-  const capacity = m ? parseInt(m[0], 10) : 0
-  if (!capacity) return null
-  const rem = remaining ?? 0
-  if (rem <= 0) return 'empty'
-  if (rem / capacity <= 0.25) return 'low'
-  return 'ok'
-}
 
 // ---------------------------------------------------------------------------
 // Composant StateSelector
@@ -355,12 +340,14 @@ export default function CombatActionWindow({
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   const forceCC       = hasTwoWeapons && !sameFirMode
   const assaultWeaponId = selectedWeapon?.id ?? null
-  // Arme(s) équipée(s) MG/MD/2M, distant ou contact — affichage ARMEMENT (COM20). weaponMg/weaponMd
-  // ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item slotté, arme ou non.
+  // Arme(s) équipée(s) MG/MD/2M/Tr, distant ou contact — affichage ARMEMENT (COM20/COM2).
+  // weaponMg/weaponMd ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item
+  // slotté, arme ou non.
   const equippedSlotRows = flattenItemsBySlot(allInventoryItems)
   const equippedMg = equippedSlotRows.find(item => item.slot === 'MG') ?? null
   const equippedMd = equippedSlotRows.find(item => item.slot === 'MD') ?? null
   const equipped2M = equippedSlotRows.find(item => item.slot === '2M') ?? null
+  const equippedTr = equippedSlotRows.find(item => item.slot === 'Tr') ?? null
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
@@ -878,21 +865,25 @@ export default function CombatActionWindow({
           {!isDrone && (
             <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
               <div style={W.sectionTitle}>ARMEMENT</div>
-              {(equippedMg || equippedMd || equipped2M) && (
+              {(() => {
+                const { rows, showSlotLabel } = handSlotDisplayRows({ MG: equippedMg, MD: equippedMd, '2M': equipped2M, Tr: equippedTr })
+                if (rows.length === 0) return null
+                return (
                 <div style={W.weaponInfo}>
-                  {[['MG', equippedMg], ['MD', equippedMd], ['2M', equipped2M]].filter(([, w]) => w).map(([hand, w]) => {
-                    const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
+                  {rows.map(({ slot, weapon: w }) => {
+                    const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count, w.ref_caliber)
                     const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
                     return (
                       <span key={w.id} className={cls} style={W.weaponInfoLine} title={w.skill_label ?? undefined}>
                         <span className="combat-equip-dot" />
-                        {(equippedMg && equippedMd) || equipped2M ? `${hand} · ` : ''}{w.custom_name || w.ref_name || '?'}
+                        {showSlotLabel ? `${slot} · ` : ''}{w.custom_name || w.ref_name || '?'}
                         {status && <span style={W.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
                       </span>
                     )
                   })}
                 </div>
-              )}
+                )
+              })()}
               <StateSelector
                 stateKey="weapon" def={STATE_DEFS.weapon}
                 current={decl.weapon} initial={initialStates.current.weapon}

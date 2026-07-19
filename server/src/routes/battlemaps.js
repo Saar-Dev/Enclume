@@ -251,13 +251,17 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
     // shared/weaponSlots.js — autorité unique, partagée avec le fetch client PJ
     // (CombatActionWindow.jsx) : filtre les objets non-armes (Bouclier) occupant une main et gère le
     // deux-mains (2M), les deux gaps trouvés Session 158 (Loulou/Breather, Mr sourire/Bouclier).
-    const { weaponMg, weaponMd, primaryWeapon } = resolveHandWeapons(weaponRows)
+    // weapon2M/weaponTr transmis en plus de primaryWeapon (COM2) — sans eux, handSlotDisplayRows côté
+    // client ne peut pas afficher le statut d'une arme en 2M/Tr, seul primaryWeapon les couvrirait.
+    const { weaponMg, weaponMd, weapon2M, weaponTr, primaryWeapon } = resolveHandWeapons(weaponRows)
 
     equipment[token.id] = {
       characterId:    token.character_id,
       weapon:         primaryWeapon,
       weaponMg,
       weaponMd,
+      weapon2M,
+      weaponTr,
       armorPieces:    armorRows,
       naturalWeapons: naturalWeaponRows,
     }

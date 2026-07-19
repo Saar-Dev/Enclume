@@ -48,6 +48,27 @@ export function resolveHandWeapons(slotRows) {
 }
 
 /**
+ * Lignes d'affichage « arme(s) en main » (ARMEMENT, COM20/COM2) — autorité unique de l'ordre et de la
+ * règle de préfixe, consommée à l'identique par CombatGmDeclareWindow.jsx (PNJ) et
+ * CombatActionWindow.jsx (PJ) pour qu'elles ne divergent plus jamais. Trouvé Session 158+ (Saar) :
+ * chaque composant maintenait son propre tableau `[['MG', w], ['MD', w]]` en dur — l'ajout du 2M
+ * Session 158 n'a été répercuté que côté PJ (COM2), et `Tr` (arme montée sur trépied, slot réel —
+ * `inventoryService.js` WEAPON_SLOTS) n'a jamais été ajouté nulle part.
+ *
+ * @param {{ MG?: object|null, MD?: object|null, '2M'?: object|null, Tr?: object|null }} weaponsBySlot
+ * @returns {{ rows: Array<{ slot: string, weapon: object }>, showSlotLabel: boolean }}
+ */
+export function handSlotDisplayRows(weaponsBySlot) {
+  const rows = HAND_WEAPON_SLOTS
+    .map(slot => ({ slot, weapon: weaponsBySlot?.[slot] ?? null }))
+    .filter(r => r.weapon)
+  // Une seule main occupée (MG seul ou MD seul) : pas de préfixe (ambigu autrement). Toute autre
+  // configuration (plusieurs mains occupées, ou une main "spéciale" seule type 2M/Tr) précise le slot.
+  const showSlotLabel = rows.length > 1 || (rows.length === 1 && !['MG', 'MD'].includes(rows[0].slot))
+  return { rows, showSlotLabel }
+}
+
+/**
  * Aplatit des items porteurs d'un tableau `slots` (forme renvoyée par
  * inventoryService.getInventory — un item peut couvrir plusieurs slots à la fois, ex. une armure) en
  * une entrée par slot occupé — miroir du format 1-ligne-par-slot déjà renvoyé par la jointure

@@ -308,6 +308,26 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > testé** : navigateur réel (le scénario exact — assaut PNJ présenté pendant une fenêtre de réaction —
 > n'a pas de fixture dédiée ; la relecture du log est la seule preuve disponible pour l'instant).
 
+> **Item 89 (Session 161, dev/Saar) — Cluster E / COM2 : statut arme absente côté MJ (2M/Tr jamais
+> affichés) ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Cause `[VÉRIFIÉ]` par lecture croisée
+> client/serveur : le bloc ARMEMENT de `CombatGmDeclareWindow.jsx` (statut munitions COM20) ne testait
+> que `weaponMg`/`weaponMd` — un PNJ équipé uniquement d'une arme deux-mains (`2M`) ou montée sur
+> trépied (`Tr`, slot réel — `inventoryService.js` `WEAPON_SLOTS`) n'affichait aucun statut arme côté
+> MJ. Le `2M` avait déjà été ajouté côté PJ (`CombatActionWindow.jsx`, COM20/Session 158) mais jamais
+> répercuté côté MJ — dérive du pattern « chaque composant maintient son propre tableau `[['MG', w],
+> ['MD', w]]` en dur » ; `Tr` n'était affiché nulle part, ni PJ ni MJ.
+> **Correctif** : nouvelle fonction pure `handSlotDisplayRows()` dans `shared/weaponSlots.js` — autorité
+> unique de l'ordre d'affichage (dérivé de `HAND_WEAPON_SLOTS`) et de la règle de préfixe de main,
+> consommée à l'identique par les deux fenêtres au lieu de dupliquer le tableau. `battlemaps.js`
+> (`/combat-equipment`) transmet désormais `weapon2M`/`weaponTr` (déjà calculés par `resolveHandWeapons`
+> mais jetés avant ce correctif). `CombatActionWindow.jsx` gagne `equippedTr` (même gap côté PJ).
+> **Testé** : 5 nouveaux tests unitaires `shared/weaponSlots.test.mjs` (MG seul, MG+MD, 2M seul —
+> reproduit COM2, Tr seul, aucune arme) ✅ ; build Vite complet propre ; `node --check` serveur/partagé
+> propre ; confirmé fonctionnel par Saar en navigateur (MJ et PJ). **Non testé** : scénario `Tr` en
+> conditions réelles (aucun item catalogue équipé en `Tr` disponible pour un test en jeu, couverture
+> unitaire uniquement pour ce slot). **Données** : aucune migration, aucun effet runtime — changement
+> d'affichage pur. **Retour arrière** : aucun schéma touché, revert du commit suffit.
+
 > **Item 88 (Session 159, dev/Saar) — Retrait de la fenêtre de réaction temporisée (refonte
 > architecturale, demandée explicitement par Saar après un 2ᵉ log de blocage : « qu'est-ce que tu
 > essaies de faire ? Est-ce qu'on est vraiment alignés sur le fonctionnement souhaité d'un tour de
@@ -2484,7 +2504,7 @@ Projet en cours et priorité user :
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
 | CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
-| COM2 | Vérif statut arme absente côté GM | Moyenne |
+| ~~**COM2**~~ | ~~Vérif statut arme absente côté GM~~ | ✅ Session 161 (Saar) |
 | ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
 | COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque (signalé Saar, non instrumenté) | À investiguer |
 | FEAT4 | Aura de portée CaC (3m + allonge arme) autour du personnage actif | Basse — sprint futur |

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { isWeaponItem, resolveHandWeapons, flattenItemsBySlot } from './weaponSlots.js'
+import { isWeaponItem, resolveHandWeapons, flattenItemsBySlot, handSlotDisplayRows } from './weaponSlots.js'
 
 test('isWeaponItem — un Bouclier (ni fire_mode ni damage_h) n\'est pas une arme', () => {
   assert.equal(isWeaponItem({ ref_fire_mode: null, ref_damage_h: null }), false)
@@ -61,4 +61,39 @@ test('flattenItemsBySlot — un item multi-slots (slots: array) devient une lign
   assert.equal(rows.length, 1)
   assert.equal(rows[0].slot, '2M')
   assert.equal(rows[0].id, 'a')
+})
+
+test('handSlotDisplayRows — MG seul : une ligne, pas de préfixe', () => {
+  const { rows, showSlotLabel } = handSlotDisplayRows({ MG: { name: 'Scorpion' } })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].slot, 'MG')
+  assert.equal(showSlotLabel, false)
+})
+
+test('handSlotDisplayRows — MG+MD : deux lignes dans l\'ordre, préfixe requis', () => {
+  const { rows, showSlotLabel } = handSlotDisplayRows({ MG: { name: 'A' }, MD: { name: 'B' } })
+  assert.deepEqual(rows.map(r => r.slot), ['MG', 'MD'])
+  assert.equal(showSlotLabel, true)
+})
+
+test('handSlotDisplayRows — 2M seul (COM2) : une ligne visible avec préfixe', () => {
+  // Reproduit le bug réel : côté MJ, weaponMg/weaponMd valent tous deux null pour un PNJ en 2M seul —
+  // sans ce cas géré explicitement, le bloc ARMEMENT entier disparaissait (COM2).
+  const { rows, showSlotLabel } = handSlotDisplayRows({ MG: null, MD: null, '2M': { name: 'Fusil à pompe' } })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].slot, '2M')
+  assert.equal(showSlotLabel, true)
+})
+
+test('handSlotDisplayRows — Tr seul (arme montée) : une ligne visible avec préfixe', () => {
+  const { rows, showSlotLabel } = handSlotDisplayRows({ Tr: { name: 'Mitrailleuse lourde' } })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].slot, 'Tr')
+  assert.equal(showSlotLabel, true)
+})
+
+test('handSlotDisplayRows — aucune arme en main : tableau vide', () => {
+  const { rows, showSlotLabel } = handSlotDisplayRows({})
+  assert.equal(rows.length, 0)
+  assert.equal(showSlotLabel, false)
 })
