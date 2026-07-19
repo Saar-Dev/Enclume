@@ -569,6 +569,10 @@ export default function CombatActionWindow({
           : null,
         attack: attackSelected ? {
           weaponInvId:        assaultWeaponId,
+          // Main non directrice (COM29) — seulement si le dual-wield est effectivement actif
+          // (mêmes conditions que isDualWield ci-dessous) ; weaponMg = main non directrice quand
+          // hasTwoWeapons (resolveHandWeapons : primaryWeapon = weaponMd en dual-wield MG+MD).
+          offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.id ?? null) : null,
           targetTokenId:      assaultPendingTokenId,
           bulletCount:        currentVariant?.bulletCount ?? null,
           fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : null,

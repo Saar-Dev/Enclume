@@ -308,6 +308,45 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > testé** : navigateur réel (le scénario exact — assaut PNJ présenté pendant une fenêtre de réaction —
 > n'a pas de fixture dédiée ; la relecture du log est la seule preuve disponible pour l'instant).
 
+> **Item 91 (Session 162, dev/Saar) — COM29 : Tir à deux armes, seule la main directrice trackée
+> (munitions) ✅ CLOS.** Cause `[VÉRIFIÉ]` (LdB `docs/REGLES/REGLESYSCOMBAT.md` p.226 "Tirer avec deux
+> armes" relu et cité exactement) : le personnage tire réellement des deux armes en dual-wield (c'est
+> la justification fictionnelle du bonus +3/+5), donc les deux doivent consommer et vérifier leurs
+> munitions propres — `combat_actions` n'avait qu'une seule colonne arme (`weapon_inv_id`), la main non
+> directrice n'était jamais fetchée, vérifiée ni décomptée. Trouvé par Saar en marge de COM25/COM28.
+> **Décision produit (Saar)** : jamais de blocage total tant qu'une main peut encore tirer — l'autre
+> main à sec dégrade en tir simple (bonus deux armes annulé), message système privé (chat, propriétaire
+> du personnage uniquement) expliquant pourquoi, jamais un refus d'agir.
+> **Correctif** : migration `176` (`combat_actions.offhand_weapon_inv_id`, FK `char_inventory`, CHECK
+> XOR miroir de `drone_weapon_inv_id`) ; `shared/dualWieldRules.js` (nouveau module, `resolveDualWieldFire`
+> — autorité unique de la décision "qui tire", séparée de `shared/ammoRules.js` qui ne connaît que le
+> comptage de munitions, pas l'arbitrage de tir) consommée à l'identique par la Déclaration (fail-fast,
+> ne bloque que si les deux mains sont à sec) et la Résolution (autorité, `resolveAssaultAction`
+> restructurée pour déterminer l'arme effective — portée/dégâts/mods/compétence/décompte tous
+> re-paramétrés sur elle, jamais un usage figé de la main directrice). Message système : `WS.CHAT_MESSAGE`
+> étendu d'un flag `system`+`i18nKey` (résolu côté client via `t()`, jamais de texte figé serveur —
+> nouvelles clés `session.dualWieldAmmoOutPrimary`/`dualWieldAmmoOutOffhand`, fr+en), acheminé par le
+> mécanisme d'émission ciblée `to:'user'`/`fallback` déjà existant (aucun nouvel événement WebSocket).
+> Client : `offhandWeaponInvId` ajouté au payload `mapActions.attack` (`CombatActionWindow.jsx` +
+> `CombatGmDeclareWindow.jsx`, main non directrice = `weaponMg` quand `hasTwoWeapons`).
+> **Testé** : 7 tests unitaires `shared/dualWieldRules.test.mjs` (4 combinaisons dual-wield + 3 cas
+> tir simple) ✅ ; `node --check` sur les 2 fichiers serveur touchés ✅ ; build Vite complet propre ✅.
+> **Non testé** : scénario réel en base (dual-wield avec une main vidée en cours de combat, vérifier
+> bonus/décompte/message privé reçu uniquement par le bon joueur) — à la charge de Saar, aucune fixture
+> dédiée montée cette session. **Données** : migration `176`, nullable et rétrocompatible. **Retour
+> arrière** : `down()` de la migration retire la colonne ; revert du commit pour le reste.
+>
+> **Item 90 (Session 160, dev/Saar) — COM25 + COM28 : munitions insuffisantes bloque le tir, statut
+> munitions Matraque Mao ✅ CLOS** (session parallèle, code déjà présent au moment d'ouvrir Item 91
+> ci-dessus — entrée reconstituée a posteriori depuis le diff réel, pas depuis une note prise en
+> l'écrivant). COM25 : aucun garde n'empêchait de déclarer/résoudre un assaut avec `ammo_remaining=0`.
+> COM28 : `weaponAmmoStatus` affichait "0/40 munitions" sur une arme de contact (Matraque Mao) sans
+> calibre réel. **Correctif** : `shared/ammoRules.js` (nouveau module) — `hasEnoughAmmo` (autorité
+> unique fail-fast Déclaration + autoritaire Résolution, `socketCombatAnnouncement.js` +
+> `socketCombatHelpers.js`) et `weaponAmmoStatus` (déplacé depuis les copies locales
+> `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`, gagne un paramètre `caliber` — non nul requis
+> pour tout statut, cf. `resolveAmmoInit`). **Testé** : 8 tests unitaires `shared/ammoRules.test.mjs`.
+>
 > **Item 89 (Session 161, dev/Saar) — Cluster E / COM2 : statut arme absente côté MJ (2M/Tr jamais
 > affichés) ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Cause `[VÉRIFIÉ]` par lecture croisée
 > client/serveur : le bloc ARMEMENT de `CombatGmDeclareWindow.jsx` (statut munitions COM20) ne testait
@@ -2498,7 +2537,9 @@ Projet en cours et priorité user :
 
 | ID | Description | Priorité |
 |---|---|---|
-| **COM25** | Arme sans munition restante (`ammo_remaining=0`) continue de tirer — aucun garde dans `resolveAssaultAction` (`socketCombatHelpers.js:1468-1480`), le décompte clampe à 0 mais ne bloque jamais l'attaque. Trouvé en marge du Lot A `docs/PLAN_ARMES_DSL.md` | 🔴 **Urgent — priorité Saar** |
+| ~~**COM25**~~ | ~~Arme sans munition restante continue de tirer~~ | ✅ Session 160 (Saar) |
+| ~~**COM28**~~ | ~~Matraque Mao (arme CaC) affichait "0/40 munitions" en fenêtre de combat — `weaponAmmoStatus` ignorait `ref_caliber`~~ | ✅ Session 160 (Saar) |
+| ~~**COM29**~~ | ~~Tir à deux armes : seule la main directrice trackée (munitions)~~ | ✅ Session 162 (Saar) |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |

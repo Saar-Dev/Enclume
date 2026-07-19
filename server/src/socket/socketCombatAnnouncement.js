@@ -9,6 +9,26 @@ import { combatDestinationFromPayload, selectCombatMovementForCost } from '../..
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
 import { planBattlemapTokenMovement } from '../services/worldMovementService.js'
+import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
+import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
+
+// Fetch arme équipée en main pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
+// appellent ce même fetch, jamais deux copies divergentes du même bloc DB). Aucune règle métier ici :
+// la main directrice bloque le tour sur échec (messages dédiés dans l'appelant), la main non-directrice
+// dégrade silencieusement en tir simple (shared/ammoRules.js::resolveDualWieldFire).
+async function fetchHandWeaponForAssault(weaponInvId, characterId) {
+  const weapon = await db('char_inventory')
+    .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+    .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': characterId })
+    .select('char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
+    .first()
+  if (!weapon) return { weapon: null, inHand: false }
+  const inHandRow = await db('char_inventory_slots')
+    .where({ char_inventory_id: weaponInvId })
+    .whereIn('slot_code', ['MG', 'MD', '2M', 'Tr'])
+    .first()
+  return { weapon, inHand: !!inHandRow }
+}
 
 async function planCombatWorldMovement(token, character, move) {
   if (token.position_space !== 'world-feet') throw new RangeError('Le token utilise encore une position legacy')
@@ -175,27 +195,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           assaultWeaponRefRange = droneWeapon.ref_range ?? null
         } else {
           // Humanoïde : validation char_inventory + PC23
-          const { weaponInvId } = mapActions.attack
+          const { weaponInvId, offhandWeaponInvId, isDualWield } = mapActions.attack
           if (!weaponInvId) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut impossible — aucune arme sélectionnée' })
             return
           }
-          const weapon = await db('char_inventory')
-            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-            .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': character.id })
-            .select('char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode')
-            .first()
+          const { weapon, inHand } = await fetchHandWeaponForAssault(weaponInvId, character.id)
           if (!weapon) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme sélectionnée est introuvable dans l'inventaire (transférée entre-temps ?)" })
             return
           }
           // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
           // stricte sur char_inventory.slot — composite-safe.
-          const weaponInHand = await db('char_inventory_slots')
-            .where({ char_inventory_id: weaponInvId })
-            .whereIn('slot_code', ['MG', 'MD', '2M', 'Tr'])
-            .first()
-          if (!weaponInHand) {
+          if (!inHand) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
             return
           }
@@ -206,7 +218,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             return
           }
           assaultWeaponRefRange = weapon.ref_range ?? null
-          // PC23 — TIR_AUTOMATIQUE requis pour RC/RL
+          // PC23 — TIR_AUTOMATIQUE requis pour RC/RL (contrôle unique, indépendant de la main —
+          // c'est une compétence du personnage, pas de l'arme)
           if (fireMode === 'RC' || fireMode === 'RL') {
             const sheet = await db('char_sheet').where({ character_id: character.id }).first()
             const autoSkill = sheet
@@ -220,19 +233,34 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
               return
             }
           }
-          // Vérification munitions ANNOUNCEMENT (MANUELSYSCOMBAT §4)
-          // ammo_remaining null = tracking désactivé (arme sans chargeur) → pas de vérification
+          // Vérification munitions ANNOUNCEMENT (MANUELSYSCOMBAT §4) — fail-fast déclaratif.
+          // Autorité de la règle : shared/ammoRules.js (revérifiée à la Résolution, COM25).
           const bulletCount = mapActions.attack.bulletCount ?? 1
-          if (weapon.ammo_remaining !== null && weapon.ammo_remaining < bulletCount) {
-            let pnjUnlimited = false
-            if (character.type === 'pnj') {
-              const settings = await getCampaignSettings(db, campaignId)
-              pnjUnlimited = settings.pnj_unlimited_ammo
+          let pnjUnlimited = false
+          if (character.type === 'pnj') {
+            const settings = await getCampaignSettings(db, campaignId)
+            pnjUnlimited = settings.pnj_unlimited_ammo
+          }
+          const primaryAmmoOk = hasEnoughAmmo(weapon.ammo_remaining, bulletCount, { isPnj: character.type === 'pnj', pnjUnlimitedAmmo: pnjUnlimited })
+
+          // Tir à deux armes (COM29, LdB p.226) — la main non-directrice ne bloque jamais la
+          // déclaration à elle seule : toute anomalie (arme introuvable, pas en main, mode de tir
+          // incompatible, munitions insuffisantes) dégrade silencieusement en tir simple, décidé et
+          // annoncé au joueur à la Résolution (shared/ammoRules.js::resolveDualWieldFire, autorité
+          // unique — même décision recalculée côté Résolution avec l'état munitions le plus frais).
+          let offhandAmmoOk = false
+          if (isDualWield && offhandWeaponInvId) {
+            const { weapon: offhandWeapon, inHand: offhandInHand } = await fetchHandWeaponForAssault(offhandWeaponInvId, character.id)
+            const offhandFireModeOk = offhandWeapon?.ref_fire_mode ? offhandWeapon.ref_fire_mode.toUpperCase().includes(fireMode) : true
+            if (offhandWeapon && offhandInHand && offhandFireModeOk) {
+              offhandAmmoOk = hasEnoughAmmo(offhandWeapon.ammo_remaining, bulletCount, { isPnj: character.type === 'pnj', pnjUnlimitedAmmo: pnjUnlimited })
             }
-            if (!pnjUnlimited) {
-              socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Munitions insuffisantes — rechargez d'abord" })
-              return
-            }
+          }
+
+          const { fires } = resolveDualWieldFire({ primaryAmmoOk, offhandAmmoOk, isDualWield: !!isDualWield && !!offhandWeaponInvId })
+          if (fires === null) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Munitions insuffisantes — rechargez d'abord" })
+            return
           }
         }
       }
@@ -331,11 +359,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       if (mapActions?.attack) {
-        const { weaponInvId, droneWeaponInvId, targetTokenId, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp } = mapActions.attack
+        const { weaponInvId, offhandWeaponInvId, droneWeaponInvId, targetTokenId, bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp } = mapActions.attack
         actionRows.push({
           campaign_id:          campaignId, token_id: tokenId,
           action_key:           'assault', type: 'assault', sequence: 3,
           weapon_inv_id:        isDrone ? null : (weaponInvId ?? null),
+          offhand_weapon_inv_id: (isDrone || !isDualWield) ? null : (offhandWeaponInvId ?? null),
           drone_weapon_inv_id:  isDrone ? (droneWeaponInvId ?? null) : null,
           target_token_id:      targetTokenId ?? null,
           fire_mode:            state.fire_mode ?? null,

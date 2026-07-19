@@ -13,6 +13,8 @@ import { calcWeaponModBonus } from '../services/modingService.js'
 import { measureBattlemapTokenDistance, tokenDistanceM } from '../services/worldSpatialQueryService.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
 import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
+import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import {
   calcSkillTotal, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -2105,6 +2107,33 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
   }
 }
 
+// Fetch arme + mods installés pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
+// utilisent ce même fetch en Résolution, jamais deux copies divergentes des colonnes/jointures).
+async function fetchAssaultWeaponAndMods(weaponInvId) {
+  const [weapon, installedMods] = await Promise.all([
+    db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': weaponInvId })
+      .select(
+        'ref_equipment.damage_h as ref_damage_h',
+        'char_inventory.equipment_id',
+        'char_inventory.ammo_remaining',
+        'ref_equipment.ammo_count as ref_ammo_count',
+        'ref_equipment.range as ref_range',
+        'ref_equipment.category as ref_category',
+      )
+      .first(),
+    // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — mods installés sur l'arme utilisée, jointure fraîche
+    // ref_equipment (pas le mod_slot snapshotté sur char_inventory_mods, qui ne sert qu'à la
+    // contrainte UNIQUE d'exclusivité).
+    db('char_inventory_mods as cim')
+      .join('ref_equipment as re', 'cim.equipment_id', 're.id')
+      .where({ 'cim.weapon_inv_id': weaponInvId })
+      .select('re.name', 're.bonus', 're.mod_slot', 're.mod_requires_aim'),
+  ])
+  return { weapon, installedMods }
+}
+
 export async function resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   console.log(`[DBG] resolveAssaultAction — début token:${action.token_id} type_perso:${character.type}`)
   try {
@@ -2129,33 +2158,56 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       options.coverageModifier = los.coverageModifier ?? 0
     }
 
-    const [weapon, rosterTireur, installedMods] = await Promise.all([
-      db('char_inventory')
-        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where({ 'char_inventory.id': action.weapon_inv_id })
-        .select(
-          'ref_equipment.damage_h as ref_damage_h',
-          'char_inventory.equipment_id',
-          'char_inventory.ammo_remaining',
-          'ref_equipment.ammo_count as ref_ammo_count',
-          'ref_equipment.range as ref_range',
-          'ref_equipment.category as ref_category',
-        )
-        .first(),
+    const [{ weapon: primaryWeapon, installedMods: primaryMods }, rosterTireur, settings] = await Promise.all([
+      fetchAssaultWeaponAndMods(action.weapon_inv_id),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
-      // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — mods installés sur l'arme utilisée, jointure fraîche
-      // ref_equipment (pas le mod_slot snapshotté sur char_inventory_mods, qui ne sert qu'à la
-      // contrainte UNIQUE d'exclusivité).
-      db('char_inventory_mods as cim')
-        .join('ref_equipment as re', 'cim.equipment_id', 're.id')
-        .where({ 'cim.weapon_inv_id': action.weapon_inv_id })
-        .select('re.name', 're.bonus', 're.mod_slot', 're.mod_requires_aim'),
+      // Options de campagne — fetch unique réutilisé pour l'encombrement, la décision dual-wield et
+      // le décompte munitions PNJ plus bas dans cette fonction (un seul fetch, jamais trois).
+      getCampaignSettings(db, campaignId),
     ])
 
-    if (!weapon?.ref_damage_h) {
+    if (!primaryWeapon?.ref_damage_h) {
       console.warn(`[WS] resolveAssaultAction — arme sans damage_h. weapon_inv_id:${action.weapon_inv_id}`)
       return { suspend: false, emissions }
     }
+
+    // Tir à deux armes (COM29, LdB p.226) — autorité Résolution : re-décidé ici avec l'état munitions
+    // le plus frais (même principe que le re-check de munitions déjà en place, COM25), jamais confiance
+    // à ce qui a été fail-fast validé à la Déclaration. Une main à sec ne bloque jamais tant que
+    // l'autre peut tirer — dégrade en tir simple (shared/ammoRules.js::resolveDualWieldFire).
+    const bulletCount = action.bullet_count ?? 1
+    const isPnjChar = character.type === 'pnj'
+    const primaryAmmoOk = hasEnoughAmmo(primaryWeapon.ammo_remaining, bulletCount, { isPnj: isPnjChar, pnjUnlimitedAmmo: settings.pnj_unlimited_ammo })
+
+    let offhandWeapon = null, offhandMods = [], offhandAmmoOk = false
+    if (action.offhand_weapon_inv_id) {
+      const fetched = await fetchAssaultWeaponAndMods(action.offhand_weapon_inv_id)
+      if (fetched.weapon?.ref_damage_h) {
+        offhandWeapon = fetched.weapon
+        offhandMods = fetched.installedMods
+        offhandAmmoOk = hasEnoughAmmo(offhandWeapon.ammo_remaining, bulletCount, { isPnj: isPnjChar, pnjUnlimitedAmmo: settings.pnj_unlimited_ammo })
+      }
+    }
+
+    const { fires, dualWieldApplied, degraded } = resolveDualWieldFire({
+      primaryAmmoOk, offhandAmmoOk,
+      isDualWield: !!action.modifiers?.dual_wield && !!action.offhand_weapon_inv_id,
+    })
+    if (fires === null) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: "Munitions insuffisantes — rechargez d'abord",
+      } })
+      return { suspend: false, emissions }
+    }
+
+    // Arme effective de cette Résolution — celle qui tire réellement (COM29 : peut être la main
+    // non-directrice si la directrice est celle qui est à sec). Toute la suite de la fonction
+    // (portée, dégâts, mods, malus Bouclier, compétence, décompte munitions) est paramétrée sur cette
+    // seule arme + son inv_id — jamais un usage direct de action.weapon_inv_id après ce point.
+    const weapon              = fires === 'offhand' ? offhandWeapon : primaryWeapon
+    const installedMods       = fires === 'offhand' ? offhandMods   : primaryMods
+    const effectiveWeaponInvId = fires === 'offhand' ? action.offhand_weapon_inv_id : action.weapon_inv_id
 
     // Bouclier (docs/PLAN_BOUCLIER.md Lot B, §3.9) — RAW traite les armes de jet/trait (arcs,
     // arbalètes, lances) comme le contact pour un Bouclier : malus à l'attaquant, jamais de
@@ -2203,9 +2255,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ? await db('char_sheet').where({ character_id: character.id }).first()
       : null
 
-    // Options de campagne — fetch unique réutilisé pour l'encombrement (ci-dessous) et le
-    // décompte munitions PNJ (plus loin dans cette fonction, évite un second fetch identique).
-    const settings = await getCampaignSettings(db, campaignId)
+    // Munitions (COM25) et dual-wield (COM29) déjà résolus plus haut, avant sélection de l'arme
+    // effective — `settings` (options de campagne) fetché à ce moment-là, réutilisé ici pour
+    // l'encombrement et plus bas pour le décompte munitions PNJ (un seul fetch, jamais trois).
 
     if (sheetTireur) {
       const [attrsTireur, archetypeTireur, skillAssoc, woundsTireur, invTireur, mutationEffectsTireur] = await Promise.all([
@@ -2252,8 +2304,13 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       .reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
     const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
-    const fireModeComp     = action.fire_mode_bonus_comp ?? 0
-    const dualWieldComp    = action.modifiers?.dual_wield_bonus_comp ?? 0
+    // fire_mode_bonus_comp stocké à la Déclaration inclut déjà le bonus deux armes (client :
+    // variant.bonusComp + dualWieldBonusComp) — si le tir a dégradé en tir simple (COM29,
+    // dualWieldApplied=false), on le retire ici plutôt que de recalculer le bonus de base depuis
+    // zéro, seule la portion "deux armes" doit disparaître.
+    const storedDualWieldComp = action.modifiers?.dual_wield_bonus_comp ?? 0
+    const dualWieldComp    = dualWieldApplied ? storedDualWieldComp : 0
+    const fireModeComp     = (action.fire_mode_bonus_comp ?? 0) - (dualWieldApplied ? 0 : storedDualWieldComp)
     // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — le bonus stocké à la Déclaration
     // (Phase 1, portee alors inconnue) est clampé ici selon la portée désormais confirmée
     // (Phase 2 Résolution). Réutilise installedMods déjà fetché pour Groupe 1 (même arme).
@@ -2312,17 +2369,45 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       breakdown,
     } })
 
+    // Tir à deux armes dégradé (COM29) — message système privé, uniquement pour le propriétaire du
+    // personnage (PJ : le joueur ; PNJ : pas de user_id, fallback vers le socket courant = le MJ qui
+    // résout ce tour). Jamais de blocage (fires ne peut pas être null ici, déjà écarté plus haut) —
+    // seulement une explication, cohérente avec le reste du fichier ("dès qu'un truc marche pas, le
+    // système doit dire pourquoi"). i18n : clé résolue côté client (useSessionSocket.js), jamais de
+    // texte figé envoyé par le serveur.
+    if (degraded) {
+      emissions.push({
+        to: 'user', userId: character.user_id ?? null, fallback: 'socket',
+        event: WS.CHAT_MESSAGE,
+        data: {
+          system: true,
+          i18nKey: degraded === 'offhand' ? 'session.dualWieldAmmoOutOffhand' : 'session.dualWieldAmmoOutPrimary',
+          timestamp: new Date().toISOString(),
+        },
+      })
+    }
+
     // ── Décompte munitions ──────────────────────────────────────────────────────
-    // Balles consommées quel que soit le résultat (touché ou raté).
-    // Skip si ammo_remaining = NULL (arme non initialisée = pas encore suivie).
+    // Balles consommées quel que soit le résultat (touché ou raté), uniquement pour la ou les armes
+    // qui ont effectivement tiré (COM29 : les deux en dual-wield complet, une seule sinon).
+    // Skip par arme si ammo_remaining = NULL (arme non initialisée = pas encore suivie).
     // Skip pour les PNJ si pnj_unlimited_ammo = true (option campagne).
-    if (action.weapon_inv_id && weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
+    {
       const isPnj = character.type === 'pnj'
       const skipDecrement = isPnj && settings.pnj_unlimited_ammo
       if (!skipDecrement) {
         const bulletsFired = action.bullet_count ?? 1
-        const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
-        await db('char_inventory').where({ id: action.weapon_inv_id }).update({ ammo_remaining: newRemaining })
+        const firedWeapons = fires === 'both'
+          ? [[action.weapon_inv_id, primaryWeapon], [action.offhand_weapon_inv_id, offhandWeapon]]
+          : fires === 'offhand'
+            ? [[action.offhand_weapon_inv_id, offhandWeapon]]
+            : [[action.weapon_inv_id, primaryWeapon]]
+        for (const [invId, row] of firedWeapons) {
+          if (row.ammo_remaining !== null && row.ammo_remaining !== undefined) {
+            const newRemaining = Math.max(0, row.ammo_remaining - bulletsFired)
+            await db('char_inventory').where({ id: invId }).update({ ammo_remaining: newRemaining })
+          }
+        }
       }
     }
 
@@ -2387,7 +2472,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
             // réel côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
             // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents,
             // parseDice n'accepte qu'un seul type de dé par formule).
-            weaponInvId: action.weapon_inv_id,
+            weaponInvId: effectiveWeaponInvId,
             for_na_cible,
             con_na_cible,
             vol_na_cible,
@@ -2407,7 +2492,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
           // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
           // effectué à la confirmation dès qu'une munition modifie les dégâts.
-          const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, action.weapon_inv_id)
+          const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, effectiveWeaponInvId)
           emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
             tokenId: action.token_id,
             formula: formulaPreview ?? weapon.ref_damage_h,
@@ -2425,7 +2510,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
         // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
         // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
-        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id)
+        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId)
         const rawDice = effectiveDamage
           ? effectiveDamage.total
           : (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total

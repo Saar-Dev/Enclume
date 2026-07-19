@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 161 (COM2 clos, cluster E)
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -307,43 +307,6 @@ d'extraction Excel, `docs/Old/script Extraction Excel/equipement/`), non instrum
 réelle (SAP : `DMG=SET(...);TXT=PEN=SET(...)|FX=SAP` cohérent avec les autres munitions SAP du
 catalogue ; IEM : `DMG=MUL(0.5);TXT=FX=IEM(TEST_PANNE:-3)` une fois le Lot C2 tranché) — probablement
 en même temps que le Lot C1/C2 puisque ces deux mécaniques y seront de toute façon retravaillées.
-
----
-
-### Bug COM25 — Arme sans munition restante continue de tirer (ammo_remaining=0 non bloqué) 🔴 URGENT
-
-**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de code (question de Saar
-sur le comportement d'une arme sans munition chargée, en testant le Lot A `docs/PLAN_ARMES_DSL.md`).
-Une arme dont le chargeur est déjà vide (`ammo_remaining = 0`) peut continuer à être déclarée et
-résolue en combat comme si elle avait des munitions — aucun blocage du jet de toucher ni de la
-résolution des dégâts.
-
-**Règle** : pas de citation LdB précise identifiée — attente métier implicite (une arme sans munition
-ne peut pas tirer), à confirmer/sourcer si besoin, mais le comportement actuel est de toute façon
-incohérent avec le décompte de munitions déjà en place (qui n'aurait aucun sens si le tir n'était
-jamais bloqué à 0).
-
-**Code impliqué** : `server/src/socket/socketCombatHelpers.js:1468-1480` (bloc "Décompte munitions"
-dans `resolveAssaultAction`) — décrémente `ammo_remaining` avec `Math.max(0, ...)` (clampé, jamais
-négatif) et **saute le décompte entièrement si `ammo_remaining` est `NULL`** ("arme non initialisée
-= pas encore suivie"), mais aucun garde nulle part dans le fichier n'empêche l'attaque de se dérouler
-quand `ammo_remaining` vaut déjà 0 avant le tir.
-
-**Cause racine [HYPOTHÈSE]** : lecture de code uniquement, non instrumentée ni reproduite en jeu réel
-(cf. méthode ci-dessus — lecture seule = `[HYPOTHÈSE]`, jamais `[VÉRIFIÉ]` sans exécution observée).
-Aucun `if (weapon.ammo_remaining === 0) return ...` ni équivalent trouvé dans `resolveAssaultAction`
-ni dans la Phase 1 Déclaration (`socketCombatAnnouncement.js`, non vérifié en détail).
-
-**Trouvé pendant** : test réel en base du Lot A (Chantier 11 Étape 2, DSL munitions,
-`docs/PLAN_ARMES_DSL.md`) — question de Saar sur le sens de "sans munition chargée" dans mon scénario
-de test a motivé une relecture du code existant, sans rapport direct avec le DSL lui-même.
-
-**Prochaine étape** — **urgent, priorité Saar** : reproduire en jeu réel (arme avec `ammo_remaining=0`,
-tenter une déclaration d'assaut), instrumenter `[DBG-COM25]` avant tout correctif. Décider du point
-d'insertion du garde (Phase 1 Déclaration vs Phase 2 Résolution — cohérence avec le reste du FSM
-combat, qui valide plutôt tôt) et du message d'erreur (réutiliser le pattern `COMBAT_DECLARE_ERROR`
-déjà existant). Exclure explicitement les armes de corps à corps (jamais de munitions) et le cas
-`pnj_unlimited_ammo=true` (option campagne déjà gérée ailleurs dans ce même bloc).
 
 ---
 

@@ -106,6 +106,8 @@
     "commerce": "Commerce",
     "userJoined": "{{username}} a rejoint la session",
     "userLeft": "{{username}} a quitté la session",
+    "dualWieldAmmoOutPrimary": "Main directrice à sec — tir simple avec la main non directrice, bonus deux armes annulé.",
+    "dualWieldAmmoOutOffhand": "Main non directrice à sec — tir simple avec la main directrice, bonus deux armes annulé.",
     "actionExpired": "Action expirée (pas de réponse du MJ)",
     "noGm": "Aucun MJ connecté",
     "actionRefused": "Action refusée par le MJ",

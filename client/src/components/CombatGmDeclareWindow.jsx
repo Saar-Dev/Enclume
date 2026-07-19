@@ -443,6 +443,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         move:     movePayload,
         attack:   weapon && assaultTarget?.targetTokenId ? {
           weaponInvId:        weapon.inv_id,
+          // Main non directrice (COM29) — miroir CombatActionWindow.jsx. weaponMg = main non
+          // directrice quand hasTwoWeapons (primaryWeapon = weaponMd, cf. resolveHandWeapons).
+          offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.inv_id ?? null) : null,
           targetTokenId:      assaultTarget.targetTokenId,
           bulletCount:        currentVariant?.bulletCount ?? null,
           fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : 0,

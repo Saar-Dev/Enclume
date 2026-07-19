@@ -40,11 +40,24 @@ export function useSessionSocket() {
       })
     }
     const onCampaignUpdated = ({ campaign: updated }) => updateCampaign(updated)
-    const onChatMessage = ({ userId, username, color, text, timestamp }) =>
+    // system:true (COM29, dual-wield dégradé) — message serveur porté par une clé i18n, jamais un
+    // texte figé (même mécanisme que les messages système join/leave ci-dessus), résolue ici pour
+    // rester cohérent avec la langue active du client qui l'affiche.
+    const onChatMessage = (payload) => {
+      if (payload.system) {
+        addMessage({
+          id: `sys-${payload.i18nKey}-${payload.timestamp}`, system: true,
+          text: t(payload.i18nKey),
+          time: new Date(payload.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        })
+        return
+      }
+      const { userId, username, color, text, timestamp } = payload
       addMessage({
         id: `${userId}-${timestamp}`, user: username, color, text,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
+    }
     const onCharacterUpdated = (updatedCharacter) => upsertCharacter(updatedCharacter)
     const onDiceResult = ({ userId, username, color, formula, rolls, total,
       isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal,
