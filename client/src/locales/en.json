@@ -484,7 +484,8 @@
       "reaBase": "REA base :",
       "malusBlessures": "Malus blessures :",
       "malusEncombrement": "Malus encombrement : −",
-      "iniEffective": "Initiative effective :"
+      "iniEffective": "Initiative effective :",
+      "testImpossible": "Blessure mortelle — aucune action de Test possible"
     }
   },
   "builder": {

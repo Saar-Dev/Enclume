@@ -164,9 +164,124 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
-🔒 En cours : — (aucune session active)
+🔒 En cours (Saar) : Chantier bugs — cluster combat confirmé par `docs/Old/COMPARATIF.md` (INI4 ✅,
+MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅, reste CHOC1 — décision à prendre avant de coder)
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 100 (Session 166, dev/Saar) — Dette `WNDMORT` : Blessure mortelle bloque les Tests ✅ CODÉ.**
+> Mon extrait RAW était tronqué (accident d'extraction PDF) — Saar a fourni le texte exact
+> (`docs/REGLES/REGLEBLESSURES.md`, "Blessures mortelles") : *"Malus aux Tests : non applicable, le
+> blessé ne peut entreprendre aucune action demandant un Test."* Contre-proposition Saar adoptée :
+> menu d'action restreint à Déplacement (Allure lente, sauf Jambes) et Passer le tour — les 2 seules
+> actions du jeu qui ne demandent aucun Test — plutôt qu'un blocage brut. Question annexe de Saar
+> (Test de Choc récurrent à chaque action) vérifiée et clarifiée : ce pattern existe bien dans le LdB
+> mais pour la **Fatigue** (`:1377-1381`), pas pour les blessures physiques — chantier Fatigue ajouté
+> à `docs/ROADMAP.md`, pas mélangé à WNDMORT. **Codé, en réutilisant l'existant plutôt qu'en
+> inventant** : `shared/woundConstants.js` — `WOUND_PENALTIES.mortelle` passe de `-20` (jamais
+> confirmé par le LdB) à `0`, nouveau `isTestBlockingWound()`/`isMortalWoundImmobilized()` (même
+> principe predicate-séparé-du-numérique que TIRIMP). Garde de déclaration dans
+> `socketCombatAnnouncement.js` — même patron exact que le stun guard déjà existant (`COMBAT_ACTION_
+> DECLARE`), juste après lui. Défense CaC : `isTargetDefenseless` (DEF5, déjà codé cette session)
+> étendu avec le même signal — pas de second mécanisme parallèle. Défense en profondeur (rare cas
+> attaquant blessé entre Déclaration et Résolution) ajoutée dans `resolveMeleeAction`/
+> `resolveAssaultAction`, réutilisant `woundsAttaquant`/`woundsTireur` déjà fetchés, zéro requête
+> supplémentaire. Fiche perso (`char-sheet.js` + `CharacterSheet.jsx`) : nouveau champ
+> `wound_test_blocked`, tooltip Initiative affiche "Blessure mortelle — aucune action de Test
+> possible" au lieu d'un malus numérique trompeur. **Volontairement pas dans ce correctif** (dettes
+> `WNDMORT-UI`/`WNDMORT-HORSCOMBAT` ajoutées) : repli visuel dans `CombatActionWindow.jsx` (le serveur
+> rejette déjà, juste pas de prévention visuelle) et le système générique de Test hors-combat
+> (`socketEntity.js`) — impact pratique jugé bien plus faible que le combat. **Testé** : `node --check`
+> sur les 3 fichiers serveur touchés, build Vite client propre, 6 nouveaux tests
+> `shared/woundConstants.test.mjs` + 64 tests `shared/*.test.mjs` au total rejoués (0 régression).
+> **Non testé** : aucune connexion PostgreSQL ici — scénario réel (déclarer une attaque/CaC/
+> interaction avec une Blessure mortelle active, vérifier le rejet ; déplacement Allure lente accepté
+> sauf Jambes ; défense CaC auto-résolue) à la charge de Saar en navigateur. **Données** : aucune
+> migration.
+
+> **Item 99 (Session 166, dev/Saar) — Dette `TIRIMP` : garde serveur « Tir impossible » ✅ CODÉ +
+> refonte architecture.** RAW exact relu (`docs/REGLES/REGLESYSCOMBAT.md:1440-1457` + `:1391-1401`) :
+> Tireur Allure maximale = impossible sans exception ; Obscurité totale = impossible sauf tir en
+> aveugle (optionnel, non implémenté) ; Couverture totale = même exception, mais **n'existe nulle
+> part dans le code** (ni checkbox client ni clé serveur) — dette `COUVERTURE_TOTALE` ajoutée,
+> regroupée avec le futur chantier « Tir en aveugle », pas traitée ici. **Question soulevée par Saar
+> avant de coder** : le sentinel numérique `-99` (son propre historique de code) mélangeait un signal
+> booléen « action interdite » avec une vraie somme de modificateurs — jamais consulté côté serveur,
+> et mathématiquement pas un vrai blocage (un empilement de bonus suffisant pourrait en théorie
+> repasser au-dessus de 1). Recherche faite (wiki Rule Elements PF2e/Foundry) : confirme le pattern
+> pro — un predicate/booléen qui gate l'action, toujours séparé du FlatModifier numérique, jamais un
+> nombre sentinel. **Refonte codée** : nouveau `shared/combatSituationMods.js` — `RANGED_SITUATION_MODS`
+> (`{ mod, impossible? }` par clé), `sumRangedSituationMods`, `isImpossibleRangedSituation` — autorité
+> unique, remplace la table dupliquée client (`CombatModifiersWindow.jsx`, tableaux `TIREUR_ALLURES`/
+> `CIBLE_ALLURES`/`COUVERTURES`/`OBSCURITES` recopiés à la main) et serveur (`SITUATION_MODS` local à
+> `socketCombatHelpers.js`, qui ne garde plus que les clés CaC `cac_*`, jamais collisionnées). Garde
+> ajoutée dans `resolveAssaultAction` **et** `resolveDroneAssaultAction` (même faille pour les drones,
+> trouvée en migrant — pas dans le périmètre initial mais corrigée pour rester cohérent), avant tout
+> effet de bord (LOS, munitions) : rejet `COMBAT_DECLARE_ERROR` si `isImpossibleRangedSituation`.
+> `fmtOpt`/l'affichage `✗` côté client utilisent désormais ce même flag, plus de comparaison `=== -99`.
+> **Testé** : `node --check` serveur propre, build Vite client propre, 49 tests `shared/*.test.mjs`
+> existants rejoués (0 régression) + 9 nouveaux tests `shared/combatSituationMods.test.mjs`. **Non
+> testé** : aucune connexion PostgreSQL ici — scénario réel (déclarer un tir à Allure maximale ou en
+> obscurité totale, PJ et drone, vérifier le rejet serveur) à la charge de Saar en navigateur.
+> **Données** : aucune migration. Détail retiré de `docs/BUGIDENTIFIE.md`, remplacé par
+> `COUVERTURE_TOTALE`.
+
+> **Item 98 (Session 166, dev/Saar) — Dette `DEF5` : « Cible sans défense » (+5, pas d'opposition)
+> ✅ CODÉ.** Texte RAW exact relu (`docs/REGLES/REGLESYSCOMBAT.md:1052-1058`, pas la paraphrase du
+> manuel) : « Si un personnage ne peut pas voir son assaillant, ou s'il n'a pas conscience de
+> l'attaque, il ne peut pas se défendre de manière active [...] Test simple, avec un bonus de +5. »
+> Scope tranché avec Saar : statuts `unconscious`/`blinded`/`stunned` (`token_statuses`) **et**
+> `is_surprised` (`combat_roster`, Test de Réaction à `COMBAT_START`) — la clause « surprise »
+> initialement écartée (système d'embuscade non géré) a été réintégrée après clarification : le Test
+> de Réaction existe déjà et pose `is_surprised`, seule la mise en forme diffère des autres statuts.
+> **Écart trouvé en creusant** : `is_surprised` n'est jamais remis à `false` après `COMBAT_START` —
+> dette distincte `SURPRISE1` ajoutée, contournée ici par un garde `current_turn === 1`. **Codé** :
+> helper unique `isTargetDefenseless(campaignId, targetTokenId, settings)` (nouveau, juste avant
+> `resolveMeleeAction`) — autorité unique tir + CaC, même principe que `countAdversaires`/
+> `multiAdversaryMalus`. Tir (`resolveAssaultAction`) : +5 ajouté à `totalModComp`, même emplacement
+> que `shieldAtkMalus` (pas d'opposition à bypasser, le tir est déjà un test simple). CaC
+> (`resolveMeleeAction`) : +5 ajouté à `chancesAttaque` au même endroit ; nouvelle branche unifiée
+> insérée avant le branchement PNJ/drone/PJ existant — auto-résolution complète (dégâts compris,
+> décision Saar) pour tout type de défenseur dès que `targetDefenseless`, généralisant le pattern déjà
+> utilisé pour le défenseur drone (§7.4). Corrige au passage un vrai trou : un PNJ inconscient/étourdi
+> relançait jusqu'ici un jet de défense automatique qui pouvait esquiver, contraire au RAW. **Non
+> câblé** : tir de drone (`resolveDroneAssaultAction`) — fonction séparée, pas touchée dans ce
+> correctif, gap documenté plutôt que silencieux. **Testé** : `node --check` propre. **Non testé** :
+> aucune connexion PostgreSQL ici — scénario réel (chaque statut, PJ/PNJ/drone attaquant et défenseur,
+> Tour 1 vs Tour 2+ pour la surprise) à la charge de Saar en navigateur. **Données** : aucune
+> migration. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos), remplacé par la dette `SURPRISE1`
+> trouvée en cours de route.
+
+> **Item 97 (Session 166, dev/Saar) — Dette `MELEE-MR` : dégâts CaC calculés sans le MR (Marge de
+> Réussite) ✅ CODÉ.** Dette Session 67, jamais close, confirmée par `docs/Old/COMPARATIF.md` §6.2 : le
+> tir à distance applique `rawDice + modDomAttaque(mrTable) + modDegatsMode`, le CaC appliquait
+> `rawDice + modDom(FOR) + combatModeBonus` sans jamais lire la table `mrTable`/`getModifier`. Règle
+> attendue (`MANUELSYSCOMBAT.md` §6.2) : `Dommages_Bruts = Arme + MR + ModDom(FOR)`. **Corrigé aux 4
+> sites réels** (`socketCombatResolution.js` ne contient plus de calcul dupliqué depuis le Lot D
+> `docs/Old/PLAN_COMBAT_TIMELINE.md` — délègue entièrement à `socketCombatHelpers.js`) :
+> `confirmMeleeDefense` PNJ-attaquant (résolution immédiate) et payload `combat_pending` PJ-attaquant
+> (ajout `mr: mrAttaque`) ; `confirmDamage` branche `pendingType==='melee'` (lit ce `mr`) ;
+> `resolveMeleeAction` défenseur PNJ (immédiat) et défenseur drone (`mrAttaque` non calculé côté drone
+> — pas de jet de défense §7.4, ajouté localement). **Testé** : `node --check` propre. **Non testé** :
+> aucune connexion PostgreSQL disponible ici — scénario réel (CaC PJ↔PJ, PJ↔PNJ, PNJ↔PJ, PJ↔drone,
+> comparer les dégâts avant/après un jet à forte marge de réussite) à la charge de Saar en navigateur.
+> **Données** : aucune migration. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos, hygiène du
+> registre).
+
+> **Item 96 (Session 166, dev/Saar) — Dette `INI4` : `initiative` jamais remise à `base_ini` en fin de
+> tour ✅ CODÉ.** Confirmé par audit `docs/Old/COMPARATIF.md` §3 : `endTurn` (`socketCombatHelpers.js`)
+> réinitialisait `has_announced`/`has_resolved`/`state_position`/`state_cover`/`state_vitesse`/
+> `state_combat_mode` par tour mais ne touchait jamais `initiative` — les modificateurs (Précipiter +3,
+> Dégainer -5, S'accroupir -3…) s'accumulaient tour après tour au lieu d'être réinitialisés
+> (`docs/REGLES/REGLESYSCOMBAT.md` p.213). **Corrigé** : `initiative: db.raw('base_ini')` ajouté à la
+> même requête `UPDATE combat_roster` déjà présente en tête d'`endTurn` — même filtre
+> `campaign_id + status:'active'`, aucune requête supplémentaire. Cohérent avec la seule autre écriture
+> de `initiative` du projet (`socketCombatState.js:98` à `COMBAT_START`, `initiative = base_ini` ±
+> jet de surprise). **Testé** : `node --check` propre. **Non testé** : aucune connexion PostgreSQL
+> disponible depuis cet environnement — scénario réel (Précipiter/Dégainer répétés sur 2+ tours,
+> vérifier que `initiative` revient à `base_ini` et non à la valeur modifiée du tour précédent) à la
+> charge de Saar en navigateur. **Données** : aucune migration. Détail retiré de
+> `docs/BUGIDENTIFIE.md` (bug clos, hygiène du registre).
 
 > **Item 95 (Session 165, dev/Saar) — Correctif FSM `AWAITING_DAMAGE` (bug préexistant, trouvé en
 > validant Tir Multi) ✅ CLOS.** Un tireur PJ qui touche pose `AWAITING_DAMAGE` (sous-état FSM bloquant,
@@ -2687,9 +2802,9 @@ Projet en cours et priorité user :
 | ~~**COM29**~~ | ~~Tir à deux armes : seule la main directrice trackée (munitions)~~ | ✅ Session 162 (Saar) |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
-| ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
+| ST1 | Badges statut (icônes SVG 14×14px, `Canvas3D.jsx:348-387`) : taille fixe ne s'adapte pas au zoom/à la taille du token, formes peu reconnaissables sans hover. Description historique ("texte trop petit") obsolète depuis le passage aux icônes Sprint 14-2 — reclassé chantier UI/UX, voir `docs/ROADMAP.md` "Badges statut token" | Chantier UI/UX dédié — pas un correctif ponctuel (décision Saar, Session 166) |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
-| CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
+| CH1 | Historique chat perdu au F5 (rechargement page) — chantier persistance (table messages, endpoint relecture, pagination), pas un correctif isolé, voir `docs/ROADMAP.md` "Chat persistant" | Chantier dédié — doc alignée Session 166 (Saar) |
 | ~~**COM2**~~ | ~~Vérif statut arme absente côté GM~~ | ✅ Session 161 (Saar) |
 | ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
 | COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque (signalé Saar, non instrumenté) | À investiguer |
@@ -2708,7 +2823,7 @@ Projet en cours et priorité user :
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
-| **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
+| ~~**KIWI2**~~ | ~~Import GLB token : local ✅ / Kiwi ❌~~ | ✅ résolu (confirmé Saar, Session 166 — dernières migrations Kiwi) |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-6 (attributs, résistances, armure/arme naturelle, déblocage de compétences, identité sex/is_fertile/hand_pref) ✅ clos et fonctionnels. Reste Lot 7 (Narratif/économie, priorité basse) — `docs/Old/PLAN_MUTATION2.md` (archivé, chantier clos) | Lot 7 à détailler quand Saar voudra enchaîner |
@@ -2725,7 +2840,7 @@ Projet en cours et priorité user :
 | **CAR2** | `ref_background_skills.skill_id` sans FK vers `ref_skills.id` (même défaut que `ref_career_skills` avant migration 111) | Basse — pas de bug connu, préventif |
 | **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
-| **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
+| ~~**JSON1**~~ | ~~`client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm`~~ | ✅ déjà résolu avant Session 166 — dette fantôme : le merge `caaf1af` "Fusion Kiwi" portait déjà la version échappée, la dette n'avait jamais été retirée du registre (`node -e "JSON.parse(...)"` valide aujourd'hui) |
 | **OPT-W1** | 3/11 options de campagne (revers, skill_natural_prog, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136, `feminin_bonus` ✅ Session 137, `random_pro_advantages`/`skill_prerequisites` ✅ Session 141, `skill_max_level` ✅ Session 141 (suite 2), `young_penalty` ✅ Session 141 (suite 4), `polaris_latent` ✅ Session 141 (suite 6) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
@@ -2739,11 +2854,15 @@ Projet en cours et priorité user :
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
 | **CHOC1** | ⚠️ Partiellement clos (Session 2026-07-16, Chantier 11 Étape 2 Lot B, `docs/PLAN_ARMES_DSL.md`) : le pool de "dommages de Choc" distinct des dégâts physiques existe désormais dans `damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc exclusif) — mais **uniquement pour les munitions `ammo_effects` CHOC=, tir à distance** (`resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM`). **Reste non câblé** : le bonus LdB propre à la mutation Corne ("+1D6 Choc si le coup porte à la tête" en CaC) — `resolveMeleeAction` ne passe toujours pas `chocDsl`/`rangeBand`, explicitement hors scope de Lot B (mécanisme mutation, pas munition) | Basse — reste un chantier séparé, mais l'infrastructure existe désormais |
 | **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
-| **INI4** | `initiative` jamais remise à `base_ini` en fin de tour (`endTurn`) — les modificateurs s'accumulent tour après tour. Trouvé par audit `docs/COMPARATIF.md`, détail `BUGIDENTIFIE.md` | Moyenne — correctif isolé |
-| **MELEE-MR** | Dégâts CaC calculés sans le MR (dette Session 67, jamais close) — le tir à distance a une vraie table MR→ModDom, le CaC non. Détail `BUGIDENTIFIE.md` | Moyenne — correctif isolé |
-| **DEF5** | « Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC — `is_surprised` sous-exploité. Détail `BUGIDENTIFIE.md` | Moyenne — un cluster, deux points d'insertion |
-| **TIRIMP** | Garde serveur absent sur « Tir impossible » (allure/couverture/éclairage Totale, `-99`) — bloqué côté client uniquement, contournable. Détail `BUGIDENTIFIE.md` | Moyenne — trou de sécurité serveur |
-| **WNDMORT** | Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests — décision produit à trancher avant de coder. Détail `BUGIDENTIFIE.md` | Basse — décision requise avant code |
+| ~~**INI4**~~ | ~~`initiative` jamais remise à `base_ini` en fin de tour~~ | ⚠️ clos partiel Session 166 (Saar), item 96 — codé, scénario réel navigateur non testé |
+| ~~**MELEE-MR**~~ | ~~Dégâts CaC calculés sans le MR (dette Session 67)~~ | ⚠️ clos partiel Session 166 (Saar), item 97 — codé, scénario réel navigateur non testé |
+| ~~**DEF5**~~ | ~~« Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC~~ | ⚠️ clos partiel Session 166 (Saar), item 98 — codé, scénario réel navigateur non testé ; tir de drone non couvert |
+| **SURPRISE1** | `is_surprised` jamais remis à `false` après `COMBAT_START` — trouvé en instrumentant DEF5. Détail `BUGIDENTIFIE.md` | Basse — contournement en place dans DEF5 |
+| ~~**TIRIMP**~~ | ~~Garde serveur absent sur « Tir impossible »~~ | ⚠️ clos partiel Session 166 (Saar), item 99 — codé, scénario réel navigateur non testé |
+| **COUVERTURE_TOTALE** | « Couverture totale » (tir) n'existe nulle part, ni client ni serveur — trouvé en clôturant TIRIMP. Détail `BUGIDENTIFIE.md` | Basse — à regrouper avec le futur chantier Tir en aveugle |
+| ~~**WNDMORT**~~ | ~~Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests~~ | ⚠️ clos partiel Session 166 (Saar), item 100 — codé, scénario réel navigateur non testé |
+| **WNDMORT-UI** | Fenêtre de déclaration sans repli visuel pour Blessure mortelle — le serveur rejette déjà, l'UI ne prévient pas avant. Détail `BUGIDENTIFIE.md` | Basse — ergonomie, pas une règle de jeu |
+| **WNDMORT-HORSCOMBAT** | Test générique hors-combat (`socketEntity.js`) non gardé pour Blessure mortelle. Détail `BUGIDENTIFIE.md` | Basse — impact pratique faible |
 
 ---
 

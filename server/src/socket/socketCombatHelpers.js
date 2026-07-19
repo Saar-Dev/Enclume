@@ -21,21 +21,19 @@ import {
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
-import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
+import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
+import { RANGED_SITUATION_MODS, sumRangedSituationMods, isImpossibleRangedSituation } from '../../../shared/combatSituationMods.js'
 
 
 // ─── Breakdown jets de dé — tables et labels ────────────────────────────────
 const PORTEE_MOD_COMP = {
   bout_portant: 5, courte: 0, moyenne: -5, longue: -10, extreme: -15,
 }
+// CaC §6.2 uniquement — les modificateurs tir à distance (allure/couverture/obscurité) vivent
+// désormais dans shared/combatSituationMods.js (RANGED_SITUATION_MODS), autorité unique client+
+// serveur, plus de duplication ni de sentinel -99 (TIRIMP, docs/BUGIDENTIFIE.md, Session 166).
 const SITUATION_MODS = {
-  cible_immobile: 3,
-  cible_allure_moyenne: -3, cible_allure_rapide: -5, cible_allure_maximale: -7,
-  tireur_allure_lente: -3, tireur_allure_moyenne: -5, tireur_allure_rapide: -7, tireur_allure_maximale: -99,
-  couverture_partielle: -3, couverture_importante: -5,
-  obscurite_legere: -3, obscurite_importante: -5, obscurite_totale: -99,
-  // CaC §6.2 — préfixe cac_ évite les collisions avec keys ranged
   cac_attaquant_cote: -3,
   cac_attaquant_au_sol: -5,
   cac_espace_confine: -3,
@@ -634,6 +632,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
             characterIdCible,
             char_sheet_id_cible,
             modDom,
+            mr: mrAttaque,
             combatModeBonus,
             formula: damageFormula,
             for_na_cible,
@@ -667,7 +666,10 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       } else {
         // PNJ attaquant : résolution auto des dégâts
         const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
-        const degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
+        // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
+        // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
+        const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
+        const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + (combatModeBonus ?? 0)
         const hitResult = await damageService.resolveTargetHit(io, db, meleeCampaignId, {
           degautsBruts, characterIdCible, cibleType: 'pj',
           char_sheet_id_cible,
@@ -777,7 +779,11 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       const rolled = await parseDice(formula.replace(/\s/g, ''))
       dmgRolls = rolled.rolls; dmgSeed = rolled.seed; rawDice = rolled.total
       resolvedFormula = formula
-      degautsBruts = rawDice + (modDom ?? 0) + (combatModeBonus ?? 0)
+      // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
+      // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
+      const mrTableMelee = await getMrTable()
+      const modDomAttaqueMelee = getModifier(mrTableMelee, mr)
+      degautsBruts = rawDice + modDomAttaqueMelee + (modDom ?? 0) + (combatModeBonus ?? 0)
     } else {
       // getEffectiveWeaponDamage peut renvoyer null si l'arme a été désequipée/transférée entre la
       // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
@@ -1010,6 +1016,9 @@ export async function forceAdvanceResolution(io, campaignId, pendingMaps) {
 export async function endTurn(io, campaignId, pendingMaps) {
   try {
     // PC18 — reset announced/resolved + états per-tour (position/cover/vitesse)
+    // INI4 (docs/BUGIDENTIFIE.md) — reset initiative=base_ini en fin de tour (REGLESYSCOMBAT p.213) :
+    // sans ça, les modificateurs d'Initiative (Précipiter/Dégainer/S'accroupir...) s'accumulaient
+    // tour après tour au lieu d'être réinitialisés.
     await db('combat_roster')
       .where({ campaign_id: campaignId, status: 'active' })
       .update({
@@ -1019,6 +1028,7 @@ export async function endTurn(io, campaignId, pendingMaps) {
         state_cover:       'exposed',
         state_vitesse:     'normal',
         state_combat_mode: 'normal',
+        initiative:        db.raw('base_ini'),
         updated_at:        db.fn.now(),
       })
 
@@ -1124,6 +1134,46 @@ export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType, m
     if (tokenDistanceM(tokenPos, t, metrics) <= 3 + maxAllonge) count++
   }
   return count
+}
+
+// ─── DEF5 — Cible sans défense ───────────────────────────────────────────────
+// REGLESYSCOMBAT.md:1052-1058 : « Si un personnage ne peut pas voir son assaillant, ou s'il n'a pas
+// conscience de l'attaque, il ne peut pas se défendre de manière active. Inutile dans ce cas de
+// recourir à un Test d'opposition : l'Attaquant doit réussir un Test simple, avec un bonus de +5. »
+// Autorité unique tir + CaC — jamais dupliquée par type d'attaque (même principe que
+// countAdversaires/multiAdversaryMalus ci-dessus). Décision Saar (2026-07-19) :
+// - Signaux retenus : token_statuses unconscious/blinded/stunned (gaté par status_effects_mode
+//   'enforced', même garde que le stun guard COMBAT_ACTION_DECLARE) + combat_roster.is_surprised
+//   (Test de Réaction raté à COMBAT_START — existe déjà, sert seulement à l'Initiative aujourd'hui).
+// - `is_surprised` n'est jamais remis à false après COMBAT_START (dette distincte, non corrigée ici) —
+//   scopé à `current_turn === 1` pour rester fidèle au RAW (la surprise ne dure qu'un Tour) sans
+//   dépendre d'un reset qui n'existe pas.
+// - WNDMORT (2026-07-19) : une Blessure mortelle interdit aussi tout Test, donc tout jet de défense
+//   actif — même effet que sans défense, ajouté ici plutôt que dans un second mécanisme parallèle.
+export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
+  if (settings.status_effects_mode === 'enforced') {
+    const statusRow = await db('token_statuses')
+      .where({ token_id: targetTokenId })
+      .whereIn('status_code', ['unconscious', 'blinded', 'stunned'])
+      .first()
+    if (statusRow) return true
+  }
+  const targetRoster = await db('combat_roster')
+    .where({ campaign_id: campaignId, token_id: targetTokenId })
+    .select('is_surprised').first()
+  if (targetRoster?.is_surprised) {
+    const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+    if ((state?.current_turn ?? 1) === 1) return true
+  }
+  const targetToken = await db('tokens').where({ id: targetTokenId }).select('character_id').first()
+  if (targetToken?.character_id) {
+    const sheet = await db('char_sheet').where({ character_id: targetToken.character_id }).first()
+    if (sheet) {
+      const wounds = await db('character_wounds').where({ char_sheet_id: sheet.id })
+      if (isTestBlockingWound(wounds)) return true
+    }
+  }
+  return false
 }
 
 // ─── RÉSOLUTION CORPS À CORPS ───────────────────────────────────────────────
@@ -1275,10 +1325,23 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         .first(),
     ])
     const shieldAtkMalus = targetShield?.malus ?? 0
+    // DEF5 — doit être connu AVANT le jet d'attaque, même raison que shieldAtkMalus ci-dessus.
+    const targetDefenseless = await isTargetDefenseless(campaignId, targetTokenId, settings)
+    const sansDefenseBonus = targetDefenseless ? 5 : 0
     const genoAttaquant = archetypeAttaquant?.genotype_id
       ? await db('ref_genotypes').where({ id: archetypeAttaquant.genotype_id }).first()
       : null
 
+    // WNDMORT — défense en profondeur : le garde principal est à la Déclaration
+    // (socketCombatAnnouncement.js), ceci couvre seulement le cas rare où l'attaquant devient
+    // mortellement blessé entre sa Déclaration et sa Résolution (même Tour, un adversaire plus
+    // rapide résout avant lui). Pas de message dédié — le cas ne devrait normalement jamais survenir.
+    if (isTestBlockingWound(woundsAttaquant)) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
+      } })
+      return { suspend: false, emissions }
+    }
     const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant, mutationEffectsAttaquant) : 0
     const woundPenalty = calcWoundPenalty(woundsAttaquant)
     // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
@@ -1337,7 +1400,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
 
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus + shieldAtkMalus
+    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus + shieldAtkMalus + sansDefenseBonus
 
     // Roll attaquant
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
@@ -1361,10 +1424,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       ...(terrainInstableMod !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' }] : []),
       ...(deuxArmesBonus !== 0 ? [{ label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' }] : []),
       ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
+      ...(sansDefenseBonus !== 0 ? [{ label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' }] : []),
       { label: 'Seuil', value: chancesAttaque, type: 'total' },
     ]
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
-    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} → seuil:${chancesAttaque}`)
+    console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} sansDefense:${sansDefenseBonus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
@@ -1495,6 +1559,68 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       situationDef: confirmedModifiers?.situationDef ?? [],
     }
 
+    // ── DEF5 — Cible sans défense : Test simple +5, aucune opposition ──────────
+    // Généralise le pattern déjà utilisé pour le défenseur drone (§7.4, pas de jet de défense) à
+    // n'importe quel type de défenseur dès que la cible est sans défense — sinon un PNJ/PJ
+    // inconscient/étourdi relancerait quand même un jet de défense actif, contraire au RAW
+    // (REGLESYSCOMBAT.md:1055-1057). Auto-résolution complète, dégâts compris — décision Saar
+    // (2026-07-19), même principe qu'un défenseur non-actif.
+    if (targetDefenseless) {
+      const hit = rollAttaque <= chancesAttaque
+      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
+        attaquantId: action.token_id, defenseurId: targetTokenId,
+        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
+        multiMalusAttaquant,
+      } })
+      if (hit) {
+        const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+        const mrAttaqueDefenseless = chancesAttaque - rollAttaque
+        const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDefenseless)
+        const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+        if (defenderCharacter.type === 'drone') {
+          const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
+          if (droneSheet) {
+            const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
+            await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
+            emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+              tireurId: action.token_id, cibleId: targetTokenId,
+              localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
+              severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+              roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+            } })
+          }
+        } else {
+          const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+            degautsBruts,
+            characterIdCible: defenderCharacter.id,
+            cibleType:        defenderCharacter.type,
+            char_sheet_id_cible,
+            for_na_cible, con_na_cible, vol_na_cible,
+            treatAsContact: true,
+          })
+          if (hitResult) {
+            const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+            if (shockResult) {
+              statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
+            }
+            emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+              tireurId:    action.token_id, cibleId: targetTokenId,
+              localisation, degautsBruts, degatsNets,
+              severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+              roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
+            } })
+            if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+              statusService.applyStun(io, db, campaignId, {
+                targetTokenId, outcome: shockResult.outcome,
+                userId: character.user_id, username: attackerUsername, color: attackerColor,
+              }).catch(err => console.error('[WS] applyStun error:', err.message))
+            }
+          }
+        }
+      }
+      return { suspend: false, emissions }
+    }
+
     // ── 4. PNJ défenseur : auto-résolution ────────────────────────────────────
     if (defenderCharacter.type === 'pnj') {
       const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
@@ -1569,7 +1695,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         // Ancien duplicata inline retiré — c'est exactement la duplication qui avait nécessité un
         // 2ᵉ correctif lors du bug de signe RD (Session 141 suite 22).
         const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
-        const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
+        // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
+        const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
+        const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
         const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
           degautsBruts,
           characterIdCible: defenderCharacter.id,
@@ -1614,7 +1742,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
         if (droneSheet) {
           const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
-          const degautsBruts = rawDice + (modDom ?? 0) + combatModeBonus
+          // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
+          // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul.
+          const mrAttaqueDrone = chancesAttaque - rollAttaque
+          const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDrone)
+          const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
           const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
           await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
           emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
@@ -1799,6 +1931,14 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
   console.log(`[DBG] resolveDroneAssaultAction — début token:${action.token_id} drone_weapon:${action.drone_weapon_inv_id} target:${action.target_token_id}`)
   try {
     const emissions = []
+    // TIRIMP (docs/BUGIDENTIFIE.md) — même garde que resolveAssaultAction, autoritaire côté serveur.
+    if (isImpossibleRangedSituation(confirmedModifiers?.situation ?? [])) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: 'Tir impossible — Allure maximale du tireur ou obscurité totale',
+      } })
+      return { suspend: false, emissions }
+    }
     // 1. Arme drone
     const weapon = await db('drone_weapons')
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
@@ -1912,7 +2052,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
     if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const situationMods = confirmedModifiers?.situation ?? []
-    totalModComp += situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
+    totalModComp += sumRangedSituationMods(situationMods)
     const coverageModifier  = options.coverageModifier ?? 0
     const chancesDeReussite = programme.level + totalModComp + coverageModifier
 
@@ -1937,7 +2077,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       { label: `Programme (niv. ${programme.level})`, value: programme.level, type: 'base' },
       ...(porteeModDrone !== 0 ? [{ label: PORTEE_LABELS[portee] ?? portee, value: porteeModDrone, type: porteeModDrone > 0 ? 'bonus' : 'malus' }] : []),
       ...situationMods.reduce((acc, k) => {
-        const v = SITUATION_MODS[k]
+        const v = RANGED_SITUATION_MODS[k]?.mod
         if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
         return acc
       }, []),
@@ -2164,6 +2304,17 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     }
     if (!action.weapon_inv_id || !action.target_token_id) return { suspend: false, emissions }
 
+    // TIRIMP (docs/BUGIDENTIFIE.md) — garde serveur autoritaire, jamais une confiance au bouton
+    // désactivé côté client (CombatModifiersWindow.jsx). Vérifié avant tout effet de bord (LOS,
+    // munitions) — un tir impossible ne doit consommer aucune ressource.
+    if (isImpossibleRangedSituation(confirmedModifiers?.situation ?? [])) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: 'Tir impossible — Allure maximale du tireur ou obscurité totale',
+      } })
+      return { suspend: false, emissions }
+    }
+
     // ── LOS check ─────────────────────────────────────────────────────────────
     if (!options.skipLos) {
       console.log(`[DBG] resolveAssaultAction — avant checkCombatLOS`)
@@ -2244,6 +2395,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       .select('ref_equipment.shield_atk_malus as malus')
       .first()
     const shieldAtkMalus = isJetOuTrait ? (targetShield?.malus ?? 0) : 0
+    // DEF5 — doit être connu AVANT le jet d'attaque, même raison que shieldAtkMalus ci-dessus.
+    const targetDefenseless = await isTargetDefenseless(campaignId, action.target_token_id, settings)
+    const sansDefenseBonus = targetDefenseless ? 5 : 0
 
     const measurement = await measureBattlemapTokenDistance({
       sourceTokenId: action.token_id,
@@ -2295,6 +2449,16 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         getMutationEffects(sheetTireur.id),
       ])
 
+      // WNDMORT — défense en profondeur, même raison que resolveMeleeAction (garde principal à la
+      // Déclaration, ceci couvre seulement le cas rare d'un tireur mortellement blessé entre sa
+      // Déclaration et sa Résolution).
+      if (isTestBlockingWound(woundsTireur)) {
+        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+          username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
+        } })
+        return { suspend: false, emissions }
+      }
+
       const genoTireur = archetypeTireur?.genotype_id
         ? await db('ref_genotypes').where({ id: archetypeTireur.genotype_id }).first()
         : null
@@ -2320,8 +2484,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     }
 
     const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand] ?? 0
-    const situationModComp = (confirmedModifiers.situation ?? [])
-      .reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
+    const situationModComp = sumRangedSituationMods(confirmedModifiers.situation ?? [])
     const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille] ?? 0
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     // fire_mode_bonus_comp stocké à la Déclaration inclut déjà le bonus deux armes (client :
@@ -2345,7 +2508,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // avec le CaC (computeMultiAttackMalus). Recalculé sur les sœurs vivantes à CET instant, pas figé
     // à la déclaration — même principe que le CaC.
     const { malus: multiAttackMalus } = await computeMultiAttackMalus(action.id)
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus + shieldAtkMalus + multiAttackMalus
+    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus + shieldAtkMalus + multiAttackMalus + sansDefenseBonus
 
     const coverageModifier   = options.coverageModifier ?? 0
     const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
@@ -2361,9 +2524,10 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(aimedLocationMalus !== 0 ? [{ label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' }] : []),
       ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
       ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
+      ...(sansDefenseBonus !== 0 ? [{ label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' }] : []),
       ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
       ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
-        const v = SITUATION_MODS[k] ?? 0
+        const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
         if (v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
         return acc
       }, [])),

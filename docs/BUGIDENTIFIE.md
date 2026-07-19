@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -35,9 +35,7 @@
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
-| **K — Chat** | CH1 | `SessionPage.jsx` | Haute — sprint persistance séparé |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
-| **R — Infrastructure Kiwi** | KIWI2 | upload GLB + MinIO + config Kiwi | Haute |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
 
@@ -49,26 +47,6 @@
 > 6 dettes étaient citées dans l'audit mais n'avaient pas d'entrée dédiée ici, contrairement à la règle
 > d'hygiène du fichier (« Détail technique de chaque bug → `BUGIDENTIFIE.md` »). `COMPARATIF.md` est
 > archivé vers `docs/Old/` une fois ce triage fait — ne plus le traiter comme registre vivant.
-
-### Dette INI4 — `initiative` jamais remise à `base_ini` en fin de tour
-
-**Symptôme** : Aucun cas observé en jeu à ce jour — trouvé par audit de code, pas par reproduction.
-Les modificateurs d'Initiative (Précipiter +3, Dégainer -5, S'accroupir -3, etc.) s'accumulent tour
-après tour au lieu d'être réinitialisés, contrairement à `docs/REGLES/REGLESYSCOMBAT.md` p.213 (voir
-`MANUELSYSCOMBAT.md` §6.7, qui décrit déjà l'exigence).
-
-**Code impliqué** : `endTurn` (`server/src/socket/socketCombatHelpers.js:215-301`) — ne touche jamais
-`initiative`, confirmé aussi par `docs/STRUCTURE_SYSCOMBAT.md:626`.
-
-**Cause racine [VÉRIFIÉ]** : lecture complète de `endTurn`, aucun `UPDATE ... SET initiative = base_ini`
-présent.
-
-**Prochaine étape** : correctif isolé — ajouter le reset dans `endTurn`, avant le passage en phase
-ANNOUNCEMENT du tour suivant (spec déjà écrite dans `MANUELSYSCOMBAT.md` §6.7). Instrumenter un
-scénario réel (plusieurs tours avec Précipiter/Dégainer répétés) pour confirmer la dérive avant de
-corriger.
-
----
 
 ### Dette INI5 — CaC : forfait Initiative de déclaration (-3/-5) potentiellement redondant avec le décalage de phase RAW
 
@@ -113,84 +91,82 @@ séparément (`CLAUDE.md` §13, un plan = un problème).
 
 ---
 
-### Dette MELEE-MR — Dégâts CaC calculés sans le Marge de Réussite (dette Session 67, jamais close)
+### Dette SURPRISE1 — `combat_roster.is_surprised` jamais remis à `false`
 
-**Symptôme** : Aucun cas observé en jeu signalé — écart de règle confirmé par lecture, le tir à
-distance applique une vraie table MR→ModDom, le CaC non.
+**Symptôme** : Aucun cas observé en jeu signalé — trouvé en instrumentant DEF5 (2026-07-19).
 
-**Règle** : `Dommages_Bruts = Arme + MR + ModDom(FOR)` attendu (voir `MANUELSYSCOMBAT.md` §6.2).
+**Règle** : `docs/REGLES/REGLESYSCOMBAT.md:184-188` — la surprise ne s'applique qu'au premier Tour de
+combat ; au Tour suivant, le personnage "retrouve son score d'Initiative habituel".
 
-**Code impliqué** : `resolveMeleeAction`/`resolveMeleeAction` PJ défenseur
-(`server/src/socket/socketCombatHelpers.js:765,819`, `socketCombatResolution.js:370,695`) — calcule
-`rawDice + ModDom(FOR_attaquant)`, sans jamais intégrer le MR (marge de réussite du jet d'attaque).
+**Code impliqué** : `is_surprised` écrit une seule fois à `COMBAT_START` (`socketCombatState.js:96-107`),
+jamais réinitialisé ensuite (`endTurn` ne le touche pas non plus).
 
-**Cause racine [VÉRIFIÉ]** : lecture de code, dette déjà notée dans l'ancien manuel comme « impl V1 »
-depuis la Session 67, jamais reprise depuis.
+**Cause racine [VÉRIFIÉ]** : grep confirmé, aucun `UPDATE ... is_surprised = false` nulle part dans le
+code.
 
-**Prochaine étape** : porter la même table `mrTable`/`getModifier` déjà utilisée côté tir
-(`socketCombatHelpers.js` pipeline assaut) vers `resolveMeleeAction` — un seul cluster CaC, ne pas
-mélanger avec MELEE-MR et d'autres chantiers CaC en cours.
+**Contournement en place** : `isTargetDefenseless` (DEF5, `socketCombatHelpers.js`) ne consomme
+`is_surprised` que si `combat_state.current_turn === 1`, pour ne pas hériter de ce flag jamais remis
+à zéro. N'importe quel autre futur consommateur du flag devra appliquer le même garde tant que ce
+correctif n'est pas fait.
 
----
-
-### Dette DEF5 — « Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC
-
-**Symptôme** : Aucun cas observé en jeu signalé — écart de règle confirmé par lecture.
-
-**Règle** : Une cible surprise/inconsciente/sans défense possible doit bénéficier d'un test simple **+5**
-pour l'attaquant, sans test d'opposition (tir : `MANUELSYSCOMBAT.md` §4 ; CaC : §6.2).
-
-**Code impliqué** : `resolveAssaultAction` et `resolveMeleeAction`
-(`server/src/socket/socketCombatHelpers.js`) — `is_surprised` existe comme colonne mais ne sert qu'à
-neutraliser l'initiative du personnage surpris (ordre de résolution), jamais consulté pour accorder un
-bonus +5 ou bypasser l'opposition.
-
-**Cause racine [VÉRIFIÉ]** : grep confirmé, aucun `+5` ni logique de bypass liée à `is_surprised` dans
-les deux resolvers.
-
-**Prochaine étape** : un seul correctif pour les deux mécanismes (même cause : `is_surprised` sous-exploité)
-— définir le critère exact de « sans défense » (surprise totale uniquement ? + inconscient/stun ?) avant
-de coder, une seule cause racine mais deux points d'insertion (tir + CaC), donc deux commits si les
-resolvers divergent trop pour un patch commun.
+**Prochaine étape** : correctif isolé — ajouter `is_surprised: false` au reset déjà fait dans `endTurn`
+(même requête que le correctif INI4).
 
 ---
 
-### Dette TIRIMP — Garde serveur absent sur « Tir impossible » (allure/couverture/éclairage Totale)
+### Dette COUVERTURE_TOTALE — « Couverture totale » (tir) n'existe nulle part, client ni serveur
 
-**Symptôme** : Aucun cas observé en jeu signalé — écart de sécurité serveur confirmé par lecture.
+**Symptôme** : Aucun cas observé en jeu — trouvé en clôturant TIRIMP (Session 166).
 
-**Règle** : Allure maximale (tireur), Couverture Totale et Éclairage Totale doivent rendre le tir
-impossible (`MANUELSYSCOMBAT.md` §6.1).
+**Règle** : `docs/REGLES/REGLESYSCOMBAT.md:1391-1401` (« Tir en aveugle », optionnel) — une cible en
+couverture totale (totalement cachée) rend le tir impossible, sauf le mécanisme optionnel tir en
+aveugle (Test d'Observation opposé, puis Test de tir -15+bonus, puis Test de Chance).
 
-**Code impliqué** : `CombatModifiersWindow.jsx` — `hasTirImpossible` désactive le bouton côté client
-(malus `-99` codé) ; **aucune vérification équivalente côté serveur** dans `resolveAssaultAction`.
+**Code impliqué** : `CombatModifiersWindow.jsx` (`COUVERTURES` n'a que 2 checkboxes : partielle/
+importante) et `shared/combatSituationMods.js` (`RANGED_SITUATION_MODS` n'a pas de clé
+`couverture_totale`) — contrairement à `tireur_allure_maximale`/`obscurite_totale`, cette clé n'a
+jamais été câblée, ni client ni serveur. Un simple garde serveur ne suffit pas ici : il faudrait
+d'abord ajouter la checkbox côté client.
 
-**Cause racine [VÉRIFIÉ]** : grep confirmé, le blocage n'existe que dans le composant client, contournable
-par un client modifié ou un payload forgé.
-
-**Prochaine étape** : ajouter un garde serveur miroir dans `resolveAssaultAction` avant le jet — rejeter
-la déclaration/résolution si un des 3 modificateurs `-99` est présent, plutôt que de faire confiance au
-client. Ne pas coder en même temps le mécanisme « tir en aveugle + Test Observation » (absent, plus gros
-morceau, chantier séparé si Saar le priorise).
+**Prochaine étape** : à regrouper avec le futur chantier « Tir en aveugle » (RAW lie les deux au même
+mécanisme optionnel) plutôt que d'ajouter une checkbox qui rendrait le tir *toujours* impossible sans
+aucun recours. Décision Saar (2026-07-19) : pas prioritaire, pas dans ce correctif.
 
 ---
 
-### Dette WNDMORT — Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests
+### Dette WNDMORT-UI — Fenêtre de déclaration : pas de repli visuel pour Blessure mortelle
 
-**Symptôme** : Aucun cas observé en jeu signalé — écart de règle confirmé par lecture.
+**Symptôme** : Aucun cas observé en jeu — trouvé en clôturant WNDMORT (Session 166).
 
-**Règle** : Une blessure « mortelle » devrait interdire tout Test (pas un simple malus numérique) selon
-le LdB.
+**Contexte** : le garde serveur (`COMBAT_ACTION_DECLARE`) rejette désormais toute action autre que
+Déplacement (Allure lente)/Passer le tour pour un personnage mortellement blessé, avec un message
+`COMBAT_DECLARE_ERROR` clair. Mais `CombatActionWindow.jsx` ne sait pas encore que ce personnage est
+mortellement blessé — aucun fetch de `character_wounds`, aucun bandeau, aucun bouton grisé. Le joueur
+découvre la restriction seulement en essayant et en recevant l'erreur, pas avant.
 
-**Code impliqué** : `shared/woundConstants.js` — `WOUND_PENALTIES.mortelle = -20`, appliqué comme un
-malus parmi d'autres par `calcWoundPenalty` (`server/src/lib/charStats.js:273-281`).
+**Code impliqué** : `client/src/components/CombatActionWindow.jsx` — pas de wound fetch actuellement.
 
-**Cause racine [VÉRIFIÉ]** : aucun garde-fou trouvé qui empêche un Test en cas de blessure mortelle —
-le -20 se comporte comme n'importe quel autre malus de gravité.
+**Prochaine étape** : sprint UI dédié — fetch `character_wounds` pour le token actif, bandeau
+d'avertissement + désactivation des sections Attaque/CaC/Interaction/Rechargement, garder Déplacement/
+Passer actifs. Décision Saar : pas dans ce correctif (le serveur reste l'autorité, ceci n'est que de
+l'ergonomie).
 
-**Prochaine étape** : décision produit à trancher avec Saar avant de coder — bloquer réellement les
-Tests change le comportement en jeu (un personnage avec blessure mortelle ne pourrait plus rien tenter),
-vs garder le malus -20 comme approximation VTT volontaire. Ne pas coder sans cette décision explicite.
+---
+
+### Dette WNDMORT-HORSCOMBAT — Test générique hors-combat non gardé (Blessure mortelle)
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en clôturant WNDMORT (Session 166).
+
+**Contexte** : le système générique de Test lié aux interactions du monde (`socketEntity.js:253`,
+Test de Force/Reconnaissance/etc. sur un objet) utilise la même donnée `character_wounds` mais n'a pas
+reçu le garde `isTestBlockingWound`. Le LdB dit littéralement "aucune action demandant un Test" — pas
+seulement en combat — donc ce système reste, en toute rigueur, un écart RAW non corrigé.
+
+**Code impliqué** : `server/src/socket/socketEntity.js` — handler de confirmation de Test générique.
+
+**Prochaine étape** : ajouter le même garde (`isTestBlockingWound`) au point de requête initial de ce
+système (pas au point de confirmation vu ici, trop tard pour une bonne UX) — chantier séparé, impact
+pratique jugé bien plus faible que le combat (Décision : non traité dans ce correctif).
 
 ---
 
@@ -301,28 +277,6 @@ console.log('[DBG-ID]', { variable1, variable2 })
 ---
 
 ## Bugs statuts / Chat — Clusters K + Q (partiel)
-
-### Bug ST1 — Badge statut illisible sur token canvas
-
-**Symptôme** : Badge hexagonal "Étourdi" (et autres statuts) visible sur le token mais texte trop petit pour être lisible en jeu.
-
-**Code impliqué** : `Canvas3D.jsx` / Html drei — affichage badges SVGs sous le nom token.
-
-**Prochaine étape** : Sprint 14-2 dédié.
-
----
-
-### Bug CH1 — Historique chat perdu au F5
-
-**Symptôme** : L'historique des messages du chat en session ne survit pas à un rechargement de page (F5).
-
-**Cause racine** [HYPOTHÈSE] : Messages stockés uniquement en mémoire React (useState). `SESSION_JOIN` ne rejoue pas l'historique. Pas de persistance DB des messages de chat.
-
-**Code impliqué** : `client/src/pages/SessionPage.jsx` — state messages. `server/src/socket/index.js` — handler `SESSION_JOIN`.
-
-**Prochaine étape** : Sprint persistance chat — vérifier d'abord si table `chat_messages` existe en DB. Si non → sprint dédié (modèle, migration, API, sync SESSION_JOIN).
-
----
 
 ### Bug COM16 — Phase ANNONCE : traits liaison attaquant↔cible disparaissent
 
@@ -579,20 +533,6 @@ sourcer `allonge` correctement (arme équipée réelle, mains nues = 0), portée
 **Code impliqué** : Composant chat + rendu `DICE_RESULT` — cas `dieType = 'd100'`.
 
 **Prochaine étape** : Cluster Q — lire rendu DICE_RESULT dans Sidebar/chat.
-
----
-
-## Infrastructure — Cluster R
-
-### Bug KIWI2 — Import GLB token : fonctionne en local, échoue sur Kiwi
-
-**Symptôme** : L'importation d'un modèle GLB fonctionne en local mais échoue sur Kiwi.
-
-**Code impliqué** : Route REST upload GLB + configuration MinIO / stockage sur Kiwi. `docs/SERVEURDISTANTKIWI.md`.
-
-**Cause racine** [INCONNU] : Pistes : chemin MinIO différent, permissions bucket, variable d'env manquante, taille max upload.
-
-**Prochaine étape** : Cluster R — tenter un upload GLB sur Kiwi avec logs serveur, puis lire `SERVEURDISTANTKIWI.md` + config MinIO.
 
 ---
 

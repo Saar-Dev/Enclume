@@ -5,6 +5,13 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import { getTailleCible } from '../../../shared/droneConstants.js'
+import { RANGED_SITUATION_MODS, isImpossibleRangedSituation } from '../../../shared/combatSituationMods.js'
+
+// mod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité tir à
+// distance, TIRIMP docs/BUGIDENTIFIE.md). Un `sitKey` absent (val 'immobile'/'cible_lente') signifie
+// "pas de modificateur, pas envoyé au serveur" — jamais une valeur codée en dur ici.
+const mod = (sitKey) => sitKey ? (RANGED_SITUATION_MODS[sitKey]?.mod ?? 0) : 0
+const isImpossible = (sitKey) => !!sitKey && RANGED_SITUATION_MODS[sitKey]?.impossible === true
 
 const FIRE_MODE_LABELS = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }
 
@@ -17,30 +24,30 @@ const PORTEES = [
 ]
 
 const TIREUR_ALLURES = [
-  { val: 'immobile',               sitKey: null,                     label: 'Immobile',              mod: 0 },
-  { val: 'tireur_allure_lente',    sitKey: 'tireur_allure_lente',    label: 'Allure lente',          mod: -3 },
-  { val: 'tireur_allure_moyenne',  sitKey: 'tireur_allure_moyenne',  label: 'Allure moyenne',        mod: -5 },
-  { val: 'tireur_allure_rapide',   sitKey: 'tireur_allure_rapide',   label: 'Allure rapide',         mod: -7 },
-  { val: 'tireur_allure_maximale', sitKey: 'tireur_allure_maximale', label: 'Allure maximale (✗)',   mod: -99 },
+  { val: 'immobile',               sitKey: null,                     label: 'Immobile',            mod: mod(null) },
+  { val: 'tireur_allure_lente',    sitKey: 'tireur_allure_lente',    label: 'Allure lente',        mod: mod('tireur_allure_lente') },
+  { val: 'tireur_allure_moyenne',  sitKey: 'tireur_allure_moyenne',  label: 'Allure moyenne',      mod: mod('tireur_allure_moyenne') },
+  { val: 'tireur_allure_rapide',   sitKey: 'tireur_allure_rapide',   label: 'Allure rapide',       mod: mod('tireur_allure_rapide') },
+  { val: 'tireur_allure_maximale', sitKey: 'tireur_allure_maximale', label: 'Allure maximale (✗)', mod: mod('tireur_allure_maximale') },
 ]
 
 const CIBLE_ALLURES = [
-  { val: 'cible_immobile',        sitKey: 'cible_immobile',        label: 'Immobile',          mod: 3 },
-  { val: 'cible_lente',           sitKey: null,                    label: 'Allure lente',      mod: 0 },
-  { val: 'cible_allure_moyenne',  sitKey: 'cible_allure_moyenne',  label: 'Allure moyenne',    mod: -3 },
-  { val: 'cible_allure_rapide',   sitKey: 'cible_allure_rapide',   label: 'Allure rapide',     mod: -5 },
-  { val: 'cible_allure_maximale', sitKey: 'cible_allure_maximale', label: 'Allure maximale',   mod: -7 },
+  { val: 'cible_immobile',        sitKey: 'cible_immobile',        label: 'Immobile',       mod: mod('cible_immobile') },
+  { val: 'cible_lente',           sitKey: null,                    label: 'Allure lente',   mod: mod(null) },
+  { val: 'cible_allure_moyenne',  sitKey: 'cible_allure_moyenne',  label: 'Allure moyenne', mod: mod('cible_allure_moyenne') },
+  { val: 'cible_allure_rapide',   sitKey: 'cible_allure_rapide',  label: 'Allure rapide',  mod: mod('cible_allure_rapide') },
+  { val: 'cible_allure_maximale', sitKey: 'cible_allure_maximale', label: 'Allure maximale', mod: mod('cible_allure_maximale') },
 ]
 
 const COUVERTURES = [
-  { key: 'couverture_partielle',  label: 'Couverture partielle (50%)',  mod: -3 },
-  { key: 'couverture_importante', label: 'Couverture importante (75%)', mod: -5 },
+  { key: 'couverture_partielle',  label: 'Couverture partielle (50%)',  mod: mod('couverture_partielle') },
+  { key: 'couverture_importante', label: 'Couverture importante (75%)', mod: mod('couverture_importante') },
 ]
 
 const OBSCURITES = [
-  { key: 'obscurite_legere',     label: 'Obscurité légère',              mod: -3 },
-  { key: 'obscurite_importante', label: 'Obscurité importante',          mod: -5 },
-  { key: 'obscurite_totale',     label: 'Obscurité totale (impossible)', mod: -99 },
+  { key: 'obscurite_legere',     label: 'Obscurité légère',              mod: mod('obscurite_legere') },
+  { key: 'obscurite_importante', label: 'Obscurité importante',          mod: mod('obscurite_importante') },
+  { key: 'obscurite_totale',     label: 'Obscurité totale (impossible)', mod: mod('obscurite_totale') },
 ]
 
 const TAILLES = [
@@ -80,7 +87,7 @@ function calcPorteePalier(distance, rangeData) {
 }
 
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
-function fmtOpt(n) { return n > 0 ? `+${n}` : n === 0 ? '±0' : n === -99 ? '✗' : `${n}` }
+function fmtOpt(n, impossible = false) { return impossible ? '✗' : n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
 export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed }) {
   const { actions } = useCombatStore()
@@ -192,7 +199,17 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const totalModComp    = porteeModComp + tireurAllureMod + cibleAllureMod + couvertureMod + obscuriteMod + tailleModComp + (isRushed ? -5 : 0)
   const bonusDmg        = assaultAction?.fire_mode_bonus_dmg ?? 0
 
-  const hasTirImpossible = tireurAllureMod === -99 || obscurites.some(k => OBSCURITES.find(o => o.key === k)?.mod === -99)
+  // Situation courante (mêmes clés que celles envoyées au serveur) — construite une seule fois,
+  // consultée par hasTirImpossible ET handleLancer, jamais deux logiques divergentes.
+  const currentSituation = [
+    ...(tireurAllureDef?.sitKey ? [tireurAllureDef.sitKey] : []),
+    ...(cibleAllureDef?.sitKey  ? [cibleAllureDef.sitKey]  : []),
+    ...couvertures,
+    ...obscurites,
+  ]
+  // TIRIMP — autorité unique partagée avec le serveur (shared/combatSituationMods.js), plus de
+  // sentinel -99 : le bouton se désactive sur le même flag `impossible` que le serveur rejettera.
+  const hasTirImpossible = isImpossibleRangedSituation(currentSituation)
 
   const handleCouverture = (key) => {
     setCouvertures(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
@@ -203,18 +220,10 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 
   const handleLancer = () => {
     if (!effectivePortee || hasTirImpossible || isRolling) return
-    const tireurSitKey = tireurAllureDef?.sitKey
-    const cibleSitKey  = cibleAllureDef?.sitKey
-    const situation = [
-      ...(tireurSitKey ? [tireurSitKey] : []),
-      ...(cibleSitKey  ? [cibleSitKey]  : []),
-      ...couvertures,
-      ...obscurites,
-    ]
     setIsRolling(true)
     socket?.emit(WS.COMBAT_ACTION_CONFIRM, {
       tokenId: activeRosterEntry.token_id,
-      confirmedModifiers: { portee: effectivePortee, situation, taille },
+      confirmedModifiers: { portee: effectivePortee, situation: currentSituation, taille },
     })
   }
 
@@ -318,7 +327,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
               style={styles.select}
             >
               {TIREUR_ALLURES.map(a => (
-                <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod)})</option>
+                <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod, isImpossible(a.sitKey))})</option>
               ))}
             </select>
           </div>
@@ -370,7 +379,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
                 <span style={styles.checkText}>
                   {o.label}
                   <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>
-                    {o.mod === -99 ? '✗' : formatMod(o.mod)}
+                    {isImpossible(o.key) ? '✗' : formatMod(o.mod)}
                   </span>
                 </span>
               </label>

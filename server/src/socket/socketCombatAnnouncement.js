@@ -11,6 +11,7 @@ import { getCharacterMovementBudget } from '../services/movementBudgetService.js
 import { planBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { hasEnoughAmmo, parseAmmoCapacity } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
+import { isTestBlockingWound, isMortalWoundImmobilized } from '../../../shared/woundConstants.js'
 
 // Fetch arme équipée en main pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
 // appellent ce même fetch, jamais deux copies divergentes du même bloc DB). Aucune règle métier ici :
@@ -178,6 +179,42 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         if (movementDeclaration && ['rapide', 'max'].includes(movementDeclaration.gait)) {
           socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Assommé — allure maximale : Moyenne" })
           return
+        }
+      }
+
+      // WNDMORT (docs/BUGIDENTIFIE.md) — Blessure mortelle : REGLEBLESSURES.md « Malus aux Tests : non
+      // applicable, le blessé ne peut entreprendre aucune action demandant un Test. » Décision Saar
+      // (2026-07-19) : seules Déplacement (Allure lente, sauf Jambes) et Passer le tour restent
+      // possibles — même patron que le stun guard ci-dessus. Pas de garde `status_effects_mode` ici :
+      // c'est une blessure physique réelle (`character_wounds`), pas un statut cosmétique togglable.
+      if (character.type !== 'drone') {
+        const sheetMortal = await db('char_sheet').where({ character_id: character.id }).first()
+        const woundsMortal = sheetMortal
+          ? await db('character_wounds').where({ char_sheet_id: sheetMortal.id })
+          : []
+        if (isTestBlockingWound(woundsMortal)) {
+          if (hasAttackDeclared) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle — aucune action de Test possible' })
+            return
+          }
+          if (mapActions?.melee?.length > 0) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle — aucune action de Test possible' })
+            return
+          }
+          if (mapActions?.interact || mapActions?.reload) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle — aucune action de Test possible' })
+            return
+          }
+          if (movementDeclaration) {
+            if (isMortalWoundImmobilized(woundsMortal)) {
+              socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle (jambe) — déplacement impossible' })
+              return
+            }
+            if (movementDeclaration.gait !== 'lente') {
+              socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle — déplacement Allure lente maximum' })
+              return
+            }
+          }
         }
       }
 

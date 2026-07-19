@@ -504,6 +504,20 @@ dépend (Test de panne IEM, Balayage Arts martiaux §6.9 `MANUELSYSCOMBAT.md`, e
 Complexité estimée : faible une fois le seuil obtenu (probablement une constante + une table de
 lookup) — le travail réel est la recherche de la règle exacte, pas l'implémentation.
 
+### Fatigue — système de statut cumulatif (règle avancée)
+Trouvé en creusant WNDMORT (Session 166, dev/Saar) : `docs/REGLES/REGLEBLESSURES.md:1377-1381`
+décrit un mécanisme complet — Fatigue extrême : malus de -10 à tous les Tests (Allure lente max), et
+**à chaque action causant de la fatigue, un Test de Résistance au Choc** (risque d'Étourdissement/
+Inconscience, en plus du malus fixe). Un des 4 systèmes de statut cumulatif (Maladies-Poisons/
+Drogues/Irradiations/Fatigue) déjà confirmés intégralement absents par l'audit `docs/Old/
+COMPARATIF.md` §8.4 — classé « Hors scope V1 » dans `docs/Old/PLAN14_StatusEffects.md` (Session 67),
+décision à reconfirmer ou lever explicitement plutôt qu'à laisser implicite. Distinct de la blessure
+mortelle (WNDMORT) : le Test de Choc récurrent par action est une règle Fatigue, pas une règle
+Blessures physiques — ne pas les confondre au moment de l'implantation.
+Complexité estimée : moyenne — nécessite un compteur d'état persistant (niveau 0-30+, comme les
+Résistances naturelles poison/maladie/drogue/radiation), un déclencheur par action, un Test de Choc
+récurrent (mécanisme déjà existant, juste un nouveau point d'appel), et une UI de suivi sur la fiche.
+
 ### Export PDF fiche personnage
 `docs/PLAN_EXPORTPDF.md` — toujours à l'état proposition (`🔶`, jamais codé, confirmé Session 149).
 Architecture recommandée par la recherche déjà faite : Puppeteer (vue HTML dédiée `@media print`,
@@ -540,6 +554,28 @@ Idée Saar, distincte de "Chat MP" ci-dessous (qui est la messagerie *privée*, 
 Vérifié : l'event `CHAT_MESSAGE` (`shared/events.js`) existe côté socket mais aucune table ne
 persiste l'historique côté serveur — le chat est volatile aujourd'hui (perdu à la reconnexion/au
 redémarrage). À planifier : table de messages, endpoint de relecture, pagination.
+Dette associée : `[CH1]` (`docs/EN_COURS.md`).
+
+### Badges statut token — chantier UI/UX (ex-dette ST1)
+Reclassé chantier dédié plutôt que correctif ponctuel (décision Saar, Session 166) : les icônes SVG
+14×14px (`Canvas3D.jsx:348-387`, `client/public/assets/status/*.svg`) ont une taille fixe qui ne
+s'adapte pas au niveau de zoom caméra ni à l'échelle du token, et certaines formes restent peu
+reconnaissables sans survol (le libellé `alt` n'est visible qu'au hover). Nécessite un vrai passage
+UI/UX : taille proportionnelle à la distance caméra/échelle token, pictogrammes plus lisibles à petite
+taille, éventuellement un mode "toujours nommé" en plus de l'icône pour les statuts critiques
+(étourdi/inconscient). Dette associée : `[ST1]` (`docs/EN_COURS.md`).
+
+### Ergonomie et pédagogie des règles — explication des bonus/malus (chantier UI/UX)
+Trouvé en clôturant DEF5 (Session 166, dev/Saar) : `Sidebar.jsx` a déjà un mécanisme réactif —
+`DiceBreakdownPopover` (bouton "⊞ Détail du calcul" sur chaque jet dans le chat), qui liste le tableau
+`breakdown`/`breakdownAtk` construit serveur (`socketCombatHelpers.js`, un label par modificateur :
+Bouclier adverse, Cible sans défense, Deux armes, etc.). Tout nouveau modificateur qui suit cette
+convention y apparaît automatiquement, sans rien construire côté client — c'est le cas de DEF5.
+**Ce qui manque** : rien de **proactif** — aucune fenêtre de déclaration (`CombatModifiersWindow.jsx`,
+`CombatCacModifiersWindow.jsx`, et plus largement toute fenêtre de Test) n'explique à l'avance quels
+bonus/malus vont s'appliquer avant que le joueur/MJ clique. Décision Saar : chantier ergonomie dédié,
+pas un correctif ponctuel à ajouter au fil des bugs — à spécifier (quoi expliquer avant le jet vs après,
+quel niveau de détail, cohérence visuelle entre les deux mécanismes réactif/proactif) avant de coder.
 
 ### Exo-armures (PLAN_EXOARMURE)
 `docs/MANUELEXOARMURE.md` existe déjà comme manuel technique complet (SSOT), avec schémas détaillés
