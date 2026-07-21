@@ -2534,6 +2534,19 @@ Convention :
 .wiz4-skill.hl { background: rgba(47,215,255,.12); border-color: rgba(47,215,255,.45); opacity: 1; }
 .wiz4-skmain { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
 .wiz4-sklabel { font: 500 12px 'Inter', sans-serif; color: var(--wiz-white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wiz4-sklabel-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  clip-path: none;
+  box-shadow: none;
+  min-width: 0;
+}
+.wiz4-sklabel-btn:hover .wiz4-sklabel { color: var(--wiz-blue-bright); filter: none; }
 .wiz4-prov { display: flex; gap: 4px; flex: none; }
 .wiz4-provtag { font: 600 8.5px 'Inter', sans-serif; color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
 .wiz4-base { font-size: 10px; color: var(--wiz-metal-3); min-width: 52px; text-align: right; }
@@ -2884,6 +2897,21 @@ Convention :
   transition: max-height .35s ease;
 }
 .wiz1-accordion-body--open { max-height: 420px; }
+
+/* Variante longue (contenu de règles, plusieurs paragraphes) — pas de clip à 420px */
+.wiz4-rules-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .35s ease;
+}
+.wiz4-rules-body--open { max-height: 3000px; }
+.wiz4-rules-text {
+  padding: 10px 14px;
+  color: rgba(255,255,255,.6);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
 
 /* ── Section règles ──────────────────────────────────────────────── */
 .wiz1-rules-content {

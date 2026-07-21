@@ -236,14 +236,14 @@
   },
   "step4": {
     "title": "Expérience préliminaire",
+    "setback_none": "Aucun revers à ce stade de votre carrière.",
     "sub_age": "Âge",
     "sub_geo_origin": "Origine",
     "sub_social_origin": "Milieu",
     "sub_training": "Formation",
     "sub_higher_ed": "Études",
     "sub_careers": "Professions",
-    "sub_pro_advantages": "Avantages pro",
-    "sub_setbacks": "Revers",
+    "sub_advantages_and_setbacks": "Avantages & Revers",
     "sub_summary": "Récap",
     "age_label": "Âge de départ",
     "age_slider": "{{age}} ans",
@@ -336,6 +336,7 @@
     "career_random_roll_btn": "Lancer 1D10",
     "career_random_rolling": "Jet en cours…",
     "career_random_narrative_note": "Narratif — n'affecte pas automatiquement la fiche de personnage.",
+    "career_random_applied_note": "Effet appliqué automatiquement à la fiche de personnage.",
     "career_random_points_toggle": "Convertir en {{n}} points d'Avantages pro",
     "career_random_points_label": "Points d'Avantages pro",
     "pro_advantages_title": "Avantages professionnels",
@@ -344,7 +345,93 @@
     "setback_intro": "Personnage expérimenté : tous les 3 ans au-delà de la 10e année d'expérience cumulée, un jet est obligatoire dans la table des Revers.",
     "setback_block": "Année {{year}}",
     "setback_roll_btn": "Lancer 1D100",
-    "setback_status_left": "Il reste des tranches de Revers obligatoires à jouer."
+    "setback_status_left": "Il reste des tranches de Revers obligatoires à jouer.",
+    "pro_adv_rules": {
+      "celebrite": {
+        "title": "Célébrité",
+        "body": "Le personnage peut gagner de la Célébrité à la fin de chaque scénario ou dès qu'il accomplit un acte jugé important par le MJ. Chaque aventure rapporte au moins 1 point ; le MJ peut augmenter le gain selon le barème suivant : action à petite échelle +1 à +3, à grande échelle +5 à +7 ; action ayant eu de nombreux témoins (publique ou relayée par les médias) +3 à +5.\n\nUn personnage dont la Célébrité dépasse 20 devient une légende (vivante ou morte) : tous les niveaux au-delà de 20 ne peuvent jamais être perdus, même après de longues années sans faire parler de lui."
+      },
+      "artisanat": {
+        "title": "Art/Artisanat",
+        "body": "Les points d'Artisanat correspondent à des œuvres réalisées au cours de la vie du personnage — des objets d'art simples, sans procédé technologique (aucun équipement électronique ou mécanique), qu'il pourra revendre plus tard. Il est possible de sélectionner des armes blanches, des armures simples ou des armes de poing (aucune arme à énergie, uniquement à projectiles).\n\nChaque niveau d'œuvre d'art rapporte 2D6 x 100 sols. Pour les armes et les protections, les points d'Artisanat s'utilisent comme des points d'Assemblage."
+      },
+      "ateliers": {
+        "title": "Ateliers",
+        "body": "Les ateliers de techniciens ne sont pas la propriété du personnage : ils sont loués à la ville de résidence, au tarif de 15 000 sols le m². Les points d'Atelier déterminent la surface du local, en m² :\n• 10 m² : Armures exo-1 à 2\n• 36 m² : Armures exo-3 à 6\n• 100 m² : Véhicules jusqu'à 100 T\n• Au-delà : 1 m² par tonne du véhicule\n\nUn atelier rapporte un bénéfice mensuel de 20 sols par m² (frais et salaires déjà déduits), en considérant que le personnage s'en occupe de temps en temps et emploie des apprentis pour l'entretenir en son absence.\n\nTout atelier peut recevoir un niveau d'équipement (outils et machines), de +0 au départ jusqu'à +5 maximum, au coût de (niveau visé)² x 5 000 sols (donc 5 000 sols pour +1, 20 000 sols pour +2, etc.). Ce niveau agit comme un bonus à tous les Tests effectués avec l'atelier."
+      },
+      "assemblage": {
+        "title": "Assemblage",
+        "body": "Les points d'Assemblage permettent de modifier un équipement que le personnage possède déjà (obtenu par sa Profession, acheté, ou appartenant à un autre membre du groupe avec l'accord du MJ) :\n• Dommages augmentés (arme) : 5 points par point de dommages supplémentaire (max +5)\n• Portée augmentée (arme) : 4 points par +5% de portée (max +25%)\n• Batterie/munitions : 2 points pour +5% de capacité (max +25%)\n• Amélioration : 10 points pour +1 (arme/appareil plus performant, max +3, incompatible avec Personnalisation)\n• Personnalisation : 5 points pour le même bonus, mais valable pour un seul personnage (max +3, incompatible avec Amélioration)\n• Protection (protection personnelle) : 5 points par point de protection (max +5)\n• Silencieux : 3 points par -1 au Test pour entendre l'appareil (max -7)\n• Intégrité : 1 point par point d'Intégrité supplémentaire (dans la limite du maximum de l'objet)\n\nLes améliorations ne sont possibles que sur les appareils du domaine d'activité du personnage (armes pour un armurier, véhicules pour un mécanicien, ordinateurs pour un technicien informatique, etc.). Un technicien peut convertir ses points d'Assemblage en points de Matériel, à raison de 2 points de Matériel par point d'Assemblage — l'équipement ainsi obtenu a été fabriqué par le technicien lui-même."
+      },
+      "bases_donnees": {
+        "title": "Bases de données",
+        "body": "Chaque base de données couvre un domaine de connaissance précis (langues étrangères, langues anciennes, armes, véhicules, sciences médicales…) — plus le domaine choisi est large, plus les connaissances qu'il fournit sont superficielles. Une base possède un niveau de +0 à +15, amélioré grâce aux points de Base de données, au même coût que les niveaux de Compétence :\n+1 à +5 : 1 point/niveau · +6 à +10 : 2 points/niveau · +11 : 3 · +12 : 4 · +13 : 5, puis +1 point par niveau supplémentaire.\n\nUne base de données s'utilise comme une Compétence dont le niveau de base dépend de l'Intelligence (INT/INT) et le niveau de maîtrise est celui de la base — recherche de quelques minutes à quelques heures selon la complexité, avec un modificateur de Difficulté au choix du MJ. Il est possible d'améliorer une base plus tard, au coût de (niveau visé)² x 1 000 sols."
+      },
+      "bars": {
+        "title": "Bars",
+        "body": "Les bars ne sont pas la propriété du personnage : ils sont loués à la ville de résidence, au tarif de 15 000 sols le m² (taille minimale 10 m², sinon il s'agit d'une buvette). Les points de Bar déterminent la surface du local. Un bar rapporte un bénéfice mensuel de 15 sols par m² (frais et salaires déduits), en considérant que le personnage s'en occupe de temps en temps et emploie du personnel en son absence."
+      },
+      "cabine_privee": {
+        "title": "Cabine privée",
+        "body": "Une cabine privée mesure 1 m² par niveau, au même coût qu'un niveau de Compétence (voir Bases de données). Le joueur choisit la station ou la ville qui abrite la cabine. Le personnage ne peut normalement avoir qu'une seule cabine privée — il ne peut répartir ses points entre plusieurs cabines, sauf changement de Profession ou de communauté."
+      },
+      "cabinets_medicaux": {
+        "title": "Cabinets médicaux",
+        "body": "Les cabinets médicaux ne sont pas la propriété du personnage : ils sont loués à la ville de résidence, au tarif de 45 000 sols le m². Les points de Cabinet médical déterminent la surface du local. Un cabinet rapporte un bénéfice mensuel de 30 sols par m² (frais et salaires déduits).\n\nComme les ateliers, un cabinet peut recevoir un niveau d'équipement (de +0 à +5 maximum), au coût de (niveau visé)² x 10 000 sols. Ce niveau agit comme un bonus à tous les Tests effectués avec le cabinet, mais exige une superficie au moins égale à 10 fois le niveau du cabinet."
+      },
+      "concessions_minieres": {
+        "title": "Concessions minières",
+        "body": "Une mine ne se loue ni ne s'achète : si elle est sur le territoire d'une nation, on obtient un droit d'exploitation ; sinon, ce droit peut être loué ou acheté à son détenteur, sous validation du bureau des concessions minières. Types d'exploitation : eau potable, énergie, métal, gaz.\n\nJusqu'à 50 points, il s'agit d'une petite exploitation personnelle, rapportant 10 sols par point et par mois. Au-delà, il s'agit d'une exploitation industrielle, rapportant 50 sols par point et par mois (frais et salaires déjà déduits dans les deux cas)."
+      },
+      "corruption_chantage": {
+        "title": "Corruption/Chantage",
+        "body": "Le personnage bénéficie des faveurs d'un individu corrompu, ou détient de quoi le faire chanter. Les points de Corruption/Chantage achètent des niveaux (même coût qu'une Compétence, voir Bases de données), jusqu'à un maximum de 20. Plus le niveau est élevé, plus l'individu compromis est important et/ou prêt à satisfaire les exigences du personnage — il est possible de répartir ses points entre plusieurs cibles.\n\nObtenir une faveur demande un Test sous le niveau de Corruption/Chantage, avec un modificateur de Difficulté au choix du MJ selon l'importance de la demande (+5 pour une petite faveur, -5 ou plus pour une demande importante). Le MJ ne devrait autoriser que des demandes raisonnables."
+      },
+      "etal_boutique": {
+        "title": "Étal/Petite boutique",
+        "body": "Les étals et boutiques ne sont pas la propriété du personnage. Les étals sont des emplacements alloués par les syndicats marchands ; une boutique s'investit au tarif de 10 000 sols le m². Les points d'Étal/Petite boutique déterminent la taille du local.\n\nUn étal rapporte un bénéfice mensuel de 10 sols par m² (frais et salaires déduits). Une boutique a une taille minimale de 10 m² et rapporte 100 sols par m² et par mois, dans les mêmes conditions."
+      },
+      "falsification": {
+        "title": "Falsification",
+        "body": "Les points de Falsification achètent des faux documents dotés d'un niveau (maximum 15), qui agit comme un malus pour quiconque tente de déterminer s'il s'agit d'un faux. Le coût d'un niveau est identique à celui d'une Compétence (voir Bases de données). Le joueur peut répartir ses points entre plusieurs documents, mais doit préciser leur nature (permis, autorisation, etc.)."
+      },
+      "fausses_identites": {
+        "title": "Fausses identités",
+        "body": "Les points de Fausse identité s'affectent à la Célébrité d'un ou plusieurs personnages fictifs incarnés par le personnage — cette Célébrité fonctionne comme celle d'un personnage normal et peut donner accès à des bonus d'Influence. Le personnage peut aussi sacrifier des points de Fausse identité pour « protéger » une identité : chaque point sacrifié inflige un malus de -1 (maximum -15) à quiconque cherche à découvrir la supercherie."
+      },
+      "materiel": {
+        "title": "Matériel",
+        "body": "Cet atout permet d'accumuler gratuitement du matériel accessible à la Profession du personnage (sauf mention contraire). Chaque point rapporte l'équivalent de 1 000 sols de matériel gratuit."
+      },
+      "parcelles_elevage_cultures": {
+        "title": "Parcelles d'élevage/cultures",
+        "body": "Des fermes sous-marines aux petits modules d'hydroculture, ces exploitations peuvent servir de base à une nouvelle communauté indépendante. Jusqu'à 50 points, il s'agit de petites parcelles personnelles (environ 200 m²) ; au-delà, d'une ferme pouvant couvrir plusieurs milliers d'hectares.\n\nUne petite parcelle personnelle rapporte 10 sols par point de taille et par mois ; une ferme indépendante (10 000 m² et plus) rapporte 50 sols par point et par mois (frais et salaires déjà déduits dans les deux cas)."
+      },
+      "pharmacie_personnelle": {
+        "title": "Pharmacie personnelle",
+        "body": "Une pharmacie personnelle regroupe des médicaments pour soigner un patient (sans matériel spécifique d'équipement). Les points de Pharmacie personnelle achètent des niveaux, au même coût qu'une Compétence (voir Bases de données), jusqu'à un maximum de 20 — il est possible de répartir ses points entre plusieurs pharmacies.\n\nUtiliser une pharmacie demande un Test sous son niveau (le MJ peut imposer un malus face à une maladie inconnue). En cas de réussite, le personnage gagne un bonus égal à son modificateur de réussite pour un Test de Médecine ou de Premier soins — et le niveau de la pharmacie baisse de 1 point après chaque utilisation réussie (rachat possible à 1 000 sols par niveau). Une pharmacie personnelle pèse 1 kilo par niveau."
+      },
+      "planque_cache": {
+        "title": "Planque/Cache",
+        "body": "Le personnage achète des niveaux de Planque/Cache, au même coût qu'une Compétence (voir Bases de données), jusqu'à un maximum de 15 — répartissables entre plusieurs lieux. Si le personnage doit se cacher, le niveau de la planque agit comme un malus supplémentaire pour quiconque tente de la localiser (enquête auprès de ses contacts, étude de ses comptes ou de son passé, etc.)."
+      },
+      "reseau_contrebande": {
+        "title": "Réseau de contrebande",
+        "body": "Un réseau de contrebande permet de faire entrer ou sortir du matériel d'une cité précise. Le personnage achète des niveaux, au même coût qu'une Compétence (voir Bases de données), jusqu'à un maximum de 15, répartissables entre plusieurs réseaux.\n\nUtiliser son réseau demande un Test sous son niveau : en cas d'échec, les autorités découvrent une faille et le niveau baisse de 1 point. Il est possible de regagner des niveaux via une petite aventure où le personnage sollicite Contacts, Alliés et Fournisseurs — au MJ de déterminer si le réseau progresse (15 restant le maximum)."
+      },
+      "relations": {
+        "title": "Relations",
+        "body": "Contacts, Fournisseurs et Alliés — des relations qui aident le personnage :\n• Contact : connaissance peu influente, informe ou vend du petit matériel, s'attend à être payée.\n• Fournisseur : fournit du matériel important, des informations capitales ou des services majeurs, contre un prix conséquent.\n• Allié : famille, ami ou partisan fiable, aide gratuitement mais attend la réciproque.\n\nContacts et Fournisseurs peuvent trahir si leur intérêt (ou celui du MJ) le justifie ; les Alliés restent loyaux mais attendent d'être aidés en retour le moment venu.\n\nChaque personnage dispose au départ d'un Contact et d'un Allié automatiques. Il en gagne ensuite régulièrement au fil de sa carrière (Contact, Fournisseur ou Allié au choix), et peut accumuler des points de Relation via ses Avantages professionnels pour en acheter d'autres : Contact 1 point, Fournisseur ou Allié 3 points.\n\nCes points servent aussi à améliorer une relation existante (accord du MJ requis) — Personne influente ou Groupe/Gang : 3 points pour un Contact ou un Fournisseur, 5 points pour un Allié. Informations et services plus intéressants, mais retombées plus risquées ; le MJ ne devrait pas autoriser plus d'un individu de ce type par personnage.\n\nOpposants et Ennemis (adversaires) :\n• Opposant : rival, concurrent ou jaloux qui nuit sans aller jusqu'à l'attaque physique, sauf si le conflit s'envenime. Le MJ peut échanger 3 Opposants contre 1 Ennemi.\n• Ennemi : bien plus déterminé — prêt à intriguer et à s'en prendre physiquement au personnage."
+      },
+      "stock_marchandises": {
+        "title": "Stock de marchandises",
+        "body": "Des réserves acquises par le personnage sans qu'il en connaisse toujours le contenu. Les points de Stock achètent des niveaux, au même coût qu'une Compétence (voir Bases de données), jusqu'à un maximum de 20, répartissables entre plusieurs stocks. Chaque dépôt vaut théoriquement 10D10 x 20 sols par niveau.\n\nÀ la création, il faut déterminer la nature du stock (1D20) : 1-10 produits divers, 11 nourriture/boissons, 12 armement léger, 13 munitions, 14 armures, 15 mécanique, 16 électronique, 17 informatique, 18 produits médicaux, 19 drogues, 20 matériel de plongée.\n\nÀ chaque recours au stock, on détermine son état (1D20) : 1-3 détruit (valeur nulle), 4-5 détérioré (valeur réduite de moitié), 6-7 volé, 8-13 en parfait état, 14-15 sous scellés (à récupérer auprès des autorités, amende probable), 16-17 surveillé (risque d'ennuis), 18 erreur sur la marchandise (gros ennuis en perspective), 19 sous-évalué (valeur théorique x10), 20 surprise de taille (matériel bien plus précieux que prévu, possiblement compromettant).\n\nRechercher un objet précis dans son stock demande un Test sous le niveau du Stock ; le modificateur de réussite indique combien d'exemplaires sont disponibles, sans jamais dépasser la valeur théorique du stock."
+      },
+      "unite": {
+        "title": "Unité",
+        "body": "L'unité ouvrière n'apporte aucun avantage en nature, mais tout ouvrier ou docker qui sollicite ses confrères peut bénéficier immédiatement de leur aide. Pour un coup de main mineur (se loger, trouver à manger, faire la fête…), un Test sous le niveau de Célébrité suffit. Pour une aide plus importante (se cacher, se battre…), le personnage doit utiliser son Influence à la place."
+      }
+    }
   },
   "step5": {
     "title": "Étape 5/5 — Avantages & Désavantages",

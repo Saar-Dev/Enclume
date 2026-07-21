@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
 import CareersAllocator from './CareersAllocator'
-import ProAdvantagesAllocator from './ProAdvantagesAllocator'
-import SetbacksAllocator from './SetbacksAllocator'
+import ProAdvantagesAndSetbacks from './ProAdvantagesAndSetbacks'
 import { BG_META } from './backgroundMeta'
 import Step4Summary from './Step4Summary'
 import { useCreationStore } from '../../stores/creationStore'
@@ -20,8 +19,7 @@ const SUB_STEPS = {
   TRAINING: 'training',
   HIGHER_ED: 'higher_ed',
   CAREERS: 'careers',
-  PRO_ADVANTAGES: 'pro_advantages',
-  SETBACKS: 'setbacks',
+  ADVANTAGES_AND_SETBACKS: 'advantages_and_setbacks',
   SUMMARY: 'summary',
 }
 
@@ -29,7 +27,7 @@ const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
 export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const { sheetId, step1Data, step2Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled } = useCreationStore()
+  const { sheetId, step1Data, step2Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, setStep4Data } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [age, setAge] = useState(initialData?.age ?? 16)
@@ -95,15 +93,22 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   // ─── PC calculés ───────────────────────────────────────────────
   const totalCareerYears = careers.reduce((sum, c) => sum + c.years, 0)
   const totalPC = (higherEd ? 1 : 0) + totalCareerYears
-  const remainingPC = pcDispo - totalPC
   const finalAge = age + (selectedHigherEdItem?.years_added ?? 0) + totalCareerYears
+
+  // Aperçu live du coût de l'étape 4 (avant soumission) — écrit directement dans le store
+  // (setStep4Data est stable par construction, pas besoin de callback-prop mémoïsée).
+  // getStepBudget() (consommé par CareersAllocator ci-dessous) ignore ce champ : seul
+  // getPcDispo() (header) le lit, donc pas de double décompte possible.
+  useEffect(() => {
+    setStep4Data({ liveYears: totalPC })
+  }, [totalPC, setStep4Data])
 
   // ─── OPT-06 (revers) — total cumulé, pas par carrière (shared/careerSetbacks.js) ───
   const setbackBlockCount = getSetbackBlockCount(totalCareerYears)
   const showSetbacks = !!reversEnabled && setbackBlockCount > 0
   // Dérivé (pas d'effet + setState) : si le joueur revient sur Carrières et réduit le total
   // d'années, une tranche déjà jetée peut devenir hors bornes — filtrée ici plutôt que purgée en
-  // état, SetbacksAllocator se remonte avec cette valeur à chaque retour sur la sous-step.
+  // état, ProAdvantagesAndSetbacks se remonte avec cette valeur à chaque retour sur la sous-step.
   const validSetbackRolls = setbackRolls.filter(r => r.blockIndex < setbackBlockCount)
 
   // ─── Handlers ──────────────────────────────────────────────────
@@ -236,10 +241,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       advanceSubStep(SUB_STEPS.CAREERS)
       return
     }
-    if (subStep === SUB_STEPS.PRO_ADVANTAGES && !showSetbacks) {
-      advanceSubStep(SUB_STEPS.SUMMARY)
-      return
-    }
+
     if (idx < SUB_STEP_ORDER.length - 1) {
       advanceSubStep(SUB_STEP_ORDER[idx + 1])
     }
@@ -251,10 +253,10 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
       setSubStep(SUB_STEPS.TRAINING)
       return
     }
-    if (subStep === SUB_STEPS.SUMMARY && !showSetbacks) {
-      setSubStep(SUB_STEPS.PRO_ADVANTAGES)
-      return
-    }
+    if (subStep === SUB_STEPS.SUMMARY) {
+  setSubStep(SUB_STEPS.ADVANTAGES_AND_SETBACKS)
+  return
+}
     if (idx > 0) {
       setSubStep(SUB_STEP_ORDER[idx - 1])
     } else {
@@ -271,7 +273,6 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           const isReachable = SUB_STEP_ORDER.indexOf(ss) <= SUB_STEP_ORDER.indexOf(highestSubStep)
           const isClickable = isReachable && !isActive
             && (ss !== SUB_STEPS.HIGHER_ED || showHigherEd)
-            && (ss !== SUB_STEPS.SETBACKS || showSetbacks)
           return (
             <span
               key={ss}
@@ -394,6 +395,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
 
 {subStep === SUB_STEPS.CAREERS && (
   <CareersAllocator
+    // pcDispo (prop) est getStepBudget() côté WizardCreation — toujours brut, jamais affecté
+    // par la dépense en cours de cette étape. CareersAllocator soustrait lui-même son propre
+    // totalPC (somme des années déjà choisies) : aucune compensation à faire ici.
     pcDispo={pcDispo - (higherEd ? 1 : 0)}
     selectedCareers={careers}
     careers={refData.careers}
@@ -418,26 +422,20 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   />
 )}
 
-{subStep === SUB_STEPS.PRO_ADVANTAGES && (
-  <ProAdvantagesAllocator
+{subStep === SUB_STEPS.ADVANTAGES_AND_SETBACKS && (
+  <ProAdvantagesAndSetbacks
     selectedCareers={careers}
     careers={refData.careers}
-    initialProAdvantages={proAdvantages}
-    onProAdvantagesChange={handleProAdvantagesChange}
-    initialRandomPicks={randomPicks}
-    onRandomPicksChange={handleRandomPicksChange}
-    randomProAdvantagesEnabled={randomProAdvantagesEnabled}
-    onNext={handleSubNext}
-    onPrev={handleSubPrev}
-  />
-)}
-
-{subStep === SUB_STEPS.SETBACKS && (
-  <SetbacksAllocator
     totalYears={totalCareerYears}
     setbackRows={refData.setbacks}
-    initialRolls={validSetbackRolls}
-    onRollsChange={handleSetbackRollsChange}
+    initialProAdvantages={proAdvantages}
+    initialRandomPicks={randomPicks}
+    initialSetbackRolls={setbackRolls}
+    onProAdvantagesChange={handleProAdvantagesChange}
+    onRandomPicksChange={handleRandomPicksChange}
+    onSetbackRollsChange={handleSetbackRollsChange}
+    randomProAdvantagesEnabled={randomProAdvantagesEnabled}
+    reversEnabled={reversEnabled}
     onNext={handleSubNext}
     onPrev={handleSubPrev}
   />

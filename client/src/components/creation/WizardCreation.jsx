@@ -28,7 +28,7 @@ export default function WizardCreation() {
     resetCreation,
     step1Data, step2Data, step3Data, step4Data, step5Data,
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data, setStep5Data,
-    getPcDispo,
+    getPcDispo, getStepBudget,
     ambiance: storeAmbiance,
     randomMutationsEnabled,
     femininBonusEnabled,
@@ -49,6 +49,7 @@ export default function WizardCreation() {
   }, [campaignId, setCampaignId])
 
   const pcDispo = getPcDispo()
+  const stepBudget = getStepBudget()
   const ambiance = storeAmbiance ?? 'INTERMEDIAIRE'
 
   const navigateToStep = (target) => {
@@ -178,7 +179,7 @@ export default function WizardCreation() {
           <Step3Mutations
             initialData={step3Data}
             sheetId={sheetId}
-            pcDispo={pcDispo}
+            pcDispo={stepBudget}
             randomMutationsEnabled={randomMutationsEnabled}
             onNext={(data) => {
               setStep3Data(data)
@@ -195,7 +196,7 @@ export default function WizardCreation() {
         {step === 4 && (
           <Step4Experience
             initialData={step4Data}
-            pcDispo={pcDispo}
+            pcDispo={stepBudget}
             onNext={(data) => {
               setStep4Data(data)
               setHighestStep(5)
@@ -212,7 +213,7 @@ export default function WizardCreation() {
           <Step5Advantages
             initialData={step5Data}
             sheetId={sheetId}
-            pcDispo={pcDispo}
+            pcDispo={stepBudget}
             onNext={(data) => {
               setStep5Data(data)
               setHighestStep(6)

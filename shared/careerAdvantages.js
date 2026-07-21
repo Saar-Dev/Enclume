@@ -64,3 +64,58 @@ export function computeRandomBudgetDelta(picks, benefitRows) {
   }
   return delta
 }
+
+// Mécanisation des tirages 1D10 (effets réels, pas seulement narratifs) — fonction pure, appelée
+// à chaque reconcileCreation (rejouable) : le total renvoyé est recalculé intégralement à partir
+// des picks courants, jamais accumulé entre deux appels. Un pick avec useAsPoints=true est exclu :
+// le joueur a choisi les points du budget plutôt que l'effet de cette ligne (jamais les deux).
+//
+// Types d'effets supportés (ref_career_random_benefits.effects, JSONB) :
+//   attribute      { target: 'FOR'|'CON'|'COO'|'ADA'|'PER'|'INT'|'VOL'|'PRE', value }
+//   celebrity      { value }
+//   skill_points   { value }
+//   category       { target: string (catégorie d'avantage pro, ex. 'Matériel'), value }
+//   income_percent { value }   — pourcentage additif, appliqué sur l'ensemble des économies du métier
+//   income_multiplier { value } — multiplicateur (ex. 2 pour "doublé"), composé par multiplication
+// Types non couverts par cette étape (disadvantage, narrative, relation Allié/Contact) : ignorés
+// ici, le texte narratif reste affiché tel quel côté client.
+export function resolveCareerRandomEffects(picks, benefitRows) {
+  const rowByRoll = new Map((benefitRows ?? []).map(r => [r.roll, r]))
+  const totals = {
+    attributes: {},
+    celebrity: 0,
+    skillPoints: 0,
+    categories: {},
+    incomePercent: 0,
+    incomeMultiplier: 1,
+  }
+  for (const pick of picks ?? []) {
+    if (pick.useAsPoints) continue
+    const row = rowByRoll.get(pick.roll)
+    for (const effect of row?.effects ?? []) {
+      switch (effect.type) {
+        case 'attribute':
+          totals.attributes[effect.target] = (totals.attributes[effect.target] ?? 0) + effect.value
+          break
+        case 'celebrity':
+          totals.celebrity += effect.value
+          break
+        case 'skill_points':
+          totals.skillPoints += effect.value
+          break
+        case 'category':
+          totals.categories[effect.target] = (totals.categories[effect.target] ?? 0) + effect.value
+          break
+        case 'income_percent':
+          totals.incomePercent += effect.value
+          break
+        case 'income_multiplier':
+          totals.incomeMultiplier *= effect.value
+          break
+        default:
+          break
+      }
+    }
+  }
+  return totals
+}

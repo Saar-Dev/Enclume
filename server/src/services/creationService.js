@@ -9,7 +9,7 @@ import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
-import { computeProAdvantageAllocation, computeRandomBudgetDelta } from '../../../shared/careerAdvantages.js'
+import { computeProAdvantageAllocation, computeRandomBudgetDelta, resolveCareerRandomEffects } from '../../../shared/careerAdvantages.js'
 import { getSetbackBlockCount, resolveSetback } from '../../../shared/careerSetbacks.js'
 import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
 import { addAdvantage } from './advantageService.js'
@@ -451,6 +451,11 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       // Carrières
       // totalCareerYears calculé plus haut (validation Revers) — même somme, réutilisée ici.
       const careersCtx = []
+      // Accumulateur des effets de tirages 1D10 (Lot 6, mécanisation) — recalculé intégralement à
+      // chaque reconcile à partir des picks courants (jamais accumulé entre deux appels), rempli
+      // pendant la boucle carrières (où les tirages sont résolus), consommé après (attributs,
+      // char_sheet). resolveCareerRandomEffects exclut déjà les picks useAsPoints=true.
+      const characterEffectTotals = { attributes: {}, celebrity: 0, skillPoints: 0 }
       for (const career of careersData) {
         const refCareer = await trx('ref_careers').where({ id: career.career_id }).first()
         if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
@@ -468,7 +473,6 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           if (title.salary_per_year) salary = title.salary_per_year
           else if (title.salary_formula) salary = evaluateSalaryFormula(title.salary_formula)
         }
-        const savings = salary * career.years
 
         // Tirage 1D10 (Lot 6) : validé AVANT Q3 — le delta budgétaire qui en résulte est injecté
         // dans computeProAdvantageAllocation ci-dessous. Ignoré (mais toujours validé en forme) pour
@@ -497,7 +501,26 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         }
         const randomBudgetDelta = computeRandomBudgetDelta(randomPicks, randomBenefitRows)
 
+        // Mécanisation (Étape 1) : effets réels résolus depuis randomBenefitRows.effects, recalculés
+        // intégralement à chaque reconcile (jamais accumulés). [HYPOTHÈSE] non tranchée avec Saar :
+        // income_percent/income_multiplier s'appliquent ici à l'ensemble des économies du métier
+        // (modèle salary*years déjà plat, pas de découpage par tranche de 5 ans) plutôt qu'à partir
+        // du bloc où le tirage tombe — simplification assumée, à revoir si le rendu ne convient pas.
+        const resolvedEffects = resolveCareerRandomEffects(randomPicks, randomBenefitRows)
+        const savings = Math.round(
+          salary * career.years * resolvedEffects.incomeMultiplier * (1 + resolvedEffects.incomePercent / 100)
+        )
+        for (const [attr, delta] of Object.entries(resolvedEffects.attributes)) {
+          characterEffectTotals.attributes[attr] = (characterEffectTotals.attributes[attr] ?? 0) + delta
+        }
+        characterEffectTotals.celebrity += resolvedEffects.celebrity
+        characterEffectTotals.skillPoints += resolvedEffects.skillPoints
+
         // Q3 — validation par métier du coût avantages pro (shared/careerAdvantages.js, Lot 4).
+        // Volontairement basée sur career.proAdvantages SEUL (allocation manuelle du joueur) —
+        // resolvedEffects.categories (bonus gratuits gagnés par tirage) ne doit jamais entrer dans
+        // ce calcul sous peine de fausser le budget validé ; stocké séparément (random_effects_applied)
+        // et additionné uniquement côté lecture (fiche personnage), pas ici.
         const pointCatRows = await trx('ref_career_point_categories').where({ career_id: career.career_id })
         const advResult = computeProAdvantageAllocation(career.proAdvantages || {}, {
           categories: pointCatRows.map(c => c.category),
@@ -520,6 +543,7 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           pro_advantages: JSON.stringify(career.proAdvantages || {}),
           random_picks: JSON.stringify(career.randomPicks || []),
           setbacks: JSON.stringify(career.setbacks || []),
+          random_effects_applied: JSON.stringify(resolvedEffects.categories),
         })
 
         // Compétences "au choix" (Lot 5) : validées par groupe AVANT d'être traitées comme pro
@@ -597,14 +621,25 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
 
       // Effets de l'âge sur les attributs — set absolu (pas increment) : rejouer la
       // reconciliation avec un âge final différent recalcule au lieu de cumuler les malus.
+      // Composé avec characterEffectTotals.attributes (tirages 1D10, résolus pendant la boucle
+      // carrières ci-dessus) — même principe : set absolu, jamais un increment sur plusieurs appels.
       const ageEffects = getAgeEffects(finalAge, { attributes: ageAttrs, youngPenaltyEnabled: settings.young_penalty })
       for (const attr of ATTR_IDS_START) {
+        const careerDelta = characterEffectTotals.attributes[attr] ?? 0
         await trx('char_attributes')
           .where({ char_sheet_id: sheetId, attr_id: attr })
-          .update({ pc_modifier: ageEffects[attr] ?? 0 })
+          .update({ pc_modifier: (ageEffects[attr] ?? 0) + careerDelta })
       }
       await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ age: finalAge })
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step4: pc4 ?? 0 })
+
+      // Célébrité / points de compétence gagnés par tirage — set absolu (aucun autre écrivain
+      // pendant la création : xp_available n'est touché qu'en jeu via routes/character/char-sheet.js,
+      // celebrity n'existe que depuis cette mécanisation).
+      await trx('char_sheet').where({ id: sheetId }).update({
+        celebrity: characterEffectTotals.celebrity,
+        xp_available: characterEffectTotals.skillPoints,
+      })
     }
 
     // ── STEP 5 : avantages/désavantages ────────────────────────────────────────
