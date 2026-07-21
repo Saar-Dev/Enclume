@@ -1,3 +1,8 @@
+> **[HISTORIQUE, archivé 2026-07-21 Session 167]** — Fonctionnalité terminée (Groupe 1/2, codés et
+> confirmés fonctionnels en navigateur). Contenu définitif intégré dans `docs/SYSTEME/MODING.md`
+> (Règle 10, `docs/RegleDocumentaire.md`). Conservé pour l'historique de conception. Ne plus modifier
+> ni citer comme référence active — voir `docs/SYSTEME/MODING.md`.
+
 # PLAN_MODING_PHASEB.md — Effets mécaniques des mods d'armes en combat
 > Rédaction initiale : Session 141 (suite 21 suite), 2026-07-12 — mis à jour Session 141 (suite 29), 2026-07-13
 > Fait suite à `docs/Old/PLAN_MODING.md` (Phase A — rangement pur, terminée, archivé Session 149). Ce document couvre
@@ -403,3 +408,4 @@ sa propre session de planification (voir section Groupe 4 ci-dessus).
 **Prochain numéro de migration à reconfirmer au moment de coder** (P53 — dérive déjà constatée
 plusieurs fois sur ce chantier, dont une collision réelle Session 141 suite 28) — 143 libre au
 2026-07-13, ne pas s'y fier sans revérifier `ls migrations/`.
+

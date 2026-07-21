@@ -164,10 +164,116 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
-🔒 En cours (Saar) : Chantier bugs — cluster combat confirmé par `docs/Old/COMPARATIF.md` (INI4 ✅,
-MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅, reste CHOC1 — décision à prendre avant de coder)
+Chantier Moding Groupe 4 (architecture définitive : `docs/SYSTEME/MODING.md` ; plan archivé :
+`docs/Old/[HISTORIQUE] PLAN_MODDING_REFONTE.md`) **clos** (Session 167, item 104) : Phases
+1/3/4 (socle, état, mécaniques ATI/Mémoire/Projecteur) codées et testées. Intégration live volontairement
+non câblée — 4 dettes résiduelles notées `docs/BUGIDENTIFIE.md` (`MODING4-ATI`, `MODING4-MEMOIRE`,
+`MODING4-PROJECTEUR`, `MODING4-INTEGRATION`), décisions produit + câblage restants, pas un chantier actif.
+Phase 2 (migration Groupe 1/2 déjà livré) toujours différée (Strangler Fig).
+
+Aucun chantier `🔒 En cours` actif. Prochaine décision en attente de Saar : CHOC1 — plan écrit
+(`docs/PLAN_CHOC1.md`), décision de scope avant tout code sur ce sujet (cluster combat déjà clos :
+INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`).
+
+> **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
+> intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).
+> **Corrigé en préparant Phase 4** : `modLevel` était conçu comme un champ global du contexte
+> partagé — faux dès que 2 mods de niveaux différents sont évalués dans le même appel
+> (`weaponModService.js` injecte désormais `modLevel: mod.bonus` par mod, un seul endroit,
+> `getAllCombatMods` étendu pour sélectionner `re.bonus` qui manquait). **Codé** : `shared/mods/ati.js`,
+> `memoire.js`, `projecteur.js` (RAW cité, `docs/Old/.../STEP1_cleaned_data.js` EQ_00001/00002/00005) ;
+> `shared/weaponModRegistry.js` peuplé (3 entrées réelles, `statusCodes` pour l'ATI) ; migration 184
+> (`ref_equipment.mod_key` sur les 3 lignes catalogue, noms exacts repris de la migration 141).
+> **Corrigé aussi** : les tests Phase 1/3 supposaient le registre vide et le vidaient en nettoyage
+> (`.length = 0`) — aurait effacé les vraies entrées Groupe 4 pour le reste de la suite ; réécrits
+> pour sauvegarder/restaurer le registre réel autour de tout mock. **Volontairement pas câblé dans
+> `resolveAssaultAction`/`resolveMeleeAction`** — Saar tranche : « 4 items manquants, c'est une dette
+> à noter mais c'est une fin de chantier ». Détail des 4 dettes résiduelles (décisions produit
+> ATI/Mémoire + situation zigzag manquante, câblage final) : `docs/BUGIDENTIFIE.md`
+> `MODING4-ATI`/`MODING4-MEMOIRE`/`MODING4-PROJECTEUR`/`MODING4-INTEGRATION` — pas dupliqué ici.
+> Vérification faite avant clôture : `targetIsMoving`/`targetMovementMalus` du Projecteur sont déjà
+> dérivables de `confirmedModifiers.situation` (aucune nouvelle donnée nécessaire) ; seul
+> `targetMovementIsErratic` (zigzag) n'existe nulle part, ni `shared/combatSituationMods.js` ni
+> `CombatModifiersWindow.jsx` — confirmé par recherche exhaustive, pas une hypothèse. **Testé** : `node --check` sur tous
+> les fichiers touchés, suite complète rejouée (99/99, 0 régression), 18 nouveaux tests unitaires sur
+> les 3 handlers purs (mocks de dés déterministes) + 4 tests d'intégration sur le registre réel.
+> **Non testé** : aucun scénario en base réelle (mécaniques non atteignables en jeu tant que
+> l'intégration live n'est pas câblée). **Données** : migration 184 (mod_key, rétrocompatible).
+> **Prochaine étape** : décision de Saar sur 4.1.4/4.2.2 (config ATI/Mémoire) + vérification du code
+> `resolveAssaultAction` pour sourcer les 3 champs mouvement du Projecteur, avant de câbler l'appel
+> réel — Phase 5 (tests d'intégration combat réel + non-régression Groupe 1/2) suit.
+
+> **Item 103 (Session 167, dev/Saar) — Moding Groupe 4 Phase 3 (infrastructure état) ✅ CODÉ.**
+> Suite de l'item 102 (Phase 1). **Codé** : `weaponModService.js` — `getAllCombatMods(campaignId)`
+> (tous les mods de chaque personnage en lice, toute arme, pas seulement celle d'une action précise) ;
+> `resolveModHooks` injecte désormais `rollDice: parseDice` dans le contexte à un seul endroit ;
+> `getAllModStatusCodes()` (union des `statusCodes` déclarés par le registre, jamais une liste en
+> dur). `statusService.js` — `applyModStatus`/`clearModStatus` (nouveau, upsert `ON CONFLICT
+> (token_id, status_code)` sur la contrainte UNIQUE déjà en base, migration 68 — même fichier que
+> `applyStunWithDuration`, pas d'insert ad-hoc ailleurs). `startResolutionPhase` (`socketCombatHelpers.js`) :
+> tick `onTurnStart` juste après `buildTimelineEntries`, persistance `state`/`tokenEffects` par mod.
+> `COMBAT_END` (`socketCombatState.js`) : remise à `NULL` de `char_inventory_mods.state` pour tous les
+> mods des personnages du roster + purge `token_statuses` pilotée par `getAllModStatusCodes()`.
+> **Contrats fixés et documentés dans le plan** pour que Phase 4 n'ait pas à les redeviner :
+> `tokenEffects = [{ statusCode, expiresAtTurn? }]`, entrée de registre `{ key, priority, hooks,
+> statusCodes? }`. **Registre toujours vide (Phase 4 non câblée) — comportement de jeu strictement
+> inchangé**, chaque nouvelle boucle/nettoyage est un no-op vérifié par construction (retourne `[]`).
+> **Testé** : `node --check` sur les 5 fichiers touchés, suite `shared/*.test.mjs` + Phase 1 rejouée
+> (75/75, 0 régression), 3 nouveaux tests (`rollDice` réellement basé sur `parseDice` — pas un mock,
+> `getAllModStatusCodes` vide par défaut et agrégation multi-entrées). **Non testé** : `getAllCombatMods`
+> et le tick `onTurnStart`/nettoyage `COMBAT_END` n'ont pas été exercés contre une base réelle (pas de
+> connexion PostgreSQL ici) ; aucun scénario navigateur (rien d'observable tant que Phase 4 est vide).
+> **Données** : aucune nouvelle migration (Phase 3 réutilise `state`/`mod_key` de la Phase 1).
+> **Prochaine étape** : Phase 4 — ATI (4.1), Mémoire de cibles (4.2), Projecteur de mouvement (4.3),
+> texte RAW déjà retrouvé et cité dans le plan (3ᵉ passage d'analyse à charge).
+
+> **Item 102 (Session 167, dev/Saar) — Moding Groupe 4 Phase 1 (socle) ✅ CODÉ**, en implémentant
+> `docs/PLAN_MODDING_REFONTE.md` après 3 passages d'analyse à charge (architecture inspirée PF2e Rule
+> Elements, ordre Strangler Fig). Trois corrections trouvées en codant (pas juste en planifiant),
+> appliquées directement dans le plan avant d'écrire le code concerné : (1) étape 1.7 (câbler
+> `onDeclare` dès la Phase 1) retirée — aurait câblé du code mort, ce branchement reste en Phase 2
+> (différée) où `lunette` existe réellement ; (2) étape 1.2 (5 fichiers handlers vides) retirée — 2
+> appartiennent à la Phase 2 différée, 3 à la Phase 4 pas commencée, chaque handler sera créé par la
+> phase qui lui donne un vrai contenu ; (3) le "state orphelin au swap" trouvé en analyse à charge
+> (3ᵉ passage) était une fausse alerte — `modingService.js:130` supprime entièrement la ligne
+> `char_inventory_mods` de l'ancien occupant au swap (`.del()`), `state` disparaît avec, aucun code à
+> ajouter. **Codé** : `shared/weaponModRegistry.js` (registre vide + `findModRegistryEntry`) ;
+> `server/src/services/weaponModService.js` (`resolveModHooks` — moteur générique 4 hooks,
+> `onBeforeAttack` enchaîne `adjustedModifiers` par `priority` croissante et s'arrête sur `blocked`,
+> `onCalculateModifiers` additionne indépendamment) ; migration 180 (`char_inventory_mods.state`
+> JSONB nullable) ; migration 182 (`ref_equipment.mod_key` TEXT nullable, colonne seule, aucune
+> population — chaque phase consommatrice peuple ses propres valeurs) ; les deux fetchs
+> `installedMods` existants (`socketCombatHelpers.js` Résolution, `socketCombatAnnouncement.js`
+> Déclaration) étendus avec `mod_key`/`state`, colonnes inutilisées tant que Phase 2/4 ne sont pas
+> câblées. **Comportement de jeu strictement inchangé** — Phase 1 est un socle inerte, aucun résolveur
+> n'est modifié. **Testé** : `node --check` sur les 6 fichiers créés/modifiés, suite complète
+> `shared/*.test.mjs` rejouée (64/64, 0 régression), 8 nouveaux tests
+> `server/src/services/weaponModService.test.mjs` (registre vide neutre sur les 4 hooks, mod sans
+> `mod_key` ignoré, hook inconnu → throw explicite, agrégation `onCalculateModifiers` multi-mods,
+> chaînage/arrêt `blocked` de `onBeforeAttack`). **Non testé** : migrations 180/182 non exécutées
+> contre une base réelle (pas de connexion PostgreSQL disponible ici) ; aucun scénario navigateur
+> (Phase 1 ne touche aucun comportement visible, rien à observer côté client). **Données** :
+> migrations 180/182, rétrocompatibles, colonnes nullables sans défaut. **Prochaine étape** : Phase 3
+> (infrastructure état — `getAllCombatMods`, câblage `onTurnStart` dans `startResolutionPhase`,
+> nettoyage `COMBAT_END`).
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
+
+> **Item 101 (Session 166, dev/Saar) — Dette `CHOC1` : remise à plat + `docs/PLAN_CHOC1.md` écrit,
+> aucun code.** Ma première explication orale de CHOC1 était imprécise (cadrage "tir marche/CaC non"
+> jamais vérifié contre le catalogue réel) — Saar l'a repérée à raison ("méconnaissance des règles").
+> Recherche complète refaite : `docs/VOCABULARY.md` avait déjà l'analyse "3 catégories" que j'avais
+> ratée ; `docs/REGLES/REGLESMUNITIONS.md` confirme que le retrait "Tête uniquement" pour les munitions
+> (migration 160) était correct, pas une erreur ; le vrai axe cassé est **arme (`ref_equipment.shock`)
+> vs munition (`ammo_effects` DSL)**, pas **CaC vs tir** — vérifié en lisant `STEP1_cleaned_data.js`
+> (source catalogue réelle) : des armes à distance (Flex, Fusil choc Stun...) portent leur Choc sur
+> l'arme, pas une munition, donc déjà cassées en tir aussi. Inventaire complet fait : 11 armes réelles
+> couvrables par un mécanisme générique (dégâts réels+Choc = Tête uniquement ; Choc pur = aucun gate),
+> + plusieurs armes bespoke explicitement exclues (Gant choc, Bâton Ordonnateurs, Canon à infrasons,
+> Sonar d'attaque, Disrupteur neural — mécaniques narratives propres, aucune ne dépend de CHOC1).
+> Détail complet : `docs/PLAN_CHOC1.md`. **Rien codé** — décision de scope (lancer le Palier 1
+> généralisable maintenant, ou différer) à prendre par Saar avant tout code. `docs/BUGIDENTIFIE.md`
+> CHOC1 mis à jour pour pointer vers ce plan plutôt que dupliquer son contenu.
 
 > **Item 100 (Session 166, dev/Saar) — Dette `WNDMORT` : Blessure mortelle bloque les Tests ✅ CODÉ.**
 > Mon extrait RAW était tronqué (accident d'extraction PDF) — Saar a fourni le texte exact
@@ -2852,7 +2958,7 @@ Projet en cours et priorité user :
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
-| **CHOC1** | ⚠️ Partiellement clos (Session 2026-07-16, Chantier 11 Étape 2 Lot B, `docs/PLAN_ARMES_DSL.md`) : le pool de "dommages de Choc" distinct des dégâts physiques existe désormais dans `damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc exclusif) — mais **uniquement pour les munitions `ammo_effects` CHOC=, tir à distance** (`resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM`). **Reste non câblé** : le bonus LdB propre à la mutation Corne ("+1D6 Choc si le coup porte à la tête" en CaC) — `resolveMeleeAction` ne passe toujours pas `chocDsl`/`rangeBand`, explicitement hors scope de Lot B (mécanisme mutation, pas munition) | Basse — reste un chantier séparé, mais l'infrastructure existe désormais |
+| **CHOC1** | Choc porté par l'**arme** (`ref_equipment.shock`) jamais lu en résolution — ni CaC ni tir (axe réel du problème, corrigé Session 166 après remise à plat). Pool de Choc (`resolveTargetHit`) fonctionne déjà pour le Choc porté par une **munition** (Lot B Session 152). Inventaire catalogue (11 armes + mutation Corne) et scope proposé : `docs/PLAN_CHOC1.md` | Basse — décision Saar sur le scope du plan |
 | **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
 | ~~**INI4**~~ | ~~`initiative` jamais remise à `base_ini` en fin de tour~~ | ⚠️ clos partiel Session 166 (Saar), item 96 — codé, scénario réel navigateur non testé |
 | ~~**MELEE-MR**~~ | ~~Dégâts CaC calculés sans le MR (dette Session 67)~~ | ⚠️ clos partiel Session 166 (Saar), item 97 — codé, scénario réel navigateur non testé |

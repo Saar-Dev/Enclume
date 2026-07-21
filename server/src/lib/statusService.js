@@ -149,6 +149,34 @@ export async function applyStun(io, db, campaignId, {
   }
 }
 
+// ─── applyModStatus / clearModStatus ──────────────────────────────────────────
+// Générique (docs/PLAN_MODDING_REFONTE.md Phase 3) — écriture token_statuses pour un effet
+// cosmétique de mod d'arme (ex. ATI : ati_offensive/ati_defensive, Phase 4). Contrairement à
+// applyStunWithDuration, aucune exclusion mutuelle entre codes : deux mods de slots différents
+// peuvent chacun poser leur badge simultanément. La magnitude réelle du mod (ex. cumulativeMR de
+// l'ATI) ne vit jamais ici — uniquement char_inventory_mods.state ; token_statuses reste un badge,
+// jamais recalculé pour la valeur numérique (correctif "token_statuses cosmétique",
+// PLAN_MODDING_REFONTE.md 3ᵉ passage).
+export async function applyModStatus(io, db, campaignId, tokenId, statusCode, { expiresAtTurn = null } = {}) {
+  try {
+    await db('token_statuses')
+      .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: expiresAtTurn })
+      .onConflict(['token_id', 'status_code']).merge()
+    await emitTokenStatusUpdated(io, db, campaignId, tokenId)
+  } catch (err) {
+    console.error('[statusService] applyModStatus error:', err.message)
+  }
+}
+
+export async function clearModStatus(io, db, campaignId, tokenId, statusCode) {
+  try {
+    await db('token_statuses').where({ token_id: tokenId, status_code: statusCode }).delete()
+    await emitTokenStatusUpdated(io, db, campaignId, tokenId)
+  } catch (err) {
+    console.error('[statusService] clearModStatus error:', err.message)
+  }
+}
+
 // ─── emitShockDiceResult ──────────────────────────────────────────────────────
 // Synchrone — emit DICE_RESULT D20 Test de Choc vers tous les clients de la campagne.
 // Appelé après chaque resolveShockTest non-null, avant COMBAT_ATTACK_RESULT.

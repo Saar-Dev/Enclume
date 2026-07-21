@@ -2,6 +2,7 @@
 > Source : SYSTEME.md §17
 > Lire pour : COMBAT_ACTION_CONFIRM, resolveAssaultAction, charStats.js, state_character
 > Règles LdB complètes (actions, déplacements, CaC, tir) : voir `docs/SYSTEME/REGLES_LdB.md`
+> Effet mécanique des mods d'armes (Lunette, ATI, Mémoire, Projecteur...) : voir `docs/SYSTEME/MODING.md`
 
 ---
 

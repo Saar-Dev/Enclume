@@ -414,10 +414,13 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           }
           const aimWeaponInvId = mapActions.attack[0]?.weaponInvId
           if (aimWeaponInvId) {
+            // mod_key/state (docs/PLAN_MODDING_REFONTE.md Phase 1) : routage vers
+            // weaponModService.resolveModHooks, inutilisés tant que Phase 2 (différée) ne câble pas
+            // le hook onDeclare.
             const installedMods = await db('char_inventory_mods as cim')
               .join('ref_equipment as re', 'cim.equipment_id', 're.id')
               .where({ 'cim.weapon_inv_id': aimWeaponInvId })
-              .select('re.bonus', 're.mod_slot', 're.mod_requires_aim')
+              .select('re.bonus', 're.mod_slot', 're.mod_requires_aim', 're.mod_key', 'cim.state')
             lunetteNiveau = getLunetteNiveau(installedMods)
           }
           iniDelta += getAimIniCost(aimTranches, { lunetteNiveau })

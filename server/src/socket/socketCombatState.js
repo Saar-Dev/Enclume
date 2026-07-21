@@ -9,6 +9,7 @@ import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAdvantages } from '../services/advantageService.js'
+import { getAllModStatusCodes } from '../services/weaponModService.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -191,6 +192,41 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           const affectedIds = [...new Set(affected.map(r => r.token_id))]
           for (const tid of affectedIds) {
             await statusService.emitTokenStatusUpdated(io, db, campaignId, tid)
+          }
+        }
+      }
+
+      // Groupe 4 (docs/PLAN_MODDING_REFONTE.md Phase 3.4) — un state de mod (ex. cumulativeMR de
+      // l'ATI) ne survit jamais hors combat. Registre vide aujourd'hui : modStatusCodes est
+      // toujours [], ce bloc reste un no-op tant que Phase 4 ne déclare pas de statusCodes.
+      if (rosterTokenIds.length > 0) {
+        const rosterCharacterIds = await db('tokens').whereIn('id', rosterTokenIds).pluck('character_id')
+        if (rosterCharacterIds.length > 0) {
+          const characterWeaponInvIds = await db('char_inventory')
+            .whereIn('character_id', rosterCharacterIds)
+            .pluck('id')
+          if (characterWeaponInvIds.length > 0) {
+            await db('char_inventory_mods')
+              .whereIn('weapon_inv_id', characterWeaponInvIds)
+              .whereNotNull('state')
+              .update({ state: null })
+          }
+        }
+        const modStatusCodes = getAllModStatusCodes()
+        if (modStatusCodes.length > 0) {
+          const affectedMods = await db('token_statuses')
+            .whereIn('token_id', rosterTokenIds)
+            .whereIn('status_code', modStatusCodes)
+            .select('token_id')
+          if (affectedMods.length > 0) {
+            await db('token_statuses')
+              .whereIn('token_id', rosterTokenIds)
+              .whereIn('status_code', modStatusCodes)
+              .delete()
+            const affectedModIds = [...new Set(affectedMods.map(r => r.token_id))]
+            for (const tid of affectedModIds) {
+              await statusService.emitTokenStatusUpdated(io, db, campaignId, tid)
+            }
           }
         }
       }

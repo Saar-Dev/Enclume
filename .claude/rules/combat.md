@@ -7,11 +7,16 @@ paths:
   - "client/src/**/*Combat*.jsx"
   - "client/src/stores/*combat*.js"
   - "shared/**/*combat*.js"
+  - "shared/mods/*.js"
+  - "shared/weaponModRegistry.js"
+  - "server/src/services/weaponModService.js"
+  - "server/src/services/modingService.js"
 ---
 
 # Combat
 
 Lire `docs/REGLES/REGLESYSCOMBAT.md`, `docs/SYSTEME/COMBAT.md` et les règles spécialisées utiles.
+Pour les mods d'armes (Lunette, ATI, Mémoire, Projecteur...), lire aussi `docs/SYSTEME/MODING.md`.
 
 ## Autorité
 

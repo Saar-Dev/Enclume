@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels)
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -170,36 +170,108 @@ pratique jugé bien plus faible que le combat (Décision : non traité dans ce c
 
 ---
 
-### Dette CHOC1 — Choc étourdissant structurellement limité aux munitions à distance
+### Dette MODING4-ATI — Analyseur Tactique Individuel : aucune interface de configuration cible/mode
 
-**Symptôme** : Aucun cas observé en jeu signalé pour le manque CaC — infrastructure Choc existe et
-fonctionne pour le tir (validée Session 152).
+**Symptôme** : Aucun cas observé en jeu — mécanique codée et testée en isolation (Session 167,
+architecture `docs/SYSTEME/MODING.md`), jamais atteignable en jeu réel.
 
-**Règle** (LdB p.243) : le Choc est réservé aux **armes lourdes/contondantes de mêlée touchant la
-Tête** (ou armes purement électriques, sans restriction) — deux jets séparés (dégâts physiques normaux,
-PUIS jet additionnel de Choc ajouté à la Difficulté du Test de Choc), jamais transformé en blessure
-physique.
+**Contexte** : `shared/mods/ati.js` (`atiOnTurnStart`/`atiOnCalculateModifiers`) est fonctionnellement
+correct et testé (RAW `docs/Old/script Extraction Excel/equipement/STEP1_cleaned_data.js` EQ_00001),
+mais lit `modState.ati.{mode, targetCharacterId}` — rien ne permet aujourd'hui au joueur de choisir le
+mode (offensif/défensif) ni la cible verrouillée. Décision produit non technique, jamais tranchée
+(item 4.1.4 du plan depuis sa première rédaction).
 
-**Code impliqué** : `damageService.js:193-239`, `shared/weaponAmmoDsl.js:34-96`.
+**Code impliqué** : `shared/mods/ati.js` ; interface à créer côté déclaration de combat ou inventaire.
 
-**Cause racine [VÉRIFIÉ]** : le Choc n'est déclenché que par la DSL munitions à distance (`chocDsl`) —
-les chemins de résolution CaC (`socketCombatResolution.js:696-701`, `socketCombatHelpers.js:1230-1236`)
-n'y ont pas accès. Un total combiné unique (`degatsNets + chocTotal`) pilote un seul Test de Choc, au
-lieu des deux jets séparés du RAW — restriction « Tête uniquement » délibérément retirée pour les
-munitions (correctif Session 141, cohérent avec `docs/Old/PLAN_ARMES_DSL.md`).
-**Champ mort trouvé en marge** : `ref_equipment.protection_shock` (colonne réelle, migration 48) est
-récupérée par `inventoryService.js` mais **jamais consommée** dans `damageService.js:178` (seul `.etq`
-est extrait, `.prt` est jeté) — confirme qu'aucune distinction armure anti-Choc n'a d'implémentation.
+**Prochaine étape** : décision Saar sur le point d'interface (déclaration de combat vs réglage
+inventaire), puis câblage de `resolveModHooks(installedMods, 'onCalculateModifiers'/'onTurnStart', …)`
+dans `resolveAssaultAction`/`startResolutionPhase` avec `targetCharacterId` réel.
 
-**Travail partiel** : le pool de dommages de Choc distinct existe désormais dans
-`damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc
-exclusif) — Lot B Chantier 11 Étape 2, Session 2026-07-16. Reste non câblé : bonus mutation Corne
-(« +1D6 Choc si le coup porte à la tête » en CaC) — hors scope de ce Lot (mécanisme mutation, pas
-munition).
+---
 
-**Prochaine étape** : chantier séparé — décider si le Choc CaC (armes lourdes/contondantes touchant la
-Tête, RAW strict) doit être construit maintenant, ou rester différé tant qu'aucune arme de mêlée
-lourde/contondante n'est un cas d'usage réel en jeu.
+### Dette MODING4-MEMOIRE — Mémoire de cibles : aucune interface d'enregistrement de cibles
+
+**Symptôme** : Aucun cas observé en jeu — mécanique codée et testée en isolation (Session 167),
+jamais atteignable en jeu réel.
+
+**Contexte** : `shared/mods/memoire.js` (`memoireOnBeforeAttack`) est correct et testé (RAW EQ_00002),
+mais lit `modState.memoire.registeredTargetIds` — rien ne permet au joueur d'enregistrer une cible
+parmi les 24 possibles (RAW : "Le modèle Mémo peut enregistrer 24 cibles différentes"). Même nature
+que MODING4-ATI : décision produit, pas technique.
+
+**Code impliqué** : `shared/mods/memoire.js` ; interface à créer (probablement fiche perso/inventaire).
+
+**Prochaine étape** : décision Saar sur le point d'interface, puis câblage de
+`resolveModHooks(installedMods, 'onBeforeAttack', …)` dans `resolveAssaultAction`.
+
+---
+
+### Dette MODING4-PROJECTEUR — Projecteur de mouvement : "cible en zigzag" n'existe nulle part
+
+**Symptôme** : Aucun cas observé en jeu — vérifié en clôturant Phase 4 (Session 167), avant tout
+câblage réel.
+
+**Contexte [VÉRIFIÉ]** : `targetIsMoving`/`targetMovementMalus` (2 des 3 champs de contexte attendus
+par `projecteurOnBeforeAttack`) sont directement dérivables de l'existant sans nouvelle donnée —
+`confirmedModifiers.situation` (array déjà déclaré par le joueur/GM à la confirmation) contient déjà
+`cible_allure_moyenne/rapide/maximale` (`shared/combatSituationMods.js`), qui donnent à la fois le
+signal "en mouvement" et la magnitude du malus (`RANGED_SITUATION_MODS[key].mod`). En revanche
+`targetMovementIsErratic` (RAW : "se déplace en zigzag ou de manière imprévisible" → niveau de
+l'appareil réduit de moitié) **n'existe nulle part** — vérifié par recherche exhaustive dans
+`shared/combatSituationMods.js` et `client/src/components/CombatModifiersWindow.jsx` (aucune clé
+zigzag/erratique, aucune checkbox correspondante). Nécessite une nouvelle option de situation
+(product + UI), pas seulement du câblage serveur.
+
+**Code impliqué** : `shared/combatSituationMods.js` (nouvelle clé) ; `CombatModifiersWindow.jsx`
+(nouvelle checkbox) ; `shared/mods/projecteur.js` (déjà prêt à consommer le champ).
+
+**Prochaine étape** : décision Saar sur l'ajout de la situation "cible imprévisible/zigzag" (nouvelle
+option UI), puis câblage de `resolveModHooks(installedMods, 'onBeforeAttack', …)` dans
+`resolveAssaultAction` — `targetIsMoving`/`targetMovementMalus` sont déjà dérivables sans attendre
+cette décision, seul `targetMovementIsErratic` en dépend (peut être câblé en deux temps : d'abord
+sans zigzag, en `false` par défaut — comportement RAW partiel mais jamais faux).
+
+---
+
+### Dette MODING4-INTEGRATION — Groupe 4 (ATI/Mémoire/Projecteur) jamais appelé en résolution réelle
+
+**Symptôme** : Aucun cas observé en jeu — chantier clos en l'état (Session 167), câblage volontairement
+non fait.
+
+**Contexte** : `resolveAssaultAction`/`resolveMeleeAction` n'appellent aujourd'hui
+`resolveModHooks(...)` que pour aucun hook Groupe 4 — les 3 mécaniques (`shared/mods/ati.js`,
+`memoire.js`, `projecteur.js`) sont codées, testées, dans le registre (`shared/weaponModRegistry.js`,
+`mod_key` peuplé migration 184), mais totalement inertes en combat réel tant que ce câblage n'existe
+pas. Dépend de MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR pour être fonctionnellement utile — le
+câblage lui-même est mécanique et court une fois ces décisions prises.
+
+**Code impliqué** : `server/src/socket/socketCombatHelpers.js` (`resolveAssaultAction`,
+`resolveMeleeAction`).
+
+**Prochaine étape** : une fois au moins une des 3 décisions produit tranchée, ajouter l'appel
+`resolveModHooks(installedMods, 'onBeforeAttack', context)` (gérer `blocked`) et
+`resolveModHooks(installedMods, 'onCalculateModifiers', context)` (injecter dans `totalModComp`) —
+même point d'insertion que Groupe 1/2 (`socketCombatHelpers.js:2500-2502`), additif, sans toucher au
+calcul Groupe 1/2 existant (Phase 2 reste différée, Strangler Fig).
+
+---
+
+### Dette CHOC1 — Choc étourdissant de l'arme (`ref_equipment.shock`) jamais lu en résolution
+
+**Symptôme** : Aucun cas observé en jeu — remis à plat en profondeur Session 166 (Saar), l'axe initial
+"tir marche, CaC non" était inexact.
+
+**Vrai axe du problème [VÉRIFIÉ]** : le Choc porté par une **munition** (`ammo_effects` DSL) fonctionne
+(tir uniquement, Lot B Session 152). Le Choc porté par **l'arme elle-même** (`ref_equipment.shock`,
+migration 48) n'est lu par aucun chemin de résolution — ni CaC, ni tir (des armes à distance comme
+Flex/Fusil choc Stun portent leur Choc sur l'arme, pas une munition — leur Choc est donc déjà cassé en
+tir aussi). `ref_shock` est fetché dans 5 requêtes (`char-sheet.js`, `inventoryService.js`) mais jamais
+réutilisé après — mort pour la résolution, vivant seulement pour l'affichage inventaire.
+
+**Détail complet, inventaire catalogue vérifié (11 armes réelles concernées + mutation Corne), sources
+RAW et scope proposé** : `docs/PLAN_CHOC1.md` — ne pas dupliquer ici, ce plan est la référence.
+
+**Prochaine étape** : décision Saar sur le scope du plan (Palier 1 généralisable vs différé).
 
 ---
 
@@ -676,3 +748,26 @@ mécanique de tirage `adv_078`).
 
 **Prochaine étape** : Sprint dédié — spécifier l'interface (toggle 2D/3D, rendu canvas 2D, synchronisation tokens).
 
+---
+Bug B‑VX — Modification faces voxel non exposée dans l’UI
+
+Symptôme : Impossible de modifier les faces d’un voxel existant via l’interface, alors que la fonction de modification existe probablement côté moteur.
+
+Règle : Aucune référence LdB.
+
+Code impliqué : client/src/components/VoxelBuilderTab.jsx (ou composant d’édition voxel). Le bouton/modale d’édition de faces est absent.
+
+Cause racine [INCONNU] : Non investigué.
+
+Prochaine étape : Identifier le composant responsable de l’édition de voxels, vérifier si la fonctionnalité est seulement masquée ou jamais construite.
+Bug SURPRISE‑ROLL — roll=1 → initiative=1, sémantique PJ surpris à revoir
+
+Symptôme : Lorsqu’un PJ obtient un 1 sur son jet de surprise, son initiative est fixée à 1, ce qui le fait agir en dernier au lieu de « surpris et ne pouvant agir ». La règle de surprise devrait l’empêcher d’agir au premier tour.
+
+Règle : docs/REGLES/REGLESYSCOMBAT.md — Surprise. Un personnage surpris ne peut agir au premier tour.
+
+Code impliqué : server/src/socket/socketCombatState.js — COMBAT_START, calcul de l’initiative pour les surpris.
+
+Cause racine [INCONNU] : Non investigué. Soit le code confond « surpris » et « initiative minimale », soit le calcul de l’initiative écrase le flag is_surprised.
+
+Prochaine étape : Instrumenter COMBAT_START pour observer is_surprised et initiative sur un jet de surprise = 1. Vérifier si la FSM interdit bien toute action aux surpris.

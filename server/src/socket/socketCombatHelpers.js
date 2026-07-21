@@ -10,6 +10,7 @@ import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
+import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { measureBattlemapTokenDistance, tokenDistanceM } from '../services/worldSpatialQueryService.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
 import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
@@ -173,6 +174,21 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
     ])
 
     await buildTimelineEntries(campaignId, currentTurn, pendingActions, announcedRoster)
+
+    // Groupe 4 (docs/PLAN_MODDING_REFONTE.md Phase 3) — tick de début de tour pour les mods à état
+    // (ex. ATI : cumul de marge de réussite). Registre vide tant que Phase 4 n'est pas câblée :
+    // getAllCombatMods/resolveModHooks renvoient un résultat neutre, cette boucle n'a aujourd'hui
+    // aucun effet observable.
+    const combatMods = await getAllCombatMods(campaignId)
+    for (const { tokenId, mods } of combatMods) {
+      const results = await resolveModHooks(mods, 'onTurnStart', { tokenId, campaignId, currentTurn })
+      for (const { mod, updatedState, tokenEffects } of results) {
+        await db('char_inventory_mods').where({ id: mod.id }).update({ state: updatedState })
+        for (const effect of tokenEffects) {
+          await statusService.applyModStatus(io, db, campaignId, tokenId, effect.statusCode, { expiresAtTurn: effect.expiresAtTurn ?? null })
+        }
+      }
+    }
 
     const broadcastRoster = fullRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
@@ -2285,11 +2301,13 @@ async function fetchAssaultWeaponAndMods(weaponInvId) {
       .first(),
     // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — mods installés sur l'arme utilisée, jointure fraîche
     // ref_equipment (pas le mod_slot snapshotté sur char_inventory_mods, qui ne sert qu'à la
-    // contrainte UNIQUE d'exclusivité).
+    // contrainte UNIQUE d'exclusivité). mod_key/state (docs/PLAN_MODDING_REFONTE.md Phase 1) :
+    // routage vers weaponModService.resolveModHooks, inutilisés tant que Phase 2/4 ne sont pas
+    // câblées (registre vide).
     db('char_inventory_mods as cim')
       .join('ref_equipment as re', 'cim.equipment_id', 're.id')
       .where({ 'cim.weapon_inv_id': weaponInvId })
-      .select('re.name', 're.bonus', 're.mod_slot', 're.mod_requires_aim'),
+      .select('re.name', 're.bonus', 're.mod_slot', 're.mod_requires_aim', 're.mod_key', 'cim.state'),
   ])
   return { weapon, installedMods }
 }
