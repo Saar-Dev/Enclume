@@ -4653,9 +4653,15 @@ build Vite réussi, syntaxe de la route serveur valide et ESLint ciblé sans err
 a été généré dans Chromium et inspecté sur damier : les ouvertures sont entièrement transparentes,
 les barreaux restent détaillés.
 
+**Déploiement** : commit `0e6fc53` fast-forwardé sur `dev/monde`, après création du tag
+`backup/pre-session159-20260722-grate`. Les dépendances racine/client/serveur ont été réinstallées
+sans vulnérabilité signalée, puis `enclume-codex-client` et `enclume-codex-server` ont été redémarrés.
+Le client `8293`, l'API `8294` et le smoke Chromium distant répondent sans erreur. Les instances
+`8193/8194` et `8393/8394` n'ont pas été touchées.
+
 **Non testé** : création, ouverture et persistance de la trappe dans une vraie carte authentifiée,
 ainsi que le rendu intégré sur chaque type de surface. La livraison reste donc close partiellement
-jusqu'à cette recette visuelle ; aucune donnée distante ni aucun service partagé n'a été modifié.
+jusqu'à cette recette fonctionnelle ; aucune donnée de carte distante n'a été modifiée.
 
 **Retour arrière** : retirer les branches `hatch` du document, du compilateur, du renderer et de la
 route runtime, puis retirer le motif `industrial_grate`. Aucun schéma SQL ni conversion de carte

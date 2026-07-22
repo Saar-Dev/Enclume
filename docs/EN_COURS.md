@@ -1,11 +1,12 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-22 — trappe d'échelle et grille ajourée implémentées localement** : poser une échelle
+> **2026-07-22 — trappe d'échelle et grille ajourée déployées sur `8293/8294`** : poser une échelle
 > ajoute par défaut une trappe au palier haut. Fermée, elle remplace la dalle comme support et ferme
 > la traversée ; ouverte, elle pivote, libère le trou et autorise la montée. Le motif procédural
 > **Grille industrielle ajourée** s'applique aux surfaces et structures avec un vrai cutout alpha ;
-> le preset physique `grate` reste collider sans occulter la LOS. Validation locale : 141 tests
-> monde/serveur, 41 tests Surface, 3 configuration, build Vite, ESLint ciblé et inspection du PNG
-> RGBA sur damier. Reste non testé : recette complète dans une vraie carte/une vraie session.
+> le preset physique `grate` reste collider sans occulter la LOS. Validation locale et Kiwi :
+> 141 tests monde/serveur, 41 tests Surface, 3 configuration, build Vite, ESLint ciblé, inspection
+> du PNG RGBA sur damier et smoke Chromium distant sans exception. Reste non testé : recette
+> fonctionnelle complète dans une vraie carte/une vraie session.
 >
 > **2026-07-18 — palier haut du colimaçon livré sur 8293** : la trémie n'est plus le carré
 > englobant de l'escalier. Elle suit le secteur de volée qui exige réellement de la garde au

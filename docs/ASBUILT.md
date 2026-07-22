@@ -18,10 +18,11 @@ transparence de type verre. Le même matériau peut habiller sols, murs, marches
 Le preset physique `grate` reste distinct de l'apparence : il bloque mouvement et collision, mais
 pas la LOS ni l'eau. Le snapshot ne déduit jamais sa physique des pixels de la texture.
 
-Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration serveur,
-build Vite et ESLint ciblé sans erreur. Le PNG RGBA généré a été inspecté sur damier pour confirmer
-les trous transparents. La recette complète dans une vraie carte reste à effectuer avant clôture
-visuelle définitive.
+Validation locale puis sur Kiwi : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration
+serveur et build Vite réussis ; ESLint ciblé sans erreur. Le PNG RGBA généré a été inspecté sur
+damier pour confirmer les trous transparents. La Session 159 est déployée sur `8293/8294` au commit
+`0e6fc53`, avec un smoke Chromium distant sans exception. La recette complète dans une vraie carte
+reste à effectuer avant clôture visuelle définitive.
 
 ---
 
