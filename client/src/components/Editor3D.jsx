@@ -1,6 +1,6 @@
 import { Suspense, useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { Edges, Html, MapControls, Grid } from '@react-three/drei'
+import { Edges, MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
@@ -12,6 +12,7 @@ import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
 import {
   buildWallPlacementVolume,
+  resolveStickyEntityPlacement,
   validateEntityPlacement,
 } from '../lib/entityPlacementCollision.js'
 import Voxel from './Voxel.jsx'
@@ -190,7 +191,7 @@ function GhostVoxel({ position, geometry, rotation }) {
 }
 
 // ─── Ghost entité — preview avant pose ───────────────────────────────────────
-function GhostEntityBounds({ position, blueprint, r, entityState = {}, invalid = false }) {
+function GhostEntityBounds({ position, blueprint, r, entityState = {} }) {
   if (!position || !blueprint) return null
   const { x, y, z } = position
   const rot = r * (Math.PI / 2)
@@ -203,8 +204,8 @@ function GhostEntityBounds({ position, blueprint, r, entityState = {}, invalid =
     <group position={[authoredOrigin ? x : x + width / 2, y, authoredOrigin ? z : z + depth / 2]} rotation={[0, rot, 0]}>
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[width, height, depth]} />
-        <meshBasicMaterial color={invalid ? '#ef4444' : '#5b8dee'} transparent opacity={invalid ? 0.3 : 0.18} depthWrite={false} />
-        <Edges color={invalid ? '#fecaca' : '#7fb0ff'} transparent opacity={0.95} />
+        <meshBasicMaterial color="#5b8dee" transparent opacity={0.18} depthWrite={false} />
+        <Edges color="#7fb0ff" transparent opacity={0.95} />
       </mesh>
     </group>
   )
@@ -214,18 +215,10 @@ function GhostEntity({
   position,
   blueprint,
   r,
-  validation = null,
   entityState = {},
   currentStateId = 0,
 }) {
   if (!position || !blueprint) return null
-  const invalid = validation?.valid === false
-  const blockLabel = validation?.reason === 'wall'
-    ? 'Placement impossible : collision avec un mur'
-    : validation?.reason === 'structure'
-      ? 'Placement impossible : collision avec la structure'
-      : 'Placement impossible : collision avec un objet'
-  const labelHeight = Math.max(0.5, Number(blueprint.geometry?.height) || 1) * normalizeEntityScale(entityState)
   const entity = {
     id: `preview:${blueprint.id}`,
     blueprint_id: blueprint.id,
@@ -235,32 +228,16 @@ function GhostEntity({
     current_state_id: currentStateId,
   }
   return (
-    <>
-      <Suspense fallback={invalid ? null : <GhostEntityBounds position={position} blueprint={blueprint} r={r} entityState={entityState} />}>
-        <EntityMesh
-          entity={entity}
-          blueprint={blueprint}
-          entityTextureMaterials={null}
-          sceneOpacity={1}
-          isPreview
-          isSelected
-        />
-      </Suspense>
-      {invalid && (
-        <>
-          <GhostEntityBounds position={position} blueprint={blueprint} r={r} entityState={entityState} invalid />
-          <Html
-            center
-            position={[position.x, position.y + labelHeight + 0.35, position.z]}
-            style={{ pointerEvents: 'none', whiteSpace: 'nowrap' }}
-          >
-            <div style={{ padding: '5px 8px', border: '1px solid #ef4444', borderRadius: 5, background: 'rgba(69,10,10,0.94)', color: '#fee2e2', fontSize: 11, fontWeight: 700 }}>
-              {blockLabel}
-            </div>
-          </Html>
-        </>
-      )}
-    </>
+    <Suspense fallback={<GhostEntityBounds position={position} blueprint={blueprint} r={r} entityState={entityState} />}>
+      <EntityMesh
+        entity={entity}
+        blueprint={blueprint}
+        entityTextureMaterials={null}
+        sceneOpacity={1}
+        isPreview
+        isSelected
+      />
+    </Suspense>
   )
 }
 
@@ -290,6 +267,7 @@ function EntityEditorScene({
   const moveGhostRef = useRef(null)
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const [ghostPos, setGhostPos] = useState(null)
+  const ghostPosRef = useRef(null)
   const [ghostR, setGhostR] = useState(0)
   const ghostRRef = useRef(0)
   const [moveGhost, setMoveGhost] = useState(null)
@@ -635,24 +613,21 @@ function EntityEditorScene({
     obstacleVolumes: placementObstacleVolumes,
   }), [blueprints, entities, placementObstacleVolumes])
 
-  const ghostValidation = useMemo(() => (
-    ghostPos && activeBlueprint
-      ? validatePlacement(ghostPos, activeBlueprint, { rotation: ghostPos.r ?? ghostR })
-      : null
-  ), [activeBlueprint, ghostPos, ghostR, validatePlacement])
-
   const rotateGhostPreview = useCallback(direction => {
     if (!activeBlueprint?.id || blueprintPlacementMode(activeBlueprint) === 'wall') return
     const nextRotation = (ghostRRef.current + direction + 4) % 4
-    ghostRRef.current = nextRotation
-    setGhostR(nextRotation)
-    setGhostPos(calcPreciseEntityPos(
+    const nextPosition = calcPreciseEntityPos(
       mousePosRef.current.x,
       mousePosRef.current.y,
       activeBlueprint,
       nextRotation,
-    ))
-  }, [activeBlueprint, calcPreciseEntityPos])
+    )
+    if (!nextPosition || !validatePlacement(nextPosition, activeBlueprint, { rotation: nextRotation }).valid) return
+    ghostRRef.current = nextRotation
+    setGhostR(nextRotation)
+    ghostPosRef.current = nextPosition
+    setGhostPos(nextPosition)
+  }, [activeBlueprint, calcPreciseEntityPos, validatePlacement])
 
   usePlacementWheelRotation({
     element: gl.domElement,
@@ -704,16 +679,23 @@ function EntityEditorScene({
         if (drag.moved) {
           const entity = entities.find(item => item.id === drag.entityId)
           const blueprint = entity ? blueprints[entity.blueprint_id] : null
-          const next = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
-          if (next && entity && blueprint) {
-            const rotation = next.r ?? entity.r ?? 0
-            const validation = validatePlacement(next, blueprint, {
+          const desired = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
+          if (desired && entity && blueprint) {
+            const rotation = desired.r ?? entity.r ?? 0
+            const validate = position => validatePlacement(position, blueprint, {
               entityId: entity.id,
               entityState: entity.state,
               currentStateId: entity.current_state_id,
               rotation,
             })
-            const preview = { entityId: entity.id, position: next, blueprint, r: rotation, validation }
+            const next = resolveStickyEntityPlacement({
+              previousPosition: drag.lastValidPosition,
+              desiredPosition: desired,
+              validate,
+            })
+            if (!next) return
+            drag.lastValidPosition = next
+            const preview = { entityId: entity.id, position: next, blueprint, r: rotation }
             preview.entityState = entity.state || {}
             preview.currentStateId = entity.current_state_id || 0
             moveGhostRef.current = preview
@@ -722,8 +704,18 @@ function EntityEditorScene({
         }
         return
       }
-      if (!activeBlueprint?.id) { setGhostPos(null); return }
-      const next = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      if (!activeBlueprint?.id) {
+        ghostPosRef.current = null
+        setGhostPos(null)
+        return
+      }
+      const desired = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      const next = resolveStickyEntityPlacement({
+        previousPosition: ghostPosRef.current,
+        desiredPosition: desired,
+        validate: position => validatePlacement(position, activeBlueprint, { rotation: position?.r ?? ghostR }),
+      })
+      ghostPosRef.current = next
       setGhostPos(prev => (
         prev?.x === next?.x
           && prev?.y === next?.y
@@ -755,7 +747,14 @@ function EntityEditorScene({
           startX: e.clientX,
           startY: e.clientY,
           moved: false,
+          lastValidPosition: {
+            x: entity.pos_x,
+            y: entity.pos_z,
+            z: entity.pos_y,
+            r: entity.r || 0,
+          },
         }
+        ghostPosRef.current = null
         setGhostPos(null)
         e.preventDefault()
         return
@@ -764,7 +763,12 @@ function EntityEditorScene({
         onEntitySelect?.(null, e.clientX, e.clientY)
         return
       }
-      const pos = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      const desired = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      const pos = resolveStickyEntityPlacement({
+        previousPosition: ghostPosRef.current,
+        desiredPosition: desired,
+        validate: position => validatePlacement(position, activeBlueprint, { rotation: position?.r ?? ghostR }),
+      })
       if (!pos) return
       const validation = validatePlacement(pos, activeBlueprint, { rotation: pos.r ?? ghostR })
       if (!validation.valid) return
@@ -777,6 +781,7 @@ function EntityEditorScene({
         })
         addEntity(res.data.entity)   // mise à jour store locale immédiate
         socket?.emit(WS.ENTITY_CREATED, { entityId: res.data.entity.id })
+        ghostPosRef.current = null
         setGhostPos(null)
         onBlueprintPlaced?.(res.data.entity)
       } catch (err) { console.error('[EntityEditor] Erreur pose entité :', err) }
@@ -793,7 +798,14 @@ function EntityEditorScene({
       moveGhostRef.current = null
       setMoveGhost(null)
       if (!drag?.moved || !preview || preview.entityId !== drag.entityId) return
-      if (preview.validation?.valid === false) return
+      const entity = entities.find(item => item.id === drag.entityId)
+      const blueprint = entity ? blueprints[entity.blueprint_id] : null
+      if (!entity || !blueprint || !validatePlacement(preview.position, blueprint, {
+        entityId: entity.id,
+        entityState: entity.state,
+        currentStateId: entity.current_state_id,
+        rotation: preview.r,
+      }).valid) return
       try {
         const res = await api.put(`/entities/${drag.entityId}`, {
           ...worldPointToDbPosition(preview.position),
@@ -818,7 +830,7 @@ function EntityEditorScene({
     }
     window.addEventListener('mouseup', onMouseUp)
     return () => window.removeEventListener('mouseup', onMouseUp)
-  }, [entities, socket, updateEntity])
+  }, [blueprints, entities, socket, updateEntity, validatePlacement])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -952,7 +964,6 @@ function EntityEditorScene({
           position={ghostPos}
           blueprint={activeBlueprint}
           r={ghostPos.r ?? ghostR}
-          validation={ghostValidation}
         />
       )}
       {moveGhost && (
@@ -960,7 +971,6 @@ function EntityEditorScene({
           position={moveGhost.position}
           blueprint={moveGhost.blueprint}
           r={moveGhost.r}
-          validation={moveGhost.validation}
           entityState={moveGhost.entityState}
           currentStateId={moveGhost.currentStateId}
         />

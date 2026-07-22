@@ -5,6 +5,7 @@ import {
   buildEntityPlacementVolume,
   buildWallPlacementVolume,
   placementVolumesOverlap,
+  resolveStickyEntityPlacement,
   validateEntityPlacement,
 } from './entityPlacementCollision.js'
 
@@ -143,4 +144,41 @@ test('un volume structurel bloque les objets libres et les objets muraux', () =>
   })
   assert.equal(freeResult.reason, 'structure')
   assert.equal(wallResult.reason, 'structure')
+})
+
+test('le placement sticky s’arrête au mur même si la destination finale est de l’autre côté', () => {
+  const wall = buildWallPlacementVolume({ position: [2.25, 1, 0], args: [0.5, 2, 8] }, 'wall')
+  const validate = position => validateEntityPlacement({ position, blueprint: crate, wallVolumes: [wall] })
+  const result = resolveStickyEntityPlacement({
+    previousPosition: { x: 0, y: 0, z: 0, r: 0 },
+    desiredPosition: { x: 4, y: 0, z: 0, r: 0 },
+    validate,
+  })
+  assert.ok(result.x > 0.99 && result.x <= 1.001)
+  assert.equal(result.z, 0)
+  assert.equal(validate(result).valid, true)
+})
+
+test('le placement sticky glisse le long du mur sur le mouvement restant', () => {
+  const wall = buildWallPlacementVolume({ position: [2.25, 1, 0], args: [0.5, 2, 10] }, 'wall')
+  const validate = position => validateEntityPlacement({ position, blueprint: crate, wallVolumes: [wall] })
+  const result = resolveStickyEntityPlacement({
+    previousPosition: { x: 0, y: 0, z: 0, r: 0 },
+    desiredPosition: { x: 4, y: 0, z: 2, r: 0 },
+    validate,
+  })
+  assert.ok(result.x > 0.99 && result.x <= 1.001)
+  assert.ok(Math.abs(result.z - 2) < 0.001)
+  assert.equal(validate(result).valid, true)
+})
+
+test('un premier survol invalide masque le fantôme au lieu de le rendre rouge', () => {
+  const wall = buildWallPlacementVolume({ position: [0, 1, 0], args: [5, 2, 0.5] }, 'wall')
+  const validate = position => validateEntityPlacement({ position, blueprint: crate, wallVolumes: [wall] })
+  const result = resolveStickyEntityPlacement({
+    previousPosition: null,
+    desiredPosition: { x: 0, y: 0, z: 0, r: 0 },
+    validate,
+  })
+  assert.equal(result, null)
 })

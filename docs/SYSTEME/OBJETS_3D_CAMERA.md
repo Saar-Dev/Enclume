@@ -28,8 +28,14 @@ Pour fabriquer un GLB, choisir son mode de pose et écrire son manifeste, voir `
 - Le simple contact entre deux faces est autorisé ; seul un chevauchement horizontal **et** vertical
   est bloquant. Un objet mural ignore le volume de son mur porteur, mais pas une autre entité ou un
   connecteur structurel déjà présent au même endroit.
-- Un fantôme invalide reçoit un volume rouge et le motif **mur**, **structure** ou **objet**. Le clic,
-  le relâchement du glisser-déposer ou la rotation n'envoie alors aucun `POST`/`PUT`.
+- `resolveStickyEntityPlacement()` balaie tout le segment entre la dernière position valide et la
+  cible de la souris : le fantôme ne téléporte donc pas au travers d'un mur mince si le pointeur le
+  franchit rapidement. Au premier contact il s'arrête, puis consomme le mouvement restant sur les
+  axes libres pour glisser le long de l'obstacle.
+- Le fantôme ne devient jamais rouge et n'entre jamais dans l'obstacle. Un premier survol déjà
+  invalide ne montre simplement aucun fantôme ; après un contact, il reste collé à la dernière
+  position valide. Le clic pose à cette position résolue. Le glisser-déposer et la rotation gardent
+  le même garde final avant tout `POST`/`PUT`.
 - Après une pose réussie, le blueprint actif est automatiquement désélectionné : une nouvelle pose exige un nouveau choix explicite dans la palette.
 - Un clic sur le modèle sélectionne l'instance, même si elle n'a aucune interaction de jeu.
 - Les meshes GLB portent `userData.isEntity` et `entityId` pour le raycaster de l'éditeur.

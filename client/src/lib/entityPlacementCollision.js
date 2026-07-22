@@ -2,6 +2,9 @@ import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 
 const MIN_SIZE = 0.05
 const OVERLAP_EPSILON = 0.0001
+const SWEEP_STEP = 0.08
+const SWEEP_MAX_STEPS = 160
+const SWEEP_REFINEMENT_STEPS = 12
 
 const positive = (value, fallback = 1) => {
   const number = Number(value)
@@ -111,6 +114,84 @@ export function placementVolumesOverlap(a, b) {
     if (overlap <= OVERLAP_EPSILON) return false
   }
   return true
+}
+
+const placementAt = (from, to, ratio) => ({
+  ...to,
+  x: finite(from.x) + (finite(to.x) - finite(from.x)) * ratio,
+  y: finite(from.y) + (finite(to.y) - finite(from.y)) * ratio,
+  z: finite(from.z) + (finite(to.z) - finite(from.z)) * ratio,
+})
+
+const placementDistance = (from, to) => Math.hypot(
+  finite(to.x) - finite(from.x),
+  finite(to.y) - finite(from.y),
+  finite(to.z) - finite(from.z),
+)
+
+const isValidPlacement = (validate, position) => validate(position)?.valid === true
+
+function furthestValidOnSegment(from, to, validate) {
+  if (!from || !to || !isValidPlacement(validate, from)) return null
+  const distance = placementDistance(from, to)
+  if (distance <= OVERLAP_EPSILON) return from
+  const steps = Math.min(SWEEP_MAX_STEPS, Math.max(1, Math.ceil(distance / SWEEP_STEP)))
+  let lastValid = from
+  let lastValidRatio = 0
+
+  for (let index = 1; index <= steps; index += 1) {
+    const ratio = index / steps
+    const candidate = placementAt(from, to, ratio)
+    if (isValidPlacement(validate, candidate)) {
+      lastValid = candidate
+      lastValidRatio = ratio
+      continue
+    }
+
+    let low = lastValidRatio
+    let high = ratio
+    for (let refinement = 0; refinement < SWEEP_REFINEMENT_STEPS; refinement += 1) {
+      const middle = (low + high) / 2
+      const probe = placementAt(from, to, middle)
+      if (isValidPlacement(validate, probe)) {
+        low = middle
+        lastValid = probe
+      } else {
+        high = middle
+      }
+    }
+    return lastValid
+  }
+
+  return lastValid
+}
+
+/**
+ * Résout le mouvement du fantôme comme un volume solide : il s'arrête au premier obstacle puis
+ * consomme le mouvement restant sur X/Z pour produire un glissement le long de la surface.
+ */
+export function resolveStickyEntityPlacement({ previousPosition, desiredPosition, validate } = {}) {
+  if (!desiredPosition || typeof validate !== 'function') return null
+  if (!previousPosition) return isValidPlacement(validate, desiredPosition) ? desiredPosition : null
+  if (!isValidPlacement(validate, previousPosition)) {
+    return isValidPlacement(validate, desiredPosition) ? desiredPosition : null
+  }
+
+  const boundary = furthestValidOnSegment(previousPosition, desiredPosition, validate)
+  if (!boundary) return previousPosition
+  if (placementDistance(boundary, desiredPosition) <= OVERLAP_EPSILON) return desiredPosition
+
+  const slideOrder = (firstAxis, secondAxis) => {
+    const firstTarget = { ...desiredPosition, ...boundary, [firstAxis]: desiredPosition[firstAxis] }
+    const first = furthestValidOnSegment(boundary, firstTarget, validate) || boundary
+    const secondTarget = { ...desiredPosition, ...first, [secondAxis]: desiredPosition[secondAxis] }
+    return furthestValidOnSegment(first, secondTarget, validate) || first
+  }
+  const xThenZ = slideOrder('x', 'z')
+  const zThenX = slideOrder('z', 'x')
+  return placementDistance(xThenZ, desiredPosition) <= placementDistance(zThenX, desiredPosition)
+    ? xThenZ
+    : zThenX
 }
 
 /**
