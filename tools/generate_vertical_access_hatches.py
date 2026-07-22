@@ -16,6 +16,7 @@ OUT = ROOT / "output" / "vertical_access_hatches"
 GLB_DIR = OUT / "glb"
 DEG = math.pi / 180.0
 OPEN_FRAME = 60
+SLIDING_POCKET_DROP = 0.16
 
 ASSETS = [
     ("01_square_hinged_armored", "Trappe carrée blindée battante", "rectangle", "hinged", False),
@@ -293,7 +294,10 @@ def animate_slide(obj, asset_name, index, delta):
     obj.location = start
     obj.keyframe_insert(data_path="location", frame=1)
     bpy.context.scene.frame_set(OPEN_FRAME)
-    obj.location = (start.x + delta[0], start.y + delta[1], start.z - 0.035)
+    # Les panneaux ouverts coulissent dans une poche sous le plancher. Leur face supérieure finit
+    # sous le dessus de la dalle : la géométrie du sol les masque naturellement, comme un vantail
+    # de porte escamoté dans son mur.
+    obj.location = (start.x + delta[0], start.y + delta[1], start.z - SLIDING_POCKET_DROP)
     obj.keyframe_insert(data_path="location", frame=OPEN_FRAME)
     if obj.animation_data and obj.animation_data.action:
         obj.animation_data.action.name = f"open_{asset_name}_panel_{index + 1}"
@@ -418,7 +422,7 @@ def editor_slots(asset_name):
 def configure_preview(records, pack_collection):
     for index, record in enumerate(records):
         row, column = divmod(index, 4)
-        record["root"].location = ((column - 1.5) * 1.55, (0.5 - row) * 1.65, 0.02)
+        record["root"].location = ((column - 1.5) * 1.55, (0.5 - row) * 1.65, -0.09)
     floor_mat = material("Preview_Floor", (0.022, 0.03, 0.04), 0.15, 0.58)
     box(pack_collection, None, "Preview_Floor", (0, 0, -0.09), (7.0, 4.2, 0.14), floor_mat, 0.02)
     bpy.ops.object.light_add(type="AREA", location=(1.5, -3.5, 6.5))
@@ -496,7 +500,10 @@ def main():
             "height_m": 0.38,
             "opening_shape": shape,
             "opening_mechanism": mechanism,
-            "features": ["service-hatch", "dual-sided-operation"] if has_service_hatch else ["dual-sided-edge-controls"],
+            "features": (
+                ["service-hatch", "dual-sided-operation"] if has_service_hatch
+                else ["dual-sided-edge-controls"]
+            ) + (["floor-pocketed-panels"] if mechanism.startswith("sliding") else []),
             "openable": True,
             "allowed_states": ["closed", "open", "locked"],
             "editor_color_slots": editor_slots(asset_name),
@@ -516,7 +523,9 @@ def main():
         "Catalogue moteur de huit trappes animées : chaque mécanisme existe en version carrée et ronde. "
         "Les modèles 03 et 04 possèdent une écoutille de service intégrée sans boîtier séparé. "
         "Toutes les feuilles sont détaillées dessus et dessous ; les autres modèles portent des commandes "
-        "verticales intégrées à la rive, accessibles depuis les deux niveaux.\n\n"
+        "verticales intégrées à la rive, accessibles depuis les deux niveaux. Les panneaux des "
+        "modèles coulissants descendent dans une poche sous la dalle et sont masqués par le sol "
+        "une fois ouverts.\n\n"
         "Le footprint de 1 × 1 décrit exclusivement la trémie canonique ; aucun boîtier mural ne dépasse.\n",
         encoding="utf-8",
     )

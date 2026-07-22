@@ -581,6 +581,7 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
       <group>
         <ConnectorSegment
           connector={{ id: 'connector-preview', ...connector }}
+          linkedHatch={hatch}
           opacity={0.68}
           displayLevel={Number(connector.level) || 0}
         />

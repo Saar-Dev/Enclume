@@ -48,6 +48,7 @@ import {
 } from '../../../shared/world/stairGeometry.js'
 import {
   ladderPlacementCenter,
+  ladderVisualRange,
   verticalAccessOpenings,
   verticalOpeningMultiPolygon,
 } from '../../../shared/world/verticalAccessGeometry.js'
@@ -1736,8 +1737,11 @@ function connectorDoorBox(connector) {
 function connectorAssetUrl(connector) {
   const rawUrl = connector?.modelGlbUrl
   if (!rawUrl) return null
+  const builtinVersion = connector?.type === 'hatch'
+    ? 'hatch-floor-pocket-20260722'
+    : 'door-model-refresh-20260709'
   const versionedUrl = rawUrl.startsWith('builtin-models/') && !rawUrl.includes('?')
-    ? `${rawUrl}?v=door-model-refresh-20260709`
+    ? `${rawUrl}?v=${builtinVersion}`
     : rawUrl
   if (/^https?:\/\//i.test(versionedUrl)) return versionedUrl
   return `${import.meta.env.VITE_API_URL}/api/assets/${versionedUrl}`
@@ -2218,7 +2222,7 @@ function HatchConnectorSegment({ connector, textureMaterials, opacity, selected 
   )
 }
 
-export function ConnectorSegment({ connector, curveWall = null, textureMaterials = {}, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
+export function ConnectorSegment({ connector, linkedHatch = null, curveWall = null, textureMaterials = {}, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
   const handlePointerDown = useCallback((event) => {
     if (!onPointerSelect || !connector?.id) return
     event.stopPropagation()
@@ -2316,22 +2320,20 @@ export function ConnectorSegment({ connector, curveWall = null, textureMaterials
   }
 
   if (connector.type === 'ladder') {
-    const fullY = Number(connector.y) || 0
-    const fullTopY = Number(connector.topY) || fullY + STORY_HEIGHT
-    const visualFullTopY = Math.max(fullY + 0.2, fullTopY - 0.07)
-    const sliceBottom = displayLevel === null ? -Infinity : displayLevel * STORY_HEIGHT
-    const sliceTop = displayLevel === null ? Infinity : sliceBottom + STORY_HEIGHT
-    const y = Math.max(fullY, sliceBottom)
-    let topY = Math.min(visualFullTopY, sliceTop)
-    if (topY <= y && displayLevel !== null && Math.abs(visualFullTopY - sliceBottom) < 0.01) {
-      topY = y + 0.12
-    }
-    const height = Math.max(0.2, topY - y)
+    const visualRange = ladderVisualRange(connector, {
+      linkedHatch,
+      displayLevel,
+      storyHeight: STORY_HEIGHT,
+    })
+    if (!visualRange) return null
+    const y = visualRange.bottomY
+    const height = visualRange.height
     const width = Math.max(0.2, Number(connector.width) || 0.7)
     const depth = Math.max(0.05, Number(connector.depth) || 0.12)
     const spacing = Math.max(0.1, Number(connector.anchorSpacing) || 0.5)
     const railThickness = Math.min(0.08, Math.max(0.035, width * 0.09))
-    const rungCount = Math.min(128, Math.max(2, Math.floor(height / spacing) + 1))
+    const usableRungHeight = Math.max(0, height - railThickness)
+    const rungCount = Math.min(128, Math.max(2, Math.floor(usableRungHeight / spacing) + 1))
     const ladderCenter = ladderPlacementCenter(connector)
     const centerX = ladderCenter.x
     const centerZ = ladderCenter.z
@@ -2369,11 +2371,11 @@ export function ConnectorSegment({ connector, curveWall = null, textureMaterials
           </mesh>
         ))}
         {Array.from({ length: rungCount }, (_, index) => {
-          const ratio = rungCount === 1 ? 0 : index / (rungCount - 1)
+          const ratio = rungCount === 1 ? 0.5 : index / (rungCount - 1)
           return (
             <mesh
               key={`rung-${index}`}
-              position={[centerX, y + ratio * height, centerZ]}
+              position={[centerX, y + railThickness / 2 + ratio * usableRungHeight, centerZ]}
               material={structureMaterial}
               castShadow
               receiveShadow
@@ -2810,6 +2812,11 @@ function SurfaceDungeonScene({
     [surface.connectors],
   )
   const verticalOpenings = useMemo(() => verticalAccessOpenings(surface), [surface])
+  const hatchesByLadderId = useMemo(() => new Map(
+    Object.values(surface.connectors)
+      .filter(connector => connector?.type === 'hatch' && connector?.linkedLadderId)
+      .map(connector => [String(connector.linkedLadderId), connector]),
+  ), [surface.connectors])
   const horizontalConnectorOpenings = useMemo(() => [
     ...skylights.map(connector => ({
       shape: 'rectangle',
@@ -3055,6 +3062,7 @@ function SurfaceDungeonScene({
             ...connector,
             runtimeState: runtimeFeatureStates[connector?.worldId || id] || null,
           }}
+          linkedHatch={connector?.type === 'ladder' ? hatchesByLadderId.get(String(id)) || null : null}
           curveWall={connector?.curveId ? curveWallsById.get(connector.curveId) || null : null}
           textureMaterials={textureMaterials}
           opacity={1}

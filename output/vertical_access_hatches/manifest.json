@@ -300,7 +300,8 @@
       "opening_shape": "rectangle",
       "opening_mechanism": "sliding-bipartite",
       "features": [
-        "dual-sided-edge-controls"
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
       ],
       "openable": true,
       "allowed_states": [
@@ -370,7 +371,8 @@
       "opening_shape": "circle",
       "opening_mechanism": "sliding-bipartite",
       "features": [
-        "dual-sided-edge-controls"
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
       ],
       "openable": true,
       "allowed_states": [
@@ -440,7 +442,8 @@
       "opening_shape": "rectangle",
       "opening_mechanism": "sliding-tripartite",
       "features": [
-        "dual-sided-edge-controls"
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
       ],
       "openable": true,
       "allowed_states": [
@@ -510,7 +513,8 @@
       "opening_shape": "circle",
       "opening_mechanism": "sliding-tripartite",
       "features": [
-        "dual-sided-edge-controls"
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
       ],
       "openable": true,
       "allowed_states": [

@@ -2,6 +2,7 @@ const DEFAULT_STORY_HEIGHT = 2.5
 const DEFAULT_OPENING_SIZE = 1
 const CIRCLE_SEGMENTS = 48
 const LADDER_EDGE_INSET = 0.16
+const DEFAULT_LADDER_TOP_EXTENSION = 0.75
 
 const LADDER_ORIENTATIONS = Object.freeze([
   Object.freeze({ axis: 'x', side: -1 }),
@@ -55,6 +56,47 @@ export function ladderPlacementCenter(ladder, opening = null) {
   return {
     x: alongX ? x + width / 2 : x + (side > 0 ? width - inset : inset),
     z: alongX ? z + (side > 0 ? depth - inset : inset) : z + depth / 2,
+  }
+}
+
+export function ladderVisualTopY(ladder, {
+  linkedHatch = null,
+  openTopExtension = DEFAULT_LADDER_TOP_EXTENSION,
+} = {}) {
+  const bottomY = number(ladder?.y, Math.min(number(ladder?.fromY), number(ladder?.toY)))
+  const structuralTopY = Math.max(
+    bottomY,
+    number(ladder?.topY, bottomY),
+    number(ladder?.fromY, bottomY),
+    number(ladder?.toY, bottomY),
+  )
+  const hatchBottomY = Number(linkedHatch?.y)
+  if (Number.isFinite(hatchBottomY)) return Math.max(bottomY, hatchBottomY)
+  return structuralTopY + Math.max(0, number(openTopExtension, DEFAULT_LADDER_TOP_EXTENSION))
+}
+
+export function ladderVisualRange(ladder, {
+  linkedHatch = null,
+  displayLevel = null,
+  storyHeight = DEFAULT_STORY_HEIGHT,
+  openTopExtension = DEFAULT_LADDER_TOP_EXTENSION,
+} = {}) {
+  const bottomY = number(ladder?.y, Math.min(number(ladder?.fromY), number(ladder?.toY)))
+  const topY = ladderVisualTopY(ladder, { linkedHatch, openTopExtension })
+  const showsAllLevels = displayLevel === null || displayLevel === undefined
+  if (showsAllLevels) return topY > bottomY ? { bottomY, topY, height: topY - bottomY } : null
+  const level = Number(displayLevel)
+  if (!Number.isFinite(level)) return null
+  const levelHeight = positive(storyHeight, DEFAULT_STORY_HEIGHT)
+  const sliceBottom = level * levelHeight
+  const sliceTop = sliceBottom + levelHeight
+  const visibleBottomY = Math.max(bottomY, sliceBottom)
+  const visibleTopY = Math.min(topY, sliceTop)
+  if (visibleTopY <= visibleBottomY + 1e-6) return null
+  return {
+    bottomY: visibleBottomY,
+    topY: visibleTopY,
+    height: visibleTopY - visibleBottomY,
   }
 }
 
