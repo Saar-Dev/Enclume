@@ -4861,3 +4861,40 @@ Les pistes GLB bipartites et tripartites ont été relues à `-0.16` sur leur ax
 fonctionnel `e999448` est déployé sur `8293/8294`; le catalogue synchronise toujours 100 modèles.
 Seuls les services Codex ont été redémarrés. Saar `8193/8194` et fusion `8393/8394` sont inchangés.
 Retour arrière : `backup/pre-session162-ladder-hatch-20260722` (`ff66e61`).
+
+---
+
+## Session 163 (Codex) — 2026-07-22 — Ascenseurs orthogonaux modulaires 🧪 DÉPLOYÉ
+
+**Décision de conception** : un ascenseur n'est plus limité à une pile verticale. L'utilisateur
+pose ses arrêts dans l'ordre ; chaque paire consécutive reste alignée sur un seul axe X, Y ou Z et
+la direction ne peut changer qu'à un arrêt. Une gaine fermée entoure aussi les tronçons horizontaux.
+Elle peut relier deux salles séparées par du vide extérieur sous-marin, mais aucun arrêt ne peut
+s'ouvrir dans ce vide : toute l'empreinte d'un palier doit appartenir à une même salle fermée.
+
+**UX et données** : le premier clic crée un brouillon, le deuxième matérialise le connecteur et les
+suivants prolongent la route. **Terminer l'ascenseur** ouvre son panneau ; **Continuer le trajet**
+reprend depuis le dernier arrêt. Chaque palier possède une orientation Nord/Est/Sud/Ouest autonome.
+Le modèle et son empreinte sont verrouillés dès le premier arrêt. La sélection fonctionne depuis
+tous les paliers et le catalogue ne présente que les blueprints `connectorType=elevator`.
+
+**Moteur** : `elevatorRuntime.js` persiste et interpole la cabine en X/Y/Z le long de la polyligne,
+avec durées verticale et horizontale distinctes. Les passagers conservent leurs coordonnées locales
+sur les trois axes. Le compilateur produit une gaine par segment plutôt qu'un objet par case, ouvre
+correctement les jonctions, ferme les extrémités et génère la porte propre à chaque palier. Une gaine
+industrielle bloque la vue ; une gaine vitrée laisse passer la LOS mais reste étanche et bloquante
+pour le mouvement.
+
+**Assets** : `tools/generate_elevator_transit.py` produit le pack `output/elevator_transit/` et ses
+huit GLB détaillés : industriel/vitré en 1x1, 1x2, 2x1 et 2x2. Les formats 1x2 et 2x1 sont construits
+séparément avec leurs dimensions de porte propres. Le catalogue expose cinq slots de couleur sans
+réintroduire les champs procéduraux Matière/Motif.
+
+**Validation et déploiement** : 149/149 tests monde/serveur, 98/98 tests client, 3/3 configuration,
+8/8 assets sans erreur ni avertissement, build Vite, ESLint ciblé sans erreur et smoke Chromium
+distant réussis. Une recette connectée réelle sur `8294` a enregistré trois arrêts `[0,0.125,0]`,
+`[0,2.625,0]`, `[4,2.625,0]`, demandé le troisième et vérifié l'arrivée exacte après le tronçon
+vertical puis horizontal. Les données temporaires ont été supprimées. Le commit fonctionnel
+`1c54e61` est déployé sur `8293/8294` ; le catalogue synchronise 108 modèles. Saar `8193/8194` et
+fusion `8393/8394` sont inchangés. Retour arrière :
+`backup/pre-session163-elevator-route-20260722` (`77ecaa7`).

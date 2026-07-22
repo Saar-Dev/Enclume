@@ -257,9 +257,17 @@ masquage sans mesh invisible ni stencil particulier. Le pack de référence
 service intégrée suit actuellement l'état global de la trappe : elle n'a pas de second automate
 indépendant.
 
-Les ascenseurs utilisent aujourd'hui des arrêts et métadonnées de liaison dans
-`surface_data.connectors`. Les escaliers droits ou en colimaçon utilisent `surface_data.stairs`.
-Ne jamais les introduire comme objets `free` ou `wall`.
+Les ascenseurs utilisent des arrêts ordonnés et des métadonnées de liaison dans
+`surface_data.connectors`. Le pack de référence `output/elevator_transit/`, généré par
+`tools/generate_elevator_transit.py`, fournit huit cabines : industriel et vitré en 1x1, 1x2, 2x1
+et 2x2. Chaque asset déclare `connector_type: elevator`, `elevator_style`, son empreinte, les quatre
+orientations de porte supportées et les largeurs utiles des faces X/Z. Les variantes 1x2 et 2x1
+doivent rester des GLB séparés : leur porte et leur aménagement ne sont pas interchangeables par une
+simple rotation. Le GLB porte l'apparence détaillée de la cabine ; portes, panneaux de gaine,
+collisions, étanchéité et LOS restent modulaires et autoritaires dans le moteur.
+
+Les escaliers droits ou en colimaçon utilisent `surface_data.stairs`. Ne jamais introduire ces
+structures comme objets `free` ou `wall`.
 
 ## Validation et intégration
 

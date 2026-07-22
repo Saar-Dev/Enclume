@@ -341,7 +341,7 @@ Ils appartiennent à `surface_data.connectors`, car ils portent des règles de s
 
 - appartenance à une ou plusieurs salles ;
 - position contrainte à une frontière physique pour une porte ;
-- niveaux de départ/arrivée pour un ascenseur ;
+- liste ordonnée d'arrêts X/Y/Z pour un ascenseur ;
 - état futur : ouvert/fermé/verrouillé/étanche ;
 - règles de collision, vue, déplacement et eau.
 
@@ -371,17 +371,32 @@ s'ouvre du côté de la normale ; elle ne dépend donc ni d'une corde d'approxim
 lequel les anciens petits segments auraient été générés. Si le mur est partagé par deux salles, le
 connecteur peut référencer les deux salles.
 
-Un ascenseur se pose depuis la configuration d’une salle sélectionnée. Sa définition référence une
-cabine et plusieurs arrêts. Son étage courant, ses portes et son déplacement appartiennent à un
-automate runtime ; l'ascenseur ne doit pas être réduit à une téléportation vers un unique étage
-d'arrivée.
+Un ascenseur se lance depuis la configuration d'une salle sélectionnée, puis se construit en posant
+ses arrêts dans leur ordre de desserte. Le premier clic conserve un brouillon ; le deuxième crée le
+connecteur et les suivants prolongent sa route. Chaque nouveau tronçon doit modifier exactement un
+axe parmi X, Y ou Z : aucune diagonale n'est acceptée, mais la direction peut changer à chaque
+arrêt. Le bouton **Terminer l'ascenseur** quitte la pose et ouvre son panneau ; **Continuer le
+trajet** reprend ensuite la construction depuis son dernier arrêt.
 
-Depuis la Phase 6, cette définition compile une gaine réellement évidée et une cabine praticable
-mobile. Toutes les portes palières restent bloquantes lorsque la cabine est absente. Les tokens
-embarqués sont attachés à son repère local durable et suivent sa hauteur sans déplacement gratuit.
+Chaque empreinte d'arrêt doit tenir entièrement dans une même salle fermée possédant sol, plafond et
+murs. Un arrêt ne peut donc jamais être créé dans le vide extérieur sous-marin. La gaine étanche
+peut en revanche traverser ce vide entre deux salles et se génère automatiquement sur chaque
+tronçon, vertical comme horizontal. La direction de porte Nord, Est, Sud ou Ouest est propre à
+chaque arrêt et reste modifiable depuis le panneau du connecteur.
+
+La définition référence une cabine, une empreinte 1x1, 1x2, 2x1 ou 2x2, un style industriel ou
+vitré et une liste ordonnée d'arrêts. Les formats 1x2 et 2x1 sont deux modèles distincts : selon la
+face, la largeur de porte et l'agencement intérieur diffèrent. Le modèle est verrouillé après le
+premier arrêt pour empêcher un changement d'empreinte au milieu d'une route.
+
+Son arrêt courant, ses portes et son déplacement appartiennent à un automate runtime ; l'ascenseur
+ne doit pas être réduit à une téléportation. La cabine suit réellement la polyligne X/Y/Z et les
+tokens embarqués restent attachés à son repère local durable sur les trois axes. Toutes les portes
+palières restent bloquantes lorsque la cabine est absente.
 
 Le modèle 3D d'une porte est choisi dans le flux lancé depuis le mur ; celui d'un ascenseur reste
-choisi depuis la configuration de la salle. Les fenêtres sont présentées dans le catalogue d'objets
+choisi depuis la configuration de la salle, dans un catalogue qui ne contient que les blueprints
+`connectorType=elevator`. Les fenêtres sont présentées dans le catalogue d'objets
 pour la commodité de pose, mais toutes ces apparences sont attachées au connecteur
 (`modelBlueprintId`, label, catégorie, GLB) et ne doivent pas redevenir la source de vérité.
 

@@ -757,7 +757,8 @@ service de combat conserve ses effets métier et délègue les décisions spatia
 - le chemin de session détaille le coût segment par segment ;
 - validation : 50 tests monde et build Vite.
 
-L'ascenseur reste expressément non navigable avant son automate de Phase 6.
+Avant la Phase 6, l'ascenseur restait expressément non navigable. Il est désormais compilé par son
+automate et sa cabine physique ; aucune arête ne téléporte directement entre ses arrêts.
 
 ---
 
@@ -779,17 +780,23 @@ L'ascenseur reste expressément non navigable avant son automate de Phase 6.
 ## Moteur de monde — Phase 6 ✅
 
 - `shared/world/elevatorRuntime.js` — automate durable `idle/open/closing/moving/opening/blocked`,
-  arrêts multiples, appels déterministes, interpolation et reprise après redémarrage ;
-- `worldCompiler.js` — gaine découpée dans les étages, cabine mobile avec sol/plafond/parois,
-  portes palières fermées en l'absence de cabine et embarquement uniquement aligné/portes ouvertes ;
+  arrêts ordonnés X/Y/Z, appels déterministes, interpolation par tronçons orthogonaux et reprise
+  après redémarrage ;
+- `worldCompiler.js` — gaine étanche segmentée, verticale ou horizontale, cabine mobile avec
+  sol/plafond/parois, portes palières orientables fermées en l'absence de cabine et embarquement
+  uniquement aligné/portes ouvertes ;
 - `server/src/services/worldElevatorService.js` — réconciliation transactionnelle sous verrou,
   commandes, persistance et translation des passagers dans le repère local de cabine ;
 - migration 155 — `world_elevator_passengers`, position locale durable et unicité d'attachement ;
 - déplacement et visibilité consomment la position réconciliée avant toute navigation, collision,
   LOS ou couverture ;
-- éditeur et session affichent la petite cabine animée. Les joueurs appellent un palier ; le MJ
+- l'éditeur pose chaque arrêt dans une salle fermée, autorise un changement de direction seulement à
+  l'arrêt et génère la gaine dans le vide entre salles. Les joueurs appellent un palier ; le MJ
   administre aussi le blocage et les portes ;
-- validation : 64 tests monde, build Vite, migration 155 `up/down` transactionnelle PostgreSQL.
+- les empreintes 1x1, 1x2, 2x1 et 2x2 ont chacune un GLB industriel et vitré. Les panneaux de gaine
+  vitrés laissent passer la LOS sans cesser de bloquer mouvement, eau et gaz ;
+- validation initiale : 64 tests monde et migration 155 `up/down`. Extension Session 163 : 149
+  tests monde/serveur, 98 tests client, 3 configuration, 8 assets et build Vite.
 
 Les cartes historiques ne constituent pas une cible de migration. Elles ne sont conservées comme
 fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au moteur canonique.

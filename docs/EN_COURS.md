@@ -1,4 +1,15 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> 🧪 **2026-07-22 — Session 163 déployée sur `8293/8294`, recette visuelle utilisateur attendue** :
+> les ascenseurs suivent maintenant une route ordonnée de tronçons strictement X/Y/Z et peuvent
+> changer de direction à chaque arrêt. Les arrêts restent obligatoirement dans des salles fermées ;
+> la gaine étanche, verticale ou horizontale, peut traverser le vide extérieur. Chaque palier choisit
+> indépendamment sa porte Nord/Est/Sud/Ouest. Huit cabines distinctes sont livrées : industriel et
+> vitré en 1x1, 1x2, 2x1 et 2x2. Validation : 149 tests monde/serveur, 98 tests client, 3
+> configuration, 8 assets sans erreur ni avertissement, build Vite, ESLint ciblé sans erreur,
+> smoke Chromium distant et recette API réelle en trois arrêts vertical puis horizontal. Retour
+> arrière : `backup/pre-session163-elevator-route-20260722` (`77ecaa7`). Saar et fusion sont
+> inchangés.
+>
 > 🧪 **2026-07-22 — Session 162 déployée sur `8293/8294`, recette utilisateur attendue** : une
 > échelle seule dépasse désormais le palier haut de 75 cm ; dès qu'une trappe est liée, rails et
 > barreaux s'arrêtent exactement à sa sous-face, sans segment résiduel à l'étage supérieur. Les

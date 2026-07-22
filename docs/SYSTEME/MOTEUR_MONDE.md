@@ -472,17 +472,20 @@ ni chemin serveur absent du rendu.
 
 ### Ascenseur
 
-Plateforme ou cabine mobile avec :
+Cabine mobile sur une route orthogonale avec :
 
-- liste d'arrêts ;
-- position ou arrêt actuel ;
-- portes de cabine et portes palières ;
+- liste ordonnée d'arrêts, chacun avec position X/Y/Z et orientation de porte indépendante ;
+- position X/Y/Z ou arrêt actuel ;
+- segments strictement verticaux ou horizontaux, sans diagonale ;
+- gaine fermée sur chaque segment, y compris lorsqu'elle traverse l'extérieur sous-marin ;
+- portes de cabine modulaires et portes palières ;
 - automate `idle/opening/open/closing/moving/blocked` ;
-- temps de trajet et règles d'appel ;
+- vitesses verticale et horizontale, temps de porte et règles d'appel ;
 - passagers attachés au référentiel de la cabine pendant le déplacement.
 
 L'ascenseur n'est pas une téléportation entre connecteurs. Sa définition est statique ; son automate
-et sa cabine appartiennent à l'état runtime.
+et sa cabine appartiennent à l'état runtime. Un arrêt doit être contenu dans une salle fermée ; seule
+la gaine peut passer dans le vide entre deux salles.
 
 ### Implémentation Phase 4
 
@@ -501,20 +504,24 @@ et sa cabine appartiennent à l'état runtime.
 
 ### Implémentation Phase 6
 
-- un ascenseur compile une gaine évidée et une vraie cabine mobile : support praticable, plancher,
-  plafond, parois, portes de cabine et compartiment ;
+- un ascenseur compile une gaine évidée par tronçon droit et une vraie cabine mobile : support
+  praticable, plancher, plafond, parois, portes de cabine et compartiment ;
+- les jonctions n'ajoutent pas de paroi fantôme dans la direction du prochain segment et les
+  extrémités verticales reçoivent un capot étanche. Les gaines industrielles occultent la vue ; les
+  gaines vitrées bloquent mouvement, eau et gaz mais laissent passer la LOS ;
 - chaque palier possède une barrière physique. Elle ne s'ouvre que si la cabine est exactement
-  alignée et que l'automate est en phase `open` ;
-- le graphe ne contient jamais de traversée verticale d'ascenseur. Il ne produit qu'une courte
+  alignée, que l'automate est en phase `open` et que la face correspond à l'orientation propre de
+  cet arrêt ;
+- le graphe ne contient jamais de traversée longitudinale d'ascenseur. Il ne produit qu'une courte
   traversée d'embarquement lorsque cabine et palier sont compatibles ;
-- l'automate pur `elevatorRuntime.js` persiste phase, position, arrêt courant, destination, file,
-  échéances, blocage et état de reprise dans `world_feature_states` ;
+- l'automate pur `elevatorRuntime.js` persiste phase, position X/Y/Z, polyligne de mouvement, arrêt
+  courant, destination, file, échéances, blocage et état de reprise dans `world_feature_states` ;
 - `worldElevatorService.js` avance cette horloge sous verrou de battlemap. Les appels concurrents
   sont ordonnés par date puis identité stable ; aucun timer en mémoire n'est une autorité ;
 - `world_elevator_passengers` attache au plus une cabine à un token et stocke sa position locale.
   Toute réconciliation déplace ces tokens dans la même transaction avant navigation ou visibilité ;
-- le renderer interpole la cabine depuis les mêmes échéances, tandis que le serveur reste
-  l'autorité des collisions, des portes, de l'occupation et des lignes de vue ;
+- le renderer interpole chaque tronçon avec les mêmes durées pondérées que le serveur, tandis que le
+  serveur reste l'autorité des collisions, des portes, de l'occupation et des lignes de vue ;
 - les anciennes cartes ne justifient aucun mode de compatibilité. Une fixture legacy peut rester
   uniquement si elle ne modifie pas les contrats du monde canonique.
 

@@ -1,3 +1,22 @@
+## v204 — 2026-07-22 — Ascenseurs orthogonaux modulaires
+
+### Éditeur et modèles
+- [new] L'ascenseur se construit désormais en posant une suite d'arrêts. Chaque tronçon est
+  strictement vertical ou horizontal ; la direction peut changer à un arrêt, jamais en diagonale.
+- [new] Huit cabines détaillées sont disponibles : industriel et vitré, chacun en 1x1, 1x2, 2x1
+  et 2x2. Les variantes 1x2 et 2x1 sont bien des modèles distincts avec leurs propres largeurs de
+  porte.
+- [new] Chaque arrêt possède sa propre porte Nord, Est, Sud ou Ouest, modifiable après la pose.
+- [change] Un arrêt doit tenir dans une salle entièrement fermée. La gaine étanche peut traverser
+  le vide extérieur sous-marin entre deux salles, mais aucun palier ne peut s'y ouvrir.
+
+### Moteur de monde
+- [new] La cabine et ses passagers suivent réellement toute la polyligne en X, Y et Z. Les vitesses
+  verticale et horizontale sont configurées séparément.
+- [new] Les gaines verticales et horizontales sont générées par tronçon, avec jonctions ouvertes
+  dans le bon axe et extrémités étanches. La version vitrée laisse passer la vue tout en bloquant
+  déplacement, eau et gaz.
+
 ## v203 — 2026-07-22 — Échelles ajustées et trappes escamotables
 
 ### Accès verticaux
