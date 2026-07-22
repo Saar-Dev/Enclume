@@ -2402,7 +2402,10 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     let offhandWeapon = null, offhandMods = [], offhandAmmoOk = false
     if (action.offhand_weapon_inv_id) {
       const fetched = await fetchAssaultWeaponAndMods(action.offhand_weapon_inv_id)
-      if (fetched.weapon?.ref_damage_h) {
+      // CHOC1 : ne jamais tester ref_damage_h pour savoir si une arme a été trouvée — une arme Choc
+      // pur (Flex...) en main secondaire est réelle et doit pouvoir tirer. equipment_id est présent
+      // dès que la ligne char_inventory existe, indépendamment du join.
+      if (fetched.weapon?.equipment_id) {
         offhandWeapon = fetched.weapon
         offhandMods = fetched.installedMods
         offhandAmmoOk = hasEnoughAmmo(offhandWeapon.ammo_remaining, bulletCount, { isPnj: isPnjChar, pnjUnlimitedAmmo: settings.pnj_unlimited_ammo })
@@ -2760,9 +2763,13 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
         // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
         const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
+        // CHOC1 : repli sur weapon.ref_damage_h (fetch initial) si l'arme a disparu entre-temps — peut
+        // lui-même être vide (arme Choc pur) : ne jamais appeler parseDice sur une chaîne vide.
         const rawDice = effectiveDamage
           ? effectiveDamage.total
-          : (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
+          : weapon.ref_damage_h
+            ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
+            : 0
         const degautsBruts = rawDice + modDomAttaque + modDegatsMode
 
         // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)

@@ -388,6 +388,12 @@ scope validé.
    ce n'est pas corrigé, mais indépendant de la mécanique Choc elle-même.
 4. Correction cosmétique différée, non bloquante : retitrer l'entrée `CHOC1` dans
    `docs/BUGIDENTIFIE.md` pour refléter l'origine réelle (§1).
+6. **Ajouté puis clos (run à vide post-commit, 2026-07-22)** : trois trous de la même famille trouvés
+   en continuant l'analyse après le commit du prérequis — deux fenêtres étroites (tir
+   `resolveAssaultAction ~2765`, CaC `getEffectiveMeleeDamage`) et un bug reproductible à volonté
+   (tir à deux armes, arme Choc pur en main secondaire jamais détectée). **Les trois corrigés**,
+   syntaxe vérifiée, non testés en jeu. Détail complet : `docs/EN_COURS.md` Item 106,
+   `docs/JOURNALTEMP.md` Étape 9/10.
 5. ~~**Séquencement acté (Saar, 2026-07-22)**~~ — **clos.** Le correctif minimal `CHOC1` (`getEffectiveMeleeDamage`,
    `docs/JOURNALTEMP.md` Étapes 5-8) est codé et testé en jeu (Session 168, `docs/EN_COURS.md` Item 106).
    Verrou levé sur `docs/PLAN_REFONTECAC.md` — la refonte CaC peut reprendre sa planification. Le Palier 1

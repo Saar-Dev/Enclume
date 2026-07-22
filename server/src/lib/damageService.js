@@ -176,8 +176,10 @@ export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalW
       .where({ 'char_inventory.id': weaponInvId })
       .select('ref_equipment.id as weapon_ref_id', 'ref_equipment.damage_h as ref_damage_h', 'ref_equipment.name as weapon_name')
       .first()
-    // weapon_ref_id absent = arme introuvable → repli sur la formule stockée à la Déclaration.
-    formula = weapon?.weapon_ref_id ? (weapon.ref_damage_h ?? null) : (fallbackFormula ?? '1D4')
+    // weapon_ref_id absent = arme introuvable → repli sur la formule stockée à la Déclaration, telle
+    // quelle. Jamais réinjecter '1D4' par-dessus : si fallbackFormula était déjà null (arme Choc pur
+    // au moment de la Déclaration), elle doit le rester — pas redevenir mains nues par accident.
+    formula = weapon?.weapon_ref_id ? (weapon.ref_damage_h ?? null) : fallbackFormula
     producer = weapon?.weapon_ref_id ? 'arme équipée' : 'fallback (arme introuvable)'
     weaponName = weapon?.weapon_name ?? null
   } else {

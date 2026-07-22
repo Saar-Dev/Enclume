@@ -191,9 +191,23 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > pas** déclenché — câblage du Choc porté par l'arme (Palier 1, `docs/PLAN_CHOC1.md` §4) reste une
 > décision de scope séparée, non tranchée.
 > **Verrou levé** : `docs/PLAN_REFONTECAC.md` peut reprendre sa planification (prérequis fermé).
-> **Dette ouverte, non corrigée, notée pour plus tard** : `socketCombatHelpers.js:~2765`
-> (`resolveAssaultAction`) — filet de secours `parseDice(weapon.ref_damage_h...)` sans garde `null`,
-> risque résiduel étroit (arme Choc pur désequipée entre Déclaration et Résolution du tir).
+> **Trois dettes de la même famille trouvées en run à vide post-commit (2026-07-22), toutes trois
+> corrigées dans la foulée (même invariant, même correctif déjà validé 6× dans ce fichier)** :
+> 1. `socketCombatHelpers.js:~2765` (`resolveAssaultAction`, tir PNJ) — filet de secours
+>    `parseDice(weapon.ref_damage_h...)` sans garde `null` (fenêtre étroite : arme désequipée entre
+>    Déclaration et Résolution). ✅ corrigé — repli à 0 si `weapon.ref_damage_h` vide.
+> 2. `damageService.js::getEffectiveMeleeDamage` — le repli `?? '1D4'` confondait "arme introuvable"
+>    avec "était Choc pur au moment de la Déclaration" (même fenêtre étroite, côté CaC). ✅ corrigé —
+>    `fallbackFormula` utilisée telle quelle, sans réinjecter `'1D4'` par-dessus.
+> 3. **Trouvé en continuant l'analyse, pas une fenêtre étroite cette fois — reproductible à volonté** :
+>    `socketCombatHelpers.js:~2405`, tir à deux armes — `if (fetched.weapon?.ref_damage_h)` faisait
+>    disparaître silencieusement toute arme Choc pur (Flex...) placée en main secondaire, à chaque
+>    tentative, sans condition de timing. ✅ corrigé — test sur `equipment_id`. Tracé jusqu'au bout
+>    (`fires === 'both'` ne calcule le dégât que sur l'arme principale, déjà le cas avant ce correctif,
+>    rien de nouveau introduit ; `fires === 'offhand'` alimente correctement `getEffectiveWeaponDamage`
+>    une fois l'arme secondaire détectée).
+> **Testé** : `node --check` uniquement sur les trois. **Non testé en jeu** — en particulier le
+> dual-wield avec une arme Choc pur en main secondaire, jamais essayé avant aujourd'hui.
 
 > **Item 105 (Session 168, dev/Saar) — Wizard Step4 : bug budget PC + données chasseur_primes ✅ CODÉ
 > et confirmé par Saar en navigateur ; mécanisation avantages/revers ⚠️ NON LIVRÉE au périmètre demandé.**
