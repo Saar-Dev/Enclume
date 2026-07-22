@@ -28,6 +28,10 @@ et escalier depuis deux caméras opposées, sans double grille ni exception Java
 fonctionnel `932a041` est déployé sur `8293/8294` ; le health API et le smoke Chromium distant sont
 verts.
 
+Recette utilisateur validée le 2026-07-22 sur l'instance monde : le rendu mono-plan est accepté
+tel quel pour les murs et les sols, et le rendu déjà validé des escaliers est conservé. Ce lot est
+prêt à entrer dans la prochaine fusion combat/monde.
+
 ---
 
 ## Marches ajourées et murs en grille recto-verso (2026-07-22)

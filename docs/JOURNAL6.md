@@ -4763,3 +4763,8 @@ harness et sa capture ont ensuite été supprimés du dépôt.
 sur `8293/8294` ; le health API, la réponse HTTP du client et le smoke Chromium distant sont verts.
 Le tag de sauvegarde préalable est `backup/pre-session159-single-sheet-grate-20260722`. Les instances
 de Saar et de fusion n'ont pas été touchées.
+
+**Recette finale** : le rendu a été accepté par l'utilisateur le 2026-07-22 sans nouvelle demande
+de modification. La Session 159 monde est donc candidate à la prochaine intégration. Sa fiche de
+transmission, les conflits anticipés et la procédure de reprise sont consignés dans
+`docs/FUSION_SESSION159.md`.

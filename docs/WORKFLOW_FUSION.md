@@ -2,6 +2,8 @@
 
 > Dernière mise à jour : 2026-07-22 — validations courantes sur cartes v13.
 >
+> Lot monde suivant prêt : Session 159, fiche `docs/FUSION_SESSION159.md`.
+>
 > But : permettre aux deux développeurs de travailler indépendamment, puis de valider ensemble une
 > fusion déployée sans écraser leurs dépôts, leurs bases de données ou leurs états de partie.
 
