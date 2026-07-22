@@ -694,11 +694,13 @@ export default function Sidebar({
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
     .filter(blueprint => {
+      const connectorType = blueprint?.geometry?.connectorType
+      if (connectorType === 'hatch') return false
+      if (connectorType === 'door') return true
       const text = normalizedBlueprintText(blueprint)
       return text.includes('futuristic_doors')
         || text.includes('porte')
         || text.includes('door')
-        || text.includes('hatch')
         || text.includes('sas')
     })
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
@@ -763,6 +765,13 @@ export default function Sidebar({
     surfaceToolState.verticalAccessEditLadderId
       && String(surfaceToolState.selectedConnectorId) === String(surfaceToolState.verticalAccessEditLadderId),
   )
+  const verticalAccessCatalogActive = Boolean(
+    (structuralObjectConnectorType(activeBlueprint) === 'ladder'
+      && surfaceToolState.mode === 'connector'
+      && surfaceToolState.connectorType === 'ladder')
+      || editingVerticalAccess,
+  )
+  const hatchCatalogOnly = verticalAccessCatalogActive && surfaceToolState.ladderHatch !== false
   const connectorMaterialSlots = normalizeModelMaterialSlots(selectedConnectorChoice?.geometry)
   const connectorMaterialOverrides = surfaceToolState.connectorMaterialOverrides || {}
   const updateConnectorMaterialSlot = (slot, patch) => updateSurfaceTool({
@@ -2052,72 +2061,57 @@ export default function Sidebar({
             return (
               <div style={{ marginTop: '6px' }}>
                 <div style={{ ...styles.paletteTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <span>{t('sidebar.paletteEntities')}</span>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={refreshingObjects}
-                    onClick={async () => {
-                      setRefreshingObjects(true)
-                      try {
-                        await refreshBuiltinModels()
-                      } catch (err) {
-                        console.error('[Bibliothèque 3D] Échec du rafraîchissement :', err)
-                      } finally {
-                        setRefreshingObjects(false)
-                      }
-                    }}
-                    title={t('sidebar.refreshObjectsHint')}
-                    style={{ padding: '3px 7px', fontSize: '10px' }}
-                  >
-                    {refreshingObjects ? '…' : t('sidebar.refreshObjects')}
-                  </button>
-                </div>
-                <input
-                  value={objectSearch}
-                  onChange={event => setObjectSearch(event.target.value)}
-                  placeholder={t('sidebar.searchObjects')}
-                  style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
-                />
-                {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
-                {((structuralObjectConnectorType(activeBlueprint) === 'ladder'
-                  && surfaceToolState.mode === 'connector'
-                  && surfaceToolState.connectorType === 'ladder')
-                  || editingVerticalAccess) && (
-                  <div style={{ ...styles.connectorPicker, marginBottom: '10px' }}>
-                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessComposition')}</div>
-                    <select
-                      value={surfaceToolState.ladderHatch === false ? 'ladder-only' : 'ladder-hatch'}
-                      onChange={event => selectVerticalAccessComposition(event.target.value === 'ladder-hatch')}
-                      style={styles.roomToolSelect}
+                  <span>{hatchCatalogOnly ? t('surfaceEditor.hatchModel') : t('sidebar.paletteEntities')}</span>
+                  {!hatchCatalogOnly && (
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={refreshingObjects}
+                      onClick={async () => {
+                        setRefreshingObjects(true)
+                        try {
+                          await refreshBuiltinModels()
+                        } catch (err) {
+                          console.error('[Bibliothèque 3D] Échec du rafraîchissement :', err)
+                        } finally {
+                          setRefreshingObjects(false)
+                        }
+                      }}
+                      title={t('sidebar.refreshObjectsHint')}
+                      style={{ padding: '3px 7px', fontSize: '10px' }}
                     >
-                      <option value="ladder-only">{t('surfaceEditor.ladderOnly')}</option>
-                      <option value="ladder-hatch" disabled={hatchChoices.length === 0}>
-                        {t('surfaceEditor.ladderAndHatch')}
-                      </option>
-                    </select>
-                    {surfaceToolState.ladderHatch !== false && (
-                      <>
-                        <div style={styles.connectorPickerTitle}>{t('surfaceEditor.hatchModel')}</div>
-                        <div style={styles.rotationRow}>
-                          <button
-                            type="button"
-                            onClick={() => rotateVerticalAccess(-1)}
-                            style={styles.roomToolSmallBtn}
-                          >
-                            {t('surfaceEditor.rotateLeft')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => rotateVerticalAccess(1)}
-                            style={styles.roomToolSmallBtn}
-                          >
-                            {t('surfaceEditor.rotateRight')}
-                          </button>
-                        </div>
-                        {selectedHatchChoice?.glb_url && <Object3DPreview blueprint={selectedHatchChoice} />}
-                      </>
-                    )}
+                      {refreshingObjects ? '…' : t('sidebar.refreshObjects')}
+                    </button>
+                  )}
+                </div>
+                {!hatchCatalogOnly && (
+                  <input
+                    value={objectSearch}
+                    onChange={event => setObjectSearch(event.target.value)}
+                    placeholder={t('sidebar.searchObjects')}
+                    style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
+                  />
+                )}
+                {!hatchCatalogOnly && activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
+                {hatchCatalogOnly && (
+                  <div style={{ ...styles.connectorPicker, marginBottom: '10px' }}>
+                    <div style={styles.rotationRow}>
+                      <button
+                        type="button"
+                        onClick={() => rotateVerticalAccess(-1)}
+                        style={styles.roomToolSmallBtn}
+                      >
+                        {t('surfaceEditor.rotateLeft')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rotateVerticalAccess(1)}
+                        style={styles.roomToolSmallBtn}
+                      >
+                        {t('surfaceEditor.rotateRight')}
+                      </button>
+                    </div>
+                    {selectedHatchChoice?.glb_url && <Object3DPreview blueprint={selectedHatchChoice} />}
                     {hatchChoices.map(choice => {
                       const selected = String(selectedHatchChoice?.id) === String(choice.id)
                       const shape = choice.geometry?.openingShape === 'circle'
@@ -2143,12 +2137,12 @@ export default function Sidebar({
                     })}
                   </div>
                 )}
-                {bpList.length === 0 && (
+                {!hatchCatalogOnly && bpList.length === 0 && (
                   <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
                     {t('sidebar.noBlueprints')}
                   </p>
                 )}
-                {Object.entries(grouped).map(([category, items]) => (
+                {!hatchCatalogOnly && Object.entries(grouped).map(([category, items]) => (
                   <div key={category} style={{ marginBottom: '10px' }}>
                     <div style={{ color: '#7f8eaa', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 8px 3px' }}>
                       {category} <span style={{ opacity: 0.55 }}>({items.length})</span>
@@ -2168,9 +2162,11 @@ export default function Sidebar({
                     })}
                   </div>
                 ))}
-                <button className="btn" style={{ width: '100%', marginTop: '4px' }} onClick={() => navigate('/workshop')}>
-                  {t('sidebar.importCustomObject')}
-                </button>
+                {!hatchCatalogOnly && (
+                  <button className="btn" style={{ width: '100%', marginTop: '4px' }} onClick={() => navigate('/workshop')}>
+                    {t('sidebar.importCustomObject')}
+                  </button>
+                )}
               </div>
             )
           })()}

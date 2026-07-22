@@ -1,5 +1,5 @@
 # SYSTEME/ENTITES.md — Occupation, rotation et déplacement des entités
-> Mis à jour : 2026-07-22 — `WorldSnapshot`, occupation dynamique et positions `world-feet`.
+> Mis à jour : 2026-07-22 — `WorldSnapshot`, placement éditeur et positions `world-feet`.
 > Source : SYSTEME.md §12–§13–§15
 > Lire pour : occupation dynamique, déplacement entités/tokens, rotation tokens, interpolation 300 ms
 
@@ -157,3 +157,4 @@ visuelle et ne constitue jamais une position intermédiaire autoritaire.
 | PE26 | `resolveEntityState().returning()` inclut `battlemap_id` pour la révision runtime |
 | PE27 | `moveType` est prévisualisé client puis recalculé serveur |
 | PE29 | Acteur et objet sont contrôlés pas à pas sur supports, barrières et occupants du snapshot |
+| PE30 | L'éditeur refuse pose, glisser et rotation si le volume chevauche mur, structure ou entité |

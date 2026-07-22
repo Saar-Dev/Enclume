@@ -1,4 +1,12 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> 🔒 **2026-07-22 — Session 161, chantier Codex actif (ne pas modifier ces zones en parallèle)** :
+> séparation stricte des catalogues **Portes** et **Trappes** dans la palette Objets 3D, puis
+> contrôle de collision lors de la pose, du déplacement et de la rotation des objets 3D libres.
+> Zones réservées : `client/src/components/Sidebar.jsx`, `client/src/components/Editor3D.jsx`,
+> le nouveau helper/test de collision de placement et la documentation moteur associée. Cible de
+> recette : instance Codex `8293/8294` uniquement ; Saar `8193/8194` et fusion `8393/8394` restent
+> hors périmètre.
+>
 > 🧪 **2026-07-22 — correction de recette des accès verticaux déployée sur `8293/8294`, nouvelle
 > recette utilisateur attendue** : le choix initial contient uniquement **Échelle seule** et
 > **Échelle + Trappe** ; ce dernier ouvre le catalogue visuel à droite. L’échelle est latérale,

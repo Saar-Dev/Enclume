@@ -1,13 +1,19 @@
 import { Suspense, useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { Edges, MapControls, Grid } from '@react-three/drei'
+import { Edges, Html, MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
+import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
+import { compileSurfaceWorld } from '../../../shared/world/worldCompiler.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
+import {
+  buildWallPlacementVolume,
+  validateEntityPlacement,
+} from '../lib/entityPlacementCollision.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
@@ -184,46 +190,77 @@ function GhostVoxel({ position, geometry, rotation }) {
 }
 
 // ─── Ghost entité — preview avant pose ───────────────────────────────────────
-function GhostEntityBounds({ position, blueprint, r }) {
+function GhostEntityBounds({ position, blueprint, r, entityState = {}, invalid = false }) {
   if (!position || !blueprint) return null
   const { x, y, z } = position
   const rot = r * (Math.PI / 2)
-  const width = blueprint.geometry?.width ?? 1
-  const height = blueprint.geometry?.height ?? 1
-  const depth = blueprint.geometry?.depth ?? 1
+  const scale = normalizeEntityScale(entityState)
+  const width = (blueprint.geometry?.width ?? 1) * scale
+  const height = (blueprint.geometry?.height ?? 1) * scale
+  const depth = (blueprint.geometry?.depth ?? 1) * scale
   const authoredOrigin = blueprint.geometry?.origin === 'floor-center' || blueprint.geometry?.origin === 'wall-back-center'
   return (
     <group position={[authoredOrigin ? x : x + width / 2, y, authoredOrigin ? z : z + depth / 2]} rotation={[0, rot, 0]}>
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[width, height, depth]} />
-        <meshBasicMaterial color="#5b8dee" transparent opacity={0.18} depthWrite={false} />
-        <Edges color="#7fb0ff" transparent opacity={0.9} />
+        <meshBasicMaterial color={invalid ? '#ef4444' : '#5b8dee'} transparent opacity={invalid ? 0.3 : 0.18} depthWrite={false} />
+        <Edges color={invalid ? '#fecaca' : '#7fb0ff'} transparent opacity={0.95} />
       </mesh>
     </group>
   )
 }
 
-function GhostEntity({ position, blueprint, r }) {
+function GhostEntity({
+  position,
+  blueprint,
+  r,
+  validation = null,
+  entityState = {},
+  currentStateId = 0,
+}) {
   if (!position || !blueprint) return null
+  const invalid = validation?.valid === false
+  const blockLabel = validation?.reason === 'wall'
+    ? 'Placement impossible : collision avec un mur'
+    : validation?.reason === 'structure'
+      ? 'Placement impossible : collision avec la structure'
+      : 'Placement impossible : collision avec un objet'
+  const labelHeight = Math.max(0.5, Number(blueprint.geometry?.height) || 1) * normalizeEntityScale(entityState)
   const entity = {
     id: `preview:${blueprint.id}`,
     blueprint_id: blueprint.id,
     ...worldPointToDbPosition(position),
     r,
-    state: {},
-    current_state_id: 0,
+    state: entityState,
+    current_state_id: currentStateId,
   }
   return (
-    <Suspense fallback={<GhostEntityBounds position={position} blueprint={blueprint} r={r} />}>
-      <EntityMesh
-        entity={entity}
-        blueprint={blueprint}
-        entityTextureMaterials={null}
-        sceneOpacity={1}
-        isPreview
-        isSelected
-      />
-    </Suspense>
+    <>
+      <Suspense fallback={invalid ? null : <GhostEntityBounds position={position} blueprint={blueprint} r={r} entityState={entityState} />}>
+        <EntityMesh
+          entity={entity}
+          blueprint={blueprint}
+          entityTextureMaterials={null}
+          sceneOpacity={1}
+          isPreview
+          isSelected
+        />
+      </Suspense>
+      {invalid && (
+        <>
+          <GhostEntityBounds position={position} blueprint={blueprint} r={r} entityState={entityState} invalid />
+          <Html
+            center
+            position={[position.x, position.y + labelHeight + 0.35, position.z]}
+            style={{ pointerEvents: 'none', whiteSpace: 'nowrap' }}
+          >
+            <div style={{ padding: '5px 8px', border: '1px solid #ef4444', borderRadius: 5, background: 'rgba(69,10,10,0.94)', color: '#fee2e2', fontSize: 11, fontWeight: 700 }}>
+              {blockLabel}
+            </div>
+          </Html>
+        </>
+      )}
+    </>
   )
 }
 
@@ -288,16 +325,27 @@ function EntityEditorScene({
     return supports
   }, [displayLevel, expandedSurface.floors])
 
-  const displayedWallSupports = useMemo(() => {
+  const wallRenderBoxes = useMemo(() => {
     const surface = normalizeSurfaceData(surfaceData)
     const walls = cutWallsForDoorConnectors([
       ...roomsWallSegments(surface.rooms),
       ...Object.entries(surface.walls || {}).map(([id, wall]) => ({ ...wall, id: wall?.id || id })),
     ], surface.connectors)
     return walls.flatMap(wall => {
-      if (!wall?.id || !wall?.axis || wall.axis === 'segment' || yToLevel(wall.y) !== displayLevel) return []
+      if (!wall?.id || !wall?.axis) return []
       const renderBox = getWallRenderBox(wall)
       if (!renderBox) return []
+      return [{ wall, renderBox }]
+    })
+  }, [surfaceData])
+
+  const displayedWallRenderBoxes = useMemo(() => (
+    wallRenderBoxes.filter(({ wall }) => yToLevel(wall.y) === displayLevel)
+  ), [displayLevel, wallRenderBoxes])
+
+  const displayedWallSupports = useMemo(() => (
+    displayedWallRenderBoxes.flatMap(({ wall, renderBox }) => {
+      if (wall.axis === 'segment') return []
       const [width, height, depth] = renderBox.args
       const [x, y, z] = renderBox.position
       const min = new THREE.Vector3(x - width / 2, y - height / 2, z - depth / 2)
@@ -313,7 +361,60 @@ function EntityEditorScene({
         topY: max.y,
       }]
     })
-  }, [displayLevel, surfaceData])
+  ), [displayedWallRenderBoxes])
+
+  const displayedWallPlacementVolumes = useMemo(() => (
+    wallRenderBoxes
+      .map(({ wall, renderBox }) => buildWallPlacementVolume(renderBox, wall.id))
+      .filter(Boolean)
+  ), [wallRenderBoxes])
+
+  const structuralPlacementVolumes = useMemo(() => {
+    if (!hasSurfaceContent(surfaceData)) return []
+    try {
+      const snapshot = compileSurfaceWorld({ surfaceData, battlemapId })
+      return snapshot.spatial.colliders.flatMap(collider => {
+        if (collider.kind === 'wall' || !collider.bounds?.min || !collider.bounds?.max) return []
+        const min = collider.bounds.min
+        const max = collider.bounds.max
+        const width = Number(max.x) - Number(min.x)
+        const height = Number(max.y) - Number(min.y)
+        const depth = Number(max.z) - Number(min.z)
+        const volume = buildWallPlacementVolume({
+          position: [
+            Number(min.x) + width / 2,
+            Number(min.y) + height / 2,
+            Number(min.z) + depth / 2,
+          ],
+          args: [width, height, depth],
+        }, collider.id, collider.kind)
+        return volume ? [volume] : []
+      })
+    } catch (error) {
+      console.warn('[EntityEditor] Volumes structurels indisponibles :', error)
+      return []
+    }
+  }, [battlemapId, surfaceData])
+
+  const legacyVoxelPlacementVolumes = useMemo(() => {
+    if (hasSurfaceContent(surfaceData)) return []
+    return Object.entries(voxels).map(([id, voxel]) => {
+      const halfHeight = voxel.geo === 'slab_bottom' || voxel.geo === 'slab_top' ? 0.25 : 0.5
+      const centerY = voxel.y + (voxel.geo === 'slab_bottom' ? 0.25 : voxel.geo === 'slab_top' ? 0.75 : 0.5)
+      return buildWallPlacementVolume({
+        position: [voxel.x + 0.5, centerY, voxel.z + 0.5],
+        args: [1, halfHeight * 2, 1],
+      }, `voxel:${id}`, 'voxel')
+    }).filter(Boolean)
+  }, [surfaceData, voxels])
+
+  const placementObstacleVolumes = useMemo(() => (
+    [
+      ...displayedWallPlacementVolumes,
+      ...structuralPlacementVolumes,
+      ...legacyVoxelPlacementVolumes,
+    ]
+  ), [displayedWallPlacementVolumes, legacyVoxelPlacementVolumes, structuralPlacementVolumes])
 
   const columnTops = useMemo(() => {
     const tops = {}
@@ -517,6 +618,29 @@ function EntityEditorScene({
     }
   }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, gl, surfaceData])
 
+  const validatePlacement = useCallback((position, blueprint, {
+    entityId = null,
+    entityState = {},
+    currentStateId = 0,
+    rotation = position?.r || 0,
+  } = {}) => validateEntityPlacement({
+    position,
+    rotation,
+    blueprint,
+    entityState,
+    currentStateId,
+    entityId,
+    entities,
+    blueprints,
+    obstacleVolumes: placementObstacleVolumes,
+  }), [blueprints, entities, placementObstacleVolumes])
+
+  const ghostValidation = useMemo(() => (
+    ghostPos && activeBlueprint
+      ? validatePlacement(ghostPos, activeBlueprint, { rotation: ghostPos.r ?? ghostR })
+      : null
+  ), [activeBlueprint, ghostPos, ghostR, validatePlacement])
+
   const rotateGhostPreview = useCallback(direction => {
     if (!activeBlueprint?.id || blueprintPlacementMode(activeBlueprint) === 'wall') return
     const nextRotation = (ghostRRef.current + direction + 4) % 4
@@ -582,7 +706,16 @@ function EntityEditorScene({
           const blueprint = entity ? blueprints[entity.blueprint_id] : null
           const next = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
           if (next && entity && blueprint) {
-            const preview = { entityId: entity.id, position: next, blueprint, r: next.r ?? entity.r ?? 0 }
+            const rotation = next.r ?? entity.r ?? 0
+            const validation = validatePlacement(next, blueprint, {
+              entityId: entity.id,
+              entityState: entity.state,
+              currentStateId: entity.current_state_id,
+              rotation,
+            })
+            const preview = { entityId: entity.id, position: next, blueprint, r: rotation, validation }
+            preview.entityState = entity.state || {}
+            preview.currentStateId = entity.current_state_id || 0
             moveGhostRef.current = preview
             setMoveGhost(preview)
           }
@@ -604,7 +737,7 @@ function EntityEditorScene({
     }
     canvas.addEventListener('mousemove', onMove)
     return () => canvas.removeEventListener('mousemove', onMove)
-  }, [gl, activeBlueprint, blueprints, calcPreciseEntityPos, entities, ghostR])
+  }, [gl, activeBlueprint, blueprints, calcPreciseEntityPos, entities, ghostR, validatePlacement])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -633,6 +766,8 @@ function EntityEditorScene({
       }
       const pos = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
       if (!pos) return
+      const validation = validatePlacement(pos, activeBlueprint, { rotation: pos.r ?? ghostR })
+      if (!validation.valid) return
       try {
         const res = await api.post(`/battlemaps/${battlemapId}/entities`, {
           blueprint_id: activeBlueprint.id,
@@ -648,7 +783,7 @@ function EntityEditorScene({
     }
     canvas.addEventListener('mousedown', onMouseDown)
     return () => canvas.removeEventListener('mousedown', onMouseDown)
-  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity])
+  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity, validatePlacement])
 
   useEffect(() => {
     const onMouseUp = async () => {
@@ -658,6 +793,7 @@ function EntityEditorScene({
       moveGhostRef.current = null
       setMoveGhost(null)
       if (!drag?.moved || !preview || preview.entityId !== drag.entityId) return
+      if (preview.validation?.valid === false) return
       try {
         const res = await api.put(`/entities/${drag.entityId}`, {
           ...worldPointToDbPosition(preview.position),
@@ -694,6 +830,18 @@ function EntityEditorScene({
         const blueprint = blueprints[entity.blueprint_id]
         if (blueprintPlacementMode(blueprint) === 'wall') return
         const newR = (entity.r + 1) % 4
+        const validation = validatePlacement({
+          x: entity.pos_x,
+          y: entity.pos_z,
+          z: entity.pos_y,
+          r: newR,
+        }, blueprint, {
+          entityId: entity.id,
+          entityState: entity.state,
+          currentStateId: entity.current_state_id,
+          rotation: newR,
+        })
+        if (!validation.valid) return
         api.put(`/entities/${entityId}`, { r: newR })
           .then(res => {
             updateEntity(res.data.entity)
@@ -711,7 +859,7 @@ function EntityEditorScene({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, rotateGhostPreview, socket, updateEntity])
+  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, rotateGhostPreview, socket, updateEntity, validatePlacement])
 
   // ─── Suppression entité — touche Delete/Backspace ───────────────────────
   // Entité sous le curseur → DELETE REST → removeEntity + WS.
@@ -800,10 +948,22 @@ function EntityEditorScene({
         )
       })}
       {ghostPos && activeBlueprint && (
-        <GhostEntity position={ghostPos} blueprint={activeBlueprint} r={ghostPos.r ?? ghostR} />
+        <GhostEntity
+          position={ghostPos}
+          blueprint={activeBlueprint}
+          r={ghostPos.r ?? ghostR}
+          validation={ghostValidation}
+        />
       )}
       {moveGhost && (
-        <GhostEntity position={moveGhost.position} blueprint={moveGhost.blueprint} r={moveGhost.r} />
+        <GhostEntity
+          position={moveGhost.position}
+          blueprint={moveGhost.blueprint}
+          r={moveGhost.r}
+          validation={moveGhost.validation}
+          entityState={moveGhost.entityState}
+          currentStateId={moveGhost.currentStateId}
+        />
       )}
     </>
   )

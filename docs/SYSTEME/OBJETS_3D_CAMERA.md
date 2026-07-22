@@ -21,6 +21,15 @@ Pour fabriquer un GLB, choisir son mode de pose et écrire son manifeste, voir `
 ## Aperçu, sélection et modification
 
 - Le fantôme de pose charge le vrai GLB avec sa rotation et ses couleurs ; il est semi-transparent et exclu du raycast.
+- Avant une pose, un déplacement ou une rotation, `entityPlacementCollision.js` compare le volume
+  du blueprint aux murs découpés autour des ouvertures, aux colliders structurels du
+  `WorldSnapshot`, aux voxels legacy encore affichés et aux autres entités. Le calcul reprend le
+  collider de l'état courant, `state.transform.scale`, l'origine et les quarts de tour du rendu.
+- Le simple contact entre deux faces est autorisé ; seul un chevauchement horizontal **et** vertical
+  est bloquant. Un objet mural ignore le volume de son mur porteur, mais pas une autre entité ou un
+  connecteur structurel déjà présent au même endroit.
+- Un fantôme invalide reçoit un volume rouge et le motif **mur**, **structure** ou **objet**. Le clic,
+  le relâchement du glisser-déposer ou la rotation n'envoie alors aucun `POST`/`PUT`.
 - Après une pose réussie, le blueprint actif est automatiquement désélectionné : une nouvelle pose exige un nouveau choix explicite dans la palette.
 - Un clic sur le modèle sélectionne l'instance, même si elle n'a aucune interaction de jeu.
 - Les meshes GLB portent `userData.isEntity` et `entityId` pour le raycaster de l'éditeur.
@@ -28,6 +37,9 @@ Pour fabriquer un GLB, choisir son mode de pose et écrire son manifeste, voir `
 - Une instance sélectionnée se déplace par glisser-déposer. Un seul `PUT /api/entities/:id` est envoyé au relâchement.
 - Pour une instance murale, ce déplacement cherche obligatoirement un nouveau mur. La rotation est calculée depuis la normale de la face et ne se règle pas manuellement.
 - `entities.state.placement` conserve `wallId`, les panneaux contigus, l'axe, la face, le rôle intérieur/extérieur, la position le long du mur et la hauteur basse.
+
+Cette prévalidation appartient à l'UX de l'éditeur. Elle ne remplace ni les contrôles REST
+d'autorisation/mode de pose, ni l'autorité physique du snapshot pour les déplacements de jeu.
 
 ## Affichage par étage
 
