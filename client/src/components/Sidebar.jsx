@@ -7,6 +7,7 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
 import { useCombatStore } from '../stores/combatStore'
 import api from '../lib/api.js'
+import { isDoorConnectorBlueprint, normalizedBlueprintText } from '../lib/connectorBlueprintCatalog.js'
 import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
@@ -679,13 +680,6 @@ export default function Sidebar({
       ...(changesPhysicalPreset ? { surfaceBlocking: nextBlocking } : {}),
     })
   }
-  const normalizedBlueprintText = (blueprint) => [
-    blueprint?.label,
-    blueprint?.name,
-    blueprint?.category,
-    blueprint?.builtin_key,
-    blueprint?.glb_url,
-  ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
   const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
   const structuralObjectConnectorType = (blueprint) => {
     const type = blueprint?.geometry?.connectorType
@@ -693,16 +687,7 @@ export default function Sidebar({
   }
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
-    .filter(blueprint => {
-      const connectorType = blueprint?.geometry?.connectorType
-      if (connectorType === 'hatch') return false
-      if (connectorType === 'door') return true
-      const text = normalizedBlueprintText(blueprint)
-      return text.includes('futuristic_doors')
-        || text.includes('porte')
-        || text.includes('door')
-        || text.includes('sas')
-    })
+    .filter(isDoorConnectorBlueprint)
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
   const windowConnectorBlueprints = connectorBlueprints
     .filter(blueprint => blueprint?.geometry?.connectorType === 'window')
