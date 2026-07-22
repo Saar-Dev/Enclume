@@ -40,6 +40,13 @@ rectangulaire ou circulaire. L’échelle est placée sur l’un des quatre bord
 point de raccord du palier haut permet au graphe de navigation de rejoindre une passerelle adjacente
 sans inventer de dalle au milieu du trou.
 
+La géométrie visuelle de l'échelle suit maintenant la composition réelle. Sans trappe, elle dépasse
+le palier supérieur de 0,75 unité afin d'offrir une prise. Avec une trappe liée, rails et barreaux
+s'arrêtent exactement à la sous-face `hatch.y` ; la tranche de l'étage haut ne fabrique aucun petit
+segment de secours. Les quatre modèles coulissants descendent leurs panneaux mobiles de 0,16 unité
+dans une poche sous le plancher avant de les déplacer hors de l'ouverture. La dalle les occulte par
+sa profondeur tandis que cadres et commandes fixes restent visibles.
+
 La palette choisit d’abord **Échelle seule** ou **Échelle + Trappe**. Dans le second cas, la première
 trappe est créée et le catalogue visuel à droite affiche les modèles et leur preview, comme pour les
 portes. Le catalogue intégré

@@ -248,7 +248,10 @@ maillage exporté.
 `opening_shape` vaut `rectangle` ou `circle` et devient la forme de `ladder.topOpening` lors de la
 pose. `opening_mechanism` est une métadonnée de catalogue (`hinged`, `sliding-bipartite` ou
 `sliding-tripartite`) utilisée pour présenter le modèle ; il ne crée aucune physique implicite.
-`features` peut notamment contenir `service-hatch`. Le pack de référence
+`features` peut notamment contenir `service-hatch`. Une trappe coulissante escamotée sous la dalle
+déclare `floor-pocketed-panels` et sa piste d'animation doit placer la face supérieure de chaque
+panneau mobile sous le dessus du sol lorsqu'il quitte l'ouverture ; le sol réel assure alors le
+masquage sans mesh invisible ni stencil particulier. Le pack de référence
 `output/vertical_access_hatches/` et son générateur
 `tools/generate_vertical_access_hatches.py` montrent les huit combinaisons validées. L'écoutille de
 service intégrée suit actuellement l'état global de la trappe : elle n'a pas de second automate

@@ -438,8 +438,10 @@ reste active quand la trappe est ouverte, détruite ou absente. L'état initial 
 statique ; l'état courant vient de `WorldRuntimeState.featureStates` et prévaut dans le snapshot.
 Le popup de l'échelle choisit seulement la présence de la trappe sans modifier ni supprimer la
 trémie ; le catalogue à droite remplace son modèle. Deux commandes gauche/droite tournent ensemble
-l’échelle latérale et la trappe par quarts de tour. Visuellement, les rails s’arrêtent sous le plan
-de fermeture pour ne jamais traverser une trappe fermée.
+l’échelle latérale et la trappe par quarts de tour. La hauteur visuelle dépend de la composition :
+sans trappe, rails et barreaux dépassent le palier supérieur de 0,75 unité pour rester saisissables ;
+avec une trappe liée, leur face haute s'arrête exactement à `hatch.y`, sous le modèle, et aucune
+portion résiduelle n'est rendue dans la tranche de l'étage supérieur.
 
 Une trappe peut référencer un blueprint GLB de connecteur `hatch` et ses clips d'animation, comme
 une porte. Le pack `vertical_access_hatches` fournit quatre mécanismes, chacun carré et rond :
@@ -447,6 +449,11 @@ battant blindé, battant avec écoutille de service, coulissant bipartite et cou
 radial. Si aucun modèle n'est choisi, le renderer utilise le panneau procédural. Le GLB reste
 strictement visuel : `topOpening` et le connecteur canonique demeurent les autorités pour la
 découpe, le support, la collision, la LOS et la traversée.
+
+Les variantes coulissantes utilisent une poche de plancher : pendant l'ouverture, leurs panneaux
+descendent de 0,16 unité puis se déplacent hors de la trémie. La dalle réelle les masque alors par
+le depth buffer, selon le même principe qu'une porte coulissante masquée par son mur. Le cadre et
+les commandes, qui ne bougent pas, restent visibles.
 
 Un connecteur portant `modelGlbUrl` n’expose pas les champs procéduraux **Matière** et **Motif**.
 Les slots couleur déclarés dans `modelGeometry.materialSlots` restent indépendants et n’affectent

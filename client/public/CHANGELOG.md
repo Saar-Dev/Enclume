@@ -1,3 +1,14 @@
+## v203 — 2026-07-22 — Échelles ajustées et trappes escamotables
+
+### Accès verticaux
+- [fix] Une échelle liée à une trappe s'arrête maintenant exactement à la sous-face du modèle 3D ;
+  aucun montant ni barreau ne le traverse et aucun segment ne dépasse à l'étage supérieur.
+- [change] Sans trappe, l'échelle dépasse au contraire le palier haut de 75 cm afin de rester
+  saisissable depuis l'étage d'arrivée.
+- [fix] Les panneaux mobiles des trappes coulissantes bipartites et tripartites descendent dans une
+  poche sous la dalle. Une fois ouverts, le sol les masque comme un mur masque une porte
+  coulissante ; cadres et commandes fixes restent visibles.
+
 ## v202 — 2026-07-22 — Catalogues exclusifs et placement sticky
 
 ### Éditeur 3D

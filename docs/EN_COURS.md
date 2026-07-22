@@ -1,4 +1,13 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> 🧪 **2026-07-22 — Session 162 déployée sur `8293/8294`, recette utilisateur attendue** : une
+> échelle seule dépasse désormais le palier haut de 75 cm ; dès qu'une trappe est liée, rails et
+> barreaux s'arrêtent exactement à sa sous-face, sans segment résiduel à l'étage supérieur. Les
+> panneaux des quatre trappes coulissantes descendent de 16 cm dans une poche puis disparaissent
+> sous la dalle, comme une porte coulissante dans son mur. Validation : 146 tests monde/serveur,
+> 95 tests client, 3 configuration, 8 assets sans erreur ni avertissement, build Vite, ESLint ciblé,
+> previews Blender fermée/ouverte, pistes GLB contrôlées et smoke Chromium distant. Retour arrière :
+> `backup/pre-session162-ladder-hatch-20260722` (`ff66e61`). Saar et fusion sont inchangés.
+>
 > 🧪 **2026-07-22 — Session 161 déployée sur `8293/8294`, recette utilisateur attendue** : le
 > catalogue d'une porte exclut strictement les trappes. Après **Échelle + Trappe**, la palette
 > conserve le choix de composition mais n'affiche plus que les huit trappes, sans recherche ni

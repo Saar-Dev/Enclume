@@ -4832,3 +4832,32 @@ la recette ont été supprimés puis contrôlés à zéro. Le commit fonctionnel
 `8293/8294`; seuls `enclume-codex-client` et `enclume-codex-server` ont été redémarrés. Saar
 `8193/8194` et fusion `8393/8394` sont inchangés. Retour arrière :
 `backup/pre-session161-placement-collision-20260722` (`23949e4`).
+
+---
+
+## Session 162 (Codex) — 2026-07-22 — Échelles et poches de trappes 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : la marge fixe de 7 cm ne suivait pas la géométrie réelle du palier. Le
+dessus structurel de l'échelle pouvait être à 2,625 tandis que la trappe commençait à 2,5 ; rails et
+barreaux entraient donc dans le GLB. À l'inverse, une échelle sans trappe devait dépasser le palier
+pour rester utilisable. Les panneaux coulissants ouverts devaient aussi disparaître dans le sol,
+comme les vantaux de porte dans leur mur.
+
+**Rendu** : `ladderVisualTopY` et `ladderVisualRange` distinguent désormais les compositions. Une
+échelle seule dépasse le support haut de 0,75 unité. Avec une trappe, sa limite est exactement
+`linkedHatch.y`; la tranche supérieure retourne `null` au lieu de forcer un segment de 20 cm. Les
+centres des barreaux sont inset d'un demi-diamètre, donc leur volume ne franchit pas cette limite.
+La preview de pose reçoit la même trappe liée que le rendu sauvegardé.
+
+**Assets** : les quatre GLB coulissants ont été régénérés avec une descente verticale de 0,16 unité
+sur chaque piste de panneau. Hors de la trémie, les feuilles se trouvent sous le dessus de la dalle
+et sont masquées par son depth buffer. Le manifeste les marque `floor-pocketed-panels`; le cache des
+trappes possède une nouvelle version. Les previews Blender montrent les panneaux fermés et seulement
+les cadres/commandes fixes une fois ouverts.
+
+**Validation et déploiement** : 146/146 tests monde/serveur, 95/95 tests client, 3/3 configuration,
+8/8 assets sans erreur ni avertissement, build Vite, ESLint ciblé et smoke Chromium distant réussis.
+Les pistes GLB bipartites et tripartites ont été relues à `-0.16` sur leur axe vertical. Le commit
+fonctionnel `e999448` est déployé sur `8293/8294`; le catalogue synchronise toujours 100 modèles.
+Seuls les services Codex ont été redémarrés. Saar `8193/8194` et fusion `8393/8394` sont inchangés.
+Retour arrière : `backup/pre-session162-ladder-hatch-20260722` (`ff66e61`).
