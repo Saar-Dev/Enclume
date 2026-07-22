@@ -47,4 +47,19 @@ nécessite de rollback ; les quatre anciens GLB sont restaurés par Git.
 
 ## Conflits de fusion
 
-La liste exacte sera complétée par `git merge-tree` contre `kiwi/integration` avant le tag final.
+La simulation `git merge-tree --write-tree kiwi/integration HEAD`, contre `kiwi/integration` à
+`355e388`, signale les huit mêmes conflits documentaires que la Session 161 :
+
+- `CLAUDE.md` ;
+- `client/public/CHANGELOG.md` ;
+- `docs/ASBUILT.md` ;
+- `docs/EN_COURS.md` ;
+- `docs/FUSION_PROJET_COUSIN.md` ;
+- `docs/JOURNAL6.md` ;
+- `docs/Old/PLAN_LOS.md` ;
+- `docs/VOCABULARY.md`.
+
+Le renderer des accès verticaux, son helper/test, le générateur Blender et les quatre GLB modifiés
+ne sont pas en conflit. Pour les huit documents partagés, conserver les apports des deux branches
+dans leur ordre chronologique, sans remplacer en bloc les contrats règles/combat de Saar ni les
+sections monde des Sessions 159 à 162.
