@@ -1,9 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-22 — grille mono-plan validée localement** : murs, sols, plafonds, passerelles et trappes
+> **2026-07-22 — grille mono-plan déployée sur `8293/8294`** : murs, sols, plafonds, passerelles et trappes
 > entièrement ajourés utilisent maintenant une seule grille recto-verso ; les escaliers validés
 > restent inchangés. Même les empreintes découpées/courbes ne sont plus extrudées visuellement. Le
 > volume physique demeure complet. Validation locale, build et rendu du vrai renderer depuis deux
-> caméras opposées réussis ; déploiement Kiwi à effectuer.
+> caméras opposées réussis ; health API et smoke Chromium distant validés après redémarrage.
 >
 > **2026-07-22 — correctif visuel grille déployé sur `8293/8294`** : les marches ajourées sont maintenant des
 > plateaux minces recto-verso au lieu de blocs opaques empilés. Leur motif utilise une densité ×4

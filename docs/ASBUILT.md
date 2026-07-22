@@ -22,9 +22,11 @@ Le volume canonique n'est pas aminci. Supports, collisions, découpe de dalle, L
 continuent d'utiliser l'épaisseur déclarée dans `surface_data`. Le changement est exclusivement une
 projection de rendu.
 
-Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration, build Vite
-et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu avec mur, sol, trappe et escalier
-depuis deux caméras opposées, sans double grille ni exception JavaScript.
+Validation locale puis sur Kiwi : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration,
+build Vite et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu avec mur, sol, trappe
+et escalier depuis deux caméras opposées, sans double grille ni exception JavaScript. Le code
+fonctionnel `932a041` est déployé sur `8293/8294` ; le health API et le smoke Chromium distant sont
+verts.
 
 ---
 

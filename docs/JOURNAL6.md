@@ -4736,7 +4736,7 @@ Chromium distant `8293` sont verts. Les instances de Saar et de fusion n'ont pas
 
 ---
 
-## Session 159 (suite 3, Codex) — 2026-07-22 — Grilles mono-plan ⚠️ EN VALIDATION
+## Session 159 (suite 3, Codex) — 2026-07-22 — Grilles mono-plan ✅ CLOS
 
 **Décision de rendu** : la coque mince conservait deux peaux ajourées. À très courte distance et
 en vue rasante, leur parallaxe recréait donc une double grille sur les murs et les sols. L'extrusion
@@ -4757,3 +4757,9 @@ traversées et découpes n'utilisent jamais le plan graphique.
 Vite et ESLint ciblé verts. Un harness temporaire du vrai `SurfaceDungeonScene` a affiché mur, sol,
 trappe et escalier depuis deux caméras opposées, sans double grille ni exception JavaScript. Le
 harness et sa capture ont ensuite été supprimés du dépôt.
+
+**Déploiement Kiwi** : le code fonctionnel `932a041` a été poussé puis intégré en avance rapide sur
+`dev/monde`. Les services système `enclume-codex-client` et `enclume-codex-server` ont été redémarrés
+sur `8293/8294` ; le health API, la réponse HTTP du client et le smoke Chromium distant sont verts.
+Le tag de sauvegarde préalable est `backup/pre-session159-single-sheet-grate-20260722`. Les instances
+de Saar et de fusion n'ont pas été touchées.
