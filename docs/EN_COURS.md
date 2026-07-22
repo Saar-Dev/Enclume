@@ -1,4 +1,14 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> 🧪 **2026-07-22 — Session 164 déployée sur `8293/8294`, recette visuelle utilisateur attendue** :
+> **Ouvrir** inverse maintenant une fermeture au lieu d'être ignoré. Au palier cliqué, l'interface
+> propose **Appeler l'ascenseur** si la cabine est absente, puis **Utiliser** lorsqu'elle est là.
+> Utiliser ouvre immédiatement, centre le token actif dans la cabine et crée son attachement durable ;
+> les destinations suivantes déplacent cabine et token ensemble. Validation : 152 tests
+> monde/serveur, 101 tests client, 3 configuration, build Vite, ESLint ciblé sans erreur, recette
+> REST réelle porte/embarquement/trajet et smoke Chromium distant. Données temporaires contrôlées à
+> zéro. Retour arrière : `backup/pre-session164-elevator-use-20260722` (`6c772cf`). Saar et fusion
+> sont inchangés.
+>
 > 🧪 **2026-07-22 — Session 163 déployée sur `8293/8294`, recette visuelle utilisateur attendue** :
 > les ascenseurs suivent maintenant une route ordonnée de tronçons strictement X/Y/Z et peuvent
 > changer de direction à chaque arrêt. Les arrêts restent obligatoirement dans des salles fermées ;

@@ -520,6 +520,11 @@ la gaine peut passer dans le vide entre deux salles.
   sont ordonnés par date puis identité stable ; aucun timer en mémoire n'est une autorité ;
 - `world_elevator_passengers` attache au plus une cabine à un token et stocke sa position locale.
   Toute réconciliation déplace ces tokens dans la même transaction avant navigation ou visibilité ;
+- la commande serveur **Utiliser** vérifie le palier et les droits sur le token, ouvre la porte,
+  place les pieds au centre du support mobile et crée l'attachement dans la même transaction. Une
+  apparence de token posée dans la cabine ne remplace jamais cette écriture autoritaire ;
+- la commande **Ouvrir** accepte une cabine immobile en fermeture et inverse sa transition. Elle
+  reste refusée pendant le déplacement ou tant qu'un blocage n'a pas été levé ;
 - le renderer interpole chaque tronçon avec les mêmes durées pondérées que le serveur, tandis que le
   serveur reste l'autorité des collisions, des portes, de l'occupation et des lignes de vue ;
 - les anciennes cartes ne justifient aucun mode de compatibilité. Une fixture legacy peut rester

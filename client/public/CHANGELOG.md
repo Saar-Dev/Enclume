@@ -1,3 +1,16 @@
+## v205 — 2026-07-22 — Appel et utilisation des ascenseurs
+
+### Mode jeu
+- [fix] Le bouton **Ouvrir** ouvre maintenant réellement une porte fermée et peut inverser une
+  fermeture encore en cours.
+- [new] Cliquer sur un palier sans cabine propose **Appeler l’ascenseur**.
+- [new] Lorsque la cabine est présente, **Utiliser** ouvre les portes, place le token actif dans la
+  cabine et l'attache à son plancher mobile.
+- [fix] Le token embarqué suit désormais la cabine pendant tous ses déplacements verticaux et
+  horizontaux. Une fois à bord, le panneau propose les autres arrêts comme destinations.
+- [security] Un joueur ne peut embarquer que le token de son propre personnage ; le MJ peut choisir
+  explicitement un token sélectionné.
+
 ## v204 — 2026-07-22 — Ascenseurs orthogonaux modulaires
 
 ### Éditeur et modèles

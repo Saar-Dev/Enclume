@@ -4898,3 +4898,32 @@ vertical puis horizontal. Les données temporaires ont été supprimées. Le com
 `1c54e61` est déployé sur `8293/8294` ; le catalogue synchronise 108 modèles. Saar `8193/8194` et
 fusion `8393/8394` sont inchangés. Retour arrière :
 `backup/pre-session163-elevator-route-20260722` (`77ecaa7`).
+
+---
+
+## Session 164 (Codex) — 2026-07-22 — Appel et embarquement des ascenseurs 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : la commande MJ **Ouvrir** pouvait être envoyée pendant une fermeture mais
+l'automate l'ignorait. Un token placé graphiquement dans la cabine par téléportation MJ restait
+volontairement détaché ; la cabine partait donc seule. Le panneau exposait en outre toutes les
+destinations sans distinguer le palier cliqué, l'appel et l'embarquement.
+
+**Automate et serveur** : **Ouvrir** inverse maintenant une fermeture immobile et reste refusé en
+mouvement ou lorsque la porte est bloquée. La nouvelle intention **Utiliser** vérifie la présence de
+la cabine au palier, l'appartenance du token pour un joueur, puis ouvre immédiatement, déplace les
+pieds au centre du plancher et écrit `world_elevator_passengers` dans la transaction autoritaire.
+Chaque réconciliation ultérieure applique la position locale du passager en X/Y/Z et publie le
+token déplacé par le canal temps réel existant.
+
+**UX** : le point 3D du clic sélectionne le palier le plus proche. Cabine absente, le panneau montre
+**Appeler l'ascenseur**. Cabine présente, il montre **Utiliser** pour le token sélectionné du MJ ou
+le token possédé du joueur. Une fois ce token embarqué, les autres arrêts deviennent ses
+destinations. Les libellés nouveaux existent en français et en anglais.
+
+**Validation et déploiement** : 152/152 tests monde/serveur, 101/101 tests client, 3/3 configuration,
+build Vite, ESLint ciblé sans erreur et smoke Chromium distant réussis. Une recette REST connectée
+sur `8294` a fermé puis rouvert la porte, embarqué un token au point `[0.5,0.125,0.5]`, demandé le
+palier haut et vérifié l'arrivée conjointe à `[0.5,2.625,0.5]`. Le passager durable était présent et
+les comptes/campagnes temporaires ont été supprimés puis contrôlés à zéro. Le commit fonctionnel
+`9436514` est déployé sur `8293/8294`. Saar `8193/8194` et fusion `8393/8394` sont inchangés. Retour
+arrière : `backup/pre-session164-elevator-use-20260722` (`6c772cf`).

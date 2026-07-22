@@ -394,6 +394,14 @@ ne doit pas être réduit à une téléportation. La cabine suit réellement la 
 tokens embarqués restent attachés à son repère local durable sur les trois axes. Toutes les portes
 palières restent bloquantes lorsque la cabine est absente.
 
+En mode jeu, cliquer la géométrie d'un ascenseur résout le palier spatialement le plus proche. Si la
+cabine n'y est pas, le panneau propose **Appeler l'ascenseur** et enfile une demande pour cet arrêt.
+Si elle est présente, **Utiliser** ouvre la porte, place le token actif au centre du plancher et
+persiste immédiatement son attachement. Le token d'un joueur est résolu depuis la propriété du
+personnage ; le MJ peut employer le token qu'il a sélectionné. Une fois embarqué, le même panneau
+présente les autres arrêts comme destinations. Déplacer visuellement un token ne doit jamais être la
+source implicite de cet attachement.
+
 Le modèle 3D d'une porte est choisi dans le flux lancé depuis le mur ; celui d'un ascenseur reste
 choisi depuis la configuration de la salle, dans un catalogue qui ne contient que les blueprints
 `connectorType=elevator`. Les fenêtres sont présentées dans le catalogue d'objets

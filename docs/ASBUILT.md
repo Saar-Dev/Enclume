@@ -790,13 +790,16 @@ automate et sa cabine physique ; aucune arête ne téléporte directement entre 
 - migration 155 — `world_elevator_passengers`, position locale durable et unicité d'attachement ;
 - déplacement et visibilité consomment la position réconciliée avant toute navigation, collision,
   LOS ou couverture ;
+- en mode jeu, le palier cliqué propose l'appel lorsque la cabine est absente puis l'utilisation
+  lorsqu'elle est présente. **Utiliser** ouvre, centre le token autorisé et persiste son attachement
+  avant qu'une destination ne puisse déplacer l'ensemble ;
 - l'éditeur pose chaque arrêt dans une salle fermée, autorise un changement de direction seulement à
   l'arrêt et génère la gaine dans le vide entre salles. Les joueurs appellent un palier ; le MJ
   administre aussi le blocage et les portes ;
 - les empreintes 1x1, 1x2, 2x1 et 2x2 ont chacune un GLB industriel et vitré. Les panneaux de gaine
   vitrés laissent passer la LOS sans cesser de bloquer mouvement, eau et gaz ;
-- validation initiale : 64 tests monde et migration 155 `up/down`. Extension Session 163 : 149
-  tests monde/serveur, 98 tests client, 3 configuration, 8 assets et build Vite.
+- validation initiale : 64 tests monde et migration 155 `up/down`. Extension Session 164 : 152
+  tests monde/serveur, 101 tests client, 3 configuration, 8 assets et build Vite.
 
 Les cartes historiques ne constituent pas une cible de migration. Elles ne sont conservées comme
 fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au moteur canonique.
