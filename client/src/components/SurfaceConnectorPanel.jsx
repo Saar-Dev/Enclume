@@ -9,7 +9,7 @@ import {
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import Object3DPreview from './Object3DPreview.jsx'
 import { stairGeometry } from '../../../shared/world/stairGeometry.js'
-import { rotateHatchOrientation } from '../lib/surfaceData.js'
+import { rotateHatchOrientation, rotateLadderOrientation } from '../lib/surfaceData.js'
 import {
   PROCEDURAL_MATERIAL_PRESETS,
   PROCEDURAL_PATTERN_PRESETS,
@@ -135,6 +135,7 @@ export default function SurfaceConnectorPanel({
   linkedHatch = null,
   hatchChoices = [],
   onVerticalAccessHatchChange = null,
+  onVerticalAccessRotate = null,
   x,
   y,
   onPatch,
@@ -163,6 +164,9 @@ export default function SurfaceConnectorPanel({
     geometry: connector?.modelGeometry || {},
     label: connector?.modelLabel || connectorTypeLabel(connector?.type),
   }), [connector?.modelGlbUrl, connector?.modelGeometry, connector?.modelLabel, connector?.type])
+  const linkedHatchBlueprint = useMemo(() => hatchChoices.find(choice => (
+    String(choice.id) === String(linkedHatch?.modelBlueprintId)
+  )) || hatchChoices[0] || null, [hatchChoices, linkedHatch?.modelBlueprintId])
   if (!connector) return null
 
   const patchMaterialSlot = (slot, patch) => {
@@ -288,48 +292,66 @@ export default function SurfaceConnectorPanel({
             <div style={S.rotationActions}>
               <button
                 type="button"
-                onClick={() => onPatch?.(connector.id, { axis: connector.axis === 'z' ? 'x' : 'z' })}
+                onClick={() => {
+                  const rotated = rotateLadderOrientation(connector, -1)
+                  if (onVerticalAccessRotate) {
+                    onVerticalAccessRotate(connector.id, -1)
+                    return
+                  }
+                  onPatch?.(connector.id, {
+                    axis: rotated.axis,
+                    side: rotated.side,
+                    rotationQuarterTurns: rotated.rotationQuarterTurns,
+                  })
+                }}
                 style={S.button}
               >
                 ↶ Rotation gauche
               </button>
               <button
                 type="button"
-                onClick={() => onPatch?.(connector.id, { axis: connector.axis === 'z' ? 'x' : 'z' })}
+                onClick={() => {
+                  const rotated = rotateLadderOrientation(connector, 1)
+                  if (onVerticalAccessRotate) {
+                    onVerticalAccessRotate(connector.id, 1)
+                    return
+                  }
+                  onPatch?.(connector.id, {
+                    axis: rotated.axis,
+                    side: rotated.side,
+                    rotationQuarterTurns: rotated.rotationQuarterTurns,
+                  })
+                }}
                 style={S.button}
               >
                 Rotation droite ↷
               </button>
             </div>
             <label style={S.field}>
-              <span style={S.label}>{t('surfaceEditor.verticalAccessModel')}</span>
+              <span style={S.label}>{t('surfaceEditor.verticalAccessComposition')}</span>
               <select
-                value={linkedHatch?.modelBlueprintId || (linkedHatch ? '__procedural_hatch__' : '__no_hatch__')}
+                value={linkedHatch ? 'ladder-hatch' : 'ladder-only'}
                 onChange={event => {
                   const value = event.target.value
-                  if (value === '__no_hatch__') {
+                  if (value === 'ladder-only') {
                     onVerticalAccessHatchChange?.(connector.id, null)
                     return
                   }
-                  const blueprint = hatchChoices.find(choice => String(choice.id) === String(value))
-                  if (blueprint) onVerticalAccessHatchChange?.(connector.id, blueprint)
+                  if (linkedHatchBlueprint) onVerticalAccessHatchChange?.(connector.id, linkedHatchBlueprint)
                 }}
                 style={S.input}
               >
-                <option value="__no_hatch__">{t('surfaceEditor.ladderOnly')}</option>
-                {linkedHatch && !linkedHatch.modelBlueprintId && (
-                  <option value="__procedural_hatch__" disabled>{t('surfaceEditor.proceduralModel')}</option>
-                )}
-                {hatchChoices.map(choice => (
-                  <option key={choice.id} value={choice.id}>{choice.label}</option>
-                ))}
+                <option value="ladder-only">{t('surfaceEditor.ladderOnly')}</option>
+                <option value="ladder-hatch" disabled={hatchChoices.length === 0}>
+                  {t('surfaceEditor.ladderAndHatch')}
+                </option>
               </select>
-              <span style={S.hint}>
-                {linkedHatch
-                  ? `${linkedHatch.openingShape === 'circle' ? t('surfaceEditor.roundShape') : t('surfaceEditor.squareShape')} · ${linkedHatch.modelLabel || t('surfaceEditor.proceduralModel')}`
-                  : t('surfaceEditor.openOpening')}
-              </span>
             </label>
+            <span style={S.hint}>
+              {linkedHatch
+                ? t('surfaceEditor.hatchCatalogInSidebar')
+                : t('surfaceEditor.openOpening')}
+            </span>
           </div>
         )}
 
@@ -517,7 +539,7 @@ export default function SurfaceConnectorPanel({
           <span style={S.hint}>×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.</span>
         </label>}
 
-        {canEdit && ['stairs', 'ladder', 'hatch'].includes(connector.type) && connector.material && (
+        {canEdit && ['stairs', 'ladder'].includes(connector.type) && connector.material && !connector.modelGlbUrl && (
           <div style={S.field}>
             <span style={S.label}>Apparence procédurale</span>
             <label style={S.appearanceRow}>

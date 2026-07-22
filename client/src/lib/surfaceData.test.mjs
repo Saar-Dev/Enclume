@@ -281,6 +281,9 @@ test('une échelle crée sa trappe supérieure avec le même matériau ajouré',
 
   assert.ok(ladder)
   assert.ok(hatch)
+  assert.equal(ladder.axis, 'z')
+  assert.equal(ladder.side, -1)
+  assert.equal(ladder.rotationQuarterTurns, 1)
   assert.equal(hatch.linkedLadderId, ladder.id)
   assert.equal(hatch.y, 2.5)
   assert.equal(hatch.height, 0.25)

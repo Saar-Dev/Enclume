@@ -659,8 +659,8 @@ test('une échelle compile une traversée climb fractionnable avec des ancrages 
     }),
   })
   const traversal = snapshot.spatial.traversals.find(item => item.kind === 'ladder')
-  assert.deepEqual(traversal.from, { x: 2.5, y: 0.125, z: 3.5 })
-  assert.deepEqual(traversal.to, { x: 2.5, y: 5.125, z: 3.5 })
+  assert.deepEqual(traversal.from, { x: 2.5, y: 0.125, z: 3.16 })
+  assert.deepEqual(traversal.to, { x: 2.5, y: 5.125, z: 3.16 })
   assert.equal(traversal.mode, 'climb')
   assert.equal(traversal.allowPartial, true)
   assert.equal(traversal.anchorSpacing, 0.5)
@@ -689,7 +689,9 @@ test('une échelle sans trappe découpe sa trémie et expose ses raccords de pal
   assert.equal(snapshot.spatial.supports.some(item => (
     item.kind === 'floor' && item.bounds.min.x === 0 && Math.abs(item.y - 2.625) < 1e-9
   )), false)
-  assert.equal(snapshot.spatial.supports.filter(item => item.kind === 'ladder-landing').length, 2)
+  const landings = snapshot.spatial.supports.filter(item => item.kind === 'ladder-landing')
+  assert.equal(landings.length, 1)
+  assert.deepEqual(landings[0].point, { x: 0.5, y: 2.625, z: 0.16 })
 })
 
 test('une trappe fermée remplace la dalle et verrouille la traversée de son échelle', () => {

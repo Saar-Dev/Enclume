@@ -32,7 +32,9 @@ import {
   stairGeometry,
 } from '../../../shared/world/stairGeometry.js'
 import {
+  ladderOrientationQuarterTurns,
   normalizeVerticalOpeningShape,
+  rotateLadderOrientation,
   verticalAccessOpeningDescriptor,
 } from '../../../shared/world/verticalAccessGeometry.js'
 
@@ -42,6 +44,7 @@ export const EXTERIOR_WATER_CLEARANCE_LEVELS = 5
 export { SURFACE_DATA_VERSION }
 export const getRoomBoundaryEdges = roomBoundaryEdges
 export const getRoomBoundaryWallRuns = roomBoundaryWallRuns
+export { ladderOrientationQuarterTurns, rotateLadderOrientation }
 const STATION_USED_PACK_ID = '6f3916a6-7c7b-45f7-a020-7d63b7a74176'
 const STATION_USED_SPECIAL_RATE = 12
 const DEFAULT_FLOOR_THICKNESS = 0.25
@@ -2231,6 +2234,17 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
   const openingWidth = Math.max(0.2, Number(hatchGeometry.width) || 1)
   const openingDepth = Math.max(0.2, Number(hatchGeometry.depth) || 1)
   const openingY = levelToY(maxLevel)
+  const requestedQuarterTurns = Number.isFinite(Number(tool?.ladderRotationQuarterTurns))
+    ? Number(tool.ladderRotationQuarterTurns)
+    : Number.isFinite(Number(tool?.hatchRotationQuarterTurns))
+      ? Number(tool.hatchRotationQuarterTurns)
+      : null
+  const ladderOrientation = requestedQuarterTurns === null
+    ? {
+        axis: tool?.ladderAxis === 'z' ? 'z' : 'x',
+        side: Number(tool?.ladderSide) > 0 ? 1 : -1,
+      }
+    : rotateLadderOrientation({ axis: 'x', side: -1 }, requestedQuarterTurns)
   return {
     id,
     type: 'ladder',
@@ -2248,7 +2262,9 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
     width: Math.max(0.2, Number(tool?.ladderWidth) || 0.7),
     depth: Math.max(0.05, Number(tool?.ladderDepth) || 0.12),
     height: Math.abs(toY - fromY),
-    axis: tool?.ladderAxis === 'z' ? 'z' : 'x',
+    axis: ladderOrientation.axis,
+    side: ladderOrientation.side,
+    rotationQuarterTurns: ladderOrientationQuarterTurns(ladderOrientation),
     state: 'ready',
     walkable: true,
     movementMode: 'climb',
@@ -2302,10 +2318,16 @@ export function makeLadderHatchFromConnector(ladder, tool = {}) {
   const id = `connector:hatch:${ladder.x}:${ladder.z}:${topLevel}`
   const blocking = surfaceBlockingForTool(tool)
   const material = makeSurfaceMaterial(tool, `${id}:panel`)
-  const orientation = rotateHatchOrientation({
-    axis: ladder.axis === 'z' ? 'z' : 'x',
-    hingeSide: Number(tool?.hatchHingeSide) < 0 ? -1 : 1,
-  }, Number(tool?.hatchRotationQuarterTurns) || 0)
+  const hatchBaseOrientation = Number.isFinite(Number(tool?.hatchRotationQuarterTurns))
+    ? { axis: 'x', hingeSide: 1 }
+    : {
+        axis: ladder.axis === 'z' ? 'z' : 'x',
+        hingeSide: Number(tool?.hatchHingeSide) < 0 ? -1 : 1,
+      }
+  const orientation = rotateHatchOrientation(
+    hatchBaseOrientation,
+    Number(tool?.hatchRotationQuarterTurns) || 0,
+  )
   return {
     id,
     type: 'hatch',
@@ -2384,8 +2406,12 @@ export function setVerticalAccessHatch(surfaceData, ladderId, tool = {}) {
   if (tool?.ladderHatch !== false) {
     const hatch = makeLadderHatchFromConnector(updatedLadder, {
       ...tool,
-      hatchHingeSide: currentHatch?.hingeSide ?? tool?.hatchHingeSide,
-      hatchRotationQuarterTurns: currentHatch?.rotationQuarterTurns ?? tool?.hatchRotationQuarterTurns,
+      hatchHingeSide: tool?.preserveHatchOrientation === false
+        ? tool?.hatchHingeSide
+        : currentHatch?.hingeSide ?? tool?.hatchHingeSide,
+      hatchRotationQuarterTurns: tool?.preserveHatchOrientation === false
+        ? tool?.hatchRotationQuarterTurns
+        : currentHatch?.rotationQuarterTurns ?? tool?.hatchRotationQuarterTurns,
     })
     if (hatch) connectors[hatch.id] = {
       ...hatch,

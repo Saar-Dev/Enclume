@@ -34,6 +34,7 @@ import {
 } from './stairGeometry.js'
 import {
   hatchOpeningDescriptor,
+  ladderPlacementCenter,
   verticalAccessOpeningDescriptor,
   verticalAccessOpeningsAtY,
   verticalOpeningMultiPolygon,
@@ -1190,7 +1191,8 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       const hatchState = hatch
         ? runtimeStates[hatch.worldId]?.state || hatch.state || 'closed'
         : 'open'
-      const center = point(number(connector.x) + 0.5, 0, number(connector.z) + 0.5)
+      const placementCenter = ladderPlacementCenter(connector)
+      const center = point(placementCenter.x, 0, placementCenter.z)
       spatial.traversals.push({
         id: `traversal:ladder:${connector.worldId}`,
         sourceId: connector.worldId,
@@ -1212,16 +1214,8 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       })
       if (opening) {
         const topY = Math.max(number(connector.fromY, connector.y), number(connector.toY, connector.topY))
-        const alongX = connector.axis !== 'z'
-        const landingPoints = alongX
-          ? [
-              point(opening.x + opening.width / 2, topY, opening.z),
-              point(opening.x + opening.width / 2, topY, opening.z + opening.depth),
-            ]
-          : [
-              point(opening.x, topY, opening.z + opening.depth / 2),
-              point(opening.x + opening.width, topY, opening.z + opening.depth / 2),
-            ]
+        const landingCenter = ladderPlacementCenter(connector, opening)
+        const landingPoints = [point(landingCenter.x, topY, landingCenter.z)]
         for (const [index, landingPoint] of landingPoints.entries()) {
           spatial.supports.push({
             id: `support:ladder-landing:${connector.worldId}:${index}`,

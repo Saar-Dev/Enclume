@@ -30,6 +30,7 @@ import {
   getToolWallThicknessFine,
   getWallRenderBox,
   isWorldInteriorPointVisibleAtLevel,
+  ladderOrientationQuarterTurns,
   levelToY,
   makeStairFromCell,
   makeDoorConnectorFromWallPoint,
@@ -682,12 +683,15 @@ export default function SurfaceEditorScene({
         }
       }
       if (current.connectorType === 'ladder') {
+        const quarterTurns = normalizedQuarterTurns(
+          normalizedQuarterTurns(current.ladderRotationQuarterTurns ?? current.hatchRotationQuarterTurns) + direction,
+        )
         return {
           ...current,
-          ladderAxis: current.ladderAxis === 'z' ? 'x' : 'z',
-          hatchRotationQuarterTurns: normalizedQuarterTurns(
-            normalizedQuarterTurns(current.hatchRotationQuarterTurns) + direction,
-          ),
+          ladderRotationQuarterTurns: quarterTurns,
+          ladderAxis: quarterTurns % 2 === 0 ? 'x' : 'z',
+          ladderSide: quarterTurns < 2 ? -1 : 1,
+          hatchRotationQuarterTurns: quarterTurns,
         }
       }
       return current
@@ -953,19 +957,42 @@ export default function SurfaceEditorScene({
     const nativeEvent = event?.nativeEvent || event?.sourceEvent || event || {}
     const clientX = Number.isFinite(Number(nativeEvent.clientX)) ? Number(nativeEvent.clientX) : 24
     const clientY = Number.isFinite(Number(nativeEvent.clientY)) ? Number(nativeEvent.clientY) : 24
+    const linkedHatch = connector?.type === 'ladder'
+      ? Object.values(surfaceData.connectors || {}).find(candidate => (
+          candidate?.type === 'hatch' && String(candidate.linkedLadderId) === String(connectorId)
+        )) || null
+      : null
+    const rotationQuarterTurns = connector?.type === 'ladder'
+      ? ladderOrientationQuarterTurns(connector)
+      : 0
     onSurfaceToolChange?.({
       ...surfaceTool,
       mode: 'select',
       selectedRoomId: null,
       selectedRoomIds: [],
       selectedConnectorId: connectorId,
+      verticalAccessEditLadderId: connector?.type === 'ladder' ? connectorId : null,
+      ...(connector?.type === 'ladder' ? {
+        ladderAxis: connector.axis === 'z' ? 'z' : 'x',
+        ladderSide: Number(connector.side) > 0 ? 1 : -1,
+        ladderRotationQuarterTurns: rotationQuarterTurns,
+        ladderHatch: Boolean(linkedHatch),
+        hatchRotationQuarterTurns: Number(linkedHatch?.rotationQuarterTurns) || rotationQuarterTurns,
+        hatchBlueprintId: linkedHatch?.modelBlueprintId || null,
+        hatchModelLabel: linkedHatch?.modelLabel || null,
+        hatchModelCategory: linkedHatch?.modelCategory || null,
+        hatchModelGlbUrl: linkedHatch?.modelGlbUrl || null,
+        hatchModelBuiltinKey: linkedHatch?.modelBuiltinKey || null,
+        hatchModelGeometry: linkedHatch?.modelGeometry || null,
+        hatchMaterialOverrides: linkedHatch?.modelMaterialOverrides || {},
+      } : {}),
       roomWallEdit: false,
       selectedRoomWallKeys: [],
       selectedRoomWallCount: 0,
       roomArcError: null,
     })
     onSurfaceConnectorSelect?.(connectorId, clientX, clientY, connector)
-  }, [onSurfaceConnectorSelect, onSurfaceToolChange, surfaceTool])
+  }, [onSurfaceConnectorSelect, onSurfaceToolChange, surfaceData.connectors, surfaceTool])
 
   const handleRoomWallPointerSelect = useCallback((edgeKeys, event) => {
     if (!edgeKeys?.length || surfaceTool?.mode !== 'select' || !surfaceTool?.selectedRoomId) return
@@ -1139,18 +1166,7 @@ export default function SurfaceEditorScene({
           const clickPoint = getWorldPoint(e.clientX, e.clientY)
           const connectorHit = findConnectorAtWorldPoint(clickPoint, editLevel)
           if (connectorHit) {
-            onSurfaceToolChange?.({
-              ...surfaceTool,
-              mode: 'select',
-              selectedRoomId: null,
-              selectedRoomIds: [],
-              selectedConnectorId: connectorHit.id,
-              roomWallEdit: false,
-              selectedRoomWallKeys: [],
-              selectedRoomWallCount: 0,
-              roomArcError: null,
-            })
-            onSurfaceConnectorSelect?.(connectorHit.id, e.clientX, e.clientY)
+            handleConnectorPointerSelect(connectorHit.id, connectorHit.connector, e)
             onSurfaceRoomSelect?.(null)
             e.preventDefault()
             e.stopPropagation()
@@ -1255,6 +1271,7 @@ export default function SurfaceEditorScene({
           ...surfaceTool,
           mode: 'select',
           selectedConnectorId: placedLadder?.id || null,
+          verticalAccessEditLadderId: placedLadder?.id || null,
           roomArcError: null,
         })
         if (placedLadder) {
@@ -1357,6 +1374,7 @@ export default function SurfaceEditorScene({
     activeMaterial,
     availableBlocks,
     findConnectorAtWorldPoint,
+    handleConnectorPointerSelect,
     onRuntimeEffectCreate,
     getFloorCell,
     getSelectedDoorWallPoint,

@@ -1,6 +1,14 @@
 const DEFAULT_STORY_HEIGHT = 2.5
 const DEFAULT_OPENING_SIZE = 1
 const CIRCLE_SEGMENTS = 48
+const LADDER_EDGE_INSET = 0.16
+
+const LADDER_ORIENTATIONS = Object.freeze([
+  Object.freeze({ axis: 'x', side: -1 }),
+  Object.freeze({ axis: 'z', side: -1 }),
+  Object.freeze({ axis: 'x', side: 1 }),
+  Object.freeze({ axis: 'z', side: 1 }),
+])
 
 function number(value, fallback = 0) {
   const parsed = Number(value)
@@ -14,6 +22,40 @@ function positive(value, fallback = DEFAULT_OPENING_SIZE) {
 
 export function normalizeVerticalOpeningShape(value) {
   return value === 'circle' || value === 'round' ? 'circle' : 'rectangle'
+}
+
+export function ladderOrientationQuarterTurns(ladder) {
+  const axis = ladder?.axis === 'z' ? 'z' : 'x'
+  const side = Number(ladder?.side) > 0 ? 1 : -1
+  const index = LADDER_ORIENTATIONS.findIndex(orientation => (
+    orientation.axis === axis && orientation.side === side
+  ))
+  return index < 0 ? 0 : index
+}
+
+export function rotateLadderOrientation(ladder, deltaQuarterTurns) {
+  const current = ladderOrientationQuarterTurns(ladder)
+  const next = ((current + Math.trunc(number(deltaQuarterTurns))) % 4 + 4) % 4
+  return { ...ladder, ...LADDER_ORIENTATIONS[next], rotationQuarterTurns: next }
+}
+
+export function ladderPlacementCenter(ladder, opening = null) {
+  const descriptor = opening || verticalAccessOpeningDescriptor(ladder)
+  const x = number(descriptor?.x, number(ladder?.x))
+  const z = number(descriptor?.z, number(ladder?.z))
+  const width = positive(descriptor?.width)
+  const depth = positive(descriptor?.depth)
+  const alongX = ladder?.axis !== 'z'
+  const side = Number(ladder?.side) > 0 ? 1 : -1
+  const span = alongX ? depth : width
+  const inset = Math.min(span / 2, Math.max(
+    LADDER_EDGE_INSET,
+    positive(ladder?.depth, 0.12) / 2 + 0.04,
+  ))
+  return {
+    x: alongX ? x + width / 2 : x + (side > 0 ? width - inset : inset),
+    z: alongX ? z + (side > 0 ? depth - inset : inset) : z + depth / 2,
+  }
 }
 
 export function hatchOpeningDescriptor(hatch) {

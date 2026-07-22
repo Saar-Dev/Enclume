@@ -14,10 +14,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "rectangle",
       "opening_mechanism": "hinged",
-      "features": [],
+      "features": [
+        "dual-sided-edge-controls"
+      ],
       "openable": true,
       "allowed_states": [
         "closed",
@@ -82,10 +84,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "circle",
       "opening_mechanism": "hinged",
-      "features": [],
+      "features": [
+        "dual-sided-edge-controls"
+      ],
       "openable": true,
       "allowed_states": [
         "closed",
@@ -150,11 +154,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "rectangle",
       "opening_mechanism": "hinged",
       "features": [
-        "service-hatch"
+        "service-hatch",
+        "dual-sided-operation"
       ],
       "openable": true,
       "allowed_states": [
@@ -220,11 +225,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "circle",
       "opening_mechanism": "hinged",
       "features": [
-        "service-hatch"
+        "service-hatch",
+        "dual-sided-operation"
       ],
       "openable": true,
       "allowed_states": [
@@ -290,10 +296,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "rectangle",
       "opening_mechanism": "sliding-bipartite",
-      "features": [],
+      "features": [
+        "dual-sided-edge-controls"
+      ],
       "openable": true,
       "allowed_states": [
         "closed",
@@ -358,10 +366,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "circle",
       "opening_mechanism": "sliding-bipartite",
-      "features": [],
+      "features": [
+        "dual-sided-edge-controls"
+      ],
       "openable": true,
       "allowed_states": [
         "closed",
@@ -426,10 +436,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "rectangle",
       "opening_mechanism": "sliding-tripartite",
-      "features": [],
+      "features": [
+        "dual-sided-edge-controls"
+      ],
       "openable": true,
       "allowed_states": [
         "closed",
@@ -494,10 +506,12 @@
       "origin": "hatch-center",
       "footprint_width_m": 1.0,
       "footprint_depth_m": 1.0,
-      "height_m": 0.18,
+      "height_m": 0.38,
       "opening_shape": "circle",
       "opening_mechanism": "sliding-tripartite",
-      "features": [],
+      "features": [
+        "dual-sided-edge-controls"
+      ],
       "openable": true,
       "allowed_states": [
         "closed",

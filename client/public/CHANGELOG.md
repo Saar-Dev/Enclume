@@ -1,3 +1,17 @@
+## v201 — 2026-07-22 — Trappes bilatérales et accès vertical latéral
+
+### Éditeur, rendu et modèles 3D
+- [change] Un accès vertical propose seulement **Échelle seule** ou **Échelle + Trappe**. Le second
+  choix crée la trappe puis ouvre à droite le catalogue des huit modèles avec preview, comme pour
+  les portes ; le menu ne mélange plus composition et noms de modèles.
+- [fix] L’échelle occupe maintenant un bord de la trémie, tourne réellement sur ses quatre côtés et
+  s’arrête sous la fermeture au lieu de traverser le panneau.
+- [fix] Les huit trappes possèdent un dessous détaillé et restent manipulables depuis les deux
+  niveaux. Les six modèles standards portent des commandes verticales intégrées à la rive, dessus
+  et dessous ; les deux modèles avec écoutille n’ont aucun boîtier séparé.
+- [fix] Les connecteurs utilisant un modèle GLB n’affichent plus les champs procéduraux
+  **Matière** et **Motif**. Leurs éventuels slots de couleur du modèle restent disponibles.
+
 ## v200 — 2026-07-22 — Accès verticaux et trappes 3D
 
 ### Éditeur et moteur de monde

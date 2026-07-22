@@ -179,17 +179,36 @@ def parent_detail(obj, parent):
     return obj
 
 
-def add_frame(target, root, shape, mats, mechanism):
+def add_edge_controls(target, root, mats):
+    for face_name, z in (("Top", 0.20), ("Bottom", -0.02)):
+        box(
+            target, root, f"Control_{face_name}_Housing",
+            (0.34, 0.515, z), (0.28, 0.08, 0.16), mats["hardware"], 0.018,
+        )
+        box(
+            target, root, f"Control_{face_name}_Face",
+            (0.34, 0.468, z), (0.22, 0.018, 0.115), mats["secondary"], 0.008,
+        )
+        for index, color in enumerate(("accent", "glass", "accent")):
+            box(
+                target, root, f"Control_{face_name}_Status_{index}",
+                (0.285 + index * 0.055, 0.456, z), (0.026, 0.012, 0.026), mats[color], 0.003,
+            )
+
+
+def add_frame(target, root, shape, mats, mechanism, service_hatch):
     if shape == "circle":
         torus(target, root, "Outer_Reinforced_Rim", (0, 0, 0.065), 0.515, 0.055, mats["hardware"])
-        torus(target, root, "Inner_Pressure_Seal", (0, 0, 0.082), 0.462, 0.018, mats["accent"])
+        torus(target, root, "Inner_Pressure_Seal_Top", (0, 0, 0.105), 0.462, 0.018, mats["accent"])
+        torus(target, root, "Inner_Pressure_Seal_Bottom", (0, 0, 0.025), 0.462, 0.018, mats["accent"])
         for index in range(16):
             angle = index * math.tau / 16
-            cylinder(
-                target, root, f"Frame_Bolt_{index:02d}",
-                (math.cos(angle) * 0.515, math.sin(angle) * 0.515, 0.132),
-                0.018, 0.025, mats["hardware"], vertices=12, amount=0.002,
-            )
+            for face_name, z in (("Top", 0.132), ("Bottom", -0.002)):
+                cylinder(
+                    target, root, f"Frame_Bolt_{face_name}_{index:02d}",
+                    (math.cos(angle) * 0.515, math.sin(angle) * 0.515, z),
+                    0.018, 0.025, mats["hardware"], vertices=12, amount=0.002,
+                )
     else:
         outside = 1.12
         bar = 0.095
@@ -198,44 +217,52 @@ def add_frame(target, root, shape, mats, mechanism):
         box(target, root, "Frame_West", (-outside / 2, 0, 0.07), (bar, outside - bar * 2, 0.14), mats["hardware"], 0.02)
         box(target, root, "Frame_East", (outside / 2, 0, 0.07), (bar, outside - bar * 2, 0.14), mats["hardware"], 0.02)
         for index, (x, y) in enumerate(((-0.51, -0.51), (0.51, -0.51), (-0.51, 0.51), (0.51, 0.51))):
-            cylinder(target, root, f"Frame_Bolt_{index}", (x, y, 0.153), 0.022, 0.028, mats["accent"], vertices=12, amount=0.002)
-    pod_y = 0.63 if mechanism == "hinged" else 0.57
-    box(target, root, "Control_Pod", (0.39, pod_y, 0.14), (0.25, 0.16, 0.23), mats["hardware"], 0.025)
-    box(target, root, "Control_Pod_Face", (0.39, pod_y - 0.085, 0.16), (0.19, 0.018, 0.15), mats["secondary"], 0.012)
-    for index, color in enumerate(("accent", "glass", "accent")):
-        cylinder(target, root, f"Control_Status_{index}", (0.33 + index * 0.06, pod_y - 0.101, 0.17), 0.014, 0.012, mats[color], vertices=16, amount=0.001)
+            for face_name, z in (("Top", 0.153), ("Bottom", -0.013)):
+                cylinder(
+                    target, root, f"Frame_Bolt_{face_name}_{index}",
+                    (x, y, z), 0.022, 0.028, mats["accent"], vertices=12, amount=0.002,
+                )
+    if not service_hatch:
+        add_edge_controls(target, root, mats)
 
 
-def add_panel_details(target, parent, shape, mats, prefix):
+def add_panel_details(target, parent, shape, mats, prefix, underside=False):
+    face_name = "Bottom" if underside else "Top"
+    detail_z = 0.032 if underside else 0.148
     if shape == "circle":
-        torus(target, parent, f"{prefix}_Panel_Reinforcement", (0, 0, 0.122), 0.31, 0.018, mats["secondary"])
+        torus(target, parent, f"{prefix}_{face_name}_Panel_Reinforcement", (0, 0, detail_z), 0.31, 0.018, mats["secondary"])
         for index in range(8):
             angle = index * math.tau / 8
             box(
-                target, parent, f"{prefix}_Radial_Rib_{index}",
-                (math.cos(angle) * 0.23, math.sin(angle) * 0.23, 0.119),
+                target, parent, f"{prefix}_{face_name}_Radial_Rib_{index}",
+                (math.cos(angle) * 0.23, math.sin(angle) * 0.23, detail_z),
                 (0.27, 0.026, 0.025), mats["secondary"], 0.004, rotation=(0, 0, angle),
             )
     else:
         for index, offset in enumerate((-0.28, 0, 0.28)):
-            box(target, parent, f"{prefix}_Longitudinal_Rib_{index}", (offset, 0, 0.124), (0.035, 0.78, 0.03), mats["secondary"], 0.005)
+            box(target, parent, f"{prefix}_{face_name}_Longitudinal_Rib_{index}", (offset, 0, detail_z), (0.035, 0.78, 0.03), mats["secondary"], 0.005)
         for index, offset in enumerate((-0.27, 0.27)):
-            box(target, parent, f"{prefix}_Cross_Rib_{index}", (0, offset, 0.125), (0.82, 0.035, 0.032), mats["secondary"], 0.005)
+            box(target, parent, f"{prefix}_{face_name}_Cross_Rib_{index}", (0, offset, detail_z), (0.82, 0.035, 0.032), mats["secondary"], 0.005)
 
 
 def add_service_hatch(target, parent, mats):
-    cylinder(target, parent, "Service_Hatch_Leaf", (0.02, 0.06, 0.158), 0.205, 0.055, mats["secondary"], vertices=48, amount=0.008)
-    torus(target, parent, "Service_Hatch_Rim", (0.02, 0.06, 0.19), 0.205, 0.025, mats["hardware"])
-    cylinder(target, parent, "Service_Hatch_Glass", (0.02, 0.06, 0.194), 0.095, 0.018, mats["glass"], vertices=48, amount=0.003)
-    torus(target, parent, "Service_Hatch_Wheel", (0.02, 0.06, 0.217), 0.13, 0.014, mats["accent"])
-    cylinder(target, parent, "Service_Hatch_Wheel_Hub", (0.02, 0.06, 0.218), 0.035, 0.024, mats["hardware"], vertices=24, amount=0.003)
-    for index in range(6):
-        angle = index * math.tau / 6
-        box(
-            target, parent, f"Service_Hatch_Wheel_Spoke_{index}",
-            (0.02 + math.cos(angle) * 0.065, 0.06 + math.sin(angle) * 0.065, 0.219),
-            (0.13, 0.012, 0.012), mats["accent"], 0.002, rotation=(0, 0, angle),
-        )
+    for face_name, values in (
+        ("Top", (0.158, 0.19, 0.194, 0.217, 0.218)),
+        ("Bottom", (0.022, -0.01, -0.014, -0.037, -0.038)),
+    ):
+        leaf_z, rim_z, glass_z, wheel_z, hub_z = values
+        cylinder(target, parent, f"Service_Hatch_{face_name}_Leaf", (0.02, 0.06, leaf_z), 0.205, 0.055, mats["secondary"], vertices=48, amount=0.008)
+        torus(target, parent, f"Service_Hatch_{face_name}_Rim", (0.02, 0.06, rim_z), 0.205, 0.025, mats["hardware"])
+        cylinder(target, parent, f"Service_Hatch_{face_name}_Glass", (0.02, 0.06, glass_z), 0.095, 0.018, mats["glass"], vertices=48, amount=0.003)
+        torus(target, parent, f"Service_Hatch_{face_name}_Wheel", (0.02, 0.06, wheel_z), 0.13, 0.014, mats["accent"])
+        cylinder(target, parent, f"Service_Hatch_{face_name}_Wheel_Hub", (0.02, 0.06, hub_z), 0.035, 0.024, mats["hardware"], vertices=24, amount=0.003)
+        for index in range(6):
+            angle = index * math.tau / 6
+            box(
+                target, parent, f"Service_Hatch_{face_name}_Wheel_Spoke_{index}",
+                (0.02 + math.cos(angle) * 0.065, 0.06 + math.sin(angle) * 0.065, wheel_z + 0.002),
+                (0.13, 0.012, 0.012), mats["accent"], 0.002, rotation=(0, 0, angle),
+            )
 
 
 def interpolation(obj):
@@ -284,6 +311,7 @@ def build_hinged(target, root, asset_name, shape, mats, service_hatch):
     else:
         panel = box(target, leaf_root, "Moving_Square_Armored_Leaf", (0, 0, 0.09), (0.91, 0.91, 0.09), mats["primary"], 0.025)
     add_panel_details(target, leaf_root, shape, mats, "Moving")
+    add_panel_details(target, leaf_root, shape, mats, "Moving", underside=True)
     if service_hatch:
         add_service_hatch(target, leaf_root, mats)
     for index, x in enumerate((-0.28, 0, 0.28)):
@@ -302,7 +330,8 @@ def build_bipartite(target, root, asset_name, shape, mats):
             polygon_prism(target, slider, f"Round_Half_{index + 1}", sector_points(shape, start, end, 28), 0.09, 0.09, mats["primary"], 0.007)
             for rib in range(3):
                 y = (rib - 1) * 0.18
-                box(target, slider, f"Round_Half_{index + 1}_Rib_{rib}", (direction * 0.23, y, 0.145), (0.32, 0.022, 0.024), mats["secondary"], 0.004)
+                for face_name, z in (("Top", 0.145), ("Bottom", 0.035)):
+                    box(target, slider, f"Round_Half_{index + 1}_{face_name}_Rib_{rib}", (direction * 0.23, y, z), (0.32, 0.022, 0.024), mats["secondary"], 0.004)
             animate_slide(slider, asset_name, index, (direction * 0.64, 0))
             sliders.append(slider)
     else:
@@ -311,11 +340,14 @@ def build_bipartite(target, root, asset_name, shape, mats):
             x = direction * 0.2275
             box(target, slider, f"Square_Half_{index + 1}", (x, 0, 0.09), (0.455, 0.91, 0.09), mats["primary"], 0.018)
             for rib, y in enumerate((-0.27, 0, 0.27)):
-                box(target, slider, f"Square_Half_{index + 1}_Rib_{rib}", (x, y, 0.145), (0.37, 0.025, 0.025), mats["secondary"], 0.004)
+                for face_name, z in (("Top", 0.145), ("Bottom", 0.035)):
+                    box(target, slider, f"Square_Half_{index + 1}_{face_name}_Rib_{rib}", (x, y, z), (0.37, 0.025, 0.025), mats["secondary"], 0.004)
             animate_slide(slider, asset_name, index, (direction * 0.66, 0))
             sliders.append(slider)
     box(target, root, "Sliding_Track_Left", (-0.52, 0, 0.02), (0.09, 1.1, 0.06), mats["hardware"], 0.012)
     box(target, root, "Sliding_Track_Right", (0.52, 0, 0.02), (0.09, 1.1, 0.06), mats["hardware"], 0.012)
+    box(target, root, "Sliding_Track_Left_Top", (-0.52, 0, 0.16), (0.09, 1.1, 0.06), mats["hardware"], 0.012)
+    box(target, root, "Sliding_Track_Right_Top", (0.52, 0, 0.16), (0.09, 1.1, 0.06), mats["hardware"], 0.012)
     return sliders
 
 
@@ -330,14 +362,16 @@ def build_tripartite(target, root, asset_name, shape, mats):
             target, slider, f"Tripartite_{shape}_Panel_{index + 1}",
             sector_points(shape, start, end, 22), 0.09, 0.09, mats["primary"], 0.007,
         )
-        box(
-            target, slider, f"Tripartite_Accent_Rib_{index + 1}",
-            (math.cos(middle) * 0.22, math.sin(middle) * 0.22, 0.145),
-            (0.34, 0.026, 0.026), mats["accent"], 0.004, rotation=(0, 0, middle),
-        )
+        for face_name, z in (("Top", 0.145), ("Bottom", 0.035)):
+            box(
+                target, slider, f"Tripartite_{face_name}_Accent_Rib_{index + 1}",
+                (math.cos(middle) * 0.22, math.sin(middle) * 0.22, z),
+                (0.34, 0.026, 0.026), mats["accent"], 0.004, rotation=(0, 0, middle),
+            )
         animate_slide(slider, asset_name, index, (math.cos(middle) * 0.67, math.sin(middle) * 0.67))
         sliders.append(slider)
     cylinder(target, root, "Tripartite_Central_Lock", (0, 0, 0.15), 0.065, 0.045, mats["hardware"], vertices=24, amount=0.006)
+    cylinder(target, root, "Tripartite_Central_Lock_Bottom", (0, 0, 0.03), 0.065, 0.045, mats["hardware"], vertices=24, amount=0.006)
     return sliders
 
 
@@ -441,7 +475,7 @@ def main():
         root["opening_mechanism"] = mechanism
         root["service_hatch"] = has_service_hatch
         mats = make_materials(asset_name)
-        add_frame(target, root, shape, mats, mechanism)
+        add_frame(target, root, shape, mats, mechanism, has_service_hatch)
         if mechanism == "hinged":
             build_hinged(target, root, asset_name, shape, mats, has_service_hatch)
         elif mechanism == "sliding-bipartite":
@@ -459,10 +493,10 @@ def main():
             "origin": "hatch-center",
             "footprint_width_m": 1.0,
             "footprint_depth_m": 1.0,
-            "height_m": 0.18,
+            "height_m": 0.38,
             "opening_shape": shape,
             "opening_mechanism": mechanism,
-            "features": ["service-hatch"] if has_service_hatch else [],
+            "features": ["service-hatch", "dual-sided-operation"] if has_service_hatch else ["dual-sided-edge-controls"],
             "openable": True,
             "allowed_states": ["closed", "open", "locked"],
             "editor_color_slots": editor_slots(asset_name),
@@ -480,8 +514,10 @@ def main():
     (OUT / "README.md").write_text(
         "# Trappes d’accès vertical\n\n"
         "Catalogue moteur de huit trappes animées : chaque mécanisme existe en version carrée et ronde. "
-        "Les modèles 03 et 04 possèdent une écoutille de service intégrée.\n\n"
-        "Le footprint de 1 × 1 décrit exclusivement la trémie canonique ; le cadre et le boîtier peuvent dépasser.\n",
+        "Les modèles 03 et 04 possèdent une écoutille de service intégrée sans boîtier séparé. "
+        "Toutes les feuilles sont détaillées dessus et dessous ; les autres modèles portent des commandes "
+        "verticales intégrées à la rive, accessibles depuis les deux niveaux.\n\n"
+        "Le footprint de 1 × 1 décrit exclusivement la trémie canonique ; aucun boîtier mural ne dépasse.\n",
         encoding="utf-8",
     )
     configure_preview(records, pack_collection)

@@ -564,6 +564,7 @@ export default function Sidebar({
     connectorModelBuiltinKey: null,
     connectorModelGeometry: null,
     connectorMaterialOverrides: {},
+    verticalAccessEditLadderId: null,
     roomHeightLevels: 1,
     wallHeightLevels: 1,
     floorThickness: 0.25,
@@ -592,10 +593,12 @@ export default function Sidebar({
     stairRailingThicknessM: 0.05,
     movementMultiplier: 1,
     ladderAxis: 'x',
+    ladderSide: -1,
+    ladderRotationQuarterTurns: 0,
     ladderWidth: 0.7,
     ladderDepth: 0.12,
     ladderAnchorSpacing: 0.5,
-    ladderHatch: true,
+    ladderHatch: false,
     hatchHingeSide: 1,
     hatchRotationQuarterTurns: 0,
     hatchBlueprintId: null,
@@ -736,12 +739,6 @@ export default function Sidebar({
     label: t('surfaceEditor.verticalAccess'),
     category: 'surface_connectors',
   }
-  const genericHatchChoice = {
-    id: '__generic_hatch__',
-    label: 'Trappe procédurale',
-    category: 'surface_connectors',
-    geometry: { placementMode: 'connector', connectorType: 'hatch', origin: 'hatch-center' },
-  }
   const connectorChoices = surfaceToolState.connectorType === 'door'
     ? doorConnectorBlueprints
     : surfaceToolState.connectorType === 'window'
@@ -756,17 +753,16 @@ export default function Sidebar({
   const selectedConnectorChoice = connectorChoices.find(choice => String(choice.id) === String(surfaceToolState.connectorBlueprintId))
     || connectorChoices[0]
     || null
-  const noHatchChoice = {
-    id: '__no_hatch__',
-    label: t('surfaceEditor.ladderOnly'),
-    category: 'surface_connectors',
-    noHatch: true,
-  }
-  const hatchChoices = [noHatchChoice, ...hatchConnectorBlueprints, genericHatchChoice]
+  const hatchChoices = hatchConnectorBlueprints
   const selectedHatchChoice = surfaceToolState.ladderHatch === false
-    ? noHatchChoice
+    ? null
     : hatchChoices.find(choice => String(choice.id) === String(surfaceToolState.hatchBlueprintId))
-      || genericHatchChoice
+      || hatchChoices[0]
+      || null
+  const editingVerticalAccess = Boolean(
+    surfaceToolState.verticalAccessEditLadderId
+      && String(surfaceToolState.selectedConnectorId) === String(surfaceToolState.verticalAccessEditLadderId),
+  )
   const connectorMaterialSlots = normalizeModelMaterialSlots(selectedConnectorChoice?.geometry)
   const connectorMaterialOverrides = surfaceToolState.connectorMaterialOverrides || {}
   const updateConnectorMaterialSlot = (slot, patch) => updateSurfaceTool({
@@ -810,6 +806,7 @@ export default function Sidebar({
           selectedRoomWallKeys: [],
           selectedRoomWallCount: 0,
           selectedConnectorId: null,
+          verticalAccessEditLadderId: null,
           roomArcError: null,
         })
         return
@@ -825,6 +822,7 @@ export default function Sidebar({
         selectedRoomWallKeys: [],
         selectedRoomWallCount: 0,
         selectedConnectorId: null,
+        verticalAccessEditLadderId: null,
         connectorMaterialOverrides: {},
         roomArcError: null,
         ...connectorModelPatch(blueprint),
@@ -849,9 +847,28 @@ export default function Sidebar({
     connectorType: surfaceToolState.connectorType || 'door',
     ...connectorModelPatch(blueprint),
   })
-  const selectHatchModel = (blueprint) => updateSurfaceTool(blueprint?.noHatch
-    ? { ladderHatch: false, ...hatchModelPatch(null) }
-    : { ladderHatch: true, ...hatchModelPatch(blueprint) })
+  const selectHatchModel = (blueprint) => updateSurfaceTool({
+    ladderHatch: true,
+    ...hatchModelPatch(blueprint),
+  })
+  const selectVerticalAccessComposition = (withHatch) => {
+    if (!withHatch) {
+      updateSurfaceTool({ ladderHatch: false, ...hatchModelPatch(null) })
+      return
+    }
+    selectHatchModel(selectedHatchChoice || hatchChoices[0] || null)
+  }
+  const rotateVerticalAccess = (delta) => {
+    const quarterTurns = ((
+      (Number(surfaceToolState.ladderRotationQuarterTurns ?? surfaceToolState.hatchRotationQuarterTurns) || 0) + delta
+    ) % 4 + 4) % 4
+    updateSurfaceTool({
+      ladderRotationQuarterTurns: quarterTurns,
+      ladderAxis: quarterTurns % 2 === 0 ? 'x' : 'z',
+      ladderSide: quarterTurns < 2 ? -1 : 1,
+      hatchRotationQuarterTurns: quarterTurns,
+    })
+  }
 
   useEffect(() => {
     if (surfaceToolState.mode !== 'connector' || !selectedConnectorChoice) return
@@ -1583,26 +1600,34 @@ export default function Sidebar({
                         Rotation 90°
                       </button>
                     )}
-                    {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
+                    {((surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder')
+                      || editingVerticalAccess) && (
                       <div style={styles.connectorPicker}>
-                        <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessModel')}</div>
+                        <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessComposition')}</div>
+                        <select
+                          value={surfaceToolState.ladderHatch === false ? 'ladder-only' : 'ladder-hatch'}
+                          onChange={event => selectVerticalAccessComposition(event.target.value === 'ladder-hatch')}
+                          style={styles.roomToolSelect}
+                        >
+                          <option value="ladder-only">{t('surfaceEditor.ladderOnly')}</option>
+                          <option value="ladder-hatch" disabled={hatchChoices.length === 0}>
+                            {t('surfaceEditor.ladderAndHatch')}
+                          </option>
+                        </select>
                         {surfaceToolState.ladderHatch !== false && (
                           <>
+                            <div style={styles.connectorPickerTitle}>{t('surfaceEditor.hatchModel')}</div>
                             <div style={styles.rotationRow}>
                               <button
                                 type="button"
-                                onClick={() => updateSurfaceTool({
-                                  hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 3) % 4,
-                                })}
+                                onClick={() => rotateVerticalAccess(-1)}
                                 style={styles.roomToolSmallBtn}
                               >
                                 ↶ Rotation gauche
                               </button>
                               <button
                                 type="button"
-                                onClick={() => updateSurfaceTool({
-                                  hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 1) % 4,
-                                })}
+                                onClick={() => rotateVerticalAccess(1)}
                                 style={styles.roomToolSmallBtn}
                               >
                                 Rotation droite ↷
@@ -1617,10 +1642,10 @@ export default function Sidebar({
                           const selected = String(selectedHatchChoice?.id) === String(choice.id)
                           const shape = choice.geometry?.openingShape === 'circle'
                             ? t('surfaceEditor.roundShape')
-                            : choice.noHatch ? t('surfaceEditor.openOpening') : t('surfaceEditor.squareShape')
+                            : t('surfaceEditor.squareShape')
                           const mechanism = choice.geometry?.openingMechanism
                             ? t(`surfaceEditor.hatchMechanisms.${choice.geometry.openingMechanism}`, { defaultValue: choice.geometry.openingMechanism })
-                            : choice.noHatch ? t('surfaceEditor.noHatch') : t('surfaceEditor.proceduralModel')
+                            : t('surfaceEditor.connectorModel')
                           return (
                             <button
                               key={choice.id}
@@ -2055,28 +2080,36 @@ export default function Sidebar({
                   style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
                 />
                 {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
-                {structuralObjectConnectorType(activeBlueprint) === 'ladder'
+                {((structuralObjectConnectorType(activeBlueprint) === 'ladder'
                   && surfaceToolState.mode === 'connector'
-                  && surfaceToolState.connectorType === 'ladder' && (
+                  && surfaceToolState.connectorType === 'ladder')
+                  || editingVerticalAccess) && (
                   <div style={{ ...styles.connectorPicker, marginBottom: '10px' }}>
-                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessModel')}</div>
+                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessComposition')}</div>
+                    <select
+                      value={surfaceToolState.ladderHatch === false ? 'ladder-only' : 'ladder-hatch'}
+                      onChange={event => selectVerticalAccessComposition(event.target.value === 'ladder-hatch')}
+                      style={styles.roomToolSelect}
+                    >
+                      <option value="ladder-only">{t('surfaceEditor.ladderOnly')}</option>
+                      <option value="ladder-hatch" disabled={hatchChoices.length === 0}>
+                        {t('surfaceEditor.ladderAndHatch')}
+                      </option>
+                    </select>
                     {surfaceToolState.ladderHatch !== false && (
                       <>
+                        <div style={styles.connectorPickerTitle}>{t('surfaceEditor.hatchModel')}</div>
                         <div style={styles.rotationRow}>
                           <button
                             type="button"
-                            onClick={() => updateSurfaceTool({
-                              hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 3) % 4,
-                            })}
+                            onClick={() => rotateVerticalAccess(-1)}
                             style={styles.roomToolSmallBtn}
                           >
                             {t('surfaceEditor.rotateLeft')}
                           </button>
                           <button
                             type="button"
-                            onClick={() => updateSurfaceTool({
-                              hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 1) % 4,
-                            })}
+                            onClick={() => rotateVerticalAccess(1)}
                             style={styles.roomToolSmallBtn}
                           >
                             {t('surfaceEditor.rotateRight')}
@@ -2089,10 +2122,10 @@ export default function Sidebar({
                       const selected = String(selectedHatchChoice?.id) === String(choice.id)
                       const shape = choice.geometry?.openingShape === 'circle'
                         ? t('surfaceEditor.roundShape')
-                        : choice.noHatch ? t('surfaceEditor.openOpening') : t('surfaceEditor.squareShape')
+                        : t('surfaceEditor.squareShape')
                       const mechanism = choice.geometry?.openingMechanism
                         ? t(`surfaceEditor.hatchMechanisms.${choice.geometry.openingMechanism}`, { defaultValue: choice.geometry.openingMechanism })
-                        : choice.noHatch ? t('surfaceEditor.noHatch') : t('surfaceEditor.proceduralModel')
+                        : t('surfaceEditor.connectorModel')
                       return (
                         <button
                           key={choice.id}

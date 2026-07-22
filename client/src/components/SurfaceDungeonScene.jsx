@@ -47,6 +47,7 @@ import {
   stairOpeningMultiPolygon,
 } from '../../../shared/world/stairGeometry.js'
 import {
+  ladderPlacementCenter,
   verticalAccessOpenings,
   verticalOpeningMultiPolygon,
 } from '../../../shared/world/verticalAccessGeometry.js'
@@ -2317,11 +2318,12 @@ export function ConnectorSegment({ connector, curveWall = null, textureMaterials
   if (connector.type === 'ladder') {
     const fullY = Number(connector.y) || 0
     const fullTopY = Number(connector.topY) || fullY + STORY_HEIGHT
+    const visualFullTopY = Math.max(fullY + 0.2, fullTopY - 0.07)
     const sliceBottom = displayLevel === null ? -Infinity : displayLevel * STORY_HEIGHT
     const sliceTop = displayLevel === null ? Infinity : sliceBottom + STORY_HEIGHT
     const y = Math.max(fullY, sliceBottom)
-    let topY = Math.min(fullTopY, sliceTop)
-    if (topY <= y && displayLevel !== null && Math.abs(fullTopY - sliceBottom) < 0.01) {
+    let topY = Math.min(visualFullTopY, sliceTop)
+    if (topY <= y && displayLevel !== null && Math.abs(visualFullTopY - sliceBottom) < 0.01) {
       topY = y + 0.12
     }
     const height = Math.max(0.2, topY - y)
@@ -2330,8 +2332,9 @@ export function ConnectorSegment({ connector, curveWall = null, textureMaterials
     const spacing = Math.max(0.1, Number(connector.anchorSpacing) || 0.5)
     const railThickness = Math.min(0.08, Math.max(0.035, width * 0.09))
     const rungCount = Math.min(128, Math.max(2, Math.floor(height / spacing) + 1))
-    const centerX = Number(connector.x) + 0.5
-    const centerZ = Number(connector.z) + 0.5
+    const ladderCenter = ladderPlacementCenter(connector)
+    const centerX = ladderCenter.x
+    const centerZ = ladderCenter.z
     const alongX = connector.axis !== 'z'
     const railGeometry = alongX
       ? [railThickness, height, depth]

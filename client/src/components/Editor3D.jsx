@@ -35,6 +35,7 @@ import {
   normalizeSurfaceData,
   parseFloorKey,
   removeRoomBoundaryArcs,
+  rotateLadderOrientation,
   roomsWallSegments,
   setVerticalAccessHatch,
   SURFACE_DATA_VERSION,
@@ -1240,6 +1241,7 @@ export default function Editor3D({
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
   const surfaceDataRef = useRef(surfaceData)
+  const verticalAccessSelectionRef = useRef('')
   const surfaceQueuedBaseRef = useRef(normalizeSurfaceData(null))
   const processedRoomArcActionRef = useRef(null)
   const processedWallElevationProfileActionRef = useRef(null)
@@ -1676,7 +1678,116 @@ export default function Editor3D({
       : { ladderHatch: false }
     const nextSurfaceData = setVerticalAccessHatch(surfaceDataRef.current, ladderId, tool)
     if (nextSurfaceData !== surfaceDataRef.current) handleSurfaceDataChange(nextSurfaceData)
-  }, [handleSurfaceDataChange])
+    const selectionKey = `${ladderId}:${blueprint ? blueprint.id || blueprint.glb_url || 'hatch' : 'ladder-only'}:${Number(surfaceTool?.ladderRotationQuarterTurns ?? surfaceTool?.hatchRotationQuarterTurns) || 0}`
+    verticalAccessSelectionRef.current = selectionKey
+    onSurfaceToolChange?.(current => ({
+      ...current,
+      mode: 'select',
+      connectorType: 'ladder',
+      selectedConnectorId: ladderId,
+      verticalAccessEditLadderId: ladderId,
+      ladderHatch: Boolean(blueprint),
+      hatchBlueprintId: blueprint?.id || null,
+      hatchModelLabel: blueprint?.label || null,
+      hatchModelCategory: blueprint?.category || null,
+      hatchModelGlbUrl: blueprint?.glb_url || null,
+      hatchModelBuiltinKey: blueprint?.builtin_key || null,
+      hatchModelGeometry: blueprint?.geometry || null,
+      hatchMaterialOverrides: {},
+    }))
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool?.hatchRotationQuarterTurns, surfaceTool?.ladderRotationQuarterTurns])
+
+  const handleVerticalAccessRotate = useCallback((ladderId, delta) => {
+    const ladder = surfaceDataRef.current.connectors?.[ladderId]
+    if (!ladder || ladder.type !== 'ladder') return
+    const rotated = rotateLadderOrientation(ladder, delta)
+    const linkedHatch = Object.values(surfaceDataRef.current.connectors || {}).find(connector => (
+      connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)
+    )) || null
+    verticalAccessSelectionRef.current = ''
+    onSurfaceToolChange?.(current => ({
+      ...current,
+      mode: 'select',
+      connectorType: 'ladder',
+      selectedConnectorId: ladderId,
+      verticalAccessEditLadderId: ladderId,
+      ladderAxis: rotated.axis,
+      ladderSide: rotated.side,
+      ladderRotationQuarterTurns: rotated.rotationQuarterTurns,
+      ladderHatch: Boolean(linkedHatch),
+      hatchRotationQuarterTurns: rotated.rotationQuarterTurns,
+      hatchBlueprintId: linkedHatch?.modelBlueprintId || null,
+      hatchModelLabel: linkedHatch?.modelLabel || null,
+      hatchModelCategory: linkedHatch?.modelCategory || null,
+      hatchModelGlbUrl: linkedHatch?.modelGlbUrl || null,
+      hatchModelBuiltinKey: linkedHatch?.modelBuiltinKey || null,
+      hatchModelGeometry: linkedHatch?.modelGeometry || null,
+      hatchMaterialOverrides: linkedHatch?.modelMaterialOverrides || {},
+    }))
+  }, [onSurfaceToolChange])
+
+  useEffect(() => {
+    const ladderId = surfaceTool?.verticalAccessEditLadderId
+    if (!ladderId) return
+    const quarterTurns = Number(surfaceTool?.ladderRotationQuarterTurns ?? surfaceTool?.hatchRotationQuarterTurns) || 0
+    const selectionKey = `${ladderId}:${surfaceTool?.ladderHatch === false ? 'ladder-only' : surfaceTool?.hatchBlueprintId || surfaceTool?.hatchModelGlbUrl || 'hatch'}:${quarterTurns}`
+    if (verticalAccessSelectionRef.current === selectionKey) return
+    verticalAccessSelectionRef.current = selectionKey
+    const currentSurfaceData = surfaceDataRef.current
+    const ladder = currentSurfaceData.connectors?.[ladderId]
+    if (!ladder || ladder.type !== 'ladder') return
+    const ladderSide = quarterTurns < 2 ? -1 : 1
+    const ladderAxis = quarterTurns % 2 === 0 ? 'x' : 'z'
+    const currentHatch = Object.values(currentSurfaceData.connectors || {}).find(connector => (
+      connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)
+    )) || null
+    const wantsHatch = surfaceTool?.ladderHatch !== false
+    const orientationAlreadyMatches = ladder.axis === ladderAxis
+      && (Number(ladder.side) > 0 ? 1 : -1) === ladderSide
+      && (Number(ladder.rotationQuarterTurns) || 0) === quarterTurns
+    const hatchAlreadyMatches = wantsHatch
+      ? Boolean(currentHatch)
+        && String(currentHatch.modelBlueprintId || '') === String(surfaceTool?.hatchBlueprintId || '')
+        && (Number(currentHatch.rotationQuarterTurns) || 0) === quarterTurns
+      : !currentHatch
+    if (orientationAlreadyMatches && hatchAlreadyMatches) return
+    const connectors = {
+      ...(currentSurfaceData.connectors || {}),
+      [ladderId]: {
+        ...ladder,
+        axis: ladderAxis,
+        side: ladderSide,
+        rotationQuarterTurns: quarterTurns,
+      },
+    }
+    const orientedSurfaceData = { ...currentSurfaceData, connectors }
+    const nextSurfaceData = setVerticalAccessHatch(orientedSurfaceData, ladderId, {
+      ladderHatch: surfaceTool?.ladderHatch !== false,
+      hatchBlueprintId: surfaceTool?.hatchBlueprintId || null,
+      hatchModelLabel: surfaceTool?.hatchModelLabel || null,
+      hatchModelCategory: surfaceTool?.hatchModelCategory || null,
+      hatchModelGlbUrl: surfaceTool?.hatchModelGlbUrl || null,
+      hatchModelBuiltinKey: surfaceTool?.hatchModelBuiltinKey || null,
+      hatchModelGeometry: surfaceTool?.hatchModelGeometry || null,
+      hatchMaterialOverrides: surfaceTool?.hatchMaterialOverrides || {},
+      hatchRotationQuarterTurns: quarterTurns,
+      preserveHatchOrientation: false,
+    })
+    handleSurfaceDataChange(nextSurfaceData)
+  }, [
+    handleSurfaceDataChange,
+    surfaceTool?.hatchBlueprintId,
+    surfaceTool?.hatchMaterialOverrides,
+    surfaceTool?.hatchModelBuiltinKey,
+    surfaceTool?.hatchModelCategory,
+    surfaceTool?.hatchModelGeometry,
+    surfaceTool?.hatchModelGlbUrl,
+    surfaceTool?.hatchModelLabel,
+    surfaceTool?.hatchRotationQuarterTurns,
+    surfaceTool?.ladderHatch,
+    surfaceTool?.ladderRotationQuarterTurns,
+    surfaceTool?.verticalAccessEditLadderId,
+  ])
 
   const handleSurfaceConnectorDelete = useCallback(connectorId => {
     if (!connectorId) return
@@ -2061,6 +2172,7 @@ export default function Editor3D({
           linkedHatch={selectedLadderHatch}
           hatchChoices={hatchBlueprintChoices}
           onVerticalAccessHatchChange={handleVerticalAccessHatchChange}
+          onVerticalAccessRotate={handleVerticalAccessRotate}
           x={surfaceConnectorPanel.x}
           y={surfaceConnectorPanel.y}
           onPatch={handleSurfaceConnectorPatch}
