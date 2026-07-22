@@ -102,7 +102,7 @@ export async function getEffectiveWeaponDamage(db, weaponInvId, { rangeBand = nu
       flatBonus      = resolved.flatBonus
       dropoffFormula = resolved.dropoffFormula
       mulFactor      = 1
-      choc           = mechanic.chocFixed ? { action: 'SET', value: mechanic.chocFixed } : resolveChoc(parsed.choc)
+      choc           = resolveChoc(mechanic.chocFixed ? { action: 'SET', value: mechanic.chocFixed } : parsed.choc)
     } else {
       const resolved = resolveDmgEffect(row.weapon_formula, parsed.dmg)
       baseFormula    = resolved.baseFormula
