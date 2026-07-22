@@ -23,6 +23,9 @@ import {
   isWorldInteriorPointVisibleAtLevel,
   entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
+  applyElevatorRouteStop,
+  elevatorStopsAreAligned,
+  makeElevatorStopFromCell,
   rotateHatchOrientation,
   makeSpiralStairFromCell,
   makeStraightStairFromCell,
@@ -1077,4 +1080,46 @@ test('une verrière exige une vraie interface horizontale et jamais un niveau vi
   assert.ok(ceilingSkylight)
   assert.equal(ceilingSkylight.y, 5)
   assert.deepEqual(ceilingSkylight.roomIds, ['well'])
+})
+
+test('les arrêts d’un ascenseur forment un trajet orthogonal ordonné', () => {
+  const lower = { ...room('lower', 0), minX: 0, maxX: 4, minZ: 0, maxZ: 2 }
+  const upper = { ...room('upper', 1), minX: 0, maxX: 5, minZ: 0, maxZ: 2 }
+  const surface = emptySurface({ rooms: { lower, upper } })
+  const tool = {
+    connectorType: 'elevator', level: 0,
+    connectorModelGeometry: { footprintWidth: 2, footprintDepth: 1, elevatorStyle: 'industrial' },
+    elevatorDoorAxis: 'z', elevatorDoorSide: 1,
+  }
+  const first = applyElevatorRouteStop(surface, { x: 1, z: 0 }, tool)
+  assert.equal(first.connector, null)
+  assert.equal(first.stops.length, 1)
+
+  const second = applyElevatorRouteStop(surface, { x: 1, z: 0 }, {
+    ...tool, level: 1, elevatorDraftStops: first.stops, elevatorDoorAxis: 'x', elevatorDoorSide: -1,
+  })
+  assert.equal(second.connector.stops.length, 2)
+  assert.deepEqual(second.connector.stops.map(stop => [stop.x, stop.y, stop.z]), [[1, 0.125, 0], [1, 2.625, 0]])
+  assert.deepEqual(second.connector.stops.map(stop => [stop.doorAxis, stop.doorSide]), [['z', 1], ['x', -1]])
+  assert.deepEqual([second.connector.width, second.connector.depth], [2, 1])
+
+  const third = applyElevatorRouteStop(second.surfaceData, { x: 3, z: 0 }, {
+    ...tool, level: 1, elevatorEditConnectorId: second.connector.id,
+  })
+  assert.equal(third.connector.stops.length, 3)
+  assert.equal(elevatorStopsAreAligned(third.connector.stops[1], third.connector.stops[2]), true)
+})
+
+test('un arrêt extérieur, trop large ou diagonal est refusé', () => {
+  const lower = { ...room('lower', 0), minX: 0, maxX: 2, minZ: 0, maxZ: 1 }
+  const upper = { ...room('upper', 1), minX: 0, maxX: 3, minZ: 0, maxZ: 2 }
+  const surface = emptySurface({ rooms: { lower, upper } })
+  const tool = { level: 0, connectorModelGeometry: { footprintWidth: 2, footprintDepth: 1 } }
+  assert.equal(makeElevatorStopFromCell(surface, { x: 2, z: 0 }, tool), null)
+  assert.equal(makeElevatorStopFromCell(emptySurface({
+    rooms: { lower: { ...lower, openWallEdgeKeys: ['0:0:0:1'] } },
+  }), { x: 0, z: 0 }, tool), null)
+  const first = applyElevatorRouteStop(surface, { x: 0, z: 0 }, tool)
+  const diagonal = applyElevatorRouteStop(surface, { x: 1, z: 1 }, { ...tool, level: 1, elevatorDraftStops: first.stops })
+  assert.match(diagonal.error, /aligné/)
 })

@@ -1739,6 +1739,8 @@ function connectorAssetUrl(connector) {
   if (!rawUrl) return null
   const builtinVersion = connector?.type === 'hatch'
     ? 'hatch-floor-pocket-20260722'
+    : connector?.type === 'elevator'
+      ? 'elevator-transit-20260722'
     : 'door-model-refresh-20260709'
   const versionedUrl = rawUrl.startsWith('builtin-models/') && !rawUrl.includes('?')
     ? `${rawUrl}?v=${builtinVersion}`
@@ -1796,25 +1798,147 @@ function WindowEmbrasure({ connector, opacity = 1 }) {
   )
 }
 
-function elevatorDisplayY(state, fallbackY, now = Date.now()) {
+function elevatorDisplayPosition(state, fallback, connector, now = Date.now()) {
   if (state?.phase !== 'moving' || !Number.isFinite(Number(state.transitionEndsAt))) {
-    return Number.isFinite(Number(state?.positionY)) ? Number(state.positionY) : fallbackY
+    return {
+      x: Number.isFinite(Number(state?.positionX)) ? Number(state.positionX) : fallback.x,
+      y: Number.isFinite(Number(state?.positionY)) ? Number(state.positionY) : fallback.y,
+      z: Number.isFinite(Number(state?.positionZ)) ? Number(state.positionZ) : fallback.z,
+    }
   }
   const startedAt = Number(state.transitionStartedAt)
   const endsAt = Number(state.transitionEndsAt)
-  const fromY = Number(state.movementFromY)
-  const toY = Number(state.movementToY)
-  if (![startedAt, endsAt, fromY, toY].every(Number.isFinite) || endsAt <= startedAt) return fallbackY
+  const from = state.movementFrom || {
+    x: Number(state.positionX ?? fallback.x),
+    y: Number(state.movementFromY ?? fallback.y),
+    z: Number(state.positionZ ?? fallback.z),
+  }
+  const path = Array.isArray(state.movementPath) && state.movementPath.length
+    ? state.movementPath
+    : [{ x: from.x, y: Number(state.movementToY ?? fallback.y), z: from.z }]
+  if (![startedAt, endsAt, from.x, from.y, from.z].every(Number.isFinite) || endsAt <= startedAt) return fallback
   const ratio = Math.max(0, Math.min(1, (now - startedAt) / (endsAt - startedAt)))
-  return fromY + (toY - fromY) * ratio
+  const points = [from, ...path]
+  const storyHeight = Math.max(0.1, Number(connector?.storyHeight) || STORY_HEIGHT)
+  const verticalRate = Math.max(0.1, Number(connector?.travelSecondsPerLevel) || 2) / storyHeight
+  const horizontalRate = Math.max(0.1, Number(connector?.travelSecondsPerUnit) || 1)
+  const weights = points.slice(1).map((point, index) => {
+    const previous = points[index]
+    const dx = Math.abs(Number(point.x) - Number(previous.x))
+    const dy = Math.abs(Number(point.y) - Number(previous.y))
+    const dz = Math.abs(Number(point.z) - Number(previous.z))
+    return dy > 0.0001 ? dy * verticalRate : (dx + dz) * horizontalRate
+  })
+  let remaining = ratio * weights.reduce((sum, value) => sum + value, 0)
+  for (let index = 0; index < weights.length; index += 1) {
+    const weight = weights[index]
+    if (remaining <= weight || index === weights.length - 1) {
+      const localRatio = weight > 0 ? Math.max(0, Math.min(1, remaining / weight)) : 1
+      return {
+        x: Number(points[index].x) + (Number(points[index + 1].x) - Number(points[index].x)) * localRatio,
+        y: Number(points[index].y) + (Number(points[index + 1].y) - Number(points[index].y)) * localRatio,
+        z: Number(points[index].z) + (Number(points[index + 1].z) - Number(points[index].z)) * localRatio,
+      }
+    }
+    remaining -= weight
+  }
+  return { ...fallback }
 }
 
-function AnimatedElevatorCabin({ state, fallbackY, children }) {
+function AnimatedElevatorCabin({ state, fallback, connector, children }) {
   const ref = useRef()
   useFrame(() => {
-    if (ref.current) ref.current.position.y = elevatorDisplayY(state, fallbackY)
+    if (!ref.current) return
+    const position = elevatorDisplayPosition(state, fallback, connector)
+    ref.current.position.set(position.x, position.y, position.z)
   })
-  return <group ref={ref} position={[0, elevatorDisplayY(state, fallbackY), 0]}>{children}</group>
+  const position = elevatorDisplayPosition(state, fallback, connector)
+  return <group ref={ref} position={[position.x, position.y, position.z]}>{children}</group>
+}
+
+function ElevatorTubeBox({ position, size, openAxis = 'y', style = 'industrial', opacity = 1 }) {
+  const glass = style === 'glass'
+  const frame = 0.055
+  const [width, height, depth] = size
+  const panel = Math.max(0.018, frame * 0.38)
+  const panels = [
+    ...(openAxis === 'y' ? [] : [
+      { key: 'floor', position: [0, -height / 2, 0], args: [width, panel, depth] },
+      { key: 'ceiling', position: [0, height / 2, 0], args: [width, panel, depth] },
+    ]),
+    ...(openAxis === 'x' ? [] : [
+      { key: 'west', position: [-width / 2, 0, 0], args: [panel, height, depth] },
+      { key: 'east', position: [width / 2, 0, 0], args: [panel, height, depth] },
+    ]),
+    ...(openAxis === 'z' ? [] : [
+      { key: 'north', position: [0, 0, -depth / 2], args: [width, height, panel] },
+      { key: 'south', position: [0, 0, depth / 2], args: [width, height, panel] },
+    ]),
+  ]
+  const beams = [
+    ...[-1, 1].flatMap(xSide => [-1, 1].map(zSide => ({
+      key: `y:${xSide}:${zSide}`,
+      position: [xSide * width / 2, 0, zSide * depth / 2],
+      args: [frame, height, frame],
+    }))),
+    ...[-1, 1].flatMap(ySide => [-1, 1].map(zSide => ({
+      key: `x:${ySide}:${zSide}`,
+      position: [0, ySide * height / 2, zSide * depth / 2],
+      args: [width, frame, frame],
+    }))),
+    ...[-1, 1].flatMap(xSide => [-1, 1].map(ySide => ({
+      key: `z:${xSide}:${ySide}`,
+      position: [xSide * width / 2, ySide * height / 2, 0],
+      args: [frame, frame, depth],
+    }))),
+  ]
+  return (
+    <group position={position}>
+      {panels.map(item => <mesh key={item.key} position={item.position}>
+        <boxGeometry args={item.args} />
+        <meshStandardMaterial
+          color={glass ? '#7dd3fc' : '#17212b'}
+          metalness={glass ? 0.08 : 0.68}
+          roughness={glass ? 0.16 : 0.4}
+          transparent
+          opacity={Math.min(glass ? 0.2 : 0.58, opacity)}
+          depthWrite={!glass && opacity >= 0.95}
+          side={THREE.DoubleSide}
+        />
+      </mesh>)}
+      {beams.map(beam => (
+        <mesh key={beam.key} position={beam.position} castShadow>
+          <boxGeometry args={beam.args} />
+          <meshStandardMaterial color={glass ? '#263746' : '#0c1218'} metalness={0.82} roughness={0.3} transparent opacity={opacity} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function ElevatorCabinModel({ connector, opacity = 1 }) {
+  const url = connectorAssetUrl(connector)
+  const { scene: sourceScene } = useGLTF(url)
+  const materialSlots = useMemo(() => connectorModelMaterialSlots(connector), [connector])
+  const materialOverrides = connector?.modelMaterialOverrides || null
+  const scene = useMemo(() => {
+    const clone = SkeletonUtils.clone(sourceScene)
+    clone.traverse(child => {
+      if (!child.isMesh) return
+      child.castShadow = true
+      child.receiveShadow = true
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      child.material = materials.map(material => {
+        const next = applyMaterialSlotOverrides(material.clone(), materialSlots, materialOverrides)
+        next.transparent = opacity < 0.999 || next.transparent
+        next.opacity = Math.min(Number(next.opacity) || 1, opacity)
+        return next
+      })
+      if (child.material.length === 1) child.material = child.material[0]
+    })
+    return clone
+  }, [sourceScene, opacity, materialOverrides, materialSlots])
+  return <primitive object={scene} position={[Number(connector.width) / 2, 0, Number(connector.depth) / 2]} />
 }
 
 function doorControlMountSide(name) {
@@ -2402,89 +2526,177 @@ export function ConnectorSegment({ connector, linkedHatch = null, curveWall = nu
     const floorThickness = Math.max(0.04, Number(connector.cabinFloorThickness) || 0.12)
     const wallThickness = Math.max(0.04, Number(connector.cabinWallThickness) || 0.08)
     const stops = Array.isArray(connector.stops) && connector.stops.length
-      ? connector.stops
+      ? connector.stops.map(stop => ({
+        ...stop,
+        x: Number.isFinite(Number(stop.x)) ? Number(stop.x) : Number(connector.x) || 0,
+        z: Number.isFinite(Number(stop.z)) ? Number(stop.z) : Number(connector.z) || 0,
+        doorAxis: stop.doorAxis === 'x' ? 'x' : stop.doorAxis === 'z' ? 'z' : connector.doorAxis === 'x' ? 'x' : 'z',
+        doorSide: Number(stop.doorSide ?? connector.doorSide) < 0 ? -1 : 1,
+      }))
       : [
-        { id: `level:${connector.fromLevel ?? connector.level ?? 0}`, y: Number(connector.y) || 0 },
-        { id: `level:${connector.toLevel ?? ((connector.level ?? 0) + 1)}`, y: Number(connector.topY) || (Number(connector.y) || 0) + STORY_HEIGHT },
+        { id: `level:${connector.fromLevel ?? connector.level ?? 0}`, x: Number(connector.x) || 0, y: Number(connector.y) || 0, z: Number(connector.z) || 0, doorAxis: connector.doorAxis === 'x' ? 'x' : 'z', doorSide: Number(connector.doorSide) < 0 ? -1 : 1 },
+        { id: `level:${connector.toLevel ?? ((connector.level ?? 0) + 1)}`, x: Number(connector.x) || 0, y: Number(connector.topY) || (Number(connector.y) || 0) + STORY_HEIGHT, z: Number(connector.z) || 0, doorAxis: connector.doorAxis === 'x' ? 'x' : 'z', doorSide: Number(connector.doorSide) < 0 ? -1 : 1 },
       ]
     const runtimeState = connector.runtimeState || {}
+    const fallback = { x: stops[0].x, y: Number(stops[0].y) || Number(connector.y) || 0, z: stops[0].z }
     const floorY = Number.isFinite(Number(runtimeState.positionY))
       ? Number(runtimeState.positionY)
-      : Number(stops[0]?.y) || Number(connector.y) || 0
+      : fallback.y
+    const cabinPosition = elevatorDisplayPosition(runtimeState, fallback, connector)
     const currentStop = stops.find(stop => stop.id === runtimeState.currentStopId)
     const doorsOpen = runtimeState.phase === 'open'
       && runtimeState.doorState === 'open'
       && currentStop
+      && Math.abs(Number(currentStop.x) - cabinPosition.x) < 0.001
       && Math.abs(Number(currentStop.y) - floorY) < 0.001
-    const x = Number(connector.x) || 0
-    const z = Number(connector.z) || 0
-    const centerX = x + width / 2
-    const centerZ = z + depth / 2
+      && Math.abs(Number(currentStop.z) - cabinPosition.z) < 0.001
     const fullShaftBottom = Math.min(...stops.map(stop => Number(stop.y) || 0))
     const fullShaftTop = Math.max(...stops.map(stop => Number(stop.y) || 0)) + cabinHeight
     const sliceBottom = displayLevel === null ? fullShaftBottom : displayLevel * STORY_HEIGHT
     const sliceTop = displayLevel === null ? fullShaftTop : sliceBottom + STORY_HEIGHT
-    const shaftBottom = Math.max(fullShaftBottom, sliceBottom)
-    const shaftTop = Math.min(fullShaftTop, sliceTop)
-    const visibleStops = stops.filter(stop => displayLevel === null || yToLevel(stop.y) === displayLevel)
-    const cabinDisplayY = elevatorDisplayY(runtimeState, floorY)
+    const visibleStops = stops.filter(stop => displayLevel === null || (
+      Number(stop.y) < sliceTop && Number(stop.y) + cabinHeight > sliceBottom
+    ))
+    const cabinDisplayY = cabinPosition.y
     const cabinVisible = displayLevel === null
       || (cabinDisplayY < sliceTop && cabinDisplayY + cabinHeight > sliceBottom)
-    const doorAxis = connector.doorAxis === 'x' ? 'x' : 'z'
-    const doorSide = Number(connector.doorSide) < 0 ? -1 : 1
+    const style = String(connector.elevatorStyle || connector.modelGeometry?.elevatorStyle || 'industrial') === 'glass' ? 'glass' : 'industrial'
     const faces = [
       { axis: 'x', side: -1 }, { axis: 'x', side: 1 },
       { axis: 'z', side: -1 }, { axis: 'z', side: 1 },
     ]
-    const faceBox = (face, y) => face.axis === 'x'
+    const faceBox = (face, origin, y, height = cabinHeight) => face.axis === 'x'
       ? {
-        position: [face.side < 0 ? x : x + width, y, centerZ],
-        args: [wallThickness, cabinHeight, depth],
+        position: [face.side < 0 ? origin.x : origin.x + width, y, origin.z + depth / 2],
+        args: [wallThickness, height, depth],
       }
       : {
-        position: [centerX, y, face.side < 0 ? z : z + depth],
-        args: [width, cabinHeight, wallThickness],
+        position: [origin.x + width / 2, y, face.side < 0 ? origin.z : origin.z + depth],
+        args: [width, height, wallThickness],
       }
+    const cabinDoorFaces = new Set(stops.map(stop => `${stop.doorAxis}:${stop.doorSide}`))
+    const routeBoxes = stops.slice(1).flatMap((stop, index) => {
+      const previous = stops[index]
+      const axis = ['x', 'y', 'z'].find(key => Math.abs(Number(stop[key]) - Number(previous[key])) > 0.001)
+      if (axis === 'y') {
+        const low = Number(previous.y) < Number(stop.y) ? previous : stop
+        const high = low === previous ? stop : previous
+        const bottom = Number(low.y) + cabinHeight
+        const top = Number(high.y)
+        return top > bottom + 0.001 ? [{
+          key: `${index}:y`,
+          axis: 'y',
+          position: [Number(low.x) + width / 2, (bottom + top) / 2, Number(low.z) + depth / 2],
+          size: [width + wallThickness * 2, top - bottom, depth + wallThickness * 2],
+        }] : []
+      }
+      if (axis === 'x') {
+        const low = Number(previous.x) < Number(stop.x) ? previous : stop
+        const high = low === previous ? stop : previous
+        const start = Number(low.x) + width
+        const end = Number(high.x)
+        return end > start + 0.001 ? [{
+          key: `${index}:x`,
+          axis: 'x',
+          position: [(start + end) / 2, Number(low.y) + cabinHeight / 2, Number(low.z) + depth / 2],
+          size: [end - start, cabinHeight + wallThickness * 2, depth + wallThickness * 2],
+        }] : []
+      }
+      if (axis === 'z') {
+        const low = Number(previous.z) < Number(stop.z) ? previous : stop
+        const high = low === previous ? stop : previous
+        const start = Number(low.z) + depth
+        const end = Number(high.z)
+        return end > start + 0.001 ? [{
+          key: `${index}:z`,
+          axis: 'z',
+          position: [Number(low.x) + width / 2, Number(low.y) + cabinHeight / 2, (start + end) / 2],
+          size: [width + wallThickness * 2, cabinHeight + wallThickness * 2, end - start],
+        }] : []
+      }
+      return []
+    }).filter(box => displayLevel === null || (
+      box.position[1] + box.size[1] / 2 > sliceBottom && box.position[1] - box.size[1] / 2 < sliceTop
+    ))
+    const panelColor = style === 'glass' ? '#75c7e8' : '#17212b'
     return (
       <group renderOrder={30} {...pointerProps}>
-        <mesh position={[centerX, shaftBottom + (shaftTop - shaftBottom) / 2, centerZ]}>
-          <boxGeometry args={[width + wallThickness * 2, shaftTop - shaftBottom, depth + wallThickness * 2]} />
-          <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={Math.min(0.2, opacity * 0.2)} depthWrite={false} />
-        </mesh>
+        {routeBoxes.map(box => (
+          <ElevatorTubeBox key={box.key} position={box.position} size={box.size} openAxis={box.axis} style={style} opacity={opacity} />
+        ))}
         {visibleStops.map(stop => {
+          const stopIndex = stops.findIndex(candidate => candidate.id === stop.id)
+          const connectedFaces = new Set()
+          const neighbors = [stops[stopIndex - 1], stops[stopIndex + 1]].filter(Boolean)
+          for (const neighbor of neighbors) {
+            const axis = ['x', 'z'].find(key => Math.abs(Number(neighbor[key]) - Number(stop[key])) > 0.001)
+            if (axis) connectedFaces.add(`${axis}:${Number(neighbor[axis]) < Number(stop[axis]) ? -1 : 1}`)
+          }
           const open = doorsOpen && stop.id === runtimeState.currentStopId
-          if (open) return null
-          const face = { axis: doorAxis, side: doorSide }
-          const box = faceBox(face, Number(stop.y) + cabinHeight / 2)
+          const doorFace = { axis: stop.doorAxis, side: stop.doorSide }
+          const doorBox = faceBox(doorFace, stop, Number(stop.y) + cabinHeight / 2)
           return (
-            <mesh key={`landing-${stop.id}`} position={box.position}>
-              <boxGeometry args={box.args} />
-              <meshStandardMaterial color="#475569" transparent opacity={Math.min(0.82, opacity)} />
-            </mesh>
+            <group key={`landing-${stop.id}`}>
+              {faces.filter(face => (
+                (face.axis !== stop.doorAxis || face.side !== stop.doorSide)
+                && !connectedFaces.has(`${face.axis}:${face.side}`)
+              )).map(face => {
+                const box = faceBox(face, stop, Number(stop.y) + cabinHeight / 2)
+                return (
+                  <mesh key={`${face.axis}:${face.side}`} position={box.position} castShadow receiveShadow>
+                    <boxGeometry args={box.args} />
+                    <meshStandardMaterial color={panelColor} metalness={style === 'glass' ? 0.08 : 0.7} roughness={style === 'glass' ? 0.16 : 0.42} transparent opacity={Math.min(style === 'glass' ? 0.2 : 0.7, opacity)} depthWrite={style !== 'glass'} side={THREE.DoubleSide} />
+                  </mesh>
+                )
+              })}
+              {!open && (
+                <mesh position={doorBox.position} castShadow>
+                  <boxGeometry args={doorBox.args} />
+                  <meshStandardMaterial color={style === 'glass' ? '#87d7f7' : '#475569'} metalness={0.56} roughness={0.34} transparent opacity={Math.min(style === 'glass' ? 0.34 : 0.92, opacity)} depthWrite={style !== 'glass'} />
+                </mesh>
+              )}
+              {!neighbors.some(neighbor => Math.abs(Number(neighbor.y) - Number(stop.y)) > 0.001 && Number(neighbor.y) < Number(stop.y)) && (
+                <mesh position={[Number(stop.x) + width / 2, Number(stop.y), Number(stop.z) + depth / 2]}>
+                  <boxGeometry args={[width, wallThickness, depth]} />
+                  <meshStandardMaterial color={panelColor} metalness={0.62} roughness={0.38} transparent opacity={Math.min(style === 'glass' ? 0.2 : 0.72, opacity)} depthWrite={style !== 'glass'} />
+                </mesh>
+              )}
+              {!neighbors.some(neighbor => Math.abs(Number(neighbor.y) - Number(stop.y)) > 0.001 && Number(neighbor.y) > Number(stop.y)) && (
+                <mesh position={[Number(stop.x) + width / 2, Number(stop.y) + cabinHeight, Number(stop.z) + depth / 2]}>
+                  <boxGeometry args={[width, wallThickness, depth]} />
+                  <meshStandardMaterial color={panelColor} metalness={0.62} roughness={0.38} transparent opacity={Math.min(style === 'glass' ? 0.2 : 0.72, opacity)} depthWrite={style !== 'glass'} />
+                </mesh>
+              )}
+            </group>
           )
         })}
-        {cabinVisible && <AnimatedElevatorCabin state={runtimeState} fallbackY={floorY}>
-          <mesh position={[centerX, -floorThickness / 2, centerZ]} receiveShadow>
+        {cabinVisible && <AnimatedElevatorCabin state={runtimeState} fallback={fallback} connector={connector}>
+          {connectorAssetUrl(connector) && (
+            <Suspense fallback={null}><ElevatorCabinModel connector={{ ...connector, width, depth }} opacity={opacity} /></Suspense>
+          )}
+          <mesh position={[width / 2, -floorThickness / 2, depth / 2]} receiveShadow>
             <boxGeometry args={[width, floorThickness, depth]} />
             <meshStandardMaterial color="#a78bfa" metalness={0.55} roughness={0.38} transparent opacity={Math.min(0.96, opacity)} />
           </mesh>
-          <mesh position={[centerX, cabinHeight - floorThickness / 2, centerZ]} castShadow>
+          <mesh position={[width / 2, cabinHeight - floorThickness / 2, depth / 2]} castShadow>
             <boxGeometry args={[width, floorThickness, depth]} />
             <meshStandardMaterial color="#64748b" metalness={0.45} roughness={0.45} transparent opacity={Math.min(0.92, opacity)} />
           </mesh>
           {faces.map(face => {
-            const isDoor = face.axis === doorAxis && face.side === doorSide
-            if (isDoor && doorsOpen) return null
-            const box = faceBox(face, cabinHeight / 2)
+            const faceKey = `${face.axis}:${face.side}`
+            const isDoor = cabinDoorFaces.has(faceKey)
+            const activeDoor = currentStop && face.axis === currentStop.doorAxis && face.side === currentStop.doorSide
+            if (activeDoor && doorsOpen) return null
+            const box = faceBox(face, { x: 0, z: 0 }, cabinHeight / 2)
             return (
               <mesh key={`cabin-${face.axis}-${face.side}`} position={box.position} castShadow>
                 <boxGeometry args={box.args} />
-                <meshStandardMaterial color={isDoor ? '#8b5cf6' : '#334155'} metalness={0.5} roughness={0.42} transparent opacity={Math.min(isDoor ? 0.9 : 0.72, opacity)} />
+                <meshStandardMaterial color={isDoor ? '#8b5cf6' : panelColor} metalness={0.5} roughness={style === 'glass' && !isDoor ? 0.16 : 0.42} transparent opacity={Math.min(style === 'glass' && !isDoor ? 0.22 : isDoor ? 0.9 : 0.78, opacity)} depthWrite={style !== 'glass' || isDoor} />
               </mesh>
             )
           })}
           {selected && (
-            <mesh position={[centerX, cabinHeight / 2, centerZ]} renderOrder={45}>
+            <mesh position={[width / 2, cabinHeight / 2, depth / 2]} renderOrder={45}>
               <boxGeometry args={[width + 0.1, cabinHeight + 0.1, depth + 0.1]} />
               <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
             </mesh>

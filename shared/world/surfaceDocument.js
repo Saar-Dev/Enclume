@@ -471,6 +471,33 @@ function validateFeature(collection, id, item, errors) {
       }
     } else if (item.type === 'elevator') {
       validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
+      if (item.stops != null && (!Array.isArray(item.stops) || item.stops.length < 2)) {
+        errors.push(`${path}.stops doit contenir au moins deux arrêts`)
+      } else if (Array.isArray(item.stops)) {
+        const stopIds = new Set()
+        const routedStops = item.stops.some(stop => stop?.x != null || stop?.z != null)
+        item.stops.forEach((stop, stopIndex) => {
+          const stopPath = `${path}.stops[${stopIndex}]`
+          if (!isPlainObject(stop)) {
+            errors.push(`${stopPath} doit être un objet`)
+            return
+          }
+          validateFiniteFields(stop, routedStops ? ['x', 'y', 'z', 'level'] : ['y', 'level'], stopPath, errors)
+          if (typeof stop.id !== 'string' || !stop.id) errors.push(`${stopPath}.id est obligatoire`)
+          else if (stopIds.has(stop.id)) errors.push(`${stopPath}.id doit être unique`)
+          else stopIds.add(stop.id)
+          if (routedStops && !['x', 'z'].includes(stop.doorAxis)) errors.push(`${stopPath}.doorAxis doit valoir x ou z`)
+          if (routedStops && ![1, -1].includes(Number(stop.doorSide))) errors.push(`${stopPath}.doorSide doit valoir 1 ou -1`)
+          if (routedStops && stopIndex > 0) {
+            const previous = item.stops[stopIndex - 1]
+            const changedAxes = ['x', 'y', 'z'].filter(axis => (
+              Math.abs(Number(stop[axis]) - Number(previous?.[axis])) > 0.001
+            ))
+            if (changedAxes.length !== 1) errors.push(`${stopPath} doit être aligné sur X, Y ou Z avec l’arrêt précédent`)
+          }
+        })
+      }
+      if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une emprise positive`)
     }
   }
 }

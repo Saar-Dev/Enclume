@@ -1407,6 +1407,7 @@ export default function Editor3D({
   const [surfaceRedoDepth, setSurfaceRedoDepth] = useState(0)
   const surfaceUndoRequestRef = useRef(surfaceUndoRequest)
   const surfaceRedoRequestRef = useRef(surfaceRedoRequest)
+  const previousSurfaceToolModeRef = useRef(surfaceTool?.mode)
   // voxelsRef — miroir de voxels pour accès dans le cleanup useEffect (évite le stale closure)
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
@@ -2017,6 +2018,31 @@ export default function Editor3D({
     })
   }, [onSurfaceToolChange, surfaceTool])
 
+  const continueElevatorRoute = useCallback((connector) => {
+    if (!connector || connector.type !== 'elevator') return
+    const lastStop = connector.stops?.at(-1)
+    setSurfaceConnectorPanel(null)
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'connector',
+      connectorType: 'elevator',
+      connectorPlacementSource: 'surface-editor',
+      selectedConnectorId: connector.id,
+      elevatorDraftStops: connector.stops || [],
+      elevatorEditConnectorId: connector.id,
+      elevatorDoorAxis: lastStop?.doorAxis === 'x' ? 'x' : 'z',
+      elevatorDoorSide: Number(lastStop?.doorSide) < 0 ? -1 : 1,
+      connectorBlueprintId: connector.modelBlueprintId || null,
+      connectorModelLabel: connector.modelLabel || null,
+      connectorModelCategory: connector.modelCategory || null,
+      connectorModelGlbUrl: connector.modelGlbUrl || null,
+      connectorModelBuiltinKey: connector.modelBuiltinKey || null,
+      connectorModelGeometry: connector.modelGeometry || null,
+      connectorMaterialOverrides: connector.modelMaterialOverrides || {},
+      roomArcError: null,
+    })
+  }, [onSurfaceToolChange, surfaceTool])
+
   const closeSurfaceRoomPanel = useCallback(() => {
     setSurfaceRoomPanel(null)
     if (!surfaceTool?.selectedRoomId) return
@@ -2053,6 +2079,15 @@ export default function Editor3D({
     if (surfaceTool?.mode === 'select') return
     setSurfaceConnectorPanel(null)
   }, [surfaceConnectorPanel, surfaceTool?.mode])
+
+  useEffect(() => {
+    const previousMode = previousSurfaceToolModeRef.current
+    previousSurfaceToolModeRef.current = surfaceTool?.mode
+    const connectorId = surfaceTool?.selectedConnectorId
+    if (previousMode !== 'connector' || surfaceTool?.mode !== 'select' || !connectorId) return
+    if (surfaceData.connectors?.[connectorId]?.type !== 'elevator') return
+    setSurfaceConnectorPanel({ connectorId, x: 24, y: 24 })
+  }, [surfaceData.connectors, surfaceTool?.mode, surfaceTool?.selectedConnectorId])
 
   useEffect(() => {
     const placingOpeningOnSelectedWall = surfaceTool?.mode === 'connector'
@@ -2264,7 +2299,7 @@ export default function Editor3D({
 
   const activeStructuralConnectorType = activeBlueprint?.geometry?.connectorType
   const placingStructuralObject = activeEditorTab === 'entity'
-    && ['window', 'screen-window', 'skylight', 'stairs', 'ladder'].includes(activeStructuralConnectorType)
+    && ['window', 'screen-window', 'skylight', 'stairs', 'ladder', 'elevator'].includes(activeStructuralConnectorType)
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -2349,6 +2384,7 @@ export default function Editor3D({
           onDelete={handleSurfaceConnectorDelete}
           runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
           onElevatorCommand={handleElevatorCommand}
+          onContinueElevatorRoute={continueElevatorRoute}
           onClose={closeSurfaceConnectorPanel}
         />
       )}

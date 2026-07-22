@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { isDoorConnectorBlueprint } from './connectorBlueprintCatalog.js'
+import { isDoorConnectorBlueprint, isElevatorConnectorBlueprint } from './connectorBlueprintCatalog.js'
 
 test('les portes legacy du pack futuriste restent dans le catalogue', () => {
   assert.equal(isDoorConnectorBlueprint({
@@ -31,4 +31,14 @@ test('un objet sans métadonnée ni mot-clé de porte reste hors du catalogue', 
     label: 'Caisse technique',
     geometry: { connectorType: null },
   }), false)
+})
+
+test('les catalogues portes et ascenseurs restent strictement séparés', () => {
+  const elevator = {
+    label: 'Ascenseur avec porte large',
+    geometry: { connectorType: 'elevator' },
+  }
+  assert.equal(isDoorConnectorBlueprint(elevator), false)
+  assert.equal(isElevatorConnectorBlueprint(elevator), true)
+  assert.equal(isElevatorConnectorBlueprint({ geometry: { connectorType: 'door' } }), false)
 })

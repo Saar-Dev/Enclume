@@ -11,7 +11,7 @@ import {
   applyBridgeSelection,
   applyCeilingSelection,
   applyDoorConnector,
-  applyElevatorConnector,
+  applyElevatorRouteStop,
   applyFloorSelection,
   applyLadderConnector,
   applySkylightConnector,
@@ -34,7 +34,10 @@ import {
   levelToY,
   makeStairFromCell,
   makeDoorConnectorFromWallPoint,
+  elevatorStopsAreAligned,
   makeElevatorConnectorFromCell,
+  makeElevatorConnectorFromStops,
+  makeElevatorStopFromCell,
   makeLadderHatchFromConnector,
   makeLadderConnectorFromCell,
   makeSkylightConnectorFromCell,
@@ -553,6 +556,36 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
     )
   }, [surfaceData])
   if (!drag) return null
+  if (surfaceTool?.connectorType === 'elevator') {
+    const surface = normalizeSurfaceData(surfaceData)
+    const existing = surfaceTool?.elevatorEditConnectorId
+      ? surface.connectors?.[surfaceTool.elevatorEditConnectorId]
+      : null
+    const draftStops = existing?.type === 'elevator'
+      ? existing.stops || []
+      : Array.isArray(surfaceTool?.elevatorDraftStops) ? surfaceTool.elevatorDraftStops : []
+    const stop = makeElevatorStopFromCell(surface, drag.end, surfaceTool, draftStops.length)
+    if (!stop || (draftStops.length && !elevatorStopsAreAligned(draftStops.at(-1), stop))) return null
+    if (!draftStops.length) {
+      const geometry = surfaceTool?.connectorModelGeometry || {}
+      const width = Math.max(1, Math.round(Number(geometry.footprintWidth ?? geometry.width) || 1))
+      const depth = Math.max(1, Math.round(Number(geometry.footprintDepth ?? geometry.depth) || 1))
+      return (
+        <mesh position={[stop.x + width / 2, stop.y + 1.1, stop.z + depth / 2]} renderOrder={35}>
+          <boxGeometry args={[width, 2.2, depth]} />
+          <meshBasicMaterial color="#a78bfa" transparent opacity={0.34} depthWrite={false} />
+        </mesh>
+      )
+    }
+    const connector = makeElevatorConnectorFromStops(surface, [...draftStops, stop], surfaceTool, existing)
+    return connector ? (
+      <ConnectorSegment
+        connector={{ ...connector, id: 'connector-preview', runtimeState: { phase: 'idle', doorState: 'closed', currentStopId: connector.stops[0].id, positionX: connector.stops[0].x, positionY: connector.stops[0].y, positionZ: connector.stops[0].z } }}
+        opacity={0.5}
+        displayLevel={null}
+      />
+    ) : null
+  }
   const connector = ['door', 'window', 'screen-window'].includes(surfaceTool?.connectorType)
     ? makeDoorConnectorFromWallPoint(surfaceData, drag.end, surfaceTool)
     : surfaceTool?.connectorType === 'skylight'
@@ -900,6 +933,22 @@ export default function SurfaceEditorScene({
       }
     }
     for (const [id, connector] of Object.entries(surface.connectors || {})) {
+      if (connector?.type === 'elevator') {
+        const stops = Array.isArray(connector.stops) ? connector.stops : []
+        const width = Math.max(0.5, Number(connector.width) || 1)
+        const depth = Math.max(0.5, Number(connector.depth) || 1)
+        for (const stop of stops) {
+          if (Number(stop.level ?? yToLevel(stop.y)) !== level) continue
+          const minX = Number(stop.x ?? connector.x)
+          const minZ = Number(stop.z ?? connector.z)
+          const maxX = minX + width
+          const maxZ = minZ + depth
+          if (point.x < minX || point.x > maxX || point.z < minZ || point.z > maxZ) continue
+          const distance = Math.hypot(point.x - (minX + maxX) / 2, point.z - (minZ + maxZ) / 2)
+          if (!best || distance < best.distance) best = { id, connector: { id, ...connector }, distance }
+        }
+        continue
+      }
       const connectorLevel = Number.isFinite(Number(connector?.level))
         ? Number(connector.level)
         : Math.round((Number(connector?.y) || 0) / STORY_HEIGHT)
@@ -933,7 +982,7 @@ export default function SurfaceEditorScene({
           minZ = Math.min(Number(connector.z0), Number(connector.z1)) / SURFACE_FINE
           maxZ = Math.max(Number(connector.z0), Number(connector.z1)) / SURFACE_FINE
         }
-      } else if (connector?.type === 'elevator' || connector?.type === 'ladder') {
+      } else if (connector?.type === 'ladder') {
         minX = Number(connector.x)
         maxX = minX + 1
         minZ = Number(connector.z)
@@ -1243,6 +1292,27 @@ export default function SurfaceEditorScene({
       }
 
       if (mode === 'connector') {
+        if (surfaceTool?.connectorType === 'elevator') {
+          const result = applyElevatorRouteStop(surfaceData, finalDrag.end, surfaceTool)
+          if (result.error) {
+            onSurfaceToolChange?.({ ...surfaceTool, roomArcError: result.error })
+          } else {
+            if (result.surfaceData !== surfaceData) onSurfaceDataChange(result.surfaceData)
+            onSurfaceToolChange?.({
+              ...surfaceTool,
+              mode: 'connector',
+              connectorType: 'elevator',
+              elevatorDraftStops: result.stops,
+              elevatorEditConnectorId: result.connector?.id || null,
+              selectedConnectorId: result.connector?.id || null,
+              roomArcError: null,
+            })
+          }
+          setHoverPreview(null)
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
         const placedLadder = surfaceTool?.connectorType === 'ladder'
           ? makeLadderConnectorFromCell(surfaceData, finalDrag.end, surfaceTool)
           : null
@@ -1252,7 +1322,7 @@ export default function SurfaceEditorScene({
             ? applySkylightConnector(surfaceData, finalDrag.end, surfaceTool)
           : surfaceTool?.connectorType === 'ladder'
             ? applyLadderConnector(surfaceData, finalDrag.end, surfaceTool)
-            : applyElevatorConnector(surfaceData, finalDrag.end, surfaceTool)
+            : surfaceData
         if (nextData === surfaceData) {
           const openingError = ['window', 'screen-window'].includes(surfaceTool?.connectorType)
             ? 'La fenêtre doit être posée sur un mur.'

@@ -94,7 +94,7 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
         <span>Cabine</span>
         <strong>{ELEVATOR_PHASE_LABELS[runtimeState?.phase] || 'État initial'}</strong>
         <span>Palier</span>
-        <strong>{runtimeState?.currentStopId || stops[0]?.label || '—'}</strong>
+        <strong>{stops.find(stop => stop.id === runtimeState?.currentStopId)?.label || stops[0]?.label || '—'}</strong>
         <span>File</span>
         <strong>{runtimeState?.queue?.length || 0} appel(s)</strong>
       </div>
@@ -143,6 +143,7 @@ export default function SurfaceConnectorPanel({
   onClose,
   runtimeState = null,
   onElevatorCommand = null,
+  onContinueElevatorRoute = null,
   onWindowStateChange = null,
   onHatchStateChange = null,
   canEdit = true,
@@ -515,12 +516,47 @@ export default function SurfaceConnectorPanel({
         )}
 
         {connector.type === 'elevator' && (
-          <ElevatorRuntimeControls
-            connector={connector}
-            runtimeState={runtimeState}
-            onCommand={onElevatorCommand}
-            canAdmin={canAdminElevator}
-          />
+          <>
+            {canEdit && (
+              <div style={S.field}>
+                <span style={S.label}>Arrêts et portes palières</span>
+                {(connector.stops || []).map((stop, index) => (
+                  <label key={stop.id} style={S.appearanceRow}>
+                    <span>{stop.label || `Arrêt ${index + 1}`}</span>
+                    <select
+                      value={`${stop.doorAxis === 'x' ? 'x' : 'z'}:${Number(stop.doorSide) < 0 ? -1 : 1}`}
+                      onChange={event => {
+                        const [doorAxis, doorSide] = event.target.value.split(':')
+                        onPatch?.(connector.id, {
+                          stops: connector.stops.map(candidate => candidate.id === stop.id
+                            ? { ...candidate, doorAxis, doorSide: Number(doorSide) }
+                            : candidate),
+                        })
+                      }}
+                      style={S.input}
+                    >
+                      <option value="z:-1">Nord</option>
+                      <option value="x:1">Est</option>
+                      <option value="z:1">Sud</option>
+                      <option value="x:-1">Ouest</option>
+                    </select>
+                  </label>
+                ))}
+                {onContinueElevatorRoute && (
+                  <button type="button" onClick={() => onContinueElevatorRoute(connector)} style={S.button}>
+                    Continuer le trajet
+                  </button>
+                )}
+                <span style={S.hint}>La direction ne peut changer qu’à un arrêt. Chaque porte est orientée indépendamment.</span>
+              </div>
+            )}
+            <ElevatorRuntimeControls
+              connector={connector}
+              runtimeState={runtimeState}
+              onCommand={onElevatorCommand}
+              canAdmin={canAdminElevator}
+            />
+          </>
         )}
 
         {canEdit && <label style={S.field}>

@@ -116,6 +116,16 @@ function dimensions(asset, packName, manifest = {}, animationNames = []) {
   if (Number.isFinite(Number(asset.span_levels))) geometry.spanLevels = Number(asset.span_levels)
   if (Array.isArray(asset.allowed_states)) geometry.allowedStates = asset.allowed_states.map(String)
   if (asset.skylight_size) geometry.skylightSize = String(asset.skylight_size)
+  if (asset.elevator_style) geometry.elevatorStyle = String(asset.elevator_style)
+  if (asset.connector_type === 'elevator') {
+    geometry.footprintWidth = width
+    geometry.footprintDepth = geometry.depth
+    geometry.doorFaceWidthX = Number(asset.door_face_width_x_m ?? geometry.depth)
+    geometry.doorFaceWidthZ = Number(asset.door_face_width_z_m ?? width)
+    if (Array.isArray(asset.supported_door_orientations)) {
+      geometry.supportedDoorOrientations = asset.supported_door_orientations.map(String)
+    }
+  }
   if (animationNames.length > 0) geometry.animationClips = animationNames
   const explicitOpenable = Boolean(asset.openable || asset.animation || asset.opening || asset.animation_frame_open)
   if (modelHasOpenAnimation(animationNames, explicitOpenable)) geometry.openable = true

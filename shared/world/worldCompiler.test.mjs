@@ -858,6 +858,29 @@ test('une cabine en mouvement ferme tous les paliers et déplace son support', (
   assert.equal(moving.spatial.barriers.filter(item => item.kind === 'elevator-landing-door').length, 3)
 })
 
+test('une gaine orthogonale peut tourner à un arrêt et le verre reste transparent à la LOS', () => {
+  const surfaceData = emptySurface({
+    connectors: {
+      routedLift: {
+        id: 'routedLift', type: 'elevator', x: 0, z: 0, fromLevel: 0, toLevel: 1,
+        width: 2, depth: 1, elevatorStyle: 'glass', initialStopId: 'a',
+        stops: [
+          { id: 'a', level: 0, x: 0, y: 0.125, z: 0, doorAxis: 'z', doorSide: 1 },
+          { id: 'b', level: 1, x: 0, y: 2.625, z: 0, doorAxis: 'x', doorSide: -1 },
+          { id: 'c', level: 1, x: 4, y: 2.625, z: 0, doorAxis: 'z', doorSide: -1 },
+        ],
+      },
+    },
+  })
+  const snapshot = compileSurfaceWorld({ battlemapId: 'map-routed-lift', surfaceData })
+  const shaft = snapshot.spatial.barriers.filter(item => item.kind === 'elevator-shaft')
+  assert.ok(shaft.some(item => item.axis === 'horizontal'))
+  assert.ok(shaft.every(item => item.blocks.water && item.blocks.movement && !item.blocks.sight))
+  assert.equal(snapshot.spatial.occluders.some(item => item.kind === 'elevator-shaft'), false)
+  const landingDoors = snapshot.spatial.barriers.filter(item => item.kind === 'elevator-landing-door')
+  assert.deepEqual(landingDoors.map(item => item.axis), ['x', 'z'])
+})
+
 test('la compilation est déterministe pour une même entrée', () => {
   const args = {
     battlemapId: 'map-deterministic',

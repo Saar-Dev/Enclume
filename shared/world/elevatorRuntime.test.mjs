@@ -87,3 +87,40 @@ test('un ascenseur dessiné depuis le haut démarre bien au palier choisi', () =
   })
   assert.equal(createInitialElevatorState(descending).currentStopId, 'level:2')
 })
+
+test('un trajet orthogonal conserve l’ordre des arrêts et tourne sans diagonale', () => {
+  const routed = normalizeElevatorDefinition({
+    id: 'elevator-route', width: 2, depth: 1,
+    travelSecondsPerLevel: 1, travelSecondsPerUnit: 1, doorSeconds: 1,
+    stops: [
+      { id: 'a', level: 0, x: 1, y: 0, z: 1, doorAxis: 'z', doorSide: 1 },
+      { id: 'b', level: 1, x: 1, y: 2.5, z: 1, doorAxis: 'x', doorSide: -1 },
+      { id: 'c', level: 1, x: 4, y: 2.5, z: 1, doorAxis: 'z', doorSide: -1 },
+    ],
+  })
+  assert.deepEqual(routed.stops.map(stop => stop.id), ['a', 'b', 'c'])
+  assert.deepEqual(routed.stops.map(stop => [stop.doorAxis, stop.doorSide]), [['z', 1], ['x', -1], ['z', -1]])
+
+  const requested = requestElevatorStop(routed, createInitialElevatorState(routed), {
+    stopId: 'c', requestId: 'route', requestedAt: 0,
+  })
+  const atTurn = reconcileElevatorState(routed, requested, 2000)
+  assert.equal(atTurn.phase, 'moving')
+  assert.deepEqual(
+    { x: atTurn.positionX, y: atTurn.positionY, z: atTurn.positionZ },
+    { x: 1, y: 2.5, z: 1 },
+  )
+  const halfwayHorizontal = reconcileElevatorState(routed, requested, 3500)
+  assert.equal(halfwayHorizontal.positionY, 2.5)
+  assert.ok(halfwayHorizontal.positionX > 1 && halfwayHorizontal.positionX < 4)
+})
+
+test('un trajet diagonal est refusé', () => {
+  assert.throws(() => normalizeElevatorDefinition({
+    id: 'elevator-diagonal',
+    stops: [
+      { id: 'a', x: 0, y: 0, z: 0 },
+      { id: 'b', x: 1, y: 2.5, z: 0 },
+    ],
+  }), /alignés/)
+})

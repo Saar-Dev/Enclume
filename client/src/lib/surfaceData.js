@@ -2153,8 +2153,13 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     return {
       id: `level:${stopLevel}`,
       level: stopLevel,
+      x: cell.x,
       y: supportTopAt(surface, cell, stopLevel, getToolFloorThickness(tool)),
+      z: cell.z,
       label: `Étage ${stopLevel}`,
+      roomId: hit.id,
+      doorAxis: tool?.elevatorDoorAxis === 'x' ? 'x' : 'z',
+      doorSide: Number(tool?.elevatorDoorSide) < 0 ? -1 : 1,
     }
   })
   const id = `connector:elevator:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
@@ -2186,6 +2191,140 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('elevator'),
+  }
+}
+
+function elevatorFootprintFromTool(tool = {}) {
+  const geometry = connectorModelGeometryFromTool(tool)
+  return {
+    width: Math.max(1, Math.min(2, Math.round(Number(geometry.footprintWidth ?? geometry.gridWidth ?? geometry.width) || Number(tool.elevatorWidth) || 1))),
+    depth: Math.max(1, Math.min(2, Math.round(Number(geometry.footprintDepth ?? geometry.gridDepth ?? geometry.depth) || Number(tool.elevatorDepth) || 1))),
+  }
+}
+
+export function makeElevatorStopFromCell(surfaceData, cell, tool = {}, index = 0) {
+  if (!cell) return null
+  const surface = normalizeSurfaceData(surfaceData)
+  const level = getToolLevel(tool)
+  const x = Math.trunc(Number(cell.x))
+  const z = Math.trunc(Number(cell.z))
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null
+  const { width, depth } = elevatorFootprintFromTool(tool)
+  let owner = null
+  for (let dz = 0; dz < depth; dz += 1) {
+    for (let dx = 0; dx < width; dx += 1) {
+      const hit = findRoomAtCell(surface, { x: x + dx, z: z + dz }, level)
+      if (!hit?.room || (owner && hit.id !== owner.id)) return null
+      if (hit.room.wallEnabled === false
+        || hit.room.floorEnabled === false
+        || hit.room.ceilingEnabled === false
+        || (hit.room.openWallEdgeKeys || []).length > 0
+        || !sameLevel(getRoomBaseY(hit.room), levelToY(level))) return null
+      owner = hit
+    }
+  }
+  if (!owner) return null
+  return {
+    id: `stop:${Math.max(1, Math.trunc(Number(index) || 0) + 1)}`,
+    level,
+    x,
+    y: supportTopAt(surface, { x, z }, level, getToolFloorThickness(tool)),
+    z,
+    label: `Arrêt ${Math.max(1, Math.trunc(Number(index) || 0) + 1)} · étage ${level}`,
+    roomId: owner.id,
+    doorAxis: tool?.elevatorDoorAxis === 'x' ? 'x' : 'z',
+    doorSide: Number(tool?.elevatorDoorSide) < 0 ? -1 : 1,
+  }
+}
+
+export function elevatorStopsAreAligned(from, to, epsilon = 0.001) {
+  if (!from || !to) return false
+  const changedAxes = ['x', 'y', 'z'].filter(axis => Math.abs(Number(to[axis]) - Number(from[axis])) > epsilon)
+  return changedAxes.length === 1
+}
+
+function elevatorConnectorId(surface, firstStop) {
+  const stem = `connector:elevator:${firstStop.x}:${firstStop.y.toFixed(3)}:${firstStop.z}`
+  let id = stem
+  let suffix = 2
+  while (surface.connectors?.[id]) {
+    id = `${stem}:${suffix}`
+    suffix += 1
+  }
+  return id
+}
+
+export function makeElevatorConnectorFromStops(surfaceData, stopsInput, tool = {}, existingConnector = null) {
+  const surface = normalizeSurfaceData(surfaceData)
+  const stops = Array.isArray(stopsInput) ? stopsInput.map((stop, index) => ({
+    ...stop,
+    id: String(stop.id || `stop:${index + 1}`),
+    label: String(stop.label || `Arrêt ${index + 1} · étage ${stop.level}`),
+  })) : []
+  if (stops.length < 2 || stops.slice(1).some((stop, index) => !elevatorStopsAreAligned(stops[index], stop))) return null
+  const { width, depth } = elevatorFootprintFromTool(tool)
+  const first = stops[0]
+  const last = stops.at(-1)
+  const roomIds = [...new Set(stops.map(stop => stop.roomId).filter(Boolean))]
+  return {
+    ...(existingConnector || {}),
+    id: existingConnector?.id || elevatorConnectorId(surface, first),
+    type: 'elevator',
+    roomId: first.roomId || null,
+    roomIds,
+    x: first.x,
+    z: first.z,
+    level: first.level,
+    fromLevel: first.level,
+    toLevel: last.level,
+    initialStopId: existingConnector?.initialStopId || first.id,
+    stops,
+    y: Math.min(...stops.map(stop => Number(stop.y))),
+    topY: Math.max(...stops.map(stop => Number(stop.y))) + Math.min(2.2, STORY_HEIGHT * 0.88),
+    width,
+    depth,
+    cabinHeight: Math.min(2.2, STORY_HEIGHT * 0.88),
+    cabinFloorThickness: 0.12,
+    cabinWallThickness: 0.08,
+    doorAxis: first.doorAxis,
+    doorSide: first.doorSide,
+    elevatorStyle: connectorModelGeometryFromTool(tool).elevatorStyle || tool.elevatorStyle || existingConnector?.elevatorStyle || 'industrial',
+    travelSecondsPerLevel: Math.max(0.1, Number(tool?.elevatorTravelSecondsPerLevel ?? existingConnector?.travelSecondsPerLevel) || 2),
+    travelSecondsPerUnit: Math.max(0.1, Number(tool?.elevatorTravelSecondsPerUnit ?? existingConnector?.travelSecondsPerUnit) || 1),
+    doorSeconds: Math.max(0.1, Number(tool?.elevatorDoorSeconds ?? existingConnector?.doorSeconds) || 0.75),
+    dwellSeconds: Math.max(0.1, Number(tool?.elevatorDwellSeconds ?? existingConnector?.dwellSeconds) || 0.75),
+    state: existingConnector?.state || 'ready',
+    movementMultiplier: getToolMovementMultiplier(tool),
+    ...connectorModelFromTool(tool),
+    ...connectorCommonBlocking('elevator'),
+  }
+}
+
+export function applyElevatorRouteStop(surfaceData, cell, tool = {}) {
+  const surface = normalizeSurfaceData(surfaceData)
+  const existingId = tool?.elevatorEditConnectorId || null
+  const existing = existingId ? surface.connectors?.[existingId] : null
+  const draftStops = existing?.type === 'elevator'
+    ? existing.stops || []
+    : Array.isArray(tool?.elevatorDraftStops) ? tool.elevatorDraftStops : []
+  const stop = makeElevatorStopFromCell(surface, cell, tool, draftStops.length)
+  if (!stop) return { surfaceData, stops: draftStops, connector: existing || null, error: "L'arrêt doit tenir entièrement dans une même salle fermée." }
+  if (draftStops.length && !elevatorStopsAreAligned(draftStops.at(-1), stop)) {
+    return { surfaceData, stops: draftStops, connector: existing || null, error: "Le nouvel arrêt doit être aligné sur X, Y ou Z avec le précédent." }
+  }
+  const stops = [...draftStops, stop]
+  if (stops.length === 1) return { surfaceData, stops, connector: null, error: null }
+  const connector = makeElevatorConnectorFromStops(surface, stops, tool, existing)
+  if (!connector) return { surfaceData, stops: draftStops, connector: existing || null, error: 'Trajet d’ascenseur invalide.' }
+  return {
+    surfaceData: {
+      ...surface,
+      version: SURFACE_DATA_VERSION,
+      connectors: { ...surface.connectors, [connector.id]: connector },
+    },
+    stops,
+    connector,
+    error: null,
   }
 }
 

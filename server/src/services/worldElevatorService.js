@@ -55,9 +55,9 @@ export function findCabinSupportForPoint(snapshot, point) {
 
 export function elevatorLocalPosition(definition, state, worldPoint) {
   return Object.freeze({
-    x: Number(worldPoint.x) - definition.x,
+    x: Number(worldPoint.x) - Number(state.positionX ?? definition.x),
     y: Number(worldPoint.y) - state.positionY,
-    z: Number(worldPoint.z) - definition.z,
+    z: Number(worldPoint.z) - Number(state.positionZ ?? definition.z),
   })
 }
 

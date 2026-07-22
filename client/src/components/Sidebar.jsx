@@ -7,7 +7,7 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
 import { useCombatStore } from '../stores/combatStore'
 import api from '../lib/api.js'
-import { isDoorConnectorBlueprint, normalizedBlueprintText } from '../lib/connectorBlueprintCatalog.js'
+import { isDoorConnectorBlueprint, isElevatorConnectorBlueprint, normalizedBlueprintText } from '../lib/connectorBlueprintCatalog.js'
 import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
@@ -611,7 +611,10 @@ export default function Sidebar({
     hatchMaterialOverrides: {},
     elevatorDoorAxis: 'z',
     elevatorDoorSide: 1,
+    elevatorDraftStops: [],
+    elevatorEditConnectorId: null,
     elevatorTravelSecondsPerLevel: 2,
+    elevatorTravelSecondsPerUnit: 1,
     elevatorDoorSeconds: 0.75,
     elevatorDwellSeconds: 0.75,
     effectDefinitionKey: 'fire',
@@ -683,7 +686,7 @@ export default function Sidebar({
   const blueprintPlacementMode = (blueprint) => blueprint?.geometry?.placementMode || blueprint?.geometry?.placement_mode || 'free'
   const structuralObjectConnectorType = (blueprint) => {
     const type = blueprint?.geometry?.connectorType
-    return ['window', 'screen-window', 'skylight', 'stairs', 'ladder'].includes(type) ? type : null
+    return ['window', 'screen-window', 'skylight', 'stairs', 'ladder', 'elevator'].includes(type) ? type : null
   }
   const connectorBlueprints = Object.values(blueprints || {}).filter(blueprint => !blueprint.deprecated)
   const doorConnectorBlueprints = connectorBlueprints
@@ -699,12 +702,7 @@ export default function Sidebar({
     .filter(blueprint => blueprint?.geometry?.connectorType === 'skylight')
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
   const elevatorConnectorBlueprints = connectorBlueprints
-    .filter(blueprint => {
-      const text = normalizedBlueprintText(blueprint)
-      return text.includes('ascenseur')
-        || text.includes('elevator')
-        || text.includes('lift')
-    })
+    .filter(isElevatorConnectorBlueprint)
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
   const ladderConnectorBlueprints = connectorBlueprints
     .filter(blueprint => {
@@ -736,7 +734,7 @@ export default function Sidebar({
           ? skylightConnectorBlueprints
     : surfaceToolState.connectorType === 'ladder'
       ? [...ladderConnectorBlueprints, genericLadderChoice]
-      : [...elevatorConnectorBlueprints, genericElevatorChoice]
+      : elevatorConnectorBlueprints.length > 0 ? elevatorConnectorBlueprints : [genericElevatorChoice]
   const selectedConnectorChoice = connectorChoices.find(choice => String(choice.id) === String(surfaceToolState.connectorBlueprintId))
     || connectorChoices[0]
     || null
@@ -818,13 +816,14 @@ export default function Sidebar({
         selectedConnectorId: null,
         verticalAccessEditLadderId: null,
         connectorMaterialOverrides: {},
+        ...(connectorType === 'elevator' ? { elevatorDraftStops: [], elevatorEditConnectorId: null } : {}),
         roomArcError: null,
         ...connectorModelPatch(blueprint),
       })
       return
     }
 
-    if ((['window', 'screen-window', 'skylight', 'ladder'].includes(surfaceToolState.connectorType)
+    if ((['window', 'screen-window', 'skylight', 'ladder', 'elevator'].includes(surfaceToolState.connectorType)
       && surfaceToolState.connectorPlacementSource === 'object-palette')
       || (surfaceToolState.mode === 'stair' && surfaceToolState.stairPlacementSource === 'object-palette')) {
       onSurfaceToolChange?.({
@@ -836,11 +835,14 @@ export default function Sidebar({
       })
     }
   }
-  const selectConnectorModel = (blueprint) => updateSurfaceTool({
-    mode: 'connector',
-    connectorType: surfaceToolState.connectorType || 'door',
-    ...connectorModelPatch(blueprint),
-  })
+  const selectConnectorModel = (blueprint) => {
+    if (surfaceToolState.connectorType === 'elevator' && (surfaceToolState.elevatorDraftStops?.length || 0) > 0) return
+    updateSurfaceTool({
+      mode: 'connector',
+      connectorType: surfaceToolState.connectorType || 'door',
+      ...connectorModelPatch(blueprint),
+    })
+  }
   const selectHatchModel = (blueprint) => updateSurfaceTool({
     ladderHatch: true,
     ...hatchModelPatch(blueprint),
@@ -1523,7 +1525,8 @@ export default function Sidebar({
                         onClick={() => updateSurfaceTool({
                           mode: 'connector',
                           connectorType: 'elevator',
-                          connectorToLevel: Number(surfaceToolState.level || 0) + 1,
+                          elevatorDraftStops: surfaceToolState.connectorType === 'elevator' ? surfaceToolState.elevatorDraftStops || [] : [],
+                          elevatorEditConnectorId: surfaceToolState.connectorType === 'elevator' ? surfaceToolState.elevatorEditConnectorId || null : null,
                           ...connectorModelPatch(surfaceToolState.connectorType === 'elevator' ? selectedConnectorChoice : (elevatorConnectorBlueprints[0] || genericElevatorChoice)),
                         })}
                         style={{
@@ -1536,38 +1539,25 @@ export default function Sidebar({
                     </div>
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
                       <div style={styles.connectorPicker}>
+                      <div style={styles.connectorPickerTitle}>Tracé par arrêts</div>
+                      <small>
+                        Place chaque arrêt dans une salle fermée. Change d’étage pour monter ou descendre ; chaque nouveau tronçon doit rester droit.
+                      </small>
+                      <div>Arrêts posés : <strong>{surfaceToolState.elevatorDraftStops?.length || 0}</strong></div>
                       <label style={styles.roomToolLabel}>
-                        <span>{t('surfaceEditor.elevatorToLevel')}</span>
+                        <span>Porte du prochain arrêt</span>
                         <select
-                          value={surfaceToolState.connectorToLevel}
-                          onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
+                          value={`${surfaceToolState.elevatorDoorAxis || 'z'}:${Number(surfaceToolState.elevatorDoorSide) < 0 ? -1 : 1}`}
+                          onChange={e => {
+                            const [axis, side] = e.target.value.split(':')
+                            updateSurfaceTool({ elevatorDoorAxis: axis, elevatorDoorSide: Number(side) })
+                          }}
                           style={styles.roomToolSelect}
                         >
-                          {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
-                            <option key={level} value={level}>{level}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label style={styles.roomToolLabel}>
-                        <span>Axe de la porte</span>
-                        <select
-                          value={surfaceToolState.elevatorDoorAxis || 'z'}
-                          onChange={e => updateSurfaceTool({ elevatorDoorAxis: e.target.value })}
-                          style={styles.roomToolSelect}
-                        >
-                          <option value="z">Nord / sud</option>
-                          <option value="x">Est / ouest</option>
-                        </select>
-                      </label>
-                      <label style={styles.roomToolLabel}>
-                        <span>Côté de la porte</span>
-                        <select
-                          value={Number(surfaceToolState.elevatorDoorSide) < 0 ? -1 : 1}
-                          onChange={e => updateSurfaceTool({ elevatorDoorSide: Number(e.target.value) })}
-                          style={styles.roomToolSelect}
-                        >
-                          <option value={1}>Positif</option>
-                          <option value={-1}>Négatif</option>
+                          <option value="z:-1">Nord</option>
+                          <option value="x:1">Est</option>
+                          <option value="z:1">Sud</option>
+                          <option value="x:-1">Ouest</option>
                         </select>
                       </label>
                       <label style={styles.roomToolLabel}>
@@ -1581,6 +1571,45 @@ export default function Sidebar({
                           style={styles.roomToolInput}
                         />
                       </label>
+                      <label style={styles.roomToolLabel}>
+                        <span>Trajet horizontal par case (s)</span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={surfaceToolState.elevatorTravelSecondsPerUnit || 1}
+                          onChange={e => updateSurfaceTool({ elevatorTravelSecondsPerUnit: Math.max(0.1, Number(e.target.value) || 1) })}
+                          style={styles.roomToolInput}
+                        />
+                      </label>
+                      {(surfaceToolState.elevatorDraftStops?.length || 0) >= 2 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const connectorId = surfaceToolState.elevatorEditConnectorId
+                            updateSurfaceTool({
+                              mode: 'select',
+                              selectedConnectorId: connectorId,
+                              elevatorDraftStops: [],
+                              elevatorEditConnectorId: null,
+                              roomArcError: null,
+                            })
+                            if (surfaceToolState.connectorPlacementSource === 'object-palette') onBlueprintSelect?.(null)
+                          }}
+                          style={styles.roomToolModeBtn}
+                        >
+                          Terminer l’ascenseur
+                        </button>
+                      )}
+                      {(surfaceToolState.elevatorDraftStops?.length || 0) === 1 && !surfaceToolState.elevatorEditConnectorId && (
+                        <button
+                          type="button"
+                          onClick={() => updateSurfaceTool({ elevatorDraftStops: [], roomArcError: null })}
+                          style={styles.roomToolSmallBtn}
+                        >
+                          Annuler le premier arrêt
+                        </button>
+                      )}
                       </div>
                     )}
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'skylight' && (
@@ -1720,10 +1749,13 @@ export default function Sidebar({
                             {connectorChoices.map(choice => {
                               const isSelected = String(surfaceToolState.connectorBlueprintId) === String(choice.id)
                                 || (!surfaceToolState.connectorBlueprintId && selectedConnectorChoice?.id === choice.id)
+                              const modelLocked = surfaceToolState.connectorType === 'elevator'
+                                && (surfaceToolState.elevatorDraftStops?.length || 0) > 0
                               return (
                                 <button
                                   key={choice.id}
                                   type="button"
+                                  disabled={modelLocked}
                                   onClick={() => selectConnectorModel(choice)}
                                   style={{
                                     ...styles.connectorModelBtn,
