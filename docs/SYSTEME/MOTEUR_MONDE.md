@@ -418,23 +418,28 @@ Parcours vertical de type grimpe. Il contient assez d'ancrages pour persister un
 étages. Le mode course n'y est pas disponible par défaut.
 
 L'UX suit le même principe que l'escalier : **Objets 3D > Accès verticaux** affiche la géométrie
-structurelle en prévisualisation. Le catalogue commence par **Échelle seule**, puis mélange
-directement les modèles carrés et ronds. La pose crée le connecteur `ladder`, repasse en sélection et
-ouvre son popup. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
+structurelle en prévisualisation. Un premier sélecteur ne contient que **Échelle seule** et
+**Échelle + Trappe**. Le second choix active le catalogue visuel à droite, qui mélange directement
+les modèles carrés et ronds avec leur preview, comme le catalogue des portes. La pose crée le
+connecteur `ladder`, repasse en sélection et ouvre son popup. Aucun outil direct « Ajouter une
+échelle » ne doit coexister avec ce chemin.
 
 Le connecteur `ladder` porte une `topOpening` canonique : forme `rectangle|circle`, position,
 altitude, largeur et profondeur. Cette trémie existe toujours, avec ou sans trappe. Elle découpe le
-sol haut et le plafond bas dans le renderer comme dans le `WorldSnapshot`. Deux supports d'ancrage
-placés sur les bords cohérents avec l'axe de l'échelle relient le palier haut aux passerelles
-adjacentes ; ils n'ajoutent aucun collider et ne rebouchent jamais l'ouverture.
+sol haut et le plafond bas dans le renderer comme dans le `WorldSnapshot`. `axis`, `side` et
+`rotationQuarterTurns` placent l’échelle contre l’un des quatre bords de cette ouverture. Son unique
+support d’ancrage de palier suit le même bord et relie le haut aux passerelles adjacentes ; il
+n'ajoute aucun collider et ne rebouche jamais l'ouverture.
 
 Une trappe facultative est un connecteur `hatch` lié par `linkedLadderId`. `closed` ou `locked`, elle
 remplace l'ouverture comme support et barrière horizontale ; `open` ou `destroyed`, elle ne produit
 ni support, ni collider, ni occluder. La traversée `climb` est bloquée par une trappe fermée, mais
 reste active quand la trappe est ouverte, détruite ou absente. L'état initial appartient au document
 statique ; l'état courant vient de `WorldRuntimeState.featureStates` et prévaut dans le snapshot.
-Le popup de l'échelle peut retirer ou remplacer la trappe sans modifier l'échelle ni supprimer la
-trémie. Deux commandes gauche/droite orientent le modèle par quarts de tour.
+Le popup de l'échelle choisit seulement la présence de la trappe sans modifier ni supprimer la
+trémie ; le catalogue à droite remplace son modèle. Deux commandes gauche/droite tournent ensemble
+l’échelle latérale et la trappe par quarts de tour. Visuellement, les rails s’arrêtent sous le plan
+de fermeture pour ne jamais traverser une trappe fermée.
 
 Une trappe peut référencer un blueprint GLB de connecteur `hatch` et ses clips d'animation, comme
 une porte. Le pack `vertical_access_hatches` fournit quatre mécanismes, chacun carré et rond :
@@ -442,6 +447,10 @@ battant blindé, battant avec écoutille de service, coulissant bipartite et cou
 radial. Si aucun modèle n'est choisi, le renderer utilise le panneau procédural. Le GLB reste
 strictement visuel : `topOpening` et le connecteur canonique demeurent les autorités pour la
 découpe, le support, la collision, la LOS et la traversée.
+
+Un connecteur portant `modelGlbUrl` n’expose pas les champs procéduraux **Matière** et **Motif**.
+Les slots couleur déclarés dans `modelGeometry.materialSlots` restent indépendants et n’affectent
+jamais sa physique.
 
 ### Passerelle
 

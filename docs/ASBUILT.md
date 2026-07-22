@@ -8,25 +8,34 @@
 L’objet structurel autrefois présenté comme **Échelle** est maintenant un **Accès vertical**. Sa
 définition canonique contient toujours une échelle et une `topOpening`; cette trémie existe même si
 aucun connecteur `hatch` n’est associé. Le renderer et `WorldSnapshot` découpent la même ouverture
-rectangulaire ou circulaire. Les deux points de raccord du palier haut permettent au graphe de
-navigation de rejoindre une passerelle adjacente sans inventer de dalle au milieu du trou.
+rectangulaire ou circulaire. L’échelle est placée sur l’un des quatre bords, jamais au centre ; son
+point de raccord du palier haut permet au graphe de navigation de rejoindre une passerelle adjacente
+sans inventer de dalle au milieu du trou.
 
-La palette affiche directement **Échelle seule**, puis les modèles de trappe. Le catalogue intégré
+La palette choisit d’abord **Échelle seule** ou **Échelle + Trappe**. Dans le second cas, la première
+trappe est créée et le catalogue visuel à droite affiche les modèles et leur preview, comme pour les
+portes. Le catalogue intégré
 `vertical_access_hatches` contient huit GLB animés : battante blindée, battante avec écoutille de
 service, coulissante bipartite et coulissante tripartite radiale, chaque mécanisme en carré et en
 rond. Tous déclarent `origin=hatch-center`, une empreinte structurelle 1 × 1, cinq slots couleur et
-des clips `open_*`. Le boîtier, le cadre et l’écoutille peuvent dépasser l’empreinte sans agrandir la
-trémie. Le popup de l’échelle permet de retirer ou remplacer la trappe en conservant l’ouverture.
+des clips `open_*`. Chaque feuille est détaillée dessus et dessous. Les modèles sans écoutille ont
+deux commandes verticales intégrées à la rive, accessibles depuis les deux niveaux ; les modèles
+avec écoutille n’ont pas de boîtier séparé. Le popup de l’échelle change seulement la composition ;
+le remplacement du modèle se fait dans le catalogue à droite en conservant la trémie.
+
+Le renderer arrête les rails sous le plan de fermeture : une trappe fermée n’est jamais traversée
+par l’échelle. Le panneau d’un connecteur GLB ne propose pas les champs procéduraux **Matière** et
+**Motif** ; seuls les slots de couleur réellement déclarés par le modèle peuvent être modifiés.
 
 Les anciennes cartes restent compatibles : une échelle sans `topOpening` dérive une trémie carrée
 1 × 1, ou reprend la forme de sa trappe historique. La trappe ferme toujours la traversée quand son
 état est `closed`/`locked`; sans trappe, la traversée `climb` est ouverte.
 
-Validation : 144 tests monde/serveur, 42 tests Surface, 3 tests de configuration, validateur des
-8 GLB sans erreur ni avertissement, ESLint ciblé sans erreur et build Vite réussis. Sur Kiwi, les
-services `8293/8294` sont actifs, le catalogue est passé de 92 à 100 modèles, un GLB du nouveau pack
-répond en HTTP 200 et le smoke Chromium distant est vert. La recette fonctionnelle utilisateur reste
-consignée comme attendue dans `docs/EN_COURS.md`.
+Validation : 144 tests monde/serveur, 81 tests client Surface/lib, 3 tests de configuration,
+validateur des 8 GLB sans erreur ni avertissement, ESLint ciblé sans erreur et build Vite réussis.
+Sur Kiwi, les services `8293/8294` sont actifs, le catalogue contient 100 modèles, le GLB bilatéral
+d’écoutille répond en HTTP 200 et le smoke Chromium distant est vert. La nouvelle recette visuelle
+utilisateur reste consignée comme attendue dans `docs/EN_COURS.md`.
 
 ---
 

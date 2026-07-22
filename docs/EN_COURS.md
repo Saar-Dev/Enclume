@@ -1,14 +1,15 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> 🧪 **2026-07-22 — accès verticaux et huit trappes 3D déployés sur `8293/8294`, recette utilisateur
-> attendue** : **Objets 3D > Accès verticaux** propose **Échelle seule**, puis les modèles carrés et
-> ronds battants, avec écoutille, coulissants bipartites ou tripartites. La trémie appartient à
-> l'échelle et reste découpée sans trappe ; deux raccords de palier permettent à une passerelle
-> adjacente de rejoindre la traversée. Les ouvertures rondes sont circulaires dans le rendu et le
-> snapshot physique. Le popup peut retirer ou remplacer la trappe sans supprimer l'accès. Validation :
-> 144 tests monde/serveur, 42 tests Surface, 3 configuration, 8 manifestes GLB sans avertissement,
-> build Vite, ESLint ciblé sans erreur, health, client HTTP, catalogue serveur à 100 modèles, GLB
-> distant HTTP 200 et smoke Chromium distant. Retour arrière serveur : tag
-> `backup/pre-session160-20260722` (`69164fe`). Les instances Saar et fusion n'ont pas été modifiées.
+> 🧪 **2026-07-22 — correction de recette des accès verticaux déployée sur `8293/8294`, nouvelle
+> recette utilisateur attendue** : le choix initial contient uniquement **Échelle seule** et
+> **Échelle + Trappe** ; ce dernier ouvre le catalogue visuel à droite. L’échelle est latérale,
+> possède quatre orientations et s’arrête sous la fermeture. Les huit GLB sont détaillés des deux
+> côtés. Les six modèles standards ont des commandes de rive dessus/dessous ; les deux modèles avec
+> écoutille n’ont aucun boîtier. Les champs procéduraux Matière/Motif sont masqués sur les trappes
+> GLB. Validation : 144 tests monde/serveur, 81 tests client Surface/lib, 3 configuration,
+> 8 manifestes GLB sans avertissement, build Vite, ESLint ciblé sans erreur, health, client et GLB
+> HTTP 200, catalogue serveur à 100 modèles et smoke Chromium distant. Retour arrière immédiat :
+> `backup/pre-session160-followup-20260722` (`f82bdea`). Les instances Saar et fusion n’ont pas été
+> modifiées.
 >
 > **2026-07-22 — grille mono-plan validée et déployée sur `8293/8294`** : murs, sols, plafonds, passerelles et trappes
 > entièrement ajourés utilisent maintenant une seule grille recto-verso ; les escaliers validés

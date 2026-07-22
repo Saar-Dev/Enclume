@@ -5,9 +5,11 @@
 
 ## Sources et périmètre
 
-- source monde prévue : tag immuable `handoff/world-session160-20260722` sur `dev/monde` ;
+- source monde corrigée prévue : tag immuable `handoff/world-session160-corrected-20260722` sur
+  `dev/monde` ; l’ancien tag `handoff/world-session160-20260722` reste immuable mais est supplanté ;
 - moteur et UX : `aabf0f8` (`Session 160 (Codex) - Construire les acces verticaux`) ;
 - catalogue Blender/GLB : `46694fc` (`Session 160 (Codex) - Generer huit trappes animees`) ;
+- correction de recette : `cb971ed` (`Session 160 suite 2 - Corriger les acces verticaux et les trappes`) ;
 - tête monde documentée : le tag de transmission, créé après cette fiche ;
 - base d'intégration observée : `355e388` ;
 - dernière référence Saar disponible dans ce dépôt : tag de sauvegarde
@@ -17,19 +19,25 @@
 Le lot remplace l'objet présenté comme **Échelle** par un constructeur d'**Accès vertical**. La
 trémie `ladder.topOpening` devient indépendante de la trappe et peut être rectangulaire ou
 circulaire. Le `WorldSnapshot`, le renderer et la navigation consomment la même ouverture ; une
-passerelle peut rejoindre le palier haut sans trappe. Le popup permet de retirer ou remplacer le
-connecteur `hatch` sans supprimer l'échelle ni sa trémie.
+passerelle peut rejoindre le palier haut sans trappe. Le popup permet d’ajouter ou retirer le
+connecteur `hatch` sans supprimer l'échelle ni sa trémie ; le catalogue à droite remplace son modèle.
+
+Le parcours corrigé choisit d’abord **Échelle seule** ou **Échelle + Trappe** puis, dans le second
+cas, expose à droite le catalogue avec previews. L’échelle est alignée sur un bord et son orientation
+tourne avec la trappe. Les connecteurs GLB ne proposent pas Matière/Motif.
 
 Le pack `output/vertical_access_hatches/` ajoute huit modèles animés : battants blindés, battants
 avec écoutille de service, coulissants bipartites et coulissants tripartites radiaux, chacun en
 carré et en rond. Il comprend le `.blend` source, les GLB, deux planches de rendu, le manifeste et
-le générateur reproductible. Il n'ajoute aucune migration de base de données ni dépendance npm.
+le générateur reproductible. Les feuilles sont détaillées dessus/dessous ; les modèles standards
+ont deux commandes verticales de rive, tandis que ceux avec écoutille n’ont pas de boîtier. Il
+n'ajoute aucune migration de base de données ni dépendance npm.
 NumPy est une dépendance locale de l'exporteur Blender, pas une dépendance de production.
 
 ## Validation du lot monde
 
 - 144/144 tests monde/serveur ;
-- 42/42 tests Surface ;
+- 81/81 tests client Surface/lib ;
 - 3/3 tests de configuration serveur ;
 - 8/8 assets acceptés par `validate-3d-manifest`, sans erreur ni avertissement ;
 - ESLint ciblé sans erreur et build Vite réussi ;
@@ -37,16 +45,17 @@ NumPy est une dépendance locale de l'exporteur Blender, pas une dépendance de 
 - services `8293/8294` actifs, health API vert et client HTTP 200 ;
 - catalogue intégré passé de 92 à 100 modèles et métadonnées des huit entrées contrôlées en base ;
 - GLB distant HTTP 200 et smoke Playwright Chromium distant réussi ;
-- retour arrière serveur : `backup/pre-session160-20260722` (`69164fe`).
+- retour arrière du correctif serveur : `backup/pre-session160-followup-20260722` (`f82bdea`) ;
+  sauvegarde antérieure au lot initial : `backup/pre-session160-20260722` (`69164fe`).
 
 Les instances Saar et fusion n'ont pas été redémarrées ni déployées pendant ce chantier. La recette
 fonctionnelle utilisateur sur une vraie carte reste le dernier feu vert avant fusion commune.
 
 ## Prévisualisation de merge
 
-`git merge-tree --write-tree integration handoff/world-session160-20260722`, simulé contre
-`integration` `355e388`, combine automatiquement les fichiers moteur, les assets, les locales et le
-runtime. Huit conflits documentaires/préexistants restent à résoudre :
+`git merge-tree --write-tree kiwi/integration handoff/world-session160-corrected-20260722`, simulé
+contre `kiwi/integration` `355e388`, combine automatiquement les fichiers moteur, les assets, les
+locales et le runtime. Huit conflits documentaires/préexistants restent à résoudre :
 
 1. `CLAUDE.md` : conserver les responsabilités fusionnées et l'environnement Node 24/npm 11 ;
 2. `client/public/CHANGELOG.md` : conserver les deux historiques dans l'ordre chronologique ;
@@ -64,7 +73,7 @@ conflits.
 
 ## Procédure de reprise
 
-1. confirmer les têtes exactes d'`integration`, du tag monde et de Saar ;
+1. confirmer les têtes exactes d'`integration`, du tag monde corrigé et de Saar ;
 2. créer les tags et sauvegardes PostgreSQL/MinIO prévus par `docs/WORKFLOW_FUSION.md` ;
 3. dans `/home/codex/Enclume-fusion`, fusionner le tag monde avec `--no-commit --no-ff` ;
 4. résoudre les huit fichiers ci-dessus, puis importer la tête Saar selon

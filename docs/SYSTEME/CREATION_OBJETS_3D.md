@@ -134,6 +134,14 @@ Manifest correspondant :
 - éviter de partager une même instance de matériau entre une zone recolorable et une zone fixe ;
 - textures, normales et propriétés PBR sont conservées lors d'un changement de couleur.
 
+Pour un connecteur horizontal de trappe, utiliser `placement_mode: connector`,
+`connector_type: hatch` et `origin: hatch-center`. Le modèle doit être fermé et détaillé des deux
+côtés : un joueur peut le regarder et l’actionner depuis l’étage haut comme depuis l’étage bas.
+Une commande standard se place verticalement dans la rive, une occurrence sur chaque face ; elle ne
+doit jamais dépasser jusqu’au mur voisin. Une écoutille portant déjà son propre organe d’ouverture
+n’ajoute aucun boîtier. Les champs **Matière** et **Motif** sont réservés aux primitives
+procédurales ; un GLB expose uniquement ses `editor_color_slots` explicites.
+
 ## Géométrie et performances
 
 - Un GLB par objet sélectionnable. Ne pas assembler des dizaines d'entités dans l'éditeur pour fabriquer un meuble.

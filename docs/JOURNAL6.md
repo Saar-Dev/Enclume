@@ -4768,3 +4768,35 @@ de Saar et de fusion n'ont pas été touchées.
 de modification. La Session 159 monde est donc candidate à la prochaine intégration. Sa fiche de
 transmission, les conflits anticipés et la procédure de reprise sont consignés dans
 `docs/FUSION_SESSION159.md`.
+
+---
+
+## Session 160 (suite 2, Codex) — 2026-07-22 — Correction de recette des accès verticaux 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : le premier parcours mélangeait l’absence de trappe et les huit modèles
+dans la même liste ; l’échelle restait au centre et traversait le panneau. Les GLB n’étaient
+réellement détaillés que sur leur face haute et leur boîtier externe pouvait entrer dans un mur.
+
+**UX** : le sélecteur contient désormais uniquement **Échelle seule** et **Échelle + Trappe**. Le
+second choix crée la première trappe disponible puis conserve à droite le catalogue des modèles et
+sa preview, selon le même parcours qu’une porte. Le popup ne contient plus la liste des modèles. Les
+champs procéduraux Matière/Motif ne sont plus affichés pour une trappe GLB ; les slots couleur
+explicitement déclarés restent disponibles.
+
+**Géométrie** : `axis`, `side` et `rotationQuarterTurns` placent l’échelle sur l’un des quatre bords
+de la trémie. Rendu, traversée et ancrage de palier utilisent le même centre latéral. Les rails
+visuels s’arrêtent 7 cm sous le plan supérieur pour ne pas traverser la fermeture. Le raccord à une
+passerelle sans trappe est conservé.
+
+**Assets** : les huit GLB ont été régénérés avec renforts et organes d’ouverture sur les deux faces.
+Les six variantes sans écoutille ont une commande verticale intégrée à la rive au-dessus et
+au-dessous ; les variantes carrée et ronde avec écoutille n’ont aucun boîtier et portent leur roue
+des deux côtés. Les tailles restent comprises entre 318 Ko et 1,48 Mo ; seule la preview du modèle
+sélectionné est montée, donc le catalogue ne charge pas les huit GLB simultanément.
+
+**Validation et déploiement** : 144/144 tests monde/serveur, 81/81 tests client Surface/lib, 3/3
+tests de configuration, 8/8 assets validés sans avertissement, ESLint ciblé sans erreur et build
+Vite réussis. `cb971ed` a été fast-forwardé sur `dev/monde`; les services `8293/8294`, le health,
+le client, un GLB distant et le smoke Chromium sont verts. Le catalogue synchronise 100 modèles.
+Retour arrière : `backup/pre-session160-followup-20260722` (`f82bdea`). Saar `8193` et la fusion
+`8393` n’ont pas été modifiés. La nouvelle recette utilisateur reste attendue.
