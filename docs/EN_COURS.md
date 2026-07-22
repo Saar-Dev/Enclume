@@ -164,6 +164,37 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
+> **Item 106 (Session 168, dev/Saar) — Prérequis `CHOC1` (arme équipée sans dégât physique) ✅ CODÉ
+> ET TESTÉ EN JEU (confirmé par Saar via logs serveur).**
+> **Codé** : `getEffectiveMeleeDamage` (nouveau, `damageService.js`) — point de résolution unique du
+> dégât CaC, miroir de `getEffectiveWeaponDamage` (tir), 3 producteurs (arme naturelle > arme
+> équipée > mains nues). Branché sur les 5 sites qui lançaient auparavant `parseDice(damageFormula)`
+> directement (`resolveMeleeAction` ×3 : cible sans défense, PNJ défenseur, drone défenseur ;
+> `confirmMeleeDefense` PNJ attaquant ; `confirmDamage` PJ attaquant). Côté tir, `getEffectiveWeaponDamage`/
+> `getEffectiveWeaponFormulaPreview`/garde `resolveAssaultAction` corrigés pour distinguer "arme
+> introuvable" (`weapon_ref_id` absent) de "arme sans dégât physique" (`damage_h` vide) — cette
+> dernière retourne désormais `{total:0,...}` au lieu de `null`. Détail complet du raisonnement et de
+> l'auto-correction (une reprise a d'abord contredit sa propre décision, repérée et corrigée avant
+> commit) : `docs/JOURNALTEMP.md` Étapes 5-7.
+> **Bug additionnel trouvé et corrigé en testant** : côté MJ, une arme Choc pur (Dague neurale Brain)
+> n'était jamais reconnue comme "arme en main" — `shared/weaponSlots.js::isWeaponItem` ne testait que
+> `fire_mode`/`damage_h`, jamais `shock`. Corrigé (+ `ref_equipment.shock` ajouté à la requête
+> `/combat-equipment`, `server/src/routes/battlemaps.js`) + 2 tests ajoutés à `weaponSlots.test.mjs`
+> (15/15 verts). N'affectait que le MJ (`CombatGmDeclareWindow`) — le joueur (`CombatActionWindow`)
+> n'était pas concerné (sélection par catégorie, pas par ce filtre).
+> **Testé en jeu (logs serveur)** : tir Flex (Choc pur) plusieurs coups, CaC Matraque Mao (non-régression),
+> CaC mains nues, **CaC Dague neurale Brain (Choc pur, le cas critique) — coup touché, `total:0`
+> proprement géré, aucune erreur serveur**. **Non testé** : les chemins PJ réel (`confirmMeleeDefense`/
+> `confirmDamage`), "cible sans défense", drone — seule la branche "PNJ défenseur" a été exercée en
+> jeu, les 4 autres sites branchés sur `getEffectiveMeleeDamage` restent non exercés en conditions
+> réelles (seulement `node --check`). Le Choc réel de la Dague neurale (3D10) n'est **volontairement
+> pas** déclenché — câblage du Choc porté par l'arme (Palier 1, `docs/PLAN_CHOC1.md` §4) reste une
+> décision de scope séparée, non tranchée.
+> **Verrou levé** : `docs/PLAN_REFONTECAC.md` peut reprendre sa planification (prérequis fermé).
+> **Dette ouverte, non corrigée, notée pour plus tard** : `socketCombatHelpers.js:~2765`
+> (`resolveAssaultAction`) — filet de secours `parseDice(weapon.ref_damage_h...)` sans garde `null`,
+> risque résiduel étroit (arme Choc pur désequipée entre Déclaration et Résolution du tir).
+
 > **Item 105 (Session 168, dev/Saar) — Wizard Step4 : bug budget PC + données chasseur_primes ✅ CODÉ
 > et confirmé par Saar en navigateur ; mécanisation avantages/revers ⚠️ NON LIVRÉE au périmètre demandé.**
 > **Codé et testé (confirmé par Saar)** : bug de double décompte du budget PC en étape 4
@@ -200,9 +231,11 @@ non câblée — 4 dettes résiduelles notées `docs/BUGIDENTIFIE.md` (`MODING4-
 `MODING4-PROJECTEUR`, `MODING4-INTEGRATION`), décisions produit + câblage restants, pas un chantier actif.
 Phase 2 (migration Groupe 1/2 déjà livré) toujours différée (Strangler Fig).
 
-Aucun chantier `🔒 En cours` actif. Prochaine décision en attente de Saar : CHOC1 — plan écrit
-(`docs/PLAN_CHOC1.md`), décision de scope avant tout code sur ce sujet (cluster combat déjà clos :
-INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`).
+Aucun chantier `🔒 En cours` actif. Prérequis `CHOC1` (arme équipée sans dégât physique) fermé et
+testé (Item 106). Prochaine décision en attente de Saar : scope du Palier 1 de `CHOC1` (câblage réel
+du Choc porté par l'arme, `ref_equipment.shock` — `docs/PLAN_CHOC1.md` §4) et démarrage de la refonte
+CaC (`docs/PLAN_REFONTECAC.md`, verrou levé) — cluster combat déjà clos : INI4 ✅, MELEE-MR ✅,
+DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
 
 > **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
 > intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).
@@ -2987,7 +3020,7 @@ Projet en cours et priorité user :
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
-| **CHOC1** | Choc porté par l'**arme** (`ref_equipment.shock`) jamais lu en résolution — ni CaC ni tir (axe réel du problème, corrigé Session 166 après remise à plat). Pool de Choc (`resolveTargetHit`) fonctionne déjà pour le Choc porté par une **munition** (Lot B Session 152). Inventaire catalogue (11 armes + mutation Corne) et scope proposé : `docs/PLAN_CHOC1.md` | Basse — décision Saar sur le scope du plan |
+| **CHOC1** | Prérequis (arme équipée sans dégât physique, crash potentiel) ✅ fermé et testé Session 168 (Item 106) — `getEffectiveMeleeDamage` construite, 5 sites CaC + 2 tir unifiés. Reste : Palier 1, câblage réel du Choc porté par l'**arme** (`ref_equipment.shock`) dans la résolution — Choc pur (Dague neurale...) ne fait toujours 0 dégât, aucun Test de Choc déclenché. Pool de Choc (`resolveTargetHit`) fonctionne déjà pour le Choc porté par une **munition** (Lot B Session 152). Inventaire catalogue (11 armes + mutation Corne) et scope proposé : `docs/PLAN_CHOC1.md` | Basse — décision Saar sur le scope du Palier 1 |
 | **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
 | ~~**INI4**~~ | ~~`initiative` jamais remise à `base_ini` en fin de tour~~ | ⚠️ clos partiel Session 166 (Saar), item 96 — codé, scénario réel navigateur non testé |
 | ~~**MELEE-MR**~~ | ~~Dégâts CaC calculés sans le MR (dette Session 67)~~ | ⚠️ clos partiel Session 166 (Saar), item 97 — codé, scénario réel navigateur non testé |

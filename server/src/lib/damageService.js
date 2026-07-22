@@ -22,7 +22,9 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
     .leftJoin('ref_equipment as weapon_ref', 'char_inventory.equipment_id', 'weapon_ref.id')
     .leftJoin('ref_equipment as ammo_ref', 'char_inventory.current_ammo', 'ammo_ref.id')
     .where({ 'char_inventory.id': weaponInvId })
-    .select('weapon_ref.damage_h as weapon_formula', 'ammo_ref.ammo_effects as ammo_effects')
+    // weapon_ref_id (CHOC1) : seul signal fiable de "l'arme a été trouvée" — weapon_formula peut être
+    // légitimement vide pour une arme Choc pur, ne jamais l'utiliser comme test de présence de l'arme.
+    .select('weapon_ref.id as weapon_ref_id', 'weapon_ref.damage_h as weapon_formula', 'ammo_ref.ammo_effects as ammo_effects')
     .first()
 }
 
@@ -32,16 +34,23 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
 // par tous les appelants (PNJ immédiat et PJ différé via combat_pending) — jamais une 2ᵉ copie.
 // Fail-safe : munition sans DSL/DSL malformé/formule invalide → repli sur damage_h brut de l'arme
 // (comportement historique), jamais un throw qui bloque un tour de combat.
-// Retourne null si l'arme elle-même n'a pas de damage_h (même garde que le code historique) — TOUS
-// les appelants doivent vérifier ce cas avant d'utiliser le retour (arme désequipée/transférée entre
-// la Déclaration et la Confirmation côté PJ différé — fenêtre réelle, pas seulement théorique).
+// Retourne null si l'arme elle-même est introuvable (arme désequipée/transférée entre la Déclaration
+// et la Confirmation côté PJ différé — fenêtre réelle, pas seulement théorique) — TOUS les appelants
+// doivent vérifier ce cas avant d'utiliser le retour. CHOC1 (docs/PLAN_CHOC1.md) : une arme trouvée
+// mais sans damage_h (catégorie Choc pur, ex. Flex) retourne un résultat valide à 0, jamais null —
+// null signifie uniquement "arme introuvable", plus jamais "pas de dégât physique".
 // `rangeBand` (Lot C1, optionnel) : uniquement consommé par la dégression Shrapnel — sans lien avec
 // le Choc (retiré du pipeline Choc au correctif Lot B, réintroduit ici pour un usage différent).
 export async function getEffectiveWeaponDamage(db, weaponInvId, { rangeBand = null } = {}) {
   const row = await _fetchWeaponAndAmmo(db, weaponInvId)
-  if (!row?.weapon_formula) return null
+  if (!row?.weapon_ref_id) return null
 
-  const parsed   = parseAmmoEffects(row.ammo_effects)
+  const parsed = parseAmmoEffects(row.ammo_effects)
+  if (!row.weapon_formula) {
+    // Arme Choc pur (CHOC1) : aucun dégât physique à lancer, mais le Choc catalogue/munition doit
+    // continuer à circuler normalement vers resolveTargetHit.
+    return { total: 0, rolls: [], formula: '', tags: parsed.tags, choc: parsed.choc }
+  }
   if (parsed.unknown.length) {
     console.warn(`[damageService] getEffectiveWeaponDamage — DSL non reconnu ignoré : ${parsed.unknown.join(' | ')} (weaponInvId:${weaponInvId})`)
   }
@@ -98,10 +107,12 @@ export async function getEffectiveWeaponDamage(db, weaponInvId, { rangeBand = nu
 // Aperçu Phase 1 (COMBAT_DAMAGE_PROMPT) : formule effective affichée au joueur AVANT le jet réel, sans
 // jamais lancer de dé (parseDice serait non déterministe et gaspillerait un jet juste pour l'affichage
 // — aperçu non engageant, `.claude/rules/combat.md`). Retourne une chaîne lisible ("3d10+5",
-// "4d10+1d6", "4d10 ×0.5") ou null si l'arme n'a pas de damage_h.
+// "4d10+1d6", "4d10 ×0.5"), "—" si l'arme est trouvée mais sans damage_h (Choc pur, CHOC1), ou null
+// si l'arme elle-même est introuvable.
 export async function getEffectiveWeaponFormulaPreview(db, weaponInvId, { rangeBand = null } = {}) {
   const row = await _fetchWeaponAndAmmo(db, weaponInvId)
-  if (!row?.weapon_formula) return null
+  if (!row?.weapon_ref_id) return null
+  if (!row.weapon_formula) return '—'
 
   const parsed   = parseAmmoEffects(row.ammo_effects)
   const mechanic = resolveAmmoMechanic(parsed.tags.FX)
@@ -130,6 +141,57 @@ export async function getEffectiveWeaponFormulaPreview(db, weaponInvId, { rangeB
     flatBonus      ? `${flatBonus > 0 ? '+' : ''}${flatBonus}` : '',
   ].join('')
   return mulFactor !== 1 ? `${withExtra} ×${mulFactor}` : withExtra
+}
+
+// ─── getEffectiveMeleeDamage — CHOC1 prérequis (docs/PLAN_CHOC1.md, docs/JOURNALTEMP.md Étape 6) ────
+// Point de résolution unique du dégât effectif d'une attaque de corps-à-corps — miroir de
+// getEffectiveWeaponDamage (tir) : fetch au moment du jet réel, jamais précalculé. Remplace 5 appels
+// directs à parseDice(damageFormula) trouvés dans resolveMeleeAction (3 branches défenseur PNJ/sans-
+// défense/drone) + confirmMeleeDefense (PNJ attaquant) + confirmDamage (PJ attaquant) — même bug
+// latent partout (formule vide non gérée pour une arme Choc pur), même correctif, un seul endroit.
+// Trois producteurs : arme naturelle (mutation) > arme équipée > mains nues ('1D4') par défaut.
+// `naturalWeaponCharMutationId`/`charSheetId` : uniquement fournis par resolveMeleeAction (même tick
+// que la Déclaration, aucun risque de péremption) — les appels différés (confirmMeleeDefense/
+// confirmDamage, après le round-trip défense) ne les passent jamais, ils s'appuient sur
+// `fallbackFormula` pour ce cas (formule mutation déjà résolue à la Déclaration — statique, contenu
+// catalogue, pas de fenêtre de péremption comme pour une arme équipable/désequipable).
+// `fallbackFormula` (formule résolue à la Déclaration) : utilisée si l'arme équipée n'est plus
+// trouvable au moment du jet (désequipée/transférée entre Déclaration et Confirmation — fenêtre
+// réelle côté PJ différé, même risque déjà géré côté tir) — jamais un tour de combat silencieux.
+export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalWeaponCharMutationId = null, charSheetId = null, fallbackFormula = null } = {}) {
+  let formula, producer, weaponName = null
+
+  if (naturalWeaponCharMutationId && charSheetId) {
+    const naturalWeaponMutation = await db('char_mutations as cm')
+      .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+      .where({ 'cm.id': naturalWeaponCharMutationId, 'cm.char_sheet_id': charSheetId, 'cm.status': 'active' })
+      .select('rm.natural_weapon_formula', 'rm.name as mutation_name')
+      .first()
+    formula = naturalWeaponMutation?.natural_weapon_formula ?? fallbackFormula ?? '1D4'
+    producer = naturalWeaponMutation?.natural_weapon_formula ? 'arme naturelle' : 'fallback'
+    weaponName = naturalWeaponMutation?.mutation_name ?? null
+  } else if (weaponInvId) {
+    const weapon = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': weaponInvId })
+      .select('ref_equipment.id as weapon_ref_id', 'ref_equipment.damage_h as ref_damage_h', 'ref_equipment.name as weapon_name')
+      .first()
+    // weapon_ref_id absent = arme introuvable → repli sur la formule stockée à la Déclaration.
+    formula = weapon?.weapon_ref_id ? (weapon.ref_damage_h ?? null) : (fallbackFormula ?? '1D4')
+    producer = weapon?.weapon_ref_id ? 'arme équipée' : 'fallback (arme introuvable)'
+    weaponName = weapon?.weapon_name ?? null
+  } else {
+    formula = fallbackFormula ?? '1D4'
+    producer = 'mains nues'
+  }
+
+  if (!formula) {
+    console.log(`[DBG] getEffectiveMeleeDamage — producteur:${producer} arme:${weaponName ?? '—'} weaponInvId:${weaponInvId ?? '—'} formule:(vide, Choc pur) → total:0`)
+    return { total: 0, rolls: [], formula: '', seed: 0 }
+  }
+  const rolled = await parseDice(formula.replace(/\s/g, ''))
+  console.log(`[DBG] getEffectiveMeleeDamage — producteur:${producer} arme:${weaponName ?? '—'} weaponInvId:${weaponInvId ?? '—'} formule:${formula} → total:${rolled.total}`)
+  return { total: rolled.total, rolls: rolled.rolls, formula, seed: rolled.seed }
 }
 
 // _severityForDamage — table de sévérité (LdB p.114, 5/10/15/20/25/30) extraite en fonction interne

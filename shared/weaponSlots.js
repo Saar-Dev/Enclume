@@ -8,19 +8,25 @@
 // incomplète (aucune ne gérait le slot deux-mains `2M`, celle du serveur ne filtrait en plus aucune
 // catégorie — un Bouclier en main gauche pouvait être pris pour « l'arme »).
 //
-// Un item occupant un slot de main n'est une arme que s'il peut infliger des dégâts au combat
-// (fire_mode pour le tir, damage_h pour le contact) — discriminant volontairement indépendant de
-// `ref_equipment.category` (liste ouverte, une trentaine de catégories d'armes distinctes et
-// croissante) plutôt qu'une liste d'inclusion à maintenir à chaque nouvelle catégorie catalogue.
+// Un item occupant un slot de main n'est une arme que s'il peut infliger un effet de combat — tir
+// (fire_mode), dégât physique au contact (damage_h), ou Choc (shock, docs/PLAN_CHOC1.md/SYSTEME/
+// DOMMAGES.md : une arme « Choc pur » comme la Dague neurale n'a ni fire_mode ni damage_h, elle
+// disparaîtrait sinon complètement de la détection — bug réel trouvé Session CHOC1, côté MJ/PNJ
+// uniquement, la Dague neurale n'était jamais reconnue comme arme en main) — discriminant
+// volontairement indépendant de `ref_equipment.category` (liste ouverte, une trentaine de catégories
+// d'armes distinctes et croissante) plutôt qu'une liste d'inclusion à maintenir à chaque nouvelle
+// catégorie catalogue.
 
 export const HAND_WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
 
 /**
- * @param {{ fire_mode?: string|null, ref_fire_mode?: string|null, damage_h?: string|null, ref_damage_h?: string|null }} item
+ * @param {{ fire_mode?: string|null, ref_fire_mode?: string|null, damage_h?: string|null, ref_damage_h?: string|null, shock?: string|null, ref_shock?: string|null }} item
  */
 export function isWeaponItem(item) {
   if (!item) return false
-  return Boolean(item.fire_mode ?? item.ref_fire_mode) || Boolean(item.damage_h ?? item.ref_damage_h)
+  return Boolean(item.fire_mode ?? item.ref_fire_mode)
+      || Boolean(item.damage_h ?? item.ref_damage_h)
+      || Boolean(item.shock ?? item.ref_shock)
 }
 
 /**

@@ -543,7 +543,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     rollAttaque, chancesAttaque,
     defenderSkillTotal, defenderEffectiveMalus,
     multiMalusDefenseur,
-    damageFormula, modDom, combatModeBonus,
+    damageFormula, weaponInvId, modDom, combatModeBonus,
     characterIdCible, char_sheet_id_cible,
     for_na_cible, con_na_cible, vol_na_cible,
     targetName, userId,
@@ -651,6 +651,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
             mr: mrAttaque,
             combatModeBonus,
             formula: damageFormula,
+            weaponInvId,
             for_na_cible,
             con_na_cible,
             vol_na_cible,
@@ -680,8 +681,14 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         }
         suspendForDamage = true
       } else {
-        // PNJ attaquant : résolution auto des dégâts
-        const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+        // PNJ attaquant : résolution auto des dégâts. CHOC1 : point de résolution unique (voir
+        // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6) — pas de re-fetch arme naturelle ici
+        // (appel différé, formule mutation déjà résolue et stable dans damageFormula, voir
+        // commentaire de la fonction), seule l'arme équipée est re-fetchée (fenêtre de péremption
+        // réelle : désequipée entre Déclaration et confirmation de défense).
+        const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+          weaponInvId, fallbackFormula: damageFormula,
+        })
         // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
         // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
         const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
@@ -792,9 +799,13 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
     // n'accepte qu'un seul type par formule).
     let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null, effectiveAmmoFx = null
     if (pendingType === 'melee') {
-      const rolled = await parseDice(formula.replace(/\s/g, ''))
-      dmgRolls = rolled.rolls; dmgSeed = rolled.seed; rawDice = rolled.total
-      resolvedFormula = formula
+      // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md
+      // Étape 6) — pas de re-fetch arme naturelle ici (appel différé, formule mutation déjà résolue
+      // et stable dans `formula`), seule l'arme équipée est re-fetchée (fenêtre de péremption réelle :
+      // désequipée entre la Déclaration et cette Confirmation, côté PJ différé).
+      const meleeRolled = await damageService.getEffectiveMeleeDamage(db, { weaponInvId, fallbackFormula: formula })
+      dmgRolls = meleeRolled.rolls; dmgSeed = meleeRolled.seed; rawDice = meleeRolled.total
+      resolvedFormula = meleeRolled.formula
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
       // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
       const mrTableMelee = await getMrTable()
@@ -1211,6 +1222,10 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     if (!sheetAttaquant) return { suspend: false, emissions }
 
     // Arme + formule dégâts + allonge
+    // CHOC1 (prérequis Palier 1, docs/PLAN_CHOC1.md) : damageFormula = null signifie "arme équipée
+    // sans dégât physique" (catégorie Choc pur, ex. Dague neurale Brain) — à distinguer de '1D4'
+    // (mains nues, aucune arme sélectionnée). Ne jamais tester weapon.ref_damage_h pour savoir si une
+    // arme a été trouvée : une arme réelle peut légitimement avoir ref_damage_h vide.
     let weapon = null, damageFormula = '1D4'
     if (weaponInvId) {
       weapon = await db('char_inventory')
@@ -1219,7 +1234,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id',
                 'ref_equipment.range as ref_range')
         .first()
-      if (weapon?.ref_damage_h) damageFormula = weapon.ref_damage_h
+      if (weapon) damageFormula = weapon.ref_damage_h ?? null
     }
 
     // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec weaponInvId
@@ -1560,6 +1575,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       multiMalusAttaquant,
       multiMalusDefenseur,
       damageFormula,
+      weaponInvId,
       modDom,
       combatModeBonus,
       characterIdCible: defenderCharacter.id,
@@ -1589,7 +1605,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         multiMalusAttaquant,
       } })
       if (hit) {
-        const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+        // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
+        // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+        const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+          weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
+        })
         const mrAttaqueDefenseless = chancesAttaque - rollAttaque
         const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDefenseless)
         const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
@@ -1710,7 +1730,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         // fetch désormais aussi mutations/avantages pour RD/Choc (docs/PLAN_MUTATION2.md Lot 3).
         // Ancien duplicata inline retiré — c'est exactement la duplication qui avait nécessité un
         // 2ᵉ correctif lors du bug de signe RD (Session 141 suite 22).
-        const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+        // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
+        // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+        const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+          weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
+        })
         // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
         const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
         const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
@@ -1757,7 +1781,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       if (hit) {
         const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
         if (droneSheet) {
-          const { total: rawDice } = await parseDice(damageFormula.replace(/\s/g, ''))
+          // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
+          // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+          const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+            weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
+          })
           // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
           // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul.
           const mrAttaqueDrone = chancesAttaque - rollAttaque
@@ -2355,8 +2383,11 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       getCampaignSettings(db, campaignId),
     ])
 
-    if (!primaryWeapon?.ref_damage_h) {
-      console.warn(`[WS] resolveAssaultAction — arme sans damage_h. weapon_inv_id:${action.weapon_inv_id}`)
+    // CHOC1 : ne jamais tester ref_damage_h pour savoir si une arme a été trouvée — une arme réelle
+    // (catégorie Choc pur, ex. Flex) peut légitimement avoir ref_damage_h vide. equipment_id est une
+    // colonne propre de char_inventory, présente dès que la ligne existe, indépendamment du join.
+    if (!primaryWeapon?.equipment_id) {
+      console.warn(`[WS] resolveAssaultAction — arme introuvable. weapon_inv_id:${action.weapon_inv_id}`)
       return { suspend: false, emissions }
     }
 

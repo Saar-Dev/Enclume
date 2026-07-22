@@ -204,9 +204,11 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .whereIn('cis.slot_code', HAND_WEAPON_SLOTS)
         .select(
           'char_inventory.id as inv_id', 'ref_equipment.name', 'cis.slot_code as slot', 'ref_equipment.fire_mode as ref_fire_mode',
-          // shared/weaponSlots.js resolveHandWeapons() a besoin de damage_h pour distinguer une arme
-          // de contact (Matraque Mao) d'un objet non-arme occupant la main (Bouclier) — Session 158.
+          // shared/weaponSlots.js resolveHandWeapons() a besoin de damage_h/shock pour distinguer une
+          // arme (contact ou Choc pur, ex. Dague neurale) d'un objet non-arme occupant la main
+          // (Bouclier) — Session 158, shock ajouté pour CHOC1 (Dague neurale jamais détectée sinon).
           'ref_equipment.damage_h as ref_damage_h',
+          'ref_equipment.shock as ref_shock',
           'char_inventory.ammo_remaining', 'ref_equipment.ammo_count as ref_ammo_count', 'ref_equipment.caliber as ref_caliber',
           // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — même sous-requête que
           // inventoryService.getInventory (fenêtre PJ), fenêtre MJ batchée par token (pas de N+1).

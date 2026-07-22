@@ -16,6 +16,18 @@ test('isWeaponItem — une arme à feu (fire_mode seul) est une arme', () => {
   assert.equal(isWeaponItem({ ref_fire_mode: 'CC/RC/RL', ref_damage_h: null }), true)
 })
 
+test('isWeaponItem — une arme Choc pur (shock seul, ni fire_mode ni damage_h) est une arme', () => {
+  // Reproduit le bug réel CHOC1 (Saar) : la Dague neurale (ref_damage_h null, ref_shock '3D10')
+  // disparaissait de la détection côté MJ (CombatGmDeclareWindow → /combat-equipment).
+  assert.equal(isWeaponItem({ ref_fire_mode: null, ref_damage_h: null, ref_shock: '3D10' }), true)
+})
+
+test('resolveHandWeapons — une arme Choc pur seule (Dague neurale) est détectée comme primaryWeapon', () => {
+  const rows = [{ slot: 'MD', ref_fire_mode: null, ref_damage_h: null, ref_shock: '3D10' }]
+  const result = resolveHandWeapons(rows)
+  assert.equal(result.primaryWeapon.slot, 'MD')
+})
+
 test('resolveHandWeapons — un deux-mains chargé (2M) est détecté comme primaryWeapon', () => {
   // Reproduit le cas réel Session 158 (Saar) — Loulou / Breather, slot '2M' seul.
   const rows = [{ slot: '2M', ref_fire_mode: 'CC/RC/RL', ref_damage_h: '4D10' }]
