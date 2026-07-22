@@ -1,12 +1,15 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> 🔒 **2026-07-22 — Session 161, chantier Codex actif (ne pas modifier ces zones en parallèle)** :
-> séparation stricte des catalogues **Portes** et **Trappes** dans la palette Objets 3D, puis
-> placement sticky avec glissement lors de la pose, du déplacement et de la rotation des objets 3D
-> libres, sans fantôme rouge ni traversée d'obstacle.
-> Zones réservées : `client/src/components/Sidebar.jsx`, `client/src/components/Editor3D.jsx`,
-> le nouveau helper/test de collision de placement et la documentation moteur associée. Cible de
-> recette : instance Codex `8293/8294` uniquement ; Saar `8193/8194` et fusion `8393/8394` restent
-> hors périmètre.
+> 🧪 **2026-07-22 — Session 161 déployée sur `8293/8294`, recette utilisateur attendue** : le
+> catalogue d'une porte exclut strictement les trappes. Après **Échelle + Trappe**, la palette
+> conserve le choix de composition mais n'affiche plus que les huit trappes, sans recherche ni
+> objets généraux. Les objets 3D libres possèdent un placement sticky : leur fantôme balaie le
+> trajet de la souris, s'arrête au premier mur, objet ou volume structurel puis glisse sur les axes
+> libres. Il ne devient jamais rouge et ne traverse pas l'obstacle, même lors d'un saut rapide du
+> pointeur ; clic, glisser-déposer et rotation gardent une validation finale avant écriture.
+> Validation : 144 tests monde/serveur, 95 tests client, 3 configuration, build Vite, ESLint ciblé
+> sans erreur, smoke Chromium et recette connectée réelle (catalogue exclusif et franchissement de
+> mur refusé). Les données temporaires ont été supprimées et contrôlées à zéro. Retour arrière :
+> `backup/pre-session161-placement-collision-20260722` (`23949e4`). Saar et fusion sont inchangés.
 >
 > 🧪 **2026-07-22 — correction de recette des accès verticaux déployée sur `8293/8294`, nouvelle
 > recette utilisateur attendue** : le choix initial contient uniquement **Échelle seule** et

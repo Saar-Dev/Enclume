@@ -3,6 +3,34 @@
 > Contrats techniques réaudités le 2026-07-22 : `surface_data` v13, spatial sans Redis et
 > environnement Node 24/npm 11.
 
+## Catalogues contextuels et placement sticky des objets 3D (2026-07-22)
+
+Le catalogue de connecteurs ne mélange plus les familles. Un blueprint dont
+`geometry.connectorType = "hatch"` est toujours exclu des portes, même si ses métadonnées legacy
+contiennent `door`, `sas` ou le chemin du pack historique. Les portes sans `connectorType` restent
+reconnues par leur pack et leurs mots-clés. Dans **Objets 3D > Accès vertical**, le sélecteur
+**Échelle seule / Échelle + Trappe** reste accessible ; le second choix remplace recherche,
+import et bibliothèque générale par la preview et les huit seules trappes.
+
+Le placement des entités libres est maintenant volumique et sticky. La géométrie de collision
+reprend dimensions ou collider d'état, échelle d'instance, origine et rotation. Elle est confrontée
+aux murs droits ou courbes déjà découpés autour des ouvertures, aux autres colliders du snapshot,
+aux voxels legacy affichés et aux entités existantes. Un contact de faces est permis ; un
+chevauchement horizontal et vertical ne l'est pas.
+
+Le fantôme balaie le segment entre sa dernière position valide et la cible du pointeur. Il ne peut
+donc pas se téléporter au travers d'un mur mince. Au contact, une recherche X/Z utilise le mouvement
+restant pour le faire glisser le long de l'obstacle. Il ne devient jamais rouge : un premier point
+invalide le masque, puis il reste collé à la dernière position valide. Le clic pose à cette position
+résolue ; glisser-déposer et rotation répètent le garde avant le `POST` ou `PUT`.
+
+Validation : 144 tests monde/serveur, 95 tests client, 3 tests de configuration, build Vite et
+ESLint ciblé sans erreur. Une recette Chromium connectée sur `8293` a confirmé les huit seules
+trappes après le choix de composition et une pose lancée de l'autre côté d'un mur persistée au
+contact du côté d'origine. Campagnes et comptes de recette ont été supprimés puis contrôlés à zéro.
+
+---
+
 ## Accès verticaux et catalogue de trappes 3D (2026-07-22)
 
 L’objet structurel autrefois présenté comme **Échelle** est maintenant un **Accès vertical**. Sa

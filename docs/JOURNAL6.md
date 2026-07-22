@@ -4800,3 +4800,35 @@ Vite réussis. `cb971ed` a été fast-forwardé sur `dev/monde`; les services `8
 le client, un GLB distant et le smoke Chromium sont verts. Le catalogue synchronise 100 modèles.
 Retour arrière : `backup/pre-session160-followup-20260722` (`f82bdea`). Saar `8193` et la fusion
 `8393` n’ont pas été modifiés. La nouvelle recette utilisateur reste attendue.
+
+---
+
+## Session 161 (Codex) — 2026-07-22 — Catalogues exclusifs et placement sticky 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : la simple coloration rouge d'un fantôme en collision ne répondait pas au
+besoin. L'objet doit rester physiquement du bon côté, se coller à l'obstacle et glisser le long de
+celui-ci, de sorte qu'aucune position invalide ne soit jamais proposée. La palette devait aussi
+cesser de mélanger portes, trappes et objets généraux selon le parcours actif.
+
+**Catalogues** : le filtre des portes refuse explicitement tout blueprint `connectorType=hatch`,
+même si ses métadonnées historiques mentionnent encore `door`, `sas` ou le pack des portes. Dans
+**Accès vertical**, le choix de composition reste visible ; **Échelle + Trappe** masque recherche,
+import et bibliothèque générale pour ne conserver que la preview et les huit trappes. Revenir à
+**Échelle seule** restaure la bibliothèque normale.
+
+**Placement sticky** : un helper commun construit le volume orienté de l'entité depuis son collider,
+son origine, sa rotation et son échelle. Il teste murs, volumes structurels, voxels legacy et autres
+entités, avec contact de faces autorisé. Chaque mouvement balaie le segment depuis la dernière
+position valide, ce qui empêche aussi les traversées lors d'un saut rapide du pointeur. Au premier
+contact, les chemins X puis Z et Z puis X permettent de glisser sur l'axe libre. Un premier survol
+invalide masque le fantôme ; ensuite celui-ci reste à la dernière position valide et ne devient
+jamais rouge. Pose, glisser-déposer et rotation possèdent en plus un dernier garde avant écriture.
+
+**Validation et déploiement** : 144/144 tests monde/serveur, 95/95 tests client, 3/3 tests de
+configuration, build Vite, ESLint ciblé sans erreur et smoke Chromium distant réussis. Une recette
+Chromium connectée réelle sur `8293` a confirmé les huit seules trappes et une pose demandée de
+l'autre côté d'un mur enregistrée au contact du côté d'origine. Les campagnes et comptes créés pour
+la recette ont été supprimés puis contrôlés à zéro. Le commit fonctionnel `0d74a41` est déployé sur
+`8293/8294`; seuls `enclume-codex-client` et `enclume-codex-server` ont été redémarrés. Saar
+`8193/8194` et fusion `8393/8394` sont inchangés. Retour arrière :
+`backup/pre-session161-placement-collision-20260722` (`23949e4`).

@@ -1,3 +1,17 @@
+## v202 — 2026-07-22 — Catalogues exclusifs et placement sticky
+
+### Éditeur 3D
+- [fix] Le catalogue **Portes** exclut désormais toutes les trappes, y compris les anciens modèles
+  dont le pack ou les mots-clés contiennent encore `door` ou `sas`.
+- [fix] Après **Échelle + Trappe**, la palette conserve le sélecteur de composition et n'affiche que
+  la preview et les huit modèles de trappe ; recherche, import et objets 3D généraux sont masqués.
+- [feat] Les objets 3D libres ne peuvent plus être posés ni déplacés dans un mur, un volume
+  structurel ou un autre objet. Le fantôme reste toujours valide, s'arrête au contact et glisse le
+  long de l'obstacle sans devenir rouge.
+- [engine] Le trajet du pointeur est balayé avant chaque pose : un saut rapide de la souris ne peut
+  plus téléporter un objet au travers d'une paroi mince. Déplacement et rotation répètent le garde
+  juste avant l'écriture serveur.
+
 ## v201 — 2026-07-22 — Trappes bilatérales et accès vertical latéral
 
 ### Éditeur, rendu et modèles 3D
