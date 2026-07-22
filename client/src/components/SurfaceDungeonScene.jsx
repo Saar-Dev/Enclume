@@ -47,6 +47,10 @@ import {
   stairOpeningMultiPolygon,
 } from '../../../shared/world/stairGeometry.js'
 import {
+  verticalAccessOpenings,
+  verticalOpeningMultiPolygon,
+} from '../../../shared/world/verticalAccessGeometry.js'
+import {
   SURFACE_FINE,
   STORY_HEIGHT,
   computeSurfaceWaterCells,
@@ -593,7 +597,7 @@ function WallBoltHeads({ wall, box, frontDescriptor, backDescriptor }) {
   return heads.length ? <>{heads}</> : null
 }
 
-function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDetails = true }) {
+function FloorTile({ id, floor, surface, openings = [], textureMaterials, opacity = 1, showDetails = true }) {
   const { x, z, y } = parseFloorKey(id, floor)
   const topProcedural = surfaceMaterialAt(floor.topMaterial || floor.material, showDetails)
   const bottomProcedural = surfaceMaterialAt(floor.bottomMaterial || floor.material, showDetails)
@@ -615,12 +619,18 @@ function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDeta
   const sheetY = y + thickness / 2
   const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
   const clippedFootprint = (() => {
-    const rawRoom = floor?.clipRoomId ? surface?.rooms?.[floor.clipRoomId] : null
-    if (!rawRoom) return null
-    const room = { id: floor.clipRoomId, ...rawRoom }
-    const roomInterior = roomInteriorFootprintAtY(room, y, surface.rooms, STORY_HEIGHT)
     const tile = [[[[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1], [x, z]]]]
-    return intersectMultiPolygons(tile, roomInterior)
+    const rawRoom = floor?.clipRoomId ? surface?.rooms?.[floor.clipRoomId] : null
+    let footprint = tile
+    if (rawRoom) {
+      const room = { id: floor.clipRoomId, ...rawRoom }
+      const roomInterior = roomInteriorFootprintAtY(room, y, surface.rooms, STORY_HEIGHT)
+      footprint = intersectMultiPolygons(tile, roomInterior)
+    }
+    if (openings.length > 0 && footprint.length > 0) {
+      footprint = differenceMultiPolygons(footprint, ...openings.map(verticalOpeningMultiPolygon))
+    }
+    return rawRoom || openings.length > 0 ? footprint : null
   })()
   if (!top) return null
   if (clippedFootprint) {
@@ -675,7 +685,7 @@ function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDeta
   )
 }
 
-function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = true }) {
+function CeilingTile({ id, ceiling, openings = [], textureMaterials, opacity, showDetails = true }) {
   const { x, z, y } = parseCeilingKey(id, ceiling)
   const topProcedural = surfaceMaterialAt(ceiling.topMaterial || ceiling.material, showDetails)
   const bottomProcedural = surfaceMaterialAt(ceiling.bottomMaterial || ceiling.material, showDetails)
@@ -696,6 +706,26 @@ function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = tru
   const visualThickness = thinGrateThickness(thickness, cutout)
   const visualY = horizontalSurfaceVisualY(y, thickness, visualThickness, bottomCutout ? 'bottom' : 'top')
   const materials = withOpacity([side, side, top, bottom, side, side], opacity)
+  if (openings.length > 0) {
+    const tile = [[[[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1], [x, z]]]]
+    const clippedFootprint = differenceMultiPolygons(tile, ...openings.map(verticalOpeningMultiPolygon))
+    if (clippedFootprint.length === 0) return null
+    return (
+      <CurvedRoomSlab
+        room={null}
+        contours={multiPolygonContours(clippedFootprint)}
+        kind="ceiling"
+        y={singleSheet ? y - thickness / 2 : visualY}
+        thickness={visualThickness}
+        capMaterial={bottom}
+        frontMaterial={top}
+        backMaterial={bottom}
+        sideMaterial={side}
+        opacity={opacity}
+        singleSheet={singleSheet}
+      />
+    )
+  }
   if (singleSheet) {
     return (
       <SingleSurfaceSheet
@@ -762,13 +792,7 @@ function RoomSlab({
     [Number(connector.x), Number(connector.z)],
   ]]])
   const stairOpenings = slabStairs.map(stair => stairOpeningMultiPolygon(stair, { storyHeight: STORY_HEIGHT }))
-  const hatchOpenings = slabHatches.map(connector => [[[
-    [Number(connector.x), Number(connector.z)],
-    [Number(connector.x) + Number(connector.width || 1), Number(connector.z)],
-    [Number(connector.x) + Number(connector.width || 1), Number(connector.z) + Number(connector.depth || 1)],
-    [Number(connector.x), Number(connector.z) + Number(connector.depth || 1)],
-    [Number(connector.x), Number(connector.z)],
-  ]]])
+  const hatchOpenings = slabHatches.map(verticalOpeningMultiPolygon)
   const openings = [...skylightOpenings, ...stairOpenings, ...hatchOpenings]
   const clippedFootprint = openings.length > 0
     ? differenceMultiPolygons(sourceFootprint, ...openings)
@@ -2782,10 +2806,18 @@ function SurfaceDungeonScene({
     () => Object.values(surface.connectors).filter(connector => connector?.type === 'skylight'),
     [surface.connectors],
   )
-  const hatches = useMemo(
-    () => Object.values(surface.connectors).filter(connector => connector?.type === 'hatch'),
-    [surface.connectors],
-  )
+  const verticalOpenings = useMemo(() => verticalAccessOpenings(surface), [surface])
+  const horizontalConnectorOpenings = useMemo(() => [
+    ...skylights.map(connector => ({
+      shape: 'rectangle',
+      x: Number(connector.x) || 0,
+      z: Number(connector.z) || 0,
+      y: Number(connector.y) || 0,
+      width: Math.max(0.01, Number(connector.width) || 1),
+      depth: Math.max(0.01, Number(connector.depth) || 1),
+    })),
+    ...verticalOpenings,
+  ], [skylights, verticalOpenings])
   const stairs = useMemo(() => Object.values(surface.stairs), [surface.stairs])
   const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef, roomContextAnchor)
   useEffect(() => {
@@ -2902,7 +2934,7 @@ function SurfaceDungeonScene({
               textureMaterials={textureMaterials}
               showDetails={showDetails}
               skylights={skylights}
-              hatches={hatches}
+              hatches={verticalOpenings}
               stairs={stairs}
             />
           )
@@ -2923,7 +2955,7 @@ function SurfaceDungeonScene({
             opacity={opacity}
             showDetails={showDetails}
             skylights={skylights}
-            hatches={hatches}
+            hatches={verticalOpenings}
             stairs={stairs}
           />
         )
@@ -2939,11 +2971,13 @@ function SurfaceDungeonScene({
       ) : null)}
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
-        if ([...skylights, ...hatches].some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
-          && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
-          && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
+        const openings = horizontalConnectorOpenings.filter(opening => (
+          Math.abs(Number(opening.y) - parsed.y) < 0.01
+            && Number(opening.x) < parsed.x + 1 && Number(opening.x) + Number(opening.width || 1) > parsed.x
+            && Number(opening.z) < parsed.z + 1 && Number(opening.z) + Number(opening.depth || 1) > parsed.z
+        ))
         if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
-        return <FloorTile key={id} id={id} floor={floor} surface={surface} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
+        return <FloorTile key={id} id={id} floor={floor} surface={surface} openings={openings} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
       {surfaceWallSegments.map(wall => {
         const box = getWallRenderBox(wall)
@@ -2961,9 +2995,11 @@ function SurfaceDungeonScene({
       })}
       {Object.entries(surface.ceilings).map(([id, ceiling]) => {
         const parsed = parseCeilingKey(id, ceiling)
-        if ([...skylights, ...hatches].some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
-          && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
-          && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
+        const openings = horizontalConnectorOpenings.filter(opening => (
+          Math.abs(Number(opening.y) - parsed.y) < 0.01
+            && Number(opening.x) < parsed.x + 1 && Number(opening.x) + Number(opening.width || 1) > parsed.x
+            && Number(opening.z) < parsed.z + 1 && Number(opening.z) + Number(opening.depth || 1) > parsed.z
+        ))
         if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
         const opacity = ceilingOpacity
         return (
@@ -2971,6 +3007,7 @@ function SurfaceDungeonScene({
             key={id}
             id={id}
             ceiling={ceiling}
+            openings={openings}
             textureMaterials={textureMaterials}
             opacity={opacity}
             showDetails={showDetails}

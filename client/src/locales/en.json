@@ -220,6 +220,24 @@
 "macroCritical": "critical!",
 "macroFumble": "fumble!"
   },
+  "surfaceEditor": {
+    "verticalAccess": "Vertical access",
+    "verticalAccesses": "Vertical accesses",
+    "verticalAccessModel": "Vertical access model",
+    "ladderOnly": "Ladder only",
+    "noHatch": "No hatch",
+    "openOpening": "Open shaft",
+    "squareShape": "Square",
+    "roundShape": "Round",
+    "proceduralModel": "Procedural model",
+    "rotateLeft": "↶ Rotate left",
+    "rotateRight": "Rotate right ↷",
+    "hatchMechanisms": {
+      "hinged": "Hinged",
+      "sliding-bipartite": "Bipartite sliding",
+      "sliding-tripartite": "Tripartite sliding"
+    }
+  },
   "character": {
     "tabSheet": "Fiche",
     "tabMateriel": "Matériel",

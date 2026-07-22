@@ -115,6 +115,35 @@ test('la cabine est navigable seulement lorsqu’elle est alignée avec ses port
   assert.equal(absent.status, 'unreachable')
 })
 
+test('une passerelle rejoint une échelle même lorsque la trémie n’a pas de trappe', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-ladder-bridge-no-hatch',
+    surfaceData: emptySurface({
+      floors: {
+        '0:0:0': { x: 0, z: 0, y: 0, thickness: 0.25 },
+        '0:0:2.5': { x: 0, z: 0, y: 2.5, thickness: 0.25, kind: 'bridge' },
+        '1:0:2.5': { x: 1, z: 0, y: 2.5, thickness: 0.25, kind: 'bridge' },
+      },
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 0, z: 0, axis: 'x',
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+          topOpening: { shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1 },
+          movementMultiplier: 1,
+        },
+      },
+    }),
+  })
+  const result = planWorldPath({
+    snapshot,
+    from: { x: 0.5, y: 0.125, z: 0.5 },
+    to: { x: 1.5, y: 2.625, z: 0.5 },
+    budgetM: 30,
+  })
+  assert.equal(result.status, 'destination')
+  assert.ok(result.plan.segments.some(segment => segment.mode === 'climb'))
+})
+
 test('un effet volumique pondère A* et le plan avec la même catégorie environnement', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-effect-cost',

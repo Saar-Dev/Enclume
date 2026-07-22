@@ -53,8 +53,8 @@ const PARAMETRIC_STRUCTURAL_OBJECTS = Object.freeze([
   },
   {
     id: '__generic_ladder__',
-    label: 'Échelle structurelle',
-    category: 'Échelles',
+    labelKey: 'surfaceEditor.verticalAccess',
+    categoryKey: 'surfaceEditor.verticalAccesses',
     builtin_key: 'surface_ladder_straight',
     geometry: { placementMode: 'connector', connectorType: 'ladder' },
   },
@@ -733,7 +733,7 @@ export default function Sidebar({
   }
   const genericLadderChoice = {
     id: '__generic_ladder__',
-    label: 'Échelle structurelle',
+    label: t('surfaceEditor.verticalAccess'),
     category: 'surface_connectors',
   }
   const genericHatchChoice = {
@@ -756,9 +756,17 @@ export default function Sidebar({
   const selectedConnectorChoice = connectorChoices.find(choice => String(choice.id) === String(surfaceToolState.connectorBlueprintId))
     || connectorChoices[0]
     || null
-  const hatchChoices = [...hatchConnectorBlueprints, genericHatchChoice]
-  const selectedHatchChoice = hatchChoices.find(choice => String(choice.id) === String(surfaceToolState.hatchBlueprintId))
-    || genericHatchChoice
+  const noHatchChoice = {
+    id: '__no_hatch__',
+    label: t('surfaceEditor.ladderOnly'),
+    category: 'surface_connectors',
+    noHatch: true,
+  }
+  const hatchChoices = [noHatchChoice, ...hatchConnectorBlueprints, genericHatchChoice]
+  const selectedHatchChoice = surfaceToolState.ladderHatch === false
+    ? noHatchChoice
+    : hatchChoices.find(choice => String(choice.id) === String(surfaceToolState.hatchBlueprintId))
+      || genericHatchChoice
   const connectorMaterialSlots = normalizeModelMaterialSlots(selectedConnectorChoice?.geometry)
   const connectorMaterialOverrides = surfaceToolState.connectorMaterialOverrides || {}
   const updateConnectorMaterialSlot = (slot, patch) => updateSurfaceTool({
@@ -841,7 +849,9 @@ export default function Sidebar({
     connectorType: surfaceToolState.connectorType || 'door',
     ...connectorModelPatch(blueprint),
   })
-  const selectHatchModel = (blueprint) => updateSurfaceTool(hatchModelPatch(blueprint))
+  const selectHatchModel = (blueprint) => updateSurfaceTool(blueprint?.noHatch
+    ? { ladderHatch: false, ...hatchModelPatch(null) }
+    : { ladderHatch: true, ...hatchModelPatch(blueprint) })
 
   useEffect(() => {
     if (surfaceToolState.mode !== 'connector' || !selectedConnectorChoice) return
@@ -1575,19 +1585,7 @@ export default function Sidebar({
                     )}
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
                       <div style={styles.connectorPicker}>
-                        <button
-                          type="button"
-                          onClick={() => updateSurfaceTool({ ladderHatch: surfaceToolState.ladderHatch === false })}
-                          style={{
-                            ...styles.roomToolToggle,
-                            ...(surfaceToolState.ladderHatch !== false ? styles.roomToolToggleActive : {}),
-                          }}
-                        >
-                          <span>Trappe au palier haut</span>
-                          <span style={styles.roomToolToggleState}>
-                            {surfaceToolState.ladderHatch !== false ? 'Active' : 'Inactive'}
-                          </span>
-                        </button>
+                        <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessModel')}</div>
                         {surfaceToolState.ladderHatch !== false && (
                           <>
                             <div style={styles.rotationRow}>
@@ -1610,29 +1608,34 @@ export default function Sidebar({
                                 Rotation droite ↷
                               </button>
                             </div>
-                            <div style={styles.connectorPickerTitle}>Modèle de trappe</div>
                             {selectedHatchChoice?.glb_url && (
                               <Object3DPreview blueprint={selectedHatchChoice} />
                             )}
-                            {hatchChoices.map(choice => {
-                              const selected = String(selectedHatchChoice?.id) === String(choice.id)
-                              return (
-                                <button
-                                  key={choice.id}
-                                  type="button"
-                                  onClick={() => selectHatchModel(choice)}
-                                  style={{
-                                    ...styles.connectorModelBtn,
-                                    ...(selected ? styles.connectorModelBtnActive : {}),
-                                  }}
-                                >
-                                  <span>{selected ? '✓ ' : ''}{choice.label}</span>
-                                  <small>{choice.glb_url ? 'GLB animé' : 'Fallback moteur'}</small>
-                                </button>
-                              )
-                            })}
                           </>
                         )}
+                        {hatchChoices.map(choice => {
+                          const selected = String(selectedHatchChoice?.id) === String(choice.id)
+                          const shape = choice.geometry?.openingShape === 'circle'
+                            ? t('surfaceEditor.roundShape')
+                            : choice.noHatch ? t('surfaceEditor.openOpening') : t('surfaceEditor.squareShape')
+                          const mechanism = choice.geometry?.openingMechanism
+                            ? t(`surfaceEditor.hatchMechanisms.${choice.geometry.openingMechanism}`, { defaultValue: choice.geometry.openingMechanism })
+                            : choice.noHatch ? t('surfaceEditor.noHatch') : t('surfaceEditor.proceduralModel')
+                          return (
+                            <button
+                              key={choice.id}
+                              type="button"
+                              onClick={() => selectHatchModel(choice)}
+                              style={{
+                                ...styles.connectorModelBtn,
+                                ...(selected ? styles.connectorModelBtnActive : {}),
+                              }}
+                            >
+                              <span>{selected ? '✓ ' : ''}{choice.label}</span>
+                              <small>{shape} · {mechanism}</small>
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                     {surfaceToolState.mode === 'connector' && (
@@ -1999,7 +2002,12 @@ export default function Sidebar({
           {/* ── Onglet Entités — palette blueprints ── */}
           {activeEditorTab === 'entity' && (() => {
             const query = objectSearch.trim().toLocaleLowerCase()
-            const bpList = [...Object.values(blueprints), ...PARAMETRIC_STRUCTURAL_OBJECTS]
+            const parametricObjects = PARAMETRIC_STRUCTURAL_OBJECTS.map(blueprint => ({
+              ...blueprint,
+              label: blueprint.labelKey ? t(blueprint.labelKey) : blueprint.label,
+              category: blueprint.categoryKey ? t(blueprint.categoryKey) : blueprint.category,
+            }))
+            const bpList = [...Object.values(blueprints), ...parametricObjects]
               .filter(bp => !bp.deprecated)
               .filter(bp => blueprintPlacementMode(bp) !== 'connector' || structuralObjectConnectorType(bp))
               .filter(bp => !query || bp.label.toLocaleLowerCase().includes(query) || (bp.category || '').toLocaleLowerCase().includes(query))
@@ -2010,7 +2018,7 @@ export default function Sidebar({
                 : connectorType === 'stairs'
                   ? 'Escaliers'
                   : connectorType === 'ladder'
-                    ? 'Échelles'
+                    ? t('surfaceEditor.verticalAccesses')
                     : connectorType ? 'Fenêtres' : (bp.category || t('sidebar.customObjects'))
               if (!groups[category]) groups[category] = []
               groups[category].push(bp)
@@ -2047,6 +2055,61 @@ export default function Sidebar({
                   style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
                 />
                 {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
+                {structuralObjectConnectorType(activeBlueprint) === 'ladder'
+                  && surfaceToolState.mode === 'connector'
+                  && surfaceToolState.connectorType === 'ladder' && (
+                  <div style={{ ...styles.connectorPicker, marginBottom: '10px' }}>
+                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessModel')}</div>
+                    {surfaceToolState.ladderHatch !== false && (
+                      <>
+                        <div style={styles.rotationRow}>
+                          <button
+                            type="button"
+                            onClick={() => updateSurfaceTool({
+                              hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 3) % 4,
+                            })}
+                            style={styles.roomToolSmallBtn}
+                          >
+                            {t('surfaceEditor.rotateLeft')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateSurfaceTool({
+                              hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 1) % 4,
+                            })}
+                            style={styles.roomToolSmallBtn}
+                          >
+                            {t('surfaceEditor.rotateRight')}
+                          </button>
+                        </div>
+                        {selectedHatchChoice?.glb_url && <Object3DPreview blueprint={selectedHatchChoice} />}
+                      </>
+                    )}
+                    {hatchChoices.map(choice => {
+                      const selected = String(selectedHatchChoice?.id) === String(choice.id)
+                      const shape = choice.geometry?.openingShape === 'circle'
+                        ? t('surfaceEditor.roundShape')
+                        : choice.noHatch ? t('surfaceEditor.openOpening') : t('surfaceEditor.squareShape')
+                      const mechanism = choice.geometry?.openingMechanism
+                        ? t(`surfaceEditor.hatchMechanisms.${choice.geometry.openingMechanism}`, { defaultValue: choice.geometry.openingMechanism })
+                        : choice.noHatch ? t('surfaceEditor.noHatch') : t('surfaceEditor.proceduralModel')
+                      return (
+                        <button
+                          key={choice.id}
+                          type="button"
+                          onClick={() => selectHatchModel(choice)}
+                          style={{
+                            ...styles.connectorModelBtn,
+                            ...(selected ? styles.connectorModelBtnActive : {}),
+                          }}
+                        >
+                          <span>{selected ? '✓ ' : ''}{choice.label}</span>
+                          <small>{shape} · {mechanism}</small>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
                 {bpList.length === 0 && (
                   <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
                     {t('sidebar.noBlueprints')}

@@ -682,7 +682,13 @@ export default function SurfaceEditorScene({
         }
       }
       if (current.connectorType === 'ladder') {
-        return { ...current, ladderAxis: current.ladderAxis === 'z' ? 'x' : 'z' }
+        return {
+          ...current,
+          ladderAxis: current.ladderAxis === 'z' ? 'x' : 'z',
+          hatchRotationQuarterTurns: normalizedQuarterTurns(
+            normalizedQuarterTurns(current.hatchRotationQuarterTurns) + direction,
+          ),
+        }
       }
       return current
     })

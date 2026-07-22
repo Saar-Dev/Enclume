@@ -32,6 +32,12 @@ import {
   stairGeometry,
   stairOpeningMultiPolygon,
 } from './stairGeometry.js'
+import {
+  hatchOpeningDescriptor,
+  verticalAccessOpeningDescriptor,
+  verticalAccessOpeningsAtY,
+  verticalOpeningMultiPolygon,
+} from './verticalAccessGeometry.js'
 
 const EPSILON = 1e-6
 
@@ -790,19 +796,10 @@ function stairOpeningsAtY(surface, y) {
     .map(stair => stairOpeningMultiPolygon(stair, { storyHeight: surface.storyHeight }))
 }
 
-function hatchOpeningsAtY(surface, y) {
-  return Object.values(surface.connectors)
-    .filter(connector => connector.type === 'hatch' && Math.abs(number(connector.y) - number(y)) <= EPSILON)
-    .map(connector => rectangleMultiPolygon({
-      minX: number(connector.x),
-      maxX: number(connector.x) + positive(connector.width, 1),
-      minZ: number(connector.z),
-      maxZ: number(connector.z) + positive(connector.depth, 1),
-    }))
-}
-
 function horizontalOpeningsAtY(surface, y) {
-  return [...stairOpeningsAtY(surface, y), ...hatchOpeningsAtY(surface, y)]
+  const verticalOpenings = verticalAccessOpeningsAtY(surface, y, EPSILON)
+    .map(verticalOpeningMultiPolygon)
+  return [...stairOpeningsAtY(surface, y), ...verticalOpenings]
 }
 
 function addSlabs(surface, runtimeStates, battlemapId, spatial) {
@@ -962,7 +959,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const width = positive(connector.width, 1)
     const depth = positive(connector.depth, 1)
     const thickness = positive(connector.height, 0.12)
-    const footprint = rectangleMultiPolygon({ minX: x, maxX: x + width, minZ: z, maxZ: z + depth })
+    const footprint = verticalOpeningMultiPolygon(hatchOpeningDescriptor(connector))
     const panelBounds = bounds(x, y - thickness / 2, z, x + width, y + thickness / 2, z + depth)
     spatial.supports.push({
       id: `support:hatch:${connector.worldId}`,
@@ -1209,6 +1206,38 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
         movementMultiplier: movementMultiplier(connector),
         anchorSpacing: positive(connector.anchorSpacing, 0.5),
       })
+      const opening = verticalAccessOpeningDescriptor(connector, {
+        linkedHatch: hatch,
+        storyHeight: surface.storyHeight,
+      })
+      if (opening) {
+        const topY = Math.max(number(connector.fromY, connector.y), number(connector.toY, connector.topY))
+        const alongX = connector.axis !== 'z'
+        const landingPoints = alongX
+          ? [
+              point(opening.x + opening.width / 2, topY, opening.z),
+              point(opening.x + opening.width / 2, topY, opening.z + opening.depth),
+            ]
+          : [
+              point(opening.x, topY, opening.z + opening.depth / 2),
+              point(opening.x + opening.width, topY, opening.z + opening.depth / 2),
+            ]
+        for (const [index, landingPoint] of landingPoints.entries()) {
+          spatial.supports.push({
+            id: `support:ladder-landing:${connector.worldId}:${index}`,
+            sourceId: connector.worldId,
+            kind: 'ladder-landing',
+            bounds: bounds(
+              landingPoint.x - 0.01, landingPoint.y - 0.01, landingPoint.z - 0.01,
+              landingPoint.x + 0.01, landingPoint.y + 0.01, landingPoint.z + 0.01,
+            ),
+            point: landingPoint,
+            y: landingPoint.y,
+            walkable: true,
+            movementMultiplier: movementMultiplier(connector),
+          })
+        }
+      }
       continue
     }
     if (connector.type !== 'elevator') continue

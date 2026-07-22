@@ -431,6 +431,20 @@ function validateFeature(collection, id, item, errors) {
     } else if (item.type === 'skylight') {
       validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth'], path, errors)
       if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une largeur et une profondeur positives`)
+    } else if (item.type === 'ladder') {
+      if (item.topOpening !== undefined) {
+        if (!isPlainObject(item.topOpening)) {
+          errors.push(`${path}.topOpening doit être un objet`)
+        } else {
+          validateFiniteFields(item.topOpening, ['x', 'z', 'y', 'width', 'depth'], `${path}.topOpening`, errors)
+          if (Number(item.topOpening.width) <= 0 || Number(item.topOpening.depth) <= 0) {
+            errors.push(`${path}.topOpening doit avoir une largeur et une profondeur positives`)
+          }
+          if (!['rectangle', 'circle'].includes(item.topOpening.shape)) {
+            errors.push(`${path}.topOpening.shape doit valoir rectangle ou circle`)
+          }
+        }
+      }
     } else if (item.type === 'hatch') {
       validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth', 'height'], path, errors)
       if (Number(item.width) <= 0 || Number(item.depth) <= 0 || Number(item.height) <= 0) {
@@ -438,6 +452,9 @@ function validateFeature(collection, id, item, errors) {
       }
       if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
       if (![1, -1].includes(Number(item.hingeSide))) errors.push(`${path}.hingeSide doit valoir 1 ou -1`)
+      if (item.openingShape != null && !['rectangle', 'circle'].includes(item.openingShape)) {
+        errors.push(`${path}.openingShape doit valoir rectangle ou circle`)
+      }
       if (item.rotationQuarterTurns != null
         && (!Number.isInteger(Number(item.rotationQuarterTurns)) || Number(item.rotationQuarterTurns) < 0 || Number(item.rotationQuarterTurns) > 3)) {
         errors.push(`${path}.rotationQuarterTurns doit être un entier entre 0 et 3`)

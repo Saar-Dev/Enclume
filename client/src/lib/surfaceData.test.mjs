@@ -31,6 +31,7 @@ import {
   roomFootprintRectangles,
   roomsWallRenderPaths,
   roomsWallSegments,
+  setVerticalAccessHatch,
   wallOpeningVerticalRange,
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
@@ -294,6 +295,9 @@ test('une échelle crée sa trappe supérieure avec le même matériau ajouré',
   assert.equal(hatch.modelBlueprintId, 'hatch-blueprint')
   assert.equal(hatch.modelGlbUrl, 'builtin-models/hatches/test.glb')
   assert.equal(hatch.modelGeometry.origin, 'hatch-center')
+  assert.deepEqual(ladder.topOpening, {
+    shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1,
+  })
   assert.deepEqual(
     rotateHatchOrientation(rotateHatchOrientation(rotateHatchOrientation(rotateHatchOrientation(hatch, 1), 1), 1), 1),
     hatch,
@@ -310,6 +314,41 @@ test('une échelle crée sa trappe supérieure avec le même matériau ajouré',
   )
   assert.equal(Object.values(erasedFromLowerLevel.connectors).some(connector => connector.type === 'ladder'), false)
   assert.equal(Object.values(erasedFromLowerLevel.connectors).some(connector => connector.type === 'hatch'), false)
+})
+
+test('un accès vertical conserve sa trémie sans trappe et peut recevoir une trappe ronde', () => {
+  const lower = room('lower', 0)
+  const upper = { ...room('upper', 1), y: 2.5, level: 1 }
+  const withoutHatch = applyLadderConnector(emptySurface({ rooms: { lower, upper } }), { x: 0, z: 0 }, {
+    level: 0,
+    connectorToLevel: 1,
+    ladderHatch: false,
+    floorThickness: 0.25,
+  })
+  const ladder = Object.values(withoutHatch.connectors).find(connector => connector.type === 'ladder')
+  assert.ok(ladder)
+  assert.equal(Object.values(withoutHatch.connectors).some(connector => connector.type === 'hatch'), false)
+  assert.deepEqual(ladder.topOpening, {
+    shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1,
+  })
+
+  const withRoundHatch = setVerticalAccessHatch(withoutHatch, ladder.id, {
+    ladderHatch: true,
+    hatchBlueprintId: 'round-hatch',
+    hatchModelLabel: 'Trappe ronde',
+    hatchModelGeometry: {
+      connectorType: 'hatch', origin: 'hatch-center', openingShape: 'circle', width: 1, depth: 1,
+    },
+  })
+  const roundLadder = withRoundHatch.connectors[ladder.id]
+  const roundHatch = Object.values(withRoundHatch.connectors).find(connector => connector.type === 'hatch')
+  assert.equal(roundLadder.topOpening.shape, 'circle')
+  assert.equal(roundHatch.openingShape, 'circle')
+  assert.equal(roundHatch.modelBlueprintId, 'round-hatch')
+
+  const removedAgain = setVerticalAccessHatch(withRoundHatch, ladder.id, { ladderHatch: false })
+  assert.equal(Object.values(removedAgain.connectors).some(connector => connector.type === 'hatch'), false)
+  assert.equal(removedAgain.connectors[ladder.id].topOpening.shape, 'circle')
 })
 
 test('un mur courbe produit des segments orientés avec une boîte de rendu tournée', () => {

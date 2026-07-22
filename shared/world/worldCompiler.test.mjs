@@ -667,6 +667,31 @@ test('une échelle compile une traversée climb fractionnable avec des ancrages 
   assert.equal(traversal.movementMultiplier, 2)
 })
 
+test('une échelle sans trappe découpe sa trémie et expose ses raccords de palier', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-ladder-open-shaft',
+    surfaceData: emptySurface({
+      floors: {
+        '0:0:0': { x: 0, z: 0, y: 0, thickness: 0.25 },
+        '0:0:2.5': { x: 0, z: 0, y: 2.5, thickness: 0.25, kind: 'bridge' },
+        '1:0:2.5': { x: 1, z: 0, y: 2.5, thickness: 0.25, kind: 'bridge' },
+      },
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 0, z: 0, axis: 'x',
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+          topOpening: { shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1 },
+        },
+      },
+    }),
+  })
+  assert.equal(snapshot.spatial.traversals.find(item => item.kind === 'ladder').enabled, true)
+  assert.equal(snapshot.spatial.supports.some(item => (
+    item.kind === 'floor' && item.bounds.min.x === 0 && Math.abs(item.y - 2.625) < 1e-9
+  )), false)
+  assert.equal(snapshot.spatial.supports.filter(item => item.kind === 'ladder-landing').length, 2)
+})
+
 test('une trappe fermée remplace la dalle et verrouille la traversée de son échelle', () => {
   const surfaceData = emptySurface({
     rooms: {
@@ -731,6 +756,29 @@ test('une trappe en grille fermée reste un support sans occulter la LOS', () =>
   assert.ok(snapshot.spatial.supports.some(item => item.kind === 'hatch'))
   assert.ok(snapshot.spatial.colliders.some(item => item.kind === 'hatch'))
   assert.equal(snapshot.spatial.occluders.some(item => item.kind === 'hatch'), false)
+})
+
+test('une trappe ronde compile un support circulaire et non sa boîte englobante', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-round-hatch',
+    surfaceData: emptySurface({
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 0, z: 0, axis: 'x',
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+          topOpening: { shape: 'circle', x: 0, z: 0, y: 2.5, width: 1, depth: 1 },
+        },
+        hatchA: {
+          id: 'hatchA', type: 'hatch', linkedLadderId: 'ladderA', openingShape: 'circle',
+          x: 0, z: 0, y: 2.5, width: 1, depth: 1, height: 0.12,
+          axis: 'x', hingeSide: 1, state: 'closed', allowedStates: ['closed', 'open', 'locked'],
+        },
+      },
+    }),
+  })
+  const support = snapshot.spatial.supports.find(item => item.kind === 'hatch')
+  assert.equal(multiPolygonContainsPoint(support.footprint, { x: 0.5, z: 0.5 }), true)
+  assert.equal(multiPolygonContainsPoint(support.footprint, { x: 0.02, z: 0.02 }), false)
 })
 
 test('une passerelle détruite ne compile plus son support', () => {

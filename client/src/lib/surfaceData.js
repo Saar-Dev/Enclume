@@ -31,6 +31,10 @@ import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
 import {
   stairGeometry,
 } from '../../../shared/world/stairGeometry.js'
+import {
+  normalizeVerticalOpeningShape,
+  verticalAccessOpeningDescriptor,
+} from '../../../shared/world/verticalAccessGeometry.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
@@ -2221,6 +2225,12 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
   const maxLevel = Math.max(fromLevel, toLevel)
   const id = `connector:ladder:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
   const material = makeSurfaceMaterial(tool, `${id}:structure`)
+  const hatchGeometry = tool?.hatchModelGeometry && typeof tool.hatchModelGeometry === 'object'
+    ? tool.hatchModelGeometry
+    : {}
+  const openingWidth = Math.max(0.2, Number(hatchGeometry.width) || 1)
+  const openingDepth = Math.max(0.2, Number(hatchGeometry.depth) || 1)
+  const openingY = levelToY(maxLevel)
   return {
     id,
     type: 'ladder',
@@ -2245,6 +2255,14 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
     movementMultiplier: getToolMovementMultiplier(tool),
     allowPartial: true,
     anchorSpacing: Math.max(0.1, Number(tool?.ladderAnchorSpacing) || 0.5),
+    topOpening: {
+      shape: normalizeVerticalOpeningShape(hatchGeometry.openingShape),
+      x: Number(cell.x) || 0,
+      z: Number(cell.z) || 0,
+      y: openingY,
+      width: openingWidth,
+      depth: openingDepth,
+    },
     ...(material ? { material } : {}),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('ladder'),
@@ -2276,7 +2294,9 @@ export function rotateHatchOrientation(hatch, deltaQuarterTurns) {
 export function makeLadderHatchFromConnector(ladder, tool = {}) {
   if (!ladder || ladder.type !== 'ladder' || tool?.ladderHatch === false) return null
   const topLevel = Math.max(Number(ladder.fromLevel) || 0, Number(ladder.toLevel) || 0)
-  const y = levelToY(topLevel)
+  const fallbackY = levelToY(topLevel)
+  const opening = verticalAccessOpeningDescriptor(ladder, { storyHeight: STORY_HEIGHT })
+  const y = opening?.y ?? fallbackY
   const contactY = Math.max(Number(ladder.fromY) || y, Number(ladder.toY) || y)
   const thickness = Math.max(0.06, Math.min(0.4, Math.abs(contactY - y) * 2 || 0.12))
   const id = `connector:hatch:${ladder.x}:${ladder.z}:${topLevel}`
@@ -2292,13 +2312,14 @@ export function makeLadderHatchFromConnector(ladder, tool = {}) {
     linkedLadderId: ladder.id,
     roomId: ladder.roomId || null,
     roomIds: Array.isArray(ladder.roomIds) ? [...ladder.roomIds] : [],
-    x: Number(ladder.x) || 0,
-    z: Number(ladder.z) || 0,
+    x: opening?.x ?? (Number(ladder.x) || 0),
+    z: opening?.z ?? (Number(ladder.z) || 0),
     y,
     level: topLevel,
-    width: 1,
-    depth: 1,
+    width: opening?.width || 1,
+    depth: opening?.depth || 1,
     height: thickness,
+    openingShape: opening?.shape || 'rectangle',
     axis: orientation.axis,
     hingeSide: orientation.hingeSide,
     rotationQuarterTurns: orientation.rotationQuarterTurns,
@@ -2326,6 +2347,55 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
       ...(hatch ? { [hatch.id]: hatch } : {}),
     },
   }
+}
+
+export function setVerticalAccessHatch(surfaceData, ladderId, tool = {}) {
+  const next = normalizeSurfaceData(surfaceData)
+  const ladder = next.connectors?.[ladderId]
+  if (!ladder || ladder.type !== 'ladder') return surfaceData
+  const connectors = { ...next.connectors }
+  const currentHatch = Object.values(connectors).find(connector => (
+    connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)
+  ))
+  for (const [id, connector] of Object.entries(connectors)) {
+    if (connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)) delete connectors[id]
+  }
+
+  let updatedLadder = ladder
+  if (tool?.ladderHatch !== false) {
+    const geometry = tool?.hatchModelGeometry && typeof tool.hatchModelGeometry === 'object'
+      ? tool.hatchModelGeometry
+      : {}
+    const previousOpening = verticalAccessOpeningDescriptor(ladder, {
+      linkedHatch: currentHatch,
+      storyHeight: next.storyHeight,
+    })
+    updatedLadder = {
+      ...ladder,
+      topOpening: {
+        ...previousOpening,
+        shape: normalizeVerticalOpeningShape(geometry.openingShape),
+        width: Math.max(0.2, Number(geometry.width) || previousOpening?.width || 1),
+        depth: Math.max(0.2, Number(geometry.depth) || previousOpening?.depth || 1),
+      },
+    }
+  }
+  connectors[ladderId] = updatedLadder
+  if (tool?.ladderHatch !== false) {
+    const hatch = makeLadderHatchFromConnector(updatedLadder, {
+      ...tool,
+      hatchHingeSide: currentHatch?.hingeSide ?? tool?.hatchHingeSide,
+      hatchRotationQuarterTurns: currentHatch?.rotationQuarterTurns ?? tool?.hatchRotationQuarterTurns,
+    })
+    if (hatch) connectors[hatch.id] = {
+      ...hatch,
+      state: currentHatch?.state || hatch.state,
+      modelMaterialOverrides: String(currentHatch?.modelBlueprintId || '') === String(hatch.modelBlueprintId || '')
+        ? currentHatch?.modelMaterialOverrides || hatch.modelMaterialOverrides
+        : hatch.modelMaterialOverrides,
+    }
+  }
+  return { ...next, version: SURFACE_DATA_VERSION, connectors }
 }
 
 export function expandRoomsToSurface(data) {

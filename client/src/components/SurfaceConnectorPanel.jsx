@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   clearMaterialSlotOverride,
   connectorModelMaterialSlots,
@@ -131,6 +132,9 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
 
 export default function SurfaceConnectorPanel({
   connector,
+  linkedHatch = null,
+  hatchChoices = [],
+  onVerticalAccessHatchChange = null,
   x,
   y,
   onPatch,
@@ -144,6 +148,7 @@ export default function SurfaceConnectorPanel({
   canAdminElevator = canEdit,
   canAdminFeature = canEdit,
 }) {
+  const { t } = useTranslation()
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
@@ -296,6 +301,35 @@ export default function SurfaceConnectorPanel({
                 Rotation droite ↷
               </button>
             </div>
+            <label style={S.field}>
+              <span style={S.label}>{t('surfaceEditor.verticalAccessModel')}</span>
+              <select
+                value={linkedHatch?.modelBlueprintId || (linkedHatch ? '__procedural_hatch__' : '__no_hatch__')}
+                onChange={event => {
+                  const value = event.target.value
+                  if (value === '__no_hatch__') {
+                    onVerticalAccessHatchChange?.(connector.id, null)
+                    return
+                  }
+                  const blueprint = hatchChoices.find(choice => String(choice.id) === String(value))
+                  if (blueprint) onVerticalAccessHatchChange?.(connector.id, blueprint)
+                }}
+                style={S.input}
+              >
+                <option value="__no_hatch__">{t('surfaceEditor.ladderOnly')}</option>
+                {linkedHatch && !linkedHatch.modelBlueprintId && (
+                  <option value="__procedural_hatch__" disabled>{t('surfaceEditor.proceduralModel')}</option>
+                )}
+                {hatchChoices.map(choice => (
+                  <option key={choice.id} value={choice.id}>{choice.label}</option>
+                ))}
+              </select>
+              <span style={S.hint}>
+                {linkedHatch
+                  ? `${linkedHatch.openingShape === 'circle' ? t('surfaceEditor.roundShape') : t('surfaceEditor.squareShape')} · ${linkedHatch.modelLabel || t('surfaceEditor.proceduralModel')}`
+                  : t('surfaceEditor.openOpening')}
+              </span>
+            </label>
           </div>
         )}
 

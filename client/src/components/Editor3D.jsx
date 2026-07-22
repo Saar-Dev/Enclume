@@ -36,6 +36,7 @@ import {
   parseFloorKey,
   removeRoomBoundaryArcs,
   roomsWallSegments,
+  setVerticalAccessHatch,
   SURFACE_DATA_VERSION,
   SURFACE_FINE,
   yToLevel,
@@ -1208,7 +1209,7 @@ export default function Editor3D({
   onBlueprintPlaced,
 }) {
   const { battlemap, setBattlemap } = useMapStore()
-  const { entities } = useEntityStore()
+  const { entities, blueprints } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
   const [voxels, setVoxels] = useState({})
@@ -1568,6 +1569,16 @@ export default function Editor3D({
     const stair = surfaceData.stairs?.[connectorId]
     return stair ? { id: connectorId, ...stair, type: 'stairs' } : null
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors, surfaceData.stairs])
+  const selectedLadderHatch = useMemo(() => {
+    if (selectedSurfaceConnector?.type !== 'ladder') return null
+    return Object.entries(surfaceData.connectors || {}).find(([, connector]) => (
+      connector?.type === 'hatch'
+        && String(connector.linkedLadderId) === String(selectedSurfaceConnector.id)
+    ))?.[1] || null
+  }, [selectedSurfaceConnector, surfaceData.connectors])
+  const hatchBlueprintChoices = useMemo(() => Object.values(blueprints || {})
+    .filter(blueprint => blueprint?.geometry?.connectorType === 'hatch')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label))), [blueprints])
 
   const selectedSurfaceRoom = useMemo(() => {
     const roomId = surfaceWallPanel?.roomId || surfaceRoomPanel?.roomId
@@ -1649,6 +1660,22 @@ export default function Editor3D({
         },
       },
     })
+  }, [handleSurfaceDataChange])
+
+  const handleVerticalAccessHatchChange = useCallback((ladderId, blueprint) => {
+    const tool = blueprint
+      ? {
+          ladderHatch: true,
+          hatchBlueprintId: blueprint.id || null,
+          hatchModelLabel: blueprint.label || null,
+          hatchModelCategory: blueprint.category || null,
+          hatchModelGlbUrl: blueprint.glb_url || null,
+          hatchModelBuiltinKey: blueprint.builtin_key || null,
+          hatchModelGeometry: blueprint.geometry || null,
+        }
+      : { ladderHatch: false }
+    const nextSurfaceData = setVerticalAccessHatch(surfaceDataRef.current, ladderId, tool)
+    if (nextSurfaceData !== surfaceDataRef.current) handleSurfaceDataChange(nextSurfaceData)
   }, [handleSurfaceDataChange])
 
   const handleSurfaceConnectorDelete = useCallback(connectorId => {
@@ -2031,6 +2058,9 @@ export default function Editor3D({
         <SurfaceConnectorPanel
           key={surfaceConnectorPanel.connectorId}
           connector={selectedSurfaceConnector}
+          linkedHatch={selectedLadderHatch}
+          hatchChoices={hatchBlueprintChoices}
+          onVerticalAccessHatchChange={handleVerticalAccessHatchChange}
           x={surfaceConnectorPanel.x}
           y={surfaceConnectorPanel.y}
           onPatch={handleSurfaceConnectorPatch}

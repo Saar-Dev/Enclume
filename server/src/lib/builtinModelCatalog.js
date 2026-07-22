@@ -106,6 +106,9 @@ function dimensions(asset, packName, manifest = {}, animationNames = []) {
     origin: asset.origin || (!hasAssetPlacementMode ? manifest.origin_default : null) || defaultOrigin,
   }
   if (asset.connector_type) geometry.connectorType = String(asset.connector_type)
+  if (asset.opening_shape) geometry.openingShape = String(asset.opening_shape)
+  if (asset.opening_mechanism) geometry.openingMechanism = String(asset.opening_mechanism)
+  if (Array.isArray(asset.features)) geometry.features = asset.features.map(String)
   if (Number.isFinite(Number(asset.opening_bottom_m))) geometry.openingBottom = Number(asset.opening_bottom_m)
   if (Number.isFinite(Number(asset.opening_width_m))) geometry.openingWidth = Number(asset.opening_width_m)
   if (Number.isFinite(Number(asset.wall_cut_width_m))) geometry.wallCutWidth = Number(asset.wall_cut_width_m)
