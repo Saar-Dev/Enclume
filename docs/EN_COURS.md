@@ -1,9 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-22 — correctif visuel grille en validation** : les marches ajourées sont maintenant des
+> **2026-07-22 — correctif visuel grille déployé sur `8293/8294`** : les marches ajourées sont maintenant des
 > plateaux minces recto-verso au lieu de blocs opaques empilés. Leur motif utilise une densité ×4
 > corrigée par les dimensions du giron. Les murs ajourés restent visibles depuis les deux côtés et
 > ne subissent plus la coupe caméra des murs pleins. Validation locale et rendu Chromium bilatéral
-> réussis ; déploiement Kiwi à effectuer.
+> réussis, puis health API et smoke Chromium distant validés après redémarrage.
 >
 > **2026-07-22 — raffinement des grilles et architecture des trappes 3D déployés sur `8293/8294`** : les marches utilisent
 > un motif de grille deux fois plus serré. Les autres surfaces ajourées affichent une coque unique

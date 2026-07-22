@@ -22,7 +22,8 @@ caméra passe d'un côté du mur à l'autre.
 Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration, build Vite
 et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu simultanément depuis les deux
 côtés sous Chromium : mur présent dans les deux vues, marches minces et ajours recto-verso, sans
-exception JavaScript.
+exception JavaScript. Le code fonctionnel `d8fea5a` est déployé sur Kiwi `8293/8294` ; le health
+API et le smoke Chromium distant sont verts.
 
 ---
 

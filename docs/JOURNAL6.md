@@ -4703,7 +4703,7 @@ ils apparaîtront automatiquement dans le sélecteur dédié.
 
 ---
 
-## Session 159 (suite 2, Codex) — 2026-07-22 — Marches ajourées et murs bilatéraux ⚠️ EN VALIDATION
+## Session 159 (suite 2, Codex) — 2026-07-22 — Marches ajourées et murs bilatéraux ✅ CLOS
 
 **Cause des marches** : l'escalier droit utilisait encore ses volumes physiques croissants comme
 meshes visibles. Seul le dessus recevait le cutout, tandis que les faces verticales formaient une
@@ -4727,3 +4727,9 @@ directions et ses chants métalliques sont recto-verso. Les murs opaques conserv
 Vite et ESLint ciblé verts. Un harness temporaire a monté le vrai `SurfaceDungeonScene` dans deux
 caméras opposées : le mur est présent des deux côtés et les marches sont minces, proportionnées et
 ajourées dessus/dessous, sans exception JavaScript. Le harness n'est pas conservé dans le dépôt.
+
+**Déploiement** : le code fonctionnel `d8fea5a` a été fast-forwardé sur `dev/monde` après création
+du tag `backup/pre-session159-grate-visibility-20260722`. Les 141 tests monde/serveur, 41 tests
+Surface, 3 tests de configuration et le build ont aussi réussi sur Kiwi. Seuls
+`enclume-codex-client` et `enclume-codex-server` ont été redémarrés ; le health `8294` et le smoke
+Chromium distant `8293` sont verts. Les instances de Saar et de fusion n'ont pas été touchées.
