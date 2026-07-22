@@ -686,7 +686,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         // (appel différé, formule mutation déjà résolue et stable dans damageFormula, voir
         // commentaire de la fonction), seule l'arme équipée est re-fetchée (fenêtre de péremption
         // réelle : désequipée entre Déclaration et confirmation de défense).
-        const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+        const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
           weaponInvId, fallbackFormula: damageFormula,
         })
         // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
@@ -697,6 +697,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
           degautsBruts, characterIdCible, cibleType: 'pj',
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
+          chocDsl: effectiveChocDsl,
           treatAsContact: true,
         })
         if (hitResult === null) return
@@ -806,6 +807,9 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       const meleeRolled = await damageService.getEffectiveMeleeDamage(db, { weaponInvId, fallbackFormula: formula })
       dmgRolls = meleeRolled.rolls; dmgSeed = meleeRolled.seed; rawDice = meleeRolled.total
       resolvedFormula = meleeRolled.formula
+      // CHOC1 Palier 1 : jamais câblé jusqu'ici côté CaC (contrairement à la branche assault ci-dessous,
+      // effectiveChocDsl restait toujours null pour 'melee' — voir docs/PLAN_CHOC1.md §4).
+      effectiveChocDsl = meleeRolled.choc
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
       // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
       const mrTableMelee = await getMrTable()
@@ -1607,7 +1611,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       if (hit) {
         // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
         // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
-        const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+        const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
           weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
         })
         const mrAttaqueDefenseless = chancesAttaque - rollAttaque
@@ -1632,6 +1636,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
             cibleType:        defenderCharacter.type,
             char_sheet_id_cible,
             for_na_cible, con_na_cible, vol_na_cible,
+            chocDsl: effectiveChocDsl,
             treatAsContact: true,
           })
           if (hitResult) {
@@ -1732,7 +1737,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         // 2ᵉ correctif lors du bug de signe RD (Session 141 suite 22).
         // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
         // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
-        const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+        const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
           weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
         })
         // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
@@ -1744,6 +1749,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
           cibleType:        defenderCharacter.type,
           char_sheet_id_cible,
           for_na_cible, con_na_cible, vol_na_cible,
+          chocDsl: effectiveChocDsl,
           treatAsContact: true,
         })
 

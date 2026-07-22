@@ -268,10 +268,12 @@ Flex/Fusil choc Stun portent leur Choc sur l'arme, pas une munition — leur Cho
 tir aussi). `ref_shock` est fetché dans 5 requêtes (`char-sheet.js`, `inventoryService.js`) mais jamais
 réutilisé après — mort pour la résolution, vivant seulement pour l'affichage inventaire.
 
-**Détail complet, inventaire catalogue vérifié (11 armes réelles concernées + mutation Corne), sources
-RAW et scope proposé** : `docs/PLAN_CHOC1.md` — ne pas dupliquer ici, ce plan est la référence.
+**Détail complet, inventaire catalogue vérifié (18 armes réelles + mutation Corne), sources RAW, scope
+et statut d'implémentation** : `docs/PLAN_CHOC1.md` — ne pas dupliquer ici, ce plan est la référence.
 
-**Prochaine étape** : décision Saar sur le scope du plan (Palier 1 généralisable vs différé).
+**Statut (2026-07-22)** : scope tranché GO par Saar, Palier 1 codé (migration 190, `damageService.js`,
+`socketCombatHelpers.js` — détail `docs/JOURNALTEMP.md` Étape 11). **Prochaine étape** : test en jeu
+par Saar avant clôture définitive de cette dette.
 
 ---
 

@@ -245,11 +245,16 @@ non câblée — 4 dettes résiduelles notées `docs/BUGIDENTIFIE.md` (`MODING4-
 `MODING4-PROJECTEUR`, `MODING4-INTEGRATION`), décisions produit + câblage restants, pas un chantier actif.
 Phase 2 (migration Groupe 1/2 déjà livré) toujours différée (Strangler Fig).
 
-Aucun chantier `🔒 En cours` actif. Prérequis `CHOC1` (arme équipée sans dégât physique) fermé et
-testé (Item 106). Prochaine décision en attente de Saar : scope du Palier 1 de `CHOC1` (câblage réel
-du Choc porté par l'arme, `ref_equipment.shock` — `docs/PLAN_CHOC1.md` §4) et démarrage de la refonte
-CaC (`docs/PLAN_REFONTECAC.md`, verrou levé) — cluster combat déjà clos : INI4 ✅, MELEE-MR ✅,
-DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
+🔒 En cours (Claude) : Palier 1 `CHOC1` — **codé (2026-07-22), en attente de test en jeu par Saar**.
+Migration 190 (`ref_equipment.shock_mechanism`/`shock_reduced_by_armor`,
+`ref_mutations.natural_weapon_choc_formula`), producteurs `damageService.js` (`getEffectiveWeaponDamage`/
+`getEffectiveMeleeDamage`) + `resolveTargetHit` (gate Tête + réduction d'armure) + câblage CaC
+`socketCombatHelpers.js` (4 call sites, jamais fait jusqu'ici). Détail complet, Testé/Non testé :
+`docs/JOURNALTEMP.md` Étape 11. 18 armes catalogue + mutation Corne câblées ; Lance-flammes/armes de
+zone/4 armes `damage_h` tronqué explicitement exclues (voir plan). Verrou retiré au commit de clôture,
+une fois le test en jeu de Saar confirmé. Refonte CaC (`docs/PLAN_REFONTECAC.md`, verrou levé) reste
+différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif — cluster combat déjà
+clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
 
 > **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
 > intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).

@@ -291,6 +291,29 @@ catégorie 3 non). Le plus sûr est d'étendre la forme du paramètre `chocDsl`/
 par catégorie. Deux producteurs alimenteraient ce même paramètre : `ref_equipment.shock` (armes) et
 `ref_mutations.natural_weapon_choc_formula` (Corne, §3.4) — un seul consommateur, comme aujourd'hui.
 
+**Décision actée (2026-07-22, Saar délègue le choix technique à Claude, recherche de prior art
+demandée explicitement)** : format confirmé, aucune alternative retenue. Validation croisée avec
+un système de référence de l'industrie VTT — les "Rule Elements" du système Pathfinder 2e pour
+Foundry VTT (`foundryvtt/pf2e`, système en production, large communauté) résolvent la même classe de
+problème ("effet secondaire conditionnel sur un coup, réutilisable par plusieurs sources catalogue")
+avec un objet descriptif typé (`key`/`selector`/`value`/`predicate`) consommé par un moteur générique
+unique — `predicate` jouant exactement le rôle du gate proposé ici, `value` celui de la réduction.
+Extension `chocDsl` (`{action:'SET', value}` → `+ {gateLocation, reducedByArmor}`) confirmée comme la
+même famille de solution, pas une improvisation isolée. Deux points vérifiés dans le code réel pour
+s'assurer que l'extension ne demande aucun mécanisme nouveau :
+- `chocDsl` est déjà un objet typé (`shared/weaponAmmoDsl.js:94-96`), pas une chaîne brute — ajouter
+  deux clés est une croissance de la même forme, pas un nouveau concept à maintenir.
+- `prt` (protection_shock) est déjà calculé par `calcResistanceArmure` (`server/src/lib/charStats.js:309-317`,
+  retourne `{etq, prt}`) mais jeté à `damageService.js:302` (seul `.etq` est repris) — `reducedByArmor`
+  ne demande donc aucun nouveau calcul, seulement de cesser de jeter une valeur déjà produite.
+- Le gate `gateLocation` se vérifie après l'étape 1 de `resolveTargetHit` (localisation déjà connue,
+  ligne ~250), avant la combinaison du total au point 3bis (ligne ~333) — pas de changement de
+  séquencement de la fonction, une condition de plus sur un chemin déjà exécuté à chaque coup.
+
+Point technique du §6 (point 2) clos par cette recherche — reste uniquement la décision de scope
+(lancement Palier 1 maintenant ou différé, question ouverte ci-dessous), qui n'est pas un choix
+technique et reste à Saar.
+
 **Inventaire final, vérifié base réelle + tables RAW du Livre de Base/Guide technique (2026-07-22,
 zéro écart trouvé sur les deux catégories, détail §1/§3)** :
 
@@ -320,13 +343,17 @@ direct sur le Test de Choc sans pool de dégâts, aucune ne dépend de `CHOC1`. 
 **mécanisme de zone réel** (plusieurs cibles) — nécessite un système de zone d'effet qui n'existe pas
 encore, tous domaines confondus (pas seulement Choc).
 
-**Question ouverte pour Saar** : le Palier 1 vaut-il la peine maintenant (11 armes + mutation Corne,
-mécanisme réutilisable), ou reste-t-il différé tant qu'aucune de ces armes n'est un cas d'usage réel
-en jeu (même logique que la clôture initiale de `CHOC1`) ? **Élément nouveau pour cette décision**
-(analyse à charge, 2026-07-21) : Corne n'est plus un "bonus" dans ce calcul — c'est le cas qui a
-motivé la création de `CHOC1`, déjà entièrement prêt côté physique/gate, et pour lequel le Palier 1
-est la seule pièce manquante. Si Saar tranche pour un lancement même partiel, Corne est le candidat
-le plus sûr pour valider le mécanisme en premier (le moins de nouvelles inconnues).
+**Décision de lancement actée (Saar, 2026-07-22)** : Saar a explicitement refusé de trancher sur un
+critère d'usage en jeu ("nous sommes en développement, TOUT est à faire, les seules priorités sont
+techniques") et délégué le go/no-go à une lecture de préparation technique — GO. Justification
+technique de ce GO, pas un usage de campagne : les deux verrous qui auraient rendu un lancement
+prématuré sont déjà levés (prérequis catégorie "damage_h vide ≠ arme introuvable" codé et validé en
+jeu, Session 168 ; séquencement avec `docs/PLAN_REFONTECAC.md` clos) et le format technique du
+mécanisme est déterminé et validé contre un système de référence (§4 ci-dessus) — aucun blocage
+architectural résiduel ne justifierait d'attendre. Corne reste le candidat le plus sûr pour valider le
+mécanisme en premier (le moins de nouvelles inconnues, déjà prêt côté physique/gate de saisie) —
+c'est aussi le cas qui a motivé la création de `CHOC1` (§1), sa fermeture referme la dette à sa
+racine.
 
 ---
 
@@ -360,16 +387,27 @@ le plus sûr pour valider le mécanisme en premier (le moins de nouvelles inconn
 ## 6. Non fait dans ce document
 
 Aucune ligne de code, aucune migration, aucun test — recherche et inventaire uniquement, conformément
-à la demande de Saar. La décision de lancer le Palier 1 (et son design détaillé : où exactement dans
-`resolveMeleeAction`/`resolveAssaultAction`, format du gate, breakdown UI) reste à faire une fois le
-scope validé.
+à la demande de Saar. **Scope tranché (2026-07-22) : Palier 1 GO** (voir §4, "Décision de lancement
+actée"). Ce plan est maintenant clos pour sa mission (recherche + scope) ; le design détaillé
+d'exécution (fichiers exacts, migration, séquencement des changements) est produit séparément avant
+tout code, tracé dans `docs/EN_COURS.md`/`docs/JOURNALTEMP.md` comme les chantiers précédents de ce
+même document (prérequis Étapes 5-9) — pas dupliqué ici une fois clos (Règle 10).
+
+**Implémenté (2026-07-22, `docs/JOURNALTEMP.md` Étape 11)** : migration 190, producteurs
+`damageService.js`, gate/réduction `resolveTargetHit`, câblage CaC `socketCombatHelpers.js`. Testé par
+script isolé + non-régression suite `shared/*.test.mjs` (214/214) — **non testé en jeu**, reste
+l'étape de clôture avant absorption définitive dans `docs/SYSTEME/DOMMAGES.md`.
 
 **Reste bloquant avant tout code (mis à jour 2026-07-22)** :
 1. ~~La requête base réelle du §1~~ — **close** : exécutée, recroisée avec les deux tables RAW
    (Armes de contact + Armes étourdissantes et soniques), zéro écart, inventaire final au §4.
-2. La décision Saar sur le format exact de la recommandation d'architecture du §4 (extension du
-   paramètre `chocDsl`/`choc` existant avec `gateLocation`/`reducedByArmor` vs. autre approche) —
-   c'est un choix technique recommandé, toujours pas acté par Saar. Seul point bloquant restant.
+2. ~~La décision sur le format exact de la recommandation d'architecture du §4~~ — **clos (2026-07-22)** :
+   Saar a explicitement délégué ce choix technique et demandé une recherche de prior art avant de le
+   figer. Format confirmé (extension `chocDsl` avec `gateLocation`/`reducedByArmor`), validé contre le
+   système de "Rule Elements" de PF2e/Foundry VTT (même classe de problème, pattern de production
+   établi) et contre le code réel (`chocDsl` déjà un objet typé, `prt` déjà calculé et jeté) — détail
+   complet §4. N'est plus un point bloquant pour la conception ; reste seulement la décision de scope
+   ci-dessous (non technique, celle-là reste à Saar).
    **Prérequis (point 0 ci-dessus) codé (2026-07-22, repris à l'Étape 7 après retour de l'agent
    refonte)** — côté tir : correctif ciblé (`getEffectiveWeaponDamage`/`getEffectiveWeaponFormulaPreview`/
    garde `resolveAssaultAction`). Côté CaC : **une fonction unique** `getEffectiveMeleeDamage`
