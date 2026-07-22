@@ -2084,6 +2084,21 @@ export default function Sidebar({
                     </button>
                   )}
                 </div>
+                {verticalAccessCatalogActive && (
+                  <div style={{ ...styles.connectorPicker, marginBottom: '10px' }}>
+                    <div style={styles.connectorPickerTitle}>{t('surfaceEditor.verticalAccessComposition')}</div>
+                    <select
+                      value={surfaceToolState.ladderHatch === false ? 'ladder-only' : 'ladder-hatch'}
+                      onChange={event => selectVerticalAccessComposition(event.target.value === 'ladder-hatch')}
+                      style={styles.roomToolSelect}
+                    >
+                      <option value="ladder-only">{t('surfaceEditor.ladderOnly')}</option>
+                      <option value="ladder-hatch" disabled={hatchChoices.length === 0}>
+                        {t('surfaceEditor.ladderAndHatch')}
+                      </option>
+                    </select>
+                  </div>
+                )}
                 {!hatchCatalogOnly && (
                   <input
                     value={objectSearch}
