@@ -4666,3 +4666,35 @@ jusqu'à cette recette fonctionnelle ; aucune donnée de carte distante n'a ét�
 **Retour arrière** : retirer les branches `hatch` du document, du compilateur, du renderer et de la
 route runtime, puis retirer le motif `industrial_grate`. Aucun schéma SQL ni conversion de carte
 n'est nécessaire.
+
+---
+
+## Session 159 (suite 1, Codex) — 2026-07-22 — Grilles minces et trappes modelables ✅ CLOS
+
+**Retour visuel** : le pas du motif était adapté aux murs et aux dalles, mais trop large sur les
+marches. Les faces opposées d'un mur ou d'un sol ajouré produisaient en outre deux réseaux séparés
+par toute l'épaisseur structurelle. La commande de charnière binaire ne permettait pas non plus de
+préparer des variantes réalistes de trappes.
+
+**Rendu** : les marches répètent désormais le cutout 2 × 2 sur leur dessus uniquement. Les sols,
+plafonds, murs ajourés des deux côtés et trappes affichent une coque métallique unique de 4,5 cm,
+alignée sur leur face de support. Ce changement est exclusivement visuel : le compilateur conserve
+les dimensions structurelles complètes pour les supports, collisions et canaux de visibilité.
+
+**Trappes** : les contrôles d'orientation sont devenus deux rotations gauche/droite à 90°. La
+palette accepte maintenant des blueprints GLB de connecteur `hatch` et persiste leurs métadonnées
+de modèle et de matériaux. Le renderer sait les orienter et piloter leurs animations d'état ; faute
+d'asset, il conserve le panneau procédural. Le contrat documenté couvre les futurs modèles à
+écoutille, coulissants ou munis d'un boîtier sans confier leur physique au maillage.
+
+**Testé** : 141/141 tests monde/serveur, 41/41 tests Surface, build Vite et ESLint ciblé réussis.
+Le vrai `SurfaceDungeonScene` a été monté sous Chromium avec dalle, mur, trappe et escalier ajourés :
+la transparence, la coque mince et le motif resserré ont été visibles sans exception navigateur.
+
+**Déploiement** : fast-forward sur `dev/monde`, sauvegarde Git préalable, puis redémarrage limité à
+`enclume-codex-client` et `enclume-codex-server`. Les instances de Saar et de fusion ne sont pas
+touchées. Aucun schéma SQL, migration ni conversion de carte n'est requis.
+
+**Suite artistique** : aucun nouveau GLB de trappe n'est inventé dans cette livraison. Les modèles
+écoutille, coulissant et boîtier devront être produits puis importés avec `connector_type: hatch` ;
+ils apparaîtront automatiquement dans le sélecteur dédié.

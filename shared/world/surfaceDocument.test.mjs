@@ -385,7 +385,7 @@ test('une trappe exige une échelle liée et un état autorisé', () => {
   surface.connectors.hatch = {
     id: 'hatch', type: 'hatch', linkedLadderId: 'ladder',
     x: 0, z: 0, y: 2.5, width: 1, depth: 1, height: 0.25,
-    axis: 'x', hingeSide: 1, state: 'closed',
+    axis: 'x', hingeSide: 1, rotationQuarterTurns: 0, state: 'closed',
     allowedStates: ['closed', 'open', 'locked'],
   }
   assert.equal(validateSurfaceData(surface).valid, true)
@@ -393,6 +393,9 @@ test('une trappe exige une échelle liée et un état autorisé', () => {
   surface.connectors.hatch.state = 'jammed'
   assert.equal(validateSurfaceData(surface).valid, false)
   surface.connectors.hatch.state = 'closed'
+  surface.connectors.hatch.rotationQuarterTurns = 4
+  assert.equal(validateSurfaceData(surface).valid, false)
+  surface.connectors.hatch.rotationQuarterTurns = 0
   surface.connectors.hatch.linkedLadderId = 'missing'
   assert.equal(validateSurfaceData(surface).valid, false)
 })

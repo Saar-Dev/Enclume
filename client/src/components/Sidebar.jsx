@@ -597,6 +597,14 @@ export default function Sidebar({
     ladderAnchorSpacing: 0.5,
     ladderHatch: true,
     hatchHingeSide: 1,
+    hatchRotationQuarterTurns: 0,
+    hatchBlueprintId: null,
+    hatchModelLabel: null,
+    hatchModelCategory: null,
+    hatchModelGlbUrl: null,
+    hatchModelBuiltinKey: null,
+    hatchModelGeometry: null,
+    hatchMaterialOverrides: {},
     elevatorDoorAxis: 'z',
     elevatorDoorSide: 1,
     elevatorTravelSecondsPerLevel: 2,
@@ -715,6 +723,9 @@ export default function Sidebar({
         || text.includes('ladder')
     })
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+  const hatchConnectorBlueprints = connectorBlueprints
+    .filter(blueprint => blueprint?.geometry?.connectorType === 'hatch')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
   const genericElevatorChoice = {
     id: '__generic_elevator__',
     label: t('surfaceEditor.genericElevator'),
@@ -724,6 +735,12 @@ export default function Sidebar({
     id: '__generic_ladder__',
     label: 'Échelle structurelle',
     category: 'surface_connectors',
+  }
+  const genericHatchChoice = {
+    id: '__generic_hatch__',
+    label: 'Trappe procédurale',
+    category: 'surface_connectors',
+    geometry: { placementMode: 'connector', connectorType: 'hatch', origin: 'hatch-center' },
   }
   const connectorChoices = surfaceToolState.connectorType === 'door'
     ? doorConnectorBlueprints
@@ -739,6 +756,9 @@ export default function Sidebar({
   const selectedConnectorChoice = connectorChoices.find(choice => String(choice.id) === String(surfaceToolState.connectorBlueprintId))
     || connectorChoices[0]
     || null
+  const hatchChoices = [...hatchConnectorBlueprints, genericHatchChoice]
+  const selectedHatchChoice = hatchChoices.find(choice => String(choice.id) === String(surfaceToolState.hatchBlueprintId))
+    || genericHatchChoice
   const connectorMaterialSlots = normalizeModelMaterialSlots(selectedConnectorChoice?.geometry)
   const connectorMaterialOverrides = surfaceToolState.connectorMaterialOverrides || {}
   const updateConnectorMaterialSlot = (slot, patch) => updateSurfaceTool({
@@ -754,6 +774,15 @@ export default function Sidebar({
     connectorModelGlbUrl: blueprint?.glb_url || null,
     connectorModelBuiltinKey: blueprint?.builtin_key || null,
     connectorModelGeometry: blueprint?.geometry || null,
+  })
+  const hatchModelPatch = (blueprint) => ({
+    hatchBlueprintId: blueprint?.id || null,
+    hatchModelLabel: blueprint?.label || null,
+    hatchModelCategory: blueprint?.category || null,
+    hatchModelGlbUrl: blueprint?.glb_url || null,
+    hatchModelBuiltinKey: blueprint?.builtin_key || null,
+    hatchModelGeometry: blueprint?.geometry || null,
+    hatchMaterialOverrides: {},
   })
   const selectObjectBlueprint = (blueprint) => {
     const isActive = String(activeBlueprint?.id || '') === String(blueprint?.id || '')
@@ -812,6 +841,7 @@ export default function Sidebar({
     connectorType: surfaceToolState.connectorType || 'door',
     ...connectorModelPatch(blueprint),
   })
+  const selectHatchModel = (blueprint) => updateSurfaceTool(hatchModelPatch(blueprint))
 
   useEffect(() => {
     if (surfaceToolState.mode !== 'connector' || !selectedConnectorChoice) return
@@ -1559,15 +1589,49 @@ export default function Sidebar({
                           </span>
                         </button>
                         {surfaceToolState.ladderHatch !== false && (
-                          <button
-                            type="button"
-                            onClick={() => updateSurfaceTool({
-                              hatchHingeSide: Number(surfaceToolState.hatchHingeSide) < 0 ? 1 : -1,
+                          <>
+                            <div style={styles.rotationRow}>
+                              <button
+                                type="button"
+                                onClick={() => updateSurfaceTool({
+                                  hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 3) % 4,
+                                })}
+                                style={styles.roomToolSmallBtn}
+                              >
+                                ↶ Rotation gauche
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateSurfaceTool({
+                                  hatchRotationQuarterTurns: ((Number(surfaceToolState.hatchRotationQuarterTurns) || 0) + 1) % 4,
+                                })}
+                                style={styles.roomToolSmallBtn}
+                              >
+                                Rotation droite ↷
+                              </button>
+                            </div>
+                            <div style={styles.connectorPickerTitle}>Modèle de trappe</div>
+                            {selectedHatchChoice?.glb_url && (
+                              <Object3DPreview blueprint={selectedHatchChoice} />
+                            )}
+                            {hatchChoices.map(choice => {
+                              const selected = String(selectedHatchChoice?.id) === String(choice.id)
+                              return (
+                                <button
+                                  key={choice.id}
+                                  type="button"
+                                  onClick={() => selectHatchModel(choice)}
+                                  style={{
+                                    ...styles.connectorModelBtn,
+                                    ...(selected ? styles.connectorModelBtnActive : {}),
+                                  }}
+                                >
+                                  <span>{selected ? '✓ ' : ''}{choice.label}</span>
+                                  <small>{choice.glb_url ? 'GLB animé' : 'Fallback moteur'}</small>
+                                </button>
+                              )
                             })}
-                            style={styles.roomToolSmallBtn}
-                          >
-                            Inverser les charnières
-                          </button>
+                          </>
                         )}
                       </div>
                     )}

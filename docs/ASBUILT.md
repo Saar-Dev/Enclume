@@ -3,6 +3,28 @@
 > Contrats techniques réaudités le 2026-07-22 : `surface_data` v13, spatial sans Redis et
 > environnement Node 24/npm 11.
 
+## Grilles minces et trappes 3D modelables (2026-07-22)
+
+Une surface portant le cutout `industrial_grate` n'est plus rendue comme deux grilles espacées par
+toute l'épaisseur de sa dalle ou de son mur. Le renderer conserve le volume physique canonique,
+mais affiche une coque métallique unique de 4,5 cm alignée sur la face porteuse : dessus pour un
+sol, dessous pour un plafond, et plan médian pour un mur ajouré sur ses deux faces. Les trappes
+ajourées suivent le même principe. Les marches resserrent localement le motif par un repeat 2 × 2 ;
+le pas des sols, murs, passerelles et trappes reste inchangé.
+
+La trappe possède quatre orientations canoniques et deux commandes de rotation gauche/droite à
+90°, dans la palette comme dans le popup après pose. Sa définition peut désormais reprendre le
+blueprint, l'URL GLB, la géométrie déclarée et les substitutions de matériaux d'un modèle de
+connecteur `hatch`. Le renderer sait charger et animer ce GLB selon les états `closed`, `open` et
+`locked`; en l'absence d'asset compatible, la trappe procédurale reste le fallback. Le GLB est une
+représentation : découpe, support, collision, LOS et traversée restent dérivés du connecteur.
+
+Validation : 141 tests monde/serveur, 41 tests Surface, build Vite et ESLint ciblé réussis. Un rendu
+intégré du vrai `SurfaceDungeonScene` sous Chromium a contrôlé la coque mince, la transparence et
+les marches au motif resserré sans exception navigateur.
+
+---
+
 ## Trappe d'échelle et grille industrielle ajourée (2026-07-22)
 
 Poser une échelle crée désormais, par défaut, une trappe structurelle sur la dalle du palier haut.

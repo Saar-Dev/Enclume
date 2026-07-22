@@ -8,6 +8,7 @@ import {
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import Object3DPreview from './Object3DPreview.jsx'
 import { stairGeometry } from '../../../shared/world/stairGeometry.js'
+import { rotateHatchOrientation } from '../lib/surfaceData.js'
 import {
   PROCEDURAL_MATERIAL_PRESETS,
   PROCEDURAL_PATTERN_PRESETS,
@@ -300,14 +301,37 @@ export default function SurfaceConnectorPanel({
 
         {canEdit && connector.type === 'hatch' && (
           <div style={S.field}>
-            <span style={S.label}>Charnières</span>
-            <button
-              type="button"
-              onClick={() => onPatch?.(connector.id, { hingeSide: Number(connector.hingeSide) < 0 ? 1 : -1 })}
-              style={S.button}
-            >
-              Inverser le côté d’ouverture
-            </button>
+            <span style={S.label}>Orientation de la trappe</span>
+            <div style={S.runtimeActions}>
+              <button
+                type="button"
+                onClick={() => {
+                  const rotated = rotateHatchOrientation(connector, -1)
+                  onPatch?.(connector.id, {
+                    axis: rotated.axis,
+                    hingeSide: rotated.hingeSide,
+                    rotationQuarterTurns: rotated.rotationQuarterTurns,
+                  })
+                }}
+                style={S.button}
+              >
+                ↶ Rotation gauche
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const rotated = rotateHatchOrientation(connector, 1)
+                  onPatch?.(connector.id, {
+                    axis: rotated.axis,
+                    hingeSide: rotated.hingeSide,
+                    rotationQuarterTurns: rotated.rotationQuarterTurns,
+                  })
+                }}
+                style={S.button}
+              >
+                Rotation droite ↷
+              </button>
+            </div>
           </div>
         )}
 

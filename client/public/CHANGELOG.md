@@ -1,3 +1,15 @@
+## v197 — 2026-07-22 — Grilles minces et trappes 3D préparées
+
+### Éditeur et moteur de monde
+- [fix] Sur les escaliers, le pas visuel de la grille industrielle est doublé pour obtenir des
+  mailles plus serrées sans changer le motif des autres surfaces.
+- [fix] Les sols, plafonds, murs et trappes ajourés affichent désormais une seule grille métallique
+  de 4,5 cm d'épaisseur, alignée sur leur face porteuse. Leur volume physique reste inchangé.
+- [change] Les trappes se tournent par quarts de tour avec deux commandes gauche/droite, avant et
+  après leur pose.
+- [engine] Une trappe liée à une échelle peut maintenant référencer un modèle GLB animé comme une
+  porte. Le panneau procédural reste disponible comme solution de repli.
+
 ## v196 — 2026-07-22 — Trappe d'échelle et grille industrielle ajourée
 
 ### Éditeur et moteur de monde

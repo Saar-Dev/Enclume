@@ -1778,6 +1778,31 @@ function connectorModelFromTool(tool) {
   }
 }
 
+function hatchModelFromTool(tool) {
+  const modelBlueprintId = tool?.hatchBlueprintId || null
+  const modelLabel = tool?.hatchModelLabel || null
+  const modelCategory = tool?.hatchModelCategory || null
+  const modelGlbUrl = tool?.hatchModelGlbUrl || null
+  const modelBuiltinKey = tool?.hatchModelBuiltinKey || null
+  const modelGeometry = tool?.hatchModelGeometry && typeof tool.hatchModelGeometry === 'object'
+    ? tool.hatchModelGeometry
+    : null
+  const modelMaterialOverrides = tool?.hatchMaterialOverrides
+  const hasMaterialOverrides = modelMaterialOverrides
+    && typeof modelMaterialOverrides === 'object'
+    && Object.keys(modelMaterialOverrides).length > 0
+  if (!modelBlueprintId && !modelLabel && !modelCategory && !modelGlbUrl && !modelBuiltinKey && !modelGeometry && !hasMaterialOverrides) return {}
+  return {
+    modelBlueprintId,
+    modelLabel,
+    modelCategory,
+    modelGlbUrl,
+    modelBuiltinKey,
+    modelGeometry,
+    modelMaterialOverrides: hasMaterialOverrides ? modelMaterialOverrides : {},
+  }
+}
+
 function connectorModelGeometryFromTool(tool) {
   return tool?.connectorModelGeometry && typeof tool.connectorModelGeometry === 'object'
     ? tool.connectorModelGeometry
@@ -2226,6 +2251,28 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
   }
 }
 
+const HATCH_ORIENTATIONS = Object.freeze([
+  Object.freeze({ axis: 'x', hingeSide: 1 }),
+  Object.freeze({ axis: 'z', hingeSide: 1 }),
+  Object.freeze({ axis: 'x', hingeSide: -1 }),
+  Object.freeze({ axis: 'z', hingeSide: -1 }),
+])
+
+export function hatchOrientationQuarterTurns(hatch) {
+  const axis = hatch?.axis === 'z' ? 'z' : 'x'
+  const hingeSide = Number(hatch?.hingeSide) < 0 ? -1 : 1
+  const index = HATCH_ORIENTATIONS.findIndex(orientation => (
+    orientation.axis === axis && orientation.hingeSide === hingeSide
+  ))
+  return index < 0 ? 0 : index
+}
+
+export function rotateHatchOrientation(hatch, deltaQuarterTurns) {
+  const current = hatchOrientationQuarterTurns(hatch)
+  const next = ((current + Math.trunc(Number(deltaQuarterTurns) || 0)) % 4 + 4) % 4
+  return { ...hatch, ...HATCH_ORIENTATIONS[next], rotationQuarterTurns: next }
+}
+
 export function makeLadderHatchFromConnector(ladder, tool = {}) {
   if (!ladder || ladder.type !== 'ladder' || tool?.ladderHatch === false) return null
   const topLevel = Math.max(Number(ladder.fromLevel) || 0, Number(ladder.toLevel) || 0)
@@ -2235,6 +2282,10 @@ export function makeLadderHatchFromConnector(ladder, tool = {}) {
   const id = `connector:hatch:${ladder.x}:${ladder.z}:${topLevel}`
   const blocking = surfaceBlockingForTool(tool)
   const material = makeSurfaceMaterial(tool, `${id}:panel`)
+  const orientation = rotateHatchOrientation({
+    axis: ladder.axis === 'z' ? 'z' : 'x',
+    hingeSide: Number(tool?.hatchHingeSide) < 0 ? -1 : 1,
+  }, Number(tool?.hatchRotationQuarterTurns) || 0)
   return {
     id,
     type: 'hatch',
@@ -2248,14 +2299,16 @@ export function makeLadderHatchFromConnector(ladder, tool = {}) {
     width: 1,
     depth: 1,
     height: thickness,
-    axis: ladder.axis === 'z' ? 'z' : 'x',
-    hingeSide: Number(tool?.hatchHingeSide) < 0 ? -1 : 1,
+    axis: orientation.axis,
+    hingeSide: orientation.hingeSide,
+    rotationQuarterTurns: orientation.rotationQuarterTurns,
     state: 'closed',
     allowedStates: ['closed', 'open', 'locked'],
     walkable: true,
     movementMultiplier: 1,
     ...blocking,
     ...(material ? { material } : {}),
+    ...hatchModelFromTool(tool),
   }
 }
 

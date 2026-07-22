@@ -210,6 +210,30 @@ Les portes existantes utilisent en plus :
 
 Le cadre statique doit rester dans `wall_cut_width_m`. Les boîtiers de commande peuvent dépasser : ils ne doivent pas élargir le trou. Le modèle conserve son échelle d'origine et le mur est découpé selon les dimensions déclarées.
 
+Les trappes horizontales utilisent un connecteur `hatch`. Exemple minimal :
+
+```json
+{
+  "placement_mode": "connector",
+  "connector_type": "hatch",
+  "origin": "hatch-center",
+  "footprint_width_m": 1.5,
+  "footprint_depth_m": 1.5,
+  "height_m": 0.12,
+  "allowed_states": ["closed", "open", "locked"],
+  "openable": true
+}
+```
+
+L'axe Y du GLB est vertical et son origine `hatch-center` se place au centre de l'ouverture, sur le
+plan supérieur du support. À l'orientation 0, la charnière est parallèle à X, sur le bord +Z ; les
+rotations suivantes avancent par quarts de tour. Le clip `open` peut animer un battant ou un panneau
+coulissant ; `locked` reprend visuellement la pose fermée tant qu'aucune animation dédiée n'est
+déclarée. Cadre, écoutille et boîtier de commande peuvent faire partie du même GLB et dépasser
+visuellement l'empreinte, mais `footprint_width_m` et `footprint_depth_m` décrivent toujours la
+seule ouverture structurelle. Le moteur dérive la collision et la LOS du connecteur, jamais du
+maillage exporté.
+
 Les ascenseurs utilisent aujourd'hui des arrêts et métadonnées de liaison dans
 `surface_data.connectors`. Les escaliers droits ou en colimaçon utilisent `surface_data.stairs`.
 Ne jamais les introduire comme objets `free` ou `wall`.

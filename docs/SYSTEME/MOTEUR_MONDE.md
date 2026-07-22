@@ -428,6 +428,13 @@ remplace la partie retirée comme support et barrière horizontale ; une trappe 
 ne produit ni support, ni collider, ni occluder. La traversée `climb` de l'échelle est activée
 uniquement lorsque cette trappe est ouverte ou détruite. L'état initial appartient au document
 statique ; l'état courant vient de `WorldRuntimeState.featureStates` et prévaut dans le snapshot.
+Deux commandes gauche/droite font tourner sa charnière par quarts de tour, avant ou après la pose.
+
+Une trappe peut référencer un blueprint GLB de connecteur `hatch` et ses clips d'animation, comme
+une porte. Cela permet de décliner panneau battant, écoutille, panneau coulissant et boîtier de
+commande sans créer de nouvelle primitive physique. Si aucun modèle n'est choisi, le renderer
+utilise le panneau procédural. Dans tous les cas, le GLB reste strictement visuel : le connecteur
+canonique demeure l'autorité pour la découpe, le support, la collision, la LOS et la traversée.
 
 ### Passerelle
 
@@ -754,6 +761,12 @@ ou est entièrement absent. Cela conserve le depth buffer, les ombres et la lect
 inférieurs sans les artefacts de tri du verre. Le dessus d'un sol, d'un mur, d'une marche, d'une
 passerelle ou d'une trappe peut utiliser ce cutout ; les chants et les pièces structurelles fines
 emploient son matériau métallique plein associé.
+
+Pour éviter deux réseaux séparés par toute la profondeur d'un mur ou d'une dalle, une surface
+ajourée est affichée comme une coque unique de 4,5 cm. Elle reste alignée sur la face de support ;
+son collider conserve l'épaisseur structurelle déclarée. Sur les escaliers uniquement, les UV du
+dessus répètent le motif 2 × 2 afin de resserrer le pas des mailles sans modifier le réglage des
+autres surfaces.
 
 Apparence et physique restent deux champs séparés. Choisir ce motif hors d'une salle applique
 explicitement le preset `barrierType: grate` (`blocksMovement: true`, `blocksSight: false`,

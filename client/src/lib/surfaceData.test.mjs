@@ -23,6 +23,7 @@ import {
   isWorldInteriorPointVisibleAtLevel,
   entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
+  rotateHatchOrientation,
   makeSpiralStairFromCell,
   makeStraightStairFromCell,
   makeSkylightConnectorFromCell,
@@ -257,6 +258,11 @@ test('une échelle crée sa trappe supérieure avec le même matériau ajouré',
     connectorToLevel: 1,
     ladderHatch: true,
     ladderAxis: 'x',
+    hatchRotationQuarterTurns: 1,
+    hatchBlueprintId: 'hatch-blueprint',
+    hatchModelLabel: 'Trappe test',
+    hatchModelGlbUrl: 'builtin-models/hatches/test.glb',
+    hatchModelGeometry: { connectorType: 'hatch', origin: 'hatch-center', width: 1, depth: 1 },
     floorThickness: 0.25,
     surfaceBlocking: 'grate',
     surfaceMaterialMode: 'procedural',
@@ -277,11 +283,21 @@ test('une échelle crée sa trappe supérieure avec le même matériau ajouré',
   assert.equal(hatch.linkedLadderId, ladder.id)
   assert.equal(hatch.y, 2.5)
   assert.equal(hatch.height, 0.25)
+  assert.equal(hatch.axis, 'z')
+  assert.equal(hatch.hingeSide, 1)
+  assert.equal(hatch.rotationQuarterTurns, 1)
   assert.equal(hatch.state, 'closed')
   assert.equal(hatch.barrierType, 'grate')
   assert.equal(hatch.blocksSight, false)
   assert.equal(hatch.material.pattern, 'industrial_grate')
   assert.equal(hatch.material.alphaMode, 'cutout')
+  assert.equal(hatch.modelBlueprintId, 'hatch-blueprint')
+  assert.equal(hatch.modelGlbUrl, 'builtin-models/hatches/test.glb')
+  assert.equal(hatch.modelGeometry.origin, 'hatch-center')
+  assert.deepEqual(
+    rotateHatchOrientation(rotateHatchOrientation(rotateHatchOrientation(rotateHatchOrientation(hatch, 1), 1), 1), 1),
+    hatch,
+  )
   const prepared = prepareSurfaceData(next, { battlemapId: 'map-ladder-hatch' })
   const preparedHatch = Object.values(prepared.surfaceData.connectors).find(connector => connector.type === 'hatch')
   assert.ok(preparedHatch.worldId)

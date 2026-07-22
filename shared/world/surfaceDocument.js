@@ -438,6 +438,10 @@ function validateFeature(collection, id, item, errors) {
       }
       if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
       if (![1, -1].includes(Number(item.hingeSide))) errors.push(`${path}.hingeSide doit valoir 1 ou -1`)
+      if (item.rotationQuarterTurns != null
+        && (!Number.isInteger(Number(item.rotationQuarterTurns)) || Number(item.rotationQuarterTurns) < 0 || Number(item.rotationQuarterTurns) > 3)) {
+        errors.push(`${path}.rotationQuarterTurns doit être un entier entre 0 et 3`)
+      }
       if (typeof item.linkedLadderId !== 'string' || !item.linkedLadderId) {
         errors.push(`${path}.linkedLadderId doit référencer l’échelle associée`)
       }
