@@ -60,5 +60,20 @@ changements de la Session 161. Les bases de données ne nécessitent aucun rollb
 
 ## Conflits de fusion
 
-La liste exacte est complétée à partir d'un `git merge-tree` contre `kiwi/integration` avant la
-création du tag final.
+La simulation `git merge-tree --write-tree kiwi/integration HEAD`, effectuée contre
+`kiwi/integration` à `355e388`, signale huit conflits de contenu :
+
+- `CLAUDE.md` ;
+- `client/public/CHANGELOG.md` ;
+- `docs/ASBUILT.md` ;
+- `docs/EN_COURS.md` ;
+- `docs/FUSION_PROJET_COUSIN.md` ;
+- `docs/JOURNAL6.md` ;
+- `docs/Old/PLAN_LOS.md` ;
+- `docs/VOCABULARY.md`.
+
+Les fichiers fonctionnels propres à la Session 161, notamment `Editor3D.jsx`, `Sidebar.jsx` et les
+deux helpers testés, ne sont pas en conflit dans cette simulation. Pour les huit fichiers ci-dessus,
+conserver les ajouts des deux branches par ordre chronologique ; ne pas remplacer en bloc les
+contrats règles/combat de Saar ni les sections monde des Sessions 159 à 161. Relancer ensuite la
+suite complète et la recette commune sur `8393/8394`.
