@@ -21,7 +21,8 @@ représentation : découpe, support, collision, LOS et traversée restent dériv
 
 Validation : 141 tests monde/serveur, 41 tests Surface, build Vite et ESLint ciblé réussis. Un rendu
 intégré du vrai `SurfaceDungeonScene` sous Chromium a contrôlé la coque mince, la transparence et
-les marches au motif resserré sans exception navigateur.
+les marches au motif resserré sans exception navigateur. Le code fonctionnel `d7bf60b` est déployé
+sur Kiwi `8293/8294` ; le health de l'API et le smoke Chromium distant sont verts.
 
 ---
 

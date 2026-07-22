@@ -4691,9 +4691,11 @@ d'asset, il conserve le panneau procédural. Le contrat documenté couvre les fu
 Le vrai `SurfaceDungeonScene` a été monté sous Chromium avec dalle, mur, trappe et escalier ajourés :
 la transparence, la coque mince et le motif resserré ont été visibles sans exception navigateur.
 
-**Déploiement** : fast-forward sur `dev/monde`, sauvegarde Git préalable, puis redémarrage limité à
-`enclume-codex-client` et `enclume-codex-server`. Les instances de Saar et de fusion ne sont pas
-touchées. Aucun schéma SQL, migration ni conversion de carte n'est requis.
+**Déploiement** : le code fonctionnel `d7bf60b` a été fast-forwardé sur `dev/monde` après création
+du tag `backup/pre-session159-grate-refinement-20260722`, puis le redémarrage a été limité à
+`enclume-codex-client` et `enclume-codex-server`. Le health `8294` et le smoke Chromium distant sur
+`8293` sont verts. Les instances de Saar et de fusion ne sont pas touchées. Aucun schéma SQL,
+migration ni conversion de carte n'est requis.
 
 **Suite artistique** : aucun nouveau GLB de trappe n'est inventé dans cette livraison. Les modèles
 écoutille, coulissant et boîtier devront être produits puis importés avec `connector_type: hatch` ;

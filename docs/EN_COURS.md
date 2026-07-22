@@ -1,10 +1,11 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-22 — raffinement des grilles et architecture des trappes 3D** : les marches utilisent
+> **2026-07-22 — raffinement des grilles et architecture des trappes 3D déployés sur `8293/8294`** : les marches utilisent
 > un motif de grille deux fois plus serré. Les autres surfaces ajourées affichent une coque unique
 > de 4,5 cm au lieu de deux grilles séparées par toute leur profondeur, sans modifier leur volume
 > physique. Les trappes tournent maintenant à gauche/droite par quarts de tour et peuvent recevoir
 > un blueprint GLB animé de connecteur `hatch`; la version procédurale reste le fallback. Il reste à
-> produire les variantes artistiques (écoutille, coulissante, boîtier) selon ce contrat.
+> produire les variantes artistiques (écoutille, coulissante, boîtier) selon ce contrat. Health API
+> et smoke Chromium distant validés après redémarrage.
 >
 > **2026-07-22 — trappe d'échelle et grille ajourée déployées sur `8293/8294`** : poser une échelle
 > ajoute par défaut une trappe au palier haut. Fermée, elle remplace la dalle comme support et ferme
