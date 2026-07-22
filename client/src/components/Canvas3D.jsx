@@ -1008,11 +1008,11 @@ function Scene({
   }, [])
 
   // Sprint 2.5 — centrage caméra sur le token actif en mode mouvement combat
-  // combatCameraCenter : { x, z } coords DB (PE14) | null
+  // combatCameraCenter : { x, z } point monde canonique (pieds) | null
   // Retour à null (annulation) → guard bloque → caméra reste où elle est (PC36)
   useEffect(() => {
     if (!combatCameraCenter || !orbitRef.current) return
-    orbitRef.current.target.set(combatCameraCenter.x + 0.5, levelToY(displayLevel), combatCameraCenter.z + 0.5)
+    orbitRef.current.target.set(combatCameraCenter.x, levelToY(displayLevel), combatCameraCenter.z)
     orbitRef.current.update()
   }, [combatCameraCenter, displayLevel])
 
@@ -1271,15 +1271,16 @@ function Scene({
       {phase === 'ANNOUNCEMENT' && announcedActions.filter(e => e.moveTarget).map(entry => {
         const m   = entry.moveTarget
         const src = tokens.find(t => t.id === entry.tokenId)
-        // PE14 → Three.js : X=pos_x, Y=pos_z(altitude), Z=pos_y(depth)
-        const movePts = src ? new Float32Array([
-          src.pos_x + 0.5, src.pos_z + 1.5, src.pos_y + 0.5,
-          m.x + 0.5,       m.z + 1.0,       m.y + 0.5,
+        const source = src ? tokenFeetPoint(src) : null
+        const destination = { x: Number(m.x), y: Number(m.z), z: Number(m.y) }
+        const movePts = source ? new Float32Array([
+          source.x, source.y + 1.5, source.z,
+          destination.x, destination.y + 1.5, destination.z,
         ]) : null
         return (
           <group key={entry.tokenId}>
             {/* Marqueur destination */}
-            <mesh position={[m.x + 0.5, m.z + 0.5, m.y + 0.5]}>
+            <mesh position={[destination.x, destination.y + 0.5, destination.z]}>
               <boxGeometry args={[1, 1, 1]} />
               <meshBasicMaterial color="#5b8dee" transparent opacity={0.22} />
             </mesh>
@@ -1294,7 +1295,7 @@ function Scene({
             )}
             {/* Label nom du token au-dessus de la destination */}
             {src && (
-              <Billboard position={[m.x + 0.5, m.z + 2.0, m.y + 0.5]}>
+              <Billboard position={[destination.x, destination.y + 2.0, destination.z]}>
                 <Text
                   font={FONT_URL}
                   fontSize={0.25}
@@ -1317,9 +1318,11 @@ function Scene({
         const src = tokensRef.current.find(t => t.id === entry.tokenId)
         const tgt = tokensRef.current.find(t => t.id === entry.attackTargetId)
         if (!src || !tgt) return null
+        const source = tokenFeetPoint(src)
+        const target = tokenFeetPoint(tgt)
         const pts = new Float32Array([
-          src.pos_x + 0.5, src.pos_z + 1.5, src.pos_y + 0.5,
-          tgt.pos_x + 0.5, tgt.pos_z + 1.5, tgt.pos_y + 0.5,
+          source.x, source.y + 1.5, source.z,
+          target.x, target.y + 1.5, target.z,
         ])
         return (
           <line key={entry.tokenId}>
@@ -1578,7 +1581,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
-    if (!['elevator', 'window', 'screen-window'].includes(connector?.type)) return
+    if (!['elevator', 'window', 'screen-window', 'hatch'].includes(connector?.type)) return
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
     setSurfaceConnectorPanel({
       connectorId,
@@ -1596,6 +1599,12 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const handleWindowStateChange = useCallback(async (featureId, state) => {
     if (!battlemap?.id || !featureId) return
     await api.patch(`/battlemaps/${battlemap.id}/world-windows/${featureId}/state`, { state })
+    await refreshRuntimeEffects()
+  }, [battlemap?.id, refreshRuntimeEffects])
+
+  const handleHatchStateChange = useCallback(async (featureId, state) => {
+    if (!battlemap?.id || !featureId) return
+    await api.patch(`/battlemaps/${battlemap.id}/world-hatches/${featureId}/state`, { state })
     await refreshRuntimeEffects()
   }, [battlemap?.id, refreshRuntimeEffects])
 
@@ -1657,8 +1666,10 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         runtimeState={(selectedSurfaceConnector.type === 'elevator' ? runtimeElevatorStates : runtimeFeatureStates)[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
         onElevatorCommand={handleElevatorCommand}
         onWindowStateChange={handleWindowStateChange}
+        onHatchStateChange={handleHatchStateChange}
         canEdit={false}
         canAdminElevator={isGm}
+        canAdminFeature={isGm}
         onClose={() => setSurfaceConnectorPanel(null)}
       />
     )}

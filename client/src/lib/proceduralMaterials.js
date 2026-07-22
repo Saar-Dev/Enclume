@@ -36,10 +36,13 @@ const MATERIAL_PRESETS = [
 const PATTERN_PRESETS = [
   { id: 'none', label: 'Aucun motif' },
   { id: 'metal_panels', label: 'Plaques rivetees' },
+  { id: 'industrial_grate', label: 'Grille industrielle ajouree' },
   { id: 'tile_grid', label: 'Dalles jointes' },
   { id: 'planks', label: 'Planches' },
   { id: 'diamond_plate', label: 'Tole striee' },
 ]
+
+const CUTOUT_PATTERNS = new Set(['industrial_grate'])
 
 export const PROCEDURAL_MATERIAL_PRESETS = MATERIAL_PRESETS
 export const PROCEDURAL_PATTERN_PRESETS = PATTERN_PRESETS
@@ -66,6 +69,10 @@ export const DEFAULT_SURFACE_MATERIAL_PRESET = {
   relief: 0,
   realRelief: true,
   seed: DEFAULT_PROCEDURAL_MATERIAL.seed,
+}
+
+export function proceduralPatternUsesCutout(pattern) {
+  return CUTOUT_PATTERNS.has(String(pattern || ''))
 }
 
 function clamp(value, min = 0, max = 1) {
@@ -342,6 +349,56 @@ function applyDiamondPlate(ctx, height, size, relief) {
   ctx.restore()
 }
 
+function wrappedLineDistance(value, spacing) {
+  const wrapped = ((value % spacing) + spacing) % spacing
+  return Math.min(wrapped, spacing - wrapped)
+}
+
+export function industrialGrateOpacityAt(u, v) {
+  const wrappedU = ((Number(u) || 0) % 1 + 1) % 1
+  const wrappedV = ((Number(v) || 0) % 1 + 1) % 1
+  const verticalDistance = wrappedLineDistance(wrappedU, 1 / 6)
+  const horizontalDistance = wrappedLineDistance(wrappedV, 1 / 4)
+  const halfBar = 0.015
+  const feather = 0.004
+  const vertical = 1 - clamp((verticalDistance - halfBar) / feather)
+  const horizontal = 1 - clamp((horizontalDistance - halfBar) / feather)
+  return Math.max(vertical, horizontal)
+}
+
+function applyIndustrialGrateCutout(ctx, height, size) {
+  const image = ctx.getImageData(0, 0, size, size)
+  const data = image.data
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = (x + 0.5) / size
+      const v = (y + 0.5) / size
+      const opacity = industrialGrateOpacityAt(u, v)
+      const index = y * size + x
+      const pixel = index * 4
+      data[pixel + 3] = Math.round(opacity * 255)
+      if (opacity <= 0.001) {
+        height[index] = 0.38
+        continue
+      }
+
+      const distanceX = wrappedLineDistance(u, 1 / 6)
+      const distanceY = wrappedLineDistance(v, 1 / 4)
+      const nearest = Math.min(distanceX, distanceY)
+      const bevel = 1 - clamp(nearest / 0.019)
+      const intersection = distanceX < 0.019 && distanceY < 0.019
+      height[index] += 0.08 + bevel * 0.055 + (intersection ? 0.035 : 0)
+
+      const edgeShade = clamp((nearest - 0.009) / 0.01)
+      const highlight = 1 - edgeShade
+      data[pixel] = clamp(data[pixel] * (0.72 + highlight * 0.38), 0, 255)
+      data[pixel + 1] = clamp(data[pixel + 1] * (0.74 + highlight * 0.34), 0, 255)
+      data[pixel + 2] = clamp(data[pixel + 2] * (0.76 + highlight * 0.3), 0, 255)
+    }
+  }
+  ctx.putImageData(image, 0, 0)
+}
+
 function applyPattern(ctx, height, options, size, seed) {
   const relief = clamp(options.relief / 100)
   switch (options.pattern) {
@@ -415,6 +472,18 @@ function patternAccumulationMask(pattern, x, y, size, seed) {
       const lineX = (size / boards) * i + (valueNoise(i, 0, 1, seed) - 0.5) * seam
       mask = Math.max(mask, lineFalloff(Math.abs(x - lineX), seam * 2.2) * 0.62)
     }
+  }
+
+  if (pattern === 'industrial_grate') {
+    const u = (x + 0.5) / size
+    const v = (y + 0.5) / size
+    const distanceX = wrappedLineDistance(u, 1 / 6)
+    const distanceY = wrappedLineDistance(v, 1 / 4)
+    const edgeDistance = Math.min(
+      Math.abs(distanceX - 0.015),
+      Math.abs(distanceY - 0.015),
+    )
+    mask = Math.max(mask, lineFalloff(edgeDistance, 0.018) * 0.82)
   }
 
   return clamp(mask)
@@ -492,22 +561,26 @@ function samplePatternHeight(pattern, x, y, size, relief, seed) {
 }
 
 export function makeProceduralMaterialDescriptor(options) {
+  const pattern = options.pattern || DEFAULT_PROCEDURAL_MATERIAL.pattern
+  const cutout = proceduralPatternUsesCutout(pattern)
   return {
     type: 'procedural-material',
     version: 1,
     material: options.material || DEFAULT_PROCEDURAL_MATERIAL.material,
     paint: options.paint || DEFAULT_PROCEDURAL_MATERIAL.paint,
-    pattern: options.pattern || DEFAULT_PROCEDURAL_MATERIAL.pattern,
+    pattern,
     wear: Number(options.wear) || 0,
     dirt: Number(options.dirt) || 0,
     relief: Number(options.relief) || 0,
     realRelief: options.realRelief !== false,
     seed: options.seed || DEFAULT_PROCEDURAL_MATERIAL.seed,
+    ...(cutout ? { alphaMode: 'cutout', alphaCutoff: 0.5 } : {}),
   }
 }
 
 export function sampleProceduralMaterialHeight(u, v, options) {
   const descriptor = makeProceduralMaterialDescriptor(options || {})
+  if (proceduralPatternUsesCutout(descriptor.pattern)) return 0.5
   const relief = clamp(descriptor.relief / 100)
   if (relief <= 0.001) return 0.5
 
@@ -732,6 +805,7 @@ export function generateProceduralMaterialTexture(options) {
   applyPattern(ctx, height, options, size, seed)
   applyWear(ctx, height, material, options, size, seed)
   applyDirt(ctx, height, options, size, seed)
+  if (proceduralPatternUsesCutout(options.pattern)) applyIndustrialGrateCutout(ctx, height, size)
 
   return {
     albedoDataUrl: canvas.toDataURL('image/png'),
@@ -739,5 +813,6 @@ export function generateProceduralMaterialTexture(options) {
     procedural: makeProceduralMaterialDescriptor(options),
     material,
     pattern: PATTERN_PRESETS.find(pattern => pattern.id === options.pattern) || PATTERN_PRESETS[0],
+    cutout: proceduralPatternUsesCutout(options.pattern),
   }
 }

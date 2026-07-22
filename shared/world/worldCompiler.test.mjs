@@ -667,6 +667,72 @@ test('une échelle compile une traversée climb fractionnable avec des ancrages 
   assert.equal(traversal.movementMultiplier, 2)
 })
 
+test('une trappe fermée remplace la dalle et verrouille la traversée de son échelle', () => {
+  const surfaceData = emptySurface({
+    rooms: {
+      lower: room('lower', 0, 0),
+      upper: { ...room('upper', 0, 0), level: 1, y: 2.5 },
+    },
+    connectors: {
+      ladderA: {
+        id: 'ladderA', type: 'ladder', x: 0, z: 0,
+        fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+      },
+      hatchA: {
+        id: 'hatchA', type: 'hatch', linkedLadderId: 'ladderA',
+        x: 0, z: 0, y: 2.5, width: 1, depth: 1, height: 0.25,
+        axis: 'x', hingeSide: 1, state: 'closed',
+        allowedStates: ['closed', 'open', 'locked'],
+        barrierType: 'solid', blocksMovement: true, blocksSight: true, blocksWater: true,
+      },
+    },
+  })
+  const closed = compileSurfaceWorld({ battlemapId: 'map-ladder-hatch', surfaceData })
+  const traversal = closed.spatial.traversals.find(item => item.kind === 'ladder')
+  const hatchSupport = closed.spatial.supports.find(item => item.kind === 'hatch')
+
+  assert.equal(traversal.enabled, false)
+  assert.equal(traversal.gateFeatureId, hatchSupport.sourceId)
+  assert.equal(traversal.gateState, 'closed')
+  assert.ok(closed.spatial.colliders.some(item => item.kind === 'hatch'))
+  assert.ok(closed.spatial.occluders.some(item => item.kind === 'hatch'))
+  assert.equal(closed.spatial.supports.some(item => item.kind === 'floor' && Math.abs(item.y - 2.625) < 1e-9), false)
+
+  const opened = compileSurfaceWorld({
+    battlemapId: 'map-ladder-hatch',
+    surfaceData,
+    runtimeState: { featureStates: { [hatchSupport.sourceId]: { state: 'open' } } },
+  })
+  assert.equal(opened.spatial.traversals.find(item => item.kind === 'ladder').enabled, true)
+  assert.equal(opened.spatial.supports.some(item => item.kind === 'hatch'), false)
+  assert.equal(opened.spatial.colliders.some(item => item.kind === 'hatch'), false)
+  assert.equal(opened.spatial.occluders.some(item => item.kind === 'hatch'), false)
+})
+
+test('une trappe en grille fermée reste un support sans occulter la LOS', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-grate-hatch',
+    surfaceData: emptySurface({
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 1, z: 2,
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+        },
+        hatchA: {
+          id: 'hatchA', type: 'hatch', linkedLadderId: 'ladderA',
+          x: 1, z: 2, y: 2.5, width: 1, depth: 1, height: 0.12,
+          axis: 'z', hingeSide: -1, state: 'closed',
+          allowedStates: ['closed', 'open', 'locked'],
+          barrierType: 'grate', blocksMovement: true, blocksSight: false, blocksWater: false,
+        },
+      },
+    }),
+  })
+  assert.ok(snapshot.spatial.supports.some(item => item.kind === 'hatch'))
+  assert.ok(snapshot.spatial.colliders.some(item => item.kind === 'hatch'))
+  assert.equal(snapshot.spatial.occluders.some(item => item.kind === 'hatch'), false)
+})
+
 test('une passerelle détruite ne compile plus son support', () => {
   const surfaceData = emptySurface({
     floors: {

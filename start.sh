@@ -1,17 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-ROOT="$HOME/Enclume"
+set -u
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SERVER="$ROOT/server"
 CLIENT="$ROOT/client"
 
 echo ""
 echo "========================================"
-echo "   ENCLUME - Démarrage intelligent"
+echo "   ENCLUME - Démarrage local complet"
 echo "========================================"
 echo ""
 
 # --- DOCKER ---
-echo "[1] Docker..."
+echo "[1] Docker (PostgreSQL, Redis legacy éventuel, MinIO)..."
 if ! docker info > /dev/null 2>&1; then
     echo "    Docker non détecté. Vérifie que Docker est installé et démarré."
     exit 1

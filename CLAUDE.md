@@ -50,6 +50,8 @@ règles domaine > `MANUEL` > `PLAN`.
 - La fusion du code ne fusionne jamais implicitement les données vivantes.
 - Le workflow complet et le retour arrière sont dans `docs/WORKFLOW_FUSION.md`.
 - Les autorités combat/monde sont dans `docs/FUSION_PROJET_COUSIN.md`.
+- Le poste Ubuntu, les versions d'outils et le runner distant sont dans
+  `docs/ENVIRONNEMENT_UBUNTU.md`.
 
 ---
 
@@ -132,7 +134,7 @@ Termes interdits sans preuve : « probablement », « certainement », « évide
 
 ## 8. Autorité du moteur monde
 
-- `surface_data` v12 est validé puis compilé par `shared/world/worldCompiler.js`.
+- `surface_data` v13 est validé puis compilé par `shared/world/worldCompiler.js`.
 - Le `WorldSnapshot` immuable est l'autorité des supports, barrières, traversées, colliders,
   occluders, compartiments, régions, navigation, collision, occupation, LOS et couverture.
 - PostgreSQL est durable ; Redis n'est jamais l'autorité spatiale.

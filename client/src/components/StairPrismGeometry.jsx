@@ -8,7 +8,7 @@ function polygonArea(points) {
   }, 0) / 2
 }
 
-function createStairPrismBufferGeometry({ polygon, minY, maxY }) {
+function createStairPrismBufferGeometry({ polygon, minY, maxY }, splitMaterials = false) {
   const source = (polygon || [])
     .map(point => ({ x: Number(point.x), z: Number(point.z) }))
     .filter(point => Number.isFinite(point.x) && Number.isFinite(point.z))
@@ -32,10 +32,16 @@ function createStairPrismBufferGeometry({ polygon, minY, maxY }) {
   }
 
   const contour = points.map(point => new THREE.Vector2(point.x, point.z))
-  for (const triangle of THREE.ShapeUtils.triangulateShape(contour, [])) {
+  const topIndexStart = indices.length
+  const triangles = THREE.ShapeUtils.triangulateShape(contour, [])
+  for (const triangle of triangles) {
     const [a, b, c] = triangle
     // Dans le plan XZ, l'ordre trigonométrique pointe vers -Y : on inverse le dessus.
     indices.push(topOffset + a, topOffset + c, topOffset + b)
+  }
+  const topIndexCount = indices.length - topIndexStart
+  for (const triangle of triangles) {
+    const [a, b, c] = triangle
     indices.push(bottomOffset + a, bottomOffset + b, bottomOffset + c)
   }
 
@@ -61,14 +67,19 @@ function createStairPrismBufferGeometry({ polygon, minY, maxY }) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   geometry.setIndex(indices)
+  if (splitMaterials) {
+    geometry.clearGroups()
+    geometry.addGroup(topIndexStart, topIndexCount, 0)
+    geometry.addGroup(topIndexStart + topIndexCount, indices.length - topIndexCount, 1)
+  }
   geometry.computeVertexNormals()
   geometry.computeBoundingBox()
   geometry.computeBoundingSphere()
   return geometry
 }
 
-export default function StairPrismGeometry({ part }) {
-  const geometry = useMemo(() => createStairPrismBufferGeometry(part), [part])
+export default function StairPrismGeometry({ part, splitMaterials = false }) {
+  const geometry = useMemo(() => createStairPrismBufferGeometry(part, splitMaterials), [part, splitMaterials])
   useEffect(() => () => geometry.dispose(), [geometry])
   return <primitive object={geometry} attach="geometry" />
 }

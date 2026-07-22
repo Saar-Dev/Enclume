@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { proceduralPatternUsesCutout } from './proceduralMaterials.js'
 
 // Cache module-level, shared by Canvas3D, Editor3D and workshop previews.
 export const textureCache = {}
@@ -48,6 +49,8 @@ export async function loadVoxelTextures(textures) {
   for (const tex of textures) {
     const faces = resolveLegacyFaces(tex.faces)
     const packId = tex.pack_id
+    const procedural = proceduralReliefForFaces(faces)
+    const cutout = proceduralPatternUsesCutout(procedural?.pattern)
 
     const loadTex = (path, { color = true } = {}) => {
       if (!path) return Promise.resolve(null)
@@ -78,8 +81,10 @@ export async function loadVoxelTextures(textures) {
           normalMap: normalMap || null,
           normalScale: new THREE.Vector2(0.75, 0.75),
           color: 0xffffff,
-          roughness: 0.72,
-          metalness: 0.08,
+          roughness: cutout ? 0.48 : 0.72,
+          metalness: cutout ? 0.72 : 0.08,
+          alphaTest: cutout ? Number(procedural?.alphaCutoff) || 0.5 : 0,
+          side: cutout ? THREE.DoubleSide : THREE.FrontSide,
         })
       }
 
@@ -95,7 +100,15 @@ export async function loadVoxelTextures(textures) {
 
     result[tex.id] = {
       faceMaterials: loadedFaces,
-      relief: proceduralReliefForFaces(faces),
+      relief: cutout ? null : procedural,
+      cutout,
+      solidMaterial: cutout
+        ? new THREE.MeshStandardMaterial({
+            color: procedural?.paint || '#6f7f8e',
+            roughness: 0.5,
+            metalness: 0.68,
+          })
+        : null,
     }
   }
 

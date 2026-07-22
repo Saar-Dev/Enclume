@@ -3,9 +3,9 @@
     "origin_default":  "floor-center",
     "unit":  "meters",
     "style":  "cartoon futuristic post-apocalyptic underwater station",
-    "blend":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\submarine_postapo_futuristic_furniture_pack.blend",
-    "combined_glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\submarine_postapo_futuristic_furniture_pack.glb",
-    "preview_png":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\submarine_postapo_futuristic_furniture_preview.png",
+    "blend":  "submarine_postapo_futuristic_furniture_pack.blend",
+    "combined_glb":  "glb/submarine_postapo_futuristic_furniture_pack.glb",
+    "preview_png":  "submarine_postapo_futuristic_furniture_preview.png",
     "assets":  [
                    {
                        "name":  "01_modular_bunk_bed_2x0p9m",
@@ -15,7 +15,6 @@
                        "height_m":  1.72,
                        "features":  "two bunks, ladder, animated drawers",
                        "animation":  "3 underbed drawers slide open on Y",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Lit superposé modulaire.glb",
                        "label":  "Lit superposé modulaire",
                        "catalog_file":  "Lit superposé modulaire.glb"
                    },
@@ -27,7 +26,6 @@
                        "height_m":  0.96,
                        "features":  "table with benches and control terminal",
                        "animation":  "static",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Table de réfectoire rabattable.glb",
                        "label":  "Table de réfectoire rabattable",
                        "catalog_file":  "Table de réfectoire rabattable.glb"
                    },
@@ -39,7 +37,6 @@
                        "height_m":  2.0,
                        "features":  "animated double locker doors and shelves",
                        "animation":  "2 hinged doors swing open",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Casier mural de rangement.glb",
                        "label":  "Casier mural de rangement",
                        "catalog_file":  "Casier mural de rangement.glb"
                    },
@@ -51,7 +48,6 @@
                        "height_m":  1.48,
                        "features":  "desk with monitor, drawers and chair",
                        "animation":  "static",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Poste de travail compact.glb",
                        "label":  "Poste de travail compact",
                        "catalog_file":  "Poste de travail compact.glb"
                    },
@@ -63,7 +59,6 @@
                        "height_m":  1.75,
                        "features":  "animated glass cabinet with medical supplies",
                        "animation":  "2 glass doors swing open",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Armoire de fournitures médicales.glb",
                        "label":  "Armoire de fournitures médicales",
                        "catalog_file":  "Armoire de fournitures médicales.glb"
                    },
@@ -75,7 +70,6 @@
                        "height_m":  0.92,
                        "features":  "bench with cushions, storage and terminal",
                        "animation":  "static",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Banquette modulaire.glb",
                        "label":  "Banquette modulaire",
                        "catalog_file":  "Banquette modulaire.glb"
                    },
@@ -87,7 +81,6 @@
                        "height_m":  1.68,
                        "features":  "counter with sink, stove and overhead shelf",
                        "animation":  "static",
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_furniture\\glb\\Comptoir de cuisine avec évier.glb",
                        "label":  "Comptoir de cuisine avec évier",
                        "catalog_file":  "Comptoir de cuisine avec évier.glb"
                    }

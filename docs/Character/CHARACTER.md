@@ -1,6 +1,6 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-07-08 — Session 141 (SKILL_MIN conditionné par OPT-07 `skill_prerequisites`)
+> Dernière mise à jour : 2026-07-22 — autorité serveur du mille-feuille d'armure documentée.
 > Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire — 51 migrations appliquées
 
 ---
@@ -500,7 +500,7 @@ Base  = AN(attr_1) + AN(attr_2)    — si attr_2 null : AN(attr_1) × 2 (PC4)
 Total = Base + mastery              — jamais clampé, peut être négatif (PC11)
 ```
 
-### Mille-feuille armure (calcMillefeuille — client uniquement)
+### Mille-feuille armure (affichage client, autorité serveur)
 
 ```javascript
 // LocationPanel.jsx — multi-couches sur une localisation
@@ -508,7 +508,7 @@ const vals = equippedItems.map(i => i.protection)
 const max  = Math.max(...vals)
 const rest = vals.reduce((s, v) => s + v, 0) - max
 return max + rest / 2
-// ⚠️ Arbitrage Math.ceil en attente de vérification LdB — actuel = sans arrondi
+// Aperçu UI uniquement ; la résolution appelle calcResistanceArmure() côté serveur.
 ```
 
 ### Malus blessures + encombrement (charStats.js)

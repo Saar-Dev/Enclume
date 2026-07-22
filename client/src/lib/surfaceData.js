@@ -416,6 +416,9 @@ export function surfaceTextureIds(data) {
   for (const stair of Object.values(surface.stairs)) {
     if (stair?.tex) ids.add(stair.tex)
   }
+  for (const connector of Object.values(surface.connectors)) {
+    if (connector?.tex) ids.add(connector.tex)
+  }
   for (const room of Object.values(surface.rooms)) {
     if (room?.floorTex) ids.add(room.floorTex)
     if (room?.ceilingTex) ids.add(room.ceilingTex)
@@ -2187,14 +2190,17 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
   const fromY = supportTopAt(surface, cell, fromLevel, fallbackThickness)
   const toY = supportTopAt(surface, cell, toLevel, fallbackThickness)
   const roomHit = findRoomAtCell(surface, cell, fromLevel)
+  const destinationRoomHit = findRoomAtCell(surface, cell, toLevel)
+  const roomIds = [...new Set([roomHit?.id, destinationRoomHit?.id].filter(Boolean))]
   const minLevel = Math.min(fromLevel, toLevel)
   const maxLevel = Math.max(fromLevel, toLevel)
   const id = `connector:ladder:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
+  const material = makeSurfaceMaterial(tool, `${id}:structure`)
   return {
     id,
     type: 'ladder',
     roomId: roomHit?.id || null,
-    roomIds: roomHit?.id ? [roomHit.id] : [],
+    roomIds,
     x: cell.x,
     z: cell.z,
     level: fromLevel,
@@ -2214,14 +2220,49 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
     movementMultiplier: getToolMovementMultiplier(tool),
     allowPartial: true,
     anchorSpacing: Math.max(0.1, Number(tool?.ladderAnchorSpacing) || 0.5),
+    ...(material ? { material } : {}),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('ladder'),
+  }
+}
+
+export function makeLadderHatchFromConnector(ladder, tool = {}) {
+  if (!ladder || ladder.type !== 'ladder' || tool?.ladderHatch === false) return null
+  const topLevel = Math.max(Number(ladder.fromLevel) || 0, Number(ladder.toLevel) || 0)
+  const y = levelToY(topLevel)
+  const contactY = Math.max(Number(ladder.fromY) || y, Number(ladder.toY) || y)
+  const thickness = Math.max(0.06, Math.min(0.4, Math.abs(contactY - y) * 2 || 0.12))
+  const id = `connector:hatch:${ladder.x}:${ladder.z}:${topLevel}`
+  const blocking = surfaceBlockingForTool(tool)
+  const material = makeSurfaceMaterial(tool, `${id}:panel`)
+  return {
+    id,
+    type: 'hatch',
+    linkedLadderId: ladder.id,
+    roomId: ladder.roomId || null,
+    roomIds: Array.isArray(ladder.roomIds) ? [...ladder.roomIds] : [],
+    x: Number(ladder.x) || 0,
+    z: Number(ladder.z) || 0,
+    y,
+    level: topLevel,
+    width: 1,
+    depth: 1,
+    height: thickness,
+    axis: ladder.axis === 'z' ? 'z' : 'x',
+    hingeSide: Number(tool?.hatchHingeSide) < 0 ? -1 : 1,
+    state: 'closed',
+    allowedStates: ['closed', 'open', 'locked'],
+    walkable: true,
+    movementMultiplier: 1,
+    ...blocking,
+    ...(material ? { material } : {}),
   }
 }
 
 export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const connector = makeLadderConnectorFromCell(surfaceData, cell, tool)
   if (!connector) return surfaceData
+  const hatch = makeLadderHatchFromConnector(connector, tool)
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
@@ -2229,6 +2270,7 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
+      ...(hatch ? { [hatch.id]: hatch } : {}),
     },
   }
 }
@@ -3269,6 +3311,16 @@ export function eraseSurfaceSelection(surfaceData, selection, tool) {
       || (Number.isFinite(Number(connector?.fromLevel)) && sameLevel(levelToY(connector.fromLevel), targetY))
       || (Number.isFinite(Number(connector?.toLevel)) && sameLevel(levelToY(connector.toLevel), targetY))
     if (sameStartOrEnd && connectorIntersectsCellArea(connector, area)) {
+      delete connectors[id]
+      changed = true
+    }
+  }
+
+  const remainingConnectorIds = new Set(Object.entries(connectors).flatMap(([id, connector]) => (
+    [String(id), ...(connector?.id ? [String(connector.id)] : [])]
+  )))
+  for (const [id, connector] of Object.entries(connectors)) {
+    if (connector?.type === 'hatch' && !remainingConnectorIds.has(String(connector.linkedLadderId))) {
       delete connectors[id]
       changed = true
     }

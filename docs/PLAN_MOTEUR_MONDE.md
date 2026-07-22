@@ -1,8 +1,10 @@
 # PLAN_MOTEUR_MONDE.md — reconstruction progressive du moteur de monde
 
-> Dernière mise à jour : 2026-07-16 — moteur commun fusionné, escalier droit paramétrique livré.
+> Dernière mise à jour : 2026-07-22 — contrat courant `surface_data` v13, Phases 0 à 16 livrées.
 >
 > Statut : **Phases 0 à 16 codées et vérifiées ; moteur monde autoritaire branché au combat**.
+> Les titres v1 à v12 plus bas décrivent les jalons successifs du plan ; ils ne remplacent pas le
+> contrat courant v13.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.

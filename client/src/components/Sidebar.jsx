@@ -595,6 +595,8 @@ export default function Sidebar({
     ladderWidth: 0.7,
     ladderDepth: 0.12,
     ladderAnchorSpacing: 0.5,
+    ladderHatch: true,
+    hatchHingeSide: 1,
     elevatorDoorAxis: 'z',
     elevatorDoorSide: 1,
     elevatorTravelSecondsPerLevel: 2,
@@ -646,14 +648,26 @@ export default function Sidebar({
   const surfacePaintValue = /^#[0-9a-f]{6}$/i.test(String(surfaceMaterialState.paint || ''))
     ? surfaceMaterialState.paint
     : DEFAULT_SURFACE_MATERIAL_PRESET.paint
-  const updateSurfaceMaterial = (patch) => updateSurfaceTool({
-    surfaceMaterialMode: 'procedural',
-    materialFace: surfaceMaterialFace,
-    materialProfiles: {
-      ...surfaceMaterialProfiles,
-      [surfaceMaterialFace]: { ...surfaceMaterialState, ...patch },
-    },
-  })
+  const updateSurfaceMaterial = (patch) => {
+    const nextMaterial = { ...surfaceMaterialState, ...patch }
+    const changesPhysicalPreset = patch.pattern !== undefined && surfaceToolState.mode !== 'room'
+    const nextBlocking = patch.pattern === 'industrial_grate'
+      ? 'grate'
+      : surfaceMaterialState.pattern === 'industrial_grate'
+        && (surfaceToolState.surfaceBlocking || 'solid') === 'grate'
+        ? 'solid'
+        : surfaceToolState.surfaceBlocking
+    updateSurfaceTool({
+      surfaceMaterialMode: 'procedural',
+      materialFace: surfaceMaterialFace,
+      materialPreset: nextMaterial,
+      materialProfiles: {
+        ...surfaceMaterialProfiles,
+        [surfaceMaterialFace]: nextMaterial,
+      },
+      ...(changesPhysicalPreset ? { surfaceBlocking: nextBlocking } : {}),
+    })
+  }
   const normalizedBlueprintText = (blueprint) => [
     blueprint?.label,
     blueprint?.name,
@@ -1528,6 +1542,34 @@ export default function Sidebar({
                       >
                         Rotation 90°
                       </button>
+                    )}
+                    {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' && (
+                      <div style={styles.connectorPicker}>
+                        <button
+                          type="button"
+                          onClick={() => updateSurfaceTool({ ladderHatch: surfaceToolState.ladderHatch === false })}
+                          style={{
+                            ...styles.roomToolToggle,
+                            ...(surfaceToolState.ladderHatch !== false ? styles.roomToolToggleActive : {}),
+                          }}
+                        >
+                          <span>Trappe au palier haut</span>
+                          <span style={styles.roomToolToggleState}>
+                            {surfaceToolState.ladderHatch !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </button>
+                        {surfaceToolState.ladderHatch !== false && (
+                          <button
+                            type="button"
+                            onClick={() => updateSurfaceTool({
+                              hatchHingeSide: Number(surfaceToolState.hatchHingeSide) < 0 ? 1 : -1,
+                            })}
+                            style={styles.roomToolSmallBtn}
+                          >
+                            Inverser les charnières
+                          </button>
+                        )}
+                      </div>
                     )}
                     {surfaceToolState.mode === 'connector' && (
                       <div style={styles.connectorPicker}>

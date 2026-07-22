@@ -34,6 +34,7 @@ import {
   makeStairFromCell,
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
+  makeLadderHatchFromConnector,
   makeLadderConnectorFromCell,
   makeSkylightConnectorFromCell,
   makeWallsFromDrag,
@@ -573,7 +574,27 @@ function ConnectorPreview({ drag, surfaceData, surfaceTool }) {
     )
   }
 
-  if (['door', 'window', 'screen-window', 'ladder'].includes(connector.type)) {
+  if (connector.type === 'ladder') {
+    const hatch = makeLadderHatchFromConnector(connector, surfaceTool)
+    return (
+      <group>
+        <ConnectorSegment
+          connector={{ id: 'connector-preview', ...connector }}
+          opacity={0.68}
+          displayLevel={Number(connector.level) || 0}
+        />
+        {hatch && (
+          <ConnectorSegment
+            connector={{ id: 'hatch-preview', ...hatch }}
+            opacity={0.68}
+            displayLevel={Number(hatch.level) || 0}
+          />
+        )}
+      </group>
+    )
+  }
+
+  if (['door', 'window', 'screen-window'].includes(connector.type)) {
     return (
       <ConnectorSegment
         connector={{ id: 'connector-preview', ...connector }}

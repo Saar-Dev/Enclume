@@ -431,6 +431,23 @@ function validateFeature(collection, id, item, errors) {
     } else if (item.type === 'skylight') {
       validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth'], path, errors)
       if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une largeur et une profondeur positives`)
+    } else if (item.type === 'hatch') {
+      validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth', 'height'], path, errors)
+      if (Number(item.width) <= 0 || Number(item.depth) <= 0 || Number(item.height) <= 0) {
+        errors.push(`${path} doit avoir des dimensions strictement positives`)
+      }
+      if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+      if (![1, -1].includes(Number(item.hingeSide))) errors.push(`${path}.hingeSide doit valoir 1 ou -1`)
+      if (typeof item.linkedLadderId !== 'string' || !item.linkedLadderId) {
+        errors.push(`${path}.linkedLadderId doit référencer l’échelle associée`)
+      }
+      const allowedStates = Array.isArray(item.allowedStates) ? item.allowedStates.map(String) : []
+      if (!allowedStates.includes('closed') || allowedStates.some(state => !['open', 'closed', 'locked'].includes(state))) {
+        errors.push(`${path}.allowedStates contient un état de trappe invalide`)
+      }
+      if (!allowedStates.includes(String(item.state || 'closed'))) {
+        errors.push(`${path}.state doit appartenir à allowedStates`)
+      }
     } else if (item.type === 'elevator') {
       validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
     }
@@ -476,6 +493,14 @@ export function validateSurfaceData(input) {
   for (const [id, room] of Object.entries(rooms)) {
     for (const clipId of Array.isArray(room?.geometryClipRoomIds) ? room.geometryClipRoomIds : []) {
       if (!rooms[clipId]) errors.push(`$.rooms.${id}.geometryClipRoomIds référence la salle absente ${clipId}`)
+    }
+  }
+  const connectors = isPlainObject(input.connectors) ? input.connectors : {}
+  for (const [id, connector] of Object.entries(connectors)) {
+    if (connector?.type !== 'hatch') continue
+    const ladder = connectors[connector.linkedLadderId]
+    if (!ladder || ladder.type !== 'ladder') {
+      errors.push(`$.connectors.${id}.linkedLadderId doit référencer un connecteur ladder existant`)
     }
   }
   const visiting = new Set()
@@ -624,6 +649,7 @@ export function collectSurfaceTextureIds(input) {
     add(ceiling.tex); add(ceiling.topTex); add(ceiling.bottomTex)
   }
   for (const stair of Object.values(surface.stairs)) add(stair.tex)
+  for (const connector of Object.values(surface.connectors)) add(connector.tex)
   for (const room of Object.values(surface.rooms)) {
     add(room.floorTex); add(room.ceilingTex); add(room.wallInteriorTex)
     for (const profile of room.wallAppearanceProfiles || []) {

@@ -8,6 +8,10 @@ import {
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import Object3DPreview from './Object3DPreview.jsx'
 import { stairGeometry } from '../../../shared/world/stairGeometry.js'
+import {
+  PROCEDURAL_MATERIAL_PRESETS,
+  PROCEDURAL_PATTERN_PRESETS,
+} from '../lib/proceduralMaterials.js'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -45,6 +49,7 @@ function connectorTypeLabel(type) {
   if (type === 'skylight') return 'Dalle en verre'
   if (type === 'elevator') return 'Ascenseur'
   if (type === 'ladder') return 'Échelle'
+  if (type === 'hatch') return 'Trappe'
   if (type === 'stairs') return 'Escalier'
   return type
 }
@@ -133,8 +138,10 @@ export default function SurfaceConnectorPanel({
   runtimeState = null,
   onElevatorCommand = null,
   onWindowStateChange = null,
+  onHatchStateChange = null,
   canEdit = true,
   canAdminElevator = canEdit,
+  canAdminFeature = canEdit,
 }) {
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
@@ -169,6 +176,7 @@ export default function SurfaceConnectorPanel({
     ? connector.allowedStates
     : ['transparent', ...(connector.type === 'screen-window' ? ['opaque', 'mirror'] : [])]
   const currentWindowState = runtimeState?.state || connector.state || 'transparent'
+  const currentHatchState = runtimeState?.state || connector.state || 'closed'
   const stairShape = connector.type === 'stairs'
     ? stairGeometry(connector)
     : null
@@ -190,10 +198,25 @@ export default function SurfaceConnectorPanel({
   }
 
   const patchState = (state) => {
+    if (connector.type === 'hatch') {
+      onPatch?.(connector.id, { state })
+      return
+    }
     onPatch?.(connector.id, {
       state,
       ...connectorBlockingForState(connector.type, state),
     })
+  }
+
+  const patchProceduralAppearance = (patch) => {
+    const material = { ...(connector.material || {}), ...patch }
+    const switchesPattern = patch.pattern !== undefined
+    const physical = patch.pattern === 'industrial_grate'
+      ? { barrierType: 'grate', blocksSight: false, blocksMovement: true, blocksWater: false }
+      : switchesPattern && connector.material?.pattern === 'industrial_grate' && connector.barrierType === 'grate'
+        ? { barrierType: 'solid', blocksSight: true, blocksMovement: true, blocksWater: true }
+        : {}
+    onPatch?.(connector.id, { material, ...physical })
   }
 
   return (
@@ -275,6 +298,19 @@ export default function SurfaceConnectorPanel({
           </div>
         )}
 
+        {canEdit && connector.type === 'hatch' && (
+          <div style={S.field}>
+            <span style={S.label}>Charnières</span>
+            <button
+              type="button"
+              onClick={() => onPatch?.(connector.id, { hingeSide: Number(connector.hingeSide) < 0 ? 1 : -1 })}
+              style={S.button}
+            >
+              Inverser le côté d’ouverture
+            </button>
+          </div>
+        )}
+
         {canEdit && connector.type === 'stairs' && (
           <div style={S.field}>
             <span style={S.label}>Garde-corps</span>
@@ -308,6 +344,40 @@ export default function SurfaceConnectorPanel({
               <option value="locked">Verrouillée</option>
             </select>
           </label>
+        )}
+
+        {canEdit && connector.type === 'hatch' && (
+          <label style={S.field}>
+            <span style={S.label}>État initial</span>
+            <select value={connector.state || 'closed'} onChange={e => patchState(e.target.value)} style={S.input}>
+              <option value="closed">Fermée</option>
+              <option value="open">Ouverte</option>
+              <option value="locked">Verrouillée</option>
+            </select>
+          </label>
+        )}
+
+        {!canEdit && connector.type === 'hatch' && (
+          <div style={S.field}>
+            <span style={S.label}>Trappe</span>
+            <div style={S.runtimeActions}>
+              {[
+                ['closed', 'Fermer'],
+                ['open', 'Ouvrir'],
+                ['locked', 'Verrouiller'],
+              ].map(([state, label]) => (
+                <button
+                  key={state}
+                  type="button"
+                  disabled={!canAdminFeature || !onHatchStateChange || currentHatchState === state}
+                  onClick={() => onHatchStateChange(connector.worldId || connector.id, state)}
+                  style={{ ...S.runtimeBtn, ...(currentHatchState === state ? S.runtimeBtnCurrent : {}) }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {isWindow && (
@@ -389,17 +459,39 @@ export default function SurfaceConnectorPanel({
           <span style={S.hint}>×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.</span>
         </label>}
 
-        {canEdit && connector.type === 'stairs' && connector.material && (
+        {canEdit && ['stairs', 'ladder', 'hatch'].includes(connector.type) && connector.material && (
           <div style={S.field}>
             <span style={S.label}>Apparence procédurale</span>
+            <label style={S.appearanceRow}>
+              <span>Matière</span>
+              <select
+                value={connector.material.material || 'steel'}
+                onChange={event => patchProceduralAppearance({ material: event.target.value })}
+                style={S.input}
+              >
+                {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
+                  <option key={preset.id} value={preset.id}>{preset.label}</option>
+                ))}
+              </select>
+            </label>
+            <label style={S.appearanceRow}>
+              <span>Motif</span>
+              <select
+                value={connector.material.pattern || 'none'}
+                onChange={event => patchProceduralAppearance({ pattern: event.target.value })}
+                style={S.input}
+              >
+                {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
+                  <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
+                ))}
+              </select>
+            </label>
             <label style={S.appearanceRow}>
               <span>Couleur</span>
               <input
                 type="color"
                 value={connector.material.paint || '#6f7f8e'}
-                onChange={event => onPatch?.(connector.id, {
-                  material: { ...connector.material, paint: event.target.value },
-                })}
+                onChange={event => patchProceduralAppearance({ paint: event.target.value })}
                 style={S.colorInput}
               />
             </label>
@@ -416,9 +508,7 @@ export default function SurfaceConnectorPanel({
                   max="100"
                   step="1"
                   value={Number(connector.material[field]) || 0}
-                  onChange={event => onPatch?.(connector.id, {
-                    material: { ...connector.material, [field]: Number(event.target.value) },
-                  })}
+                  onChange={event => patchProceduralAppearance({ [field]: Number(event.target.value) })}
                 />
                 <strong>{Number(connector.material[field]) || 0}</strong>
               </label>

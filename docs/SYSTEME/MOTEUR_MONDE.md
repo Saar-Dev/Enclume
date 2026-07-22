@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-18 — trémie de colimaçon et palier haut canoniques.
+> Dernière mise à jour : 2026-07-22 — trappe d'échelle et matériau de grille ajouré canoniques.
 >
-> Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> Statut : **Phases 0 à 16 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
@@ -68,7 +68,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 12 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 13 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -131,7 +131,7 @@ Le dossier `shared/world/` fournit désormais :
 - `movementCost.js` : facteurs explicables, segments pondérés et arrêt à budget épuisé ;
 - `worldContracts.js` : contrats versionnés et immuables `WorldDocument`, `WorldRuntimeState` et
   `WorldSnapshot` ;
-- `surfaceDocument.js` : validation de schéma, normalisation v6, UUID physiques stables et adaptation
+- `surfaceDocument.js` : validation de schéma, normalisation v13, UUID physiques stables et adaptation
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
@@ -422,6 +422,13 @@ géométrie structurelle en prévisualisation, puis la pose crée automatiquemen
 `ladder`, repasse en sélection et ouvre son popup. Celui-ci expose les niveaux, la rotation et le
 coût. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
 
+Par défaut, cette pose crée aussi un connecteur `hatch` lié par `linkedLadderId`, sur la dalle du
+palier le plus haut. La dalle est toujours découpée à cet endroit. Une trappe `closed` ou `locked`
+remplace la partie retirée comme support et barrière horizontale ; une trappe `open` ou `destroyed`
+ne produit ni support, ni collider, ni occluder. La traversée `climb` de l'échelle est activée
+uniquement lorsque cette trappe est ouverte ou détruite. L'état initial appartient au document
+statique ; l'état courant vient de `WorldRuntimeState.featureStates` et prévaut dans le snapshot.
+
 ### Passerelle
 
 Support praticable surélevé. Une passerelle fixe appartient au monde statique. Une passerelle
@@ -555,7 +562,7 @@ leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel
 `displayLevel = N` rend tout l'intérieur de la tranche N. Les intérieurs strictement inférieurs
 restent eux aussi rendus avec leurs matériaux opaques, mais les vraies interfaces horizontales et
 les vraies parois les occultent naturellement. Ils ne deviennent donc visibles que par une
-ouverture géométrique réelle : trémie d'escalier, future trappe ouverte ou dalle vitrée. Les murs
+ouverture géométrique réelle : trémie d'escalier, trappe ouverte ou dalle vitrée. Les murs
 inférieurs ne participent pas à la coupe caméra du niveau courant et restent opaques. Les niveaux
 supérieurs restent masqués en temps normal.
 
@@ -741,6 +748,19 @@ arêtes restantes et retire ceux de la séparation supprimée. Le validateur v13
 les textures et les valeurs d'apparence entre 0 et 100. Le contrat v13 refuse les anciennes
 apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`.
 
+Le motif procédural `industrial_grate` est un matériau ajouré réutilisable. Sa texture RGBA est
+rendue avec `alphaTest`, pas avec un panneau semi-transparent : un fragment appartient au barreau
+ou est entièrement absent. Cela conserve le depth buffer, les ombres et la lecture des niveaux
+inférieurs sans les artefacts de tri du verre. Le dessus d'un sol, d'un mur, d'une marche, d'une
+passerelle ou d'une trappe peut utiliser ce cutout ; les chants et les pièces structurelles fines
+emploient son matériau métallique plein associé.
+
+Apparence et physique restent deux champs séparés. Choisir ce motif hors d'une salle applique
+explicitement le preset `barrierType: grate` (`blocksMovement: true`, `blocksSight: false`,
+`blocksWater: false`). Dans une salle, le changement d'une seule face ne modifie pas implicitement
+les canaux physiques de tout le volume. `worldCompiler` lit exclusivement ces canaux : ni l'alpha,
+ni la normal map, ni un éventuel GLB ne deviennent une autorité de collision ou de LOS.
+
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
 de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
 niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
@@ -912,7 +932,7 @@ moteur.
 ### Validation navigateur de l'autorité de déplacement
 
 Le scénario de recette de l'intégration a été exécuté sur `8393` avec deux identités réelles, une
-campagne temporaire isolée et une carte `surface_data` v12 à deux salles. Il confirme le contrat
+campagne temporaire isolée et une carte `surface_data` v13 à deux salles. Il confirme le contrat
 suivant :
 
 - un joueur qui déplace son token sur un support valide passe par `world-move`, avec trajet et

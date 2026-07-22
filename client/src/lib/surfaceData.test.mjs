@@ -5,6 +5,7 @@ import {
   SURFACE_DATA_VERSION,
   applyRoomBoundaryArc,
   applyBridgeSelection,
+  applyLadderConnector,
   applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomSelection,
@@ -40,6 +41,7 @@ import {
 } from '../../../shared/world/roomGeometry.js'
 import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
 import { spiralStairGeometry, straightStairGeometry } from '../../../shared/world/stairGeometry.js'
+import { industrialGrateOpacityAt } from './proceduralMaterials.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -75,6 +77,12 @@ function room(id, level, heightLevels = 1) {
     blocksWater: true,
   }
 }
+
+test('le motif de grille alterne métal opaque et ajours totalement transparents', () => {
+  assert.equal(industrialGrateOpacityAt(0, 0), 1)
+  assert.equal(industrialGrateOpacityAt(1 / 12, 1 / 8), 0)
+  assert.equal(industrialGrateOpacityAt(1, 1), 1)
+})
 
 test('la surface extérieure de l eau reste cinq étages au-dessus du sommet global', () => {
   const result = computeSurfaceWaterCells(emptySurface({
@@ -239,6 +247,53 @@ test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () 
   assert.equal(bridge.topMaterial.paint, '#123456')
   assert.equal(bridge.bottomMaterial.material, 'concrete')
   assert.equal(bridge.bottomMaterial.paint, '#654321')
+})
+
+test('une échelle crée sa trappe supérieure avec le même matériau ajouré', () => {
+  const lower = room('lower', 0)
+  const upper = { ...room('upper', 1), y: 2.5, level: 1 }
+  const next = applyLadderConnector(emptySurface({ rooms: { lower, upper } }), { x: 0, z: 0 }, {
+    level: 0,
+    connectorToLevel: 1,
+    ladderHatch: true,
+    ladderAxis: 'x',
+    floorThickness: 0.25,
+    surfaceBlocking: 'grate',
+    surfaceMaterialMode: 'procedural',
+    materialPreset: {
+      material: 'steel',
+      paint: '#66737a',
+      pattern: 'industrial_grate',
+      wear: 35,
+      dirt: 25,
+      relief: 70,
+    },
+  })
+  const ladder = Object.values(next.connectors).find(connector => connector.type === 'ladder')
+  const hatch = Object.values(next.connectors).find(connector => connector.type === 'hatch')
+
+  assert.ok(ladder)
+  assert.ok(hatch)
+  assert.equal(hatch.linkedLadderId, ladder.id)
+  assert.equal(hatch.y, 2.5)
+  assert.equal(hatch.height, 0.25)
+  assert.equal(hatch.state, 'closed')
+  assert.equal(hatch.barrierType, 'grate')
+  assert.equal(hatch.blocksSight, false)
+  assert.equal(hatch.material.pattern, 'industrial_grate')
+  assert.equal(hatch.material.alphaMode, 'cutout')
+  const prepared = prepareSurfaceData(next, { battlemapId: 'map-ladder-hatch' })
+  const preparedHatch = Object.values(prepared.surfaceData.connectors).find(connector => connector.type === 'hatch')
+  assert.ok(preparedHatch.worldId)
+  assert.equal(prepared.worldDocument.features.connectors[preparedHatch.worldId].type, 'hatch')
+
+  const erasedFromLowerLevel = eraseSurfaceSelection(
+    next,
+    { start: { x: 0, z: 0 }, end: { x: 0, z: 0 } },
+    { level: 0 },
+  )
+  assert.equal(Object.values(erasedFromLowerLevel.connectors).some(connector => connector.type === 'ladder'), false)
+  assert.equal(Object.values(erasedFromLowerLevel.connectors).some(connector => connector.type === 'hatch'), false)
 })
 
 test('un mur courbe produit des segments orientés avec une boîte de rendu tournée', () => {

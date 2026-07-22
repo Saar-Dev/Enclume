@@ -1,5 +1,7 @@
 # Objets 3D libres et visibilité caméra
 
+> Mis à jour : 2026-07-22 — occupation snapshot et coupe par volume/façade.
+
 Ce document décrit le contrat actuel du placement des objets 3D génériques et de l'affichage par étage. Les portes et ascenseurs restent des connecteurs de salle dans `surface_data.connectors` et ne suivent pas ce flux.
 
 Pour fabriquer un GLB, choisir son mode de pose et écrire son manifeste, voir `docs/SYSTEME/CREATION_OBJETS_3D.md`.
@@ -12,7 +14,9 @@ Pour fabriquer un GLB, choisir son mode de pose et écrire son manifeste, voir `
 - Pour un blueprint avec `geometry.origin = "floor-center"`, `pos_x` et `pos_y` désignent le centre horizontal réel du modèle. `pos_z` désigne son plan de support.
 - Le plan de support d'une salle est la face supérieure de sa dalle : `baseY + floorThickness / 2`. Le centre de la dalle ne doit jamais servir d'altitude de pose.
 - Les blueprints sans origine `floor-center` gardent la convention du coin minimal de leur footprint.
-- La collision Redis reste indexée par case et quantifie les coordonnées fines avec `Math.floor`, y compris pour les coordonnées négatives.
+- L'occupation runtime reprend le point monde de l'instance et son empreinte mise à l'échelle ; elle
+  est vérifiée par `WorldSnapshot`, `createSpatialIndex()` et `createOccupancyIndex()`. Aucune
+  quantification Redis par case ne subsiste.
 
 ## Aperçu, sélection et modification
 
@@ -37,11 +41,18 @@ Le sélecteur d'étage est une règle de visibilité, pas un simple réglage d'o
 
 ## Occlusion des murs par la caméra
 
-Les murs du niveau affiché utilisent une occlusion topologique caméra vers mur vers dalle.
+La coupe caméra raisonne par volume de salle et par façade complète, y compris pour les murs courbes
+ou découpés en plusieurs panneaux.
 
-1. Le côté du mur où se trouve la caméra est déterminé depuis l'axe réel du panneau.
-2. Le système échantillonne la longueur du panneau juste derrière son épaisseur, du côté opposé à la caméra.
-3. Si au moins un point tombe sur une vraie case de sol du niveau affiché, le mur se trouve entre la caméra et la pièce et passe à une opacité fixe de `0.18`.
-4. Les autres murs restent opaques.
+1. Le volume regardé est déterminé à partir de l'ancre explicite de contexte, puis de la cible des
+   `MapControls`. La position de la caméra ne sert que de secours si aucune cible n'existe.
+2. Le point de focus est testé dans l'empreinte multipolygone de la salle à `displayLevel`; la salle
+   reste donc stable pendant une orbite autour de la cible.
+3. Les panneaux partageant un `facadeId` sont regroupés. `interiorNormalSignsByRoom` donne le vrai
+   côté intérieur du volume actif pour chaque portion droite ou courbe.
+4. Toute façade placée entre la caméra et ce volume passe à une opacité fixe de `0.18`; les autres
+   façades restent opaques.
 
-Le calcul est limité à environ un passage toutes les 80 ms et utilise les boîtes de murs, jamais les triangles subdivisés du relief. Il ne dépend donc ni du zoom ni de l'angle précis de projection. Un mur estompé ne projette plus d'ombre opaque et ses rivets 3D sont masqués pour éviter des éléments suspendus devant la pièce.
+Le calcul est limité à un passage toutes les 80 ms et n'échantillonne plus les cases derrière chaque
+panneau. Un mur estompé ne projette plus d'ombre opaque et ses rivets sont masqués pour éviter des
+éléments suspendus devant la pièce.

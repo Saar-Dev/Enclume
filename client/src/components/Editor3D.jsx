@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
+import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
 import Voxel from './Voxel.jsx'
@@ -205,9 +206,7 @@ function GhostEntity({ position, blueprint, r }) {
   const entity = {
     id: `preview:${blueprint.id}`,
     blueprint_id: blueprint.id,
-    pos_x: position.x,
-    pos_y: position.z,
-    pos_z: position.y,
+    ...worldPointToDbPosition(position),
     r,
     state: {},
     current_state_id: 0,
@@ -635,7 +634,8 @@ function EntityEditorScene({
       try {
         const res = await api.post(`/battlemaps/${battlemapId}/entities`, {
           blueprint_id: activeBlueprint.id,
-          pos_x: pos.x, pos_y: pos.z, pos_z: pos.y, r: pos.r ?? ghostR, // PE14
+          ...worldPointToDbPosition(pos),
+          r: pos.r ?? ghostR,
           state: { placement: pos.placement || { mode: 'free', level: displayLevel } },
         })
         addEntity(res.data.entity)   // mise à jour store locale immédiate
@@ -658,9 +658,7 @@ function EntityEditorScene({
       if (!drag?.moved || !preview || preview.entityId !== drag.entityId) return
       try {
         const res = await api.put(`/entities/${drag.entityId}`, {
-          pos_x: preview.position.x,
-          pos_y: preview.position.z,
-          pos_z: preview.position.y,
+          ...worldPointToDbPosition(preview.position),
           r: preview.r,
           state: {
             ...(entities.find(entity => entity.id === drag.entityId)?.state || {}),
@@ -1668,7 +1666,13 @@ export default function Editor3D({
     }
     if (!currentSurfaceData.connectors?.[connectorId]) return
     const connectors = { ...(currentSurfaceData.connectors || {}) }
+    const connector = connectors[connectorId]
     delete connectors[connectorId]
+    if (connector?.type === 'ladder') {
+      for (const [id, candidate] of Object.entries(connectors)) {
+        if (candidate?.type === 'hatch' && candidate?.linkedLadderId === connectorId) delete connectors[id]
+      }
+    }
     handleSurfaceDataChange({ ...currentSurfaceData, version: SURFACE_DATA_VERSION, connectors })
     setSurfaceConnectorPanel(null)
     if (surfaceTool?.selectedConnectorId === connectorId) {

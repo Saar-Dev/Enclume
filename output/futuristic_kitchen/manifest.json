@@ -4,9 +4,9 @@
   "unit": "meters",
   "style": "cartoon futuristic post-apocalyptic underwater station",
   "pack": "galley cooking, cold storage, preparation, sanitation and food service",
-  "blend": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\submarine_postapo_futuristic_kitchen_pack.blend",
-  "combined_glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\submarine_postapo_futuristic_kitchen_pack.glb",
-  "preview_png": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\submarine_postapo_futuristic_kitchen_preview.png",
+  "blend": "submarine_postapo_futuristic_kitchen_pack.blend",
+  "combined_glb": "glb/submarine_postapo_futuristic_kitchen_pack.glb",
+  "preview_png": "submarine_postapo_futuristic_kitchen_preview.png",
   "assets": [
     {
       "name": "01_industrial_range_oven_1p2x0p75x1p25m",
@@ -129,8 +129,7 @@
         "01_industrial_range_oven_1p2x0p75x1p25m__FIXED__mini_control_screen_OFF_red",
         "01_industrial_range_oven_1p2x0p75x1p25m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Cuisiniere industrielle avec four.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Cuisiniere industrielle avec four.glb"
+      "catalog_file": "Cuisiniere industrielle avec four.glb"
     },
     {
       "name": "02_vertical_cold_storage_1p1x0p8x2p05m",
@@ -253,8 +252,7 @@
         "02_vertical_cold_storage_1p1x0p8x2p05m__FIXED__mini_control_screen_OFF_red",
         "02_vertical_cold_storage_1p1x0p8x2p05m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Armoire frigorifique verticale.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Armoire frigorifique verticale.glb"
+      "catalog_file": "Armoire frigorifique verticale.glb"
     },
     {
       "name": "03_chest_freezer_1p25x0p75x0p9m",
@@ -377,8 +375,7 @@
         "03_chest_freezer_1p25x0p75x0p9m__FIXED__mini_control_screen_OFF_red",
         "03_chest_freezer_1p25x0p75x0p9m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Congelateur coffre blinde.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Congelateur coffre blinde.glb"
+      "catalog_file": "Congelateur coffre blinde.glb"
     },
     {
       "name": "04_modular_prep_counter_1p8x0p7x1p05m",
@@ -501,8 +498,7 @@
         "04_modular_prep_counter_1p8x0p7x1p05m__FIXED__mini_control_screen_OFF_red",
         "04_modular_prep_counter_1p8x0p7x1p05m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Meuble de preparation modulaire.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Meuble de preparation modulaire.glb"
+      "catalog_file": "Meuble de preparation modulaire.glb"
     },
     {
       "name": "05_industrial_hood_dishwasher_1p1x0p85x1p75m",
@@ -625,8 +621,7 @@
         "05_industrial_hood_dishwasher_1p1x0p85x1p75m__FIXED__mini_control_screen_OFF_red",
         "05_industrial_hood_dishwasher_1p1x0p85x1p75m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Lave vaisselle industriel a capot.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Lave vaisselle industriel a capot.glb"
+      "catalog_file": "Lave vaisselle industriel a capot.glb"
     },
     {
       "name": "06_pantry_storage_cabinet_1p3x0p55x2m",
@@ -749,8 +744,7 @@
         "06_pantry_storage_cabinet_1p3x0p55x2m__FIXED__mini_control_screen_OFF_red",
         "06_pantry_storage_cabinet_1p3x0p55x2m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Armoire de rangement alimentaire.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Armoire de rangement alimentaire.glb"
+      "catalog_file": "Armoire de rangement alimentaire.glb"
     },
     {
       "name": "09_wall_extractor_hood_1p5x0p75x2p15m",
@@ -873,8 +867,7 @@
         "09_wall_extractor_hood_1p5x0p75x2p15m__FIXED__mini_control_screen_OFF_red",
         "09_wall_extractor_hood_1p5x0p75x2p15m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Hotte murale extractrice.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Hotte murale extractrice.glb"
+      "catalog_file": "Hotte murale extractrice.glb"
     },
     {
       "name": "10_central_prep_island_2p2x1p2x1p05m",
@@ -997,8 +990,7 @@
         "10_central_prep_island_2p2x1p2x1p05m__FIXED__mini_control_screen_OFF_red",
         "10_central_prep_island_2p2x1p2x1p05m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Ilot central de preparation.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Ilot central de preparation.glb"
+      "catalog_file": "Ilot central de preparation.glb"
     },
     {
       "name": "11_kitchen_service_trolley_0p95x0p55x1p05m",
@@ -1121,8 +1113,7 @@
         "11_kitchen_service_trolley_0p95x0p55x1p05m__FIXED__mini_control_screen_OFF_red",
         "11_kitchen_service_trolley_0p95x0p55x1p05m__FIXED__mini_control_screen_text"
       ],
-      "catalog_file": "Chariot de service cuisine.glb",
-      "glb": "E:\\Codex\\Enclume-master\\output\\futuristic_kitchen\\glb\\Chariot de service cuisine.glb"
+      "catalog_file": "Chariot de service cuisine.glb"
     }
   ]
 }

@@ -1,5 +1,30 @@
 # ASBUILT — Ce qui est codé et stable
 
+> Contrats techniques réaudités le 2026-07-22 : `surface_data` v13, spatial sans Redis et
+> environnement Node 24/npm 11.
+
+## Trappe d'échelle et grille industrielle ajourée (2026-07-22)
+
+Poser une échelle crée désormais, par défaut, une trappe structurelle sur la dalle du palier haut.
+La découpe de dalle existe indépendamment de l'état de la trappe : fermée ou verrouillée, le panneau
+remplace la dalle comme support, collider et barrière ; ouverte, il pivote visuellement, libère le
+passage et active la traversée `climb` de l'échelle. L'état de session est persistant et administré
+par le MJ sans modifier la définition statique.
+
+Le générateur de matériaux propose **Grille industrielle ajourée**. Son alpha est un cutout
+(`alphaTest`) : les trous sont réellement traversés par le rendu et la profondeur, sans tri de
+transparence de type verre. Le même matériau peut habiller sols, murs, marches, passerelles,
+échelles et trappes ; les chants, cadres, rails et barreaux conservent un matériau métallique plein.
+Le preset physique `grate` reste distinct de l'apparence : il bloque mouvement et collision, mais
+pas la LOS ni l'eau. Le snapshot ne déduit jamais sa physique des pixels de la texture.
+
+Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration serveur,
+build Vite et ESLint ciblé sans erreur. Le PNG RGBA généré a été inspecté sur damier pour confirmer
+les trous transparents. La recette complète dans une vraie carte reste à effectuer avant clôture
+visuelle définitive.
+
+---
+
 ## Trémie de colimaçon avec palier haut praticable (2026-07-18)
 
 La trémie d'un colimaçon n'est plus son carré englobant. `spiralStairGeometry(...)` utilise la
@@ -356,7 +381,7 @@ est réservé à la validation commune sur `8393/8394` avec la base `vtt_fusion`
 
 La première fusion, commit à deux parents `1f048cd`, part de `92ae9a9` et importe `bad0190` depuis `origin/master`. Elle exclut
 explicitement `origin/fusion-kiwi` (`37703bf`), dont l'éditeur Surface v2 est remplacé par le moteur
-monde v12. Le détail des responsabilités reste dans `docs/FUSION_PROJET_COUSIN.md` et le cycle de
+monde v13. Le détail des responsabilités reste dans `docs/FUSION_PROJET_COUSIN.md` et le cycle de
 livraison dans `docs/WORKFLOW_FUSION.md`.
 
 Avant toute mutation, un point de restauration complet a été créé :
@@ -510,7 +535,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation `surface_data` v12, UUID physiques
+- `shared/world/surfaceDocument.js` — validation `surface_data` v13, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -669,8 +694,8 @@ moteur ; sinon elles doivent être supprimées.
 - à cette phase, chaque courbe était tessellée en segments orientés courts et les portes restaient
   limitées aux portions droites. La Phase 12 remplace explicitement cette représentation transitoire
   par un arc canonique et des portes tangentes ;
-- la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
-  une échelle.
+- la trappe est un connecteur horizontal lié à l'échelle : sa découpe reste ouverte dans la dalle,
+  et son état runtime contrôle simultanément le support, la barrière et la traversée verticale.
 
 ---
 
@@ -1048,7 +1073,7 @@ Enclume/
 | Backend | Node.js + Express + Socket.io | Port 3001 dev (8194 Kiwi) |
 | Serveur Alpha "Kiwi" | Debian 13, systemd, box Bouygues | `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md` |
 | Base de données | PostgreSQL | Knex migrations |
-| Cache legacy | Redis + ioredis | Collision voxel/entités historique ; non autoritaire pour les tokens depuis la Phase 2 |
+| Cache spatial | Aucun | Le hash Redis de collision a été entièrement retiré ; snapshots et graphes sont reconstruits depuis PostgreSQL |
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
@@ -1088,9 +1113,9 @@ Enclume/
 | Méthode | Route | Description |
 |---|---|---|
 | GET | /battlemaps/:id/entities | Instances carte — JOIN blueprint avec pack_id (P47) |
-| POST | /battlemaps/:id/entities | Poser une instance — GM uniquement + collisionAddEntity |
-| PUT | /entities/:entityId | Modifier position/rotation/state/overrides — GM uniquement + maintenance Redis |
-| DELETE | /entities/:entityId | Supprimer instance — GM uniquement + collisionRemoveEntity AVANT delete |
+| POST | /battlemaps/:id/entities | Poser une instance — GM uniquement + incrément `runtime_revision` |
+| PUT | /entities/:entityId | Modifier position/rotation/state/overrides — GM uniquement + incrément `runtime_revision` |
+| DELETE | /entities/:entityId | Supprimer instance — GM uniquement + incrément `runtime_revision` |
 
 ### Routes REST — Moteur de monde
 
@@ -1226,9 +1251,8 @@ Enclume/
 
 ## Collision map Redis — session 39 `[LEGACY]`
 
-Depuis la Phase 2, ce hash ne valide plus la création ni le déplacement des tokens. Les lignes
-ci-dessous documentent le comportement historique encore utilisé par des flux voxel/entités en
-attendant leur retrait, pas l'architecture à étendre.
+Ce hash est aujourd'hui entièrement retiré du runtime. Les lignes ci-dessous documentent uniquement
+le comportement des sessions 39–43 et ne constituent pas une architecture à restaurer ou étendre.
 
 ### Architecture
 ```
@@ -1281,8 +1305,9 @@ Non bloquante si joueur sans `player_location` (première connexion).
 - dmax = isSuccess ? modifier + 1 : 0 — toute réussite = au moins 1 case
 - stepsMax = Math.min(dmax, stepsTarget) — destination joueur respectée (PE30)
 - dmax_override si défini dans l'interaction (plafonne push ET pull)
-- Step-by-step : isCaseOccupied entity à pos_z, acteur à pos_z+1 (PE29), excludeIds=[tokenId,entityId] (PE22)
-- Update DB + collisionMoveEntity + collisionMoveToken Redis
+- Step-by-step : supports stables, index spatial du snapshot et index d'occupation dynamique ;
+  `excludeOccupantIds=[tokenId,entityId]` (PE22)
+- transaction DB + dernière position atteinte + `runtime_revision` + événements d'effets
 - Broadcast ENTITY_MOVED + TOKEN_MOVED → room
 - ENTITY_MOVE_RESULT → socket.id uniquement
 
@@ -1409,7 +1434,7 @@ Joueur clique ⚙ → handleEntityClick → filter interactions par current_stat
 Joueur choisit → handleEntityAction → socket.emit(WS.ENTITY_ACTION_REQUEST)
 Serveur → ENTITY_ACTION_PENDING → GM reçoit notification dans chat
 GM arbitre → socket.emit(WS.ENTITY_ACTION_RESOLVE)
-Serveur → resolveEntityState → update current_state_id → collisionUpdateEntityState → ENTITY_UPDATED broadcast
+Serveur → resolveEntityState → update current_state_id → runtime_revision → ENTITY_UPDATED + WORLD_RUNTIME_UPDATED
 ```
 
 ### Flux joueur déplacement ✅
@@ -1472,14 +1497,10 @@ Malus encombrement : règle maison, s'additionne au malus santé.
 | PE19 | transparent={true} obligatoire sur meshLambertMaterial — opacity=0 ineffectif sans ça |
 | PE20 | HoverIcon : toujours monté si hasInteractions, jamais conditionnel à hovered — visibilité CSS uniquement |
 | PE21 | r tokens = 0-7 — rotation.y = r * Math.PI / 4 |
-| PE22 | tunnel de swap excludeIds dans isCaseOccupied |
-| PE23 | buildCollisionMap au SESSION_JOIN — pas au démarrage serveur |
-| PE24 | collisionMoveToken : hdel systématique ancienne case, hset conditionnel layer |
-| PE25 | maintenance Redis dans REST, pas dans handlers WS reliques |
+| PE22 | mouvement rigide : `excludeOccupantIds=[tokenId,entityId]` dans l'index d'occupation |
 | PE26 | resolveEntityState : returning doit inclure battlemap_id |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux |
-| PE28 | Voxels Redis : convertis Three.js→PE14 dans buildCollisionMap/add/remove |
-| PE29 | Acteur step-by-step vérifié à pos_z+1 — espace de marche |
+| PE29 | Acteur et objet validés pas à pas sur supports, barrières et occupants du snapshot |
 | PE30 | stepsMax = Math.min(dmax, stepsTarget) |
 | PE31 | upsertCharacter : guard visible+isGm |
 | PE32 | DiceMesh useMemo deps [geoDef.type, color, dieType] |

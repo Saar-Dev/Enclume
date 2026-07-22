@@ -1,4 +1,5 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> Mis à jour : 2026-07-22 — autorité serveur du mille-feuille ; carence retirée.
 > Source : SYSTEME.md §16
 > Lire pour : wounds, ArmorWoundPanel, LocationPanel, mille-feuille, calculs P51
 
@@ -9,7 +10,8 @@
 ```
 shared/woundConstants.js  — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS
 shared/armorConstants.js  — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
-server/lib/charStats.js   — calcWoundPenalty(wounds) / calcEncumbrancePenalty(totalWeight, forValue)
+server/src/lib/charStats.js — calcWoundPenalty / calcEncumbrancePenalty / calcResistanceArmure
+server/src/lib/damageService.js — localisation, armure, dégâts nets, sévérité, blessure et choc
 ```
 
 ## Constantes blessures (woundConstants.js)
@@ -50,15 +52,17 @@ CharacterWindow
     └── SilhouettePanel      — SVG silhouette 50%, colorée par pire blessure par localisation
 ```
 
-## Mille-feuille (calcMillefeuille — client uniquement)
+## Mille-feuille d'armure
 
 ```javascript
-// Couches sur une localisation → max + reste/2
-const max  = Math.max(...vals)
-const rest = vals.reduce((s, v) => s + v, 0) - max
-return max + rest / 2
-// Affiché ETQ/PRT dans LocationPanel — non encore intégré côté serveur (résolution dommages future)
+// Autorité serveur, après filtrage des armures sur le slot touché :
+calcResistanceArmure(armuresSlot)
+// → { etq, prt } ; meilleure couche + moitié arrondie Polaris des autres couches
 ```
+
+`server/src/lib/damageService.js` utilise déjà cette résistance dans la résolution complète d'un
+impact. `LocationPanel.jsx` conserve un helper d'affichage local pour montrer les couches équipées,
+mais il ne devient jamais l'autorité d'une résolution de combat.
 
 ## Codes slots — PI6 / PI7
 
@@ -92,13 +96,16 @@ availableItems = items.filter(i => i.ref_location?.split('/').includes(refCode))
 
 ## ARMOR_CATEGORY_MALUS (armorConstants.js)
 
-Malus de carence par catégorie d'armure. S'applique quand la FOR est insuffisante (`calcCarenceArmure`).
+Valeurs de catégorie encore affichées dans l'interface d'inventaire :
 
 ```javascript
 ARMOR_CATEGORY_MALUS = { S: 0, A: -2, B: -3, C: -4, D: -6 }
-// S = Sans contrainte (combinaison souple)
-// A/B/C/D = armures de plus en plus lourdes
+// S = Sans contrainte ; A/B/C/D = catégories de plus en plus lourdes
 ```
+
+`calcCarenceArmure` a été retiré en session 141. Ne pas réintroduire ce calcul dans le serveur sans
+une décision de règle explicite portée par Saar ; `ARMOR_CATEGORY_MALUS` n'est pas, à lui seul, une
+autorité de résolution.
 
 ## Routes REST armures/blessures
 

@@ -264,7 +264,8 @@ test('les versions futures et les coordonnées corrompues sont refusées', () =>
 test('la collecte texture couvre salles, escaliers et surfaces sans doublon', () => {
   const surface = surfaceFixture()
   surface.floors['0:0:0'] = { y: 0, tex: 10, topTex: 13 }
-  assert.deepEqual([...collectSurfaceTextureIds(surface)].sort((a, b) => a - b), [10, 11, 12, 13])
+  surface.connectors.ladder = { id: 'ladder', type: 'ladder', tex: 14 }
+  assert.deepEqual([...collectSurfaceTextureIds(surface)].sort((a, b) => a - b), [10, 11, 12, 13, 14])
 })
 
 test('le générateur d’identité est stable pour un même triplet', () => {
@@ -372,5 +373,26 @@ test('les fenêtres et verrières structurelles sont validées comme connecteurs
   assert.equal(validateSurfaceData(surface).valid, false)
   surface.connectors.screen.modelFacing = 'front'
   surface.connectors.skylight.width = 0
+  assert.equal(validateSurfaceData(surface).valid, false)
+})
+
+test('une trappe exige une échelle liée et un état autorisé', () => {
+  const surface = surfaceFixture()
+  surface.connectors.ladder = {
+    id: 'ladder', type: 'ladder', x: 0, z: 0,
+    fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+  }
+  surface.connectors.hatch = {
+    id: 'hatch', type: 'hatch', linkedLadderId: 'ladder',
+    x: 0, z: 0, y: 2.5, width: 1, depth: 1, height: 0.25,
+    axis: 'x', hingeSide: 1, state: 'closed',
+    allowedStates: ['closed', 'open', 'locked'],
+  }
+  assert.equal(validateSurfaceData(surface).valid, true)
+
+  surface.connectors.hatch.state = 'jammed'
+  assert.equal(validateSurfaceData(surface).valid, false)
+  surface.connectors.hatch.state = 'closed'
+  surface.connectors.hatch.linkedLadderId = 'missing'
   assert.equal(validateSurfaceData(surface).valid, false)
 })

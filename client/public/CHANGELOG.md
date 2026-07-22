@@ -1,3 +1,16 @@
+## v196 — 2026-07-22 — Trappe d'échelle et grille industrielle ajourée
+
+### Éditeur et moteur de monde
+- [feat] Poser une échelle ajoute par défaut une vraie trappe sur son palier haut, avec charnières
+  orientables et états fermée, ouverte ou verrouillée.
+- [engine] Une trappe fermée remplace la dalle comme support et bloque la montée ; ouverte, elle
+  libère réellement la dalle et active la traversée de l'échelle. Le MJ peut changer son état en
+  session.
+- [feat] Le générateur de matériaux propose une grille métallique détaillée et réutilisable sur les
+  sols, murs, escaliers, passerelles, échelles et trappes.
+- [engine] Les trous de la grille utilisent un cutout alpha réel. Son preset physique bloque le
+  mouvement sans bloquer la ligne de vue ; la texture ne devient jamais l'autorité physique.
+
 ## v195 — 2026-07-18 — Palier haut praticable du colimaçon
 
 ### Éditeur et moteur de monde

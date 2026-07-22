@@ -4,9 +4,9 @@
     "unit":  "meters",
     "style":  "cartoon futuristic post-apocalyptic underwater station",
     "materials_note":  "No wood. Assets use iron/steel, rubber and molded plastic/composite materials.",
-    "blend":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\submarine_postapo_tables_chairs_pack.blend",
-    "combined_glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\submarine_postapo_tables_chairs_pack.glb",
-    "preview_png":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\submarine_postapo_tables_chairs_preview.png",
+    "blend":  "submarine_postapo_tables_chairs_pack.blend",
+    "combined_glb":  "glb/submarine_postapo_tables_chairs_pack.glb",
+    "preview_png":  "submarine_postapo_tables_chairs_preview.png",
     "assets":  [
                    {
                        "name":  "01_table_2p_compact_iron_plastic",
@@ -38,7 +38,6 @@
                                                "material":  "TABLE2_rivets_pale_steel"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Table compacte pour deux personnes.glb",
                        "label":  "Table compacte pour deux personnes",
                        "catalog_file":  "Table compacte pour deux personnes.glb"
                    },
@@ -72,7 +71,6 @@
                                                "material":  "TABLE4_rivets_pale_steel"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Table carrée pour quatre personnes.glb",
                        "label":  "Table carrée pour quatre personnes",
                        "catalog_file":  "Table carrée pour quatre personnes.glb"
                    },
@@ -106,7 +104,6 @@
                                                "material":  "TABLE8_rivets_pale_steel"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Table longue pour huit personnes.glb",
                        "label":  "Table longue pour huit personnes",
                        "catalog_file":  "Table longue pour huit personnes.glb"
                    },
@@ -136,7 +133,6 @@
                                                "material":  "CHAIR_A_feet_black_rubber"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Ensemble de chaises moulées.glb",
                        "label":  "Ensemble de chaises moulées",
                        "catalog_file":  "Ensemble de chaises moulées.glb"
                    },
@@ -170,7 +166,6 @@
                                                "material":  "CHAIR_B_feet_black_rubber"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Ensemble de chaises métalliques perforées.glb",
                        "label":  "Ensemble de chaises métalliques perforées",
                        "catalog_file":  "Ensemble de chaises métalliques perforées.glb"
                    },
@@ -204,7 +199,6 @@
                                                "material":  "CHAIR_C_trim_muted_brass_plate"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\futuristic_tables_chairs\\glb\\Ensemble de fauteuils pivotants rembourrés.glb",
                        "label":  "Ensemble de fauteuils pivotants rembourrés",
                        "catalog_file":  "Ensemble de fauteuils pivotants rembourrés.glb"
                    }

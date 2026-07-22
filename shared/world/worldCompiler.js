@@ -790,6 +790,21 @@ function stairOpeningsAtY(surface, y) {
     .map(stair => stairOpeningMultiPolygon(stair, { storyHeight: surface.storyHeight }))
 }
 
+function hatchOpeningsAtY(surface, y) {
+  return Object.values(surface.connectors)
+    .filter(connector => connector.type === 'hatch' && Math.abs(number(connector.y) - number(y)) <= EPSILON)
+    .map(connector => rectangleMultiPolygon({
+      minX: number(connector.x),
+      maxX: number(connector.x) + positive(connector.width, 1),
+      minZ: number(connector.z),
+      maxZ: number(connector.z) + positive(connector.depth, 1),
+    }))
+}
+
+function horizontalOpeningsAtY(surface, y) {
+  return [...stairOpeningsAtY(surface, y), ...hatchOpeningsAtY(surface, y)]
+}
+
 function addSlabs(surface, runtimeStates, battlemapId, spatial) {
   const elevators = surfaceElevators(surface)
   for (const [legacyId, floor] of roomFloorEntries(surface, battlemapId)) {
@@ -820,7 +835,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const baseFootprint = sourceFootprint || tileFootprint
     const clippedFootprint = differenceMultiPolygons(
       baseFootprint,
-      ...stairOpeningsAtY(surface, parsed.y),
+      ...horizontalOpeningsAtY(surface, parsed.y),
     )
     for (const [fragmentIndex, polygon] of clippedFootprint.entries()) {
       const slabFootprint = [polygon]
@@ -883,7 +898,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
       maxX: parsed.x + 1,
       minZ: parsed.z,
       maxZ: parsed.z + 1,
-    }), ...stairOpeningsAtY(surface, parsed.y))
+    }), ...horizontalOpeningsAtY(surface, parsed.y))
     for (const [fragmentIndex, polygon] of clippedFootprint.entries()) {
       const slabFootprint = [polygon]
       const footprintBounds = multiPolygonBounds(slabFootprint)
@@ -934,6 +949,47 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
       axis: 'horizontal',
       bounds: glassBounds,
       blocks: { movement: true, sight: false, water: true, gas: true },
+    })
+  }
+
+  for (const connector of Object.values(surface.connectors)) {
+    if (connector.type !== 'hatch') continue
+    const state = runtimeStates[connector.worldId]?.state || connector.state || 'closed'
+    if (state === 'open' || state === 'destroyed') continue
+    const x = number(connector.x)
+    const y = number(connector.y)
+    const z = number(connector.z)
+    const width = positive(connector.width, 1)
+    const depth = positive(connector.depth, 1)
+    const thickness = positive(connector.height, 0.12)
+    const footprint = rectangleMultiPolygon({ minX: x, maxX: x + width, minZ: z, maxZ: z + depth })
+    const panelBounds = bounds(x, y - thickness / 2, z, x + width, y + thickness / 2, z + depth)
+    spatial.supports.push({
+      id: `support:hatch:${connector.worldId}`,
+      sourceId: connector.worldId,
+      kind: 'hatch',
+      state,
+      bounds: panelBounds,
+      footprint,
+      point: point(x + width / 2, y + thickness / 2, z + depth / 2),
+      y: clean(y + thickness / 2),
+      walkable: connector.walkable !== false,
+      movementMultiplier: movementMultiplier(connector),
+    })
+    addBarrierOutputs(spatial, {
+      id: `barrier:hatch:${connector.worldId}`,
+      sourceId: connector.worldId,
+      kind: 'hatch',
+      state,
+      axis: 'horizontal',
+      bounds: panelBounds,
+      geometry: {
+        type: 'horizontal-multipolygon',
+        multiPolygon: footprint,
+        minY: clean(y - thickness / 2),
+        maxY: clean(y + thickness / 2),
+      },
+      blocks: blockingChannels(connector),
     })
   }
 }
@@ -1126,9 +1182,17 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
     }
   }
 
+  const hatchByLadderId = new Map(Object.values(surface.connectors)
+    .filter(connector => connector.type === 'hatch' && connector.linkedLadderId)
+    .map(connector => [String(connector.linkedLadderId), connector]))
+
   for (const connector of Object.values(surface.connectors)) {
     if (connector.type === 'ladder') {
       const state = runtimeStates[connector.worldId]
+      const hatch = hatchByLadderId.get(String(connector.id)) || null
+      const hatchState = hatch
+        ? runtimeStates[hatch.worldId]?.state || hatch.state || 'closed'
+        : 'open'
       const center = point(number(connector.x) + 0.5, 0, number(connector.z) + 0.5)
       spatial.traversals.push({
         id: `traversal:ladder:${connector.worldId}`,
@@ -1137,7 +1201,10 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
         mode: 'climb',
         from: point(center.x, number(connector.fromY, connector.y), center.z),
         to: point(center.x, number(connector.toY, connector.topY), center.z),
-        enabled: state?.enabled !== false && state?.state !== 'destroyed',
+        enabled: state?.enabled !== false
+          && state?.state !== 'destroyed'
+          && (hatchState === 'open' || hatchState === 'destroyed'),
+        ...(hatch ? { gateFeatureId: hatch.worldId, gateState: hatchState } : {}),
         allowPartial: true,
         movementMultiplier: movementMultiplier(connector),
         anchorSpacing: positive(connector.anchorSpacing, 0.5),

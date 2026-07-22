@@ -1,4 +1,12 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> **2026-07-22 — trappe d'échelle et grille ajourée implémentées localement** : poser une échelle
+> ajoute par défaut une trappe au palier haut. Fermée, elle remplace la dalle comme support et ferme
+> la traversée ; ouverte, elle pivote, libère le trou et autorise la montée. Le motif procédural
+> **Grille industrielle ajourée** s'applique aux surfaces et structures avec un vrai cutout alpha ;
+> le preset physique `grate` reste collider sans occulter la LOS. Validation locale : 141 tests
+> monde/serveur, 41 tests Surface, 3 configuration, build Vite, ESLint ciblé et inspection du PNG
+> RGBA sur damier. Reste non testé : recette complète dans une vraie carte/une vraie session.
+>
 > **2026-07-18 — palier haut du colimaçon livré sur 8293** : la trémie n'est plus le carré
 > englobant de l'escalier. Elle suit le secteur de volée qui exige réellement de la garde au
 > plafond et conserve le secteur suivant comme palier praticable devant la dernière marche.
@@ -260,8 +268,8 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 - Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
   des cartes anciennes n'est exigée.
 - Intégration du 2026-07-16 validée sur `8393` avec une carte multi-étages, un combat actif et un
-  parcours HTTP authentifié de personnage. Prochaine étape monde : trappe structurelle liée à
-  l'échelle, puis variantes d'escalier, sur les contrats canoniques déjà en place.
+  parcours HTTP authentifié de personnage. Les extensions monde continuent sur les variantes
+  d'escalier et de passerelle, sur les contrats canoniques déjà en place.
 
 Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
@@ -1753,13 +1761,12 @@ Projet en cours et priorité user :
 - token.owner_id — mort → toujours character_id → characters.user_id
 - socket dans dependency arrays — tout useCallback qui émet doit inclure socket (P3)
 - ordre déclaration React — callback A qui appelle B doit être déclaré APRÈS B (P4)
-- coordonnées voxel — données brutes en base, +0.5 uniquement dans le rendu visuel
+- coordonnées runtime — tokens actifs en `world-feet`; adaptateurs uniques
+  `dbPositionToWorldPoint` / `worldPointToDbPosition`; aucun offset voxel dans la physique
 - reconnectTrigger — ne jamais appeler socket.disconnect/connect depuis Sidebar
 - PE14 pos_y/pos_z — pos_y base = Z Three.js, pos_z base = Y Three.js
 - charStats.js — fonctions pures, jamais d'accès DB dans ce fichier
-- redis.js — maintenance Redis dans REST (POST/DELETE), pas dans handlers WS reliques (PE25)
 - resolveEntityState — returning doit inclure battlemap_id (PE26)
-- collisionMoveToken — hdel systématique ancienne case, hset conditionnel layer (PE24)
 - PE27 moveType — calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux
 - Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté V1
 - Lerp EntityMesh — useFrame dans sous-composants (pas EntityMesh parent) — règle des hooks

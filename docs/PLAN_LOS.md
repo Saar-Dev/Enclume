@@ -1,5 +1,12 @@
-# PLAN_LOS.md — Architecture LOS & Couverture Combat
+# PLAN_LOS.md — Plan historique LOS & Couverture Combat
 > Session 113 — 2026-06-21
+> Classé historique le 2026-07-22 après remplacement par la visibilité `WorldSnapshot`.
+>
+> **Historique, ne pas implémenter tel quel.** L'ancienne LOS voxel et ses offsets de case ont été
+> remplacés par `shared/world/visibility.js` et
+> `server/src/services/worldVisibilityService.js`. Le contrat courant utilise des positions
+> `world-feet`, des profils de posture, les occluders du `WorldSnapshot`, les entités dynamiques et
+> les effets runtime. Voir `docs/SYSTEME/MOTEUR_MONDE.md` et `docs/SYSTEME/COMBAT.md`.
 
 ---
 

@@ -4627,3 +4627,36 @@ Aucun schéma SQL, migration ou conversion de `surface_data` n'est ajouté.
 
 **Retour arrière** : revert du commit Session 158, rebuild puis redémarrage de 8293/8294. Le retour
 arrière restaure la trémie rectangulaire ; aucune donnée persistée ne nécessite de conversion.
+
+---
+
+## Session 158 (suite 1, Codex) — 2026-07-22 — Trappe d'échelle et grille ajourée ⚠️ CLOS PARTIEL
+
+**Objectif** : compléter l'échelle par une vraie fermeture de palier et fournir une apparence de
+grille métallique détaillée, réutilisable sur les structures sans imposer un modèle Blender par
+objet.
+
+**Trappe canonique** : la pose d'une échelle crée par défaut un connecteur `hatch` lié. Sa découpe
+est permanente dans la dalle haute. Fermée ou verrouillée, la trappe compile support, collider et
+barrière ; ouverte ou détruite, elle les retire et autorise la traversée `climb`. Le panneau pivote
+autour de ses charnières et son état runtime est modifiable par le MJ via une route dédiée utilisant
+le registre commun `featureStates`.
+
+**Matériau** : le motif `industrial_grate` génère albedo RGBA et normal map procéduraux. Le renderer
+utilise `alphaTest` et `DoubleSide` sur les surfaces, sans relief géométrique artificiel, et un
+matériau métallique plein compagnon pour les chants, cadres, rails et barreaux. Le choix du motif
+applique explicitement le preset physique `grate` hors salle ; le compilateur continue de lire les
+canaux physiques, jamais l'alpha de la texture.
+
+**Testé localement** : 141/141 tests monde/serveur, 41/41 tests Surface, 3/3 tests de configuration,
+build Vite réussi, syntaxe de la route serveur valide et ESLint ciblé sans erreur. Un rendu PNG RGBA
+a été généré dans Chromium et inspecté sur damier : les ouvertures sont entièrement transparentes,
+les barreaux restent détaillés.
+
+**Non testé** : création, ouverture et persistance de la trappe dans une vraie carte authentifiée,
+ainsi que le rendu intégré sur chaque type de surface. La livraison reste donc close partiellement
+jusqu'à cette recette visuelle ; aucune donnée distante ni aucun service partagé n'a été modifié.
+
+**Retour arrière** : retirer les branches `hatch` du document, du compilateur, du renderer et de la
+route runtime, puis retirer le motif `industrial_grate`. Aucun schéma SQL ni conversion de carte
+n'est nécessaire.

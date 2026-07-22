@@ -1,5 +1,7 @@
 # Créer et intégrer un objet 3D
 
+> Mis à jour : 2026-07-22 — connecteurs v13, trappes d'échelle et matériaux ajourés.
+
 Ce document est le contrat de fabrication des GLB intégrés à Enclume. Il couvre les objets libres, prépare les objets fixés à un mur et distingue les connecteurs structurels comme les portes.
 
 Le modèle prêt à copier se trouve dans `docs/SYSTEME/MANIFESTE_OBJETS_3D.example.json`.
@@ -10,9 +12,9 @@ Le modèle prêt à copier se trouve dans `docs/SYSTEME/MANIFESTE_OBJETS_3D.exam
 |---|---|---|---|
 | `free` | caisse, table, chaise, machine, décoration | entité 3D | aucun |
 | `wall` | écran, applique, armoire murale, décoration fixée | entité 3D attachée à un mur | aucun trou |
-| `connector` | porte, escalier, futur ascenseur | connecteur de salle | peut découper ou relier la structure |
+| `connector` | porte, fenêtre, verrière ou ascenseur | `surface_data.connectors` | découpe ou relie la structure selon son type |
 
-`placement_mode: "wall"` est le contrat des objets muraux. Le serveur l'importe dans le blueprint et l'éditeur impose alors un accrochage sur une vraie face de mur, avec orientation automatique. Une porte ne doit jamais être déclarée comme simple objet mural : elle reste un connecteur.
+`placement_mode: "wall"` est le contrat des objets muraux. Le serveur l'importe dans le blueprint et l'éditeur impose alors un accrochage sur une vraie face de mur, avec orientation automatique. Une porte ne doit jamais être déclarée comme simple objet mural : elle reste un connecteur. Les escaliers droits et en colimaçon sont des primitives paramétriques de `surface_data.stairs`, pas des GLB `free`, `wall` ou `connector`.
 
 ## Repère, taille et pivot du GLB
 
@@ -46,7 +48,11 @@ Règles de stabilité :
 - `catalog_file` doit correspondre exactement au nom du fichier dans `glb/` ;
 - `label` est le nom visible et peut changer ;
 - le chemin absolu `glb` présent dans certains anciens manifests est ignoré et ne doit plus être ajouté ;
-- les champs `features`, `animation` et `color_slots` des anciens packs sont actuellement ignorés par le catalogue.
+- `features` n'est pas un contrat moteur et reste ignoré ;
+- `animation` est accepté comme indice de compatibilité pour déclarer un modèle ouvrable, mais les
+  clips réels sont toujours lus dans le GLB ;
+- l'ancien `color_slots` est converti si possible ; tout nouveau pack doit écrire
+  `editor_color_slots`.
 
 ## Manifeste canonique
 
@@ -139,7 +145,19 @@ Manifest correspondant :
 - Garder séparées les pièces qui devront être animées : porte de meuble, tiroir, levier, écran mobile.
 - Donner des noms stables aux nodes animables et aux matériaux. Ne pas dépendre de noms automatiques comme `Cube.017`.
 
-Le moteur charge le vrai GLB pour l'aperçu, la pose et l'instance. Les dimensions du manifeste servent à l'empreinte, au panneau et à la future collision ; elles doivent couvrir le corps utile du modèle. Les petits éléments décoratifs qui dépassent peuvent être exclus de l'empreinte, mais jamais un pied ou une partie bloquante.
+Le moteur charge le vrai GLB pour l'aperçu, la pose et l'instance. Les dimensions du manifeste servent à l'empreinte, au panneau et à l'occupation runtime ; elles doivent couvrir le corps utile du modèle. Les petits éléments décoratifs qui dépassent peuvent être exclus de l'empreinte, mais jamais un pied ou une partie bloquante.
+
+## Matériaux procéduraux ajourés
+
+Une grille répétable n'a pas besoin d'un GLB dédié. Le motif **Grille industrielle ajourée** du
+générateur produit une texture RGBA, une normal map et un descripteur procédural utilisables sur les
+surfaces structurelles. Le renderer emploie un cutout `alphaTest` : les trous sont absents du depth
+buffer, tandis que les barreaux restent opaques et détaillés. Les cadres, chants, rails et barreaux
+géométriques utilisent le matériau métallique plein compagnon.
+
+Ce choix visuel ne définit jamais la physique. Pour une surface praticable qui doit laisser passer
+la vue, utiliser aussi le preset physique `grate`. Collision, support, LOS, eau et gaz continuent
+d'être compilés depuis les canaux du document monde ; ils ne sont pas calculés depuis la texture.
 
 ## Eau et fluides animés
 
@@ -159,12 +177,23 @@ editor_water_medium = water | algae
 
 ## Animations
 
-Les anciens manifests décrivent parfois `animation` et des numéros de frames, mais le catalogue intégré ne les exploite pas encore. Pour préparer correctement un modèle :
+Le catalogue lit les noms de clips directement dans le chunk JSON du GLB. Un clip dont le nom
+contient `open`/`opened`/`opening` ou `ouvert` rend automatiquement le modèle ouvrable ; un ancien
+champ `animation`, `opening` ou `animation_frame_open` peut aussi forcer cette capacité. Le catalogue
+crée alors les états système `closed` et `open`, associés à une progression visuelle de `0` à `1`.
+
+Pour préparer correctement un modèle :
 
 - exporter les animations comme clips glTF nommés (`open`, `close`, `idle`, etc.) ;
 - conserver un état fermé propre à la frame initiale ;
 - ne pas cuire une translation globale de l'objet dans le clip ;
-- documenter les clips dans `animations`, sans supposer qu'ils seront joués avant l'implémentation du contrôleur.
+- documenter les clips dans `animations` ; le validateur vérifie que chaque nom déclaré existe dans
+  le GLB ;
+- tester les deux directions : `useModelStateAnimation` avance ou rembobine le même clip, puis fige
+  exactement sa pose terminale.
+
+L'animation est visuelle. Le changement d'état physique, la collision et la visibilité suivent la
+`runtime_revision` serveur et n'attendent pas la fin du clip.
 
 ## Cas particulier des connecteurs
 
@@ -181,17 +210,19 @@ Les portes existantes utilisent en plus :
 
 Le cadre statique doit rester dans `wall_cut_width_m`. Les boîtiers de commande peuvent dépasser : ils ne doivent pas élargir le trou. Le modèle conserve son échelle d'origine et le mur est découpé selon les dimensions déclarées.
 
-Escaliers et ascenseurs devront avoir leurs propres métadonnées de liaison d'étages ; ne pas les introduire comme objets `free` ou `wall`.
+Les ascenseurs utilisent aujourd'hui des arrêts et métadonnées de liaison dans
+`surface_data.connectors`. Les escaliers droits ou en colimaçon utilisent `surface_data.stairs`.
+Ne jamais les introduire comme objets `free` ou `wall`.
 
 ## Validation et intégration
 
 Depuis la racine du projet :
 
-```powershell
+```bash
 node tools/validate-3d-manifest.mjs output/mon_pack/manifest.json
 ```
 
-Le validateur contrôle le JSON, les champs obligatoires, les identifiants, les dimensions, la structure des GLB, les modes de pose et les slots de couleur. Il vérifie notamment que chaque nom de `material_names` existe réellement dans le GLB et signale les anciens `color_slots` qui ne sont pas éditables.
+Le validateur contrôle le JSON, les champs obligatoires, les identifiants, les dimensions, la structure des GLB, les modes de pose, les slots de couleur et les clips d'animation. Il vérifie notamment que chaque nom de `material_names` et chaque clip déclaré existent réellement dans le GLB ; il signale aussi les anciens `color_slots` convertis pour compatibilité.
 
 Checklist avant transfert :
 
@@ -209,4 +240,5 @@ Checklist avant transfert :
 - Un objet mural est enregistré avec le mur, la face intérieure/extérieure, sa position le long du mur et sa hauteur. Ne pas simuler cet ancrage en décalant le pivot au hasard.
 - Le constructeur d'entités de l'Atelier expose `free` et `wall` et conserve les métadonnées avancées déjà présentes. Les packs système intégrés restent toutefois pilotés par leur manifeste.
 - Le système d'unités règle/Three.js doit être unifié globalement. Ne pas créer des facteurs d'échelle particuliers à chaque modèle.
-- Les clips d'animation ne sont pas encore commandés par les états d'entité.
+- Les états ouvrables pilotent une progression normalisée d'un clip. Les séquences multi-clips ou
+  les machines à états d'animation plus complexes ne font pas encore partie du contrat.
