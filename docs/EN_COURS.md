@@ -245,16 +245,21 @@ non câblée — 4 dettes résiduelles notées `docs/BUGIDENTIFIE.md` (`MODING4-
 `MODING4-PROJECTEUR`, `MODING4-INTEGRATION`), décisions produit + câblage restants, pas un chantier actif.
 Phase 2 (migration Groupe 1/2 déjà livré) toujours différée (Strangler Fig).
 
-🔒 En cours (Claude) : Palier 1 `CHOC1` — **codé (2026-07-22), en attente de test en jeu par Saar**.
-Migration 190 (`ref_equipment.shock_mechanism`/`shock_reduced_by_armor`,
+🔒 En cours (Claude) : Palier 1 `CHOC1` — **codé et vérifié par scripts isolés (2026-07-22), en
+attente du test en jeu par Saar** (Saar ne peut pas concevoir ce test lui-même — vérification poussée
+côté Claude en compensation, y compris la réduction d'armure réelle via une transaction jamais
+commitée). Migration 190 (`ref_equipment.shock_mechanism`/`shock_reduced_by_armor`,
 `ref_mutations.natural_weapon_choc_formula`), producteurs `damageService.js` (`getEffectiveWeaponDamage`/
 `getEffectiveMeleeDamage`) + `resolveTargetHit` (gate Tête + réduction d'armure) + câblage CaC
 `socketCombatHelpers.js` (4 call sites, jamais fait jusqu'ici). Détail complet, Testé/Non testé :
 `docs/JOURNALTEMP.md` Étape 11. 18 armes catalogue + mutation Corne câblées ; Lance-flammes/armes de
-zone/4 armes `damage_h` tronqué explicitement exclues (voir plan). Verrou retiré au commit de clôture,
-une fois le test en jeu de Saar confirmé. Refonte CaC (`docs/PLAN_REFONTECAC.md`, verrou levé) reste
-différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif — cluster combat déjà
-clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
+zone/4 armes `damage_h` tronqué explicitement exclues (voir plan). **Découverte séparée** :
+`protection_shock` NULL sur 100% du catalogue — réduction d'armure câblée/vérifiée mais sans effet
+observable tant qu'aucune armure n'a de valeur réelle (dette de donnée distincte, hors scope). Reste
+non testable hors jeu : mutation Corne en situation de Saisie réelle, Localisation précise (COM9).
+Verrou retiré au commit de clôture, une fois Saar confirmé. Refonte CaC (`docs/PLAN_REFONTECAC.md`,
+verrou levé) reste différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif —
+cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
 
 > **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
 > intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).

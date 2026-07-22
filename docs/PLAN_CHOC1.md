@@ -395,8 +395,12 @@ même document (prérequis Étapes 5-9) — pas dupliqué ici une fois clos (Rè
 
 **Implémenté (2026-07-22, `docs/JOURNALTEMP.md` Étape 11)** : migration 190, producteurs
 `damageService.js`, gate/réduction `resolveTargetHit`, câblage CaC `socketCombatHelpers.js`. Testé par
-script isolé + non-régression suite `shared/*.test.mjs` (214/214) — **non testé en jeu**, reste
-l'étape de clôture avant absorption définitive dans `docs/SYSTEME/DOMMAGES.md`.
+scripts isolés (dont la réduction d'armure réelle, transaction jamais commitée) + non-régression suite
+`shared/*.test.mjs` (214/214) — **non testé en jeu**, reste l'étape de clôture avant absorption
+définitive dans `docs/SYSTEME/DOMMAGES.md`. Découverte séparée au passage : `protection_shock` est
+NULL sur 100% du catalogue `ref_equipment` aujourd'hui — la réduction d'armure catégories 1/2 est
+câblée et vérifiée correcte, mais restera sans effet observable tant qu'aucune armure catalogue n'a de
+valeur réelle (dette de donnée distincte, hors scope `CHOC1`).
 
 **Reste bloquant avant tout code (mis à jour 2026-07-22)** :
 1. ~~La requête base réelle du §1~~ — **close** : exécutée, recroisée avec les deux tables RAW
