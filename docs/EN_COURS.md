@@ -1,8 +1,14 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> 🔒 **En cours (Codex) — Session 160 : accès verticaux et catalogue de trappes 3D.** L'outil
-> Échelle devient un constructeur d'accès vertical : trémie et échelle obligatoires, trappe
-> optionnelle choisie directement dans un catalogue de modèles ronds/carrés. Une passerelle doit
-> pouvoir rejoindre le palier haut même sans trappe.
+> 🧪 **2026-07-22 — accès verticaux et huit trappes 3D déployés sur `8293/8294`, recette utilisateur
+> attendue** : **Objets 3D > Accès verticaux** propose **Échelle seule**, puis les modèles carrés et
+> ronds battants, avec écoutille, coulissants bipartites ou tripartites. La trémie appartient à
+> l'échelle et reste découpée sans trappe ; deux raccords de palier permettent à une passerelle
+> adjacente de rejoindre la traversée. Les ouvertures rondes sont circulaires dans le rendu et le
+> snapshot physique. Le popup peut retirer ou remplacer la trappe sans supprimer l'accès. Validation :
+> 144 tests monde/serveur, 42 tests Surface, 3 configuration, 8 manifestes GLB sans avertissement,
+> build Vite, ESLint ciblé sans erreur, health, client HTTP, catalogue serveur à 100 modèles, GLB
+> distant HTTP 200 et smoke Chromium distant. Retour arrière serveur : tag
+> `backup/pre-session160-20260722` (`69164fe`). Les instances Saar et fusion n'ont pas été modifiées.
 >
 > **2026-07-22 — grille mono-plan validée et déployée sur `8293/8294`** : murs, sols, plafonds, passerelles et trappes
 > entièrement ajourés utilisent maintenant une seule grille recto-verso ; les escaliers validés

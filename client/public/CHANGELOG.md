@@ -1,3 +1,17 @@
+## v200 — 2026-07-22 — Accès verticaux et trappes 3D
+
+### Éditeur et moteur de monde
+- [feat] **Objets 3D > Accès verticaux** propose d’abord **Échelle seule**, puis un catalogue direct
+  de trappes carrées et rondes. La forme est une propriété du modèle, pas une étape de choix séparée.
+- [feat] Huit trappes animées sont intégrées : battantes blindées, battantes avec écoutille,
+  coulissantes bipartites et coulissantes tripartites, chaque mécanisme en carré et en rond.
+- [engine] La trémie appartient désormais à l’accès vertical et existe même sans trappe. Une
+  passerelle adjacente rejoint donc réellement le palier haut d’une échelle laissée ouverte.
+- [engine] Les ouvertures rondes découpent un vrai contour circulaire dans le rendu, les supports,
+  les collisions et la LOS. Le GLB reste une apparence ; `surface_data` reste l’autorité physique.
+- [change] Après la pose, le popup de l’échelle permet de retirer ou remplacer sa trappe sans
+  supprimer l’échelle ni sa trémie.
+
 ## v199 — 2026-07-22 — Grilles mono-plan recto-verso
 
 ### Rendu du monde

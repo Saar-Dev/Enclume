@@ -1,6 +1,6 @@
 # Créer et intégrer un objet 3D
 
-> Mis à jour : 2026-07-22 — connecteurs v13, trappes d'échelle et matériaux ajourés.
+> Mis à jour : 2026-07-22 — connecteurs v13 et catalogue de trappes d'accès vertical.
 
 Ce document est le contrat de fabrication des GLB intégrés à Enclume. Il couvre les objets libres, prépare les objets fixés à un mur et distingue les connecteurs structurels comme les portes.
 
@@ -217,9 +217,12 @@ Les trappes horizontales utilisent un connecteur `hatch`. Exemple minimal :
   "placement_mode": "connector",
   "connector_type": "hatch",
   "origin": "hatch-center",
-  "footprint_width_m": 1.5,
-  "footprint_depth_m": 1.5,
-  "height_m": 0.12,
+  "footprint_width_m": 1.0,
+  "footprint_depth_m": 1.0,
+  "height_m": 0.18,
+  "opening_shape": "circle",
+  "opening_mechanism": "hinged",
+  "features": ["service-hatch"],
   "allowed_states": ["closed", "open", "locked"],
   "openable": true
 }
@@ -233,6 +236,15 @@ déclarée. Cadre, écoutille et boîtier de commande peuvent faire partie du m�
 visuellement l'empreinte, mais `footprint_width_m` et `footprint_depth_m` décrivent toujours la
 seule ouverture structurelle. Le moteur dérive la collision et la LOS du connecteur, jamais du
 maillage exporté.
+
+`opening_shape` vaut `rectangle` ou `circle` et devient la forme de `ladder.topOpening` lors de la
+pose. `opening_mechanism` est une métadonnée de catalogue (`hinged`, `sliding-bipartite` ou
+`sliding-tripartite`) utilisée pour présenter le modèle ; il ne crée aucune physique implicite.
+`features` peut notamment contenir `service-hatch`. Le pack de référence
+`output/vertical_access_hatches/` et son générateur
+`tools/generate_vertical_access_hatches.py` montrent les huit combinaisons validées. L'écoutille de
+service intégrée suit actuellement l'état global de la trappe : elle n'a pas de second automate
+indépendant.
 
 Les ascenseurs utilisent aujourd'hui des arrêts et métadonnées de liaison dans
 `surface_data.connectors`. Les escaliers droits ou en colimaçon utilisent `surface_data.stairs`.

@@ -30,6 +30,13 @@ npx playwright install chromium
 Le répertoire du clone est libre. `start.sh` résout sa propre position et ne dépend plus de
 `$HOME/Enclume`.
 
+L'exporteur GLB de certaines distributions Blender nécessite NumPy sans le déclarer comme
+dépendance système. Vérifier avec `blender --background --python-expr "import numpy"`. La solution
+Ubuntu privilégiée est `sudo apt install python3-numpy`. Sans droits administrateur, installer le
+wheel Python correspondant à la version embarquée de Blender dans son dossier utilisateur
+`~/.config/blender/<version>/scripts/addons/modules` avec `python3 -m pip install --target ... numpy`.
+Cette dépendance sert uniquement à l'export GLB local.
+
 ## Exécution
 
 - `./start.sh` démarre une pile **entièrement locale** avec Docker, API et Vite.

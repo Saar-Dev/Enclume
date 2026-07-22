@@ -1,6 +1,6 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-22 — trappe d'échelle et matériau de grille ajouré canoniques.
+> Dernière mise à jour : 2026-07-22 — accès vertical, trémie indépendante et trappes rondes/carrées.
 >
 > Statut : **Phases 0 à 16 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -412,29 +412,36 @@ ensuite une rotation par quart de tour, l'activation des garde-corps, le multipl
 déplacement et l'apparence procédurale. Le colimaçon ajoute le retournement horaire/antihoraire.
 Une texture ou un futur modèle décoratif ne remplace jamais la géométrie physique dérivée.
 
-### Échelle
+### Accès vertical
 
 Parcours vertical de type grimpe. Il contient assez d'ancrages pour persister un token entre deux
 étages. Le mode course n'y est pas disponible par défaut.
 
-L'UX suit désormais le même principe que l'escalier : **Objets 3D > Échelles** affiche la vraie
-géométrie structurelle en prévisualisation, puis la pose crée automatiquement le connecteur
-`ladder`, repasse en sélection et ouvre son popup. Celui-ci expose les niveaux, la rotation et le
-coût. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
+L'UX suit le même principe que l'escalier : **Objets 3D > Accès verticaux** affiche la géométrie
+structurelle en prévisualisation. Le catalogue commence par **Échelle seule**, puis mélange
+directement les modèles carrés et ronds. La pose crée le connecteur `ladder`, repasse en sélection et
+ouvre son popup. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
 
-Par défaut, cette pose crée aussi un connecteur `hatch` lié par `linkedLadderId`, sur la dalle du
-palier le plus haut. La dalle est toujours découpée à cet endroit. Une trappe `closed` ou `locked`
-remplace la partie retirée comme support et barrière horizontale ; une trappe `open` ou `destroyed`
-ne produit ni support, ni collider, ni occluder. La traversée `climb` de l'échelle est activée
-uniquement lorsque cette trappe est ouverte ou détruite. L'état initial appartient au document
+Le connecteur `ladder` porte une `topOpening` canonique : forme `rectangle|circle`, position,
+altitude, largeur et profondeur. Cette trémie existe toujours, avec ou sans trappe. Elle découpe le
+sol haut et le plafond bas dans le renderer comme dans le `WorldSnapshot`. Deux supports d'ancrage
+placés sur les bords cohérents avec l'axe de l'échelle relient le palier haut aux passerelles
+adjacentes ; ils n'ajoutent aucun collider et ne rebouchent jamais l'ouverture.
+
+Une trappe facultative est un connecteur `hatch` lié par `linkedLadderId`. `closed` ou `locked`, elle
+remplace l'ouverture comme support et barrière horizontale ; `open` ou `destroyed`, elle ne produit
+ni support, ni collider, ni occluder. La traversée `climb` est bloquée par une trappe fermée, mais
+reste active quand la trappe est ouverte, détruite ou absente. L'état initial appartient au document
 statique ; l'état courant vient de `WorldRuntimeState.featureStates` et prévaut dans le snapshot.
-Deux commandes gauche/droite font tourner sa charnière par quarts de tour, avant ou après la pose.
+Le popup de l'échelle peut retirer ou remplacer la trappe sans modifier l'échelle ni supprimer la
+trémie. Deux commandes gauche/droite orientent le modèle par quarts de tour.
 
 Une trappe peut référencer un blueprint GLB de connecteur `hatch` et ses clips d'animation, comme
-une porte. Cela permet de décliner panneau battant, écoutille, panneau coulissant et boîtier de
-commande sans créer de nouvelle primitive physique. Si aucun modèle n'est choisi, le renderer
-utilise le panneau procédural. Dans tous les cas, le GLB reste strictement visuel : le connecteur
-canonique demeure l'autorité pour la découpe, le support, la collision, la LOS et la traversée.
+une porte. Le pack `vertical_access_hatches` fournit quatre mécanismes, chacun carré et rond :
+battant blindé, battant avec écoutille de service, coulissant bipartite et coulissant tripartite
+radial. Si aucun modèle n'est choisi, le renderer utilise le panneau procédural. Le GLB reste
+strictement visuel : `topOpening` et le connecteur canonique demeurent les autorités pour la
+découpe, le support, la collision, la LOS et la traversée.
 
 ### Passerelle
 
