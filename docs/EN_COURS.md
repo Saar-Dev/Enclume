@@ -1,4 +1,9 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
+> 🔒 **En cours (Codex) — Session 160 : accès verticaux et catalogue de trappes 3D.** L'outil
+> Échelle devient un constructeur d'accès vertical : trémie et échelle obligatoires, trappe
+> optionnelle choisie directement dans un catalogue de modèles ronds/carrés. Une passerelle doit
+> pouvoir rejoindre le palier haut même sans trappe.
+>
 > **2026-07-22 — grille mono-plan validée et déployée sur `8293/8294`** : murs, sols, plafonds, passerelles et trappes
 > entièrement ajourés utilisent maintenant une seule grille recto-verso ; les escaliers validés
 > restent inchangés. Même les empreintes découpées/courbes ne sont plus extrudées visuellement. Le

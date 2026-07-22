@@ -87,6 +87,7 @@ Concepts n'existant pas dans Polaris mais créés par le projet.
 | `reconcileCreation` | Endpoint unique et idempotent du Wizard (remplace l'ancien `finalizeCreation`) — accepte un payload partiel `{step1..step5, finalize}`, rejouable à volonté tant que `wizard_locked_at` n'est pas posé. | `server/src/services/creationService.js`, `routes/creation.js` |
 | `wizard_locked_at` | Marque la bascule "fiche assistant (rejouable)" → "fiche runtime (éditable librement en jeu)". | `char_sheet.wizard_locked_at` (migration 119) |
 | Actions Exclusives (registre) | Pattern générique pour une action qui interdit toute autre action/transition d'état le même tour (ex. Tir visé). Extensible (Charge/Rafale longue à venir). | `shared/combatExclusiveActions.js` (`isExclusiveDeclaration`) |
+| Accès vertical | Assemblage structurel posé depuis la bibliothèque 3D : une trémie et une échelle, complétées facultativement par une trappe. La trémie porte l'ouverture et le raccord aux passerelles ; la trappe ne conditionne donc ni l'existence du palier haut ni son raccordement. | `surface_data.connectors` (`ladder`, `hatch`) et `shared/world/worldCompiler.js` |
 
 ---
 
