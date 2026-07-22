@@ -3,6 +3,31 @@
 > Contrats techniques réaudités le 2026-07-22 : `surface_data` v13, spatial sans Redis et
 > environnement Node 24/npm 11.
 
+## Grilles mono-plan recto-verso (2026-07-22)
+
+Lorsqu'un mur, un sol, un plafond, une passerelle ou une trappe possède le cutout
+`industrial_grate` sur ses deux côtés, le renderer ne dessine plus les deux peaux du volume. Il
+produit un unique plan ajouré rendu recto-verso : plan médian pour les murs, face porteuse supérieure
+pour les sols et trappes, sous-face pour les plafonds. Les surfaces courbes, découpées et percées
+utilisent la même empreinte plane sans réintroduire une extrusion graphique.
+
+Si les deux côtés partagent le même matériau, ce plan exige un seul mesh et un seul matériau. Si
+leurs apparences diffèrent, deux faces strictement coplanaires sont conservées mais chacune est
+limitée à sa direction ; elles ne peuvent jamais être visibles simultanément ni produire de
+parallaxe. Cette règle évite le `z-fighting` et reste adaptée à de grandes quantités de murs de
+prison. Les escaliers restent volontairement des plateaux minces : leur résultat visuel a été
+validé séparément.
+
+Le volume canonique n'est pas aminci. Supports, collisions, découpe de dalle, LOS et déplacement
+continuent d'utiliser l'épaisseur déclarée dans `surface_data`. Le changement est exclusivement une
+projection de rendu.
+
+Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration, build Vite
+et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu avec mur, sol, trappe et escalier
+depuis deux caméras opposées, sans double grille ni exception JavaScript.
+
+---
+
 ## Marches ajourées et murs en grille recto-verso (2026-07-22)
 
 Un escalier droit revêtu de `industrial_grate` ne rend plus les volumes pleins et croissants de sa
@@ -30,11 +55,10 @@ API et le smoke Chromium distant sont verts.
 ## Grilles minces et trappes 3D modelables (2026-07-22)
 
 Une surface portant le cutout `industrial_grate` n'est plus rendue comme deux grilles espacées par
-toute l'épaisseur de sa dalle ou de son mur. Le renderer conserve le volume physique canonique,
-mais affiche une coque métallique unique de 4,5 cm alignée sur la face porteuse : dessus pour un
-sol, dessous pour un plafond, et plan médian pour un mur ajouré sur ses deux faces. Les trappes
-ajourées suivent le même principe. Les marches resserrent localement le motif avec une densité ×4
-proportionnelle à leurs dimensions ; le pas des sols, murs, passerelles et trappes reste inchangé.
+toute l'épaisseur de sa dalle ou de son mur. La première correction utilisait une coque métallique
+mince ; le contrat courant la remplace par le plan recto-verso décrit ci-dessus. Les marches
+conservent leurs plateaux minces et resserrent localement le motif avec une densité ×4
+proportionnelle à leurs dimensions ; le pas des autres surfaces reste inchangé.
 
 La trappe possède quatre orientations canoniques et deux commandes de rotation gauche/droite à
 90°, dans la palette comme dans le popup après pose. Sa définition peut désormais reprendre le

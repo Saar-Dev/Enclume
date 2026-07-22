@@ -1,3 +1,13 @@
+## v199 — 2026-07-22 — Grilles mono-plan recto-verso
+
+### Rendu du monde
+- [fix] Les murs, sols, plafonds, passerelles et trappes entièrement ajourés n'affichent plus deux
+  textures séparées : une seule grille recto-verso occupe désormais leur plan de support.
+- [perf] Lorsque les deux côtés partagent le même matériau, une seule géométrie et un seul matériau
+  sont rendus. Les apparences différentes restent possibles avec deux faces coplanaires orientées.
+- [engine] Les surfaces découpées et courbes utilisent elles aussi leur empreinte plane, tandis que
+  collisions, supports et LOS conservent leur volume structurel complet.
+
 ## v198 — 2026-07-22 — Marches ajourées et murs visibles des deux côtés
 
 ### Rendu du monde

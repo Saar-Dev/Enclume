@@ -4733,3 +4733,27 @@ du tag `backup/pre-session159-grate-visibility-20260722`. Les 141 tests monde/se
 Surface, 3 tests de configuration et le build ont aussi réussi sur Kiwi. Seuls
 `enclume-codex-client` et `enclume-codex-server` ont été redémarrés ; le health `8294` et le smoke
 Chromium distant `8293` sont verts. Les instances de Saar et de fusion n'ont pas été touchées.
+
+---
+
+## Session 159 (suite 3, Codex) — 2026-07-22 — Grilles mono-plan ⚠️ EN VALIDATION
+
+**Décision de rendu** : la coque mince conservait deux peaux ajourées. À très courte distance et
+en vue rasante, leur parallaxe recréait donc une double grille sur les murs et les sols. L'extrusion
+réelle des barreaux a été écartée au profit du choix le moins coûteux pour des décors très grillagés,
+comme une prison : un seul plan recto-verso.
+
+**Implémentation** : `SingleSurfaceSheet` rend un mesh `DoubleSide` lorsque les deux directions
+partagent le même matériau. Si elles diffèrent, deux matériaux strictement coplanaires sont limités
+respectivement à `FrontSide` et `BackSide`. Murs droits, murs courbes, sols, plafonds, passerelles,
+empreintes découpées et trappes procédurales utilisent ce chemin lorsque leurs deux faces sont en
+cutout. Le plan suit le support utile ; aucune deuxième peau ne reste derrière les trous.
+
+**Séparation moteur/rendu** : les escaliers restent des plateaux minces puisque leur rendu a été
+validé. Tous les volumes structurels restent inchangés côté compilateur : collision, support, LOS,
+traversées et découpes n'utilisent jamais le plan graphique.
+
+**Testé localement** : 141/141 tests monde/serveur, 41/41 tests Surface, 3/3 configuration, build
+Vite et ESLint ciblé verts. Un harness temporaire du vrai `SurfaceDungeonScene` a affiché mur, sol,
+trappe et escalier depuis deux caméras opposées, sans double grille ni exception JavaScript. Le
+harness et sa capture ont ensuite été supprimés du dépôt.

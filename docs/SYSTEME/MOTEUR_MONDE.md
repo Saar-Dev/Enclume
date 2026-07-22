@@ -763,10 +763,17 @@ passerelle ou d'une trappe peut utiliser ce cutout ; les chants et les pièces s
 emploient son matériau métallique plein associé.
 
 Pour éviter deux réseaux séparés par toute la profondeur d'un mur ou d'une dalle, une surface
-ajourée est affichée comme une coque unique de 4,5 cm. Elle reste alignée sur la face de support ;
-son collider conserve l'épaisseur structurelle déclarée. Sur les escaliers uniquement, les UV du
-dessus et du dessous utilisent une densité ×4 proportionnelle aux dimensions monde de la marche.
-Les mailles restent ainsi serrées et non étirées sans modifier le réglage des autres surfaces.
+ajourée sur ses deux côtés est affichée comme un plan unique recto-verso. Le plan se place au milieu
+d'un mur, sur la face porteuse d'un sol ou d'une trappe, et sous un plafond. Les empreintes courbes
+ou découpées génèrent directement une géométrie plane. Lorsque les apparences des deux directions
+sont identiques, un seul mesh `DoubleSide` suffit ; sinon deux matériaux coplanaires à culling
+opposé préservent chaque apparence sans qu'elles soient visibles ensemble. Le collider conserve
+toujours l'épaisseur structurelle déclarée.
+
+Sur les escaliers uniquement, les UV du dessus et du dessous utilisent une densité ×4
+proportionnelle aux dimensions monde de la marche. Les mailles restent ainsi serrées et non étirées
+sans modifier le réglage des autres surfaces. Les marches conservent leur plaque mince validée :
+elles ne suivent pas la projection mono-plan des autres structures.
 
 Pour un escalier ajouré, les volumes de marche croissants restent l'autorité physique mais ne sont
 pas rendus comme des blocs : le renderer en extrait une plaque mince alignée sur chaque plan de
