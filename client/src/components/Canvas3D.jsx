@@ -24,6 +24,10 @@ import {
   normalizeSurfaceData,
   surfaceTextureIds,
 } from '../lib/surfaceData.js'
+import {
+  elevatorInteractionStop,
+  selectElevatorActorToken,
+} from '../lib/elevatorInteraction.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
@@ -1363,7 +1367,9 @@ function Scene({
 export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0 }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
-  const { isGm } = useCharacterStore()
+  const { tokens, updateToken } = useTokenStore()
+  const { characters, isGm } = useCharacterStore()
+  const { user } = useAuthStore()
 
   const [voxels, setVoxels] = useState({})
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
@@ -1372,6 +1378,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
   const [runtimeFeatureStates, setRuntimeFeatureStates] = useState({})
   const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
+  const [runtimeElevatorPassengers, setRuntimeElevatorPassengers] = useState([])
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
@@ -1393,10 +1400,14 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
 
   const refreshRuntimeElevators = useCallback(async () => {
-    if (!battlemap?.id) return setRuntimeElevatorStates({})
+    if (!battlemap?.id) {
+      setRuntimeElevatorStates({})
+      return setRuntimeElevatorPassengers([])
+    }
     try {
       const { data } = await api.get(`/battlemaps/${battlemap.id}/world-elevators`)
       setRuntimeElevatorStates(data.worldElevators?.states || {})
+      setRuntimeElevatorPassengers(data.worldElevators?.passengers || [])
     } catch (error) {
       console.error('[Canvas3D] Erreur chargement ascenseurs monde :', error)
     }
@@ -1580,21 +1591,40 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     return connector ? { id, ...connector } : null
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
+  const selectedElevatorActorToken = useMemo(() => selectElevatorActorToken({
+    tokens,
+    characters,
+    userId: user?.id,
+    isGm,
+    selectedTokenId,
+  }), [characters, isGm, selectedTokenId, tokens, user?.id])
+
+  const selectedElevatorPassengerTokenIds = useMemo(() => new Set(
+    runtimeElevatorPassengers
+      .filter(passenger => String(passenger.elevatorId) === String(selectedSurfaceConnector?.worldId || selectedSurfaceConnector?.id))
+      .map(passenger => String(passenger.tokenId)),
+  ), [runtimeElevatorPassengers, selectedSurfaceConnector?.id, selectedSurfaceConnector?.worldId])
+
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
     if (!['elevator', 'window', 'screen-window', 'hatch'].includes(connector?.type)) return
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
+    const interactionStop = connector.type === 'elevator'
+      ? elevatorInteractionStop(connector, event?.point || null, displayLevel)
+      : null
     setSurfaceConnectorPanel({
       connectorId,
+      interactionStopId: interactionStop?.id || null,
       x: Number(source.clientX) || 24,
       y: Number(source.clientY) || 24,
     })
-  }, [])
+  }, [displayLevel])
 
   const handleElevatorCommand = useCallback(async (elevatorId, command) => {
     if (!battlemap?.id || !elevatorId) return
-    await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    const { data } = await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    for (const token of data?.passengerTokens || []) updateToken(token)
     await refreshRuntimeElevators()
-  }, [battlemap?.id, refreshRuntimeElevators])
+  }, [battlemap?.id, refreshRuntimeElevators, updateToken])
 
   const handleWindowStateChange = useCallback(async (featureId, state) => {
     if (!battlemap?.id || !featureId) return
@@ -1665,6 +1695,9 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         y={surfaceConnectorPanel.y}
         runtimeState={(selectedSurfaceConnector.type === 'elevator' ? runtimeElevatorStates : runtimeFeatureStates)[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
         onElevatorCommand={handleElevatorCommand}
+        elevatorInteractionStopId={surfaceConnectorPanel.interactionStopId}
+        elevatorActorToken={selectedElevatorActorToken}
+        elevatorPassengerTokenIds={selectedElevatorPassengerTokenIds}
         onWindowStateChange={handleWindowStateChange}
         onHatchStateChange={handleHatchStateChange}
         canEdit={false}

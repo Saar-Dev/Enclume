@@ -397,13 +397,32 @@ export function commandElevator(definitionInput, stateInput, command, nowInput =
     return deepFreeze(startClosing(definition, state, now))
   }
   if (command?.type === 'open') {
-    if (state.phase !== 'idle') return state
+    if (state.phase === 'open' || state.phase === 'opening') return state
+    if (state.phase === 'moving') throw new RangeError("La porte ne peut pas s'ouvrir pendant le déplacement")
+    if (state.phase === 'blocked') throw new RangeError("La porte doit être débloquée avant de s'ouvrir")
     return deepFreeze({
       ...state,
       phase: 'opening',
       doorState: 'opening',
       transitionStartedAt: now,
       transitionEndsAt: now + durationMs(definition.doorSeconds),
+    })
+  }
+  if (command?.type === 'use') {
+    const currentStop = stopById(definition, state.currentStopId)
+    if (!currentStop || (command.stopId && currentStop.id !== String(command.stopId))) {
+      throw new RangeError("La cabine n'est pas présente à ce palier")
+    }
+    if (state.phase === 'moving') throw new RangeError("La cabine est en déplacement")
+    if (state.phase === 'blocked') throw new RangeError("La porte doit être débloquée avant d'utiliser la cabine")
+    return deepFreeze({
+      ...state,
+      phase: 'open',
+      doorState: 'open',
+      transitionStartedAt: now,
+      transitionEndsAt: null,
+      blockedReason: null,
+      resume: null,
     })
   }
   throw new RangeError(`Commande d'ascenseur inconnue : ${command?.type || '(vide)'}`)

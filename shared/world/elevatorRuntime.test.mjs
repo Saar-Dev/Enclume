@@ -66,6 +66,29 @@ test('une porte bloquée suspend l’automate puis reprend la transition restant
   assert.equal(resumed.transitionEndsAt, 100600)
 })
 
+test('ouvrir inverse une fermeture au lieu de rester sans effet', () => {
+  const closing = commandElevator(elevator, createInitialElevatorState(elevator), { type: 'close' }, 0)
+  const opening = commandElevator(elevator, closing, { type: 'open' }, 250)
+  assert.equal(opening.phase, 'opening')
+  assert.equal(opening.doorState, 'opening')
+  assert.equal(reconcileElevatorState(elevator, opening, 1250).phase, 'open')
+})
+
+test('utiliser ouvre immédiatement la cabine uniquement au palier où elle se trouve', () => {
+  const closed = reconcileElevatorState(
+    elevator,
+    commandElevator(elevator, createInitialElevatorState(elevator), { type: 'close' }, 0),
+    1000,
+  )
+  const used = commandElevator(elevator, closed, { type: 'use', stopId: 'level:0' }, 1000)
+  assert.equal(used.phase, 'open')
+  assert.equal(used.doorState, 'open')
+  assert.throws(
+    () => commandElevator(elevator, closed, { type: 'use', stopId: 'level:1' }, 1000),
+    /pas présente/,
+  )
+})
+
 test('un état sérialisé peut être réconcilié après redémarrage', () => {
   const requested = requestElevatorStop(elevator, createInitialElevatorState(elevator), {
     stopId: 'level:2', requestId: 'r1', requestedAt: 1000,

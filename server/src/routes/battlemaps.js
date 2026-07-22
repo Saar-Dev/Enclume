@@ -473,7 +473,21 @@ router.post('/:id/world-elevators/:elevatorId/commands', requireAuth, async (req
   try {
     const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
     const type = String(req.body?.type || '')
-    if (type !== 'request') requireBattlemapGm(member)
+    if (type !== 'request' && type !== 'use') requireBattlemapGm(member)
+    if (type === 'use') {
+      const tokenId = String(req.body?.tokenId || '')
+      if (!tokenId) throw new AppError(400, 'A token is required to use the elevator')
+      const token = await db('tokens')
+        .where({ id: tokenId, battlemap_id: battlemap.id })
+        .first()
+      if (!token) throw new AppError(404, 'Token not found on this battlemap')
+      if (member.role !== 'gm') {
+        const character = token.character_id
+          ? await db('characters').where({ id: token.character_id }).first()
+          : null
+        if (character?.user_id !== req.user.id) throw new AppError(403, 'You do not own this token')
+      }
+    }
     const outcome = await commandBattlemapElevator({
       battlemapId: battlemap.id,
       elevatorId: req.params.elevatorId,

@@ -8,6 +8,14 @@
     "delete": "Supprimer",
     "close": "Fermer"
   },
+  "elevator": {
+    "call": "Appeler l’ascenseur",
+    "use": "Utiliser",
+    "selectToken": "Sélectionnez d’abord le token à embarquer.",
+    "onBoard": "{{token}} est dans la cabine.",
+    "travelling": "Ascenseur en déplacement…",
+    "goTo": "Aller à {{stop}}"
+  },
   "auth": {
     "login": "Connexion",
     "logout": "Déconnexion",

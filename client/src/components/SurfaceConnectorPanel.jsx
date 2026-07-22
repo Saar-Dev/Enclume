@@ -10,6 +10,7 @@ import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import Object3DPreview from './Object3DPreview.jsx'
 import { stairGeometry } from '../../../shared/world/stairGeometry.js'
 import { rotateHatchOrientation, rotateLadderOrientation } from '../lib/surfaceData.js'
+import { elevatorCabinIsAtStop } from '../lib/elevatorInteraction.js'
 import {
   PROCEDURAL_MATERIAL_PRESETS,
   PROCEDURAL_PATTERN_PRESETS,
@@ -80,9 +81,23 @@ const ELEVATOR_PHASE_LABELS = {
   blocked: 'Porte bloquée',
 }
 
-function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin }) {
+function ElevatorRuntimeControls({
+  connector,
+  runtimeState,
+  onCommand,
+  canAdmin,
+  interactionStopId = null,
+  actorToken = null,
+  passengerTokenIds = new Set(),
+  t,
+}) {
   const [pending, setPending] = useState(false)
   const stops = Array.isArray(connector.stops) ? connector.stops : []
+  const interactionStop = stops.find(stop => String(stop.id) === String(interactionStopId)) || null
+  const currentStop = stops.find(stop => stop.id === runtimeState?.currentStopId) || stops[0] || null
+  const cabinHere = elevatorCabinIsAtStop(runtimeState, interactionStop, stops[0])
+  const passengerIds = passengerTokenIds instanceof Set ? passengerTokenIds : new Set(passengerTokenIds || [])
+  const actorOnBoard = actorToken && passengerIds.has(String(actorToken.id))
   const run = async command => {
     if (!onCommand || pending) return
     setPending(true)
@@ -98,22 +113,66 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
         <span>File</span>
         <strong>{runtimeState?.queue?.length || 0} appel(s)</strong>
       </div>
-      <div style={S.stopGrid}>
-        {stops.map(stop => (
-          <button
-            key={stop.id}
-            type="button"
-            disabled={pending || !onCommand}
-            onClick={() => run({ type: 'request', stopId: stop.id })}
-            style={{
-              ...S.runtimeBtn,
-              ...(runtimeState?.currentStopId === stop.id ? S.runtimeBtnCurrent : {}),
-            }}
-          >
-            {stop.label || `Étage ${stop.level}`}
-          </button>
-        ))}
-      </div>
+      {interactionStop ? (
+        <div style={S.stopGrid}>
+          {actorOnBoard ? (
+            <>
+              <span style={S.hint}>{t('elevator.onBoard', { token: actorToken.label || actorToken.id })}</span>
+              {runtimeState?.phase === 'moving' ? (
+                <strong>{t('elevator.travelling')}</strong>
+              ) : stops.filter(stop => stop.id !== currentStop?.id).map(stop => (
+                <button
+                  key={stop.id}
+                  type="button"
+                  disabled={pending || !onCommand}
+                  onClick={() => run({ type: 'request', stopId: stop.id })}
+                  style={S.runtimeBtn}
+                >
+                  {t('elevator.goTo', { stop: stop.label || `Étage ${stop.level}` })}
+                </button>
+              ))}
+            </>
+          ) : !cabinHere ? (
+            <button
+              type="button"
+              disabled={pending || !onCommand}
+              onClick={() => run({ type: 'request', stopId: interactionStop.id })}
+              style={S.runtimeBtn}
+            >
+              {t('elevator.call')}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={pending || !onCommand || !actorToken}
+                onClick={() => run({ type: 'use', stopId: interactionStop.id, tokenId: actorToken?.id })}
+                style={S.runtimeBtn}
+              >
+                {t('elevator.use')}
+              </button>
+              {!actorToken && <span style={S.hint}>{t('elevator.selectToken')}</span>}
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={S.stopGrid}>
+          {stops.map(stop => (
+            <button
+              key={stop.id}
+              type="button"
+              disabled={pending || !onCommand}
+              onClick={() => run({ type: 'request', stopId: stop.id })}
+              style={{
+                ...S.runtimeBtn,
+                ...(runtimeState?.currentStopId === stop.id ? S.runtimeBtnCurrent : {}),
+              }}
+            >
+              {stop.label || `Étage ${stop.level}`}
+            </button>
+          ))}
+        </div>
+      )}
       {canAdmin && (
         <div style={S.runtimeActions}>
           {runtimeState?.phase === 'blocked' ? (
@@ -121,8 +180,13 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
           ) : (
             <button type="button" disabled={pending} onClick={() => run({ type: 'block', reason: 'gm-door-obstruction' })} style={S.adminBtn}>Bloquer la porte</button>
           )}
-          <button type="button" disabled={pending} onClick={() => run({ type: 'open' })} style={S.adminBtn}>Ouvrir</button>
-          <button type="button" disabled={pending} onClick={() => run({ type: 'close' })} style={S.adminBtn}>Fermer</button>
+          <button
+            type="button"
+            disabled={pending || ['moving', 'open', 'opening', 'blocked'].includes(runtimeState?.phase)}
+            onClick={() => run({ type: 'open' })}
+            style={S.adminBtn}
+          >Ouvrir</button>
+          <button type="button" disabled={pending || runtimeState?.phase !== 'open'} onClick={() => run({ type: 'close' })} style={S.adminBtn}>Fermer</button>
         </div>
       )}
       {runtimeState?.blockedReason && <p style={S.hint}>Blocage : {runtimeState.blockedReason}</p>}
@@ -143,6 +207,9 @@ export default function SurfaceConnectorPanel({
   onClose,
   runtimeState = null,
   onElevatorCommand = null,
+  elevatorInteractionStopId = null,
+  elevatorActorToken = null,
+  elevatorPassengerTokenIds = new Set(),
   onContinueElevatorRoute = null,
   onWindowStateChange = null,
   onHatchStateChange = null,
@@ -555,6 +622,10 @@ export default function SurfaceConnectorPanel({
               runtimeState={runtimeState}
               onCommand={onElevatorCommand}
               canAdmin={canAdminElevator}
+              interactionStopId={elevatorInteractionStopId}
+              actorToken={elevatorActorToken}
+              passengerTokenIds={elevatorPassengerTokenIds}
+              t={t}
             />
           </>
         )}

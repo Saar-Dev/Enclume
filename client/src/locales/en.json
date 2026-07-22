@@ -9,6 +9,15 @@
 "close": "Close"
 },
 
+"elevator": {
+"call": "Call elevator",
+"use": "Use",
+"selectToken": "Select the token to board first.",
+"onBoard": "{{token}} is inside the cabin.",
+"travelling": "Elevator moving…",
+"goTo": "Go to {{stop}}"
+},
+
 "auth": {
 "login": "Log In",
 "logout": "Log Out",
