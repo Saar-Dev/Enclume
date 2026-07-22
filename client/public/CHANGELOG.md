@@ -1,3 +1,13 @@
+## v198 — 2026-07-22 — Marches ajourées et murs visibles des deux côtés
+
+### Rendu du monde
+- [fix] Les escaliers en grille affichent maintenant des plateaux métalliques minces au lieu de
+  blocs pleins dont seul le dessus était ajouré. Dessous et chants restent lisibles à tout angle.
+- [fix] Le motif des marches est encore resserré, avec une densité ×4 calculée dans les dimensions
+  réelles du plateau pour éviter les mailles étirées.
+- [fix] Les murs en grille restent visibles des deux côtés et ne sont plus effacés par le mécanisme
+  de coupe caméra réservé aux murs opaques.
+
 ## v197 — 2026-07-22 — Grilles minces et trappes 3D préparées
 
 ### Éditeur et moteur de monde

@@ -4700,3 +4700,30 @@ migration ni conversion de carte n'est requis.
 **Suite artistique** : aucun nouveau GLB de trappe n'est inventé dans cette livraison. Les modèles
 écoutille, coulissant et boîtier devront être produits puis importés avec `connector_type: hatch` ;
 ils apparaîtront automatiquement dans le sélecteur dédié.
+
+---
+
+## Session 159 (suite 2, Codex) — 2026-07-22 — Marches ajourées et murs bilatéraux ⚠️ EN VALIDATION
+
+**Cause des marches** : l'escalier droit utilisait encore ses volumes physiques croissants comme
+meshes visibles. Seul le dessus recevait le cutout, tandis que les faces verticales formaient une
+pile de blocs pleins. Le matériau compagnon des chants était en outre simple face. Selon l'angle,
+ces contours apparaissaient ou disparaissaient derrière les ajours.
+
+**Correction des marches** : le rendu extrait désormais de chaque volume une plaque mince alignée
+sur le plan praticable. Le dessus et le dessous sont ajourés, les chants métalliques sont
+recto-verso, et la surbrillance de sélection suit cette plaque. Le motif utilise une densité ×4
+pondérée par largeur et profondeur pour conserver des mailles proportionnées. La géométrie serveur,
+les supports, collisions et ancrages restent inchangés.
+
+**Cause du mur** : les murs tournés vers la caméra recevaient volontairement une opacité de coupe
+de 18 % pour révéler les pièces. Sur une grille déjà largement ajourée, ce fondu faisait presque
+disparaître les barreaux d'un côté malgré le cutout `DoubleSide`.
+
+**Correction du mur** : un mur ajouré sur ses deux faces reste à pleine intensité dans les deux
+directions et ses chants métalliques sont recto-verso. Les murs opaques conservent leur coupe caméra.
+
+**Testé localement** : 141/141 tests monde/serveur, 41/41 tests Surface, 3/3 configuration, build
+Vite et ESLint ciblé verts. Un harness temporaire a monté le vrai `SurfaceDungeonScene` dans deux
+caméras opposées : le mur est présent des deux côtés et les marches sont minces, proportionnées et
+ajourées dessus/dessous, sans exception JavaScript. Le harness n'est pas conservé dans le dépôt.

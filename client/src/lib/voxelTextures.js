@@ -107,6 +107,7 @@ export async function loadVoxelTextures(textures) {
             color: procedural?.paint || '#6f7f8e',
             roughness: 0.5,
             metalness: 0.68,
+            side: THREE.DoubleSide,
           })
         : null,
     }

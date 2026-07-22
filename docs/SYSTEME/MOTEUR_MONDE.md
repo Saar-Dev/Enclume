@@ -765,8 +765,14 @@ emploient son matériau métallique plein associé.
 Pour éviter deux réseaux séparés par toute la profondeur d'un mur ou d'une dalle, une surface
 ajourée est affichée comme une coque unique de 4,5 cm. Elle reste alignée sur la face de support ;
 son collider conserve l'épaisseur structurelle déclarée. Sur les escaliers uniquement, les UV du
-dessus répètent le motif 2 × 2 afin de resserrer le pas des mailles sans modifier le réglage des
-autres surfaces.
+dessus et du dessous utilisent une densité ×4 proportionnelle aux dimensions monde de la marche.
+Les mailles restent ainsi serrées et non étirées sans modifier le réglage des autres surfaces.
+
+Pour un escalier ajouré, les volumes de marche croissants restent l'autorité physique mais ne sont
+pas rendus comme des blocs : le renderer en extrait une plaque mince alignée sur chaque plan de
+marche. Dessus et dessous utilisent le cutout, tandis que les chants emploient le métal plein
+recto-verso. De même, un mur ajouré sur ses deux faces ne reçoit pas le fondu directionnel de coupe
+caméra des murs opaques ; ses barreaux restent visibles depuis chaque côté.
 
 Apparence et physique restent deux champs séparés. Choisir ce motif hors d'une salle applique
 explicitement le preset `barrierType: grate` (`blocksMovement: true`, `blocksSight: false`,

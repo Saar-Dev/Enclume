@@ -91,7 +91,7 @@ const GRID_SECTION_WORLD_UNITS = 1
 const GRID_SECTION_METERS = 1.5
 const TEXTURE_TILE_GRID_SECTIONS = 1
 const GRATE_VISUAL_THICKNESS = 0.045
-const STAIR_GRATE_TEXTURE_REPEAT = 2
+const STAIR_GRATE_TEXTURE_REPEAT = 4
 const RELIEF_SEGMENTS_PER_TEXTURE_TILE = 14
 const RELIEF_MAX_SEGMENTS = 192
 const BOLT_HEAD_RADIUS = 0.026
@@ -263,6 +263,7 @@ function proceduralMaterialAt(descriptor) {
         color: descriptor.paint || '#6f7f8e',
         roughness: 0.5,
         metalness: 0.68,
+        side: THREE.DoubleSide,
       })
     : material
   const entry = {
@@ -864,6 +865,7 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   const [width, height, depth] = box?.args || [1, 1, 1]
   const thinGrate = usesCutoutMaterial(frontProcedural, textureMaterials, wall.frontTex)
     && usesCutoutMaterial(backProcedural, textureMaterials, wall.backTex || wall.frontTex)
+  const visualOpacity = thinGrate ? 1 : opacity
   const visualArgs = thinGrate
     ? wall.axis === 'z'
       ? [thinGrateThickness(width, true), height, depth]
@@ -920,7 +922,7 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   }
 
   if (!frontBase || !backBase || !box) return null
-  const visibleMaterials = withOpacity(materials, opacity)
+  const visibleMaterials = withOpacity(materials, visualOpacity)
 
   return (
     <>
@@ -928,7 +930,7 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
         position={box.position}
         rotation={[0, box.rotationY || 0, 0]}
         material={visibleMaterials}
-        castShadow={opacity >= 0.999}
+        castShadow={visualOpacity >= 0.999}
         receiveShadow
       >
         <ReliefBoxGeometry
@@ -940,7 +942,7 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
           maxSegments={reliefMaxSegmentsForRepeats(...faceUvScales.flat())}
         />
       </mesh>
-      {showDetails && opacity >= 0.999 && (
+      {showDetails && visualOpacity >= 0.999 && (
         <WallBoltHeads
           wall={wall}
           box={{ ...box, args: visualArgs }}
@@ -1213,6 +1215,7 @@ function CurvedWallSegment({ wall, textureMaterials, opacity = 1, showDetails = 
   const thinGrate = usesCutoutMaterial(frontProcedural, textureMaterials, wall.frontTex)
     && usesCutoutMaterial(backProcedural, textureMaterials, wall.backTex || wall.frontTex)
   const visualThickness = thinGrate ? GRATE_VISUAL_THICKNESS : null
+  const visualOpacity = thinGrate ? 1 : opacity
   const geometry = useMemo(() => makeCurvedWallGeometry(wall, visualThickness), [wall, visualThickness])
   useEffect(() => () => geometry?.dispose(), [geometry])
   if (!geometry || !frontBase || !backBase || !topBase) return null
@@ -1227,9 +1230,9 @@ function CurvedWallSegment({ wall, textureMaterials, opacity = 1, showDetails = 
     withRepeat(backBase, -length, height, -offset - length, Number(wall.y) || 0),
     withRepeat(topBase, length, thickness, offset, 0),
     withRepeat(topBase, length, thickness, offset, 0),
-  ], opacity)
+  ], visualOpacity)
   return (
-    <mesh geometry={geometry} material={materials} castShadow={opacity >= 0.999} receiveShadow />
+    <mesh geometry={geometry} material={materials} castShadow={visualOpacity >= 0.999} receiveShadow />
   )
 }
 
@@ -2326,15 +2329,12 @@ function StairSegment({
 }) {
   const procedural = surfaceMaterialAt(stair.material, showDetails)
   const topBase = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
-  const top = usesCutoutMaterial(procedural, textureMaterials, stair.tex)
-    ? withRepeat(topBase, STAIR_GRATE_TEXTURE_REPEAT, STAIR_GRATE_TEXTURE_REPEAT)
-    : topBase
-  const side = procedural?.solidMaterial || solidMaterialAt(textureMaterials, stair.tex) || procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || top
-  const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || top
+  const cutout = usesCutoutMaterial(procedural, textureMaterials, stair.tex)
+  const side = procedural?.solidMaterial || solidMaterialAt(textureMaterials, stair.tex) || procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || topBase
+  const bottomBase = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || topBase
   const relief = showDetails ? (procedural?.relief || reliefAt(textureMaterials, stair.tex)) : null
-  const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
   const geometry = stairGeometry(stair, { storyHeight: STORY_HEIGHT })
-  if (!top) return null
+  if (!topBase) return null
 
   return (
     <group
@@ -2343,40 +2343,67 @@ function StairSegment({
         onPointerSelect(stair.id, { ...stair, type: 'stairs' }, event)
       } : undefined}
     >
-      {geometry.steps.map(step => step.polygon ? (
-        <group key={step.index}>
-          <mesh material={[top, side]} castShadow receiveShadow userData={{ worldSupport: true }}>
-            <StairPrismGeometry part={step} splitMaterials />
+      {geometry.steps.map(step => {
+        const physicalHeight = step.polygon
+          ? Math.max(0.01, Number(step.maxY) - Number(step.minY))
+          : Math.max(0.01, Number(step.size?.[1]) || 0.01)
+        const visualHeight = thinGrateThickness(physicalHeight, cutout)
+        const visualStep = !cutout
+          ? step
+          : step.polygon
+            ? { ...step, minY: Number(step.maxY) - visualHeight }
+            : {
+                ...step,
+                position: {
+                  ...step.position,
+                  y: Number(step.position.y) + (physicalHeight - visualHeight) / 2,
+                },
+                size: [step.size[0], visualHeight, step.size[2]],
+              }
+        const repeatX = visualStep.polygon
+          ? STAIR_GRATE_TEXTURE_REPEAT
+          : Math.max(0.05, Number(visualStep.size[0]) * STAIR_GRATE_TEXTURE_REPEAT)
+        const repeatZ = visualStep.polygon
+          ? STAIR_GRATE_TEXTURE_REPEAT
+          : Math.max(0.05, Number(visualStep.size[2]) * STAIR_GRATE_TEXTURE_REPEAT)
+        const top = cutout ? withRepeat(topBase, repeatX, repeatZ) : topBase
+        const bottom = cutout ? withRepeat(bottomBase, repeatX, repeatZ) : bottomBase
+        const materials = withOpacity([side, side, top, bottom, side, side], opacity)
+        return visualStep.polygon ? (
+          <group key={visualStep.index}>
+            <mesh material={[top, bottom, side]} castShadow receiveShadow userData={{ worldSupport: true }}>
+              <StairPrismGeometry part={visualStep} splitMaterials />
+            </mesh>
+            {selected && (
+              <mesh renderOrder={43}>
+                <StairPrismGeometry part={visualStep} />
+                <meshBasicMaterial color="#facc15" wireframe transparent opacity={0.42} depthWrite={false} />
+              </mesh>
+            )}
+          </group>
+        ) : (
+          <mesh
+            key={visualStep.index}
+            position={[visualStep.position.x, visualStep.position.y, visualStep.position.z]}
+            material={materials}
+            castShadow
+            receiveShadow
+            userData={{ worldSupport: true }}
+          >
+            <ReliefBoxGeometry
+              args={visualStep.size}
+              faceProfiles={[null, null, relief, null, null, null]}
+              faceMask={[false, false, true, false, false, false]}
+            />
+            {selected && (
+              <mesh scale={[1.025, 1.012, 1.025]} renderOrder={43}>
+                <boxGeometry args={visualStep.size} />
+                <meshBasicMaterial color="#facc15" transparent opacity={0.2} depthWrite={false} />
+              </mesh>
+            )}
           </mesh>
-          {selected && (
-            <mesh renderOrder={43}>
-              <StairPrismGeometry part={step} />
-              <meshBasicMaterial color="#facc15" wireframe transparent opacity={0.42} depthWrite={false} />
-            </mesh>
-          )}
-        </group>
-      ) : (
-        <mesh
-          key={step.index}
-          position={[step.position.x, step.position.y, step.position.z]}
-          material={materials}
-          castShadow
-          receiveShadow
-          userData={{ worldSupport: true }}
-        >
-          <ReliefBoxGeometry
-            args={step.size}
-            faceProfiles={[null, null, relief, null, null, null]}
-            faceMask={[false, false, true, false, false, false]}
-          />
-          {selected && (
-            <mesh scale={[1.025, 1.012, 1.025]} renderOrder={43}>
-              <boxGeometry args={step.size} />
-              <meshBasicMaterial color="#facc15" transparent opacity={0.2} depthWrite={false} />
-            </mesh>
-          )}
-        </mesh>
-      ))}
+        )
+      })}
       {geometry.column && (() => {
         const height = geometry.column.maxY - geometry.column.minY
         return (

@@ -40,10 +40,12 @@ function createStairPrismBufferGeometry({ polygon, minY, maxY }, splitMaterials 
     indices.push(topOffset + a, topOffset + c, topOffset + b)
   }
   const topIndexCount = indices.length - topIndexStart
+  const bottomIndexStart = indices.length
   for (const triangle of triangles) {
     const [a, b, c] = triangle
     indices.push(bottomOffset + a, bottomOffset + b, bottomOffset + c)
   }
+  const bottomIndexCount = indices.length - bottomIndexStart
 
   for (let index = 0; index < points.length; index += 1) {
     const from = points[index]
@@ -70,7 +72,8 @@ function createStairPrismBufferGeometry({ polygon, minY, maxY }, splitMaterials 
   if (splitMaterials) {
     geometry.clearGroups()
     geometry.addGroup(topIndexStart, topIndexCount, 0)
-    geometry.addGroup(topIndexStart + topIndexCount, indices.length - topIndexCount, 1)
+    geometry.addGroup(bottomIndexStart, bottomIndexCount, 1)
+    geometry.addGroup(bottomIndexStart + bottomIndexCount, indices.length - topIndexCount - bottomIndexCount, 2)
   }
   geometry.computeVertexNormals()
   geometry.computeBoundingBox()

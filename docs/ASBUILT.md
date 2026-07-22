@@ -3,14 +3,37 @@
 > Contrats techniques réaudités le 2026-07-22 : `surface_data` v13, spatial sans Redis et
 > environnement Node 24/npm 11.
 
+## Marches ajourées et murs en grille recto-verso (2026-07-22)
+
+Un escalier droit revêtu de `industrial_grate` ne rend plus les volumes pleins et croissants de sa
+géométrie physique. Chaque marche visible est une plaque mince alignée sur son altitude praticable ;
+sa face supérieure et son dessous sont ajourés, et ses chants métalliques sont recto-verso. Les
+colliders, supports et ancrages conservent la géométrie canonique complète du moteur.
+
+La densité du motif des marches est portée à ×4. Pour une marche rectangulaire, les répétitions U/V
+sont multipliées par ses dimensions monde : les mailles gardent donc leur proportion entre largeur
+et giron au lieu d'être comprimées dans l'un des axes. Les marches courbes utilisent la même densité
+sur leurs UV monde.
+
+Un mur ajouré sur ses deux faces est désormais exclu du fondu de coupe caméra destiné aux murs
+pleins et son matériau de chant est rendu recto-verso. La même grille demeure donc visible quand la
+caméra passe d'un côté du mur à l'autre.
+
+Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration, build Vite
+et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu simultanément depuis les deux
+côtés sous Chromium : mur présent dans les deux vues, marches minces et ajours recto-verso, sans
+exception JavaScript.
+
+---
+
 ## Grilles minces et trappes 3D modelables (2026-07-22)
 
 Une surface portant le cutout `industrial_grate` n'est plus rendue comme deux grilles espacées par
 toute l'épaisseur de sa dalle ou de son mur. Le renderer conserve le volume physique canonique,
 mais affiche une coque métallique unique de 4,5 cm alignée sur la face porteuse : dessus pour un
 sol, dessous pour un plafond, et plan médian pour un mur ajouré sur ses deux faces. Les trappes
-ajourées suivent le même principe. Les marches resserrent localement le motif par un repeat 2 × 2 ;
-le pas des sols, murs, passerelles et trappes reste inchangé.
+ajourées suivent le même principe. Les marches resserrent localement le motif avec une densité ×4
+proportionnelle à leurs dimensions ; le pas des sols, murs, passerelles et trappes reste inchangé.
 
 La trappe possède quatre orientations canoniques et deux commandes de rotation gauche/droite à
 90°, dans la palette comme dans le popup après pose. Sa définition peut désormais reprendre le
