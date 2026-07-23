@@ -1,4 +1,5 @@
 # SYSTEME/CONVENTIONS.md — Règles immuables, pièges actifs §18+§19
+> Mis à jour : 2026-07-22 — snapshot monde et environnement Ubuntu.
 > Source : SYSTEME.md §18–§19
 > Lire pour : tout nouveau code — vérifier que la convention appliquée est documentée ici
 
@@ -7,10 +8,11 @@
 ## §18 — Conventions non-négociables
 
 - **UUID partout** — jamais `increments()` (sauf `voxel_textures.id` — P22)
-- **`threeToDb(tx, ty, tz)`** → `{ pos_x: tx, pos_y: tz, pos_z: ty }` — jamais inline
+- **Adaptateurs DB/monde** — `dbPositionToWorldPoint()` / `worldPointToDbPosition()` uniquement ;
+  PE14 ne doit jamais être recodé inline
 - **`WS.CONSTANTE` toujours** — jamais de chaîne en dur dans `socket.emit/on`
 - **`knexfile.cjs`** en CommonJS — CLI Knex ne supporte pas ES Modules
-- **Commande migrations Windows :** `node_modules\.bin\knex.cmd migrate:latest --knexfile knexfile.cjs`
+- **Commande migrations portable :** depuis `server/`, `npx knex migrate:latest --knexfile knexfile.cjs`
 - **Migrations format .js** — ES module avec `export const up/down`
 - **`socket.data.role`** — stocker au SESSION_JOIN, pas `socket.role` (PE2)
 - **`owner_id` tokens = mort** — ownership via `character_id → characters.user_id`
@@ -26,9 +28,12 @@
 - **`effectiveMalus`** — `calcWoundPenalty(wounds) − calcEncumbrancePenalty(weight, FOR)` — toujours ≤ 0. Appliqué sur le total du jet, jamais sur un attribut (P51)
 - **`LOCATION_TO_SLOT` vs `SLOT_TO_REF_LOCATION`** — slotCode (BG/BD/JG/JD) pour les slots individuels, refCode (B/J) pour le lookup `ref_location` compat (PI7)
 - **`pendingEntityActions Map` hors `initSocket`** — une seule instance
-- **Collision map Redis** — convention PE14 partout (tokens, entités, voxels convertis)
-- **Voxels Redis** — convertis Three.js→PE14 dans `buildCollisionMap`/`add`/`remove`
-- **Acteur step-by-step** — collision à `pos_z+1` (espace de marche, pas sol)
+- **Positions runtime** — `position_space = 'world-feet'` ; convertir uniquement avec
+  `dbPositionToWorldPoint()` / `worldPointToDbPosition()`
+- **Collision et occupation** — `WorldSnapshot` + `createSpatialIndex()` +
+  `createOccupancyIndex()` ; aucun hash Redis spatial
+- **Déplacement forcé acteur/objet** — `executeBattlemapRigidPairMovement()` est autoritaire et le
+  couple mobile s'exclut lui-même de l'occupation
 - **`stepsMax`** — `Math.min(dmax, stepsTarget)` — destination joueur respectée
 - **`resolveEntityState returning`** — doit inclure `battlemap_id` (PE26)
 - **Lerp EntityMesh** — `useFrame` dans sous-composants (règle des hooks)
@@ -48,7 +53,6 @@
 
 | Code | Description | Fichier thématique |
 |---|---|---|
-| P12 | VOXEL_ADD guard `if (!battlemapId) return` | VOXELS.md |
 | P13 | `updated_at = db.fn.now()` après guard Object.keys | CONVENTIONS.md |
 | P14 | `updated_at` jamais dans le JWT | CORE.md |
 | P17 | Séparateur voxel = `":"` NON NÉGOCIABLE | VOXELS.md |
@@ -81,14 +85,11 @@
 | PE17 | `usage_hint` = hint de tri, jamais exclusif | CONVENTIONS.md |
 | PE18 | `blueprint.pack_id` nullable — guard obligatoire | ASSETS.md |
 | PE21 | `r` tokens = 0-7 — `rotation.y = r * Math.PI / 4` | ENTITES.md |
-| PE22 | tunnel de swap `excludeIds = [tokenId, entityId]` dans `isCaseOccupied` | ENTITES.md |
-| PE23 | `buildCollisionMap` au SESSION_JOIN — pas au démarrage serveur | ENTITES.md |
-| PE24 | `collisionMoveToken` : hdel systématique ancienne case, hset conditionnel si `layer != 'gm'` | ENTITES.md |
-| PE25 | maintenance Redis dans REST — jamais dans handlers WS reliques | ENTITES.md |
+| PE22 | mouvement rigide : `excludeOccupantIds = [tokenId, entityId]` dans l'index d'occupation | ENTITES.md |
 | PE26 | `resolveEntityState` : `.returning()` doit inclure `battlemap_id` | ENTITES.md |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation) | ENTITES.md |
-| PE29 | Acteur step-by-step vérifié à `pos_z+1` (espace de marche) | ENTITES.md |
-| PE34 | Pieds token Three.js : `pos_z + 1.0` (top voxel) — pas `pos_z + 0.5` | VOXELS.md |
+| PE29 | acteur et objet validés pas à pas sur supports stables, barrières et occupants du snapshot | ENTITES.md |
+| PE34 | token `world-feet` : `pos_z` est directement l'altitude Y de ses pieds | VOXELS.md |
 | PC41 | Express 5 : routes sans `/` initial → 404 silencieux — toujours `'/:id/foo'` | CONVENTIONS.md |
 | PEF1 | `pack_id` obligatoire sur blueprint | ASSETS.md |
 | PEF2 | fakeTexObj : `{ id, pack_id, faces }` | ASSETS.md |

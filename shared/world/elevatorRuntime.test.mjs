@@ -66,6 +66,29 @@ test('une porte bloquée suspend l’automate puis reprend la transition restant
   assert.equal(resumed.transitionEndsAt, 100600)
 })
 
+test('ouvrir inverse une fermeture au lieu de rester sans effet', () => {
+  const closing = commandElevator(elevator, createInitialElevatorState(elevator), { type: 'close' }, 0)
+  const opening = commandElevator(elevator, closing, { type: 'open' }, 250)
+  assert.equal(opening.phase, 'opening')
+  assert.equal(opening.doorState, 'opening')
+  assert.equal(reconcileElevatorState(elevator, opening, 1250).phase, 'open')
+})
+
+test('utiliser ouvre immédiatement la cabine uniquement au palier où elle se trouve', () => {
+  const closed = reconcileElevatorState(
+    elevator,
+    commandElevator(elevator, createInitialElevatorState(elevator), { type: 'close' }, 0),
+    1000,
+  )
+  const used = commandElevator(elevator, closed, { type: 'use', stopId: 'level:0' }, 1000)
+  assert.equal(used.phase, 'open')
+  assert.equal(used.doorState, 'open')
+  assert.throws(
+    () => commandElevator(elevator, closed, { type: 'use', stopId: 'level:1' }, 1000),
+    /pas présente/,
+  )
+})
+
 test('un état sérialisé peut être réconcilié après redémarrage', () => {
   const requested = requestElevatorStop(elevator, createInitialElevatorState(elevator), {
     stopId: 'level:2', requestId: 'r1', requestedAt: 1000,
@@ -86,4 +109,41 @@ test('un ascenseur dessiné depuis le haut démarre bien au palier choisi', () =
     id: 'elevator-descending', fromLevel: 2, toLevel: 0,
   })
   assert.equal(createInitialElevatorState(descending).currentStopId, 'level:2')
+})
+
+test('un trajet orthogonal conserve l’ordre des arrêts et tourne sans diagonale', () => {
+  const routed = normalizeElevatorDefinition({
+    id: 'elevator-route', width: 2, depth: 1,
+    travelSecondsPerLevel: 1, travelSecondsPerUnit: 1, doorSeconds: 1,
+    stops: [
+      { id: 'a', level: 0, x: 1, y: 0, z: 1, doorAxis: 'z', doorSide: 1 },
+      { id: 'b', level: 1, x: 1, y: 2.5, z: 1, doorAxis: 'x', doorSide: -1 },
+      { id: 'c', level: 1, x: 4, y: 2.5, z: 1, doorAxis: 'z', doorSide: -1 },
+    ],
+  })
+  assert.deepEqual(routed.stops.map(stop => stop.id), ['a', 'b', 'c'])
+  assert.deepEqual(routed.stops.map(stop => [stop.doorAxis, stop.doorSide]), [['z', 1], ['x', -1], ['z', -1]])
+
+  const requested = requestElevatorStop(routed, createInitialElevatorState(routed), {
+    stopId: 'c', requestId: 'route', requestedAt: 0,
+  })
+  const atTurn = reconcileElevatorState(routed, requested, 2000)
+  assert.equal(atTurn.phase, 'moving')
+  assert.deepEqual(
+    { x: atTurn.positionX, y: atTurn.positionY, z: atTurn.positionZ },
+    { x: 1, y: 2.5, z: 1 },
+  )
+  const halfwayHorizontal = reconcileElevatorState(routed, requested, 3500)
+  assert.equal(halfwayHorizontal.positionY, 2.5)
+  assert.ok(halfwayHorizontal.positionX > 1 && halfwayHorizontal.positionX < 4)
+})
+
+test('un trajet diagonal est refusé', () => {
+  assert.throws(() => normalizeElevatorDefinition({
+    id: 'elevator-diagonal',
+    stops: [
+      { id: 'a', x: 0, y: 0, z: 0 },
+      { id: 'b', x: 1, y: 2.5, z: 0 },
+    ],
+  }), /alignés/)
 })

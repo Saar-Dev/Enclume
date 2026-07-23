@@ -5,8 +5,16 @@ import * as THREE from 'three'
 import raycastVoxels from 'fast-voxel-raycast'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
+import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
+import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
+import { compileSurfaceWorld } from '../../../shared/world/worldCompiler.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { persistSurfaceDocument } from '../lib/surfacePersistence.js'
+import {
+  buildWallPlacementVolume,
+  resolveStickyEntityPlacement,
+  validateEntityPlacement,
+} from '../lib/entityPlacementCollision.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
@@ -34,7 +42,9 @@ import {
   normalizeSurfaceData,
   parseFloorKey,
   removeRoomBoundaryArcs,
+  rotateLadderOrientation,
   roomsWallSegments,
+  setVerticalAccessHatch,
   SURFACE_DATA_VERSION,
   SURFACE_FINE,
   yToLevel,
@@ -181,39 +191,44 @@ function GhostVoxel({ position, geometry, rotation }) {
 }
 
 // ─── Ghost entité — preview avant pose ───────────────────────────────────────
-function GhostEntityBounds({ position, blueprint, r }) {
+function GhostEntityBounds({ position, blueprint, r, entityState = {} }) {
   if (!position || !blueprint) return null
   const { x, y, z } = position
   const rot = r * (Math.PI / 2)
-  const width = blueprint.geometry?.width ?? 1
-  const height = blueprint.geometry?.height ?? 1
-  const depth = blueprint.geometry?.depth ?? 1
+  const scale = normalizeEntityScale(entityState)
+  const width = (blueprint.geometry?.width ?? 1) * scale
+  const height = (blueprint.geometry?.height ?? 1) * scale
+  const depth = (blueprint.geometry?.depth ?? 1) * scale
   const authoredOrigin = blueprint.geometry?.origin === 'floor-center' || blueprint.geometry?.origin === 'wall-back-center'
   return (
     <group position={[authoredOrigin ? x : x + width / 2, y, authoredOrigin ? z : z + depth / 2]} rotation={[0, rot, 0]}>
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[width, height, depth]} />
         <meshBasicMaterial color="#5b8dee" transparent opacity={0.18} depthWrite={false} />
-        <Edges color="#7fb0ff" transparent opacity={0.9} />
+        <Edges color="#7fb0ff" transparent opacity={0.95} />
       </mesh>
     </group>
   )
 }
 
-function GhostEntity({ position, blueprint, r }) {
+function GhostEntity({
+  position,
+  blueprint,
+  r,
+  entityState = {},
+  currentStateId = 0,
+}) {
   if (!position || !blueprint) return null
   const entity = {
     id: `preview:${blueprint.id}`,
     blueprint_id: blueprint.id,
-    pos_x: position.x,
-    pos_y: position.z,
-    pos_z: position.y,
+    ...worldPointToDbPosition(position),
     r,
-    state: {},
-    current_state_id: 0,
+    state: entityState,
+    current_state_id: currentStateId,
   }
   return (
-    <Suspense fallback={<GhostEntityBounds position={position} blueprint={blueprint} r={r} />}>
+    <Suspense fallback={<GhostEntityBounds position={position} blueprint={blueprint} r={r} entityState={entityState} />}>
       <EntityMesh
         entity={entity}
         blueprint={blueprint}
@@ -252,6 +267,7 @@ function EntityEditorScene({
   const moveGhostRef = useRef(null)
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const [ghostPos, setGhostPos] = useState(null)
+  const ghostPosRef = useRef(null)
   const [ghostR, setGhostR] = useState(0)
   const ghostRRef = useRef(0)
   const [moveGhost, setMoveGhost] = useState(null)
@@ -287,16 +303,27 @@ function EntityEditorScene({
     return supports
   }, [displayLevel, expandedSurface.floors])
 
-  const displayedWallSupports = useMemo(() => {
+  const wallRenderBoxes = useMemo(() => {
     const surface = normalizeSurfaceData(surfaceData)
     const walls = cutWallsForDoorConnectors([
       ...roomsWallSegments(surface.rooms),
       ...Object.entries(surface.walls || {}).map(([id, wall]) => ({ ...wall, id: wall?.id || id })),
     ], surface.connectors)
     return walls.flatMap(wall => {
-      if (!wall?.id || !wall?.axis || wall.axis === 'segment' || yToLevel(wall.y) !== displayLevel) return []
+      if (!wall?.id || !wall?.axis) return []
       const renderBox = getWallRenderBox(wall)
       if (!renderBox) return []
+      return [{ wall, renderBox }]
+    })
+  }, [surfaceData])
+
+  const displayedWallRenderBoxes = useMemo(() => (
+    wallRenderBoxes.filter(({ wall }) => yToLevel(wall.y) === displayLevel)
+  ), [displayLevel, wallRenderBoxes])
+
+  const displayedWallSupports = useMemo(() => (
+    displayedWallRenderBoxes.flatMap(({ wall, renderBox }) => {
+      if (wall.axis === 'segment') return []
       const [width, height, depth] = renderBox.args
       const [x, y, z] = renderBox.position
       const min = new THREE.Vector3(x - width / 2, y - height / 2, z - depth / 2)
@@ -312,7 +339,60 @@ function EntityEditorScene({
         topY: max.y,
       }]
     })
-  }, [displayLevel, surfaceData])
+  ), [displayedWallRenderBoxes])
+
+  const displayedWallPlacementVolumes = useMemo(() => (
+    wallRenderBoxes
+      .map(({ wall, renderBox }) => buildWallPlacementVolume(renderBox, wall.id))
+      .filter(Boolean)
+  ), [wallRenderBoxes])
+
+  const structuralPlacementVolumes = useMemo(() => {
+    if (!hasSurfaceContent(surfaceData)) return []
+    try {
+      const snapshot = compileSurfaceWorld({ surfaceData, battlemapId })
+      return snapshot.spatial.colliders.flatMap(collider => {
+        if (collider.kind === 'wall' || !collider.bounds?.min || !collider.bounds?.max) return []
+        const min = collider.bounds.min
+        const max = collider.bounds.max
+        const width = Number(max.x) - Number(min.x)
+        const height = Number(max.y) - Number(min.y)
+        const depth = Number(max.z) - Number(min.z)
+        const volume = buildWallPlacementVolume({
+          position: [
+            Number(min.x) + width / 2,
+            Number(min.y) + height / 2,
+            Number(min.z) + depth / 2,
+          ],
+          args: [width, height, depth],
+        }, collider.id, collider.kind)
+        return volume ? [volume] : []
+      })
+    } catch (error) {
+      console.warn('[EntityEditor] Volumes structurels indisponibles :', error)
+      return []
+    }
+  }, [battlemapId, surfaceData])
+
+  const legacyVoxelPlacementVolumes = useMemo(() => {
+    if (hasSurfaceContent(surfaceData)) return []
+    return Object.entries(voxels).map(([id, voxel]) => {
+      const halfHeight = voxel.geo === 'slab_bottom' || voxel.geo === 'slab_top' ? 0.25 : 0.5
+      const centerY = voxel.y + (voxel.geo === 'slab_bottom' ? 0.25 : voxel.geo === 'slab_top' ? 0.75 : 0.5)
+      return buildWallPlacementVolume({
+        position: [voxel.x + 0.5, centerY, voxel.z + 0.5],
+        args: [1, halfHeight * 2, 1],
+      }, `voxel:${id}`, 'voxel')
+    }).filter(Boolean)
+  }, [surfaceData, voxels])
+
+  const placementObstacleVolumes = useMemo(() => (
+    [
+      ...displayedWallPlacementVolumes,
+      ...structuralPlacementVolumes,
+      ...legacyVoxelPlacementVolumes,
+    ]
+  ), [displayedWallPlacementVolumes, legacyVoxelPlacementVolumes, structuralPlacementVolumes])
 
   const columnTops = useMemo(() => {
     const tops = {}
@@ -516,18 +596,38 @@ function EntityEditorScene({
     }
   }, [calcEntityPos, camera, columnTops, displayLevel, displayedFloorSupports, displayedWallSupports, gl, surfaceData])
 
+  const validatePlacement = useCallback((position, blueprint, {
+    entityId = null,
+    entityState = {},
+    currentStateId = 0,
+    rotation = position?.r || 0,
+  } = {}) => validateEntityPlacement({
+    position,
+    rotation,
+    blueprint,
+    entityState,
+    currentStateId,
+    entityId,
+    entities,
+    blueprints,
+    obstacleVolumes: placementObstacleVolumes,
+  }), [blueprints, entities, placementObstacleVolumes])
+
   const rotateGhostPreview = useCallback(direction => {
     if (!activeBlueprint?.id || blueprintPlacementMode(activeBlueprint) === 'wall') return
     const nextRotation = (ghostRRef.current + direction + 4) % 4
-    ghostRRef.current = nextRotation
-    setGhostR(nextRotation)
-    setGhostPos(calcPreciseEntityPos(
+    const nextPosition = calcPreciseEntityPos(
       mousePosRef.current.x,
       mousePosRef.current.y,
       activeBlueprint,
       nextRotation,
-    ))
-  }, [activeBlueprint, calcPreciseEntityPos])
+    )
+    if (!nextPosition || !validatePlacement(nextPosition, activeBlueprint, { rotation: nextRotation }).valid) return
+    ghostRRef.current = nextRotation
+    setGhostR(nextRotation)
+    ghostPosRef.current = nextPosition
+    setGhostPos(nextPosition)
+  }, [activeBlueprint, calcPreciseEntityPos, validatePlacement])
 
   usePlacementWheelRotation({
     element: gl.domElement,
@@ -579,17 +679,43 @@ function EntityEditorScene({
         if (drag.moved) {
           const entity = entities.find(item => item.id === drag.entityId)
           const blueprint = entity ? blueprints[entity.blueprint_id] : null
-          const next = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
-          if (next && entity && blueprint) {
-            const preview = { entityId: entity.id, position: next, blueprint, r: next.r ?? entity.r ?? 0 }
+          const desired = calcPreciseEntityPos(e.clientX, e.clientY, blueprint, entity?.r || 0)
+          if (desired && entity && blueprint) {
+            const rotation = desired.r ?? entity.r ?? 0
+            const validate = position => validatePlacement(position, blueprint, {
+              entityId: entity.id,
+              entityState: entity.state,
+              currentStateId: entity.current_state_id,
+              rotation,
+            })
+            const next = resolveStickyEntityPlacement({
+              previousPosition: drag.lastValidPosition,
+              desiredPosition: desired,
+              validate,
+            })
+            if (!next) return
+            drag.lastValidPosition = next
+            const preview = { entityId: entity.id, position: next, blueprint, r: rotation }
+            preview.entityState = entity.state || {}
+            preview.currentStateId = entity.current_state_id || 0
             moveGhostRef.current = preview
             setMoveGhost(preview)
           }
         }
         return
       }
-      if (!activeBlueprint?.id) { setGhostPos(null); return }
-      const next = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      if (!activeBlueprint?.id) {
+        ghostPosRef.current = null
+        setGhostPos(null)
+        return
+      }
+      const desired = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      const next = resolveStickyEntityPlacement({
+        previousPosition: ghostPosRef.current,
+        desiredPosition: desired,
+        validate: position => validatePlacement(position, activeBlueprint, { rotation: position?.r ?? ghostR }),
+      })
+      ghostPosRef.current = next
       setGhostPos(prev => (
         prev?.x === next?.x
           && prev?.y === next?.y
@@ -603,7 +729,7 @@ function EntityEditorScene({
     }
     canvas.addEventListener('mousemove', onMove)
     return () => canvas.removeEventListener('mousemove', onMove)
-  }, [gl, activeBlueprint, blueprints, calcPreciseEntityPos, entities, ghostR])
+  }, [gl, activeBlueprint, blueprints, calcPreciseEntityPos, entities, ghostR, validatePlacement])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -621,7 +747,14 @@ function EntityEditorScene({
           startX: e.clientX,
           startY: e.clientY,
           moved: false,
+          lastValidPosition: {
+            x: entity.pos_x,
+            y: entity.pos_z,
+            z: entity.pos_y,
+            r: entity.r || 0,
+          },
         }
+        ghostPosRef.current = null
         setGhostPos(null)
         e.preventDefault()
         return
@@ -630,23 +763,32 @@ function EntityEditorScene({
         onEntitySelect?.(null, e.clientX, e.clientY)
         return
       }
-      const pos = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      const desired = calcPreciseEntityPos(e.clientX, e.clientY, activeBlueprint, ghostR)
+      const pos = resolveStickyEntityPlacement({
+        previousPosition: ghostPosRef.current,
+        desiredPosition: desired,
+        validate: position => validatePlacement(position, activeBlueprint, { rotation: position?.r ?? ghostR }),
+      })
       if (!pos) return
+      const validation = validatePlacement(pos, activeBlueprint, { rotation: pos.r ?? ghostR })
+      if (!validation.valid) return
       try {
         const res = await api.post(`/battlemaps/${battlemapId}/entities`, {
           blueprint_id: activeBlueprint.id,
-          pos_x: pos.x, pos_y: pos.z, pos_z: pos.y, r: pos.r ?? ghostR, // PE14
+          ...worldPointToDbPosition(pos),
+          r: pos.r ?? ghostR,
           state: { placement: pos.placement || { mode: 'free', level: displayLevel } },
         })
         addEntity(res.data.entity)   // mise à jour store locale immédiate
         socket?.emit(WS.ENTITY_CREATED, { entityId: res.data.entity.id })
+        ghostPosRef.current = null
         setGhostPos(null)
         onBlueprintPlaced?.(res.data.entity)
       } catch (err) { console.error('[EntityEditor] Erreur pose entité :', err) }
     }
     canvas.addEventListener('mousedown', onMouseDown)
     return () => canvas.removeEventListener('mousedown', onMouseDown)
-  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity])
+  }, [gl, activeBlueprint, battlemapId, displayLevel, ghostR, calcPreciseEntityPos, socket, entities, getEntityUnderCursor, onEntitySelect, onBlueprintPlaced, addEntity, validatePlacement])
 
   useEffect(() => {
     const onMouseUp = async () => {
@@ -656,11 +798,17 @@ function EntityEditorScene({
       moveGhostRef.current = null
       setMoveGhost(null)
       if (!drag?.moved || !preview || preview.entityId !== drag.entityId) return
+      const entity = entities.find(item => item.id === drag.entityId)
+      const blueprint = entity ? blueprints[entity.blueprint_id] : null
+      if (!entity || !blueprint || !validatePlacement(preview.position, blueprint, {
+        entityId: entity.id,
+        entityState: entity.state,
+        currentStateId: entity.current_state_id,
+        rotation: preview.r,
+      }).valid) return
       try {
         const res = await api.put(`/entities/${drag.entityId}`, {
-          pos_x: preview.position.x,
-          pos_y: preview.position.z,
-          pos_z: preview.position.y,
+          ...worldPointToDbPosition(preview.position),
           r: preview.r,
           state: {
             ...(entities.find(entity => entity.id === drag.entityId)?.state || {}),
@@ -682,7 +830,7 @@ function EntityEditorScene({
     }
     window.addEventListener('mouseup', onMouseUp)
     return () => window.removeEventListener('mouseup', onMouseUp)
-  }, [entities, socket, updateEntity])
+  }, [blueprints, entities, socket, updateEntity, validatePlacement])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -694,6 +842,18 @@ function EntityEditorScene({
         const blueprint = blueprints[entity.blueprint_id]
         if (blueprintPlacementMode(blueprint) === 'wall') return
         const newR = (entity.r + 1) % 4
+        const validation = validatePlacement({
+          x: entity.pos_x,
+          y: entity.pos_z,
+          z: entity.pos_y,
+          r: newR,
+        }, blueprint, {
+          entityId: entity.id,
+          entityState: entity.state,
+          currentStateId: entity.current_state_id,
+          rotation: newR,
+        })
+        if (!validation.valid) return
         api.put(`/entities/${entityId}`, { r: newR })
           .then(res => {
             updateEntity(res.data.entity)
@@ -711,7 +871,7 @@ function EntityEditorScene({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, rotateGhostPreview, socket, updateEntity])
+  }, [activeBlueprint, blueprints, entities, getEntityUnderCursor, rotateGhostPreview, socket, updateEntity, validatePlacement])
 
   // ─── Suppression entité — touche Delete/Backspace ───────────────────────
   // Entité sous le curseur → DELETE REST → removeEntity + WS.
@@ -800,10 +960,20 @@ function EntityEditorScene({
         )
       })}
       {ghostPos && activeBlueprint && (
-        <GhostEntity position={ghostPos} blueprint={activeBlueprint} r={ghostPos.r ?? ghostR} />
+        <GhostEntity
+          position={ghostPos}
+          blueprint={activeBlueprint}
+          r={ghostPos.r ?? ghostR}
+        />
       )}
       {moveGhost && (
-        <GhostEntity position={moveGhost.position} blueprint={moveGhost.blueprint} r={moveGhost.r} />
+        <GhostEntity
+          position={moveGhost.position}
+          blueprint={moveGhost.blueprint}
+          r={moveGhost.r}
+          entityState={moveGhost.entityState}
+          currentStateId={moveGhost.currentStateId}
+        />
       )}
     </>
   )
@@ -1210,7 +1380,7 @@ export default function Editor3D({
   onBlueprintPlaced,
 }) {
   const { battlemap, setBattlemap } = useMapStore()
-  const { entities } = useEntityStore()
+  const { entities, blueprints } = useEntityStore()
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
 
   const [voxels, setVoxels] = useState({})
@@ -1237,10 +1407,12 @@ export default function Editor3D({
   const [surfaceRedoDepth, setSurfaceRedoDepth] = useState(0)
   const surfaceUndoRequestRef = useRef(surfaceUndoRequest)
   const surfaceRedoRequestRef = useRef(surfaceRedoRequest)
+  const previousSurfaceToolModeRef = useRef(surfaceTool?.mode)
   // voxelsRef — miroir de voxels pour accès dans le cleanup useEffect (évite le stale closure)
   const voxelsRef = useRef(voxels)
   useEffect(() => { voxelsRef.current = voxels }, [voxels])
   const surfaceDataRef = useRef(surfaceData)
+  const verticalAccessSelectionRef = useRef('')
   const surfaceQueuedBaseRef = useRef(normalizeSurfaceData(null))
   const processedRoomArcActionRef = useRef(null)
   const processedWallElevationProfileActionRef = useRef(null)
@@ -1570,6 +1742,16 @@ export default function Editor3D({
     const stair = surfaceData.stairs?.[connectorId]
     return stair ? { id: connectorId, ...stair, type: 'stairs' } : null
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors, surfaceData.stairs])
+  const selectedLadderHatch = useMemo(() => {
+    if (selectedSurfaceConnector?.type !== 'ladder') return null
+    return Object.entries(surfaceData.connectors || {}).find(([, connector]) => (
+      connector?.type === 'hatch'
+        && String(connector.linkedLadderId) === String(selectedSurfaceConnector.id)
+    ))?.[1] || null
+  }, [selectedSurfaceConnector, surfaceData.connectors])
+  const hatchBlueprintChoices = useMemo(() => Object.values(blueprints || {})
+    .filter(blueprint => blueprint?.geometry?.connectorType === 'hatch')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label))), [blueprints])
 
   const selectedSurfaceRoom = useMemo(() => {
     const roomId = surfaceWallPanel?.roomId || surfaceRoomPanel?.roomId
@@ -1653,6 +1835,131 @@ export default function Editor3D({
     })
   }, [handleSurfaceDataChange])
 
+  const handleVerticalAccessHatchChange = useCallback((ladderId, blueprint) => {
+    const tool = blueprint
+      ? {
+          ladderHatch: true,
+          hatchBlueprintId: blueprint.id || null,
+          hatchModelLabel: blueprint.label || null,
+          hatchModelCategory: blueprint.category || null,
+          hatchModelGlbUrl: blueprint.glb_url || null,
+          hatchModelBuiltinKey: blueprint.builtin_key || null,
+          hatchModelGeometry: blueprint.geometry || null,
+        }
+      : { ladderHatch: false }
+    const nextSurfaceData = setVerticalAccessHatch(surfaceDataRef.current, ladderId, tool)
+    if (nextSurfaceData !== surfaceDataRef.current) handleSurfaceDataChange(nextSurfaceData)
+    const selectionKey = `${ladderId}:${blueprint ? blueprint.id || blueprint.glb_url || 'hatch' : 'ladder-only'}:${Number(surfaceTool?.ladderRotationQuarterTurns ?? surfaceTool?.hatchRotationQuarterTurns) || 0}`
+    verticalAccessSelectionRef.current = selectionKey
+    onSurfaceToolChange?.(current => ({
+      ...current,
+      mode: 'select',
+      connectorType: 'ladder',
+      selectedConnectorId: ladderId,
+      verticalAccessEditLadderId: ladderId,
+      ladderHatch: Boolean(blueprint),
+      hatchBlueprintId: blueprint?.id || null,
+      hatchModelLabel: blueprint?.label || null,
+      hatchModelCategory: blueprint?.category || null,
+      hatchModelGlbUrl: blueprint?.glb_url || null,
+      hatchModelBuiltinKey: blueprint?.builtin_key || null,
+      hatchModelGeometry: blueprint?.geometry || null,
+      hatchMaterialOverrides: {},
+    }))
+  }, [handleSurfaceDataChange, onSurfaceToolChange, surfaceTool?.hatchRotationQuarterTurns, surfaceTool?.ladderRotationQuarterTurns])
+
+  const handleVerticalAccessRotate = useCallback((ladderId, delta) => {
+    const ladder = surfaceDataRef.current.connectors?.[ladderId]
+    if (!ladder || ladder.type !== 'ladder') return
+    const rotated = rotateLadderOrientation(ladder, delta)
+    const linkedHatch = Object.values(surfaceDataRef.current.connectors || {}).find(connector => (
+      connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)
+    )) || null
+    verticalAccessSelectionRef.current = ''
+    onSurfaceToolChange?.(current => ({
+      ...current,
+      mode: 'select',
+      connectorType: 'ladder',
+      selectedConnectorId: ladderId,
+      verticalAccessEditLadderId: ladderId,
+      ladderAxis: rotated.axis,
+      ladderSide: rotated.side,
+      ladderRotationQuarterTurns: rotated.rotationQuarterTurns,
+      ladderHatch: Boolean(linkedHatch),
+      hatchRotationQuarterTurns: rotated.rotationQuarterTurns,
+      hatchBlueprintId: linkedHatch?.modelBlueprintId || null,
+      hatchModelLabel: linkedHatch?.modelLabel || null,
+      hatchModelCategory: linkedHatch?.modelCategory || null,
+      hatchModelGlbUrl: linkedHatch?.modelGlbUrl || null,
+      hatchModelBuiltinKey: linkedHatch?.modelBuiltinKey || null,
+      hatchModelGeometry: linkedHatch?.modelGeometry || null,
+      hatchMaterialOverrides: linkedHatch?.modelMaterialOverrides || {},
+    }))
+  }, [onSurfaceToolChange])
+
+  useEffect(() => {
+    const ladderId = surfaceTool?.verticalAccessEditLadderId
+    if (!ladderId) return
+    const quarterTurns = Number(surfaceTool?.ladderRotationQuarterTurns ?? surfaceTool?.hatchRotationQuarterTurns) || 0
+    const selectionKey = `${ladderId}:${surfaceTool?.ladderHatch === false ? 'ladder-only' : surfaceTool?.hatchBlueprintId || surfaceTool?.hatchModelGlbUrl || 'hatch'}:${quarterTurns}`
+    if (verticalAccessSelectionRef.current === selectionKey) return
+    verticalAccessSelectionRef.current = selectionKey
+    const currentSurfaceData = surfaceDataRef.current
+    const ladder = currentSurfaceData.connectors?.[ladderId]
+    if (!ladder || ladder.type !== 'ladder') return
+    const ladderSide = quarterTurns < 2 ? -1 : 1
+    const ladderAxis = quarterTurns % 2 === 0 ? 'x' : 'z'
+    const currentHatch = Object.values(currentSurfaceData.connectors || {}).find(connector => (
+      connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)
+    )) || null
+    const wantsHatch = surfaceTool?.ladderHatch !== false
+    const orientationAlreadyMatches = ladder.axis === ladderAxis
+      && (Number(ladder.side) > 0 ? 1 : -1) === ladderSide
+      && (Number(ladder.rotationQuarterTurns) || 0) === quarterTurns
+    const hatchAlreadyMatches = wantsHatch
+      ? Boolean(currentHatch)
+        && String(currentHatch.modelBlueprintId || '') === String(surfaceTool?.hatchBlueprintId || '')
+        && (Number(currentHatch.rotationQuarterTurns) || 0) === quarterTurns
+      : !currentHatch
+    if (orientationAlreadyMatches && hatchAlreadyMatches) return
+    const connectors = {
+      ...(currentSurfaceData.connectors || {}),
+      [ladderId]: {
+        ...ladder,
+        axis: ladderAxis,
+        side: ladderSide,
+        rotationQuarterTurns: quarterTurns,
+      },
+    }
+    const orientedSurfaceData = { ...currentSurfaceData, connectors }
+    const nextSurfaceData = setVerticalAccessHatch(orientedSurfaceData, ladderId, {
+      ladderHatch: surfaceTool?.ladderHatch !== false,
+      hatchBlueprintId: surfaceTool?.hatchBlueprintId || null,
+      hatchModelLabel: surfaceTool?.hatchModelLabel || null,
+      hatchModelCategory: surfaceTool?.hatchModelCategory || null,
+      hatchModelGlbUrl: surfaceTool?.hatchModelGlbUrl || null,
+      hatchModelBuiltinKey: surfaceTool?.hatchModelBuiltinKey || null,
+      hatchModelGeometry: surfaceTool?.hatchModelGeometry || null,
+      hatchMaterialOverrides: surfaceTool?.hatchMaterialOverrides || {},
+      hatchRotationQuarterTurns: quarterTurns,
+      preserveHatchOrientation: false,
+    })
+    handleSurfaceDataChange(nextSurfaceData)
+  }, [
+    handleSurfaceDataChange,
+    surfaceTool?.hatchBlueprintId,
+    surfaceTool?.hatchMaterialOverrides,
+    surfaceTool?.hatchModelBuiltinKey,
+    surfaceTool?.hatchModelCategory,
+    surfaceTool?.hatchModelGeometry,
+    surfaceTool?.hatchModelGlbUrl,
+    surfaceTool?.hatchModelLabel,
+    surfaceTool?.hatchRotationQuarterTurns,
+    surfaceTool?.ladderHatch,
+    surfaceTool?.ladderRotationQuarterTurns,
+    surfaceTool?.verticalAccessEditLadderId,
+  ])
+
   const handleSurfaceConnectorDelete = useCallback(connectorId => {
     if (!connectorId) return
     const currentSurfaceData = surfaceDataRef.current
@@ -1668,7 +1975,13 @@ export default function Editor3D({
     }
     if (!currentSurfaceData.connectors?.[connectorId]) return
     const connectors = { ...(currentSurfaceData.connectors || {}) }
+    const connector = connectors[connectorId]
     delete connectors[connectorId]
+    if (connector?.type === 'ladder') {
+      for (const [id, candidate] of Object.entries(connectors)) {
+        if (candidate?.type === 'hatch' && candidate?.linkedLadderId === connectorId) delete connectors[id]
+      }
+    }
     handleSurfaceDataChange({ ...currentSurfaceData, version: SURFACE_DATA_VERSION, connectors })
     setSurfaceConnectorPanel(null)
     if (surfaceTool?.selectedConnectorId === connectorId) {
@@ -1702,6 +2015,31 @@ export default function Editor3D({
     onSurfaceToolChange?.({
       ...surfaceTool,
       selectedConnectorId: null,
+    })
+  }, [onSurfaceToolChange, surfaceTool])
+
+  const continueElevatorRoute = useCallback((connector) => {
+    if (!connector || connector.type !== 'elevator') return
+    const lastStop = connector.stops?.at(-1)
+    setSurfaceConnectorPanel(null)
+    onSurfaceToolChange?.({
+      ...surfaceTool,
+      mode: 'connector',
+      connectorType: 'elevator',
+      connectorPlacementSource: 'surface-editor',
+      selectedConnectorId: connector.id,
+      elevatorDraftStops: connector.stops || [],
+      elevatorEditConnectorId: connector.id,
+      elevatorDoorAxis: lastStop?.doorAxis === 'x' ? 'x' : 'z',
+      elevatorDoorSide: Number(lastStop?.doorSide) < 0 ? -1 : 1,
+      connectorBlueprintId: connector.modelBlueprintId || null,
+      connectorModelLabel: connector.modelLabel || null,
+      connectorModelCategory: connector.modelCategory || null,
+      connectorModelGlbUrl: connector.modelGlbUrl || null,
+      connectorModelBuiltinKey: connector.modelBuiltinKey || null,
+      connectorModelGeometry: connector.modelGeometry || null,
+      connectorMaterialOverrides: connector.modelMaterialOverrides || {},
+      roomArcError: null,
     })
   }, [onSurfaceToolChange, surfaceTool])
 
@@ -1741,6 +2079,15 @@ export default function Editor3D({
     if (surfaceTool?.mode === 'select') return
     setSurfaceConnectorPanel(null)
   }, [surfaceConnectorPanel, surfaceTool?.mode])
+
+  useEffect(() => {
+    const previousMode = previousSurfaceToolModeRef.current
+    previousSurfaceToolModeRef.current = surfaceTool?.mode
+    const connectorId = surfaceTool?.selectedConnectorId
+    if (previousMode !== 'connector' || surfaceTool?.mode !== 'select' || !connectorId) return
+    if (surfaceData.connectors?.[connectorId]?.type !== 'elevator') return
+    setSurfaceConnectorPanel({ connectorId, x: 24, y: 24 })
+  }, [surfaceData.connectors, surfaceTool?.mode, surfaceTool?.selectedConnectorId])
 
   useEffect(() => {
     const placingOpeningOnSelectedWall = surfaceTool?.mode === 'connector'
@@ -1952,7 +2299,7 @@ export default function Editor3D({
 
   const activeStructuralConnectorType = activeBlueprint?.geometry?.connectorType
   const placingStructuralObject = activeEditorTab === 'entity'
-    && ['window', 'screen-window', 'skylight', 'stairs', 'ladder'].includes(activeStructuralConnectorType)
+    && ['window', 'screen-window', 'skylight', 'stairs', 'ladder', 'elevator'].includes(activeStructuralConnectorType)
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -2027,12 +2374,17 @@ export default function Editor3D({
         <SurfaceConnectorPanel
           key={surfaceConnectorPanel.connectorId}
           connector={selectedSurfaceConnector}
+          linkedHatch={selectedLadderHatch}
+          hatchChoices={hatchBlueprintChoices}
+          onVerticalAccessHatchChange={handleVerticalAccessHatchChange}
+          onVerticalAccessRotate={handleVerticalAccessRotate}
           x={surfaceConnectorPanel.x}
           y={surfaceConnectorPanel.y}
           onPatch={handleSurfaceConnectorPatch}
           onDelete={handleSurfaceConnectorDelete}
           runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
           onElevatorCommand={handleElevatorCommand}
+          onContinueElevatorRoute={continueElevatorRoute}
           onClose={closeSurfaceConnectorPanel}
         />
       )}

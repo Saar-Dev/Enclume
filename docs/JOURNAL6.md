@@ -4936,3 +4936,303 @@ worktree Saar et le worktree monde n'ont pas été modifiés.
 **Publication** : `git push origin integration baseline/common-20260718` a été tenté avec les
 prompts désactivés et a échoué avant transfert, faute d'identifiant GitHub pour le compte système
 `codex`. Aucune authentification de Saar n'a été utilisée ; la branche et le tag restent locaux.
+
+---
+
+## Session 158 (suite 1, Codex) — 2026-07-22 — Trappe d'échelle et grille ajourée ⚠️ CLOS PARTIEL
+
+**Objectif** : compléter l'échelle par une vraie fermeture de palier et fournir une apparence de
+grille métallique détaillée, réutilisable sur les structures sans imposer un modèle Blender par
+objet.
+
+**Trappe canonique** : la pose d'une échelle crée par défaut un connecteur `hatch` lié. Sa découpe
+est permanente dans la dalle haute. Fermée ou verrouillée, la trappe compile support, collider et
+barrière ; ouverte ou détruite, elle les retire et autorise la traversée `climb`. Le panneau pivote
+autour de ses charnières et son état runtime est modifiable par le MJ via une route dédiée utilisant
+le registre commun `featureStates`.
+
+**Matériau** : le motif `industrial_grate` génère albedo RGBA et normal map procéduraux. Le renderer
+utilise `alphaTest` et `DoubleSide` sur les surfaces, sans relief géométrique artificiel, et un
+matériau métallique plein compagnon pour les chants, cadres, rails et barreaux. Le choix du motif
+applique explicitement le preset physique `grate` hors salle ; le compilateur continue de lire les
+canaux physiques, jamais l'alpha de la texture.
+
+**Testé localement** : 141/141 tests monde/serveur, 41/41 tests Surface, 3/3 tests de configuration,
+build Vite réussi, syntaxe de la route serveur valide et ESLint ciblé sans erreur. Un rendu PNG RGBA
+a été généré dans Chromium et inspecté sur damier : les ouvertures sont entièrement transparentes,
+les barreaux restent détaillés.
+
+**Déploiement** : commit `0e6fc53` fast-forwardé sur `dev/monde`, après création du tag
+`backup/pre-session159-20260722-grate`. Les dépendances racine/client/serveur ont été réinstallées
+sans vulnérabilité signalée, puis `enclume-codex-client` et `enclume-codex-server` ont été redémarrés.
+Le client `8293`, l'API `8294` et le smoke Chromium distant répondent sans erreur. Les instances
+`8193/8194` et `8393/8394` n'ont pas été touchées.
+
+**Non testé** : création, ouverture et persistance de la trappe dans une vraie carte authentifiée,
+ainsi que le rendu intégré sur chaque type de surface. La livraison reste donc close partiellement
+jusqu'à cette recette fonctionnelle ; aucune donnée de carte distante n'a été modifiée.
+
+**Retour arrière** : retirer les branches `hatch` du document, du compilateur, du renderer et de la
+route runtime, puis retirer le motif `industrial_grate`. Aucun schéma SQL ni conversion de carte
+n'est nécessaire.
+
+---
+
+## Session 159 (suite 1, Codex) — 2026-07-22 — Grilles minces et trappes modelables ✅ CLOS
+
+**Retour visuel** : le pas du motif était adapté aux murs et aux dalles, mais trop large sur les
+marches. Les faces opposées d'un mur ou d'un sol ajouré produisaient en outre deux réseaux séparés
+par toute l'épaisseur structurelle. La commande de charnière binaire ne permettait pas non plus de
+préparer des variantes réalistes de trappes.
+
+**Rendu** : les marches répètent désormais le cutout 2 × 2 sur leur dessus uniquement. Les sols,
+plafonds, murs ajourés des deux côtés et trappes affichent une coque métallique unique de 4,5 cm,
+alignée sur leur face de support. Ce changement est exclusivement visuel : le compilateur conserve
+les dimensions structurelles complètes pour les supports, collisions et canaux de visibilité.
+
+**Trappes** : les contrôles d'orientation sont devenus deux rotations gauche/droite à 90°. La
+palette accepte maintenant des blueprints GLB de connecteur `hatch` et persiste leurs métadonnées
+de modèle et de matériaux. Le renderer sait les orienter et piloter leurs animations d'état ; faute
+d'asset, il conserve le panneau procédural. Le contrat documenté couvre les futurs modèles à
+écoutille, coulissants ou munis d'un boîtier sans confier leur physique au maillage.
+
+**Testé** : 141/141 tests monde/serveur, 41/41 tests Surface, build Vite et ESLint ciblé réussis.
+Le vrai `SurfaceDungeonScene` a été monté sous Chromium avec dalle, mur, trappe et escalier ajourés :
+la transparence, la coque mince et le motif resserré ont été visibles sans exception navigateur.
+
+**Déploiement** : le code fonctionnel `d7bf60b` a été fast-forwardé sur `dev/monde` après création
+du tag `backup/pre-session159-grate-refinement-20260722`, puis le redémarrage a été limité à
+`enclume-codex-client` et `enclume-codex-server`. Le health `8294` et le smoke Chromium distant sur
+`8293` sont verts. Les instances de Saar et de fusion ne sont pas touchées. Aucun schéma SQL,
+migration ni conversion de carte n'est requis.
+
+**Suite artistique** : aucun nouveau GLB de trappe n'est inventé dans cette livraison. Les modèles
+écoutille, coulissant et boîtier devront être produits puis importés avec `connector_type: hatch` ;
+ils apparaîtront automatiquement dans le sélecteur dédié.
+
+---
+
+## Session 159 (suite 2, Codex) — 2026-07-22 — Marches ajourées et murs bilatéraux ✅ CLOS
+
+**Cause des marches** : l'escalier droit utilisait encore ses volumes physiques croissants comme
+meshes visibles. Seul le dessus recevait le cutout, tandis que les faces verticales formaient une
+pile de blocs pleins. Le matériau compagnon des chants était en outre simple face. Selon l'angle,
+ces contours apparaissaient ou disparaissaient derrière les ajours.
+
+**Correction des marches** : le rendu extrait désormais de chaque volume une plaque mince alignée
+sur le plan praticable. Le dessus et le dessous sont ajourés, les chants métalliques sont
+recto-verso, et la surbrillance de sélection suit cette plaque. Le motif utilise une densité ×4
+pondérée par largeur et profondeur pour conserver des mailles proportionnées. La géométrie serveur,
+les supports, collisions et ancrages restent inchangés.
+
+**Cause du mur** : les murs tournés vers la caméra recevaient volontairement une opacité de coupe
+de 18 % pour révéler les pièces. Sur une grille déjà largement ajourée, ce fondu faisait presque
+disparaître les barreaux d'un côté malgré le cutout `DoubleSide`.
+
+**Correction du mur** : un mur ajouré sur ses deux faces reste à pleine intensité dans les deux
+directions et ses chants métalliques sont recto-verso. Les murs opaques conservent leur coupe caméra.
+
+**Testé localement** : 141/141 tests monde/serveur, 41/41 tests Surface, 3/3 configuration, build
+Vite et ESLint ciblé verts. Un harness temporaire a monté le vrai `SurfaceDungeonScene` dans deux
+caméras opposées : le mur est présent des deux côtés et les marches sont minces, proportionnées et
+ajourées dessus/dessous, sans exception JavaScript. Le harness n'est pas conservé dans le dépôt.
+
+**Déploiement** : le code fonctionnel `d8fea5a` a été fast-forwardé sur `dev/monde` après création
+du tag `backup/pre-session159-grate-visibility-20260722`. Les 141 tests monde/serveur, 41 tests
+Surface, 3 tests de configuration et le build ont aussi réussi sur Kiwi. Seuls
+`enclume-codex-client` et `enclume-codex-server` ont été redémarrés ; le health `8294` et le smoke
+Chromium distant `8293` sont verts. Les instances de Saar et de fusion n'ont pas été touchées.
+
+---
+
+## Session 159 (suite 3, Codex) — 2026-07-22 — Grilles mono-plan ✅ CLOS
+
+**Décision de rendu** : la coque mince conservait deux peaux ajourées. À très courte distance et
+en vue rasante, leur parallaxe recréait donc une double grille sur les murs et les sols. L'extrusion
+réelle des barreaux a été écartée au profit du choix le moins coûteux pour des décors très grillagés,
+comme une prison : un seul plan recto-verso.
+
+**Implémentation** : `SingleSurfaceSheet` rend un mesh `DoubleSide` lorsque les deux directions
+partagent le même matériau. Si elles diffèrent, deux matériaux strictement coplanaires sont limités
+respectivement à `FrontSide` et `BackSide`. Murs droits, murs courbes, sols, plafonds, passerelles,
+empreintes découpées et trappes procédurales utilisent ce chemin lorsque leurs deux faces sont en
+cutout. Le plan suit le support utile ; aucune deuxième peau ne reste derrière les trous.
+
+**Séparation moteur/rendu** : les escaliers restent des plateaux minces puisque leur rendu a été
+validé. Tous les volumes structurels restent inchangés côté compilateur : collision, support, LOS,
+traversées et découpes n'utilisent jamais le plan graphique.
+
+**Testé localement** : 141/141 tests monde/serveur, 41/41 tests Surface, 3/3 configuration, build
+Vite et ESLint ciblé verts. Un harness temporaire du vrai `SurfaceDungeonScene` a affiché mur, sol,
+trappe et escalier depuis deux caméras opposées, sans double grille ni exception JavaScript. Le
+harness et sa capture ont ensuite été supprimés du dépôt.
+
+**Déploiement Kiwi** : le code fonctionnel `932a041` a été poussé puis intégré en avance rapide sur
+`dev/monde`. Les services système `enclume-codex-client` et `enclume-codex-server` ont été redémarrés
+sur `8293/8294` ; le health API, la réponse HTTP du client et le smoke Chromium distant sont verts.
+Le tag de sauvegarde préalable est `backup/pre-session159-single-sheet-grate-20260722`. Les instances
+de Saar et de fusion n'ont pas été touchées.
+
+**Recette finale** : le rendu a été accepté par l'utilisateur le 2026-07-22 sans nouvelle demande
+de modification. La Session 159 monde est donc candidate à la prochaine intégration. Sa fiche de
+transmission, les conflits anticipés et la procédure de reprise sont consignés dans
+`docs/FUSION_SESSION159.md`.
+
+---
+
+## Session 160 (suite 2, Codex) — 2026-07-22 — Correction de recette des accès verticaux 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : le premier parcours mélangeait l’absence de trappe et les huit modèles
+dans la même liste ; l’échelle restait au centre et traversait le panneau. Les GLB n’étaient
+réellement détaillés que sur leur face haute et leur boîtier externe pouvait entrer dans un mur.
+
+**UX** : le sélecteur contient désormais uniquement **Échelle seule** et **Échelle + Trappe**. Le
+second choix crée la première trappe disponible puis conserve à droite le catalogue des modèles et
+sa preview, selon le même parcours qu’une porte. Le popup ne contient plus la liste des modèles. Les
+champs procéduraux Matière/Motif ne sont plus affichés pour une trappe GLB ; les slots couleur
+explicitement déclarés restent disponibles.
+
+**Géométrie** : `axis`, `side` et `rotationQuarterTurns` placent l’échelle sur l’un des quatre bords
+de la trémie. Rendu, traversée et ancrage de palier utilisent le même centre latéral. Les rails
+visuels s’arrêtent 7 cm sous le plan supérieur pour ne pas traverser la fermeture. Le raccord à une
+passerelle sans trappe est conservé.
+
+**Assets** : les huit GLB ont été régénérés avec renforts et organes d’ouverture sur les deux faces.
+Les six variantes sans écoutille ont une commande verticale intégrée à la rive au-dessus et
+au-dessous ; les variantes carrée et ronde avec écoutille n’ont aucun boîtier et portent leur roue
+des deux côtés. Les tailles restent comprises entre 318 Ko et 1,48 Mo ; seule la preview du modèle
+sélectionné est montée, donc le catalogue ne charge pas les huit GLB simultanément.
+
+**Validation et déploiement** : 144/144 tests monde/serveur, 81/81 tests client Surface/lib, 3/3
+tests de configuration, 8/8 assets validés sans avertissement, ESLint ciblé sans erreur et build
+Vite réussis. `cb971ed` a été fast-forwardé sur `dev/monde`; les services `8293/8294`, le health,
+le client, un GLB distant et le smoke Chromium sont verts. Le catalogue synchronise 100 modèles.
+Retour arrière : `backup/pre-session160-followup-20260722` (`f82bdea`). Saar `8193` et la fusion
+`8393` n’ont pas été modifiés. La nouvelle recette utilisateur reste attendue.
+
+---
+
+## Session 161 (Codex) — 2026-07-22 — Catalogues exclusifs et placement sticky 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : la simple coloration rouge d'un fantôme en collision ne répondait pas au
+besoin. L'objet doit rester physiquement du bon côté, se coller à l'obstacle et glisser le long de
+celui-ci, de sorte qu'aucune position invalide ne soit jamais proposée. La palette devait aussi
+cesser de mélanger portes, trappes et objets généraux selon le parcours actif.
+
+**Catalogues** : le filtre des portes refuse explicitement tout blueprint `connectorType=hatch`,
+même si ses métadonnées historiques mentionnent encore `door`, `sas` ou le pack des portes. Dans
+**Accès vertical**, le choix de composition reste visible ; **Échelle + Trappe** masque recherche,
+import et bibliothèque générale pour ne conserver que la preview et les huit trappes. Revenir à
+**Échelle seule** restaure la bibliothèque normale.
+
+**Placement sticky** : un helper commun construit le volume orienté de l'entité depuis son collider,
+son origine, sa rotation et son échelle. Il teste murs, volumes structurels, voxels legacy et autres
+entités, avec contact de faces autorisé. Chaque mouvement balaie le segment depuis la dernière
+position valide, ce qui empêche aussi les traversées lors d'un saut rapide du pointeur. Au premier
+contact, les chemins X puis Z et Z puis X permettent de glisser sur l'axe libre. Un premier survol
+invalide masque le fantôme ; ensuite celui-ci reste à la dernière position valide et ne devient
+jamais rouge. Pose, glisser-déposer et rotation possèdent en plus un dernier garde avant écriture.
+
+**Validation et déploiement** : 144/144 tests monde/serveur, 95/95 tests client, 3/3 tests de
+configuration, build Vite, ESLint ciblé sans erreur et smoke Chromium distant réussis. Une recette
+Chromium connectée réelle sur `8293` a confirmé les huit seules trappes et une pose demandée de
+l'autre côté d'un mur enregistrée au contact du côté d'origine. Les campagnes et comptes créés pour
+la recette ont été supprimés puis contrôlés à zéro. Le commit fonctionnel `0d74a41` est déployé sur
+`8293/8294`; seuls `enclume-codex-client` et `enclume-codex-server` ont été redémarrés. Saar
+`8193/8194` et fusion `8393/8394` sont inchangés. Retour arrière :
+`backup/pre-session161-placement-collision-20260722` (`23949e4`).
+
+---
+
+## Session 162 (Codex) — 2026-07-22 — Échelles et poches de trappes 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : la marge fixe de 7 cm ne suivait pas la géométrie réelle du palier. Le
+dessus structurel de l'échelle pouvait être à 2,625 tandis que la trappe commençait à 2,5 ; rails et
+barreaux entraient donc dans le GLB. À l'inverse, une échelle sans trappe devait dépasser le palier
+pour rester utilisable. Les panneaux coulissants ouverts devaient aussi disparaître dans le sol,
+comme les vantaux de porte dans leur mur.
+
+**Rendu** : `ladderVisualTopY` et `ladderVisualRange` distinguent désormais les compositions. Une
+échelle seule dépasse le support haut de 0,75 unité. Avec une trappe, sa limite est exactement
+`linkedHatch.y`; la tranche supérieure retourne `null` au lieu de forcer un segment de 20 cm. Les
+centres des barreaux sont inset d'un demi-diamètre, donc leur volume ne franchit pas cette limite.
+La preview de pose reçoit la même trappe liée que le rendu sauvegardé.
+
+**Assets** : les quatre GLB coulissants ont été régénérés avec une descente verticale de 0,16 unité
+sur chaque piste de panneau. Hors de la trémie, les feuilles se trouvent sous le dessus de la dalle
+et sont masquées par son depth buffer. Le manifeste les marque `floor-pocketed-panels`; le cache des
+trappes possède une nouvelle version. Les previews Blender montrent les panneaux fermés et seulement
+les cadres/commandes fixes une fois ouverts.
+
+**Validation et déploiement** : 146/146 tests monde/serveur, 95/95 tests client, 3/3 configuration,
+8/8 assets sans erreur ni avertissement, build Vite, ESLint ciblé et smoke Chromium distant réussis.
+Les pistes GLB bipartites et tripartites ont été relues à `-0.16` sur leur axe vertical. Le commit
+fonctionnel `e999448` est déployé sur `8293/8294`; le catalogue synchronise toujours 100 modèles.
+Seuls les services Codex ont été redémarrés. Saar `8193/8194` et fusion `8393/8394` sont inchangés.
+Retour arrière : `backup/pre-session162-ladder-hatch-20260722` (`ff66e61`).
+
+---
+
+## Session 163 (Codex) — 2026-07-22 — Ascenseurs orthogonaux modulaires 🧪 DÉPLOYÉ
+
+**Décision de conception** : un ascenseur n'est plus limité à une pile verticale. L'utilisateur
+pose ses arrêts dans l'ordre ; chaque paire consécutive reste alignée sur un seul axe X, Y ou Z et
+la direction ne peut changer qu'à un arrêt. Une gaine fermée entoure aussi les tronçons horizontaux.
+Elle peut relier deux salles séparées par du vide extérieur sous-marin, mais aucun arrêt ne peut
+s'ouvrir dans ce vide : toute l'empreinte d'un palier doit appartenir à une même salle fermée.
+
+**UX et données** : le premier clic crée un brouillon, le deuxième matérialise le connecteur et les
+suivants prolongent la route. **Terminer l'ascenseur** ouvre son panneau ; **Continuer le trajet**
+reprend depuis le dernier arrêt. Chaque palier possède une orientation Nord/Est/Sud/Ouest autonome.
+Le modèle et son empreinte sont verrouillés dès le premier arrêt. La sélection fonctionne depuis
+tous les paliers et le catalogue ne présente que les blueprints `connectorType=elevator`.
+
+**Moteur** : `elevatorRuntime.js` persiste et interpole la cabine en X/Y/Z le long de la polyligne,
+avec durées verticale et horizontale distinctes. Les passagers conservent leurs coordonnées locales
+sur les trois axes. Le compilateur produit une gaine par segment plutôt qu'un objet par case, ouvre
+correctement les jonctions, ferme les extrémités et génère la porte propre à chaque palier. Une gaine
+industrielle bloque la vue ; une gaine vitrée laisse passer la LOS mais reste étanche et bloquante
+pour le mouvement.
+
+**Assets** : `tools/generate_elevator_transit.py` produit le pack `output/elevator_transit/` et ses
+huit GLB détaillés : industriel/vitré en 1x1, 1x2, 2x1 et 2x2. Les formats 1x2 et 2x1 sont construits
+séparément avec leurs dimensions de porte propres. Le catalogue expose cinq slots de couleur sans
+réintroduire les champs procéduraux Matière/Motif.
+
+**Validation et déploiement** : 149/149 tests monde/serveur, 98/98 tests client, 3/3 configuration,
+8/8 assets sans erreur ni avertissement, build Vite, ESLint ciblé sans erreur et smoke Chromium
+distant réussis. Une recette connectée réelle sur `8294` a enregistré trois arrêts `[0,0.125,0]`,
+`[0,2.625,0]`, `[4,2.625,0]`, demandé le troisième et vérifié l'arrivée exacte après le tronçon
+vertical puis horizontal. Les données temporaires ont été supprimées. Le commit fonctionnel
+`1c54e61` est déployé sur `8293/8294` ; le catalogue synchronise 108 modèles. Saar `8193/8194` et
+fusion `8393/8394` sont inchangés. Retour arrière :
+`backup/pre-session163-elevator-route-20260722` (`77ecaa7`).
+
+---
+
+## Session 164 (Codex) — 2026-07-22 — Appel et embarquement des ascenseurs 🧪 DÉPLOYÉ
+
+**Retour utilisateur** : la commande MJ **Ouvrir** pouvait être envoyée pendant une fermeture mais
+l'automate l'ignorait. Un token placé graphiquement dans la cabine par téléportation MJ restait
+volontairement détaché ; la cabine partait donc seule. Le panneau exposait en outre toutes les
+destinations sans distinguer le palier cliqué, l'appel et l'embarquement.
+
+**Automate et serveur** : **Ouvrir** inverse maintenant une fermeture immobile et reste refusé en
+mouvement ou lorsque la porte est bloquée. La nouvelle intention **Utiliser** vérifie la présence de
+la cabine au palier, l'appartenance du token pour un joueur, puis ouvre immédiatement, déplace les
+pieds au centre du plancher et écrit `world_elevator_passengers` dans la transaction autoritaire.
+Chaque réconciliation ultérieure applique la position locale du passager en X/Y/Z et publie le
+token déplacé par le canal temps réel existant.
+
+**UX** : le point 3D du clic sélectionne le palier le plus proche. Cabine absente, le panneau montre
+**Appeler l'ascenseur**. Cabine présente, il montre **Utiliser** pour le token sélectionné du MJ ou
+le token possédé du joueur. Une fois ce token embarqué, les autres arrêts deviennent ses
+destinations. Les libellés nouveaux existent en français et en anglais.
+
+**Validation et déploiement** : 152/152 tests monde/serveur, 101/101 tests client, 3/3 configuration,
+build Vite, ESLint ciblé sans erreur et smoke Chromium distant réussis. Une recette REST connectée
+sur `8294` a fermé puis rouvert la porte, embarqué un token au point `[0.5,0.125,0.5]`, demandé le
+palier haut et vérifié l'arrivée conjointe à `[0.5,2.625,0.5]`. Le passager durable était présent et
+les comptes/campagnes temporaires ont été supprimés puis contrôlés à zéro. Le commit fonctionnel
+`9436514` est déployé sur `8293/8294`. Saar `8193/8194` et fusion `8393/8394` sont inchangés. Retour
+arrière : `backup/pre-session164-elevator-use-20260722` (`6c772cf`).

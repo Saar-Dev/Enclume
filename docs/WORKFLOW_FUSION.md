@@ -1,6 +1,9 @@
 # WORKFLOW_FUSION.md — espaces de développement et instance commune
 
-> Dernière mise à jour : 2026-07-16.
+> Dernière mise à jour : 2026-07-22 — validations courantes sur cartes v13.
+>
+> Lot monde suivant prêt : Session 164, incluant les Sessions 159 à 163, fiche
+> `docs/FUSION_SESSION164.md`.
 >
 > But : permettre aux deux développeurs de travailler indépendamment, puis de valider ensemble une
 > fusion déployée sans écraser leurs dépôts, leurs bases de données ou leurs états de partie.
@@ -99,7 +102,7 @@ anciennes têtes restent accessibles par `backup/pre-common-baseline-cousin-2026
 
 ## 4. Règles de fusion
 
-- ne jamais fusionner `origin/fusion-kiwi` dans le moteur v12 : cette branche contient l'ancien
+- ne jamais fusionner `origin/fusion-kiwi` dans le moteur v13 : cette branche contient l'ancien
   éditeur Surface v2 et supprimerait des collections canoniques lors d'une sauvegarde ;
 - importer les nouvelles versions des règles depuis `dev/Saar` ou depuis une branche explicitement
   annoncée comme sa nouvelle tête ;
@@ -225,7 +228,7 @@ node --test client/src/lib/surfaceData.test.mjs
 cd client && npm run build
 ```
 
-Elle doit ensuite être vérifiée sur `8393` avec une carte v12 multi-étages et une vraie session de
+Elle doit ensuite être vérifiée sur `8393` avec une carte v13 multi-étages et une vraie session de
 combat. En cas d'échec, arrêter uniquement les unités `enclume-fusion-*`, restaurer `vtt_fusion` et
 le bucket de fusion, puis replacer `integration` sur le dernier commit validé. Les deux espaces de
 développement restent intacts.

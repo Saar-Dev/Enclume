@@ -1,6 +1,10 @@
 # SERVEUR DISTANT — Documentation déploiement Enclume
 > Créé : 2026-06-01 — Session 68/69
-> Mis à jour : 2026-06-01 — Session 69
+> Mis à jour : 2026-07-22 — périmètre historique clarifié face au workflow multi-instance.
+>
+> Périmètre : état historique de l'instance règles `8193/8194`. L'organisation actuelle des trois
+> instances, leurs worktrees et leurs données est définie dans `docs/WORKFLOW_FUSION.md`. Les
+> versions ci-dessous sont des valeurs observées sur Kiwi, pas les versions du poste Ubuntu local.
 
 ---
 
@@ -32,6 +36,10 @@ postgres:  image: postgres:16-alpine        # port 5432
 redis:     image: redis:7-alpine            # port 6379, requirepass activé
 minio:     image: minio/minio:RELEASE.2022-02-07T08-17-33Z  # port 9000/9001
 ```
+
+Redis peut rester présent pour l'isolation historique de l'infrastructure, mais n'est plus une
+autorité spatiale : collision, navigation, LOS et occupation viennent du `WorldSnapshot` et de
+PostgreSQL.
 
 **⚠ MinIO : NE PAS mettre à jour.** Le CPU du serveur ne supporte pas x86-64-v2 requis par glibc des images récentes (Rocky Linux 9+). Les images post-mai 2022 crashent avec :
 ```

@@ -1,182 +1,147 @@
-# SYSTEME/ENTITES.md — Collision Redis, Rotation tokens, Déplacement entités
+# SYSTEME/ENTITES.md — Occupation, rotation et déplacement des entités
+> Mis à jour : 2026-07-22 — `WorldSnapshot`, placement éditeur et positions `world-feet`.
 > Source : SYSTEME.md §12–§13–§15
-> Lire pour : collision map Redis, déplacement entités/tokens, rotation tokens, Lerp 300ms
+> Lire pour : occupation dynamique, déplacement entités/tokens, rotation tokens, interpolation 300 ms
 
 ---
 
-## Collision map Redis — architecture (sessions 39 + 43)
+## Autorité spatiale actuelle
 
-```
-DB PostgreSQL = source de vérité
-Redis Hash    = cache O(1) par case — reconstruit depuis DB au SESSION_JOIN
-
-Clé Redis  : "collision:{battlemap_id}"
-Champ Hash : "x:pos_y:pos_z"  (convention PE14 base — NON Three.js)
-Valeur     : JSON { type: 'token'|'entity'|'voxel', id: string }
-TTL        : 24h — reconstruite au prochain SESSION_JOIN (PE23)
+```text
+PostgreSQL                         = positions et états durables
+surface_data v13                  = définition statique du monde
+WorldSnapshot                     = supports, barrières, colliders et occluders
+tokens + entities PostgreSQL      = occupants dynamiques
+world_revision/runtime_revision   = invalidation des snapshots et graphes
 ```
 
-### Convention PE14 dans Redis — NON NÉGOCIABLE
-Tous les champs Hash utilisent `"pos_x:pos_y:pos_z"` en convention base (PE14) :
-- `pos_x` = axe X (identique Three.js)
-- `pos_y` = profondeur (axe Z Three.js)
-- `pos_z` = altitude (axe Y Three.js)
+Le hash de collision Redis des sessions 39–43 a été retiré. Une mutation spatiale ne doit jamais
+réintroduire `buildCollisionMap`, `isCaseOccupied` ou un helper `collision*`.
 
-Les voxels sont stockés dans `voxel_data` en Three.js brut (`"x:y_altitude:z_profondeur"`)
-mais convertis en PE14 avant stockage Redis. Voir VOXELS.md pour la conversion.
+### Coordonnées runtime
 
-### Filtres
-- Tokens `layer = 'gm'` : **exclus** — invisibles aux joueurs, pas bloquants
-- Entités : incluses **uniquement** si `is_blocking = true` dans l'état courant (JOIN blueprint)
-- Voxels : tous inclus
+PE14 ne vit plus que dans l'adaptateur DB :
 
-### buildCollisionMap
 ```javascript
-// server/src/lib/redis.js
-// Appelée au SESSION_JOIN depuis player_locations
-// Non bloquante si joueur sans player_location (première connexion)
-// Pipeline Redis — O(1) réseau
-await buildCollisionMap(playerLocation.battlemap_id)
+const point = dbPositionToWorldPoint(row)
+// { x: row.pos_x, y: row.pos_z, z: row.pos_y }
+
+const dbPosition = worldPointToDbPosition(point)
+// { pos_x: point.x, pos_y: point.z, pos_z: point.y }
 ```
 
-### isCaseOccupied
-```javascript
-// O(1) — utilisé dans step-by-step 9F-B/C
-// excludeIds = [tokenId, entityId] — tunnel de swap (PE22)
-await isCaseOccupied(battlemapId, x, y, z, excludeIds)
-// x, y, z = coordonnées PE14 (pos_x, pos_y, pos_z)
-```
+Un token moteur doit avoir `position_space = 'world-feet'` : son point stocké est directement le
+contact de ses pieds avec le support. Un token `legacy-cell` doit être replacé par le MJ avant tout
+déplacement autoritaire. Les entités utilisent le même point monde, sans colonne `position_space`.
 
-### Altitude acteur dans step-by-step (PE29)
-```javascript
-// Token pos_z = altitude des pieds (même niveau que voxels sol pos_z=0)
-// Vérifier pos_z+1 = espace de marche — évite faux blocage sur sol
-await isCaseOccupied(battlemapId, nextActorPosX, nextActorPosY, token.pos_z + 1, excludeIds)
-```
+### Occupants dynamiques
 
-### Maintenance Redis — PE25 (règle fondamentale)
-**La maintenance Redis est dans les routes REST, pas dans les handlers WS reliques.**
-`TOKEN_CREATED` / `TOKEN_DELETED` WS sont des reliques — ne pas y toucher Redis.
-`ENTITY_CREATED` / `ENTITY_DELETED` / `ENTITY_MOVED` WS : idem.
+`server/src/services/worldMovementService.js` construit les occupants depuis les lignes courantes :
 
-| Mutation | Où | Helper |
-|---|---|---|
-| Token créé | `POST /tokens` | `collisionAddToken` |
-| Token déplacé (REST) | `PUT /tokens/:id` | `collisionMoveToken` |
-| Token déplacé (WS drag) | `TOKEN_MOVE` handler | `collisionMoveToken` |
-| Token supprimé | `DELETE /tokens/:id` AVANT delete | `collisionRemoveToken` |
-| Token rotate | `TOKEN_ROTATE` handler | aucune (position inchangée) |
-| Entité créée | `POST /entities` | `collisionAddEntity` |
-| Entité pos/état changé | `PUT /entities/:id` | `collisionMoveEntity` ou `collisionUpdateEntityState` |
-| Entité supprimée | `DELETE /entities/:id` AVANT delete | `collisionRemoveEntity` |
-| Entité état (interaction) | `resolveEntityState` | `collisionUpdateEntityState` |
-| Voxel ajouté | `VOXEL_ADD` | `collisionAddVoxel` (converti PE14) |
-| Voxel supprimé | `VOXEL_REMOVE` | `collisionRemoveVoxel` (converti PE14) |
-| Voxel tourné | `VOXEL_UPDATE` | aucune (position inchangée) |
+- les tokens `world-feet` sont inclus, sauf ceux de la couche `gm` ;
+- une entité est incluse si son état courant est bloquant ;
+- son rayon et sa hauteur viennent du collider de l'état ou de la géométrie du blueprint ;
+- `state.transform.scale` est normalisé par `shared/world/entityTransform.js` et appliqué à
+  l'empreinte comme au rendu ;
+- `createOccupancyIndex()` vérifie l'occupation, tandis que `createSpatialIndex(snapshot)` vérifie
+  les barrières et colliders statiques.
+
+Créer, déplacer, redimensionner, supprimer ou changer l'état physique d'une entité incrémente la
+`runtime_revision`. Le graphe de navigation est indexé par `world_revision` et `runtime_revision` :
+il ne faut pas conserver un second cache spatial côté client ou dans Redis.
 
 ---
 
-## Rotation tokens — PE21 (session 39)
+## Rotation des tokens — PE21
 
 ```javascript
-// tokens.r = 0-7 — 8 orientations, incréments 45°
-// rotation.y = r * Math.PI / 4 (côté client, sur le <group> parent)
-
-// Flux TOKEN_ROTATE :
-// 1. Clic court sur token propriétaire → Canvas3D → onTokenRotate(tokenId)
-// 2. SessionPage → socket.emit(WS.TOKEN_ROTATE, { tokenId })
-// 3. Serveur : ownership check → r = (r+1) % 8 → update DB → broadcast TOKEN_UPDATED
-// 4. SessionPage handler TOKEN_UPDATED → updateToken(token) → store merge
-// 5. Canvas3D TokenMesh → rotation.y recalculé
-
-// Ownership TOKEN_ROTATE : character.user_id === socket.data.userId OU role === 'gm'
-// token.character_id null → seul le GM peut rotate
+// tokens.r = 0..7 — huit orientations par pas de 45°
+rotation.y = token.r * Math.PI / 4
 ```
+
+Flux `TOKEN_ROTATE` :
+
+1. le client envoie uniquement l'identifiant du token ;
+2. le serveur vérifie le propriétaire (`character.user_id`) ou le rôle MJ ;
+3. le serveur enregistre `r = (r + 1) % 8` ;
+4. `TOKEN_UPDATED` est diffusé à la campagne.
+
+Un token sans personnage ne peut être tourné que par le MJ.
 
 ---
 
-## Déplacement entités — flux complet (sessions 40-43)
+## Déplacement forcé d'une entité par un acteur
 
-### Flux
-```
-Joueur clique ⚙ → RadialMenu → handleEntityMove → setMoveTarget → mode visée Canvas3D
-Canvas3D : ghost wireframe snapé 8 axes depuis entité, couleur bleu=push/orange=pull/rouge=impossible
-Joueur clique destination (dot≠0) → ENTITY_MOVE_REQUEST émis :
-  socket.emit(WS.ENTITY_MOVE_REQUEST, { entityId, tokenId, interactionId, moveType:'push'|'pull', destX, destZ })
-  // destZ = pos_y base (PE14) malgré le nom — profondeur Z Three.js
-Serveur → jet attribut via charStats.js → calcul MR → getModifier(mrTable,mr) → dmax=modifier+1
-  → step-by-step : min(dmax, stepsTarget) pas max — destination joueur respectée
-  → collision entité à pos_z, acteur à pos_z+1 (espace de marche)
-  → ENTITY_MOVED + TOKEN_MOVED broadcast → ENTITY_MOVE_RESULT → joueur
-SessionPage → setMoveTarget(null) + badge MR dans chat
-Canvas3D/EntityMesh → Lerp 300ms vers position finale
+### Intention client et règles serveur
+
+```text
+RadialMenu / Canvas3D
+  -> ENTITY_MOVE_REQUEST { entityId, tokenId, interactionId, moveType, destX, destZ }
+  -> validation ownership, interaction et portée en mètres
+  -> jet d'attribut et calcul Polaris du MR côté serveur
+  -> Dmax = modifier + 1 en cas de réussite, sinon 0
+  -> executeBattlemapRigidPairMovement(...)
+  -> WORLD_RUNTIME_UPDATED + ENTITY_MOVED + TOKEN_MOVED
+  -> ENTITY_MOVE_RESULT vers le demandeur
 ```
 
-### Polaris MR — table officielle (migration 46)
-```
-modifier = getModifier(mrTable, mr)   // LdB p.209 — 20 paliers réussite + échec
-dmax = isSuccess ? modifier + 1 : 0   // toute réussite = au moins 1 case
-stepsMax = Math.min(dmax, stepsTarget) // destination joueur respectée
-```
+`moveType` est calculé côté client pour le retour visuel, puis recalculé côté serveur avec le produit
+scalaire. `destX` est X monde et `destZ` est Z monde ; leurs noms historiques reflètent le payload,
+pas un second espace de coordonnées.
 
-### Table polaris_mr (migration 46)
-```
-mr_min | mr_max | modifier | Qualité
-0      | 2      | 0        De justesse
-3      | 4      | 1        Correct
-5      | 6      | 2        Assez bon
-7      | 9      | 3        Bon
-10     | 12     | 4        Très bon
-13     | 14     | 5        Excellent
-15     | 19     | 6        Parfait
-20     | 24     | 7        Extraordinaire
-25     | 34     | 8        Héroïque
-35     | null   | 9        Légendaire
--2     | -1     | 0        De justesse (échec)
--4     | -3     | -1       Médiocre
-...
--999   | -35    | -9       Légendaire (échec)
-```
-
-### Ghost mode visée
-```
-Snap : 8 axes depuis entité (ratio 2:1)
-  if dx > 2*dz → axe X pur : entity.pos_x + round(dPosX)
-  if dz > 2*dx → axe Z pur : entity.pos_y + round(dPosZ)
-  else → diagonal : dist = round((|dPosX|+|dPosZ|)/2)
-Couleurs : dot>0→bleu(#2563eb) dot<0→orange(#f97316) dot=0→rouge(#ef4444)
-```
-
-### PE24 — collisionMoveToken : règle hdel/hset
 ```javascript
-// TOUJOURS hdel l'ancienne case, même si layer === 'gm'
-await redisClient.hdel(`collision:${battlemapId}`, oldKey)
-
-// hset la nouvelle case SEULEMENT si layer !== 'gm'
-if (token.layer !== 'gm') {
-  await redisClient.hset(`collision:${battlemapId}`, newKey, JSON.stringify({ type: 'token', id: tokenId }))
-}
-// Raison : les tokens GM sont exclus de la collision, mais leur ancienne case doit quand même être libérée
+const modifier = getModifier(mrTable, mr)
+const dmax = isSuccess ? modifier + 1 : 0
+const stepsMax = Math.min(dmax, stepsTarget)
 ```
 
-### Lerp 300ms — pattern R3F (session 43)
-```javascript
-// Dans EntityMeshVoxel, EntityMeshGlb, TokenMesh
-const groupRef = useRef()
-const lerpPos  = useRef({ x: posX, y: posY, z: posZ })
-const targetRef = useRef({ x: posX, y: posY, z: posZ })
-targetRef.current = { x: posX, y: posY, z: posZ }  // mis à jour à chaque render
+### Exécution physique
 
+`server/src/services/worldForcedMovementService.js` déplace le couple acteur/objet rigidement :
+
+1. verrouille la carte, ses tokens et ses entités dans une transaction ;
+2. charge le snapshot, les états runtime et le graphe de navigation courants ;
+3. avance par pas de `snapshot.metrics.worldUnitsPerCell` dans l'une des huit directions ;
+4. recale chaque candidat sur un support stable ;
+5. vérifie chaque segment avec l'index spatial puis chaque destination avec l'index d'occupation ;
+6. exclut `[tokenId, entityId]` de l'occupation pour permettre au couple de se déplacer ensemble ;
+7. s'arrête au premier obstacle, persiste la dernière position atteinte et incrémente la
+   `runtime_revision` ;
+8. enregistre les événements d'effets traversés et synchronise un éventuel ascenseur.
+
+L'apparence GLB, les voxels legacy et la destination demandée par le client ne sont jamais des
+autorités de collision.
+
+---
+
+## États, interactions et animations
+
+- `states[0]` reste le fallback si `current_state_id` est absent ou invalide (PE11).
+- Une interaction avec `target_state_id` met à jour l'état en base, incrémente la révision runtime et
+  diffuse `ENTITY_UPDATED` puis `WORLD_RUNTIME_UPDATED`.
+- `pendingEntityActions` est une instance partagée hors `initSocket`; son timeout doit toujours être
+  annulé à la résolution (PE12).
+- Les clips GLB reflètent l'état visuel via `useModelStateAnimation`; ils ne retardent ni ne pilotent
+  la mise à jour de la physique.
+
+## Interpolation visuelle 300 ms
+
+Les positions serveur sont interpolées dans `TokenMesh` et `EntityMesh` avec une constante de temps
+de `0.1`, soit environ 95 % du trajet en 300 ms :
+
+```javascript
 useFrame((_, delta) => {
   if (!groupRef.current) return
-  const alpha = 1 - Math.exp(-delta / 0.1)  // tau=0.1 → 95% en ~300ms
+  const alpha = 1 - Math.exp(-delta / 0.1)
   lerpPos.current.x += (targetRef.current.x - lerpPos.current.x) * alpha
   lerpPos.current.y += (targetRef.current.y - lerpPos.current.y) * alpha
   lerpPos.current.z += (targetRef.current.z - lerpPos.current.z) * alpha
   groupRef.current.position.set(lerpPos.current.x, lerpPos.current.y, lerpPos.current.z)
 })
-// <group ref={groupRef}> — position retirée du JSX (P40)
 ```
+
+Le `useFrame` reste dans un sous-composant monté sous le Canvas R3F. L'interpolation est purement
+visuelle et ne constitue jamais une position intermédiaire autoritaire.
 
 ---
 
@@ -184,6 +149,12 @@ useFrame((_, delta) => {
 
 | Code | Description |
 |---|---|
-| PE11 | Fallback `states[0]` si `current_state_id` invalide ou null — état courant toujours défini |
-| PE12 | `clearTimeout(pendingEntityActions.get(key))` obligatoire à la résolution — évite double-déclenchement timeout + résolution manuelle |
-| PE13 | Touche R en mode Editor3D = toggle ghost SI entité sous le curseur, SINON rien — ne pas intercepter R globalement |
+| PE11 | Fallback `states[0]` si `current_state_id` est invalide ou nul |
+| PE12 | `clearTimeout(pendingEntityActions.get(key))` obligatoire à la résolution |
+| PE13 | Touche R dans l'éditeur : ghost ou entité sous le curseur, jamais interception globale |
+| PE21 | `tokens.r` vaut 0–7 ; `rotation.y = r * Math.PI / 4` |
+| PE22 | Mouvement rigide : `excludeOccupantIds = [tokenId, entityId]` |
+| PE26 | `resolveEntityState().returning()` inclut `battlemap_id` pour la révision runtime |
+| PE27 | `moveType` est prévisualisé client puis recalculé serveur |
+| PE29 | Acteur et objet sont contrôlés pas à pas sur supports, barrières et occupants du snapshot |
+| PE30 | L'éditeur refuse pose, glisser et rotation si le volume chevauche mur, structure ou entité |

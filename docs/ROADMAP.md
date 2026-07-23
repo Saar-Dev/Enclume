@@ -3,6 +3,10 @@
 > lourdes fixes (voir `docs/PLAN_MODING_PHASEB.md`, Groupe 3 retiré) ; 2026-07-11 Session 141
 > (suite 18) — point documentaire, voir `CLAUDE.md` dettes `[DOC1]`/`[DOC2]` pour le suivi
 > (archivage PLAN_*.md, VOCABULARY.md, REGLES_LdB.md)
+>
+> Statut documentaire : journal historique des chantiers. Les architectures décrites dans les
+> anciennes sessions (notamment collision Redis et `calcCarenceArmure`) ne sont pas des contrats
+> actifs. Consulter `docs/EN_COURS.md`, `docs/ASBUILT.md` et `docs/SYSTEME/` pour l'état courant.
 
 ---
 

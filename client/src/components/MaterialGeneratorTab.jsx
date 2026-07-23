@@ -8,6 +8,7 @@ import {
   PROCEDURAL_MATERIAL_PRESETS,
   PROCEDURAL_PATTERN_PRESETS,
   generateProceduralMaterialTexture,
+  proceduralPatternUsesCutout,
 } from '../lib/proceduralMaterials'
 
 const CATEGORY_OPTIONS = ['Sol', 'Mur', 'Divers']
@@ -41,8 +42,10 @@ function PreviewBlock({ preview }) {
       map,
       normalMap,
       normalScale: new THREE.Vector2(0.75, 0.75),
-      metalness: preview.material.id === 'steel' ? 0.45 : 0.05,
-      roughness: preview.material.id === 'plastic' ? 0.38 : 0.74,
+      metalness: preview.cutout ? 0.72 : preview.material.id === 'steel' ? 0.45 : 0.05,
+      roughness: preview.cutout ? 0.48 : preview.material.id === 'plastic' ? 0.38 : 0.74,
+      alphaTest: preview.cutout ? 0.5 : 0,
+      side: preview.cutout ? THREE.DoubleSide : THREE.FrontSide,
     })
   }, [preview])
 
@@ -63,7 +66,7 @@ function PreviewBlock({ preview }) {
     <mesh ref={meshRef} rotation={[-0.35, 0.4, 0]} material={material} castShadow receiveShadow>
       <ReliefBoxGeometry
         args={[1.35, 0.18, 1.35]}
-        profile={preview.procedural}
+        profile={proceduralPatternUsesCutout(preview.procedural?.pattern) ? null : preview.procedural}
         faceMask={[false, false, true, false, false, false]}
       />
     </mesh>
@@ -176,7 +179,7 @@ export default function MaterialGeneratorTab({
         },
         allowed_geometries: ALLOWED_GEOMETRIES,
         category_label: form.categoryLabel === 'Divers' ? null : form.categoryLabel,
-        usage_hint: 'voxel',
+        usage_hint: 'both',
       })
 
       setPackFiles(prev => [

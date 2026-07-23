@@ -1,7 +1,6 @@
 # FUSION_PROJET_COUSIN.md — contrat d'intégration combat / moteur monde
 
-> Dernière mise à jour : 2026-07-18 — troisième intégration de `dev/monde` et `dev/Saar` validée
-> sur `8393/8394`.
+> Dernière mise à jour : 2026-07-23 — quatrième intégration de `dev/monde` et `dev/Saar` en cours sur `integration`.
 >
 > But : fusionner une nouvelle version du projet combat sans modifier le dépôt de l'autre
 > développeur, sans réintroduire les anciennes cartes et sans dupliquer les décisions spatiales.
@@ -93,7 +92,7 @@ les deux nouveaux commits de tête et créer un tag de sauvegarde sur l'intégra
 
 | Domaine | Autorité à conserver | Ce que l'autre côté peut faire |
 |---|---|---|
-| Géométrie statique | `surface_data` v12 puis `shared/world/worldCompiler.js` | L'éditeur écrit le document, le combat ne le lit pas directement |
+| Géométrie statique | `surface_data` v13 puis `shared/world/worldCompiler.js` | L'éditeur écrit le document, le combat ne le lit pas directement |
 | Position/occupation | snapshot monde + état runtime PostgreSQL | Le combat demande une mesure, un plan ou une exécution |
 | Déplacement | `server/src/services/worldMovementService.js` | La FSM fournit destination, acteur et budget de règles |
 | Budget/allure | `server/src/services/movementBudgetService.js` | Les règles combat fournissent les allures calculées de la fiche |
@@ -109,9 +108,10 @@ géométrie. Dès qu'un conflit touche chemin, position atteinte, distance, port
 LOS, couverture ou effet de terrain, conserver l'appel au service monde et adapter le code combat
 autour de son résultat.
 
-## 3. Rupture volontaire `surface_data` v12
+## 3. Contrat courant `surface_data` v13
 
-Une salle v12 ne possède que les apparences suivantes :
+La rupture d'apparence introduite en v12 reste applicable en v13. Une salle v13 ne possède que les
+apparences suivantes :
 
 ```text
 floorTex / floorMaterial
@@ -132,7 +132,12 @@ wallAppearanceProfiles[].exterior*
 Il ne faut ajouter ni alias, ni fallback, ni migration de ces valeurs. Les anciennes cartes peuvent
 servir de capture ou de fixture visuelle, mais ne sont pas des entrées valides du nouveau moteur.
 Lors d'une fusion, tout code réintroduisant un de ces champs doit être supprimé ou réécrit contre le
-contrat v12.
+contrat v13.
+
+La v13 ajoute le contrat strict des escaliers droits et en colimaçon dans `surface_data.stairs`.
+Leur géométrie visible, leurs marches praticables, leurs colliders, leurs occluders, leur trémie et
+leur palier haut proviennent tous de `shared/world/stairGeometry.js`. Une fusion ne doit pas recréer
+une version GLB ou combat parallèle de cette structure.
 
 ### Plafond et sol empilés
 
@@ -158,8 +163,8 @@ combat ne doit reconstruire cette interface depuis les meshes.
   visibles sur toute sa hauteur ;
 - la transparence de caméra est décidée par façade complète. Toutes les tranches verticales et les
   morceaux créés par une porte partagent un `facadeId` de rendu. La salle active vient d'abord de
-  la position 3D réelle de la caméra dans le volume, puis de la cible des contrôles lorsque la caméra
-  est dehors. `interiorNormalSignsByRoom` indique ensuite le côté intérieur de
+  l'ancre de contexte explicite, puis de la cible des contrôles ; la position 3D de la caméra ne sert
+  que de secours. `interiorNormalSignsByRoom` indique ensuite le côté intérieur de
   chaque façade pour cette salle ; caméra du côté extérieur signifie transparent, caméra du côté
   intérieur signifie opaque. Ne pas réintroduire de rayons vers des centres de cases ;
 - les bouchons internes des découpes de porte ne sont pas rendus.
@@ -248,11 +253,11 @@ Redis ou une LOS voxel pour « dépanner » un conflit de merge.
    dernière intégration monde validée ;
 3. importer la tête combat active depuis `origin/dev/Saar` ; si son ascendance porte un ancien
    moteur monde, enregistrer la tête comme parent puis appliquer seulement son delta règles depuis
-   le dernier point commun vérifié ; ne jamais importer `origin/fusion-kiwi` dans le moteur v12 ;
+   le dernier point commun vérifié ; ne jamais importer `origin/fusion-kiwi` dans le moteur v13 ;
 4. résoudre d'abord les contrats partagés et migrations, puis le serveur, puis le client ;
 5. rechercher les anciens champs et anciens moteurs avant de lancer l'application ;
 6. exécuter les tests purs, le build, le lint ciblé et Playwright ;
-7. tester une vraie session combat sur une carte v12 à au moins deux étages ;
+7. tester une vraie session combat sur une carte v13 à au moins deux étages ;
 8. seulement ensuite créer le commit de fusion et redémarrer les services
    `enclume-fusion-*` sur `8393/8394` ;
 9. publier `integration` afin que les deux développeurs puissent repartir du commit validé.
@@ -289,7 +294,7 @@ modifiés.
 
 Scénarios manuels indispensables :
 
-- créer une carte v12 neuve ;
+- créer une carte v13 neuve ;
 - salle basse + salle empilée : plafond depuis le bas, sol depuis le haut, aucun clignotement ;
 - niveau supérieur : tous les étages inférieurs opaques ;
 - mur droit et arc avec porte : transparence monobloc sans bouchons visibles ;

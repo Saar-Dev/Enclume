@@ -4,9 +4,9 @@
     "unit":  "meters",
     "style":  "cartoon futuristic post-apocalyptic underwater station",
     "pack":  "information technology, electrical and ventilation technical blocks",
-    "blend":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\submarine_postapo_technical_blocks_pack.blend",
-    "combined_glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\submarine_postapo_technical_blocks_pack.glb",
-    "preview_png":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\submarine_postapo_technical_blocks_preview.png",
+    "blend":  "submarine_postapo_technical_blocks_pack.blend",
+    "combined_glb":  "glb/submarine_postapo_technical_blocks_pack.glb",
+    "preview_png":  "submarine_postapo_technical_blocks_preview.png",
     "assets":  [
                    {
                        "name":  "01_it_sealed_server_rack_0p8x0p9x2m",
@@ -57,7 +57,6 @@
                                                "material":  "01_it_sealed_server_rack_0p8x0p9x2m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Baie de serveurs étanche.glb",
                        "catalog_file":  "Baie de serveurs étanche.glb"
                    },
                    {
@@ -109,7 +108,6 @@
                                                "material":  "02_it_network_distribution_cabinet_1p15x0p48x1p35m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Armoire de distribution réseau.glb",
                        "catalog_file":  "Armoire de distribution réseau.glb"
                    },
                    {
@@ -161,7 +159,6 @@
                                                "material":  "03_it_data_core_console_1p7x0p78x1p45m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Console de contrôle informatique.glb",
                        "catalog_file":  "Console de contrôle informatique.glb"
                    },
                    {
@@ -213,7 +210,6 @@
                                                "material":  "04_electrical_power_distribution_cabinet_1x0p58x1p9m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Armoire de distribution électrique.glb",
                        "catalog_file":  "Armoire de distribution électrique.glb"
                    },
                    {
@@ -265,7 +261,6 @@
                                                "material":  "05_electrical_transformer_rectifier_1p3x0p82x1p25m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Bloc transformateur redresseur.glb",
                        "catalog_file":  "Bloc transformateur redresseur.glb"
                    },
                    {
@@ -317,7 +312,6 @@
                                                "material":  "06_electrical_backup_battery_bank_1p45x0p7x1p45m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Banc de batteries de secours.glb",
                        "catalog_file":  "Banc de batteries de secours.glb"
                    },
                    {
@@ -369,7 +363,6 @@
                                                "material":  "07_ventilation_filter_air_handler_1p35x0p78x1p9m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Module de filtration de l air.glb",
                        "catalog_file":  "Module de filtration de l air.glb"
                    },
                    {
@@ -421,7 +414,6 @@
                                                "material":  "08_ventilation_heat_exchanger_1p75x0p82x1p35m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Échangeur thermique de ventilation.glb",
                        "catalog_file":  "Échangeur thermique de ventilation.glb"
                    },
                    {
@@ -473,7 +465,6 @@
                                                "material":  "09_ventilation_emergency_extractor_1p15x0p9x1p75m__SLOT_GLASS__smoked_glass"
                                            }
                                        ],
-                       "glb":  "E:\\Codex\\Enclume-master\\output\\technical_blocks\\glb\\Extracteur d urgence blindé.glb",
                        "catalog_file":  "Extracteur d urgence blindé.glb"
                    }
                ]

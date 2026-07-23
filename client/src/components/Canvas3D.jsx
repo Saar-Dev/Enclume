@@ -24,6 +24,10 @@ import {
   normalizeSurfaceData,
   surfaceTextureIds,
 } from '../lib/surfaceData.js'
+import {
+  elevatorInteractionStop,
+  selectElevatorActorToken,
+} from '../lib/elevatorInteraction.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
@@ -1009,11 +1013,11 @@ function Scene({
   }, [])
 
   // Sprint 2.5 — centrage caméra sur le token actif en mode mouvement combat
-  // combatCameraCenter : { x, z } coords DB (PE14) | null
+  // combatCameraCenter : { x, z } point monde canonique (pieds) | null
   // Retour à null (annulation) → guard bloque → caméra reste où elle est (PC36)
   useEffect(() => {
     if (!combatCameraCenter || !orbitRef.current) return
-    orbitRef.current.target.set(combatCameraCenter.x + 0.5, levelToY(displayLevel), combatCameraCenter.z + 0.5)
+    orbitRef.current.target.set(combatCameraCenter.x, levelToY(displayLevel), combatCameraCenter.z)
     orbitRef.current.update()
   }, [combatCameraCenter, displayLevel])
 
@@ -1273,15 +1277,16 @@ function Scene({
       {phase === 'ANNOUNCEMENT' && announcedActions.filter(e => e.moveTarget).map(entry => {
         const m   = entry.moveTarget
         const src = tokens.find(t => t.id === entry.tokenId)
-        // PE14 → Three.js : X=pos_x, Y=pos_z(altitude), Z=pos_y(depth)
-        const movePts = src ? new Float32Array([
-          src.pos_x + 0.5, src.pos_z + 1.5, src.pos_y + 0.5,
-          m.x + 0.5,       m.z + 1.0,       m.y + 0.5,
+        const source = src ? tokenFeetPoint(src) : null
+        const destination = { x: Number(m.x), y: Number(m.z), z: Number(m.y) }
+        const movePts = source ? new Float32Array([
+          source.x, source.y + 1.5, source.z,
+          destination.x, destination.y + 1.5, destination.z,
         ]) : null
         return (
           <group key={entry.tokenId}>
             {/* Marqueur destination */}
-            <mesh position={[m.x + 0.5, m.z + 0.5, m.y + 0.5]}>
+            <mesh position={[destination.x, destination.y + 0.5, destination.z]}>
               <boxGeometry args={[1, 1, 1]} />
               <meshBasicMaterial color="#5b8dee" transparent opacity={0.22} />
             </mesh>
@@ -1296,7 +1301,7 @@ function Scene({
             )}
             {/* Label nom du token au-dessus de la destination */}
             {src && (
-              <Billboard position={[m.x + 0.5, m.z + 2.0, m.y + 0.5]}>
+              <Billboard position={[destination.x, destination.y + 2.0, destination.z]}>
                 <Text
                   font={FONT_URL}
                   fontSize={0.25}
@@ -1319,9 +1324,11 @@ function Scene({
         const src = tokensRef.current.find(t => t.id === entry.tokenId)
         const tgt = tokensRef.current.find(t => t.id === entry.attackTargetId)
         if (!src || !tgt) return null
+        const source = tokenFeetPoint(src)
+        const target = tokenFeetPoint(tgt)
         const pts = new Float32Array([
-          src.pos_x + 0.5, src.pos_z + 1.5, src.pos_y + 0.5,
-          tgt.pos_x + 0.5, tgt.pos_z + 1.5, tgt.pos_y + 0.5,
+          source.x, source.y + 1.5, source.z,
+          target.x, target.y + 1.5, target.z,
         ])
         return (
           <line key={entry.tokenId}>
@@ -1362,7 +1369,9 @@ function Scene({
 export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced' }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
-  const { isGm } = useCharacterStore()
+  const { tokens, updateToken } = useTokenStore()
+  const { characters, isGm } = useCharacterStore()
+  const { user } = useAuthStore()
 
   const [voxels, setVoxels] = useState({})
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
@@ -1371,6 +1380,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
   const [runtimeFeatureStates, setRuntimeFeatureStates] = useState({})
   const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
+  const [runtimeElevatorPassengers, setRuntimeElevatorPassengers] = useState([])
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
@@ -1392,10 +1402,14 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
 
   const refreshRuntimeElevators = useCallback(async () => {
-    if (!battlemap?.id) return setRuntimeElevatorStates({})
+    if (!battlemap?.id) {
+      setRuntimeElevatorStates({})
+      return setRuntimeElevatorPassengers([])
+    }
     try {
       const { data } = await api.get(`/battlemaps/${battlemap.id}/world-elevators`)
       setRuntimeElevatorStates(data.worldElevators?.states || {})
+      setRuntimeElevatorPassengers(data.worldElevators?.passengers || [])
     } catch (error) {
       console.error('[Canvas3D] Erreur chargement ascenseurs monde :', error)
     }
@@ -1579,25 +1593,50 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     return connector ? { id, ...connector } : null
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
+  const selectedElevatorActorToken = useMemo(() => selectElevatorActorToken({
+    tokens,
+    characters,
+    userId: user?.id,
+    isGm,
+    selectedTokenId,
+  }), [characters, isGm, selectedTokenId, tokens, user?.id])
+
+  const selectedElevatorPassengerTokenIds = useMemo(() => new Set(
+    runtimeElevatorPassengers
+      .filter(passenger => String(passenger.elevatorId) === String(selectedSurfaceConnector?.worldId || selectedSurfaceConnector?.id))
+      .map(passenger => String(passenger.tokenId)),
+  ), [runtimeElevatorPassengers, selectedSurfaceConnector?.id, selectedSurfaceConnector?.worldId])
+
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
-    if (!['elevator', 'window', 'screen-window'].includes(connector?.type)) return
+    if (!['elevator', 'window', 'screen-window', 'hatch'].includes(connector?.type)) return
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
+    const interactionStop = connector.type === 'elevator'
+      ? elevatorInteractionStop(connector, event?.point || null, displayLevel)
+      : null
     setSurfaceConnectorPanel({
       connectorId,
+      interactionStopId: interactionStop?.id || null,
       x: Number(source.clientX) || 24,
       y: Number(source.clientY) || 24,
     })
-  }, [])
+  }, [displayLevel])
 
   const handleElevatorCommand = useCallback(async (elevatorId, command) => {
     if (!battlemap?.id || !elevatorId) return
-    await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    const { data } = await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
+    for (const token of data?.passengerTokens || []) updateToken(token)
     await refreshRuntimeElevators()
-  }, [battlemap?.id, refreshRuntimeElevators])
+  }, [battlemap?.id, refreshRuntimeElevators, updateToken])
 
   const handleWindowStateChange = useCallback(async (featureId, state) => {
     if (!battlemap?.id || !featureId) return
     await api.patch(`/battlemaps/${battlemap.id}/world-windows/${featureId}/state`, { state })
+    await refreshRuntimeEffects()
+  }, [battlemap?.id, refreshRuntimeEffects])
+
+  const handleHatchStateChange = useCallback(async (featureId, state) => {
+    if (!battlemap?.id || !featureId) return
+    await api.patch(`/battlemaps/${battlemap.id}/world-hatches/${featureId}/state`, { state })
     await refreshRuntimeEffects()
   }, [battlemap?.id, refreshRuntimeEffects])
 
@@ -1659,9 +1698,14 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         y={surfaceConnectorPanel.y}
         runtimeState={(selectedSurfaceConnector.type === 'elevator' ? runtimeElevatorStates : runtimeFeatureStates)[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
         onElevatorCommand={handleElevatorCommand}
+        elevatorInteractionStopId={surfaceConnectorPanel.interactionStopId}
+        elevatorActorToken={selectedElevatorActorToken}
+        elevatorPassengerTokenIds={selectedElevatorPassengerTokenIds}
         onWindowStateChange={handleWindowStateChange}
+        onHatchStateChange={handleHatchStateChange}
         canEdit={false}
         canAdminElevator={isGm}
+        canAdminFeature={isGm}
         onClose={() => setSurfaceConnectorPanel(null)}
       />
     )}

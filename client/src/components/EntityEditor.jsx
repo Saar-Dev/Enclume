@@ -3,6 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { MapControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
 import { WS } from '../../../shared/events.js'
+import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
 import Voxel from './Voxel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import { useMapStore } from '../stores/mapStore'
@@ -86,15 +87,11 @@ function EntityEditorScene({
       const pos = calcGroundPos(e.clientX, e.clientY)
       if (!pos) return
 
-      // PE14 : threeToDb — pos.x = X, pos.y = 0 = altitude Y Three.js → pos_z,
-      // pos.z = Z Three.js → pos_y
       try {
         const { default: api } = await import('../lib/api.js')
         const res = await api.post(`/battlemaps/${battlemapId}/entities`, {
           blueprint_id: selectedBlueprintId,
-          pos_x: pos.x,
-          pos_y: pos.z,   // profondeur Z Three.js → pos_y en base (PE14)
-          pos_z: pos.y,   // altitude  Y Three.js → pos_z en base (PE14)
+          ...worldPointToDbPosition(pos),
           r: ghostR,
         })
         const entity = res.data.entity

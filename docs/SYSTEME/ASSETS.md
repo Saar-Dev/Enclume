@@ -138,6 +138,15 @@ Les fenêtres-écrans exposent les états `transparent`, `opaque` et `mirror`. L
 — dont les charnières — restent des options d'apparence d'instance et ne modifient ni la découpe,
 ni les collisions, ni les canaux de ligne de vue.
 
+Le pack intégré `vertical_access_hatches` contient huit connecteurs `hatch`, chacun avec un clip
+d’ouverture et `origin=hatch-center`. Les feuilles, renforts et organes d’ouverture doivent être
+lisibles dessus et dessous. Les variantes standards intègrent une commande verticale à la rive sur
+chaque face ; les variantes `service-hatch` utilisent leur écoutille bilatérale et n’ont aucun
+boîtier séparé. Aucun organe de commande ne doit être déporté dans un mur. Le pack se régénère avec
+`blender --background --python tools/generate_vertical_access_hatches.py`. Les quatre variantes
+coulissantes déclarent `floor-pocketed-panels` : leurs feuilles animées descendent de 0,16 unité
+sous la dalle avant de s'escamoter, afin que le sol les masque naturellement une fois ouvertes.
+
 ### Outils Blender de fabrication intégrés au dépôt
 
 Les scripts Python sous `tools/`, notamment `generate_futuristic_hydroponics.py`,

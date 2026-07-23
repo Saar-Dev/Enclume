@@ -1,10 +1,10 @@
-$ROOT = "C:\Users\Nemet\Documents\Enclume"
-$SERVER = "$ROOT\server"
-$CLIENT = "$ROOT\client"
+$ROOT = $PSScriptRoot
+$SERVER = Join-Path $ROOT 'server'
+$CLIENT = Join-Path $ROOT 'client'
 
 Write-Host ""
 Write-Host "========================================"
-Write-Host "   ENCLUME - Demarrage intelligent"
+Write-Host "   ENCLUME - Demarrage local complet"
 Write-Host "========================================"
 Write-Host ""
 

@@ -1,12 +1,87 @@
 ﻿# EN COURS — Dettes actives et prochaines étapes
-> **2026-07-18 — troisième fusion commune livrée sur 8393/8394** : le moteur monde `1255b37` et les règles
-> Saar `1733aaa` sont réunis depuis la tête commune `ee3302c`, sans modifier les worktrees
-> `dev/monde` ou `/home/didier/Enclume`. La sauvegarde complète se trouve dans
-> `/home/codex/backups/enclume-pre-fusion-20260718-095537`. Les 138 tests monde/serveur, 3 tests
-> de configuration, 78 tests client, la syntaxe serveur, le build Vite et le smoke Playwright
-> passent. Le commit `a8a8846` est déployé, les migrations `160/162/164/166/168` sont en base et
-> la recette navigateur réelle confirme dashboard v201, session 3D/combat, niveaux 0/1 et les deux
-> escaliers paramétriques dans **Objets 3D**, sans erreur console.
+> 🧪 **2026-07-22 — Session 164 déployée sur `8293/8294`, recette visuelle utilisateur attendue** :
+> **Ouvrir** inverse maintenant une fermeture au lieu d'être ignoré. Au palier cliqué, l'interface
+> propose **Appeler l'ascenseur** si la cabine est absente, puis **Utiliser** lorsqu'elle est là.
+> Utiliser ouvre immédiatement, centre le token actif dans la cabine et crée son attachement durable ;
+> les destinations suivantes déplacent cabine et token ensemble. Validation : 152 tests
+> monde/serveur, 101 tests client, 3 configuration, build Vite, ESLint ciblé sans erreur, recette
+> REST réelle porte/embarquement/trajet et smoke Chromium distant. Données temporaires contrôlées à
+> zéro. Retour arrière : `backup/pre-session164-elevator-use-20260722` (`6c772cf`). Saar et fusion
+> sont inchangés.
+>
+> 🧪 **2026-07-22 — Session 163 déployée sur `8293/8294`, recette visuelle utilisateur attendue** :
+> les ascenseurs suivent maintenant une route ordonnée de tronçons strictement X/Y/Z et peuvent
+> changer de direction à chaque arrêt. Les arrêts restent obligatoirement dans des salles fermées ;
+> la gaine étanche, verticale ou horizontale, peut traverser le vide extérieur. Chaque palier choisit
+> indépendamment sa porte Nord/Est/Sud/Ouest. Huit cabines distinctes sont livrées : industriel et
+> vitré en 1x1, 1x2, 2x1 et 2x2. Validation : 149 tests monde/serveur, 98 tests client, 3
+> configuration, 8 assets sans erreur ni avertissement, build Vite, ESLint ciblé sans erreur,
+> smoke Chromium distant et recette API réelle en trois arrêts vertical puis horizontal. Retour
+> arrière : `backup/pre-session163-elevator-route-20260722` (`77ecaa7`). Saar et fusion sont
+> inchangés.
+>
+> 🧪 **2026-07-22 — Session 162 déployée sur `8293/8294`, recette utilisateur attendue** : une
+> échelle seule dépasse désormais le palier haut de 75 cm ; dès qu'une trappe est liée, rails et
+> barreaux s'arrêtent exactement à sa sous-face, sans segment résiduel à l'étage supérieur. Les
+> panneaux des quatre trappes coulissantes descendent de 16 cm dans une poche puis disparaissent
+> sous la dalle, comme une porte coulissante dans son mur. Validation : 146 tests monde/serveur,
+> 95 tests client, 3 configuration, 8 assets sans erreur ni avertissement, build Vite, ESLint ciblé,
+> previews Blender fermée/ouverte, pistes GLB contrôlées et smoke Chromium distant. Retour arrière :
+> `backup/pre-session162-ladder-hatch-20260722` (`ff66e61`). Saar et fusion sont inchangés.
+>
+> 🧪 **2026-07-22 — Session 161 déployée sur `8293/8294`, recette utilisateur attendue** : le
+> catalogue d'une porte exclut strictement les trappes. Après **Échelle + Trappe**, la palette
+> conserve le choix de composition mais n'affiche plus que les huit trappes, sans recherche ni
+> objets généraux. Les objets 3D libres possèdent un placement sticky : leur fantôme balaie le
+> trajet de la souris, s'arrête au premier mur, objet ou volume structurel puis glisse sur les axes
+> libres. Il ne devient jamais rouge et ne traverse pas l'obstacle, même lors d'un saut rapide du
+> pointeur ; clic, glisser-déposer et rotation gardent une validation finale avant écriture.
+> Validation : 144 tests monde/serveur, 95 tests client, 3 configuration, build Vite, ESLint ciblé
+> sans erreur, smoke Chromium et recette connectée réelle (catalogue exclusif et franchissement de
+> mur refusé). Les données temporaires ont été supprimées et contrôlées à zéro. Retour arrière :
+> `backup/pre-session161-placement-collision-20260722` (`23949e4`). Saar et fusion sont inchangés.
+>
+> 🧪 **2026-07-22 — correction de recette des accès verticaux déployée sur `8293/8294`, nouvelle
+> recette utilisateur attendue** : le choix initial contient uniquement **Échelle seule** et
+> **Échelle + Trappe** ; ce dernier ouvre le catalogue visuel à droite. L’échelle est latérale,
+> possède quatre orientations et s’arrête sous la fermeture. Les huit GLB sont détaillés des deux
+> côtés. Les six modèles standards ont des commandes de rive dessus/dessous ; les deux modèles avec
+> écoutille n’ont aucun boîtier. Les champs procéduraux Matière/Motif sont masqués sur les trappes
+> GLB. Validation : 144 tests monde/serveur, 81 tests client Surface/lib, 3 configuration,
+> 8 manifestes GLB sans avertissement, build Vite, ESLint ciblé sans erreur, health, client et GLB
+> HTTP 200, catalogue serveur à 100 modèles et smoke Chromium distant. Retour arrière immédiat :
+> `backup/pre-session160-followup-20260722` (`f82bdea`). Les instances Saar et fusion n’ont pas été
+> modifiées.
+>
+> **2026-07-22 — grille mono-plan validée et déployée sur `8293/8294`** : murs, sols, plafonds, passerelles et trappes
+> entièrement ajourés utilisent maintenant une seule grille recto-verso ; les escaliers validés
+> restent inchangés. Même les empreintes découpées/courbes ne sont plus extrudées visuellement. Le
+> volume physique demeure complet. Validation locale, build et rendu du vrai renderer depuis deux
+> caméras opposées réussis ; health API et smoke Chromium distant validés après redémarrage. La
+> recette utilisateur est acceptée et le lot monde Session 159 est prêt pour la fusion.
+>
+> **2026-07-22 — correctif visuel grille déployé sur `8293/8294`** : les marches ajourées sont maintenant des
+> plateaux minces recto-verso au lieu de blocs opaques empilés. Leur motif utilise une densité ×4
+> corrigée par les dimensions du giron. Les murs ajourés restent visibles depuis les deux côtés et
+> ne subissent plus la coupe caméra des murs pleins. Validation locale et rendu Chromium bilatéral
+> réussis, puis health API et smoke Chromium distant validés après redémarrage.
+>
+> **2026-07-22 — raffinement des grilles et architecture des trappes 3D déployés sur `8293/8294`** : les marches utilisent
+> un motif de grille deux fois plus serré. Les autres surfaces ajourées affichent une coque unique
+> de 4,5 cm au lieu de deux grilles séparées par toute leur profondeur, sans modifier leur volume
+> physique. Les trappes tournent maintenant à gauche/droite par quarts de tour et peuvent recevoir
+> un blueprint GLB animé de connecteur `hatch`; la version procédurale reste le fallback. Il reste à
+> produire les variantes artistiques (écoutille, coulissante, boîtier) selon ce contrat. Health API
+> et smoke Chromium distant validés après redémarrage.
+>
+> **2026-07-22 — trappe d'échelle et grille ajourée déployées sur `8293/8294`** : poser une échelle
+> ajoute par défaut une trappe au palier haut. Fermée, elle remplace la dalle comme support et ferme
+> la traversée ; ouverte, elle pivote, libère le trou et autorise la montée. Le motif procédural
+> **Grille industrielle ajourée** s'applique aux surfaces et structures avec un vrai cutout alpha ;
+> le preset physique `grate` reste collider sans occulter la LOS. Validation locale et Kiwi :
+> 141 tests monde/serveur, 41 tests Surface, 3 configuration, build Vite, ESLint ciblé, inspection
+> du PNG RGBA sur damier et smoke Chromium distant sans exception. Reste non testé : recette
+> fonctionnelle complète dans une vraie carte/une vraie session.
 >
 > **2026-07-18 — palier haut du colimaçon livré sur 8293** : la trémie n'est plus le carré
 > englobant de l'escalier. Elle suit le secteur de volée qui exige réellement de la garde au
@@ -277,8 +352,8 @@ Branche `codex/world-engine-integration`, sans modification du dépôt de l'autr
 - Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
   des cartes anciennes n'est exigée.
 - Intégration du 2026-07-16 validée sur `8393` avec une carte multi-étages, un combat actif et un
-  parcours HTTP authentifié de personnage. Prochaine étape monde : trappe structurelle liée à
-  l'échelle, puis variantes d'escalier, sur les contrats canoniques déjà en place.
+  parcours HTTP authentifié de personnage. Les extensions monde continuent sur les variantes
+  d'escalier et de passerelle, sur les contrats canoniques déjà en place.
 
 Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
@@ -2074,13 +2149,12 @@ Projet en cours et priorité user :
 - token.owner_id — mort → toujours character_id → characters.user_id
 - socket dans dependency arrays — tout useCallback qui émet doit inclure socket (P3)
 - ordre déclaration React — callback A qui appelle B doit être déclaré APRÈS B (P4)
-- coordonnées voxel — données brutes en base, +0.5 uniquement dans le rendu visuel
+- coordonnées runtime — tokens actifs en `world-feet`; adaptateurs uniques
+  `dbPositionToWorldPoint` / `worldPointToDbPosition`; aucun offset voxel dans la physique
 - reconnectTrigger — ne jamais appeler socket.disconnect/connect depuis Sidebar
 - PE14 pos_y/pos_z — pos_y base = Z Three.js, pos_z base = Y Three.js
 - charStats.js — fonctions pures, jamais d'accès DB dans ce fichier
-- redis.js — maintenance Redis dans REST (POST/DELETE), pas dans handlers WS reliques (PE25)
 - resolveEntityState — returning doit inclure battlemap_id (PE26)
-- collisionMoveToken — hdel systématique ancienne case, hset conditionnel layer (PE24)
 - PE27 moveType — calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux
 - Token GM sans char_sheet → ENTITY_MOVE_REQUEST ignoré silencieusement — comportement documenté V1
 - Lerp EntityMesh — useFrame dans sous-composants (pas EntityMesh parent) — règle des hooks

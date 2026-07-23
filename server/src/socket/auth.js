@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken'
-import { parse } from 'cookie'
+import { parseCookie } from 'cookie'
 
 // Middleware d'authentification WebSocket
 // Fonctionne comme requireAuth mais pour Socket.io
@@ -13,7 +13,7 @@ const socketAuth = (socket, next) => {
       return next(new Error('Authentication required'))
     }
 
-    const cookies = parse(cookieHeader)
+    const cookies = parseCookie(cookieHeader)
     const token = cookies.token
     if (!token) {
       return next(new Error('Authentication required'))

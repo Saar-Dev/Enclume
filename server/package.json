@@ -2,6 +2,10 @@
   "name": "server",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -13,7 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "bcrypt": "^6.0.0",
-    "cookie": "^1.1.1",
+    "cookie": "^2.0.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

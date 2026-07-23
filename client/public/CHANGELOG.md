@@ -1,3 +1,132 @@
+## v211 — 2026-07-22 — Appel et utilisation des ascenseurs
+
+### Mode jeu
+- [fix] Le bouton **Ouvrir** ouvre maintenant réellement une porte fermée et peut inverser une
+  fermeture encore en cours.
+- [new] Cliquer sur un palier sans cabine propose **Appeler l’ascenseur**.
+- [new] Lorsque la cabine est présente, **Utiliser** ouvre les portes, place le token actif dans la
+  cabine et l'attache à son plancher mobile.
+- [fix] Le token embarqué suit désormais la cabine pendant tous ses déplacements verticaux et
+  horizontaux. Une fois à bord, le panneau propose les autres arrêts comme destinations.
+- [security] Un joueur ne peut embarquer que le token de son propre personnage ; le MJ peut choisir
+  explicitement un token sélectionné.
+
+## v210 — 2026-07-22 — Ascenseurs orthogonaux modulaires
+
+### Éditeur et modèles
+- [new] L'ascenseur se construit désormais en posant une suite d'arrêts. Chaque tronçon est
+  strictement vertical ou horizontal ; la direction peut changer à un arrêt, jamais en diagonale.
+- [new] Huit cabines détaillées sont disponibles : industriel et vitré, chacun en 1x1, 1x2, 2x1
+  et 2x2. Les variantes 1x2 et 2x1 sont bien des modèles distincts avec leurs propres largeurs de
+  porte.
+- [new] Chaque arrêt possède sa propre porte Nord, Est, Sud ou Ouest, modifiable après la pose.
+- [change] Un arrêt doit tenir dans une salle entièrement fermée. La gaine étanche peut traverser
+  le vide extérieur sous-marin entre deux salles, mais aucun palier ne peut s'y ouvrir.
+
+### Moteur de monde
+- [new] La cabine et ses passagers suivent réellement toute la polyligne en X, Y et Z. Les vitesses
+  verticale et horizontale sont configurées séparément.
+- [new] Les gaines verticales et horizontales sont générées par tronçon, avec jonctions ouvertes
+  dans le bon axe et extrémités étanches. La version vitrée laisse passer la vue tout en bloquant
+  déplacement, eau et gaz.
+
+## v209 — 2026-07-22 — Échelles ajustées et trappes escamotables
+
+### Accès verticaux
+- [fix] Une échelle liée à une trappe s'arrête maintenant exactement à la sous-face du modèle 3D ;
+  aucun montant ni barreau ne le traverse et aucun segment ne dépasse à l'étage supérieur.
+- [change] Sans trappe, l'échelle dépasse au contraire le palier haut de 75 cm afin de rester
+  saisissable depuis l'étage d'arrivée.
+- [fix] Les panneaux mobiles des trappes coulissantes bipartites et tripartites descendent dans une
+  poche sous la dalle. Une fois ouverts, le sol les masque comme un mur masque une porte
+  coulissante ; cadres et commandes fixes restent visibles.
+
+## v208 — 2026-07-22 — Catalogues exclusifs et placement sticky
+
+### Éditeur 3D
+- [fix] Le catalogue **Portes** exclut désormais toutes les trappes, y compris les anciens modèles
+  dont le pack ou les mots-clés contiennent encore `door` ou `sas`.
+- [fix] Après **Échelle + Trappe**, la palette conserve le sélecteur de composition et n'affiche que
+  la preview et les huit modèles de trappe ; recherche, import et objets 3D généraux sont masqués.
+- [feat] Les objets 3D libres ne peuvent plus être posés ni déplacés dans un mur, un volume
+  structurel ou un autre objet. Le fantôme reste toujours valide, s'arrête au contact et glisse le
+  long de l'obstacle sans devenir rouge.
+- [engine] Le trajet du pointeur est balayé avant chaque pose : un saut rapide de la souris ne peut
+  plus téléporter un objet au travers d'une paroi mince. Déplacement et rotation répètent le garde
+  juste avant l'écriture serveur.
+
+## v207 — 2026-07-22 — Trappes bilatérales et accès vertical latéral
+
+### Éditeur, rendu et modèles 3D
+- [change] Un accès vertical propose seulement **Échelle seule** ou **Échelle + Trappe**. Le second
+  choix crée la trappe puis ouvre à droite le catalogue des huit modèles avec preview, comme pour
+  les portes ; le menu ne mélange plus composition et noms de modèles.
+- [fix] L’échelle occupe maintenant un bord de la trémie, tourne réellement sur ses quatre côtés et
+  s’arrête sous la fermeture au lieu de traverser le panneau.
+- [fix] Les huit trappes possèdent un dessous détaillé et restent manipulables depuis les deux
+  niveaux. Les six modèles standards portent des commandes verticales intégrées à la rive, dessus
+  et dessous ; les deux modèles avec écoutille n’ont aucun boîtier séparé.
+- [fix] Les connecteurs utilisant un modèle GLB n’affichent plus les champs procéduraux
+  **Matière** et **Motif**. Leurs éventuels slots de couleur du modèle restent disponibles.
+
+## v206 — 2026-07-22 — Accès verticaux et trappes 3D
+
+### Éditeur et moteur de monde
+- [feat] **Objets 3D > Accès verticaux** propose d’abord **Échelle seule**, puis un catalogue direct
+  de trappes carrées et rondes. La forme est une propriété du modèle, pas une étape de choix séparée.
+- [feat] Huit trappes animées sont intégrées : battantes blindées, battantes avec écoutille,
+  coulissantes bipartites et coulissantes tripartites, chaque mécanisme en carré et en rond.
+- [engine] La trémie appartient désormais à l’accès vertical et existe même sans trappe. Une
+  passerelle adjacente rejoint donc réellement le palier haut d’une échelle laissée ouverte.
+- [engine] Les ouvertures rondes découpent un vrai contour circulaire dans le rendu, les supports,
+  les collisions et la LOS. Le GLB reste une apparence ; `surface_data` reste l’autorité physique.
+- [change] Après la pose, le popup de l’échelle permet de retirer ou remplacer sa trappe sans
+  supprimer l’échelle ni sa trémie.
+
+## v205 — 2026-07-22 — Grilles mono-plan recto-verso
+
+### Rendu du monde
+- [fix] Les murs, sols, plafonds, passerelles et trappes entièrement ajourés n'affichent plus deux
+  textures séparées : une seule grille recto-verso occupe désormais leur plan de support.
+- [perf] Lorsque les deux côtés partagent le même matériau, une seule géométrie et un seul matériau
+  sont rendus. Les apparences différentes restent possibles avec deux faces coplanaires orientées.
+- [engine] Les surfaces découpées et courbes utilisent elles aussi leur empreinte plane, tandis que
+  collisions, supports et LOS conservent leur volume structurel complet.
+
+## v204 — 2026-07-22 — Marches ajourées et murs visibles des deux côtés
+
+### Rendu du monde
+- [fix] Les escaliers en grille affichent maintenant des plateaux métalliques minces au lieu de
+  blocs pleins dont seul le dessus était ajouré. Dessous et chants restent lisibles à tout angle.
+- [fix] Le motif des marches est encore resserré, avec une densité ×4 calculée dans les dimensions
+  réelles du plateau pour éviter les mailles étirées.
+- [fix] Les murs en grille restent visibles des deux côtés et ne sont plus effacés par le mécanisme
+  de coupe caméra réservé aux murs opaques.
+
+## v203 — 2026-07-22 — Grilles minces et trappes 3D préparées
+
+### Éditeur et moteur de monde
+- [fix] Sur les escaliers, le pas visuel de la grille industrielle est doublé pour obtenir des
+  mailles plus serrées sans changer le motif des autres surfaces.
+- [fix] Les sols, plafonds, murs et trappes ajourés affichent désormais une seule grille métallique
+  de 4,5 cm d'épaisseur, alignée sur leur face porteuse. Leur volume physique reste inchangé.
+- [change] Les trappes se tournent par quarts de tour avec deux commandes gauche/droite, avant et
+  après leur pose.
+- [engine] Une trappe liée à une échelle peut maintenant référencer un modèle GLB animé comme une
+  porte. Le panneau procédural reste disponible comme solution de repli.
+
+## v202 — 2026-07-22 — Trappe d'échelle et grille industrielle ajourée
+
+### Éditeur et moteur de monde
+- [feat] Poser une échelle ajoute par défaut une vraie trappe sur son palier haut, avec charnières
+  orientables et états fermée, ouverte ou verrouillée.
+- [engine] Une trappe fermée remplace la dalle comme support et bloque la montée ; ouverte, elle
+  libère réellement la dalle et active la traversée de l'échelle. Le MJ peut changer son état en
+  session.
+- [feat] Le générateur de matériaux propose une grille métallique détaillée et réutilisable sur les
+  sols, murs, escaliers, passerelles, échelles et trappes.
+- [engine] Les trous de la grille utilisent un cutout alpha réel. Son preset physique bloque le
+  mouvement sans bloquer la ligne de vue ; la texture ne devient jamais l'autorité physique.
 ## v201 — 2026-07-18 — Escaliers validés et règles Saar réunis sur la base monde commune
 
 ### Éditeur et moteur de monde

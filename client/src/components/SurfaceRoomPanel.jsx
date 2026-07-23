@@ -50,6 +50,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     connectorModelBuiltinKey: null,
     connectorModelGeometry: null,
     connectorMaterialOverrides: {},
+    ...(type === 'elevator' ? { elevatorDraftStops: [], elevatorEditConnectorId: null } : {}),
   })
 
   return (

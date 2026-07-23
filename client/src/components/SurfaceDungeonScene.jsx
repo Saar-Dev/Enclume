@@ -6,7 +6,10 @@ import { SkeletonUtils } from 'three-stdlib'
 import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import StairPrismGeometry from './StairPrismGeometry.jsx'
-import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
+import {
+  generateProceduralMaterialTexture,
+  proceduralPatternUsesCutout,
+} from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, connectorModelMaterialSlots, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
 import { arcSurfaceMountFrame } from '../lib/curvedConnectorMount.js'
 import {
@@ -44,6 +47,12 @@ import {
   stairOpeningMultiPolygon,
 } from '../../../shared/world/stairGeometry.js'
 import {
+  ladderPlacementCenter,
+  ladderVisualRange,
+  verticalAccessOpenings,
+  verticalOpeningMultiPolygon,
+} from '../../../shared/world/verticalAccessGeometry.js'
+import {
   SURFACE_FINE,
   STORY_HEIGHT,
   computeSurfaceWaterCells,
@@ -54,6 +63,7 @@ import {
   getRoomFloorThickness,
   getRoomTopY,
   getWallRenderBox,
+  hatchOrientationQuarterTurns,
   isWorldInteriorPointVisibleAtLevel,
   isWorldPointVisibleAtLevel,
   normalizeSurfaceData,
@@ -79,6 +89,7 @@ const proceduralSurfaceMaterialCache = new Map()
 const proceduralPreviewMaterialCache = new Map()
 const opacityMaterialCache = new WeakMap()
 const repeatMaterialCache = new WeakMap()
+const sidedMaterialCache = new WeakMap()
 // Drei/Grid dessine les grandes cases avec sectionSize=1.
 // Côté règles Enclume, cette case vaut 1,5 m, mais côté rendu elle vaut
 // toujours 1 unité Three.js. Les UV doivent donc suivre l'unité visible,
@@ -86,6 +97,8 @@ const repeatMaterialCache = new WeakMap()
 const GRID_SECTION_WORLD_UNITS = 1
 const GRID_SECTION_METERS = 1.5
 const TEXTURE_TILE_GRID_SECTIONS = 1
+const GRATE_VISUAL_THICKNESS = 0.045
+const STAIR_GRATE_TEXTURE_REPEAT = 4
 const RELIEF_SEGMENTS_PER_TEXTURE_TILE = 14
 const RELIEF_MAX_SEGMENTS = 192
 const BOLT_HEAD_RADIUS = 0.026
@@ -110,6 +123,11 @@ const BOLT_WASHER_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0.3,
 })
 const HIDDEN_WALL_CAP_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
+const STRUCTURAL_STEEL_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#6f7f86',
+  roughness: 0.5,
+  metalness: 0.68,
+})
 
 function useCameraRoomId(surface, displayLevel, cameraControlsRef = null, roomContextAnchor = null) {
   const { camera } = useThree()
@@ -200,17 +218,18 @@ function proceduralMaterialKey(descriptor) {
   })
 }
 
-function makeDataTexture(dataUrl, color = true) {
+function makeDataTexture(dataUrl, color = true, smooth = false) {
   const texture = new THREE.TextureLoader().load(dataUrl)
   texture.colorSpace = color ? THREE.SRGBColorSpace : (THREE.NoColorSpace || '')
-  texture.magFilter = THREE.NearestFilter
-  texture.minFilter = THREE.NearestFilter
+  texture.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter
+  texture.minFilter = smooth ? THREE.LinearMipmapLinearFilter : THREE.NearestFilter
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
   return texture
 }
 
-function pbrForProcedural(materialId) {
+function pbrForProcedural(materialId, patternId = null) {
+  if (proceduralPatternUsesCutout(patternId)) return { roughness: 0.48, metalness: 0.72 }
   switch (materialId) {
     case 'steel':
       return { roughness: 0.55, metalness: 0.42 }
@@ -230,10 +249,11 @@ function proceduralMaterialAt(descriptor) {
   if (!key) return null
   if (proceduralSurfaceMaterialCache.has(key)) return proceduralSurfaceMaterialCache.get(key)
 
-  const generated = generateProceduralMaterialTexture({ ...descriptor, size: 128 })
-  const map = makeDataTexture(generated.albedoDataUrl, true)
-  const normalMap = makeDataTexture(generated.normalDataUrl, false)
-  const pbr = pbrForProcedural(generated.material?.id)
+  const cutout = proceduralPatternUsesCutout(descriptor.pattern)
+  const generated = generateProceduralMaterialTexture({ ...descriptor, size: cutout ? 256 : 128 })
+  const map = makeDataTexture(generated.albedoDataUrl, true, cutout)
+  const normalMap = makeDataTexture(generated.normalDataUrl, false, cutout)
+  const pbr = pbrForProcedural(generated.material?.id, descriptor.pattern)
   const reliefStrength = Math.max(0, Math.min(1, Number(descriptor.relief) / 100 || 0))
   const material = new THREE.MeshStandardMaterial({
     map,
@@ -242,10 +262,23 @@ function proceduralMaterialAt(descriptor) {
     color: 0xffffff,
     roughness: pbr.roughness,
     metalness: pbr.metalness,
+    alphaTest: cutout ? Number(descriptor.alphaCutoff) || 0.5 : 0,
+    side: cutout ? THREE.DoubleSide : THREE.FrontSide,
   })
+  const solidMaterial = cutout
+    ? new THREE.MeshStandardMaterial({
+        color: descriptor.paint || '#6f7f8e',
+        roughness: 0.5,
+        metalness: 0.68,
+        side: THREE.DoubleSide,
+      })
+    : material
   const entry = {
     faceMaterials: [material, material, material, material, material, material],
-    relief: generated.procedural,
+    relief: cutout ? null : generated.procedural,
+    cutout,
+    cutoutMaterial: material,
+    solidMaterial,
   }
   proceduralSurfaceMaterialCache.set(key, entry)
   return entry
@@ -275,6 +308,7 @@ function proceduralPreviewMaterialAt(descriptor) {
 }
 
 function surfaceMaterialAt(descriptor, showDetails) {
+  if (proceduralPatternUsesCutout(descriptor?.pattern)) return proceduralMaterialAt(descriptor)
   return showDetails
     ? proceduralMaterialAt(descriptor)
     : proceduralPreviewMaterialAt(descriptor)
@@ -288,6 +322,25 @@ function materialAt(textureMaterials, texId, face, fallbackFace = FACE.top) {
 
 function reliefAt(textureMaterials, texId) {
   return textureMaterials[texId]?.relief || null
+}
+
+function solidMaterialAt(textureMaterials, texId) {
+  return textureMaterials[texId]?.solidMaterial || null
+}
+
+function usesCutoutMaterial(procedural, textureMaterials, texId) {
+  return Boolean(procedural?.cutout || textureMaterials[texId]?.cutout)
+}
+
+function thinGrateThickness(physicalThickness, cutout) {
+  const thickness = Math.max(0.01, Number(physicalThickness) || 0.01)
+  return cutout ? Math.min(thickness, GRATE_VISUAL_THICKNESS) : thickness
+}
+
+function horizontalSurfaceVisualY(y, physicalThickness, visualThickness, face) {
+  if (visualThickness >= physicalThickness - 1e-6) return y
+  const direction = face === 'bottom' ? -1 : 1
+  return y + direction * (physicalThickness - visualThickness) / 2
 }
 
 function withOpacity(materials, opacity) {
@@ -307,6 +360,59 @@ function withOpacity(materials, opacity) {
     variants.set(key, clone)
     return clone
   })
+}
+
+function withRenderSide(material, side) {
+  if (!material || material.side === side) return material
+  let variants = sidedMaterialCache.get(material)
+  if (!variants) {
+    variants = new Map()
+    sidedMaterialCache.set(material, variants)
+  }
+  if (variants.has(side)) return variants.get(side)
+  const clone = material.clone()
+  clone.side = side
+  clone.needsUpdate = true
+  variants.set(side, clone)
+  return clone
+}
+
+function SingleSurfaceSheet({
+  position,
+  rotation = [0, 0, 0],
+  size,
+  geometry = null,
+  frontMaterial,
+  backMaterial = null,
+  opacity = 1,
+  castShadow = true,
+  receiveShadow = true,
+  userData = undefined,
+}) {
+  const front = withOpacity([frontMaterial], opacity)[0]
+  const back = withOpacity([backMaterial || frontMaterial], opacity)[0]
+  const sameMaterial = front === back
+  const mesh = (key, material) => (
+    <mesh
+      key={key}
+      geometry={geometry || undefined}
+      position={position}
+      rotation={rotation}
+      material={material}
+      castShadow={castShadow}
+      receiveShadow={receiveShadow}
+      userData={userData}
+    >
+      {!geometry && <planeGeometry args={size} />}
+    </mesh>
+  )
+  if (sameMaterial) return mesh('both', withRenderSide(front, THREE.DoubleSide))
+  return (
+    <>
+      {mesh('front', withRenderSide(front, THREE.FrontSide))}
+      {mesh('back', withRenderSide(back, THREE.BackSide))}
+    </>
+  )
 }
 
 function withRepeat(material, repeatX = 1, repeatY = 1, offsetX = 0, offsetY = 0) {
@@ -493,27 +599,40 @@ function WallBoltHeads({ wall, box, frontDescriptor, backDescriptor }) {
   return heads.length ? <>{heads}</> : null
 }
 
-function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDetails = true }) {
+function FloorTile({ id, floor, surface, openings = [], textureMaterials, opacity = 1, showDetails = true }) {
   const { x, z, y } = parseFloorKey(id, floor)
   const topProcedural = surfaceMaterialAt(floor.topMaterial || floor.material, showDetails)
   const bottomProcedural = surfaceMaterialAt(floor.bottomMaterial || floor.material, showDetails)
   const topTex = floor.topTex || floor.tex
   const bottomTex = floor.bottomTex || floor.tex || topTex
   const top = topProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, topTex, FACE.top)
-  const side = topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || top
+  const side = topProcedural?.solidMaterial || solidMaterialAt(textureMaterials, topTex) || topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || top
   const bottom = bottomProcedural?.faceMaterials[FACE.bottom]
     || materialAt(textureMaterials, bottomTex, FACE.bottom, FACE.top)
     || top
   const topRelief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
   const thickness = getFloorThickness(floor)
+  const topCutout = usesCutoutMaterial(topProcedural, textureMaterials, topTex)
+  const bottomCutout = usesCutoutMaterial(bottomProcedural, textureMaterials, bottomTex)
+  const cutout = topCutout || bottomCutout
+  const singleSheet = topCutout && bottomCutout
+  const visualThickness = thinGrateThickness(thickness, cutout)
+  const visualY = horizontalSurfaceVisualY(y, thickness, visualThickness, topCutout ? 'top' : 'bottom')
+  const sheetY = y + thickness / 2
   const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
   const clippedFootprint = (() => {
-    const rawRoom = floor?.clipRoomId ? surface?.rooms?.[floor.clipRoomId] : null
-    if (!rawRoom) return null
-    const room = { id: floor.clipRoomId, ...rawRoom }
-    const roomInterior = roomInteriorFootprintAtY(room, y, surface.rooms, STORY_HEIGHT)
     const tile = [[[[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1], [x, z]]]]
-    return intersectMultiPolygons(tile, roomInterior)
+    const rawRoom = floor?.clipRoomId ? surface?.rooms?.[floor.clipRoomId] : null
+    let footprint = tile
+    if (rawRoom) {
+      const room = { id: floor.clipRoomId, ...rawRoom }
+      const roomInterior = roomInteriorFootprintAtY(room, y, surface.rooms, STORY_HEIGHT)
+      footprint = intersectMultiPolygons(tile, roomInterior)
+    }
+    if (openings.length > 0 && footprint.length > 0) {
+      footprint = differenceMultiPolygons(footprint, ...openings.map(verticalOpeningMultiPolygon))
+    }
+    return rawRoom || openings.length > 0 ? footprint : null
   })()
   if (!top) return null
   if (clippedFootprint) {
@@ -524,29 +643,43 @@ function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDeta
         roomLookup={surface?.rooms}
         contours={multiPolygonContours(clippedFootprint)}
         kind="floor"
-        y={y}
-        thickness={thickness}
+        y={singleSheet ? sheetY : visualY}
+        thickness={visualThickness}
         capMaterial={top}
+        backMaterial={bottom}
         sideMaterial={side}
         opacity={opacity}
+        singleSheet={singleSheet}
       />
     )
   }
   return (
     <>
-      <mesh
-        position={[x + 0.5, y, z + 0.5]}
-        material={materials}
-        castShadow
-        receiveShadow
-        userData={{ worldSupport: true }}
-      >
-        <ReliefBoxGeometry
-          args={[1, thickness, 1]}
-          faceProfiles={[null, null, topRelief, null, null, null]}
-          faceMask={[false, false, true, false, false, false]}
+      {singleSheet ? (
+        <SingleSurfaceSheet
+          position={[x + 0.5, sheetY, z + 0.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          size={[1, 1]}
+          frontMaterial={top}
+          backMaterial={bottom}
+          opacity={opacity}
+          userData={{ worldSupport: true }}
         />
-      </mesh>
+      ) : (
+        <mesh
+          position={[x + 0.5, visualY, z + 0.5]}
+          material={materials}
+          castShadow
+          receiveShadow
+          userData={{ worldSupport: true }}
+        >
+          <ReliefBoxGeometry
+            args={[1, visualThickness, 1]}
+            faceProfiles={[null, null, topRelief, null, null, null]}
+            faceMask={[false, false, true, false, false, false]}
+          />
+        </mesh>
+      )}
       {showDetails && (
         <TopBoltHeads id={`floor:${id}`} descriptor={floor.topMaterial || floor.material || topRelief} x={x} z={z} topY={y + thickness / 2} />
       )}
@@ -554,7 +687,7 @@ function FloorTile({ id, floor, surface, textureMaterials, opacity = 1, showDeta
   )
 }
 
-function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = true }) {
+function CeilingTile({ id, ceiling, openings = [], textureMaterials, opacity, showDetails = true }) {
   const { x, z, y } = parseCeilingKey(id, ceiling)
   const topProcedural = surfaceMaterialAt(ceiling.topMaterial || ceiling.material, showDetails)
   const bottomProcedural = surfaceMaterialAt(ceiling.bottomMaterial || ceiling.material, showDetails)
@@ -565,14 +698,52 @@ function CeilingTile({ id, ceiling, textureMaterials, opacity, showDetails = tru
   if (!bottom) return null
 
   const top = topProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, topTex, FACE.top, FACE.bottom) || bottom
-  const side = topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || bottom
+  const side = topProcedural?.solidMaterial || solidMaterialAt(textureMaterials, topTex) || topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || bottom
   const relief = showDetails ? (bottomProcedural?.relief || reliefAt(textureMaterials, bottomTex)) : null
   const thickness = getCeilingThickness(ceiling)
+  const bottomCutout = usesCutoutMaterial(bottomProcedural, textureMaterials, bottomTex)
+  const topCutout = usesCutoutMaterial(topProcedural, textureMaterials, topTex)
+  const cutout = bottomCutout || topCutout
+  const singleSheet = bottomCutout && topCutout
+  const visualThickness = thinGrateThickness(thickness, cutout)
+  const visualY = horizontalSurfaceVisualY(y, thickness, visualThickness, bottomCutout ? 'bottom' : 'top')
   const materials = withOpacity([side, side, top, bottom, side, side], opacity)
+  if (openings.length > 0) {
+    const tile = [[[[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1], [x, z]]]]
+    const clippedFootprint = differenceMultiPolygons(tile, ...openings.map(verticalOpeningMultiPolygon))
+    if (clippedFootprint.length === 0) return null
+    return (
+      <CurvedRoomSlab
+        room={null}
+        contours={multiPolygonContours(clippedFootprint)}
+        kind="ceiling"
+        y={singleSheet ? y - thickness / 2 : visualY}
+        thickness={visualThickness}
+        capMaterial={bottom}
+        frontMaterial={top}
+        backMaterial={bottom}
+        sideMaterial={side}
+        opacity={opacity}
+        singleSheet={singleSheet}
+      />
+    )
+  }
+  if (singleSheet) {
+    return (
+      <SingleSurfaceSheet
+        position={[x + 0.5, y - thickness / 2, z + 0.5]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        size={[1, 1]}
+        frontMaterial={top}
+        backMaterial={bottom}
+        opacity={opacity}
+      />
+    )
+  }
   return (
-    <mesh position={[x + 0.5, y, z + 0.5]} material={materials} castShadow receiveShadow>
+    <mesh position={[x + 0.5, visualY, z + 0.5]} material={materials} castShadow receiveShadow>
       <ReliefBoxGeometry
-        args={[1, thickness, 1]}
+        args={[1, visualThickness, 1]}
         faceProfiles={[null, null, null, relief, null, null]}
         faceMask={[false, false, false, true, false, false]}
       />
@@ -591,6 +762,7 @@ function RoomSlab({
   footprint = null,
   yOverride = null,
   skylights = [],
+  hatches = [],
   stairs = [],
 }) {
   const sourceRectangles = roomFootprintRectangles(room)
@@ -611,6 +783,7 @@ function RoomSlab({
           && Number(connector.z) + Number(connector.depth || 1) > rectangle.minZ
       ))
   ))
+  const slabHatches = hatches.filter(connector => Math.abs(Number(connector?.y) - y) < 0.01)
   const slabStairs = stairs.filter(stair => Math.abs(Number(stair?.topY) - y) < 0.01)
   const sourceFootprint = footprint || roomBoundaryMultiPolygon(room, roomLookup)
   const skylightOpenings = slabSkylights.map(connector => [[[
@@ -621,7 +794,8 @@ function RoomSlab({
     [Number(connector.x), Number(connector.z)],
   ]]])
   const stairOpenings = slabStairs.map(stair => stairOpeningMultiPolygon(stair, { storyHeight: STORY_HEIGHT }))
-  const openings = [...skylightOpenings, ...stairOpenings]
+  const hatchOpenings = slabHatches.map(verticalOpeningMultiPolygon)
+  const openings = [...skylightOpenings, ...stairOpenings, ...hatchOpenings]
   const clippedFootprint = openings.length > 0
     ? differenceMultiPolygons(sourceFootprint, ...openings)
     : sourceFootprint
@@ -637,8 +811,15 @@ function RoomSlab({
   const bottom = bottomProcedural?.faceMaterials[FACE.bottom]
     || materialAt(textureMaterials, bottomTex, FACE.bottom, FACE.top)
     || top
-  const side = topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || top
+  const side = topProcedural?.solidMaterial || solidMaterialAt(textureMaterials, topTex) || topProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, topTex, FACE.south, FACE.top) || top
   const relief = showDetails ? (topProcedural?.relief || reliefAt(textureMaterials, topTex)) : null
+  const topCutout = usesCutoutMaterial(topProcedural, textureMaterials, topTex)
+  const bottomCutout = usesCutoutMaterial(bottomProcedural, textureMaterials, bottomTex)
+  const cutout = topCutout || bottomCutout
+  const singleSheet = topCutout && bottomCutout
+  const visualThickness = thinGrateThickness(thickness, cutout)
+  const visualY = horizontalSurfaceVisualY(y, thickness, visualThickness, isCeiling ? 'bottom' : 'top')
+  const sheetY = isCeiling ? y - thickness / 2 : y + thickness / 2
   if (!top) return null
 
   const hasCurvedBoundary = openings.length > 0 || (Array.isArray(footprintContours)
@@ -652,11 +833,14 @@ function RoomSlab({
         roomLookup={roomLookup}
         contours={multiPolygonContours(clippedFootprint)}
         kind={kind}
-        y={y}
-        thickness={thickness}
+        y={singleSheet ? sheetY : visualY}
+        thickness={visualThickness}
         capMaterial={isCeiling ? bottom : top}
+        frontMaterial={top}
+        backMaterial={top === bottom ? top : bottom}
         sideMaterial={side}
         opacity={opacity}
+        singleSheet={singleSheet}
       />
     )
   }
@@ -668,11 +852,15 @@ function RoomSlab({
         const minZ = rectangle.minZ
         const maxX = minX + rectangle.width
         const maxZ = minZ + rectangle.depth
-        const minY = y - thickness / 2
-        const maxY = y + thickness / 2
+        const minY = visualY - visualThickness / 2
+        const maxY = visualY + visualThickness / 2
         const faceUvTransforms = faceUvTransformsForBox(minX, minY, minZ, maxX, maxY, maxZ)
         const faceUvScales = faceUvScalesFromTransforms(faceUvTransforms)
         const faceUvOffsets = faceUvOffsetsFromTransforms(faceUvTransforms)
+        const sheetFront = withUvTransform(top, faceUvTransforms[2])
+        const sheetBack = top === bottom
+          ? sheetFront
+          : withUvTransform(bottom, faceUvTransforms[3])
         const materials = withOpacity([
           withUvTransform(side, faceUvTransforms[0]),
           withUvTransform(side, faceUvTransforms[1]),
@@ -682,17 +870,28 @@ function RoomSlab({
           withUvTransform(side, faceUvTransforms[5]),
         ], opacity)
 
-        return (
+        return singleSheet ? (
+          <SingleSurfaceSheet
+            key={`${kind}:${rectangle.minX}:${rectangle.minZ}:${rectangle.width}:${rectangle.depth}`}
+            position={[minX + rectangle.width / 2, sheetY, minZ + rectangle.depth / 2]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            size={[rectangle.width, rectangle.depth]}
+            frontMaterial={sheetFront}
+            backMaterial={sheetBack}
+            opacity={opacity}
+            userData={isCeiling ? undefined : { worldSupport: true }}
+          />
+        ) : (
           <mesh
             key={`${kind}:${rectangle.minX}:${rectangle.minZ}:${rectangle.width}:${rectangle.depth}`}
-            position={[minX + rectangle.width / 2, y, minZ + rectangle.depth / 2]}
+            position={[minX + rectangle.width / 2, visualY, minZ + rectangle.depth / 2]}
             material={materials}
             castShadow
             receiveShadow
             userData={isCeiling ? undefined : { worldSupport: true }}
           >
             <ReliefBoxGeometry
-              args={[rectangle.width, thickness, rectangle.depth]}
+              args={[rectangle.width, visualThickness, rectangle.depth]}
               faceProfiles={[null, null, isCeiling ? null : relief, isCeiling ? relief : null, null, null]}
               faceMask={[false, false, !isCeiling, isCeiling, false, false]}
               faceUvScales={faceUvScales}
@@ -729,11 +928,30 @@ function shapesFromRoomContours(contours) {
   })
 }
 
-function CurvedRoomSlab({ room, roomLookup, contours = null, kind, y, thickness, capMaterial, sideMaterial, opacity }) {
+function CurvedRoomSlab({
+  room,
+  roomLookup,
+  contours = null,
+  kind,
+  y,
+  thickness,
+  capMaterial,
+  frontMaterial = null,
+  backMaterial = null,
+  sideMaterial,
+  opacity,
+  singleSheet = false,
+}) {
   const isCeiling = kind === 'ceiling'
   const geometries = useMemo(() => shapesFromRoomContours(
     contours || roomBoundaryContours(room, roomLookup),
   ).map(shape => {
+    if (singleSheet) {
+      const geometry = new THREE.ShapeGeometry(shape, 1)
+      geometry.rotateX(-Math.PI / 2)
+      geometry.computeVertexNormals()
+      return geometry
+    }
     const geometry = new THREE.ExtrudeGeometry(shape, {
       depth: thickness,
       bevelEnabled: false,
@@ -746,22 +964,34 @@ function CurvedRoomSlab({ room, roomLookup, contours = null, kind, y, thickness,
     geometry.rotateX(-Math.PI / 2)
     geometry.computeVertexNormals()
     return geometry
-  }), [contours, room, roomLookup, thickness])
+  }), [contours, room, roomLookup, singleSheet, thickness])
 
   useEffect(() => () => geometries.forEach(geometry => geometry.dispose()), [geometries])
   if (geometries.length === 0) return null
   return (
     <>
       {geometries.map((geometry, index) => (
-        <mesh
-          key={`${kind}:polygon:${index}`}
-          geometry={geometry}
-          position={[0, y, 0]}
-          material={withOpacity([capMaterial, sideMaterial], opacity)}
-          castShadow
-          receiveShadow
-          userData={isCeiling ? undefined : { worldSupport: true }}
-        />
+        singleSheet ? (
+          <SingleSurfaceSheet
+            key={`${kind}:polygon:${index}`}
+            geometry={geometry}
+            position={[0, y, 0]}
+            frontMaterial={frontMaterial || capMaterial}
+            backMaterial={backMaterial || frontMaterial || capMaterial}
+            opacity={opacity}
+            userData={isCeiling ? undefined : { worldSupport: true }}
+          />
+        ) : (
+          <mesh
+            key={`${kind}:polygon:${index}`}
+            geometry={geometry}
+            position={[0, y, 0]}
+            material={withOpacity([capMaterial, sideMaterial], opacity)}
+            castShadow
+            receiveShadow
+            userData={isCeiling ? undefined : { worldSupport: true }}
+          />
+        )
       ))}
     </>
   )
@@ -796,16 +1026,25 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   const backRelief = showDetails ? (backProcedural?.relief || reliefAt(textureMaterials, wall.backTex)) : null
   const box = getWallRenderBox(wall)
   const [width, height, depth] = box?.args || [1, 1, 1]
+  const thinGrate = usesCutoutMaterial(frontProcedural, textureMaterials, wall.frontTex)
+    && usesCutoutMaterial(backProcedural, textureMaterials, wall.backTex || wall.frontTex)
+  const visualOpacity = thinGrate ? 1 : opacity
+  const visualArgs = thinGrate
+    ? wall.axis === 'z'
+      ? [thinGrateThickness(width, true), height, depth]
+      : [width, height, thinGrateThickness(depth, true)]
+    : [width, height, depth]
   const frontBase = frontProcedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, wall.frontTex, FACE.south)
   const backBase = backProcedural?.faceMaterials[FACE.north] || materialAt(textureMaterials, wall.backTex, FACE.north, FACE.south) || frontBase
-  const topBase = frontProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, wall.topTex || wall.frontTex, FACE.top, FACE.south) || frontBase
+  const topBase = frontProcedural?.solidMaterial || solidMaterialAt(textureMaterials, wall.topTex || wall.frontTex) || frontProcedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, wall.topTex || wall.frontTex, FACE.top, FACE.south) || frontBase
   const [cx, cy, cz] = box?.position || [0, 0, 0]
-  const minX = cx - width / 2
-  const maxX = cx + width / 2
-  const minY = cy - height / 2
-  const maxY = cy + height / 2
-  const minZ = cz - depth / 2
-  const maxZ = cz + depth / 2
+  const [visualWidth, visualHeight, visualDepth] = visualArgs
+  const minX = cx - visualWidth / 2
+  const maxX = cx + visualWidth / 2
+  const minY = cy - visualHeight / 2
+  const maxY = cy + visualHeight / 2
+  const minZ = cz - visualDepth / 2
+  const maxZ = cz + visualDepth / 2
   const faceUvTransforms = faceUvTransformsForBox(minX, minY, minZ, maxX, maxY, maxZ)
   const faceUvScales = faceUvScalesFromTransforms(faceUvTransforms)
   const faceUvOffsets = faceUvOffsetsFromTransforms(faceUvTransforms)
@@ -846,7 +1085,21 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
   }
 
   if (!frontBase || !backBase || !box) return null
-  const visibleMaterials = withOpacity(materials, opacity)
+  const visibleMaterials = withOpacity(materials, visualOpacity)
+  if (thinGrate) {
+    const frontSheet = wall.axis === 'x' || wall.axis === 'segment' ? materials[4] : materials[0]
+    const backSheet = wall.axis === 'x' || wall.axis === 'segment' ? materials[5] : materials[1]
+    return (
+      <SingleSurfaceSheet
+        position={box.position}
+        rotation={[0, wall.axis === 'z' ? Math.PI / 2 : box.rotationY || 0, 0]}
+        size={[wall.axis === 'z' ? visualDepth : visualWidth, visualHeight]}
+        frontMaterial={frontSheet}
+        backMaterial={frontBase === backBase ? frontSheet : backSheet}
+        opacity={visualOpacity}
+      />
+    )
+  }
 
   return (
     <>
@@ -854,11 +1107,11 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
         position={box.position}
         rotation={[0, box.rotationY || 0, 0]}
         material={visibleMaterials}
-        castShadow={opacity >= 0.999}
+        castShadow={visualOpacity >= 0.999}
         receiveShadow
       >
         <ReliefBoxGeometry
-          args={box.args}
+          args={visualArgs}
           faceProfiles={faceProfiles}
           faceMask={faceMask}
           faceUvScales={faceUvScales}
@@ -866,10 +1119,10 @@ function WallSegment({ wall, textureMaterials, opacity = 1, showDetails = true }
           maxSegments={reliefMaxSegmentsForRepeats(...faceUvScales.flat())}
         />
       </mesh>
-      {showDetails && opacity >= 0.999 && (
+      {showDetails && visualOpacity >= 0.999 && (
         <WallBoltHeads
           wall={wall}
-          box={box}
+          box={{ ...box, args: visualArgs }}
           frontDescriptor={wall.frontMaterial || wall.material || frontRelief}
           backDescriptor={wall.backMaterial || wall.frontMaterial || wall.material || backRelief}
         />
@@ -947,8 +1200,10 @@ function profiledWallVerticalLevels(wall) {
     .map(t => ({ t, y: origin + t * span }))
 }
 
-function profiledWallFaceDistances(wall, progress) {
-  const half = Math.max(1, Number(wall?.thickness) || 1) / (2 * SURFACE_FINE)
+function profiledWallFaceDistances(wall, progress, visualThickness = null) {
+  const half = Number.isFinite(Number(visualThickness))
+    ? Math.max(0.01, Number(visualThickness)) / 2
+    : Math.max(1, Number(wall?.thickness) || 1) / (2 * SURFACE_FINE)
   const minimumThickness = Math.max(0.01, half * 0.2)
   let front = half
   let back = -half
@@ -1015,7 +1270,7 @@ function joinedWallFacePoint(value, frame, distance, join, side, y) {
   ]
 }
 
-function makeCurvedWallGeometry(wall) {
+function makeCurvedWallGeometry(wall, visualThickness = null, singleSheet = false, distinctSheetFaces = false) {
   const path = profiledWallPath(wall)
   if (path.length < 2) return null
   const cumulative = [0]
@@ -1049,16 +1304,21 @@ function makeCurvedWallGeometry(wall) {
 
   const surfaces = verticalLevels.map(level => path.map((value, pathIndex) => {
     const frame = pathFrames[pathIndex]
-    const distances = profiledWallFaceDistances(wall, level.t)
+    const distances = profiledWallFaceDistances(wall, level.t, visualThickness)
     const join = pathIndex === 0
       ? wall.profileJoinStart
       : pathIndex === path.length - 1
         ? wall.profileJoinEnd
         : null
-    return {
-      front: joinedWallFacePoint(value, frame, distances.front, join, 'front', level.y),
-      back: joinedWallFacePoint(value, frame, distances.back, join, 'back', level.y),
-    }
+    const front = joinedWallFacePoint(value, frame, distances.front, join, 'front', level.y)
+    const back = joinedWallFacePoint(value, frame, distances.back, join, 'back', level.y)
+    if (!singleSheet) return { front, back }
+    const middle = [
+      (front[0] + back[0]) / 2,
+      (front[1] + back[1]) / 2,
+      (front[2] + back[2]) / 2,
+    ]
+    return { front: middle, back: middle }
   }))
   const geometry = new THREE.BufferGeometry()
   const positions = []
@@ -1078,13 +1338,15 @@ function makeCurvedWallGeometry(wall) {
       const frontNormal = quadFaceNormal(frontPoints)
       addCurvedWallQuad(positions, normals, uvs, geometry, 0, frontPoints,
         [frontNormal, frontNormal, frontNormal, frontNormal], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]])
-      const backPoints = [lowerB.back, lowerA.back, upperA.back, upperB.back]
-      const backNormal = quadFaceNormal(backPoints)
-      addCurvedWallQuad(positions, normals, uvs, geometry, 1, backPoints,
-        [backNormal, backNormal, backNormal, backNormal], [[1 - u1, v0], [1 - u0, v0], [1 - u0, v1], [1 - u1, v1]])
+      if (!singleSheet || distinctSheetFaces) {
+        const backPoints = [lowerB.back, lowerA.back, upperA.back, upperB.back]
+        const backNormal = quadFaceNormal(backPoints)
+        addCurvedWallQuad(positions, normals, uvs, geometry, 1, backPoints,
+          [backNormal, backNormal, backNormal, backNormal], [[1 - u1, v0], [1 - u0, v0], [1 - u0, v1], [1 - u1, v1]])
+      }
     }
   }
-  for (const verticalIndex of [0, verticalLevels.length - 1]) {
+  for (const verticalIndex of singleSheet ? [] : [0, verticalLevels.length - 1]) {
     for (let index = 0; index < path.length - 1; index += 1) {
       const a = surfaces[verticalIndex][index]
       const b = surfaces[verticalIndex][index + 1]
@@ -1097,7 +1359,7 @@ function makeCurvedWallGeometry(wall) {
         [normal, normal, normal, normal], [[0, 0], [1, 0], [1, 1], [0, 1]])
     }
   }
-  for (const pathIndex of [0, path.length - 1]) {
+  for (const pathIndex of singleSheet ? [] : [0, path.length - 1]) {
     if (pathIndex === 0 && wall.capStart === false) continue
     if (pathIndex === path.length - 1 && wall.capEnd === false) continue
     if (pathIndex === 0 && wall.profileJoinStart) continue
@@ -1129,26 +1391,45 @@ function CurvedWallSegment({ wall, textureMaterials, opacity = 1, showDetails = 
   const backBase = backProcedural?.faceMaterials[FACE.north]
     || materialAt(textureMaterials, wall.backTex, FACE.north, FACE.south)
     || frontBase
-  const topBase = frontProcedural?.faceMaterials[FACE.top]
+  const topBase = frontProcedural?.solidMaterial
+    || solidMaterialAt(textureMaterials, wall.topTex || wall.frontTex)
+    || frontProcedural?.faceMaterials[FACE.top]
     || materialAt(textureMaterials, wall.topTex || wall.frontTex, FACE.top, FACE.south)
     || frontBase
-  const geometry = useMemo(() => makeCurvedWallGeometry(wall), [wall])
+  const thinGrate = usesCutoutMaterial(frontProcedural, textureMaterials, wall.frontTex)
+    && usesCutoutMaterial(backProcedural, textureMaterials, wall.backTex || wall.frontTex)
+  const visualThickness = thinGrate ? GRATE_VISUAL_THICKNESS : null
+  const visualOpacity = thinGrate ? 1 : opacity
+  const distinctSheetFaces = thinGrate && frontBase !== backBase
+  const geometry = useMemo(
+    () => makeCurvedWallGeometry(wall, visualThickness, thinGrate, distinctSheetFaces),
+    [wall, visualThickness, thinGrate, distinctSheetFaces],
+  )
   useEffect(() => () => geometry?.dispose(), [geometry])
   if (!geometry || !frontBase || !backBase || !topBase) return null
   const length = wall.axis === 'arc'
     ? Math.max(0.05, Math.abs(Number(wall.radius) * Number(wall.sweep)))
     : Math.max(0.05, Math.hypot(Number(wall.x1) - Number(wall.x0), Number(wall.z1) - Number(wall.z0)) / SURFACE_FINE)
   const height = Math.max(0.05, Number(wall.height) || STORY_HEIGHT)
-  const thickness = Math.max(1, Number(wall.thickness) || 1) / SURFACE_FINE
+  const thickness = visualThickness || Math.max(1, Number(wall.thickness) || 1) / SURFACE_FINE
   const offset = Number(wall.curveOffset0) || 0
-  const materials = withOpacity([
-    withRepeat(frontBase, length, height, offset, Number(wall.y) || 0),
-    withRepeat(backBase, -length, height, -offset - length, Number(wall.y) || 0),
-    withRepeat(topBase, length, thickness, offset, 0),
-    withRepeat(topBase, length, thickness, offset, 0),
-  ], opacity)
+  const frontMaterial = withRepeat(frontBase, length, height, offset, Number(wall.y) || 0)
+  const backMaterial = withRepeat(backBase, -length, height, -offset - length, Number(wall.y) || 0)
+  const materials = thinGrate
+    ? withOpacity([
+        withRenderSide(frontMaterial, distinctSheetFaces ? THREE.FrontSide : THREE.DoubleSide),
+        distinctSheetFaces ? withRenderSide(backMaterial, THREE.FrontSide) : HIDDEN_WALL_CAP_MATERIAL,
+        HIDDEN_WALL_CAP_MATERIAL,
+        HIDDEN_WALL_CAP_MATERIAL,
+      ], visualOpacity)
+    : withOpacity([
+        frontMaterial,
+        backMaterial,
+        withRepeat(topBase, length, thickness, offset, 0),
+        withRepeat(topBase, length, thickness, offset, 0),
+      ], visualOpacity)
   return (
-    <mesh geometry={geometry} material={materials} castShadow={opacity >= 0.999} receiveShadow />
+    <mesh geometry={geometry} material={materials} castShadow={visualOpacity >= 0.999} receiveShadow />
   )
 }
 
@@ -1456,8 +1737,13 @@ function connectorDoorBox(connector) {
 function connectorAssetUrl(connector) {
   const rawUrl = connector?.modelGlbUrl
   if (!rawUrl) return null
+  const builtinVersion = connector?.type === 'hatch'
+    ? 'hatch-floor-pocket-20260722'
+    : connector?.type === 'elevator'
+      ? 'elevator-transit-20260722'
+    : 'door-model-refresh-20260709'
   const versionedUrl = rawUrl.startsWith('builtin-models/') && !rawUrl.includes('?')
-    ? `${rawUrl}?v=door-model-refresh-20260709`
+    ? `${rawUrl}?v=${builtinVersion}`
     : rawUrl
   if (/^https?:\/\//i.test(versionedUrl)) return versionedUrl
   return `${import.meta.env.VITE_API_URL}/api/assets/${versionedUrl}`
@@ -1512,25 +1798,147 @@ function WindowEmbrasure({ connector, opacity = 1 }) {
   )
 }
 
-function elevatorDisplayY(state, fallbackY, now = Date.now()) {
+function elevatorDisplayPosition(state, fallback, connector, now = Date.now()) {
   if (state?.phase !== 'moving' || !Number.isFinite(Number(state.transitionEndsAt))) {
-    return Number.isFinite(Number(state?.positionY)) ? Number(state.positionY) : fallbackY
+    return {
+      x: Number.isFinite(Number(state?.positionX)) ? Number(state.positionX) : fallback.x,
+      y: Number.isFinite(Number(state?.positionY)) ? Number(state.positionY) : fallback.y,
+      z: Number.isFinite(Number(state?.positionZ)) ? Number(state.positionZ) : fallback.z,
+    }
   }
   const startedAt = Number(state.transitionStartedAt)
   const endsAt = Number(state.transitionEndsAt)
-  const fromY = Number(state.movementFromY)
-  const toY = Number(state.movementToY)
-  if (![startedAt, endsAt, fromY, toY].every(Number.isFinite) || endsAt <= startedAt) return fallbackY
+  const from = state.movementFrom || {
+    x: Number(state.positionX ?? fallback.x),
+    y: Number(state.movementFromY ?? fallback.y),
+    z: Number(state.positionZ ?? fallback.z),
+  }
+  const path = Array.isArray(state.movementPath) && state.movementPath.length
+    ? state.movementPath
+    : [{ x: from.x, y: Number(state.movementToY ?? fallback.y), z: from.z }]
+  if (![startedAt, endsAt, from.x, from.y, from.z].every(Number.isFinite) || endsAt <= startedAt) return fallback
   const ratio = Math.max(0, Math.min(1, (now - startedAt) / (endsAt - startedAt)))
-  return fromY + (toY - fromY) * ratio
+  const points = [from, ...path]
+  const storyHeight = Math.max(0.1, Number(connector?.storyHeight) || STORY_HEIGHT)
+  const verticalRate = Math.max(0.1, Number(connector?.travelSecondsPerLevel) || 2) / storyHeight
+  const horizontalRate = Math.max(0.1, Number(connector?.travelSecondsPerUnit) || 1)
+  const weights = points.slice(1).map((point, index) => {
+    const previous = points[index]
+    const dx = Math.abs(Number(point.x) - Number(previous.x))
+    const dy = Math.abs(Number(point.y) - Number(previous.y))
+    const dz = Math.abs(Number(point.z) - Number(previous.z))
+    return dy > 0.0001 ? dy * verticalRate : (dx + dz) * horizontalRate
+  })
+  let remaining = ratio * weights.reduce((sum, value) => sum + value, 0)
+  for (let index = 0; index < weights.length; index += 1) {
+    const weight = weights[index]
+    if (remaining <= weight || index === weights.length - 1) {
+      const localRatio = weight > 0 ? Math.max(0, Math.min(1, remaining / weight)) : 1
+      return {
+        x: Number(points[index].x) + (Number(points[index + 1].x) - Number(points[index].x)) * localRatio,
+        y: Number(points[index].y) + (Number(points[index + 1].y) - Number(points[index].y)) * localRatio,
+        z: Number(points[index].z) + (Number(points[index + 1].z) - Number(points[index].z)) * localRatio,
+      }
+    }
+    remaining -= weight
+  }
+  return { ...fallback }
 }
 
-function AnimatedElevatorCabin({ state, fallbackY, children }) {
+function AnimatedElevatorCabin({ state, fallback, connector, children }) {
   const ref = useRef()
   useFrame(() => {
-    if (ref.current) ref.current.position.y = elevatorDisplayY(state, fallbackY)
+    if (!ref.current) return
+    const position = elevatorDisplayPosition(state, fallback, connector)
+    ref.current.position.set(position.x, position.y, position.z)
   })
-  return <group ref={ref} position={[0, elevatorDisplayY(state, fallbackY), 0]}>{children}</group>
+  const position = elevatorDisplayPosition(state, fallback, connector)
+  return <group ref={ref} position={[position.x, position.y, position.z]}>{children}</group>
+}
+
+function ElevatorTubeBox({ position, size, openAxis = 'y', style = 'industrial', opacity = 1 }) {
+  const glass = style === 'glass'
+  const frame = 0.055
+  const [width, height, depth] = size
+  const panel = Math.max(0.018, frame * 0.38)
+  const panels = [
+    ...(openAxis === 'y' ? [] : [
+      { key: 'floor', position: [0, -height / 2, 0], args: [width, panel, depth] },
+      { key: 'ceiling', position: [0, height / 2, 0], args: [width, panel, depth] },
+    ]),
+    ...(openAxis === 'x' ? [] : [
+      { key: 'west', position: [-width / 2, 0, 0], args: [panel, height, depth] },
+      { key: 'east', position: [width / 2, 0, 0], args: [panel, height, depth] },
+    ]),
+    ...(openAxis === 'z' ? [] : [
+      { key: 'north', position: [0, 0, -depth / 2], args: [width, height, panel] },
+      { key: 'south', position: [0, 0, depth / 2], args: [width, height, panel] },
+    ]),
+  ]
+  const beams = [
+    ...[-1, 1].flatMap(xSide => [-1, 1].map(zSide => ({
+      key: `y:${xSide}:${zSide}`,
+      position: [xSide * width / 2, 0, zSide * depth / 2],
+      args: [frame, height, frame],
+    }))),
+    ...[-1, 1].flatMap(ySide => [-1, 1].map(zSide => ({
+      key: `x:${ySide}:${zSide}`,
+      position: [0, ySide * height / 2, zSide * depth / 2],
+      args: [width, frame, frame],
+    }))),
+    ...[-1, 1].flatMap(xSide => [-1, 1].map(ySide => ({
+      key: `z:${xSide}:${ySide}`,
+      position: [xSide * width / 2, ySide * height / 2, 0],
+      args: [frame, frame, depth],
+    }))),
+  ]
+  return (
+    <group position={position}>
+      {panels.map(item => <mesh key={item.key} position={item.position}>
+        <boxGeometry args={item.args} />
+        <meshStandardMaterial
+          color={glass ? '#7dd3fc' : '#17212b'}
+          metalness={glass ? 0.08 : 0.68}
+          roughness={glass ? 0.16 : 0.4}
+          transparent
+          opacity={Math.min(glass ? 0.2 : 0.58, opacity)}
+          depthWrite={!glass && opacity >= 0.95}
+          side={THREE.DoubleSide}
+        />
+      </mesh>)}
+      {beams.map(beam => (
+        <mesh key={beam.key} position={beam.position} castShadow>
+          <boxGeometry args={beam.args} />
+          <meshStandardMaterial color={glass ? '#263746' : '#0c1218'} metalness={0.82} roughness={0.3} transparent opacity={opacity} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function ElevatorCabinModel({ connector, opacity = 1 }) {
+  const url = connectorAssetUrl(connector)
+  const { scene: sourceScene } = useGLTF(url)
+  const materialSlots = useMemo(() => connectorModelMaterialSlots(connector), [connector])
+  const materialOverrides = connector?.modelMaterialOverrides || null
+  const scene = useMemo(() => {
+    const clone = SkeletonUtils.clone(sourceScene)
+    clone.traverse(child => {
+      if (!child.isMesh) return
+      child.castShadow = true
+      child.receiveShadow = true
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      child.material = materials.map(material => {
+        const next = applyMaterialSlotOverrides(material.clone(), materialSlots, materialOverrides)
+        next.transparent = opacity < 0.999 || next.transparent
+        next.opacity = Math.min(Number(next.opacity) || 1, opacity)
+        return next
+      })
+      if (child.material.length === 1) child.material = child.material[0]
+    })
+    return clone
+  }, [sourceScene, opacity, materialOverrides, materialSlots])
+  return <primitive object={scene} position={[Number(connector.width) / 2, 0, Number(connector.depth) / 2]} />
 }
 
 function doorControlMountSide(name) {
@@ -1759,7 +2167,186 @@ function SkylightSelectionOutline({ connector }) {
   )
 }
 
-export function ConnectorSegment({ connector, curveWall = null, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
+function HatchConnectorModel({ connector, opacity = 1, selected = false }) {
+  const url = connectorAssetUrl(connector)
+  const { scene: sourceScene, animations } = useGLTF(url)
+  const materialSlots = useMemo(() => connectorModelMaterialSlots(connector), [connector])
+  const materialOverrides = connector?.modelMaterialOverrides || connector?.materialOverrides || null
+  const modelState = connector?.runtimeState?.state || connector?.state || 'closed'
+  const supportsWorld = !['open', 'destroyed'].includes(modelState)
+  const geometry = connector?.modelGeometry || {}
+  const width = Math.max(0.2, Number(connector.width) || 1)
+  const depth = Math.max(0.2, Number(connector.depth) || 1)
+  const thickness = Math.max(0.04, Number(connector.height) || 0.12)
+  const { scene, offset, uniformScale } = useMemo(() => {
+    const clone = SkeletonUtils.clone(sourceScene)
+    clone.traverse(child => {
+      if (!child.isMesh || !child.material) return
+      child.castShadow = opacity >= 0.999
+      child.receiveShadow = true
+      child.userData = {
+        ...child.userData,
+        ...(supportsWorld ? {
+          worldSupport: true,
+          worldFeatureId: connector.worldId || connector.id,
+        } : {}),
+      }
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      const next = materials.map(material => {
+        const value = applyMaterialSlotOverrides(material.clone(), materialSlots, materialOverrides)
+        value.transparent = value.transparent || opacity < 0.999
+        value.opacity = Math.min(value.opacity ?? 1, opacity)
+        if (value.transparent) value.depthWrite = false
+        value.needsUpdate = true
+        return value
+      })
+      child.material = Array.isArray(child.material) ? next : next[0]
+    })
+    clone.updateWorldMatrix(true, true)
+    const bounds = new THREE.Box3().setFromObject(clone)
+    const size = new THREE.Vector3()
+    const center = new THREE.Vector3()
+    bounds.getSize(size)
+    bounds.getCenter(center)
+    const declaredWidth = Math.max(0.01, Number(geometry.width) || size.x || width)
+    const declaredDepth = Math.max(0.01, Number(geometry.depth) || size.z || depth)
+    const scale = Math.min(width / declaredWidth, depth / declaredDepth)
+    const preserveOrigin = geometry.origin === 'hatch-center'
+    return {
+      scene: clone,
+      offset: preserveOrigin
+        ? new THREE.Vector3(0, 0, 0)
+        : new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
+      uniformScale: scale,
+    }
+  }, [sourceScene, opacity, supportsWorld, connector.worldId, connector.id, materialSlots, materialOverrides,
+    geometry.width, geometry.depth, geometry.origin, width, depth])
+  const selectionHalos = useMemo(() => attachEntitySelectionHalo(scene), [scene])
+  useModelStateAnimation(scene, animations, modelState)
+
+  useEffect(() => {
+    setEntitySelectionHaloVisible(selectionHalos, selected)
+  }, [selected, selectionHalos])
+  useEffect(() => () => disposeEntitySelectionHalo(selectionHalos), [selectionHalos])
+
+  if (modelState === 'destroyed') return null
+  const rotationY = -hatchOrientationQuarterTurns(connector) * Math.PI / 2
+  return (
+    <group
+      position={[Number(connector.x) + width / 2, (Number(connector.y) || 0) + thickness / 2, Number(connector.z) + depth / 2]}
+      rotation={[0, rotationY, 0]}
+      scale={uniformScale}
+      renderOrder={31}
+    >
+      <primitive object={scene} position={offset} />
+    </group>
+  )
+}
+
+function HatchConnectorSegment({ connector, textureMaterials, opacity, selected }) {
+  const panelRef = useRef()
+  const appearance = surfaceMaterialAt(connector.material, true)
+  const top = appearance?.cutoutMaterial
+    || appearance?.faceMaterials[FACE.top]
+    || materialAt(textureMaterials, connector.tex, FACE.top)
+    || STRUCTURAL_STEEL_MATERIAL
+  const solid = appearance?.solidMaterial
+    || solidMaterialAt(textureMaterials, connector.tex)
+    || STRUCTURAL_STEEL_MATERIAL
+  const panelMaterials = withOpacity([solid, solid, top, top, solid, solid], opacity)
+  const frameMaterial = withOpacity([solid], opacity)[0]
+  const x = Number(connector.x) || 0
+  const y = Number(connector.y) || 0
+  const z = Number(connector.z) || 0
+  const width = Math.max(0.2, Number(connector.width) || 1)
+  const depth = Math.max(0.2, Number(connector.depth) || 1)
+  const thickness = Math.max(0.04, Number(connector.height) || 0.12)
+  const cutout = Boolean(appearance?.cutout || textureMaterials[connector.tex]?.cutout)
+  const visualThickness = thinGrateThickness(thickness, cutout)
+  const hingeSide = Number(connector.hingeSide) < 0 ? -1 : 1
+  const axis = connector.axis === 'z' ? 'z' : 'x'
+  const state = connector.runtimeState?.state || connector.state || 'closed'
+  const open = state === 'open' || state === 'destroyed'
+  const targetAngle = open
+    ? axis === 'x' ? hingeSide * Math.PI * 0.56 : -hingeSide * Math.PI * 0.56
+    : 0
+  const initialAngleRef = useRef(targetAngle)
+  const frameSize = Math.min(0.08, Math.max(0.035, Math.min(width, depth) * 0.065))
+  const pivotY = cutout ? y + thickness / 2 : y
+  const panelY = cutout ? -visualThickness / 2 : 0
+  const pivot = axis === 'x'
+    ? [x + width / 2, pivotY, z + (hingeSide > 0 ? depth : 0)]
+    : [x + (hingeSide > 0 ? width : 0), pivotY, z + depth / 2]
+  const panelOffset = axis === 'x'
+    ? [0, panelY, hingeSide > 0 ? -depth / 2 : depth / 2]
+    : [hingeSide > 0 ? -width / 2 : width / 2, panelY, 0]
+
+  useFrame((_, delta) => {
+    if (!panelRef.current) return
+    const rotationAxis = axis === 'x' ? 'x' : 'z'
+    panelRef.current.rotation[rotationAxis] = THREE.MathUtils.damp(
+      panelRef.current.rotation[rotationAxis],
+      targetAngle,
+      11,
+      delta,
+    )
+  })
+
+  return (
+    <group>
+      <mesh position={[x + width / 2, y + thickness / 2, z]} material={frameMaterial} castShadow receiveShadow>
+        <boxGeometry args={[width + frameSize * 2, frameSize, frameSize]} />
+      </mesh>
+      <mesh position={[x + width / 2, y + thickness / 2, z + depth]} material={frameMaterial} castShadow receiveShadow>
+        <boxGeometry args={[width + frameSize * 2, frameSize, frameSize]} />
+      </mesh>
+      <mesh position={[x, y + thickness / 2, z + depth / 2]} material={frameMaterial} castShadow receiveShadow>
+        <boxGeometry args={[frameSize, frameSize, depth]} />
+      </mesh>
+      <mesh position={[x + width, y + thickness / 2, z + depth / 2]} material={frameMaterial} castShadow receiveShadow>
+        <boxGeometry args={[frameSize, frameSize, depth]} />
+      </mesh>
+      {state !== 'destroyed' && (
+        <group
+          ref={panelRef}
+          position={pivot}
+          rotation={axis === 'x' ? [initialAngleRef.current, 0, 0] : [0, 0, initialAngleRef.current]}
+        >
+          {!cutout && (
+            <mesh
+              position={panelOffset}
+              material={panelMaterials}
+              castShadow
+              receiveShadow
+              userData={!open ? { worldSupport: true, worldFeatureId: connector.worldId || connector.id } : undefined}
+            >
+              <boxGeometry args={[width, visualThickness, depth]} />
+            </mesh>
+          )}
+          {cutout && (
+            <SingleSurfaceSheet
+              position={[panelOffset[0], 0, panelOffset[2]]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              size={[width, depth]}
+              frontMaterial={top}
+              backMaterial={top}
+              opacity={opacity}
+              userData={!open ? { worldSupport: true, worldFeatureId: connector.worldId || connector.id } : undefined}
+            />
+          )}
+        </group>
+      )}
+      {selected && (
+        <mesh position={[x + width / 2, y + thickness / 2 + 0.01, z + depth / 2]} renderOrder={45}>
+          <boxGeometry args={[width + 0.08, thickness + 0.08, depth + 0.08]} />
+          <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+export function ConnectorSegment({ connector, linkedHatch = null, curveWall = null, textureMaterials = {}, opacity = 1, selected = false, onPointerSelect = null, displayLevel = null }) {
   const handlePointerDown = useCallback((event) => {
     if (!onPointerSelect || !connector?.id) return
     event.stopPropagation()
@@ -1809,6 +2396,33 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
     )
   }
 
+  if (connector.type === 'hatch') {
+    const url = connectorAssetUrl(connector)
+    return (
+      <group {...pointerProps}>
+        {url ? (
+          <Suspense fallback={(
+            <HatchConnectorSegment
+              connector={connector}
+              textureMaterials={textureMaterials}
+              opacity={opacity}
+              selected={selected}
+            />
+          )}>
+            <HatchConnectorModel connector={connector} opacity={opacity} selected={selected} />
+          </Suspense>
+        ) : (
+          <HatchConnectorSegment
+            connector={connector}
+            textureMaterials={textureMaterials}
+            opacity={opacity}
+            selected={selected}
+          />
+        )}
+      </group>
+    )
+  }
+
   if (connector.type === 'legacy-door-placeholder') {
     const fine = SURFACE_FINE
     const wallDepth = Math.max(0.28, (Number(connector.thickness) || 1) / fine + 0.12)
@@ -1830,23 +2444,23 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
   }
 
   if (connector.type === 'ladder') {
-    const fullY = Number(connector.y) || 0
-    const fullTopY = Number(connector.topY) || fullY + STORY_HEIGHT
-    const sliceBottom = displayLevel === null ? -Infinity : displayLevel * STORY_HEIGHT
-    const sliceTop = displayLevel === null ? Infinity : sliceBottom + STORY_HEIGHT
-    const y = Math.max(fullY, sliceBottom)
-    let topY = Math.min(fullTopY, sliceTop)
-    if (topY <= y && displayLevel !== null && Math.abs(fullTopY - sliceBottom) < 0.01) {
-      topY = y + 0.12
-    }
-    const height = Math.max(0.2, topY - y)
+    const visualRange = ladderVisualRange(connector, {
+      linkedHatch,
+      displayLevel,
+      storyHeight: STORY_HEIGHT,
+    })
+    if (!visualRange) return null
+    const y = visualRange.bottomY
+    const height = visualRange.height
     const width = Math.max(0.2, Number(connector.width) || 0.7)
     const depth = Math.max(0.05, Number(connector.depth) || 0.12)
     const spacing = Math.max(0.1, Number(connector.anchorSpacing) || 0.5)
     const railThickness = Math.min(0.08, Math.max(0.035, width * 0.09))
-    const rungCount = Math.min(128, Math.max(2, Math.floor(height / spacing) + 1))
-    const centerX = Number(connector.x) + 0.5
-    const centerZ = Number(connector.z) + 0.5
+    const usableRungHeight = Math.max(0, height - railThickness)
+    const rungCount = Math.min(128, Math.max(2, Math.floor(usableRungHeight / spacing) + 1))
+    const ladderCenter = ladderPlacementCenter(connector)
+    const centerX = ladderCenter.x
+    const centerZ = ladderCenter.z
     const alongX = connector.axis !== 'z'
     const railGeometry = alongX
       ? [railThickness, height, depth]
@@ -1854,6 +2468,14 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
     const rungGeometry = alongX
       ? [width, railThickness, depth]
       : [depth, railThickness, width]
+    const appearance = surfaceMaterialAt(connector.material, true)
+    const structureMaterial = withOpacity([
+      appearance?.solidMaterial
+        || solidMaterialAt(textureMaterials, connector.tex)
+        || appearance?.faceMaterials[FACE.south]
+        || materialAt(textureMaterials, connector.tex, FACE.south, FACE.top)
+        || STRUCTURAL_STEEL_MATERIAL,
+    ], opacity)[0]
 
     return (
       <group renderOrder={30} {...pointerProps}>
@@ -1865,23 +2487,25 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
               y + height / 2,
               centerZ + (alongX ? 0 : side * width / 2),
             ]}
+            material={structureMaterial}
             castShadow
+            receiveShadow
           >
             <boxGeometry args={railGeometry} />
-            <meshStandardMaterial color="#94a3b8" transparent opacity={Math.min(0.95, opacity)} />
           </mesh>
         ))}
         {Array.from({ length: rungCount }, (_, index) => {
-          const ratio = rungCount === 1 ? 0 : index / (rungCount - 1)
+          const ratio = rungCount === 1 ? 0.5 : index / (rungCount - 1)
           return (
             <mesh
               key={`rung-${index}`}
-              position={[centerX, y + ratio * height, centerZ]}
+              position={[centerX, y + railThickness / 2 + ratio * usableRungHeight, centerZ]}
+              material={structureMaterial}
               castShadow
+              receiveShadow
               userData={{ worldSupport: true, worldFeatureId: connector.worldId || connector.id }}
             >
               <boxGeometry args={rungGeometry} />
-              <meshStandardMaterial color="#cbd5e1" transparent opacity={Math.min(0.95, opacity)} />
             </mesh>
           )
         })}
@@ -1902,89 +2526,177 @@ export function ConnectorSegment({ connector, curveWall = null, opacity = 1, sel
     const floorThickness = Math.max(0.04, Number(connector.cabinFloorThickness) || 0.12)
     const wallThickness = Math.max(0.04, Number(connector.cabinWallThickness) || 0.08)
     const stops = Array.isArray(connector.stops) && connector.stops.length
-      ? connector.stops
+      ? connector.stops.map(stop => ({
+        ...stop,
+        x: Number.isFinite(Number(stop.x)) ? Number(stop.x) : Number(connector.x) || 0,
+        z: Number.isFinite(Number(stop.z)) ? Number(stop.z) : Number(connector.z) || 0,
+        doorAxis: stop.doorAxis === 'x' ? 'x' : stop.doorAxis === 'z' ? 'z' : connector.doorAxis === 'x' ? 'x' : 'z',
+        doorSide: Number(stop.doorSide ?? connector.doorSide) < 0 ? -1 : 1,
+      }))
       : [
-        { id: `level:${connector.fromLevel ?? connector.level ?? 0}`, y: Number(connector.y) || 0 },
-        { id: `level:${connector.toLevel ?? ((connector.level ?? 0) + 1)}`, y: Number(connector.topY) || (Number(connector.y) || 0) + STORY_HEIGHT },
+        { id: `level:${connector.fromLevel ?? connector.level ?? 0}`, x: Number(connector.x) || 0, y: Number(connector.y) || 0, z: Number(connector.z) || 0, doorAxis: connector.doorAxis === 'x' ? 'x' : 'z', doorSide: Number(connector.doorSide) < 0 ? -1 : 1 },
+        { id: `level:${connector.toLevel ?? ((connector.level ?? 0) + 1)}`, x: Number(connector.x) || 0, y: Number(connector.topY) || (Number(connector.y) || 0) + STORY_HEIGHT, z: Number(connector.z) || 0, doorAxis: connector.doorAxis === 'x' ? 'x' : 'z', doorSide: Number(connector.doorSide) < 0 ? -1 : 1 },
       ]
     const runtimeState = connector.runtimeState || {}
+    const fallback = { x: stops[0].x, y: Number(stops[0].y) || Number(connector.y) || 0, z: stops[0].z }
     const floorY = Number.isFinite(Number(runtimeState.positionY))
       ? Number(runtimeState.positionY)
-      : Number(stops[0]?.y) || Number(connector.y) || 0
+      : fallback.y
+    const cabinPosition = elevatorDisplayPosition(runtimeState, fallback, connector)
     const currentStop = stops.find(stop => stop.id === runtimeState.currentStopId)
     const doorsOpen = runtimeState.phase === 'open'
       && runtimeState.doorState === 'open'
       && currentStop
+      && Math.abs(Number(currentStop.x) - cabinPosition.x) < 0.001
       && Math.abs(Number(currentStop.y) - floorY) < 0.001
-    const x = Number(connector.x) || 0
-    const z = Number(connector.z) || 0
-    const centerX = x + width / 2
-    const centerZ = z + depth / 2
+      && Math.abs(Number(currentStop.z) - cabinPosition.z) < 0.001
     const fullShaftBottom = Math.min(...stops.map(stop => Number(stop.y) || 0))
     const fullShaftTop = Math.max(...stops.map(stop => Number(stop.y) || 0)) + cabinHeight
     const sliceBottom = displayLevel === null ? fullShaftBottom : displayLevel * STORY_HEIGHT
     const sliceTop = displayLevel === null ? fullShaftTop : sliceBottom + STORY_HEIGHT
-    const shaftBottom = Math.max(fullShaftBottom, sliceBottom)
-    const shaftTop = Math.min(fullShaftTop, sliceTop)
-    const visibleStops = stops.filter(stop => displayLevel === null || yToLevel(stop.y) === displayLevel)
-    const cabinDisplayY = elevatorDisplayY(runtimeState, floorY)
+    const visibleStops = stops.filter(stop => displayLevel === null || (
+      Number(stop.y) < sliceTop && Number(stop.y) + cabinHeight > sliceBottom
+    ))
+    const cabinDisplayY = cabinPosition.y
     const cabinVisible = displayLevel === null
       || (cabinDisplayY < sliceTop && cabinDisplayY + cabinHeight > sliceBottom)
-    const doorAxis = connector.doorAxis === 'x' ? 'x' : 'z'
-    const doorSide = Number(connector.doorSide) < 0 ? -1 : 1
+    const style = String(connector.elevatorStyle || connector.modelGeometry?.elevatorStyle || 'industrial') === 'glass' ? 'glass' : 'industrial'
     const faces = [
       { axis: 'x', side: -1 }, { axis: 'x', side: 1 },
       { axis: 'z', side: -1 }, { axis: 'z', side: 1 },
     ]
-    const faceBox = (face, y) => face.axis === 'x'
+    const faceBox = (face, origin, y, height = cabinHeight) => face.axis === 'x'
       ? {
-        position: [face.side < 0 ? x : x + width, y, centerZ],
-        args: [wallThickness, cabinHeight, depth],
+        position: [face.side < 0 ? origin.x : origin.x + width, y, origin.z + depth / 2],
+        args: [wallThickness, height, depth],
       }
       : {
-        position: [centerX, y, face.side < 0 ? z : z + depth],
-        args: [width, cabinHeight, wallThickness],
+        position: [origin.x + width / 2, y, face.side < 0 ? origin.z : origin.z + depth],
+        args: [width, height, wallThickness],
       }
+    const cabinDoorFaces = new Set(stops.map(stop => `${stop.doorAxis}:${stop.doorSide}`))
+    const routeBoxes = stops.slice(1).flatMap((stop, index) => {
+      const previous = stops[index]
+      const axis = ['x', 'y', 'z'].find(key => Math.abs(Number(stop[key]) - Number(previous[key])) > 0.001)
+      if (axis === 'y') {
+        const low = Number(previous.y) < Number(stop.y) ? previous : stop
+        const high = low === previous ? stop : previous
+        const bottom = Number(low.y) + cabinHeight
+        const top = Number(high.y)
+        return top > bottom + 0.001 ? [{
+          key: `${index}:y`,
+          axis: 'y',
+          position: [Number(low.x) + width / 2, (bottom + top) / 2, Number(low.z) + depth / 2],
+          size: [width + wallThickness * 2, top - bottom, depth + wallThickness * 2],
+        }] : []
+      }
+      if (axis === 'x') {
+        const low = Number(previous.x) < Number(stop.x) ? previous : stop
+        const high = low === previous ? stop : previous
+        const start = Number(low.x) + width
+        const end = Number(high.x)
+        return end > start + 0.001 ? [{
+          key: `${index}:x`,
+          axis: 'x',
+          position: [(start + end) / 2, Number(low.y) + cabinHeight / 2, Number(low.z) + depth / 2],
+          size: [end - start, cabinHeight + wallThickness * 2, depth + wallThickness * 2],
+        }] : []
+      }
+      if (axis === 'z') {
+        const low = Number(previous.z) < Number(stop.z) ? previous : stop
+        const high = low === previous ? stop : previous
+        const start = Number(low.z) + depth
+        const end = Number(high.z)
+        return end > start + 0.001 ? [{
+          key: `${index}:z`,
+          axis: 'z',
+          position: [Number(low.x) + width / 2, Number(low.y) + cabinHeight / 2, (start + end) / 2],
+          size: [width + wallThickness * 2, cabinHeight + wallThickness * 2, end - start],
+        }] : []
+      }
+      return []
+    }).filter(box => displayLevel === null || (
+      box.position[1] + box.size[1] / 2 > sliceBottom && box.position[1] - box.size[1] / 2 < sliceTop
+    ))
+    const panelColor = style === 'glass' ? '#75c7e8' : '#17212b'
     return (
       <group renderOrder={30} {...pointerProps}>
-        <mesh position={[centerX, shaftBottom + (shaftTop - shaftBottom) / 2, centerZ]}>
-          <boxGeometry args={[width + wallThickness * 2, shaftTop - shaftBottom, depth + wallThickness * 2]} />
-          <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={Math.min(0.2, opacity * 0.2)} depthWrite={false} />
-        </mesh>
+        {routeBoxes.map(box => (
+          <ElevatorTubeBox key={box.key} position={box.position} size={box.size} openAxis={box.axis} style={style} opacity={opacity} />
+        ))}
         {visibleStops.map(stop => {
+          const stopIndex = stops.findIndex(candidate => candidate.id === stop.id)
+          const connectedFaces = new Set()
+          const neighbors = [stops[stopIndex - 1], stops[stopIndex + 1]].filter(Boolean)
+          for (const neighbor of neighbors) {
+            const axis = ['x', 'z'].find(key => Math.abs(Number(neighbor[key]) - Number(stop[key])) > 0.001)
+            if (axis) connectedFaces.add(`${axis}:${Number(neighbor[axis]) < Number(stop[axis]) ? -1 : 1}`)
+          }
           const open = doorsOpen && stop.id === runtimeState.currentStopId
-          if (open) return null
-          const face = { axis: doorAxis, side: doorSide }
-          const box = faceBox(face, Number(stop.y) + cabinHeight / 2)
+          const doorFace = { axis: stop.doorAxis, side: stop.doorSide }
+          const doorBox = faceBox(doorFace, stop, Number(stop.y) + cabinHeight / 2)
           return (
-            <mesh key={`landing-${stop.id}`} position={box.position}>
-              <boxGeometry args={box.args} />
-              <meshStandardMaterial color="#475569" transparent opacity={Math.min(0.82, opacity)} />
-            </mesh>
+            <group key={`landing-${stop.id}`}>
+              {faces.filter(face => (
+                (face.axis !== stop.doorAxis || face.side !== stop.doorSide)
+                && !connectedFaces.has(`${face.axis}:${face.side}`)
+              )).map(face => {
+                const box = faceBox(face, stop, Number(stop.y) + cabinHeight / 2)
+                return (
+                  <mesh key={`${face.axis}:${face.side}`} position={box.position} castShadow receiveShadow>
+                    <boxGeometry args={box.args} />
+                    <meshStandardMaterial color={panelColor} metalness={style === 'glass' ? 0.08 : 0.7} roughness={style === 'glass' ? 0.16 : 0.42} transparent opacity={Math.min(style === 'glass' ? 0.2 : 0.7, opacity)} depthWrite={style !== 'glass'} side={THREE.DoubleSide} />
+                  </mesh>
+                )
+              })}
+              {!open && (
+                <mesh position={doorBox.position} castShadow>
+                  <boxGeometry args={doorBox.args} />
+                  <meshStandardMaterial color={style === 'glass' ? '#87d7f7' : '#475569'} metalness={0.56} roughness={0.34} transparent opacity={Math.min(style === 'glass' ? 0.34 : 0.92, opacity)} depthWrite={style !== 'glass'} />
+                </mesh>
+              )}
+              {!neighbors.some(neighbor => Math.abs(Number(neighbor.y) - Number(stop.y)) > 0.001 && Number(neighbor.y) < Number(stop.y)) && (
+                <mesh position={[Number(stop.x) + width / 2, Number(stop.y), Number(stop.z) + depth / 2]}>
+                  <boxGeometry args={[width, wallThickness, depth]} />
+                  <meshStandardMaterial color={panelColor} metalness={0.62} roughness={0.38} transparent opacity={Math.min(style === 'glass' ? 0.2 : 0.72, opacity)} depthWrite={style !== 'glass'} />
+                </mesh>
+              )}
+              {!neighbors.some(neighbor => Math.abs(Number(neighbor.y) - Number(stop.y)) > 0.001 && Number(neighbor.y) > Number(stop.y)) && (
+                <mesh position={[Number(stop.x) + width / 2, Number(stop.y) + cabinHeight, Number(stop.z) + depth / 2]}>
+                  <boxGeometry args={[width, wallThickness, depth]} />
+                  <meshStandardMaterial color={panelColor} metalness={0.62} roughness={0.38} transparent opacity={Math.min(style === 'glass' ? 0.2 : 0.72, opacity)} depthWrite={style !== 'glass'} />
+                </mesh>
+              )}
+            </group>
           )
         })}
-        {cabinVisible && <AnimatedElevatorCabin state={runtimeState} fallbackY={floorY}>
-          <mesh position={[centerX, -floorThickness / 2, centerZ]} receiveShadow>
+        {cabinVisible && <AnimatedElevatorCabin state={runtimeState} fallback={fallback} connector={connector}>
+          {connectorAssetUrl(connector) && (
+            <Suspense fallback={null}><ElevatorCabinModel connector={{ ...connector, width, depth }} opacity={opacity} /></Suspense>
+          )}
+          <mesh position={[width / 2, -floorThickness / 2, depth / 2]} receiveShadow>
             <boxGeometry args={[width, floorThickness, depth]} />
             <meshStandardMaterial color="#a78bfa" metalness={0.55} roughness={0.38} transparent opacity={Math.min(0.96, opacity)} />
           </mesh>
-          <mesh position={[centerX, cabinHeight - floorThickness / 2, centerZ]} castShadow>
+          <mesh position={[width / 2, cabinHeight - floorThickness / 2, depth / 2]} castShadow>
             <boxGeometry args={[width, floorThickness, depth]} />
             <meshStandardMaterial color="#64748b" metalness={0.45} roughness={0.45} transparent opacity={Math.min(0.92, opacity)} />
           </mesh>
           {faces.map(face => {
-            const isDoor = face.axis === doorAxis && face.side === doorSide
-            if (isDoor && doorsOpen) return null
-            const box = faceBox(face, cabinHeight / 2)
+            const faceKey = `${face.axis}:${face.side}`
+            const isDoor = cabinDoorFaces.has(faceKey)
+            const activeDoor = currentStop && face.axis === currentStop.doorAxis && face.side === currentStop.doorSide
+            if (activeDoor && doorsOpen) return null
+            const box = faceBox(face, { x: 0, z: 0 }, cabinHeight / 2)
             return (
               <mesh key={`cabin-${face.axis}-${face.side}`} position={box.position} castShadow>
                 <boxGeometry args={box.args} />
-                <meshStandardMaterial color={isDoor ? '#8b5cf6' : '#334155'} metalness={0.5} roughness={0.42} transparent opacity={Math.min(isDoor ? 0.9 : 0.72, opacity)} />
+                <meshStandardMaterial color={isDoor ? '#8b5cf6' : panelColor} metalness={0.5} roughness={style === 'glass' && !isDoor ? 0.16 : 0.42} transparent opacity={Math.min(style === 'glass' && !isDoor ? 0.22 : isDoor ? 0.9 : 0.78, opacity)} depthWrite={style !== 'glass' || isDoor} />
               </mesh>
             )
           })}
           {selected && (
-            <mesh position={[centerX, cabinHeight / 2, centerZ]} renderOrder={45}>
+            <mesh position={[width / 2, cabinHeight / 2, depth / 2]} renderOrder={45}>
               <boxGeometry args={[width + 0.1, cabinHeight + 0.1, depth + 0.1]} />
               <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.95} depthWrite={false} />
             </mesh>
@@ -2041,13 +2753,13 @@ function StairSegment({
   onPointerSelect = null,
 }) {
   const procedural = surfaceMaterialAt(stair.material, showDetails)
-  const top = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
-  const side = procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || top
-  const bottom = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || top
+  const topBase = procedural?.faceMaterials[FACE.top] || materialAt(textureMaterials, stair.tex, FACE.top)
+  const cutout = usesCutoutMaterial(procedural, textureMaterials, stair.tex)
+  const side = procedural?.solidMaterial || solidMaterialAt(textureMaterials, stair.tex) || procedural?.faceMaterials[FACE.south] || materialAt(textureMaterials, stair.tex, FACE.south, FACE.top) || topBase
+  const bottomBase = procedural?.faceMaterials[FACE.bottom] || materialAt(textureMaterials, stair.tex, FACE.bottom, FACE.top) || topBase
   const relief = showDetails ? (procedural?.relief || reliefAt(textureMaterials, stair.tex)) : null
-  const materials = top ? withOpacity([side, side, top, bottom, side, side], opacity) : []
   const geometry = stairGeometry(stair, { storyHeight: STORY_HEIGHT })
-  if (!top) return null
+  if (!topBase) return null
 
   return (
     <group
@@ -2056,40 +2768,67 @@ function StairSegment({
         onPointerSelect(stair.id, { ...stair, type: 'stairs' }, event)
       } : undefined}
     >
-      {geometry.steps.map(step => step.polygon ? (
-        <group key={step.index}>
-          <mesh material={top} castShadow receiveShadow userData={{ worldSupport: true }}>
-            <StairPrismGeometry part={step} />
+      {geometry.steps.map(step => {
+        const physicalHeight = step.polygon
+          ? Math.max(0.01, Number(step.maxY) - Number(step.minY))
+          : Math.max(0.01, Number(step.size?.[1]) || 0.01)
+        const visualHeight = thinGrateThickness(physicalHeight, cutout)
+        const visualStep = !cutout
+          ? step
+          : step.polygon
+            ? { ...step, minY: Number(step.maxY) - visualHeight }
+            : {
+                ...step,
+                position: {
+                  ...step.position,
+                  y: Number(step.position.y) + (physicalHeight - visualHeight) / 2,
+                },
+                size: [step.size[0], visualHeight, step.size[2]],
+              }
+        const repeatX = visualStep.polygon
+          ? STAIR_GRATE_TEXTURE_REPEAT
+          : Math.max(0.05, Number(visualStep.size[0]) * STAIR_GRATE_TEXTURE_REPEAT)
+        const repeatZ = visualStep.polygon
+          ? STAIR_GRATE_TEXTURE_REPEAT
+          : Math.max(0.05, Number(visualStep.size[2]) * STAIR_GRATE_TEXTURE_REPEAT)
+        const top = cutout ? withRepeat(topBase, repeatX, repeatZ) : topBase
+        const bottom = cutout ? withRepeat(bottomBase, repeatX, repeatZ) : bottomBase
+        const materials = withOpacity([side, side, top, bottom, side, side], opacity)
+        return visualStep.polygon ? (
+          <group key={visualStep.index}>
+            <mesh material={[top, bottom, side]} castShadow receiveShadow userData={{ worldSupport: true }}>
+              <StairPrismGeometry part={visualStep} splitMaterials />
+            </mesh>
+            {selected && (
+              <mesh renderOrder={43}>
+                <StairPrismGeometry part={visualStep} />
+                <meshBasicMaterial color="#facc15" wireframe transparent opacity={0.42} depthWrite={false} />
+              </mesh>
+            )}
+          </group>
+        ) : (
+          <mesh
+            key={visualStep.index}
+            position={[visualStep.position.x, visualStep.position.y, visualStep.position.z]}
+            material={materials}
+            castShadow
+            receiveShadow
+            userData={{ worldSupport: true }}
+          >
+            <ReliefBoxGeometry
+              args={visualStep.size}
+              faceProfiles={[null, null, relief, null, null, null]}
+              faceMask={[false, false, true, false, false, false]}
+            />
+            {selected && (
+              <mesh scale={[1.025, 1.012, 1.025]} renderOrder={43}>
+                <boxGeometry args={visualStep.size} />
+                <meshBasicMaterial color="#facc15" transparent opacity={0.2} depthWrite={false} />
+              </mesh>
+            )}
           </mesh>
-          {selected && (
-            <mesh renderOrder={43}>
-              <StairPrismGeometry part={step} />
-              <meshBasicMaterial color="#facc15" wireframe transparent opacity={0.42} depthWrite={false} />
-            </mesh>
-          )}
-        </group>
-      ) : (
-        <mesh
-          key={step.index}
-          position={[step.position.x, step.position.y, step.position.z]}
-          material={materials}
-          castShadow
-          receiveShadow
-          userData={{ worldSupport: true }}
-        >
-          <ReliefBoxGeometry
-            args={step.size}
-            faceProfiles={[null, null, relief, null, null, null]}
-            faceMask={[false, false, true, false, false, false]}
-          />
-          {selected && (
-            <mesh scale={[1.025, 1.012, 1.025]} renderOrder={43}>
-              <boxGeometry args={step.size} />
-              <meshBasicMaterial color="#facc15" transparent opacity={0.2} depthWrite={false} />
-            </mesh>
-          )}
-        </mesh>
-      ))}
+        )
+      })}
       {geometry.column && (() => {
         const height = geometry.column.maxY - geometry.column.minY
         return (
@@ -2223,7 +2962,7 @@ function useOccludedWallIds(walls, displayLevel, cameraVolumeRoomId = null) {
   return occludedIds
 }
 
-function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, skylights, stairs }) {
+function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, skylights, hatches, stairs }) {
   const hasVerticalProfile = Array.isArray(room?.verticalProfile?.slices)
     && room.verticalProfile.slices.length > 0
   const floorSlice = hasVerticalProfile ? roomSliceAtLevel(room, 0, roomLookup, STORY_HEIGHT) : null
@@ -2239,12 +2978,13 @@ function RoomFloorSurface({ room, roomLookup, textureMaterials, showDetails, sky
       footprintContours={floorSlice ? multiPolygonContours(floorSlice.footprint) : null}
       footprint={floorSlice?.footprint || roomBoundaryMultiPolygon(room, roomLookup)}
       skylights={skylights}
+      hatches={hatches}
       stairs={stairs}
     />
   )
 }
 
-function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails, skylights, stairs }) {
+function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMaterials, opacity, showDetails, skylights, hatches, stairs }) {
   return (
     <RoomSlab
       room={room}
@@ -2257,6 +2997,7 @@ function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMa
       footprint={horizontalInterface.footprint}
       yOverride={horizontalInterface.y}
       skylights={skylights}
+      hatches={hatches}
       stairs={stairs}
     />
   )
@@ -2282,6 +3023,23 @@ function SurfaceDungeonScene({
     () => Object.values(surface.connectors).filter(connector => connector?.type === 'skylight'),
     [surface.connectors],
   )
+  const verticalOpenings = useMemo(() => verticalAccessOpenings(surface), [surface])
+  const hatchesByLadderId = useMemo(() => new Map(
+    Object.values(surface.connectors)
+      .filter(connector => connector?.type === 'hatch' && connector?.linkedLadderId)
+      .map(connector => [String(connector.linkedLadderId), connector]),
+  ), [surface.connectors])
+  const horizontalConnectorOpenings = useMemo(() => [
+    ...skylights.map(connector => ({
+      shape: 'rectangle',
+      x: Number(connector.x) || 0,
+      z: Number(connector.z) || 0,
+      y: Number(connector.y) || 0,
+      width: Math.max(0.01, Number(connector.width) || 1),
+      depth: Math.max(0.01, Number(connector.depth) || 1),
+    })),
+    ...verticalOpenings,
+  ], [skylights, verticalOpenings])
   const stairs = useMemo(() => Object.values(surface.stairs), [surface.stairs])
   const cameraVolumeRoomId = useCameraRoomId(surface, displayLevel, cameraControlsRef, roomContextAnchor)
   useEffect(() => {
@@ -2398,6 +3156,7 @@ function SurfaceDungeonScene({
               textureMaterials={textureMaterials}
               showDetails={showDetails}
               skylights={skylights}
+              hatches={verticalOpenings}
               stairs={stairs}
             />
           )
@@ -2418,6 +3177,7 @@ function SurfaceDungeonScene({
             opacity={opacity}
             showDetails={showDetails}
             skylights={skylights}
+            hatches={verticalOpenings}
             stairs={stairs}
           />
         )
@@ -2433,11 +3193,13 @@ function SurfaceDungeonScene({
       ) : null)}
       {Object.entries(surface.floors).map(([id, floor]) => {
         const parsed = parseFloorKey(id, floor)
-        if (skylights.some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
-          && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
-          && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
+        const openings = horizontalConnectorOpenings.filter(opening => (
+          Math.abs(Number(opening.y) - parsed.y) < 0.01
+            && Number(opening.x) < parsed.x + 1 && Number(opening.x) + Number(opening.width || 1) > parsed.x
+            && Number(opening.z) < parsed.z + 1 && Number(opening.z) + Number(opening.depth || 1) > parsed.z
+        ))
         if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.y)) return null
-        return <FloorTile key={id} id={id} floor={floor} surface={surface} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
+        return <FloorTile key={id} id={id} floor={floor} surface={surface} openings={openings} textureMaterials={textureMaterials} opacity={1} showDetails={showDetails} />
       })}
       {surfaceWallSegments.map(wall => {
         const box = getWallRenderBox(wall)
@@ -2455,9 +3217,11 @@ function SurfaceDungeonScene({
       })}
       {Object.entries(surface.ceilings).map(([id, ceiling]) => {
         const parsed = parseCeilingKey(id, ceiling)
-        if (skylights.some(connector => Math.abs(Number(connector.y) - parsed.y) < 0.01
-          && parsed.x + 0.5 > Number(connector.x) && parsed.x + 0.5 < Number(connector.x) + Number(connector.width || 1)
-          && parsed.z + 0.5 > Number(connector.z) && parsed.z + 0.5 < Number(connector.z) + Number(connector.depth || 1))) return null
+        const openings = horizontalConnectorOpenings.filter(opening => (
+          Math.abs(Number(opening.y) - parsed.y) < 0.01
+            && Number(opening.x) < parsed.x + 1 && Number(opening.x) + Number(opening.width || 1) > parsed.x
+            && Number(opening.z) < parsed.z + 1 && Number(opening.z) + Number(opening.depth || 1) > parsed.z
+        ))
         if (!worldInteriorPointIsVisible(parsed.x + 0.5, parsed.z + 0.5, parsed.baseY)) return null
         const opacity = ceilingOpacity
         return (
@@ -2465,6 +3229,7 @@ function SurfaceDungeonScene({
             key={id}
             id={id}
             ceiling={ceiling}
+            openings={openings}
             textureMaterials={textureMaterials}
             opacity={opacity}
             showDetails={showDetails}
@@ -2509,7 +3274,9 @@ function SurfaceDungeonScene({
             ...connector,
             runtimeState: runtimeFeatureStates[connector?.worldId || id] || null,
           }}
+          linkedHatch={connector?.type === 'ladder' ? hatchesByLadderId.get(String(id)) || null : null}
           curveWall={connector?.curveId ? curveWallsById.get(connector.curveId) || null : null}
+          textureMaterials={textureMaterials}
           opacity={1}
           selected={id === selectedConnectorId || connector?.id === selectedConnectorId}
           onPointerSelect={onConnectorSelect}

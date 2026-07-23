@@ -106,6 +106,9 @@ function dimensions(asset, packName, manifest = {}, animationNames = []) {
     origin: asset.origin || (!hasAssetPlacementMode ? manifest.origin_default : null) || defaultOrigin,
   }
   if (asset.connector_type) geometry.connectorType = String(asset.connector_type)
+  if (asset.opening_shape) geometry.openingShape = String(asset.opening_shape)
+  if (asset.opening_mechanism) geometry.openingMechanism = String(asset.opening_mechanism)
+  if (Array.isArray(asset.features)) geometry.features = asset.features.map(String)
   if (Number.isFinite(Number(asset.opening_bottom_m))) geometry.openingBottom = Number(asset.opening_bottom_m)
   if (Number.isFinite(Number(asset.opening_width_m))) geometry.openingWidth = Number(asset.opening_width_m)
   if (Number.isFinite(Number(asset.wall_cut_width_m))) geometry.wallCutWidth = Number(asset.wall_cut_width_m)
@@ -113,6 +116,16 @@ function dimensions(asset, packName, manifest = {}, animationNames = []) {
   if (Number.isFinite(Number(asset.span_levels))) geometry.spanLevels = Number(asset.span_levels)
   if (Array.isArray(asset.allowed_states)) geometry.allowedStates = asset.allowed_states.map(String)
   if (asset.skylight_size) geometry.skylightSize = String(asset.skylight_size)
+  if (asset.elevator_style) geometry.elevatorStyle = String(asset.elevator_style)
+  if (asset.connector_type === 'elevator') {
+    geometry.footprintWidth = width
+    geometry.footprintDepth = geometry.depth
+    geometry.doorFaceWidthX = Number(asset.door_face_width_x_m ?? geometry.depth)
+    geometry.doorFaceWidthZ = Number(asset.door_face_width_z_m ?? width)
+    if (Array.isArray(asset.supported_door_orientations)) {
+      geometry.supportedDoorOrientations = asset.supported_door_orientations.map(String)
+    }
+  }
   if (animationNames.length > 0) geometry.animationClips = animationNames
   const explicitOpenable = Boolean(asset.openable || asset.animation || asset.opening || asset.animation_frame_open)
   if (modelHasOpenAnimation(animationNames, explicitOpenable)) geometry.openable = true

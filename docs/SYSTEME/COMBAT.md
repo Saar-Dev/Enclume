@@ -1,4 +1,5 @@
 # SYSTEME/COMBAT.md — Données personnage serveur, calculs combat, state_character
+> Mis à jour : 2026-07-22 — affichage des déplacements en coordonnées `world-feet`.
 > Source : SYSTEME.md §17
 > Lire pour : COMBAT_ACTION_CONFIRM, resolveAssaultAction, charStats.js, state_character
 > Règles LdB complètes (actions, déplacements, CaC, tir) : voir `docs/SYSTEME/REGLES_LdB.md`
@@ -974,31 +975,33 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 
 ### PC36 — combatCameraCenter : centrage caméra sur token actif
 ```javascript
-// Shape : { x, z } coords DB (PE14) | null
+// Shape : { x, z } point monde canonique des pieds | null
 // Canvas3D useEffect([combatCameraCenter]) :
-//   orbitRef.current.target.set(x + 0.5, 0, z + 0.5); orbitRef.update()
+//   orbitRef.current.target.set(x, levelToY(displayLevel), z); orbitRef.update()
 // Guard : null → return (caméra reste, annulation ne la déplace pas)
 // Calculé dans SessionPage → CombatActionWindow → combatTokenPos
 ```
 
 ### Rendu 3D combat — Canvas3D
 
-#### Anneaux déplacement combat
-- Centré sur `myToken` : `cx = pos_x+0.5`, `cz = pos_y+0.5` (PE14)
-- Y : `pos_z + 1.0 + 0.05` (PE34 — pieds du token)
-- Group rotation `[-Math.PI/2, 0, 0]` (couché au sol)
-- `zones[0]` → `circleGeometry args=[radius, 64]`
-- `zones[i>0]` → `ringGeometry args=[prev.radius, radius, 64]`
-- Material : `transparent, opacity=0.25, depthWrite=false`
+#### Chemin de déplacement combat
+- Le curseur raycaste un vrai support du monde, puis demande un aperçu à
+  `/battlemaps/:id/world-path-preview`.
+- Chaque point du chemin est exprimé directement dans l'espace `world-feet` et affiché à
+  `[point.x, point.y + 0.05, point.z]`.
+- La couleur vient de la distance cumulée en mètres et des allures autorisées ; le libellé détaille
+  le mode, la distance, le facteur de terrain et le coût du segment.
+- La sélection ne transmet qu'une destination et une allure. Le serveur replanifie à la résolution.
 
-#### Cursor wireframe case survolée (combatMoveMode)
-- Mis à jour dans `handlePointerMove` : `{ x: Math.floor(worldPos.x), z: Math.floor(worldPos.z) }`
-- Y : `curToken.pos_z + 1.0 + 0.05` ou `0.1` si token non trouvé
+#### Curseur wireframe sur support (combatMoveMode)
+- Mis à jour depuis le point de support exact retourné par `raycastWorldSupport`.
+- Position : `[point.x, point.y + 0.05, point.z]`, sans offset voxel `+0.5`/`+1.0`.
 - `planeGeometry args=[1,1]` + wireframe blanc
 
 #### Ligne de visée assaut (targetLinePoints)
 - `useMemo([combatTargetMode?.pendingTargetId])`
 - Guard : requiert `pendingTargetId` + `tokenId` + les deux tokens trouvés dans tokenStore
-- Points : `Float32Array[6]` → `[myToken.pos_x+0.5, myToken.pos_z+1.5, myToken.pos_y+0.5, tgt.pos_x+0.5, tgt.pos_z+1.5, tgt.pos_y+0.5]`
-- (PE14 + PE34 : altitude = pos_z+1.5, profondeur = pos_y)
+- Points : `tokenFeetPoint(source/target)` + `1.5` sur Y pour la hauteur visuelle de visée.
+- Les lignes d'annonce utilisent le même adaptateur ; aucune demi-case voxel n'est ajoutée aux
+  tokens `world-feet`.
 - Rendu : `<line>` + `lineBasicMaterial color="#e07070"`

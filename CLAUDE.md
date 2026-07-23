@@ -52,6 +52,8 @@ règles domaine > `MANUEL` > `PLAN`.
 - La fusion du code ne fusionne jamais implicitement les données vivantes.
 - Le workflow complet et le retour arrière sont dans `docs/WORKFLOW_FUSION.md`.
 - Les autorités combat/monde sont dans `docs/FUSION_PROJET_COUSIN.md`.
+- Le poste Ubuntu, les versions d'outils et le runner distant sont dans
+  `docs/ENVIRONNEMENT_UBUNTU.md`.
 
 ---
 
@@ -135,10 +137,19 @@ Termes interdits sans preuve : « probablement », « certainement », « évide
 
 ## 8. Autorité du moteur monde
 
-Le `WorldSnapshot` (compilé depuis `surface_data` v12 par `worldCompiler.js`) est l'autorité unique
-des supports, barrières, collision, occupation, LOS et navigation ; PostgreSQL est durable, Redis et
-`voxel_data` ne sont jamais l'autorité spatiale. Détail complet et invariants actifs, auto-chargés dès
-qu'un fichier du périmètre est touché : `.claude/rules/world.md` + `docs/SYSTEME/MOTEUR_MONDE.md`.
+- `surface_data` v13 est validé puis compilé par `shared/world/worldCompiler.js`.
+- Le `WorldSnapshot` immuable est l'autorité des supports, barrières, traversées, colliders,
+  occluders, compartiments, régions, navigation, collision, occupation, LOS et couverture.
+- PostgreSQL est durable ; Redis n'est jamais l'autorité spatiale.
+- `voxel_data` est legacy/rendu et ne contraint jamais le moteur canonique.
+- Les règles utilisent des mètres via `WorldMetrics`; une case vaut 1,5 m par défaut.
+- Le serveur recalcule chemin, coût, position atteinte, distance, LOS et effets.
+- Le GLB est une apparence ; la physique provient des capacités déclarées.
+- Document statique et état runtime restent séparés.
+- Les canaux mouvement, vision et fluides sont indépendants.
+- Un token peut s'arrêter au milieu d'un escalier ou d'une échelle.
+- Un ascenseur est une cabine mobile avec passagers, jamais une téléportation verticale.
+- Les anciennes cartes ne justifient ni fallback approximatif ni second moteur.
 
 ---
 

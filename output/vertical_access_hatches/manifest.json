@@ -1,0 +1,575 @@
+{
+  "pack": "vertical_access_hatches",
+  "label": "Trappes d’accès vertical",
+  "version": 1,
+  "placement_mode_default": "connector",
+  "origin_default": "hatch-center",
+  "assets": [
+    {
+      "name": "01_square_hinged_armored",
+      "label": "Trappe carrée blindée battante",
+      "catalog_file": "01_square_hinged_armored.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "rectangle",
+      "opening_mechanism": "hinged",
+      "features": [
+        "dual-sided-edge-controls"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "01_square_hinged_armored__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "01_square_hinged_armored__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "01_square_hinged_armored__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "01_square_hinged_armored__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "01_square_hinged_armored__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02_round_hinged_armored",
+      "label": "Trappe ronde blindée battante",
+      "catalog_file": "02_round_hinged_armored.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "circle",
+      "opening_mechanism": "hinged",
+      "features": [
+        "dual-sided-edge-controls"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "02_round_hinged_armored__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "02_round_hinged_armored__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "02_round_hinged_armored__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "02_round_hinged_armored__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "02_round_hinged_armored__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03_square_hinged_service_hatch",
+      "label": "Trappe carrée battante avec écoutille",
+      "catalog_file": "03_square_hinged_service_hatch.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "rectangle",
+      "opening_mechanism": "hinged",
+      "features": [
+        "service-hatch",
+        "dual-sided-operation"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "03_square_hinged_service_hatch__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "03_square_hinged_service_hatch__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "03_square_hinged_service_hatch__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "03_square_hinged_service_hatch__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "03_square_hinged_service_hatch__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04_round_hinged_service_hatch",
+      "label": "Trappe ronde battante avec écoutille",
+      "catalog_file": "04_round_hinged_service_hatch.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "circle",
+      "opening_mechanism": "hinged",
+      "features": [
+        "service-hatch",
+        "dual-sided-operation"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "04_round_hinged_service_hatch__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "04_round_hinged_service_hatch__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "04_round_hinged_service_hatch__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "04_round_hinged_service_hatch__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "04_round_hinged_service_hatch__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05_square_sliding_bipartite",
+      "label": "Trappe carrée coulissante bipartite",
+      "catalog_file": "05_square_sliding_bipartite.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "rectangle",
+      "opening_mechanism": "sliding-bipartite",
+      "features": [
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "05_square_sliding_bipartite__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "05_square_sliding_bipartite__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "05_square_sliding_bipartite__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "05_square_sliding_bipartite__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "05_square_sliding_bipartite__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06_round_sliding_bipartite",
+      "label": "Trappe ronde coulissante bipartite",
+      "catalog_file": "06_round_sliding_bipartite.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "circle",
+      "opening_mechanism": "sliding-bipartite",
+      "features": [
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "06_round_sliding_bipartite__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "06_round_sliding_bipartite__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "06_round_sliding_bipartite__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "06_round_sliding_bipartite__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "06_round_sliding_bipartite__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07_square_sliding_tripartite",
+      "label": "Trappe carrée coulissante tripartite",
+      "catalog_file": "07_square_sliding_tripartite.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "rectangle",
+      "opening_mechanism": "sliding-tripartite",
+      "features": [
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "07_square_sliding_tripartite__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "07_square_sliding_tripartite__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "07_square_sliding_tripartite__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "07_square_sliding_tripartite__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "07_square_sliding_tripartite__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08_round_sliding_tripartite",
+      "label": "Trappe ronde coulissante tripartite",
+      "catalog_file": "08_round_sliding_tripartite.glb",
+      "connector_type": "hatch",
+      "placement_mode": "connector",
+      "origin": "hatch-center",
+      "footprint_width_m": 1.0,
+      "footprint_depth_m": 1.0,
+      "height_m": 0.38,
+      "opening_shape": "circle",
+      "opening_mechanism": "sliding-tripartite",
+      "features": [
+        "dual-sided-edge-controls",
+        "floor-pocketed-panels"
+      ],
+      "openable": true,
+      "allowed_states": [
+        "closed",
+        "open",
+        "locked"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#12404F",
+          "material_names": [
+            "08_round_sliding_tripartite__SLOT_01__Primary_Painted_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#276B7D",
+          "material_names": [
+            "08_round_sliding_tripartite__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#050709",
+          "material_names": [
+            "08_round_sliding_tripartite__SLOT_03__Dark_Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF5909",
+          "material_names": [
+            "08_round_sliding_tripartite__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre d’écoutille",
+          "default_hex": "#058CB8",
+          "transparent": true,
+          "material_names": [
+            "08_round_sliding_tripartite__SLOT_05__Service_Glass"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -431,8 +431,73 @@ function validateFeature(collection, id, item, errors) {
     } else if (item.type === 'skylight') {
       validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth'], path, errors)
       if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une largeur et une profondeur positives`)
+    } else if (item.type === 'ladder') {
+      if (item.topOpening !== undefined) {
+        if (!isPlainObject(item.topOpening)) {
+          errors.push(`${path}.topOpening doit être un objet`)
+        } else {
+          validateFiniteFields(item.topOpening, ['x', 'z', 'y', 'width', 'depth'], `${path}.topOpening`, errors)
+          if (Number(item.topOpening.width) <= 0 || Number(item.topOpening.depth) <= 0) {
+            errors.push(`${path}.topOpening doit avoir une largeur et une profondeur positives`)
+          }
+          if (!['rectangle', 'circle'].includes(item.topOpening.shape)) {
+            errors.push(`${path}.topOpening.shape doit valoir rectangle ou circle`)
+          }
+        }
+      }
+    } else if (item.type === 'hatch') {
+      validateFiniteFields(item, ['x', 'z', 'y', 'width', 'depth', 'height'], path, errors)
+      if (Number(item.width) <= 0 || Number(item.depth) <= 0 || Number(item.height) <= 0) {
+        errors.push(`${path} doit avoir des dimensions strictement positives`)
+      }
+      if (!['x', 'z'].includes(item.axis)) errors.push(`${path}.axis doit valoir x ou z`)
+      if (![1, -1].includes(Number(item.hingeSide))) errors.push(`${path}.hingeSide doit valoir 1 ou -1`)
+      if (item.openingShape != null && !['rectangle', 'circle'].includes(item.openingShape)) {
+        errors.push(`${path}.openingShape doit valoir rectangle ou circle`)
+      }
+      if (item.rotationQuarterTurns != null
+        && (!Number.isInteger(Number(item.rotationQuarterTurns)) || Number(item.rotationQuarterTurns) < 0 || Number(item.rotationQuarterTurns) > 3)) {
+        errors.push(`${path}.rotationQuarterTurns doit être un entier entre 0 et 3`)
+      }
+      if (typeof item.linkedLadderId !== 'string' || !item.linkedLadderId) {
+        errors.push(`${path}.linkedLadderId doit référencer l’échelle associée`)
+      }
+      const allowedStates = Array.isArray(item.allowedStates) ? item.allowedStates.map(String) : []
+      if (!allowedStates.includes('closed') || allowedStates.some(state => !['open', 'closed', 'locked'].includes(state))) {
+        errors.push(`${path}.allowedStates contient un état de trappe invalide`)
+      }
+      if (!allowedStates.includes(String(item.state || 'closed'))) {
+        errors.push(`${path}.state doit appartenir à allowedStates`)
+      }
     } else if (item.type === 'elevator') {
       validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
+      if (item.stops != null && (!Array.isArray(item.stops) || item.stops.length < 2)) {
+        errors.push(`${path}.stops doit contenir au moins deux arrêts`)
+      } else if (Array.isArray(item.stops)) {
+        const stopIds = new Set()
+        const routedStops = item.stops.some(stop => stop?.x != null || stop?.z != null)
+        item.stops.forEach((stop, stopIndex) => {
+          const stopPath = `${path}.stops[${stopIndex}]`
+          if (!isPlainObject(stop)) {
+            errors.push(`${stopPath} doit être un objet`)
+            return
+          }
+          validateFiniteFields(stop, routedStops ? ['x', 'y', 'z', 'level'] : ['y', 'level'], stopPath, errors)
+          if (typeof stop.id !== 'string' || !stop.id) errors.push(`${stopPath}.id est obligatoire`)
+          else if (stopIds.has(stop.id)) errors.push(`${stopPath}.id doit être unique`)
+          else stopIds.add(stop.id)
+          if (routedStops && !['x', 'z'].includes(stop.doorAxis)) errors.push(`${stopPath}.doorAxis doit valoir x ou z`)
+          if (routedStops && ![1, -1].includes(Number(stop.doorSide))) errors.push(`${stopPath}.doorSide doit valoir 1 ou -1`)
+          if (routedStops && stopIndex > 0) {
+            const previous = item.stops[stopIndex - 1]
+            const changedAxes = ['x', 'y', 'z'].filter(axis => (
+              Math.abs(Number(stop[axis]) - Number(previous?.[axis])) > 0.001
+            ))
+            if (changedAxes.length !== 1) errors.push(`${stopPath} doit être aligné sur X, Y ou Z avec l’arrêt précédent`)
+          }
+        })
+      }
+      if (Number(item.width) <= 0 || Number(item.depth) <= 0) errors.push(`${path} doit avoir une emprise positive`)
     }
   }
 }
@@ -476,6 +541,14 @@ export function validateSurfaceData(input) {
   for (const [id, room] of Object.entries(rooms)) {
     for (const clipId of Array.isArray(room?.geometryClipRoomIds) ? room.geometryClipRoomIds : []) {
       if (!rooms[clipId]) errors.push(`$.rooms.${id}.geometryClipRoomIds référence la salle absente ${clipId}`)
+    }
+  }
+  const connectors = isPlainObject(input.connectors) ? input.connectors : {}
+  for (const [id, connector] of Object.entries(connectors)) {
+    if (connector?.type !== 'hatch') continue
+    const ladder = connectors[connector.linkedLadderId]
+    if (!ladder || ladder.type !== 'ladder') {
+      errors.push(`$.connectors.${id}.linkedLadderId doit référencer un connecteur ladder existant`)
     }
   }
   const visiting = new Set()
@@ -624,6 +697,7 @@ export function collectSurfaceTextureIds(input) {
     add(ceiling.tex); add(ceiling.topTex); add(ceiling.bottomTex)
   }
   for (const stair of Object.values(surface.stairs)) add(stair.tex)
+  for (const connector of Object.values(surface.connectors)) add(connector.tex)
   for (const room of Object.values(surface.rooms)) {
     add(room.floorTex); add(room.ceilingTex); add(room.wallInteriorTex)
     for (const profile of room.wallAppearanceProfiles || []) {

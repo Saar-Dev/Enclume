@@ -8,6 +8,14 @@
     "delete": "Supprimer",
     "close": "Fermer"
   },
+  "elevator": {
+    "call": "Appeler l’ascenseur",
+    "use": "Utiliser",
+    "selectToken": "Sélectionnez d’abord le token à embarquer.",
+    "onBoard": "{{token}} est dans la cabine.",
+    "travelling": "Ascenseur en déplacement…",
+    "goTo": "Aller à {{stop}}"
+  },
   "auth": {
     "login": "Connexion",
     "logout": "Déconnexion",
@@ -265,6 +273,26 @@
     "doorModel": "Modèle de porte",
     "elevatorModel": "Modèle d’ascenseur",
     "genericElevator": "Ascenseur générique",
+    "verticalAccess": "Accès vertical",
+    "verticalAccesses": "Accès verticaux",
+    "verticalAccessModel": "Modèle d’accès vertical",
+    "verticalAccessComposition": "Composition de l’accès",
+    "ladderOnly": "Échelle seule",
+    "ladderAndHatch": "Échelle + Trappe",
+    "hatchModel": "Modèle de trappe",
+    "hatchCatalogInSidebar": "Choisis maintenant le modèle dans le catalogue à droite.",
+    "noHatch": "Sans trappe",
+    "openOpening": "Trémie ouverte",
+    "squareShape": "Carrée",
+    "roundShape": "Ronde",
+    "proceduralModel": "Modèle procédural",
+    "rotateLeft": "↶ Rotation gauche",
+    "rotateRight": "Rotation droite ↷",
+    "hatchMechanisms": {
+      "hinged": "Battante",
+      "sliding-bipartite": "Coulissante bipartite",
+      "sliding-tripartite": "Coulissante tripartite"
+    },
     "connectorModel": "Modèle connecteur",
     "selectedConnectorModel": "Modèle sélectionné",
     "noConnectorModels": "Aucun modèle disponible pour ce connecteur.",

@@ -1,8 +1,8 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-18 — trémie de colimaçon et palier haut canoniques.
+> Dernière mise à jour : 2026-07-22 — accès vertical, trémie indépendante et trappes rondes/carrées.
 >
-> Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
+> Statut : **Phases 0 à 16 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
 >
 > Lire pour : tout travail touchant le monde 3D, les coordonnées, les surfaces praticables, les
@@ -68,7 +68,7 @@ Principes obligatoires :
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
 Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
-sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 12 et
+sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 13 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.
 
@@ -131,7 +131,7 @@ Le dossier `shared/world/` fournit désormais :
 - `movementCost.js` : facteurs explicables, segments pondérés et arrêt à budget épuisé ;
 - `worldContracts.js` : contrats versionnés et immuables `WorldDocument`, `WorldRuntimeState` et
   `WorldSnapshot` ;
-- `surfaceDocument.js` : validation de schéma, normalisation v6, UUID physiques stables et adaptation
+- `surfaceDocument.js` : validation de schéma, normalisation v13, UUID physiques stables et adaptation
   de `surface_data` vers `WorldDocument` ;
 - `worldCompiler.js` : compilation pure des supports, barrières, portails, colliders, occluders,
   traversées verticales et compartiments ;
@@ -412,15 +412,52 @@ ensuite une rotation par quart de tour, l'activation des garde-corps, le multipl
 déplacement et l'apparence procédurale. Le colimaçon ajoute le retournement horaire/antihoraire.
 Une texture ou un futur modèle décoratif ne remplace jamais la géométrie physique dérivée.
 
-### Échelle
+### Accès vertical
 
 Parcours vertical de type grimpe. Il contient assez d'ancrages pour persister un token entre deux
 étages. Le mode course n'y est pas disponible par défaut.
 
-L'UX suit désormais le même principe que l'escalier : **Objets 3D > Échelles** affiche la vraie
-géométrie structurelle en prévisualisation, puis la pose crée automatiquement le connecteur
-`ladder`, repasse en sélection et ouvre son popup. Celui-ci expose les niveaux, la rotation et le
-coût. Aucun outil direct « Ajouter une échelle » ne doit coexister avec ce chemin.
+L'UX suit le même principe que l'escalier : **Objets 3D > Accès verticaux** affiche la géométrie
+structurelle en prévisualisation. Un premier sélecteur ne contient que **Échelle seule** et
+**Échelle + Trappe**. Le second choix active le catalogue visuel à droite, qui mélange directement
+les modèles carrés et ronds avec leur preview, comme le catalogue des portes. La pose crée le
+connecteur `ladder`, repasse en sélection et ouvre son popup. Aucun outil direct « Ajouter une
+échelle » ne doit coexister avec ce chemin.
+
+Le connecteur `ladder` porte une `topOpening` canonique : forme `rectangle|circle`, position,
+altitude, largeur et profondeur. Cette trémie existe toujours, avec ou sans trappe. Elle découpe le
+sol haut et le plafond bas dans le renderer comme dans le `WorldSnapshot`. `axis`, `side` et
+`rotationQuarterTurns` placent l’échelle contre l’un des quatre bords de cette ouverture. Son unique
+support d’ancrage de palier suit le même bord et relie le haut aux passerelles adjacentes ; il
+n'ajoute aucun collider et ne rebouche jamais l'ouverture.
+
+Une trappe facultative est un connecteur `hatch` lié par `linkedLadderId`. `closed` ou `locked`, elle
+remplace l'ouverture comme support et barrière horizontale ; `open` ou `destroyed`, elle ne produit
+ni support, ni collider, ni occluder. La traversée `climb` est bloquée par une trappe fermée, mais
+reste active quand la trappe est ouverte, détruite ou absente. L'état initial appartient au document
+statique ; l'état courant vient de `WorldRuntimeState.featureStates` et prévaut dans le snapshot.
+Le popup de l'échelle choisit seulement la présence de la trappe sans modifier ni supprimer la
+trémie ; le catalogue à droite remplace son modèle. Deux commandes gauche/droite tournent ensemble
+l’échelle latérale et la trappe par quarts de tour. La hauteur visuelle dépend de la composition :
+sans trappe, rails et barreaux dépassent le palier supérieur de 0,75 unité pour rester saisissables ;
+avec une trappe liée, leur face haute s'arrête exactement à `hatch.y`, sous le modèle, et aucune
+portion résiduelle n'est rendue dans la tranche de l'étage supérieur.
+
+Une trappe peut référencer un blueprint GLB de connecteur `hatch` et ses clips d'animation, comme
+une porte. Le pack `vertical_access_hatches` fournit quatre mécanismes, chacun carré et rond :
+battant blindé, battant avec écoutille de service, coulissant bipartite et coulissant tripartite
+radial. Si aucun modèle n'est choisi, le renderer utilise le panneau procédural. Le GLB reste
+strictement visuel : `topOpening` et le connecteur canonique demeurent les autorités pour la
+découpe, le support, la collision, la LOS et la traversée.
+
+Les variantes coulissantes utilisent une poche de plancher : pendant l'ouverture, leurs panneaux
+descendent de 0,16 unité puis se déplacent hors de la trémie. La dalle réelle les masque alors par
+le depth buffer, selon le même principe qu'une porte coulissante masquée par son mur. Le cadre et
+les commandes, qui ne bougent pas, restent visibles.
+
+Un connecteur portant `modelGlbUrl` n’expose pas les champs procéduraux **Matière** et **Motif**.
+Les slots couleur déclarés dans `modelGeometry.materialSlots` restent indépendants et n’affectent
+jamais sa physique.
 
 ### Passerelle
 
@@ -435,17 +472,20 @@ ni chemin serveur absent du rendu.
 
 ### Ascenseur
 
-Plateforme ou cabine mobile avec :
+Cabine mobile sur une route orthogonale avec :
 
-- liste d'arrêts ;
-- position ou arrêt actuel ;
-- portes de cabine et portes palières ;
+- liste ordonnée d'arrêts, chacun avec position X/Y/Z et orientation de porte indépendante ;
+- position X/Y/Z ou arrêt actuel ;
+- segments strictement verticaux ou horizontaux, sans diagonale ;
+- gaine fermée sur chaque segment, y compris lorsqu'elle traverse l'extérieur sous-marin ;
+- portes de cabine modulaires et portes palières ;
 - automate `idle/opening/open/closing/moving/blocked` ;
-- temps de trajet et règles d'appel ;
+- vitesses verticale et horizontale, temps de porte et règles d'appel ;
 - passagers attachés au référentiel de la cabine pendant le déplacement.
 
 L'ascenseur n'est pas une téléportation entre connecteurs. Sa définition est statique ; son automate
-et sa cabine appartiennent à l'état runtime.
+et sa cabine appartiennent à l'état runtime. Un arrêt doit être contenu dans une salle fermée ; seule
+la gaine peut passer dans le vide entre deux salles.
 
 ### Implémentation Phase 4
 
@@ -464,20 +504,29 @@ et sa cabine appartiennent à l'état runtime.
 
 ### Implémentation Phase 6
 
-- un ascenseur compile une gaine évidée et une vraie cabine mobile : support praticable, plancher,
-  plafond, parois, portes de cabine et compartiment ;
+- un ascenseur compile une gaine évidée par tronçon droit et une vraie cabine mobile : support
+  praticable, plancher, plafond, parois, portes de cabine et compartiment ;
+- les jonctions n'ajoutent pas de paroi fantôme dans la direction du prochain segment et les
+  extrémités verticales reçoivent un capot étanche. Les gaines industrielles occultent la vue ; les
+  gaines vitrées bloquent mouvement, eau et gaz mais laissent passer la LOS ;
 - chaque palier possède une barrière physique. Elle ne s'ouvre que si la cabine est exactement
-  alignée et que l'automate est en phase `open` ;
-- le graphe ne contient jamais de traversée verticale d'ascenseur. Il ne produit qu'une courte
+  alignée, que l'automate est en phase `open` et que la face correspond à l'orientation propre de
+  cet arrêt ;
+- le graphe ne contient jamais de traversée longitudinale d'ascenseur. Il ne produit qu'une courte
   traversée d'embarquement lorsque cabine et palier sont compatibles ;
-- l'automate pur `elevatorRuntime.js` persiste phase, position, arrêt courant, destination, file,
-  échéances, blocage et état de reprise dans `world_feature_states` ;
+- l'automate pur `elevatorRuntime.js` persiste phase, position X/Y/Z, polyligne de mouvement, arrêt
+  courant, destination, file, échéances, blocage et état de reprise dans `world_feature_states` ;
 - `worldElevatorService.js` avance cette horloge sous verrou de battlemap. Les appels concurrents
   sont ordonnés par date puis identité stable ; aucun timer en mémoire n'est une autorité ;
 - `world_elevator_passengers` attache au plus une cabine à un token et stocke sa position locale.
   Toute réconciliation déplace ces tokens dans la même transaction avant navigation ou visibilité ;
-- le renderer interpole la cabine depuis les mêmes échéances, tandis que le serveur reste
-  l'autorité des collisions, des portes, de l'occupation et des lignes de vue ;
+- la commande serveur **Utiliser** vérifie le palier et les droits sur le token, ouvre la porte,
+  place les pieds au centre du support mobile et crée l'attachement dans la même transaction. Une
+  apparence de token posée dans la cabine ne remplace jamais cette écriture autoritaire ;
+- la commande **Ouvrir** accepte une cabine immobile en fermeture et inverse sa transition. Elle
+  reste refusée pendant le déplacement ou tant qu'un blocage n'a pas été levé ;
+- le renderer interpole chaque tronçon avec les mêmes durées pondérées que le serveur, tandis que le
+  serveur reste l'autorité des collisions, des portes, de l'occupation et des lignes de vue ;
 - les anciennes cartes ne justifient aucun mode de compatibilité. Une fixture legacy peut rester
   uniquement si elle ne modifie pas les contrats du monde canonique.
 
@@ -555,7 +604,7 @@ leur tooltip. Ce rendu consomme les mêmes `materialOverrides` que l'objet réel
 `displayLevel = N` rend tout l'intérieur de la tranche N. Les intérieurs strictement inférieurs
 restent eux aussi rendus avec leurs matériaux opaques, mais les vraies interfaces horizontales et
 les vraies parois les occultent naturellement. Ils ne deviennent donc visibles que par une
-ouverture géométrique réelle : trémie d'escalier, future trappe ouverte ou dalle vitrée. Les murs
+ouverture géométrique réelle : trémie d'escalier, trappe ouverte ou dalle vitrée. Les murs
 inférieurs ne participent pas à la coupe caméra du niveau courant et restent opaques. Les niveaux
 supérieurs restent masqués en temps normal.
 
@@ -741,6 +790,38 @@ arêtes restantes et retire ceux de la séparation supprimée. Le validateur v13
 les textures et les valeurs d'apparence entre 0 et 100. Le contrat v13 refuse les anciennes
 apparences `exterior`, ainsi que les faces de salle `top/bottom` et `front/back`.
 
+Le motif procédural `industrial_grate` est un matériau ajouré réutilisable. Sa texture RGBA est
+rendue avec `alphaTest`, pas avec un panneau semi-transparent : un fragment appartient au barreau
+ou est entièrement absent. Cela conserve le depth buffer, les ombres et la lecture des niveaux
+inférieurs sans les artefacts de tri du verre. Le dessus d'un sol, d'un mur, d'une marche, d'une
+passerelle ou d'une trappe peut utiliser ce cutout ; les chants et les pièces structurelles fines
+emploient son matériau métallique plein associé.
+
+Pour éviter deux réseaux séparés par toute la profondeur d'un mur ou d'une dalle, une surface
+ajourée sur ses deux côtés est affichée comme un plan unique recto-verso. Le plan se place au milieu
+d'un mur, sur la face porteuse d'un sol ou d'une trappe, et sous un plafond. Les empreintes courbes
+ou découpées génèrent directement une géométrie plane. Lorsque les apparences des deux directions
+sont identiques, un seul mesh `DoubleSide` suffit ; sinon deux matériaux coplanaires à culling
+opposé préservent chaque apparence sans qu'elles soient visibles ensemble. Le collider conserve
+toujours l'épaisseur structurelle déclarée.
+
+Sur les escaliers uniquement, les UV du dessus et du dessous utilisent une densité ×4
+proportionnelle aux dimensions monde de la marche. Les mailles restent ainsi serrées et non étirées
+sans modifier le réglage des autres surfaces. Les marches conservent leur plaque mince validée :
+elles ne suivent pas la projection mono-plan des autres structures.
+
+Pour un escalier ajouré, les volumes de marche croissants restent l'autorité physique mais ne sont
+pas rendus comme des blocs : le renderer en extrait une plaque mince alignée sur chaque plan de
+marche. Dessus et dessous utilisent le cutout, tandis que les chants emploient le métal plein
+recto-verso. De même, un mur ajouré sur ses deux faces ne reçoit pas le fondu directionnel de coupe
+caméra des murs opaques ; ses barreaux restent visibles depuis chaque côté.
+
+Apparence et physique restent deux champs séparés. Choisir ce motif hors d'une salle applique
+explicitement le preset `barrierType: grate` (`blocksMovement: true`, `blocksSight: false`,
+`blocksWater: false`). Dans une salle, le changement d'une seule face ne modifie pas implicitement
+les canaux physiques de tout le volume. `worldCompiler` lit exclusivement ces canaux : ni l'alpha,
+ni la normal map, ni un éventuel GLB ne deviennent une autorité de collision ou de LOS.
+
 Les interfaces horizontales sont dérivées par altitude depuis les empreintes de sol et les régions
 de plafond. Si un plafond et un sol coïncident, une seule interface est rendue : plafond depuis le
 niveau inférieur, sol dès que le niveau supérieur est affiché. Depuis le niveau inférieur, elle
@@ -912,7 +993,7 @@ moteur.
 ### Validation navigateur de l'autorité de déplacement
 
 Le scénario de recette de l'intégration a été exécuté sur `8393` avec deux identités réelles, une
-campagne temporaire isolée et une carte `surface_data` v12 à deux salles. Il confirme le contrat
+campagne temporaire isolée et une carte `surface_data` v13 à deux salles. Il confirme le contrat
 suivant :
 
 - un joueur qui déplace son token sur un support valide passe par `world-move`, avec trajet et

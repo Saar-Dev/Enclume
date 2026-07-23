@@ -1,8 +1,10 @@
 # PLAN_MOTEUR_MONDE.md — reconstruction progressive du moteur de monde
 
-> Dernière mise à jour : 2026-07-16 — moteur commun fusionné, escalier droit paramétrique livré.
+> Dernière mise à jour : 2026-07-22 — contrat courant `surface_data` v13, Phases 0 à 16 livrées.
 >
 > Statut : **Phases 0 à 16 codées et vérifiées ; moteur monde autoritaire branché au combat**.
+> Les titres v1 à v12 plus bas décrivent les jalons successifs du plan ; ils ne remplacent pas le
+> contrat courant v13.
 >
 > Priorité produit : fonctionnement du monde et de l'éditeur avant l'adaptation des mécaniques de
 > combat historiques.
@@ -350,21 +352,27 @@ Phase 7.
 ### Implémentation livrée
 
 - `shared/world/elevatorRuntime.js` porte l'automate pur et sérialisable, les arrêts multiples,
-  l'interpolation physique, la file d'appels stable et le blocage/reprise des portes ;
-- le compilateur découpe la gaine dans les dalles, produit une cabine mobile praticable, ses
+  l'interpolation physique X/Y/Z par segments orthogonaux, la file d'appels stable et le
+  blocage/reprise des portes ;
+- le compilateur découpe les passages verticaux dans les dalles, produit une gaine étanche continue
+  autour des tronçons verticaux et horizontaux, une cabine mobile praticable, ses
   colliders/occluders, ses portes palières et une traversée d'embarquement seulement au palier
-  aligné avec portes ouvertes ; aucune arête verticale d'ascenseur n'existe ;
+  aligné avec portes ouvertes ; aucune arête de transport interne à l'ascenseur n'existe ;
 - `worldElevatorService.js` réconcilie l'horloge sous verrou de battlemap, persiste l'état dans
   `world_feature_states` et déplace les tokens attachés dans le même référentiel local ;
 - la migration 155 ajoute `world_elevator_passengers`. La file et les échéances restant dans l'état
   de feature, un redémarrage ne perd ni la destination ni les passagers ;
 - déplacement, occupation, LOS et couverture réconcilient la cabine avant de compiler leur
   snapshot runtime ;
-- l'éditeur configure les arrêts, l'orientation de porte et la vitesse. Éditeur et session rendent
-  la vraie petite cabine mobile ; un joueur appelle un palier, le MJ peut aussi bloquer, débloquer,
-  ouvrir ou fermer la porte ;
-- validation : 64 tests monde, build Vite et aller-retour transactionnel PostgreSQL de la migration
-  155.
+- l'éditeur pose les arrêts dans l'ordre, refuse tout segment diagonal et tout arrêt hors d'une
+  salle fermée. Il configure l'orientation de porte de chaque arrêt, les vitesses verticale et
+  horizontale, le style et l'empreinte ;
+- les huit modèles industriels/vitrés 1x1, 1x2, 2x1 et 2x2 restent distincts. Éditeur et session
+  rendent la cabine sur toute sa polyligne ; un joueur appelle un palier, le MJ peut aussi bloquer,
+  débloquer, ouvrir ou fermer la porte ;
+- validation initiale : 64 tests monde, build Vite et aller-retour transactionnel PostgreSQL de la
+  migration 155. Extension orthogonale Session 163 : 149 tests monde/serveur, 98 tests client,
+  3 tests de configuration et 8 assets validés.
 
 ---
 

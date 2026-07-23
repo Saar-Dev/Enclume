@@ -488,7 +488,21 @@ router.post('/:id/world-elevators/:elevatorId/commands', requireAuth, async (req
   try {
     const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
     const type = String(req.body?.type || '')
-    if (type !== 'request') requireBattlemapGm(member)
+    if (type !== 'request' && type !== 'use') requireBattlemapGm(member)
+    if (type === 'use') {
+      const tokenId = String(req.body?.tokenId || '')
+      if (!tokenId) throw new AppError(400, 'A token is required to use the elevator')
+      const token = await db('tokens')
+        .where({ id: tokenId, battlemap_id: battlemap.id })
+        .first()
+      if (!token) throw new AppError(404, 'Token not found on this battlemap')
+      if (member.role !== 'gm') {
+        const character = token.character_id
+          ? await db('characters').where({ id: token.character_id }).first()
+          : null
+        if (character?.user_id !== req.user.id) throw new AppError(403, 'You do not own this token')
+      }
+    }
     const outcome = await commandBattlemapElevator({
       battlemapId: battlemap.id,
       elevatorId: req.params.elevatorId,
@@ -633,6 +647,34 @@ router.patch('/:id/world-windows/:featureId/state', requireAuth, async (req, res
     const requested = String(req.body?.state || '')
     const allowedStates = Array.isArray(connector.allowedStates) ? connector.allowedStates : ['transparent']
     if (!allowedStates.includes(requested)) throw new AppError(400, 'État de fenêtre non autorisé')
+    const outcome = await setWorldFeatureState({
+      battlemapId: battlemap.id,
+      featureId: req.params.featureId,
+      state: { state: requested },
+      userId: req.user.id,
+    })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: outcome.runtimeRevision, kind: 'feature-state',
+      featureId: req.params.featureId,
+    })
+    res.json(outcome)
+  } catch (error) {
+    next(runtimeInputError(error))
+  }
+})
+
+router.patch('/:id/world-hatches/:featureId/state', requireAuth, async (req, res, next) => {
+  try {
+    const { battlemap, member } = await battlemapAndMember(req.params.id, req.user.id)
+    requireBattlemapGm(member)
+    const connectors = Object.values(battlemap.surface_data?.connectors || {})
+    const connector = connectors.find(item => String(item?.worldId) === String(req.params.featureId))
+    if (!connector || connector.type !== 'hatch') throw new AppError(404, 'Trappe inconnue')
+    const requested = String(req.body?.state || '')
+    const allowedStates = Array.isArray(connector.allowedStates)
+      ? connector.allowedStates
+      : ['closed', 'open', 'locked']
+    if (!allowedStates.includes(requested)) throw new AppError(400, 'État de trappe non autorisé')
     const outcome = await setWorldFeatureState({
       battlemapId: battlemap.id,
       featureId: req.params.featureId,

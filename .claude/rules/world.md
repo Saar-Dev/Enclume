@@ -19,7 +19,7 @@ Lire `docs/SYSTEME/MOTEUR_MONDE.md` avant toute modification de ce périmètre.
 
 ## Autorités
 
-- `surface_data` v12 est le document statique canonique, validé avant compilation.
+- `surface_data` v13 est le document statique canonique, validé avant compilation.
 - `shared/world/worldCompiler.js` produit un `WorldSnapshot` immuable.
 - Ce snapshot est l'autorité unique pour supports, barrières, traversées, colliders, occluders,
   compartiments, régions, navigation, collision, occupation, LOS et couverture.
@@ -62,7 +62,7 @@ Lire `docs/SYSTEME/MOTEUR_MONDE.md` avant toute modification de ce périmètre.
 
 ## Validation minimale
 
-- Tester validation v12, compilation, sérialisation et rechargement.
+- Tester validation v13, compilation, sérialisation et rechargement.
 - Tester salles adjacentes ou imbriquées, hauteurs différentes, courbes/profils et raccords.
 - Tester plusieurs niveaux, arrêt sur connecteur, occupation, portes, LOS et couverture.
 - Tester build client et rendu réel sans transformer un défaut géométrique en simple artefact masqué.

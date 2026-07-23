@@ -659,12 +659,128 @@ test('une échelle compile une traversée climb fractionnable avec des ancrages 
     }),
   })
   const traversal = snapshot.spatial.traversals.find(item => item.kind === 'ladder')
-  assert.deepEqual(traversal.from, { x: 2.5, y: 0.125, z: 3.5 })
-  assert.deepEqual(traversal.to, { x: 2.5, y: 5.125, z: 3.5 })
+  assert.deepEqual(traversal.from, { x: 2.5, y: 0.125, z: 3.16 })
+  assert.deepEqual(traversal.to, { x: 2.5, y: 5.125, z: 3.16 })
   assert.equal(traversal.mode, 'climb')
   assert.equal(traversal.allowPartial, true)
   assert.equal(traversal.anchorSpacing, 0.5)
   assert.equal(traversal.movementMultiplier, 2)
+})
+
+test('une échelle sans trappe découpe sa trémie et expose ses raccords de palier', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-ladder-open-shaft',
+    surfaceData: emptySurface({
+      floors: {
+        '0:0:0': { x: 0, z: 0, y: 0, thickness: 0.25 },
+        '0:0:2.5': { x: 0, z: 0, y: 2.5, thickness: 0.25, kind: 'bridge' },
+        '1:0:2.5': { x: 1, z: 0, y: 2.5, thickness: 0.25, kind: 'bridge' },
+      },
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 0, z: 0, axis: 'x',
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+          topOpening: { shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1 },
+        },
+      },
+    }),
+  })
+  assert.equal(snapshot.spatial.traversals.find(item => item.kind === 'ladder').enabled, true)
+  assert.equal(snapshot.spatial.supports.some(item => (
+    item.kind === 'floor' && item.bounds.min.x === 0 && Math.abs(item.y - 2.625) < 1e-9
+  )), false)
+  const landings = snapshot.spatial.supports.filter(item => item.kind === 'ladder-landing')
+  assert.equal(landings.length, 1)
+  assert.deepEqual(landings[0].point, { x: 0.5, y: 2.625, z: 0.16 })
+})
+
+test('une trappe fermée remplace la dalle et verrouille la traversée de son échelle', () => {
+  const surfaceData = emptySurface({
+    rooms: {
+      lower: room('lower', 0, 0),
+      upper: { ...room('upper', 0, 0), level: 1, y: 2.5 },
+    },
+    connectors: {
+      ladderA: {
+        id: 'ladderA', type: 'ladder', x: 0, z: 0,
+        fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+      },
+      hatchA: {
+        id: 'hatchA', type: 'hatch', linkedLadderId: 'ladderA',
+        x: 0, z: 0, y: 2.5, width: 1, depth: 1, height: 0.25,
+        axis: 'x', hingeSide: 1, state: 'closed',
+        allowedStates: ['closed', 'open', 'locked'],
+        barrierType: 'solid', blocksMovement: true, blocksSight: true, blocksWater: true,
+      },
+    },
+  })
+  const closed = compileSurfaceWorld({ battlemapId: 'map-ladder-hatch', surfaceData })
+  const traversal = closed.spatial.traversals.find(item => item.kind === 'ladder')
+  const hatchSupport = closed.spatial.supports.find(item => item.kind === 'hatch')
+
+  assert.equal(traversal.enabled, false)
+  assert.equal(traversal.gateFeatureId, hatchSupport.sourceId)
+  assert.equal(traversal.gateState, 'closed')
+  assert.ok(closed.spatial.colliders.some(item => item.kind === 'hatch'))
+  assert.ok(closed.spatial.occluders.some(item => item.kind === 'hatch'))
+  assert.equal(closed.spatial.supports.some(item => item.kind === 'floor' && Math.abs(item.y - 2.625) < 1e-9), false)
+
+  const opened = compileSurfaceWorld({
+    battlemapId: 'map-ladder-hatch',
+    surfaceData,
+    runtimeState: { featureStates: { [hatchSupport.sourceId]: { state: 'open' } } },
+  })
+  assert.equal(opened.spatial.traversals.find(item => item.kind === 'ladder').enabled, true)
+  assert.equal(opened.spatial.supports.some(item => item.kind === 'hatch'), false)
+  assert.equal(opened.spatial.colliders.some(item => item.kind === 'hatch'), false)
+  assert.equal(opened.spatial.occluders.some(item => item.kind === 'hatch'), false)
+})
+
+test('une trappe en grille fermée reste un support sans occulter la LOS', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-grate-hatch',
+    surfaceData: emptySurface({
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 1, z: 2,
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+        },
+        hatchA: {
+          id: 'hatchA', type: 'hatch', linkedLadderId: 'ladderA',
+          x: 1, z: 2, y: 2.5, width: 1, depth: 1, height: 0.12,
+          axis: 'z', hingeSide: -1, state: 'closed',
+          allowedStates: ['closed', 'open', 'locked'],
+          barrierType: 'grate', blocksMovement: true, blocksSight: false, blocksWater: false,
+        },
+      },
+    }),
+  })
+  assert.ok(snapshot.spatial.supports.some(item => item.kind === 'hatch'))
+  assert.ok(snapshot.spatial.colliders.some(item => item.kind === 'hatch'))
+  assert.equal(snapshot.spatial.occluders.some(item => item.kind === 'hatch'), false)
+})
+
+test('une trappe ronde compile un support circulaire et non sa boîte englobante', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-round-hatch',
+    surfaceData: emptySurface({
+      connectors: {
+        ladderA: {
+          id: 'ladderA', type: 'ladder', x: 0, z: 0, axis: 'x',
+          fromLevel: 0, toLevel: 1, fromY: 0.125, toY: 2.625,
+          topOpening: { shape: 'circle', x: 0, z: 0, y: 2.5, width: 1, depth: 1 },
+        },
+        hatchA: {
+          id: 'hatchA', type: 'hatch', linkedLadderId: 'ladderA', openingShape: 'circle',
+          x: 0, z: 0, y: 2.5, width: 1, depth: 1, height: 0.12,
+          axis: 'x', hingeSide: 1, state: 'closed', allowedStates: ['closed', 'open', 'locked'],
+        },
+      },
+    }),
+  })
+  const support = snapshot.spatial.supports.find(item => item.kind === 'hatch')
+  assert.equal(multiPolygonContainsPoint(support.footprint, { x: 0.5, z: 0.5 }), true)
+  assert.equal(multiPolygonContainsPoint(support.footprint, { x: 0.02, z: 0.02 }), false)
 })
 
 test('une passerelle détruite ne compile plus son support', () => {
@@ -740,6 +856,29 @@ test('une cabine en mouvement ferme tous les paliers et déplace son support', (
   assert.equal(moving.spatial.traversals.some(item => item.kind === 'elevator-boarding'), false)
   assert.equal(moving.spatial.supports.find(item => item.kind === 'elevator-cabin').y, 2.625)
   assert.equal(moving.spatial.barriers.filter(item => item.kind === 'elevator-landing-door').length, 3)
+})
+
+test('une gaine orthogonale peut tourner à un arrêt et le verre reste transparent à la LOS', () => {
+  const surfaceData = emptySurface({
+    connectors: {
+      routedLift: {
+        id: 'routedLift', type: 'elevator', x: 0, z: 0, fromLevel: 0, toLevel: 1,
+        width: 2, depth: 1, elevatorStyle: 'glass', initialStopId: 'a',
+        stops: [
+          { id: 'a', level: 0, x: 0, y: 0.125, z: 0, doorAxis: 'z', doorSide: 1 },
+          { id: 'b', level: 1, x: 0, y: 2.625, z: 0, doorAxis: 'x', doorSide: -1 },
+          { id: 'c', level: 1, x: 4, y: 2.625, z: 0, doorAxis: 'z', doorSide: -1 },
+        ],
+      },
+    },
+  })
+  const snapshot = compileSurfaceWorld({ battlemapId: 'map-routed-lift', surfaceData })
+  const shaft = snapshot.spatial.barriers.filter(item => item.kind === 'elevator-shaft')
+  assert.ok(shaft.some(item => item.axis === 'horizontal'))
+  assert.ok(shaft.every(item => item.blocks.water && item.blocks.movement && !item.blocks.sight))
+  assert.equal(snapshot.spatial.occluders.some(item => item.kind === 'elevator-shaft'), false)
+  const landingDoors = snapshot.spatial.barriers.filter(item => item.kind === 'elevator-landing-door')
+  assert.deepEqual(landingDoors.map(item => item.axis), ['x', 'z'])
 })
 
 test('la compilation est déterministe pour une même entrée', () => {

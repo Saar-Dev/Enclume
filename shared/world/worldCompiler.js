@@ -32,6 +32,13 @@ import {
   stairGeometry,
   stairOpeningMultiPolygon,
 } from './stairGeometry.js'
+import {
+  hatchOpeningDescriptor,
+  ladderPlacementCenter,
+  verticalAccessOpeningDescriptor,
+  verticalAccessOpeningsAtY,
+  verticalOpeningMultiPolygon,
+} from './verticalAccessGeometry.js'
 
 const EPSILON = 1e-6
 
@@ -752,12 +759,33 @@ function slabIsInsideElevatorShaft(elevators, slab, topY) {
   return elevators.some(elevator => {
     const centerX = slab.x + 0.5
     const centerZ = slab.z + 0.5
-    const minY = elevator.stops[0].y - elevator.floorThickness
-    const maxY = elevator.stops.at(-1).y + elevator.cabinHeight
-    return centerX > elevator.x - EPSILON && centerX < elevator.x + elevator.width + EPSILON
-      && centerZ > elevator.z - EPSILON && centerZ < elevator.z + elevator.depth + EPSILON
-      && topY >= minY - EPSILON && topY <= maxY + EPSILON
+    const insideFootprint = stop => (
+      centerX > stop.x - EPSILON && centerX < stop.x + elevator.width + EPSILON
+      && centerZ > stop.z - EPSILON && centerZ < stop.z + elevator.depth + EPSILON
+    )
+    if (elevator.stops.some(stop => insideFootprint(stop) && Math.abs(topY - stop.y) <= elevator.floorThickness + EPSILON)) return true
+    return elevator.stops.slice(1).some((stop, index) => {
+      const previous = elevator.stops[index]
+      if (Math.abs(stop.x - previous.x) > EPSILON || Math.abs(stop.z - previous.z) > EPSILON) return false
+      const minY = Math.min(previous.y, stop.y) - elevator.floorThickness
+      const maxY = Math.max(previous.y, stop.y) + elevator.cabinHeight
+      return insideFootprint(previous) && topY >= minY - EPSILON && topY <= maxY + EPSILON
+    })
   })
+}
+
+function elevatorFaceBounds(definition, origin, face, bottom, top) {
+  const half = definition.wallThickness / 2
+  const line = face.axis === 'x'
+    ? origin.x + (face.side > 0 ? definition.width : 0)
+    : origin.z + (face.side > 0 ? definition.depth : 0)
+  return face.axis === 'x'
+    ? bounds(line - half, bottom, origin.z, line + half, top, origin.z + definition.depth)
+    : bounds(origin.x, bottom, line - half, origin.x + definition.width, top, line + half)
+}
+
+function elevatorRouteAxis(from, to) {
+  return ['x', 'y', 'z'].find(axis => Math.abs(to[axis] - from[axis]) > EPSILON) || null
 }
 
 function skylightCoveringSlab(surface, slab, y) {
@@ -790,6 +818,12 @@ function stairOpeningsAtY(surface, y) {
     .map(stair => stairOpeningMultiPolygon(stair, { storyHeight: surface.storyHeight }))
 }
 
+function horizontalOpeningsAtY(surface, y) {
+  const verticalOpenings = verticalAccessOpeningsAtY(surface, y, EPSILON)
+    .map(verticalOpeningMultiPolygon)
+  return [...stairOpeningsAtY(surface, y), ...verticalOpenings]
+}
+
 function addSlabs(surface, runtimeStates, battlemapId, spatial) {
   const elevators = surfaceElevators(surface)
   for (const [legacyId, floor] of roomFloorEntries(surface, battlemapId)) {
@@ -820,7 +854,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
     const baseFootprint = sourceFootprint || tileFootprint
     const clippedFootprint = differenceMultiPolygons(
       baseFootprint,
-      ...stairOpeningsAtY(surface, parsed.y),
+      ...horizontalOpeningsAtY(surface, parsed.y),
     )
     for (const [fragmentIndex, polygon] of clippedFootprint.entries()) {
       const slabFootprint = [polygon]
@@ -883,7 +917,7 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
       maxX: parsed.x + 1,
       minZ: parsed.z,
       maxZ: parsed.z + 1,
-    }), ...stairOpeningsAtY(surface, parsed.y))
+    }), ...horizontalOpeningsAtY(surface, parsed.y))
     for (const [fragmentIndex, polygon] of clippedFootprint.entries()) {
       const slabFootprint = [polygon]
       const footprintBounds = multiPolygonBounds(slabFootprint)
@@ -934,6 +968,47 @@ function addSlabs(surface, runtimeStates, battlemapId, spatial) {
       axis: 'horizontal',
       bounds: glassBounds,
       blocks: { movement: true, sight: false, water: true, gas: true },
+    })
+  }
+
+  for (const connector of Object.values(surface.connectors)) {
+    if (connector.type !== 'hatch') continue
+    const state = runtimeStates[connector.worldId]?.state || connector.state || 'closed'
+    if (state === 'open' || state === 'destroyed') continue
+    const x = number(connector.x)
+    const y = number(connector.y)
+    const z = number(connector.z)
+    const width = positive(connector.width, 1)
+    const depth = positive(connector.depth, 1)
+    const thickness = positive(connector.height, 0.12)
+    const footprint = verticalOpeningMultiPolygon(hatchOpeningDescriptor(connector))
+    const panelBounds = bounds(x, y - thickness / 2, z, x + width, y + thickness / 2, z + depth)
+    spatial.supports.push({
+      id: `support:hatch:${connector.worldId}`,
+      sourceId: connector.worldId,
+      kind: 'hatch',
+      state,
+      bounds: panelBounds,
+      footprint,
+      point: point(x + width / 2, y + thickness / 2, z + depth / 2),
+      y: clean(y + thickness / 2),
+      walkable: connector.walkable !== false,
+      movementMultiplier: movementMultiplier(connector),
+    })
+    addBarrierOutputs(spatial, {
+      id: `barrier:hatch:${connector.worldId}`,
+      sourceId: connector.worldId,
+      kind: 'hatch',
+      state,
+      axis: 'horizontal',
+      bounds: panelBounds,
+      geometry: {
+        type: 'horizontal-multipolygon',
+        multiPolygon: footprint,
+        minY: clean(y - thickness / 2),
+        maxY: clean(y + thickness / 2),
+      },
+      blocks: blockingChannels(connector),
     })
   }
 }
@@ -1126,10 +1201,19 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
     }
   }
 
+  const hatchByLadderId = new Map(Object.values(surface.connectors)
+    .filter(connector => connector.type === 'hatch' && connector.linkedLadderId)
+    .map(connector => [String(connector.linkedLadderId), connector]))
+
   for (const connector of Object.values(surface.connectors)) {
     if (connector.type === 'ladder') {
       const state = runtimeStates[connector.worldId]
-      const center = point(number(connector.x) + 0.5, 0, number(connector.z) + 0.5)
+      const hatch = hatchByLadderId.get(String(connector.id)) || null
+      const hatchState = hatch
+        ? runtimeStates[hatch.worldId]?.state || hatch.state || 'closed'
+        : 'open'
+      const placementCenter = ladderPlacementCenter(connector)
+      const center = point(placementCenter.x, 0, placementCenter.z)
       spatial.traversals.push({
         id: `traversal:ladder:${connector.worldId}`,
         sourceId: connector.worldId,
@@ -1137,30 +1221,62 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
         mode: 'climb',
         from: point(center.x, number(connector.fromY, connector.y), center.z),
         to: point(center.x, number(connector.toY, connector.topY), center.z),
-        enabled: state?.enabled !== false && state?.state !== 'destroyed',
+        enabled: state?.enabled !== false
+          && state?.state !== 'destroyed'
+          && (hatchState === 'open' || hatchState === 'destroyed'),
+        ...(hatch ? { gateFeatureId: hatch.worldId, gateState: hatchState } : {}),
         allowPartial: true,
         movementMultiplier: movementMultiplier(connector),
         anchorSpacing: positive(connector.anchorSpacing, 0.5),
       })
+      const opening = verticalAccessOpeningDescriptor(connector, {
+        linkedHatch: hatch,
+        storyHeight: surface.storyHeight,
+      })
+      if (opening) {
+        const topY = Math.max(number(connector.fromY, connector.y), number(connector.toY, connector.topY))
+        const landingCenter = ladderPlacementCenter(connector, opening)
+        const landingPoints = [point(landingCenter.x, topY, landingCenter.z)]
+        for (const [index, landingPoint] of landingPoints.entries()) {
+          spatial.supports.push({
+            id: `support:ladder-landing:${connector.worldId}:${index}`,
+            sourceId: connector.worldId,
+            kind: 'ladder-landing',
+            bounds: bounds(
+              landingPoint.x - 0.01, landingPoint.y - 0.01, landingPoint.z - 0.01,
+              landingPoint.x + 0.01, landingPoint.y + 0.01, landingPoint.z + 0.01,
+            ),
+            point: landingPoint,
+            y: landingPoint.y,
+            walkable: true,
+            movementMultiplier: movementMultiplier(connector),
+          })
+        }
+      }
       continue
     }
     if (connector.type !== 'elevator') continue
     const definition = normalizeElevatorDefinition(connector, { storyHeight: surface.storyHeight })
     const initial = createInitialElevatorState(definition, {
-      initialStopId: `level:${number(connector.fromLevel, definition.stops[0].level)}`,
+      initialStopId: connector.initialStopId || `level:${number(connector.fromLevel, definition.stops[0].level)}`,
     })
     const state = normalizeElevatorState(definition, runtimeStates[connector.worldId] || initial)
+    const cabinX = number(state.positionX, definition.x)
     const floorY = state.positionY
+    const cabinZ = number(state.positionZ, definition.z)
     const floorBottom = floorY - definition.floorThickness
     const cabinTop = floorY + definition.cabinHeight
-    const centerX = definition.x + definition.width / 2
-    const centerZ = definition.z + definition.depth / 2
+    const centerX = cabinX + definition.width / 2
+    const centerZ = cabinZ + definition.depth / 2
     const currentStop = definition.stops.find(stop => stop.id === state.currentStopId)
-    const aligned = currentStop && Math.abs(currentStop.y - floorY) <= EPSILON
+    const aligned = currentStop
+      && Math.abs(currentStop.x - cabinX) <= EPSILON
+      && Math.abs(currentStop.y - floorY) <= EPSILON
+      && Math.abs(currentStop.z - cabinZ) <= EPSILON
     const doorsOpen = state.phase === 'open' && state.doorState === 'open' && aligned
     const cabinBounds = bounds(
-      definition.x, floorBottom, definition.z,
-      definition.x + definition.width, cabinTop, definition.z + definition.depth,
+      cabinX, floorBottom, cabinZ,
+      cabinX + definition.width, cabinTop, cabinZ + definition.depth,
     )
 
     spatial.supports.push({
@@ -1168,8 +1284,8 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       sourceId: connector.worldId,
       kind: 'elevator-cabin',
       bounds: bounds(
-        definition.x, floorBottom, definition.z,
-        definition.x + definition.width, floorY, definition.z + definition.depth,
+        cabinX, floorBottom, cabinZ,
+        cabinX + definition.width, floorY, cabinZ + definition.depth,
       ),
       y: clean(floorY),
       walkable: true,
@@ -1182,8 +1298,8 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       kind: 'elevator-cabin-floor',
       axis: 'horizontal',
       bounds: bounds(
-        definition.x, floorBottom, definition.z,
-        definition.x + definition.width, floorY, definition.z + definition.depth,
+        cabinX, floorBottom, cabinZ,
+        cabinX + definition.width, floorY, cabinZ + definition.depth,
       ),
       blocks: { movement: true, sight: false, water: true, gas: true },
     })
@@ -1193,75 +1309,151 @@ function addVerticalTraversals(surface, runtimeStates, spatial) {
       kind: 'elevator-cabin-ceiling',
       axis: 'horizontal',
       bounds: bounds(
-        definition.x, cabinTop - definition.floorThickness, definition.z,
-        definition.x + definition.width, cabinTop, definition.z + definition.depth,
+        cabinX, cabinTop - definition.floorThickness, cabinZ,
+        cabinX + definition.width, cabinTop, cabinZ + definition.depth,
       ),
       blocks: { movement: true, sight: true, water: true, gas: true },
     })
 
     const wallFaces = [
-      { axis: 'x', side: -1, line: definition.x },
-      { axis: 'x', side: 1, line: definition.x + definition.width },
-      { axis: 'z', side: -1, line: definition.z },
-      { axis: 'z', side: 1, line: definition.z + definition.depth },
+      { axis: 'x', side: -1 },
+      { axis: 'x', side: 1 },
+      { axis: 'z', side: -1 },
+      { axis: 'z', side: 1 },
     ]
+    const cabinDoorFaces = new Set(definition.stops.map(stop => `${stop.doorAxis}:${stop.doorSide}`))
     for (const face of wallFaces) {
-      const isDoorFace = face.axis === definition.doorAxis && face.side === definition.doorSide
-      if (isDoorFace && doorsOpen) continue
-      const half = definition.wallThickness / 2
+      const faceKey = `${face.axis}:${face.side}`
+      const isDoorFace = cabinDoorFaces.has(faceKey)
+      const activeDoorFace = currentStop && face.axis === currentStop.doorAxis && face.side === currentStop.doorSide
+      if (activeDoorFace && doorsOpen) continue
       addBarrierOutputs(spatial, {
         id: `barrier:elevator-cabin-wall:${connector.worldId}:${face.axis}:${face.side}`,
         sourceId: connector.worldId,
         kind: isDoorFace ? 'elevator-cabin-door' : 'elevator-cabin-wall',
         axis: face.axis,
-        bounds: face.axis === 'x'
-          ? bounds(face.line - half, floorY, definition.z, face.line + half, cabinTop, definition.z + definition.depth)
-          : bounds(definition.x, floorY, face.line - half, definition.x + definition.width, cabinTop, face.line + half),
+        bounds: elevatorFaceBounds(definition, { x: cabinX, z: cabinZ }, face, floorY, cabinTop),
         blocks: { movement: true, sight: true, water: true, gas: true },
       })
     }
 
-    const shaftBottom = definition.stops[0].y
-    const shaftTop = definition.stops.at(-1).y + definition.cabinHeight
-    for (const face of wallFaces) {
-      if (face.axis === definition.doorAxis && face.side === definition.doorSide) continue
+    const shaftBlocksSight = String(connector.elevatorStyle || connector.modelGeometry?.elevatorStyle || 'industrial') !== 'glass'
+    const shaftBlocks = { movement: true, sight: shaftBlocksSight, water: true, gas: true }
+    for (const [stopIndex, stop] of definition.stops.entries()) {
+      const connectedFaces = new Set()
+      for (const neighbor of [definition.stops[stopIndex - 1], definition.stops[stopIndex + 1]].filter(Boolean)) {
+        const axis = elevatorRouteAxis(stop, neighbor)
+        if (axis === 'x' || axis === 'z') connectedFaces.add(`${axis}:${neighbor[axis] < stop[axis] ? -1 : 1}`)
+      }
+      for (const face of wallFaces) {
+        if (face.axis === stop.doorAxis && face.side === stop.doorSide) continue
+        if (connectedFaces.has(`${face.axis}:${face.side}`)) continue
+        addBarrierOutputs(spatial, {
+          id: `barrier:elevator-stop-wall:${connector.worldId}:${stopIndex}:${face.axis}:${face.side}`,
+          sourceId: connector.worldId,
+          kind: 'elevator-shaft',
+          axis: face.axis,
+          bounds: elevatorFaceBounds(definition, stop, face, stop.y, stop.y + definition.cabinHeight),
+          blocks: shaftBlocks,
+        })
+      }
+      const verticalNeighbors = [definition.stops[stopIndex - 1], definition.stops[stopIndex + 1]]
+        .filter(neighbor => neighbor && elevatorRouteAxis(stop, neighbor) === 'y')
       const half = definition.wallThickness / 2
-      addBarrierOutputs(spatial, {
-        id: `barrier:elevator-shaft:${connector.worldId}:${face.axis}:${face.side}`,
+      if (!verticalNeighbors.some(neighbor => neighbor.y < stop.y)) {
+        addBarrierOutputs(spatial, {
+          id: `barrier:elevator-stop-floor:${connector.worldId}:${stopIndex}`,
+          sourceId: connector.worldId,
+          kind: 'elevator-shaft',
+          axis: 'horizontal',
+          bounds: bounds(stop.x, stop.y - half, stop.z, stop.x + definition.width, stop.y + half, stop.z + definition.depth),
+          blocks: shaftBlocks,
+        })
+      }
+      if (!verticalNeighbors.some(neighbor => neighbor.y > stop.y)) {
+        addBarrierOutputs(spatial, {
+          id: `barrier:elevator-stop-ceiling:${connector.worldId}:${stopIndex}`,
+          sourceId: connector.worldId,
+          kind: 'elevator-shaft',
+          axis: 'horizontal',
+          bounds: bounds(stop.x, stop.y + definition.cabinHeight - half, stop.z, stop.x + definition.width, stop.y + definition.cabinHeight + half, stop.z + definition.depth),
+          blocks: shaftBlocks,
+        })
+      }
+    }
+    for (let segmentIndex = 0; segmentIndex < definition.stops.length - 1; segmentIndex += 1) {
+      const from = definition.stops[segmentIndex]
+      const to = definition.stops[segmentIndex + 1]
+      const axis = elevatorRouteAxis(from, to)
+      const addShaftBarrier = (part, barrierAxis, barrierBounds) => addBarrierOutputs(spatial, {
+        id: `barrier:elevator-shaft:${connector.worldId}:${segmentIndex}:${part}`,
         sourceId: connector.worldId,
         kind: 'elevator-shaft',
-        axis: face.axis,
-        bounds: face.axis === 'x'
-          ? bounds(face.line - half, shaftBottom, definition.z, face.line + half, shaftTop, definition.z + definition.depth)
-          : bounds(definition.x, shaftBottom, face.line - half, definition.x + definition.width, shaftTop, face.line + half),
-        blocks: { movement: true, sight: true, water: true, gas: true },
+        axis: barrierAxis,
+        bounds: barrierBounds,
+        blocks: shaftBlocks,
       })
+      if (axis === 'y') {
+        const low = from.y < to.y ? from : to
+        const high = low === from ? to : from
+        const bottom = low.y + definition.cabinHeight
+        const top = high.y
+        if (top > bottom + EPSILON) {
+          for (const face of wallFaces) {
+            addShaftBarrier(`${face.axis}:${face.side}`, face.axis, elevatorFaceBounds(definition, low, face, bottom, top))
+          }
+        }
+      } else if (axis === 'x') {
+        const low = from.x < to.x ? from : to
+        const high = low === from ? to : from
+        const minX = low.x + definition.width
+        const maxX = high.x
+        if (maxX > minX + EPSILON) {
+          const half = definition.wallThickness / 2
+          addShaftBarrier('floor', 'horizontal', bounds(minX, from.y - half, from.z, maxX, from.y + half, from.z + definition.depth))
+          addShaftBarrier('ceiling', 'horizontal', bounds(minX, from.y + definition.cabinHeight - half, from.z, maxX, from.y + definition.cabinHeight + half, from.z + definition.depth))
+          addShaftBarrier('z:-1', 'z', bounds(minX, from.y, from.z - half, maxX, from.y + definition.cabinHeight, from.z + half))
+          addShaftBarrier('z:1', 'z', bounds(minX, from.y, from.z + definition.depth - half, maxX, from.y + definition.cabinHeight, from.z + definition.depth + half))
+        }
+      } else if (axis === 'z') {
+        const low = from.z < to.z ? from : to
+        const high = low === from ? to : from
+        const minZ = low.z + definition.depth
+        const maxZ = high.z
+        if (maxZ > minZ + EPSILON) {
+          const half = definition.wallThickness / 2
+          addShaftBarrier('floor', 'horizontal', bounds(from.x, from.y - half, minZ, from.x + definition.width, from.y + half, maxZ))
+          addShaftBarrier('ceiling', 'horizontal', bounds(from.x, from.y + definition.cabinHeight - half, minZ, from.x + definition.width, from.y + definition.cabinHeight + half, maxZ))
+          addShaftBarrier('x:-1', 'x', bounds(from.x - half, from.y, minZ, from.x + half, from.y + definition.cabinHeight, maxZ))
+          addShaftBarrier('x:1', 'x', bounds(from.x + definition.width - half, from.y, minZ, from.x + definition.width + half, from.y + definition.cabinHeight, maxZ))
+        }
+      }
     }
 
     for (const stop of definition.stops) {
       const landingOpen = doorsOpen && stop.id === state.currentStopId
       if (landingOpen) continue
       const half = definition.wallThickness / 2
-      const line = definition.doorAxis === 'x'
-        ? (definition.doorSide < 0 ? definition.x : definition.x + definition.width)
-        : (definition.doorSide < 0 ? definition.z : definition.z + definition.depth)
+      const line = stop.doorAxis === 'x'
+        ? (stop.doorSide < 0 ? stop.x : stop.x + definition.width)
+        : (stop.doorSide < 0 ? stop.z : stop.z + definition.depth)
       addBarrierOutputs(spatial, {
         id: `barrier:elevator-landing-door:${connector.worldId}:${stop.id}`,
         sourceId: connector.worldId,
         kind: 'elevator-landing-door',
-        axis: definition.doorAxis,
+        axis: stop.doorAxis,
         stopId: stop.id,
-        bounds: definition.doorAxis === 'x'
-          ? bounds(line - half, stop.y, definition.z, line + half, stop.y + definition.cabinHeight, definition.z + definition.depth)
-          : bounds(definition.x, stop.y, line - half, definition.x + definition.width, stop.y + definition.cabinHeight, line + half),
-        blocks: { movement: true, sight: true, water: true, gas: true },
+        bounds: stop.doorAxis === 'x'
+          ? bounds(line - half, stop.y, stop.z, line + half, stop.y + definition.cabinHeight, stop.z + definition.depth)
+          : bounds(stop.x, stop.y, line - half, stop.x + definition.width, stop.y + definition.cabinHeight, line + half),
+        blocks: { movement: true, sight: shaftBlocksSight, water: true, gas: true },
       })
     }
 
     if (doorsOpen) {
-      const landing = definition.doorAxis === 'x'
-        ? point(centerX + definition.doorSide * definition.width, floorY, centerZ)
-        : point(centerX, floorY, centerZ + definition.doorSide * definition.depth)
+      const landing = currentStop.doorAxis === 'x'
+        ? point(currentStop.x + (currentStop.doorSide > 0 ? definition.width + 0.25 : -0.25), floorY, centerZ)
+        : point(centerX, floorY, currentStop.z + (currentStop.doorSide > 0 ? definition.depth + 0.25 : -0.25))
       spatial.traversals.push({
         id: `traversal:elevator-boarding:${connector.worldId}:${state.currentStopId}`,
         sourceId: connector.worldId,

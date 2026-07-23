@@ -9,6 +9,15 @@
 "close": "Close"
 },
 
+"elevator": {
+"call": "Call elevator",
+"use": "Use",
+"selectToken": "Select the token to board first.",
+"onBoard": "{{token}} is inside the cabin.",
+"travelling": "Elevator moving…",
+"goTo": "Go to {{stop}}"
+},
+
 "auth": {
 "login": "Log In",
 "logout": "Log Out",
@@ -219,6 +228,28 @@
 "macroFail": "Failure",
 "macroCritical": "critical!",
 "macroFumble": "fumble!"
+  },
+  "surfaceEditor": {
+    "verticalAccess": "Vertical access",
+    "verticalAccesses": "Vertical accesses",
+    "verticalAccessModel": "Vertical access model",
+    "verticalAccessComposition": "Access composition",
+    "ladderOnly": "Ladder only",
+    "ladderAndHatch": "Ladder + Hatch",
+    "hatchModel": "Hatch model",
+    "hatchCatalogInSidebar": "Now choose the model from the catalog on the right.",
+    "noHatch": "No hatch",
+    "openOpening": "Open shaft",
+    "squareShape": "Square",
+    "roundShape": "Round",
+    "proceduralModel": "Procedural model",
+    "rotateLeft": "↶ Rotate left",
+    "rotateRight": "Rotate right ↷",
+    "hatchMechanisms": {
+      "hinged": "Hinged",
+      "sliding-bipartite": "Bipartite sliding",
+      "sliding-tripartite": "Tripartite sliding"
+    }
   },
   "character": {
     "tabSheet": "Fiche",

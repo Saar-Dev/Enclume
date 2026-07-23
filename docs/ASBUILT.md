@@ -26,6 +26,179 @@ nouvelle erreur ESLint n'est introduite par le delta Saar. Le commit `a8a8846` e
 health checks répondent 200. Une recette réelle dans le navigateur a chargé le dashboard v201,
 une session 3D avec combat actif, les niveaux 0 et 1 puis le catalogue **Objets 3D** contenant les
 deux escaliers paramétriques et l'échelle, sans erreur console.
+> Contrats techniques réaudités le 2026-07-22 : `surface_data` v13, spatial sans Redis et
+> environnement Node 24/npm 11.
+
+## Catalogues contextuels et placement sticky des objets 3D (2026-07-22)
+
+Le catalogue de connecteurs ne mélange plus les familles. Un blueprint dont
+`geometry.connectorType = "hatch"` est toujours exclu des portes, même si ses métadonnées legacy
+contiennent `door`, `sas` ou le chemin du pack historique. Les portes sans `connectorType` restent
+reconnues par leur pack et leurs mots-clés. Dans **Objets 3D > Accès vertical**, le sélecteur
+**Échelle seule / Échelle + Trappe** reste accessible ; le second choix remplace recherche,
+import et bibliothèque générale par la preview et les huit seules trappes.
+
+Le placement des entités libres est maintenant volumique et sticky. La géométrie de collision
+reprend dimensions ou collider d'état, échelle d'instance, origine et rotation. Elle est confrontée
+aux murs droits ou courbes déjà découpés autour des ouvertures, aux autres colliders du snapshot,
+aux voxels legacy affichés et aux entités existantes. Un contact de faces est permis ; un
+chevauchement horizontal et vertical ne l'est pas.
+
+Le fantôme balaie le segment entre sa dernière position valide et la cible du pointeur. Il ne peut
+donc pas se téléporter au travers d'un mur mince. Au contact, une recherche X/Z utilise le mouvement
+restant pour le faire glisser le long de l'obstacle. Il ne devient jamais rouge : un premier point
+invalide le masque, puis il reste collé à la dernière position valide. Le clic pose à cette position
+résolue ; glisser-déposer et rotation répètent le garde avant le `POST` ou `PUT`.
+
+Validation : 144 tests monde/serveur, 95 tests client, 3 tests de configuration, build Vite et
+ESLint ciblé sans erreur. Une recette Chromium connectée sur `8293` a confirmé les huit seules
+trappes après le choix de composition et une pose lancée de l'autre côté d'un mur persistée au
+contact du côté d'origine. Campagnes et comptes de recette ont été supprimés puis contrôlés à zéro.
+
+---
+
+## Accès verticaux et catalogue de trappes 3D (2026-07-22)
+
+L’objet structurel autrefois présenté comme **Échelle** est maintenant un **Accès vertical**. Sa
+définition canonique contient toujours une échelle et une `topOpening`; cette trémie existe même si
+aucun connecteur `hatch` n’est associé. Le renderer et `WorldSnapshot` découpent la même ouverture
+rectangulaire ou circulaire. L’échelle est placée sur l’un des quatre bords, jamais au centre ; son
+point de raccord du palier haut permet au graphe de navigation de rejoindre une passerelle adjacente
+sans inventer de dalle au milieu du trou.
+
+La géométrie visuelle de l'échelle suit maintenant la composition réelle. Sans trappe, elle dépasse
+le palier supérieur de 0,75 unité afin d'offrir une prise. Avec une trappe liée, rails et barreaux
+s'arrêtent exactement à la sous-face `hatch.y` ; la tranche de l'étage haut ne fabrique aucun petit
+segment de secours. Les quatre modèles coulissants descendent leurs panneaux mobiles de 0,16 unité
+dans une poche sous le plancher avant de les déplacer hors de l'ouverture. La dalle les occulte par
+sa profondeur tandis que cadres et commandes fixes restent visibles.
+
+La palette choisit d’abord **Échelle seule** ou **Échelle + Trappe**. Dans le second cas, la première
+trappe est créée et le catalogue visuel à droite affiche les modèles et leur preview, comme pour les
+portes. Le catalogue intégré
+`vertical_access_hatches` contient huit GLB animés : battante blindée, battante avec écoutille de
+service, coulissante bipartite et coulissante tripartite radiale, chaque mécanisme en carré et en
+rond. Tous déclarent `origin=hatch-center`, une empreinte structurelle 1 × 1, cinq slots couleur et
+des clips `open_*`. Chaque feuille est détaillée dessus et dessous. Les modèles sans écoutille ont
+deux commandes verticales intégrées à la rive, accessibles depuis les deux niveaux ; les modèles
+avec écoutille n’ont pas de boîtier séparé. Le popup de l’échelle change seulement la composition ;
+le remplacement du modèle se fait dans le catalogue à droite en conservant la trémie.
+
+Le renderer arrête les rails sous le plan de fermeture : une trappe fermée n’est jamais traversée
+par l’échelle. Le panneau d’un connecteur GLB ne propose pas les champs procéduraux **Matière** et
+**Motif** ; seuls les slots de couleur réellement déclarés par le modèle peuvent être modifiés.
+
+Les anciennes cartes restent compatibles : une échelle sans `topOpening` dérive une trémie carrée
+1 × 1, ou reprend la forme de sa trappe historique. La trappe ferme toujours la traversée quand son
+état est `closed`/`locked`; sans trappe, la traversée `climb` est ouverte.
+
+Validation : 144 tests monde/serveur, 81 tests client Surface/lib, 3 tests de configuration,
+validateur des 8 GLB sans erreur ni avertissement, ESLint ciblé sans erreur et build Vite réussis.
+Sur Kiwi, les services `8293/8294` sont actifs, le catalogue contient 100 modèles, le GLB bilatéral
+d’écoutille répond en HTTP 200 et le smoke Chromium distant est vert. La nouvelle recette visuelle
+utilisateur reste consignée comme attendue dans `docs/EN_COURS.md`.
+
+---
+
+## Grilles mono-plan recto-verso (2026-07-22)
+
+Lorsqu'un mur, un sol, un plafond, une passerelle ou une trappe possède le cutout
+`industrial_grate` sur ses deux côtés, le renderer ne dessine plus les deux peaux du volume. Il
+produit un unique plan ajouré rendu recto-verso : plan médian pour les murs, face porteuse supérieure
+pour les sols et trappes, sous-face pour les plafonds. Les surfaces courbes, découpées et percées
+utilisent la même empreinte plane sans réintroduire une extrusion graphique.
+
+Si les deux côtés partagent le même matériau, ce plan exige un seul mesh et un seul matériau. Si
+leurs apparences diffèrent, deux faces strictement coplanaires sont conservées mais chacune est
+limitée à sa direction ; elles ne peuvent jamais être visibles simultanément ni produire de
+parallaxe. Cette règle évite le `z-fighting` et reste adaptée à de grandes quantités de murs de
+prison. Les escaliers restent volontairement des plateaux minces : leur résultat visuel a été
+validé séparément.
+
+Le volume canonique n'est pas aminci. Supports, collisions, découpe de dalle, LOS et déplacement
+continuent d'utiliser l'épaisseur déclarée dans `surface_data`. Le changement est exclusivement une
+projection de rendu.
+
+Validation locale puis sur Kiwi : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration,
+build Vite et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu avec mur, sol, trappe
+et escalier depuis deux caméras opposées, sans double grille ni exception JavaScript. Le code
+fonctionnel `932a041` est déployé sur `8293/8294` ; le health API et le smoke Chromium distant sont
+verts.
+
+Recette utilisateur validée le 2026-07-22 sur l'instance monde : le rendu mono-plan est accepté
+tel quel pour les murs et les sols, et le rendu déjà validé des escaliers est conservé. Ce lot est
+prêt à entrer dans la prochaine fusion combat/monde.
+
+---
+
+## Marches ajourées et murs en grille recto-verso (2026-07-22)
+
+Un escalier droit revêtu de `industrial_grate` ne rend plus les volumes pleins et croissants de sa
+géométrie physique. Chaque marche visible est une plaque mince alignée sur son altitude praticable ;
+sa face supérieure et son dessous sont ajourés, et ses chants métalliques sont recto-verso. Les
+colliders, supports et ancrages conservent la géométrie canonique complète du moteur.
+
+La densité du motif des marches est portée à ×4. Pour une marche rectangulaire, les répétitions U/V
+sont multipliées par ses dimensions monde : les mailles gardent donc leur proportion entre largeur
+et giron au lieu d'être comprimées dans l'un des axes. Les marches courbes utilisent la même densité
+sur leurs UV monde.
+
+Un mur ajouré sur ses deux faces est désormais exclu du fondu de coupe caméra destiné aux murs
+pleins et son matériau de chant est rendu recto-verso. La même grille demeure donc visible quand la
+caméra passe d'un côté du mur à l'autre.
+
+Validation locale : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration, build Vite
+et ESLint ciblé réussis. Le vrai `SurfaceDungeonScene` a été rendu simultanément depuis les deux
+côtés sous Chromium : mur présent dans les deux vues, marches minces et ajours recto-verso, sans
+exception JavaScript. Le code fonctionnel `d8fea5a` est déployé sur Kiwi `8293/8294` ; le health
+API et le smoke Chromium distant sont verts.
+
+---
+
+## Grilles minces et trappes 3D modelables (2026-07-22)
+
+Une surface portant le cutout `industrial_grate` n'est plus rendue comme deux grilles espacées par
+toute l'épaisseur de sa dalle ou de son mur. La première correction utilisait une coque métallique
+mince ; le contrat courant la remplace par le plan recto-verso décrit ci-dessus. Les marches
+conservent leurs plateaux minces et resserrent localement le motif avec une densité ×4
+proportionnelle à leurs dimensions ; le pas des autres surfaces reste inchangé.
+
+La trappe possède quatre orientations canoniques et deux commandes de rotation gauche/droite à
+90°, dans la palette comme dans le popup après pose. Sa définition peut désormais reprendre le
+blueprint, l'URL GLB, la géométrie déclarée et les substitutions de matériaux d'un modèle de
+connecteur `hatch`. Le renderer sait charger et animer ce GLB selon les états `closed`, `open` et
+`locked`; en l'absence d'asset compatible, la trappe procédurale reste le fallback. Le GLB est une
+représentation : découpe, support, collision, LOS et traversée restent dérivés du connecteur.
+
+Validation : 141 tests monde/serveur, 41 tests Surface, build Vite et ESLint ciblé réussis. Un rendu
+intégré du vrai `SurfaceDungeonScene` sous Chromium a contrôlé la coque mince, la transparence et
+les marches au motif resserré sans exception navigateur. Le code fonctionnel `d7bf60b` est déployé
+sur Kiwi `8293/8294` ; le health de l'API et le smoke Chromium distant sont verts.
+
+---
+
+## Trappe d'échelle et grille industrielle ajourée (2026-07-22)
+
+Poser une échelle crée désormais, par défaut, une trappe structurelle sur la dalle du palier haut.
+La découpe de dalle existe indépendamment de l'état de la trappe : fermée ou verrouillée, le panneau
+remplace la dalle comme support, collider et barrière ; ouverte, il pivote visuellement, libère le
+passage et active la traversée `climb` de l'échelle. L'état de session est persistant et administré
+par le MJ sans modifier la définition statique.
+
+Le générateur de matériaux propose **Grille industrielle ajourée**. Son alpha est un cutout
+(`alphaTest`) : les trous sont réellement traversés par le rendu et la profondeur, sans tri de
+transparence de type verre. Le même matériau peut habiller sols, murs, marches, passerelles,
+échelles et trappes ; les chants, cadres, rails et barreaux conservent un matériau métallique plein.
+Le preset physique `grate` reste distinct de l'apparence : il bloque mouvement et collision, mais
+pas la LOS ni l'eau. Le snapshot ne déduit jamais sa physique des pixels de la texture.
+
+Validation locale puis sur Kiwi : 141 tests monde/serveur, 41 tests Surface, 3 tests de configuration
+serveur et build Vite réussis ; ESLint ciblé sans erreur. Le PNG RGBA généré a été inspecté sur
+damier pour confirmer les trous transparents. La Session 159 est déployée sur `8293/8294` au commit
+`0e6fc53`, avec un smoke Chromium distant sans exception. La recette complète dans une vraie carte
+reste à effectuer avant clôture visuelle définitive.
+
+---
 
 ## Trémie de colimaçon avec palier haut praticable (2026-07-18)
 
@@ -383,7 +556,7 @@ est réservé à la validation commune sur `8393/8394` avec la base `vtt_fusion`
 
 La première fusion, commit à deux parents `1f048cd`, part de `92ae9a9` et importe `bad0190` depuis `origin/master`. Elle exclut
 explicitement `origin/fusion-kiwi` (`37703bf`), dont l'éditeur Surface v2 est remplacé par le moteur
-monde v12. Le détail des responsabilités reste dans `docs/FUSION_PROJET_COUSIN.md` et le cycle de
+monde v13. Le détail des responsabilités reste dans `docs/FUSION_PROJET_COUSIN.md` et le cycle de
 livraison dans `docs/WORKFLOW_FUSION.md`.
 
 Avant toute mutation, un point de restauration complet a été créé :
@@ -537,7 +710,7 @@ Voir `docs/SYSTEME/MOTEUR_MONDE.md` pour les invariants et la séparation statiq
 
 ## Moteur de monde — Phase 1 ✅
 
-- `shared/world/surfaceDocument.js` — validation `surface_data` v12, UUID physiques
+- `shared/world/surfaceDocument.js` — validation `surface_data` v13, UUID physiques
   stables, adaptation vers le document canonique ;
 - `shared/world/worldCompiler.js` — compilation déterministe des sols, plafonds, murs partagés,
   découpes de porte, escaliers, barrières multi-canaux, colliders, occluders et compartiments ;
@@ -610,7 +783,8 @@ service de combat conserve ses effets métier et délègue les décisions spatia
 - le chemin de session détaille le coût segment par segment ;
 - validation : 50 tests monde et build Vite.
 
-L'ascenseur reste expressément non navigable avant son automate de Phase 6.
+Avant la Phase 6, l'ascenseur restait expressément non navigable. Il est désormais compilé par son
+automate et sa cabine physique ; aucune arête ne téléporte directement entre ses arrêts.
 
 ---
 
@@ -632,17 +806,26 @@ L'ascenseur reste expressément non navigable avant son automate de Phase 6.
 ## Moteur de monde — Phase 6 ✅
 
 - `shared/world/elevatorRuntime.js` — automate durable `idle/open/closing/moving/opening/blocked`,
-  arrêts multiples, appels déterministes, interpolation et reprise après redémarrage ;
-- `worldCompiler.js` — gaine découpée dans les étages, cabine mobile avec sol/plafond/parois,
-  portes palières fermées en l'absence de cabine et embarquement uniquement aligné/portes ouvertes ;
+  arrêts ordonnés X/Y/Z, appels déterministes, interpolation par tronçons orthogonaux et reprise
+  après redémarrage ;
+- `worldCompiler.js` — gaine étanche segmentée, verticale ou horizontale, cabine mobile avec
+  sol/plafond/parois, portes palières orientables fermées en l'absence de cabine et embarquement
+  uniquement aligné/portes ouvertes ;
 - `server/src/services/worldElevatorService.js` — réconciliation transactionnelle sous verrou,
   commandes, persistance et translation des passagers dans le repère local de cabine ;
 - migration 155 — `world_elevator_passengers`, position locale durable et unicité d'attachement ;
 - déplacement et visibilité consomment la position réconciliée avant toute navigation, collision,
   LOS ou couverture ;
-- éditeur et session affichent la petite cabine animée. Les joueurs appellent un palier ; le MJ
+- en mode jeu, le palier cliqué propose l'appel lorsque la cabine est absente puis l'utilisation
+  lorsqu'elle est présente. **Utiliser** ouvre, centre le token autorisé et persiste son attachement
+  avant qu'une destination ne puisse déplacer l'ensemble ;
+- l'éditeur pose chaque arrêt dans une salle fermée, autorise un changement de direction seulement à
+  l'arrêt et génère la gaine dans le vide entre salles. Les joueurs appellent un palier ; le MJ
   administre aussi le blocage et les portes ;
-- validation : 64 tests monde, build Vite, migration 155 `up/down` transactionnelle PostgreSQL.
+- les empreintes 1x1, 1x2, 2x1 et 2x2 ont chacune un GLB industriel et vitré. Les panneaux de gaine
+  vitrés laissent passer la LOS sans cesser de bloquer mouvement, eau et gaz ;
+- validation initiale : 64 tests monde et migration 155 `up/down`. Extension Session 164 : 152
+  tests monde/serveur, 101 tests client, 3 configuration, 8 assets et build Vite.
 
 Les cartes historiques ne constituent pas une cible de migration. Elles ne sont conservées comme
 fixtures que si elles n'ajoutent aucun adaptateur ni branche conditionnelle au moteur canonique.
@@ -696,8 +879,8 @@ moteur ; sinon elles doivent être supprimées.
 - à cette phase, chaque courbe était tessellée en segments orientés courts et les portes restaient
   limitées aux portions droites. La Phase 12 remplace explicitement cette représentation transitoire
   par un arc canonique et des portes tangentes ;
-- la future trappe est documentée comme capacité d'un connecteur vertical lié, le plus souvent, à
-  une échelle.
+- la trappe est un connecteur horizontal lié à l'échelle : sa découpe reste ouverte dans la dalle,
+  et son état runtime contrôle simultanément le support, la barrière et la traversée verticale.
 
 ---
 
@@ -1076,7 +1259,7 @@ Enclume/
 | Backend | Node.js + Express + Socket.io | Port 3001 dev (8194 Kiwi) |
 | Serveur Alpha "Kiwi" | Debian 13, systemd, box Bouygues | `http://89.92.219.211:8193` — voir `docs/SERVEURDISTANTKIWI.md` |
 | Base de données | PostgreSQL | Knex migrations |
-| Cache legacy | Redis + ioredis | Collision voxel/entités historique ; non autoritaire pour les tokens depuis la Phase 2 |
+| Cache spatial | Aucun | Le hash Redis de collision a été entièrement retiré ; snapshots et graphes sont reconstruits depuis PostgreSQL |
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
@@ -1116,9 +1299,9 @@ Enclume/
 | Méthode | Route | Description |
 |---|---|---|
 | GET | /battlemaps/:id/entities | Instances carte — JOIN blueprint avec pack_id (P47) |
-| POST | /battlemaps/:id/entities | Poser une instance — GM uniquement + collisionAddEntity |
-| PUT | /entities/:entityId | Modifier position/rotation/state/overrides — GM uniquement + maintenance Redis |
-| DELETE | /entities/:entityId | Supprimer instance — GM uniquement + collisionRemoveEntity AVANT delete |
+| POST | /battlemaps/:id/entities | Poser une instance — GM uniquement + incrément `runtime_revision` |
+| PUT | /entities/:entityId | Modifier position/rotation/state/overrides — GM uniquement + incrément `runtime_revision` |
+| DELETE | /entities/:entityId | Supprimer instance — GM uniquement + incrément `runtime_revision` |
 
 ### Routes REST — Moteur de monde
 
@@ -1254,9 +1437,8 @@ Enclume/
 
 ## Collision map Redis — session 39 `[LEGACY]`
 
-Depuis la Phase 2, ce hash ne valide plus la création ni le déplacement des tokens. Les lignes
-ci-dessous documentent le comportement historique encore utilisé par des flux voxel/entités en
-attendant leur retrait, pas l'architecture à étendre.
+Ce hash est aujourd'hui entièrement retiré du runtime. Les lignes ci-dessous documentent uniquement
+le comportement des sessions 39–43 et ne constituent pas une architecture à restaurer ou étendre.
 
 ### Architecture
 ```
@@ -1309,8 +1491,9 @@ Non bloquante si joueur sans `player_location` (première connexion).
 - dmax = isSuccess ? modifier + 1 : 0 — toute réussite = au moins 1 case
 - stepsMax = Math.min(dmax, stepsTarget) — destination joueur respectée (PE30)
 - dmax_override si défini dans l'interaction (plafonne push ET pull)
-- Step-by-step : isCaseOccupied entity à pos_z, acteur à pos_z+1 (PE29), excludeIds=[tokenId,entityId] (PE22)
-- Update DB + collisionMoveEntity + collisionMoveToken Redis
+- Step-by-step : supports stables, index spatial du snapshot et index d'occupation dynamique ;
+  `excludeOccupantIds=[tokenId,entityId]` (PE22)
+- transaction DB + dernière position atteinte + `runtime_revision` + événements d'effets
 - Broadcast ENTITY_MOVED + TOKEN_MOVED → room
 - ENTITY_MOVE_RESULT → socket.id uniquement
 
@@ -1437,7 +1620,7 @@ Joueur clique ⚙ → handleEntityClick → filter interactions par current_stat
 Joueur choisit → handleEntityAction → socket.emit(WS.ENTITY_ACTION_REQUEST)
 Serveur → ENTITY_ACTION_PENDING → GM reçoit notification dans chat
 GM arbitre → socket.emit(WS.ENTITY_ACTION_RESOLVE)
-Serveur → resolveEntityState → update current_state_id → collisionUpdateEntityState → ENTITY_UPDATED broadcast
+Serveur → resolveEntityState → update current_state_id → runtime_revision → ENTITY_UPDATED + WORLD_RUNTIME_UPDATED
 ```
 
 ### Flux joueur déplacement ✅
@@ -1500,14 +1683,10 @@ Malus encombrement : règle maison, s'additionne au malus santé.
 | PE19 | transparent={true} obligatoire sur meshLambertMaterial — opacity=0 ineffectif sans ça |
 | PE20 | HoverIcon : toujours monté si hasInteractions, jamais conditionnel à hovered — visibilité CSS uniquement |
 | PE21 | r tokens = 0-7 — rotation.y = r * Math.PI / 4 |
-| PE22 | tunnel de swap excludeIds dans isCaseOccupied |
-| PE23 | buildCollisionMap au SESSION_JOIN — pas au démarrage serveur |
-| PE24 | collisionMoveToken : hdel systématique ancienne case, hset conditionnel layer |
-| PE25 | maintenance Redis dans REST, pas dans handlers WS reliques |
+| PE22 | mouvement rigide : `excludeOccupantIds=[tokenId,entityId]` dans l'index d'occupation |
 | PE26 | resolveEntityState : returning doit inclure battlemap_id |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation). Si discordance → refus silencieux |
-| PE28 | Voxels Redis : convertis Three.js→PE14 dans buildCollisionMap/add/remove |
-| PE29 | Acteur step-by-step vérifié à pos_z+1 — espace de marche |
+| PE29 | Acteur et objet validés pas à pas sur supports, barrières et occupants du snapshot |
 | PE30 | stepsMax = Math.min(dmax, stepsTarget) |
 | PE31 | upsertCharacter : guard visible+isGm |
 | PE32 | DiceMesh useMemo deps [geoDef.type, color, dieType] |

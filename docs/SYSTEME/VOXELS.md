@@ -1,6 +1,11 @@
-# SYSTEME/VOXELS.md — Coordonnées, voxels, PE14
+# SYSTEME/VOXELS.md — Format voxel legacy et adaptateurs de coordonnées
+> Mis à jour : 2026-07-22 — retrait complet de l'autorité spatiale voxel/Redis.
 > Source : SYSTEME.md §7–§8
-> Lire pour : tout code touchant les voxels, coordonnées 3D, tokens (pos_x/y/z), overlays canvas
+> Lire pour : rendu des anciennes cartes voxel, registre `voxel_textures` et adaptation DB/monde
+>
+> Statut : `voxel_data` est conservé pour le rendu et l'édition des anciennes cartes. Il n'est plus
+> une autorité de collision, de navigation, de LOS ou de combat. Cette autorité appartient au
+> `WorldSnapshot` compilé depuis `surface_data` v13.
 
 ---
 
@@ -26,29 +31,26 @@
 payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
 ```
 
-### Convention clés collision map Redis — voxels (PE28)
-```
-voxel_data stocke : "x:y_altitude:z_profondeur" (Three.js brut)
-Redis collision map : "x:z_profondeur:y_altitude" (PE14 base)
-Conversion dans buildCollisionMap/collisionAddVoxel/collisionRemoveVoxel :
-  const [vx, vy, vz] = voxelKey.split(':').map(Number)
-  const pe14Key = `${vx}:${vz}:${vy}`
-```
-**Convention Redis = PE14 partout (tokens, entités, voxels). Three.js = rendu uniquement.**
+### Limite du format legacy
+
+La clé `"x:y:z"` de `voxel_data` reste en axes Three.js bruts : `y` est l'altitude et `z` la
+profondeur. Elle ne doit jamais être injectée dans les services de monde. Une carte active est
+validée avec `shared/world/surfaceDocument.js`, puis compilée par `shared/world/worldCompiler.js`.
+Les anciens helpers Redis `buildCollisionMap` / `collisionAddVoxel` / `collisionRemoveVoxel` ont été
+retirés.
 
 ---
 
 ## Coordonnées entités — PE14
 
 ```javascript
-// Base de données → Three.js (rendu dans EntityMesh)
-posX = entity.pos_x + width/2
-posY = entity.pos_z + height/2   // pos_z base = altitude Y Three.js
-posZ = entity.pos_y + depth/2    // pos_y base = profondeur Z Three.js
+// Base de données → point monde/Three.js
+const point = dbPositionToWorldPoint(row)
+// { x: row.pos_x, y: row.pos_z, z: row.pos_y }
 
-// Three.js → base de données (pose depuis Editor3D)
-{ pos_x: pos.x, pos_y: pos.z, pos_z: pos.y }
-// Identique à threeToDb() — jamais inline
+// Point monde/Three.js → base de données
+const position = worldPointToDbPosition(point)
+// { pos_x: point.x, pos_y: point.z, pos_z: point.y }
 ```
 
 **Règle PE14 résumée :**
@@ -58,25 +60,24 @@ posZ = entity.pos_y + depth/2    // pos_y base = profondeur Z Three.js
 | `pos_y` | axe Z (profondeur) |
 | `pos_z` | axe Y (altitude) |
 
-S'applique à : tokens, entités, voxels Redis. Ne s'applique PAS aux clés voxel_data en base (Three.js brut).
+S'applique aux tokens et entités runtime. Ne s'applique pas aux clés `voxel_data`, qui restent un
+format de rendu legacy en axes Three.js bruts.
 
 ---
 
-## PE34 — Altitude pieds token en Three.js (session 61)
+## PE34 — Altitude des pieds d'un token canonique
 
 ```javascript
-// Token group (lerpPos) centré à : Y = token.pos_z + 0.5 (centre du voxel)
-// Y_OFFSET = 0.5 (primitive au-dessus du centre) → pieds à : Y = token.pos_z + 1.0
-
-// Formule pieds token (Three.js Y) :
-const feetY = token.pos_z + 1.0
-
-// Pour un overlay au sol (anneau, cercle) — +0.05 évite le z-fighting :
-const overlayY = token.pos_z + 1.0 + 0.05
+if (token.position_space !== 'world-feet') {
+  // Ancien token : le MJ doit le replacer avant un déplacement moteur autoritaire.
+}
+const feet = dbPositionToWorldPoint(token)
+const overlayY = feet.y + 0.05 // évite le z-fighting
 ```
-**Piège :** `token.pos_z + 0.5` = centre du voxel (intérieur) — overlays sols cachés.
-`token.pos_z + 1.0` = surface du sol = pieds du token.
-Cohérent avec PE29 (step-by-step collision à pos_z+1 = espace de marche).
+
+Pour `position_space = 'world-feet'`, la position sauvegardée est déjà le point de contact des pieds
+avec le support. Ne jamais réintroduire `+0.5` ou `+1.0` dans un calcul physique. Le décalage de
+compatibilité des anciens tokens est uniquement visuel dans `Canvas3D`.
 
 ---
 
@@ -84,7 +85,6 @@ Cohérent avec PE29 (step-by-step collision à pos_z+1 = espace de marche).
 
 | Code | Description |
 |---|---|
-| P12 | `VOXEL_ADD` handler : guard `if (!battlemapId) return` en tête — battlemapId peut être null si carte non chargée |
 | P17 | Séparateur clé voxel = `":"` — `"x:y:z"` NON NÉGOCIABLE. Jamais `"x,y,z"` ni `"x-y-z"`. |
 | P22 | `voxel_textures.id` = integer — exception UUID du projet. `increments()` intentionnel. |
 | P26 | `blocksReady = true` même si 0 textures — ne pas conditionner sur la longueur du tableau |

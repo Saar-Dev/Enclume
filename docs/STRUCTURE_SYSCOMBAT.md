@@ -1,5 +1,5 @@
 # STRUCTURE_SYSCOMBAT.md — Logique complète d'un tour de combat
-> Session 120 — 2026-06-24 (mise à jour Session 141 suite 16 — correction : `calcCarenceArmure` effacée)
+> Session 120 — 2026-06-24 ; flux spatial mis à jour le 2026-07-22 pour le moteur monde v13.
 > Reconstruction depuis le code. Source : socketCombatState.js, socketCombatAnnouncement.js,
 > socketCombatHelpers.js, socketCombatResolution.js, statusService.js, combatFSM.js
 
@@ -188,9 +188,11 @@ EMIT COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: roster[0] }  // INI la plu
 **Actions non-melee** :
 ```
 type='move_short' / 'move_long' :
-  → isCaseOccupied(battlemap_id, tx, ty, tz+1)  [PE29 : vérif espace de marche]
-  → Si libre : UPDATE tokens + collisionMoveToken(Redis) + EMIT TOKEN_MOVED
-  → Si occupé : ignoré silencieusement (log seulement)
+  → exige destination_world + movement_gait enregistrés à l'annonce
+  → recalcule le budget en mètres depuis la fiche
+  → executeBattlemapTokenMovement() replannifie sous verrou avec snapshot + runtime courants
+  → persiste le dernier support stable atteint, incrémente runtime_revision et EMIT TOKEN_MOVED
+  → si bloqué/partiel : COMBAT_RESOLVE_MOVE_BLOCKED avec position atteinte et dérive du monde
 
 type='assault' :
   → resolveAssaultAction() → flushEmissions()

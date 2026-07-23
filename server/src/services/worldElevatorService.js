@@ -55,9 +55,17 @@ export function findCabinSupportForPoint(snapshot, point) {
 
 export function elevatorLocalPosition(definition, state, worldPoint) {
   return Object.freeze({
-    x: Number(worldPoint.x) - definition.x,
+    x: Number(worldPoint.x) - Number(state.positionX ?? definition.x),
     y: Number(worldPoint.y) - state.positionY,
-    z: Number(worldPoint.z) - definition.z,
+    z: Number(worldPoint.z) - Number(state.positionZ ?? definition.z),
+  })
+}
+
+export function elevatorBoardingPoint(definition, state) {
+  return Object.freeze({
+    x: Number(state.positionX ?? definition.x) + Number(definition.width) / 2,
+    y: Number(state.positionY),
+    z: Number(state.positionZ ?? definition.z) + Number(definition.depth) / 2,
   })
 }
 
@@ -242,6 +250,8 @@ export async function commandBattlemapElevator({
     }, now)
     const stateChanged = !sameValue(current, next)
     const passengerTokens = new Map(reconciled.passengerTokens.map(token => [token.id, token]))
+    let passenger = null
+    let passengerChanged = false
     if (stateChanged) {
       await persistElevatorState(trx, {
         battlemapId,
@@ -257,7 +267,37 @@ export async function commandBattlemapElevator({
         passengerTokens.set(token.id, token)
       }
     }
-    const changed = reconciled.changed || stateChanged
+    if (command?.type === 'use') {
+      const tokenId = String(command.tokenId || '')
+      if (!tokenId) throw new RangeError('Un token est requis pour utiliser l’ascenseur')
+      const token = await trx('tokens')
+        .where({ id: tokenId, battlemap_id: battlemapId })
+        .forUpdate()
+        .first()
+      if (!token) throw new RangeError('Token inconnu sur cette battlemap')
+      const point = elevatorBoardingPoint(definition, next)
+      const localPosition = elevatorLocalPosition(definition, next, point)
+      await trx('world_elevator_passengers').where({ token_id: tokenId }).del()
+      const [passengerRow] = await trx('world_elevator_passengers').insert({
+        battlemap_id: battlemapId,
+        elevator_id: elevatorId,
+        token_id: tokenId,
+        local_position: localPosition,
+        updated_at: trx.fn.now(),
+      }).returning('*')
+      const [updatedToken] = await trx('tokens')
+        .where({ id: tokenId, battlemap_id: battlemapId })
+        .update({
+          ...worldPointToDbPosition(point),
+          position_space: 'world-feet',
+          updated_at: trx.fn.now(),
+        })
+        .returning(['id', 'pos_x', 'pos_y', 'pos_z', 'position_space', 'updated_at'])
+      passenger = passengerPayload(passengerRow)
+      passengerTokens.set(updatedToken.id, updatedToken)
+      passengerChanged = true
+    }
+    const changed = reconciled.changed || stateChanged || passengerChanged
     const runtimeRevision = changed
       ? await bumpRuntimeRevision(trx, reconciled.battlemap)
       : Number(battlemap.runtime_revision || 0)
@@ -265,6 +305,7 @@ export async function commandBattlemapElevator({
       elevatorId,
       definition,
       state: next,
+      passenger,
       changed,
       runtimeRevision,
       passengerTokens: Object.freeze([...passengerTokens.values()]),

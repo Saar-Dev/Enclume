@@ -1,10 +1,11 @@
-# PLAN_LOS.md — Architecture LOS & Couverture Combat
+# PLAN_LOS.md — Plan historique LOS & Couverture Combat
 > Session 113 — 2026-06-21
 > Statut : ⚠️ ARCHITECTURE OBSOLÈTE — `shared/losUtils.js` (raycast voxel décrit ici) n'existe plus,
 > remplacé par `shared/world/visibility.js`. Objectifs 1-2 refaits ailleurs et fonctionnels ; objectif 3
 > (localisation contrainte) et Phase 2 (postures) jamais faits — repris dans `docs/ROADMAP.md`.
 > Détail complet : `docs/JOURNAL6.md` "Session 149".
 > Archivé dans `docs/Old/` — Session 149
+> Voir aussi `docs/SYSTEME/MOTEUR_MONDE.md` et `docs/SYSTEME/COMBAT.md`.
 
 ---
 

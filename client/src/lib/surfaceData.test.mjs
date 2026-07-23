@@ -5,6 +5,7 @@ import {
   SURFACE_DATA_VERSION,
   applyRoomBoundaryArc,
   applyBridgeSelection,
+  applyLadderConnector,
   applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomSelection,
@@ -22,6 +23,10 @@ import {
   isWorldInteriorPointVisibleAtLevel,
   entityUsesWallPlacement,
   makeDoorConnectorFromWallPoint,
+  applyElevatorRouteStop,
+  elevatorStopsAreAligned,
+  makeElevatorStopFromCell,
+  rotateHatchOrientation,
   makeSpiralStairFromCell,
   makeStraightStairFromCell,
   makeSkylightConnectorFromCell,
@@ -29,6 +34,7 @@ import {
   roomFootprintRectangles,
   roomsWallRenderPaths,
   roomsWallSegments,
+  setVerticalAccessHatch,
   wallOpeningVerticalRange,
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
@@ -40,6 +46,7 @@ import {
 } from '../../../shared/world/roomGeometry.js'
 import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
 import { spiralStairGeometry, straightStairGeometry } from '../../../shared/world/stairGeometry.js'
+import { industrialGrateOpacityAt } from './proceduralMaterials.js'
 
 function emptySurface(patch = {}) {
   return {
@@ -75,6 +82,12 @@ function room(id, level, heightLevels = 1) {
     blocksWater: true,
   }
 }
+
+test('le motif de grille alterne métal opaque et ajours totalement transparents', () => {
+  assert.equal(industrialGrateOpacityAt(0, 0), 1)
+  assert.equal(industrialGrateOpacityAt(1 / 12, 1 / 8), 0)
+  assert.equal(industrialGrateOpacityAt(1, 1), 1)
+})
 
 test('la surface extérieure de l eau reste cinq étages au-dessus du sommet global', () => {
   const result = computeSurfaceWaterCells(emptySurface({
@@ -239,6 +252,109 @@ test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () 
   assert.equal(bridge.topMaterial.paint, '#123456')
   assert.equal(bridge.bottomMaterial.material, 'concrete')
   assert.equal(bridge.bottomMaterial.paint, '#654321')
+})
+
+test('une échelle crée sa trappe supérieure avec le même matériau ajouré', () => {
+  const lower = room('lower', 0)
+  const upper = { ...room('upper', 1), y: 2.5, level: 1 }
+  const next = applyLadderConnector(emptySurface({ rooms: { lower, upper } }), { x: 0, z: 0 }, {
+    level: 0,
+    connectorToLevel: 1,
+    ladderHatch: true,
+    ladderAxis: 'x',
+    hatchRotationQuarterTurns: 1,
+    hatchBlueprintId: 'hatch-blueprint',
+    hatchModelLabel: 'Trappe test',
+    hatchModelGlbUrl: 'builtin-models/hatches/test.glb',
+    hatchModelGeometry: { connectorType: 'hatch', origin: 'hatch-center', width: 1, depth: 1 },
+    floorThickness: 0.25,
+    surfaceBlocking: 'grate',
+    surfaceMaterialMode: 'procedural',
+    materialPreset: {
+      material: 'steel',
+      paint: '#66737a',
+      pattern: 'industrial_grate',
+      wear: 35,
+      dirt: 25,
+      relief: 70,
+    },
+  })
+  const ladder = Object.values(next.connectors).find(connector => connector.type === 'ladder')
+  const hatch = Object.values(next.connectors).find(connector => connector.type === 'hatch')
+
+  assert.ok(ladder)
+  assert.ok(hatch)
+  assert.equal(ladder.axis, 'z')
+  assert.equal(ladder.side, -1)
+  assert.equal(ladder.rotationQuarterTurns, 1)
+  assert.equal(hatch.linkedLadderId, ladder.id)
+  assert.equal(hatch.y, 2.5)
+  assert.equal(hatch.height, 0.25)
+  assert.equal(hatch.axis, 'z')
+  assert.equal(hatch.hingeSide, 1)
+  assert.equal(hatch.rotationQuarterTurns, 1)
+  assert.equal(hatch.state, 'closed')
+  assert.equal(hatch.barrierType, 'grate')
+  assert.equal(hatch.blocksSight, false)
+  assert.equal(hatch.material.pattern, 'industrial_grate')
+  assert.equal(hatch.material.alphaMode, 'cutout')
+  assert.equal(hatch.modelBlueprintId, 'hatch-blueprint')
+  assert.equal(hatch.modelGlbUrl, 'builtin-models/hatches/test.glb')
+  assert.equal(hatch.modelGeometry.origin, 'hatch-center')
+  assert.deepEqual(ladder.topOpening, {
+    shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1,
+  })
+  assert.deepEqual(
+    rotateHatchOrientation(rotateHatchOrientation(rotateHatchOrientation(rotateHatchOrientation(hatch, 1), 1), 1), 1),
+    hatch,
+  )
+  const prepared = prepareSurfaceData(next, { battlemapId: 'map-ladder-hatch' })
+  const preparedHatch = Object.values(prepared.surfaceData.connectors).find(connector => connector.type === 'hatch')
+  assert.ok(preparedHatch.worldId)
+  assert.equal(prepared.worldDocument.features.connectors[preparedHatch.worldId].type, 'hatch')
+
+  const erasedFromLowerLevel = eraseSurfaceSelection(
+    next,
+    { start: { x: 0, z: 0 }, end: { x: 0, z: 0 } },
+    { level: 0 },
+  )
+  assert.equal(Object.values(erasedFromLowerLevel.connectors).some(connector => connector.type === 'ladder'), false)
+  assert.equal(Object.values(erasedFromLowerLevel.connectors).some(connector => connector.type === 'hatch'), false)
+})
+
+test('un accès vertical conserve sa trémie sans trappe et peut recevoir une trappe ronde', () => {
+  const lower = room('lower', 0)
+  const upper = { ...room('upper', 1), y: 2.5, level: 1 }
+  const withoutHatch = applyLadderConnector(emptySurface({ rooms: { lower, upper } }), { x: 0, z: 0 }, {
+    level: 0,
+    connectorToLevel: 1,
+    ladderHatch: false,
+    floorThickness: 0.25,
+  })
+  const ladder = Object.values(withoutHatch.connectors).find(connector => connector.type === 'ladder')
+  assert.ok(ladder)
+  assert.equal(Object.values(withoutHatch.connectors).some(connector => connector.type === 'hatch'), false)
+  assert.deepEqual(ladder.topOpening, {
+    shape: 'rectangle', x: 0, z: 0, y: 2.5, width: 1, depth: 1,
+  })
+
+  const withRoundHatch = setVerticalAccessHatch(withoutHatch, ladder.id, {
+    ladderHatch: true,
+    hatchBlueprintId: 'round-hatch',
+    hatchModelLabel: 'Trappe ronde',
+    hatchModelGeometry: {
+      connectorType: 'hatch', origin: 'hatch-center', openingShape: 'circle', width: 1, depth: 1,
+    },
+  })
+  const roundLadder = withRoundHatch.connectors[ladder.id]
+  const roundHatch = Object.values(withRoundHatch.connectors).find(connector => connector.type === 'hatch')
+  assert.equal(roundLadder.topOpening.shape, 'circle')
+  assert.equal(roundHatch.openingShape, 'circle')
+  assert.equal(roundHatch.modelBlueprintId, 'round-hatch')
+
+  const removedAgain = setVerticalAccessHatch(withRoundHatch, ladder.id, { ladderHatch: false })
+  assert.equal(Object.values(removedAgain.connectors).some(connector => connector.type === 'hatch'), false)
+  assert.equal(removedAgain.connectors[ladder.id].topOpening.shape, 'circle')
 })
 
 test('un mur courbe produit des segments orientés avec une boîte de rendu tournée', () => {
@@ -964,4 +1080,46 @@ test('une verrière exige une vraie interface horizontale et jamais un niveau vi
   assert.ok(ceilingSkylight)
   assert.equal(ceilingSkylight.y, 5)
   assert.deepEqual(ceilingSkylight.roomIds, ['well'])
+})
+
+test('les arrêts d’un ascenseur forment un trajet orthogonal ordonné', () => {
+  const lower = { ...room('lower', 0), minX: 0, maxX: 4, minZ: 0, maxZ: 2 }
+  const upper = { ...room('upper', 1), minX: 0, maxX: 5, minZ: 0, maxZ: 2 }
+  const surface = emptySurface({ rooms: { lower, upper } })
+  const tool = {
+    connectorType: 'elevator', level: 0,
+    connectorModelGeometry: { footprintWidth: 2, footprintDepth: 1, elevatorStyle: 'industrial' },
+    elevatorDoorAxis: 'z', elevatorDoorSide: 1,
+  }
+  const first = applyElevatorRouteStop(surface, { x: 1, z: 0 }, tool)
+  assert.equal(first.connector, null)
+  assert.equal(first.stops.length, 1)
+
+  const second = applyElevatorRouteStop(surface, { x: 1, z: 0 }, {
+    ...tool, level: 1, elevatorDraftStops: first.stops, elevatorDoorAxis: 'x', elevatorDoorSide: -1,
+  })
+  assert.equal(second.connector.stops.length, 2)
+  assert.deepEqual(second.connector.stops.map(stop => [stop.x, stop.y, stop.z]), [[1, 0.125, 0], [1, 2.625, 0]])
+  assert.deepEqual(second.connector.stops.map(stop => [stop.doorAxis, stop.doorSide]), [['z', 1], ['x', -1]])
+  assert.deepEqual([second.connector.width, second.connector.depth], [2, 1])
+
+  const third = applyElevatorRouteStop(second.surfaceData, { x: 3, z: 0 }, {
+    ...tool, level: 1, elevatorEditConnectorId: second.connector.id,
+  })
+  assert.equal(third.connector.stops.length, 3)
+  assert.equal(elevatorStopsAreAligned(third.connector.stops[1], third.connector.stops[2]), true)
+})
+
+test('un arrêt extérieur, trop large ou diagonal est refusé', () => {
+  const lower = { ...room('lower', 0), minX: 0, maxX: 2, minZ: 0, maxZ: 1 }
+  const upper = { ...room('upper', 1), minX: 0, maxX: 3, minZ: 0, maxZ: 2 }
+  const surface = emptySurface({ rooms: { lower, upper } })
+  const tool = { level: 0, connectorModelGeometry: { footprintWidth: 2, footprintDepth: 1 } }
+  assert.equal(makeElevatorStopFromCell(surface, { x: 2, z: 0 }, tool), null)
+  assert.equal(makeElevatorStopFromCell(emptySurface({
+    rooms: { lower: { ...lower, openWallEdgeKeys: ['0:0:0:1'] } },
+  }), { x: 0, z: 0 }, tool), null)
+  const first = applyElevatorRouteStop(surface, { x: 0, z: 0 }, tool)
+  const diagonal = applyElevatorRouteStop(surface, { x: 1, z: 1 }, { ...tool, level: 1, elevatorDraftStops: first.stops })
+  assert.match(diagonal.error, /aligné/)
 })

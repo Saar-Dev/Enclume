@@ -31,6 +31,12 @@ import { SURFACE_DATA_VERSION } from '../../../shared/world/surfaceDocument.js'
 import {
   stairGeometry,
 } from '../../../shared/world/stairGeometry.js'
+import {
+  ladderOrientationQuarterTurns,
+  normalizeVerticalOpeningShape,
+  rotateLadderOrientation,
+  verticalAccessOpeningDescriptor,
+} from '../../../shared/world/verticalAccessGeometry.js'
 
 export const SURFACE_FINE = 4
 export const STORY_HEIGHT = 2.5
@@ -38,6 +44,7 @@ export const EXTERIOR_WATER_CLEARANCE_LEVELS = 5
 export { SURFACE_DATA_VERSION }
 export const getRoomBoundaryEdges = roomBoundaryEdges
 export const getRoomBoundaryWallRuns = roomBoundaryWallRuns
+export { ladderOrientationQuarterTurns, rotateLadderOrientation }
 const STATION_USED_PACK_ID = '6f3916a6-7c7b-45f7-a020-7d63b7a74176'
 const STATION_USED_SPECIAL_RATE = 12
 const DEFAULT_FLOOR_THICKNESS = 0.25
@@ -415,6 +422,9 @@ export function surfaceTextureIds(data) {
   }
   for (const stair of Object.values(surface.stairs)) {
     if (stair?.tex) ids.add(stair.tex)
+  }
+  for (const connector of Object.values(surface.connectors)) {
+    if (connector?.tex) ids.add(connector.tex)
   }
   for (const room of Object.values(surface.rooms)) {
     if (room?.floorTex) ids.add(room.floorTex)
@@ -1775,6 +1785,31 @@ function connectorModelFromTool(tool) {
   }
 }
 
+function hatchModelFromTool(tool) {
+  const modelBlueprintId = tool?.hatchBlueprintId || null
+  const modelLabel = tool?.hatchModelLabel || null
+  const modelCategory = tool?.hatchModelCategory || null
+  const modelGlbUrl = tool?.hatchModelGlbUrl || null
+  const modelBuiltinKey = tool?.hatchModelBuiltinKey || null
+  const modelGeometry = tool?.hatchModelGeometry && typeof tool.hatchModelGeometry === 'object'
+    ? tool.hatchModelGeometry
+    : null
+  const modelMaterialOverrides = tool?.hatchMaterialOverrides
+  const hasMaterialOverrides = modelMaterialOverrides
+    && typeof modelMaterialOverrides === 'object'
+    && Object.keys(modelMaterialOverrides).length > 0
+  if (!modelBlueprintId && !modelLabel && !modelCategory && !modelGlbUrl && !modelBuiltinKey && !modelGeometry && !hasMaterialOverrides) return {}
+  return {
+    modelBlueprintId,
+    modelLabel,
+    modelCategory,
+    modelGlbUrl,
+    modelBuiltinKey,
+    modelGeometry,
+    modelMaterialOverrides: hasMaterialOverrides ? modelMaterialOverrides : {},
+  }
+}
+
 function connectorModelGeometryFromTool(tool) {
   return tool?.connectorModelGeometry && typeof tool.connectorModelGeometry === 'object'
     ? tool.connectorModelGeometry
@@ -2118,8 +2153,13 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     return {
       id: `level:${stopLevel}`,
       level: stopLevel,
+      x: cell.x,
       y: supportTopAt(surface, cell, stopLevel, getToolFloorThickness(tool)),
+      z: cell.z,
       label: `Étage ${stopLevel}`,
+      roomId: hit.id,
+      doorAxis: tool?.elevatorDoorAxis === 'x' ? 'x' : 'z',
+      doorSide: Number(tool?.elevatorDoorSide) < 0 ? -1 : 1,
     }
   })
   const id = `connector:elevator:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
@@ -2151,6 +2191,140 @@ export function makeElevatorConnectorFromCell(surfaceData, cell, tool = {}) {
     movementMultiplier: getToolMovementMultiplier(tool),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('elevator'),
+  }
+}
+
+function elevatorFootprintFromTool(tool = {}) {
+  const geometry = connectorModelGeometryFromTool(tool)
+  return {
+    width: Math.max(1, Math.min(2, Math.round(Number(geometry.footprintWidth ?? geometry.gridWidth ?? geometry.width) || Number(tool.elevatorWidth) || 1))),
+    depth: Math.max(1, Math.min(2, Math.round(Number(geometry.footprintDepth ?? geometry.gridDepth ?? geometry.depth) || Number(tool.elevatorDepth) || 1))),
+  }
+}
+
+export function makeElevatorStopFromCell(surfaceData, cell, tool = {}, index = 0) {
+  if (!cell) return null
+  const surface = normalizeSurfaceData(surfaceData)
+  const level = getToolLevel(tool)
+  const x = Math.trunc(Number(cell.x))
+  const z = Math.trunc(Number(cell.z))
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null
+  const { width, depth } = elevatorFootprintFromTool(tool)
+  let owner = null
+  for (let dz = 0; dz < depth; dz += 1) {
+    for (let dx = 0; dx < width; dx += 1) {
+      const hit = findRoomAtCell(surface, { x: x + dx, z: z + dz }, level)
+      if (!hit?.room || (owner && hit.id !== owner.id)) return null
+      if (hit.room.wallEnabled === false
+        || hit.room.floorEnabled === false
+        || hit.room.ceilingEnabled === false
+        || (hit.room.openWallEdgeKeys || []).length > 0
+        || !sameLevel(getRoomBaseY(hit.room), levelToY(level))) return null
+      owner = hit
+    }
+  }
+  if (!owner) return null
+  return {
+    id: `stop:${Math.max(1, Math.trunc(Number(index) || 0) + 1)}`,
+    level,
+    x,
+    y: supportTopAt(surface, { x, z }, level, getToolFloorThickness(tool)),
+    z,
+    label: `Arrêt ${Math.max(1, Math.trunc(Number(index) || 0) + 1)} · étage ${level}`,
+    roomId: owner.id,
+    doorAxis: tool?.elevatorDoorAxis === 'x' ? 'x' : 'z',
+    doorSide: Number(tool?.elevatorDoorSide) < 0 ? -1 : 1,
+  }
+}
+
+export function elevatorStopsAreAligned(from, to, epsilon = 0.001) {
+  if (!from || !to) return false
+  const changedAxes = ['x', 'y', 'z'].filter(axis => Math.abs(Number(to[axis]) - Number(from[axis])) > epsilon)
+  return changedAxes.length === 1
+}
+
+function elevatorConnectorId(surface, firstStop) {
+  const stem = `connector:elevator:${firstStop.x}:${firstStop.y.toFixed(3)}:${firstStop.z}`
+  let id = stem
+  let suffix = 2
+  while (surface.connectors?.[id]) {
+    id = `${stem}:${suffix}`
+    suffix += 1
+  }
+  return id
+}
+
+export function makeElevatorConnectorFromStops(surfaceData, stopsInput, tool = {}, existingConnector = null) {
+  const surface = normalizeSurfaceData(surfaceData)
+  const stops = Array.isArray(stopsInput) ? stopsInput.map((stop, index) => ({
+    ...stop,
+    id: String(stop.id || `stop:${index + 1}`),
+    label: String(stop.label || `Arrêt ${index + 1} · étage ${stop.level}`),
+  })) : []
+  if (stops.length < 2 || stops.slice(1).some((stop, index) => !elevatorStopsAreAligned(stops[index], stop))) return null
+  const { width, depth } = elevatorFootprintFromTool(tool)
+  const first = stops[0]
+  const last = stops.at(-1)
+  const roomIds = [...new Set(stops.map(stop => stop.roomId).filter(Boolean))]
+  return {
+    ...(existingConnector || {}),
+    id: existingConnector?.id || elevatorConnectorId(surface, first),
+    type: 'elevator',
+    roomId: first.roomId || null,
+    roomIds,
+    x: first.x,
+    z: first.z,
+    level: first.level,
+    fromLevel: first.level,
+    toLevel: last.level,
+    initialStopId: existingConnector?.initialStopId || first.id,
+    stops,
+    y: Math.min(...stops.map(stop => Number(stop.y))),
+    topY: Math.max(...stops.map(stop => Number(stop.y))) + Math.min(2.2, STORY_HEIGHT * 0.88),
+    width,
+    depth,
+    cabinHeight: Math.min(2.2, STORY_HEIGHT * 0.88),
+    cabinFloorThickness: 0.12,
+    cabinWallThickness: 0.08,
+    doorAxis: first.doorAxis,
+    doorSide: first.doorSide,
+    elevatorStyle: connectorModelGeometryFromTool(tool).elevatorStyle || tool.elevatorStyle || existingConnector?.elevatorStyle || 'industrial',
+    travelSecondsPerLevel: Math.max(0.1, Number(tool?.elevatorTravelSecondsPerLevel ?? existingConnector?.travelSecondsPerLevel) || 2),
+    travelSecondsPerUnit: Math.max(0.1, Number(tool?.elevatorTravelSecondsPerUnit ?? existingConnector?.travelSecondsPerUnit) || 1),
+    doorSeconds: Math.max(0.1, Number(tool?.elevatorDoorSeconds ?? existingConnector?.doorSeconds) || 0.75),
+    dwellSeconds: Math.max(0.1, Number(tool?.elevatorDwellSeconds ?? existingConnector?.dwellSeconds) || 0.75),
+    state: existingConnector?.state || 'ready',
+    movementMultiplier: getToolMovementMultiplier(tool),
+    ...connectorModelFromTool(tool),
+    ...connectorCommonBlocking('elevator'),
+  }
+}
+
+export function applyElevatorRouteStop(surfaceData, cell, tool = {}) {
+  const surface = normalizeSurfaceData(surfaceData)
+  const existingId = tool?.elevatorEditConnectorId || null
+  const existing = existingId ? surface.connectors?.[existingId] : null
+  const draftStops = existing?.type === 'elevator'
+    ? existing.stops || []
+    : Array.isArray(tool?.elevatorDraftStops) ? tool.elevatorDraftStops : []
+  const stop = makeElevatorStopFromCell(surface, cell, tool, draftStops.length)
+  if (!stop) return { surfaceData, stops: draftStops, connector: existing || null, error: "L'arrêt doit tenir entièrement dans une même salle fermée." }
+  if (draftStops.length && !elevatorStopsAreAligned(draftStops.at(-1), stop)) {
+    return { surfaceData, stops: draftStops, connector: existing || null, error: "Le nouvel arrêt doit être aligné sur X, Y ou Z avec le précédent." }
+  }
+  const stops = [...draftStops, stop]
+  if (stops.length === 1) return { surfaceData, stops, connector: null, error: null }
+  const connector = makeElevatorConnectorFromStops(surface, stops, tool, existing)
+  if (!connector) return { surfaceData, stops: draftStops, connector: existing || null, error: 'Trajet d’ascenseur invalide.' }
+  return {
+    surfaceData: {
+      ...surface,
+      version: SURFACE_DATA_VERSION,
+      connectors: { ...surface.connectors, [connector.id]: connector },
+    },
+    stops,
+    connector,
+    error: null,
   }
 }
 
@@ -2187,14 +2361,34 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
   const fromY = supportTopAt(surface, cell, fromLevel, fallbackThickness)
   const toY = supportTopAt(surface, cell, toLevel, fallbackThickness)
   const roomHit = findRoomAtCell(surface, cell, fromLevel)
+  const destinationRoomHit = findRoomAtCell(surface, cell, toLevel)
+  const roomIds = [...new Set([roomHit?.id, destinationRoomHit?.id].filter(Boolean))]
   const minLevel = Math.min(fromLevel, toLevel)
   const maxLevel = Math.max(fromLevel, toLevel)
   const id = `connector:ladder:${cell.x}:${cell.z}:${minLevel}:${maxLevel}`
+  const material = makeSurfaceMaterial(tool, `${id}:structure`)
+  const hatchGeometry = tool?.hatchModelGeometry && typeof tool.hatchModelGeometry === 'object'
+    ? tool.hatchModelGeometry
+    : {}
+  const openingWidth = Math.max(0.2, Number(hatchGeometry.width) || 1)
+  const openingDepth = Math.max(0.2, Number(hatchGeometry.depth) || 1)
+  const openingY = levelToY(maxLevel)
+  const requestedQuarterTurns = Number.isFinite(Number(tool?.ladderRotationQuarterTurns))
+    ? Number(tool.ladderRotationQuarterTurns)
+    : Number.isFinite(Number(tool?.hatchRotationQuarterTurns))
+      ? Number(tool.hatchRotationQuarterTurns)
+      : null
+  const ladderOrientation = requestedQuarterTurns === null
+    ? {
+        axis: tool?.ladderAxis === 'z' ? 'z' : 'x',
+        side: Number(tool?.ladderSide) > 0 ? 1 : -1,
+      }
+    : rotateLadderOrientation({ axis: 'x', side: -1 }, requestedQuarterTurns)
   return {
     id,
     type: 'ladder',
     roomId: roomHit?.id || null,
-    roomIds: roomHit?.id ? [roomHit.id] : [],
+    roomIds,
     x: cell.x,
     z: cell.z,
     level: fromLevel,
@@ -2207,21 +2401,103 @@ export function makeLadderConnectorFromCell(surfaceData, cell, tool = {}) {
     width: Math.max(0.2, Number(tool?.ladderWidth) || 0.7),
     depth: Math.max(0.05, Number(tool?.ladderDepth) || 0.12),
     height: Math.abs(toY - fromY),
-    axis: tool?.ladderAxis === 'z' ? 'z' : 'x',
+    axis: ladderOrientation.axis,
+    side: ladderOrientation.side,
+    rotationQuarterTurns: ladderOrientationQuarterTurns(ladderOrientation),
     state: 'ready',
     walkable: true,
     movementMode: 'climb',
     movementMultiplier: getToolMovementMultiplier(tool),
     allowPartial: true,
     anchorSpacing: Math.max(0.1, Number(tool?.ladderAnchorSpacing) || 0.5),
+    topOpening: {
+      shape: normalizeVerticalOpeningShape(hatchGeometry.openingShape),
+      x: Number(cell.x) || 0,
+      z: Number(cell.z) || 0,
+      y: openingY,
+      width: openingWidth,
+      depth: openingDepth,
+    },
+    ...(material ? { material } : {}),
     ...connectorModelFromTool(tool),
     ...connectorCommonBlocking('ladder'),
+  }
+}
+
+const HATCH_ORIENTATIONS = Object.freeze([
+  Object.freeze({ axis: 'x', hingeSide: 1 }),
+  Object.freeze({ axis: 'z', hingeSide: 1 }),
+  Object.freeze({ axis: 'x', hingeSide: -1 }),
+  Object.freeze({ axis: 'z', hingeSide: -1 }),
+])
+
+export function hatchOrientationQuarterTurns(hatch) {
+  const axis = hatch?.axis === 'z' ? 'z' : 'x'
+  const hingeSide = Number(hatch?.hingeSide) < 0 ? -1 : 1
+  const index = HATCH_ORIENTATIONS.findIndex(orientation => (
+    orientation.axis === axis && orientation.hingeSide === hingeSide
+  ))
+  return index < 0 ? 0 : index
+}
+
+export function rotateHatchOrientation(hatch, deltaQuarterTurns) {
+  const current = hatchOrientationQuarterTurns(hatch)
+  const next = ((current + Math.trunc(Number(deltaQuarterTurns) || 0)) % 4 + 4) % 4
+  return { ...hatch, ...HATCH_ORIENTATIONS[next], rotationQuarterTurns: next }
+}
+
+export function makeLadderHatchFromConnector(ladder, tool = {}) {
+  if (!ladder || ladder.type !== 'ladder' || tool?.ladderHatch === false) return null
+  const topLevel = Math.max(Number(ladder.fromLevel) || 0, Number(ladder.toLevel) || 0)
+  const fallbackY = levelToY(topLevel)
+  const opening = verticalAccessOpeningDescriptor(ladder, { storyHeight: STORY_HEIGHT })
+  const y = opening?.y ?? fallbackY
+  const contactY = Math.max(Number(ladder.fromY) || y, Number(ladder.toY) || y)
+  const thickness = Math.max(0.06, Math.min(0.4, Math.abs(contactY - y) * 2 || 0.12))
+  const id = `connector:hatch:${ladder.x}:${ladder.z}:${topLevel}`
+  const blocking = surfaceBlockingForTool(tool)
+  const material = makeSurfaceMaterial(tool, `${id}:panel`)
+  const hatchBaseOrientation = Number.isFinite(Number(tool?.hatchRotationQuarterTurns))
+    ? { axis: 'x', hingeSide: 1 }
+    : {
+        axis: ladder.axis === 'z' ? 'z' : 'x',
+        hingeSide: Number(tool?.hatchHingeSide) < 0 ? -1 : 1,
+      }
+  const orientation = rotateHatchOrientation(
+    hatchBaseOrientation,
+    Number(tool?.hatchRotationQuarterTurns) || 0,
+  )
+  return {
+    id,
+    type: 'hatch',
+    linkedLadderId: ladder.id,
+    roomId: ladder.roomId || null,
+    roomIds: Array.isArray(ladder.roomIds) ? [...ladder.roomIds] : [],
+    x: opening?.x ?? (Number(ladder.x) || 0),
+    z: opening?.z ?? (Number(ladder.z) || 0),
+    y,
+    level: topLevel,
+    width: opening?.width || 1,
+    depth: opening?.depth || 1,
+    height: thickness,
+    openingShape: opening?.shape || 'rectangle',
+    axis: orientation.axis,
+    hingeSide: orientation.hingeSide,
+    rotationQuarterTurns: orientation.rotationQuarterTurns,
+    state: 'closed',
+    allowedStates: ['closed', 'open', 'locked'],
+    walkable: true,
+    movementMultiplier: 1,
+    ...blocking,
+    ...(material ? { material } : {}),
+    ...hatchModelFromTool(tool),
   }
 }
 
 export function applyLadderConnector(surfaceData, cell, tool = {}) {
   const connector = makeLadderConnectorFromCell(surfaceData, cell, tool)
   if (!connector) return surfaceData
+  const hatch = makeLadderHatchFromConnector(connector, tool)
   const next = normalizeSurfaceData(surfaceData)
   return {
     ...next,
@@ -2229,8 +2505,62 @@ export function applyLadderConnector(surfaceData, cell, tool = {}) {
     connectors: {
       ...next.connectors,
       [connector.id]: connector,
+      ...(hatch ? { [hatch.id]: hatch } : {}),
     },
   }
+}
+
+export function setVerticalAccessHatch(surfaceData, ladderId, tool = {}) {
+  const next = normalizeSurfaceData(surfaceData)
+  const ladder = next.connectors?.[ladderId]
+  if (!ladder || ladder.type !== 'ladder') return surfaceData
+  const connectors = { ...next.connectors }
+  const currentHatch = Object.values(connectors).find(connector => (
+    connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)
+  ))
+  for (const [id, connector] of Object.entries(connectors)) {
+    if (connector?.type === 'hatch' && String(connector.linkedLadderId) === String(ladderId)) delete connectors[id]
+  }
+
+  let updatedLadder = ladder
+  if (tool?.ladderHatch !== false) {
+    const geometry = tool?.hatchModelGeometry && typeof tool.hatchModelGeometry === 'object'
+      ? tool.hatchModelGeometry
+      : {}
+    const previousOpening = verticalAccessOpeningDescriptor(ladder, {
+      linkedHatch: currentHatch,
+      storyHeight: next.storyHeight,
+    })
+    updatedLadder = {
+      ...ladder,
+      topOpening: {
+        ...previousOpening,
+        shape: normalizeVerticalOpeningShape(geometry.openingShape),
+        width: Math.max(0.2, Number(geometry.width) || previousOpening?.width || 1),
+        depth: Math.max(0.2, Number(geometry.depth) || previousOpening?.depth || 1),
+      },
+    }
+  }
+  connectors[ladderId] = updatedLadder
+  if (tool?.ladderHatch !== false) {
+    const hatch = makeLadderHatchFromConnector(updatedLadder, {
+      ...tool,
+      hatchHingeSide: tool?.preserveHatchOrientation === false
+        ? tool?.hatchHingeSide
+        : currentHatch?.hingeSide ?? tool?.hatchHingeSide,
+      hatchRotationQuarterTurns: tool?.preserveHatchOrientation === false
+        ? tool?.hatchRotationQuarterTurns
+        : currentHatch?.rotationQuarterTurns ?? tool?.hatchRotationQuarterTurns,
+    })
+    if (hatch) connectors[hatch.id] = {
+      ...hatch,
+      state: currentHatch?.state || hatch.state,
+      modelMaterialOverrides: String(currentHatch?.modelBlueprintId || '') === String(hatch.modelBlueprintId || '')
+        ? currentHatch?.modelMaterialOverrides || hatch.modelMaterialOverrides
+        : hatch.modelMaterialOverrides,
+    }
+  }
+  return { ...next, version: SURFACE_DATA_VERSION, connectors }
 }
 
 export function expandRoomsToSurface(data) {
@@ -3269,6 +3599,16 @@ export function eraseSurfaceSelection(surfaceData, selection, tool) {
       || (Number.isFinite(Number(connector?.fromLevel)) && sameLevel(levelToY(connector.fromLevel), targetY))
       || (Number.isFinite(Number(connector?.toLevel)) && sameLevel(levelToY(connector.toLevel), targetY))
     if (sameStartOrEnd && connectorIntersectsCellArea(connector, area)) {
+      delete connectors[id]
+      changed = true
+    }
+  }
+
+  const remainingConnectorIds = new Set(Object.entries(connectors).flatMap(([id, connector]) => (
+    [String(id), ...(connector?.id ? [String(connector.id)] : [])]
+  )))
+  for (const [id, connector] of Object.entries(connectors)) {
+    if (connector?.type === 'hatch' && !remainingConnectorIds.has(String(connector.linkedLadderId))) {
       delete connectors[id]
       changed = true
     }

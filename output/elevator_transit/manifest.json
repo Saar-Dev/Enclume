@@ -1,0 +1,610 @@
+{
+  "pack": "elevator_transit",
+  "label": "Ascenseurs et transport orthogonal",
+  "version": 1,
+  "unit": "enclume_world_unit",
+  "placement_mode_default": "connector",
+  "origin_default": "floor-center",
+  "assets": [
+    {
+      "name": "01_industrial_1x1",
+      "label": "Ascenseur industriel 1 × 1",
+      "catalog_file": "01_industrial_1x1.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 1,
+      "height_m": 2.2,
+      "elevator_style": "industrial",
+      "door_face_width_x_m": 1,
+      "door_face_width_z_m": 1,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "01_industrial_1x1__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "01_industrial_1x1__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "01_industrial_1x1__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "01_industrial_1x1__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "01_industrial_1x1__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02_industrial_1x2",
+      "label": "Ascenseur industriel 1 × 2",
+      "catalog_file": "02_industrial_1x2.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 2,
+      "height_m": 2.2,
+      "elevator_style": "industrial",
+      "door_face_width_x_m": 2,
+      "door_face_width_z_m": 1,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "02_industrial_1x2__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "02_industrial_1x2__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "02_industrial_1x2__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "02_industrial_1x2__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "02_industrial_1x2__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03_industrial_2x1",
+      "label": "Ascenseur industriel 2 × 1",
+      "catalog_file": "03_industrial_2x1.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 1,
+      "height_m": 2.2,
+      "elevator_style": "industrial",
+      "door_face_width_x_m": 1,
+      "door_face_width_z_m": 2,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "03_industrial_2x1__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "03_industrial_2x1__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "03_industrial_2x1__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "03_industrial_2x1__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "03_industrial_2x1__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04_industrial_2x2",
+      "label": "Ascenseur industriel 2 × 2",
+      "catalog_file": "04_industrial_2x2.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 2,
+      "height_m": 2.2,
+      "elevator_style": "industrial",
+      "door_face_width_x_m": 2,
+      "door_face_width_z_m": 2,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "04_industrial_2x2__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "04_industrial_2x2__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "04_industrial_2x2__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "04_industrial_2x2__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "04_industrial_2x2__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05_glass_1x1",
+      "label": "Ascenseur vitré 1 × 1",
+      "catalog_file": "05_glass_1x1.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 1,
+      "height_m": 2.2,
+      "elevator_style": "glass",
+      "door_face_width_x_m": 1,
+      "door_face_width_z_m": 1,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "05_glass_1x1__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "05_glass_1x1__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "05_glass_1x1__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "05_glass_1x1__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "05_glass_1x1__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06_glass_1x2",
+      "label": "Ascenseur vitré 1 × 2",
+      "catalog_file": "06_glass_1x2.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 1,
+      "footprint_depth_m": 2,
+      "height_m": 2.2,
+      "elevator_style": "glass",
+      "door_face_width_x_m": 2,
+      "door_face_width_z_m": 1,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "06_glass_1x2__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "06_glass_1x2__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "06_glass_1x2__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "06_glass_1x2__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "06_glass_1x2__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07_glass_2x1",
+      "label": "Ascenseur vitré 2 × 1",
+      "catalog_file": "07_glass_2x1.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 1,
+      "height_m": 2.2,
+      "elevator_style": "glass",
+      "door_face_width_x_m": 1,
+      "door_face_width_z_m": 2,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "07_glass_2x1__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "07_glass_2x1__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "07_glass_2x1__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "07_glass_2x1__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "07_glass_2x1__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08_glass_2x2",
+      "label": "Ascenseur vitré 2 × 2",
+      "catalog_file": "08_glass_2x2.glb",
+      "category": "Ascenseurs",
+      "connector_type": "elevator",
+      "placement_mode": "connector",
+      "origin": "floor-center",
+      "footprint_width_m": 2,
+      "footprint_depth_m": 2,
+      "height_m": 2.2,
+      "elevator_style": "glass",
+      "door_face_width_x_m": 2,
+      "door_face_width_z_m": 2,
+      "supported_door_orientations": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "features": [
+        "four-face-modular-doors",
+        "orthogonal-route",
+        "sealed-shaft",
+        "independent-landing-doors"
+      ],
+      "editor_color_slots": [
+        {
+          "id": "primary",
+          "code": "SLOT_01",
+          "label": "Métal principal",
+          "default_hex": "#0E222B",
+          "material_names": [
+            "08_glass_2x2__SLOT_01__Primary_Metal"
+          ]
+        },
+        {
+          "id": "secondary",
+          "code": "SLOT_02",
+          "label": "Panneaux secondaires",
+          "default_hex": "#2B4A54",
+          "material_names": [
+            "08_glass_2x2__SLOT_02__Secondary_Panels"
+          ]
+        },
+        {
+          "id": "hardware",
+          "code": "SLOT_03",
+          "label": "Cadre et mécanismes",
+          "default_hex": "#030507",
+          "material_names": [
+            "08_glass_2x2__SLOT_03__Frame_Hardware"
+          ]
+        },
+        {
+          "id": "accent",
+          "code": "SLOT_04",
+          "label": "Signalétique",
+          "default_hex": "#FF4006",
+          "material_names": [
+            "08_glass_2x2__SLOT_04__Safety_Accent"
+          ]
+        },
+        {
+          "id": "glass",
+          "code": "SLOT_05",
+          "label": "Verre",
+          "default_hex": "#0A80B3",
+          "transparent": true,
+          "material_names": [
+            "08_glass_2x2__SLOT_05__Cabin_Glass"
+          ]
+        }
+      ]
+    }
+  ]
+}

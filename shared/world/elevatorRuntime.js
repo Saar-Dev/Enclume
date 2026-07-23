@@ -23,11 +23,24 @@ function stopId(level) {
   return `level:${Number(level)}`
 }
 
+function pointOf(stop, fallback = {}) {
+  return {
+    x: finite(stop?.x, fallback.x),
+    y: finite(stop?.y, fallback.y),
+    z: finite(stop?.z, fallback.z),
+  }
+}
+
+function segmentAxis(from, to) {
+  const changed = ['x', 'y', 'z'].filter(axis => Math.abs(finite(to?.[axis]) - finite(from?.[axis])) > 1e-6)
+  return changed.length === 1 ? changed[0] : null
+}
+
 export function normalizeElevatorDefinition(connector, { storyHeight = 2.5 } = {}) {
   if (!connector || typeof connector !== 'object') throw new TypeError("La définition d'ascenseur doit être un objet")
   const id = String(connector.worldId || connector.id || '').trim()
   if (!id) throw new RangeError("L'ascenseur exige une identité stable")
-  let stops = Array.isArray(connector.stops) ? connector.stops : []
+  let stops = Array.isArray(connector.stops) ? [...connector.stops] : []
   if (stops.length === 0) {
     const from = Math.trunc(finite(connector.fromLevel, connector.level || 0))
     const to = Math.trunc(finite(connector.toLevel, from + 1))
@@ -36,31 +49,46 @@ export function normalizeElevatorDefinition(connector, { storyHeight = 2.5 } = {
       stops.push({ id: stopId(level), level, y: level * storyHeight + positive(connector.floorThickness, 0.25) / 2 })
     }
   }
+  const origin = { x: finite(connector.x), z: finite(connector.z) }
+  const defaultDoorAxis = connector.doorAxis === 'x' ? 'x' : 'z'
+  const defaultDoorSide = Number(connector.doorSide) < 0 ? -1 : 1
   const normalizedStops = stops.map((stop, index) => {
     const level = Math.trunc(finite(stop.level, index))
     return {
       id: String(stop.id || stopId(level)),
       level,
+      x: finite(stop.x, origin.x),
       y: finite(stop.y, level * storyHeight + positive(connector.floorThickness, 0.25) / 2),
+      z: finite(stop.z, origin.z),
       label: String(stop.label || `Étage ${level}`).slice(0, 80),
+      roomId: stop.roomId == null ? null : String(stop.roomId),
+      doorAxis: stop.doorAxis === 'x' ? 'x' : stop.doorAxis === 'z' ? 'z' : defaultDoorAxis,
+      doorSide: Number(stop.doorSide) < 0 ? -1 : stop.doorSide == null ? defaultDoorSide : 1,
     }
-  }).sort((a, b) => a.y - b.y || a.id.localeCompare(b.id))
+  })
   if (normalizedStops.length < 2) throw new RangeError("Un ascenseur doit desservir au moins deux arrêts")
   if (new Set(normalizedStops.map(stop => stop.id)).size !== normalizedStops.length) {
     throw new RangeError("Deux arrêts d'ascenseur partagent la même identité")
   }
+  normalizedStops.slice(1).forEach((stop, index) => {
+    if (!segmentAxis(normalizedStops[index], stop)) {
+      throw new RangeError("Deux arrêts consécutifs d'ascenseur doivent être alignés sur X, Y ou Z")
+    }
+  })
   return deepFreeze({
     id,
-    x: finite(connector.x),
-    z: finite(connector.z),
+    x: normalizedStops[0].x,
+    z: normalizedStops[0].z,
     width: positive(connector.width, 1),
     depth: positive(connector.depth, 1),
     cabinHeight: positive(connector.cabinHeight || connector.height, Math.min(2.2, storyHeight * 0.88)),
     floorThickness: positive(connector.cabinFloorThickness, 0.12),
     wallThickness: positive(connector.cabinWallThickness, 0.08),
-    doorAxis: connector.doorAxis === 'x' ? 'x' : 'z',
-    doorSide: Number(connector.doorSide) < 0 ? -1 : 1,
+    doorAxis: defaultDoorAxis,
+    doorSide: defaultDoorSide,
     travelSecondsPerLevel: positive(connector.travelSecondsPerLevel, 2),
+    travelSecondsPerUnit: positive(connector.travelSecondsPerUnit, 1),
+    storyHeight: positive(storyHeight, 2.5),
     doorSeconds: positive(connector.doorSeconds, 0.75),
     dwellSeconds: positive(connector.dwellSeconds, 0.75),
     movementMultiplier: positive(connector.movementMultiplier, 1),
@@ -96,13 +124,17 @@ export function createInitialElevatorState(definitionInput, { initialStopId = nu
     phase: 'open',
     currentStopId: stop.id,
     targetStopId: null,
+    positionX: stop.x,
     positionY: stop.y,
+    positionZ: stop.z,
     doorState: 'open',
     queue: [],
     transitionStartedAt: Math.max(0, Math.trunc(finite(now))),
     transitionEndsAt: null,
     movementFromY: null,
     movementToY: null,
+    movementFrom: null,
+    movementPath: [],
     blockedReason: null,
     resume: null,
   })
@@ -119,7 +151,9 @@ export function normalizeElevatorState(definitionInput, state) {
     phase,
     currentStopId: current.id,
     targetStopId: target?.id || null,
+    positionX: finite(state.positionX, current.x),
     positionY: finite(state.positionY, current.y),
+    positionZ: finite(state.positionZ, current.z),
     doorState: state.doorState === 'open' || state.doorState === 'opening' || state.doorState === 'closing'
       ? state.doorState
       : 'closed',
@@ -128,6 +162,12 @@ export function normalizeElevatorState(definitionInput, state) {
     transitionEndsAt: state.transitionEndsAt == null ? null : Math.max(0, Math.trunc(finite(state.transitionEndsAt))),
     movementFromY: state.movementFromY == null ? null : finite(state.movementFromY),
     movementToY: state.movementToY == null ? null : finite(state.movementToY),
+    movementFrom: state.movementFrom && typeof state.movementFrom === 'object'
+      ? pointOf(state.movementFrom, current)
+      : state.movementFromY == null ? null : { x: finite(state.positionX, current.x), y: finite(state.movementFromY), z: finite(state.positionZ, current.z) },
+    movementPath: Array.isArray(state.movementPath)
+      ? state.movementPath.map(point => pointOf(point, current))
+      : state.movementToY == null ? [] : [{ x: target?.x ?? current.x, y: finite(state.movementToY), z: target?.z ?? current.z }],
     blockedReason: state.blockedReason ? String(state.blockedReason).slice(0, 240) : null,
     resume: state.resume && typeof state.resume === 'object' ? { ...state.resume } : null,
   })
@@ -135,6 +175,45 @@ export function normalizeElevatorState(definitionInput, state) {
 
 function durationMs(seconds) {
   return Math.max(1, Math.round(seconds * 1000))
+}
+
+function routeBetween(definition, fromId, toId) {
+  const fromIndex = definition.stops.findIndex(stop => stop.id === fromId)
+  const toIndex = definition.stops.findIndex(stop => stop.id === toId)
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return []
+  const direction = fromIndex < toIndex ? 1 : -1
+  const route = []
+  for (let index = fromIndex + direction; ; index += direction) {
+    route.push(pointOf(definition.stops[index]))
+    if (index === toIndex) return route
+  }
+}
+
+function segmentTravelSeconds(definition, from, to) {
+  const axis = segmentAxis(from, to)
+  const distance = axis ? Math.abs(to[axis] - from[axis]) : 0
+  if (axis === 'y') return definition.travelSecondsPerLevel * distance / definition.storyHeight
+  return definition.travelSecondsPerUnit * distance
+}
+
+function movementPosition(definition, from, path, ratio) {
+  const points = [from, ...path]
+  const durations = points.slice(1).map((point, index) => segmentTravelSeconds(definition, points[index], point))
+  const total = durations.reduce((sum, value) => sum + value, 0)
+  let remaining = Math.max(0, Math.min(1, ratio)) * total
+  for (let index = 0; index < durations.length; index += 1) {
+    const duration = durations[index]
+    if (remaining <= duration || index === durations.length - 1) {
+      const localRatio = duration > 0 ? Math.max(0, Math.min(1, remaining / duration)) : 1
+      return {
+        x: points[index].x + (points[index + 1].x - points[index].x) * localRatio,
+        y: points[index].y + (points[index + 1].y - points[index].y) * localRatio,
+        z: points[index].z + (points[index + 1].z - points[index].z) * localRatio,
+      }
+    }
+    remaining -= duration
+  }
+  return pointOf(path.at(-1), from)
 }
 
 function startClosing(definition, state, now) {
@@ -162,14 +241,20 @@ function startServingFromClosed(definition, state, now) {
       transitionEndsAt: now + durationMs(definition.doorSeconds),
     }
   }
-  const levelDistance = Math.max(1, Math.abs(target.level - current.level))
+  const movementFrom = { x: state.positionX, y: state.positionY, z: state.positionZ }
+  const movementPath = routeBetween(definition, current.id, target.id)
+  const movementPoints = [movementFrom, ...movementPath]
+  const travelSeconds = movementPoints.slice(1)
+    .reduce((sum, point, index) => sum + segmentTravelSeconds(definition, movementPoints[index], point), 0)
   return {
     ...state,
     phase: 'moving',
     targetStopId: target.id,
     doorState: 'closed',
     transitionStartedAt: now,
-    transitionEndsAt: now + durationMs(definition.travelSecondsPerLevel * levelDistance),
+    transitionEndsAt: now + durationMs(Math.max(0.001, travelSeconds)),
+    movementFrom,
+    movementPath,
     movementFromY: state.positionY,
     movementToY: target.y,
   }
@@ -185,7 +270,15 @@ export function reconcileElevatorState(definitionInput, stateInput, nowInput = D
     if (state.phase === 'moving' && state.transitionEndsAt > now) {
       const duration = Math.max(1, state.transitionEndsAt - state.transitionStartedAt)
       const ratio = Math.max(0, Math.min(1, (now - state.transitionStartedAt) / duration))
-      state.positionY = state.movementFromY + (state.movementToY - state.movementFromY) * ratio
+      const point = movementPosition(
+        definition,
+        state.movementFrom || { x: state.positionX, y: state.movementFromY, z: state.positionZ },
+        state.movementPath?.length ? state.movementPath : [{ x: state.positionX, y: state.movementToY, z: state.positionZ }],
+        ratio,
+      )
+      state.positionX = point.x
+      state.positionY = point.y
+      state.positionZ = point.z
       break
     }
     if (state.transitionEndsAt == null || state.transitionEndsAt > now) break
@@ -201,9 +294,13 @@ export function reconcileElevatorState(definitionInput, stateInput, nowInput = D
         ...state,
         phase: 'opening',
         currentStopId: target.id,
+        positionX: target.x,
         positionY: target.y,
+        positionZ: target.z,
         movementFromY: null,
         movementToY: null,
+        movementFrom: null,
+        movementPath: [],
         doorState: 'opening',
         transitionStartedAt: at,
         transitionEndsAt: at + durationMs(definition.doorSeconds),
@@ -300,13 +397,32 @@ export function commandElevator(definitionInput, stateInput, command, nowInput =
     return deepFreeze(startClosing(definition, state, now))
   }
   if (command?.type === 'open') {
-    if (state.phase !== 'idle') return state
+    if (state.phase === 'open' || state.phase === 'opening') return state
+    if (state.phase === 'moving') throw new RangeError("La porte ne peut pas s'ouvrir pendant le déplacement")
+    if (state.phase === 'blocked') throw new RangeError("La porte doit être débloquée avant de s'ouvrir")
     return deepFreeze({
       ...state,
       phase: 'opening',
       doorState: 'opening',
       transitionStartedAt: now,
       transitionEndsAt: now + durationMs(definition.doorSeconds),
+    })
+  }
+  if (command?.type === 'use') {
+    const currentStop = stopById(definition, state.currentStopId)
+    if (!currentStop || (command.stopId && currentStop.id !== String(command.stopId))) {
+      throw new RangeError("La cabine n'est pas présente à ce palier")
+    }
+    if (state.phase === 'moving') throw new RangeError("La cabine est en déplacement")
+    if (state.phase === 'blocked') throw new RangeError("La porte doit être débloquée avant d'utiliser la cabine")
+    return deepFreeze({
+      ...state,
+      phase: 'open',
+      doorState: 'open',
+      transitionStartedAt: now,
+      transitionEndsAt: null,
+      blockedReason: null,
+      resume: null,
     })
   }
   throw new RangeError(`Commande d'ascenseur inconnue : ${command?.type || '(vide)'}`)
@@ -317,8 +433,8 @@ export function elevatorPassengerWorldPoint(definitionInput, state, localPoint) 
     ? definitionInput
     : normalizeElevatorDefinition(definitionInput)
   return deepFreeze({
-    x: definition.x + finite(localPoint.x),
+    x: finite(state.positionX, definition.x) + finite(localPoint.x),
     y: finite(state.positionY) + finite(localPoint.y),
-    z: definition.z + finite(localPoint.z),
+    z: finite(state.positionZ, definition.z) + finite(localPoint.z),
   })
 }
