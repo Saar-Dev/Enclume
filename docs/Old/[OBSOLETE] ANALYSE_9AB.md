@@ -1,7 +1,6 @@
 # ANALYSE_9AB.md — Mémoire externe planification Chantiers 9A + 9B
 > Créé session 22 — 2026-04-08
-> À fournir en début de chaque session travaillant sur 9A ou 9B.
-> Append uniquement — jamais de remplacement.
+--- OBSOLETE - REMPLACE PAR MOTEUR_MONDE.md ---
 
 ---
 

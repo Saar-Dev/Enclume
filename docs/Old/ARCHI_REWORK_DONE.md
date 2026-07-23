@@ -1,7 +1,8 @@
-# ARCHI_REWORK_DONE.md — Spécifications des reworks achevés
-> Créé Session 101 — 2026-06-17 | Mis à jour Session 116 suite — 2026-06-22
-> Archive des specs complètes (problème, décision, interface, plan, validation).
-> Pour la liste active et les reworks en cours → [ARCHI_REWORK.md](ARCHI_REWORK.md)
+> ⚠️ **Journal de rework — valeur historique uniquement.**
+> Ces fichiers décrivent les problèmes, alternatives et plans d'exécution des reworks.
+> Pour la documentation canonique, voir :
+> - `docs/SYSTEME/ARCHITECTURE_SOCKET.md` — architecture socket client/serveur
+> - `docs/SYSTEME/SERVICES_COMBAT.md` — services métier combat
 
 ---
 

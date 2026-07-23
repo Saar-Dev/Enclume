@@ -1,7 +1,9 @@
-# STRUCTURE_SYSCOMBAT.md — Logique complète d'un tour de combat
-> Session 120 — 2026-06-24 (mise à jour Session 141 suite 16 — correction : `calcCarenceArmure` effacée)
-> Reconstruction depuis le code. Source : socketCombatState.js, socketCombatAnnouncement.js,
-> socketCombatHelpers.js, socketCombatResolution.js, statusService.js, combatFSM.js
+# SYSTEME/COMBAT_FLUX.md — Déroulement complet d'un tour de combat
+
+> Dernière mise à jour : 2026-06-24 (vérifié code : 2026-07-19)
+> Sources : `socketCombatState.js`, `socketCombatAnnouncement.js`, `socketCombatResolution.js`, `socketCombatHelpers.js`, `statusService.js`, `combatFSM.js`
+> Lire pour : comprendre le déroulement complet d'un tour de combat, de la phase ROSTER jusqu'à endTurn.
+> Voir aussi : @SERVICES_COMBAT pour les signatures des services (dégâts, choc, FSM), @BLESSURES pour les blessures et armures, @PERSONNAGE_CALCULS pour la chaîne de calcul des attributs et compétences.
 
 ---
 
