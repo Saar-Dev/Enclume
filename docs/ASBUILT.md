@@ -1095,19 +1095,19 @@ Enclume/
 │   │   └── CHANGELOG.md               # Modifié 67 Sprint 7.6 — +v67 rechargement combat
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — +combatTargetMode. Modifié 66 — +shockResult. Modifié 67 Sprint 7.6 — +CombatResultReload. Modifié 67 Sprint CaC 1 — +CombatResultMelee (bottom-right), +modal défense PJ. Modifié 71 — +actionTimerSec prop passé à CombatTimeline. Modifié 72 CaC 4a — alerte ⚠ encerclement dans defense prompt + props multiMalus* vers CombatResultMelee. Modifié 81 Sprint Annonce v2 — prop announcementMarker + mini-panneau bottom-left "vient d'annoncer" (nom, INI, déplacement, cible), visible pour tous, pointerEvents:none. Modifié 85 Bugs A+B — fenêtres validation positionnées near-click (pendingTargetScreenPos / pendingMoveSelection.screenX). Modifié 87 — guard isGm sur <CombatDeclareLog /> (ANNOUNCEMENT/RESOLUTION)
+│   │   │   ├── CombatOverlay.jsx        # Modifié 64 — +combatTargetMode. Modifié 66 — +shockResult. Modifié 67 Sprint 7.6 — +CombatResultReload. Modifié 67 Sprint CaC 1 — +CombatResultMelee (bottom-right), +modal défense PJ. Modifié 71 — +actionTimerSec prop passé à CombatTimeline. Modifié 72 CaC 4a — alerte ⚠ encerclement dans defense prompt + props multiMalus* vers CombatResultMelee. Modifié 81 Sprint Annonce v2 — prop announcementMarker + mini-panneau bottom-left "vient d'annoncer" (nom, INI, déplacement, cible), visible pour tous, pointerEvents:none. Modifié 85 Bugs A+B — fenêtres validation positionnées near-click (pendingTargetScreenPos / pendingMoveSelection.screenX). Modifié 87 — guard isGm sur <CombatDeclareLog /> (ANNOUNCEMENT/RESOLUTION). Modifié 159 — échelle de phases (Lots B/C/D `PLAN_COMBAT_TIMELINE.md`, archivé) : `activeAssaultAction`/`activeMeleeAction` dérivés de `currentStep` (pas `combat_roster`), panneaux Agir maintenant (mi-Tour + tour obligatoire)/Passer/Forcer MJ, guard `currentStep?.kind !== 'delayed_turn'` sur les fenêtres de modificateurs
 │   │   │   ├── CombatRosterWindow.jsx  # Réécriture complète 65 Sprint GM-A. Modifié 66 — draggable (useDraggable, key combat-roster-pos) — détection arme/armure, chips T/C/B/J (PjArmorChips/PnjArmorChips), quick-equip PNJ, bannière alerte, fetches parallèles combat-ini+combat-equipment+refWeapons+refArmors. Modifié 83 Rework Design — const S migré vers classes CSS système (combat-win/combat-badge/combat-chip/combat-select/btn-tac-confirm)
-│   │   │   ├── CombatTimeline.jsx      # Réécriture complète 71 — BG3-style, Motion FLIP, ANNOUNCEMENT(roster ASC)/RESOLUTION(actions seq), TimelineCard, timer countdown, MAX_CARDS=12, phase indicator+flèche. Modifié 81 — isDimmed=hasAnnounced&&!isActive en phase ANNOUNCEMENT, passé à TimelineCard. Modifié 83 Rework Design — styles.bar() → .combat-timeline-bar
+│   │   │   ├── CombatTimeline.jsx      # Réécriture complète 71 — BG3-style, Motion FLIP, ANNOUNCEMENT(roster ASC)/RESOLUTION(actions seq), TimelineCard, timer countdown, MAX_CARDS=12, phase indicator+flèche. Modifié 81 — isDimmed=hasAnnounced&&!isActive en phase ANNOUNCEMENT, passé à TimelineCard. Modifié 83 Rework Design — styles.bar() → .combat-timeline-bar. Modifié 159 — RESOLUTION consomme `timelineEntries`/`currentStep` (une carte par entrée d'échelle, plus par personnage), zone « en attente » cliquable pour les personnages en délai (clé `entry.id`, filtré `turn_number`)
 │   │   │   ├── TimelineCard.jsx        # NOUVEAU 71 — carte portrait plein format, gradient overlay nom+INI, bordure SEVERITY_COLORS, taille active 72×100/normal 54×76, badges ✓⚠. Modifié 81 — prop isDimmed -> opacity 0.35. Modifié 83 Rework Design — 5 hex inline → CSS vars (--halo-active, --color-gold, --color-primary, --color-success-soft, --color-warning-soft)
-│   │   │   ├── CombatActionWindow.jsx  # Modifié 66 — draggable v2, StateSelector, exclusion mutuelle EXCLUSIVE_ACTIONS. Modifié 67 Sprint 7.6 — +reload panneau. Modifié 67 Sprint CaC 1 — +melee panneau droit (liste armes contact + allonge + cible via target mode), Phase 2 myMeleeAction, reset has_announced, COMBAT_DECLARE_ERROR listener. Modifié 68 Sprint CaC 2 — +combatMode state (normal/offensif/charge), mode selector 3 chips, handleChargeFlow séquentiel (chargeAllures=lente uniquement), meleeValid Charge, payload state.combat_mode + move.ini_mod=0. Modifié 68 Sprint CaC 3 — meleeDefensif const ligne 330 (fix TDZ), modes Défensif+Retraite : chips vert uniforme, melee/cible masqués si meleeDefensif, handleRetraiteMove() toggle zone lente ini_mod=0, mapActionsObj.melee=null, server freeMove étendu à retraite. Modifié 81 — isAmmoEmpty fix + setMeleePendingTokenIds fix + refactor multi-token (playerChars filter, playerTokensInRoster, activeStoreToken, useDraggable déplacé avant early returns, rosterSection collapsible localStorage). Modifié 83 Rework Design — const W migré (window/header/body/section/footer → combat-float-win) + const ss hex→CSS vars. Modifié 85 Bug C — position:'fixed' sur 7 blocs .combat-float-win. Item 16 — Math.max(80, top). Modifié 87 — ACTION_LABELS + PURE_MOVE_TYPES module-level restaurés, declareLogSection remplace rosterSection (3 branches read-only). Modifié 98 REWORK-05 — ACTION_LABELS+PURE_MOVE_TYPES → import combatSections. declareLogSection → &lt;DeclareLogContent&gt; (fix CL2). Panneaux droits → DroneWeaponPanel + AssaultRangedPanel + MeleeCombatPanel.
+│   │   │   ├── CombatActionWindow.jsx  # Modifié 66 — draggable v2, StateSelector, exclusion mutuelle EXCLUSIVE_ACTIONS. Modifié 67 Sprint 7.6 — +reload panneau. Modifié 67 Sprint CaC 1 — +melee panneau droit (liste armes contact + allonge + cible via target mode), Phase 2 myMeleeAction, reset has_announced, COMBAT_DECLARE_ERROR listener. Modifié 68 Sprint CaC 2 — +combatMode state (normal/offensif/charge), mode selector 3 chips, handleChargeFlow séquentiel (chargeAllures=lente uniquement), meleeValid Charge, payload state.combat_mode + move.ini_mod=0. Modifié 68 Sprint CaC 3 — meleeDefensif const ligne 330 (fix TDZ), modes Défensif+Retraite : chips vert uniforme, melee/cible masqués si meleeDefensif, handleRetraiteMove() toggle zone lente ini_mod=0, mapActionsObj.melee=null, server freeMove étendu à retraite. Modifié 81 — isAmmoEmpty fix + setMeleePendingTokenIds fix + refactor multi-token (playerChars filter, playerTokensInRoster, activeStoreToken, useDraggable déplacé avant early returns, rosterSection collapsible localStorage). Modifié 83 Rework Design — const W migré (window/header/body/section/footer → combat-float-win) + const ss hex→CSS vars. Modifié 85 Bug C — position:'fixed' sur 7 blocs .combat-float-win. Item 16 — Math.max(80, top). Modifié 87 — ACTION_LABELS + PURE_MOVE_TYPES module-level restaurés, declareLogSection remplace rosterSection (3 branches read-only). Modifié 98 REWORK-05 — ACTION_LABELS+PURE_MOVE_TYPES → import combatSections. declareLogSection → &lt;DeclareLogContent&gt; (fix CL2). Panneaux droits → DroneWeaponPanel + AssaultRangedPanel + MeleeCombatPanel. Modifié 165 Tir Multi — état `assaultPendingTokenIds` (array, remplace le singulier) + `assaultCount`/`effectiveAssaultCount`, payload `mapActions.attack[]`, cible par défaut (1 clic remplit la série).
 │   │   │   ├── CombatDamageWindow.jsx  # NOUVEAU 64 Sprint 7.4 — fenêtre PJ lancer dés dégâts : Phase 1 dés vides / Phase 2 animation / Phase 3 résultats colorés. Modifié 66 Sprint Test de Choc : +bloc Test de Choc après severityBanner (roll/seuil/outcome coloré). Modifié 83 Rework Design — styles.window/header migré (combat-float-win, cursor:default overlay non-draggable)
 │   │   │   ├── CombatModifiersWindow.jsx # NOUVEAU 64 Sprint 7.2. Modifié 65 Sprint 7.6. Modifié 66 — draggable (useDraggable, sticky retiré du header) — is_rushed → state_vitesse === 'rushed'. Modifié 83 Rework Design — const styles migré (window/header/sections/footer/btns → combat-float-win/btn btn-gold/btn-ghost. Modifié 85 Bug D — position:'fixed'. Bug#13 — +isRushed -5 dans totalModComp)
 │   │   │   ├── CombatResultPanels.jsx  # NOUVEAU 66 Sprint Test de Choc — CombatResultGM + CombatResultPlayer + ShockBlock. Modifié 67 Sprint 7.6 — +CombatResultReload. Modifié 67 Sprint CaC 1 — +CombatResultMelee (bottom-right, jets opposition attaque/défense colorés). Modifié 72 CaC 4a — CombatResultMelee +bloc ⚠ orange encerclement si multiMalusAttaquant ou multiMalusDefenseur ≠ 0
 │   │   │   ├── CombatPnjPanel.jsx      # NOUVEAU 58 — modal GM PJs/PNJs read-only, isPnj via character.type
-│   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 81 Sprint Annonce v2 — batch supprimé, queues supprimées, appels directs onEnterMoveMode/onEnterTargetMode, états directs (pendingMove, assaultTarget, meleeTargets, chargeSelection), roster lecture seule, bouton "Passer [PJ]" quand slot actif = PJ. ~600 lignes vs 1128 avant. Modifié 81 S1 GM — rosterOpen localStorage('gm-roster-open'), toggle ▲▼ dans rosterHeader. Modifié 83 Rework Design — const S partiel migré (window/header/sections/footer/btnDeclare → classes CSS. Modifié 85 Bug#1 — isMeleeSetup nettoyé. Bug#8/#12 — initialStates remplace STATE_DEFAULTS dans useEffect([activeTokenId])). Modifié 98 REWORK-05 — panneaux droits → DroneWeaponPanel+AssaultRangedPanel+MeleeCombatPanel. Modifié 99 — BUG-W1 (init weapon : initialStates.weapon guard) + BUG-W2 (setTimeout fix batch race setCombatTargetMode) + ERG-W1 (auto-draw "Assaut tir") + ERG-W2 (auto-draw/holster CaC onWeaponChange)
+│   │   │   ├── CombatGmDeclareWindow.jsx # Réécriture complète 81 Sprint Annonce v2 — batch supprimé, queues supprimées, appels directs onEnterMoveMode/onEnterTargetMode, états directs (pendingMove, assaultTarget, meleeTargets, chargeSelection), roster lecture seule, bouton "Passer [PJ]" quand slot actif = PJ. ~600 lignes vs 1128 avant. Modifié 81 S1 GM — rosterOpen localStorage('gm-roster-open'), toggle ▲▼ dans rosterHeader. Modifié 83 Rework Design — const S partiel migré (window/header/sections/footer/btnDeclare → classes CSS. Modifié 85 Bug#1 — isMeleeSetup nettoyé. Bug#8/#12 — initialStates remplace STATE_DEFAULTS dans useEffect([activeTokenId])). Modifié 98 REWORK-05 — panneaux droits → DroneWeaponPanel+AssaultRangedPanel+MeleeCombatPanel. Modifié 99 — BUG-W1 (init weapon : initialStates.weapon guard) + BUG-W2 (setTimeout fix batch race setCombatTargetMode) + ERG-W1 (auto-draw "Assaut tir") + ERG-W2 (auto-draw/holster CaC onWeaponChange). Modifié 165 Tir Multi — état `assaultTargets`/`assaultCount` (array), `handleStartAttack` simplifié (1 clic remplit la série, plus de chaînage récursif comme le CaC)
 │   │   │   ├── CombatInitStateWindow.jsx # NOUVEAU 65 Sprint 7.6 — fenêtre joueur phase ROSTER : sélection état initial (position/arme/mode de tir), StateChip click-to-cycle, draggable, emit COMBAT_INIT_STATE. Affiché par CombatOverlay.
 │   │   │   ├── CombatStunWindow.jsx    # NOUVEAU 95-5b — fenêtre PJ interactive "Lancer 1D6" durée étourdissement. Reçoit COMBAT_STUN_PROMPT. Emit COMBAT_STUN_CONFIRM.
-│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS, MOVE_ZONE_DEFS. Modifié 67 Sprint 7.6 — +reload dans MAP_ACTIONS (span2, après melee), +span2 sur move, EXCLUSIVE_ACTIONS dans CombatActionWindow. Modifié 98 REWORK-05 — +ACTION_LABELS, PURE_MOVE_TYPES, COMBAT_MODE_DEFS, FIRE_MODE_VARIANTS. Modifié 99 — +computeFireVariant (factorisation CC/RC/RL depuis GM+Joueur, defaultCcCount param)
+│   │   │   ├── combatSections.js       # Modifié 65 Sprint 7.6 — STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS, MOVE_ZONE_DEFS. Modifié 67 Sprint 7.6 — +reload dans MAP_ACTIONS (span2, après melee), +span2 sur move, EXCLUSIVE_ACTIONS dans CombatActionWindow. Modifié 98 REWORK-05 — +ACTION_LABELS, PURE_MOVE_TYPES, COMBAT_MODE_DEFS, FIRE_MODE_VARIANTS. Modifié 99 — +computeFireVariant (factorisation CC/RC/RL depuis GM+Joueur, defaultCcCount param). Modifié 165 Tir Multi — stub mort `k:'multi'` retiré de MAP_ACTIONS, `calcIniBreakdown` lit `mapActions.attack[0]` (array)
 │   │   │   ├── Canvas3D.jsx            # Modifié 64 — +combatTargetMode prop, combatTargetModeRef (P40), intercept drag→target, ligne R3F attaquant→cible (useMemo targetLinePoints). Modifié 65 Sprint Pathfinding — A* Chebyshev temps réel (cases colorées par allure, murs respectés). Modifié 65 Sprint Raycast — raycastVoxelColumn via fast-voxel-raycast (remplace plan y=0 fixe, précis sur terrain élevé). Modifié 70 — TokenGlbBody + TokenFallbackBody + TokenGlbErrorBoundary, HARDCODED_DEFAULT_TOKEN_URL=/models/default.glb, prop defaultTokenGlbUrl, hiérarchie fallback 4 niveaux. Modifié 73 — Billboard drei sur étiquettes tokens (billboarding), color=user_color||token.color||'#4A90D9', drag snappedX/Z (snap case), raycastVoxelColumn +rawX/rawZ, drag utilise raycastVoxelColumn (précision altitude). Modifié 76 — clic simple = ouvre TokenRadialMenu (handlePointerUp onTokenRotate→onTokenDoubleClick, dep array mis à jour), TokenMesh.onDoubleClick retiré. Modifié 76 Sprint Voxels — boucle Voxel remplacée par <CulledVoxelScene>, import Voxel retiré. Modifié 79 — getVoxelSurfaceTop() module-level (slab_bottom→y+0.5), colTopSurface useMemo O(1) (remplace getColumnTopY O(N)), dragRef enrichi (snappedX/Z/surfaceY stockés pendant drag), handlePointerUp lit dragRef pas curseur, threeToDb(x, surfaceY-1.0, z), Math.floor (was Math.round), ghost overlay corrigé. Modifié 81 Sprint Annonce v2 — prop announcementMarker (outer+inner Scene), ghost box bleue (PE14→Three.js) à moveTarget, ligne ambre tokensRef déclarant→cible (Float32Array, même pattern que targetLinePoints). Modifié 81 S2 — ghost déplacement enrichi : ligne bleue (#7ab8f5) origine→destination + Billboard+Text FONT_URL nom du token au-dessus destination
 │   │   │   ├── Editor3D.jsx            # Modifié 9C — EntityEditorScene, activeEditorTab
 │   │   │   ├── EntityMesh.jsx          # Modifié 43 — Lerp 300ms EntityMeshVoxel + EntityMeshGlb
@@ -1133,7 +1133,7 @@ Enclume/
 │   │   │   ├── useDraggable.js         # NOUVEAU 66 — hook partagé drag+localStorage+clamp (storageKey, defaultPos, panelW)
 │   │   │   ├── useTokenSocket.js       # NOUVEAU 103 (REWORK-09) — listeners TOKEN_MOVED/TOKEN_UPDATED/TOKEN_STATUS_*/TOKEN_SET_ROTATION
 │   │   │   ├── useEntitySocket.js      # NOUVEAU 103 (REWORK-09) — listeners ENTITY_MOVE_RESULT/ENTITY_UPDATED/DICE_RESULT(entity_action). Modifié 108b — clear pendingEntityId sur DICE_RESULT échec
-│   │   │   └── useCombatSocket.js      # NOUVEAU 103 (REWORK-09) — listeners COMBAT_*/DICE_RESULT(combat). 1509→1296 lignes SessionPage
+│   │   │   └── useCombatSocket.js      # NOUVEAU 103 (REWORK-09) — listeners COMBAT_*/DICE_RESULT(combat). 1509→1296 lignes SessionPage. Modifié 159 — onCombatEnded purge désormais tous les états de fenêtre/résultat (bug réel : seuls attackResult/reloadResult l'étaient, une fenêtre de dégâts restée ouverte survivait au combat suivant)
 │   │   │   ├── DashboardPage.jsx       # Modifié 45 — upload cover. Modifié 66 — layout flex+ChangelogPanel. Modifié 68 — formulaires inline. Modifié 69 — document.title 'Enclume — Tableau de bord'. Modifié 73 — deux cartes Créer/Rejoindre symétriques (filigrane +/↵, formulaires inline, refs focus, suppression actionsRow/showCreate/showJoin)
 │   │   │   ├── SessionPage.jsx         # Modifié 64-66 — combat, dés. Modifié 69 — document.title dynamique. Modifié 70 — defaultTokenGlbUrl. Modifié 71 — +updateCharacter destructure, +3 listeners wound (WOUND_ADDED/UPDATED/REMOVED → updateCharacter({id,worst_wound_severity})), +actionTimerSec prop CombatOverlay. Modifié 73 — setActiveCampaign(campaignId) début useEffect socket. Modifié 76 — dropdown token remplacé par TokenRadialMenu, contextMenuRef+useEffect click-outside supprimés, handleRemoveContextToken (sans setContextMenu), handleSetContextTokenRotation (TOKEN_SET_ROTATION). Modifié 79 — fix TDZ : useState statusPanel déplacé avant useEffect qui l'utilise. Modifié 81 — state announcementMarker (null|{tokenId,moveTarget,attackTargetId}), set dans COMBAT_ACTION_DECLARED, reset dans COMBAT_PHASE_CHANGED, passé à Canvas3D + CombatOverlay. Modifié 85 M3 — CAMPAIGN_SETTINGS_UPDATED listener (setCampaign merge). Modifié 95-6 — reset setCombatMoveMode/setCombatTargetMode/setPendingMoveSelection dans COMBAT_ENDED + COMBAT_PHASE_CHANGED (CUR1). Modifié 103 (REWORK-09) — useTokenSocket+useEntitySocket+useCombatSocket extraits, useEffect socket 340→~100L, total 1509→1296 lignes
 │   │   │   ├── CampaignSettingsPage.jsx # Modifié 66 Sprint 7.5 — section Règles de jeu. Modifié 68 Sprint Timer — +actionTimerSec. Modifié 69 — document.title. Modifié 70 — section Tokens 3D : upload/réinitialiser default_token_glb_url, feedback succès/erreur
@@ -1143,7 +1143,7 @@ Enclume/
 │   │   │   ├── authStore.js
 │   │   │   ├── tokenStore.js
 │   │   │   ├── characterStore.js       # Modifié 44 — upsertCharacter guard visible+isGm (Bug A)
-│   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot. Modifié 111 (REWORK-04) — +subPhase:null, +setCombatSubPhase, resetCombat inclut subPhase
+│   │   │   ├── combatStore.js          # Modifié 62 — phase/roster/actions/currentTurn/activeSlotIdx/markTokenAnnounced + setActions + advanceSlot. Modifié 111 (REWORK-04) — +subPhase:null, +setCombatSubPhase, resetCombat inclut subPhase. Modifié 159 — +timelineEntries/currentStep (setTimelineState), subPhase désormais aussi mis à jour par ce canal (seul canal qui le pousse hors reconnexion — bug réel corrigé, `subPhase` restait figé à null en jeu normal)
 │   │   │   ├── mapStore.js
 │   │   │   ├── sessionStore.js         # Modifié 73 — messages[]→messagesByCampaign{}, activeCampaignId, setActiveCampaign. resetSession mis à jour (était dead code)
 │   │   │   ├── libraryStore.js         # NOUVEAU 75 — documents[], addDocument (upsert), updateDocument, removeDocument
@@ -1225,7 +1225,7 @@ Enclume/
 │   │       ├── AppError.js
 │   │       ├── minio.js
 │   │       ├── diceParser.js
-│   │       ├── combatFSM.js            # NOUVEAU 111 (REWORK-04) — canTransition + nextState + setFSMSubPhase + allowedEvents. Table TRANSITIONS : 6 états FSM. Fonctions pures, zéro I/O sauf setFSMSubPhase (DB uniquement).
+│   │       ├── combatFSM.js            # NOUVEAU 111 (REWORK-04) — canTransition + nextState + setFSMSubPhase + allowedEvents. Table TRANSITIONS : 6 états FSM. Fonctions pures, zéro I/O sauf setFSMSubPhase (DB uniquement). Modifié 159 — sous-état `AWAITING_REACTION_WINDOW` (minuteur, Lot B) ajouté puis retiré la même session : RAW ne prévoit aucun minuteur pour Retarder, remplacé par une borne de position sur `SLOT_ACTIVE` (aucun sous-état de plus)
 │   │       ├── charStats.js            # Modifié 60 — calcVitesses→calcAllures (4 allures LdB p.221, lookup COO+Athlétisme)
 │   │       ├── redis.js                # NOUVEAU 39 — client ioredis + helpers collision map (PE14 voxels)
 │   │       ├── socketUtils.js          # NOUVEAU 100 (REWORK-07) — getUserColor (6 call sites) + checkTokenOwnership (4 call sites, role==='gm'). LOC_TABLE_CONTACT supprimé.
@@ -1393,6 +1393,11 @@ Enclume/
 | 20260713_155_world_elevator_passengers | Attachement durable token/cabine, position locale JSONB et unicité d'un passager dans une seule cabine. |
 | *(156-157 : chantier Fusion Kiwi, non documentées ici — table ASBUILT.md en retard sur ces numéros, hors scope de cette session)* | |
 | 158_battlemap_texture_usage_cascade | Écrite et appliquée en base (batch 108) pendant une session sur `dev/Saar`/`fusion-kiwi-v2`, un temps dupliquée indépendamment sur `master` (commit `80e75e0`, contenu byte-identique, réconcilié lors de la bascule `dev/Saar` = branche exclusive du 2026-07-15) — provoquait un crash serveur au démarrage sur le worktree `master` (`knex_migrations` référençant un fichier absent, root-cause : ce worktree a partagé la même base Postgres locale que `fusion-kiwi-v2`). Correctif réel et isolé : `battlemap_texture_usage.battlemap_id` référençait `battlemaps.id` sans `ON DELETE CASCADE` (contrairement aux ~15 autres tables enfants d'une campagne), bloquant `DELETE /api/campaigns/:id` dès qu'une battlemap de la campagne a des textures posées. Voir `docs/JOURNAL6.md` Session 142 |
+| *(159-193 : chantiers CHOC1/Moding/Wizard antérieurs — non détaillées ici, table en retard sur ces numéros)* | |
+| 194_ref_setbacks_revers_effects | `docs/PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §5ter — peuple `ref_setbacks.effects` (JSONB, colonne réservée depuis la migration 188) pour les 27 Revers réels, source unique `shared/reversEffectsData.js` (28 tests). Round-trip `down` fourni (remise à `'[]'`) |
+| 196_ref_career_random_benefits_effects | Idem §5quater — peuple `ref_career_random_benefits.effects` pour les 36 métiers restants (`chasseur_primes` déjà peuplé migration 188), source unique `shared/careerRandomEffectsData.js` (21 tests). Round-trip `down` fourni |
+| 198_chasseur_primes_result4_choice | Correctif isolé sur une donnée déjà en production (jamais mélangé au peuplement neuf 196) : `chasseur_primes` résultat 4 (migration 188) appliquait son bonus revenus/célébrité/compétences de façon inconditionnelle, alors que le résultat est un choix accepte/refuse (comme Médecin/4, Mercenaire/4). Round-trip `down` restaure l'ancien effet |
+| 200_pirate_result3_missing_effects | Correctif isolé (même principe que 198) : `pirate` résultat 3 (migration 196) n'avait que le `money_reward`, oubliant Célébrité +2/Matériel +2 pourtant explicites au RAW — trouvé lors d'une 2e passe critique dédiée. Round-trip `down` restaure l'effet incomplet d'origine |
 
 ---
 
@@ -1652,6 +1657,160 @@ difficulty_dc     = modificateur signé (-20 à +10)
 ```
 Malus santé (blessures) : non-cumulatif — pire blessure seule retenue (LdB p.236).
 Malus encombrement : règle maison, s'additionne au malus santé.
+
+---
+## Corps à Corps Polaris (sessions 67–74)
+
+### Serveur
+- Migrations **63** (`chk_action_type` étendu à `'melee'`) et **64** (`state_combat_mode` avec CHECK `normal`/`offensif`/`charge`/`defensif`/`retraite`).
+- `resolveMeleeAction` (dans `socketCombatHelpers.js`) — jet d’opposition attaque/défense, prise en compte des modes de combat, de l’allonge, des multi‑adversaires et des attaques multiples. Bifurcation PJ (attente défense interactive) / PNJ (résolution automatique).
+- `handleChargeFlow` et `handleRetraiteMove` — gestion spécifique des modes Charge (allure lente imposée, bonus dégâts) et Retraite (déplacement gratuit sans attaque d’opportunité). `freeMove` étendu au mode Retraite.
+- **Multi‑adversaires** — `multiAdversaryMalus()` et `countAdversaires()` utilisent les distances réelles (moteur monde) pour déterminer le nombre d’adversaires au contact et appliquer les malus –5/–7/–10 (LdB). Le malus est répercuté dans les jets d’attaque et de défense.
+- **Attaque multiple mêlée** — `mapActions.melee` devient un tableau (1 à 3 cibles), même contrat que CaC 4b. Malus –5/–7, insertion groupée via `declaration_group_id` pour l’étalement de phase, caps serveur, exclusion des modes défensifs.
+- `COMBAT_MELEE_DEFENSE_PROMPT` / `CONFIRM` pour la résolution interactive des défenses PJ, avec transport des modificateurs de mode et d’encerclement.
+
+### Client
+- `CombatActionWindow.jsx` — panneau CaC (armes de contact, allonge, mode de combat, cibles multiples via `meleePendingTokenIds` array). Reset de `has_announced` pendant la déclaration.
+- `CombatGmDeclareWindow.jsx` — file séquentielle PNJ avec les mêmes options de mode et multi‑cibles, chips de combat et gestion des états initiaux.
+- `CombatResultMelee` (dans `CombatResultPanels.jsx`) — affichage des jets d’attaque/défense colorés, badge ⚠ d’encerclement si un malus multi‑adversaires est appliqué.
+- Modes Défensif/Retraite : chips verts, l’attaque est masquée, seule la défense est résolue. La Retraite déclenche un toggle de zone lente avec `ini_mod=0`.
+
+### État
+✅ Tous les sprints CaC 1 à 4b livrés et testés en sessions 67–74. Aucune régression connue.
+---
+
+## Échange / Commerce (tradeService.js) — sessions 124-153 ✅
+
+Système complet PJ↔PJ ("Échange") et PJ↔GM (marchands, revente) — un seul service, une seule table
+d'offres, pas de doublon avec l'ancien Lot A0 (`echangeService.js`, retiré session 153, jamais
+branché à une UI).
+
+### Serveur
+- `server/src/services/tradeService.js` — `getMerchants`/`upsertMerchant`/`deleteMerchant`,
+  `getCatalog`, `buyFromMerchant`, `acceptTransfer` (exécution atomique Échange PJ↔PJ),
+  `executeSell`/`getMyActiveSellOffer` (revente PJ→GM), `getTradeLog`.
+- `server/src/socket/socketTrade.js` — handlers WS (voir events ci-dessous), résolution MJ agissant
+  au nom d'un PJ (`fromChar` non filtré par `user_id` quand `socket.data.role === 'gm'`).
+- Migrations `84_merchants` / `85_trade_log` / `86_trade_offers` / `88_trade_offers_sell` /
+  `89_trade_log_sell` / `90_trade_offers_counter` (+ `87`/`91` sans rapport direct, mêmes numéros).
+
+### Client
+- `client/src/components/ExchangeWindow.jsx` — fenêtre Échange PJ↔PJ, `effectiveCharId`
+  (`isGm ? gmActingAsId : myCharId`) comme autorité unique d'identité agissante.
+- `client/src/components/TradeWindow.jsx` — marchands/revente (scope campagne).
+- `client/src/components/TokenRadialMenu.jsx` — secteur `echange` (`enabled: true` depuis session
+  151, ouvre `ExchangeWindow`).
+
+### Events WS (`shared/events.js`)
+`TRADE_TRANSFER_OFFER/ACCEPTED/DECLINED/CANCELLED`, `TRADE_SELL_PROPOSED/ACCEPTED/DECLINED/
+COUNTER*`, `TRADE_OFFER_RECEIVED/ACCEPTED/DECLINED/CANCELLED/EXPIRED`, `TRADE_MERCHANT_UPDATED`,
+`TRADE_LOG_UPDATED`, `TRADE_ERROR`, `TRADE_DRONE_TRANSFER(RED)` (transfert immédiat même
+propriétaire, ex. drone).
+
+### État
+Parcours complet confirmé fonctionnel en navigateur (ciblage MJ, catalogue filtré sur les items
+déséquipés, proposition, acceptation par un second compte joueur réel) — session 153. Dette connue
+non bloquante : `TRADE1` (`TRADE_TRANSFER_DECLINED` sans vérification d'ownership serveur, sévérité
+faible) — voir `docs/BUGIDENTIFIE.md`.
+
+---
+
+## Bouclier (`damageService.js`, `inventoryService.js`) — session 156 ✅
+
+Implante les règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : deux effets RAW distincts portés
+par un seul objet à slot composite (`char_inventory_slots`, réutilise le mécanisme multi-slot
+existant — aucune nouvelle mécanique de protection) — malus au Test d'attaque de l'adversaire au
+contact/jet-trait (jamais aux armes à feu), protection localisée automatique à distance (jamais au
+contact), jamais les deux effets cumulés sur un même coup (`treatAsContact`).
+
+### Serveur
+- Migration `168_ref_equipment_bouclier.js` — `ref_equipment.shield_atk_malus`/
+  `shield_extra_locations`, mise à jour en place des 3 lignes catalogue historiques déjà en base
+  (pas un seed neuf).
+- `shared/armorConstants.js` — `HAND_TO_ARM_SLOT` (MG→BG, MD→BD).
+- `inventoryService.js` (`updateItem`) — branche composite dédiée pour
+  `ref_equipment.category==='Bouclier'` : le client envoie la main (MG/MD), le serveur compose
+  `[main, bras, ...shield_extra_locations]` et réutilise `_handSlotConflict`/`_armorSlotOccupants`
+  tels quels.
+- `damageService.js` (`resolveTargetHit`) — nouveau paramètre `treatAsContact` : exclut le bouclier
+  de la résolution armure au contact/jet-trait. Test de Chance du Petit bouclier (`1d20 ≤
+  char_sheet.chc`, Corps/Tête uniquement — Moyen/Grand toujours protégés sans jet, Bras toujours
+  automatique).
+- `resolveMeleeAction`/`resolveAssaultAction` (`socketCombatHelpers.js`) — malus CaC/jet-trait de la
+  cible plié dans le Seuil d'attaque avant le jet ; distinction arme à feu (jamais de malus) vs
+  jet/trait (`ref_equipment.category`, valeurs catalogue réelles). `treatAsContact` transporté dans
+  le payload différé PJ (`socketCombatResolution.js`, `COMBAT_DAMAGE_CONFIRM`).
+- Hors scope confirmé : `resolveDroneAssaultAction` (armes de drone) toujours traité comme arme à
+  feu par défaut.
+
+### Client
+- `WeaponPanel.jsx` — bouclier équipable dans l'emplacement main dédié (corrige le bug original
+  signalé par Saar), badge de main corrigé pour un slot composite, stats dédiées affichées (malus
+  CaC adverse, Protection à distance, localisations couvertes).
+- `LocationPanel.jsx` — déséquipement toujours total (`slot: null`) pour un Bouclier, tag visuel +
+  tooltip explicatif.
+- Test de Chance du Petit bouclier diffusé en `DICE_RESULT` (`socketCombatResolution.js`), même
+  patron que la carte `rollLoc` existante.
+- Confirmé sans code neuf : `battlemaps.js` et les fenêtres de déclaration combat affichent déjà le
+  bouclier génériquement (aucune hypothèse `ref_family==='Armes'` excluante), `DiceBreakdownPopover`
+  rend l'entrée « Bouclier adverse » automatiquement.
+
+### État
+Lots A+B+C ✅ codés et testés (21 assertions unitaires Lot A+B, 0 résidu sur personnages/tokens
+jetables) — confirmé fonctionnel en combat réel et en navigateur par Saar (session 156, test du
+Lot C mené en parallèle du développement). **Chantier clos.** Dette connue, non bloquante : les 4
+fichiers character-sheet concernés (`WeaponPanel.jsx`/`LocationPanel.jsx`/`InventoryPanel.jsx`/
+`ContainerPanel.jsx`) n'utilisent `useTranslation` nulle part (zone legacy antérieure au rollout
+i18n) — texte Lot C écrit en dur par cohérence locale, retrofit i18n hors scope. Détail complet
+(archivé) : `docs/Old/PLAN_BOUCLIER.md`.
+
+---
+
+## Tir Multi — Attaques multiples à distance (session 165)
+
+### Serveur
+- `socketCombatAnnouncement.js` — `mapActions.attack` singulier → array (1 à 3 tirs, même contrat que
+  `mapActions.melee`) : boucle de validation/insertion, cap serveur à 3, munitions totales de la série
+  vérifiées avant insertion, garde uniformité d'arme sur toute la série, exclusion RC/RL/tireur-drone,
+  Tir visé/deux armes/Localisation forcés neutres dès que la série dépasse 1 tir. Deux messages
+  d'erreur munitions distincts (`shared/ammoRules.js::parseAmmoCapacity` nouveau).
+- `socketCombatHelpers.js` — `buildTimelineEntries` généralisé (CaC et Tir Multi partagent le même
+  groupement `declaration_group_id`/étalement de phase) ; `computeMultiAttackMalus` extrait en
+  fonction partagée (CaC inchangé, Tir Multi nouveau) ; `resolveDroneAssaultAction`/
+  `resolveAssaultAction` reçoivent chacun le correctif `suspend:true` sur leur branche PJ-touche (voir
+  Bug FSM ci-dessous).
+- `shared/combatExclusiveActions.js` — `getMultiShotIneligibilityReasons` nouveau (symétrique de
+  `getAimIneligibilityReasons`) ; `getAimIneligibilityReasons` reconnaît `mapActions.attack.length > 1`.
+
+### Client
+- `AssaultRangedPanel.jsx` — section « Nombre de tirs » (chips 1/2/3, CC uniquement), cible par défaut
+  (un clic remplit toute la série, "Changer" par tir pour diverger), sections Tir visé/deux armes/
+  Localisation masquées ou grisées dès que la série dépasse 1 tir.
+- `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` — état `assaultPendingTokenIds`/`assaultTargets`
+  (array, remplace le singulier), `assaultCount`/`effectiveAssaultCount`, payload `mapActions.attack[]`.
+  Stub mort `k:'multi'` (« Attaque multiple », jamais câblé) retiré de `combatSections.js`
+  (`MAP_ACTIONS`), GM et joueur.
+- `useDroneDeclare.js` — `mapActions.attack` toujours un array (longueur 1, drones hors scope Tir
+  Multi mais contrat unifié).
+
+### Bug FSM réel trouvé et corrigé en validant (`AWAITING_DAMAGE` écrasé)
+Défaut préexistant de la refonte de l'échelle de phases (session 159), pas spécifique à Tir Multi —
+touche aussi le CaC et les drones. Un tireur/attaquant PJ qui touche posait `AWAITING_DAMAGE` puis un
+`advanceTimeline()` inconditionnel l'écrasait en `SLOT_ACTIVE` dès qu'un autre combattant avait un pas
+suivant, rejetant `COMBAT_DAMAGE_CONFIRM` à jamais. Corrigé dans `resolveAssaultAction`,
+`resolveDroneAssaultAction`, `confirmMeleeDefense` (`suspend:true`/`suspendForDamage`) et `confirmDamage`
+(appelle `advanceTimeline()` au lieu d'un simple rebroadcast quand sa file se vide).
+`socketCombatResolution.js` : `needsDefenseWait` renommé `resolutionSuspended`. Détail complet :
+`docs/SYSTEME/COMBAT.md` § « Bug réel — AWAITING_DAMAGE écrasé ».
+
+### État
+✅ codé et testé en navigateur par Saar, base réelle : déclaration/résolution Tir Multi 2 et 3 tirs,
+malus cohérent, entrelacement de l'échelle confirmé, un PJ qui touche deux fois dans le même Tour avec
+chaînage dégâts correct (validation du correctif FSM ci-dessus). **Chantier clos.** Non testé : série à
+3 tirs avec un TOUCHE, Tir Multi PNJ côté MJ jusqu'à résolution complète, rejets serveur (>3 tirs,
+RC/RL, drone). Détail Testé/Non testé complet : `docs/EN_COURS.md` Items 94/95 (archivé). Détail complet
+(archivé) : `docs/Old/PLAN_TIRMULTI.md`. Dettes restantes hors scope : **INI5** (`docs/BUGIDENTIFIE.md`,
+audit forfait Initiative CaC), dette doc `docs/SYSTEME/COMBAT.md:850` (`pendingDamageActions` obsolète).
 
 ---
 

@@ -8,7 +8,9 @@ import {
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
-import { getAimIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { handSlotDisplayRows } from '../../../shared/weaponSlots.js'
+import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -17,6 +19,7 @@ import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
+import { StateSelector } from './CombatActionWindow.jsx'
 
 // ---------------------------------------------------------------------------
 // Etat par défaut (= DEFAULT colonne DB)
@@ -27,20 +30,6 @@ const STATE_DEFAULTS = {
   fire_mode: 'cc',
   cover:     'exposed',
   vitesse:   'normal',
-}
-
-// ---------------------------------------------------------------------------
-// Statut munitions d'une arme équipée (COM20) — miroir de CombatActionWindow.jsx.
-// ---------------------------------------------------------------------------
-function weaponAmmoStatus(remaining, capacityRaw) {
-  if (capacityRaw == null) return null
-  const m = String(capacityRaw).match(/\d+/)
-  const capacity = m ? parseInt(m[0], 10) : 0
-  if (!capacity) return null
-  const rem = remaining ?? 0
-  if (rem <= 0) return 'empty'
-  if (rem / capacity <= 0.25) return 'low'
-  return 'ok'
 }
 
 function nextKey(stateKey, currentKey, availableKeys) {
@@ -100,7 +89,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [meleeAttackCount,setMeleeAttackCount]= useState(1)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
-  const [assaultTarget,   setAssaultTarget]   = useState(null)     // { targetTokenId } | null
+  const [assaultTargets,  setAssaultTargets]  = useState([])       // [tokenId, ...] — docs/PLAN_TIRMULTI.md
+  const [assaultCount,    setAssaultCount]    = useState(1)        // 1|2|3
   const [meleeTargets,    setMeleeTargets]    = useState([])       // [tokenId, ...]
   const [chargeSelection, setChargeSelection] = useState(null)     // { move, targetTokenId } | null
   // Tir GM — variant mode de tir (miroir PJ)
@@ -119,8 +109,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
 
+  // StrictMode (main.jsx) double-invoque les effets de montage en dev (mount → cleanup → mount) —
+  // sans ce réarmement dans le corps de l'effet, isMountedRef.current reste bloqué à false après ce
+  // cycle synthétique (seul le cleanup le mettait à false, rien ne le repassait à true), et la chaîne
+  // de sélection multi-cibles (selectNext ci-dessous) s'arrêtait alors systématiquement après la
+  // première cible — COM7.
   const isMountedRef = useRef(true)
-  useEffect(() => () => { isMountedRef.current = false }, [])
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
 
   // ── Reset complet quand le slot actif change ─────────────────────────────
   useEffect(() => {
@@ -129,7 +127,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setMeleeAttackCount(1)
     setMeleePendingMode(false)
     setPendingMove(null)
-    setAssaultTarget(null)
+    setAssaultTargets([])
+    setAssaultCount(1)
     setMeleeTargets([])
     setChargeSelection(null)
     setAssaultBulletCount(null)
@@ -242,6 +241,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const rangedActive = isActivePnj && isRanged(activeTokenId)
   const weaponMg      = isActivePnj ? (equipment[activeTokenId]?.weaponMg ?? null) : null
   const weaponMd      = isActivePnj ? (equipment[activeTokenId]?.weaponMd ?? null) : null
+  const weapon2M      = isActivePnj ? (equipment[activeTokenId]?.weapon2M ?? null) : null
+  const weaponTr      = isActivePnj ? (equipment[activeTokenId]?.weaponTr ?? null) : null
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
 
@@ -296,11 +297,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     : 0
   const ccSliderDisplayIdx = ccSliderIdx === -1 ? 0 : ccSliderIdx
 
+  // Tir Multi (docs/PLAN_TIRMULTI.md D6) — CC uniquement, jamais RC/RL
+  const effectiveAssaultCount = currentFireMode === 'CC' ? assaultCount : 1
+  // D10 — Tir visé / deux armes / Viser une localisation sont chacun exclusifs avec Tir Multi
+  const multiShotIneligibilityReasons = getMultiShotIneligibilityReasons({
+    currentFireMode, aimTranches, isDualWield, aimedLocation,
+  })
+
   // Tir visé — éligibilité recalculée à chaque rendu, source unique shared/combatExclusiveActions.js
   // (même évaluateur que le serveur et que CombatActionWindow.jsx PJ — retour visuel immédiat)
   const aimIneligibilityReasons = getAimIneligibilityReasons({
     mapActions: {
       move:     pendingMove ?? chargeSelection?.move ?? null,
+      // Tir Multi (D1) : array, comme CombatActionWindow.jsx — signale l'exclusivité dès que plus
+      // d'un tir est configuré. assaultTargets.length > 0 (pas isAttackActive, défini plus bas dans
+      // ce composant) suffit ici, même patron que meleeTargets juste au-dessus.
+      attack:   assaultTargets.length > 0 ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau: weapon?.lunette_niveau ?? 0 }) : null,
       melee:    meleeTargets.length > 0 ? meleeTargets : null,
       reload:   mapAction === 'reload'   ? {} : null,
       interact: mapAction === 'interact' ? {} : null,
@@ -312,7 +324,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── canDeclare ───────────────────────────────────────────────────────────
   const stateChanged = isActivePnj && Object.keys(initialStates).some(k => decl[k] !== initialStates[k])
   const hasAction    = isActivePnj && (
-    !!assaultTarget?.targetTokenId ||
+    (assaultTargets.filter(Boolean).length >= effectiveAssaultCount && assaultTargets.length > 0) ||
     (meleeTargets.length >= effectiveMeleeCount && !meleeDefensif) ||
     meleeDefensif ||
     !!pendingMove ||
@@ -321,8 +333,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     decl.combatMode !== 'normal' ||
     decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase
   )
-  // Si cible d'assaut sélectionnée, un variant doit être configuré (+ Tir visé éligible si utilisé)
-  const assaultValid = !assaultTarget?.targetTokenId || (
+  // Si cible(s) d'assaut sélectionnée(s), un variant doit être configuré (+ Tir visé éligible si utilisé)
+  const assaultValid = assaultTargets.length === 0 || (
+    assaultTargets.slice(0, effectiveAssaultCount).filter(Boolean).length === effectiveAssaultCount &&
     currentVariant !== null && (aimTranches === 0 || aimIneligibilityReasons.length === 0)
   )
   const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || (isActiveDrone && droneDeclare.canDeclare)
@@ -339,26 +352,43 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     )
   }
 
-  // ── Assaut direct ────────────────────────────────────────────────────────
-  const handleStartAttack = () => {
+  // ── Assaut direct (Tir Multi, docs/PLAN_TIRMULTI.md) ──────────────────────
+  // UX (retour Saar) : un seul clic suffit pour le cas courant — tant qu'aucune cible n'est encore
+  // posée, le premier choix remplit toute la série (comportement par défaut, pas de N clics sur la
+  // même cible). startIdx>0 (bouton "Changer" d'un slot précis, une fois au moins une cible posée) ne
+  // touche que ce slot — plus de chaînage récursif nécessaire, contrairement à handleStartMelee (dont
+  // le cas d'usage courant reste des cibles distinctes).
+  const effectiveAssaultCountRef = useRef(effectiveAssaultCount)
+  effectiveAssaultCountRef.current = effectiveAssaultCount
+  const handleStartAttack = (startIdx = 0) => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
-    setAssaultTarget(null)
     setIsSelectingOnMap(true)
     onEnterTargetMode(
       activeTokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (targetId) => { setAssaultTarget({ targetTokenId: targetId }); setIsSelectingOnMap(false) },
+      (targetId) => {
+        setAssaultTargets(prev => {
+          if (!prev.some(Boolean)) return Array(effectiveAssaultCountRef.current).fill(targetId)
+          const next = [...prev]
+          next[startIdx] = targetId
+          return next
+        })
+        setIsSelectingOnMap(false)
+      },
       () => { setIsSelectingOnMap(false) },
       'ranged'
     )
   }
 
   // ── Melee direct ────────────────────────────────────────────────────────
-  const handleStartMelee = () => {
+  // startIdx : emplacement à (re)cibler. Ne ré-enchaîne les N sélections que si on redémarre depuis 0
+  // (premier réglage) — reciblage d'un seul emplacement (startIdx>0, bouton "Changer" par slot) ne
+  // touche plus les autres. Correctif rapide de test (Saar, Session 158) : le MJ devait auparavant tout
+  // resélectionner à chaque changement, un seul bouton « Cibler » repartant toujours de zéro.
+  const handleStartMelee = (startIdx = 0) => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
-    setMeleeTargets([])
+    if (startIdx === 0) setMeleeTargets([])
     setIsSelectingOnMap(true)
-    // Pour N attaques, on enchaîne N sélections
     const selectNext = (idx) => {
       onEnterTargetMode(
         activeTokenId,
@@ -369,7 +399,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             next[idx] = targetId
             return next
           })
-          if (idx + 1 < effectiveMeleeCountRef.current) {
+          if (startIdx === 0 && idx + 1 < effectiveMeleeCountRef.current) {
             setTimeout(() => { if (isMountedRef.current) selectNext(idx + 1) }, 0)
           } else {
             setIsSelectingOnMap(false)
@@ -379,7 +409,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         'melee'
       )
     }
-    selectNext(0)
+    selectNext(startIdx)
   }
 
   // ── Charge (move court gratuit → cible CaC) ─────────────────────────────
@@ -434,26 +464,30 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         position:    decl.position,
         weapon:      decl.weapon,
         fire_mode:   decl.fire_mode,
-        cover:       decl.cover,
         vitesse:     decl.vitesse,
         combat_mode: decl.combatMode,
       },
       mapActions: {
         move:     movePayload,
-        attack:   weapon && assaultTarget?.targetTokenId ? {
-          weaponInvId:        weapon.inv_id,
-          targetTokenId:      assaultTarget.targetTokenId,
-          bulletCount:        currentVariant?.bulletCount ?? null,
-          fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : 0,
-          fireModeBonusDmg:   currentVariant?.bonusDmg    ?? 0,
-          isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
-          dualWieldBonusComp: dualWieldBonusComp,
-          aimTranches:        aimTranches,
-          aimedLocation:      aimedLocation,
-        } : null,
+        // Tir Multi (docs/PLAN_TIRMULTI.md) : array d'1 à 3 tirs, même arme pour toute la série (D9).
+        attack:   weapon && assaultTargets.length > 0
+          ? assaultTargets.slice(0, effectiveAssaultCount).map(targetTokenId => ({
+              weaponInvId:        weapon.inv_id,
+              // Main non directrice (COM29) — miroir CombatActionWindow.jsx. weaponMg = main non
+              // directrice quand hasTwoWeapons (primaryWeapon = weaponMd, cf. resolveHandWeapons).
+              offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.inv_id ?? null) : null,
+              targetTokenId,
+              bulletCount:        currentVariant?.bulletCount ?? null,
+              fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : 0,
+              fireModeBonusDmg:   currentVariant?.bonusDmg    ?? 0,
+              isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
+              dualWieldBonusComp: dualWieldBonusComp,
+              aimTranches:        aimTranches,
+              aimedLocation:      aimedLocation,
+            }))
+          : null,
         melee:    meleeCaC.length > 0 ? meleeCaC : null,
         reload:   mapAction === 'reload',
-        multi:    false,
         interact: mapAction === 'interact',
       },
       quick: { ...decl.quick },
@@ -468,7 +502,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   )
 
   // ── Attack actif (visuellement) ───────────────────────────────────────────
-  const isAttackActive = !!assaultTarget || (combatTargetMode?.tokenId === activeTokenId && !isMeleeSetup)
+  const isAttackActive = assaultTargets.length > 0 || (combatTargetMode?.tokenId === activeTokenId && !isMeleeSetup)
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDU
@@ -501,33 +535,44 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               <div className="combat-win-section">
                 <span className="combat-win-section-title">TACTIQUE</span>
                 <div style={S.chips}>
-                  {['position', 'cover', 'vitesse'].map(k => (
-                    <InlineChip key={k} stateKey={k}
-                      initial={initialStates[k]}
-                      current={decl[k]}
-                      onChange={v => dispatch({ type: 'SET_FIELD', key: k, value: v })} />
-                  ))}
+                  <InlineChip stateKey="position"
+                    initial={initialStates.position}
+                    current={decl.position}
+                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })} />
                 </div>
+                {/* Retarder/Précipiter — segmented control (pas la puce à cycle : Session 158, retour
+                    Saar « pas de bouton pour Action retardée pour les PNJ » — la puce à cycle masquait
+                    les 3 choix derrière des clics successifs sans repère visuel, StateSelector montre
+                    les 3 en même temps comme côté joueur). */}
+                <StateSelector
+                  stateKey="vitesse" def={STATE_DEFS.vitesse}
+                  current={decl.vitesse} initial={initialStates.vitesse}
+                  onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
+                />
               </div>
 
               {/* ARMEMENT */}
               <div className="combat-win-section">
                 <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>ARMEMENT</span>
-                {(weaponMg || weaponMd) && (
-                  <div style={S.weaponInfo}>
-                    {[['MG', weaponMg], ['MD', weaponMd]].filter(([, w]) => w).map(([hand, w]) => {
-                      const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count)
-                      const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
-                      return (
-                        <span key={w.inv_id} className={cls} style={S.weaponInfoLine} title={w.skill_label ?? undefined}>
-                          <span className="combat-equip-dot" />
-                          {weaponMg && weaponMd ? `${hand} · ` : ''}{w.name || '?'}
-                          {status && <span style={S.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
+                {(() => {
+                  const { rows, showSlotLabel } = handSlotDisplayRows({ MG: weaponMg, MD: weaponMd, '2M': weapon2M, Tr: weaponTr })
+                  if (rows.length === 0) return null
+                  return (
+                    <div style={S.weaponInfo}>
+                      {rows.map(({ slot, weapon: w }) => {
+                        const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count, w.ref_caliber)
+                        const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
+                        return (
+                          <span key={w.inv_id} className={cls} style={S.weaponInfoLine} title={w.skill_label ?? undefined}>
+                            <span className="combat-equip-dot" />
+                            {showSlotLabel ? `${slot} · ` : ''}{w.name || '?'}
+                            {status && <span style={S.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
                 <div style={S.chips}>
                   {['weapon', 'fire_mode'].map(k => (
                     <InlineChip key={k} stateKey={k}
@@ -548,9 +593,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
                     const noRangedWeapon = a.k === 'attack' && !rangedActive
+                    // Rien à recharger sans arme à munitions — même garde que le panneau Joueur
+                    // (CombatActionWindow.jsx, `isAmmoFull || !selectedWeapon`) : sans elle, "Recharger"
+                    // reste cliquable pour un personnage CaC pur et ne fait rien, sans retour (Session 158,
+                    // Bourrin/Matraque Mao).
+                    const noReloadWeapon = a.k === 'reload' && !rangedActive
                     const weaponNotDrawn = a.k === 'attack' && rangedActive && decl.weapon !== 'drawn'
                     const stunDisabled   = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
-                    const disabled = noRangedWeapon || stunDisabled
+                    const disabled = noRangedWeapon || noReloadWeapon || stunDisabled
                     const grayed   = weaponNotDrawn || disabled
                     const active   = !disabled && (
                       a.k === 'attack' ? isAttackActive :
@@ -572,12 +622,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                             handleStartMove()
                           } else if (a.k === 'attack') {
                             if (isAttackActive) {
-                              setAssaultTarget(null)
+                              setAssaultTargets([])
+                              setAssaultCount(1)
                               setAssaultBulletCount(null)
                               setAssaultVariantAB('A')
                               setAimTranches(0)
                               setAimedLocation(null)
                               return
+                            }
+                            // CaC et Tir mutuellement exclusifs à la déclaration (LdB « Types
+                            // d'Actions », docs/PLAN_COMBAT_TIMELINE.md §6sexies point 5) — sélectionner
+                            // Tir efface un CaC en cours de configuration, jamais les deux ensemble.
+                            if (isMeleeSetup) {
+                              setMeleePendingMode(false)
+                              setMeleeTargets([])
+                              setChargeSelection(null)
+                              dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             }
                             if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
                             handleStartAttack()
@@ -588,6 +648,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               setChargeSelection(null)
                               dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             } else {
+                              // Même exclusivité que ci-dessus, dans l'autre sens.
+                              if (isAttackActive) {
+                                setAssaultTargets([])
+                                setAssaultCount(1)
+                                setAssaultBulletCount(null)
+                                setAssaultVariantAB('A')
+                                setAimTranches(0)
+                                setAimedLocation(null)
+                              }
                               handleStartMelee()
                             }
                           } else {
@@ -710,12 +779,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     </div>
                   )}
 
-                  {/* Cible assaut */}
-                  {pjPreview.assaultTargetId && (
+                  {/* Cible(s) assaut — Tir Multi (docs/PLAN_TIRMULTI.md) */}
+                  {pjPreview.assaultTargetIds?.length > 0 && (
                     <div style={S.monitorRow}>
                       <span style={S.monitorIcon}>→</span>
                       <span style={{ ...S.monitorText, color: '#e07070' }}>
-                        {getLabel(pjPreview.assaultTargetId)}
+                        {pjPreview.assaultTargetIds.filter(Boolean).map(id => getLabel(id)).join(', ')}
                       </span>
                     </div>
                   )}
@@ -857,11 +926,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               meleeCount={meleeAttackCount}
               effectiveMeleeCount={effectiveMeleeCount}
               onMeleeCountChange={(n) => { setMeleeAttackCount(n); setMeleeTargets(prev => prev.slice(0, n)) }}
-              perSlotTargeting={false}
+              perSlotTargeting={true}
               targetIds={chargeSelection?.targetTokenId ? [chargeSelection.targetTokenId] : meleeTargets}
               isInTargetMode={combatTargetMode?.tokenId === activeTokenId && !chargeSelection?.targetTokenId}
               tokens={tokens}
-              onChooseTarget={() => handleStartMelee()}
+              onChooseTarget={(i) => handleStartMelee(i)}
               showReadyBadge={false}
             />
           </div>
@@ -873,9 +942,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             <AssaultRangedPanel
               weaponDisplay={weapon ? `${weapon.name ?? 'Arme'} (${weapon.slot ?? '?'})` : null}
               weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.name ?? 'Arme'} (${weaponMd.slot ?? '?'})` : null}
-              assaultTargetId={assaultTarget?.targetTokenId ?? null}
+              targetIds={assaultTargets}
               getLabel={getLabel}
-              onChooseTarget={handleStartAttack}
+              onChooseTarget={(i) => handleStartAttack(i)}
               showDualWieldSection={hasTwoWeapons && sameFirMode}
               isDualWield={isDualWield}
               currentFireMode={currentFireMode}
@@ -894,6 +963,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               lunetteNiveau={weapon?.lunette_niveau ?? 0}
               aimedLocation={aimedLocation}
               onAimedLocationChange={(loc) => setAimedLocation(loc)}
+              assaultCount={assaultCount}
+              effectiveAssaultCount={effectiveAssaultCount}
+              onAssaultCountChange={(n) => {
+                setAssaultCount(n)
+                setAssaultTargets(prev => {
+                  const truncated = prev.slice(0, n)
+                  if (truncated.length >= n) return truncated
+                  const fillValue = truncated.find(Boolean) ?? null
+                  return Array.from({ length: n }, (_, i) => truncated[i] ?? fillValue)
+                })
+              }}
+              multiShotIneligibilityReasons={multiShotIneligibilityReasons}
             />
           </div>
         )}

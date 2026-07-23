@@ -2,6 +2,25 @@ import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
 import { AIM_MAX_TRANCHES, getAimBonusComp, getAimIniCost } from '../../../shared/combatExclusiveActions.js'
 import AimedLocationPicker from './AimedLocationPicker.jsx'
 
+// Chips inline pour le nombre de tirs — même motif que MeleeCombatPanel.jsx (CountChip), palette
+// rouge du panneau Assaut plutôt que le vert CaC.
+function ShotCountChip({ label, tooltip, selected, disabled, onClick }) {
+  return (
+    <div
+      title={tooltip}
+      onClick={disabled ? undefined : onClick}
+      style={{
+        padding: '4px 8px', borderRadius: 3, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 10,
+        border: `1px solid ${selected ? '#e07070' : '#3a2a2a'}`,
+        background: selected ? 'rgba(224,112,112,0.15)' : 'rgba(255,255,255,0.02)',
+        color: disabled ? '#5b4a4a' : (selected ? '#e07070' : '#9a7a7a'),
+        fontWeight: selected ? 600 : 400,
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >{label}</div>
+  )
+}
+
 const P = {
   section: {
     padding: '8px 14px',
@@ -69,10 +88,10 @@ const P = {
 export default function AssaultRangedPanel({
   weaponDisplay,        // string | null — ex: "Glock-17 (MG)"
   weaponMdDisplay,      // string | null — dual wield 2nd weapon, null = masqué
-  assaultTargetId,      // string | null
+  targetIds,            // string[] — cibles sélectionnées, une par tir de la série (docs/PLAN_TIRMULTI.md)
   getLabel,             // (tokenId) => string
-  onChooseTarget,       // () => void
-  showDualWieldSection, // bool — hasTwoWeapons && sameFirMode
+  onChooseTarget,       // (index) => void
+  showDualWieldSection, // bool — hasTwoWeapons && sameFirMode && effectiveAssaultCount === 1 (D10)
   isDualWield,          // bool — état réel, câblé identique PJ (CombatActionWindow) et MJ (CombatGmDeclareWindow)
   currentFireMode,      // 'CC' | 'RC' | 'RL'
   onDualWieldChange,    // (bool) => void — setter réel des deux côtés
@@ -90,9 +109,15 @@ export default function AssaultRangedPanel({
   lunetteNiveau,        // number — niveau de la Lunette installée sur l'arme sélectionnée (0/undefined = aucune)
   aimedLocation,        // string | null — Viser une Localisation précise (COM9, docs/PLAN_TIRVISE v2.md)
   onAimedLocationChange, // (loc | null) => void
+  // Tir Multi (docs/PLAN_TIRMULTI.md) — série de 1 à 3 tirs, malus -5/2 tirs ou -7/3 tirs (LdB p.218)
+  assaultCount,             // 1 | 2 | 3
+  effectiveAssaultCount,    // 1 | 2 | 3 — 1 si currentFireMode !== 'CC' (D6, calculé par le parent)
+  onAssaultCountChange,     // (n) => void
+  multiShotIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
 }) {
   const aimSliderMax = Math.max(AIM_MAX_TRANCHES, lunetteNiveau ?? 0)
   const fireModeLabel = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode
+  const multiShotDisabled = multiShotIneligibilityReasons.length > 0
 
   return (
     <>
@@ -111,21 +136,57 @@ export default function AssaultRangedPanel({
         )}
       </div>
 
-      {/* Section Cible */}
-      <div style={P.section}>
-        <div style={P.sectionTitle}>Cible</div>
-        {assaultTargetId ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={P.targetName}>{getLabel(assaultTargetId)}</span>
-            <button style={P.changeBtn} onClick={onChooseTarget}>Changer</button>
+      {/* Section Nombre de tirs — Tir Multi (docs/PLAN_TIRMULTI.md), CC uniquement (D6) */}
+      {currentFireMode === 'CC' && (
+        <div style={P.section}>
+          <div style={P.sectionTitle}>Nombre de tirs</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <ShotCountChip label="1 tir"      tooltip="Un tir — aucun malus."                    selected={effectiveAssaultCount === 1} onClick={() => onAssaultCountChange(1)} />
+            <ShotCountChip label="2 tirs −5"   tooltip={multiShotDisabled ? `Indisponible car : ${multiShotIneligibilityReasons.join(', ')}` : "−5 à tous les jets de tir (LdB p.218)."} selected={effectiveAssaultCount === 2} disabled={multiShotDisabled} onClick={() => onAssaultCountChange(2)} />
+            <ShotCountChip label="3 tirs −7"   tooltip={multiShotDisabled ? `Indisponible car : ${multiShotIneligibilityReasons.join(', ')}` : "−7 à tous les jets de tir (LdB p.218)."} selected={effectiveAssaultCount === 3} disabled={multiShotDisabled} onClick={() => onAssaultCountChange(3)} />
           </div>
+        </div>
+      )}
+
+      {/* Section Cible(s) — une par tir de la série. Tant qu'aucune cible n'a encore été choisie, un
+          seul bouton suffit : le premier choix remplit toute la série (comportement par défaut demandé
+          par Saar — ne pas forcer N clics sur la même cible pour le cas courant). Une fois au moins une
+          cible posée, chaque tir affiche son propre slot avec "Changer" pour permettre de diverger. */}
+      <div style={P.section}>
+        <div style={P.sectionTitle}>
+          {effectiveAssaultCount === 1 ? 'Cible' : `Cibles (${targetIds.filter(Boolean).length}/${effectiveAssaultCount})`}
+        </div>
+        {targetIds.filter(Boolean).length === 0 ? (
+          <button style={P.chooseBtn} onClick={() => onChooseTarget(0)}>Choisir une cible</button>
         ) : (
-          <button style={P.chooseBtn} onClick={onChooseTarget}>Choisir une cible</button>
+          Array.from({ length: effectiveAssaultCount }, (_, i) => {
+            const tgtId = targetIds[i] ?? null
+            return (
+              <div key={i} style={{ marginBottom: i < effectiveAssaultCount - 1 ? 4 : 0 }}>
+                {tgtId ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {effectiveAssaultCount > 1 && (
+                      <span style={{ fontSize: 9, color: '#705050', minWidth: 12 }}>{i + 1}.</span>
+                    )}
+                    <span style={P.targetName}>{getLabel(tgtId)}</span>
+                    <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>Changer</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {effectiveAssaultCount > 1 && (
+                      <span style={{ fontSize: 9, color: '#705050', minWidth: 12 }}>{i + 1}.</span>
+                    )}
+                    <button style={P.chooseBtn} onClick={() => onChooseTarget(i)}>Choisir une cible</button>
+                  </div>
+                )}
+              </div>
+            )
+          })
         )}
       </div>
 
-      {/* Section Type de tir — dual wield Joueur uniquement */}
-      {showDualWieldSection && (
+      {/* Section Type de tir — dual wield Joueur uniquement, exclusif avec Tir Multi (D10) */}
+      {showDualWieldSection && effectiveAssaultCount === 1 && (
         <div style={P.section}>
           <div style={P.sectionTitle}>Type de tir</div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -297,9 +358,10 @@ export default function AssaultRangedPanel({
       )}
 
       {/* Section Viser une localisation (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — malus au
-          Test pour choisir la zone au lieu du 1D20 aléatoire. Aucune condition d'éligibilité
-          (contrairement à Tir visé) : toujours sélectionnable, cumulable avec le reste. */}
-      {weaponDisplay && (
+          Test pour choisir la zone au lieu du 1D20 aléatoire. Pas de condition d'éligibilité propre
+          (contrairement à Tir visé), mais exclusif avec Tir Multi (docs/PLAN_TIRMULTI.md D10,
+          tranché Saar) : masqué tant qu'une série de plusieurs tirs est active. */}
+      {weaponDisplay && effectiveAssaultCount === 1 && (
         <div style={P.section}>
           <div style={P.sectionTitle}>Viser une localisation</div>
           <AimedLocationPicker aimedLocation={aimedLocation} onChange={onAimedLocationChange} />

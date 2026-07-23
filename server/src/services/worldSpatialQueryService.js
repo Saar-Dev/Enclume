@@ -27,6 +27,7 @@ export async function measureBattlemapTokenDistance({
   targetTokenId,
   database = db,
 } = {}) {
+  console.log(`[DBG] measureBattlemapTokenDistance — début source:${sourceTokenId} target:${targetTokenId}`)
   const [initialSource, initialTarget] = await Promise.all([
     database('tokens').where({ id: sourceTokenId }).first(),
     database('tokens').where({ id: targetTokenId }).first(),
@@ -38,10 +39,12 @@ export async function measureBattlemapTokenDistance({
     return Object.freeze({ status: 'cross-battlemap', distanceM: null })
   }
 
+  console.log(`[DBG] measureBattlemapTokenDistance — avant reconcileBattlemapElevators battlemap:${initialSource.battlemap_id}`)
   const elevatorRuntime = await reconcileBattlemapElevators({
     battlemapId: initialSource.battlemap_id,
     database,
   })
+  console.log(`[DBG] measureBattlemapTokenDistance — après reconcileBattlemapElevators`)
   const battlemap = elevatorRuntime.battlemap
   const [sourceToken, targetToken, runtimeContext] = await Promise.all([
     database('tokens').where({ id: sourceTokenId, battlemap_id: battlemap.id }).first(),

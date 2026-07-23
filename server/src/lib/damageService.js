@@ -2,13 +2,17 @@ import { parseDice }                        from './diceParser.js'
 import { calcResistanceArmure }             from './charStats.js'
 import {
   calcResistanceDommages, getMutationModForResistance, getAdvantageModForResistance, getNaturalArmorMod,
+  polarisRound,
 } from '../../../shared/polarisUtils.js'
 import { getMutationEffects }               from '../services/mutationService.js'
 import { getAdvantages }                    from '../services/advantageService.js'
 import * as woundService                    from './woundService.js'
 import * as statusService                   from './statusService.js'
 import { LOC_TABLE, SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
-import { parseAmmoEffects, resolveDmgEffect, resolveChocFormula } from '../../../shared/weaponAmmoDsl.js'
+import {
+  parseAmmoEffects, resolveDmgEffect, resolveChocFormula,
+  resolveAmmoMechanic, resolveMechanicDamageFormula,
+} from '../../../shared/weaponAmmoDsl.js'
 
 // ─── _fetchWeaponAndAmmo (interne) ─────────────────────────────────────────────
 // Fetch commun arme + munition chargée (current_ammo) en une passe — partagé par
@@ -18,43 +22,118 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
     .leftJoin('ref_equipment as weapon_ref', 'char_inventory.equipment_id', 'weapon_ref.id')
     .leftJoin('ref_equipment as ammo_ref', 'char_inventory.current_ammo', 'ammo_ref.id')
     .where({ 'char_inventory.id': weaponInvId })
-    .select('weapon_ref.damage_h as weapon_formula', 'ammo_ref.ammo_effects as ammo_effects')
+    // weapon_ref_id (CHOC1) : seul signal fiable de "l'arme a été trouvée" — weapon_formula peut être
+    // légitimement vide pour une arme Choc pur, ne jamais l'utiliser comme test de présence de l'arme.
+    // shock/shock_mechanism/shock_reduced_by_armor (CHOC1 Palier 1, migration 190) : Choc porté par
+    // l'arme elle-même, indépendant de la munition — voir _weaponShockDsl ci-dessous.
+    .select(
+      'weapon_ref.id as weapon_ref_id', 'weapon_ref.damage_h as weapon_formula', 'ammo_ref.ammo_effects as ammo_effects',
+      'weapon_ref.shock as weapon_shock', 'weapon_ref.shock_mechanism as weapon_shock_mechanism',
+      'weapon_ref.shock_reduced_by_armor as weapon_shock_reduced_by_armor',
+    )
     .first()
 }
 
-// ─── getEffectiveWeaponDamage — Chantier 11 Étape 2 Lot A (docs/PLAN_ARMES_DSL.md) ────────────────
+// ─── _weaponShockDsl (interne, CHOC1 Palier 1) ─────────────────────────────────────────────────────
+// Construit le descripteur Choc porté par l'arme elle-même (ref_equipment.shock, catégories 1/2,
+// docs/PLAN_CHOC1.md §4) — même forme que le chocDsl déjà transporté pour la munition (catégorie 3,
+// `{action:'SET', value}`), étendu de `gateLocation`/`reducedByArmor` (seule différence structurelle
+// entre catégories, voir décision d'architecture du plan). `shock_mechanism` NULL = arme non câblée
+// par ce palier (comportement inchangé) : ne jamais dériver ce câblage de la seule présence de
+// `shock`, colonne encore peuplée pour des armes hors scope (Palier 2, narratif, armes à énergie...).
+function _weaponShockDsl(row) {
+  if (!row.weapon_shock_mechanism || !row.weapon_shock) return null
+  return {
+    action: 'SET',
+    value: row.weapon_shock,
+    gateLocation: row.weapon_shock_mechanism === 'tete_gated' ? 'tete' : null,
+    reducedByArmor: row.weapon_shock_reduced_by_armor,
+  }
+}
+
+// ─── getEffectiveWeaponDamage — Chantier 11 Étape 2 Lot A+C1 (docs/PLAN_ARMES_DSL.md) ─────────────
 // Point de résolution unique du dégât effectif d'une arme à munitions : fetch arme + munition
 // chargée (current_ammo) en une passe, parse le DSL de la munition, lance les dés réels. Réutilisé
 // par tous les appelants (PNJ immédiat et PJ différé via combat_pending) — jamais une 2ᵉ copie.
 // Fail-safe : munition sans DSL/DSL malformé/formule invalide → repli sur damage_h brut de l'arme
 // (comportement historique), jamais un throw qui bloque un tour de combat.
-// Retourne null si l'arme elle-même n'a pas de damage_h (même garde que le code historique) — TOUS
-// les appelants doivent vérifier ce cas avant d'utiliser le retour (arme désequipée/transférée entre
-// la Déclaration et la Confirmation côté PJ différé — fenêtre réelle, pas seulement théorique).
-export async function getEffectiveWeaponDamage(db, weaponInvId) {
+// Retourne null si l'arme elle-même est introuvable (arme désequipée/transférée entre la Déclaration
+// et la Confirmation côté PJ différé — fenêtre réelle, pas seulement théorique) — TOUS les appelants
+// doivent vérifier ce cas avant d'utiliser le retour. CHOC1 (docs/PLAN_CHOC1.md) : une arme trouvée
+// mais sans damage_h (catégorie Choc pur, ex. Flex) retourne un résultat valide à 0, jamais null —
+// null signifie uniquement "arme introuvable", plus jamais "pas de dégât physique".
+// `rangeBand` (Lot C1, optionnel) : uniquement consommé par la dégression Shrapnel — sans lien avec
+// le Choc (retiré du pipeline Choc au correctif Lot B, réintroduit ici pour un usage différent).
+export async function getEffectiveWeaponDamage(db, weaponInvId, { rangeBand = null } = {}) {
   const row = await _fetchWeaponAndAmmo(db, weaponInvId)
-  if (!row?.weapon_formula) return null
+  if (!row?.weapon_ref_id) return null
 
   const parsed = parseAmmoEffects(row.ammo_effects)
+  const weaponShockDsl = _weaponShockDsl(row)
+  // Précédence CHOC1 Palier 1 : le Choc de munition (catégorie 3, déjà câblé Lot B) reste prioritaire
+  // s'il est présent — le Choc intrinsèque de l'arme (catégories 1/2) ne comble que son absence. Les
+  // deux sources simultanées seraient une anomalie catalogue (une arme ne devrait porter qu'une seule
+  // autorité de Choc à la fois), signalée plutôt que combinée silencieusement.
+  const resolveChoc = (ammoChoc) => {
+    if (ammoChoc && weaponShockDsl) {
+      console.warn(`[damageService] getEffectiveWeaponDamage — Choc munition ET Choc arme présents simultanément (weaponInvId:${weaponInvId}), munition prioritaire, arme ignorée`)
+    }
+    return ammoChoc ?? weaponShockDsl
+  }
+  if (!row.weapon_formula) {
+    // Arme Choc pur (CHOC1) : aucun dégât physique à lancer, mais le Choc catalogue/munition/arme doit
+    // continuer à circuler normalement vers resolveTargetHit.
+    return { total: 0, rolls: [], formula: '', tags: parsed.tags, choc: resolveChoc(parsed.choc) }
+  }
   if (parsed.unknown.length) {
     console.warn(`[damageService] getEffectiveWeaponDamage — DSL non reconnu ignoré : ${parsed.unknown.join(' | ')} (weaponInvId:${weaponInvId})`)
   }
-  const { baseFormula, extraFormula, mulFactor } = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+  // Lot C1 : dès que tags.FX correspond à une des 6 familles mécaniques, le registre devient la seule
+  // autorité de dégât/armure/Choc — les clauses DMG=/CHOC= catalogue de CETTE ligne sont ignorées
+  // (voir shared/weaponAmmoDsl.js, tête du registre AMMO_MECHANIC_ACTIONS, pour la justification).
+  const mechanic = resolveAmmoMechanic(parsed.tags.FX)
 
   try {
-    const base  = await parseDice(baseFormula.replace(/\s/g, ''))
-    const extra = extraFormula ? await parseDice(extraFormula.replace(/\s/g, '')) : null
+    let baseFormula, bonusFormula, flatBonus, dropoffFormula, mulFactor, choc
+    if (mechanic) {
+      const resolved = resolveMechanicDamageFormula(row.weapon_formula, mechanic, rangeBand)
+      baseFormula    = resolved.baseFormula
+      bonusFormula   = resolved.bonusFormula
+      flatBonus      = resolved.flatBonus
+      dropoffFormula = resolved.dropoffFormula
+      mulFactor      = 1
+      choc           = resolveChoc(mechanic.chocFixed ? { action: 'SET', value: mechanic.chocFixed } : parsed.choc)
+    } else {
+      const resolved = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+      baseFormula    = resolved.baseFormula
+      bonusFormula   = resolved.extraFormula
+      flatBonus      = 0
+      dropoffFormula = null
+      mulFactor      = resolved.mulFactor
+      choc           = resolveChoc(parsed.choc)
+    }
+
+    const base    = await parseDice(baseFormula.replace(/\s/g, ''))
+    const bonus   = bonusFormula   ? await parseDice(bonusFormula.replace(/\s/g, ''))   : null
+    const dropoff = dropoffFormula ? await parseDice(dropoffFormula.replace(/\s/g, '')) : null
+    const total   = Math.round((base.total + (bonus?.total ?? 0) + flatBonus - (dropoff?.total ?? 0)) * mulFactor)
+    const rolls   = [...base.rolls, ...(bonus?.rolls ?? []), ...(dropoff?.rolls ?? [])]
+    const formulaParts = [
+      base.formula,
+      bonus ? `+${bonus.formula}` : '',
+      dropoff ? `-${dropoff.formula}` : '',
+      flatBonus ? `${flatBonus > 0 ? '+' : ''}${flatBonus}` : '',
+    ]
     return {
-      total:   Math.round((base.total + (extra?.total ?? 0)) * mulFactor),
-      rolls:   extra ? [...base.rolls, ...extra.rolls] : base.rolls,
-      formula: extra ? `${base.formula}+${extra.formula}` : base.formula,
+      total, rolls,
+      formula: formulaParts.join(''),
       tags:    parsed.tags,
-      choc:    parsed.choc,
+      choc,
     }
   } catch (err) {
     console.warn(`[damageService] getEffectiveWeaponDamage — formule DSL invalide (${err.message}), repli sur damage_h brut. weaponInvId:${weaponInvId}`)
     const base = await parseDice(row.weapon_formula.replace(/\s/g, ''))
-    return { total: base.total, rolls: base.rolls, formula: base.formula, tags: {}, choc: parsed.choc }
+    return { total: base.total, rolls: base.rolls, formula: base.formula, tags: {}, choc: resolveChoc(parsed.choc) }
   }
 }
 
@@ -62,15 +141,106 @@ export async function getEffectiveWeaponDamage(db, weaponInvId) {
 // Aperçu Phase 1 (COMBAT_DAMAGE_PROMPT) : formule effective affichée au joueur AVANT le jet réel, sans
 // jamais lancer de dé (parseDice serait non déterministe et gaspillerait un jet juste pour l'affichage
 // — aperçu non engageant, `.claude/rules/combat.md`). Retourne une chaîne lisible ("3d10+5",
-// "4d10+1d6", "4d10 ×0.5") ou null si l'arme n'a pas de damage_h.
-export async function getEffectiveWeaponFormulaPreview(db, weaponInvId) {
+// "4d10+1d6", "4d10 ×0.5"), "—" si l'arme est trouvée mais sans damage_h (Choc pur, CHOC1), ou null
+// si l'arme elle-même est introuvable.
+export async function getEffectiveWeaponFormulaPreview(db, weaponInvId, { rangeBand = null } = {}) {
   const row = await _fetchWeaponAndAmmo(db, weaponInvId)
-  if (!row?.weapon_formula) return null
+  if (!row?.weapon_ref_id) return null
+  if (!row.weapon_formula) return '—'
 
-  const parsed = parseAmmoEffects(row.ammo_effects)
-  const { baseFormula, extraFormula, mulFactor } = resolveDmgEffect(row.weapon_formula, parsed.dmg)
-  const withExtra = extraFormula ? `${baseFormula}+${extraFormula}` : baseFormula
+  const parsed   = parseAmmoEffects(row.ammo_effects)
+  const mechanic = resolveAmmoMechanic(parsed.tags.FX)
+
+  let baseFormula, bonusFormula, flatBonus, dropoffFormula, mulFactor
+  if (mechanic) {
+    const resolved = resolveMechanicDamageFormula(row.weapon_formula, mechanic, rangeBand)
+    baseFormula    = resolved.baseFormula
+    bonusFormula   = resolved.bonusFormula
+    flatBonus      = resolved.flatBonus
+    dropoffFormula = resolved.dropoffFormula
+    mulFactor      = 1
+  } else {
+    const resolved = resolveDmgEffect(row.weapon_formula, parsed.dmg)
+    baseFormula    = resolved.baseFormula
+    bonusFormula   = resolved.extraFormula
+    flatBonus      = 0
+    dropoffFormula = null
+    mulFactor      = resolved.mulFactor
+  }
+
+  const withExtra = [
+    baseFormula,
+    bonusFormula   ? `+${bonusFormula}` : '',
+    dropoffFormula ? `-${dropoffFormula}` : '',
+    flatBonus      ? `${flatBonus > 0 ? '+' : ''}${flatBonus}` : '',
+  ].join('')
   return mulFactor !== 1 ? `${withExtra} ×${mulFactor}` : withExtra
+}
+
+// ─── getEffectiveMeleeDamage — CHOC1 prérequis (docs/PLAN_CHOC1.md, docs/JOURNALTEMP.md Étape 6) ────
+// Point de résolution unique du dégât effectif d'une attaque de corps-à-corps — miroir de
+// getEffectiveWeaponDamage (tir) : fetch au moment du jet réel, jamais précalculé. Remplace 5 appels
+// directs à parseDice(damageFormula) trouvés dans resolveMeleeAction (3 branches défenseur PNJ/sans-
+// défense/drone) + confirmMeleeDefense (PNJ attaquant) + confirmDamage (PJ attaquant) — même bug
+// latent partout (formule vide non gérée pour une arme Choc pur), même correctif, un seul endroit.
+// Trois producteurs : arme naturelle (mutation) > arme équipée > mains nues ('1D4') par défaut.
+// `naturalWeaponCharMutationId`/`charSheetId` : uniquement fournis par resolveMeleeAction (même tick
+// que la Déclaration, aucun risque de péremption) — les appels différés (confirmMeleeDefense/
+// confirmDamage, après le round-trip défense) ne les passent jamais, ils s'appuient sur
+// `fallbackFormula` pour ce cas (formule mutation déjà résolue à la Déclaration — statique, contenu
+// catalogue, pas de fenêtre de péremption comme pour une arme équipable/désequipable).
+// `fallbackFormula` (formule résolue à la Déclaration) : utilisée si l'arme équipée n'est plus
+// trouvable au moment du jet (désequipée/transférée entre Déclaration et Confirmation — fenêtre
+// réelle côté PJ différé, même risque déjà géré côté tir) — jamais un tour de combat silencieux.
+export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalWeaponCharMutationId = null, charSheetId = null, fallbackFormula = null } = {}) {
+  let formula, producer, weaponName = null, choc = null
+
+  if (naturalWeaponCharMutationId && charSheetId) {
+    const naturalWeaponMutation = await db('char_mutations as cm')
+      .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+      .where({ 'cm.id': naturalWeaponCharMutationId, 'cm.char_sheet_id': charSheetId, 'cm.status': 'active' })
+      .select('rm.natural_weapon_formula', 'rm.name as mutation_name', 'rm.natural_weapon_choc_formula')
+      .first()
+    formula = naturalWeaponMutation?.natural_weapon_formula ?? fallbackFormula ?? '1D4'
+    producer = naturalWeaponMutation?.natural_weapon_formula ? 'arme naturelle' : 'fallback'
+    weaponName = naturalWeaponMutation?.mutation_name ?? null
+    // CHOC1 Palier 1 (migration 190) : bonus de Choc de mutation (ex. Corne "+1D6 si tête") — gate/
+    // réduction fixes RAW (p.243, même règle que l'arme catégorie 1), pas de variation observée à ce
+    // jour parmi les mutations à arme naturelle (voir commentaire de la migration).
+    if (naturalWeaponMutation?.natural_weapon_choc_formula) {
+      choc = { action: 'SET', value: naturalWeaponMutation.natural_weapon_choc_formula, gateLocation: 'tete', reducedByArmor: true }
+    }
+  } else if (weaponInvId) {
+    const weapon = await db('char_inventory')
+      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+      .where({ 'char_inventory.id': weaponInvId })
+      .select(
+        'ref_equipment.id as weapon_ref_id', 'ref_equipment.damage_h as ref_damage_h', 'ref_equipment.name as weapon_name',
+        'ref_equipment.shock as weapon_shock', 'ref_equipment.shock_mechanism as weapon_shock_mechanism',
+        'ref_equipment.shock_reduced_by_armor as weapon_shock_reduced_by_armor',
+      )
+      .first()
+    // weapon_ref_id absent = arme introuvable → repli sur la formule stockée à la Déclaration, telle
+    // quelle. Jamais réinjecter '1D4' par-dessus : si fallbackFormula était déjà null (arme Choc pur
+    // au moment de la Déclaration), elle doit le rester — pas redevenir mains nues par accident.
+    formula = weapon?.weapon_ref_id ? (weapon.ref_damage_h ?? null) : fallbackFormula
+    producer = weapon?.weapon_ref_id ? 'arme équipée' : 'fallback (arme introuvable)'
+    weaponName = weapon?.weapon_name ?? null
+    // CHOC1 Palier 1 : arme introuvable → pas de Choc reconstruit depuis une donnée partielle, même
+    // garde que côté tir (getEffectiveWeaponDamage) pour le repli sur formule stockée.
+    choc = weapon?.weapon_ref_id ? _weaponShockDsl(weapon) : null
+  } else {
+    formula = fallbackFormula ?? '1D4'
+    producer = 'mains nues'
+  }
+
+  if (!formula) {
+    console.log(`[DBG] getEffectiveMeleeDamage — producteur:${producer} arme:${weaponName ?? '—'} weaponInvId:${weaponInvId ?? '—'} formule:(vide, Choc pur) → total:0`)
+    return { total: 0, rolls: [], formula: '', seed: 0, choc }
+  }
+  const rolled = await parseDice(formula.replace(/\s/g, ''))
+  console.log(`[DBG] getEffectiveMeleeDamage — producteur:${producer} arme:${weaponName ?? '—'} weaponInvId:${weaponInvId ?? '—'} formule:${formula} → total:${rolled.total}`)
+  return { total: rolled.total, rolls: rolled.rolls, formula, seed: rolled.seed, choc }
 }
 
 // _severityForDamage — table de sévérité (LdB p.114, 5/10/15/20/25/30) extraite en fonction interne
@@ -107,6 +277,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   con_na_cible,
   vol_na_cible,
   chocDsl = null,
+  ammoFx = null,
   forcedSlotCode = null,
   treatAsContact = false,
 }) {
@@ -128,10 +299,11 @@ export async function resolveTargetHit(io, db, campaignId, {
   // 2. Armures + résistances (mutations/avantages) de la cible — seul point d'insertion pour toute
   // la résolution de combat (docs/PLAN_MUTATION2.md Lot 3) : les 4 appelants de resolveTargetHit
   // n'ont plus besoin de fetcher mutations/avantages eux-mêmes.
-  // `prt` (protection_shock) n'est pas consommé ici : le Choc de munition (Lot B) n'est pas réduit par
-  // l'armure (LdB p.243 littéral + `docs/REGLES/REGLESMUNITIONS.md`) — `prt` reste réservé au futur
-  // mécanisme arme (`ref_equipment.shock`, catégories 1/2, `docs/VOCABULARY.md` "Dommages de Choc").
+  // `prt` (protection_shock) : jamais consommé pour le Choc de munition (Lot B, catégorie 3, LdB p.243
+  // littéral + `docs/REGLES/REGLESMUNITIONS.md`) — consommé au point 3bis pour le Choc arme/mutation
+  // (catégories 1/2, `chocDsl.reducedByArmor`, CHOC1 Palier 1, migration 190).
   let etq = null
+  let prt = null
   let mutationEffectsCible = null, advantagesCible = []
   let rollChance = null, chanceRolls = null, chanceSeed = null, chanceSuccess = null, chanceThreshold = null
   if (char_sheet_id_cible && characterIdCible) {
@@ -175,9 +347,23 @@ export async function resolveTargetHit(io, db, campaignId, {
       chanceSuccess = rollChance <= chanceThreshold
       if (chanceSuccess) armuresSlot.push(shieldPetit)
     }
-    etq = calcResistanceArmure(armuresSlot).etq
+    const resistanceArmure = calcResistanceArmure(armuresSlot)
+    etq = resistanceArmure.etq
+    prt = resistanceArmure.prt
     mutationEffectsCible = mutEff
     advantagesCible = adv
+
+    // Lot C1 (docs/PLAN_ARMES_DSL.md) — armure de la cible modifiée par la munition (fraction fixe,
+    // jamais un PEN= flat catalogue — voir shared/weaponAmmoDsl.js). Même registre que le dégât côté
+    // getEffectiveWeaponDamage, jamais une 2ᵉ table dupliquée. Ne s'applique que si une armure réelle
+    // a pu être calculée (etq non nul) — multiplier une absence d'armure n'a pas de sens.
+    if (etq != null) {
+      const mechanic = ammoFx ? resolveAmmoMechanic(ammoFx) : null
+      if (mechanic?.armorMulFactor != null) {
+        const scaled = etq * mechanic.armorMulFactor
+        etq = mechanic.armorRound === 'polaris' ? polarisRound(scaled) : Math.floor(scaled)
+      }
+    }
   }
 
   // 3. RD + dégâts nets — RD_TABLE encode le modificateur tel qu'imprimé au LdB p.114 (positif pour
@@ -193,13 +379,20 @@ export async function resolveTargetHit(io, db, campaignId, {
   // 3bis. Dommages de Choc (Lot B, LdB p.243 + `docs/REGLES/REGLESMUNITIONS.md`) — munition avec CHOC
   // applicable, quelle que soit la localisation touchée (catégorie 3, `docs/VOCABULARY.md`, aucune
   // restriction dans les munitions spéciales). Brut, jamais réduit (ni armure, ni RD) — confirmé Saar.
+  // CHOC1 Palier 1 (migration 190, docs/PLAN_CHOC1.md §4) — `gateLocation`/`reducedByArmor` gèrent le
+  // Choc arme/mutation (catégories 1/2) : absents du chocDsl munition (catégorie 3, toujours
+  // `{action:'SET', value}` sans ces clés), donc sans effet sur son comportement historique — un seul
+  // chemin de résolution, deux jeux de paramètres selon le producteur (getEffectiveWeaponDamage/
+  // getEffectiveMeleeDamage).
   // Dommages virtuels : jamais de character_wounds créée, seulement une comparaison de sévérité (étape 5).
   let chocTotal = null
-  if (chocDsl) {
+  const chocGated = chocDsl?.gateLocation && localisation !== chocDsl.gateLocation
+  if (chocDsl && !chocGated) {
     const chocFormula = resolveChocFormula(chocDsl)
     if (chocFormula) {
       try {
         chocTotal = (await parseDice(chocFormula.replace(/\s/g, ''))).total
+        if (chocDsl.reducedByArmor) chocTotal = Math.max(0, chocTotal - (prt ?? 0))
       } catch (err) {
         console.warn(`[damageService] resolveTargetHit — formule Choc invalide (${err.message}), Choc ignoré`)
       }
@@ -241,7 +434,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   return {
     rollLoc, locRolls, locSeed,
     slotCode, localisation,
-    etq, rd,
+    etq, rd, prt,
     degatsNets,
     chocTotal,
     severity, is_lethal,

@@ -8,7 +8,7 @@ import { useSessionStore } from '../stores/sessionStore'
 export function useCombatSocket({ isGm, setMode, onModeReset }) {
   const {
     setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster,
-    advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions,
+    advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions, setTimelineState,
   } = useCombatStore()
   const { addMessage } = useSessionStore()
   const { t } = useTranslation()
@@ -52,19 +52,35 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onCombatEnded = () => {
       resetCombat()
       setMode('play')
+      // Retour Saar Session 159 (« mauvaise réinitialisation ») : seuls attackResult/reloadResult
+      // étaient remis à zéro ici — une fenêtre de dégâts, défense CaC, étourdissement ou résultat PNJ
+      // encore ouverte à la fin d'un combat restait affichée (ou logiquement en attente) dans le combat
+      // SUIVANT. Un clic dessus ré-émettait une confirmation pour un token/pending qui n'existe plus,
+      // rejetée en silence par le garde FSM (`ROSTER|null + COMBAT_DAMAGE_CONFIRM` observé en log) —
+      // inoffensif pour les données mais confus pour l'utilisateur. Tous les états de fenêtre/résultat
+      // de ce hook sont désormais purgés ensemble, même invariant que attackResult/reloadResult déjà là.
       setAttackResult(null)
       setReloadResult(null)
+      setDamagePayload(null)
+      setDamageResults(null)
+      setGmAttackResult(null)
+      setPnjAttackResult(null)
+      setMeleeDefensePrompt(null)
+      setMeleeResult(null)
+      setStunPayload(null)
+      setPendingSurpriseRoll(null)
+      setPjPreview(null)
       onModeReset()
     }
     const onStateSync = ({ combatState, roster, actions }) => {
+      // RESOLUTION : activeTokenId n'est plus dérivable ici depuis active_slot_idx (colonne supprimée,
+      // Lot B) — laissé null, corrigé immédiatement par le COMBAT_TIMELINE_UPDATED de reconnexion émis
+      // juste après par le serveur (server/src/socket/index.js).
       let activeTokenId = null
       if (combatState.phase === 'ANNOUNCEMENT') {
         activeTokenId = [...roster]
           .filter(r => !r.has_announced && r.status === 'active')
           .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
-      } else if (combatState.phase === 'RESOLUTION') {
-        activeTokenId = [...roster]
-          .sort((a, b) => b.initiative - a.initiative)[combatState.active_slot_idx]?.token_id ?? null
       }
       setCombatState({
         phase: combatState.phase,
@@ -72,7 +88,6 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         roster,
         actions,
         currentTurn: combatState.current_turn,
-        activeSlotIdx: combatState.active_slot_idx,
         activeTokenId,
       })
       if (combatState.phase) setMode('combat')  // F-R9-6 : troisième callsite setMode
@@ -89,8 +104,12 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         setMeleeDefensePrompt(null)
         setMeleeResult(null)
         resetAnnouncedActions()
+        // Nouveau Tour — l'échelle du Tour précédent n'a plus lieu d'être affichée, elle sera
+        // reconstruite au prochain passage en RESOLUTION (COMBAT_TIMELINE_UPDATED).
+        setTimelineState({ entries: [], currentStep: null })
       }
     }
+    const onTimelineUpdated = (payload) => { setTimelineState(payload) }
     const onRosterUpdated   = ({ roster }) => { updateRoster(roster) }
     const onSurpriseRoll    = ({ tokenId }) => { setPendingSurpriseRoll({ tokenId }) }
     const onAnnouncePreview = (preview) => { setPjPreview(preview) }
@@ -157,6 +176,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     socket.on(WS.COMBAT_TURN_SKIPPED,          onTurnSkipped)
     socket.on(WS.COMBAT_DECLARE_ERROR,         onDeclareError)
     socket.on(WS.COMBAT_RESOLVE_MOVE_BLOCKED,  onResolveMoveBlocked)
+    socket.on(WS.COMBAT_TIMELINE_UPDATED,      onTimelineUpdated)
 
     return () => {
       socket.off(WS.COMBAT_RELOAD_RESULT,        onReloadResult)
@@ -179,6 +199,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_TURN_SKIPPED,         onTurnSkipped)
       socket.off(WS.COMBAT_DECLARE_ERROR,        onDeclareError)
       socket.off(WS.COMBAT_RESOLVE_MOVE_BLOCKED, onResolveMoveBlocked)
+      socket.off(WS.COMBAT_TIMELINE_UPDATED,     onTimelineUpdated)
     }
   }, [socket, isGm, setMode, onModeReset])
 

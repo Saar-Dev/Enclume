@@ -14,11 +14,44 @@ async function loadVisibility(db, sourceToken, targetToken) {
   })
 }
 
+// Message narratif « cible interposée » + résultat de redirection (docs/PLAN_COMBAT_TIMELINE.md §6
+// point 3, analyse à charge) — un seul patron pour les deux cas où visibility.interceptors est
+// consulté (ligne dégagée ET ligne bloquée : le moteur monde ne distingue pas « mur bloquant » de
+// « cible hors de portée » sous le même signal status:'blocked', un mur qui bloque réellement tout
+// ne laisse remonter aucun intercepteur non plus — sans conséquence pratique).
+async function redirectToInterceptor(io, db, campaignId, character, interceptors) {
+  const interceptorId = interceptors[0]?.actorId
+  if (!interceptorId) return null
+  const first = await db('tokens').where({ id: interceptorId }).select('id', 'label').first()
+  if (!first) return null
+  io.to(campaignId).emit(WS.DICE_RESULT, {
+    userId: character.user_id,
+    username: character.name ?? 'Inconnu',
+    color: '#c86030',
+    formula: '—',
+    rolls: [],
+    total: 0,
+    isCriticalSuccess: false,
+    isCriticalFail: false,
+    seed: null,
+    timestamp: new Date().toISOString(),
+    skillLabel: `Cible interposée — tir redirigé vers ${first.label ?? 'token inconnu'}`,
+    mechanicalTotal: 0,
+    diffLabel: '',
+    chancesDeReussite: 0,
+    isSuccess: false,
+    mr: 0,
+    breakdown: [],
+  })
+  return { result: 'intercepted', newTargetTokenId: first.id }
+}
+
 /**
  * Vérifie LOS, couverture et intercepteurs pour une action de tir. Toute décision spatiale provient
  * du WorldSnapshot ; ce service conserve seulement les effets métier du combat (message et munition).
  */
 export async function checkCombatLOS(io, db, campaignId, action, character) {
+  console.log(`[DBG] checkCombatLOS — début token:${action.token_id} target:${action.target_token_id}`)
   const [srcToken, tgtToken, settings] = await Promise.all([
     db('tokens').where({ id: action.token_id }).first(),
     db('tokens').where({ id: action.target_token_id }).first(),
@@ -27,7 +60,9 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
   if (!srcToken || !tgtToken) return { result: 'clear' }
   if (srcToken.battlemap_id !== tgtToken.battlemap_id) return { result: 'clear' }
 
+  console.log(`[DBG] checkCombatLOS — avant loadVisibility`)
   const visibility = await loadVisibility(db, srcToken, tgtToken)
+  console.log(`[DBG] checkCombatLOS — après loadVisibility, status:${visibility.status}`)
   if (visibility.status === 'legacy-position' || visibility.status === 'battlemap-not-found') {
     io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
       username: character.name,
@@ -37,6 +72,15 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
     return { result: 'blocked' }
   }
   if (visibility.status === 'blocked') {
+    // §6 point 3 du plan Timeline — la cible devenue inatteignable (déplacée, cachée) ne doit pas
+    // faire capoter le tir si quelqu'un se trouve sur le vecteur : munitions consommées, jet complet
+    // contre l'intercepteur (même patron que l'interposition sur ligne dégagée ci-dessous), jamais un
+    // abandon muet du tir. worldVisibilityService calcule déjà les intercepteurs dans tous les cas.
+    const redirected = await redirectToInterceptor(io, db, campaignId, character, visibility.interceptors ?? [])
+    if (redirected) {
+      await spendAmmo(db, action, character, settings)
+      return redirected
+    }
     io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
       username: character.name,
       message: 'Ligne de vue bloquée',
@@ -45,32 +89,8 @@ export async function checkCombatLOS(io, db, campaignId, action, character) {
     return { result: 'blocked' }
   }
 
-  if (visibility.interceptors.length > 0) {
-    const interceptorId = visibility.interceptors[0].actorId
-    const first = await db('tokens').where({ id: interceptorId }).select('id', 'label').first()
-    if (first) {
-      io.to(campaignId).emit(WS.DICE_RESULT, {
-        userId: character.user_id,
-        username: character.name ?? 'Inconnu',
-        color: '#c86030',
-        formula: '—',
-        rolls: [],
-        total: 0,
-        isCriticalSuccess: false,
-        isCriticalFail: false,
-        seed: null,
-        timestamp: new Date().toISOString(),
-        skillLabel: `Cible interposée — tir redirigé vers ${first.label ?? 'token inconnu'}`,
-        mechanicalTotal: 0,
-        diffLabel: '',
-        chancesDeReussite: 0,
-        isSuccess: false,
-        mr: 0,
-        breakdown: [],
-      })
-      return { result: 'intercepted', newTargetTokenId: first.id }
-    }
-  }
+  const redirected = await redirectToInterceptor(io, db, campaignId, character, visibility.interceptors ?? [])
+  if (redirected) return redirected
 
   return { result: 'clear', coverageModifier: visibility.coverage.modifier }
 }

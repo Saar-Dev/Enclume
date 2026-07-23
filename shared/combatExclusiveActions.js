@@ -90,6 +90,10 @@ export function getAimIneligibilityReasons({ mapActions, state, quick, entry, is
   const reasons = []
   if (bulletCount !== 1) reasons.push('tir non simple (répétition ou rafale)')
   if (isDualWield) reasons.push('deux armes')
+  // Tir Multi (docs/PLAN_TIRMULTI.md D10) : une série de plusieurs tirs est par construction
+  // « une autre action ce Tour » vis-à-vis de chacun de ses éléments — même exclusivité que le CaC
+  // ci-dessous, appliquée au tir lui-même.
+  if (Array.isArray(mapActions?.attack) && mapActions.attack.length > 1) reasons.push('tir multiple')
   // Préconditions intrinsèques : arme déjà au clair + déjà en coup par coup AVANT ce tour.
   if (entry?.state_weapon !== 'drawn') reasons.push('arme pas encore au clair')
   if (entry?.state_fire_mode !== 'cc') reasons.push('pas encore en coup par coup')
@@ -98,7 +102,7 @@ export function getAimIneligibilityReasons({ mapActions, state, quick, entry, is
   if (state?.weapon !== entry?.state_weapon) reasons.push('changement d\'arme')
   if (state?.fire_mode !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
   if (state?.cover !== entry?.state_cover) reasons.push('changement de couverture')
-  if (state?.vitesse !== entry?.state_vitesse) reasons.push('précipitation')
+  if (state?.vitesse !== entry?.state_vitesse) reasons.push('changement de vitesse')
   // Aucune autre mapAction / quick action ce tour.
   if (mapActions?.move) reasons.push('déplacement')
   if (mapActions?.interact) reasons.push('interaction')
@@ -114,11 +118,32 @@ export function isAimEligible(args) {
   return getAimIneligibilityReasons(args).length === 0
 }
 
+// Tir Multi (docs/PLAN_TIRMULTI.md D6/D10) — réciproque de getAimIneligibilityReasons : raisons pour
+// lesquelles une série de plusieurs tirs (mapActions.attack.length > 1) n'est pas disponible. Même
+// patron (liste de raisons, vide = éligible), symétrique côté UI (griser + tooltip, pas de reset
+// silencieux d'un autre champ).
+export function getMultiShotIneligibilityReasons({ currentFireMode, aimTranches, isDualWield, aimedLocation }) {
+  const reasons = []
+  // D6 — RAW « Attaques multiples » (p.218-219) ne couvre que Tir simple/Tir à répétition ; Rafale
+  // longue est de toute façon une action exclusive, Rafale courte n'est pas couverte par le texte.
+  if (currentFireMode !== 'CC') reasons.push('rafale (RC/RL)')
+  // D10 — Tir visé, Tir à deux armes et Viser une Localisation précise sont chacun exclusifs vis-à-vis
+  // de Tir Multi (tranché Saar, 2026-07-19) : un seul raffinement de tir à la fois.
+  if ((aimTranches ?? 0) > 0) reasons.push('tir visé actif')
+  if (isDualWield) reasons.push('deux armes actif')
+  if (aimedLocation) reasons.push('localisation visée active')
+  return reasons
+}
+
+export function isMultiShotEligible(args) {
+  return getMultiShotIneligibilityReasons(args).length === 0
+}
+
 // Déclaration exclusive ? (registre — Charge/Rafale longue/Tir de suppression rejoindront cette
 // fonction dans leurs propres sessions dédiées, pas ici). Pour Tir visé, isAimEligible bloque déjà
 // le CaC (règle "rien d'autre ce tour") — ce garde reste la seule protection pour les futures
 // actions exclusives dont l'éligibilité sera plus permissive (ex. Charge exige un déplacement).
 export function isExclusiveDeclaration({ mapActions }) {
-  if ((mapActions?.attack?.aimTranches ?? 0) > 0) return { exclusive: true, reason: 'tir_vise' }
+  if ((mapActions?.attack?.[0]?.aimTranches ?? 0) > 0) return { exclusive: true, reason: 'tir_vise' }
   return { exclusive: false, reason: null }
 }

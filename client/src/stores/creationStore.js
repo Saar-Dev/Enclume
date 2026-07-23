@@ -3,6 +3,12 @@ import api from '../lib/api'
 
 const PC_TOTAL = 20
 
+// Partagé par getPcDispo() (vivant, header) et getStepBudget() (brut, budget interne par étape) —
+// source unique pour éviter que les deux calculs divergent un jour.
+const computeGenoCost = (s) => !s.step2Data ? 0
+  : s.step2Data.genotypeId === 'HUMAIN' ? 0
+  : s.step2Data.isDeserter ? 4 : 5
+
 export const useCreationStore = create((set, get) => ({
   step: 0,
   highestStep: 0,
@@ -27,11 +33,27 @@ export const useCreationStore = create((set, get) => ({
   skillMaxLevelEnabled: null,
   youngPenaltyEnabled: null,
 
+  // Vivant — pour le header (WizardHeader) : reflète la dépense en cours de l'étape 4 avant
+  // même sa soumission (liveYears), en plus des étapes déjà committed.
   getPcDispo: () => {
     const s = get()
-    const genoCost = !s.step2Data ? 0
-      : s.step2Data.genotypeId === 'HUMAIN' ? 0
-      : s.step2Data.isDeserter ? 4 : 5
+    const genoCost = computeGenoCost(s)
+    const step4Cost = s.step4Data?.pcSpent ?? s.step4Data?.liveYears ?? 0
+    return PC_TOTAL
+      - (s.step1Data?.pcSpent ?? 0)
+      - genoCost
+      - (s.step3Data?.pcSpent ?? 0)
+      - step4Cost
+      + (s.step5Data?.pcNet ?? 0)
+  },
+
+  // Brut — pour le budget interne d'une étape (CareersAllocator, Step3Mutations,
+  // Step5Advantages) : ne lit JAMAIS liveYears, uniquement les valeurs committed des autres
+  // étapes. Ces composants font leur propre soustraction de ce qu'ils allouent en interne ;
+  // leur passer une valeur déjà nette de la dépense en cours créerait un double décompte.
+  getStepBudget: () => {
+    const s = get()
+    const genoCost = computeGenoCost(s)
     return PC_TOTAL
       - (s.step1Data?.pcSpent ?? 0)
       - genoCost
@@ -67,7 +89,10 @@ export const useCreationStore = create((set, get) => ({
   })),
   setStep2Data: (data) => set({ step2Data: data }),
   setStep3Data: (data) => set({ step3Data: data }),
-  setStep4Data: (data) => set({ step4Data: data }),
+  // Merge (pas overwrite) : onPcChange envoie { liveYears: n } partiel sans perdre careers/origins
+  setStep4Data: (data) => set(s => ({
+    step4Data: data === null ? null : { ...(s.step4Data ?? {}), ...data },
+  })),
   setStep5Data: (data) => set({ step5Data: data }),
 
   resetCreation: () => set({

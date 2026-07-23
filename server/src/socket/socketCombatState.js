@@ -9,6 +9,7 @@ import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAdvantages } from '../services/advantageService.js'
+import { getAllModStatusCodes } from '../services/weaponModService.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -123,7 +124,6 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         battlemap_id,
         phase: 'ROSTER',
         current_turn: 1,
-        active_slot_idx: 0,
         action_timer_sec: actionTimerSec,
       })
       const insertedRoster = await db('combat_roster').insert(rosterRows).returning('*')
@@ -192,6 +192,41 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           const affectedIds = [...new Set(affected.map(r => r.token_id))]
           for (const tid of affectedIds) {
             await statusService.emitTokenStatusUpdated(io, db, campaignId, tid)
+          }
+        }
+      }
+
+      // Groupe 4 (docs/PLAN_MODDING_REFONTE.md Phase 3.4) — un state de mod (ex. cumulativeMR de
+      // l'ATI) ne survit jamais hors combat. Registre vide aujourd'hui : modStatusCodes est
+      // toujours [], ce bloc reste un no-op tant que Phase 4 ne déclare pas de statusCodes.
+      if (rosterTokenIds.length > 0) {
+        const rosterCharacterIds = await db('tokens').whereIn('id', rosterTokenIds).pluck('character_id')
+        if (rosterCharacterIds.length > 0) {
+          const characterWeaponInvIds = await db('char_inventory')
+            .whereIn('character_id', rosterCharacterIds)
+            .pluck('id')
+          if (characterWeaponInvIds.length > 0) {
+            await db('char_inventory_mods')
+              .whereIn('weapon_inv_id', characterWeaponInvIds)
+              .whereNotNull('state')
+              .update({ state: null })
+          }
+        }
+        const modStatusCodes = getAllModStatusCodes()
+        if (modStatusCodes.length > 0) {
+          const affectedMods = await db('token_statuses')
+            .whereIn('token_id', rosterTokenIds)
+            .whereIn('status_code', modStatusCodes)
+            .select('token_id')
+          if (affectedMods.length > 0) {
+            await db('token_statuses')
+              .whereIn('token_id', rosterTokenIds)
+              .whereIn('status_code', modStatusCodes)
+              .delete()
+            const affectedModIds = [...new Set(affectedMods.map(r => r.token_id))]
+            for (const tid of affectedModIds) {
+              await statusService.emitTokenStatusUpdated(io, db, campaignId, tid)
+            }
           }
         }
       }
@@ -298,7 +333,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
   // Payload : { tokenId }
   socket.on(WS.COMBAT_SURPRISE_RESULT, async ({ tokenId }) => {
     try {
-      const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
+      const { phase: _gPhase, sub_phase: _gSubPhase, current_turn: _gCurrentTurn } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
       if (!canTransition(_gPhase ?? null, _gSubPhase ?? null, 'COMBAT_SURPRISE_RESULT')) {
         console.warn(`[FSM] guard bloqué : ${_gPhase ?? null}|${_gSubPhase ?? null} + COMBAT_SURPRISE_RESULT`)
         return
@@ -358,6 +393,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           action_key: 'skip',
           sequence: 99,
           status: 'skipped',
+          turn_number: _gCurrentTurn ?? 1,
         })
         // PC13 — tous annoncés → phase Résolution
         const [{ count }] = await db('combat_roster')

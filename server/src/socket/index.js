@@ -5,6 +5,7 @@ import { registerTokenHandlers } from './socketToken.js'
 import { registerDiceHandlers } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerCombatHandlers } from './socketCombat.js'
+import { pickNextTimelineStep } from './socketCombatHelpers.js'
 import { registerTradeHandlers } from './socketTrade.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
@@ -82,7 +83,10 @@ const initSocket = (io) => {
           if (activeCombat) {
             const [roster, actions] = await Promise.all([
               db('combat_roster').where({ campaign_id: campaignId }),
-              db('combat_actions').where({ campaign_id: campaignId }),
+              // Bornée au Tour en cours (docs/PLAN_COMBAT_TIMELINE.md §6bis point 5) — combat_actions
+              // n'est plus vidée à chaque Tour, l'historique des Tours précédents ne doit pas fuiter
+              // dans la sync de reconnexion.
+              db('combat_actions').where({ campaign_id: campaignId, turn_number: activeCombat.current_turn }),
             ])
             socket.emit(WS.COMBAT_STATE_SYNC, { combatState: activeCombat, roster, actions })
             // Sync preview Ã©phÃ©mÃ¨re si un joueur est en train de dÃ©clarer
@@ -91,6 +95,18 @@ const initSocket = (io) => {
 
             // C3 — restauration combat_pending sur reconnexion en phase RESOLUTION
             if (activeCombat.phase === 'RESOLUTION') {
+              // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B) — un reconnectant doit revoir
+              // l'état courant de la timeline, pas seulement roster/actions ci-dessus.
+              const timelineEntries = await db('combat_timeline_entries')
+                .where({ campaign_id: campaignId, turn_number: activeCombat.current_turn })
+                .orderBy('phase_position', 'desc')
+              const currentStep = await pickNextTimelineStep(campaignId, activeCombat.current_turn)
+              socket.emit(WS.COMBAT_TIMELINE_UPDATED, {
+                turnNumber: activeCombat.current_turn,
+                entries: timelineEntries,
+                currentStep,
+              })
+
               const userToken = await db('tokens')
                 .join('characters', 'tokens.character_id', 'characters.id')
                 .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })
@@ -99,8 +115,14 @@ const initSocket = (io) => {
               const userTokenId = userToken?.token_id
 
               if (userTokenId) {
+                // Plusieurs entrées 'damage' peuvent désormais coexister pour le même token
+                // (docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO côté serveur, un seul prompt
+                // visible à la fois côté client : ordonner par ancienneté et ne restaurer que la plus
+                // ancienne, cohérent avec ce que COMBAT_DAMAGE_CONFIRM affiche déjà en jeu normal.
                 const rows = await db('combat_pending')
                   .where({ campaign_id: campaignId, token_id: userTokenId })
+                  .orderBy('created_at', 'asc')
+                let damagePromptSent = false
                 for (const row of rows) {
                   const p = row.payload
                   if (row.type === 'melee_defense') {
@@ -114,11 +136,13 @@ const initSocket = (io) => {
                       multiMalusDefenseur: p.multiMalusDefenseur,
                     })
                   } else if (row.type === 'damage') {
+                    if (damagePromptSent) continue
                     socket.emit(WS.COMBAT_DAMAGE_PROMPT, {
                       tokenId:    row.token_id,
                       formula:    p.formula,
                       targetName: p.targetName,
                     })
+                    damagePromptSent = true
                   } else if (row.type === 'stun') {
                     socket.emit(WS.COMBAT_STUN_PROMPT, {
                       tokenId: row.token_id,

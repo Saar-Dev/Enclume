@@ -263,7 +263,16 @@
 
 > Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 156 : `docs/PLAN_BOUCLIER.md` Lots A+B+C
 > — ✅ codés et testés, Lot A/B fonctionnel confirmé Saar en combat réel, Lot C navigateur non encore
-> testé, item 81 ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
+> testé, item 81 ; **Session 157 (2026-07-18) : Sprint Tir Multi → refonte complète du moteur de tours
+> combat, planification uniquement (aucun code) — `docs/PLAN_COMBAT_TIMELINE.md` intégralement conçu
+> (4 Lots + analyses à charge + audit indépendant), correctif isolé `combat_pending` conçu et prêt à
+> coder en premier, item 82** ; **Session 158 (2026-07-18) : correctif isolé `combat_pending`
+> (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3) — ✅ codé et testé en base réelle (migration 170 + FIFO +
+> guard prompt), item 83 ; Lot A (item 84) + correctif détection arme en main (item 85) — ✅ codés,
+> testés, confirmés fonctionnels par Saar en navigateur ; Lots B+C+D (items 86-87) — ✅ codés (serveur
+> testé par fixtures, client par build Vite propre — Lot D a trouvé et corrigé un bug réel du Lot B,
+> fenêtre de réaction en boucle infinie), validation navigateur groupée encore à faire par Saar, rien
+> committé** ; Session 154 : refonte `docs/PLAN_INVENTORY_SLOTS.md`
 > (prérequis chantier Bouclier) — ✅ clos, fonctionnel confirmé Saar en navigateur, item 80 ;
 > Session 153 : `docs/PLAN_ECHANGE.md` — correction
 > du câblage MJ (Échange), retrait Lot A0, items équipés exclus du catalogue — ✅ clos, fonctionnel
@@ -361,10 +370,972 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
-🔒 En cours : — (aucune session active)
+> **Item 106 (Session 168, dev/Saar) — Prérequis `CHOC1` (arme équipée sans dégât physique) ✅ CODÉ
+> ET TESTÉ EN JEU (confirmé par Saar via logs serveur).**
+> **Codé** : `getEffectiveMeleeDamage` (nouveau, `damageService.js`) — point de résolution unique du
+> dégât CaC, miroir de `getEffectiveWeaponDamage` (tir), 3 producteurs (arme naturelle > arme
+> équipée > mains nues). Branché sur les 5 sites qui lançaient auparavant `parseDice(damageFormula)`
+> directement (`resolveMeleeAction` ×3 : cible sans défense, PNJ défenseur, drone défenseur ;
+> `confirmMeleeDefense` PNJ attaquant ; `confirmDamage` PJ attaquant). Côté tir, `getEffectiveWeaponDamage`/
+> `getEffectiveWeaponFormulaPreview`/garde `resolveAssaultAction` corrigés pour distinguer "arme
+> introuvable" (`weapon_ref_id` absent) de "arme sans dégât physique" (`damage_h` vide) — cette
+> dernière retourne désormais `{total:0,...}` au lieu de `null`. Détail complet du raisonnement et de
+> l'auto-correction (une reprise a d'abord contredit sa propre décision, repérée et corrigée avant
+> commit) : `docs/JOURNALTEMP.md` Étapes 5-7.
+> **Bug additionnel trouvé et corrigé en testant** : côté MJ, une arme Choc pur (Dague neurale Brain)
+> n'était jamais reconnue comme "arme en main" — `shared/weaponSlots.js::isWeaponItem` ne testait que
+> `fire_mode`/`damage_h`, jamais `shock`. Corrigé (+ `ref_equipment.shock` ajouté à la requête
+> `/combat-equipment`, `server/src/routes/battlemaps.js`) + 2 tests ajoutés à `weaponSlots.test.mjs`
+> (15/15 verts). N'affectait que le MJ (`CombatGmDeclareWindow`) — le joueur (`CombatActionWindow`)
+> n'était pas concerné (sélection par catégorie, pas par ce filtre).
+> **Testé en jeu (logs serveur)** : tir Flex (Choc pur) plusieurs coups, CaC Matraque Mao (non-régression),
+> CaC mains nues, **CaC Dague neurale Brain (Choc pur, le cas critique) — coup touché, `total:0`
+> proprement géré, aucune erreur serveur**. **Non testé** : les chemins PJ réel (`confirmMeleeDefense`/
+> `confirmDamage`), "cible sans défense", drone — seule la branche "PNJ défenseur" a été exercée en
+> jeu, les 4 autres sites branchés sur `getEffectiveMeleeDamage` restent non exercés en conditions
+> réelles (seulement `node --check`). Le Choc réel de la Dague neurale (3D10) n'est **volontairement
+> pas** déclenché — câblage du Choc porté par l'arme (Palier 1, `docs/PLAN_CHOC1.md` §4) reste une
+> décision de scope séparée, non tranchée.
+> **Verrou levé** : `docs/PLAN_REFONTECAC.md` peut reprendre sa planification (prérequis fermé).
+> **Trois dettes de la même famille trouvées en run à vide post-commit (2026-07-22), toutes trois
+> corrigées dans la foulée (même invariant, même correctif déjà validé 6× dans ce fichier)** :
+> 1. `socketCombatHelpers.js:~2765` (`resolveAssaultAction`, tir PNJ) — filet de secours
+>    `parseDice(weapon.ref_damage_h...)` sans garde `null` (fenêtre étroite : arme désequipée entre
+>    Déclaration et Résolution). ✅ corrigé — repli à 0 si `weapon.ref_damage_h` vide.
+> 2. `damageService.js::getEffectiveMeleeDamage` — le repli `?? '1D4'` confondait "arme introuvable"
+>    avec "était Choc pur au moment de la Déclaration" (même fenêtre étroite, côté CaC). ✅ corrigé —
+>    `fallbackFormula` utilisée telle quelle, sans réinjecter `'1D4'` par-dessus.
+> 3. **Trouvé en continuant l'analyse, pas une fenêtre étroite cette fois — reproductible à volonté** :
+>    `socketCombatHelpers.js:~2405`, tir à deux armes — `if (fetched.weapon?.ref_damage_h)` faisait
+>    disparaître silencieusement toute arme Choc pur (Flex...) placée en main secondaire, à chaque
+>    tentative, sans condition de timing. ✅ corrigé — test sur `equipment_id`. Tracé jusqu'au bout
+>    (`fires === 'both'` ne calcule le dégât que sur l'arme principale, déjà le cas avant ce correctif,
+>    rien de nouveau introduit ; `fires === 'offhand'` alimente correctement `getEffectiveWeaponDamage`
+>    une fois l'arme secondaire détectée).
+> **Testé** : `node --check` uniquement sur les trois. **Non testé en jeu** — en particulier le
+> dual-wield avec une arme Choc pur en main secondaire, jamais essayé avant aujourd'hui.
+
+> **Item 107 (Sessions 169-171, dev/Saar) — Lot 6 (`docs/PLAN_WIZARD_AVANTAGES_IMPLANTATION.md`) ✅
+> CODÉ, TESTÉ ET CONFIRMÉ FONCTIONNEL PAR SAAR EN NAVIGATEUR — les 27 Revers ET les 37 métiers ont
+> désormais un `effects[]` réel en base.** Referme l'écart signalé item 105 (« ⚠️ NON LIVRÉE ») : le
+> plan complet demandé par Saar a fini par être livré et exécuté intégralement, pas repoussé un métier
+> de plus.
+> **Revers (2026-07-22, migration 194)** : `shared/reversEffectsData.js` + `reversEffectsData.test.mjs`
+> (28 tests). 3 mécanismes d'effet nouveaux (`gauge_fraction_delta`/`celebrity_fraction`,
+> `irradiation_reward`, `subroll.condition`) — détail complet et corrections vs RAW :
+> `PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §5ter.
+> **Métiers (2026-07-23, migrations 196+198)** : `shared/careerRandomEffectsData.js` +
+> `careerRandomEffectsData.test.mjs` (21 tests). Nouveau mécanisme "Formation" (`skill_choice`/
+> `add_skill`, choix libre d'une compétence professionnelle, câblé jusqu'à l'UI —
+> `ProAdvantagesAndSetbacks.jsx`). **Protocole de décision** : Saar a refusé un questionnaire structuré
+> et demandé un survol complet des 37 métiers listant toutes les questions ouvertes d'abord, tranchées
+> ensemble en un seul batch ensuite — pas de code avant ce tour complet. **3 bugs de production réels
+> trouvés et corrigés** : Pirate/8 (résumé du plan copié à tort depuis un autre métier, RAW réel très
+> différent), `chasseur_primes`/4 (déjà en production depuis la migration 188, appliquait son bonus
+> sans le choix accepte/refuse décidé depuis — corrigé par la migration **198**, isolée du peuplement
+> neuf), et Pirate/3 (Célébrité+2/Matériel+2 oubliés à côté du money_reward, trouvé lors d'une 2e passe
+> critique dédiée — corrigé par la migration **200**, même isolation). Détail complet, y compris le 16e
+> cas `income_multiplier_permanent` trouvé (Voleur/7) et la correction Assassin/8 (note non demandée
+> retirée après relecture critique) : `PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §5quater.
+> **Referme aussi les dettes `ADV1`/`ADV2` du tableau ci-dessous** (célébrité + revenus mécanisés pour
+> les 37 métiers, plus seulement chasseur_primes ; Allié/Contact/Ennemi/Opposant désormais trackés via
+> `char_traits`).
+> **UX Revers (Session 171)** : Saar a testé en navigateur réel et trouvé 2 défauts — les jets
+> enchaînés (Attentat, 2 `chained_setback`) et auto-tirés (Choc psychologique, `subroll`) ne
+> montraient jamais leur résultat, et `manual_grant_choice` affichait des codes `advantage_id` bruts
+> au lieu de noms. Corrigé : `resolveSetbackEffects` renvoie désormais aussi `history` (jets déjà
+> répondus, champ additif, même traversée) ; l'UI affiche ce journal + un séparateur visuel (proposé
+> par Saar) ; un nouveau prop `advantagesCatalog` (réutilise l'endpoint Step5 existant) résout les
+> noms. Même défaut corrigé côté carrières (`money_reward`, montant jamais affiché — Pirate/3,
+> Marchand itinérant/4). Détail : `PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §4bis (4e correction).
+> **Confirmé fonctionnel par Saar en navigateur** après ce correctif.
+> **Testé** : 181/181 `shared/*.test.mjs`, 33/33 `server/src/services/*.test.mjs` (0 régression,
+> y compris non-régression `chasseur_primes` avant/après migration 198), `node --check` sur tous les
+> fichiers touchés, `npx eslint`/`npx vite build` propres, **scénario réel confirmé fonctionnel par
+> Saar en navigateur** (tirage carrières + Revers, y compris Attentat/Choc psychologique). **Non
+> testé** : couverture exhaustive de tous les cas (37 métiers × 27 Revers) en conditions réelles —
+> seul un sous-ensemble a été joué. **Données** : migrations 194, 196, 198, 200 (toutes
+> auto-appliquées par nodemon côté Saar, vérifiées directement en base). **Retour arrière** : `down()`
+> fourni sur les quatre. **Committé et poussé** : `005a52c` sur `dev/Saar`, branche à jour avec
+> `origin/dev/Saar`. Chantier clos.
+
+> **Item 105 (Session 168, dev/Saar) — Wizard Step4 : bug budget PC + données chasseur_primes ✅ CODÉ
+> et confirmé par Saar en navigateur ; mécanisation avantages/revers ⚠️ NON LIVRÉE au périmètre demandé.**
+> **Codé et testé (confirmé par Saar)** : bug de double décompte du budget PC en étape 4
+> (`CareersAllocator` recevait un `pcDispo` déjà net de sa propre dépense en cours) — corrigé par
+> séparation `getPcDispo()` (vivant, header) / `getStepBudget()` (brut, budget interne par étape),
+> `creationStore.js`/`WizardCreation.jsx`/`Step4Experience.jsx`. Migration **186** : données
+> `chasseur_primes` corrigées (`ref_career_point_categories` manquantes — migration 120 affirmait à
+> tort leur absence légitime —, 2 paliers de salaire fusionnés à tort). Accordéon de règles rendu
+> cliquable directement sur les catégories déjà affichées (`proAdvCategoryRuleKeys.js`), pas de liste
+> séparée. **Non testé par Saar** (auto-appliquée par nodemon, non vérifiée en base par lui) : migration
+> **188** — mécanisme de mécanisation des tirages 1D10 (`resolveCareerRandomEffects`,
+> `shared/careerAdvantages.js`, 6 tests unitaires OK) + `effects` peuplé pour **chasseur_primes
+> uniquement**.
+> **⚠️ Écart avec la demande réelle de Saar, à ne pas reproduire** : Saar a demandé **4 fois**, en
+> ces termes, un plan pour mécaniser **chaque avantage et chaque revers de chaque métier** (pas un
+> métier isolé, pas juste les avantages sans les revers). J'ai systématiquement réduit le périmètre
+> (un métier, puis "avantages seulement") sans jamais livrer ce plan complet — cause de la clôture de
+> session en frustration. **Prochaine étape réelle, telle que demandée** : écrire le plan complet
+> (chiffré, en étapes vérifiables si nécessaire) couvrant TOUS les métiers ET les Revers, avant tout
+> nouveau code sur ce sujet — pas un correctif ponctuel sur un métier de plus. Le texte source existe
+> déjà pour tout (migrations 108/112-116/122 pour les avantages ≈310 lignes, 126 pour les 27 Revers) :
+> ce n'est pas un travail de recherche RAW, c'est un travail d'encodage à planifier et chiffrer
+> honnêtement dès le début, pas à découvrir métier par métier en cours de route.
+> **Testé** : `node --test shared/*.test.mjs` (76/76, 0 régression), `npx vite build` propre à chaque
+> étape, syntaxe migrations vérifiée. **Non testé** : scénario réel de la mécanisation (aucune
+> connexion PostgreSQL ici) au-delà de la confirmation de Saar sur le bug PC et les données
+> chasseur_primes. **Données** : migrations 186 et 188 (auto-appliquées par nodemon côté Saar).
+> **Retour arrière** : `down()` fourni sur les deux.
+
+Chantier Moding Groupe 4 (architecture définitive : `docs/SYSTEME/MODING.md` ; plan archivé :
+`docs/Old/[HISTORIQUE] PLAN_MODDING_REFONTE.md`) **clos** (Session 167, item 104) : Phases
+1/3/4 (socle, état, mécaniques ATI/Mémoire/Projecteur) codées et testées. Intégration live volontairement
+non câblée — 4 dettes résiduelles notées `docs/BUGIDENTIFIE.md` (`MODING4-ATI`, `MODING4-MEMOIRE`,
+`MODING4-PROJECTEUR`, `MODING4-INTEGRATION`), décisions produit + câblage restants, pas un chantier actif.
+Phase 2 (migration Groupe 1/2 déjà livré) toujours différée (Strangler Fig).
+
+🔒 En cours (Claude) : Palier 1 `CHOC1` — **codé et vérifié par scripts isolés (2026-07-22), en
+attente du test en jeu par Saar** (Saar ne peut pas concevoir ce test lui-même — vérification poussée
+côté Claude en compensation, y compris la réduction d'armure réelle via une transaction jamais
+commitée). Migration 190 (`ref_equipment.shock_mechanism`/`shock_reduced_by_armor`,
+`ref_mutations.natural_weapon_choc_formula`), producteurs `damageService.js` (`getEffectiveWeaponDamage`/
+`getEffectiveMeleeDamage`) + `resolveTargetHit` (gate Tête + réduction d'armure) + câblage CaC
+`socketCombatHelpers.js` (4 call sites, jamais fait jusqu'ici). Détail complet, Testé/Non testé :
+`docs/JOURNALTEMP.md` Étape 11. 18 armes catalogue + mutation Corne câblées ; Lance-flammes/armes de
+zone/4 armes `damage_h` tronqué explicitement exclues (voir plan). **Découverte séparée** :
+`protection_shock` NULL sur 100% du catalogue — réduction d'armure câblée/vérifiée mais sans effet
+observable tant qu'aucune armure n'a de valeur réelle (dette de donnée distincte, hors scope). Reste
+non testable hors jeu : mutation Corne en situation de Saisie réelle, Localisation précise (COM9).
+Verrou retiré au commit de clôture, une fois Saar confirmé. Refonte CaC (`docs/PLAN_REFONTECAC.md`,
+verrou levé) reste différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif —
+cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
+
+> **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
+> intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).
+> **Corrigé en préparant Phase 4** : `modLevel` était conçu comme un champ global du contexte
+> partagé — faux dès que 2 mods de niveaux différents sont évalués dans le même appel
+> (`weaponModService.js` injecte désormais `modLevel: mod.bonus` par mod, un seul endroit,
+> `getAllCombatMods` étendu pour sélectionner `re.bonus` qui manquait). **Codé** : `shared/mods/ati.js`,
+> `memoire.js`, `projecteur.js` (RAW cité, `docs/Old/.../STEP1_cleaned_data.js` EQ_00001/00002/00005) ;
+> `shared/weaponModRegistry.js` peuplé (3 entrées réelles, `statusCodes` pour l'ATI) ; migration 184
+> (`ref_equipment.mod_key` sur les 3 lignes catalogue, noms exacts repris de la migration 141).
+> **Corrigé aussi** : les tests Phase 1/3 supposaient le registre vide et le vidaient en nettoyage
+> (`.length = 0`) — aurait effacé les vraies entrées Groupe 4 pour le reste de la suite ; réécrits
+> pour sauvegarder/restaurer le registre réel autour de tout mock. **Volontairement pas câblé dans
+> `resolveAssaultAction`/`resolveMeleeAction`** — Saar tranche : « 4 items manquants, c'est une dette
+> à noter mais c'est une fin de chantier ». Détail des 4 dettes résiduelles (décisions produit
+> ATI/Mémoire + situation zigzag manquante, câblage final) : `docs/BUGIDENTIFIE.md`
+> `MODING4-ATI`/`MODING4-MEMOIRE`/`MODING4-PROJECTEUR`/`MODING4-INTEGRATION` — pas dupliqué ici.
+> Vérification faite avant clôture : `targetIsMoving`/`targetMovementMalus` du Projecteur sont déjà
+> dérivables de `confirmedModifiers.situation` (aucune nouvelle donnée nécessaire) ; seul
+> `targetMovementIsErratic` (zigzag) n'existe nulle part, ni `shared/combatSituationMods.js` ni
+> `CombatModifiersWindow.jsx` — confirmé par recherche exhaustive, pas une hypothèse. **Testé** : `node --check` sur tous
+> les fichiers touchés, suite complète rejouée (99/99, 0 régression), 18 nouveaux tests unitaires sur
+> les 3 handlers purs (mocks de dés déterministes) + 4 tests d'intégration sur le registre réel.
+> **Non testé** : aucun scénario en base réelle (mécaniques non atteignables en jeu tant que
+> l'intégration live n'est pas câblée). **Données** : migration 184 (mod_key, rétrocompatible).
+> **Prochaine étape** : décision de Saar sur 4.1.4/4.2.2 (config ATI/Mémoire) + vérification du code
+> `resolveAssaultAction` pour sourcer les 3 champs mouvement du Projecteur, avant de câbler l'appel
+> réel — Phase 5 (tests d'intégration combat réel + non-régression Groupe 1/2) suit.
+
+> **Item 103 (Session 167, dev/Saar) — Moding Groupe 4 Phase 3 (infrastructure état) ✅ CODÉ.**
+> Suite de l'item 102 (Phase 1). **Codé** : `weaponModService.js` — `getAllCombatMods(campaignId)`
+> (tous les mods de chaque personnage en lice, toute arme, pas seulement celle d'une action précise) ;
+> `resolveModHooks` injecte désormais `rollDice: parseDice` dans le contexte à un seul endroit ;
+> `getAllModStatusCodes()` (union des `statusCodes` déclarés par le registre, jamais une liste en
+> dur). `statusService.js` — `applyModStatus`/`clearModStatus` (nouveau, upsert `ON CONFLICT
+> (token_id, status_code)` sur la contrainte UNIQUE déjà en base, migration 68 — même fichier que
+> `applyStunWithDuration`, pas d'insert ad-hoc ailleurs). `startResolutionPhase` (`socketCombatHelpers.js`) :
+> tick `onTurnStart` juste après `buildTimelineEntries`, persistance `state`/`tokenEffects` par mod.
+> `COMBAT_END` (`socketCombatState.js`) : remise à `NULL` de `char_inventory_mods.state` pour tous les
+> mods des personnages du roster + purge `token_statuses` pilotée par `getAllModStatusCodes()`.
+> **Contrats fixés et documentés dans le plan** pour que Phase 4 n'ait pas à les redeviner :
+> `tokenEffects = [{ statusCode, expiresAtTurn? }]`, entrée de registre `{ key, priority, hooks,
+> statusCodes? }`. **Registre toujours vide (Phase 4 non câblée) — comportement de jeu strictement
+> inchangé**, chaque nouvelle boucle/nettoyage est un no-op vérifié par construction (retourne `[]`).
+> **Testé** : `node --check` sur les 5 fichiers touchés, suite `shared/*.test.mjs` + Phase 1 rejouée
+> (75/75, 0 régression), 3 nouveaux tests (`rollDice` réellement basé sur `parseDice` — pas un mock,
+> `getAllModStatusCodes` vide par défaut et agrégation multi-entrées). **Non testé** : `getAllCombatMods`
+> et le tick `onTurnStart`/nettoyage `COMBAT_END` n'ont pas été exercés contre une base réelle (pas de
+> connexion PostgreSQL ici) ; aucun scénario navigateur (rien d'observable tant que Phase 4 est vide).
+> **Données** : aucune nouvelle migration (Phase 3 réutilise `state`/`mod_key` de la Phase 1).
+> **Prochaine étape** : Phase 4 — ATI (4.1), Mémoire de cibles (4.2), Projecteur de mouvement (4.3),
+> texte RAW déjà retrouvé et cité dans le plan (3ᵉ passage d'analyse à charge).
+
+> **Item 102 (Session 167, dev/Saar) — Moding Groupe 4 Phase 1 (socle) ✅ CODÉ**, en implémentant
+> `docs/PLAN_MODDING_REFONTE.md` après 3 passages d'analyse à charge (architecture inspirée PF2e Rule
+> Elements, ordre Strangler Fig). Trois corrections trouvées en codant (pas juste en planifiant),
+> appliquées directement dans le plan avant d'écrire le code concerné : (1) étape 1.7 (câbler
+> `onDeclare` dès la Phase 1) retirée — aurait câblé du code mort, ce branchement reste en Phase 2
+> (différée) où `lunette` existe réellement ; (2) étape 1.2 (5 fichiers handlers vides) retirée — 2
+> appartiennent à la Phase 2 différée, 3 à la Phase 4 pas commencée, chaque handler sera créé par la
+> phase qui lui donne un vrai contenu ; (3) le "state orphelin au swap" trouvé en analyse à charge
+> (3ᵉ passage) était une fausse alerte — `modingService.js:130` supprime entièrement la ligne
+> `char_inventory_mods` de l'ancien occupant au swap (`.del()`), `state` disparaît avec, aucun code à
+> ajouter. **Codé** : `shared/weaponModRegistry.js` (registre vide + `findModRegistryEntry`) ;
+> `server/src/services/weaponModService.js` (`resolveModHooks` — moteur générique 4 hooks,
+> `onBeforeAttack` enchaîne `adjustedModifiers` par `priority` croissante et s'arrête sur `blocked`,
+> `onCalculateModifiers` additionne indépendamment) ; migration 180 (`char_inventory_mods.state`
+> JSONB nullable) ; migration 182 (`ref_equipment.mod_key` TEXT nullable, colonne seule, aucune
+> population — chaque phase consommatrice peuple ses propres valeurs) ; les deux fetchs
+> `installedMods` existants (`socketCombatHelpers.js` Résolution, `socketCombatAnnouncement.js`
+> Déclaration) étendus avec `mod_key`/`state`, colonnes inutilisées tant que Phase 2/4 ne sont pas
+> câblées. **Comportement de jeu strictement inchangé** — Phase 1 est un socle inerte, aucun résolveur
+> n'est modifié. **Testé** : `node --check` sur les 6 fichiers créés/modifiés, suite complète
+> `shared/*.test.mjs` rejouée (64/64, 0 régression), 8 nouveaux tests
+> `server/src/services/weaponModService.test.mjs` (registre vide neutre sur les 4 hooks, mod sans
+> `mod_key` ignoré, hook inconnu → throw explicite, agrégation `onCalculateModifiers` multi-mods,
+> chaînage/arrêt `blocked` de `onBeforeAttack`). **Non testé** : migrations 180/182 non exécutées
+> contre une base réelle (pas de connexion PostgreSQL disponible ici) ; aucun scénario navigateur
+> (Phase 1 ne touche aucun comportement visible, rien à observer côté client). **Données** :
+> migrations 180/182, rétrocompatibles, colonnes nullables sans défaut. **Prochaine étape** : Phase 3
+> (infrastructure état — `getAllCombatMods`, câblage `onTurnStart` dans `startResolutionPhase`,
+> nettoyage `COMBAT_END`).
 
 > Lire ce bloc en PREMIER. Il indique quoi faire maintenant, dans quel ordre, et vers quel fichier aller.
 
+> **Item 101 (Session 166, dev/Saar) — Dette `CHOC1` : remise à plat + `docs/PLAN_CHOC1.md` écrit,
+> aucun code.** Ma première explication orale de CHOC1 était imprécise (cadrage "tir marche/CaC non"
+> jamais vérifié contre le catalogue réel) — Saar l'a repérée à raison ("méconnaissance des règles").
+> Recherche complète refaite : `docs/VOCABULARY.md` avait déjà l'analyse "3 catégories" que j'avais
+> ratée ; `docs/REGLES/REGLESMUNITIONS.md` confirme que le retrait "Tête uniquement" pour les munitions
+> (migration 160) était correct, pas une erreur ; le vrai axe cassé est **arme (`ref_equipment.shock`)
+> vs munition (`ammo_effects` DSL)**, pas **CaC vs tir** — vérifié en lisant `STEP1_cleaned_data.js`
+> (source catalogue réelle) : des armes à distance (Flex, Fusil choc Stun...) portent leur Choc sur
+> l'arme, pas une munition, donc déjà cassées en tir aussi. Inventaire complet fait : 11 armes réelles
+> couvrables par un mécanisme générique (dégâts réels+Choc = Tête uniquement ; Choc pur = aucun gate),
+> + plusieurs armes bespoke explicitement exclues (Gant choc, Bâton Ordonnateurs, Canon à infrasons,
+> Sonar d'attaque, Disrupteur neural — mécaniques narratives propres, aucune ne dépend de CHOC1).
+> Détail complet : `docs/PLAN_CHOC1.md`. **Rien codé** — décision de scope (lancer le Palier 1
+> généralisable maintenant, ou différer) à prendre par Saar avant tout code. `docs/BUGIDENTIFIE.md`
+> CHOC1 mis à jour pour pointer vers ce plan plutôt que dupliquer son contenu.
+
+> **Item 100 (Session 166, dev/Saar) — Dette `WNDMORT` : Blessure mortelle bloque les Tests ✅ CODÉ.**
+> Mon extrait RAW était tronqué (accident d'extraction PDF) — Saar a fourni le texte exact
+> (`docs/REGLES/REGLEBLESSURES.md`, "Blessures mortelles") : *"Malus aux Tests : non applicable, le
+> blessé ne peut entreprendre aucune action demandant un Test."* Contre-proposition Saar adoptée :
+> menu d'action restreint à Déplacement (Allure lente, sauf Jambes) et Passer le tour — les 2 seules
+> actions du jeu qui ne demandent aucun Test — plutôt qu'un blocage brut. Question annexe de Saar
+> (Test de Choc récurrent à chaque action) vérifiée et clarifiée : ce pattern existe bien dans le LdB
+> mais pour la **Fatigue** (`:1377-1381`), pas pour les blessures physiques — chantier Fatigue ajouté
+> à `docs/ROADMAP.md`, pas mélangé à WNDMORT. **Codé, en réutilisant l'existant plutôt qu'en
+> inventant** : `shared/woundConstants.js` — `WOUND_PENALTIES.mortelle` passe de `-20` (jamais
+> confirmé par le LdB) à `0`, nouveau `isTestBlockingWound()`/`isMortalWoundImmobilized()` (même
+> principe predicate-séparé-du-numérique que TIRIMP). Garde de déclaration dans
+> `socketCombatAnnouncement.js` — même patron exact que le stun guard déjà existant (`COMBAT_ACTION_
+> DECLARE`), juste après lui. Défense CaC : `isTargetDefenseless` (DEF5, déjà codé cette session)
+> étendu avec le même signal — pas de second mécanisme parallèle. Défense en profondeur (rare cas
+> attaquant blessé entre Déclaration et Résolution) ajoutée dans `resolveMeleeAction`/
+> `resolveAssaultAction`, réutilisant `woundsAttaquant`/`woundsTireur` déjà fetchés, zéro requête
+> supplémentaire. Fiche perso (`char-sheet.js` + `CharacterSheet.jsx`) : nouveau champ
+> `wound_test_blocked`, tooltip Initiative affiche "Blessure mortelle — aucune action de Test
+> possible" au lieu d'un malus numérique trompeur. **Volontairement pas dans ce correctif** (dettes
+> `WNDMORT-UI`/`WNDMORT-HORSCOMBAT` ajoutées) : repli visuel dans `CombatActionWindow.jsx` (le serveur
+> rejette déjà, juste pas de prévention visuelle) et le système générique de Test hors-combat
+> (`socketEntity.js`) — impact pratique jugé bien plus faible que le combat. **Testé** : `node --check`
+> sur les 3 fichiers serveur touchés, build Vite client propre, 6 nouveaux tests
+> `shared/woundConstants.test.mjs` + 64 tests `shared/*.test.mjs` au total rejoués (0 régression).
+> **Non testé** : aucune connexion PostgreSQL ici — scénario réel (déclarer une attaque/CaC/
+> interaction avec une Blessure mortelle active, vérifier le rejet ; déplacement Allure lente accepté
+> sauf Jambes ; défense CaC auto-résolue) à la charge de Saar en navigateur. **Données** : aucune
+> migration.
+
+> **Item 99 (Session 166, dev/Saar) — Dette `TIRIMP` : garde serveur « Tir impossible » ✅ CODÉ +
+> refonte architecture.** RAW exact relu (`docs/REGLES/REGLESYSCOMBAT.md:1440-1457` + `:1391-1401`) :
+> Tireur Allure maximale = impossible sans exception ; Obscurité totale = impossible sauf tir en
+> aveugle (optionnel, non implémenté) ; Couverture totale = même exception, mais **n'existe nulle
+> part dans le code** (ni checkbox client ni clé serveur) — dette `COUVERTURE_TOTALE` ajoutée,
+> regroupée avec le futur chantier « Tir en aveugle », pas traitée ici. **Question soulevée par Saar
+> avant de coder** : le sentinel numérique `-99` (son propre historique de code) mélangeait un signal
+> booléen « action interdite » avec une vraie somme de modificateurs — jamais consulté côté serveur,
+> et mathématiquement pas un vrai blocage (un empilement de bonus suffisant pourrait en théorie
+> repasser au-dessus de 1). Recherche faite (wiki Rule Elements PF2e/Foundry) : confirme le pattern
+> pro — un predicate/booléen qui gate l'action, toujours séparé du FlatModifier numérique, jamais un
+> nombre sentinel. **Refonte codée** : nouveau `shared/combatSituationMods.js` — `RANGED_SITUATION_MODS`
+> (`{ mod, impossible? }` par clé), `sumRangedSituationMods`, `isImpossibleRangedSituation` — autorité
+> unique, remplace la table dupliquée client (`CombatModifiersWindow.jsx`, tableaux `TIREUR_ALLURES`/
+> `CIBLE_ALLURES`/`COUVERTURES`/`OBSCURITES` recopiés à la main) et serveur (`SITUATION_MODS` local à
+> `socketCombatHelpers.js`, qui ne garde plus que les clés CaC `cac_*`, jamais collisionnées). Garde
+> ajoutée dans `resolveAssaultAction` **et** `resolveDroneAssaultAction` (même faille pour les drones,
+> trouvée en migrant — pas dans le périmètre initial mais corrigée pour rester cohérent), avant tout
+> effet de bord (LOS, munitions) : rejet `COMBAT_DECLARE_ERROR` si `isImpossibleRangedSituation`.
+> `fmtOpt`/l'affichage `✗` côté client utilisent désormais ce même flag, plus de comparaison `=== -99`.
+> **Testé** : `node --check` serveur propre, build Vite client propre, 49 tests `shared/*.test.mjs`
+> existants rejoués (0 régression) + 9 nouveaux tests `shared/combatSituationMods.test.mjs`. **Non
+> testé** : aucune connexion PostgreSQL ici — scénario réel (déclarer un tir à Allure maximale ou en
+> obscurité totale, PJ et drone, vérifier le rejet serveur) à la charge de Saar en navigateur.
+> **Données** : aucune migration. Détail retiré de `docs/BUGIDENTIFIE.md`, remplacé par
+> `COUVERTURE_TOTALE`.
+
+> **Item 98 (Session 166, dev/Saar) — Dette `DEF5` : « Cible sans défense » (+5, pas d'opposition)
+> ✅ CODÉ.** Texte RAW exact relu (`docs/REGLES/REGLESYSCOMBAT.md:1052-1058`, pas la paraphrase du
+> manuel) : « Si un personnage ne peut pas voir son assaillant, ou s'il n'a pas conscience de
+> l'attaque, il ne peut pas se défendre de manière active [...] Test simple, avec un bonus de +5. »
+> Scope tranché avec Saar : statuts `unconscious`/`blinded`/`stunned` (`token_statuses`) **et**
+> `is_surprised` (`combat_roster`, Test de Réaction à `COMBAT_START`) — la clause « surprise »
+> initialement écartée (système d'embuscade non géré) a été réintégrée après clarification : le Test
+> de Réaction existe déjà et pose `is_surprised`, seule la mise en forme diffère des autres statuts.
+> **Écart trouvé en creusant** : `is_surprised` n'est jamais remis à `false` après `COMBAT_START` —
+> dette distincte `SURPRISE1` ajoutée, contournée ici par un garde `current_turn === 1`. **Codé** :
+> helper unique `isTargetDefenseless(campaignId, targetTokenId, settings)` (nouveau, juste avant
+> `resolveMeleeAction`) — autorité unique tir + CaC, même principe que `countAdversaires`/
+> `multiAdversaryMalus`. Tir (`resolveAssaultAction`) : +5 ajouté à `totalModComp`, même emplacement
+> que `shieldAtkMalus` (pas d'opposition à bypasser, le tir est déjà un test simple). CaC
+> (`resolveMeleeAction`) : +5 ajouté à `chancesAttaque` au même endroit ; nouvelle branche unifiée
+> insérée avant le branchement PNJ/drone/PJ existant — auto-résolution complète (dégâts compris,
+> décision Saar) pour tout type de défenseur dès que `targetDefenseless`, généralisant le pattern déjà
+> utilisé pour le défenseur drone (§7.4). Corrige au passage un vrai trou : un PNJ inconscient/étourdi
+> relançait jusqu'ici un jet de défense automatique qui pouvait esquiver, contraire au RAW. **Non
+> câblé** : tir de drone (`resolveDroneAssaultAction`) — fonction séparée, pas touchée dans ce
+> correctif, gap documenté plutôt que silencieux. **Testé** : `node --check` propre. **Non testé** :
+> aucune connexion PostgreSQL ici — scénario réel (chaque statut, PJ/PNJ/drone attaquant et défenseur,
+> Tour 1 vs Tour 2+ pour la surprise) à la charge de Saar en navigateur. **Données** : aucune
+> migration. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos), remplacé par la dette `SURPRISE1`
+> trouvée en cours de route.
+
+> **Item 97 (Session 166, dev/Saar) — Dette `MELEE-MR` : dégâts CaC calculés sans le MR (Marge de
+> Réussite) ✅ CODÉ.** Dette Session 67, jamais close, confirmée par `docs/Old/COMPARATIF.md` §6.2 : le
+> tir à distance applique `rawDice + modDomAttaque(mrTable) + modDegatsMode`, le CaC appliquait
+> `rawDice + modDom(FOR) + combatModeBonus` sans jamais lire la table `mrTable`/`getModifier`. Règle
+> attendue (`MANUELSYSCOMBAT.md` §6.2) : `Dommages_Bruts = Arme + MR + ModDom(FOR)`. **Corrigé aux 4
+> sites réels** (`socketCombatResolution.js` ne contient plus de calcul dupliqué depuis le Lot D
+> `docs/Old/PLAN_COMBAT_TIMELINE.md` — délègue entièrement à `socketCombatHelpers.js`) :
+> `confirmMeleeDefense` PNJ-attaquant (résolution immédiate) et payload `combat_pending` PJ-attaquant
+> (ajout `mr: mrAttaque`) ; `confirmDamage` branche `pendingType==='melee'` (lit ce `mr`) ;
+> `resolveMeleeAction` défenseur PNJ (immédiat) et défenseur drone (`mrAttaque` non calculé côté drone
+> — pas de jet de défense §7.4, ajouté localement). **Testé** : `node --check` propre. **Non testé** :
+> aucune connexion PostgreSQL disponible ici — scénario réel (CaC PJ↔PJ, PJ↔PNJ, PNJ↔PJ, PJ↔drone,
+> comparer les dégâts avant/après un jet à forte marge de réussite) à la charge de Saar en navigateur.
+> **Données** : aucune migration. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos, hygiène du
+> registre).
+
+> **Item 96 (Session 166, dev/Saar) — Dette `INI4` : `initiative` jamais remise à `base_ini` en fin de
+> tour ✅ CODÉ.** Confirmé par audit `docs/Old/COMPARATIF.md` §3 : `endTurn` (`socketCombatHelpers.js`)
+> réinitialisait `has_announced`/`has_resolved`/`state_position`/`state_cover`/`state_vitesse`/
+> `state_combat_mode` par tour mais ne touchait jamais `initiative` — les modificateurs (Précipiter +3,
+> Dégainer -5, S'accroupir -3…) s'accumulaient tour après tour au lieu d'être réinitialisés
+> (`docs/REGLES/REGLESYSCOMBAT.md` p.213). **Corrigé** : `initiative: db.raw('base_ini')` ajouté à la
+> même requête `UPDATE combat_roster` déjà présente en tête d'`endTurn` — même filtre
+> `campaign_id + status:'active'`, aucune requête supplémentaire. Cohérent avec la seule autre écriture
+> de `initiative` du projet (`socketCombatState.js:98` à `COMBAT_START`, `initiative = base_ini` ±
+> jet de surprise). **Testé** : `node --check` propre. **Non testé** : aucune connexion PostgreSQL
+> disponible depuis cet environnement — scénario réel (Précipiter/Dégainer répétés sur 2+ tours,
+> vérifier que `initiative` revient à `base_ini` et non à la valeur modifiée du tour précédent) à la
+> charge de Saar en navigateur. **Données** : aucune migration. Détail retiré de
+> `docs/BUGIDENTIFIE.md` (bug clos, hygiène du registre).
+
+> **Item 95 (Session 165, dev/Saar) — Correctif FSM `AWAITING_DAMAGE` (bug préexistant, trouvé en
+> validant Tir Multi) ✅ CLOS.** Un tireur PJ qui touche pose `AWAITING_DAMAGE` (sous-état FSM bloquant,
+> `combatFSM.js`) puis, dans 4 fonctions, un `advanceTimeline()` inconditionnel juste après l'écrasait
+> en `SLOT_ACTIVE` dès qu'un autre combattant avait un pas suivant dans l'échelle — `COMBAT_DAMAGE_CONFIRM`
+> était alors rejeté à jamais par le garde FSM (observé : `[FSM] guard bloqué : RESOLUTION|SLOT_ACTIVE +
+> COMBAT_DAMAGE_CONFIRM`). Cause racine distincte de Tir Multi (préexistante depuis la refonte de
+> l'échelle de phases, session 159), touche aussi le CaC et les drones — commit séparé du chantier Tir
+> Multi. **Corrigé** : `resolveAssaultAction` (branche PJ-touche) et `resolveDroneAssaultAction` (branche
+> cible PJ) retournent désormais `suspend:true` ; `confirmMeleeDefense` (branche attaquant PJ-touche)
+> gagne un flag local `suspendForDamage` qui bloque son propre `advanceTimeline()` final ; `confirmDamage`
+> (FIFO partagée CaC/Tir) appelle `advanceTimeline()` au lieu d'un simple `setFSMSubPhase`+broadcast
+> quand sa file se vide — sans ça, une confirmation de dégâts terminant le Tour n'aurait jamais déclenché
+> `endTurn()`. `socketCombatResolution.js` : `needsDefenseWait` renommé `resolutionSuspended` (couvre
+> désormais `AWAITING_DEFENSE` et `AWAITING_DAMAGE`, plus seulement la défense CaC), capture le `suspend`
+> des 3 résolveurs concernés (assault/drone/melee). **Testé** : en navigateur par Saar, base réelle — un
+> PJ touche deux fois dans le même Tour (Tir Multi 2 tirs), les deux confirmations de dégâts se sont
+> enchaînées correctement (log vérifié explicitement : absence des lignes `avant/après advanceTimeline
+> final` juste après chaque TOUCHE, confirmant la suspension ; reprise propre sur le combattant suivant
+> après chaque confirmation ; aucun `[FSM] guard bloqué` dans le log). **Non testé** : le même mécanisme
+> côté CaC (`confirmMeleeDefense`, attaquant PJ qui touche) et côté drone (`resolveDroneAssaultAction`)
+> n'a pas été explicitement revérifié en jeu avec ce correctif — seul le chemin Tir Multi l'a été,
+> le correctif y étant strictement identique par construction (même patron `suspend`/`resolutionSuspended`).
+> **Données** : aucune migration.
+
+> **Item 94 (Session 165, dev/Saar) — `docs/PLAN_TIRMULTI.md` : Lots A+B+C ✅ CLOS.** Chantier repris
+> après déblocage par la refonte de l'échelle de phases (session 159, `docs/Old/PLAN_COMBAT_TIMELINE.md`)
+> — vérification RAW complète des points ouverts avant de coder (`docs/REGLES/REGLESYSCOMBAT.md`
+> p.218-219/223/227-230), tranchés avec Saar : D2 cibles distinctes permissif (RAW muet), D3 aucun
+> forfait Initiative de déclaration supplémentaire (le seul coût RAW chiffré — le décalage de phase
+> -5/-10 — était déjà implémenté par `computeSeriesPositions`), D6 CC uniquement (jamais RC/RL ni
+> tireur-drone, RAW muet + Rafale longue déjà action exclusive), D9 une seule arme pour toute la série,
+> D10 Tir visé/Tir à deux armes/Viser une Localisation tous trois exclusifs avec Tir Multi. **Écart
+> trouvé en vérifiant D3** : le forfait Initiative CaC existant (`-3`/`-5` fixe à la déclaration,
+> `socketCombatAnnouncement.js`) semble redondant avec le décalage de phase RAW déjà porté par l'échelle
+> — dette **INI5** ajoutée à `docs/BUGIDENTIFIE.md`, audit demandé par Saar, non traitée dans ce chantier.
+> **Codé** : `mapActions.attack` singulier → array partout (client
+> `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`/`AssaultRangedPanel.jsx`/`useDroneDeclare.js`/
+> `combatSections.js`, shared `combatExclusiveActions.js` + `getMultiShotIneligibilityReasons` nouveau,
+> serveur `socketCombatAnnouncement.js` boucle validation/insertion + cap serveur à 3 + munitions
+> totales de la série + garde uniformité arme + deux messages d'erreur munitions distincts (capacité
+> chargeur insuffisante vs chargeur pas assez rempli, `shared/ammoRules.js::parseAmmoCapacity`
+> nouveau) ; `buildTimelineEntries` généralisé (CaC et Tir Multi partagent la même fonction de
+> groupement `declaration_group_id`/étalement de phase) ; `computeMultiAttackMalus` extrait en fonction
+> partagée, câblée dans `resolveAssaultAction` (nouvelle) et `resolveMeleeAction` (déjà là, inchangée
+> fonctionnellement) ; cible par défaut UX — un seul clic pose la même cible sur toute la série,
+> "Changer" par tir pour diverger (retour Saar) ; Lot C — stub mort `combatSections.js` (`k:'multi'`,
+> jamais câblé) retiré, GM ET joueur. Aucune migration DB nécessaire (schéma déjà générique). **Testé**
+> en navigateur par Saar, base réelle : déclaration Tir Multi 2 tirs (compteur, cible par défaut sur les
+> deux slots), malus cohérent sur les deux entrées d'échelle (même Seuil), entrelacement confirmé avec
+> les autres combattants dans la Résolution, un tir à 3 déclaré et résolu (3 entrées distinctes,
+> interleaved), messages munitions différenciés, stub mort confirmé disparu. Voir Item 95 pour la
+> validation du chaînage dégâts PJ. **Non testé** : série à 3 tirs avec au moins un TOUCHE (le seul essai
+> à 3 tirs observé a fait 3 ratés — la déclaration/le malus/l'entrelacement sont validés, pas le
+> chaînage dégâts à 3) ; déclaration Tir Multi côté MJ pour un PNJ jusqu'à résolution complète (le
+> panneau "Nombre de tirs" est confirmé apparaître côté MJ, mais aucune résolution PNJ multi-tir
+> observée dans les logs partagés) ; rejets serveur (>3 tirs, RC/RL, tireur-drone — gardes codés,
+> jamais déclenchés en test). **Reste à faire** : dette doc `docs/SYSTEME/COMBAT.md:850`
+> (`pendingDamageActions` obsolète, déjà notée comme hors scope de ce plan) — correction séparée si
+> Saar la priorise.
+
+> **Item 93 (Session 164, dev/Saar) — Chantier 11 Étape 2 (Module Armes DSL) ✅ CLOS.** Lot C1 (armure
+> APHC/SAP/SLAP/HP/Explosive/Shrapnel) codé. Recherche menée avant conception (demande explicite Saar :
+> documentation + inspiration pros, pas de rush) : rule element `DamageDice` de PF2e/Foundry confirme
+> le pattern "transformation calculée" pour SAP/SLAP (-1 dé recalculé depuis la formule réelle de
+> l'arme, jamais lu depuis une chaîne catalogue par munition×arme) ; design RPG général confirme que
+> l'AP doit réduire l'armure de la cible plutôt que gonfler le dé de dégât. **Écart trouvé en codant** :
+> 3 des 6 familles (HP/EXPLOSIVE/SHRAPNEL) ont un DSL catalogue incompatible avec
+> `docs/REGLES/REGLESMUNITIONS.md` (scaling `_ARME` inventé, `DMG_DROP=` jamais parsé) — même défaut que
+> les 5 cas déjà confirmés fautifs ce chantier (dont Assommante/Choc, migration 160). **Décision
+> d'architecture** : plutôt qu'une migration de plus (répétée à chaque nouvelle munition mal saisie),
+> `AMMO_MECHANIC_ACTIONS` (`shared/weaponAmmoDsl.js`, nouveau registre par `tags.FX`) devient la seule
+> autorité pour ces 6 familles — le catalogue devient cosmétique, aucune migration nécessaire, une
+> nouvelle munition fonctionne automatiquement dès que `FX=` est posé. **Codé** :
+> `reduceDiceCount`/`resolveAmmoMechanic`/`resolveMechanicDamageFormula` (`shared/weaponAmmoDsl.js`) ;
+> `getEffectiveWeaponDamage`/`getEffectiveWeaponFormulaPreview` gagnent `rangeBand` (Shrapnel
+> uniquement) et dispatchent sur le registre ; `resolveTargetHit` gagne `ammoFx` (armure cible
+> multipliée par la fraction du registre) ; 2 sites `socketCombatHelpers.js` déjà rebranchés Lot A/B
+> transmettent les nouveaux paramètres. **Testé** : 16 scénarios purs nouveaux
+> (`shared/weaponAmmoDsl.test.mjs`, aucun fichier de test n'existait avant pour ce module), suite
+> `shared/*.test.mjs` complète rejouée (49/49, 0 régression), `node --check` propre. **Non testé** :
+> aucune connexion PostgreSQL disponible depuis cet environnement (scénario réel en base impossible
+> ici), build Vite (aucun fichier client touché, hors scope), navigateur réel — à la charge de Saar, en
+> particulier vérifier que les chaînes `FX=` réelles en base correspondent aux clés du registre
+> (sensible à la casse). **Données** : aucune migration (décision explicite de ce Lot).
+>
+> **C2 (Test de panne IEM) — clôturé narratif, décision Saar.** Recherche de la règle exacte
+> (`docs/REGLES/REGLEMATERIEL.md` p.273-274, "Test de panne" : 1D20 sous l'Intégrité de l'objet, échec
+> = -1 Intégrité, Catastrophe = -1D6 Intégrité + réparation experte). Saar a précisé que les munitions
+> IEM ciblent des systèmes électroniques (exo-armure, vaisseaux) qui n'existent pas encore dans le
+> projet — construire le mécanisme maintenant serait "une brique dans le désert", assumé et volontaire.
+> Blocage annexe identifié en creusant : le seuil numérique de "Catastrophe" (terme transversal utilisé
+> partout dans le LdB — combat, tests, blessures, pouvoirs Polaris) n'est formalisé nulle part dans le
+> projet, ni dans les extraits de règles disponibles. Saar a fourni le texte "Catastrophes en combat"
+> (table 1D10 de conséquences), mais pas le seuil de déclenchement lui-même. **Décision explicite de
+> Saar : pas la priorité, ne pas ouvrir de chantier dédié maintenant.** `DMG=MUL(0.5)` (mi-dégâts IEM)
+> reste codé et actif (Lot A) — seul le malus Test de panne reste narratif/MJ. Aucune ligne de code
+> ajoutée pour C2.
+>
+> **C3 (zone Shrapnel) — différé, décision Saar.** Le ciblage n'est pas une sélection MJ mais des cases
+> adjacentes calculées par le futur builder — nécessite une collaboration avec Kiwi (monde/builder),
+> hors périmètre solo. Armure/dégression par portée de Shrapnel déjà câblées par C1 ; seul le
+> ciblage multi-cibles reste à faire, plus tard.
+>
+> **Clôture documentaire** : `docs/PLAN_ARMES_DSL.md` archivé vers `docs/Old/` (Règle 10,
+> `docs/RegleDocumentaire.md`) — contenu durable (registre, invariants, décisions actées ci-dessus)
+> transféré dans `docs/SYSTEME/COMBAT.md` §Munitions. `docs/ROADMAP.md` mis à jour (Étape 2 ✅ clos).
+
+> ⚡ **Statut au 2026-07-18 fin de session : mécanisme central Retarder/Agir maintenant validé en
+> navigateur par Saar, après une longue série de correctifs (Items 86-88 + refonte ci-dessous).**
+> Validé en vrai (plusieurs Tours, plusieurs configurations Précipiter/Retarder croisées) : Agir
+> maintenant actif exactement à partir de la propre phase d'Initiative du personnage retardé (jamais
+> avant — vérifié explicitement contre un cas où un PNJ précipité passe légitimement devant), priorité
+> RAW correcte à l'interruption, tous les participants résolvent dans le bon ordre sur plusieurs tests
+> d'affilée. **Encore non testé avant de considérer le chantier clos** : le tour obligatoire de fin de
+> Tour lui-même (aucun test récent n'a laissé un personnage retardé être le dernier debout — tous les
+> tests l'ont fait interrompre en plein Tour) ; Passer consciemment ; deux personnages retardés
+> simultanés (départage Initiative égale, RAW §0.1 point 5) ; un CaC retardé (seul le Tir a été retesté
+> après les derniers correctifs) ; Retarder d'un Tour sur l'autre (RAW l'autorise explicitement, jamais
+> exercé). ⚠️ **Rien n'est committé malgré une indication contraire de Saar** — `git status` au moment de
+> la rédaction montre encore les 28 fichiers modifiés/nouveaux de toute la session (Lots B/C/D, refonte
+> Item 88, tous les correctifs qui suivent) ; le dernier commit réel (`bb1bfef`) est antérieur à ce
+> chantier. À vérifier par Saar avant toute autre action (mauvaise branche, mauvais dossier, échec
+> silencieux) — ne pas supposer une sauvegarde qui n'existe pas.
+> **Premier passage navigateur de Saar (2026-07-18)** — 3 correctifs additionnels appliqués avant de
+> continuer les tests : CaC et Assaut n'étaient pas mutuellement exclusifs à la déclaration (plantait à
+> la résolution — gap identifié mais jamais câblé pendant la conception du Lot B, corrigé client+serveur) ;
+> couverture manuelle retirée (vestige déconnecté du vrai calcul de couverture, déjà auto-géré par le
+> moteur monde — sera repris différemment par le futur builder) ; MJ devait resélectionner les 3 cibles
+> d'une série CaC à chaque changement (un seul bouton relançait toute la chaîne) — corrigé au minimum
+> (réutilise le pattern déjà correct côté joueur, un bouton par emplacement) pour ne pas bloquer les
+> tests. **Chantier UI/UX dédié explicitement reporté** (décision Saar) : nettoyage CSS (classes de base
+> `index.css` existantes mais contournées par du style en dur dans `StateSelector`/`MAP_ACTIONS`/
+> `MeleeCombatPanel`) et refonte de l'affichage Retarder/Précipiter (actuellement fonctionnel mais peu
+> lisible) — à lancer une fois les Lots B/C validés et stabilisés en jeu réel, pas maintenant.
+> Détail complet, fichiers exacts et 2 bugs réels trouvés en
+> auditant (dont un qui aurait cassé tout `COMBAT_START`) : Item 86 ci-dessous.
+> **Troisième passage (2026-07-18)** — label « précipitation » du Tir visé faux pour Retarder (corrigé,
+> renommé) ; motif racine du blocage « fenêtre de modificateur non validable, Tour planté » identifié
+> (deux gardes silencieuses de `COMBAT_ACTION_CONFIRM`, jamais de message — corrigé, `COMBAT_DECLARE_ERROR`
+> explicite) ; affordance « Agir maintenant » ajoutée pour un personnage en délai pendant une fenêtre de
+> réaction ouverte (avant, seul le tour obligatoire l'affichait clairement). Détail complet : paragraphe
+> dédié entre Items 86 et 87 ci-dessous.
+> **Refonte architecturale (2026-07-18, Item 88)** — un 2ᵉ log de blocage a mené Saar à demander une
+> réflexion de fond plutôt qu'un patch de plus : `AWAITING_REACTION_WINDOW` (sous-état FSM temporisé du
+> Lot B) est **entièrement retiré**, remplacé par une règle unique conforme au RAW (« agir à n'importe
+> quelle phase d'Action », aucun minuteur) — 3 bugs réels en une journée venaient tous de ce même
+> sous-état. Detail complet : Item 88 ci-dessous, juste avant Item 87 (qui documente encore l'ancien
+> comportement — lire Item 88 en premier pour l'état actuel).
+> **Deuxième passage navigateur de Saar (2026-07-18)** — rapport de 6 points, tous traités :
+> **bug racine réel corrigé** : `COMBAT_ACTION_CONFIRM` marquait l'entrée d'échelle `resolved` **avant**
+> d'appeler `resolveMeleeAction`/`resolveAssaultAction` ; si le resolver levait une exception, le
+> `catch` englobant l'avalait côté serveur uniquement (`console.error`) sans jamais appeler
+> `advanceTimeline` — le Tour restait gelé en silence (symptôme "plantage sur Civil, aucun message"),
+> et un `COMBAT_TIMELINE_UPDATED` de reconnexion ultérieur pouvait ensuite désigner directement le
+> prochain token légitime, donnant l'impression qu'un personnage en délai « shuntait » tout le monde
+> alors que c'était juste la suite normale d'une échelle où l'entrée cassée avait été traitée comme
+> résolue. **Corrigé** : le bloc resolveur est isolé dans son propre `try/catch`, qui émet désormais un
+> `COMBAT_DECLARE_ERROR` explicite en chat et appelle `advanceTimeline` dans tous les cas — l'échelle
+> ne peut plus rester bloquée en silence. **Cause exacte de l'exception d'origine (Civil, double
+> Scorpion) non identifiée avec certitude — `[INCONNU]`**, code relu sans trouver de suspect évident
+> (dual-wield structurellement identique aux deux fenêtres) ; le filet de sécurité posé rendra l'erreur
+> visible en chat si ça se reproduit, avec le message exact nécessaire à un vrai diagnostic.
+> **Autres correctifs** : (1) sous-état `AWAITING_REACTION_WINDOW` absent de la table de transitions
+> pour `COMBAT_ACTION_CONFIRM` — un joueur cliquant « Agir » pendant une fenêtre de réaction ouverte
+> recevait le message générique « Action non autorisée dans cet état de combat » (cause du symptôme LOS
+> rapporté, plausible mais pas certaine sans reproduction exacte) ; message désormais explicite par
+> sous-état + bouton « Agir » désactivé côté client (`CombatActionWindow.jsx`, `CombatOverlay.jsx`)
+> tant que la fenêtre est ouverte, plutôt qu'un clic voué à échouer. (2) Redirection d'interception LOS
+> (§6 point 3, Item 86) vérifiée correcte par relecture — `checkCombatLOS`/`redirectToInterceptor`
+> fonctionnent comme conçus, aucune correction nécessaire là. (3) MJ n'avait structurellement aucun
+> bouton dédié Retarder/Précipiter — `InlineChip` est une puce à cycle (un seul clic fait défiler
+> normal→précipité→retardé sans jamais montrer les 3 choix), contrairement à `StateSelector` côté
+> joueur (3 boutons visibles). `StateSelector` exporté depuis `CombatActionWindow.jsx` et réutilisé tel
+> quel dans `CombatGmDeclareWindow.jsx` pour la ligne vitesse. (4) Messages d'erreur de déclaration
+> assaut (arme manquante, mode de tir incompatible, **compétence Tir Automatique manquante**, arme
+> drone introuvable) routés vers l'événement générique `error` → bannière flottante isolée
+> (`gmSocketError`) au lieu du fil de chat — convertis vers `COMBAT_DECLARE_ERROR` (même patron que
+> « Tir visé : ... », explicitement salué par Saar comme le bon format) avec plus de détail
+> (`socketCombatAnnouncement.js`, bloc PC22/PC23). **Testé** : `node --check` propre sur les 3 fichiers
+> serveur touchés, build Vite complet propre, fixture de fumée (construction + pas courant) rejouée
+> sans régression. **Non testé** : navigateur réel (à nouveau la charge de Saar) ; la cause exacte du
+> crash Civil reste à confirmer par le message désormais visible en chat s'il se reproduit.
+
+> **Troisième passage navigateur de Saar (2026-07-18)** — 4 points rapportés sur le Lot D/fenêtre de
+> réaction, tous traités : (1) le motif d'inéligibilité « précipitation » du Tir visé
+> (`shared/combatExclusiveActions.js` `getAimIneligibilityReasons`) s'affichait même quand le joueur
+> venait de choisir Retarder — la clé compare `state.vitesse` à l'état persisté sans distinguer la
+> direction du changement (normal→retardé/précipité/normal), le libellé « précipitation » était donc
+> faux pour 2 des 3 transitions possibles. Renommé en « changement de vitesse » (générique, correct dans
+> les 3 cas). (2) Bug racine réel identifié derrière « fenêtre de modificateur non validable, Tour
+> planté » : `COMBAT_ACTION_CONFIRM` (`socketCombatResolution.js`) a deux gardes qui existaient déjà
+> (garde FSM `canTransition` + garde `step.tokenId !== tokenId` re-vérifiant le pas courant au moment du
+> clic) mais aucune des deux n'émettait de message en cas de rejet — retour silencieux (`return` nu).
+> Scénario reconstitué : le MJ ouvre la fenêtre de modificateurs d'un PNJ (passe le PRECHECK, à ce
+> moment légitime) puis, avant de cliquer Confirmer, un personnage en délai déclenche « Agir maintenant »
+> (légitime aussi — priorité RAW sur l'action normale, §6ter point 3) : l'échelle est réordonnée sous les
+> pieds du MJ, son clic Confirmer arrive ensuite sur un pas qui n'est plus le pas courant et échoue sans
+> aucun retour — la fenêtre reste affichée, semble ne plus répondre, indiscernable d'un plantage. Ce
+> n'est pas un bug de concurrence à éliminer (la priorité du personnage en délai est voulue) mais un
+> silence à combler — même famille que le correctif Item 86 (Civil/Scorpion) généralisée ici aux deux
+> gardes de `COMBAT_ACTION_CONFIRM` : message `COMBAT_DECLARE_ERROR` explicite (qui a pris la main,
+> pourquoi la fenêtre n'est plus valide) au lieu d'un no-op muet. (3) L'unique affordance du joueur en
+> délai pendant une fenêtre de réaction ouverte (pas le tour obligatoire de fin de Tour, un cas différent
+> déjà bien traité) était un simple portrait cliquable dans la timeline, sans texte ni bouton — beaucoup
+> trop discret (« la fenêtre Agir maintenant n'est apparue chez le joueur qu'au tour obligatoire, plus
+> tard »). Ajouté : panneau explicite « <Perso> — action retardée : agir maintenant, avant la suite ? »
+> avec bouton doré, un par personnage en délai contrôlé par ce viewer, même patron visuel que le panneau
+> du tour obligatoire (sans bouton Passer — non valide pendant une fenêtre de réaction,
+> `triggerDelayedPass` le rejetterait). (4) Message MJ/acteur bloqué pendant la fenêtre reformulé (texte
+> plus explicite sur qui/pourquoi) — clarification minimale seulement, la refonte complète du panneau
+> reste dans le chantier UI/UX différé (décision Saar, cf. plus haut). **Testé** : `node --check` propre
+> sur `socketCombatResolution.js`, `esbuild` propre sur `CombatOverlay.jsx`, build Vite complet propre (0
+> erreur, seul l'avertissement pré-existant de taille de chunk). **Non testé** : navigateur réel (à la
+> charge de Saar) — en particulier le scénario exact qui a produit le blocage rapporté n'a pas pu être
+> rejoué (pas de fixture dédiée à cette race précise, la garde touchée est un ajout de message sur un
+> chemin de code par ailleurs inchangé). **Données** : aucune migration. **Retour arrière** : aucun
+> schéma touché.
+
+> **Analyse de log (2026-07-18, même journée)** — Saar a fourni les logs serveur d'un Tour test sans
+> savoir interpréter un blocage ; bug racine réel trouvé en lisant le log (pas en reproduisant) :
+> `[DBG] COMBAT_ACTION_CONFIRM — tokenId:238cb98c... mods:null` suivi de
+> `[WS] COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers` — l'assaut d'un PNJ a été marqué résolu
+> sans jamais lancer de dé, aucun message. Cause : `COMBAT_ACTION_PRECHECK` traitait
+> `AWAITING_REACTION_WINDOW` (et `AWAITING_DEFENSE`) comme un rejet dur (`callback({ ok:false })`,
+> exactement le même traitement qu'un blocage LOS définitif) au lieu d'une attente transitoire comme
+> `AWAITING_DAMAGE` (`callback({ awaiting:true })`, pattern déjà existant). Le PNJ de ce test avait son
+> assaut présenté juste après le premier tir raté du Tour, au moment exact où le personnage retardé
+> (Joueur 3) ouvrait une fenêtre de réaction — precheck rejeté en dur, `assaultPrecheckOk` passait à
+> `false`, le bouton générique « Agir » (sans fenêtre de modificateurs) s'affichait à la place de
+> `CombatModifiersWindow`, clic MJ, confirm sans `confirmedModifiers`, assaut ignoré en silence côté
+> serveur. Corrigé : `AWAITING_REACTION_WINDOW`/`AWAITING_DEFENSE` rejoignent `AWAITING_DAMAGE` dans la
+> branche `awaiting:true` (`socketCombatResolution.js`) ; le retry côté client (`CombatOverlay.jsx`,
+> effets `meleePrecheckOk`/`assaultPrecheckOk`) dépendait uniquement de `precheckRetryKey`
+> (`COMBAT_ATTACK_RESULT`) — ajouté `subPhase` aux dépendances pour retenter dès la fermeture de la
+> fenêtre, pas seulement après une attaque déjà confirmée. Filet de sécurité ajouté en plus (double
+> protection, pas un correctif du symptôme) : le cas `assault sans confirmedModifiers` émettait un
+> `console.warn` serveur seul — émet désormais aussi `COMBAT_DECLARE_ERROR` en chat, au cas où ce chemin
+> se reproduirait pour une autre raison. Non confirmé/hors scope : le log montre aussi une déclaration
+> d'action (4e participant, INI 12) dont la ligne de log apparaît après celle de `startResolutionPhase` —
+> pourrait indiquer une course entre deux `COMBAT_ACTION_DECLARE` concurrents autour du comptage « tout
+> le monde a annoncé » (pré-existant, aucun lien avec les Lots B/C/D), mais les 4 participants ont bien
+> été résolus dans la suite du log — pas de perte de donnée confirmée, seulement un ordre de log
+> surprenant. `[INCONNU]`, non creusé (hors du signalement de Saar, à surveiller si un vrai symptôme
+> apparaît). **Testé** : `node --check` propre, `esbuild` propre, build Vite complet propre. **Non
+> testé** : navigateur réel (le scénario exact — assaut PNJ présenté pendant une fenêtre de réaction —
+> n'a pas de fixture dédiée ; la relecture du log est la seule preuve disponible pour l'instant).
+
+> **Item 91 (Session 162, dev/Saar) — COM29 : Tir à deux armes, seule la main directrice trackée
+> (munitions) ✅ CLOS.** Cause `[VÉRIFIÉ]` (LdB `docs/REGLES/REGLESYSCOMBAT.md` p.226 "Tirer avec deux
+> armes" relu et cité exactement) : le personnage tire réellement des deux armes en dual-wield (c'est
+> la justification fictionnelle du bonus +3/+5), donc les deux doivent consommer et vérifier leurs
+> munitions propres — `combat_actions` n'avait qu'une seule colonne arme (`weapon_inv_id`), la main non
+> directrice n'était jamais fetchée, vérifiée ni décomptée. Trouvé par Saar en marge de COM25/COM28.
+> **Décision produit (Saar)** : jamais de blocage total tant qu'une main peut encore tirer — l'autre
+> main à sec dégrade en tir simple (bonus deux armes annulé), message système privé (chat, propriétaire
+> du personnage uniquement) expliquant pourquoi, jamais un refus d'agir.
+> **Correctif** : migration `176` (`combat_actions.offhand_weapon_inv_id`, FK `char_inventory`, CHECK
+> XOR miroir de `drone_weapon_inv_id`) ; `shared/dualWieldRules.js` (nouveau module, `resolveDualWieldFire`
+> — autorité unique de la décision "qui tire", séparée de `shared/ammoRules.js` qui ne connaît que le
+> comptage de munitions, pas l'arbitrage de tir) consommée à l'identique par la Déclaration (fail-fast,
+> ne bloque que si les deux mains sont à sec) et la Résolution (autorité, `resolveAssaultAction`
+> restructurée pour déterminer l'arme effective — portée/dégâts/mods/compétence/décompte tous
+> re-paramétrés sur elle, jamais un usage figé de la main directrice). Message système : `WS.CHAT_MESSAGE`
+> étendu d'un flag `system`+`i18nKey` (résolu côté client via `t()`, jamais de texte figé serveur —
+> nouvelles clés `session.dualWieldAmmoOutPrimary`/`dualWieldAmmoOutOffhand`, fr+en), acheminé par le
+> mécanisme d'émission ciblée `to:'user'`/`fallback` déjà existant (aucun nouvel événement WebSocket).
+> Client : `offhandWeaponInvId` ajouté au payload `mapActions.attack` (`CombatActionWindow.jsx` +
+> `CombatGmDeclareWindow.jsx`, main non directrice = `weaponMg` quand `hasTwoWeapons`).
+> **Testé** : 7 tests unitaires `shared/dualWieldRules.test.mjs` (4 combinaisons dual-wield + 3 cas
+> tir simple) ✅ ; `node --check` sur les 2 fichiers serveur touchés ✅ ; build Vite complet propre ✅ ;
+> **scénario réel en base confirmé fonctionnel par Saar** — dual-wield complet (bonus + double décompte),
+> main non directrice à sec (tir simple, décompte MD seule, message privé reçu uniquement par le
+> propriétaire), main directrice à sec (symétrique), les deux à sec (blocage inchangé), message absent
+> chez les autres joueurs connectés. **Chantier clos complet**, plus de réserve. **Données** :
+> migration `176`, nullable et rétrocompatible. **Retour arrière** : `down()` de la migration retire la
+> colonne ; revert du commit pour le reste.
+>
+> **Item 92 (Session 163, dev/Saar) — PLAN_CAC_BATTERIE.md Lot A : munition générique "Charge
+> électrique" ✅ CLOS (Lot A uniquement).** Suite directe de COM28 — Saar a rejeté le correctif
+> d'affichage seul (« la Matraque Mao a des munitions, un correctif serait l'inverse de cacher la
+> misère ») et demandé une vraie mécanique de recharge, indépendante CaC/tir. Investigation confirmée
+> `[VÉRIFIÉ]` : `caliber` est déjà l'unique champ de liaison arme/munition du projet
+> (`docs/Old/JARMES.md` §2.5, « Aucune exception : Toujours utiliser caliber »), utilisé par égalité de
+> chaîne sans distinction de catégorie — rien à changer côté code, seulement de la donnée manquante sur
+> 19 armes (`ammo_count` réel, `caliber` resté `NULL`). Piège évité en cours de route : `GP-*`
+> (`GP-A1`…`GP-D4`, retrouvé lié à 13 armes à énergie + Poing Kryss) est une classification de sources
+> d'énergie de **drones** (`docs/REGLES/REGLEDRONE.md`), réutilisée intentionnellement pour un domaine
+> différent (confirmé `docs/Old/JOURNAL2.md:4587`, « enrichissement intentionnel... conservé ») — ne pas
+> y raccrocher ce chantier. **Décision produit (Saar)** : munition générique unique "Charge électrique",
+> `family='Munitions'`, `category='Charges électriques'`, `caliber='Charge électrique'`, 10 sols/charge
+> (aligné sur `9 mm - Munition standard`) ; scope limité au Lot A (19 armes à charge numérique propre :
+> 7 armes de contact + Flex + 11 armes étourdissantes/soniques) — Lots B (armes à durée, "1
+> heure"/"1h de gaz", mécanique de jauge temporelle distincte), C (armes de trait, déjà liées à
+> Flèche/Carreau, juste un lien à poser) et D (lanceurs, Capsule existe déjà pour Lance-capsules, les
+> autres nécessitent un item dédié par type de projectile) volontairement reportés — root cause
+> distincte par lot. **Correctif** : migration `178` (`server/src/db/migrations/178_ammo_charge_electrique.js`,
+> 176 pris entre-temps par COM29) — INSERT munition + UPDATE `caliber` sur les 19 armes, idempotent
+> (patron migration 75), échec net (`throw`) plutôt qu'état partiel silencieux si le nombre d'armes
+> mises à jour ne correspond pas exactement. Aucun code applicatif touché : `resolveAmmoInit`/
+> `reloadWeapon`/`weaponAmmoStatus` (COM28) fonctionnent immédiatement dès `caliber` peuplé. **Testé** :
+> migration appliquée en base réelle (20/20 lignes liées, vérifié par requête) ; premier essai a échoué
+> proprement sur `tech_level NOT NULL` manqué, transaction Postgres a tout annulé (aucune ligne
+> orpheline), corrigé et réappliqué ; `node --test shared/ammoRules.test.mjs shared/dualWieldRules.test.mjs`
+> → 15/15 (non-régression COM25/COM28/COM29) ; **scénario réel navigateur confirmé fonctionnel par
+> Saar** (équiper/recharger une arme du Lot A, affichage munitions correct en combat). **Anomalie infra
+> découverte en testant `down()`** (hors scope, signalée séparément) : `knex migrate:rollback` CLI
+> n'exécute rien de constatable sur ce projet (bookkeeping et données inchangés malgré un message de
+> succès) — `down()` lui-même vérifié fonctionnel par appel direct (20→0 lignes, 0 exception), donc pas
+> en cause ; piste non creusée : `NaturalMigrationSource`. Détail complet : `docs/PLAN_CAC_BATTERIE.md`
+> (reste actif — Lots B/C/D non fermés). **Retour arrière** : `down()` de la migration 178 fonctionnel
+> (vérifié par appel direct, pas via la CLI cassée) ; aucune perte possible (`current_ammo` de ces armes
+> n'a jamais pu être posé avant cette migration).
+>
+> **Item 90 (Session 160, dev/Saar) — COM25 + COM28 : munitions insuffisantes bloque le tir, statut
+> munitions Matraque Mao ✅ CLOS** (session parallèle, code déjà présent au moment d'ouvrir Item 91
+> ci-dessus — entrée reconstituée a posteriori depuis le diff réel, pas depuis une note prise en
+> l'écrivant). COM25 : aucun garde n'empêchait de déclarer/résoudre un assaut avec `ammo_remaining=0`.
+> COM28 : `weaponAmmoStatus` affichait "0/40 munitions" sur une arme de contact (Matraque Mao) sans
+> calibre réel. **Correctif** : `shared/ammoRules.js` (nouveau module) — `hasEnoughAmmo` (autorité
+> unique fail-fast Déclaration + autoritaire Résolution, `socketCombatAnnouncement.js` +
+> `socketCombatHelpers.js`) et `weaponAmmoStatus` (déplacé depuis les copies locales
+> `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`, gagne un paramètre `caliber` — non nul requis
+> pour tout statut, cf. `resolveAmmoInit`). **Testé** : 8 tests unitaires `shared/ammoRules.test.mjs`.
+>
+> **Item 89 (Session 161, dev/Saar) — Cluster E / COM2 : statut arme absente côté MJ (2M/Tr jamais
+> affichés) ✅ CLOS, fonctionnel confirmé Saar en navigateur.** Cause `[VÉRIFIÉ]` par lecture croisée
+> client/serveur : le bloc ARMEMENT de `CombatGmDeclareWindow.jsx` (statut munitions COM20) ne testait
+> que `weaponMg`/`weaponMd` — un PNJ équipé uniquement d'une arme deux-mains (`2M`) ou montée sur
+> trépied (`Tr`, slot réel — `inventoryService.js` `WEAPON_SLOTS`) n'affichait aucun statut arme côté
+> MJ. Le `2M` avait déjà été ajouté côté PJ (`CombatActionWindow.jsx`, COM20/Session 158) mais jamais
+> répercuté côté MJ — dérive du pattern « chaque composant maintient son propre tableau `[['MG', w],
+> ['MD', w]]` en dur » ; `Tr` n'était affiché nulle part, ni PJ ni MJ.
+> **Correctif** : nouvelle fonction pure `handSlotDisplayRows()` dans `shared/weaponSlots.js` — autorité
+> unique de l'ordre d'affichage (dérivé de `HAND_WEAPON_SLOTS`) et de la règle de préfixe de main,
+> consommée à l'identique par les deux fenêtres au lieu de dupliquer le tableau. `battlemaps.js`
+> (`/combat-equipment`) transmet désormais `weapon2M`/`weaponTr` (déjà calculés par `resolveHandWeapons`
+> mais jetés avant ce correctif). `CombatActionWindow.jsx` gagne `equippedTr` (même gap côté PJ).
+> **Testé** : 5 nouveaux tests unitaires `shared/weaponSlots.test.mjs` (MG seul, MG+MD, 2M seul —
+> reproduit COM2, Tr seul, aucune arme) ✅ ; build Vite complet propre ; `node --check` serveur/partagé
+> propre ; confirmé fonctionnel par Saar en navigateur (MJ et PJ). **Non testé** : scénario `Tr` en
+> conditions réelles (aucun item catalogue équipé en `Tr` disponible pour un test en jeu, couverture
+> unitaire uniquement pour ce slot). **Données** : aucune migration, aucun effet runtime — changement
+> d'affichage pur. **Retour arrière** : aucun schéma touché, revert du commit suffit.
+
+> **Item 88 (Session 159, dev/Saar) — Retrait de la fenêtre de réaction temporisée (refonte
+> architecturale, demandée explicitement par Saar après un 2ᵉ log de blocage : « qu'est-ce que tu
+> essaies de faire ? Est-ce qu'on est vraiment alignés sur le fonctionnement souhaité d'un tour de
+> combat ? Réflexion profonde. »).** Trois bugs réels en une seule journée de test (boucle infinie
+> Item 87, confirmation silencieuse Item 87, precheck en rejet dur — paragraphe « analyse de log »
+> ci-dessus) tous causés par le même sous-état FSM ajouté au Lot B (`AWAITING_REACTION_WINDOW`, minuteur
+> 15s), jamais par Retarder lui-même. Relecture RAW à froid (`REGLESYSCOMBAT.md:554-567`) : « Le
+> personnage peut alors agir à n'importe quelle phase d'Action » — **aucun minuteur dans le texte**, la
+> fenêtre était une invention (actée avec Saar au moment du plan, §6ter point 3, mais dont le coût réel
+> n'était pas visible avant de la tester en conditions réelles). Le tour obligatoire de fin de Tour (§6
+> point 2, déjà codé au Lot B) faisait déjà, sans minuteur, ce que le RAW demande — la fenêtre de
+> réaction était une couche redondante qui n'apportait rien de plus. **Décision (validée par Saar,
+> "Ok, go") : supprimer entièrement `AWAITING_REACTION_WINDOW`, son minuteur, `justClosedReactionWindow`
+> et tout leur câblage — unifier « Agir maintenant » en une seule règle valable à tout moment de
+> `SLOT_ACTIVE` pendant la Résolution.**
+> **Codé** : `combatFSM.js` — sous-état retiré du `TRANSITIONS` table (commentaire de tête réécrit,
+> explique le retrait) ; `socketCombatHelpers.js` — `advanceTimeline` simplifiée (plus de
+> `delayedCount`/`resolvedCount`/timer/`justClosedReactionWindow`, présente directement le pas suivant
+> en `SLOT_ACTIVE`) ; `triggerActNow` unifiée (un seul chemin : si un pas normal existe, bloqué
+> uniquement si `sub_phase !== 'SLOT_ACTIVE'` — c'est-à-dire si ce pas est déjà en cours de résolution,
+> `AWAITING_DEFENSE`/`AWAITING_DAMAGE`, dés déjà lancés, cf. §6ter point 3 « explicitement écarté » du
+> plan original ; sinon, tour obligatoire inchangé) ; `forceAdvanceResolution` — branche
+> `AWAITING_REACTION_WINDOW` retirée (devenue impossible) ; `REACTION_WINDOW_MS`/
+> `clearReactionWindowTimer`/`pendingMaps.reactionWindows` supprimés, ainsi que leur initialisation dans
+> `socket/index.js` (`combatReactionWindows`) et le champ `reactionWindow` du payload
+> `COMBAT_TIMELINE_UPDATED` (reconnexion comprise). `socketCombatResolution.js` — precheck et confirm
+> perdent leurs branches `AWAITING_REACTION_WINDOW` (celles pour `AWAITING_DEFENSE`/`AWAITING_DAMAGE`,
+> légitimes et pré-existantes, restent). **Client** : `combatStore.js` perd le champ `reactionWindow` ;
+> `CombatTimeline.jsx` perd le minuteur dédié et la clé `isReactive` devient `subPhase === 'SLOT_ACTIVE'`
+> (au lieu de `reactionWindow?.open`) — les cartes « en délai » restent cliquables en continu, plus
+> seulement pendant une fenêtre ; `CombatOverlay.jsx` — le panneau « Agir maintenant » ajouté à la
+> session précédente pour la fenêtre devient valable à tout moment de `SLOT_ACTIVE` (exclu pendant le
+> tour obligatoire pour ne pas dupliquer son propre panneau) ; le panneau MJ « Forcer » perd la branche
+> `AWAITING_REACTION_WINDOW` (ne reste que `AWAITING_DEFENSE`/`AWAITING_DAMAGE`, cas où un joueur ne
+> répond vraiment pas) ; le bouton « Agir » du MJ et celui du joueur (`CombatActionWindow.jsx`) perdent
+> leur état désactivé dédié à la fenêtre — une interruption reste possible à tout instant mais se résout
+> proprement via le message d'erreur déjà en place (Item « analyse de log » ci-dessus, `step.tokenId !==
+> tokenId`) plutôt que d'être pré-empêchée par un état de plus à synchroniser. Migration `174` non
+> retouchée — son `CHECK` autorise encore `'AWAITING_REACTION_WINDOW'` en base, valeur simplement
+> jamais plus écrite (permissif et inoffensif, pas de nouvelle migration pour un nettoyage cosmétique
+> d'une valeur inutilisée). **Testé** : fixture jetable dédiée (10/10, campagne + 4 tokens + échelle
+> construite à la main, 0 résidu après suppression) — Agir maintenant en plein `SLOT_ACTIVE` sans
+> minuteur, retour naturel au pas suivant sans jamais passer par `AWAITING_REACTION_WINDOW`, blocage
+> confirmé pendant `AWAITING_DEFENSE`, tour obligatoire toujours fonctionnel (Agir maintenant et Passer).
+> `node --check` propre sur les 5 fichiers serveur touchés, build Vite complet propre (0 erreur, seul
+> l'avertissement pré-existant de taille de chunk). **Non testé** : navigateur réel (à la charge de
+> Saar) — la régression complète du Lot B (construction/interleaving/attaques multiples/`endTurn`) n'a
+> pas été rejouée dans cette session (aucun de ces chemins n'a été touché par ce retrait, risque jugé
+> faible, mais non vérifié empiriquement). **Données** : aucune migration. **Retour arrière** : aucun
+> schéma touché, revert du commit suffit.
+> **Correction (même session) — retour Saar, faute de compréhension réelle repérée par lui** : la
+> première version de ce retrait autorisait « Agir maintenant » à *tout instant* de `SLOT_ACTIVE`, sans
+> aucune borne — un personnage retardé avec une Initiative basse aurait pu interrompre un acteur avec
+> une Initiative bien plus haute, ce qui contredit le sens même de Retarder (« plus tard dans le Tour »,
+> jamais plus tôt — RAW `REGLESYSCOMBAT.md:554-567`). Saar a reformulé la règle en 3 points clairs et j'ai
+> confirmé/corrigé chacun ; le point manquant était que « Agir maintenant » ne devient actif qu'une fois
+> que le pas normal à résoudre atteint (ou dépasse) la **propre phase d'Initiative d'origine** du
+> personnage en délai (`initiative × 100`), jamais avant — reste ensuite actif jusqu'à la fin du Tour.
+> **Corrigé** : `triggerActNow` (`socketCombatHelpers.js`) compare désormais `referenceStep.position` à
+> `rosterEntry.initiative × 100` et refuse (`return 'too_early'`) tant que ce n'est pas atteint ; la
+> fonction retourne maintenant un statut (`'ok'`/`'too_early'`/`'busy'`/`'not_your_turn'`) au lieu d'un
+> `undefined` muet, et `COMBAT_ACT_NOW` (`socketCombatResolution.js`) émet un `COMBAT_DECLARE_ERROR`
+> explicite sur `'too_early'`. **Client** : `CombatTimeline.jsx` (cartes « en délai » cliquables) et le
+> panneau dédié de `CombatOverlay.jsx` appliquent la même borne — le personnage n'apparaît plus cliquable
+> avant sa propre phase, cohérent avec le retour Saar (« la fenêtre doit être active dès que… »).
+> **Bug annexe trouvé en testant cette correction** : `endTurn` appelait encore
+> `clearReactionWindowTimer`, fonction supprimée au retrait précédent — jamais détecté par le grep
+> textuel (casse différente, `ReactionWindowTimer` vs le motif `reactionWindow` cherché), révélé
+> uniquement en poussant une fixture jusqu'à la fin du Tour. Corrigé (appel retiré). **Testé** : nouvelle
+> fixture jetable dédiée à la borne d'Initiative (9/9, campagne à 4 tokens Initiative 12/11/9/7, vérifie
+> le refus tant que le pas courant n'a pas atteint 9, l'autorisation une fois atteint, et la priorité RAW
+> à Initiative croisée) + fixture de régression complète Agir maintenant/tour obligatoire/Passer/`endTurn`
+> (8/8, 0 résidu, a révélé le bug `clearReactionWindowTimer`) ; `node --check` et build Vite complet
+> propres après correction. **Non testé** : navigateur réel.
+
+> **Suite (même session, 2026-07-18) — bug réel trouvé au tour obligatoire d'un personnage en délai
+> ayant déclaré un Tir (pas un CaC)** : `activeAssaultAction`/`playerActiveAssaultAction`
+> (`CombatOverlay.jsx`) ne vérifiaient jamais `currentStep?.kind !== 'delayed_turn'`, contrairement à
+> `activeMeleeAction`/`playerActiveMeleeAction` qui l'avaient déjà — asymétrie jamais remarquée. Résultat
+> : dès que le tour obligatoire de fin de Tour présentait un personnage en délai ayant déclaré un
+> assaut, la fenêtre de modificateurs de tir s'ouvrait quand même par-dessus le panneau dédié « Agir
+> maintenant/Passer ». Cliquer « Valider » envoyait un `COMBAT_ACTION_CONFIRM` complet, rejeté en
+> silence par le garde serveur (`step.tokenId !== tokenId`, l'entrée restant `delayed_waiting` puisque
+> jamais repositionnée par un vrai Agir maintenant) — vécu comme un plantage total (« Crash combat, pas
+> d'action du joueur ») alors que le serveur attendait légitimement. Root-caused via les logs de
+> breadcrumbs ajoutés cette session : la dernière ligne visible était toujours le `COMBAT_ACTION_CONFIRM`
+> initial, jamais la ligne juste avant la résolution — signature exacte d'un rejet précoce par ce garde.
+> **Corrigé** : ajout de la même garde `currentStep?.kind !== 'delayed_turn'` aux deux variables assaut.
+> **Testé** : `esbuild` + build Vite complets propres. **Non testé** : navigateur — scénario exact
+> (personnage en délai avec un Tir déclaré, atteignant le tour obligatoire) à revalider par Saar.
+> **Note annexe** : les logs de breadcrumbs `reconcileBattlemapElevators` ajoutés pour chasser un faux
+> soupçon de deadlock se sont révélés bruyants (poll 300ms de `Canvas3D.jsx`/`Editor3D.jsx` tant qu'un
+> ascenseur transite) — rendus silencieux sauf acquisition >100ms. `useCombatSocket.js` : `COMBAT_ENDED`
+> ne réinitialisait que 2 états sur ~10 (retour Saar « mauvaise réinitialisation »), corrigé — tous les
+> états de fenêtre/résultat sont désormais purgés à la fin d'un combat.
+
+> **Bug racine réel, cause de toute la confusion « Agir maintenant » depuis le début de cette refonte
+> (même session, 2026-07-18)** — Saar a demandé de vérifier la RAW pas à pas (déclaration croissante,
+> résolution décroissante, dernier déclarant = plus rapide = premier à agir, donc un personnage retardé
+> avec la PLUS HAUTE Initiative devrait pouvoir agir dès le tout début de la Résolution). Vérification :
+> le raisonnement RAW de Saar est exact, et le code serveur (borne d'Initiative d'origine, item
+> précédent) l'implémentait déjà correctement — **mais le client ne recevait jamais l'information pour
+> l'afficher**. `combat_state.sub_phase` n'était diffusé aux clients qu'à la reconnexion
+> (`COMBAT_STATE_SYNC`) — jamais pendant une partie normale. `subPhase` restait donc figé à `null` côté
+> client du début à la fin d'une session de jeu, rendant fausses en permanence toutes les conditions
+> `subPhase === 'SLOT_ACTIVE'` ajoutées cette session (panneau Agir maintenant mi-Tour, retry precheck,
+> panneau MJ Forcer) — jamais détecté avant car le flux principal (bouton Agir normal, résolution pas à
+> pas) ne dépend pas de `subPhase`, seulement `phase` et `currentStep`. **Corrigé à la source unique** :
+> `broadcastTimelineState` (`socketCombatHelpers.js`) relit et inclut désormais toujours le `sub_phase`
+> courant dans `COMBAT_TIMELINE_UPDATED` ; nouvel helper `broadcastCurrentSubPhase(io, campaignId)`
+> ajouté aux 5 endroits où `setFSMSubPhase(..., 'AWAITING_DEFENSE'/'AWAITING_DAMAGE'/'SLOT_ACTIVE')` était
+> appelé hors du chemin `advanceTimeline` (résolution suspendue en attendant un jet de dégâts/défense) et
+> ne rediffusait donc jamais rien. **Client** : `combatStore.js` — `setTimelineState` ignorait
+> silencieusement tout champ `subPhase` reçu (ne déstructurait que `turnNumber`/`entries`/`currentStep`)
+> — LE bug exact qui annulait le fix serveur : même corrigé côté serveur, le client aurait continué à
+> l'ignorer. Corrigé. **Testé** : fixture jetable dédiée (3/3 — premier broadcast de Résolution inclut
+> bien `subPhase:'SLOT_ACTIVE'`, et `currentStep.position <= ownPosition` du personnage retardé à
+> Initiative la plus haute dès ce tout premier broadcast, confirmant le scénario exact décrit par Saar).
+> `node --check` + build Vite complets propres. **Non testé** : navigateur — c'est la pièce qui manquait
+> à TOUTES les vérifications précédentes de cette session sur Agir maintenant ; à confirmer en vrai.
+
+> **Item 87 (Session 158, dev/Saar) — Lot D de `docs/PLAN_COMBAT_TIMELINE.md` (§5, « Contrôle du temps
+> MJ ») — ✅ CODÉ ET TESTÉ PAR FIXTURES.** Implanté avant tout retour navigateur sur les Lots B/C (Saar
+> manque de temps pour tester dans l'immédiat, décision explicite : enchaîner plutôt que bloquer —
+> risque accepté : si un test futur du Lot C révèle un bug du moteur central, le Lot D qui s'appuie
+> dessus pourrait avoir besoin d'un ajustement mineur). **Généralisation de l'outil MJ existant** —
+> même bouton, même événement `COMBAT_SKIP_PLAYER` (`socketCombatAnnouncement.js`), désormais autorisé
+> par la FSM (`combatFSM.js`) depuis `AWAITING_DEFENSE`/`AWAITING_DAMAGE`/`AWAITING_REACTION_WINDOW` en
+> plus de `SLOT_ACTIVE`/Annonce. Comportement par sous-état (`forceAdvanceResolution`,
+> `socketCombatHelpers.js`) : `AWAITING_REACTION_WINDOW` → fermeture immédiate, comme une expiration
+> normale ; `AWAITING_DEFENSE`/`AWAITING_DAMAGE` → « le serveur lance les dés à la place du joueur
+> injoignable, il devient PNJ pour le Tour » — **découverte en implantant** : ces deux confirmations
+> acceptaient déjà le MJ comme déclencheur autorisé (`!isGm` déjà présent dans leur garde de propriétaire,
+> bien avant ce Lot) ; la seule pièce manquante était l'accès — `confirmMeleeDefense`/`confirmDamage`
+> extraites des handlers `COMBAT_MELEE_DEFENSE_CONFIRM`/`COMBAT_DAMAGE_CONFIRM` vers des fonctions
+> exportées de `socketCombatHelpers.js` (même code exact, aucune formule dupliquée — `forced:true`
+> contourne uniquement la vérification de propriétaire et affiche le jet sous l'identité du personnage
+> plutôt que celle du MJ) ; `SLOT_ACTIVE` — tour obligatoire d'un délai → équivaut à `COMBAT_DELAYED_PASS` ;
+> entrée normale/pas simple bloqué → marqué `skipped`, l'échelle avance (le MJ dispose déjà par ailleurs
+> du bouton « Agir » existant pour exécuter réellement l'action à la place d'un joueur silencieux — cette
+> branche est un dernier recours, pas le chemin principal). **Client** : nouveau panneau MJ générique
+> « Forcer » (`CombatOverlay.jsx`) visible pendant `AWAITING_DEFENSE`/`AWAITING_DAMAGE`/
+> `AWAITING_REACTION_WINDOW`. **Bug réel du Lot B trouvé et corrigé en testant le Lot D** (pas en
+> navigateur — par fixture, avant tout risque réel) : la fenêtre de réaction se rouvrait indéfiniment
+> pour le même pas tant qu'un personnage restait en délai — `delayedCount>0 && resolvedCount>0` reste
+> vrai en continu une fois la première entrée résolue, et rien ne distinguait « ce pas vient d'avoir sa
+> fenêtre, ne pas la rouvrir » de « nouveau pas, fenêtre méritée » ; le minuteur naturel (15s) avait
+> exactement le même défaut — **le Tour combat se serait bloqué pour de bon dès qu'un personnage
+> retardait son Action**, jamais détecté par les fixtures du Lot B (qui ne poussaient jamais la fenêtre
+> jusqu'à sa fermeture). Corrigé : `advanceTimeline` accepte un paramètre interne
+> `justClosedReactionWindow` (jamais exposé à un event socket), positionné par le minuteur ET par
+> `forceAdvanceResolution` — n'empêche l'ouverture que pour le pas qui vient d'être fermé, laisse les
+> pas suivants légitimement candidats. **Testé** : `node --check` propre sur les 4 fichiers serveur
+> touchés, `esbuild`/build Vite propres côté client, 2 scénarios de fixtures jetables (10/10 assertions,
+> 0 résidu — fermeture de fenêtre sans boucle, entrée normale forcée, tour obligatoire forcé, no-op hors
+> Résolution) + rejeu complet du scénario de régression Lot B (construction/interleaving/delay/act-now/
+> endTurn, 7/7, 0 résidu) confirmant l'absence de régression du correctif `justClosedReactionWindow`.
+> **Non testé** : navigateur réel (à la charge de Saar, comme Items 84-86) ; le cas à 2+ personnages
+> delayed simultanés pendant un `COMBAT_ACT_NOW` (nuance mineure documentée dans le code, pas un bug
+> confirmé). **Données** : aucune migration. **Retour arrière** : aucun schéma touché, revert du commit
+> suffit si besoin.
+
+> **Item 86 (Session 158, dev/Saar) — Lots B+C de `docs/PLAN_COMBAT_TIMELINE.md` (§5/§6ter/§6quater) :
+> moteur de résolution générique + timeline client — ✅ CODÉS (serveur testé par fixtures, client par
+> build Vite propre), ⚠️ AUCUNE VALIDATION NAVIGATEUR ENCORE OBTENUE.**
+> Recherche best-practices faite avant code (exigence Saar) : FSM à sous-états explicites + parcours
+> relu en direct sans curseur dupliqué (patron Foundry VTT `Combat.nextTurn`/lifecycle events, *Event
+> Queue* de Game Programming Patterns) — confirme la conception déjà actée dans le plan, rien à
+> corriger. **2 découvertes non anticipées par le plan, tranchées en codant** : (1) « Précipiter son
+> Action » (+3 INI, -5 Action) était déjà presque entièrement câblé avant ce Lot
+> (`combatSections.js`/`socketCombatAnnouncement.js` `iniDelta`, `resolveMeleeAction` `isRushedMod`) —
+> Lot A capture déjà son effet sur `phase_position` du simple fait de l'ordre des étapes (iniDelta
+> appliqué à `combat_roster.initiative` avant `buildTimelineEntries`) ; seul le guard RAW « précipité
+> jamais retardable » restait à vérifier — **déjà garanti gratuitement** par le sélecteur `vitesse`
+> exclusif à un seul choix (delayed/normal/rushed), rien à coder. (2) Un token sans aucune action
+> complexe (juste déplacement/rechargement) n'a structurellement aucune entrée d'échelle (§5 « portée
+> des entrées ») — le parcours générique doit donc fusionner deux sources triées ensemble : les entrées
+> `scheduled` ET les membres du roster sans entrée ce Tour (`has_resolved`, colonne `combat_roster`
+> existante depuis la migration 54, jamais câblée avant ce Lot).
+> **Codé** (`server/src/lib/combatFSM.js`, `server/src/socket/socketCombatHelpers.js`,
+> `server/src/socket/socketCombatResolution.js`, `server/src/socket/index.js`, `server/src/lib/
+> losService.js`, `shared/events.js`) : nouveau sous-état FSM `AWAITING_REACTION_WINDOW` (minuteur en
+> mémoire déclencheur, le FSM seul décide qu'on attend — corrige la proposition initiale erronée du
+> plan §6ter point 3 correction 1) ; `pickNextTimelineStep`/`advanceTimeline` remplacent
+> `advanceSlot`/`active_slot_idx` (fusion scheduled+simple ci-dessus, position DESC, relu en direct à
+> chaque appel) ; `pickNextObligatoryDelayed` (tour obligatoire de fin de Tour, ascendant Initiative,
+> §6 point 2) ; `triggerActNow`/`triggerDelayedPass` (nouveaux events `COMBAT_ACT_NOW`/
+> `COMBAT_DELAYED_PASS`) — guard strict : Agir maintenant/Passer refusés hors fenêtre de réaction ou
+> tour obligatoire de CE token précis (pas de resquille) ; position d'insertion Agir maintenant
+> `référence + 100 + initiative` (priorité RAW sur l'action normale à la même phase + départage
+> Initiative décroissante entre deux déclenchements simultanés, §6 point 8) ; `resolveMeleeAction`
+> allégée (`remainingMeleeActions`/`totalMeleeCount` retirés, malus recalculé en direct depuis les
+> entrées sœurs non `lost`/`skipped` du même `declaration_group_id`, §6bis point 3) ; `forfeitToken`
+> (étourdissement — clôture aussi les entrées d'échelle orphelines, pas seulement `combat_actions`, sans
+> quoi `pickNextTimelineStep` les resélectionnerait indéfiniment — piège trouvé en concevant, pas en
+> testant) ; `COMBAT_ACTION_CONFIRM` résout désormais **une seule entrée à la fois** (plus « toutes les
+> actions restantes » d'un token) ; extension LOS §6 point 3 (`losService.js` — un tir dont la cible
+> devient hors de portée redirige vers un intercepteur sur le vecteur au lieu d'échouer muet, même
+> patron que l'interposition déjà fonctionnelle). **Migration `174_combat_timeline_resolution.js`** :
+> `combat_state.sub_phase` CHECK étendu (+`AWAITING_REACTION_WINDOW`) + colonne `active_slot_idx`
+> supprimée (dernier lecteur retiré dans ce Lot, colonne réellement morte) — up/down/up testé en base
+> réelle. **Bug de conception trouvé et corrigé en testant** (fixtures) : la position de référence d'un
+> Agir-maintenant hors fenêtre (tour obligatoire) pointait vers la plus haute `phase_position` déjà
+> résolue au lieu de la plus récente chronologiquement (`resolved_at` au lieu de `phase_position` pour
+> trier) — sans impact gameplay (l'ordre réel de ce cas vient de `pickNextObligatoryDelayed`, pas de
+> cette position, purement cosmétique/audit) mais corrigé par cohérence avec l'intention du code.
+> **Testé** : `node --check` propre sur les 6 fichiers serveur touchés ; 2 scénarios de fixtures
+> jetables en base réelle (campagne/battlemap/tokens disposables, 0 résidu confirmé après coup) — (1)
+> construction + interleaving 3 personnages (série CaC ×3 normale, assault normal, CaC retardé),
+> positions exactes vérifiées, tour obligatoire + Agir maintenant + `endTurn` (roster réinitialisé,
+> aucune entrée orpheline) ; (2) fenêtre de réaction réelle de bout en bout via `advanceTimeline`
+> (ouverture après la 1ʳᵉ résolution seulement, jamais avant, minuteur bien enregistré/nettoyé, position
+> d'insertion Agir-maintenant-en-fenêtre exacte `référence+100+initiative`). **Non testé, volontairement
+> reporté** : `resolveMeleeAction`/`resolveAssaultAction` eux-mêmes (jets de dés, dégâts, armure) —
+> logique métier inchangée par ce Lot (changement de signature uniquement), déjà couverte par l'usage
+> réel antérieur ; parcours HTTP/Socket.IO réel (aucun client ne peut encore déclencher Retarder/Agir
+> maintenant/Passer, cf. ci-dessous) ; scénario à 2+ personnages en délai simultané.
+> **Pourquoi pas de bouton temporaire pour valider le Lot B seul** : décision explicite Saar (2026-07-18,
+> discussion directe hors questionnaire) — enchaîner Lot B et Lot C sans étape de validation
+> intermédiaire plutôt que construire un bouton jetable (aurait été le genre de travail à double emploi
+> explicitement interdit cette session).
+> **Lot C — codé** (`client/src/stores/combatStore.js`, `client/src/lib/useCombatSocket.js`,
+> `client/src/components/CombatTimeline.jsx`, `client/src/components/CombatOverlay.jsx`,
+> `client/src/components/CombatActionWindow.jsx`) : nouvelles données de store `timelineEntries`/
+> `currentStep`/`reactionWindow`, alimentées par `COMBAT_TIMELINE_UPDATED` (un seul event, poussé à
+> chaque changement de l'échelle, y compris à la reconnexion — `server/src/socket/index.js`) ;
+> `CombatTimeline.jsx` branche RÉSOLUTION reconstruite : une carte par entrée (clé `entry.id`, pas
+> `token_id` — le piège déjà identifié au plan §6quater), carte éphémère non persistée pour un token
+> sans entrée dont c'est le tour (actions simples seules, sinon il disparaîtrait de la timeline pendant
+> son tour — régression non voulue, ajout au-delà du plan) ; nouvelle zone « en attente » — une carte
+> par personnage `delayed_waiting`, portrait = déclencheur `COMBAT_ACT_NOW`, cliquable seulement si ce
+> viewer contrôle le token ET (fenêtre de réaction ouverte OU c'est son tour obligatoire) ; `TimelineCard.jsx`
+> réutilisé tel quel (déjà purement visuel). Nouveau panneau `CombatOverlay.jsx` dédié au tour obligatoire
+> (« Agir maintenant » / « Passer », `COMBAT_DELAYED_PASS`) — portée volontairement limitée à ce cas
+> précis, ne généralise pas l'outil MJ (ça, c'est le Lot D, « forcer la suite de l'étape en cours » sur
+> n'importe quel sous-état bloqué). **2 bugs réels trouvés en écrivant le client, corrigés** : (1)
+> `CombatOverlay.jsx` (`activeMeleeAction`/`playerActiveMeleeAction`) utilisait `actions.find(a =>
+> a.token_id === X && a.action_key === 'melee')` — plusieurs lignes `combat_actions` du même token
+> peuvent désormais rester `pending` simultanément (série CaC non intégralement résolue), `.find()`
+> aurait pris la première de l'array au lieu de celle réellement due — remplacé par une correspondance
+> sur `currentStep.entry.combat_action_id`. (2) `CombatActionWindow.jsx` `resolveSlotTid =
+> sorted[activeSlotIdx]?.token_id` — `activeSlotIdx` n'existe plus côté RÉSOLUTION (colonne supprimée
+> par la migration 174) — remplacé par `activeTokenId` (dérivé de `currentStep.tokenId` dans le store).
+> **1 bug serveur supplémentaire trouvé en auditant après coup (grep exhaustif `active_slot_idx`), avant
+> tout test navigateur — aurait cassé COMBAT_START** : `socketCombatState.js` insérait encore
+> `active_slot_idx: 0` dans `combat_state` à la création d'un combat — colonne supprimée par la
+> migration 174, l'INSERT aurait levé une erreur SQL au tout premier `COMBAT_START` suivant ce Lot.
+> Corrigé (ligne retirée). **Simplification documentée, non construite** : survol MJ d'une carte « en
+> attente » pour mettre en surbrillance le jeton sur la carte de bataille (§6quater) — micro-interaction
+> non essentielle au mécanisme, reportée pour ne pas alourdir davantage un chantier déjà volumineux ; le
+> clic seul (sans confirmation visuelle préalable) suffit à valider le mécanisme.
+> **Testé** : `node --check` propre sur tous les fichiers serveur touchés (dont le correctif
+> `socketCombatState.js`) ; `esbuild` propre sur les 6 fichiers client touchés ; **build Vite complet du
+> client réussi (0 erreur)** ; grep exhaustif `active_slot_idx`/`activeSlotIdx` sur tout le dépôt (client
+> + serveur) confirmant plus aucune lecture/écriture orpheline ; grep croisé confirmant que chaque
+> nouvel event (`COMBAT_ACT_NOW`, `COMBAT_DELAYED_PASS`, `COMBAT_TIMELINE_UPDATED`) est bien émis ET
+> consommé des deux côtés, aucun câblage orphelin. **Non testé** : aucun test navigateur réel (Claude ne
+> pilote pas de navigateur, cf. mémoire projet) — c'est la prochaine étape, à la charge de Saar. Scénario
+> à couvrir : Tour normal (non-régression), série CaC entrelacée avec un tir, un personnage Retarder +
+> Agir maintenant pendant une fenêtre de réaction réelle, un Passer volontaire au tour obligatoire,
+> reconnexion en cours de RÉSOLUTION (timeline resynchronisée). Survol MJ « en attente » non construit
+> (voir ci-dessus).
+> **Données** : migration `174` appliquée en base locale de développement (`vtt`), aucun effet sur les
+> données de campagne existantes (colonne supprimée jamais lue par aucune donnée métier). **Retour
+> arrière** : `down()` de la migration 174 testé et fonctionnel (round-trip up/down/up confirmé). Rien
+> n'est committé à ce stade — voir rappel `git add`/`commit`/`push` en tête de session suivante.
+>
 > **Item 80 (Session 154) — Chantier Bouclier : refonte préalable `docs/PLAN_INVENTORY_SLOTS.md`
 > ✅ CODÉE ET TESTÉE, CHANTIER CLOS ; suite Lot A/B en item 81.**
 > Réflexion sur l'implantation des règles de Bouclier (`docs/REGLES/REGLEBOUCLIER.md`) : plan rédigé,
@@ -446,8 +1417,214 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > character-sheet n'utilisent `useTranslation` nulle part (zone legacy antérieure au rollout i18n) —
 > nouveau texte Lot C écrit en dur par cohérence locale, contraire à la règle générale i18n ; retrofit
 > complet explicitement hors scope. **Testé** : colonnes SELECT vérifiées réel (0 résidu), ESLint 0
-> erreur. **Non testé** : parcours navigateur réel — nécessaire avant clôture définitive. **Prochaine
-> étape** : test navigateur de Lot C par Saar, puis clôture du chantier Bouclier.
+> erreur, **parcours navigateur réel confirmé fonctionnel par Saar** (test mené en parallèle du
+> développement, avant le commit de clôture — confirmé 2026-07-18). **CHANTIER BOUCLIER CLOS**
+> (commit `1733aaa`, Session 156) : `docs/PLAN_BOUCLIER.md` archivé vers `docs/Old/`, détail durable
+> transféré dans `docs/ASBUILT.md` (Règle 10, `docs/RegleDocumentaire.md`).
+>
+> **Item 82 (Session 157, dev/Saar) — Chantier Sprint Tir Multi → refonte complète du moteur de tours
+> ⚠️ PLANIFICATION UNIQUEMENT, AUCUN CODE ÉCRIT. Prochain agent : lire les 3 documents ci-dessous
+> intégralement avant toute action, ils sont conçus pour être auto-suffisants.**
+> Point de départ : Saar demande le Sprint Tir Multi (`docs/ROADMAP.md`, Chantier CaC). Plan rédigé
+> (`docs/PLAN_TIRMULTI.md`), 8 points ouverts (D1-D8) discutés avec Saar — D4/D5 (comment enchaîner
+> plusieurs tirs sans jet de défense opposé) révèlent que le mécanisme existant de chaînage
+> multi-attaque CaC (`resolveMeleeAction` récursif) contient un bug réel de collision de clé primaire
+> sur `combat_pending`, déjà vivant en production aujourd'hui (pas hypothétique — toute attaque
+> multiple CaC touchant 2 défenseurs PJ distincts le déclenche silencieusement, la 2e/3e attaque
+> disparaît sans erreur visible). Prérequis rédigé (`docs/PLAN_COMBAT_ACTION_QUEUE.md`). Puis une
+> question de Saar (« la timeline peut-elle afficher plusieurs portraits par personnage à chaque
+> action ? ») révèle que l'architecture de résolution actuelle (liste statique résolue en une passe,
+> pas de vraie notion de phases) ne peut structurellement pas le faire — et que ce qui manque recoupe
+> une règle RAW jamais implémentée, « Retarder son Action » (LdB p.218). **Décision Saar (Option A,
+> « des bases saines seront toujours plus pertinentes »)** : refonte complète du moteur de tours en
+> timeline à phases avant de reprendre quoi que ce soit d'autre — `docs/PLAN_COMBAT_TIMELINE.md`,
+> désormais racine des 3 chantiers combat.
+> **État de la conception** (`docs/PLAN_COMBAT_TIMELINE.md`) : cadrage RAW complet (6 règles du
+> sous-système Initiative citées une seule fois, autorité unique), 4 Lots séquentiels intégralement
+> conçus (A — nouvelle table `combat_timeline_entries` + additions `combat_actions`, schéma exact en
+> §5 ; B — moteur de résolution générique + 2 nouveaux sous-états FSM `AWAITING_REACTION_WINDOW` + tour
+> obligatoire ; C — `CombatTimeline.jsx` sur l'échelle, portrait = déclencheur « Agir maintenant » ; D —
+> généralisation de l'outil MJ existant, reprise de `PLAN_TIRMULTI.md`), chacun passé par une analyse
+> à charge dédiée, plus une analyse à charge globale (10 points), un audit indépendant demandé par
+> Saar pour limiter le biais de confirmation (8 points, citations RAW et code revérifiées
+> indépendamment, toutes confirmées exactes), et une relecture finale de cohérence (3 décalages de
+> propagation trouvés et corrigés). Un seul point reste ouvert (§6 point 5 du document — mécanisme de
+> secours du Lot B), sans impact sur le démarrage du Lot A, à trancher au moment de coder ce Lot précis.
+> **Décision de jeu prise en cours de route, à répercuter dans `PLAN_TIRMULTI.md` à sa reprise (Lot
+> D)** : CaC et Tir sont désormais mutuellement exclusifs à la déclaration (nouvelle règle, RAW « Types
+> d'Actions » les range dans une seule catégorie « Action de combat » — vérifié
+> `CombatActionWindow.jsx:404-408`, permissif aujourd'hui, à corriger).
+> **Dettes annexes trouvées et documentées séparément, non traitées** : `BUGIDENTIFIE.md` DEP1 (Allure
+> Maximale accessible même chargé/encombré, aucun filtre dans `calcAllures`/`getCharacterMovementBudget`)
+> ; `shared/polarisUtils.js` — `DEPLACEMENT_ACTION_MALUS` ajouté (table RAW malus Précision/Équilibre/
+> Furtivité/Vigilance selon l'Allure combinée à une Action, LdB p.220) pour ne pas perdre la donnée,
+> non branchée à la résolution combat (aucune Action combinée n'est câblée à ce jour).
+> **Codé** : rien. **Documenté** : conception complète des 3 plans + 2 fichiers annexes. **Non
+> committé** (`git status`, branche `dev/Saar`) : `docs/PLAN_TIRMULTI.md`,
+> `docs/PLAN_COMBAT_ACTION_QUEUE.md`, `docs/PLAN_COMBAT_TIMELINE.md` (nouveaux) ;
+> `docs/BUGIDENTIFIE.md`, `shared/polarisUtils.js` (modifiés).
+> **Exigence explicite de Saar avant de coder quoi que ce soit ci-dessous** : se documenter, chercher
+> des dépôts GitHub inspirants et des patterns éprouvés (moteurs de tours à phases de jeux tactiques,
+> VTT open-source type Foundry, implémentations de FSM pour systèmes de combat) avant d'écrire la
+> moindre ligne — ne jamais coder from scratch un mécanisme non trivial sans avoir d'abord regardé
+> comment des projets pro le résolvent. Aucune urgence de temps, la certitude architecturale prime.
+> **Prochaine étape exacte, dans l'ordre, pas d'ambiguïté** :
+> 1. **Correctif isolé `combat_pending`** — conception complète et prête dans
+>    `docs/PLAN_COMBAT_ACTION_QUEUE.md` §3 (clé primaire propre par ligne, plusieurs entrées
+>    `type='damage'` possibles par personnage, `melee_defense`/`stun` restent singuliers). Migration +
+>    patch des points d'insertion/lecture. Livrer avant toute chose — bug de production connu,
+>    indépendant de la Timeline. Une fois livré et testé : archiver `docs/PLAN_COMBAT_ACTION_QUEUE.md`
+>    dans `docs/Old/` (son contenu de conception « file plate » reste obsolète, absorbé par le Lot B de
+>    `PLAN_COMBAT_TIMELINE.md` — seul le correctif en est extrait).
+> 2. **Lot A de `docs/PLAN_COMBAT_TIMELINE.md`** (§5) — schéma `combat_timeline_entries` détaillé
+>    colonne par colonne, migration `combat_actions`, numéro de migration pair à auditer au moment du
+>    code (`CLAUDE.md` §5).
+> Lots B, C, D suivent dans cet ordre une fois A validé — ne pas paralléliser (`CLAUDE.md` §6.8).
+>
+> **Item 83 (Session 158, dev/Saar) — Correctif isolé `combat_pending` ✅ CODÉ ET TESTÉ EN BASE RÉELLE
+> (`docs/PLAN_COMBAT_ACTION_QUEUE.md` §3, prérequis Lot A `docs/PLAN_COMBAT_TIMELINE.md`).** Migration
+> `170_combat_pending_multi_damage.js` : PK composite `(campaign_id, token_id, type)` remplacée par un
+> `id` uuid propre + index unique **partiel** `WHERE type <> 'damage'` (melee_defense/stun restent
+> singuliers, seule `damage` autorise désormais plusieurs lignes par personnage) + index FIFO
+> `(campaign_id, token_id, type, created_at)`. **Audit complet des points de lecture/écriture**
+> (`combat_pending` grep exhaustif, 6 fichiers serveur) : `COMBAT_DAMAGE_CONFIRM`
+> (`socketCombatResolution.js`) — sélectionne désormais la plus ancienne entrée (FIFO), supprime par
+> `id` propre (jamais par le filtre composite, qui aurait supprimé toutes les entrées du même type),
+> et si la file n'est pas vide après suppression, `sub_phase` reste `AWAITING_DAMAGE` + nouveau prompt
+> émis pour la suivante (conception déjà écrite dans le plan, §3). **Piège trouvé en traçant
+> l'enchaînement CaC 4b réel** (non anticipé par le plan d'origine) : le 2ᵉ/3ᵉ `INSERT` de
+> `type='damage'` pour le même attaquant peut survenir alors que le 1ᵉʳ prompt n'a pas encore été
+> confirmé par le joueur (le défenseur B confirme sa défense avant que l'attaquant ait cliqué "Lancer
+> les dés" pour l'attaque contre le défenseur A) — émettre le prompt à chaque `INSERT` aurait fait
+> perdre au joueur la visibilité du prompt encore non résolu. Corrigé aux 3 points d'insertion
+> (`COMBAT_MELEE_DEFENSE_CONFIRM` et `resolveAssaultAction`/`resolveDroneAssaultAction` dans
+> `socketCombatHelpers.js`) : le prompt n'est émis que si c'est la seule entrée en attente pour ce
+> token (`COUNT` après insertion) — sinon il sera émis plus tard par `COMBAT_DAMAGE_CONFIRM` une fois
+> la file FIFO consommée jusqu'à cette entrée. Sync reconnexion (`index.js`) alignée sur la même
+> règle : ordonnée par `created_at`, ne restaure qu'**un seul** prompt `damage` (le plus ancien) au lieu
+> d'en émettre un par ligne trouvée. **Testé** : migration (`up`/fonctionnel — 2 lignes `damage`
+> coexistent sans erreur, 2ᵉ ligne `melee_defense` rejetée par la contrainte partielle —
+> `down`/dédoublonnage défensif/`up` à nouveau, cycle complet validé en base locale) ; `node --check`
+> 0 erreur sur les 4 fichiers touchés ; scénario réel simulé en transaction annulée (2 attaques CaC du
+> même attaquant PJ touchant 2 défenseurs PJ distincts — plus de collision, ordre FIFO confirmé, un
+> seul prompt visible à la fois à chaque étape), 0 résidu.
+> **Bug réel trouvé en testant en navigateur (bloquait ce parcours), corrigé séparément —
+> `BUGIDENTIFIE.md` COM7 (Multi-attaque CaC : bouton "Déclarer" grisé) ✅ CLOS.** Root cause
+> `[VÉRIFIÉ]` : `CombatGmDeclareWindow.jsx:122-123`, `isMountedRef` initialisé à `true` via
+> `useRef(true)` mais seul le cleanup de son `useEffect` le repassait à `false` — rien ne le réarmait à
+> `true`. `StrictMode` (`main.jsx:8`, actif) double-invoque les effets de montage en dev (mount →
+> cleanup → mount) pour détecter exactement ce cas : après ce cycle synthétique, `isMountedRef.current`
+> restait bloqué à `false` pour toute la durée de vie du composant. La chaîne de sélection multi-cibles
+> CaC (`selectNext`, ligne 373, `if (isMountedRef.current) selectNext(idx + 1)`) s'arrêtait donc
+> systématiquement après la première cible — expliquant à la fois le bouton "Déclarer" grisé
+> (`meleeTargets.length` ne pouvait jamais atteindre `effectiveMeleeCount`) et la sortie du mode de
+> ciblage après une seule cible. **Preuve obtenue par instrumentation temporaire** (`[DBG-COM7]`,
+> retirée après diagnostic) : le code de debug ajoutait par inadvertance
+> `isMountedRef.current = true` dans le corps de l'effet — ce qui réarmait le ref après le double-mount
+> StrictMode et corrigeait le bug par effet de bord (1er test Saar : "Fonctionnel") ; son retrait a fait
+> réapparaître le bug à l'identique (2ᵉ test Saar : "Non fonctionnel") — correspondance exacte entre
+> les deux tests et le diff, cause confirmée sans ambiguïté. **Corrigé** : `isMountedRef.current = true`
+> déplacé dans le corps de l'effet (pattern "StrictMode-safe" standard, seul point d'usage de ce
+> pattern dans le client, grep confirmé). **Testé** : build Vite propre (0 erreur/warning), committé et
+> poussé par Saar (`412a318`, puis correctif COM7 committé séparément).
+> **Parcours navigateur du correctif `combat_pending` confirmé fonctionnel par Saar** (2026-07-18) :
+> attaque CaC multiple touchant 2 défenseurs PJ, dégâts confirmés un par un sans blocage ni collision —
+> objet réel de Session 158 validé de bout en bout. **CHANTIER `combat_pending` CLOS.** **2 points
+> trouvés en marge pendant ce test, documentés séparément (`BUGIDENTIFIE.md`), non traités ici** :
+> **COM27** (nouveau, `[INCONNU]`) — Saar observe le jet de défense affiché avant le jet d'attaque en
+> CaC multi-attaque ; lecture du code (`resolveMeleeAction` roll attaque avant l'insertion
+> `melee_defense`) semble contredire le symptôme — à instrumenter avant toute conclusion, non bloquant
+> pour la suite. **FEAT4** (nouveau) — demande Saar d'une aura visuelle (3m + allonge arme) autour du
+> personnage actif en CaC pour visualiser sa portée — sprint futur, hors scope Timeline.
+> **Dette trouvée en marge, non corrigée (hors scope, un seul problème par plan)** :
+> `server/src/socket/index.js`, sync reconnexion `pendingDmgDrone` (recherche d'un dégât de drone en
+> attente pour le joueur qui se reconnecte) utilise `.first()` sans tri, filtré uniquement par
+> `payload->>'targetUserId'` (pas par `token_id`) — si 2 drones distincts ont chacun un dégât en
+> attente contre le même PJ cible au moment de sa reconnexion, un seul est restauré. Préexistant à ce
+> correctif (différents `token_id` ne collisionnaient déjà pas sur l'ancienne PK), non aggravé par ce
+> changement — noté pour un futur audit, pas ajouté à `BUGIDENTIFIE.md` (portée trop étroite pour
+> justifier une entrée dédiée à ce stade, à relier si `docs/PLAN_TIRMULTI.md` fait un jour intervenir
+> plusieurs drones tireurs sur la même cible). **Données** : migration `170` appliquée en base locale de
+> développement (`vtt`), aucun effet sur les données de campagne existantes (table `combat_pending`
+> vide au moment de la migration). **Retour arrière** : `down()` de la migration 170 testé et fonctionnel
+> (dédoublonnage défensif inclus).
+> **Prochaine étape** : voir Item 84 (Lot A, ci-dessous) — codé et testé le jour même.
+>
+> **Item 84 (Session 158, dev/Saar) — Lot A de `docs/PLAN_COMBAT_TIMELINE.md` (§5) : modèle de données
+> de l'échelle de phases ✅ CODÉ ET TESTÉ EN BASE RÉELLE.** Migration `172_combat_timeline_entries.js` :
+> `combat_actions.turn_number` (backfill trivial, table vide en pratique) + nouvelle table
+> `combat_timeline_entries` (schéma exact du plan — `id`, `campaign_id`, `turn_number`, `token_id`,
+> `combat_action_id` FK, `declaration_group_id`, `phase_position`, `status` CHECK 5 valeurs,
+> `resolved_at`, `resolution_snapshot`, 2 index). **6 sites scopés sur `turn_number`** (audit complet,
+> exactement ceux listés au plan + `index.js`) : insertion déclaration (`socketCombatAnnouncement.js`),
+> insertion skip (`skipPlayer` + `COMBAT_SURPRISE_RESULT`), lecture `startResolutionPhase`, 2 lectures
+> `COMBAT_ACTION_PRECHECK`/`COMBAT_ACTION_CONFIRM` (guard stun ×2 + range CaC + lecture principale),
+> sync reconnexion (`index.js`). `COMBAT_END` (wipe complet campagne) inchangé, cohérent avec
+> "suppression réelle seulement à COMBAT_START". **`endTurn()`** : `DELETE combat_actions`
+> inconditionnel (PC28) retiré — les lignes encore `pending` à la clôture du Tour sont marquées
+> `skipped` explicitement, l'historique reste en base. **Construction de l'échelle**
+> (`startResolutionPhase`, seul point de transition ANNONCE→RÉSOLUTION, nouvelle fonction
+> `buildTimelineEntries`) : une entrée par action `type IN ('melee','assault')` déclarée ce Tour ;
+> `phase_position = combat_roster.initiative × 100` pour la 1ʳᵉ attaque d'un token — **le décalage RAW
+> -5 Initiative par attaque supplémentaire d'une série CaC multi-attaque (LdB p.218-219, jamais câblé
+> avant ce Lot, cf. `PLAN_TIRMULTI.md` §0.1 point 1) devient réel** : 2ᵉ attaque `-500`, 3ᵉ `-1000`
+> (même échelle ×100) ; position ≤ 0 → `status:'lost'` immédiat. `declaration_group_id` : un uuid par
+> token ayant ≥1 action `melee` ce Tour (les 1-3 attaques d'une même déclaration partagent le même
+> groupe) ; `null` pour `assault` (pas encore de Tir Multi, toujours singulier). Cette construction
+> **alimente la table sans rien changer au moteur de résolution actuel** (`advanceSlot`/
+> `active_slot_idx` inchangés) — bascule réelle de consommation au Lot B. **Testé** : migration
+> up/down/up (round-trip complet, schéma vérifié colonne par colonne) ; 2 scénarios réels en base
+> (fixture jetable — campagne/battlemap/tokens disposables, 0 résidu confirmé après coup) : (1)
+> construction — 1 token 3 attaques CaC + 1 token 1 tir, positions `1500/1000/500`/`800` exactes,
+> `declaration_group_id` partagé pour les 3 CaC et `null` pour le tir, décoy `turn_number` différent
+> jamais ramassé et resté intact ; (2) `endTurn()` — ligne `pending` marquée `skipped` (pas supprimée),
+> ligne déjà `resolved` intacte, aucune ligne supprimée, Tour incrémenté, phase repassée à
+> `ANNOUNCEMENT`. `node --check` 0 erreur sur les 6 fichiers touchés. **Non testé** : parcours
+> navigateur d'un Tour de combat complet — aucun changement visuel attendu (le moteur de résolution
+> actif ne lit pas encore `combat_timeline_entries`), mais à confirmer qu'aucune régression n'a été
+> introduite sur le flux existant (déclaration, résolution, fin de Tour) par les 6 sites scopés et le
+> retrait du DELETE. **Données** : migration `172` appliquée en base locale de développement (`vtt`).
+> **Retour arrière** : `down()` testé (drop table + drop colonne, round-trip validé).
+> **Prochaine étape** : voir Item 85 (ci-dessous) — bug bloquant trouvé en testant le Tour de combat
+> demandé par cet item, corrigé le même jour.
+>
+> **Item 85 (Session 158, dev/Saar) — Détection de l'arme en main : Bouclier confondu avec une arme,
+> arme deux-mains (2M) ignorée ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Trouvé par Saar en jouant le Tour de
+> combat demandé pour valider l'Item 84 (aucun rapport avec le Lot A lui-même — confirmé par
+> `git log`/`git blame` : dernière modification des lignes fautives Session 154, `857becc` "Refonte
+> char_inventory_slots", avant toute intervention de cette session). 3 symptômes, une seule cause
+> racine par site : Loulou (PJ, Breather chargé en slot `2M`) détecté sans arme ; Mr sourire (PNJ,
+> Bouclier en `MG` + Scorpion chargé en `MD`) détecté incapable de tirer ; Bourrin (PNJ, Matraque Mao
+> CaC pure) — "Recharger" cliquable et silencieusement sans effet. **Root cause `[VÉRIFIÉ]`** (reproduit
+> avec les données réelles des 3 personnages, cf. ci-dessous) : deux implémentations indépendantes de
+> "quelle est l'arme en main" (`server/src/routes/battlemaps.js` route `combat-equipment`,
+> `client/src/components/CombatActionWindow.jsx` fetch `assaultWeapons`) — aucune des deux ne gérait le
+> slot deux-mains `2M`, et la route serveur ne filtrait en plus **aucune catégorie** (n'importe quel
+> objet occupant `MG`/`MD` était pris pour "l'arme", donc le Bouclier de Mr sourire avant son Scorpion).
+> **Exigence Saar avant de corriger** : aucun bricolage, architecture robuste/pérenne/adaptative.
+> **Corrigé** : nouveau module `shared/weaponSlots.js` (`isWeaponItem` — discriminant `fire_mode` OU
+> `damage_h`, volontairement indépendant de `ref_equipment.category`, liste ouverte d'une trentaine de
+> catégories d'armes ; `resolveHandWeapons` — priorité RAW deux-mains > trépied > main directrice ;
+> `flattenItemsBySlot` — normalise la forme `slots: []` de l'API client vers une ligne par slot,
+> miroir du format déjà renvoyé par la jointure `char_inventory_slots` côté serveur), **autorité
+> unique réutilisée aux deux endroits** (`core.md` — pas de logique dupliquée client/serveur) :
+> `battlemaps.js` (ajout `ref_equipment.damage_h` au SELECT, `weaponMg`/`weaponMd`/`weapon` dérivés via
+> `resolveHandWeapons`, constante locale `WEAPON_SLOTS_SET` dupliquée retirée au profit de
+> `HAND_WEAPON_SLOTS` importé) ; `CombatActionWindow.jsx` (3 sites : fetch `assaultWeapons`, effet reset
+> `fire_mode`, dérives `weaponMg`/`weaponMd`/`selectedWeapon`/`equippedMg`/`equippedMd` — `equipped2M`
+> ajouté à l'affichage ARMEMENT/COM20). **Gap connexe corrigé dans le même geste** (même cause racine,
+> même correctif) : `CombatGmDeclareWindow.jsx` — bouton "Recharger" n'était gardé par aucune condition
+> (contrairement à "Tirer", déjà grisé sans arme à distance) ; ajout `noReloadWeapon = a.k==='reload' &&
+> !rangedActive`, même garde que côté Joueur (`isAmmoFull || !selectedWeapon`), cohérence entre les deux
+> fenêtres. **Testé** : 8 tests unitaires purs (`shared/weaponSlots.test.mjs`, `node --test`) — dont les
+> 3 scénarios réels exacts (Breather 2M, Bouclier+Scorpion, Matraque Mao) reproduits avec des données
+> synthétiques ; **rejoué avec les données réelles des 4 personnages du combat de Saar** (Loulou, Mr
+> sourire, Bourrin, Civil) via le nouveau module — `primaryWeapon`/`isRanged` corrects pour les 4,
+> Civil (déjà correct avant, double Scorpion MG+MD) non régressé ; build Vite propre (0 erreur/warning)
+> après chaque édition client ; `node --check` propre sur `battlemaps.js`. **Non testé** : parcours
+> navigateur réel (Saar doit rejouer Loulou/Mr sourire/Bourrin dans le combat en cours pour confirmer
+> visuellement). **Données** : aucune migration, correctif de lecture uniquement. **Retour arrière** :
+> aucun schéma touché, revert du commit suffit si besoin.
 >
 > **Item 79 (Session 153) — `docs/PLAN_ECHANGE.md` : correction du câblage MJ (Échange), retrait
 > Lot A0 ✅ CODÉ ET TESTÉ, CHANTIER CLOS.** Suite de l'item 78 : le câblage MJ posé cette session-là était à l'envers (token
@@ -2062,14 +3239,18 @@ Projet en cours et priorité user :
 
 | ID | Description | Priorité |
 |---|---|---|
-| **COM25** | Arme sans munition restante (`ammo_remaining=0`) continue de tirer — aucun garde dans `resolveAssaultAction` (`socketCombatHelpers.js:1468-1480`), le décompte clampe à 0 mais ne bloque jamais l'attaque. Trouvé en marge du Lot A `docs/PLAN_ARMES_DSL.md` | 🔴 **Urgent — priorité Saar** |
+| ~~**COM25**~~ | ~~Arme sans munition restante continue de tirer~~ | ✅ Session 160 (Saar) |
+| ~~**COM28**~~ | ~~Matraque Mao (arme CaC) affichait "0/40 munitions" en fenêtre de combat — `weaponAmmoStatus` ignorait `ref_caliber`~~ | ✅ Session 160 (Saar) |
+| ~~**COM29**~~ | ~~Tir à deux armes : seule la main directrice trackée (munitions)~~ | ✅ Session 162 (Saar) |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
-| ST1 | Badge statut illisible sur token canvas (texte trop petit) | Haute — Sprint 14-2 |
+| ST1 | Badges statut (icônes SVG 14×14px, `Canvas3D.jsx:348-387`) : taille fixe ne s'adapte pas au zoom/à la taille du token, formes peu reconnaissables sans hover. Description historique ("texte trop petit") obsolète depuis le passage aux icônes Sprint 14-2 — reclassé chantier UI/UX, voir `docs/ROADMAP.md` "Badges statut token" | Chantier UI/UX dédié — pas un correctif ponctuel (décision Saar, Session 166) |
 | ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
-| CH1 | Historique chat perdu au F5 (rechargement page) | Haute |
-| COM2 | Vérif statut arme absente côté GM | Moyenne |
-| COM7 | Multi-attaque CaC : duplicata / bouton grisé | Moyenne |
+| CH1 | Historique chat perdu au F5 (rechargement page) — chantier persistance (table messages, endpoint relecture, pagination), pas un correctif isolé, voir `docs/ROADMAP.md` "Chat persistant" | Chantier dédié — doc alignée Session 166 (Saar) |
+| ~~**COM2**~~ | ~~Vérif statut arme absente côté GM~~ | ✅ Session 161 (Saar) |
+| ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
+| COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque (signalé Saar, non instrumenté) | À investiguer |
+| FEAT4 | Aura de portée CaC (3m + allonge arme) autour du personnage actif | Basse — sprint futur |
 | ~~**COM9**~~ | ~~Viser une localisation précise — non implémenté~~ | ✅ Session 155 (Saar) |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | ~~**TIRVISE**~~ | ~~Tir visé — non implémenté, bloquait le Lot B2 de `docs/PLAN_MODING.md`~~ | ✅ Session 141 (suite 17) |
@@ -2084,7 +3265,7 @@ Projet en cours et priorité user :
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
-| **KIWI2** | Import GLB token : local ✅ / Kiwi ❌ | **Haute** — Cluster R |
+| ~~**KIWI2**~~ | ~~Import GLB token : local ✅ / Kiwi ❌~~ | ✅ résolu (confirmé Saar, Session 166 — dernières migrations Kiwi) |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-6 (attributs, résistances, armure/arme naturelle, déblocage de compétences, identité sex/is_fertile/hand_pref) ✅ clos et fonctionnels. Reste Lot 7 (Narratif/économie, priorité basse) — `docs/Old/PLAN_MUTATION2.md` (archivé, chantier clos) | Lot 7 à détailler quand Saar voudra enchaîner |
@@ -2101,20 +3282,29 @@ Projet en cours et priorité user :
 | **CAR2** | `ref_background_skills.skill_id` sans FK vers `ref_skills.id` (même défaut que `ref_career_skills` avant migration 111) | Basse — pas de bug connu, préventif |
 | **CAR3** | Prérequis carrières (espion, soldat_elite_*, officier_militaire_souterrain, etc.) non insérés dans `ref_career_prerequisites` | Moyenne — migration dédiée post lots 2-6 |
 | **DBG-C1** | `character.user_id` null quand GM crée pour joueur absent (steps 1-3) | Moyenne — sprint futur |
-| **JSON1** | `client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm` (préexistant, cassait déjà avant Session 132) | **Haute** — casse tout le fichier EN |
+| ~~**JSON1**~~ | ~~`client/src/locales/en.json` invalide — guillemets non échappés `deleteMapConfirm`~~ | ✅ déjà résolu avant Session 166 — dette fantôme : le merge `caaf1af` "Fusion Kiwi" portait déjà la version échappée, la dette n'avait jamais été retirée du registre (`node -e "JSON.parse(...)"` valide aujourd'hui) |
 | **OPT-W1** | 3/11 options de campagne (revers, skill_natural_prog, celebrity) sans effet mécanique branché — `ambiance` ✅ Session 132 suite, `random_mutations` ✅ Session 136, `feminin_bonus` ✅ Session 137, `random_pro_advantages`/`skill_prerequisites` ✅ Session 141, `skill_max_level` ✅ Session 141 (suite 2), `young_penalty` ✅ Session 141 (suite 4), `polaris_latent` ✅ Session 141 (suite 6) | Moyenne — en cours un par un |
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 | ~~**HP1**~~ | ~~Main directrice : `socketCombatHelpers.js:556/584` et `inventoryService.js:99/181` (déplacé depuis `char-sheet.js:810` lors de l'extraction Étape 0, item 63) lisaient `hand_pref` sur `char_sheet` (colonne inexistante, en réalité sur `char_identity`) → toujours `'R'` par défaut, quel que soit le choix réel du joueur ou l'Avantage Ambidextre. Corrigé : les 2 sites rejoignent désormais `char_identity` (même pattern déjà correct utilisé à 4 autres endroits du projet — `char-sheet.js:103`, `vault.js:49`, `creationService.js:306`, `identityService.js:44`)~~ | ✅ Session 143 |
-| **ADV1** | Célébrité, Allié/Contact/Ennemi/Opposant et les autres "avantages relationnels" (`ref_career_random_benefits`, Revers, OPT-11) ne sont trackés nulle part mécaniquement sur la fiche personnage — aucune jauge/compteur réel. Bloque l'automatisation des tirages Avantages pro aléatoires (Lot 6) et de Revers (OPT-06) au-delà de la simple conversion en points | **Haute** — à faire impérativement (décision Saar, Session 141 suite 12) |
-| **ADV2** | Bénéfices de carrière type "Revenus +10%/+20%/doublés à partir de cette année" (`ref_career_random_benefits`, ex. Cultivateur/Éleveur) — aucun mécanisme pour appliquer un modificateur cumulatif aux années futures | Moyenne — roadmap Session 141 suite 12 |
+| ~~**ADV1**~~ | ~~Célébrité : mécanisme codé (Session 168, migration 188), `effects` peuplé pour chasseur_primes seul, Allié/Contact/Ennemi/Opposant non trackés~~ | ✅ résolu (item 107) — `effects` peuplé pour les 37 métiers + 27 Revers (migrations 194/196/198/200), traits trackés via `char_traits`, confirmé fonctionnel par Saar en navigateur |
+| ~~**ADV2**~~ | ~~Bénéfices "Revenus +10%/+20%/doublés" peuplés pour chasseur_primes seul~~ | ✅ résolu (item 107) — mêmes migrations qu'ADV1 |
 | **ADV3** | Bénéfices de carrière débloquant l'accès à une compétence (mutation/compétence "développée automatiquement" via tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations` | Moyenne — roadmap Session 141 suite 12 |
 | **WIZ4** | `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée (ex. retirer sa seule carrière puis cliquer directement sur une sous-step déjà "reachable"). Filet serveur (`reconcileCreation` STEP4) empêche toute donnée invalide persistée — juste un rejet tardif au lieu d'un blocage immédiat | Basse — architecture navigation mini-stepper |
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
-| **CHOC1** | ⚠️ Partiellement clos (Session 2026-07-16, Chantier 11 Étape 2 Lot B, `docs/PLAN_ARMES_DSL.md`) : le pool de "dommages de Choc" distinct des dégâts physiques existe désormais dans `damageService.resolveTargetHit` (`prt` consommé, `chocDegatsNets`, sévérité combinée, Test de Choc exclusif) — mais **uniquement pour les munitions `ammo_effects` CHOC=, tir à distance** (`resolveAssaultAction`/`COMBAT_DAMAGE_CONFIRM`). **Reste non câblé** : le bonus LdB propre à la mutation Corne ("+1D6 Choc si le coup porte à la tête" en CaC) — `resolveMeleeAction` ne passe toujours pas `chocDsl`/`rangeBand`, explicitement hors scope de Lot B (mécanisme mutation, pas munition) | Basse — reste un chantier séparé, mais l'infrastructure existe désormais |
+| **CHOC1** | Prérequis (arme équipée sans dégât physique, crash potentiel) ✅ fermé et testé Session 168 (Item 106) — `getEffectiveMeleeDamage` construite, 5 sites CaC + 2 tir unifiés. Reste : Palier 1, câblage réel du Choc porté par l'**arme** (`ref_equipment.shock`) dans la résolution — Choc pur (Dague neurale...) ne fait toujours 0 dégât, aucun Test de Choc déclenché. Pool de Choc (`resolveTargetHit`) fonctionne déjà pour le Choc porté par une **munition** (Lot B Session 152). Inventaire catalogue (11 armes + mutation Corne) et scope proposé : `docs/PLAN_CHOC1.md` | Basse — décision Saar sur le scope du Palier 1 |
 | **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
+| ~~**INI4**~~ | ~~`initiative` jamais remise à `base_ini` en fin de tour~~ | ⚠️ clos partiel Session 166 (Saar), item 96 — codé, scénario réel navigateur non testé |
+| ~~**MELEE-MR**~~ | ~~Dégâts CaC calculés sans le MR (dette Session 67)~~ | ⚠️ clos partiel Session 166 (Saar), item 97 — codé, scénario réel navigateur non testé |
+| ~~**DEF5**~~ | ~~« Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC~~ | ⚠️ clos partiel Session 166 (Saar), item 98 — codé, scénario réel navigateur non testé ; tir de drone non couvert |
+| **SURPRISE1** | `is_surprised` jamais remis à `false` après `COMBAT_START` — trouvé en instrumentant DEF5. Détail `BUGIDENTIFIE.md` | Basse — contournement en place dans DEF5 |
+| ~~**TIRIMP**~~ | ~~Garde serveur absent sur « Tir impossible »~~ | ⚠️ clos partiel Session 166 (Saar), item 99 — codé, scénario réel navigateur non testé |
+| **COUVERTURE_TOTALE** | « Couverture totale » (tir) n'existe nulle part, ni client ni serveur — trouvé en clôturant TIRIMP. Détail `BUGIDENTIFIE.md` | Basse — à regrouper avec le futur chantier Tir en aveugle |
+| ~~**WNDMORT**~~ | ~~Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests~~ | ⚠️ clos partiel Session 166 (Saar), item 100 — codé, scénario réel navigateur non testé |
+| **WNDMORT-UI** | Fenêtre de déclaration sans repli visuel pour Blessure mortelle — le serveur rejette déjà, l'UI ne prévient pas avant. Détail `BUGIDENTIFIE.md` | Basse — ergonomie, pas une règle de jeu |
+| **WNDMORT-HORSCOMBAT** | Test générique hors-combat (`socketEntity.js`) non gardé pour Blessure mortelle. Détail `BUGIDENTIFIE.md` | Basse — impact pratique faible |
 
 ---
 

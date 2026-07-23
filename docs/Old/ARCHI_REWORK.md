@@ -1,8 +1,9 @@
 # ARCHI_REWORK.md — Reworks architecturaux
-> Créé Session 96 — 2026-06-16 | Mis à jour Session 119 — 2026-06-24
-> Rédigé par Claude Sonnet 4.6 à destination des agents Claude futurs.
-> Objectif : remplacer le bricolage incrémental par des reworks structurés, complets, et non régressifs.
-> Spécifications complètes des reworks achevés → [ARCHI_REWORK_DONE.md](ARCHI_REWORK_DONE.md)
+> ⚠️ **Journal de rework — valeur historique uniquement.**
+> Ces fichiers décrivent les problèmes, alternatives et plans d'exécution des reworks.
+> Pour la documentation canonique, voir :
+> - `docs/SYSTEME/ARCHITECTURE_SOCKET.md` — architecture socket client/serveur
+> - `docs/SYSTEME/SERVICES_COMBAT.md` — services métier combat
 
 ---
 

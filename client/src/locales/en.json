@@ -90,6 +90,8 @@
 "toolRuler": "Ruler / Distance",
 "userJoined": "{{username}} joined the session",
 "userLeft": "{{username}} left the session",
+"dualWieldAmmoOutPrimary": "Dominant hand dry — single shot with the off hand, dual-wield bonus cancelled.",
+"dualWieldAmmoOutOffhand": "Off hand dry — single shot with the dominant hand, dual-wield bonus cancelled.",
 "actionExpired": "Action expired (no response from GM)",
 "noGm": "No GM connected",
 "actionRefused": "Action denied by the GM",
@@ -517,7 +519,8 @@
       "reaBase": "REA base :",
       "malusBlessures": "Malus blessures :",
       "malusEncombrement": "Malus encombrement : −",
-      "iniEffective": "Initiative effective :"
+      "iniEffective": "Initiative effective :",
+      "testImpossible": "Blessure mortelle — aucune action de Test possible"
     }
   },
   "builder": {

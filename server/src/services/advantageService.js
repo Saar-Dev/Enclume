@@ -125,9 +125,15 @@ export async function removeAdvantage(sheetId, charAdvantageId, reason) {
  * Octroi narratif MJ post-création — même contraintes que addAdvantage (moins le budget PC,
  * inexistant/épuisé pour un personnage verrouillé), aucun contact avec char_pc_ledger. Pattern
  * identique à mutationService.addMutation (source='campaign', pas de coût).
+ *
+ * trxOpt : permet l'appel depuis une transaction externe déjà ouverte (ex. reconcileCreation
+ * STEP4, Revers → grant_advantage/manual_grant_choice, PLAN_WIZARD_AVANTAGES.md §17 — l'octroi
+ * doit faire partie de la même atomicité que le reste du Wizard, pas une transaction séparée qui
+ * commiterait indépendamment d'un rollback plus tard dans le même reconcile). Même correction que
+ * mutationService.addMutation (Lot 1, même raison) ; sinon comportement inchangé (octroi MJ en jeu).
  */
-export async function grantAdvantage(sheetId, advantageId, acquiredDuring) {
-  return db.transaction(async (trx) => {
+export async function grantAdvantage(sheetId, advantageId, acquiredDuring, trxOpt) {
+  const run = async (trx) => {
     const currentAdvantages = await trx('char_advantages as ca')
       .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
       .whereNull('ca.removed_at')
@@ -188,7 +194,8 @@ export async function grantAdvantage(sheetId, advantageId, acquiredDuring) {
       mod_resistance: refAdv.mod_resistance,
       mod_res_value: refAdv.mod_res_value,
     }
-  })
+  }
+  return trxOpt ? run(trxOpt) : db.transaction(run)
 }
 
 // ─── Notes "Autres" (texte libre) — table dédiée, hors catalogue ref_advantages ─

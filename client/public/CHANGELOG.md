@@ -144,6 +144,25 @@
   manifeste et le lockfile serveur.
 
 ## v200 — 2026-07-17 — Viser une localisation précise en tir à distance
+## v191 — 2026-07-23 — Avantages professionnels et Revers : tous les métiers ont maintenant un effet réel
+
+### Client
+- [feat] Dans l'assistant de création, le tirage 1D10 des Avantages professionnels applique
+  désormais un effet réel pour les 37 métiers (auparavant, seul Chasseur de primes en avait un — les
+  autres résultats n'avaient aucun effet mécanique).
+- [feat] Le tirage 1D100 des Revers applique désormais un effet réel pour les 27 Revers (jauges
+  Allié/Contact/Ennemi/Opposant, argent, mutations, Célébrité, avantages/désavantages accordés, etc.).
+- [feat] Nouveau choix "Formation" : quand un résultat de métier l'indique, le joueur choisit
+  librement une compétence dans la liste professionnelle de son métier.
+
+### Serveur
+- [fix] Le résultat 4 de Chasseur de primes ("Grande société") est désormais un choix
+  accepter/refuser, comme les résultats équivalents d'autres métiers — il s'appliquait auparavant de
+  façon automatique.
+- [fix] Le résultat 3 de Pirate ("Butin") accorde maintenant aussi Célébrité +2 et Matériel +2, en plus
+  de l'argent — ces deux bonus manquaient.
+
+## v190 — 2026-07-17 — Viser une localisation précise en tir à distance
 
 ### Client
 - [feat] Lors d'un tir à distance, une nouvelle section "Viser une localisation" permet de choisir

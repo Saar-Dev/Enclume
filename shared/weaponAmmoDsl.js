@@ -95,3 +95,76 @@ export function resolveChocFormula(chocDsl) {
   if (!chocDsl || chocDsl.action !== 'SET') return null
   return chocDsl.value || null
 }
+
+// ─── Lot C1 — Effets mécaniques réels (docs/PLAN_ARMES_DSL.md §Lot C1) ─────────────────────────────
+// Traduction fixe de `docs/REGLES/REGLESMUNITIONS.md`, jamais dérivée du catalogue. Vérifié en
+// relisant les vraies chaînes DSL du seed (`STEP1_cleaned_data.js`) : HP (`ARMOR=TARGET_PLUS(1+1/D10_ARME)`),
+// Explosive (`DMG=ADD(1D10,+1/5D10_ARME)`) et Shrapnel (`PEN=SET(5)`, `DMG_DROP=-1D10/RANGE` jamais
+// parsé) portent des valeurs de mise à l'échelle `_ARME`/flat incompatibles avec le texte LdB traduit
+// (même famille de défaut que les 5 cas déjà confirmés fautifs pendant ce chantier, dont Assommante/
+// Choc, corrigé migration 160). Décision : dès que `tags.FX` correspond à une des 6 familles
+// mécaniques ci-dessous, ce registre devient la SEULE autorité (dégât bonus, armure, Choc) — les
+// clauses `DMG=`/`CHOC=`/`TXT=PEN=`/`ARMOR=`/`PASS=`/`DMG_DROP=` du catalogue pour ces lignes
+// deviennent cosmétiques, jamais lues pour le calcul. Évite une migration de correction par munition
+// (qui devrait être repétée à chaque nouvel item mal saisi) — une nouvelle munition SAP/HP/etc.
+// ajoutée au catalogue fonctionne automatiquement dès que `FX=` est posé, sans dépendre d'une valeur
+// numérique saisie à la main. Pattern "override object calculé" inspiré du rule element `DamageDice`
+// de PF2e/Foundry (déjà cité §1bis) — `diceNumber`/`downgrade` modifient un jet par transformation,
+// jamais par une chaîne pré-écrite par objet.
+//
+// dmgDiceDelta      : nombre de dés à retirer de la formule de l'arme (SAP/SLAP, "-1 dé").
+// dmgFlatBonus      : bonus fixe ajouté au total, jamais lancé (HP, "+5").
+// dmgDiceBonus      : formule de dé ajoutée au total, lancée séparément (Explosive, "+1D10").
+// dmgDropoffByRange : formule de dé retirée du total selon la bande de portée (Shrapnel).
+// chocFixed         : remplace intégralement le Choc catalogue par cette formule fixe (Explosive).
+// armorMulFactor / armorRound : fraction appliquée à l'armure de la cible (les 6 familles).
+const AMMO_MECHANIC_ACTIONS = {
+  APHC:      { armorMulFactor: 2 / 3, armorRound: 'floor' },
+  SAP:       { dmgDiceDelta: 1,       armorMulFactor: 0.5, armorRound: 'floor' },
+  SLAP:      { dmgDiceDelta: 1,       armorMulFactor: 0.5, armorRound: 'floor' },
+  HP:        { dmgFlatBonus: 5,       armorMulFactor: 1.5, armorRound: 'floor' },
+  EXPLOSIVE: { dmgDiceBonus: '1D10', chocFixed: '1D10', armorMulFactor: 2, armorRound: 'floor' },
+  SHRAPNEL:  {
+    dmgDropoffByRange: { bout_portant: null, courte: '1D10', moyenne: '1D10', longue: '2D10', extreme: '3D10' },
+    armorMulFactor: 1.5, armorRound: 'polaris',
+  },
+}
+
+const FORMULA_RE = /^(\d+)?[dD](\d+)([+-]\d+)?$/
+
+// reduceDiceCount — transformation pure de formule (pas une opération sur un nombre déjà lancé) :
+// `NdX+M` → `(N-n)dX+M`, jamais sous 1 dé. Formule non reconnue (mixte, invalide) → inchangée,
+// jamais un throw (même fail-safe que le reste du module).
+export function reduceDiceCount(formula, n) {
+  const match = String(formula || '').trim().match(FORMULA_RE)
+  if (!match) return formula
+  const count    = match[1] ? parseInt(match[1], 10) : 1
+  const faces    = match[2]
+  const modifier = match[3] || ''
+  return `${Math.max(1, count - n)}D${faces}${modifier}`
+}
+
+// resolveAmmoMechanic — FX (tags.FX déjà extrait par parseAmmoEffects) → config du registre, ou
+// `null` si non reconnu (munition sans mécanique C1 : Assommante/IEM/inconnu — comportement Lot A/B
+// strictement inchangé pour elles).
+export function resolveAmmoMechanic(fx) {
+  return AMMO_MECHANIC_ACTIONS[fx] ?? null
+}
+
+// resolveMechanicDamageFormula — mechanic (résolu ci-dessus) + formule arme + bande de portée
+// courante → formules à lancer. Pure, ne lance aucun dé (même convention que resolveDmgEffect).
+export function resolveMechanicDamageFormula(weaponFormula, mechanic, rangeBand) {
+  if (!mechanic) return null
+  const baseFormula = mechanic.dmgDiceDelta
+    ? reduceDiceCount(weaponFormula, mechanic.dmgDiceDelta)
+    : weaponFormula
+  const dropoffFormula = mechanic.dmgDropoffByRange
+    ? (mechanic.dmgDropoffByRange[rangeBand] ?? null)
+    : null
+  return {
+    baseFormula,
+    bonusFormula: mechanic.dmgDiceBonus ?? null,
+    flatBonus:    mechanic.dmgFlatBonus ?? 0,
+    dropoffFormula,
+  }
+}

@@ -5,6 +5,7 @@
 > Périmètre : état historique de l'instance règles `8193/8194`. L'organisation actuelle des trois
 > instances, leurs worktrees et leurs données est définie dans `docs/WORKFLOW_FUSION.md`. Les
 > versions ci-dessous sont des valeurs observées sur Kiwi, pas les versions du poste Ubuntu local.
+> Mis à jour : 2026-07-23
 
 ---
 
@@ -249,6 +250,51 @@ git pull
 sudo systemctl restart enclume-server enclume-client
 # Si nouvelles migrations : lancer la commande migrations ci-dessus
 ```
+
+## Autres dépôts sur ce même serveur
+
+Ce serveur physique héberge **trois instances** de l'application, pas seulement
+`/home/didier/Enclume`. Topologie et cycle de fusion complets : `docs/WORKFLOW_FUSION.md`.
+
+| Dépôt | Branche | Propriétaire système | Ports |
+|---|---|---|---|
+| `/home/didier/Enclume` | `dev/Saar` | `didier` | 8193/8194 |
+| `/home/codex/Enclume-integrated` | `dev/monde` | `codex` | 8293/8294 |
+| `/home/codex/Enclume-fusion` | `integration` | `codex` | 8393/8394 |
+
+### Accès aux dépôts `codex` depuis le compte `didier`
+
+Git refuse d'opérer sur un dépôt appartenant à un autre utilisateur système
+(`fatal: dubious ownership`). Débloquer avant toute inspection :
+
+```bash
+git config --global --add safe.directory /home/codex/Enclume-integrated
+git config --global --add safe.directory /home/codex/Enclume-fusion
+```
+
+### Kiwi refuse GitHub — `dev/monde` et `integration` n'existent que sur ce serveur
+
+Confirmé (session 2026-07-23) : Kiwi refuse d'utiliser GitHub, ce n'est pas une simple
+authentification manquante à corriger. `dev/monde` et `integration` n'ont donc **jamais** été
+poussées sur `origin`, même une version ancienne (`git branch -r` ne montre aucune trace).
+
+Conséquence : toute synchronisation impliquant ces deux branches passe **exclusivement** par des
+commandes lancées à la main sur ce serveur, jamais par un `git push`/`fetch` vers `origin` pour
+elles. Pour rapatrier du contenu vers un dépôt qui, lui, est publié sur GitHub (`dev/Saar`), la
+méthode qui fonctionne est de pousser une branche temporaire depuis le dépôt source :
+
+```bash
+cd /home/didier/Enclume
+git push origin dev/Saar:refs/heads/tmp/<nom-descriptif>-<date>
+```
+
+### Claude Code ne peut pas se connecter en SSH à ce serveur depuis une session distante
+
+Testé le 2026-07-23 (clé publique et mot de passe via `plink`) : la connexion SSH initiée
+directement par l'agent reste bloquée sans réponse — probablement un blocage réseau sortant de
+l'environnement d'exécution de l'agent, pas un problème côté serveur. **Toute commande serveur doit
+être copiée-collée et exécutée par l'utilisateur dans son propre terminal SSH**, jamais lancée
+directement par l'agent.
 
 ## Dettes ouvertes
 

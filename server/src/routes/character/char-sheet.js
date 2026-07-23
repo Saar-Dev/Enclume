@@ -55,7 +55,7 @@ import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
 import { WS } from '../../../../shared/events.js'
 import {
-  WOUND_LOCATIONS, WOUND_SEVERITIES,
+  WOUND_LOCATIONS, WOUND_SEVERITIES, isTestBlockingWound,
 } from '../../../../shared/woundConstants.js'
 
 const router = Router()
@@ -832,7 +832,9 @@ router.get('/:characterId/wounds', async (req, res, next) => {
     const wounds = await db('character_wounds')
       .where({ char_sheet_id: sheet.id })
       .orderBy('created_at', 'asc')
-    res.json({ wounds, wound_penalty: calcWoundPenalty(wounds) })
+    // WNDMORT — wound_penalty reste un nombre pour compat (toujours 0 si Blessure mortelle, jamais
+    // -20), wound_test_blocked porte le vrai signal ("aucune action de Test possible") pour la fiche.
+    res.json({ wounds, wound_penalty: calcWoundPenalty(wounds), wound_test_blocked: isTestBlockingWound(wounds) })
   } catch (err) { next(err) }
 })
 

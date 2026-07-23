@@ -31,8 +31,19 @@ export async function getMutations(sheetId) {
     .orderBy('cm.created_at', 'asc')
 }
 
-export async function addMutation(sheetId, mutationId, subtypeId = null) {
-  return db.transaction(async (trx) => {
+// trxOpt : permet l'appel depuis une transaction externe déjà ouverte (ex. reconcileCreation
+// STEP4, grant_mutation — l'octroi doit faire partie de la même atomicité que le reste du Wizard,
+// pas une transaction séparée qui commiterait indépendamment d'un rollback plus tard dans le même
+// reconcile) ; sinon ouvre sa propre transaction sur `db`, comportement inchangé pour l'appelant
+// existant (AdvantagesPanel.jsx, octroi MJ en jeu). Même pattern que lockWizard (creationService.js).
+// source : distingue l'octroi MJ en jeu ('campaign', défaut — comportement inchangé de l'appelant
+// existant) de l'octroi Wizard par Revers/tirage carrière ('revers', creationService.js — même mot
+// que char_advantages.acquired_during et que le nom joueur/UI, docs/VOCABULARY.md "Revers"). Avant
+// ce paramètre, les deux étaient confondus sous 'campaign' en base, sans aucun moyen de les
+// distinguer après coup (audit MJ impossible). Valeur ajoutée à la contrainte CHECK de la colonne
+// par la migration 192 — sans elle, l'INSERT échoue (violation de contrainte).
+export async function addMutation(sheetId, mutationId, subtypeId = null, source = 'campaign', trxOpt) {
+  const run = async (trx) => {
     const mutRef = await trx('ref_mutations').where({ mutation_id: mutationId }).first()
     if (!mutRef) throw new AppError(400, `Mutation inconnue : ${mutationId}`)
 
@@ -51,18 +62,18 @@ export async function addMutation(sheetId, mutationId, subtypeId = null) {
     const { rows } = subtypeId == null
       ? await trx.raw(`
           INSERT INTO char_mutations (char_sheet_id, mutation_id, subtype_id, source, status, count)
-          VALUES (?, ?, NULL, 'campaign', 'active', 1)
+          VALUES (?, ?, NULL, ?, 'active', 1)
           ON CONFLICT (char_sheet_id, mutation_id) WHERE subtype_id IS NULL
           DO UPDATE SET count = char_mutations.count + 1
           RETURNING *
-        `, [sheetId, mutationId])
+        `, [sheetId, mutationId, source])
       : await trx.raw(`
           INSERT INTO char_mutations (char_sheet_id, mutation_id, subtype_id, source, status, count)
-          VALUES (?, ?, ?, 'campaign', 'active', 1)
+          VALUES (?, ?, ?, ?, 'active', 1)
           ON CONFLICT (char_sheet_id, mutation_id, subtype_id) WHERE subtype_id IS NOT NULL
           DO UPDATE SET count = char_mutations.count + 1
           RETURNING *
-        `, [sheetId, mutationId, subtypeId])
+        `, [sheetId, mutationId, subtypeId, source])
     const row = rows[0]
 
     // Overrides sexe/fécondité (mirrors STEP3) — garantit la cohérence avec la contrainte
@@ -70,7 +81,8 @@ export async function addMutation(sheetId, mutationId, subtypeId = null) {
     await applyMutationIdentityGrant(trx, sheetId, mutRef)
 
     return { ...row, name: mutRef.name, description: mutRef.description, subtype_name: subtypeRef?.name ?? null }
-  })
+  }
+  return trxOpt ? run(trxOpt) : db.transaction(run)
 }
 
 export async function removeMutation(sheetId, charMutationId) {

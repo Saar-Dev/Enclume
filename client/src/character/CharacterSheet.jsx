@@ -281,6 +281,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const [buyingAttrId, setBuyingAttrId] = useState(null)
   const isBuyingAttrRef = useRef(false)
   const [woundPenalty,       setWoundPenalty]       = useState(0)
+  const [woundTestBlocked,   setWoundTestBlocked]   = useState(false)
   const [encumbrancePenalty, setEncumbrancePenalty] = useState(0)
   // Debounce pour la saisie XP par le GM
   const xpDebounceTimer = useRef(null)
@@ -334,9 +335,10 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     const lines = [`${t('charSheet.tooltip.reaBase')} ${secondary.rea}`]
     if (woundPenalty < 0)       lines.push(`${t('charSheet.tooltip.malusBlessures')} ${woundPenalty}`)
     if (encumbrancePenalty > 0) lines.push(`${t('charSheet.tooltip.malusEncombrement')}${encumbrancePenalty}`)
+    if (woundTestBlocked)      lines.push(t('charSheet.tooltip.testImpossible'))
     lines.push(`${t('charSheet.tooltip.iniEffective')} ${ini}`)
     return lines.join('\n')
-  }, [woundPenalty, encumbrancePenalty, secondary.rea, t])
+  }, [woundPenalty, woundTestBlocked, encumbrancePenalty, secondary.rea, t])
 
   const iniValue = secondary.rea + effectiveMalus
 
@@ -463,6 +465,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
           ])
           if (!cancelled) {
             setWoundPenalty(woundsRes.data.wound_penalty ?? 0)
+            setWoundTestBlocked(woundsRes.data.wound_test_blocked ?? false)
             setEncumbrancePenalty(invRes.data.ini_penalty ?? 0)
           }
         } catch (penaltyErr) {

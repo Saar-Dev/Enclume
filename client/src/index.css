@@ -2534,6 +2534,19 @@ Convention :
 .wiz4-skill.hl { background: rgba(47,215,255,.12); border-color: rgba(47,215,255,.45); opacity: 1; }
 .wiz4-skmain { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
 .wiz4-sklabel { font: 500 12px 'Inter', sans-serif; color: var(--wiz-white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wiz4-sklabel-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  clip-path: none;
+  box-shadow: none;
+  min-width: 0;
+}
+.wiz4-sklabel-btn:hover .wiz4-sklabel { color: var(--wiz-blue-bright); filter: none; }
 .wiz4-prov { display: flex; gap: 4px; flex: none; }
 .wiz4-provtag { font: 600 8.5px 'Inter', sans-serif; color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
 .wiz4-base { font-size: 10px; color: var(--wiz-metal-3); min-width: 52px; text-align: right; }
@@ -2580,6 +2593,46 @@ Convention :
 .wiz4-rollbtn:hover { border-color: var(--wiz-blue-bright); color: var(--wiz-white); filter: none; }
 .wiz4-rollbtn.dis, .wiz4-rollbtn:disabled { opacity: .35; cursor: default; pointer-events: none; }
 .wiz4-randomresult { margin-top: 4px; }
+
+/* Lot 5 — décision joueur (choice) entre plusieurs options mutuellement exclusives : bouton, pas
+   une checkbox (.wiz4-choiceopt reste réservé aux choix conditionnels de background). */
+.wiz4-choicebtns { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.wiz4-choicebtn {
+  font: 600 11px 'Inter', sans-serif;
+  color: rgba(255,255,255,.78);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.14);
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  clip-path: none;
+}
+.wiz4-choicebtn:hover { border-color: var(--wiz-blue-bright); color: var(--wiz-white); filter: none; }
+.wiz4-manual-note { color: #e0a85c; font-style: italic; }
+
+/* Lot 5, 2026-07-23 — separateur entre le texte de regle (description brute du Revers) et sa
+   resolution (jets/effet), + journal des jets deja repondus (chained_setback/subroll) : sans ca,
+   un Revers a plusieurs jets enchaines (Attentat) ou a jet auto-tire (Choc psychologique) ne montre
+   jamais ce qui a ete tire (retour Saar, test reel). */
+.wiz4-divider { border: none; border-top: 1px solid var(--wiz-glass-border); margin: 6px 0; }
+.wiz4-rolllog { display: flex; flex-direction: column; gap: 2px; margin: 2px 0; }
+.wiz4-rolllog-item { font: 400 10.5px 'Inter', sans-serif; color: rgba(255,255,255,.6); }
+.wiz4-rolllog-item.hit { color: var(--wiz-blue-bright); }
+.wiz4-rolllog-item .wiz4-mono { color: inherit; }
+
+/* Lot 6 — "Formation" (skill_choice) : liste de compétences pro trop longue pour des boutons
+   (jusqu'à 20+ par métier), select natif plutôt qu'une grille de .wiz4-choicebtn. */
+.wiz4-skillselect {
+  font: 600 11px 'Inter', sans-serif;
+  color: rgba(255,255,255,.78);
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.14);
+  padding: 5px 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+  max-width: 100%;
+}
+.wiz4-skillselect:hover { border-color: var(--wiz-blue-bright); }
 
 .wiz4-diceoverlay { position: fixed; inset: 0; z-index: 200; background: rgba(4,6,14,.72); }
 
@@ -2884,6 +2937,21 @@ Convention :
   transition: max-height .35s ease;
 }
 .wiz1-accordion-body--open { max-height: 420px; }
+
+/* Variante longue (contenu de règles, plusieurs paragraphes) — pas de clip à 420px */
+.wiz4-rules-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .35s ease;
+}
+.wiz4-rules-body--open { max-height: 3000px; }
+.wiz4-rules-text {
+  padding: 10px 14px;
+  color: rgba(255,255,255,.6);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
 
 /* ── Section règles ──────────────────────────────────────────────── */
 .wiz1-rules-content {
