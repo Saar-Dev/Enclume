@@ -209,6 +209,50 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > **Testé** : `node --check` uniquement sur les trois. **Non testé en jeu** — en particulier le
 > dual-wield avec une arme Choc pur en main secondaire, jamais essayé avant aujourd'hui.
 
+> **Item 107 (Sessions 169-171, dev/Saar) — Lot 6 (`docs/PLAN_WIZARD_AVANTAGES_IMPLANTATION.md`) ✅
+> CODÉ, TESTÉ ET CONFIRMÉ FONCTIONNEL PAR SAAR EN NAVIGATEUR — les 27 Revers ET les 37 métiers ont
+> désormais un `effects[]` réel en base.** Referme l'écart signalé item 105 (« ⚠️ NON LIVRÉE ») : le
+> plan complet demandé par Saar a fini par être livré et exécuté intégralement, pas repoussé un métier
+> de plus.
+> **Revers (2026-07-22, migration 194)** : `shared/reversEffectsData.js` + `reversEffectsData.test.mjs`
+> (28 tests). 3 mécanismes d'effet nouveaux (`gauge_fraction_delta`/`celebrity_fraction`,
+> `irradiation_reward`, `subroll.condition`) — détail complet et corrections vs RAW :
+> `PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §5ter.
+> **Métiers (2026-07-23, migrations 196+198)** : `shared/careerRandomEffectsData.js` +
+> `careerRandomEffectsData.test.mjs` (21 tests). Nouveau mécanisme "Formation" (`skill_choice`/
+> `add_skill`, choix libre d'une compétence professionnelle, câblé jusqu'à l'UI —
+> `ProAdvantagesAndSetbacks.jsx`). **Protocole de décision** : Saar a refusé un questionnaire structuré
+> et demandé un survol complet des 37 métiers listant toutes les questions ouvertes d'abord, tranchées
+> ensemble en un seul batch ensuite — pas de code avant ce tour complet. **3 bugs de production réels
+> trouvés et corrigés** : Pirate/8 (résumé du plan copié à tort depuis un autre métier, RAW réel très
+> différent), `chasseur_primes`/4 (déjà en production depuis la migration 188, appliquait son bonus
+> sans le choix accepte/refuse décidé depuis — corrigé par la migration **198**, isolée du peuplement
+> neuf), et Pirate/3 (Célébrité+2/Matériel+2 oubliés à côté du money_reward, trouvé lors d'une 2e passe
+> critique dédiée — corrigé par la migration **200**, même isolation). Détail complet, y compris le 16e
+> cas `income_multiplier_permanent` trouvé (Voleur/7) et la correction Assassin/8 (note non demandée
+> retirée après relecture critique) : `PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §5quater.
+> **Referme aussi les dettes `ADV1`/`ADV2` du tableau ci-dessous** (célébrité + revenus mécanisés pour
+> les 37 métiers, plus seulement chasseur_primes ; Allié/Contact/Ennemi/Opposant désormais trackés via
+> `char_traits`).
+> **UX Revers (Session 171)** : Saar a testé en navigateur réel et trouvé 2 défauts — les jets
+> enchaînés (Attentat, 2 `chained_setback`) et auto-tirés (Choc psychologique, `subroll`) ne
+> montraient jamais leur résultat, et `manual_grant_choice` affichait des codes `advantage_id` bruts
+> au lieu de noms. Corrigé : `resolveSetbackEffects` renvoie désormais aussi `history` (jets déjà
+> répondus, champ additif, même traversée) ; l'UI affiche ce journal + un séparateur visuel (proposé
+> par Saar) ; un nouveau prop `advantagesCatalog` (réutilise l'endpoint Step5 existant) résout les
+> noms. Même défaut corrigé côté carrières (`money_reward`, montant jamais affiché — Pirate/3,
+> Marchand itinérant/4). Détail : `PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §4bis (4e correction).
+> **Confirmé fonctionnel par Saar en navigateur** après ce correctif.
+> **Testé** : 181/181 `shared/*.test.mjs`, 33/33 `server/src/services/*.test.mjs` (0 régression,
+> y compris non-régression `chasseur_primes` avant/après migration 198), `node --check` sur tous les
+> fichiers touchés, `npx eslint`/`npx vite build` propres, **scénario réel confirmé fonctionnel par
+> Saar en navigateur** (tirage carrières + Revers, y compris Attentat/Choc psychologique). **Non
+> testé** : couverture exhaustive de tous les cas (37 métiers × 27 Revers) en conditions réelles —
+> seul un sous-ensemble a été joué. **Données** : migrations 194, 196, 198, 200 (toutes
+> auto-appliquées par nodemon côté Saar, vérifiées directement en base). **Retour arrière** : `down()`
+> fourni sur les quatre. **Rien de tout ça n'est committé** (`git status` à vérifier avant de
+> continuer) — commit/push prévus juste après cette clôture documentaire.
+
 > **Item 105 (Session 168, dev/Saar) — Wizard Step4 : bug budget PC + données chasseur_primes ✅ CODÉ
 > et confirmé par Saar en navigateur ; mécanisation avantages/revers ⚠️ NON LIVRÉE au périmètre demandé.**
 > **Codé et testé (confirmé par Saar)** : bug de double décompte du budget PC en étape 4
@@ -3037,8 +3081,8 @@ Projet en cours et priorité user :
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | **MUT1** | `Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable | Basse — à investiguer |
 | ~~**HP1**~~ | ~~Main directrice : `socketCombatHelpers.js:556/584` et `inventoryService.js:99/181` (déplacé depuis `char-sheet.js:810` lors de l'extraction Étape 0, item 63) lisaient `hand_pref` sur `char_sheet` (colonne inexistante, en réalité sur `char_identity`) → toujours `'R'` par défaut, quel que soit le choix réel du joueur ou l'Avantage Ambidextre. Corrigé : les 2 sites rejoignent désormais `char_identity` (même pattern déjà correct utilisé à 4 autres endroits du projet — `char-sheet.js:103`, `vault.js:49`, `creationService.js:306`, `identityService.js:44`)~~ | ✅ Session 143 |
-| **ADV1** | Célébrité : mécanisme codé (Session 168, migration 188, `char_sheet.celebrity` + `resolveCareerRandomEffects`), mais `effects` peuplé pour **chasseur_primes seul** — reste tous les autres métiers. Allié/Contact/Ennemi/Opposant toujours pas trackés du tout (aucune jauge). Voir item 105 : plan complet (chaque avantage + chaque revers, tous métiers) demandé 4× par Saar, jamais livré dans son intégralité | **Haute** — plan complet à écrire avant tout code, ne pas repartir sur un métier isolé |
-| **ADV2** | Bénéfices "Revenus +10%/+20%/doublés" : mécanisme codé (Session 168, `income_percent`/`income_multiplier`), peuplé pour chasseur_primes seul — même limitation qu'ADV1, même plan à écrire (item 105) | Moyenne — fondu dans item 105 |
+| ~~**ADV1**~~ | ~~Célébrité : mécanisme codé (Session 168, migration 188), `effects` peuplé pour chasseur_primes seul, Allié/Contact/Ennemi/Opposant non trackés~~ | ✅ résolu (item 107) — `effects` peuplé pour les 37 métiers + 27 Revers (migrations 194/196/198/200), traits trackés via `char_traits`, confirmé fonctionnel par Saar en navigateur |
+| ~~**ADV2**~~ | ~~Bénéfices "Revenus +10%/+20%/doublés" peuplés pour chasseur_primes seul~~ | ✅ résolu (item 107) — mêmes migrations qu'ADV1 |
 | **ADV3** | Bénéfices de carrière débloquant l'accès à une compétence (mutation/compétence "développée automatiquement" via tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations` | Moyenne — roadmap Session 141 suite 12 |
 | **WIZ4** | `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée (ex. retirer sa seule carrière puis cliquer directement sur une sous-step déjà "reachable"). Filet serveur (`reconcileCreation` STEP4) empêche toute donnée invalide persistée — juste un rejet tardif au lieu d'un blocage immédiat | Basse — architecture navigation mini-stepper |
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |

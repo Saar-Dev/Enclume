@@ -27,7 +27,7 @@ const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
 export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
-  const { sheetId, step1Data, step2Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, setStep4Data } = useCreationStore()
+  const { sheetId, step1Data, step2Data, step5Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, setStep4Data } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [age, setAge] = useState(initialData?.age ?? 16)
@@ -46,14 +46,25 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const [openedSkills, setOpenedSkills] = useState(initialData?.openedSkills ?? [])
   const [randomPicks, setRandomPicks] = useState(initialData?.randomPicks ?? {})
   const [setbackRolls, setSetbackRolls] = useState(initialData?.setbackRolls ?? [])
+  // Résolution de Revers EN COURS (cascade chained_setback/subroll/choice pas encore committée dans
+  // setbackRolls) — remontée ici pour survivre à une navigation entre sous-étapes (ex. Carrières
+  // puis retour sur Avantages & Revers, qui démonte/remonte ProAdvantagesAndSetbacks), même patron
+  // que randomPicks/setbackRolls ci-dessus. Jamais envoyée au serveur (buildPayload ne la reprend
+  // pas) : purement un confort UI local à cette sous-étape, incomplète par nature.
+  const [setbackResolution, setSetbackResolution] = useState(initialData?.setbackResolution ?? null)
   const [refData, setRefData] = useState({ loading: true, geoOrigins: [], socialOrigins: [], trainings: [], higherEds: [], careers: [], setbacks: [] })
   const [refSkills, setRefSkills] = useState([])
+  // Catalogue des avantages (Lot 5, 2026-07-23) : réutilisé tel quel depuis Step5 (même endpoint,
+  // /creation/:sheetId/step5/ref) pour afficher un nom lisible sur la note manual_grant_choice
+  // (Choc psychologique, Fugitif...) au lieu des codes advantage_id bruts (adv_044...).
+  const [advantagesCatalog, setAdvantagesCatalog] = useState([])
 
   const handleSkillAllocationsChange = useCallback((next) => setSkillAllocations(next), [])
   const handleProAdvantagesChange = useCallback((next) => setProAdvantages(next), [])
   const handleOpenedSkillsChange = useCallback((next) => setOpenedSkills(next), [])
   const handleRandomPicksChange = useCallback((next) => setRandomPicks(next), [])
   const handleSetbackRollsChange = useCallback((next) => setSetbackRolls(next), [])
+  const handleSetbackResolutionChange = useCallback((next) => setSetbackResolution(next), [])
 
   useEffect(() => {
     if (!sheetId) return
@@ -71,6 +82,9 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     api.get('/char-ref/skills')
       .then(res => setRefSkills(res.data.skills ?? []))
       .catch(() => setRefSkills([]))
+    api.get(`/creation/${sheetId}/step5/ref`)
+      .then(res => setAdvantagesCatalog(res.data ?? []))
+      .catch(() => setAdvantagesCatalog([]))
   }, [sheetId])
 
   // ─── Données filtrées ──────────────────────────────────────────
@@ -110,6 +124,15 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   // d'années, une tranche déjà jetée peut devenir hors bornes — filtrée ici plutôt que purgée en
   // état, ProAdvantagesAndSetbacks se remonte avec cette valeur à chaque retour sur la sous-step.
   const validSetbackRolls = setbackRolls.filter(r => r.blockIndex < setbackBlockCount)
+  // Même garde pour la résolution en cours (même raison : une tranche redevenue hors bornes ne doit
+  // pas rester "en cascade" indéfiniment côté UI).
+  const validSetbackResolution = setbackResolution && setbackResolution.blockIndex < setbackBlockCount ? setbackResolution : null
+
+  // Force Polaris (adv_077/078/079) — condition du palier 2 du Revers Polaris (§8.2). Choisie
+  // exclusivement en Step5 (jamais accordée en Step2) : lors d'un 1er passage linéaire, step5Data
+  // est encore null, donc faux — cohérent avec le serveur qui interroge char_advantages à cet
+  // instant. Ne redevient pertinent que si le joueur revient sur Step4 après avoir déjà fait Step5.
+  const forcePolaris = !!step5Data?.advantages?.some(id => ['adv_077', 'adv_078', 'adv_079'].includes(id))
 
   // ─── Handlers ──────────────────────────────────────────────────
   const handleSelectGeoOrigin = (code) => {
@@ -428,14 +451,18 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
     careers={refData.careers}
     totalYears={totalCareerYears}
     setbackRows={refData.setbacks}
+    advantagesCatalog={advantagesCatalog}
     initialProAdvantages={proAdvantages}
     initialRandomPicks={randomPicks}
     initialSetbackRolls={setbackRolls}
+    initialSetbackResolution={validSetbackResolution}
     onProAdvantagesChange={handleProAdvantagesChange}
     onRandomPicksChange={handleRandomPicksChange}
     onSetbackRollsChange={handleSetbackRollsChange}
+    onSetbackResolutionChange={handleSetbackResolutionChange}
     randomProAdvantagesEnabled={randomProAdvantagesEnabled}
     reversEnabled={reversEnabled}
+    forcePolaris={forcePolaris}
     onNext={handleSubNext}
     onPrev={handleSubPrev}
   />

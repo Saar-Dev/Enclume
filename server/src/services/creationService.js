@@ -9,10 +9,13 @@ import { AppError } from '../lib/AppError.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
-import { computeProAdvantageAllocation, computeRandomBudgetDelta, resolveCareerRandomEffects } from '../../../shared/careerAdvantages.js'
-import { getSetbackBlockCount, resolveSetback } from '../../../shared/careerSetbacks.js'
+import { computeProAdvantageAllocation, computeRandomBudgetDelta, computeCareerBlockSavings } from '../../../shared/careerAdvantages.js'
+import { getSetbackBlockCount, resolveSetback, mapSetbackToCareerBlock } from '../../../shared/careerSetbacks.js'
+import { resolveSetbackEffects } from '../../../shared/setbackEffects.js'
+import { aggregateTraitGauges, applyFractionalLoss } from '../../../shared/traitAggregation.js'
 import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
-import { addAdvantage } from './advantageService.js'
+import { addAdvantage, grantAdvantage } from './advantageService.js'
+import { addMutation } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { applyMutationIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
 import { resolveOwnership } from './characterOwnershipService.js'
@@ -167,7 +170,10 @@ export async function getStep4RefData(sheetId) {
   .leftJoin('ref_skills as rs', 'rbs.skill_id', 'rs.id')
   .select('rbs.*', 'rs.label as skill_name', 'rs.family'),
     db('ref_careers').select('*'),
-    db('ref_career_skills as rcs').join('ref_skills as rs', 'rcs.skill_id', 'rs.id').select('rcs.*', 'rs.family'),
+    // rs.label (Lot 6, "Formation"/skill_choice) : le sélecteur de compétence côté UI a besoin d'un
+    // texte lisible, pas seulement skill_id — même patron que bgSkills (rs.label as skill_name)
+    // juste au-dessus, jamais utilisé jusqu'ici pour les compétences de carrière.
+    db('ref_career_skills as rcs').join('ref_skills as rs', 'rcs.skill_id', 'rs.id').select('rcs.*', 'rs.family', 'rs.label'),
     db('ref_career_titles').select('*'),
     db('ref_career_prerequisites').select('*'),
     db('ref_career_point_categories').select('*').orderBy('sort_order'),
@@ -393,6 +399,16 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       if (!Array.isArray(careersData) || careersData.length === 0) {
         throw new AppError(400, 'Au moins une carrière requise')
       }
+      // Le client (CareersAllocator.jsx handleAdd) interdit déjà d'ajouter deux fois le même
+      // career_id — le serveur reste autoritaire (core.md) et ne doit pas se reposer sur cette
+      // seule garde client. Même patron que seenSetbackBlocks/seenBlocks plus bas dans ce fichier.
+      const seenCareerIds = new Set()
+      for (const c of careersData) {
+        if (seenCareerIds.has(c.career_id)) {
+          throw new AppError(400, `Carrière en double : ${c.career_id}`)
+        }
+        seenCareerIds.add(c.career_id)
+      }
 
       // OPT-08 (skill_max_level, défaut OFF) : revalidation serveur du plafond par années —
       // voir shared/careerSkills.js (getSkillCap).
@@ -425,10 +441,143 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         throw new AppError(400, `Revers obligatoire non résolu : ${maxSetbackBlocks - seenSetbackBlocks.size} tirage(s) manquant(s)`)
       }
 
+      // Mécanisation des Revers (Lot 4, PLAN_WIZARD_AVANTAGES.md §17) : résolution AVANT la boucle
+      // carrières — les effets économiques (income_multiplier, points_cap) doivent être routés vers
+      // le bon (carrière, tranche)/budget avant que ces calculs ne s'exécutent plus bas.
+      // Force Polaris (§8.2) : vérifié ici par l'appelant, jamais par le résolveur lui-même — les
+      // 3 variantes (dormante/incontrôlée/maîtrisée) comptent toutes comme "doté du Polaris".
+      const forcePolarisRow = await trx('char_advantages')
+        .whereIn('advantage_id', ['adv_077', 'adv_078', 'adv_079'])
+        .where({ char_sheet_id: sheetId })
+        .whereNull('removed_at')
+        .first()
+      const setbackContext = { force_polaris: !!forcePolarisRow }
+
+      const characterEffectTotals = {
+        attributes: {}, celebrity: 0, skillPoints: 0, traits: [], grantedMutations: [],
+        grantedAdvantages: [], pendingChoices: [],
+        // celebrityFractions (Lot 6, Diffamation "un quart de sa Célébrité") : jamais additionné
+        // directement à `celebrity` (le résolveur ne connaît pas le total accumulé, §5bis du plan) —
+        // appliqué une seule fois après coup via applyFractionalLoss, même principe que
+        // shared/traitAggregation.js#aggregateTraitGauges pour les jauges char_traits.
+        celebrityFractions: [],
+      }
+      let extraSkillBudgetDelta = 0
+      const categoryBudgetDeltaByCareerIndex = new Map()
+      const extraEffectsByCareerIndexAndBlock = new Map()
+
+      // try/catch dédié : resolveSetbackEffects (shared/setbackEffects.js) lève des Error brutes
+      // (Revers cible introuvable, option de choix invalide, jet hors plages, récursion trop
+      // profonde, type inconnu) — jamais des AppError, contrairement à computeCareerBlockSavings
+      // plus bas qui a déjà ce filet. Sans lui, une donnée de Revers mal formée (faute de saisie
+      // Lot 6) remontait en 500 non géré au lieu d'un 400 propre.
+      try {
+      for (const sb of setbackRolls) {
+        const result = resolveSetbackEffects(sb.roll, setbackRows, sb.answers || {}, setbackContext)
+        if (result.status === 'pending') {
+          throw new AppError(400, `Revers incomplet : ${result.kind === 'choice' ? 'un choix' : 'un jet'} manquant (${result.key})`)
+        }
+        const location = mapSetbackToCareerBlock(sb.blockIndex, careersData)
+        if (!location) throw new AppError(400, 'Revers invalide : tranche au-delà des années de carrière')
+        const { careerIndex, blockIndexWithinCareer } = location
+
+        for (const effect of result.effects) {
+          switch (effect.type) {
+            case 'attribute':
+              characterEffectTotals.attributes[effect.target] = (characterEffectTotals.attributes[effect.target] ?? 0) + effect.value
+              break
+            case 'celebrity':
+              characterEffectTotals.celebrity += effect.value
+              break
+            case 'celebrity_fraction':
+              characterEffectTotals.celebrityFractions.push(effect.value)
+              break
+            case 'skill_points':
+              characterEffectTotals.skillPoints += effect.value
+              break
+            case 'trait':
+              characterEffectTotals.traits.push({
+                trait_type: effect.trait_type, op: effect.op, value: effect.value ?? null, note: effect.note ?? null,
+              })
+              break
+            case 'grant_advantage':
+              characterEffectTotals.grantedAdvantages.push({ advantage_id: effect.advantage_id })
+              break
+            case 'manual_grant_choice':
+              characterEffectTotals.pendingChoices.push({ trait_type: effect.trait_type, candidates: effect.candidates })
+              break
+            case 'points_cap':
+              // Ajustement ponctuel de budget (delta = plafond - taux normal), PAS un plafonnement
+              // par bloc — §17 : computeSkillAllocation (10 pts/an, character-wide) et
+              // computeProAdvantageAllocation (5 pts/an, PAR carrière) sont les seules autorités
+              // budgétaires existantes, jamais un nouveau suivi "par année".
+              if (effect.scope === 'skill_points') {
+                extraSkillBudgetDelta += effect.value - 10
+              } else if (effect.scope === 'category_points') {
+                categoryBudgetDeltaByCareerIndex.set(
+                  careerIndex, (categoryBudgetDeltaByCareerIndex.get(careerIndex) ?? 0) + (effect.value - 5)
+                )
+              } else {
+                throw new AppError(400, `points_cap : portée inconnue (${effect.scope})`)
+              }
+              break
+            case 'income_percent':
+            case 'income_multiplier':
+            case 'income_multiplier_permanent': {
+              if (!extraEffectsByCareerIndexAndBlock.has(careerIndex)) extraEffectsByCareerIndexAndBlock.set(careerIndex, new Map())
+              const byBlock = extraEffectsByCareerIndexAndBlock.get(careerIndex)
+              if (!byBlock.has(blockIndexWithinCareer)) byBlock.set(blockIndexWithinCareer, [])
+              byBlock.get(blockIndexWithinCareer).push(effect)
+              break
+            }
+            case 'narrative':
+              break
+            default:
+              throw new AppError(400, `Effet de Revers non géré côté serveur : ${effect.type}`)
+          }
+        }
+      }
+      } catch (err) {
+        if (err instanceof AppError) throw err
+        throw new AppError(400, `Revers invalide : ${err.message}`)
+      }
+
       // Reset avant réapplication — char_skills/char_careers ne sont écrits que par ce
       // bloc pendant le Wizard (avant verrouillage) : wipe sûr, pas d'orphelin FK possible.
       await trx('char_skills').where({ char_sheet_id: sheetId }).del()
       await trx('char_careers').where({ char_sheet_id: sheetId }).del()
+      // Idem char_traits (Lot 6, Allié/Contact/Ennemi/Opposant/Employer gagnés par tirage) :
+      // aucun autre écrivain dans tout le code (§Lot C, PLAN_WIZARD_AVANTAGES.md), wipe sûr.
+      await trx('char_traits').where({ char_sheet_id: sheetId }).del()
+      // char_mutations : ne wipe QUE source='revers' — seul écrivain de cette valeur est la boucle
+      // addMutation plus bas dans ce même bloc STEP4 (Revers/tirage carrière → grant_mutation).
+      // 'campaign' (octroi MJ en jeu, AdvantagesPanel.jsx) n'est jamais écrit pendant le Wizard —
+      // wizard_locked_at n'est pas encore posé à ce stade, donc aucun octroi 'campaign' légitime ne
+      // peut exister sur cette fiche ; source='chosen'/'random' (STEP3) reste intact (§14 du plan).
+      await trx('char_mutations').where({ char_sheet_id: sheetId, source: 'revers' }).del()
+      // char_advantages : capturer AVANT le wipe les champs mod_identity des octrois 'revers'
+      // qui vont disparaître (même patron que STEP5 l.818-828 ci-dessous) — recomputeIdentity()
+      // recalcule intégralement à partir de ce qui reste actif, jamais une restauration de valeur
+      // précédente (identityService.js) ; sans cet appel, un champ d'identité posé par un Revers
+      // devenu obsolète (tirage changé, Revers retiré) resterait figé sur sa dernière valeur.
+      const previouslyActiveTraumaAdvantages = await trx('char_advantages as ca')
+        .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
+        .whereNull('ca.removed_at')
+        .where({ 'ca.char_sheet_id': sheetId, 'ca.acquired_during': 'revers' })
+        .whereNotNull('ra.mod_identity')
+        .select('ra.mod_identity')
+      const reversIdentityFieldsSet = new Set()
+      for (const { mod_identity } of previouslyActiveTraumaAdvantages) {
+        const parsed = normalizeModIdentity(mod_identity)
+        if (parsed) Object.keys(parsed).forEach((k) => reversIdentityFieldsSet.add(k))
+      }
+      // ne wipe QUE acquired_during='revers' — seul écrivain de cette valeur est la boucle
+      // grantAdvantage plus bas dans ce même bloc STEP4 (Revers → grant_advantage). Sans ce wipe,
+      // grantAdvantage (INSERT nu, contrainte unique (char_sheet_id, advantage_id) WHERE
+      // removed_at IS NULL) lève AppError(409) dès le 2e reconcile qui retrouve le même octroi —
+      // corrigé ici avec la même logique que char_traits/char_mutations ci-dessus, jamais
+      // 'creation_step5'/'campaign'/'adjustment' (propriété d'autres blocs, cf. STEP5 plus bas).
+      await trx('char_advantages').where({ char_sheet_id: sheetId, acquired_during: 'revers' }).del()
 
       // Backgrounds → compétences
       const bgRows = await resolveStep4Backgrounds(trx, { originGeo, originSoc, training, higherEd })
@@ -450,13 +599,14 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
 
       // Carrières
       // totalCareerYears calculé plus haut (validation Revers) — même somme, réutilisée ici.
+      // characterEffectTotals déclaré plus haut (avant la résolution des Revers) — rempli côté
+      // Revers ci-dessus, complété côté tirages de carrière ci-dessous, consommé après la boucle.
       const careersCtx = []
-      // Accumulateur des effets de tirages 1D10 (Lot 6, mécanisation) — recalculé intégralement à
-      // chaque reconcile à partir des picks courants (jamais accumulé entre deux appels), rempli
-      // pendant la boucle carrières (où les tirages sont résolus), consommé après (attributs,
-      // char_sheet). resolveCareerRandomEffects exclut déjà les picks useAsPoints=true.
-      const characterEffectTotals = { attributes: {}, celebrity: 0, skillPoints: 0 }
-      for (const career of careersData) {
+      // "Mise à prix" (Lot 2, §Lot E point 5) : Map(career_id -> Map(roll -> montant sols de la
+      // dernière occurrence)) — un sous-historique par carrière, jamais de fuite entre deux métiers
+      // différents du même personnage. computeCareerBlockSavings ne connaît qu'une carrière à la fois.
+      const miseAPrixHistory = new Map()
+      for (const [careerIndex, career] of careersData.entries()) {
         const refCareer = await trx('ref_careers').where({ id: career.career_id }).first()
         if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
         if (!career.years || career.years < 1) throw new AppError(400, `Années invalides pour ${refCareer.name}`)
@@ -501,20 +651,33 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         }
         const randomBudgetDelta = computeRandomBudgetDelta(randomPicks, randomBenefitRows)
 
-        // Mécanisation (Étape 1) : effets réels résolus depuis randomBenefitRows.effects, recalculés
-        // intégralement à chaque reconcile (jamais accumulés). [HYPOTHÈSE] non tranchée avec Saar :
-        // income_percent/income_multiplier s'appliquent ici à l'ensemble des économies du métier
-        // (modèle salary*years déjà plat, pas de découpage par tranche de 5 ans) plutôt qu'à partir
-        // du bloc où le tirage tombe — simplification assumée, à revoir si le rendu ne convient pas.
-        const resolvedEffects = resolveCareerRandomEffects(randomPicks, randomBenefitRows)
-        const savings = Math.round(
-          salary * career.years * resolvedEffects.incomeMultiplier * (1 + resolvedEffects.incomePercent / 100)
-        )
-        for (const [attr, delta] of Object.entries(resolvedEffects.attributes)) {
+        // Mécanisation (Lot 2, PLAN_WIZARD_AVANTAGES.md §Lot E) : économies calculées tranche de 5
+        // ans par tranche, pas en un seul total plat — fonction pure extraite dans shared/ (réutilisable
+        // client + serveur, même principe que resolveCareerRandomEffects). L'historique "Mise à prix"
+        // est scopé par career_id ici (l'appelant), la fonction ne connaît qu'une carrière à la fois.
+        let blockResult
+        try {
+          blockResult = computeCareerBlockSavings(randomPicks, randomBenefitRows, {
+            salary,
+            years: career.years,
+            celebrityBefore: characterEffectTotals.celebrity,
+            miseAPrixHistory: miseAPrixHistory.get(career.career_id) ?? new Map(),
+            // Revers (Lot 4, §17) rattachés à cette carrière précise via mapSetbackToCareerBlock.
+            extraEffectsByBlock: extraEffectsByCareerIndexAndBlock.get(careerIndex) ?? new Map(),
+          })
+        } catch (err) {
+          throw new AppError(400, `Tirage 1D10 invalide pour ${refCareer.name} : ${err.message}`)
+        }
+        miseAPrixHistory.set(career.career_id, blockResult.miseAPrixHistory)
+        const savings = blockResult.savings
+        const resolvedEffects = { categories: blockResult.categories }
+        for (const [attr, delta] of Object.entries(blockResult.attributes)) {
           characterEffectTotals.attributes[attr] = (characterEffectTotals.attributes[attr] ?? 0) + delta
         }
-        characterEffectTotals.celebrity += resolvedEffects.celebrity
-        characterEffectTotals.skillPoints += resolvedEffects.skillPoints
+        characterEffectTotals.celebrity += blockResult.celebrity
+        characterEffectTotals.skillPoints += blockResult.skillPoints
+        characterEffectTotals.traits.push(...blockResult.traits)
+        characterEffectTotals.grantedMutations.push(...blockResult.grantedMutations)
 
         // Q3 — validation par métier du coût avantages pro (shared/careerAdvantages.js, Lot 4).
         // Volontairement basée sur career.proAdvantages SEUL (allocation manuelle du joueur) —
@@ -522,10 +685,12 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         // ce calcul sous peine de fausser le budget validé ; stocké séparément (random_effects_applied)
         // et additionné uniquement côté lecture (fiche personnage), pas ici.
         const pointCatRows = await trx('ref_career_point_categories').where({ career_id: career.career_id })
+        // Revers points_cap (Renvoi, §17) : ajustement ponctuel de CE budget-ci (5 pts/an, PAR
+        // carrière) — additionné au delta déjà existant du tirage, jamais un plafond par tranche.
         const advResult = computeProAdvantageAllocation(career.proAdvantages || {}, {
           categories: pointCatRows.map(c => c.category),
           years: career.years,
-          randomBudgetDelta,
+          randomBudgetDelta: randomBudgetDelta + (categoryBudgetDeltaByCareerIndex.get(careerIndex) ?? 0),
         })
         if (advResult.errors.length > 0) {
           const err = advResult.errors[0]
@@ -559,8 +724,28 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           .filter(s => (step4.openedSkills || []).includes(s.skill_id))
           .map(s => s.skill_id)
         const nonConditionalRows = await trx('ref_career_skills').where({ career_id: career.career_id, conditional: false })
+
+        // "Formation" (Lot 6, skill_choice) : la compétence choisie doit appartenir à la liste
+        // professionnelle de CE métier (serveur autoritaire, jamais confiance au client) — même
+        // patron de validation que openedSkills/validateChoiceGroups juste au-dessus. Un doublon
+        // avec nonConditionalRows/openedConditionalIds est inoffensif (isProSkill/computeSkillAllocation,
+        // shared/careerSkills.js, ne fait qu'un test d'appartenance, jamais un comptage) — pas besoin
+        // de dédoublonner.
+        const careerSkillIds = new Set([
+          ...nonConditionalRows.map(s => s.skill_id),
+          ...conditionalRows.map(s => s.skill_id),
+        ])
+        for (const skillId of blockResult.chosenSkills) {
+          if (!careerSkillIds.has(skillId)) {
+            throw new AppError(400, `Formation invalide pour ${refCareer.name} : compétence hors liste professionnelle (${skillId})`)
+          }
+        }
+
         careersCtx.push({
-          skills: [...nonConditionalRows.map(s => s.skill_id), ...openedConditionalIds],
+          skills: [
+            ...nonConditionalRows.map(s => s.skill_id), ...openedConditionalIds,
+            ...blockResult.chosenSkills, ...blockResult.grantedSkills,
+          ],
           years: career.years,
         })
       }
@@ -585,6 +770,9 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         refSkills: refSkillsRows,
         openedSkills: step4.openedSkills || [],
         skillMaxLevelEnabled: settings.skill_max_level,
+        // Revers points_cap (Renvoi, §17) : ajustement ponctuel character-wide, jamais un nouveau
+        // suivi par année — extraSkillBudgetDelta calculé plus haut lors de la résolution des Revers.
+        extraBudgetDelta: extraSkillBudgetDelta,
       })
       if (allocResult.errors.length > 0) {
         const err = allocResult.errors[0]
@@ -636,10 +824,85 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       // Célébrité / points de compétence gagnés par tirage — set absolu (aucun autre écrivain
       // pendant la création : xp_available n'est touché qu'en jeu via routes/character/char-sheet.js,
       // celebrity n'existe que depuis cette mécanisation).
+      // celebrityFractions (Lot 6, Diffamation) appliquées ici, une seule fois, contre le total brut
+      // déjà accumulé ci-dessus (shared/traitAggregation.js#applyFractionalLoss — le résolveur de
+      // Revers n'a jamais accès à ce total, §5bis du plan).
       await trx('char_sheet').where({ id: sheetId }).update({
-        celebrity: characterEffectTotals.celebrity,
+        celebrity: applyFractionalLoss(characterEffectTotals.celebrity, characterEffectTotals.celebrityFractions),
         xp_available: characterEffectTotals.skillPoints,
       })
+
+      // Traits (Lot C : Allié/Contact/Ennemi/Opposant/Employer) — recalculés intégralement à partir
+      // de characterEffectTotals.traits (jamais accumulés entre deux appels, même principe que
+      // celebrity/skillPoints ci-dessus). Wipe déjà fait plus haut (char_traits.del()).
+      // Agrégation (dont gauge_fraction_delta, Lot 6, Diffamation/Trahison) extraite en fonction pure
+      // testée : shared/traitAggregation.js#aggregateTraitGauges.
+      const { gauges: traitGauges, notes: traitNotes } = aggregateTraitGauges(characterEffectTotals.traits)
+      // Conversion Opposant→Ennemi — seule valeur connue de ref_careers.enemy_rule en base
+      // (§8.4, PLAN_WIZARD_AVANTAGES.md) : 3 Opposants échangés contre 1 Ennemi. Une autre valeur
+      // de enemy_rule n'existe nulle part aujourd'hui ; ne pas généraliser sans l'avoir vue.
+      if ((traitGauges.opponent ?? 0) >= 3) {
+        const conversions = Math.floor(traitGauges.opponent / 3)
+        traitGauges.opponent -= conversions * 3
+        traitGauges.enemy = (traitGauges.enemy ?? 0) + conversions
+      }
+      for (const [traitType, gauge] of Object.entries(traitGauges)) {
+        if (!gauge && !traitNotes[traitType]) continue
+        await trx('char_traits').insert({
+          char_sheet_id: sheetId,
+          trait_type: traitType,
+          params: JSON.stringify({ gauge, note: traitNotes[traitType] ?? null, pnj_id: null }),
+        })
+      }
+
+      // Mutations accordées par tirage (grant_mutation) — même transaction que le reste de STEP4
+      // (addMutation accepte un trxOpt depuis cette session, mutationService.js) : un rollback
+      // plus tard dans ce même reconcile doit défaire l'octroi, pas le laisser commité isolément.
+      // Wipe source='campaign' déjà fait plus haut.
+      for (const { mutation_id, subtype_id } of characterEffectTotals.grantedMutations) {
+        await addMutation(sheetId, mutation_id, subtype_id, 'revers', trx)
+      }
+
+      // Avantages/désavantages accordés par un Revers (grant_advantage — Ennemi, Recherché,
+      // Infirmité, Allergie sévère... §Lot B/C) — sans compensation PC, acquired_during='revers'.
+      // grantAdvantage accepte un trxOpt depuis cette session (advantageService.js), même raison
+      // d'atomicité que addMutation. STEP5 ne wipe que acquired_during='creation_step5' (§14/§17) :
+      // ces octrois survivent à la réconciliation de STEP5, jamais écrasés.
+      for (const { advantage_id } of characterEffectTotals.grantedAdvantages) {
+        await grantAdvantage(sheetId, advantage_id, 'revers', trx)
+      }
+      // Recompute des champs d'identité affectés par les octrois 'revers' retirés par le wipe
+      // ci-dessus (reversIdentityFieldsSet) — grantAdvantage() vient de réappliquer directement
+      // les mod_identity des NOUVEAUX octrois (applyIdentityGrant interne), mais rien ne recalcule
+      // un champ qui n'est plus couvert par aucun octroi 'revers' de cette résolution. Appelé après
+      // coup : recomputeIdentity relit l'état actuel (mutations puis avantages actifs) et retombe
+      // sur le défaut si plus rien ne couvre le champ (identityService.js) — jamais une valeur
+      // Step1 écrasée à tort, seuls les champs de reversIdentityFieldsSet sont concernés.
+      if (reversIdentityFieldsSet.size) {
+        await recomputeIdentity(trx, sheetId, [...reversIdentityFieldsSet])
+      }
+
+      // Choix manuels en attente (manual_grant_choice — Phobie/Déséquilibre mental, Recherché,
+      // Infirmité : variante à définir à table, Joueur+MJ, §Lot B/§17) — persisté en char_traits
+      // pour que le signal survive à la fermeture du Wizard, sinon perdu sans trace pour le MJ.
+      // Dédoublonné par trait_type (trouvé en relecture critique, 2026-07-22, peuplement Lot 6) :
+      // plusieurs Revers peuvent produire le même trait_type dans un seul reconcile (ex. Fugitif ET
+      // Vendetta accordent tous deux 'wanted') — sans ce regroupement, deux lignes char_traits
+      // `pending_wanted` distinctes auraient été insérées, jamais nettoyées entre elles (aucune
+      // contrainte d'unicité sur char_traits).
+      const pendingCandidatesByType = new Map()
+      for (const { trait_type, candidates } of characterEffectTotals.pendingChoices) {
+        const merged = new Set(pendingCandidatesByType.get(trait_type) ?? [])
+        for (const c of candidates) merged.add(c)
+        pendingCandidatesByType.set(trait_type, [...merged])
+      }
+      for (const [trait_type, candidates] of pendingCandidatesByType) {
+        await trx('char_traits').insert({
+          char_sheet_id: sheetId,
+          trait_type: `pending_${trait_type}`,
+          params: JSON.stringify({ candidates, note: 'à définir à table' }),
+        })
+      }
     }
 
     // ── STEP 5 : avantages/désavantages ────────────────────────────────────────
@@ -661,10 +924,13 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         if (parsed) Object.keys(parsed).forEach((k) => identityFieldsSet.add(k))
       }
 
-      // Reset avant réapplication — pendant le Wizard, char_advantages n'est écrit que
-      // par cette boucle : suppression directe + remise à zéro du ledger, pas de
-      // décrémentation ligne-à-ligne via removeAdvantage.
-      await trx('char_advantages').where({ char_sheet_id: sheetId }).del()
+      // Reset avant réapplication — ne wipe QUE acquired_during='creation_step5' : cette boucle
+      // est le seul écrivain de cette valeur précise, mais char_advantages porte aussi 'revers'
+      // (Revers, wipé/réécrit par le bloc STEP4 ci-dessus) et potentiellement 'campaign'/
+      // 'adjustment' (post-Wizard, hors reconcile) — un .del() inconditionnel ici effacerait un
+      // octroi 'revers' déjà réécrit dans la même transaction (§14/§17 du plan). Suppression
+      // directe + remise à zéro du ledger, pas de décrémentation ligne-à-ligne via removeAdvantage.
+      await trx('char_advantages').where({ char_sheet_id: sheetId, acquired_during: 'creation_step5' }).del()
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step5: 0, pc_gained_desavantages: 0 })
       for (const advantageId of advantages) {
         await addAdvantage(sheetId, advantageId, 'creation_step5', trx)

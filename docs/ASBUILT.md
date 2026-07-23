@@ -836,6 +836,11 @@ Enclume/
 | 20260713_155_world_elevator_passengers | Attachement durable token/cabine, position locale JSONB et unicité d'un passager dans une seule cabine. |
 | *(156-157 : chantier Fusion Kiwi, non documentées ici — table ASBUILT.md en retard sur ces numéros, hors scope de cette session)* | |
 | 158_battlemap_texture_usage_cascade | Écrite et appliquée en base (batch 108) pendant une session sur `dev/Saar`/`fusion-kiwi-v2`, un temps dupliquée indépendamment sur `master` (commit `80e75e0`, contenu byte-identique, réconcilié lors de la bascule `dev/Saar` = branche exclusive du 2026-07-15) — provoquait un crash serveur au démarrage sur le worktree `master` (`knex_migrations` référençant un fichier absent, root-cause : ce worktree a partagé la même base Postgres locale que `fusion-kiwi-v2`). Correctif réel et isolé : `battlemap_texture_usage.battlemap_id` référençait `battlemaps.id` sans `ON DELETE CASCADE` (contrairement aux ~15 autres tables enfants d'une campagne), bloquant `DELETE /api/campaigns/:id` dès qu'une battlemap de la campagne a des textures posées. Voir `docs/JOURNAL6.md` Session 142 |
+| *(159-193 : chantiers CHOC1/Moding/Wizard antérieurs — non détaillées ici, table en retard sur ces numéros)* | |
+| 194_ref_setbacks_revers_effects | `docs/PLAN_WIZARD_AVANTAGES_IMPLANTATION.md` §5ter — peuple `ref_setbacks.effects` (JSONB, colonne réservée depuis la migration 188) pour les 27 Revers réels, source unique `shared/reversEffectsData.js` (28 tests). Round-trip `down` fourni (remise à `'[]'`) |
+| 196_ref_career_random_benefits_effects | Idem §5quater — peuple `ref_career_random_benefits.effects` pour les 36 métiers restants (`chasseur_primes` déjà peuplé migration 188), source unique `shared/careerRandomEffectsData.js` (21 tests). Round-trip `down` fourni |
+| 198_chasseur_primes_result4_choice | Correctif isolé sur une donnée déjà en production (jamais mélangé au peuplement neuf 196) : `chasseur_primes` résultat 4 (migration 188) appliquait son bonus revenus/célébrité/compétences de façon inconditionnelle, alors que le résultat est un choix accepte/refuse (comme Médecin/4, Mercenaire/4). Round-trip `down` restaure l'ancien effet |
+| 200_pirate_result3_missing_effects | Correctif isolé (même principe que 198) : `pirate` résultat 3 (migration 196) n'avait que le `money_reward`, oubliant Célébrité +2/Matériel +2 pourtant explicites au RAW — trouvé lors d'une 2e passe critique dédiée. Round-trip `down` restaure l'effet incomplet d'origine |
 
 ---
 
@@ -1096,6 +1101,25 @@ difficulty_dc     = modificateur signé (-20 à +10)
 Malus santé (blessures) : non-cumulatif — pire blessure seule retenue (LdB p.236).
 Malus encombrement : règle maison, s'additionne au malus santé.
 
+---
+## Corps à Corps Polaris (sessions 67–74)
+
+### Serveur
+- Migrations **63** (`chk_action_type` étendu à `'melee'`) et **64** (`state_combat_mode` avec CHECK `normal`/`offensif`/`charge`/`defensif`/`retraite`).
+- `resolveMeleeAction` (dans `socketCombatHelpers.js`) — jet d’opposition attaque/défense, prise en compte des modes de combat, de l’allonge, des multi‑adversaires et des attaques multiples. Bifurcation PJ (attente défense interactive) / PNJ (résolution automatique).
+- `handleChargeFlow` et `handleRetraiteMove` — gestion spécifique des modes Charge (allure lente imposée, bonus dégâts) et Retraite (déplacement gratuit sans attaque d’opportunité). `freeMove` étendu au mode Retraite.
+- **Multi‑adversaires** — `multiAdversaryMalus()` et `countAdversaires()` utilisent les distances réelles (moteur monde) pour déterminer le nombre d’adversaires au contact et appliquer les malus –5/–7/–10 (LdB). Le malus est répercuté dans les jets d’attaque et de défense.
+- **Attaque multiple mêlée** — `mapActions.melee` devient un tableau (1 à 3 cibles), même contrat que CaC 4b. Malus –5/–7, insertion groupée via `declaration_group_id` pour l’étalement de phase, caps serveur, exclusion des modes défensifs.
+- `COMBAT_MELEE_DEFENSE_PROMPT` / `CONFIRM` pour la résolution interactive des défenses PJ, avec transport des modificateurs de mode et d’encerclement.
+
+### Client
+- `CombatActionWindow.jsx` — panneau CaC (armes de contact, allonge, mode de combat, cibles multiples via `meleePendingTokenIds` array). Reset de `has_announced` pendant la déclaration.
+- `CombatGmDeclareWindow.jsx` — file séquentielle PNJ avec les mêmes options de mode et multi‑cibles, chips de combat et gestion des états initiaux.
+- `CombatResultMelee` (dans `CombatResultPanels.jsx`) — affichage des jets d’attaque/défense colorés, badge ⚠ d’encerclement si un malus multi‑adversaires est appliqué.
+- Modes Défensif/Retraite : chips verts, l’attaque est masquée, seule la défense est résolue. La Retraite déclenche un toggle de zone lente avec `ini_mod=0`.
+
+### État
+✅ Tous les sprints CaC 1 à 4b livrés et testés en sessions 67–74. Aucune régression connue.
 ---
 
 ## Échange / Commerce (tradeService.js) — sessions 124-153 ✅

@@ -54,6 +54,10 @@ export function getSkillCap(skillId, ctx) {
  *   baseMastery: { skill_id: number },
  *   refSkills: object[],
  *   openedSkills?: [skill_id],   // compétences réservées (X) déjà ouvertes explicitement (Lot 5)
+ *   extraBudgetDelta?: number,   // ajustement ponctuel (ex. Revers Renvoi, "5 points de compétence
+ *                                // seulement" pour l'année du Revers = delta -5 sur le taux normal
+ *                                // de 10/an, PLAN_WIZARD_AVANTAGES.md §17) — défaut 0, jamais un
+ *                                // nouveau système de suivi par année, juste un delta character-wide
  * }
  * @returns {{ budget, totalCost, remaining, perSkill: object[], errors: object[] }}
  */
@@ -63,7 +67,7 @@ export function computeSkillAllocation(skillAllocations, ctx) {
   const openedSkills = ctx.openedSkills || []
   const refSkills = ctx.refSkills || []
 
-  const budget = careers.reduce((sum, c) => sum + 10 * c.years, 0)
+  const budget = careers.reduce((sum, c) => sum + 10 * c.years, 0) + (ctx.extraBudgetDelta ?? 0)
 
   const perSkill = []
   const errors = []

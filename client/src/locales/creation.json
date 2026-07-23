@@ -338,6 +338,7 @@
     "career_random_narrative_note": "Narratif — n'affecte pas automatiquement la fiche de personnage.",
     "career_random_applied_note": "Effet appliqué automatiquement à la fiche de personnage.",
     "career_random_points_toggle": "Convertir en {{n}} points d'Avantages pro",
+    "career_random_skill_choice_placeholder": "Choisir une compétence professionnelle…",
     "career_random_points_label": "Points d'Avantages pro",
     "pro_advantages_title": "Avantages professionnels",
     "pro_advantages_intro": "Répartis tes points d'Avantages professionnels et tes tirages 1D10, pour chaque métier retenu.",
@@ -346,6 +347,15 @@
     "setback_block": "Année {{year}}",
     "setback_roll_btn": "Lancer 1D100",
     "setback_status_left": "Il reste des tranches de Revers obligatoires à jouer.",
+    "setback_applied_note": "Effet appliqué automatiquement à la fiche de personnage.",
+    "setback_narrative_note": "Narratif — n'affecte pas automatiquement la fiche de personnage.",
+    "setback_suspense_roll_btn": "Lancer le jet",
+    "setback_manual_grant_note": "À traiter à table avec le MJ : {{candidates}}.",
+    "setback_roll_hit": "{{target}} : {{value}} → effet appliqué",
+    "setback_roll_miss": "{{target}} : {{value}} → sans effet",
+    "setback_roll_detail": "Jet de détail : {{value}}",
+    "career_random_money_result": "Jet : {{roll}} × {{multiplier}} = {{amount}} sols",
+    "option_fallback": "Option {{n}}",
     "pro_adv_rules": {
       "celebrite": {
         "title": "Célébrité",
