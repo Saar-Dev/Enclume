@@ -160,4 +160,10 @@ export const WS = {
   // Rechargement drone (owner → drone, immédiat, sans offre)
   TRADE_DRONE_TRANSFER:   'trade:drone_transfer',     // PJ owner → serveur
   TRADE_DRONE_TRANSFERRED:'trade:drone_transferred',  // serveur → socket owner : confirmé (non utilisé v1 — ACK suffisant)
+
+  // Wizard collaboratif GM/Joueur (docs/PLAN_WIZARDCOLLAB.md Lot A1)
+  WIZARD_JOIN:        'wizard:join',         // joueur ou GM → serveur : rejoint la room wizard:<sheetId> { sheetId }
+  WIZARD_LOCK_UPDATE: 'wizard:lock_update',  // GM → serveur : bascule un seul verrou { sheetId, step, optionKey, locked }
+  WIZARD_LOCKS_SYNC:  'wizard:locks_sync',   // serveur → room wizard:<sheetId> : état complet des verrous { sheetId, locks }
+  WIZARD_ERROR:       'wizard:error',        // serveur → socket émetteur seul : erreur métier (accès refusé, pas MJ)
 }

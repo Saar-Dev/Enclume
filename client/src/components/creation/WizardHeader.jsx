@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next'
 
-export default function WizardHeader({ step, totalSteps, highestStep = 0, pcDispo, infos, onStepClick, hasCharacter = false, onOpenPeek, peekLoading = false }) {
+export default function WizardHeader({
+  step, totalSteps, highestStep = 0, pcDispo, infos, onStepClick, hasCharacter = false, onOpenPeek, peekLoading = false,
+  isGmView = false, guideModeActive = false, onToggleGuideMode,
+}) {
   const { t } = useTranslation('creation')
 
   return (
@@ -42,6 +45,17 @@ export default function WizardHeader({ step, totalSteps, highestStep = 0, pcDisp
         >
           {peekLoading ? '…' : t('wizard.open_sheet')}
         </button>
+
+        {isGmView && (
+          <button
+            className="btn-toggle"
+            data-active={guideModeActive}
+            onClick={onToggleGuideMode}
+            style={{ flex: '0 0 auto', padding: '8px 14px' }}
+          >
+            {t('wizard.guide_mode')}
+          </button>
+        )}
 
         <div className="wiz-header-pc-block">
           <span className="wiz-header-pc-label">{t('wizard.pc_label')}</span>

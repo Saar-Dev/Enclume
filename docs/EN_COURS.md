@@ -57,7 +57,11 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-17 — Session 156 : `docs/PLAN_BOUCLIER.md` Lots A+B+C
+> Dernière mise à jour (dev/Saar) : 2026-07-23 — Session 172 : `docs/PLAN_WIZARDCOLLAB.md` Lots
+> A1+A2+A3 (fondation serveur verrous, client, état existant + Step4 + câblage MJ) — codés au complet,
+> premiers correctifs UI confirmés par Saar en navigateur réel, scénario collaboratif à 2 sessions
+> encore à valider, migrations 201/203 à appliquer (voir verrou ci-dessous) ; Session 156 :
+> `docs/PLAN_BOUCLIER.md` Lots A+B+C
 > — ✅ codés et testés, Lot A/B fonctionnel confirmé Saar en combat réel, Lot C navigateur non encore
 > testé, item 81 ; **Session 157 (2026-07-18) : Sprint Tir Multi → refonte complète du moteur de tours
 > combat, planification uniquement (aucun code) — `docs/PLAN_COMBAT_TIMELINE.md` intégralement conçu
@@ -304,6 +308,63 @@ non testable hors jeu : mutation Corne en situation de Saisie réelle, Localisat
 Verrou retiré au commit de clôture, une fois Saar confirmé. Refonte CaC (`docs/PLAN_REFONTECAC.md`,
 verrou levé) reste différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif —
 cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
+
+🔒 En cours (Saar) : `docs/PLAN_WIZARDCOLLAB.md` Lots A1+A2+A3 — **codés au complet**, Lot B (bypass
+MJ des budgets/éligibilité à la finalisation) non commencé. Terminologie tranchée avec Saar : jamais
+"Brouillon" côté texte visible (jugé dénigrant) — "brouillon"/"draft" reste un terme de code interne
+uniquement (`creation_state`, `startCreation`, `GET .../drafts`), le concept UI s'appelle "Pool de
+personnages" (`docs/VOCABULARY.md`, même patron que Coffre/Vault).
+
+**A1 — fondation serveur des verrous.** Migration `201_wizard_locks.js`. `shared/wizardOptionKeys.js`
+(formatage de clé + algorithme de comparaison choix-unique/ensemble, fonctions pures partagées
+client/serveur, `CLAUDE.md` §7). 4 événements `WIZARD_*` (`shared/events.js`), room dédiée
+`wizard:<sheetId>` (jamais la room de campagne). `creationService.js` : `resolveSheetAccess` extrait
+de `router.param('sheetId')` (comportement identique, partagé REST/WS), `getWizardLocks`/
+`toggleWizardLock` (toggle atomique, jamais un remplacement de tableau), `enforceWizardLocks` (rejet
+uniquement sur changement réel d'un slot verrouillé, jamais sur resoumission de l'état déjà acquis —
+sinon le Wizard se bloquerait dès qu'une option serait verrouillée), nettoyage des verrous dans
+`lockWizard`. `socket/socketWizard.js` (`WIZARD_JOIN` quitte les rooms `wizard:*` précédentes avant
+de rejoindre). `WIZARD_ERROR` envoie `{system:true, i18nKey}`, jamais de texte FR figé (norme
+`docs/SYSTEME/LOCALISATION.md` §4, trouvée et appliquée en cours de session).
+
+**A2 — client.** Icône cadenas dédiée par option, uniforme sur les 5 étapes (décision Saar) — jamais
+une réinterprétation du clic de sélection normal. `client/src/lib/useWizardLock.js` (hook partagé),
+`WizardLockToggle.jsx`, `WizardLockSync.jsx` (émet `WIZARD_JOIN`, monté dans `<SocketProvider>` —
+`WizardCreation.jsx` ne peut pas appeler `useSocket()` lui-même). `creationStore.js` :
+`lockedOptions`/`isGmView`/`ownerUserId`/`guideModeActive`. Toggle "Mode guide" dans `WizardHeader.jsx`.
+Les 5 composants d'étape grisent (`.locked`, jamais `style={{}}` pour l'état verrouillé) et bloquent
+la sélection côté joueur.
+
+**A3 — état existant + Step4 + câblage MJ.** `GET /:sheetId/state` reconstruit step1-5 depuis la base
+(nouveaux getters `getStep1State`…`getStep5State`) ; `skillAllocations`/`autodidacteAllocations` de
+Step4 reviennent vides à la réouverture (best-effort assumé avec Saar — `upsertSkillBonus` est
+additif pour les bonus de background, l'allocation Step4 du joueur écrit ensuite en SET par-dessus,
+irréversible sans dupliquer tout le moteur de calcul ; même catégorie que `setbackResolution`/
+`geoName`, déjà perdus au moindre F5 même pour le joueur). Migration `203` (`char_archetype.is_deserter`,
+jamais persisté avant). Demande Saar ajoutée en cours de route : verrous sur origine géo/sociale/
+formation (âge non verrouillable) + 2e état par profession indépendant du verrou existant,
+"prérequis levés pour ce joueur" (`career_waive_<code>`, vérifié dans `reconcileCreation` avant
+`checkCareerEligibility`, indépendant de `isGm`). `POST /start` + `targetUserId` idempotent. Câblage
+client : routes React `/campaigns/:campaignId/creation/:sheetId` et `/campaigns/:campaignId/pool`,
+`loadExistingSheet(sheetId)`, garde-fou de navigation (revenir sur la route sans `:sheetId` après
+avoir consulté le personnage d'un autre joueur réinitialise le store — même invariant que le
+nettoyage de room côté serveur), `CharacterPoolPage.jsx` (liste + sélecteur de joueur), bouton MJ sur
+`DashboardPage.jsx`.
+
+**Premier retour navigateur réel de Saar** — 3 points, tous corrigés : Pool de personnages listait le
+MJ lui-même en boucle (chaque test Wizard non finalisé par Saar laissait une ligne) → `GET .../drafts`
+exclut désormais le MJ demandeur et les personnages sans `user_id` ; aucun bouton retour sur l'écran 0
+du Wizard → ajouté (`Step0Method.jsx`) ; bouton "Pool de personnages" apparemment absent sur une
+campagne → pas un bug (code identique pour toutes les campagnes), en réalité chevauchement visuel
+avec "LOCAL" faute de retour à la ligne → boutons MJ réduits, Pool de personnages forcé sur sa propre
+ligne (`DashboardPage.jsx`).
+
+**Testé** : `npx vite build` propre à chaque étape, `node --test shared/wizardOptionKeys.test.mjs`
+(12/12), `node --check` sur tous les fichiers serveur touchés, **navigateur réel par Saar** (Dashboard,
+Pool de personnages, les 3 correctifs ci-dessus confirmés). **Non testé** ⚠️ : le scénario complet à 2
+sessions (MJ ouvre le personnage d'un joueur pendant que celui-ci travaille dessus, verrou posé en
+direct, `WIZARD_LOCKS_SYNC` reçu côté joueur) — c'est tout l'objet de ce chantier et reste à valider ;
+migrations 201/203 à appliquer en base réelle.
 
 > **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
 > intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).
@@ -3123,7 +3184,7 @@ Projet en cours et priorité user :
 - **Sprint Waypoints** — déplacement points intermédiaires (déclaration serveur, alt+clic)
 - **Sprint Page Santé Serveur** — `/api/health/detailed` (mémoire, uptime, températures)
 - **D2 Jets Favoris** — drag-to-reorder macros (sort_order UI)
-- **i18n combat+équipement** — 18 composants hors scope (sprint dédié futur)
+- **i18n combat+équipement** — voir `docs/PLAN_LOCALISATION.md` (norme : `docs/SYSTEME/LOCALISATION.md`)
 
 ---
 

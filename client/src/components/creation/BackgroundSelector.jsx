@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { nationsList } from './mockStep4Data'
 import AutodidacteAllocator from './AutodidacteAllocator'
+import { useWizardLock } from '../../lib/useWizardLock.js'
+import WizardLockToggle from './WizardLockToggle.jsx'
 
 export default function BackgroundSelector({
   title,
@@ -26,8 +28,13 @@ export default function BackgroundSelector({
   refSkills,
   autodidacteAllocations,
   onAutodidacteAllocationsChange,
+  optionKeyFor,
 }) {
   const { t } = useTranslation('creation')
+  // Composant partagé (origine géo/sociale, formation) — pas de step propre, toujours Step4
+  // (docs/PLAN_WIZARDCOLLAB.md, demande Saar). optionKeyFor fourni par l'appelant : chaque domaine
+  // a son propre préfixe de clé (shared/wizardOptionKeys.js), ce composant reste agnostique.
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(4)
 
   return (
     <div style={s.container}>
@@ -38,21 +45,29 @@ export default function BackgroundSelector({
       )}
 
       <div style={s.grid}>
-        {items.map(item => (
-          <div
-            key={item.code + (item.parent_code || '')}
-            style={{
-              ...s.card,
-              ...(selected === item.code ? s.cardSelected : {}),
-            }}
-            onClick={() => onSelect(item.code)}
-          >
-            <span style={s.cardName}>{item.name}</span>
-            {item.diceRange && (
-              <span style={s.cardDice}>{item.diceRange}</span>
-            )}
-          </div>
-        ))}
+        {items.map(item => {
+          const optionKey = optionKeyFor ? optionKeyFor(item.code) : null
+          const lockedForPlayer = isLockedForPlayer(optionKey)
+          return (
+            <div
+              key={item.code + (item.parent_code || '')}
+              className={lockedForPlayer ? 'locked' : undefined}
+              style={{
+                ...s.card,
+                ...(selected === item.code ? s.cardSelected : {}),
+              }}
+              onClick={() => { if (!lockedForPlayer) onSelect(item.code) }}
+            >
+              <span style={s.cardName}>{item.name}</span>
+              {item.diceRange && (
+                <span style={s.cardDice}>{item.diceRange}</span>
+              )}
+              {showLockToggle && optionKey && (
+                <WizardLockToggle locked={isLocked(optionKey)} onToggle={() => toggleLock(optionKey)} />
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Détails de la sélection */}

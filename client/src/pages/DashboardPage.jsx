@@ -291,18 +291,29 @@ export default function DashboardPage() {
 
                 {/* SETTINGS GM */}
                 {campaign.role === 'gm' && (
-                  <div style={{ ...styles.cardActions, display: 'flex', gap: '8px' }}>
+                  <div style={{ ...styles.cardActions, flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="btn btn-ghost"
+                        style={styles.cardActionBtn}
+                        onClick={() => navigate(`/campaigns/${campaign.id}/settings`)}
+                      >
+                        {t('dashboard.settings')}
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={styles.cardActionBtn}
+                        onClick={() => navigate(`/campaigns/${campaign.id}/merchants`)}
+                      >
+                        {t('dashboard.merchants')}
+                      </button>
+                    </div>
                     <button
                       className="btn btn-ghost"
-                      onClick={() => navigate(`/campaigns/${campaign.id}/settings`)}
+                      style={{ ...styles.cardActionBtn, width: '100%' }}
+                      onClick={() => navigate(`/campaigns/${campaign.id}/pool`)}
                     >
-                      {t('dashboard.settings')}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => navigate(`/campaigns/${campaign.id}/merchants`)}
-                    >
-                      {t('dashboard.merchants')}
+                      {t('dashboard.characterPool')}
                     </button>
                   </div>
                 )}
@@ -455,6 +466,14 @@ const styles = {
     gap: '8px',
     borderTop: '1px solid var(--border-subtle)',
     paddingTop: '12px',
+  },
+  // Boutons MJ (Réglages/Marchands/Pool) — réduits pour tenir sur la largeur de carte sans
+  // chevaucher, Pool de personnages forcé sur sa propre ligne (jamais un simple flex-wrap qui
+  // dépend de la largeur disponible).
+  cardActionBtn: {
+    flex: 1,
+    padding: '6px 8px',
+    fontSize: '11px',
   },
   inviteCode: {
     fontSize: '12px',

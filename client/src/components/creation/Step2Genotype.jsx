@@ -5,6 +5,9 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreationStore } from '../../stores/creationStore'
 import { calcAN, getAttributeBase } from '../../../../shared/polarisUtils.js'
+import { genotypeOptionKey } from '../../../../shared/wizardOptionKeys.js'
+import { useWizardLock } from '../../lib/useWizardLock.js'
+import WizardLockToggle from './WizardLockToggle.jsx'
 
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
 const GENO_IMAGES = {
@@ -123,6 +126,7 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
   const { t } = useTranslation('creation')
   const step1Data = useCreationStore(s => s.step1Data)
   const femininBonusEnabled = useCreationStore(s => s.femininBonusEnabled)
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(2)
 
   const [selected, setSelected] = useState(() =>
     initialData?.genotypeId ? (GENOTYPES.find(g => g.id === initialData.genotypeId) ?? null) : null
@@ -401,11 +405,13 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
       <div className="wiz2-carousel">
         {GENOTYPES.map(geno => {
           const key = getGenoKey(geno.id)
+          const optionKey = genotypeOptionKey(geno.id)
+          const lockedForPlayer = isLockedForPlayer(optionKey)
           return (
             <div
               key={geno.id}
-              className="wiz2-card"
-              onClick={() => handleSelect(geno)}
+              className={`wiz2-card${lockedForPlayer ? ' locked' : ''}`}
+              onClick={() => { if (!lockedForPlayer) handleSelect(geno) }}
             >
               <img className="wiz2-card-img" src={GENO_IMAGES[geno.id]} alt="" />
               <div className="wiz2-vignette" />
@@ -414,6 +420,9 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
                 <span className={`wiz2-card-cost${geno.cost === 0 ? ' wiz2-card-cost--free' : ''}`}>
                   {geno.cost > 0 ? `${geno.cost} PC` : t('step2.free')}
                 </span>
+                {showLockToggle && (
+                  <WizardLockToggle locked={isLocked(optionKey)} onToggle={() => toggleLock(optionKey)} />
+                )}
               </div>
               <div className="wiz2-card-bottom">
                 <p className="wiz2-card-summary">{t(`step2.${key}.summary`)}</p>

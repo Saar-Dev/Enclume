@@ -1,5 +1,6 @@
 {
   "method": {
+    "back": "Retour",
     "title": "Création de personnage",
     "subtitle": "Choisissez votre méthode de création. La répartition libre est recommandée pour les joueurs qui souhaitent personnaliser chaque aspect de leur personnage.",
     "1": {
@@ -471,6 +472,24 @@
     "review_title": "Récapitulatif",
     "finalize": "Finaliser",
     "prev": "Précédent",
-    "open_sheet": "Voir ma fiche"
+    "open_sheet": "Voir ma fiche",
+    "loading": "Chargement du personnage...",
+    "pool_title": "Pool de personnages",
+    "pool_back": "Retour",
+    "pool_empty": "Aucun personnage en cours de création dans cette campagne.",
+    "pool_no_owner": "Sans joueur assigné",
+    "pool_open": "Ouvrir",
+    "pool_pick_player": "Choisir un joueur…",
+    "pool_start_for": "Démarrer pour ce joueur",
+    "guide_mode": "Mode guide",
+    "lock_option": "Verrouiller cette option",
+    "unlock_option": "Déverrouiller cette option",
+    "waive_prereq": "Lever les prérequis de cette profession pour ce joueur",
+    "waive_prereq_short": "Sans prérequis",
+    "errors": {
+      "accessDenied": "Accès refusé à ce brouillon.",
+      "gmOnly": "Seul le MJ peut poser un verrou.",
+      "invalidLock": "Verrou invalide."
+    }
   }
 }

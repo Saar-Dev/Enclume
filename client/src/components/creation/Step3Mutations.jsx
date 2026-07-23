@@ -6,6 +6,9 @@ import api from '../../lib/api'
 import { WS } from '../../../../shared/events.js'
 import { useSocket } from '../../lib/SocketContext.jsx'
 import { useAuthStore } from '../../stores/authStore.js'
+import { mutationOptionKey } from '../../../../shared/wizardOptionKeys.js'
+import { useWizardLock } from '../../lib/useWizardLock.js'
+import WizardLockToggle from './WizardLockToggle.jsx'
 import DiceRoller from '../DiceRoller.jsx'
 import DiceLights from '../DiceLights.jsx'
 
@@ -16,6 +19,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   const { t } = useTranslation('creation')
   const socket = useSocket()
   const { user } = useAuthStore()
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(3)
 
   const [mutations, setMutations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -308,12 +312,18 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
           {availableMutations.map(mut => {
             const label = variantLabel(mut)
             const hasSkill = mut.skills.length > 0
+            const optionKey = mutationOptionKey(mut.mutation_id)
+            const lockedForPlayer = isLockedForPlayer(optionKey)
+            const classNames = [
+              mut.mutation_id === flashId ? 'wiz3-card-flash' : null,
+              lockedForPlayer ? 'locked' : null,
+            ].filter(Boolean).join(' ') || undefined
             return (
               <div
                 key={mut.mutation_id}
                 style={st.card}
-                className={mut.mutation_id === flashId ? 'wiz3-card-flash' : undefined}
-                onClick={() => handleAdd(mut.mutation_id)}
+                className={classNames}
+                onClick={() => { if (!lockedForPlayer) handleAdd(mut.mutation_id) }}
               >
                 <div style={st.cardHeader}>
                   <span style={st.cardName}>{mut.name}</span>
@@ -323,6 +333,9 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
                   }}>
                     {mut.cost_pc > 0 ? `−${mut.cost_pc} PC` : t('step3.free')}
                   </span>
+                  {showLockToggle && (
+                    <WizardLockToggle locked={isLocked(optionKey)} onToggle={() => toggleLock(optionKey)} />
+                  )}
                 </div>
                 {label && <div style={st.cardVariant}>{label}</div>}
                 <p style={st.cardDesc}>{mut.description}</p>

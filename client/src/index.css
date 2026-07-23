@@ -957,6 +957,21 @@ Convention :
   border: 1px solid rgba(76,175,119,0.45);
 }
 
+/* ── Wizard collaboratif MJ/joueur (docs/PLAN_WIZARDCOLLAB.md Lot A2) ─────────── */
+/* Option verrouillée par le MJ, côté joueur : grisée, non cliquable. Jamais appliquée côté MJ
+   (le MJ n'est jamais bloqué par ses propres verrous, il voit .btn-icon[data-active] à la place). */
+.locked {
+  opacity: .4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+/* Variante lecture seule : la sélection réelle (ex. bouton Ajouter) reste bloquée ailleurs, mais la
+   simple prévisualisation d'une carrière verrouillée (rail CareersAllocator) n'a pas besoin d'être
+   coupée — jamais de pointer-events:none ici, contrairement à .locked. */
+.locked-indicator { opacity: .55; }
+/* Icône cadenas (.btn-icon) affichée uniquement en Mode guide côté MJ — actif = verrou posé. */
+.btn-icon[data-active="true"] { color: var(--color-primary); }
+
 /* ── .badge.badge-fail ──────────────────────────────────────────── */
 .badge.badge-fail {
   color: var(--color-danger-soft);

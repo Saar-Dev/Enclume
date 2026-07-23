@@ -8,6 +8,7 @@ import { BG_META } from './backgroundMeta'
 import Step4Summary from './Step4Summary'
 import { useCreationStore } from '../../stores/creationStore'
 import { getSetbackBlockCount } from '../../../../shared/careerSetbacks.js'
+import { originGeoOptionKey, originSocOptionKey, trainingOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import api from '../../lib/api'
 
 const enrichBg = (bg) => ({ ...bg, ...(BG_META[bg.code] ?? {}) })
@@ -341,6 +342,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           onNationChange={setGeoNation}
 		  conditionalChoices={conditionalChoices}
 		  onConditionalChoice={handleConditionalChoice}
+          optionKeyFor={originGeoOptionKey}
         />
       )}
 
@@ -361,6 +363,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           defaultNation={geoNation}
 		  conditionalChoices={conditionalChoices}
 		  onConditionalChoice={handleConditionalChoice}
+          optionKeyFor={originSocOptionKey}
         />
       )}
 
@@ -381,6 +384,7 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
           refSkills={refSkills}
           autodidacteAllocations={autodidacteAllocations}
           onAutodidacteAllocationsChange={setAutodidacteAllocations}
+          optionKeyFor={trainingOptionKey}
         />
       )}
 

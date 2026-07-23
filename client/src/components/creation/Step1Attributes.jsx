@@ -14,6 +14,9 @@ import {
   getAttributeBase,
   validateStep1,
 } from '../../../../shared/polarisUtils.js'
+import { attrOptionKey, handOptionKey } from '../../../../shared/wizardOptionKeys.js'
+import { useWizardLock } from '../../lib/useWizardLock.js'
+import WizardLockToggle from './WizardLockToggle.jsx'
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
@@ -30,6 +33,7 @@ const ATTR_DESCRIPTIONS = {
 
 export default function Step1Attributes({ initialData, ambiance, femininBonusEnabled, onNext, onPrev, onPcChange }) {
   const { t } = useTranslation('creation')
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(1)
 
   const ROW_TOOLTIPS = {
     base: femininBonusEnabled
@@ -268,6 +272,12 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
                   onMouseLeave={() => setTooltip(null)}
                 >
                   {t(`step1.attr${id}`)}
+                  {showLockToggle && (
+                    <WizardLockToggle
+                      locked={isLocked(attrOptionKey(id))}
+                      onToggle={() => toggleLock(attrOptionKey(id))}
+                    />
+                  )}
                 </th>
               ))}
             </tr>
@@ -298,15 +308,18 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
               >
                 {t('step1.rowModPC')}
               </td>
-              {ATTR_IDS.map(id => (
-                <td key={id} className="wiz1-td">
-                  <div className="wiz1-spinner">
-                    <button className="wiz1-spin-btn" disabled={!canDecrement(id)} onClick={() => handleModPC(id, -1)}>−</button>
-                    <span className="wiz1-spin-value">{modPC[id]}</span>
-                    <button className="wiz1-spin-btn" disabled={!canIncrement(id)} onClick={() => handleModPC(id, +1)}>+</button>
-                  </div>
-                </td>
-              ))}
+              {ATTR_IDS.map(id => {
+                const lockedForPlayer = isLockedForPlayer(attrOptionKey(id))
+                return (
+                  <td key={id} className="wiz1-td">
+                    <div className={`wiz1-spinner${lockedForPlayer ? ' locked' : ''}`}>
+                      <button className="wiz1-spin-btn" disabled={lockedForPlayer || !canDecrement(id)} onClick={() => handleModPC(id, -1)}>−</button>
+                      <span className="wiz1-spin-value">{modPC[id]}</span>
+                      <button className="wiz1-spin-btn" disabled={lockedForPlayer || !canIncrement(id)} onClick={() => handleModPC(id, +1)}>+</button>
+                    </div>
+                  </td>
+                )
+              })}
             </tr>
 
             {/* Ligne 3 — Niveau actuel (lecture seule) */}
@@ -451,14 +464,26 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
                 onChange={e => setHandPref(e.target.value)}
               >
                 <option value="">{t('step1.handPlaceholder')}</option>
-                <option value="R">{t('step1.handRight')}</option>
-                <option value="L">{t('step1.handLeft')}</option>
+                <option value="R" disabled={isLockedForPlayer(handOptionKey('R'))}>{t('step1.handRight')}</option>
+                <option value="L" disabled={isLockedForPlayer(handOptionKey('L'))}>{t('step1.handLeft')}</option>
                 <option value="A">{t('step1.handAmbi')}</option>
               </select>
               <button type="button" className="wiz1-pc-btn" onClick={handleRollHandPref}>
                 {t('step1.handRoll')}
               </button>
             </div>
+            {showLockToggle && (
+              <div className="wiz1-desc-hand-row" style={{ gap: '10px', marginTop: '4px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <WizardLockToggle locked={isLocked(handOptionKey('L'))} onToggle={() => toggleLock(handOptionKey('L'))} />
+                  {t('step1.handLeft')}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <WizardLockToggle locked={isLocked(handOptionKey('R'))} onToggle={() => toggleLock(handOptionKey('R'))} />
+                  {t('step1.handRight')}
+                </span>
+              </div>
+            )}
           </label>
         </div>
       </div>

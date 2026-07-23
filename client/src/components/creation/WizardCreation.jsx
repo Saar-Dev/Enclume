@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/authStore'
 import api from '../../lib/api'
 import CharacterWindow from '../../character/CharacterWindow'
 import WizardHeader from './WizardHeader'
+import WizardLockSync from './WizardLockSync'
 import Step0Method from './Step0Method'
 import Step1Attributes from './Step1Attributes'
 import Step2Genotype from './Step2Genotype'
@@ -18,13 +19,13 @@ import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
-  const { campaignId } = useParams()
+  const { campaignId, sheetId: urlSheetId } = useParams()
   const { user } = useAuthStore()
   const {
     step, setStep,
     highestStep, setHighestStep,
     sheetId, isStarting, startError,
-    startCreation, setCampaignId,
+    startCreation, loadExistingSheet, setCampaignId,
     resetCreation,
     step1Data, step2Data, step3Data, step4Data, step5Data,
     setStep0Data, setStep1Data, setStep2Data, setStep3Data, setStep4Data, setStep5Data,
@@ -32,11 +33,29 @@ export default function WizardCreation() {
     ambiance: storeAmbiance,
     randomMutationsEnabled,
     femininBonusEnabled,
+    isGmView, guideModeActive, setGuideModeActive,
   } = useCreationStore()
 
   const navigate = useNavigate()
   const [stepError, setStepError] = useState(null)
   const [finalizing, setFinalizing] = useState(false)
+
+  // Reprise d'un personnage existant — route /campaigns/:campaignId/creation/:sheetId (Lot A3,
+  // docs/PLAN_WIZARDCOLLAB.md §6.2). MJ ouvrant le brouillon d'un joueur, ou lien direct de reprise.
+  useEffect(() => {
+    if (urlSheetId && urlSheetId !== sheetId) {
+      loadExistingSheet(urlSheetId).catch(() => { /* startError déjà posé par le store */ })
+    }
+  }, [urlSheetId, sheetId, loadExistingSheet])
+
+  // Hygiène de navigation — même invariant que le nettoyage de room côté serveur (WIZARD_JOIN,
+  // Lot A1) : la route sans :sheetId représente toujours SON PROPRE personnage, jamais l'état
+  // laissé par un MJ qui vient de consulter celui d'un autre joueur (isGmView=true dans le store).
+  // Sans ce garde-fou, quitter le personnage du joueur A pour /creation (le sien) afficherait
+  // silencieusement le shell avec les données de A tant que l'utilisateur n'a pas rafraîchi.
+  useEffect(() => {
+    if (!urlSheetId && isGmView) resetCreation()
+  }, [urlSheetId, isGmView, resetCreation])
 
   // ─── Fenêtre fiche personnage (lecture seule) ────────────────────────────
   const [peekOpen, setPeekOpen] = useState(false)
@@ -101,6 +120,17 @@ export default function WizardCreation() {
     }
   }
 
+  // Reprise en cours (ou échouée) — jamais Step0Method (démarrage neuf) pour une reprise ciblée.
+  if (urlSheetId && urlSheetId !== sheetId) {
+    return (
+      <>
+        {startError
+          ? <div className="wiz-error">{startError}</div>
+          : <div className="wiz-info-badge">{t('wizard.loading')}</div>}
+      </>
+    )
+  }
+
   if (step === 0) {
     return (
       <>
@@ -124,6 +154,7 @@ export default function WizardCreation() {
 
   return (
     <SocketProvider campaignId={campaignId}>
+    <WizardLockSync sheetId={sheetId} />
     <div className="wiz-shell">
       <WizardHeader
         step={step}
@@ -135,6 +166,9 @@ export default function WizardCreation() {
         hasCharacter={!!step1Data}
         onOpenPeek={openPeek}
         peekLoading={peekLoading}
+        isGmView={isGmView}
+        guideModeActive={guideModeActive}
+        onToggleGuideMode={() => setGuideModeActive(!guideModeActive)}
       />
 
       {stepError && (

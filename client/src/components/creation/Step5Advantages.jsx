@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
+import { advantageOptionKey } from '../../../../shared/wizardOptionKeys.js'
+import { useWizardLock } from '../../lib/useWizardLock.js'
+import WizardLockToggle from './WizardLockToggle.jsx'
 
 export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext, onPrev }) {
   const { t } = useTranslation('creation')
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(5)
   const [refData, setRefData] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(initialData?.advantages ?? [])
@@ -32,6 +36,7 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
   const pcRemaining = pcDispo + pcGained - pcSpent
 
   const handleToggle = (advantageId, type, costPc) => {
+    if (isLockedForPlayer(advantageOptionKey(advantageId))) return
     setSelected(prev => {
       const isOn = prev.includes(advantageId)
       if (isOn) return prev.filter(id => id !== advantageId)
@@ -69,9 +74,12 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
           {advantages.map(adv => {
             const isOn = selected.includes(adv.advantage_id)
             const canSelect = isOn || (adv.cost_pc ?? 0) <= pcRemaining
+            const optionKey = advantageOptionKey(adv.advantage_id)
+            const lockedForPlayer = isLockedForPlayer(optionKey)
             return (
               <div
                 key={adv.advantage_id}
+                className={lockedForPlayer ? 'locked' : undefined}
                 style={{
                   ...s.card,
                   ...(isOn ? s.cardOn : {}),
@@ -81,6 +89,9 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
               >
                 <span style={s.cardName}>{adv.name}</span>
                 <span style={s.cardCost}>{t('step5.pc_cost', { n: adv.cost_pc ?? 0 })}</span>
+                {showLockToggle && (
+                  <WizardLockToggle locked={isLocked(optionKey)} onToggle={() => toggleLock(optionKey)} />
+                )}
                 {adv.description && <p style={s.cardDesc}>{adv.description}</p>}
               </div>
             )
@@ -93,14 +104,20 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
         <div style={s.grid}>
           {disadvantages.map(dis => {
             const isOn = selected.includes(dis.advantage_id)
+            const optionKey = advantageOptionKey(dis.advantage_id)
+            const lockedForPlayer = isLockedForPlayer(optionKey)
             return (
               <div
                 key={dis.advantage_id}
+                className={lockedForPlayer ? 'locked' : undefined}
                 style={{ ...s.card, ...(isOn ? s.cardDisadvOn : {}) }}
                 onClick={() => handleToggle(dis.advantage_id, 'disadvantage', dis.cost_pc)}
               >
                 <span style={s.cardName}>{dis.name}</span>
                 <span style={s.cardGain}>+{Math.abs(dis.cost_pc ?? 0)} PC</span>
+                {showLockToggle && (
+                  <WizardLockToggle locked={isLocked(optionKey)} onToggle={() => toggleLock(optionKey)} />
+                )}
                 {dis.description && <p style={s.cardDesc}>{dis.description}</p>}
               </div>
             )

@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { evaluateCareerEligibility } from '../../../../shared/careerEligibility.js'
 import { computeSkillAllocation, getSkillCap } from '../../../../shared/careerSkills.js'
 import { estimateSalaryFormula } from '../../../../shared/polarisUtils.js'
+import { careerOptionKey, careerWaiveOptionKey } from '../../../../shared/wizardOptionKeys.js'
+import { useWizardLock } from '../../lib/useWizardLock.js'
+import WizardLockToggle from './WizardLockToggle.jsx'
 
 // Couleur déterministe (hash → HSL) — rail + tags de provenance du board.
 function careerHexColor(code) {
@@ -116,6 +119,7 @@ export default function CareersAllocator({
   skillMaxLevelEnabled,
 }) {
   const { t } = useTranslation('creation')
+  const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(4)
   const [state, dispatch] = useReducer(
     careersReducer,
     [initialSkillAllocations, initialOpenedSkills],
@@ -131,6 +135,14 @@ export default function CareersAllocator({
   const isAdded = career ? selectedCareers.some(c => c.career_id === career.id) : false
   const committedEntry = career ? selectedCareers.find(c => c.career_id === career.id) : null
   const displayYears = isAdded ? committedEntry.years : years
+  const careerLockKey = career ? careerOptionKey(career.code) : null
+  const careerLockedForPlayer = isLockedForPlayer(careerLockKey)
+  // Dérogation MJ (demande Saar) — distincte du verrou ci-dessus : lève les prérequis pour CETTE
+  // carrière précise, indépendamment de qui soumet (serveur : reconcileCreation, avant
+  // checkCareerEligibility). N'affecte jamais l'affichage du joueur (ni grisé ni déblocage visuel
+  // ici — l'éligibilité réelle reste calculée normalement côté client, seule la validation serveur
+  // change ; le joueur découvre l'effet en soumettant, cohérent avec le reste du Wizard).
+  const careerWaiveKey = career ? careerWaiveOptionKey(career.code) : null
 
   const getTitleForYears = (titles, yrs) => {
     if (!titles || titles.length === 0) return null
@@ -321,6 +333,7 @@ export default function CareersAllocator({
   const handleAdd = () => {
     if (!career || isAdded || !eligible) return
     if (years > remainingPC) return
+    if (careerLockedForPlayer) return
     onAdd(career.id, career.name, career.titles, years)
   }
 
@@ -397,10 +410,11 @@ export default function CareersAllocator({
           const added = selectedCareers.some(sc => sc.career_id === c.id)
           const committed = selectedCareers.find(sc => sc.career_id === c.id)
           const firstTitle = getTitleForYears(c.titles, 1)
+          const rowLockedForPlayer = isLockedForPlayer(careerOptionKey(c.code))
           return (
             <div
               key={c.id}
-              className={`wiz4-railrow${selectedCareerId === c.id ? ' sel' : ''}${added ? ' added' : ''}`}
+              className={`wiz4-railrow${selectedCareerId === c.id ? ' sel' : ''}${added ? ' added' : ''}${rowLockedForPlayer ? ' locked-indicator' : ''}`}
               onClick={() => dispatch({ type: 'SELECT_CAREER', id: c.id, committedYears: committed?.years })}
               onMouseEnter={() => dispatch({ type: 'SET_HOVER', id: c.id })}
               onMouseLeave={() => dispatch({ type: 'SET_HOVER', id: null })}
@@ -490,11 +504,28 @@ export default function CareersAllocator({
                     </div>
                   )}
                   <div style={{ flex: 1 }} />
+                  {showLockToggle && career && (
+                    <WizardLockToggle
+                      locked={isLocked(careerLockKey)}
+                      onToggle={() => toggleLock(careerLockKey)}
+                    />
+                  )}
+                  {showLockToggle && career && (
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      data-active={isLocked(careerWaiveKey)}
+                      onClick={() => toggleLock(careerWaiveKey)}
+                      title={t('wizard.waive_prereq')}
+                    >
+                      {t('wizard.waive_prereq_short')}
+                    </button>
+                  )}
                   {!isAdded ? (
                     <button
-                      className={`wiz4-addbtn${!eligible || years > remainingPC ? ' dis' : ''}`}
+                      className={`wiz4-addbtn${!eligible || years > remainingPC || careerLockedForPlayer ? ' dis' : ''}`}
                       onClick={handleAdd}
-                      disabled={!eligible || years > remainingPC}
+                      disabled={!eligible || years > remainingPC || careerLockedForPlayer}
                     >
                       {t('step4.career_add')}
                     </button>
@@ -503,7 +534,8 @@ export default function CareersAllocator({
                       <span className="wiz4-addbtn dis">✓ {t('step4.career_retained')}</span>
                       <button
                         className="wiz4-prev"
-                        onClick={() => onRemove(selectedCareers.findIndex(sc => sc.career_id === career.id))}
+                        onClick={() => { if (!careerLockedForPlayer) onRemove(selectedCareers.findIndex(sc => sc.career_id === career.id)) }}
+                        disabled={careerLockedForPlayer}
                       >
                         {t('step4.career_remove')}
                       </button>

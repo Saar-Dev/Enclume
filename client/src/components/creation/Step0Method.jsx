@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
 
 export default function Step0Method({ onNext }) {
   const { t } = useTranslation('creation')
+  const navigate = useNavigate()
 
   return (
     <div className="wiz-page">
@@ -13,6 +15,9 @@ export default function Step0Method({ onNext }) {
       />
 
       <div className="wiz-container">
+        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => navigate('/dashboard')}>
+          ← {t('method.back')}
+        </button>
         <h1 className="wiz-title">{t('method.title')}</h1>
         <p className="wiz-subtitle">{t('method.subtitle')}</p>
         <div className="wiz-divider" />

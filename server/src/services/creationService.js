@@ -19,6 +19,11 @@ import { addMutation } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { applyMutationIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
 import { resolveOwnership } from './characterOwnershipService.js'
+import {
+  attrOptionKey, handOptionKey, genotypeOptionKey, mutationOptionKey, careerOptionKey, advantageOptionKey,
+  originGeoOptionKey, originSocOptionKey, trainingOptionKey, careerWaiveOptionKey,
+  isSingleChoiceLockViolation, findSetLockViolations,
+} from '../../../shared/wizardOptionKeys.js'
 
 // ─── Résolution background avec parent nullable (single-query) ────────────────
 
@@ -208,14 +213,6 @@ export async function getStep4RefData(sheetId) {
   }
 }
 
-export async function getStep4State(sheetId) {
-  const [archetype, careers] = await Promise.all([
-    db('char_archetype').where({ char_sheet_id: sheetId }).first(),
-    db('char_careers').where({ char_sheet_id: sheetId }).select('*'),
-  ])
-  return { archetype: archetype || null, careers }
-}
-
 // ─── Step 3 : données de référence ────────────────────────────────────────────
 
 export async function getStep3RefData() {
@@ -243,34 +240,202 @@ export async function getStep5RefData(campaignId) {
   return rows.filter(r => !['adv_077', 'adv_078'].includes(r.advantage_id))
 }
 
+// ─── État existant du brouillon (Wizard collaboratif, docs/PLAN_WIZARDCOLLAB.md Lot A3) ────────
+// Miroir en lecture de ce que reconcileCreation persiste pour chaque step — jamais plus que ce que
+// le reconciler écrit réellement (les champs purement locaux au composant React, jamais envoyés au
+// serveur — ex. Step4Experience.jsx `setbackResolution`, `geoName` — n'ont pas de contrepartie ici,
+// ils sont déjà perdus au moindre rechargement pour le joueur lui-même, avant même ce chantier).
+// Step4 volontairement absent : sa reconstruction (skillAllocations vs bonus de background dans
+// char_skills.mastery, à vérifier) est plus risquée et traitée séparément avant d'être ajoutée ici.
+
+export async function getStep1State(sheetId) {
+  const [identity, archetype, attrRows, ledger] = await Promise.all([
+    db('char_identity').where({ char_sheet_id: sheetId }).first(),
+    db('char_archetype').where({ char_sheet_id: sheetId }).first(),
+    db('char_attributes').where({ char_sheet_id: sheetId }).select('attr_id', 'base_level'),
+    db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
+  ])
+  return {
+    charName: identity?.char_name ?? '',
+    playerName: identity?.player_name ?? '',
+    isFeminin: archetype?.sex === 'femme',
+    pcSpent: ledger?.pc_spent_step1 ?? 0,
+    height: identity?.height ?? null,
+    weight: identity?.weight ?? null,
+    skin: identity?.skin ?? '',
+    eyes: identity?.eyes ?? '',
+    hair: identity?.hair ?? '',
+    build: identity?.build ?? '',
+    distinctiveSigns: identity?.distinctive_signs ?? '',
+    handPref: identity?.hand_pref ?? '',
+    attributes: Object.fromEntries(attrRows.map(r => [r.attr_id, r.base_level])),
+  }
+}
+
+export async function getStep2State(sheetId) {
+  const archetype = await db('char_archetype').where({ char_sheet_id: sheetId }).first()
+  return {
+    genotypeId: archetype?.genotype_id ?? null,
+    isDeserter: archetype?.is_deserter ?? false,
+  }
+}
+
+export async function getStep3State(sheetId) {
+  const [mutations, ledger] = await Promise.all([
+    db('char_mutations').where({ char_sheet_id: sheetId }).whereIn('source', ['chosen', 'random'])
+      .select('mutation_id', 'subtype_id', 'source'),
+    db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
+  ])
+  const method = mutations.some(m => m.source === 'random') ? 'random'
+    : mutations.some(m => m.source === 'chosen') ? 'chosen' : null
+  const list = mutations.map(m => ({ mutation_id: m.mutation_id, subtype_id: m.subtype_id }))
+  return {
+    method,
+    mutations: method === 'chosen' ? list : [],
+    kept: method === 'random' ? list : [],
+    pcSpent: ledger?.pc_spent_step3 ?? 0,
+  }
+}
+
+export async function getStep5State(sheetId) {
+  const rows = await db('char_advantages')
+    .where({ char_sheet_id: sheetId, acquired_during: 'creation_step5' })
+    .whereNull('removed_at')
+    .select('advantage_id')
+  return { advantages: rows.map(r => r.advantage_id) }
+}
+
+// Best-effort (§0, décision Saar sur cette trouvaille) : skillAllocations/autodidacteAllocations
+// ne sont PAS reconstructibles proprement — upsertSkillBonus (bonus de background) est additif sur
+// char_skills.mastery, l'allocation Step4 du joueur écrit ensuite en SET (.merge) par-dessus, sans
+// laisser de trace de quelle part vient d'où. Les rejouer demanderait de dupliquer tout le moteur de
+// calcul de background (resolveStep4Backgrounds/getBackgroundSkillsToApply/resolveAutodidacteSkills)
+// en lecture — risque de divergence avec le chemin d'écriture, pour un gain cosmétique (les points
+// réellement dépensés restent corrects dans char_skills, seule la ré-édition du tableau repart de
+// zéro). Ces deux champs reviennent donc vides à la réouverture — même catégorie déjà acceptée que
+// Step4Experience.jsx `setbackResolution`/`geoName` (jamais envoyés au serveur, perdus au moindre
+// rechargement même pour le joueur, pas une régression introduite ici).
+export async function getStep4State(sheetId) {
+  const [archetype, careerRows, ledger, skillRows] = await Promise.all([
+    db('char_archetype').where({ char_sheet_id: sheetId }).first(),
+    db('char_careers').where({ char_sheet_id: sheetId }).select('*'),
+    db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
+    db('char_skills').where({ char_sheet_id: sheetId, is_learned: true }).select('skill_id'),
+  ])
+  return {
+    age: archetype?.age ?? 16,
+    originGeo: archetype?.origin_geo ?? null,
+    originSoc: archetype?.origin_soc ?? null,
+    training: archetype?.training_base ?? null,
+    higherEd: archetype?.higher_ed ?? null,
+    setbackRolls: archetype?.setback_rolls ?? [],
+    pcSpent: ledger?.pc_spent_step4 ?? 0,
+    careers: careerRows.map(c => ({
+      career_id: c.career_id,
+      years: c.years,
+      proAdvantages: c.pro_advantages ?? {},
+      randomPicks: c.random_picks ?? [],
+      setbacks: c.setbacks ?? [],
+    })),
+    openedSkills: skillRows.map(r => r.skill_id),
+    skillAllocations: {},
+    autodidacteAllocations: {},
+  }
+}
+
+// ─── Accès fiche + verrous MJ (Wizard collaboratif, docs/PLAN_WIZARDCOLLAB.md Lot A1) ──────────
+// resolveSheetAccess : extraction pure de l'ancien corps de router.param('sheetId')
+// (routes/creation.js), même comportement, partagée par le middleware REST et les handlers
+// WebSocket (§0 5e passe du plan — la duplication réelle à éliminer était REST vs WS, pas un
+// isGm générique inventé).
+
+export async function resolveSheetAccess(sheetId, userId) {
+  const sheet = await db('char_sheet').where({ id: sheetId }).first()
+  if (!sheet) throw new AppError(404, 'Fiche introuvable')
+
+  const character = await db('characters').where({ id: sheet.character_id }).first()
+  if (!character) throw new AppError(404, 'Personnage introuvable')
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: character.campaign_id, user_id: userId })
+    .first()
+  if (!member) throw new AppError(403, "Vous n'êtes pas membre de cette campagne")
+
+  const isOwner = character.user_id && character.user_id === userId
+  if (!isOwner && member.role !== 'gm') {
+    throw new AppError(403, "Vous n'avez pas accès à cette fiche")
+  }
+
+  return { sheet, character, isGm: member.role === 'gm' }
+}
+
+export async function getWizardLocks(sheetId) {
+  return db('wizard_locks').where({ char_sheet_id: sheetId }).select('step', 'option_key as optionKey')
+}
+
+// Toggle atomique d'un seul (step, optionKey) — jamais un remplacement de tableau (§0 4e passe :
+// deux onglets MJ ou une reconnexion qui réordonne les paquets créeraient une race sur un
+// remplacement intégral). onConflict().ignore() rend un double-lock idempotent, sans erreur.
+export async function toggleWizardLock(sheetId, step, optionKey, locked) {
+  if (locked) {
+    await db('wizard_locks')
+      .insert({ char_sheet_id: sheetId, step, option_key: optionKey })
+      .onConflict(['char_sheet_id', 'step', 'option_key'])
+      .ignore()
+  } else {
+    await db('wizard_locks').where({ char_sheet_id: sheetId, step, option_key: optionKey }).del()
+  }
+  return getWizardLocks(sheetId)
+}
+
 // ─── Start : création du brouillon ────────────────────────────────────────────
 
 const ATTR_IDS_START = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
 export async function startCreation(campaignId, userId) {
   return db.transaction(async (trx) => {
-    // type/color dérivés de l'appartenance réelle (docs/PLAN_CHARACTER_SERVICE.md) — un GM
-    // utilisant le Wizard pour lui-même obtient un PNJ, pas un PJ codé en dur.
-    const ownership = await resolveOwnership(trx, { campaignId, userId })
-    const [character] = await trx('characters')
-      .insert({ campaign_id: campaignId, user_id: ownership.user_id, name: 'Brouillon', type: ownership.type, color: ownership.color, visible: false })
-      .returning(['id'])
+    // Idempotence (docs/PLAN_WIZARDCOLLAB.md §0 5e passe, Lot A3) : un brouillon actif existe déjà
+    // pour cet utilisateur dans cette campagne → le retourner au lieu d'en créer un second. Sans
+    // ça, un MJ démarrant un brouillon via targetUserId (routes/creation.js) pour un joueur qui,
+    // sans le savoir, en démarre un second via le flux normal (ou l'inverse) créerait un doublon
+    // orphelin — s'applique dans les deux sens, même vérification.
+    const existing = await trx('char_sheet as cs')
+      .join('characters as c', 'c.id', 'cs.character_id')
+      .where({ 'c.campaign_id': campaignId, 'c.user_id': userId })
+      .whereNull('cs.wizard_locked_at')
+      .select('cs.id as sheetId', 'c.id as characterId')
+      .first()
 
-    const [sheet] = await trx('char_sheet')
-      .insert({ character_id: character.id, creation_state: 'draft_step0' })
-      .returning(['id'])
+    let sheetId, characterId
+    if (existing) {
+      sheetId = existing.sheetId
+      characterId = existing.characterId
+    } else {
+      // type/color dérivés de l'appartenance réelle (docs/PLAN_CHARACTER_SERVICE.md) — un GM
+      // utilisant le Wizard pour lui-même obtient un PNJ, pas un PJ codé en dur.
+      const ownership = await resolveOwnership(trx, { campaignId, userId })
+      const [character] = await trx('characters')
+        .insert({ campaign_id: campaignId, user_id: ownership.user_id, name: 'Brouillon', type: ownership.type, color: ownership.color, visible: false })
+        .returning(['id'])
 
-    await trx('char_pc_ledger').insert({ char_sheet_id: sheet.id, pc_total: 20 })
-    await trx('char_archetype').insert({ char_sheet_id: sheet.id })
-    await trx('char_attributes').insert(
-      ATTR_IDS_START.map(attr_id => ({ char_sheet_id: sheet.id, attr_id, base_level: 7, pc_modifier: 0 }))
-    )
+      const [sheet] = await trx('char_sheet')
+        .insert({ character_id: character.id, creation_state: 'draft_step0' })
+        .returning(['id'])
+
+      await trx('char_pc_ledger').insert({ char_sheet_id: sheet.id, pc_total: 20 })
+      await trx('char_archetype').insert({ char_sheet_id: sheet.id })
+      await trx('char_attributes').insert(
+        ATTR_IDS_START.map(attr_id => ({ char_sheet_id: sheet.id, attr_id, base_level: 7, pc_modifier: 0 }))
+      )
+      sheetId = sheet.id
+      characterId = character.id
+    }
 
     const settings = await getCampaignSettings(trx, campaignId)
 
     return {
-      sheetId: sheet.id,
-      characterId: character.id,
+      sheetId,
+      characterId,
       ambiance: settings.ambiance,
       randomMutationsEnabled: settings.random_mutations,
       femininBonusEnabled: settings.feminin_bonus,
@@ -282,17 +447,148 @@ export async function startCreation(campaignId, userId) {
   })
 }
 
+// ─── Enforcement des verrous MJ (Wizard collaboratif, docs/PLAN_WIZARDCOLLAB.md §4.5) ──────────
+// Lecture seule, exécutée avant toute écriture de reconcileCreation. Le MJ n'est jamais bloqué
+// par ses propres verrous (isGm=true → no-op immédiat). Pour le joueur : compare la valeur/
+// l'ensemble soumis à la valeur/l'ensemble actuellement persisté pour chaque clé verrouillée
+// (fonctions pures shared/wizardOptionKeys.js) — rejette un changement réel, accepte toujours la
+// resoumission de l'état déjà acquis (le reconciler renvoie l'état complet à chaque appel).
+async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, step5 }, isGm) {
+  if (isGm) return
+
+  const lockRows = await trx('wizard_locks').where({ char_sheet_id: sheetId })
+  if (lockRows.length === 0) return
+  const locksByStep = new Map()
+  for (const row of lockRows) {
+    if (!locksByStep.has(row.step)) locksByStep.set(row.step, new Set())
+    locksByStep.get(row.step).add(row.option_key)
+  }
+
+  // STEP 1 — attributs (choix unique par attribut) + main directrice (choix unique)
+  if (step1 && locksByStep.has(1)) {
+    const lockedKeys = locksByStep.get(1)
+    if (step1.attributes) {
+      const persistedAttrs = await trx('char_attributes').where({ char_sheet_id: sheetId }).select('attr_id', 'base_level')
+      const persistedByAttr = new Map(persistedAttrs.map(r => [r.attr_id, r.base_level]))
+      for (const [attrId, level] of Object.entries(step1.attributes)) {
+        const key = attrOptionKey(attrId)
+        if (lockedKeys.has(key) && level !== persistedByAttr.get(attrId)) {
+          throw new AppError(400, `Option verrouillée par le MJ : attribut ${attrId}`)
+        }
+      }
+    }
+    const persistedIdentity = await trx('char_identity').where({ char_sheet_id: sheetId }).select('hand_pref').first()
+    const persistedKey = handOptionKey(persistedIdentity?.hand_pref ?? null)
+    const submittedKey = handOptionKey(step1.handPref ?? null)
+    if (isSingleChoiceLockViolation({ lockedKeys, submittedKey, persistedKey })) {
+      throw new AppError(400, 'Option verrouillée par le MJ : main directrice')
+    }
+  }
+
+  // STEP 2 — génotype (choix unique)
+  if (step2 && locksByStep.has(2)) {
+    const lockedKeys = locksByStep.get(2)
+    const persistedArchetype = await trx('char_archetype').where({ char_sheet_id: sheetId }).select('genotype_id').first()
+    const persistedKey = persistedArchetype?.genotype_id != null ? genotypeOptionKey(persistedArchetype.genotype_id) : null
+    const submittedKey = step2.genotypeId != null ? genotypeOptionKey(step2.genotypeId) : null
+    if (isSingleChoiceLockViolation({ lockedKeys, submittedKey, persistedKey })) {
+      throw new AppError(400, 'Option verrouillée par le MJ : génotype')
+    }
+  }
+
+  // STEP 3 — mutations (ensemble). Seules source='chosen'/'random' appartiennent à ce step
+  // (source='revers' est écrit par STEP4, cf. creationService.js commentaire ligne ~552).
+  if (step3 && locksByStep.has(3)) {
+    const lockedKeys = locksByStep.get(3)
+    const persistedMutations = await trx('char_mutations')
+      .where({ char_sheet_id: sheetId }).whereIn('source', ['chosen', 'random'])
+      .select('mutation_id')
+    const persistedKeys = new Set(persistedMutations.map(r => mutationOptionKey(r.mutation_id)))
+    const submittedList = step3.method === 'random' ? (step3.kept ?? []) : (step3.mutations ?? [])
+    const submittedKeys = new Set(submittedList.map(m => mutationOptionKey(m.mutation_id)))
+    const violations = findSetLockViolations({ lockedKeys, submittedKeys, persistedKeys })
+    if (violations.length) {
+      throw new AppError(400, `Option verrouillée par le MJ : mutation ${violations[0]}`)
+    }
+  }
+
+  // STEP 4 — origine géo/sociale + formation (choix unique) et carrières (ensemble). L'âge de
+  // départ n'est volontairement pas verrouillable (décision Saar). optionKey carrière utilise
+  // ref_careers.code, la soumission porte career_id (uuid) — traduction par lecture DB, inévitable,
+  // pas une duplication de logique.
+  if (step4 && locksByStep.has(4)) {
+    const lockedKeys = locksByStep.get(4)
+
+    const persistedArchetype4 = await trx('char_archetype')
+      .where({ char_sheet_id: sheetId }).select('origin_geo', 'origin_soc', 'training_base').first()
+
+    const originGeoPersistedKey = persistedArchetype4?.origin_geo != null ? originGeoOptionKey(persistedArchetype4.origin_geo) : null
+    const originGeoSubmittedKey = step4.originGeo != null ? originGeoOptionKey(step4.originGeo) : null
+    if (isSingleChoiceLockViolation({ lockedKeys, submittedKey: originGeoSubmittedKey, persistedKey: originGeoPersistedKey })) {
+      throw new AppError(400, 'Option verrouillée par le MJ : origine géographique')
+    }
+
+    const originSocPersistedKey = persistedArchetype4?.origin_soc != null ? originSocOptionKey(persistedArchetype4.origin_soc) : null
+    const originSocSubmittedKey = step4.originSoc != null ? originSocOptionKey(step4.originSoc) : null
+    if (isSingleChoiceLockViolation({ lockedKeys, submittedKey: originSocSubmittedKey, persistedKey: originSocPersistedKey })) {
+      throw new AppError(400, 'Option verrouillée par le MJ : origine sociale')
+    }
+
+    const trainingPersistedKey = persistedArchetype4?.training_base != null ? trainingOptionKey(persistedArchetype4.training_base) : null
+    const trainingSubmittedKey = step4.training != null ? trainingOptionKey(step4.training) : null
+    if (isSingleChoiceLockViolation({ lockedKeys, submittedKey: trainingSubmittedKey, persistedKey: trainingPersistedKey })) {
+      throw new AppError(400, 'Option verrouillée par le MJ : formation de base')
+    }
+
+    const persistedCareers = await trx('char_careers as cc')
+      .join('ref_careers as rc', 'rc.id', 'cc.career_id')
+      .where({ 'cc.char_sheet_id': sheetId })
+      .select('rc.code')
+    const persistedKeys = new Set(persistedCareers.map(r => careerOptionKey(r.code)))
+    const careerIds = (step4.careers ?? []).map(c => c.career_id)
+    const refCareers = careerIds.length
+      ? await trx('ref_careers').whereIn('id', careerIds).select('id', 'code')
+      : []
+    const codeByCareerId = new Map(refCareers.map(r => [r.id, r.code]))
+    const submittedKeys = new Set(
+      careerIds.map(id => codeByCareerId.get(id)).filter(Boolean).map(careerOptionKey)
+    )
+    const violations = findSetLockViolations({ lockedKeys, submittedKeys, persistedKeys })
+    if (violations.length) {
+      throw new AppError(400, `Option verrouillée par le MJ : carrière ${violations[0]}`)
+    }
+  }
+
+  // STEP 5 — avantages (ensemble). Seuls acquired_during='creation_step5' appartiennent à ce
+  // step (même filtre que reconcileCreation utilise déjà pour wiper/réinsérer, cf. §4.3 du plan).
+  if (step5 && locksByStep.has(5)) {
+    const lockedKeys = locksByStep.get(5)
+    const persistedAdvantages = await trx('char_advantages')
+      .where({ char_sheet_id: sheetId, acquired_during: 'creation_step5' })
+      .whereNull('removed_at')
+      .select('advantage_id')
+    const persistedKeys = new Set(persistedAdvantages.map(r => advantageOptionKey(r.advantage_id)))
+    const submittedKeys = new Set((step5.advantages ?? []).map(advantageOptionKey))
+    const violations = findSetLockViolations({ lockedKeys, submittedKeys, persistedKeys })
+    if (violations.length) {
+      throw new AppError(400, `Option verrouillée par le MJ : avantage ${violations[0]}`)
+    }
+  }
+}
+
 // ─── Reconciliation : transaction unique, état partiel ou complet ──────────────
 // Pattern reconciler (Kubernetes/Terraform) : chaque bloc STEP n'est appliqué que si
 // l'étape correspondante est fournie. Rejouable sans duplication — chaque bloc reset
 // ses tables dérivées avant réapplication. Voir docs/STE6_FINAL.md.
 
-export async function reconcileCreation(sheetId, { step1, step2, step3, step4, step5, finalize }) {
+export async function reconcileCreation(sheetId, { step1, step2, step3, step4, step5, finalize }, isGm = false) {
   return db.transaction(async (trx) => {
     const sheet = await trx('char_sheet').where({ id: sheetId }).first()
     if (!sheet) throw new AppError(404, 'Fiche introuvable')
     if (sheet.wizard_locked_at) throw new AppError(400, "Cette fiche a quitté l'assistant de création — modifications via la fiche personnage uniquement")
     const characterId = sheet.character_id
+
+    await enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, step5 }, isGm)
 
     // ── STEP 1 : attributs + identité ──────────────────────────────────────────
     if (step1) {
@@ -337,7 +633,7 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       const geno = await trx('ref_genotypes').where({ id: genotypeId }).first()
       if (!geno) throw new AppError(400, `Génotype inconnu : ${genotypeId}`)
       const pc2 = isDeserter ? 4 : (geno.pc_cost ?? 0)
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ genotype_id: genotypeId })
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ genotype_id: genotypeId, is_deserter: isDeserter })
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step2: pc2 })
     }
 
@@ -611,8 +907,17 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         if (!refCareer) throw new AppError(400, `Carrière inconnue : ${career.career_id}`)
         if (!career.years || career.years < 1) throw new AppError(400, `Années invalides pour ${refCareer.name}`)
 
-        const eligCheck = await checkCareerEligibility(sheetId, career.career_id, trx)
-        if (!eligCheck.valide) throw new AppError(400, eligCheck.erreur)
+        // Dérogation MJ par carrière (docs/PLAN_WIZARDCOLLAB.md, demande Saar) — distincte du
+        // bypass global isGm (Lot B) : lève les prérequis pour CETTE carrière précise, quel que
+        // soit le soumetteur, tant que le MJ a activé career_waive_<code>. Vérifiée avant l'appel
+        // pour ne pas construire le contexte d'éligibilité si elle est de toute façon ignorée.
+        const waived = await trx('wizard_locks')
+          .where({ char_sheet_id: sheetId, step: 4, option_key: careerWaiveOptionKey(refCareer.code) })
+          .first()
+        if (!waived) {
+          const eligCheck = await checkCareerEligibility(sheetId, career.career_id, trx)
+          if (!eligCheck.valide) throw new AppError(400, eligCheck.erreur)
+        }
 
         const titles = await trx('ref_career_titles').where({ career_id: career.career_id }).orderBy('min_years')
         const title = titles.find(t =>
@@ -973,6 +1278,9 @@ export async function lockWizard(sheetId, trxOpt) {
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
   if (sheet.creation_state !== 'complete') throw new AppError(400, 'Personnage non finalisé — impossible de verrouiller')
   await exec('char_sheet').where({ id: sheetId }).update({ wizard_locked_at: db.fn.now() })
+  // Les verrous MJ n'ont plus de sens une fois le brouillon devenu personnage réel — le ON DELETE
+  // CASCADE ne joue qu'à la suppression de char_sheet, jamais à cette bascule (docs/PLAN_WIZARDCOLLAB.md §2.4).
+  await exec('wizard_locks').where({ char_sheet_id: sheetId }).del()
   return { ok: true }
 }
 

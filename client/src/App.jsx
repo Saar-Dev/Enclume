@@ -12,6 +12,7 @@ import VaultPage from './pages/VaultPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
 import WizardCreationPage from './pages/WizardCreationPage'
+import CharacterPoolPage from './pages/CharacterPoolPage'
 import DiceCalibrationPage from './pages/DiceCalibrationPage' // OUTIL DEV — vérification/calibration des dés
 
 function ProtectedRoute({ children }) {
@@ -74,6 +75,14 @@ export default function App() {
         } />
 		<Route path="/campaigns/:campaignId/creation" element={
 			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>
+		} />
+		{/* MJ ouvre le personnage en cours d'un joueur, ou lien direct de reprise (Lot A3,
+		    docs/PLAN_WIZARDCOLLAB.md §6.2) */}
+		<Route path="/campaigns/:campaignId/creation/:sheetId" element={
+			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>
+		} />
+		<Route path="/campaigns/:campaignId/pool" element={
+			<ProtectedRoute><CharacterPoolPage /></ProtectedRoute>
 		} />
         {/* Redirect legacy — bookmarks /texture-packs restent fonctionnels */}
         <Route path="/texture-packs" element={<Navigate to="/workshop" replace />} />
