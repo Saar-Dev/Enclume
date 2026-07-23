@@ -17,7 +17,7 @@ l'UI câblée dans `ProAdvantagesAndSetbacks.jsx` (Lot 5) existent déjà, avec 
 `shared/`, 33/33 sur `server/src/services/`) + build client vérifié (`vite build`, `eslint`). Détail
 complet de ce qui a été fait, fichier par fichier, dans `PLAN_WIZARD_AVANTAGES.md` §16/§17/§18 et ce
 document §4/§4bis — les lire avant de toucher quoi que ce soit ici, pour ne pas dupliquer ou casser ce
-qui existe. **Rien de tout ça n'est committé** (vérifier `git status` avant de continuer). Le §4
+qui existe. **Committé et poussé** (`005a52c`, `dev/Saar`) — chantier clos. Le §4
 ci-dessous (détail du Lot 1) est conservé tel qu'écrit avant le code — utile pour comprendre les
 décisions prises, mais décrit un travail déjà terminé, pas une tâche à faire. **Vérifié en navigateur
 par Saar (2026-07-23) : Lot 5/6 fonctionnel** (tirage carrières + Revers, y compris Attentat/Choc

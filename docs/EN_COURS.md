@@ -250,8 +250,8 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 > testé** : couverture exhaustive de tous les cas (37 métiers × 27 Revers) en conditions réelles —
 > seul un sous-ensemble a été joué. **Données** : migrations 194, 196, 198, 200 (toutes
 > auto-appliquées par nodemon côté Saar, vérifiées directement en base). **Retour arrière** : `down()`
-> fourni sur les quatre. **Rien de tout ça n'est committé** (`git status` à vérifier avant de
-> continuer) — commit/push prévus juste après cette clôture documentaire.
+> fourni sur les quatre. **Committé et poussé** : `005a52c` sur `dev/Saar`, branche à jour avec
+> `origin/dev/Saar`. Chantier clos.
 
 > **Item 105 (Session 168, dev/Saar) — Wizard Step4 : bug budget PC + données chasseur_primes ✅ CODÉ
 > et confirmé par Saar en navigateur ; mécanisation avantages/revers ⚠️ NON LIVRÉE au périmètre demandé.**
