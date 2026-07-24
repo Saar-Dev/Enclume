@@ -23,6 +23,7 @@ import ArmorWoundPanel from './ArmorWoundPanel.jsx'
 import WeaponPanel from './WeaponPanel.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
 import ModingWindow from './ModingWindow.jsx'
+import PossessionNotes from '../components/creation/PossessionNotes.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
 const WIN_INIT_W = 720
@@ -484,6 +485,12 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
                   />
                 </>
               )}
+
+              {/* Biens non matériels (docs/PLAN_WIZARD_MATERIEL.md §5) — même mécanisme que le
+                  Wizard Step6 (char_advantage_notes, category='possession'), disponible en continu
+                  sur la fiche permanente, pas seulement pendant la création. */}
+              <div style={s.divider} />
+              <PossessionNotes characterId={character.id} canEdit={effectiveIsOwner || effectiveIsGm} />
             </div>
 
           </div>

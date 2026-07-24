@@ -29,13 +29,16 @@ export function registerWizardHandlers(io, socket, context) {
   }
 
   socket.on(WS.WIZARD_JOIN, async ({ sheetId }) => {
+    console.log(`[DBG][Wizard] WIZARD_JOIN reçu — user=${user.id} sheetId=${sheetId} socket=${socket.id}`)
     try {
       await resolveSheetAccess(sheetId, user.id)
       leavePreviousWizardRooms()
       socket.join(`wizard:${sheetId}`)
       const locks = await getWizardLocks(sheetId)
+      console.log(`[DBG][Wizard] room wizard:${sheetId} rejointe par ${user.id}, ${locks.length} verrou(s), rooms socket=${[...socket.rooms]}`)
       socket.emit(WS.WIZARD_LOCKS_SYNC, { sheetId, locks })
-    } catch {
+    } catch (err) {
+      console.error(`[DBG][Wizard] WIZARD_JOIN échoué — user=${user.id} sheetId=${sheetId} :`, err.message, err.stack)
       emitWizardError(socket, 'wizard.errors.accessDenied')
     }
   })
@@ -52,9 +55,30 @@ export function registerWizardHandlers(io, socket, context) {
         return
       }
       const locks = await toggleWizardLock(sheetId, step, optionKey, !!locked)
+      console.log(`[DBG][Wizard] WIZARD_LOCK_UPDATE appliqué — sheetId=${sheetId} step=${step} optionKey=${optionKey} locked=${locked}, broadcast à wizard:${sheetId}`)
       io.to(`wizard:${sheetId}`).emit(WS.WIZARD_LOCKS_SYNC, { sheetId, locks })
-    } catch {
+    } catch (err) {
+      console.error(`[DBG][Wizard] WIZARD_LOCK_UPDATE échoué — sheetId=${sheetId} :`, err.message, err.stack)
       emitWizardError(socket, 'wizard.errors.accessDenied')
+    }
+  })
+
+  // WIZARD_LIVE_UPDATE (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§5bis) : relais pur, jamais persisté ni
+  // validé métier — resolveSheetAccess reste la seule garde (identité/droits). `data` est retransmis
+  // tel quel : ce canal n'a aucune autorité (distinct de WIZARD_STATE_SYNC), un payload falsifié n'a
+  // d'effet que cosmétique chez les autres clients de la room (§9 du plan), jamais lu par
+  // reconcileCreation ni par l'enforcement des verrous. `socket.to` (pas `io.to`) exclut l'émetteur —
+  // sans ça, chaque client verrait son propre champ se faire "rafraîchir" pendant qu'il tape par-dessus
+  // sa propre frappe en cours. Pas de WIZARD_ERROR ici (pas une action explicite de l'utilisateur,
+  // contrairement à WIZARD_JOIN/WIZARD_LOCK_UPDATE) — un refus reste silencieux côté client, tracé
+  // serveur seulement.
+  socket.on(WS.WIZARD_LIVE_UPDATE, async ({ sheetId, step, data }) => {
+    if (!Number.isInteger(step) || step < 1 || step > 5 || !data || typeof data !== 'object') return
+    try {
+      await resolveSheetAccess(sheetId, user.id)
+      socket.to(`wizard:${sheetId}`).emit(WS.WIZARD_LIVE_UPDATE, { sheetId, step, data })
+    } catch (err) {
+      console.warn(`[DBG][Wizard] WIZARD_LIVE_UPDATE refusé — user=${user.id} sheetId=${sheetId} :`, err.message)
     }
   })
 }

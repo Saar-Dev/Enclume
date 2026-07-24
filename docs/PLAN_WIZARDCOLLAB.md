@@ -197,6 +197,29 @@ Lot A1 sans risque —
   `hand_L`/`hand_R` suivent exactement la même règle générale — la note "+/-" est retirée, elle était
   redondante avec la règle générale, pas un cas spécial.
 
+**Huitième passe (2026-07-24, alignement post-test réel — trou de scope §2.3)** : test navigateur réel
+(Saar, MJ + Joueur simultanés) révèle que le besoin exprimé depuis le début du chantier n'est PAS ce
+que §2.3 a tranché. §2.3 dit explicitement : « Pas de « mode fantôme » en V1 : le MJ voit l'état tel
+que le joueur l'a enregistré pour la dernière fois. » — c'est-à-dire au grain de l'étape (`reconcile`
+sur "Suivant"), jamais au grain du champ. Ce que Saar demande : quand le joueur remplit "Nom de
+personnage" ou ajuste un attribut, le MJ voit le champ se remplir **pendant la saisie**, avant tout
+"Suivant". Ce n'est pas un oubli mineur : §5/§6 entiers sont bâtis sur l'hypothèse "seuls les verrous
+sont temps réel" — aucune section existante ne couvre ce grain. Analyse et décision ci-dessous
+(§2.5/§5bis/§6.1bis/§6.4bis), inspirées de la même recherche externe que la deuxième passe (Figma,
+Liveblocks, Yjs), approfondie sur le point précis manqué alors : la distinction état persisté /
+présence éphémère.
+
+- **Yjs distingue formellement `Doc` (contenu persisté, CRDT) et `Awareness` (curseurs, sélections,
+  état "en cours de frappe" d'autrui) — l'Awareness n'est jamais écrite dans le `Doc`, jamais
+  persistée, perdue à la déconnexion, purement diffusée.** Liveblocks reprend la même coupure
+  (`Storage` persisté vs `Presence` éphémère, rafraîchie en continu, jamais sourcée en base). C'est
+  exactement la distinction manquée en deuxième passe (qui n'a exploité ces sources que pour le
+  découpage par room, pas pour ce grain).
+- **Décision** : ajouter une diffusion éphémère additive, jamais un remplacement de `reconcile`/
+  `WIZARD_STATE_SYNC` qui reste la seule autorité persistée (`CLAUDE.md` §1.4). Aucune écriture DB à
+  chaque frappe (aurait été la bricole explicitement écartée — états invalides transitoires dans la
+  source de vérité, contraire à l'architecture client-primary déjà en place). Détail §2.5.
+
 **Décisions de périmètre et de séquence (Saar, 2026-07-23)** :
 
 1. Verrous d'options : basique, sur les 5 étapes (y compris Step1 Attributs).
@@ -333,6 +356,45 @@ vivant par brouillon. Le log de conflit ci-dessus ne couvre qu'un sens (MJ écra
 là que `isGm` est vrai) : si le joueur soumet après une modification MJ qu'il n'a pas vue, rien ne le
 détecte. Accepté comme limite V1 — pas une raison de bloquer le chantier, mais un comportement
 explicite, pas une découverte de bug plus tard.
+
+### 2.5 Diffusion live des champs en cours de saisie (ajout §0, 8e passe)
+
+**Deux couches, jamais confondues :**
+
+| Couche | Contenu | Persistée ? | Autorité | Mécanisme |
+|---|---|---|---|---|
+| Durable | `stepNData` | Oui (`reconcile`) | Seule source de vérité | `WIZARD_STATE_SYNC` (§4.5/§5 existant) |
+| Live | `liveStepNData` | Non, jamais écrite en DB | Aucune — purement cosmétique | nouveau `WIZARD_LIVE_UPDATE` (§5bis) |
+
+La couche live ne remplace rien : `reconcile`/l'enforcement des verrous (§4.5) continuent de ne
+comparer et de ne persister que l'état durable. Un client déconnecté/rechargé retrouve l'état durable
+via `GET /:sheetId/state`, jamais un brouillon live périmé.
+
+**Émission — symétrique, sans branchement `isGmView` côté émetteur.** Les 5 composants d'étape
+(`Step1Attributes.jsx`…`Step5Advantages.jsx`) sont déjà les mêmes, que ce soit le joueur ou le MJ
+(mode guide désactivé, §1.3/§6.3) qui les utilise. Chacun garde tout son état de saisie en `useState`
+local (vérifié en lisant `Step1Attributes.jsx:47-83` — `charName`, `height`, `handPref`, etc. ne
+touchent le store qu'au clic "Suivant", jamais avant). C'est pour ça que rien n'est visible
+aujourd'hui : le store lui-même n'a aucune visibilité sur la frappe. Chaque composant appelle donc un
+nouveau prop `onLiveChange(draftObject)` à chaque changement pertinent (un seul `useEffect`, déps =
+tous les champs locaux du composant) — la même forme dans les 5 fichiers, aucune divergence de
+structure entre eux.
+
+**Debounce centralisé, pas dupliqué 5 fois.** Le debounce (~250ms, ordre de grandeur des indicateurs
+de frappe Figma/Google Docs) vit dans un seul endroit : le nouveau hook `useWizardLiveEmit(sheetId)`
+(§6.1bis), pas recopié dans chaque composant d'étape — `onLiveChange` leur reste un simple callback
+sans logique de timer.
+
+**Réception — asymétrique, assumée.** Seule la vue MJ (`isGmView`) préfère le brouillon live à la
+donnée durable pour l'`initialData` de l'étape actuellement affichée (détail §6.4bis) : c'est le sens
+utile aujourd'hui (le MJ observe/assiste), l'inverse (joueur voit le MJ taper) n'est pas exclu par le
+mécanisme (même événement, même room) mais n'est pas câblé en réception V1 — cohérent avec la
+limite "double écrivain" déjà acceptée ci-dessus, pas une nouvelle limite introduite ici.
+
+**Un brouillon live abandonné (le joueur modifie un champ puis clique "Précédent" sans "Suivant")
+reste affiché côté MJ jusqu'au prochain `WIZARD_LIVE_UPDATE` ou jusqu'à ce que l'étape soit
+effectivement réconciliée** (qui purge alors `liveStepNData` pour cette étape, §6.1bis). Accepté en V1
+au même titre que les limites déjà listées en §2.4 (§9, risques).
 
 ---
 
@@ -536,6 +598,28 @@ Socket.io — un client doit ré-émettre ses intentions de room après reconnex
 ré-émet donc `WIZARD_JOIN` au montage/à la reconnexion, ce qui retrouve l'état sans requête REST
 supplémentaire.
 
+### 5bis. Événement `WIZARD_LIVE_UPDATE` (ajout §0/§2.5, 8e passe)
+
+```json
+{ "sheetId": "uuid", "step": 1, "data": { "charName": "...", "attributes": { ... } } }
+```
+
+Émis par n'importe quel client ayant rejoint `wizard:<sheetId>` (joueur, ou MJ en mode guide
+désactivé), débounced côté client (~250ms, §2.5). Le serveur :
+
+1. Revalide l'accès via `resolveSheetAccess(sheetId, userId)` — même garde que `WIZARD_JOIN`, jamais
+   une confiance aveugle dans le fait que le socket a déjà rejoint la room.
+2. **Ne persiste rien, ne valide aucune règle métier** — `data` est retransmis tel quel, purement
+   cosmétique (§2.5, distinction Yjs Awareness/Liveblocks Presence). Aucun risque d'incohérence avec
+   `reconcile` : ce dernier reste l'unique écriture, l'unique validation.
+3. Diffuse via `socket.to('wizard:' + sheetId).emit(...)` — **`socket.to`, pas `io.to`** : exclut
+   l'émetteur lui-même de la diffusion (mécanisme natif Socket.io), pour qu'aucun client ne voie son
+   propre champ se faire "rafraîchir" pendant qu'il tape par-dessus sa propre frappe en cours.
+
+Pas de `WIZARD_ERROR` dédié : un accès refusé ici n'a pas besoin d'un retour visible (contrairement à
+`WIZARD_JOIN`/`WIZARD_LOCK_UPDATE`, actions explicites de l'utilisateur) — un `console.warn` serveur
+suffit, cohérent avec la verbosité déjà en place (`[DBG]`).
+
 ---
 
 ## 6. Client — Architecture et flux
@@ -559,6 +643,27 @@ enregistre une fonction stable et la retire (`socket.off`) à son démontage —
 listeners existants (`react.md`). Défense supplémentaire : le handler ignore tout `WIZARD_LOCKS_SYNC`
 dont le `sheetId` reçu ne correspond pas au `sheetId` actuellement monté (utile même si le nettoyage
 de room côté serveur, §5, a un trou).
+
+### 6.1bis Store et hook — diffusion live (ajout §0/§2.5, 8e passe)
+
+Ajouts à `creationStore.js` :
+
+- `liveStep1Data`…`liveStep5Data` (initialisés `null`) — jamais lus par `getPcDispo`/`getStepBudget`
+  (§2.5 : purement cosmétique, aucun calcul métier ne doit en dépendre).
+- `applyLiveDraft(step, data)` : `set` direct de `liveStepNData` + incrément de `stateSyncVersion`
+  (réutilise **exactement** le mécanisme de remount déjà validé pour `WIZARD_STATE_SYNC`, §6.4bis —
+  aucun nouveau mécanisme de rafraîchissement à inventer).
+- `applyStateSync` (existant, §6.1) : pour chaque `stepN` présent dans le payload reçu, purger
+  `liveStepNData` (→ `null`) en plus de remplacer `stepNData` — l'état durable qui vient d'arriver
+  supersède tout brouillon live affiché pour cette étape (§2.5, dernier paragraphe).
+
+Nouveau hook `client/src/lib/useWizardLiveEmit.js` (même famille que `useWizardLock.js`) :
+`useWizardLiveEmit(sheetId)` retourne `emitLive(step, data)`, gardé par `useSocketReady()` (même garde
+que `WIZARD_JOIN`/`toggleLock`, §0 pattern déjà validé — évite de rejouer le bug de course déjà
+corrigé en Lot A2), et applique le debounce ~250ms en interne (§2.5 — un seul endroit, pas 5).
+
+`WizardLockSync.jsx` ajoute un troisième listener `WIZARD_LIVE_UPDATE` → `applyLiveDraft(step, data)`,
+même filtre défensif `sheetId` que les deux existants, retiré au démontage.
 
 ### 6.2 Route React
 
@@ -586,6 +691,27 @@ inline pour une valeur visuelle, réservé au layout/position par `react.md` §0
 mapping `optionKey` par étape défini en §3bis. Le serveur n'a pas besoin de connaître la sémantique
 des clés, seulement de les stocker/redistribuer. L'indicateur "ce sont les verrous du MJ lui-même"
 réutilise le patron `badge badge-gm` déjà en place, pas une nouvelle classe.
+
+### 6.4bis Diffusion live — câblage des composants (ajout §0/§2.5, 8e passe)
+
+Chaque composant d'étape reçoit un nouveau prop `onLiveChange` (optionnel — la route `/creation` sans
+`:sheetId`, joueur qui commence un brouillon neuf, aucun MJ encore connecté, n'a pas besoin de
+l'appeler si aucune room n'est jointe ; le prop est simplement absent tant que `WizardCreation.jsx` ne
+le fournit pas). Un seul `useEffect` par composant (déps = tous les champs de saisie locaux de ce
+composant) appelle `onLiveChange({ ...tous les champs actuels... })` — même forme que la construction
+du payload `onNext` déjà existante dans chacun, pas une structure nouvelle à inventer par étape.
+
+`WizardCreation.jsx` :
+
+- Instancie `const { emitLive } = useWizardLiveEmit(sheetId)` (nécessite d'être sous
+  `<SocketProvider>`, donc au même niveau que `WizardLockSync`, pas au-dessus).
+  passe `onLiveChange={(data) => emitLive('step1', data)}` (etc. pour les 5 étapes) à chaque composant.
+- `initialData` de l'étape actuellement affichée devient, uniquement si `isGmView` :
+  `liveStepNData ?? stepNData` (préfère le brouillon live s'il existe, retombe sur le durable sinon) ;
+  inchangé (`stepNData` seul) côté joueur.
+- Le remount `gmSyncKey` (§0 précédent, déjà en place) se déclenche désormais aussi sur les
+  incréments de `stateSyncVersion` provoqués par `applyLiveDraft` — aucun changement à `gmSyncKey`
+  lui-même, il lit déjà `stateSyncVersion` sans savoir quelle action l'a incrémenté.
 
 ### 6.5 Réconciliation finale
 
@@ -637,6 +763,7 @@ Lot C (Avantages Professionnels → effets) est hors périmètre de ce document 
 | A1 ✅ | Fondation serveur verrous : migration **201** `wizard_locks` (parité impaire confirmée par Saar, §0 7e passe — à revérifier contre `knex_migrations` au code), `shared/wizardOptionKeys.js` (fonctions pures de formatage de clé, partagées client/serveur), `requireRole('gm')` réutilisé + `resolveSheetAccess(sheetId, userId)` extrait, événements `WIZARD_JOIN` (quitte toute room `wizard:*` précédente avant de rejoindre, §0 6e passe)/`WIZARD_LOCK_UPDATE` (toggle atomique `{step, optionKey, locked}`, jamais un tableau complet)/`WIZARD_LOCKS_SYNC`/`WIZARD_ERROR` (`shared/events.js`), room `wizard:<sheetId>`, routes `GET/PUT /:sheetId/locks`, handlers WS, enforcement serveur dans `reconcileCreation` (algorithme §4.5 : rejet uniquement sur changement réel d'un slot verrouillé, jamais sur resoumission de l'état acquis), nettoyage des locks dans `lockWizard` | — | **Codé** — détail Testé/Non testé : `docs/EN_COURS.md`. Migration 201 pas encore appliquée en base réelle. |
 | A2 ✅ | Client verrous : `creationStore` (`lockedOptions`), toggle « Mode guide » (`WizardHeader`, classe `.btn-toggle` existante, clé i18n `wizard.*`), câblage des 5 composants d'étape avec le mapping §3bis (icône cadenas dédiée par option, jamais une réinterprétation du clic normal — décision Saar), émission `WIZARD_JOIN` au montage, listener `WIZARD_LOCKS_SYNC` nettoyé au démontage + filtré par `sheetId` | A1 | **Codé** — `isGmView` reste `false` tant qu'aucun MJ n'a ouvert le personnage d'un joueur via A3 (le toggle/les cadenas MJ étaient donc invisibles avant A3). |
 | A3 ✅ | MJ ouvre le personnage du joueur : `GET /campaign/:campaignId/drafts`, `POST /start` + `targetUserId` (idempotent, §0), `GET /:sheetId/state` (getters step1-5, `updated_at`, `isGm`, `ownerUserId`), route React `:sheetId`, `loadExistingSheet`, page "Pool de personnages" (jamais "Brouillon" côté UI, décision Saar) réutilisant `GET /campaigns/:id/members` pour le sélecteur de joueur | A1, A2 | **Codé, y compris Step4** (getter dédié + verrous origine/formation + dérogation par-carrière `career_waive_<code>`, demandes Saar en cours de route — `skillAllocations`/`autodidacteAllocations` best-effort assumé, détail `docs/EN_COURS.md`). Premiers correctifs UI confirmés par Saar en navigateur réel ; le scénario complet à 2 sessions reste à valider. |
+| A4 ✅ | Diffusion live des champs en cours de saisie (§0 8e passe, §2.5/§5bis/§6.1bis/§6.4bis) : événement `WIZARD_LIVE_UPDATE` (`shared/events.js`, handler `socketWizard.js` — `resolveSheetAccess` + `socket.to` sans `io.to`, aucune écriture DB), hook `useWizardLiveEmit.js` (debounce ~250ms centralisé), store (`liveStep1..5Data`, `applyLiveDraft`, purge dans `applyStateSync`), listener `WizardLockSync.jsx` (+ `emitLiveRef`, correctif de plan trouvé en codant : `WizardCreation.jsx` ne peut pas appeler `useWizardLiveEmit()` lui-même, même contrainte que `useSocket()`), câblage `onLiveChange` + priorité `liveStepNData ?? stepNData` (MJ uniquement) sur les 5 composants d'étape + `WizardCreation.jsx` | A1, A2, A3 | **Codé et confirmé fonctionnel par Saar en conditions réelles (2026-07-24).** Corrige l'écart de scope découvert en test réel (§2.3 excluait explicitement ce grain). N'a modifié ni `reconcile` ni l'enforcement des verrous (§4.5), purement additif. |
 | B | Conclure la création : `reconcileCreation` ignore éligibilité carrière + budgets (avantages pro, compétences, attributs Étape 1) quand le soumetteur est `isGm`, sans flag ni bouton séparé ; log de conflit non bloquant (`seenUpdatedAt` vs `char_sheet.updated_at`) ; **un test unitaire par point de blocage contourné** (`isGm=true` bypasse chacun des 4, `isGm=false` strictement inchangé — non-régression sur les 181+33 tests existants) | A3 | Non commencé. Pas d'augmentation de budget PC (annulé §0.3) ; rien sur les mutations (aucun contrôle existant à bypasser) ; le lot n'est pas considéré terminé sans ces tests |
 | C | *(hors périmètre, chantier séparé)* Avantages Professionnels → effets concrets (inventaire, PNJ liés, possession qualifiée) | — | à documenter dans un PLAN dédié après B, réutilise `char_traits` + `careerRandomEffectsData.js` |
 
@@ -669,6 +796,9 @@ code, et validé avant d'attaquer le suivant.
 | `optionKey` dérivée séparément client/serveur, dérive silencieusement (violation `CLAUDE.md` §7) | **Corrigé (§0, 7e passe)** : `shared/wizardOptionKeys.js`, fonctions pures de formatage partagées, même famille que `shared/careerEligibility.js`. |
 | Enforcement des verrous bloque toute resoumission d'une étape dès qu'une option y est verrouillée (le reconciler renvoie l'état complet à chaque appel) | **Corrigé (§0/§4.5, 7e passe)** : rejet uniquement si la valeur soumise diffère de la valeur persistée pour un slot verrouillé ; resoumission inchangée toujours acceptée. |
 | Vérification de la parité migration incomplète (dev/monde invisible depuis ce dépôt) | Assumé explicitement (§0, 7e passe) — garde-fou structurel = `WORKFLOW_FUSION.md` à la fusion, pas une certitude pré-code. Saar confirme formellement la convention impaire. |
+| Brouillon live abandonné (joueur modifie un champ puis "Précédent" sans "Suivant") reste affiché côté MJ | Accepté en V1 (§2.5) — purgé au prochain `WIZARD_LIVE_UPDATE` réel ou dès que l'étape est réconciliée (`applyStateSync` purge `liveStepNData`). Cosmétique uniquement, aucune conséquence sur les données persistées. |
+| `WIZARD_LIVE_UPDATE` utilisé pour contourner un verrou ou une validation (client malveillant émettrait des données invalides) | Non applicable : cette diffusion n'est jamais persistée ni lue par `reconcileCreation`/l'enforcement des verrous (§2.5/§4.5) — un payload live falsifié n'a aucun effet au-delà d'un affichage cosmétique erroné chez les autres clients de la room. |
+| Flot de `WIZARD_LIVE_UPDATE` trop fréquent (une frappe = un événement) | Debounce ~250ms centralisé dans `useWizardLiveEmit.js` (§6.1bis), pas dans chaque composant — un seul endroit à ajuster si besoin. |
 
 ---
 
@@ -686,4 +816,15 @@ réel (Dashboard, Pool de personnages). Reste avant de considérer le Lot A clos
 migrations 201/203 en base réelle et valider le scénario complet à 2 sessions (MJ ouvre le personnage
 d'un joueur pendant que celui-ci travaille dessus) — c'est l'objet même de ce chantier, jamais testable
 depuis le poste où il a été codé (`CLAUDE.md` §3). Détail Testé/Non testé complet : `docs/EN_COURS.md`.
-Lot B (bypass MJ des budgets/éligibilité à la finalisation) non commencé.
+
+**État au 2026-07-24 (§0, 8e passe) : test réel à 2 sessions révèle l'écart de scope §2.3 documenté
+ci-dessus.** Correctif de suivi de frontière (`applyStateSync` fait avancer `step` MJ, pas seulement
+`highestStep`) posé dans `creationStore.js` — nécessaire mais non suffisant seul : il ne couvrait que
+le grain "étape validée", pas le grain "champ en cours de saisie" que Saar demande depuis le début.
+**Lot A4 codé** (§8) pour combler cet écart (conception §2.5/§5bis/§6.1bis/§6.4bis, 11 fichiers
+touchés) et **confirmé fonctionnel par Saar en conditions réelles (2026-07-24)** — "Fonctionnel."
+Commit différé : session parallèle (autre agent) en cours sur le dépôt, pas de commit tant qu'elle
+n'est pas terminée (`CLAUDE.md` §3/§4). Lot B (bypass MJ des budgets/éligibilité à la finalisation)
+non commencé, indépendant de A4. Prochaine phase du chantier collaboratif GM/joueur au sens large :
+fenêtre MJ de création d'objet/item (hors périmètre de ce document, à documenter séparément,
+`docs/RegleDocumentaire.md` Règle 1).

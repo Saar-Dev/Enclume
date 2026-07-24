@@ -704,6 +704,8 @@ router.delete('/:characterId/advantages/:id', async (req, res, next) => {
 })
 
 // ─── GET /api/char-sheet/:characterId/advantage-notes ─────────────────────────
+// ?category=narrative|possession — filtre optionnel (docs/PLAN_WIZARD_MATERIEL.md §5), absent =
+// toutes catégories (comportement d'origine préservé pour tout appelant existant).
 router.get('/:characterId/advantage-notes', async (req, res, next) => {
   try {
     const sheet = await db('char_sheet')
@@ -711,7 +713,7 @@ router.get('/:characterId/advantage-notes', async (req, res, next) => {
       .first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
-    const notes = await getAdvantageNotes(sheet.id)
+    const notes = await getAdvantageNotes(sheet.id, req.query.category)
     res.json({ notes })
   } catch (err) {
     next(err)
@@ -726,7 +728,7 @@ router.post('/:characterId/advantage-notes', async (req, res, next) => {
       .first()
     if (!sheet) throw new AppError(404, 'Sheet not found — create it first')
 
-    const note = await addAdvantageNote(sheet.id, req.body.label)
+    const note = await addAdvantageNote(sheet.id, req.body.label, req.body.category)
     res.status(201).json({ note })
   } catch (err) {
     next(err)
@@ -1009,6 +1011,18 @@ router.put('/:characterId/sols', async (req, res, next) => {
 
 // ─── POST /api/char-sheet/:characterId/quick-equip ───────────────────────────
 // GM uniquement. Équipement d'urgence pré-combat — bypass isContainerAvailable.
+// Portée de diffusion inventaire (docs/PLAN_WIZARD_MATERIEL.md §2) : tant que le personnage est un
+// brouillon actif (Wizard non terminé), diffuser à wizard:<sheetId> plutôt qu'à toute la room de
+// campagne — même principe déjà posé pour les verrous/l'état du Wizard
+// (docs/PLAN_WIZARDCOLLAB.md §2.1, "diffusion scopée par ressource, jamais toute la campagne") :
+// un membre de la campagne non impliqué dans cette session Wizard ne doit pas apprendre qu'un
+// brouillon existe. Comportement inchangé (room de campagne) pour un personnage fini, en jeu réel.
+async function resolveInventoryBroadcastRoom(characterId, campaignId) {
+  const sheet = await db('char_sheet').where({ character_id: characterId }).first()
+  if (sheet && !sheet.wizard_locked_at) return `wizard:${sheet.id}`
+  return campaignId
+}
+
 router.post('/:characterId/quick-equip', async (req, res, next) => {
   try {
     if (!req.isGm) throw new AppError(403, 'GM uniquement')
@@ -1017,7 +1031,8 @@ router.post('/:characterId/quick-equip', async (req, res, next) => {
     const { equipment_id, slot } = req.body
     const item = await inventoryService.quickEquip(characterId, equipment_id, slot)
 
-    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_ADDED, { characterId, item })
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
+    req.app.get('io').to(room).emit(WS.INVENTORY_ADDED, { characterId, item })
 
     res.status(201).json({ item })
   } catch (err) { next(err) }
@@ -1028,19 +1043,20 @@ router.post('/:characterId/inventory', async (req, res, next) => {
   try {
     const characterId = req.params.characterId
     const result = await inventoryService.addItem(characterId, req.body)
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.type === 'stack') {
-      req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
+      req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
       return res.json({ item: result.item })
     }
     if (result.type === 'multi') {
       for (const item of result.items) {
-        req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_ADDED, { characterId, item })
+        req.app.get('io').to(room).emit(WS.INVENTORY_ADDED, { characterId, item })
       }
       return res.status(201).json({ item: result.items[0], items: result.items })
     }
 
-    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_ADDED, { characterId, item: result.item })
+    req.app.get('io').to(room).emit(WS.INVENTORY_ADDED, { characterId, item: result.item })
     res.status(201).json({ item: result.item })
   } catch (err) { next(err) }
 })
@@ -1051,7 +1067,8 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     const { characterId, itemId } = req.params
     const item = await inventoryService.updateItem(characterId, itemId, req.body)
 
-    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item })
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
+    req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item })
 
     res.json({ item })
   } catch (err) { next(err) }
@@ -1065,13 +1082,14 @@ router.post('/:characterId/inventory/:itemId/reload', async (req, res, next) => 
     const { characterId, itemId } = req.params
     const { ammo_item_id } = req.body
     const result = await inventoryService.reloadWeapon(characterId, itemId, ammo_item_id)
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.ammoRemoved) {
-      req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, { characterId, itemId: result.ammoItemId })
+      req.app.get('io').to(room).emit(WS.INVENTORY_REMOVED, { characterId, itemId: result.ammoItemId })
     } else {
-      req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item: result.ammoItem })
+      req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.ammoItem })
     }
-    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item: result.weapon })
+    req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.weapon })
     res.json({ item: result.weapon })
   } catch (err) { next(err) }
 })
@@ -1082,12 +1100,13 @@ router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
     const { characterId, itemId } = req.params
     const { quantity: qtyToRemove } = req.body || {}
     const result = await inventoryService.removeItem(characterId, itemId, qtyToRemove)
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.deleted) {
-      req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_REMOVED, { characterId, itemId })
+      req.app.get('io').to(room).emit(WS.INVENTORY_REMOVED, { characterId, itemId })
       return res.json({ deleted: true, itemId })
     }
-    req.app.get('io').to(req.character.campaign_id).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
+    req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
     res.json({ item: result.item })
   } catch (err) { next(err) }
 })

@@ -15,7 +15,7 @@ import DiceLights from '../DiceLights.jsx'
 const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
 const MAX_REROLL_ATTEMPTS = 500
 
-export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, randomMutationsEnabled, onNext, onPrev }) {
+export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, randomMutationsEnabled, onNext, onPrev, onLiveChange }) {
   const { t } = useTranslation('creation')
   const socket = useSocket()
   const { user } = useAuthStore()
@@ -75,6 +75,18 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
 
   const totalCost = selected.reduce((sum, m) => sum + (findMutation(m.mutation_id)?.cost_pc || 0), 0)
   const pcLeft = pcDispo - totalCost
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — même forme que onNext pour
+  // chaque méthode (mutationsMeta omis : purement cosmétique côté soumetteur, le composant MJ
+  // recevant ce brouillon comme initialData ne le lit pas, il recalcule via ses propres mutations de
+  // référence déjà chargées). Rien pour 'none' (handleNone soumet directement, pas d'état intermédiaire).
+  useEffect(() => {
+    if (method === 'chosen') {
+      onLiveChange?.({ method: 'chosen', mutations: selected, pcSpent: totalCost })
+    } else if (method === 'random') {
+      onLiveChange?.({ method: 'random', kept, removed, d20Result, pcSpent: pcDispo - pcAfterRemovals })
+    }
+  }, [method, selected, totalCost, kept, removed, d20Result, pcAfterRemovals, pcDispo, onLiveChange])
 
   const showTooltip = (desc, event) => {
     const rect = event.currentTarget.getBoundingClientRect()

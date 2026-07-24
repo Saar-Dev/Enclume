@@ -462,13 +462,15 @@
     "info_step3": "Capacités spéciales — Mutations",
     "info_step4": "Expérience préliminaire — Origines, formation, professions",
     "info_step5": "Avantages et désavantages",
-    "info_step6": "Vérifiez votre fiche avant de finaliser",
+    "info_step6": "Matériel et biens — le MJ peut convertir vos jauges d'Avantages professionnels en objets concrets",
+    "info_step7": "Vérifiez votre fiche avant de finaliser",
     "step_label_1": "Attributs",
     "step_label_2": "Génotype",
     "step_label_3": "Mutations",
     "step_label_4": "Expériences",
     "step_label_5": "Avantages",
-    "step_label_6": "Aperçu",
+    "step_label_6": "Matériel",
+    "step_label_7": "Aperçu",
     "review_title": "Récapitulatif",
     "finalize": "Finaliser",
     "prev": "Précédent",
@@ -479,6 +481,7 @@
     "pool_empty": "Aucun personnage en cours de création dans cette campagne.",
     "pool_no_owner": "Sans joueur assigné",
     "pool_open": "Ouvrir",
+    "pool_updated": "Dernière modification : {{date}}",
     "pool_pick_player": "Choisir un joueur…",
     "pool_start_for": "Démarrer pour ce joueur",
     "guide_mode": "Mode guide",
@@ -491,5 +494,20 @@
       "gmOnly": "Seul le MJ peut poser un verrou.",
       "invalidLock": "Verrou invalide."
     }
+  },
+  "materiel": {
+    "gaugesTitle": "Jauges d'Avantages professionnels",
+    "gaugesDesc": "Récapitulatif purement informatif — c'est au MJ de juger ce qu'un objet ou un bien coûte en jauge.",
+    "gaugesEmpty": "Aucune jauge acquise en Expérience préliminaire.",
+    "inventoryTitle": "Matériel",
+    "inventoryPlayerHint": "Le MJ peut ajouter du matériel ici en fonction de vos jauges. Rien à faire de ton côté.",
+    "notesTitle": "Biens non matériels",
+    "notesDesc": "Propriétés, étals, planques… texte libre, modifiable par le joueur et le MJ.",
+    "notesEmpty": "Aucun bien noté pour l'instant.",
+    "notesPlaceholder": "Ex. : un appartement à Equinoxe, un étal sur les docks de Vulcania III, un stock de produit de contrebande, etc...",
+    "notesAdd": "Ajouter",
+    "notesError": "Une erreur est survenue.",
+    "prev": "Précédent",
+    "next": "Suivant"
   }
 }

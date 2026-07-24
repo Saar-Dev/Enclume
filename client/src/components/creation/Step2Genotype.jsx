@@ -1,7 +1,7 @@
 // client/src/components/creation/Step2Genotype.jsx
 // Refonte Session 130 : tableau aligné fiche perso — accordéon Base+PC
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreationStore } from '../../stores/creationStore'
 import { calcAN, getAttributeBase } from '../../../../shared/polarisUtils.js'
@@ -122,7 +122,7 @@ const getGenoKey = (id) => {
   }
 }
 
-export default function Step2Genotype({ initialData, onNext, onPrev }) {
+export default function Step2Genotype({ initialData, onNext, onPrev, onLiveChange }) {
   const { t } = useTranslation('creation')
   const step1Data = useCreationStore(s => s.step1Data)
   const femininBonusEnabled = useCreationStore(s => s.femininBonusEnabled)
@@ -172,6 +172,13 @@ export default function Step2Genotype({ initialData, onNext, onPrev }) {
       onNext({ genotypeId: selected.id, isDeserter })
     }
   }
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — même forme que le payload
+  // onNext, mais uniquement une fois un génotype effectivement choisi (avant, rien à montrer côté MJ,
+  // même garde que handleConfirm ci-dessus).
+  useEffect(() => {
+    if (selected) onLiveChange?.({ genotypeId: selected.id, isDeserter })
+  }, [selected, isDeserter, onLiveChange])
 
   const modGenMap = useMemo(() => {
     if (!selected) return {}

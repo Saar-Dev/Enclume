@@ -201,17 +201,24 @@ export async function grantAdvantage(sheetId, advantageId, acquiredDuring, trxOp
 // ─── Notes "Autres" (texte libre) — table dédiée, hors catalogue ref_advantages ─
 // Pas de coût PC, pas de contrainte de famille/unicité, pas de soft-delete (aucun
 // enjeu mécanique à auditer). Voir docs/PLAN_ADVANTAGESPANEL.md Lot C.
+// category (migration 205, docs/PLAN_WIZARD_MATERIEL.md §5) : 'narrative' (comportement d'origine,
+// bloc "Autres" d'AdvantagesPanel.jsx) ou 'possession' (Wizard Step6, biens non matériels) — colonne
+// discriminante, jamais deux tables pour la même structure.
+const NOTE_CATEGORIES = ['narrative', 'possession']
 
-export async function getAdvantageNotes(sheetId) {
-  return db('char_advantage_notes').where({ char_sheet_id: sheetId }).orderBy('created_at', 'asc')
+export async function getAdvantageNotes(sheetId, category) {
+  const query = db('char_advantage_notes').where({ char_sheet_id: sheetId }).orderBy('created_at', 'asc')
+  if (category) query.where({ category })
+  return query
 }
 
-export async function addAdvantageNote(sheetId, label) {
+export async function addAdvantageNote(sheetId, label, category = 'narrative') {
   const trimmed = (label ?? '').trim()
   if (!trimmed) throw new AppError(400, 'label requis')
   if (trimmed.length > 255) throw new AppError(400, 'label limité à 255 caractères')
+  if (!NOTE_CATEGORIES.includes(category)) throw new AppError(400, `category invalide : ${category}`)
   const [row] = await db('char_advantage_notes')
-    .insert({ char_sheet_id: sheetId, label: trimmed })
+    .insert({ char_sheet_id: sheetId, label: trimmed, category })
     .returning('*')
   return row
 }

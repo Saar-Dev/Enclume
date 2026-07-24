@@ -166,4 +166,13 @@ export const WS = {
   WIZARD_LOCK_UPDATE: 'wizard:lock_update',  // GM → serveur : bascule un seul verrou { sheetId, step, optionKey, locked }
   WIZARD_LOCKS_SYNC:  'wizard:locks_sync',   // serveur → room wizard:<sheetId> : état complet des verrous { sheetId, locks }
   WIZARD_ERROR:       'wizard:error',        // serveur → socket émetteur seul : erreur métier (accès refusé, pas MJ)
+  // serveur → room wizard:<sheetId> : contenu de fiche réconcilié, uniquement les steps soumis cette
+  // fois { sheetId, step1?, step2?, step3?, step4?, step5? } — sans ça, un MJ déjà sur la fiche ne
+  // voit jamais les avancées du joueur sans recharger la page (bug réel, docs/PLAN_WIZARDCOLLAB.md).
+  WIZARD_STATE_SYNC:  'wizard:state_sync',
+  // joueur ou GM (mode guide désactivé) → serveur → room wizard:<sheetId> SAUF émetteur (socket.to,
+  // pas io.to) : brouillon en cours de saisie, éphémère, jamais persisté ni validé { sheetId, step,
+  // data } — distinct de WIZARD_STATE_SYNC (durable, source de vérité). docs/PLAN_WIZARDCOLLAB.md
+  // §2.5/§5bis (Lot A4) — motif Yjs Awareness / Liveblocks Presence : jamais écrit dans le Doc/DB.
+  WIZARD_LIVE_UPDATE: 'wizard:live_update',
 }

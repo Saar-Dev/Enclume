@@ -21,6 +21,14 @@ export default function CharacterPoolPage() {
   const formatError = (err) =>
     err.response?.data?.error?.message || err.response?.data?.message || `Erreur ${err.response?.status ?? 'réseau'}`
 
+  // Aucune suppression automatique d'un brouillon abandonné (action destructive, jamais en silence)
+  // — décision Saar : afficher la date pour que le MJ juge lui-même. Devient un signal fiable
+  // maintenant que chaque étape persiste réellement (plus seulement peek/finalize).
+  const formatUpdatedAt = (iso) => {
+    if (!iso) return null
+    return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -77,7 +85,12 @@ export default function CharacterPoolPage() {
             {pool.length === 0 && <p style={s.empty}>{t('wizard.pool_empty')}</p>}
             {pool.map(d => (
               <div key={d.sheetId} style={s.row}>
-                <span style={s.rowName}>{d.ownerName ?? t('wizard.pool_no_owner')}</span>
+                <div style={s.rowInfo}>
+                  <span style={s.rowName}>{d.ownerName ?? t('wizard.pool_no_owner')}</span>
+                  {d.updatedAt && (
+                    <span style={s.rowUpdated}>{t('wizard.pool_updated', { date: formatUpdatedAt(d.updatedAt) })}</span>
+                  )}
+                </div>
                 <button
                   className="btn btn-ghost"
                   onClick={() => navigate(`/campaigns/${campaignId}/creation/${d.sheetId}`)}
@@ -121,7 +134,9 @@ const s = {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '12px 16px', backgroundColor: '#0e0e1a', border: '1px solid #2a2a3e', borderRadius: '6px',
   },
+  rowInfo: { display: 'flex', flexDirection: 'column', gap: '2px' },
   rowName: { color: '#c8c8f0', fontSize: '14px', fontWeight: '600' },
+  rowUpdated: { color: '#6a6a8a', fontSize: '11px' },
   empty: { color: '#8080a0', fontSize: '13px' },
   startBlock: { display: 'flex', gap: '10px', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #1e1e2e' },
   select: { flex: 1 },

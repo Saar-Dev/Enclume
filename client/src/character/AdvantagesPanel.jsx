@@ -111,7 +111,10 @@ export default function AdvantagesPanel({
   // personnage précédent resteraient affichées.
   useEffect(() => {
     let cancelled = false
-    api.get(`/char-sheet/${characterId}/advantage-notes`)
+    // category='narrative' (migration 205, docs/PLAN_WIZARD_MATERIEL.md §5) : cette liste ne montre
+    // jamais les biens/possessions du Wizard Step6 (PossessionNotes.jsx, category='possession'),
+    // même table mais colonne discriminante — jamais mélangées à l'affichage.
+    api.get(`/char-sheet/${characterId}/advantage-notes`, { params: { category: 'narrative' } })
       .then(res => { if (!cancelled) setAdvantageNotes(res.data.notes || []) })
       .catch(err => console.error('Erreur chargement advantage-notes :', err))
     return () => { cancelled = true }
@@ -220,7 +223,7 @@ export default function AdvantagesPanel({
     setError(null)
     try {
       const res = await api.post(`/char-sheet/${characterId}/advantage-notes`, {
-        label: otherLabel.trim(),
+        label: otherLabel.trim(), category: 'narrative',
       })
       setAdvantageNotes(prev => [...prev, res.data.note])
       onSaved?.()

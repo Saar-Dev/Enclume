@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AgeSelector from './AgeSelector'
 import BackgroundSelector from './BackgroundSelector'
@@ -26,7 +26,7 @@ const SUB_STEPS = {
 
 const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
-export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }) {
+export default function Step4Experience({ initialData, pcDispo, onNext, onPrev, onLiveChange }) {
   const { t } = useTranslation('creation')
   const { sheetId, step1Data, step2Data, step5Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, setStep4Data } = useCreationStore()
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
@@ -124,7 +124,14 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   // Dérivé (pas d'effet + setState) : si le joueur revient sur Carrières et réduit le total
   // d'années, une tranche déjà jetée peut devenir hors bornes — filtrée ici plutôt que purgée en
   // état, ProAdvantagesAndSetbacks se remonte avec cette valeur à chaque retour sur la sous-step.
-  const validSetbackRolls = setbackRolls.filter(r => r.blockIndex < setbackBlockCount)
+  // Mémoïsé (useMemo, pas un .filter() nu) — sans ça, un nouveau tableau à chaque rendu redéclenche
+  // l'effet de diffusion live plus bas (dépendance instable), cause racine confirmée d'un "Maximum
+  // update depth exceeded" trouvé par Saar en test réel (combiné à l'effet liveYears juste en dessous,
+  // qui écrit dans le store à chaque montage de cette étape).
+  const validSetbackRolls = useMemo(
+    () => setbackRolls.filter(r => r.blockIndex < setbackBlockCount),
+    [setbackRolls, setbackBlockCount]
+  )
   // Même garde pour la résolution en cours (même raison : une tranche redevenue hors bornes ne doit
   // pas rester "en cascade" indéfiniment côté UI).
   const validSetbackResolution = setbackResolution && setbackResolution.blockIndex < setbackBlockCount ? setbackResolution : null
@@ -248,6 +255,19 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev }
   const handleSubmit = () => {
     onNext?.(buildPayload())
   }
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — réutilise buildPayload (même
+  // forme que la soumission finale), jamais persisté ni validé côté serveur, purement cosmétique.
+  // Déps = les champs bruts que buildPayload lit, pas la fonction elle-même (recréée à chaque rendu,
+  // la lister ferait tourner l'effet en boucle sans rien apporter — même patron que l'effet
+  // liveYears juste au-dessus).
+  useEffect(() => {
+    onLiveChange?.(buildPayload())
+  }, [
+    age, finalAge, originGeo, originSoc, training, higherEd, geoName, geoNation, socNation,
+    careers, skillAllocations, openedSkills, autodidacteAllocations, validSetbackRolls, totalPC,
+    conditionalChoices, onLiveChange,
+  ])
 
   // ─── Navigation ────────────────────────────────────────────────
   const advanceSubStep = (next) => {

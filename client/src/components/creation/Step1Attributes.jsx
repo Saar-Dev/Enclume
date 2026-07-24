@@ -1,7 +1,7 @@
 // client/src/components/creation/Step1Attributes.jsx
 // Refonte Session 130 : tableau aligné fiche perso (Base lecture seule + Mod.PC spinners)
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   POOL_AMBIANCE,
@@ -31,7 +31,7 @@ const ATTR_DESCRIPTIONS = {
   PRE: "La Présence est une mesure de l'aura dégagée par une personne, de son charisme. Son importance est vitale dans toutes les actions relationnelles : séduire, impressionner, commander, intimider…",
 }
 
-export default function Step1Attributes({ initialData, ambiance, femininBonusEnabled, onNext, onPrev, onPcChange }) {
+export default function Step1Attributes({ initialData, ambiance, femininBonusEnabled, onNext, onPrev, onPcChange, onLiveChange }) {
   const { t } = useTranslation('creation')
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(1)
 
@@ -98,6 +98,19 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
     () => Object.fromEntries(ATTR_IDS.map(id => [id, baseAttrs[id] + modPC[id]])),
     [baseAttrs, modPC]
   )
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — même forme que le payload
+  // onNext ci-dessous, jamais persisté ni validé côté serveur, purement cosmétique pour le MJ.
+  // Debounce déjà géré par useWizardLiveEmit (WizardCreation.jsx) : ici, un simple appel par
+  // changement, sans logique de timer dupliquée.
+  useEffect(() => {
+    onLiveChange?.({
+      charName, playerName, attributes: attributs, pcSpent: pcAlloues, isFeminin,
+      height: height === '' ? null : parseFloat(height),
+      weight: weight === '' ? null : parseFloat(weight),
+      skin, eyes, hair, build, distinctiveSigns, handPref: handPref || null,
+    })
+  }, [charName, playerName, attributs, pcAlloues, isFeminin, height, weight, skin, eyes, hair, build, distinctiveSigns, handPref, onLiveChange])
 
   const poolBase = POOL_AMBIANCE[ambiance] || 38
   // Validateur partagé (identique à celui appelé côté serveur à la réconciliation, pattern déjà

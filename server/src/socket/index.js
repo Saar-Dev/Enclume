@@ -56,6 +56,15 @@ const initSocket = (io) => {
         // Stocker role dans socket.data â€” nÃ©cessaire pour ciblage GM via fetchSockets() (PE2)
         socket.data.role = member.role
 
+        // Enregistre ICI, avant SESSION_JOINED : le Wizard collaboratif (WizardLockSync.jsx) emet
+        // WIZARD_JOIN des que useSocket() retourne un objet non-null, sans attendre le sync combat
+        // plus bas (await). Un handler pose apres l'emission de SESSION_JOINED laisserait une
+        // fenetre reelle ou le serveur n'a encore aucun listener pour wizard:join/wizard:lock_update
+        // - evenement silencieusement perdu, verrous inertes cote MJ (bug reel trouve en test
+        // navigateur, docs/PLAN_WIZARDCOLLAB.md). Les autres registerXHandlers restent apres
+        // SESSION_JOINED : rien d'observe ne les fait emettre aussi tot apres le montage.
+        registerWizardHandlers(io, socket, { campaignId, user: socket.user, isGm: socket.role === 'gm' })
+
         // RÃ©cupÃ©rer les utilisateurs dÃ©jÃ  dans la room (avant le join du nouvel arrivant)
         const existingSockets = await io.in(campaignId).fetchSockets()
         const onlineUserIds = existingSockets
@@ -177,7 +186,9 @@ const initSocket = (io) => {
         registerEntityHandlers(io, socket, context, pendingEntityActions)
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
         registerTradeHandlers(io, socket, context)
-        registerWizardHandlers(io, socket, context)
+        // registerWizardHandlers déjà appelé plus haut, avant SESSION_JOINED (voir commentaire ligne
+        // ~59) — pas ici, doublon supprimé (aurait enregistré wizard:join/wizard:lock_update deux
+        // fois sur le même socket).
 
         socket.on('disconnect', () => {
           console.log(`[WS] Déconnecté : ${socket.user.username} (${socket.id})`)

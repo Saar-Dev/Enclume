@@ -5,7 +5,7 @@ import { advantageOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
 
-export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext, onPrev }) {
+export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext, onPrev, onLiveChange }) {
   const { t } = useTranslation('creation')
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(5)
   const [refData, setRefData] = useState([])
@@ -34,6 +34,13 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
     .reduce((s, a) => s + (a.cost_pc ?? 0), 0)
 
   const pcRemaining = pcDispo + pcGained - pcSpent
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — seul `advantages` est
+  // consommé par initialData côté MJ (pcNet/advantagesMeta ne servent qu'à la soumission finale,
+  // onNext ci-dessous), inutile de les recalculer à chaque bascule pour un affichage cosmétique.
+  useEffect(() => {
+    onLiveChange?.({ advantages: selected })
+  }, [selected, onLiveChange])
 
   const handleToggle = (advantageId, type, costPc) => {
     if (isLockedForPlayer(advantageOptionKey(advantageId))) return

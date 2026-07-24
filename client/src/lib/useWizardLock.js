@@ -1,5 +1,5 @@
 import { useCreationStore } from '../stores/creationStore'
-import { useSocket } from './SocketContext.jsx'
+import { useSocket, useSocketReady } from './SocketContext.jsx'
 import { WS } from '../../../shared/events.js'
 
 // Câblage verrous MJ pour un composant d'étape du Wizard (docs/PLAN_WIZARDCOLLAB.md Lot A2).
@@ -10,6 +10,7 @@ import { WS } from '../../../shared/events.js'
 // une réinterprétation du clic de sélection normal, qui garde toujours son sens habituel.
 export function useWizardLock(step) {
   const socket = useSocket()
+  const ready = useSocketReady()
   const sheetId = useCreationStore(s => s.sheetId)
   const isGmView = useCreationStore(s => s.isGmView)
   const guideModeActive = useCreationStore(s => s.guideModeActive)
@@ -21,8 +22,10 @@ export function useWizardLock(step) {
   // verrous (docs/PLAN_WIZARDCOLLAB.md §4.5) ; il les voit via l'icône cadenas active, pas ce flag.
   const isLockedForPlayer = (optionKey) => !isGmView && isLocked(optionKey)
 
+  // ready (useSocketReady) : garde défensive, même motif que WizardLockSync.jsx — un clic manuel
+  // arrive presque toujours bien après la poignée de main SESSION_JOIN, mais rien ne l'garantit.
   const toggleLock = (optionKey) => {
-    if (!socket || !sheetId || optionKey == null) return
+    if (!socket || !ready || !sheetId || optionKey == null) return
     socket.emit(WS.WIZARD_LOCK_UPDATE, { sheetId, step, optionKey, locked: !isLocked(optionKey) })
   }
 

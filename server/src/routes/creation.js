@@ -78,7 +78,11 @@ router.post('/start', async (req, res, next) => {
     }
 
     const result = await startCreation(campaignId, ownerUserId)
-    res.json(result)
+    // isGm (rôle réel de campagne, pas seulement "MJ en train d'observer le brouillon d'un autre",
+    // docs/PLAN_WIZARD_MATERIEL.md) — sans ça, un MJ démarrant un brouillon pour lui-même (flux normal,
+    // jamais passé par loadExistingSheet) ne pouvait jamais être reconnu comme MJ sur Step6, bug réel
+    // remonté par Saar (aucun bouton "Ajouter du matériel" visible alors qu'il est bien MJ).
+    res.json({ ...result, isGm: member.role === 'gm' })
   } catch (err) { next(err) }
 })
 
@@ -166,6 +170,10 @@ router.get('/:sheetId/state', async (req, res, next) => {
     res.json({
       step1, step2, step3, step4, step5,
       updatedAt: req.sheet.updated_at,
+      // Marqueur de progression (docs/PLAN_WIZARD_MATERIEL.md §3bis) — permet à loadExistingSheet
+      // de reconnaître "Step6 dépassé" à froid (rechargement, pas de session live), alors que Step6
+      // ne persiste aucune donnée d'étape par ailleurs (jamais lu par getStep1State..getStep5State).
+      creationState: req.sheet.creation_state,
       isGm: req.isGm,
       ownerUserId: req.character.user_id,
       characterId: req.character.id,
@@ -216,8 +224,40 @@ router.put('/:sheetId/locks', async (req, res, next) => {
 
 router.post('/:sheetId/reconcile', async (req, res, next) => {
   try {
-    const { step1, step2, step3, step4, step5, finalize } = req.body
+    const { step1, step2, step3, step4, step5, step6, finalize } = req.body
+    // step6 n'est JAMAIS passé à reconcileCreation (docs/PLAN_WIZARD_MATERIEL.md §0/§3) : cette étape
+    // ne persiste aucune donnée métier (matériel/biens écrits immédiatement par leurs propres routes,
+    // char-sheet.js), reconcileCreation reste ignorante de son existence — un simple marqueur de
+    // diffusion géré uniquement ici, au niveau route.
     const result = await reconcileCreation(req.sheet.id, { step1, step2, step3, step4, step5, finalize }, req.isGm)
+
+    // Diffuse le contenu réellement persisté (relu, pas republié tel quel — garantit que ce qui part
+    // correspond exactement à ce que reconcileCreation a validé/normalisé) à la room wizard:<sheetId>
+    // — sans ça, un MJ déjà sur la fiche ne voit jamais les avancées du joueur sans recharger la
+    // page (bug réel remonté par Saar). Uniquement les steps réellement soumis cette fois.
+    const updatedSteps = {}
+    if (step1) updatedSteps.step1 = await getStep1State(req.sheet.id)
+    if (step2) updatedSteps.step2 = await getStep2State(req.sheet.id)
+    if (step3) updatedSteps.step3 = await getStep3State(req.sheet.id)
+    if (step4) updatedSteps.step4 = await getStep4State(req.sheet.id)
+    if (step5) updatedSteps.step5 = await getStep5State(req.sheet.id)
+    if (step6) {
+      // Marqueur pur (docs/PLAN_WIZARD_MATERIEL.md §3) : rien à relire/persister, juste signaler aux
+      // autres clients de la room que cette étape est dépassée. creation_state (§3bis) permet en plus
+      // à un MJ qui rouvrirait la fiche à froid (pas connecté en direct) de le reconnaître aussi.
+      updatedSteps.step6 = true
+      await db('char_sheet').where({ id: req.sheet.id }).update({ creation_state: 'step6_done' })
+    }
+    console.log(`[DBG][Wizard] reconcile sheetId=${req.sheet.id} isGm=${req.isGm} diffusion=${Object.keys(updatedSteps)}`)
+    if (Object.keys(updatedSteps).length) {
+      const room = `wizard:${req.sheet.id}`
+      const socketsInRoom = await req.app.get('io').in(room).fetchSockets()
+      console.log(`[DBG][Wizard] broadcast WIZARD_STATE_SYNC vers ${room} — ${socketsInRoom.length} socket(s) présent(s)`)
+      req.app.get('io').to(room).emit(WS.WIZARD_STATE_SYNC, {
+        sheetId: req.sheet.id, ...updatedSteps,
+      })
+    }
+
     res.json(result)
   } catch (err) { next(err) }
 })

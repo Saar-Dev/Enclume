@@ -318,10 +318,30 @@ export async function getStep5State(sheetId) {
 export async function getStep4State(sheetId) {
   const [archetype, careerRows, ledger, skillRows] = await Promise.all([
     db('char_archetype').where({ char_sheet_id: sheetId }).first(),
-    db('char_careers').where({ char_sheet_id: sheetId }).select('*'),
+    // Jointure ref_careers (bug réel remonté par Saar, "de temps en temps" : les noms de profession
+    // disparaissent au Récap et affichent l'UUID brut) — career_name/titles n'étaient jamais résolus
+    // ici, uniquement portés par le state local du composant React au moment de l'ajout
+    // (CareersAllocator.jsx#handleAdd). Invisible tant que Step4Experience reste monté en continu ;
+    // révélé dès qu'il se réinitialise depuis cet état serveur (réouverture, ou le remontage
+    // gmSyncKey côté MJ, docs/PLAN_WIZARDCOLLAB.md).
+    db('char_careers as cc')
+      .join('ref_careers as rc', 'rc.id', 'cc.career_id')
+      .where({ 'cc.char_sheet_id': sheetId })
+      .select('cc.*', 'rc.name as career_name'),
     db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
     db('char_skills').where({ char_sheet_id: sheetId, is_learned: true }).select('skill_id'),
   ])
+
+  const careerIds = careerRows.map(c => c.career_id)
+  const titleRows = careerIds.length
+    ? await db('ref_career_titles').whereIn('career_id', careerIds)
+    : []
+  const titlesByCareer = new Map()
+  for (const t of titleRows) {
+    if (!titlesByCareer.has(t.career_id)) titlesByCareer.set(t.career_id, [])
+    titlesByCareer.get(t.career_id).push(t)
+  }
+
   return {
     age: archetype?.age ?? 16,
     originGeo: archetype?.origin_geo ?? null,
@@ -332,6 +352,8 @@ export async function getStep4State(sheetId) {
     pcSpent: ledger?.pc_spent_step4 ?? 0,
     careers: careerRows.map(c => ({
       career_id: c.career_id,
+      career_name: c.career_name,
+      titles: titlesByCareer.get(c.career_id) ?? [],
       years: c.years,
       proAdvantages: c.pro_advantages ?? {},
       randomPicks: c.random_picks ?? [],

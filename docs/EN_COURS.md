@@ -357,11 +357,11 @@ Verrou retiré au commit de clôture, une fois Saar confirmé. Refonte CaC (`doc
 verrou levé) reste différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif —
 cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
 
-🔒 En cours (Saar) : `docs/PLAN_WIZARDCOLLAB.md` Lots A1+A2+A3+A4 — **codés au complet et confirmés
-fonctionnels par Saar en conditions réelles (2 sessions simultanées)**, Lot B (bypass MJ des budgets/
-éligibilité à la finalisation) non commencé. Commit différé : session parallèle (autre agent) encore
-en cours sur ce dépôt — pas de commit tant qu'elle n'est pas terminée (`CLAUDE.md` §3/§4). Terminologie
-tranchée avec Saar : jamais
+**Item 106 (Session 172-173, dev/Saar) — Wizard collaboratif MJ/joueur + Matériel & Biens ✅ CODÉ,
+confirmé fonctionnel par Saar.** `docs/PLAN_WIZARDCOLLAB.md` Lots A1+A2+A3+A4 — codés au complet et
+confirmés fonctionnels en conditions réelles (2 sessions simultanées). Lot B (bypass MJ des budgets/
+éligibilité à la finalisation) non commencé, indépendant du reste, reste à planifier séparément.
+Terminologie tranchée avec Saar : jamais
 "Brouillon" côté texte visible (jugé dénigrant) — "brouillon"/"draft" reste un terme de code interne
 uniquement (`creation_state`, `startCreation`, `GET .../drafts`), le concept UI s'appelle "Pool de
 personnages" (`docs/VOCABULARY.md`, même patron que Coffre/Vault).
@@ -537,6 +537,65 @@ poussé, rien recommité depuis) : `shared/events.js` (+`WIZARD_STATE_SYNC`, +`W
 frontière, +`liveStep1..5Data`/`applyLiveDraft`), `client/src/pages/CharacterPoolPage.jsx` (+date de
 dernière modification par ligne), `client/src/locales/creation.json` (+`pool_updated`), les 5
 composants d'étape Wizard (+`onLiveChange`).
+
+**"Maximum update depth exceeded" trouvé par Saar en test réel — cause confirmée, pas une hypothèse** :
+`onLiveChange` était une fléchée inline dans `WizardCreation.jsx` (recréée à chaque rendu, celui-ci
+sans sélecteur sur le store) et `validSetbackRolls` (`Step4Experience.jsx`) un `.filter()` non
+mémoïsé — deux dépendances d'effet instables, exactement le mécanisme que le message d'erreur React
+décrit. **Corrigé** : `onLiveChange1..5` en `useCallback([])` (lisent `emitLiveRef.current` à l'appel,
+jamais capturé), `validSetbackRolls` en `useMemo`. Confirmé stable par Saar ensuite (plus d'erreur
+console) — un symptôme résiduel restant ("refresh intempestifs aléatoires", sans erreur console) a été
+tracé à une cause externe (sauvegardes de l'agent travaillant en parallèle sur la localisation,
+déclenchant le rechargement HMR de Vite), pas une régression de ce chantier.
+
+**Chantier "Matériel & Biens" (Step6) — suite et fin du plan Wizard, ✅ CODÉ.** Nouveau plan dédié
+`docs/PLAN_WIZARD_MATERIEL.md` (suite explicite de `PLAN_WIZARDCOLLAB.md §0.5`, Lot C — hors périmètre
+de ce document-là). Étape 6 "Matériel & Biens" insérée entre Avantages (5) et Review (devenu 7),
+jamais bloquante pour le joueur. Aucune donnée d'étape persistée par le Wizard lui-même — les objets
+(`InventoryPanel.jsx` réutilisé tel quel) et les biens non matériels (`PossessionNotes.jsx`, nouveau,
+extrait fin du bloc "Autres" d'`AdvantagesPanel.jsx`, `char_advantage_notes.category` — migration 205)
+s'écrivent immédiatement via les routes déjà existantes. Marqueur `step6` géré uniquement au niveau
+route (jamais dans `reconcileCreation`), diffusion inventaire redirigée vers `wizard:<sheetId>` tant
+que le personnage est un brouillon actif. Recherche externe faite avant de coder (Saar l'a demandé
+explicitement) : documentation officielle Foundry VTT confirme qu'aucun VTT professionnel du domaine
+ne valide mécaniquement le coût d'un octroi MJ — décompte narratif pur, conforme à la demande. Détail
+complet (architecture, alternatives écartées, 3 passes d'analyse à charge) : `docs/PLAN_WIZARD_MATERIEL.md`.
+
+**Quatre correctifs post-livraison (retour navigateur réel de Saar)**, causes toutes confirmées par
+lecture, pas par hypothèse :
+- **Step4 Récap : noms de profession remplacés par l'UUID, "de temps en temps"** — `getStep4State`
+  ne joignait jamais `ref_careers`/`ref_career_titles`, les noms n'existaient qu'en mémoire locale du
+  composant au moment de l'ajout. Invisible tant que `Step4Experience` reste monté en continu, révélé
+  dès qu'il se réinitialise depuis les données serveur (réouverture, ou le remontage `gmSyncKey`).
+  Corrigé par une vraie jointure.
+- **Step6 : aucun bouton "Ajouter du matériel" visible pour un MJ créant son propre personnage** —
+  `isGmView` n'était peuplé que par `loadExistingSheet` (MJ ouvrant le brouillon d'un *autre*), jamais
+  par le flux normal `POST /creation/start`. Corrigé : la route renvoie désormais le rôle réel de
+  campagne, stocké côté client au démarrage.
+- **Placeholder des biens non matériels** — mis à jour avec des exemples de l'univers du jeu (Equinoxe,
+  Vulcania III) au lieu de références hors-univers.
+- **Biens non matériels ajoutés à la fiche permanente** — `PossessionNotes` (même mécanisme que
+  Step6) monté aussi dans l'onglet Bio & Info de `CharacterWindow.jsx`, disponible en continu, pas
+  seulement pendant la création.
+
+**Testé** : syntaxe de tous les fichiers touchés (`node --check` + `esbuild`), bundle complet des
+imports croisés sur deux points d'entrée (`WizardCreation.jsx`, `CharacterWindow.jsx`, 0 erreur de
+résolution), JSON des locales validé.
+**Non testé** : les 4 correctifs n'ont pas encore été revalidés par Saar en conditions réelles après
+ce tour. Migrations 201/203/205 à appliquer en base réelle si pas déjà fait.
+**Fichiers Matériel & Biens** : migration `205_char_advantage_notes_category.js`,
+`server/src/services/advantageService.js` (+`category`), `server/src/routes/character/char-sheet.js`
+(+portée diffusion inventaire conditionnelle, +`category` sur les routes notes),
+`server/src/routes/creation.js` (+marqueur `step6`, +`creationState`, +`isGm` sur `/start`),
+`server/src/services/creationService.js` (+jointure `ref_careers`/`ref_career_titles` dans
+`getStep4State`), `client/src/stores/creationStore.js` (+`step6` dans `applyStateSync`, +heuristique
+`creation_state`, +`isGmView` depuis `/start`), `client/src/components/creation/WizardCreation.jsx`
+(renumérotation 6→7), `client/src/lib/useWizardInventorySync.js` (nouveau),
+`client/src/components/creation/StepMaterielEtBiens.jsx` (nouveau),
+`client/src/components/creation/PossessionNotes.jsx` (nouveau),
+`client/src/character/AdvantagesPanel.jsx` (+filtre `category='narrative'`),
+`client/src/character/CharacterWindow.jsx` (+`PossessionNotes` onglet Bio & Info),
+`client/src/locales/creation.json` (+section `materiel`, +`step_label_6/7`, +`info_step6/7`).
 
 > **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
 > intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).
