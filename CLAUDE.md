@@ -36,6 +36,7 @@ règles domaine > `MANUEL` > `PLAN`.
 - Avant de conclure qu'aucun piège connu ne couvre un sujet, vérifier `docs/SYSTEME/CONVENTIONS.md`
   §19 (index maître des codes P/PE/PC/PI) — les `rules/` routées ne pointent qu'une partie du domaine,
   l'index est la source complète.
+- Migrations : Codex migration PAIRE uniquement. Claude migration IMPAIRE uniquement.
 
 ---
 

@@ -42,7 +42,7 @@
 - Arts Martiaux (techniques offensives/défensives, Saisie/Lutte)
 - LOS & Raycast (replanifier avec Kiwi)
 - Catastrophes (seuil à formaliser)
-- Fatigue, Maladies/Poisons, Drogues, Irradiations, dangers environnementaux (Chute/Feu/Froid/Noyade) — `docs/PLAN_FATIGUE_DOMMAGES.md`, plan en lots écrit, aucun code, décisions Lot 0 à trancher avec Saar
+- Fatigue, Maladies/Poisons, Drogues, Irradiations, Faim/soif, dangers environnementaux (Chute/Feu/Froid/Noyade), horloge de campagne — `docs/PLAN_FATIGUE_DOMMAGES.md`, plan en 10 lots, Lot 0 (cadrage) clos, aucun code
 - Exo‑armures (manuel existant, jamais implanté)
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
