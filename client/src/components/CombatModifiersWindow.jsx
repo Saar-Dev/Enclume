@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
@@ -13,52 +14,56 @@ import { RANGED_SITUATION_MODS, isImpossibleRangedSituation } from '../../../sha
 const mod = (sitKey) => sitKey ? (RANGED_SITUATION_MODS[sitKey]?.mod ?? 0) : 0
 const isImpossible = (sitKey) => !!sitKey && RANGED_SITUATION_MODS[sitKey]?.impossible === true
 
-const FIRE_MODE_LABELS = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }
+// FIRE_MODE_LABELS reutilise states.fireMode.*.label (memes libelles que StateSelector, Segment 5).
+// Toutes les autres valeurs label ci-dessous = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md
+// §3.1), resolue par le composant via t(), jamais affichee brute ici. TAILLES reutilise
+// cacModifiers.tailles.* (memes 8 paliers que CombatCacModifiersWindow.jsx, Règle 2).
+const FIRE_MODE_LABELS = { CC: 'states.fireMode.cc.label', RC: 'states.fireMode.rc.label', RL: 'states.fireMode.rl.label' }
 
 const PORTEES = [
-  { key: 'bout_portant', label: 'Bout portant', mod: 5 },
-  { key: 'courte',       label: 'Courte',        mod: 0 },
-  { key: 'moyenne',      label: 'Moyenne',        mod: -5 },
-  { key: 'longue',       label: 'Longue',         mod: -10 },
-  { key: 'extreme',      label: 'Extrême',        mod: -15 },
+  { key: 'bout_portant', label: 'modifiers.portees.boutPortant', mod: 5 },
+  { key: 'courte',       label: 'modifiers.portees.courte',      mod: 0 },
+  { key: 'moyenne',      label: 'modifiers.portees.moyenne',     mod: -5 },
+  { key: 'longue',       label: 'modifiers.portees.longue',      mod: -10 },
+  { key: 'extreme',      label: 'modifiers.portees.extreme',     mod: -15 },
 ]
 
 const TIREUR_ALLURES = [
-  { val: 'immobile',               sitKey: null,                     label: 'Immobile',            mod: mod(null) },
-  { val: 'tireur_allure_lente',    sitKey: 'tireur_allure_lente',    label: 'Allure lente',        mod: mod('tireur_allure_lente') },
-  { val: 'tireur_allure_moyenne',  sitKey: 'tireur_allure_moyenne',  label: 'Allure moyenne',      mod: mod('tireur_allure_moyenne') },
-  { val: 'tireur_allure_rapide',   sitKey: 'tireur_allure_rapide',   label: 'Allure rapide',       mod: mod('tireur_allure_rapide') },
-  { val: 'tireur_allure_maximale', sitKey: 'tireur_allure_maximale', label: 'Allure maximale (✗)', mod: mod('tireur_allure_maximale') },
+  { val: 'immobile',               sitKey: null,                     label: 'modifiers.allures.immobile',           mod: mod(null) },
+  { val: 'tireur_allure_lente',    sitKey: 'tireur_allure_lente',    label: 'modifiers.allures.lente',              mod: mod('tireur_allure_lente') },
+  { val: 'tireur_allure_moyenne',  sitKey: 'tireur_allure_moyenne',  label: 'modifiers.allures.moyenne',            mod: mod('tireur_allure_moyenne') },
+  { val: 'tireur_allure_rapide',   sitKey: 'tireur_allure_rapide',   label: 'modifiers.allures.rapide',             mod: mod('tireur_allure_rapide') },
+  { val: 'tireur_allure_maximale', sitKey: 'tireur_allure_maximale', label: 'modifiers.allures.maximaleImpossible', mod: mod('tireur_allure_maximale') },
 ]
 
 const CIBLE_ALLURES = [
-  { val: 'cible_immobile',        sitKey: 'cible_immobile',        label: 'Immobile',       mod: mod('cible_immobile') },
-  { val: 'cible_lente',           sitKey: null,                    label: 'Allure lente',   mod: mod(null) },
-  { val: 'cible_allure_moyenne',  sitKey: 'cible_allure_moyenne',  label: 'Allure moyenne', mod: mod('cible_allure_moyenne') },
-  { val: 'cible_allure_rapide',   sitKey: 'cible_allure_rapide',  label: 'Allure rapide',  mod: mod('cible_allure_rapide') },
-  { val: 'cible_allure_maximale', sitKey: 'cible_allure_maximale', label: 'Allure maximale', mod: mod('cible_allure_maximale') },
+  { val: 'cible_immobile',        sitKey: 'cible_immobile',        label: 'modifiers.allures.immobile', mod: mod('cible_immobile') },
+  { val: 'cible_lente',           sitKey: null,                    label: 'modifiers.allures.lente',    mod: mod(null) },
+  { val: 'cible_allure_moyenne',  sitKey: 'cible_allure_moyenne',  label: 'modifiers.allures.moyenne',  mod: mod('cible_allure_moyenne') },
+  { val: 'cible_allure_rapide',   sitKey: 'cible_allure_rapide',  label: 'modifiers.allures.rapide',    mod: mod('cible_allure_rapide') },
+  { val: 'cible_allure_maximale', sitKey: 'cible_allure_maximale', label: 'modifiers.allures.maximale', mod: mod('cible_allure_maximale') },
 ]
 
 const COUVERTURES = [
-  { key: 'couverture_partielle',  label: 'Couverture partielle (50%)',  mod: mod('couverture_partielle') },
-  { key: 'couverture_importante', label: 'Couverture importante (75%)', mod: mod('couverture_importante') },
+  { key: 'couverture_partielle',  label: 'modifiers.couvertures.partielle',  mod: mod('couverture_partielle') },
+  { key: 'couverture_importante', label: 'modifiers.couvertures.importante', mod: mod('couverture_importante') },
 ]
 
 const OBSCURITES = [
-  { key: 'obscurite_legere',     label: 'Obscurité légère',              mod: mod('obscurite_legere') },
-  { key: 'obscurite_importante', label: 'Obscurité importante',          mod: mod('obscurite_importante') },
-  { key: 'obscurite_totale',     label: 'Obscurité totale (impossible)', mod: mod('obscurite_totale') },
+  { key: 'obscurite_legere',     label: 'modifiers.obscurites.legere',     mod: mod('obscurite_legere') },
+  { key: 'obscurite_importante', label: 'modifiers.obscurites.importante', mod: mod('obscurite_importante') },
+  { key: 'obscurite_totale',     label: 'modifiers.obscurites.totale',     mod: mod('obscurite_totale') },
 ]
 
 const TAILLES = [
-  { key: 'minuscule',    label: 'Minuscule (~30 cm)',    mod: -10 },
-  { key: 'tres_petite',  label: 'Très petite (~50 cm)', mod: -5 },
-  { key: 'petite',       label: 'Petite (~1 m)',         mod: -3 },
-  { key: 'moyenne',      label: 'Moyenne (humaine)',     mod: 0 },
-  { key: 'grande',       label: 'Grande (~3 m)',         mod: 3 },
-  { key: 'tres_grande',  label: 'Très grande (~5 m)',    mod: 5 },
-  { key: 'enorme',       label: 'Énorme (~7 m)',         mod: 10 },
-  { key: 'gigantesque',  label: 'Gigantesque (10 m+)',   mod: 15 },
+  { key: 'minuscule',    label: 'cacModifiers.tailles.minuscule',   mod: -10 },
+  { key: 'tres_petite',  label: 'cacModifiers.tailles.tresPetite',  mod: -5 },
+  { key: 'petite',       label: 'cacModifiers.tailles.petite',      mod: -3 },
+  { key: 'moyenne',      label: 'cacModifiers.tailles.moyenne',     mod: 0 },
+  { key: 'grande',       label: 'cacModifiers.tailles.grande',      mod: 3 },
+  { key: 'tres_grande',  label: 'cacModifiers.tailles.tresGrande',  mod: 5 },
+  { key: 'enorme',       label: 'cacModifiers.tailles.enorme',      mod: 10 },
+  { key: 'gigantesque',  label: 'cacModifiers.tailles.gigantesque', mod: 15 },
 ]
 
 const MOVE_ACTION_KEYS = ['move_lente', 'move_moyenne', 'move_rapide', 'move_max']
@@ -90,6 +95,7 @@ function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n, impossible = false) { return impossible ? '✗' : n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
 export default function CombatModifiersWindow({ socket, assaultAction, activeRosterEntry, attackResult, onAttackConfirmed }) {
+  const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -109,8 +115,8 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const [isRolling, setIsRolling] = useState(false)
 
   // Fallback tokens depuis attackResult si assaultAction est null (après avancement du slot)
-  const tireurToken = tokens.find(t => t.id === (assaultAction?.token_id ?? attackResult?.tireurTokenId))
-  const cibleToken  = tokens.find(t => t.id === (assaultAction?.target_token_id ?? attackResult?.cibleTokenId))
+  const tireurToken = tokens.find(tk => tk.id === (assaultAction?.token_id ?? attackResult?.tireurTokenId))
+  const cibleToken  = tokens.find(tk => tk.id === (assaultAction?.target_token_id ?? attackResult?.cibleTokenId))
   const tireurCharId = tireurToken?.character_id ?? null
   const cibleCharId  = cibleToken?.character_id  ?? null
 
@@ -233,7 +239,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       {/* Header — titre + pill */}
       <div className="combat-float-header" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }} onMouseDown={onHeaderMouseDown}>
         <span style={styles.headerTitle}>
-          {tireurToken?.label ?? '?'} — Assaut — {cibleToken?.label ?? '?'}
+          {t('modifiers.header', { shooter: tireurToken?.label ?? '?', target: cibleToken?.label ?? '?' })}
         </span>
         <div style={styles.pills}>
           <span style={{
@@ -242,15 +248,15 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             color:      hasTirImpossible ? '#ff6060' : totalModComp >= 0 ? '#6dca6d' : '#ca6d6d',
           }}>
             {hasTirImpossible
-              ? 'Tir impossible'
+              ? t('modifiers.impossibleShot')
               : weaponSkill?.skillLabel
                 ? `${weaponSkill.skillLabel} ${weaponSkill.skillTotal ?? '?'} ${formatMod(totalModComp)}`
-                : `Comp ${formatMod(totalModComp)}`
+                : t('cacModifiers.compFallback', { mod: formatMod(totalModComp) })
             }
           </span>
           {bonusDmg !== 0 && (
             <span style={{ ...styles.pill, background: '#3a2a10', color: '#f5a842' }}>
-              Dmg {formatMod(bonusDmg)}
+              {t('modifiers.dmgTag', { mod: formatMod(bonusDmg) })}
             </span>
           )}
         </div>
@@ -265,10 +271,10 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           color:        attackResult.hit ? '#7ba8f0' : '#e06060',
         }}>
           <span style={styles.attackBannerResult}>
-            {attackResult.hit ? '✓ Touché !' : '✗ Raté'}
+            {attackResult.hit ? t('modifiers.attackBanner.hit') : t('modifiers.attackBanner.missed')}
           </span>
           <span style={styles.attackBannerDetail}>
-            {attackResult.roll} / {attackResult.seuil} Seuil
+            {t('modifiers.attackBanner.detail', { roll: attackResult.roll, seuil: attackResult.seuil })}
           </span>
         </div>
       )}
@@ -281,9 +287,9 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           <div style={styles.infoBlock}>
             {assaultAction?.fire_mode && (
               <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>Mode de tir</span>
+                <span style={styles.infoLabel}>{t('modifiers.fireModeLabel')}</span>
                 <span style={styles.infoValue}>
-                  {FIRE_MODE_LABELS[assaultAction.fire_mode] ?? assaultAction.fire_mode}
+                  {FIRE_MODE_LABELS[assaultAction.fire_mode] ? t(FIRE_MODE_LABELS[assaultAction.fire_mode]) : assaultAction.fire_mode}
                   {assaultAction.bullet_count > 1 ? ` — ${assaultAction.bullet_count}b` : ''}
                   {assaultAction.fire_mode_bonus_comp ? ` (+${assaultAction.fire_mode_bonus_comp} comp)` : ''}
                 </span>
@@ -291,13 +297,13 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             )}
             {isRushed && (
               <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>État</span>
-                <span style={{ ...styles.infoValue, color: '#e55' }}>⚠ Précipité (−5 comp)</span>
+                <span style={styles.infoLabel}>{t('modifiers.stateLabel')}</span>
+                <span style={{ ...styles.infoValue, color: '#e55' }}>{t('modifiers.rushed')}</span>
               </div>
             )}
             {prefilledPortee?.distance !== undefined && (
               <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>Distance</span>
+                <span style={styles.infoLabel}>{t('modifiers.distanceLabel')}</span>
                 <span style={styles.infoValue}>{prefilledPortee.distance} m</span>
               </div>
             )}
@@ -305,50 +311,50 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 
           {/* Portée */}
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Portée</div>
+            <div style={styles.sectionTitle}>{t('modifiers.porteeSection')}</div>
             <select
               value={effectivePortee ?? ''}
               onChange={e => setPorteeOverride(e.target.value || null)}
               style={styles.select}
             >
-              {!effectivePortee && <option value="">— choisir —</option>}
+              {!effectivePortee && <option value="">{t('modifiers.choosePlaceholder')}</option>}
               {PORTEES.map(p => (
-                <option key={p.key} value={p.key}>{p.label} ({fmtOpt(p.mod)})</option>
+                <option key={p.key} value={p.key}>{t(p.label)} ({fmtOpt(p.mod)})</option>
               ))}
             </select>
           </div>
 
           {/* Allure tireur */}
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Allure tireur</div>
+            <div style={styles.sectionTitle}>{t('modifiers.tireurAllureSection')}</div>
             <select
               value={tireurAllureVal}
               onChange={e => setTireurAllureOverride(e.target.value)}
               style={styles.select}
             >
               {TIREUR_ALLURES.map(a => (
-                <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod, isImpossible(a.sitKey))})</option>
+                <option key={a.val} value={a.val}>{t(a.label)} ({fmtOpt(a.mod, isImpossible(a.sitKey))})</option>
               ))}
             </select>
           </div>
 
           {/* Allure cible */}
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Allure cible</div>
+            <div style={styles.sectionTitle}>{t('modifiers.cibleAllureSection')}</div>
             <select
               value={cibleAllureVal}
               onChange={e => setCibleAllureOverride(e.target.value)}
               style={styles.select}
             >
               {CIBLE_ALLURES.map(a => (
-                <option key={a.val} value={a.val}>{a.label} ({fmtOpt(a.mod)})</option>
+                <option key={a.val} value={a.val}>{t(a.label)} ({fmtOpt(a.mod)})</option>
               ))}
             </select>
           </div>
 
           {/* Couverture */}
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Couverture</div>
+            <div style={styles.sectionTitle}>{t('modifiers.couvertureSection')}</div>
             {COUVERTURES.map(c => (
               <label key={c.key} style={styles.checkLabel}>
                 <input
@@ -358,7 +364,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
                   style={styles.checkbox}
                 />
                 <span style={styles.checkText}>
-                  {c.label}
+                  {t(c.label)}
                   <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>{formatMod(c.mod)}</span>
                 </span>
               </label>
@@ -367,7 +373,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 
           {/* Obscurité */}
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Obscurité</div>
+            <div style={styles.sectionTitle}>{t('modifiers.obscuriteSection')}</div>
             {OBSCURITES.map(o => (
               <label key={o.key} style={styles.checkLabel}>
                 <input
@@ -377,7 +383,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
                   style={styles.checkbox}
                 />
                 <span style={styles.checkText}>
-                  {o.label}
+                  {t(o.label)}
                   <span style={{ ...styles.checkMod, color: '#ca6d6d' }}>
                     {isImpossible(o.key) ? '✗' : formatMod(o.mod)}
                   </span>
@@ -388,14 +394,14 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
 
           {/* Taille cible */}
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Taille cible</div>
+            <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
             <select
               value={taille}
               onChange={e => setTaille(e.target.value)}
               style={styles.select}
             >
-              {TAILLES.map(t => (
-                <option key={t.key} value={t.key}>{t.label} ({fmtOpt(t.mod)})</option>
+              {TAILLES.map(opt => (
+                <option key={opt.key} value={opt.key}>{t(opt.label)} ({fmtOpt(opt.mod)})</option>
               ))}
             </select>
           </div>
@@ -419,12 +425,12 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             onClick={handleLancer}
             disabled={!effectivePortee || hasTirImpossible || isRolling}
           >
-            {isRolling ? 'En cours…' : 'Lancer les dés'}
+            {isRolling ? t('cacModifiers.rolling') : t('damageWindow.rollButton')}
           </button>
         )}
         {attackResult && !attackResult.hit && (
           <button className="btn btn-ghost" style={{ width: '100%' }} onClick={onAttackConfirmed}>
-            Fermer
+            {t('damageWindow.closeButton')}
           </button>
         )}
       </div>

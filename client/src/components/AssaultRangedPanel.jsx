@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
 import { AIM_MAX_TRANCHES, getAimBonusComp, getAimIniCost } from '../../../shared/combatExclusiveActions.js'
 import AimedLocationPicker from './AimedLocationPicker.jsx'
@@ -115,15 +116,17 @@ export default function AssaultRangedPanel({
   onAssaultCountChange,     // (n) => void
   multiShotIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
 }) {
+  const { t } = useTranslation('combat')
   const aimSliderMax = Math.max(AIM_MAX_TRANCHES, lunetteNiveau ?? 0)
-  const fireModeLabel = { CC: 'Coup par coup', RC: 'Rafale courte', RL: 'Rafale longue' }[currentFireMode] ?? currentFireMode
+  const fireModeLabelKey = { CC: 'states.fireMode.cc.label', RC: 'states.fireMode.rc.label', RL: 'states.fireMode.rl.label' }[currentFireMode]
+  const fireModeLabel = fireModeLabelKey ? t(fireModeLabelKey) : currentFireMode
   const multiShotDisabled = multiShotIneligibilityReasons.length > 0
 
   return (
     <>
       {/* Section Arme */}
       <div style={P.section}>
-        <div style={P.sectionTitle}>Arme</div>
+        <div style={P.sectionTitle}>{t('meleeCombatPanel.weaponSection')}</div>
         {weaponDisplay ? (
           <div style={P.infoText}>
             {weaponDisplay}
@@ -132,18 +135,18 @@ export default function AssaultRangedPanel({
             )}
           </div>
         ) : (
-          <div style={P.noWeapon}>Aucune arme équipée (MG/MD)</div>
+          <div style={P.noWeapon}>{t('assaultPanel.noWeapon')}</div>
         )}
       </div>
 
       {/* Section Nombre de tirs — Tir Multi (docs/PLAN_TIRMULTI.md), CC uniquement (D6) */}
       {currentFireMode === 'CC' && (
         <div style={P.section}>
-          <div style={P.sectionTitle}>Nombre de tirs</div>
+          <div style={P.sectionTitle}>{t('assaultPanel.shotCountSection')}</div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <ShotCountChip label="1 tir"      tooltip="Un tir — aucun malus."                    selected={effectiveAssaultCount === 1} onClick={() => onAssaultCountChange(1)} />
-            <ShotCountChip label="2 tirs −5"   tooltip={multiShotDisabled ? `Indisponible car : ${multiShotIneligibilityReasons.join(', ')}` : "−5 à tous les jets de tir (LdB p.218)."} selected={effectiveAssaultCount === 2} disabled={multiShotDisabled} onClick={() => onAssaultCountChange(2)} />
-            <ShotCountChip label="3 tirs −7"   tooltip={multiShotDisabled ? `Indisponible car : ${multiShotIneligibilityReasons.join(', ')}` : "−7 à tous les jets de tir (LdB p.218)."} selected={effectiveAssaultCount === 3} disabled={multiShotDisabled} onClick={() => onAssaultCountChange(3)} />
+            <ShotCountChip label={t('assaultPanel.chip1.label')} tooltip={t('assaultPanel.chip1.tooltip')} selected={effectiveAssaultCount === 1} onClick={() => onAssaultCountChange(1)} />
+            <ShotCountChip label={t('assaultPanel.chip2.label')} tooltip={multiShotDisabled ? t('assaultPanel.unavailableReasons', { reasons: multiShotIneligibilityReasons.join(', ') }) : t('assaultPanel.chip2.tooltip')} selected={effectiveAssaultCount === 2} disabled={multiShotDisabled} onClick={() => onAssaultCountChange(2)} />
+            <ShotCountChip label={t('assaultPanel.chip3.label')} tooltip={multiShotDisabled ? t('assaultPanel.unavailableReasons', { reasons: multiShotIneligibilityReasons.join(', ') }) : t('assaultPanel.chip3.tooltip')} selected={effectiveAssaultCount === 3} disabled={multiShotDisabled} onClick={() => onAssaultCountChange(3)} />
           </div>
         </div>
       )}
@@ -154,10 +157,10 @@ export default function AssaultRangedPanel({
           cible posée, chaque tir affiche son propre slot avec "Changer" pour permettre de diverger. */}
       <div style={P.section}>
         <div style={P.sectionTitle}>
-          {effectiveAssaultCount === 1 ? 'Cible' : `Cibles (${targetIds.filter(Boolean).length}/${effectiveAssaultCount})`}
+          {effectiveAssaultCount === 1 ? t('common.targetSection') : t('meleeCombatPanel.targetsCount', { count: targetIds.filter(Boolean).length, total: effectiveAssaultCount })}
         </div>
         {targetIds.filter(Boolean).length === 0 ? (
-          <button style={P.chooseBtn} onClick={() => onChooseTarget(0)}>Choisir une cible</button>
+          <button style={P.chooseBtn} onClick={() => onChooseTarget(0)}>{t('common.chooseTargetButton')}</button>
         ) : (
           Array.from({ length: effectiveAssaultCount }, (_, i) => {
             const tgtId = targetIds[i] ?? null
@@ -169,14 +172,14 @@ export default function AssaultRangedPanel({
                       <span style={{ fontSize: 9, color: '#705050', minWidth: 12 }}>{i + 1}.</span>
                     )}
                     <span style={P.targetName}>{getLabel(tgtId)}</span>
-                    <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>Changer</button>
+                    <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>{t('common.changeButton')}</button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {effectiveAssaultCount > 1 && (
                       <span style={{ fontSize: 9, color: '#705050', minWidth: 12 }}>{i + 1}.</span>
                     )}
-                    <button style={P.chooseBtn} onClick={() => onChooseTarget(i)}>Choisir une cible</button>
+                    <button style={P.chooseBtn} onClick={() => onChooseTarget(i)}>{t('common.chooseTargetButton')}</button>
                   </div>
                 )}
               </div>
@@ -188,20 +191,20 @@ export default function AssaultRangedPanel({
       {/* Section Type de tir — dual wield Joueur uniquement, exclusif avec Tir Multi (D10) */}
       {showDualWieldSection && effectiveAssaultCount === 1 && (
         <div style={P.section}>
-          <div style={P.sectionTitle}>Type de tir</div>
+          <div style={P.sectionTitle}>{t('assaultPanel.fireTypeSection')}</div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               className="seg-opt"
               data-active={!isDualWield}
               style={{ flex: 1 }}
               onClick={() => onDualWieldChange(false)}
-            >Simple</button>
+            >{t('assaultPanel.simple')}</button>
             <button
               className="seg-opt"
               data-active={isDualWield}
               style={{ flex: 1 }}
               onClick={() => onDualWieldChange(true)}
-            >Double +{currentFireMode === 'RL' ? 5 : 3}</button>
+            >{t('assaultPanel.double', { bonus: currentFireMode === 'RL' ? 5 : 3 })}</button>
           </div>
         </div>
       )}
@@ -218,8 +221,8 @@ export default function AssaultRangedPanel({
                 onClick={() => { onBulletCountChange(1); onVariantABChange('A'); onAimTranchesChange(0) }}
               >
                 <div>
-                  <div style={P.optionLabel}>Tir simple</div>
-                  <div style={P.optionSub}>1 balle : +0</div>
+                  <div style={P.optionLabel}>{t('assaultPanel.simpleShot.label')}</div>
+                  <div style={P.optionSub}>{t('assaultPanel.simpleShot.detail')}</div>
                 </div>
                 <span style={{ ...P.radio, ...(effectiveBulletCount === 1 && !aimTranches ? P.radioActive : {}) }} />
               </div>
@@ -232,7 +235,7 @@ export default function AssaultRangedPanel({
                 return (
                   <div
                     style={{ ...P.option, ...(aimDisabled ? P.optionDisabled : {}) }}
-                    title={aimDisabled ? `Action impossible car : ${aimIneligibilityReasons.join(', ')}` : undefined}
+                    title={aimDisabled ? t('assaultPanel.aimedShot.impossibleTitle', { reasons: aimIneligibilityReasons.join(', ') }) : undefined}
                     onClick={() => {
                       if (aimDisabled) return
                       onBulletCountChange(1); onVariantABChange('A')
@@ -240,10 +243,10 @@ export default function AssaultRangedPanel({
                     }}
                   >
                     <div>
-                      <div style={P.optionLabel}>Tir visé</div>
+                      <div style={P.optionLabel}>{t('assaultPanel.aimedShot.label')}</div>
                       <div style={P.optionSub}>
-                        1 balle, immobile — +1 test / 2 INI sacrifiés (max +5)
-                        {lunetteNiveau > 0 ? ` — Lunette niv.${lunetteNiveau} : +1 test / 1 INI (max +${lunetteNiveau})` : ''}
+                        {t('assaultPanel.aimedShot.detail')}
+                        {lunetteNiveau > 0 ? t('assaultPanel.aimedShot.scopeDetail', { level: lunetteNiveau }) : ''}
                       </div>
                     </div>
                     <span style={{ ...P.radio, ...(aimTranches > 0 ? P.radioActive : {}) }} />
@@ -259,7 +262,7 @@ export default function AssaultRangedPanel({
                     onChange={e => onAimTranchesChange(Number(e.target.value))}
                   />
                   <div style={P.summaryText}>
-                    {aimTranches} tranche{aimTranches > 1 ? 's' : ''} ({getAimIniCost(aimTranches, { lunetteNiveau })} INI) : +{getAimBonusComp(aimTranches, { lunetteNiveau })} test
+                    {t('assaultPanel.aimedShot.summary', { count: aimTranches, cost: getAimIniCost(aimTranches, { lunetteNiveau }), bonus: getAimBonusComp(aimTranches, { lunetteNiveau }) })}
                   </div>
                 </>
               )}
@@ -271,7 +274,7 @@ export default function AssaultRangedPanel({
                   onAimTranchesChange(0)
                 }}
               >
-                <div style={P.optionLabel}>Tir à répétition</div>
+                <div style={P.optionLabel}>{t('assaultPanel.repeatShot')}</div>
                 <span style={{ ...P.radio, ...(assaultBulletCount && assaultBulletCount !== 1 ? P.radioActive : {}) }} />
               </div>
               {assaultBulletCount && assaultBulletCount !== 1 && (
@@ -293,21 +296,21 @@ export default function AssaultRangedPanel({
                         data-active={assaultVariantAB === 'A'}
                         style={{ flex: 1 }}
                         onClick={() => onVariantABChange('A')}
-                      >+{assaultBulletCount === 7 ? 4 : 5} comp</button>
+                      >{t('assaultPanel.variantComp', { comp: assaultBulletCount === 7 ? 4 : 5 })}</button>
                       <button
                         className="seg-opt"
                         data-active={assaultVariantAB === 'B'}
                         style={{ flex: 1 }}
                         onClick={() => onVariantABChange('B')}
-                      >+{assaultBulletCount === 7 ? 3 : 4} comp / +3 dég</button>
+                      >{t('assaultPanel.variantCompDmg', { comp: assaultBulletCount === 7 ? 3 : 4 })}</button>
                     </div>
                   )}
                 </>
               )}
               {assaultBulletCount && assaultBulletCount !== 1 && currentVariant && (
                 <div style={P.summaryText}>
-                  {effectiveBulletCount} balle{effectiveBulletCount > 1 ? 's' : ''} : +{currentVariant.bonusComp + dualWieldBonusComp} test
-                  {currentVariant.bonusDmg > 0 ? ` / +${currentVariant.bonusDmg} dég` : ''}
+                  {t('assaultPanel.repeatSummary', { count: effectiveBulletCount, comp: currentVariant.bonusComp + dualWieldBonusComp })}
+                  {currentVariant.bonusDmg > 0 ? t('assaultPanel.dmgSuffix', { dmg: currentVariant.bonusDmg }) : ''}
                 </div>
               )}
             </>
@@ -317,13 +320,13 @@ export default function AssaultRangedPanel({
             <>
               <div style={P.option}>
                 <div>
-                  <div style={P.optionLabel}>Rafale courte</div>
-                  <div style={P.optionSub}>3 balles : +3 test / +5 dég (courte portée)</div>
+                  <div style={P.optionLabel}>{t('states.fireMode.rc.label')}</div>
+                  <div style={P.optionSub}>{t('assaultPanel.rcDetail')}</div>
                 </div>
                 <span style={{ ...P.radio, ...P.radioActive }} />
               </div>
               <div style={P.summaryText}>
-                3 balles : +{3 + dualWieldBonusComp} test (ou +5 dég à courte portée)
+                {t('assaultPanel.rcSummary', { comp: 3 + dualWieldBonusComp })}
               </div>
             </>
           )}
@@ -338,19 +341,19 @@ export default function AssaultRangedPanel({
                     data-active={assaultBulletCount === btn.value}
                     style={{ flex: 1 }}
                     onClick={() => onBulletCountChange(btn.value)}
-                  >{btn.label}</button>
+                  >{t(btn.label)}</button>
                 ))}
               </div>
               {currentVariant && (
                 <div style={P.summaryText}>
                   {assaultBulletCount === 'multi'
-                    ? 'Multi-cibles : +0 test / zone 3m'
-                    : `${assaultBulletCount} balles : +${currentVariant.bonusComp + dualWieldBonusComp} test / +${currentVariant.bonusDmg} dég`
+                    ? t('assaultPanel.rlMultiTarget')
+                    : t('assaultPanel.rlSummary', { count: assaultBulletCount, comp: currentVariant.bonusComp + dualWieldBonusComp, dmg: currentVariant.bonusDmg })
                   }
                 </div>
               )}
               {!assaultBulletCount && (
-                <div style={{ fontSize: 9, color: '#706050', fontStyle: 'italic' }}>Sélectionnez un volume de tir</div>
+                <div style={{ fontSize: 9, color: '#706050', fontStyle: 'italic' }}>{t('assaultPanel.selectVolume')}</div>
               )}
             </>
           )}
@@ -363,7 +366,7 @@ export default function AssaultRangedPanel({
           tranché Saar) : masqué tant qu'une série de plusieurs tirs est active. */}
       {weaponDisplay && effectiveAssaultCount === 1 && (
         <div style={P.section}>
-          <div style={P.sectionTitle}>Viser une localisation</div>
+          <div style={P.sectionTitle}>{t('assaultPanel.aimedLocationSection')}</div>
           <AimedLocationPicker aimedLocation={aimedLocation} onChange={onAimedLocationChange} />
         </div>
       )}

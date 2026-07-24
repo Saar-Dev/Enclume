@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 
 export default function DroneDeclareSection({
@@ -13,23 +14,24 @@ export default function DroneDeclareSection({
   getLabel,
   style,
 }) {
+  const { t } = useTranslation('combat')
   return (
     <div style={style}>
       <div className="combat-win-section">
-        <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>ACTION</span>
+        <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>{t('sectionTitles.action')}</span>
         <div style={S.actionGrid}>
           <div
             style={{ ...S.actionBtn, ...(pendingMove ? S.actionBtnActive : {}), gridColumn: 'span 2' }}
             onClick={onMoveToggle}
           >
-            <span style={{ ...S.actionLabel, color: pendingMove ? '#e8c870' : '#aaccdd' }}>Déplacement</span>
-            <span style={{ ...S.actionIni, color: pendingMove ? '#e8c870' : '#5a6070' }}>−INI</span>
+            <span style={{ ...S.actionLabel, color: pendingMove ? '#e8c870' : '#aaccdd' }}>{t('actionLabels.move')}</span>
+            <span style={{ ...S.actionIni, color: pendingMove ? '#e8c870' : '#5a6070' }}>{t('droneDeclare.iniPlaceholder')}</span>
           </div>
           <div
             style={{ ...S.actionBtn, ...(hasPassed ? S.actionBtnActive : {}), gridColumn: 'span 2' }}
             onClick={onPassToggle}
           >
-            <span style={{ ...S.actionLabel, color: hasPassed ? '#e8c870' : '#aaccdd' }}>Passer le tour</span>
+            <span style={{ ...S.actionLabel, color: hasPassed ? '#e8c870' : '#aaccdd' }}>{t('droneDeclare.passTurn')}</span>
           </div>
         </div>
         {pendingMove && (

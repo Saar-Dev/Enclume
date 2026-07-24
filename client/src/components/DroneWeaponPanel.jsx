@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 const P = {
   section: {
     padding: '8px 14px',
@@ -71,12 +73,13 @@ export default function DroneWeaponPanel({
   onChooseTarget,     // () => void
   getLabel,           // (tokenId) => string
 }) {
+  const { t } = useTranslation('combat')
   return (
     <>
       <div style={P.section}>
-        <div style={P.sectionTitle}>Armement drone</div>
+        <div style={P.sectionTitle}>{t('droneWeaponPanel.title')}</div>
         {droneWeapons.length === 0 ? (
-          <span style={{ color: '#607070', fontSize: 11 }}>Aucune arme configurée</span>
+          <span style={{ color: '#607070', fontSize: 11 }}>{t('droneWeaponPanel.noWeapon')}</span>
         ) : (
           droneWeapons.map(w => {
             const isSelected = w.id === selectedWeaponId
@@ -85,15 +88,15 @@ export default function DroneWeaponPanel({
               <div
                 key={w.id}
                 onClick={() => !isEmpty && onWeaponSelect(w.id)}
-                title={isEmpty ? 'Arme vide' : undefined}
+                title={isEmpty ? t('droneWeaponPanel.emptyWeaponTitle') : undefined}
                 style={{ ...P.option, cursor: isEmpty ? 'not-allowed' : 'pointer', opacity: isEmpty ? 0.35 : 1 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={P.optionLabel}>{w.display_name || w.ref_name || 'Arme'}</div>
+                  <div style={P.optionLabel}>{w.display_name || w.ref_name || t('droneWeaponPanel.weaponFallback')}</div>
                   <div style={P.optionSub}>
                     {(w.fire_mode || w.ref_fire_mode || '?').toUpperCase()} · {w.damage_formula || w.ref_damage_h || '—'}
                     {w.ammo_restant !== null && w.ammo_restant !== undefined
-                      ? ` · ${w.ammo_restant} munitions`
+                      ? ` · ${t('droneWeaponPanel.ammoCount', { count: w.ammo_restant })}`
                       : ''}
                   </div>
                 </div>
@@ -105,20 +108,20 @@ export default function DroneWeaponPanel({
       </div>
 
       <div style={P.section}>
-        <div style={P.sectionTitle}>Cible</div>
+        <div style={P.sectionTitle}>{t('common.targetSection')}</div>
         {assaultTargetId ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={P.targetName}>→ {getLabel(assaultTargetId)}</span>
-            <button style={P.changeBtn} onClick={onChooseTarget}>Changer</button>
+            <button style={P.changeBtn} onClick={onChooseTarget}>{t('common.changeButton')}</button>
           </div>
         ) : (
-          <button style={P.chooseBtn} onClick={onChooseTarget}>Choisir une cible</button>
+          <button style={P.chooseBtn} onClick={onChooseTarget}>{t('common.chooseTargetButton')}</button>
         )}
       </div>
 
       {showReadyBadge && (
         <div style={{ padding: '8px 14px' }}>
-          <div style={P.readyText}>✓ Prêt à l&apos;assaut</div>
+          <div style={P.readyText}>{t('droneWeaponPanel.ready')}</div>
         </div>
       )}
     </>

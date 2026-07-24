@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -16,9 +17,10 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
+  const { t } = useTranslation('combat')
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
-  const myTokenIds = isGm ? null : characters.filter(c => c.user_id === user?.id).map(c => tokens.find(t => t.character_id === c.id)?.id).filter(Boolean)
+  const myTokenIds = isGm ? null : characters.filter(c => c.user_id === user?.id).map(c => tokens.find(tk => tk.character_id === c.id)?.id).filter(Boolean)
   // Retarder décale l'Action vers plus tard, jamais plus tôt (RAW REGLESYSCOMBAT.md:554-567, retour
   // Saar Session 159) — n'afficher le panneau « Agir maintenant » que si le pas normal à résoudre a
   // atteint (ou dépassé) la propre phase d'Initiative d'origine du personnage en délai.
@@ -35,7 +37,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   useEffect(() => {
     if (!socket) return
     const handler = ({ tokenId }) => {
-      const token = tokens.find(t => t.id === tokenId)
+      const token = tokens.find(tk => tk.id === tokenId)
       console.log(`[Combat] Étourdissement expiré — ${token?.label ?? tokenId}`)
     }
     socket.on(WS.COMBAT_STUN_EXPIRED, handler)
@@ -53,7 +55,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   // Slot actif en RÉSOLUTION — pour le panneau GM
   const sortedRoster = [...roster].sort((a, b) => b.initiative - a.initiative)
   const gmActiveEntry = roster.find(e => e.token_id === activeTokenId) ?? null
-  const gmActiveToken = gmActiveEntry ? tokens.find(t => t.id === gmActiveEntry.token_id) : null
+  const gmActiveToken = gmActiveEntry ? tokens.find(tk => tk.id === gmActiveEntry.token_id) : null
   const gmActiveCharacter = gmActiveToken ? characters.find(c => c.id === gmActiveToken.character_id) : null
   // `currentStep?.kind !== 'delayed_turn'` (Session 159, retour Saar — « Plantage, pas d'action du
   // joueur ») : `activeTokenId` dérive de `currentStep.tokenId` quel que soit son `kind`, y compris au
@@ -77,7 +79,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
 
   // Slot actif PJ — fenêtre modificateurs côté joueur
   const playerCharacter = !isGm ? characters.find(c => c.user_id === user?.id) : null
-  const playerToken = playerCharacter ? tokens.find(t => t.character_id === playerCharacter.id) : null
+  const playerToken = playerCharacter ? tokens.find(tk => tk.character_id === playerCharacter.id) : null
   const playerRosterEntry = playerToken ? sortedRoster.find(e => e.token_id === playerToken.id) : null
   const playerActiveAssaultAction = (phase === 'RESOLUTION' && activeTokenId === playerToken?.id && currentStep?.kind !== 'delayed_turn')
     ? actions.find(a => a.token_id === playerToken?.id && a.action_key === 'assault')
@@ -204,7 +206,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {phase === 'RESOLUTION' && currentStep?.kind === 'delayed_turn' && (isGm || currentStep.tokenId === playerToken?.id) && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
-            <strong>{tokens.find(t => t.id === currentStep.tokenId)?.label ?? '?'}</strong> — action retardée
+            <strong>{tokens.find(tk => tk.id === currentStep.tokenId)?.label ?? '?'}</strong> — action retardée
           </div>
           <button
             className="btn btn-gold"
@@ -234,7 +236,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {phase === 'RESOLUTION' && subPhase === 'SLOT_ACTIVE' && currentStep?.kind !== 'delayed_turn' && myControllableDelayedTokenIds.map(tokenId => (
         <div key={tokenId} style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
-            <strong>{tokens.find(t => t.id === tokenId)?.label ?? '?'}</strong> — action retardée : agir maintenant, avant la suite ?
+            <strong>{tokens.find(tk => tk.id === tokenId)?.label ?? '?'}</strong> — action retardée : agir maintenant, avant la suite ?
           </div>
           <button
             className="btn btn-gold"
@@ -254,16 +256,16 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {isGm && phase === 'RESOLUTION' && ['AWAITING_DEFENSE', 'AWAITING_DAMAGE'].includes(subPhase) && (
         <div style={styles.gmResolution}>
           <div style={styles.gmResolutionLabel}>
-            {subPhase === 'AWAITING_DEFENSE' && 'En attente du jet de défense d’un joueur…'}
-            {subPhase === 'AWAITING_DAMAGE' && 'En attente du jet de dégâts d’un joueur…'}
+            {subPhase === 'AWAITING_DEFENSE' && t('overlay.gmResolution.awaitingDefense')}
+            {subPhase === 'AWAITING_DAMAGE' && t('overlay.gmResolution.awaitingDamage')}
           </div>
           <button
             className="btn btn-ghost"
             style={{ flexShrink: 0 }}
-            title="Le serveur lance les dés à la place du joueur injoignable"
+            title={t('overlay.gmResolution.forceTitle')}
             onClick={() => socket?.emit(WS.COMBAT_SKIP_PLAYER, {})}
           >
-            Forcer
+            {t('overlay.gmResolution.forceButton')}
           </button>
         </div>
       )}
@@ -301,14 +303,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Phase RÉSOLUTION — avertissement LOS bloquée (assaut distance PJ) */}
       {!isGm && phase === 'RESOLUTION' && playerActiveAssaultAction && assaultPrecheckOk === false && (
         <div style={styles.losBlockedWarning}>
-          <div style={styles.losBlockedTitle}>Ligne de vue bouchée</div>
-          <div style={styles.losBlockedMsg}>Vous avez tiré sans espoir d&apos;atteindre votre cible.</div>
+          <div style={styles.losBlockedTitle}>{t('overlay.losBlocked.title')}</div>
+          <div style={styles.losBlockedMsg}>{t('overlay.losBlocked.message')}</div>
           <button
             className="btn"
             style={{ width: '100%', marginTop: 10 }}
             onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}
           >
-            Continuer
+            {t('overlay.losBlocked.continueButton')}
           </button>
         </div>
       )}
@@ -350,22 +352,22 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           </div>
 
           {combatTargetMode.pendingTargetId && (() => {
-            const tgt = tokens.find(t => t.id === combatTargetMode.pendingTargetId)
+            const tgt = tokens.find(tk => tk.id === combatTargetMode.pendingTargetId)
             return (
               <div style={styles.movePending}>
                 <div style={styles.movePendingInfo}>
                   <span style={styles.movePendingDest}>{tgt?.label ?? '?'}</span>
                 </div>
                 <div style={styles.movePendingBtns}>
-                  <button className="btn" style={{ flex: 1 }} onClick={onValidateTarget}>Valider</button>
-                  <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => combatTargetMode.onPendingTarget(null)}>Changer</button>
+                  <button className="btn" style={{ flex: 1 }} onClick={onValidateTarget}>{t('overlay.validateButton')}</button>
+                  <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => combatTargetMode.onPendingTarget(null)}>{t('common.changeButton')}</button>
                 </div>
               </div>
             )
           })()}
 
           <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatTargetMode.onCancel()}>
-            Annuler
+            {t('overlay.cancelButton')}
           </button>
         </div>
       )}
@@ -400,8 +402,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Panneau résultat assaut PNJ — GM uniquement, après résolution auto */}
       {isGm && gmAttackResult && (
         <CombatResultGM
-          attaquant={tokens.find(t => t.id === gmAttackResult.tireurId)?.label ?? '?'}
-          cible={tokens.find(t => t.id === gmAttackResult.cibleId)?.label ?? '?'}
+          attaquant={tokens.find(tk => tk.id === gmAttackResult.tireurId)?.label ?? '?'}
+          cible={tokens.find(tk => tk.id === gmAttackResult.cibleId)?.label ?? '?'}
           isSuccess={gmAttackResult.isSuccess}
           roll={gmAttackResult.roll}
           seuil={gmAttackResult.chancesDeReussite}
@@ -423,7 +425,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Panneau résultat assaut PNJ — Joueur ciblé uniquement */}
       {!isGm && pnjAttackResult && pnjAttackResult.cibleId === playerToken?.id && (
         <CombatResultPlayer
-          attaquant={tokens.find(t => t.id === pnjAttackResult.tireurId)?.label ?? '?'}
+          attaquant={tokens.find(tk => tk.id === pnjAttackResult.tireurId)?.label ?? '?'}
           isSuccess={pnjAttackResult.isSuccess}
           roll={pnjAttackResult.roll}
           seuil={pnjAttackResult.chancesDeReussite}
@@ -487,8 +489,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Résultat corps à corps — attaquant et défenseur, bottom-right */}
       {meleeResult && (
         <CombatResultMelee
-          attaquant={tokens.find(t => t.id === meleeResult.attaquantId)?.label ?? '?'}
-          defenseur={tokens.find(t => t.id === meleeResult.defenseurId)?.label ?? '?'}
+          attaquant={tokens.find(tk => tk.id === meleeResult.attaquantId)?.label ?? '?'}
+          defenseur={tokens.find(tk => tk.id === meleeResult.defenseurId)?.label ?? '?'}
           rollAttaque={meleeResult.rollAttaque}
           chancesAttaque={meleeResult.chancesAttaque}
           rollDefense={meleeResult.rollDefense}
@@ -505,7 +507,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <div style={pendingMoveSelection?.screenX != null
           ? { ...styles.moveLegend, position: 'fixed', left: `clamp(8px, ${pendingMoveSelection.screenX - 110}px, calc(100vw - 228px))`, top: `clamp(8px, ${pendingMoveSelection.screenY + 16}px, calc(100vh - 200px))`, bottom: 'auto', right: 'auto' }
           : styles.moveLegend}>
-          <div style={styles.moveLegendTitle}>Déplacement</div>
+          <div style={styles.moveLegendTitle}>{t('overlay.moveLegendTitle')}</div>
 
           {MOVE_ZONE_DEFS.map(def => {
             const dist  = combatMoveMode.allures?.[def.allureKey]
@@ -513,7 +515,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
             return (
               <div key={def.action_key} style={styles.moveLegendRow}>
                 <span style={{ ...styles.moveLegendDot, background: def.color }} />
-                <span style={styles.moveLegendLabel}>{def.label}</span>
+                <span style={styles.moveLegendLabel}>{t(def.label)}</span>
                 <span style={styles.moveLegendDist}>≤ {dist} m</span>
                 <span style={styles.moveLegendIni}>{iniStr}</span>
               </div>
@@ -531,14 +533,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
                 </span>
               </div>
               <div style={styles.movePendingBtns}>
-                <button className="btn" style={{ flex: 1 }} onClick={onValidateMove}>Valider</button>
-                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onCancelPendingMove}>Changer</button>
+                <button className="btn" style={{ flex: 1 }} onClick={onValidateMove}>{t('overlay.validateButton')}</button>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onCancelPendingMove}>{t('common.changeButton')}</button>
               </div>
             </div>
           )}
 
           <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatMoveMode.onCancel()}>
-            Annuler le déplacement
+            {t('overlay.cancelMoveButton')}
           </button>
         </div>
       )}
@@ -566,13 +568,13 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
                 setStunDialogDuration(String(d))
               }}
             >
-              Lancer 1D6{stunDialog.outcome === 'inconscient' ? ' × 10' : ''} tours
+              {t('overlay.stunDialog.rollButton', { suffix: stunDialog.outcome === 'inconscient' ? ' × 10' : '' })}
             </button>
             <input
               type="number" min="1" max="60"
               value={stunDialogDuration}
               onChange={e => setStunDialogDuration(e.target.value)}
-              placeholder="Durée (tours)"
+              placeholder={t('overlay.stunDialog.durationPlaceholder')}
               style={{
                 width: '100%', background: '#0e0e1e', border: '1px solid #3a3a5a',
                 borderRadius: 4, color: '#e0e0f0', padding: '6px 8px', fontSize: 13,

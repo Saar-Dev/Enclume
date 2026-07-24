@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants)
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -33,7 +33,7 @@
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 | divers | Basse |
+| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT1 + I18N-LINT2 + I18N-LINT3 + I18N-DEADCODE1 | divers | Basse |
 | **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
 
@@ -390,6 +390,56 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
+### Dette I18N-DEADCODE1 — `components/creation/WizardCreationPage.jsx` : doublon mort de `pages/WizardCreationPage.jsx`
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en auditant les composants sans `useTranslation`
+pour `docs/PLAN_LOCALISATION.md` §4 (2026-07-24), sans rapport avec l'i18n.
+
+**Code impliqué** : `client/src/components/creation/WizardCreationPage.jsx` et
+`client/src/pages/WizardCreationPage.jsx` — quasi-identiques (`diff` : 1 ligne d'écart, un commentaire
+d'en-tête). Seul `pages/WizardCreationPage.jsx` est importé (`App.jsx:14`). L'autre n'a aucun
+importeur trouvé.
+
+**Cause racine [HYPOTHÈSE]** : résidu d'un déplacement de fichier (`components/creation/` →
+`pages/`) où l'original n'a pas été supprimé — non instrumenté, juste confirmé par recherche
+d'imports.
+
+**Prochaine étape** : sprint nettoyage — confirmer qu'aucun import ne cible
+`components/creation/WizardCreationPage.jsx` puis le supprimer.
+
+---
+
+### Dette I18N-LINT3 — `setState` synchrone dans un `useEffect` (plusieurs fichiers Combat)
+
+**Symptôme** : Aucun cas observé en jeu — trouvé par ESLint (`react-hooks/set-state-in-effect`) en
+retouchant plusieurs fichiers pour le chantier i18n Combat (`docs/PLAN_LOCALISATION.md`, 2026-07-24),
+sans rapport avec ce chantier. `git diff` confirme à chaque fois que les lignes concernées ne sont pas
+touchées par le retrofit i18n.
+
+**Code impliqué** :
+- `client/src/components/CombatTimeline.jsx:23` — `setSecondsLeft(actionTimerSec)` dans le `useEffect`
+  du timer ANNOUNCEMENT.
+- `client/src/components/CombatCacModifiersWindow.jsx:66-70` — reset de 5 states (`setSituationAtk`,
+  `setSituationDef`, `setTaille`, `setWeaponSkill`, `setIsRolling`) directement dans le corps d'un
+  `useEffect` déclenché par `[meleeOrAssaultAction?.id]`.
+- `client/src/components/CombatModifiersWindow.jsx:125-131` — même pattern, reset de 7 states
+  (`setPorteeOverride`, `setTireurAllureOverride`, `setCibleAllureOverride`, `setCouvertures`,
+  `setObscurites`, `setTaille`, `setWeaponSkill`, `setIsRolling`) dans un `useEffect` déclenché par
+  `[assaultAction?.id]` — visiblement le même patron copié entre les deux fenêtres CaC/Assaut.
+
+Dans les deux cas, ESLint signale un `setState` appelé directement dans le corps de l'effet (pas dans
+un callback d'intervalle/événement), pouvant provoquer des rendus en cascade.
+
+**Cause racine [HYPOTHÈSE]** : détection ESLint statique, non instrumentée. Les deux semblent
+fonctionner en pratique (pas de symptôme rapporté), mais le pattern n'est pas celui recommandé par
+React — probablement un pattern répété ailleurs dans les fichiers Combat, à vérifier plus largement
+si un sprint nettoyage est ouvert.
+
+**Prochaine étape** : sprint nettoyage — revoir ces effets (et chercher d'éventuelles occurrences
+similaires dans les autres fichiers Combat) sans changer le comportement visible.
+
+---
+
 ### Dette VX1 — getVoxelSurfaceTop : pas de cas slope/wedge
 
 **Code impliqué** : `Canvas3D.jsx` — `getVoxelSurfaceTop`. Retourne `y+1.0` pour tous les voxels non-cube.
@@ -397,6 +447,56 @@ console.log('[DBG-ID]', { variable1, variable2 })
 **Note** : Acceptable V1.
 
 **Prochaine étape** : Sprint voxels v2 — hors scope V1.
+
+---
+
+### Dette I18N-LINT1 — Hook `useRef` appelé conditionnellement dans `CombatGmDeclareWindow.jsx`
+
+**Symptôme** : Aucun cas observé en jeu — trouvé par ESLint (`react-hooks/rules-of-hooks`) en
+vérifiant les fichiers touchés par le chantier i18n Combat (`docs/PLAN_LOCALISATION.md`, Segment 5,
+2026-07-24), sans rapport avec ce chantier. `git diff --stat` confirme 0 ligne modifiée par le
+chantier i18n dans ce fichier — dette entièrement préexistante.
+
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx:268` et `:361` — `useRef` appelé
+après un retour conditionnel (ou dans une branche), ce qui viole l'ordre stable des hooks exigé par
+React (les hooks doivent être appelés dans le même ordre à chaque rendu).
+
+**Cause racine [HYPOTHÈSE]** : détection ESLint statique uniquement, non instrumentée ni reproduite en
+jeu. L'impact réel en exécution (désalignement d'état entre deux `useRef` selon la branche empruntée,
+crash React, ou comportement silencieusement incorrect) n'a pas été vérifié.
+
+**Prochaine étape** : lire le contexte exact des deux appels avant de décider du correctif (probable :
+déplacer le `useRef` avant tout retour conditionnel, pattern déjà appliqué ailleurs dans
+`CombatActionWindow.jsx`). Priorité modérée — pas de symptôme observé, mais violation réelle des
+règles des hooks, pas seulement un style.
+
+---
+
+### Dette I18N-LINT2 — Variables/props inutilisées (ESLint `no-unused-vars`) dans plusieurs fichiers Combat
+
+**Symptôme** : Aucun cas observé en jeu — trouvé par ESLint en vérifiant chaque segment du chantier
+i18n Combat (`docs/PLAN_LOCALISATION.md`, Segments 2/4/5, 2026-07-24), sans rapport avec le texte en
+dur. `git diff`/`git stash` confirment que ces variables préexistent, non introduites par ce chantier.
+
+**Code impliqué** :
+- `client/src/components/MeleeCombatPanel.jsx` — `CountChip({ n, ... })` : `n` jamais utilisé.
+- `client/src/components/AssaultRangedPanel.jsx` — prop `assaultCount` jamais utilisée.
+- `client/src/components/CombatActionWindow.jsx` — prop `stateKey` (`StateSelector`), `currentTurn`,
+  `iniTotal`, `myMeleeAction`, `meleeCibleTokens` : jamais utilisés.
+- `client/src/components/CombatTimeline.jsx` — import `motion` signalé inutilisé par ESLint bien que
+  `<motion.div>` soit présent dans le JSX (ligne ~170/209) — probable faux positif du plugin sur le
+  pattern `motion.div` en JSX, à vérifier avant de supprimer quoi que ce soit.
+- Plusieurs warnings `react-hooks/exhaustive-deps` (dépendances `useEffect` manquantes) dans
+  `CombatActionWindow.jsx`, `CombatGmDeclareWindow.jsx` et `CombatModifiersWindow.jsx`.
+
+**Cause racine [HYPOTHÈSE]** : probablement du code résiduel de refactors successifs (variable
+calculée puis plus consommée après un changement d'architecture) — non instrumenté.
+
+**Prochaine étape** : sprint nettoyage dédié — vérifier au cas par cas si chaque variable est un
+vestige mort (à supprimer) ou le signe d'un bug fonctionnel plus profond (donnée censée être affichée/
+utilisée mais oubliée en route) avant de supprimer aveuglément. Les warnings `exhaustive-deps`
+méritent une vérification séparée (une dépendance manquante peut être intentionnelle — ex. pattern
+`*Ref` documenté `docs/SYSTEME/REACT.md` P40 — ou un vrai bug de staleness).
 
 ---
 

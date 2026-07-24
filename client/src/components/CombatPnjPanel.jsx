@@ -1,8 +1,10 @@
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 
 export default function CombatPnjPanel({ isOpen, onClose, socket, characters }) {
+  const { t } = useTranslation('combat')
   const { roster } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -34,7 +36,7 @@ export default function CombatPnjPanel({ isOpen, onClose, socket, characters }) 
       <div style={styles.window} onClick={e => e.stopPropagation()}>
 
         <div style={styles.header}>
-          <span>⚔ Phase Annonce</span>
+          <span>{t('pnjPanel.header')}</span>
           <button style={styles.btnClose} onClick={onClose}>×</button>
         </div>
 
@@ -43,11 +45,11 @@ export default function CombatPnjPanel({ isOpen, onClose, socket, characters }) 
           {/* Section PNJs — lecture seule */}
           {pnjs.length > 0 && (
             <div style={styles.section}>
-              <div style={styles.sectionTitle}>PNJs</div>
+              <div style={styles.sectionTitle}>{t('pnjPanel.pnjsSection')}</div>
               {pnjs.map(entry => (
                 <div key={entry.token_id} style={{ ...styles.row, ...(entry.has_announced ? styles.rowDone : {}) }}>
                   <span style={styles.nameCell}>{getLabel(entry.token_id)}</span>
-                  <span style={styles.iniCell}>INI {entry.initiative}</span>
+                  <span style={styles.iniCell}>{t('ini')} {entry.initiative}</span>
                   {entry.has_announced && <span style={styles.doneBadge}>✓</span>}
                 </div>
               ))}
@@ -57,16 +59,16 @@ export default function CombatPnjPanel({ isOpen, onClose, socket, characters }) 
           {/* Section PJs */}
           {pjs.length > 0 && (
             <div style={styles.section}>
-              <div style={styles.sectionTitle}>PJs</div>
+              <div style={styles.sectionTitle}>{t('pnjPanel.pjsSection')}</div>
               {pjs.map(entry => (
                 <div key={entry.token_id} style={{ ...styles.row, ...(entry.has_announced ? styles.rowDone : {}) }}>
                   <span style={styles.nameCell}>{getLabel(entry.token_id)}</span>
-                  <span style={styles.iniCell}>INI {entry.initiative}</span>
+                  <span style={styles.iniCell}>{t('ini')} {entry.initiative}</span>
                   {entry.has_announced ? (
                     <span style={styles.doneBadge}>✓</span>
                   ) : (
                     <button style={styles.btnSkip} onClick={() => handleSkipPj(entry.token_id)}>
-                      Passer
+                      {t('pnjPanel.skipButton')}
                     </button>
                   )}
                 </div>
@@ -75,7 +77,7 @@ export default function CombatPnjPanel({ isOpen, onClose, socket, characters }) 
           )}
 
           {pnjs.length === 0 && pjs.length === 0 && (
-            <p style={styles.empty}>Aucun participant actif.</p>
+            <p style={styles.empty}>{t('pnjPanel.empty')}</p>
           )}
 
         </div>

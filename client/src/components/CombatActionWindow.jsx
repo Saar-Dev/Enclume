@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useReducer } from 'react'
+import { useTranslation } from 'react-i18next'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
@@ -28,9 +29,10 @@ import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 // Affiche un segmented control pour un etat avec cout de transition visible.
 // ---------------------------------------------------------------------------
 export function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
+  const { t } = useTranslation('combat')
   return (
     <div style={ss.row}>
-      <span style={ss.label}>{def.label}</span>
+      <span style={ss.label}>{t(def.label)}</span>
       <div style={ss.seg}>
         {def.states.map(opt => {
           const isActive      = opt.k === current
@@ -49,14 +51,14 @@ export function StateSelector({ stateKey, def, current, initial, onChange, disab
                 ...(isHighlighted ? { borderColor: '#5b8dee', color: '#5b8dee' } : {}),
               }}
             >
-              <span style={ss.segOptLabel}>{opt.l}</span>
+              <span style={ss.segOptLabel}>{t(opt.l)}</span>
               {costStr && !isActive && (
                 <span style={{ ...ss.segCost, color: cost > 0 ? '#3aaa6a' : '#c86030' }}>
                   {costStr}
                 </span>
               )}
               {isActive && opt.k === initial && (
-                <span style={ss.segCostCurrent}>actuel</span>
+                <span style={ss.segCostCurrent}>{t('stateSelector.currentBadge')}</span>
               )}
             </div>
           )
@@ -71,6 +73,7 @@ export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
   onEnterMoveMode, onEnterTargetMode,
 }) {
+  const { t } = useTranslation('combat')
   const { roster, phase, actions, activeTokenId, currentTurn } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -81,7 +84,7 @@ export default function CombatActionWindow({
   const playerTokensInRoster = playerTokens.filter(t => roster.some(r => r.token_id === t.id))
 
   // Token actif = le personnage du joueur qui occupe le slot courant (annonce ou résolution)
-  const activeStoreToken = playerTokensInRoster.find(t => t.id === activeTokenId) ?? null
+  const activeStoreToken = playerTokensInRoster.find(tk => tk.id === activeTokenId) ?? null
   // playerToken = actif si disponible, sinon premier dans le roster (pour les effets entre les tours)
   const playerToken = activeStoreToken ?? playerTokensInRoster[0] ?? null
   const playerChar  = playerToken ? playerChars.find(c => c.id === playerToken.character_id) ?? null : null
@@ -292,7 +295,7 @@ export default function CombatActionWindow({
   // Dépendances : toutes les sélections qui constituent une déclaration.
   useEffect(() => {
     if (!socket || phase !== 'ANNOUNCEMENT') return
-    if (!playerTokensInRoster.some(t => t.id === activeTokenId)) return
+    if (!playerTokensInRoster.some(tk => tk.id === activeTokenId)) return
     const tokenId = activeTokenId
     const timer = setTimeout(() => {
       socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, {
@@ -317,7 +320,7 @@ export default function CombatActionWindow({
   // courant de l'échelle), plus de active_slot_idx/roster trié (colonne supprimée, migration 174).
   const resolveSlotTid = phase === 'RESOLUTION' ? activeTokenId : null
   const isMyTurnInResolution = resolveSlotTid != null
-    && playerTokensInRoster.some(t => t.id === resolveSlotTid)
+    && playerTokensInRoster.some(tk => tk.id === resolveSlotTid)
 
   // --- derive announce : mon tour si activeTokenId correspond à l'un de mes tokens ---
   // Fallback : calcul depuis le roster si activeTokenId pas encore reçu (race condition COMBAT_SLOT_ADVANCED)
@@ -330,9 +333,9 @@ export default function CombatActionWindow({
   )
   const isMyTurnInAnnouncement = phase === 'ANNOUNCEMENT'
     && computedAnnounceTokenId != null
-    && playerTokensInRoster.some(t => t.id === computedAnnounceTokenId)
+    && playerTokensInRoster.some(tk => tk.id === computedAnnounceTokenId)
     && !rosterEntry?.has_announced
-  const myActions = actions.filter(a => playerTokensInRoster.some(t => t.id === a.token_id)
+  const myActions = actions.filter(a => playerTokensInRoster.some(tk => tk.id === a.token_id)
     && (resolveSlotTid ? a.token_id === resolveSlotTid : a.token_id === playerToken?.id)
   )
 
@@ -519,8 +522,8 @@ export default function CombatActionWindow({
       : null,
     reload: reloadSelected ? {} : null,
   }
-  const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick)
-  const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick)
+  const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick, t)
+  const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick, t)
   const iniTotal = (rosterEntry.initiative ?? 0) - iniDelta // initiative decremente par les couts
 
   // Tir visé — éligibilité recalculée à chaque rendu, source unique shared/combatExclusiveActions.js
@@ -626,20 +629,20 @@ export default function CombatActionWindow({
   // =========================================================================
   // RENDU — Surprise
   // =========================================================================
-  if (pendingSurpriseRoll?.tokenId && playerTokensInRoster.some(t => t.id === pendingSurpriseRoll.tokenId)) {
+  if (pendingSurpriseRoll?.tokenId && playerTokensInRoster.some(tk => tk.id === pendingSurpriseRoll.tokenId)) {
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
-        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Surprise !</div>
-        <p style={W.surpriseText}>Vous etes surpris. Lancez 1d20 pour determiner votre initiative.</p>
-        <button style={W.btnRoll} onClick={onSurpriseRolled}>Lancer le de d&apos;initiative</button>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.surpriseTitle')}</div>
+        <p style={W.surpriseText}>{t('actionWindow.surpriseMessage')}</p>
+        <button style={W.btnRoll} onClick={onSurpriseRolled}>{t('actionWindow.rollInitiativeButton')}</button>
       </div>
     )
   }
   if (rosterEntry.is_surprised && rosterEntry.has_announced && rosterEntry.initiative === 0) {
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
-        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Surprise !</div>
-        <p style={W.surpriseText}>Vous etes surpris — vous ne pouvez pas agir ce tour.</p>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.surpriseTitle')}</div>
+        <p style={W.surpriseText}>{t('actionWindow.surprisedCannotAct')}</p>
       </div>
     )
   }
@@ -652,12 +655,12 @@ export default function CombatActionWindow({
     const myReloadAction  = myActions.find(a => a.action_key === 'reload')
     const myMeleeActions  = myActions.filter(a => a.action_key === 'melee')
     const myMeleeAction   = myMeleeActions[0] ?? null
-    const cibleToken = myAssaultAction ? tokens.find(t => t.id === myAssaultAction.target_token_id) : null
-    const meleeCibleTokens = myMeleeActions.map(a => tokens.find(t => t.id === a.target_token_id) ?? null)
+    const cibleToken = myAssaultAction ? tokens.find(tk => tk.id === myAssaultAction.target_token_id) : null
+    const meleeCibleTokens = myMeleeActions.map(a => tokens.find(tk => tk.id === a.target_token_id) ?? null)
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
-        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 - Resolution</div>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.resolutionPhaseShort')}</div>
         <div className="combat-win-body">
           <div style={W.leftPanel}>
             {myActions.map(a => (
@@ -668,8 +671,8 @@ export default function CombatActionWindow({
             ))}
             {myAssaultAction && (
               <div style={{ padding: '6px 14px', fontSize: 11, color: '#7070a0', borderTop: '1px solid #2a2a3e' }}>
-                <div>Cible : <span style={{ color: '#c0c0d0' }}>{cibleToken?.label ?? '—'}</span></div>
-                {isRushed && <div style={{ color: '#e55' }}>Precipite (-5)</div>}
+                <div>{t('actionWindow.targetPrefix')}<span style={{ color: '#c0c0d0' }}>{cibleToken?.label ?? '—'}</span></div>
+                {isRushed && <div style={{ color: '#e55' }}>{t('actionWindow.rushedTag')}</div>}
               </div>
             )}
           </div>
@@ -677,15 +680,15 @@ export default function CombatActionWindow({
         <div className="combat-float-footer">
           {myAssaultAction ? (
             <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
-              En attente de validation GM…
+              {t('actionWindow.awaitingGmValidation')}
             </div>
           ) : myReloadAction ? (
             <div style={{ color: '#7070a0', fontSize: 12, textAlign: 'center', padding: '4px 0' }}>
-              Rechargement — en attente du MJ…
+              {t('actionWindow.reloadAwaitingGm')}
             </div>
           ) : (
             <button className="btn-tac" onClick={() => socket?.emit(WS.COMBAT_ACTION_CONFIRM, { tokenId: playerToken.id })}>
-              Agir
+              {t('actionWindow.actButton')}
             </button>
           )}
         </div>
@@ -704,7 +707,7 @@ export default function CombatActionWindow({
           localStorage.setItem('pj-roster-open', next ? 'true' : 'false')
         }}
       >
-        <span style={W.rosterTitle}>Mes personnages ({playerTokensInRoster.length})</span>
+        <span style={W.rosterTitle}>{t('actionWindow.myCharacters', { count: playerTokensInRoster.length })}</span>
         <span style={{ fontSize: 10, color: '#5b5b7a', cursor: 'pointer' }}>{rosterOpen ? '▲' : '▼'}</span>
       </div>
       {rosterOpen && (
@@ -738,12 +741,12 @@ export default function CombatActionWindow({
 
   // Pas encore mon tour d'annoncer — attente du slot actuel
   if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
-    const currentDeclarer = tokens.find(t => t.id === computedAnnounceTokenId)
+    const currentDeclarer = tokens.find(tk => tk.id === computedAnnounceTokenId)
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
-        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitle')}</div>
         <p style={W.waitText}>
-          En attente de {currentDeclarer?.label ?? '…'}…
+          {t('actionWindow.awaitingPlayer', { name: currentDeclarer?.label ?? '…' })}
         </p>
       </div>
     )
@@ -751,12 +754,12 @@ export default function CombatActionWindow({
 
   // Phase 2 — résolution en cours, pas encore mon slot actif
   if (phase === 'RESOLUTION' && !isMyTurnInResolution) {
-    const activeResolveToken = tokens.find(t => t.id === resolveSlotTid)
+    const activeResolveToken = tokens.find(tk => tk.id === resolveSlotTid)
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
-        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 2 — Résolution</div>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.resolutionPhaseTitle')}</div>
         <p style={W.waitText}>
-          {activeResolveToken ? `${activeResolveToken.label} agit…` : 'Résolution en cours…'}
+          {activeResolveToken ? t('actionWindow.tokenActing', { name: activeResolveToken.label }) : t('actionWindow.resolutionInProgress')}
         </p>
       </div>
     )
@@ -766,8 +769,8 @@ export default function CombatActionWindow({
   if (rosterEntry?.has_announced) {
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
-        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 - Declaration d&apos;intention</div>
-        <p style={W.waitText}>Action declaree. En attente des autres participants…</p>
+        <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitleAlt')}</div>
+        <p style={W.waitText}>{t('actionWindow.actionDeclaredWaiting')}</p>
       </div>
     )
   }
@@ -861,7 +864,7 @@ export default function CombatActionWindow({
       top: pos.top,
       maxHeight: 'calc(100vh - 80px)',
     }}>
-      <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>Phase 1 — Déclaration d&apos;intention</div>
+      <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitle')}</div>
 
       <div className="combat-win-body">
         {/* ---- Panneau gauche ---- */}
@@ -869,7 +872,7 @@ export default function CombatActionWindow({
 
           {/* TACTIQUE */}
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={W.sectionTitle}>TACTIQUE</div>
+            <div style={W.sectionTitle}>{t('gmDeclareWindow.tacticSection')}</div>
             {!isDrone && (
               <StateSelector
                 stateKey="position" def={STATE_DEFS.position}
@@ -889,7 +892,7 @@ export default function CombatActionWindow({
           {/* ARMEMENT */}
           {!isDrone && (
             <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-              <div style={W.sectionTitle}>ARMEMENT</div>
+              <div style={W.sectionTitle}>{t('gmDeclareWindow.equipmentSection')}</div>
               {(() => {
                 const { rows, showSlotLabel } = handSlotDisplayRows({ MG: equippedMg, MD: equippedMd, '2M': equipped2M, Tr: equippedTr })
                 if (rows.length === 0) return null
@@ -927,7 +930,7 @@ export default function CombatActionWindow({
 
           {/* ACTION */}
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={W.sectionTitle}>ACTION</div>
+            <div style={W.sectionTitle}>{t('sectionTitles.action')}</div>
             {isDrone
               ? <DroneDeclareSection
                   pendingMove={droneDeclare.pendingMove}
@@ -939,7 +942,7 @@ export default function CombatActionWindow({
                   onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
                   assaultTargetId={droneDeclare.assaultTargetId}
                   onChooseTarget={() => droneDeclare.handleChooseTarget(playerToken)}
-                  getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
+                  getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
                 />
               : <div style={W.itemsGrid}>
               {MAP_ACTIONS.map(a => {
@@ -949,8 +952,8 @@ export default function CombatActionWindow({
                 // Assaut/CaC grisé si assommé
                 if ((a.k === 'attack' || a.k === 'melee') && isStunned) {
                   return (
-                    <div key={a.k} title="Assommé — −5 à toutes les actions, allure max = Moyenne, ne peut pas attaquer" style={W.itemGreyed}>
-                      <span style={W.itemLabel}>{a.l} ☠</span>
+                    <div key={a.k} title={t('stunnedActionsTooltip')} style={W.itemGreyed}>
+                      <span style={W.itemLabel}>{t(a.l)} ☠</span>
                     </div>
                   )
                 }
@@ -958,8 +961,8 @@ export default function CombatActionWindow({
                 // Assaut grisé dynamiquement si arme vide
                 if (a.k === 'attack' && isAmmoEmpty) {
                   return (
-                    <div key={a.k} title="Arme vide — rechargez d'abord" style={{ ...W.itemGreyed, cursor: 'pointer' }} onClick={() => handleMapToggle(a.k)}>
-                      <span style={W.itemLabel}>{a.l}</span>
+                    <div key={a.k} title={t('actionWindow.emptyWeaponTitle')} style={{ ...W.itemGreyed, cursor: 'pointer' }} onClick={() => handleMapToggle(a.k)}>
+                      <span style={W.itemLabel}>{t(a.l)}</span>
                     </div>
                   )
                 }
@@ -967,16 +970,16 @@ export default function CombatActionWindow({
                 // Rechargement — munitions déjà visibles en permanence dans ARMEMENT (COM20),
                 // label statique ici. Grisé si plein ou sans arme.
                 if (a.k === 'reload') {
-                  const reloadLabel = 'Recharger'
+                  const reloadLabel = t('actionWindow.reloadButtonLabel')
                   if (isAmmoFull || !selectedWeapon) {
                     return (
-                      <div key={a.k} title={a.tooltip} style={{ ...W.itemGreyed, ...span2 }}>
+                      <div key={a.k} title={t(a.tooltip)} style={{ ...W.itemGreyed, ...span2 }}>
                         <span style={W.itemLabel}>{reloadLabel}</span>
                       </div>
                     )
                   }
                   return (
-                    <div key={a.k} title={a.tooltip}
+                    <div key={a.k} title={t(a.tooltip)}
                       style={{ ...W.item, ...(isActive ? W.itemSelected : {}), ...span2 }}
                       onClick={() => handleMapToggle(a.k)}
                     >
@@ -988,8 +991,8 @@ export default function CombatActionWindow({
                 // Statiquement désactivé (multi, interact)
                 if (a.active === false) {
                   return (
-                    <div key={a.k} title={a.tooltip} style={{ ...W.itemGreyed, ...span2 }}>
-                      <span style={W.itemLabel}>{a.l}</span>
+                    <div key={a.k} title={t(a.tooltip)} style={{ ...W.itemGreyed, ...span2 }}>
+                      <span style={W.itemLabel}>{t(a.l)}</span>
                       {a.ini && <span style={W.itemMod}>{a.ini}</span>}
                     </div>
                   )
@@ -1001,7 +1004,7 @@ export default function CombatActionWindow({
                   return (
                     <div
                       key={a.k}
-                      title={a.tooltip}
+                      title={t(a.tooltip)}
                       style={{
                         ...W.item,
                         ...(isActive ? W.itemSelected : {}),
@@ -1017,9 +1020,9 @@ export default function CombatActionWindow({
                         if (!mapSelected.has(a.k)) handleZoneSelectClick()
                       }}
                     >
-                      <span style={W.itemLabel}>{a.l}</span>
+                      <span style={W.itemLabel}>{t(a.l)}</span>
                       <span style={{ ...W.itemMod, ...(moveSelection ? { color: '#5b8dee' } : {}) }}>
-                        {moveSelection ? `${moveSelection.ini_mod}` : 'choix zone'}
+                        {moveSelection ? `${moveSelection.ini_mod}` : t('actionWindow.chooseZone')}
                       </span>
                     </div>
                   )
@@ -1029,11 +1032,11 @@ export default function CombatActionWindow({
                 return (
                   <div
                     key={a.k}
-                    title={a.tooltip}
+                    title={t(a.tooltip)}
                     style={{ ...W.item, ...(isActive ? W.itemSelected : {}), ...span2 }}
                     onClick={() => handleMapToggle(a.k)}
                   >
-                    <span style={W.itemLabel}>{a.l}</span>
+                    <span style={W.itemLabel}>{t(a.l)}</span>
                     {a.ini && (
                       <span style={{ ...W.itemMod, ...(isActive ? { color: '#5b8dee' } : {}) }}>
                         {a.ini}
@@ -1050,14 +1053,14 @@ export default function CombatActionWindow({
           {/* ACTIONS RAPIDES */}
           {!isDrone && (
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={W.sectionTitle}>ACTIONS RAPIDES</div>
+            <div style={W.sectionTitle}>{t('gmDeclareWindow.quickActionsSection')}</div>
             {QUICK_ACTIONS.map(a => {
               const isFixed = a.kind === 'fixed'
               const val     = isFixed ? decl.quick.phrase : (decl.quick[a.k] ?? 0)
               const isActive = isFixed ? !!val : val > 0
               const cost    = isFixed ? a.ini : (val * a.stepIni)
               return (
-                <div key={a.k} title={a.tooltip} style={{ borderBottom: '1px solid #1a1a2a' }}>
+                <div key={a.k} title={t(a.tooltip)} style={{ borderBottom: '1px solid #1a1a2a' }}>
                   <div
                     style={{ ...W.item, gridColumn: 'span 2' }}
                     onClick={() => {
@@ -1068,12 +1071,12 @@ export default function CombatActionWindow({
                       }
                     }}
                   >
-                    <span style={W.itemLabel}>{a.l}</span>
+                    <span style={W.itemLabel}>{t(a.l)}</span>
                     {isActive && cost !== 0 && (
                       <span style={{ ...W.itemMod, color: '#c86030' }}>{cost}</span>
                     )}
                     {!isActive && !isFixed && (
-                      <span style={W.itemMod}>-5/tr.</span>
+                      <span style={W.itemMod}>{t('actionWindow.quickActionCostPerTurn')}</span>
                     )}
                   </div>
                   {!isFixed && isActive && (
@@ -1104,24 +1107,24 @@ export default function CombatActionWindow({
         {showReload && (
           <div style={W.assaultPanel}>
             <div style={W.assaultSection}>
-              <div style={W.assaultSectionTitle}>Arme</div>
+              <div style={W.assaultSectionTitle}>{t('meleeCombatPanel.weaponSection')}</div>
               {selectedWeapon ? (
                 <div style={W.assaultInfoText}>
-                  {selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'}
+                  {selectedWeapon.custom_name || selectedWeapon.ref_name || t('actionWindow.weaponNameFallback')}
                   <span style={W.assaultInfoSub}> ({selectedWeapon.slots?.[0]}) — {selectedWeapon.ref_caliber}</span>
                 </div>
               ) : (
-                <div style={W.assaultNoWeapon}>Aucune arme équipée (MG/MD)</div>
+                <div style={W.assaultNoWeapon}>{t('assaultPanel.noWeapon')}</div>
               )}
             </div>
 
             <div style={W.assaultSection}>
               <div style={W.assaultSectionTitle}>
-                Munitions disponibles {selectedWeapon?.ref_caliber ? `— ${selectedWeapon.ref_caliber}` : ''}
+                {t('actionWindow.ammoSection')} {selectedWeapon?.ref_caliber ? `— ${selectedWeapon.ref_caliber}` : ''}
               </div>
               {reloadAmmoItems.length === 0 ? (
                 <div style={{ ...W.assaultNoWeapon, color: '#c83030' }}>
-                  Aucune munition compatible dans le sac
+                  {t('actionWindow.noCompatibleAmmo')}
                 </div>
               ) : (
                 reloadAmmoItems.map(item => {
@@ -1138,8 +1141,8 @@ export default function CombatActionWindow({
                       }}
                     >
                       <div style={{ flex: 1 }}>
-                        <div style={W.assaultOptionLabel}>{item.custom_name || item.ref_name || 'Munition'}</div>
-                        <div style={W.assaultOptionSub}>Qté : {item.quantity}</div>
+                        <div style={W.assaultOptionLabel}>{item.custom_name || item.ref_name || t('actionWindow.ammoNameFallback')}</div>
+                        <div style={W.assaultOptionSub}>{t('actionWindow.qtyLabel', { qty: item.quantity })}</div>
                       </div>
                       <div style={{ ...W.assaultRadio, ...(isSelected ? W.assaultRadioActive : {}) }} />
                     </div>
@@ -1151,7 +1154,7 @@ export default function CombatActionWindow({
             {selectedAmmoId && (
               <div style={{ padding: '8px 14px' }}>
                 <div style={{ ...W.assaultSummaryText, color: '#3aaa6a' }}>
-                  ✓ Munition sélectionnée
+                  {t('actionWindow.ammoSelected')}
                 </div>
               </div>
             )}
@@ -1164,7 +1167,7 @@ export default function CombatActionWindow({
             <MeleeCombatPanel
               availableWeapons={meleeWeapons.map(item => ({
                 id: item.id,
-                label: item.custom_name || item.ref_name || 'Arme',
+                label: item.custom_name || item.ref_name || t('actionWindow.weaponNameFallback'),
                 slot: item.slots?.[0],
                 damage: item.ref_damage_h || '—',
                 allonge: parseInt(item.ref_range) || 0,
@@ -1180,7 +1183,7 @@ export default function CombatActionWindow({
               selectedNaturalWeaponId={effectiveMeleeNaturalWeaponId}
               onNaturalWeaponChange={(id) => { setSelectedMeleeNaturalWeaponId(id); setSelectedMeleeWeaponId(null) }}
               targetIsGrappled={
-                tokens.find(t => t.id === meleePendingTokenIds[0])?.statuses?.includes('grappled') ?? false
+                tokens.find(tk => tk.id === meleePendingTokenIds[0])?.statuses?.includes('grappled') ?? false
               }
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
@@ -1214,10 +1217,10 @@ export default function CombatActionWindow({
         {showAssault && !isDrone && (
           <div style={W.assaultPanel}>
             <AssaultRangedPanel
-              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || 'Arme'} (${selectedWeapon.slots?.[0]})` : null}
-              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || 'Arme'} (${weaponMd.slots?.[0]})` : null}
+              weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || t('actionWindow.weaponNameFallback')} (${selectedWeapon.slots?.[0]})` : null}
+              weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || t('actionWindow.weaponNameFallback')} (${weaponMd.slots?.[0]})` : null}
               targetIds={assaultPendingTokenIds}
-              getLabel={(id) => tokens.find(t => t.id === id)?.label ?? '?'}
+              getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
               onChooseTarget={handleChooseTarget}
               showDualWieldSection={hasTwoWeapons && sameFirMode}
               isDualWield={isDualWield}
@@ -1304,7 +1307,7 @@ export default function CombatActionWindow({
             onClick={handleDeclare}
             disabled={!canDeclare}
           >
-            Declarer l&apos;action
+            {t('actionWindow.declareActionButton')}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
@@ -6,32 +7,34 @@ import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import { getTailleCible } from '../../../shared/droneConstants.js'
 
-// CaC §6.2 — modificateurs situation attaquant (préfixe cac_)
+// CaC §6.2 — modificateurs situation attaquant (préfixe cac_). label = cle i18n namespace combat
+// (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le composant via t(), jamais affichee brute ici.
 const SITUATION_ATK = [
-  { key: 'cac_attaquant_cote',          label: 'Attaquant de côté',           mod: -3 },
-  { key: 'cac_attaquant_au_sol',        label: 'Attaquant au sol',            mod: -5 },
-  { key: 'cac_espace_confine',          label: 'Espace confiné',              mod: -3 },
-  { key: 'cac_espace_tres_confine',     label: 'Espace très confiné',         mod: -5 },
-  { key: 'cac_position_avantageuse',    label: 'Position avantageuse',        mod: 3  },
-  { key: 'cac_main_non_directrice',     label: 'Main non directrice',         mod: -5 },
-  { key: 'cac_terrain_instable',        label: 'Terrain instable (limitative)', mod: null },
+  { key: 'cac_attaquant_cote',          label: 'cacModifiers.situationAtk.atkFlank',    mod: -3 },
+  { key: 'cac_attaquant_au_sol',        label: 'cacModifiers.situationAtk.atkProne',    mod: -5 },
+  { key: 'cac_espace_confine',          label: 'cacModifiers.situationAtk.confined',    mod: -3 },
+  { key: 'cac_espace_tres_confine',     label: 'cacModifiers.situationAtk.veryConfined', mod: -5 },
+  { key: 'cac_position_avantageuse',    label: 'cacModifiers.situationAtk.advantageous', mod: 3  },
+  { key: 'cac_main_non_directrice',     label: 'cacModifiers.situationAtk.offhand',      mod: -5 },
+  { key: 'cac_terrain_instable',        label: 'cacModifiers.situationAtk.unstableGround', mod: null },
 ]
 
 const TAILLES = [
-  { key: 'minuscule',   label: 'Minuscule (~30 cm)',    mod: -10 },
-  { key: 'tres_petite', label: 'Très petite (~50 cm)',  mod: -5  },
-  { key: 'petite',      label: 'Petite (~1 m)',         mod: -3  },
-  { key: 'moyenne',     label: 'Moyenne (humaine)',     mod: 0   },
-  { key: 'grande',      label: 'Grande (~3 m)',         mod: 3   },
-  { key: 'tres_grande', label: 'Très grande (~5 m)',    mod: 5   },
-  { key: 'enorme',      label: 'Énorme (~7 m)',         mod: 10  },
-  { key: 'gigantesque', label: 'Gigantesque (10 m+)',   mod: 15  },
+  { key: 'minuscule',   label: 'cacModifiers.tailles.minuscule',   mod: -10 },
+  { key: 'tres_petite', label: 'cacModifiers.tailles.tresPetite',  mod: -5  },
+  { key: 'petite',      label: 'cacModifiers.tailles.petite',      mod: -3  },
+  { key: 'moyenne',     label: 'cacModifiers.tailles.moyenne',     mod: 0   },
+  { key: 'grande',      label: 'cacModifiers.tailles.grande',      mod: 3   },
+  { key: 'tres_grande', label: 'cacModifiers.tailles.tresGrande',  mod: 5   },
+  { key: 'enorme',      label: 'cacModifiers.tailles.enorme',      mod: 10  },
+  { key: 'gigantesque', label: 'cacModifiers.tailles.gigantesque', mod: 15  },
 ]
 
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }
 function fmtOpt(n)    { return n > 0 ? `+${n}` : n === 0 ? '±0' : `${n}` }
 
 export default function CombatCacModifiersWindow({ socket, activeRosterEntry, isDrone }) {
+  const { t } = useTranslation('combat')
   const { actions } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -128,7 +131,7 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
       {/* Header */}
       <div className="combat-float-header" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }} onMouseDown={onHeaderMouseDown}>
         <span style={styles.headerTitle}>
-          {attaquantToken?.label ?? '?'} — Corps à corps — {cibleToken?.label ?? '?'}
+          {t('cacModifiers.header', { attacker: attaquantToken?.label ?? '?', target: cibleToken?.label ?? '?' })}
         </span>
         <div style={styles.pills}>
           <span style={{
@@ -138,9 +141,9 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
           }}>
             {weaponSkill?.skillLabel
               ? `${weaponSkill.skillLabel} ${weaponSkill.skillTotal ?? '?'} ${formatMod(totalModComp)}`
-              : `Comp ${formatMod(totalModComp)}`
+              : t('cacModifiers.compFallback', { mod: formatMod(totalModComp) })
             }
-            {hasTerrainInstableAtk && <span style={{ marginLeft: 4, opacity: 0.7 }}>+Acro</span>}
+            {hasTerrainInstableAtk && <span style={{ marginLeft: 4, opacity: 0.7 }}>{t('cacModifiers.acroTag')}</span>}
           </span>
         </div>
       </div>
@@ -150,7 +153,7 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
 
         {/* Section Attaquant */}
         <div className="combat-float-section">
-          <div style={styles.sectionTitle}>Attaquant</div>
+          <div style={styles.sectionTitle}>{t('cacModifiers.attackerSection')}</div>
           {SITUATION_ATK.map(s => (
             <label key={s.key} style={styles.checkLabel}>
               <input
@@ -160,9 +163,9 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
                 style={styles.checkbox}
               />
               <span style={styles.checkText}>
-                {s.label}
+                {t(s.label)}
                 <span style={{ ...styles.checkMod, color: s.mod != null && s.mod < 0 ? '#ca6d6d' : s.mod != null && s.mod > 0 ? '#6dca6d' : '#8888a0' }}>
-                  {s.mod == null ? '↓Acro' : formatMod(s.mod)}
+                  {s.mod == null ? t('cacModifiers.acroDown') : formatMod(s.mod)}
                 </span>
               </span>
             </label>
@@ -172,7 +175,7 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
         {/* Section Défenseur — terrain instable uniquement (V1) */}
         {!isDrone && (
           <div className="combat-float-section">
-            <div style={styles.sectionTitle}>Défenseur</div>
+            <div style={styles.sectionTitle}>{t('cacModifiers.defenderSection')}</div>
             <label style={styles.checkLabel}>
               <input
                 type="checkbox"
@@ -181,8 +184,8 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
                 style={styles.checkbox}
               />
               <span style={styles.checkText}>
-                Terrain instable (limitative)
-                <span style={{ ...styles.checkMod, color: '#8888a0' }}>↓Acro</span>
+                {t('cacModifiers.situationAtk.unstableGround')}
+                <span style={{ ...styles.checkMod, color: '#8888a0' }}>{t('cacModifiers.acroDown')}</span>
               </span>
             </label>
           </div>
@@ -190,14 +193,14 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
 
         {/* Taille cible */}
         <div className="combat-float-section">
-          <div style={styles.sectionTitle}>Taille cible</div>
+          <div style={styles.sectionTitle}>{t('cacModifiers.targetSizeSection')}</div>
           <select
             value={taille}
             onChange={e => setTaille(e.target.value)}
             style={styles.select}
           >
-            {TAILLES.map(t => (
-              <option key={t.key} value={t.key}>{t.label} ({fmtOpt(t.mod)})</option>
+            {TAILLES.map(opt => (
+              <option key={opt.key} value={opt.key}>{t(opt.label)} ({fmtOpt(opt.mod)})</option>
             ))}
           </select>
         </div>
@@ -219,7 +222,7 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
           onClick={handleLancer}
           disabled={isRolling}
         >
-          {isRolling ? 'En cours…' : 'Lancer les dés'}
+          {isRolling ? t('cacModifiers.rolling') : t('damageWindow.rollButton')}
         </button>
       </div>
 

@@ -1,12 +1,15 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { STATE_DEFS } from './combatSections.js'
 
 export function StateChip({ defKey, current, onChange, compact = false }) {
+  const { t } = useTranslation('combat')
   const def = STATE_DEFS[defKey]
   const cur = def.states.find(s => s.k === current)
+  const curLabel = cur?.l ? t(cur.l) : current
   const handleClick = () => {
     const idx = def.states.findIndex(s => s.k === current)
     onChange(def.states[(idx + 1) % def.states.length].k)
@@ -15,22 +18,23 @@ export function StateChip({ defKey, current, onChange, compact = false }) {
     return (
       <span
         onClick={handleClick}
-        title={`${def.label} : ${cur?.l ?? current} (cliquer pour changer)`}
+        title={`${t(def.label)} : ${curLabel} (cliquer pour changer)`}
         className="combat-chip-state"
       >
-        {cur?.short ?? cur?.l ?? current}
+        {cur?.short ? t(cur.short) : curLabel}
       </span>
     )
   }
   return (
     <div onClick={handleClick} style={S.chip}>
-      <span style={S.chipLabel}>{def.label}</span>
-      <span style={S.chipValue}>{cur?.l ?? current}</span>
+      <span style={S.chipLabel}>{t(def.label)}</span>
+      <span style={S.chipValue}>{curLabel}</span>
     </div>
   )
 }
 
 export default function CombatInitStateWindow({ socket, playerToken }) {
+  const { t } = useTranslation('combat')
   const { roster } = useCombatStore()
   const entry = roster.find(e => e.token_id === playerToken?.id)
 
@@ -57,12 +61,15 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
   }
 
   if (confirmed) {
-    const posLabel = STATE_DEFS.position.states.find(s => s.k === position)?.l  ?? position
-    const wpnLabel = STATE_DEFS.weapon.states.find(s => s.k === weapon)?.l      ?? weapon
-    const fmLabel  = STATE_DEFS.fire_mode.states.find(s => s.k === fireMode)?.l ?? fireMode
+    const posLabelKey = STATE_DEFS.position.states.find(s => s.k === position)?.l
+    const wpnLabelKey = STATE_DEFS.weapon.states.find(s => s.k === weapon)?.l
+    const fmLabelKey  = STATE_DEFS.fire_mode.states.find(s => s.k === fireMode)?.l
+    const posLabel = posLabelKey ? t(posLabelKey) : position
+    const wpnLabel = wpnLabelKey ? t(wpnLabelKey) : weapon
+    const fmLabel  = fmLabelKey  ? t(fmLabelKey)  : fireMode
     return (
       <div className="combat-win" style={{ width: 260, left: pos.left, top: pos.top, padding: '12px' }}>
-        <div style={S.confirmedTitle}>État initial confirmé ✓</div>
+        <div style={S.confirmedTitle}>{t('initStateWindow.confirmed')}</div>
         <div style={S.confirmedRow}>{posLabel} · {wpnLabel} · {fmLabel}</div>
       </div>
     )
@@ -70,13 +77,13 @@ export default function CombatInitStateWindow({ socket, playerToken }) {
 
   return (
     <div className="combat-win" style={{ width: 260, left: pos.left, top: pos.top, padding: '12px' }}>
-      <div className="combat-win-title" style={{ marginBottom: 10, cursor: 'grab', userSelect: 'none' }} onMouseDown={onHeaderMouseDown}>ÉTAT INITIAL</div>
+      <div className="combat-win-title" style={{ marginBottom: 10, cursor: 'grab', userSelect: 'none' }} onMouseDown={onHeaderMouseDown}>{t('initStateWindow.title')}</div>
       <div style={S.chips}>
         <StateChip defKey="position"  current={position}  onChange={setPosition}  />
         <StateChip defKey="weapon"    current={weapon}    onChange={setWeapon}    />
         <StateChip defKey="fire_mode" current={fireMode}  onChange={setFireMode}  />
       </div>
-      <button className="btn-tac-confirm" onClick={handleConfirm}>Confirmer</button>
+      <button className="btn-tac-confirm" onClick={handleConfirm}>{t('initStateWindow.confirmButton')}</button>
     </div>
   )
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 
 export default function CombatDamageWindow({ payload, results, socket, onConfirmed }) {
+  const { t } = useTranslation('combat')
   const [isRolling, setIsRolling] = useState(false)
 
   const handleLancer = () => {
@@ -25,7 +27,7 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
       <div className="combat-float-win" style={{ minWidth: 340, maxWidth: 420, padding: '18px 22px', gap: 14 }}>
 
         <div className="combat-float-header" style={{ alignItems: 'baseline', borderBottom: '1px solid var(--border-session)', paddingBottom: 10, cursor: 'default' }}>
-          <span style={styles.headerTitle}>Gestion des dégâts</span>
+          <span style={styles.headerTitle}>{t('damageWindow.title')}</span>
           <span style={styles.headerTarget}>→ {payload.targetName}</span>
         </div>
 
@@ -33,7 +35,7 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
 
           {/* Bloc Localisation */}
           <div style={styles.diceBlock}>
-            <div style={styles.blockLabel}>Localisation (Distance)</div>
+            <div style={styles.blockLabel}>{t('damageWindow.locationBlock')}</div>
             <div className={isRolling && !results ? 'dice-rolling' : ''} style={styles.dieValue}>
               {results ? results.rollLoc : '?'}
             </div>
@@ -42,7 +44,7 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
                 {results.locLabel}
               </div>
             ) : (
-              <div style={styles.badgePlaceholder}>D20</div>
+              <div style={styles.badgePlaceholder}>{t('damageWindow.d20Placeholder')}</div>
             )}
           </div>
 
@@ -50,7 +52,7 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
 
           {/* Bloc Dégâts */}
           <div style={styles.diceBlock}>
-            <div style={styles.blockLabel}>Dégâts ({payload.formula})</div>
+            <div style={styles.blockLabel}>{t('damageWindow.damageBlock', { formula: payload.formula })}</div>
             <div className={isRolling && !results ? 'dice-rolling' : ''} style={styles.dieValue}>
               {results ? results.degautsBruts : '?'}
             </div>
@@ -68,21 +70,25 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
 
         {results?.severity && (
           <div style={{ ...styles.severityBanner, background: severityColor + '22', borderColor: severityColor, color: severityColor }}>
-            Blessure {results.severity}
+            {t('damageWindow.woundBanner', { severity: results.severity })}
           </div>
         )}
 
         {results?.shockResult?.triggered && (() => {
+          // etourdi/inconscient reutilisent stunWindow.outcomes.* (docs/RegleDocumentaire.md Règle 2
+          // — meme texte que CombatStunWindow.jsx, une seule clé, jamais deux copies).
           const OUTCOME = {
-            ok:          { label: 'Résistance',  col: '#3aaa6a' },
-            etourdi:     { label: 'Étourdi',     col: '#f5c542' },
-            inconscient: { label: 'Inconscient', col: '#c83030' },
+            ok:          { labelKey: 'damageWindow.shockOutcomes.ok',  col: '#3aaa6a' },
+            etourdi:     { labelKey: 'stunWindow.outcomes.etourdi.label',     col: '#f5c542' },
+            inconscient: { labelKey: 'stunWindow.outcomes.inconscient.label', col: '#c83030' },
           }
-          const { label, col } = OUTCOME[results.shockResult.outcome] ?? { label: results.shockResult.outcome, col: '#7a7a90' }
+          const outcome = OUTCOME[results.shockResult.outcome]
+          const label = outcome ? t(outcome.labelKey) : results.shockResult.outcome
+          const col   = outcome?.col ?? '#7a7a90'
           return (
             <div style={{ padding: '8px 10px', background: col + '14', border: `1px solid ${col}66`, borderLeft: `3px solid ${col}`, borderRadius: 4 }}>
               <div style={{ fontSize: 9, color: '#5b5b7a', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>
-                Test de Choc
+                {t('damageWindow.shockTest')}
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{ fontSize: 20, color: col, fontWeight: 700, fontFamily: 'monospace' }}>{results.shockResult.roll}</span>
@@ -99,14 +105,14 @@ export default function CombatDamageWindow({ payload, results, socket, onConfirm
             onClick={handleLancer}
             disabled={isRolling}
           >
-            {isRolling ? 'Calcul en cours...' : 'Lancer les dés'}
+            {isRolling ? t('damageWindow.rolling') : t('damageWindow.rollButton')}
           </button>
         ) : (
           <button
             style={{ ...styles.actionBtn, borderColor: severityColor, color: severityColor, cursor: 'pointer' }}
             onClick={() => onConfirmed?.()}
           >
-            Fermer
+            {t('damageWindow.closeButton')}
           </button>
         )}
 

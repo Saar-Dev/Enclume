@@ -1,0 +1,495 @@
+{
+  "ini": "INI",
+  "stunnedActionsTooltip": "Assommé — −5 à toutes les actions, allure max = Moyenne, ne peut pas attaquer",
+  "overlay": {
+    "moveLegendTitle": "Déplacement",
+    "gmResolution": {
+      "awaitingDefense": "En attente du jet de défense d'un joueur…",
+      "awaitingDamage": "En attente du jet de dégâts d'un joueur…",
+      "forceTitle": "Le serveur lance les dés à la place du joueur injoignable",
+      "forceButton": "Forcer"
+    },
+    "losBlocked": {
+      "title": "Ligne de vue bouchée",
+      "message": "Vous avez tiré sans espoir d'atteindre votre cible.",
+      "continueButton": "Continuer"
+    },
+    "validateButton": "Valider",
+    "cancelButton": "Annuler",
+    "cancelMoveButton": "Annuler le déplacement",
+    "stunDialog": {
+      "rollButton": "Lancer 1D6{{suffix}} tours",
+      "durationPlaceholder": "Durée (tours)"
+    }
+  },
+  "moveZones": {
+    "lente": "Lente",
+    "moyenne": "Moyenne",
+    "rapide": "Rapide",
+    "max": "Max"
+  },
+  "modes": {
+    "normal": {
+      "label": "Normal",
+      "tooltip": "Mode par défaut — aucun modificateur."
+    },
+    "offensif": {
+      "label": "Offensif",
+      "tooltip": "+3 à l'attaque / −5 à la défense si attaqué jusqu'à la prochaine action."
+    },
+    "charge": {
+      "label": "Charge",
+      "tooltip": "+3 attaque +3 dégâts / −7 défense / distance ≥ 3m requise + déplacement court gratuit."
+    },
+    "defensif": {
+      "label": "Défensif",
+      "tooltip": "Aucune attaque. +3 en défense si attaqué. Retarde l'action. (LdB p.223)"
+    },
+    "retraite": {
+      "label": "Retraite",
+      "tooltip": "Aucune attaque. +5 en défense si attaqué. Recul possible. (LdB p.223)"
+    }
+  },
+  "meleeCombatPanel": {
+    "modeSectionTitle": "Mode de combat",
+    "weaponSection": "Arme",
+    "bareHands": "Mains nues",
+    "bareHandsFormula": "1D4 + Mod.Dom.",
+    "weaponNotDrawnTitle": "Mettez l'arme \"Au clair\" d'abord (−3 INI)",
+    "bareHandsOnlyStored": "Mains nues uniquement (arme rangée — équipez-la en main)",
+    "bareHandsOnlyNone": "Mains nues uniquement (aucune arme de contact)",
+    "actionImpossibleTitle": "Action impossible car — {{reasons}}",
+    "chargeNeedsMove": "↑ Sélectionnez d'abord votre déplacement",
+    "chargeMoveSelected": "Déplacement sélectionné (+0 INI gratuit)",
+    "defensifHint": "Aucune attaque — +3 en défense si attaqué",
+    "retraiteHint": "Aucune attaque — +5 en défense",
+    "retreatSection": "Recul (optionnel)",
+    "retreatSelected": "✓ Recul sélectionné — Annuler",
+    "retreatSelectButton": "Sélectionner la destination de recul",
+    "attackCountSection": "Nombre d'attaques",
+    "chip1": { "label": "1 attaque", "tooltip": "Une attaque — aucun malus." },
+    "chip2": { "label": "2 attaques −5", "tooltip": "−5 à tous les jets d'attaque (LdB p.218)." },
+    "chip3": { "label": "3 attaques −7", "tooltip": "−7 à tous les jets d'attaque (LdB p.218)." },
+    "targetsCount": "Cibles ({{count}}/{{total}})",
+    "chooseAdversaryButton": "Choisir l'adversaire",
+    "targetModeHint": "⚔ Cliquez sur la cible CaC",
+    "weaponFallback": "arme",
+    "bareHandsFallback": "mains nues",
+    "rechooseTargetsButton": "Rechoisir les cibles",
+    "targetButton": "Cibler",
+    "chargeSection": "Charge",
+    "destinationSet": "✓ destination",
+    "destinationPending": "… destination",
+    "targetPending": "… cible CaC"
+  },
+  "assaultPanel": {
+    "noWeapon": "Aucune arme équipée (MG/MD)",
+    "shotCountSection": "Nombre de tirs",
+    "chip1": { "label": "1 tir", "tooltip": "Un tir — aucun malus." },
+    "chip2": { "label": "2 tirs −5", "tooltip": "−5 à tous les jets de tir (LdB p.218)." },
+    "chip3": { "label": "3 tirs −7", "tooltip": "−7 à tous les jets de tir (LdB p.218)." },
+    "unavailableReasons": "Indisponible car : {{reasons}}",
+    "fireTypeSection": "Type de tir",
+    "simple": "Simple",
+    "double": "Double +{{bonus}}",
+    "simpleShot": { "label": "Tir simple", "detail": "1 balle : +0" },
+    "aimedShot": {
+      "impossibleTitle": "Action impossible car : {{reasons}}",
+      "label": "Tir visé",
+      "detail": "1 balle, immobile — +1 test / 2 INI sacrifiés (max +5)",
+      "scopeDetail": " — Lunette niv.{{level}} : +1 test / 1 INI (max +{{level}})",
+      "summary_one": "{{count}} tranche ({{cost}} INI) : +{{bonus}} test",
+      "summary_other": "{{count}} tranches ({{cost}} INI) : +{{bonus}} test"
+    },
+    "repeatShot": "Tir à répétition",
+    "variantComp": "+{{comp}} comp",
+    "variantCompDmg": "+{{comp}} comp / +3 dég",
+    "repeatSummary_one": "{{count}} balle : +{{comp}} test",
+    "repeatSummary_other": "{{count}} balles : +{{comp}} test",
+    "dmgSuffix": " / +{{dmg}} dég",
+    "rcDetail": "3 balles : +3 test / +5 dég (courte portée)",
+    "rcSummary": "3 balles : +{{comp}} test (ou +5 dég à courte portée)",
+    "rlMultiTarget": "Multi-cibles : +0 test / zone 3m",
+    "rlSummary": "{{count}} balles : +{{comp}} test / +{{dmg}} dég",
+    "selectVolume": "Sélectionnez un volume de tir",
+    "aimedLocationSection": "Viser une localisation"
+  },
+  "rosterWindow": {
+    "title": "ROSTER COMBAT",
+    "preCombatBadge": "PRÉ-COMBAT",
+    "participantCount": "{{count}} participants",
+    "alert": {
+      "title": "AVANT DÉMARRAGE",
+      "noWeapon_one": "{{count}} PNJ sans arme",
+      "noWeapon_other": "{{count}} PNJs sans arme",
+      "noArmor_one": "{{count}} PNJ non protégé",
+      "noArmor_other": "{{count}} PNJs non protégés"
+    },
+    "empty": "Aucun token sur la carte.",
+    "headers": {
+      "token": "TOKEN",
+      "weapon": "ARME",
+      "armor": "ARMURE",
+      "initState": "ÉTAT INIT",
+      "surprised": "SURPRIS",
+      "included": "INCLUS"
+    },
+    "typeBadge": { "drone": "DR", "pnj": "PNJ", "pj": "PJ" },
+    "stunnedTitle": "Assommé",
+    "stunnedDuration": "☠ étourdi ({{count}} t.)",
+    "noWeaponFallback": "— sans arme",
+    "chooseWeaponPlaceholder": "⚠ Choisir une arme",
+    "chooseArmorPlaceholder": "⚠ T C B J ▾",
+    "noItem": "Aucun item",
+    "excludedSection": "Exclus",
+    "startButton": "DÉMARRER LE COMBAT ({{count}})",
+    "announceButton": "Passer en Annonce →"
+  },
+  "actionWindow": {
+    "surpriseTitle": "Surprise !",
+    "surpriseMessage": "Vous etes surpris. Lancez 1d20 pour determiner votre initiative.",
+    "rollInitiativeButton": "Lancer le de d'initiative",
+    "surprisedCannotAct": "Vous etes surpris — vous ne pouvez pas agir ce tour.",
+    "resolutionPhaseShort": "Phase 2 - Resolution",
+    "targetPrefix": "Cible : ",
+    "rushedTag": "Precipite (-5)",
+    "declarationPhaseTitle": "Phase 1 — Déclaration d'intention",
+    "awaitingPlayer": "En attente de {{name}}…",
+    "resolutionPhaseTitle": "Phase 2 — Résolution",
+    "tokenActing": "{{name}} agit…",
+    "resolutionInProgress": "Résolution en cours…",
+    "declarationPhaseTitleAlt": "Phase 1 - Declaration d'intention",
+    "actionDeclaredWaiting": "Action declaree. En attente des autres participants…",
+    "emptyWeaponTitle": "Arme vide — rechargez d'abord",
+    "awaitingGmValidation": "En attente de validation GM…",
+    "reloadAwaitingGm": "Rechargement — en attente du MJ…",
+    "actButton": "Agir",
+    "myCharacters": "Mes personnages ({{count}})",
+    "chooseZone": "choix zone",
+    "quickActionCostPerTurn": "-5/tr.",
+    "weaponNameFallback": "Arme",
+    "ammoSection": "Munitions disponibles",
+    "noCompatibleAmmo": "Aucune munition compatible dans le sac",
+    "ammoNameFallback": "Munition",
+    "qtyLabel": "Qté : {{qty}}",
+    "ammoSelected": "✓ Munition sélectionnée",
+    "declareActionButton": "Declarer l'action",
+    "reloadButtonLabel": "Recharger"
+  },
+  "gmDeclareWindow": {
+    "title": "PHASE 1 — DÉCLARATION",
+    "declaredProgress": "{{done}}/{{total}} déclarés",
+    "tacticSection": "TACTIQUE",
+    "equipmentSection": "ARMEMENT",
+    "quickActionsSection": "ACTIONS RAPIDES",
+    "noRangedWeaponTag": "sans arme dist.",
+    "monitorTitle": "En cours de déclaration…",
+    "rangedTag": "DST",
+    "meleeTag": "CTC",
+    "iniTotalLabel": "INI TOTAL"
+  },
+  "actionLabels": {
+    "assault": "Assaut (tir)",
+    "melee": "Assaut (CaC)",
+    "reload": "Rechargement",
+    "micro": "Action",
+    "moveShort": "Déplacement",
+    "moveLong": "Déplacement (long)",
+    "sprint": "Sprint",
+    "rush": "Rush",
+    "move": "Déplacement"
+  },
+  "rlButtons": {
+    "b5": "5b",
+    "b10": "10b",
+    "b15": "15b",
+    "b20": "20b",
+    "multi": "Multi"
+  },
+  "states": {
+    "position": {
+      "label": "POSTURE",
+      "standing":  { "label": "Debout",   "short": "Deb." },
+      "crouching": { "label": "Accroupi", "short": "Acc." },
+      "prone":     { "label": "Couché",   "short": "Couc." }
+    },
+    "weapon": {
+      "label": "ARME",
+      "holstered": { "label": "Rangée",          "short": "Rang." },
+      "ready":     { "label": "Main sur l'arme", "short": "Main" },
+      "drawn":     { "label": "Au clair",        "short": "Clair" }
+    },
+    "fireMode": {
+      "label": "MODE DE TIR",
+      "cc": { "label": "Coup par coup", "short": "CC" },
+      "rc": { "label": "Rafale courte", "short": "RC" },
+      "rl": { "label": "Rafale longue", "short": "RL" }
+    },
+    "cover": {
+      "label": "COUVERTURE",
+      "exposed":   { "label": "Découvert" },
+      "partial":   { "label": "Partielle (50%)" },
+      "important": { "label": "Importante (75%)" }
+    },
+    "vitesse": {
+      "label": "VITESSE",
+      "delayed": { "label": "Retardée" },
+      "normal":  { "label": "Normale" },
+      "rushed":  { "label": "Précipitée" }
+    }
+  },
+  "stateSelector": {
+    "currentBadge": "actuel"
+  },
+  "mapActions": {
+    "move": {
+      "label": "Déplacement",
+      "tooltip": "Déplacement court -3 / Se jeter à terre -5 / Se relever -10 / Se précipiter +3"
+    },
+    "attack": {
+      "label": "Assaut (tir)",
+      "tooltip": "Attaque à distance. Tirer depuis une couverture -3 à -5."
+    },
+    "melee": {
+      "label": "Corps à corps",
+      "tooltip": "Venir au corps à corps pour saisir son adversaire -3."
+    },
+    "reload": {
+      "label": "Rechargement",
+      "tooltip": "Recharger son arme — aucun tir ni corps à corps possible ce tour. Coût INI : 0."
+    },
+    "interact": {
+      "label": "Interagir",
+      "tooltip": "Utiliser un mécanisme simple (actionner un interrupteur, ouvrir une porte, saisir un objet) -3 à -5."
+    }
+  },
+  "quickActions": {
+    "observer": {
+      "label": "Observer le combat",
+      "tooltip": "Observer le combat — 1 information par tranche de 5 pts d'Init."
+    },
+    "reperer": {
+      "label": "Repérer (obj., personne, lieu…)",
+      "tooltip": "Tenter de repérer un objet, une arme, une personne, un endroit, etc. — 1 Test d'Observation par tranche de 5 pts d'Init."
+    },
+    "phrase": {
+      "label": "Prononcer une phrase",
+      "tooltip": "Prononcer une phrase courte, donner des ordres brefs -3."
+    }
+  },
+  "iniBreakdown": {
+    "stateTransition": "{{label}} : {{from}} → {{to}}",
+    "moveZone": "Déplacement {{zone}}",
+    "melee": "Corps à corps",
+    "meleeExtraTargets": "CaC cibles supp.",
+    "coverShot": "Tirer depuis couverture",
+    "aimedShot": "Tir visé ×{{count}}",
+    "observe": "Observer ×{{count}}",
+    "spot": "Repérer ×{{count}}",
+    "shortPhrase": "Phrase courte"
+  },
+  "stunWindow": {
+    "title": "Durée d'étourdissement",
+    "rollPrompt": "Lancez {{desc}} pour déterminer la durée",
+    "sending": "Envoi...",
+    "rollButton": "Lancer 1D6",
+    "outcomes": {
+      "etourdi": {
+        "label": "Étourdi",
+        "desc": "1D6 tours"
+      },
+      "inconscient": {
+        "label": "Inconscient",
+        "desc": "1D6 × 10 tours"
+      },
+      "defaultDesc": "1D6"
+    }
+  },
+  "timeline": {
+    "turn": "Tour {{turn}}",
+    "announcement": "Annonce",
+    "resolution": "Résolution",
+    "waiting": "En délai"
+  },
+  "declareLog": {
+    "empty": "Aucune déclaration pour ce tour.",
+    "title": "Déclarations · Tour {{turn}}"
+  },
+  "initStateWindow": {
+    "title": "ÉTAT INITIAL",
+    "confirmButton": "Confirmer",
+    "confirmed": "État initial confirmé ✓"
+  },
+  "pnjPanel": {
+    "header": "⚔ Phase Annonce",
+    "pnjsSection": "PNJs",
+    "pjsSection": "PJs",
+    "skipButton": "Passer",
+    "empty": "Aucun participant actif."
+  },
+  "damageWindow": {
+    "title": "Gestion des dégâts",
+    "locationBlock": "Localisation (Distance)",
+    "damageBlock": "Dégâts ({{formula}})",
+    "woundBanner": "Blessure {{severity}}",
+    "shockTest": "Test de Choc",
+    "rolling": "Calcul en cours...",
+    "rollButton": "Lancer les dés",
+    "closeButton": "Fermer",
+    "shockOutcomes": {
+      "ok": "Résistance"
+    },
+    "d20Placeholder": "D20"
+  },
+  "cacModifiers": {
+    "header": "{{attacker}} — Corps à corps — {{target}}",
+    "compFallback": "Comp {{mod}}",
+    "acroTag": "+Acro",
+    "acroDown": "↓Acro",
+    "attackerSection": "Attaquant",
+    "defenderSection": "Défenseur",
+    "targetSizeSection": "Taille cible",
+    "rolling": "En cours…",
+    "situationAtk": {
+      "atkFlank": "Attaquant de côté",
+      "atkProne": "Attaquant au sol",
+      "confined": "Espace confiné",
+      "veryConfined": "Espace très confiné",
+      "advantageous": "Position avantageuse",
+      "offhand": "Main non directrice",
+      "unstableGround": "Terrain instable (limitative)"
+    },
+    "tailles": {
+      "minuscule": "Minuscule (~30 cm)",
+      "tresPetite": "Très petite (~50 cm)",
+      "petite": "Petite (~1 m)",
+      "moyenne": "Moyenne (humaine)",
+      "grande": "Grande (~3 m)",
+      "tresGrande": "Très grande (~5 m)",
+      "enorme": "Énorme (~7 m)",
+      "gigantesque": "Gigantesque (10 m+)"
+    }
+  },
+  "sectionTitles": {
+    "action": "ACTION"
+  },
+  "droneDeclare": {
+    "iniPlaceholder": "−INI",
+    "passTurn": "Passer le tour"
+  },
+  "common": {
+    "targetSection": "Cible",
+    "changeButton": "Changer",
+    "chooseTargetButton": "Choisir une cible"
+  },
+  "droneWeaponPanel": {
+    "title": "Armement drone",
+    "noWeapon": "Aucune arme configurée",
+    "emptyWeaponTitle": "Arme vide",
+    "weaponFallback": "Arme",
+    "ammoCount": "{{count}} munitions",
+    "ready": "✓ Prêt à l'assaut"
+  },
+  "resultPanels": {
+    "severity": {
+      "legere": "Blessure légère",
+      "moyenne": "Blessure moyenne",
+      "grave": "Blessure grave",
+      "critique": "Blessure critique",
+      "mortelle": "Blessure mortelle"
+    },
+    "location": {
+      "tete": "Tête",
+      "corps": "Corps",
+      "brasDroit": "Bras droit",
+      "brasGauche": "Bras gauche",
+      "jambeDroite": "Jambe droite",
+      "jambeGauche": "Jambe gauche"
+    },
+    "rollLine": {
+      "roll": "Jet",
+      "threshold": "Seuil"
+    },
+    "damageLine": {
+      "label": "Dégâts",
+      "absorbed": "{{gross}} bruts − {{absorbed}} armure"
+    },
+    "severityBlock": {
+      "lethal": "Létal"
+    },
+    "shockBlock": {
+      "duration_one": "Durée : {{count}} tour",
+      "duration_other": "Durée : {{count}} tours",
+      "applyButton": "Appliquer l'étourdissement",
+      "applied": "✓ Étourdissement appliqué"
+    },
+    "reload": {
+      "success": "Réussi",
+      "impossible": "Impossible",
+      "clipDisplay": "/ {{clipSize}} balles",
+      "noAmmo": "Aucune munition ({{caliber}}) disponible"
+    },
+    "melee": {
+      "hit": "Touché",
+      "dodged": "Esquivé",
+      "surrounded": "⚠ {{name}} encerclé : {{malus}}",
+      "attackLabel": "Attaque",
+      "defenseLabel": "Défense"
+    },
+    "gm": {
+      "title": "Résolution du tir",
+      "missed": "Manqué"
+    },
+    "player": {
+      "lethallyHit": "Vous êtes mortellement touché",
+      "hit": "Vous êtes touché",
+      "dodged": "Vous esquivez le tir",
+      "byPrefix": "par ",
+      "fromPrefix": "de "
+    }
+  },
+  "modifiers": {
+    "header": "{{shooter}} — Assaut — {{target}}",
+    "impossibleShot": "Tir impossible",
+    "dmgTag": "Dmg {{mod}}",
+    "attackBanner": {
+      "hit": "✓ Touché !",
+      "missed": "✗ Raté",
+      "detail": "{{roll}} / {{seuil}} Seuil"
+    },
+    "fireModeLabel": "Mode de tir",
+    "stateLabel": "État",
+    "rushed": "⚠ Précipité (−5 comp)",
+    "distanceLabel": "Distance",
+    "porteeSection": "Portée",
+    "choosePlaceholder": "— choisir —",
+    "tireurAllureSection": "Allure tireur",
+    "cibleAllureSection": "Allure cible",
+    "couvertureSection": "Couverture",
+    "obscuriteSection": "Obscurité",
+    "portees": {
+      "boutPortant": "Bout portant",
+      "courte": "Courte",
+      "moyenne": "Moyenne",
+      "longue": "Longue",
+      "extreme": "Extrême"
+    },
+    "allures": {
+      "immobile": "Immobile",
+      "lente": "Allure lente",
+      "moyenne": "Allure moyenne",
+      "rapide": "Allure rapide",
+      "maximale": "Allure maximale",
+      "maximaleImpossible": "Allure maximale (✗)"
+    },
+    "couvertures": {
+      "partielle": "Couverture partielle (50%)",
+      "importante": "Couverture importante (75%)"
+    },
+    "obscurites": {
+      "legere": "Obscurité légère",
+      "importante": "Obscurité importante",
+      "totale": "Obscurité totale (impossible)"
+    }
+  }
+}

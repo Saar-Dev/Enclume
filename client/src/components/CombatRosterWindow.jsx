@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -52,6 +53,7 @@ function defaultArmorSlot(location) {
 const WEAPON_FAMILIES_EXCLUDE = new Set(['Accessoires pour armes', 'Grenade', 'Lanceur'])
 
 export default function CombatRosterWindow({ socket, battlemapId, characters }) {
+  const { t } = useTranslation('combat')
   const { phase, roster, currentTurn } = useCombatStore()
   const tokens            = useTokenStore(s => s.tokens)
 
@@ -132,7 +134,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
 
   // ── Helpers identification ─────────────────────────────────────────────────
   const getCharType = tokenId => {
-    const token = tokens.find(t => t.id === tokenId)
+    const token = tokens.find(tk => tk.id === tokenId)
     if (!token?.character_id) return null
     return characters?.find(c => c.id === token.character_id)?.type ?? null
   }
@@ -140,7 +142,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
   // ── Lignes affichées ───────────────────────────────────────────────────────
   const previewRows = inCombat
     ? roster.map(entry => {
-        const token = tokens.find(t => t.id === entry.token_id)
+        const token = tokens.find(tk => tk.id === entry.token_id)
         return { tokenId: entry.token_id, label: token?.label ?? entry.token_id, base_ini: entry.base_ini, is_surprised: entry.is_surprised, excluded: false }
       })
     : tokens.map(token => ({
@@ -164,39 +166,39 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
         <div style={S.headerLeft}>
-          <span className="combat-win-title">ROSTER COMBAT</span>
-          {!inCombat && <span className="combat-badge-pnj">PRÉ-COMBAT</span>}
+          <span className="combat-win-title">{t('rosterWindow.title')}</span>
+          {!inCombat && <span className="combat-badge-pnj">{t('rosterWindow.preCombatBadge')}</span>}
           {inCombat  && <span className="combat-badge-pj">{phase}</span>}
         </div>
-        <span style={S.participantCount}>{activeRows.length} participants</span>
+        <span style={S.participantCount}>{t('rosterWindow.participantCount', { count: activeRows.length })}</span>
       </div>
 
       {/* BANNIÈRE ALERTE */}
       {!inCombat && (noWeaponCnt > 0 || noArmorCnt > 0) && (
         <div className="combat-win-alert">
           <span style={S.alertIcon}>⚠</span>
-          <span className="combat-win-alert-label">AVANT DÉMARRAGE</span>
-          {noWeaponCnt > 0 && <span className="combat-win-alert-item">{noWeaponCnt} PNJ{noWeaponCnt > 1 ? 's' : ''} sans arme</span>}
-          {noArmorCnt  > 0 && <span className="combat-win-alert-item">{noArmorCnt}  PNJ{noArmorCnt  > 1 ? 's' : ''} non protégé{noArmorCnt > 1 ? 's' : ''}</span>}
+          <span className="combat-win-alert-label">{t('rosterWindow.alert.title')}</span>
+          {noWeaponCnt > 0 && <span className="combat-win-alert-item">{t('rosterWindow.alert.noWeapon', { count: noWeaponCnt })}</span>}
+          {noArmorCnt  > 0 && <span className="combat-win-alert-item">{t('rosterWindow.alert.noArmor', { count: noArmorCnt })}</span>}
         </div>
       )}
 
       {/* TABLE */}
       {activeRows.length === 0 && (
-        <p style={S.empty}>Aucun token sur la carte.</p>
+        <p style={S.empty}>{t('rosterWindow.empty')}</p>
       )}
       {activeRows.length > 0 && (
         <div style={S.tableWrap}>
           <table style={S.table}>
             <thead>
               <tr>
-                <th className="combat-win-th">TOKEN</th>
-                <th className="combat-win-th" style={{ textAlign: 'center' }}>INI</th>
-                {!inCombat && <th className="combat-win-th">ARME</th>}
-                {!inCombat && <th className="combat-win-th">ARMURE</th>}
-                {phase === 'ROSTER' && <th className="combat-win-th" style={{ textAlign: 'center' }}>ÉTAT INIT</th>}
-                <th className="combat-win-th" style={{ textAlign: 'center' }}>SURPRIS</th>
-                {!inCombat && <th className="combat-win-th" style={{ textAlign: 'center' }}>INCLUS</th>}
+                <th className="combat-win-th">{t('rosterWindow.headers.token')}</th>
+                <th className="combat-win-th" style={{ textAlign: 'center' }}>{t('ini')}</th>
+                {!inCombat && <th className="combat-win-th">{t('rosterWindow.headers.weapon')}</th>}
+                {!inCombat && <th className="combat-win-th">{t('rosterWindow.headers.armor')}</th>}
+                {phase === 'ROSTER' && <th className="combat-win-th" style={{ textAlign: 'center' }}>{t('rosterWindow.headers.initState')}</th>}
+                <th className="combat-win-th" style={{ textAlign: 'center' }}>{t('rosterWindow.headers.surprised')}</th>
+                {!inCombat && <th className="combat-win-th" style={{ textAlign: 'center' }}>{t('rosterWindow.headers.included')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -207,7 +209,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                 const eq            = equipment[row.tokenId]
                 const isExcl        = row.excluded
                 const rEntry        = inCombat ? roster.find(e => e.token_id === row.tokenId) : null
-                const tEntry        = tokens.find(t => t.id === row.tokenId)
+                const tEntry        = tokens.find(tk => tk.id === row.tokenId)
                 const isStunnedEntry = tEntry?.statuses?.includes('stunned') ?? false
                 const stunnedExpiry  = tEntry?.statusExpiries?.['stunned'] ?? null
                 const initConfirmed = rEntry?.state_character?.init_state_confirmed === true
@@ -220,13 +222,13 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                       <div style={S.tokenCell}>
                         {charType && (
                           <span className={isDrone ? 'combat-badge-drone' : isPnj ? 'combat-badge-pnj' : 'combat-badge-pj'}>
-                            {isDrone ? 'DR' : isPnj ? 'PNJ' : 'PJ'}
+                            {isDrone ? t('rosterWindow.typeBadge.drone') : isPnj ? t('rosterWindow.typeBadge.pnj') : t('rosterWindow.typeBadge.pj')}
                           </span>
                         )}
                         <span style={S.tokenLabel}>{row.label}</span>
                         {inCombat && isStunnedEntry && (
-                          <span title="Assommé" style={{ fontSize: 9, color: '#f5c542', marginLeft: 4, fontWeight: 600 }}>
-                            ☠ étourdi ({Math.max(0, (stunnedExpiry ?? 0) - currentTurn)} t.)
+                          <span title={t('rosterWindow.stunnedTitle')} style={{ fontSize: 9, color: '#f5c542', marginLeft: 4, fontWeight: 600 }}>
+                            {t('rosterWindow.stunnedDuration', { count: Math.max(0, (stunnedExpiry ?? 0) - currentTurn) })}
                           </span>
                         )}
                       </div>
@@ -244,7 +246,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                           : !isPnj ? (
                             // PJ — lecture seule
                             <span style={S.equippedText}>
-                              {eq?.weapon ? `${eq.weapon.name} [${SLOT_LABELS[eq.weapon.slot] ?? eq.weapon.slot}]` : '— sans arme'}
+                              {eq?.weapon ? `${eq.weapon.name} [${SLOT_LABELS[eq.weapon.slot] ?? eq.weapon.slot}]` : t('rosterWindow.noWeaponFallback')}
                             </span>
                           ) : eq?.weapon ? (
                             // PNJ équipé
@@ -263,7 +265,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                                   handleQuickEquip(row.tokenId, eq?.characterId ?? equipment[row.tokenId]?.characterId, e.target.value, slot)
                                 }}
                               >
-                                <option value="">⚠ Choisir une arme</option>
+                                <option value="">{t('rosterWindow.chooseWeaponPlaceholder')}</option>
                                 {refWeapons.map(w => (
                                   <option key={w.id} value={w.id}>{w.name} ({w.category})</option>
                                 ))}
@@ -293,7 +295,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
                                   handleQuickEquip(row.tokenId, eq?.characterId ?? equipment[row.tokenId]?.characterId, e.target.value, slot)
                                 }}
                               >
-                                <option value="">⚠ T C B J ▾</option>
+                                <option value="">{t('rosterWindow.chooseArmorPlaceholder')}</option>
                                 {refArmors.map(a => (
                                   <option key={a.id} value={a.id}>{a.name} ({a.location ?? '?'})</option>
                                 ))}
@@ -365,7 +367,7 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
       {/* EXCLUS */}
       {excludedRows.length > 0 && (
         <div style={S.excludedSection}>
-          <span style={S.excludedLabel}>Exclus</span>
+          <span style={S.excludedLabel}>{t('rosterWindow.excludedSection')}</span>
           {excludedRows.map(row => (
             <div key={row.tokenId} style={S.excludedRow}>
               <span style={S.excludedName}>{row.label}</span>
@@ -382,12 +384,12 @@ export default function CombatRosterWindow({ socket, battlemapId, characters }) 
           onClick={handleStart}
           disabled={activeRows.length === 0}
         >
-          DÉMARRER LE COMBAT ({activeRows.length})
+          {t('rosterWindow.startButton', { count: activeRows.length })}
         </button>
       )}
       {inCombat && phase === 'ROSTER' && (
         <button className="btn-tac-confirm" onClick={handleAnnounceStart}>
-          Passer en Annonce →
+          {t('rosterWindow.announceButton')}
         </button>
       )}
     </div>
@@ -414,6 +416,7 @@ function PjArmorChips({ armorPieces }) {
 }
 
 function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
+  const { t } = useTranslation('combat')
   const { coverage, tips } = mergeArmorPieces(armorPieces)
   const [openChip, setOpenChip] = useState(null)
   return (
@@ -440,7 +443,7 @@ function PnjArmorChips({ armorPieces, refArmors, onSelect }) {
             >
               <option value="" disabled>{chip} ▾</option>
               {filteredArmors.length === 0
-                ? <option disabled>Aucun item</option>
+                ? <option disabled>{t('rosterWindow.noItem')}</option>
                 : filteredArmors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)
               }
             </select>

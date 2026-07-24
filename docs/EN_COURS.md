@@ -168,6 +168,54 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
+> **Item 108 (Session 173, dev/Saar) — i18n Combat (`docs/PLAN_LOCALISATION.md` Lot 1) ✅ CODÉ, LOT 1
+> ENTIÈREMENT CLOS — 17 fichiers + `combatSections.js`, zéro texte en dur restant (confirmé par
+> ré-audit automatisé).**
+> Nouveau chantier : la règle "pas de texte en dur" (`.claude/rules/react.md`) existait déjà mais
+> n'avait jamais été appliquée systématiquement (dette informelle notée depuis un moment, jamais
+> traitée). Norme durable écrite cette session : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`
+> (namespaces par domaine plutôt qu'un `fr.json` unique qui grossit sans fin, pattern serveur
+> `system`+`i18nKey` généralisé, anglais explicitement gelé — décision Saar, `en.json` existe mais
+> n'est chargé nulle part). Plan de résorption : `docs/PLAN_LOCALISATION.md` (4 lots identifiés, seul
+> Lot 1/Combat traité cette session).
+> **Codé** : `combatSections.js` migré en 7 segments isolés (`STATE_DEFS`/`MAP_ACTIONS`/
+> `QUICK_ACTIONS`/`MOVE_ZONE_DEFS`/`COMBAT_MODE_DEFS`/`ACTION_LABELS`/`RL_BUTTONS` + `calcIniBreakdown`/
+> `calcIniDelta` — fonctions pures, `t` injecté en paramètre par l'appelant, même convention que
+> `charStats.js`). Les 17 fichiers consommateurs retouchés un par un (segmentation explicitement
+> demandée par Saar en cours de chantier, y compris pour le texte propre à chaque fichier une fois
+> `combatSections.js` réglé). `client/src/locales/combat.json` créé : 30 sections, namespace neuf
+> isolé — la redistribution complète de `fr.json` en plusieurs namespaces (prévue au plan initial) a
+> été volontairement différée, jugée trop risquée en un seul geste pour ce lot (toucherait les ~50
+> composants déjà traduits, sans rapport avec Combat).
+> **2 bugs trouvés et corrigés en cours de route** (pas des ajouts — de vraies régressions introduites
+> puis attrapées dans la même session, avant tout test navigateur) : préfixe de namespace en trop dans
+> les toutes premières clés (`combat.moveZones.lente` au lieu de `moveZones.lente` — `useTranslation`
+> sélectionne déjà le namespace) ; `InlineChip` dans `CombatGmDeclareWindow.jsx` (composant local
+> distinct de `StateSelector`, oublié lors du segment `STATE_DEFS`) affichait des clés brutes au lieu
+> du texte sur le panneau TACTIQUE côté MJ — repéré par un balayage dédié de tout `.label}`/`.l}` non
+> enveloppé de `t()` dans `client/src`.
+> **4 dettes hors scope trouvées en cours de route, routées séparément** (consigne Saar : toute
+> trouvaille hors scope va dans `docs/BUGIDENTIFIE.md` ou `docs/ROADMAP.md`, jamais orpheline) —
+> détail complet dans `docs/BUGIDENTIFIE.md` cluster H : `I18N-LINT1` (hook `useRef` conditionnel,
+> `CombatGmDeclareWindow.jsx`), `I18N-LINT2` (variables/props inutilisées, plusieurs fichiers Combat),
+> `I18N-LINT3` (`setState` synchrone dans un `useEffect`, 3 fichiers, même patron répété),
+> `I18N-DEADCODE1` (`components/creation/WizardCreationPage.jsx` — doublon mort de
+> `pages/WizardCreationPage.jsx`).
+> **Testé** : ESLint (0 nouvelle erreur sur l'ensemble du lot — chaque fichier vérifié individuellement
+> via `git diff`/`git diff --stat` pour distinguer préexistant de régression), `vite build` propre après
+> chaque fichier, toutes les clés de `combat.json` vérifiées par script Node simulant la résolution de
+> clé i18next (namespace + chemin), aucun doublon de clé top-level dans `combat.json` (vérifié par
+> script — un JSON avec deux clés identiques au même niveau ne lève pas d'erreur, seule la dernière
+> survit silencieusement).
+> **Non testé** : tout parcours navigateur réel — décision explicite Saar en cours de chantier
+> ("Je ne compte pas tester les choses une par une mais faire une session de beta test avec des amis
+> pour vérifier tout") : pas de validation par fichier ni par lot demandée, la validation fonctionnelle
+> se fera plus tard via une session beta groupée avec d'autres joueurs, pas par Saar lui-même au fil de
+> l'eau.
+> **Reste** : Lot 2 (Équipement/fiche perso, 7 fichiers → `charSheet.json`), Lot 3 (Builder/Surface,
+> 6 fichiers → `builder.json`), Lot 4 (Outils dés, 2 fichiers) — non commencés. `docs/PLAN_LOCALISATION.md`
+> à jour (statut, détail des segments, tableau de correspondance des clés partagées).
+
 > **Item 106 (Session 168, dev/Saar) — Prérequis `CHOC1` (arme équipée sans dégât physique) ✅ CODÉ
 > ET TESTÉ EN JEU (confirmé par Saar via logs serveur).**
 > **Codé** : `getEffectiveMeleeDamage` (nouveau, `damageService.js`) — point de résolution unique du
@@ -309,8 +357,11 @@ Verrou retiré au commit de clôture, une fois Saar confirmé. Refonte CaC (`doc
 verrou levé) reste différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif —
 cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
 
-🔒 En cours (Saar) : `docs/PLAN_WIZARDCOLLAB.md` Lots A1+A2+A3 — **codés au complet**, Lot B (bypass
-MJ des budgets/éligibilité à la finalisation) non commencé. Terminologie tranchée avec Saar : jamais
+🔒 En cours (Saar) : `docs/PLAN_WIZARDCOLLAB.md` Lots A1+A2+A3+A4 — **codés au complet et confirmés
+fonctionnels par Saar en conditions réelles (2 sessions simultanées)**, Lot B (bypass MJ des budgets/
+éligibilité à la finalisation) non commencé. Commit différé : session parallèle (autre agent) encore
+en cours sur ce dépôt — pas de commit tant qu'elle n'est pas terminée (`CLAUDE.md` §3/§4). Terminologie
+tranchée avec Saar : jamais
 "Brouillon" côté texte visible (jugé dénigrant) — "brouillon"/"draft" reste un terme de code interne
 uniquement (`creation_state`, `startCreation`, `GET .../drafts`), le concept UI s'appelle "Pool de
 personnages" (`docs/VOCABULARY.md`, même patron que Coffre/Vault).
@@ -361,10 +412,131 @@ ligne (`DashboardPage.jsx`).
 
 **Testé** : `npx vite build` propre à chaque étape, `node --test shared/wizardOptionKeys.test.mjs`
 (12/12), `node --check` sur tous les fichiers serveur touchés, **navigateur réel par Saar** (Dashboard,
-Pool de personnages, les 3 correctifs ci-dessus confirmés). **Non testé** ⚠️ : le scénario complet à 2
-sessions (MJ ouvre le personnage d'un joueur pendant que celui-ci travaille dessus, verrou posé en
-direct, `WIZARD_LOCKS_SYNC` reçu côté joueur) — c'est tout l'objet de ce chantier et reste à valider ;
-migrations 201/203 à appliquer en base réelle.
+Pool de personnages, les 3 correctifs ci-dessus confirmés).
+
+**Deuxième retour navigateur réel de Saar (scénario collaboratif à 2 sessions)** — 3 bugs réels
+trouvés, tous corrigés :
+- **Cadenas MJ inertes (cause racine confirmée)** : `WizardLockSync` émettait `WIZARD_JOIN` dès que
+  `useSocket()` renvoie un objet non-null — bien avant que la connexion réseau existe, donc avant
+  `SESSION_JOIN` lui-même. Côté serveur, `registerWizardHandlers` n'était posé qu'*après*
+  `SESSION_JOINED` envoyé au client — double fenêtre de perte silencieuse (aucune erreur, l'événement
+  disparaît). Corrigé des deux côtés : `SocketContext.jsx` expose désormais `useSocketReady()` (vrai
+  seulement après réception de `SESSION_JOINED`), `WizardLockSync`/`useWizardLock` attendent ce signal
+  avant d'émettre ; `socket/index.js` enregistre `registerWizardHandlers` *avant* d'émettre
+  `SESSION_JOINED` (doublon de l'ancien emplacement supprimé).
+- **Fiche vide (cause racine confirmée)** : aucune transition d'étape n'appelait `reconcile` — seuls
+  "Voir ma fiche" et "Terminer" persistaient quoi que ce soit en base (architecture client-primary
+  d'origine, `docs/STE6_FINAL.md`). Un MJ ouvrant le personnage d'un joueur qui n'avait fait ni l'un
+  ni l'autre voyait donc une fiche réellement vide en base, pas un bug d'affichage. Corrigé :
+  `WizardCreation.jsx#advanceStep` persiste l'étape en base (reconcile) *avant* de faire avancer
+  l'écran, et n'avance pas si le serveur refuse (même logique que peek/finalize existants) — comportement
+  changé pour tous les joueurs (solo y compris), pas seulement le flux MJ.
+- **Pool affichant des brouillons abandonnés indéfiniment** : accepté comme non résolu par
+  suppression (action destructive, jamais en silence) — décision Saar : afficher la date de dernière
+  modification (`char_sheet.updated_at`, déjà renvoyée par l'API) sur chaque ligne du Pool, pour que
+  le MJ juge lui-même. Devient un signal fiable maintenant que chaque étape persiste réellement (point
+  précédent).
+
+**Testé (ce tour)** : `npx vite build` propre, `node --check` sur `socket/index.js`, `node --test
+shared/wizardOptionKeys.test.mjs` (12/12, inchangé). Cadenas confirmés fonctionnels par Saar en
+navigateur réel après ce correctif.
+
+**Troisième retour navigateur réel de Saar** : "fiche toujours vide, modification du joueur non
+broadcastée" — trou réel trouvé : la synchro live n'existait que pour les verrous (`WIZARD_LOCKS_SYNC`),
+jamais pour le contenu de fiche lui-même. `GET /:sheetId/state` n'est appelé qu'une fois à l'ouverture
+— un MJ déjà sur la page (ou l'ayant ouverte avant que le joueur avance) ne voyait donc jamais les
+avancées sans recharger, même après le correctif "persister à chaque étape" du tour précédent.
+**Corrigé** : nouvel événement `WIZARD_STATE_SYNC` (`shared/events.js`) — `POST /:sheetId/reconcile`
+relit (pas republie tel quel) les steps réellement soumis via les getters existants et les diffuse à
+la room `wizard:<sheetId>` ; `creationStore.js#applyStateSync` remplace intégralement (jamais un merge,
+contrairement à `setStepNData` en édition locale) les `stepNData` reçus ; `WizardLockSync.jsx` écoute
+ce nouvel événement en plus des verrous.
+
+**Limite résiduelle assumée, pas corrigée** : `useState(initialData?.xxx)` dans chaque composant
+d'étape ne se resynchronise qu'au montage (pattern React standard) — un step DÉJÀ monté chez le MJ ne
+se met pas à jour tant qu'il n'est pas démonté/remonté (navigation vers un autre step puis retour, ou
+rechargement) ; `highestStep` du MJ n'est recalculé qu'à l'ouverture (`loadExistingSheet`), pas mis à
+jour par `WIZARD_STATE_SYNC` — le MJ doit rouvrir la fiche pour voir le stepper débloquer une étape
+que le joueur vient d'atteindre. Le contenu lui-même est toujours à jour dès qu'on (re)visite l'étape.
+À corriger seulement si Saar confirme que ça gêne en usage réel — pas une conséquence du bug remonté
+(fiche vide au premier chargement), qui est résolu.
+
+**Quatrième retour de Saar** : "non — le broadcast doit être IMMÉDIATEMENT visible, pas seulement en
+revisitant l'étape" + exigence explicite "pas de bricolage, si ce n'était pas prévu : pause et
+justifie l'architecture." Cause : `useState(initialData?.champ)` dans chaque composant d'étape ne se
+resynchronise jamais après le montage (comportement standard React) — `WIZARD_STATE_SYNC` mettait à
+jour le store mais un step déjà affiché chez le MJ ne le reflétait pas sans le quitter/revisiter.
+**Solution retenue, justifiée avant code** (pas la seule envisagée) : remontage forcé par `key` React
+— pattern officiel documenté (react.dev "Resetting state with a key"), appliqué **uniquement côté MJ**
+(`isGmView`), jamais côté joueur en train de taper. Alternative écartée et pourquoi : réécrire les 5
+composants pour lire le store en continu au lieu d'un `useState` local — plus "pur" en apparence mais
+un chantier bien plus lourd/risqué (gérer l'écho de la propre soumission du joueur sans interrompre sa
+frappe), pour un besoin qui ne concerne que la vue MJ (observateur, pas un second éditeur simultané du
+même champ — le grain du problème correspond à l'option retenue).
+**Codé** : `creationStore.js` — `stateSyncVersion` (incrémenté à chaque `applyStateSync`), `highestStep`
+recalculé dans `applyStateSync` (même heuristique best-effort que `loadExistingSheet`, débloque le
+stepper MJ en direct). `WizardCreation.jsx` — `gmSyncKey = isGmView ? \`gm-sync-${stateSyncVersion}\`
+: undefined`, posé en `key` sur les 5 composants d'étape.
+
+**Testé (ce tour)** : `npx vite build` propre, `node --test shared/wizardOptionKeys.test.mjs` (12/12).
+Confirmé fonctionnel en conditions réelles par Saar dans le tour suivant (frontière MJ qui avance
+automatiquement — voir Cinquième retour ci-dessous).
+
+**Cinquième retour de Saar — écart de scope réel, pas un bug** : "Aucun champ n'est broadcasté d'un
+compte joueur au compte GM et inversement (...) je veux que lorsque PJ remplit le champ "Nom de
+personnage", le GM voit ce champ se remplir." Vérifié contre le plan (`docs/PLAN_WIZARDCOLLAB.md`
+§2.3) : ce grain-là est **explicitement exclu** depuis la rédaction initiale ("Pas de « mode fantôme »
+en V1 : le MJ voit l'état tel que le joueur l'a enregistré pour la dernière fois") — les 4 tours
+précédents (§ ci-dessus) ne couvraient que le grain "étape validée" (`reconcile`), jamais le grain
+"champ en cours de frappe, avant tout Suivant". Pas un malentendu ponctuel : les §5/§6 entiers du plan
+sont bâtis sur cette hypothèse V1. **Lot A4 ajouté au plan** (§0 8e passe, §2.5/§5bis/§6.1bis/§6.4bis)
+avant tout code, avec recherche externe (Yjs `Awareness` vs `Doc`, Liveblocks `Presence` vs `Storage`
+— même distinction manquée par la 2e passe initiale, qui n'avait exploité ces sources que pour le
+découpage par room). **Décision (validée par Saar après vérification explicite de robustesse)** : deux
+couches jamais confondues — le durable (`reconcile`/`WIZARD_STATE_SYNC`, inchangé, seule autorité) et
+un nouveau canal éphémère `WIZARD_LIVE_UPDATE`, jamais persisté, jamais validé métier, purement
+cosmétique, relayé par `socket.to()` (émetteur exclu nativement — aucun risque qu'un client voie son
+propre champ se faire écraser pendant sa frappe).
+
+**Bug de plan trouvé et corrigé avant code (pas après)** : le plan prévoyait d'instancier le hook
+socket directement dans `WizardCreation.jsx` — impossible, ce composant *rend* `<SocketProvider>`, il
+n'en est pas descendant (même contrainte déjà documentée dans le code pour `useSocket()`). Corrigé par
+une ref (`emitLiveRef`) déposée par `WizardLockSync.jsx` (bon endroit dans l'arbre), lue de façon
+impérative par `WizardCreation.jsx` — alternatives examinées et écartées : remonter le Provider plus
+haut (ouvrirait la connexion avant qu'un `sheetId` existe), câbler le hook dans chacun des 5 composants
+d'étape (disperse une logique aujourd'hui centralisée, `CLAUDE.md` §7).
+
+**Codé** (11 fichiers) : `shared/events.js` (+`WIZARD_LIVE_UPDATE`) ; `server/src/socket/socketWizard.js`
+(handler relais — `resolveSheetAccess` + `socket.to`, zéro écriture DB) ; `client/src/lib/
+useWizardLiveEmit.js` (nouveau, debounce ~250ms centralisé) ; `client/src/components/creation/
+WizardLockSync.jsx` (+`emitLiveRef`, +listener `WIZARD_LIVE_UPDATE`) ; `client/src/stores/
+creationStore.js` (+`liveStep1..5Data`, +`applyLiveDraft`, purge dans `applyStateSync` dès que l'état
+durable correspondant arrive) ; `client/src/components/creation/WizardCreation.jsx` (ref, câblage
+`onLiveChange` + priorité `liveStepNData ?? stepNData` côté MJ uniquement) ; les 5 composants d'étape
+(`Step1Attributes.jsx`…`Step5Advantages.jsx`, un `useEffect` par composant, réutilisant chacun la même
+forme de payload que leur `onNext`/`buildPayload` existant — aucune structure dupliquée).
+
+**Testé** : syntaxe des 11 fichiers (`node --check` + `esbuild` pour les `.jsx`), bundle complet des
+imports croisés (`esbuild --bundle` sur `WizardCreation.jsx`, 0 erreur de résolution). **Confirmé
+fonctionnel par Saar en navigateur réel** ("Fonctionnel.") — scénario 2 sessions (joueur + MJ),
+diffusion live confirmée. **Non testé** : régression sur le reste du Wizard (build/tests automatisés
+seulement, pas de re-parcours complet). **Commit différé** (pas une dette) : autre agent en session
+parallèle sur ce dépôt, pas encore terminé — pas de commit tant qu'il n'a pas fini (`CLAUDE.md` §3/§4).
+Migrations 201/203 toujours à vérifier appliquées en base réelle.
+
+**Fichiers touchés par les 5 tours de correctifs post-Lot A3** (au-delà du commit `e17d5e9` déjà
+poussé, rien recommité depuis) : `shared/events.js` (+`WIZARD_STATE_SYNC`, +`WIZARD_LIVE_UPDATE`),
+`server/src/socket/index.js` (registerWizardHandlers déplacé avant SESSION_JOINED, doublon supprimé),
+`server/src/socket/socketWizard.js` (+handler `WIZARD_LIVE_UPDATE`), `server/src/routes/creation.js`
+(broadcast après reconcile), `client/src/lib/SocketContext.jsx` (+`useSocketReady`),
+`client/src/lib/useWizardLiveEmit.js` (nouveau), `client/src/components/creation/WizardLockSync.jsx`
+(+ready gate, +listener WIZARD_STATE_SYNC, +`emitLiveRef`, +listener WIZARD_LIVE_UPDATE),
+`client/src/lib/useWizardLock.js` (+ready gate), `client/src/components/creation/WizardCreation.jsx`
+(+`advanceStep` persistant par étape, +`gmSyncKey`, +suivi de frontière MJ, +ref live + câblage 5
+étapes), `client/src/stores/creationStore.js` (+`applyStateSync`, +`stateSyncVersion`, +suivi de
+frontière, +`liveStep1..5Data`/`applyLiveDraft`), `client/src/pages/CharacterPoolPage.jsx` (+date de
+dernière modification par ligne), `client/src/locales/creation.json` (+`pool_updated`), les 5
+composants d'étape Wizard (+`onLiveChange`).
 
 > **Item 104 (Session 167, dev/Saar) — Moding Groupe 4 Phase 4 (ATI/Mémoire/Projecteur) ✅ CODÉ,
 > intégration live volontairement en suspens.** Suite des items 102 (Phase 1) et 103 (Phase 3).
@@ -3184,7 +3356,8 @@ Projet en cours et priorité user :
 - **Sprint Waypoints** — déplacement points intermédiaires (déclaration serveur, alt+clic)
 - **Sprint Page Santé Serveur** — `/api/health/detailed` (mémoire, uptime, températures)
 - **D2 Jets Favoris** — drag-to-reorder macros (sort_order UI)
-- **i18n combat+équipement** — voir `docs/PLAN_LOCALISATION.md` (norme : `docs/SYSTEME/LOCALISATION.md`)
+- **i18n équipement/builder/dés** — Lot 1 (Combat) clos item 108, reste Lots 2-4, voir
+  `docs/PLAN_LOCALISATION.md` (norme : `docs/SYSTEME/LOCALISATION.md`)
 
 ---
 

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { COMBAT_MODE_DEFS } from './combatSections.js'
 import { getNaturalWeaponIneligibilityReasons, isNaturalWeaponEligible } from '../../../shared/naturalWeapons.js'
 
@@ -118,21 +119,22 @@ export default function MeleeCombatPanel({
   // Readiness
   showReadyBadge,      // bool
 }) {
+  const { t } = useTranslation('combat')
   const meleeDefensif = combatMode === 'defensif' || combatMode === 'retraite'
 
   return (
     <>
       {/* Section Arme */}
       <div style={P.section}>
-        <div style={P.sectionTitle}>Arme</div>
+        <div style={P.sectionTitle}>{t('meleeCombatPanel.weaponSection')}</div>
         {/* Mains nues */}
         <div
           onClick={() => onWeaponChange(null)}
           style={{ ...P.option, cursor: 'pointer' }}
         >
           <div style={{ flex: 1 }}>
-            <div style={P.optionLabel}>Mains nues</div>
-            <div style={P.optionSub}>1D4 + Mod.Dom.</div>
+            <div style={P.optionLabel}>{t('meleeCombatPanel.bareHands')}</div>
+            <div style={P.optionSub}>{t('meleeCombatPanel.bareHandsFormula')}</div>
           </div>
           <div style={{ ...P.radio, ...(selectedWeaponId === null ? P.radioActive : {}) }} />
         </div>
@@ -143,7 +145,7 @@ export default function MeleeCombatPanel({
           return (
             <div
               key={item.id}
-              title={weaponUsable ? undefined : 'Mettez l\'arme "Au clair" d\'abord (−3 INI)'}
+              title={weaponUsable ? undefined : t('meleeCombatPanel.weaponNotDrawnTitle')}
               onClick={() => weaponUsable && onWeaponChange(isSelected ? null : item.id)}
               style={{
                 ...P.option,
@@ -168,8 +170,8 @@ export default function MeleeCombatPanel({
         {availableWeapons.length === 0 && (
           <div style={{ fontSize: 11, color: '#70a070', fontStyle: 'italic', marginTop: 4 }}>
             {hasMeleeInInventory
-              ? 'Mains nues uniquement (arme rangée — équipez-la en main)'
-              : 'Mains nues uniquement (aucune arme de contact)'}
+              ? t('meleeCombatPanel.bareHandsOnlyStored')
+              : t('meleeCombatPanel.bareHandsOnlyNone')}
           </div>
         )}
         {/* Armes naturelles (mutations) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B */}
@@ -181,7 +183,7 @@ export default function MeleeCombatPanel({
           return (
             <div
               key={item.id}
-              title={eligible ? undefined : `Action impossible car — ${reasons.join(', ')}`}
+              title={eligible ? undefined : t('meleeCombatPanel.actionImpossibleTitle', { reasons: reasons.join(', ') })}
               onClick={() => eligible && onNaturalWeaponChange(isSelected ? null : item.id)}
               style={{
                 ...P.option,
@@ -204,14 +206,14 @@ export default function MeleeCombatPanel({
 
       {/* Section Mode de combat — FIX COM5 : onModeChange ne déclenche PAS de target auto */}
       <div style={P.section}>
-        <div style={P.sectionTitle}>Mode de combat</div>
+        <div style={P.sectionTitle}>{t('meleeCombatPanel.modeSectionTitle')}</div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {COMBAT_MODE_DEFS.map(m => {
             const isDefensif = m.k === 'defensif' || m.k === 'retraite'
             return (
               <div
                 key={m.k}
-                title={m.tooltip}
+                title={t(m.tooltip)}
                 onClick={() => {
                   if (m.k === 'charge') {
                     onStartCharge()
@@ -222,28 +224,28 @@ export default function MeleeCombatPanel({
                 className={combatMode === m.k
                   ? (isDefensif ? 'badge badge-mode badge-mode-defensif' : 'badge badge-mode')
                   : 'badge badge-mode-off'}
-              >{m.l}</div>
+              >{t(m.l)}</div>
             )
           })}
         </div>
         {combatMode === 'charge' && !chargeMoveDest && (
           <div style={{ fontSize: 9, color: '#c8a030', marginTop: 4 }}>
-            ↑ Sélectionnez d&apos;abord votre déplacement
+            {t('meleeCombatPanel.chargeNeedsMove')}
           </div>
         )}
         {combatMode === 'charge' && chargeMoveDest && !chargeTargetLabel && (
           <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
-            Déplacement sélectionné (+0 INI gratuit)
+            {t('meleeCombatPanel.chargeMoveSelected')}
           </div>
         )}
         {combatMode === 'defensif' && (
           <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
-            Aucune attaque — +3 en défense si attaqué
+            {t('meleeCombatPanel.defensifHint')}
           </div>
         )}
         {combatMode === 'retraite' && (
           <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
-            Aucune attaque — +5 en défense
+            {t('meleeCombatPanel.retraiteHint')}
           </div>
         )}
       </div>
@@ -251,11 +253,11 @@ export default function MeleeCombatPanel({
       {/* Section Recul — Retraite avec déplacement optionnel (Joueur uniquement) */}
       {combatMode === 'retraite' && onStartRetraite && (
         <div style={P.section}>
-          <div style={P.sectionTitle}>Recul (optionnel)</div>
+          <div style={P.sectionTitle}>{t('meleeCombatPanel.retreatSection')}</div>
           <button style={P.chooseBtn} onClick={onStartRetraite}>
             {chargeMoveDest
-              ? '✓ Recul sélectionné — Annuler'
-              : 'Sélectionner la destination de recul'}
+              ? t('meleeCombatPanel.retreatSelected')
+              : t('meleeCombatPanel.retreatSelectButton')}
           </button>
         </div>
       )}
@@ -263,11 +265,11 @@ export default function MeleeCombatPanel({
       {/* Section Nombre d'attaques — masqué Défensif/Retraite/Charge */}
       {!meleeDefensif && combatMode !== 'charge' && (
         <div style={P.section}>
-          <div style={P.sectionTitle}>Nombre d&apos;attaques</div>
+          <div style={P.sectionTitle}>{t('meleeCombatPanel.attackCountSection')}</div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <CountChip n={1} label="1 attaque"    tooltip="Une attaque — aucun malus."                        selected={meleeCount === 1} onClick={() => onMeleeCountChange(1, meleeCount)} />
-            <CountChip n={2} label="2 attaques −5" tooltip="−5 à tous les jets d'attaque (LdB p.218)."       selected={meleeCount === 2} onClick={() => onMeleeCountChange(2, meleeCount)} />
-            <CountChip n={3} label="3 attaques −7" tooltip="−7 à tous les jets d'attaque (LdB p.218)."       selected={meleeCount === 3} onClick={() => onMeleeCountChange(3, meleeCount)} />
+            <CountChip n={1} label={t('meleeCombatPanel.chip1.label')} tooltip={t('meleeCombatPanel.chip1.tooltip')} selected={meleeCount === 1} onClick={() => onMeleeCountChange(1, meleeCount)} />
+            <CountChip n={2} label={t('meleeCombatPanel.chip2.label')} tooltip={t('meleeCombatPanel.chip2.tooltip')} selected={meleeCount === 2} onClick={() => onMeleeCountChange(2, meleeCount)} />
+            <CountChip n={3} label={t('meleeCombatPanel.chip3.label')} tooltip={t('meleeCombatPanel.chip3.tooltip')} selected={meleeCount === 3} onClick={() => onMeleeCountChange(3, meleeCount)} />
           </div>
         </div>
       )}
@@ -276,13 +278,13 @@ export default function MeleeCombatPanel({
       {!meleeDefensif && (
         <div style={P.section}>
           <div style={P.sectionTitle}>
-            {effectiveMeleeCount === 1 ? 'Cible' : `Cibles (${targetIds.length}/${effectiveMeleeCount})`}
+            {effectiveMeleeCount === 1 ? t('common.targetSection') : t('meleeCombatPanel.targetsCount', { count: targetIds.length, total: effectiveMeleeCount })}
           </div>
 
           {perSlotTargeting ? (
             // Mode Joueur : bouton par slot
             Array.from({ length: effectiveMeleeCount }, (_, i) => {
-              const tgt = targetIds[i] ? tokens.find(t => t.id === targetIds[i]) : null
+              const tgt = targetIds[i] ? tokens.find(tk => tk.id === targetIds[i]) : null
               return (
                 <div key={i} style={{ marginBottom: i < effectiveMeleeCount - 1 ? 4 : 0 }}>
                   {tgt ? (
@@ -291,7 +293,7 @@ export default function MeleeCombatPanel({
                         <span style={{ fontSize: 9, color: '#507050', minWidth: 12 }}>{i + 1}.</span>
                       )}
                       <span style={P.targetName}>{tgt.label}</span>
-                      <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>Changer</button>
+                      <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>{t('common.changeButton')}</button>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -299,7 +301,7 @@ export default function MeleeCombatPanel({
                         <span style={{ fontSize: 9, color: '#507050', minWidth: 12 }}>{i + 1}.</span>
                       )}
                       <button style={P.chooseBtn} onClick={() => onChooseTarget(i)}>
-                        Choisir l&apos;adversaire
+                        {t('meleeCombatPanel.chooseAdversaryButton')}
                       </button>
                     </div>
                   )}
@@ -310,21 +312,21 @@ export default function MeleeCombatPanel({
             // Mode GM : liste cibles + bouton "Cibler" unique
             <>
               {isInTargetMode && (
-                <div style={{ fontSize: 9, color: '#70c070' }}>⚔ Cliquez sur la cible CaC</div>
+                <div style={{ fontSize: 9, color: '#70c070' }}>{t('meleeCombatPanel.targetModeHint')}</div>
               )}
               {targetIds.length > 0 && (
                 <div>
                   {targetIds.map((tgtId, i) => {
-                    const t = tokens.find(tk => tk.id === tgtId)
+                    const tgtToken = tokens.find(tk => tk.id === tgtId)
                     const weaponLabel = selectedWeaponId
-                      ? (availableWeapons.find(w => w.id === selectedWeaponId)?.label ?? 'arme')
-                      : 'mains nues'
+                      ? (availableWeapons.find(w => w.id === selectedWeaponId)?.label ?? t('meleeCombatPanel.weaponFallback'))
+                      : t('meleeCombatPanel.bareHandsFallback')
                     return (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                         {targetIds.length > 1 && (
                           <span style={{ fontSize: 8, color: '#3a6a3a', minWidth: 10 }}>{i + 1}.</span>
                         )}
-                        <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{t?.label ?? '?'}</span>
+                        <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{tgtToken?.label ?? '?'}</span>
                         <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>{weaponLabel}</span>
                       </div>
                     )
@@ -333,7 +335,7 @@ export default function MeleeCombatPanel({
               )}
               {!isInTargetMode && (
                 <button style={P.chooseBtn} onClick={() => onChooseTarget(0)}>
-                  {targetIds.length > 0 ? 'Rechoisir les cibles' : 'Cibler'}
+                  {targetIds.length > 0 ? t('meleeCombatPanel.rechooseTargetsButton') : t('meleeCombatPanel.targetButton')}
                 </button>
               )}
             </>
@@ -344,14 +346,14 @@ export default function MeleeCombatPanel({
       {/* Charge status */}
       {combatMode === 'charge' && (
         <div style={{ ...P.section, borderBottom: 'none' }}>
-          <div style={{ fontSize: 9, color: '#6a3a7a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Charge</div>
+          <div style={{ fontSize: 9, color: '#6a3a7a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('meleeCombatPanel.chargeSection')}</div>
           <div style={{ fontSize: 10, color: '#c890e8' }}>
-            {chargeMoveDest ? '✓ destination' : '… destination'}
+            {chargeMoveDest ? t('meleeCombatPanel.destinationSet') : t('meleeCombatPanel.destinationPending')}
           </div>
           {chargeTargetLabel ? (
             <div style={{ fontSize: 11, color: '#c890e8', fontWeight: 600 }}>→ {chargeTargetLabel}</div>
           ) : (
-            <div style={{ fontSize: 9, color: '#705070' }}>… cible CaC</div>
+            <div style={{ fontSize: 9, color: '#705070' }}>{t('meleeCombatPanel.targetPending')}</div>
           )}
         </div>
       )}
@@ -359,7 +361,7 @@ export default function MeleeCombatPanel({
       {/* Readiness */}
       {showReadyBadge && !meleeDefensif && (
         <div style={{ padding: '8px 14px' }}>
-          <div style={P.readyText}>✓ Prêt à l&apos;assaut</div>
+          <div style={P.readyText}>{t('droneWeaponPanel.ready')}</div>
         </div>
       )}
     </>

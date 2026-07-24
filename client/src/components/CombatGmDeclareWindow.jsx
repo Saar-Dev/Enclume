@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useReducer } from 'react'
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -46,14 +47,15 @@ function nextKey(stateKey, currentKey, availableKeys) {
 // availableKeys : restreint les états cyclables (ex: modes de tir de l'arme)
 // ---------------------------------------------------------------------------
 function InlineChip({ stateKey, initial, current, onChange, availableKeys }) {
+  const { t } = useTranslation('combat')
   const def  = STATE_DEFS[stateKey]
   const cur  = def.states.find(s => s.k === current)
   const cost = current === initial ? 0 : (def.cost?.[initial]?.[current] ?? 0)
 
   return (
     <div onClick={() => onChange(nextKey(stateKey, current, availableKeys))} style={S.chip}>
-      <span style={S.chipLabel}>{def.label}</span>
-      <span style={S.chipValue}>{cur?.l ?? current}</span>
+      <span style={S.chipLabel}>{t(def.label)}</span>
+      <span style={S.chipValue}>{cur?.l ? t(cur.l) : current}</span>
       {cost !== 0 && (
         <span style={{ ...S.chipCost, color: cost > 0 ? '#3aaa6a' : '#c86030' }}>
           {cost > 0 ? `+${cost}` : cost}
@@ -67,6 +69,7 @@ function InlineChip({ stateKey, initial, current, onChange, availableKeys }) {
 // Composant principal
 // ---------------------------------------------------------------------------
 export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, battlemapId, onEnterTargetMode, combatTargetMode, pjPreview }) {
+  const { t } = useTranslation('combat')
   const { roster, activeTokenId: storeActiveTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -175,7 +178,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Fetch armes drone quand le slot actif est un drone ───────────────────
   const activeDroneCharId = (() => {
     if (!activeTokenId) return null
-    const tok = tokens.find(t => t.id === activeTokenId)
+    const tok = tokens.find(tk => tk.id === activeTokenId)
     if (!tok?.character_id) return null
     const char = characters.find(c => c.id === tok.character_id)
     return char?.type === 'drone' ? char.id : null
@@ -200,19 +203,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   const isPnj = (entry) => {
-    const token = tokens.find(t => t.id === entry.token_id)
+    const token = tokens.find(tk => tk.id === entry.token_id)
     if (!token?.character_id) return false
     return characters.find(c => c.id === token.character_id)?.type === 'pnj'
   }
   const isDroneGmManaged = (entry) => {
-    const token = tokens.find(t => t.id === entry.token_id)
+    const token = tokens.find(tk => tk.id === entry.token_id)
     if (!token?.character_id) return false
     const char = characters.find(c => c.id === token.character_id)
     return char?.type === 'drone' && !char.user_id
   }
   const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
 
-  const getLabel = (tokenId) => tokens.find(t => t.id === tokenId)?.label ?? tokenId
+  const getLabel = (tokenId) => tokens.find(tk => tk.id === tokenId)?.label ?? tokenId
   const isRanged = (tokenId) => !!equipment[tokenId]?.weapon?.ref_fire_mode
 
   const allGmManaged   = roster.filter(r => r.status === 'active').filter(isGmManaged)
@@ -230,7 +233,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Dériver l'entité active (PNJ ou drone) ────────────────────────────────
   const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)        && !activePnjEntry.has_announced
   const isActiveDrone = activePnjEntry && isDroneGmManaged(activePnjEntry) && !activePnjEntry.has_announced
-  const activeToken = activeTokenId ? tokens.find(t => t.id === activeTokenId) : null
+  const activeToken = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
   const isStunnedActivePnj = activeToken?.statuses?.includes('stunned') ?? false
 
   // Quand le slot actif est un PJ (ni PNJ ni drone) — identifier le bloquant
@@ -256,11 +259,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       melee: meleeTargets.length > 0 ? meleeTargets : null,
     },
     decl.quick,
+    t,
   ) : 0
   const iniBreakdown = isActivePnj ? calcIniBreakdown(
     initialStates, decl,
     { move: pendingMove ?? null, attack: null, melee: meleeTargets.length > 0 ? meleeTargets : null },
     decl.quick,
+    t,
   ) : []
 
   const meleeDefensif    = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
@@ -512,13 +517,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
-        <span className="combat-win-title">PHASE 1 — DÉCLARATION</span>
+        <span className="combat-win-title">{t('gmDeclareWindow.title')}</span>
         {activeTokenId && (
           <span style={{ ...S.headerActiveToken, ...(!isActivePnj && !isActiveDrone ? S.headerActiveTokenWait : {}) }}>
             {getLabel(activeTokenId)}
           </span>
         )}
-        <span style={S.headerProgress}>{allGmManaged.length - unannouncedCnt}/{allGmManaged.length} déclarés</span>
+        <span style={S.headerProgress}>{t('gmDeclareWindow.declaredProgress', { done: allGmManaged.length - unannouncedCnt, total: allGmManaged.length })}</span>
       </div>
 
       {/* BODY */}
@@ -533,7 +538,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
               {/* TACTIQUE */}
               <div className="combat-win-section">
-                <span className="combat-win-section-title">TACTIQUE</span>
+                <span className="combat-win-section-title">{t('gmDeclareWindow.tacticSection')}</span>
                 <div style={S.chips}>
                   <InlineChip stateKey="position"
                     initial={initialStates.position}
@@ -553,7 +558,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
               {/* ARMEMENT */}
               <div className="combat-win-section">
-                <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>ARMEMENT</span>
+                <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>{t('gmDeclareWindow.equipmentSection')}</span>
                 {(() => {
                   const { rows, showSlotLabel } = handSlotDisplayRows({ MG: weaponMg, MD: weaponMd, '2M': weapon2M, Tr: weaponTr })
                   if (rows.length === 0) return null
@@ -589,7 +594,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
               {/* ACTION */}
               <div className="combat-win-section">
-                <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>ACTION</span>
+                <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>{t('sectionTitles.action')}</span>
                 <div style={S.actionGrid}>
                   {MAP_ACTIONS.map(a => {
                     const noRangedWeapon = a.k === 'attack' && !rangedActive
@@ -610,11 +615,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     )
                     const span2 = a.span2 ? { gridColumn: 'span 2' } : {}
                     const stunTitle = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
-                      ? 'Assommé — −5 à toutes les actions, allure max = Moyenne, ne peut pas attaquer'
+                      ? t('stunnedActionsTooltip')
                       : null
                     return (
                       <div key={a.k}
-                        title={stunTitle ?? a.tooltip}
+                        title={stunTitle ?? t(a.tooltip)}
                         onClick={() => {
                           if (disabled) return
                           if (a.k === 'move') {
@@ -672,13 +677,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         }}
                       >
                         <span style={{ ...S.actionLabel, color: active ? '#e8c870' : (grayed ? '#2a3040' : '#aaccdd') }}>
-                          {a.l}
+                          {t(a.l)}
                         </span>
                         {a.ini && !disabled && (
                           <span style={{ ...S.actionIni, color: active ? '#e8c870' : '#5a6070' }}>{a.ini}</span>
                         )}
                         {noRangedWeapon && (
-                          <span style={S.actionDisabledTag}>sans arme dist.</span>
+                          <span style={S.actionDisabledTag}>{t('gmDeclareWindow.noRangedWeaponTag')}</span>
                         )}
                       </div>
                     )
@@ -698,18 +703,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
               {/* ACTIONS RAPIDES */}
               <div className="combat-win-section" style={{ borderBottom: 'none' }}>
-                <span className="combat-win-section-title" style={{ color: '#5a8a5a' }}>ACTIONS RAPIDES</span>
+                <span className="combat-win-section-title" style={{ color: '#5a8a5a' }}>{t('gmDeclareWindow.quickActionsSection')}</span>
                 <div style={S.quickList}>
                   {QUICK_ACTIONS.map(qa => {
                     if (qa.kind === 'incremental') {
                       const val = decl.quick[qa.k] ?? 0
                       return (
                         <div key={qa.k}
-                          title={qa.tooltip}
+                          title={t(qa.tooltip)}
                           style={{ ...S.quickRow, ...(val > 0 ? S.quickRowActive : {}) }}
                           onClick={() => val === 0 && dispatch({ type: 'SET_QUICK', key: qa.k, value: 1 })}
                         >
-                          <span style={S.quickLabel}>{qa.l}</span>
+                          <span style={S.quickLabel}>{t(qa.l)}</span>
                           <div style={S.sliderWrap} onClick={val > 0 ? e => e.stopPropagation() : undefined}>
                             <input type="range" min={0} max={qa.max} step={1} value={val}
                               disabled={val === 0}
@@ -725,11 +730,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     const isOn = !!decl.quick[qa.k]
                     return (
                       <div key={qa.k}
-                        title={qa.tooltip}
+                        title={t(qa.tooltip)}
                         style={{ ...S.quickRow, ...(isOn ? S.quickRowActive : {}) }}
                         onClick={() => dispatch({ type: 'SET_QUICK', key: qa.k, value: !decl.quick[qa.k] })}
                       >
-                        <span style={S.quickLabel}>{qa.l}</span>
+                        <span style={S.quickLabel}>{t(qa.l)}</span>
                         {qa.ini && <span style={{ color: isOn ? '#5b8dee' : '#456575', fontSize: 10 }}>{qa.ini}</span>}
                       </div>
                     )
@@ -767,7 +772,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               {/* Panneau monitoring live — preview en cours du PJ actif */}
               {pjPreview?.tokenId === activeTokenId && (
                 <div style={S.monitorPanel}>
-                  <div style={S.monitorTitle}>En cours de déclaration…</div>
+                  <div style={S.monitorTitle}>{t('gmDeclareWindow.monitorTitle')}</div>
 
                   {/* Actions sélectionnées */}
                   {pjPreview.actions?.length > 0 && (
@@ -870,9 +875,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                       ...S.rosterBadge,
                       ...(isRanged(tid) ? S.rosterBadgeDst : (equipment[tid]?.weapon ? S.rosterBadgeCct : S.rosterBadgeNone))
                     }}>
-                      {isRanged(tid) ? 'DST' : (equipment[tid]?.weapon ? 'CTC' : '···')}
+                      {isRanged(tid) ? t('gmDeclareWindow.rangedTag') : (equipment[tid]?.weapon ? t('gmDeclareWindow.meleeTag') : '···')}
                     </span>
-                    <span style={S.rosterIni}>INI {entry.initiative}</span>
+                    <span style={S.rosterIni}>{t('ini')} {entry.initiative}</span>
                     {delta !== null && delta !== 0 && (
                       <span style={{ ...S.rosterDelta, color: delta < 0 ? '#c86030' : '#3aaa6a' }}>
                         →{entry.initiative + delta}
@@ -912,7 +917,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 setSelectedGmMeleeWeaponId(null)
               }}
               targetIsGrappled={
-                tokens.find(t => t.id === meleeTargets[0])?.statuses?.includes('grappled') ?? false
+                tokens.find(tk => tk.id === meleeTargets[0])?.statuses?.includes('grappled') ?? false
               }
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
@@ -922,7 +927,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               onStartCharge={handleStartCharge}
               onStartRetraite={null}
               chargeMoveDest={chargeSelection?.move ?? null}
-              chargeTargetLabel={chargeSelection?.targetTokenId ? (tokens.find(t => t.id === chargeSelection.targetTokenId)?.label ?? null) : null}
+              chargeTargetLabel={chargeSelection?.targetTokenId ? (tokens.find(tk => tk.id === chargeSelection.targetTokenId)?.label ?? null) : null}
               meleeCount={meleeAttackCount}
               effectiveMeleeCount={effectiveMeleeCount}
               onMeleeCountChange={(n) => { setMeleeAttackCount(n); setMeleeTargets(prev => prev.slice(0, n)) }}
@@ -989,7 +994,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         {iniDelta !== 0 && isActivePnj && (
           <div style={{ position: 'relative' }}>
             <div style={S.iniRow}>
-              <span style={S.iniLabel}>INI TOTAL</span>
+              <span style={S.iniLabel}>{t('gmDeclareWindow.iniTotalLabel')}</span>
               <span
                 style={{ ...S.iniValue, color: iniDelta < -10 ? '#c83030' : (iniDelta < 0 ? '#c86030' : '#3aaa6a'), cursor: 'pointer' }}
                 onClick={() => setIniPopoverOpen(o => !o)}

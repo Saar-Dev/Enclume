@@ -3,13 +3,16 @@ import { getAimIniCost } from '../../../shared/combatExclusiveActions.js'
 // Definitions d'etats -- matrices de transition INI
 // stateTransitionCost(def, from, to) -> delta INI (0 si from === to)
 
+// label/l/short = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le
+// composant consommateur via t(), jamais affichee brute ici. special (vitesse.delayed) inutilise
+// (aucun rendu trouve) -- laisse en texte, pas un texte visible.
 export const STATE_DEFS = {
   position: {
-    label: 'POSTURE',
+    label: 'states.position.label',
     states: [
-      { k: 'standing',  l: 'Debout',   short: 'Deb.'  },
-      { k: 'crouching', l: 'Accroupi', short: 'Acc.'  },
-      { k: 'prone',     l: 'Couché',   short: 'Couc.' },
+      { k: 'standing',  l: 'states.position.standing.label',  short: 'states.position.standing.short'  },
+      { k: 'crouching', l: 'states.position.crouching.label', short: 'states.position.crouching.short' },
+      { k: 'prone',     l: 'states.position.prone.label',     short: 'states.position.prone.short'     },
     ],
     cost: {
       standing:  { crouching: -3, prone:     -5  },
@@ -18,11 +21,11 @@ export const STATE_DEFS = {
     },
   },
   weapon: {
-    label: 'ARME',
+    label: 'states.weapon.label',
     states: [
-      { k: 'holstered', l: 'Rangée',          short: 'Rang.' },
-      { k: 'ready',     l: "Main sur l'arme", short: 'Main'  },
-      { k: 'drawn',     l: 'Au clair',        short: 'Clair' },
+      { k: 'holstered', l: 'states.weapon.holstered.label', short: 'states.weapon.holstered.short' },
+      { k: 'ready',     l: 'states.weapon.ready.label',     short: 'states.weapon.ready.short'      },
+      { k: 'drawn',     l: 'states.weapon.drawn.label',     short: 'states.weapon.drawn.short'      },
     ],
     cost: {
       holstered: { ready: -3, drawn:    -5  },
@@ -31,11 +34,11 @@ export const STATE_DEFS = {
     },
   },
   fire_mode: {
-    label: 'MODE DE TIR',
+    label: 'states.fireMode.label',
     states: [
-      { k: 'cc', l: 'Coup par coup', short: 'CC' },
-      { k: 'rc', l: 'Rafale courte', short: 'RC' },
-      { k: 'rl', l: 'Rafale longue', short: 'RL' },
+      { k: 'cc', l: 'states.fireMode.cc.label', short: 'states.fireMode.cc.short' },
+      { k: 'rc', l: 'states.fireMode.rc.label', short: 'states.fireMode.rc.short' },
+      { k: 'rl', l: 'states.fireMode.rl.label', short: 'states.fireMode.rl.short' },
     ],
     // Tout changement: -3
     cost: {
@@ -45,21 +48,21 @@ export const STATE_DEFS = {
     },
   },
   cover: {
-    label: 'COUVERTURE',
+    label: 'states.cover.label',
     states: [
-      { k: 'exposed',   l: 'Découvert'          },
-      { k: 'partial',   l: 'Partielle (50%)'    },
-      { k: 'important', l: 'Importante (75%)'   },
+      { k: 'exposed',   l: 'states.cover.exposed.label'   },
+      { k: 'partial',   l: 'states.cover.partial.label'   },
+      { k: 'important', l: 'states.cover.important.label' },
     ],
     // Aucun cout INI -- flag defensif pur (affecte les tireurs adverses en Phase 2)
     cost: {},
   },
   vitesse: {
-    label: 'VITESSE',
+    label: 'states.vitesse.label',
     states: [
-      { k: 'delayed',  l: 'Retardée',    special: 'Spécial' },
-      { k: 'normal',   l: 'Normale'    },
-      { k: 'rushed',   l: 'Précipitée' },
+      { k: 'delayed',  l: 'states.vitesse.delayed.label', special: 'Spécial' },
+      { k: 'normal',   l: 'states.vitesse.normal.label'    },
+      { k: 'rushed',   l: 'states.vitesse.rushed.label'   },
     ],
     cost: {
       delayed:  { normal: 0, rushed: +3  },
@@ -75,8 +78,12 @@ export function stateTransitionCost(def, fromKey, toKey) {
   return def.cost?.[fromKey]?.[toKey] ?? 0
 }
 
-// Détail INI client — retourne { label, value }[] (indicatif -- recalcule serveur)
-export function calcIniBreakdown(prevStates, nextStates, mapActions, quick) {
+// Détail INI client — retourne { label, value }[] (indicatif -- recalcule serveur).
+// Fonction pure : ne peut pas appeler useTranslation() elle-meme (hors corps de composant, regle des
+// hooks) -- `t` est fourni explicitement par l'appelant (docs/SYSTEME/LOCALISATION.md §3.1), meme
+// convention que charStats.js (docs/SYSTEME/CONVENTIONS.md §18 : fonctions pures, le caller fournit
+// les donnees) etendue ici a `t` comme toute autre dependance externe.
+export function calcIniBreakdown(prevStates, nextStates, mapActions, quick, t) {
   const lines = []
 
   for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
@@ -86,71 +93,82 @@ export function calcIniBreakdown(prevStates, nextStates, mapActions, quick) {
     if (!from || !to || from === to) continue
     const cost = stateTransitionCost(def, from, to)
     if (cost === 0) continue
-    const fromLabel = def.states.find(s => s.k === from)?.l ?? from
-    const toLabel   = def.states.find(s => s.k === to)?.l ?? to
-    lines.push({ label: `${def.label} : ${fromLabel} → ${toLabel}`, value: cost })
+    const fromLabelKey = def.states.find(s => s.k === from)?.l
+    const toLabelKey   = def.states.find(s => s.k === to)?.l
+    const fromLabel = fromLabelKey ? t(fromLabelKey) : from
+    const toLabel   = toLabelKey   ? t(toLabelKey)   : to
+    lines.push({ label: t('iniBreakdown.stateTransition', { label: t(def.label), from: fromLabel, to: toLabel }), value: cost })
   }
 
   if (mapActions.move?.ini_mod) {
     const zone = MOVE_ZONE_DEFS.find(z => z.ini_mod === mapActions.move.ini_mod)
-    lines.push({ label: zone ? `Déplacement ${zone.label.toLowerCase()}` : 'Déplacement', value: mapActions.move.ini_mod })
+    lines.push({
+      label: zone ? t('iniBreakdown.moveZone', { zone: t(zone.label).toLowerCase() }) : t('actionLabels.move'),
+      value: mapActions.move.ini_mod,
+    })
   }
   if (Array.isArray(mapActions.melee) && mapActions.melee.length > 0) {
-    lines.push({ label: 'Corps à corps', value: -3 })
-    if (mapActions.melee.length > 1) lines.push({ label: 'CaC cibles supp.', value: -5 })
+    lines.push({ label: t('iniBreakdown.melee'), value: -3 })
+    if (mapActions.melee.length > 1) lines.push({ label: t('iniBreakdown.meleeExtraTargets'), value: -5 })
   }
   // mapActions.attack est un array (docs/PLAN_TIRMULTI.md D1) — Tir visé/cover_shot sont mutuellement
   // exclusifs avec Tir Multi (D10), donc jamais présents que sur le seul élément possible quand actifs.
   const singleAttack = Array.isArray(mapActions.attack) ? mapActions.attack[0] : mapActions.attack
   if (singleAttack?.cover_shot) {
-    lines.push({ label: 'Tirer depuis couverture', value: nextStates.cover === 'important' ? -5 : -3 })
+    lines.push({ label: t('iniBreakdown.coverShot'), value: nextStates.cover === 'important' ? -5 : -3 })
   }
   const aimTranches = singleAttack?.aimTranches ?? 0
   if (aimTranches > 0) {
     const lunetteNiveau = singleAttack?.lunetteNiveau ?? 0
-    lines.push({ label: `Tir visé ×${aimTranches}`, value: getAimIniCost(aimTranches, { lunetteNiveau }) })
+    lines.push({ label: t('iniBreakdown.aimedShot', { count: aimTranches }), value: getAimIniCost(aimTranches, { lunetteNiveau }) })
   }
   // Tir Multi (docs/PLAN_TIRMULTI.md D3) : RAW ne décrit qu'un seul coût chiffré pour les Attaques
   // multiples — le décalage de phase (-5/-10), déjà porté par l'échelle de phases côté serveur
   // (computeSeriesPositions). Aucun forfait Initiative de déclaration supplémentaire ici.
 
   const obs = quick?.observer ?? 0
-  if (obs > 0) lines.push({ label: `Observer ×${obs}`, value: obs * -5 })
+  if (obs > 0) lines.push({ label: t('iniBreakdown.observe', { count: obs }), value: obs * -5 })
   const rep = quick?.reperer ?? 0
-  if (rep > 0) lines.push({ label: `Repérer ×${rep}`, value: rep * -5 })
-  if (quick?.phrase) lines.push({ label: 'Phrase courte', value: -3 })
+  if (rep > 0) lines.push({ label: t('iniBreakdown.spot', { count: rep }), value: rep * -5 })
+  if (quick?.phrase) lines.push({ label: t('iniBreakdown.shortPhrase'), value: -3 })
 
   return lines
 }
 
-// Calcul INI total client (indicatif -- recalcule serveur)
-export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
-  return calcIniBreakdown(prevStates, nextStates, mapActions, quick)
+// Calcul INI total client (indicatif -- recalcule serveur). Fonction pure, `t` fourni par l'appelant
+// (meme convention que calcIniBreakdown ci-dessus) -- ne consomme que .value mais doit relayer `t`
+// pour que calcIniBreakdown puisse resoudre les labels qu'elle construit et jette ensuite.
+export function calcIniDelta(prevStates, nextStates, mapActions, quick, t) {
+  return calcIniBreakdown(prevStates, nextStates, mapActions, quick, t)
     .reduce((sum, l) => sum + l.value, 0)
 }
 
 // Actions sur la carte -- multi-selection
+// l/tooltip = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le composant
+// consommateur via t(), jamais affichee brute ici. hint inutilise (aucun rendu trouve) -- laisse en
+// texte, pas un texte visible.
 export const MAP_ACTIONS = [
-  { k: 'move',     l: 'Déplacement',       tooltip: 'Déplacement court -3 / Se jeter à terre -5 / Se relever -10 / Se précipiter +3',              hint: 'cliquer destination',          isZoneSelect: true, span2: true },
-  { k: 'attack',   l: 'Assaut (tir)',       tooltip: 'Attaque à distance. Tirer depuis une couverture -3 à -5.',                                    hint: 'cliquer cible',                requireWeapon: true },
-  { k: 'melee',    l: 'Corps à corps',      tooltip: 'Venir au corps à corps pour saisir son adversaire -3.',                                       hint: 'cliquer adversaire', ini: -3                      },
-  { k: 'reload',   l: 'Rechargement',       tooltip: 'Recharger son arme — aucun tir ni corps à corps possible ce tour. Coût INI : 0.',                                                                      span2: true          },
-  { k: 'interact', l: 'Interagir',          tooltip: 'Utiliser un mécanisme simple (actionner un interrupteur, ouvrir une porte, saisir un objet) -3 à -5.', hint: 'sprint suivant',    active: false       },
+  { k: 'move',     l: 'mapActions.move.label',     tooltip: 'mapActions.move.tooltip',     hint: 'cliquer destination',          isZoneSelect: true, span2: true },
+  { k: 'attack',   l: 'mapActions.attack.label',   tooltip: 'mapActions.attack.tooltip',   hint: 'cliquer cible',                requireWeapon: true },
+  { k: 'melee',    l: 'mapActions.melee.label',    tooltip: 'mapActions.melee.tooltip',    hint: 'cliquer adversaire', ini: -3                      },
+  { k: 'reload',   l: 'mapActions.reload.label',   tooltip: 'mapActions.reload.tooltip',                                                             span2: true          },
+  { k: 'interact', l: 'mapActions.interact.label', tooltip: 'mapActions.interact.tooltip', hint: 'sprint suivant',    active: false       },
 ]
 
-// Actions rapides -- cumulables
+// Actions rapides -- cumulables. l/tooltip = cle i18n namespace combat, meme convention que ci-dessus.
 export const QUICK_ACTIONS = [
-  { k: 'observer', l: 'Observer le combat',              tooltip: 'Observer le combat — 1 information par tranche de 5 pts d\'Init.',                                                    kind: 'incremental', stepIni: -5, max: 6 },
-  { k: 'reperer',  l: 'Repérer (obj., personne, lieu…)', tooltip: 'Tenter de repérer un objet, une arme, une personne, un endroit, etc. — 1 Test d\'Observation par tranche de 5 pts d\'Init.', kind: 'incremental', stepIni: -5, max: 6 },
-  { k: 'phrase',   l: 'Prononcer une phrase',            tooltip: 'Prononcer une phrase courte, donner des ordres brefs -3.',                                                             kind: 'fixed',       ini: -3             },
+  { k: 'observer', l: 'quickActions.observer.label', tooltip: 'quickActions.observer.tooltip', kind: 'incremental', stepIni: -5, max: 6 },
+  { k: 'reperer',  l: 'quickActions.reperer.label',  tooltip: 'quickActions.reperer.tooltip',  kind: 'incremental', stepIni: -5, max: 6 },
+  { k: 'phrase',   l: 'quickActions.phrase.label',   tooltip: 'quickActions.phrase.tooltip',   kind: 'fixed',       ini: -3             },
 ]
 
-// Zones de deplacement -- inchange
+// Zones de deplacement -- label = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1),
+// resolue par le composant consommateur via t(), jamais affichee brute ici.
 export const MOVE_ZONE_DEFS = [
-  { allureKey: 'lente',   action_key: 'move_lente',   ini_mod: -3, color: '#3b82f6', label: 'Lente'   },
-  { allureKey: 'moyenne', action_key: 'move_moyenne',  ini_mod: -5, color: '#22c55e', label: 'Moyenne' },
-  { allureKey: 'rapide',  action_key: 'move_rapide',   ini_mod: -7, color: '#f97316', label: 'Rapide'  },
-  { allureKey: 'max',     action_key: 'move_max',      ini_mod:  0, color: '#ef4444', label: 'Max'     },
+  { allureKey: 'lente',   action_key: 'move_lente',   ini_mod: -3, color: '#3b82f6', label: 'moveZones.lente'   },
+  { allureKey: 'moyenne', action_key: 'move_moyenne',  ini_mod: -5, color: '#22c55e', label: 'moveZones.moyenne' },
+  { allureKey: 'rapide',  action_key: 'move_rapide',   ini_mod: -7, color: '#f97316', label: 'moveZones.rapide'  },
+  { allureKey: 'max',     action_key: 'move_max',      ini_mod:  0, color: '#ef4444', label: 'moveZones.max'     },
 ]
 
 // Variants mode de tir — source unique partagée (LdB p.227-228)
@@ -178,37 +196,42 @@ export const FIRE_MODE_VARIANTS = {
 // Paliers répétition CC (index → bulletCount)
 export const CC_REPS_STEPS = [2, 3, 4, 7, 10]
 
-// Boutons RL
+// Boutons RL — label = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le
+// composant consommateur via t(), jamais affichee brute ici.
 export const RL_BUTTONS = [
-  { value: 5,       label: '5b'    },
-  { value: 10,      label: '10b'   },
-  { value: 15,      label: '15b'   },
-  { value: 20,      label: '20b'   },
-  { value: 'multi', label: 'Multi' },
+  { value: 5,       label: 'rlButtons.b5'    },
+  { value: 10,      label: 'rlButtons.b10'   },
+  { value: 15,      label: 'rlButtons.b15'   },
+  { value: 20,      label: 'rlButtons.b20'   },
+  { value: 'multi', label: 'rlButtons.multi' },
 ]
 
 // Labels d'action pour le log de déclarations — source unique (REWORK-05)
+// Valeurs = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le composant
+// consommateur via t(), jamais affichee brute ici.
 export const ACTION_LABELS = {
-  assault:    'Assaut (tir)',
-  melee:      'Assaut (CaC)',
-  reload:     'Rechargement',
-  micro:      'Action',
-  move_short: 'Déplacement',
-  move_long:  'Déplacement (long)',
-  sprint:     'Sprint',
-  rush:       'Rush',
-  move:       'Déplacement',
+  assault:    'actionLabels.assault',
+  melee:      'actionLabels.melee',
+  reload:     'actionLabels.reload',
+  micro:      'actionLabels.micro',
+  move_short: 'actionLabels.moveShort',
+  move_long:  'actionLabels.moveLong',
+  sprint:     'actionLabels.sprint',
+  rush:       'actionLabels.rush',
+  move:       'actionLabels.move',
 }
 
 export const PURE_MOVE_TYPES = new Set(['move_short', 'move_long', 'sprint', 'rush', 'move'])
 
 // Modes de combat CaC — tooltips canoniques (version Joueur, plus complets)
+// l/tooltip = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le composant
+// consommateur via t(), jamais affichee brute ici.
 export const COMBAT_MODE_DEFS = [
-  { k: 'normal',   l: 'Normal',   tooltip: 'Mode par défaut — aucun modificateur.' },
-  { k: 'offensif', l: 'Offensif', tooltip: '+3 à l\'attaque / −5 à la défense si attaqué jusqu\'à la prochaine action.' },
-  { k: 'charge',   l: 'Charge',   tooltip: '+3 attaque +3 dégâts / −7 défense / distance ≥ 3m requise + déplacement court gratuit.' },
-  { k: 'defensif', l: 'Défensif', tooltip: 'Aucune attaque. +3 en défense si attaqué. Retarde l\'action. (LdB p.223)' },
-  { k: 'retraite', l: 'Retraite', tooltip: 'Aucune attaque. +5 en défense si attaqué. Recul possible. (LdB p.223)' },
+  { k: 'normal',   l: 'modes.normal.label',   tooltip: 'modes.normal.tooltip' },
+  { k: 'offensif', l: 'modes.offensif.label', tooltip: 'modes.offensif.tooltip' },
+  { k: 'charge',   l: 'modes.charge.label',   tooltip: 'modes.charge.tooltip' },
+  { k: 'defensif', l: 'modes.defensif.label', tooltip: 'modes.defensif.tooltip' },
+  { k: 'retraite', l: 'modes.retraite.label', tooltip: 'modes.retraite.tooltip' },
 ]
 
 // Calcul variant de tir — source unique partagée entre GM et Joueur

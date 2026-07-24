@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
@@ -8,6 +9,7 @@ import TimelineCard from './TimelineCard'
 const MAX_CARDS = 12
 
 export default function CombatTimeline({ characters, topOffset = 0, onPortraitClick, actionTimerSec = 0, socket, isGm = false, myTokenIds = null }) {
+  const { t } = useTranslation('combat')
   const { roster, phase, subPhase, activeTokenId, currentTurn, timelineEntries, currentStep } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
@@ -153,8 +155,8 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
             {secondsLeft}
           </div>
         )}
-        <div style={styles.turnLabel}>Tour {currentTurn}</div>
-        <span style={styles.phaseLabel}>{isAnnouncement ? 'Annonce' : 'Résolution'}</span>
+        <div style={styles.turnLabel}>{t('timeline.turn', { turn: currentTurn })}</div>
+        <span style={styles.phaseLabel}>{isAnnouncement ? t('timeline.announcement') : t('timeline.resolution')}</span>
         <span style={styles.phaseArrow(isAnnouncement)}>{isAnnouncement ? '←' : '→'}</span>
         <button style={styles.collapseBtn} onClick={() => setCollapsed(c => !c)}>
           {collapsed ? '▼' : '▲'}
@@ -202,7 +204,7 @@ export default function CombatTimeline({ characters, topOffset = 0, onPortraitCl
               seule l'interaction est limitée par les permissions (§6quater). */}
           {waitingCards.length > 0 && (
             <div style={styles.waitingZone}>
-              <span style={styles.waitingLabel}>En délai</span>
+              <span style={styles.waitingLabel}>{t('timeline.waiting')}</span>
               <LayoutGroup>
                 <AnimatePresence initial={false}>
                   {waitingCards.map(card => (
