@@ -3,9 +3,11 @@
 > 2026-07-23 · Plan temporaire (Règle 10, `docs/RegleDocumentaire.md`) — sera archivé et fusionné dans
 > `docs/ASBUILT.md` une fois clos.
 > Norme durable : `docs/SYSTEME/LOCALISATION.md` + `.claude/rules/i18n.md`.
-> Statut (2026-07-24) : 🟢 **Lot 1 (Combat, 17 fichiers) entièrement clos** — `combatSections.js`
+> Statut (2026-07-25) : 🟢 **Lot 1 (Combat, 17 fichiers) entièrement clos** — `combatSections.js`
 > migré (Segments 1-7, §3bis) + texte propre à chacun des 17 fichiers (§3ter). Zéro texte en dur
-> restant, confirmé par ré-audit. Lots 2-4 non commencés.
+> restant, confirmé par ré-audit.
+> 🟡 **Lot 2 (Équipement/fiche personnage, 7 fichiers) codé, parcours navigateur non testé** — détail
+> §3quater ci-dessous. Lots 3-4 non commencés.
 
 ---
 
@@ -181,6 +183,70 @@ pour l'exclure).
 
 ---
 
+## 3quater. Lot 2 — Équipement / fiche personnage (7 fichiers, 2026-07-25)
+
+Ordre traité (plus isolé → plus dense, un fichier à la fois) : `AimedLocationPicker`,
+`ArmorWoundPanel`, `ModingWindow`, `ContainerPanel`, `LocationPanel`, `InventoryPanel`, `WeaponPanel`.
+Consigne Saar : « je veux être sûr » — même méthode de validation stricte que le Lot 1 à chaque
+fichier (ESLint + `vite build` + script de résolution i18next), pas de pause navigateur par fichier
+(confirmé par Saar : chaîner les 7, session de test groupée après coup, même patron que §3ter).
+
+**Décision de scope (avant le premier fichier)** : `charSheet.json` tel que décrit dans
+`docs/SYSTEME/LOCALISATION.md` §2.1 doit à terme absorber aussi 9 sections déjà traduites
+(`charSheet`, `advantages`, `skillsPanel`, `entityPanel`, `drone`, `los`, `status`, `radialMenu`,
+`tokenRadial`), utilisées par 13 fichiers déjà fonctionnels — plusieurs mélangent ces sections avec
+d'autres restant dans `fr.json` (ex. `CharacterSheet.jsx` : `charSheet`+`character`+`common`), sans
+aucun précédent de composant multi-namespace dans le projet. **Écart appliqué, même principe que
+§3 pour `combat.json`** : `charSheet.json` créé neuf et isolé, ne reçoit que le retrofit des 7
+fichiers du Lot 2. La migration des 9 sections legacy reste un chantier séparé, non ouvert.
+
+**Vocabulaire partagé cross-domaine trouvé** : `AimedLocationPicker`, `LocationPanel` et
+`WeaponPanel` affichent les mêmes 6 libellés courts de zone corporelle (Tête/Corps/Bras G/Bras D/
+Jambe G/Jambe D), jusqu'ici lus en dur depuis `shared/armorConstants.js` (`LOCATION_LABELS`) — module
+aussi consommé **côté serveur** (`socketCombatHelpers.js`, `socketCombatResolution.js`) pour
+construire du texte de jeu réel, donc ses valeurs n'ont pas été touchées. `combat.json` a déjà sa
+propre copie de ce même vocabulaire, en forme longue (`resultPanels.location.*`, exclusif à
+`CombatResultPanels.jsx`). Résolu par duplication contrôlée plutôt que par un premier usage
+multi-namespace : nouvelle clé `charSheet.json` → `locations.*` (formes courtes, identiques à
+l'affichage actuel) + nouveau module partagé `client/src/lib/locationI18nKeys.js`
+(`LOCATION_I18N_KEYS`, code slot → clé i18n) réutilisé tel quel par les 3 fichiers concernés — entorse
+littérale à la Règle 2 (`conventions.md`), actée avec Saar avant de coder.
+
+**Points par fichier** :
+- `ModingWindow.jsx` : commentaire de tête retiré (« i18n : équipement hors scope actuel » — devenu
+  faux, l'équipement est justement ce lot). Titre à deux comptes indépendants (armes/mods) — deux
+  clés `_one`/`_other` séparées composées dans une clé parente à interpolation, pas un seul `count`
+  (limite native i18next : un seul pluriel par appel `t()`).
+- `ContainerPanel.jsx` : `common.loading`/`common.closeButton` posés dans `charSheet.json` pour
+  réutilisation immédiate par `ModingWindow.jsx` (même patron que `combat.json` §3ter : vérifier
+  l'existant avant de créer une clé, dans le même namespace).
+- `LocationPanel.jsx` : réutilise `LOCATION_I18N_KEYS` (labels de zone) et `containerPanel.equipError`/
+  `unequipError`/`unequipTooltip`/`equipPlaceholder` (mêmes messages qu'`ContainerPanel.jsx`, pas
+  redupliqués). Libellés de sévérité abrégés (`Lég`/`Moy`/`Gra`/`Crit`/`Mort`) distincts des libellés
+  longs déjà dans `combat.json` (`resultPanels.severity.*`) — même situation que les localisations,
+  forme courte propre à cette grille compacte.
+- `InventoryPanel.jsx` : `CONTAINER_ORDER` (`Sac`/`Ceinture`/`Coffre`) sert à la fois de valeur
+  envoyée à l'API (`container: newContainer`) et de texte affiché — split en `CONTAINER_LABEL_KEYS`
+  (affichage uniquement, `t()`) sans toucher aux valeurs `value=`/payload envoyées au serveur. Les
+  codes de slot (`VALID_SLOTS` : T/C/BG/BD/JG/JD/MG/MD/2M/Tr) laissés en dur — identifiants
+  techniques au sens de `docs/SYSTEME/LOCALISATION.md` §3, pas du texte affiché.
+- `WeaponPanel.jsx` (le plus dense) : `SLOT_LABELS`/`shieldExtraLocationLabels` suivaient déjà le
+  patron « module exporte un code, le composant résout via `t()` » — juste raccordés aux vraies clés.
+  `shieldExtraLocationLabels` est une fonction pure hors composant : `t` reçu en paramètre explicite
+  (§3.1), pas de hook interne. `WeaponCard` et `ItemRow` (`InventoryPanel.jsx`) sont des composants
+  React à part entière (pas du JSX inline) : chacun a son propre appel `useTranslation('charSheet')`.
+
+Aucune dette hors scope trouvée pendant ce lot (contrairement au Lot 1, aucun signalement
+`I18N-LINT*`/`I18N-DEADCODE*` supplémentaire).
+
+`charSheet.json` compte 9 sections top-level en fin de Lot 2 (`locations`, `aimedLocationPicker`,
+`common`, `armorWoundPanel`, `containerPanel`, `weaponPanel`, `inventoryPanel`, `locationPanel`,
+`modingWindow`), zéro texte en dur restant sur les 7 fichiers confirmé par ré-audit (script §1) et
+script de résolution i18next (103 clés vérifiées, y compris les clés dynamiques par gabarit et les
+formes plurielles `_one`/`_other`).
+
+---
+
 ## 4. Fichiers vérifiés sans texte utilisateur (hors chantier)
 
 Vérifié par lecture (pas supposé) : ces 23 fichiers n'utilisent pas `useTranslation` et n'ont aucune
@@ -221,4 +287,14 @@ l'un semble mort — pas un sujet i18n, loguée séparément → `docs/BUGIDENTI
 du lot), `vite build` propre, toutes les clés de `combat.json` vérifiées par script de résolution,
 zéro texte en dur restant confirmé par ré-audit (script §1) sur les 17 fichiers.
 **Non testé :** tout parcours navigateur réel — aucun écran Combat n'a encore été ouvert en jeu depuis
-ce chantier. Lots 2 (Équipement), 3 (Builder), 4 (Dés) non commencés.
+ce chantier.
+
+**Testé (Lot 2 complet, 7 fichiers)** : ESLint (0 nouvelle erreur sur l'ensemble du lot), `vite build`
+propre, 103 clés vérifiées par script de résolution i18next (namespace `charSheet`, y compris clés
+dynamiques et formes plurielles), zéro texte en dur restant confirmé par ré-audit (script §1) sur les
+7 fichiers.
+**Non testé :** tout parcours navigateur réel — aucun écran Équipement/Fiche personnage n'a encore été
+ouvert en jeu depuis ce chantier (décision Saar §3quater : session de test groupée après coup, pas de
+confirmation par fichier).
+
+Lots 3 (Builder), 4 (Dés) non commencés.

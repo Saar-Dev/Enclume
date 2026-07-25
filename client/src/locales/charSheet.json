@@ -1,0 +1,132 @@
+{
+  "locations": {
+    "tete": "Tête",
+    "corps": "Corps",
+    "brasGauche": "Bras G",
+    "brasDroit": "Bras D",
+    "jambeGauche": "Jambe G",
+    "jambeDroite": "Jambe D"
+  },
+  "aimedLocationPicker": {
+    "randomHint": "Aucune (aléatoire)",
+    "clearButton": "Aucune"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "closeButton": "Fermer"
+  },
+  "armorWoundPanel": {
+    "backpackLabel": "Sac à dos",
+    "beltLabel": "Ceinture"
+  },
+  "containerPanel": {
+    "waterproof": "Étanche",
+    "notWaterproof": "Non étanche",
+    "unequipTooltip": "Déséquiper",
+    "equipPlaceholder": "— Équiper —",
+    "emptySlot": "Aucun {{label}}",
+    "equipError": "Impossible d'équiper",
+    "unequipError": "Impossible de déséquiper"
+  },
+  "weaponPanel": {
+    "slotLabels": {
+      "MG": "Main G",
+      "MD": "Main D",
+      "2M": "2 mains",
+      "Tr": "Trépied"
+    },
+    "tripodTooltip": "Arme lourde sur trépied. Si le personnage n'est pas en position stable, la compétence est divisée par 2.",
+    "tripodBadge": "⚠ Trépied",
+    "statDamage": "DMG",
+    "statShock": "CHC",
+    "statRange": "PTÉ",
+    "statFireMode": "TIR",
+    "statCaliber": "CAL",
+    "statShieldAtkMalus": "Malus CaC adverse",
+    "statShieldProtection": "Protection (dist.)",
+    "statShieldCovers": "Couvre",
+    "shieldCoversArm": "Bras",
+    "ammoUnloaded": "non chargée",
+    "ammoMagazineSuffix": "chargeur",
+    "ammoStockSuffix": "en stock",
+    "ammoAvailableSuffix": "dispo",
+    "reloadTooltip": "Recharger",
+    "reloadTooltipDisabled": "Aucune munition compatible disponible",
+    "reloadButton": "↺ Recharger",
+    "noWeaponEquipped": "Aucune arme équipée",
+    "equippedWeaponsTitle": "Armes équipées",
+    "twoHandsSectionTitle": "DEUX MAINS / TRÉPIED",
+    "tripodMissingWarning": "⚠ Trépied absent du sac — malus actif",
+    "tripodAvailableInfo": "Trépied disponible dans le sac",
+    "dirHandLabel": "MAIN DIRECTRICE",
+    "leftHandLabel": "MAIN GAUCHE",
+    "secHandLabel": "MAIN SECONDAIRE",
+    "rightHandLabel": "MAIN DROITE",
+    "malusNote": "−5",
+    "equipButton": "Équiper",
+    "equipTwoHandsPlaceholder": "— Équiper arme 2 mains / trépied —",
+    "twoHandsNoTripod": "2 mains (sans trépied)",
+    "unequipError": "Erreur déséquipement",
+    "reloadError": "Erreur rechargement",
+    "equipError": "Erreur équipement"
+  },
+  "inventoryPanel": {
+    "loading": "Chargement inventaire…",
+    "weightLabel": "Poids :",
+    "iniPenalty": "Malus INI : -{{value}}",
+    "solLabel": "Sol :",
+    "modingButton": "Customisation",
+    "emptyInventory": "Inventaire vide",
+    "closeAddPanel": "▲ Fermer",
+    "openAddPanel": "+ Ajouter un item",
+    "loadingCatalog": "Chargement du catalogue…",
+    "qtyLabel": "Qté",
+    "containerLabel": "Container",
+    "confirmButton": "Confirmer",
+    "cancelButton": "Annuler",
+    "searchPlaceholder": "Rechercher un item…",
+    "noResult": "Aucun résultat",
+    "moreItemsHint_one": "{{count}} item supplémentaire — affinez la recherche",
+    "moreItemsHint_other": "{{count}} items supplémentaires — affinez la recherche",
+    "unnamedItem": "(sans nom)",
+    "slotPlaceholder": "— slot —",
+    "deleteTooltip": "Supprimer",
+    "container": {
+      "Sac": "Sac",
+      "Ceinture": "Ceinture",
+      "Coffre": "Coffre"
+    }
+  },
+  "locationPanel": {
+    "severityShort": {
+      "legere": "Lég",
+      "moyenne": "Moy",
+      "grave": "Gra",
+      "critique": "Crit",
+      "mortelle": "Mort"
+    },
+    "shieldUnequipHint": "{{name}} — retirer déséquipe le bouclier entièrement (main comprise)",
+    "shieldTag": "(bouclier)",
+    "addLayerS": "+ Couche S",
+    "addLayer": "+ Couche",
+    "noArmor": "Aucune armure",
+    "woundStabilized": "Stabilisée — cliquer pour guérir",
+    "woundActive": "Blessure — cliquer pour stabiliser",
+    "woundEmpty": "Vide — cliquer pour ajouter"
+  },
+  "modingWindow": {
+    "title": "Customisation — {{weaponsLabel}} · {{modsLabel}}",
+    "weaponsCount_one": "{{count}} arme",
+    "weaponsCount_other": "{{count}} armes",
+    "modsInstallableCount_one": "{{count}} mod installable",
+    "modsInstallableCount_other": "{{count}} mods installables",
+    "noWeaponInInventory": "Aucune arme dans l'inventaire",
+    "selectWeapon": "Sélectionnez une arme",
+    "installedModsTitle": "Mods installés",
+    "noModInstalled": "Aucun mod installé",
+    "availableModsTitle": "Mods disponibles",
+    "noModInInventory": "Aucun mod dans l'inventaire",
+    "installButton": "Installer",
+    "installError": "Erreur installation"
+  }
+}

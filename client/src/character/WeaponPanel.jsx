@@ -1,17 +1,25 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { SLOT_TO_WOUND_LOCATION, LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { useTranslation } from 'react-i18next'
+import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
+import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import api from '../lib/api.js'
 
 const WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
-const SLOT_LABELS  = { MG: 'Main G', MD: 'Main D', '2M': '2 mains', Tr: 'Trépied' }
+// Clés i18n namespace charSheet (docs/SYSTEME/LOCALISATION.md §3.1) — le code slot lui-même reste
+// la clé JS locale, seul l'affichage passe par t().
+const SLOT_LABEL_KEYS = { MG: 'weaponPanel.slotLabels.MG', MD: 'weaponPanel.slotLabels.MD', '2M': 'weaponPanel.slotLabels.2M', Tr: 'weaponPanel.slotLabels.Tr' }
 
 // Composite (Bouclier) : slots[0] n'est plus fiable pour retrouver la main (tri alphabétique côté
 // serveur, ex. ['BG','C','MG']) — chercher explicitement le code main/2M/Tr.
 const handSlotOf = (slots) => slots?.find(s => WEAPON_SLOTS.includes(s)) ?? slots?.[0]
 
-function shieldExtraLocationLabels(refShieldExtraLocations) {
+// Fonction pure : `t` injecté en paramètre par l'appelant (règle des hooks, docs/SYSTEME/LOCALISATION.md §3.1).
+function shieldExtraLocationLabels(refShieldExtraLocations, t) {
   if (!refShieldExtraLocations) return []
-  return refShieldExtraLocations.split('/').map(code => LOCATION_LABELS[SLOT_TO_WOUND_LOCATION[code]] ?? code)
+  return refShieldExtraLocations.split('/').map(code => {
+    const key = LOCATION_I18N_KEYS[SLOT_TO_WOUND_LOCATION[code]]
+    return key ? t(key) : code
+  })
 }
 
 function parseAmmoCount(ammoCount) {
@@ -31,14 +39,17 @@ function getSlotInfo(refLocation) {
 
 function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAmmoSelect,
                       onReload, onUnequip, error }) {
+  const { t } = useTranslation('charSheet')
   const totalAmmoQty  = compatAmmos.reduce((acc, i) => acc + i.quantity, 0)
   const ammoCount     = parseAmmoCount(weapon.ref_ammo_count)
   const hasCompatAmmo = compatAmmos.length > 0
+  const handSlot      = handSlotOf(weapon.slots)
+  const slotKey       = SLOT_LABEL_KEYS[handSlot]
 
   return (
     <div style={s.weaponCard}>
       <div style={s.weaponHeader}>
-        <span style={s.slotBadge}>{SLOT_LABELS[handSlotOf(weapon.slots)] || handSlotOf(weapon.slots)}</span>
+        <span style={s.slotBadge}>{slotKey ? t(slotKey) : handSlot}</span>
         <span style={s.weaponName}>{weapon.custom_name || weapon.ref_name || '—'}</span>
         {weapon.ref_description && (
           <span className="has-tooltip" data-tooltip={weapon.ref_description} style={s.infoIcon}>ⓘ</span>
@@ -46,25 +57,25 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
         {weapon.slots?.includes('Tr') && (
           <span
             style={s.trWarning}
-            title="Arme lourde sur trépied. Si le personnage n'est pas en position stable, la compétence est divisée par 2."
-          >⚠ Trépied</span>
+            title={t('weaponPanel.tripodTooltip')}
+          >{t('weaponPanel.tripodBadge')}</span>
         )}
         {canEdit && (
-          <button style={s.unequipBtn} onClick={() => onUnequip(weapon)} title="Déséquiper">×</button>
+          <button style={s.unequipBtn} onClick={() => onUnequip(weapon)} title={t('containerPanel.unequipTooltip')}>×</button>
         )}
       </div>
 
       <div style={s.statsRow}>
-        {weapon.ref_damage_h  && <span style={s.stat}><span style={s.statKey}>DMG</span> {weapon.ref_damage_h}</span>}
-        {weapon.ref_shock     && <span style={s.stat}><span style={s.statKey}>CHC</span> {weapon.ref_shock}</span>}
-        {weapon.ref_range     && <span style={s.stat}><span style={s.statKey}>PTÉ</span> {weapon.ref_range}</span>}
-        {weapon.ref_fire_mode && <span style={s.stat}><span style={s.statKey}>TIR</span> {weapon.ref_fire_mode}</span>}
-        {weapon.ref_caliber   && <span style={s.stat}><span style={s.statKey}>CAL</span> {weapon.ref_caliber}</span>}
+        {weapon.ref_damage_h  && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statDamage')}</span> {weapon.ref_damage_h}</span>}
+        {weapon.ref_shock     && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statShock')}</span> {weapon.ref_shock}</span>}
+        {weapon.ref_range     && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statRange')}</span> {weapon.ref_range}</span>}
+        {weapon.ref_fire_mode && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statFireMode')}</span> {weapon.ref_fire_mode}</span>}
+        {weapon.ref_caliber   && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statCaliber')}</span> {weapon.ref_caliber}</span>}
         {weapon.ref_category === 'Bouclier' && (
           <>
-            {weapon.ref_shield_atk_malus != null && <span style={s.stat}><span style={s.statKey}>Malus CaC adverse</span> {weapon.ref_shield_atk_malus}</span>}
-            {weapon.ref_protection != null && <span style={s.stat}><span style={s.statKey}>Protection (dist.)</span> {weapon.ref_protection}</span>}
-            <span style={s.stat}><span style={s.statKey}>Couvre</span> Bras{shieldExtraLocationLabels(weapon.ref_shield_extra_locations).map(l => `, ${l}`).join('')}</span>
+            {weapon.ref_shield_atk_malus != null && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statShieldAtkMalus')}</span> {weapon.ref_shield_atk_malus}</span>}
+            {weapon.ref_protection != null && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statShieldProtection')}</span> {weapon.ref_protection}</span>}
+            <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statShieldCovers')}</span> {t('weaponPanel.shieldCoversArm')}{shieldExtraLocationLabels(weapon.ref_shield_extra_locations, t).map(l => `, ${l}`).join('')}</span>
           </>
         )}
       </div>
@@ -75,14 +86,14 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
             <span style={s.ammoLabel}>
               {weapon.current_ammo
                 ? <span style={s.ammoName}>{ammoName}</span>
-                : <span style={s.ammoNone}>non chargée</span>
+                : <span style={s.ammoNone}>{t('weaponPanel.ammoUnloaded')}</span>
               }
               {weapon.current_ammo && ammoCount > 0 && (() => {
                 const remaining = weapon.ammo_remaining ?? ammoCount
                 const isEmpty   = weapon.ammo_remaining === 0
                 return (
                   <span style={{ color: isEmpty ? '#c86030' : '#4a4a60' }}>
-                    {' '}— <span style={isEmpty ? { color: '#c86030', fontWeight: 600 } : {}}>{remaining}/{ammoCount}</span> chargeur · {totalAmmoQty} en stock
+                    {' '}— <span style={isEmpty ? { color: '#c86030', fontWeight: 600 } : {}}>{remaining}/{ammoCount}</span> {t('weaponPanel.ammoMagazineSuffix')} · {totalAmmoQty} {t('weaponPanel.ammoStockSuffix')}
                   </span>
                 )
               })()}
@@ -98,7 +109,7 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
                 >
                   {compatAmmos.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.custom_name || a.ref_name} ({a.quantity} dispo)
+                      {a.custom_name || a.ref_name} ({a.quantity} {t('weaponPanel.ammoAvailableSuffix')})
                     </option>
                   ))}
                 </select>
@@ -106,9 +117,9 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
               <button
                 style={{ ...s.reloadBtn, opacity: hasCompatAmmo ? 1 : 0.4 }}
                 onClick={() => onReload(weapon)}
-                title={hasCompatAmmo ? 'Recharger' : 'Aucune munition compatible disponible'}
+                title={hasCompatAmmo ? t('weaponPanel.reloadTooltip') : t('weaponPanel.reloadTooltipDisabled')}
               >
-                ↺ Recharger
+                {t('weaponPanel.reloadButton')}
               </button>
             </div>
           )}
@@ -121,6 +132,7 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
 }
 
 export default function WeaponPanel({ characterId, canEdit, reloadKey, onInventoryMutated = () => {} }) {
+  const { t } = useTranslation('charSheet')
   const [items,       setItems]       = useState([])
   const [loading,     setLoading]     = useState(true)
   const [errors,      setErrors]      = useState({})
@@ -237,9 +249,9 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       setItems(prev => prev.map(i => i.id === weaponItem.id ? res.data.item : i))
       onInventoryMutated()
     } catch (err) {
-      setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || 'Erreur déséquipement' }))
+      setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || t('weaponPanel.unequipError') }))
     }
-  }, [characterId, onInventoryMutated])
+  }, [characterId, onInventoryMutated, t])
 
   const handleReload = useCallback(async (weaponItem) => {
     clearError(weaponItem.id)
@@ -252,9 +264,9 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       })
       setItems(prev => prev.map(i => i.id === weaponItem.id ? res.data.item : i))
     } catch (err) {
-      setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || 'Erreur rechargement' }))
+      setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || t('weaponPanel.reloadError') }))
     }
-  }, [characterId, availableAmmoFor, ammoSelected])
+  }, [characterId, availableAmmoFor, ammoSelected, t])
 
   const handleEquipItem = useCallback(async (itemId, slot) => {
     if (!itemId || !slot) return
@@ -273,11 +285,11 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       setErrors(prev => { const n = { ...prev }; delete n.equip; return n })
       onInventoryMutated()
     } catch (err) {
-      setErrors(prev => ({ ...prev, equip: err.response?.data?.error?.message || 'Erreur équipement' }))
+      setErrors(prev => ({ ...prev, equip: err.response?.data?.error?.message || t('weaponPanel.equipError') }))
     } finally {
       setEquipping(false)
     }
-  }, [characterId, equippedWeapons, onInventoryMutated])
+  }, [characterId, equippedWeapons, onInventoryMutated, t])
 
   const handleSelect2M = useCallback((itemId) => {
     setEquip2MId(itemId)
@@ -297,7 +309,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
     return (
       <div style={s.root}>
         <div style={s.separator} />
-        <div style={s.emptyMsg}>Aucune arme équipée</div>
+        <div style={s.emptyMsg}>{t('weaponPanel.noWeaponEquipped')}</div>
       </div>
     )
   }
@@ -305,12 +317,12 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
   return (
     <div style={s.root}>
       <div style={s.separator} />
-      <div style={s.sectionLabel}>Armes équipées</div>
+      <div style={s.sectionLabel}>{t('weaponPanel.equippedWeaponsTitle')}</div>
 
       {weapon2M ? (
         /* ── Mode DEUX MAINS ──────────────────────────────────────────────── */
         <div style={s.sectionTwoHands}>
-          <div style={s.colHeader}>DEUX MAINS / TRÉPIED</div>
+          <div style={s.colHeader}>{t('weaponPanel.twoHandsSectionTitle')}</div>
           <WeaponCard
             weapon={weapon2M}
             canEdit={canEdit}
@@ -323,11 +335,11 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             error={errors[weapon2M.id]}
           />
           {weapon2M.slots?.includes('Tr') && !hasTrepied && (
-            <div style={s.warning}>⚠ Trépied absent du sac — malus actif</div>
+            <div style={s.warning}>{t('weaponPanel.tripodMissingWarning')}</div>
           )}
           {weapon2M.slots?.includes('2M') && hasTrepied &&
            getSlotInfo(weapon2M.ref_location).type === '2M_Tr' && (
-            <div style={s.info}>Trépied disponible dans le sac</div>
+            <div style={s.info}>{t('weaponPanel.tripodAvailableInfo')}</div>
           )}
         </div>
       ) : (
@@ -338,7 +350,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             {/* Colonne DIRECTRICE */}
             <div style={s.col}>
               <div style={s.colHeader}>
-                {isAmbi ? 'MAIN GAUCHE' : 'MAIN DIRECTRICE'}
+                {isAmbi ? t('weaponPanel.leftHandLabel') : t('weaponPanel.dirHandLabel')}
               </div>
               {weaponDir ? (
                 <WeaponCard
@@ -359,7 +371,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     value={equipDir}
                     onChange={e => setEquipDir(e.target.value)}
                   >
-                    <option value="">— Équiper —</option>
+                    <option value="">{t('containerPanel.equipPlaceholder')}</option>
                     {available1H.map(i => (
                       <option key={i.id} value={i.id}>
                         {i.custom_name || i.ref_name}
@@ -371,7 +383,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     onClick={() => handleEquipItem(equipDir, dirSlot)}
                     disabled={!equipDir || equipping}
                   >
-                    Équiper
+                    {t('weaponPanel.equipButton')}
                   </button>
                 </div>
               )}
@@ -381,8 +393,8 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             <div style={s.col}>
               <div style={s.colHeader}>
                 {isAmbi
-                  ? 'MAIN DROITE'
-                  : <>{weaponSec && <span style={s.malusNote}>−5 </span>}MAIN SECONDAIRE</>
+                  ? t('weaponPanel.rightHandLabel')
+                  : <>{weaponSec && <span style={s.malusNote}>{t('weaponPanel.malusNote')} </span>}{t('weaponPanel.secHandLabel')}</>
                 }
               </div>
               {weaponSec ? (
@@ -404,7 +416,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     value={equipSec}
                     onChange={e => setEquipSec(e.target.value)}
                   >
-                    <option value="">— Équiper —</option>
+                    <option value="">{t('containerPanel.equipPlaceholder')}</option>
                     {available1H.map(i => (
                       <option key={i.id} value={i.id}>
                         {i.custom_name || i.ref_name}
@@ -416,7 +428,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     onClick={() => handleEquipItem(equipSec, secSlot)}
                     disabled={!equipSec || equipping}
                   >
-                    Équiper
+                    {t('weaponPanel.equipButton')}
                   </button>
                 </div>
               )}
@@ -427,14 +439,14 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
           {/* Section DEUX MAINS (toujours visible si armes dispo) */}
           {canEdit && available2M.length > 0 && (
             <div style={s.sectionTwoHands}>
-              <div style={s.colHeader}>DEUX MAINS / TRÉPIED</div>
+              <div style={s.colHeader}>{t('weaponPanel.twoHandsSectionTitle')}</div>
               <div style={s.equipCol}>
                 <select
                   style={s.select}
                   value={equip2MId}
                   onChange={e => handleSelect2M(e.target.value)}
                 >
-                  <option value="">— Équiper arme 2 mains / trépied —</option>
+                  <option value="">{t('weaponPanel.equipTwoHandsPlaceholder')}</option>
                   {available2M.map(i => (
                     <option key={i.id} value={i.id}>
                       {i.custom_name || i.ref_name}
@@ -448,8 +460,8 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     value={equip2MSlot}
                     onChange={e => setEquip2MSlot(e.target.value)}
                   >
-                    <option value="2M">2 mains (sans trépied)</option>
-                    <option value="Tr">Trépied</option>
+                    <option value="2M">{t('weaponPanel.twoHandsNoTripod')}</option>
+                    <option value="Tr">{t('weaponPanel.slotLabels.Tr')}</option>
                   </select>
                 )}
                 <button
@@ -457,7 +469,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                   onClick={() => handleEquipItem(equip2MId, equip2MSlot)}
                   disabled={!equip2MId || equipping}
                 >
-                  Équiper
+                  {t('weaponPanel.equipButton')}
                 </button>
               </div>
             </div>

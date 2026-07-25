@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { useCharacterStore } from '../stores/characterStore'
 import SilhouettePanel from './SilhouettePanel.jsx'
@@ -6,6 +7,7 @@ import LocationPanel   from './LocationPanel.jsx'
 import ContainerPanel  from './ContainerPanel.jsx'
 
 export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
+  const { t } = useTranslation('charSheet')
   const [wounds,     setWounds]     = useState([])
   const [inventory,  setInventory]  = useState([])
   const [totalWeight, setTotalWeight] = useState(0)
@@ -61,7 +63,7 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
   }, [characterId, setStoreWounds])
 
   if (loading) {
-    return <div style={{ color: '#5a5a7a', fontSize: 12, padding: '16px 0' }}>Chargement…</div>
+    return <div style={{ color: '#5a5a7a', fontSize: 12, padding: '16px 0' }}>{t('common.loading')}</div>
   }
 
   // ── Couleur poids ─────────────────────────────────────────────────────────
@@ -106,8 +108,8 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
         {/* ── Colonne centre ───────────────────────────────────────── */}
         <div style={s.colCenter}>
           <div style={s.containerGroup}>
-            <ContainerPanel type="D"  label="Sac à dos" {...sharedContainerProps} />
-            <ContainerPanel type="Ce" label="Ceinture"  {...sharedContainerProps} />
+            <ContainerPanel type="D"  label={t('armorWoundPanel.backpackLabel')} {...sharedContainerProps} />
+            <ContainerPanel type="Ce" label={t('armorWoundPanel.beltLabel')}  {...sharedContainerProps} />
           </div>
           <div style={{ position: 'relative' }}>
             <span style={{ ...s.weightLabel, color: weightColor }}>

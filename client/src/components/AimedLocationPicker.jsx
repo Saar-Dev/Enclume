@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import BodySilhouetteSvg from './BodySilhouetteSvg.jsx'
-import { AIMED_LOCATION_MALUS, LOCATION_LABELS } from '../../../shared/armorConstants.js'
+import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
+import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 
 const NEUTRAL_FILL = '#2a2a3e'
 const HOVER_FILL = '#3a3a5a'
@@ -12,6 +14,7 @@ function formatMalus(n) { return n > 0 ? `+${n}` : `${n}` }
 // aucune condition d'éligibilité (contrairement à Tir visé) : toujours sélectionnable indépendamment
 // du reste de la déclaration.
 export default function AimedLocationPicker({ aimedLocation, onChange }) {
+  const { t } = useTranslation('charSheet')
   const [hovered, setHovered] = useState(null)
 
   const fillFor = (loc) => {
@@ -35,14 +38,14 @@ export default function AimedLocationPicker({ aimedLocation, onChange }) {
       <div style={s.info}>
         {displayLoc ? (
           <span style={s.infoText}>
-            {LOCATION_LABELS[displayLoc]} ({formatMalus(AIMED_LOCATION_MALUS[displayLoc])})
+            {t(LOCATION_I18N_KEYS[displayLoc])} ({formatMalus(AIMED_LOCATION_MALUS[displayLoc])})
           </span>
         ) : (
-          <span style={s.infoTextMuted}>Aucune (aléatoire)</span>
+          <span style={s.infoTextMuted}>{t('aimedLocationPicker.randomHint')}</span>
         )}
         {aimedLocation && (
           <button type="button" className="btn btn-ghost" style={s.clearBtn} onClick={() => onChange(null)}>
-            Aucune
+            {t('aimedLocationPicker.clearButton')}
           </button>
         )}
       </div>

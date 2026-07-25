@@ -1,16 +1,14 @@
 import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   WOUND_SEVERITIES, WOUND_MAX_COUNTS, SEVERITY_COLORS,
 } from '../../../shared/woundConstants.js'
 import {
-  ARMOR_CATEGORY_MALUS, LOCATION_TO_SLOT, LOCATION_LABELS, SLOT_TO_REF_LOCATION, SYMMETRIC_SLOT_PAIRS,
+  ARMOR_CATEGORY_MALUS, LOCATION_TO_SLOT, SLOT_TO_REF_LOCATION, SYMMETRIC_SLOT_PAIRS,
 } from '../../../shared/armorConstants.js'
 import { polarisRound } from '../../../shared/polarisUtils.js'
+import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import api from '../lib/api.js'
-
-const SEVERITY_LABELS = {
-  legere: 'Lég', moyenne: 'Moy', grave: 'Gra', critique: 'Crit', mortelle: 'Mort',
-}
 
 function calcMillefeuille(items, field) {
   const vals = items.map(i => i[field] ?? 0).filter(v => v > 0)
@@ -33,8 +31,9 @@ export default function LocationPanel({
   onInventoryChange,
   onWoundsReload,
 }) {
+  const { t } = useTranslation('charSheet')
   const slotCode = LOCATION_TO_SLOT[location]
-  const label    = LOCATION_LABELS[location]
+  const label    = t(LOCATION_I18N_KEYS[location])
   const refCode  = SLOT_TO_REF_LOCATION[slotCode] ?? slotCode
 
   const [lastAddedWoundId, setLastAddedWoundId] = useState(null)
@@ -78,9 +77,9 @@ export default function LocationPanel({
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
       onInventoryChange(res.data.item)
     } catch (err) {
-      setEquipError(err.response?.data?.error || 'Impossible d\'équiper')
+      setEquipError(err.response?.data?.error || t('containerPanel.equipError'))
     }
-  }, [characterId, slotCode, items, onInventoryChange])
+  }, [characterId, slotCode, items, onInventoryChange, t])
 
   const handleUnequip = useCallback(async (itemId) => {
     setEquipError(null)
@@ -98,9 +97,9 @@ export default function LocationPanel({
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
       onInventoryChange(res.data.item)
     } catch (err) {
-      setEquipError(err.response?.data?.error || 'Impossible de déséquiper')
+      setEquipError(err.response?.data?.error || t('containerPanel.unequipError'))
     }
-  }, [characterId, slotCode, items, onInventoryChange])
+  }, [characterId, slotCode, items, onInventoryChange, t])
 
   // ── Handlers blessures ─────────────────────────────────────────────────────
   const woundsHere = wounds.filter(w => w.location === location)
@@ -159,11 +158,11 @@ export default function LocationPanel({
             <div
               style={s.equippedName}
               title={item.ref_category === 'Bouclier'
-                ? `${item.custom_name || item.ref_name} — retirer déséquipe le bouclier entièrement (main comprise)`
+                ? t('locationPanel.shieldUnequipHint', { name: item.custom_name || item.ref_name })
                 : (item.custom_name || item.ref_name)}
             >
               {item.custom_name || item.ref_name || '—'}
-              {item.ref_category === 'Bouclier' && <span style={s.shieldTag}> (bouclier)</span>}
+              {item.ref_category === 'Bouclier' && <span style={s.shieldTag}> {t('locationPanel.shieldTag')}</span>}
             </div>
             <div style={s.equippedStats}>
               {item.ref_protection       != null && <span>E{item.ref_protection}</span>}
@@ -171,7 +170,7 @@ export default function LocationPanel({
               {item.ref_malus_cat && <span>{item.ref_malus_cat}</span>}
             </div>
             {canEdit && (
-              <button style={s.unequipBtn} onClick={() => handleUnequip(item.id)} title="Déséquiper">×</button>
+              <button style={s.unequipBtn} onClick={() => handleUnequip(item.id)} title={t('containerPanel.unequipTooltip')}>×</button>
             )}
           </div>
         ))}
@@ -185,18 +184,18 @@ export default function LocationPanel({
               onChange={e => { if (e.target.value) handleEquip(e.target.value) }}
             >
               <option value="">
-                {equippedItems.length === 0 ? '— Équiper —' : (hasNonS ? '+ Couche S' : '+ Couche')}
+                {equippedItems.length === 0 ? t('containerPanel.equipPlaceholder') : (hasNonS ? t('locationPanel.addLayerS') : t('locationPanel.addLayer'))}
               </option>
               {availableItems.map(i => (
                 <option key={i.id} value={i.id}>{i.custom_name || i.ref_name}</option>
               ))}
             </select>
           ) : equippedItems.length === 0 ? (
-            <span style={s.emptySlot}>Aucune armure</span>
+            <span style={s.emptySlot}>{t('locationPanel.noArmor')}</span>
           ) : null
         )}
         {!canEdit && equippedItems.length === 0 && (
-          <span style={s.emptySlot}>Aucune armure</span>
+          <span style={s.emptySlot}>{t('locationPanel.noArmor')}</span>
         )}
 
         {equipError && <div style={s.equipError}>{equipError}</div>}
@@ -209,7 +208,7 @@ export default function LocationPanel({
           const woundsOfSev = woundsHere.filter(w => w.severity === sev)
           return (
             <div key={sev} style={s.woundRow}>
-              <span style={s.sevLabel}>{SEVERITY_LABELS[sev]}</span>
+              <span style={s.sevLabel}>{t(`locationPanel.severityShort.${sev}`)}</span>
               <div style={s.boxes}>
                 {Array.from({ length: maxCount }).map((_, i) => {
                   const w       = woundsOfSev[i]
@@ -220,8 +219,8 @@ export default function LocationPanel({
                       onClick={() => handleBoxClick(sev, i)}
                       title={
                         w
-                          ? (w.is_stabilized ? 'Stabilisée — cliquer pour guérir' : 'Blessure — cliquer pour stabiliser')
-                          : (canEdit ? 'Vide — cliquer pour ajouter' : '')
+                          ? (w.is_stabilized ? t('locationPanel.woundStabilized') : t('locationPanel.woundActive'))
+                          : (canEdit ? t('locationPanel.woundEmpty') : '')
                       }
                       style={{
                         width: 13, height: 13,

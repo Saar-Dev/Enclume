@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next'
 import fr from './locales/fr.json'
 import creation from './locales/creation.json'
 import combat from './locales/combat.json'
+import charSheet from './locales/charSheet.json'
 
 i18n
   .use(initReactI18next)
@@ -12,6 +13,7 @@ i18n
         translation: fr,
         creation: creation,
         combat: combat,
+        charSheet: charSheet,
       },
     },
     lng: 'fr',

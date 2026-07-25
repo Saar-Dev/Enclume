@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ARMOR_CATEGORY_MALUS } from '../../../shared/armorConstants.js'
 import api from '../lib/api.js'
 
 export default function ContainerPanel({ type, label, items, characterId, canEdit, onInventoryChange }) {
+  const { t } = useTranslation('charSheet')
   const [equipError, setEquipError] = useState(null)
 
   // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau) remplace `slot` (texte) côté lecture —
@@ -16,9 +18,9 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
       const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: type })
       onInventoryChange(res.data.item)
     } catch (err) {
-      setEquipError(err.response?.data?.error || 'Impossible d\'équiper')
+      setEquipError(err.response?.data?.error || t('containerPanel.equipError'))
     }
-  }, [characterId, type, onInventoryChange])
+  }, [characterId, type, onInventoryChange, t])
 
   const handleUnequip = useCallback(async () => {
     if (!equippedItem) return
@@ -27,9 +29,9 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
       const res = await api.put(`/char-sheet/${characterId}/inventory/${equippedItem.id}`, { slot: null })
       onInventoryChange(res.data.item)
     } catch (err) {
-      setEquipError(err.response?.data?.error || 'Impossible de déséquiper')
+      setEquipError(err.response?.data?.error || t('containerPanel.unequipError'))
     }
-  }, [characterId, equippedItem, onInventoryChange])
+  }, [characterId, equippedItem, onInventoryChange, t])
 
   return (
     <div style={s.panel}>
@@ -44,11 +46,11 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
           </div>
           <div style={s.equippedStats}>
             {equippedItem.ref_capacity   != null && <span>{equippedItem.ref_capacity} kg</span>}
-            {equippedItem.ref_waterproof != null && <span>{equippedItem.ref_waterproof ? 'Étanche' : 'Non étanche'}</span>}
+            {equippedItem.ref_waterproof != null && <span>{equippedItem.ref_waterproof ? t('containerPanel.waterproof') : t('containerPanel.notWaterproof')}</span>}
             {equippedItem.ref_malus_cat  && <span>{equippedItem.ref_malus_cat}/{ARMOR_CATEGORY_MALUS[equippedItem.ref_malus_cat]}</span>}
           </div>
           {canEdit && (
-            <button style={s.unequipBtn} onClick={handleUnequip} title="Déséquiper">×</button>
+            <button style={s.unequipBtn} onClick={handleUnequip} title={t('containerPanel.unequipTooltip')}>×</button>
           )}
         </div>
       ) : canEdit ? (
@@ -57,13 +59,13 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
           value=""
           onChange={e => { if (e.target.value) handleEquip(e.target.value) }}
         >
-          <option value="">— Équiper —</option>
+          <option value="">{t('containerPanel.equipPlaceholder')}</option>
           {availableItems.map(i => (
             <option key={i.id} value={i.id}>{i.custom_name || i.ref_name}</option>
           ))}
         </select>
       ) : (
-        <span style={s.empty}>Aucun {label.toLowerCase()}</span>
+        <span style={s.empty}>{t('containerPanel.emptySlot', { label: label.toLowerCase() })}</span>
       )}
 
       {equipError && <div style={s.equipError}>{equipError}</div>}

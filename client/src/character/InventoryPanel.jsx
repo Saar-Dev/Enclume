@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
 const VALID_SLOTS     = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'MG', 'MD', '2M', 'Tr']
 
+// Libellé affiché (clé i18n namespace charSheet) pour chaque code container — le code lui-même
+// (`item.container`, envoyé tel quel à l'API) ne change jamais, seul l'affichage passe par t().
+const CONTAINER_LABEL_KEYS = { Sac: 'inventoryPanel.container.Sac', Ceinture: 'inventoryPanel.container.Ceinture', Coffre: 'inventoryPanel.container.Coffre' }
+
 export default function InventoryPanel({ characterId, canEdit, isGm, onInventoryMutated = () => {}, reloadKey = 0, onOpenModing = () => {} }) {
+  const { t } = useTranslation('charSheet')
   const [items,       setItems]       = useState([])
   const [sols,        setSols]        = useState(0)
   const [totalWeight, setTotalWeight] = useState(0)
@@ -178,7 +184,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
-  if (loading) return <div style={{ color: '#5a5a7a', fontSize: 12, padding: '16px 0' }}>Chargement inventaire…</div>
+  if (loading) return <div style={{ color: '#5a5a7a', fontSize: 12, padding: '16px 0' }}>{t('inventoryPanel.loading')}</div>
 
   const itemsByContainer = {}
   for (const c of CONTAINER_ORDER) itemsByContainer[c] = []
@@ -194,17 +200,17 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
       {/* ── Header stats ───────────────────────────────────────────────── */}
       <div style={s.header}>
         <span style={s.statLabel}>
-          Poids :&nbsp;
+          {t('inventoryPanel.weightLabel')}&nbsp;
           <span style={{ color: iniPenalty > 0 ? '#FF6B6B' : '#c0c0d0' }}>
             {totalWeight.toFixed(1)} kg
           </span>
           <span style={{ color: '#4a4a60' }}> / {threshold.toFixed(1)} kg</span>
         </span>
         {iniPenalty > 0 && (
-          <span style={{ ...s.statLabel, color: '#FF6B6B' }}>Malus INI : -{iniPenalty}</span>
+          <span style={{ ...s.statLabel, color: '#FF6B6B' }}>{t('inventoryPanel.iniPenalty', { value: iniPenalty })}</span>
         )}
         <span style={{ ...s.statLabel, display: 'flex', alignItems: 'center', gap: 4 }}>
-          Sol :&nbsp;
+          {t('inventoryPanel.solLabel')}&nbsp;
           {editingSols && canEdit ? (
             <input
               style={s.solsInput}
@@ -231,7 +237,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
       {/* ── Bouton "Customisation" (docs/PLAN_MODING.md Phase A) ─────────── */}
       {canEdit && (
         <button onClick={onOpenModing} style={{ ...s.addToggleBtn, marginBottom: 8 }}>
-          Customisation
+          {t('inventoryPanel.modingButton')}
         </button>
       )}
 
@@ -241,7 +247,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
         if (!list?.length) return null
         return (
           <div key={container} style={{ marginBottom: 8 }}>
-            <div style={s.containerLabel}>{container}</div>
+            <div style={s.containerLabel}>{t(CONTAINER_LABEL_KEYS[container])}</div>
             {list.map(item => (
               <ItemRow
                 key={item.id}
@@ -259,7 +265,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
 
       {items.length === 0 && (
         <p style={{ color: '#4a4a60', fontSize: 12, fontStyle: 'italic', textAlign: 'center', margin: '16px 0' }}>
-          Inventaire vide
+          {t('inventoryPanel.emptyInventory')}
         </p>
       )}
 
@@ -267,13 +273,13 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
       {isGm && (
         <div style={{ marginTop: 12 }}>
           <button onClick={() => handleToggleAdd(availableContainers)} style={s.addToggleBtn}>
-            {addOpen ? '▲ Fermer' : '+ Ajouter un item'}
+            {addOpen ? t('inventoryPanel.closeAddPanel') : t('inventoryPanel.openAddPanel')}
           </button>
 
           {addOpen && (
             <div style={s.addPanel}>
               {!catalogLoaded ? (
-                <div style={{ color: '#5a5a7a', fontSize: 12 }}>Chargement du catalogue…</div>
+                <div style={{ color: '#5a5a7a', fontSize: 12 }}>{t('inventoryPanel.loadingCatalog')}</div>
               ) : selectedRef ? (
                 /* ── Confirmation ajout ──────────────────────────────── */
                 <div style={s.confirmPanel}>
@@ -283,7 +289,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <label style={s.addLabel}>
-                      Qté
+                      {t('inventoryPanel.qtyLabel')}
                       <input
                         type="number"
                         min={1}
@@ -293,22 +299,22 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
                       />
                     </label>
                     <label style={s.addLabel}>
-                      Container
+                      {t('inventoryPanel.containerLabel')}
                       <select
                         value={addContainer}
                         onChange={e => setAddContainer(e.target.value)}
                         style={s.selectSmall}
                       >
                         {availableContainers.map(c => (
-                          <option key={c} value={c}>{c}</option>
+                          <option key={c} value={c}>{t(CONTAINER_LABEL_KEYS[c])}</option>
                         ))}
                       </select>
                     </label>
                     <button onClick={handleConfirmAdd} disabled={adding} style={s.confirmBtn}>
-                      {adding ? '…' : 'Confirmer'}
+                      {adding ? '…' : t('inventoryPanel.confirmButton')}
                     </button>
                     <button onClick={() => setSelectedRef(null)} style={s.cancelBtn}>
-                      Annuler
+                      {t('inventoryPanel.cancelButton')}
                     </button>
                   </div>
                 </div>
@@ -317,14 +323,14 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
                 <>
                   <input
                     style={s.searchInput}
-                    placeholder="Rechercher un item…"
+                    placeholder={t('inventoryPanel.searchPlaceholder')}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     autoFocus
                   />
                   <div style={s.catalogList}>
                     {filteredCatalog.length === 0 && (
-                      <div style={{ color: '#4a4a60', fontSize: 11, padding: 8 }}>Aucun résultat</div>
+                      <div style={{ color: '#4a4a60', fontSize: 11, padding: 8 }}>{t('inventoryPanel.noResult')}</div>
                     )}
                     {filteredCatalog.map(refItem => (
                       <div
@@ -338,7 +344,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
                     ))}
                     {!searchQuery && catalog.length > 50 && (
                       <div style={{ color: '#4a4a60', fontSize: 10, padding: '4px 8px' }}>
-                        {catalog.length - 50} items supplémentaires — affinez la recherche
+                        {t('inventoryPanel.moreItemsHint', { count: catalog.length - 50 })}
                       </div>
                     )}
                   </div>
@@ -353,7 +359,8 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
 }
 
 function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip, onDelete }) {
-  const name = item.custom_name || item.ref_name || '(sans nom)'
+  const { t } = useTranslation('charSheet')
+  const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
   const containerOptions = availableContainers.includes(item.container)
     ? availableContainers
@@ -377,7 +384,7 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
             style={s.selectSmall}
           >
             {containerOptions.map(c => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>{t(CONTAINER_LABEL_KEYS[c])}</option>
             ))}
           </select>
           {item.container === 'Sac' && (
@@ -386,13 +393,13 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
               onChange={e => onEquip(item.id, e.target.value || null)}
               style={{ ...s.selectSmall, color: item.slots?.length > 0 ? '#5b8dee' : '#4a4a60' }}
             >
-              <option value="">— slot —</option>
+              <option value="">{t('inventoryPanel.slotPlaceholder')}</option>
               {VALID_SLOTS.map(sl => (
                 <option key={sl} value={sl}>{sl}</option>
               ))}
             </select>
           )}
-          <button onClick={() => onDelete(item.id)} style={s.deleteBtn} title="Supprimer">✕</button>
+          <button onClick={() => onDelete(item.id)} style={s.deleteBtn} title={t('inventoryPanel.deleteTooltip')}>✕</button>
         </>
       )}
     </div>

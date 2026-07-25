@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { useDraggable } from '../lib/useDraggable.js'
 
 // ModingWindow — docs/PLAN_MODING.md Phase A : installation d'un module d'arme (accessoire)
 // depuis l'inventaire sur une arme. Rangement pur, aucun effet mécanique (Phase B, hors scope).
 // Pattern TradeWindow.jsx (fenêtre flottante indépendante, useDraggable, suffixe "Window").
-// i18n : équipement hors scope actuel (CLAUDE.md), mêmes conventions que InventoryPanel.jsx.
 
 const PANEL_W = 460
 
 export default function ModingWindow({ characterId, canEdit, onClose, reloadKey = 0, onInventoryMutated = () => {} }) {
+  const { t } = useTranslation('charSheet')
   const { pos, onHeaderMouseDown } = useDraggable(
     'moding-window-pos',
     { top: 100, left: window.innerWidth - PANEL_W - 60 },
@@ -62,11 +63,11 @@ export default function ModingWindow({ characterId, canEdit, onClose, reloadKey 
       setInstallableMods(res.data.installableMods)
       onInventoryMutated()
     } catch (err) {
-      setErrorMsg(err.response?.data?.error?.message || 'Erreur installation')
+      setErrorMsg(err.response?.data?.error?.message || t('modingWindow.installError'))
     } finally {
       setInstallingId(null)
     }
-  }, [characterId, selectedId, installingId, onInventoryMutated])
+  }, [characterId, selectedId, installingId, onInventoryMutated, t])
 
   const selectedWeapon = weapons.find(w => w.id === selectedId) ?? null
 
@@ -75,18 +76,21 @@ export default function ModingWindow({ characterId, canEdit, onClose, reloadKey 
 
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
         <span className="combat-win-title">
-          Customisation — {weapons.length} arme{weapons.length > 1 ? 's' : ''} · {installableMods.length} mod{installableMods.length > 1 ? 's' : ''} installable{installableMods.length > 1 ? 's' : ''}
+          {t('modingWindow.title', {
+            weaponsLabel: t('modingWindow.weaponsCount', { count: weapons.length }),
+            modsLabel: t('modingWindow.modsInstallableCount', { count: installableMods.length }),
+          })}
         </span>
-        <button className="btn btn-icon" onClick={onClose} title="Fermer">✕</button>
+        <button className="btn btn-icon" onClick={onClose} title={t('common.closeButton')}>✕</button>
       </div>
 
       {loading ? (
-        <div className="moding-empty">Chargement…</div>
+        <div className="moding-empty">{t('common.loading')}</div>
       ) : (
         <div className="combat-win-body moding-body">
 
           <div className="moding-weapons">
-            {weapons.length === 0 && <div className="moding-empty">Aucune arme dans l'inventaire</div>}
+            {weapons.length === 0 && <div className="moding-empty">{t('modingWindow.noWeaponInInventory')}</div>}
             {weapons.map(w => (
               <div
                 key={w.id}
@@ -100,12 +104,12 @@ export default function ModingWindow({ characterId, canEdit, onClose, reloadKey 
           </div>
 
           <div className="moding-detail">
-            {!selectedWeapon && <div className="moding-empty">Sélectionnez une arme</div>}
+            {!selectedWeapon && <div className="moding-empty">{t('modingWindow.selectWeapon')}</div>}
             {selectedWeapon && (
               <>
-                <span className="combat-win-section-title">Mods installés</span>
+                <span className="combat-win-section-title">{t('modingWindow.installedModsTitle')}</span>
                 {selectedWeapon.installed_mods.length === 0 && (
-                  <div className="moding-empty">Aucun mod installé</div>
+                  <div className="moding-empty">{t('modingWindow.noModInstalled')}</div>
                 )}
                 {selectedWeapon.installed_mods.map(m => (
                   <div key={m.id} className="moding-mod-row">
@@ -114,10 +118,10 @@ export default function ModingWindow({ characterId, canEdit, onClose, reloadKey 
                 ))}
 
                 <span className="combat-win-section-title" style={{ marginTop: '10px', display: 'block' }}>
-                  Mods disponibles
+                  {t('modingWindow.availableModsTitle')}
                 </span>
                 {installableMods.length === 0 && (
-                  <div className="moding-empty">Aucun mod dans l'inventaire</div>
+                  <div className="moding-empty">{t('modingWindow.noModInInventory')}</div>
                 )}
                 {installableMods.map(m => (
                   <div key={m.id} className="moding-mod-row">
@@ -128,7 +132,7 @@ export default function ModingWindow({ characterId, canEdit, onClose, reloadKey 
                         disabled={installingId === m.id}
                         onClick={() => handleInstall(m.id)}
                       >
-                        {installingId === m.id ? '…' : 'Installer'}
+                        {installingId === m.id ? '…' : t('modingWindow.installButton')}
                       </button>
                     )}
                   </div>
