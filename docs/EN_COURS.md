@@ -57,7 +57,15 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-24 — Session 176 : triage priorisé `ROADMAP.md`/
+🔒 En cours (Saar) : `docs/PLAN_RW_SYSCOMBAT.md` Lot 1 — noyau pur `computeAttackRoll` + shadow-mode
+
+> Dernière mise à jour (dev/Saar) : 2026-07-25 — Session 180 : audit technique complet
+> (`docs/AUDIT_FABLE.md`) ; `docs/PLAN_RW_SYSCOMBAT.md` rédigé (découpage resolveMeleeAction/
+> resolveAssaultAction, 2 analyses à charge + run à vide) ; Lot 0 codé — tables de modificateurs
+> CaC/taille/portée rapatriées dans `shared/combatSituationMods.js` (autorité unique client+serveur,
+> même geste que TIRIMP Session 166), serveur (melee/assault/drone) + 2 fenêtres client basculés,
+> 23 valeurs vérifiées conformes par script, build Vite OK, serveur démarré OK (Saar) — vérification
+> visuelle des 2 fenêtres de modificateurs encore à faire par Saar ; 2026-07-24 — Session 176 : triage priorisé `ROADMAP.md`/
 > `BUGIDENTIFIE.md` — CHOC1 (item 109) et Cluster I (DMG1/DMG2) clos, testés en jeu et confirmés par
 > Saar ; SURPRISE1 (item 110) codé, non testé en jeu ; SURPRISE-ROLL retiré (comportement normal,
 > confirmé Saar) ; INI5 (item 111) audit tranché par Saar (« pas RAW, ça dégage »), forfait Initiative

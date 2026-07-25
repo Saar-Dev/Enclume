@@ -6,28 +6,40 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import { getTailleCible } from '../../../shared/droneConstants.js'
+import { CAC_SITUATION_MODS, TAILLE_MODS } from '../../../shared/combatSituationMods.js'
+
+// cacMod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité CaC,
+// PLAN_RW_SYSCOMBAT.md Lot 0 — même pattern que mod() dans CombatModifiersWindow.jsx pour le Tir).
+// `limitative` (terrain instable) → null : la valeur réelle est calculée serveur (Acrobatie/Équilibre),
+// l'UI affiche le tag "selon Acrobatie" au lieu d'un nombre — jamais une valeur codée en dur ici.
+const cacMod = (key) => {
+  const entry = CAC_SITUATION_MODS[key]
+  return entry?.limitative ? null : (entry?.mod ?? 0)
+}
+const tailleMod = (key) => TAILLE_MODS[key]?.mod ?? 0
 
 // CaC §6.2 — modificateurs situation attaquant (préfixe cac_). label = cle i18n namespace combat
 // (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le composant via t(), jamais affichee brute ici.
+// Ordre du tableau = ordre d'affichage (présentation locale) ; valeurs = table shared uniquement.
 const SITUATION_ATK = [
-  { key: 'cac_attaquant_cote',          label: 'cacModifiers.situationAtk.atkFlank',    mod: -3 },
-  { key: 'cac_attaquant_au_sol',        label: 'cacModifiers.situationAtk.atkProne',    mod: -5 },
-  { key: 'cac_espace_confine',          label: 'cacModifiers.situationAtk.confined',    mod: -3 },
-  { key: 'cac_espace_tres_confine',     label: 'cacModifiers.situationAtk.veryConfined', mod: -5 },
-  { key: 'cac_position_avantageuse',    label: 'cacModifiers.situationAtk.advantageous', mod: 3  },
-  { key: 'cac_main_non_directrice',     label: 'cacModifiers.situationAtk.offhand',      mod: -5 },
-  { key: 'cac_terrain_instable',        label: 'cacModifiers.situationAtk.unstableGround', mod: null },
+  { key: 'cac_attaquant_cote',          label: 'cacModifiers.situationAtk.atkFlank',       mod: cacMod('cac_attaquant_cote') },
+  { key: 'cac_attaquant_au_sol',        label: 'cacModifiers.situationAtk.atkProne',       mod: cacMod('cac_attaquant_au_sol') },
+  { key: 'cac_espace_confine',          label: 'cacModifiers.situationAtk.confined',       mod: cacMod('cac_espace_confine') },
+  { key: 'cac_espace_tres_confine',     label: 'cacModifiers.situationAtk.veryConfined',   mod: cacMod('cac_espace_tres_confine') },
+  { key: 'cac_position_avantageuse',    label: 'cacModifiers.situationAtk.advantageous',   mod: cacMod('cac_position_avantageuse') },
+  { key: 'cac_main_non_directrice',     label: 'cacModifiers.situationAtk.offhand',        mod: cacMod('cac_main_non_directrice') },
+  { key: 'cac_terrain_instable',        label: 'cacModifiers.situationAtk.unstableGround', mod: cacMod('cac_terrain_instable') },
 ]
 
 const TAILLES = [
-  { key: 'minuscule',   label: 'cacModifiers.tailles.minuscule',   mod: -10 },
-  { key: 'tres_petite', label: 'cacModifiers.tailles.tresPetite',  mod: -5  },
-  { key: 'petite',      label: 'cacModifiers.tailles.petite',      mod: -3  },
-  { key: 'moyenne',     label: 'cacModifiers.tailles.moyenne',     mod: 0   },
-  { key: 'grande',      label: 'cacModifiers.tailles.grande',      mod: 3   },
-  { key: 'tres_grande', label: 'cacModifiers.tailles.tresGrande',  mod: 5   },
-  { key: 'enorme',      label: 'cacModifiers.tailles.enorme',      mod: 10  },
-  { key: 'gigantesque', label: 'cacModifiers.tailles.gigantesque', mod: 15  },
+  { key: 'minuscule',   label: 'cacModifiers.tailles.minuscule',   mod: tailleMod('minuscule') },
+  { key: 'tres_petite', label: 'cacModifiers.tailles.tresPetite',  mod: tailleMod('tres_petite') },
+  { key: 'petite',      label: 'cacModifiers.tailles.petite',      mod: tailleMod('petite') },
+  { key: 'moyenne',     label: 'cacModifiers.tailles.moyenne',     mod: tailleMod('moyenne') },
+  { key: 'grande',      label: 'cacModifiers.tailles.grande',      mod: tailleMod('grande') },
+  { key: 'tres_grande', label: 'cacModifiers.tailles.tresGrande',  mod: tailleMod('tres_grande') },
+  { key: 'enorme',      label: 'cacModifiers.tailles.enorme',      mod: tailleMod('enorme') },
+  { key: 'gigantesque', label: 'cacModifiers.tailles.gigantesque', mod: tailleMod('gigantesque') },
 ]
 
 function formatMod(n) { return n > 0 ? `+${n}` : `${n}` }

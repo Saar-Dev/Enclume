@@ -24,29 +24,16 @@ import {
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
-import { RANGED_SITUATION_MODS, sumRangedSituationMods, isImpossibleRangedSituation } from '../../../shared/combatSituationMods.js'
+import {
+  RANGED_SITUATION_MODS, sumRangedSituationMods, isImpossibleRangedSituation,
+  CAC_SITUATION_MODS, TAILLE_MODS, PORTEE_MOD_COMP,
+} from '../../../shared/combatSituationMods.js'
 
 
-// ─── Breakdown jets de dé — tables et labels ────────────────────────────────
-const PORTEE_MOD_COMP = {
-  bout_portant: 5, courte: 0, moyenne: -5, longue: -10, extreme: -15,
-}
-// CaC §6.2 uniquement — les modificateurs tir à distance (allure/couverture/obscurité) vivent
-// désormais dans shared/combatSituationMods.js (RANGED_SITUATION_MODS), autorité unique client+
-// serveur, plus de duplication ni de sentinel -99 (TIRIMP, docs/BUGIDENTIFIE.md, Session 166).
-const SITUATION_MODS = {
-  cac_attaquant_cote: -3,
-  cac_attaquant_au_sol: -5,
-  cac_espace_confine: -3,
-  cac_espace_tres_confine: -5,
-  cac_position_avantageuse: 3,
-  cac_main_non_directrice: -5,
-  // cac_terrain_instable : compétence limitative — traité séparément (Math.min)
-}
-const TAILLE_MODS = {
-  minuscule: -10, tres_petite: -5, petite: -3, moyenne: 0,
-  grande: 3, tres_grande: 5, enorme: 10, gigantesque: 15,
-}
+// ─── Breakdown jets de dé — labels d'affichage (FR serveur, dette i18n séparée) ─
+// Les tables de VALEURS (situation Tir + CaC, taille, portée) vivent dans
+// shared/combatSituationMods.js — autorité unique client+serveur (TIRIMP Session 166 pour le Tir,
+// PLAN_RW_SYSCOMBAT.md Lot 0 pour CaC/taille/portée). Ne jamais recréer une table de valeurs ici.
 const SITUATION_LABELS = {
   cible_immobile:        'Cible immobile',
   cible_allure_moyenne:  'Cible allure moyenne',
@@ -1429,8 +1416,8 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     const terrainInstable = footingRequiresBalance
       || (confirmedModifiers?.situation ?? []).includes('cac_terrain_instable')
     const situationMods = (confirmedModifiers?.situation ?? []).filter(k => k !== 'cac_terrain_instable')
-    const situationModComp = situationMods.reduce((sum, k) => sum + (SITUATION_MODS[k] ?? 0), 0)
-    const tailleMod = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne'] ?? 0
+    const situationModComp = situationMods.reduce((sum, k) => sum + (CAC_SITUATION_MODS[k]?.mod ?? 0), 0)
+    const tailleMod = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne']?.mod ?? 0
     let terrainInstableMod = 0, acrobatieTotal = attackerSkillTotal
     if (terrainInstable) {
       const [acrobatieRefSkill, acrobatieCharSkill] = await Promise.all([
@@ -2105,10 +2092,10 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     }
 
     // 3. Calcul chancesDeReussite (§7.3 — même modificateurs que humanoïdes)
-    // armement_contact : portée = null → PORTEE_MOD_COMP[null]??0 = 0 (contact physique, pas de modificateur portée)
+    // armement_contact : portée = null → PORTEE_MOD_COMP[null]?.mod ?? 0 = 0 (contact physique, pas de modificateur portée)
     const portee = category !== 'armement_contact' ? authoritativeRangeBand : null
-    let totalModComp = PORTEE_MOD_COMP[portee] ?? 0
-    if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille] ?? 0
+    let totalModComp = PORTEE_MOD_COMP[portee]?.mod ?? 0
+    if (confirmedModifiers?.taille) totalModComp += TAILLE_MODS[confirmedModifiers.taille]?.mod ?? 0
     const situationMods = confirmedModifiers?.situation ?? []
     totalModComp += sumRangedSituationMods(situationMods)
     const coverageModifier  = options.coverageModifier ?? 0
@@ -2129,8 +2116,8 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     const now            = new Date().toISOString()
 
     // 6. Broadcast jet programme
-    const porteeModDrone = PORTEE_MOD_COMP[portee] ?? 0
-    const tailleModDrone = confirmedModifiers?.taille ? (TAILLE_MODS[confirmedModifiers.taille] ?? 0) : 0
+    const porteeModDrone = PORTEE_MOD_COMP[portee]?.mod ?? 0
+    const tailleModDrone = confirmedModifiers?.taille ? (TAILLE_MODS[confirmedModifiers.taille]?.mod ?? 0) : 0
     const breakdownDrone = [
       { label: `Programme (niv. ${programme.level})`, value: programme.level, type: 'base' },
       ...(porteeModDrone !== 0 ? [{ label: PORTEE_LABELS[portee] ?? portee, value: porteeModDrone, type: porteeModDrone > 0 ? 'bonus' : 'malus' }] : []),
@@ -2549,9 +2536,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         : 0)
     }
 
-    const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand] ?? 0
+    const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0
     const situationModComp = sumRangedSituationMods(confirmedModifiers.situation ?? [])
-    const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille] ?? 0
+    const tailleModComp    = TAILLE_MODS[confirmedModifiers.taille]?.mod ?? 0
     const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
     // fire_mode_bonus_comp stocké à la Déclaration inclut déjà le bonus deux armes (client :
     // variant.bonusComp + dualWieldBonusComp) — si le tir a dégradé en tir simple (COM29,

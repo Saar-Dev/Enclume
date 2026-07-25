@@ -6,13 +6,16 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import { getTailleCible } from '../../../shared/droneConstants.js'
-import { RANGED_SITUATION_MODS, isImpossibleRangedSituation } from '../../../shared/combatSituationMods.js'
+import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS, PORTEE_MOD_COMP } from '../../../shared/combatSituationMods.js'
 
 // mod() — lit la valeur numérique dans la table unique partagée avec le serveur (autorité tir à
 // distance, TIRIMP docs/BUGIDENTIFIE.md). Un `sitKey` absent (val 'immobile'/'cible_lente') signifie
 // "pas de modificateur, pas envoyé au serveur" — jamais une valeur codée en dur ici.
+// porteeMod()/tailleMod() — même principe pour portée et taille (PLAN_RW_SYSCOMBAT.md Lot 0).
 const mod = (sitKey) => sitKey ? (RANGED_SITUATION_MODS[sitKey]?.mod ?? 0) : 0
 const isImpossible = (sitKey) => !!sitKey && RANGED_SITUATION_MODS[sitKey]?.impossible === true
+const porteeMod = (key) => PORTEE_MOD_COMP[key]?.mod ?? 0
+const tailleMod = (key) => TAILLE_MODS[key]?.mod ?? 0
 
 // FIRE_MODE_LABELS reutilise states.fireMode.*.label (memes libelles que StateSelector, Segment 5).
 // Toutes les autres valeurs label ci-dessous = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md
@@ -21,11 +24,11 @@ const isImpossible = (sitKey) => !!sitKey && RANGED_SITUATION_MODS[sitKey]?.impo
 const FIRE_MODE_LABELS = { CC: 'states.fireMode.cc.label', RC: 'states.fireMode.rc.label', RL: 'states.fireMode.rl.label' }
 
 const PORTEES = [
-  { key: 'bout_portant', label: 'modifiers.portees.boutPortant', mod: 5 },
-  { key: 'courte',       label: 'modifiers.portees.courte',      mod: 0 },
-  { key: 'moyenne',      label: 'modifiers.portees.moyenne',     mod: -5 },
-  { key: 'longue',       label: 'modifiers.portees.longue',      mod: -10 },
-  { key: 'extreme',      label: 'modifiers.portees.extreme',     mod: -15 },
+  { key: 'bout_portant', label: 'modifiers.portees.boutPortant', mod: porteeMod('bout_portant') },
+  { key: 'courte',       label: 'modifiers.portees.courte',      mod: porteeMod('courte') },
+  { key: 'moyenne',      label: 'modifiers.portees.moyenne',     mod: porteeMod('moyenne') },
+  { key: 'longue',       label: 'modifiers.portees.longue',      mod: porteeMod('longue') },
+  { key: 'extreme',      label: 'modifiers.portees.extreme',     mod: porteeMod('extreme') },
 ]
 
 const TIREUR_ALLURES = [
@@ -56,14 +59,14 @@ const OBSCURITES = [
 ]
 
 const TAILLES = [
-  { key: 'minuscule',    label: 'cacModifiers.tailles.minuscule',   mod: -10 },
-  { key: 'tres_petite',  label: 'cacModifiers.tailles.tresPetite',  mod: -5 },
-  { key: 'petite',       label: 'cacModifiers.tailles.petite',      mod: -3 },
-  { key: 'moyenne',      label: 'cacModifiers.tailles.moyenne',     mod: 0 },
-  { key: 'grande',       label: 'cacModifiers.tailles.grande',      mod: 3 },
-  { key: 'tres_grande',  label: 'cacModifiers.tailles.tresGrande',  mod: 5 },
-  { key: 'enorme',       label: 'cacModifiers.tailles.enorme',      mod: 10 },
-  { key: 'gigantesque',  label: 'cacModifiers.tailles.gigantesque', mod: 15 },
+  { key: 'minuscule',    label: 'cacModifiers.tailles.minuscule',   mod: tailleMod('minuscule') },
+  { key: 'tres_petite',  label: 'cacModifiers.tailles.tresPetite',  mod: tailleMod('tres_petite') },
+  { key: 'petite',       label: 'cacModifiers.tailles.petite',      mod: tailleMod('petite') },
+  { key: 'moyenne',      label: 'cacModifiers.tailles.moyenne',     mod: tailleMod('moyenne') },
+  { key: 'grande',       label: 'cacModifiers.tailles.grande',      mod: tailleMod('grande') },
+  { key: 'tres_grande',  label: 'cacModifiers.tailles.tresGrande',  mod: tailleMod('tres_grande') },
+  { key: 'enorme',       label: 'cacModifiers.tailles.enorme',      mod: tailleMod('enorme') },
+  { key: 'gigantesque',  label: 'cacModifiers.tailles.gigantesque', mod: tailleMod('gigantesque') },
 ]
 
 const MOVE_ACTION_KEYS = ['move_lente', 'move_moyenne', 'move_rapide', 'move_max']
