@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import api from '../lib/api'
@@ -11,6 +12,9 @@ import {
 } from '../lib/proceduralMaterials'
 
 const CATEGORY_OPTIONS = ['Sol', 'Mur', 'Divers']
+// Clé i18n namespace builder (docs/SYSTEME/LOCALISATION.md §3.1) — le code catégorie lui-même
+// (envoyé tel quel à l'API via category_label) ne change jamais, seul l'affichage passe par t().
+const CATEGORY_LABEL_KEYS = { Sol: 'materialGeneratorTab.categorySol', Mur: 'materialGeneratorTab.categoryMur', Divers: 'materialGeneratorTab.categoryDivers' }
 const ALLOWED_GEOMETRIES = ['cube', 'slab_bottom', 'slab_top', 'slope', 'wedge']
 
 function dataUrlToFile(dataUrl, name) {
@@ -110,6 +114,7 @@ export default function MaterialGeneratorTab({
   setPackFiles,
   isOwner,
 }) {
+  const { t } = useTranslation('builder')
   const [form, setForm] = useState(() => ({ ...DEFAULT_PROCEDURAL_MATERIAL }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -154,7 +159,7 @@ export default function MaterialGeneratorTab({
   const handleCreate = useCallback(async () => {
     if (!isOwner || !selectedPackId || !preview) return
     if (!form.label.trim()) {
-      setError('Nom requis')
+      setError(t('materialGeneratorTab.nameRequired'))
       return
     }
 
@@ -193,9 +198,9 @@ export default function MaterialGeneratorTab({
           ? { ...pack, texture_count: Number(pack.texture_count) + 1 }
           : pack
       )))
-      setSuccess(`Materiau cree : ${form.label.trim()}`)
+      setSuccess(t('materialGeneratorTab.materialCreated', { name: form.label.trim() }))
     } catch (err) {
-      setError(err.response?.data?.error || 'Creation impossible')
+      setError(err.response?.data?.error || t('materialGeneratorTab.creationFailed'))
     } finally {
       setSaving(false)
     }
@@ -208,12 +213,13 @@ export default function MaterialGeneratorTab({
     setPackFiles,
     setPacks,
     uploadGeneratedFile,
+    t,
   ])
 
   if (!isOwner) {
     return (
       <div style={S.empty}>
-        <p style={S.muted}>Ce pack ne vous appartient pas. Le generateur est disponible sur vos packs.</p>
+        <p style={S.muted}>{t('materialGeneratorTab.notOwnerMessage')}</p>
       </div>
     )
   }
@@ -222,32 +228,32 @@ export default function MaterialGeneratorTab({
     <div style={S.layout}>
       <div style={S.controls}>
         <div style={S.header}>
-          <h3 style={S.title}>Generateur de materiau</h3>
-          <p style={S.hint}>Choisis une matiere, une peinture, un motif et les filtres. Le bouton cree un materiau utilisable dans la palette.</p>
+          <h3 style={S.title}>{t('materialGeneratorTab.title')}</h3>
+          <p style={S.hint}>{t('materialGeneratorTab.hint')}</p>
         </div>
 
         <div style={S.grid}>
           <label style={S.field}>
-            <span style={S.fieldLabel}>Nom</span>
+            <span style={S.fieldLabel}>{t('materialGeneratorTab.nameLabel')}</span>
             <input
               value={form.label}
               onChange={e => updateForm({ label: e.target.value })}
               style={S.input}
-              placeholder="ex: Acier jaune sale"
+              placeholder={t('materialGeneratorTab.namePlaceholder')}
             />
           </label>
           <label style={S.field}>
-            <span style={S.fieldLabel}>Classement</span>
+            <span style={S.fieldLabel}>{t('materialGeneratorTab.categoryLabel')}</span>
             <select
               value={form.categoryLabel}
               onChange={e => updateForm({ categoryLabel: e.target.value })}
               style={S.input}
             >
-              {CATEGORY_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+              {CATEGORY_OPTIONS.map(option => <option key={option} value={option}>{t(CATEGORY_LABEL_KEYS[option])}</option>)}
             </select>
           </label>
           <label style={S.field}>
-            <span style={S.fieldLabel}>Matiere</span>
+            <span style={S.fieldLabel}>{t('materialGeneratorTab.materialLabel')}</span>
             <select
               value={form.material}
               onChange={e => updateForm({ material: e.target.value })}
@@ -259,7 +265,7 @@ export default function MaterialGeneratorTab({
             </select>
           </label>
           <label style={S.field}>
-            <span style={S.fieldLabel}>Motif</span>
+            <span style={S.fieldLabel}>{t('surfaceMaterialEditor.patternLabel')}</span>
             <select
               value={form.pattern}
               onChange={e => updateForm({ pattern: e.target.value })}
@@ -271,7 +277,7 @@ export default function MaterialGeneratorTab({
             </select>
           </label>
           <label style={S.field}>
-            <span style={S.fieldLabel}>Peinture</span>
+            <span style={S.fieldLabel}>{t('surfaceMaterialEditor.paintLabel')}</span>
             <div style={S.paintRow}>
               <input
                 type="color"
@@ -287,27 +293,27 @@ export default function MaterialGeneratorTab({
             </div>
           </label>
           <label style={S.field}>
-            <span style={S.fieldLabel}>Seed</span>
+            <span style={S.fieldLabel}>{t('materialGeneratorTab.seedLabel')}</span>
             <input
               value={form.seed}
               onChange={e => updateForm({ seed: e.target.value })}
               style={S.input}
-              placeholder="variation"
+              placeholder={t('materialGeneratorTab.seedPlaceholder')}
             />
           </label>
         </div>
 
         <div style={S.sliders}>
-          <SliderField label="Usure" value={form.wear} onChange={wear => updateForm({ wear })} />
-          <SliderField label="Salete" value={form.dirt} onChange={dirt => updateForm({ dirt })} />
-          <SliderField label="Relief" value={form.relief} onChange={relief => updateForm({ relief })} />
+          <SliderField label={t('surfaceMaterialEditor.wearLabel')} value={form.wear} onChange={wear => updateForm({ wear })} />
+          <SliderField label={t('materialGeneratorTab.dirtLabel')} value={form.dirt} onChange={dirt => updateForm({ dirt })} />
+          <SliderField label={t('surfaceMaterialEditor.reliefLabel')} value={form.relief} onChange={relief => updateForm({ relief })} />
           <label style={S.checkRow}>
             <input
               type="checkbox"
               checked={form.realRelief !== false}
               onChange={e => updateForm({ realRelief: e.target.checked })}
             />
-            <span>Relief reel sur la geometrie</span>
+            <span>{t('materialGeneratorTab.realReliefCheckboxLabel')}</span>
           </label>
         </div>
 
@@ -316,29 +322,29 @@ export default function MaterialGeneratorTab({
 
         <div style={S.footer}>
           <button style={S.btnGhost} type="button" onClick={() => updateForm({ seed: `${form.seed || 'enclume'}-v` })}>
-            Nouvelle variation
+            {t('materialGeneratorTab.newVariationButton')}
           </button>
           <button style={S.btnPrimary} type="button" disabled={saving || !preview} onClick={handleCreate}>
-            {saving ? 'Creation...' : 'Creer le materiau'}
+            {saving ? t('materialGeneratorTab.creatingButton') : t('materialGeneratorTab.createButton')}
           </button>
         </div>
       </div>
 
       <div style={S.previewPanel}>
         <div style={S.preview3d}>
-          {preview ? <Preview3D preview={preview} /> : <span style={S.muted}>Apercu indisponible</span>}
+          {preview ? <Preview3D preview={preview} /> : <span style={S.muted}>{t('materialGeneratorTab.previewUnavailable')}</span>}
         </div>
         <div style={S.previewGrid}>
           <div style={S.previewTile}>
-            {preview && <img src={preview.albedoDataUrl} alt="Texture generee" style={S.previewImg} />}
-            <span style={S.previewLabel}>Peinture finale</span>
+            {preview && <img src={preview.albedoDataUrl} alt={t('materialGeneratorTab.generatedTextureAlt')} style={S.previewImg} />}
+            <span style={S.previewLabel}>{t('materialGeneratorTab.finalPaintLabel')}</span>
           </div>
           <div style={S.previewTile}>
-            {preview && <img src={preview.normalDataUrl} alt="Normal map generee" style={S.previewImg} />}
-            <span style={S.previewLabel}>Relief</span>
+            {preview && <img src={preview.normalDataUrl} alt={t('materialGeneratorTab.generatedNormalMapAlt')} style={S.previewImg} />}
+            <span style={S.previewLabel}>{t('surfaceMaterialEditor.reliefLabel')}</span>
           </div>
         </div>
-        <p style={S.muted}>Taille generee : {tileSize}px. Le relief combine normal map et deformation reelle quand l'option est active.</p>
+        <p style={S.muted}>{t('materialGeneratorTab.generatedSizeInfo', { size: tileSize })}</p>
       </div>
     </div>
   )

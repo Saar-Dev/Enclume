@@ -1,4 +1,5 @@
 import { Suspense, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Canvas } from '@react-three/fiber'
 import { Bounds, Center, Html, OrbitControls, useGLTF } from '@react-three/drei'
 import { SkeletonUtils } from 'three-stdlib'
@@ -21,6 +22,7 @@ function PreviewModel({ url, materialSlots, materialOverrides }) {
 }
 
 export default function Object3DPreview({ blueprint, materialOverrides }) {
+  const { t } = useTranslation('builder')
   const geometry = blueprint?.geometry
   const materialSlots = useMemo(() => normalizeModelMaterialSlots(geometry), [geometry])
   if (!blueprint?.glb_url) return null
@@ -40,7 +42,7 @@ export default function Object3DPreview({ blueprint, materialOverrides }) {
           <ambientLight intensity={1.35} />
           <directionalLight position={[4, 7, 5]} intensity={2.2} />
           <directionalLight position={[-4, 2, -3]} intensity={0.8} />
-          <Suspense fallback={<Html center style={{ color: '#7f8eaa', fontSize: '11px', whiteSpace: 'nowrap' }}>Chargement du modèle…</Html>}>
+          <Suspense fallback={<Html center style={{ color: '#7f8eaa', fontSize: '11px', whiteSpace: 'nowrap' }}>{t('object3DPreview.loadingModel')}</Html>}>
             <Bounds fit clip margin={1.2} observe>
               <Center bottom>
                 <PreviewModel url={url} materialSlots={materialSlots} materialOverrides={materialOverrides} />

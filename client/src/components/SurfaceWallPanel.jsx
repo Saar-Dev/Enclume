@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import {
   roomSelectableWallRuns,
   roomWallAppearanceForEdges,
@@ -12,6 +13,7 @@ const PANEL_W = 310
 const PANEL_H_EST = 680
 
 export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearanceChange, onClose }) {
+  const { t } = useTranslation('builder')
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
@@ -68,28 +70,28 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
     >
       <div style={S.header} onPointerDown={beginDrag} data-testid="surface-wall-panel-handle">
         <div>
-          <p style={S.kicker}>Mur</p>
-          <p style={S.title}>{count} mur{count > 1 ? 's' : ''} sélectionné{count > 1 ? 's' : ''}</p>
+          <p style={S.kicker}>{t('surfaceWallPanel.kicker')}</p>
+          <p style={S.title}>{t('surfaceWallPanel.wallsSelectedCount', { count })}</p>
         </div>
         <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
-        <FloatingPanelSection title="Identité" defaultOpen>
+        <FloatingPanelSection title={t('common.identitySection')} defaultOpen>
           <label style={S.field}>
-            <span style={S.label}>Nom technique du mur</span>
+            <span style={S.label}>{t('surfaceWallPanel.technicalNameLabel')}</span>
             <textarea
               readOnly
               value={wallName}
               rows={Math.min(3, Math.max(1, selectedRuns.length))}
               onPointerDown={event => event.stopPropagation()}
               style={S.readOnlyName}
-              aria-label="Nom technique du mur"
+              aria-label={t('surfaceWallPanel.technicalNameLabel')}
             />
           </label>
         </FloatingPanelSection>
         <p style={S.hint}>
-          Clique d’autres murs pour composer la sélection. Deux murs contigus peuvent devenir un seul arc canonique.
+          {t('surfaceWallPanel.selectionHint')}
         </p>
 
         <button
@@ -102,21 +104,21 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           })}
           style={{ ...S.button, ...S.selectAll, ...(allWallKeys.length === 0 || allWallsSelected ? S.disabled : {}) }}
         >
-          {allWallsSelected ? 'Tous les murs sont sélectionnés' : 'Sélectionner tous les murs de la salle'}
+          {allWallsSelected ? t('surfaceWallPanel.allWallsSelected') : t('surfaceWallPanel.selectAllWalls')}
         </button>
 
-        <FloatingPanelSection title="Apparence">
-          <span style={S.label}>Apparence côté salle</span>
+        <FloatingPanelSection title={t('common.appearanceSection')}>
+          <span style={S.label}>{t('surfaceWallPanel.wallSideAppearance')}</span>
           <SurfaceMaterialEditor profile={appearanceMaterial} onChange={patchAppearance} />
         </FloatingPanelSection>
 
-        <FloatingPanelSection title="Profil vertical" defaultOpen>
-          <span style={S.label}>Profil vertical vu de côté</span>
+        <FloatingPanelSection title={t('surfaceWallPanel.elevationProfileSection')} defaultOpen>
+          <span style={S.label}>{t('surfaceWallPanel.elevationProfileSideView')}</span>
           <div style={S.profileButtons}>
             {[
-              ['vertical', '|', 'Vertical'],
-              ['curved', '(', 'Courbe'],
-              ['faceted', '<', 'Cassé'],
+              ['vertical', '|', t('surfaceWallPanel.profileVertical')],
+              ['curved', '(', t('surfaceWallPanel.profileCurved')],
+              ['faceted', '<', t('surfaceWallPanel.profileFaceted')],
             ].map(([type, glyph, label]) => (
               <button
                 key={type}
@@ -132,7 +134,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
           {elevationProfile.type !== 'vertical' && (
             <>
               <label style={S.field}>
-                <span style={S.label}>Profondeur : {depth.toFixed(2)} m</span>
+                <span style={S.label}>{t('surfaceWallPanel.depthValue', { value: depth.toFixed(2) })}</span>
                 <input
                   type="range"
                   min="0.05"
@@ -144,7 +146,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
                 />
               </label>
               <label style={S.field}>
-                <span style={S.label}>Angle : {angle.toFixed(0)}°</span>
+                <span style={S.label}>{t('common.angleValue', { value: angle.toFixed(0) })}</span>
                 <input
                   type="range"
                   min="2"
@@ -158,46 +160,46 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
                 />
               </label>
               <div style={S.field}>
-                <span style={S.label}>Direction</span>
+                <span style={S.label}>{t('surfaceWallPanel.directionLabel')}</span>
                 <div style={S.directionButtons}>
                   <button
                     type="button"
                     onClick={event => patchElevationProfile({ direction: 1 }, event.timeStamp)}
                     style={{ ...S.button, ...(Number(elevationProfile.direction) >= 0 ? S.profileButtonActive : {}) }}
                   >
-                    Vers l’intérieur
+                    {t('surfaceWallPanel.directionInward')}
                   </button>
                   <button
                     type="button"
                     onClick={event => patchElevationProfile({ direction: -1 }, event.timeStamp)}
                     style={{ ...S.button, ...(Number(elevationProfile.direction) < 0 ? S.profileButtonActive : {}) }}
                   >
-                    Vers l’extérieur
+                    {t('surfaceWallPanel.directionOutward')}
                   </button>
                 </div>
               </div>
               <p style={S.hint}>
-                Façade extérieure : les deux faces suivent le profil. Mur mitoyen : seule la face de cette salle varie, l’autre limite reste fixe.
+                {t('surfaceWallPanel.profileHint')}
               </p>
             </>
           )}
         </FloatingPanelSection>
 
-        <FloatingPanelSection title="Ouvertures" defaultOpen>
+        <FloatingPanelSection title={t('surfaceWallPanel.openingsSection')} defaultOpen>
           <button
             type="button"
             disabled={selectedRuns.length !== 1}
             onClick={startDoorPlacement}
             style={{ ...S.button, ...S.primary, ...(selectedRuns.length !== 1 ? S.disabled : {}) }}
           >
-            Ajouter une porte
+            {t('surfaceWallPanel.addDoorButton')}
           </button>
-          {selectedRuns.length !== 1 && <p style={S.hint}>Sélectionne un seul mur pour y ajouter une porte.</p>}
+          {selectedRuns.length !== 1 && <p style={S.hint}>{t('surfaceWallPanel.addDoorHint')}</p>}
         </FloatingPanelSection>
 
         {count >= 2 && (
           <label style={S.field}>
-            <span style={S.label}>Angle : {Number(tool.roomArcAngle || 90).toFixed(0)}°</span>
+            <span style={S.label}>{t('common.angleValue', { value: Number(tool.roomArcAngle || 90).toFixed(0) })}</span>
             <input
               type="range"
               min="5"
@@ -217,7 +219,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
             onClick={() => onPatch?.({ roomArcSide: Number(tool.roomArcSide) < 0 ? 1 : -1, roomArcError: null })}
             style={{ ...S.button, ...(count < 2 ? S.disabled : {}) }}
           >
-            Inverser dans le plan
+            {t('surfaceWallPanel.invertInPlane')}
           </button>
           <button
             type="button"
@@ -225,7 +227,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
             onClick={() => triggerAction('apply')}
             style={{ ...S.button, ...S.primary, ...(count < 2 ? S.disabled : {}) }}
           >
-            Appliquer l’arrondi
+            {t('surfaceWallPanel.applyArc')}
           </button>
           <button
             type="button"
@@ -233,7 +235,7 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
             onClick={() => triggerAction('remove')}
             style={{ ...S.button, ...(selectedKeys.length === 0 ? S.disabled : {}) }}
           >
-            Remettre droit
+            {t('surfaceWallPanel.straightenButton')}
           </button>
           <button
             type="button"
@@ -241,12 +243,12 @@ export default function SurfaceWallPanel({ room, tool, x, y, onPatch, onAppearan
             onClick={() => triggerAction('delete')}
             style={{ ...S.button, ...S.danger, ...(count < 1 ? S.disabled : {}) }}
           >
-            {count > 1 ? 'Supprimer les murs' : 'Supprimer le mur'}
+            {count > 1 ? t('surfaceWallPanel.deleteWallsButton') : t('surfaceWallPanel.deleteWallButton')}
           </button>
         </div>
 
         <p style={S.hint}>
-          Un mur extérieur supprimé ouvre la salle. Un mur commun supprimé fusionne les volumes, y compris lorsqu’ils ont des hauteurs différentes.
+          {t('surfaceWallPanel.mergeHint')}
         </p>
         {tool.roomArcError && <p style={S.error}>{tool.roomArcError}</p>}
       </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_SURFACE_MATERIAL_PRESET,
   PROCEDURAL_MATERIAL_PRESETS,
@@ -6,6 +7,7 @@ import {
 import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 
 export default function SurfaceMaterialEditor({ profile, onChange }) {
+  const { t } = useTranslation('builder')
   const material = normalizedSurfaceMaterial(profile)
   const patch = value => onChange?.({ ...material, ...value })
   const paint = /^#[0-9a-f]{6}$/i.test(String(material.paint || ''))
@@ -16,7 +18,7 @@ export default function SurfaceMaterialEditor({ profile, onChange }) {
     <div style={S.root} data-testid="surface-material-editor">
       <div style={S.grid}>
         <label style={S.field}>
-          <span style={S.label}>Matière</span>
+          <span style={S.label}>{t('surfaceMaterialEditor.materialLabel')}</span>
           <select value={material.material} onChange={event => patch({ material: event.target.value })} style={S.input}>
             {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
               <option key={preset.id} value={preset.id}>{preset.label}</option>
@@ -24,7 +26,7 @@ export default function SurfaceMaterialEditor({ profile, onChange }) {
           </select>
         </label>
         <label style={S.field}>
-          <span style={S.label}>Motif</span>
+          <span style={S.label}>{t('surfaceMaterialEditor.patternLabel')}</span>
           <select value={material.pattern} onChange={event => patch({ pattern: event.target.value })} style={S.input}>
             {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
               <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
@@ -33,14 +35,14 @@ export default function SurfaceMaterialEditor({ profile, onChange }) {
         </label>
       </div>
       <label style={S.colorField}>
-        <span style={S.label}>Peinture</span>
+        <span style={S.label}>{t('surfaceMaterialEditor.paintLabel')}</span>
         <input type="color" value={paint} onChange={event => patch({ paint: event.target.value })} style={S.colorInput} />
         <input type="text" value={material.paint || paint} onChange={event => patch({ paint: event.target.value })} style={S.input} />
       </label>
       {[
-        ['wear', 'Usure'],
-        ['dirt', 'Saleté'],
-        ['relief', 'Relief'],
+        ['wear', t('surfaceMaterialEditor.wearLabel')],
+        ['dirt', t('surfaceMaterialEditor.dirtLabel')],
+        ['relief', t('surfaceMaterialEditor.reliefLabel')],
       ].map(([key, label]) => (
         <label key={key} style={S.field}>
           <span style={S.rangeLabel}><span>{label}</span><strong>{Number(material[key]) || 0}</strong></span>
@@ -61,7 +63,9 @@ export default function SurfaceMaterialEditor({ profile, onChange }) {
         onClick={() => patch({ realRelief: material.realRelief === false })}
         style={{ ...S.toggle, ...(material.realRelief !== false ? S.toggleActive : {}) }}
       >
-        Relief réel : {material.realRelief !== false ? 'actif' : 'normal map'}
+        {t('surfaceMaterialEditor.realReliefToggle', {
+          state: material.realRelief !== false ? t('surfaceMaterialEditor.realReliefActive') : t('surfaceMaterialEditor.realReliefNormalMap'),
+        })}
       </button>
     </div>
   )

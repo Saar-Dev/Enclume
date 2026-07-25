@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -10,12 +11,14 @@ import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 const PANEL_W = 310
 const PANEL_H_EST = 620
 
-const MODEL_SLOT_LABELS = {
-  SLOT_01: 'Métal principal',
-  SLOT_02: 'Panneaux secondaires',
-  SLOT_03: 'Cadre / hardware',
-  SLOT_04: 'Accent',
-  SLOT_05: 'Verre',
+// Clés i18n namespace builder (docs/SYSTEME/LOCALISATION.md §3.1) — le code slot lui-même reste
+// la clé JS locale, seul l'affichage passe par t().
+const MODEL_SLOT_LABEL_KEYS = {
+  SLOT_01: 'surfaceConnectorPanel.modelSlotLabels.SLOT_01',
+  SLOT_02: 'surfaceConnectorPanel.modelSlotLabels.SLOT_02',
+  SLOT_03: 'surfaceConnectorPanel.modelSlotLabels.SLOT_03',
+  SLOT_04: 'surfaceConnectorPanel.modelSlotLabels.SLOT_04',
+  SLOT_05: 'surfaceConnectorPanel.modelSlotLabels.SLOT_05',
 }
 
 function connectorBlockingForState(type, state) {
@@ -36,23 +39,25 @@ function connectorBlockingForState(type, state) {
   }
 }
 
-function connectorTypeLabel(type) {
-  if (type === 'door') return 'Porte'
-  if (type === 'elevator') return 'Ascenseur'
-  if (type === 'ladder') return 'Échelle'
+// Fonction pure : `t` injecté en paramètre par l'appelant (règle des hooks, docs/SYSTEME/LOCALISATION.md §3.1).
+function connectorTypeLabel(type, t) {
+  if (type === 'door') return t('surfaceConnectorPanel.typeDoor')
+  if (type === 'elevator') return t('surfaceConnectorPanel.typeElevator')
+  if (type === 'ladder') return t('surfaceConnectorPanel.typeLadder')
   return type
 }
 
-const ELEVATOR_PHASE_LABELS = {
-  idle: 'À l’arrêt',
-  open: 'Portes ouvertes',
-  closing: 'Fermeture',
-  moving: 'En déplacement',
-  opening: 'Ouverture',
-  blocked: 'Porte bloquée',
+const ELEVATOR_PHASE_LABEL_KEYS = {
+  idle: 'elevatorRuntimeControls.phaseLabels.idle',
+  open: 'elevatorRuntimeControls.phaseLabels.open',
+  closing: 'elevatorRuntimeControls.phaseLabels.closing',
+  moving: 'elevatorRuntimeControls.phaseLabels.moving',
+  opening: 'elevatorRuntimeControls.phaseLabels.opening',
+  blocked: 'elevatorRuntimeControls.phaseLabels.blocked',
 }
 
 function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin }) {
+  const { t } = useTranslation('builder')
   const [pending, setPending] = useState(false)
   const stops = Array.isArray(connector.stops) ? connector.stops : []
   const run = async command => {
@@ -63,12 +68,12 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
   return (
     <div style={S.elevatorRuntime}>
       <div style={S.infoGrid}>
-        <span>Cabine</span>
-        <strong>{ELEVATOR_PHASE_LABELS[runtimeState?.phase] || 'État initial'}</strong>
-        <span>Palier</span>
+        <span>{t('elevatorRuntimeControls.cabinLabel')}</span>
+        <strong>{runtimeState?.phase && ELEVATOR_PHASE_LABEL_KEYS[runtimeState.phase] ? t(ELEVATOR_PHASE_LABEL_KEYS[runtimeState.phase]) : t('elevatorRuntimeControls.initialState')}</strong>
+        <span>{t('elevatorRuntimeControls.stopLabel')}</span>
         <strong>{runtimeState?.currentStopId || stops[0]?.label || '—'}</strong>
-        <span>File</span>
-        <strong>{runtimeState?.queue?.length || 0} appel(s)</strong>
+        <span>{t('elevatorRuntimeControls.queueLabel')}</span>
+        <strong>{t('elevatorRuntimeControls.callsCount', { count: runtimeState?.queue?.length || 0 })}</strong>
       </div>
       <div style={S.stopGrid}>
         {stops.map(stop => (
@@ -82,22 +87,22 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
               ...(runtimeState?.currentStopId === stop.id ? S.runtimeBtnCurrent : {}),
             }}
           >
-            {stop.label || `Étage ${stop.level}`}
+            {stop.label || t('elevatorRuntimeControls.floorFallback', { level: stop.level })}
           </button>
         ))}
       </div>
       {canAdmin && (
         <div style={S.runtimeActions}>
           {runtimeState?.phase === 'blocked' ? (
-            <button type="button" disabled={pending} onClick={() => run({ type: 'unblock' })} style={S.adminBtn}>Débloquer</button>
+            <button type="button" disabled={pending} onClick={() => run({ type: 'unblock' })} style={S.adminBtn}>{t('elevatorRuntimeControls.unblockButton')}</button>
           ) : (
-            <button type="button" disabled={pending} onClick={() => run({ type: 'block', reason: 'gm-door-obstruction' })} style={S.adminBtn}>Bloquer la porte</button>
+            <button type="button" disabled={pending} onClick={() => run({ type: 'block', reason: 'gm-door-obstruction' })} style={S.adminBtn}>{t('elevatorRuntimeControls.blockDoorButton')}</button>
           )}
-          <button type="button" disabled={pending} onClick={() => run({ type: 'open' })} style={S.adminBtn}>Ouvrir</button>
-          <button type="button" disabled={pending} onClick={() => run({ type: 'close' })} style={S.adminBtn}>Fermer</button>
+          <button type="button" disabled={pending} onClick={() => run({ type: 'open' })} style={S.adminBtn}>{t('elevatorRuntimeControls.openButton')}</button>
+          <button type="button" disabled={pending} onClick={() => run({ type: 'close' })} style={S.adminBtn}>{t('elevatorRuntimeControls.closeButton')}</button>
         </div>
       )}
-      {runtimeState?.blockedReason && <p style={S.hint}>Blocage : {runtimeState.blockedReason}</p>}
+      {runtimeState?.blockedReason && <p style={S.hint}>{t('elevatorRuntimeControls.blockedReasonPrefix', { reason: runtimeState.blockedReason })}</p>}
     </div>
   )
 }
@@ -114,6 +119,7 @@ export default function SurfaceConnectorPanel({
   canEdit = true,
   canAdminElevator = canEdit,
 }) {
+  const { t } = useTranslation('builder')
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
@@ -153,29 +159,29 @@ export default function SurfaceConnectorPanel({
     >
       <div style={S.header} onPointerDown={beginDrag} data-testid="surface-connector-panel-handle">
         <div>
-          <p style={S.kicker}>Connecteur 3D</p>
-          <p style={S.title}>{connector.modelLabel || connector.type || 'Objet 3D'}</p>
+          <p style={S.kicker}>{t('surfaceConnectorPanel.kicker')}</p>
+          <p style={S.title}>{connector.modelLabel || connector.type || t('surfaceConnectorPanel.defaultObjectLabel')}</p>
         </div>
         <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
         <div style={S.infoGrid}>
-          <span>Type</span>
-          <strong>{connectorTypeLabel(connector.type)}</strong>
-          <span>Étage</span>
+          <span>{t('surfaceConnectorPanel.typeLabel')}</span>
+          <strong>{connectorTypeLabel(connector.type, t)}</strong>
+          <span>{t('surfaceConnectorPanel.levelLabel')}</span>
           <strong>{connector.fromLevel !== undefined && connector.toLevel !== undefined ? `${connector.fromLevel} → ${connector.toLevel}` : connector.level ?? 0}</strong>
-          <span>Dimensions</span>
+          <span>{t('surfaceConnectorPanel.dimensionsLabel')}</span>
           <strong>{connector.width ?? connector.modelGeometry?.width ?? 1} × {connector.depth ?? connector.modelGeometry?.depth ?? 1} × {connector.height ?? connector.modelGeometry?.height ?? 1} m</strong>
         </div>
 
         {canEdit && connector.type === 'door' && (
           <label style={S.field}>
-            <span style={S.label}>État</span>
+            <span style={S.label}>{t('surfaceConnectorPanel.stateLabel')}</span>
             <select value={connector.state || 'closed'} onChange={e => patchState(e.target.value)} style={S.input}>
-              <option value="closed">Fermée</option>
-              <option value="open">Ouverte</option>
-              <option value="locked">Verrouillée</option>
+              <option value="closed">{t('surfaceConnectorPanel.stateClosed')}</option>
+              <option value="open">{t('surfaceConnectorPanel.stateOpen')}</option>
+              <option value="locked">{t('surfaceConnectorPanel.stateLocked')}</option>
             </select>
           </label>
         )}
@@ -190,7 +196,7 @@ export default function SurfaceConnectorPanel({
         )}
 
         {canEdit && <label style={S.field}>
-          <span style={S.label}>Coût de déplacement</span>
+          <span style={S.label}>{t('surfaceRoomPanel.movementCostLabel')}</span>
           <input
             type="number"
             min="0.05"
@@ -202,19 +208,20 @@ export default function SurfaceConnectorPanel({
             })}
             style={S.input}
           />
-          <span style={S.hint}>×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.</span>
+          <span style={S.hint}>{t('surfaceConnectorPanel.movementCostHint')}</span>
         </label>}
 
         {canEdit && (materialSlots.length > 0 ? (
           <div style={S.field}>
-            <span style={S.label}>Couleurs</span>
+            <span style={S.label}>{t('surfaceConnectorPanel.colorsLabel')}</span>
             <div style={S.slotList}>
               {materialSlots.map(slot => {
                 const slotValue = materialSlotDisplayValue(materialOverrides, slot)
+                const slotLabelKey = MODEL_SLOT_LABEL_KEYS[slot.code]
                 return (
                   <label key={slot.code} style={S.slotRow}>
                     <span style={S.slotLabel}>
-                      {MODEL_SLOT_LABELS[slot.code] || slot.label}
+                      {slotLabelKey ? t(slotLabelKey) : slot.label}
                       <small>{slot.code}</small>
                     </span>
                     <input
@@ -224,7 +231,7 @@ export default function SurfaceConnectorPanel({
                       style={S.colorInput}
                     />
                     <button type="button" onClick={() => clearMaterialSlot(slot)} style={S.resetBtn}>
-                      Reset
+                      {t('common.resetButton')}
                     </button>
                   </label>
                 )
@@ -232,20 +239,20 @@ export default function SurfaceConnectorPanel({
             </div>
           </div>
         ) : (
-          <p style={S.hint}>Ce modèle n’expose pas de slots couleur.</p>
+          <p style={S.hint}>{t('surfaceConnectorPanel.noColorSlots')}</p>
         ))}
 
         {canEdit && onDelete && (!confirmDelete ? (
           <button type="button" onClick={() => setConfirmDelete(true)} style={{ ...S.button, ...S.danger }}>
-            Supprimer l’objet 3D
+            {t('surfaceConnectorPanel.deleteObjectButton')}
           </button>
         ) : (
           <div style={S.deleteActions}>
             <button type="button" onClick={() => onDelete(connector.id)} style={{ ...S.button, ...S.danger }}>
-              Confirmer la suppression
+              {t('surfaceRoomPanel.confirmDeleteButton')}
             </button>
             <button type="button" onClick={() => setConfirmDelete(false)} style={S.button}>
-              Annuler
+              {t('common.cancelButton')}
             </button>
           </div>
         ))}

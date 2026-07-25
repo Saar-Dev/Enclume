@@ -6,8 +6,10 @@
 > Statut (2026-07-25) : 🟢 **Lot 1 (Combat, 17 fichiers) entièrement clos** — `combatSections.js`
 > migré (Segments 1-7, §3bis) + texte propre à chacun des 17 fichiers (§3ter). Zéro texte en dur
 > restant, confirmé par ré-audit.
-> 🟡 **Lot 2 (Équipement/fiche personnage, 7 fichiers) codé, parcours navigateur non testé** — détail
-> §3quater ci-dessous. Lots 3-4 non commencés.
+> 🟡 **Lot 2 (Équipement/fiche personnage, 7 fichiers) codé et commité (`d6a21f4`), parcours navigateur
+> non testé** — détail §3quater.
+> 🟡 **Lot 3 (Builder/Surface, 6 fichiers) codé, parcours navigateur non testé** — détail §3quinquies.
+> Lot 4 non commencé.
 
 ---
 
@@ -247,6 +249,58 @@ formes plurielles `_one`/`_other`).
 
 ---
 
+## 3quinquies. Lot 3 — Builder / Surface (6 fichiers, 2026-07-25)
+
+Ordre traité (plus isolé → plus dense) : `Object3DPreview`, `SurfaceMaterialEditor`,
+`SurfaceRoomPanel`, `SurfaceWallPanel`, `MaterialGeneratorTab`, `SurfaceConnectorPanel`. Même méthode
+que les Lots 1-2 (un fichier à la fois, ESLint + `vite build` + script de résolution à chaque étape),
+chaînés sans pause navigateur par fichier (consigne Saar reconfirmée).
+
+**Point de vigilance signalé avant de coder, non bloquant** : ces 6 fichiers (éditeur Surface) sont au
+cœur du chantier parallèle moteur-monde (Codex, `dev/monde`, dépôt physique séparé,
+`docs/EN_COURS.md` « CHANTIER PARALLÈLE — MOTEUR DE MONDE »). Seule la couche texte/JSX a été
+touchée — aucune logique spatiale, aucun appel `WorldSnapshot`/`world*` modifié — mais un conflit de
+fusion reste possible si Codex retouche les mêmes fichiers de son côté. Saar informé, a donné le go.
+
+**Même décision de scope que Lots 1-2** : `builder.json` créé neuf et isolé (pas de migration des 5
+sections legacy `builder`/`surfaceEditor`/`texturePacks`/`workshop`/`entity` déjà utilisées par
+d'autres fichiers fonctionnels — même situation de mélange multi-namespace que `charSheet.json`,
+même déviation appliquée).
+
+**Réutilisation intra-namespace (Règle 2)** trouvée à plusieurs reprises, la plupart entre
+`SurfaceMaterialEditor.jsx` et `MaterialGeneratorTab.jsx` (deux éditeurs de matière procédurale
+distincts partageant le même vocabulaire — Motif/Peinture/Usure/Relief) : clés `surfaceMaterialEditor.*`
+réutilisées telles quelles plutôt que redupliquées. Exception notée : `MaterialGeneratorTab.jsx` utilise
+une orthographe sans accents propre à ce fichier (« Matiere », « Salete », « Generateur »...) —
+préservée verbatim (relocalisation de texte, pas correction orthographique hors scope). « Identité »/
+« Apparence » (titres de section répétés entre `SurfaceRoomPanel`/`SurfaceWallPanel`) et « Coût de
+déplacement »/« Confirmer la suppression » (répétés entre `SurfaceRoomPanel`/`SurfaceConnectorPanel`)
+promus dans `common`/réutilisés en cross-fichier plutôt que redupliqués.
+
+**Patron « code sert aussi de valeur »** rencontré deux fois, même traitement que `CONTAINER_ORDER`
+du Lot 2 (`InventoryPanel.jsx`) : `CATEGORY_OPTIONS` (`MaterialGeneratorTab.jsx`, valeur envoyée à
+l'API via `category_label`) et `MODEL_SLOT_LABELS`/`ELEVATOR_PHASE_LABELS`
+(`SurfaceConnectorPanel.jsx`, codes de slot/phase runtime) — split en mapping code→clé i18n pour
+l'affichage uniquement, valeur brute inchangée dans le payload/la comparaison.
+
+**Fonctions pures hors composant** (§3.1) : `connectorTypeLabel` (`SurfaceConnectorPanel.jsx`) reçoit
+`t` en paramètre explicite, même patron que `shieldExtraLocationLabels` du Lot 2.
+
+**Composants séparés avec leur propre hook** : `ElevatorRuntimeControls` (dans
+`SurfaceConnectorPanel.jsx`) — même situation que `WeaponCard`/`ItemRow` au Lot 2, chacun appelle son
+propre `useTranslation('builder')`. `SliderField` (`MaterialGeneratorTab.jsx`) reçoit son `label` déjà
+résolu en prop par l'appelant, donc aucun hook propre nécessaire.
+
+Aucune dette hors scope trouvée pendant ce lot.
+
+`builder.json` compte 8 sections top-level en fin de Lot 3 (`object3DPreview`, `surfaceMaterialEditor`,
+`common`, `surfaceRoomPanel`, `surfaceWallPanel`, `materialGeneratorTab`, `surfaceConnectorPanel`,
+`elevatorRuntimeControls`), zéro texte en dur restant sur les 6 fichiers confirmé par ré-audit
+(script §1) et script de résolution i18next (141 clés vérifiées, y compris les mappings code→clé et
+les formes plurielles `_one`/`_other`).
+
+---
+
 ## 4. Fichiers vérifiés sans texte utilisateur (hors chantier)
 
 Vérifié par lecture (pas supposé) : ces 23 fichiers n'utilisent pas `useTranslation` et n'ont aucune
@@ -297,4 +351,12 @@ dynamiques et formes plurielles), zéro texte en dur restant confirmé par ré-a
 ouvert en jeu depuis ce chantier (décision Saar §3quater : session de test groupée après coup, pas de
 confirmation par fichier).
 
-Lots 3 (Builder), 4 (Dés) non commencés.
+**Testé (Lot 3 complet, 6 fichiers)** : ESLint (0 nouvelle erreur sur l'ensemble du lot), `vite build`
+propre, 141 clés vérifiées par script de résolution i18next (namespace `builder`, y compris mappings
+code→clé et formes plurielles), zéro texte en dur restant confirmé par ré-audit (script §1) sur les
+6 fichiers.
+**Non testé :** tout parcours navigateur réel — aucun écran Builder/Surface n'a encore été ouvert en
+jeu depuis ce chantier (même décision Saar : session de test groupée après coup). Risque de conflit de
+fusion avec le chantier parallèle moteur-monde non vérifiable depuis cette instance (§3quinquies).
+
+Lot 4 (Dés) non commencé.

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
@@ -7,11 +8,12 @@ import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
 const PANEL_W = 330
 const PANEL_H_EST = 720
 const MATERIAL_FACES = [
-  ['floor', 'Sol'],
-  ['ceiling', 'Plafond'],
+  ['floor', 'surfaceRoomPanel.faceFloor'],
+  ['ceiling', 'surfaceRoomPanel.faceCeiling'],
 ]
 
 export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, onClose }) {
+  const { t } = useTranslation('builder')
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
     x,
     y,
@@ -61,16 +63,16 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
     >
       <div style={S.header} onPointerDown={beginDrag} data-testid="surface-room-panel-handle">
         <div>
-          <p style={S.kicker}>Salle</p>
+          <p style={S.kicker}>{t('surfaceRoomPanel.kicker')}</p>
           <p style={S.title}>{room.label || room.name || room.id}</p>
         </div>
         <button type="button" onPointerDown={event => event.stopPropagation()} onClick={onClose} style={S.closeBtn}>×</button>
       </div>
 
       <div style={S.body}>
-        <FloatingPanelSection title="Identité" defaultOpen>
+        <FloatingPanelSection title={t('common.identitySection')} defaultOpen>
           <label style={S.field}>
-            <span style={S.label}>Nom de la salle</span>
+            <span style={S.label}>{t('surfaceRoomPanel.roomNameLabel')}</span>
             <input
               type="text"
               value={tool?.roomName ?? room.label ?? room.name ?? room.id}
@@ -81,18 +83,18 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             />
           </label>
         </FloatingPanelSection>
-        <FloatingPanelSection title="Géométrie" defaultOpen>
+        <FloatingPanelSection title={t('surfaceRoomPanel.geometrySection')} defaultOpen>
         <div style={S.infoGrid}>
-          <span>Étage de base</span>
+          <span>{t('surfaceRoomPanel.baseFloorLabel')}</span>
           <strong>{Number(tool?.level) || 0}</strong>
-          <span>Volume</span>
-          <strong>{hasCanonicalProfile ? `profil vertical · ${heightLevels} niveaux` : `${heightLevels} niveau${heightLevels > 1 ? 'x' : ''}`}</strong>
+          <span>{t('surfaceRoomPanel.volumeLabel')}</span>
+          <strong>{hasCanonicalProfile ? t('surfaceRoomPanel.verticalProfileVolume', { count: heightLevels }) : t('surfaceRoomPanel.levelsCount', { count: heightLevels })}</strong>
         </div>
 
         <div style={S.grid}>
           {!hasCanonicalProfile ? (
             <label style={S.field}>
-              <span style={S.label}>Hauteur</span>
+              <span style={S.label}>{t('surfaceRoomPanel.heightLabel')}</span>
               <select
                 value={Number(tool?.roomHeightLevels) || heightLevels}
                 onChange={event => onPatch?.({
@@ -102,17 +104,17 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
                 style={S.input}
               >
                 {[1, 2, 3, 4, 5, 6].map(levels => (
-                  <option key={levels} value={levels}>{levels} niveau{levels > 1 ? 'x' : ''}</option>
+                  <option key={levels} value={levels}>{t('surfaceRoomPanel.levelsCount', { count: levels })}</option>
                 ))}
               </select>
             </label>
           ) : (
             <div style={S.profileNote}>
-              La hauteur locale est portée par le profil vertical du monde. Les zones basses et hautes restent indépendantes.
+              {t('surfaceRoomPanel.profileNote')}
             </div>
           )}
           <label style={S.field}>
-            <span style={S.label}>Dalle</span>
+            <span style={S.label}>{t('surfaceRoomPanel.slabLabel')}</span>
             <input
               type="number"
               min="0.05"
@@ -124,7 +126,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             />
           </label>
           <label style={S.field}>
-            <span style={S.label}>Plafond</span>
+            <span style={S.label}>{t('surfaceRoomPanel.faceCeiling')}</span>
             <input
               type="number"
               min="0.05"
@@ -136,7 +138,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             />
           </label>
           <label style={S.field}>
-            <span style={S.label}>Épaisseur des murs</span>
+            <span style={S.label}>{t('surfaceRoomPanel.wallThicknessLabel')}</span>
             <input
               type="number"
               min="1"
@@ -150,10 +152,10 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
         </div>
         </FloatingPanelSection>
 
-        <FloatingPanelSection title="Déplacement et collision">
+        <FloatingPanelSection title={t('surfaceRoomPanel.movementSection')}>
         <div style={S.grid}>
           <label style={S.field}>
-            <span style={S.label}>Coût de déplacement</span>
+            <span style={S.label}>{t('surfaceRoomPanel.movementCostLabel')}</span>
             <input
               type="number"
               min="0.05"
@@ -167,24 +169,24 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
             />
           </label>
           <label style={S.field}>
-            <span style={S.label}>Collision</span>
+            <span style={S.label}>{t('surfaceRoomPanel.collisionLabel')}</span>
             <select
               value={tool?.surfaceBlocking || 'solid'}
               onChange={event => onPatch?.({ surfaceBlocking: event.target.value })}
               style={S.input}
             >
-              <option value="solid">Plein</option>
-              <option value="glass">Verre</option>
-              <option value="grate">Grille</option>
+              <option value="solid">{t('surfaceRoomPanel.collisionSolid')}</option>
+              <option value="glass">{t('surfaceRoomPanel.collisionGlass')}</option>
+              <option value="grate">{t('surfaceRoomPanel.collisionGrate')}</option>
             </select>
           </label>
         </div>
         </FloatingPanelSection>
 
-        <FloatingPanelSection title="Apparence">
-          <span style={S.label}>Apparence de la salle</span>
+        <FloatingPanelSection title={t('common.appearanceSection')}>
+          <span style={S.label}>{t('surfaceRoomPanel.roomAppearanceLabel')}</span>
           <div style={S.faceTabs}>
-            {MATERIAL_FACES.map(([face, label]) => (
+            {MATERIAL_FACES.map(([face, labelKey]) => (
               <button
                 key={face}
                 type="button"
@@ -194,31 +196,31 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
                 }}
                 style={{ ...S.tab, ...(materialFace === face ? S.tabActive : {}) }}
               >
-                {label}
+                {t(labelKey)}
               </button>
             ))}
           </div>
           <SurfaceMaterialEditor profile={material} onChange={patchMaterial} />
         </FloatingPanelSection>
 
-        <FloatingPanelSection title="Connecteurs verticaux">
+        <FloatingPanelSection title={t('surfaceRoomPanel.connectorsSection')}>
           <div style={S.actionRow}>
-            <button type="button" onClick={() => startConnector('elevator')} style={S.action}>Ascenseur</button>
-            <button type="button" onClick={() => startConnector('ladder')} style={S.action}>Échelle</button>
+            <button type="button" onClick={() => startConnector('elevator')} style={S.action}>{t('surfaceRoomPanel.elevatorButton')}</button>
+            <button type="button" onClick={() => startConnector('ladder')} style={S.action}>{t('surfaceRoomPanel.ladderButton')}</button>
           </div>
         </FloatingPanelSection>
 
         {onDelete && (!confirmDelete ? (
           <button type="button" onClick={() => setConfirmDelete(true)} style={{ ...S.action, ...S.danger }}>
-            Supprimer la salle
+            {t('surfaceRoomPanel.deleteRoomButton')}
           </button>
         ) : (
           <div style={S.deleteActions}>
             <button type="button" onClick={() => onDelete(room.id)} style={{ ...S.action, ...S.danger }}>
-              Confirmer la suppression
+              {t('surfaceRoomPanel.confirmDeleteButton')}
             </button>
             <button type="button" onClick={() => setConfirmDelete(false)} style={S.action}>
-              Annuler
+              {t('common.cancelButton')}
             </button>
           </div>
         ))}
