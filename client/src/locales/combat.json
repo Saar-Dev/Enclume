@@ -80,7 +80,10 @@
     "chargeSection": "Charge",
     "destinationSet": "✓ destination",
     "destinationPending": "… destination",
-    "targetPending": "… cible CaC"
+    "targetPending": "… cible CaC",
+    "dualWieldSection": "Combat à deux armes",
+    "dualWieldSimple": "Une arme",
+    "dualWieldDouble": "Deux armes +{{bonus}}"
   },
   "assaultPanel": {
     "noWeapon": "Aucune arme équipée (MG/MD)",
@@ -281,7 +284,6 @@
     "stateTransition": "{{label}} : {{from}} → {{to}}",
     "moveZone": "Déplacement {{zone}}",
     "melee": "Corps à corps",
-    "meleeExtraTargets": "CaC cibles supp.",
     "coverShot": "Tirer depuis couverture",
     "aimedShot": "Tir visé ×{{count}}",
     "observe": "Observer ×{{count}}",

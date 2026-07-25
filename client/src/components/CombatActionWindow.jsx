@@ -125,6 +125,10 @@ export default function CombatActionWindow({
   // selectedMeleeWeaponId (un seul choix radio) : sélectionner l'un remet l'autre à null.
   const [naturalWeapons, setNaturalWeapons]                 = useState([])
   const [selectedMeleeNaturalWeaponId, setSelectedMeleeNaturalWeaponId] = useState(null)
+  // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — miroir isDualWield (Tir), état séparé :
+  // les deux mécaniques sont indépendantes (CaC et Assaut sont mutuellement exclusifs à la
+  // déclaration, mais chacun garde son propre état pour ne pas se réinitialiser l'un l'autre).
+  const [isDualWieldMelee, setIsDualWieldMelee]             = useState(false)
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
   const [iniPopoverOpen, setIniPopoverOpen]                 = useState(false)
 
@@ -243,6 +247,7 @@ export default function CombatActionWindow({
       setSelectedAmmoId(null)
       setMeleePendingTokenIds([])
       setSelectedMeleeWeaponId(undefined)
+      setIsDualWieldMelee(false)
       setInMeleeTargetMode(false)
     }
   }, [rosterEntry?.has_announced])
@@ -421,6 +426,25 @@ export default function CombatActionWindow({
   // Armes de contact en inventaire (tous slots/containers) — pour message d'état
   const hasMeleeInInventory = allInventoryItems.some(item => item.ref_category === 'Arme de contact')
 
+  // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — même utilitaire partagé que le dual-wield
+  // Tir (shared/weaponSlots.js), filtré aux armes de contact plutôt qu'aux armes à feu. hasTwoWeapons
+  // exclut déjà un 2M actif (resolveHandWeapons). L'arme secondaire est celle des deux mains qui ne
+  // correspond pas à l'arme principale sélectionnée — jamais mains nues/arme naturelle (pas de
+  // weaponInvId dans ce cas, condition ci-dessous déjà fausse).
+  const meleeHandWeapons = flattenItemsBySlot(allInventoryItems, ['MG', 'MD', '2M']).filter(item => item.ref_category === 'Arme de contact')
+  const { weaponMg: meleeWeaponMg, weaponMd: meleeWeaponMd, hasTwoWeapons: hasTwoMeleeWeapons } = resolveHandWeapons(meleeHandWeapons)
+  const meleeOffhandWeapon = (hasTwoMeleeWeapons && effectiveMeleeWeaponId)
+    ? (effectiveMeleeWeaponId === meleeWeaponMd?.id ? meleeWeaponMg
+      : effectiveMeleeWeaponId === meleeWeaponMg?.id ? meleeWeaponMd
+      : null)
+    : null
+  const showDualWieldMeleeSection = hasTwoMeleeWeapons && !!meleeOffhandWeapon
+  // Jamais actif hors du contexte où le toggle est visible (Défensif/Retraite/Charge le masquent,
+  // §MeleeCombatPanel.jsx) — sinon une valeur restée true en mémoire s'appliquerait silencieusement
+  // après un changement de mode sans que le joueur ait pu la revoir/désactiver.
+  const effectiveDualWieldMelee = isDualWieldMelee && showDualWieldMeleeSection
+    && !meleeDefensif && decl.combatMode !== 'charge'
+
   // CaC et Tir sont mutuellement exclusifs à la déclaration — une seule « Action de combat » par Tour
   // (LdB « Types d'Actions », docs/PLAN_COMBAT_TIMELINE.md §6sexies point 5 : décidé pendant la
   // conception du Lot B mais jamais câblé — gap qui laissait déclarer les deux, provoquant un plantage
@@ -439,6 +463,7 @@ export default function CombatActionWindow({
     setMeleePendingTokenIds([])
     setMeleeCount(1)
     setSelectedMeleeWeaponId(undefined)
+    setIsDualWieldMelee(false)
     setInMeleeTargetMode(false)
     if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
     dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
@@ -613,6 +638,10 @@ export default function CombatActionWindow({
               targetTokenId: id,
               weaponInvId:   effectiveMeleeWeaponId,
               naturalWeaponCharMutationId: effectiveMeleeNaturalWeaponId,
+              // Combat à deux armes (COM24) — même patron que offhandWeaponInvId/isDualWield du Tir
+              // ci-dessus, jamais fait confiance sans revalidation serveur (socketCombatAnnouncement.js).
+              offhandWeaponInvId: effectiveDualWieldMelee ? (meleeOffhandWeapon?.id ?? null) : null,
+              isDualWield:        effectiveDualWieldMelee,
             }))
           : null,
         reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
@@ -1209,6 +1238,10 @@ export default function CombatActionWindow({
               tokens={tokens}
               onChooseTarget={(i) => handleChooseMeleeTarget(i)}
               showReadyBadge={meleeValid && !meleeDefensif}
+              showDualWieldSection={showDualWieldMeleeSection}
+              isDualWield={isDualWieldMelee}
+              onDualWieldChange={setIsDualWieldMelee}
+              offhandWeaponDisplay={meleeOffhandWeapon ? (meleeOffhandWeapon.custom_name || meleeOffhandWeapon.ref_name || t('actionWindow.weaponNameFallback')) : null}
             />
           </div>
         )}

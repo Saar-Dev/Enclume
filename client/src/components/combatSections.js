@@ -107,10 +107,10 @@ export function calcIniBreakdown(prevStates, nextStates, mapActions, quick, t) {
       value: mapActions.move.ini_mod,
     })
   }
-  if (Array.isArray(mapActions.melee) && mapActions.melee.length > 0) {
-    lines.push({ label: t('iniBreakdown.melee'), value: -3 })
-    if (mapActions.melee.length > 1) lines.push({ label: t('iniBreakdown.meleeExtraTargets'), value: -5 })
-  }
+  // CaC (docs/BUGIDENTIFIE.md INI5, audit Session 176) : comme pour Tir Multi ci-dessous, RAW ne
+  // décrit qu'un seul coût chiffré pour les Attaques multiples — le décalage de phase (-5/-10), déjà
+  // porté par l'échelle de phases côté serveur (computeSeriesPositions). Aucun forfait Initiative de
+  // déclaration ici (l'ancien -3/-5 était un doublon sans base RAW, retiré).
   // mapActions.attack est un array (docs/PLAN_TIRMULTI.md D1) — Tir visé/cover_shot sont mutuellement
   // exclusifs avec Tir Multi (D10), donc jamais présents que sur le seul élément possible quand actifs.
   const singleAttack = Array.isArray(mapActions.attack) ? mapActions.attack[0] : mapActions.attack
@@ -150,7 +150,7 @@ export function calcIniDelta(prevStates, nextStates, mapActions, quick, t) {
 export const MAP_ACTIONS = [
   { k: 'move',     l: 'mapActions.move.label',     tooltip: 'mapActions.move.tooltip',     hint: 'cliquer destination',          isZoneSelect: true, span2: true },
   { k: 'attack',   l: 'mapActions.attack.label',   tooltip: 'mapActions.attack.tooltip',   hint: 'cliquer cible',                requireWeapon: true },
-  { k: 'melee',    l: 'mapActions.melee.label',    tooltip: 'mapActions.melee.tooltip',    hint: 'cliquer adversaire', ini: -3                      },
+  { k: 'melee',    l: 'mapActions.melee.label',    tooltip: 'mapActions.melee.tooltip',    hint: 'cliquer adversaire'                                },
   { k: 'reload',   l: 'mapActions.reload.label',   tooltip: 'mapActions.reload.tooltip',                                                             span2: true          },
   { k: 'interact', l: 'mapActions.interact.label', tooltip: 'mapActions.interact.tooltip', hint: 'sprint suivant',    active: false       },
 ]

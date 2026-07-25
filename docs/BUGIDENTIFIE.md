@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline ; 2026-07-24 (Saar, triage priorisé) — CHOC1 clos (Palier 1 testé en jeu, confirmé Saar) ; Cluster I / DMG1+DMG2 clos (validation fonctionnelle confirmée Saar) ; SURPRISE-ROLL retiré (comportement normal, pas un bug — confirmé Saar) ; SURPRISE1 codé (`is_surprised: false` ajouté au reset `endTurn`, même requête qu'INI4 ; contournement `current_turn === 1` dans `isTargetDefenseless` retiré, devenu redondant), détail `EN_COURS.md`, non testé en jeu ; INI5 clos (audit git blame + relecture RAW p.218-219 : forfait `-3`/`-5` introduit Session 65, 94 sessions avant `computeSeriesPositions`, aucune base RAW — décision Saar : retiré, serveur + client + i18n, détail `EN_COURS.md` item 111, non testé en jeu) ; COM27 analysé en profondeur (flux d'émission tracé en entier, ordre serveur semble garanti correct par construction) mais mis en pause — reproduction non confirmée, décision Saar : attendre une nouvelle occurrence en jeu ; COM24 clos (bonus "deux armes" CaC déconnecté de l'arme déclarée — mécanisme "deux armes" à la déclaration ajouté, miroir exact du dual-wield Tir déjà existant, `shared/weaponSlots.js` réutilisé tel quel, revalidation serveur déclaration+résolution, 7 fichiers, détail `EN_COURS.md` item 112, non testé en jeu), ajout MELEE-INHAND (résiduel, trouvé en cours de route)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -33,8 +33,7 @@
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT1 + I18N-LINT2 + I18N-LINT3 + I18N-DEADCODE1 | divers | Basse |
-| **I — Affichage dégâts drone** | DMG1 + DMG2 | `socketCombatResolution.js` | SR ✅ — validation fonctionnelle requise |
+| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT1 + I18N-LINT2 + I18N-LINT3 + I18N-LINT4 + I18N-DEADCODE1 | divers | Basse |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
@@ -47,72 +46,6 @@
 > 6 dettes étaient citées dans l'audit mais n'avaient pas d'entrée dédiée ici, contrairement à la règle
 > d'hygiène du fichier (« Détail technique de chaque bug → `BUGIDENTIFIE.md` »). `COMPARATIF.md` est
 > archivé vers `docs/Old/` une fois ce triage fait — ne plus le traiter comme registre vivant.
-
-### Dette INI5 — CaC : forfait Initiative de déclaration (-3/-5) potentiellement redondant avec le décalage de phase RAW
-
-**Symptôme** : Aucun cas observé en jeu à ce jour — trouvé en vérifiant le RAW pour
-`docs/PLAN_TIRMULTI.md` (2026-07-19), pas encore instrumenté ni reproduit en jeu.
-
-**Règle** : RAW p.218-219 (`docs/REGLES/REGLESYSCOMBAT.md:604-618`, « Effectuer plusieurs Attaques par
-Tour ») ne décrit qu'**un seul** coût chiffré pour les Attaques multiples : le décalage de phase de -5
-Initiative par attaque supplémentaire (« Deuxième Action : Initiative -5, Troisième Action :
-Initiative -10 »). Aucun forfait d'engagement ni malus de déclaration distinct n'est mentionné dans ce
-paragraphe.
-
-**Code impliqué** : `server/src/socket/socketCombatAnnouncement.js:305-308` — à la déclaration d'un
-CaC, `iniDelta += -3` s'applique systématiquement dès qu'une attaque CaC est déclarée, puis
-`iniDelta += -5` supplémentaire si `mapActions.melee.length > 1` (2 ET 3 attaques payent le même -5
-fixe). Ce coût réduit directement `combat_roster.initiative` (donc décale la position du personnage
-sur toute l'échelle), **en plus** du décalage de phase déjà appliqué séparément par
-`computeSeriesPositions` (`server/src/socket/socketCombatHelpers.js:207-209`, -500/attaque à l'échelle
-×100 = -5/-10 RAW) au moment de `buildTimelineEntries`.
-
-**Cause racine [HYPOTHÈSE]** : lecture de code uniquement, non instrumentée. Deux hypothèses à
-départager avant tout correctif :
-1. Le `-3` est un forfait « engagement CaC » générique, indépendant des Attaques multiples (règle
-   maison sans lien avec le RAW cité) — dans ce cas seul le `-5` additionnel (si `length > 1`) serait le
-   doublon suspect.
-2. Le `-3` et le `-5` modélisaient tous deux, avant la refonte de l'échelle de phases (session 159), le
-   coût RAW « à la main » via `combat_roster.initiative` — devenus redondants depuis que
-   `computeSeriesPositions` calcule le vrai décalage RAW au niveau de l'échelle elle-même, ce qui
-   pénaliserait aujourd'hui un CaC multi-attaque deux fois pour le même effet.
-
-**Trouvé pendant** : vérification RAW pour `docs/PLAN_TIRMULTI.md` §4 D3 (2026-07-19) — en évaluant si
-Tir Multi devait payer un forfait Initiative équivalent au CaC, constat que le seul coût RAW chiffré
-(le décalage de phase) est déjà couvert par l'architecture de l'échelle, ce qui a fait remonter la
-question du forfait CaC existant.
-
-**Prochaine étape** : **audit demandé par Saar (2026-07-19)** — reconstituer l'historique de ce `-3`/`-5`
-(git blame, `docs/JOURNAL6.md`/journaux archivés, avant/après la refonte session 159) pour établir s'il
-a été conçu comme un forfait CaC indépendant du RAW p.218, ou comme une modélisation aujourd'hui
-redondante du même décalage de phase, avant de décider de le retirer, le garder ou le redéfinir. Ne pas
-coder tant que l'audit n'a pas tranché — dette indépendante du chantier Tir Multi en cours, traitée
-séparément (`CLAUDE.md` §13, un plan = un problème).
-
----
-
-### Dette SURPRISE1 — `combat_roster.is_surprised` jamais remis à `false`
-
-**Symptôme** : Aucun cas observé en jeu signalé — trouvé en instrumentant DEF5 (2026-07-19).
-
-**Règle** : `docs/REGLES/REGLESYSCOMBAT.md:184-188` — la surprise ne s'applique qu'au premier Tour de
-combat ; au Tour suivant, le personnage "retrouve son score d'Initiative habituel".
-
-**Code impliqué** : `is_surprised` écrit une seule fois à `COMBAT_START` (`socketCombatState.js:96-107`),
-jamais réinitialisé ensuite (`endTurn` ne le touche pas non plus).
-
-**Cause racine [VÉRIFIÉ]** : grep confirmé, aucun `UPDATE ... is_surprised = false` nulle part dans le
-code.
-
-**Contournement en place** : `isTargetDefenseless` (DEF5, `socketCombatHelpers.js`) ne consomme
-`is_surprised` que si `combat_state.current_turn === 1`, pour ne pas hériter de ce flag jamais remis
-à zéro. N'importe quel autre futur consommateur du flag devra appliquer le même garde tant que ce
-correctif n'est pas fait.
-
-**Prochaine étape** : correctif isolé — ajouter `is_surprised: false` au reset déjà fait dans `endTurn`
-(même requête que le correctif INI4).
-
----
 
 ### Dette COUVERTURE_TOTALE — « Couverture totale » (tir) n'existe nulle part, client ni serveur
 
@@ -253,27 +186,6 @@ câblage lui-même est mécanique et court une fois ces décisions prises.
 `resolveModHooks(installedMods, 'onCalculateModifiers', context)` (injecter dans `totalModComp`) —
 même point d'insertion que Groupe 1/2 (`socketCombatHelpers.js:2500-2502`), additif, sans toucher au
 calcul Groupe 1/2 existant (Phase 2 reste différée, Strangler Fig).
-
----
-
-### Dette CHOC1 — Choc étourdissant de l'arme (`ref_equipment.shock`) jamais lu en résolution
-
-**Symptôme** : Aucun cas observé en jeu — remis à plat en profondeur Session 166 (Saar), l'axe initial
-"tir marche, CaC non" était inexact.
-
-**Vrai axe du problème [VÉRIFIÉ]** : le Choc porté par une **munition** (`ammo_effects` DSL) fonctionne
-(tir uniquement, Lot B Session 152). Le Choc porté par **l'arme elle-même** (`ref_equipment.shock`,
-migration 48) n'est lu par aucun chemin de résolution — ni CaC, ni tir (des armes à distance comme
-Flex/Fusil choc Stun portent leur Choc sur l'arme, pas une munition — leur Choc est donc déjà cassé en
-tir aussi). `ref_shock` est fetché dans 5 requêtes (`char-sheet.js`, `inventoryService.js`) mais jamais
-réutilisé après — mort pour la résolution, vivant seulement pour l'affichage inventaire.
-
-**Détail complet, inventaire catalogue vérifié (18 armes réelles + mutation Corne), sources RAW, scope
-et statut d'implémentation** : `docs/PLAN_CHOC1.md` — ne pas dupliquer ici, ce plan est la référence.
-
-**Statut (2026-07-22)** : scope tranché GO par Saar, Palier 1 codé (migration 190, `damageService.js`,
-`socketCombatHelpers.js` — détail `docs/JOURNALTEMP.md` Étape 11). **Prochaine étape** : test en jeu
-par Saar avant clôture définitive de cette dette.
 
 ---
 
@@ -450,6 +362,28 @@ similaires dans les autres fichiers Combat) sans changer le comportement visible
 
 ---
 
+### Dette I18N-LINT4 — `handleDragEnd` référencé avant déclaration dans `DicePanel.jsx`
+
+**Symptôme** : Aucun cas observé en jeu — trouvé par ESLint (`react-hooks/immutability`) en retouchant
+`DicePanel.jsx` pour le chantier i18n (`docs/PLAN_LOCALISATION.md` Lot 4, 2026-07-25), sans rapport
+avec le texte en dur. `git show HEAD` confirme que le code incriminé est identique avant toute
+modification de ce chantier — dette entièrement préexistante.
+
+**Code impliqué** : `client/src/components/DicePanel.jsx:331-335` — `handleDragEnd` (un `useCallback`)
+retire son propre listener `pointerup` en le référençant dans son propre corps avant que la déclaration
+`const handleDragEnd = ...` soit complète ; fonctionne à l'exécution (la closure capture la référence
+à l'appel, pas à la déclaration) mais viole l'ordre de déclaration attendu par la règle.
+
+**Cause racine [HYPOTHÈSE]** : détection ESLint statique uniquement, non instrumentée ni reproduite en
+jeu. Pattern probablement copié tel quel dans d'autres gestionnaires de drag du projet — à vérifier
+avant correctif pour éviter une régression isolée qui laisserait les autres occurrences incohérentes.
+
+**Prochaine étape** : pas de symptôme observé, priorité basse — corriger en réordonnant
+`handleDragEnd`/`handleDragMove` ou en passant par une `ref` stable, même patron que
+`CombatActionWindow.jsx` si un précédent existe déjà.
+
+---
+
 ### Dette I18N-LINT1 — Hook `useRef` appelé conditionnellement dans `CombatGmDeclareWindow.jsx`
 
 **Symptôme** : Aucun cas observé en jeu — trouvé par ESLint (`react-hooks/rules-of-hooks`) en
@@ -562,38 +496,24 @@ dans `calcAllures`/`getCharacterMovementBudget` — session dédiée, hors scope
 ---
 
 
-### Bug COM24 — Bonus "deux armes" (+3 CaC) déconnecté de l'arme réellement déclarée
+### Dette MELEE-INHAND — Arme principale CaC jamais vérifiée "en main" à la résolution
 
-**Symptôme** : Aucun cas observé en jeu à ce jour — gap trouvé par lecture de code lors d'un run à
-vide (pas encore rencontré en pratique). Un personnage possédant deux armes de contact équipées en
-slots MD/MG obtiendrait le bonus "deux armes" (+3 au Test de combat au contact) même sur une attaque
-où il choisit explicitement de combattre "Mains nues" ou avec une seule des deux armes.
+**Symptôme** : Aucun cas observé en jeu — trouvé en codant COM24 (Session 176), en écrivant la
+revalidation de l'arme secondaire (en-main, catégorie, propriétaire) pour le bonus "deux armes".
 
-**Règle** : LdB "Se battre avec deux armes" (`docs/REGLES/REGLESYSCOMBAT.md`) — le bonus suppose que
-le personnage combat effectivement avec une arme dans chaque main pour cette attaque, pas seulement
-qu'il en possède deux d'équipées.
+**Contexte** : contrairement au Tir (`fetchHandWeaponForAssault` vérifie `inHand` explicitement,
+déclaration ET résolution), `resolveMeleeAction` (`socketCombatHelpers.js`) fetch l'arme **principale**
+(`weaponInvId`) uniquement par id dans `char_inventory`, sans jamais vérifier `char_inventory_slots`
+(en main MG/MD/2M). Un item transféré hors des mains entre Déclaration et Résolution (fenêtre étroite)
+resterait utilisable pour l'attaque CaC.
 
-**Code impliqué** : `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction`, calcul de
-`deuxArmesSlots`/`deuxArmesBonus` (~ligne 443-444).
+**Décision (Session 176)** : ne pas corriger dans le cadre de COM24 — appliquer cette rigueur
+uniquement à l'arme secondaire (donnée nouvellement introduite, aucun risque de rétrocompatibilité)
+sans toucher à la validation existante de l'arme principale (la durcir pourrait rejeter des
+déclarations aujourd'hui acceptées, changement de comportement non demandé).
 
-**Cause racine [HYPOTHÈSE]** : `deuxArmesSlots` filtre uniquement l'inventaire du personnage (slots
-MD/MG + `ref_category === 'Arme de contact'`), sans jamais croiser `weaponInvId` (l'arme
-effectivement sélectionnée pour l'attaque en cours) ni vérifier que l'attaque utilise réellement les
-deux mains. Non instrumenté — lecture de code uniquement.
-
-**Trouvé pendant** : run à vide du Lot 4 `docs/PLAN_MUTATION2.md` (armes naturelles), en vérifiant
-que les armes naturelles ne bénéficient pas indûment de ce bonus (elles ne sont pas dans
-`char_inventory`, donc exclues par construction) — le bonus s'est avéré déjà découplé de la
-sélection réelle pour **toute** arme, pas seulement les naturelles. Pas introduit par le Lot 4.
-
-**[DBG-COM24] suggestion** :
-```js
-console.log('[DBG-COM24]', { weaponInvId, deuxArmesSlots: deuxArmesSlots.map(s => s.slot), deuxArmesBonus })
-```
-
-**Prochaine étape** : instrumenter avant tout correctif — reproduire en jeu réel (personnage avec
-deux épées équipées, déclarer une attaque "Mains nues", vérifier si +3 s'applique quand même) pour
-confirmer l'hypothèse avant de coder.
+**Prochaine étape** : session dédiée — même patron que `fetchHandWeaponForAssault`, à appliquer à
+l'arme principale CaC si jugé prioritaire.
 
 ---
 
@@ -634,14 +554,36 @@ avant le jet d'attaque, alors que l'ordre attendu est attaque puis défense.
 `COMBAT_MELEE_DEFENSE_CONFIRM` (`socketCombatResolution.js`, jet `rollDefense` ~ligne 579) — le code
 lu semble donc déjà conforme à l'ordre attendu.
 
-**Cause racine [INCONNU]** : pas encore investigué en instrumentant — lecture seule, contradictoire
-avec le symptôme rapporté. Pistes à vérifier : ordre d'affichage dans le chat (Sidebar) vs ordre réel
-d'émission serveur ; scénario précis testé par Saar (nombre de défenseurs PJ, qui contrôlait quel
-personnage) non capturé en détail.
+**Cause racine [INCONNU]** : pas encore investigué en instrumentant. Analyse de code approfondie
+Session 176 (Saar re-signale le symptôme sans détail de scénario supplémentaire) — trace complète du
+flux d'émission :
+- `resolveMeleeAction` pousse le jet d'attaque dans un tableau `emissions` (`socketCombatHelpers.js:1464`),
+  non envoyé immédiatement.
+- Défenseur PJ : insertion `combat_pending` + `setFSMSubPhase(..., 'AWAITING_DEFENSE')` +
+  `broadcastCurrentSubPhase` (`:1812-1813`, **émission directe** `COMBAT_TIMELINE_UPDATED`, avant que
+  `emissions` ne soit vidé), puis `COMBAT_MELEE_DEFENSE_PROMPT` poussé dans le même tableau `emissions`
+  après l'attaque (`:1826`).
+- `flushEmissions` (`socketCombatResolution.js:25`) vide ce tableau dans un `for` synchrone : attaque
+  puis prompt, ordre préservé par Socket.IO. Le défenseur ne peut pas cliquer "Défendre" avant d'avoir
+  reçu le prompt (contient `rollAttaque`/`chancesAttaque`) — son jet ne peut donc pas partir avant
+  l'attaque par ce chemin.
+- Multi-cibles (CaC multiple sur 2 défenseurs) : chaque cible = une entrée d'échelle séparée, résolue
+  une à la fois par `advanceTimeline`/`pickNextTimelineStep` (FSM `SLOT_ACTIVE`/`AWAITING_DEFENSE`/
+  `AWAITING_DAMAGE` strictement serialisé) — la 2ᵉ attaque ne démarre qu'une fois l'échange complet
+  avec la 1ʳᵉ cible terminé. Pas de parallélisme trouvé dans ce chemin.
+- **Point d'attention non tranché** : `broadcastCurrentSubPhase` émet `COMBAT_TIMELINE_UPDATED`
+  directement, avant le flush du jet d'attaque — si un composant client réagit à ce changement de
+  `subPhase` indépendamment du jet d'attaque, ça pourrait créer une fenêtre. Composant responsable pas
+  encore identifié côté client (`CombatOverlay.jsx`/`CombatActionWindow.jsx` à tracer).
 
-**Prochaine étape** : reproduire avec la séquence exacte de Saar, instrumenter `[DBG-COM27]` sur les
-points d'émission `DICE_RESULT` (attaque vs défense) pour confirmer l'ordre réel serveur avant de
-soupçonner un problème d'affichage client.
+**Mis en pause (2026-07-24, décision Saar)** : reproduction non confirmée aujourd'hui, symptôme
+resignalé sans nouveau détail de scénario. On attend une nouvelle occurrence en jeu avant de continuer
+— ne pas coder sur la base du code lu seul, contradictoire avec le symptôme.
+
+**Prochaine étape** : si le symptôme se reproduit, capturer précisément : nombre de défenseurs,
+inversion entre attaque/défense du même échange vs entre deux échanges différents, qui contrôlait quel
+personnage. Puis instrumenter `[DBG-COM27]` horodaté aux 3 points d'émission (attaque, changement de
+sous-état, défense) avant tout correctif.
 
 ---
 
@@ -862,14 +804,3 @@ Code impliqué : client/src/components/VoxelBuilderTab.jsx (ou composant d’éd
 Cause racine [INCONNU] : Non investigué.
 
 Prochaine étape : Identifier le composant responsable de l’édition de voxels, vérifier si la fonctionnalité est seulement masquée ou jamais construite.
-Bug SURPRISE‑ROLL — roll=1 → initiative=1, sémantique PJ surpris à revoir
-
-Symptôme : Lorsqu’un PJ obtient un 1 sur son jet de surprise, son initiative est fixée à 1, ce qui le fait agir en dernier au lieu de « surpris et ne pouvant agir ». La règle de surprise devrait l’empêcher d’agir au premier tour.
-
-Règle : docs/REGLES/REGLESYSCOMBAT.md — Surprise. Un personnage surpris ne peut agir au premier tour.
-
-Code impliqué : server/src/socket/socketCombatState.js — COMBAT_START, calcul de l’initiative pour les surpris.
-
-Cause racine [INCONNU] : Non investigué. Soit le code confond « surpris » et « initiative minimale », soit le calcul de l’initiative écrase le flag is_surprised.
-
-Prochaine étape : Instrumenter COMBAT_START pour observer is_surprised et initiative sur un jet de surprise = 1. Vérifier si la FSM interdit bien toute action aux surpris.

@@ -209,6 +209,9 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
           // (Bouclier) — Session 158, shock ajouté pour CHOC1 (Dague neurale jamais détectée sinon).
           'ref_equipment.damage_h as ref_damage_h',
           'ref_equipment.shock as ref_shock',
+          // COM24 (docs/BUGIDENTIFIE.md) — nécessaire pour distinguer côté MJ "deux armes de contact
+          // en main" d'une arme de contact + une arme à distance (bonus "deux armes" CaC).
+          'ref_equipment.category as ref_category',
           'char_inventory.ammo_remaining', 'ref_equipment.ammo_count as ref_ammo_count', 'ref_equipment.caliber as ref_caliber',
           // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — même sous-requête que
           // inventoryService.getInventory (fenêtre PJ), fenêtre MJ batchée par token (pas de N+1).

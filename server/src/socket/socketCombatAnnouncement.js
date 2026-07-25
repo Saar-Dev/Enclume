@@ -394,10 +394,6 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
         const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
         if (movementDeclaration) iniDelta += freeMove ? 0 : movementDeclaration.initiativeModifier
-        if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
-          iniDelta += -3
-          if (mapActions.melee.length > 1) iniDelta += -5
-        }
         // Tir visé — validé/recalculé serveur, jamais confiance au client. isAimEligible bloque
         // déjà toute combinaison avec le CaC ou une transition d'état (règle "aucune autre action
         // ce tour", isExclusiveDeclaration/shared/combatExclusiveActions.js reste disponible pour
@@ -482,8 +478,45 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // Phase 1 : intention enregistrée sans validation distance (vérifiée en Phase 2)
-      // mapActions.melee est un array : [{ targetTokenId, weaponInvId?, droneWeaponInvId? }, ...]
-      if (Array.isArray(mapActions?.melee)) {
+      // mapActions.melee est un array : [{ targetTokenId, weaponInvId?, droneWeaponInvId?,
+      // offhandWeaponInvId?, isDualWield? }, ...]
+      if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
+        const firstMelee = mapActions.melee[0]
+        // D-CAC1 (miroir D9 Tir Multi) — même arme(s)/mode deux-armes pour toute la série : le
+        // personnage ne change pas d'arme en main entre ses attaques du même Tour.
+        const sameLoadoutAcrossSeries = mapActions.melee.every(m => (
+          m.weaponInvId === firstMelee.weaponInvId &&
+          m.droneWeaponInvId === firstMelee.droneWeaponInvId &&
+          (m.offhandWeaponInvId ?? null) === (firstMelee.offhandWeaponInvId ?? null) &&
+          !!m.isDualWield === !!firstMelee.isDualWield
+        ))
+        if (mapActions.melee.length > 1 && !sameLoadoutAcrossSeries) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'CaC multiple : même arme(s) pour toute la série' })
+          return
+        }
+
+        // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — revalidé serveur, jamais fait confiance
+        // au payload client (`core.md`). Dégradation silencieuse si invalide (arme secondaire
+        // introuvable, pas en main, mauvaise catégorie, identique à la principale) — jamais de
+        // blocage de l'attaque principale pour ça, même philosophie que le dual-wield Tir
+        // (shared/dualWieldRules.js, COM29).
+        let validatedOffhandWeaponInvId = null
+        if (!isDrone && firstMelee.isDualWield && firstMelee.weaponInvId && firstMelee.offhandWeaponInvId
+            && firstMelee.offhandWeaponInvId !== firstMelee.weaponInvId) {
+          const offhandWeapon = await db('char_inventory')
+            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+            .where({ 'char_inventory.id': firstMelee.offhandWeaponInvId, 'char_inventory.character_id': character.id })
+            .select('ref_equipment.category as ref_category')
+            .first()
+          const offhandInHand = offhandWeapon && await db('char_inventory_slots')
+            .where({ char_inventory_id: firstMelee.offhandWeaponInvId })
+            .whereIn('slot_code', ['MG', 'MD'])
+            .first()
+          if (offhandWeapon?.ref_category === 'Arme de contact' && offhandInHand) {
+            validatedOffhandWeaponInvId = firstMelee.offhandWeaponInvId
+          }
+        }
+
         for (const {
           targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId, droneWeaponInvId: meleeDroneWeaponId,
           naturalWeaponCharMutationId: meleeNaturalWeaponId,
@@ -493,6 +526,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
               campaign_id: campaignId, token_id: tokenId,
               action_key: 'melee', type: 'melee', sequence: 3,
               weapon_inv_id:       meleeDroneWeaponId ? null : (meleeWeaponId ?? null),
+              offhand_weapon_inv_id: meleeDroneWeaponId ? null : validatedOffhandWeaponInvId,
               drone_weapon_inv_id: meleeDroneWeaponId ?? null,
               // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Un drone n'a
               // pas de mutations, toujours null dans cette branche (même garde que weapon_inv_id).

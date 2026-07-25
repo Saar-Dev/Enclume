@@ -1060,6 +1060,7 @@ export async function endTurn(io, campaignId, pendingMaps) {
         state_vitesse:     'normal',
         state_combat_mode: 'normal',
         initiative:        db.raw('base_ini'),
+        is_surprised:      false,
         updated_at:        db.fn.now(),
       })
 
@@ -1176,9 +1177,8 @@ export function countAdversaires(tokenPos, rosterTokens, excludeId, enemyType, m
 // - Signaux retenus : token_statuses unconscious/blinded/stunned (gaté par status_effects_mode
 //   'enforced', même garde que le stun guard COMBAT_ACTION_DECLARE) + combat_roster.is_surprised
 //   (Test de Réaction raté à COMBAT_START — existe déjà, sert seulement à l'Initiative aujourd'hui).
-// - `is_surprised` n'est jamais remis à false après COMBAT_START (dette distincte, non corrigée ici) —
-//   scopé à `current_turn === 1` pour rester fidèle au RAW (la surprise ne dure qu'un Tour) sans
-//   dépendre d'un reset qui n'existe pas.
+//   `is_surprised` est remis à false par endTurn() (SURPRISE1) — la surprise ne dure donc qu'un Tour
+//   sans garde supplémentaire ici.
 // - WNDMORT (2026-07-19) : une Blessure mortelle interdit aussi tout Test, donc tout jet de défense
 //   actif — même effet que sans défense, ajouté ici plutôt que dans un second mécanisme parallèle.
 export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
@@ -1192,10 +1192,7 @@ export async function isTargetDefenseless(campaignId, targetTokenId, settings) {
   const targetRoster = await db('combat_roster')
     .where({ campaign_id: campaignId, token_id: targetTokenId })
     .select('is_surprised').first()
-  if (targetRoster?.is_surprised) {
-    const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-    if ((state?.current_turn ?? 1) === 1) return true
-  }
+  if (targetRoster?.is_surprised) return true
   const targetToken = await db('tokens').where({ id: targetTokenId }).select('character_id').first()
   if (targetToken?.character_id) {
     const sheet = await db('char_sheet').where({ character_id: targetToken.character_id }).first()
@@ -1308,19 +1305,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
       db('ref_skills').where({ id: skillId }).first(),
       db('character_wounds').where({ char_sheet_id: sheetAttaquant.id }),
-      // in_hand_slot (Lot B, docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une
-      // égalité stricte sur char_inventory.slot — un item à slot composite (armure multi-localisation,
-      // futur bouclier) occupant MG/MD reste détecté, contrairement à l'ancienne comparaison exacte.
       db('char_inventory')
         .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
         .where({ 'char_inventory.character_id': character.id })
         .select('char_inventory.container', 'char_inventory.quantity',
-                'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
-                'ref_equipment.category as ref_category',
-                db.raw(`EXISTS (
-                  SELECT 1 FROM char_inventory_slots cis
-                  WHERE cis.char_inventory_id = char_inventory.id AND cis.slot_code IN ('MG', 'MD')
-                ) as in_hand_slot`)),
+                'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str'),
       // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
       // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
       db('tokens as t')
@@ -1410,9 +1399,28 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // computeMultiAttackMalus, docs/PLAN_TIRMULTI.md).
     const { malus: multiAttackMalus } = await computeMultiAttackMalus(action.id)
 
+    // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — revalidé à la résolution, jamais une
+    // confiance aveugle dans `action.offhand_weapon_inv_id` stocké à la Déclaration (même principe
+    // que le reste de cette fonction : l'arme principale, l'allonge, etc. sont toutes refetchées ici).
+    // RAW (`REGLESYSCOMBAT.md:1044-1051`) : bonus lié au fait de combattre réellement avec les deux
+    // armes pour cette attaque, jamais au seul fait d'en avoir deux équipées (COM24) — contrairement à
+    // l'ancien scan d'inventaire, ne s'applique plus en mains nues/arme naturelle avec 2 armes rangées.
+    let deuxArmesBonus = 0
+    if (action.offhand_weapon_inv_id && action.offhand_weapon_inv_id !== weaponInvId) {
+      const offhandWeapon = await db('char_inventory')
+        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where({ 'char_inventory.id': action.offhand_weapon_inv_id, 'char_inventory.character_id': character.id })
+        .select('ref_equipment.category as ref_category')
+        .first()
+      const offhandInHand = offhandWeapon && await db('char_inventory_slots')
+        .where({ char_inventory_id: action.offhand_weapon_inv_id })
+        .whereIn('slot_code', ['MG', 'MD'])
+        .first()
+      if (offhandWeapon?.ref_category === 'Arme de contact' && offhandInHand) {
+        deuxArmesBonus = 3
+      }
+    }
     // Mods situation CaC (§6.2)
-    const deuxArmesSlots = invAttaquant.filter(i => i.in_hand_slot && i.ref_category === 'Arme de contact')
-    const deuxArmesBonus = deuxArmesSlots.length >= 2 ? 3 : 0
     const footingRequiresBalance = measurement.sourceEffectRegions.some(region => (
       region.hooks.some(hook => (
         hook.event === 'traverse' && hook.type === 'test' && hook.testKey === 'balance'

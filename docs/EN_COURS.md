@@ -57,7 +57,13 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-> Dernière mise à jour (dev/Saar) : 2026-07-23 — Session 172 : `docs/PLAN_WIZARDCOLLAB.md` Lots
+> Dernière mise à jour (dev/Saar) : 2026-07-24 — Session 176 : triage priorisé `ROADMAP.md`/
+> `BUGIDENTIFIE.md` — CHOC1 (item 109) et Cluster I (DMG1/DMG2) clos, testés en jeu et confirmés par
+> Saar ; SURPRISE1 (item 110) codé, non testé en jeu ; SURPRISE-ROLL retiré (comportement normal,
+> confirmé Saar) ; INI5 (item 111) audit tranché par Saar (« pas RAW, ça dégage »), forfait Initiative
+> CaC retiré ; COM27 analysé en profondeur, mis en pause (reproduction non confirmée) ; COM24
+> (item 112) codé — mécanisme "combat à deux armes" CaC complet, miroir du dual-wield Tir existant,
+> ajout dette MELEE-INHAND (résiduelle) ; 2026-07-23 — Session 172 : `docs/PLAN_WIZARDCOLLAB.md` Lots
 > A1+A2+A3 (fondation serveur verrous, client, état existant + Step4 + câblage MJ) — codés au complet,
 > premiers correctifs UI confirmés par Saar en navigateur réel, scénario collaboratif à 2 sessions
 > encore à valider, migrations 201/203 à appliquer (voir verrou ci-dessous) ; Session 156 :
@@ -341,21 +347,101 @@ non câblée — 4 dettes résiduelles notées `docs/BUGIDENTIFIE.md` (`MODING4-
 `MODING4-PROJECTEUR`, `MODING4-INTEGRATION`), décisions produit + câblage restants, pas un chantier actif.
 Phase 2 (migration Groupe 1/2 déjà livré) toujours différée (Strangler Fig).
 
-🔒 En cours (Claude) : Palier 1 `CHOC1` — **codé et vérifié par scripts isolés (2026-07-22), en
-attente du test en jeu par Saar** (Saar ne peut pas concevoir ce test lui-même — vérification poussée
-côté Claude en compensation, y compris la réduction d'armure réelle via une transaction jamais
-commitée). Migration 190 (`ref_equipment.shock_mechanism`/`shock_reduced_by_armor`,
-`ref_mutations.natural_weapon_choc_formula`), producteurs `damageService.js` (`getEffectiveWeaponDamage`/
-`getEffectiveMeleeDamage`) + `resolveTargetHit` (gate Tête + réduction d'armure) + câblage CaC
-`socketCombatHelpers.js` (4 call sites, jamais fait jusqu'ici). Détail complet, Testé/Non testé :
-`docs/JOURNALTEMP.md` Étape 11. 18 armes catalogue + mutation Corne câblées ; Lance-flammes/armes de
-zone/4 armes `damage_h` tronqué explicitement exclues (voir plan). **Découverte séparée** :
-`protection_shock` NULL sur 100% du catalogue — réduction d'armure câblée/vérifiée mais sans effet
-observable tant qu'aucune armure n'a de valeur réelle (dette de donnée distincte, hors scope). Reste
-non testable hors jeu : mutation Corne en situation de Saisie réelle, Localisation précise (COM9).
-Verrou retiré au commit de clôture, une fois Saar confirmé. Refonte CaC (`docs/PLAN_REFONTECAC.md`,
-verrou levé) reste différée, non concurrente sur les mêmes fichiers tant que ce chantier est actif —
-cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité `08eed26`.
+> **Item 109 (Session 176, dev/Saar) — Palier 1 `CHOC1` (Choc porté par l'arme, `ref_equipment.shock`)
+> ✅ CODÉ ET TESTÉ EN JEU, CONFIRMÉ FONCTIONNEL PAR SAAR.** Migration 190
+> (`ref_equipment.shock_mechanism`/`shock_reduced_by_armor`, `ref_mutations.natural_weapon_choc_formula`),
+> producteurs `damageService.js` (`getEffectiveWeaponDamage`/`getEffectiveMeleeDamage`) +
+> `resolveTargetHit` (gate Tête + réduction d'armure) + câblage CaC `socketCombatHelpers.js` (4 call
+> sites). Détail complet : `docs/JOURNALTEMP.md` Étape 11. 18 armes catalogue + mutation Corne câblées ;
+> Lance-flammes/armes de zone/4 armes `damage_h` tronqué explicitement exclues (voir
+> `docs/PLAN_CHOC1.md`). **Découverte séparée non corrigée ici** : `protection_shock` NULL sur 100% du
+> catalogue — réduction d'armure câblée/vérifiée mais sans effet observable tant qu'aucune armure n'a
+> de valeur réelle (dette de donnée distincte, hors scope). **Testé** : en jeu par Saar (confirmé
+> 2026-07-24). **Non testé** : mutation Corne en situation de Saisie réelle, Localisation précise
+> (COM9). Cluster combat déjà clos : INI4 ✅, MELEE-MR ✅, DEF5 ✅, TIRIMP ✅, WNDMORT ✅ — commité
+> `08eed26`. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos, hygiène du registre).
+
+> **Item 110 (Session 176, dev/Saar) — Dette `SURPRISE1` : `is_surprised` jamais remis à `false` après
+> `COMBAT_START` ✅ CODÉ.** Trouvé en instrumentant DEF5 (Session 166). **Corrigé** :
+> `is_surprised: false` ajouté à la même requête `UPDATE combat_roster` déjà présente en tête
+> d'`endTurn` (`socketCombatHelpers.js`) — même pattern que le correctif INI4 (`initiative:
+> db.raw('base_ini')`), aucune requête supplémentaire. **Nettoyage associé (même invariant, même
+> fichier)** : le contournement `current_turn === 1` dans `isTargetDefenseless` (ajouté avec DEF5
+> justement parce que `is_surprised` n'était jamais remis à zéro) est devenu redondant — retiré, le
+> commentaire mis à jour pour référencer ce correctif au lieu de documenter une dette qui n'existe
+> plus. **Testé** : `node --check` propre sur `socketCombatHelpers.js`. **Non testé** : aucune
+> connexion PostgreSQL disponible ici — scénario réel (personnage surpris Tour 1, vérifier qu'il
+> redevient une cible normale — non « sans défense » — dès le Tour 2) à la charge de Saar en
+> navigateur. **Données** : aucune migration. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos,
+> hygiène du registre). **Écart trouvé et retiré du registre en même temps (hors scope, sans rapport)** :
+> `SURPRISE-ROLL` (`docs/BUGIDENTIFIE.md`) décrivait roll=1 → initiative=1 comme un bug — confirmé par
+> Saar comme comportement normal, retiré sans code.
+
+> **Item 111 (Session 176, dev/Saar) — Dette `INI5` : forfait Initiative CaC (-3/-5) sans base RAW,
+> doublon avec le décalage de phase ✅ CODÉ (audit tranché par Saar).** Audit git demandé Session
+> 165 : `git log -S "iniDelta += -3"` situe l'introduction à la Session 65 (`19a5ea2`, 26/05/2026,
+> système générique de coût de déclaration `MAP_ACTIONS`), **94 sessions avant** `computeSeriesPositions`
+> (Session 159, `ccac5a5`) — aucune des deux docs de l'époque (`JOURNAL3.md`, `SYSTEME/COMBAT.md`) ne
+> cite de référence RAW pour ce `-3`/`-5`, contrairement au reste du même commit. RAW p.218-219 relu
+> intégralement (`REGLESYSCOMBAT.md:604-618`) : la règle "Attaques multiples" ne décrit que 2 coûts
+> (malus de Test -5/-7, déjà `computeMultiAttackMalus` ; décalage de phase -5/-10, déjà
+> `computeSeriesPositions`) — aucun troisième forfait. **Trouvé en traçant le flux jusqu'au bout** :
+> `computeSeriesPositions` prend `combat_roster.initiative` comme base (`socketCombatHelpers.js:262`)
+> — précisément la colonne déjà amputée du `-3`/`-5` à la déclaration. Un CaC 2 attaques payait donc
+> trois fois la même règle : `-3`/`-5` non-RAW dans `initiative`, puis le décalage de phase RAW
+> par-dessus cette base déjà réduite, puis le malus de Test RAW. Décision Saar : « Simple : on suit les
+> règles RAW. Pas pertinent selon les règles, ça dégage. » **Corrigé** : bloc `iniDelta += -3` / `+= -5`
+> retiré de `socketCombatAnnouncement.js` (déclaration serveur) ; miroir client retiré de
+> `combatSections.js` (`calcIniBreakdown` + `MAP_ACTIONS.melee.ini`, affichage indicatif) ; clé i18n
+> `iniBreakdown.meleeExtraTargets` devenue orpheline supprimée de `combat.json` (`iniBreakdown.melee`
+> conservée — réutilisée comme simple titre de section dans `CombatResultPanels.jsx`, sans rapport).
+> Scope confirmé strictement CaC — Tir Multi (Session 165) avait déjà exclu ce forfait par le même
+> raisonnement RAW (`combatSections.js`, commentaire D3 préexistant). **Testé** : `node --check` sur
+> les fichiers serveur, `npx vite build` propre, JSON `combat.json` validé. **Non testé** : aucune
+> connexion PostgreSQL disponible ici — scénario réel (CaC 1/2/3 attaques, comparer l'ordre d'annonce
+> et de résolution avant/après) à la charge de Saar en navigateur. **Données** : aucune migration.
+> Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos, hygiène du registre).
+
+> **Item 112 (Session 176, dev/Saar) — Bug `COM24` : bonus "deux armes" (+3 CaC) déconnecté de l'arme
+> réellement déclarée ✅ CODÉ.** Analyse de code initiale insuffisante (scan d'inventaire brut, sans
+> croiser l'arme réellement sélectionnée) — Saar a fait le lien avec le mécanisme "Type de tir : Simple
+> ou Double +3" déjà existant côté Tir (`AssaultRangedPanel.jsx`, `isDualWield`/`offhandWeaponInvId`,
+> COM29) et a demandé la même chose côté CaC plutôt qu'un correctif partiel. Tracé intégralement avant
+> code : RAW CaC (`REGLESYSCOMBAT.md:1044-1051`, bonus simple, pas de variante "2 cibles" contrairement
+> au Tir) ; `shared/weaponSlots.js::resolveHandWeapons`/`flattenItemsBySlot` déjà génériques (pas
+> spécifiques au tir), réutilisés tels quels ; `combat_actions.offhand_weapon_inv_id` (migration 176)
+> déjà générique, aucune nouvelle migration. **Codé (7 fichiers)** :
+> - `server/src/routes/battlemaps.js` — ajout `ref_category` au SELECT `/combat-equipment` (nécessaire
+>   au MJ pour distinguer main armée de contact vs à distance).
+> - `client/src/components/MeleeCombatPanel.jsx` — section toggle "Combat à deux armes", miroir exact
+>   de la section dual-wield d'`AssaultRangedPanel.jsx`, jamais visible en Défensif/Retraite/Charge.
+> - `client/src/components/CombatActionWindow.jsx` / `CombatGmDeclareWindow.jsx` — détection
+>   `hasTwoMeleeWeapons` (armes de contact uniquement, filtre avant `resolveHandWeapons` — même patron
+>   que le filtre `ref_fire_mode` déjà utilisé côté Tir), état `isDualWieldMelee`, arme secondaire
+>   dérivée (l'autre main que l'arme principale sélectionnée), **jamais actif hors du contexte où le
+>   toggle est visible** (Défensif/Retraite/Charge, sinon une valeur restée `true` en mémoire
+>   s'appliquerait silencieusement après un changement de mode).
+> - `server/src/socket/socketCombatAnnouncement.js` — revalidation serveur de l'arme secondaire
+>   (propriétaire, en main MG/MD, catégorie Arme de contact, différente de la principale), même
+>   cohérence de série que Tir Multi (D9) ; dégradation silencieuse si invalide, jamais de blocage de
+>   l'attaque principale (même philosophie que `shared/dualWieldRules.js`, COM29).
+> - `server/src/socket/socketCombatHelpers.js` (`resolveMeleeAction`) — ancien scan d'inventaire
+>   (`deuxArmesSlots`/`deuxArmesBonus`, colonnes `in_hand_slot`/`ref_category` devenues orphelines,
+>   retirées de la requête) remplacé par une revalidation de `action.offhand_weapon_inv_id` à la
+>   résolution, même rigueur que la déclaration (jamais une confiance aveugle dans la valeur stockée).
+> - `client/src/locales/combat.json` — clés `meleeCombatPanel.dualWieldSection`/`.dualWieldSimple`/
+>   `.dualWieldDouble`.
+> **Compatible attaques multiples** (décision Saar) : le bonus s'applique à chaque Test de la série CaC,
+> aucune exclusion contrairement au Tir (RAW CaC n'a pas de variante "2 cibles" à protéger). **Hors
+> périmètre, dette trouvée en cours de route** : `MELEE-INHAND` (arme **principale** CaC jamais
+> vérifiée "en main" à la résolution, contrairement à l'arme secondaire ci-dessus — asymétrie
+> consciente, corriger la principale changerait un comportement existant non demandé). **Hors
+> périmètre, confirmé séparé** : bonus défenseur "deux armes" (nécessite Arts martiaux, jamais câblé) ;
+> variante "2 cibles" du Tir (jamais implémentée, chantier distinct déjà convenu avec Saar). **Testé** :
+> `node --check` sur les 3 fichiers serveur, `npx vite build` propre (×3, un par étape). **Non testé** :
+> aucune connexion PostgreSQL disponible ici — scénario réel (CaC deux armes vs une arme vs mains nues,
+> PJ et PNJ, seul et en série multi-attaque) à la charge de Saar en navigateur. **Données** : aucune
+> migration. Détail retiré de `docs/BUGIDENTIFIE.md` (bug clos, hygiène du registre).
 
 **Item 106 (Session 172-173, dev/Saar) — Wizard collaboratif MJ/joueur + Matériel & Biens ✅ CODÉ,
 confirmé fonctionnel par Saar.** `docs/PLAN_WIZARDCOLLAB.md` Lots A1+A2+A3+A4 — codés au complet et
@@ -3380,12 +3466,16 @@ Projet en cours et priorité user :
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |
 | **DOC2** | `docs/SYSTEME/REGLES_LdB.md` — dump brut d'extraction LdB, encodage mojibake par endroits, mal placé selon `RegleDocumentaire.md` Règle 8 (devrait être dans `REGLES/`), doublon probable avec `docs/REGLES/REGLESYSCOMBAT.md`. Bandeau d'avertissement ajouté ; vérification/déplacement à faire en session dédiée | Basse — session dédiée à planifier |
-| **CHOC1** | Prérequis (arme équipée sans dégât physique, crash potentiel) ✅ fermé et testé Session 168 (Item 106) — `getEffectiveMeleeDamage` construite, 5 sites CaC + 2 tir unifiés. Reste : Palier 1, câblage réel du Choc porté par l'**arme** (`ref_equipment.shock`) dans la résolution — Choc pur (Dague neurale...) ne fait toujours 0 dégât, aucun Test de Choc déclenché. Pool de Choc (`resolveTargetHit`) fonctionne déjà pour le Choc porté par une **munition** (Lot B Session 152). Inventaire catalogue (11 armes + mutation Corne) et scope proposé : `docs/PLAN_CHOC1.md` | Basse — décision Saar sur le scope du Palier 1 |
+| ~~**CHOC1**~~ | ~~Prérequis (arme équipée sans dégât physique) + Palier 1 (Choc porté par l'arme, `ref_equipment.shock`)~~ | ✅ clos Session 176 (Saar), item 109 — Palier 1 testé en jeu et confirmé fonctionnel par Saar |
 | **GEOM1** | `docs/PLAN_GEOMETRIE.md` (Rampe/Slope/Porte, Atelier du GM) jamais codé, obsolète depuis le nouveau builder (Kiwi) selon Saar — **question posée à Codex** : des fragments (recherche `THREE.ExtrudeGeometry`/`UVGenerator`, décisions d'architecture) sont-ils réutilisables avant archivage/suppression du plan ? Archiver vers `docs/Old/` ou supprimer dès réponse de Codex (Session 149) | En attente réponse Codex |
 | ~~**INI4**~~ | ~~`initiative` jamais remise à `base_ini` en fin de tour~~ | ⚠️ clos partiel Session 166 (Saar), item 96 — codé, scénario réel navigateur non testé |
+| ~~**INI5**~~ | ~~CaC : forfait Initiative de déclaration (-3/-5) doublon sans base RAW avec le décalage de phase~~ | ⚠️ clos partiel Session 176 (Saar), item 111 — audit tranché, retiré, scénario réel navigateur non testé |
+| ~~**COM24**~~ | ~~Bonus "deux armes" (+3 CaC) déconnecté de l'arme réellement déclarée~~ | ⚠️ clos partiel Session 176 (Saar), item 112 — codé (mécanisme complet, miroir Tir), scénario réel navigateur non testé |
+| **MELEE-INHAND** | Arme principale CaC jamais vérifiée "en main" à la résolution (contrairement à l'arme secondaire du dual-wield, COM24) — trouvé en codant COM24. Détail `BUGIDENTIFIE.md` | Basse — asymétrie consciente, pas un risque actif |
 | ~~**MELEE-MR**~~ | ~~Dégâts CaC calculés sans le MR (dette Session 67)~~ | ⚠️ clos partiel Session 166 (Saar), item 97 — codé, scénario réel navigateur non testé |
 | ~~**DEF5**~~ | ~~« Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC~~ | ⚠️ clos partiel Session 166 (Saar), item 98 — codé, scénario réel navigateur non testé ; tir de drone non couvert |
-| **SURPRISE1** | `is_surprised` jamais remis à `false` après `COMBAT_START` — trouvé en instrumentant DEF5. Détail `BUGIDENTIFIE.md` | Basse — contournement en place dans DEF5 |
+| ~~**SURPRISE1**~~ | ~~`is_surprised` jamais remis à `false` après `COMBAT_START`~~ | ⚠️ clos partiel Session 176 (Saar), item 110 — codé, scénario réel navigateur non testé |
+| ~~**SURPRISE-ROLL**~~ | ~~roll=1 → initiative=1 sur jet de surprise~~ | ✅ retiré Session 176 (Saar) — comportement normal, pas un bug, confirmé Saar |
 | ~~**TIRIMP**~~ | ~~Garde serveur absent sur « Tir impossible »~~ | ⚠️ clos partiel Session 166 (Saar), item 99 — codé, scénario réel navigateur non testé |
 | **COUVERTURE_TOTALE** | « Couverture totale » (tir) n'existe nulle part, ni client ni serveur — trouvé en clôturant TIRIMP. Détail `BUGIDENTIFIE.md` | Basse — à regrouper avec le futur chantier Tir en aveugle |
 | ~~**WNDMORT**~~ | ~~Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests~~ | ⚠️ clos partiel Session 166 (Saar), item 100 — codé, scénario réel navigateur non testé |

@@ -109,6 +109,12 @@ export default function MeleeCombatPanel({
   effectiveMeleeCount, // 1 | 2 | 3 (charge → 1)
   onMeleeCountChange,  // (n, prevN) => void
 
+  // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — miroir du dual-wield Tir (AssaultRangedPanel)
+  showDualWieldSection, // bool — hasTwoWeapons && arme en main sélectionnée (pas mains nues/naturelle)
+  isDualWield,          // bool
+  onDualWieldChange,    // (bool) => void
+  offhandWeaponDisplay, // string | null — nom de l'arme en main non directrice, null = masqué
+
   // Cibles
   perSlotTargeting,    // bool — true=Joueur (bouton par slot) / false=GM (Cibler unique)
   targetIds,           // string[] — cibles sélectionnées
@@ -271,6 +277,31 @@ export default function MeleeCombatPanel({
             <CountChip n={2} label={t('meleeCombatPanel.chip2.label')} tooltip={t('meleeCombatPanel.chip2.tooltip')} selected={meleeCount === 2} onClick={() => onMeleeCountChange(2, meleeCount)} />
             <CountChip n={3} label={t('meleeCombatPanel.chip3.label')} tooltip={t('meleeCombatPanel.chip3.tooltip')} selected={meleeCount === 3} onClick={() => onMeleeCountChange(3, meleeCount)} />
           </div>
+        </div>
+      )}
+
+      {/* Section Combat à deux armes — COM24, même emplacement/garde que Nombre d'attaques
+          (jamais visible quand aucune attaque n'est déclarable ce Tour) */}
+      {!meleeDefensif && combatMode !== 'charge' && showDualWieldSection && (
+        <div style={P.section}>
+          <div style={P.sectionTitle}>{t('meleeCombatPanel.dualWieldSection')}</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className="seg-opt"
+              data-active={!isDualWield}
+              style={{ flex: 1 }}
+              onClick={() => onDualWieldChange(false)}
+            >{t('meleeCombatPanel.dualWieldSimple')}</button>
+            <button
+              className="seg-opt"
+              data-active={isDualWield}
+              style={{ flex: 1 }}
+              onClick={() => onDualWieldChange(true)}
+            >{t('meleeCombatPanel.dualWieldDouble', { bonus: 3 })}</button>
+          </div>
+          {isDualWield && offhandWeaponDisplay && (
+            <div style={P.optionSub}>{'+ '}{offhandWeaponDisplay}</div>
+          )}
         </div>
       )}
 

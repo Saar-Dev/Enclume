@@ -102,6 +102,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [isDualWield,         setIsDualWield]         = useState(false)
   const [aimTranches,         setAimTranches]         = useState(0)
   const [aimedLocation,       setAimedLocation]       = useState(null)
+  // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — état séparé du dual-wield Tir ci-dessus
+  // (même raison que côté PJ : les deux Actions sont exclusives à la déclaration mais gardent chacune
+  // leur propre état pour ne pas se réinitialiser l'une l'autre).
+  const [isDualWieldMelee,    setIsDualWieldMelee]    = useState(false)
   // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
   const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
   // Arme naturelle (mutation PNJ) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B.
@@ -140,6 +144,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setAimTranches(0)
     setAimedLocation(null)
     setSelectedGmMeleeWeaponId(undefined)
+    setIsDualWieldMelee(false)
     setIsSelectingOnMap(false)
     setIniPopoverOpen(false)
   }, [activeTokenId])
@@ -248,6 +253,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const weaponTr      = isActivePnj ? (equipment[activeTokenId]?.weaponTr ?? null) : null
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
+  // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — même source `equipment[tokenId]` que le
+  // Tir ci-dessus, filtrée à la catégorie Arme de contact (ref_category, route /combat-equipment).
+  const hasTwoMeleeWeapons = !!(weaponMg && weaponMd
+    && weaponMg.ref_category === 'Arme de contact' && weaponMd.ref_category === 'Arme de contact')
 
   // ── INI delta ────────────────────────────────────────────────────────────
   const iniDelta = isActivePnj ? calcIniDelta(
@@ -280,6 +289,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       ? (meleeWeaponAvailable?.inv_id ?? null)
       : selectedGmMeleeWeaponId
   const weaponInvIdForMelee = effectiveGmMeleeWeaponId
+  // Arme secondaire (COM24) — quand les deux mains portent une arme de contact, meleeWeaponAvailable
+  // (dérivé de primaryWeapon, priorité 2M > Tr > MD > MG) correspond à weaponMd ; l'arme secondaire
+  // est donc weaponMg, jamais l'inverse tant qu'aucun 2M/Tr n'est actif — même logique que le Tir.
+  const meleeOffhandWeapon = (hasTwoMeleeWeapons && effectiveGmMeleeWeaponId) ? weaponMg : null
+  const showDualWieldMeleeSection = hasTwoMeleeWeapons && !!meleeOffhandWeapon
+  // Miroir CombatActionWindow.jsx : jamais actif hors du contexte où le toggle est visible.
+  const effectiveDualWieldMelee = isDualWieldMelee && showDualWieldMeleeSection
+    && !meleeDefensif && decl.combatMode !== 'charge'
   // Armes naturelles (mutations) du PNJ actif — batché par /combat-equipment (docs/PLAN_MUTATION2.md
   // Lot 4 sous-lot B), jamais un fetch par PNJ (évite le N+1 que ce batch existant évite déjà).
   const naturalWeaponsAvailable = isActivePnj ? (equipment[activeTokenId]?.naturalWeapons ?? []) : []
@@ -459,9 +476,15 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       return
     }
 
+    // Combat à deux armes CaC (COM24) — jamais actif en Charge (effectiveDualWieldMelee déjà gardé
+    // par decl.combatMode !== 'charge' plus haut), même arme(s) pour toute la série meleeTargets.
+    const meleeOffhandInvIdForMelee = effectiveDualWieldMelee ? (meleeOffhandWeapon?.inv_id ?? null) : null
     const meleeCaC = chargeSelection?.targetTokenId
       ? [{ targetTokenId: chargeSelection.targetTokenId, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee }]
-      : meleeTargets.slice(0, effectiveMeleeCount).map(id => ({ targetTokenId: id, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee }))
+      : meleeTargets.slice(0, effectiveMeleeCount).map(id => ({
+          targetTokenId: id, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee,
+          offhandWeaponInvId: meleeOffhandInvIdForMelee, isDualWield: effectiveDualWieldMelee,
+        }))
     const movePayload = chargeSelection?.move ?? pendingMove ?? null
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: activeTokenId,
@@ -937,6 +960,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               tokens={tokens}
               onChooseTarget={(i) => handleStartMelee(i)}
               showReadyBadge={false}
+              showDualWieldSection={showDualWieldMeleeSection}
+              isDualWield={isDualWieldMelee}
+              onDualWieldChange={setIsDualWieldMelee}
+              offhandWeaponDisplay={meleeOffhandWeapon ? (meleeOffhandWeapon.name ?? t('meleeCombatPanel.weaponFallback')) : null}
             />
           </div>
         )}

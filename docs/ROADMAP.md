@@ -1,5 +1,5 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
+> Dernière mise à jour : 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
 > Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL6.md`.
 > **Bugs et dettes techniques** : voir le registre unique `docs/BUGIDENTIFIE.md`.
 
@@ -12,9 +12,6 @@
 
 ### Chantier `PLAN_MUTATION2.md` — Mutations & Avantages
 - Lot 7 : Narratif/économie (priorité basse) — 🔲
-
-### Chantier 11 — Système de Combat Polaris
-- Dette INI5 : audit forfait Initiative CaC — 🔲
 
 ### Options de campagne
 - `revers` — 🔲
@@ -29,7 +26,6 @@
 ---
 
 ## Phase 3 — Polish + assets
-- Scènes 2D ambiance
 - Avatars utilisateur
 - Optimisation voxel face culling
 - Persistance viewport caméra
@@ -55,7 +51,8 @@
 - Chat MP (messagerie privée)
 - Mode spectateur
 - Sauvegarde/export carte 3D
-- Environnement carte 2D (Roll20‑like)
+- Battlemap 2D (illustration ou tokens sur fond 2D) — `docs/PLAN_BATTLEMAP2D.md`, plan en 4 lots, Lot 0 (cadrage) clos, aucun code
+- Spotlight / bibliothèque de présentation (personnage, document, indice) — besoin identifié pendant le cadrage Battlemap 2D, plan encore à écrire
 
 ---
 

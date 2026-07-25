@@ -1252,8 +1252,9 @@ malus cohérent, entrelacement de l'échelle confirmé, un PJ qui touche deux fo
 chaînage dégâts correct (validation du correctif FSM ci-dessus). **Chantier clos.** Non testé : série à
 3 tirs avec un TOUCHE, Tir Multi PNJ côté MJ jusqu'à résolution complète, rejets serveur (>3 tirs,
 RC/RL, drone). Détail Testé/Non testé complet : `docs/EN_COURS.md` Items 94/95 (archivé). Détail complet
-(archivé) : `docs/Old/PLAN_TIRMULTI.md`. Dettes restantes hors scope : **INI5** (`docs/BUGIDENTIFIE.md`,
-audit forfait Initiative CaC), dette doc `docs/SYSTEME/COMBAT.md:850` (`pendingDamageActions` obsolète).
+(archivé) : `docs/Old/PLAN_TIRMULTI.md`. **INI5** (audit forfait Initiative CaC) clos Session 176 — forfait
+sans base RAW retiré, voir `docs/EN_COURS.md` item 111. Dette restante hors scope : dette doc
+`docs/SYSTEME/COMBAT.md:850` (`pendingDamageActions` obsolète).
 
 ---
 
