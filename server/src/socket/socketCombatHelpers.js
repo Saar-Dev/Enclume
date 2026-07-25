@@ -6,6 +6,7 @@ import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
+import { computeAttackRoll } from '../lib/combatAttackRoll.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
@@ -1457,6 +1458,28 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       ...(sansDefenseBonus !== 0 ? [{ label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' }] : []),
       { label: 'Seuil', value: chancesAttaque, type: 'total' },
     ]
+    // [DBG-DECOUPLAGE] — PLAN_RW_SYSCOMBAT.md Lot 1 §2.3 : double-calcul temporaire (pattern
+    // Scientist). Le bloc inline ci-dessus reste seul autoritaire ; un écart est loggé, jamais
+    // bloquant. Bloc inline + ce dispositif retirés ensemble au commit de clôture du Lot 1.
+    const shadowMelee = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
+      contributions: [
+        { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
+        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+        { label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' },
+        { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
+        { label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' },
+        { label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' },
+        { label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' },
+        { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' },
+        { label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' },
+        { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
+        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+      ],
+    })
+    if (shadowMelee.seuil !== chancesAttaque || JSON.stringify(shadowMelee.breakdown) !== JSON.stringify(breakdownAtk)) {
+      console.error(`[DBG-DECOUPLAGE] melee — écart noyau/inline. seuil inline:${chancesAttaque} noyau:${shadowMelee.seuil}\n  inline: ${JSON.stringify(breakdownAtk)}\n  noyau:  ${JSON.stringify(shadowMelee.breakdown)}`)
+    }
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} sansDefense:${sansDefenseBonus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -2590,6 +2613,35 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
       { label: 'Seuil', value: chancesDeReussite, type: 'total' },
     ]
+    // [DBG-DECOUPLAGE] — PLAN_RW_SYSCOMBAT.md Lot 1 §2.3 : double-calcul temporaire (pattern
+    // Scientist), miroir du bloc CaC. Condition agrégée weaponModComp !== 0 conservée telle quelle
+    // (RV2 §7 : masquer les mods d'arme en bloc quand leur total est nul est une décision d'assemblage
+    // coquille, pas un filtre du noyau). Retiré avec le bloc inline au commit de clôture du Lot 1.
+    const shadowAssault = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque,
+      contributions: [
+        { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
+        { label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' },
+        { label: 'Deux armes', value: dualWieldComp, type: 'bonus' },
+        { label: 'Tir visé', value: aimBonusComp, type: 'bonus' },
+        { label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' },
+        { label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' },
+        { label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' },
+        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+        ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
+        ...((confirmedModifiers.situation ?? []).map(k => {
+          const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
+          return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
+        })),
+        { label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
+        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+        { label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' },
+        { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
+      ],
+    })
+    if (shadowAssault.seuil !== chancesDeReussite || JSON.stringify(shadowAssault.breakdown) !== JSON.stringify(breakdown)) {
+      console.error(`[DBG-DECOUPLAGE] assault — écart noyau/inline. seuil inline:${chancesDeReussite} noyau:${shadowAssault.seuil}\n  inline: ${JSON.stringify(breakdown)}\n  noyau:  ${JSON.stringify(shadowAssault.breakdown)}`)
+    }
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId:            character.user_id,

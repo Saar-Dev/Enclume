@@ -65,7 +65,13 @@
 > CaC/taille/portée rapatriées dans `shared/combatSituationMods.js` (autorité unique client+serveur,
 > même geste que TIRIMP Session 166), serveur (melee/assault/drone) + 2 fenêtres client basculés,
 > 23 valeurs vérifiées conformes par script, build Vite OK, serveur démarré OK (Saar) — vérification
-> visuelle des 2 fenêtres de modificateurs encore à faire par Saar ; 2026-07-24 — Session 176 : triage priorisé `ROADMAP.md`/
+> visuelle des 2 fenêtres de modificateurs encore à faire par Saar ; Lot 1 phase shadow codée —
+> noyau pur `server/src/lib/combatAttackRoll.js` (pattern liste de contributions, pf2e) + 9 tests
+> unitaires (premiers tests automatisés sur le calcul du Seuil) + double-calcul Scientist dans
+> resolveMeleeAction/resolveAssaultAction (`[DBG-DECOUPLAGE]`, jamais bloquant, inline seul
+> autoritaire), fuzz d'équivalence 1000 tirages sans écart — reste : session de jeu Saar sans
+> `[DBG-DECOUPLAGE]` puis commit de clôture (retrait inline + dispositif) ;
+> 2026-07-24 — Session 176 : triage priorisé `ROADMAP.md`/
 > `BUGIDENTIFIE.md` — CHOC1 (item 109) et Cluster I (DMG1/DMG2) clos, testés en jeu et confirmés par
 > Saar ; SURPRISE1 (item 110) codé, non testé en jeu ; SURPRISE-ROLL retiré (comportement normal,
 > confirmé Saar) ; INI5 (item 111) audit tranché par Saar (« pas RAW, ça dégage »), forfait Initiative

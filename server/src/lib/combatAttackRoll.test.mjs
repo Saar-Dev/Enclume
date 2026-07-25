@@ -1,0 +1,127 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import { computeAttackRoll } from './combatAttackRoll.js'
+
+// Lancement manuel (aucun script npm test dans le projet, PLAN_RW_SYSCOMBAT.md §2.2) :
+//   node --test server/src/lib/combatAttackRoll.test.mjs
+
+test('aucune contribution — breakdown = base + total, seuil = compétence', () => {
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 12, contributions: [], totalLabel: 'Seuil', rollAttaque: 5,
+  })
+  assert.equal(r.seuil, 12)
+  assert.deepEqual(r.breakdown, [
+    { label: 'Compétence', value: 12, type: 'base' },
+    { label: 'Seuil', value: 12, type: 'total' },
+  ])
+})
+
+test('somme mixte bonus/malus', () => {
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 10, totalLabel: 'Seuil', rollAttaque: 5,
+    contributions: [
+      { label: 'Mode offensif', value: 3, type: 'bonus' },
+      { label: 'Multi-adversaires', value: -3, type: 'malus' },
+      { label: 'Malus santé', value: -2, type: 'malus' },
+    ],
+  })
+  assert.equal(r.seuil, 8)
+})
+
+test('contribution à zéro — absente du breakdown, somme inchangée', () => {
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 10, totalLabel: 'Seuil', rollAttaque: 5,
+    contributions: [
+      { label: 'Précipitation', value: 0, type: 'malus' },
+      { label: 'Taille cible', value: 3, type: 'bonus' },
+    ],
+  })
+  assert.equal(r.seuil, 13)
+  assert.equal(r.breakdown.length, 3) // base + taille + total
+  assert.ok(!r.breakdown.some(e => e.label === 'Précipitation'))
+})
+
+test('ordre préservé — base en tête, contributions dans l\'ordre fourni, total en queue', () => {
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 10, totalLabel: 'Seuil', rollAttaque: 5,
+    contributions: [
+      { label: 'B', value: 1, type: 'bonus' },
+      { label: 'A', value: -1, type: 'malus' },
+      { label: 'C', value: 2, type: 'bonus' },
+    ],
+  })
+  assert.deepEqual(r.breakdown.map(e => e.label), ['Compétence', 'B', 'A', 'C', 'Seuil'])
+  assert.equal(r.breakdown[0].type, 'base')
+  assert.equal(r.breakdown.at(-1).type, 'total')
+})
+
+test('contributions se compensant — toutes deux conservées (RV2 : le masquage agrégé est en coquille)', () => {
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 10, totalLabel: 'Seuil', rollAttaque: 5,
+    contributions: [
+      { label: 'Mod +2', value: 2, type: 'bonus' },
+      { label: 'Mod -2', value: -2, type: 'malus' },
+    ],
+  })
+  assert.equal(r.seuil, 10)
+  assert.equal(r.breakdown.length, 4) // base + 2 entrées conservées + total
+})
+
+test('bornes isSuccess/mr — égal au Seuil = réussite (D20 ≤ Seuil)', () => {
+  const base = { skillLabel: 'Compétence', skillTotal: 10, contributions: [], totalLabel: 'Seuil' }
+  const equal = computeAttackRoll({ ...base, rollAttaque: 10 })
+  assert.equal(equal.isSuccess, true)
+  assert.equal(equal.mr, 0)
+  const above = computeAttackRoll({ ...base, rollAttaque: 11 })
+  assert.equal(above.isSuccess, false)
+  assert.equal(above.mr, -1)
+  const below = computeAttackRoll({ ...base, rollAttaque: 3 })
+  assert.equal(below.isSuccess, true)
+  assert.equal(below.mr, 7)
+})
+
+test('roll 1 et 20 — simple passage de valeur, pas de traitement critique dans le noyau', () => {
+  const base = { skillLabel: 'Compétence', skillTotal: 10, contributions: [], totalLabel: 'Seuil' }
+  assert.equal(computeAttackRoll({ ...base, rollAttaque: 1 }).isSuccess, true)
+  assert.equal(computeAttackRoll({ ...base, rollAttaque: 20 }).isSuccess, false)
+})
+
+test('cas réaliste CaC — mode offensif + multi-adversaires + santé (valeurs LdB calculées à la main)', () => {
+  // Compétence 12, Mode offensif +3, Multi-adversaires -3, Malus santé -2 → Seuil 10 ; roll 7 → MR 3
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 12, totalLabel: 'Seuil', rollAttaque: 7,
+    contributions: [
+      { label: 'Mode offensif', value: 3, type: 'bonus' },
+      { label: 'Précipitation', value: 0, type: 'malus' },
+      { label: 'Multi-adversaires (attaquant)', value: -3, type: 'malus' },
+      { label: 'Malus santé / encombrement', value: -2, type: 'malus' },
+    ],
+  })
+  assert.equal(r.seuil, 10)
+  assert.equal(r.isSuccess, true)
+  assert.equal(r.mr, 3)
+  assert.deepEqual(r.breakdown, [
+    { label: 'Compétence', value: 12, type: 'base' },
+    { label: 'Mode offensif', value: 3, type: 'bonus' },
+    { label: 'Multi-adversaires (attaquant)', value: -3, type: 'malus' },
+    { label: 'Malus santé / encombrement', value: -2, type: 'malus' },
+    { label: 'Seuil', value: 10, type: 'total' },
+  ])
+})
+
+test('cas réaliste Tir — portée moyenne + mode de tir + taille + couverture (valeurs LdB)', () => {
+  // Compétence 14, Portée moyenne -5, Mode de tir +2, Cible grande +3, Couverture partielle -3 → Seuil 11
+  const r = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: 14, totalLabel: 'Seuil', rollAttaque: 12,
+    contributions: [
+      { label: 'Portée moyenne', value: -5, type: 'malus' },
+      { label: 'Mode de tir (×2)', value: 2, type: 'bonus' },
+      { label: 'Cible grande (~3m)', value: 3, type: 'bonus' },
+      { label: 'Couverture partielle (50%)', value: -3, type: 'malus' },
+    ],
+  })
+  assert.equal(r.seuil, 11)
+  assert.equal(r.isSuccess, false) // 12 > 11
+  assert.equal(r.mr, -1)
+})
