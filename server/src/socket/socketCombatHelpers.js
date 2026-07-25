@@ -1431,9 +1431,8 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
 
-    const chancesAttaque  = attackerSkillTotal + effectiveMalusAttaquant + isRushedMod + attackModeBonus + multiMalusAttaquant + multiAttackMalus + situationModComp + tailleMod + terrainInstableMod + deuxArmesBonus + shieldAtkMalus + sansDefenseBonus
-
-    // Roll attaquant
+    // Roll attaquant — le jet reste en coquille, le noyau (combatAttackRoll.js) est pur et le
+    // consomme en paramètre (PLAN_RW_SYSCOMBAT.md §2.1.c).
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
 
     // Info affichage
@@ -1443,25 +1442,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     const attackerColor    = userRow?.color    ?? '#c86030'
     const attackerUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
-    const breakdownAtk = [
-      { label: 'Compétence', value: attackerSkillTotal, type: 'base' },
-      ...(attackModeBonus !== 0 ? [{ label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' }] : []),
-      ...(isRushedMod !== 0 ? [{ label: 'Précipitation', value: isRushedMod, type: 'malus' }] : []),
-      ...(multiMalusAttaquant !== 0 ? [{ label: 'Multi-adversaires (attaquant)', value: multiMalusAttaquant, type: 'malus' }] : []),
-      ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
-      ...(effectiveMalusAttaquant !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalusAttaquant, type: 'malus' }] : []),
-      ...(situationModComp !== 0 ? [{ label: 'Mods situation', value: situationModComp, type: situationModComp > 0 ? 'bonus' : 'malus' }] : []),
-      ...(tailleMod !== 0 ? [{ label: 'Taille cible', value: tailleMod, type: tailleMod > 0 ? 'bonus' : 'malus' }] : []),
-      ...(terrainInstableMod !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieTotal})`, value: terrainInstableMod, type: 'malus' }] : []),
-      ...(deuxArmesBonus !== 0 ? [{ label: 'Deux armes au contact', value: deuxArmesBonus, type: 'bonus' }] : []),
-      ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
-      ...(sansDefenseBonus !== 0 ? [{ label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' }] : []),
-      { label: 'Seuil', value: chancesAttaque, type: 'total' },
-    ]
-    // [DBG-DECOUPLAGE] — PLAN_RW_SYSCOMBAT.md Lot 1 §2.3 : double-calcul temporaire (pattern
-    // Scientist). Le bloc inline ci-dessus reste seul autoritaire ; un écart est loggé, jamais
-    // bloquant. Bloc inline + ce dispositif retirés ensemble au commit de clôture du Lot 1.
-    const shadowMelee = computeAttackRoll({
+    // Seuil + breakdown — noyau pur (PLAN_RW_SYSCOMBAT.md Lot 1, clos après session de jeu shadow
+    // sans écart). La coquille assemble la liste ordonnée des contributions (l'ordre de la liste EST
+    // l'ordre d'affichage client) ; le noyau somme, filtre les zéros et assemble le breakdown.
+    // Ajouter un modificateur CaC = ajouter une entrée ici, jamais toucher au noyau.
+    const { seuil: chancesAttaque, breakdown: breakdownAtk } = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
       contributions: [
         { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
@@ -1477,9 +1462,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
       ],
     })
-    if (shadowMelee.seuil !== chancesAttaque || JSON.stringify(shadowMelee.breakdown) !== JSON.stringify(breakdownAtk)) {
-      console.error(`[DBG-DECOUPLAGE] melee — écart noyau/inline. seuil inline:${chancesAttaque} noyau:${shadowMelee.seuil}\n  inline: ${JSON.stringify(breakdownAtk)}\n  noyau:  ${JSON.stringify(shadowMelee.breakdown)}`)
-    }
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} sansDefense:${sansDefenseBonus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -2584,40 +2566,16 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // avec le CaC (computeMultiAttackMalus). Recalculé sur les sœurs vivantes à CET instant, pas figé
     // à la déclaration — même principe que le CaC.
     const { malus: multiAttackMalus } = await computeMultiAttackMalus(action.id)
-    const totalModComp     = porteeModComp + situationModComp + tailleModComp + isRushedMod + fireModeComp + aimBonusComp + weaponModComp + aimedLocationMalus + shieldAtkMalus + multiAttackMalus + sansDefenseBonus
 
     const coverageModifier   = options.coverageModifier ?? 0
-    const chancesDeReussite  = skillTotal + totalModComp + effectiveMalus + coverageModifier
     const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
-    const isSuccess = rollAttaque <= chancesDeReussite
-    const mr = chancesDeReussite - rollAttaque
-    const breakdown = [
-      { label: 'Compétence', value: skillTotal, type: 'base' },
-      ...(porteeModComp !== 0 ? [{ label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' }] : []),
-      ...(fireModeComp - dualWieldComp !== 0 ? [{ label: `Mode de tir (×${action.bullet_count ?? 1})`, value: fireModeComp - dualWieldComp, type: 'bonus' }] : []),
-      ...(dualWieldComp !== 0 ? [{ label: 'Deux armes', value: dualWieldComp, type: 'bonus' }] : []),
-      ...(aimBonusComp !== 0 ? [{ label: 'Tir visé', value: aimBonusComp, type: 'bonus' }] : []),
-      ...(aimedLocationMalus !== 0 ? [{ label: `Visée ${LOCATION_LABELS[aimedLocationKey] ?? aimedLocationKey}`, value: aimedLocationMalus, type: 'malus' }] : []),
-      ...(multiAttackMalus !== 0 ? [{ label: 'Attaque multiple', value: multiAttackMalus, type: 'malus' }] : []),
-      ...(shieldAtkMalus !== 0 ? [{ label: 'Bouclier adverse', value: shieldAtkMalus, type: 'malus' }] : []),
-      ...(sansDefenseBonus !== 0 ? [{ label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' }] : []),
-      ...(weaponModComp !== 0 ? weaponModBreakdown.map(b => ({ label: b.name, value: b.value, type: 'bonus' })) : []),
-      ...((confirmedModifiers.situation ?? []).reduce((acc, k) => {
-        const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
-        if (v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
-        return acc
-      }, [])),
-      ...(tailleModComp !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' }] : []),
-      ...(isRushedMod !== 0 ? [{ label: 'Précipitation', value: isRushedMod, type: 'malus' }] : []),
-      ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
-      ...(coverageModifier !== 0 ? [{ label: 'Couverture cible', value: coverageModifier, type: 'malus' }] : []),
-      { label: 'Seuil', value: chancesDeReussite, type: 'total' },
-    ]
-    // [DBG-DECOUPLAGE] — PLAN_RW_SYSCOMBAT.md Lot 1 §2.3 : double-calcul temporaire (pattern
-    // Scientist), miroir du bloc CaC. Condition agrégée weaponModComp !== 0 conservée telle quelle
-    // (RV2 §7 : masquer les mods d'arme en bloc quand leur total est nul est une décision d'assemblage
-    // coquille, pas un filtre du noyau). Retiré avec le bloc inline au commit de clôture du Lot 1.
-    const shadowAssault = computeAttackRoll({
+    // Seuil + breakdown — noyau pur (PLAN_RW_SYSCOMBAT.md Lot 1, clos après session de jeu shadow
+    // sans écart), miroir du bloc CaC de resolveMeleeAction. La coquille assemble la liste ordonnée
+    // des contributions ; le noyau somme, filtre les zéros et assemble le breakdown. Condition
+    // agrégée weaponModComp !== 0 : masquer les mods d'arme en bloc quand leur total est nul est une
+    // décision d'assemblage coquille, pas un filtre du noyau (RV2, PLAN_RW_SYSCOMBAT.md §7).
+    // Ajouter un modificateur Tir = ajouter une entrée ici, jamais toucher au noyau.
+    const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque,
       contributions: [
         { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
@@ -2639,9 +2597,6 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
       ],
     })
-    if (shadowAssault.seuil !== chancesDeReussite || JSON.stringify(shadowAssault.breakdown) !== JSON.stringify(breakdown)) {
-      console.error(`[DBG-DECOUPLAGE] assault — écart noyau/inline. seuil inline:${chancesDeReussite} noyau:${shadowAssault.seuil}\n  inline: ${JSON.stringify(breakdown)}\n  noyau:  ${JSON.stringify(shadowAssault.breakdown)}`)
-    }
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId:            character.user_id,

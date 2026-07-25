@@ -57,8 +57,6 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
-🔒 En cours (Saar) : `docs/PLAN_RW_SYSCOMBAT.md` Lot 1 — noyau pur `computeAttackRoll` + shadow-mode
-
 > Dernière mise à jour (dev/Saar) : 2026-07-25 — Session 180 : audit technique complet
 > (`docs/AUDIT_FABLE.md`) ; `docs/PLAN_RW_SYSCOMBAT.md` rédigé (découpage resolveMeleeAction/
 > resolveAssaultAction, 2 analyses à charge + run à vide) ; Lot 0 codé — tables de modificateurs
@@ -69,8 +67,11 @@
 > noyau pur `server/src/lib/combatAttackRoll.js` (pattern liste de contributions, pf2e) + 9 tests
 > unitaires (premiers tests automatisés sur le calcul du Seuil) + double-calcul Scientist dans
 > resolveMeleeAction/resolveAssaultAction (`[DBG-DECOUPLAGE]`, jamais bloquant, inline seul
-> autoritaire), fuzz d'équivalence 1000 tirages sans écart — reste : session de jeu Saar sans
-> `[DBG-DECOUPLAGE]` puis commit de clôture (retrait inline + dispositif) ;
+> autoritaire), fuzz d'équivalence 1000 tirages sans écart ; **Lot 1 ✅ clos** — session de jeu réelle
+> Saar (CaC PJ/PNJ + Tir + attaque multiple + deux armes + mode offensif + Seuil négatif) sans aucun
+> `[DBG-DECOUPLAGE]`, bloc inline et dispositif retirés, `computeAttackRoll` autoritaire pour le Seuil
+> et le breakdown des deux fonctions — prochaine étape chantier : Lot 2 (branchement défenseur), à
+> planifier ;
 > 2026-07-24 — Session 176 : triage priorisé `ROADMAP.md`/
 > `BUGIDENTIFIE.md` — CHOC1 (item 109) et Cluster I (DMG1/DMG2) clos, testés en jeu et confirmés par
 > Saar ; SURPRISE1 (item 110) codé, non testé en jeu ; SURPRISE-ROLL retiré (comportement normal,
