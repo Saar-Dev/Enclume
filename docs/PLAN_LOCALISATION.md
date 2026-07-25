@@ -8,8 +8,11 @@
 > restant, confirmé par ré-audit.
 > 🟡 **Lot 2 (Équipement/fiche personnage, 7 fichiers) codé et commité (`d6a21f4`), parcours navigateur
 > non testé** — détail §3quater.
-> 🟡 **Lot 3 (Builder/Surface, 6 fichiers) codé, parcours navigateur non testé** — détail §3quinquies.
-> Lot 4 non commencé.
+> 🟡 **Lot 3 (Builder/Surface, 6 fichiers) codé et commité (`211a523`), parcours navigateur non testé**
+> — détail §3quinquies.
+> 🟡 **Lot 4 (Outils dés, 1 fichier — `DiceCalibrationPage.jsx` exclu, décision Saar 2026-07-25) codé,
+> parcours navigateur non testé** — détail §3sexies. **Les 4 lots sont maintenant codés** ; archivage
+> de ce plan dans `docs/ASBUILT.md` différé jusqu'à validation navigateur complète.
 
 ---
 
@@ -71,11 +74,10 @@ Bouclier) — confirme que c'est la même dette, pas une nouvelle.
 `SurfaceRoomPanel`, `SurfaceConnectorPanel`, `SurfaceWallPanel`, `SurfaceMaterialEditor`,
 `MaterialGeneratorTab`, `Object3DPreview`.
 
-### Lot 4 — Outils dés (2 fichiers) → `common.json` (`dice.*`, déjà une section)
+### Lot 4 — Outils dés (1 fichier, décision Saar 2026-07-25) → `dice.*` dans `fr.json` (déjà une section)
 
-`DicePanel`, `DiceCalibrationPage` (outil dev — vérifier avec Saar si ce dernier vaut la peine d'être
-traduit ou si un outil interne peut rester en dur, décision produit mineure à trancher en ouvrant le
-lot, pas ici).
+`DicePanel`. `DiceCalibrationPage` (outil dev, jamais vu par un joueur/MJ en jeu) tranché **hors
+scope** par Saar à l'ouverture du lot — reste en dur, décision définitive, pas une dette.
 
 ---
 
@@ -301,6 +303,54 @@ les formes plurielles `_one`/`_other`).
 
 ---
 
+## 3sexies. Lot 4 — Outils dés (1 fichier, 2026-07-25)
+
+**Décision d'ouverture de lot** : `DiceCalibrationPage.jsx` (outil dev de calibration des normales de
+face GLB, jamais atteint par un joueur/MJ en jeu — route utilisée par Saar seul) tranché hors scope par
+Saar avant tout code — reste en dur. Seul `DicePanel.jsx` (lanceur de dés réel, en jeu) est retenu.
+
+**Différence de méthode vs Lots 1-3** : pas de nouveau namespace créé. `fr.json` (namespace par défaut,
+`translation`) contient déjà une section `dice.*` de 13 clés, dont 11 orphelines — vérifié par
+recherche exhaustive des consommateurs (`grep` sur tout `client/src`) : seules `dice.criticalSuccess`/
+`dice.criticalFail` avaient un consommateur réel (`Sidebar.jsx`), les 11 autres (`roll`, `result`,
+`formula`, `panel`, `gmRoll`, `gmRollSoon`, `launch`, `move`, `advanced`, `disabledInEdit`, `history`)
+n'étaient utilisées nulle part — probablement pré-semées en prévision de ce retrofit. `DicePanel.jsx`
+n'avait par ailleurs jamais utilisé aucun autre namespace (0 `useTranslation` avant ce lot), donc aucun
+risque de mélange multi-namespace : `useTranslation()` (défaut) suffit, pas de `charSheet.json`/
+`builder.json` à créer pour ce lot.
+
+**Réutilisation trouvée** : `panel` ("Lanceur de dés"), `gmRoll` ("Jet au MJ"), `history`
+("Historique"), `move` ("Déplacer") et `launch` ("Lancer") — 5 des 11 clés orphelines correspondent
+exactement à du texte du fichier, jusqu'ici recopié en dur en plus (souvent en majuscules pour le
+rendu HUD/console). Réutilisées telles quelles avec `textTransform: 'uppercase'` ajouté au `style`
+là où l'affichage actuel est en capitales (`LANCEUR DE DÉS`, `JET AU MJ`, `LANCER`, `HISTORIQUE`) —
+changement CSS pur, aucun changement de contenu ni de rendu visuel. `common.cancel` (déjà utilisée
+ailleurs dans le projet) réutilisée pour le bouton « Annuler » du formulaire macro. **Trouvé lors du
+run à vide de relecture** : `dashboard.create` (= « Créer ») existait déjà — clé `dice.createButton`
+initialement créée par erreur (doublon Règle 2, non vérifiée contre tout `fr.json` au moment de
+l'écrire, seulement contre `common`) retirée, bouton « Créer » du formulaire macro repointé vers
+`dashboard.create`.
+
+**Patron « code sert aussi de valeur »** : aucune occurrence cette fois (contrairement aux Lots 2/3) —
+les seules valeurs numériques/symboliques affichées sur les dés (`10`, `%`, `6`, `8`, `12`, `20`, `4`)
+sont des chiffres/symboles universels, hors périmètre `docs/SYSTEME/LOCALISATION.md` §3 (identifiants
+techniques), pas du texte.
+
+**Composant séparé avec son propre hook** : `DieButton` (interne à `DicePanel.jsx`) — même patron que
+`WeaponCard`/`ItemRow` (Lot 2) et `ElevatorRuntimeControls` (Lot 3), son propre `useTranslation()`.
+
+**Dette hors scope trouvée, routée séparément (pas traitée ici)** : `I18N-LINT4` —
+`docs/BUGIDENTIFIE.md` cluster H — `handleDragEnd` référencé avant déclaration dans
+`DicePanel.jsx:331-335` (ESLint `react-hooks/immutability`), confirmé préexistant par `git show HEAD`
+avant toute modification de ce chantier.
+
+`fr.json` section `dice` passe de 13 à 44 clés (31 nouvelles, dont 5 réutilisent une clé orpheline
+préexistante ; un 6e réemploi, `dashboard.create`, reste hors section `dice`), zéro texte en dur
+restant sur `DicePanel.jsx` confirmé par ré-audit (script §1) et script de résolution i18next
+(44 clés vérifiées).
+
+---
+
 ## 4. Fichiers vérifiés sans texte utilisateur (hors chantier)
 
 Vérifié par lecture (pas supposé) : ces 23 fichiers n'utilisent pas `useTranslation` et n'ont aucune
@@ -324,6 +374,7 @@ l'un semble mort — pas un sujet i18n, loguée séparément → `docs/BUGIDENTI
 - Anglais (`en.json`) — gelé, voir `docs/SYSTEME/LOCALISATION.md` §1.
 - Suppression du fichier dupliqué `WizardCreationPage.jsx` (§4) — chantier dead-code séparé.
 - Toute clé déjà correctement traduite dans les 50 composants existants.
+- `DiceCalibrationPage.jsx` — outil dev, tranché hors scope par Saar (§3sexies), reste en dur.
 
 ---
 
@@ -359,4 +410,12 @@ code→clé et formes plurielles), zéro texte en dur restant confirmé par ré-
 jeu depuis ce chantier (même décision Saar : session de test groupée après coup). Risque de conflit de
 fusion avec le chantier parallèle moteur-monde non vérifiable depuis cette instance (§3quinquies).
 
-Lot 4 (Dés) non commencé.
+**Testé (Lot 4 complet, 1 fichier — `DiceCalibrationPage.jsx` exclu)** : ESLint (0 nouvelle erreur —
+`I18N-LINT4` confirmé préexistant par `git show HEAD`, routé séparément), `vite build` propre, 44 clés
+vérifiées par script de résolution i18next (namespace par défaut, section `dice.*` de `fr.json`), zéro
+texte en dur restant confirmé par ré-audit (script §1).
+**Non testé :** tout parcours navigateur réel — même décision Saar, session de test groupée après coup.
+
+**Les 4 lots de `docs/PLAN_LOCALISATION.md` sont maintenant entièrement codés.** Aucun n'a de
+confirmation navigateur — la session de test groupée reste à faire avant d'archiver ce plan dans
+`docs/ASBUILT.md` (Règle 10, `docs/RegleDocumentaire.md`).

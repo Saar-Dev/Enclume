@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useAuthStore } from '../stores/authStore.js'
 import { useCharacterStore } from '../stores/characterStore.js'
@@ -174,6 +175,7 @@ function DieShape({ k, size = 64, isCenter = false, count = 0, color = '#3a8aaa'
 
 // ─── DieButton ──────────────────────────────────────────────────────────────
 function DieButton({ k, count, color, size = 64, isCenter = false, onClick, onContextMenu }) {
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   const hitSize = size + 6
   return (
@@ -182,7 +184,7 @@ function DieButton({ k, count, color, size = 64, isCenter = false, onClick, onCo
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={`Gauche : +1 ${k.toUpperCase()}  ·  Droit : −1`}
+      title={t('dice.dieButtonHint', { die: k.toUpperCase() })}
       style={{
         width: hitSize, height: hitSize,
         margin: -3,
@@ -228,6 +230,7 @@ function DiceIcon({ size = 28 }) {
 
 // ─── Composant principal ─────────────────────────────────────────────────────
 export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }) {
+  const { t } = useTranslation()
   const { user } = useAuthStore()
   const { characters, isGm } = useCharacterStore()
   const playerColor = user?.color || '#3a8aaa'
@@ -478,8 +481,8 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
         ...(isEditMode ? styles.toggleBtnDisabled : {}),
       }}
       onClick={() => !isEditMode && setIsOpen(o => !o)}
-      title={isEditMode ? '' : 'Lanceur de dés'}
-      aria-label="Lanceur de dés"
+      title={isEditMode ? '' : t('dice.panel')}
+      aria-label={t('dice.panel')}
     >
       <DiceIcon size={26}/>
     </button>
@@ -503,8 +506,8 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
 
         {/* ── HEADER ─────────────────────────────────────────────────────── */}
         <div style={styles.header}>
-          <span style={{ ...styles.monoSm, color: playerColor, letterSpacing: '0.18em', fontWeight: 600, flex: 1, fontSize: 11 }}>
-            LANCEUR DE DÉS
+          <span style={{ ...styles.monoSm, color: playerColor, letterSpacing: '0.18em', fontWeight: 600, flex: 1, fontSize: 11, textTransform: 'uppercase' }}>
+            {t('dice.panel')}
           </span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
             <input
@@ -513,8 +516,8 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               onChange={e => setSecret(e.target.checked)}
               style={{ accentColor: '#aa6030', cursor: 'pointer' }}
             />
-            <span style={{ ...styles.monoSm, fontSize: 8, color: secret ? '#e8c870' : '#456575', letterSpacing: '0.08em' }}>
-              JET AU MJ
+            <span style={{ ...styles.monoSm, fontSize: 8, color: secret ? '#e8c870' : '#456575', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {t('dice.gmRoll')}
             </span>
           </label>
           <span
@@ -579,7 +582,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
 
         {/* ── MOD + RESET ────────────────────────────────────────────────── */}
         <div style={{ padding: '4px 14px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ ...styles.monoSm, fontSize: 9, color: '#456575', letterSpacing: '0.1em' }}>MOD</span>
+          <span style={{ ...styles.monoSm, fontSize: 9, color: '#456575', letterSpacing: '0.1em' }}>{t('dice.modLabel')}</span>
 
           <div onClick={() => setMod(formula.mod - 1)} style={styles.modBtn}>
             <span style={styles.modBtnTxt}>−</span>
@@ -607,7 +610,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#aa303055' }}
             >
               <span style={{ ...styles.monoSm, fontSize: 9, color: '#e89090', letterSpacing: '0.08em', fontWeight: 600 }}>
-                ↺ RESET
+                ↺ {t('dice.resetButton')}
               </span>
             </div>
           )}
@@ -621,7 +624,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
             fontSize: 14, fontWeight: 600, letterSpacing: '0.05em',
             color: isEmpty(formula) ? '#3a4a55' : '#dde7ee',
           }}>
-            {isEmpty(formula) ? 'choisis un dé…' : formulaDisplay(formula)}
+            {isEmpty(formula) ? t('dice.chooseDiePrompt') : formulaDisplay(formula)}
           </div>
           <div
             onClick={rollCurrent}
@@ -637,8 +640,8 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               userSelect: 'none',
             }}
           >
-            <span style={{ ...styles.monoSm, fontSize: 11, color: '#aaccdd', fontWeight: 600, letterSpacing: '0.14em' }}>
-              LANCER
+            <span style={{ ...styles.monoSm, fontSize: 11, color: '#aaccdd', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              {t('dice.launch')}
             </span>
           </div>
         </div>
@@ -655,7 +658,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                 if (e.key === 'Enter')  confirmSavePreset()
                 if (e.key === 'Escape') cancelSaveForm()
               }}
-              placeholder="Nom du favori…"
+              placeholder={t('dice.presetNamePlaceholder')}
               style={styles.saveFormInput}
               maxLength={40}
             />
@@ -664,7 +667,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               disabled={!presetName.trim()}
               style={{ ...styles.saveFormBtn, ...(presetName.trim() ? styles.saveFormBtnOk : styles.saveFormBtnDisabled) }}
             >
-              OK
+              {t('dice.saveConfirm')}
             </button>
             <button onClick={cancelSaveForm} style={styles.saveFormBtn}>
               ✕
@@ -678,7 +681,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
             onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
           >
             <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: playerColor }}>
-              + Enregistrer comme favori
+              {t('dice.saveAsFavorite')}
             </span>
           </div>
         )}
@@ -688,22 +691,22 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
         {/* ── FAVORIS ────────────────────────────────────────────────────── */}
         {!showMacroForm && <div style={{ padding: '10px 14px', borderBottom: '1px solid #15212e' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-            <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>FAVORIS</span>
-            <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>— clic = lance · ⇧clic = charge</span>
+            <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>{t('dice.favoritesTitle')}</span>
+            <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>{t('dice.favoritesHint')}</span>
             <div style={{ flex: 1 }}/>
             {presets.length > 0 && (
               <span
                 onClick={() => setEdit(v => !v)}
                 style={{ ...styles.monoSm, fontSize: 8, color: editPresets ? '#e8c870' : '#456575', cursor: 'pointer', letterSpacing: '0.08em', userSelect: 'none' }}
               >
-                {editPresets ? '✓ OK' : '✎ ÉDITER'}
+                {editPresets ? t('dice.editDoneToggle') : t('dice.editToggle')}
               </span>
             )}
           </div>
 
           {presets.length === 0 && (
             <div style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: '#3a4a55', textAlign: 'center', padding: '4px 0' }}>
-              aucun favori — lance un dé puis enregistre
+              {t('dice.noFavorites')}
             </div>
           )}
 
@@ -754,7 +757,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                 }}
                 style={{ ...styles.macroFormSelect, width: '100%', marginBottom: 8 }}
               >
-                <option value=''>— Personnage cible —</option>
+                <option value=''>{t('dice.targetCharacterPlaceholder')}</option>
                 {characters.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -762,22 +765,22 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
             )}
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-              <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>MACROS</span>
-              <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>— clic = lance</span>
+              <span style={{ ...styles.monoSm, fontSize: 8, color: '#aa8a30', letterSpacing: '0.12em', fontWeight: 600 }}>{t('dice.macrosTitle')}</span>
+              <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#456575' }}>{t('dice.macrosHint')}</span>
               <div style={{ flex: 1 }}/>
               {macros.length > 0 && (
                 <span
                   onClick={() => setEditMacros(v => !v)}
                   style={{ ...styles.monoSm, fontSize: 8, color: editMacros ? '#e8c870' : '#456575', cursor: 'pointer', letterSpacing: '0.08em', userSelect: 'none' }}
                 >
-                  {editMacros ? '✓ OK' : '✎ ÉDITER'}
+                  {editMacros ? t('dice.editDoneToggle') : t('dice.editToggle')}
                 </span>
               )}
             </div>
 
             {macros.length === 0 && (
               <div style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: '#3a4a55', textAlign: 'center', padding: '4px 0' }}>
-                aucune macro — créez-en une avec +
+                {t('dice.noMacros')}
               </div>
             )}
 
@@ -819,7 +822,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               <div style={styles.macroForm}>
                 <input
                   type="text" value={mfName} onChange={e => setMfName(e.target.value)}
-                  placeholder="Nom de la macro…" maxLength={40}
+                  placeholder={t('dice.macroNamePlaceholder')} maxLength={40}
                   style={{ ...styles.macroFormInput, marginBottom: 8 }}
                 />
 
@@ -837,9 +840,9 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                         }}
                         style={styles.macroFormSelect}
                       >
-                        <option value="skill">Compétence</option>
-                        <option value="attribute">Attribut</option>
-                        <option value="secondary">Secondaire</option>
+                        <option value="skill">{t('dice.sourceTypeSkill')}</option>
+                        <option value="attribute">{t('dice.sourceTypeAttribute')}</option>
+                        <option value="secondary">{t('dice.sourceTypeSecondary')}</option>
                       </select>
                       <select
                         value={src.ref_id}
@@ -850,7 +853,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                         }}
                         style={{ ...styles.macroFormSelect, flex: 1 }}
                       >
-                        <option value="">— choisir —</option>
+                        <option value="">{t('dice.chooseOptionPlaceholder')}</option>
                         {opts.map(o => (
                           <option key={o.skill_id || o.id} value={o.skill_id || o.id}>{o.label}</option>
                         ))}
@@ -863,11 +866,11 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                 })}
 
                 {mfSources.length < 3 && (
-                  <div onClick={addSource} style={{ ...styles.macroFormSmallBtn, marginBottom: 8 }}>+ source</div>
+                  <div onClick={addSource} style={{ ...styles.macroFormSmallBtn, marginBottom: 8 }}>{t('dice.addSourceButton')}</div>
                 )}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <span style={{ ...styles.monoSm, fontSize: 9, color: '#456575' }}>MOD</span>
+                  <span style={{ ...styles.monoSm, fontSize: 9, color: '#456575' }}>{t('dice.modLabel')}</span>
                   <input
                     type="number" value={mfModifier} min={-99} max={99}
                     onChange={e => setMfModifier(parseInt(e.target.value, 10) || 0)}
@@ -875,7 +878,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                   />
                   {mfPreview !== null && (
                     <span style={{ ...styles.monoSm, fontSize: 10, color: '#aa8a30', marginLeft: 4 }}>
-                      seuil : <strong>{mfPreview}</strong>
+                      {t('dice.thresholdLabel')} : <strong>{mfPreview}</strong>
                     </span>
                   )}
                 </div>
@@ -883,12 +886,12 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                 <textarea
                   value={mfTemplate}
                   onChange={e => setMfTemplate(e.target.value)}
-                  placeholder={'{me} — {source} → {résultat}/{seuil} → {succès} {critique}'}
+                  placeholder={t('dice.templatePlaceholder')}
                   rows={2}
                   style={{ ...styles.macroFormInput, resize: 'none', width: '100%', boxSizing: 'border-box', marginBottom: 4 }}
                 />
                 <div style={{ fontFamily: 'Caveat, cursive', fontSize: 9, color: '#3a4a55', marginBottom: 8 }}>
-                  {'{me} {source} {résultat} {seuil} {modificateur} {succès} {critique}'}
+                  {t('dice.templateVariablesHint')}
                 </div>
 
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -897,9 +900,9 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                     disabled={!mfName.trim() || mfSources.every(s => !s.ref_id)}
                     style={{ ...styles.macroFormBtn, flex: 1, ...(mfName.trim() && mfSources.some(s => s.ref_id) ? { borderColor: '#aa8a30', color: '#e8c870' } : { opacity: 0.4 }) }}
                   >
-                    Créer
+                    {t('dashboard.create')}
                   </button>
-                  <button onClick={closeMacroForm} style={styles.macroFormBtn}>Annuler</button>
+                  <button onClick={closeMacroForm} style={styles.macroFormBtn}>{t('common.cancel')}</button>
                 </div>
               </div>
             ) : macros.length < 10 ? (
@@ -908,12 +911,12 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                 onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
               >
                 <span style={{ fontFamily: 'Caveat, cursive', fontSize: 12, color: '#aa8a30' }}>
-                  + Créer une macro
+                  {t('dice.createMacroButton')}
                 </span>
               </div>
             ) : (
               <div style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: '#3a4a55', textAlign: 'center', padding: '4px 0' }}>
-                limite de 10 macros atteinte
+                {t('dice.macroLimitReached')}
               </div>
             )}
           </div>
@@ -931,11 +934,11 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
               userSelect: 'none',
             }}
           >
-            <span style={{ ...styles.monoSm, fontSize: 8, color: '#5a7080', letterSpacing: '0.12em', fontWeight: 600 }}>
-              HISTORIQUE
+            <span style={{ ...styles.monoSm, fontSize: 8, color: '#5a7080', letterSpacing: '0.12em', fontWeight: 600, textTransform: 'uppercase' }}>
+              {t('dice.history')}
             </span>
             <span style={{ fontFamily: 'Caveat, cursive', fontSize: 10, color: '#3a4a55' }}>
-              ({history.length}) — aussi dans le chat
+              ({history.length}) {t('dice.historyAlsoInChat')}
             </span>
             <div style={{ flex: 1 }}/>
             <span style={{ ...styles.monoSm, fontSize: 10, color: '#5a7080' }}>
@@ -947,7 +950,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
             <div style={{ padding: '4px 14px 8px', maxHeight: 140, overflowY: 'auto' }}>
               {history.length === 0 ? (
                 <div style={{ fontFamily: 'Caveat, cursive', fontSize: 11, color: '#3a4a55', textAlign: 'center', padding: 8 }}>
-                  aucun jet pour le moment
+                  {t('dice.noRollsYet')}
                 </div>
               ) : history.map(h => {
                 const accent = h.crit ? '#3aaa6a' : (h.fumble ? '#aa3030' : '#7a8a99')
@@ -955,7 +958,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                   <div
                     key={h.id}
                     onClick={() => reroll(h.formula)}
-                    title="Clic : rejouer ce jet"
+                    title={t('dice.rerollTooltip')}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 4px', borderBottom: '1px solid #0e1520', opacity: h.secret ? 0.55 : 1, cursor: 'pointer', transition: 'background 0.1s' }}
                     onMouseEnter={e => { e.currentTarget.style.background = '#0a1018' }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
@@ -964,7 +967,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                     <span style={{ ...styles.monoSm, fontSize: 10, color: '#7a8a99', flex: 1 }}>{h.formula}</span>
                     <span style={{ ...styles.monoSm, fontSize: 8, color: '#3a4a55' }}>[{h.rolls.join(',')}]</span>
                     <span style={{ ...styles.monoSm, fontSize: 14, color: accent, fontWeight: 700, minWidth: 26, textAlign: 'right' }}>{h.result}</span>
-                    {h.secret && <span style={{ fontSize: 9 }} title="Jet au MJ">🔒</span>}
+                    {h.secret && <span style={{ fontSize: 9 }} title={t('dice.gmRoll')}>🔒</span>}
                   </div>
                 )
               })}
@@ -974,8 +977,8 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
 
         {/* ── FOOTER — drag handle ────────────────────────────────────────── */}
         <div style={styles.footer}>
-          <button style={styles.dragHandle} onPointerDown={handleDragStart} aria-label="Déplacer le panneau">
-            ≡ Déplacer
+          <button style={styles.dragHandle} onPointerDown={handleDragStart} aria-label={t('dice.dragPanelLabel')}>
+            ≡ {t('dice.move')}
           </button>
         </div>
       </div>
