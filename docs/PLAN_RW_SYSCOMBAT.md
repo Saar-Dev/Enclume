@@ -283,6 +283,147 @@ quasi nul :
 4. Dispositif temporaire — supprimé avec le bloc inline au commit qui clôture le Lot 1, jamais laissé en
    double-calcul permanent.
 
+### 2.4 Architecture retenue — Lot 2 (branchement défenseur CaC + `confirmMeleeDefense`)
+
+> **Corrigée le 2026-07-26 après analyse à charge** — la version précédente de cette section avait un
+> angle mort (point h) et une erreur factuelle (point b). Les deux sont corrigés ci-dessous plutôt que
+> réécrits en silence, pour garder la trace de ce qui a été trouvé et pourquoi.
+
+Scope resserré après lecture du code réel (2026-07-26) : Lot 2 ne couvre que `resolveMeleeAction`.
+`resolveAssaultAction` n'a **pas** de branchement défenseur symétrique — le Tir n'a pas de jet de
+défense opposé (RAW : la défense est pliée dans le Seuil de l'attaquant), `[VÉRIFIÉ]` par grep, aucun
+`AWAITING_DEFENSE`/`DEFENSE_PROMPT` côté Tir. Le branchement réel de `resolveAssaultAction` est sur le
+type de l'**attaquant** (PJ diffère les dégâts au joueur / PNJ résout immédiatement, avec un sous-cas
+cible-drone imbriqué, L.2784) — un axe différent, hors périmètre de ce Lot (voir §3.1).
+
+**a) Les 4 branches à extraire (`resolveMeleeAction`, état post-Lot 1, `[VÉRIFIÉ]` par lecture).**
+Correctif du tableau §3 : le texte « PJ sans-défense » d'une version antérieure de ce plan était
+imprécis — la cible sans défense (DEF5) s'applique à n'importe quel type de défenseur, ce n'est pas la
+branche PJ. Les 4 branches réelles, mutuellement exclusives :
+1. `resolveDefenselessTarget` — cible sans défense (DEF5), tout type de défenseur, auto-résolution
+   complète.
+2. `resolveMeleeDefensePnj` — défenseur PNJ, jet de défense opposé réel.
+3. `resolveMeleeDefenseDrone` — défenseur drone, pas de jet de défense (§7.4).
+4. `resolveMeleeDefensePj` — défenseur PJ, suspend + prompt (`COMBAT_MELEE_DEFENSE_PROMPT`), résolu
+   plus tard par `COMBAT_MELEE_DEFENSE_CONFIRM` (hors de cette fonction).
+
+Le cas « décor » (`!targetToken?.character_id`) reste inline — 3 lignes, extraction inutile.
+
+**b) Un objet de contexte à vérifier champ par champ, pas une réutilisation gratuite.** `[VÉRIFIÉ]`
+correctif d'une erreur de la version précédente de cette section : `commonPending` n'est **aujourd'hui
+consommé que par la branche PJ** (L.1814) — c'est le payload persisté en base (`combat_pending.payload`)
+et relu par nom de champ dans `confirmMeleeDefense` (L.527-539, point h), pas un objet de contexte déjà
+généraliste. L'étendre pour servir aussi aux branches 1-3 reste une bonne idée mais demande une
+vérification champ par champ : `weaponInvId` et `damageFormula` y sont **déjà** présents (L.1581-1582,
+inutile de les rajouter, contrairement à ce que disait la version précédente) ; le vrai manque est
+`targetTokenId` (scalaire, utilisé par les 4 branches — pas `targetToken`, la ligne complète n'étant plus
+nécessaire une fois `defenderCharacter`/`targetName` déjà résolus par la coquille), plus
+`sheetAttaquant.id` et `naturalWeaponCharMutationId` (dégâts, branches 1-3 seulement). Contrainte
+supplémentaire : aucune clé existante ne doit être renommée — `confirmMeleeDefense` les lit par nom sans
+validation de schéma, un renommage silencieux casserait ce lecteur externe sans erreur visible avant le
+prochain combat à défenseur PJ.
+
+**c) Dispatch : suite de gardes, pas de table générique.** Seulement 3-4 cas mutuellement exclusifs sur
+`defenderCharacter.type` — la doctrine standard (catalogue de refactoring Fowler, « guard clauses » vs
+« dispatch table ») réserve la table de dispatch aux cas nombreux et homogènes ; une suite simple
+`if (defenseless) return await resolveDefenselessTarget(...); if (type === 'pnj') return await
+resolveMeleeDefensePnj(...); ...` reste la solution la plus simple, cohérente avec le style déjà en
+place dans ce fichier (`resolveDroneAssaultAction` extrait de la même façon, pas de registre).
+
+**d) Réutilisation gratuite du noyau Lot 1.** `breakdownDef` (défense PNJ, L.1702-1709) a exactement la
+forme `{ label, value, type }` — `resolveMeleeDefensePnj` appelle `computeAttackRoll` pour ce jet de
+défense au lieu de reconstruire le breakdown à la main (RV6, §7). Zéro nouveau code à valider : le
+noyau est déjà testé et éprouvé en jeu par le Lot 1.
+
+**e) Contrat à préserver — appelants vérifiés.** `resolveMeleeAction` n'est appelée que par
+`socketCombatResolution.js:362` (`[VÉRIFIÉ]` par grep, aucun autre site) — chaque fonction extraite doit
+retourner exactement `{ suspend, emissions }`, même contenu et même ordre d'émissions qu'aujourd'hui ; la
+coquille assemble `commonPending`, appelle la bonne branche, et retransmet son retour tel quel.
+`confirmMeleeDefense` (point h) a en revanche **deux** appelants `[VÉRIFIÉ]` par grep : le handler
+`COMBAT_MELEE_DEFENSE_CONFIRM` (`socketCombatResolution.js:410`, joueur qui confirme sa défense) et
+`forceAdvanceResolution` (`socketCombatHelpers.js:998`, MJ qui force la résolution à la place d'un joueur
+absent, `forced:true`) — le correctif du breakdown doit rester correct dans les deux appels, pas
+seulement le chemin joueur normalement testé.
+
+**f) Vérification — pas de shadow-mode (contrairement au Lot 1), scénarios corrigés.** Les branches
+écrivent en base (`combat_pending`, `resolveDroneIntegrityLoss`, `resolveTargetHit`) et émettent des
+événements — les rejouer deux fois pour comparer doublerait les dégâts et les jets de dés, contrairement
+au noyau pur du Lot 1. La vérification reprend la méthode déjà utilisée avec succès sur ce projet pour du
+code touchant la DB (Tir visé, Moding Groupe 1, Lot B — `docs/EN_COURS.md`) : un script de fixture
+jetable (campagne/tokens/personnages construits à la main), nettoyage vérifié 0 résidu, jamais commité
+(`CLAUDE.md` §7 : test temporaire hors dépôt partagé). « Un scénario par branche » (4) sous-comptait :
+la branche sans-défense se resépare elle-même en drone/non-drone (L.1620), et `confirmMeleeDefense`
+(point h) ajoute son propre succès/échec de défense et son branchement attaquant PJ/PNJ après un hit.
+Liste minimale :
+1. Sans-défense, défenseur non-drone → touché.
+2. Sans-défense, défenseur drone → touché.
+3. PNJ défenseur → attaquant touche (défense ratée ou MR inférieur).
+4. PNJ défenseur → défense réussie (pas de hit) — vérifie le noyau hors du seul cas « victoire ».
+5. Drone défenseur → touché.
+6. PJ défenseur → suspend + prompt émis (pas encore confirmé) — couvre aussi l'invariant d'ordre (i).
+7. `confirmMeleeDefense` → défense réussie (miss).
+8. `confirmMeleeDefense` → touché, attaquant PJ (dégâts différés au joueur).
+9. `confirmMeleeDefense` → touché, attaquant PNJ (dégâts auto).
+
+Plus une session de jeu réelle de Saar avant clôture, comme au Lot 1, couvrant au moins un défenseur PJ
+réel (déclaration → défense confirmée → dégâts) en plus des cas PNJ/drone/sans-défense.
+
+**g) Décision tranchée — le bloc PJ reste dans Lot 2.** La branche PJ (L.1813-1831) contient
+`combat_pending`/`setFSMSubPhase`/`broadcastCurrentSubPhase` — primitives que le Lot 3 doit par ailleurs
+traiter pour le reste de l'orchestration. Décision : ce bloc reste dans Lot 2 en tant que 4ᵉ branche
+défenseur (cohésion du groupe) ; le Lot 3 ne touchera que l'orchestration qui n'est pas déjà rattachée à
+une branche défenseur précise.
+
+**h) `confirmMeleeDefense` entre dans le périmètre — même dette, deuxième copie (angle mort trouvé en
+analyse à charge).** `resolveMeleeAction` ne fait que **suspendre** côté PJ (branche 4) — la vraie
+résolution (jet de défense opposé, ajustement mode de combat/terrain instable, breakdown) vit dans
+`confirmMeleeDefense` (`socketCombatHelpers.js:510-732`), la seule fonction qui relit `commonPending`
+depuis la base. Cette fonction contient sa propre copie du calcul de défense — `chanceDefense`,
+`breakdownDefPj` (L.580-587), `hit`, `mr` — miroir quasi identique de la branche PNJ (`breakdownDef`,
+L.1702). RV6 (§7) ne visait que la branche PNJ ; sans ce point, la dette resterait à moitié réglée : la
+deuxième copie continuerait d'exister côté PJ, exactement ce que ce chantier cherche à éliminer.
+Correctif : `confirmMeleeDefense` appelle `computeAttackRoll` avec `rollAttaque: rollDefense` (le noyau
+ne connaît qu'« un jet de D20 », peu importe s'il s'agit d'une attaque ou d'une défense — aucun
+changement du noyau Lot 1, déjà testé et clos) et la même liste de contributions ordonnée que la branche
+PNJ. `confirmMeleeDefense` reste par ailleurs une fonction à part entière déjà correctement isolée (pas
+de duplication structurelle dans son branchement attaquant PJ/PNJ après le hit, L.621-718) — seul le
+calcul de la défense elle-même bascule sur le noyau.
+
+**i) Invariant d'ordre — à tester explicitement, pas seulement par relecture.** Le test « cible sans
+défense » (DEF5) doit rester évalué **avant** le type de défenseur : un PNJ ou un PJ étourdi/inconscient
+doit toujours passer par `resolveDefenselessTarget`, jamais par sa branche de type normale (sinon un
+défenseur sans-défense relancerait un jet de défense actif, contraire au RAW,
+`REGLESYSCOMBAT.md:1055-1057`, déjà cité §0). Cet ordre est correct dans le code actuel (L.1604 avant
+L.1666/1779/1813) ; Lot 2 doit le préserver explicitement et le vérifier par un scénario dédié (f.6), pas
+seulement par relecture du diff.
+
+**j) Aucune transaction, aucun filet — l'ordre des `await` doit rester identique, pas seulement les
+appels.** `[VÉRIFIÉ]` par grep : une seule `db.transaction(` dans tout le fichier (L.1952, sans rapport
+avec cette résolution). Aucune des écritures de la résolution CaC (`combat_pending`, `resolveTargetHit`,
+`resolveDroneIntegrityLoss`) n'est atomique aujourd'hui — un crash à mi-chemin peut déjà laisser un état
+incohérent, sans rattrapage. Lot 2 ne doit pas seulement préserver les mêmes appels, mais le même ordre
+exact d'`await`, faute de quoi un échec partiel laisserait un état différent d'aujourd'hui.
+
+**k) Invariant de propagation d'erreur — aucune fonction extraite ne doit avoir son propre `try/catch`.**
+`[VÉRIFIÉ]` : le catch unique de `resolveMeleeAction` (L.1832-1835) retourne `{ suspend: false, emissions:
+[] }` sur toute exception — un tableau **vide**, pas le tableau `emissions` déjà rempli. Comportement
+actuel : si une branche défenseur lève une exception après que le `DICE_RESULT` de l'attaque a déjà été
+mis en file (toujours le cas, il est poussé avant le branchement), ce `DICE_RESULT` est silencieusement
+perdu — pas un bug de ce chantier, mais un comportement à préserver à l'identique. Si une des 4 fonctions
+extraites gagnait son propre `try/catch` local, elle pourrait retourner des émissions partielles au lieu
+de rien, changeant ce comportement sans que personne ne le remarque avant un crash réel en jeu — donc
+aucune fonction extraite ne doit attraper ses propres erreurs, elles remontent toutes au catch unique de
+la coquille.
+
+**l) `confirmMeleeDefense` a une sémantique d'échec différente — à ne pas harmoniser au passage.**
+Contrairement à `resolveMeleeAction` (file `emissions[]`, flush différé par l'appelant), `confirmMeleeDefense`
+émet directement et immédiatement (`io.to(...).emit(...)`, `[VÉRIFIÉ]` L.593, L.610) ; son catch (L.729)
+ne fait que logger, sans rien annuler — un événement déjà émis avant une exception reste envoyé,
+contrairement à `resolveMeleeAction` où tout serait perdu. Les deux fonctions ont donc deux comportements
+différents face à une erreur en cours de route, aujourd'hui. Le point h) ne change que le calcul du
+breakdown — il ne doit pas tenter d'unifier ces deux styles au passage (ce serait INFRA-2, §5, hors
+périmètre, décision séparée).
+
 ---
 
 ## 3. Découpage en lots — un seul problème par lot, validé avant le suivant
@@ -294,7 +435,7 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 |---|---|---|---|
 | **Lot 0** | Tables CaC/taille/portée → `shared/combatSituationMods.js` étendu (§2.1.a) : 3 sites serveur (melee/assault/drone) + 2 fenêtres client basculés, copies locales supprimées | Faible — valeurs inchangées, invariant « autorité unique des tables », vérifiable par simple comparaison des constantes | **Codé (2026-07-25)** — 23 valeurs vérifiées conformes par script, build Vite OK, syntaxe serveur OK ; ⚠️ en attente : vérif visuelle Saar des 2 fenêtres + démarrage serveur réel + décision commit (Session 176 toujours non committée sur le même fichier, §0.5) |
 | **Lot 1** | Noyau `computeAttackRoll` (§2.1.b-d) + assemblage contributions dans les deux fonctions + shadow-mode (§2.3) + tests unitaires (§2.2) | Faible — comportement identique bit-à-bit, aucune écriture DB ni émission déplacée | **✅ Clos (2026-07-25)** — 9 tests unitaires OK, fuzz 1000 tirages sans écart, session de jeu réelle Saar (CaC PJ/PNJ + Tir + attaque multiple + deux armes + mode offensif + Seuil négatif) sans aucun `[DBG-DECOUPLAGE]`, bloc inline + dispositif retirés, noyau autoritaire. Modificateurs non exercés en jeu (couverts par fuzz + tests seulement) : taille≠moyenne, terrain instable, bouclier, sans défense, précipitation, tir visé, visée localisation, dual-wield Tir, couverture, mods d'arme |
-| **Lot 2** | Extraire le branchement défenseur (PNJ auto-résolution CaC / drone / PJ sans-défense) en fonctions dédiées | Moyen — touche à des `await db(...)` et à la construction des émissions `COMBAT_MELEE_RESULT`/`COMBAT_ATTACK_RESULT` | Non commencé, à planifier après le Lot 1 |
+| **Lot 2** | `resolveMeleeAction` (4 branches défenseur) **+ `confirmMeleeDefense`** (même dette de breakdown dupliqué côté PJ, trouvée en analyse à charge, point h) — détail §2.4 | Moyen — touche à des `await db(...)` et à la construction des émissions `COMBAT_MELEE_RESULT`/`COMBAT_ATTACK_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (9 scénarios, §2.4.f), pas de shadow-mode possible (effets de bord) | **✅ Clos (2026-07-27)** — `node --check` propre, 9 tests Lot 1 toujours au vert (noyau non touché), équivalence numérique ancienne formule/`computeAttackRoll` vérifiée sur 7 cas (script jetable, sans DB), 7 scénarios de fixture jetable en base réelle (0 résidu après coup), puis session de jeu réelle Saar (CaC PNJ auto-résolution + cible sans défense après étourdissement) confirmée sans régression — vérifié aussi en base (2 blessures correctement écrites, une par chemin de code touché). Alerte initiale de Saar (« résolutions manquantes ») retombée sur deux comportements corrects non liés au Lot 2 (attaque hors portée rejetée, PNJ étourdi auto-skip) |
 | **Lot 3** | Orchestration DB/socket restante (`combat_pending`, `setFSMSubPhase`, `broadcastCurrentSubPhase`) | Élevé — recoupe RC2/BUG-1 (`docs/AUDIT_FABLE.md`), la cause probable du bug COM27 déjà documenté | Non commencé — **à ne jamais mélanger avec un correctif fonctionnel de COM27** ; si COM27 est corrigé avant ce Lot, ce Lot devra repartir du code déjà corrigé, pas l'inverse |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
@@ -316,6 +457,12 @@ que les Lots 2 et 3 ne sont pas faits. Point secondaire d'honnêteté : la toute
 orale de ce chantier incluait la résolution arme/distance dans un « Lot 1 » plus large — portée
 resserrée après la lecture de `charStats.js` (§0.3), volontairement, pour respecter la pureté stricte
 déjà en vigueur ailleurs dans le projet.
+
+**Asymétrie CaC/Tir découverte en planifiant le Lot 2** : `resolveAssaultAction` n'a pas de branchement
+défenseur au sens CaC — pas de jet de défense opposé en Tir (RAW), son branchement réel est sur le type
+de l'**attaquant** (PJ diffère les dégâts / PNJ résout immédiatement, avec un sous-cas cible-drone
+imbriqué). Hors périmètre du Lot 2 tel que planifié (§2.4) ; à traiter dans un lot séparé si souhaité,
+pas mélangé ici (`CLAUDE.md` §13, un plan = un problème).
 
 ---
 
@@ -362,8 +509,12 @@ Aucune règle de jeu ne change. Aucune migration, aucun nouvel événement WS, a
   aucun `[DBG-DECOUPLAGE]` sur au moins un combat CaC réel et un combat Tir réel en jeu par Saar, à
   modificateurs cumulés (ex. multi-adversaires + mode combat + deux armes) — puis retrait du bloc inline
   et du dispositif de comparaison une fois confirmé.
-- **Non testé** : ce qui reste après le Lot en cours (Lots suivants du tableau §3) — marquer
-  `⚠️ clos partiel` tant que les 4 Lots ne sont pas tous fermés.
+- **Testé (Lot 2)** : équivalence numérique ancienne formule/`computeAttackRoll` sur 7 cas (script pur,
+  sans DB) + 7 scénarios de fixture jetable en base réelle (0 résidu, §2.4.f) + session de jeu réelle
+  Saar (CaC PNJ auto-résolution, cible sans défense après étourdissement) + vérification directe en base
+  des blessures écrites par les deux chemins de code touchés.
+- **Non testé** : Lot 3 (tableau §3) — marquer `⚠️ clos partiel` tant que les 4 Lots ne sont pas tous
+  fermés.
 - **Données** : aucune migration, aucun effet runtime en dehors du code déplacé.
 - **Retour arrière** : chaque Lot est un commit isolé — `git revert` suffit, aucune donnée vivante
   affectée.

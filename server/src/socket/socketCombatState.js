@@ -146,6 +146,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       const broadcastRoster = insertedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
       io.to(campaignId).emit(WS.COMBAT_STARTED, { roster: broadcastRoster, phase: 'ROSTER' })
 
+      console.log('###### DEBUT COMBAT #############')
       console.log(`[WS] combat:start — ${user.username} → ${tokens.length} participants (campagne ${campaignId})`)
     } catch (err) {
       console.error('[WS] combat:start error:', err.message)
@@ -238,6 +239,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       pendingMaps.combatPreviews.delete(campaignId)
       io.to(campaignId).emit(WS.COMBAT_ENDED)
 
+      console.log('###### FIN COMBAT #############')
       console.log(`[WS] combat:end — ${user.username} (campagne ${campaignId})`)
     } catch (err) {
       console.error('[WS] combat:end error:', err.message)

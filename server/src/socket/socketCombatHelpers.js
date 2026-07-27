@@ -544,11 +544,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     // Mode combat du défenseur PJ — Offensif/Charge → pénalité, Défensif/Retraite → bonus (CaC3)
     const rosterDef = await db('combat_roster').where({ campaign_id: meleeCampaignId, token_id: tokenId }).first()
     const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
-    let chanceDefense = defenderSkillTotal + defenderEffectiveMalus + (multiMalusDefenseur ?? 0)
-    if      (defCombatMode === 'offensif') chanceDefense -= 5
-    else if (defCombatMode === 'charge')   chanceDefense -= 7
-    else if (defCombatMode === 'defensif') chanceDefense += 3
-    else if (defCombatMode === 'retraite') chanceDefense += 5
+    const modeCombatDefPj = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
 
     // Terrain instable défenseur PJ — compétence limitative ACROBATIE_EQUILIBRE
     let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
@@ -566,25 +562,25 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         ? calcSkillTotal(attrsCibleDef, acrobatieCharDef, acrobatieRefDef, genoCibleDef, mutationEffectsCibleDef)
         : defenderSkillTotal
       terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
-      chanceDefense += terrainInstableModDef
     }
 
+    // Seuil de défense + breakdown — noyau pur du Lot 1 réutilisé ici (Lot 2, RV6, PLAN_RW_SYSCOMBAT.md
+    // §2.4.h) au lieu d'un tableau assemblé à la main (miroir de resolveMeleeDefensePnj).
+    const { seuil: chanceDefense, breakdown: breakdownDefPj, isSuccess: defenseSuccess, mr: mrDefense } = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
+      contributions: [
+        { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' },
+        { label: 'Multi-adversaires', value: multiMalusDefenseur ?? 0, type: 'malus' },
+        { label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' },
+        { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
+      ],
+    })
+
     // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
-    const mrAttaque      = chancesAttaque - rollAttaque
-    const mrDefense      = chanceDefense  - rollDefense
-    const attackSuccess  = rollAttaque  <= chancesAttaque
-    const defenseSuccess = rollDefense  <= chanceDefense
+    const mrAttaque     = chancesAttaque - rollAttaque
+    const attackSuccess = rollAttaque <= chancesAttaque
     const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
-    const modeCombatDefPj = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
-    const breakdownDefPj = [
-      { label: 'Compétence', value: defenderSkillTotal, type: 'base' },
-      ...(modeCombatDefPj !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' }] : []),
-      ...((multiMalusDefenseur ?? 0) !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
-      ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
-      ...(terrainInstableModDef !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' }] : []),
-      { label: 'Seuil', value: chanceDefense, type: 'total' },
-    ]
     console.log(`[WS] melee défense — rollAtk:${rollAttaque}/${chancesAttaque} rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
 
     // Broadcast roll défense au chat — identité du défenseur si forcé par le MJ (§ « devient PNJ
@@ -602,7 +598,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
       chancesDeReussite: chanceDefense,
       isSuccess:         defenseSuccess,
-      mr:                chanceDefense - rollDefense,
+      mr:                mrDefense,
       breakdown:         breakdownDefPj,
     })
 
@@ -1566,6 +1562,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         : 0)
     }
 
+    // Lot 2 (PLAN_RW_SYSCOMBAT.md §2.4.b) : commonPending sert désormais de contexte partagé aux 4
+    // fonctions de branchement défenseur, pas seulement au payload persisté pour le défenseur PJ —
+    // targetTokenId/attackerSheetId/naturalWeaponCharMutationId/defenderCharacterName ajoutés pour cet
+    // usage (clés en plus, ignorées sans risque par confirmMeleeDefense qui ne lit que ce qu'elle
+    // connaît par nom, §2.4.b).
     const commonPending = {
       campaignId,
       attackerTokenId: action.token_id,
@@ -1593,246 +1594,291 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       defenderUserId: defenderCharacter.user_id,
       confirmedModifiers,
       situationDef: confirmedModifiers?.situationDef ?? [],
+      targetTokenId,
+      attackerSheetId: sheetAttaquant.id,
+      naturalWeaponCharMutationId,
+      defenderCharacterName: defenderCharacter.name,
     }
 
-    // ── DEF5 — Cible sans défense : Test simple +5, aucune opposition ──────────
-    // Généralise le pattern déjà utilisé pour le défenseur drone (§7.4, pas de jet de défense) à
-    // n'importe quel type de défenseur dès que la cible est sans défense — sinon un PNJ/PJ
-    // inconscient/étourdi relancerait quand même un jet de défense actif, contraire au RAW
-    // (REGLESYSCOMBAT.md:1055-1057). Auto-résolution complète, dégâts compris — décision Saar
-    // (2026-07-19), même principe qu'un défenseur non-actif.
+    // ── Branchement défenseur (PLAN_RW_SYSCOMBAT.md §2.4, Lot 2) ───────────────
+    // Ordre invariant (§2.4.i) : sans-défense d'abord, quel que soit le type de défenseur — sinon un
+    // PNJ/PJ étourdi relancerait un jet de défense actif, contraire au RAW (REGLESYSCOMBAT.md:1055-1057).
     if (targetDefenseless) {
-      const hit = rollAttaque <= chancesAttaque
-      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
-        attaquantId: action.token_id, defenseurId: targetTokenId,
-        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
-        multiMalusAttaquant,
-      } })
-      if (hit) {
-        // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
-        // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
-        const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-          weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
-        })
-        const mrAttaqueDefenseless = chancesAttaque - rollAttaque
-        const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDefenseless)
-        const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
-        if (defenderCharacter.type === 'drone') {
-          const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
-          if (droneSheet) {
-            const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-            await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
-            emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-              tireurId: action.token_id, cibleId: targetTokenId,
-              localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
-              severity: null, is_lethal: false, isSuccess: true, isPnj: true,
-              roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
-            } })
-          }
-        } else {
-          const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-            degautsBruts,
-            characterIdCible: defenderCharacter.id,
-            cibleType:        defenderCharacter.type,
-            char_sheet_id_cible,
-            for_na_cible, con_na_cible, vol_na_cible,
-            chocDsl: effectiveChocDsl,
-            treatAsContact: true,
-          })
-          if (hitResult) {
-            const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
-            if (shockResult) {
-              statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
-            }
-            emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-              tireurId:    action.token_id, cibleId: targetTokenId,
-              localisation, degautsBruts, degatsNets,
-              severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
-              roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
-            } })
-            if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-              statusService.applyStun(io, db, campaignId, {
-                targetTokenId, outcome: shockResult.outcome,
-                userId: character.user_id, username: attackerUsername, color: attackerColor,
-              }).catch(err => console.error('[WS] applyStun error:', err.message))
-            }
-          }
-        }
-      }
-      return { suspend: false, emissions }
+      return await resolveDefenselessTarget(io, campaignId, commonPending, emissions)
     }
-
-    // ── 4. PNJ défenseur : auto-résolution ────────────────────────────────────
     if (defenderCharacter.type === 'pnj') {
-      const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
-      // Mode combat du défenseur — Offensif/Charge → pénalité défense
-      const rosterDef = await db('combat_roster').where({ campaign_id: campaignId, token_id: targetTokenId }).first()
-      const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
-      let chanceDefense = defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur
-      if      (defCombatMode === 'offensif') chanceDefense -= 5
-      else if (defCombatMode === 'charge')   chanceDefense -= 7
-      else if (defCombatMode === 'defensif') chanceDefense += 3
-      else if (defCombatMode === 'retraite') chanceDefense += 5
-      // Terrain instable défenseur PNJ — compétence limitative ACROBATIE_EQUILIBRE
-      // attrsCible/genoCible hors scope (déclarés dans if(sheetCible)) → re-fetch conditionnel
-      let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
-      if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
-        const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsDef] = await Promise.all([
-          db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
-          db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
-          db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
-          db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
-          getMutationEffects(char_sheet_id_cible),
-        ])
-        const genoDef = archetypeDef?.genotype_id
-          ? await db('ref_genotypes').where({ id: archetypeDef.genotype_id }).first() : null
-        acrobatieDefTotal = acrobatieRefDef
-          ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef, mutationEffectsDef)
-          : defenderSkillTotal
-        terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
-        chanceDefense += terrainInstableModDef
-      }
-      const mrAttaque      = chancesAttaque - rollAttaque
-      const mrDefense      = chanceDefense  - rollDefense
-      const attackSuccess  = rollAttaque  <= chancesAttaque
-      const defenseSuccess = rollDefense  <= chanceDefense
-      const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
-
-      const modeCombatDef = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
-      const breakdownDef = [
-        { label: 'Compétence', value: defenderSkillTotal, type: 'base' },
-        ...(modeCombatDef !== 0 ? [{ label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDef, type: modeCombatDef > 0 ? 'bonus' : 'malus' }] : []),
-        ...(multiMalusDefenseur !== 0 ? [{ label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' }] : []),
-        ...(defenderEffectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' }] : []),
-        ...(terrainInstableModDef !== 0 ? [{ label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' }] : []),
-        { label: 'Seuil', value: chanceDefense, type: 'total' },
-      ]
-      console.log(`[WS] melee défense PNJ — rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
-
-      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
-        userId: null, username: defenderCharacter.name ?? 'PNJ', color: '#808080',
-        formula: '1d20', rolls: defRolls, total: rollDefense,
-        isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
-        seed: defSeed, timestamp: new Date().toISOString(),
-        skillLabel:        'Jet pour défendre (contact)',
-        mechanicalTotal:   defenderSkillTotal,
-        diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
-        chancesDeReussite: chanceDefense,
-        isSuccess:         defenseSuccess,
-        mr:                chanceDefense - rollDefense,
-        breakdown:         breakdownDef,
-      } })
-
-      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
-        attaquantId: action.token_id, defenseurId: targetTokenId,
-        rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit,
-        multiMalusAttaquant, multiMalusDefenseur,
-      } })
-
-      if (hit) {
-        // Dégâts auto (même logique que PNJ dans resolveAssaultAction) — délègue entièrement à
-        // damageService.resolveTargetHit (localisation/armure/RD/sévérité/blessure/shock), qui
-        // fetch désormais aussi mutations/avantages pour RD/Choc (docs/PLAN_MUTATION2.md Lot 3).
-        // Ancien duplicata inline retiré — c'est exactement la duplication qui avait nécessité un
-        // 2ᵉ correctif lors du bug de signe RD (Session 141 suite 22).
-        // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
-        // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
-        const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-          weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
-        })
-        // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
-        const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
-        const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
-        const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-          degautsBruts,
-          characterIdCible: defenderCharacter.id,
-          cibleType:        defenderCharacter.type,
-          char_sheet_id_cible,
-          for_na_cible, con_na_cible, vol_na_cible,
-          chocDsl: effectiveChocDsl,
-          treatAsContact: true,
-        })
-
-        if (hitResult) {
-          const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
-
-          if (shockResult) {
-            statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, attackerUsername, attackerColor)
-          }
-
-          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-            tireurId:    action.token_id, cibleId: targetTokenId,
-            localisation, degautsBruts, degatsNets,
-            severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
-            roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
-          } })
-          if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-            statusService.applyStun(io, db, campaignId, {
-              targetTokenId, outcome: shockResult.outcome,
-              userId: character.user_id, username: attackerUsername, color: attackerColor,
-            }).catch(err => console.error('[WS] applyStun error:', err.message))
-          }
-        }
-      }
-
-      return { suspend: false, emissions }  // entrée résolue, advanceTimeline() enchaîne (§5 Lot B)
-    } else if (defenderCharacter.type === 'drone') {
-      // §7.4 : sans programme esquive, le drone ne peut pas se défendre — test simple
-      const hit = rollAttaque <= chancesAttaque
-      emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
-        attaquantId: action.token_id, defenseurId: targetTokenId,
-        rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
-        multiMalusAttaquant,
-      } })
-      if (hit) {
-        const droneSheet = await db('drone_sheet').where({ character_id: defenderCharacter.id }).first()
-        if (droneSheet) {
-          // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
-          // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
-          const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
-            weaponInvId, naturalWeaponCharMutationId, charSheetId: sheetAttaquant.id, fallbackFormula: damageFormula,
-          })
-          // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
-          // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul.
-          const mrAttaqueDrone = chancesAttaque - rollAttaque
-          const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDrone)
-          const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
-          const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-          await resolveDroneIntegrityLoss(io, campaignId, defenderCharacter.id, targetTokenId, droneSheet, degatsNetsDrone)
-          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-            tireurId: action.token_id, cibleId: targetTokenId,
-            localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
-            severity: null, is_lethal: false, isSuccess: true, isPnj: true,
-            roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
-          } })
-        }
-      }
-      return { suspend: false, emissions }
+      return await resolveMeleeDefensePnj(io, campaignId, commonPending, emissions)
     }
-
-    // ── 5. PJ défenseur : bloquer le slot, émettre le prompt ─────────────────
-    await db('combat_pending').insert({ campaign_id: campaignId, token_id: targetTokenId, type: 'melee_defense', payload: commonPending })
-    await setFSMSubPhase(db, campaignId, 'AWAITING_DEFENSE')
-    await broadcastCurrentSubPhase(io, campaignId)
-
-    // Cibler le socket du défenseur PJ
-    const prompt = {
-      attackerName:    attackerUsername,
-      attackerTokenId: action.token_id,
-      defenderTokenId: targetTokenId,
-      rollAttaque,
-      chancesAttaque,
-      // Défenseur : Seuil de base (sans ajustement combat_mode, résolu au confirm) + malus encerclement
-      chanceDefenseBase: defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur,
-      multiMalusDefenseur,
+    if (defenderCharacter.type === 'drone') {
+      return await resolveMeleeDefenseDrone(io, campaignId, commonPending, emissions)
     }
-    emissions.push({ to: 'user', userId: defenderCharacter.user_id, event: WS.COMBAT_MELEE_DEFENSE_PROMPT, data: prompt, fallback: 'room' })
-
-    return { suspend: true, emissions }  // slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM
+    return await resolveMeleeDefensePj(io, campaignId, commonPending, emissions)
   } catch (err) {
     console.error('[WS] resolveMeleeAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
+}
+
+// ── Branches défenseur de resolveMeleeAction (PLAN_RW_SYSCOMBAT.md §2.4, Lot 2) ──────────────────
+// Extraites de resolveMeleeAction — ctx = commonPending (contexte déjà assemblé par la coquille, §2.4.b).
+// Aucune de ces fonctions n'a son propre try/catch (§2.4.k) : toute exception remonte au catch unique
+// de resolveMeleeAction, qui vide alors `emissions` — comportement existant à préserver à l'identique.
+
+// DEF5 — Cible sans défense : Test simple +5, aucune opposition. Généralise le pattern déjà utilisé
+// pour le défenseur drone (§7.4, pas de jet de défense) à n'importe quel type de défenseur dès que la
+// cible est sans défense — sinon un PNJ/PJ inconscient/étourdi relancerait quand même un jet de défense
+// actif, contraire au RAW (REGLESYSCOMBAT.md:1055-1057). Auto-résolution complète, dégâts compris —
+// décision Saar (2026-07-19), même principe qu'un défenseur non-actif.
+async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
+  const {
+    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant,
+    weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
+    characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    attackerUsername, attackerColor, userId,
+  } = ctx
+  const hit = rollAttaque <= chancesAttaque
+  emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
+    attaquantId: attackerTokenId, defenseurId: targetTokenId,
+    rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
+    multiMalusAttaquant,
+  } })
+  if (hit) {
+    // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
+    // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+    const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
+      weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
+    })
+    const mrAttaqueDefenseless = chancesAttaque - rollAttaque
+    const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDefenseless)
+    const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+    if (cibleType === 'drone') {
+      const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
+      if (droneSheet) {
+        const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
+        await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+          tireurId: attackerTokenId, cibleId: targetTokenId,
+          localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
+          severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+          roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+        } })
+      }
+    } else {
+      const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+        degautsBruts,
+        characterIdCible,
+        cibleType,
+        char_sheet_id_cible,
+        for_na_cible, con_na_cible, vol_na_cible,
+        chocDsl: effectiveChocDsl,
+        treatAsContact: true,
+      })
+      if (hitResult) {
+        const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+        if (shockResult) {
+          statusService.emitShockDiceResult(io, campaignId, shockResult, userId, attackerUsername, attackerColor)
+        }
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+          tireurId:    attackerTokenId, cibleId: targetTokenId,
+          localisation, degautsBruts, degatsNets,
+          severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+          roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
+        } })
+        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+          statusService.applyStun(io, db, campaignId, {
+            targetTokenId, outcome: shockResult.outcome,
+            userId, username: attackerUsername, color: attackerColor,
+          }).catch(err => console.error('[WS] applyStun error:', err.message))
+        }
+      }
+    }
+  }
+  return { suspend: false, emissions }
+}
+
+// Défenseur PNJ : auto-résolution avec jet de défense opposé réel. Breakdown construit via
+// computeAttackRoll (RV6, §2.4.d) au lieu d'un tableau assemblé à la main.
+async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
+  const {
+    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant,
+    weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
+    characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    attackerUsername, attackerColor, userId,
+    defenderSkillTotal, defenderEffectiveMalus, multiMalusDefenseur, confirmedModifiers,
+    defenderCharacterName,
+  } = ctx
+  const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
+  // Mode combat du défenseur — Offensif/Charge → pénalité défense
+  const rosterDef = await db('combat_roster').where({ campaign_id: campaignId, token_id: targetTokenId }).first()
+  const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
+  const modeCombatDef = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
+  // Terrain instable défenseur PNJ — compétence limitative ACROBATIE_EQUILIBRE
+  // attrsCible/genoCible hors scope (déclarés dans if(sheetCible)) → re-fetch conditionnel
+  let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
+  if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
+    const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsDef] = await Promise.all([
+      db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
+      db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
+      db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
+      db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
+      getMutationEffects(char_sheet_id_cible),
+    ])
+    const genoDef = archetypeDef?.genotype_id
+      ? await db('ref_genotypes').where({ id: archetypeDef.genotype_id }).first() : null
+    acrobatieDefTotal = acrobatieRefDef
+      ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef, mutationEffectsDef)
+      : defenderSkillTotal
+    terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
+  }
+
+  // Seuil de défense + breakdown — noyau pur du Lot 1 réutilisé ici (Lot 2, RV6, §2.4.d) : un jet de
+  // D20, peu importe qu'il s'agisse d'une attaque ou d'une défense.
+  const { seuil: chanceDefense, breakdown: breakdownDef, isSuccess: defenseSuccess, mr: mrDefense } = computeAttackRoll({
+    skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
+    contributions: [
+      { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDef, type: modeCombatDef > 0 ? 'bonus' : 'malus' },
+      { label: 'Multi-adversaires', value: multiMalusDefenseur, type: 'malus' },
+      { label: 'Malus santé / encombrement', value: defenderEffectiveMalus, type: 'malus' },
+      { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
+    ],
+  })
+  const mrAttaque = chancesAttaque - rollAttaque
+  const attackSuccess = rollAttaque <= chancesAttaque
+  const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
+
+  console.log(`[WS] melee défense PNJ — rollDef:${rollDefense}/${chanceDefense} → ${hit ? 'TOUCHÉ' : 'ESQUIVÉ/RATÉ'}`)
+
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId: null, username: defenderCharacterName ?? 'PNJ', color: '#808080',
+    formula: '1d20', rolls: defRolls, total: rollDefense,
+    isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
+    seed: defSeed, timestamp: new Date().toISOString(),
+    skillLabel:        'Jet pour défendre (contact)',
+    mechanicalTotal:   defenderSkillTotal,
+    diffLabel:         chanceDefense - defenderSkillTotal >= 0 ? `+${chanceDefense - defenderSkillTotal}` : `${chanceDefense - defenderSkillTotal}`,
+    chancesDeReussite: chanceDefense,
+    isSuccess:         defenseSuccess,
+    mr:                mrDefense,
+    breakdown:         breakdownDef,
+  } })
+
+  emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
+    attaquantId: attackerTokenId, defenseurId: targetTokenId,
+    rollAttaque, chancesAttaque, rollDefense, chanceDefense, hit,
+    multiMalusAttaquant, multiMalusDefenseur,
+  } })
+
+  if (hit) {
+    // Dégâts auto (même logique que PNJ dans resolveAssaultAction) — délègue entièrement à
+    // damageService.resolveTargetHit (localisation/armure/RD/sévérité/blessure/shock), qui
+    // fetch désormais aussi mutations/avantages pour RD/Choc (docs/PLAN_MUTATION2.md Lot 3).
+    // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
+    // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+    const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
+      weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
+    })
+    // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
+    const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
+    const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+    const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+      degautsBruts,
+      characterIdCible,
+      cibleType,
+      char_sheet_id_cible,
+      for_na_cible, con_na_cible, vol_na_cible,
+      chocDsl: effectiveChocDsl,
+      treatAsContact: true,
+    })
+
+    if (hitResult) {
+      const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+
+      if (shockResult) {
+        statusService.emitShockDiceResult(io, campaignId, shockResult, userId, attackerUsername, attackerColor)
+      }
+
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+        tireurId:    attackerTokenId, cibleId: targetTokenId,
+        localisation, degautsBruts, degatsNets,
+        severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+        roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult,
+      } })
+      if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+        statusService.applyStun(io, db, campaignId, {
+          targetTokenId, outcome: shockResult.outcome,
+          userId, username: attackerUsername, color: attackerColor,
+        }).catch(err => console.error('[WS] applyStun error:', err.message))
+      }
+    }
+  }
+
+  return { suspend: false, emissions }  // entrée résolue, advanceTimeline() enchaîne (§5 Lot B)
+}
+
+// Défenseur drone — §7.4 : sans programme esquive, le drone ne peut pas se défendre, test simple.
+async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
+  const {
+    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant,
+    weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
+    characterIdCible,
+  } = ctx
+  const hit = rollAttaque <= chancesAttaque
+  emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
+    attaquantId: attackerTokenId, defenseurId: targetTokenId,
+    rollAttaque, chancesAttaque, rollDefense: null, chanceDefense: null, hit,
+    multiMalusAttaquant,
+  } })
+  if (hit) {
+    const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
+    if (droneSheet) {
+      // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
+      // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+      const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
+        weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
+      })
+      // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
+      // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul.
+      const mrAttaqueDrone = chancesAttaque - rollAttaque
+      const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDrone)
+      const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+      const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
+      await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+        tireurId: attackerTokenId, cibleId: targetTokenId,
+        localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
+        severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+        roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+      } })
+    }
+  }
+  return { suspend: false, emissions }
+}
+
+// Défenseur PJ : bloquer le slot, émettre le prompt — la résolution réelle (jet de défense, dégâts) se
+// fait plus tard dans confirmMeleeDefense, pas ici.
+async function resolveMeleeDefensePj(io, campaignId, ctx, emissions) {
+  const {
+    attackerTokenId, targetTokenId, attackerUsername, rollAttaque, chancesAttaque,
+    defenderSkillTotal, defenderEffectiveMalus, multiMalusDefenseur, defenderUserId,
+  } = ctx
+  await db('combat_pending').insert({ campaign_id: campaignId, token_id: targetTokenId, type: 'melee_defense', payload: ctx })
+  await setFSMSubPhase(db, campaignId, 'AWAITING_DEFENSE')
+  await broadcastCurrentSubPhase(io, campaignId)
+
+  // Cibler le socket du défenseur PJ
+  const prompt = {
+    attackerName:    attackerUsername,
+    attackerTokenId,
+    defenderTokenId: targetTokenId,
+    rollAttaque,
+    chancesAttaque,
+    // Défenseur : Seuil de base (sans ajustement combat_mode, résolu au confirm) + malus encerclement
+    chanceDefenseBase: defenderSkillTotal + defenderEffectiveMalus + multiMalusDefenseur,
+    multiMalusDefenseur,
+  }
+  emissions.push({ to: 'user', userId: defenderUserId, event: WS.COMBAT_MELEE_DEFENSE_PROMPT, data: prompt, fallback: 'room' })
+
+  return { suspend: true, emissions }  // slot bloqué jusqu'à COMBAT_MELEE_DEFENSE_CONFIRM
 }
 
 // Appelée depuis COMBAT_ACTION_CONFIRM quand action.type==='reload'.

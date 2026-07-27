@@ -57,6 +57,30 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-27 — Session 181 : `docs/PLAN_RW_SYSCOMBAT.md` Lot 2
+> **✅ clos** — branchement défenseur de `resolveMeleeAction` extrait en 4 fonctions
+> (`resolveDefenselessTarget`/`resolveMeleeDefensePnj`/`resolveMeleeDefenseDrone`/`resolveMeleeDefensePj`,
+> contexte partagé `commonPending` étendu de 4 champs) + `confirmMeleeDefense` basculée sur
+> `computeAttackRoll` pour son breakdown de défense PJ (angle mort trouvé en analyse à charge : deuxième
+> copie du calcul de défense PNJ, non vue à la première passe). 2 analyses à charge menées avant tout
+> code (périmètre `confirmMeleeDefense` manquant + erreur factuelle sur `commonPending` trouvés en 1 ;
+> invariants de propagation d'erreur/absence de transaction trouvés en 2) — méthode reprise du Lot 1.
+> **Testé** : équivalence numérique ancienne formule/noyau sur 7 cas (script pur, sans DB) + 7 scénarios
+> de fixture jetable en base réelle (campagne/personnages/tokens jetables, 0 résidu après coup) + session
+> de jeu réelle Saar (CaC PNJ auto-résolution + cible sans défense après étourdissement), confirmée sans
+> régression après vérification directe en base (2 blessures correctement écrites, une par chemin de code
+> touché). Alerte initiale de Saar (« résolutions manquantes ») retombée sur 2 comportements corrects non
+> liés au Lot 2 (attaque hors portée rejetée, PNJ étourdi auto-skip). **Prochaine étape chantier : Lot 3
+> (orchestration DB/socket restante), risque élevé, recoupe COM27 — à ne jamais mélanger avec un
+> correctif fonctionnel de ce bug**, non planifié.
+> Investigation annexe (hors chantier) : 403 `GET /api/char-sheet/.../wounds` sur la fenêtre GM de Saar —
+> cause trouvée par lecture (`server/src/middleware/auth.js:5`), cookie de session partagé par navigateur
+> (pas par onglet) : ouvrir un compte joueur dans une 2ᵉ fenêtre du même navigateur écrase le cookie du
+> GM, dont les requêtes suivantes s'authentifient alors comme le joueur. Pas un bug, limite connue de
+> l'auth par cookie — contournement : une des deux fenêtres en navigation privée. Logs ajoutés pour la
+> prochaine fois : bannière `###### DEBUT COMBAT #############`/`###### FIN COMBAT #############`
+> (`socketCombatState.js`), attribution `[user:pseudo]` sur toute erreur HTTP (`errorHandler.js`).
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-25 — Session 180 : audit technique complet
 > (`docs/AUDIT_FABLE.md`) ; `docs/PLAN_RW_SYSCOMBAT.md` rédigé (découpage resolveMeleeAction/
 > resolveAssaultAction, 2 analyses à charge + run à vide) ; Lot 0 codé — tables de modificateurs
