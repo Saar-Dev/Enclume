@@ -48,7 +48,11 @@ router.get('/:folder/*filePath', async (req, res, next) => {
     const stream = await client.getObject(bucket, filePath)
     stream.pipe(res)
   } catch (err) {
-    if (err.code === 'NoSuchKey') {
+    // statObject (HEAD, sans corps XML) renvoie 'NotFound' ; un getObject sur corps XML
+    // renverrait 'NoSuchKey' pour la même absence — le SDK minio n'unifie pas les deux
+    // selon le verbe HTTP. Les deux signifient "objet absent", jamais une panne d'infra
+    // (bucket manquant, credentials, connexion) qui doit continuer vers next(err) en 500.
+    if (err.code === 'NotFound' || err.code === 'NoSuchKey') {
       res.status(404).json({ error: { status: 404, message: 'Asset introuvable' } })
     } else {
       next(err)

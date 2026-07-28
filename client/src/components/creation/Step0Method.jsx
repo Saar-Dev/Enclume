@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
-const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
+const ASSETS_BASE = '/assets'
 
 export default function Step0Method({ onNext }) {
   const { t } = useTranslation('creation')

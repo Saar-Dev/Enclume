@@ -9,7 +9,7 @@ import { genotypeOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
 
-const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
+const ASSETS_BASE = '/assets'
 const GENO_IMAGES = {
   HUMAIN:  `${ASSETS_BASE}/s1_human.webp`,
   HYB_NAT: `${ASSETS_BASE}/s1_hybrid.webp`,

@@ -12,7 +12,7 @@ import WizardLockToggle from './WizardLockToggle.jsx'
 import DiceRoller from '../DiceRoller.jsx'
 import DiceLights from '../DiceLights.jsx'
 
-const ASSETS_BASE = `${import.meta.env.VITE_API_URL}/api/assets/assets`
+const ASSETS_BASE = '/assets'
 const MAX_REROLL_ATTEMPTS = 500
 
 export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, randomMutationsEnabled, onNext, onPrev, onLiveChange }) {

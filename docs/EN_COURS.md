@@ -3477,6 +3477,8 @@ Projet en cours et priorité user :
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
 | ~~**KIWI2**~~ | ~~Import GLB token : local ✅ / Kiwi ❌~~ | ✅ résolu (confirmé Saar, Session 166 — dernières migrations Kiwi) |
+| ~~**KIWI3**~~ | ~~404 `/api/creation/campaign/:id/drafts` sur Kiwi~~ — cause : `enclume-server` jamais redémarré depuis le 2026-07-15 (route ajoutée Session 172, 23/07), pas un retard de code. Fix : pull + migrations 158-205 appliquées + restart systemd | ✅ résolu Session 182 (Saar) |
+| ~~**KIWI4**~~ | ~~500 sur `/api/assets/assets/*` (illustrations Wizard)~~ — deux causes empilées : (a) `assets.js` ne traitait que `err.code === 'NoSuchKey'`, or `statObject` (HEAD) renvoie `'NotFound'` côté SDK minio → 500 au lieu de 404 sur tout asset absent, toute instance ; (b) les 46 illustrations Wizard (Step0/2/3 + `ref_careers.illustration`) n'étaient jamais synchronisées entre instances MinIO. Fix (a) : `assets.js` traite les deux codes. Fix (b) : sorties de MinIO, servies en statique via `client/public/assets/` (plus jamais d'upload par instance) | ✅ résolu Session 182 (Saar) |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
 | **CS5** | Compétence réservée (X) : ouverture 1 XP, reste -3 | Moyenne — Cluster O |
 | **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-6 (attributs, résistances, armure/arme naturelle, déblocage de compétences, identité sex/is_fertile/hand_pref) ✅ clos et fonctionnels. Reste Lot 7 (Narratif/économie, priorité basse) — `docs/Old/PLAN_MUTATION2.md` (archivé, chantier clos) | Lot 7 à détailler quand Saar voudra enchaîner |

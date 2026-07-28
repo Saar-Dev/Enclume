@@ -469,7 +469,7 @@ export default function CareersAllocator({
               {career.illustration && (
                 <img
                   className="wiz4-illus"
-                  src={`${import.meta.env.VITE_API_URL}/api/assets/${career.illustration}`}
+                  src={`/${career.illustration}`}
                   alt={career.name}
                 />
               )}
