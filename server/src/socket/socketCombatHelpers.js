@@ -2731,142 +2731,47 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
 
       const targetName = cibleCharacter?.name ?? cibleToken?.label ?? 'Cible'
 
-      if (character.type === 'pj') {
-        // PJ — stocker paramètres bruts, le joueur lance les dés via CombatDamageWindow
-        emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
-          hit: true,
-          roll: rollAttaque,
-          seuil: chancesDeReussite,
-          tireurTokenId: action.token_id,
-          cibleTokenId: action.target_token_id,
-        } })
-        // Plusieurs entrées peuvent désormais coexister pour le même tireur (attaques multiples,
-        // docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt
-        // n'est émis ici que si aucune autre entrée n'attendait déjà.
-        // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet réel
-        // côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
-        // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents, parseDice
-        // n'accepte qu'un seul type de dé par formule).
-        const pendingDamageCount = await armAwaitingDamage(io, campaignId, action.token_id, {
-          campaignId,
-          targetTokenId: action.target_token_id,
-          characterIdCible: cibleToken?.character_id ?? null,
-          cibleType: cibleCharacter?.type ?? null,
-          char_sheet_id_cible,
-          mr,
-          portee: authoritativeRangeBand,
-          aimedLocation: aimedLocationKey,
-          fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
-          formula: weapon.ref_damage_h,
-          weaponInvId: effectiveWeaponInvId,
-          for_na_cible,
-          con_na_cible,
-          vol_na_cible,
-          tireurUsername,
-          tireurColor,
-          userId: character.user_id,
-          targetName,
-          treatAsContact: isJetOuTrait,
-        })
-        if (pendingDamageCount === 1) {
-          // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
-          // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
-          // effectué à la confirmation dès qu'une munition modifie les dégâts.
-          const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
-          emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
-            tokenId: action.token_id,
-            formula: formulaPreview ?? weapon.ref_damage_h,
-            targetName,
-          } })
-        }
-        // Bug réel trouvé en testant Tir Multi (Saar, 2026-07-19) : AWAITING_DAMAGE est un sous-état
-        // FSM bloquant (combatFSM.js, garde exclusive sur COMBAT_DAMAGE_CONFIRM), au même titre que
-        // AWAITING_DEFENSE côté CaC (ligne ~1633, `suspend:true`). Cette branche tombait auparavant
-        // dans le `return { suspend: false, emissions }` générique de fin de fonction — l'appelant
-        // (`socketCombatResolution.js`) appelait alors `advanceTimeline` juste après, qui écrase
-        // sub_phase en 'SLOT_ACTIVE' dès qu'un autre combattant a un pas suivant dans l'échelle,
-        // rendant `COMBAT_DAMAGE_CONFIRM` définitivement rejeté par le garde FSM (observé :
-        // `[FSM] guard bloqué : RESOLUTION|SLOT_ACTIVE + COMBAT_DAMAGE_CONFIRM`). Corrigé en alignant
-        // sur le même patron que le CaC : suspendre explicitement ici, jamais laisser le comportement
-        // par défaut trancher pour une branche qui vient de poser un sous-état bloquant.
-        return { suspend: true, emissions }
-      } else {
-        // PNJ — calcul complet immédiat, invisible aux joueurs
-        const mrTable = await getMrTable()
-        const modDomAttaque = getModifier(mrTable, mr)
-        const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
-        const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
-        // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution
-        // unique, repli automatique sur damage_h brut si aucune munition/DSL malformé. Repli
-        // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
-        // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
-        // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
-        const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
-        // CHOC1 : repli sur weapon.ref_damage_h (fetch initial) si l'arme a disparu entre-temps — peut
-        // lui-même être vide (arme Choc pur) : ne jamais appeler parseDice sur une chaîne vide.
-        const rawDice = effectiveDamage
-          ? effectiveDamage.total
-          : weapon.ref_damage_h
-            ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
-            : 0
-        const degautsBruts = rawDice + modDomAttaque + modDegatsMode
-
-        // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
-        if (cibleCharacter?.type === 'drone') {
-          const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
-          if (droneSheet) {
-            const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-            await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
-            emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-              tireurId: action.token_id, cibleId: action.target_token_id,
-              localisation: null,
-              degautsBruts, degatsNets: degatsNetsDrone,
-              severity: null, is_lethal: false, isSuccess: true,
-              isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
-            } })
-          }
-          return { suspend: false, emissions }
-        }
-
-        const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-          degautsBruts,
-          characterIdCible: cibleToken.character_id,
-          cibleType:        cibleCharacter?.type ?? null,
-          char_sheet_id_cible,
-          for_na_cible, con_na_cible, vol_na_cible,
-          chocDsl: effectiveDamage ? effectiveDamage.choc : null,
-          ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
-          forcedSlotCode: aimedLocationKey ? LOCATION_TO_SLOT[aimedLocationKey] : null,
-          treatAsContact: isJetOuTrait,
-        })
-        if (hitResult === null) return { suspend: false, emissions }
-        const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
-
-        if (shockResult) {
-          statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
-        }
-
-        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-          tireurId:    action.token_id,
-          cibleId:     action.target_token_id,
-          localisation,
-          degautsBruts,
-          degatsNets,
-          severity:    finalSeverity,
-          is_lethal,
-          isSuccess,
-          isPnj:       true,
-          roll:        rollAttaque,
-          chancesDeReussite,
-          shockResult,
-        } })
-        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-          statusService.applyStun(io, db, campaignId, {
-            targetTokenId: action.target_token_id, outcome: shockResult.outcome,
-            userId: character.user_id, username: tireurUsername, color: tireurColor,
-          }).catch(err => console.error('[WS] applyStun error:', err.message))
-        }
+      // Contexte transporté aux fonctions-feuilles (PLAN_RW_SYSCOMBAT.md §2.6.c) — objet interne à ce
+      // refactor, aucun lecteur externe (à distinguer du payload construit dans resolveAssaultHitPj
+      // pour armAwaitingDamage, celui-là bien relu par nom dans confirmDamage, §2.6.c).
+      const ctx = {
+        action, character, tireurUsername, tireurColor, weapon, effectiveWeaponInvId,
+        authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
+        cibleToken, cibleCharacter, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+        targetName,
       }
+
+      if (character.type === 'pj') {
+        return await resolveAssaultHitPj(io, campaignId, ctx, emissions)
+      }
+
+      // PNJ — calcul complet immédiat, invisible aux joueurs. Dégâts bruts identiques que la cible
+      // soit un drone ou non (`[VÉRIFIÉ]`, PLAN_RW_SYSCOMBAT.md §2.6.a) — calculés une seule fois ici,
+      // avant le guard-clause vers la fonction-feuille adaptée (§2.6.b, aucune fonction-type qui
+      // re-branche elle-même, même précédent que resolveMeleeDefenseDrone/Pnj au Lot 2).
+      const mrTable = await getMrTable()
+      const modDomAttaque = getModifier(mrTable, mr)
+      const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
+      const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
+      // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution
+      // unique, repli automatique sur damage_h brut si aucune munition/DSL malformé. Repli
+      // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
+      // ci-dessus et cet appel — fenêtre quasi nulle en pratique côté PNJ mais gardée par cohérence
+      // avec la branche PJ différée où la fenêtre est réelle) : jamais un tour de combat silencieux.
+      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
+      // CHOC1 : repli sur weapon.ref_damage_h (fetch initial) si l'arme a disparu entre-temps — peut
+      // lui-même être vide (arme Choc pur) : ne jamais appeler parseDice sur une chaîne vide.
+      const rawDice = effectiveDamage
+        ? effectiveDamage.total
+        : weapon.ref_damage_h
+          ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
+          : 0
+      const degautsBruts = rawDice + modDomAttaque + modDegatsMode
+
+      if (cibleCharacter?.type === 'drone') {
+        return await resolveAssaultHitPnjDrone(io, campaignId, { ...ctx, degautsBruts }, emissions)
+      }
+      return await resolveAssaultHitPnjNormal(io, campaignId, { ...ctx, degautsBruts, effectiveDamage }, emissions)
     } else if (character.type === 'pj') {
       emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
         hit: false,
@@ -2896,6 +2801,145 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     console.error('[WS] resolveAssaultAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
+}
+
+// ── Branches "touche" de resolveAssaultAction (PLAN_RW_SYSCOMBAT.md §2.6, Lot 4) ──────────────────
+// Extraites de resolveAssaultAction — ctx assemblé par la coquille (§2.6.c). Contrat identique aux
+// branches défenseur du Lot 2 : { suspend, emissions }, aucun try/catch propre (la propagation
+// d'erreur remonte au catch unique de la coquille appelante, §2.6.d).
+
+async function resolveAssaultHitPj(io, campaignId, ctx, emissions) {
+  const {
+    action, character, tireurUsername, tireurColor, weapon, effectiveWeaponInvId,
+    authoritativeRangeBand, aimedLocationKey, rollAttaque, chancesDeReussite, mr, isJetOuTrait,
+    cibleToken, cibleCharacter, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible, targetName,
+  } = ctx
+  // PJ — stocker paramètres bruts, le joueur lance les dés via CombatDamageWindow
+  emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
+    hit: true,
+    roll: rollAttaque,
+    seuil: chancesDeReussite,
+    tireurTokenId: action.token_id,
+    cibleTokenId: action.target_token_id,
+  } })
+  // Plusieurs entrées peuvent désormais coexister pour le même tireur (attaques multiples,
+  // docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt
+  // n'est émis ici que si aucune autre entrée n'attendait déjà.
+  // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet réel
+  // côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
+  // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents, parseDice
+  // n'accepte qu'un seul type de dé par formule). Ce payload est relu par nom dans confirmDamage —
+  // aucune clé à renommer ni à ajouter ici (PLAN_RW_SYSCOMBAT.md §2.6.c).
+  const pendingDamageCount = await armAwaitingDamage(io, campaignId, action.token_id, {
+    campaignId,
+    targetTokenId: action.target_token_id,
+    characterIdCible: cibleToken?.character_id ?? null,
+    cibleType: cibleCharacter?.type ?? null,
+    char_sheet_id_cible,
+    mr,
+    portee: authoritativeRangeBand,
+    aimedLocation: aimedLocationKey,
+    fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
+    formula: weapon.ref_damage_h,
+    weaponInvId: effectiveWeaponInvId,
+    for_na_cible,
+    con_na_cible,
+    vol_na_cible,
+    tireurUsername,
+    tireurColor,
+    userId: character.user_id,
+    targetName,
+    treatAsContact: isJetOuTrait,
+  })
+  if (pendingDamageCount === 1) {
+    // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
+    // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
+    // effectué à la confirmation dès qu'une munition modifie les dégâts.
+    const formulaPreview = await damageService.getEffectiveWeaponFormulaPreview(db, effectiveWeaponInvId, { rangeBand: authoritativeRangeBand })
+    emissions.push({ to: 'socket', event: WS.COMBAT_DAMAGE_PROMPT, data: {
+      tokenId: action.token_id,
+      formula: formulaPreview ?? weapon.ref_damage_h,
+      targetName,
+    } })
+  }
+  // Bug réel trouvé en testant Tir Multi (Saar, 2026-07-19) : AWAITING_DAMAGE est un sous-état
+  // FSM bloquant (combatFSM.js, garde exclusive sur COMBAT_DAMAGE_CONFIRM), au même titre que
+  // AWAITING_DEFENSE côté CaC (resolveMeleeDefensePj, `suspend:true`). Cette branche tombait
+  // auparavant dans le `return { suspend: false, emissions }` générique de fin de fonction —
+  // l'appelant (`socketCombatResolution.js`) appelait alors `advanceTimeline` juste après, qui
+  // écrase sub_phase en 'SLOT_ACTIVE' dès qu'un autre combattant a un pas suivant dans l'échelle,
+  // rendant `COMBAT_DAMAGE_CONFIRM` définitivement rejeté par le garde FSM (observé :
+  // `[FSM] guard bloqué : RESOLUTION|SLOT_ACTIVE + COMBAT_DAMAGE_CONFIRM`). Corrigé en alignant
+  // sur le même patron que le CaC : suspendre explicitement ici, jamais laisser le comportement
+  // par défaut trancher pour une branche qui vient de poser un sous-état bloquant.
+  return { suspend: true, emissions }
+}
+
+async function resolveAssaultHitPnjDrone(io, campaignId, ctx, emissions) {
+  const { action, cibleCharacter, degautsBruts, rollAttaque, chancesDeReussite } = ctx
+  // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6). Si aucune
+  // ligne drone_sheet n'existe (edge case pré-existant, PLAN_RW_SYSCOMBAT.md §2.6.e) : aucune
+  // émission de résultat, comportement à préserver identique, pas un bug de ce Lot.
+  const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
+  if (droneSheet) {
+    const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
+    await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNetsDrone)
+    emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+      tireurId: action.token_id, cibleId: action.target_token_id,
+      localisation: null,
+      degautsBruts, degatsNets: degatsNetsDrone,
+      severity: null, is_lethal: false, isSuccess: true,
+      isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
+    } })
+  }
+  return { suspend: false, emissions }
+}
+
+async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
+  const {
+    action, character, tireurUsername, tireurColor, aimedLocationKey, isJetOuTrait,
+    cibleToken, cibleCharacter, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    degautsBruts, effectiveDamage, rollAttaque, chancesDeReussite,
+  } = ctx
+  const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+    degautsBruts,
+    characterIdCible: cibleToken.character_id,
+    cibleType:        cibleCharacter?.type ?? null,
+    char_sheet_id_cible,
+    for_na_cible, con_na_cible, vol_na_cible,
+    chocDsl: effectiveDamage ? effectiveDamage.choc : null,
+    ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
+    forcedSlotCode: aimedLocationKey ? LOCATION_TO_SLOT[aimedLocationKey] : null,
+    treatAsContact: isJetOuTrait,
+  })
+  if (hitResult === null) return { suspend: false, emissions }
+  const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+
+  if (shockResult) {
+    statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
+  }
+
+  emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+    tireurId:    action.token_id,
+    cibleId:     action.target_token_id,
+    localisation,
+    degautsBruts,
+    degatsNets,
+    severity:    finalSeverity,
+    is_lethal,
+    isSuccess: true,
+    isPnj:       true,
+    roll:        rollAttaque,
+    chancesDeReussite,
+    shockResult,
+  } })
+  if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+    statusService.applyStun(io, db, campaignId, {
+      targetTokenId: action.target_token_id, outcome: shockResult.outcome,
+      userId: character.user_id, username: tireurUsername, color: tireurColor,
+    }).catch(err => console.error('[WS] applyStun error:', err.message))
+  }
+  return { suspend: false, emissions }
 }
 
 // ─── Drones — fonctions de résolution ────────────────────────────────────────

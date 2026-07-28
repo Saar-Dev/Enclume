@@ -81,10 +81,22 @@
 > aucun code écrit)** — `docs/PLAN_RW_SYSCOMBAT.md` §2.6 : branchement attaquant de
 > `resolveAssaultAction` (le vrai croisement, trouvé en relisant post-Lot 3 : `isSuccess` × type
 > attaquant, pas un simple `pj`/`pnj` — 4 branches, dont 2 substantielles extraites en
-> `resolveAssaultHitPj`/`resolveAssaultHitPnj`, sous-cas cible-drone gardé imbriqué ; les 2 branches
-> « raté » laissées inline, trop courtes pour justifier une extraction, même principe que le « cas
-> décor » du Lot 2). **Prochaine étape chantier** : coder Lot 4 tel que spécifié §2.6, puis validation
-> en jeu (5 scénarios §2.6.e) avant commit isolé.
+> `resolveAssaultHitPj`, sous-cas cible-drone d'abord gardé imbriqué ; les 2 branches « raté » laissées
+> inline, trop courtes pour justifier une extraction, même principe que le « cas décor » du Lot 2).
+> **Analyse à charge (2026-07-28)** : erreur trouvée (sous-cas drone imbriqué à tort, corrigé en
+> fonction sœur `resolveAssaultHitPnjDrone`, cohérent avec le précédent Lot 2) + affirmation trompeuse
+> corrigée (le payload `armAwaitingDamage` de `resolveAssaultHitPj` est bien relu par nom dans
+> `confirmDamage`) + edge case pré-existant documenté (cible drone sans `drone_sheet` → silence total,
+> à préserver). **Lot 4 ✅ clos (2026-07-28)** — `node --check` propre, 9 tests Lot 1 toujours au vert,
+> diff relu ligne à ligne (code déplacé à l'identique), confirmé en jeu par Saar (Tir PNJ touche une
+> cible normale visible au log ; reste des scénarios confirmé globalement, « ça a l'air bien », sans
+> détail par cas). **Les 4 lots de `PLAN_RW_SYSCOMBAT.md` sont clos.** Trouvé en testant, sans rapport
+> avec ce chantier : **MELEE-ATKNAME** (`docs/BUGIDENTIFIE.md`) — la fenêtre de défense CaC affiche le
+> nom du compte (« Saar (GM) ») au lieu du nom du personnage attaquant ; `attackerUsername`
+> (`socketCombatHelpers.js:1443-1444`, pensé pour l'attribution des jets de dés) est réutilisé tel quel
+> comme `attackerName` du prompt de défense (`resolveMeleeDefensePj`) — `[HYPOTHÈSE]`, pas encore
+> instrumenté. **Prochaine étape** : instrumenter `[DBG-MELEE-ATKNAME]` puis séparer les deux usages
+> (détail `docs/BUGIDENTIFIE.md`).
 >
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 183 : `docs/PLAN_BATTLEMAP2D.md` Lots 1-2
 > **✅ clos** — Lot 1 : discriminant `battlemaps.render_mode` (migration 207) + génération serveur de

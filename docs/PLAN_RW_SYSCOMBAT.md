@@ -635,7 +635,7 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 | **Lot 1** | Noyau `computeAttackRoll` (§2.1.b-d) + assemblage contributions dans les deux fonctions + shadow-mode (§2.3) + tests unitaires (§2.2) | Faible — comportement identique bit-à-bit, aucune écriture DB ni émission déplacée | **✅ Clos (2026-07-25)** — 9 tests unitaires OK, fuzz 1000 tirages sans écart, session de jeu réelle Saar (CaC PJ/PNJ + Tir + attaque multiple + deux armes + mode offensif + Seuil négatif) sans aucun `[DBG-DECOUPLAGE]`, bloc inline + dispositif retirés, noyau autoritaire. Modificateurs non exercés en jeu (couverts par fuzz + tests seulement) : taille≠moyenne, terrain instable, bouclier, sans défense, précipitation, tir visé, visée localisation, dual-wield Tir, couverture, mods d'arme |
 | **Lot 2** | `resolveMeleeAction` (4 branches défenseur) **+ `confirmMeleeDefense`** (même dette de breakdown dupliqué côté PJ, trouvée en analyse à charge, point h) — détail §2.4 | Moyen — touche à des `await db(...)` et à la construction des émissions `COMBAT_MELEE_RESULT`/`COMBAT_ATTACK_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (9 scénarios, §2.4.f), pas de shadow-mode possible (effets de bord) | **✅ Clos (2026-07-27)** — `node --check` propre, 9 tests Lot 1 toujours au vert (noyau non touché), équivalence numérique ancienne formule/`computeAttackRoll` vérifiée sur 7 cas (script jetable, sans DB), 7 scénarios de fixture jetable en base réelle (0 résidu après coup), puis session de jeu réelle Saar (CaC PNJ auto-résolution + cible sans défense après étourdissement) confirmée sans régression — vérifié aussi en base (2 blessures correctement écrites, une par chemin de code touché). Alerte initiale de Saar (« résolutions manquantes ») retombée sur deux comportements corrects non liés au Lot 2 (attaque hors portée rejetée, PNJ étourdi auto-skip) |
 | **Lot 3** | Extraction `armAwaitingDamage` (§2.5) : 3 sites dupliqués (`confirmMeleeDefense`, `resolveDroneAssaultAction`, `resolveAssaultAction`) fusionnés sur un seul point d'insert/FSM/broadcast/comptage ; émission du prompt inchangée par site (§2.5.b) | Faible — comportement identique bit-à-bit (même insert, même comptage, même condition d'émission) ; pas de changement d'ordre d'émission, donc pas un correctif de COM27 (§2.5.d le rend seulement moins coûteux plus tard) | **✅ Clos (2026-07-28)** — diff relu ligne à ligne (mêmes clés/valeurs de payload, mêmes `campaignId`/`tokenId` par site), `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non touché), puis 3 scénarios de jeu réels confirmés par Saar (§6) — committé (`ef12136`) |
-| **Lot 4** | Branchement attaquant de `resolveAssaultAction` (§2.6) — extraction `resolveAssaultHitPj`/`resolveAssaultHitPnjDrone`/`resolveAssaultHitPnjNormal` (3 fonctions-feuilles sœurs, calcul commun `degautsBruts` remonté en coquille, §2.6.b) ; branches "raté" (PJ/PNJ) laissées inline (§2.6.b) | Moyen — écritures DB (`armAwaitingDamage`, `resolveDroneIntegrityLoss`, `damageService.resolveTargetHit`) et émissions `COMBAT_ATTACK_RESULT`/`COMBAT_ATTACK_PLAYER_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (6 scénarios, §2.6.f), pas de shadow-mode possible | **Planifié (2026-07-28), analyse à charge menée** — prêt à coder |
+| **Lot 4** | Branchement attaquant de `resolveAssaultAction` (§2.6) — extraction `resolveAssaultHitPj`/`resolveAssaultHitPnjDrone`/`resolveAssaultHitPnjNormal` (3 fonctions-feuilles sœurs, calcul commun `degautsBruts` remonté en coquille, §2.6.b) ; branches "raté" (PJ/PNJ) laissées inline (§2.6.b) | Moyen — écritures DB (`armAwaitingDamage`, `resolveDroneIntegrityLoss`, `damageService.resolveTargetHit`) et émissions `COMBAT_ATTACK_RESULT`/`COMBAT_ATTACK_PLAYER_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (6 scénarios, §2.6.f), pas de shadow-mode possible | **✅ Clos (2026-07-28)** — diff relu ligne à ligne (code déplacé à l'identique, aucune clé renommée), `node --check` propre, 9 tests Lot 1 toujours au vert, puis confirmé en jeu par Saar (Tir PNJ touche une cible normale observé dans le log serveur, reste des scénarios confirmé globalement par Saar sans détail par cas) — committé. Trouvé en testant, sans rapport avec ce Lot : MELEE-ATKNAME (`docs/BUGIDENTIFIE.md`, fenêtre défense CaC affiche le nom du compte au lieu du personnage) |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le Lot 0 est séparé du Lot 1 parce qu'il porte un invariant différent (autorité
@@ -718,11 +718,19 @@ Aucune règle de jeu ne change. Aucune migration, aucun nouvel événement WS, a
   par Saar (CaC attaquant PJ touche, Tir attaquant PJ touche, drone touche une cible PJ) — prompt de
   dégâts reçu côté client concerné dans les 3 cas, aucune régression sur l'ordre déjà existant (ce Lot
   ne le change pas, §2.5.d).
-- **Non testé** : Lot 4 (tableau §3, pas encore rédigé) — les 4 Lots ne sont pas tous fermés, `⚠️ clos
-  partiel` au niveau du plan tant que Lot 4 n'existe pas.
+- **Testé (Lot 4)** : `node --check` propre, 9 tests Lot 1 toujours au vert, diff relu ligne à ligne
+  (code déplacé à l'identique, aucune clé renommée) ; en jeu, le scénario « Tir attaquant PNJ touche
+  une cible normale » est confirmé par le log serveur (§2.6.f cas 2) — les autres cas (§2.6.f 1, 3-6)
+  n'ont pas de trace individuelle dans le log fourni, confirmés par Saar de façon globale (« ça a l'air
+  bien ») sans détail scénario par scénario. Trouvé en testant, sans rapport avec ce Lot : MELEE-ATKNAME
+  (`docs/BUGIDENTIFIE.md`).
 - **Données** : aucune migration, aucun effet runtime en dehors du code déplacé.
 - **Retour arrière** : chaque Lot est un commit isolé — `git revert` suffit, aucune donnée vivante
   affectée.
+
+Les 4 lots de ce plan sont maintenant clos — tout gap architectural restant sur `resolveMeleeAction`/
+`resolveAssaultAction` (INFRA-2, COM27, `COMBAT_DAMAGE_CONFIRM`/`COMBAT_MELEE_DEFENSE_CONFIRM`) reste
+documenté §5, hors périmètre de ce document.
 
 ---
 
