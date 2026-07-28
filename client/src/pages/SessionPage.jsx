@@ -21,6 +21,7 @@ import { useCharacterSocket } from '../lib/useCharacterSocket'
 import { useBattlemapManager } from '../lib/useBattlemapManager'
 import { useCombatUIState } from '../lib/useCombatUIState'
 import Canvas3D from '../components/Canvas3D'
+import Canvas2D from '../components/Canvas2D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
 import DicePanel from '../components/DicePanel'
@@ -92,6 +93,16 @@ function SessionContent({ campaignId }) {
       setCanvasVisible(true)
     }, 300)
   }, [mode])
+
+  // docs/PLAN_BATTLEMAP2D.md §7 point 4 — une carte 2D n'a pas d'éditeur (Canvas2D remplace
+  // Editor3D/Canvas3D quel que soit `mode`). Si le MJ arrive sur une carte 2D en étant resté en mode
+  // Édition (carte 3D précédente), on repasse en jeu via handleModeChange — pas setMode direct — pour
+  // garder la transition canvasVisible qui évite le double contexte WebGL (voir commentaire L.79-80).
+  useEffect(() => {
+    if (battlemap?.render_mode === '2d' && mode === 'edit') {
+      handleModeChange('play')
+    }
+  }, [battlemap?.render_mode, mode, handleModeChange])
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const [activeMaterial, setActiveMaterial] = useState(null)
@@ -567,7 +578,9 @@ function SessionContent({ campaignId }) {
           if (characterId) handleCharacterDrop(characterId)
         }}
       >
-        {canvasVisible && (mode === 'edit'
+        {canvasVisible && (battlemap?.render_mode === '2d'
+          ? <Canvas2D key={battlemap.id} battlemap={battlemap} />
+          : mode === 'edit'
           ? <Editor3D
               socket={socket}
               activeMaterial={activeMaterial}
@@ -640,7 +653,7 @@ function SessionContent({ campaignId }) {
             />
           </div>
         )}
-        <div className="level-selector">
+        {battlemap?.render_mode !== '2d' && <div className="level-selector">
           <span className="level-selector__label">{t('surfaceEditor.displayLevel')}</span>
           <button
             type="button"
@@ -670,13 +683,14 @@ function SessionContent({ campaignId }) {
           >
             +
           </button>
-        </div>
+        </div>}
       </div>
 
       {sidebarVisible && (
         <Sidebar
           mode={mode}
           onModeChange={handleModeChange}
+          renderMode2D={battlemap?.render_mode === '2d'}
           activeEditorTab={activeEditorTab}
           onEditorTabChange={setActiveEditorTab}
           layer={layer}

@@ -485,7 +485,7 @@ function DiceBreakdownPopover({ popover, popoverRef }) {
 
 // ─── Sidebar principale ───────────────────────────────────────────────────────
 export default function Sidebar({
-  mode, onModeChange,
+  mode, onModeChange, renderMode2D,
   activeEditorTab, onEditorTabChange,
   layer, onLayerChange,
   width, onWidthChange,
@@ -1031,7 +1031,7 @@ export default function Sidebar({
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>
-        {isGm && (
+        {isGm && !renderMode2D && (
           <button
             className="btn-tool"
             data-active={mode === 'edit'}

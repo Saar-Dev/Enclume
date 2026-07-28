@@ -57,6 +57,29 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 183 : `docs/PLAN_BATTLEMAP2D.md` Lots 1-2
+> **✅ clos** — Lot 1 : discriminant `battlemaps.render_mode` (migration 207) + génération serveur de
+> la salle triviale à `POST /battlemaps` ; correctif trouvé au passage sur `image_url` (chemin MinIO
+> relatif via `req.file.objectName`, pas l'URL complète — `MINIO_ENDPOINT` vaut `localhost`, injoignable
+> depuis un navigateur distant, jamais consommé côté client avant ce chantier donc jamais détecté).
+> Lot 2 : `client/src/components/Canvas2D.jsx` (plan texturé, caméra orthographique, grille, pan/zoom
+> persistant via `viewport_state`) + intégration `SessionPage.jsx`/`Sidebar.jsx` (bascule sur
+> `render_mode`, `mode` forcé hors édition sur une carte 2D, sélecteur d'étage masqué). Architecture
+> caméra revue après analyse à charge (recherche `coldi/r3f-game-demo` + lecture du code source
+> `MapControls`/`OrbitControls`) : caméra le long de Z sans rotation (évite la singularité
+> d'`OrbitControls` autour de `camera.up`), `screenSpacePanning=true` (le mode par défaut de
+> `MapControls`, pensé pour une caméra élevée au-dessus d'un sol XZ, est dégénéré pour cette
+> orientation). **Testé** : lint/build client + serveur, migration appliquée et vérifiée sur la DB dev,
+> route `/api/assets/` vérifiée bout en bout (upload réel MinIO + requête HTTP réelle, octets
+> identiques), session de jeu réelle Saar (carte de test `[TEST 2D] bar.webp`, campagne LOCAL) —
+> image visible, grille alignée, pan/zoom confirmés après les deux correctifs ci-dessus. **Non testé** :
+> Lots 3-4 (tokens, flux de création, arborescence) — ⚠️ clos partiel au niveau du plan. **Élargissement
+> identifié en testant** (hors périmètre de ce plan, nouveau document après le Lot 4) : gestionnaire de
+> stockage/upload MinIO pour le MJ, grille à résolution réglable selon l'image de fond, tokens 2D
+> (détection 2D/3D + fiche personnage), créateur de token 2D (recadrage circulaire + bordure).
+> Prochaine étape chantier : Lot 3 tel qu'écrit dans le plan (tokens + flux de création), pas encore
+> l'élargissement ci-dessus.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 182 : triage `BUGIDENTIFIE.md` (6 correctifs
 > indépendants, 1 commit chacun, détail complet `JOURNAL7.md`). **KIWI3/KIWI4** — Wizard inaccessible
 > sur le serveur distant Kiwi : 404 `/drafts` causé par `enclume-server` jamais redémarré depuis

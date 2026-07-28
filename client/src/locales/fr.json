@@ -188,7 +188,8 @@
     "rename": "Renommer",
     "delete": "Supprimer la carte",
     "setDefault": "Définir comme carte d'accueil",
-    "assignPlayers": "Affecter les joueurs"
+    "assignPlayers": "Affecter les joueurs",
+    "imageLoadError": "Impossible de charger l'image de cette carte"
   },
   "errors": {
     "notFound": "Page introuvable",

@@ -118,18 +118,45 @@ router.post('/',
   multerUpload.single('image'),
   uploadToMinio('battlemaps'),
   async (req, res) => {
-    const { name, folder, scale_label, grid_size, grid_enabled } = req.body
+    const { name, folder, scale_label, grid_size, grid_enabled, render_mode } = req.body
     if (!name) throw new AppError(400, 'Battlemap name is required')
+
+    const renderMode = render_mode === '2d' ? '2d' : '3d'
+
+    // docs/PLAN_BATTLEMAP2D.md §6 (Lot 1) — une carte 2D est une battlemap avec une salle triviale
+    // (sol seul, sans mur), pas un système de coordonnées séparé. Dimensionnement réel depuis l'image
+    // uploadée : Lot 3 (pas encore d'upload d'image pour le 2D à ce stade). Id généré avant l'insert
+    // (même patron que POST /:id/duplicate, L.906-910) : prepareSurfaceData en a besoin pour dériver
+    // des worldId stables, cohérents avec l'id réel de la carte, pas un UUID jetable sans rapport.
+    const battlemapId = randomUUID()
+    let surfaceData = null
+    if (renderMode === '2d') {
+      try {
+        surfaceData = prepareSurfaceData(
+          { rooms: { main: { minX: 0, maxX: 9, minZ: 0, maxZ: 9, wallEnabled: false } } },
+          { battlemapId }
+        ).surfaceData
+      } catch (error) {
+        if (error instanceof SurfaceDocumentError) throw new AppError(400, error.message)
+        throw error
+      }
+    }
 
     const [battlemap] = await db('battlemaps')
       .insert({
+        id: battlemapId,
         campaign_id: req.params.id,
         name,
         folder: folder || null,
         scale_label: scale_label || '1,5m',
         grid_size: grid_size || 64,
         grid_enabled: grid_enabled !== undefined ? grid_enabled : true,
-        image_url: req.file ? req.file.url : null,
+        // Chemin MinIO relatif, pas l'URL complète (`req.file.url` pointe vers MINIO_ENDPOINT, souvent
+        // `localhost` — injoignable depuis un navigateur distant). Même convention que
+        // campaigns.default_token_glb_url : le client reconstruit via /api/assets/<chemin>.
+        image_url: req.file ? req.file.objectName : null,
+        render_mode: renderMode,
+        ...(surfaceData ? { surface_data: JSON.stringify(surfaceData) } : {}),
       })
       .returning('*')
 
@@ -704,7 +731,8 @@ router.put('/:id',
     if (grid_enabled !== undefined) updates.grid_enabled = grid_enabled
     if (grid_opacity !== undefined) updates.grid_opacity = grid_opacity
     if (viewport_state !== undefined) updates.viewport_state = viewport_state
-    if (req.file) updates.image_url = req.file.url
+    // Chemin relatif, pas l'URL complète — voir commentaire POST / ci-dessus.
+    if (req.file) updates.image_url = req.file.objectName
 
     // updated_at systématique sur tout PUT
     updates.updated_at = db.fn.now()
