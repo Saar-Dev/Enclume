@@ -77,9 +77,14 @@
 > `resolveAssaultAction`) basculés dessus, émission du prompt inchangée par site (§2.5.b). **Testé** :
 > `node --check` propre, 9 tests Lot 1 toujours au vert, diff relu ligne à ligne (mêmes clés/valeurs de
 > payload par site), puis 3 scénarios de jeu réels confirmés par Saar (CaC PJ touche, Tir PJ touche,
-> drone touche cible PJ) — committé (`ef12136`). **Prochaine étape chantier** : Lot 4 (branchement
-> attaquant de `resolveAssaultAction`, symétrique du branchement défenseur du Lot 2, §3.1) — à
-> planifier, pas encore rédigé.
+> drone touche cible PJ) — committé (`ef12136`). **Lot 4 rédigé (2026-07-28, planification uniquement,
+> aucun code écrit)** — `docs/PLAN_RW_SYSCOMBAT.md` §2.6 : branchement attaquant de
+> `resolveAssaultAction` (le vrai croisement, trouvé en relisant post-Lot 3 : `isSuccess` × type
+> attaquant, pas un simple `pj`/`pnj` — 4 branches, dont 2 substantielles extraites en
+> `resolveAssaultHitPj`/`resolveAssaultHitPnj`, sous-cas cible-drone gardé imbriqué ; les 2 branches
+> « raté » laissées inline, trop courtes pour justifier une extraction, même principe que le « cas
+> décor » du Lot 2). **Prochaine étape chantier** : coder Lot 4 tel que spécifié §2.6, puis validation
+> en jeu (5 scénarios §2.6.e) avant commit isolé.
 >
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 183 : `docs/PLAN_BATTLEMAP2D.md` Lots 1-2
 > **✅ clos** — Lot 1 : discriminant `battlemaps.render_mode` (migration 207) + génération serveur de
