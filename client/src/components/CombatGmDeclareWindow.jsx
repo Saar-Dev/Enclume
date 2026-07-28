@@ -116,6 +116,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
 
+  // I18N-LINT1 (docs/BUGIDENTIFIE.md) — hooks déclarés ici même si le composant retourne null plus
+  // bas (allGmManaged.length === 0) : useRef doit toujours s'exécuter au même ordre à chaque rendu,
+  // seule l'affectation .current (conditionnelle par construction) peut être sautée sans risque.
+  const effectiveMeleeCountRef = useRef()
+  const effectiveAssaultCountRef = useRef()
+
   // StrictMode (main.jsx) double-invoque les effets de montage en dev (mount → cleanup → mount) —
   // sans ce réarmement dans le corps de l'effet, isMountedRef.current reste bloqué à false après ce
   // cycle synthétique (seul le cleanup le mettait à false, rien ne le repassait à true), et la chaîne
@@ -279,7 +285,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   const meleeDefensif    = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
-  const effectiveMeleeCountRef = useRef(effectiveMeleeCount)
   effectiveMeleeCountRef.current = effectiveMeleeCount
   const meleeWeaponAvailable = weapon && !weapon.ref_fire_mode ? weapon : null
   // undefined = pas de choix → dériver; null = mains nues explicite; id = arme choisie
@@ -380,7 +385,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // même cible). startIdx>0 (bouton "Changer" d'un slot précis, une fois au moins une cible posée) ne
   // touche que ce slot — plus de chaînage récursif nécessaire, contrairement à handleStartMelee (dont
   // le cas d'usage courant reste des cibles distinctes).
-  const effectiveAssaultCountRef = useRef(effectiveAssaultCount)
   effectiveAssaultCountRef.current = effectiveAssaultCount
   const handleStartAttack = (startIdx = 0) => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return

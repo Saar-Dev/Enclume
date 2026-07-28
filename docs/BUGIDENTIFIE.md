@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline ; 2026-07-24 (Saar, triage priorisé) — CHOC1 clos (Palier 1 testé en jeu, confirmé Saar) ; Cluster I / DMG1+DMG2 clos (validation fonctionnelle confirmée Saar) ; SURPRISE-ROLL retiré (comportement normal, pas un bug — confirmé Saar) ; SURPRISE1 codé (`is_surprised: false` ajouté au reset `endTurn`, même requête qu'INI4 ; contournement `current_turn === 1` dans `isTargetDefenseless` retiré, devenu redondant), détail `EN_COURS.md`, non testé en jeu ; INI5 clos (audit git blame + relecture RAW p.218-219 : forfait `-3`/`-5` introduit Session 65, 94 sessions avant `computeSeriesPositions`, aucune base RAW — décision Saar : retiré, serveur + client + i18n, détail `EN_COURS.md` item 111, non testé en jeu) ; COM27 analysé en profondeur (flux d'émission tracé en entier, ordre serveur semble garanti correct par construction) mais mis en pause — reproduction non confirmée, décision Saar : attendre une nouvelle occurrence en jeu ; COM24 clos (bonus "deux armes" CaC déconnecté de l'arme déclarée — mécanisme "deux armes" à la déclaration ajouté, miroir exact du dual-wield Tir déjà existant, `shared/weaponSlots.js` réutilisé tel quel, revalidation serveur déclaration+résolution, 7 fichiers, détail `EN_COURS.md` item 112, non testé en jeu), ajout MELEE-INHAND (résiduel, trouvé en cours de route) ; 2026-07-28 (Saar, Session 182) — I18N-DEADCODE1 clos (`client/src/components/creation/WizardCreationPage.jsx` supprimé, confirmé sans importeur, build client OK) ; COM26 clos (migration 209 : `Darts 7.62mm ST SAP` → `DMG=BASE;TXT=FX=SAP|DEPTH=...` cohérent avec le mécanisme Lot C1 déjà câblé + confirmé RAW par Saar ; `Flèche IEM` → valeur ground-truth retrouvée dans le fichier d'extraction Excel original, identique à ses munitions sœurs — vérifié contre le vrai parseur `weaponAmmoDsl.js`, tests existants passent, non testé en jeu réel), ajout DARTS-TAGDUP (résiduel, trouvé en vérifiant le fix) ; TRADE1 clos (`socketTrade.js` — `TRADE_TRANSFER_DECLINED` vérifie maintenant l'ownership du `decliningCharId` sur `to_char_id`, même patron que `TRADE_TRANSFER_ACCEPTED`/`CANCELLED` ; `ExchangeWindow.jsx` + `TradeWindow.jsx` mis à jour pour envoyer ce paramètre, build client OK, non testé en jeu)
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline ; 2026-07-24 (Saar, triage priorisé) — CHOC1 clos (Palier 1 testé en jeu, confirmé Saar) ; Cluster I / DMG1+DMG2 clos (validation fonctionnelle confirmée Saar) ; SURPRISE-ROLL retiré (comportement normal, pas un bug — confirmé Saar) ; SURPRISE1 codé (`is_surprised: false` ajouté au reset `endTurn`, même requête qu'INI4 ; contournement `current_turn === 1` dans `isTargetDefenseless` retiré, devenu redondant), détail `EN_COURS.md`, non testé en jeu ; INI5 clos (audit git blame + relecture RAW p.218-219 : forfait `-3`/`-5` introduit Session 65, 94 sessions avant `computeSeriesPositions`, aucune base RAW — décision Saar : retiré, serveur + client + i18n, détail `EN_COURS.md` item 111, non testé en jeu) ; COM27 analysé en profondeur (flux d'émission tracé en entier, ordre serveur semble garanti correct par construction) mais mis en pause — reproduction non confirmée, décision Saar : attendre une nouvelle occurrence en jeu ; COM24 clos (bonus "deux armes" CaC déconnecté de l'arme déclarée — mécanisme "deux armes" à la déclaration ajouté, miroir exact du dual-wield Tir déjà existant, `shared/weaponSlots.js` réutilisé tel quel, revalidation serveur déclaration+résolution, 7 fichiers, détail `EN_COURS.md` item 112, non testé en jeu), ajout MELEE-INHAND (résiduel, trouvé en cours de route) ; 2026-07-28 (Saar, Session 182) — I18N-DEADCODE1 clos (`client/src/components/creation/WizardCreationPage.jsx` supprimé, confirmé sans importeur, build client OK) ; COM26 clos (migration 209 : `Darts 7.62mm ST SAP` → `DMG=BASE;TXT=FX=SAP|DEPTH=...` cohérent avec le mécanisme Lot C1 déjà câblé + confirmé RAW par Saar ; `Flèche IEM` → valeur ground-truth retrouvée dans le fichier d'extraction Excel original, identique à ses munitions sœurs — vérifié contre le vrai parseur `weaponAmmoDsl.js`, tests existants passent, non testé en jeu réel), ajout DARTS-TAGDUP (résiduel, trouvé en vérifiant le fix) ; TRADE1 clos (`socketTrade.js` — `TRADE_TRANSFER_DECLINED` vérifie maintenant l'ownership du `decliningCharId` sur `to_char_id`, même patron que `TRADE_TRANSFER_ACCEPTED`/`CANCELLED` ; `ExchangeWindow.jsx` + `TradeWindow.jsx` mis à jour pour envoyer ce paramètre, build client OK, non testé en jeu) ; I18N-LINT1 clos (`CombatGmDeclareWindow.jsx` — les deux `useRef` remontés avant le retour conditionnel `allGmManaged.length === 0`, ESLint `rules-of-hooks` confirmé propre avant/après, build client OK), ajout REFS-RENDER (résiduel, démasqué par ce fix — écriture de ref pendant le rendu, préexistante)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -33,7 +33,7 @@
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT1 + I18N-LINT2 + I18N-LINT3 + I18N-LINT4 | divers | Basse |
+| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + REFS-RENDER + I18N-LINT2 + I18N-LINT3 + I18N-LINT4 | divers | Basse |
 | **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
@@ -365,25 +365,30 @@ avant correctif pour éviter une régression isolée qui laisserait les autres o
 
 ---
 
-### Dette I18N-LINT1 — Hook `useRef` appelé conditionnellement dans `CombatGmDeclareWindow.jsx`
+### Dette REFS-RENDER — `effectiveMeleeCountRef`/`effectiveAssaultCountRef` : mutation de ref pendant le rendu
 
-**Symptôme** : Aucun cas observé en jeu — trouvé par ESLint (`react-hooks/rules-of-hooks`) en
-vérifiant les fichiers touchés par le chantier i18n Combat (`docs/PLAN_LOCALISATION.md`, Segment 5,
-2026-07-24), sans rapport avec ce chantier. `git diff --stat` confirme 0 ligne modifiée par le
-chantier i18n dans ce fichier — dette entièrement préexistante.
+**Symptôme** : Aucun cas observé en jeu — surfacé par ESLint (`react-hooks/refs`, règle React
+Compiler) en clôturant I18N-LINT1 (Session 182) : une fois les deux `useRef` remontés en position
+inconditionnelle, le linter a pu analyser plus loin et signale `effectiveMeleeCountRef.current = ...`
+/ `effectiveAssaultCountRef.current = ...` comme une écriture de ref pendant le rendu (interdit par
+React Compiler — un rendu est censé être pur, une ref ne devrait être lue/écrite que dans un effet ou
+un handler). Cette écriture existait déjà avant I18N-LINT1 (même ligne, juste après le `useRef`
+alors conditionnel) — le premier correctif ne l'a pas introduite, seulement démasquée : ESLint
+n'analysait pas plus loin tant que l'erreur `rules-of-hooks` bloquait ces lignes.
 
-**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx:268` et `:361` — `useRef` appelé
-après un retour conditionnel (ou dans une branche), ce qui viole l'ordre stable des hooks exigé par
-React (les hooks doivent être appelés dans le même ordre à chaque rendu).
+**Code impliqué** : `client/src/components/CombatGmDeclareWindow.jsx` — `effectiveMeleeCountRef.current
+= effectiveMeleeCount` et `effectiveAssaultCountRef.current = effectiveAssaultCount`, toutes deux
+dans le corps du composant, hors `useEffect`/handler.
 
-**Cause racine [HYPOTHÈSE]** : détection ESLint statique uniquement, non instrumentée ni reproduite en
-jeu. L'impact réel en exécution (désalignement d'état entre deux `useRef` selon la branche empruntée,
-crash React, ou comportement silencieusement incorrect) n'a pas été vérifié.
+**Cause racine [HYPOTHÈSE]** : détection ESLint statique (règle React Compiler récente), non
+instrumentée ni reproduite en jeu — `npm run lint` n'est pas dans le build/CI (`client/package.json`),
+donc sans impact bloquant aujourd'hui.
 
-**Prochaine étape** : lire le contexte exact des deux appels avant de décider du correctif (probable :
-déplacer le `useRef` avant tout retour conditionnel, pattern déjà appliqué ailleurs dans
-`CombatActionWindow.jsx`). Priorité modérée — pas de symptôme observé, mais violation réelle des
-règles des hooks, pas seulement un style.
+**Prochaine étape** : déplacer chaque affectation dans un `useEffect([effectiveMeleeCount])` /
+`useEffect([effectiveAssaultCount])` dédié — vérifier d'abord que les lecteurs de ces refs
+(`effectiveAssaultCountRef.current` dans `handleStartAttack`, déclenché uniquement sur interaction
+utilisateur après le premier rendu commité) ne dépendent pas de la fraîcheur synchrone pendant le
+rendu lui-même avant de faire le changement.
 
 ---
 
