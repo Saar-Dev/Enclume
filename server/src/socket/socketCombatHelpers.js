@@ -367,6 +367,21 @@ async function broadcastCurrentSubPhase(io, campaignId) {
   await broadcastTimelineState(io, campaignId, turnNumber, step)
 }
 
+// Arme l'attente de dégâts d'un token (PLAN_RW_SYSCOMBAT.md §2.5, Lot 3) — factorise l'insert
+// combat_pending/setFSMSubPhase/broadcastCurrentSubPhase/comptage identique aux 3 sites qui la posent
+// (confirmMeleeDefense, resolveDroneAssaultAction, resolveAssaultAction). L'émission du prompt reste à
+// l'appelant : elle diffère réellement d'un site à l'autre (direct vs emissions[], §2.5.b) — ne pas la
+// tirer dans ce helper harmoniserait un comportement d'émission au passage, hors périmètre du Lot 3.
+async function armAwaitingDamage(io, campaignId, tokenId, payload) {
+  await db('combat_pending').insert({ campaign_id: campaignId, token_id: tokenId, type: 'damage', payload })
+  await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+  await broadcastCurrentSubPhase(io, campaignId)
+  const [{ count }] = await db('combat_pending')
+    .where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' })
+    .count('* as count')
+  return parseInt(count, 10)
+}
+
 // ─── advanceTimeline — remplace advanceSlot, seul point d'entrée « fais avancer la résolution » ────
 // Pas de fenêtre de réaction temporisée (retirée Session 159, retour Saar — cf. commentaire en tête de
 // `combatFSM.js`) : dès qu'un pas normal existe, on le présente directement en SLOT_ACTIVE.
@@ -621,36 +636,26 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         // chacune un défenseur PJ distinct, docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO
         // par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre entrée n'attendait
         // déjà (sinon le joueur perdrait de vue le prompt encore non résolu de la précédente).
-        await db('combat_pending').insert({
-          campaign_id: meleeCampaignId,
-          token_id: attackerTokenId,
-          type: 'damage',
-          payload: {
-            type: 'melee',
-            campaignId: meleeCampaignId,
-            targetTokenId: tokenId,
-            characterIdCible,
-            char_sheet_id_cible,
-            modDom,
-            mr: mrAttaque,
-            combatModeBonus,
-            formula: damageFormula,
-            weaponInvId,
-            for_na_cible,
-            con_na_cible,
-            vol_na_cible,
-            tireurUsername: attackerUsername,
-            tireurColor: attackerColor,
-            userId,
-            targetName,
-          },
+        const pendingDamageCount = await armAwaitingDamage(io, meleeCampaignId, attackerTokenId, {
+          type: 'melee',
+          campaignId: meleeCampaignId,
+          targetTokenId: tokenId,
+          characterIdCible,
+          char_sheet_id_cible,
+          modDom,
+          mr: mrAttaque,
+          combatModeBonus,
+          formula: damageFormula,
+          weaponInvId,
+          for_na_cible,
+          con_na_cible,
+          vol_na_cible,
+          tireurUsername: attackerUsername,
+          tireurColor: attackerColor,
+          userId,
+          targetName,
         })
-        await setFSMSubPhase(db, meleeCampaignId, 'AWAITING_DAMAGE')
-        await broadcastCurrentSubPhase(io, meleeCampaignId)
-        const [{ count: pendingDamageCount }] = await db('combat_pending')
-          .where({ campaign_id: meleeCampaignId, token_id: attackerTokenId, type: 'damage' })
-          .count('* as count')
-        if (parseInt(pendingDamageCount, 10) === 1) {
+        if (pendingDamageCount === 1) {
           // Trouver le socket de l'attaquant PJ
           const sockets = await io.fetchSockets()
           const attackerSocket = sockets.find(s =>
@@ -2322,33 +2327,23 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     // Plusieurs entrées peuvent désormais coexister pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
     // §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre
     // entrée n'attendait déjà.
-    await db('combat_pending').insert({
-      campaign_id: campaignId,
-      token_id: action.token_id,
-      type: 'damage',
-      payload: {
-        campaignId,
-        targetTokenId:       action.target_token_id,
-        characterIdCible:    cibleCharacter.id,
-        cibleType:           null,
-        char_sheet_id_cible: cibleSheet?.id ?? null,
-        mr, portee,
-        fire_mode_bonus_dmg: 0,
-        formula,
-        for_na_cible:  for_na,
-        con_na_cible:  con_na,
-        vol_na_cible:  vol_na,
-        tireurUsername, tireurColor, userId, targetName,
-        type: 'assault', modDom: null, combatModeBonus: null,
-        targetUserId: cibleCharacter.user_id,
-      },
+    const pendingDamageCount = await armAwaitingDamage(io, campaignId, action.token_id, {
+      campaignId,
+      targetTokenId:       action.target_token_id,
+      characterIdCible:    cibleCharacter.id,
+      cibleType:           null,
+      char_sheet_id_cible: cibleSheet?.id ?? null,
+      mr, portee,
+      fire_mode_bonus_dmg: 0,
+      formula,
+      for_na_cible:  for_na,
+      con_na_cible:  con_na,
+      vol_na_cible:  vol_na,
+      tireurUsername, tireurColor, userId, targetName,
+      type: 'assault', modDom: null, combatModeBonus: null,
+      targetUserId: cibleCharacter.user_id,
     })
-    await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
-    await broadcastCurrentSubPhase(io, campaignId)
-    const [{ count: pendingDamageCount }] = await db('combat_pending')
-      .where({ campaign_id: campaignId, token_id: action.token_id, type: 'damage' })
-      .count('* as count')
-    if (parseInt(pendingDamageCount, 10) === 1) {
+    if (pendingDamageCount === 1) {
       const damagePayload = { tokenId: action.token_id, formula, targetName }
       emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
     }
@@ -2748,42 +2743,32 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         // Plusieurs entrées peuvent désormais coexister pour le même tireur (attaques multiples,
         // docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt
         // n'est émis ici que si aucune autre entrée n'attendait déjà.
-        await db('combat_pending').insert({
-          campaign_id: campaignId,
-          token_id: action.token_id,
-          type: 'damage',
-          payload: {
-            campaignId,
-            targetTokenId: action.target_token_id,
-            characterIdCible: cibleToken?.character_id ?? null,
-            cibleType: cibleCharacter?.type ?? null,
-            char_sheet_id_cible,
-            mr,
-            portee: authoritativeRangeBand,
-            aimedLocation: aimedLocationKey,
-            fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
-            formula: weapon.ref_damage_h,
-            // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet
-            // réel côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
-            // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents,
-            // parseDice n'accepte qu'un seul type de dé par formule).
-            weaponInvId: effectiveWeaponInvId,
-            for_na_cible,
-            con_na_cible,
-            vol_na_cible,
-            tireurUsername,
-            tireurColor,
-            userId: character.user_id,
-            targetName,
-            treatAsContact: isJetOuTrait,
-          },
+        // weaponInvId : résolution du dégât effectif (munition chargée) différée jusqu'au jet réel
+        // côté COMBAT_DAMAGE_CONFIRM — jamais précalculée ici (Chantier 11 Étape 2 Lot A,
+        // docs/PLAN_ARMES_DSL.md : un ADD munition peut nécessiter 2 jets de dés différents, parseDice
+        // n'accepte qu'un seul type de dé par formule).
+        const pendingDamageCount = await armAwaitingDamage(io, campaignId, action.token_id, {
+          campaignId,
+          targetTokenId: action.target_token_id,
+          characterIdCible: cibleToken?.character_id ?? null,
+          cibleType: cibleCharacter?.type ?? null,
+          char_sheet_id_cible,
+          mr,
+          portee: authoritativeRangeBand,
+          aimedLocation: aimedLocationKey,
+          fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ?? 0,
+          formula: weapon.ref_damage_h,
+          weaponInvId: effectiveWeaponInvId,
+          for_na_cible,
+          con_na_cible,
+          vol_na_cible,
+          tireurUsername,
+          tireurColor,
+          userId: character.user_id,
+          targetName,
+          treatAsContact: isJetOuTrait,
         })
-        await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
-        await broadcastCurrentSubPhase(io, campaignId)
-        const [{ count: pendingDamageCount }] = await db('combat_pending')
-          .where({ campaign_id: campaignId, token_id: action.token_id, type: 'damage' })
-          .count('* as count')
-        if (parseInt(pendingDamageCount, 10) === 1) {
+        if (pendingDamageCount === 1) {
           // Aperçu formule effective (munition chargée) — Chantier 11 Étape 2 Lot A, correctif
           // affichage : montrait auparavant weapon.ref_damage_h brut, incohérent avec le jet réel
           // effectué à la confirmation dès qu'une munition modifie les dégâts.

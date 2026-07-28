@@ -1,6 +1,6 @@
 # AUDIT_FABLE.md — Audit technique complet (architecture, sécurité, bugs)
 
-> Auteur : Claude Fable 5 (revue autonome, sur demande explicite de Saar 2026-07-25).
+> Auteur : Claude Sonnet (revue autonome, sur demande explicite de Saar 2026-07-25).
 > Méthode : cartographie (6 explorations parallèles read-only) → compréhension → validation ciblée
 > (lecture directe des fichiers cités, pas seulement les rapports de cartographie) → synthèse.
 > Portée couverte : `server/`, `client/`, `shared/`, migrations DB, sécurité applicative.

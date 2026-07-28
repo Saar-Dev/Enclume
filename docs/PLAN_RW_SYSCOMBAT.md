@@ -17,7 +17,8 @@
   `resolveAssaultAction` (~367 lignes) classées `🟡 TECH DEBT — non bloquant V1`. Découpage proposé
   (`resolveDamage.js`/`resolveMelee.js`) mais différé « sprint dédié post-V1 », sans point de
   re-décision fixé.
-- **`docs/AUDIT_FABLE.md` RC1/INFRA-1** (2026-07-25) : `[VÉRIFIÉ]` re-mesuré à `resolveMeleeAction`
+- **`docs/AUDIT.md` RC1/INFRA-1** (2026-07-25, renommé depuis `AUDIT_FABLE.md` — le modèle Fable n'est
+  pas à l'origine de cet audit) : `[VÉRIFIÉ]` re-mesuré à `resolveMeleeAction`
   (`server/src/socket/socketCombatHelpers.js:1214-1844`, 631 lignes, 42 branches) et
   `resolveAssaultAction` (`socketCombatHelpers.js:2357-2874`, 518 lignes, 35 branches) — **grossi de
   25-40 % depuis 2026-06-15** (COM24 deux-armes CaC, drones, MR-table CHOC1 ajoutés inline). Sans point
@@ -424,6 +425,95 @@ différents face à une erreur en cours de route, aujourd'hui. Le point h) ne ch
 breakdown — il ne doit pas tenter d'unifier ces deux styles au passage (ce serait INFRA-2, §5, hors
 périmètre, décision séparée).
 
+### 2.5 Architecture retenue — Lot 3 (orchestration `AWAITING_DAMAGE` dupliquée)
+
+> Recherche menée avant de figer cette architecture (consigne explicite de Saar, 2026-07-28 : s'appuyer
+> sur l'expertise déjà publiée, ne jamais bricoler une solution locale quand un précédent pro existe).
+
+**Sources** :
+- [Fowler — « An example of preparatory refactoring »](https://martinfowler.com/articles/preparatory-refactoring-example.html) :
+  cite Kent Beck, « make the change easy, then make the easy change ». Cadre exact de ce Lot — il ne
+  résout pas RC2/COM27 (§5, hors périmètre), il rend son futur correctif bon marché.
+- [Colyseus — Room / State Synchronization](https://docs.colyseus.io/room) : ce framework Node.js
+  multijoueur de référence documente `afterNextPatch`, une option de broadcast qui ne part **qu'une
+  fois l'état muté déjà appliqué** — reconnaissance, dans un projet de production du même domaine, du
+  problème exact de BUG-1 (`docs/AUDIT.md`) : une notification de changement d'état qui part avant
+  l'événement qui la justifie. Confirme que `emissions[]`/`flushEmissions` (déjà dans ce projet) est
+  l'équivalent maison d'un problème déjà résolu ailleurs — pas une invention locale à remettre en
+  cause à cette occasion.
+- [Colyseus — The Command Pattern](https://docs.colyseus.io/best-practices/command-pattern) : confirme,
+  par un framework en production, que « Dispatcher + Command » est la direction reconnue si ce projet
+  généralise un jour `emissions[]` — corrobore indépendamment §1.2 (Game Programming Patterns, déjà
+  noté « pas retenu pour ce plan », toujours vrai ici : direction pour un futur lot, pas pour celui-ci).
+- Le nom générique du motif « file d'événements, publiée dans l'ordre après la mutation » est le
+  *transactional outbox pattern* (distribué à l'origine) : l'enseignement qui s'applique ici est que la
+  file existe déjà (`emissions[]`) — le vrai défaut (RC2) est qu'elle n'est pas appliquée partout, pas
+  qu'elle serait mal conçue. Rien à réinventer.
+
+**a) Constat `[VÉRIFIÉ]` par lecture post-Lot 2 (lignes à jour)** — un même bloc revient 3 fois, pas 1 :
+insertion `combat_pending` (`type:'damage'`) → `setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')` →
+`broadcastCurrentSubPhase(io, campaignId)` (direct, identique dans les 3 cas) → comptage
+`pendingDamageCount` → prompt émis seulement si `count === 1` :
+1. `confirmMeleeDefense` L.624-665 (attaquant PJ CaC qui touche).
+2. `resolveDroneAssaultAction` L.2325-2354 (drone qui touche une cible PJ).
+3. `resolveAssaultAction` L.2751-2794 (attaquant PJ Tir qui touche).
+
+Le 4ᵉ site structurellement voisin, `resolveMeleeDefensePj` (L.1859-1886, Lot 2), reste **hors
+périmètre** : type `'melee_defense'`, sous-état `AWAITING_DEFENSE`, pas de comptage (un seul défenseur
+possible) — décision déjà actée §2.4.g, pas la même duplication.
+
+**b) Piège trouvé en comparant les 3, pas une extraction à l'aveugle** : elles ne sont **pas**
+émission-identiques après le comptage. `confirmMeleeDefense` n'utilise **aucun** `emissions[]` — tout y
+est émis en direct (`attackerSocket.emit(...)`, L.660-664 ; déjà noté §2.4.l comme volontaire, à ne pas
+harmoniser). `resolveDroneAssaultAction`/`resolveAssaultAction` poussent leur prompt dans `emissions[]`
+(`{ to: 'user'|'socket', ... }`, flush différé par l'appelant). Une extraction qui engloberait aussi
+l'émission du prompt forcerait un style sur l'autre — changement de comportement non demandé, et
+précisément le terrain de BUG-1/COM27 que ce Lot doit éviter (§5).
+
+**c) Découpage retenu — extraire seulement la portion réellement identique.** Nouvelle fonction
+`armAwaitingDamage(io, campaignId, tokenId, payload)` (voisinage `broadcastCurrentSubPhase`, même
+fichier) : fait l'insert + `setFSMSubPhase` + `broadcastCurrentSubPhase` + le comptage, retourne
+`pendingDamageCount`. Chaque site garde sa propre émission du prompt telle quelle :
+
+```js
+// server/src/socket/socketCombatHelpers.js — voisinage de broadcastCurrentSubPhase (L.362)
+async function armAwaitingDamage(io, campaignId, tokenId, payload) {
+  await db('combat_pending').insert({ campaign_id: campaignId, token_id: tokenId, type: 'damage', payload })
+  await setFSMSubPhase(db, campaignId, 'AWAITING_DAMAGE')
+  await broadcastCurrentSubPhase(io, campaignId)
+  const [{ count }] = await db('combat_pending')
+    .where({ campaign_id: campaignId, token_id: tokenId, type: 'damage' })
+    .count('* as count')
+  return parseInt(count, 10)
+}
+```
+
+Chaque appelant devient : `const pendingDamageCount = await armAwaitingDamage(io, campaignId, tokenId,
+payload); if (pendingDamageCount === 1) { /* émission du prompt, style propre au site, inchangé */ }`.
+Payload construit par l'appelant comme aujourd'hui (les 3 payloads diffèrent réellement en contenu —
+`melee`/`assault`/drone — la fonction ne les façonne pas, elle les transporte).
+
+**d) Pourquoi c'est de la « preparatory refactoring » et pas une DRY cosmétique.** L'appel à
+`broadcastCurrentSubPhase` est aujourd'hui identique (direct, immédiat) dans les 3 sites — regroupé en
+un seul point d'appel, un futur correctif RC2/COM27 qui déciderait de le faire transiter par un
+`emissions[]` (le style Colyseus `afterNextPatch`) n'aurait qu'**un** endroit à changer au lieu de 3.
+Ce Lot ne fait pas ce changement — il le rend seulement moins coûteux le jour où il sera décidé
+séparément (§5).
+
+**e) `confirmDamage` — bloc voisin, forme différente, non inclus.** Le ré-armement FIFO de
+`confirmDamage` (L.759-760 : `setFSMSubPhase` + `broadcastCurrentSubPhase` seuls, sans nouvel insert ni
+comptage — une entrée suivante déjà existante est simplement re-signalée) n'a pas la même forme que le
+bloc a) — 2 lignes, pas de payload à transporter, pas de comptage. L'extraire dans `armAwaitingDamage`
+forcerait cette fonction à accepter un mode "sans insert", complexifiant sa signature pour un gain nul
+(2 lignes économisées). Laissé tel quel, hors périmètre — cohérent avec le principe « ne pas designer
+pour un besoin hypothétique » : rien n'indique aujourd'hui qu'un 4ᵉ site aurait cette forme.
+
+**f) Contrat à préserver.** Les 3 appelants ne changent que leur bloc a) — payload, comptage et
+condition `=== 1` identiques avant/après ; l'insert et le nom des colonnes ne bougent pas (autres
+lecteurs de `combat_pending.payload` : `confirmDamage`, `forceAdvanceResolution`, non affectés, aucune
+clé renommée). Aucune fonction extraite ne gagne de `try/catch` propre — même invariant que §2.4.k, la
+propagation d'erreur remonte au catch de la coquille appelante inchangé.
+
 ---
 
 ## 3. Découpage en lots — un seul problème par lot, validé avant le suivant
@@ -436,7 +526,7 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 | **Lot 0** | Tables CaC/taille/portée → `shared/combatSituationMods.js` étendu (§2.1.a) : 3 sites serveur (melee/assault/drone) + 2 fenêtres client basculés, copies locales supprimées | Faible — valeurs inchangées, invariant « autorité unique des tables », vérifiable par simple comparaison des constantes | **Codé (2026-07-25)** — 23 valeurs vérifiées conformes par script, build Vite OK, syntaxe serveur OK ; ⚠️ en attente : vérif visuelle Saar des 2 fenêtres + démarrage serveur réel + décision commit (Session 176 toujours non committée sur le même fichier, §0.5) |
 | **Lot 1** | Noyau `computeAttackRoll` (§2.1.b-d) + assemblage contributions dans les deux fonctions + shadow-mode (§2.3) + tests unitaires (§2.2) | Faible — comportement identique bit-à-bit, aucune écriture DB ni émission déplacée | **✅ Clos (2026-07-25)** — 9 tests unitaires OK, fuzz 1000 tirages sans écart, session de jeu réelle Saar (CaC PJ/PNJ + Tir + attaque multiple + deux armes + mode offensif + Seuil négatif) sans aucun `[DBG-DECOUPLAGE]`, bloc inline + dispositif retirés, noyau autoritaire. Modificateurs non exercés en jeu (couverts par fuzz + tests seulement) : taille≠moyenne, terrain instable, bouclier, sans défense, précipitation, tir visé, visée localisation, dual-wield Tir, couverture, mods d'arme |
 | **Lot 2** | `resolveMeleeAction` (4 branches défenseur) **+ `confirmMeleeDefense`** (même dette de breakdown dupliqué côté PJ, trouvée en analyse à charge, point h) — détail §2.4 | Moyen — touche à des `await db(...)` et à la construction des émissions `COMBAT_MELEE_RESULT`/`COMBAT_ATTACK_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (9 scénarios, §2.4.f), pas de shadow-mode possible (effets de bord) | **✅ Clos (2026-07-27)** — `node --check` propre, 9 tests Lot 1 toujours au vert (noyau non touché), équivalence numérique ancienne formule/`computeAttackRoll` vérifiée sur 7 cas (script jetable, sans DB), 7 scénarios de fixture jetable en base réelle (0 résidu après coup), puis session de jeu réelle Saar (CaC PNJ auto-résolution + cible sans défense après étourdissement) confirmée sans régression — vérifié aussi en base (2 blessures correctement écrites, une par chemin de code touché). Alerte initiale de Saar (« résolutions manquantes ») retombée sur deux comportements corrects non liés au Lot 2 (attaque hors portée rejetée, PNJ étourdi auto-skip) |
-| **Lot 3** | Orchestration DB/socket restante (`combat_pending`, `setFSMSubPhase`, `broadcastCurrentSubPhase`) | Élevé — recoupe RC2/BUG-1 (`docs/AUDIT_FABLE.md`), la cause probable du bug COM27 déjà documenté | Non commencé — **à ne jamais mélanger avec un correctif fonctionnel de COM27** ; si COM27 est corrigé avant ce Lot, ce Lot devra repartir du code déjà corrigé, pas l'inverse |
+| **Lot 3** | Extraction `armAwaitingDamage` (§2.5) : 3 sites dupliqués (`confirmMeleeDefense`, `resolveDroneAssaultAction`, `resolveAssaultAction`) fusionnés sur un seul point d'insert/FSM/broadcast/comptage ; émission du prompt inchangée par site (§2.5.b) | Faible — comportement identique bit-à-bit (même insert, même comptage, même condition d'émission) ; pas de changement d'ordre d'émission, donc pas un correctif de COM27 (§2.5.d le rend seulement moins coûteux plus tard) | **Codé (2026-07-28)** — diff relu ligne à ligne (mêmes clés/valeurs de payload, mêmes `campaignId`/`tokenId` par site), `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non touché) ; ⚠️ en attente : validation en jeu par Saar (3 scénarios §6) et décision de commit — **à ne jamais mélanger avec un correctif fonctionnel de COM27** ; si COM27 est corrigé avant ce Lot, ce Lot devra repartir du code déjà corrigé, pas l'inverse |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le Lot 0 est séparé du Lot 1 parce qu'il porte un invariant différent (autorité
@@ -513,8 +603,17 @@ Aucune règle de jeu ne change. Aucune migration, aucun nouvel événement WS, a
   sans DB) + 7 scénarios de fixture jetable en base réelle (0 résidu, §2.4.f) + session de jeu réelle
   Saar (CaC PNJ auto-résolution, cible sans défense après étourdissement) + vérification directe en base
   des blessures écrites par les deux chemins de code touchés.
-- **Non testé** : Lot 3 (tableau §3) — marquer `⚠️ clos partiel` tant que les 4 Lots ne sont pas tous
-  fermés.
+- **Testé (Lot 3, partiel)** : `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non
+  touché), relecture ligne à ligne du diff des 3 sites (mêmes clés/valeurs de payload, mêmes
+  `campaignId`/`tokenId`, condition `pendingDamageCount === 1` préservée) — équivalence comportementale
+  vérifiée par lecture, pas par exécution réelle (pas de script de fixture DB : la fonction extraite
+  n'est pas exportée, la tester isolément demanderait d'élargir l'API publique du fichier pour le seul
+  besoin du test, hors périmètre). **Restant** : 3 scénarios de jeu réels par Saar (CaC attaquant PJ
+  touche, Tir attaquant PJ touche, drone touche une cible PJ), chacun vérifiant que le prompt de dégâts
+  attendu arrive bien côté client concerné, sans régression sur l'ordre déjà existant aujourd'hui (ce
+  Lot ne le change pas, §2.5.d).
+- **Non testé** : Lot 3 — session de jeu réelle Saar (3 scénarios ci-dessus), pas encore rejouée ;
+  marquer `⚠️ clos partiel` tant que ce Lot n'est pas confirmé en jeu et committé.
 - **Données** : aucune migration, aucun effet runtime en dehors du code déplacé.
 - **Retour arrière** : chaque Lot est un commit isolé — `git revert` suffit, aucune donnée vivante
   affectée.

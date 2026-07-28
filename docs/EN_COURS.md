@@ -57,6 +57,30 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 184 : `docs/PLAN_RW_SYSCOMBAT.md` Lot 3
+> **architecture rédigée, planification uniquement, aucun code écrit** — `docs/AUDIT_FABLE.md` renommé
+> `docs/AUDIT.md` (le modèle Fable n'est pas à l'origine de cet audit), références mises à jour dans le
+> plan. Inventaire post-Lot 2 : le bloc `combat_pending`(type `damage`)/`setFSMSubPhase(AWAITING_DAMAGE)`/
+> `broadcastCurrentSubPhase`/comptage est dupliqué 3 fois (`confirmMeleeDefense` L.624-665,
+> `resolveDroneAssaultAction` L.2325-2354, `resolveAssaultAction` L.2751-2794) — piège trouvé en
+> comparant les 3 : l'émission du prompt qui suit n'est **pas** identique (direct dans
+> `confirmMeleeDefense`, `emissions[]` dans les deux autres), donc pas extractible avec le comptage
+> sans changer un comportement d'émission (terrain BUG-1/COM27, hors périmètre). Architecture retenue
+> (`docs/PLAN_RW_SYSCOMBAT.md` §2.5) : extraire uniquement la portion identique dans
+> `armAwaitingDamage(io, campaignId, tokenId, payload)`, chaque site gardant sa propre émission de
+> prompt — recherche à l'appui (préconisée par Saar) : Fowler « preparatory refactoring » (ne pas
+> corriger COM27 ici, rendre son futur correctif moins cher) et Colyseus `afterNextPatch`/Command
+> Pattern (confirmation, par un framework Node.js multijoueur de référence, que le motif
+> `emissions[]`/`flushEmissions` déjà en place est la bonne direction, pas une invention locale).
+> **Lot 3 codé (2026-07-28)** — `armAwaitingDamage(io, campaignId, tokenId, payload)` ajoutée au
+> voisinage de `broadcastCurrentSubPhase`, les 3 sites (`confirmMeleeDefense`, `resolveDroneAssaultAction`,
+> `resolveAssaultAction`) basculés dessus, émission du prompt inchangée par site (§2.5.b). **Testé** :
+> `node --check` propre, 9 tests Lot 1 toujours au vert, diff relu ligne à ligne (mêmes clés/valeurs de
+> payload par site). **Non testé** : session de jeu réelle (CaC PJ touche / Tir PJ touche / drone touche
+> cible PJ) — ⚠️ clos partiel tant que Saar n'a pas confirmé et que ce n'est pas committé. **Prochaine
+> étape chantier** : validation en jeu par Saar puis commit isolé de ce Lot — à ne jamais mélanger avec
+> un correctif fonctionnel de COM27.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 183 : `docs/PLAN_BATTLEMAP2D.md` Lots 1-2
 > **✅ clos** — Lot 1 : discriminant `battlemaps.render_mode` (migration 207) + génération serveur de
 > la salle triviale à `POST /battlemaps` ; correctif trouvé au passage sur `image_url` (chemin MinIO
