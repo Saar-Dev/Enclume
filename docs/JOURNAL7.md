@@ -98,3 +98,93 @@ mortelle) reste à valider par Saar en navigateur avant de considérer le cluste
 **Données** : aucune migration sur l'ensemble du cluster. **Retour arrière** : rien committé avant
 cette session — un `git diff`/`git checkout` suffirait ; après commit, un `git revert` isolé par
 correctif reste possible si un test navigateur invalide l'un des cinq indépendamment des autres.
+
+---
+
+## Session 182 (Saar) — 2026-07-28 — Wizard Kiwi (404/500) + triage BUGIDENTIFIE (6 correctifs isolés) — ✅ codés, navigateur non testé
+
+**Contexte** : Saar signale deux symptômes sur le serveur distant Kiwi (`89.92.219.211:8193`, dépôt
+`/home/didier/Enclume`, branche `dev/Saar`) : 404 sur `/api/creation/campaign/:id/drafts` (pool de
+personnages du Wizard inaccessible) et 500 sur plusieurs illustrations Wizard. Diagnostic mené par
+lecture + logs `journalctl` fournis par Saar (aucun accès SSH direct depuis cette session — confirmé
+bloqué, `docs/SERVEURDISTANTKIWI.md`), avant tout code. Une fois ces deux bugs clos, Saar a demandé
+d'enchaîner sur le registre `BUGIDENTIFIE.md` : un correctif à la fois, validé puis committé avant le
+suivant (I18N-DEADCODE1 → COM26 → TRADE1 → I18N-LINT1 → REFS-RENDER, ce dernier découvert en cours de
+route).
+
+**KIWI3 — 404 `/drafts`** : `git log`/`journalctl` fournis par Saar montrent `enclume-server` actif
+depuis le 2026-07-15 13:00, sans redémarrage, alors que la route (`server/src/routes/creation.js:91`)
+existe depuis Session 172 (23/07) — le process tournait du code d'avant même le merge "Fusion Kiwi" de
+ce jour-là. Pas un bug de code : `git pull` (1 commit d'écart, sans rapport) + 25 migrations en attente
+appliquées + `systemctl restart` par Saar sur le serveur.
+
+**KIWI4 — 500 sur les illustrations** : deux causes distinctes. (a) `server/src/routes/assets.js`
+catchait uniquement `err.code === 'NoSuchKey'` ; `statObject` (HEAD, sans corps XML) renvoie
+`'NotFound'` côté SDK minio (vérifié en lisant `node_modules/minio/dist/esm/internal/
+xml-parser.mjs:54-56`) — donc tout asset absent partait en 500 au lieu d'un 404 propre, sur
+n'importe quelle instance. Fix : les deux codes traités comme équivalents. (b) 46 illustrations
+Wizard (`Step0Method.jsx`/`Step2Genotype.jsx`/`Step3Mutations.jsx`/`CareersAllocator.jsx`, dont les 38
+`ref_careers.illustration`) jamais uploadées sur le bucket MinIO de Kiwi — Saar a fourni un
+`assets.zip` (46 fichiers web + `Profession.xcf` exclu, 39 Mo, fichier source non-web). Discussion
+d'architecture : ces illustrations sont fixes, identiques à toute instance, versionnées avec le code —
+les faire dépendre d'un bucket MinIO *par instance* crée exactement ce genre de dérive. Sorties vers
+`client/public/assets/` (même chemin relatif que celui déjà stocké en base, zéro migration DB), les 4
+composants client réécrits pour pointer en statique plutôt que via l'API.
+
+**I18N-DEADCODE1** : `client/src/components/creation/WizardCreationPage.jsx` — doublon mort confirmé
+(`diff` contre `pages/WizardCreationPage.jsx` : 1 ligne d'écart, aucun importeur trouvé) puis supprimé.
+
+**COM26** : Darts 7.62mm ST SAP et Flèche IEM portaient toutes deux le DSL exact d'une munition
+Assommante (déjà exclues de la migration 160 faute de valeur de correction connue). Recherche menée
+dans le fichier d'extraction Excel original (`docs/Old/script Extraction Excel/equipement/
+STEP1_cleaned_data.js`) : la valeur IEM y est correcte et identique à 6+ munitions sœurs (ground-truth
+directe) ; la valeur SAP y est **déjà fautive à la source** (erreur de saisie antérieure à l'import,
+pas introduite par le pipeline). Saar a fourni le tableau RAW des armes sous-marines à projectiles
+(portées, dégâts, astérisques air libre) faute de stats par munition — a permis de choisir `DMG=BASE`
+plutôt qu'une valeur inventée, `shared/weaponAmmoDsl.js` (Lot C1, déjà câblé dans `damageService.js`)
+faisant de `FX=SAP` la seule autorité mécanique sur la formule de l'ARME (4D10+3 du tableau, -1 dé,
+armure ×0.5) dès qu'il est posé — le `DMG=` catalogue devient cosmétique. Le tag `RANGE=AIR_X2` des
+munitions sœurs semble lui-même faux au vu du tableau (astérisque simple = ×3, pas ×2) mais n'est lu
+par aucun code — non touché, dette à part si un jour câblé. Migration 209, vérifiée contre le vrai
+parseur (`node --input-type=module`) + suite `weaponAmmoDsl.test.mjs` (16/16). Vérification a aussi
+révélé **DARTS-TAGDUP** : `TXT=DEPTH=...|DEPTH=...` (deux sous-tags de même clé) s'écrasent
+silencieusement dans l'objet `tags` du parseur — inerte aujourd'hui (rien ne lit `DEPTH`), documenté
+sans correctif.
+
+**TRADE1** : `socketTrade.js`, handler `TRADE_TRANSFER_DECLINED` ne vérifiait jamais que l'appelant
+correspondait au `to_char_id` de l'offre (contrairement à `ACCEPTED`/`CANCELLED`) — un `offerId`
+deviné permettait à n'importe quel membre de refuser l'offre d'un autre. Ajout de la vérification
+d'ownership, même patron que `TRADE_TRANSFER_ACCEPTED` ; `ExchangeWindow.jsx`/`TradeWindow.jsx` mis à
+jour pour envoyer `decliningCharId`.
+
+**I18N-LINT1 → REFS-RENDER (cascade)** : `CombatGmDeclareWindow.jsx` avait deux `useRef` déclarés
+après le retour conditionnel `allGmManaged.length === 0` (violation `rules-of-hooks`). Remontés en
+position inconditionnelle — ESLint a alors pu analyser plus loin et signalé une 2ᵉ erreur
+(`react-hooks/refs`, règle React Compiler) sur l'écriture `.current` elle-même, déjà présente avant ce
+premier fix mais jamais atteinte par le linter. Vérifié contre la doc officielle
+(`react.dev/reference/react/useRef`, section Pitfall : écrire une ref pendant le rendu n'est acceptable
+que pour une initialisation paresseuse, jamais notre cas) avant de coder — chaque écriture déplacée
+dans son propre `useEffect`, ce qui a nécessité de remonter aussi `currentFireMode`/
+`effectiveMeleeCount`/`effectiveAssaultCount` avant le retour conditionnel (leurs seules dépendances,
+`decl`/`meleeAttackCount`/`assaultCount`, déjà disponibles dès le haut du composant — anciennes
+déclarations supprimées, pas dupliquées). Ce 2ᵉ fix a lui-même démasqué une 3ᵉ erreur
+(`react-hooks/set-state-in-effect`, déjà documentée ailleurs sous I18N-LINT3) — ajoutée à l'entrée
+existante du registre, non traitée (3ᵉ couche, hors scope).
+
+**Fichiers touchés** : `server/src/routes/assets.js`, `server/src/db/migrations/
+209_fix_ref_equipment_ammo_sap_iem.js`, `server/src/socket/socketTrade.js`,
+`client/src/components/{Step0Method,Step2Genotype,Step3Mutations,CareersAllocator,
+CombatGmDeclareWindow,ExchangeWindow,TradeWindow}.jsx`, `client/public/assets/` (46 nouveaux
+fichiers), suppression `client/src/components/creation/WizardCreationPage.jsx` ;
+`docs/BUGIDENTIFIE.md`/`EN_COURS.md`/`CHANGELOG.md` mis à jour au fur et à mesure.
+
+**Testé** : chaque correctif vérifié isolément avant de passer au suivant — `node --check` (fichiers
+serveur), build Vite client (×6, un par correctif), ESLint avant/après comparé pour les deux fixes
+hooks, suite `weaponAmmoDsl.test.mjs` (16/16) + vérification directe contre le vrai parseur pour COM26.
+**Non testé** : aucun scénario navigateur réel — affichage effectif des illustrations Wizard sur Kiwi
+après déploiement, dégâts réels des 2 munitions corrigées en combat, refus d'offre TRADE par le bon
+destinataire puis tentative par un tiers, déclaration GM Tir Multi/CaC après le remaniement des hooks.
+Tout reste à valider par Saar. **Données** : migration 209 (rétrocompatible, `down()` fourni) — à
+appliquer sur Kiwi via la procédure habituelle (`docs/SERVEURDISTANTKIWI.md`). **Retour arrière** :
+6 commits distincts sur `dev/Saar` (un par correctif), chacun revert-able isolément sans affecter les
+autres.

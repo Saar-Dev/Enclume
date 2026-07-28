@@ -1,3 +1,15 @@
+## v192 — 2026-07-28 — Illustrations du Wizard + correctif munitions
+
+### Client
+- [fix] Les illustrations du Wizard (choix du mode de création, génotype, mutations, carrières) ne
+  s'affichaient plus sur le serveur distant — elles sont désormais livrées directement avec le
+  client, sans dépendre d'une synchronisation séparée par instance.
+
+### Serveur
+- [fix] Deux munitions du catalogue (Darts 7.62mm - Projectile SAP, Flèche - Projectile IEM)
+  infligeaient par erreur les dégâts d'une munition Assommante au lieu de leur propre effet
+  (perforation d'armure pour la première, mi-dégâts + Test de panne pour la seconde).
+
 ## v191 — 2026-07-23 — Avantages professionnels et Revers : tous les métiers ont maintenant un effet réel
 
 ### Client

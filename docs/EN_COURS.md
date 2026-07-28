@@ -57,6 +57,30 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 182 : triage `BUGIDENTIFIE.md` (6 correctifs
+> indépendants, 1 commit chacun, détail complet `JOURNAL7.md`). **KIWI3/KIWI4** — Wizard inaccessible
+> sur le serveur distant Kiwi : 404 `/drafts` causé par `enclume-server` jamais redémarré depuis
+> 13 jours (pas un retard de code, route déjà présente) ; 500 sur les illustrations causé par (a)
+> `assets.js` ne reconnaissait que `err.code==='NoSuchKey'` alors que `statObject` (HEAD) renvoie
+> `'NotFound'` côté SDK minio — 500 au lieu de 404 sur tout asset absent, toute instance — et (b) 46
+> illustrations Wizard jamais synchronisées sur ce bucket, sorties de MinIO vers `client/public/
+> assets/` (fixes, versionnées avec le code, plus jamais d'upload par instance). **I18N-DEADCODE1** —
+> doublon mort `components/creation/WizardCreationPage.jsx` supprimé. **COM26** — 2 munitions
+> catalogue (Darts 7.62mm SAP, Flèche IEM) avaient le DSL d'une munition Assommante par erreur de
+> copié-collé (migration 209 ; SAP confirmé RAW avec Saar, `DMG=BASE` suffit grâce au mécanisme Lot C1
+> déjà câblé ; IEM = valeur ground-truth du fichier d'extraction original). Ajout dette
+> **DARTS-TAGDUP** (résiduelle, tags DEPTH dupliqués s'écrasent silencieusement, inerte aujourd'hui).
+> **TRADE1** — `TRADE_TRANSFER_DECLINED` sans vérification d'ownership, corrigé même patron que
+> `TRADE_TRANSFER_ACCEPTED`. **I18N-LINT1 → REFS-RENDER** — cascade sur `CombatGmDeclareWindow.jsx` :
+> hooks `useRef` conditionnels corrigés (remontés avant le retour `allGmManaged.length===0`), ce qui a
+> démasqué une écriture de ref pendant le rendu (vérifiée non-conforme contre la doc officielle
+> react.dev avant correctif — déplacée en `useEffect`), qui a elle-même démasqué une 3ᵉ occurrence
+> d'I18N-LINT3 (`setState` dans un effet, ajoutée à l'entrée existante, non traitée). **Testé** :
+> chaque fix vérifié isolément (ESLint avant/après, build client, `node --check`, tests
+> `weaponAmmoDsl.test.mjs` 16/16, parseur DSL vérifié en direct) — **aucun scénario navigateur réel
+> rejoué**, à valider par Saar. **Données** : migration 209 (rétrocompatible, `down()` prévu) à
+> appliquer sur Kiwi comme d'habitude.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-27 — Session 181 : `docs/PLAN_RW_SYSCOMBAT.md` Lot 2
 > **✅ clos** — branchement défenseur de `resolveMeleeAction` extrait en 4 fonctions
 > (`resolveDefenselessTarget`/`resolveMeleeDefensePnj`/`resolveMeleeDefenseDrone`/`resolveMeleeDefensePj`,
