@@ -117,10 +117,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   useEffect(() => { tokensRef.current = tokens }, [tokens])
 
   // I18N-LINT1 (docs/BUGIDENTIFIE.md) — hooks déclarés ici même si le composant retourne null plus
-  // bas (allGmManaged.length === 0) : useRef doit toujours s'exécuter au même ordre à chaque rendu,
-  // seule l'affectation .current (conditionnelle par construction) peut être sautée sans risque.
+  // bas (allGmManaged.length === 0) : useRef doit toujours s'exécuter au même ordre à chaque rendu.
+  // REFS-RENDER : la synchro .current passe par useEffect (pas une écriture pendant le rendu, voir
+  // react.dev/reference/react/useRef "Pitfall" — seule l'initialisation paresseuse y échappe, pas ce
+  // cas) — donc currentFireMode/effectiveMeleeCount/effectiveAssaultCount doivent aussi être calculés
+  // ici, avant le retour conditionnel (leurs seules dépendances, decl/meleeAttackCount/assaultCount,
+  // sont déjà disponibles à ce point — jamais recalculés plus bas, réutilisés tels quels).
   const effectiveMeleeCountRef = useRef()
   const effectiveAssaultCountRef = useRef()
+  const currentFireMode = decl.fire_mode.toUpperCase()
+  const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
+  const effectiveAssaultCount = currentFireMode === 'CC' ? assaultCount : 1
+  useEffect(() => { effectiveMeleeCountRef.current = effectiveMeleeCount }, [effectiveMeleeCount])
+  useEffect(() => { effectiveAssaultCountRef.current = effectiveAssaultCount }, [effectiveAssaultCount])
 
   // StrictMode (main.jsx) double-invoque les effets de montage en dev (mount → cleanup → mount) —
   // sans ce réarmement dans le corps de l'effet, isMountedRef.current reste bloqué à false après ce
@@ -284,8 +293,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   ) : []
 
   const meleeDefensif    = decl.combatMode === 'defensif' || decl.combatMode === 'retraite'
-  const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
-  effectiveMeleeCountRef.current = effectiveMeleeCount
   const meleeWeaponAvailable = weapon && !weapon.ref_fire_mode ? weapon : null
   // undefined = pas de choix → dériver; null = mains nues explicite; id = arme choisie
   const effectiveGmMeleeWeaponId = decl.weapon !== 'drawn'
@@ -311,7 +318,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const availableFireModes = weapon?.ref_fire_mode
     ? weapon.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
     : ['cc']
-  const currentFireMode = decl.fire_mode.toUpperCase()
   const { variant: currentVariant, effectiveBulletCount } = computeFireVariant(
     currentFireMode, assaultBulletCount, assaultVariantAB, { defaultCcCount: 1 }
   )
@@ -324,8 +330,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     : 0
   const ccSliderDisplayIdx = ccSliderIdx === -1 ? 0 : ccSliderIdx
 
-  // Tir Multi (docs/PLAN_TIRMULTI.md D6) — CC uniquement, jamais RC/RL
-  const effectiveAssaultCount = currentFireMode === 'CC' ? assaultCount : 1
   // D10 — Tir visé / deux armes / Viser une localisation sont chacun exclusifs avec Tir Multi
   const multiShotIneligibilityReasons = getMultiShotIneligibilityReasons({
     currentFireMode, aimTranches, isDualWield, aimedLocation,
@@ -385,7 +389,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // même cible). startIdx>0 (bouton "Changer" d'un slot précis, une fois au moins une cible posée) ne
   // touche que ce slot — plus de chaînage récursif nécessaire, contrairement à handleStartMelee (dont
   // le cas d'usage courant reste des cibles distinctes).
-  effectiveAssaultCountRef.current = effectiveAssaultCount
   const handleStartAttack = (startIdx = 0) => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
     setIsSelectingOnMap(true)
