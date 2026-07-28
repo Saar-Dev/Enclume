@@ -122,11 +122,22 @@ export function registerTradeHandlers(io, socket, context) {
     }
   })
 
-  // PJ B → refuse l'offre
-  socket.on(WS.TRADE_TRANSFER_DECLINED, async ({ offerId }) => {
+  // PJ B (ou GM pour PNJ) → refuse l'offre
+  socket.on(WS.TRADE_TRANSFER_DECLINED, async ({ offerId, decliningCharId }) => {
     try {
+      const decliningChar = await db('characters')
+        .where({ campaign_id: campaignId, id: decliningCharId })
+        .select('id', 'user_id')
+        .first()
+      const isGm = socket.data.role === 'gm'
+      const ownerOk = decliningChar?.user_id === user.id || (isGm && decliningChar?.user_id === null)
+      if (!decliningChar || !ownerOk) {
+        socket.emit(WS.TRADE_ERROR, { code: 'OFFER_NOT_FOUND' })
+        return
+      }
+
       const offer = await db('trade_offers')
-        .where({ id: offerId, campaign_id: campaignId, status: 'PENDING' })
+        .where({ id: offerId, campaign_id: campaignId, status: 'PENDING', to_char_id: decliningChar.id })
         .first()
       if (!offer) {
         socket.emit(WS.TRADE_ERROR, { code: 'OFFER_NOT_FOUND' })

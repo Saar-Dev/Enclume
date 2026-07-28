@@ -396,10 +396,10 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
   }, [socket, myCharId, incomingOffer, timeLeft])
 
   const handleDeclineOffer = useCallback(() => {
-    if (!socket || !incomingOffer) return
-    socket.emit(WS.TRADE_TRANSFER_DECLINED, { offerId: incomingOffer.offerId })
+    if (!socket || !incomingOffer || !myCharId) return
+    socket.emit(WS.TRADE_TRANSFER_DECLINED, { offerId: incomingOffer.offerId, decliningCharId: myCharId })
     setIncomingOffer(null)
-  }, [socket, incomingOffer])
+  }, [socket, myCharId, incomingOffer])
 
   // ── Callbacks revente PJ→GM ───────────────────────────────────────────────
 

@@ -165,9 +165,11 @@ export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId
 
   const handleDeclineOffer = useCallback(() => {
     if (!socket || !incomingOffer) return
-    socket.emit(WS.TRADE_TRANSFER_DECLINED, { offerId: incomingOffer.offerId })
+    const decliningCharId = incomingOffer.toCharId ?? effectiveCharId
+    if (!decliningCharId) return
+    socket.emit(WS.TRADE_TRANSFER_DECLINED, { offerId: incomingOffer.offerId, decliningCharId })
     setIncomingOffer(null)
-  }, [socket, incomingOffer])
+  }, [socket, effectiveCharId, incomingOffer])
 
   return (
     <div className="combat-win" style={{ width: PANEL_W, left: pos.left, top: pos.top }}>
