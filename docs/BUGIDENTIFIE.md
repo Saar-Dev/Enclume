@@ -1,6 +1,6 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
-> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline ; 2026-07-24 (Saar, triage priorisé) — CHOC1 clos (Palier 1 testé en jeu, confirmé Saar) ; Cluster I / DMG1+DMG2 clos (validation fonctionnelle confirmée Saar) ; SURPRISE-ROLL retiré (comportement normal, pas un bug — confirmé Saar) ; SURPRISE1 codé (`is_surprised: false` ajouté au reset `endTurn`, même requête qu'INI4 ; contournement `current_turn === 1` dans `isTargetDefenseless` retiré, devenu redondant), détail `EN_COURS.md`, non testé en jeu ; INI5 clos (audit git blame + relecture RAW p.218-219 : forfait `-3`/`-5` introduit Session 65, 94 sessions avant `computeSeriesPositions`, aucune base RAW — décision Saar : retiré, serveur + client + i18n, détail `EN_COURS.md` item 111, non testé en jeu) ; COM27 analysé en profondeur (flux d'émission tracé en entier, ordre serveur semble garanti correct par construction) mais mis en pause — reproduction non confirmée, décision Saar : attendre une nouvelle occurrence en jeu ; COM24 clos (bonus "deux armes" CaC déconnecté de l'arme déclarée — mécanisme "deux armes" à la déclaration ajouté, miroir exact du dual-wield Tir déjà existant, `shared/weaponSlots.js` réutilisé tel quel, revalidation serveur déclaration+résolution, 7 fichiers, détail `EN_COURS.md` item 112, non testé en jeu), ajout MELEE-INHAND (résiduel, trouvé en cours de route) ; 2026-07-28 (Saar, Session 182) — I18N-DEADCODE1 clos (`client/src/components/creation/WizardCreationPage.jsx` supprimé, confirmé sans importeur, build client OK)
+> Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline ; 2026-07-24 (Saar, triage priorisé) — CHOC1 clos (Palier 1 testé en jeu, confirmé Saar) ; Cluster I / DMG1+DMG2 clos (validation fonctionnelle confirmée Saar) ; SURPRISE-ROLL retiré (comportement normal, pas un bug — confirmé Saar) ; SURPRISE1 codé (`is_surprised: false` ajouté au reset `endTurn`, même requête qu'INI4 ; contournement `current_turn === 1` dans `isTargetDefenseless` retiré, devenu redondant), détail `EN_COURS.md`, non testé en jeu ; INI5 clos (audit git blame + relecture RAW p.218-219 : forfait `-3`/`-5` introduit Session 65, 94 sessions avant `computeSeriesPositions`, aucune base RAW — décision Saar : retiré, serveur + client + i18n, détail `EN_COURS.md` item 111, non testé en jeu) ; COM27 analysé en profondeur (flux d'émission tracé en entier, ordre serveur semble garanti correct par construction) mais mis en pause — reproduction non confirmée, décision Saar : attendre une nouvelle occurrence en jeu ; COM24 clos (bonus "deux armes" CaC déconnecté de l'arme déclarée — mécanisme "deux armes" à la déclaration ajouté, miroir exact du dual-wield Tir déjà existant, `shared/weaponSlots.js` réutilisé tel quel, revalidation serveur déclaration+résolution, 7 fichiers, détail `EN_COURS.md` item 112, non testé en jeu), ajout MELEE-INHAND (résiduel, trouvé en cours de route) ; 2026-07-28 (Saar, Session 182) — I18N-DEADCODE1 clos (`client/src/components/creation/WizardCreationPage.jsx` supprimé, confirmé sans importeur, build client OK) ; COM26 clos (migration 209 : `Darts 7.62mm ST SAP` → `DMG=BASE;TXT=FX=SAP|DEPTH=...` cohérent avec le mécanisme Lot C1 déjà câblé + confirmé RAW par Saar ; `Flèche IEM` → valeur ground-truth retrouvée dans le fichier d'extraction Excel original, identique à ses munitions sœurs — vérifié contre le vrai parseur `weaponAmmoDsl.js`, tests existants passent, non testé en jeu réel), ajout DARTS-TAGDUP (résiduel, trouvé en vérifiant le fix)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -498,28 +498,24 @@ l'arme principale CaC si jugé prioritaire.
 
 ---
 
-### Bug COM26 — 2 munitions catalogue avec un `ammo_effects` copié-collé d'une autre munition
+### Dette DARTS-TAGDUP — `TXT=DEPTH=...|DEPTH=...` : clés dupliquées dans le même tag, la 2ᵉ écrase la 1ʳᵉ
 
-**Symptôme** : `ref_equipment` — "Darts 7.62 mm ST - Projectile SAP" (id `30985a34-876d-4c0e-89d0-
-5f49cab10809`) et "Flèche - Projectile IEM" (id `4795d390-04ee-4697-8d9c-d8eb77480ccd`) portent toutes
-deux `DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10,M:3D10,L:2D10,E:1D10);TXT=FX=ASSOMMANTE` — le DSL exact
-d'une munition Assommante — alors que leur propre colonne `description` décrit un mécanisme totalement
-différent (SAP : dégâts normaux + pénétration d'armure ; IEM : mi-dégâts + Test de panne). En l'état,
-ces deux items infligeraient les dégâts/Choc d'une munition Assommante en jeu, pas ceux annoncés par
-leur description/nom.
+**Symptôme** : Aucun cas observé en jeu — trouvé en vérifiant la migration 209 (COM26, Session 182)
+contre le vrai parseur (`parseAmmoEffects`).
 
-**Trouvé pendant** : migration `160_fix_ref_equipment_choc_assommante.js` (Chantier 11 Étape 2, Lot B,
-`docs/PLAN_ARMES_DSL.md`) — ces 2 lignes correspondaient au filtre `CHOC=SET(BP%` mais ont été
-explicitement exclues de la correction (leur description ne parlant pas d'Assommante, les corriger
-vers `CHOC=SET(1D10+2)` aurait entériné l'erreur au lieu de la réparer).
+**Contexte** : plusieurs munitions Darts (`Darts 5.56mm SAP`, `Darts 7.62mm APHC`, et maintenant `Darts
+7.62mm SAP` via la migration 209) portent `TXT=...|DEPTH=>500M_X0.5|DEPTH=>=1000M_DISABLE` — deux
+sous-tags `DEPTH` distincts (règle RAW : au-delà de 500m portée ÷2, à -1000m arme inutile). Or
+`parseAmmoEffects` (`shared/weaponAmmoDsl.js`) stocke les tags dans un objet clé→valeur : la 2ᵉ
+occurrence de `DEPTH` écrase silencieusement la 1ʳᵉ. `tags.DEPTH` ne contient jamais que
+`>=1000M_DISABLE`, jamais les deux valeurs.
 
-**Cause `[HYPOTHÈSE]`** : erreur de copier-coller lors du peuplement initial du catalogue (script
-d'extraction Excel, `docs/Old/script Extraction Excel/equipement/`), non instrumentée en jeu.
+**Impact actuel** : aucun — `DEPTH` n'est lu par aucun mécanisme de résolution aujourd'hui (seul `FX`
+est consommé, `damageService.js`). Latent, pas actif.
 
-**Prochaine étape** : reconstruire le bon `ammo_effects` pour ces 2 items à partir de leur description
-réelle (SAP : `DMG=SET(...);TXT=PEN=SET(...)|FX=SAP` cohérent avec les autres munitions SAP du
-catalogue ; IEM : `DMG=MUL(0.5);TXT=FX=IEM(TEST_PANNE:-3)` une fois le Lot C2 tranché) — probablement
-en même temps que le Lot C1/C2 puisque ces deux mécaniques y seront de toute façon retravaillées.
+**Prochaine étape** : à traiter avant toute implémentation d'un mécanisme de profondeur (armes
+sous-marines) — soit autoriser des valeurs multiples par clé dans `parseAmmoEffects` (ex. tableau),
+soit changer la convention catalogue pour une clé composite (`DEPTH=500M_X0.5,1000M_DISABLE`).
 
 ---
 
