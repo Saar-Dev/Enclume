@@ -526,7 +526,7 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 | **Lot 0** | Tables CaC/taille/portée → `shared/combatSituationMods.js` étendu (§2.1.a) : 3 sites serveur (melee/assault/drone) + 2 fenêtres client basculés, copies locales supprimées | Faible — valeurs inchangées, invariant « autorité unique des tables », vérifiable par simple comparaison des constantes | **Codé (2026-07-25)** — 23 valeurs vérifiées conformes par script, build Vite OK, syntaxe serveur OK ; ⚠️ en attente : vérif visuelle Saar des 2 fenêtres + démarrage serveur réel + décision commit (Session 176 toujours non committée sur le même fichier, §0.5) |
 | **Lot 1** | Noyau `computeAttackRoll` (§2.1.b-d) + assemblage contributions dans les deux fonctions + shadow-mode (§2.3) + tests unitaires (§2.2) | Faible — comportement identique bit-à-bit, aucune écriture DB ni émission déplacée | **✅ Clos (2026-07-25)** — 9 tests unitaires OK, fuzz 1000 tirages sans écart, session de jeu réelle Saar (CaC PJ/PNJ + Tir + attaque multiple + deux armes + mode offensif + Seuil négatif) sans aucun `[DBG-DECOUPLAGE]`, bloc inline + dispositif retirés, noyau autoritaire. Modificateurs non exercés en jeu (couverts par fuzz + tests seulement) : taille≠moyenne, terrain instable, bouclier, sans défense, précipitation, tir visé, visée localisation, dual-wield Tir, couverture, mods d'arme |
 | **Lot 2** | `resolveMeleeAction` (4 branches défenseur) **+ `confirmMeleeDefense`** (même dette de breakdown dupliqué côté PJ, trouvée en analyse à charge, point h) — détail §2.4 | Moyen — touche à des `await db(...)` et à la construction des émissions `COMBAT_MELEE_RESULT`/`COMBAT_ATTACK_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (9 scénarios, §2.4.f), pas de shadow-mode possible (effets de bord) | **✅ Clos (2026-07-27)** — `node --check` propre, 9 tests Lot 1 toujours au vert (noyau non touché), équivalence numérique ancienne formule/`computeAttackRoll` vérifiée sur 7 cas (script jetable, sans DB), 7 scénarios de fixture jetable en base réelle (0 résidu après coup), puis session de jeu réelle Saar (CaC PNJ auto-résolution + cible sans défense après étourdissement) confirmée sans régression — vérifié aussi en base (2 blessures correctement écrites, une par chemin de code touché). Alerte initiale de Saar (« résolutions manquantes ») retombée sur deux comportements corrects non liés au Lot 2 (attaque hors portée rejetée, PNJ étourdi auto-skip) |
-| **Lot 3** | Extraction `armAwaitingDamage` (§2.5) : 3 sites dupliqués (`confirmMeleeDefense`, `resolveDroneAssaultAction`, `resolveAssaultAction`) fusionnés sur un seul point d'insert/FSM/broadcast/comptage ; émission du prompt inchangée par site (§2.5.b) | Faible — comportement identique bit-à-bit (même insert, même comptage, même condition d'émission) ; pas de changement d'ordre d'émission, donc pas un correctif de COM27 (§2.5.d le rend seulement moins coûteux plus tard) | **Codé (2026-07-28)** — diff relu ligne à ligne (mêmes clés/valeurs de payload, mêmes `campaignId`/`tokenId` par site), `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non touché) ; ⚠️ en attente : validation en jeu par Saar (3 scénarios §6) et décision de commit — **à ne jamais mélanger avec un correctif fonctionnel de COM27** ; si COM27 est corrigé avant ce Lot, ce Lot devra repartir du code déjà corrigé, pas l'inverse |
+| **Lot 3** | Extraction `armAwaitingDamage` (§2.5) : 3 sites dupliqués (`confirmMeleeDefense`, `resolveDroneAssaultAction`, `resolveAssaultAction`) fusionnés sur un seul point d'insert/FSM/broadcast/comptage ; émission du prompt inchangée par site (§2.5.b) | Faible — comportement identique bit-à-bit (même insert, même comptage, même condition d'émission) ; pas de changement d'ordre d'émission, donc pas un correctif de COM27 (§2.5.d le rend seulement moins coûteux plus tard) | **✅ Clos (2026-07-28)** — diff relu ligne à ligne (mêmes clés/valeurs de payload, mêmes `campaignId`/`tokenId` par site), `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non touché), puis 3 scénarios de jeu réels confirmés par Saar (§6) — committé (`ef12136`) |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le Lot 0 est séparé du Lot 1 parce qu'il porte un invariant différent (autorité
@@ -603,17 +603,14 @@ Aucune règle de jeu ne change. Aucune migration, aucun nouvel événement WS, a
   sans DB) + 7 scénarios de fixture jetable en base réelle (0 résidu, §2.4.f) + session de jeu réelle
   Saar (CaC PNJ auto-résolution, cible sans défense après étourdissement) + vérification directe en base
   des blessures écrites par les deux chemins de code touchés.
-- **Testé (Lot 3, partiel)** : `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non
-  touché), relecture ligne à ligne du diff des 3 sites (mêmes clés/valeurs de payload, mêmes
-  `campaignId`/`tokenId`, condition `pendingDamageCount === 1` préservée) — équivalence comportementale
-  vérifiée par lecture, pas par exécution réelle (pas de script de fixture DB : la fonction extraite
-  n'est pas exportée, la tester isolément demanderait d'élargir l'API publique du fichier pour le seul
-  besoin du test, hors périmètre). **Restant** : 3 scénarios de jeu réels par Saar (CaC attaquant PJ
-  touche, Tir attaquant PJ touche, drone touche une cible PJ), chacun vérifiant que le prompt de dégâts
-  attendu arrive bien côté client concerné, sans régression sur l'ordre déjà existant aujourd'hui (ce
-  Lot ne le change pas, §2.5.d).
-- **Non testé** : Lot 3 — session de jeu réelle Saar (3 scénarios ci-dessus), pas encore rejouée ;
-  marquer `⚠️ clos partiel` tant que ce Lot n'est pas confirmé en jeu et committé.
+- **Testé (Lot 3)** : `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non touché),
+  relecture ligne à ligne du diff des 3 sites (mêmes clés/valeurs de payload, mêmes `campaignId`/
+  `tokenId`, condition `pendingDamageCount === 1` préservée), puis 3 scénarios de jeu réels confirmés
+  par Saar (CaC attaquant PJ touche, Tir attaquant PJ touche, drone touche une cible PJ) — prompt de
+  dégâts reçu côté client concerné dans les 3 cas, aucune régression sur l'ordre déjà existant (ce Lot
+  ne le change pas, §2.5.d).
+- **Non testé** : Lot 4 (tableau §3, pas encore rédigé) — les 4 Lots ne sont pas tous fermés, `⚠️ clos
+  partiel` au niveau du plan tant que Lot 4 n'existe pas.
 - **Données** : aucune migration, aucun effet runtime en dehors du code déplacé.
 - **Retour arrière** : chaque Lot est un commit isolé — `git revert` suffit, aucune donnée vivante
   affectée.

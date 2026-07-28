@@ -72,14 +72,14 @@
 > corriger COM27 ici, rendre son futur correctif moins cher) et Colyseus `afterNextPatch`/Command
 > Pattern (confirmation, par un framework Node.js multijoueur de référence, que le motif
 > `emissions[]`/`flushEmissions` déjà en place est la bonne direction, pas une invention locale).
-> **Lot 3 codé (2026-07-28)** — `armAwaitingDamage(io, campaignId, tokenId, payload)` ajoutée au
+> **Lot 3 ✅ clos (2026-07-28)** — `armAwaitingDamage(io, campaignId, tokenId, payload)` ajoutée au
 > voisinage de `broadcastCurrentSubPhase`, les 3 sites (`confirmMeleeDefense`, `resolveDroneAssaultAction`,
 > `resolveAssaultAction`) basculés dessus, émission du prompt inchangée par site (§2.5.b). **Testé** :
 > `node --check` propre, 9 tests Lot 1 toujours au vert, diff relu ligne à ligne (mêmes clés/valeurs de
-> payload par site). **Non testé** : session de jeu réelle (CaC PJ touche / Tir PJ touche / drone touche
-> cible PJ) — ⚠️ clos partiel tant que Saar n'a pas confirmé et que ce n'est pas committé. **Prochaine
-> étape chantier** : validation en jeu par Saar puis commit isolé de ce Lot — à ne jamais mélanger avec
-> un correctif fonctionnel de COM27.
+> payload par site), puis 3 scénarios de jeu réels confirmés par Saar (CaC PJ touche, Tir PJ touche,
+> drone touche cible PJ) — committé (`ef12136`). **Prochaine étape chantier** : Lot 4 (branchement
+> attaquant de `resolveAssaultAction`, symétrique du branchement défenseur du Lot 2, §3.1) — à
+> planifier, pas encore rédigé.
 >
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 183 : `docs/PLAN_BATTLEMAP2D.md` Lots 1-2
 > **✅ clos** — Lot 1 : discriminant `battlemaps.render_mode` (migration 207) + génération serveur de
