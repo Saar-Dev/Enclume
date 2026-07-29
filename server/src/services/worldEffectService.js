@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
 import db from '../db/knex.js'
-import { compileSurfaceWorld } from '../../../shared/world/worldCompiler.js'
 import { createWorldRuntimeState, createWorldSnapshot } from '../../../shared/world/worldContracts.js'
+import { getBattlemapStructuralSnapshotWithRuntimeState } from './worldService.js'
 import {
   BUILTIN_WORLD_EFFECTS,
   collectPointEffectHooks,
@@ -98,12 +98,7 @@ export async function loadBattlemapRuntimeContext(battlemap, database = db) {
     featureStates,
     effectInstances: Object.fromEntries(instances.map(instance => [instance.id, instance])),
   })
-  const structuralSnapshot = compileSurfaceWorld({
-    battlemapId: battlemap.id,
-    worldRevision: Number(battlemap.world_revision || 0),
-    surfaceData: battlemap.surface_data || {},
-    runtimeState,
-  })
+  const structuralSnapshot = getBattlemapStructuralSnapshotWithRuntimeState(battlemap, runtimeState)
   const regions = compileEffectRegions(structuralSnapshot, { definitions, instances })
   const snapshot = createWorldSnapshot({
     battlemapId: structuralSnapshot.battlemapId,

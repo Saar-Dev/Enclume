@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { LRUCache } from 'lru-cache'
 
 import db from '../db/knex.js'
 import {
@@ -22,7 +23,7 @@ import {
 import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
 
 const MAX_GRAPH_CACHE_ENTRIES = 32
-const graphCache = new Map()
+const graphCache = new LRUCache({ max: MAX_GRAPH_CACHE_ENTRIES })
 
 function graphKey(battlemap, actorProfile) {
   return [
@@ -35,12 +36,6 @@ function graphKey(battlemap, actorProfile) {
   ].join(':')
 }
 
-function trimGraphCache() {
-  while (graphCache.size > MAX_GRAPH_CACHE_ENTRIES) {
-    graphCache.delete(graphCache.keys().next().value)
-  }
-}
-
 export function getBattlemapNavigationGraph(battlemap, actorProfile = {}, runtimeContext = null) {
   const key = graphKey(battlemap, actorProfile)
   const cached = graphCache.get(key)
@@ -51,7 +46,6 @@ export function getBattlemapNavigationGraph(battlemap, actorProfile = {}, runtim
     effectRegions: runtimeContext?.regions || snapshot.spatial.regions,
   })
   graphCache.set(key, graph)
-  trimGraphCache()
   return graph
 }
 

@@ -1,6 +1,7 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-15 — moteur v12 conservé comme autorité dans l'intégration commune.
+> Dernière mise à jour : 2026-07-29 — cache LRU du compile structurel + état runtime documenté (§2.8,
+> DEPLACEMENT1) ; 2026-07-15 — moteur v12 conservé comme autorité dans l'intégration commune.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -171,6 +172,19 @@ le reste de `surface_data`.
 
 La duplication d'une carte réattribue tous les UUID physiques : deux cartes copiées ne doivent
 jamais pointer vers le même futur état runtime.
+
+`server/src/services/worldService.js` porte deux caches LRU distincts, tous deux à clé génération
+(`battlemapId:revision(s)`, jamais d'invalidation manuelle dispersée) : le compile structurel pur
+(`getBattlemapWorldSnapshot`, clé `world_revision`) et le compile structurel avec état runtime des
+portes/ascenseurs (`getBattlemapStructuralSnapshotWithRuntimeState`, clé `world_revision` +
+`runtime_revision`, consommé par `loadBattlemapRuntimeContext`). Ce second cache est correct
+uniquement parce que toute écriture sur `world_feature_states` fait basculer `runtime_revision` dans
+la même transaction (`worldEffectService.js:setWorldFeatureState`,
+`worldElevatorService.js:persistElevatorState`) — invariant vérifié, pas supposé. Les définitions et
+instances d'effets (`world_effect_definitions`, `world_effect_instances`) n'ont pas de compteur de
+révision par battlemap et ne sont donc jamais mises en cache : elles restent lues à chaque appel de
+`loadBattlemapRuntimeContext`. Détail du diagnostic de performance ayant motivé ce cache :
+`docs/BUGIDENTIFIE.md` DEPLACEMENT1.
 
 ### 2.9 Navigation et positions runtime `[EXISTANT — PHASE 2]`
 
