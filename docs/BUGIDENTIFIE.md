@@ -14,7 +14,15 @@ tout niveau de zoom est une taille constante, pas une dépendance à la distance
 ; 2026-07-29 (Saar, `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 1, horloge de campagne) — ajout UI4
 (`encumbrance_enabled`/`encumbrance_multiplier` absents de la liste de chargement initial de
 `CampaignSettingsPage.jsx`, réaffichent toujours leur défaut client au rechargement — trouvé en
-ajoutant les clés `calendar_start_*` au même endroit, non corrigé, hors périmètre du Lot 1)
+ajoutant les clés `calendar_start_*` au même endroit, non corrigé, hors périmètre du Lot 1) ;
+ASCENSEUR1 (world builder, fenêtre propriétés ascenseur s'ouvre/se ferme aussitôt) suspendu, non
+reproductible ; SALLENIV1 clos (world builder — sol d'une salle rendu systématiquement à y=0 quel que
+soit son étage réel, `SurfaceDungeonScene.jsx` `RoomSlab` : `Number.isFinite(Number(yOverride))` avec
+`yOverride=null` par défaut — `Number(null)` vaut 0, donc toujours vrai, l'override s'appliquait même
+sans override explicite. Invisible pour les salles au niveau 0 (0=0 par coïncidence), visible dès
+qu'une salle habite un étage différent. Diagnostiqué par instrumentation live avec Saar (3 allers-
+retours de logs `[DBG-SALLENIV]`, retirés après confirmation), corrigé en une ligne
+(`yOverride !== null && ...`), tests `surfaceData.test.mjs` (27/27) + build OK, non testé en jeu)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---

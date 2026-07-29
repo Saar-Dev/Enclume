@@ -550,7 +550,10 @@ function RoomSlab({
 }) {
   const rectangles = roomFootprintRectangles(room)
   const isCeiling = kind === 'ceiling'
-  const y = Number.isFinite(Number(yOverride))
+  // Number(null) vaut 0, donc Number.isFinite(Number(yOverride)) était vrai même sans override
+  // explicite (yOverride=null par défaut pour un sol) — le sol de toute salle hors niveau 0
+  // retombait systématiquement à y=0. Voir docs/BUGIDENTIFIE.md SALLENIV1.
+  const y = yOverride !== null && Number.isFinite(Number(yOverride))
     ? Number(yOverride)
     : isCeiling ? getRoomTopY(room) : getRoomBaseY(room)
   const thickness = isCeiling ? getRoomCeilingThickness(room) : getRoomFloorThickness(room)
