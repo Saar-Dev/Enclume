@@ -3591,7 +3591,9 @@ Projet en cours et priorité user :
 | **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
 | **EAU1** | Nappe d'eau ambiante `computeSurfaceWaterCells`/`WaterSheets` retirée (improvisation client hors autorité serveur, décision Saar 2026-07-29) — eau en jeu recentrée sur l'effet runtime "inondation" déjà câblé (compartiments + `runtimeEffectRegions`). Codé, tests/build/lint OK | Basse — validation en jeu par Saar avant clôture |
 | ~~**DEPLACEMENT1**~~ | ~~Action "Déplacement" très lente (2-3s)/prévisualisation cassée — cache LRU `loadBattlemapRuntimeContext`~~ | ✅ Session 185 (Saar), confirmé fonctionnel en jeu |
-| **DEPLACEMENT2** | Destination occupée : le déplacement est entièrement annulé au lieu de s'arrêter à la dernière case libre avant l'obstacle — `shared/world/navigation.js:findNavigationPath`, trouvé en validant DEPLACEMENT1 | Moyenne — à reproduire/instrumenter |
+| ~~**DEPLACEMENT2**~~ | ~~Destination occupée : déplacement entièrement annulé au lieu de s'arrêter à la dernière case libre — `shared/world/navigation.js:findNavigationPath`~~ | ✅ Session 185 (Saar), confirmé fonctionnel en jeu |
+| **DEPLACEMENT3** | Latence résiduelle ~0,5-1s au premier "Déplacement" après un déplacement validé — confirme la piste notée dans DEPLACEMENT1 (`runtime_revision` bump sur simple déplacement de token invalide aussi le cache structurel) | Très basse — "rien de gênant" (Saar) |
+| **TOURTRANSITION1** | Latence + message "En attente de {{nom}}" en chaînant plusieurs actions de PNJ (`CombatActionWindow.jsx:772-782`) — non instrumenté | Très basse — "rien de gênant" (Saar) |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |

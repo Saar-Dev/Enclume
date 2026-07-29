@@ -227,7 +227,7 @@ test('une traversée de grimpe reste fractionnable et applique le facteur ×2', 
   assert.ok(Math.abs(continuation.routeCostM - (27.75 - result.plan.spentM)) < 1e-9)
 })
 
-test('un occupant dynamique bloque une destination sans écraser les autres occupants', () => {
+test('un occupant dynamique bloque une case sans écraser les autres occupants', () => {
   const snapshot = compileSurfaceWorld({
     battlemapId: 'map-occupancy',
     surfaceData: emptySurface({ rooms: { roomA: room('roomA', 0, 1) } }),
@@ -238,6 +238,49 @@ test('un occupant dynamique bloque une destination sans écraser les autres occu
     to: { x: 1.5, y: 0.125, z: 0.5 },
     budgetM: 10,
     occupants: [{ id: 'other-token', point: { x: 1.5, y: 0.125, z: 0.5 } }],
+  })
+  // DEPLACEMENT2 (docs/BUGIDENTIFIE.md) — une destination occupée n'annule plus le déplacement : il
+  // s'arrête sur la case libre la plus proche de l'obstacle (ici, la case de départ elle-même,
+  // seule voisine libre dans une salle à 2 cases — aucun segment à parcourir, donc `plan.end` reste
+  // `null` par construction de `buildMovementPlan` ; les appelants retombent sur `snappedFrom`).
+  assert.equal(result.status, 'destination')
+  assert.equal(result.plan.spentM, 0)
+  assert.equal(result.plan.end, null)
+  assert.deepEqual(result.snappedFrom, { x: 0.5, y: 0.125, z: 0.5 })
+  assert.deepEqual(result.snappedTo, { x: 0.5, y: 0.125, z: 0.5 })
+})
+
+test('destination occupée : le déplacement avance jusqu’à la dernière case libre avant l’obstacle', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-occupancy-partial',
+    surfaceData: emptySurface({ rooms: { roomA: room('roomA', 0, 2) } }),
+  })
+  const result = planWorldPath({
+    snapshot,
+    from: { x: 0.5, y: 0.125, z: 0.5 },
+    to: { x: 2.5, y: 0.125, z: 0.5 },
+    budgetM: 10,
+    occupants: [{ id: 'other-token', point: { x: 2.5, y: 0.125, z: 0.5 } }],
+  })
+  assert.equal(result.status, 'destination')
+  assert.deepEqual(result.plan.end, { x: 1.5, y: 0.125, z: 0.5 })
+  assert.equal(result.plan.spentM, 1.5)
+})
+
+test('destination occupée sans aucune case libre voisine reste unreachable', () => {
+  const snapshot = compileSurfaceWorld({
+    battlemapId: 'map-occupancy-surrounded',
+    surfaceData: emptySurface({ rooms: { roomA: room('roomA', 0, 2) } }),
+  })
+  const result = planWorldPath({
+    snapshot,
+    from: { x: 0.5, y: 0.125, z: 0.5 },
+    to: { x: 2.5, y: 0.125, z: 0.5 },
+    budgetM: 10,
+    occupants: [
+      { id: 'blocker-destination', point: { x: 2.5, y: 0.125, z: 0.5 } },
+      { id: 'blocker-neighbor', point: { x: 1.5, y: 0.125, z: 0.5 } },
+    ],
   })
   assert.equal(result.status, 'unreachable')
 })

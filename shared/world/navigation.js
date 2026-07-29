@@ -445,9 +445,33 @@ export function findNavigationPath(graph, {
     }
   }
   const start = nearestNode(workingGraph.nodes, requestedFrom, blocked, maxSnapDistance)
-  const destination = nearestNode(workingGraph.nodes, requestedTo, blocked, maxSnapDistance)
-  if (!start || !destination) return null
-  if (start.id === destination.id) return deepFreeze({ start, destination, nodes: [start], edges: [], costM: 0 })
+  if (!start) return null
+
+  // Nœud géométriquement le plus proche de la destination demandée, occupation ignorée : sert à
+  // détecter une destination occupée (DEPLACEMENT2, docs/BUGIDENTIFIE.md) et à borner la recherche de
+  // repli sur ses voisins directs plutôt que d'annuler tout le déplacement.
+  const requestedDestinationNode = nearestNode(workingGraph.nodes, requestedTo, new Set(), maxSnapDistance)
+  if (!requestedDestinationNode) return null
+
+  const nodeById = new Map(workingGraph.nodes.map(node => [node.id, node]))
+  let destinationCandidateIds
+  if (!blocked.has(requestedDestinationNode.id)) {
+    destinationCandidateIds = new Set([requestedDestinationNode.id])
+  } else {
+    // Destination occupée : le déplacement doit s'arrêter à la case libre la plus proche de
+    // l'obstacle (ses voisins directs dans le graphe), jamais être annulé entièrement.
+    destinationCandidateIds = new Set()
+    for (const edge of workingGraph.edges) {
+      if (edge.to === requestedDestinationNode.id && !blocked.has(edge.from)) destinationCandidateIds.add(edge.from)
+      if (edge.from === requestedDestinationNode.id && !blocked.has(edge.to)) destinationCandidateIds.add(edge.to)
+    }
+    if (destinationCandidateIds.size === 0) return null
+  }
+
+  if (destinationCandidateIds.has(start.id)) {
+    const destination = nodeById.get(start.id)
+    return deepFreeze({ start, destination, nodes: [start], edges: [], costM: 0 })
+  }
 
   const outgoing = new Map()
   for (const edge of workingGraph.edges) {
@@ -456,20 +480,29 @@ export function findNavigationPath(graph, {
     list.push(edge)
     outgoing.set(edge.from, list)
   }
-  const nodeById = new Map(workingGraph.nodes.map(node => [node.id, node]))
   const minFactor = workingGraph.edges.length
     ? Math.min(...workingGraph.edges.map(edge => edge.costM / edge.distanceM))
     : 1
-  const heuristic = node => distanceBetweenWorldPointsM(node.point, destination.point, workingGraph.metrics) * minFactor
+  // Un seul candidat (cas normal) : heuristique A* admissible vers ce nœud précis, comportement
+  // inchangé. Plusieurs candidats (destination occupée, repli sur ses voisins libres) : heuristique
+  // nulle (Dijkstra pur) — rester provablement correct sur le choix du candidat le moins coûteux
+  // plutôt que d'admettre une heuristique partagée entre plusieurs cibles proches mais distinctes.
+  const singleDestination = destinationCandidateIds.size === 1
+    ? nodeById.get([...destinationCandidateIds][0])
+    : null
+  const heuristic = singleDestination
+    ? node => distanceBetweenWorldPointsM(node.point, singleDestination.point, workingGraph.metrics) * minFactor
+    : () => 0
   const heap = new MinHeap()
   const costs = new Map([[start.id, 0]])
   const previous = new Map()
   heap.push({ id: start.id, score: heuristic(start), cost: 0 })
 
+  let reachedId = null
   while (heap.size > 0) {
     const current = heap.pop()
     if (current.cost > (costs.get(current.id) ?? Infinity) + EPSILON) continue
-    if (current.id === destination.id) break
+    if (destinationCandidateIds.has(current.id)) { reachedId = current.id; break }
     for (const edge of outgoing.get(current.id) || []) {
       const nextCost = current.cost + edge.costM
       if (nextCost + EPSILON >= (costs.get(edge.to) ?? Infinity)) continue
@@ -482,8 +515,9 @@ export function findNavigationPath(graph, {
       })
     }
   }
-  if (!previous.has(destination.id)) return null
+  if (!reachedId) return null
 
+  const destination = nodeById.get(reachedId)
   const edges = []
   let currentId = destination.id
   while (currentId !== start.id) {
