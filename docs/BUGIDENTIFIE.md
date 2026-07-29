@@ -276,6 +276,26 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 ---
 
+### Bug ASCENSEUR1 — World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt
+
+**Symptôme** : signalé par Saar (2026-07-29) — clic sur un ascenseur dans le world builder, la fenêtre
+`SurfaceConnectorPanel` s'ouvre puis se referme immédiatement. Spécifique à l'ascenseur (pas observé
+sur porte/échelle, même mécanisme de sélection `handleConnectorPointerSelect`/`findConnectorAtWorldPoint`).
+
+**Code impliqué** : `Editor3D.jsx` (état `surfaceConnectorPanel`, effets de fermeture ~L.1643-1654) ;
+`SurfaceEditorScene.jsx` (`handleConnectorPointerSelect`/`findConnectorAtWorldPoint`) ; rendu ascenseur
+`SurfaceDungeonScene.jsx` (`ConnectorSegment` type `elevator`, `AnimatedElevatorCabin`).
+
+**Cause racine [INCONNU]** : lecture complète du circuit de sélection/fermeture sans cause certaine
+identifiée (plusieurs hypothèses non instrumentées : timing `skipNextCanvasMouseDownRef`, animation
+`AnimatedElevatorCabin` via `useFrame` hors React). **Suspendu (2026-07-29, Saar)** : non reproductible
+au moment du signalement suivant — règle du registre, ne pas analyser plus loin sans repro confirmée.
+
+**Prochaine étape** : attendre une nouvelle occurrence en jeu ; si ça se reproduit, noter la séquence
+exacte (niveau affiché, mode outil courant, clic après quelle action) avant d'instrumenter.
+
+---
+
 ## Bugs statuts / Chat — Clusters K + Q (partiel)
 
 ### Bug COM16 — Phase ANNONCE : traits liaison attaquant↔cible disparaissent

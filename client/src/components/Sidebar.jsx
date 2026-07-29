@@ -1031,7 +1031,8 @@ export default function Sidebar({
       >?</button>
 
       {/* ─── HORLOGE DE CAMPAGNE (docs/PLAN_FATIGUE_DOMMAGES.md §7, Lot 1) ────────── */}
-      <GameTimeWidget campaignId={campaignId} />
+      {/* Masquée en mode Combat et Édition — décision Saar 2026-07-29, distraction non désirée */}
+      {mode !== 'combat' && mode !== 'edit' && <GameTimeWidget campaignId={campaignId} />}
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>
