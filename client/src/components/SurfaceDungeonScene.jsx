@@ -3,7 +3,6 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { SkeletonUtils } from 'three-stdlib'
-import { createWaterMaterial, updateWaterMaterial } from '../lib/waterMaterials'
 import ReliefBoxGeometry from './ReliefBoxGeometry.jsx'
 import { generateProceduralMaterialTexture } from '../lib/proceduralMaterials.js'
 import { applyMaterialSlotOverrides, normalizeModelMaterialSlots } from '../lib/modelMaterialSlots.js'
@@ -22,7 +21,6 @@ import {
 import {
   SURFACE_FINE,
   STORY_HEIGHT,
-  computeSurfaceWaterCells,
   getCeilingThickness,
   getFloorThickness,
   getRoomBaseY,
@@ -1833,90 +1831,6 @@ function StairSegment({ stair, textureMaterials, opacity = 1, showDetails = true
   )
 }
 
-function mergeWaterCells(waterCells) {
-  const groups = new Map()
-  for (const cell of waterCells) {
-    const key = `${Math.round(cell.baseY * 1000)}:${Math.round(cell.topY * 1000)}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(cell)
-  }
-
-  const rectangles = []
-  for (const cells of groups.values()) {
-    const cellMap = new Map(cells.map(cell => [`${cell.x}:${cell.z}`, cell]))
-    const used = new Set()
-    const sorted = [...cells].sort((a, b) => a.z - b.z || a.x - b.x)
-
-    for (const cell of sorted) {
-      const startKey = `${cell.x}:${cell.z}`
-      if (used.has(startKey)) continue
-
-      let width = 1
-      while (cellMap.has(`${cell.x + width}:${cell.z}`) && !used.has(`${cell.x + width}:${cell.z}`)) {
-        width += 1
-      }
-
-      let depth = 1
-      let canExtend = true
-      while (canExtend) {
-        const nextZ = cell.z + depth
-        for (let dx = 0; dx < width; dx += 1) {
-          const key = `${cell.x + dx}:${nextZ}`
-          if (!cellMap.has(key) || used.has(key)) {
-            canExtend = false
-            break
-          }
-        }
-        if (canExtend) depth += 1
-      }
-
-      for (let dz = 0; dz < depth; dz += 1) {
-        for (let dx = 0; dx < width; dx += 1) {
-          used.add(`${cell.x + dx}:${cell.z + dz}`)
-        }
-      }
-
-      rectangles.push({
-        x: cell.x,
-        z: cell.z,
-        width,
-        depth,
-        baseY: cell.baseY,
-        topY: cell.topY,
-      })
-    }
-  }
-
-  return rectangles
-}
-
-function WaterSheets({ waterCells, opacity = 0.16 }) {
-  const rectangles = useMemo(() => mergeWaterCells(waterCells), [waterCells])
-  const material = useMemo(() => createWaterMaterial({ opacity: Math.max(opacity, 0.38) }), [opacity])
-
-  useFrame((state) => updateWaterMaterial(material, state.clock.elapsedTime))
-
-  useEffect(() => () => material.dispose(), [material])
-
-  return (
-    <>
-      {rectangles.map((rect, index) => {
-        return (
-          <mesh
-            key={`${rect.baseY}:${rect.topY}:${rect.x}:${rect.z}:${index}`}
-            position={[rect.x + rect.width / 2, rect.topY - 0.02, rect.z + rect.depth / 2]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            renderOrder={20}
-          >
-            <planeGeometry args={[rect.width, rect.depth, 16, 16]} />
-            <primitive object={material} attach="material" />
-          </mesh>
-        )
-      })}
-    </>
-  )
-}
-
 function sameStringSet(left, right) {
   if (left.size !== right.size) return false
   for (const value of left) if (!right.has(value)) return false
@@ -2032,8 +1946,6 @@ function RoomCeilingInterface({ horizontalInterface, room, roomLookup, textureMa
 function SurfaceDungeonScene({
   surfaceData,
   textureMaterials,
-  showWater = true,
-  waterOpacity = 0.16,
   ceilingOpacity = 0.18,
   displayLevel = null,
   showDetails = true,
@@ -2051,10 +1963,6 @@ function SurfaceDungeonScene({
   const horizontalInterfaces = useMemo(
     () => roomHorizontalInterfaces(surface.rooms, STORY_HEIGHT),
     [surface.rooms],
-  )
-  const water = useMemo(
-    () => (showWater ? computeSurfaceWaterCells(surface) : null),
-    [showWater, surface],
   )
   const roomWallPaths = useMemo(
     () => roomsWallRenderPaths(surface.rooms),
@@ -2122,10 +2030,6 @@ function SurfaceDungeonScene({
     ].filter(value => Number.isFinite(Number(value)))
     return heights.some(y => worldPointIsVisible(centerX, centerZ, Number(y)))
   }
-  const visibleWaterCells = useMemo(
-    () => water?.waterCells || [],
-    [water?.waterCells],
-  )
 
   return (
     <>
@@ -2250,7 +2154,6 @@ function SurfaceDungeonScene({
           displayLevel={displayLevel}
         />
       ) : null)}
-      {showWater && visibleWaterCells.length > 0 && <WaterSheets waterCells={visibleWaterCells} opacity={waterOpacity} />}
     </>
   )
 }

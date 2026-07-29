@@ -1,6 +1,8 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-14 — édition contextuelle, profils continus et passerelles découpées.
+> Dernière mise à jour : 2026-07-29 — section "Rendu de l'eau" ajoutée puis mise à jour : nappe
+> ambiante côté client retirée (dette `EAU1`), eau en jeu recentrée sur le mécanisme canonique
+> compartiments + effet runtime "inondation".
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -432,6 +434,65 @@ donc jamais plus grand que son volume physique, ni l'inverse.
 Rotation et échelle sont appliquées immédiatement à l'instance du store pour prévisualiser le mesh.
 **Sauvegarder** persiste cette prévisualisation et la diffuse ; fermer le panneau avant sauvegarde
 restaure la transformation persistée.
+
+## Rendu de l'eau (calcul client)
+
+> Dette connue sur ce mécanisme : `docs/BUGIDENTIFIE.md` EAU1. Statut d'ensemble (preuve de concept,
+> pas une simulation autoritaire) : `docs/SYSTEME/MOTEUR_MONDE.md` §10.
+
+Deux mécanismes portent le mot « eau » dans le code ; ne pas les confondre en cherchant un bug de
+l'un dans l'autre.
+
+- **Eau portée par un mesh GLB** (`client/src/lib/waterMaterials.js` + `EntityMesh.jsx`) : un asset
+  importé peut nommer un sous-mesh `water_surface`/`waterfall`/`fluid_window`/`fluid_band`, ou porter
+  `userData.editor_water_role` (`surface`/`flow`/`contained`). Le renderer lui applique alors le
+  shader `createWaterMaterial`. C'est une apparence d'objet ; elle n'a aucun rapport avec
+  `surface_data` et ne dépend d'aucune salle.
+- **Eau visible en jeu = uniquement l'effet runtime « inondation »**, décrit ci-dessous. Il n'existe
+  aucun troisième mécanisme.
+
+### Il n'y a plus de nappe ambiante calculée côté client
+
+Jusqu'à Session 184, `computeSurfaceWaterCells` (`client/src/lib/surfaceData.js`) recalculait une
+nappe d'eau directement depuis `surface_data` brut, à chaque rendu de `SurfaceDungeonScene`, sans
+jamais consulter le `WorldSnapshot` ni aucune donnée serveur. Deux défauts cumulés :
+
+- sa hauteur (`mapTopY`) était le plafond le plus haut de **toute la carte**, tous étages et salles
+  confondus, appliqué sans distinction à chaque case d'eau — une seule salle haute n'importe où sur la
+  carte faisait flotter toute l'eau du bâtiment à cette hauteur, potentiellement bien au-dessus de
+  salles sans rapport avec l'eau ;
+- une « nappe extérieure » apparaissait automatiquement autour de n'importe quelle construction, même
+  sans aucune case « Grille » déclarée nulle part sur la carte — de l'eau qu'aucun MJ n'avait jamais
+  déclenchée, jamais validée serveur, en contradiction avec l'autorité unique du `WorldSnapshot`
+  (`.claude/rules/world.md`) et l'absence de logique métier dupliquée client/serveur (`CLAUDE.md` §7).
+
+Retiré (décision Saar, 2026-07-29, dette `docs/BUGIDENTIFIE.md` EAU1) : `computeSurfaceWaterCells` et
+son rendu (`WaterSheets`/`mergeWaterCells`) ont été supprimés de `SurfaceDungeonScene.jsx`, ainsi que
+les props `showWater`/`waterOpacity` devenues sans objet dans `Editor3D.jsx` et
+`SurfaceEditorScene.jsx`. Toute l'eau visible en jeu passe désormais par le mécanisme canonique
+ci-dessous.
+
+### Le mécanisme canonique : compartiments + effet runtime « inondation »
+
+Le moteur monde compile déjà un système d'eau complet et autoritaire, indépendant du rendu :
+
+- `worldCompiler.js` (`addCompartments`) compile un `compartment` par salle dans le `WorldSnapshot`,
+  scellé par défaut sauf si `room.blocksWater === false` — la même origine que la case « Grille » du
+  panneau Salle (`SurfaceRoomPanel.jsx`, sélecteur **Collision**, via `surfaceBlockingForTool`), mais
+  consommée par le modèle canonique, jamais par un recalcul client ;
+- `shared/world/worldEffects.js` — `buildCompartmentPropagationGraph(snapshot, { channel: 'water' })`
+  relie ces compartiments par les portes (une porte peut bloquer l'eau sans bloquer la vision) ;
+  `propagateEffectThroughCompartments` y propage une intensité depuis un compartiment d'origine ;
+- ce graphe sert au registre d'effets runtime décrit en §9 de `MOTEUR_MONDE.md` : une inondation est
+  une instance d'effet (`world_effect_instances`), déclenchée explicitement par le MJ, journalisée et
+  durable, au même titre que le feu, le gaz ou l'huile répandue ;
+- le rendu existe déjà côté client : `Canvas3D.jsx` affiche chaque `runtimeEffectRegions` reçu du
+  serveur comme un volume translucide (`definitionKey === 'flooded'` → bleu `#38bdf8`), positionné
+  sur l'AABB déclaré par le serveur — jamais recalculé depuis la géométrie brute.
+
+Il n'existe aujourd'hui aucun outil dédié pour une eau structurelle permanente (mare/lac faisant
+partie du décor construit, indépendante d'un événement de partie — besoin identifié pour les sas et
+calles sèches de navires). Reporté en v2, voir `docs/ROADMAP.md`.
 
 ## Coût de déplacement et effets
 

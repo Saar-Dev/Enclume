@@ -1186,7 +1186,6 @@ export default function SurfaceEditorScene({
       <SurfaceDungeonScene
         surfaceData={surfaceData}
         textureMaterials={textureMaterials}
-        showWater={false}
         ceilingOpacity={0.35}
         displayLevel={displayLevel}
         cameraControlsRef={orbitRef}

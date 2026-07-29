@@ -8,7 +8,6 @@ import {
   applyRoomWallElevationProfile,
   applyRoomSelection,
   applyRoomSelectionWithResult,
-  computeSurfaceWaterCells,
   deleteRoomBoundaryWalls,
   deleteSurfaceRoom,
   expandRoomsToSurface,
@@ -65,18 +64,6 @@ function room(id, level, heightLevels = 1) {
     blocksWater: true,
   }
 }
-
-test('la surface extérieure de l eau utilise le sommet global de la carte', () => {
-  const result = computeSurfaceWaterCells(emptySurface({
-    rooms: {
-      low: room('low', 0),
-      high: room('high', 2),
-    },
-  }))
-
-  assert.ok(result.waterCells.length > 0)
-  assert.deepEqual([...new Set(result.waterCells.map(cell => cell.topY))], [7.5])
-})
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
   const surface = emptySurface()

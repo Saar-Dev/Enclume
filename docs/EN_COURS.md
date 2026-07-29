@@ -3556,6 +3556,7 @@ Projet en cours et priorité user :
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
+| **EAU1** | Nappe d'eau ambiante `computeSurfaceWaterCells`/`WaterSheets` retirée (improvisation client hors autorité serveur, décision Saar 2026-07-29) — eau en jeu recentrée sur l'effet runtime "inondation" déjà câblé (compartiments + `runtimeEffectRegions`). Codé, tests/build/lint OK | Basse — validation en jeu par Saar avant clôture |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
