@@ -56,6 +56,19 @@ process.on('uncaughtException', (err) => {
 
 const app = express()
 const httpServer = createServer(app)
+
+// Garde-fou 2026-07-29 : un port déjà occupé (deuxième instance dev lancée par erreur) plantait
+// silencieusement dans un terminal qu'on ne regardait pas — Node relance par défaut une exception
+// non interceptée, mais le message générique se perd facilement. Ici : message explicite + arrêt
+// immédiat (pas le patron retry de la doc Node, qui masquerait justement le doublon au lieu de le
+// signaler).
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${PORT} déjà utilisé — un autre serveur Enclume tourne déjà. Ferme-le avant de relancer (voir tâches node.exe).\n`)
+    process.exit(1)
+  }
+  throw err
+})
 const clientOrigins = parseClientOrigins(process.env.CLIENT_URLS || process.env.CLIENT_URL)
 const validateClientOrigin = createCorsOriginValidator(clientOrigins)
 const io = new Server(httpServer, {

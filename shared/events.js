@@ -132,6 +132,7 @@ export const WS = {
 
   // Campagne
   CAMPAIGN_SETTINGS_UPDATED: 'campaign:settings_updated',  // serveur → room : paramètres campagne modifiés
+  CAMPAIGN_GAME_TIME_ADJUSTED: 'campaign:game_time_adjusted',  // serveur → room : horloge de campagne ajustée (docs/PLAN_FATIGUE_DOMMAGES.md §7)
 
   // Trade (marchands + échanges PJ↔PJ)
   // client → serveur

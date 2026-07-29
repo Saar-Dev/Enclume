@@ -75,6 +75,22 @@ if (e.key === '1') { ... }  // ✗ — 'Digit1' vs '&' selon layout
 ```
 S'applique aussi aux raccourcis multi-modificateurs (Ctrl, Shift).
 
+## P57 — WS live : hook dédié + store, jamais un `socket.on` local dans un composant leaf
+Tout event WS qui doit mettre à jour l'UI en direct (pas juste une émission ponctuelle) passe par le
+hook déjà actif au niveau page (`useSessionSocket.js` pour les events transverses campagne/chat/dés,
+`useTokenSocket.js`/`useEntitySocket.js`/`useCombatSocket.js` pour leurs domaines), qui écrit dans le
+store Zustand concerné (`campaignStore.updateCampaign(partial)`, `tokenStore`...). Le composant qui
+affiche la donnée lit le store directement (`useCampaignStore()`), il n'ouvre pas son propre
+`socket.on`/`socket.off`.
+**Piège trouvé en codant (2026-07-29, `docs/PLAN_FATIGUE_DOMMAGES.md` §7)** : `campaign` a d'abord
+été supposé être un `useState` local de `SessionPage.jsx` (ce que suggère son usage dans le JSX) —
+c'est en fait `useCampaignStore()` (Zustand), déjà alimenté par un listener existant
+(`onCampaignUpdated` dans `useSessionSocket.js`). Un nouvel event WS s'ajoute à ce hook existant
+(une ligne `socket.on`/`socket.off` + un handler `updateCampaign({ champ: valeur })`), il ne justifie
+jamais un nouveau `useEffect`/`socket.on` dans le composant d'affichage — même si ce composant reçoit
+déjà `socket` en prop pour d'autres besoins (emit ponctuel), ça n'en fait pas le bon endroit pour un
+abonnement live.
+
 ## PE16 — `e.code` pour la touche Alt
 ```javascript
 // Correct :

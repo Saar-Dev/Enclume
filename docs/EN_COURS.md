@@ -125,6 +125,40 @@
 > n'avait pas été remplacé ; ajouté un spacer dédié entre le déclencheur "Cartes ▾" et le bouton
 > Combat. Prochaine étape : Lot 5 (créateur de token 2D).
 >
+> Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 188 : `docs/PLAN_FATIGUE_DOMMAGES.md` **Lot 1
+> ✅ clos** (horloge de campagne, confirmé fonctionnel par Saar en navigateur). Fondation du chantier
+> Fatigue/Dommages (§5) — compteur de temps de jeu écoulé par campagne, consommé par les futurs
+> Lots 2-10 (Froid, Maladies, Drogues, Irradiations, Faim/soif). Deux compteurs `integer` (pas
+> `bigint` — `pg-types` désérialise `bigint` en string, vérifié dans le paquet réellement installé) :
+> `campaigns.game_time_minutes` (affiché, déplaçable dans les deux sens par le MJ) et
+> `game_time_resolved_minutes` (repère mécanique interne, strictement non-décroissant, ne quitte
+> jamais le serveur — ni HTTP ni WS, consommé par le futur balayage d'échéances du Lot 2). Calendrier
+> propre à Enclume, sans rapport avec un calendrier réel : 12 mois fixes de 31 jours, aucun bissextile,
+> aucun nom de mois (recherche exhaustive du Livre de Base transcrit — aucune matière trouvée). Point
+> de départ (année/mois/jour) configurable par le MJ dans Options de campagne, onglet Règle du jeu.
+> Migration 217, `server/src/lib/gameTimeService.js` (`adjustGameTime`, verrou `.forUpdate()`),
+> `shared/gameTime.js` (`projectGameTime`, `floorDiv`/`floorMod` — MDN, modulo mathématiquement correct
+> pour un compteur négatif), route `POST /campaigns/:id/game-time/adjust`, event
+> `CAMPAIGN_GAME_TIME_ADJUSTED`. UI `client/src/components/GameTimeWidget.jsx` — sidebar session,
+> au-dessus de la rangée Édition/Calque/Outils (emplacement demandé par Saar) : un bouton par unité
+> (Année/Mois/Jour/Heure/Minute) affichant sa valeur, clic simple ouvre un menu de durées relatives
+> dimensionné à l'unité, double-clic bascule en édition inline valeur absolue. Deux itérations UX sur
+> retour Saar (bloc initial trop haut → boutons compacts ; bug de zIndex sur le dropdown "Autre" →
+> "Autre" retiré au profit du double-clic). Branché sur le store `campaignStore` via le hook déjà
+> actif `useSessionSocket.js` (nouveau piège documenté : `docs/SYSTEME/REACT.md` P57 — un event WS
+> live se branche dans le hook dédié existant, jamais un `socket.on` local dans un composant).
+> **Testé** : migration 217 appliquée et vérifiée en base (colonnes réelles, valeurs confirmées
+> `number` pas string), `adjustGameTime` exercé sur une vraie campagne (4 cas de l'analyse à charge —
+> avance simple, recul pur, ravance sous le repère, ravance qui le dépasse — état remis à zéro après),
+> maths de l'édition inline vérifiées par exécution (7 scénarios), `node --test` 202/202,
+> ESLint + build client propres sur tous les fichiers touchés, garde-fou `EADDRINUSE` ajouté et
+> vérifié en conditions réelles (deux instances serveur en doublon trouvées et tuées en cours de
+> route), confirmé fonctionnel en navigateur par Saar après les deux itérations UX. **Non testé** :
+> round-trip HTTP authentifié scripté (pas d'identifiants côté agent). Dette hors périmètre trouvée en
+> marge et non traitée : `docs/BUGIDENTIFIE.md` UI4 (`encumbrance_enabled`/`encumbrance_multiplier`
+> absents de la liste de chargement initial de `CampaignSettingsPage.jsx`). Prochaine étape : Lot 2
+> (moteur générique d'échéances de jeu), sur confirmation de Saar.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 187 : `docs/PLAN_BATTLEMAP2D.md` **Lot 5
 > ✅ clos** (validé fonctionnel par Saar en navigateur, recentrage du portrait confirmé) — créateur
 > de token 2D. **Ce Lot 5 était le dernier lot du plan v1** — les 5 lots sont maintenant tous clos ;

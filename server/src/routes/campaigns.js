@@ -8,6 +8,7 @@ import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
 import { SETTINGS_SCHEMA } from '../lib/campaignSettingsService.js'
+import { adjustGameTime } from '../lib/gameTimeService.js'
 
 const router = Router()
 
@@ -169,6 +170,9 @@ router.get('/:id', requireAuth, async (req, res) => {
     .where({ 'campaigns.id': req.params.id })
     .first()
   if (!campaign) throw new AppError(404, 'Campaign not found')
+  // game_time_resolved_minutes est un repère mécanique interne (docs/PLAN_FATIGUE_DOMMAGES.md §7,
+  // Lot 1) — jamais montré au MJ, à retirer explicitement avant toute réponse client.
+  delete campaign.game_time_resolved_minutes
 
   const members = await db('campaign_members')
     .join('users', 'campaign_members.user_id', 'users.id')
@@ -223,6 +227,15 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
       if (key === 'encumbrance_multiplier' && !(value > 0)) {
         throw new AppError(400, 'settings.encumbrance_multiplier doit être > 0')
       }
+      if (key === 'calendar_start_year' && (!Number.isInteger(value) || value < 1 || value > 9999)) {
+        throw new AppError(400, 'settings.calendar_start_year doit être un entier entre 1 et 9999')
+      }
+      if (key === 'calendar_start_month' && (!Number.isInteger(value) || value < 1 || value > 12)) {
+        throw new AppError(400, 'settings.calendar_start_month doit être un entier entre 1 et 12')
+      }
+      if (key === 'calendar_start_day' && (!Number.isInteger(value) || value < 1 || value > 31)) {
+        throw new AppError(400, 'settings.calendar_start_day doit être un entier entre 1 et 31')
+      }
     }
 
     // Merge JSONB atomique côté DB — évite une race condition entre deux sauvegardes concurrentes (pattern PC39)
@@ -238,6 +251,19 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'default_token_glb_url', 'settings', 'created_at', 'updated_at'])
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_SETTINGS_UPDATED, { campaign })
   res.json({ campaign })
+})
+
+// POST /api/campaigns/:id/game-time/adjust — ajuste l'horloge de campagne (docs/PLAN_FATIGUE_DOMMAGES.md §7)
+// GM uniquement. minutes : entier signé non nul (positif = avance, négatif = recul).
+// game_time_resolved_minutes ne quitte jamais le serveur (invariant de non-fuite) — ni ici, ni sur GET /:id.
+router.post('/:id/game-time/adjust', requireAuth, requireRole('gm'), async (req, res) => {
+  const { minutes } = req.body
+  const { displayedAfter } = await adjustGameTime(req.params.id, minutes)
+  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
+    campaignId: req.params.id,
+    gameTimeMinutes: displayedAfter,
+  })
+  res.json({ gameTimeMinutes: displayedAfter })
 })
 
 // DELETE /api/campaigns/:id — supprimer définitivement une campagne

@@ -13,6 +13,9 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [statusEffectsMode, setStatusEffectsMode] = useState(initialData.status_effects_mode ?? 'enforced')
   const [encumbranceEnabled, setEncumbranceEnabled] = useState(initialData.encumbrance_enabled ?? true)
   const [encumbranceMultiplier, setEncumbranceMultiplier] = useState(initialData.encumbrance_multiplier ?? 3)
+  const [calendarStartDay, setCalendarStartDay] = useState(initialData.calendar_start_day ?? 1)
+  const [calendarStartMonth, setCalendarStartMonth] = useState(initialData.calendar_start_month ?? 1)
+  const [calendarStartYear, setCalendarStartYear] = useState(initialData.calendar_start_year ?? 1)
 
   const handlePnjUnlimitedAmmo = (val) => { setPnjUnlimitedAmmo(val); onChange({ pnj_unlimited_ammo: val }) }
   const handleReloadMode = (val) => { setReloadMode(val); onChange({ reload_mode: val }) }
@@ -21,6 +24,9 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleStatusEffectsMode = (val) => { setStatusEffectsMode(val); onChange({ status_effects_mode: val }) }
   const handleEncumbranceEnabled = (val) => { setEncumbranceEnabled(val); onChange({ encumbrance_enabled: val }) }
   const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
+  const handleCalendarStartDay = (val) => { setCalendarStartDay(val); onChange({ calendar_start_day: val }) }
+  const handleCalendarStartMonth = (val) => { setCalendarStartMonth(val); onChange({ calendar_start_month: val }) }
+  const handleCalendarStartYear = (val) => { setCalendarStartYear(val); onChange({ calendar_start_year: val }) }
 
   return (
     <section className="card">
@@ -111,6 +117,33 @@ export default function SectionGameRules({ initialData, onChange }) {
             onChange={e => {
               const val = parseFloat(e.target.value)
               handleEncumbranceMultiplier(isNaN(val) || val <= 0 ? 3 : val)
+            }}
+            style={{ ...styles.numInput, width: '80px' }} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={styles.toggleLabel}>{t('settings.calendarStartLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.calendarStartHint')}</span>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+          <input type="number" min={1} max={31} value={calendarStartDay}
+            onChange={e => {
+              const val = parseInt(e.target.value, 10)
+              handleCalendarStartDay(isNaN(val) ? 1 : Math.min(31, Math.max(1, val)))
+            }}
+            style={{ ...styles.numInput, width: '60px' }} />
+          <span style={styles.toggleHint}>/</span>
+          <input type="number" min={1} max={12} value={calendarStartMonth}
+            onChange={e => {
+              const val = parseInt(e.target.value, 10)
+              handleCalendarStartMonth(isNaN(val) ? 1 : Math.min(12, Math.max(1, val)))
+            }}
+            style={{ ...styles.numInput, width: '60px' }} />
+          <span style={styles.toggleHint}>/</span>
+          <input type="number" min={1} max={9999} value={calendarStartYear}
+            onChange={e => {
+              const val = parseInt(e.target.value, 10)
+              handleCalendarStartYear(isNaN(val) ? 1 : Math.min(9999, Math.max(1, val)))
             }}
             style={{ ...styles.numInput, width: '80px' }} />
         </div>

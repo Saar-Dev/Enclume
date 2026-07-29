@@ -27,6 +27,12 @@ export const SETTINGS_SCHEMA = {
   // le comportement de toutes les campagnes existantes.
   encumbrance_enabled:    { type: 'boolean', default: true },
   encumbrance_multiplier: { type: 'number',  default: 3 },
+  // Horloge de campagne (docs/PLAN_FATIGUE_DOMMAGES.md §7, Lot 1) — point de départ du calendrier
+  // de jeu (Jour/Mois/Année, 31j/mois fixes, pas de bissextile). Défaut 1/1/1 : origine neutre,
+  // sans effet tant que le MJ ne configure/n'avance jamais l'horloge (game_time_minutes reste à 0).
+  calendar_start_year:  { type: 'number', default: 1 },
+  calendar_start_month: { type: 'number', default: 1 },
+  calendar_start_day:   { type: 'number', default: 1 },
 }
 
 const DEFAULT_SETTINGS = Object.fromEntries(

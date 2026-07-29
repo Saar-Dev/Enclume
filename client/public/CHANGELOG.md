@@ -1,3 +1,17 @@
+## v193 — 2026-07-29 — Horloge de campagne
+
+### Client
+- [feat] Nouvelle horloge de campagne, visible en session au-dessus des boutons Édition/Calque/Outils.
+  Calendrier propre au jeu (12 mois de 31 jours, aucun rapport avec un calendrier réel). Le MJ peut
+  avancer ou reculer le temps de jeu par petits ou grands pas (Année/Mois/Jour/Heure/Minute), ou
+  double-cliquer sur une valeur pour la modifier directement.
+- [feat] Le point de départ du calendrier (jour/mois/année) se configure dans Options de campagne,
+  onglet Règle du jeu.
+
+### Serveur
+- [feat] Le temps de jeu écoulé est maintenant suivi par campagne, fondation pour les futures règles
+  de Fatigue, Froid, Maladies, Drogues, Irradiations et Faim/soif (`docs/PLAN_FATIGUE_DOMMAGES.md`).
+
 ## v192 — 2026-07-28 — Illustrations du Wizard + correctif munitions
 
 ### Client

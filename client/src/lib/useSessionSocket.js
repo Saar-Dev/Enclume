@@ -40,6 +40,9 @@ export function useSessionSocket() {
       })
     }
     const onCampaignUpdated = ({ campaign: updated }) => updateCampaign(updated)
+    // docs/PLAN_FATIGUE_DOMMAGES.md §7 (Lot 1) — payload minimal (pas le campaign complet, resolved
+    // ne quitte jamais le serveur), merge partiel via updateCampaign comme les autres champs live.
+    const onGameTimeAdjusted = ({ gameTimeMinutes }) => updateCampaign({ game_time_minutes: gameTimeMinutes })
     // system:true (COM29, dual-wield dégradé) — message serveur porté par une clé i18n, jamais un
     // texte figé (même mécanisme que les messages système join/leave ci-dessus), résolue ici pour
     // rester cohérent avec la langue active du client qui l'affiche.
@@ -96,6 +99,7 @@ export function useSessionSocket() {
     socket.on(WS.SESSION_USER_JOINED,       onUserJoined)
     socket.on(WS.SESSION_USER_LEFT,         onUserLeft)
     socket.on(WS.CAMPAIGN_SETTINGS_UPDATED, onCampaignUpdated)
+    socket.on(WS.CAMPAIGN_GAME_TIME_ADJUSTED, onGameTimeAdjusted)
     socket.on(WS.CHAT_MESSAGE,              onChatMessage)
     socket.on(WS.CHARACTER_UPDATED,         onCharacterUpdated)
     socket.on(WS.DICE_RESULT,               onDiceResult)

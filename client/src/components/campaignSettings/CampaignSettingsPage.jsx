@@ -52,6 +52,9 @@ export default function CampaignSettingsPage() {
             shock_auto_stun: s.shock_auto_stun ?? true,
             allow_los_cancel: s.allow_los_cancel ?? false,
             status_effects_mode: s.status_effects_mode ?? 'enforced',
+            calendar_start_day: s.calendar_start_day ?? 1,
+            calendar_start_month: s.calendar_start_month ?? 1,
+            calendar_start_year: s.calendar_start_year ?? 1,
           },
         }
         setFormData(data)

@@ -12,6 +12,7 @@ import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
 import { DeclareLogContent } from './CombatDeclareLog.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
+import GameTimeWidget from './GameTimeWidget.jsx'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -1028,6 +1029,9 @@ export default function Sidebar({
         title={t('sidebar.helpTitle')}
         style={{ position:'absolute', top:'8px', right:'34px', zIndex:10, border:'1px solid #2a2a3e', borderRadius:'50%', width:'20px', height:'20px', fontSize:'11px', fontWeight:'700', display:'flex', alignItems:'center', justifyContent:'center' }}
       >?</button>
+
+      {/* ─── HORLOGE DE CAMPAGNE (docs/PLAN_FATIGUE_DOMMAGES.md §7, Lot 1) ────────── */}
+      <GameTimeWidget campaignId={campaignId} />
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>

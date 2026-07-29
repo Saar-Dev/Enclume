@@ -11,6 +11,10 @@ personnages incomplets déjà correct dans la liste Dashboard) ; ST1 clos (`Toke
 explorée puis écartée, recherche confirmant que le pattern pro pour un repère devant rester lisible à
 tout niveau de zoom est une taille constante, pas une dépendance à la distance ; retiré de la liste
 "chantier UI/UX dédié" de `docs/ROADMAP.md`, traité en correctif ponctuel), détail `docs/EN_COURS.md`
+; 2026-07-29 (Saar, `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 1, horloge de campagne) — ajout UI4
+(`encumbrance_enabled`/`encumbrance_multiplier` absents de la liste de chargement initial de
+`CampaignSettingsPage.jsx`, réaffichent toujours leur défaut client au rechargement — trouvé en
+ajoutant les clés `calendar_start_*` au même endroit, non corrigé, hors périmètre du Lot 1)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -709,6 +713,20 @@ console.log('[DBG-EAU1]', { x, z, baseY, mapTopY, candidateCeilingY: candidate?.
 **Code impliqué** : Composant chat + rendu `DICE_RESULT` — cas `dieType = 'd100'`.
 
 **Prochaine étape** : Cluster Q — lire rendu DICE_RESULT dans Sidebar/chat.
+
+---
+
+### Bug UI4 — Options de campagne : `encumbrance_enabled`/`encumbrance_multiplier` réaffichent toujours leur défaut client au rechargement
+
+**Symptôme** : Sur l'onglet Règle du jeu, les champs "Limite de poids porté" et "Multiplicateur de charge" affichent toujours `true`/`3` (défauts client) à l'ouverture de la page, même si le MJ a sauvegardé une autre valeur — l'édition/sauvegarde elle-même fonctionne, seul le rechargement affiche la mauvaise valeur.
+
+**Code impliqué** : `client/src/components/campaignSettings/CampaignSettingsPage.jsx` — l'objet `data.settings` construit dans `load()` (L.37-58) liste explicitement chaque clé lue depuis `s.<clé> ?? défaut`, mais `encumbrance_enabled`/`encumbrance_multiplier` sont absentes de cette liste alors que `SectionGameRules.jsx` les consomme bien via `initialData.encumbrance_*`.
+
+**Cause racine** [VÉRIFIÉ] : clé manquante dans la liste explicite de `load()` → `initialData.encumbrance_*` vaut toujours `undefined` au premier rendu → le `useState(initialData.encumbrance_multiplier ?? 3)` de `SectionGameRules.jsx` retombe systématiquement sur son propre défaut local, jamais sur la valeur réellement stockée en base.
+
+**Trouvé en marge de** : `docs/PLAN_FATIGUE_DOMMAGES.md` §7 (Lot 1, horloge de campagne) — en ajoutant `calendar_start_day/month/year` au même endroit, pour ne pas reproduire le même piège sur les nouvelles clés.
+
+**Prochaine étape** : ajouter `encumbrance_enabled: s.encumbrance_enabled ?? true` et `encumbrance_multiplier: s.encumbrance_multiplier ?? 3` à la liste de `load()`, même patron que les 3 clés `calendar_start_*` déjà correctement listées.
 
 ---
 

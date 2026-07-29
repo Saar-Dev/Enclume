@@ -1,8 +1,9 @@
 # PLAN — Intégration FATIGUE&DOMMAGES.md
 
-> Statut : Lot 0 (cadrage) tranché avec Saar 2026-07-23, aucun code encore écrit. Document
-> temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
-> chantier clos, contenu durable transféré vers `docs/SYSTEME/*.md`.
+> Statut : Lot 0 (cadrage) tranché avec Saar 2026-07-23. **Lot 1 (Horloge de campagne) ✅ clos
+> 2026-07-29** — codé, testé (fonctionnel, confirmé par Saar en navigateur), voir §7 et
+> `docs/EN_COURS.md`. Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans
+> `docs/Old/` une fois le chantier entier clos, contenu durable transféré vers `docs/SYSTEME/*.md`.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -85,7 +86,7 @@ ira dans `docs/SYSTEME/COMBAT.md`, pas ici.
 | Lot | Contenu | Taille | Dépend de | Notes |
 |---|---|---|---|---|
 | 0 | Cadrage — clos | — | — | décisions ci-dessus |
-| 1 | **Horloge de campagne** (fondation) — détail §7 | M | Lot 0 | structurant, planifié |
+| 1 | **Horloge de campagne** (fondation) — détail §7 | M | Lot 0 | ✅ clos 2026-07-29, testé par Saar |
 | 2 | **Moteur générique d'échéances de jeu** (fondation) — détail §8 | L | Lot 1 | structurant, planifié |
 | 3 | Dommages environnementaux de combat : Chute (ponctuel) + Acide/Décompression/Feu (récurrents/Tour) — détail §9 | M | Lot 0 | indépendant de l'horloge, réutilise le moteur de blessures + le tick `onTurnStart` existant |
 | 4 | **Fatigue** (fondation d'effet, avancée exprès) — détail §10 | M | Lot 0 | fournit le point d'entrée partagé consommé par 5/7/8/9/10 — construit avant ses émetteurs pour éviter tout stub temporaire |
@@ -185,10 +186,18 @@ docs](https://foundryvtt.com/api/classes/foundry.helpers.GameTime.html), [Simple
 Foundry VTT](https://foundryvtt.com/packages/foundryvtt-simple-calendar), [updateWorldTime hook —
 Foundry VTT docs](https://foundryvtt.com/api/functions/hookEvents.updateWorldTime.html).
 
-**Décision Saar 2026-07-23** : pas de mois — aucun calendrier canonique dans le Livre de Base
-Polaris (vérifié dans `REGLEPOLARIS.md`), donc pur choix Enclume. Date = Jour N de l'Année Y,
-nombre de jours/année configurable par le MJ. Granularité de l'horloge = minute (pas de secondes) —
-unité unique de bout en bout (point 2 de l'analyse à charge).
+**Décision Saar 2026-07-23, révisée 2026-07-29** : aucun nom de mois — reconfirmé le 2026-07-29 par
+relecture intégrale de `REGLEPOLARIS.md`, `FATIGUE&DOMMAGES.md`, `VOCABULARY.md` et `FOUNDATION.md` :
+zéro occurrence d'un nom de mois ou d'une date absolue dans tout le corpus transcrit, seulement des
+durées relatives (jour/semaine/mois/année) — rien à respecter puisqu'aucune matière n'existe. En
+revanche, calendrier à **trois champs numériques** retenu (revirement sur le "Jour N de l'Année Y"
+initial, jugé trop dépouillé à l'usage) : **Jour/Mois/Année**, mais avec une structure entièrement
+arbitraire au jeu, pas calquée sur un calendrier réel — **12 mois fixes de 31 jours chacun** (donc
+année de jeu = 372 jours), aucune longueur de mois variable, aucun bissextile, aucune règle
+d'ajustement. Année plafonnée à **1-9999** (4 chiffres), valeur hors borne rejetée (pas de
+troncature silencieuse — patron `AppError` déjà en usage pour les bornes de `SETTINGS_SCHEMA`).
+Granularité de l'horloge = minute (pas de secondes) — unité unique de bout en bout (point 2 de
+l'analyse à charge).
 
 - **Deux compteurs, pas un seul** (raison : point 8 de l'analyse à charge) :
   - `campaigns.game_time_minutes` — le compteur **affiché/narratif**, librement déplaçable par
@@ -198,6 +207,23 @@ unité unique de bout en bout (point 2 de l'analyse à charge).
     strictement non-décroissant (`GREATEST(ancien, nouveau_affiché)` à chaque ajustement). C'est
     l'unique valeur qui compte pour le futur balayage du Lot 2 : l'intervalle réellement à balayer
     est `(resolved_avant, resolved_après]`, jamais calculé sur le compteur affiché.
+  - **Type SQL `integer`, pas `bigint`** (correction 2026-07-29, vérifiée à 100 % dans le package
+    `pg-types` réellement installé, `server/node_modules/pg-types/lib/textParsers.js:109-117`) :
+    `bigint`/OID 20 est désérialisé par `parseBigInteger`, qui retourne une **chaîne**, jamais un
+    nombre — contrairement à `integer`/OID 23 qui passe par `parseInt()`. Le projet ne surcharge ce
+    comportement nulle part (aucun `setTypeParser`), donc tout calcul direct sur une valeur lue en
+    base (`"120" + 30 = "12030"`, pas `150`) serait un bug silencieux. Plutôt qu'imposer un cast
+    explicite à chaque consommateur présent et futur du compteur, `integer` (max signé
+    2 147 483 647, soit ±4084 ans de temps de jeu en minutes) supprime la classe de bug à la racine
+    — aucune campagne n'approche cette borne, la marge est massive.
+  - **Invariant de non-fuite** : `game_time_resolved_minutes` ne doit jamais apparaître dans une
+    réponse HTTP/WS destinée au client. `GET /campaigns/:id` (`campaigns.js:168-183`) fait
+    aujourd'hui `db('campaigns').where(...).first()` sans `.select()` puis `res.json({ campaign,
+    members })` — sans action explicite, l'ajout de la colonne la ferait fuiter automatiquement
+    vers le client dès ce lot, avant même que Lot 2 existe. À corriger dans le même commit que la
+    migration : lister explicitement les colonnes de `campaigns` renvoyées par cette route (ou
+    `delete campaign.game_time_resolved_minutes` avant `res.json`), pas seulement sur la nouvelle
+    route `POST /:id/game-time/adjust`.
   - Un recul (`newDisplayed < ancien affiché`) laisse `resolved` inchangé → intervalle à balayer
     vide → « aucun effet mécanique », conforme à la décision Saar.
   - Une avance qui reste sous le repère `resolved` déjà atteint (ex. recul à Jour 5 puis ravance à
@@ -205,18 +231,29 @@ unité unique de bout en bout (point 2 de l'analyse à charge).
     **aucune double résolution**, même si l'affichage retraverse un territoire déjà vécu.
   - Une avance qui dépasse le repère `resolved` (ravance à Jour 12 depuis l'exemple ci-dessus) ne
     balaie que le territoire réellement neuf, `(10, 12]` — jamais `(5, 12]`.
-- **Config de calendrier** (rarement modifiée, posée une fois par le MJ) : nouvelles clés dans
-  `SETTINGS_SCHEMA` (`campaignSettingsService.js`, mécanisme déjà en place, pas de nouveau fichier
-  de config) : `calendar_start_year` (number), `calendar_start_day` (number, jour de l'année de
-  départ), `calendar_days_per_year` (number, > 0). Passe par la route `PUT /campaigns/:id`
-  existante (`requireRole('gm')`), aucune nouvelle route de config nécessaire. Projette uniquement
-  le compteur **affiché** — `resolved` n'est jamais montré, n'a pas besoin d'une date lisible.
+- **Config de calendrier** (rarement modifiée, posée une fois par le MJ, dans Options de campagne —
+  **onglet exact non tranché**, à choisir en codant l'UI) : nouvelles clés dans `SETTINGS_SCHEMA`
+  (`campaignSettingsService.js`, mécanisme déjà en place, pas de nouveau fichier de config) :
+  `calendar_start_year` (number, borne **1-9999**, rejeté hors borne), `calendar_start_month`
+  (number, borne **1-12**), `calendar_start_day` (number, borne **1-31**, jour du **mois**, pas de
+  l'année — révisé 2026-07-29). `calendar_days_per_year` **retiré** : 31 jours/mois et 12 mois/année
+  deviennent des constantes du jeu (`shared/gameTime.js`), plus un réglage MJ — ces trois bornes
+  redeviennent indépendantes les unes des autres (aucune ne dépend de la valeur d'une autre clé),
+  donc s'intègrent telles quelles dans la boucle de validation synchrone mono-clé déjà en place
+  (même patron que `encumbrance_multiplier`) : **le problème de validation croisée sur merge JSONB
+  partiel identifié le 2026-07-29 disparaît avec le réglage qui le causait**, pas de fix à écrire
+  pour un problème qui n'existe plus. Passe par la route `PUT /campaigns/:id` existante
+  (`requireRole('gm')`), aucune nouvelle route de config nécessaire. Projette uniquement le compteur
+  **affiché** — `resolved` n'est jamais montré, n'a pas besoin d'une date lisible.
 - **Projection pure** (jamais stockée) : à partir de `game_time_minutes` (affiché) + la config
-  ci-dessus, calcule `{ year, dayOfYear, hour, minute }` — fonction pure côté `shared/` (réutilisable
-  client + serveur, comme `polarisUtils.js`), pas de duplication de la logique de calcul. Attention
-  d'implémentation à noter maintenant : `dayOfYear`/`year` doivent rester corrects pour un compteur
-  négatif (modulo JS natif `%` ne se comporte pas comme un modulo mathématique sur les négatifs — à
-  gérer explicitement, sinon bug garanti dès qu'un MJ recule avant le jour de départ).
+  ci-dessus, calcule `{ year, month, day, hour, minute }` — fonction pure côté `shared/` (réutilisable
+  client + serveur, comme `polarisUtils.js`), pas de duplication de la logique de calcul. Convertit le
+  point de départ (`calendar_start_year/month/day`) en un index de jour linéaire, additionne les
+  jours écoulés, puis redécompose en `year`/`month`/`day` via division/reste par les constantes
+  372 (jours/année) et 31 (jours/mois). Attention d'implémentation à noter maintenant :
+  `year`/`month`/`day` doivent rester corrects pour un compteur négatif (modulo JS natif `%` ne se
+  comporte pas comme un modulo mathématique sur les négatifs — à gérer explicitement avec une
+  division/reste toujours positifs, sinon bug garanti dès qu'un MJ recule avant le jour de départ).
 - **Mutateur unique** : `adjustGameTime(db, campaignId, deltaMinutes)` — entier **signé non
   nul** (positif = avance, négatif = recul), renommé depuis `advanceGameTime` (l'ancien nom supposait
   un sens unique, plus vrai depuis le point 8). Verrouille la ligne `campaigns` (`.forUpdate()`,
@@ -226,9 +263,12 @@ unité unique de bout en bout (point 2 de l'analyse à charge).
   le merge JSONB de `settings` — les deux patrons coexistent déjà dans le projet pour des formes de
   mutation différentes). Retourne `{ displayedBefore, displayedAfter, resolvedBefore, resolvedAfter }`
   — c'est `resolvedBefore`/`resolvedAfter` que le futur Lot 2 consomme, jamais `displayed*`.
-- **Diffusion** : un seul événement WS après la mutation, renommé `CAMPAIGN_GAME_TIME_ADJUSTED`
-  (l'ancien nom `_ADVANCED` supposait aussi un sens unique) — transporte les deux compteurs affiché
-  (pour l'UI) et résolu (inutile au client aujourd'hui, mais diffusé pour cohérence/debug). Pas de
+- **Diffusion** : un seul événement WS après la mutation, `CAMPAIGN_GAME_TIME_ADJUSTED` — transporte
+  uniquement le compteur **affiché** (pour l'UI). Correction 2026-07-29 : une version antérieure de
+  cette puce prévoyait de diffuser aussi le compteur résolu "pour cohérence/debug", ce qui
+  contredisait directement l'invariant de non-fuite (Architecture retenue, "Deux comptes") — le
+  broadcast WS part vers toute la room (joueurs compris, pas seulement le MJ), donc c'était une fuite
+  plus large que celle déjà corrigée sur `GET /:id`. `resolved` ne quitte jamais le serveur. Pas de
   mini-ticks serveur. Côté serveur, le futur balayage du Lot 2 n'est **pas** un abonnement à cet
   event (un event WS ne boucle pas vers le serveur lui-même) mais un appel de fonction direct, dans
   la même transaction que `adjustGameTime`, orchestré par la route — voir §8.
@@ -241,26 +281,29 @@ unité unique de bout en bout (point 2 de l'analyse à charge).
 
 | Fichier | Rôle |
 |---|---|
-| `server/src/db/migrations/<N>_campaigns_game_time.js` | ajoute `campaigns.game_time_minutes` (bigint, `notNullable`, `defaultTo(0)`) **et** `campaigns.game_time_resolved_minutes` (bigint, `notNullable`, `defaultTo(0)`) — rétrocompatible |
-| `server/src/lib/campaignSettingsService.js` | ajoute `calendar_start_year`/`calendar_start_day`/`calendar_days_per_year` à `SETTINGS_SCHEMA` |
-| `server/src/routes/campaigns.js` (route `PUT /:id` existante) | ajoute la validation de bornes `1 <= calendar_start_day <= calendar_days_per_year` au bloc de validation par clé déjà présent (analyse à charge point 4) |
-| `shared/gameTime.js` (nouveau) | fonction pure de projection compteur affiché → `{year, dayOfYear, hour, minute}`, gère explicitement les valeurs négatives (voir note modulo ci-dessus), testée isolément, partagée client/serveur |
+| `server/src/db/migrations/217_campaigns_game_time.js` | ajoute `campaigns.game_time_minutes` (**integer**, `notNullable`, `defaultTo(0)`) **et** `campaigns.game_time_resolved_minutes` (**integer**, `notNullable`, `defaultTo(0)`) — rétrocompatible (corrigé 2026-07-29 : `bigint`→`integer`, voir Architecture retenue) ; 217 = prochain numéro impair libre (215 = `characters_token_style.js`, vérifié dans `server/src/db/migrations/`) |
+| `server/src/lib/campaignSettingsService.js` | ajoute `calendar_start_year`/`calendar_start_month`/`calendar_start_day` à `SETTINGS_SCHEMA` (révisé 2026-07-29 : plus de `calendar_days_per_year`, remplacé par les constantes 31j/12mois de `shared/gameTime.js`) |
+| `server/src/routes/campaigns.js` (route `PUT /:id` existante) | ajoute 3 bornes indépendantes au bloc de validation par clé déjà présent : `calendar_start_year` ∈ [1, 9999], `calendar_start_month` ∈ [1, 12], `calendar_start_day` ∈ [1, 31] (révisé 2026-07-29 : plus de borne croisée, voir Architecture retenue) |
+| `server/src/routes/campaigns.js` (route `GET /:id` existante, L.168-183) | ajoutée 2026-07-29 : exclure `game_time_resolved_minutes` de la réponse (`.select()` explicite ou suppression avant `res.json`) — sans quoi la colonne fuite vers le client dès ce lot (invariant de non-fuite, Architecture retenue) |
+| `shared/gameTime.js` (nouveau) | constantes `JOURS_PAR_MOIS = 31`/`MOIS_PAR_ANNEE = 12` + fonction pure de projection compteur affiché → `{year, month, day, hour, minute}`, gère explicitement les valeurs négatives (voir note modulo ci-dessus), testée isolément, partagée client/serveur |
 | `server/src/lib/gameTimeService.js` (nouveau) | `adjustGameTime(db, campaignId, deltaMinutes)` — verrou `.forUpdate()`, calcule et écrit les deux compteurs |
 | `server/src/routes/campaigns.js` | nouvelle route `POST /:id/game-time/adjust`, `requireAuth, requireRole('gm')` (patron identique à `PUT /:id`), corps `{ minutes: <entier signé non nul> }` exclusivement (point 2) |
 | `shared/events.js` | nouvelle constante `CAMPAIGN_GAME_TIME_ADJUSTED` |
-| UI GM minimale | préréglages (+15min/+1h/+6h/+1 jour/+1 semaine, chacun disponible en + et en -) + saisie libre en minutes/heures/jours (tranché) — même unité que le serveur, aucune conversion, emplacement exact à préciser en codant |
+| `client/src/components/GameTimeWidget.jsx` (nouveau) | UI GM, sidebar session au-dessus de la rangée Édition/Calque/Outils (Saar, 2026-07-29). Révisé 2026-07-29 (retour Saar : bloc initial trop haut) : 5 boutons compacts Année/Mois/Jour/Heure/Minute affichant la valeur courante, chacun ouvre un menu de durées relatives dans les deux sens dimensionné à son unité (An ±1, Mois ±1, Jour ±1/±7, Heure ±1/±6, Minute ±15/±30) plutôt qu'une liste de préréglages à plat — plus saisie libre minutes/heures/jours (tranché) repliée derrière un bouton "Autre" pour ne pas occuper de place en permanence |
 
 ### i18n (`.claude/rules/i18n.md`, vérifié avant d'écrire cette section)
 
 - Aucun texte visible codé en dur dans le composant UI GM (labels des préréglages, saisie libre,
   confirmations) — `useTranslation()`/`t('clé')` obligatoire, clé ajoutée au namespace **avant**
   utilisation dans le JSX (jamais l'inverse).
-- Namespaces existants vérifiés : seuls `fr.json` (transverse `common`), `en.json` (gelé, non
-  chargé) et `creation.json` existent réellement aujourd'hui — `combat.json`/`charSheet.json`/
-  `builder.json` cités dans la règle comme exemples ne sont pas encore créés. Décision : nouveau
-  namespace dédié `campaignClock.json` plutôt que d'entasser dans `fr.json` — ce chantier
-  (Lots 1-10) va ajouter beaucoup d'UI dans la durée, un namespace unique par domaine évite d'avoir
-  à tout migrer plus tard (règle "un domaine dense a son propre fichier").
+- Correction 2026-07-29, en codant l'UI GM (onglet "Règle du jeu", `SectionGameRules.jsx`) :
+  hypothèse initiale fausse — `combat.json`/`charSheet.json`/`builder.json` existent bel et bien
+  (vérifié par `Glob`), et les 6 onglets d'Options de campagne (dice/rules/tokens/players/sheet/
+  danger), pourtant un ensemble dense, vivent tous sous `settings.*` dans `fr.json`, pas dans un
+  namespace dédié. Les 3 nouvelles clés calendrier suivent donc le même patron que
+  `encumbranceMultiplierLabel`/`Hint` (`settings.calendarStart*`), pas de `campaignClock.json` créé
+  pour ce sous-formulaire — un futur widget d'avance d'horloge séparé (hors Options de campagne)
+  pourra rouvrir la question s'il devient dense à son tour.
 - Erreurs REST (`AppError` sur la nouvelle route) : suit le patron déjà en usage dans
   `campaigns.js` (message simple, pas de `system:true`/`i18nKey` — ce dernier patron est réservé aux
   notifications système WS, vérifié dans `socketCombatHelpers.js:2630-2631`, pas aux erreurs de
@@ -529,8 +572,14 @@ de rations) — entièrement déclaratif MJ, comme Froid.
 
 ## 17. Prochaine étape
 
-Lot 1 prêt à être codé sur confirmation de Saar — présentation faite en §7 conformément à
-`CLAUDE.md` §6. Les Lots 2 à 10 sont maintenant planifiés dans leurs grandes lignes ; plusieurs
-points marqués « à vérifier/trancher en codant » sont volontairement laissés ouverts (ils dépendent
-de détails du code réel au moment d'écrire chaque lot, pas d'une décision produit à prendre
-maintenant). **Aucun code n'a encore été écrit, sur aucun lot.**
+**Lot 1 ✅ clos (2026-07-29)** — codé, vérifié par exécution à chaque étape (migration 217 appliquée,
+`node --test` 202/202, `adjustGameTime` exercé sur une vraie campagne, ESLint/build client propres),
+confirmé fonctionnel par Saar en navigateur. Détail complet en §7, y compris les corrections faites en
+cours de route (type `integer` plutôt que `bigint`, invariant de non-fuite de `game_time_resolved_minutes`,
+calendrier Jour/Mois/Année à mois fixes plutôt que Jour-de-l'année, widget UI revu deux fois sur retour
+Saar). Dette hors périmètre trouvée en cours de route et non traitée : `docs/BUGIDENTIFIE.md` UI4.
+
+Les Lots 2 à 10 restent planifiés dans leurs grandes lignes seulement ; plusieurs points marqués
+« à vérifier/trancher en codant » sont volontairement laissés ouverts (ils dépendent de détails du
+code réel au moment d'écrire chaque lot, pas d'une décision produit à prendre maintenant). Prochain
+lot à reprendre : Lot 2 (moteur générique d'échéances de jeu), sur confirmation de Saar.

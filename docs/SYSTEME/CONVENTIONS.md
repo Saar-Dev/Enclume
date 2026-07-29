@@ -71,6 +71,7 @@
 | P54 | Toujours vérifier `knex_migrations` avant un appel manuel à `up()`/`down()` — jamais deux `up()` sans `down()` entre les deux | CORE.md |
 | P55 | Compétence réservée `(X)` : `isLearned` doit couvrir 3 cas (déblocage, bonus d'origine, `isPro`) — oublier `isPro` plante en `-Infinity` | COMBAT.md |
 | P56 | `DICE_RESULT` ne porte jamais `dieType` — tout consommateur hors SessionPage doit le reconstruire lui-même | DICE.md |
+| P57 | Un event WS live (`CAMPAIGN_*`, `TOKEN_*`...) se branche dans le hook dédié déjà actif (`useSessionSocket.js`/`useTokenSocket.js`/...) qui met à jour un store Zustand — jamais un `socket.on` local dans un composant leaf | REACT.md |
 | PE2 | `socket.data.role` pour `fetchSockets()` | CORE.md |
 | PE4 | face null = invisible | ASSETS.md |
 | PE11 | fallback `states[0]` si `current_state_id` invalide | ENTITES.md |
