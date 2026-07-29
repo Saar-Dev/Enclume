@@ -351,7 +351,13 @@ function SessionContent({ campaignId }) {
     openRenameModal, openCreateModal,
     handleSetDefault, handleGroupMove, handleMapDuplicate, handleMapDelete,
     showRenameModal, setShowRenameModal, renameValue, setRenameValue, handleMapRename,
-    showCreateModal, setShowCreateModal, createMapName, setCreateMapName, handleMapCreate,
+    showCreateModal, setShowCreateModal, createMapName, setCreateMapName,
+    createRenderMode, setCreateRenderMode, createImageFile, setCreateImageFile, createError,
+    handleMapCreate,
+    openSettingsModal, showSettingsModal, setShowSettingsModal,
+    settingsGridEnabled, setSettingsGridEnabled, settingsGridSize, setSettingsGridSize,
+    settingsGridOffsetX, setSettingsGridOffsetX, settingsGridOffsetY, setSettingsGridOffsetY,
+    settingsImageFile, setSettingsImageFile, settingsError, handleMapSettingsSave,
   } = useBattlemapManager({ campaignId, isGm })
   const handleDiceDone = useCallback(() => setLastDiceRoll(null), [setLastDiceRoll])
 
@@ -558,14 +564,18 @@ function SessionContent({ campaignId }) {
               </button>
             ))}
           </div>
-          <button
-            onClick={handleCombatToggle}
-            className={mode === 'combat' ? 'btn btn-danger' : 'btn'}
-            style={{ flexShrink: 0 }}
-            title={mode === 'combat' && combatPhase !== null ? t('session.combatEnd') : t('session.combatMode')}
-          >
-            {mode === 'combat' && combatPhase !== null ? `✕ ${t('session.combat')}` : `⚔ ${t('session.combat')}`}
-          </button>
+          {/* docs/PLAN_BATTLEMAP2D.md §8 (Lot 3, correction 2026-07-29) — combat hors périmètre v1,
+              bouton masqué en carte 2D jusqu'à un plan v2 (mouvement tactique, grille, LOS, allures) */}
+          {battlemap?.render_mode !== '2d' && (
+            <button
+              onClick={handleCombatToggle}
+              className={mode === 'combat' ? 'btn btn-danger' : 'btn'}
+              style={{ flexShrink: 0 }}
+              title={mode === 'combat' && combatPhase !== null ? t('session.combatEnd') : t('session.combatMode')}
+            >
+              {mode === 'combat' && combatPhase !== null ? `✕ ${t('session.combat')}` : `⚔ ${t('session.combat')}`}
+            </button>
+          )}
         </div>
       )}
       <div style={styles.mainArea}>
@@ -579,7 +589,12 @@ function SessionContent({ campaignId }) {
         }}
       >
         {canvasVisible && (battlemap?.render_mode === '2d'
-          ? <Canvas2D key={battlemap.id} battlemap={battlemap} />
+          ? <Canvas2D
+              key={battlemap.id}
+              battlemap={battlemap}
+              onTokenDoubleClick={handleTokenDoubleClick}
+              statusEffectsMode={statusEffectsMode}
+            />
           : mode === 'edit'
           ? <Editor3D
               socket={socket}
@@ -820,6 +835,11 @@ function SessionContent({ campaignId }) {
             <button style={styles.contextMenuItem} onClick={() => openRenameModal(mapContextMenu.bm)}>
               {t('session.mapRename')}
             </button>
+            {mapContextMenu.bm.render_mode === '2d' && (
+              <button style={styles.contextMenuItem} onClick={() => openSettingsModal(mapContextMenu.bm)}>
+                {t('session.mapSettings')}
+              </button>
+            )}
             <button style={styles.contextMenuItem} onClick={() => handleSetDefault(mapContextMenu.bm)}>
               {t('session.mapSetDefault')}
             </button>
@@ -873,15 +893,105 @@ function SessionContent({ campaignId }) {
               style={styles.modalInput}
               value={createMapName}
               onChange={e => setCreateMapName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleMapCreate() }}
+              onKeyDown={e => { if (e.key === 'Enter' && createRenderMode === '3d') handleMapCreate() }}
               placeholder={t('session.mapNamePlaceholder')}
               autoFocus
             />
+            <div style={{ display: 'flex', gap: 8, margin: '8px 0' }}>
+              <button
+                type="button"
+                className="btn-toggle"
+                data-active={createRenderMode === '3d'}
+                onClick={() => setCreateRenderMode('3d')}
+              >
+                {t('session.mapCreateRenderMode3d')}
+              </button>
+              <button
+                type="button"
+                className="btn-toggle"
+                data-active={createRenderMode === '2d'}
+                onClick={() => setCreateRenderMode('2d')}
+              >
+                {t('session.mapCreateRenderMode2d')}
+              </button>
+            </div>
+            {createRenderMode === '2d' && (
+              <label style={{ display: 'block', margin: '8px 0' }}>
+                {t('session.mapCreateImageLabel')}{createImageFile ? ` — ${createImageFile.name}` : ''}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => setCreateImageFile(e.target.files[0] || null)}
+                />
+              </label>
+            )}
+            {createError && <p style={{ color: 'var(--color-danger)' }}>{createError}</p>}
             <div style={styles.modalActions}>
               <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>
                 {t('common.cancel')}
               </button>
               <button className="btn" onClick={handleMapCreate}>
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modale "Paramètres" carte 2D (docs/PLAN_BATTLEMAP2D.md §8) ─────── */}
+      {showSettingsModal && (
+        <div style={styles.modalOverlay} onMouseDown={() => setShowSettingsModal(false)}>
+          <div style={styles.modalBox} onMouseDown={e => e.stopPropagation()}>
+            <p style={styles.modalTitle}>{t('session.mapSettingsTitle')}</p>
+            <label style={{ display: 'block', margin: '8px 0' }}>
+              <input
+                type="checkbox"
+                checked={settingsGridEnabled}
+                onChange={e => setSettingsGridEnabled(e.target.checked)}
+              />
+              {' '}{t('session.mapSettingsGridEnabled')}
+            </label>
+            <label style={{ display: 'block', margin: '8px 0' }}>
+              {t('session.mapSettingsGridSize')}
+              <input
+                type="number"
+                style={styles.modalInput}
+                value={settingsGridSize}
+                onChange={e => setSettingsGridSize(Number(e.target.value) || 0)}
+              />
+            </label>
+            <label style={{ display: 'block', margin: '8px 0' }}>
+              {t('session.mapSettingsGridOffsetX')}
+              <input
+                type="number"
+                style={styles.modalInput}
+                value={settingsGridOffsetX}
+                onChange={e => setSettingsGridOffsetX(Number(e.target.value) || 0)}
+              />
+            </label>
+            <label style={{ display: 'block', margin: '8px 0' }}>
+              {t('session.mapSettingsGridOffsetY')}
+              <input
+                type="number"
+                style={styles.modalInput}
+                value={settingsGridOffsetY}
+                onChange={e => setSettingsGridOffsetY(Number(e.target.value) || 0)}
+              />
+            </label>
+            <label style={{ display: 'block', margin: '8px 0' }}>
+              {t('session.mapSettingsReplaceImage')}{settingsImageFile ? ` — ${settingsImageFile.name}` : ''}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => setSettingsImageFile(e.target.files[0] || null)}
+              />
+            </label>
+            {settingsError && <p style={{ color: 'var(--color-danger)' }}>{settingsError}</p>}
+            <div style={styles.modalActions}>
+              <button className="btn btn-ghost" onClick={() => setShowSettingsModal(false)}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn" onClick={handleMapSettingsSave}>
                 {t('common.save')}
               </button>
             </div>

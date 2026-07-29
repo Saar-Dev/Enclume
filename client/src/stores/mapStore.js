@@ -21,6 +21,17 @@ export const useMapStore = create((set) => ({
       : state.battlemap,
   })),
 
+  // Fusion partielle — modale "Paramètres" (grille, image). Met à jour battlemap active ET la liste,
+  // même garantie de synchronisation que renameBattlemap.
+  updateBattlemap: (id, patch) => set((state) => ({
+    battlemaps: state.battlemaps.map(bm =>
+      bm.id === id ? { ...bm, ...patch } : bm
+    ),
+    battlemap: state.battlemap?.id === id
+      ? { ...state.battlemap, ...patch }
+      : state.battlemap,
+  })),
+
   // Ajout dans la liste — duplication, création
   addBattlemap: (battlemap) => set((state) => ({
     battlemaps: [...state.battlemaps, battlemap],

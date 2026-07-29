@@ -11,7 +11,9 @@ import api from './api'
 export function useBattlemapManager({ campaignId, isGm }) {
   const socket = useSocket()
   const { t } = useTranslation()
-  const { battlemap, battlemaps, setBattlemap, renameBattlemap, addBattlemap, removeBattlemap } = useMapStore()
+  const {
+    battlemap, battlemaps, setBattlemap, renameBattlemap, updateBattlemap, addBattlemap, removeBattlemap,
+  } = useMapStore()
   const { setTokens } = useTokenStore()
   const { setEntities } = useEntityStore()
   const { updateCampaign } = useCampaignStore()
@@ -24,6 +26,20 @@ export function useBattlemapManager({ campaignId, isGm }) {
   const [renameValue, setRenameValue] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createMapName, setCreateMapName] = useState('')
+  // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) — choix 2D/3D + upload d'image, affiché seulement si 2D.
+  const [createRenderMode, setCreateRenderMode] = useState('3d')
+  const [createImageFile, setCreateImageFile] = useState(null)
+  const [createError, setCreateError] = useState(null)
+
+  // ─── Modale "Paramètres" (docs/PLAN_BATTLEMAP2D.md §8) — grille + réupload image après création ──
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [settingsTarget, setSettingsTarget] = useState(null)
+  const [settingsGridEnabled, setSettingsGridEnabled] = useState(true)
+  const [settingsGridSize, setSettingsGridSize] = useState(64)
+  const [settingsGridOffsetX, setSettingsGridOffsetX] = useState(0)
+  const [settingsGridOffsetY, setSettingsGridOffsetY] = useState(0)
+  const [settingsImageFile, setSettingsImageFile] = useState(null)
+  const [settingsError, setSettingsError] = useState(null)
 
   // ─── Fermeture mapContextMenu sur clic extérieur ──────────────────────────
   useEffect(() => {
@@ -48,8 +64,41 @@ export function useBattlemapManager({ campaignId, isGm }) {
   const openCreateModal = useCallback(() => {
     setMapContextMenu(null)
     setCreateMapName('')
+    setCreateRenderMode('3d')
+    setCreateImageFile(null)
+    setCreateError(null)
     setShowCreateModal(true)
   }, [])
+
+  // Réutilise exactement les champs du formulaire de création (docs/PLAN_BATTLEMAP2D.md §8,
+  // "Modification après création") — même patron que openRenameModal.
+  const openSettingsModal = useCallback((bm) => {
+    setSettingsTarget(bm)
+    setSettingsGridEnabled(bm.grid_enabled !== false)
+    setSettingsGridSize(bm.grid_size || 64)
+    setSettingsGridOffsetX(bm.grid_offset_x || 0)
+    setSettingsGridOffsetY(bm.grid_offset_y || 0)
+    setSettingsImageFile(null)
+    setSettingsError(null)
+    setShowSettingsModal(true)
+    setMapContextMenu(null)
+  }, [])
+
+  // Dimensions lues côté client (API navigateur standard) — le serveur en a besoin pour dimensionner
+  // la salle triviale d'une carte 2D à la taille réelle de l'image (docs/PLAN_BATTLEMAP2D.md §8).
+  const readImageDimensions = useCallback((file) => new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image load failed'))
+    }
+    img.src = url
+  }), [])
 
   // ─── loadMap — REST GET battlemap + tokens + entités ───────────────────────
   const loadMap = useCallback(async (battlemapId) => {
@@ -136,15 +185,61 @@ export function useBattlemapManager({ campaignId, isGm }) {
 
   const handleMapCreate = useCallback(async () => {
     if (!createMapName.trim()) return
+    if (createRenderMode === '2d' && !createImageFile) {
+      setCreateError(t('session.mapCreate2dImageRequired'))
+      return
+    }
     try {
-      const res = await api.post(`/campaigns/${campaignId}/battlemaps`, { name: createMapName.trim() })
+      const formData = new FormData()
+      formData.append('name', createMapName.trim())
+      formData.append('render_mode', createRenderMode)
+      if (createRenderMode === '2d' && createImageFile) {
+        const { width, height } = await readImageDimensions(createImageFile)
+        formData.append('image', createImageFile)
+        formData.append('image_width', String(width))
+        formData.append('image_height', String(height))
+        // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3, correction 2026-07-29) — grille désactivée par défaut
+        // pour une carte 2D, le MJ l'active lui-même via "Paramètres" s'il le souhaite.
+        formData.append('grid_enabled', 'false')
+      }
+      const res = await api.post(`/campaigns/${campaignId}/battlemaps`, formData)
       addBattlemap(res.data.battlemap)
       setCreateMapName('')
+      setCreateRenderMode('3d')
+      setCreateImageFile(null)
+      setCreateError(null)
       setShowCreateModal(false)
     } catch (err) {
       console.error('Erreur création carte :', err)
+      setCreateError(t('session.mapCreateError'))
     }
-  }, [createMapName, campaignId, addBattlemap])
+  }, [createMapName, createRenderMode, createImageFile, campaignId, addBattlemap, readImageDimensions, t])
+
+  const handleMapSettingsSave = useCallback(async () => {
+    if (!settingsTarget) return
+    try {
+      const formData = new FormData()
+      formData.append('grid_enabled', String(settingsGridEnabled))
+      formData.append('grid_size', String(settingsGridSize))
+      formData.append('grid_offset_x', String(settingsGridOffsetX))
+      formData.append('grid_offset_y', String(settingsGridOffsetY))
+      if (settingsImageFile) {
+        const { width, height } = await readImageDimensions(settingsImageFile)
+        formData.append('image', settingsImageFile)
+        formData.append('image_width', String(width))
+        formData.append('image_height', String(height))
+      }
+      const res = await api.put(`/battlemaps/${settingsTarget.id}`, formData)
+      updateBattlemap(settingsTarget.id, res.data.battlemap)
+      setShowSettingsModal(false)
+      setSettingsTarget(null)
+      setSettingsImageFile(null)
+      setSettingsError(null)
+    } catch (err) {
+      console.error('Erreur mise à jour paramètres carte :', err)
+      setSettingsError(t('session.mapCreateError'))
+    }
+  }, [settingsTarget, settingsGridEnabled, settingsGridSize, settingsGridOffsetX, settingsGridOffsetY, settingsImageFile, readImageDimensions, updateBattlemap, t])
 
   return {
     // Chargement — exposé pour gmBar (onClick={() => loadMap(bm.id)})
@@ -172,6 +267,27 @@ export function useBattlemapManager({ campaignId, isGm }) {
     setShowCreateModal,
     createMapName,
     setCreateMapName,
+    createRenderMode,
+    setCreateRenderMode,
+    createImageFile,
+    setCreateImageFile,
+    createError,
     handleMapCreate,
+    // Settings modal ("Paramètres")
+    openSettingsModal,
+    showSettingsModal,
+    setShowSettingsModal,
+    settingsGridEnabled,
+    setSettingsGridEnabled,
+    settingsGridSize,
+    setSettingsGridSize,
+    settingsGridOffsetX,
+    setSettingsGridOffsetX,
+    settingsGridOffsetY,
+    setSettingsGridOffsetY,
+    settingsImageFile,
+    setSettingsImageFile,
+    settingsError,
+    handleMapSettingsSave,
   }
 }

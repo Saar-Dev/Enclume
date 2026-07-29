@@ -1,14 +1,27 @@
-import { Suspense, useLayoutEffect, useMemo, useRef, useCallback, Component } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, Component } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { MapControls, Grid, useTexture, Html } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import api from '../lib/api.js'
+import { useTokenStore } from '../stores/tokenStore'
+import { useCharacterStore } from '../stores/characterStore'
+import { useAuthStore } from '../stores/authStore'
+import { TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPresentation.jsx'
 
 // docs/PLAN_BATTLEMAP2D.md §6 (Lot 1) — clé de la salle triviale synthétisée par le serveur à la
 // création d'une carte 2D (server/src/routes/battlemaps.js, POST /).
 const TRIVIAL_ROOM_ID = 'main'
 const CAMERA_DISTANCE = 50
+
+// [VÉRIFIÉ] 2026-07-29 par compilation réelle de la salle triviale (compileSurfaceWorld) : le support
+// de sol produit support.y = roomBaseY(0, salle sans level/y) + floorThickness/2 (défaut 0.25 dans
+// roomFloorEntries, shared/world/worldCompiler.js) = 0.125. Constante fixe : rien n'expose
+// floorThickness pour la salle triviale, jamais configurable côté UI (docs/PLAN_BATTLEMAP2D.md §8).
+const TRIVIAL_ROOM_FLOOR_Y = 0.125
+
+// Seuil en pixels pour distinguer clic court (sélection/menu radial) de drag — même valeur que Canvas3D.
+const DRAG_THRESHOLD = 4
 
 // Recherche (voir docs/PLAN_BATTLEMAP2D.md §4.3, sources GitHub) : contrairement à Canvas3D (caméra
 // orbitale au-dessus d'un sol XZ, Y-up), une carte 2D plate est posée dans le plan que la caméra
@@ -71,11 +84,23 @@ function BattlemapImagePlane({ imageUrl, bounds }) {
 // viewport_state règlent `camera.position` ET `controls.target` ensemble (sinon MapControls
 // recalcule l'orientation vers son target par défaut (0,0,0) au premier update() et contredit le
 // cadrage). useLayoutEffect (pas useEffect) pour éviter un flash de la caméra par défaut avant peinture.
-function MapCameraRig({ battlemapId, bounds, initialViewport }) {
+function MapCameraRig({ battlemapId, bounds, initialViewport, controlsRef }) {
   const { camera, size } = useThree()
-  const controlsRef = useRef(null)
   const fitted = useRef(false)
   const saveTimeoutRef = useRef(null)
+  const prevBoundsKeyRef = useRef(null)
+
+  // "Paramètres" (docs/PLAN_BATTLEMAP2D.md §8) peut réuploader l'image sans démonter Canvas2D (même
+  // battlemap.id → même clé React) : si la salle triviale change de taille, refaire le cadrage initial
+  // plutôt que garder une vue obsolète. Déclaré avant l'effet de cadrage — même commit, ordre de
+  // déclaration respecté par useLayoutEffect.
+  useLayoutEffect(() => {
+    const key = `${bounds.widthCells}:${bounds.depthCells}`
+    if (prevBoundsKeyRef.current !== null && prevBoundsKeyRef.current !== key) {
+      fitted.current = false
+    }
+    prevBoundsKeyRef.current = key
+  }, [bounds.widthCells, bounds.depthCells])
 
   useLayoutEffect(() => {
     if (fitted.current || !controlsRef.current) return
@@ -130,9 +155,170 @@ function MapCameraRig({ battlemapId, bounds, initialViewport }) {
   )
 }
 
-export default function Canvas2D({ battlemap }) {
+// Token 2D — cercle coloré + label/badges partagés (docs/PLAN_BATTLEMAP2D.md §8, extraction
+// obligatoire depuis Canvas3D.jsx : présentation pure, pas d'état combat). Le créateur de token
+// (recadrage portrait) est un chantier séparé (Lot 5) — v1 se contente d'un disque de couleur.
+function Token2D({ token, isDragging, dragPos, onDragStart, statusEffectsMode }) {
+  const color = token.user_color || token.color || '#4A90D9'
+  const label = token.label || '?'
+  const isGmLayer = token.layer === 'gm'
+  const x = isDragging ? dragPos.x : Number(token.pos_x) || 0
+  const y = isDragging ? dragPos.y : Number(token.pos_y) || 0
+
+  return (
+    <group
+      position={[x, y, 0.05]}
+      userData={{ isToken: true, tokenId: token.id }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        onDragStart(e, token)
+      }}
+    >
+      <mesh>
+        <circleGeometry args={[0.45, 32]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+      <mesh position={[0, 0, 0.001]}>
+        <ringGeometry args={[0.45, 0.52, 32]} />
+        <meshBasicMaterial color={isDragging ? '#ffffff' : '#000000'} transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      {/* offsetY réduits — le disque a un rayon de 0.45, pas la hauteur d'un modèle 3D (docs/PLAN_BATTLEMAP2D.md
+          §8, correctif Saar : le label apparaissait à des cases de distance avec l'offset par défaut Canvas3D) */}
+      <TokenLabel label={label} color={color} isGmLayer={isGmLayer} offsetY={0.72} />
+      {isGmLayer && <TokenGmBadge offsetY={0.92} />}
+      <TokenStatusBadges statuses={token.statuses} statusEffectsMode={statusEffectsMode} offsetY={0.55} />
+    </group>
+  )
+}
+
+// Rendu + mouvement des tokens (docs/PLAN_BATTLEMAP2D.md §8, Lot 3). Consomme directement les mêmes
+// routes serveur que Canvas3D (teleport MJ / world-move joueur) — pas de hook partagé (décision
+// inversée le 2026-07-28, cf. plan), pas de prévisualisation combat (hors périmètre v1). Lit
+// tokens/characters/user directement depuis les stores, pas via des props relais (Canvas3D.jsx:527-528).
+function TokenLayer({ battlemapId, statusEffectsMode, onTokenDoubleClick, controlsRef }) {
+  const { camera, gl } = useThree()
+  const raycaster = useMemo(() => new THREE.Raycaster(), [])
+  // Plan de la carte — normale +Z, à l'origine locale (le plan texturé est toujours posé à z=0).
+  const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), [])
+
+  const { tokens, updateToken } = useTokenStore()
+  const { characters, isGm } = useCharacterStore()
+  const { user } = useAuthStore()
+
+  const [dragState, setDragState] = useState(null) // { tokenId, x, y } | null
+  const dragRef = useRef({
+    active: false, tokenId: null, token: null, startX: 0, startY: 0, hasMoved: false, destination: null,
+  })
+
+  const raycastPlane = useCallback((clientX, clientY) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    const mouse = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    )
+    raycaster.setFromCamera(mouse, camera)
+    const target = new THREE.Vector3()
+    const hit = raycaster.ray.intersectPlane(dragPlane, target)
+    return hit ? target : null
+  }, [camera, gl, raycaster, dragPlane])
+
+  // Garde de propriété — même contrat que Canvas3D.jsx:766-769 : un non-MJ ne peut démarrer un drag
+  // que sur un token dont il possède le personnage, sinon aucune requête serveur n'est envoyée.
+  const handleDragStart = useCallback((e, token) => {
+    if (e.nativeEvent.button !== 0) return
+    if (!isGm) {
+      const character = characters.find(c => c.id === token.character_id)
+      if (!character || character.user_id !== user?.id) return
+    }
+    dragRef.current = {
+      active: true, tokenId: token.id, token,
+      startX: e.clientX, startY: e.clientY, hasMoved: false, destination: null,
+    }
+    // MapControls écoute le canvas nativement (hors du système d'événements r3f) — stopPropagation()
+    // seul ne l'empêche pas de paniquer sur le même pointerdown (même patron que Canvas3D.jsx:781).
+    if (controlsRef.current) controlsRef.current.enabled = false
+  }, [isGm, characters, user, controlsRef])
+
+  useEffect(() => {
+    const canvas = gl.domElement
+
+    const handlePointerMove = (e) => {
+      if (!dragRef.current.active) return
+      const dx = e.clientX - dragRef.current.startX
+      const dy = e.clientY - dragRef.current.startY
+      if (!dragRef.current.hasMoved) {
+        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return
+        dragRef.current.hasMoved = true
+      }
+      const hit = raycastPlane(e.clientX, e.clientY)
+      if (!hit) return
+      // world_x → local x, world_z → local y (convention Canvas2D, cf. en-tête de fichier).
+      dragRef.current.destination = { x: hit.x, y: TRIVIAL_ROOM_FLOOR_Y, z: hit.y }
+      setDragState({ tokenId: dragRef.current.tokenId, x: hit.x, y: hit.y })
+    }
+
+    const handlePointerUp = async (e) => {
+      if (!dragRef.current.active) return
+      const wasMoving = dragRef.current.hasMoved
+      const token = dragRef.current.token
+
+      if (controlsRef.current) controlsRef.current.enabled = true
+      dragRef.current.active = false
+      dragRef.current.hasMoved = false
+      setDragState(null)
+
+      if (!wasMoving) {
+        onTokenDoubleClick?.(token, e.clientX, e.clientY)
+        return
+      }
+
+      const destination = dragRef.current.destination
+      if (!destination) return
+      try {
+        const res = isGm
+          ? await api.post(`/tokens/${token.id}/teleport`, { destination })
+          : await api.post(`/battlemaps/${battlemapId}/world-move`, {
+              token_id: token.id,
+              destination,
+              gait: 'moyenne',
+            })
+        const updated = res.data?.token || res.data?.outcome?.token
+        if (updated) updateToken(updated)
+      } catch (err) {
+        console.error('Erreur déplacement token (carte 2D) :', err)
+      }
+    }
+
+    canvas.addEventListener('pointermove', handlePointerMove)
+    canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('pointerleave', handlePointerUp)
+    return () => {
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointerleave', handlePointerUp)
+    }
+  }, [gl, raycastPlane, isGm, battlemapId, onTokenDoubleClick, updateToken, controlsRef])
+
+  return (
+    <>
+      {tokens.map(token => (
+        <Token2D
+          key={token.id}
+          token={token}
+          isDragging={dragState?.tokenId === token.id}
+          dragPos={dragState?.tokenId === token.id ? dragState : null}
+          onDragStart={handleDragStart}
+          statusEffectsMode={statusEffectsMode}
+        />
+      ))}
+    </>
+  )
+}
+
+export default function Canvas2D({ battlemap, onTokenDoubleClick, statusEffectsMode = 'enforced' }) {
   const { t } = useTranslation()
   const bounds = useMemo(() => trivialRoomBounds(battlemap), [battlemap])
+  const controlsRef = useRef(null)
 
   // Lot 3 branche l'upload d'image — rien à afficher tant qu'aucune image n'existe sur la carte.
   if (!battlemap?.image_url) return null
@@ -142,18 +328,30 @@ export default function Canvas2D({ battlemap }) {
   // du serveur, pas celui du joueur). Même reconstruction que defaultTokenGlbUrl (SessionPage.jsx).
   const imageUrl = `${import.meta.env.VITE_API_URL}/api/assets/${battlemap.image_url}`
 
+  // Réglage d'offset (docs/PLAN_BATTLEMAP2D.md §8) — px → cases, même unité que bounds. Décale la
+  // grille pour l'aligner sur l'image (quasi jamais pile au premier essai) ; l'image reste la
+  // référence fixe, c'est la grille qui bouge — patron d'alignement standard (Roll20).
+  const gridSize = battlemap.grid_size || 64
+  const offsetXCells = (Number(battlemap.grid_offset_x) || 0) / gridSize
+  const offsetYCells = (Number(battlemap.grid_offset_y) || 0) / gridSize
+
   return (
     <Canvas
       orthographic
       camera={{ position: [bounds.centerX, bounds.centerY, CAMERA_DISTANCE], near: 0.1, far: 1000 }}
       style={{ background: '#0f172a' }}
     >
-      <MapCameraRig battlemapId={battlemap.id} bounds={bounds} initialViewport={battlemap.viewport_state} />
+      <MapCameraRig
+        battlemapId={battlemap.id}
+        bounds={bounds}
+        initialViewport={battlemap.viewport_state}
+        controlsRef={controlsRef}
+      />
 
       {battlemap.grid_enabled && (
         <Grid
           args={[bounds.widthCells, bounds.depthCells]}
-          position={[bounds.centerX, bounds.centerY, 0.01]}
+          position={[bounds.centerX + offsetXCells, bounds.centerY + offsetYCells, 0.01]}
           rotation={[-Math.PI / 2, 0, 0]}
           cellColor="#334155"
           sectionColor="#475569"
@@ -168,6 +366,13 @@ export default function Canvas2D({ battlemap }) {
           <BattlemapImagePlane imageUrl={imageUrl} bounds={bounds} />
         </Suspense>
       </Canvas2DImageErrorBoundary>
+
+      <TokenLayer
+        battlemapId={battlemap.id}
+        statusEffectsMode={statusEffectsMode}
+        onTokenDoubleClick={onTokenDoubleClick}
+        controlsRef={controlsRef}
+      />
     </Canvas>
   )
 }

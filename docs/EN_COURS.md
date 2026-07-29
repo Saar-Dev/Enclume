@@ -98,6 +98,39 @@
 > instrumenté. **Prochaine étape** : instrumenter `[DBG-MELEE-ATKNAME]` puis séparer les deux usages
 > (détail `docs/BUGIDENTIFIE.md`).
 >
+> Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 186 : `docs/PLAN_BATTLEMAP2D.md` segmenté en
+> v1 (ce plan, sans combat) / v2 (combat, grille tactique, LOS affichée, allures — futur plan séparé
+> non cadré), décision Saar. **Lot 3 ✅ clos** (validé en navigateur par Saar, un résidu non bloquant
+> filé séparément — voir plus bas) : tokens présentés via nouveau module partagé
+> `client/src/components/TokenPresentation.jsx` (`TokenLabel`/`TokenGmBadge`/`TokenStatusBadges`,
+> extraits de `Canvas3D.jsx` sans changement de comportement pour Canvas3D) ; mouvement par drag
+> (`teleport` MJ / `world-move` joueur, garde de propriété, même contrat que `Canvas3D.jsx`) ;
+> altitude de la salle triviale (`TRIVIAL_ROOM_FLOOR_Y = 0.125`) **[VÉRIFIÉ]** par compilation réelle
+> (`compileSurfaceWorld`), pas par lecture seule du code ; grille réglable (`grid_offset_x`/
+> `grid_offset_y`, migration 211) désactivée par défaut sur une carte 2D ; flux de création MJ (choix
+> 2D/3D, upload image, dimensionnement serveur de la salle triviale `POST`/`PUT`, fonction partagée
+> `buildTrivialRoomSurfaceData`) ; modale "Paramètres" (grille, réupload image, recadrage caméra) ;
+> bouton "⚔ Combat" gardé/masqué en 2D. **Deux bugs trouvés en validant et corrigés dans la foulée** :
+> (1) offset de `TokenLabel`/`TokenGmBadge`/`TokenStatusBadges` calibré pour un modèle 3D (2.5 unités),
+> disproportionné sur le disque 2D (0.45 de rayon) — nouveau paramètre `offsetY` optionnel sur les
+> trois (défaut inchangé, zéro régression Canvas3D), Canvas2D passe des valeurs réduites (0.55-0.92) ;
+> (2) l'entrée "Paramètres" du menu contextuel de carte n'apparaissait plus — `GET /campaigns/:id/
+> battlemaps` (liste `gmBar`) n'a **jamais sélectionné `render_mode`** depuis son introduction Lot 1,
+> `mapContextMenu.bm.render_mode === '2d'` était donc toujours faux ; colonne ajoutée au `SELECT`.
+> **Un résidu non bloquant déféré** : la grille ne s'affiche pas sur une carte 2D même avec
+> `grid_enabled=true` vérifié client (log temporaire) et serveur (requête DB directe), y compris après
+> rechargement complet et redémarrage intégral du serveur Vite — cause non identifiée, piste la plus
+> probable non encore instrumentée : interaction rotation/shader du `<Grid>` drei (`extend()`
+> `GridMaterial`), différent de l'usage inconditionnel sans rotation de `Canvas3D.jsx:966`. Décision
+> Saar : pas bloquant, ne pas creuser maintenant — noté **GRID2D1** dans `docs/BUGIDENTIFIE.md`.
+> **Testé** : `node --check` serveur, migration 211 appliquée et vérifiée en base, script direct de
+> `buildTrivialRoomSurfaceData` (image normale + 3 cas limites), 44 tests `shared/world/*` au vert,
+> ESLint sur tous les fichiers client touchés (0 erreur/warning nouveau vs baseline via `git stash`),
+> build client réussi à chaque étape, **scénario navigateur réel confirmé par Saar** (création carte
+> 2D, token affiché et déplaçable, menu radial, modale Paramètres, réupload + recadrage caméra, bouton
+> Combat masqué). **Non testé** : Lot 4 (sélecteur Roll20) et Lot 5 (créateur de token 2D) — prochaine
+> étape.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 183 : `docs/PLAN_BATTLEMAP2D.md` Lots 1-2
 > **✅ clos** — Lot 1 : discriminant `battlemaps.render_mode` (migration 207) + génération serveur de
 > la salle triviale à `POST /battlemaps` ; correctif trouvé au passage sur `image_url` (chemin MinIO
@@ -3557,6 +3590,8 @@ Projet en cours et priorité user :
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
 | **EAU1** | Nappe d'eau ambiante `computeSurfaceWaterCells`/`WaterSheets` retirée (improvisation client hors autorité serveur, décision Saar 2026-07-29) — eau en jeu recentrée sur l'effet runtime "inondation" déjà câblé (compartiments + `runtimeEffectRegions`). Codé, tests/build/lint OK | Basse — validation en jeu par Saar avant clôture |
+| ~~**DEPLACEMENT1**~~ | ~~Action "Déplacement" très lente (2-3s)/prévisualisation cassée — cache LRU `loadBattlemapRuntimeContext`~~ | ✅ Session 185 (Saar), confirmé fonctionnel en jeu |
+| **DEPLACEMENT2** | Destination occupée : le déplacement est entièrement annulé au lieu de s'arrêter à la dernière case libre avant l'obstacle — `shared/world/navigation.js:findNavigationPath`, trouvé en validant DEPLACEMENT1 | Moyenne — à reproduire/instrumenter |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |

@@ -64,6 +64,35 @@ function requireBattlemapGm(member) {
   if (member.role !== 'gm') throw new AppError(403, 'GM role required')
 }
 
+// docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) — un champ multipart arrive en texte ('true'/'false'), jamais
+// un booléen JS. Même patron que equipment.js:39.
+function parseBoolField(value, fallback) {
+  if (value === undefined) return fallback
+  return value === true || value === 'true' || value === '1'
+}
+
+// docs/PLAN_BATTLEMAP2D.md §6 (Lot 1) + §8 (Lot 3) — une carte 2D est une battlemap avec une salle
+// triviale (sol seul, sans mur). Dimensionnement réel depuis l'image uploadée (naturalWidth/Height
+// lus côté client, aucune dépendance serveur type sharp/jimp) : une case entamée compte entière
+// (Math.ceil, cohérent avec roomEffectiveGridCells qui travaille en cases entières), minimum 1 cellule
+// dans chaque dimension — une salle 0×N ne compile pas. Point unique appelé par POST / et PUT /:id
+// (nouvelle image) — pas de duplication de la formule entre création et modification (P4).
+function buildTrivialRoomSurfaceData({ battlemapId, gridSize, imageWidth, imageHeight }) {
+  const widthCells = Math.max(1, Math.ceil((Number(imageWidth) || 0) / (Number(gridSize) || 64)))
+  const depthCells = Math.max(1, Math.ceil((Number(imageHeight) || 0) / (Number(gridSize) || 64)))
+  try {
+    return prepareSurfaceData(
+      { rooms: { main: {
+        minX: 0, maxX: widthCells - 1, minZ: 0, maxZ: depthCells - 1, wallEnabled: false,
+      } } },
+      { battlemapId }
+    ).surfaceData
+  } catch (error) {
+    if (error instanceof SurfaceDocumentError) throw new AppError(400, error.message)
+    throw error
+  }
+}
+
 function runtimeInputError(error) {
   if (error instanceof TypeError || error instanceof RangeError) return new AppError(400, error.message)
   return error
@@ -106,6 +135,10 @@ router.get('/', requireAuth, async (req, res) => {
     .select(
       'id', 'name', 'folder', 'image_url', 'grid_size', 'grid_enabled', 'scale_label',
       'world_revision', 'surface_revision', 'voxel_revision', 'created_at',
+      // render_mode — docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) : sans lui, l'entrée "Paramètres" du menu
+      // contextuel de carte (`mapContextMenu.bm.render_mode === '2d'`) n'apparaissait jamais, cette
+      // liste ne l'a jamais sélectionné depuis son introduction (Lot 1, migration 207).
+      'render_mode',
     )
     .orderBy('created_at', 'asc')
   res.json({ battlemaps })
@@ -118,29 +151,25 @@ router.post('/',
   multerUpload.single('image'),
   uploadToMinio('battlemaps'),
   async (req, res) => {
-    const { name, folder, scale_label, grid_size, grid_enabled, render_mode } = req.body
+    const {
+      name, folder, scale_label, grid_size, grid_enabled, render_mode,
+      image_width, image_height, grid_offset_x, grid_offset_y,
+    } = req.body
     if (!name) throw new AppError(400, 'Battlemap name is required')
 
     const renderMode = render_mode === '2d' ? '2d' : '3d'
+    const gridSize = Number(grid_size) || 64
 
-    // docs/PLAN_BATTLEMAP2D.md §6 (Lot 1) — une carte 2D est une battlemap avec une salle triviale
-    // (sol seul, sans mur), pas un système de coordonnées séparé. Dimensionnement réel depuis l'image
-    // uploadée : Lot 3 (pas encore d'upload d'image pour le 2D à ce stade). Id généré avant l'insert
-    // (même patron que POST /:id/duplicate, L.906-910) : prepareSurfaceData en a besoin pour dériver
-    // des worldId stables, cohérents avec l'id réel de la carte, pas un UUID jetable sans rapport.
+    // Id généré avant l'insert (même patron que POST /:id/duplicate, L.906-910) : prepareSurfaceData
+    // en a besoin pour dériver des worldId stables, cohérents avec l'id réel de la carte, pas un UUID
+    // jetable sans rapport.
     const battlemapId = randomUUID()
-    let surfaceData = null
-    if (renderMode === '2d') {
-      try {
-        surfaceData = prepareSurfaceData(
-          { rooms: { main: { minX: 0, maxX: 9, minZ: 0, maxZ: 9, wallEnabled: false } } },
-          { battlemapId }
-        ).surfaceData
-      } catch (error) {
-        if (error instanceof SurfaceDocumentError) throw new AppError(400, error.message)
-        throw error
-      }
-    }
+    const surfaceData = renderMode === '2d'
+      ? buildTrivialRoomSurfaceData({
+          battlemapId, gridSize,
+          imageWidth: image_width, imageHeight: image_height,
+        })
+      : null
 
     const [battlemap] = await db('battlemaps')
       .insert({
@@ -149,8 +178,13 @@ router.post('/',
         name,
         folder: folder || null,
         scale_label: scale_label || '1,5m',
-        grid_size: grid_size || 64,
-        grid_enabled: grid_enabled !== undefined ? grid_enabled : true,
+        grid_size: gridSize,
+        // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3, correction 2026-07-29) — grille désactivée par défaut
+        // pour une carte 2D (le MJ l'active lui-même via "Paramètres" s'il veut un repère visuel) ;
+        // défaut true inchangé pour la 3D, non affecté par ce champ optionnel.
+        grid_enabled: parseBoolField(grid_enabled, renderMode !== '2d'),
+        grid_offset_x: Number(grid_offset_x) || 0,
+        grid_offset_y: Number(grid_offset_y) || 0,
         // Chemin MinIO relatif, pas l'URL complète (`req.file.url` pointe vers MINIO_ENDPOINT, souvent
         // `localhost` — injoignable depuis un navigateur distant). Même convention que
         // campaigns.default_token_glb_url : le client reconstruit via /api/assets/<chemin>.
@@ -721,18 +755,36 @@ router.put('/:id',
       .first()
     if (!member) throw new AppError(403, 'GM only')
 
-    const { name, folder, scale_label, grid_size, grid_enabled, grid_opacity, viewport_state } = req.body
+    const {
+      name, folder, scale_label, grid_size, grid_enabled, grid_opacity, viewport_state,
+      image_width, image_height, grid_offset_x, grid_offset_y,
+    } = req.body
 
     const updates = {}
     if (name !== undefined) updates.name = name
     if (folder !== undefined) updates.folder = folder
     if (scale_label !== undefined) updates.scale_label = scale_label
     if (grid_size !== undefined) updates.grid_size = grid_size
-    if (grid_enabled !== undefined) updates.grid_enabled = grid_enabled
+    if (grid_enabled !== undefined) updates.grid_enabled = parseBoolField(grid_enabled, true)
     if (grid_opacity !== undefined) updates.grid_opacity = grid_opacity
+    if (grid_offset_x !== undefined) updates.grid_offset_x = Number(grid_offset_x) || 0
+    if (grid_offset_y !== undefined) updates.grid_offset_y = Number(grid_offset_y) || 0
     if (viewport_state !== undefined) updates.viewport_state = viewport_state
     // Chemin relatif, pas l'URL complète — voir commentaire POST / ci-dessus.
     if (req.file) updates.image_url = req.file.objectName
+
+    // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) — "Paramètres" peut réuploader l'image d'une carte 2D :
+    // la salle triviale doit se redimensionner avec la nouvelle image, même formule qu'à la création
+    // (buildTrivialRoomSurfaceData, point unique P4). Ignoré pour une 3D (surface_data porte une vraie
+    // géométrie éditée par le MJ, jamais régénérée ici) et si aucune nouvelle image n'est fournie.
+    if (req.file && battlemap.render_mode === '2d') {
+      updates.surface_data = JSON.stringify(buildTrivialRoomSurfaceData({
+        battlemapId: battlemap.id,
+        gridSize: Number(grid_size) || battlemap.grid_size || 64,
+        imageWidth: image_width,
+        imageHeight: image_height,
+      }))
+    }
 
     // updated_at systématique sur tout PUT
     updates.updated_at = db.fn.now()
