@@ -22,7 +22,8 @@ soit son étage réel, `SurfaceDungeonScene.jsx` `RoomSlab` : `Number.isFinite(N
 sans override explicite. Invisible pour les salles au niveau 0 (0=0 par coïncidence), visible dès
 qu'une salle habite un étage différent. Diagnostiqué par instrumentation live avec Saar (3 allers-
 retours de logs `[DBG-SALLENIV]`, retirés après confirmation), corrigé en une ligne
-(`yOverride !== null && ...`), tests `surfaceData.test.mjs` (27/27) + build OK, non testé en jeu)
+(`yOverride !== null && ...`), tests `surfaceData.test.mjs` (27/27) + build OK, confirmé fonctionnel
+en jeu par Saar)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---

@@ -1,8 +1,9 @@
 # SYSTEME/SURFACES_SALLES.md — éditeur Salle
 
-> Dernière mise à jour : 2026-07-29 — section "Rendu de l'eau" ajoutée puis mise à jour : nappe
-> ambiante côté client retirée (dette `EAU1`), eau en jeu recentrée sur le mécanisme canonique
-> compartiments + effet runtime "inondation".
+> Dernière mise à jour : 2026-07-29 — autorité unique `getRoomBaseY`/`getRoomTopY` documentée
+> (bug `SALLENIV1` résolu, sol de salle plaqué à y=0 hors étage 0) ; section "Rendu de l'eau" ajoutée
+> puis mise à jour : nappe ambiante côté client retirée (dette `EAU1`), eau en jeu recentrée sur le
+> mécanisme canonique compartiments + effet runtime "inondation".
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
@@ -83,6 +84,15 @@ Une salle est un volume métier dont l'empreinte peut être non rectangulaire :
 - passerelle ajustée à une salle : un sol `kind: bridge` peut porter `clipRoomId`. Ce lien demande au
   renderer et au compilateur d'intersecter sa dalle avec l'emprise intérieure réelle de la salle à
   sa hauteur ; la courbe horizontale et le retrait d'un profil vertical ne sont pas aplatis en AABB.
+
+La position verticale d'une salle (`getRoomBaseY`/`getRoomTopY`, `client/src/lib/surfaceData.js`) a
+une autorité unique : `room.y` si finie, sinon `levelToY(room.level)`. Tout rendu (sol, plafond,
+murs, panneau d'édition) doit passer par ces deux fonctions plutôt que relire `room.y`/`room.level`
+directement — un second calcul local peut diverger silencieusement. Bug résolu Session 186
+(`SALLENIV1`, `docs/BUGIDENTIFIE.md`) : `RoomSlab` acceptait un `yOverride` optionnel dont la valeur
+par défaut `null` passait `Number.isFinite(Number(yOverride))` (`Number(null) === 0`), donc l'override
+s'appliquait toujours et le sol de toute salle hors étage 0 retombait à `y=0` — invisible tant
+qu'une salle habitait réellement le niveau 0.
 
 Lorsqu'une nouvelle salle recouvre une salle orthogonale existante à une hauteur commune, ses cases
 sont transférées : elles sont ajoutées à la nouvelle empreinte et retirées de l'ancienne. Si une
