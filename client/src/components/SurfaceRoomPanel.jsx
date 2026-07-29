@@ -4,6 +4,7 @@ import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
 import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
+import { getRoomBaseY, yToLevel } from '../lib/surfaceData.js'
 
 const PANEL_W = 330
 const PANEL_H_EST = 720
@@ -86,7 +87,7 @@ export default function SurfaceRoomPanel({ room, tool, x, y, onPatch, onDelete, 
         <FloatingPanelSection title={t('surfaceRoomPanel.geometrySection')} defaultOpen>
         <div style={S.infoGrid}>
           <span>{t('surfaceRoomPanel.baseFloorLabel')}</span>
-          <strong>{Number(tool?.level) || 0}</strong>
+          <strong>{yToLevel(getRoomBaseY(room))}</strong>
           <span>{t('surfaceRoomPanel.volumeLabel')}</span>
           <strong>{hasCanonicalProfile ? t('surfaceRoomPanel.verticalProfileVolume', { count: heightLevels }) : t('surfaceRoomPanel.levelsCount', { count: heightLevels })}</strong>
         </div>
