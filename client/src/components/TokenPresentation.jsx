@@ -1,6 +1,5 @@
-import { Component, Suspense, useEffect, useMemo, useRef } from 'react'
+import { Component, Suspense, useEffect, useMemo } from 'react'
 import { Billboard, Html, Text, useTexture } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { tokenCropWindow } from '../lib/tokenCrop.js'
 
@@ -21,20 +20,6 @@ const STATUS_CATEGORY = {
   stunned: 'sens', unconscious: 'sens', blinded: 'sens',
   hypothermia: 'chronique', infected: 'chronique', poisoned: 'chronique', irradiated: 'chronique',
 }
-
-// ST1 — badges statut adaptatifs à la distance caméra (Html de drei garde une taille écran fixe par
-// défaut, aucun distanceFactor n'était appliqué). Formule maison plutôt que la prop `distanceFactor`
-// de drei (mise à l'échelle non bornée, top ou bottom-out impossibles à clamper depuis l'extérieur du
-// composant) — REF_DISTANCE calibré sur la caméra 3e personne (Canvas3D THIRD_PERSON_MIN/MAX_DISTANCE
-// = 2.2/12) pour atteindre le plafond au plus près (~50px) ; au dézoom max (12), la chute naturelle
-// (REF_DISTANCE/dist ≈ 0.33) suffit déjà à rendre le badge minimal sans le couper à 0 — décision Saar
-// (2026-07-29) : rester perceptible même au dézoom max plutôt que disparaître (vue tactique MJ), donc
-// MIN reste un plancher de sécurité bas (extrêmes hors 3e personne, ex. dézoom MapControls illimité),
-// pas une valeur qui intervient au dézoom max normal.
-const BADGE_SCALE_REF_DISTANCE = 4
-const BADGE_SCALE_MIN = 0.25
-const BADGE_SCALE_MAX = 1.8
-const tmpBadgeWorldPos = /* @__PURE__ */ new THREE.Vector3()
 
 // offsetY par défaut = échelle Canvas3D (personnage GLB ~2 unités de haut, label "au-dessus de la
 // tête"). Canvas2D (docs/PLAN_BATTLEMAP2D.md §8, correctif Saar) passe un offsetY réduit, proportionné
@@ -195,58 +180,42 @@ export function TokenPortrait({ tokenStyle, portraitUrl, fallbackColor, radius =
 }
 
 export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', offsetY = 2.1 }) {
-  const anchorRef = useRef(null)
-  const scaleRef = useRef(null)
-
-  // Mutation directe du style, jamais via state (P40 — même patron que le lerp de TokenMesh) : une
-  // valeur par frame ne doit pas déclencher de re-render React.
-  useFrame(({ camera }) => {
-    if (!anchorRef.current || !scaleRef.current) return
-    anchorRef.current.updateWorldMatrix(true, false)
-    anchorRef.current.getWorldPosition(tmpBadgeWorldPos)
-    const dist = camera.position.distanceTo(tmpBadgeWorldPos)
-    const scale = Math.min(BADGE_SCALE_MAX, Math.max(BADGE_SCALE_MIN, BADGE_SCALE_REF_DISTANCE / dist))
-    scaleRef.current.style.transform = `scale(${scale})`
-  })
-
   if (!(statuses?.length > 0) || statusEffectsMode === 'off') return null
   return (
-    <group ref={anchorRef} position={[0, offsetY, 0]}>
-      <Html center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-        <div ref={scaleRef} style={{ display: 'flex', gap: 2 }}>
-          {(statuses.length > 4 ? statuses.slice(0, 3) : statuses).map(code => {
-            const color = STATUS_CATEGORY_COLOR[STATUS_CATEGORY[code]] ?? '#888'
-            return (
-              <img
-                key={code}
-                src={`/assets/status/${code}.svg`}
-                width={28}
-                height={28}
-                alt={code}
-                style={{
-                  borderRadius: 3,
-                  background: `${color}44`,
-                  outline: `1px solid ${color}99`,
-                  filter: `drop-shadow(0 0 2px ${color})`,
-                }}
-              />
-            )
-          })}
-          {statuses.length > 4 && (
-            <span style={{
-              fontSize: 14,
-              color: '#ccc',
-              background: 'rgba(0,0,0,0.6)',
-              borderRadius: 3,
-              padding: '0 4px',
-              lineHeight: '28px',
-              outline: '1px solid rgba(255,255,255,0.2)',
-            }}>
-              +{statuses.length - 3}
-            </span>
-          )}
-        </div>
-      </Html>
-    </group>
+    <Html position={[0, offsetY, 0]} center zIndexRange={[1, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {(statuses.length > 4 ? statuses.slice(0, 3) : statuses).map(code => {
+          const color = STATUS_CATEGORY_COLOR[STATUS_CATEGORY[code]] ?? '#888'
+          return (
+            <img
+              key={code}
+              src={`/assets/status/${code}.svg`}
+              width={28}
+              height={28}
+              alt={code}
+              style={{
+                borderRadius: 3,
+                background: `${color}44`,
+                outline: `1px solid ${color}99`,
+                filter: `drop-shadow(0 0 2px ${color})`,
+              }}
+            />
+          )
+        })}
+        {statuses.length > 4 && (
+          <span style={{
+            fontSize: 14,
+            color: '#ccc',
+            background: 'rgba(0,0,0,0.6)',
+            borderRadius: 3,
+            padding: '0 4px',
+            lineHeight: '28px',
+            outline: '1px solid rgba(255,255,255,0.2)',
+          }}>
+            +{statuses.length - 3}
+          </span>
+        )}
+      </div>
+    </Html>
   )
 }

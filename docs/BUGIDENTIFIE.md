@@ -4,7 +4,13 @@
 (Saar, Session 186, `docs/PLAN_BATTLEMAP2D.md` Lot 3) — FEAT1 retiré (obsolète, la carte 2D existe
 désormais et est trackée par le plan/EN_COURS.md, pas par ce registre) ; ajout GRID2D1 (grille non
 affichée sur une carte 2D malgré `grid_enabled=true` vérifié client et serveur — cause non identifiée,
-non bloquant, décision Saar de ne pas creuser davantage)
+non bloquant, décision Saar de ne pas creuser davantage) ; 2026-07-29 (Saar) — ST3 clos (confirmé
+Saar, fenêtre THUG STATUTS déjà à 20×20, `TokenStatusPanel.jsx`) ; WIZ-1 clos (confirmé Saar, filtre
+personnages incomplets déjà correct dans la liste Dashboard) ; ST1 clos (`TokenPresentation.jsx`
+`TokenStatusBadges` 14×14→28×28px, taille écran fixe conservée — mise à l'échelle par distance caméra
+explorée puis écartée, recherche confirmant que le pattern pro pour un repère devant rester lisible à
+tout niveau de zoom est une taille constante, pas une dépendance à la distance ; retiré de la liste
+"chantier UI/UX dédié" de `docs/ROADMAP.md`, traité en correctif ponctuel), détail `docs/EN_COURS.md`
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -38,7 +44,7 @@ non bloquant, décision Saar de ne pas creuser davantage)
 |---|---|---|---|
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
 | **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT2 + I18N-LINT3 + I18N-LINT4 | divers | Basse |
-| **Q — UI divers** | UI2 + UI3 + ST3 | composants dés + chat | Basse |
+| **Q — UI divers** | UI2 + UI3 | composants dés + chat | Basse |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
 

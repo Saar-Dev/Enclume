@@ -3654,9 +3654,8 @@ Projet en cours et priorité user :
 | ~~**COM29**~~ | ~~Tir à deux armes : seule la main directrice trackée (munitions)~~ | ✅ Session 162 (Saar) |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
-| ST1 | Badges statut (icônes SVG 14×14px, `Canvas3D.jsx:348-387`) : taille fixe ne s'adapte pas au zoom/à la taille du token, formes peu reconnaissables sans hover. Description historique ("texte trop petit") obsolète depuis le passage aux icônes Sprint 14-2 — reclassé chantier UI/UX, voir `docs/ROADMAP.md` "Badges statut token" | Chantier UI/UX dédié — pas un correctif ponctuel (décision Saar, Session 166) |
 | ~~**ST3**~~ | ~~Fenêtre THUG STATUTS trop petite — overflow des icônes statuts~~ | ✅ confirmé Saar — voir ST1 |
-| **ST1** | Badges statut token dans Canvas3D (`TokenPresentation.jsx` `TokenStatusBadges`) : 28×28px validé par Saar, puis rendu adaptatif à la distance caméra (drei `Html` a une taille écran fixe par défaut — formule maison clampée `BADGE_SCALE_MIN/MAX` [0.25,1.8] × 28px, calibrée sur `THIRD_PERSON_MIN/MAX_DISTANCE` [2.2,12] de `Canvas3D.jsx` : ~50px au plus près ; au dézoom max, badge minimal (~9px, chute naturelle) mais jamais totalement invisible — décision Saar 2026-07-29, rester perceptible en vue tactique plutôt que disparaître à 0×0 | En attente de validation en jeu par Saar |
+| ~~**ST1**~~ | ~~Badges statut token dans Canvas3D (`TokenPresentation.jsx` `TokenStatusBadges`) : 14×14px, taille fixe~~ | ✅ Session 186 (Saar), 28×28px taille écran fixe — mise à l'échelle par distance caméra explorée (billboard `close=grand/loin=petit` clampé, style Cesium `scaleByDistance`, puis inversion proposée par Saar) mais tranchée en défaveur : recherche confirme que le pattern pro pour un repère qui doit rester lisible à tout niveau de zoom (Google Maps/Mapbox) est une taille écran **constante**, pas une dépendance à la distance — décision finale Saar, retour à `drei Html` sans `distanceFactor` |
 | CH1 | Historique chat perdu au F5 (rechargement page) — chantier persistance (table messages, endpoint relecture, pagination), pas un correctif isolé, voir `docs/ROADMAP.md` "Chat persistant" | Chantier dédié — doc alignée Session 166 (Saar) |
 | ~~**COM2**~~ | ~~Vérif statut arme absente côté GM~~ | ✅ Session 161 (Saar) |
 | ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
@@ -3739,7 +3738,7 @@ Projet en cours et priorité user :
 - **Sprint Drones 2e** — resolveDroneAutoAction
 - **Sprint Drones 3** — Télépilotage (drone lié à PJ pilote)
 - ~~**Sprint PLAN 14-1**~~ ✅ — Menu contextuel token codé (`TokenRadialMenu.jsx`/`TokenStatusPanel.jsx`)
-- ~~**Sprint PLAN 14-2**~~ ✅ — Badges codés (`Canvas3D.jsx`) — reste `ST1`/`ST3` (dettes actives)
+- ~~**Sprint PLAN 14-2**~~ ✅ — Badges codés (`Canvas3D.jsx`) — `ST1`/`ST3` clos Session 186
 - ~~**Sprint PLAN 14-3**~~ ✅ — Option campagne `status_effects_mode` (`off`/`icon_only`/`enforced`,
   défaut `enforced`) codée 2026-07-16 — voir `docs/ROADMAP.md` §PLAN 14 pour le détail des 3 sites
   serveur gatés + menu/badges client. FIX-D abandonné (aucune base dans `REGLESYSCOMBAT.md`).
