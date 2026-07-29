@@ -532,6 +532,7 @@ function Scene({
 
   const [dragState, setDragState] = useState(null)
   const [cameraVolumeRoomId, setCameraVolumeRoomId] = useState(null)
+  const [freeCameraOverride, setFreeCameraOverride] = useState(false)
 
   useEffect(() => {
     const previousLevel = previousDisplayLevelRef.current
@@ -563,7 +564,17 @@ function Scene({
     if (!isGm) return tokens.find(token => token.layer !== 'gm') || null
     return null
   }, [tokens, characters, user?.id, selectedTokenId, isGm])
-  const thirdPersonCameraActive = cameraMode === 'play' && !!followToken
+  const thirdPersonCameraActive = cameraMode === 'play' && !!followToken && !freeCameraOverride
+
+  // ─── Échap : sortir de la caméra troisième personne (token possédé, jamais désélectionnable) ──
+  useEffect(() => {
+    if (cameraMode !== 'play' || !followToken) return undefined
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setFreeCameraOverride(true)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [cameraMode, followToken])
 
   // ─── Mode déplacement combat — P40 : ref miroir pour handlers stables ─────
   const combatMoveModeRef = useRef(null)
@@ -933,6 +944,7 @@ function Scene({
       }
       justSelectedRef.current = true
       onTokenSelect(token.id)
+      setFreeCameraOverride(false)
       return
     }
 
