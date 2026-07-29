@@ -125,6 +125,57 @@
 > n'avait pas été remplacé ; ajouté un spacer dédié entre le déclencheur "Cartes ▾" et le bouton
 > Combat. Prochaine étape : Lot 5 (créateur de token 2D).
 >
+> Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 187 : `docs/PLAN_BATTLEMAP2D.md` **Lot 5
+> ✅ clos** (validé fonctionnel par Saar en navigateur, recentrage du portrait confirmé) — créateur
+> de token 2D. **Ce Lot 5 était le dernier lot du plan v1** — les 5 lots sont maintenant tous clos ;
+> l'archivage du document vers `docs/Old/` (`docs/RegleDocumentaire.md` Règle 10) n'a pas été fait,
+> à traiter séparément si/quand Saar le demande (contenu durable déjà en grande partie transféré :
+> `docs/VOCABULARY.md` a les entrées "Carte 2D" et `token_style`). Objectif reformulé par Saar en cours de
+> route : structure adaptative (forme/bordure/overlay), inspiration Discord (`avatar_decoration_data`
+> — décoration composée séparément de l'avatar) et Foundry VTT (Dynamic Token Ring — subject/ring/
+> effets en couches indépendantes), les deux vérifiés par recherche externe avant de figer
+> l'architecture. Décision : couches de rendu séparées calculées à l'affichage, jamais une image
+> recomposée côté serveur (aucune dépendance `sharp`/`jimp` ajoutée). Nouvelle colonne
+> `characters.token_style` (migration 215, jsonb nullable, défaut `null` = disque de couleur inchangé)
+> — portée **personnage** (comme `portrait_url`/`glb_url`), pas par token, confirmé par Saar. Nouvelle
+> route `PUT /api/characters/:id/token-style` (GM ou propriétaire, même patron que `/portrait` — pas
+> ajouté au `PUT /:id` générique qui restreint un owner à `name/visible/description`) ; `overlay`
+> rejeté explicitement si non-null (emplacement réservé, pas de catalogue de décorations en v1).
+> Rendu : `TokenPortrait`/`TokenShapeMesh`/`ImageErrorBoundary` ajoutés à `TokenPresentation.jsx`
+> (module de présentation pure partagé, Lot 3) — géométrie cercle/hexagone (`CircleGeometry` à 32/6
+> segments, même projection UV radiale)/carré (`PlaneGeometry`), cadrage par offset/repeat de texture,
+> bordure en couche séparée derrière le portrait (effet cadre, pas un anneau vrai pour hex/carré —
+> évite une géométrie de ring sur mesure). `Canvas2D.jsx` : `Token2D` bascule sur `TokenPortrait`
+> quand `character.token_style` est renseigné, garde le disque de couleur sinon (zéro régression) ;
+> `Canvas2DImageErrorBoundary` local fusionné dans le nouveau `ImageErrorBoundary` partagé (P4, une
+> seule définition pour la carte de fond et le portrait de token). UI : nouveau
+> `client/src/character/TokenStyleEditor.jsx` (modale — sélecteur de forme, glisser-déposer + zoom
+> pour le cadrage, couleur/épaisseur de bordure, aperçu CSS clip-path/border-radius), bouton "Style du
+> token" ajouté dans `CharacterWindow.jsx` à côté de l'upload de portrait (même garde `canUploadPortrait`
+> — GM ou propriétaire). **Testé** : migration 215 appliquée et vérifiée en base (colonne jsonb +
+> `knex_migrations`), fonction de validation serveur (`validateTokenStyle`) vérifiée par exécution
+> réelle (clamps offset/zoom/largeur, rejet forme invalide/couleur invalide/`overlay` non-null,
+> passthrough nominal — export temporaire retiré après test), round-trip JSONB vérifié par script
+> direct sur la DB réelle (écriture puis lecture, personnage testé restauré à sa valeur d'origine),
+> `node --check` sur `characters.js`, build client + ESLint sur les 4 fichiers touchés/créés (0 erreur/
+> warning nouveau). **Non testé** : scénario navigateur réel (choix de forme, ajustement du cadrage,
+> bordure visible sur une vraie carte 2D avec portrait réellement uploadé) — condition de clôture du
+> lot, voir plan §10.
+>
+> **Correctif immédiat (même session, auto-critique avant validation)** — Saar a confirmé en testant
+> exactement le défaut identifié en relisant le code : le recadrage (offset) n'avait aucun effet.
+> Cause racine à deux volets : `offsetX`/`offsetY` neutralisés à `zoom=1` (défaut) et aucune correction
+> du ratio d'aspect du portrait (200×260, pas carré) — l'image aurait été déformée sur le token.
+> Corrigé par un calcul de fenêtre de cadrage unique et partagé, `client/src/lib/tokenCrop.js`
+> (`tokenCropWindow`/`tokenCropOffsetFromCenter`), consommé identiquement par le rendu réel
+> (`TokenPresentation.jsx`) et l'aperçu d'édition (`TokenStyleEditor.jsx`, repositionné en pixels
+> exacts au lieu d'un `transform` CSS approximatif) — élimine la divergence entre les deux qui causait
+> le bug. Une inversion d'axe V héritée sans nouvelle vérification a aussi été retirée après relecture
+> de `BattlemapImagePlane` (aucune inversion nécessaire dans ce contexte de rendu). **Testé** : maths
+> de cadrage vérifiées par exécution (cas carré/portrait non carré, zoom, round-trip offset↔centre),
+> build client + ESLint propres, et scénario navigateur réel confirmé par Saar (recentrage du
+> portrait fonctionnel). Lot 5 clos.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 186 : `docs/PLAN_BATTLEMAP2D.md` segmenté en
 > v1 (ce plan, sans combat) / v2 (combat, grille tactique, LOS affichée, allures — futur plan séparé
 > non cadré), décision Saar. **Lot 3 ✅ clos** (validé en navigateur par Saar, un résidu non bloquant
@@ -3604,7 +3655,8 @@ Projet en cours et priorité user :
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badges statut (icônes SVG 14×14px, `Canvas3D.jsx:348-387`) : taille fixe ne s'adapte pas au zoom/à la taille du token, formes peu reconnaissables sans hover. Description historique ("texte trop petit") obsolète depuis le passage aux icônes Sprint 14-2 — reclassé chantier UI/UX, voir `docs/ROADMAP.md` "Badges statut token" | Chantier UI/UX dédié — pas un correctif ponctuel (décision Saar, Session 166) |
-| ~~**ST3**~~ | ~~Fenêtre THUG STATUTS trop petite — overflow des icônes statuts~~ | ✅ confirmé Saar — voir ST1 (icônes trop petites partout, pas seulement cette fenêtre) |
+| ~~**ST3**~~ | ~~Fenêtre THUG STATUTS trop petite — overflow des icônes statuts~~ | ✅ confirmé Saar — voir ST1 |
+| **ST1** | Badges statut token dans Canvas3D (`TokenPresentation.jsx` `TokenStatusBadges`) : 28×28px validé par Saar, puis rendu adaptatif à la distance caméra (drei `Html` a une taille écran fixe par défaut — formule maison clampée `BADGE_SCALE_MIN/MAX` [0.25,1.8] × 28px, calibrée sur `THIRD_PERSON_MIN/MAX_DISTANCE` [2.2,12] de `Canvas3D.jsx` : ~50px au plus près ; au dézoom max, badge minimal (~9px, chute naturelle) mais jamais totalement invisible — décision Saar 2026-07-29, rester perceptible en vue tactique plutôt que disparaître à 0×0 | En attente de validation en jeu par Saar |
 | CH1 | Historique chat perdu au F5 (rechargement page) — chantier persistance (table messages, endpoint relecture, pagination), pas un correctif isolé, voir `docs/ROADMAP.md` "Chat persistant" | Chantier dédié — doc alignée Session 166 (Saar) |
 | ~~**COM2**~~ | ~~Vérif statut arme absente côté GM~~ | ✅ Session 161 (Saar) |
 | ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |

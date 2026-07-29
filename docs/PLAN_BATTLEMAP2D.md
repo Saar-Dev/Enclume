@@ -588,7 +588,107 @@ ailleurs, vérifié : onglet "Profil" de la sidebar (`Sidebar.jsx:2402-2403,2475
 
 ---
 
-## 10. Lots proposés (séquentiels — un seul actif à la fois)
+## 10. Lot 5 — créateur de token 2D (détail)
+
+> Cadrage 2026-07-29, objectif reformulé par Saar : « une structure adaptative où l'on pourra
+> ajouter des éléments au besoin (forme, bordure, effet superposé) », inspiration Discord (avatar +
+> décoration séparée) et sa boutique. **Aucun code produit écrit avant validation de ce cadrage.**
+
+**Recherche externe, demandée avant de figer l'architecture (même discipline que Lot 0/2/4) :**
+
+- **Discord** : `avatar_decoration_data` (`asset` + `sku_id`) référence un asset de décoration
+  **séparé**, composé par-dessus l'avatar au rendu — jamais fusionné dans les pixels de l'avatar
+  ([discord-api-types](https://discord-api-types.dev/api/discord-api-types-v10/interface/APIAvatarDecorationData)).
+- **Foundry VTT (Dynamic Token Ring)** : le "subject" (illustration), le "ring" (cadre — couleur/
+  dégradé/effet configurables) et les effets (`RING_PULSE`, `RING_GRADIENT`, `COLOR_OVER_SUBJECT`,
+  etc.) sont trois couches indépendantes, jamais un bitmap unique pré-composé
+  ([Dynamic Token Rings](https://foundryvtt.com/article/dynamic-token-rings/)).
+- **Conséquence pour ce lot** : forme, bordure et overlay doivent être des **couches de rendu
+  séparées calculées à l'affichage**, jamais une image recomposée côté serveur — c'est ce qui rend la
+  structure réellement adaptative (ajouter un futur overlay n'implique ni migration ni retraitement
+  des images existantes). Confirme aussi la décision déjà actée de ne pas ajouter de dépendance
+  serveur de traitement d'image (`sharp`/`jimp`, absents du projet, §8).
+
+**Constat interne (déjà en place, vérifié par lecture)** :
+
+- `characters.portrait_url` existe déjà (illustration rectangulaire, upload MinIO fonctionnel,
+  `CharacterWindow.jsx:427-440`, `POST /characters/:id/portrait`).
+- `tokens.image_url` existe en base mais est **toujours inséré à `null`** (`tokens.js:79`) — jamais
+  utilisé. `Token2D` (`Canvas2D.jsx:158-160`) a déjà un commentaire explicite anticipant ce lot : « v1
+  se contente d'un disque de couleur ».
+- Le disque de sélection existant (`ringGeometry` 0.45→0.52, blanc en drag/noir sinon,
+  `Canvas2D.jsx:181-183`) est un **anneau fonctionnel** (feedback d'interaction), distinct de la
+  future bordure décorative — ne pas les confondre ni les fusionner.
+- Aucune lib de crop (Cropper/Konva/Fabric) dans `client/package.json` — cohérent avec la décision
+  Lot 2 de ne pas ajouter de dépendance de rendu lourde tant qu'un besoin réel ne le justifie pas ;
+  cadrage (offset+zoom) et forme peuvent être gérés à la main (CSS transform + clip-path pour l'aperçu
+  d'édition, geometry/UV Three.js pour le rendu Canvas2D).
+
+**Décisions actées avec Saar (2026-07-29)** :
+
+1. **Portée de la donnée : par personnage, pas par token** — cohérent avec `portrait_url`/`glb_url`
+   déjà au niveau `characters`, aucun besoin exprimé d'un style différent par carte pour un même
+   personnage. Un seul style, valable sur tous les tokens de ce personnage.
+2. **Nouvelle colonne `characters.token_style`** (`jsonb`, nullable, défaut `null`) — migration
+   **215** (impaire, Claude — 213 déjà pris par Lot 4, à reconfirmer contre `knex_migrations` au
+   moment de coder). `null` = comportement actuel (disque de couleur) inchangé, zéro régression.
+   Structure v1 :
+   ```json
+   { "shape": "circle", "crop": { "offsetX": 0, "offsetY": 0, "zoom": 1 },
+     "border": { "color": "#4A90D9", "width": 0.06 }, "overlay": null }
+   ```
+   `shape` ∈ `circle|hex|square`. `overlay` réservé (structure adaptative demandée), **non exploité
+   en v1** — pas de catalogue/boutique de décorations ici, ce serait le chantier "Coffre hybride"
+   séparé et non cadré (§10 note en fin de plan) ; le serveur ignore/rejette toute valeur non-`null`
+   envoyée pour `overlay` en v1 plutôt que de la stocker sans jamais l'afficher (éviter un champ mort
+   silencieux, cf. `folder`/`viewport_state`).
+3. **Permission d'édition — même patron que le portrait, pas le `PUT /:id` générique** :
+   `PUT /:id` restreint aujourd'hui un owner non-GM à `name/visible/description` (`characters.js:163-
+   167`) ; `portrait_url` lui-même passe par un endpoint dédié (`POST /:id/portrait`, GM ou owner).
+   `token_style` suit ce même patron : nouvel endpoint dédié `PUT /api/characters/:id/token-style`
+   (GM ou owner), pas d'ajout au `PUT /:id` générique.
+4. **Rendu : couches Three.js dans `TokenPresentation.jsx`** (module de présentation pure déjà
+   partagé) — géométrie de forme (cercle/hexagone/carré) texturée avec `portrait_url`, offset/repeat
+   UV pour le cadrage (`crop`), anneau de bordure séparé (`border.color`/`border.width`), point
+   d'extension `overlay` prévu dans le composant mais non peuplé (rendu `null` en v1). Consommé par
+   `Token2D` (`Canvas2D.jsx`) uniquement — les tokens 3D (`Canvas3D.jsx`) utilisent déjà un vrai
+   modèle GLB comme apparence, non concernés par ce lot.
+5. **UI de création — nouvelle action dans `CharacterWindow.jsx`**, à côté de l'upload de portrait :
+   éditeur (modale) avec sélecteur de forme (3 boutons), molette/glisser pour cadrer le portrait dans
+   la forme (offset+zoom, aperçu CSS `clip-path`/`border-radius` selon la forme), sélecteur couleur +
+   curseur épaisseur pour la bordure, aperçu live, bouton Enregistrer → `PUT .../token-style`.
+6. **Hors périmètre explicite de ce lot** : catalogue/boutique d'overlays, upload d'overlay
+   personnalisé, application aux tokens 3D, `sort_order`/animation de bordure (Foundry `RING_PULSE`
+   etc., piste future si besoin réel exprimé).
+
+**i18n** (`.claude/rules/i18n.md`) : libellés de l'éditeur (forme, bordure, cadrage, enregistrer),
+clés `t('character.*')` ajoutées avant usage dans `client/src/locales/fr.json`.
+
+**Condition de clôture** : validé par Saar en navigateur (choix de forme, ajustement du cadrage,
+bordure visible sur une vraie carte 2D avec un portrait réellement uploadé) — même discipline que
+Lot 2 §7 point 7 (pas de validation sur un cas synthétique favorable uniquement).
+
+**Correctif 2026-07-29 (auto-critique avant validation, confirmé par Saar en testant)** — le premier
+jet du cadrage (`crop`) était cassé sur deux points : (1) `offsetX`/`offsetY` neutralisés à `zoom=1`
+(valeur par défaut) — glisser dans l'éditeur n'avait aucun effet sur le token réel ; (2) aucune
+correction du ratio d'aspect de l'image source (`characters.portrait_url` n'est pas carré, 200×260
+dans `CharacterWindow.jsx`) — le portrait aurait été affiché déformé sur le token. Root cause : deux
+implémentations de cadrage indépendantes (CSS de l'éditeur / UV Three.js du rendu), jamais
+réconciliées. Corrigé par un calcul unique partagé `client/src/lib/tokenCrop.js`
+(`tokenCropWindow`/`tokenCropOffsetFromCenter`, recadrage "cover" corrigé du ratio d'aspect avant
+d'appliquer le pan/zoom), consommé identiquement par `TokenPresentation.jsx` (texture Three.js) et
+`TokenStyleEditor.jsx` (positionnement pixel de l'aperçu, plus un simple `transform` CSS
+approximatif). Maths vérifiées par exécution directe (cas carré/portrait, zoom, round-trip
+offset↔centre UV). Une inversion d'axe V héritée du premier jet (non re-vérifiée) a aussi été retirée
+après lecture de `BattlemapImagePlane` (même fichier, même caméra, aucune inversion nécessaire pour
+afficher une image droite).
+
+**✅ Lot clos (2026-07-29)** — confirmé fonctionnel par Saar en navigateur après ce correctif
+(recentrage du portrait vérifié en jeu).
+
+---
+
+## 11. Lots proposés (séquentiels — un seul actif à la fois)
 
 | Lot | Contenu | Dépend de | Notes |
 |---|---|---|---|
@@ -597,7 +697,7 @@ ailleurs, vérifié : onglet "Profil" de la sidebar (`Sidebar.jsx:2402-2403,2475
 | 2 | **✅ clos** — `Canvas2D.jsx` : plan texturé + caméra orthographique + grille + pan/zoom (`viewport_state`) + intégration `SessionPage.jsx`/`Sidebar.jsx` | Lot 1 | Architecture caméra revue après analyse à charge (recherche `coldi/r3f-game-demo` + code source `MapControls`/`OrbitControls`) : caméra le long de Z sans rotation (évite la singularité d'`OrbitControls` autour de `camera.up`), `screenSpacePanning=true` (le mode par défaut de `MapControls`, pensé pour une caméra élevée au-dessus d'un sol XZ, est dégénéré pour cette orientation). Pas de tokens ni de création carte à ce stade (Lot 3) |
 | 3 | **✅ clos** — tokens (badges/labels extraits vers `TokenPresentation.jsx`, mouvement via `teleport`/`world-move`, garde de propriété, menu radial), grille réglable (`grid_offset_x`/`grid_offset_y`, migration 211, désactivée par défaut en 2D), flux de création MJ (choix 2D/3D, upload, dimensions), modale "Paramètres", bouton Combat gardé en 2D | Lot 2 | pas de hook `useTokenMovement` partagé — décision inversée le 2026-07-28, voir §8. Altitude de la salle triviale (`TRIVIAL_ROOM_FLOOR_Y = 0.125`) vérifiée par compilation réelle 2026-07-29. Deux correctifs trouvés en validant : offset label/badges token (calibré 3D, disproportionné en 2D) et `render_mode` absent du `SELECT` de la liste des cartes (bouton "Paramètres" invisible). Résidu non bloquant différé : grille non affichée malgré `grid_enabled=true` vérifié — voir `docs/BUGIDENTIFIE.md` **GRID2D1** |
 | 4 | **✅ clos** — sélecteur de cartes façon Roll20 (`BattlemapSelectorPanel.jsx`, arbre de dossiers + grille de vignettes), arborescence `battlemap_folders` (migration 213), icône 2D/3D dérivée de `render_mode`, `sessionHeader` retiré, barre GM réduite à un déclencheur compact, "Déplacer vers…" ajouté au menu contextuel | Lot 3 | UI revue le 2026-07-28 (référence Roll20 partagée par Saar), remplace le popover initialement prévu. Suppression de dossier testée en base (BFS + CASCADE + nettoyage tokens confirmés par script direct). Deux correctifs trouvés en validant : `campaigns.js:183-187` sélectionnait encore l'ancienne colonne `battlemaps.folder` dans une sous-requête embarquée jamais consommée côté client (code mort depuis la fusion Kiwi, retiré entièrement plutôt que renommé — une seule source de vérité pour la liste des cartes, la route dédiée `/campaigns/:id/battlemaps`) ; spacer `flex:1` manquant après le retrait de l'ancienne barre de cartes en ligne (bouton Combat désaligné) |
-| 5 | **Non commencé** — créateur de token 2D (recadrage circulaire/hexagonal/carré + bordure depuis le portrait de personnage, styles fournis par l'app) | Lot 4 | Dans le périmètre v1 (décision Saar 2026-07-29, remplace le renvoi du 2026-07-28 vers "hors de ce plan") — touche la fiche personnage, séquencé en dernier par charge de travail, pas par nécessité technique |
+| 5 | **✅ clos** — créateur de token 2D (`characters.token_style` jsonb, migration 215, structure adaptative forme/bordure/overlay) | Lot 4 | Cadrage détaillé §10. Dans le périmètre v1 (décision Saar 2026-07-29, remplace le renvoi du 2026-07-28 vers "hors de ce plan") — touche la fiche personnage, séquencé en dernier par charge de travail, pas par nécessité technique. Rendu Three.js (`TokenPresentation.jsx`), éditeur `TokenStyleEditor.jsx` (bouton dans `CharacterWindow.jsx`, onglet Bio), calcul de cadrage partagé `client/src/lib/tokenCrop.js`. Bug de cadrage trouvé en auto-critique et confirmé par Saar en testant (offset neutralisé à zoom=1 + déformation d'aspect), corrigé avant clôture — voir §10. Validé fonctionnel par Saar en navigateur |
 
 **Reste hors de ce plan, à traiter dans un nouveau document, pas avant** — élargi et reprécisé le
 2026-07-28, **rien n'est tranché ici, à débattre entièrement le moment venu** (mots de Saar : « je ne
@@ -615,7 +715,7 @@ suis pas au clair avec moi-même ») :
 
 ---
 
-## 11. Hors scope de ce plan (récap)
+## 12. Hors scope de ce plan (récap)
 
 - Spotlight / bibliothèque de présentation (§2, §4.2) — plan séparé.
 - Fog of war / illumination dynamique — non construit, seulement rendu possible par l'architecture

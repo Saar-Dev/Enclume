@@ -41,6 +41,7 @@ router.get('/', requireAuth, async (req, res) => {
     'characters.visible',
     'characters.glb_url',
     'characters.portrait_url',
+    'characters.token_style',
     'characters.user_id',
     'characters.description',
     'characters.created_at',
@@ -113,7 +114,7 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
       .insert({ campaign_id: campaignId, user_id: ownership.user_id, name, color, visible, type })
       .returning([
         'id', 'campaign_id', 'user_id', 'type', 'name', 'color',
-        'visible', 'glb_url', 'portrait_url',
+        'visible', 'glb_url', 'portrait_url', 'token_style',
         'description', 'gm_notes', 'created_at', 'updated_at',
       ])
 
@@ -203,6 +204,7 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
       'characters.visible',
       'characters.glb_url',
       'characters.portrait_url',
+      'characters.token_style',
       'characters.description',
       'characters.gm_notes',
       'characters.created_at',
@@ -266,6 +268,7 @@ async function broadcastCharacterUpdate(characterId, app) {
       'characters.visible',
       'characters.glb_url',
       'characters.portrait_url',
+      'characters.token_style',
       'characters.description',
       'characters.gm_notes',
       'characters.created_at',
@@ -330,6 +333,90 @@ actionsRouter.post('/:id/portrait',
     res.json({ character: updatedCharacter })
   }
 )
+
+// PUT /api/characters/:id/token-style
+// Apparence du token 2D (docs/PLAN_BATTLEMAP2D.md §10, Lot 5) — forme, cadrage du portrait, bordure.
+// Accessible au GM et au propriétaire du character, même patron que /portrait (asset visuel du
+// joueur, pas une donnée de règles) — pas ajouté au PUT /:id générique, qui restreint un owner à
+// name/visible/description.
+// `overlay` est un emplacement réservé pour un futur catalogue de décorations (hors périmètre v1,
+// voir plan) : rejeté explicitement plutôt qu'ignoré en silence pour ne pas stocker un champ mort.
+const TOKEN_STYLE_SHAPES = ['circle', 'hex', 'square']
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+
+function validateTokenStyle(body) {
+  if (body === null) return null
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw new AppError(400, 'token_style must be an object or null')
+  }
+
+  const { shape, crop, border, overlay } = body
+
+  if (!TOKEN_STYLE_SHAPES.includes(shape)) {
+    throw new AppError(400, `token_style.shape must be one of ${TOKEN_STYLE_SHAPES.join(', ')}`)
+  }
+  if (overlay !== undefined && overlay !== null) {
+    throw new AppError(400, 'token_style.overlay is reserved and not yet supported')
+  }
+  if (typeof crop !== 'object' || crop === null) {
+    throw new AppError(400, 'token_style.crop is required')
+  }
+  const offsetX = Number(crop.offsetX)
+  const offsetY = Number(crop.offsetY)
+  const zoom = Number(crop.zoom)
+  if (!Number.isFinite(offsetX) || !Number.isFinite(offsetY) || !Number.isFinite(zoom)) {
+    throw new AppError(400, 'token_style.crop.offsetX/offsetY/zoom must be numbers')
+  }
+  if (typeof border !== 'object' || border === null) {
+    throw new AppError(400, 'token_style.border is required')
+  }
+  if (!HEX_COLOR_RE.test(border.color)) {
+    throw new AppError(400, 'token_style.border.color must be a #rrggbb hex string')
+  }
+  const borderWidth = Number(border.width)
+  if (!Number.isFinite(borderWidth)) {
+    throw new AppError(400, 'token_style.border.width must be a number')
+  }
+
+  return {
+    shape,
+    crop: {
+      offsetX: Math.max(-50, Math.min(50, offsetX)),
+      offsetY: Math.max(-50, Math.min(50, offsetY)),
+      zoom: Math.max(1, Math.min(3, zoom)),
+    },
+    border: {
+      color: border.color,
+      width: Math.max(0, Math.min(0.3, borderWidth)),
+    },
+    overlay: null,
+  }
+}
+
+actionsRouter.put('/:id/token-style', requireAuth, async (req, res) => {
+  const character = await db('characters').where({ id: req.params.id }).first()
+  if (!character) throw new AppError(404, 'Character not found')
+
+  const member = await db('campaign_members')
+    .where({ campaign_id: character.campaign_id, user_id: req.user.id })
+    .first()
+  if (!member) throw new AppError(403, 'You are not a member of this campaign')
+
+  const isGm = member.role === 'gm'
+  const isOwner = character.user_id && character.user_id === req.user.id
+  if (!isGm && !isOwner) {
+    throw new AppError(403, 'You do not have permission to edit this character\'s token style')
+  }
+
+  const tokenStyle = validateTokenStyle(req.body.token_style)
+
+  await db('characters')
+    .where({ id: req.params.id })
+    .update({ token_style: tokenStyle ? JSON.stringify(tokenStyle) : null, updated_at: db.fn.now() })
+
+  const updatedCharacter = await broadcastCharacterUpdate(req.params.id, req.app)
+  res.json({ character: updatedCharacter })
+})
 
 // POST /api/characters/:id/glb
 // Upload d'un modèle 3D GLB vers MinIO.

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, Component } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { MapControls, Grid, useTexture, Html } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
@@ -7,7 +7,7 @@ import api from '../lib/api.js'
 import { useTokenStore } from '../stores/tokenStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useAuthStore } from '../stores/authStore'
-import { TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPresentation.jsx'
+import { TokenLabel, TokenGmBadge, TokenStatusBadges, TokenPortrait, ImageErrorBoundary } from './TokenPresentation.jsx'
 
 // docs/PLAN_BATTLEMAP2D.md §6 (Lot 1) — clé de la salle triviale synthétisée par le serveur à la
 // création d'une carte 2D (server/src/routes/battlemaps.js, POST /).
@@ -42,20 +42,6 @@ function trivialRoomBounds(battlemap) {
     depthCells: maxZ - minZ + 1,
     centerX: minX + (maxX - minX + 1) / 2,
     centerY: minZ + (maxZ - minZ + 1) / 2, // world z, réutilisé tel quel comme axe vertical écran
-  }
-}
-
-class Canvas2DImageErrorBoundary extends Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false }
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true }
-  }
-  render() {
-    if (this.state.hasError) return this.props.fallback
-    return this.props.children
   }
 }
 
@@ -155,15 +141,21 @@ function MapCameraRig({ battlemapId, bounds, initialViewport, controlsRef }) {
   )
 }
 
-// Token 2D — cercle coloré + label/badges partagés (docs/PLAN_BATTLEMAP2D.md §8, extraction
-// obligatoire depuis Canvas3D.jsx : présentation pure, pas d'état combat). Le créateur de token
-// (recadrage portrait) est un chantier séparé (Lot 5) — v1 se contente d'un disque de couleur.
+// Token 2D — portrait stylé (forme/bordure, docs/PLAN_BATTLEMAP2D.md §10, Lot 5) si le personnage a
+// un `token_style`, sinon disque de couleur inchangé (comportement v1 précédent, zéro régression) +
+// label/badges partagés (§8, extraction obligatoire depuis Canvas3D.jsx : présentation pure).
 function Token2D({ token, isDragging, dragPos, onDragStart, statusEffectsMode }) {
+  const { characters } = useCharacterStore()
+  const character = characters.find(c => c.id === token.character_id)
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
   const isGmLayer = token.layer === 'gm'
   const x = isDragging ? dragPos.x : Number(token.pos_x) || 0
   const y = isDragging ? dragPos.y : Number(token.pos_y) || 0
+  const tokenStyle = character?.token_style
+  const portraitUrl = character?.portrait_url
+    ? `${import.meta.env.VITE_API_URL}/api/assets/${character.portrait_url}`
+    : null
 
   return (
     <group
@@ -174,10 +166,14 @@ function Token2D({ token, isDragging, dragPos, onDragStart, statusEffectsMode })
         onDragStart(e, token)
       }}
     >
-      <mesh>
-        <circleGeometry args={[0.45, 32]} />
-        <meshBasicMaterial color={color} />
-      </mesh>
+      {tokenStyle ? (
+        <TokenPortrait tokenStyle={tokenStyle} portraitUrl={portraitUrl} fallbackColor={color} radius={0.45} />
+      ) : (
+        <mesh>
+          <circleGeometry args={[0.45, 32]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+      )}
       <mesh position={[0, 0, 0.001]}>
         <ringGeometry args={[0.45, 0.52, 32]} />
         <meshBasicMaterial color={isDragging ? '#ffffff' : '#000000'} transparent opacity={0.6} depthWrite={false} />
@@ -359,13 +355,13 @@ export default function Canvas2D({ battlemap, onTokenDoubleClick, statusEffectsM
         />
       )}
 
-      <Canvas2DImageErrorBoundary fallback={
+      <ImageErrorBoundary fallback={
         <Html center position={[bounds.centerX, bounds.centerY, 0]}>{t('battlemap.imageLoadError')}</Html>
       }>
         <Suspense fallback={null}>
           <BattlemapImagePlane imageUrl={imageUrl} bounds={bounds} />
         </Suspense>
-      </Canvas2DImageErrorBoundary>
+      </ImageErrorBoundary>
 
       <TokenLayer
         battlemapId={battlemap.id}

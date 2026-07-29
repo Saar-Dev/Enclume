@@ -24,6 +24,7 @@ import WeaponPanel from './WeaponPanel.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
 import ModingWindow from './ModingWindow.jsx'
 import PossessionNotes from '../components/creation/PossessionNotes.jsx'
+import TokenStyleEditor from './TokenStyleEditor.jsx'
 
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
 const WIN_INIT_W = 720
@@ -191,6 +192,7 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
   const [gmNotes,     setGmNotes]     = useState(character.gm_notes    || '')
 
   const [portraitUploading, setPortraitUploading] = useState(false)
+  const [showTokenStyleEditor, setShowTokenStyleEditor] = useState(false)
   const [glbUploading,      setGlbUploading]      = useState(false)
   const [sendingToVault,    setSendingToVault]    = useState(false)
 
@@ -455,6 +457,16 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
                   />
                 </label>
               )}
+              {canUploadPortrait && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ marginTop: 6 }}
+                  onClick={() => setShowTokenStyleEditor(true)}
+                >
+                  {t('character.tokenStyleOpen')}
+                </button>
+              )}
             </div>
 
             {/* Colonne droite — description + notes MJ */}
@@ -583,6 +595,14 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
         onClose={() => setModingOpen(false)}
         reloadKey={inventoryVersion}
         onInventoryMutated={bumpInventoryVersion}
+      />
+    )}
+
+    {/* docs/PLAN_BATTLEMAP2D.md §10 (Lot 5) — style de token 2D, sibling comme ModingWindow */}
+    {showTokenStyleEditor && (
+      <TokenStyleEditor
+        character={character}
+        onClose={() => setShowTokenStyleEditor(false)}
       />
     )}
     </>
