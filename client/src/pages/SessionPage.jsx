@@ -36,6 +36,29 @@ import TradeWindow from '../components/TradeWindow'
 import ExchangeWindow from '../components/ExchangeWindow'
 import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
+import BattlemapSelectorPanel from '../components/BattlemapSelectorPanel.jsx'
+
+// docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — liste plate de dossiers → options de <select> indentées,
+// pour la modale "Déplacer vers…". Séparé de BattlemapSelectorPanel.jsx (arbre interactif) : ici on
+// veut juste un ordre déterministe + une indentation textuelle, pas de composants récursifs.
+function flattenFoldersForSelect(folders) {
+  const byParent = new Map()
+  for (const folder of folders) {
+    const key = folder.parent_folder_id || null
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key).push(folder)
+  }
+  for (const list of byParent.values()) list.sort((a, b) => a.name.localeCompare(b.name))
+  const out = []
+  const walk = (parentId, depth) => {
+    for (const folder of byParent.get(parentId) || []) {
+      out.push({ id: folder.id, label: `${'  '.repeat(depth)}${folder.name}` })
+      walk(folder.id, depth + 1)
+    }
+  }
+  walk(null, 0)
+  return out
+}
 
 export default function SessionPage() {
   const { campaignId } = useParams()
@@ -53,7 +76,7 @@ function SessionContent({ campaignId }) {
 
   const { tokens, setTokens, addToken, removeToken } = useTokenStore()
   const { characters, isGm, setCharacters, setMembers } = useCharacterStore()
-  const { battlemap, battlemaps, setBattlemap, setBattlemaps } = useMapStore()
+  const { battlemap, battlemaps, setBattlemap, setBattlemaps, setFolders } = useMapStore()
   const { setActiveCampaign, setPendingEntityId } = useSessionStore()
   const { entities, setEntities, fetchBlueprints } = useEntityStore()
   const { phase: combatPhase } = useCombatStore()
@@ -267,6 +290,12 @@ function SessionContent({ campaignId }) {
       const mapsRes = await api.get(`/campaigns/${campaignId}/battlemaps`)
       setBattlemaps(mapsRes.data.battlemaps || [])
 
+      // Chargement des dossiers (docs/PLAN_BATTLEMAP2D.md §9, Lot 4) — non conditionné par isGm ici
+      // (même patron que mapsRes/docsRes juste au-dessus) : isGm n'est pas encore stable dans cette
+      // fermeture au premier chargement, la restriction réelle est déjà côté UI (gmBar).
+      const foldersRes = await api.get(`/campaigns/${campaignId}/battlemap-folders`)
+      setFolders(foldersRes.data.folders || [])
+
       // Chargement des documents de la bibliothèque
       const docsRes = await api.get(`/campaigns/${campaignId}/documents`)
       setDocuments(docsRes.data.documents || [])
@@ -358,6 +387,15 @@ function SessionContent({ campaignId }) {
     settingsGridEnabled, setSettingsGridEnabled, settingsGridSize, setSettingsGridSize,
     settingsGridOffsetX, setSettingsGridOffsetX, settingsGridOffsetY, setSettingsGridOffsetY,
     settingsImageFile, setSettingsImageFile, settingsError, handleMapSettingsSave,
+    folders, showSelectorPanel, setShowSelectorPanel, openSelectorPanel,
+    currentFolderId, setCurrentFolderId, selectorSearch, setSelectorSearch,
+    showCreateFolderModal, setShowCreateFolderModal, createFolderName, setCreateFolderName,
+    openCreateFolderModal, handleCreateFolder,
+    showRenameFolderModal, setShowRenameFolderModal, renameFolderValue, setRenameFolderValue,
+    openRenameFolderModal, handleRenameFolder,
+    handleDeleteFolder,
+    showMoveModal, setShowMoveModal, moveMapTarget, moveFolderId, setMoveFolderId,
+    openMoveModal, handleMoveMapSave,
   } = useBattlemapManager({ campaignId, isGm })
   const handleDiceDone = useCallback(() => setLastDiceRoll(null), [setLastDiceRoll])
 
@@ -527,43 +565,19 @@ function SessionContent({ campaignId }) {
 
   return (
     <div style={styles.container}>
-      <div style={styles.sessionHeader}>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => navigate('/dashboard')}
-          style={styles.homeBtn}
-        >
-          {t('settings.home')}
-        </button>
-        <div style={styles.sessionTitle}>
-          <span style={styles.sessionTitleLabel}>{t('dashboard.title')}</span>
-          <strong style={styles.sessionTitleName}>{campaign?.name || 'Campagne'}</strong>
-        </div>
-      </div>
-
       {/* ─── Barre GM supérieure ─────────────────────────────────────────── */}
       {isGm && (
         <div style={styles.gmBar}>
-          <span style={styles.gmBarLabel}>{t('session.battlemaps')}</span>
-          <div style={styles.gmBarMaps}>
-            {battlemaps.map(bm => (
-              <button
-                key={bm.id}
-                className="btn btn-ghost"
-                data-active={bm.id === battlemap?.id}
-                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-                onClick={() => loadMap(bm.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  setMapContextMenu({ bm, x: e.clientX, y: e.clientY })
-                }}
-                title={bm.name}
-              >
-                {bm.name}
-              </button>
-            ))}
-          </div>
+          {/* docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — sessionHeader retiré entièrement (nom de campagne
+              déjà visible via document.title, sortie déjà couverte par l'onglet Profil de la sidebar) ;
+              la barre de cartes en ligne est remplacée par un déclencheur compact ouvrant le sélecteur
+              plein cadre façon Roll20 (arborescence de dossiers + vignettes). */}
+          <button className="btn btn-ghost" style={{ flexShrink: 0 }} onClick={openSelectorPanel}>
+            {t('session.battlemaps')} ▾
+          </button>
+          {/* Pousse le bouton Combat à droite — remplace l'ancien spacer flex:1 (styles.gmBarMaps,
+              retiré avec la liste de cartes en ligne). */}
+          <div style={{ flex: 1 }} />
           {/* docs/PLAN_BATTLEMAP2D.md §8 (Lot 3, correction 2026-07-29) — combat hors périmètre v1,
               bouton masqué en carte 2D jusqu'à un plan v2 (mouvement tactique, grille, LOS, allures) */}
           {battlemap?.render_mode !== '2d' && (
@@ -849,6 +863,9 @@ function SessionContent({ campaignId }) {
             <button style={styles.contextMenuItem} onClick={() => handleMapDuplicate(mapContextMenu.bm)}>
               {t('session.mapDuplicate')}
             </button>
+            <button style={styles.contextMenuItem} onClick={() => openMoveModal(mapContextMenu.bm)}>
+              {t('session.mapMoveTo')}
+            </button>
             <button style={{ ...styles.contextMenuItem, color: 'var(--color-danger)' }}
               onClick={() => handleMapDelete(mapContextMenu.bm)}>
               {t('session.mapDelete')}
@@ -992,6 +1009,101 @@ function SessionContent({ campaignId }) {
                 {t('common.cancel')}
               </button>
               <button className="btn" onClick={handleMapSettingsSave}>
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Sélecteur de cartes façon Roll20 (docs/PLAN_BATTLEMAP2D.md §9, Lot 4) ──────────── */}
+      <BattlemapSelectorPanel
+        isOpen={showSelectorPanel}
+        onClose={() => setShowSelectorPanel(false)}
+        battlemaps={battlemaps}
+        folders={folders}
+        battlemap={battlemap}
+        currentFolderId={currentFolderId}
+        onNavigateFolder={setCurrentFolderId}
+        search={selectorSearch}
+        onSearchChange={setSelectorSearch}
+        onSelectMap={(bm) => { loadMap(bm.id); setShowSelectorPanel(false) }}
+        onMapContextMenu={(bm, x, y) => setMapContextMenu({ bm, x, y })}
+        onCreateMap={openCreateModal}
+        onCreateFolder={openCreateFolderModal}
+        onRenameFolder={openRenameFolderModal}
+        onDeleteFolder={handleDeleteFolder}
+      />
+
+      {/* ─── Modale création dossier ─────────────────────────────────────── */}
+      {showCreateFolderModal && (
+        <div style={styles.modalOverlay} onMouseDown={() => setShowCreateFolderModal(false)}>
+          <div style={styles.modalBox} onMouseDown={e => e.stopPropagation()}>
+            <p style={styles.modalTitle}>{t('session.folderCreate')}</p>
+            <input
+              style={styles.modalInput}
+              value={createFolderName}
+              onChange={e => setCreateFolderName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder() }}
+              placeholder={t('session.folderNamePlaceholder')}
+              autoFocus
+            />
+            <div style={styles.modalActions}>
+              <button className="btn btn-ghost" onClick={() => setShowCreateFolderModal(false)}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn" onClick={handleCreateFolder}>
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modale renommage dossier ────────────────────────────────────── */}
+      {showRenameFolderModal && (
+        <div style={styles.modalOverlay} onMouseDown={() => setShowRenameFolderModal(false)}>
+          <div style={styles.modalBox} onMouseDown={e => e.stopPropagation()}>
+            <p style={styles.modalTitle}>{t('session.folderRename')}</p>
+            <input
+              style={styles.modalInput}
+              value={renameFolderValue}
+              onChange={e => setRenameFolderValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRenameFolder() }}
+              autoFocus
+            />
+            <div style={styles.modalActions}>
+              <button className="btn btn-ghost" onClick={() => setShowRenameFolderModal(false)}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn" onClick={handleRenameFolder}>
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modale "Déplacer vers…" ─────────────────────────────────────── */}
+      {showMoveModal && (
+        <div style={styles.modalOverlay} onMouseDown={() => setShowMoveModal(false)}>
+          <div style={styles.modalBox} onMouseDown={e => e.stopPropagation()}>
+            <p style={styles.modalTitle}>{t('session.mapMoveTo')} — {moveMapTarget?.name}</p>
+            <select
+              style={styles.modalInput}
+              value={moveFolderId || ''}
+              onChange={e => setMoveFolderId(e.target.value || null)}
+            >
+              <option value="">{t('session.foldersRoot')}</option>
+              {flattenFoldersForSelect(folders).map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+            <div style={styles.modalActions}>
+              <button className="btn btn-ghost" onClick={() => setShowMoveModal(false)}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn" onClick={handleMoveMapSave}>
                 {t('common.save')}
               </button>
             </div>
@@ -1167,43 +1279,6 @@ const styles = {
     background: '#0a0a0f',
     overflow: 'hidden',
   },
-  sessionHeader: {
-    height: '38px',
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
-    padding: '0 16px',
-    backgroundColor: '#090914',
-    borderBottom: '1px solid #1e1e2e',
-    zIndex: 120,
-  },
-  homeBtn: {
-    flexShrink: 0,
-    padding: '6px 10px',
-  },
-  sessionTitle: {
-    minWidth: 0,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: '#64748b',
-    fontSize: '12px',
-  },
-  sessionTitleLabel: {
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    fontSize: '10px',
-    color: '#475569',
-  },
-  sessionTitleName: {
-    color: '#cbd5e1',
-    fontSize: '13px',
-    fontWeight: 600,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
   gmBar: {
     display: 'flex',
     alignItems: 'center',
@@ -1214,20 +1289,6 @@ const styles = {
     borderBottom: '1px solid #2a2a3e',
     flexShrink: 0,
     zIndex: 100,
-  },
-  gmBarLabel: {
-    fontSize: '11px',
-    color: '#5b8dee',
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    whiteSpace: 'nowrap',
-  },
-  gmBarMaps: {
-    display: 'flex',
-    gap: '6px',
-    overflowX: 'auto',
-    flex: 1,
   },
   mainArea: {
     display: 'flex',

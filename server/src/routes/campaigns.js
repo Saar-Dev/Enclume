@@ -180,11 +180,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       'campaign_members.character_name'
     )
 
-  const battlemaps = await db('battlemaps')
-    .where({ campaign_id: req.params.id })
-    .select('id', 'name', 'folder', 'created_at')
-
-  res.json({ campaign, members, battlemaps })
+  res.json({ campaign, members })
 })
 
 // PUT /api/campaigns/:id — modifier une campagne

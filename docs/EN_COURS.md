@@ -98,6 +98,33 @@
 > instrumenté. **Prochaine étape** : instrumenter `[DBG-MELEE-ATKNAME]` puis séparer les deux usages
 > (détail `docs/BUGIDENTIFIE.md`).
 >
+> Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 186 (suite) : `docs/PLAN_BATTLEMAP2D.md`
+> **Lot 4 ✅ clos** (validé en navigateur par Saar) : arborescence de dossiers
+> `battlemap_folders` (migration 213, liste d'adjacence CASCADE, même conventions que `battlemaps`) ;
+> `battlemaps.folder` (texte, jamais utilisé, vérifié vide en base) remplacé par `folder_id` (FK) ;
+> nouveau router `server/src/routes/battlemapFolders.js` (GET/POST scopés campagne, PUT/DELETE scopés
+> dossier — suppression récursive BFS avec nettoyage tokens Redis/broadcast avant CASCADE SQL, même
+> garde-fou que `DELETE /battlemaps/:id`) ; nouveau composant `BattlemapSelectorPanel.jsx` (arbre de
+> dossiers à gauche, grille de vignettes cartes/sous-dossiers à droite, recherche, Échap/clic-dehors
+> pour fermer) ; `sessionHeader` retiré entièrement (décision Saar 2026-07-25, styles morts nettoyés) ;
+> barre GM réduite à un déclencheur compact "Cartes ▾" ; "Déplacer vers…" ajouté au menu contextuel
+> existant. **Testé** : migration 213 appliquée et vérifiée en base (table + colonne + `knex_migrations`),
+> `node --check` sur les 3 fichiers serveur touchés, **suppression récursive de dossier vérifiée par
+> script direct sur la DB réelle** (dossier + sous-dossier + 2 cartes + 2 tokens, BFS confirmé trouver
+> toute la descendance, CASCADE SQL confirmé tout nettoyer) — pas seulement lecture de code, ESLint sur
+> les 4 fichiers client touchés (0 erreur/warning nouveau vs baseline), build client réussi,
+> **scénario navigateur réel confirmé par Saar** (session, panneau, interface carte fonctionnels).
+> **Deux bugs trouvés en validant, corrigés dans la foulée** : (1) `campaigns.js:183-187` — sous-requête
+> embarquée dans `GET /campaigns/:id` sélectionnant encore `battlemaps.folder` (colonne supprimée par
+> la migration 213), jamais consommée côté client (vérifié sur les deux seuls appelants réels de cette
+> route) — **code mort depuis la fusion Kiwi** (`git log` confirmé), retiré entièrement plutôt que
+> renommé (une seule source de vérité pour la liste des cartes : la route dédiée `/campaigns/:id/
+> battlemaps`) ; première tentative de correctif (juste renommer la colonne) reconnue comme du
+> bricolage par Saar avant cette correction en profondeur. (2) Bouton "⚔ Combat" désaligné à droite —
+> le spacer `flex:1` de l'ancienne barre de cartes en ligne (`styles.gmBarMaps`, retiré avec elle)
+> n'avait pas été remplacé ; ajouté un spacer dédié entre le déclencheur "Cartes ▾" et le bouton
+> Combat. Prochaine étape : Lot 5 (créateur de token 2D).
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 186 : `docs/PLAN_BATTLEMAP2D.md` segmenté en
 > v1 (ce plan, sans combat) / v2 (combat, grille tactique, LOS affichée, allures — futur plan séparé
 > non cadré), décision Saar. **Lot 3 ✅ clos** (validé en navigateur par Saar, un résidu non bloquant
@@ -3506,7 +3533,7 @@ ce tour. Migrations 201/203/205 à appliquer en base réelle si pas déjà fait.
 **41. Wizard COUCHE 4c → analyse terminée (session 2026-07-05 suite) : deux dossiers distincts, à ne plus confondre**
    → `PLAN_COUCHE4.md` (architecture wizard step-by-step, câblage frontend→backend) : confirmé **obsolète** — remplacé par COUCHE 5 (architecture client-primary, Session 130). Archivé par Saar dans `docs/Old/`.
    → `JOURNALCOUCHE4.md` (audit seeding carrières lots 1-6) : **toujours valide et exploitable**. Déplacé dans `docs/Old/` (réorganisation documentaire) mais reste la référence du seeding — voir item "1." en tête de fichier.
-   → [WIZ-1] Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard — dette indépendante, toujours ouverte
+   → [WIZ-1] ~~Filtrer personnages incomplets (creation_state ≠ 'complete') dans la liste Dashboard~~ ✅ confirmé Saar 2026-07-29
    → [WIZ-2] Synchroniser les deux compteurs PC (store header vs local CareersAllocator) — dette indépendante, toujours ouverte
    → [WIZ-3] Formation "apprentissage_technique" → choix de spécialité — dette indépendante, toujours ouverte
    → [S4-C1] ~~Seeder les ~24 carrières restantes~~ ✅ CLOS Session 134 suite — 37/37 carrières en base
@@ -3577,7 +3604,7 @@ Projet en cours et priorité user :
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ST1 | Badges statut (icônes SVG 14×14px, `Canvas3D.jsx:348-387`) : taille fixe ne s'adapte pas au zoom/à la taille du token, formes peu reconnaissables sans hover. Description historique ("texte trop petit") obsolète depuis le passage aux icônes Sprint 14-2 — reclassé chantier UI/UX, voir `docs/ROADMAP.md` "Badges statut token" | Chantier UI/UX dédié — pas un correctif ponctuel (décision Saar, Session 166) |
-| ST3 | Fenêtre THUG STATUTS trop petite — overflow des icônes statuts | Moyenne |
+| ~~**ST3**~~ | ~~Fenêtre THUG STATUTS trop petite — overflow des icônes statuts~~ | ✅ confirmé Saar — voir ST1 (icônes trop petites partout, pas seulement cette fenêtre) |
 | CH1 | Historique chat perdu au F5 (rechargement page) — chantier persistance (table messages, endpoint relecture, pagination), pas un correctif isolé, voir `docs/ROADMAP.md` "Chat persistant" | Chantier dédié — doc alignée Session 166 (Saar) |
 | ~~**COM2**~~ | ~~Vérif statut arme absente côté GM~~ | ✅ Session 161 (Saar) |
 | ~~**COM7**~~ | ~~Multi-attaque CaC : duplicata / bouton grisé~~ | ✅ Session 158 (Saar) |
@@ -3614,7 +3641,7 @@ Projet en cours et priorité user :
 | **FEAT3** | ~~Token actif : cercle de sélection~~ | ✅ Session 127 |
 | **UI2** | Alignement dés | Basse — Cluster Q |
 | **UI3** | Dé 100 : affichage chat | Basse — Cluster Q |
-| **WIZ-1** | Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste | Moyenne — COUCHE 4c |
+| ~~**WIZ-1**~~ | ~~Personnages incomplets (creation_state ≠ 'complete') visibles dans la liste~~ | ✅ confirmé Saar 2026-07-29 |
 | **WIZ-2** | Deux compteurs PC (header store vs CareersAllocator local) | Basse — cosmétique |
 | **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
 | **CAR1** | Mécanisme "au choix" (`conditional:true`) non implémenté — 34 occurrences lots 2-6 | Moyenne — Step4 UI |

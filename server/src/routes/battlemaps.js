@@ -133,7 +133,7 @@ router.get('/', requireAuth, async (req, res) => {
   const battlemaps = await db('battlemaps')
     .where({ campaign_id: req.params.id })
     .select(
-      'id', 'name', 'folder', 'image_url', 'grid_size', 'grid_enabled', 'scale_label',
+      'id', 'name', 'folder_id', 'image_url', 'grid_size', 'grid_enabled', 'scale_label',
       'world_revision', 'surface_revision', 'voxel_revision', 'created_at',
       // render_mode — docs/PLAN_BATTLEMAP2D.md §8 (Lot 3) : sans lui, l'entrée "Paramètres" du menu
       // contextuel de carte (`mapContextMenu.bm.render_mode === '2d'`) n'apparaissait jamais, cette
@@ -152,13 +152,22 @@ router.post('/',
   uploadToMinio('battlemaps'),
   async (req, res) => {
     const {
-      name, folder, scale_label, grid_size, grid_enabled, render_mode,
+      name, folder_id, scale_label, grid_size, grid_enabled, render_mode,
       image_width, image_height, grid_offset_x, grid_offset_y,
     } = req.body
     if (!name) throw new AppError(400, 'Battlemap name is required')
 
     const renderMode = render_mode === '2d' ? '2d' : '3d'
     const gridSize = Number(grid_size) || 64
+
+    // docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — folder_id nullable, valide seulement s'il pointe un
+    // dossier de cette campagne (jamais un id d'une autre campagne glissé côté client).
+    if (folder_id) {
+      const parentFolder = await db('battlemap_folders')
+        .where({ id: folder_id, campaign_id: req.params.id })
+        .first()
+      if (!parentFolder) throw new AppError(400, 'Invalid folder')
+    }
 
     // Id généré avant l'insert (même patron que POST /:id/duplicate, L.906-910) : prepareSurfaceData
     // en a besoin pour dériver des worldId stables, cohérents avec l'id réel de la carte, pas un UUID
@@ -176,7 +185,7 @@ router.post('/',
         id: battlemapId,
         campaign_id: req.params.id,
         name,
-        folder: folder || null,
+        folder_id: folder_id || null,
         scale_label: scale_label || '1,5m',
         grid_size: gridSize,
         // docs/PLAN_BATTLEMAP2D.md §8 (Lot 3, correction 2026-07-29) — grille désactivée par défaut
@@ -756,13 +765,22 @@ router.put('/:id',
     if (!member) throw new AppError(403, 'GM only')
 
     const {
-      name, folder, scale_label, grid_size, grid_enabled, grid_opacity, viewport_state,
+      name, folder_id, scale_label, grid_size, grid_enabled, grid_opacity, viewport_state,
       image_width, image_height, grid_offset_x, grid_offset_y,
     } = req.body
 
+    // docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — "Déplacer vers…" : folder_id doit pointer un dossier de
+    // la même campagne, ou être vide/null explicite pour remonter à la racine.
+    if (folder_id) {
+      const targetFolder = await db('battlemap_folders')
+        .where({ id: folder_id, campaign_id: battlemap.campaign_id })
+        .first()
+      if (!targetFolder) throw new AppError(400, 'Invalid folder')
+    }
+
     const updates = {}
     if (name !== undefined) updates.name = name
-    if (folder !== undefined) updates.folder = folder
+    if (folder_id !== undefined) updates.folder_id = folder_id || null
     if (scale_label !== undefined) updates.scale_label = scale_label
     if (grid_size !== undefined) updates.grid_size = grid_size
     if (grid_enabled !== undefined) updates.grid_enabled = parseBoolField(grid_enabled, true)
@@ -975,7 +993,7 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
         id: duplicatedId,
         campaign_id: battlemap.campaign_id,
         name: `${battlemap.name} (copie)`,
-        folder: battlemap.folder,
+        folder_id: battlemap.folder_id,
         scale_label: battlemap.scale_label,
         grid_size: battlemap.grid_size,
         grid_enabled: battlemap.grid_enabled,

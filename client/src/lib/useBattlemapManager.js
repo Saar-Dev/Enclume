@@ -12,7 +12,8 @@ export function useBattlemapManager({ campaignId, isGm }) {
   const socket = useSocket()
   const { t } = useTranslation()
   const {
-    battlemap, battlemaps, setBattlemap, renameBattlemap, updateBattlemap, addBattlemap, removeBattlemap,
+    battlemap, battlemaps, setBattlemap, setBattlemaps, renameBattlemap, updateBattlemap, addBattlemap,
+    removeBattlemap, folders, setFolders, addFolder, updateFolder, removeFolder,
   } = useMapStore()
   const { setTokens } = useTokenStore()
   const { setEntities } = useEntityStore()
@@ -40,6 +41,34 @@ export function useBattlemapManager({ campaignId, isGm }) {
   const [settingsGridOffsetY, setSettingsGridOffsetY] = useState(0)
   const [settingsImageFile, setSettingsImageFile] = useState(null)
   const [settingsError, setSettingsError] = useState(null)
+
+  // ─── Sélecteur de cartes façon Roll20 (docs/PLAN_BATTLEMAP2D.md §9, Lot 4) ─────────────────
+  const [showSelectorPanel, setShowSelectorPanel] = useState(false)
+  const [currentFolderId, setCurrentFolderId] = useState(null) // null = racine
+  const [selectorSearch, setSelectorSearch] = useState('')
+
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false)
+  const [createFolderName, setCreateFolderName] = useState('')
+  const [createFolderParentId, setCreateFolderParentId] = useState(null)
+
+  const [showRenameFolderModal, setShowRenameFolderModal] = useState(false)
+  const [renameFolderTarget, setRenameFolderTarget] = useState(null)
+  const [renameFolderValue, setRenameFolderValue] = useState('')
+
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [moveMapTarget, setMoveMapTarget] = useState(null)
+  const [moveFolderId, setMoveFolderId] = useState(null)
+
+  // Chargement dossiers — exposé pour loadSession (SessionPage.jsx), même patron que la liste des cartes.
+  const loadFolders = useCallback(async () => {
+    if (!isGm) return
+    try {
+      const res = await api.get(`/campaigns/${campaignId}/battlemap-folders`)
+      setFolders(res.data.folders || [])
+    } catch (err) {
+      console.error('Erreur chargement dossiers :', err)
+    }
+  }, [campaignId, isGm])
 
   // ─── Fermeture mapContextMenu sur clic extérieur ──────────────────────────
   useEffect(() => {
@@ -84,6 +113,32 @@ export function useBattlemapManager({ campaignId, isGm }) {
     setMapContextMenu(null)
   }, [])
 
+  // ─── Ouverture panneau + modaux dossiers ──────────────────────────────────────────────────
+  const openSelectorPanel = useCallback(() => {
+    setCurrentFolderId(null)
+    setSelectorSearch('')
+    setShowSelectorPanel(true)
+  }, [])
+
+  const openCreateFolderModal = useCallback((parentId = null) => {
+    setCreateFolderName('')
+    setCreateFolderParentId(parentId)
+    setShowCreateFolderModal(true)
+  }, [])
+
+  const openRenameFolderModal = useCallback((folder) => {
+    setRenameFolderTarget(folder)
+    setRenameFolderValue(folder.name)
+    setShowRenameFolderModal(true)
+  }, [])
+
+  const openMoveModal = useCallback((bm) => {
+    setMoveMapTarget(bm)
+    setMoveFolderId(bm.folder_id || null)
+    setShowMoveModal(true)
+    setMapContextMenu(null)
+  }, [])
+
   // Dimensions lues côté client (API navigateur standard) — le serveur en a besoin pour dimensionner
   // la salle triviale d'une carte 2D à la taille réelle de l'image (docs/PLAN_BATTLEMAP2D.md §8).
   const readImageDimensions = useCallback((file) => new Promise((resolve, reject) => {
@@ -124,6 +179,77 @@ export function useBattlemapManager({ campaignId, isGm }) {
     await loadMap(battlemapId)
     socket?.emit(WS.MAP_SWITCH, { battlemapId, userIds: [] })
   }, [loadMap, socket])
+
+  // ─── CRUD dossiers (docs/PLAN_BATTLEMAP2D.md §9, Lot 4) ────────────────────────────────────
+  const handleCreateFolder = useCallback(async () => {
+    if (!createFolderName.trim()) return
+    try {
+      const res = await api.post(`/campaigns/${campaignId}/battlemap-folders`, {
+        name: createFolderName.trim(),
+        parent_folder_id: createFolderParentId,
+      })
+      addFolder(res.data.folder)
+      setShowCreateFolderModal(false)
+    } catch (err) {
+      console.error('Erreur création dossier :', err)
+    }
+  }, [createFolderName, createFolderParentId, campaignId, addFolder])
+
+  const handleRenameFolder = useCallback(async () => {
+    if (!renameFolderTarget || !renameFolderValue.trim()) return
+    try {
+      const res = await api.put(`/battlemap-folders/${renameFolderTarget.id}`, { name: renameFolderValue.trim() })
+      updateFolder(renameFolderTarget.id, res.data.folder)
+      setShowRenameFolderModal(false)
+      setRenameFolderTarget(null)
+    } catch (err) {
+      console.error('Erreur renommage dossier :', err)
+    }
+  }, [renameFolderTarget, renameFolderValue, updateFolder])
+
+  const handleDeleteFolder = useCallback(async (folder) => {
+    const childFolderCount = folders.filter(f => f.parent_folder_id === folder.id).length
+    const childMapCount = battlemaps.filter(bm => bm.folder_id === folder.id).length
+    if (!window.confirm(t('session.folderDeleteConfirm', { name: folder.name, maps: childMapCount, folders: childFolderCount }))) return
+    try {
+      const res = await api.delete(`/battlemap-folders/${folder.id}`)
+      // Suppression récursive côté serveur (sous-dossiers + cartes) — recharge complète plutôt que
+      // reconstruire la fermeture transitive côté client (plus simple, plus sûr).
+      removeFolder(folder.id)
+      const deletedMapIds = new Set(res.data.deletedMapIds || [])
+      const remainingMaps = battlemaps.filter(bm => !deletedMapIds.has(bm.id))
+      if (battlemap?.id && deletedMapIds.has(battlemap.id)) {
+        if (remainingMaps.length > 0) {
+          await loadMap(remainingMaps[0].id)
+        } else {
+          setBattlemap(null)
+          setTokens([])
+        }
+      }
+      await Promise.all([loadFolders(), (async () => {
+        try {
+          const mapsRes = await api.get(`/campaigns/${campaignId}/battlemaps`)
+          setBattlemaps(mapsRes.data.battlemaps || [])
+        } catch (err) {
+          console.error('Erreur rechargement cartes :', err)
+        }
+      })()])
+    } catch (err) {
+      console.error('Erreur suppression dossier :', err)
+    }
+  }, [folders, battlemaps, battlemap?.id, t, removeFolder, loadMap, loadFolders, campaignId])
+
+  const handleMoveMapSave = useCallback(async () => {
+    if (!moveMapTarget) return
+    try {
+      const res = await api.put(`/battlemaps/${moveMapTarget.id}`, { folder_id: moveFolderId || '' })
+      updateBattlemap(moveMapTarget.id, res.data.battlemap)
+      setShowMoveModal(false)
+      setMoveMapTarget(null)
+    } catch (err) {
+      console.error('Erreur déplacement carte vers dossier :', err)
+    }
+  }, [moveMapTarget, moveFolderId, updateBattlemap])
 
   // ─── CRUD handlers ────────────────────────────────────────────────────────────
   const handleMapRename = useCallback(async () => {
@@ -193,6 +319,9 @@ export function useBattlemapManager({ campaignId, isGm }) {
       const formData = new FormData()
       formData.append('name', createMapName.trim())
       formData.append('render_mode', createRenderMode)
+      // docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — une carte créée depuis le sélecteur atterrit dans le
+      // dossier actuellement parcouru, pas systématiquement à la racine.
+      if (currentFolderId) formData.append('folder_id', currentFolderId)
       if (createRenderMode === '2d' && createImageFile) {
         const { width, height } = await readImageDimensions(createImageFile)
         formData.append('image', createImageFile)
@@ -213,7 +342,7 @@ export function useBattlemapManager({ campaignId, isGm }) {
       console.error('Erreur création carte :', err)
       setCreateError(t('session.mapCreateError'))
     }
-  }, [createMapName, createRenderMode, createImageFile, campaignId, addBattlemap, readImageDimensions, t])
+  }, [createMapName, createRenderMode, createImageFile, currentFolderId, campaignId, addBattlemap, readImageDimensions, t])
 
   const handleMapSettingsSave = useCallback(async () => {
     if (!settingsTarget) return
@@ -289,5 +418,40 @@ export function useBattlemapManager({ campaignId, isGm }) {
     setSettingsImageFile,
     settingsError,
     handleMapSettingsSave,
+    // Sélecteur de cartes (docs/PLAN_BATTLEMAP2D.md §9, Lot 4)
+    folders,
+    loadFolders,
+    showSelectorPanel,
+    setShowSelectorPanel,
+    openSelectorPanel,
+    currentFolderId,
+    setCurrentFolderId,
+    selectorSearch,
+    setSelectorSearch,
+    // Dossiers — création
+    showCreateFolderModal,
+    setShowCreateFolderModal,
+    createFolderName,
+    setCreateFolderName,
+    createFolderParentId,
+    openCreateFolderModal,
+    handleCreateFolder,
+    // Dossiers — renommage
+    showRenameFolderModal,
+    setShowRenameFolderModal,
+    renameFolderValue,
+    setRenameFolderValue,
+    openRenameFolderModal,
+    handleRenameFolder,
+    // Dossiers — suppression
+    handleDeleteFolder,
+    // Déplacer une carte vers un dossier
+    showMoveModal,
+    setShowMoveModal,
+    moveMapTarget,
+    moveFolderId,
+    setMoveFolderId,
+    openMoveModal,
+    handleMoveMapSave,
   }
 }

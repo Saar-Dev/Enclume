@@ -15,6 +15,7 @@ import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import campaignsRouter from './routes/campaigns.js'
 import battlemapsRouter from './routes/battlemaps.js'
+import battlemapFoldersRouter from './routes/battlemapFolders.js'
 import tokensRouter from './routes/tokens.js'
 import initSocket from './socket/index.js'
 import texturesRouter from './routes/textures.js'
@@ -92,6 +93,8 @@ app.use('/api/campaigns/:campaignId/characters', charactersRouter)
 app.use('/api/characters', charactersActionsRouter)
 app.use('/api/campaigns/:id/battlemaps', battlemapsRouter)
 app.use('/api/battlemaps', battlemapsRouter)
+app.use('/api/campaigns/:id/battlemap-folders', battlemapFoldersRouter)
+app.use('/api/battlemap-folders', battlemapFoldersRouter)
 app.use('/api/battlemaps/:id/tokens', tokensRouter)
 app.use('/api/tokens', tokensRouter)
 app.use('/api/users', usersRouter)
