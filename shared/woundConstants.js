@@ -1,3 +1,5 @@
+import { MINUTES_PER_DAY } from './gameTime.js'
+
 export const WOUND_LOCATIONS = [
   'tete', 'corps', 'bras_droit', 'bras_gauche', 'jambe_droite', 'jambe_gauche',
 ]
@@ -43,4 +45,33 @@ export const MORTAL_WOUND_IMMOBILE_LOCATIONS = ['jambe_droite', 'jambe_gauche']
 
 export function isMortalWoundImmobilized(wounds) {
   return (wounds ?? []).some(w => w.severity === 'mortelle' && MORTAL_WOUND_IMMOBILE_LOCATIONS.includes(w.wound_location))
+}
+
+// Table RAW « Durée de guérison et soins nécessaires » (REGLEBLESSURES.md:413-433, vérifiée
+// 2026-07-30 contre Polaris 3ème édition p.238 — voir docs/PLAN_BLESSURES_GUERISON.md §3.2).
+// `legere` volontairement absente : guérit seule, sans Test, jamais d'échéance `wound_healing_check`.
+// soinsConstants=true -> échéance récurrente hebdomadaire (Test de Médecine chaque semaine) ;
+// false -> échéance unique, ponctuelle, à la fin de la durée.
+// "Membre détruit" non modélisé (Option de campagne différée, docs/ROADMAP.md) — une Mortelle sur
+// Bras/Jambe suit la ligne `mortelle` ci-dessous, pas une ligne séparée.
+export const WOUND_HEALING = {
+  moyenne:  { durationMinutes: 3 * MINUTES_PER_DAY,  soinsConstants: false },
+  grave:    { durationMinutes: 7 * MINUTES_PER_DAY,  soinsConstants: false },
+  critique: { durationMinutes: 21 * MINUTES_PER_DAY, soinsConstants: true },
+  mortelle: { durationMinutes: 35 * MINUTES_PER_DAY, soinsConstants: true },
+}
+
+// Table RAW « Infection » (REGLEBLESSURES.md:436-472, vérifiée 2026-07-30 contre Polaris 3ème
+// édition p.239-240, docs/PLAN_BLESSURES_GUERISON.md §3.3). `legere` absente : jamais concernée.
+// caseMalus : -2 au Test par case déjà cochée sur la ligne (localisation/gravité), en plus de la
+// première — RAW explicite sur Grave/Critique/Mortelle, absent du texte pour Moyenne (relecture
+// attentive : la ligne Moyenne ne mentionne aucun malus de ce type, contrairement aux trois autres).
+// periodMalus : -2 cumulatif par période de 2 jours passée sans soins corrects — RAW explicite
+// seulement pour Grave (réussite) et Critique (échec) ; ni Moyenne ni Mortelle ne le mentionnent
+// (Mortelle : la conséquence est un compte à rebours en heures, aucune "période suivante" réaliste).
+export const WOUND_INFECTION = {
+  moyenne:  { baseModifier: 5,   caseMalus: false, periodMalus: false, infectsOnSuccess: false },
+  grave:    { baseModifier: 0,   caseMalus: true,  periodMalus: true,  infectsOnSuccess: false },
+  critique: { baseModifier: -5,  caseMalus: true,  periodMalus: true,  infectsOnSuccess: true },
+  mortelle: { baseModifier: -10, caseMalus: true,  periodMalus: false, infectsOnSuccess: true },
 }

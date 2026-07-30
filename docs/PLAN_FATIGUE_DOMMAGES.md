@@ -11,10 +11,27 @@
 > réel du Lot 2) : un trou de concurrence supplémentaire trouvé et corrigé (§8 point 10, append
 > atomique de `pending_advance_undo_log`), plus plusieurs citations de code corrigées (signature
 > `adjustGameTime`, patron `tradeService.js`, plage `char-sheet.js`, portée du patron
-> `weaponModRegistry.js`) — sans impact sur l'architecture retenue. Toujours
-> aucun code écrit sur Lot 2. Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver
-> dans `docs/Old/` une fois le chantier entier clos, contenu durable transféré vers
-> `docs/SYSTEME/*.md`.
+> `weaponModRegistry.js`) — sans impact sur l'architecture retenue.
+> **2026-07-30 — Lot 2 codé et testé** : migrations `221_game_echeances.js`/
+> `223_campaigns_pending_advance.js`, `shared/echeanceTypeRegistry.js`,
+> `server/src/lib/echeanceService.js` (`createEcheance`/`sweepDueEcheances`/`previewDueEcheances`/
+> `resolveEcheanceNow`), `server/src/lib/gameTimeService.js` (`requestGameTimeAdvance`/
+> `confirmPendingAdvance`/`cancelPendingAdvance` + garde sur `adjustGameTime`, balayage automatique
+> intégré dans sa transaction). **92/92 tests verts en conditions réelles** (base locale). Deux vrais
+> bugs trouvés en testant, corrigés avant tout commit — non prévus par le texte du plan :
+> (1) `confirmPendingAdvance` levait son AppError de refus *à l'intérieur* du `db.transaction()`,
+> provoquant un `ROLLBACK` qui effaçait le marquage `pending_mj_review` d'une échéance nouvellement
+> due qu'on venait de committer juste avant — corrigé en faisant retourner un descripteur d'issue par
+> la transaction (qui committe toujours) plutôt que de lever depuis l'intérieur ;
+> (2) l'engine ne traçait dans `undoEntries` que les mutations du *handler*, jamais sa propre
+> mutation de la ligne `game_echeances` elle-même (statut/reschedule) — `cancelPendingAdvance` ne
+> pouvait donc pas restaurer une échéance déjà `completed` à son état d'origine (`next_due_minutes`/
+> `occurrences_remaining` perdus, pas seulement le statut) ; corrigé en faisant tracer par l'engine sa
+> propre mutation, même patron générique `{ table, rowId, previousValues }` que le handler.
+> Reste : routes REST/WS + tests transport (increment 5, pas encore fait), et tout consommateur réel
+> (Blessures §5/§6 de `PLAN_BLESSURES_GUERISON.md`). Document temporaire (`docs/RegleDocumentaire.md`
+> Règle 10) — à archiver dans `docs/Old/` une fois le chantier entier clos, contenu durable transféré
+> vers `docs/SYSTEME/*.md`.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -617,9 +634,10 @@ opaque :
 
 ### Points ouverts pour la cuisson avec Saar
 
-1. Nom de la table — `game_echeances` proposé, pas figé.
-2. `character_id` obligatoire (`NOT NULL`) ou nullable pour une future échéance non liée à un
-   personnage précis ? Aucun cas connu — pencherait pour `NOT NULL` (YAGNI) sauf objection.
+1. ~~Nom de la table~~ — **tranché en codant (2026-07-30)** : `game_echeances`, aucune objection,
+   migration `221_game_echeances.js`.
+2. ~~`character_id` obligatoire ou nullable~~ — **tranché en codant (2026-07-30)** : `NOT NULL`
+   (YAGNI), aucun cas connu qui aurait demandé le contraire.
 3. ~~`cancelPendingAdvance` sur une échéance déjà résolue~~ — **résolu (Saar, 2026-07-29)** :
    l'effet doit être défait, pas seulement l'avance du compteur. Journal d'annulation
    (`pending_advance_undo_log`) ajouté ci-dessus pour ça.

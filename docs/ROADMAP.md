@@ -1,5 +1,7 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-29 — ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
+> Dernière mise à jour : 2026-07-30 — précision sur "Ergonomie et pédagogie des règles" (besoin concret
+> noté en tranchant `docs/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
+> 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
 > Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL6.md`.
 > **Bugs et dettes techniques** : voir le registre unique `docs/BUGIDENTIFIE.md`.
 
@@ -17,6 +19,9 @@
 - `revers` — 🔲
 - `skill_natural_prog` — 🔲
 - `celebrity` — 🔲
+- Membres détruits (distinction Mortelle vs Membre détruit, `docs/PLAN_BLESSURES_GUERISON.md` §3.2/§8
+  — décision Saar 2026-07-29 : différé, la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant
+  que cette option n'existe pas) — 🔲
 
 ### Autres chantiers immédiats
 - Upload screenshot éditeur → MinIO — 🔲
@@ -42,7 +47,9 @@
 - Exo‑armures (manuel existant, jamais implanté)
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
-- Ergonomie et pédagogie des règles (explication proactive des bonus/malus)
+- Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté
+  2026-07-30 en cadrant `docs/PLAN_BLESSURES_GUERISON.md` — afficher les règles de Guérison/Infection
+  dans l'UI, tooltips envisagés, pas encore cadré)
 - Export PDF fiche personnage
 - Wizard création à deux (GM + joueur)
 - Matériel → objets réels (conversion dans inventaire)

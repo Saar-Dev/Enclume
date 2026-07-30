@@ -45,7 +45,8 @@ import {
   getNaturalArmorMod,
 } from '../../../../shared/polarisUtils.js'
 import { areRequirementsSatisfied } from '../../../../shared/skillRequirements.js'
-import { resolveWoundInsertion, isShockTestRequired, getWorstWoundSeverity } from '../../lib/woundUtils.js'
+import { getWorstWoundSeverity } from '../../lib/woundUtils.js'
+import { applyWound } from '../../lib/woundService.js'
 import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addAdvantageNote, removeAdvantageNote } from '../../services/advantageService.js'
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { cloneToVault } from '../../services/vaultService.js'
@@ -851,22 +852,16 @@ router.post('/:characterId/wounds', async (req, res, next) => {
     if (!WOUND_LOCATIONS.includes(location)) throw new AppError(400, `Localisation invalide : ${location}`)
     if (!WOUND_SEVERITIES.includes(severity)) throw new AppError(400, `Gravité invalide : ${severity}`)
 
-    const result = await db.transaction(trx =>
-      resolveWoundInsertion(trx, sheet.id, location, severity)
-    )
-
-    const shock_test_required = isShockTestRequired(result.wound.severity, result.wound.location)
-    const worst_wound_severity = await getWorstWoundSeverity(db, sheet.id)
-
-    req.app.get('io').to(req.character.campaign_id).emit(WS.WOUND_ADDED, {
-      characterId: req.params.characterId,
-      wound:       result.wound,
-      promoted:    result.promoted,
-      shock_test_required,
-      worst_wound_severity,
+    // applyWound centralise insertion + échéance de Guérison (Lot 2, docs/PLAN_BLESSURES_GUERISON.md
+    // §5) + broadcast WOUND_ADDED — cette route ne dupliquait plus que ça avant ce commit.
+    const result = await applyWound(req.app.get('io'), db, req.character.campaign_id, {
+      charSheetId: sheet.id, characterId: req.params.characterId, localisation: location, severity,
     })
+    if (!result) throw new AppError(400, 'Ligne pleine — gravité maximale atteinte pour cette localisation')
 
-    res.status(201).json({ wound: result.wound, promoted: result.promoted, shock_test_required })
+    res.status(201).json({
+      wound: result.wound, promoted: result.promoted, shock_test_required: result.shock_test_required,
+    })
   } catch (err) { next(err) }
 })
 

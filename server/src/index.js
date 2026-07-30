@@ -36,6 +36,7 @@ import creationRouter from './routes/creation.js'
 import vaultRouter from './routes/vault.js'
 import { BUILTIN_MODELS_ROOT, syncBuiltinModels } from './lib/builtinModelCatalog.js'
 import { createCorsOriginValidator, parseClientOrigins } from './lib/clientOrigins.js'
+import './lib/echeanceHandlerRegistrations.js' // effet de bord : peuple shared/echeanceTypeRegistry.js
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 

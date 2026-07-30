@@ -363,7 +363,7 @@ temps de guérison et les types de soins nécessaires.
 Chaque blessure possède une durée de guérison, expri￾mée en jours ou en semaines. C’est la durée minimum nécessaire 
 pour qu’une blessure diminue et se transforme en une blessure 
 de gravité inférieure. Ainsi, au bout de 3 semaines, une Blessure 
-mortelle a la possibilité de se transformer en Blessure critique. 
+critique a la possibilité de se transformer en Blessure grave. 
 Les Blessures voient leur gravité décroître peu à peu, jusqu’à dis￾paraître totalement.
 Note : un Membre détruit devient une Blessure critique.
 Néanmoins, pour qu’une blessure guérisse aussi facilement, il 
@@ -552,6 +552,39 @@ manqué plusieurs paliers). Le seul moyen d’arrêter le phénomène
 est de placer l’individu en caisson hyperbare, ou de le redescendre 
 au dernier palier respecté (si c’est possible…). Le personnage devra 
 alors respecter le temps de décompression nécessaire.
+SOUFFLE (OPTIONNEL)
+L’Attribut secondaire Souffle indique le nombre de
+Tours de combat pendant lesquels un personnage peut retenir sa respiration. Il faut un Tour de combat complet pour
+prendre sa respiration : si le personnage est surpris et n’a
+pas le temps de se préparer, son niveau de Souffle doit être
+divisé par deux. Retenir sa respiration permet bien entendu d’échapper à la noyade, en cas d’immersion, mais peut
+aussi être utile si le personnage veut éviter de s’asphyxier
+par manque d’oxygène ou de respirer un gaz nocif.
+Dès qu’un personnage retient sa respiration, il commence à perdre des points de Souffle (le compteur de Souffle de la fiche de personnage peut être utilisé pour gérer
+tout cela). Le rythme auquel un personnage perd ses points
+de Souffle dépend de l’intensité de son activité :
+• Personnage immobile : perte d’1 point de Souffle
+par Tour de combat.
+• Activité modérée (nage peu rapide, marche…) : perte de 2 points/Tour.
+• Activité intense (nage rapide, course…) : perte
+de 3 points/Tour.
+• Activité très intense (combat…) : perte de 4
+points/Tour.
+Lorsqu’un personnage a épuisé tous ses points de Souffle, il peut encore effectuer un Test d’Athlétisme : le modificateur de réussite (s’il est égal à 1 ou plus) indique le nombre de Tours de combat qu’il gagne avant de devoir faire un
+nouveau Test. À chaque nouveau Test, le personnage subit
+un malus cumulatif égal à la valeur du nombre de points de
+Souffle perdus, en fonction de son activité (par exemple -2
+pour une activité modérée, -3 pour une activité intense,
+etc.). Dès qu’un Test d’Athlétisme est raté, le personnage
+commence à se noyer (voir Noyade, dans Autres sources de dommages, page 244), à s’asphyxier ou à subir les
+effets du gaz nocif (qui n’est pas forcément mortel, il peut
+s’agir d’un gaz lacrymogène ou soporifique.
+HYPERVENTILATION (OPTIONNEL)
+Avant de retenir sa respiration, un personnage peut
+avoir envie de recourir à des techniques d’hyperventilation
+pour améliorer ses performances, en augmentant fortement
+son rythme et son amplitude respiratoire. Cette méthode est
+toutefois dangereuse, car elle a pour effet de tromper la vigilance et les réflexes naturels du corps, concernant son besoin
 en oxygène, et peut entraîner une syncope imprévisible. 
 En terme de jeu, avant que le personnage ne retienne son 
 souffle, le MJ doit effectuer secrètement un Test 

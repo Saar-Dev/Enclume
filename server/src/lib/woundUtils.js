@@ -29,23 +29,25 @@ async function getResolvedGameMinutes(trx, char_sheet_id) {
   return row?.game_time_resolved_minutes ?? 0
 }
 
-// Récursif — résout la promotion en cascade dans une transaction knex.
+// Récursif — résout la promotion en cascade dans une transaction knex. `deletedWounds` accumule les
+// lignes supprimées par la cascade (vide si aucune promotion) — nécessaire aux appelants qui doivent
+// construire des undoEntries génériques { table, rowId, previousValues } (Lot 2, ex.
+// wound_infection_check) sur une insertion qui peut être un mélange delete+insert, pas juste un insert.
 export async function resolveWoundInsertion(trx, char_sheet_id, location, severity) {
   const maxCount = WOUND_MAX_COUNTS[location]?.[severity]
   if (!maxCount) throw new AppError(400, `Gravité "${severity}" invalide pour "${location}"`)
 
-  const { count } = await trx('character_wounds')
+  const existingRows = await trx('character_wounds')
     .where({ char_sheet_id, location, severity })
-    .count('* as count')
-    .first()
+    .select('*')
 
-  const currentCount = parseInt(count)
+  const currentCount = existingRows.length
   const next = nextSeverity(severity)
 
   if (next && currentCount >= maxCount - 1) {
     await trx('character_wounds').where({ char_sheet_id, location, severity }).del()
     const result = await resolveWoundInsertion(trx, char_sheet_id, location, next)
-    return { ...result, promoted: true }
+    return { ...result, promoted: true, deletedWounds: [...existingRows, ...result.deletedWounds] }
   }
 
   if (currentCount >= maxCount) {
@@ -59,7 +61,17 @@ export async function resolveWoundInsertion(trx, char_sheet_id, location, severi
       occurred_at_game_minutes: occurredAtGameMinutes,
     })
     .returning('*')
-  return { wound, promoted: false }
+  return { wound, promoted: false, deletedWounds: [] }
+}
+
+// undoEntries génériques { table, rowId, previousValues } pour un résultat de resolveWoundInsertion —
+// une entrée par ligne supprimée par la cascade (previousValues = son contenu) + une pour la ligne
+// insérée (previousValues: null). Convention Lot 2, docs/PLAN_FATIGUE_DOMMAGES.md §8.
+export function buildWoundInsertionUndoEntries(insertionResult) {
+  return [
+    ...insertionResult.deletedWounds.map(w => ({ table: 'character_wounds', rowId: w.id, previousValues: w })),
+    { table: 'character_wounds', rowId: insertionResult.wound.id, previousValues: null },
+  ]
 }
 
 // Inverse de resolveWoundInsertion — ne cascade jamais (RAW : la guérison diminue la gravité d'un

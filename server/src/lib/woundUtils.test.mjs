@@ -5,6 +5,7 @@ import db from '../db/knex.js'
 import { AppError } from './AppError.js'
 import {
   nextSeverity, previousSeverity, resolveWoundInsertion, resolveWoundImprovement,
+  buildWoundInsertionUndoEntries,
 } from './woundUtils.js'
 
 // Lancement manuel (aucun script npm test dans le projet) :
@@ -49,6 +50,49 @@ test('resolveWoundInsertion stampe occurred_at_game_minutes depuis game_time_res
     const { charSheet } = await createFixture(trx, { resolvedMinutes: 4242 })
     const { wound } = await resolveWoundInsertion(trx, charSheet.id, 'tete', 'moyenne')
     assert.equal(wound.occurred_at_game_minutes, 4242)
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('resolveWoundInsertion : sans promotion, deletedWounds vide, une seule undoEntry insert', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne')
+    assert.deepEqual(result.deletedWounds, [])
+    const undoEntries = buildWoundInsertionUndoEntries(result)
+    assert.deepEqual(undoEntries, [{ table: 'character_wounds', rowId: result.wound.id, previousValues: null }])
+    throw new Error('ROLLBACK_WOUND_TEST')
+  }), /ROLLBACK_WOUND_TEST/)
+})
+
+test('resolveWoundInsertion : promotion en cascade, deletedWounds capture les lignes supprimées', { skip }, async () => {
+  await assert.rejects(db.transaction(async (trx) => {
+    const { charSheet } = await createFixture(trx)
+    // corps/moyenne maxCount=3 -> 2 cases existantes déclenchent déjà la cascade (currentCount >= maxCount-1)
+    const existing = []
+    for (let i = 0; i < 2; i++) {
+      const [row] = await trx('character_wounds')
+        .insert({ char_sheet_id: charSheet.id, location: 'corps', severity: 'moyenne', occurred_at_game_minutes: 100 + i })
+        .returning('*')
+      existing.push(row)
+    }
+
+    const result = await resolveWoundInsertion(trx, charSheet.id, 'corps', 'moyenne')
+    assert.equal(result.promoted, true)
+    assert.equal(result.wound.severity, 'grave')
+    assert.equal(result.deletedWounds.length, 2)
+    assert.deepEqual(new Set(result.deletedWounds.map(w => w.id)), new Set(existing.map(w => w.id)))
+
+    const undoEntries = buildWoundInsertionUndoEntries(result)
+    assert.equal(undoEntries.length, 3) // 2 delete-undo (insert) + 1 insert-undo (delete)
+    for (const w of existing) {
+      assert.ok(undoEntries.some(e => e.rowId === w.id && e.previousValues?.id === w.id))
+    }
+    assert.ok(undoEntries.some(e => e.rowId === result.wound.id && e.previousValues === null))
+
+    const remaining = await trx('character_wounds').where({ char_sheet_id: charSheet.id, location: 'corps' }).select('*')
+    assert.equal(remaining.length, 1)
+    assert.equal(remaining[0].severity, 'grave')
     throw new Error('ROLLBACK_WOUND_TEST')
   }), /ROLLBACK_WOUND_TEST/)
 })

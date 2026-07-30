@@ -9,9 +9,24 @@
 > la dépendance au Lot 2 ci-dessous. Le résolveur de Test générique, prérequis,
 > est déjà clos séparément (§2). **Dépend du Lot 2 de
 > `PLAN_FATIGUE_DOMMAGES.md`** (échéancier générique, table `game_echeances`) — toujours v1 discutée,
-> pas encore codé : ce plan ne peut pas être codé en entier avant que le Lot 2 le soit, seule la
-> partie indépendante (migration `character_wounds`, `resolveWoundImprovement`) peut commencer
-> avant. Aucun code écrit sur ce plan lui-même. Document temporaire (`docs/RegleDocumentaire.md`
+> pas encore codé : ce plan ne peut pas être codé en entier avant que le Lot 2 le soit.
+> **✅ Partie indépendante codée et testée (2026-07-30)** : migration
+> `server/src/db/migrations/219_character_wounds_occurred_at.js` (colonne
+> `occurred_at_game_minutes`, ancrée sur `game_time_resolved_minutes`) et
+> `resolveWoundImprovement`/`previousSeverity` (`server/src/lib/woundUtils.js`).
+> **✅ Lot 2 (`PLAN_FATIGUE_DOMMAGES.md`) clos le 2026-07-30** — ce plan n'est plus bloqué.
+> **✅ Handlers `wound_healing_check`/`wound_infection_check` codés et testés (2026-07-30)** —
+> `server/src/lib/woundEvolutionService.js`, enregistrés dans `shared/echeanceTypeRegistry.js` via
+> `server/src/lib/echeanceHandlerRegistrations.js`. Tables RAW (durées de guérison, modificateurs
+> d'Infection) dans `shared/woundConstants.js` (`WOUND_HEALING`/`WOUND_INFECTION`). Étendu au passage :
+> `resolveWoundInsertion` retourne désormais `deletedWounds` (+ `buildWoundInsertionUndoEntries`) pour
+> construire des `undoEntries` Lot 2 corrects même sur une promotion en cascade ;
+> `applyWound`/`char-sheet.js` (route `POST /:characterId/wounds`) branchés sur la création initiale
+> d'échéance, la seconde dédupliquée sur `applyWound` au passage (réutilisation au lieu d'une 2ᵉ copie
+> de la logique d'insertion). **122/122 tests verts en conditions réelles**
+> (`node --env-file=../.env --test <fichiers>`, suite serveur complète, aucune régression).
+> Reste : écran de revue MJ, panneau joueur, routes REST/WS (§6) — pas encore codé.
+> Document temporaire (`docs/RegleDocumentaire.md`
 > Règle 10) — à archiver dans `docs/Old/` une fois le chantier clos, contenu durable transféré vers
 > `docs/SYSTEME/BLESSURES.md`.
 > Source : `docs/REGLES/REGLEBLESSURES.md` (extrait Livre de Base Polaris, p.236-240, sections
@@ -110,11 +125,15 @@ Table de durée (`REGLEBLESSURES.md:413-433`) :
 | Mortelle | 5 semaines | **Non** | Chirurgie + Médecine | Bras/Jambe -3, Corps -5, Tête -7 | **Oui** |
 | Membre détruit | 3 semaines | **Non** | Chirurgie + Médecine | -3 | **Oui** |
 
-**Incohérence trouvée dans le livre lui-même, signalée plutôt que résolue en silence** : le texte
-narratif (:365-366) donne "3 semaines" pour l'exemple Mortelle→Critique, alors que ce tableau donne
-5 semaines pour Mortelle (3 semaines est la vraie durée de Critique — vraisemblablement une coquille
-du livre). Le tableau est retenu comme source (plus précis, dédié, moins susceptible d'être une
-approximation illustrative qu'une phrase d'exemple).
+**Correction 2026-07-30 — pas une incohérence du livre, une erreur de transcription trouvée en
+comparant contre le PDF réel (`Polaris 3ème édition.pdf`, p.237, fourni par Saar)** : une version
+antérieure de ce plan pensait avoir trouvé une coquille du Livre de Base (l'exemple narratif
+`:365-366` donnant "Mortelle→Critique, 3 semaines" contre 5 semaines au tableau pour Mortelle). En
+réalité, le vrai texte du LdB dit *"au bout de 3 semaines, une Blessure **critique** a la possibilité
+de se transformer en Blessure **grave**"* — cohérent avec le tableau (3 semaines = durée de
+Critique), aucune incohérence dans le livre. C'est `REGLEBLESSURES.md` qui avait interverti les
+gravités lors de sa transcription — corrigé dans ce fichier. Sans conséquence sur les décisions déjà
+prises : le tableau faisait déjà foi, la correction ne change aucune mécanique codée.
 
 **Emplacement en code (proposition Saar, 2026-07-29)** : ce tableau et celui d'Infection (§3.3) sont
 des tables RAW brutes, même nature que `AN_TABLE` déjà présente dans `shared/polarisUtils.js`. Mais
@@ -261,9 +280,19 @@ sur sa pire blessure. Pas un candidat à l'automatisation ; à laisser en outil 
   quand la blessure a eu lieu pour un MJ qui consulterait l'historique).
 - **`game_echeances`** (Lot 2, table partagée) — chaque échéance de Guérison/Infection porte dans
   son `payload` (jsonb, opaque au moteur) au minimum `{ woundId }`. Une même blessure peut avoir
-  **deux lignes `game_echeances` simultanées et indépendantes** (une `wound_healing_check`, une
-  `wound_infection_check` dès que la gravité ≥ Moyenne) — cohérent avec le moteur générique conçu
-  pour porter plusieurs échéances indépendantes par personnage.
+  **deux lignes `game_echeances` simultanées** (une `wound_healing_check`, une `wound_infection_check`)
+  — cohérent avec le moteur générique conçu pour porter plusieurs échéances indépendantes par
+  personnage. **Précision 2026-07-30** (question posée par Saar, tranchée après relecture RAW
+  combinée de `:396-401` et `:405-407`) : la `wound_infection_check` n'est **jamais** créée
+  indépendamment dès la naissance de la blessure — uniquement en conséquence d'un Échec/Catastrophe
+  du `wound_healing_check` (§5). Le cas RAW "blessure jamais traitée du tout" (`:405-407`,
+  *"toutes les blessures non soignées... risquent de s'aggraver par l'infection"*) n'est pas un 3ᵉ
+  déclencheur mécanique séparé : le `wound_healing_check` se déclenche toujours (échéance
+  programmée), le MJ y répond forcément Amélioration/Échec/Catastrophe même si narrativement
+  personne n'a soigné le blessé — "jamais traitée" se traduit par une réponse Échec ou Catastrophe à
+  cette échéance-là, pas par un mécanisme parallèle à construire. Confirmé Saar : aucun cas connu où
+  l'Infection devrait s'appliquer avant que le premier `wound_healing_check` de la blessure ait eu
+  l'occasion de se résoudre.
 - **Fonction manquante à écrire** : inverse de `resolveWoundInsertion` — retire une case à la
   gravité courante, insère une case à la gravité inférieure (ou supprime purement si Légère). Nom
   proposé : `resolveWoundImprovement(trx, woundId)`.
