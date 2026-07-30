@@ -33,11 +33,24 @@ export const SETTINGS_SCHEMA = {
   calendar_start_year:  { type: 'number', default: 1 },
   calendar_start_month: { type: 'number', default: 1 },
   calendar_start_day:   { type: 'number', default: 1 },
+  // Fatigue (règle avancée optionnelle, docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) — défaut `false`
+  // (mécanique neuve, contrairement à encumbrance_enabled qui tournait déjà sans gate) : aucun malus
+  // appliqué, aucune entrée UI visible tant que le MJ ne l'active pas explicitement.
+  fatigue_enabled: { type: 'boolean', default: false },
 }
 
-const DEFAULT_SETTINGS = Object.fromEntries(
-  Object.entries(SETTINGS_SCHEMA).map(([key, def]) => [key, def.default])
-)
+/**
+ * Projette un objet settings (partiel, brut depuis campaigns.settings JSONB) sur exactement les
+ * clés de SETTINGS_SCHEMA : clé absente → défaut, clé parasite (schéma passé, JSONB jamais purgé)
+ * → filtrée. Ne jamais remplacer par un simple spread `{...defaults, ...settings}` : une clé
+ * parasite round-tripperait jusqu'au client puis reviendrait sur PUT /campaigns/:id, que la
+ * validation par clé (`campaigns.js`) rejette explicitement (AppError "Clé settings inconnue").
+ */
+export function mergeWithDefaults(settings) {
+  return Object.fromEntries(
+    Object.keys(SETTINGS_SCHEMA).map(key => [key, settings?.[key] ?? SETTINGS_SCHEMA[key].default])
+  )
+}
 
 /**
  * Lit campaigns.settings et retourne l'objet mergé avec les defaults du schéma —
@@ -45,5 +58,5 @@ const DEFAULT_SETTINGS = Object.fromEntries(
  */
 export async function getCampaignSettings(db, campaignId) {
   const row = await db('campaigns').where({ id: campaignId }).select('settings').first()
-  return { ...DEFAULT_SETTINGS, ...(row?.settings ?? {}) }
+  return mergeWithDefaults(row?.settings)
 }

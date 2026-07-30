@@ -17,15 +17,24 @@ export async function emitTokenStatusUpdated(io, db, campaignId, tokenId) {
 
 // ─── applyStunWithDuration ────────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre.
-// Transaction : delete stunned+unconscious existants → insert nouveau. Exclusion mutuelle garantie.
-export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome, stunDuration, currentTurn) {
-  const stunUntil    = currentTurn + stunDuration
-  const statusCode   = outcome === 'inconscient' ? 'unconscious' : 'stunned'
+// Transaction : delete stunned+unconscious(+evanoui)+existants → insert nouveau. Exclusion mutuelle
+// garantie.
+// Extension (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4, trou structurel 5) : `outcome` déduisait avant
+// un binaire fermé stunned/unconscious, incapable de produire `evanoui` (Fatigue, palier "À bout de
+// force") — `statusCode` explicite optionnel accepté en 8e paramètre, défaut inchangé (déduit
+// d'`outcome`) pour tous les appelants existants du Choc de blessure.
+// Extension (trou structurel 8) : `currentTurn` peut être `null` — le Test de Fatigue peut être
+// déclaré hors combat, où aucun `current_turn` ne progresse jamais (confirmé Saar : comportement
+// voulu, badge sans expiration hors combat, retrait manuel MJ) — `stunUntil` devient alors `null`
+// (jusqu'à retrait manuel) plutôt qu'une valeur de Tour qui ne serait jamais atteinte.
+export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome, stunDuration, currentTurn, { statusCode: statusCodeOverride } = {}) {
+  const stunUntil    = currentTurn != null ? currentTurn + stunDuration : null
+  const statusCode   = statusCodeOverride ?? (outcome === 'inconscient' ? 'unconscious' : 'stunned')
   try {
     await db.transaction(async trx => {
       await trx('token_statuses')
         .where({ token_id: tokenId })
-        .whereIn('status_code', ['stunned', 'unconscious'])
+        .whereIn('status_code', ['stunned', 'unconscious', 'evanoui'])
         .delete()
       await trx('token_statuses')
         .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: stunUntil })
@@ -34,7 +43,7 @@ export async function applyStunWithDuration(io, db, campaignId, tokenId, outcome
   } catch (err) {
     console.error('[statusService] applyStunWithDuration error:', err.message)
   }
-  console.log(`[statusService] applyStunWithDuration — token:${tokenId} outcome:${outcome} duration:${stunDuration} until_turn:${stunUntil}`)
+  console.log(`[statusService] applyStunWithDuration — token:${tokenId} outcome:${outcome} statusCode:${statusCode} duration:${stunDuration} until_turn:${stunUntil}`)
 }
 
 // ─── resolveShockTest ─────────────────────────────────────────────────────────

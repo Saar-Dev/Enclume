@@ -7,7 +7,7 @@ import { requireRole } from '../middleware/role.js'
 import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
-import { SETTINGS_SCHEMA } from '../lib/campaignSettingsService.js'
+import { SETTINGS_SCHEMA, mergeWithDefaults } from '../lib/campaignSettingsService.js'
 import { adjustGameTime, requestGameTimeAdvance, confirmPendingAdvance, cancelPendingAdvance } from '../lib/gameTimeService.js'
 import { resolveEcheanceNow } from '../lib/echeanceService.js'
 import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
@@ -180,6 +180,10 @@ router.get('/:id', requireAuth, async (req, res) => {
   // game_time_resolved_minutes est un repère mécanique interne (docs/PLAN_FATIGUE_DOMMAGES.md §7,
   // Lot 1) — jamais montré au MJ, à retirer explicitement avant toute réponse client.
   delete campaign.game_time_resolved_minutes
+  // Merge avec les défauts du schéma (source unique campaignSettingsService.js) — sans ça, toute
+  // clé jamais sauvegardée par le MJ est absente du JSONB et force chaque consommateur client à
+  // dupliquer sa propre copie clé→défaut (cause racine UI4, docs/BUGIDENTIFIE.md).
+  campaign.settings = mergeWithDefaults(campaign.settings)
 
   const members = await db('campaign_members')
     .join('users', 'campaign_members.user_id', 'users.id')

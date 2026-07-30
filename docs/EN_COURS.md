@@ -57,6 +57,24 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-30 — `docs/BUGIDENTIFIE.md` UI4 traité (cause racine, pas
+> la rustine décrite initialement) : `GET /api/campaigns/:id` renvoyait `campaign.settings` brut, donc
+> `CampaignSettingsPage.jsx` dupliquait à la main la liste clé→défaut déjà centralisée côté serveur
+> (`campaignSettingsService.js` `SETTINGS_SCHEMA`, ~20 consommateurs) — `calendar_start_*` avait déjà dû
+> y être rajouté après coup, `encumbrance_*` a été oublié, `fatigue_enabled` (chantier Fatigue en cours)
+> aurait suivi. Nouvelle fonction pure `mergeWithDefaults(settings)` (projection filtrée sur les clés du
+> schéma, pas un spread — évite qu'une clé parasite du JSONB round-trippe jusqu'au client puis casse la
+> validation stricte de `PUT /campaigns/:id`), réutilisée par `getCampaignSettings()` (comportement
+> inchangé) et appliquée sur `GET /:id` avant réponse. Côté client, la liste à 20 clés recopiées à la
+> main dans `load()` est remplacée par un simple spread du `settings` désormais toujours complet — plus
+> aucune clé à ajouter côté client à chaque évolution du schéma. **Testé** : nouveau
+> `campaignSettingsService.test.mjs` (4/4), suite serveur complète (77/77, 60 skip DB), ESLint + build
+> client propres. **Non testé** : rendu réel navigateur (Paramètres > Règle du jeu, sauvegarde +
+> rechargement). **Données** : aucune migration, lecture seule sur `campaigns.settings` existant.
+> **Retour arrière** : aucun commit encore créé, modifications dans le worktree uniquement. **Prochaine
+> étape** : Saar teste en navigateur ; puis lot suivant du triage `BUGIDENTIFIE.md`
+> (HORLOGE-OVERFLOW1 → HORLOGE-TEST1 → GRIDDEAD1 → DCO1).
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-30 — `GameTimeWidget.jsx` (horloge de campagne, sidebar
 > session) reskin — Saar : « avec son aspect de bouton, c'est moche ». Les 5 unités (année/mois/jour/
 > heure/minute) étaient 5 boutons `.btn-tool` séparés, indiscernables des vrais boutons d'outils juste
@@ -592,6 +610,34 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 ---
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
+
+> **Item 109 (Session 190, Saar) — `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 4 (Fatigue) ✅ CLOS, CONFIRMÉ
+> FONCTIONNEL PAR SAAR EN NAVIGATEUR.**
+> 7 passes d'analyse critique avant/pendant le codage (détail complet §10 du plan) — corrections
+> notables : agrégation de malus revue en registre déclaratif (`activeMalusRegistry.js`, patron
+> `echeanceTypeRegistry.js`) plutôt qu'une fonction à paramètres fixes ; verrouillage `.forUpdate()`
+> sur toute mutation de `fatigue_points` (même classe de race déjà corrigée Lot 1/Lot 2) ;
+> `catastropheRisk` (marge ≤ -15) correctement distingué d'`isCriticalFail` (jet=20) — deux concepts
+> RAW distincts, la 1ʳᵉ rédaction confondait les deux ; badge Choc (`evanoui`/`unconscious`) sans
+> expiration si le Test de Fatigue est déclaré hors combat (`current_turn` ne progresse jamais hors
+> FSM combat, confirmé voulu par Saar) ; routes déplacées de `campaigns.js` vers `char-sheet.js` en
+> cours de route (`CharacterSheet.jsx` n'a jamais `campaignId` en prop) ; case à cocher UI
+> (`SectionGameRules.jsx`) trouvée manquante après la fin du codage backend — sans elle, aucun MJ
+> n'aurait pu activer la mécanique.
+> **Codé** : migration 227, `shared/fatigueConstants.js` (6/6 tests), `activeMalusRegistry.js` (7/7,
+> registre branché sur 6 sites — 3× combat `socketCombatHelpers.js`, `socketEntity.js`, `macro-preview`/
+> `MACRO_ROLL`, ces deux derniers corrigeant un bug préexistant blessure/encombrement absent des
+> macros joueur) ; `fatigueService.js` (`resolveFatigueTest`/`restFatigue`/`setFatiguePoints`) ;
+> extension `applyStunWithDuration` (statut `evanoui`) ; event `FATIGUE_TEST_RESULT` ; 2 routes REST ;
+> `CharacterSheet.jsx` (section Fatigue, palier/case + malus dans le tooltip INI, boutons MJ
+> Test/Repos) ; case à cocher campagne `fatigue_enabled` (défaut désactivé) ; icône `evanoui.svg` ;
+> `docs/VOCABULARY.md`/`docs/ASBUILT.md` à jour.
+> **Testé** : 330 tests Node (270 pass/60 skip DB, 0 échec), ESLint (0 nouvelle erreur, 3 préexistantes
+> confirmées via `git stash`), `npm run build` client propre à chaque étape, **confirmé fonctionnel en
+> navigateur par Saar** (case à cocher, apparition/disparition du bloc Fatigue, Test avec évolution
+> palier/case, malus dans le tooltip, Repos, macro joueur reflétant désormais le malus de blessure).
+> **Non testé** : round-trip HTTP authentifié scripté (pas d'identifiants côté agent).
+> Détail complet : `docs/PLAN_FATIGUE_DOMMAGES.md` §10, `docs/ASBUILT.md` (section Fatigue).
 
 > **Item 108 (Session 173, dev/Saar) — i18n Combat (`docs/PLAN_LOCALISATION.md` Lot 1) ✅ CODÉ, LOT 1
 > ENTIÈREMENT CLOS — 17 fichiers + `combatSections.js`, zéro texte en dur restant (confirmé par

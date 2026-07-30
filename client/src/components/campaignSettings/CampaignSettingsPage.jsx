@@ -29,33 +29,14 @@ export default function CampaignSettingsPage() {
       try {
         const res = await api.get(`/campaigns/${campaignId}`)
         const { campaign } = res.data
-        const s = campaign.settings || {}
+        // GET /campaigns/:id renvoie désormais settings déjà mergé avec les défauts du schéma
+        // serveur (campaignSettingsService.js, source unique) — plus de liste clé→défaut à
+        // dupliquer ici, une clé de schéma ajoutée côté serveur apparaît automatiquement.
         const data = {
           name: campaign.name,
           dice_config: campaign.dice_config,
           default_token_glb_url: campaign.default_token_glb_url ?? null,
-          settings: {
-            ambiance: s.ambiance ?? 'INTERMEDIAIRE',
-            feminin_bonus: s.feminin_bonus ?? false,
-            random_mutations: s.random_mutations ?? true,
-            polaris_latent: s.polaris_latent ?? false,
-            random_pro_advantages: s.random_pro_advantages ?? true,
-            revers: s.revers ?? false,
-            skill_prerequisites: s.skill_prerequisites ?? false,
-            skill_max_level: s.skill_max_level ?? false,
-            skill_natural_prog: s.skill_natural_prog ?? false,
-            young_penalty: s.young_penalty ?? false,
-            celebrity: s.celebrity ?? false,
-            pnj_unlimited_ammo: s.pnj_unlimited_ammo ?? true,
-            reload_mode: s.reload_mode ?? 'magazine',
-            action_timer_sec: s.action_timer_sec ?? 0,
-            shock_auto_stun: s.shock_auto_stun ?? true,
-            allow_los_cancel: s.allow_los_cancel ?? false,
-            status_effects_mode: s.status_effects_mode ?? 'enforced',
-            calendar_start_day: s.calendar_start_day ?? 1,
-            calendar_start_month: s.calendar_start_month ?? 1,
-            calendar_start_year: s.calendar_start_year ?? 1,
-          },
+          settings: { ...(campaign.settings || {}) },
         }
         setFormData(data)
         setLoading(false)

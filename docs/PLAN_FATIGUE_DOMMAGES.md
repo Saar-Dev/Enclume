@@ -37,7 +37,46 @@
 > dupliquée en fermeture privée) et 6 points ouverts à trancher avec Saar avant tout code. Document
 > temporaire (`docs/RegleDocumentaire.md`
 > Règle 10) — à archiver dans `docs/Old/` une fois le chantier entier clos, contenu durable transféré
-> vers `docs/SYSTEME/*.md`.
+> vers `docs/SYSTEME/*.md`. **Lot 3 ✅ clos 2026-07-30** (increments A-G, testé en navigateur par
+> Saar, bug d'émission `COMBAT_ATTACK_RESULT` trouvé et corrigé) — voir §9 pour le détail complet,
+> commit `a48e114`.
+> **2026-07-30 — Lot 4 (Fatigue) : cadrage détaillé rédigé (§10)** après relecture RAW complète
+> (Test de Fatigue réel, Compteur à 6 paliers × 3 cases retrouvé Annexe p.250) + exploration du code
+> réel (aucun point d'agrégation unique des modificateurs de Test, `resolveShockTest` non réutilisable
+> tel quel) + recherche externe (Active Effects Foundry VTT). Décisions Saar : Test de Fatigue
+> interactif (vrai jet), pas de badge token, mécanique entièrement optionnelle par campagne
+> (`fatigue_enabled`). **2ᵉ passe d'analyse critique (même session)**, demandée explicitement par Saar
+> (« le rework n'est pas un paramètre, la qualité si ») : agrégation de malus revue en **registre
+> déclaratif** (`activeMalusRegistry.js`, patron `echeanceTypeRegistry.js`/`environmentalHazardRegistry.js`,
+> pas une fonction à paramètres fixes) ; verrouillage `char_sheet.forUpdate()` ajouté (trou de
+> concurrence identifié, même classe que Lot 1/Lot 2) ; **trou pré-existant trouvé et tranché (a)** —
+> le système générique de macros (`MACRO_ROLL`/`macro-preview`) n'applique aujourd'hui aucun malus de
+> blessure/encombrement, corrigé dans ce lot plutôt que contourné. **3ᵉ passe d'analyse critique (même
+> session)** : 4 trous de plus trouvés et corrigés — le Test de Fatigue oubliait le malus actif
+> (blessure/encombrement) sur son propre seuil (RAW n'exempte que le malus de palier, pas les autres,
+> `calcActiveMalus` gagne un filtre `exclude`) ; `applyStunWithDuration` ne pouvait pas produire le
+> statut `evanoui` (binaire fermé, vérifié dans le code) ; aucune émission WS prévue pour le résultat
+> du Test (même classe de bug que Lot 3 increment G, corrigée avant d'exister cette fois) ; gate
+> `fatigue_enabled` pas explicite côté serveur. Section Validation + rappel VOCABULARY.md ajoutés
+> (manquaient dans les passes précédentes). **2026-07-30 — fondations codées et testées** (migration
+> 227, `shared/fatigueConstants.js` 6/6, `server/src/lib/activeMalusRegistry.js` 7/7). **4ᵉ passe
+> d'analyse critique** avant de câbler les 7 sites : le site fiche de personnage n'a pas la même forme
+> que les 3 sites combat (deux routes séparées sommées côté client, tooltip qui décompose déjà le
+> malus par source) — `calcActiveMalus` (serveur) ne s'y applique pas, corrigé en calcul client via
+> `getFatigueLevelMalus` (déjà dans `shared/`), pas de nouvelle route nécessaire (`fatigue_points`
+> déjà exposé par `GET /char-sheet/:id` sans changement). **5ᵉ passe** : badge Choc hors combat —
+> `current_turn` ne progresse jamais hors combat, expiration en Tours impossible dans ce cas (vérifié,
+> pas déjà un bug ailleurs : Lot 3 n'auto-applique jamais ce badge). Tranché Saar : comportement voulu
+> en/hors combat, badge sans expiration hors combat (retrait manuel MJ) plutôt qu'un bug à corriger.
+> **7ᵉ passe** : les 2 routes REST vivaient dans `campaigns.js` (scope `campaignId`) alors que
+> `CharacterSheet.jsx`, seule consommatrice, n'a jamais `campaignId` — déplacées vers `char-sheet.js`
+> (`req.character.campaign_id` résolu serveur, patron déjà établi par cette route family) ; clés i18n
+> corrigées vers `fr.json` (`CharacterSheet.jsx` pas migré vers `charSheet.json`, vérifié). **Lot 4 codé
+> intégralement** (backend + UI + case à cocher campagne, trouvée manquante après coup). **✅ Lot 4 clos
+> 2026-07-30 — confirmé fonctionnel en navigateur par Saar** (case à cocher, bloc Fatigue, Test avec
+> évolution palier/case, malus tooltip, Repos, macro joueur reflétant le malus de blessure). 330 tests
+> (270 pass/60 skip DB, 0 échec), ESLint/build client propres. Détail : `docs/ASBUILT.md` (section
+> Fatigue), `docs/EN_COURS.md` item 109.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -1163,40 +1202,362 @@ par coup porté, réutilisant tel quel `CombatResultGM`/`CombatResultPlayer` (au
 
 ## 10. Lot 4 — Fatigue
 
+> **Cadrage détaillé 2026-07-30** (relecture RAW complète p.242-243 — le §10 initial avait sous-estimé
+> la mécanique réelle — + exploration du code réel + recherche externe). Aucun code écrit à ce stade.
+
 **Dépend de** : Lot 0. Avancé volontairement dans la séquence (voir §5) — fournit le point d'entrée
 partagé que les Lots 5/7/8/9/10 appellent tous.
 
-**Modèle de données** : un seul entier persistant, `char_sheet.fatigue_points` (0 à 14 — 5 paliers
-× 3 cases), plutôt que palier et case en deux champs séparés qui pourraient se désynchroniser — même
-principe d'autorité unique que le compteur d'horloge du Lot 1. Palier = `floor(points/3)`, case =
-`points % 3`.
+### RAW relu en détail — ce que le §10 initial avait manqué
 
-**Barème retenu** (décision §4.1, p.243 du chapitre Fatigue) : palier 0 Normal (0), 1 Légèrement
-fatigué (-3), 2 Fatigué (-5), 3 Très fatigué (-7), 4 Épuisé (-10), 5 À bout de force (-10 + Test de
-Choc à chaque action fatigante).
+Le texte décrit un vrai **Test de Fatigue** (jet réel, pas une simple valeur posée à la main par le
+MJ), avec une table de résultat précise, **et** un **Compteur de Fatigue à 6 états × 3 cases**
+(Annexe p.250, capture Saar 2026-07-30) — pas 5 états comme écrit initialement. Chaque case porte un
+malus qui ne s'applique **pas** aux autres Tests du personnage (ceux-là utilisent le malus de palier,
+barème §4.1) mais uniquement à la difficulté du **prochain** Test de Fatigue (ou Test de Choc au
+dernier palier) :
 
-**Point d'entrée partagé** : `setFatiguePoints`/`addFatiguePoints(db, characterId, delta)` — unique
-fonction mutatrice. Les Lots 5 (Froid), 7 (Maladies/Poisons), 8 (Drogues), 9 (Irradiations), 10
-(Faim/soif) et le MJ (déclenchement narratif direct, décision §4.2) passent tous par elle ; aucun
-lot n'écrit `fatigue_points` directement.
+| Palier | Normal | Légèrement fatigué (-3) | Fatigué (-5) | Très fatigué (-7) | Épuisé (-10) | À bout de force (-10) |
+|---|---|---|---|---|---|---|
+| Case 0 | +0 | +0 | +0 | +0 | +0 | Choc -5 |
+| Case 1 | -5 | -5 | -5 | -5 | -5 | Choc -10 |
+| Case 2 | -10 | -10 | -10 | -10 | -10 | Choc -15 |
 
-**Application du malus** : rejoint le point d'agrégation des modificateurs de Test déjà existant
-(celui qui applique déjà le malus de blessure) — à identifier précisément en codant, pas un nouveau
-site d'application séparé.
+Deux malus **indépendants**, jamais confondus : le malus de **palier** (colonne, barème §4.1,
+0/-3/-5/-7/-10/-10) s'applique à tous les Tests du personnage sauf ses Tests de Fatigue eux-mêmes
+(RAW explicite, ligne 976-979) ; le malus de **case** (tableau ci-dessus) s'applique uniquement au
+prochain Test de Fatigue/Choc.
 
-**Badge** (icône au-dessus du token) : la Fatigue est un état de **personnage**, persistant hors
-combat, alors que `token_statuses` est scope **token** avec expiration en Tours. Option recommandée :
-miroir — à chaque changement de `fatigue_points`, upsert/retrait d'une entrée `token_statuses` sans
-expiration sur le(s) token(s) actif(s) du personnage, ce qui réutilise tel quel `TokenStatusPanel.jsx`/
-`Canvas3D.jsx` sans toucher au rendu. Alternative (étendre le rendu pour lire un champ personnage)
-possible mais plus invasive — choix final en codant.
+Résolution du Test de Fatigue (Test de CON, VOL, Endurance — compétence réelle CON/VOL,
+`REGLECOMPETENCE.md:87-92` — ou moyenne CON/VOL au choix du MJ, + modificateur de difficulté
+optionnel MJ) :
+- **Échec, pas de risque de Catastrophe** (`!isSuccess && !catastropheRisk`) → palier +1, case posée
+  sur **0** du nouveau palier.
+- **Catastrophe** (`catastropheRisk`, marge d'échec ≤ -15) → palier +1, case posée sur **1** (pas 0)
+  du nouveau palier.
+- **Réussite, marge < 15** → case +1 dans le palier courant (plafonnée à 2, ne redescend jamais toute
+  seule).
+- **Réussite, marge ≥ 15** (« second souffle ») → case -1. **[HYPOTHÈSE, pas un fait RAW littéral]** :
+  le texte dit seulement « réduisant ainsi le niveau de Fatigue général », sans préciser si ça peut
+  franchir la borne basse du palier courant. Retenu par symétrie avec la réussite normale (qui, elle,
+  RAW précise explicitement « ne change pas de niveau ») : plancher à la case 0 du **palier courant**,
+  jamais de franchissement vers le palier inférieur par ce chemin — seule la Récupération (repos)
+  fait baisser de palier. À confirmer avec Saar si une lecture différente est préférée, sinon retenu
+  tel quel en codant.
+- **Palier 5 (« À bout de force »)** : le Test de Fatigue est **remplacé** par un Test de Résistance
+  au Choc (même source CON/VOL/Endurance/moyenne, même déclaration, malus de case = table Choc
+  ci-dessus au lieu de la table Fatigue) — **tranché avec Saar 2026-07-30** : échec → **Évanoui**
+  (1D6 minutes), Catastrophe → **Inconscient** (même formule de durée que le Choc de blessure
+  existant, `statusService.js`/`_applyAutoStun`, 1D6×10 — "min→tours" — pas une durée inventée).
+  Réussite → case +1 quand même (plafonnée à 2, palier ne peut pas dépasser 5).
 
-**Récupération** : action MJ explicite (« marquer ce personnage comme reposé »), pas un balayage
-automatique du Lot 2 — cohérent avec la décision §4.2 (narratif/manuel). Peut afficher l'heure de
-l'horloge (Lot 1) comme simple référence, sans déclenchement automatique.
+**[6ᵉ passe d'analyse critique, même session] Correction — mauvais flag moteur utilisé pour
+« Catastrophe ».** La rédaction précédente utilisait `isCriticalFail` (jet = 20, « Échec critique »,
+`resolveTestOutcome`) comme proxy de « Catastrophe » — vérifié faux contre `shared/
+polarisTestResolution.js` : ce sont deux concepts RAW distincts (p.204 « Catastrophes (optionnel) » ≠
+« Échec critique », déjà géré en interne par `resolvePolarisTest` via son propre reroll avant que
+`fatigueService.js` ne voie le résultat final). Le bon flag est `catastropheRisk` (marge d'échec
+≤ -15). **Trouvaille supplémentaire en vérifiant** : le commentaire source de `resolveTestOutcome`
+dit explicitement « jamais automatique, décision MJ » — et les 5 consommateurs actuels de
+`catastropheRisk` (`socketCombatHelpers.js`) ne font que le transmettre dans `DICE_RESULT` pour
+affichage, **aucun n'en tire une conséquence mécanique automatique** nulle part dans le projet
+aujourd'hui. La Fatigue aurait été la première à le faire. **Tranché Saar 2026-07-30** : appliqué
+automatiquement (pas de confirmation MJ intermédiaire) — le chapitre Fatigue ne prévoit aucune option
+MJ pour ce cas précis, contrairement au flou volontaire du reste des règles de Fatigue.
+
+**Récupération** (repos) — **confirmé Saar 2026-07-30** : action MJ manuelle « Repos complet » →
+palier -1, case reposée sur **0** du palier inférieur (symétrique de la montée par échec, pas un
+simple `points - 3`) ; pas de balayage automatique du Lot 2 (cohérent §4.2), l'horloge (Lot 1)
+affichée en simple référence. Un « Repos partiel » (conditions dégradées) reste une action MJ libre
+de déplacer la case de 1-2 sans changer de palier (RAW l'autorise explicitement, ligne 1015-1017) —
+pas une fonction dédiée, juste une variante de paramètre de la même mutation.
+
+**Pas de badge token** — tranché Saar 2026-07-30, revient sur l'option "miroir `token_statuses`" du
+§10 initial. La Fatigue reste visible uniquement sur la fiche de personnage, aucune icône au-dessus
+du token.
+
+**Optionnel par campagne** — exigence Saar 2026-07-30 : toute la mécanique doit être désactivable,
+`fatigue_enabled` (nouvelle clé `SETTINGS_SCHEMA`, `campaignSettingsService.js`, même patron que
+`encumbrance_enabled`), **défaut `false`** (mécanique neuve, contrairement à l'encombrement qui
+tournait déjà sans gate sur toutes les campagnes existantes — pas de raison de changer silencieusement
+leur comportement dans un sens comme dans l'autre). Désactivée : aucun malus appliqué, aucune entrée
+UI visible (bouton Test de Fatigue masqué, section fiche masquée).
+
+### Trous structurels trouvés en explorant (pas prévus par le cadrage initial)
+
+**1. Il n'existe aucun point d'agrégation unique des modificateurs de Test** — vérifié, pas supposé :
+`calcWoundPenalty` (`charStats.js:273`) est appelé indépendamment à 5 endroits qui recalculent chacun
+`woundPenalty - encumbrancePenalty` en dur (`socketCombatHelpers.js:1391,1593,2598`,
+`socketEntity.js:253`, affichage `char-sheet.js:840`/`CharacterSheet.jsx:327`). Ajouter la Fatigue en
+dupliquant un 6ᵉ appel identique à ces mêmes sites perpétue la dette plutôt que de la traiter, alors
+que Froid/Maladies/Drogues/Irradiations (Lots 5/7/8/9) vont devoir se brancher au même endroit juste
+après. **Recherche faite avant de trancher** (Saar, 2026-07-30 : "l'architecture avant le temps
+passé") — patron Foundry VTT (Active Effects, [foundryvtt.com/article/active-effects](https://foundryvtt.com/article/active-effects/) ;
+exhaustion D&D5e/PF2e, conditions à valeur numérique) : une source de vérité par état + **un seul
+point d'agrégation** qui combine tous les modificateurs actifs avant tout jet, jamais recalculé
+indépendamment par consommateur.
+
+**Révision (2ᵉ passe d'analyse critique, 2026-07-30)** — une fonction unique à paramètres fixes
+(`calcActiveMalus({ wounds, fatiguePoints, ... })`, version initialement écrite ici) rouvrirait cette
+même fonction à chaque nouveau lot (5/7/8/9) pour lui ajouter un paramètre de plus — pas différent du
+problème qu'elle est censée résoudre. Le projet a déjà tranché ce type de besoin trois fois
+(`weaponModRegistry.js`, `echeanceTypeRegistry.js`, `environmentalHazardRegistry.js`) avec le même
+principe : **registre déclaratif + dispatcher générique**, jamais un paramètre/switch central qui
+grossit. Retenu ici à l'identique, à la différence près que chaque entrée calcule un **nombre** (pas
+une mutation) :
+- `server/src/lib/activeMalusRegistry.js` (nouveau) — `ACTIVE_MALUS_SOURCES = [{ key: 'wound',
+  compute: ctx => calcWoundPenalty(ctx.wounds) }, { key: 'encumbrance', compute: ctx =>
+  ctx.settings.encumbrance_enabled ? -calcEncumbrancePenalty(ctx.totalWeight, ctx.forNA,
+  ctx.settings.encumbrance_multiplier) : 0 }, { key: 'fatigue', compute: ctx =>
+  ctx.settings.fatigue_enabled ? getFatigueLevelMalus(ctx.fatiguePoints ?? 0) : 0 }]` +
+  `calcActiveMalus(ctx) = ACTIVE_MALUS_SOURCES.reduce((sum, src) => sum + src.compute(ctx), 0)`.
+- Lots 5/7/8/9 ajoutent chacun **une entrée** à ce tableau (même geste que Blessures peuplant
+  `echeanceTypeRegistry.js` en Lot consommateur) — plus jamais besoin de retoucher les 5 sites
+  consommateurs ni la signature de `calcActiveMalus` elle-même.
+- `ctx` reste un objet simple assemblé par l'appelant à partir de ce qu'il a déjà en main (aucun
+  changement de la couche de fetch existante à chacun des 5 sites — `char_sheet` y est déjà chargé en
+  entier, `fatigue_points` y sera donc présent sans requête supplémentaire dès la migration posée).
+
+**2. Risque de concurrence non traité dans la 1ʳᵉ rédaction de ce §10** — `setFatiguePoints`/
+`resolveFatigueTest`/`restFatigue` lisaient `fatigue_points`, calculaient la nouvelle valeur en JS,
+puis écrivaient — le même patron lire-puis-écrire déjà identifié comme dangereux et corrigé deux fois
+dans ce plan (Lot 1 point 1 `adjustGameTime`, Lot 2 point 10 `pending_advance_undo_log`). Deux MJ (ou
+un double-clic réseau) déclenchant un Test de Fatigue ou un repos sur le même personnage au même
+instant perdraient silencieusement une des deux mutations. **Corrigé** : les trois fonctions
+verrouillent la ligne `char_sheet` (`.forUpdate()`) avant de lire `fatigue_points`, dans la même
+transaction que l'écriture — patron déjà réel dans le projet, pas inventé pour l'occasion
+(`tradeService.js:190`, `db('char_sheet').where(...).forUpdate().first()`).
+
+**3. Trou pré-existant révélé — tranché Saar 2026-07-30 : (a), corrigé dans ce lot** (« même si on
+doit mettre le projet en pause pour bien recoder cette fonctionnalité »). Le système générique de
+Test hors combat (`character_macros`/`MACRO_ROLL`, `socketDice.js:86-207`, et son aperçu
+`POST /char-sheet/:id/macro-preview`, `char-sheet.js:1274-1326`) **n'applique aujourd'hui aucun malus
+de blessure ni d'encombrement** — vérifié, `calcWoundPenalty` n'apparaît nulle part dans
+`socketDice.js`. Un personnage blessé qui relance sa macro "Test Perception" obtient un seuil qui
+ignore sa blessure, alors que la même compétence utilisée en combat l'inclut.
+
+**Implémentation vérifiée contre le code réel des deux sites** (même geste aux deux endroits, code
+quasi identique — `sheet`/`attrs`/`archetype`/`mutationEffects` déjà fetchés dans les deux, `na()`/
+`secondaryValue()` déjà en place) :
+- `sheet` (char_sheet complet, déjà fetché aux deux sites) porte déjà `fatigue_points` dès la
+  migration 227 posée — aucune requête supplémentaire pour cette partie.
+- Deux requêtes manquent aujourd'hui aux deux sites, à ajouter au même `Promise.all` existant :
+  `db('character_wounds').where({ char_sheet_id: sheet.id })` (patron exact `char-sheet.js:835-837`)
+  et le total pondéré `char_inventory` (patron exact `socketCombatHelpers.js:1388-1390`, join
+  `ref_equipment`, exclusion `container === 'Coffre'`) + `getCampaignSettings(db, campaignId)` (déjà
+  importée dans `char-sheet.js`, `campaignId` disponible via `req.character.campaign_id` — vérifié,
+  posé par le middleware `router.param('characterId', ...)` — et déjà dans la closure du handler
+  socket côté `socketDice.js`, aucun changement de signature de route/event nécessaire nulle part).
+- `baseThreshold += calcActiveMalus({ wounds, fatiguePoints: sheet.fatigue_points, totalWeight,
+  forNA: na('FOR'), settings })` — juste avant l'ajout du `modifier` manuel, aux deux endroits.
+- Aucun opt-out par macro : le malus s'applique à toute source (`attribute`/`skill`/`secondary`),
+  cohérent avec le fait qu'aucun des 5 sites combat n'a d'opt-out non plus (RAW : « malus à tous ses
+  Tests », sans exception par type de Test).
+
+**4. [3ᵉ passe d'analyse critique, même session] Le Test de Fatigue lui-même oubliait le malus actif
+(blessure/encombrement).** Première rédaction : seuil = source + `getFatigueTestMalus` + `mjModifier`,
+sans passer par `calcActiveMalus`. Or la Note RAW (ligne 976-979) n'exempte le Test de Fatigue **que**
+du malus de **palier** de Fatigue lui-même (« les Tests de Fatigue ne sont pas affectés par le malus
+que les différents états de Fatigue imposent aux autres Tests ») — elle ne dit rien d'une exemption au
+malus de blessure ou d'encombrement, qui doivent donc continuer à s'appliquer normalement (rien dans
+le texte ne les exempte). **Corrigé** : `calcActiveMalus` gagne un 2ᵉ paramètre optionnel
+`{ exclude = [] }` (filtre `ACTIVE_MALUS_SOURCES` par `key` avant réduction — pas une resignature
+fermée, une future source qui aurait besoin de la même auto-exemption pourra réutiliser le même
+mécanisme). `resolveFatigueTest` appelle `calcActiveMalus(ctx, { exclude: ['fatigue'] })` +
+`getFatigueTestMalus(...)` + `mjModifier` — nécessite donc de fetcher `wounds`/`char_inventory` dans
+`fatigueService.js` aussi (pas seulement `attrs`/`archetype`/`mutationEffects`, comme la rédaction
+initiale le laissait supposer).
+
+**5. [3ᵉ passe] `applyStunWithDuration` n'est pas réutilisable tel quel pour "Évanoui"** — vérifié
+dans le code (pas supposé) : `statusService.js:21-38` calcule
+`statusCode = outcome === 'inconscient' ? 'unconscious' : 'stunned'`, un binaire fermé, et exclut
+mutuellement `['stunned', 'unconscious']` à l'insertion. Passer `outcome: 'evanoui'` tomberait dans la
+branche `else` et poserait `stunned` par erreur — pas le comportement voulu. **Corrigé** : extension
+additive de `applyStunWithDuration` (accepter un `statusCode` explicite en paramètre plutôt que
+déduit du seul `outcome`, défaut inchangé pour l'appelant existant qui continue à passer `outcome`
+seul) + `evanoui` ajouté à la liste d'exclusion mutuelle (un personnage Étourdi/Évanoui/Inconscient ne
+peut être que dans un seul de ces états à la fois, cohérent avec les deux autres déjà exclusifs entre
+eux).
+
+**6. [3ᵉ passe] Aucune émission WebSocket prévue pour le résultat du Test de Fatigue** — exactement la
+même classe de bug que celle trouvée et corrigée en increment G du Lot 3 (§9 : dégâts environnementaux
+créés en base mais invisibles dans le panneau de combat faute d'émission). La 1ʳᵉ rédaction de ce §10
+ne prévoyait qu'un retour HTTP au MJ. **Corrigé** : nouvel événement `shared/events.js`
+`FATIGUE_TEST_RESULT` (`'fatigue:test_result'`, patron `MACRO_ROLL_RESULT`/`WOUND_INFECTION_ROLL`),
+diffusé à `campaignId` par `resolveFatigueTest` après résolution — visible MJ et joueur concerné, pas
+seulement retourné à l'appelant de la route REST.
+
+**7. [3ᵉ passe] Gate serveur `fatigue_enabled` pas explicite sur les routes elles-mêmes** — la
+rédaction initiale ne mentionnait le gate que côté UI (bouton masqué) et côté calcul de malus
+(`ACTIVE_MALUS_SOURCES`), pas comme un garde explicite en tête de `resolveFatigueTest`/`restFatigue`
+(`AppError` si `fatigue_enabled` est `false`) — défense en profondeur, cohérent avec `core.md` (« le
+serveur valide... avant toute mutation ») : un MJ pourrait sinon appeler la route directement même UI
+masquée, sur une campagne où la mécanique est explicitement désactivée.
+
+### Architecture retenue
+
+**Modèle de données** : un seul entier persistant, `char_sheet.fatigue_points` **0 à 17** (6 paliers ×
+3 cases — corrigé du §10 initial qui plafonnait à 14/5 paliers, erreur trouvée en relisant l'Annexe
+p.250), plutôt que palier et case en deux champs séparés qui pourraient se désynchroniser — même
+principe d'autorité unique que le compteur d'horloge du Lot 1. `palier = floor(points/3)` (max 5 par
+construction dès que `points ≥ 15`, aucun clamp explicite nécessaire), `case = points % 3`.
+
+**Fonctions pures** (`shared/fatigueConstants.js`, même patron que `fallDamageConstants.js`/
+`woundConstants.js`, testées isolément) :
+- `FATIGUE_LEVEL_MALUS = [0, -3, -5, -7, -10, -10]` (index = palier) — barème §4.1.
+- `FATIGUE_TEST_MALUS = [0, -5, -10]` (index = case, paliers 0-4) — malus au prochain Test de Fatigue.
+- `FATIGUE_CHOC_MALUS = [-5, -10, -15]` (index = case, palier 5 uniquement) — malus au Test de Choc de
+  remplacement.
+- `getFatiguePalier(points)`/`getFatigueCase(points)`, `getFatigueLevelMalus(points)`,
+  `getFatigueTestMalus(points)` (sélectionne la bonne table selon le palier).
+
+**`calcActiveMalus(ctx, { exclude = [] } = {})`** (révision point 4) : filtre `ACTIVE_MALUS_SOURCES`
+par `key` avant de sommer — `exclude: ['fatigue']` pour le Test de Fatigue lui-même (auto-exemption
+RAW, ligne 976-979), tableau vide (défaut) partout ailleurs (5 sites combat/fiche + macros).
+
+**Point d'entrée mutateur unique** : `setFatiguePoints(trx, characterId, points)` (clampé [0, 17]) —
+les Lots 5 (Froid), 7 (Maladies/Poisons), 8 (Drogues), 9 (Irradiations), 10 (Faim/soif) et le MJ
+passent tous par elle ; aucun lot n'écrit `fatigue_points` directement (même contrat que
+`adjustGameTime` pour l'horloge). **Verrouillage (trou structurel 2 ci-dessus)** : la fonction
+suppose une transaction déjà ouverte par l'appelant sur laquelle `char_sheet` est déjà verrouillé
+(`.forUpdate()`) — elle ne lit/écrit jamais en dehors de ce verrou, jamais de lire-puis-écrire sans
+lock.
+
+**Test de Fatigue — résolution immédiate, pas un consommateur du Lot 2.** Contrairement à Blessures/
+Guérison, ce Test se déclare et se résout dans le même geste MJ (pas de réponse différée à travers
+plusieurs jours réels) — même famille que la Chute (Lot 3, `fallDamageService.js`), pas le patron
+interactif/différé du Lot 2. Nouveau `server/src/lib/fatigueService.js` :
+- `resolveFatigueTest(io, db, campaignId, { characterId, source, mjModifier = 0 })` — `source` ∈
+  `'CON'|'VOL'|'ENDURANCE'|'MOYENNE'`. **Garde en tête** : `AppError` si
+  `!settings.fatigue_enabled` (point 7). Ouvre sa propre transaction, verrouille `char_sheet`
+  (`.forUpdate()`, patron `tradeService.js:190`) avant toute lecture de `fatigue_points`. Fetch
+  combiné : `attrs`/`archetype`/`mutationEffects`/`genotypeRow` (patron E, `fallDamageService.js`) +
+  `char_skills`/`ref_skills` si `source === 'ENDURANCE'` (patron `socketCombatHelpers.js:1437-1442`)
+  **+ `wounds`/`char_inventory` (point 4, nécessaires à `calcActiveMalus`)**. Seuil = valeur de
+  `source` + `calcActiveMalus(ctx, { exclude: ['fatigue'] })` + `getFatigueTestMalus(fatigue_points
+  actuels)` + `mjModifier` → `resolvePolarisTest(seuil)`. Applique la table de résultat ci-dessus
+  (branche palier 5 = Choc séparée). Mute `fatigue_points` via `setFatiguePoints` (même transaction,
+  verrou déjà posé) ; à palier 5, applique le statut Choc (`evanoui`/`unconscious`, durée 1D6 min ou
+  1D6×10, point 5) via `applyStunWithDuration` étendue. **Diffuse `WS.FATIGUE_TEST_RESULT` à
+  `campaignId`** (point 6) — jet, seuil, issue, nouveau palier/case, pas seulement un retour HTTP.
+
+**8. [5ᵉ passe d'analyse critique, même session — tranché Saar 2026-07-30] Expiration du badge Choc
+hors combat.** `current_turn` (`combat_state`, remis à 1 à `COMBAT_START`, statuts stunned/unconscious
+nettoyés à `COMBAT_END`, `socketCombatState.js:126,179`) ne progresse jamais hors combat — un badge
+posé avec une expiration en Tours ne se lèverait donc jamais si le Test de Fatigue est déclaré hors
+combat (vérifié : ni `resolveFall` ni `resolveEnvironmentalHazardTicks`, Lot 3, n'appellent
+`applyStunWithDuration`, elles ne font que retourner `shockResult` pour affichage — ce piège n'existe
+donc pas déjà ailleurs dans le projet, `fatigueService.js` aurait été la première fonction à
+l'introduire en suivant le patron combat trop littéralement). **Confirmé Saar** : comportement voulu,
+pas un bug à corriger — « un Test que le MJ peut demander en et hors combat. En combat, le personnage
+subit l'effet la durée prédéfinie ; hors combat, le MJ retire l'effet une fois le temps écoulé
+narrativement. » `resolveFatigueTest` vérifie si `combat_state` existe pour la campagne avant
+`applyStunWithDuration` : **présent** → badge avec expiration en Tours, patron combat inchangé ;
+**absent** → badge posé avec `expires_at_turn: null` (retrait manuel MJ, `clearModStatus` déjà
+existant), cohérent avec la philosophie déjà actée de la Fatigue (narratif/manuel, décision Lot 0
+§4.2).
+- `restFatigue(db, characterId, { full = true, caseDelta = 1 })` — même garde `fatigue_enabled` +
+  même verrouillage. `full: true` → palier -1, case 0 ; `full: false` → case -= `caseDelta` (plancher
+  borne basse du palier courant), jamais de changement de palier. Action MJ pure, aucun jet — diffuse
+  aussi un event (même famille) pour que le palier/case affiché reste synchronisé chez tous les
+  clients connectés (MJ + joueur du personnage), pas seulement l'auteur de l'action.
+
+**Nouveau statut Choc-Fatigue** — `evanoui` (catégorie `sens`, même famille visuelle que
+`stunned`/`unconscious`, `TokenPresentation.jsx:STATUS_CATEGORY`) : n'existe nulle part dans le projet
+aujourd'hui (vérifié), à créer. `unconscious` (Catastrophe) est déjà un statut existant, réutilisé tel
+quel — pas de 2ᵉ code pour la même chose. **Extension nécessaire (point 5)** : `applyStunWithDuration`
+(`statusService.js:21-38`) déduit aujourd'hui `statusCode` uniquement de `outcome ('etourdi'/
+'inconscient')`, binaire fermé qui ne sait pas produire `evanoui` — signature étendue pour accepter un
+`statusCode` explicite (défaut = comportement actuel déduit de `outcome`, aucune régression sur
+l'appelant existant du Choc de blessure) + `evanoui` ajouté à la liste d'exclusion mutuelle
+`whereIn(['stunned', 'unconscious'])` → `['stunned', 'unconscious', 'evanoui']`.
+
+**UI** — pas de badge token (tranché ci-dessus). Fiche de personnage (`CharacterSheet.jsx`), nouvelle
+section Fatigue (masquée si `fatigue_enabled = false`) :
+- Affichage palier/case courants + malus effectif (même famille que le panneau blessures existant).
+- MJ uniquement : bouton "Lancer un Test de Fatigue" (choix source + modificateur optionnel), boutons
+  "Repos complet"/"Repos partiel".
+- Aucun composant nouveau structurel pressenti — à confirmer en codant (patron `AdvantagesPanel.jsx`/
+  panneau blessures comme référence la plus proche).
+
+**[4ᵉ passe d'analyse critique, même session] Correction sur le site fiche de personnage —
+`calcActiveMalus` ne s'y applique pas tel quel.** Vérifié contre le code réel : contrairement aux 3
+sites combat (une seule expression JS serveur), l'affichage fiche vient de **deux routes séparées**
+(`GET /wounds` → `wound_penalty`, `GET /inventory` → `ini_penalty`, `inventoryService.js:229-231`) que
+le **client** additionne lui-même (`CharacterSheet.jsx:327`). `calcActiveMalus` est une fonction
+serveur (`server/src/lib/`), pas appelable côté client — la remplacer telle quelle ici serait une
+erreur de câblage. De plus le tooltip de la fiche **décompose déjà le malus par source** (ligne
+« Malus blessures », ligne « Malus encombrement » séparées) — un total agrégé unique y serait une
+régression d'affichage, pas une simplification.
+- **Vérifié** : `GET /char-sheet/:characterId` (`char-sheet.js:97-99`) fait
+  `db('char_sheet').where(...).first()` sans `.select()` — `fatigue_points` y apparaît automatiquement
+  dès la migration posée, **aucun changement de route nécessaire** pour l'exposer.
+- Le malus de Fatigue est un simple lookup pur (`getFatigueLevelMalus`, déjà dans `shared/`, donc
+  importable tel quel côté client comme côté serveur — une seule source de vérité pour la **valeur**,
+  même si l'**agrégation** reste locale à ce site comme aujourd'hui). `CharacterSheet.jsx` calcule
+  localement `fatiguePenalty = settings.fatigue_enabled ? getFatigueLevelMalus(sheet.fatigue_points ??
+  0) : 0` (garde `fatigue_enabled` répliquée côté client, même raison que le garde serveur : un
+  palier/case resté non nul après désactivation de la mécanique ne doit produire aucun malus) et
+  l'ajoute à `effectiveMalus` + une 3ᵉ ligne dans `iniTooltip` (`charSheet.tooltip.malusFatigue`,
+  même patron que `malusBlessures`/`malusEncombrement`).
+
+**[7ᵉ passe d'analyse critique — correction avant d'écrire l'UI] Routes déplacées de `campaigns.js`
+vers `char-sheet.js`.** Rédaction initiale : routes scope `campaignId` (`server/src/routes/
+campaigns.js`, même patron que `hazards/fall`/`healing-choice`). Vérifié faux en préparant
+`CharacterSheet.jsx` : ce composant n'a **jamais** `campaignId` en prop ni en state — tout son accès
+API est scope `characterId` uniquement, le serveur résolvant `campaign_id` en interne via
+`req.character.campaign_id` (patron déjà établi par toute la route family `char-sheet.js`, ex.
+`/wounds`, `/macro-preview`). Router les deux nouvelles routes par `campaignId` aurait forcé un
+prop-drilling non existant jusqu'ici dans ce composant pour rien — `resolveFatigueTest`/`restFatigue`
+prennent déjà `campaignId` en paramètre, peu importe d'où il est résolu. **Routes finales** (MJ
+uniquement, patron `if (!req.isGm) throw new AppError(403, ...)` + `try/catch/next(err)`, même style
+que `PUT /:characterId/xp` — pas le style `requireRole('gm')` de `campaigns.js`, chaque fichier garde
+son propre patron existant) :
+- `POST /api/char-sheet/:characterId/fatigue-test` → `resolveFatigueTest`.
+- `POST /api/char-sheet/:characterId/fatigue-rest` → `restFatigue`.
+
+**Fichiers concernés** (aucun code écrit à ce stade) :
+
+| Fichier | Rôle |
+|---|---|
+| `server/src/db/migrations/227_char_sheet_fatigue.js` | `char_sheet.fatigue_points` integer, `notNullable`, `defaultTo(0)` — 227 = prochain numéro impair libre (225 = `token_statuses_data.js`) |
+| `shared/fatigueConstants.js` (nouveau) | tables/fonctions pures ci-dessus (`FATIGUE_LEVEL_MALUS`/`FATIGUE_TEST_MALUS`/`FATIGUE_CHOC_MALUS`/`getFatiguePalier`/`getFatigueCase`/`getFatigueLevelMalus`/`getFatigueTestMalus`), testées isolément |
+| `server/src/lib/activeMalusRegistry.js` (nouveau) | `ACTIVE_MALUS_SOURCES` (wound/encumbrance/fatigue) + `calcActiveMalus(ctx)` — registre déclaratif, patron `echeanceTypeRegistry.js`/`environmentalHazardRegistry.js` |
+| `server/src/socket/socketCombatHelpers.js` (×3), `socketEntity.js` | remplacent `woundPenalty - encumbrancePenalty` par `calcActiveMalus(ctx)` (calcul serveur unique, seuil de Test) |
+| `client/src/character/CharacterSheet.jsx` | **pas `calcActiveMalus`** (fonction serveur, non appelable client) — voir correction ci-dessous |
+| `server/src/routes/character/char-sheet.js` (`macro-preview`) | ajoute fetch `character_wounds`/`char_inventory`/`getCampaignSettings` + `calcActiveMalus(ctx)` dans le calcul de `baseThreshold` (point structurel 3) |
+| `server/src/socket/socketDice.js` (`MACRO_ROLL`) | même correctif que `macro-preview`, code quasi identique aux deux endroits |
+| `server/src/lib/campaignSettingsService.js` | ajoute `fatigue_enabled` à `SETTINGS_SCHEMA`, défaut `false` |
+| `client/src/components/campaignSettings/SectionGameRules.jsx` | **trou trouvé après coup, corrigé** : le schéma serveur seul ne suffit pas à ce qu'un MJ puisse activer la mécanique — chaque clé de `SETTINGS_SCHEMA` a besoin de son propre contrôle explicite (pas de formulaire générique, patron déjà vu pour `encumbrance_enabled`/`calendar_start_*`). Case à cocher ajoutée, onglet Règle du jeu, même patron que `encumbrance_enabled` |
+| `server/src/lib/fatigueService.js` (nouveau) | `resolveFatigueTest`/`restFatigue`, verrouillage `char_sheet.forUpdate()`, diffusion `WS.FATIGUE_TEST_RESULT` |
+| `server/src/lib/statusService.js` | étend `applyStunWithDuration` : `statusCode` explicite optionnel (défaut = déduit de `outcome`, inchangé pour l'appelant existant) + `evanoui` dans l'exclusion mutuelle (point 5) |
+| `shared/events.js` | nouvelle constante `FATIGUE_TEST_RESULT` (`'fatigue:test_result'`) |
+| `server/src/routes/character/char-sheet.js` | 2 nouvelles routes (déplacées de `campaigns.js`, correction ci-dessus) |
+| `client/src/components/TokenPresentation.jsx` | ajoute `evanoui` à `STATUS_CATEGORY` (catégorie `sens`) |
+| `client/src/character/CharacterSheet.jsx` | nouvelle section Fatigue, écoute `FATIGUE_TEST_RESULT` |
+| `client/src/locales/fr.json` | clés `charSheet.tooltip.malusFatigue` + section Fatigue — **corrigé** : `CharacterSheet.jsx` n'est **pas** migré vers `charSheet.json` (Lot 2 `PLAN_LOCALISATION.md`, non commencé) — vérifié, les clés `charSheet.*` existantes de ce fichier vivent dans `fr.json`, pas un namespace séparé ; suivre le même fichier plutôt que d'anticiper une migration non faite |
 
 **Hors périmètre** : aucune cadence automatique de Test de Fatigue (RAW explicitement laissé à la
-discrétion MJ).
+discrétion MJ) ; aucun badge token (tranché) ; aucun branchement Lot 2/échéances pour le Test lui-même
+(résolution immédiate, pas différée).
+
+### Validation prévue
+
+- Tests Node ciblés (`node --test shared/fatigueConstants.test.mjs`) : `getFatiguePalier`/
+  `getFatigueCase` aux bornes (0, 2, 3, 14, 15, 17), `getFatigueLevelMalus`/`getFatigueTestMalus` sur
+  les 6 paliers, sélection correcte de la table Choc à palier 5.
+- Test Node ciblé `activeMalusRegistry.test.mjs` : chaque source isolée (gate `enabled=false` → 0,
+  `wounds` vide → 0, cumul des trois), `exclude: ['fatigue']` retire bien la bonne entrée et aucune
+  autre.
+- Test Node ciblé sur la table de résultat du Test de Fatigue (échec/catastrophe/réussite/second
+  souffle/palier 5) — cas synthétiques avec seuil connu, pas de dépendance DB.
+- Vérification manuelle du verrou de concurrence (deux Tests de Fatigue quasi simultanés sur le même
+  personnage ne s'écrasent pas) — même scénario que celui déjà exécuté pour `adjustGameTime` (Lot 1).
+- Vérification manuelle : une macro joueur sur un personnage blessé reflète désormais le malus
+  (`macro-preview` et `MACRO_ROLL`), non-régression sur une macro sans blessure/fatigue active.
+- `eslint`/`npm run build` (client), `node --check` (serveur) à chaque fichier touché.
+- Nouveau concept Enclume (« Fatigue », « Compteur de Fatigue », « Test de Fatigue ») à ajouter dans
+  `docs/VOCABULARY.md` une fois codé (`CLAUDE.md` §2), même geste que l'Horloge de campagne (Lot 1).
 
 ---
 
@@ -1346,7 +1707,17 @@ cours de route (type `integer` plutôt que `bigint`, invariant de non-fuite de `
 calendrier Jour/Mois/Année à mois fixes plutôt que Jour-de-l'année, widget UI revu deux fois sur retour
 Saar). Dette hors périmètre trouvée en cours de route et non traitée : `docs/BUGIDENTIFIE.md` UI4.
 
-Les Lots 2 à 10 restent planifiés dans leurs grandes lignes seulement ; plusieurs points marqués
+**Lot 2 ✅ clos** — moteur générique d'échéances (§8), consommé par `PLAN_BLESSURES_GUERISON.md`.
+
+**Lot 3 ✅ clos (2026-07-30)** — Chute/Acide/Décompression/Feu (§9), confirmé fonctionnel par Saar en
+navigateur.
+
+**Lot 4 ✅ clos (2026-07-30)** — Fatigue (§10), 7 passes d'analyse critique, confirmé fonctionnel par
+Saar en navigateur. Point d'entrée partagé (`setFatiguePoints`) et registre de malus
+(`activeMalusRegistry.js`) désormais en place pour les Lots 5/7/8/9/10.
+
+Les Lots 6 à 10 restent planifiés dans leurs grandes lignes seulement ; plusieurs points marqués
 « à vérifier/trancher en codant » sont volontairement laissés ouverts (ils dépendent de détails du
 code réel au moment d'écrire chaque lot, pas d'une décision produit à prendre maintenant). Prochain
-lot à reprendre : Lot 2 (moteur générique d'échéances de jeu), sur confirmation de Saar.
+lot à reprendre : **Lot 5 (Froid)** — détail §11, dépend des Lots 1/2/4 (tous clos), sur confirmation
+de Saar.

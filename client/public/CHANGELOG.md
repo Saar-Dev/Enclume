@@ -1,3 +1,20 @@
+## v195 — 2026-07-30 — Fatigue (règle avancée optionnelle)
+
+### Client
+- [feat] Nouvelle règle de Fatigue, désactivée par défaut — le MJ l'active dans Options de campagne,
+  onglet Règle du jeu.
+- [feat] Une fois activée, la fiche de personnage affiche un nouveau bloc "Fatigue" (état actuel,
+  malus en cours). Le MJ peut y lancer un Test de Fatigue (Constitution, Volonté, Endurance ou
+  moyenne) ou marquer un personnage comme reposé (complet ou partiel).
+- [feat] Le malus de Fatigue apparaît désormais dans le détail de l'Initiative, aux côtés des malus
+  de blessure et d'encombrement déjà existants.
+- [fix] Les macros favorites (dés) tiennent maintenant compte du malus de blessure et d'encombrement
+  du personnage — ce n'était pas le cas jusqu'ici.
+
+### Serveur
+- [feat] Fondations de la règle de Fatigue (`docs/PLAN_FATIGUE_DOMMAGES.md` Lot 4) — sert de socle
+  aux futures règles de Froid, Maladies, Drogues, Irradiations et Faim/soif.
+
 ## v194 — 2026-07-30 — Dommages environnementaux : Chute, Acide, Décompression, Feu
 
 ### Client

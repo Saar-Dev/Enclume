@@ -769,6 +769,35 @@ console.log('[DBG-EAU1]', { x, z, baseY, mapTopY, candidateCeilingY: candidate?.
 
 **Prochaine étape** : ajouter `encumbrance_enabled: s.encumbrance_enabled ?? true` et `encumbrance_multiplier: s.encumbrance_multiplier ?? 3` à la liste de `load()`, même patron que les 3 clés `calendar_start_*` déjà correctement listées.
 
+**Correctif codé (2026-07-30, décision Saar : cause racine, pas un ajout des 2 clés manquantes)** —
+la vraie cause n'était pas 2 clés oubliées mais une duplication structurelle : `campaignSettingsService.js`
+a déjà une source unique (`SETTINGS_SCHEMA`) utilisée par ~20 consommateurs serveur via
+`getCampaignSettings()`, mais `GET /api/campaigns/:id` (seul point d'entrée de la page Paramètres)
+renvoyait `campaign.settings` **brut**, forçant `CampaignSettingsPage.jsx` à dupliquer à la main la
+liste clé→défaut — `calendar_start_*` avait déjà dû y être ajouté après coup, `encumbrance_*` a été
+oublié, `fatigue_enabled` aurait suivi. Corrigé en supprimant la duplication plutôt qu'en la
+perpétuant :
+- `campaignSettingsService.js` — nouvelle fonction pure exportée `mergeWithDefaults(settings)`,
+  projection sur exactement les clés de `SETTINGS_SCHEMA` (clé absente → défaut, clé parasite →
+  filtrée — volontairement pas un simple spread, une clé parasite round-tripperait jusqu'au client
+  puis casserait `PUT /campaigns/:id` qui rejette toute clé inconnue). `getCampaignSettings()`
+  refactorée pour la réutiliser, comportement inchangé, aucune requête DB supplémentaire.
+- `routes/campaigns.js` — `GET /:id` : `campaign.settings = mergeWithDefaults(campaign.settings)`
+  avant `res.json()`, même endroit que le garde `delete campaign.game_time_resolved_minutes` déjà
+  présent.
+- `CampaignSettingsPage.jsx` — `load()` : liste à 20 clés recopiées à la main remplacée par
+  `settings: { ...(campaign.settings || {}) }` — le serveur garantit désormais toutes les clés du
+  schéma ; plus aucune clé à ajouter côté client quand le schéma évolue (élimine la classe de bug,
+  pas seulement l'occurrence).
+
+**Testé** : nouveau `server/src/lib/campaignSettingsService.test.mjs` (4/4 — undefined/null, override,
+clé parasite filtrée, piège `??` vs `||` sur une clé falsy avec défaut `true`) ; suite serveur complète
+(`node --test`, 77/77 verts, 60 skip DB) ; ESLint (`CampaignSettingsPage.jsx`) et `npm run build`
+(client) propres.
+**Non testé** : scénario réel en jeu (ouvrir Paramètres > Règle du jeu, changer Limite de poids
+porté/Multiplicateur, sauvegarder, recharger la page, vérifier que les valeurs sauvegardées
+persistent) — à la charge de Saar avant de considérer cette dette close et de la retirer du registre.
+
 ---
 
 ### Dette HORLOGE-TEST1 — `adjustGameTime` (Lot 1) sans aucun test automatisé

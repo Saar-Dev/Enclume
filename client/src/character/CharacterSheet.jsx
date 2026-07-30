@@ -38,6 +38,11 @@ import {
   getAdvantageRowsForAttr, getAdvantageRowsForResistance, getNaturalArmorMod,
   calcResistanceDommages, calcResistanceNaturelle, calcResistanceDroguesInput, calcSouffle, calcSeuils,
 } from '../../../shared/polarisUtils.js'
+import {
+  getFatiguePalier, getFatigueCase, getFatigueLevelMalus,
+} from '../../../shared/fatigueConstants.js'
+import { WS } from '../../../shared/events.js'
+import { useSocket } from '../lib/SocketContext.jsx'
 
 // ─── Constantes métier ────────────────────────────────────────────────────────
 
@@ -172,7 +177,7 @@ function buildSecondaryTooltips(naMap, charAdvantages, mutationEffects, secondar
 // Saar : "mes fiches perso ne s'affichent pas pareil que les autres". Le composant ne remonte pas
 // entre deux personnages (pas de key={characterId}, dette connue depuis Session 141 suite 9) —
 // l'état est donc rechargé via useEffect([isOwner, characterId]), pas seulement à l'init.
-const ACCORDION_BLOCK_IDS = ['xp', 'description', 'attributes', 'secondary', 'skills', 'advantages']
+const ACCORDION_BLOCK_IDS = ['xp', 'description', 'attributes', 'secondary', 'fatigue', 'skills', 'advantages']
 const DEFAULT_ACCORDION_STATE = Object.fromEntries(ACCORDION_BLOCK_IDS.map(id => [id, true]))
 
 function getAccordionStorageKey(isOwner) {
@@ -283,6 +288,16 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
   const [woundPenalty,       setWoundPenalty]       = useState(0)
   const [woundTestBlocked,   setWoundTestBlocked]   = useState(false)
   const [encumbrancePenalty, setEncumbrancePenalty] = useState(0)
+  // Fatigue (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) — pas de calcActiveMalus ici (fonction
+  // serveur) : le malus de palier est un simple lookup pur (getFatigueLevelMalus, shared/), calculé
+  // localement à partir de fatigue_points déjà présent sur la fiche (GET /char-sheet/:id, aucune
+  // route dédiée nécessaire pour l'afficher).
+  const [fatiguePoints, setFatiguePoints] = useState(0)
+  const [fatigueSource, setFatigueSource] = useState('CON')
+  const [fatigueModifier, setFatigueModifier] = useState(0)
+  const [fatigueBusy, setFatigueBusy] = useState(false)
+  const [fatigueError, setFatigueError] = useState(null)
+  const [fatigueLastResult, setFatigueLastResult] = useState(null)
   // Debounce pour la saisie XP par le GM
   const xpDebounceTimer = useRef(null)
 
@@ -324,10 +339,14 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     [naMap, charAdvantages, mutationEffects, secondary, t]
   )
 
-  const effectiveMalus = woundPenalty - encumbrancePenalty
+  // fatiguePenalty : gardé par settings.fatigue_enabled côté client aussi (§10, trou structurel 8-ter)
+  // — un palier resté non nul après désactivation de la mécanique par le MJ ne doit produire aucun
+  // malus, même comportement que le gate serveur (activeMalusRegistry.js).
+  const fatiguePenalty = campaignSettings?.fatigue_enabled ? getFatigueLevelMalus(fatiguePoints) : 0
+  const effectiveMalus = woundPenalty - encumbrancePenalty + fatiguePenalty
 
   const iniTooltip = useMemo(() => {
-    const malus = woundPenalty - encumbrancePenalty
+    const malus = woundPenalty - encumbrancePenalty + fatiguePenalty
     const ini   = secondary.rea + malus
     if (malus === 0) {
       return t('charSheet.tooltip.iniBase')
@@ -335,10 +354,11 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
     const lines = [`${t('charSheet.tooltip.reaBase')} ${secondary.rea}`]
     if (woundPenalty < 0)       lines.push(`${t('charSheet.tooltip.malusBlessures')} ${woundPenalty}`)
     if (encumbrancePenalty > 0) lines.push(`${t('charSheet.tooltip.malusEncombrement')}${encumbrancePenalty}`)
+    if (fatiguePenalty < 0)    lines.push(`${t('charSheet.tooltip.malusFatigue')} ${fatiguePenalty}`)
     if (woundTestBlocked)      lines.push(t('charSheet.tooltip.testImpossible'))
     lines.push(`${t('charSheet.tooltip.iniEffective')} ${ini}`)
     return lines.join('\n')
-  }, [woundPenalty, woundTestBlocked, encumbrancePenalty, secondary.rea, t])
+  }, [woundPenalty, woundTestBlocked, encumbrancePenalty, fatiguePenalty, secondary.rea, t])
 
   const iniValue = secondary.rea + effectiveMalus
 
@@ -400,6 +420,7 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         setSheetId(sheet.id)
         setCampaignSettings(settings ?? null)
         setMutationEffects(mutationEffects ?? null)
+        setFatiguePoints(sheet.fatigue_points ?? 0)
         setChc(sheet.chc ?? 11)
         chcRef.current = sheet.chc ?? 11
 
@@ -482,6 +503,54 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
 
     load()
     return () => { cancelled = true }
+  }, [characterId])
+
+  // ─── Fatigue — Test/Repos (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) ────────────────────────────
+  // Écoute locale scope characterId (pas via le store global characterStore, comme wound_penalty/
+  // ini_penalty ci-dessus déjà fetchés localement à cette fiche plutôt que via useCharacterSocket) —
+  // rattrape une mise à jour déclenchée depuis une autre fiche/session (MJ + joueur du personnage
+  // ouverts en même temps), la réponse HTTP directe couvrant déjà le cas courant (MJ agit depuis
+  // cette même fiche).
+  const socket = useSocket()
+  useEffect(() => {
+    if (!socket) return
+    const onFatigueResult = (payload) => {
+      if (payload.characterId !== characterId) return
+      setFatiguePoints(payload.newPoints)
+      setFatigueLastResult(payload)
+    }
+    socket.on(WS.FATIGUE_TEST_RESULT, onFatigueResult)
+    return () => socket.off(WS.FATIGUE_TEST_RESULT, onFatigueResult)
+  }, [socket, characterId])
+
+  const runFatigueTest = useCallback(async () => {
+    setFatigueBusy(true)
+    setFatigueError(null)
+    try {
+      const res = await api.post(`/char-sheet/${characterId}/fatigue-test`, {
+        source: fatigueSource, mjModifier: Number(fatigueModifier) || 0,
+      })
+      setFatiguePoints(res.data.newPoints)
+      setFatigueLastResult(res.data)
+    } catch (err) {
+      setFatigueError(err.response?.data?.error?.message || err.response?.data?.message || err.message)
+    } finally {
+      setFatigueBusy(false)
+    }
+  }, [characterId, fatigueSource, fatigueModifier])
+
+  const runFatigueRest = useCallback(async (full) => {
+    setFatigueBusy(true)
+    setFatigueError(null)
+    try {
+      const res = await api.post(`/char-sheet/${characterId}/fatigue-rest`, { full })
+      setFatiguePoints(res.data.newPoints)
+      setFatigueLastResult(null)
+    } catch (err) {
+      setFatigueError(err.response?.data?.error?.message || err.response?.data?.message || err.message)
+    } finally {
+      setFatigueBusy(false)
+    }
   }, [characterId])
 
   // ─── Sauvegarde ───────────────────────────────────────────────────────────
@@ -1053,6 +1122,76 @@ export default function CharacterSheet({ characterId, isGm, isOwner, onSaved }) 
         </div>
       </CollapsibleBlock>
 
+      {/* ══ BLOC — FATIGUE (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) ══════ */}
+      {/* Masqué entièrement si la mécanique est désactivée sur cette campagne (fatigue_enabled) —
+          garde répliquée côté client, même raison que le garde serveur : pas d'entrée UI visible
+          pour une mécanique que le MJ n'a pas activée. */}
+      {campaignSettings?.fatigue_enabled && (
+        <CollapsibleBlock id="fatigue" title={t('charSheet.sectionFatigue')} open={blockOpen.fatigue} onToggle={toggleBlock}>
+          <div style={s.secondaryCards}>
+            <SecondaryField
+              label={t('charSheet.fatigue.palierLabel')}
+              value={`${t(`charSheet.fatigue.palier${getFatiguePalier(fatiguePoints)}`)} (${getFatigueCase(fatiguePoints) + 1}/3)`}
+              tooltip={fatiguePenalty < 0
+                ? `${t('charSheet.fatigue.malus')} ${fatiguePenalty}`
+                : t('charSheet.fatigue.malusNone')}
+              valueStyle={fatiguePenalty < 0 ? { color: '#e05c5c' } : undefined}
+            />
+          </div>
+
+          {isGm && (
+            <>
+              <div style={s.fatigueRow}>
+                <select
+                  style={s.select}
+                  value={fatigueSource}
+                  onChange={e => setFatigueSource(e.target.value)}
+                  disabled={fatigueBusy}
+                >
+                  <option value="CON">{t('charSheet.fatigue.sourceCon')}</option>
+                  <option value="VOL">{t('charSheet.fatigue.sourceVol')}</option>
+                  <option value="ENDURANCE">{t('charSheet.fatigue.sourceEndurance')}</option>
+                  <option value="MOYENNE">{t('charSheet.fatigue.sourceMoyenne')}</option>
+                </select>
+                <input
+                  type="number"
+                  style={s.fatigueModifierInput}
+                  value={fatigueModifier}
+                  onChange={e => setFatigueModifier(e.target.value)}
+                  placeholder={t('charSheet.fatigue.modifierPlaceholder')}
+                  disabled={fatigueBusy}
+                />
+                <button style={s.fatigueBtn} onClick={runFatigueTest} disabled={fatigueBusy}>
+                  {t('charSheet.fatigue.launchTest')}
+                </button>
+              </div>
+              <div style={s.fatigueRow}>
+                <button style={s.fatigueBtn} onClick={() => runFatigueRest(true)} disabled={fatigueBusy}>
+                  {t('charSheet.fatigue.restFull')}
+                </button>
+                <button style={s.fatigueBtn} onClick={() => runFatigueRest(false)} disabled={fatigueBusy}>
+                  {t('charSheet.fatigue.restPartial')}
+                </button>
+              </div>
+              {fatigueError && (
+                <div style={{ ...s.fatigueRow, color: '#e05c5c', fontSize: '11px' }}>{fatigueError}</div>
+              )}
+              {fatigueLastResult && (
+                <div style={{ ...s.fatigueRow, fontSize: '11px', color: '#5a5a7a' }}>
+                  {t('charSheet.fatigue.lastResult', {
+                    roll: fatigueLastResult.roll,
+                    seuil: fatigueLastResult.seuil,
+                    result: fatigueLastResult.isSuccess
+                      ? t('charSheet.fatigue.success')
+                      : t('charSheet.fatigue.failure'),
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </CollapsibleBlock>
+      )}
+
       {/* ══ BLOC 5 — COMPÉTENCES ══════════════════════════════════════════ */}
       <CollapsibleBlock id="skills" title={t('charSheet.sectionSkills')} open={blockOpen.skills} onToggle={toggleBlock}>
         <div style={{ padding: '8px' }}>
@@ -1359,6 +1498,38 @@ const s = {
     borderColor: '#5b8dee',
     color: '#5b8dee',
     background: 'rgba(91,141,238,0.10)',
+  },
+
+  // Fatigue (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) — mêmes teintes que xpBtn
+  fatigueRow: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    padding: '4px 12px',
+    flexWrap: 'wrap',
+  },
+  fatigueBtn: {
+    padding: '4px 12px',
+    border: '1px solid #2a2a3e',
+    borderRadius: '4px',
+    background: '#0e0e1a',
+    color: '#5a5a7a',
+    fontSize: '11px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    transition: 'all 0.1s ease',
+  },
+  fatigueModifierInput: {
+    background: '#0e0e1a',
+    border: '1px solid #2a2a3e',
+    borderRadius: '4px',
+    color: '#b0b0c8',
+    fontSize: '12px',
+    padding: '2px 4px',
+    outline: 'none',
+    width: '48px',
   },
 
   // Grille description

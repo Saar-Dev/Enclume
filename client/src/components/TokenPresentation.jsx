@@ -17,7 +17,7 @@ const STATUS_CATEGORY_COLOR = {
 const STATUS_CATEGORY = {
   grappled: 'entrave', restrained: 'entrave', off_balance: 'entrave',
   burning: 'dot', acid: 'dot', asphyxia: 'dot', decompression: 'dot', electrocuted: 'dot',
-  stunned: 'sens', unconscious: 'sens', blinded: 'sens',
+  stunned: 'sens', unconscious: 'sens', blinded: 'sens', evanoui: 'sens',
   hypothermia: 'chronique', infected: 'chronique', poisoned: 'chronique', irradiated: 'chronique',
 }
 

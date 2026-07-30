@@ -4,6 +4,8 @@ import { parseDice } from '../lib/diceParser.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import { calcSkillTotal, calcAttributeNA } from '../lib/charStats.js'
+import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
+import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import {
   calcREA, getAdvantageModForAttr, getAdvantageModForResistance, getMutationModForResistance,
   calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle, calcResistanceDommages,
@@ -103,11 +105,20 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       const sheet = await db('char_sheet').where({ character_id: characterId }).first()
       if (!sheet) return
 
-      const [attrs, archetype, mutationEffects, advantages] = await Promise.all([
+      // Point structurel 3 (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) : les macros ignoraient jusqu'ici
+      // tout malus de blessure/encombrement/fatigue — corrigé en branchant le même registre que les
+      // sites combat, wounds/char_inventory/settings ajoutés au même Promise.all déjà en place.
+      const [attrs, archetype, mutationEffects, advantages, wounds, invItems, settings] = await Promise.all([
         db('char_attributes').where({ char_sheet_id: sheet.id }),
         db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
         getMutationEffects(sheet.id),
         getAdvantages(sheet.id),
+        db('character_wounds').where({ char_sheet_id: sheet.id }),
+        db('char_inventory')
+          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+          .where({ 'char_inventory.character_id': characterId })
+          .select('char_inventory.container', 'ref_equipment.weight as ref_weight', 'char_inventory.quantity'),
+        getCampaignSettings(db, campaignId),
       ])
       const genotypeRow = archetype?.genotype_id
         ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -115,6 +126,12 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
 
       // ── 4. Seuil (somme des sources + modificateur fixe) ──────────
       const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow, mutationEffects)
+      const totalWeight = invItems.reduce((sum, item) =>
+        (item.container === 'Coffre' || item.ref_weight == null) ? sum : sum + item.ref_weight * item.quantity, 0
+      )
+      const activeMalus = calcActiveMalus({
+        wounds, fatiguePoints: sheet.fatigue_points, totalWeight, forNA: na('FOR'), settings,
+      })
 
       const secondaryValue = (key) => {
         switch (key) {
@@ -145,7 +162,7 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
           baseThreshold += secondaryValue(src.ref_id)
         }
       }
-      const threshold = baseThreshold + macro.modifier
+      const threshold = baseThreshold + activeMalus + macro.modifier
 
       // ── 5-6. Jet 1d20 + Succès/critique/Catastrophe — règle absolue Polaris, extraite dans
       // server/src/lib/polarisTestService.js (docs/PLAN_FATIGUE_DOMMAGES.md, résolveur de Test

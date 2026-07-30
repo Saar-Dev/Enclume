@@ -32,6 +32,10 @@ export const WS = {
   // contre l'Infection, seuil calculé et jet effectué côté serveur (jamais un simple DICE_ROLL
   // d'affichage, mute character_wounds via resolveEcheanceNow).
   WOUND_INFECTION_ROLL: 'wound:infection_roll',
+  // docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4 : serveur → room, résultat d'un Test de Fatigue (jet,
+  // seuil, issue, nouveau palier/case) — diffusion visible MJ + joueur (patron MACRO_ROLL_RESULT),
+  // pas seulement un retour HTTP au MJ qui a déclenché le Test.
+  FATIGUE_TEST_RESULT: 'fatigue:test_result',
 
   // Battlemap
   MAP_SWITCH:   'map:switch',

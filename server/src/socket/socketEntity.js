@@ -5,9 +5,9 @@ import { getUserColor } from '../lib/socketUtils.js'
 import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import {
   calcSkillTotal, calcAttributeAN, calcAttributeNA,
-  calcWoundPenalty, calcEncumbrancePenalty,
   ATTR_LABELS,
 } from '../lib/charStats.js'
+import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { measureBattlemapTokenEntityDistance } from '../services/worldSpatialQueryService.js'
@@ -250,7 +250,6 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
           // ── Malus effectif (blessures + encombrement) ──────────────────────
           try {
             const wounds = await db('character_wounds').where({ char_sheet_id: sheet.id })
-            const woundPenalty = calcWoundPenalty(wounds)
 
             // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), corrige PI4
             const forValue = calcAttributeNA(attrs, 'FOR', genotypeRow, mutationEffects)
@@ -266,10 +265,10 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
               return sum + item.ref_weight * item.quantity
             }, 0)
 
-            const encumbrancePenalty = settings.encumbrance_enabled
-              ? calcEncumbrancePenalty(totalWeight, forValue, settings.encumbrance_multiplier)
-              : 0
-            effectiveMalus = woundPenalty - encumbrancePenalty
+            // Registre de malus actifs (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4).
+            effectiveMalus = calcActiveMalus({
+              wounds, fatiguePoints: sheet.fatigue_points, totalWeight, forNA: forValue, settings,
+            })
 
             if (effectiveMalus < 0) console.log(`[DBG] entity:action_resolve — malus actif ${effectiveMalus} pour character ${pending.characterId}`)
           } catch (malusErr) {

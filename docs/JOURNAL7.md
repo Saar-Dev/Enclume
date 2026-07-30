@@ -271,3 +271,72 @@ round-trip HTTP authentifié scripté (pas d'identifiants côté agent). **Donn�
 appliquée automatiquement par le serveur `dev` déjà actif au moment de sa création. **Retour arrière** :
 commit isolé sur `dev/Saar`, `git revert` possible sans affecter les chantiers Lot 1/Lot 2 déjà commités
 séparément.
+
+---
+
+## Session 190 (Saar) — 2026-07-30 — `PLAN_FATIGUE_DOMMAGES.md` Lot 4 clos : Fatigue — ✅ codé et confirmé fonctionnel en navigateur
+
+**Contexte** : reprise après le Lot 3 (dangers environnementaux, Session 189). Cadrage fait par
+relecture RAW complète (`FATIGUE&DOMMAGES.md:838-1017`, capture Annexe p.250 fournie par Saar pour
+retrouver la table des cases, absente du texte transcrit) — le §10 initial du plan avait sous-estimé
+la mécanique réelle (5 paliers au lieu de 6, un seul malus au lieu de deux indépendants). **7 passes
+d'analyse critique**, chacune demandée explicitement par Saar avant de continuer, chacune ayant trouvé
+un vrai trou :
+
+1. Aucun point d'agrégation unique des modificateurs de Test dans le projet — `calcWoundPenalty`
+   dupliqué à 5 endroits. Corrigé en registre déclaratif (`activeMalusRegistry.js`, patron
+   `echeanceTypeRegistry.js`), pas une fonction à paramètres fixes (aurait rouvert le même problème à
+   chaque lot futur) — recherche externe faite (Active Effects Foundry VTT) pour confirmer le patron
+   avant de trancher.
+2. Risque de concurrence non traité sur `fatigue_points` — même classe déjà corrigée deux fois dans ce
+   plan (Lot 1, Lot 2). Verrouillage `.forUpdate()` ajouté.
+3. Trou préexistant révélé (pas causé par ce lot) : le système de macros joueur n'appliquait aucun
+   malus de blessure/encombrement. Tranché par Saar : corrigé dans ce lot plutôt que contourné
+   (« même si on doit mettre le projet en pause pour bien recoder cette fonctionnalité »).
+4. Le Test de Fatigue lui-même oubliait le malus actif sur son propre seuil — le RAW n'exempte que le
+   malus de *palier* de Fatigue, pas blessure/encombrement.
+5. `applyStunWithDuration` ne pouvait pas produire le statut `evanoui` (binaire fermé stunned/
+   unconscious, vérifié dans le code) — étendue plutôt que dupliquée.
+6. **Erreur de fond trouvée en préparant le code** : la première rédaction utilisait `isCriticalFail`
+   (jet=20, "Échec critique") comme proxy de "Catastrophe" RAW — faux contre
+   `shared/polarisTestResolution.js` : `catastropheRisk` (marge ≤ -15) est un concept distinct, et le
+   code source dit explicitement qu'il n'a **jamais** d'effet mécanique automatique nulle part dans le
+   projet (juste transmis pour affichage). Tranché par Saar : appliqué automatiquement pour la
+   Fatigue quand même — le chapitre RAW ne prévoit aucune option MJ pour ce cas précis.
+7. Repéré en préparant l'UI : les 2 routes REST visaient `campaigns.js` (scope `campaignId`) alors que
+   `CharacterSheet.jsx`, seule consommatrice, n'a jamais `campaignId` en prop — déplacées vers
+   `char-sheet.js` (`req.character.campaign_id` résolu serveur, patron déjà établi par cette route
+   family). Correction symétrique sur les clés i18n (`fr.json`, pas `charSheet.json` — ce composant
+   n'est pas migré vers les namespaces séparés, `PLAN_LOCALISATION.md` Lot 2 non commencé).
+
+**Trouvaille supplémentaire, hors combat** : le badge Choc (`evanoui`/`unconscious`, palier "À bout de
+force") ne peut pas s'appuyer sur une expiration en Tours si le Test est déclaré hors combat
+(`current_turn` ne progresse jamais hors FSM combat). Vérifié que ce n'était pas déjà un bug existant
+(Lot 3 n'auto-applique jamais ce badge, contrairement à ce que la 1ʳᵉ rédaction de ce lot s'apprêtait à
+faire). Saar : comportement voulu, pas un bug — badge sans expiration hors combat, retrait manuel MJ.
+
+**Bug de câblage trouvé au moment de tester (pas en navigateur — en répondant à la question de Saar
+"je teste quoi ?")** : le schéma serveur (`fatigue_enabled`, `SETTINGS_SCHEMA`) n'avait aucune case à
+cocher côté UI pour l'activer — sans elle, rien n'était testable. Corrigé (`SectionGameRules.jsx`,
+même patron que `encumbrance_enabled`) avant que Saar ne commence son test.
+
+**Fichiers touchés** : migration `227_char_sheet_fatigue.js` ; nouveaux
+`shared/fatigueConstants.js` (+ test), `server/src/lib/{activeMalusRegistry,fatigueService}.js`
+(+ test) ; modifiés `server/src/lib/{charStats,statusService,campaignSettingsService}.js`,
+`server/src/socket/{socketCombatHelpers,socketEntity,socketDice}.js`,
+`server/src/routes/character/char-sheet.js`, `shared/events.js` ; client
+`CharacterSheet.jsx`, `components/campaignSettings/SectionGameRules.jsx`,
+`components/TokenPresentation.jsx`, `locales/fr.json`, nouvelle icône `assets/status/evanoui.svg` ;
+`docs/{PLAN_FATIGUE_DOMMAGES,VOCABULARY,ASBUILT,EN_COURS}.md` tenus à jour à chaque passe (pas en fin
+de session).
+
+**Testé** : 330 tests Node (270 pass / 60 skip DB, 0 échec — 0 régression sur les tests existants
+rejoués), ESLint (0 nouvelle erreur, 3 préexistantes confirmées non liées via `git stash`),
+`npm run build` client propre à chaque étape. **Confirmé fonctionnel en navigateur par Saar** : case à
+cocher campagne, apparition/disparition du bloc Fatigue, Test de Fatigue avec évolution palier/case,
+malus dans le tooltip Initiative, boutons Repos, macro joueur reflétant désormais le malus de
+blessure. **Non testé** : round-trip HTTP authentifié scripté (pas d'identifiants côté agent).
+**Données** : migration 227, s'applique automatiquement au prochain redémarrage du serveur `dev`
+(`db.migrate.latest()`). **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` possible sans
+affecter les Lots 1-3 déjà commités séparément.
+

@@ -39,6 +39,8 @@ import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, getCoutAttributPc, MAX_PC_MODIFIER, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
+import { calcActiveMalus } from '../../lib/activeMalusRegistry.js'
+import { resolveFatigueTest, restFatigue } from '../../lib/fatigueService.js'
 import {
   calcREA, getAdvantageModForAttr, getAdvantageModForResistance, getMutationModForResistance,
   calcSeuils, calcSouffle, calcResistanceDroguesInput, calcResistanceNaturelle, calcResistanceDommages,
@@ -826,6 +828,33 @@ router.delete('/:characterId/mutations/:id', async (req, res, next) => {
 // ─── Helpers blessures — voir server/src/lib/woundUtils.js ──────────────────
 
 // ─── GET /api/char-sheet/:characterId/wounds ─────────────────────────────────
+// ─── POST /api/char-sheet/:characterId/fatigue-test ──────────────────────────
+// GM uniquement — docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4. campaignId résolu via
+// req.character.campaign_id (patron déjà établi par cette route family, characterId-scope
+// uniquement — CharacterSheet.jsx, seule consommatrice, n'a jamais campaignId en prop).
+// Body : { source: 'CON'|'VOL'|'ENDURANCE'|'MOYENNE', mjModifier? }
+router.post('/:characterId/fatigue-test', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'Seul le MJ peut déclencher un Test de Fatigue')
+    const { source, mjModifier } = req.body
+    const result = await resolveFatigueTest(req.app.get('io'), req.character.campaign_id, {
+      characterId: req.params.characterId, source, mjModifier,
+    })
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
+// ─── POST /api/char-sheet/:characterId/fatigue-rest ──────────────────────────
+// GM uniquement. Body : { full?, caseDelta? }
+router.post('/:characterId/fatigue-rest', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'Seul le MJ peut déclencher un Repos')
+    const { full, caseDelta } = req.body
+    const result = await restFatigue(req.app.get('io'), req.character.campaign_id, req.params.characterId, { full, caseDelta })
+    res.json(result)
+  } catch (err) { next(err) }
+})
+
 router.get('/:characterId/wounds', async (req, res, next) => {
   try {
     const sheet = await db('char_sheet')
@@ -1278,17 +1307,32 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
     const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
     if (!sheet) return res.json({ threshold: Number(modifier) })
 
-    const [attrs, archetype, mutationEffects, advantages] = await Promise.all([
+    // Point structurel 3 (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) : les macros ignoraient jusqu'ici
+    // tout malus de blessure/encombrement/fatigue — corrigé en branchant le même registre que les
+    // sites combat, wounds/char_inventory/settings ajoutés au même Promise.all déjà en place.
+    const [attrs, archetype, mutationEffects, advantages, wounds, invItems, settings] = await Promise.all([
       db('char_attributes').where({ char_sheet_id: sheet.id }),
       db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
       getMutationEffects(sheet.id),
       getAdvantages(sheet.id),
+      db('character_wounds').where({ char_sheet_id: sheet.id }),
+      db('char_inventory')
+        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
+        .where({ 'char_inventory.character_id': req.params.characterId })
+        .select('char_inventory.container', 'ref_equipment.weight as ref_weight', 'char_inventory.quantity'),
+      getCampaignSettings(db, req.character.campaign_id),
     ])
     const genotypeRow = archetype?.genotype_id
       ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
       : null
 
     const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow, mutationEffects)
+    const totalWeight = invItems.reduce((sum, item) =>
+      (item.container === 'Coffre' || item.ref_weight == null) ? sum : sum + item.ref_weight * item.quantity, 0
+    )
+    const activeMalus = calcActiveMalus({
+      wounds, fatiguePoints: sheet.fatigue_points, totalWeight, forNA: na('FOR'), settings,
+    })
 
     const secondaryValue = (key) => {
       switch (key) {
@@ -1321,7 +1365,7 @@ router.post('/:characterId/macro-preview', async (req, res, next) => {
       }
     }
 
-    res.json({ threshold: baseThreshold + Number(modifier) })
+    res.json({ threshold: baseThreshold + activeMalus + Number(modifier) })
   } catch (err) { next(err) }
 })
 

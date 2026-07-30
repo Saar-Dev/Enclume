@@ -1326,6 +1326,72 @@ posée sur la carte ; chantier séparé, territoire Codex/dev-monde, à cadrer p
 
 ---
 
+## Fatigue — Compteur de Fatigue (Lot 4, session 190)
+
+### Serveur
+- Migration `227_char_sheet_fatigue.js` — `char_sheet.fatigue_points` integer, `notNullable`,
+  `defaultTo(0)` (additive, 0-17 = 6 paliers × 3 cases, Annexe LdB p.250).
+- `shared/fatigueConstants.js` — tables RAW (`FATIGUE_LEVEL_MALUS`/`FATIGUE_TEST_MALUS`/
+  `FATIGUE_CHOC_MALUS`) + fonctions pures (`getFatiguePalier`/`getFatigueCase`/`getFatigueLevelMalus`/
+  `getFatigueTestMalus`), testées isolément (6/6).
+- `server/src/lib/activeMalusRegistry.js` (`ACTIVE_MALUS_SOURCES`/`calcActiveMalus`) — registre
+  déclaratif (patron `echeanceTypeRegistry.js`), remplace le calcul `woundPenalty - encumbrancePenalty`
+  dupliqué en dur à 5 endroits (`socketCombatHelpers.js` ×3, `socketEntity.js`) et **corrige un bug
+  préexistant** : le système de macros joueur (`socketDice.js:MACRO_ROLL`,
+  `char-sheet.js:macro-preview`) n'appliquait jusqu'ici aucun malus de blessure/encombrement — branché
+  sur le même registre. Support `exclude: ['fatigue']` (auto-exemption RAW du Test de Fatigue à son
+  propre malus de palier, ligne 976-979 du texte source — pas aux autres malus).
+- `server/src/lib/fatigueService.js` (`resolveFatigueTest`/`restFatigue`/`setFatiguePoints`) —
+  résolution immédiate (pas un consommateur du moteur d'échéances, Lot 2), verrou `char_sheet.forUpdate()`
+  avant toute lecture de `fatigue_points`. Table de résultat RAW complète : échec → palier+1 case 0 ;
+  Catastrophe (`catastropheRisk`, marge ≤ -15 — **pas** `isCriticalFail`/jet=20, deux concepts RAW
+  distincts) → palier+1 case 1, appliqué automatiquement (seul consommateur du projet où
+  `catastropheRisk` a un effet mécanique, tranché Saar) ; réussite → case+1, ou -1 si marge ≥15
+  (« second souffle », plancher case 0 du palier — hypothèse documentée, RAW ambigu sur un
+  franchissement de palier par ce chemin). Palier 5 (« À bout de force ») : Test remplacé par un Test de
+  Choc, échec → statut `evanoui`, Catastrophe → `unconscious` (même formule de durée ×10 que le Choc de
+  blessure existant) ; statut posé sans expiration si hors combat (`current_turn` ne progresse jamais
+  hors FSM combat — comportement voulu, retrait manuel MJ, cohérent avec Lot 3 point COMBAT_END).
+- `statusService.js` (`applyStunWithDuration`) — étendue : `statusCode` explicite optionnel (défaut
+  inchangé, déduit d'`outcome`) pour produire `evanoui` (binaire fermé stunned/unconscious
+  auparavant), `evanoui` ajouté à l'exclusion mutuelle des statuts d'incapacitation.
+- `campaignSettingsService.js` — `fatigue_enabled` (boolean, défaut `false` — mécanique neuve, contraire
+  à `encumbrance_enabled` qui tournait déjà sans gate).
+- `shared/events.js` — `FATIGUE_TEST_RESULT`, diffusé après résolution (visible MJ + joueur, pas
+  seulement un retour HTTP — même classe de bug que le correctif Lot 3 sur `COMBAT_ATTACK_RESULT`,
+  cette fois anticipée).
+- Routes `POST /api/char-sheet/:characterId/fatigue-test|fatigue-rest` (`char-sheet.js`, pas
+  `campaigns.js` — ce composant client n'a jamais `campaignId` en prop, résolu serveur via
+  `req.character.campaign_id`, patron déjà établi par cette route family).
+
+### Client
+- `CharacterSheet.jsx` — nouveau bloc dépliable Fatigue (masqué si `fatigue_enabled=false`), palier/case
+  affichés, malus intégré au tooltip Initiative (3ᵉ ligne, même patron que blessure/encombrement).
+  MJ uniquement : sélecteur de source (CON/VOL/Endurance/Moyenne) + modificateur + bouton Test, boutons
+  Repos complet/partiel. Écoute `FATIGUE_TEST_RESULT` (scope `characterId`) pour rattraper une action
+  déclenchée depuis une autre session. **Pas de badge token** (décision Saar — visible uniquement sur la
+  fiche, contrairement aux dangers environnementaux du Lot 3).
+- `SectionGameRules.jsx` (Options de campagne, onglet Règle du jeu) — case à cocher `fatigue_enabled`,
+  même patron que `encumbrance_enabled` (trouvé manquant après la fin du codage initial : le schéma
+  serveur seul ne donne aucun moyen au MJ de l'activer).
+- `TokenPresentation.jsx` — `evanoui` ajouté à `STATUS_CATEGORY` (catégorie `sens`), icône
+  `assets/status/evanoui.svg` (nouvelle).
+- Clés i18n `charSheet.fatigue.*`/`charSheet.tooltip.malusFatigue`/`settings.fatigueEnabled*`
+  (`fr.json` — `CharacterSheet.jsx` pas encore migré vers `charSheet.json`, `PLAN_LOCALISATION.md`
+  Lot 2 non commencé).
+
+### État
+✅ codé et confirmé fonctionnel en navigateur par Saar (case à cocher campagne, apparition/disparition
+du bloc Fatigue, Test de Fatigue avec évolution palier/case, malus dans le tooltip INI, Repos, macro
+joueur reflétant désormais le malus de blessure). Tests automatisés : 330 (270 pass / 60 skip DB, 0
+échec), `eslint`+`npm run build` client propres. 7 passes d'analyse critique avant/pendant le codage
+(détail complet `docs/PLAN_FATIGUE_DOMMAGES.md` §10) — corrections notables : agrégation en registre
+déclaratif plutôt qu'une fonction à paramètres fixes, verrouillage de concurrence, distinction
+`catastropheRisk`/`isCriticalFail`, badge Choc hors combat, routes déplacées `campaigns.js`→
+`char-sheet.js`, case à cocher UI manquante. Non testé : round-trip HTTP authentifié scripté.
+
+---
+
 ## Pièges actifs — tous domaines
 
 | Code | Description |

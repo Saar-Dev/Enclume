@@ -20,9 +20,9 @@ import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import {
   calcSkillTotal, calcAttributeNA,
-  calcWoundPenalty, calcEncumbrancePenalty,
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
+import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
@@ -1381,16 +1381,18 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       return { suspend: false, emissions }
     }
     const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant, mutationEffectsAttaquant) : 0
-    const woundPenalty = calcWoundPenalty(woundsAttaquant)
     // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
     // (docs/PLAN_MUTATION2.md Lot 1), calculée une fois et réutilisée (modDom/encombrement).
     const for_na_attaquant = calcAttributeNA(attrsAttaquant, 'FOR', genoAttaquant, mutationEffectsAttaquant)
     const totalWeight = invAttaquant.reduce((sum, i) =>
       (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
     )
-    const effectiveMalusAttaquant = woundPenalty - (settings.encumbrance_enabled
-      ? calcEncumbrancePenalty(totalWeight, for_na_attaquant, settings.encumbrance_multiplier)
-      : 0)
+    // Registre de malus actifs (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) — blessure/encombrement/
+    // fatigue agrégés en un seul point, plus jamais recalculés en dur ici.
+    const effectiveMalusAttaquant = calcActiveMalus({
+      wounds: woundsAttaquant, fatiguePoints: sheetAttaquant.fatigue_points,
+      totalWeight, forNA: for_na_attaquant, settings,
+    })
     const modDom = getModDom(for_na_attaquant)
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
@@ -1585,14 +1587,14 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
 
       if (refSkillDef) defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible, mutationEffectsCible)
 
-      const woundPenaltyDef = calcWoundPenalty(woundsCible)
       // for_na_cible déjà calculé ci-dessus (calcAttributeNA) — corrige PI4, plus de valeur brute séparée
       const totalWeightDef = invCible.reduce((sum, i) =>
         (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
       )
-      defenderEffectiveMalus = woundPenaltyDef - (settings.encumbrance_enabled
-        ? calcEncumbrancePenalty(totalWeightDef, for_na_cible, settings.encumbrance_multiplier)
-        : 0)
+      defenderEffectiveMalus = calcActiveMalus({
+        wounds: woundsCible, fatiguePoints: sheetCible.fatigue_points,
+        totalWeight: totalWeightDef, forNA: for_na_cible, settings,
+      })
     }
 
     // Lot 2 (PLAN_RW_SYSCOMBAT.md §2.4.b) : commonPending sert désormais de contexte partagé aux 4
@@ -2588,16 +2590,16 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         if (refSkill) skillTotal = calcSkillTotal(attrsTireur, charSkill, refSkill, genoTireur, mutationEffectsTireur)
       }
 
-      const woundPenalty = calcWoundPenalty(woundsTireur)
       // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
       const for_na_tireur = calcAttributeNA(attrsTireur, 'FOR', genoTireur, mutationEffectsTireur)
       const totalWeight = invTireur.reduce((sum, i) => {
         if (i.container === 'Coffre' || i.ref_weight == null) return sum
         return sum + i.ref_weight * i.quantity
       }, 0)
-      effectiveMalus = woundPenalty - (settings.encumbrance_enabled
-        ? calcEncumbrancePenalty(totalWeight, for_na_tireur, settings.encumbrance_multiplier)
-        : 0)
+      effectiveMalus = calcActiveMalus({
+        wounds: woundsTireur, fatiguePoints: sheetTireur.fatigue_points,
+        totalWeight, forNA: for_na_tireur, settings,
+      })
     }
 
     const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0

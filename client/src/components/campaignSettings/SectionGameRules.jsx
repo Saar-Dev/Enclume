@@ -13,6 +13,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const [statusEffectsMode, setStatusEffectsMode] = useState(initialData.status_effects_mode ?? 'enforced')
   const [encumbranceEnabled, setEncumbranceEnabled] = useState(initialData.encumbrance_enabled ?? true)
   const [encumbranceMultiplier, setEncumbranceMultiplier] = useState(initialData.encumbrance_multiplier ?? 3)
+  const [fatigueEnabled, setFatigueEnabled] = useState(initialData.fatigue_enabled ?? false)
   const [calendarStartDay, setCalendarStartDay] = useState(initialData.calendar_start_day ?? 1)
   const [calendarStartMonth, setCalendarStartMonth] = useState(initialData.calendar_start_month ?? 1)
   const [calendarStartYear, setCalendarStartYear] = useState(initialData.calendar_start_year ?? 1)
@@ -24,6 +25,7 @@ export default function SectionGameRules({ initialData, onChange }) {
   const handleStatusEffectsMode = (val) => { setStatusEffectsMode(val); onChange({ status_effects_mode: val }) }
   const handleEncumbranceEnabled = (val) => { setEncumbranceEnabled(val); onChange({ encumbrance_enabled: val }) }
   const handleEncumbranceMultiplier = (val) => { setEncumbranceMultiplier(val); onChange({ encumbrance_multiplier: val }) }
+  const handleFatigueEnabled = (val) => { setFatigueEnabled(val); onChange({ fatigue_enabled: val }) }
   const handleCalendarStartDay = (val) => { setCalendarStartDay(val); onChange({ calendar_start_day: val }) }
   const handleCalendarStartMonth = (val) => { setCalendarStartMonth(val); onChange({ calendar_start_month: val }) }
   const handleCalendarStartYear = (val) => { setCalendarStartYear(val); onChange({ calendar_start_year: val }) }
@@ -121,6 +123,14 @@ export default function SectionGameRules({ initialData, onChange }) {
             style={{ ...styles.numInput, width: '80px' }} />
         </div>
       </div>
+
+      <label style={{ ...styles.toggleRow, marginTop: 12 }}>
+        <input type="checkbox" checked={fatigueEnabled}
+          onChange={e => handleFatigueEnabled(e.target.checked)}
+          style={styles.checkbox} />
+        <span style={styles.toggleLabel}>{t('settings.fatigueEnabledLabel')}</span>
+        <span style={styles.toggleHint}>{t('settings.fatigueEnabledHint')}</span>
+      </label>
 
       <div style={{ marginTop: 12 }}>
         <span style={styles.toggleLabel}>{t('settings.calendarStartLabel')}</span>
