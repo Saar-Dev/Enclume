@@ -68,27 +68,34 @@ test('contributions se compensant — toutes deux conservées (RV2 : le masquage
   assert.equal(r.breakdown.length, 4) // base + 2 entrées conservées + total
 })
 
-test('bornes isSuccess/mr — égal au Seuil = réussite (D20 ≤ Seuil)', () => {
+test('bornes isSuccess/mr — RAW : marge de réussite = roll direct, marge d\'échec = roll-seuil', () => {
   const base = { skillLabel: 'Compétence', skillTotal: 10, contributions: [], totalLabel: 'Seuil' }
   const equal = computeAttackRoll({ ...base, rollAttaque: 10 })
   assert.equal(equal.isSuccess, true)
-  assert.equal(equal.mr, 0)
+  assert.equal(equal.isCriticalSuccess, true) // roll===seuil
+  assert.equal(equal.mr, 10)
   const above = computeAttackRoll({ ...base, rollAttaque: 11 })
   assert.equal(above.isSuccess, false)
   assert.equal(above.mr, -1)
   const below = computeAttackRoll({ ...base, rollAttaque: 3 })
   assert.equal(below.isSuccess, true)
-  assert.equal(below.mr, 7)
+  assert.equal(below.mr, 3)
 })
 
-test('roll 1 et 20 — simple passage de valeur, pas de traitement critique dans le noyau', () => {
+test('critique/Catastrophe délégués à resolveTestOutcome (docs/PLAN_TEST_CRITIQUE.md)', () => {
   const base = { skillLabel: 'Compétence', skillTotal: 10, contributions: [], totalLabel: 'Seuil' }
-  assert.equal(computeAttackRoll({ ...base, rollAttaque: 1 }).isSuccess, true)
-  assert.equal(computeAttackRoll({ ...base, rollAttaque: 20 }).isSuccess, false)
+  // Réussite critique = roll===seuil, jamais roll===1 fixe.
+  assert.equal(computeAttackRoll({ ...base, rollAttaque: 1 }).isCriticalSuccess, false)
+  assert.equal(computeAttackRoll({ ...base, rollAttaque: 10 }).isCriticalSuccess, true)
+  // Échec critique = roll===20 exactement, jamais assimilé à une Catastrophe automatique.
+  const critFail = computeAttackRoll({ ...base, rollAttaque: 20 })
+  assert.equal(critFail.isSuccess, false)
+  assert.equal(critFail.isCriticalFail, true)
+  assert.equal(critFail.catastropheRisk, false) // mr=-10, sous le seuil de 15
 })
 
 test('cas réaliste CaC — mode offensif + multi-adversaires + santé (valeurs LdB calculées à la main)', () => {
-  // Compétence 12, Mode offensif +3, Multi-adversaires -3, Malus santé -2 → Seuil 10 ; roll 7 → MR 3
+  // Compétence 12, Mode offensif +3, Multi-adversaires -3, Malus santé -2 → Seuil 10 ; roll 7 réussi → marge = roll = 7
   const r = computeAttackRoll({
     skillLabel: 'Compétence', skillTotal: 12, totalLabel: 'Seuil', rollAttaque: 7,
     contributions: [
@@ -100,7 +107,7 @@ test('cas réaliste CaC — mode offensif + multi-adversaires + santé (valeurs 
   })
   assert.equal(r.seuil, 10)
   assert.equal(r.isSuccess, true)
-  assert.equal(r.mr, 3)
+  assert.equal(r.mr, 7)
   assert.deepEqual(r.breakdown, [
     { label: 'Compétence', value: 12, type: 'base' },
     { label: 'Mode offensif', value: 3, type: 'bonus' },

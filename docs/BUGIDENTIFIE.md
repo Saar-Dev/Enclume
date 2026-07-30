@@ -1,6 +1,9 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
 > Dernière mise à jour : 2026-07-19 Session 162 (COM25/COM28/COM29 clos — détail EN_COURS.md Items 90-91 ; COM2 clos Session 161, cluster E) ; 2026-07-19 (Saar) triage `docs/COMPARATIF.md` — ajout INI4/MELEE-MR/DEF5/TIRIMP/WNDMORT/CHOC1 ; 2026-07-19 (dev/Saar, chantier Tir Multi) — ajout INI5, audit demandé par Saar ; 2026-07-19 Session 166 (Saar) — INI4 clos (item 96 `EN_COURS.md`) ; ST1/CH1 retirés du registre (reclassés chantiers dédiés, voir `docs/ROADMAP.md`) ; KIWI2 retiré (résolu, confirmé Saar) ; JSON1 (dette `EN_COURS.md`, pas ici) clos — dette fantôme déjà résolue par le merge Fusion Kiwi ; MELEE-MR clos (item 97 `EN_COURS.md`) ; DEF5 clos (item 98 `EN_COURS.md`), ajout SURPRISE1 (trouvé en cours de route) ; TIRIMP clos (item 99 `EN_COURS.md`, refonte `shared/combatSituationMods.js` — retrait du sentinel -99), ajout COUVERTURE_TOTALE (trouvé en cours de route) ; WNDMORT clos (item 100 `EN_COURS.md`, `WOUND_PENALTIES.mortelle` -20→0 + garde déclaration/défense), ajout WNDMORT-UI et WNDMORT-HORSCOMBAT (résiduels) ; 2026-07-21 Session 167 (Saar) — chantier Moding Groupe 4 clos (item 104 `EN_COURS.md`, Phases 1/3/4 codées et testées) ; ajout MODING4-ATI/MODING4-MEMOIRE/MODING4-PROJECTEUR/MODING4-INTEGRATION (résiduels, décisions produit + câblage restants) ; 2026-07-24 (Saar) chantier i18n Combat — ajout I18N-LINT1 (hook conditionnel `CombatGmDeclareWindow.jsx`), I18N-LINT2 (variables inutilisées Combat) et I18N-DEADCODE1 (doublon mort `WizardCreationPage.jsx`), trouvés en cours de chantier, sans rapport avec le texte en dur — consigne Saar : toute trouvaille hors scope non traitée va systématiquement dans `BUGIDENTIFIE.md` (bug/dette) ou `ROADMAP.md` (feature/chantier futur), jamais laissée orpheline ; 2026-07-24 (Saar, triage priorisé) — CHOC1 clos (Palier 1 testé en jeu, confirmé Saar) ; Cluster I / DMG1+DMG2 clos (validation fonctionnelle confirmée Saar) ; SURPRISE-ROLL retiré (comportement normal, pas un bug — confirmé Saar) ; SURPRISE1 codé (`is_surprised: false` ajouté au reset `endTurn`, même requête qu'INI4 ; contournement `current_turn === 1` dans `isTargetDefenseless` retiré, devenu redondant), détail `EN_COURS.md`, non testé en jeu ; INI5 clos (audit git blame + relecture RAW p.218-219 : forfait `-3`/`-5` introduit Session 65, 94 sessions avant `computeSeriesPositions`, aucune base RAW — décision Saar : retiré, serveur + client + i18n, détail `EN_COURS.md` item 111, non testé en jeu) ; COM27 analysé en profondeur (flux d'émission tracé en entier, ordre serveur semble garanti correct par construction) mais mis en pause — reproduction non confirmée, décision Saar : attendre une nouvelle occurrence en jeu ; COM24 clos (bonus "deux armes" CaC déconnecté de l'arme déclarée — mécanisme "deux armes" à la déclaration ajouté, miroir exact du dual-wield Tir déjà existant, `shared/weaponSlots.js` réutilisé tel quel, revalidation serveur déclaration+résolution, 7 fichiers, détail `EN_COURS.md` item 112, non testé en jeu), ajout MELEE-INHAND (résiduel, trouvé en cours de route) ; 2026-07-28 (Saar, Session 182) — I18N-DEADCODE1 clos (`client/src/components/creation/WizardCreationPage.jsx` supprimé, confirmé sans importeur, build client OK) ; COM26 clos (migration 209 : `Darts 7.62mm ST SAP` → `DMG=BASE;TXT=FX=SAP|DEPTH=...` cohérent avec le mécanisme Lot C1 déjà câblé + confirmé RAW par Saar ; `Flèche IEM` → valeur ground-truth retrouvée dans le fichier d'extraction Excel original, identique à ses munitions sœurs — vérifié contre le vrai parseur `weaponAmmoDsl.js`, tests existants passent, non testé en jeu réel), ajout DARTS-TAGDUP (résiduel, trouvé en vérifiant le fix) ; TRADE1 clos (`socketTrade.js` — `TRADE_TRANSFER_DECLINED` vérifie maintenant l'ownership du `decliningCharId` sur `to_char_id`, même patron que `TRADE_TRANSFER_ACCEPTED`/`CANCELLED` ; `ExchangeWindow.jsx` + `TradeWindow.jsx` mis à jour pour envoyer ce paramètre, build client OK, non testé en jeu) ; I18N-LINT1 clos (`CombatGmDeclareWindow.jsx` — les deux `useRef` remontés avant le retour conditionnel `allGmManaged.length === 0`, ESLint `rules-of-hooks` confirmé propre avant/après, build client OK), REFS-RENDER clos (les deux affectations `.current` déplacées en `useEffect` dédié, `currentFireMode`/`effectiveMeleeCount`/`effectiveAssaultCount` remontés avant le retour conditionnel — vérifié par doc officielle react.dev/useRef "Pitfall" avant de coder, ESLint confirmé propre, build client OK, non testé en jeu), démasque une occurrence supplémentaire d'I18N-LINT3 dans le même fichier (ajoutée à l'entrée existante, pas un nouveau code) ; 2026-07-28 (Saar, Session 184, `docs/PLAN_RW_SYSCOMBAT.md` Lots 3-4) — ajout MELEE-ATKNAME (fenêtre défense CaC affiche le nom du compte au lieu du personnage attaquant, trouvé en testant Lot 4/Tir, sans rapport avec ce chantier) ; 2026-07-29 (Saar) — ajout EAU1 (nappe d'eau `Canvas3D` calée sur le plafond global de la carte au lieu du plafond local de l'étage d'eau, `computeSurfaceWaterCells`/`surfaceData.js`) ; investigation approfondie révèle une improvisation client (nappe jamais validée serveur, doublonnant le vrai système de compartiments/effets runtime déjà construit) — décision Saar : retrait complet de la nappe ambiante, eau en jeu recentrée sur l'effet runtime "inondation" existant, eau structurelle authorée différée en v2 (`docs/ROADMAP.md`) ; codé (`SurfaceDungeonScene.jsx`, `Editor3D.jsx`, `SurfaceEditorScene.jsx`, `surfaceData.js`, `surfaceData.test.mjs`), tests/build/lint OK, non testé en jeu ; documentation `docs/SYSTEME/SURFACES_SALLES.md` section "Rendu de l'eau" réécrite ; DEPLACEMENT1 clos (2026-07-29, confirmé fonctionnel en jeu par Saar — cache LRU `loadBattlemapRuntimeContext`, détail `docs/EN_COURS.md`) ; DEPLACEMENT2 clos (2026-07-29, confirmé fonctionnel en jeu par Saar — repli sur la case libre la plus proche d'une destination occupée, `shared/world/navigation.js:findNavigationPath`, détail `docs/EN_COURS.md`) ; ajout DEPLACEMENT3 (latence résiduelle ~0,5-1s au premier "Déplacement" après un déplacement validé, confirme la piste notée dans DEPLACEMENT1 — non prioritaire, signalé "rien de gênant" par Saar) et TOURTRANSITION1 (latence + message "En attente de {{nom}}" en chaînant des actions de PNJ, `CombatActionWindow.jsx:772-782` — non prioritaire, non instrumenté, signalé "rien de gênant" par Saar)
+2026-07-30 (Saar) — `docs/PLAN_TEST_CRITIQUE.md` Lot 1 clos (refonte RAW marge/critique/Catastrophe) ;
+ajout BOUCLIER-CHANCE1 (Test de Chance du Petit bouclier sans Réussite/Échec critique câblés, trouvé
+en auditant tous les sites de jet du combat, hors périmètre discuté pour ce chantier).
 (Saar, Session 186, `docs/PLAN_BATTLEMAP2D.md` Lot 3) — FEAT1 retiré (obsolète, la carte 2D existe
 désormais et est trackée par le plan/EN_COURS.md, pas par ce registre) ; ajout GRID2D1 (grille non
 affichée sur une carte 2D malgré `grid_enabled=true` vérifié client et serveur — cause non identifiée,
@@ -23,7 +26,11 @@ sans override explicite. Invisible pour les salles au niveau 0 (0=0 par coïncid
 qu'une salle habite un étage différent. Diagnostiqué par instrumentation live avec Saar (3 allers-
 retours de logs `[DBG-SALLENIV]`, retirés après confirmation), corrigé en une ligne
 (`yOverride !== null && ...`), tests `surfaceData.test.mjs` (27/27) + build OK, confirmé fonctionnel
-en jeu par Saar)
+en jeu par Saar) ; 2026-07-29 (Saar) — analyse à charge de `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 1
+(horloge de campagne, déjà clos) demandée par Saar avant d'attaquer le Lot 2 — ajout HORLOGE-TEST1
+(aucun test automatisé sur `adjustGameTime`, seule la projection pure `shared/gameTime.js` est
+testée) et HORLOGE-OVERFLOW1 (`deltaMinutes` sans borne haute, dépassement `integer` Postgres non
+gardé), trouvés en lisant le code réel, aucun code modifié
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -759,6 +766,66 @@ console.log('[DBG-EAU1]', { x, z, baseY, mapTopY, candidateCeilingY: candidate?.
 
 ---
 
+### Dette HORLOGE-TEST1 — `adjustGameTime` (Lot 1) sans aucun test automatisé
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en analyse à charge du Lot 1 (déjà clos et validé
+par Saar en navigateur), demandée avant d'attaquer le Lot 2.
+
+**Contexte** : le plan (`docs/PLAN_FATIGUE_DOMMAGES.md` §7, "Validation prévue") promettait des tests
+Node ciblés sur `adjustGameTime` couvrant les 4 scénarios du point 8 (avance simple, recul pur, avance
+sous le repère résolu après un recul, avance au-delà), plus delta=0 rejeté et verrou concurrent.
+Recherche exhaustive (`grep` sur "adjustGameTime" dans tous les `*.test.mjs` du dépôt) : zéro fichier.
+Seule `shared/gameTime.js` (la projection pure `projectGameTime`/`floorDiv`/`floorMod`) est testée
+(`shared/gameTime.test.mjs`, 9/9 verts) — la fonction la plus subtile du lot, le repère
+`game_time_resolved_minutes` non-décroissant (`server/src/lib/gameTimeService.js`), n'a aucun filet de
+régression.
+
+**Vérification manuelle faite pendant l'analyse** : les 4 scénarios ont été rejoués à la main contre
+le code réel (`GREATEST(resolved, displayed)`) et sont corrects par lecture — mais ceci reste une
+vérification ponctuelle, pas une garantie pour un futur refactor (le Lot 2 va justement toucher cette
+fonction ou ses appelants).
+
+**Code impliqué** : `server/src/lib/gameTimeService.js` (`adjustGameTime`) — aucun fichier
+`gameTimeService.test.mjs` n'existe.
+
+**Cause racine [VÉRIFIÉ]** : test jamais écrit, pas une régression.
+
+**Prochaine étape** : écrire `server/src/lib/gameTimeService.test.mjs` avant ou pendant le Lot 2
+(qui va consommer `resolvedBefore`/`resolvedAfter`) — les 4 scénarios du point 8 + delta=0 rejeté +
+verrou `.forUpdate()` concurrent (deux appels simultanés sur la même campagne ne s'écrasent pas).
+
+---
+
+### Dette HORLOGE-OVERFLOW1 — `deltaMinutes` sans borne haute face au type `integer` Postgres
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en analyse à charge du Lot 1, même session que
+HORLOGE-TEST1.
+
+**Contexte** : `POST /:id/game-time/adjust` (`server/src/routes/campaigns.js:259-267`) passe
+`req.body.minutes` directement à `adjustGameTime`, qui ne vérifie que `Number.isInteger(deltaMinutes)
+&& deltaMinutes !== 0` (`gameTimeService.js:11-13`) — aucune borne face au type `integer` (max signé
+2 147 483 647) des colonnes `game_time_minutes`/`game_time_resolved_minutes` (migration 217).
+`GameTimeWidget.jsx`/`SectionGameRules.jsx` ne peuvent pas produire une valeur pareille (bornées par
+construction), mais l'endpoint REST lui-même n'a aucune garde — un appel direct, ou un futur
+consommateur automatique (Lot 2/5/9/10) avec un bug de boucle, ferait planter la requête SQL au lieu
+d'être rejeté proprement.
+
+**Cause racine [VÉRIFIÉ]** : vérifié contre `server/src/middleware/errorHandler.js` — une erreur
+Postgres "value out of range for type integer" n'est pas une `AppError` (`statusCode` absent) →
+tombe en 500 et **renvoie `err.message` (le message Postgres brut) au client tel quel**, alors que ce
+même plan a posé le patron inverse (rejet propre via `AppError`) pour `calendar_start_year`/
+`action_timer_sec` dans ce même lot.
+
+**Code impliqué** : `server/src/lib/gameTimeService.js` (`adjustGameTime`) ;
+`server/src/routes/campaigns.js` (route `POST /:id/game-time/adjust`).
+
+**Prochaine étape** : ajouter une borne explicite sur `deltaMinutes` (et/ou sur `displayedAfter`/
+`resolvedAfter` calculés) dans `adjustGameTime`, avec `AppError(400, ...)` — même patron que les
+bornes déjà posées sur `calendar_start_year`/`action_timer_sec` par ce lot. À faire avant que Lot 2
+n'ajoute un appelant automatique supplémentaire de cette fonction.
+
+---
+
 ## Bugs marchands / catalogue
 
 ### Bug EQ1 — `ref_equipment.price_modifier` jamais lu, prix formulés facturés au prix de base
@@ -913,6 +980,27 @@ potentiellement `node_modules/@react-three/drei/core/Grid.js` (shader `GridMater
 `useFrame` temporaire vérifiant `matrixWorld`/`geometry` du mesh `<Grid>` au moment du rendu), ou
 remplacer le rendu par un mécanisme n'utilisant pas `extend()`/shaderMaterial (lignes Three.js
 natives ou texture répétée) pour écarter définitivement la piste drei.
+
+---
+
+### BOUCLIER-CHANCE1 — Test de Chance du Petit bouclier sans Réussite/Échec critique câblés
+
+**Symptôme** : `damageService.resolveTargetHit` (consommé par `confirmDamage`/`socketCombatHelpers.js`)
+émet un `DICE_RESULT` pour le Test de Chance du Petit bouclier (`rollChance`/`chanceThreshold`/
+`chanceSuccess`, `docs/PLAN_BOUCLIER.md` Lot C) avec `isCriticalSuccess`/`isCriticalFail` figés à
+`false` en dur — contrairement aux autres jets contre un Seuil (attaque/défense), jamais branché sur
+`resolveTestOutcome` (`shared/polarisTestResolution.js`).
+
+**Trouvé en** : implémentant `docs/PLAN_TEST_CRITIQUE.md` (refonte RAW marge/critique), en auditant
+tous les `isCriticalSuccess: false` du fichier pour distinguer les vrais Tests des simples jets de
+dégâts/narration. Celui-ci est structurellement un vrai Test binaire contre un seuil (`rollChance <=
+chanceThreshold`), donc un candidat légitime — mais hors du périmètre discuté avec Saar pour ce
+chantier (portée = combat CaC/Tir/drone + Test de Choc examiné et exclu, ce Test de Chance n'avait pas
+été identifié à ce moment-là).
+
+**Prochaine étape** : décision Saar — l'inclure dans une prochaine passe (branchement direct sur
+`resolveTestOutcome`, même patron que les autres sites) ou le laisser tel quel si aucune Réussite/
+Échec critique n'est jugée pertinente pour ce Test précis.
 
 ---
 Bug B‑VX — Modification faces voxel non exposée dans l’UI

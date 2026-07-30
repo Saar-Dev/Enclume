@@ -57,6 +57,46 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-30 — `docs/PLAN_TEST_CRITIQUE.md` **Lot 1 ✅ clos** —
+> refonte de la résolution des Tests critiques (réussite/échec critique, marge, Catastrophe), RAW
+> partout, aucun toggle de campagne (décision Saar après confirmation de la règle exacte, LdB
+> p.203-205). **Deux bugs distincts trouvés et corrigés, pas un seul** : (A) `isCriticalSuccess`
+> était `roll===1` (faux — RAW dit `roll===seuil final`, dépend du Test, jamais une constante) et
+> `roll===20` était étiqueté "Catastrophe" alors que c'est l'Échec critique RAW (retest + cumul sur
+> la marge d'échec ; la vraie Catastrophe est un flag `marge d'échec ≥15`, toujours optionnel/MJ,
+> jamais automatique). (B) plus grave et non identifié avant cet audit : `mr` (Marge de Réussite,
+> `combatAttackRoll.js` + 4 copies inline dans `socketCombatHelpers.js`/`socketEntity.js`) était
+> calculé `seuil-roll` partout — juste par coïncidence côté échec, **faux côté réussite** (RAW : marge
+> de réussite = résultat du dé lu directement, pas `seuil-roll`). Ce `mr` alimentait en jeu réel les
+> dégâts de combat (CaC + Tir + drones) et la distance de poussée/traction — sous-évaluait
+> systématiquement les bonnes réussites. **Architecture retenue (occasion prise d'améliorer, pas
+> seulement corriger, décision explicite Saar)** : nouveau noyau pur partagé unique
+> `shared/polarisTestResolution.js` (`resolveTestOutcome`/`applyCriticalFailReroll`/`MR_TABLE`/
+> `getMrModifier`) — `combatAttackRoll.js` et `polarisTestService.js` délèguent tous les deux, plus
+> aucune copie locale de la règle (cause racine des deux bugs : la règle était réimplémentée à la
+> main à chaque site). `polaris_mr` (table DB, migration 46, déjà correcte RAW) retirée de la lecture
+> runtime — donnée statique jamais éditée en jeu, désormais constante pure comme `AN_TABLE`,
+> `mrTable.js` supprimé (cache de promesse fragile en moins). Sites migrés : `resolvePolarisTest`
+> (MACRO_ROLL + futur `wound_infection_check`), les 4 sites combat CaC/Tir de
+> `socketCombatHelpers.js` et leurs branches (défenseur sans-défense/PNJ/drone, confirmation dégâts),
+> `resolveDroneAssaultAction` (programmes drone, intégré sur demande explicite de Saar), poussée/
+> traction (`socketEntity.js`, formule de marge seule — aucune règle de critique ajoutée sur ce Test).
+> **Exclu explicitement** (décision documentée, pas un oubli) : Test de Choc
+> (`statusService.js:resolveShockTest`) — mécanique à deux seuils graduée (ok/étourdi/inconscient),
+> pas un Test binaire, le concept de marge/critique ne s'y applique pas structurellement ;
+> `dice_config`/`DICE_ROLL` (jets libres), mécanique distincte. **Trouvaille non traitée** :
+> `BOUCLIER-CHANCE1` (Test de Chance du Petit bouclier avec critique jamais câblé, `docs/BUGIDENTIFIE.md`).
+> **Testé** : `node --check` sur les 8 fichiers touchés ; 29/29 tests unitaires nouveaux/réécrits
+> (`shared/polarisTestResolution.test.mjs`, `combatAttackRoll.test.mjs`, `polarisTestService.test.mjs`) ;
+> suite de régression complète `shared/*.test.mjs` (347/347) + `server/src/lib`/`server/src/services`
+> sans dépendance DB (44/44) toujours verts après la refonte, **et scénario réel en navigateur
+> confirmé fonctionnel par Saar** (combat CaC/Tir/drone). **Non testé** : suites `*.test.mjs`
+> nécessitant une DB non relancées (hors périmètre de ce chantier). **Données** : aucune migration ;
+> `polaris_mr` laissée en base, inerte, retrait différé à un cleanup séparé. Détail complet :
+> `docs/PLAN_TEST_CRITIQUE.md` §9. **Prochaine étape** : commit/push de ce chantier, puis Lot 2
+> (bonus de maîtrise/moitié d'Attribut sur Réussite critique) ou Lot 3 (tooltips explicatifs des
+> règles) selon décision de Saar.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-28 — Session 184 : `docs/PLAN_RW_SYSCOMBAT.md` Lot 3
 > **architecture rédigée, planification uniquement, aucun code écrit** — `docs/AUDIT_FABLE.md` renommé
 > `docs/AUDIT.md` (le modèle Fable n'est pas à l'origine de cet audit), références mises à jour dans le
@@ -3689,6 +3729,8 @@ Projet en cours et priorité user :
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
+| **HORLOGE-TEST1** | `adjustGameTime` (Lot 1, `gameTimeService.js`) sans aucun test automatisé — seule la projection pure `shared/gameTime.js` est testée, trouvé en analyse à charge avant le Lot 2, détail `docs/BUGIDENTIFIE.md` | À faire avant/pendant le Lot 2 |
+| **HORLOGE-OVERFLOW1** | `deltaMinutes` (`POST /:id/game-time/adjust`) sans borne haute face au type `integer` Postgres — erreur SQL brute renvoyée au client au lieu d'un `AppError` propre, détail `docs/BUGIDENTIFIE.md` | Basse — avant qu'un consommateur automatique (Lot 2+) n'appelle cette fonction |
 | ~~**SALLENIV1**~~ | ~~World builder : sol d'une salle rendu systématiquement à y=0 quel que soit son étage réel (`SurfaceDungeonScene.jsx` `RoomSlab` — piège `Number(null)===0`)~~ | ✅ Session 186 (Saar), confirmé fonctionnel en jeu |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | ~~**ST3**~~ | ~~Fenêtre THUG STATUTS trop petite — overflow des icônes statuts~~ | ✅ confirmé Saar — voir ST1 |

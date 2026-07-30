@@ -1,7 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
-import { getMrTable, getModifier } from '../lib/mrTable.js'
+import { resolveTestOutcome, applyCriticalFailReroll, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
@@ -61,6 +61,17 @@ const TAILLE_LABELS = {
 export const COMBAT_MODE_LABELS = {
   offensif: 'Mode offensif', charge:   'Mode charge',
   defensif: 'Mode défensif', retraite: 'Mode retraite',
+}
+
+// ─── Helper — retest d'Échec critique (RAW p.204, docs/PLAN_TEST_CRITIQUE.md) ─────────────────────
+// computeAttackRoll (noyau pur) ne peut pas faire ce second jet lui-même (pas d'I/O dans le noyau,
+// PLAN_RW_SYSCOMBAT.md §2.1.c) — chaque site qui appelle computeAttackRoll sur un jet frais (attaque
+// ou défense, jamais une relecture depuis combat_pending) passe son résultat ici juste après.
+// Sans effet si l'issue n'est pas un Échec critique.
+async function resolveCriticalFailReroll(outcome) {
+  if (!outcome.isCriticalFail) return outcome
+  const { total: reroll } = await parseDice('1d20')
+  return applyCriticalFailReroll(outcome, reroll)
 }
 
 // ─── Helper — démarrer les timers auto-skip pour la phase ANNONCE ─────────────
@@ -581,7 +592,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
 
     // Seuil de défense + breakdown — noyau pur du Lot 1 réutilisé ici (Lot 2, RV6, PLAN_RW_SYSCOMBAT.md
     // §2.4.h) au lieu d'un tableau assemblé à la main (miroir de resolveMeleeDefensePnj).
-    const { seuil: chanceDefense, breakdown: breakdownDefPj, isSuccess: defenseSuccess, mr: mrDefense } = computeAttackRoll({
+    const defenseOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
       contributions: [
         { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDefPj, type: modeCombatDefPj > 0 ? 'bonus' : 'malus' },
@@ -590,9 +601,11 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
       ],
     })
+    const { seuil: chanceDefense, breakdown: breakdownDefPj, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcome0
+    const defenseOutcome = await resolveCriticalFailReroll(defenseOutcome0)
 
     // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
-    const mrAttaque     = chancesAttaque - rollAttaque
+    const { mr: mrAttaque } = resolveTestOutcome(rollAttaque, chancesAttaque)
     const attackSuccess = rollAttaque <= chancesAttaque
     const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
@@ -606,7 +619,8 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       username: forced ? (targetName ?? 'PNJ') : requesterUsername,
       color: forced ? '#808080' : '#6060c0',
       formula: '1d20', rolls: defRolls, total: rollDefense,
-      isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
+      isCriticalSuccess: defenseOutcome.isCriticalSuccess, isCriticalFail: defenseOutcome.isCriticalFail,
+      catastropheRisk:   defenseOutcome.catastropheRisk,
       seed: defSeed, timestamp: now,
       skillLabel:        'Jet pour défendre (contact)',
       mechanicalTotal:   defenderSkillTotal,
@@ -679,8 +693,8 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
           weaponInvId, fallbackFormula: damageFormula,
         })
         // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
-        // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
-        const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
+        // même table que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
+        const modDomAttaque = getMrModifier(mrAttaque)
         const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + (combatModeBonus ?? 0)
         const hitResult = await damageService.resolveTargetHit(io, db, meleeCampaignId, {
           degautsBruts, characterIdCible, cibleType: 'pj',
@@ -800,9 +814,8 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       // effectiveChocDsl restait toujours null pour 'melee' — voir docs/PLAN_CHOC1.md §4).
       effectiveChocDsl = meleeRolled.choc
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
-      // même table mrTable/getModifier que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
-      const mrTableMelee = await getMrTable()
-      const modDomAttaqueMelee = getModifier(mrTableMelee, mr)
+      // même table que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
+      const modDomAttaqueMelee = getMrModifier(mr)
       degautsBruts = rawDice + modDomAttaqueMelee + (modDom ?? 0) + (combatModeBonus ?? 0)
     } else {
       // getEffectiveWeaponDamage peut renvoyer null si l'arme a été désequipée/transférée entre la
@@ -823,8 +836,7 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       // (Lot C1) : ammoFx reste null dans ce repli, jamais reconstruit depuis une donnée partielle.
       effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
       effectiveAmmoFx  = effectiveDamage ? effectiveDamage.tags?.FX ?? null : null
-      const mrTable = await getMrTable()
-      const modDomAttaque = getModifier(mrTable, mr)
+      const modDomAttaque = getMrModifier(mr)
       const isShortRange = ['bout_portant', 'courte'].includes(portee)
       const modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0
       degautsBruts = rawDice + modDomAttaque + modDegatsMode
@@ -1447,7 +1459,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // sans écart). La coquille assemble la liste ordonnée des contributions (l'ordre de la liste EST
     // l'ordre d'affichage client) ; le noyau somme, filtre les zéros et assemble le breakdown.
     // Ajouter un modificateur CaC = ajouter une entrée ici, jamais toucher au noyau.
-    const { seuil: chancesAttaque, breakdown: breakdownAtk } = computeAttackRoll({
+    const attaqueOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal: attackerSkillTotal, totalLabel: 'Seuil', rollAttaque,
       contributions: [
         { label: COMBAT_MODE_LABELS[combatModeAtk] ?? combatModeAtk, value: attackModeBonus, type: 'bonus' },
@@ -1463,19 +1475,22 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
       ],
     })
+    const { seuil: chancesAttaque, breakdown: breakdownAtk } = attaqueOutcome0
+    const attaqueOutcome = await resolveCriticalFailReroll(attaqueOutcome0)
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} sansDefense:${sansDefenseBonus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId: character.user_id, username: attackerUsername, color: attackerColor,
       formula: '1d20', rolls: attackRolls, total: rollAttaque,
-      isCriticalSuccess: rollAttaque === 1, isCriticalFail: rollAttaque === 20,
+      isCriticalSuccess: attaqueOutcome.isCriticalSuccess, isCriticalFail: attaqueOutcome.isCriticalFail,
+      catastropheRisk:   attaqueOutcome.catastropheRisk,
       seed: attackSeed, timestamp: new Date().toISOString(),
       skillLabel:        'Jet pour toucher (contact)',
       mechanicalTotal:   attackerSkillTotal,
       diffLabel:         chancesAttaque - attackerSkillTotal >= 0 ? `+${chancesAttaque - attackerSkillTotal}` : `${chancesAttaque - attackerSkillTotal}`,
       chancesDeReussite: chancesAttaque,
-      isSuccess:         rollAttaque <= chancesAttaque,
-      mr:                chancesAttaque - rollAttaque,
+      isSuccess:         attaqueOutcome.isSuccess,
+      mr:                attaqueOutcome.mr,
       breakdown:         breakdownAtk,
     } })
 
@@ -1653,8 +1668,8 @@ async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
     const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
       weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
-    const mrAttaqueDefenseless = chancesAttaque - rollAttaque
-    const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDefenseless)
+    const { mr: mrAttaqueDefenseless } = resolveTestOutcome(rollAttaque, chancesAttaque)
+    const modDomAttaque = getMrModifier(mrAttaqueDefenseless)
     const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
     if (cibleType === 'drone') {
       const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
@@ -1738,7 +1753,7 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
 
   // Seuil de défense + breakdown — noyau pur du Lot 1 réutilisé ici (Lot 2, RV6, §2.4.d) : un jet de
   // D20, peu importe qu'il s'agisse d'une attaque ou d'une défense.
-  const { seuil: chanceDefense, breakdown: breakdownDef, isSuccess: defenseSuccess, mr: mrDefense } = computeAttackRoll({
+  const defenseOutcome0 = computeAttackRoll({
     skillLabel: 'Compétence', skillTotal: defenderSkillTotal, totalLabel: 'Seuil', rollAttaque: rollDefense,
     contributions: [
       { label: COMBAT_MODE_LABELS[defCombatMode] ?? defCombatMode, value: modeCombatDef, type: modeCombatDef > 0 ? 'bonus' : 'malus' },
@@ -1747,7 +1762,9 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
       { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
     ],
   })
-  const mrAttaque = chancesAttaque - rollAttaque
+  const { seuil: chanceDefense, breakdown: breakdownDef, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcome0
+  const defenseOutcome = await resolveCriticalFailReroll(defenseOutcome0)
+  const { mr: mrAttaque } = resolveTestOutcome(rollAttaque, chancesAttaque)
   const attackSuccess = rollAttaque <= chancesAttaque
   const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
@@ -1756,7 +1773,8 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
   emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
     userId: null, username: defenderCharacterName ?? 'PNJ', color: '#808080',
     formula: '1d20', rolls: defRolls, total: rollDefense,
-    isCriticalSuccess: rollDefense === 1, isCriticalFail: rollDefense === 20,
+    isCriticalSuccess: defenseOutcome.isCriticalSuccess, isCriticalFail: defenseOutcome.isCriticalFail,
+    catastropheRisk:   defenseOutcome.catastropheRisk,
     seed: defSeed, timestamp: new Date().toISOString(),
     skillLabel:        'Jet pour défendre (contact)',
     mechanicalTotal:   defenderSkillTotal,
@@ -1783,7 +1801,7 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
       weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
     // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
-    const modDomAttaque = getModifier(await getMrTable(), mrAttaque)
+    const modDomAttaque = getMrModifier(mrAttaque)
     const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
     const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
       degautsBruts,
@@ -1843,8 +1861,8 @@ async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
       })
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
       // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul.
-      const mrAttaqueDrone = chancesAttaque - rollAttaque
-      const modDomAttaque = getModifier(await getMrTable(), mrAttaqueDrone)
+      const { mr: mrAttaqueDrone } = resolveTestOutcome(rollAttaque, chancesAttaque)
+      const modDomAttaque = getMrModifier(mrAttaqueDrone)
       const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
       const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
       await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
@@ -2161,8 +2179,8 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     console.log(`[DBG] resolveDroneAssaultAction — avant parseDice`)
     const { total: roll, rolls: attRolls, seed: attSeed } = await parseDice('1d20')
     console.log(`[DBG] resolveDroneAssaultAction — après parseDice, roll:${roll}`)
-    const isSuccess = roll <= chancesDeReussite
-    const mr        = chancesDeReussite - roll
+    const droneOutcome = await resolveCriticalFailReroll(resolveTestOutcome(roll, chancesDeReussite))
+    const { isSuccess, mr } = droneOutcome
 
     // 5. Display data tireur
     const userRow        = character.user_id ? await db('users').where({ id: character.user_id }).select('color', 'username').first() : null
@@ -2189,7 +2207,8 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId, username: tireurUsername, color: tireurColor,
       formula: '1d20', rolls: attRolls, total: roll,
-      isCriticalSuccess: false, isCriticalFail: false,
+      isCriticalSuccess: droneOutcome.isCriticalSuccess, isCriticalFail: droneOutcome.isCriticalFail,
+      catastropheRisk: droneOutcome.catastropheRisk,
       seed: attSeed, timestamp: now,
       skillLabel: `${weapon.display_name ?? 'Armement'} — Drone`,
       mechanicalTotal: roll,
@@ -2236,8 +2255,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
       if (!droneSheet) return { suspend: false, emissions }
       const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
-      const mrTable       = await getMrTable()
-      const modDomAttaque = getModifier(mrTable, mr)
+      const modDomAttaque = getMrModifier(mr)
       const degautsBruts  = rawDice + modDomAttaque
       const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
       await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
@@ -2268,8 +2286,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       const { for_na, con_na, vol_na } = cibleSheet ? await fetchCibleNA(cibleCharacter.id, cibleSheet.id) : { for_na: 8, con_na: 8, vol_na: 8 }
 
       const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
-      const mrTable       = await getMrTable()
-      const modDomAttaque = getModifier(mrTable, mr)
+      const modDomAttaque = getMrModifier(mr)
       const degautsBruts  = rawDice + modDomAttaque
       const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
         degautsBruts,
@@ -2616,7 +2633,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // agrégée weaponModComp !== 0 : masquer les mods d'arme en bloc quand leur total est nul est une
     // décision d'assemblage coquille, pas un filtre du noyau (RV2, PLAN_RW_SYSCOMBAT.md §7).
     // Ajouter un modificateur Tir = ajouter une entrée ici, jamais toucher au noyau.
-    const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = computeAttackRoll({
+    const assaultOutcome0 = computeAttackRoll({
       skillLabel: 'Compétence', skillTotal, totalLabel: 'Seuil', rollAttaque,
       contributions: [
         { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
@@ -2638,6 +2655,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
       ],
     })
+    const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = assaultOutcome0
+    const assaultOutcome = await resolveCriticalFailReroll(assaultOutcome0)
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId:            character.user_id,
@@ -2646,8 +2665,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       formula:           '1d20',
       rolls:             attackRolls,
       total:             rollAttaque,
-      isCriticalSuccess: rollAttaque === 1,
-      isCriticalFail:    rollAttaque === 20,
+      isCriticalSuccess: assaultOutcome.isCriticalSuccess,
+      isCriticalFail:    assaultOutcome.isCriticalFail,
+      catastropheRisk:   assaultOutcome.catastropheRisk,
       seed:              attackSeed,
       timestamp:         new Date().toISOString(),
       skillLabel:        'Jet pour toucher (distance)',
@@ -2749,8 +2769,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       // soit un drone ou non (`[VÉRIFIÉ]`, PLAN_RW_SYSCOMBAT.md §2.6.a) — calculés une seule fois ici,
       // avant le guard-clause vers la fonction-feuille adaptée (§2.6.b, aucune fonction-type qui
       // re-branche elle-même, même précédent que resolveMeleeDefenseDrone/Pnj au Lot 2).
-      const mrTable = await getMrTable()
-      const modDomAttaque = getModifier(mrTable, mr)
+      const modDomAttaque = getMrModifier(mr)
       const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
       const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
       // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution

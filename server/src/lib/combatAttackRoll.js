@@ -1,3 +1,5 @@
+import { resolveTestOutcome } from '../../../shared/polarisTestResolution.js'
+
 /**
  * combatAttackRoll.js — Noyau pur du jet d'attaque combat (CaC + Tir)
  *
@@ -19,10 +21,17 @@
  * - deux contributions non nulles qui se compensent sont toutes deux conservées — si un domaine veut
  *   les masquer en bloc quand leur total est nul (mods d'arme, RV2 PLAN_RW_SYSCOMBAT.md §7),
  *   c'est à l'appelant de ne pas les verser dans la liste.
+ *
+ * isSuccess/isCriticalSuccess/isCriticalFail/mr délégués à resolveTestOutcome (shared/
+ * polarisTestResolution.js, docs/PLAN_TEST_CRITIQUE.md) — autorité unique de la règle RAW
+ * marge/critique, plus jamais recalculée ici ou chez l'appelant. Sur isCriticalFail, l'appelant
+ * doit relancer un D20 et appliquer applyCriticalFailReroll (cette fonction reste pure, donc ne
+ * fait pas ce second jet elle-même).
  */
 export function computeAttackRoll({ skillLabel, skillTotal, contributions, totalLabel, rollAttaque }) {
   const kept = contributions.filter(c => c.value !== 0)
   const seuil = skillTotal + kept.reduce((sum, c) => sum + c.value, 0)
+  const outcome = resolveTestOutcome(rollAttaque, seuil)
   return {
     seuil,                        // = chancesAttaque (CaC) / chancesDeReussite (Tir)
     breakdown: [
@@ -30,7 +39,6 @@ export function computeAttackRoll({ skillLabel, skillTotal, contributions, total
       ...kept,
       { label: totalLabel, value: seuil, type: 'total' },
     ],
-    isSuccess: rollAttaque <= seuil,
-    mr: seuil - rollAttaque,
+    ...outcome,
   }
 }

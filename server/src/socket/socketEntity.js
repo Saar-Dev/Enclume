@@ -2,7 +2,7 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getUserColor } from '../lib/socketUtils.js'
-import { getMrTable, getModifier } from '../lib/mrTable.js'
+import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import {
   calcSkillTotal, calcAttributeAN, calcAttributeNA,
   calcWoundPenalty, calcEncumbrancePenalty,
@@ -543,15 +543,14 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
       // ── Calcul seuil, réussite, MR et Dmax ──────────────────────────
       // Formule Polaris : chancesDeReussite = attributeNA + effectiveDifficulty (signé)
-      // Réussite si diceRoll <= chancesDeReussite.
-      // MR = chancesDeReussite - diceRoll (positif si réussite, négatif si échec).
-      // modifier = getModifier(mrTable, mr) — LdB p.209, migration 46.
+      // Réussite si diceRoll <= chancesDeReussite. Marge/degré RAW délégués à resolveTestOutcome
+      // (shared/polarisTestResolution.js, docs/PLAN_TEST_CRITIQUE.md) — marge de réussite = diceRoll
+      // direct, pas chancesDeReussite-diceRoll (correction de l'ancienne formule, cf. plan §Bug B).
+      // modifier = getMrModifier(mr) — LdB p.209.
       // dmax = modifier + 1 si réussite (toute réussite = au moins 1 case), 0 si échec.
       const chancesDeReussite = attributeNA + effectiveDifficulty
-      const isSuccess = diceRoll <= chancesDeReussite
-      const mr = chancesDeReussite - diceRoll
-      const mrTable = await getMrTable()
-      const modifier = isSuccess ? getModifier(mrTable, mr) : 0
+      const { isSuccess, mr } = resolveTestOutcome(diceRoll, chancesDeReussite)
+      const modifier = isSuccess ? getMrModifier(mr) : 0
       let dmax = isSuccess ? modifier + 1 : 0
 
       // Override déplacement — dmax_override plafonne push ET pull (session 40)
