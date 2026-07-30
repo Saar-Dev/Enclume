@@ -259,6 +259,11 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       console.log(`[WS] wound:infection_roll — ${user.username} : ${rollResult.roll}/${threshold} → ${rollResult.isSuccess ? 'Succès' : 'Échec'}`)
     } catch (err) {
       console.error(`[WS] wound:infection_roll error (${user.username}) : ${err.message}`)
+      // Sans ça, le bouton "Lancer" du joueur (PendingRollsPanel.jsx, state `rolling`) reste
+      // désactivé indéfiniment sur tout échec après les gardes explicites ci-dessus (ex. double clic
+      // concurrent → resolveEcheanceNow rejette en AppError 409, jamais catché avant ce bloc) —
+      // trouvé en analyse à charge du chantier, pas au premier passage.
+      socket.emit('error', { message: 'Le jet a échoué, réessayez' })
     }
   })
 

@@ -34,6 +34,34 @@
 > propre et `vite build` propre sur les 4 fichiers client touchés/créés (un bug réel de règle des
 > Hooks trouvé et corrigé par ce lint, pas juste une formalité). **Non testé** : navigateur — comme
 > toujours, à faire par Saar (pas d'accès navigateur côté agent).
+> **✅ Analyse à charge du chantier complet (2026-07-30)** — relecture de bout en bout (moteur, handlers,
+> routes, socket, client) après la clôture ci-dessus, 3 bugs réels trouvés et corrigés :
+> (1) `PendingRollsPanel.jsx`/`socketDice.js` : le catch de `WOUND_INFECTION_ROLL` n'émettait aucun
+> `socket.emit('error', ...)`, donc l'état local `rolling` restait bloqué indéfiniment après tout échec
+> serveur (ex. double clic concurrent sur la garde 409 de `resolveEcheanceNow`) ;
+> (2) `campaigns.js` (route `confirm-advance`) : un 409 issu de `confirmPendingAdvance` (cas
+> `newlyDue`) ne diffusait rien — un `wound_infection_check` fraîchement engendré par un Échec/
+> Catastrophe de Guérison restait invisible côté MJ tant que personne ne retentait une confirmation ;
+> corrigé en diffusant `CAMPAIGN_ADVANCE_PENDING` avant de relancer l'erreur ;
+> (3) cause racine du (2) : `getPendingReviewForGm` (`woundReviewService.js`) ne filtrait que sur
+> `status IN ('pending_mj_review','awaiting_player_roll')`, jamais sur les échéances encore `active`
+> mais déjà dues (`next_due_minutes <= game_time_resolved_minutes`) — une naissance d'échéance par
+> handler (`buildInfectionSpawn`) reste `active` jusqu'à la prochaine découverte par
+> `confirmPendingAdvance`. Corrigé par une union de requête ; `game_time_resolved_minutes` reste
+> interne, jamais renvoyé par `enrichWoundEcheances` (invariant de non-fuite Lot 1 toujours respecté).
+> (4) `PendingRollsPanel.jsx` : `rollAll()` appelait `setRolling(echeanceId)` en boucle sur un état à
+> valeur unique — seul le bouton de la *dernière* ligne de la boucle finissait désactivé après un clic
+> "Tout lancer", les autres jets étaient bien en vol côté serveur mais leur bouton restait cliquable.
+> Corrigé en remplaçant `rolling` (valeur unique) par `rollingIds` (Set, une entrée par échéance en
+> vol). Note secondaire vérifiée non-bloquante : les doubles-clics concurrents sur `infection-mode`
+> (mode `auto`) et `healing-choice` sont déjà protégés — toute la séquence lecture-payload +
+> `resolveEcheanceNow` est enveloppée dans un seul `db.transaction()`, le verrou de ligne Postgres pris
+> par l'`UPDATE` du payload sérialise les tentatives concurrentes, la perdante échoue proprement en 409
+> avec rollback complet (aucune donnée corrompue, aucun jet fantôme persisté).
+> **Testé** : nouveau test dédié à la branche "active déjà due" + suite serveur complète rejouée —
+> 128/128 verts (`node --env-file=../.env --test` sur tous les `server/src/**/*.test.mjs`) ; `eslint`
+> et `vite build` propres sur `PendingRollsPanel.jsx` après le correctif (4). **Non testé** :
+> navigateur, comme toujours.
 > Document temporaire (`docs/RegleDocumentaire.md`
 > Règle 10) — à archiver dans `docs/Old/` une fois le chantier clos, contenu durable transféré vers
 > `docs/SYSTEME/BLESSURES.md`.

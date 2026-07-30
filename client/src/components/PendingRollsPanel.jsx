@@ -14,7 +14,9 @@ export default function PendingRollsPanel({ campaignId }) {
   const { t: tChar } = useTranslation('charSheet')
   const socket = useSocket()
   const [echeances, setEcheances] = useState([])
-  const [rolling, setRolling] = useState(null)
+  // Set, pas une seule valeur : rollAll() déclenche plusieurs jets en parallèle (analyse à charge du
+  // chantier, 2026-07-30) — avec un seul id, seul le dernier bouton de la boucle restait désactivé.
+  const [rollingIds, setRollingIds] = useState(() => new Set())
 
   const load = useCallback(() => {
     api.get(`/campaigns/${campaignId}/game-echeances/my-pending-rolls`)
@@ -31,12 +33,17 @@ export default function PendingRollsPanel({ campaignId }) {
     const onPending  = () => load()
     const onResolved = ({ echeanceId }) => {
       setEcheances(prev => prev.filter(e => e.id !== echeanceId))
-      setRolling(prev => (prev === echeanceId ? null : prev))
+      setRollingIds(prev => {
+        if (!prev.has(echeanceId)) return prev
+        const next = new Set(prev)
+        next.delete(echeanceId)
+        return next
+      })
     }
-    // Filet de sécurité : si le serveur refuse le jet (socket.emit('error', ...), échéance déjà
-    // résolue par ailleurs, etc.), le bouton ne doit pas rester désactivé indéfiniment — pas de
-    // moyen de savoir QUELLE échéance a échoué depuis un event générique, donc on débloque tout.
-    const onError = () => setRolling(null)
+    // Filet de sécurité : si le serveur refuse un jet (socket.emit('error', ...), échéance déjà
+    // résolue par ailleurs, etc.), le bouton concerné ne doit pas rester désactivé indéfiniment — pas
+    // de moyen de savoir QUELLE échéance a échoué depuis un event générique, donc on débloque tout.
+    const onError = () => setRollingIds(new Set())
     socket.on(WS.CAMPAIGN_ADVANCE_PENDING, onPending)
     socket.on(WS.GAME_ECHEANCE_RESOLVED, onResolved)
     socket.on('error', onError)
@@ -53,7 +60,7 @@ export default function PendingRollsPanel({ campaignId }) {
   // l'événement pour chaque échéance choisie, le serveur reste seul autoritaire sur le jet.
   const rollOne = (echeanceId) => {
     if (!socket) return
-    setRolling(echeanceId)
+    setRollingIds(prev => new Set(prev).add(echeanceId))
     socket.emit(WS.WOUND_INFECTION_ROLL, { echeanceId })
   }
   const rollAll = () => echeances.forEach(e => rollOne(e.id))
@@ -66,7 +73,7 @@ export default function PendingRollsPanel({ campaignId }) {
           <span>
             {e.characterName} — {e.wound ? `${tChar(LOCATION_I18N_KEYS[e.wound.location])} (${tChar(`locationPanel.severityShort.${e.wound.severity}`)})` : ''}
           </span>
-          <button type="button" className="btn btn-tool" disabled={rolling === e.id} onClick={() => rollOne(e.id)}>
+          <button type="button" className="btn btn-tool" disabled={rollingIds.has(e.id)} onClick={() => rollOne(e.id)}>
             {t('dice.roll')}
           </button>
         </div>

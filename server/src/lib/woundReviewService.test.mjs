@@ -65,6 +65,31 @@ test('getPendingReviewForGm : enrichit avec personnage + blessure, filtre statut
   }
 })
 
+test('getPendingReviewForGm : inclut une échéance active déjà due (spawn pas encore "découvert" par confirmPendingAdvance)', { skip }, async () => {
+  const fixture = await createRealFixture()
+  try {
+    const { campaign, character, wound } = fixture
+    await db('campaigns').where({ id: campaign.id }).update({ game_time_resolved_minutes: 5000 })
+
+    const [spawned] = await db('game_echeances').insert({
+      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
+      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 4000, status: 'active',
+    }).returning('*')
+    // bruit : active mais PAS encore due (dans le futur du repère résolu) -> ne doit jamais apparaître
+    await db('game_echeances').insert({
+      campaign_id: campaign.id, character_id: character.id, condition_type: 'wound_infection_check',
+      interactive: true, payload: { woundId: wound.id }, next_due_minutes: 9000, status: 'active',
+    })
+
+    const rows = await getPendingReviewForGm(campaign.id)
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].id, spawned.id)
+    assert.equal(rows[0].status, 'active')
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
 test('getPendingReviewForGm : inclut aussi awaiting_player_roll (visibilité MJ sur tout le lot)', { skip }, async () => {
   const fixture = await createRealFixture()
   try {

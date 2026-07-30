@@ -296,7 +296,23 @@ router.post('/:id/game-time/request-advance', requireAuth, requireRole('gm'), as
 // lot a déjà été résolue individuellement (healing-choice/infection-mode/WOUND_INFECTION_ROLL, qui
 // diffusent chacune leur propre WOUND_UPDATED) — ici, seul le compteur d'horloge avance.
 router.post('/:id/game-time/confirm-advance', requireAuth, requireRole('gm'), async (req, res) => {
-  const result = await confirmPendingAdvance(req.params.id)
+  let result
+  try {
+    result = await confirmPendingAdvance(req.params.id)
+  } catch (err) {
+    // Trouvé en traçant le flux Guérison→Infection de bout en bout (analyse à charge du chantier,
+    // pas au premier passage) : un Échec de Guérison peut faire naître un wound_infection_check
+    // *pendant* la revue en cours — confirmPendingAdvance le détecte et le marque pending_mj_review
+    // en base (gameTimeService.js), mais sans ce broadcast, aucun client (y compris le MJ qui vient
+    // de cliquer Confirmer) n'apprend qu'une nouvelle ligne vient d'apparaître : le panneau reste
+    // affiché comme si de rien n'était jusqu'à un rechargement de page. Rejoue sur tout refus 409,
+    // pas seulement ce cas précis — un rafraîchissement de trop est inoffensif, un manqué ne l'est pas.
+    if (err.statusCode === 409) {
+      req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_ADVANCE_PENDING, { campaignId: req.params.id })
+    }
+    throw err
+  }
+
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
     campaignId: req.params.id,
     gameTimeMinutes: result.displayedAfter,

@@ -43,11 +43,29 @@ async function enrichWoundEcheances(rows) {
 
 // Écran de revue MJ (§6) — pending_mj_review ET awaiting_player_roll (le MJ voit tout le lot, même
 // les lignes en attente d'un jet joueur, pour suivre l'avancement — seul le joueur peut agir dessus).
+// **Correction 2026-07-30 (analyse à charge du chantier, trouvée en traçant Guérison→Infection de
+// bout en bout)** : inclut aussi les échéances encore `active` mais déjà dues (`next_due_minutes <=
+// game_time_resolved_minutes`) — un Échec/Catastrophe de Guérison fait naître un `wound_infection_check`
+// déjà dû, mais celui-ci ne devient `pending_mj_review` qu'au *prochain* essai de
+// `confirmPendingAdvance` (gameTimeService.js, vérification "newlyDue"), jamais avant. Sans cette
+// union, la ligne reste invisible dans cet écran tant que le MJ n'a pas tenté de confirmer — même
+// après un rafraîchissement manuel. `game_time_resolved_minutes` reste interne au serveur, jamais
+// renvoyé par `enrichWoundEcheances` (invariant de non-fuite du Lot 1, toujours respecté ici).
 export async function getPendingReviewForGm(campaignId) {
+  const campaign = await db('campaigns').where({ id: campaignId }).select('game_time_resolved_minutes').first()
+  if (!campaign) return []
+
   const rows = await db('game_echeances')
     .where({ campaign_id: campaignId })
     .whereIn('condition_type', WOUND_CONDITION_TYPES)
-    .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
+    .where((builder) => {
+      builder
+        .whereIn('status', ['pending_mj_review', 'awaiting_player_roll'])
+        .orWhere((sub) => {
+          sub.where({ status: 'active', interactive: true })
+            .where('next_due_minutes', '<=', campaign.game_time_resolved_minutes)
+        })
+    })
     .select('*')
   return enrichWoundEcheances(rows)
 }
