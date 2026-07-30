@@ -8,7 +8,12 @@ import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
 import { SETTINGS_SCHEMA } from '../lib/campaignSettingsService.js'
-import { adjustGameTime } from '../lib/gameTimeService.js'
+import { adjustGameTime, requestGameTimeAdvance, confirmPendingAdvance, cancelPendingAdvance } from '../lib/gameTimeService.js'
+import { resolveEcheanceNow } from '../lib/echeanceService.js'
+import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
+import { getWorstWoundSeverity } from '../lib/woundUtils.js'
+import { resolvePolarisTest } from '../lib/polarisTestService.js'
+import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
 
 const router = Router()
 
@@ -264,6 +269,144 @@ router.post('/:id/game-time/adjust', requireAuth, requireRole('gm'), async (req,
     gameTimeMinutes: displayedAfter,
   })
   res.json({ gameTimeMinutes: displayedAfter })
+})
+
+// docs/PLAN_BLESSURES_GUERISON.md §6.1 (Lot 2, premier consommateur interactif) — remplace
+// progressivement l'usage de /game-time/adjust par le widget une fois le client migré ; laissé en
+// place tel quel pour l'instant (fonctionnel, testé, aucune raison de casser un appelant existant
+// avant que le client soit prêt).
+// POST /api/campaigns/:id/game-time/request-advance — GM uniquement, body { minutes }.
+router.post('/:id/game-time/request-advance', requireAuth, requireRole('gm'), async (req, res) => {
+  const { minutes } = req.body
+  const result = await requestGameTimeAdvance(req.params.id, minutes)
+
+  if (result.pending) {
+    req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_ADVANCE_PENDING, { campaignId: req.params.id })
+    return res.json({ pending: true })
+  }
+
+  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
+    campaignId: req.params.id,
+    gameTimeMinutes: result.displayedAfter,
+  })
+  res.json({ pending: false, gameTimeMinutes: result.displayedAfter })
+})
+
+// POST /api/campaigns/:id/game-time/confirm-advance — GM uniquement, sans body. Chaque échéance du
+// lot a déjà été résolue individuellement (healing-choice/infection-mode/WOUND_INFECTION_ROLL, qui
+// diffusent chacune leur propre WOUND_UPDATED) — ici, seul le compteur d'horloge avance.
+router.post('/:id/game-time/confirm-advance', requireAuth, requireRole('gm'), async (req, res) => {
+  const result = await confirmPendingAdvance(req.params.id)
+  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
+    campaignId: req.params.id,
+    gameTimeMinutes: result.displayedAfter,
+  })
+  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_ADVANCE_RESOLVED, { campaignId: req.params.id })
+  res.json({ gameTimeMinutes: result.displayedAfter })
+})
+
+// POST /api/campaigns/:id/game-time/cancel-advance — GM uniquement, sans body. Rejoue les undoEntries
+// (Lot 2) en base silencieusement — contrairement à confirm-advance, aucun WOUND_UPDATED individuel
+// n'a été émis pour ces restaurations. CAMPAIGN_ADVANCE_CANCELLED reste un signal générique (pas de
+// liste de characterId précise pour l'instant — point non-bloquant déjà noté §6.1, différé) : les
+// clients avec une fiche personnage ouverte doivent la rafraîchir par précaution à sa réception.
+router.post('/:id/game-time/cancel-advance', requireAuth, requireRole('gm'), async (req, res) => {
+  await cancelPendingAdvance(req.params.id)
+  req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_ADVANCE_CANCELLED, { campaignId: req.params.id })
+  res.json({ cancelled: true })
+})
+
+// GET /api/campaigns/:id/game-echeances/pending-review — GM uniquement. Enrichi (personnage,
+// blessure) pour un écran humain — voir woundReviewService.js. Appelé au montage du panneau de revue
+// et à la (re)connexion, pas seulement poussé par CAMPAIGN_ADVANCE_PENDING (sinon un MJ qui se
+// reconnecte après l'ouverture d'une revue ne la découvre jamais).
+router.get('/:id/game-echeances/pending-review', requireAuth, requireRole('gm'), async (req, res) => {
+  const echeances = await getPendingReviewForGm(req.params.id)
+  res.json({ echeances })
+})
+
+// GET /api/campaigns/:id/game-echeances/my-pending-rolls — tout membre. Un joueur ne voit que les
+// jets de ses propres personnages ; un GM voit tous les jets en attente de la campagne.
+router.get('/:id/game-echeances/my-pending-rolls', requireAuth, async (req, res) => {
+  const member = await db('campaign_members').where({ campaign_id: req.params.id, user_id: req.user.id }).first()
+  if (!member) throw new AppError(403, 'You are not a member of this campaign')
+  const echeances = await getPendingRollsForPlayer(req.params.id, req.user.id, { isGm: member.role === 'gm' })
+  res.json({ echeances })
+})
+
+// POST /api/campaigns/:id/game-echeances/:echeanceId/healing-choice — GM uniquement.
+// body { mjChoice: 'amelioration'|'echec'|'catastrophe', soinsContinues?: boolean }.
+router.post('/:id/game-echeances/:echeanceId/healing-choice', requireAuth, requireRole('gm'), async (req, res) => {
+  const { mjChoice, soinsContinues } = req.body
+  if (!['amelioration', 'echec', 'catastrophe'].includes(mjChoice)) {
+    throw new AppError(400, `mjChoice invalide : ${mjChoice}`)
+  }
+
+  const echeance = await db('game_echeances').where({ id: req.params.echeanceId, campaign_id: req.params.id }).first()
+  if (!echeance) throw new AppError(404, 'Échéance introuvable pour cette campagne')
+  if (echeance.condition_type !== 'wound_healing_check') {
+    throw new AppError(400, 'Cette échéance n\'est pas une Guérison')
+  }
+  const woundBefore = await db('character_wounds').where({ id: echeance.payload.woundId }).first()
+
+  const patch = { mjChoice, ...(soinsContinues !== undefined ? { soinsContinues } : {}) }
+  const result = await db.transaction(async (trx) => {
+    // Fusion atomique — jamais lire-puis-écrire en JS, même patron que pending_advance_undo_log
+    // (echeanceService.js) et le merge settings (PUT /:id ci-dessus).
+    await trx('game_echeances').where({ id: echeance.id })
+      .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify(patch)]) })
+    return resolveEcheanceNow(trx, echeance.id)
+  })
+
+  req.app.get('io').to(req.params.id).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
+  if (result.resolved && woundBefore) {
+    await broadcastWoundUpdate(req.app.get('io'), req.params.id, {
+      characterId: echeance.character_id, charSheetIdForWorst: woundBefore.char_sheet_id, woundId: echeance.payload.woundId,
+    })
+  }
+  res.json({ resolved: result.resolved })
+})
+
+// POST /api/campaigns/:id/game-echeances/:echeanceId/infection-mode — GM uniquement.
+// body { mode: 'auto' | 'player' }. `auto` résout immédiatement (seuil calculé, jet serveur).
+// `player` bascule seulement le statut — le jet réel arrive via l'événement socket
+// WOUND_INFECTION_ROLL (socketDice.js), pas par cette route.
+router.post('/:id/game-echeances/:echeanceId/infection-mode', requireAuth, requireRole('gm'), async (req, res) => {
+  const { mode } = req.body
+  if (!['auto', 'player'].includes(mode)) throw new AppError(400, `mode invalide : ${mode}`)
+
+  const echeance = await db('game_echeances').where({ id: req.params.echeanceId, campaign_id: req.params.id }).first()
+  if (!echeance) throw new AppError(404, 'Échéance introuvable pour cette campagne')
+  if (echeance.condition_type !== 'wound_infection_check') {
+    throw new AppError(400, 'Cette échéance n\'est pas une Infection')
+  }
+
+  if (mode === 'player') {
+    const updated = await db('game_echeances').where({ id: echeance.id, status: 'pending_mj_review' })
+      .update({ status: 'awaiting_player_roll' })
+    if (!updated) throw new AppError(409, `Échéance "${echeance.id}" n'est pas en attente de revue (status: ${echeance.status})`)
+    return res.json({ status: 'awaiting_player_roll' })
+  }
+
+  const wound = await db('character_wounds').where({ id: echeance.payload.woundId }).first()
+  if (!wound) throw new AppError(404, 'Blessure introuvable')
+
+  const { rollResult, resolution } = await db.transaction(async (trx) => {
+    const threshold = await computeWoundInfectionThreshold(trx, wound, echeance.payload.periodesSansSoin ?? 0)
+    const roll = await resolvePolarisTest(threshold)
+    await trx('game_echeances').where({ id: echeance.id })
+      .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify({ rollResult: roll })]) })
+    const resolved = await resolveEcheanceNow(trx, echeance.id)
+    return { rollResult: roll, resolution: resolved }
+  })
+
+  req.app.get('io').to(req.params.id).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
+  if (resolution.resolved) {
+    await broadcastWoundUpdate(req.app.get('io'), req.params.id, {
+      characterId: echeance.character_id, charSheetIdForWorst: wound.char_sheet_id, woundId: echeance.payload.woundId,
+    })
+  }
+  res.json({ status: 'resolved', rollResult })
 })
 
 // DELETE /api/campaigns/:id — supprimer définitivement une campagne

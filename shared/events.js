@@ -28,6 +28,10 @@ export const WS = {
   // Dés
   DICE_ROLL:   'dice:roll',
   DICE_RESULT: 'dice:result',
+  // docs/PLAN_BLESSURES_GUERISON.md §6.1 : joueur/GM → serveur, { echeanceId } — Test de Constitution
+  // contre l'Infection, seuil calculé et jet effectué côté serveur (jamais un simple DICE_ROLL
+  // d'affichage, mute character_wounds via resolveEcheanceNow).
+  WOUND_INFECTION_ROLL: 'wound:infection_roll',
 
   // Battlemap
   MAP_SWITCH:   'map:switch',
@@ -133,6 +137,11 @@ export const WS = {
   // Campagne
   CAMPAIGN_SETTINGS_UPDATED: 'campaign:settings_updated',  // serveur → room : paramètres campagne modifiés
   CAMPAIGN_GAME_TIME_ADJUSTED: 'campaign:game_time_adjusted',  // serveur → room : horloge de campagne ajustée (docs/PLAN_FATIGUE_DOMMAGES.md §7)
+  // Avance en attente (Lot 2, docs/PLAN_FATIGUE_DOMMAGES.md §8 + docs/PLAN_BLESSURES_GUERISON.md §6.1)
+  CAMPAIGN_ADVANCE_PENDING:   'campaign:advance_pending',    // serveur → room : une revue MJ vient de s'ouvrir (signal léger, pas le détail)
+  CAMPAIGN_ADVANCE_RESOLVED:  'campaign:advance_resolved',   // serveur → room : avance confirmée, { characterIds } touchés
+  CAMPAIGN_ADVANCE_CANCELLED: 'campaign:advance_cancelled',  // serveur → room : avance annulée (undo rejoué), { characterIds } touchés
+  GAME_ECHEANCE_RESOLVED:     'game_echeance:resolved',      // serveur → room : { echeanceId } — une échéance individuelle du lot vient d'être résolue
 
   // Trade (marchands + échanges PJ↔PJ)
   // client → serveur

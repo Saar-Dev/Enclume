@@ -59,11 +59,16 @@ export default function GameTimeWidget({ campaignId }) {
   }
   const projected = projectGameTime(gameTimeMinutes, calendarStart)
 
+  // docs/PLAN_BLESSURES_GUERISON.md §6.1 — request-advance remplace adjust : si des échéances de
+  // Guérison/Infection sont dues, le serveur pose l'avance en attente au lieu de l'appliquer tout de
+  // suite. Ce composant n'a rien à faire du résultat `pending` lui-même — BlessuresReviewPanel.jsx,
+  // toujours monté, réagit à l'événement CAMPAIGN_ADVANCE_PENDING que le serveur diffuse dans ce cas
+  // (analyse à charge du plan : pas besoin d'un état partagé pour "ouvrir" le panneau depuis ici).
   const adjust = async (deltaMinutes) => {
     if (!deltaMinutes || submitting) return
     setSubmitting(true)
     try {
-      await api.post(`/campaigns/${campaignId}/game-time/adjust`, { minutes: deltaMinutes })
+      await api.post(`/campaigns/${campaignId}/game-time/request-advance`, { minutes: deltaMinutes })
     } catch (err) {
       console.error('[GameTimeWidget] adjust:', err.message)
     } finally {
@@ -153,7 +158,7 @@ export default function GameTimeWidget({ campaignId }) {
 }
 
 const styles = {
-  container: { padding: '8px 12px 8px 16px', borderBottom: '1px solid #1e1e2e', flexShrink: 0 },
+  container: { padding: '8px 12px 8px 16px', borderBottom: '1px solid var(--wiz-glass-border)', flexShrink: 0 },
   row: { display: 'flex', gap: '4px', flexWrap: 'wrap' },
   unitBtn: { padding: '4px 6px', minWidth: '38px' },
   unitValue: { fontSize: '12px', fontWeight: '700' },

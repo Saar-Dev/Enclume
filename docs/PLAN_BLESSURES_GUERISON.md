@@ -23,9 +23,17 @@
 > construire des `undoEntries` Lot 2 corrects même sur une promotion en cascade ;
 > `applyWound`/`char-sheet.js` (route `POST /:characterId/wounds`) branchés sur la création initiale
 > d'échéance, la seconde dédupliquée sur `applyWound` au passage (réutilisation au lieu d'une 2ᵉ copie
-> de la logique d'insertion). **122/122 tests verts en conditions réelles**
+> de la logique d'insertion). **127/127 tests verts en conditions réelles**
 > (`node --env-file=../.env --test <fichiers>`, suite serveur complète, aucune régression).
-> Reste : écran de revue MJ, panneau joueur, routes REST/WS (§6) — pas encore codé.
+> **✅ Routes REST/WS + écran de revue MJ + panneau joueur codés (2026-07-30)** — §6.1 : 7 routes
+> `campaigns.js`, handler socket `WOUND_INFECTION_ROLL` (`socketDice.js`), `BlessuresReviewPanel.jsx`/
+> `PendingRollsPanel.jsx` (nouveaux, montés dans `Sidebar.jsx` aux côtés de `GameTimeWidget.jsx`),
+> `GameTimeWidget.jsx` migré sur `request-advance`. Aucun état partagé "ouvrir la modale" nécessaire —
+> les deux panneaux sont toujours montés et réagissent directement aux événements serveur (trouvaille
+> de l'implémentation, simplifie le plan §6.1 initial). **Testé** : suite serveur 127/127, `eslint`
+> propre et `vite build` propre sur les 4 fichiers client touchés/créés (un bug réel de règle des
+> Hooks trouvé et corrigé par ce lint, pas juste une formalité). **Non testé** : navigateur — comme
+> toujours, à faire par Saar (pas d'accès navigateur côté agent).
 > Document temporaire (`docs/RegleDocumentaire.md`
 > Règle 10) — à archiver dans `docs/Old/` une fois le chantier clos, contenu durable transféré vers
 > `docs/SYSTEME/BLESSURES.md`.
@@ -390,6 +398,121 @@ quand le MJ choisit "Demander aux joueurs" pour une Infection (statut `awaiting_
 Tableau récapitulatif des jets à faire, **un par un ou tous d'un coup** (choix du joueur, décidé
 Saar) — réutilise le mécanisme de jet déjà en place (`DICE_ROLL`/`MACRO_ROLL`, `socketDice.js`)
 plutôt qu'un nouveau protocole de jet.
+
+### 6.1 Implémentation — état réel vérifié avant de coder (2026-07-30, corrigé après analyse à charge)
+
+`client/src/components/GameTimeWidget.jsx` (Lot 1) appelle aujourd'hui directement l'ancienne route
+`POST /:id/game-time/adjust` (`adjustGameTime`) — jamais `requestGameTimeAdvance`. Conséquence
+concrète non documentée avant cette relecture : avancer le temps via l'UI actuelle **ignore
+silencieusement** toute échéance interactive due (`sweepDueEcheances` ne traite que
+`interactive=false` ; rien n'appelle `previewDueEcheances`) — les échéances restent `active` pour
+toujours, jamais remontées au MJ. C'est le premier fil à tirer.
+
+**Analyse à charge du 2026-07-30 — 4 trous trouvés dans la v1 de cette section, corrigés ci-dessous** :
+(1) aucun événement n'informait un client qu'une blessure venait d'évoluer via Guérison/Infection
+(vérifié : `woundEvolutionService.js` appelle `resolveWoundImprovement`/`resolveWoundInsertion`
+**directement**, jamais via `applyWound` qui est la seule source de `WOUND_ADDED` — l'affirmation
+inverse d'une version antérieure de ce paragraphe était fausse, jamais vérifiée) ; (2) l'écran de
+revue MJ n'avait accès qu'à des lignes `game_echeances` brutes (`payload: { woundId }` opaque par
+design Lot 2), rien d'affichable (qui, quelle blessure, quelle gravité) ; (3) un MJ ou un joueur qui
+se reconnecte après l'ouverture d'une revue ne la découvre jamais (les événements ne sont émis qu'au
+moment où l'état change, pas rejoués à la connexion) ; (4) le risque d'atomicité déjà trouvé et
+corrigé deux fois aujourd'hui (`confirmPendingAdvance`, l'append du journal d'annulation) n'était pas
+rappelé assez explicitement à l'endroit où il va se reproduire (fusion de `payload` avant
+`resolveEcheanceNow`).
+
+**Routes** (`server/src/routes/campaigns.js`, `requireAuth` déjà en place sur le routeur ; **invariant
+explicite** : chaque route `:echeanceId` vérifie `game_echeances.campaign_id === :id` avant tout appel
+de service — un GM d'une campagne ne doit jamais pouvoir agir sur l'échéance d'une autre) :
+- `GET /:id/game-echeances/pending-review` (`requireRole('gm')`) — lecture seule, **enrichit**
+  `previewDueEcheances`/l'état `pending_mj_review`/`awaiting_player_roll` par une jointure
+  `game_echeances → character_wounds → characters` (nom, Localisation, gravité, nombre de cases sur
+  la ligne) : le Lot 2 générique reste agnostique du métier (son contrat ne change pas), l'enrichissement
+  est une responsabilité du domaine Blessures, faite ici. Appelée au montage de `BlessuresReviewPanel`
+  **et** à la reconnexion (corrige le trou 3) — pas seulement poussée par événement.
+- `GET /:id/game-echeances/my-pending-rolls` (`requireAuth`, tout membre) — même enrichissement,
+  filtré aux échéances `awaiting_player_roll` dont le personnage appartient à l'appelant (ou tout si
+  GM). Appelée au montage de `PendingRollsPanel` — corrige le trou 3 côté joueur.
+- `POST /:id/game-time/request-advance` (`requireRole('gm')`) — remplace l'usage actuel de
+  `/game-time/adjust` par le widget. Body `{ minutes }` identique à l'existant. Réponse :
+  `{ pending: false, displayedAfter, ... }` (chemin rapide, comportement inchangé pour le widget) ou
+  `{ pending: true }` (revue nécessaire — le détail vient de `pending-review` ci-dessus, pas dupliqué
+  dans cette réponse).
+- `POST /:id/game-time/confirm-advance` / `POST /:id/game-time/cancel-advance` (`requireRole('gm')`,
+  sans body) — appellent directement `confirmPendingAdvance`/`cancelPendingAdvance`.
+- `POST /:id/game-echeances/:echeanceId/healing-choice` (`requireRole('gm')`) — body
+  `{ mjChoice, soinsContinues? }`. **Fusion atomique obligatoire** (corrige le trou 4) :
+  `UPDATE game_echeances SET payload = payload || ?::jsonb WHERE id=?` dans la transaction qui
+  précède `resolveEcheanceNow`, jamais un lire-en-JS-puis-écrire — même patron que
+  `pending_advance_undo_log` (`echeanceService.js`) et le merge `settings` (`campaigns.js`).
+- `POST /:id/game-echeances/:echeanceId/infection-mode` (`requireRole('gm')`) — body
+  `{ mode: 'auto' | 'player' }`. `auto` : calcule le seuil (`computeWoundInfectionThreshold`), appelle
+  `resolvePolarisTest`, fusionne le résultat dans `payload.rollResult` (même règle d'atomicité),
+  `resolveEcheanceNow` immédiatement. `player` : bascule l'échéance `awaiting_player_roll`, ne résout
+  rien.
+
+**Après `resolveEcheanceNow` (les 3 chemins : `healing-choice`, `infection-mode: auto`,
+`WOUND_INFECTION_ROLL` ci-dessous) — corrige le trou 1, révisé après vérification supplémentaire** :
+`WOUND_UPDATED` **existe déjà** (`shared/events.js:64`, `{ characterId, wound, worst_wound_severity }`,
+émis aujourd'hui par la stabilisation manuelle) — pas un nouvel événement à créer, une simple
+réutilisation. Mieux : son consommateur client (`useCharacterSocket.js:22-28`) est **déjà entièrement
+générique** — il ignore `wound`, ne lit que `characterId`/`worst_wound_severity`, et refetch
+systématiquement `/char-sheet/:characterId/wounds`. Conséquence concrète : **zéro nouveau code client
+nécessaire pour que les fiches personnage se resynchronisent** après une résolution — juste émettre
+cet événement déjà câblé depuis les 3 chemins serveur. Corrige au passage une erreur de la version
+précédente de ce paragraphe, qui proposait de créer un `WOUND_UPDATED` en pensant l'événement
+inexistant (jamais vérifié contre `shared/events.js` à ce moment-là).
+
+**Jet joueur — socket, pas REST** (`.claude/rules/dice.md` : le serveur reste autoritaire sur tout
+jet, protocole `shared/events.js`/Socket.IO, jamais une route REST séparée pour "lancer un dé") :
+nouvel événement `WOUND_INFECTION_ROLL` (client→serveur, `{ echeanceId }`) dans `socketDice.js`.
+**Précision (corrige la sous-estimation initiale)** : ce n'est pas un handler "à côté de `MACRO_ROLL`"
+— `MACRO_ROLL`/`DICE_ROLL` sont purement d'affichage (vérifié `socketDice.js:21-60`, aucune mutation
+de `character_wounds`), alors que ce handler doit lancer le dé **et** muter l'état (`resolveEcheanceNow`)
+**et** notifier — plus proche en forme d'un handler de combat (`confirmMeleeDefense`) que de
+`MACRO_ROLL`. Vérifie que l'appelant est bien le propriétaire du personnage concerné ou le MJ (garde
+`isOwner = character.user_id === req.user.id`, même principe que `router.param('characterId')` de
+`char-sheet.js`, adapté au contexte socket — `user`/`isGm` déjà disponibles dans
+`registerDiceHandlers(io, socket, { campaignId, user, isGm })`).
+
+**Nouveaux événements** (`shared/events.js`, patron `domaine:action` déjà en usage — seuls 3 sont
+réellement nouveaux, `WOUND_UPDATED` existe déjà et se réutilise tel quel, voir ci-dessus) :
+- `CAMPAIGN_ADVANCE_PENDING` (serveur → room) — signal léger qu'une revue vient de s'ouvrir (pas le
+  détail, voir `pending-review` ci-dessus) ; les clients déjà connectés l'utilisent pour ouvrir
+  `BlessuresReviewPanel`, un client qui se (re)connecte plus tard s'appuie sur `pending-review` au
+  montage, pas sur cet événement (corrige le trou 3).
+- `GAME_ECHEANCE_RESOLVED` (serveur → room, `{ echeanceId }`) — l'écran de revue MJ et le panneau
+  joueur retirent la ligne en direct. Ne transporte jamais l'état de blessure (couvert séparément par
+  `WOUND_UPDATED`, réutilisé — deux préoccupations distinctes, pas mélangées dans un seul événement).
+- `CAMPAIGN_ADVANCE_RESOLVED` / `CAMPAIGN_ADVANCE_CANCELLED` (serveur → room) — transportent la liste
+  des `characterId` touchés par le lot, pour qu'une fiche personnage ouverte revérifie son état même
+  si elle a raté un `WOUND_UPDATED` individuel (filet de sécurité, pas la source principale de mise à
+  jour).
+
+**Composants client** (nouveaux) :
+- `client/src/components/BlessuresReviewPanel.jsx` — écran de revue MJ groupé (§6), charge son
+  contenu via `GET pending-review` au montage **et** à la réception de `CAMPAIGN_ADVANCE_PENDING`,
+  mis à jour en direct par `GAME_ECHEANCE_RESOLVED`, boutons Confirmer/Annuler en pied d'écran.
+  **"Contexte RAW" (§3.2, tranché Saar 2026-07-30)** : pas de donnée à modéliser — 3 champs éphémères
+  purement client (jamais envoyés au serveur, jamais stockés, remis à zéro à chaque ligne), affichés
+  à côté des 3 boutons Amélioration/Échec/Catastrophe pour aider le MJ à se décider, jamais à calculer
+  à sa place (cohérent avec la décision déjà actée) : **Soin** (oui/non), **Médecin** (oui/non — si
+  oui, sélecteur du personnage qui l'incarne, purement informatif/narratif), **Matériel** (oui/non).
+  Pas de nouveau champ `payload`, aucun changement côté routes/services déjà planifiés ci-dessus.
+  Un patron d'état partagé UI (store dédié ou extension `useCampaignStore`, voir plus bas) reste
+  nécessaire pour ouvrir ce panneau depuis `GameTimeWidget.jsx` — aucun patron de modale globale
+  n'existe encore dans le projet (vérifié, `.claude/rules/react.md` : "les stores contiennent l'état
+  partagé" justifie cette direction plutôt que d'en inventer une autre).
+- `client/src/components/PendingRollsPanel.jsx` — panneau joueur "Jets en attente", charge via
+  `GET my-pending-rolls` au montage, un par un ou tous d'un coup, émet `WOUND_INFECTION_ROLL`.
+- `GameTimeWidget.jsx` modifié : `adjust()` appelle `request-advance` au lieu de `adjust` ; sur
+  `pending:true`, ouvre `BlessuresReviewPanel` au lieu de considérer l'action terminée.
+
+**Points à confirmer avant/pendant le codage, pas bloquants pour démarrer par les routes** :
+1. Granularité exacte de `CAMPAIGN_ADVANCE_RESOLVED`/`CANCELLED` (liste de `characterId` suffit-elle
+   comme filet de sécurité, ou faut-il aussi la liste des `woundId`) — à trancher en codant le client.
+2. Emplacement exact de `BlessuresReviewPanel`/`PendingRollsPanel` dans l'UI (modale, panneau latéral
+   fixe, onglet dédié) — décision d'ergonomie, pas d'architecture.
 
 ---
 

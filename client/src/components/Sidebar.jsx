@@ -13,6 +13,8 @@ import LibraryPanel from './LibraryPanel.jsx'
 import { DeclareLogContent } from './CombatDeclareLog.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
 import GameTimeWidget from './GameTimeWidget.jsx'
+import BlessuresReviewPanel from './BlessuresReviewPanel.jsx'
+import PendingRollsPanel from './PendingRollsPanel.jsx'
 import {
   clearMaterialSlotOverride,
   materialSlotDisplayValue,
@@ -382,7 +384,7 @@ function CharacterModal({ character, isGm, isOwner, onClose, onCharacterUpdate }
                 <span style={styles.fieldLabel}>{t('character.ownerLabel')}</span>
                 {isGm ? (
                   <select
-                    style={styles.select}
+                    className="sidebar-tool-field" style={styles.select}
                     value={character.user_id || ''}
                     onChange={async (e) => {
                       const user_id = e.target.value || null
@@ -1001,7 +1003,7 @@ export default function Sidebar({
   }
 
   return (
-    <div style={{ ...styles.sidebar, width }}>
+    <div className="sidebar-panel" style={{ ...styles.sidebar, width }}>
 
       {/* Keyframes animation dé — toujours dans le DOM, indépendant de l'onglet actif */}
       <style>{`
@@ -1033,6 +1035,12 @@ export default function Sidebar({
       {/* ─── HORLOGE DE CAMPAGNE (docs/PLAN_FATIGUE_DOMMAGES.md §7, Lot 1) ────────── */}
       {/* Masquée en mode Combat et Édition — décision Saar 2026-07-29, distraction non désirée */}
       {mode !== 'combat' && mode !== 'edit' && <GameTimeWidget campaignId={campaignId} />}
+
+      {/* ─── BLESSURES : revue MJ + jets en attente (docs/PLAN_BLESSURES_GUERISON.md §6.1) ────── */}
+      {/* Jamais masqués par le mode — une revue/un jet déjà ouvert avant un changement de mode reste
+          actionnable ; contrairement à l'horloge, rien ici n'en déclenche de nouveaux depuis ces modes. */}
+      <BlessuresReviewPanel campaignId={campaignId} />
+      <PendingRollsPanel campaignId={campaignId} />
 
       {/* ─── OUTILS ─────────────────────────────────────────────────────── */}
       <div style={styles.toolsRow}>
@@ -1070,11 +1078,11 @@ export default function Sidebar({
             <span style={{ fontSize:'9px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{t('session.tools')}</span>
           </button>
           {toolsOpen && (
-            <div style={styles.toolsDropdown}>
-              <button style={styles.toolsDropdownItem} disabled>
+            <div className="sidebar-tools-dropdown">
+              <button className="sidebar-tools-dropdown-item" disabled>
                 {t('session.toolRuler')}
               </button>
-              <button style={styles.toolsDropdownItemEnabled} onClick={() => { setToolsOpen(false); onOpenTrade?.() }}>
+              <button className="sidebar-tools-dropdown-item enabled" onClick={() => { setToolsOpen(false); onOpenTrade?.() }}>
                 {t('session.commerce')}
               </button>
             </div>
@@ -1086,15 +1094,17 @@ export default function Sidebar({
       {mode === 'edit' && (
         <div style={styles.palette}>
           {/* ── Onglets éditeur : Voxels / Entités ── */}
-          <div style={styles.editorTabs}>
+          <div className="sidebar-editor-tabs">
             <button
-              style={{ ...styles.editorTab, ...(activeEditorTab === 'world' ? styles.editorTabActive : {}) }}
+              className="sidebar-editor-tab"
+              data-active={activeEditorTab === 'world'}
               onClick={() => onEditorTabChange?.('world')}
             >
               Monde
             </button>
             <button
-              style={{ ...styles.editorTab, ...(activeEditorTab === 'entity' ? styles.editorTabActive : {}) }}
+              className="sidebar-editor-tab"
+              data-active={activeEditorTab === 'entity'}
               onClick={() => onEditorTabChange?.('entity')}
             >
               {t('sidebar.editorTabEntities')}
@@ -1103,25 +1113,21 @@ export default function Sidebar({
           <div style={styles.undoRow}>
             <button
               type="button"
+              className="sidebar-undo-btn"
               onClick={() => canSurfaceUndo && onSurfaceUndo?.()}
               disabled={!canSurfaceUndo}
               title="Annuler la derniere action (Ctrl+Z)"
-              style={{
-                ...styles.undoBtn,
-                ...(!canSurfaceUndo ? styles.undoBtnDisabled : {}),
-              }}
+              style={styles.undoBtn}
             >
               ↶ Annuler
             </button>
             <button
               type="button"
+              className="sidebar-undo-btn"
               onClick={() => canSurfaceRedo && onSurfaceRedo?.()}
               disabled={!canSurfaceRedo}
               title="Refaire la derniere action annulee (Ctrl+Y / Ctrl+Shift+Z)"
-              style={{
-                ...styles.undoBtn,
-                ...(!canSurfaceRedo ? styles.undoBtnDisabled : {}),
-              }}
+              style={styles.undoBtn}
             >
               ↷ Refaire
             </button>
@@ -1138,15 +1144,14 @@ export default function Sidebar({
                   </span>
                 )}
               </div>
-              <div style={styles.roomTool}>
+              <div className="sidebar-tool-box" style={styles.roomTool}>
                 <div style={styles.roomToolModes}>
                   <button
                     type="button"
                     onClick={() => updateSurfaceTool({ mode: 'select' })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'select' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'select'}
+                    style={styles.roomToolModeBtn}
                   >
                     {t('surfaceEditor.select')}
                   </button>
@@ -1161,10 +1166,9 @@ export default function Sidebar({
                       selectedRoomWallCount: 0,
                       roomArcError: null,
                     })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'room' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'room'}
+                    style={styles.roomToolModeBtn}
                   >
                     {t('surfaceEditor.addRoom')}
                   </button>
@@ -1179,40 +1183,36 @@ export default function Sidebar({
                       selectedRoomWallKeys: [],
                       selectedRoomWallCount: 0,
                     })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'wall' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'wall'}
+                    style={styles.roomToolModeBtn}
                   >
                     Mur droit
                   </button>
                   <button
                     type="button"
                     onClick={() => updateSurfaceTool({ mode: 'stair' })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'stair' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'stair'}
+                    style={styles.roomToolModeBtn}
                   >
                     Escalier
                   </button>
                   <button
                     type="button"
                     onClick={() => updateSurfaceTool({ mode: 'bridge' })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'bridge' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'bridge'}
+                    style={styles.roomToolModeBtn}
                   >
                     Passerelle
                   </button>
                   <button
                     type="button"
                     onClick={() => updateSurfaceTool({ mode: 'effect' })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'effect' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'effect'}
+                    style={styles.roomToolModeBtn}
                   >
                     Zone / effet
                   </button>
@@ -1224,20 +1224,18 @@ export default function Sidebar({
                       connectorToLevel: Number(surfaceToolState.level || 0) + 1,
                       ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
                     })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder'}
+                    style={styles.roomToolModeBtn}
                   >
                     Échelle
                   </button>
                   <button
                     type="button"
                     onClick={() => updateSurfaceTool({ mode: 'erase' })}
-                    style={{
-                      ...styles.roomToolModeBtn,
-                      ...(surfaceToolState.mode === 'erase' ? styles.roomToolModeBtnActive : {}),
-                    }}
+                    className="sidebar-tool-mode-btn"
+                    data-active={surfaceToolState.mode === 'erase'}
+                    style={styles.roomToolModeBtn}
                   >
                     {t('surfaceEditor.erase')}
                   </button>
@@ -1249,7 +1247,7 @@ export default function Sidebar({
                       <select
                         value={surfaceToolState.connectorToLevel}
                         onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
-                        style={styles.roomToolSelect}
+                        className="sidebar-tool-field"
                       >
                         {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
                           <option key={level} value={level}>{level}</option>
@@ -1261,7 +1259,7 @@ export default function Sidebar({
                       <select
                         value={surfaceToolState.ladderAxis || 'x'}
                         onChange={e => updateSurfaceTool({ ladderAxis: e.target.value })}
-                        style={styles.roomToolSelect}
+                        className="sidebar-tool-field"
                       >
                         <option value="x">Est / Ouest</option>
                         <option value="z">Nord / Sud</option>
@@ -1270,7 +1268,7 @@ export default function Sidebar({
                   </div>
                 )}
                 {surfaceToolState.mode === 'effect' && (
-                  <div style={styles.connectorPicker}>
+                  <div className="sidebar-tool-box" style={styles.connectorPicker}>
                     <div style={styles.connectorPickerTitle}>Région environnementale</div>
                     <div style={styles.roomToolGrid}>
                       <label style={styles.roomToolLabel}>
@@ -1278,7 +1276,7 @@ export default function Sidebar({
                         <select
                           value={surfaceToolState.effectDefinitionKey || 'fire'}
                           onChange={e => updateSurfaceTool({ effectDefinitionKey: e.target.value })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           {(worldEffects.definitions || []).map(definition => (
                             <option key={definition.key} value={definition.key}>
@@ -1296,7 +1294,7 @@ export default function Sidebar({
                           step="0.25"
                           value={surfaceToolState.effectIntensity}
                           onChange={e => updateSurfaceTool({ effectIntensity: Math.max(0.01, Number(e.target.value) || 1) })}
-                          style={styles.roomToolInput}
+                          className="sidebar-tool-field"
                         />
                       </label>
                       <label style={styles.roomToolLabel}>
@@ -1308,22 +1306,22 @@ export default function Sidebar({
                           step="0.25"
                           value={surfaceToolState.effectHeight}
                           onChange={e => updateSurfaceTool({ effectHeight: Math.max(0.1, Number(e.target.value) || 2.5) })}
-                          style={styles.roomToolInput}
+                          className="sidebar-tool-field"
                         />
                       </label>
                     </div>
-                    <button type="button" onClick={() => setCustomEffectOpen(open => !open)} style={styles.roomToolSmallBtn}>
+                    <button type="button" onClick={() => setCustomEffectOpen(open => !open)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
                       {customEffectOpen ? 'Fermer' : 'Nouvel effet MJ'}
                     </button>
                     {customEffectOpen && (
-                      <div style={styles.connectorColorList}>
+                      <div className="sidebar-tool-box" style={styles.connectorColorList}>
                         <label style={styles.roomToolLabel}>
                           <span>Clé technique</span>
                           <input
                             value={customEffectDraft.key}
                             onChange={e => setCustomEffectDraft(draft => ({ ...draft, key: e.target.value }))}
                             placeholder="debris-lourds"
-                            style={styles.roomToolInput}
+                            className="sidebar-tool-field"
                           />
                         </label>
                         <label style={styles.roomToolLabel}>
@@ -1332,7 +1330,7 @@ export default function Sidebar({
                             value={customEffectDraft.label}
                             onChange={e => setCustomEffectDraft(draft => ({ ...draft, label: e.target.value }))}
                             placeholder="Débris lourds"
-                            style={styles.roomToolInput}
+                            className="sidebar-tool-field"
                           />
                         </label>
                         <label style={styles.roomToolLabel}>
@@ -1344,7 +1342,7 @@ export default function Sidebar({
                             step="0.25"
                             value={customEffectDraft.movementMultiplier}
                             onChange={e => setCustomEffectDraft(draft => ({ ...draft, movementMultiplier: Number(e.target.value) || 1 }))}
-                            style={styles.roomToolInput}
+                            className="sidebar-tool-field"
                           />
                         </label>
                         <label style={styles.roomToolLabel}>
@@ -1353,23 +1351,23 @@ export default function Sidebar({
                             value={customEffectDraft.note}
                             onChange={e => setCustomEffectDraft(draft => ({ ...draft, note: e.target.value }))}
                             rows={3}
-                            style={styles.roomToolInput}
+                            className="sidebar-tool-field"
                           />
                         </label>
-                        <button type="button" onClick={createCustomEffect} style={styles.roomToolSmallBtn}>
+                        <button type="button" onClick={createCustomEffect} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
                           Créer et sélectionner
                         </button>
                       </div>
                     )}
                     {(worldEffects.instances || []).length > 0 && (
-                      <div style={styles.connectorColorList}>
+                      <div className="sidebar-tool-box" style={styles.connectorColorList}>
                         <div style={styles.connectorPickerTitle}>Effets actifs</div>
                         {worldEffects.instances.map(instance => {
                           const definition = worldEffects.definitions.find(item => item.key === instance.definitionKey)
                           return (
-                            <div key={instance.id} style={styles.roomToolSelection}>
+                            <div key={instance.id} className="sidebar-tool-selection" style={styles.roomToolSelection}>
                               <span>{definition?.label || instance.definitionKey} ×{instance.intensity}</span>
-                              <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} style={styles.roomToolSmallBtn}>
+                              <button type="button" onClick={() => deleteRuntimeEffect(instance.id)} className="btn btn-ghost" style={styles.roomToolSmallBtn}>
                                 Supprimer
                               </button>
                             </div>
@@ -1391,13 +1389,13 @@ export default function Sidebar({
                       onChange={e => updateSurfaceTool({
                         movementMultiplier: Math.max(0.05, Math.min(100, Number(e.target.value) || 1)),
                       })}
-                      style={styles.roomToolInput}
+                      className="sidebar-tool-field"
                     />
                   </label>
                 )}
                 {surfaceToolState.mode === 'connector' && (
                   <>
-                    <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
+                    <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.connectors')}</div>
                     <div style={styles.roomToolModes}>
                       <button
                         type="button"
@@ -1407,10 +1405,9 @@ export default function Sidebar({
                           connectorToLevel: Number(surfaceToolState.level || 0) + 1,
                           ...connectorModelPatch(surfaceToolState.connectorType === 'elevator' ? selectedConnectorChoice : (elevatorConnectorBlueprints[0] || genericElevatorChoice)),
                         })}
-                        style={{
-                          ...styles.roomToolModeBtn,
-                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' ? styles.roomToolModeBtnActive : {}),
-                        }}
+                        className="sidebar-tool-mode-btn"
+                        data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator'}
+                        style={styles.roomToolModeBtn}
                       >
                         {t('surfaceEditor.addElevator')}
                       </button>
@@ -1422,22 +1419,21 @@ export default function Sidebar({
                           connectorToLevel: Number(surfaceToolState.level || 0) + 1,
                           ...connectorModelPatch(surfaceToolState.connectorType === 'ladder' ? selectedConnectorChoice : (ladderConnectorBlueprints[0] || genericLadderChoice)),
                         })}
-                        style={{
-                          ...styles.roomToolModeBtn,
-                          ...(surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder' ? styles.roomToolModeBtnActive : {}),
-                        }}
+                        className="sidebar-tool-mode-btn"
+                        data-active={surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'ladder'}
+                        style={styles.roomToolModeBtn}
                       >
                         Échelle
                       </button>
                     </div>
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
-                      <div style={styles.connectorPicker}>
+                      <div className="sidebar-tool-box" style={styles.connectorPicker}>
                       <label style={styles.roomToolLabel}>
                         <span>{t('surfaceEditor.elevatorToLevel')}</span>
                         <select
                           value={surfaceToolState.connectorToLevel}
                           onChange={e => updateSurfaceTool({ connectorToLevel: Number(e.target.value) })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           {[-2, -1, 0, 1, 2, 3, 4, 5, 6].map(level => (
                             <option key={level} value={level}>{level}</option>
@@ -1449,7 +1445,7 @@ export default function Sidebar({
                         <select
                           value={surfaceToolState.elevatorDoorAxis || 'z'}
                           onChange={e => updateSurfaceTool({ elevatorDoorAxis: e.target.value })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           <option value="z">Nord / sud</option>
                           <option value="x">Est / ouest</option>
@@ -1460,7 +1456,7 @@ export default function Sidebar({
                         <select
                           value={Number(surfaceToolState.elevatorDoorSide) < 0 ? -1 : 1}
                           onChange={e => updateSurfaceTool({ elevatorDoorSide: Number(e.target.value) })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           <option value={1}>Positif</option>
                           <option value={-1}>Négatif</option>
@@ -1474,13 +1470,13 @@ export default function Sidebar({
                           step="0.1"
                           value={surfaceToolState.elevatorTravelSecondsPerLevel || 2}
                           onChange={e => updateSurfaceTool({ elevatorTravelSecondsPerLevel: Math.max(0.1, Number(e.target.value) || 2) })}
-                          style={styles.roomToolInput}
+                          className="sidebar-tool-field"
                         />
                       </label>
                       </div>
                     )}
                     {surfaceToolState.mode === 'connector' && (
-                      <div style={styles.connectorPicker}>
+                      <div className="sidebar-tool-box" style={styles.connectorPicker}>
                         <div style={styles.connectorPickerTitle}>
                           {surfaceToolState.connectorType === 'door'
                             ? t('surfaceEditor.doorModel')
@@ -1493,7 +1489,7 @@ export default function Sidebar({
                         ) : (
                           <>
                             {selectedConnectorChoice && (
-                              <div style={styles.connectorSelectedModel}>
+                              <div className="sidebar-connector-selected" style={styles.connectorSelectedModel}>
                                 <span>✓ {t('surfaceEditor.selectedConnectorModel')}</span>
                                 <strong>{selectedConnectorChoice.label}</strong>
                               </div>
@@ -1505,7 +1501,7 @@ export default function Sidebar({
                               />
                             )}
                             {connectorMaterialSlots.length > 0 && (
-                              <div style={styles.connectorColorPanel}>
+                              <div className="sidebar-tool-box" style={styles.connectorColorPanel}>
                                 <div style={styles.connectorPickerTitle}>Couleurs du modèle</div>
                                 {connectorMaterialSlots.map(slot => {
                                   const slotValue = materialSlotDisplayValue(connectorMaterialOverrides, slot)
@@ -1519,11 +1515,12 @@ export default function Sidebar({
                                         type="color"
                                         value={slotValue.color}
                                         onChange={e => updateConnectorMaterialSlot(slot, { color: e.target.value })}
-                                        style={styles.roomToolColorInput}
+                                        className="sidebar-tool-color-input" style={styles.roomToolColorInput}
                                       />
                                       <button
                                         type="button"
                                         onClick={() => clearConnectorMaterialSlot(slot)}
+                                        className="btn btn-ghost"
                                         style={styles.connectorColorReset}
                                       >
                                         Reset
@@ -1541,10 +1538,9 @@ export default function Sidebar({
                                   key={choice.id}
                                   type="button"
                                   onClick={() => selectConnectorModel(choice)}
-                                  style={{
-                                    ...styles.connectorModelBtn,
-                                    ...(isSelected ? styles.connectorModelBtnActive : {}),
-                                  }}
+                                  className="sidebar-connector-model-btn"
+                                  data-active={isSelected}
+                                  style={styles.connectorModelBtn}
                                 >
                                   <span>{isSelected ? '✓ ' : ''}{choice.label}</span>
                                   <small>{choice.category || t('surfaceEditor.connectorModel')}</small>
@@ -1564,7 +1560,7 @@ export default function Sidebar({
                       <select
                         value={surfaceToolState.roomHeightLevels}
                         onChange={e => updateSurfaceTool({ roomHeightLevels: Number(e.target.value) })}
-                        style={styles.roomToolSelect}
+                        className="sidebar-tool-field"
                       >
                         {[1, 2, 3, 4, 5, 6].map(levels => (
                           <option key={levels} value={levels}>{t('surfaceEditor.levelCount', { count: levels })}</option>
@@ -1582,7 +1578,7 @@ export default function Sidebar({
                         step="0.05"
                         value={surfaceToolState.floorThickness}
                         onChange={e => updateSurfaceTool({ floorThickness: Number(e.target.value) })}
-                        style={styles.roomToolInput}
+                        className="sidebar-tool-field"
                       />
                     </label>
                   )}
@@ -1595,7 +1591,7 @@ export default function Sidebar({
                         max="8"
                         value={surfaceToolState.wallThickness}
                         onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
-                        style={styles.roomToolInput}
+                        className="sidebar-tool-field"
                       />
                     </label>
                   )}
@@ -1610,7 +1606,7 @@ export default function Sidebar({
                         max="8"
                         value={surfaceToolState.wallThickness}
                         onChange={e => updateSurfaceTool({ wallThickness: Number(e.target.value) })}
-                        style={styles.roomToolInput}
+                        className="sidebar-tool-field"
                       />
                     </label>
                     <label style={styles.roomToolLabel}>
@@ -1618,7 +1614,7 @@ export default function Sidebar({
                       <select
                         value={surfaceToolState.wallHeightLevels}
                         onChange={e => updateSurfaceTool({ wallHeightLevels: Number(e.target.value) })}
-                        style={styles.roomToolSelect}
+                        className="sidebar-tool-field"
                       >
                         {[1, 2, 3, 4, 5, 6].map(levels => (
                           <option key={levels} value={levels}>{t('surfaceEditor.levelCount', { count: levels })}</option>
@@ -1629,7 +1625,7 @@ export default function Sidebar({
                 )}
                 {surfaceToolState.mode === 'room' && (
                   <>
-                    <div style={styles.roomToolSectionTitle}>{t('surfaceEditor.appliedMaterial')}</div>
+                    <div className="sidebar-tool-section-title" style={styles.roomToolSectionTitle}>{t('surfaceEditor.appliedMaterial')}</div>
                     <div style={styles.roomToolModes}>
                       {[
                         ['floor', 'Sol'],
@@ -1640,10 +1636,9 @@ export default function Sidebar({
                           key={face}
                           type="button"
                           onClick={() => updateSurfaceTool({ materialFace: face })}
-                          style={{
-                            ...styles.roomToolModeBtn,
-                            ...(surfaceMaterialFace === face ? styles.roomToolModeBtnActive : {}),
-                          }}
+                          className="sidebar-tool-mode-btn"
+                          data-active={surfaceMaterialFace === face}
+                          style={styles.roomToolModeBtn}
                         >
                           {label}
                         </button>
@@ -1655,7 +1650,7 @@ export default function Sidebar({
                         <select
                           value={surfaceMaterialState.material}
                           onChange={e => updateSurfaceMaterial({ material: e.target.value })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           {PROCEDURAL_MATERIAL_PRESETS.map(preset => (
                             <option key={preset.id} value={preset.id}>{preset.label}</option>
@@ -1667,7 +1662,7 @@ export default function Sidebar({
                         <select
                           value={surfaceMaterialState.pattern}
                           onChange={e => updateSurfaceMaterial({ pattern: e.target.value })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           {PROCEDURAL_PATTERN_PRESETS.map(pattern => (
                             <option key={pattern.id} value={pattern.id}>{pattern.label}</option>
@@ -1682,13 +1677,13 @@ export default function Sidebar({
                           type="color"
                           value={surfacePaintValue}
                           onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
-                          style={styles.roomToolColorInput}
+                          className="sidebar-tool-color-input" style={styles.roomToolColorInput}
                         />
                         <input
                           type="text"
                           value={surfaceMaterialState.paint || surfacePaintValue}
                           onChange={e => updateSurfaceMaterial({ paint: e.target.value })}
-                          style={styles.roomToolInput}
+                          className="sidebar-tool-field"
                         />
                       </div>
                     </label>
@@ -1716,10 +1711,9 @@ export default function Sidebar({
                     <button
                       type="button"
                       onClick={() => updateSurfaceMaterial({ realRelief: surfaceMaterialState.realRelief === false })}
-                      style={{
-                        ...styles.roomToolToggle,
-                        ...(surfaceMaterialState.realRelief !== false ? styles.roomToolToggleActive : {}),
-                      }}
+                      className="sidebar-tool-toggle"
+                      data-active={surfaceMaterialState.realRelief !== false}
+                      style={styles.roomToolToggle}
                     >
                       <span>Relief reel</span>
                       <span style={styles.roomToolToggleState}>
@@ -1729,10 +1723,9 @@ export default function Sidebar({
                     <button
                       type="button"
                       onClick={() => updateSurfaceTool({ autoVariants: !surfaceToolState.autoVariants })}
-                      style={{
-                        ...styles.roomToolToggle,
-                        ...(surfaceToolState.autoVariants ? styles.roomToolToggleActive : {}),
-                      }}
+                      className="sidebar-tool-toggle"
+                      data-active={surfaceToolState.autoVariants}
+                      style={styles.roomToolToggle}
                     >
                       <span>Variations par surface</span>
                       <span style={styles.roomToolToggleState}>
@@ -1745,7 +1738,7 @@ export default function Sidebar({
                         <select
                           value={surfaceToolState.surfaceBlocking || surfaceToolState.wallBlocking || 'solid'}
                           onChange={e => updateSurfaceTool({ surfaceBlocking: e.target.value })}
-                          style={styles.roomToolSelect}
+                          className="sidebar-tool-field"
                         >
                           <option value="solid">Plein</option>
                           <option value="glass">Verre</option>
@@ -1755,14 +1748,14 @@ export default function Sidebar({
                       <button
                         type="button"
                         onClick={() => updateSurfaceMaterial({ seed: `mat-${Date.now().toString(36)}` })}
-                        style={styles.roomToolSmallBtn}
+                        className="btn btn-ghost" style={styles.roomToolSmallBtn}
                       >
                         Nouvelle variation
                       </button>
                     </div>
                   </>
                 )}
-                <div style={styles.roomToolHint}>
+                <div className="sidebar-tool-hint" style={styles.roomToolHint}>
                   {surfaceToolState.mode === 'connector'
                     ? (surfaceToolState.connectorType === 'door'
                         ? t('surfaceEditor.hintDoorConnector')
@@ -1789,7 +1782,7 @@ export default function Sidebar({
               {surfaceToolState.mode !== 'connector' && (
                 <>
                   {availableBlocks.length === 0 && (
-                    <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '8px' }}>{t('common.loading')}</p>
                   )}
                   {(() => {
                     const groups = {}
@@ -1817,10 +1810,10 @@ export default function Sidebar({
                                 style={{
                                   ...styles.matBtn,
                                   backgroundImage: texUrl ? `url(${texUrl})` : 'none',
-                                  backgroundColor: texUrl ? 'transparent' : '#1e1e2e',
+                                  backgroundColor: texUrl ? 'transparent' : 'var(--wiz-bg-3)',
                                   borderWidth: '2px',
                                   borderStyle: 'solid',
-                                  borderColor: isActive ? '#5b8dee' : 'transparent',
+                                  borderColor: isActive ? 'var(--color-primary)' : 'transparent',
                                 }}
                               />
                             )
@@ -1875,17 +1868,18 @@ export default function Sidebar({
                   value={objectSearch}
                   onChange={event => setObjectSearch(event.target.value)}
                   placeholder={t('sidebar.searchObjects')}
-                  style={{ width: '100%', boxSizing: 'border-box', margin: '7px 0 9px', padding: '7px 9px', border: '1px solid #292944', borderRadius: '4px', background: '#11111d', color: '#d7d7e5' }}
+                  className="sidebar-tool-field"
+                  style={{ margin: '7px 0 9px' }}
                 />
                 {activeBlueprint?.glb_url && <Object3DPreview blueprint={activeBlueprint} />}
                 {bpList.length === 0 && (
-                  <p style={{ color: '#5a5a7a', fontSize: '12px', padding: '8px' }}>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '8px' }}>
                     {t('sidebar.noBlueprints')}
                   </p>
                 )}
                 {Object.entries(grouped).map(([category, items]) => (
                   <div key={category} style={{ marginBottom: '10px' }}>
-                    <div style={{ color: '#7f8eaa', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 8px 3px' }}>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 8px 3px' }}>
                       {category} <span style={{ opacity: 0.55 }}>({items.length})</span>
                     </div>
                     {items.sort((a, b) => a.label.localeCompare(b.label)).map(bp => {
@@ -1895,7 +1889,7 @@ export default function Sidebar({
                           key={bp.id}
                           onClick={() => onBlueprintSelect?.(isActive ? null : bp)}
                           title={t('sidebar.clickThenPlace')}
-                          style={{ display: 'block', width: '100%', padding: '7px 10px', background: isActive ? 'rgba(91,141,238,0.18)' : 'none', border: 'none', borderBottom: '1px solid #1a1a2e', borderLeft: isActive ? '2px solid #5b8dee' : '2px solid transparent', color: isActive ? '#5b8dee' : '#c0c0d0', fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.1s' }}
+                          style={{ display: 'block', width: '100%', padding: '7px 10px', background: isActive ? 'var(--color-primary-muted)' : 'none', border: 'none', borderBottom: '1px solid var(--wiz-glass-border)', borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent', color: isActive ? 'var(--color-primary)' : 'var(--text-secondary)', fontSize: '12px', textAlign: 'left', cursor: 'pointer', transition: 'background 0.1s' }}
                         >
                           {blueprintPlacementMode(bp) === 'wall' ? '▥ ' : ''}{bp.label}
                         </button>
@@ -1912,13 +1906,14 @@ export default function Sidebar({
         </div>
       )}
 
-      <div style={styles.separator} />
+      <div className="sidebar-separator" />
 
       {/* ─── ONGLETS — masqués en mode édition ───────────────────────────── */}
       {mode !== 'edit' && (
-      <div style={styles.tabs}>
+      <div className="sidebar-tabs">
         <button
-          style={{ ...styles.tab, ...(activeTab === 'chat' ? styles.tabActive : {}) }}
+          className="sidebar-tab"
+          data-active={activeTab === 'chat'}
           onClick={() => setActiveTab('chat')}
         >
           {t('sidebar.chat')}
@@ -1927,19 +1922,22 @@ export default function Sidebar({
           )}
         </button>
         <button
-          style={{ ...styles.tab, ...(activeTab === 'persos' ? styles.tabActive : {}) }}
+          className="sidebar-tab"
+          data-active={activeTab === 'persos'}
           onClick={() => setActiveTab('persos')}
         >
           {t('sidebar.characters')}
         </button>
         <button
-          style={{ ...styles.tab, ...(activeTab === 'biblio' ? styles.tabActive : {}) }}
+          className="sidebar-tab"
+          data-active={activeTab === 'biblio'}
           onClick={() => setActiveTab('biblio')}
         >
           {t('sidebar.library')}
         </button>
         <button
-          style={{ ...styles.tab, ...(activeTab === 'profil' ? styles.tabActive : {}) }}
+          className="sidebar-tab"
+          data-active={activeTab === 'profil'}
           onClick={() => setActiveTab('profil')}
         >
           {t('sidebar.profil')}
@@ -1984,7 +1982,7 @@ export default function Sidebar({
                   // Visible uniquement par le GM
                   if (!isGm) return null
                   return (
-                    <div key={msg.id} style={styles.messageAction}>
+                    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
                       <div style={styles.actionHeader}>
                         <span style={styles.actionIcon}>⚔</span>
                         <span style={styles.actionTitle}>
@@ -2000,13 +1998,13 @@ export default function Sidebar({
                         </div>
                       )}
                       <div style={styles.actionBtns}>
-                        <button style={styles.btnAccept} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, false, 0) }}>
+                        <button className="btn btn-success" style={styles.btnAccept} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, false, 0) }}>
                           {t('sidebar.actionAccept')}
                         </button>
-                        <button style={styles.btnAuto} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, true, 0) }}>
+                        <button className="btn" style={styles.btnAuto} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, true, 0) }}>
                           {t('sidebar.actionAuto')}
                         </button>
-                        <button style={styles.btnRefuse} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, false, false, 0) }}>
+                        <button className="btn btn-danger" style={styles.btnRefuse} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, false, false, 0) }}>
                           {t('sidebar.actionRefuse')}
                         </button>
                       </div>
@@ -2016,7 +2014,7 @@ export default function Sidebar({
                 if (msg.type === 'sell_request') {
                   if (!isGm) return null
                   return (
-                    <div key={msg.id} style={styles.messageAction}>
+                    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
                       <div style={styles.actionHeader}>
                         <span style={styles.actionIcon}>🏪</span>
                         <span style={styles.actionTitle}>
@@ -2032,7 +2030,7 @@ export default function Sidebar({
                       </div>
                       <div style={styles.actionBtns}>
                         <button
-                          style={styles.btnAccept}
+                          className="btn btn-success" style={styles.btnAccept}
                           onClick={() => {
                             setPendingActionCount(p => Math.max(0, p - 1))
                             onOpenTrade?.({ mode: 'reventes' })
@@ -2046,7 +2044,7 @@ export default function Sidebar({
                 }
                 if (msg.type === 'exchange_offer') {
                   return (
-                    <div key={msg.id} style={styles.messageAction}>
+                    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
                       <div style={styles.actionHeader}>
                         <span style={styles.actionIcon}>🔄</span>
                         <span style={styles.actionTitle}>
@@ -2059,7 +2057,7 @@ export default function Sidebar({
                       </div>
                       <div style={styles.actionBtns}>
                         <button
-                          style={styles.btnAccept}
+                          className="btn btn-success" style={styles.btnAccept}
                           onClick={() => {
                             setPendingActionCount(p => Math.max(0, p - 1))
                             onOpenExchange?.({ incomingOffer: { offerId: msg.offerId, fromCharName: msg.fromCharName, items: msg.items, solsOffer: msg.solsOffer, expiresAt: msg.expiresAt, toCharId: msg.toCharId } })
@@ -2073,7 +2071,7 @@ export default function Sidebar({
                 }
                 if (msg.type === 'declare_error') {
                   return (
-                    <div key={msg.id} style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
+                    <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
                       <div style={styles.diceHeader}>
                         <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
                         {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
@@ -2088,7 +2086,7 @@ export default function Sidebar({
                 }
                 if (msg.type === 'resolve_move_blocked') {
                   return (
-                    <div key={msg.id} style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
+                    <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
                       <div style={styles.diceHeader}>
                         <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
                         {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
@@ -2110,7 +2108,7 @@ export default function Sidebar({
                       ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
                       : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
                     return (
-                      <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
+                      <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...successStyle }}>
                         <div style={styles.diceHeader}>
                           <span style={{ ...styles.diceIcon, color: msg.color || '#aa8a30' }}>★</span>
                           <span style={{ ...styles.msgUser, color: msg.color || '#aa8a30' }}>{msg.characterName}</span>
@@ -2143,7 +2141,7 @@ export default function Sidebar({
                     // ── Dégâts combat (PJ confirme) ─────────────────────────
                     if (msg.interactionType === 'combat_damage') {
                       return (
-                        <div key={msg.id} style={{
+                        <div key={msg.id} className="sidebar-msg-dice" style={{
                           ...styles.messageDice,
                           background: (msg.severityColor ?? '#FF6B6B') + '18',
                           border: `1px solid ${(msg.severityColor ?? '#FF6B6B')}44`,
@@ -2170,7 +2168,7 @@ export default function Sidebar({
                   // ── Déplacement d'entité ────────────────────────────────
                     if (msg.interactionType === 'displacement') {
                       return (
-                        <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
+                        <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...successStyle }}>
                           {/* En-tête : icône + nom + heure */}
                           <div style={styles.diceHeader}>
                             <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
@@ -2209,7 +2207,7 @@ export default function Sidebar({
 
                     // ── Skillcheck ──────────────────────────────────────────
                     return (
-                      <div key={msg.id} style={{ ...styles.messageDice, ...successStyle }}>
+                      <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...successStyle }}>
                         {/* En-tête : icône + nom + heure */}
                         <div style={styles.diceHeader}>
                           <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
@@ -2256,7 +2254,7 @@ export default function Sidebar({
                       ? styles.diceCritFail
                       : null
                   return (
-                    <div key={msg.id} style={{ ...styles.messageDice, ...(critStyle || {}) }}>
+                    <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...(critStyle || {}) }}>
                       {/* En-tête : icône animée + nom + heure */}
                       <div style={styles.diceHeader}>
                         <span
@@ -2308,7 +2306,7 @@ export default function Sidebar({
             </div>
             <form onSubmit={sendMessage} style={styles.chatForm}>
               <input
-                style={styles.chatInput}
+                className="sidebar-chat-input" style={styles.chatInput}
                 placeholder={t('chat.placeholder')}
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
@@ -2337,7 +2335,7 @@ export default function Sidebar({
             {isGm && showNewChar && (
               <form onSubmit={handleCreateCharacter} style={{ ...styles.newCharForm, flexDirection: 'column', gap: '6px' }}>
                 <select
-                  style={styles.select}
+                  className="sidebar-tool-field" style={styles.select}
                   value={newCharType}
                   onChange={e => setNewCharType(e.target.value)}
                 >
@@ -2347,7 +2345,7 @@ export default function Sidebar({
                 </select>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <input
-                    style={styles.chatInput}
+                    className="sidebar-chat-input" style={styles.chatInput}
                     placeholder={t('sidebar.characterNamePlaceholder')}
                     value={newCharName}
                     onChange={e => setNewCharName(e.target.value)}
@@ -2377,6 +2375,7 @@ export default function Sidebar({
                 onMouseDown={handleCardMouseDown}
                 onDragStart={e => handleDragStart(e, char)}
                 onClick={e => handleCardClick(e, char)}
+                className="sidebar-card"
                 style={styles.charCard}
                 title={t('sidebar.dragToMap')}
               >
@@ -2416,7 +2415,7 @@ export default function Sidebar({
                 <div style={styles.configField}>
                   <label style={styles.configLabel}>{t('sidebar.configUsername')}</label>
                   <input
-                    style={styles.configInput}
+                    className="sidebar-tool-field" style={styles.configInput}
                     value={configUsername}
                     onChange={e => setConfigUsername(e.target.value)}
                   />
@@ -2428,7 +2427,7 @@ export default function Sidebar({
                       type="color"
                       value={configColor}
                       onChange={e => setConfigColor(e.target.value)}
-                      style={styles.configColorPicker}
+                      className="sidebar-tool-color-input" style={styles.configColorPicker}
                     />
                     <span style={{ ...styles.configLabel, color: configColor }}>{configColor}</span>
                   </div>
@@ -2440,7 +2439,7 @@ export default function Sidebar({
             </div>
 
             {/* Séparateur */}
-            <div style={styles.profilSeparator} />
+            <div className="sidebar-separator" style={styles.profilSeparator} />
 
             {/* Liste des connectés */}
             <div style={styles.playersList}>
@@ -2451,10 +2450,10 @@ export default function Sidebar({
                 const isOnline = onlineUsers.has(member.id)
                 const character = characters.find(c => c.user_id === member.id)
                 return (
-                  <div key={member.id} style={styles.playerCard}>
+                  <div key={member.id} className="sidebar-card" style={styles.playerCard}>
                     <div style={{
                       ...styles.onlineDot,
-                      background: isOnline ? '#4caf77' : '#2a2a3e',
+                      background: isOnline ? 'var(--color-success-soft)' : 'var(--border-session-2)',
                     }} />
                     <div style={styles.playerInfo}>
                       <div style={styles.playerNameRow}>
@@ -2467,7 +2466,7 @@ export default function Sidebar({
                         <span style={styles.playerCharacter}>↳ {character.name}</span>
                       )}
                     </div>
-                    <span style={{ ...styles.onlineLabel, color: isOnline ? '#4caf77' : '#2a2a3e' }}>
+                    <span style={{ ...styles.onlineLabel, color: isOnline ? 'var(--color-success-soft)' : 'var(--border-session-2)' }}>
                       {isOnline ? t('sidebar.online') : t('sidebar.offline')}
                     </span>
                   </div>
@@ -2534,8 +2533,6 @@ const styles = {
     position: 'relative',
     height: '100%',
     minHeight: 0,
-    background: '#0f0f1a',
-    borderLeft: '1px solid #1e1e2e',
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
@@ -2558,39 +2555,6 @@ const styles = {
     flexWrap: 'wrap',
     flexShrink: 0,
   },
-  toolsDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
-    zIndex: 100,
-    minWidth: '140px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-  },
-  toolsDropdownItem: {
-    display: 'block',
-    width: '100%',
-    padding: '8px 12px',
-    background: 'none',
-    border: 'none',
-    color: '#4a4a60',
-    fontSize: '12px',
-    textAlign: 'left',
-    cursor: 'default',
-  },
-  toolsDropdownItemEnabled: {
-    display: 'block',
-    width: '100%',
-    padding: '8px 12px',
-    background: 'none',
-    border: 'none',
-    color: '#c0c0d0',
-    fontSize: '12px',
-    textAlign: 'left',
-    cursor: 'pointer',
-  },
   palette: {
     padding: '4px 12px 8px',
     flex: 1,
@@ -2600,7 +2564,7 @@ const styles = {
   },
   paletteTitle: {
     fontSize: '10px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     marginBottom: '6px',
@@ -2615,7 +2579,7 @@ const styles = {
   },
   paletteGroupLabel: {
     fontSize: '10px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     marginBottom: '4px',
@@ -2629,8 +2593,6 @@ const styles = {
     backgroundPosition: 'center',
   },
   roomTool: {
-    background: '#111827',
-    border: '1px solid #1e293b',
     borderRadius: '6px',
     padding: '8px',
     marginBottom: '10px',
@@ -2641,20 +2603,12 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '7px 8px',
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
     borderRadius: '5px',
-    color: '#9090a8',
     fontSize: '12px',
     cursor: 'pointer',
   },
-  roomToolToggleActive: {
-    color: '#dbeafe',
-    borderColor: '#5b8dee',
-    background: 'rgba(91,141,238,0.16)',
-  },
   roomToolToggleState: {
-    color: '#5b8dee',
+    color: 'var(--color-primary)',
     fontSize: '10px',
     textTransform: 'uppercase',
   },
@@ -2667,17 +2621,9 @@ const styles = {
   roomToolModeBtn: {
     flex: '1 1 72px',
     padding: '6px 0',
-    background: '#0f0f1a',
-    border: '1px solid #1e1e2e',
     borderRadius: '4px',
-    color: '#6f7893',
     fontSize: '11px',
     cursor: 'pointer',
-  },
-  roomToolModeBtnActive: {
-    color: '#dbeafe',
-    borderColor: '#5b8dee',
-    background: 'rgba(91,141,238,0.14)',
   },
   roomToolGrid: {
     display: 'grid',
@@ -2688,35 +2634,14 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
-    color: '#6f7893',
+    color: 'var(--text-muted)',
     fontSize: '10px',
     textTransform: 'uppercase',
     marginTop: '8px',
   },
-  roomToolInput: {
-    width: '100%',
-    boxSizing: 'border-box',
-    background: '#0f0f1a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    color: '#d0d5e8',
-    fontSize: '12px',
-    padding: '5px 6px',
-  },
-  roomToolSelect: {
-    width: '100%',
-    background: '#0f0f1a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    color: '#d0d5e8',
-    fontSize: '12px',
-    padding: '5px 6px',
-  },
   roomToolSectionTitle: {
     marginTop: '10px',
     paddingTop: '8px',
-    borderTop: '1px solid #1e293b',
-    color: '#c8d4ee',
     fontSize: '11px',
     fontWeight: 600,
     textTransform: 'uppercase',
@@ -2729,9 +2654,6 @@ const styles = {
     gap: '8px',
     padding: '7px 8px',
     borderRadius: '8px',
-    border: '1px solid rgba(251, 191, 36, 0.35)',
-    background: 'rgba(251, 191, 36, 0.08)',
-    color: '#fbbf24',
     fontSize: '11px',
     fontWeight: 600,
   },
@@ -2742,18 +2664,16 @@ const styles = {
     marginTop: '8px',
     padding: '8px',
     borderRadius: '6px',
-    border: '1px solid #1e293b',
-    background: 'rgba(15, 23, 42, 0.65)',
   },
   connectorPickerTitle: {
-    color: '#c8d4ee',
+    color: 'var(--text-secondary)',
     fontSize: '10px',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
   },
   connectorPickerEmpty: {
-    color: '#6f7893',
+    color: 'var(--text-muted)',
     fontSize: '11px',
     lineHeight: 1.35,
   },
@@ -2763,9 +2683,6 @@ const styles = {
     gap: '2px',
     padding: '7px 8px',
     borderRadius: '5px',
-    border: '1px solid rgba(249, 115, 22, 0.45)',
-    background: 'rgba(249, 115, 22, 0.12)',
-    color: '#fdba74',
     fontSize: '11px',
   },
   connectorModelBtn: {
@@ -2775,17 +2692,9 @@ const styles = {
     width: '100%',
     padding: '7px 8px',
     borderRadius: '5px',
-    border: '1px solid #1e1e2e',
-    background: '#0f0f1a',
-    color: '#c0c8df',
     fontSize: '12px',
     textAlign: 'left',
     cursor: 'pointer',
-  },
-  connectorModelBtnActive: {
-    color: '#dbeafe',
-    borderColor: '#f97316',
-    background: 'rgba(249, 115, 22, 0.14)',
   },
   connectorColorPanel: {
     display: 'flex',
@@ -2793,8 +2702,6 @@ const styles = {
     gap: '6px',
     padding: '7px 8px',
     borderRadius: '5px',
-    border: '1px solid rgba(91, 141, 238, 0.28)',
-    background: 'rgba(15, 23, 42, 0.72)',
   },
   connectorColorRow: {
     display: 'grid',
@@ -2806,18 +2713,14 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '1px',
-    color: '#cbd5e1',
+    color: 'var(--text-secondary)',
     fontSize: '11px',
     minWidth: 0,
   },
   connectorColorReset: {
     height: '28px',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    background: '#0f0f1a',
-    color: '#7f8eaa',
+    padding: '0 8px',
     fontSize: '10px',
-    cursor: 'pointer',
   },
   roomToolColorRow: {
     display: 'grid',
@@ -2829,10 +2732,6 @@ const styles = {
     width: '34px',
     height: '29px',
     padding: '2px',
-    background: '#0f0f1a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    cursor: 'pointer',
   },
   roomToolRangeRow: {
     display: 'grid',
@@ -2842,10 +2741,10 @@ const styles = {
   },
   roomToolRange: {
     width: '100%',
-    accentColor: '#5b8dee',
+    accentColor: 'var(--color-primary)',
   },
   roomToolRangeValue: {
-    color: '#d0d5e8',
+    color: 'var(--text-primary)',
     fontSize: '11px',
     fontFamily: "'Share Tech Mono', monospace",
     textAlign: 'right',
@@ -2853,45 +2752,13 @@ const styles = {
   roomToolSmallBtn: {
     marginTop: '8px',
     alignSelf: 'end',
-    background: '#0f0f1a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    color: '#c8d4ee',
-    fontSize: '11px',
     padding: '6px 8px',
-    cursor: 'pointer',
+    fontSize: '11px',
   },
   roomToolHint: {
     marginTop: '8px',
-    color: '#6f7893',
     fontSize: '11px',
     lineHeight: 1.35,
-  },
-  separator: {
-    height: '1px',
-    background: '#1e1e2e',
-    margin: '0',
-  },
-  tabs: {
-    display: 'flex',
-    borderBottom: '1px solid #1e1e2e',
-    flexShrink: 0,
-  },
-  tab: {
-    flex: 1,
-    padding: '8px 0',
-    background: 'none',
-    border: 'none',
-    borderBottom: '2px solid transparent',
-    color: '#4a4a60',
-    cursor: 'pointer',
-    fontSize: '10px',
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-  },
-  tabActive: {
-    color: '#9090a8',
-    borderBottom: '2px solid #5b8dee',
   },
   tabContent: {
     flex: 1,
@@ -2909,7 +2776,7 @@ const styles = {
     gap: '6px',
   },
   emptyMsg: {
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
     fontSize: '12px',
     fontStyle: 'italic',
     textAlign: 'center',
@@ -2930,12 +2797,12 @@ const styles = {
   },
   msgSystemText: {
     fontSize: '11px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
     fontStyle: 'italic',
   },
   msgSystemErrorText: {
     fontSize: '11px',
-    color: '#e05252',
+    color: 'var(--color-danger)',
     fontStyle: 'italic',
     fontWeight: 600,
   },
@@ -2945,13 +2812,13 @@ const styles = {
   },
   msgTime: {
     fontSize: '10px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
   },
   msgText: {
     width: '100%',
     margin: '2px 0 0',
     fontSize: '13px',
-    color: '#c0c0d0',
+    color: 'var(--text-secondary)',
     lineHeight: '1.4',
     wordBreak: 'break-word',
   },
@@ -2959,16 +2826,12 @@ const styles = {
     display: 'flex',
     gap: '6px',
     padding: '8px 12px',
-    borderTop: '1px solid #1e1e2e',
+    borderTop: '1px solid var(--wiz-glass-border)',
     flexShrink: 0,
   },
   chatInput: {
     flex: 1,
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
     padding: '6px 10px',
-    color: '#c0c0d0',
     fontSize: '12px',
     outline: 'none',
   },
@@ -2977,11 +2840,6 @@ const styles = {
     flexDirection: 'column',
     gap: '4px',
     padding: '8px 12px',
-  },
-  persosHeader: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    marginBottom: '4px',
   },
   newCharForm: {
     display: 'flex',
@@ -2993,8 +2851,6 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '8px 10px',
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
     borderRadius: '6px',
     cursor: 'grab',
   },
@@ -3013,17 +2869,17 @@ const styles = {
   },
   charName: {
     fontSize: '13px',
-    color: '#c0c0d0',
+    color: 'var(--text-secondary)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   charOwner: {
     fontSize: '10px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
   },
   charHidden: {
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
     flexShrink: 0,
   },
   playersList: {
@@ -3037,8 +2893,6 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     padding: '8px 10px',
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
     borderRadius: '6px',
   },
   onlineDot: {
@@ -3061,11 +2915,11 @@ const styles = {
   },
   playerName: {
     fontSize: '13px',
-    color: '#c0c0d0',
+    color: 'var(--text-secondary)',
   },
   playerCharacter: {
     fontSize: '11px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -3196,29 +3050,6 @@ const styles = {
     cursor: 'pointer',
     userSelect: 'none',
   },
-  // ─── Onglets éditeur (Voxels / Entités) ──
-  editorTabs: {
-    display: 'flex',
-    gap: '4px',
-    marginBottom: '2px',
-  },
-  editorTab: {
-    flex: 1,
-    padding: '5px 0',
-    background: 'none',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    color: '#4a4a60',
-    cursor: 'pointer',
-    fontSize: '10px',
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-  },
-  editorTabActive: {
-    color: '#9090a8',
-    borderColor: '#5b8dee',
-    backgroundColor: 'rgba(91,141,238,0.08)',
-  },
   undoRow: {
     display: 'flex',
     gap: '6px',
@@ -3242,130 +3073,20 @@ const styles = {
     color: '#3f4658',
     cursor: 'not-allowed',
   },
-  // ─── Badge onglet Actions ──
-  actionsBadge: {
-    position: 'absolute',
-    top: '3px',
-    right: '3px',
-    background: '#e05c5c',
-    color: 'white',
-    borderRadius: '8px',
-    fontSize: '9px',
-    fontWeight: '700',
-    padding: '0 4px',
-    minWidth: '14px',
-    textAlign: 'center',
-    lineHeight: '14px',
-  },
-  // ─── Onglet Actions — contenu ──
-  actionsContent: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  actionsNav: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-  },
-  actionsNavBtn: {
-    background: 'none',
-    border: '1px solid #1e1e2e',
-    borderRadius: '4px',
-    color: '#9090a8',
-    cursor: 'pointer',
-    padding: '2px 8px',
-    fontSize: '14px',
-  },
-  actionsNavCount: {
-    fontSize: '11px',
-    color: '#4a4a60',
-  },
-  arbitrageCard: {
-    background: '#16162a',
-    border: '1px solid #2a2a3e',
-    borderRadius: '8px',
-    padding: '12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  arbitrageTitle: {
-    fontSize: '12px',
-    color: '#c0c0d0',
-    margin: 0,
-  },
-  arbitrageEntity: {
-    fontSize: '11px',
-    color: '#5b8dee',
-    margin: '0 0 4px',
-  },
-  arbitrageRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '8px',
-  },
-  arbitrageLabel: {
-    fontSize: '11px',
-    color: '#64748b',
-  },
-  arbitrageValue: {
-    fontSize: '12px',
-    color: '#c0c0d0',
-    fontFamily: 'monospace',
-  },
-  arbitrageInput: {
-    background: '#0e0e1a',
-    border: '1px solid #2a2a3e',
-    borderRadius: '4px',
-    color: '#c0c0d0',
-    fontSize: '12px',
-    padding: '3px 8px',
-    width: '64px',
-    textAlign: 'center',
-  },
-  arbitrageActions: {
-    display: 'flex',
-    gap: '6px',
-    marginTop: '4px',
-  },
   btnAccept: {
     flex: 1,
     padding: '7px 0',
-    background: 'rgba(76,175,119,0.12)',
-    border: '1px solid rgba(76,175,119,0.4)',
-    borderRadius: '6px',
-    color: '#4caf77',
-    cursor: 'pointer',
     fontSize: '11px',
-    fontWeight: '500',
   },
   btnAuto: {
     flex: 1,
     padding: '7px 0',
-    background: 'rgba(91,141,238,0.12)',
-    border: '1px solid rgba(91,141,238,0.4)',
-    borderRadius: '6px',
-    color: '#5b8dee',
-    cursor: 'pointer',
     fontSize: '11px',
-    fontWeight: '500',
   },
   btnRefuse: {
     flex: 1,
     padding: '7px 0',
-    background: 'rgba(224,92,92,0.12)',
-    border: '1px solid rgba(224,92,92,0.4)',
-    borderRadius: '6px',
-    color: '#e05c5c',
-    cursor: 'pointer',
     fontSize: '11px',
-    fontWeight: '500',
   },
   modalTabs: {
     display: 'flex',
@@ -3452,20 +3173,13 @@ const styles = {
     width: '100%',
   },
   select: {
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
     padding: '6px 10px',
-    color: '#c0c0d0',
     fontSize: '12px',
-    outline: 'none',
     cursor: 'pointer',
     width: '100%',
   },
   // ── Séparateur Profil ──
   profilSeparator: {
-    height: '1px',
-    background: '#1e1e2e',
     margin: '8px 0',
     flexShrink: 0,
   },
@@ -3476,17 +3190,9 @@ const styles = {
     flexDirection: 'column',
     gap: '12px',
   },
-  configTitle: {
-    fontSize: '11px',
-    color: '#5b8dee',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    fontWeight: '500',
-    margin: 0,
-  },
   configSuccess: {
     fontSize: '12px',
-    color: '#4caf77',
+    color: 'var(--color-success-soft)',
     backgroundColor: 'rgba(76,175,119,0.1)',
     border: '1px solid rgba(76,175,119,0.3)',
     borderRadius: '6px',
@@ -3500,18 +3206,13 @@ const styles = {
   },
   configLabel: {
     fontSize: '11px',
-    color: '#64748b',
+    color: 'var(--text-muted)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
   configInput: {
-    background: '#16162a',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
     padding: '8px 10px',
-    color: '#c0c0d0',
     fontSize: '12px',
-    outline: 'none',
   },
   configColorRow: {
     display: 'flex',
@@ -3521,8 +3222,6 @@ const styles = {
   configColorPicker: {
     width: '36px',
     height: '32px',
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
     padding: '2px',
     backgroundColor: '#16162a',
     cursor: 'pointer',
@@ -3534,8 +3233,6 @@ const styles = {
     gap: '3px',
     padding: '6px 8px',
     clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-    background: 'rgba(91,141,238,0.07)',
-    border: '1px solid rgba(91,141,238,0.15)',
   },
   diceCritSuccess: {
     background: 'rgba(76,175,119,0.1)',
@@ -3569,22 +3266,22 @@ const styles = {
   },
   diceFormula: {
     fontSize: '12px',
-    color: '#8888a8',
+    color: 'var(--text-secondary)',
     fontFamily: 'monospace',
   },
   diceRolls: {
     fontSize: '11px',
-    color: '#64748b',
+    color: 'var(--text-muted)',
     fontFamily: 'monospace',
   },
   diceEquals: {
     fontSize: '11px',
-    color: '#4a4a60',
+    color: 'var(--text-muted)',
   },
   diceTotal: {
     fontSize: '20px',
     fontWeight: '700',
-    color: '#c0c0d0',
+    color: 'var(--text-primary)',
     fontFamily: 'monospace',
     marginLeft: 'auto',
   },
@@ -3685,8 +3382,6 @@ const styles = {
   messageAction: {
     padding: '8px 10px',
     borderRadius: '6px',
-    background: 'rgba(168,85,247,0.07)',
-    border: '1px solid rgba(168,85,247,0.25)',
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
@@ -3703,19 +3398,19 @@ const styles = {
   },
   actionTitle: {
     fontSize: '12px',
-    color: '#c0c0d0',
+    color: 'var(--text-secondary)',
     flex: 1,
   },
   actionSub: {
     fontSize: '11px',
-    color: '#64748b',
+    color: 'var(--text-muted)',
     paddingLeft: '2px',
   },
   actionMeta: {
     display: 'flex',
     gap: '10px',
     fontSize: '11px',
-    color: '#8888a8',
+    color: 'var(--text-secondary)',
     flexWrap: 'wrap',
     paddingLeft: '2px',
   },
@@ -3728,7 +3423,7 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#e05c5c',
+    background: 'var(--color-danger-soft)',
     color: '#fff',
     borderRadius: '50%',
     width: '14px',

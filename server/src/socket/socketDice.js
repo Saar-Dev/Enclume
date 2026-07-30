@@ -1,6 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
+import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import { calcSkillTotal, calcAttributeNA } from '../lib/charStats.js'
 import {
@@ -10,6 +11,9 @@ import {
 } from '../../../shared/polarisUtils.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getAdvantages } from '../services/advantageService.js'
+import { resolveEcheanceNow } from '../lib/echeanceService.js'
+import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
+import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
 
 export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
   // ─── DICE:ROLL ─────────────────────────────────────────────────────────
@@ -143,15 +147,10 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       }
       const threshold = baseThreshold + macro.modifier
 
-      // ── 5. Jet 1d20 ───────────────────────────────────────────────
-      const { rolls, total: rollResult, seed } = await parseDice('1d20')
-
-      // ── 6. Succès / critique (règles absolues Polaris) ────────────
-      const isCriticalSuccess = rollResult === 1
-      const isCriticalFail    = rollResult === 20
-      const isSuccess = isCriticalFail ? false
-        : isCriticalSuccess ? true
-        : rollResult <= threshold
+      // ── 5-6. Jet 1d20 + Succès/critique/Catastrophe — règle absolue Polaris, extraite dans
+      // server/src/lib/polarisTestService.js (docs/PLAN_FATIGUE_DOMMAGES.md, résolveur de Test
+      // générique) : point d'entrée unique partagé avec les futures échéances serveur autonomes.
+      const { roll: rollResult, seed, isSuccess, isCriticalSuccess, isCriticalFail } = await resolvePolarisTest(threshold)
 
       // ── 7. Substitution template ──────────────────────────────────
       const sourceLabel  = macro.sources.map(s => s.ref_label).join(' + ')
@@ -204,6 +203,62 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       console.log(`[WS] macro:roll — ${user.username} : ${macro.label} = ${rollResult}/${threshold} → ${successText}${secret ? ' [secret]' : ''}`)
     } catch (err) {
       console.error(`[WS] macro:roll error (${user.username}) : ${err.message}`)
+    }
+  })
+
+  // ─── WOUND:INFECTION_ROLL ──────────────────────────────────────────────
+  // Payload : { echeanceId } — docs/PLAN_BLESSURES_GUERISON.md §6.1. Contrairement à DICE_ROLL/
+  // MACRO_ROLL (purement d'affichage), ce handler mute character_wounds via resolveEcheanceNow —
+  // plus proche en forme d'un handler de combat que d'un jet d'affichage : lance le dé, calcule le
+  // seuil, résout l'échéance, notifie, dans cet ordre.
+  socket.on(WS.WOUND_INFECTION_ROLL, async ({ echeanceId }) => {
+    if (!campaignId) return
+    try {
+      const echeance = await db('game_echeances').where({ id: echeanceId, campaign_id: campaignId }).first()
+      if (!echeance || echeance.condition_type !== 'wound_infection_check' || echeance.status !== 'awaiting_player_roll') {
+        socket.emit('error', { message: 'Échéance introuvable ou déjà résolue' })
+        return
+      }
+
+      const character = await db('characters').where({ id: echeance.character_id }).first()
+      const isOwner = character?.user_id === user.id
+      if (!character || (!isOwner && !isGm)) {
+        socket.emit('error', { message: 'Ce jet ne vous appartient pas' })
+        return
+      }
+
+      const wound = await db('character_wounds').where({ id: echeance.payload.woundId }).first()
+      if (!wound) return
+
+      const { rollResult, threshold, resolution } = await db.transaction(async (trx) => {
+        const seuil = await computeWoundInfectionThreshold(trx, wound, echeance.payload.periodesSansSoin ?? 0)
+        const roll = await resolvePolarisTest(seuil)
+        await trx('game_echeances').where({ id: echeance.id })
+          .update({ payload: trx.raw('payload || ?::jsonb', [JSON.stringify({ rollResult: roll })]) })
+        const resolved = await resolveEcheanceNow(trx, echeance.id)
+        return { rollResult: roll, threshold: seuil, resolution: resolved }
+      })
+
+      io.to(campaignId).emit(WS.GAME_ECHEANCE_RESOLVED, { echeanceId: echeance.id })
+      if (resolution.resolved) {
+        await broadcastWoundUpdate(io, campaignId, {
+          characterId: echeance.character_id, charSheetIdForWorst: wound.char_sheet_id, woundId: echeance.payload.woundId,
+        })
+      }
+
+      // Réutilise DICE_RESULT (même forme que DICE_ROLL) — le jet du joueur reste visible dans le
+      // journal de dés déjà en place côté client, sans nouveau composant d'affichage.
+      const color = await getUserColor(db, user.id)
+      io.to(campaignId).emit(WS.DICE_RESULT, {
+        userId: user.id, username: user.username, color,
+        formula: '1d20 (Constitution, Infection)', rolls: [rollResult.roll], total: rollResult.roll,
+        isCriticalSuccess: rollResult.isCriticalSuccess, isCriticalFail: rollResult.isCriticalFail,
+        seed: rollResult.seed, timestamp: new Date().toISOString(), secret: false,
+      })
+
+      console.log(`[WS] wound:infection_roll — ${user.username} : ${rollResult.roll}/${threshold} → ${rollResult.isSuccess ? 'Succès' : 'Échec'}`)
+    } catch (err) {
+      console.error(`[WS] wound:infection_roll error (${user.username}) : ${err.message}`)
     }
   })
 
