@@ -1144,7 +1144,7 @@ export default function Sidebar({
                   </span>
                 )}
               </div>
-              <div className="sidebar-tool-box" style={styles.roomTool}>
+              <div className="sidebar-glass" style={styles.roomTool}>
                 <div style={styles.roomToolModes}>
                   <button
                     type="button"
@@ -1268,7 +1268,7 @@ export default function Sidebar({
                   </div>
                 )}
                 {surfaceToolState.mode === 'effect' && (
-                  <div className="sidebar-tool-box" style={styles.connectorPicker}>
+                  <div className="sidebar-glass" style={styles.connectorPicker}>
                     <div style={styles.connectorPickerTitle}>Région environnementale</div>
                     <div style={styles.roomToolGrid}>
                       <label style={styles.roomToolLabel}>
@@ -1314,7 +1314,7 @@ export default function Sidebar({
                       {customEffectOpen ? 'Fermer' : 'Nouvel effet MJ'}
                     </button>
                     {customEffectOpen && (
-                      <div className="sidebar-tool-box" style={styles.connectorColorList}>
+                      <div className="sidebar-glass" style={styles.connectorColorList}>
                         <label style={styles.roomToolLabel}>
                           <span>Clé technique</span>
                           <input
@@ -1360,7 +1360,7 @@ export default function Sidebar({
                       </div>
                     )}
                     {(worldEffects.instances || []).length > 0 && (
-                      <div className="sidebar-tool-box" style={styles.connectorColorList}>
+                      <div className="sidebar-glass" style={styles.connectorColorList}>
                         <div style={styles.connectorPickerTitle}>Effets actifs</div>
                         {worldEffects.instances.map(instance => {
                           const definition = worldEffects.definitions.find(item => item.key === instance.definitionKey)
@@ -1427,7 +1427,7 @@ export default function Sidebar({
                       </button>
                     </div>
                     {surfaceToolState.mode === 'connector' && surfaceToolState.connectorType === 'elevator' && (
-                      <div className="sidebar-tool-box" style={styles.connectorPicker}>
+                      <div className="sidebar-glass" style={styles.connectorPicker}>
                       <label style={styles.roomToolLabel}>
                         <span>{t('surfaceEditor.elevatorToLevel')}</span>
                         <select
@@ -1476,7 +1476,7 @@ export default function Sidebar({
                       </div>
                     )}
                     {surfaceToolState.mode === 'connector' && (
-                      <div className="sidebar-tool-box" style={styles.connectorPicker}>
+                      <div className="sidebar-glass" style={styles.connectorPicker}>
                         <div style={styles.connectorPickerTitle}>
                           {surfaceToolState.connectorType === 'door'
                             ? t('surfaceEditor.doorModel')
@@ -1501,7 +1501,7 @@ export default function Sidebar({
                               />
                             )}
                             {connectorMaterialSlots.length > 0 && (
-                              <div className="sidebar-tool-box" style={styles.connectorColorPanel}>
+                              <div className="sidebar-glass" style={styles.connectorColorPanel}>
                                 <div style={styles.connectorPickerTitle}>Couleurs du modèle</div>
                                 {connectorMaterialSlots.map(slot => {
                                   const slotValue = materialSlotDisplayValue(connectorMaterialOverrides, slot)
@@ -2071,7 +2071,7 @@ export default function Sidebar({
                 }
                 if (msg.type === 'declare_error') {
                   return (
-                    <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
+                    <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
                       <div style={styles.diceHeader}>
                         <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
                         {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
@@ -2086,7 +2086,7 @@ export default function Sidebar({
                 }
                 if (msg.type === 'resolve_move_blocked') {
                   return (
-                    <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
+                    <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
                       <div style={styles.diceHeader}>
                         <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
                         {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
@@ -2108,7 +2108,7 @@ export default function Sidebar({
                       ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
                       : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
                     return (
-                      <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...successStyle }}>
+                      <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
                         <div style={styles.diceHeader}>
                           <span style={{ ...styles.diceIcon, color: msg.color || '#aa8a30' }}>★</span>
                           <span style={{ ...styles.msgUser, color: msg.color || '#aa8a30' }}>{msg.characterName}</span>
@@ -2141,7 +2141,7 @@ export default function Sidebar({
                     // ── Dégâts combat (PJ confirme) ─────────────────────────
                     if (msg.interactionType === 'combat_damage') {
                       return (
-                        <div key={msg.id} className="sidebar-msg-dice" style={{
+                        <div key={msg.id} className="sidebar-glass" style={{
                           ...styles.messageDice,
                           background: (msg.severityColor ?? '#FF6B6B') + '18',
                           border: `1px solid ${(msg.severityColor ?? '#FF6B6B')}44`,
@@ -2168,7 +2168,7 @@ export default function Sidebar({
                   // ── Déplacement d'entité ────────────────────────────────
                     if (msg.interactionType === 'displacement') {
                       return (
-                        <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...successStyle }}>
+                        <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
                           {/* En-tête : icône + nom + heure */}
                           <div style={styles.diceHeader}>
                             <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
@@ -2207,7 +2207,7 @@ export default function Sidebar({
 
                     // ── Skillcheck ──────────────────────────────────────────
                     return (
-                      <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...successStyle }}>
+                      <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
                         {/* En-tête : icône + nom + heure */}
                         <div style={styles.diceHeader}>
                           <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
@@ -2254,7 +2254,7 @@ export default function Sidebar({
                       ? styles.diceCritFail
                       : null
                   return (
-                    <div key={msg.id} className="sidebar-msg-dice" style={{ ...styles.messageDice, ...(critStyle || {}) }}>
+                    <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...(critStyle || {}) }}>
                       {/* En-tête : icône animée + nom + heure */}
                       <div style={styles.diceHeader}>
                         <span
@@ -2306,7 +2306,7 @@ export default function Sidebar({
             </div>
             <form onSubmit={sendMessage} style={styles.chatForm}>
               <input
-                className="sidebar-chat-input" style={styles.chatInput}
+                className="sidebar-tool-field" style={styles.chatInput}
                 placeholder={t('chat.placeholder')}
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
@@ -2345,7 +2345,7 @@ export default function Sidebar({
                 </select>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <input
-                    className="sidebar-chat-input" style={styles.chatInput}
+                    className="sidebar-tool-field" style={styles.chatInput}
                     placeholder={t('sidebar.characterNamePlaceholder')}
                     value={newCharName}
                     onChange={e => setNewCharName(e.target.value)}
@@ -2375,7 +2375,7 @@ export default function Sidebar({
                 onMouseDown={handleCardMouseDown}
                 onDragStart={e => handleDragStart(e, char)}
                 onClick={e => handleCardClick(e, char)}
-                className="sidebar-card"
+                className="sidebar-glass"
                 style={styles.charCard}
                 title={t('sidebar.dragToMap')}
               >
@@ -2450,7 +2450,7 @@ export default function Sidebar({
                 const isOnline = onlineUsers.has(member.id)
                 const character = characters.find(c => c.user_id === member.id)
                 return (
-                  <div key={member.id} className="sidebar-card" style={styles.playerCard}>
+                  <div key={member.id} className="sidebar-glass" style={styles.playerCard}>
                     <div style={{
                       ...styles.onlineDot,
                       background: isOnline ? 'var(--color-success-soft)' : 'var(--border-session-2)',

@@ -15,11 +15,13 @@ import SurfaceWallPanel from './SurfaceWallPanel.jsx'
 import SurfaceEditorScene from './SurfaceEditorScene.jsx'
 import SurfaceDungeonScene, { cutWallsForDoorConnectors } from './SurfaceDungeonScene.jsx'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
+import Skydome from './Skydome.jsx'
 import {
   applyRoomBoundaryArc,
   applyRoomWallAppearance,
   applyRoomWallElevationProfile,
   applyRoomToolUpdate,
+  computeSurfaceGridExtent,
   deleteRoomBoundaryWalls,
   deleteSurfaceRoom,
   expandRoomsToSurface,
@@ -245,6 +247,12 @@ function EntityEditorScene({
   const mousePosRef = useRef({ x: 0, y: 0 })
   const entityDragRef = useRef(null)
   const moveGhostRef = useRef(null)
+  // Grille visuelle — grandit avec le sol construit, jamais au-delà de GRID_SIZE (garde-fou de
+  // construction inchangé, cf. clamps `Math.abs(x) > GRID_SIZE / 2` plus bas dans ce fichier).
+  const visibleGridSize = useMemo(
+    () => computeSurfaceGridExtent(surfaceData, { max: GRID_SIZE }),
+    [surfaceData],
+  )
   const { entities, blueprints, addEntity, removeEntity, updateEntity } = useEntityStore()
   const [ghostPos, setGhostPos] = useState(null)
   const [ghostR, setGhostR] = useState(0)
@@ -716,10 +724,10 @@ function EntityEditorScene({
         mouseButtons={{ LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
         enableDamping dampingFactor={0.05} maxPolarAngle={Math.PI / 2}
       />
-      <Grid args={[GRID_SIZE, GRID_SIZE]} position={[0, levelToY(displayLevel) + 0.01, 0]}
+      <Grid args={[visibleGridSize, visibleGridSize]} position={[0, levelToY(displayLevel) + 0.01, 0]}
         cellColor="#334155" sectionColor="#475569" fadeDistance={80}
       />
-      <Grid args={[GRID_SIZE, GRID_SIZE * SURFACE_FINE]} position={[0, levelToY(displayLevel) + 0.02, 0]}
+      <Grid args={[visibleGridSize, visibleGridSize * SURFACE_FINE]} position={[0, levelToY(displayLevel) + 0.02, 0]}
         cellColor="#233044" sectionColor="#233044" fadeDistance={45}
       />
       {hasSurfaceContent(surfaceData) ? (
@@ -1868,6 +1876,7 @@ export default function Editor3D({
         style={{ width: '100%', height: '100%', background: '#0f172a' }}
         onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
       >
+        <Skydome preset="ocean_floor" />
         {blocksReady && activeEditorTab === 'entity' && (
           <EntityEditorScene
             key={activeBlueprint?.id || 'no-blueprint'}

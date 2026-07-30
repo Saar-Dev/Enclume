@@ -57,6 +57,94 @@
 > (Section 12, sci-fi premium/glassmorphism) vers Login, Dashboard et les pages de configuration de
 > campagne — clos et confirmé ; Session 141 (suite 30) : `docs/PLAN_MODING_PHASEB.md` Groupe 2
 
+> Dernière mise à jour (dev/Saar) : 2026-07-30 — `GameTimeWidget.jsx` (horloge de campagne, sidebar
+> session) reskin — Saar : « avec son aspect de bouton, c'est moche ». Les 5 unités (année/mois/jour/
+> heure/minute) étaient 5 boutons `.btn-tool` séparés, indiscernables des vrais boutons d'outils juste
+> au-dessus. Remplacé par un seul afficheur continu (`588/4/16 — 13:45`, police `--font-mono` déjà
+> utilisée pour les dés/combat), fond unique (`.sidebar-glass`, réutilisé du chantier Sidebar), chaque
+> nombre restant cliquable/double-cliquable (comportement inchangé — clic = menu de durée, double-clic =
+> édition directe). Le menu déroulant de durées réutilise aussi les classes `.sidebar-tools-dropdown*`
+> du chantier Sidebar au lieu de son ancien style sombre en dur — plus de nouveau CSS créé que les
+> classes `.gametime-*` propres à l'afficheur lui-même. **Testé** : ESLint + build client propres.
+> **Non testé : rendu réel navigateur**. **Retour arrière** : aucun commit encore créé.
+>
+> Dernière mise à jour (dev/Saar) : 2026-07-30 — Skydome configurable (chantier 2 de la demande « rendre
+> Enclume moins moche », suite du reskin Sidebar). Recherche faite avant de coder (bibliothèques déjà
+> installées, pas de nouvelle dépendance) : `@react-three/drei` fournit `GradientTexture` et `Sparkles`,
+> suffisants pour un dôme ambiant animé sans écrire de shader GLSL maison. **Lot 1 (visuel, preset figé)
+> ✅ clos, confirmé par Saar** — nouveau `client/src/components/Skydome.jsx` (dôme en dégradé + brouillard
+> `fogExp2` + particules dérivantes `Sparkles`) et son catalogue `client/src/lib/skydomePresets.js` (un
+> seul preset pour l'instant : `ocean_floor`, univers Polaris = sous-marin — Saar a précisé vouloir à
+> terme plusieurs ambiances : fosse abyssale, proche surface... — moteur générique dès le départ pour
+> que chaque ambiance ne soit qu'un jeu de réglages, pas du nouveau code). Branché à la fois dans
+> `Canvas3D.jsx` (mode jeu) et `Editor3D.jsx` (mode édition). **Bug trouvé au premier test, corrigé** :
+> Saar signale un `Uncaught TypeError` (`createRadialGradient` argument non fini) après l'ajout d'un plan
+> de sol sous la grille (Saar : « le sol a pris la teinte du dôme, il n'y a pas de sol, juste une grille »
+> — piste A de la discussion floor/skydome, déclenchée par ce retour) — cause : `outerCircleRadius="80%"`
+> passé à `GradientTexture` (chaîne, alors que la lib attend un nombre — `Number("80%")` vaut `NaN`), plus
+> le `width` du canvas interne resté à sa valeur par défaut (16px) au lieu d'être carré comme `size` pour
+> un dégradé radial correct — les deux corrigés (`width={512}`, `outerCircleRadius` retiré, l'valeur
+> `'auto'` par défaut de la lib suffit). **Confirmé par Saar après correctif : « Test visuel ok »**.
+> **Grille dynamique (piste B, décidée avec Saar avant de coder)** — la grille de repère affichée
+> (`GRID_SIZE` en dur à 50 dans 3 fichiers) grandit désormais avec le sol réellement construit (empreinte
+> de `surface.floors`, nouvelle fonction `computeSurfaceGridExtent` dans `client/src/lib/surfaceData.js`),
+> minimum 20 comme demandé, **maximum 50 inchangé** (Saar : « on reste sur 50 max »). Point d'attention
+> trouvé en lisant le code avant de toucher à quoi que ce soit : `GRID_SIZE` sert aussi de garde-fou de
+> construction (clamps `Math.abs(x) > GRID_SIZE / 2` dans `Editor3D.jsx`/`SurfaceEditorScene.jsx`) — décision
+> prise avec Saar de séparer les deux : ces clamps ne référencent plus jamais la grille visuelle, aucun
+> changé, vérifié ligne à ligne sur le diff. Câblé dans les 3 rendus réellement actifs (`Canvas3D.jsx`
+> `Scene`, `SurfaceEditorScene.jsx`, `EntityEditorScene` dans `Editor3D.jsx`) — **non testé en jeu**,
+> codé juste avant cette note. Trouvaille en marge (registre séparé, pas ici) : `docs/BUGIDENTIFIE.md`
+> GRIDDEAD1 — `Editor3D.jsx` contient un composant `EditorScene` avec sa propre grille, jamais rendu nulle
+> part dans l'appli (mort depuis le passage à `surface_data`), non touché. **Testé** : ESLint + build
+> client propres à chaque étape ; rendu réel confirmé par Saar pour le dôme et le plan de sol ; **grille
+> dynamique non testée en navigateur**. **Données** : aucune migration, aucun effet runtime — tout est
+> encore côté rendu client uniquement (pas encore persisté/configurable par le MJ, prévu en Lot 2 sur
+> confirmation de Saar : migration `battlemaps.skydome_key`, route `PUT /battlemaps/:id` étendue,
+> événement WS dédié, menu MJ). **Retour arrière** : aucun commit encore créé pour ce chantier au moment
+> de cette note. **Prochaine étape** : Saar teste la grille dynamique en navigateur ; puis Lot 2 skydome
+> (persistance/configuration MJ) sur confirmation.
+>
+> Dernière mise à jour (dev/Saar) : 2026-07-30 — Reskin visuel Sidebar (`client/src/components/Sidebar.jsx`
+> + `client/src/index.css`), demande directe de Saar (« rendre Enclume moins moche »), **option B choisie
+> par Saar après clarification** : la Sidebar avait une palette "session" volontairement plus sombre que
+> le skin Wizard (commentaire `index.css` : « darker for contrast » par-dessus la carte 3D, exclusion
+> documentée `.btn-tool` « hors scope reskin, session/combat » lors du reskin Wizard de Session 141) —
+> Saar a choisi de tester quand même le rapprochement visuel avec le skin Wizard/Dashboard plutôt que de
+> garder cette séparation. **Lots 1 à 4 ✅ clos** (cadre général/onglets/dropdown outils ; palette et
+> panneau d'outils d'édition/connecteurs ; chat et messages de dés/actions ; cartes personnages/joueurs +
+> onglet Profil) — nouvelles classes `.sidebar-*` dans `index.css` (tokens `--wiz-*`/`--color-*`/
+> `--text-*` existants, aucune nouvelle couleur inventée), `styles.xxx` de `Sidebar.jsx` réduits aux
+> propriétés de layout (le visuel passe par `className`), réutilisation de `.btn`/`.btn-ghost`/
+> `.btn-success`/`.btn-danger` au lieu de styles refaits à la main sur les boutons d'action et petits
+> boutons utilitaires. Nettoyage en marge : bloc mort `actionsBadge`/`actionsContent`/`actionsNav*`/
+> `arbitrage*` (ancien onglet Actions disparu, plus aucune référence JSX) supprimé ; deux `<div>`
+> référençant un style inexistant (`connectorColorList`) reçoivent maintenant une vraie classe.
+> **Lot 5 non fait** (fenêtre fiche personnage détaillée + modale aide raccourcis, encore sur l'ancien
+> style sombre en dur) — laissé en l'état, Saar a arrêté le chantier après le Lot 4.
+> **Bug trouvé au premier rendu réel, corrigé dans la foulée** : premier retour navigateur de Saar
+> (« très sombre et gris, l'antithèse de ce que j'attendais »). Cause racine : `--wiz-glass` (blanc à
+> 6%) n'est visible que posé sur le dégradé navy de `.app-shell` (Dashboard/Wizard) ; la Sidebar posait
+> ce même verre directement sur le rendu 3D (souvent noir), donc aucun contraste — gris terne au lieu de
+> l'effet givré recherché. Correctif : `.sidebar-panel` porte désormais le dégradé navy
+> `var(--wiz-bg-3)→var(--wiz-bg-1)` (celui de `.app-shell`), les boutons/cartes/champs internes restent
+> en `--wiz-glass` et ressortent par contraste dessus, comme sur le Dashboard — un seul point de
+> correctif pour tous les lots (aucune classe individuelle à retoucher). Bordure `GameTimeWidget.jsx`
+> corrigée en passant (même piège, hex en dur au lieu du token). **Confirmé par Saar après ce correctif :
+> « c'est beaucoup mieux »** (Lots 1 à 4). **Nettoyage demandé par Saar après relecture critique** :
+> `.sidebar-tool-box`/`.sidebar-card`/`.sidebar-msg-dice` étaient trois classes strictement identiques
+> (même fond/bordure verre) sous des noms différents — fusionnées en une seule `.sidebar-glass` (15
+> usages renommés) ; `.sidebar-chat-input` (quasi doublon de `.sidebar-tool-field`, juste un rayon de
+> coin différent) supprimée au profit de `.sidebar-tool-field` (2 usages). CSS généré plus léger après
+> coup (constaté sur le bundle buildé). **Testé** : à chaque lot, ESLint (`Sidebar.jsx`) et build
+> client (`vite build`) propres ; rendu réel confirmé par Saar en navigateur après le correctif de fond
+> (avant le nettoyage CSS, qui ne change aucune valeur visuelle — non re-testé en navigateur depuis).
+> **Données** : aucune migration, aucun effet runtime. **Retour
+> arrière** : aucun commit encore créé pour ce chantier au moment de cette note — modifications encore
+> uniquement dans le worktree. **Prochaine étape** : Saar teste en navigateur ; si la lisibilité pose
+> problème, ajuster ou revenir sur des lots ciblés plutôt que tout annuler ; si ça passe, Lot 5 sur
+> décision de Saar, puis commit/push (`git status`/`git diff` à vérifier avant, rien n'est encore commité).
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-30 — `docs/PLAN_TEST_CRITIQUE.md` **Lot 1 ✅ clos** —
 > refonte de la résolution des Tests critiques (réussite/échec critique, marge, Catastrophe), RAW
 > partout, aucun toggle de campagne (décision Saar après confirmation de la règle exacte, LdB

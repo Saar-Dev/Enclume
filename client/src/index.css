@@ -909,10 +909,10 @@ Convention :
   align-items: center;
   gap: 3px;
   padding: 8px 10px;
-  background: var(--bg-session-raised);
-  border: 1px solid var(--border-session);
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
   border-radius: var(--radius-sm);
-  color: var(--text-session-mid);
+  color: var(--text-secondary);
   cursor: pointer;
   min-width: 52px;
   transition: background .15s, border-color .15s, color .15s;
@@ -1014,6 +1014,224 @@ Convention :
 .doc-row:hover {
   background: #1e1e3a;
   border-color: var(--border-session-2);
+}
+
+/* ── SIDEBAR — glass Wizard (test option B, docs/EN_COURS.md Lot 1 cadre) ─── */
+/* Le "glass" (.wiz-glass = blanc à 6%) n'est visible que posé sur le dégradé navy de .app-shell
+   (Dashboard/Wizard) — appliqué tel quel ici, il n'a que le rendu 3D (souvent noir) derrière lui et
+   rend gris/terne. Le panneau lui-même porte donc le dégradé navy ; les boutons/cartes/champs à
+   l'intérieur restent en --wiz-glass et ressortent par contraste, comme sur le Dashboard. */
+.sidebar-panel {
+  background: linear-gradient(180deg, var(--wiz-bg-3) 0%, var(--wiz-bg-1) 100%);
+  border-left: 1px solid var(--wiz-glass-border);
+}
+.sidebar-separator {
+  height: 1px;
+  background: var(--wiz-glass-border);
+}
+.sidebar-tools-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  min-width: 140px;
+  background: var(--wiz-bg-2);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+.sidebar-tools-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: default;
+}
+.sidebar-tools-dropdown-item.enabled {
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--wiz-glass-border);
+  flex-shrink: 0;
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  transition: color .15s, border-color .15s;
+}
+.sidebar-tab[data-active="true"] {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+.sidebar-editor-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+.sidebar-editor-tab {
+  flex: 1;
+  padding: 5px 0;
+  background: none;
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.sidebar-editor-tab[data-active="true"] {
+  color: var(--text-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+/* ── SIDEBAR — outils d'édition, glass Wizard (test option B, Lot 2) ─── */
+/* .sidebar-glass = surface verre générique, réutilisée par les Lots 2/3/4 (boîtes d'outils,
+   cartes perso/joueur, bulles de dés) — un seul endroit pour "fond verre + bordure verre". */
+.sidebar-glass {
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+}
+.sidebar-tool-toggle {
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  color: var(--text-secondary);
+}
+.sidebar-tool-toggle[data-active="true"] {
+  color: var(--wiz-white);
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+.sidebar-tool-mode-btn {
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  color: var(--text-muted);
+}
+.sidebar-tool-mode-btn[data-active="true"] {
+  color: var(--wiz-white);
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+.sidebar-tool-field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 5px 6px;
+}
+.sidebar-tool-section-title {
+  color: var(--text-secondary);
+  border-top: 1px solid var(--wiz-glass-border);
+}
+.sidebar-tool-hint {
+  color: var(--text-muted);
+}
+.sidebar-tool-selection {
+  border: 1px solid rgba(245,197,66,0.35);
+  background: rgba(245,197,66,0.08);
+  color: var(--color-gold);
+}
+.sidebar-connector-selected {
+  border: 1px solid rgba(240,160,75,0.45);
+  background: rgba(240,160,75,0.12);
+  color: var(--color-warning);
+}
+.sidebar-connector-model-btn {
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  color: var(--text-secondary);
+}
+.sidebar-connector-model-btn[data-active="true"] {
+  color: var(--wiz-white);
+  border-color: var(--color-warning);
+  background: rgba(240,160,75,0.14);
+}
+.sidebar-tool-color-input {
+  background: var(--wiz-glass);
+  border: 1px solid var(--wiz-glass-border);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+.sidebar-undo-btn {
+  background: var(--color-primary-muted);
+  border: 1px solid var(--color-primary);
+  color: var(--wiz-white);
+}
+.sidebar-undo-btn:disabled {
+  background: var(--wiz-glass);
+  border-color: var(--wiz-glass-border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* ── SIDEBAR — chat et messages, glass Wizard (test option B, Lot 3) ─── */
+/* Bulles de dés et champ de chat : voir .sidebar-glass et .sidebar-tool-field (Lot 2) — mêmes
+   surfaces verre, pas de classe dédiée pour éviter la duplication trouvée en relecture. */
+.sidebar-msg-action {
+  background: rgba(168,85,247,0.08);
+  border: 1px solid rgba(168,85,247,0.3);
+}
+
+/* ── GameTimeWidget — horloge de campagne, un seul afficheur (pas 5 boutons) ─── */
+.gametime-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+.gametime-value {
+  background: none;
+  border: none;
+  padding: 2px 3px;
+  font: 700 13px/1 var(--font-mono);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: background .15s, color .15s;
+}
+.gametime-value:hover,
+.gametime-value[data-active="true"] {
+  background: var(--color-primary-muted);
+  color: var(--color-primary);
+}
+.gametime-value:disabled {
+  cursor: default;
+  color: var(--text-secondary);
+}
+.gametime-sep {
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
+  padding: 0 1px;
+}
+.gametime-edit-input {
+  width: 3.4em;
+  background: var(--wiz-glass);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font: 700 13px/1 var(--font-mono);
+  text-align: center;
+  padding: 2px 3px;
 }
 
 /* ── TYPE HELPERS (inchangés) ───────────────────────────────────── */

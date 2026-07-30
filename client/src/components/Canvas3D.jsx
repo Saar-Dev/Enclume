@@ -13,11 +13,13 @@ import { useCameraLOS } from '../lib/useCameraLOS.js'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import DungeonTerrainScene from './DungeonTerrainScene.jsx'
 import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
+import Skydome from './Skydome.jsx'
 import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPresentation.jsx'
 import {
+  computeSurfaceGridExtent,
   hasSurfaceContent,
   isWorldPointVisibleAtLevel,
   levelToY,
@@ -425,6 +427,12 @@ function Scene({
   const previousDisplayLevelRef = useRef(displayLevel)
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
   const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
+  // Grille visuelle — grandit avec le sol construit, jamais au-delà de GRID_SIZE (garde-fou de
+  // construction inchangé, cf. Editor3D.jsx). Purement cosmétique, aucun impact sur les limites de jeu.
+  const visibleGridSize = useMemo(
+    () => computeSurfaceGridExtent(surfaceData, { max: GRID_SIZE }),
+    [surfaceData],
+  )
 
   // Lecture des stores — pas de props pour ces données
   const { tokens, updateToken, removeToken } = useTokenStore()
@@ -964,7 +972,7 @@ function Scene({
       )}
 
       <Grid
-        args={[GRID_SIZE, GRID_SIZE]}
+        args={[visibleGridSize, visibleGridSize]}
         position={[0, levelToY(displayLevel), 0]}
         cellColor="#334155"
         sectionColor="#475569"
@@ -1508,6 +1516,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
       onClick={handleCanvasClick}
       onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
     >
+      <Skydome preset="ocean_floor" />
       {blocksReady && (
         <Scene
           voxels={voxels}

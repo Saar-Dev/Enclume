@@ -30,7 +30,12 @@ en jeu par Saar) ; 2026-07-29 (Saar) — analyse à charge de `docs/PLAN_FATIGUE
 (horloge de campagne, déjà clos) demandée par Saar avant d'attaquer le Lot 2 — ajout HORLOGE-TEST1
 (aucun test automatisé sur `adjustGameTime`, seule la projection pure `shared/gameTime.js` est
 testée) et HORLOGE-OVERFLOW1 (`deltaMinutes` sans borne haute, dépassement `integer` Postgres non
-gardé), trouvés en lisant le code réel, aucun code modifié
+gardé), trouvés en lisant le code réel, aucun code modifié ; 2026-07-30 (Saar, chantier skydome +
+grille dynamique) — ajout GRIDDEAD1 (`Editor3D.jsx` — le composant `EditorScene` [~ligne 770], avec sa
+propre grille et sa logique voxel, n'est importé ni rendu nulle part dans l'appli : mort depuis le
+passage à l'éditeur de salles actuel `SurfaceEditorScene.jsx`/`surface_data`. Trouvé en lisant le
+fichier pour rendre la grille visuelle dynamique — cette grille morte n'a pas été touchée, non
+prioritaire, à nettoyer un jour)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---

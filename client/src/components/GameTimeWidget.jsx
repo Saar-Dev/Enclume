@@ -109,15 +109,17 @@ export default function GameTimeWidget({ campaignId }) {
 
   return (
     <div ref={rootRef} style={styles.container}>
-      <div style={styles.row}>
-        {UNIT_ORDER.map(unit => (
-          <div key={unit} style={{ position: 'relative' }}>
+      <div className="sidebar-glass gametime-pill">
+        {UNIT_ORDER.map((unit, i) => (
+          <div key={unit} style={{ position: 'relative', display: 'flex', alignItems: 'baseline' }}>
+            {i > 0 && (
+              <span className="gametime-sep">{unit === 'hour' ? '—' : unit === 'minute' ? ':' : '/'}</span>
+            )}
             {editingUnit === unit ? (
               <input
                 ref={editInputRef}
                 type="number"
-                className="btn-tool"
-                style={{ ...styles.unitBtn, ...styles.unitEditInput }}
+                className="gametime-edit-input"
                 value={editValue}
                 onChange={e => setEditValue(e.target.value)}
                 onKeyDown={e => {
@@ -129,21 +131,20 @@ export default function GameTimeWidget({ campaignId }) {
             ) : (
               <button
                 type="button"
-                className="btn-tool"
+                className="gametime-value"
                 disabled={!isGm}
                 data-active={openMenu === unit}
                 onClick={() => isGm && setOpenMenu(openMenu === unit ? null : unit)}
                 onDoubleClick={() => isGm && startEdit(unit)}
-                style={styles.unitBtn}
+                title={t(`session.${MENUS[unit].labelKey}`)}
               >
-                <span style={styles.unitValue}>{unit === 'hour' || unit === 'minute' ? String(projected[unit]).padStart(2, '0') : projected[unit]}</span>
-                <span style={styles.unitLabel}>{t(`session.${MENUS[unit].labelKey}`)}</span>
+                {unit === 'hour' || unit === 'minute' ? String(projected[unit]).padStart(2, '0') : projected[unit]}
               </button>
             )}
             {openMenu === unit && (
-              <div style={styles.dropdown}>
-                {MENUS[unit].options.map(({ minutes, presetKey }, i) => (
-                  <button key={i} type="button" style={styles.dropdownItem} disabled={submitting}
+              <div className="sidebar-tools-dropdown">
+                {MENUS[unit].options.map(({ minutes, presetKey }, optionIndex) => (
+                  <button key={optionIndex} type="button" className="sidebar-tools-dropdown-item enabled" disabled={submitting}
                     onClick={() => { setOpenMenu(null); adjust(minutes) }}>
                     {minutes > 0 ? '+' : '−'}{t(`session.gameTimePreset${presetKey}`)}
                   </button>
@@ -159,21 +160,4 @@ export default function GameTimeWidget({ campaignId }) {
 
 const styles = {
   container: { padding: '8px 12px 8px 16px', borderBottom: '1px solid var(--wiz-glass-border)', flexShrink: 0 },
-  row: { display: 'flex', gap: '4px', flexWrap: 'wrap' },
-  unitBtn: { padding: '4px 6px', minWidth: '38px' },
-  unitValue: { fontSize: '12px', fontWeight: '700' },
-  unitLabel: { fontSize: '8px', letterSpacing: '0.4px', textTransform: 'uppercase' },
-  unitEditInput: {
-    background: '#16162a', border: '1px solid var(--color-primary)', borderRadius: 'var(--radius-sm)',
-    color: 'var(--text-primary)', fontSize: '12px', fontWeight: '700', textAlign: 'center',
-  },
-  dropdown: {
-    position: 'absolute', top: '100%', left: 0, marginTop: '2px', zIndex: 100,
-    background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '6px',
-    display: 'flex', flexDirection: 'column', minWidth: '84px', overflow: 'hidden',
-  },
-  dropdownItem: {
-    background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: '11px',
-    padding: '6px 10px', textAlign: 'left', cursor: 'pointer',
-  },
 }

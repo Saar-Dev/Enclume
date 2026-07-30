@@ -15,6 +15,7 @@ import {
   applyRoomSelectionWithResult,
   applyStairSelection,
   applyWallDrag,
+  computeSurfaceGridExtent,
   eraseSurfaceSelection,
   findRoomAtCell,
   findRoomsInSelection,
@@ -1134,6 +1135,12 @@ export default function SurfaceEditorScene({
   }, [])
 
   const gridElevation = getEditPlaneY(surfaceTool)
+  // Grille visuelle — grandit avec le sol construit, jamais au-delà de GRID_SIZE (garde-fou de
+  // construction inchangé, cf. clamps `Math.abs(x) > GRID_SIZE / 2` plus bas dans ce fichier).
+  const visibleGridSize = useMemo(
+    () => computeSurfaceGridExtent(surfaceData, { max: GRID_SIZE }),
+    [surfaceData],
+  )
   const normalizedSurface = normalizeSurfaceData(surfaceData)
   const selectedRoomIds = surfaceTool?.selectedRoomIds?.length
     ? surfaceTool.selectedRoomIds
@@ -1170,14 +1177,14 @@ export default function SurfaceEditorScene({
         maxPolarAngle={Math.PI / 2}
       />
       <Grid
-        args={[GRID_SIZE, GRID_SIZE]}
+        args={[visibleGridSize, visibleGridSize]}
         position={[0, gridElevation + 0.01, 0]}
         cellColor="#334155"
         sectionColor="#475569"
         fadeDistance={80}
       />
       <Grid
-        args={[GRID_SIZE, GRID_SIZE * SURFACE_FINE]}
+        args={[visibleGridSize, visibleGridSize * SURFACE_FINE]}
         position={[0, gridElevation + 0.02, 0]}
         cellColor="#233044"
         sectionColor="#233044"

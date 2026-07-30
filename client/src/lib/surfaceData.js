@@ -395,6 +395,21 @@ export function hasSurfaceContent(data) {
     || Object.keys(surface.connectors).length > 0
 }
 
+// Taille de la grille visuelle affichée dans l'éditeur/le rendu — distincte du garde-fou de
+// construction (`GRID_SIZE` dans Canvas3D.jsx/Editor3D.jsx, jamais touché ici). Grandit avec le sol
+// réellement construit (empreinte des tuiles de `surface.floors`), jamais en dessous de `min`, jamais
+// au-dessus de `max` (le garde-fou lui-même).
+export function computeSurfaceGridExtent(data, { min = 20, max = 50, margin = 4 } = {}) {
+  const surface = normalizeSurfaceData(data)
+  let farthest = 0
+  for (const [id, floor] of Object.entries(surface.floors)) {
+    const { x, z } = parseFloorKey(id, floor)
+    farthest = Math.max(farthest, Math.abs(x), Math.abs(z))
+  }
+  const half = Math.max(min / 2, farthest + margin)
+  return Math.min(max, half * 2)
+}
+
 export function surfaceTextureIds(data) {
   const surface = normalizeSurfaceData(data)
   const ids = new Set()
