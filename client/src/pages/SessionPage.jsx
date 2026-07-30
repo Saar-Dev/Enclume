@@ -829,6 +829,7 @@ function SessionContent({ campaignId }) {
             isGm={isGm}
             userId={user?.id}
             socket={socket}
+            campaignId={campaignId}
             onClose={() => setStatusPanel(null)}
           />
         )

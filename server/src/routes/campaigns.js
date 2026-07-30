@@ -14,6 +14,8 @@ import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { getWorstWoundSeverity } from '../lib/woundUtils.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
+import { resolveFall } from '../lib/fallDamageService.js'
+import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
 
 const router = Router()
 
@@ -423,6 +425,62 @@ router.post('/:id/game-echeances/:echeanceId/infection-mode', requireAuth, requi
     })
   }
   res.json({ status: 'resolved', rollResult })
+})
+
+// ─── Lot 3 — Dommages environnementaux de combat (docs/PLAN_FATIGUE_DOMMAGES.md §9) ───────────────
+// resolveCampaignToken — vérifie qu'un token appartient bien à cette campagne (tokens.battlemap_id ->
+// battlemaps.campaign_id, tokens n'a pas de campaign_id propre) avant toute mutation ; utilisé par
+// les 3 routes ci-dessous plutôt que dupliqué (une seule information, un seul endroit).
+async function resolveCampaignToken(campaignId, tokenId) {
+  const token = await db('tokens as t')
+    .join('battlemaps as bm', 't.battlemap_id', 'bm.id')
+    .where({ 't.id': tokenId, 'bm.campaign_id': campaignId })
+    .select('t.id', 't.character_id')
+    .first()
+  if (!token) throw new AppError(404, 'Token introuvable pour cette campagne')
+  return token
+}
+
+// POST /api/campaigns/:id/hazards/fall — GM uniquement. body { tokenId, heightMeters?, groundTrigger?,
+// terrainAccidente?, attemptTest? } — heightMeters/groundTrigger mutuellement exclusifs, validés par
+// resolveFall lui-même (fallDamageService.js).
+router.post('/:id/hazards/fall', requireAuth, requireRole('gm'), async (req, res) => {
+  const { tokenId, heightMeters, groundTrigger, terrainAccidente, attemptTest } = req.body
+  const token = await resolveCampaignToken(req.params.id, tokenId)
+  if (!token.character_id) throw new AppError(400, 'Ce token n\'a pas de personnage associé')
+  const sheet = await db('char_sheet').where({ character_id: token.character_id }).first()
+  if (!sheet) throw new AppError(404, 'Fiche de personnage introuvable pour ce token')
+
+  const result = await resolveFall(req.app.get('io'), db, req.params.id, {
+    characterId: token.character_id,
+    charSheetId: sheet.id,
+    tokenId: token.id,
+    heightMeters: heightMeters ?? null,
+    groundTrigger: !!groundTrigger,
+    terrainAccidente: !!terrainAccidente,
+    attemptTest: !!attemptTest,
+  })
+  res.json(result)
+})
+
+// POST /api/campaigns/:id/tokens/:tokenId/hazards/:code/expose — GM uniquement.
+// body { formula, locations?, forcedLocation? }.
+router.post('/:id/tokens/:tokenId/hazards/:code/expose', requireAuth, requireRole('gm'), async (req, res) => {
+  await resolveCampaignToken(req.params.id, req.params.tokenId)
+  const { formula, locations, forcedLocation } = req.body
+  await exposeToHazard(req.app.get('io'), db, req.params.id, req.params.tokenId, req.params.code, {
+    formula, locations, forcedLocation,
+  })
+  res.json({ exposed: true })
+})
+
+// POST /api/campaigns/:id/tokens/:tokenId/hazards/:code/clear — GM uniquement. body { linger? }
+// (réservé à "acid", rejeté par clearHazard sinon).
+router.post('/:id/tokens/:tokenId/hazards/:code/clear', requireAuth, requireRole('gm'), async (req, res) => {
+  await resolveCampaignToken(req.params.id, req.params.tokenId)
+  const { linger } = req.body
+  await clearHazard(req.app.get('io'), db, req.params.id, req.params.tokenId, req.params.code, { linger: !!linger })
+  res.json({ cleared: true })
 })
 
 // DELETE /api/campaigns/:id — supprimer définitivement une campagne

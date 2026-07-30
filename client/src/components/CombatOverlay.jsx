@@ -18,8 +18,16 @@ import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMel
 
 export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
   const { t } = useTranslation('combat')
+  const { t: tStatus } = useTranslation()
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
+  // Dégâts environnementaux/Chute (docs/PLAN_FATIGUE_DOMMAGES.md §9 Lot 3) — pas de token attaquant
+  // (tireurId null), sourceCode résolu ici en libellé plutôt qu'un texte FR figé émis par le serveur
+  // (i18n.md). 'fall' → combat.json:fallPanel.title, sinon (burning/acid/decompression) → fr.json:
+  // status.* (mêmes clés déjà utilisées par TokenStatusPanel/TokenPresentation pour ces mêmes codes).
+  const resolveAttaquantLabel = (result) => result.sourceCode
+    ? (result.sourceCode === 'fall' ? t('fallPanel.title') : tStatus(`status.${result.sourceCode}`))
+    : (tokens.find(tk => tk.id === result.tireurId)?.label ?? '?')
   const myTokenIds = isGm ? null : characters.filter(c => c.user_id === user?.id).map(c => tokens.find(tk => tk.character_id === c.id)?.id).filter(Boolean)
   // Retarder décale l'Action vers plus tard, jamais plus tôt (RAW REGLESYSCOMBAT.md:554-567, retour
   // Saar Session 159) — n'afficher le panneau « Agir maintenant » que si le pas normal à résoudre a
@@ -402,7 +410,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Panneau résultat assaut PNJ — GM uniquement, après résolution auto */}
       {isGm && gmAttackResult && (
         <CombatResultGM
-          attaquant={tokens.find(tk => tk.id === gmAttackResult.tireurId)?.label ?? '?'}
+          attaquant={resolveAttaquantLabel(gmAttackResult)}
           cible={tokens.find(tk => tk.id === gmAttackResult.cibleId)?.label ?? '?'}
           isSuccess={gmAttackResult.isSuccess}
           roll={gmAttackResult.roll}
@@ -425,7 +433,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Panneau résultat assaut PNJ — Joueur ciblé uniquement */}
       {!isGm && pnjAttackResult && pnjAttackResult.cibleId === playerToken?.id && (
         <CombatResultPlayer
-          attaquant={tokens.find(tk => tk.id === pnjAttackResult.tireurId)?.label ?? '?'}
+          attaquant={resolveAttaquantLabel(pnjAttackResult)}
           isSuccess={pnjAttackResult.isSuccess}
           roll={pnjAttackResult.roll}
           seuil={pnjAttackResult.chancesDeReussite}

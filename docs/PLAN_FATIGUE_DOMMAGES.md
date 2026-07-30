@@ -29,7 +29,13 @@
 > `occurrences_remaining` perdus, pas seulement le statut) ; corrigé en faisant tracer par l'engine sa
 > propre mutation, même patron générique `{ table, rowId, previousValues }` que le handler.
 > Reste : routes REST/WS + tests transport (increment 5, pas encore fait), et tout consommateur réel
-> (Blessures §5/§6 de `PLAN_BLESSURES_GUERISON.md`). Document temporaire (`docs/RegleDocumentaire.md`
+> (Blessures §5/§6 de `PLAN_BLESSURES_GUERISON.md`). **✅ Consommé par `PLAN_BLESSURES_GUERISON.md`
+> (handlers + routes/UI + analyse à charge, tout codé et testé le 2026-07-30)** — voir ce plan pour le
+> détail. **2026-07-30 — Lot 3 (Dommages environnementaux de combat) : cadrage détaillé rédigé (§9)**
+> après exploration du code réel (`resolveTargetHit`, `statusService`, `startResolutionPhase`) — 2 trous
+> structurels trouvés (pas de réduction d'armure générique sur `resolveTargetHit`, `fetchCibleNA`
+> dupliquée en fermeture privée) et 6 points ouverts à trancher avec Saar avant tout code. Document
+> temporaire (`docs/RegleDocumentaire.md`
 > Règle 10) — à archiver dans `docs/Old/` une fois le chantier entier clos, contenu durable transféré
 > vers `docs/SYSTEME/*.md`.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
@@ -655,28 +661,503 @@ opaque :
 
 ## 9. Lot 3 — Dommages environnementaux de combat (Chute, Acide, Décompression, Feu)
 
+> **2026-07-30 — cadrage détaillé** (après le §9 initial trop court) : exploration du code réel
+> (`resolveTargetHit`, `statusService`, `startResolutionPhase`, `polarisTestService`) avant d'écrire quoi
+> que ce soit — RAW verbatim relue dans `docs/REGLES/FATIGUE&DOMMAGES.md` p.242-243. **6 points ouverts
+> tranchés avec Saar avant tout code** (liste ci-dessous), 3 de plus (7-9) ajoutés et tranchés le
+> 2026-07-30 lors de l'analyse critique de reprise (nettoyage `COMBAT_END`, gestion d'erreur
+> `exposeToHazard`/`clearHazard`, ré-exposition différée à l'increment G).
+
 **Dépend de** : Lot 0 uniquement — indépendant de l'horloge de campagne, ces effets s'expriment en
 **Tours de combat**, pas en temps de jeu réel.
 
-- **Chute** (ponctuelle, un seul jet) : hauteur déclarée par le MJ (ou le joueur) → formule de dés +
-  nombre de localisations aléatoires selon la table RAW déjà citée dans le fichier source, protection
-  d'armure réduite de moitié (paramètre à vérifier/ajouter dans `resolveTargetHit` si absent), Test
-  d'Acrobatie/Équilibre optionnel pour réduire les dégâts. Aucun état persistant.
-- **Acide / Décompression / Feu** (récurrents, par Tour, jusqu'à neutralisation/sortie de zone) :
-  patron déjà en germe dans le projet — `startResolutionPhase` (`socketCombatHelpers.js`) tick déjà
-  `onTurnStart` pour les mods d'armes (Moding Groupe 4 Phase 3, item 103 `EN_COURS.md`), même point
-  d'accroche à réutiliser plutôt qu'un nouveau minuteur. Retrait manuel (sortir de la zone, éteindre
-  le feu, neutraliser l'acide) plutôt qu'une expiration `expires_at_turn` fixe, puisque la RAW ne fixe
-  pas de durée a priori.
-- Réutilise directement le moteur de blessures + localisation existants — aucune nouvelle jauge,
-  aucun horodatage de campagne.
+### Fondations réutilisées (vérifiées dans le code, pas supposées)
 
-**Hors périmètre** : pas de détection automatique de hauteur de chute via le moteur monde
-(`WorldSnapshot`) — saisie manuelle MJ pour ce lot, une intégration monde éventuelle resterait un
-chantier séparé.
+- `resolveTargetHit(io, db, campaignId, {...})` (`server/src/lib/damageService.js:271-447`) —
+  résolution complète localisation/armure/RD/sévérité/blessure/shock à partir d'un `degautsBruts` déjà
+  tiré par le caller. Localisation 1D20 native (`LOC_TABLE`) sauf `forcedSlotCode` fourni — un appel =
+  une seule localisation.
+- `calcResistanceArmure` (`server/src/lib/charStats.js:309`) — appelée en interne par
+  `resolveTargetHit`, **aucun paramètre exposé aujourd'hui pour réduire l'armure de moitié** (besoin
+  RAW de la Chute). Le seul mécanisme de réduction existant (`ammoFx`/`mechanic.armorMulFactor`,
+  `damageService.js:360-366`) est spécifique au DSL munitions, pas un paramètre générique appelable
+  hors contexte d'arme.
+- `resolvePolarisTest(threshold)` (`server/src/lib/polarisTestService.js:12-24`) — Test générique 1D20
+  vs seuil, gère déjà la relance sur échec critique, retourne `{roll, mr, isSuccess, isCriticalSuccess,
+  isCriticalFail, ...}`. Le Test d'Acrobatie/Équilibre de la Chute passe par lui tel quel — seuil =
+  compétence − (hauteur × 2).
+- `applyModStatus`/`clearModStatus` (`server/src/lib/statusService.js:160-178`) — écriture générique
+  `token_statuses` malgré leur nom "Mod", réutilisables tels quels : `expiresAtTurn: null` = jusqu'à
+  retrait manuel, exactement ce qu'il faut pour `acid_exposure`/`decompression`/`on_fire`.
+- Tick de début de Tour : `startResolutionPhase` (`server/src/socket/socketCombatHelpers.js:154-208`),
+  boucle `combatMods`/`resolveModHooks('onTurnStart', ...)` (lignes 181-190) — **spécifique aux mods
+  d'armes équipés** (`char_inventory_mods`/`WEAPON_MOD_REGISTRY`, `shared/weaponModRegistry.js`), pas un
+  patron générique "tout effet récurrent par Tour". Acide/Feu ne sont pas des mods : Lot 3 ne peut pas
+  s'enregistrer dans ce registre lui-même (domaines différents : équipement vs danger environnemental),
+  mais en réutilise le **patron architectural** (registre déclaratif + dispatcher générique, jamais un
+  `if/else` par type) via un second registre dédié — voir §9 "Plan d'exécution" increment F, révisé
+  après recherche sur l'architecture "Rule Elements" de PF2e/Foundry VTT qui suit exactement ce même
+  principe.
 
-**Point ouvert** : le nom exact des nouveaux `status_code` (`acid_exposure`/`decompression`/
-`on_fire` ou équivalent) — à trancher en codant.
+### Deux trous structurels trouvés en explorant (pas prévus par le cadrage initial)
+
+1. **Pas de paramètre de réduction d'armure générique sur `resolveTargetHit`** — nécessite une
+   extension ciblée de sa signature (ex. `armorReductionFactor = 1`, appliqué au même endroit que
+   `mechanic.armorMulFactor`, comportement des appelants existants strictement inchangé puisqu'ils ne
+   le passeraient jamais).
+2. **Calcul des Attributs NA (For/Con/Vol) d'une cible avec génotype+mutations** (nécessaire pour
+   appeler `resolveTargetHit` hors du flux d'attaque normal, ex. une Chute ou un tick Feu déclenchés
+   par le MJ hors tour d'un adversaire) n'existe **que sous forme de fermeture locale non exportée**
+   `fetchCibleNA` (`socketCombatHelpers.js:2237`) — déjà dupliquée une fois en interne à ce fichier.
+   Écrire une 3ᵉ copie ad hoc pour Lot 3 dupliquerait cette logique une fois de plus. Extraction
+   proposée : exporter cette logique en fonction partagée (`charStats.js` ou `damageService.js`) avant
+   de l'utiliser ici — sinon, si Saar préfère différer ce refactor, accepter une 2ᵉ copie assumée comme
+   dette (à noter alors dans `docs/BUGIDENTIFIE.md`, pas silencieusement).
+
+### Architecture retenue
+
+**Chute** (ponctuelle, un seul événement) :
+1. MJ saisit la hauteur (mètres) — pas de détection automatique via `WorldSnapshot` (hors périmètre,
+   déjà noté au cadrage initial).
+2. Table RAW hauteur→dés/localisations (RAW verbatim, `docs/REGLES/FATIGUE&DOMMAGES.md` lignes 14-25)
+   extraite en constante partagée (ex. `shared/fallDamageConstants.js`), même patron que
+   `WOUND_HEALING`/`WOUND_INFECTION` (`shared/woundConstants.js`) — jamais de littéraux dispersés dans
+   le code serveur.
+3. Terrain accidenté (case à cocher MJ, non persistée — même patron que le "contexte RAW" de Blessures
+   §6.1) : +1D10 ajouté au total de dégâts bruts avant résolution.
+4. Test d'Acrobatie/Équilibre optionnel (RAW : le joueur peut tenter de contrôler sa chute ; le MJ peut
+   imposer un Test de Réaction préalable si la chute est soudaine — narratif, aucune détection
+   automatique de "chute soudaine") : seuil = compétence Acrobatie/Équilibre − (hauteur × 2), via
+   `resolvePolarisTest`. Réussite → dégâts réduits de 1D6 + `mr`, jamais négatif
+   (`Math.max(0, degatsBruts - reduction)`). Au-delà de 5 m, RAW interdit toute réduction — case/bouton
+   grisé côté UI.
+5. Résolution : N localisations (1, 1D3, ou 1D3+3 selon hauteur) — chaque localisation = un appel
+   séparé à `resolveTargetHit` (jamais de `forcedSlotCode`, localisation 1D20 native à chaque appel),
+   avec `armorReductionFactor: 0.5` (point structurel 1 ci-dessus). Interprétation provisoire du même
+   total de dégâts bruts appliqué à chaque localisation (voir point ouvert 1).
+
+**Acide / Décompression / Feu** (récurrents, par Tour, jusqu'à neutralisation/sortie de zone) :
+1. Déclenchement : action MJ explicite (ex. bouton "Exposer" sur un token) → pose `token_statuses`
+   (`acid_exposure`/`decompression`/`on_fire`), `expires_at_turn: null`. Décompression est fixe RAW
+   (1D10, ou 2D10 si plusieurs paliers manqués — choix MJ à la pose). Acide/Feu ont une intensité
+   variable (petite flamme/moyenne/grand feu/brasier pour le Feu ; "dépend de la puissance", non
+   chiffrée par la RAW, pour l'Acide) — voir point ouvert 2 pour où la stocker.
+2. Nouvelle boucle dans `startResolutionPhase`, indépendante de celle des mods : pour chaque token
+   portant un `status_code` environnemental actif, résout le dégât du Tour via `resolveTargetHit` —
+   Décompression toujours localisée "corps" (simplification RAW explicite, `forcedLocation` de
+   registre) ; Acide/petite flamme/feu moyen sur **« la Localisation exposée »** (RAW littéral p.243,
+   variable par instance, PAS un tirage aléatoire — `data.forcedLocation` choisi par le MJ à
+   l'exposition, voir point ouvert 10) ; Grand feu 1D3 localisations aléatoires (RAW littéral, même
+   remarque multi-localisation que la Chute, point ouvert 1) ; Brasier sans Localisation précisée par la
+   RAW, laissé à l'appréciation MJ via `data.locations` (même silence RAW que l'intensité de l'Acide,
+   point ouvert 2).
+3. Retrait : action MJ explicite (`clearModStatus` réutilisé tel quel) — sortir de la zone, éteindre le
+   feu, neutraliser l'acide. Aucune détection automatique (le moteur monde ne sait pas aujourd'hui si un
+   token "est dans" une zone Acide/Feu — hors périmètre, cohérent avec le cadrage initial).
+4. Persistance de l'Acide après sortie de zone (RAW : "peut persister 1D6 Tour(s)") — voir point ouvert 3.
+5. Réutilise directement le moteur de blessures + localisation existants — aucune nouvelle jauge, aucun
+   horodatage de campagne (contrairement à Maladies/Poisons/Drogues/Irradiations, Lots 7-9, consommateurs
+   du Lot 2).
+
+### Points ouverts pour la cuisson avec Saar — tous tranchés (2026-07-30)
+
+1. ~~Multi-localisation~~ — **tranché (Saar)** : même total de dégâts appliqué indépendamment à
+   chaque localisation touchée (pas de reroll/répartition).
+2. ~~Intensité variable (Acide, Feu)~~ — **tranché (Saar), après recherche pro (Foundry VTT/PF2e — le
+   "Dommage persistant" PF2e est modélisé comme une condition qui porte sa propre formule/DC, pas un
+   flag nu)** : ajout d'une colonne JSONB `data` sur `token_statuses` (nullable, additive — même
+   patron que `char_inventory_mods.state`, réutilisable pour tout futur statut à charge de données).
+   Migration `225_token_statuses_data.js` (prochain numéro impair Claude).
+3. ~~Persistance de l'Acide~~ — **tranché (Saar)** : automatique, `expires_at_turn` calculé (1D6
+   Tours) au moment de la sortie de zone — pas de retrait manuel MJ pour ce cas précis.
+4. ~~Nom exact des `status_code`~~ — **résolu par le point 2** : un seul code par danger
+   (`acid_exposure`/`decompression`/`on_fire`), l'intensité vit dans `data`, pas dans le code.
+5. ~~Chute — qui déclenche le Test~~ — **tranché (Saar)** : MJ uniquement, cohérent avec l'écran de
+   revue Blessures — aucune UI joueur à construire pour ce Test.
+6. ~~Extraction de `fetchCibleNA`~~ — **tranché (Saar)** : « Architecture robuste, pérenne et
+   adaptative. Si une fonction partagée est une bonne pratique, go » — extraite en fonction partagée
+   avant utilisation, remplace aussi la fermeture privée existante dans `socketCombatHelpers.js` (une
+   seule copie au lieu de deux). Directive générale de Saar à retenir au-delà de ce point précis : le
+   temps de travail ou l'ampleur du rework n'est jamais un paramètre de décision sur ce projet, seule
+   la qualité finale de l'architecture l'est — modifier du code existant pour coller à une architecture
+   solide est toujours une option légitime, pas un dernier recours.
+7. ~~Nettoyage `COMBAT_END` des statuts environnementaux~~ — **tranché (Saar, 2026-07-30)**, trou trouvé
+   en analyse critique de reprise (increment C non encore codé à ce moment) : `socketCombatState.js:
+   216-232` ne purge à `COMBAT_END` que les codes de `getAllModStatusCodes()`
+   (`WEAPON_MOD_REGISTRY.statusCodes`, `weaponModRegistry.js`) — `ENVIRONMENTAL_HAZARD_REGISTRY` (F.1)
+   en est délibérément séparé, donc **jamais balayé** à `COMBAT_END`. Décision : **assumé et voulu**,
+   pas un bug à corriger. Les dangers environnementaux **survivent** à la fin d'un combat (icône/badge
+   token persiste, cohérent avec « quelqu'un qui brûle continue de brûler hors initiative ») — mais
+   **aucun effet ne se produit hors combat** : la seule boucle de résolution (`startResolutionPhase`,
+   F.5) ne s'exécute que dans la FSM combat, il n'existe aucun autre mécanisme de "Tour" hors de ce
+   contexte. Un token qui rentre dans un nouveau combat avec un badge encore actif retickera
+   automatiquement (comportement voulu, pas un oubli). Retrait reste 100% manuel MJ (déjà noté en §9
+   Architecture retenue point 3, sauf Acide en sortie de zone qui a son `expires_at_turn` calculé).
+   Conséquence pour l'increment F.1 : `ENVIRONMENTAL_HAZARD_REGISTRY` **ne doit pas** être ajouté au
+   balayage de `COMBAT_END` — ne pas "corriger" cette asymétrie plus tard sans revalider cette décision.
+8. ~~`applyModStatus`/`clearModStatus` avalent les erreurs en silence~~ — **tranché (Saar, 2026-07-30)** :
+   comportement actuel (`try/catch` → `console.error`, jamais de rethrow, `statusService.js:160-178`)
+   acceptable pour les badges cosmétiques existants (mods d'armes), mais pas pour F.2/F.3
+   (`exposeToHazard`/`clearHazard`) qui vont réellement déclencher des dégâts par Tour. **Implémentation
+   précisée** (2ᵉ passe d'analyse critique) : ajout d'un flag optionnel `throwOnFailure = false` sur
+   `applyModStatus`/`clearModStatus` (increment C), défaut inchangé pour l'unique appelant existant
+   (boucle mods de `startResolutionPhase`, qui tourne dans le même `try` global que la transition de
+   phase déjà committée — le faire lever par défaut aurait fait planter toute la résolution du Tour sur
+   un simple échec d'écriture de badge de mod, régression non voulue). F.2/F.3 passeront
+   `throwOnFailure: true` et attraperont pour lever une `AppError` (`server/src/lib/AppError.js`, pattern
+   déjà utilisé par `echeanceService.js` et lu par le middleware central `errorHandler.js`) — cohérent
+   avec le fait que G n'expose ces actions qu'en routes REST (aucun event socket dans ce lot).
+9. Ré-exposition d'une cible déjà marquée (ex. re-cliquer "Exposer au feu" sur un token déjà `on_fire`)
+   — **différé à l'increment G (UI), pas un blocage pour C-F**. Contexte donné par Saar : l'action MJ
+   envisagée ne cible probablement pas le token/joueur directement mais une **source de danger** (zone
+   de feu/acide posée sur la carte, popup de niveau d'intensité) — sauf cas où l'arme applique l'effet
+   directement à une cible précise (ex. lance-flammes), qui ne rentre pas dans ce patron "zone". Les
+   deux mécaniques (zone vs cible directe) coexisteront probablement. Écrasement des valeurs `data` en
+   base reste autorisé techniquement (`onConflict().merge()`) ; la prévention du double-clic accidentel
+   et le choix zone/cible sont un sujet d'ergonomie propre à G, à cadrer séparément avant ce lot-là.
+10. ~~Localisation « exposée » du Feu/Acide vs localisation aléatoire de la Chute~~ — **tranché (Saar,
+    2026-07-30)**, trouvé en relisant le RAW verbatim du Feu (p.243, non relu en détail avant cette
+    passe) : petite flamme et feu moyen touchent **« la Localisation exposée »** (partie du corps
+    réellement en contact — variable par instance, PAS un tirage 1D20), alors que Grand feu (2D10,
+    **1D3** Localisation(s) — RAW littéral, confirme le design déjà prévu) et Chute restent aléatoires.
+    Brasier (3D10/Tour) : RAW ne précise **aucune** Localisation pour ce palier — silence RAW, comme
+    l'intensité de l'Acide déjà notée (point 2), laissé à l'appréciation MJ via `data.locations`.
+    Décision (Saar, "architecture robuste/pérenne/adaptative, corriger l'ensemble au besoin") :
+    réutiliser tel quel le vocabulaire de la **visée** déjà existant (COM9,
+    `shared/armorConstants.js` : `LOCATION_TO_SLOT`/`SLOT_TO_WOUND_LOCATION`, clés `tete`/`corps`/
+    `bras_gauche`/`bras_droit`/`jambe_gauche`/`jambe_droite`) plutôt qu'une nouvelle notion. Le champ
+    `data.forcedLocation` (increment F, **même nom et même représentation** que
+    `ENVIRONMENTAL_HAZARD_REGISTRY[].forcedLocation` — pas de 2ᵉ vocabulaire, une seule conversion en
+    F.4 : `LOCATION_TO_SLOT[entry.forcedLocation ?? row.data?.forcedLocation ?? null]` → `forcedSlotCode`
+    de `resolveTargetHit`, `null` = aléatoire natif) porte la localisation choisie par le MJ à
+    l'exposition pour Acide/petite flamme/feu moyen. Validation à l'écriture (F.2, `exposeToHazard`) :
+    `data.forcedLocation` doit être une clé connue de `LOCATION_TO_SLOT` (même source de vérité que la
+    visée, pas de liste dupliquée), sinon `AppError` (`throwOnFailure`, point 8). UI (G, pas cadrée
+    maintenant) : réutiliser le composant client de sélection de localisation de la visée plutôt que
+    d'en construire un nouveau.
+
+**Hors périmètre** :
+- Détection automatique de hauteur de chute via `WorldSnapshot` — saisie manuelle MJ.
+- Détection automatique de zone Acide/Feu/Décompression via le moteur monde — déclenchement et retrait
+  100% MJ.
+- "Dommages de Choc" (item 2 du chapitre RAW) — déjà hors périmètre du plan entier (§2), chantier CHOC1
+  séparé.
+- Vêtements prenant feu automatiquement sur certains coups d'arme incendiaire — la RAW le mentionne en
+  passant, mais ce lot ne construit que le déclenchement/tick manuel MJ, pas un déclenchement
+  automatique depuis une résolution d'attaque.
+- Chute au-delà de 10D10 ("dommages massifs...") — RAW elle-même vague/inachevée sur ce cas (une seule
+  phrase, pas de table). Traité comme narratif MJ pur, aucune formule mécanique construite au-delà.
+
+### Plan d'exécution (incréments vérifiables) — 2026-07-30, analyse à charge faite avant rédaction
+
+> Chaque increment ci-dessous a été vérifié contre le code réel (pas supposé) avant d'être écrit ici.
+> Deux increments (A, B) déjà codés et testés à la date de rédaction — cf. `docs/EN_COURS.md`.
+
+**A. ✅ Extraction `fetchCibleNA`** (`server/src/lib/damageService.js`) — fait, testé, voir plus haut §9
+"point structurel 2". **Complété le 2026-07-30** : la 1ʳᵉ passe n'avait converti que
+`resolveDroneAssaultAction` ; audit de reprise a trouvé une 2ᵉ copie réelle (identique, isolée) dans
+`resolveAssaultAction` (`socketCombatHelpers.js`, ex-lignes 2719-2736) — convertie à son tour, une seule
+copie désormais dans ce fichier. `resolveMeleeAction` (lignes 1522-1571) garde son propre calcul inline :
+ce n'est **pas** un doublon paresseux — le calcul NA y est un sous-produit d'un `Promise.all` combiné qui
+fetch aussi identity/wounds/inventaire/armes de contact pour la sélection de compétence défenseur ;
+appeler `fetchCibleNA` à la place ajouterait 3 requêtes redondantes. Laissé tel quel, décision
+consciente.
+
+**B. ✅ `armorReductionFactor` sur `resolveTargetHit`** (`server/src/lib/damageService.js`) — fait,
+testé (128/128), additif, comportement des appelants existants strictement inchangé.
+
+**C. ✅ Migration 225 + `statusService.js`** — fait le 2026-07-30. Migration appliquée (batch 143, via
+`db.migrate.latest()` au démarrage du serveur `dev` déjà actif — colonne `data` confirmée présente et
+nullable sur `token_statuses`). `applyModStatus`/`clearModStatus` acceptent `data`/`throwOnFailure`,
+comportement de l'appelant existant strictement inchangé (vérifié par défauts).
+- `server/src/db/migrations/225_token_statuses_data.js` : `ALTER TABLE token_statuses ADD COLUMN data
+  JSONB NULL` (additive, aucune donnée existante affectée — `token_statuses` n'a aujourd'hui que
+  `id`/`token_id`/`status_code`/`applied_by`/`applied_at`/`expires_at_turn`, vérifié dans les
+  migrations `68_token_statuses.js`/`79_token_statuses_expiry.js`).
+- `applyModStatus(io, db, campaignId, tokenId, statusCode, { expiresAtTurn = null, data = null,
+  throwOnFailure = false } = {})` / `clearModStatus(io, db, campaignId, tokenId, statusCode,
+  { throwOnFailure = false } = {})` (`server/src/lib/statusService.js:160-178`) : `data` ajouté à
+  l'objet inséré. `.onConflict([...]).merge()` (sans argument) fusionne déjà toutes les colonnes de
+  l'insert, `data` y sera donc inclus automatiquement sans changement de la clause `merge()`
+  elle-même. `throwOnFailure` (point ouvert 8) : si `true`, le `catch` lève une `AppError(500, ...)`
+  au lieu de logger et avaler ; si `false` (défaut), comportement historique inchangé. Signature
+  additive — **corrigé (2ᵉ passe d'analyse critique)** : `applyModStatus` n'a en réalité qu'**un seul**
+  appelant existant aujourd'hui (`socketCombatHelpers.js:187`, boucle mods de `startResolutionPhase`,
+  vérifié par recherche exhaustive dans `server/`), pas "une vingtaine" comme écrit dans une version
+  antérieure de ce plan — il continue avec `data: null, throwOnFailure: false` implicites, comportement
+  strictement inchangé.
+
+**D. ✅ `shared/fallDamageConstants.js`** — fait et testé le 2026-07-30 (`fallDamageConstants.test.mjs`,
+5/5, `node --test shared/fallDamageConstants.test.mjs`). Table RAW verbatim (`docs/REGLES/
+FATIGUE&DOMMAGES.md` lignes 14-25) :
+- Niveau du sol : 1D6, 1 loc. — **déclenché uniquement** si le personnage courait à Allure maximale
+  OU a obtenu une Catastrophe à un Test d'Acrobatie/Équilibre (jamais une "hauteur 0" saisie par
+  défaut — décision MJ narrative de déclencher ce cas précis, pas une valeur de hauteur).
+- 1 m : 1D6, 1 loc. — 2 m : 1D10, 1 loc. — 3 m : 2D10, 1 loc. — 4 m : 3D10, 1D3 loc.
+- Au-delà de 4 m : `fallDamageBeyondFourMeters(h)` → `(h-1)D10`, 1D3+3 loc. — simplification
+  algébrique vérifiée équivalente à `3D10 + 1D10×(h-4)` (h=4 → 3d10 identique au palier 4m, h=5 → 4d10
+  = 3d10+1d10), nécessaire car `parseDice` ne supporte qu'un seul type de dé par formule, pas un
+  composé `3d10+1d10`. Plafonné narrativement à 10D10 (hors périmètre au-delà, voir ci-dessus) — aucune
+  limite numérique imposée dans la constante elle-même, décision MJ pure.
+- Terrain accidenté (gravas/ferraille) : +1D10, indépendant de la hauteur.
+- Même patron d'extraction que `WOUND_HEALING`/`WOUND_INFECTION` (`shared/woundConstants.js`), tests
+  colocalisés `*.test.mjs` inclus (comblant le manque de couverture noté en analyse critique de reprise
+  sur ce Lot).
+
+**E. ✅ Service résolution Chute** — fait le 2026-07-30, `server/src/lib/fallDamageService.js`
+(`resolveFall`). Vérifié : `node --check` OK, chaque appel confronté au code réel (`calcSkillTotal`,
+`resolvePolarisTest`, `resolveTargetHit`, pattern `ACROBATIE_EQUILIBRE`). Point non tranché
+explicitement par Saar, décidé par défaut (documenté en commentaire dans le fichier) : hauteur
+effective = 0 pour le malus du Test quand `groundTrigger` est vrai (RAW silencieuse sur ce cas précis).
+Aucun test automatisé écrit — cohérent avec l'absence de tests sur `resolveTargetHit` lui-même
+(fonction d'orchestration DB+socket, pas une fonction pure ; le projet ne teste ce type de fonction
+qu'en conditions réelles via l'UI, jamais par fixture, contrairement aux services purs comme
+`fallDamageConstants.js`/`polarisTestService.js`).
+
+Détail original du design (ci-dessous, conservé pour traçabilité) :
+1. `resolveFall(io, db, campaignId, { characterId, charSheetId, heightMeters, groundTrigger,
+   terrainAccidente, attemptTest })` — `groundTrigger` (bool, cas "niveau du sol") et `heightMeters`
+   sont mutuellement exclusifs côté UI (l'un ou l'autre, jamais les deux).
+2. Dégâts bruts = formule(`shared/fallDamageConstants.js`) [+1D10 si `terrainAccidente`].
+3. **Un seul fetch combiné** (pas `fetchCibleNA` ici — corrigé lors de l'analyse à charge : `fetchCibleNA`
+   ne retourne que NA, alors que le Test d'Acrobatie/Équilibre a besoin des mêmes lignes brutes
+   `attrs`/`archetype`/`mutationEffects`/`genotypeRow` que `calcSkillTotal` — un appel à `fetchCibleNA`
+   PUIS un re-fetch séparé de ces mêmes lignes pour le Test dupliquerait 3 requêtes pour rien) :
+   `attrs`/`archetype`/`mutationEffects` (`Promise.all`, patron `fetchCibleNA`) + `genotypeRow` (si
+   `archetype.genotype_id`) → `for_na`/`con_na`/`vol_na` via `calcAttributeNA` directement (3 appels,
+   même calcul que `fetchCibleNA` mais sans 2ᵉ fetch).
+4. Si `attemptTest` et hauteur ≤ 5 m (RAW : "au-delà de 5 mètres, impossible de réduire") : à partir
+   des mêmes `attrs`/`genotypeRow`/`mutationEffects` déjà en main, fetch seulement
+   `ref_skills`/`char_skills` pour `ACROBATIE_EQUILIBRE` (patron exact : `socketCombatHelpers.js:
+   1437-1442`) → `calcSkillTotal(...)` → seuil = total − hauteur×2 → `resolvePolarisTest(seuil)`.
+   Réussite → dégâts bruts réduits de `1D6 + mr`, plancher 0 (`Math.max`).
+5. N localisations (table D) → boucle de N appels `resolveTargetHit(io, db, campaignId, {
+   degautsBruts, characterIdCible: characterId, cibleType: characters.type (fetché, 'pj' ou 'pnj' —
+   jamais codé en dur : une Chute peut toucher un PNJ, pas seulement un joueur — **corrigé lors de
+   l'analyse à charge de ce plan**, la première rédaction hardcodait `'pj'`), char_sheet_id_cible:
+   charSheetId, for_na_cible, con_na_cible, vol_na_cible, armorReductionFactor: 0.5 })` — jamais de
+   `forcedSlotCode` (localisation 1D20 native à chaque appel), même `degautsBruts` réutilisé aux N
+   appels (point ouvert 1 tranché par Saar). **Hors périmètre** : cible `type: 'drone'` — `
+   resolveTargetHit` retourne `null` pour un drone (comportement existant, ligne 305 de
+   `damageService.js`), ce lot ne construit pas de chemin `resolveDroneIntegrityLoss` équivalent pour
+   la Chute/les dangers environnementaux ; un drone exposé ne subit donc rien via ce lot.
+6. Retourne le détail agrégé (jets, seuil/mr du Test, N localisations touchées, blessures créées) pour
+   affichage MJ.
+
+**F. ✅ Exposition/tick Acide-Décompression-Feu** — fait le 2026-07-30. `shared/environmentalHazardRegistry.js`
+(testé 3/3), `server/src/lib/environmentalHazardService.js` (`exposeToHazard`/`clearHazard`/
+`resolveEnvironmentalHazardTicks`), hook dans `startResolutionPhase` (`socketCombatHelpers.js`, juste
+après la boucle des mods). Deux ajustements trouvés en auto-relecture (pas dans le design initial) :
+- **`diceParser.js` factorisé** : `parseFormulaShape` (interne) extraite de `parseDice`, nouvel export
+  pur `isValidDiceFormula(formula)` (jamais un jet, juste la validation syntaxique) — testé 4/4
+  (`diceParser.test.mjs`, nouveau, comblant une lacune de couverture sur une fonction au cœur de tout
+  le combat). Utilisé par `exposeToHazard` pour rejeter une formule/nombre de localisations MJ invalide
+  **à l'écriture** plutôt que de laisser planter tout `startResolutionPhase` (donc toute la résolution
+  du Tour pour la campagne entière) au premier Tick sur une formule mal saisie.
+- **Garde `row.data?.formula` dans `resolveEnvironmentalHazardTicks`** : une ligne `token_statuses`
+  malformée/legacy (hors flux `exposeToHazard`) est ignorée plutôt que de planter toute la boucle pour
+  les autres tokens de la campagne.
+
+**Renommage des codes (2026-07-30, increment G, en construisant l'UI)** : `on_fire`/`acid_exposure`
+renommés en `burning`/`acid` (Décompression inchangée) dans `ENVIRONMENTAL_HAZARD_REGISTRY` et partout
+où le code apparaît (`environmentalHazardService.js`, routes, tests). Motif : `TokenStatusPanel.jsx`/
+`socketToken.js` avaient déjà `burning`/`acid`/`decompression` comme toggle cosmétique (catégorie
+`dot`, aucune `data`, aucun effet mécanique) avec icônes `/assets/status/*.svg` et clés i18n `status.*`
+existantes — `decompression` collisionnait exactement, `on_fire`/`acid_exposure` auraient dupliqué
+assets/i18n pour le même concept sous un 2ᵉ nom. Ces 3 codes étaient un parking-lot cosmétique
+(catégorie "dot" = "damage over time") anticipant précisément ce Lot — migrés vers le vrai mécanisme,
+retirés de `socketToken.js:VALID_STATUS_CODES` (le toggle nu écraserait silencieusement `data` posée
+par `exposeToHazard` via `.onConflict().merge()`). Passent désormais exclusivement par les routes
+`expose`/`clear`.
+
+> **Révision (2026-07-30, après recherche pro, suite à la demande explicite de Saar de ne jamais
+> coder à partir de zéro sans avoir regardé comment les pros font)** : la 1ʳᵉ rédaction proposait un
+> `HAZARD_CODES` figé + une boucle bespoke, jetable, non réutilisable par un futur lot. Recherche PF2e
+> (Foundry VTT — système TTRPG open-source le plus abouti en la matière) : chaque condition/effet y
+> est un **Rule Element**, un type déclaré dans un registre (`RuleElements.builtin`,
+> `src/module/rules/index.ts`) qui sait résoudre son propre comportement — le moteur ne connaît qu'un
+> seul point de dispatch générique, jamais un `switch/case` central par type d'effet. Ce patron existe
+> **déjà dans Enclume** sous une forme quasi identique : `shared/weaponModRegistry.js`
+> (`WEAPON_MOD_REGISTRY`) + `resolveModHooks` (`weaponModService.js:97-107`) pour les mods d'armes.
+> Plutôt qu'un tableau figé + boucle jetable, Lot 3 réutilise ce **même patron** pour les dangers
+> environnementaux — un vrai registre, extensible sans toucher au moteur de dispatch. Bénéfice
+> concret et immédiat (pas juste esthétique) : Lot 5 (Froid, §11 ci-dessous) aura besoin d'une
+> infrastructure de résolution récurrente très proche (dégâts croissants par exposition prolongée) —
+> poser un registre maintenant plutôt qu'une boucle jetable évite un 2ᵉ rebuild à ce moment-là.
+
+Nouveaux fichiers `shared/environmentalHazardRegistry.js` + `server/src/lib/environmentalHazardService.js`,
+plus modif ciblée de `startResolutionPhase` (`server/src/socket/socketCombatHelpers.js:154-208`).
+**Précision (3ᵉ passe d'analyse critique, 2026-07-30)** : le patron exact est celui
+d'`echeanceTypeRegistry.js`/`findEcheanceRegistryEntry` (lookup simple, un seul handler par ligne),
+**pas** l'agrégation/priorité de `weaponModRegistry.js`/`resolveModHooks` (plusieurs mods actifs
+simultanément sur une même arme, résolus ensemble avec un ordre de priorité). Un token peut porter
+plusieurs dangers environnementaux à la fois (feu + acide simultanément, RAW ne l'interdit pas) mais
+chaque **ligne** `token_statuses` se résout indépendamment via un seul lookup — jamais d'agrégation
+entre plusieurs dangers d'un même token. Même correction déjà faite une fois pour `echeanceTypeRegistry.js`
+lui-même (Lot 2, §8, "la moitié dispatch de weaponModService.js ne s'applique pas ici") — le mécanisme
+décrit ci-dessous (boucle par ligne, F.4) était déjà correct, seul le nom du patron cité prêtait à
+confusion :
+
+1. `shared/environmentalHazardRegistry.js` — `ENVIRONMENTAL_HAZARD_REGISTRY = [{ code:
+   'acid_exposure', forcedLocation: null }, { code: 'decompression', forcedLocation: 'corps' },
+   { code: 'on_fire', forcedLocation: null }]` + `findHazardRegistryEntry(code)`, même forme que
+   `findEcheanceRegistryEntry` (`shared/echeanceTypeRegistry.js`, déjà ce patron pour le Lot 2). Seule
+   la localisation forcée (RAW : Décompression toujours Corps) est déclarative ici — formule/nombre de
+   localisations restent dans `token_statuses.data` (par instance, pas par type, puisqu'un Feu petit
+   et un brasier partagent le même `code` mais pas la même intensité).
+2. `exposeToHazard(io, db, campaignId, tokenId, hazardCode, { formula, locations = 1, forcedLocation =
+   null })` → valide `findHazardRegistryEntry(hazardCode)` existe (sinon `AppError`, même garde que
+   `createEcheance` pour un `condition_type` inconnu) → si `forcedLocation` fourni, valide que c'est
+   une clé connue de `LOCATION_TO_SLOT` (`shared/armorConstants.js`, même vocabulaire que la visée
+   COM9, point ouvert 10 — sinon `AppError`) → `statusService.applyModStatus(io, db, campaignId,
+   tokenId, hazardCode, { expiresAtTurn: null, data: { formula, locations, forcedLocation },
+   throwOnFailure: true })` (increment C, point ouvert 8). Décompression : `formula` fixe `'1d10'` ou
+   `'2d10'` (case MJ "paliers manqués" à l'exposition), `forcedLocation` inutile ici (déjà géré
+   statiquement par le registre, point ouvert 10). Grand Feu : `locations: '1d3'` (chaîne, formule à
+   relancer chaque Tick — RAW ne précise pas si le nombre de localisations est fixé à l'ignition ou
+   varie par Tour ; interprétation retenue : re-tirée chaque Tick, cohérente avec le "par Tour" de la
+   formule de dégâts elle-même, qui elle est explicitement relancée à chaque fois), `forcedLocation`
+   laissé `null` (aléatoire, RAW littéral "1D3 Localisation(s)"). Petite flamme/feu moyen/Acide :
+   `forcedLocation` attendu (RAW : "la Localisation exposée"), pas forcé côté serveur — un MJ qui
+   omet ce champ obtient un tirage aléatoire au lieu d'une localisation fixe, à corriger côté UI (G)
+   plutôt que bloqué côté serveur (une omission MJ reste une décision de jeu valide, pas une erreur).
+3. `clearHazard(io, db, campaignId, tokenId, hazardCode, { linger = false, currentTurn = null } =
+   {})` :
+   - `linger: false` (Feu éteint, Acide neutralisé, Décompression stoppée) → `statusService.
+     clearModStatus(...)` immédiat, comme aujourd'hui.
+   - `linger: true` (sortie de zone Acide uniquement, RAW : persiste "1D6 Tour(s)") → **ne supprime
+     pas** la ligne, mais `UPDATE token_statuses SET expires_at_turn = currentTurn + roll(1d6) + 1
+     WHERE token_id/status_code`. Le `+1` est nécessaire (pas juste `+roll`) : la purge universelle de
+     fin de Tour (`socketCombatHelpers.js:1092-1114`, condition `expires_at_turn <= newTurn`) retire
+     le statut **avant** la phase de résolution du Tour où `newTurn === expires_at_turn` — sans le
+     `+1`, l'Acide ne tickerait que `roll-1` fois au lieu des `roll` Tours RAW. Vérifié en traçant
+     l'ordre réel `startResolutionPhase` (tick) → ... → purge de fin de Tour (incrément `current_turn`)
+     → `ANNOUNCEMENT` suivant.
+4. `resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)`
+   (`environmentalHazardService.js`) — dispatch générique, patron `resolveModHooks`
+   (`weaponModService.js:97-107`) : pour chaque ligne, `findHazardRegistryEntry(row.status_code)`
+   (registre increment F.1, jamais un `if/else` par code) → `parseDice(row.data.formula)` pour
+   `degautsBruts` du Tick → `parseDice(row.data.locations)` si c'est une chaîne de dés (ex. Grand Feu
+   `'1d3'`), sinon le nombre fixe → `token_id` → `tokens.character_id` → `characters.type`/
+   `char_sheet.id` (join, même patron que `resolveAssaultAction` ligne ~2230-2233) → **un seul fetch
+   combiné** `attrs`/`archetype`/`mutationEffects`/`genotypeRow` → NA via `calcAttributeNA` (même
+   correction qu'en E.3, pas de double-fetch via `fetchCibleNA`) → boucle de N appels
+   `resolveTargetHit` avec le vrai `cibleType`, `forcedSlotCode` dérivé d'une précédence unique
+   (point ouvert 10) : `const locKey = entry.forcedLocation ?? row.data?.forcedLocation ?? null` →
+   `locKey ? LOCATION_TO_SLOT[locKey] : null` — registre (Décompression) prime sur l'instance
+   (Acide/petite flamme/feu moyen si le MJ l'a renseigné à l'exposition), `null` = 1D20 natif (Grand
+   feu/Brasier, ou Acide/Feu sans `forcedLocation` fourni). Mêmes remarques drone/pj/pnj qu'en E. Un
+   token sans `character_id` ou de type `drone` est ignoré (mêmes limites qu'en E).
+5. Appel depuis `startResolutionPhase`, juste après la boucle des mods existants (ligne ~190) :
+   ```js
+   const hazardRows = await db('combat_roster as roster')
+     .join('token_statuses as ts', 'roster.token_id', 'ts.token_id')
+     .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active' })
+     .whereIn('ts.status_code', ENVIRONMENTAL_HAZARD_REGISTRY.map(e => e.code))
+     .select('roster.token_id', 'ts.status_code', 'ts.data')
+   await resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)
+   ```
+   (même patron de jointure que `getAllCombatMods`, `weaponModService.js:114-121`, scope par
+   `combat_roster` puisque `token_statuses` n'a pas de `campaign_id` propre — **boucle indépendante de
+   celle des mods**, les deux registres restent séparés : un danger environnemental n'est pas un mod
+   d'arme, les fusionner en un seul registre aurait mélangé deux domaines sans rapport).
+
+**G. Routes/socket/UI** (dernier increment, après validation de C-F) — cadré le 2026-07-30, passe
+solo UX/UI (rôle expert interface gaming demandé par Saar), validé par Saar ("rien à redire, alignés").
+
+**Découverte de cadrage (pas un défaut de F, une clarification de périmètre)** : `docs/
+FUSION_PROJET_COUSIN.md` §2 déclare `server/src/services/worldEffectService.js` autorité des "effets
+de terrain" — un système de zones AABB posées sur la carte (`world_effect_definitions`/
+`world_effect_instances`, migration 154, built-ins `fire`/`gas`/`oil`/`flooded` déjà déclarés, outil MJ
+de tracé déjà dans `Sidebar.jsx` ~1212-1377) existe déjà côté moteur monde, avec des hooks `turnStart`
+**jamais consommés** (`grep turnStart server/src` → 0 résultat). Ce n'est **pas** un doublon du Lot 3 :
+RAW distingue explicitement deux cas — exposition **personnelle/ciblée** (*"vêtements qui prennent feu
+sur un personnage"*, *"aspergé de liquide inflammable"* — suit le personnage, indépendant de la
+position) traitée par `token_statuses`/Lot 3 (F), vs exposition **de zone/ambiance** (*"atmosphère
+corrosive"*) qui relève de `worldEffectService.js`. **G reste scopé au cas personnel/ciblé.** Le cas
+zone (brancher les hooks `turnStart` déjà déclarés côté monde) est un chantier séparé, plus tard,
+territoire Codex/dev-monde — pas improvisé ici. Confirme et formalise l'intuition de Saar ("zone vs
+lance-flammes qui cible directement, coexisteront probablement", tour précédent).
+
+**UI — aucun nouveau composant structurel, tout se greffe sur l'existant** :
+- Point d'entrée MJ : `TokenRadialMenu.jsx` (clic droit sur un token, déjà utilisé pour "statuts") —
+  nouvelle entrée "Chute", "statuts" enrichi pour les 3 codes danger.
+- Poser/retirer un danger : `TokenStatusPanel.jsx` (bulle 3×5, déjà MJ/owner-gated) — étendu avec un
+  sous-formulaire (formule/localisations) pour les 3 codes danger, pas un simple toggle comme les
+  statuts existants.
+- Localisation exposée (`data.forcedLocation`, point ouvert 10) : `AimedLocationPicker.jsx` (silhouette
+  cliquable, déjà les 6 clés RAW `LOCATION_I18N_KEYS`) réutilisé tel quel, aucun nouveau composant.
+- Badge sur le token : `TokenPresentation.jsx:TokenStatusBadges` — ajouter `acid_exposure`/
+  `decompression`/`on_fire` à `STATUS_CATEGORY` + icônes SVG dédiées.
+- Résultat de la Chute (jets, blessures) : nouvelle fenêtre courte, même famille visuelle que
+  `CombatStunWindow.jsx`.
+
+**Routes REST — ✅ fait le 2026-07-30** (`server/src/routes/campaigns.js`, GM uniquement
+`requireAuth`+`requireRole('gm')`, même patron que `healing-choice`/`infection-mode` déjà dans ce
+fichier). `resolveCampaignToken(campaignId, tokenId)` factorisée (jointure `tokens`→`battlemaps`→
+`campaign_id`, `tokens` n'a pas de `campaign_id` propre) — vérifie qu'un token appartient bien à la
+campagne avant toute mutation, réutilisée par les 3 routes plutôt que dupliquée :
+- `POST /api/campaigns/:id/hazards/fall` (body : `{ tokenId, heightMeters?, groundTrigger?,
+  terrainAccidente?, attemptTest? }`) → `fallDamageService.js:resolveFall`.
+- `POST /api/campaigns/:id/tokens/:tokenId/hazards/:code/expose` (body : `{ formula, locations?,
+  forcedLocation? }`) → `environmentalHazardService.js:exposeToHazard`.
+- `POST /api/campaigns/:id/tokens/:tokenId/hazards/:code/clear` (body : `{ linger? }`) →
+  `environmentalHazardService.js:clearHazard`.
+
+UI client — fait en fichiers segmentés (Saar peut relire du JSX, contrairement au code serveur dense) :
+
+- **✅ Exposition/retrait Acide/Feu/Décompression** — fait le 2026-07-30, `TokenStatusPanel.jsx` étendu
+  (sous-formulaire au lieu du toggle nu pour ces 3 codes, MJ uniquement), `SessionPage.jsx` (prop
+  `campaignId` ajoutée), `AimedLocationPicker.jsx` (prop `showMalus=false` ajoutée — réutilisé tel quel
+  pour choisir `forcedLocation`, pas de malus de visée hors contexte d'attaque). Présets RAW extraits en
+  constante partagée `shared/environmentalHazardPresets.js` (testé 2/2, même patron que
+  `fallDamageConstants.js`), clés i18n `combat.json:hazardPanel.*` (nouvelles, `en.json` gelé donc non
+  touché). `node --check`/tests/`eslint`/`npm run build` (client) tous passés.
+- **✅ Chute** — fait le 2026-07-30, **écart assumé par rapport au cadrage initial** : pas une nouvelle
+  entrée dans `TokenRadialMenu.jsx`. En lisant le composant, le nombre de secteurs (`N = 8`) est couplé
+  à la géométrie SVG (angles, graduations) — passer à 9 change l'équilibre visuel du menu radial (dont
+  la boussole de rotation centrale est déjà calée sur 8 directions, un souci esthétique différent mais
+  qui aurait rendu l'ajout d'un 9ᵉ secteur visuellement bancal). Choix retenu : un bouton "Chute" dans
+  `TokenStatusPanel.jsx` (déjà ouvert depuis le secteur "statuts" existant), formulaire dédié (hauteur/
+  niveau du sol/terrain accidenté/tentative de réduction) + affichage du résultat agrégé (dégâts, Test,
+  localisations touchées avec sévérité — réutilise `LOCATION_I18N_KEYS`/`charSheet:locationPanel.
+  severityShort.*` déjà existants, aucune nouvelle table de libellés). Panneau plafonné à la hauteur du
+  viewport avec défilement interne (jusqu'à 6 localisations possibles sur une grosse chute, la hauteur
+  du panneau ne pouvait pas rester une estimation fixe). Clés i18n `combat.json:fallPanel.*`.
+  `eslint`/`npm run build` (client) passés.
+
+Increment G clos — Lot 3 entier (C à G) fonctionnellement complet.
+
+**2026-07-30 — test navigateur Saar : fonctionnel OK.** Retour ergonomique : fenêtre `TokenStatusPanel`
+et icônes de statuts trop petites. Ajusté : icônes grille 20→32px, libellés 8→10px, largeur panneau
+320→340px, hauteurs estimées +~20 (300/450/400 selon le mode) — plafond viewport + scroll interne déjà
+en place absorbe tout dépassement résiduel. `eslint`/`npm run build` (client) repassés, propres.
+
+**2026-07-30 — bug réel trouvé au test navigateur : dégâts environnementaux invisibles dans le
+"chat".** Cause racine (recherche dédiée) : `resolveTargetHit` ne fait jamais d'émission socket visible
+en jeu — les attaques normales (`resolveAssaultAction`/`resolveMeleeAction`) émettent explicitement
+`WS.COMBAT_ATTACK_RESULT` après coup (consommé par `CombatResultGM`/`CombatResultPlayer` via
+`useCombatSocket.js`) ; `resolveEnvironmentalHazardTicks` (F.4) et `resolveFall` (E) ne le faisaient
+jamais — la blessure était bien créée en base (`WOUND_ADDED`, jamais lu par l'overlay combat) mais rien
+n'atteignait le panneau visible. Corrigé : les deux services émettent désormais `WS.COMBAT_ATTACK_RESULT`
+par coup porté, réutilisant tel quel `CombatResultGM`/`CombatResultPlayer` (aucun nouveau composant) :
+- `tireurId: null` (pas de jet d'attaque, dégât automatique) + nouveau champ `sourceCode`
+  (`'burning'|'acid'|'decompression'|'fall'`) résolu en libellé **côté client**
+  (`CombatOverlay.jsx:resolveAttaquantLabel`) — jamais de texte FR figé émis par le serveur (i18n.md).
+  `burning`/`acid`/`decompression` réutilisent les clés `status.*` déjà existantes (mêmes codes que
+  Lot 3 §9 increment G) ; `fall` → `combat.json:fallPanel.title`.
+- `isPnj: true` réutilisé pour son effet pratique dans `useCombatSocket.js` (montré au MJ ET au joueur
+  ciblé), pas pour son sens littéral "cible PNJ" — pas de nouveau champ pour éviter d'étendre le contrat
+  d'événement pour un besoin déjà couvert.
+- **Correctif connexe** : `CombatResultPlayer` affichait `roll`/`seuil` sans garde (`undefined` visible
+  à l'écran) contrairement à `CombatResultGM` qui avait déjà `{roll !== undefined && (...)}`. Harmonisé
+  — sans effet sur les attaques normales (elles fournissent toujours un `roll` réel), nécessaire pour
+  que Chute/dangers (qui n'ont pas de jet d'attaque) s'affichent proprement.
+- Pas d'émission `DICE_RESULT` (animation du jet de Test de Choc) pour ces dégâts — aurait demandé un
+  `username`/`color` fictif pour l'auteur du jet, hors scope ; le résultat du Test de Choc reste visible
+  dans le panneau via `shockResult` (bloc dédié), seule l'animation du dé lui-même est absente.
+
+`node --check` (serveur), `eslint`/`npm run build` (client) tous propres après correctif.
 
 ---
 

@@ -392,9 +392,11 @@ export function CombatResultPlayer({ attaquant, isSuccess, roll, seuil, localisa
         <span style={{ color: C.text, fontWeight: 600 }}>{attaquant}</span>
       </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <RollSeuilLine roll={roll} seuil={seuil} isSuccess={isSuccess} />
-      </div>
+      {roll !== undefined && (
+        <div style={{ marginBottom: 8 }}>
+          <RollSeuilLine roll={roll} seuil={seuil} isSuccess={isSuccess} />
+        </div>
+      )}
 
       {isSuccess && (
         <div style={{ marginBottom: 8 }}>

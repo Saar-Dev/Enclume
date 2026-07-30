@@ -1,3 +1,21 @@
+## v194 — 2026-07-30 — Dommages environnementaux : Chute, Acide, Décompression, Feu
+
+### Client
+- [feat] Nouveau bouton "Chute" dans le panneau Statuts d'un token (MJ) : hauteur de la chute (ou
+  "Niveau du sol"), terrain accidenté, tentative de réduction via un Test d'Acrobatie/Équilibre —
+  résout localisations touchées, dégâts et blessures en un clic.
+- [feat] Les statuts Enflammé/Corrodé/Décompression exposent maintenant un vrai danger (formule de
+  dégâts, nombre de localisations, localisation exposée optionnelle) au lieu d'un simple badge
+  cosmétique — le MJ les pose depuis le panneau Statuts, ils infligent des dégâts à chaque Tour de
+  combat jusqu'à leur retrait.
+- [feat] Ces dégâts sont maintenant visibles dans le panneau de résultat de combat, comme une attaque
+  normale.
+- [fix] Panneau Statuts et icônes de statuts agrandis (meilleure lisibilité).
+
+### Serveur
+- [feat] Nouvelles routes MJ pour déclencher une Chute ou exposer/retirer un danger environnemental
+  sur un token (`docs/PLAN_FATIGUE_DOMMAGES.md` Lot 3).
+
 ## v193 — 2026-07-29 — Horloge de campagne
 
 ### Client

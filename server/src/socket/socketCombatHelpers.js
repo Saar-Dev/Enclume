@@ -12,6 +12,7 @@ import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
+import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import { measureBattlemapTokenDistance, tokenDistanceM } from '../services/worldSpatialQueryService.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
 import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
@@ -188,6 +189,18 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
         }
       }
     }
+
+    // Lot 3 (docs/PLAN_FATIGUE_DOMMAGES.md §9 increment F) — tick de début de tour pour les dangers
+    // environnementaux (Acide/Décompression/Feu), boucle indépendante de celle des mods ci-dessus :
+    // deux registres séparés (équipement vs danger environnemental), jamais fusionnés. Un statut
+    // environnemental n'est jamais balayé à COMBAT_END (§9 point ouvert 7, décision assumée) — un
+    // token qui rentre dans un nouveau combat avec un badge encore actif retickera automatiquement ici.
+    const hazardRows = await db('combat_roster as roster')
+      .join('token_statuses as ts', 'roster.token_id', 'ts.token_id')
+      .where({ 'roster.campaign_id': campaignId, 'roster.status': 'active' })
+      .whereIn('ts.status_code', getAllHazardCodes())
+      .select('roster.token_id', 'ts.status_code', 'ts.data')
+    await resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)
 
     const broadcastRoster = fullRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
 
@@ -2233,22 +2246,10 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       : null
     const formula = weapon.effective_formula.replace(/\s/g, '')
 
-    // Helper : fetch attributs NA cible avec genotype + mutations
-    const fetchCibleNA = async (charId, sheetId) => {
-      const [attrsCible, archetypeCible, mutationEffectsCible] = await Promise.all([
-        db('char_attributes').where({ char_sheet_id: sheetId }),
-        db('char_archetype').where({ char_sheet_id: sheetId }).first(),
-        getMutationEffects(sheetId),
-      ])
-      const genoCible = archetypeCible?.genotype_id
-        ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
-        : null
-      return {
-        for_na: calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible),
-        con_na: calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible),
-        vol_na: calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible),
-      }
-    }
+    // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
+    // (extrait le 2026-07-30, docs/PLAN_FATIGUE_DOMMAGES.md §9 point structurel 2 : fermeture
+    // auparavant privée à cette fonction, désormais partagée avec le Lot 3 Chute/Feu/Acide).
+    const fetchCibleNA = (charId, sheetId) => damageService.fetchCibleNA(db, charId, sheetId)
 
     // 8a. Cible = drone (§7.6 — blindage + RD intégrité, auto-resolve)
     if (cibleCharacter?.type === 'drone') {
@@ -2734,17 +2735,13 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           const sheetCible = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
           if (sheetCible) {
             char_sheet_id_cible = sheetCible.id
-            const [attrsCible, archetypeCible, mutationEffectsCible] = await Promise.all([
-              db('char_attributes').where({ char_sheet_id: sheetCible.id }),
-              db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
-              getMutationEffects(sheetCible.id),
-            ])
-            const genoCible = archetypeCible?.genotype_id
-              ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
-              : null
-            for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible)
-            con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible)
-            vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible)
+            // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
+            // (docs/PLAN_FATIGUE_DOMMAGES.md §9 point structurel 2, complété le 2026-07-30 : 2ᵉ copie
+            // trouvée ici en plus de resolveDroneAssaultAction, dédupliquée à son tour).
+            const naCible = await damageService.fetchCibleNA(db, cibleCharacter.id, sheetCible.id)
+            for_na_cible = naCible.for_na
+            con_na_cible = naCible.con_na
+            vol_na_cible = naCible.vol_na
           }
         }
       }

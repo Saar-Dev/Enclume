@@ -1258,6 +1258,74 @@ sans base RAW retiré, voir `docs/EN_COURS.md` item 111. Dette restante hors sco
 
 ---
 
+## Fatigue & Dommages — Chute/Acide/Décompression/Feu (Lot 3, session 189)
+
+### Serveur
+- Migration `225_token_statuses_data.js` — `token_statuses.data` JSONB nullable (additive), porte
+  `{formula, locations, forcedLocation}` par instance de danger environnemental.
+- `server/src/lib/fallDamageService.js` (`resolveFall`) — Chute ponctuelle : table RAW hauteur→dés/
+  localisations (`shared/fallDamageConstants.js`), Test d'Acrobatie/Équilibre optionnel (malus
+  hauteur×2, réduction 1D6+mr, impossible au-delà de 5m), protection d'armure réduite de moitié
+  (`armorReductionFactor` sur `resolveTargetHit`, additif). Garde d'entrée serveur autoritaire
+  (`groundTrigger`/`heightMeters` mutuellement exclusifs, hauteur entière ≥1).
+- `server/src/lib/environmentalHazardService.js` (`exposeToHazard`/`clearHazard`/
+  `resolveEnvironmentalHazardTicks`) + `shared/environmentalHazardRegistry.js` — Acide/Décompression/
+  Feu récurrents, patron registre `echeanceTypeRegistry.js` (lookup simple, pas d'agrégation type
+  `weaponModRegistry.js` : plusieurs dangers peuvent coexister sur un même token, résolus
+  indépendamment). Codes `burning`/`acid`/`decompression` — alignés sur les codes cosmétiques
+  préexistants de `TokenStatusPanel.jsx`/`socketToken.js` (retirés du toggle nu, qui aurait écrasé
+  silencieusement `data`) plutôt qu'un 2ᵉ vocabulaire. Localisation « exposée » (RAW : petite flamme/
+  feu moyen/Acide touchent un point fixe, pas un tirage aléatoire) : `data.forcedLocation`, précédence
+  registre (Décompression = Corps fixe) > instance > aléatoire natif. Persistance Acide après sortie
+  de zone : `expires_at_turn` calculé (1D6 Tours), `+1` nécessaire pour compenser l'ordre purge/tick de
+  `startResolutionPhase`. Statuts environnementaux **jamais balayés à `COMBAT_END`** (décision assumée :
+  persistent hors combat, mais aucun Tick ne s'exécute hors FSM combat — aucun autre mécanisme de
+  "Tour" n'existe hors de ce contexte).
+- Hook `startResolutionPhase` (`socketCombatHelpers.js`) — 2ᵉ boucle indépendante de celle des mods,
+  juste après, jointure `combat_roster`/`token_statuses`.
+- `diceParser.js` factorisé (`parseFormulaShape` interne, nouvel export pur `isValidDiceFormula` —
+  jamais un jet, juste la validation syntaxique) : valide les formules MJ à l'écriture
+  (`exposeToHazard`) plutôt que de laisser planter toute la résolution du Tour sur une formule invalide.
+- `statusService.js` (`applyModStatus`/`clearModStatus`) — `data`/`throwOnFailure` ajoutés (additif,
+  défaut inchangé pour l'unique appelant existant, la boucle mods).
+- Routes `POST /api/campaigns/:id/hazards/fall`, `/tokens/:tokenId/hazards/:code/expose|clear`
+  (`campaigns.js`, GM uniquement, `resolveCampaignToken` factorisé pour vérifier l'appartenance token↔
+  campagne).
+- **Bug trouvé et corrigé en validant** : `resolveTargetHit` ne fait aucune émission visible en jeu
+  par lui-même — les attaques normales l'annoncent explicitement (`WS.COMBAT_ATTACK_RESULT`), ce que
+  ni `resolveEnvironmentalHazardTicks` ni `resolveFall` ne faisaient (blessure créée en base,
+  invisible en jeu). Corrigé : les deux émettent `WS.COMBAT_ATTACK_RESULT` par coup porté
+  (`tireurId: null` + nouveau champ `sourceCode`, résolu en libellé côté client, jamais de texte FR
+  figé serveur).
+
+### Client
+- `TokenStatusPanel.jsx` étendu — les 3 codes danger ouvrent un sous-formulaire (présets RAW
+  `shared/environmentalHazardPresets.js`, formule/localisations libres, sélecteur de localisation via
+  `AimedLocationPicker` réutilisé avec un nouveau prop `showMalus=false`) au lieu du toggle nu ; bouton
+  "Chute" (formulaire + résultat agrégé inline) — pas de nouvelle entrée dans `TokenRadialMenu.jsx`
+  (aurait cassé la géométrie 8 secteurs/boussole de rotation, couplées dans le composant).
+- `SessionPage.jsx` — prop `campaignId` ajoutée à `TokenStatusPanel`.
+- `CombatOverlay.jsx`/`CombatResultPanels.jsx` — réutilisation telle quelle de `CombatResultGM`/
+  `CombatResultPlayer` pour les dégâts environnementaux/Chute (`sourceCode` résolu en libellé via
+  `status.*`/`fallPanel.title`) ; `CombatResultPlayer` harmonisé sur la garde `roll !== undefined`
+  déjà présente côté GM (sans effet sur les attaques normales).
+- Clés i18n `combat.json:hazardPanel.*`/`fallPanel.*` (nouvelles, `en.json` gelé donc non touché).
+
+### État
+✅ codé et confirmé fonctionnel en navigateur par Saar (exposition/retrait des 3 dangers, Tick
+récurrent en combat, Chute avec/sans Test, visibilité en jeu après correctif). Ajustements ergonomiques
+faits sur retour direct (icônes/panneau agrandis). Tests automatisés : `node --test` sur tous les
+fichiers serveur/`shared` nouveaux (constantes RAW, registre, `diceParser` refactor — 0 régression),
+`eslint`+`npm run build` client propres à chaque étape. Non testé : round-trip HTTP authentifié scripté
+(pas d'identifiants côté agent). Dette hors périmètre, non traitée : intégration avec le système de
+zones `worldEffectService.js` (dangers "d'ambiance"/de zone posés sur la carte, hooks `turnStart`
+déjà déclarés côté moteur monde mais jamais consommés) — ce Lot ne couvre que l'exposition
+personnelle/ciblée (RAW : vêtements qui prennent feu, aspergé de liquide inflammable), pas la zone
+posée sur la carte ; chantier séparé, territoire Codex/dev-monde, à cadrer plus tard. Détail complet :
+`docs/PLAN_FATIGUE_DOMMAGES.md` §9.
+
+---
+
 ## Pièges actifs — tous domaines
 
 | Code | Description |

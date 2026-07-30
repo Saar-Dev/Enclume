@@ -188,3 +188,86 @@ Tout reste à valider par Saar. **Données** : migration 209 (rétrocompatible, 
 appliquer sur Kiwi via la procédure habituelle (`docs/SERVEURDISTANTKIWI.md`). **Retour arrière** :
 6 commits distincts sur `dev/Saar` (un par correctif), chacun revert-able isolément sans affecter les
 autres.
+
+---
+
+## Session 189 (Saar) — 2026-07-30 — `PLAN_FATIGUE_DOMMAGES.md` Lot 3 clos : Chute/Acide/Décompression/Feu — ✅ codé et confirmé fonctionnel en navigateur
+
+**Contexte** : reprise du chantier Fatigue & Dommages après le Lot 1 (horloge de campagne, Session 188)
+et le Lot 2 (moteur d'échéances + Blessures/Guérison, sessions précédentes non journalisées ici — voir
+`docs/ASBUILT.md`). Cadrage du Lot 3 fait par exploration du code réel avant tout code (RAW verbatim
+relue dans `docs/REGLES/FATIGUE&DOMMAGES.md` p.242-243), avec plusieurs passes d'analyse critique
+demandées par Saar avant/entre chaque increment plutôt qu'un plan figé validé une fois pour toutes.
+
+**Increments A-B (extraction préalable)** : `fetchCibleNA` partagée (`damageService.js`, déjà
+dupliquée deux fois dans `socketCombatHelpers.js` — complétée en cours de route, une 2ᵉ copie réelle
+trouvée dans `resolveAssaultAction` en plus de `resolveDroneAssaultAction`) ; `armorReductionFactor` sur
+`resolveTargetHit` (additif, RAW Chute : protection d'armure réduite de moitié).
+
+**Increment C — migration 225** : `token_statuses.data` JSONB nullable. `applyModStatus`/
+`clearModStatus` (`statusService.js`) étendues avec `data`/`throwOnFailure` — ce dernier trouvé
+nécessaire en analyse critique (l'appelant existant, boucle mods de `startResolutionPhase`, tourne dans
+le même bloc `try` que la transition de phase déjà committée ; un échec d'écriture ne doit pas
+planter toute la résolution du Tour, mais les nouvelles actions MJ Lot 3 doivent, elles, voir l'échec).
+
+**Increment D — `shared/fallDamageConstants.js`** : table RAW Chute extraite, testée. Simplification
+algébrique trouvée pour "au-delà de 4m" (`3D10 + 1D10×(h-4)` ≡ `(h-1)D10`, un seul type de dé —
+`parseDice` ne supporte pas les formules composées).
+
+**Increment E — `fallDamageService.js`** (`resolveFall`) : Test d'Acrobatie/Équilibre optionnel, garde
+d'entrée serveur ajoutée après coup (validation `groundTrigger`/`heightMeters`, absente de la première
+version — trouvée en auto-relecture, pas par Saar).
+
+**Increment F — `environmentalHazardService.js`/`environmentalHazardRegistry.js`** (Acide/Décompression/
+Feu récurrents) : le plus gros morceau, plusieurs trous trouvés en cours de route plutôt qu'anticipés au
+cadrage :
+1. Nettoyage `COMBAT_END` — les statuts environnementaux ne sont volontairement jamais balayés (décision
+   Saar : persistent hors combat, mais aucun Tick ne s'exécute hors FSM combat de toute façon).
+2. Localisation "exposée" du Feu (RAW littéral p.243, relu en détail seulement à cette passe) : petite
+   flamme/feu moyen touchent un point fixe, pas un tirage aléatoire — contrairement au design initial.
+   Réutilise le vocabulaire de la visée existant (`LOCATION_TO_SLOT`) plutôt qu'une nouvelle notion,
+   directive explicite de Saar ("architecture robuste/pérenne/adaptative, corriger l'ensemble au besoin").
+3. Collision de nommage découverte en construisant l'UI : `TokenStatusPanel.jsx`/`socketToken.js`
+   avaient déjà `burning`/`acid`/`decompression` en toggle cosmétique (catégorie "dot", icônes/i18n
+   existants, aucun effet mécanique) — codes registre renommés pour s'aligner plutôt que dupliquer
+   assets/i18n, toggle nu retiré pour ces 3 codes (aurait écrasé silencieusement `data`).
+4. Patron de registre corrigé en 2ᵉ passe : `echeanceTypeRegistry.js` (lookup simple), pas
+   `weaponModRegistry.js`/`resolveModHooks` (agrégation/priorité) — un excès de langage déjà commis puis
+   corrigé une fois pour Lot 2, répété puis recorrigé ici.
+
+**Increment G — routes REST + UI** : cadrage fait en délégant un rôle "expert UX/UI gaming" à part
+entière avant de coder. Découverte de fond : `worldEffectService.js` (moteur monde, Codex) a déjà un
+système de zones de danger (`fire`/`gas`/`oil`/`flooded`, hooks `turnStart` jamais consommés) — pas un
+doublon du Lot 3 mais un cas RAW différent (zone/ambiance vs exposition personnelle/ciblée) ; l'intégration
+avec ce système reste un chantier séparé, territoire Codex/dev-monde, volontairement hors scope ici.
+UI : aucun nouveau composant structurel — `TokenStatusPanel.jsx` étendu (sous-formulaire danger +
+bouton Chute, plutôt qu'une 9ᵉ entrée dans `TokenRadialMenu.jsx` dont la géométrie à 8 secteurs est
+couplée dans le composant), `AimedLocationPicker.jsx` (nouveau prop `showMalus`), routes GM-only dans
+`campaigns.js`.
+
+**Bug réel trouvé au test navigateur** : Saar a signalé les dégâts environnementaux invisibles "dans le
+chat". Cause racine : `resolveTargetHit` ne s'annonce jamais lui-même en jeu — chaque appelant doit
+émettre explicitement `WS.COMBAT_ATTACK_RESULT`, ce que ni le Tick récurrent ni la Chute ne faisaient
+(la blessure était bien créée en base, juste invisible). Corrigé en réutilisant tel quel les panneaux
+`CombatResultGM`/`CombatResultPlayer` existants (`tireurId: null` + nouveau champ `sourceCode` résolu en
+libellé côté client, jamais de texte FR figé serveur) ; correctif connexe sur `CombatResultPlayer` qui
+affichait `roll`/`seuil` sans garde contrairement à la vue GM.
+
+**Fichiers touchés** : migration `225_token_statuses_data.js` ; nouveaux
+`server/src/lib/{fallDamageService,environmentalHazardService}.js`,
+`shared/{fallDamageConstants,environmentalHazardRegistry,environmentalHazardPresets}.js` (+ tests) ;
+modifiés `server/src/lib/{statusService,damageService,diceParser}.js` (+ nouveau
+`diceParser.test.mjs`), `server/src/socket/{socketCombatHelpers,socketToken}.js`,
+`server/src/routes/campaigns.js` ; client `TokenStatusPanel.jsx`, `AimedLocationPicker.jsx`,
+`SessionPage.jsx`, `CombatOverlay.jsx`, `CombatResultPanels.jsx`, `locales/combat.json` ;
+`docs/PLAN_FATIGUE_DOMMAGES.md` tenu à jour à chaque increment (pas en fin de session).
+
+**Testé** : `node --check`/`node --test` sur tous les fichiers serveur/`shared` touchés (constantes RAW,
+registre, `diceParser` — 0 régression sur les tests existants rejoués), `eslint`+`npm run build` client
+propres à chaque étape, migration 225 vérifiée appliquée en base. Confirmé fonctionnel en navigateur par
+Saar (exposition/retrait des 3 dangers, Tick récurrent, Chute avec/sans Test, visibilité en jeu après
+correctif), ajustements ergonomiques faits sur retour direct (icônes/panneau agrandis). **Non testé** :
+round-trip HTTP authentifié scripté (pas d'identifiants côté agent). **Données** : migration 225,
+appliquée automatiquement par le serveur `dev` déjà actif au moment de sa création. **Retour arrière** :
+commit isolé sur `dev/Saar`, `git revert` possible sans affecter les chantiers Lot 1/Lot 2 déjà commités
+séparément.

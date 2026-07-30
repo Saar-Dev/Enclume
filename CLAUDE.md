@@ -16,6 +16,9 @@
 6. Une modification n'est terminée qu'après validation proportionnée au risque.
 7. Signaler séparément ce qui est testé et ce qui ne l'est pas.
 8. Un résumé de conversation aide à continuer ; il ne remplace pas la lecture des fichiers utiles.
+9. Une mécanique de jeu implémentée colle au texte RAW du Livre de Base Polaris autant que
+   possible ; toute simplification ou tout écart est une décision explicite, discutée et
+   documentée — jamais un raccourci silencieux pris pour aller plus vite.
 
 Hiérarchie documentaire : Livre de Base Polaris > `FOUNDATION` > `VOCABULARY` > `SYSTEME` >
 règles domaine > `MANUEL` > `PLAN`.
@@ -36,7 +39,6 @@ règles domaine > `MANUEL` > `PLAN`.
 - Avant de conclure qu'aucun piège connu ne couvre un sujet, vérifier `docs/SYSTEME/CONVENTIONS.md`
   §19 (index maître des codes P/PE/PC/PI) — les `rules/` routées ne pointent qu'une partie du domaine,
   l'index est la source complète.
-- Migrations : Codex migration PAIRE uniquement. Claude migration IMPAIRE uniquement.
 
 ---
 

@@ -148,9 +148,14 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
       const { isOwner } = await checkTokenOwnership(db, token, user.id, isGm ? 'gm' : 'player')
       if (!isOwner && !isGm) return
 
+      // burning/acid/decompression retirés (docs/PLAN_FATIGUE_DOMMAGES.md §9 Lot 3, increment G) — ce
+      // toggle nu (aucune `data`) écraserait silencieusement la formule/localisation posée par
+      // environmentalHazardService.js:exposeToHazard (`applyModStatus`, `.onConflict().merge()`).
+      // Ces 3 codes passent désormais exclusivement par exposeToHazard/clearHazard (POST /campaigns/
+      // :id/tokens/:tokenId/hazards/:code/expose|clear), jamais par ce toggle générique.
       const VALID_STATUS_CODES = new Set([
         'grappled', 'restrained', 'off_balance',
-        'burning', 'acid', 'asphyxia', 'decompression', 'electrocuted',
+        'asphyxia', 'electrocuted',
         'stunned', 'unconscious', 'blinded',
         'hypothermia', 'infected', 'poisoned', 'irradiated',
       ])

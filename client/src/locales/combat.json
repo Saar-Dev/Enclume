@@ -307,6 +307,48 @@
       "defaultDesc": "1D6"
     }
   },
+  "hazardPanel": {
+    "exposeTitle": "Exposer — {{label}}",
+    "clearTitle": "Retirer — {{label}}",
+    "formula": "Formule de dégâts",
+    "formulaPlaceholder": "ex. 1d10",
+    "locations": "Localisations",
+    "locationsPlaceholder": "ex. 1 ou 1d3",
+    "forcedLocation": "Localisation exposée",
+    "forcedLocationHint": "Optionnel — sinon tirage aléatoire",
+    "linger": "Persiste 1D6 Tour(s) après retrait (Acide)",
+    "custom": "Personnalisé",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "clearButton": "Retirer",
+    "presets": {
+      "burning_small": "Petite flamme (1D6, 1 loc.)",
+      "burning_medium": "Feu moyen (1D10, 1 loc.)",
+      "burning_large": "Grand feu (2D10, 1D3 loc.)",
+      "burning_inferno": "Brasier (3D10)",
+      "decompression_normal": "Paliers manqués (1D10)",
+      "decompression_severe": "Paliers multiples (2D10)"
+    }
+  },
+  "fallPanel": {
+    "openButton": "Chute",
+    "title": "Chute",
+    "heightMeters": "Hauteur (mètres)",
+    "groundTrigger": "Niveau du sol (Allure maximale ou Catastrophe)",
+    "terrainAccidente": "Terrain accidenté (+1D10)",
+    "attemptTest": "Tentative de réduction (Test Acrobatie/Équilibre)",
+    "confirm": "Résoudre",
+    "cancel": "Annuler",
+    "resultTitle": "Résultat — Chute",
+    "resultDegats": "Dégâts bruts : {{total}} ({{formula}})",
+    "resultTerrain": "Terrain accidenté : +{{total}}",
+    "resultLocations": "{{count}} localisation(s) touchée(s)",
+    "resultTestSuccess": "Test réussi (MR {{mr}}) — dégâts réduits de {{reduction}}",
+    "resultTestFail": "Test échoué (seuil {{seuil}})",
+    "resultHit": "{{location}} — {{degats}} dégâts nets — {{severity}}",
+    "resultNone": "Aucune blessure",
+    "close": "Fermer"
+  },
   "timeline": {
     "turn": "Tour {{turn}}",
     "announcement": "Annonce",

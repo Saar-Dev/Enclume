@@ -12,8 +12,10 @@ function formatMalus(n) { return n > 0 ? `+${n}` : `${n}` }
 
 // Viser une Localisation précise (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — picker interactif,
 // aucune condition d'éligibilité (contrairement à Tir visé) : toujours sélectionnable indépendamment
-// du reste de la déclaration.
-export default function AimedLocationPicker({ aimedLocation, onChange }) {
+// du reste de la déclaration. showMalus=false (Lot 3, docs/PLAN_FATIGUE_DOMMAGES.md §9, increment G) :
+// réutilisé tel quel pour choisir la "Localisation exposée" d'un danger environnemental (Acide/Feu) —
+// contexte sans Test d'attaque, le malus de visée n'y a pas de sens.
+export default function AimedLocationPicker({ aimedLocation, onChange, showMalus = true }) {
   const { t } = useTranslation('charSheet')
   const [hovered, setHovered] = useState(null)
 
@@ -38,7 +40,8 @@ export default function AimedLocationPicker({ aimedLocation, onChange }) {
       <div style={s.info}>
         {displayLoc ? (
           <span style={s.infoText}>
-            {t(LOCATION_I18N_KEYS[displayLoc])} ({formatMalus(AIMED_LOCATION_MALUS[displayLoc])})
+            {t(LOCATION_I18N_KEYS[displayLoc])}
+            {showMalus && ` (${formatMalus(AIMED_LOCATION_MALUS[displayLoc])})`}
           </span>
         ) : (
           <span style={s.infoTextMuted}>{t('aimedLocationPicker.randomHint')}</span>

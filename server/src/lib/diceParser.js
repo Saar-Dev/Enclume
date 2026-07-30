@@ -19,7 +19,11 @@ const DICE_REGEX = /^(\d+)?d(\d+)([+-]\d+)?$/i
 //
 // Async car crypto.randomInt peut être async selon la version Node.js.
 
-export async function parseDice(formula) {
+// parseFormulaShape — validation pure (aucun jet), factorisée pour être réutilisée par parseDice ET
+// par un appelant qui a seulement besoin de vérifier qu'une formule MJ est valide avant de l'écrire en
+// base (ex. environmentalHazardService.js:exposeToHazard, Lot 3) — jamais rouler un dé juste pour
+// valider une chaîne, ça consommerait de l'entropie réelle pour rien.
+function parseFormulaShape(formula) {
   if (!formula || typeof formula !== 'string') {
     throw new Error(`Formule invalide : ${formula}`)
   }
@@ -43,6 +47,23 @@ export async function parseDice(formula) {
   if (faces < 2 || faces > 1000) {
     throw new Error(`Nombre de faces invalide : ${faces}`)
   }
+
+  return { count, faces, modifier }
+}
+
+// isValidDiceFormula — true/false, jamais un throw, jamais un jet. Pour valider une entrée MJ à
+// l'écriture (ex. exposeToHazard) avant qu'une formule invalide n'explose bien plus tard, au Tick.
+export function isValidDiceFormula(formula) {
+  try {
+    parseFormulaShape(formula)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function parseDice(formula) {
+  const { count, faces, modifier } = parseFormulaShape(formula)
 
   // Lancer les dés
   const rolls = []

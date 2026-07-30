@@ -253,6 +253,25 @@
 > n'avait pas été remplacé ; ajouté un spacer dédié entre le déclencheur "Cartes ▾" et le bouton
 > Combat. Prochaine étape : Lot 5 (créateur de token 2D).
 >
+> Dernière mise à jour (dev/Saar) : 2026-07-30 — Session 189 : `docs/PLAN_FATIGUE_DOMMAGES.md` **Lot 3
+> ✅ clos** (Chute/Acide/Décompression/Feu — dommages environnementaux de combat), confirmé fonctionnel
+> par Saar en navigateur après un correctif de visibilité en jeu. Increments C-G, détail exhaustif de
+> chaque décision/écart dans le plan lui-même (§9) et dans `docs/ASBUILT.md`
+> ("Fatigue & Dommages — Chute/Acide/Décompression/Feu"), pas dupliqué ici. Points notables : migration
+> 225 (`token_statuses.data` JSONB), `fallDamageService.js`/`environmentalHazardService.js` nouveaux,
+> `diceParser.js` factorisé (`isValidDiceFormula` pur), 3 codes cosmétiques préexistants
+> (`burning`/`acid`/`decompression`) migrés vers le vrai mécanisme plutôt que dupliqués, bug réel trouvé
+> et corrigé en validant (dégâts environnementaux invisibles en jeu — `resolveTargetHit` ne s'annonce
+> jamais lui-même, chaque appelant doit émettre `WS.COMBAT_ATTACK_RESULT`). **Testé** : `node --test`
+> sur tous les fichiers serveur/`shared` nouveaux, `eslint`+`npm run build` client propres à chaque
+> étape, confirmé fonctionnel en navigateur par Saar (fonctionnalité + visibilité en jeu). **Non
+> testé** : round-trip HTTP authentifié scripté. **Données** : migration 225, appliquée. **Dette hors
+> périmètre notée, non traitée** : intégration avec les zones `worldEffectService.js` (dangers
+> "d'ambiance" posés sur la carte, hooks `turnStart` déjà déclarés côté moteur monde mais jamais
+> consommés) — ce Lot ne couvre que l'exposition personnelle/ciblée, pas la zone ; chantier séparé,
+> territoire Codex/dev-monde. Prochaine étape chantier : Lot 4 (Fatigue), point d'entrée partagé des
+> Lots 5/7/8/9/10, sur confirmation de Saar.
+>
 > Dernière mise à jour (dev/Saar) : 2026-07-29 — Session 188 : `docs/PLAN_FATIGUE_DOMMAGES.md` **Lot 1
 > ✅ clos** (horloge de campagne, confirmé fonctionnel par Saar en navigateur). Fondation du chantier
 > Fatigue/Dommages (§5) — compteur de temps de jeu écoulé par campagne, consommé par les futurs

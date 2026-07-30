@@ -1,5 +1,5 @@
 import { parseDice }                        from './diceParser.js'
-import { calcResistanceArmure }             from './charStats.js'
+import { calcResistanceArmure, calcAttributeNA } from './charStats.js'
 import {
   calcResistanceDommages, getMutationModForResistance, getAdvantageModForResistance, getNaturalArmorMod,
   polarisRound,
@@ -243,6 +243,27 @@ export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalW
   return { total: rolled.total, rolls: rolled.rolls, formula, seed: rolled.seed, choc }
 }
 
+// fetchCibleNA — Attributs NA (For/Con/Vol) d'une cible avec génotype + mutations, pour tout appel à
+// resolveTargetHit hors du flux d'attaque normal (Lot 3, docs/PLAN_FATIGUE_DOMMAGES.md §9 point
+// structurel 2). Extrait le 2026-07-30 d'une fermeture privée dupliquée deux fois dans
+// socketCombatHelpers.js (resolveAssaultAction/resolveMeleeAction) — une seule copie désormais,
+// comportement strictement inchangé (même 3 requêtes, même calcul via calcAttributeNA).
+export async function fetchCibleNA(db, characterId, charSheetId) {
+  const [attrsCible, archetypeCible, mutationEffectsCible] = await Promise.all([
+    db('char_attributes').where({ char_sheet_id: charSheetId }),
+    db('char_archetype').where({ char_sheet_id: charSheetId }).first(),
+    getMutationEffects(charSheetId),
+  ])
+  const genoCible = archetypeCible?.genotype_id
+    ? await db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
+    : null
+  return {
+    for_na: calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible),
+    con_na: calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible),
+    vol_na: calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible),
+  }
+}
+
 // _severityForDamage — table de sévérité (LdB p.114, 5/10/15/20/25/30) extraite en fonction interne
 // (Lot B, docs/PLAN_ARMES_DSL.md) pour être appelée à la fois sur le dégât physique seul et sur le
 // total combiné physique+Choc, sans dupliquer les seuils.
@@ -268,6 +289,10 @@ function _severityForDamage(net) {
 // Test d'attaque de l'adversaire (effet symétrique, contact/jet-trait) est un mécanisme séparé,
 // appliqué en amont par l'appelant (resolveMeleeAction/resolveAssaultAction) sur chancesAttaque,
 // jamais ici — resolveTargetHit ne connaît que la résolution côté cible.
+// armorReductionFactor (Lot 3, docs/PLAN_FATIGUE_DOMMAGES.md §9) : 1 par défaut (aucun effet, tous les
+// appelants existants restent inchangés) — multiplie `etq` avant soustraction, indépendant du DSL
+// munition (`ammoFx`/`mechanic.armorMulFactor`, qui reste le seul mécanisme pour les munitions). Ex.
+// Chute RAW : "protection offerte par l'armure réduite de moitié" → `armorReductionFactor: 0.5`.
 export async function resolveTargetHit(io, db, campaignId, {
   degautsBruts,
   characterIdCible,
@@ -280,6 +305,7 @@ export async function resolveTargetHit(io, db, campaignId, {
   ammoFx = null,
   forcedSlotCode = null,
   treatAsContact = false,
+  armorReductionFactor = 1,
 }) {
   if (cibleType === 'drone') return null
 
@@ -363,6 +389,7 @@ export async function resolveTargetHit(io, db, campaignId, {
         const scaled = etq * mechanic.armorMulFactor
         etq = mechanic.armorRound === 'polaris' ? polarisRound(scaled) : Math.floor(scaled)
       }
+      if (armorReductionFactor !== 1) etq = Math.floor(etq * armorReductionFactor)
     }
   }
 

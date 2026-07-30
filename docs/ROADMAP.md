@@ -1,5 +1,11 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-30 — précision sur "Ergonomie et pédagogie des règles" (besoin concret
+> Dernière mise à jour : 2026-07-30 — Fatigue & Dommages : Lot 3 clos (Chute/Acide/Décompression/Feu,
+> `docs/PLAN_FATIGUE_DOMMAGES.md` §9), confirmé fonctionnel par Saar en navigateur. Prochaine étape du
+> chantier : Lot 4 (Fatigue).
+> 2026-07-30 — Exo-armures : Lot 0 clos, Lot 1 rédigé et prêt à coder
+> (`docs/PLAN_EXOARMURE.md`) ; entrée "Catastrophes" remplacée par le chantier formel
+> `docs/PLAN_TEST_CRITIQUE.md` (cadrage en pause côté Saar).
+> 2026-07-30 — précision sur "Ergonomie et pédagogie des règles" (besoin concret
 > noté en tranchant `docs/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
 > 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
 > Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL6.md`.
@@ -42,9 +48,13 @@
 ## Chantiers futurs — à planifier
 - Arts Martiaux (techniques offensives/défensives, Saisie/Lutte)
 - LOS & Raycast (replanifier avec Kiwi)
-- Catastrophes (seuil à formaliser)
-- Fatigue, Maladies/Poisons, Drogues, Irradiations, Faim/soif, dangers environnementaux (Chute/Feu/Froid/Noyade), horloge de campagne — `docs/PLAN_FATIGUE_DOMMAGES.md`, plan en 10 lots, Lot 0 (cadrage) clos, aucun code
-- Exo‑armures (manuel existant, jamais implanté)
+- Résolution des Tests critiques/Catastrophe par marge, pas par valeur de dé (`docs/PLAN_TEST_CRITIQUE.md`,
+  cadrage v1 **en pause côté Saar** — doit revenir avec la lecture RAW exacte de la table de marge
+  avant de trancher) — bloque uniquement le Lot 8 (Réparation) d'Exo-armures, aucune autre dépendance
+- Fatigue, Maladies/Poisons, Drogues, Irradiations, Faim/soif, dangers environnementaux (Froid/Noyade), horloge de campagne — `docs/PLAN_FATIGUE_DOMMAGES.md`, plan en 10 lots. **Lots 0-3 clos et codés** (horloge de campagne, moteur d'échéances, Blessures/Guérison, Chute/Acide/Décompression/Feu — confirmés fonctionnels par Saar). Prochaine étape : Lot 4 (Fatigue)
+- Exo-armures (`docs/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis, Lot 0 cadrage clos — **Lot 1
+  (Fondations) rédigé et prêt à coder**, analyse à charge faite ; Lots 2/3 définis mais pas encore
+  rédigés en détail, indépendants de `PLAN_TEST_CRITIQUE.md` ; seul le Lot 8 en dépend)
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté

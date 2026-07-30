@@ -4,6 +4,7 @@ import { getShockMalus }        from './charStats.js'
 import { WS }                   from '../../../shared/events.js'
 import { getCampaignSettings }  from './campaignSettingsService.js'
 import { calcSeuils }           from '../../../shared/polarisUtils.js'
+import { AppError }             from './AppError.js'
 
 // ─── emitTokenStatusUpdated ───────────────────────────────────────────────────
 // Migré depuis server/src/socket/index.js — db ajouté en paramètre (était closure).
@@ -157,23 +158,30 @@ export async function applyStun(io, db, campaignId, {
 // l'ATI) ne vit jamais ici — uniquement char_inventory_mods.state ; token_statuses reste un badge,
 // jamais recalculé pour la valeur numérique (correctif "token_statuses cosmétique",
 // PLAN_MODDING_REFONTE.md 3ᵉ passage).
-export async function applyModStatus(io, db, campaignId, tokenId, statusCode, { expiresAtTurn = null } = {}) {
+// throwOnFailure (docs/PLAN_FATIGUE_DOMMAGES.md §9 point ouvert 8) : défaut false, comportement
+// historique inchangé pour l'appelant mods existant (startResolutionPhase, boucle onTurnStart) qui
+// tourne dans le même try global que la transition de phase déjà committée — un échec silencieux y
+// reste préférable à faire planter toute la résolution du Tour. true réservé aux actions MJ Lot 3
+// (exposeToHazard/clearHazard) où un échec d'écriture doit être visible plutôt qu'avalé.
+export async function applyModStatus(io, db, campaignId, tokenId, statusCode, { expiresAtTurn = null, data = null, throwOnFailure = false } = {}) {
   try {
     await db('token_statuses')
-      .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: expiresAtTurn })
+      .insert({ token_id: tokenId, status_code: statusCode, expires_at_turn: expiresAtTurn, data })
       .onConflict(['token_id', 'status_code']).merge()
     await emitTokenStatusUpdated(io, db, campaignId, tokenId)
   } catch (err) {
     console.error('[statusService] applyModStatus error:', err.message)
+    if (throwOnFailure) throw new AppError(500, `Échec d'écriture du statut "${statusCode}" : ${err.message}`)
   }
 }
 
-export async function clearModStatus(io, db, campaignId, tokenId, statusCode) {
+export async function clearModStatus(io, db, campaignId, tokenId, statusCode, { throwOnFailure = false } = {}) {
   try {
     await db('token_statuses').where({ token_id: tokenId, status_code: statusCode }).delete()
     await emitTokenStatusUpdated(io, db, campaignId, tokenId)
   } catch (err) {
     console.error('[statusService] clearModStatus error:', err.message)
+    if (throwOnFailure) throw new AppError(500, `Échec de retrait du statut "${statusCode}" : ${err.message}`)
   }
 }
 
