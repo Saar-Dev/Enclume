@@ -2,8 +2,19 @@
 
 > Statut : Lot 0 (cadrage) tranché avec Saar 2026-07-23. **Lot 1 (Horloge de campagne) ✅ clos
 > 2026-07-29** — codé, testé (fonctionnel, confirmé par Saar en navigateur), voir §7 et
-> `docs/EN_COURS.md`. Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans
-> `docs/Old/` une fois le chantier entier clos, contenu durable transféré vers `docs/SYSTEME/*.md`.
+> `docs/EN_COURS.md`. Analyse à charge du Lot 1 déjà clos (2026-07-29, demandée par Saar avant
+> d'attaquer le Lot 2) : deux dettes trouvées, `docs/BUGIDENTIFIE.md` (`HORLOGE-TEST1`,
+> `HORLOGE-OVERFLOW1`), pas de code touché. **Lot 2 (moteur générique d'échéances) : cadrage v2
+> corrigé 2026-07-29** après une seconde analyse à charge (cette fois sur la v2 elle-même, avant tout
+> code) — deux trous structurels trouvés et corrigés dans le texte, voir §8 points 8/9.
+> **2026-07-30 — analyse à charge combinée avec `PLAN_BLESSURES_GUERISON.md`** (premier consommateur
+> réel du Lot 2) : un trou de concurrence supplémentaire trouvé et corrigé (§8 point 10, append
+> atomique de `pending_advance_undo_log`), plus plusieurs citations de code corrigées (signature
+> `adjustGameTime`, patron `tradeService.js`, plage `char-sheet.js`, portée du patron
+> `weaponModRegistry.js`) — sans impact sur l'architecture retenue. Toujours
+> aucun code écrit sur Lot 2. Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver
+> dans `docs/Old/` une fois le chantier entier clos, contenu durable transféré vers
+> `docs/SYSTEME/*.md`.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -42,9 +53,18 @@ ira dans `docs/SYSTEME/COMBAT.md`, pas ici.
   de dégâts physiques ponctuelles (Acide, Chute, Décompression) s'y branchent nativement.
 - **Attributs de résistance secondaires déjà calculés et branchés mutations/avantages** :
   `resistance_dommages`, `resistance_drogues`, `resistance_poison`, `resistance_maladie`,
-  `resistance_radiation` (`char-sheet.js:1245-1289`, `calcResistanceNaturelle`,
-  `getMutationModForResistance`/`getAdvantageModForResistance`). Rien à ajouter côté fiche
-  personnage pour ces attributs — seul le moteur de jauge qui les consomme reste à construire.
+  `resistance_radiation`. **Correction 2026-07-30** (citation vérifiée contre le code réel) : les
+  fonctions (`calcResistanceNaturelle`, `getMutationModForResistance`/`getAdvantageModForResistance`)
+  vivent dans `shared/polarisUtils.js` (`:72`, `:89`, `:176`), pas dans `char-sheet.js`/`charStats.js`
+  comme le laissait supposer une version antérieure de cette puce — `char-sheet.js` les importe
+  seulement. Leur seul point d'appel réel aujourd'hui est `char-sheet.js:1304-1308`, à l'intérieur de
+  la route étroite `POST /:characterId/macro-preview` (aperçu de macro joueur), pas la plage
+  `1245-1289` citée précédemment (qui ne couvre que le tableau de labels `secondary`). Nuance pour la
+  suite : ces résistances ne sont donc **pas** déjà exposées comme un champ général de la fiche —
+  Lot 7+ (Maladies/Poisons) devra importer ces fonctions depuis `shared/polarisUtils.js` dans un
+  nouveau contexte de service, pas réutiliser un calcul déjà branché ailleurs sur la fiche. Rien à
+  ajouter côté **schéma** de fiche personnage pour ces attributs (ils se calculent à la volée depuis
+  des données déjà présentes) — seul le moteur de jauge qui les consomme reste à construire.
 - **Souffle** (`calcSouffle`, déjà utilisé en combat sous-marin) : ressource prête pour
   Noyade/Asphyxie.
 - **Badges de statut au-dessus du token** : `token_statuses` (migration 68/79), `statusService.js`,
@@ -254,14 +274,20 @@ l'analyse à charge).
   `year`/`month`/`day` doivent rester corrects pour un compteur négatif (modulo JS natif `%` ne se
   comporte pas comme un modulo mathématique sur les négatifs — à gérer explicitement avec une
   division/reste toujours positifs, sinon bug garanti dès qu'un MJ recule avant le jour de départ).
-- **Mutateur unique** : `adjustGameTime(db, campaignId, deltaMinutes)` — entier **signé non
+- **Mutateur unique** : `adjustGameTime(campaignId, deltaMinutes)` — entier **signé non
   nul** (positif = avance, négatif = recul), renommé depuis `advanceGameTime` (l'ancien nom supposait
-  un sens unique, plus vrai depuis le point 8). Verrouille la ligne `campaigns` (`.forUpdate()`,
-  patron `tradeService.js`, analyse à charge point 1) avant de lire les deux compteurs courants, puis
-  calcule `newDisplayed`/`newResolved` en application et écrit les deux valeurs concrètes (patron
-  lire-sous-verrou-puis-écrire de `tradeService.js`, plutôt que l'expression SQL brute utilisée pour
-  le merge JSONB de `settings` — les deux patrons coexistent déjà dans le projet pour des formes de
-  mutation différentes). Retourne `{ displayedBefore, displayedAfter, resolvedBefore, resolvedAfter }`
+  un sens unique, plus vrai depuis le point 8). **Correction 2026-07-30** (analyse à charge combinée
+  des deux plans, contre le code réellement codé) : signature corrigée — pas de paramètre `db`, la
+  fonction l'importe en module (`server/src/lib/gameTimeService.js:1,10`) ; une version antérieure de
+  cette puce affirmait à tort `adjustGameTime(db, campaignId, deltaMinutes)`. Même correction : le
+  patron "lire sous verrou puis écrire" n'est **pas** illustré par `tradeService.js` (ce fichier
+  mute ses soldes exclusivement via `.increment()`/`.decrement()`, jamais un recalcul JS suivi d'une
+  écriture de valeur concrète) — le seul exemple réel de ce patron dans le projet est cette fonction
+  elle-même. Verrouille la ligne `campaigns` (`.forUpdate()`, analyse à charge point 1) avant de lire
+  les deux compteurs courants, puis calcule `newDisplayed`/`newResolved` en application et écrit les
+  deux valeurs concrètes — à distinguer de l'expression SQL brute utilisée pour le merge JSONB de
+  `settings` (`campaigns.js`, patron différent, réutilisé pour l'append atomique du Lot 2, voir §8).
+  Retourne `{ displayedBefore, displayedAfter, resolvedBefore, resolvedAfter }`
   — c'est `resolvedBefore`/`resolvedAfter` que le futur Lot 2 consomme, jamais `displayed*`.
 - **Diffusion** : un seul événement WS après la mutation, `CAMPAIGN_GAME_TIME_ADJUSTED` — transporte
   uniquement le compteur **affiché** (pour l'UI). Correction 2026-07-29 : une version antérieure de
@@ -345,35 +371,267 @@ l'analyse à charge).
 
 ## 8. Lot 2 — Moteur générique d'échéances de jeu
 
-> Fondation structurante, aucun contenu de jeu réel dessus (même patron que Moding Groupe 4 Phase 1 :
-> socle livré inerte, affiné par son premier vrai consommateur — ici le Lot 7).
+> **v2 (2026-07-29) — réécrit après analyse à charge de la v1 à la lumière de son premier
+> consommateur réel** (`docs/PLAN_BLESSURES_GUERISON.md`). La v1 avait été conçue pour une
+> résolution **entièrement automatique** (un jet, une conséquence, fini) — Blessures a depuis
+> révélé un **3ᵉ patron non anticipé**, la résolution **interactive/différée** (attend une réponse
+> MJ ou un jet joueur, potentiellement plusieurs jours réels plus tard, et peut faire naître de
+> nouvelles échéances en cours de route). La v1 ne le supportait pas et se contredisait déjà
+> elle-même (la section "Composition avec le Lot 1" décrivait encore un balayage synchrone en une
+> seule transaction, pendant qu'une note ajoutée en tête mentionnait une avance "en attente" sans
+> que le corps du texte soit corrigé en conséquence). Cette v2 réconcilie les deux.
 
-**Objectif** : une seule primitive de planification sur l'horloge de campagne (Lot 1), consommée
-par tout lot qui a besoin de « dans X temps de jeu, quelque chose se passe, éventuellement plusieurs
-fois ». Deux patrons de consommation identifiés dans le RAW :
-(a) **jauge graduée persistante 0-30** (Maladies, Poisons, Drogues, Irradiations) ;
-(b) **injection directe** — dégâts physiques ou perte d'attribut sans jauge intermédiaire (Froid,
-Faim/soif).
+### Analyse à charge (2026-07-29, v1 puis v2)
 
-**Composition avec le Lot 1** : le balayage n'est **pas** un abonnement à l'event WS
-`CAMPAIGN_GAME_TIME_ADVANCED` (un event WS ne boucle pas vers le serveur) — c'est un appel de
-fonction direct, dans la **même transaction** que `advanceGameTime`, orchestré par la route
-`POST /:id/game-time/advance` : avancer l'horloge et balayer les échéances dues doivent réussir ou
-échouer ensemble. Le résumé des changements est diffusé dans le même event que la nouvelle heure.
+1. **Point de composition corrigé (v1).** Le texte précédent disait "orchestré par la route
+   `POST /:id/game-time/advance`". Faux contre le code réel du Lot 1 : `adjustGameTime`
+   (`server/src/lib/gameTimeService.js:15`) ouvre et commit sa propre transaction avant de
+   retourner — le balayage automatique (patron ci-dessous) doit être appelé **depuis l'intérieur**
+   de cette transaction, pas depuis la route après coup.
+2. **Idempotence du balayage automatique, à la lumière d'`about-time`.** `about-time`
+   (Trahloc/about-time, module Foundry VTT actif, code lu sur GitHub, `ElapsedTime.ts`,
+   `pseudoClockUpdate`) n'a pas de champ "dernier seuil appliqué" séparé : sa boucle
+   `while (due) { pop; exécuter; recalculer next; re-insérer }` avance et persiste le prochain
+   déclenchement à **chaque itération** — l'idempotence est structurelle. Repris pour le patron
+   automatique ci-dessous.
+3. **Garde-fou anti-boucle infinie**, trouvé dans le même code source : `if (nextTime <= qe._time)`
+   → erreur, reschedule rejeté — sans ça, un `interval_minutes` mal configuré boucle indéfiniment.
+4. **Portée de l'idempotence clarifiée.** L'idempotence du *déclenchement* est structurellement
+   garantie par le point 2 pour le patron automatique — **hors du périmètre de responsabilité des
+   consommateurs**. Le franchissement de *seuil d'effet* sur une jauge 0-30 reste une responsabilité
+   du consommateur (Lot 7), problème séparé.
+5. **[v2] Un handler qui plante ne doit jamais faire perdre tout un balayage déjà en cours** — trouvé
+   en écrivant Blessures : le texte v1 affirmait l'idempotence "par persistance à chaque itération",
+   mais toute la boucle tourne dans **une seule transaction** — si l'itération 5 plante, la
+   transaction entière rollback, y compris les itérations 1 à 4 "déjà persistées". Jamais corrigé
+   dans le texte v1 malgré en avoir discuté. Corrigé ci-dessous (isolation par savepoint).
+6. **[v2] Le patron "un jet, une conséquence, fini" ne couvre pas la résolution interactive/différée
+   dont Blessures a besoin.** Un handler doit pouvoir (a) répondre "pas encore résolu, en attente
+   d'une réponse externe" sans faire avancer son échéance, (b) faire naître de nouvelles échéances
+   (Guérison→Infection), (c) changer temporairement son propre rythme. Rien de tout ça n'existait
+   dans la v1. Corrigé ci-dessous (deux patrons de résolution, pas un seul).
+7. **[v2] Application des effets vs. avance du compteur d'horloge — deux moments différents,
+   confondus dans la première rédaction du flux Blessures.** Un effet de blessure (case cochée,
+   amélioration) doit s'appliquer **dès que la réponse est connue** (MJ répond, ou joueur lance son
+   dé), pas attendre la confirmation finale groupée — seul **le compteur `game_time_minutes`**
+   attend que tout le lot soit résolu. Ça réduit aussi le risque du point 5 : la confirmation finale
+   ne fait plus qu'avancer le compteur, elle n'appelle plus aucun handler.
+8. **[Correction 2026-07-29, même session — analyse à charge de la v2 elle-même] Ni `sweepDueEcheances`
+   ni `previewDueEcheances` ne distinguaient `interactive` en SQL.** Le texte v2 initial décrivait les
+   deux fonctions avec la même requête (`status='active' AND next_due_minutes<=?`), sans filtre sur
+   `interactive` — et `game_echeances` n'avait pas de colonne pour ça. Tel quel, `sweepDueEcheances`
+   (censée n'agir QUE sur le patron automatique) aurait fetché et résolu aussi les échéances
+   interactives dues, contredisant frontalement "jamais résolues par le balayage lui-même" ; et
+   `previewDueEcheances` (censée ne détecter QUE les interactives pour décider d'ouvrir une revue MJ)
+   aurait déclenché une revue pour de simples échéances automatiques, cassant le "chemin rapide".
+   Corrigé ci-dessous : colonne `interactive` dénormalisée sur `game_echeances` (même justification
+   que `campaign_id`, déjà dénormalisé sur cette table pour la même raison — filtre direct de
+   balayage), copiée depuis le registre au moment de la création de chaque échéance.
+9. **[Correction 2026-07-29, même session] Le contrat du handler ne disait jamais qui capture
+   `previousValues` pour `pending_advance_undo_log`, ni comment.** Le handler ne recevait ni ne
+   retournait aucune information sur les lignes qu'il s'apprête à toucher — `resolveEcheanceNow` ne
+   pouvait donc rien snapshoter avant l'appel. Le format `{ table, rowId, previousValues }` couvrait
+   implicitement un UPDATE (restaurer d'anciennes valeurs) mais pas le cas cité en exemple lui-même
+   (`resolveWoundInsertion`, qui supprime plusieurs lignes et en insère une seule — un mélange
+   insert/delete que le format ne savait pas représenter). Corrigé ci-dessous : le handler retourne
+   désormais `undoEntries` explicitement, avec une convention à 3 cas qui couvre insert/update/delete.
+10. **[Correction 2026-07-30, analyse à charge combinée des deux plans, avant tout code]** L'append de
+    `undoEntries` à `campaigns.pending_advance_undo_log` par `resolveEcheanceNow` n'avait pas de
+    garantie de concurrence explicite — le même risque que le point 1 (deux mutations concurrentes sur
+    `campaigns` sans protection), pas retraité pour ce nouveau champ. Corrigé ci-dessous : append par
+    expression SQL atomique (`||` jsonb), pas par lire-puis-écrire en JS.
 
-**Modèle de données** (forme générale — schéma exact affiné en codant le Lot 7, premier vrai
-consommateur, pas figé ici par principe de ne pas deviner) : une table d'échéances portant
-personnage, campagne (dénormalisée pour la requête de balayage), horodatage de prochaine échéance,
-intervalle de répétition, nombre d'occurrences restantes, et une référence au type de condition qui
-détermine quoi faire à l'échéance (incrémenter une jauge vs injecter un dégât/malus direct).
+### Architecture retenue (v2)
 
-**Idempotence** : pour le patron jauge, chaque instance retient le dernier seuil déjà appliqué —
-un balayage qui traverse plusieurs seuils d'un coup (gros saut de temps) applique chaque seuil une
-seule fois, jamais en boucle.
+**Deux patrons de résolution coexistants**, déclarés par l'entrée de registre elle-même
+(`interactive: true|false`) :
 
-**Hors périmètre** : aucune maladie/poison/drogue/irradiation/froid réel branché — livré avec un
-test isolé prouvant le moteur (une jauge factice qui monte, un dégât direct factice), avant
-d'attaquer un vrai consommateur.
+- **Automatique** (`interactive: false`, patron d'origine — Maladies/Irradiations à venir) : reste
+  résolu en un seul passage, dans la transaction d'`adjustGameTime`, via `sweepDueEcheances`.
+- **Interactif/différé** (`interactive: true`, Blessures — Guérison/Infection) : jamais résolu dans
+  le balayage lui-même ; passe par le mécanisme d'avance en attente (ci-dessous), une échéance à la
+  fois, dès que sa réponse est connue.
+
+**Registre + dispatch générique**, inspiré de `weaponModRegistry.js`/`weaponModService.js` (Moding
+Groupe 4 Phase 1) — **précision 2026-07-30** (analyse à charge) : "repris à l'identique" ne vaut que
+pour la moitié **registre/lookup** (tableau `{key, ...}`, `.find()` par clé qui renvoie `undefined`,
+jamais un throw). La moitié **dispatch** de `weaponModService.js` (`RESOLVERS` routées par nom de
+hook, agrégation de plusieurs mods actifs simultanément avec priorité/tri) ne s'applique pas ici —
+Lot 2 n'a besoin que d'**un seul handler par échéance**, invoqué directement par `condition_type`,
+sans notion d'agrégation ni de priorité entre entrées. Ne pas copier cette moitié du patron en
+codant, le besoin réel est plus simple que le modèle cité :
+- `shared/echeanceTypeRegistry.js` — tableau `{ key, interactive, handler }`, vide en Lot 2, peuplé
+  par ses consommateurs (`wound_healing_check`/`wound_infection_check` en premier, `interactive:
+  true` tous les deux). Lookup par clé qui renvoie `undefined` si inconnue, **jamais un throw**.
+- **[Correction point 8]** Toute fonction qui crée une échéance (création initiale ou `spawn` d'un
+  handler) lit `interactive` depuis ce registre par `condition_type` et la copie sur la ligne
+  `game_echeances` — source unique toujours le registre, la colonne n'est qu'une dénormalisation pour
+  que le SQL de balayage puisse filtrer sans recharger le registre par ligne.
+- Contrat du `handler(trx, echeance, context)` : retourne soit
+  `{ resolved: true, effects, reschedule, spawn: [], undoEntries: [] }` (reschedule =
+  `{ intervalMinutes, occurrencesRemaining }` ou `null` = terminé ; spawn = nouvelles échéances à
+  créer dans le même `trx`, chacune avec son `interactive` résolu depuis le registre comme ci-dessus)
+  soit `{ resolved: false }` (attend une réponse externe — uniquement valide pour une entrée
+  `interactive: true`).
+- **[Correction point 9] `undoEntries`** — tableau de `{ table, rowId, previousValues }` que le
+  handler lui-même construit, en lisant l'état de chaque ligne **avant** de la muter (il connaît déjà
+  `trx` et le contenu de `payload`, ex. `woundId`) :
+  - `previousValues` = objet complet de la ligne **avant** modification → à l'annulation, l'engine
+    fait un `UPDATE` de restauration (ou un `INSERT` si la ligne a été supprimée par le handler).
+  - `previousValues: null` → la ligne n'existait pas avant l'appel (le handler l'a insérée) →
+    à l'annulation, l'engine fait un `DELETE` de cette ligne.
+  Un seul appel de handler peut retourner plusieurs entrées (ex. `resolveWoundInsertion` qui
+  supprime des cases pleines et en insère une promue : une entrée par ligne supprimée
+  (`previousValues` = son contenu) + une entrée pour la ligne insérée (`previousValues: null`)).
+  Le moteur (`resolveEcheanceNow`) ne connaît aucune règle métier — il persiste tel quel ce que le
+  handler lui donne, `payload`/`table`/`rowId` restent opaques à l'engine.
+
+**`server/src/lib/echeanceService.js`** :
+- `sweepDueEcheances(trx, campaignId, resolvedAfter)` — **patron automatique uniquement**
+  (`interactive: false`). Boucle inspirée `pseudoClockUpdate` :
+  1. `SELECT ... WHERE campaign_id=? AND status='active' AND interactive=false AND
+     next_due_minutes<=? FOR UPDATE` — **[Correction point 8]** le filtre `interactive=false` est
+     explicite dans la requête, pas déduit après coup : une échéance interactive due n'est jamais
+     fetchée par cette fonction.
+  2. Pour chaque ligne due : **[v2] appel du handler isolé dans un savepoint**
+     (`await trx.transaction(async (sp) => { ... })` — knex crée un SAVEPOINT quand `.transaction()`
+     est appelé sur un `trx` déjà ouvert ; **revérifié 2026-07-29** contre le code source knex
+     réellement installé, `server/node_modules/knex/lib/execution/transaction.js:208-210`
+     — `this.client.transacting ? this.savepoint(connection) : this.begin(connection)` confirme le
+     comportement, knex 3.3.0). Si le handler plante, rollback **seulement** de ce savepoint,
+     l'échéance passe `status='error'`, le balayage continue pour le reste — corrige le point 5.
+  3. Garde-fou anti-boucle infinie (point 3) : `status='error'` si le rescheduling ne fait pas
+     avancer `next_due_minutes`.
+  4. `reschedule: null` ou `occurrences_remaining` épuisé → `status='completed'`.
+- `previewDueEcheances(campaignId, resolvedAfter)` — **[v2] lecture seule**, aucune écriture.
+  **[Correction point 8]** Requête différente de l'étape 1 ci-dessus, pas la même : `SELECT ...
+  WHERE campaign_id=? AND status='active' AND interactive=true AND next_due_minutes<=?` (sans
+  `FOR UPDATE`, lecture seule) — seules les échéances **interactives** dues intéressent cette
+  fonction, une échéance automatique due ne doit jamais faire ouvrir une revue MJ. Utilisée par
+  `requestGameTimeAdvance` (ci-dessous) pour savoir si une revue est nécessaire.
+- `resolveEcheanceNow(trx, echeanceId)` — **[v2] résolution immédiate d'une échéance interactive
+  unique**, dès que sa réponse est connue (MJ répond dans l'écran de revue, joueur lance son dé).
+  Appelle le handler (dans un savepoint, même protection que le point 2 ci-dessus), applique les
+  effets, gère `reschedule`/`spawn`. **[Correction point 9]** Récupère aussi `undoEntries` dans le
+  retour du handler et les ajoute (append, pas remplacement) à `campaigns.pending_advance_undo_log`
+  dans la même transaction que l'application des effets — avant de committer le savepoint.
+  **[Correction point 10, 2026-07-30]** Cet append **doit** passer par une expression SQL atomique en
+  une seule instruction (`UPDATE campaigns SET pending_advance_undo_log = pending_advance_undo_log
+  || ?::jsonb WHERE id = ?`, même patron déjà en usage dans le projet pour le merge JSONB de
+  `settings`, `campaigns.js`), **jamais** un lire-en-JS-puis-écrire séparé — plusieurs joueurs peuvent
+  répondre à des échéances `awaiting_player_roll` distinctes à quelques millisecondes d'écart (ex.
+  après une bataille avec plusieurs PJ blessés), et deux lectures concurrentes du tableau suivies
+  d'écritures séparées perdraient silencieusement l'une des deux entrées d'annulation (lost update).
+  L'opérateur `||` sur deux tableaux jsonb les concatène (confirmé, doc Postgres), et une seule
+  instruction `UPDATE` est atomique au niveau ligne — pas besoin d'un `.forUpdate()` supplémentaire
+  tant que l'append reste dans cette forme. Repasse l'échéance `active` ou `completed`. **N'avance
+  jamais le compteur d'horloge** — corrige le point 7, c'est la seule chose que la confirmation finale
+  doit encore faire.
+
+**Composition avec le Lot 1 — trois fonctions d'orchestration** (`server/src/lib/gameTimeService.js`,
+aux côtés d'`adjustGameTime` qui reste inchangé sauf un garde ajouté en tête) :
+1. **`requestGameTimeAdvance(campaignId, deltaMinutes)`** — verrouille `campaigns`
+   (`.forUpdate()`), refuse si une avance est déjà en attente (`pending_advance_delta_minutes` non
+   null — un seul saut à la fois). Appelle `previewDueEcheances`.
+   - Aucune échéance `interactive` due → appelle `adjustGameTime` directement (qui balaie les
+     échéances automatiques normalement) dans le même verrou. **Chemin rapide inchangé** — le
+     widget Lot 1 ne voit pas la différence dans le cas courant.
+   - Au moins une échéance `interactive` due → pose `pending_advance_delta_minutes`, marque ces
+     échéances `pending_mj_review` (ou `awaiting_player_roll` si le choix "demander aux joueurs"
+     est déjà fait par défaut pour ce `condition_type` — sinon la revue MJ décide), retourne la
+     liste.
+2. **Chaque réponse MJ/joueur appelle `resolveEcheanceNow`** directement, dès qu'elle arrive — pas
+   groupé, pas différé à la confirmation. **[Correction point 9]** `resolveEcheanceNow` récupère les
+   `undoEntries` retournées par le handler (voir contrat ci-dessus, capturées par le handler
+   lui-même avant sa propre mutation) et les ajoute à `campaigns.pending_advance_undo_log` — décidé
+   Saar 2026-07-29 : une annulation doit défaire les effets déjà appliqués, pas seulement l'avance du
+   compteur.
+3. **`confirmPendingAdvance(campaignId)`** — revérifie `previewDueEcheances` à cet instant précis ;
+   toute échéance nouvelle depuis la proposition rejoint le lot en `pending_mj_review`, confirmation
+   refusée. Si tout le lot est `active`/`completed` (plus rien en `pending_mj_review`/
+   `awaiting_player_roll`) → appelle `adjustGameTime` (qui balaie au passage les échéances
+   automatiques normales), vide `pending_advance_delta_minutes` **et `pending_advance_undo_log`**
+   (plus besoin, tout est committé). **N'appelle plus aucun handler interactif** — ils sont déjà
+   résolus, corrige le point 5/7 : le risque de plantage à ce stade est réduit à la seule avance du
+   compteur, déjà protégée par la transaction du Lot 1.
+4. **`cancelPendingAdvance(campaignId)`** — **rejoue `pending_advance_undo_log` en sens inverse**
+   (ordre chronologique inversé, dernière entrée d'abord), repasse les échéances du lot à `active`,
+   vide `pending_advance_delta_minutes` et le journal. **[Correction point 9]** Algorithme de rejeu
+   générique à 3 cas, uniquement basé sur `{ table, rowId, previousValues }` — l'engine n'a besoin
+   d'aucune connaissance métier pour l'appliquer :
+   - `previousValues` non nul, la ligne existe encore → `UPDATE` vers `previousValues` (annule une
+     modification).
+   - `previousValues` nul, la ligne existe → `DELETE` (annule une insertion faite par le handler).
+   - `previousValues` non nul, la ligne n'existe plus → `INSERT` de `previousValues` (annule une
+     suppression faite par le handler, ex. une case de blessure retirée par
+     `resolveWoundInsertion`).
+   **Corrige la nuance laissée ouverte en v2** : un effet déjà appliqué (case de blessure cochée,
+   amélioration) est maintenant défait lui aussi, pas seulement l'avance du compteur.
+
+**Alternative écartée** : garder tout dans une seule transaction Postgres ouverte de la proposition
+à la confirmation, et laisser un `ROLLBACK` tout défaire gratuitement. Rejetée — une transaction peut
+rester ouverte plusieurs jours réels (le temps qu'un joueur réponde), et une transaction aussi
+longue pose de vrais problèmes (verrous tenus tout ce temps, connexion bloquée, tout perdu si la
+connexion tombe). D'où le journal explicite plutôt que le mécanisme transactionnel natif.
+
+**Modèle de données** — colonnes structurelles reprises du plan initial, payload volontairement
+opaque :
+- `game_echeances` : `id` uuid pk, `campaign_id` uuid FK `campaigns` (dénormalisé, filtre direct de
+  balayage), `character_id` uuid FK `characters`, `condition_type` text, **`interactive` boolean
+  not null (Correction point 8, dénormalisé depuis `echeanceTypeRegistry` à la création — même
+  justification que `campaign_id` ci-dessus : filtre direct de balayage, source de vérité toujours
+  le registre)**, `payload` jsonb (opaque), `next_due_minutes` integer (comparé à
+  `game_time_resolved_minutes`), `interval_minutes` integer nullable, `occurrences_remaining`
+  integer nullable, `status` text
+  (`active`/`completed`/`cancelled`/`error`/`pending_mj_review`/`awaiting_player_roll`),
+  `created_at`/`updated_at`. Type `integer`, pas `bigint` (même raison que `campaigns.game_time_*`).
+  **Convention pour tout futur consommateur (2026-07-30, généralisée après gut-check de Lot 7)** :
+  `payload` ne contient que des **identifiants** (`{ woundId }`, `{ conditionId }`...), jamais une
+  donnée métier dupliquée depuis la table domaine du consommateur, et la table domaine du
+  consommateur ne duplique jamais en retour `next_due_minutes`/`interval_minutes`/
+  `occurrences_remaining`/`status` — `game_echeances` reste la seule autorité de planification, la
+  table domaine la seule autorité de l'état métier (niveau de jauge, gravité, seuil déjà appliqué...).
+  Déjà respecté par Blessures (`payload: { woundId }`, état dans `character_wounds`) ; erreur trouvée
+  et corrigée pour Maladies/Poisons (Lot 7, voir §13) avant que le code n'existe.
+- `campaigns.pending_advance_delta_minutes` — integer nullable, verrou "un seul saut à la fois"
+  (**Point D confirmé — Saar, 2026-07-29** : un seul saut de temps en attente par campagne gèle
+  toute avance, même sans rapport avec l'échéance en cause, jusqu'à résolution ou
+  `cancelPendingAdvance` ; compromis assumé plutôt qu'un oubli, alternative multi-avances
+  concurrentes jugée disproportionnée).
+- **`campaigns.pending_advance_undo_log`** (nouvelle colonne, `jsonb` nullable, tableau qui
+  s'accumule) — chaque entrée : `{ table, rowId, previousValues }`, produite par le handler lui-même
+  (voir `undoEntries` dans le contrat du handler ci-dessus, Correction point 9) — jamais déduite par
+  l'engine. `previousValues` = contenu complet de la ligne avant mutation (pas un delta — nécessaire
+  car `resolveWoundInsertion`/`resolveWoundImprovement` peuvent supprimer plusieurs lignes et en
+  insérer une seule) ; `previousValues: null` = la ligne n'existait pas avant (insertion à annuler
+  par un `DELETE`). Vidé à chaque commit ou annulation — ne survit jamais à une seule avance en
+  attente, borné dans le temps par construction (un seul saut possible à la fois).
+
+### Hors périmètre
+
+- Aucune maladie/poison/drogue/irradiation/froid réel branché — le patron automatique est livré
+  avec un test isolé (un `condition_type` factice, retiré après), avant Lot 7.
+- Le franchissement de seuil d'effet sur une jauge 0-30 — responsabilité de Lot 7.
+- Aucune UI générique pour le patron automatique — Lot 7+ branchera un affichage si besoin. L'UI du
+  patron interactif est spécifiée dans `docs/PLAN_BLESSURES_GUERISON.md` §6 (premier consommateur).
+
+### Points ouverts pour la cuisson avec Saar
+
+1. Nom de la table — `game_echeances` proposé, pas figé.
+2. `character_id` obligatoire (`NOT NULL`) ou nullable pour une future échéance non liée à un
+   personnage précis ? Aucun cas connu — pencherait pour `NOT NULL` (YAGNI) sauf objection.
+3. ~~`cancelPendingAdvance` sur une échéance déjà résolue~~ — **résolu (Saar, 2026-07-29)** :
+   l'effet doit être défait, pas seulement l'avance du compteur. Journal d'annulation
+   (`pending_advance_undo_log`) ajouté ci-dessus pour ça.
+4. ~~Filtre `interactive` absent des requêtes SQL de `sweepDueEcheances`/`previewDueEcheances`~~ —
+   **résolu (2026-07-29, analyse à charge de la v2)** : colonne `interactive` dénormalisée sur
+   `game_echeances`, voir point 8 de l'analyse à charge et Modèle de données ci-dessus.
+5. ~~Contrat du handler ne spécifiant pas la collecte de `previousValues`~~ — **résolu
+   (2026-07-29, analyse à charge de la v2)** : `undoEntries` ajouté au retour du handler, convention
+   à 3 cas (insert/update/delete), voir point 9 de l'analyse à charge ci-dessus.
+6. ~~Verrou "un seul saut de temps en attente par campagne" — restrictif ?~~ — **confirmé (Saar,
+   2026-07-29)** : accepté tel quel, voir note sur `campaigns.pending_advance_delta_minutes` dans le
+   Modèle de données.
 
 ---
 
@@ -494,7 +752,17 @@ schéma de données exact du Lot 2**, pas l'inverse.
 - `char_conditions` (nouvelle table instance — **plusieurs lignes possibles par personnage**, un
   personnage peut porter deux maladies distinctes en même temps, ce n'est pas un slot unique) :
   personnage, campagne, définition, niveau courant, dernier seuil déjà appliqué (anti-double-
-  application), prochaine échéance, occurrences restantes, statut.
+  application), statut de la condition (ex. `active`/`guerie`/`chronique` — distinct du `status` de
+  l'échéance, voir correction ci-dessous). **Correction 2026-07-30** (gut-check du premier vrai
+  consommateur "jauge" contre le contrat Lot 2, avant tout code) : une version antérieure de cette
+  puce ajoutait aussi `prochaine échéance, occurrences restantes` sur cette table — **retiré**, ces
+  deux informations sont déjà l'autorité unique de `game_echeances.next_due_minutes`/
+  `occurrences_remaining` (§8 ci-dessus, `CLAUDE.md` §1.4 : une propriété possède une autorité
+  unique). `char_conditions` ne stocke que l'état **métier** de la condition (niveau, seuil), jamais
+  sa planification — pour connaître la prochaine échéance d'une condition, interroger
+  `game_echeances WHERE payload->>'conditionId' = ? AND status = 'active'`, ne jamais dupliquer la
+  valeur. Même règle que celle déjà appliquée par Blessures (`payload: { woundId }`, minimal) —
+  généralisée en convention explicite pour Lot 2 dans le Modèle de données ci-dessus.
 - Résistance appliquée à **chaque** jet (apparition ET chaque évolution, pas une seule fois) — relit
   `resistance_maladie`/`resistance_poison` déjà calculés (§3), rien à ajouter côté attribut.
 
