@@ -5,6 +5,9 @@ import api from '../lib/api.js'
 import AimedLocationPicker from './AimedLocationPicker.jsx'
 import { BURNING_PRESETS, DECOMPRESSION_PRESETS } from '../../../shared/environmentalHazardPresets.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
+import { COLD_TIERS } from '../../../shared/coldExposureConstants.js'
+
+const COLD_TIER_I18N_KEY = { froid: 'tierFroid', tres_froid: 'tierTresFroid', glacial: 'tierGlacial' }
 
 // ─── Statuts — ordre et métadonnées ─────────────────────────────────────────
 const STATUS_LIST = [
@@ -36,6 +39,11 @@ const CATEGORY_COLOR = {
 // exposeToHazard/clearHazard (formule/localisations), jamais le toggle nu WS.TOKEN_STATUS_TOGGLE
 // (écraserait silencieusement la `data` posée — voir server/src/socket/socketToken.js).
 const HAZARD_CODES = new Set(['burning', 'acid', 'decompression'])
+
+// Froid (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5) — scope personnage (character_id), pas token/Tour
+// comme les dangers ci-dessus : sous-formulaire dédié (tranche/paliers extrêmes/humide), jamais un
+// simple toggle (écraserait silencieusement l'exposition posée, même raison que HAZARD_CODES).
+const CHRONIC_HAZARD_CODES = new Set(['hypothermia'])
 
 // ─── TokenStatusPanel ────────────────────────────────────────────────────────
 // Bulle-grille 3×5 pour ajouter/retirer les statuts d'un token. Les 3 codes danger environnemental
@@ -82,6 +90,15 @@ export default function TokenStatusPanel({
   const [fallAttemptTest, setFallAttemptTest] = useState(false)
   const [fallResult, setFallResult] = useState(null)
 
+  // Froid (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5) — flux séparé du sous-formulaire danger ci-dessus,
+  // même raison que fallForm : champs et sémantique différents (tranche/paliers extrêmes/humide,
+  // scope personnage plutôt que token).
+  const [coldForm, setColdForm] = useState(false)
+  const [coldLoading, setColdLoading] = useState(false)
+  const [coldTier, setColdTier] = useState('froid')
+  const [coldExtremeSteps, setColdExtremeSteps] = useState(0)
+  const [coldWet, setColdWet] = useState(false)
+
   const isOwner = character?.user_id === userId
   const canToggle = isGm || isOwner
 
@@ -114,7 +131,57 @@ export default function TokenStatusPanel({
       openHazardForm(statusCode, statuses.includes(statusCode) ? 'clear' : 'expose')
       return
     }
+    if (CHRONIC_HAZARD_CODES.has(statusCode)) {
+      if (!isGm) return // Froid : MJ uniquement, même règle que les dangers ci-dessus
+      openColdForm()
+      return
+    }
     socket?.emit(WS.TOKEN_STATUS_TOGGLE, { tokenId: token.id, statusCode })
+  }
+
+  // openColdForm — pré-remplit depuis l'exposition active du personnage s'il y en a une (permet de
+  // "changer de tranche" en connaissance de cause, docs/PLAN_FATIGUE_DOMMAGES.md §11 passe 2 point 3).
+  const openColdForm = async () => {
+    setColdForm(true)
+    setColdLoading(true)
+    try {
+      const { data } = await api.get(`/campaigns/${campaignId}/tokens/${token.id}/cold-exposure`)
+      setColdTier(data.state?.tier ?? 'froid')
+      setColdExtremeSteps(data.state?.extremeSteps ?? 0)
+      setColdWet(data.state?.wet ?? false)
+    } catch (err) {
+      console.error('[TokenStatusPanel] getColdExposureState:', err.message)
+    } finally {
+      setColdLoading(false)
+    }
+  }
+
+  const submitColdExpose = async () => {
+    if (sending) return
+    setSending(true)
+    try {
+      await api.post(`/campaigns/${campaignId}/tokens/${token.id}/cold-exposure`, {
+        tier: coldTier, extremeSteps: Number(coldExtremeSteps), wet: coldWet,
+      })
+      setColdForm(false)
+    } catch (err) {
+      console.error('[TokenStatusPanel] cold expose:', err.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const submitColdClear = async () => {
+    if (sending) return
+    setSending(true)
+    try {
+      await api.delete(`/campaigns/${campaignId}/tokens/${token.id}/cold-exposure`)
+      setColdForm(false)
+    } catch (err) {
+      console.error('[TokenStatusPanel] cold clear:', err.message)
+    } finally {
+      setSending(false)
+    }
   }
 
   const applyPreset = (preset) => {
@@ -186,7 +253,7 @@ export default function TokenStatusPanel({
   // Clamping écran — plus haut quand un sous-formulaire/résultat est ouvert. Fenêtre/icônes
   // agrandies (retour Saar, test navigateur 2026-07-30) — plafond viewport + scroll (ci-dessus)
   // absorbe le débordement si le contenu réel dépasse ces estimations.
-  const W = 340, H = (hazardForm || fallForm) ? 450 : fallResult ? 400 : 300
+  const W = 340, H = (hazardForm || fallForm || coldForm) ? 450 : fallResult ? 400 : 300
   const left = Math.max(8, Math.min(window.innerWidth  - W - 8, x - W / 2))
   const top  = Math.max(8, Math.min(window.innerHeight - H - 8, y - H / 2))
 
@@ -226,7 +293,9 @@ export default function TokenStatusPanel({
           ? tCombat(fallResult ? 'fallPanel.resultTitle' : 'fallPanel.title')
           : hazardForm
             ? tCombat(hazardForm.mode === 'expose' ? 'hazardPanel.exposeTitle' : 'hazardPanel.clearTitle', { label: t(`status.${hazardForm.code}`) })
-            : t('tokenRadial.statuts')}
+            : coldForm
+              ? tCombat('coldExposurePanel.exposeTitle')
+              : t('tokenRadial.statuts')}
       </div>
 
       {fallForm ? (
@@ -392,6 +461,62 @@ export default function TokenStatusPanel({
             </>
           )}
         </div>
+      ) : coldForm ? (
+        <div>
+          {coldLoading ? null : (
+            <>
+              <label style={{ display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>
+                {tCombat('coldExposurePanel.tier')}
+              </label>
+              <select
+                value={coldTier}
+                onChange={(e) => {
+                  setColdTier(e.target.value)
+                  if (e.target.value !== 'glacial') setColdExtremeSteps(0)
+                }}
+                style={{ width: '100%', marginBottom: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#eee', padding: '4px 6px', fontSize: 12, colorScheme: 'dark' }}
+              >
+                {COLD_TIERS.map((tierKey) => (
+                  <option key={tierKey} value={tierKey} style={{ background: '#12121c', color: '#eee' }}>
+                    {tCombat(`coldExposurePanel.${COLD_TIER_I18N_KEY[tierKey]}`)}
+                  </option>
+                ))}
+              </select>
+
+              <label style={{ display: 'block', fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>
+                {tCombat('coldExposurePanel.extremeSteps')} — <span style={{ opacity: 0.6 }}>{tCombat('coldExposurePanel.extremeStepsHint')}</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={coldExtremeSteps}
+                disabled={coldTier !== 'glacial'}
+                onChange={(e) => setColdExtremeSteps(e.target.value)}
+                style={{ width: '100%', marginBottom: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#eee', padding: '4px 6px', fontSize: 12 }}
+              />
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 10 }}>
+                <input type="checkbox" checked={coldWet} onChange={(e) => setColdWet(e.target.checked)} />
+                {tCombat('coldExposurePanel.wet')}
+              </label>
+
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-gold" disabled={sending} onClick={submitColdExpose}>
+                  {tCombat('coldExposurePanel.confirm')}
+                </button>
+                {statuses.includes('hypothermia') && (
+                  <button type="button" className="btn btn-danger" disabled={sending} onClick={submitColdClear}>
+                    {tCombat('coldExposurePanel.clearButton')}
+                  </button>
+                )}
+                <button type="button" className="btn btn-ghost" onClick={() => setColdForm(false)}>
+                  {tCombat('coldExposurePanel.cancel')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       ) : (
         <>
           {/* Grille 5×3 */}
@@ -403,7 +528,7 @@ export default function TokenStatusPanel({
             {STATUS_LIST.map(({ code, category }) => {
               const active  = statuses.includes(code)
               const color   = CATEGORY_COLOR[category]
-              const clickable = canToggle && (!HAZARD_CODES.has(code) || isGm)
+              const clickable = canToggle && (!HAZARD_CODES.has(code) && !CHRONIC_HAZARD_CODES.has(code) || isGm)
 
               return (
                 <div

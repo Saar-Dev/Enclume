@@ -349,6 +349,20 @@
     "resultNone": "Aucune blessure",
     "close": "Fermer"
   },
+  "coldExposurePanel": {
+    "exposeTitle": "Exposer au froid",
+    "clearTitle": "Retirer — Froid",
+    "tier": "Tranche",
+    "tierFroid": "Froid (10-15°C)",
+    "tierTresFroid": "Très froid (5-10°C)",
+    "tierGlacial": "Glacial (~0°C)",
+    "extremeSteps": "Paliers de Froid extrême supplémentaires",
+    "extremeStepsHint": "Uniquement avec la tranche Glacial — chaque palier divise les temps par deux",
+    "wet": "Dans l'eau / vêtements mouillés (divise les temps par deux)",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "clearButton": "Retirer"
+  },
   "timeline": {
     "turn": "Tour {{turn}}",
     "announcement": "Annonce",

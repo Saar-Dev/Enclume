@@ -25,6 +25,7 @@ import Canvas2D from '../components/Canvas2D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
 import DicePanel from '../components/DicePanel'
+import EnvironmentalResultQueue from '../components/EnvironmentalResultQueue'
 import CharacterWindow from '../character/CharacterWindow'
 import DroneWindow from '../character/DroneWindow'
 import RadialMenu from '../components/RadialMenu'
@@ -1194,6 +1195,9 @@ function SessionContent({ campaignId }) {
 
       {/* ─── DicePanel — flottant, hors canvas, hors Sidebar ─────────────── */}
       <DicePanel socket={socket} mode={mode} sidebarVisible={sidebarVisible} sidebarWidth={sidebarWidth} />
+
+      {/* ─── EnvironmentalResultQueue — toujours monté, jamais gaté au mode combat ───── */}
+      <EnvironmentalResultQueue socket={socket} />
 
       {/* ─── CombatOverlay — position:fixed, z-index 1000, visible en mode combat ── */}
       {mode === 'combat' && (

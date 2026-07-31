@@ -77,6 +77,27 @@
 > évolution palier/case, malus tooltip, Repos, macro joueur reflétant le malus de blessure). 330 tests
 > (270 pass/60 skip DB, 0 échec), ESLint/build client propres. Détail : `docs/ASBUILT.md` (section
 > Fatigue), `docs/EN_COURS.md` item 109.
+> **2026-07-31 — Lot 5 (Froid) : 4 passes de cadrage avant tout code** (§11) — trous trouvés :
+> modèle de tranches corrigé (Froid extrême n'est pas une 5ᵉ option mais Glacial répété avec un
+> diviseur, `extremeSteps`), double autorité évitée (badge `hypothermia` sans payload, tranche
+> uniquement dans `game_echeances`), concurrence protégée (`char_sheet.forUpdate()`), réutilisations
+> confirmées (`resolveCampaignToken`, `applyModStatus`/`clearModStatus`, garde token-sans-personnage
+> déjà écrit pour la Chute). **Codé** : fix des 2 trous du moteur Lot 2 (`effects` jamais propagé,
+> `resolveFatigueTest` non réutilisable dans un handler), `shared/coldExposureConstants.js` (9 tests),
+> `coldExposureService.js` (nouveau), routes `cold-exposure` calquées sur le patron hazards Lot 3,
+> sous-formulaire `TokenStatusPanel.jsx` sur le badge `hypothermia` (déjà réservé, jamais câblé).
+> **3 bugs trouvés par Saar en testant, corrigés avant clôture** : (1) `resolveTargetHit`/`applyWound`
+> émet son WS de façon synchrone — jamais appelable depuis le savepoint du balayage, corrigé en
+> différant l'application réelle après le commit (`applyColdDamageHits`) ; (2) le Choc du dégât
+> Glacial dépendait du Stun Dialog combat (fenêtre unique, jamais montée hors combat) — corrigé en
+> résolution automatique, même patron que la Fatigue palier 5 ; (3) aucune file d'attente pour
+> l'affichage hors combat — nouveau composant `EnvironmentalResultQueue.jsx`, toujours monté,
+> vrai tableau, jamais un slot qui écrase (bénéficie aussi à Feu/Acide/Décompression). **✅ Lot 5 clos
+> 2026-07-31 — confirmé fonctionnel en navigateur par Saar** (déclaration/tranches, dégâts Glacial
+> escaladés sur plusieurs personnages, file d'attente vérifiée). Écart RAW explicite et documenté
+> (§11) : le rattrapage d'un grand saut de temps s'étale sur plusieurs avances plutôt qu'en une seule
+> fois — confirmé souhaité par Saar après explication, pas un raccourci silencieux. Détail complet :
+> §11, `docs/EN_COURS.md` item 110.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -1563,23 +1584,446 @@ discrétion MJ) ; aucun badge token (tranché) ; aucun branchement Lot 2/échéa
 
 ## 11. Lot 5 — Froid
 
-**Dépend de** : Lot 1 (horloge), Lot 2 (patron "injection directe"), Lot 4 (Fatigue).
+> **2026-07-31 — cadrage détaillé (1ʳᵉ passe)**, après relecture RAW complète (`FATIGUE&DOMMAGES.md`
+> p.243-244, citée intégralement ci-dessous) + exploration du code réel des trois fondations
+> consommées (`echeanceService.js`/`echeanceTypeRegistry.js` Lot 2, `fatigueService.js`/
+> `activeMalusRegistry.js` Lot 4, `resolveTargetHit`/`environmentalHazardService.js` Lot 3). **Aucun
+> code écrit.** Deux trous structurels trouvés dans le moteur partagé du Lot 2 (points A/B ci-dessous)
+> — Froid en est le premier consommateur à en avoir besoin, comme Blessures l'avait été pour le
+> patron interactif.
 
-Seul danger environnemental à s'exprimer en **heures de jeu réel** (toutes les 2h/1h/30min selon la
-tranche de température), pas en Tours de combat — d'où sa dépendance à l'horloge plutôt qu'au tick
-`onTurnStart` du Lot 3.
+**Dépend de** : Lot 1 (`adjustGameTime`), Lot 2 (`echeanceService.js`, patron automatique
+`interactive:false`), Lot 4 (`resolveFatigueTest`/`calcActiveMalus`). Réutilise aussi `resolveTargetHit`
+(moteur de blessures, §3) pour l'injection directe de dégâts physiques.
 
-- Le MJ déclare/retire manuellement la tranche de température d'un personnage (Froid/Très froid/
-  Glacial/Froid extrême) — aucun système de climat/température ambiante automatique dans le projet,
-  hors périmètre d'y en ajouter un.
-- Une fois déclarée, le Lot 2 planifie : (1) un Test de résistance à la Fatigue périodique (échec →
-  appelle le Lot 4) ; (2) sous Glacial et en dessous, des dégâts physiques localisés croissants
-  (Bras/Jambes puis Corps/Tête, 1D10 → 2D10 → 3D10...) injectés directement dans le moteur de
-  blessures (Lot 3), sans jauge intermédiaire.
-- Retrait de l'exposition = action MJ manuelle, arrête la planification en cours.
+### RAW retenu (p.243-244)
+
+- **Froid** (10-15°C) : Test de résistance à la Fatigue (Constitution) toutes les **2 heures**.
+- **Très froid** (5-10°C) : même chose, toutes les **heures**.
+- **Glacial** (~0°C) : même chose, toutes les **30 minutes**. En plus : dégâts physiques localisés —
+  au bout d'1h, Bras/Jambes touchés (1D10), puis +1D10 à chaque heure supplémentaire (2D10, 3D10...) ;
+  au bout de 2h, Corps/Tête s'y ajoutent, suivant la même progression indépendante.
+- **Froid extrême** (<0°C) : mêmes règles que Glacial, mais **tous les temps divisés par deux** par
+  tranche de 5°C supplémentaire sous 0°C.
+- Action fatigante en cours → Tests plus fréquents à la discrétion du MJ (narratif, jamais mécanisé —
+  cohérent avec la décision §4.2 : déclenchement narratif/manuel, effets automatiques une fois posés).
+- Environnement humide (dans l'eau, ou vêtements mouillés) → **tous les temps divisés par deux**.
+- Vêtements/tenue adaptée → ajustement manuel de la tranche déclarée par le MJ (déjà noté hors
+  périmètre ci-dessous, RAW le permet nativement, aucun mécanisme à construire).
+- Amputation (Blessure critique/mortelle sur Bras/Jambe) : **déjà couvert narrativement par le système
+  Blessures existant** (`docs/PLAN_BLESSURES_GUERISON.md`, sévérité Critique/Mortelle implique déjà
+  l'amputation en RAW général, pas un mécanisme séparé) — **rien à coder spécifiquement pour Froid**.
+
+### Trou structurel A — `io` non tissé dans le moteur d'échéances (Lot 2)
+
+`sweepDueEcheances`/`resolveEcheanceHandler` (`echeanceService.js`) n'ont aujourd'hui **aucun canal**
+pour émettre un événement WS pendant un balayage automatique. Le contrat handler déclare déjà un champ
+`effects` (`{ resolved: true, effects, reschedule, spawn, undoEntries }`, voir §8) mais **rien ne le
+lit ni ne le propage** — vérifié : `resolveEcheanceHandler` ne déstructure que `{ reschedule, spawn }`
+du retour du handler (`echeanceService.js:63`), et `sweepDueEcheances` ignore entièrement la valeur de
+retour de chaque appel. Sans correction, un Test de Fatigue ou un dégât physique déclenché
+automatiquement par le froid resterait invisible en temps réel côté client — même classe de bug que
+Lot 3 increment G / Lot 4 passe 3, cette fois dans le **moteur partagé** plutôt que chez un
+consommateur (Blessures n'avait jamais eu ce besoin : ses handlers sont `interactive:true`, résolus un
+par un via `resolveEcheanceNow`, jamais depuis `sweepDueEcheances`).
+
+**Correction proposée** (extension du contrat existant, pas un nouveau mécanisme) :
+- `resolveEcheanceHandler` retourne aussi `handlerResult.effects` tel quel.
+- `sweepDueEcheances` accumule les `effects` de chaque échéance résolue dans un tableau et le retourne
+  (au lieu de ne rien retourner aujourd'hui).
+- `performTimeAdjustment`/`adjustGameTime`/`requestGameTimeAdvance`/`confirmPendingAdvance`
+  (`gameTimeService.js`) propagent ce tableau jusqu'à leur retour.
+- La route `campaigns.js` qui appelle ces fonctions émet les événements WS correspondants **après le
+  commit** (patron déjà en place ailleurs : `resolveFatigueTest` émet après la fin de son propre
+  `db.transaction()`, jamais depuis l'intérieur) — jamais d'émission depuis un savepoint pas encore
+  committé au niveau supérieur.
+
+### Trou structurel B — `resolveFatigueTest` non réutilisable tel quel dans un handler
+
+`resolveFatigueTest` (`fatigueService.js:97`) ouvre son **propre** `db.transaction()` et émet lui-même
+le WS. Appelé depuis un handler d'échéance (déjà exécuté dans un savepoint du `trx` de balayage), ce
+serait une transaction imbriquée sur une connexion différente — risque réel de deadlock sur
+`char_sheet.forUpdate()` (le `trx` englobant tient déjà le verrou, la nouvelle transaction attendrait
+indéfiniment sur la même ligne).
+
+**Correction proposée** : extraire le cœur de la fonction en
+`performFatigueTest(trx, characterId, { source, mjModifier })` — aucune transaction propre, aucune
+émission, retourne le même objet `result` que `resolveFatigueTest` construit aujourd'hui (lignes
+165-171). Réutilisé par :
+- `resolveFatigueTest` existant (inchangé pour ses appelants actuels : ouvre sa transaction, appelle le
+  cœur, émet après commit) ;
+- le handler `cold_fatigue_check` (reçoit le `trx` du balayage, retourne le résultat dans `effects` pour
+  émission différée via la correction A).
+
+### Architecture retenue — deux échéances indépendantes par exposition, pas de nouvelle table
+
+Pas de jauge (contrairement à Maladies/Poisons, Lot 7) : le froid n'a pas d'état cumulatif propre en
+dehors de ce que `game_echeances.payload` porte déjà pour sa propre replanification.
+
+- **`cold_fatigue_check`** (`interactive:false`) — Test de Fatigue (source `CON`) à la cadence de la
+  tranche déclarée (2h/1h/30min, divisée par deux par tranche de Froid extrême et/ou environnement
+  humide — l'`interval_minutes` **effectif** est calculé une fois à la déclaration, pas recalculé à
+  chaque tick).
+- **`cold_damage_tick`** (`interactive:false`) — créée **uniquement** si la tranche déclarée est
+  Glacial ou en dessous. Cadence fixe 1h (elle aussi divisée par deux en Froid extrême/humide).
+  `payload: { hoursElapsed }` : la 1ʳᵉ résolution touche Bras/Jambes (1D10), incrémente `hoursElapsed`
+  et augmente le dé d'1D10 à chaque résolution suivante ; à partir de la 2ᵉ heure écoulée, Corps/Tête
+  s'ajoutent (boucle sur les 4 localisations avec `forcedSlotCode`, même patron de boucle que
+  `resolveEnvironmentalHazardTicks` sur `locationsCount`). Injection directe via `resolveTargetHit`
+  (`trx` du savepoint passé en paramètre `db` — la fonction est déjà générique sur ce paramètre, vérifié
+  `damageService.js:296`).
+  **Précision (Q1 Saar 2026-07-31) : ce ne sont pas des dégâts au rabais.** `resolveTargetHit` appelle
+  toujours `woundService.applyWound` **et** `statusService.resolveShockTest`
+  (`damageService.js:436-459`, vérifié — ce n'est pas conditionné par `chocDsl`, qui ne fait qu'ajouter
+  un Choc *supplémentaire* réservé aux munitions catégorie 3, absent ici). Une Blessure réelle est donc
+  posée sur Bras/Jambes/Corps/Tête, avec son propre Test de Choc/étourdissement standard, **exactement
+  le même mécanisme que Acide/Décompression/Feu** (Lot 3) — rien de spécifique à construire pour le
+  Choc, il vient gratuitement en réutilisant `resolveTargetHit` tel quel. Le Froid a donc bien deux
+  effets indépendants et cumulables à Glacial+ : le Test de Fatigue périodique (`cold_fatigue_check`,
+  toutes tranches) ET de vraies Blessures physiques avec Choc standard (`cold_damage_tick`, Glacial+),
+  jamais l'un au lieu de l'autre.
+- Les deux échéances sont **scopées `character_id`**, jamais `token_id` — le froid affecte le
+  personnage, pas seulement un token de combat (cohérent avec la scope "personnage, persistant hors
+  combat" déjà actée pour Fatigue/Maladie/Poison/Drogue/Irradiation, §3).
+- **Changement de tranche** (le MJ redéclare une tranche différente) : les échéances actives existantes
+  de ce personnage pour ces deux `condition_type` passent `status:'completed'`, puis de nouvelles sont
+  créées à la nouvelle cadence avec `hoursElapsed:0` — jamais un `UPDATE` en place de
+  `interval_minutes` sur l'échéance existante (repartir à zéro les dégâts physiques à la ré-exposition
+  est la lecture RAW la plus directe, bien qu'implicite : le texte ne couvre pas explicitement un
+  changement de tranche en cours d'exposition).
+- **Retrait complet** de l'exposition = mêmes échéances marquées `completed`, rien d'autre à nettoyer
+  (pas de jauge à remettre à zéro, contrairement à Maladie/Poison à venir).
+- **`armorReductionFactor`** : RAW ne mentionne aucune réduction d'armure spécifique pour le froid
+  (contrairement à la Chute, `fallDamageService.js`) — défaut `1`, même traitement que Acide/
+  Décompression/Feu (Lot 3), pas de cas spécial à coder.
+
+### Décisions tranchées avec Saar (2026-07-31, 1ʳᵉ passe)
+
+1. **[CORRIGÉ] `fatigue_enabled=false` ne bloque pas Froid — seul le volet Fatigue s'efface.** Ma
+   proposition initiale (bloquer toute déclaration si `fatigue_enabled` est faux) était fausse — Saar :
+   « Froid n'est pas conditionné à Fatigue_enabled, il n'inflige juste pas de dégât de fatigue si
+   désactivé. » Retenu : `declareColdExposure` ne vérifie plus `fatigue_enabled` du tout. Les deux
+   échéances (ci-dessous) sont créées inconditionnellement. Le handler `cold_fatigue_check` lit
+   `getCampaignSettings` **à chaque résolution** (pas seulement à la déclaration, pour couvrir un
+   bascule de réglage en cours d'exposition) : si `fatigue_enabled` est faux à cet instant, il retourne
+   `{ resolved: true, effects: null, reschedule: {...même cadence...} }` — un tick neutre qui
+   replanifie normalement sans toucher `fatigue_points`. `cold_damage_tick` (Glacial+) ne dépend
+   d'aucun réglage campagne, jamais concerné par ce garde-fou.
+2. **[CORRIGÉ] UI MJ — pas la fiche personnage : le bloc Statuts du token (`TokenStatusPanel.jsx`)
+   existe déjà et porte un code inerte prévu pour ça.** Erreur de ma part : je n'avais pas relu ce
+   composant avant de proposer la fiche personnage. Vérifié maintenant — `TokenStatusPanel.jsx:22`
+   liste déjà `{ code: 'hypothermia', category: 'chronique' }` aux côtés de `infected`/`poisoned`/
+   `irradiated` (catégorie "chronique" = les futurs Lots 7/9, personnage/persistant, par opposition à
+   `dot` = Lot 3 combat/Tour). i18n déjà présent (`fr.json:909`, `"hypothermia": "Hypothermie"`), icône
+   déjà présente (`client/public/assets/status/hypothermia.svg`), déjà dans `VALID_STATUS_CODES`
+   (`socketToken.js:160`) — un toggle nu fonctionnerait déjà aujourd'hui, mais sans aucun effet
+   mécanique, exactement l'état de `burning`/`acid`/`decompression` avant le Lot 3. Retenu : suivre
+   **le même patron** que ces trois codes — ajouter `hypothermia` à un ensemble
+   `CHRONIC_HAZARD_CODES` (à côté de `HAZARD_CODES`, `TokenStatusPanel.jsx:38`) qui intercepte le clic
+   et ouvre un sous-formulaire (tranche + case "humide") au lieu d'un toggle nu, plutôt qu'un nouveau
+   bloc dans `CharacterSheet.jsx`.
+   **Distinction importante à ne pas mélanger** : ce sous-formulaire réutilise l'UI et l'icône du
+   panneau Statuts (token), mais **pas** le moteur de tick de `environmentalHazardService.js`/
+   `ENVIRONMENTAL_HAZARD_REGISTRY` (Lot 3, scope Tour de combat via `startResolutionPhase`) — Froid
+   reste scope **temps de jeu** (Lot 1/2, `game_echeances`, `character_id`). Le clic sur un token
+   résout le `character_id` derrière ce token (`token.character_id`) et appelle le service Froid
+   (character-scope) ; le badge `hypothermia` est ensuite appliqué à **tous** les tokens de ce
+   personnage (même patron que `resolveCharacterTokens` dans `fatigueService.js`, pas seulement le
+   token cliqué) — cohérent avec "le froid affecte le personnage, pas un token de combat" (§3).
+3. **Badge visuel token — confirmé, code déjà réservé (`hypothermia`), rien à créer.** Voir point 2 —
+   asset/i18n/enum déjà en place, seul le branchement mécanique manque.
+4. **Numéro de migration — aucune migration nécessaire pour ce Lot.** `game_echeances.payload` (jsonb
+   libre, Lot 2) porte `{tier, wet}` sans nouvelle colonne ; `token_statuses.status_code` est déjà
+   `hypothermia`, déjà sans contrainte CHECK/enum. Lot 5 n'a donc aucun fichier de migration à ce stade.
+
+### 2ᵉ passe d'analyse critique (2026-07-31, demandée par Saar sur le cadrage déjà écrit)
+
+Six constats, deux confirmations. Vérifiés contre le code réel, pas des hypothèses.
+
+1. **[Trou] Le modèle "4 tranches fixes" est faux pour Froid extrême — la RAW le paramètre, elle ne
+   l'énumère pas.** Relecture littérale (p.244) : « Pour chaque tranche de 5°C en dessous de 0°C, vous
+   pouvez appliquer les règles ci-dessus [Glacial], en divisant à chaque fois les temps indiqués par
+   deux. » Ce n'est pas un 4ᵉ palier discret, c'est Glacial **répété** avec un diviseur qui double à
+   chaque tranche supplémentaire de -5°C (illimité en théorie). Un sélecteur à 4 options fixes
+   (Froid/Très froid/Glacial/Froid extrême) ne peut pas représenter ça. **Correction retenue** :
+   sélecteur à 3 options (Froid/Très froid/Glacial) + un compteur numérique séparé « paliers de Froid
+   extrême » (0 = pas de Froid extrême, N ≥ 1 = Glacial avec diviseur `2^N` sur tous les temps,
+   dégâts/Test inclus). `payload.extremeSteps` (entier ≥ 0), pas un enum.
+2. **[Trou] Risque de double autorité entre `token_statuses.data` et `game_echeances.payload` pour la
+   tranche courante — corrigé avant d'exister.** Les dangers Lot 3 stockent leur état dans
+   `token_statuses.data` (`formula`/`locations`/`forcedLocation`) parce que ce sont eux, l'autorité
+   (scope Tour/token, pas d'échéance derrière). Froid a son autorité ailleurs — les deux échéances
+   `character_id`-scopées. Si `token_statuses.data` du badge `hypothermia` stockait *aussi* `{tier,
+   wet}`, on aurait deux copies de la même donnée pouvant diverger (CLAUDE.md priorité 4 : autorité
+   unique). **Retenu** : le badge `hypothermia` ne porte **aucun payload mécanique**, `data: null` —
+   présence du statut = simple reflet visuel de "au moins une échéance froid active pour ce
+   personnage". La tranche réelle se lit uniquement depuis `game_echeances` (point 3).
+3. **[Trou, dépend du point 2] Il manque une lecture "tranche actuellement déclarée" — absente du
+   tableau de fichiers précédent.** Sans elle, le sous-formulaire de `TokenStatusPanel.jsx` ne peut ni
+   se pré-remplir à la réouverture, ni permettre "changer de tranche" en connaissance de cause. **Ajout
+   nécessaire** : petite lecture (nouvelle route ou fonction service) `GET` — ou embarquée dans la
+   réponse déjà chargée pour le token/personnage — qui retourne `{tier, wet, extremeSteps}` déduits des
+   échéances `active` du personnage pour `cold_fatigue_check`/`cold_damage_tick` (absence des deux =
+   pas exposé). Ajoutée au tableau de fichiers ci-dessous.
+4. **[Trou] Contrat `effects` pas assez précis pour être consommé.** `effects` doit permettre à la
+   route d'émettre le **bon** événement WS pour chaque entrée accumulée (un Test de Fatigue →
+   `WS.FATIGUE_TEST_RESULT`, un coup physique → `WS.COMBAT_ATTACK_RESULT`) — un objet `effects` nu ne
+   porte pas cette information. **Retenu** : chaque handler retourne `effects: { wsEvent, payload }` (ou
+   `effects: null` pour un tick neutre, point "Décisions tranchées" 1) ; `sweepDueEcheances` accumule
+   ces `{wsEvent, payload}` (en ignorant les `null`) ; la route boucle sur le tableau et fait
+   `io.to(campaignId).emit(WS[wsEvent], payload)` pour chacun — dispatcher générique, aucune
+   connaissance métier ajoutée à la route.
+5. **[Confirmation, pas un trou] `effects` est bien mort aujourd'hui, vérifié à la source — la
+   correction ne collisionne avec rien.** `woundEvolutionService.js:218` peuple déjà
+   `effects: { isSuccess, infected, survivalHoursInfo }` dans son retour de handler, mais
+   `resolveEcheanceNow` (`echeanceService.js:151-153`) ne le lit jamais, et ses 2 appelants
+   (`campaigns.js` routes `healing-choice`/`infection-mode`, lignes 361-427) ne lisent pas non plus
+   `result.effects` — ils re-requêtent `character_wounds` après coup et appellent `broadcastWoundUpdate`
+   directement. **Pourquoi Blessures n'a jamais eu besoin du mécanisme du point 4** : sa route connaît
+   déjà l'`echeanceId` précis (dans l'URL, un clic MJ = une échéance) donc peut re-requêter la bonne
+   ligne après coup. `sweepDueEcheances`, lui, résout un nombre arbitraire d'échéances de personnages
+   différents en une seule requête MJ (`game-time/adjust`) — la route n'a aucun moyen de deviner quoi
+   re-requêter sans que le résultat le lui dise. Les deux problèmes sont réellement différents, la
+   correction du point 4 n'est pas une réinvention inutile d'un mécanisme déjà résolu ailleurs.
+6. **[Trou, duplication à éviter] `resolveCharacterTokens` doit être extrait, pas recopié.**
+   `fatigueService.js:78-83` définit déjà cette fonction (résout les tokens d'un personnage dans une
+   campagne). `coldExposureService.js` en a besoin à l'identique pour propager le badge `hypothermia` à
+   tous les tokens du personnage. CLAUDE.md §7 : « pas de logique métier dupliquée ». **Retenu** :
+   déplacer la fonction vers un fichier partagé neutre (candidat : `statusService.js`, déjà consommé par
+   les deux) plutôt que de la dupliquer dans le nouveau service.
+
+**Contrat `declareColdExposure` précisé** : **idempotent**, pas seulement pour le cas initial —
+un appel alors que des échéances actives existent déjà pour ce personnage les marque `cancelled`
+(corrigé passe 3 point 5, pas `completed`) puis recrée à la nouvelle tranche/`extremeSteps`/`wet`
+(déjà décrit en §11 "Architecture retenue" pour le changement de tranche, mais pas explicitement
+nommé comme LE contrat général de la fonction). Ça signifie qu'un seul endpoint sert à la fois
+"déclarer" et "changer de tranche" — pas de route ou fonction séparée pour ce dernier cas.
+
+### 3ᵉ passe d'analyse critique (2026-07-31, Saar : « on continue tant qu'on trouve des trous »)
+
+1. **[Trou] Division fractionnaire des minutes — jamais remarqué avant.** `interval_minutes / 2^
+   extremeSteps / (wet ? 2 : 1)` peut produire un non-entier : Glacial (base 30 min) avec
+   `extremeSteps=1` **et** `wet=true` → 30/2/2 = **7.5**. La colonne est `integer`
+   (migration 221) et le garde-fou anti-boucle infinie de `echeanceService.js:81` rejette déjà tout
+   `intervalMinutes` non entier (`!Number.isInteger(...)` → `status:'error'`) — sans correction, cette
+   combinaison ferait échouer silencieusement l'échéance au tick suivant. **Fix retenu** :
+   `Math.max(1, Math.floor(baseMinutes / 2**extremeSteps / (wet ? 2 : 1)))` — dans une fonction pure
+   partagée (voir point suivant), jamais recalculé différemment à deux endroits.
+2. **[Trou] `extremeSteps` n'a de sens que si `tier==='glacial'` — RAW ne le traite pas comme une 5ᵉ
+   option indépendante.** Relecture : « Froid extrême... vous pouvez appliquer les règles ci-dessus
+   [Glacial], en divisant... » — c'est Glacial répété avec un diviseur, pas un régime séparé
+   sélectionnable sur Froid/Très froid. Une combinaison `tier:'froid', extremeSteps:2` n'a pas de sens
+   RAW. **Fix retenu** : validation serveur — `extremeSteps > 0` exige `tier === 'glacial'`
+   (`AppError` sinon) ; côté client, le compteur `extremeSteps` reste désactivé/à 0 tant que "Glacial"
+   n'est pas sélectionné. Confirme aussi le point précédent du plan : le calcul d'intervalle devient une
+   fonction pure `shared/coldExposureConstants.js` (candidat, patron `shared/fatigueConstants.js`/
+   `shared/gameTime.js`) — réutilisable côté client pour prévisualiser la cadence dans le
+   sous-formulaire, jamais dupliquée serveur/client.
+3. **[Trou, le plus significatif] `resolveTargetHit` n'a en réalité jamais été appelé avec un `trx`
+   dans ce dépôt — ma citation précédente (« la fonction est déjà générique sur ce paramètre »)
+   survendait la généricité.** Vérifié exhaustivement : les 9 appels existants
+   (`socketCombatHelpers.js` ×6, `fallDamageService.js`, `environmentalHazardService.js`,
+   plus la définition) passent tous le `db` brut du pool, jamais un `trx`/savepoint — cette composition
+   serait inédite. En creusant plus loin : `getMutationEffects` (`mutationService.js:17-19`) et
+   `getAdvantages` (`advantageService.js:13-18`), tous deux appelés à l'intérieur de
+   `resolveTargetHit`, utilisent le **singleton `db` importé au niveau module**, pas le paramètre reçu
+   — même en passant `sp` à `resolveTargetHit`, ces deux lectures s'exécuteraient sur une connexion
+   séparée, hors de la transaction du balayage. `woundService.applyWound`, en revanche, ouvre bien sa
+   propre sous-transaction **sur le `db` qu'on lui passe** (`db.transaction(...)`, `woundService.js:20`)
+   — lui passer `sp` créerait un savepoint imbriqué, comportement déjà établi et sûr ailleurs dans ce
+   projet (même mécanisme knex documenté dans `echeanceService.js`).
+   **Verdict** : pas de risque de deadlock (les lectures mutations/avantages sont de simples `SELECT`,
+   rien n'est verrouillé sur ces tables ailleurs dans ce flux) mais l'« atomicité totale » de l'appel
+   reste illusoire — un rollback improbable du savepoint englobant n'annulerait pas ces lectures (sans
+   conséquence puisque ce sont des lectures, pas des écritures). **Retenu : accepté comme limitation
+   connue et documentée**, pas de refactor de `getMutationEffects`/`getAdvantages` pour accepter un
+   `trx` — ces deux fonctions ont de nombreux appelants sans rapport avec ce Lot, un tel refactor serait
+   disproportionné (CLAUDE.md : ne pas dépasser le périmètre demandé).
+4. **[Trou] Concurrence non protégée sur `declareColdExposure`.** Aucune contrainte unique
+   `(character_id, condition_type, status)` sur `game_echeances` (vérifié migration 221, seul index :
+   `campaign_id`) — un double-clic MJ (ou deux onglets ouverts) sur "déclarer" pourrait créer deux
+   `cold_fatigue_check` actifs simultanés pour le même personnage, chacun tickant indépendamment
+   (double Test de Fatigue à chaque balayage, silencieusement). **Fix retenu** : `declareColdExposure`/
+   `clearColdExposure` verrouillent `char_sheet` du personnage (`.forUpdate()`) pendant toute
+   l'opération cancel+create — même patron déjà établi pour `resolveFatigueTest`/`adjustGameTime`.
+5. **[Précision] `status:'cancelled'` existe déjà dans la contrainte CHECK (migration 221,
+   `chk_echeances_status`) mais n'est utilisé nulle part dans le code actuel — c'est la bonne valeur
+   pour un retrait/changement de tranche MJ, pas `'completed'`.** Ma rédaction précédente (§ "Contrat"
+   ci-dessus et tableau de fichiers) employait `completed` par erreur — cette valeur signifie déjà "le
+   handler a fini naturellement" (`echeanceService.js:79-80`, reschedule null/épuisé), pas "annulé par
+   le MJ". Corrigé partout dans cette section.
+6. **[Trou/edge case, à trancher] Un token créé pendant une exposition déjà active n'hérite pas du
+   badge.** Le badge n'est posé qu'au moment de `declareColdExposure`/d'un tick, jamais à la création
+   d'un token. Ma comparaison précédente avec le badge Choc de Lot 4 était inexacte : Choc est
+   transitoire (posé au moment précis d'un échec de Test, un token créé après n'a jamais dû l'avoir),
+   Froid est censé être persistant pendant toute la durée de l'exposition — un token créé en cours
+   d'exposition "devrait" logiquement porter le badge dès sa création. **Deux options** : (a) accepter
+   tel quel, contournement MJ = redéclarer la même tranche resynchronise manuellement le token oublié ;
+   (b) câbler `tokenLifecycle.js` (création de token) pour vérifier l'exposition active du personnage et
+   poser le badge d'emblée. **Recommandation** : (a) — cas rare (créer un token pour un personnage déjà
+   exposé au froid en cours de partie), (b) toucherait un fichier partagé par toute création de token
+   pour un bénéfice marginal. **Tranché par Saar (2026-07-31) : confirmé, option (a).**
+
+### 4ᵉ passe d'analyse critique (2026-07-31)
+
+Plus courte — surtout des réutilisations à confirmer contre le code réel, un vrai oubli.
+
+1. **[Confirmé, patron exact à copier] Le garde `token.character_id` null existe déjà mot pour mot.**
+   `campaigns.js:451-454` (route `hazards/fall`) : `if (!token.character_id) throw new AppError(400,
+   'Ce token n\'a pas de personnage associé')`. Passe 3 point "edge case" traitait ça comme un ajout à
+   faire — c'est en fait un copier-coller direct d'un garde déjà écrit pour Chute, pas une nouvelle
+   invention.
+2. **[Confirmé, patron exact à copier] `resolveCampaignToken(campaignId, tokenId)` existe déjà**
+   (`campaigns.js:438-446`, fonction privée du fichier) — valide que le token appartient à la campagne
+   et retourne `{id, character_id}`. Utilisé par toutes les routes hazards/fall existantes. Les
+   nouvelles routes cold-exposure le réutilisent tel quel, aucune nouvelle validation à écrire.
+3. **[Confirmé, patron exact à copier] `applyModStatus`/`clearModStatus` (`statusService.js:175-195`)
+   sont les bonnes primitives pour le badge `hypothermia`** — `insert().onConflict(['token_id',
+   'status_code']).merge()` / `delete()`, déjà utilisées par Lot 3 pour `burning`/`acid`/`decompression`
+   avec `expiresAtTurn: null` (persistant, pas de purge automatique de fin de Tour). Rien de nouveau à
+   écrire pour poser/retirer le badge lui-même, juste boucler dessus via `resolveCharacterTokens`.
+4. **[Trou, réel oubli] Signatures `declareColdExposure`/`clearColdExposure`/`getColdExposureState` du
+   tableau de fichiers omettaient `io`.** Or `applyModStatus`/`clearModStatus` (point 3) exigent `io`
+   pour émettre `TOKEN_STATUS_UPDATED`. **Fix retenu** : signatures alignées sur le patron
+   `exposeToHazard(io, db, campaignId, tokenId, hazardCode, {...})` — mais `declareColdExposure`/
+   `clearColdExposure` gèrent leur **propre** transaction interne (comme `adjustGameTime`, pas de `db`/
+   `trx` reçu de l'appelant), donc signature finale `declareColdExposure(io, campaignId, characterId,
+   {tier, extremeSteps, wet})`. Le badge est posé **après** le commit de cette transaction interne —
+   même règle déjà établie pour `resolveFatigueTest`→`applyStunWithDuration`
+   (`fatigueService.js:174-176` : « jamais imbriquer une 2ᵉ transaction knex dans la première »).
+5. **Route exacte, calquée sur le patron Lot 3 vérifié** (`campaigns.js:470-488`) :
+   `POST/GET/DELETE /api/campaigns/:id/tokens/:tokenId/cold-exposure`, `requireAuth,
+   requireRole('gm')` — même structure à trois lignes que `hazards/:code/expose`/`clear`, aucune
+   nouvelle décision de routage.
+
+Constat général de cette passe : plus de nouveaux trous structurels majeurs trouvés, seulement des
+confirmations de réutilisation exacte + un paramètre manquant. Signe que le cadrage converge.
+
+### Fichiers concernés — plan écrit avant tout code (2026-07-31)
+
+| Fichier | Rôle |
+|---|---|
+| `server/src/lib/echeanceService.js` | **Trou A** — `resolveEcheanceHandler` retourne aussi `handlerResult.effects` ; `sweepDueEcheances` accumule les `effects` de chaque échéance résolue dans un tableau et le retourne (au lieu de `undefined` aujourd'hui) |
+| `server/src/lib/gameTimeService.js` | Propage ce tableau d'`effects` à travers `performTimeAdjustment` → `adjustGameTime`/`requestGameTimeAdvance`/`confirmPendingAdvance`, jusqu'à leur valeur de retour |
+| `server/src/lib/fatigueService.js` | **Trou B** — extraction de `performFatigueTest(trx, characterId, {source, mjModifier})` (aucune transaction propre, aucune émission WS, même calcul que `resolveFatigueTest` lignes 105-171) ; `resolveFatigueTest` existant devient un mince wrapper (ouvre sa transaction, appelle le cœur, émet après commit — comportement inchangé pour ses appelants actuels) |
+| `shared/coldExposureConstants.js` (nouveau) | Fonction pure `computeColdIntervalMinutes({tier, extremeSteps, wet}, baseKind)` — `Math.max(1, Math.floor(...))` (fix passe 3 point 1), validation `extremeSteps>0 ⟹ tier==='glacial'` (passe 3 point 2), réutilisable client (prévisualisation cadence) et serveur, même patron que `shared/fatigueConstants.js`/`shared/gameTime.js` |
+| `server/src/lib/coldExposureService.js` (nouveau) | `declareColdExposure(io, campaignId, characterId, {tier, extremeSteps, wet})` (signature corrigée passe 4 point 4 — `io` ajouté, gère sa propre transaction comme `adjustGameTime`) — verrouille `char_sheet` du personnage (`.forUpdate()`, fix concurrence passe 3 point 4) le temps de l'opération ; **idempotent** (`status:'cancelled'` sur les échéances actives existantes, pas `completed` — précision passe 3 point 5 — puis recrée), utilise `computeColdIntervalMinutes` pour l'`interval_minutes` effectif, crée `cold_fatigue_check` + `cold_damage_tick` si `tier==='glacial'`, `payload` ne stocke `tier`/`extremeSteps`/`wet` que comme mémoire de replanification (jamais dupliqué côté token, passe 2 point 2) ; badge `hypothermia` posé via `applyModStatus` (`resolveCharacterTokens` en boucle) **après le commit** de la transaction interne (passe 4 point 4) ; `clearColdExposure(io, campaignId, characterId)` (`status:'cancelled'` + `clearModStatus` en boucle après commit) ; `getColdExposureState(characterId)` (lecture, passe 2 point 3) ; handlers `coldFatigueCheckHandler` (retourne `effects: {kind:'fatigueTestResult', payload, applyStun} \| null`) et `coldDamageTickHandler` (calcule seulement les `hitSpecs`, retourne `effects: {kind:'coldDamageHits', characterId, campaignId, hitSpecs}` — **ne** appelle **pas** `resolveTargetHit` lui-même, voir "Correction trouvée en codant" ci-dessus) ; `applyColdDamageHits(io, campaignId, characterId, hitSpecs)` (nouveau, appelée par la route après commit — fetch contexte + boucle `resolveTargetHit`/émission `COMBAT_ATTACK_RESULT`, même patron que `resolveEnvironmentalHazardTicks`) |
+| `server/src/lib/statusService.js` | Extraction de `resolveCharacterTokens` depuis `fatigueService.js:78-83` (passe 2 point 6) — réutilisé par `fatigueService.js` (import, comportement inchangé) et `coldExposureService.js` ; `applyModStatus`/`clearModStatus` déjà présents (`:175-195`) réutilisés tels quels pour le badge (confirmé passe 4 point 3) |
+| `server/src/lib/echeanceHandlerRegistrations.js` | Enregistre les 2 handlers (`cold_fatigue_check`/`cold_damage_tick`, `interactive:false`) |
+| `server/src/routes/campaigns.js` | Routes calquées mot pour mot sur le patron `hazards/:code/expose`/`clear` (passe 4 point 5, `campaigns.js:470-488`) : `POST/GET/DELETE /:id/tokens/:tokenId/cold-exposure`, `requireAuth, requireRole('gm')`, réutilisent `resolveCampaignToken` (passe 4 point 2) et le garde `if (!token.character_id) throw new AppError(400, ...)` déjà écrit pour `hazards/fall` (passe 4 point 1) ; route `game-time/adjust` existante boucle sur les `effects` remontés après le commit — `kind==='fatigueTestResult'` : applique `applyStun` puis émet `WS.FATIGUE_TEST_RESULT` ; `kind==='coldDamageHits'` : appelle `applyColdDamageHits` |
+| `client/src/components/TokenStatusPanel.jsx` | Ajoute `hypothermia` à un ensemble `CHRONIC_HAZARD_CODES` qui ouvre un sous-formulaire (tranche à 3 options + compteur `extremeSteps` désactivé hors Glacial + case "humide") au lieu du toggle nu, pré-rempli via `getColdExposureState` à l'ouverture — même patron que `hazardForm`/`HAZARD_CODES` déjà en place pour Acide/Décompression/Feu |
+| `client/src/locales/combat.json` (ou namespace du panneau) | Clés du sous-formulaire (titre, options de tranche, compteur paliers extrêmes, case humide, confirmer/retirer) — aucune clé `status.hypothermia` à ajouter, déjà présente |
+| `shared/events.js` | Aucun nouvel événement — `getColdExposureState` couvre le pré-remplissage par lecture REST, `WS.FATIGUE_TEST_RESULT`/`WS.COMBAT_ATTACK_RESULT` déjà existants couvrent les deux `wsEvent` possibles |
+| `server/src/lib/tokenLifecycle.js` | **Pas de changement retenu** (passe 3 point 6, option (a)) — un token créé pendant une exposition active n'hérite pas automatiquement du badge, contournement MJ = redéclarer la même tranche |
+
+**Hors périmètre de ce Lot** (inchangé) : suivi automatique vêtements mouillés/tenue adaptée, système de
+climat automatique, mécanisme d'amputation séparé.
+
+### Correction trouvée en codant (2026-07-31) — au-delà des 4 passes de cadrage
+
+En écrivant `coldDamageTickHandler` : `woundService.applyWound` (appelé par `resolveTargetHit`) émet
+`WOUND_ADDED` de façon **synchrone et inconditionnelle** dès son appel (`woundService.js:38`), jamais
+différée. L'appeler depuis l'intérieur du savepoint de `sweepDueEcheances` émettrait donc avant que la
+transaction englobante (`adjustGameTime`) n'ait committé — en plus, `resolveTargetHit` a besoin d'un
+`io` valide (`applyWound` plante sur `null.to()`), qu'aucune fonction du moteur d'échéances ne
+transporte aujourd'hui. Threader `io` à travers tout le moteur (`adjustGameTime` →
+`performTimeAdjustment` → `sweepDueEcheances` → `resolveEcheanceHandler` → handler) aurait été un
+changement de signature partagé disproportionné pour ce Lot. **Retenu** : `coldDamageTickHandler` ne
+fait que calculer les Localisations/formules à jouer (`hitSpecs`) et les retourne via `effects` ;
+`applyColdDamageHits` (nouvelle fonction, `coldExposureService.js`) fait le jet + l'application réelle
+(`resolveTargetHit`) **après le commit**, appelée par la route qui dispose d'`io` — même séparation que
+`performFatigueTest`/`resolveFatigueTest`. Conséquence sur le contrat `effects` (passe 2 point 4,
+raffiné passe 4) : discriminant renommé `kind` (`'fatigueTestResult'` | `'coldDamageHits'`) plutôt que
+`wsEvent` nu, pour porter aussi bien un événement WS direct qu'une action différée à exécuter.
+
+**Prochaine étape** : Saar valide ce plan de fichiers avant tout code (`CLAUDE.md` §6 point 5) — une
+fois validé, implémentation fichier par fichier dans l'ordre du tableau (les deux trous du moteur
+d'abord, consommés ensuite par le nouveau service).
+
+### Bug trouvé par Saar en testant (2026-07-31) — Choc du dégât Glacial dépendait du combat
+
+**Symptôme rapporté** : la fenêtre de résolution du Choc ne s'affichait qu'à l'ouverture de la fenêtre
+combat, et deux personnages touchés simultanément ne pouvaient pas être résolus tous les deux (une
+seule fenêtre, la seconde perdue).
+
+**Cause** : `applyColdDamageHits` se contentait d'émettre `hit.shockResult` dans le payload
+`COMBAT_ATTACK_RESULT`, exactement comme `resolveEnvironmentalHazardTicks` (Lot 3). Or le seul
+mécanisme qui résout un `shockResult` ainsi émis est une fenêtre interactive côté client
+(`CombatOverlay.jsx`, "Stun Dialog") — jamais un problème pour Lot 3 (ses dangers ne tickent que
+pendant `startResolutionPhase`, donc la fenêtre de combat est *par construction* déjà ouverte), mais un
+vrai bug pour le Froid : ses tics viennent de l'horloge de campagne, sans aucune garantie qu'une
+fenêtre de combat soit ouverte, et un seul balayage peut toucher plusieurs personnages à la fois — or
+cette fenêtre ne garde qu'un seul dialogue en mémoire (état simple, pas de file d'attente), les
+résolutions suivantes écrasent silencieusement la précédente.
+
+**Correction retenue** : `applyColdDamageHits` résout maintenant le Choc **automatiquement**,
+exactement comme `performFatigueTest` le fait déjà pour son propre remplacement de Test au palier 5
+(jet 1D6 de durée, ×10 si inconscient, `applyStunWithDuration` direct) — aucune fenêtre, aucune
+dépendance au combat, aucune perte possible en cas de multi-personnages. `COMBAT_ATTACK_RESULT` reste
+émis pour l'affichage (visible si la fenêtre combat est ouverte, silencieux sinon — cosmétique
+uniquement désormais, plus aucune donnée mécanique n'en dépend).
+
+### Bug trouvé par Saar en testant (2026-07-31, suite) — pas de file d'attente pour l'affichage
+
+**Symptôme** : même après la correction ci-dessus, la fenêtre de résultat ne s'affiche qu'à
+l'ouverture du mode combat, et deux personnages touchés dans le même balayage se perdent l'un
+l'autre (un seul affiché, l'autre jamais montré).
+
+**Cause confirmée** (`useCombatSocket.js`) : `gmAttackResult`/`pnjAttackResult` sont des variables
+`useState` simples (pas un tableau), et le composant qui les affiche (`CombatOverlay.jsx`) n'est monté
+que si `mode==='combat'` (`SessionPage.jsx`, `{mode==='combat' && <CombatOverlay .../>}`). Le listener
+socket lui-même (`useCombatSocket`) est bien monté en permanence (appelé depuis `SessionPage.jsx`) —
+l'événement est donc reçu et écrase l'état en arrière-plan hors combat, mais rien ne l'affiche tant que
+`CombatOverlay` n'est pas monté ; un second résultat écrase le premier avant même d'avoir été vu.
+**Jamais un problème pour Feu/Acide/Décompression** (Lot 3) : ils ne tiquent que pendant
+`startResolutionPhase`, qui ne s'exécute que pendant la résolution d'un Tour de combat — la fenêtre
+combat est donc toujours déjà montée quand ils déclenchent. Le Froid est le premier mécanisme
+déclenché depuis l'horloge de campagne, sans cette garantie.
+
+**Correction demandée par Saar, portée volontairement restreinte** (« ni plus ni moins » — pas de
+refonte du chat, chantier séparé) : une file d'attente dédiée aux résultats de dangers
+environnementaux, découplée du mode combat, sans toucher à l'affichage combat normal existant.
+
+**Solution retenue** — nouveau composant `client/src/components/EnvironmentalResultQueue.jsx` :
+- Toujours monté (même patron que `DicePanel`, ajouté dans `SessionPage.jsx` sans condition de mode).
+- État `useState([])` — un vrai tableau qui s'ajoute (`[...q, item]`), jamais un slot unique écrasé.
+- Écoute `WS.COMBAT_ATTACK_RESULT` directement, filtré sur `data.sourceCode` présent (jamais posé par
+  une attaque de combat normale — vérifié : aucun des 3 emitters de combat normal dans
+  `socketCombatHelpers.js` ne pose ce champ) — ne capte donc que Froid/Feu/Acide/Décompression, jamais
+  un assaut PJ/PNJ classique.
+- Réutilise **tel quel** `CombatResultGM`/`CombatResultPlayer` (`CombatResultPanels.jsx`) et le même
+  calcul de libellé source que `CombatOverlay.jsx` (`resolveAttaquantLabel` : `status.${sourceCode}`,
+  déjà traduit) — rien de nouveau côté présentation, seule la gestion de file est neuve.
+- Un client qui n'est ni MJ ni la cible de l'entrée courante la retire silencieusement de sa propre
+  file locale (sinon elle resterait bloquée indéfiniment de son point de vue, sans jamais avancer).
+- **Correction en retour dans `useCombatSocket.js`** : `onAttackResult` ignore désormais les résultats
+  porteurs de `sourceCode` (`if (data.sourceCode) return`) — sans ce garde-fou, Feu/Acide/Décompression
+  s'afficheraient en double pendant un combat réel (une fois dans l'ancien slot combat, une fois dans
+  la nouvelle file). Correction minimale (une ligne), aucune autre logique combat touchée.
+
+Testé : ESLint (0 erreur, seulement des warnings préexistants sans rapport), build client réussi.
+**Confirmé fonctionnel en navigateur par Saar** (2026-07-31) : file d'attente vérifiée avec plusieurs
+personnages exposés simultanément, rien perdu.
+
+### Décision explicite (2026-07-31) — rattrapage étalé sur plusieurs avances, pas en un seul saut
+
+`sweepDueEcheances` (Lot 2, `echeanceService.js`) ne fait ticker chaque échéance due **qu'une seule
+fois par appel**, quelle que soit l'ampleur du saut de temps — un unique `+6h` sur une exposition
+Glacial (tic horaire) ne produit donc qu'1D10 (Bras/Jambes, 1ʳᵉ heure), pas un rattrapage complet des
+6 heures d'un coup. L'échéance reste en retard et retique au prochain ajustement d'horloge, aussi
+minime soit-il — l'escalade RAW (1D10→2D10→3D10..., Corps/Tête dès la 2ᵉ heure) s'observe donc étalée
+sur plusieurs avances MJ successives plutôt qu'en une seule fois pour un grand saut.
+
+**Saar confirme (2026-07-31), après explication du mécanisme, que ce comportement est celui souhaité**
+— écart RAW explicite et discuté (`CLAUDE.md` priorité 9), pas un raccourci silencieux : consigné ici
+pour que ce ne soit pas re-découvert comme un bug lors d'un futur test. Pas de correctif appliqué à
+`sweepDueEcheances` — reste un moteur partagé avec Blessures (Lot 2), toute modification de son
+comportement de rattrapage devrait être évaluée pour les deux consommateurs, pas seulement Froid.
 
 **Hors périmètre** : pas de suivi automatique "vêtements mouillés"/"tenue adaptée" — ajustement
-manuel de la tranche déclarée par le MJ, comme la RAW le permet déjà nativement.
+manuel de la tranche déclarée par le MJ, comme la RAW le permet déjà nativement. Pas de système de
+climat/température ambiante automatique. Pas de mécanisme d'amputation séparé (déjà couvert
+narrativement, voir RAW retenu ci-dessus).
 
 ---
 

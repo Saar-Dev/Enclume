@@ -37,7 +37,11 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     const onDamageResult        = (data) => { setDamageResults(data) }
     const onStunPrompt          = (data) => { setStunPayload(data) }
     const onAttackPlayerResult  = (data) => { setAttackResult(data) }
+    // sourceCode (Acide/Décompression/Feu/Froid, docs/PLAN_FATIGUE_DOMMAGES.md §9/§11) : géré en
+    // exclusivité par EnvironmentalResultQueue.jsx (toujours monté, jamais gaté au mode combat, vraie
+    // file d'attente) — jamais aussi ici, ce serait un double affichage pendant un combat réel.
     const onAttackResult        = (data) => {
+      if (data.sourceCode) return
       if (data.isPnj) {
         setGmAttackResult(data)
         setPnjAttackResult(data)

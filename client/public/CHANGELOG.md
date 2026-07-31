@@ -1,3 +1,22 @@
+## v196 — 2026-07-31 — Froid
+
+### Client
+- [feat] Nouveau danger "Hypothermie" dans le panneau Statuts d'un token (MJ) : tranche de froid
+  (Froid/Très froid/Glacial + paliers de Froid extrême), environnement humide — se déclare et se
+  retire comme les autres dangers environnementaux.
+- [feat] Sous Glacial, les personnages exposés subissent des dégâts physiques croissants au fil du
+  temps de jeu (Bras/Jambes, puis Corps/Tête), en plus du Test de Fatigue périodique déjà prévu par
+  la règle — visible même en dehors d'un combat.
+- [feat] Les résultats de ces dégâts (et ceux d'Acide/Décompression/Feu) s'affichent désormais à tout
+  moment, sans avoir besoin d'ouvrir la fenêtre de combat, et ne s'effacent plus les uns les autres si
+  plusieurs personnages sont touchés en même temps.
+- [fix] Sélecteur de tranche de froid : texte illisible (blanc sur blanc) une fois la liste ouverte.
+
+### Serveur
+- [feat] Fondations du moteur d'échéances de jeu renforcées (visibilité en temps réel des effets
+  automatiques déclenchés par l'horloge de campagne) — sert de socle aux futures règles de Maladies,
+  Drogues et Irradiations.
+
 ## v195 — 2026-07-30 — Fatigue (règle avancée optionnelle)
 
 ### Client

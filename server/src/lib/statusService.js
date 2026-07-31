@@ -194,6 +194,20 @@ export async function clearModStatus(io, db, campaignId, tokenId, statusCode, { 
   }
 }
 
+// ─── resolveCharacterTokens ───────────────────────────────────────────────────
+// Résout les tokens actifs du personnage dans cette campagne (patron resolveCampaignToken,
+// campaigns.js, inversé character→tokens). Extrait de fatigueService.js (docs/
+// PLAN_FATIGUE_DOMMAGES.md §11 Lot 5, passe 2 point 6 — évite une 2e copie identique dans
+// coldExposureService.js, CLAUDE.md §7 "pas de logique métier dupliquée"). Zéro token trouvé
+// (personnage non placé sur une carte) : l'état mécanique reste correct, seul le badge visuel est
+// absent pour ce personnage.
+export async function resolveCharacterTokens(trx, campaignId, characterId) {
+  return trx('tokens as t')
+    .join('battlemaps as bm', 't.battlemap_id', 'bm.id')
+    .where({ 't.character_id': characterId, 'bm.campaign_id': campaignId })
+    .pluck('t.id')
+}
+
 // ─── emitShockDiceResult ──────────────────────────────────────────────────────
 // Synchrone — emit DICE_RESULT D20 Test de Choc vers tous les clients de la campagne.
 // Appelé après chaque resolveShockTest non-null, avant COMBAT_ATTACK_RESULT.

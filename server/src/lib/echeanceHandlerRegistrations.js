@@ -6,8 +6,12 @@
 // jamais réimporter ce fichier ailleurs qu'à l'entrée du serveur, sous peine de doublons.
 import { ECHEANCE_TYPE_REGISTRY } from '../../../shared/echeanceTypeRegistry.js'
 import { woundHealingCheckHandler, woundInfectionCheckHandler } from './woundEvolutionService.js'
+import { coldFatigueCheckHandler, coldDamageTickHandler } from './coldExposureService.js'
 
 ECHEANCE_TYPE_REGISTRY.push(
   { key: 'wound_healing_check', interactive: true, handler: woundHealingCheckHandler },
   { key: 'wound_infection_check', interactive: true, handler: woundInfectionCheckHandler },
+  // Froid (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5) — patron automatique, jamais de revue MJ.
+  { key: 'cold_fatigue_check', interactive: false, handler: coldFatigueCheckHandler },
+  { key: 'cold_damage_tick', interactive: false, handler: coldDamageTickHandler },
 )

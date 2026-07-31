@@ -611,6 +611,47 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
+> **Item 110 (Session 191, Saar) — `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 5 (Froid) ✅ CLOS, CONFIRMÉ
+> FONCTIONNEL PAR SAAR EN NAVIGATEUR.**
+> 4 passes d'analyse critique avant tout code (détail complet §11 du plan) — trous corrigés dans le
+> texte avant le premier fichier : modèle de tranches revu (Froid extrême = Glacial répété avec un
+> diviseur `extremeSteps`, pas une 5ᵉ option indépendante — la RAW ne le traite pas comme un palier
+> discret) ; double autorité évitée entre le badge token et les échéances (le badge `hypothermia` ne
+> porte aucune donnée mécanique, la tranche réelle ne vit que dans `game_echeances`) ; concurrence
+> protégée (`char_sheet.forUpdate()` pendant déclaration/retrait, aucune contrainte unique en base) ;
+> deux trous trouvés dans le moteur partagé du Lot 2 lui-même (`effects` jamais propagé par
+> `sweepDueEcheances`, `resolveFatigueTest` non réutilisable depuis un handler d'échéance — corrigés
+> avant le reste, réutilisés par tout futur consommateur automatique).
+> **Codé** : fix `echeanceService.js`/`gameTimeService.js`/`fatigueService.js` (moteur partagé) ;
+> `shared/coldExposureConstants.js` (9/9 tests, cadence pure) ; `coldExposureService.js` (nouveau —
+> déclarer/retirer/lire l'exposition, 2 handlers automatiques, injection différée des dégâts
+> physiques) ; extraction `resolveCharacterTokens` vers `statusService.js` (évite une 2ᵉ copie) ; 3
+> routes `cold-exposure` dans `campaigns.js`, calquées mot pour mot sur le patron hazards Lot 3 ;
+> sous-formulaire tranche/paliers extrêmes/humide dans `TokenStatusPanel.jsx` sur le badge
+> `hypothermia` (déjà réservé — code, icône, i18n existaient, jamais câblés avant ce Lot).
+> **3 bugs réels trouvés par Saar en testant, corrigés avant clôture** — aucun anticipé par les 4
+> passes de cadrage : (1) `resolveTargetHit`/`applyWound` émet son WS de façon synchrone et
+> inconditionnelle, jamais appelable depuis le savepoint du balayage d'horloge sans threader `io` à
+> travers tout le moteur (disproportionné) — corrigé en ne calculant que les formules dans le
+> handler, l'application réelle (`applyColdDamageHits`) attendant le commit ; (2) le Choc du dégât
+> Glacial dépendait du "Stun Dialog" du combat (fenêtre interactive qui n'existe que si le combat est
+> monté, jamais un problème pour Feu/Acide/Décompression puisqu'eux ne tiquent que pendant la
+> résolution d'un Tour) — corrigé en résolution automatique, même patron que le Choc de la Fatigue
+> palier 5 ; (3) aucune file d'attente pour l'affichage hors combat (`gmAttackResult`/`pnjAttackResult`
+> sont des variables simples, pas un tableau, et leur fenêtre n'est montée qu'en mode combat) —
+> nouveau composant `EnvironmentalResultQueue.jsx`, toujours monté, vrai tableau qui s'ajoute, corrigé
+> en retour dans `useCombatSocket.js` (1 ligne) pour éviter un double affichage pendant un combat réel.
+> **Testé** : `node --check` sur les 7 fichiers serveur, `node --test shared/*.test.mjs` (247/247,
+> dont les 9 nouveaux), `npm run build` client réussi, ESLint 0 erreur (warnings préexistants sans
+> rapport), **confirmé fonctionnel en navigateur par Saar** (déclaration de tranche, dégâts Glacial
+> escaladés sur plusieurs personnages simultanément, file d'attente vérifiée sans perte).
+> **Écart RAW explicite et documenté** (§11, pas un raccourci silencieux) : le rattrapage d'un grand
+> saut d'horloge s'étale sur plusieurs avances MJ plutôt qu'en une seule fois (le moteur du Lot 2 ne
+> fait ticker une échéance qu'une fois par appel, partagé avec Blessures) — confirmé souhaité par Saar
+> après explication du mécanisme.
+> **Non testé** : round-trip HTTP authentifié scripté (pas d'identifiants côté agent).
+> Détail complet : `docs/PLAN_FATIGUE_DOMMAGES.md` §11.
+
 > **Item 109 (Session 190, Saar) — `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 4 (Fatigue) ✅ CLOS, CONFIRMÉ
 > FONCTIONNEL PAR SAAR EN NAVIGATEUR.**
 > 7 passes d'analyse critique avant/pendant le codage (détail complet §10 du plan) — corrections

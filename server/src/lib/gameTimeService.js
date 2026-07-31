@@ -25,9 +25,11 @@ async function performTimeAdjustment(trx, campaign, deltaMinutes) {
 
   // Balayage automatique appelé depuis l'intérieur de cette transaction, jamais depuis la route
   // après coup (docs/PLAN_FATIGUE_DOMMAGES.md §8, analyse à charge point 1).
-  await sweepDueEcheances(trx, campaign.id, resolvedAfter)
+  // effects (§11 Lot 5, Trou A) : les 3 appelants de performTimeAdjustment retournent ou étalent déjà
+  // cet objet tel quel — rien d'autre à changer dans ce fichier pour que ça remonte jusqu'à la route.
+  const effects = await sweepDueEcheances(trx, campaign.id, resolvedAfter)
 
-  return { displayedBefore, displayedAfter, resolvedBefore, resolvedAfter }
+  return { displayedBefore, displayedAfter, resolvedBefore, resolvedAfter, effects }
 }
 
 // docs/PLAN_FATIGUE_DOMMAGES.md §7 (Lot 1) — mutateur unique de l'horloge de campagne.

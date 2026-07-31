@@ -16,6 +16,10 @@ import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getPendingReviewForGm, getPendingRollsForPlayer, broadcastWoundUpdate } from '../lib/woundReviewService.js'
 import { resolveFall } from '../lib/fallDamageService.js'
 import { exposeToHazard, clearHazard } from '../lib/environmentalHazardService.js'
+import { applyStunWithDuration } from '../lib/statusService.js'
+import {
+  declareColdExposure, clearColdExposure, getColdExposureState, applyColdDamageHits,
+} from '../lib/coldExposureService.js'
 
 const router = Router()
 
@@ -264,12 +268,36 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   res.json({ campaign })
 })
 
+// processGameTimeEffects — consomme les `effects` remontés par adjustGameTime/requestGameTimeAdvance/
+// confirmPendingAdvance (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5, Trou A + correction "trouvée en
+// codant") — appelé après le commit de la transaction d'ajustement d'horloge, jamais avant. Dispatch
+// par `kind`, connaissance métier volontairement ici (le moteur d'échéances reste agnostique, voir
+// echeanceService.js "ne connaît aucune règle métier").
+async function processGameTimeEffects(io, campaignId, effects = []) {
+  for (const effect of effects) {
+    if (effect.kind === 'fatigueTestResult') {
+      if (effect.applyStun) {
+        for (const tokenId of effect.applyStun.tokenIds) {
+          await applyStunWithDuration(
+            io, db, campaignId, tokenId, effect.applyStun.statusOutcome, effect.applyStun.stunDuration,
+            effect.applyStun.currentTurn, { statusCode: effect.applyStun.statusCode },
+          )
+        }
+      }
+      io.to(campaignId).emit(WS.FATIGUE_TEST_RESULT, effect.payload)
+    } else if (effect.kind === 'coldDamageHits') {
+      await applyColdDamageHits(io, effect.campaignId, effect.characterId, effect.hitSpecs)
+    }
+  }
+}
+
 // POST /api/campaigns/:id/game-time/adjust — ajuste l'horloge de campagne (docs/PLAN_FATIGUE_DOMMAGES.md §7)
 // GM uniquement. minutes : entier signé non nul (positif = avance, négatif = recul).
 // game_time_resolved_minutes ne quitte jamais le serveur (invariant de non-fuite) — ni ici, ni sur GET /:id.
 router.post('/:id/game-time/adjust', requireAuth, requireRole('gm'), async (req, res) => {
   const { minutes } = req.body
-  const { displayedAfter } = await adjustGameTime(req.params.id, minutes)
+  const { displayedAfter, effects } = await adjustGameTime(req.params.id, minutes)
+  await processGameTimeEffects(req.app.get('io'), req.params.id, effects)
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
     campaignId: req.params.id,
     gameTimeMinutes: displayedAfter,
@@ -291,6 +319,7 @@ router.post('/:id/game-time/request-advance', requireAuth, requireRole('gm'), as
     return res.json({ pending: true })
   }
 
+  await processGameTimeEffects(req.app.get('io'), req.params.id, result.effects)
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
     campaignId: req.params.id,
     gameTimeMinutes: result.displayedAfter,
@@ -319,6 +348,7 @@ router.post('/:id/game-time/confirm-advance', requireAuth, requireRole('gm'), as
     throw err
   }
 
+  await processGameTimeEffects(req.app.get('io'), req.params.id, result.effects)
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_GAME_TIME_ADJUSTED, {
     campaignId: req.params.id,
     gameTimeMinutes: result.displayedAfter,
@@ -484,6 +514,37 @@ router.post('/:id/tokens/:tokenId/hazards/:code/clear', requireAuth, requireRole
   await resolveCampaignToken(req.params.id, req.params.tokenId)
   const { linger } = req.body
   await clearHazard(req.app.get('io'), db, req.params.id, req.params.tokenId, req.params.code, { linger: !!linger })
+  res.json({ cleared: true })
+})
+
+// Froid (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5) — URL scopée token (même convention que les routes
+// hazards ci-dessus, patron déjà appelé par TokenStatusPanel.jsx) mais mécanique scopée personnage :
+// le handler résout characterId depuis token.character_id, jamais fourni par le client.
+// GET /api/campaigns/:id/tokens/:tokenId/cold-exposure — état courant (tier/extremeSteps/wet), null
+// si pas exposé — alimente le pré-remplissage du sous-formulaire à l'ouverture.
+router.get('/:id/tokens/:tokenId/cold-exposure', requireAuth, requireRole('gm'), async (req, res) => {
+  const token = await resolveCampaignToken(req.params.id, req.params.tokenId)
+  if (!token.character_id) throw new AppError(400, 'Ce token n\'a pas de personnage associé')
+  const state = await getColdExposureState(token.character_id)
+  res.json({ state })
+})
+
+// POST /api/campaigns/:id/tokens/:tokenId/cold-exposure — déclare/change la tranche. GM uniquement.
+// body { tier, extremeSteps?, wet? }. Idempotent (déclarer alors qu'une exposition existe déjà =
+// changer de tranche, docs/PLAN_FATIGUE_DOMMAGES.md §11 "Contrat declareColdExposure").
+router.post('/:id/tokens/:tokenId/cold-exposure', requireAuth, requireRole('gm'), async (req, res) => {
+  const token = await resolveCampaignToken(req.params.id, req.params.tokenId)
+  if (!token.character_id) throw new AppError(400, 'Ce token n\'a pas de personnage associé')
+  const { tier, extremeSteps, wet } = req.body
+  await declareColdExposure(req.app.get('io'), req.params.id, token.character_id, { tier, extremeSteps, wet })
+  res.json({ declared: true })
+})
+
+// DELETE /api/campaigns/:id/tokens/:tokenId/cold-exposure — retire l'exposition. GM uniquement.
+router.delete('/:id/tokens/:tokenId/cold-exposure', requireAuth, requireRole('gm'), async (req, res) => {
+  const token = await resolveCampaignToken(req.params.id, req.params.tokenId)
+  if (!token.character_id) throw new AppError(400, 'Ce token n\'a pas de personnage associé')
+  await clearColdExposure(req.app.get('io'), req.params.id, token.character_id)
   res.json({ cleared: true })
 })
 

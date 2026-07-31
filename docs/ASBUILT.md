@@ -1392,6 +1392,74 @@ déclaratif plutôt qu'une fonction à paramètres fixes, verrouillage de concur
 
 ---
 
+## Froid (Lot 5, session 191)
+
+### Serveur
+- Aucune migration : `game_echeances.payload` (jsonb libre, Lot 2) et `token_statuses.status_code`
+  (text libre, sans contrainte) couvrent tout le besoin de ce Lot.
+- `shared/coldExposureConstants.js` — `COLD_TIERS`, `isValidColdExposureInput`,
+  `computeColdIntervalMinutes` (fonction pure, cadence par tranche/`extremeSteps`/humidité,
+  `Math.max(1, Math.floor(...))` — évite une valeur fractionnaire ou nulle que le garde-fou
+  anti-boucle du Lot 2 rejetterait), 9/9 tests.
+- `server/src/lib/coldExposureService.js` (nouveau) — `declareColdExposure`/`clearColdExposure`
+  (idempotent : redéclarer = changer de tranche, `char_sheet.forUpdate()` le temps de l'opération,
+  aucune contrainte unique en base sinon) ; `getColdExposureState` (lecture, pré-remplissage
+  sous-formulaire) ; deux handlers automatiques (`interactive:false`) enregistrés dans
+  `echeanceHandlerRegistrations.js` : `coldFatigueCheckHandler` (Test de Fatigue périodique, toutes
+  tranches, tick neutre si `fatigue_enabled=false` — Froid n'est **pas** conditionné à ce réglage,
+  seul son propre effet s'efface) et `coldDamageTickHandler` (Glacial+, Bras/Jambes dès 1h puis
+  Corps/Tête dès 2h, escalade 1D10/2D10/3D10...) ; `applyColdDamageHits` (application réelle différée
+  après le commit du balayage d'horloge — voir trou structurel ci-dessous).
+- **Deux trous corrigés dans le moteur partagé du Lot 2 lui-même** (`echeanceService.js`/
+  `gameTimeService.js`/`fatigueService.js`) : `sweepDueEcheances` ne propageait jamais le champ
+  `effects` du contrat handler (déclaré depuis l'origine, jamais lu) — corrigé, accumulé en tableau,
+  remonté jusqu'à la route qui émet/applique après le commit (`processGameTimeEffects`,
+  `campaigns.js`) ; `resolveFatigueTest` ouvrait sa propre transaction et émettait lui-même son WS —
+  inutilisable depuis un handler d'échéance (savepoint déjà ouvert), cœur extrait en
+  `performFatigueTest` (pas de transaction propre), réutilisé par les deux.
+- **Bug trouvé en codant** : `resolveTargetHit`/`woundService.applyWound` émet son WS de façon
+  synchrone et inconditionnelle — jamais appelable depuis le savepoint du balayage sans threader `io`
+  à travers tout le moteur d'échéances (disproportionné pour ce Lot). `coldDamageTickHandler` ne
+  calcule que les Localisations/formules à jouer ; `applyColdDamageHits` fait le jet + l'application
+  réelle après le commit, appelée par la route.
+- **Bug trouvé par Saar en testant** : le Choc du dégât Glacial dépendait du "Stun Dialog" du combat
+  (fenêtre interactive qui n'existe que si `mode==='combat'`, jamais un problème pour Feu/Acide/
+  Décompression qui ne tiquent que pendant la résolution d'un Tour) — corrigé en résolution
+  automatique dans `applyColdDamageHits`, même patron que le Choc de la Fatigue palier 5.
+- Routes `POST/GET/DELETE /api/campaigns/:id/tokens/:tokenId/cold-exposure` (`campaigns.js`) —
+  calquées mot pour mot sur le patron `hazards/:code/expose|clear` du Lot 3 (`resolveCampaignToken`,
+  garde token-sans-personnage déjà écrit pour la Chute).
+
+### Client
+- `TokenStatusPanel.jsx` — badge `hypothermia` (déjà réservé en catégorie "chronique" avec `infected`/
+  `poisoned`/`irradiated`, icône/i18n déjà présents, jamais câblé avant ce Lot) ouvre un
+  sous-formulaire (tranche Froid/Très froid/Glacial + compteur `extremeSteps` désactivé hors Glacial +
+  case humide), même patron que `hazardForm` pour Acide/Décompression/Feu. `colorScheme:'dark'` +
+  style explicite sur chaque `<option>` (bug de sélecteur blanc-sur-blanc trouvé par Saar).
+- **Bug trouvé par Saar en testant** : aucune file d'attente pour l'affichage hors combat —
+  `gmAttackResult`/`pnjAttackResult` (`useCombatSocket.js`) sont des variables simples, pas un
+  tableau, et leur fenêtre (`CombatOverlay.jsx`) n'est montée que si `mode==='combat'`. Portée
+  restreinte explicitement par Saar (pas de refonte du chat, chantier séparé) : nouveau composant
+  `client/src/components/EnvironmentalResultQueue.jsx`, toujours monté (même patron que `DicePanel`),
+  vrai tableau qui s'ajoute, filtré sur `sourceCode` (jamais posé par une attaque normale), réutilise
+  tel quel `CombatResultGM`/`CombatResultPlayer`. `useCombatSocket.js` corrigé en retour (1 ligne,
+  `if (data.sourceCode) return`) pour éviter un double affichage de Feu/Acide/Décompression pendant un
+  combat réel.
+
+### État
+✅ codé et confirmé fonctionnel en navigateur par Saar (déclaration de tranche, dégâts Glacial
+escaladés sur plusieurs personnages simultanément, file d'attente vérifiée sans perte). Tests
+automatisés : `node --test shared/*.test.mjs` 247/247 (dont les 9 nouveaux), `node --check` sur les 7
+fichiers serveur, `eslint`+`npm run build` client propres. 4 passes d'analyse critique avant tout code
++ 3 bugs réels trouvés par Saar en testant, aucun anticipé par les passes (détail complet
+`docs/PLAN_FATIGUE_DOMMAGES.md` §11). **Écart RAW explicite et documenté** : le rattrapage d'un grand
+saut d'horloge s'étale sur plusieurs avances MJ plutôt qu'en une seule fois (le moteur du Lot 2 ne
+fait ticker une échéance qu'une fois par appel, partagé avec Blessures) — confirmé souhaité par Saar
+après explication du mécanisme, pas un raccourci silencieux. Non testé : round-trip HTTP authentifié
+scripté.
+
+---
+
 ## Pièges actifs — tous domaines
 
 | Code | Description |

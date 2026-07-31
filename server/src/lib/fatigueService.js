@@ -7,7 +7,7 @@ import { parseDice } from './diceParser.js'
 import { calcAttributeNA, calcSkillTotal } from './charStats.js'
 import { calcActiveMalus } from './activeMalusRegistry.js'
 import { resolvePolarisTest } from './polarisTestService.js'
-import { applyStunWithDuration } from './statusService.js'
+import { applyStunWithDuration, resolveCharacterTokens } from './statusService.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getCampaignSettings } from './campaignSettingsService.js'
 import { AppError } from './AppError.js'
@@ -71,18 +71,7 @@ async function fetchFatigueTestContext(trx, characterId, charSheetId, source) {
   return { sourceValue, wounds, totalWeight, forNA }
 }
 
-// Résout les tokens actifs du personnage dans cette campagne (patron resolveCampaignToken,
-// campaigns.js, inversé character→tokens) — le badge Choc (evanoui/unconscious) est scope token,
-// la Fatigue elle-même est scope personnage. Zéro token trouvé (perso non placé sur une carte) :
-// l'issue reste connue via WS.FATIGUE_TEST_RESULT, seul le badge visuel est absent.
-async function resolveCharacterTokens(trx, campaignId, characterId) {
-  return trx('tokens as t')
-    .join('battlemaps as bm', 't.battlemap_id', 'bm.id')
-    .where({ 't.character_id': characterId, 'bm.campaign_id': campaignId })
-    .pluck('t.id')
-}
-
-// resolveFatigueTest — RAW p.243, table de résultat complète (docs/PLAN_FATIGUE_DOMMAGES.md §10) :
+// performFatigueTest — RAW p.243, table de résultat complète (docs/PLAN_FATIGUE_DOMMAGES.md §10) :
 // - Échec, pas de risque de Catastrophe → palier +1, case 0 du nouveau palier.
 // - Catastrophe (catastropheRisk, marge ≤ -15 — PAS isCriticalFail/jet=20, deux concepts RAW
 //   distincts, vérifié contre shared/polarisTestResolution.js) → palier +1, case 1. Appliqué
@@ -94,81 +83,98 @@ async function resolveCharacterTokens(trx, campaignId, characterId) {
 // - Palier 5 (« À bout de force ») : Test remplacé par un Test de Résistance au Choc (même source,
 //   malus de case = table Choc) — échec → Évanoui (1D6 min), Catastrophe → Inconscient (même
 //   formule ×10 que le Choc de blessure), réussite → case +1 quand même.
-export async function resolveFatigueTest(io, campaignId, { characterId, source, mjModifier = 0 }) {
+//
+// Cœur de calcul, sans transaction propre ni émission WS (docs/PLAN_FATIGUE_DOMMAGES.md §11 Lot 5,
+// Trou B). `resolveFatigueTest` ouvrait sa propre transaction et émettait lui-même le WS —
+// inutilisable tel quel depuis un handler d'échéance (`cold_fatigue_check`, Froid) qui tourne déjà
+// dans un savepoint du balayage de `sweepDueEcheances` : une 2e transaction sur une connexion séparée
+// risquerait un deadlock sur le verrou `char_sheet` que le savepoint englobant tient déjà. Extrait
+// pour être réutilisé par les deux : `resolveFatigueTest` (ouvre sa transaction, appelle ce cœur, émet
+// après commit — comportement inchangé pour ses appelants actuels) et `coldFatigueCheckHandler`
+// (reçoit le trx du balayage, retourne le résultat via `effects` pour émission différée par
+// l'appelant, voir echeanceService.js/gameTimeService.js).
+export async function performFatigueTest(trx, campaignId, characterId, { source, mjModifier = 0 }) {
   if (!FATIGUE_TEST_SOURCES.includes(source)) {
     throw new AppError(400, `resolveFatigueTest : source invalide (${source})`)
   }
 
-  let result
+  const settings = await getCampaignSettings(trx, campaignId)
+  if (!settings.fatigue_enabled) {
+    throw new AppError(400, 'La Fatigue est désactivée sur cette campagne')
+  }
+
+  // Verrou avant toute lecture de fatigue_points (trou structurel 2) — même patron que
+  // tradeService.js:190.
+  const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first()
+  if (!sheet) throw new AppError(404, 'Fiche de personnage introuvable')
+
+  const currentPoints = sheet.fatigue_points ?? 0
+  const palier = getFatiguePalier(currentPoints)
+  const isChocReplacement = palier === 5
+
+  const ctx = await fetchFatigueTestContext(trx, characterId, sheet.id, source)
+
+  // exclude: ['fatigue'] — auto-exemption RAW du malus de palier de Fatigue sur son propre Test
+  // (ligne 976-979), blessure/encombrement restent appliqués (rien ne les exempte).
+  const activeMalus = calcActiveMalus(
+    { wounds: ctx.wounds, totalWeight: ctx.totalWeight, forNA: ctx.forNA, settings, fatiguePoints: currentPoints },
+    { exclude: ['fatigue'] }
+  )
+  const testMalus = getFatigueTestMalus(currentPoints)
+  const seuil = ctx.sourceValue + activeMalus + testMalus + Number(mjModifier)
+  const outcome = await resolvePolarisTest(seuil)
+
+  let newPoints = currentPoints
+  let statusOutcome = null
+
+  if (isChocReplacement) {
+    if (!outcome.isSuccess) {
+      statusOutcome = outcome.catastropheRisk ? 'inconscient' : 'evanoui'
+    } else {
+      newPoints = Math.min(MAX_FATIGUE_POINTS, currentPoints + 1)
+    }
+  } else if (outcome.catastropheRisk) {
+    newPoints = (palier + 1) * 3 + 1
+  } else if (!outcome.isSuccess) {
+    newPoints = (palier + 1) * 3
+  } else if (outcome.mr >= 15) {
+    newPoints = Math.max(palier * 3, currentPoints - 1)
+  } else {
+    newPoints = Math.min(palier * 3 + 2, currentPoints + 1)
+  }
+
+  await setFatiguePoints(trx, characterId, newPoints)
+
   let pendingStun = null
+  if (statusOutcome) {
+    // Statut Choc — trou structurel 8 : hors combat, current_turn ne progresse jamais (confirmé
+    // Saar : comportement voulu, badge sans expiration hors combat, retrait manuel MJ).
+    const combatState = await trx('combat_state').where({ campaign_id: campaignId }).first()
+    const currentTurn = combatState?.current_turn ?? null
+    const { total: durationRoll } = await parseDice('1d6')
+    const stunDuration = statusOutcome === 'inconscient' ? durationRoll * 10 : durationRoll
+    const statusCode = statusOutcome === 'inconscient' ? 'unconscious' : 'evanoui'
+    const tokenIds = await resolveCharacterTokens(trx, campaignId, characterId)
+    pendingStun = { tokenIds, statusOutcome, statusCode, stunDuration, currentTurn }
+  }
+
+  const result = {
+    characterId, source, seuil, mjModifier: Number(mjModifier),
+    roll: outcome.roll, mr: outcome.mr,
+    isSuccess: outcome.isSuccess, catastropheRisk: outcome.catastropheRisk,
+    previousPoints: currentPoints, newPoints,
+    statusOutcome,
+  }
+
+  return { result, pendingStun }
+}
+
+export async function resolveFatigueTest(io, campaignId, { characterId, source, mjModifier = 0 }) {
+  let result
+  let pendingStun
 
   await db.transaction(async (trx) => {
-    const settings = await getCampaignSettings(trx, campaignId)
-    if (!settings.fatigue_enabled) {
-      throw new AppError(400, 'La Fatigue est désactivée sur cette campagne')
-    }
-
-    // Verrou avant toute lecture de fatigue_points (trou structurel 2) — même patron que
-    // tradeService.js:190.
-    const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first()
-    if (!sheet) throw new AppError(404, 'Fiche de personnage introuvable')
-
-    const currentPoints = sheet.fatigue_points ?? 0
-    const palier = getFatiguePalier(currentPoints)
-    const isChocReplacement = palier === 5
-
-    const ctx = await fetchFatigueTestContext(trx, characterId, sheet.id, source)
-
-    // exclude: ['fatigue'] — auto-exemption RAW du malus de palier de Fatigue sur son propre Test
-    // (ligne 976-979), blessure/encombrement restent appliqués (rien ne les exempte).
-    const activeMalus = calcActiveMalus(
-      { wounds: ctx.wounds, totalWeight: ctx.totalWeight, forNA: ctx.forNA, settings, fatiguePoints: currentPoints },
-      { exclude: ['fatigue'] }
-    )
-    const testMalus = getFatigueTestMalus(currentPoints)
-    const seuil = ctx.sourceValue + activeMalus + testMalus + Number(mjModifier)
-    const outcome = await resolvePolarisTest(seuil)
-
-    let newPoints = currentPoints
-    let statusOutcome = null
-
-    if (isChocReplacement) {
-      if (!outcome.isSuccess) {
-        statusOutcome = outcome.catastropheRisk ? 'inconscient' : 'evanoui'
-      } else {
-        newPoints = Math.min(MAX_FATIGUE_POINTS, currentPoints + 1)
-      }
-    } else if (outcome.catastropheRisk) {
-      newPoints = (palier + 1) * 3 + 1
-    } else if (!outcome.isSuccess) {
-      newPoints = (palier + 1) * 3
-    } else if (outcome.mr >= 15) {
-      newPoints = Math.max(palier * 3, currentPoints - 1)
-    } else {
-      newPoints = Math.min(palier * 3 + 2, currentPoints + 1)
-    }
-
-    await setFatiguePoints(trx, characterId, newPoints)
-
-    if (statusOutcome) {
-      // Statut Choc — trou structurel 8 : hors combat, current_turn ne progresse jamais (confirmé
-      // Saar : comportement voulu, badge sans expiration hors combat, retrait manuel MJ).
-      const combatState = await trx('combat_state').where({ campaign_id: campaignId }).first()
-      const currentTurn = combatState?.current_turn ?? null
-      const { total: durationRoll } = await parseDice('1d6')
-      const stunDuration = statusOutcome === 'inconscient' ? durationRoll * 10 : durationRoll
-      const statusCode = statusOutcome === 'inconscient' ? 'unconscious' : 'evanoui'
-      const tokenIds = await resolveCharacterTokens(trx, campaignId, characterId)
-      pendingStun = { tokenIds, statusOutcome, statusCode, stunDuration, currentTurn }
-    }
-
-    result = {
-      characterId, source, seuil, mjModifier: Number(mjModifier),
-      roll: outcome.roll, mr: outcome.mr,
-      isSuccess: outcome.isSuccess, catastropheRisk: outcome.catastropheRisk,
-      previousPoints: currentPoints, newPoints,
-      statusOutcome,
-    }
+    ({ result, pendingStun } = await performFatigueTest(trx, campaignId, characterId, { source, mjModifier }))
   })
 
   // applyStunWithDuration gère sa propre transaction interne (patron déjà établi ailleurs) —

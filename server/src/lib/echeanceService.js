@@ -116,15 +116,25 @@ async function resolveEcheanceHandler(trx, echeance, context) {
 // Patron automatique uniquement (interactive: false) — appelée depuis l'intérieur de la transaction
 // d'adjustGameTime (jamais après coup depuis la route). Boucle inspirée pseudoClockUpdate
 // (about-time, module Foundry VTT).
+// Retourne les `effects` accumulés de chaque échéance résolue (docs/PLAN_FATIGUE_DOMMAGES.md §11,
+// Trou A) — le contrat handler `{ resolved:true, effects, reschedule, spawn, undoEntries }` déclarait
+// déjà `effects` sans que rien ne le lise ; ce balayage tourne dans une transaction pas encore
+// committée, il ne peut pas émettre lui-même un WS (émission uniquement après commit, patron déjà en
+// place pour resolveFatigueTest) — l'appelant (gameTimeService.js) doit donc récupérer ce tableau et
+// émettre/appliquer après coup. `effects` reste opaque ici — forme `{kind, ...}` propre à chaque
+// consommateur (ex. coldExposureService.js : `kind:'fatigueTestResult'` ou `kind:'coldDamageHits'`).
 export async function sweepDueEcheances(trx, campaignId, resolvedAfter) {
   const dueEcheances = await trx('game_echeances')
     .where({ campaign_id: campaignId, status: 'active', interactive: false })
     .where('next_due_minutes', '<=', resolvedAfter)
     .forUpdate()
 
+  const effects = []
   for (const echeance of dueEcheances) {
-    await resolveEcheanceHandler(trx, echeance, { resolvedAfter })
+    const handlerResult = await resolveEcheanceHandler(trx, echeance, { resolvedAfter })
+    if (handlerResult?.effects) effects.push(handlerResult.effects)
   }
+  return effects
 }
 
 // Lecture seule, aucune écriture — utilisée par requestGameTimeAdvance pour savoir si une revue
