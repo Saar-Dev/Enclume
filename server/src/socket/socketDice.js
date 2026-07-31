@@ -3,7 +3,8 @@ import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { resolvePolarisTest } from '../lib/polarisTestService.js'
 import { getUserColor } from '../lib/socketUtils.js'
-import { calcSkillTotal, calcAttributeNA } from '../lib/charStats.js'
+import { calcSkillTotal, calcAttributeNA, calcAttributeAN } from '../lib/charStats.js'
+import { getCriticalSuccessBonus } from '../../../shared/polarisTestResolution.js'
 import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import {
@@ -125,7 +126,16 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
         : null
 
       // ── 4. Seuil (somme des sources + modificateur fixe) ──────────
+      // na() sert aux formules dérivées ci-dessous (REA, Seuils, Résistances...) : RAW les définit
+      // explicitement sur le niveau brut de l'Attribut (ex. ATTRIBUTS.md:101 "Résistance aux
+      // poisons... : niveau de CON"), pas sur son AN — na() reste correct pour ces usages.
       const na = (attrId) => calcAttributeNA(attrs, attrId, genotypeRow, mutationEffects)
+      // an() sert exclusivement à une source de macro de type 'attribute' utilisée comme seuil de
+      // Test (chances de réussite) — l'AN (Aptitude naturelle) est la seule conversion RAW confirmée
+      // d'un Attribut en score de Test (docs/REGLES/ATTRIBUTS.md:131-148, docs/PLAN_TEST_CRITIQUE.md
+      // Lot 2). Corrige une divergence préexistante (NA brut utilisé comme seuil direct, même bug que
+      // celui trouvé et corrigé dans socketEntity.js push/pull).
+      const an = (attrId) => calcAttributeAN(attrs, attrId, genotypeRow, mutationEffects)
       const totalWeight = invItems.reduce((sum, item) =>
         (item.container === 'Coffre' || item.ref_weight == null) ? sum : sum + item.ref_weight * item.quantity, 0
       )
@@ -148,26 +158,43 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
         }
       }
 
+      // Réussite critique (p.204, Lot 2) : la RAW ne couvre qu'un Test à une seule Compétence OU un
+      // seul Attribut. Une macro perso (jusqu'à 3 sources libres, DicePanel.jsx) peut cumuler
+      // plusieurs sources du même type sans que cela corresponde à un vrai Test RAW (décision Saar
+      // 2026-07-31) — le bonus n'est donc appliqué que si la macro se réduit à exactement une source
+      // Compétence (xor) une source Attribut ; toute autre combinaison (0, 2+, ou mélange) n'a pas de
+      // règle RAW à appliquer et reste sans bonus.
+      const skillMasteries = []
+      const attributeANs = []
+
       let baseThreshold = 0
       for (const src of macro.sources) {
         if (src.type === 'attribute') {
-          baseThreshold += na(src.ref_id)
+          const attributeAN = an(src.ref_id)
+          baseThreshold += attributeAN
+          attributeANs.push(attributeAN)
         } else if (src.type === 'skill') {
           const [charSkill, refSkill] = await Promise.all([
             db('char_skills').where({ char_sheet_id: sheet.id, skill_id: src.ref_id }).first(),
             db('ref_skills').where({ id: src.ref_id }).first(),
           ])
           baseThreshold += calcSkillTotal(attrs, charSkill, refSkill, genotypeRow, mutationEffects)
+          skillMasteries.push(charSkill?.mastery ?? 0)
         } else if (src.type === 'secondary') {
           baseThreshold += secondaryValue(src.ref_id)
         }
       }
       const threshold = baseThreshold + activeMalus + macro.modifier
+      const criticalSuccessBonus = skillMasteries.length === 1 && attributeANs.length === 0
+        ? getCriticalSuccessBonus({ masteryLevel: skillMasteries[0] })
+        : attributeANs.length === 1 && skillMasteries.length === 0
+          ? getCriticalSuccessBonus({ attributeAN: attributeANs[0] })
+          : 0
 
       // ── 5-6. Jet 1d20 + Succès/critique/Catastrophe — règle absolue Polaris, extraite dans
       // server/src/lib/polarisTestService.js (docs/PLAN_FATIGUE_DOMMAGES.md, résolveur de Test
       // générique) : point d'entrée unique partagé avec les futures échéances serveur autonomes.
-      const { roll: rollResult, seed, isSuccess, isCriticalSuccess, isCriticalFail } = await resolvePolarisTest(threshold)
+      const { roll: rollResult, seed, isSuccess, isCriticalSuccess, isCriticalFail } = await resolvePolarisTest(threshold, criticalSuccessBonus)
 
       // ── 7. Substitution template ──────────────────────────────────
       const sourceLabel  = macro.sources.map(s => s.ref_label).join(' + ')

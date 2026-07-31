@@ -611,6 +611,25 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
+> **Dernière mise à jour (dev/Saar) : 2026-07-31 — `docs/PLAN_TEST_CRITIQUE.md` Lot 2 (bonus de
+> maîtrise/moitié d'AN sur Réussite critique) ✅ codé, non testé en navigateur, aucun commit encore
+> créé.** Autorité unique centralisée dans `shared/polarisTestResolution.js`
+> (`getCriticalSuccessBonus`/`applyCriticalSuccessBonus`), branchée sur CaC/Tir/drone
+> (`socketCombatHelpers.js`), push/pull + interactions génériques (`socketEntity.js`), macros
+> (`socketDice.js`) et `resolvePolarisTest` (`polarisTestService.js`, nouveau paramètre optionnel,
+> défaut 0 — pas de changement pour les échéances environnementales). 2 divergences RAW préexistantes
+> corrigées au passage (même bug, 2 sites) : push/pull et la source `attribute` des macros utilisaient
+> le NA brut d'un Attribut comme seuil de Test au lieu de l'AN (Aptitude naturelle) — seule conversion
+> RAW confirmée. `ENTITY_ACTION_RESOLVE` (interactions génériques) n'avait par ailleurs **jamais** eu de
+> détection Réussite/Échec critique (hors périmètre de l'audit Lot 1) — amené au même niveau RAW dans
+> le même geste. Trouvaille structurelle CaC : `mrAttaque` était recalculé à neuf dans 4 fonctions en
+> aval de l'attaque (dégâts + comparaison Attaque/Défense), ce qui aurait rendu le bonus invisible
+> partout sauf au jet initial — corrigé en le threadant via `commonPending`/`combat_pending`. **Testé** :
+> `node --test shared/*.test.mjs` (254/254), `server/src/lib/*.test.mjs` (38/38 hors 60 skip DB),
+> `node --check` propre sur les 6 fichiers serveur touchés. **Non testé** : scénario réel navigateur.
+> Détail complet : `docs/PLAN_TEST_CRITIQUE.md` §10. **Prochaine étape** : Saar teste en navigateur, puis
+> commit/push.
+>
 > **Item 110 (Session 191, Saar) — `docs/PLAN_FATIGUE_DOMMAGES.md` Lot 5 (Froid) ✅ CLOS, CONFIRMÉ
 > FONCTIONNEL PAR SAAR EN NAVIGATEUR.**
 > 4 passes d'analyse critique avant tout code (détail complet §11 du plan) — trous corrigés dans le

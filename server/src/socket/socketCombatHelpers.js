@@ -1,7 +1,7 @@
 import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
-import { resolveTestOutcome, applyCriticalFailReroll, getMrModifier } from '../../../shared/polarisTestResolution.js'
+import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
@@ -15,7 +15,7 @@ import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
 import { measureBattlemapTokenDistance, tokenDistanceM } from '../services/worldSpatialQueryService.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
-import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/combatRange.js'
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import {
@@ -567,8 +567,8 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     campaignId: meleeCampaignId,
     attackerTokenId, attackerCharacter,
     attackerUsername, attackerColor,
-    rollAttaque, chancesAttaque,
-    defenderSkillTotal, defenderEffectiveMalus,
+    rollAttaque, chancesAttaque, mrAttaque,
+    defenderSkillTotal, defenderEffectiveMalus, defenderMastery,
     multiMalusDefenseur,
     damageFormula, weaponInvId, modDom, combatModeBonus,
     characterIdCible, char_sheet_id_cible,
@@ -614,11 +614,13 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
       ],
     })
-    const { seuil: chanceDefense, breakdown: breakdownDefPj, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcome0
-    const defenseOutcome = await resolveCriticalFailReroll(defenseOutcome0)
+    // Réussite critique défenseur (p.204, Lot 2) — même geste que resolveMeleeDefensePnj.
+    const defenseOutcomeCrit = applyCriticalSuccessBonus(defenseOutcome0, getCriticalSuccessBonus({ masteryLevel: defenderMastery }))
+    const { seuil: chanceDefense, breakdown: breakdownDefPj, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcomeCrit
+    const defenseOutcome = await resolveCriticalFailReroll(defenseOutcomeCrit)
 
     // 2. Résolution Polaris §6.2 : les deux réussissent → meilleure MR l'emporte, égalité = rien
-    const { mr: mrAttaque } = resolveTestOutcome(rollAttaque, chancesAttaque)
+    // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
     const attackSuccess = rollAttaque <= chancesAttaque
     const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
@@ -1280,7 +1282,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       }
     }
 
-    const allonge = parseInt(weapon?.ref_range) || 0
+    const meleeReachM = resolveMeleeReachM(weapon?.ref_range)
 
     // Validation distance Phase 2 — positions post-déplacement (PE14)
     const measurement = await measureBattlemapTokenDistance({
@@ -1297,11 +1299,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     const myTokenPos = measurement.sourceToken
     const targetTokenPos = measurement.targetToken
     const distanceMChk = measurement.distanceM
-    if (distanceMChk > 3 + allonge) {
-      console.warn(`[WS] resolveMeleeAction — hors portée: ${distanceMChk.toFixed(1)}m max:${3 + allonge}m token:${action.token_id}`)
+    if (distanceMChk > meleeReachM) {
+      console.warn(`[WS] resolveMeleeAction — hors portée: ${distanceMChk.toFixed(1)}m max:${meleeReachM}m token:${action.token_id}`)
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
-        message: `Corps à corps impossible — distance : ${distanceMChk.toFixed(1)}m, portée max : ${3 + allonge}m`,
+        message: `Corps à corps impossible — distance : ${distanceMChk.toFixed(1)}m, portée max : ${meleeReachM}m`,
       } })
       return { suspend: false, emissions }
     }
@@ -1491,7 +1493,15 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       ],
     })
     const { seuil: chancesAttaque, breakdown: breakdownAtk } = attaqueOutcome0
-    const attaqueOutcome = await resolveCriticalFailReroll(attaqueOutcome0)
+    // Réussite critique (p.204, docs/PLAN_TEST_CRITIQUE.md Lot 2) : bonus = niveau de maîtrise de la
+    // Compétence utilisée pour l'attaque (charSkill, ci-dessus) — appliqué AVANT le reroll d'Échec
+    // critique (mutuellement exclusifs, l'ordre entre les deux est sans effet). mrAttaque (post-bonus)
+    // est ensuite threadé via commonPending pour que resolveDefenselessTarget/resolveMeleeDefensePnj/
+    // resolveMeleeDefenseDrone/confirmMeleeDefense l'utilisent tel quel au lieu de recalculer un
+    // resolveTestOutcome(rollAttaque, chancesAttaque) nu qui perdrait ce bonus (le bonus conditionne
+    // aussi bien la comparaison mrAttaque>mrDefense que le ModDom des dégâts).
+    const attaqueOutcomeCrit = applyCriticalSuccessBonus(attaqueOutcome0, getCriticalSuccessBonus({ masteryLevel: charSkill?.mastery ?? 0 }))
+    const attaqueOutcome = await resolveCriticalFailReroll(attaqueOutcomeCrit)
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} sansDefense:${sansDefenseBonus} → seuil:${chancesAttaque}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -1533,7 +1543,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
 
     // ── 3. Données défenseur ──────────────────────────────────────────────────
     const sheetCible = await db('char_sheet').where({ character_id: defenderCharacter.id }).first()
-    let defenderSkillTotal = 0, defenderEffectiveMalus = 0
+    let defenderSkillTotal = 0, defenderEffectiveMalus = 0, defenderMastery = 0
     let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
     let char_sheet_id_cible = null
 
@@ -1585,7 +1595,10 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible)
       vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible)
 
-      if (refSkillDef) defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible, mutationEffectsCible)
+      if (refSkillDef) {
+        defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible, mutationEffectsCible)
+        defenderMastery = charSkillDef?.mastery ?? 0
+      }
 
       // for_na_cible déjà calculé ci-dessus (calcAttributeNA) — corrige PI4, plus de valeur brute séparée
       const totalWeightDef = invCible.reduce((sum, i) =>
@@ -1610,8 +1623,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       attackerColor,
       rollAttaque,
       chancesAttaque,
+      // mrAttaque : Marge de réussite déjà résolue (bonus Réussite critique + reroll Échec critique
+      // inclus, cf. commentaire au-dessus de attaqueOutcomeCrit) — les branches défenseur/dégâts
+      // l'utilisent tel quel, ne le recalculent jamais.
+      mrAttaque: attaqueOutcome.mr,
       defenderSkillTotal,
       defenderEffectiveMalus,
+      defenderMastery,
       multiMalusAttaquant,
       multiMalusDefenseur,
       damageFormula,
@@ -1666,7 +1684,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
 // décision Saar (2026-07-19), même principe qu'un défenseur non-actif.
 async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
   const {
-    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant,
+    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
     weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     attackerUsername, attackerColor, userId,
@@ -1683,8 +1701,8 @@ async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
     const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
       weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
-    const { mr: mrAttaqueDefenseless } = resolveTestOutcome(rollAttaque, chancesAttaque)
-    const modDomAttaque = getMrModifier(mrAttaqueDefenseless)
+    // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
+    const modDomAttaque = getMrModifier(mrAttaque)
     const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
     if (cibleType === 'drone') {
       const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
@@ -1735,11 +1753,11 @@ async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
 // computeAttackRoll (RV6, §2.4.d) au lieu d'un tableau assemblé à la main.
 async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
   const {
-    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant,
+    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
     weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     attackerUsername, attackerColor, userId,
-    defenderSkillTotal, defenderEffectiveMalus, multiMalusDefenseur, confirmedModifiers,
+    defenderSkillTotal, defenderEffectiveMalus, defenderMastery, multiMalusDefenseur, confirmedModifiers,
     defenderCharacterName,
   } = ctx
   const { total: rollDefense, rolls: defRolls, seed: defSeed } = await parseDice('1d20')
@@ -1777,9 +1795,12 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
       { label: `Terrain instable (Acrobatie/Équilibre: ${acrobatieDefTotal})`, value: terrainInstableModDef, type: 'malus' },
     ],
   })
-  const { seuil: chanceDefense, breakdown: breakdownDef, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcome0
-  const defenseOutcome = await resolveCriticalFailReroll(defenseOutcome0)
-  const { mr: mrAttaque } = resolveTestOutcome(rollAttaque, chancesAttaque)
+  // Réussite critique défenseur (p.204, Lot 2) — même geste que l'attaquant (resolveMeleeAction),
+  // appliqué avant le reroll d'Échec critique.
+  const defenseOutcomeCrit = applyCriticalSuccessBonus(defenseOutcome0, getCriticalSuccessBonus({ masteryLevel: defenderMastery }))
+  const { seuil: chanceDefense, breakdown: breakdownDef, isSuccess: defenseSuccess, mr: mrDefense } = defenseOutcomeCrit
+  const defenseOutcome = await resolveCriticalFailReroll(defenseOutcomeCrit)
+  // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
   const attackSuccess = rollAttaque <= chancesAttaque
   const hit = attackSuccess && (!defenseSuccess || mrAttaque > mrDefense)
 
@@ -1856,7 +1877,7 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
 // Défenseur drone — §7.4 : sans programme esquive, le drone ne peut pas se défendre, test simple.
 async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
   const {
-    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant,
+    attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
     weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible,
   } = ctx
@@ -1875,9 +1896,9 @@ async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
         weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
       })
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
-      // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul.
-      const { mr: mrAttaqueDrone } = resolveTestOutcome(rollAttaque, chancesAttaque)
-      const modDomAttaque = getMrModifier(mrAttaqueDrone)
+      // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul,
+      // déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
+      const modDomAttaque = getMrModifier(mrAttaque)
       const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
       const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
       await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
@@ -2105,16 +2126,16 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 
     // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688) ──────────
     if (isCaCWeapon) {
-      const allonge = parseInt(weapon?.ref_range) || 0
+      const meleeReachM = resolveMeleeReachM(weapon?.ref_range)
       const measurement = await measureBattlemapTokenDistance({
         sourceTokenId: action.token_id,
         targetTokenId: action.target_token_id,
       })
-      if (measurement.status !== 'ok' || measurement.distanceM > 3 + allonge) {
+      if (measurement.status !== 'ok' || measurement.distanceM > meleeReachM) {
         emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
           username: character.name,
           message: measurement.status === 'ok'
-            ? `Corps à corps impossible — distance : ${measurement.distanceM.toFixed(1)}m, portée max : ${3 + allonge}m`
+            ? `Corps à corps impossible — distance : ${measurement.distanceM.toFixed(1)}m, portée max : ${meleeReachM}m`
             : 'Corps à corps impossible — position incompatible avec le moteur de monde',
         } })
         return { suspend: false, emissions }
@@ -2194,7 +2215,11 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     console.log(`[DBG] resolveDroneAssaultAction — avant parseDice`)
     const { total: roll, rolls: attRolls, seed: attSeed } = await parseDice('1d20')
     console.log(`[DBG] resolveDroneAssaultAction — après parseDice, roll:${roll}`)
-    const droneOutcome = await resolveCriticalFailReroll(resolveTestOutcome(roll, chancesDeReussite))
+    // Réussite critique (p.204, Lot 2) — le drone n'a ni Compétence ni Attribut au sens RAW,
+    // `programme.level` fait déjà tout le seuil (base + « maîtrise » fusionnées) : décision Saar
+    // 2026-07-31, docs/PLAN_TEST_CRITIQUE.md Lot 2, le programme tient lieu de niveau de maîtrise.
+    const droneOutcomeCrit = applyCriticalSuccessBonus(resolveTestOutcome(roll, chancesDeReussite), getCriticalSuccessBonus({ masteryLevel: programme.level }))
+    const droneOutcome = await resolveCriticalFailReroll(droneOutcomeCrit)
     const { isSuccess, mr } = droneOutcome
 
     // 5. Display data tireur
@@ -2542,7 +2567,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     const tireurColor    = userRow?.color    ?? '#c86030'
     const tireurUsername = userRow?.username ?? character.name ?? 'Inconnu'
 
-    let skillTotal = 0, effectiveMalus = 0
+    let skillTotal = 0, effectiveMalus = 0, skillMastery = 0
 
     const sheetTireur = character?.id
       ? await db('char_sheet').where({ character_id: character.id }).first()
@@ -2587,7 +2612,10 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
           db('ref_skills').where({ id: skillAssoc.skill_id }).first(),
           db('char_skills').where({ char_sheet_id: sheetTireur.id, skill_id: skillAssoc.skill_id }).first(),
         ])
-        if (refSkill) skillTotal = calcSkillTotal(attrsTireur, charSkill, refSkill, genoTireur, mutationEffectsTireur)
+        if (refSkill) {
+          skillTotal = calcSkillTotal(attrsTireur, charSkill, refSkill, genoTireur, mutationEffectsTireur)
+          skillMastery = charSkill?.mastery ?? 0
+        }
       }
 
       // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
@@ -2658,8 +2686,12 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
       ],
     })
-    const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = assaultOutcome0
-    const assaultOutcome = await resolveCriticalFailReroll(assaultOutcome0)
+    // Réussite critique (p.204, Lot 2) — même geste que le CaC (resolveMeleeAction), appliqué avant
+    // le reroll d'Échec critique. Pas d'opposition en Tir (contrairement au CaC) : rien à threader en
+    // aval, mr/isSuccess servent directement ici pour les dégâts.
+    const assaultOutcomeCrit = applyCriticalSuccessBonus(assaultOutcome0, getCriticalSuccessBonus({ masteryLevel: skillMastery }))
+    const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = assaultOutcomeCrit
+    const assaultOutcome = await resolveCriticalFailReroll(assaultOutcomeCrit)
     console.log(`[WS] assault — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
     emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
       userId:            character.user_id,

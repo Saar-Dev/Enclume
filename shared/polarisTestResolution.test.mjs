@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveTestOutcome, applyCriticalFailReroll, getMrModifier, MR_TABLE } from './polarisTestResolution.js'
+import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier, MR_TABLE } from './polarisTestResolution.js'
 
 // Lancement manuel (aucun script npm test dans le projet) :
 //   node --test shared/polarisTestResolution.test.mjs
@@ -72,6 +72,46 @@ test('applyCriticalFailReroll — cumule le retest sur la marge et recalcule le 
 test('applyCriticalFailReroll — no-op si pas un échec critique', () => {
   const base = resolveTestOutcome(3, 10)
   assert.equal(applyCriticalFailReroll(base, 6), base)
+})
+
+test('getCriticalSuccessBonus — Test de Compétence : niveau de maîtrise tel quel', () => {
+  assert.equal(getCriticalSuccessBonus({ masteryLevel: 5 }), 5)
+  assert.equal(getCriticalSuccessBonus({ masteryLevel: 0 }), 0) // maîtrise 0 valide, pas "absent"
+  assert.equal(getCriticalSuccessBonus({ masteryLevel: -3 }), -3) // compétence difficile, malus de départ
+})
+
+test('getCriticalSuccessBonus — Test d\'Attribut seul : moitié de l\'AN, arrondi inférieur', () => {
+  assert.equal(getCriticalSuccessBonus({ attributeAN: 4 }), 2)
+  assert.equal(getCriticalSuccessBonus({ attributeAN: 3 }), 1) // arrondi inférieur, pas Math.round
+  assert.equal(getCriticalSuccessBonus({ attributeAN: -3 }), -2) // AN négatif (Aptitude naturelle faible)
+})
+
+test('getCriticalSuccessBonus — masteryLevel prioritaire si les deux sont fournis par erreur', () => {
+  assert.equal(getCriticalSuccessBonus({ masteryLevel: 5, attributeAN: 4 }), 5)
+})
+
+test('getCriticalSuccessBonus — 0 si ni l\'un ni l\'autre fourni', () => {
+  assert.equal(getCriticalSuccessBonus({}), 0)
+  assert.equal(getCriticalSuccessBonus(), 0)
+})
+
+test('applyCriticalSuccessBonus — ajoute le bonus à la marge sur Réussite critique (p.204)', () => {
+  const base = resolveTestOutcome(10, 10) // isCriticalSuccess=true, mr=10
+  const after = applyCriticalSuccessBonus(base, 4)
+  assert.equal(after.mr, 14)
+  assert.equal(after.isSuccess, true)
+  assert.equal(after.isCriticalSuccess, true) // jamais remis en cause par le bonus
+})
+
+test('applyCriticalSuccessBonus — no-op si pas une réussite critique', () => {
+  const base = resolveTestOutcome(3, 10) // réussite ordinaire
+  assert.equal(applyCriticalSuccessBonus(base, 4), base)
+})
+
+test('applyCriticalSuccessBonus — no-op si bonus nul/absent (évite un objet dupliqué inutilement)', () => {
+  const base = resolveTestOutcome(10, 10)
+  assert.equal(applyCriticalSuccessBonus(base, 0), base)
+  assert.equal(applyCriticalSuccessBonus(base, undefined), base)
 })
 
 test('getMrModifier couvre toute la plage réussite (LdB p.209)', () => {

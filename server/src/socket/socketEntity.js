@@ -2,7 +2,7 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getUserColor } from '../lib/socketUtils.js'
-import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestResolution.js'
+import { resolveTestOutcome, getCriticalSuccessBonus, applyCriticalSuccessBonus, applyCriticalFailReroll, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import {
   calcSkillTotal, calcAttributeAN, calcAttributeNA,
   ATTR_LABELS,
@@ -216,6 +216,10 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         let mechanicalTotal = 0
         let effectiveMalus = 0
         let formulaLabel = pending.skillId || pending.attributeId || '?'
+        // Renseigné selon le type de Test (mutuellement exclusif, cf. branchement plus bas) — sert
+        // uniquement à résoudre le bonus de Réussite critique RAW p.204 (docs/PLAN_TEST_CRITIQUE.md
+        // Lot 2) via getCriticalSuccessBonus, jamais recalculé à la main ici.
+        let masteryLevel, attributeANForBonus
 
         const sheet = pending.characterId
           ? await db('char_sheet').where({ character_id: pending.characterId }).first()
@@ -241,9 +245,11 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
           if (pending.skillId && refSkill) {
             mechanicalTotal = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutationEffects)
+            masteryLevel = charSkillRow?.mastery ?? 0
             formulaLabel = refSkill.label || pending.skillId
           } else if (pending.attributeId) {
             mechanicalTotal = calcAttributeAN(attrs, pending.attributeId, genotypeRow, mutationEffects)
+            attributeANForBonus = mechanicalTotal
             formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
           }
 
@@ -285,7 +291,20 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
         const totalDiffMod = pending.defaultDifficulty + gmModifier
         const chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
-        const isSuccess = diceRoll <= chancesDeReussite
+
+        // Résolution RAW complète (p.201-205, docs/PLAN_TEST_CRITIQUE.md) — ce site calculait
+        // jusqu'ici isSuccess à la main sans jamais détecter Réussite/Échec critique (hors périmètre
+        // de l'audit Lot 1, qui ne couvrait que la poussée/traction dans ce fichier). Même moteur que
+        // les autres Tests du projet, pas une variante locale.
+        let outcome = applyCriticalSuccessBonus(
+          resolveTestOutcome(diceRoll, chancesDeReussite),
+          getCriticalSuccessBonus({ masteryLevel, attributeAN: attributeANForBonus }),
+        )
+        if (outcome.isCriticalFail) {
+          const { total: reroll } = await parseDice('1d20')
+          outcome = applyCriticalFailReroll(outcome, reroll)
+        }
+        const { isSuccess, isCriticalSuccess, isCriticalFail, mr, catastropheRisk } = outcome
         const diffLabel = totalDiffMod >= 0 ? `+${totalDiffMod}` : `${totalDiffMod}`
 
         const breakdown = [
@@ -305,8 +324,9 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
           rolls,
           total: diceRoll,
           type: 'entity_action',
-          isCriticalSuccess: false,
-          isCriticalFail: false,
+          isCriticalSuccess,
+          isCriticalFail,
+          catastropheRisk,
           seed,
           timestamp,
           skillLabel: formulaLabel,
@@ -315,6 +335,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
           effectiveMalus,
           diffLabel,
           isSuccess,
+          mr,
           breakdown,
         })
 
@@ -535,20 +556,30 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
       // attribute_id depuis l'interaction (configurable — ex: 'FOR')
       const attributeId = interaction.attribute_id || 'FOR'
-      const attributeNA = calcAttributeNA(attrs, attributeId, genotypeRow, mutationEffects)
+      // AN (Aptitude naturelle), pas NA brut — aucune règle RAW n'utilise le niveau brut d'un
+      // Attribut comme chances de réussite ; AN est la seule conversion RAW confirmée d'un Attribut
+      // en score de Test (base d'une Compétence = AN1+AN2, docs/REGLES/ATTRIBUTS.md:131-148).
+      // Poussée/traction n'a pas de règle RAW dédiée (décision Saar 2026-07-31, docs/PLAN_TEST_CRITIQUE.md
+      // Lot 2) : on suit la logique générale du LdB plutôt qu'inventer une échelle propre — même
+      // convention que le Test d'interaction générique ci-dessus (`calcAttributeAN`, L.246).
+      // Corrige une divergence préexistante (NA brut, Session 40-43, jamais confrontée à la RAW).
+      const attributeAN = calcAttributeAN(attrs, attributeId, genotypeRow, mutationEffects)
 
       // ── Jet 1d20 ────────────────────────────────────────────────────
       const { rolls, total: diceRoll, seed } = await parseDice('1d20')
 
       // ── Calcul seuil, réussite, MR et Dmax ──────────────────────────
-      // Formule Polaris : chancesDeReussite = attributeNA + effectiveDifficulty (signé)
+      // Formule Polaris : chancesDeReussite = attributeAN + effectiveDifficulty (signé)
       // Réussite si diceRoll <= chancesDeReussite. Marge/degré RAW délégués à resolveTestOutcome
       // (shared/polarisTestResolution.js, docs/PLAN_TEST_CRITIQUE.md) — marge de réussite = diceRoll
       // direct, pas chancesDeReussite-diceRoll (correction de l'ancienne formule, cf. plan §Bug B).
+      // Réussite critique (p.204) : Test d'Attribut seul, sans niveau de maîtrise → bonus = moitié de
+      // l'AN testé (arrondi inférieur), docs/PLAN_TEST_CRITIQUE.md Lot 2.
       // modifier = getMrModifier(mr) — LdB p.209.
       // dmax = modifier + 1 si réussite (toute réussite = au moins 1 case), 0 si échec.
-      const chancesDeReussite = attributeNA + effectiveDifficulty
-      const { isSuccess, mr } = resolveTestOutcome(diceRoll, chancesDeReussite)
+      const chancesDeReussite = attributeAN + effectiveDifficulty
+      const rawOutcome = resolveTestOutcome(diceRoll, chancesDeReussite)
+      const { isSuccess, isCriticalSuccess, mr } = applyCriticalSuccessBonus(rawOutcome, getCriticalSuccessBonus({ attributeAN }))
       const modifier = isSuccess ? getMrModifier(mr) : 0
       let dmax = isSuccess ? modifier + 1 : 0
 
@@ -566,7 +597,7 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
 
       // Broadcast DICE_RESULT — visible dans le chat pour joueur et GM
       const breakdownDisp = [
-        { label: ATTR_LABELS[attributeId] || attributeId, value: attributeNA, type: 'base' },
+        { label: ATTR_LABELS[attributeId] || attributeId, value: attributeAN, type: 'base' },
         ...(effectiveDifficulty !== 0 ? [{ label: 'Difficulté', value: effectiveDifficulty, type: effectiveDifficulty > 0 ? 'bonus' : 'malus' }] : []),
         { label: 'Seuil', value: chancesDeReussite, type: 'total' },
       ]
@@ -579,12 +610,12 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         total: diceRoll,
         type: 'entity_action',
         interactionType: 'displacement',
-        isCriticalSuccess: false,
+        isCriticalSuccess,
         isCriticalFail: false,
         seed,
         timestamp,
         skillLabel: ATTR_LABELS[attributeId] || attributeId,
-        mechanicalTotal: attributeNA,
+        mechanicalTotal: attributeAN,
         chancesDeReussite,
         diffLabel,
         isSuccess,

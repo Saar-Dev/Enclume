@@ -1,9 +1,9 @@
 # PLAN — Résolution des Tests : Réussite/Échec critique par marge (pas par valeur de dé)
 
-> Statut (2026-07-30) : **Lot 1 (RAW everywhere, refonte architecturale) ✅ clos, confirmé fonctionnel
-> en jeu par Saar** — détail §9. Lot 2 (bonus de maîtrise/moitié d'Attribut sur Réussite critique) et
-> Lot 3 (tooltips explicatifs)
-> restent à faire, sur confirmation de Saar. Décision de principe (§4) : **règle RAW partout, pas de
+> Statut (2026-07-31) : **Lot 1 (RAW everywhere, refonte architecturale) ✅ clos, confirmé fonctionnel
+> en jeu par Saar** — détail §9. **Lot 2 (bonus de maîtrise/moitié d'AN sur Réussite critique) ✅ codé,
+> non testé en navigateur** — détail §10. Lot 3 (tooltips explicatifs) reste à faire, sur confirmation
+> de Saar. Décision de principe (§4) : **règle RAW partout, pas de
 > toggle de campagne** — l'hypothèse du toggle `marge`/`fixe` envisagée en cadrage v1 est abandonnée.
 > Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois
 > les Lots 2/3 clos ou explicitement abandonnés, contenu durable à transférer vers
@@ -195,3 +195,71 @@ nécessaire avant le premier commit de ce chantier.
 
 **Prochaine étape** : validation navigateur par Saar, puis Lot 2 (bonus de maîtrise/moitié d'Attribut
 sur Réussite critique) ou Lot 3 (tooltips) selon décision de Saar.
+
+---
+
+## 10. Clôture Lot 2 (2026-07-31) — bonus de maîtrise/moitié d'AN sur Réussite critique
+
+**RAW (p.204, "RÉUSSITE CRITIQUE")** : sur une Réussite critique (roll===seuil final), on ajoute à la
+Marge de réussite le niveau de maîtrise de la Compétence testée (« et non le niveau global ») ; pour
+un Test d'Attribut seul (« qui n'a pas de niveau de maîtrise »), on ajoute la moitié du niveau de
+l'Attribut testé. Augmente uniquement la Marge de réussite, jamais le résultat du dé ni le fait que le
+Test soit réussi. Application automatique décidée avec Saar (2026-07-31) — rien dans le texte
+n'indique une option MJ, contrairement aux Catastrophes (encadré "OPTIONNEL" explicite).
+
+**« Moitié de l'Attribut »** : aucune règle RAW écrite pour départager AN (Aptitude naturelle, table
+p.114) vs NA (niveau brut). Décision Saar/Claude (2026-07-31, vérifiée contre `docs/REGLES/ATTRIBUTS.md`
+avant de trancher) : **AN**, seule conversion RAW confirmée d'un Attribut en score de Test (base d'une
+Compétence = AN1+AN2) — un demi-NA (6-7 pour un FOR 13) dépasserait l'échelle de la table de marge,
+un demi-AN (1-3) y reste cohérent.
+
+**Architecture** — autorité unique centralisée dans `shared/polarisTestResolution.js` :
+`getCriticalSuccessBonus({ masteryLevel, attributeAN })` (choisit la formule RAW selon le type de Test
+reçu) + `applyCriticalSuccessBonus(outcome, bonus)` (applique le bonus déjà résolu au `mr`). Aucun site
+appelant ne recalcule `Math.floor(AN/2)` ou ne lit `.mastery` pour en décider lui-même — même principe
+que `resolveTestOutcome`/`MR_TABLE` au Lot 1.
+
+**Sites branchés** :
+- `socketEntity.js` push/pull (`ENTITY_MOVE_REQUEST`) — corrige au passage une divergence RAW
+  préexistante (Session 40-43) : le seuil utilisait le NA brut de l'Attribut, pas l'AN. Aucune règle
+  RAW dédiée à la poussée/traction (confirmé par Saar) : suit la logique générale du LdB plutôt qu'une
+  échelle inventée.
+- `socketEntity.js` `ENTITY_ACTION_RESOLVE` (interactions génériques Compétence/Attribut) — ce site
+  n'avait **jamais** eu de détection Réussite/Échec critique (hors périmètre de l'audit Lot 1, isSuccess
+  calculé à la main). Amené au même niveau RAW que le reste du projet dans le même geste (retest
+  d'Échec critique inclus), pas seulement le bonus du Lot 2.
+- `socketCombatHelpers.js` — CaC (`resolveMeleeAction` + 4 branches défenseur : PJ synchrone, PJ
+  asynchrone via `combat_pending`, PNJ, drone) et Tir (`resolveAssaultAction`). Trouvaille structurelle
+  en cours de route : `mrAttaque` était recalculé à neuf (`resolveTestOutcome(rollAttaque,
+  chancesAttaque)`) dans 4 fonctions en aval de l'attaque CaC (dégâts + comparaison Attaque/Défense) —
+  un bonus appliqué seulement au jet initial n'aurait jamais atteint ni les dégâts ni la comparaison.
+  Corrigé en threadant `mrAttaque` (déjà résolu, bonus inclus) via `commonPending`, plus aucun recalcul
+  aval. Même chose pour la maîtrise du défenseur (`defenderMastery`, threadée jusqu'à
+  `confirmMeleeDefense`). Le Tir n'avait pas ce problème (architecture déjà centralisée sur un seul
+  `mr`).
+- `resolveDroneAssaultAction` — décision Saar : `programme.level` (seule valeur du drone, pas de
+  Compétence/Attribut RAW pour ce type de personnage) tient lieu de niveau de maîtrise.
+- `polarisTestService.js` (`resolvePolarisTest`) — nouveau paramètre optionnel `criticalSuccessBonus`
+  (défaut 0, aucun changement de comportement pour les appelants qui ne le passent pas :
+  `WOUND_INFECTION_ROLL`, `fallDamageService.js`, `fatigueService.js`, `campaigns.js` — Tests
+  environnementaux sans Compétence/Attribut identifiable, hors périmètre de ce Lot).
+- `socketDice.js` (`MACRO_ROLL`) — bonus appliqué seulement si la macro se réduit à exactement une
+  source Compétence (xor) une source Attribut (décision Saar 2026-07-31) : une macro perso peut
+  cumuler jusqu'à 3 sources libres (`DicePanel.jsx`) sans que cela corresponde à un vrai Test RAW à
+  Compétence/Attribut unique — aucune règle de cumul inventée pour les macros composites, elles restent
+  simplement sans bonus. Corrige au passage la même divergence NA/AN que push/pull : une source de type
+  `attribute` utilisait `calcAttributeNA` au lieu de `calcAttributeAN` comme seuil direct (les formules
+  dérivées `secondaryValue` — REA, Seuils, Résistances — restent sur NA, RAW explicite sur ce point,
+  `ATTRIBUTS.md:101`).
+
+**Testé** : `node --test shared/*.test.mjs` (254/254, dont 15 nouveaux/modifiés sur
+`polarisTestResolution.test.mjs`), `node --test server/src/lib/*.test.mjs` (38/38 hors 60 skip DB,
+inchangé), `node --check` propre sur les 6 fichiers serveur touchés.
+**Non testé** : scénario réel en navigateur (CaC/Tir/drone/push-pull/interactions/macro avec Réussite
+critique) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : purement additif/substitutif, rien encore committé — `git diff`/`git checkout`
+suffisent.
+**Prochaine étape** : Saar teste en navigateur (viser un jet dont le résultat tombe pile sur le seuil,
+via macro ou en ajustant temporairement les stats, pour provoquer une Réussite critique observable) ;
+puis Lot 3 (tooltips) ou clôture du chantier.

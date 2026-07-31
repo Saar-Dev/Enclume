@@ -80,3 +80,34 @@ export function applyCriticalFailReroll(outcome, rerollValue) {
   const mr = outcome.mr - rerollValue
   return { ...outcome, mr, catastropheRisk: mr <= -CATASTROPHE_MARGE_MIN }
 }
+
+// getCriticalSuccessBonus({ masteryLevel, attributeAN }) — RAW p.204, "RÉUSSITE CRITIQUE" :
+// autorité unique des DEUX formules du bonus de Réussite critique. Un appelant ne calcule jamais
+// lui-même `mastery` ou `Math.floor(AN/2)` — il fournit la donnée brute dont il dispose (niveau de
+// maîtrise pour un Test de Compétence, AN pour un Test d'Attribut seul) et cette fonction choisit
+// la formule. Centralisé ici pour la même raison que resolveTestOutcome (§ en tête de fichier) :
+// évite que chaque site (combat CaC/Tir, poussée/traction, interactions, drone, macros) réinvente
+// sa propre variante et diverge silencieusement — un seul des deux champs doit être fourni.
+// - Test de Compétence (`masteryLevel`) : le bonus est le niveau de maîtrise tel quel (pas le
+//   niveau global base+maîtrise — RAW explicite : "et non le niveau global").
+// - Test d'Attribut seul (`attributeAN`, "qui n'a pas de niveau de maîtrise") : moitié de l'AN
+//   (Aptitude naturelle, pas le niveau brut — seule conversion RAW confirmée d'un Attribut en
+//   score de Test, docs/REGLES/ATTRIBUTS.md:131-148), arrondie à l'entier inférieur.
+export function getCriticalSuccessBonus({ masteryLevel, attributeAN } = {}) {
+  if (masteryLevel != null) return masteryLevel
+  if (attributeAN != null) return Math.floor(attributeAN / 2)
+  return 0
+}
+
+// applyCriticalSuccessBonus(outcome, bonus) — à appeler quand outcome.isCriticalSuccess est vrai,
+// avec `bonus` déjà résolu par getCriticalSuccessBonus ci-dessus. Ajoute le bonus à la Marge de
+// réussite. Augmente uniquement le `mr` (donc le degré/modificateur consulté en aval via
+// getMrModifier) — jamais le résultat du dé ni isSuccess/isCriticalSuccess eux-mêmes (RAW explicite
+// sur ce point : "il s'agit bien d'une augmentation de la Marge de réussite et non pas du résultat
+// du dé"). Décision Saar 2026-07-31 : application automatique, pas une option laissée au MJ
+// (contrairement aux Catastrophes, qui portent un encadré "OPTIONNEL" explicite dans le livre —
+// rien de tel ici).
+export function applyCriticalSuccessBonus(outcome, bonus) {
+  if (!outcome.isCriticalSuccess || !bonus) return outcome
+  return { ...outcome, mr: outcome.mr + bonus }
+}

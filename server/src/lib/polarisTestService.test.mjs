@@ -82,6 +82,27 @@ test('catastropheRisk atteignable après cumul du retest (marge d\'échec ≥ 15
   assert.ok(sawCatastrophe, 'aucun Échec critique observé en 300 tirages — augmenter le nombre d\'essais')
 })
 
+test('criticalSuccessBonus (Lot 2) — ajouté à mr seulement sur Réussite critique', async () => {
+  let sawCrit = false
+  for (let i = 0; i < 500; i++) {
+    const { roll, isCriticalSuccess, mr } = await resolvePolarisTest(10, 4)
+    if (isCriticalSuccess) {
+      sawCrit = true
+      assert.equal(mr, roll + 4) // roll===10 (seul cas critique possible pour threshold=10)
+    } else if (roll <= 10) {
+      assert.equal(mr, roll) // réussite ordinaire, bonus non appliqué
+    }
+  }
+  assert.ok(sawCrit, 'aucune Réussite critique observée en 500 tirages — augmenter le nombre d\'essais')
+})
+
+test('criticalSuccessBonus absent (défaut 0) — comportement inchangé pour les appelants existants', async () => {
+  for (let i = 0; i < 100; i++) {
+    const { roll, isSuccess, mr } = await resolvePolarisTest(10)
+    if (isSuccess) assert.equal(mr, roll)
+  }
+})
+
 test('threshold retourné = threshold fourni (traçabilité du résultat)', async () => {
   const { threshold } = await resolvePolarisTest(14)
   assert.equal(threshold, 14)
