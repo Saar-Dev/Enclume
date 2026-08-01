@@ -486,7 +486,7 @@ voir dette **DRONE-DETRUIT1** ci-dessous).
 
 ---
 
-### Dette DRONE-DETRUIT1 — `DRONE_INTEGRITY_UPDATED` : champ `detruit` reçu mais jamais appliqué à l'état
+### Dette DRONE-DETRUIT1 — `DRONE_INTEGRITY_UPDATED` : champ `detruit` reçu mais jamais appliqué à l'état ✅ Session (2026-08-01)
 
 **Symptôme** : Aucun cas observé en jeu — trouvé en clôturant I18N-LINT4 (ESLint `no-unused-vars` sur
 `DroneWindow.jsx:128`, découvert en corrigeant le pattern drag/resize du même fichier, sans rapport).
@@ -505,6 +505,33 @@ utile par le serveur (à vérifier côté `socketCombatHelpers.js`/dégâts dron
 **Prochaine étape** : vérifier l'émetteur serveur de `DRONE_INTEGRITY_UPDATED`, puis décider si
 `detruit` doit gater l'UI (désactiver armes/programmes, bandeau "détruit") — décision produit avant
 correctif.
+
+**Émetteur serveur [VÉRIFIÉ]** : `server/src/socket/socketCombatHelpers.js:resolveDroneIntegrityLoss`
+(~L.3002-3043) — `detruit = newIntegrite <= 0` est un booléen réel et significatif : quand vrai, le
+drone est retiré de `combat_roster` (sorti du combat) **et** `damages.detruit = true` est persisté en
+base (`drone_sheet.damages`), donc déjà inclus dans l'objet `damages` du payload — le champ top-level
+`detruit` déstructuré par le client était **redondant** avec `damages.detruit`, jamais un vestige côté
+serveur.
+
+**Correctif codé (2026-08-01, décision : ajout minimal non bloquant, pas de désactivation des
+contrôles)** — portée volontairement limitée à un indicateur visuel, la désactivation
+armes/programmes (option plus invasive évoquée ci-dessus) laissée à une itération future si Saar la
+juge utile après avoir vu le badge en jeu :
+- `client/src/character/DroneWindow.jsx` — le handler socket ne déstructure plus le `detruit`
+  top-level redondant (`damages` suffit, déjà propagé par le spread existant) ; badge
+  `t('drone.destroyedBadge')` (classe `badge badge-fail badge-compact`, réutilise le vocabulaire
+  existant, aucune nouvelle classe CSS) ajouté dans le header, visible sur tous les onglets, gated sur
+  `drone?.damages?.detruit`.
+- `client/src/locales/fr.json` — clé `drone.destroyedBadge` : "Détruit".
+
+**Testé** : ESLint sur `DroneWindow.jsx` (erreur `no-unused-vars` disparue, seule reste l'erreur
+préexistante `set-state-in-effect` sans rapport, déjà trackée I18N-LINT3) ; JSON valide ; `npm run
+build` (client) propre.
+**Non testé** : scénario réel en jeu (détruire un drone en combat, fenêtre ouverte, vérifier
+l'apparition du badge) — à la charge de Saar. Si le badge est jugé insuffisant (armes/programmes
+restant cliquables sur un drone détruit), ouvrir une dette dédiée pour le gating des contrôles.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, ajout pur — aucun comportement existant modifié.
 
 ---
 

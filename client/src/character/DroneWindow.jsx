@@ -125,7 +125,9 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
   // ─── Mise à jour temps réel — intégrité drone (combat) ────────────────────
   useEffect(() => {
     if (!socket) return
-    const handler = ({ characterId, integrite_actuelle, damages, detruit }) => {
+    // detruit (top-level) non déstructuré — redondant avec damages.detruit (même payload,
+    // server/src/socket/socketCombatHelpers.js:resolveDroneIntegrityLoss), déjà propagé par le spread.
+    const handler = ({ characterId, integrite_actuelle, damages }) => {
       if (characterId !== character.id) return
       setDrone(prev => prev ? { ...prev, integrite_actuelle, damages } : prev)
     }
@@ -206,6 +208,9 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
           <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: character.color, flexShrink: 0 }} />
           <span style={{ fontSize: '14px', fontWeight: '500', color: '#c0c0d0' }}>{character.name}</span>
           <span style={{ fontSize: '10px', color: '#4a4a60', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Drone</span>
+          {drone?.damages?.detruit && (
+            <span className="badge badge-fail badge-compact">{t('drone.destroyedBadge')}</span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {isGm && (
