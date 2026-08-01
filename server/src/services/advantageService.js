@@ -4,11 +4,36 @@
 // Source : docs/Character/Creation/PLAN_CREATION_E5.md — corrigé (AppError, JOIN currentAdvantages,
 // pas de champ "notes", catch err.code === '23505').
 
+import { randomInt } from 'crypto'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { validateAdvantage } from './advantageConstraints.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { applyIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
+
+// POL1 (docs/BUGIDENTIFIE.md) — adv_078 "Polaris non maîtrisé" : "2 pouvoirs tirés aléatoirement,
+// pas d'accès à Maîtrise de la Force Polaris" (ref_advantages.special_rule). Pool = même famille que
+// le client (CharacterSheet.jsx refSkillsPolaris : ref_skills.parent === 'POUVOIRS_POLARIS'), exclut
+// donc déjà POUVOIRS_POLARIS elle-même (l'umbrella "Maîtrise de la Force Polaris") — c'est un parent,
+// jamais son propre parent. Tirage sans remise (randomInt/crypto, jamais Math.random — même principe
+// que diceParser.js pour toute randomisation ayant un effet de jeu réel). Marqué appris directement
+// (is_learned=true) : contrairement à adv_079, ce n'est pas un choix du joueur.
+async function grantPolarisRandomPowers(trx, sheetId) {
+  const pool = await trx('ref_skills').where({ parent: 'POUVOIRS_POLARIS' }).select('id')
+  const remaining = [...pool]
+  const picks = []
+  for (let i = 0; i < 2 && remaining.length > 0; i++) {
+    const idx = randomInt(0, remaining.length)
+    picks.push(remaining.splice(idx, 1)[0].id)
+  }
+  for (const skillId of picks) {
+    await trx('char_skills')
+      .insert({ char_sheet_id: sheetId, skill_id: skillId, mastery: 0, is_learned: true })
+      .onConflict(['char_sheet_id', 'skill_id'])
+      .merge(['is_learned'])
+  }
+  return picks
+}
 
 export async function getAdvantages(sheetId) {
   return db('char_advantages as ca')
@@ -77,6 +102,8 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
     }
 
     await applyIdentityGrant(trx, sheetId, refAdv.mod_identity)
+
+    if (advantageId === 'adv_078') await grantPolarisRandomPowers(trx, sheetId)
 
     return row
   }
@@ -174,6 +201,8 @@ export async function grantAdvantage(sheetId, advantageId, acquiredDuring, trxOp
     }
 
     await applyIdentityGrant(trx, sheetId, refAdv.mod_identity)
+
+    if (advantageId === 'adv_078') await grantPolarisRandomPowers(trx, sheetId)
 
     // Forme identique à getAdvantages() (JOIN ref_advantages) — le client pousse directement ce
     // retour dans charAdvantages sans re-fetch, il doit porter les mêmes champs (name/type/...)

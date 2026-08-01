@@ -1267,7 +1267,7 @@ avant de pouvoir détailler ligne-à-ligne, même famille de travail que Lot 5.
 
 ## Bugs Polaris
 
-### Dette POL1 — Avantage "Polaris non maîtrisé" (adv_078) : tirage de 2 pouvoirs aléatoires non implémenté
+### Dette POL1 — Avantage "Polaris non maîtrisé" (adv_078) : tirage de 2 pouvoirs aléatoires non implémenté ✅ Session (2026-08-01)
 
 **Symptôme** : Aucun cas observé en jeu à ce jour — signalé par Saar en clarifiant l'architecture du
 Lot 5 (`docs/PLAN_MUTATION2.md`), pas encore rencontré en pratique.
@@ -1289,6 +1289,36 @@ définir la famille "Pouvoirs Polaris" (sous-ensemble de `ref_skills`, hors `Ma�
 **Prochaine étape** : session dédiée — hors scope de `docs/PLAN_MUTATION2.md` Lot 5 (qui traite
 uniquement le bug d'affichage `[CS7]` des compétences à prérequis MUTATION/ADVANTAGE, pas la
 mécanique de tirage `adv_078`).
+
+**Décision (Saar, 2026-08-01)** : famille = Skill "Compétences Spéciales/Pouvoir Polaris" — confirme
+la piste déjà identifiée côté client (`CharacterSheet.jsx` `refSkillsPolaris = refSkills.filter(s =>
+s.parent === 'POUVOIRS_POLARIS')`), jamais utilisée côté serveur avant ce correctif.
+
+**Correctif codé (2026-08-01)** — `server/src/services/advantageService.js` :
+- Nouvelle fonction `grantPolarisRandomPowers(trx, sheetId)` — pool = `ref_skills.parent ===
+  'POUVOIRS_POLARIS'` (52 pouvoirs seedés, migration 37 ; exclut déjà l'umbrella `POUVOIRS_POLARIS`
+  elle-même, qui est un parent, jamais son propre parent — donc conforme à "hors Maîtrise de la Force
+  Polaris" sans filtre supplémentaire). Tirage sans remise, `randomInt` (`crypto`, jamais
+  `Math.random()` — même principe que `diceParser.js` pour toute randomisation à effet de jeu réel).
+  Marque directement `is_learned=true` dans `char_skills` (upsert `onConflict` identique au patron
+  déjà utilisé par `PUT /skills/toggle-learned`) — pas de choix joueur, contrairement à `adv_079`.
+- Appelée depuis **les deux** points d'entrée qui peuvent accorder `adv_078` — `addAdvantage`
+  (Wizard création, step5) et `grantAdvantage` (octroi narratif MJ post-création, et par extension
+  `creationService.js` "Revers → grant_advantage") — un seul point de logique (`grantPolarisRandomPowers`),
+  gated par `if (advantageId === 'adv_078')`, appelé après l'insert `char_advantages` réussi et après
+  `applyIdentityGrant`, dans la même transaction (atomique avec le reste de l'octroi).
+
+**Testé** : nouveau `server/src/services/advantageService.test.mjs` (2/2 ✅, DB réelle — `adv_078`
+tire exactement 2 pouvoirs distincts appartenant à `POUVOIRS_POLARIS` et les marque appris ;
+`adv_079` n'en tire aucun, confirme le gate `advantageId === 'adv_078'`) ; suite serveur complète
+`node --test` (153/153 ✅) ; `node --check` propre. Testé uniquement via `grantAdvantage` (fixture plus
+simple, pas de `char_pc_ledger`) — `addAdvantage` appelle le même helper au même point, non re-testé
+séparément (couverture jugée redondante).
+**Non testé** : scénario réel en jeu (Wizard création ou octroi MJ de "Polaris non maîtrisé", vérifier
+que 2 pouvoirs apparaissent cochés sur la fiche) — à la charge de Saar.
+**Données** : aucune migration — écrit dans `char_skills`, table déjà existante.
+**Retour arrière** : commit isolé, aucun changement pour `adv_077`/`adv_079` ni pour un personnage
+sans `adv_078`.
 
 ---
 
