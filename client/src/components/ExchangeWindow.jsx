@@ -179,12 +179,16 @@ export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId
         <button className="btn btn-icon" onClick={onClose} title={t('common.close')}>✕</button>
       </div>
 
+      {/* TRADE2 (docs/BUGIDENTIFIE.md) — remplacement (décision Saar 2026-08-01) : "Agir en tant que"
+          incarne désormais un PNJ (plus un PJ), "Destinataire" reste réservé à un PJ (filtre plus bas).
+          Le serveur n'a jamais imposé de type ici (socketTrade.js — "n'importe quel personnage") :
+          restriction purement côté client, changée sans toucher le serveur. */}
       {isGm && !gmActingAsId && (() => {
-        const gmPjOptions = characters.filter(c => c.type === 'pj' && c.id !== exTargetId)
+        const gmPnjOptions = characters.filter(c => c.type === 'pnj' && c.id !== exTargetId)
         return (
           <div style={S.gmActingAsRow}>
             <span style={S.modLabel}>{t('trade.window.ex_acting_as_select')}</span>
-            {gmPjOptions.length > 0 ? (
+            {gmPnjOptions.length > 0 ? (
               <div style={{ flex: 1 }}>
                 <select
                   style={S.merchantSelect}
@@ -192,11 +196,11 @@ export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId
                   onChange={e => { if (e.target.value) setGmActingAsId(e.target.value) }}
                 >
                   <option value="">{t('trade.window.ex_acting_as_placeholder')}</option>
-                  {gmPjOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {gmPnjOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             ) : (
-              <span style={S.exTimer}>{t('trade.window.ex_no_other_pj')}</span>
+              <span style={S.exTimer}>{t('trade.window.ex_no_pnj')}</span>
             )}
           </div>
         )
@@ -299,6 +303,9 @@ export default function ExchangeWindow({ socket, onClose, isGm = false, myCharId
                     const suggestions = characters
                       .filter(c => c.id !== effectiveCharId
                                && (c.type !== 'drone' || c.user_id === myUserId)
+                               // TRADE2 : le MJ (agissant en PNJ) ne peut cibler qu'un PJ (ou son
+                               // drone, déjà filtré ci-dessus) — jamais un autre PNJ.
+                               && (!isGm || c.type !== 'pnj')
                                && c.name.toLowerCase().includes(searchText.toLowerCase()))
                       .slice(0, 3)
                     return suggestions.length > 0 ? (

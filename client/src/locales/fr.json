@@ -1100,7 +1100,7 @@
       "ex_acting_as": "MJ — agit au nom de : {{name}}",
       "ex_acting_as_select": "MJ — agir en tant que :",
       "ex_acting_as_placeholder": "— Choisir un personnage —",
-      "ex_no_other_pj": "Aucun autre personnage joueur dans la campagne",
+      "ex_no_pnj": "Aucun PNJ dans la campagne",
       "ex_select_actor_first": "Choisissez d'abord le personnage pour qui vous agissez",
       "ex_target_label": "Destinataire",
       "ex_no_target": "— Choisissez un personnage —",

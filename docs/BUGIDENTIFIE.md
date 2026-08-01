@@ -1187,7 +1187,7 @@ autres items du catalogue ont un `price_modifier` non-null et sont donc potentie
 
 ---
 
-### Dette TRADE2 — Échange MJ : logique "Agir en tant que" / "Destinataire" pas alignée avec l'usage attendu
+### Dette TRADE2 — Échange MJ : logique "Agir en tant que" / "Destinataire" pas alignée avec l'usage attendu ✅ Session (2026-08-01)
 
 **Symptôme** : Testé par Saar en tant que MJ (2026-07-17, validation du chantier refonte slots). La
 logique actuelle de la fenêtre Échange (`ExchangeWindow.jsx`) n'est pas celle attendue côté MJ.
@@ -1209,6 +1209,26 @@ l'usage attendu par Saar (PNJ→PJ) et ce qui a été livré (PJ→PJ au nom du 
 **Prochaine étape** : décision produit à prendre — un flux PNJ→PJ est-il un **ajout** à côté de
 l'existant PJ→PJ, ou son **remplacement** ? Non tranché, hors scope de la tâche qui a fait remonter
 le sujet (validation fonctionnelle du chantier `docs/PLAN_INVENTORY_SLOTS.md`).
+
+**Décision (Saar, 2026-08-01)** : remplacement.
+
+**Correctif codé (2026-08-01)** — vérifié d'abord que le serveur (`socketTrade.js`
+`TRADE_TRANSFER_OFFER`) n'imposait déjà aucun type sur `fromChar` pour un MJ ("peut proposer au nom de
+n'importe quel personnage", décision Saar 2026-07-16, commentaire en place) — correctif entièrement
+côté client, aucun changement serveur :
+- `client/src/components/ExchangeWindow.jsx` — le picker "Agir en tant que" filtre désormais
+  `c.type === 'pnj'` (au lieu de `'pj'`). Les suggestions de "Destinataire" excluent les PNJ quand
+  `isGm` (`c.type !== 'pnj'`) — un drone reste ciblable si sa condition de propriété (déjà existante,
+  inchangée) est remplie, un PJ toujours ciblable. Le flux joueur (non-MJ, `isGm=false`) n'est pas
+  concerné par ces deux filtres (branches gardées par `isGm`), comportement inchangé.
+- `client/src/locales/fr.json` — clé `ex_no_other_pj` renommée `ex_no_pnj`, texte mis à jour ("Aucun
+  PNJ dans la campagne" au lieu de "Aucun autre personnage joueur"), seul consommateur du fichier.
+
+**Testé** : ESLint sur `ExchangeWindow.jsx` (0 erreur) ; JSON valide ; `npm run build` (client) propre.
+**Non testé** : scénario réel en jeu (MJ ouvre Échange, choisit un PNJ, propose un objet à un PJ,
+double validation inchangée) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, flux joueur (PJ↔PJ) totalement inchangé.
 
 ---
 
