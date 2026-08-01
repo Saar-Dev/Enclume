@@ -8,6 +8,7 @@ import {
   ATTR_LABELS,
 } from '../lib/charStats.js'
 import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
+import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getMutationEffects } from '../services/mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { measureBattlemapTokenEntityDistance } from '../services/worldSpatialQueryService.js'
@@ -100,6 +101,18 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       if (!interaction.skill_id && !interaction.attribute_id) {
         await resolveEntityState(entityId, interactionId, campaignId, io)
         console.log(`[WS] entity:action_request direct (no skill) — ${user.username} → ${interaction.action_label}`)
+        return
+      }
+
+      // WNDMORT-HORSCOMBAT (docs/BUGIDENTIFIE.md) — REGLEBLESSURES.md : "aucune action demandant un
+      // Test", pas seulement en combat. Gardé ici, au point de requête initial (pas à la confirmation
+      // GM plus bas) pour ne pas faire perdre son temps au MJ sur une interaction déjà impossible.
+      const sheetMortal = await db('char_sheet').where({ character_id: characterId }).first()
+      const woundsMortal = sheetMortal
+        ? await db('character_wounds').where({ char_sheet_id: sheetMortal.id })
+        : []
+      if (isTestBlockingWound(woundsMortal)) {
+        socket.emit(WS.ENTITY_ACTION_RESULT, { requestId, isApproved: false, reason: 'mortally_wounded' })
         return
       }
 

@@ -37,6 +37,7 @@ import TradeWindow from '../components/TradeWindow'
 import ExchangeWindow from '../components/ExchangeWindow'
 import { DEFAULT_SURFACE_MATERIAL_PRESET } from '../lib/proceduralMaterials.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
+import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import BattlemapSelectorPanel from '../components/BattlemapSelectorPanel.jsx'
 
 // docs/PLAN_BATTLEMAP2D.md §9 (Lot 4) — liste plate de dossiers → options de <select> indentées,
@@ -231,6 +232,11 @@ function SessionContent({ campaignId }) {
   // null = inactif, sinon { entity, interaction, tokenId }
   const [moveTarget, setMoveTarget] = useState(null)
 
+  // ─── Bandeau centré — interaction refusée pour Blessure mortelle (WNDMORT-HORSCOMBAT) ───────────
+  // null = masqué, sinon le texte à afficher. Auto-effacé après 4s (setMortalWoundBanner passé
+  // tel quel à useEntitySocket, même patron que declareError dans CombatActionWindow.jsx).
+  const [mortalWoundBanner, setMortalWoundBanner] = useState(null)
+
 
   // Fenêtre character flottante — null = fermée, sinon id du character ouvert
   // Le character est dérivé du store pour se mettre à jour automatiquement via WS
@@ -365,7 +371,7 @@ function SessionContent({ campaignId }) {
 
   // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget…)
   useTokenSocket()
-  useEntitySocket({ setRadialMenu, setMoveTarget })
+  useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBanner })
   // useCombatUIState AVANT useCombatSocket — handleModeReset passé comme onModeReset (P-R14-1)
   const {
     combatMoveMode, pendingMoveSelection, combatTargetMode, targetRecap, combatCameraCenter,
@@ -1178,6 +1184,11 @@ function SessionContent({ campaignId }) {
         )
       })()}
 
+      {/* ─── Bandeau centré — interaction refusée pour Blessure mortelle (WNDMORT-HORSCOMBAT) ──── */}
+      {mortalWoundBanner && (
+        <div style={styles.mortalWoundBanner}>{mortalWoundBanner}</div>
+      )}
+
       {/* ─── Panneau config instance GM ──────────────────────────────────────── */}
       {instancePanel && (() => {
         const entity = entities.find(item => item.id === instancePanel.entityId)
@@ -1281,6 +1292,22 @@ function SessionContent({ campaignId }) {
 }
 
 const styles = {
+  mortalWoundBanner: {
+    position: 'fixed',
+    top: '18%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 2000,
+    padding: '10px 20px',
+    borderRadius: 6,
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#e0a0a0',
+    background: `${SEVERITY_COLORS.mortelle}dd`,
+    border: `1px solid ${SEVERITY_COLORS.mortelle}`,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+    pointerEvents: 'none',
+  },
   container: {
     width: '100vw',
     height: '100vh',

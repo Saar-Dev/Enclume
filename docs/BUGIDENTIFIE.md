@@ -144,7 +144,7 @@ tuiles grisées, Déplacement/Passer toujours cliquables) — à la charge de Sa
 
 ---
 
-### Dette WNDMORT-HORSCOMBAT — Test générique hors-combat non gardé (Blessure mortelle)
+### Dette WNDMORT-HORSCOMBAT — Test générique hors-combat non gardé (Blessure mortelle) ✅ Session (2026-08-01)
 
 **Symptôme** : Aucun cas observé en jeu — trouvé en clôturant WNDMORT (Session 166).
 
@@ -158,6 +158,36 @@ seulement en combat — donc ce système reste, en toute rigueur, un écart RAW 
 **Prochaine étape** : ajouter le même garde (`isTestBlockingWound`) au point de requête initial de ce
 système (pas au point de confirmation vu ici, trop tard pour une bonne UX) — chantier séparé, impact
 pratique jugé bien plus faible que le combat (Décision : non traité dans ce correctif).
+
+**Décision (Saar, 2026-08-01)** : ajouter un bandeau centré expliquant la situation au joueur (en plus
+du garde serveur).
+
+**Correctif codé (2026-08-01)** :
+- `server/src/socket/socketEntity.js` (`ENTITY_ACTION_REQUEST`) — garde `isTestBlockingWound` ajouté
+  juste après le garde existant "pas de mécanique → résolution directe" (ligne ~100), donc seulement
+  quand l'interaction demande réellement un Test (`skill_id`/`attribute_id`), au point de requête
+  initial comme prescrit — pas à la confirmation GM (`ENTITY_ACTION_RESOLVE`, où `character_wounds`
+  était déjà lu mais seulement pour le malus, jamais comme garde). Émet `ENTITY_ACTION_RESULT
+  { isApproved:false, reason:'mortally_wounded' }`, même événement/forme que `'timeout'`/`'no_gm'`
+  déjà existants — pas de nouvel événement.
+- `client/src/lib/useEntitySocket.js` — nouvelle branche `reason === 'mortally_wounded'` →
+  `t('session.mortallyWoundedNoTest')`, ajoutée au message de chat existant (comportement inchangé
+  pour les 2 raisons précédentes) **et** déclenche un bandeau centré temporaire (4s, même patron que
+  `declareError` dans `CombatActionWindow.jsx`).
+- `client/src/pages/SessionPage.jsx` — nouvel état `mortalWoundBanner` passé à `useEntitySocket`,
+  rendu en `position:fixed` centré horizontalement, couleur `SEVERITY_COLORS.mortelle` (réutilisée
+  depuis `shared/woundConstants.js`, même teinte que le bandeau combat WNDMORT-UI — cohérence
+  visuelle entre les deux correctifs de la même session).
+- `client/src/locales/fr.json` — clé `session.mortallyWoundedNoTest`.
+
+**Testé** : `node --check socketEntity.js` ; ESLint sur les 2 fichiers client touchés (0 nouvelle
+erreur, warnings `exhaustive-deps` préexistants étendus d'un setter de plus, même famille que les
+autres déjà listés) ; JSON valide ; suite serveur complète `node --test` (151/151 — aucun test dédié à
+`socketEntity.js` dans le dépôt) ; `npm run build` (client) propre.
+**Non testé** : scénario réel en jeu (personnage mortellement blessé tente une interaction à
+compétence hors combat — bandeau centré + message de chat, MJ jamais sollicité) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, aucun changement pour un personnage non mortellement blessé.
 
 ---
 

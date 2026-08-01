@@ -9,7 +9,7 @@ import { useTokenStore } from '../stores/tokenStore'
 import { useEntityStore } from '../stores/entityStore'
 import api from './api'
 
-export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
+export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBanner }) {
   const socket = useSocket()
   const { user } = useAuthStore()
   const { clearPendingEntityId, addMessage } = useSessionStore()
@@ -57,13 +57,21 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget }) {
           ? t('session.actionExpired')
           : reason === 'no_gm'
             ? t('session.noGm')
-            : t('session.actionRefused')
+            : reason === 'mortally_wounded'
+              ? t('session.mortallyWoundedNoTest')
+              : t('session.actionRefused')
         addMessage({
           id: `entity-result-${requestId}`,
           system: true,
           text: reasonText,
           time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         })
+        // WNDMORT-HORSCOMBAT (docs/BUGIDENTIFIE.md) — décision Saar : bandeau centré en plus du
+        // message de chat, la restriction physique mérite plus de visibilité qu'un refus générique.
+        if (reason === 'mortally_wounded') {
+          setMortalWoundBanner(reasonText)
+          setTimeout(() => setMortalWoundBanner(null), 4000)
+        }
       }
       setRadialMenu(null)
     }
