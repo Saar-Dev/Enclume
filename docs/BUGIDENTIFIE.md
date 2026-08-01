@@ -68,7 +68,7 @@ prioritaire, à nettoyer un jour)
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT2 + I18N-LINT3 | divers | Basse |
+| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT3 | divers | Basse |
 | **Q — UI divers** | UI2 + UI3 | composants dés + chat | Basse |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
@@ -535,7 +535,7 @@ restant cliquables sur un drone détruit), ouvrir une dette dédiée pour le gat
 
 ---
 
-### Dette I18N-LINT2 — Variables/props inutilisées (ESLint `no-unused-vars`) dans plusieurs fichiers Combat
+### Dette I18N-LINT2 — Variables/props inutilisées (ESLint `no-unused-vars`) dans plusieurs fichiers Combat ✅ Session (2026-08-01)
 
 **Symptôme** : Aucun cas observé en jeu — trouvé par ESLint en vérifiant chaque segment du chantier
 i18n Combat (`docs/PLAN_LOCALISATION.md`, Segments 2/4/5, 2026-07-24), sans rapport avec le texte en
@@ -587,6 +587,34 @@ propre.
 de Saar, aucun changement de comportement attendu (suppression de props/params non lus).
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, comportement utilisateur inchangé.
+
+**Traité (suite, 2026-08-01)** — chantier UI Combat commité entre-temps, `CombatActionWindow.jsx`
+n'est plus bloqué. Les 5 occurrences restantes de ce fichier vérifiées une à une avant suppression
+(remontée via `git log -S` sur chacune, pas une suppression aveugle) :
+- `stateKey` (`StateSelector`) — vérifié : les 5 sites d'appel (`CombatActionWindow.jsx` ×4,
+  `CombatGmDeclareWindow.jsx` ×1) passent tous `stateKey="position"/"vitesse"/"weapon"/"fire_mode"`,
+  jamais lu dans le composant (`def` porte déjà tout ce qu'il faut au rendu). Retiré de la
+  déstructuration uniquement ; les appelants continuent de le passer sans effet (inoffensif,
+  potentiellement utile comme documentation inline au call site).
+- `currentTurn` (déstructuration `useCombatStore()`) — **vérifié PAS un vestige mort de toujours** :
+  `git log -S currentTurn` remonte au commit `1fb89e4` (Session 87, "Correctifs combat (13 bugs)"),
+  qui a supprimé un bloc JSX entier (`declareLogSection`, "Déclarations — Tour {currentTurn}") sans
+  retirer la déstructuration devenue orpheline. Suppression tardive légitime, pas de fonctionnalité à
+  restaurer (le bloc a été retiré délibérément par ce correctif historique, jamais réintroduit depuis).
+- `myMeleeAction`/`meleeCibleTokens` (+ `myMeleeActions`, devenu inutile une fois les deux retirés) —
+  même archéologie, même commit `1fb89e4` : diff confirmé, il supprimait un bloc `Corps à corps →
+  {targets} — en attente du résultat…` (symétrique du bloc assaut encore présent juste au-dessus,
+  `cibleToken`) sans nettoyer les 3 variables qui ne servaient plus qu'à lui. Suppression tardive
+  légitime, même cause que `currentTurn`.
+- `iniTotal` — `git log -S iniTotal` ne remonte qu'un seul commit (introduction, Session 65) : jamais
+  consommé depuis son introduction, contrairement aux 3 précédents (pas de trace d'un affichage
+  supprimé). Vestige mort dès l'origine plutôt qu'un reliquat de nettoyage — supprimé à l'identique.
+
+**Testé (suite)** : ESLint sur `CombatActionWindow.jsx` — 0 erreur `no-unused-vars` (vs 5 avant),
+warnings `exhaustive-deps` restants inchangés (hors scope, notés ci-dessus) ; `npm run build` (client)
+propre.
+**Non testé (suite)** : scénario réel en jeu (fenêtre Résolution PJ, tour normal) — à la charge de
+Saar, aucun changement de comportement attendu.
 
 ---
 

@@ -31,7 +31,9 @@ import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 // Composant StateSelector
 // Affiche un segmented control pour un etat avec cout de transition visible.
 // ---------------------------------------------------------------------------
-export function StateSelector({ stateKey, def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
+// stateKey (ex. "position"/"vitesse"/"weapon") passé par tous les appelants mais jamais consommé ici
+// — def encode déjà tout ce dont le rendu a besoin (label, options). Appelants inchangés.
+export function StateSelector({ def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
   const { t } = useTranslation('combat')
   return (
     <div style={ss.row}>
@@ -78,7 +80,7 @@ export default function CombatActionWindow({
   battlemapId, registerAmbientAttackHandler, showTargetRecap,
 }) {
   const { t } = useTranslation('combat')
-  const { roster, phase, actions, activeTokenId, currentTurn } = useCombatStore()
+  const { roster, phase, actions, activeTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
 
   // Multi-personnage : tous les persos contrôlés par ce joueur
@@ -625,7 +627,6 @@ export default function CombatActionWindow({
   }
   const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick, t)
   const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick, t)
-  const iniTotal = (rosterEntry.initiative ?? 0) - iniDelta // initiative decremente par les couts
 
   // Tir visé — éligibilité recalculée à chaque rendu, source unique shared/combatExclusiveActions.js
   // (même évaluateur que le serveur — retour visuel immédiat, jamais d'aller-retour pour ce feedback)
@@ -757,10 +758,7 @@ export default function CombatActionWindow({
   if (isMyTurnInResolution) {
     const myAssaultAction = myActions.find(a => a.action_key === 'assault')
     const myReloadAction  = myActions.find(a => a.action_key === 'reload')
-    const myMeleeActions  = myActions.filter(a => a.action_key === 'melee')
-    const myMeleeAction   = myMeleeActions[0] ?? null
     const cibleToken = myAssaultAction ? tokens.find(tk => tk.id === myAssaultAction.target_token_id) : null
-    const meleeCibleTokens = myMeleeActions.map(a => tokens.find(tk => tk.id === a.target_token_id) ?? null)
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
       <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
