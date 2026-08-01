@@ -517,7 +517,13 @@ router.post('/:id/world-visibility', requireAuth, async (req, res, next) => {
       .first()
     if (!member) throw new AppError(403, 'Access denied')
 
-    const { source_token_id, target_token_id, source_posture, target_posture } = req.body
+    const {
+      source_token_id, target_token_id, source_posture, target_posture,
+      // Position hypothétique du token source (forme DB pos_x/pos_y/pos_z) — déclaration ANNONCE
+      // avec une destination de déplacement déjà posée mais pas encore résolue (inférence CaC/Tir
+      // au clic sur un token, cf. docs/BUGIDENTIFIE.md COMBAT-CLICK-RECAP). Jamais pour la cible.
+      source_position_override,
+    } = req.body
     const [sourceToken, targetToken] = await Promise.all([
       db('tokens').where({ id: source_token_id, battlemap_id: battlemap.id }).first(),
       db('tokens').where({ id: target_token_id, battlemap_id: battlemap.id }).first(),
@@ -538,6 +544,7 @@ router.post('/:id/world-visibility', requireAuth, async (req, res, next) => {
         targetToken,
         sourceProfile: { posture: source_posture },
         targetProfile: { posture: target_posture },
+        sourcePositionOverride: source_position_override ?? null,
       })
     } catch (error) {
       if (error instanceof TypeError || error instanceof RangeError) {

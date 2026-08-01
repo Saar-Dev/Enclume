@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
 import api from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
@@ -366,6 +367,11 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
     ? availableContainers
     : [item.container, ...availableContainers]
 
+  // Même filtre que WeaponPanel.jsx (`availableWeapons`) — les colonnes ref_damage_h/ref_shock
+  // existent sur toute la table ref_equipment, pas seulement les armes ; ne pas afficher le badge
+  // sur un objet non-arme dont ces champs seraient renseignés par erreur de saisie catalogue.
+  const isWeaponLike = item.ref_family === 'Armes' || item.ref_category === 'Bouclier'
+
   return (
     <div style={s.itemRow}>
       <span style={s.itemName}>
@@ -373,6 +379,9 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
         {item.slots?.length > 0 && <span style={s.itemSlot}> [{item.slots.join('/')}]</span>}
       </span>
+      {isWeaponLike && DAMAGE_TYPE_BADGES.map(({ key, field, className, i18nKey }) => item[field] && (
+        <span key={key} className={`badge badge-compact ${className}`} style={s.itemDamageBadge}>{t(i18nKey)} <span className="num">{item[field]}</span></span>
+      ))}
       {item.ref_weight != null && (
         <span style={s.itemWeight}>{(item.ref_weight * item.quantity).toFixed(1)} kg</span>
       )}
@@ -427,6 +436,7 @@ const s = {
   itemName:   { flex: 1, color: '#c0c0d0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   itemQty:    { color: '#5a5a7a' },
   itemSlot:   { color: '#5b8dee' },
+  itemDamageBadge: { flexShrink: 0 },
   itemWeight: { color: '#4a4a60', fontSize: 11, flexShrink: 0 },
   selectSmall: {
     background: '#16162a', border: '1px solid #2a2a3e', borderRadius: 4,

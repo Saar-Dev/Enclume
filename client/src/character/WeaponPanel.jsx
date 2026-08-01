@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
+import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
 import api from '../lib/api.js'
 
 const WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
@@ -66,8 +67,9 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
       </div>
 
       <div style={s.statsRow}>
-        {weapon.ref_damage_h  && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statDamage')}</span> {weapon.ref_damage_h}</span>}
-        {weapon.ref_shock     && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statShock')}</span> {weapon.ref_shock}</span>}
+        {DAMAGE_TYPE_BADGES.map(({ key, field, className, i18nKey }) => weapon[field] && (
+          <span key={key} className={`badge badge-compact ${className}`}>{t(i18nKey)} <span className="num">{weapon[field]}</span></span>
+        ))}
         {weapon.ref_range     && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statRange')}</span> {weapon.ref_range}</span>}
         {weapon.ref_fire_mode && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statFireMode')}</span> {weapon.ref_fire_mode}</span>}
         {weapon.ref_caliber   && <span style={s.stat}><span style={s.statKey}>{t('weaponPanel.statCaliber')}</span> {weapon.ref_caliber}</span>}

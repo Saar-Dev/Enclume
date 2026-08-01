@@ -1237,6 +1237,147 @@ Cause racine [INCONNU] : Non investigué.
 
 Prochaine étape : Identifier le composant responsable de l’édition de voxels, vérifier si la fonctionnalité est seulement masquée ou jamais construite.
 
+---
+
+## UI Combat — refonte actions INTERAGIR / DÉPLACEMENT (proposé Session 2026-07-31, Saar)
+
+> Contexte commun : `client/src/components/combatSections.js` (`MAP_ACTIONS`), consommé par
+> `CombatActionWindow.jsx` (PJ) et `CombatGmDeclareWindow.jsx` (PNJ/drone).
+
+### Dette COMBAT-INTERAGIR-SYNC — "Interagir" actif côté MJ, grisé côté joueur ; à sortir de la liste d’actions ✅ Session (2026-08-01)
+
+**Symptôme [VÉRIFIÉ, lecture de code]** : `MAP_ACTIONS` définissait `interact` avec `active: false` →
+grisé pour le joueur, jamais vérifié côté MJ (`CombatGmDeclareWindow.jsx`). Payload transmis au serveur
+(`socketCombatAnnouncement.js`, `action_key:'interact'`, `type:'micro'`) mais aucun résolveur ne
+traitait ce `type` à la résolution — chemin mort fonctionnellement confirmé (aucune trace dans
+`socketCombatResolution.js`/`socketCombatHelpers.js`).
+
+**Résolution (Saar, 2026-08-01)** : retiré entièrement plutôt que raccordé — l'affichage contextuel sur
+les entités interactives (`socketEntity.js`) envisagé initialement n'a jamais été construit et n'est plus
+prévu via ce chemin. Supprimé : entrée `MAP_ACTIONS`, `mapActions.interact` (déclaration client PJ/GM,
+payload serveur `socketCombatAnnouncement.js`), clés i18n `mapActions.interact.*`.
+
+**Testé** : build client, ESLint (aucune nouvelle erreur), `node --check` serveur.
+**Non testé** : scénario réel en jeu — à la charge de Saar.
+
+---
+
+### Dette COMBAT-INTERAGIR-DISTANCE — Distance d’interaction (1,5m) non vérifiée côté serveur pour le flux générique
+
+**Symptôme [VÉRIFIÉ]** : la vérification de distance (1,5m = 1 case, cf. `.claude/rules/world.md`)
+existe déjà pour `ENTITY_MOVE_REQUEST` (portes, `socketEntity.js:497-500` — `overrides.range ??
+interaction.range ?? 1.5`, via `measureBattlemapTokenEntityDistance`,
+`worldSpatialQueryService.js:86-131`). Le flux générique `ENTITY_ACTION_REQUEST` (interactions à
+compétence, `socketEntity.js:62-157`) ne vérifie que la propriété du personnage et l’existence de
+l’interaction — **aucune distance**.
+
+**Besoin (Saar, 2026-07-31)** : la limite de 1,5m doit être une règle dure (hardcodée), appliquée à
+toute interaction, y compris ce flux générique.
+
+**Code impliqué** : `server/src/socket/socketEntity.js` (handler `ENTITY_ACTION_REQUEST`),
+`server/src/services/worldSpatialQueryService.js` (réutiliser `measureBattlemapTokenEntityDistance`,
+ne pas dupliquer le calcul).
+
+**Prochaine étape** : ajouter le même garde que `ENTITY_MOVE_REQUEST`, refus serveur clair si hors
+portée.
+
+---
+
+### COMBAT-INTERAGIR-AUTOMOVE — Proposer un déplacement si l’entité cliquée est hors de portée (feature)
+
+**Besoin (Saar, 2026-07-31)** : si le joueur clique une entité interactive hors de portée (>1,5m),
+proposer un déplacement pour se mettre à portée plutôt qu’un simple refus.
+
+**Points d’architecture à trancher avant de coder** : ce déplacement consomme-t-il le budget/coût INI
+normal (probable, cohérence avec le système d’Allures) ? Une seule déclaration (déplacement + interagir)
+ou deux étapes séparées ? Le serveur reste seul autoritaire — la proposition de trajet reste indicative,
+revalidée à l’exécution comme le reste du mouvement.
+
+**Prochaine étape** : dépend de COMBAT-INTERAGIR-SYNC (le point d’affichage contextuel doit exister
+avant d’y greffer cette proposition) — décision produit sur le déroulé exact avant conception.
+
+---
+
+### Dette COMBAT-DEPLACEMENT-HOVER — "Déplacement" doit devenir toujours actif au survol (pas un bouton à activer) ✅ Session (2026-07-31)
+
+**Symptôme [VÉRIFIÉ]** : aujourd’hui il faut cliquer le bouton "Déplacement" (`MAP_ACTIONS`, item
+`isZoneSelect:true`) avant de pouvoir survoler la grille (`handleZoneSelectClick`,
+`CombatActionWindow.jsx:500-512` → `onEnterMoveMode`). Le hover-preview existe déjà et fonctionne
+(`requestWorldPathPreview`, `Canvas3D.jsx:612-649` ; panneau allures/coût INI en direct,
+`CombatOverlay.jsx:513-554`).
+
+**Besoin (Saar, 2026-07-31, décidé)** : rendre cette preview toujours active au survol d’une case,
+sans avoir à cliquer un bouton "Déplacement" au préalable.
+
+**Code impliqué** : `combatSections.js` (retrait de l’entrée `move` de la liste d’actions cliquables),
+`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (déclenchement du mode survol), `Canvas3D.jsx`
+(`requestWorldPathPreview` déjà fonctionnel, à activer par défaut plutôt que sur mode explicite).
+
+**Prochaine étape** : chantier dédié — vérifier que ce hover permanent n’interfère pas avec d’autres
+survols existants (tooltips case/entité), garder un geste de confirmation explicite (clic) avant tout
+déplacement réel — un survol ne doit jamais commit un mouvement.
+
+**Correctif codé (2026-07-31)** — plus complexe que prévu initialement, 2 vrais blocages trouvés et
+résolus en cours de route (pas de raccourci silencieux) :
+- **Déclaration combinée** : "Déplacement" est une tuile multi-sélection pouvant se combiner avec
+  Attaque/CaC dans la même déclaration (cf. dette DEP1) ; Charge/Retraite réutilisent le même
+  mécanisme `onEnterMoveMode` avec des Allures restreintes — ces deux-là restent des tuiles
+  explicites inchangées, jamais écrasées par le nouveau survol ambiant (`enabled` les exclut).
+- **Fenêtre masquée en continu** (bloquant, soumis à Saar avant de coder — option 1 retenue) :
+  `CombatActionWindow`/`CombatGmDeclareWindow` se masquaient entièrement pendant tout le mode
+  déplacement ; comme ce mode devient permanent par défaut, la fenêtre serait restée masquée en
+  continu pendant tout le tour. Corrigé : le masquage ne dépend plus de "mode déplacement actif" mais
+  de "une destination est posée et attend Validation" (`pendingMoveSelection` scopé au bon tokenId via
+  `combatMoveMode`), nouvelle info non disponible avant ce chantier — propagée via `CombatOverlay.jsx`
+  (déjà destinataire de ces deux états) jusqu’aux deux fenêtres.
+- Nouveau hook partagé `client/src/lib/useAutoMoveMode.js` — point d’entrée unique réutilisé par
+  `CombatActionWindow.jsx` (PJ), `CombatGmDeclareWindow.jsx` (PNJ) et `useDroneDeclare.js` (drone
+  PJ/GM, 3ᵉ/4ᵉ point d’entrée initialement manqué dans le plan, trouvé en lisant le fichier) — pas de
+  logique dupliquée entre les 3 appelants.
+- `useDroneDeclare.js` : `isSelectingOnMap` (exposé, nom stable) sépare désormais ciblage explicite
+  (`isSelectingTarget`, inchangé) et déplacement en attente (dérivé de `combatMoveMode`/
+  `pendingMoveSelection`, plus jamais un simple booléen local) ; `handleStartMove` supprimé (entrée
+  désormais automatique), les 2 boutons `onMoveToggle` restants (déclaration PJ et GM) ne font plus
+  qu’effacer une sélection déjà posée.
+
+**Testé** : `npm run build` (client, propre) ; ESLint sur les 6 fichiers touchés — 0 nouvelle erreur
+(quelques erreurs/avertissements preexistants démasqués, déjà trackés I18N-LINT2/I18N-LINT3, non
+introduits par ce chantier, vérifié par `git show HEAD`).
+**Non testé** : scénario réel en jeu (survol permanent, clic Attaque/CaC pendant le survol ambiant,
+Charge/Retraite toujours prioritaires, Échap puis reprise du survol par défaut, drone PJ et GM) — à la
+charge de Saar avant de considérer cette dette close et de la retirer du registre.
+
+**Régression trouvée en testant (2026-07-31, Saar)** : le survol permanent restait actif en toutes
+circonstances — impossible de cibler un token (Attaque/CaC), clic proposant systématiquement un
+déplacement même sur la case d'un token. 2 correctifs successifs incomplets avant la cause complète
+(dérive signalée par Saar — reprise depuis zéro, grep exhaustif de tous les points de vérification
+`combatMoveModeRef.current` dans `Canvas3D.jsx` plutôt qu'un 3ᵉ rustinage isolé) :
+- **Cause racine [VÉRIFIÉ]** : `combatMoveModeRef.current` était vérifié en priorité absolue à
+  **3 endroits indépendants** (`handleDragStart` L.677, `handlePointerMove` L.700, `handlePointerUp`
+  L.817) — mon 1er correctif n'avait touché que `handleDragStart`. `handlePointerMove`/`handlePointerUp`
+  sont des gestionnaires **niveau canvas** (coordonnées écran brutes), totalement indépendants du
+  `stopPropagation()` du clic par-token — un clic sur un token déclenchait bien `handleDragStart`
+  (ciblage correctement enregistré) puis, séparément, `handlePointerUp` qui proposait quand même un
+  déplacement, écrasant le ciblage. `moveTarget` (mode visée entité) souffrait du même problème,
+  jamais signalé mais présent par construction.
+- **Correctif** : point de vérité unique `combatMoveHasPriority()` (mémoïsé), consulté par les 3
+  gestionnaires au lieu de 3 vérifications indépendantes recopiées — élimine le risque d'un 4ᵉ endroit
+  oublié. Effet de nettoyage `combatCursorPos`/`currentPath` (L.526-533) étendu : se déclenchait
+  seulement quand `combatMoveMode` redevenait `null`, jamais quand un autre mode prenait juste la
+  priorité (`combatMoveMode` reste non-null en arrière-plan par design du survol ambiant) — sans ça le
+  chemin/curseur seraient restés affichés par-dessus le ciblage.
+- Occupation de case (correctif précédent, conservé) : survol sur la case d'un autre token → aucun
+  curseur/chemin affiché, au lieu de suggérer une destination sur quelqu'un.
+
+**Testé** : `npm run build` (client, propre) ; ESLint sur `Canvas3D.jsx` — 0 nouvelle erreur/warning
+introduit (vérifié spécifiquement, y compris l'avertissement de mémoïsation soulevé par le nouveau
+helper, corrigé par `useCallback`).
+**Non testé** : scénario réel en jeu — priorité absolue à reconfirmer avant de considérer cette dette
+close : ciblage Attaque/CaC fonctionnel pendant le survol ambiant, mode LOS, visée entité (pousser/
+tirer un objet), survol sur case occupée sans curseur trompeur, Charge/Retraite toujours inchangés.
+
+---
+
 ## UI Combat — sélection de cible (proposé Session 2026-07-31, Saar)
 
 ### Dette COMBAT-LOS-PRECHECK-DIVERGENCE — Precheck Tir sans check LOS/portée, doc contradictoire ✅ Session (2026-08-01)
@@ -1280,3 +1421,105 @@ déjà visible (LOS dégagée).
 
 ---
 
+### COMBAT-CLICK-RECAP — Récap flottant distance/portée/LOS au clic sur un token adverse (feature)
+
+**Besoin (Saar, 2026-07-31)** : au clic sur un token non possédé en combat, afficher un texte flottant
+auto-disparaissant après quelques secondes : "Distance : Xm / Portée : [palier] / Ligne de vue
+[dégagée/bloquée/partielle]".
+
+**Contexte [VÉRIFIÉ]** : aujourd’hui, hors mode de ciblage actif, un clic sur un ennemi ne fait rien
+(`Canvas3D.jsx:677-680`). Aucune info distance/portée/LOS n’est affichée avant déclaration d’une action.
+
+**Code impliqué (pistes)** : `Canvas3D.jsx` (point de clic token), nouvelle requête serveur légère
+(réutiliser `measureBattlemapTokenDistance`/`worldVisibilityService.evaluateBattlemapVisibility`, ne
+jamais dupliquer ce calcul côté client — le serveur reste seul autoritaire LOS/distance),
+`CombatOverlay.jsx` (affichage flottant).
+
+**Prochaine étape** : chantier dédié — définir les paliers de "portée" affichés (réutiliser l’échelle
+déjà existante des modificateurs de tir plutôt qu’une nouvelle échelle), concevoir la requête serveur
+légère dédiée.
+
+---
+
+### COMBAT-CLICK-AUTOSOLVE — Proposition intelligente CaC/Tir + déplacement pour LOS/portée (feature, grande envergure)
+
+**Besoin (Saar, 2026-07-31, soumis à critique explicite)** : au clic sur un token adverse, proposer
+automatiquement une solution d’attaque (mode CaC ou Tir choisi selon l’arme équipée), en incluant un
+déplacement proposé si nécessaire pour obtenir la ligne de vue ou être à portée.
+
+**Analyse UX/architecture (Claude, 2026-07-31)** :
+- Ambiguïté du choix de mode si plusieurs armes équipées (CaC + Tir simultané) ou aucune arme — règle
+  de priorité à définir explicitement (ex. arme "en main" prioritaire, repli mains nues), non déductible
+  du code actuel.
+- Combine 3 systèmes (ciblage, pathfinding, sélection d’arme) en un clic — risque de tunnel-vision :
+  le déplacement proposé ne doit jamais s’exécuter silencieusement, seulement être proposé avec
+  confirmation explicite (cohérent avec `CLAUDE.md` §7 : le client prévisualise, le serveur décide).
+- Dépend directement de COMBAT-CLICK-RECAP (même brique distance/LOS) et de
+  COMBAT-INTERAGIR-AUTOMOVE (même brique proposition de trajet) — à construire après ces deux
+  primitives plus petites, pas en même temps.
+
+**Prochaine étape** : ne pas démarrer avant que COMBAT-CLICK-RECAP et COMBAT-INTERAGIR-AUTOMOVE
+existent et soient validés en jeu — conception dédiée ensuite (choix de mode d’arme, économie d’action
+déplacement+attaque combinée).
+
+---
+
+## UI Inventaire — armes et recherche (proposé Session 2026-07-31, Saar)
+
+### Dette ARME-DEGATS-LABELS — Types de dégâts (Normal/Choc) affichés sans distinction visuelle ✅ Session (2026-07-31)
+
+**Besoin (Saar, 2026-07-31)** : labels colorés distincts pour les deux types de dégâts d’arme existants
+aujourd’hui — Normal (`ref_damage_h`) et Choc (`ref_shock`) — en inventaire et équipement, jusqu’ici en
+texte gris identique sans distinction (`WeaponPanel.jsx` avant correctif, couleur `s.stat` #9090a8 pour
+les deux) ; `InventoryPanel.jsx` n’affichait même pas ces stats.
+
+**Anticipation explicite (non construite maintenant)** : un futur type "dégât environnemental" (armes
+rares : lance-flammes, lance-capsules à munition spéciale — feu/froid/gaz/acide, etc., toujours en plus
+d’un dégât Normal et/ou Choc, jamais un 3ᵉ type indépendant) est prévu mais non défini (pas de colonne
+DB, pas de liste d’armes concernées). Le composant de label est conçu de façon extensible (piloté par
+une config `client/src/lib/damageTypeBadges.js`, pas deux conditions figées) pour ne pas devoir le
+réécrire à l’ajout de ce type.
+
+**Correctif codé (2026-07-31)** :
+- `client/src/lib/damageTypeBadges.js` (nouveau) — source unique `DAMAGE_TYPE_BADGES` (clé, champ
+  `ref_*`, classe CSS, clé i18n), réutilisée par les deux composants.
+- `client/src/index.css` — `.badge.badge-damage-normal` (rouge, `--color-danger-soft`) et
+  `.badge.badge-damage-choc` (orange, `--color-warning-soft`), même patron que les badges existants.
+- `client/src/character/WeaponPanel.jsx` (`WeaponCard`) — les deux `<span style={s.stat}>` dégâts
+  remplacés par des badges colorés.
+- `client/src/character/InventoryPanel.jsx` (`ItemRow`) — ajout des mêmes badges (absents avant ce
+  correctif).
+
+**Testé** : `npm run build` (client) + ESLint sur les 4 fichiers touchés.
+**Non testé** : visuel navigateur (affichage réel équipement + liste inventaire) — à la charge de Saar.
+
+**Ajustement (2026-07-31, retour Saar « fonctionnel, un peu trop gros/gras »)** : la base `.badge`
+partagée (10px/600/padding 3-9, utilisée aussi par badge-gm/badge-player/badge-mode…) était trop lourde
+à côté du reste du vocabulaire 9-11px de ces panneaux. Ajout d'un modificateur générique
+`.badge.badge-compact` (9px/500/padding 1-6) plutôt que de toucher la base partagée (aurait affecté
+tous les autres badges du projet) — appliqué aux deux usages (`WeaponPanel.jsx`, `InventoryPanel.jsx`).
+Build + lint propres, non retesté en navigateur.
+
+---
+
+### Dette INVENTAIRE-RECHERCHE-CATEGORIE — Recherche catalogue par mot-clé famille/catégorie + "Voir plus" (feature)
+
+**Besoin (Saar, 2026-07-31)** : pouvoir taper des mots-clés de famille/catégorie (ex. "arme de poing",
+"nourriture") dans le sélecteur d’ajout d’item pour filtrer le catalogue, plus un bouton "Voir plus" si
+plus de 50 résultats, ouvrant une nouvelle fenêtre listant l’intégralité du catalogue.
+
+**Contexte [VÉRIFIÉ]** : `family`/`category` (`ref_equipment`) sont des colonnes texte libre
+(`48_ref_equipment.js:22-23`), pas de taxonomie/enum. `equipment-admin.html` a un `<select>` de
+préréglage indicatif seulement (`applyPreset()`), sans contrainte réelle sur les champs.
+`InventoryPanel.jsx:175-183` (`filteredCatalog`) fait déjà une recherche texte simple sur
+`name`/`category`/`family`, plafonnée à 50 résultats (`inventoryPanel.moreItemsHint`, texte seul,
+aucun lien), sans regroupement.
+
+**Point à vérifier avant de concevoir** : cohérence réelle des valeurs actuelles de `family`/`category`
+en base (texte libre = risque d’incohérences qui casseraient un filtre par mot-clé) — à auditer
+(valeurs distinctes) avant de décider si une simple amélioration de la recherche texte suffit, ou si une
+normalisation des valeurs existantes est un préalable.
+
+**Prochaine étape** : chantier dédié — audit des valeurs distinctes de `family`/`category`, puis
+recherche élargie (pas seulement sous-chaîne) + bouton "Voir plus" ouvrant une page listant tout le
+catalogue sans limite de 50.

@@ -152,7 +152,6 @@ export const MAP_ACTIONS = [
   { k: 'attack',   l: 'mapActions.attack.label',   tooltip: 'mapActions.attack.tooltip',   hint: 'cliquer cible',                requireWeapon: true },
   { k: 'melee',    l: 'mapActions.melee.label',    tooltip: 'mapActions.melee.tooltip',    hint: 'cliquer adversaire'                                },
   { k: 'reload',   l: 'mapActions.reload.label',   tooltip: 'mapActions.reload.tooltip',                                                             span2: true          },
-  { k: 'interact', l: 'mapActions.interact.label', tooltip: 'mapActions.interact.tooltip', hint: 'sprint suivant',    active: false       },
 ]
 
 // Actions rapides -- cumulables. l/tooltip = cle i18n namespace combat, meme convention que ci-dessus.

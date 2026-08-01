@@ -122,7 +122,12 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       setPjPreview(null)
       addAnnouncedAction({ tokenId, actionType, initiative, moveTarget: moveTarget ?? null, attackTargetId: attackTargetId ?? null })
     }
-    const onSlotAdvanced = ({ activeSlotIdx, tokenId }) => { advanceSlot(activeSlotIdx, tokenId) }
+    // onModeReset avant advanceSlot — le survol/ciblage combat (combatMoveMode/combatTargetMode) était
+    // armé pour l'ancien token actif et ne se réinitialisait jamais au changement de slot (seuls
+    // onPhaseChanged/onStateSync l'appelaient) : useAutoMoveMode refuse de réarmer tant que
+    // combatMoveMode reste non-null, donc le survol restait calé sur le token précédent — cases
+    // erronées signalées par Saar 2026-07-31.
+    const onSlotAdvanced = ({ activeSlotIdx, tokenId }) => { onModeReset(); advanceSlot(activeSlotIdx, tokenId) }
     const onTurnSkipped  = ({ tokenId, tokenLabel }) => {
       markTokenAnnounced(tokenId)
       addMessage({

@@ -783,6 +783,9 @@ Convention :
   .badge.badge-fail   = résultat échec rouge
   .badge.badge-mode   = mode CaC actif
   .badge.badge-mode-off = mode CaC inactif
+  .badge.badge-damage-normal = dégâts normaux (arme) rouge
+  .badge.badge-damage-choc   = dégâts de Choc (arme) orange
+  .badge.badge-compact       = variante resserrée (inline texte dense)
 
   .doc-row = ligne liste document (card-row, pas chamfré)
 ========================= */
@@ -993,6 +996,30 @@ Convention :
   background: rgba(42,96,64,0.08);
   border: 1px solid rgba(42,96,64,0.3);
   cursor: pointer;
+}
+
+/* ── .badge.badge-damage-normal — dégâts normaux (arme) ─────────── */
+.badge.badge-damage-normal {
+  color: var(--color-danger-soft);
+  background: rgba(224,91,91,0.12);
+  border: 1px solid rgba(224,91,91,0.45);
+}
+
+/* ── .badge.badge-damage-choc — dégâts de Choc (arme) ───────────── */
+.badge.badge-damage-choc {
+  color: var(--color-warning-soft);
+  background: rgba(224,160,80,0.12);
+  border: 1px solid rgba(224,160,80,0.45);
+}
+
+/* ── .badge.badge-compact — variante resserrée (inline dans du texte dense,
+   ex. statsRow arme) — la base .badge (10px/600/padding 3-9) est trop lourde
+   à côté du reste du vocabulaire 9-11px de ces panneaux ────────────────── */
+.badge.badge-compact {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 6px;
+  gap: 3px;
 }
 
 /* ── .doc-row — ligne liste document (card-row) ─────────────────── */

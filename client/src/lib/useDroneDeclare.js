@@ -1,13 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from './api.js'
+import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { useAutoMoveMode } from './useAutoMoveMode.js'
+import { useCombatClickAttack } from './useCombatClickAttack.js'
 
-export function useDroneDeclare({ charId, tokenId, allures, onEnterMoveMode, onEnterTargetMode }) {
+export function useDroneDeclare({
+  charId, tokenId, tokenPos, allures, onEnterMoveMode, onEnterTargetMode,
+  moveHoverEnabled = false, combatMoveMode = null, pendingMoveSelection = null,
+  battlemapId = null, registerAmbientAttackHandler = null, showTargetRecap = null,
+}) {
   const [droneWeapons,          setDroneWeapons]          = useState([])
   const [selectedDroneWeaponId, setSelectedDroneWeaponId] = useState(null)
   const [assaultTargetId,       setAssaultTargetId]       = useState(null)
   const [pendingMove,           setPendingMove]           = useState(null)
   const [hasPassed,             setHasPassed]             = useState(false)
-  const [isSelectingOnMap,      setIsSelectingOnMap]      = useState(false)
+  // Uniquement le ciblage Attaque (picking explicite) — le déplacement est géré en ambiant par
+  // useAutoMoveMode ci-dessous, jamais par ce flag (COMBAT-DEPLACEMENT-HOVER).
+  const [isSelectingTarget,     setIsSelectingTarget]     = useState(false)
 
   // Fetch armes drone quand le personnage change (cancelled flag = convention projet)
   useEffect(() => {
@@ -31,31 +40,59 @@ export function useDroneDeclare({ charId, tokenId, allures, onEnterMoveMode, onE
     setPendingMove(null)
     setHasPassed(false)
     setDroneWeapons([])
-    setIsSelectingOnMap(false)
+    setIsSelectingTarget(false)
   }, [tokenId])
 
   const canDeclare = hasPassed || !!pendingMove || (!!selectedDroneWeaponId && !!assaultTargetId)
 
-  const handleStartMove = useCallback((activeToken) => {
-    if (!onEnterMoveMode || !tokenId || !activeToken || !allures) return
-    setIsSelectingOnMap(true)
-    onEnterMoveMode(
-      allures, tokenId,
-      { x: activeToken.pos_x, z: activeToken.pos_y },
-      (sel) => { setPendingMove(sel); setIsSelectingOnMap(false) },
-      () => { setPendingMove(null); setIsSelectingOnMap(false) },
-    )
-  }, [allures, tokenId, onEnterMoveMode])
+  // Déplacement : plus de clic préalable — useAutoMoveMode maintient le survol/preview actif par
+  // défaut tant qu'aucun ciblage Attaque n'est en cours (décision Saar, COMBAT-DEPLACEMENT-HOVER).
+  useAutoMoveMode({
+    enabled: moveHoverEnabled && !isSelectingTarget,
+    allures, tokenId, tokenPos, combatMoveMode,
+    onEnterMoveMode,
+    onMoveSelected: (sel) => setPendingMove(sel),
+    onCancel: () => setPendingMove(null),
+  })
+
+  // Clic direct sur un token adverse (sans clic préalable sur "Cibler") — même hook que
+  // CombatActionWindow (PJ)/CombatGmDeclareWindow (PNJ), cf. useCombatClickAttack.js. Mode CaC/Tir
+  // dérivé du programme actuellement sélectionné (selectedDroneWeaponId, dropdown existant) — jamais
+  // de la distance : un drone avec deux programmes installés (CaC+Tir) laisse le choix au joueur via
+  // ce dropdown, pas une bascule automatique (décision Saar 2026-07-31, docs/BUGIDENTIFIE.md
+  // COMBAT-CLICK-AUTOSOLVE) — contrairement au PJ/PNJ où la portée tranche.
+  const resolveDroneClickAttackMode = useCallback((distanceM) => {
+    const selectedWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
+    if (!selectedWeapon) return null  // aucun programme sélectionné — rien à proposer
+    const isCaC = selectedWeapon.fire_mode ? selectedWeapon.fire_mode === 'cc' : !selectedWeapon.ref_fire_mode
+    return {
+      mode: isCaC ? 'melee' : 'ranged',
+      band: isCaC ? null : resolveWeaponRangeBand(distanceM, selectedWeapon.ref_range).band,
+    }
+  }, [droneWeapons, selectedDroneWeaponId])
+  useCombatClickAttack({
+    enabled: moveHoverEnabled && !isSelectingTarget,
+    battlemapId,
+    tokenId, tokenPos,
+    moveDestination: pendingMove
+      ? { pos_x: pendingMove.targetPosX, pos_y: pendingMove.targetPosY, pos_z: pendingMove.targetPosZ ?? 0 }
+      : null,
+    resolveMode: resolveDroneClickAttackMode,
+    showTargetRecap,
+    registerAmbientAttackHandler,
+    onMeleeTarget:   (tid) => setAssaultTargetId(tid),
+    onAssaultTarget: (tid) => setAssaultTargetId(tid),
+  })
 
   const handleChooseTarget = useCallback((activeToken) => {
     if (!onEnterTargetMode || !tokenId || !activeToken) return
     setAssaultTargetId(null)
-    setIsSelectingOnMap(true)
+    setIsSelectingTarget(true)
     onEnterTargetMode(
       tokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (targetId) => { setAssaultTargetId(targetId); setIsSelectingOnMap(false) },
-      () => { setIsSelectingOnMap(false) },
+      (targetId) => { setAssaultTargetId(targetId); setIsSelectingTarget(false) },
+      () => { setIsSelectingTarget(false) },
       'ranged',
     )
   }, [tokenId, onEnterTargetMode])
@@ -89,10 +126,16 @@ export function useDroneDeclare({ charId, tokenId, allures, onEnterMoveMode, onE
     }
   }, [selectedDroneWeaponId, assaultTargetId, droneWeapons, pendingMove])
 
+  // Exposé tel quel aux appelants (nom stable) — combine ciblage explicite ET sélection de
+  // déplacement en attente de validation, mêmes deux raisons qui masquaient la fenêtre avant
+  // COMBAT-DEPLACEMENT-HOVER (seule la 2e ne vient plus d'un clic explicite).
+  const hasPendingMove = combatMoveMode?.tokenId === tokenId && !!pendingMoveSelection
+  const isSelectingOnMap = isSelectingTarget || hasPendingMove
+
   return {
     droneWeapons, selectedDroneWeaponId, setSelectedDroneWeaponId,
     assaultTargetId, pendingMove, hasPassed, setHasPassed, isSelectingOnMap,
     canDeclare, buildMapActions, clearPendingMove,
-    handleStartMove, handleChooseTarget,
+    handleChooseTarget,
   }
 }

@@ -15,8 +15,9 @@ import CombatStunWindow from './CombatStunWindow'
 import CombatInitStateWindow from './CombatInitStateWindow'
 import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
+import CombatTargetRecapToast from './CombatTargetRecapToast.jsx'
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, onEnterTargetMode, onValidateTarget, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, targetRecap, onEnterTargetMode, onValidateTarget, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
   const { t } = useTranslation('combat')
   const { t: tStatus } = useTranslation()
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
@@ -184,10 +185,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           socket={socket}
           characters={characters}
           onEnterMoveMode={onEnterMoveMode}
+          combatMoveMode={combatMoveMode}
+          pendingMoveSelection={pendingMoveSelection}
           battlemapId={battlemap?.id}
           onEnterTargetMode={onEnterTargetMode}
           combatTargetMode={combatTargetMode}
           pjPreview={pjPreview}
+          registerAmbientAttackHandler={registerAmbientAttackHandler}
+          showTargetRecap={showTargetRecap}
         />
       )}
 
@@ -203,7 +208,13 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           pendingSurpriseRoll={pendingSurpriseRoll}
           onSurpriseRolled={onSurpriseRolled}
           onEnterMoveMode={onEnterMoveMode}
+          combatMoveMode={combatMoveMode}
+          pendingMoveSelection={pendingMoveSelection}
+          combatTargetMode={combatTargetMode}
           onEnterTargetMode={onEnterTargetMode}
+          battlemapId={battlemap?.id}
+          registerAmbientAttackHandler={registerAmbientAttackHandler}
+          showTargetRecap={showTargetRecap}
         />
       )}
 
@@ -380,6 +391,10 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         </div>
       )}
 
+      {/* Recap flottant temporaire (LOS/distance/portée) — cycle de vie indépendant de
+          combatTargetMode (timer propre, useCombatUIState.showTargetRecap), retour Saar 2026-07-31. */}
+      <CombatTargetRecapToast recap={targetRecap} />
+
       {/* Fenêtre "Gestion des dégâts" — PJ uniquement, après un toucher */}
       {damagePayload && (
         <CombatDamageWindow
@@ -510,11 +525,10 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
-      {/* Panneau légende déplacement — visible pendant le mode sélection destination */}
+      {/* Panneau légende déplacement — visible pendant le mode sélection destination. Reste toujours
+          dans son coin fixe (retour Saar 2026-08-01) : ne suit plus le clic sur la carte. */}
       {combatMoveMode && (
-        <div style={pendingMoveSelection?.screenX != null
-          ? { ...styles.moveLegend, position: 'fixed', left: `clamp(8px, ${pendingMoveSelection.screenX - 110}px, calc(100vw - 228px))`, top: `clamp(8px, ${pendingMoveSelection.screenY + 16}px, calc(100vh - 200px))`, bottom: 'auto', right: 'auto' }
-          : styles.moveLegend}>
+        <div style={styles.moveLegend}>
           <div style={styles.moveLegendTitle}>{t('overlay.moveLegendTitle')}</div>
 
           {MOVE_ZONE_DEFS.map(def => {
@@ -696,7 +710,10 @@ const styles = {
   moveLegend: {
     position: 'absolute',
     bottom: 24,
-    right: 24,
+    // Décalé de la largeur de la sidebar (--sidebar-w, posée sur .overlay) — sinon reste collé au bord
+    // physique de l'écran et se retrouve sous/derrière la sidebar ou un autre panneau ancré à droite
+    // (retour Saar 2026-08-01).
+    right: 'calc(24px + var(--sidebar-w, 0px))',
     width: 220,
     background: '#16162a',
     border: '1px solid #2a2a3e',

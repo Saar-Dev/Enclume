@@ -12,6 +12,7 @@ import {
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { handSlotDisplayRows } from '../../../shared/weaponSlots.js'
 import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
+import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -19,6 +20,8 @@ import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
+import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import { StateSelector } from './CombatActionWindow.jsx'
 
@@ -68,7 +71,7 @@ function InlineChip({ stateKey, initial, current, onChange, availableKeys }) {
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
-export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, battlemapId, onEnterTargetMode, combatTargetMode, pjPreview }) {
+export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, combatMoveMode, pendingMoveSelection, battlemapId, onEnterTargetMode, combatTargetMode, pjPreview, registerAmbientAttackHandler, showTargetRecap }) {
   const { t } = useTranslation('combat')
   const { roster, activeTokenId: storeActiveTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -88,7 +91,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── États de déclaration pour le PNJ actif ───────────────────────────────
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
-  const [mapAction,       setMapAction]       = useState(null)     // 'reload' | 'interact' | null
+  const [mapAction,       setMapAction]       = useState(null)     // 'reload' | null
   const [meleeAttackCount,setMeleeAttackCount]= useState(1)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
@@ -204,24 +207,42 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return char?.type === 'drone' ? char.id : null
   })()
 
+  // Token courant nécessaire ici (avant le retour anticipé plus bas, règle des hooks) — recalcul
+  // léger, `activeToken` (dérivé plus tard) ne peut pas être réutilisé à ce point.
+  const activeTokenForHover = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
   const droneDeclare = useDroneDeclare({
     charId:           activeDroneCharId,
     tokenId:          activeTokenId,
+    tokenPos:         activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
     allures:          DEFAULT_PNJ_ALLURES,
     onEnterMoveMode,
     onEnterTargetMode,
+    moveHoverEnabled: !!activeDroneCharId,
+    combatMoveMode,
+    pendingMoveSelection,
+    battlemapId,
+    registerAmbientAttackHandler,
+    showTargetRecap,
+  })
+  // Déplacement PNJ (non-drone) : survol/preview ambiant par défaut, même patron que le drone
+  // ci-dessus et que CombatActionWindow (COMBAT-DEPLACEMENT-HOVER) — suspendu pendant Charge (géré
+  // en interne par handleStartCharge) et pendant toute autre sélection en cours (isSelectingOnMap).
+  useAutoMoveMode({
+    enabled: !activeDroneCharId && !isSelectingOnMap && decl.combatMode !== 'charge',
+    allures: DEFAULT_PNJ_ALLURES,
+    tokenId: activeTokenId,
+    tokenPos: activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
+    combatMoveMode,
+    onEnterMoveMode,
+    onMoveSelected: (sel) => setPendingMove(sel),
+    onCancel: () => {},
   })
 
-  // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
-  useEffect(() => {
-    const w = equipment[activeTokenId]?.weapon
-    if (!w?.ref_fire_mode) return
-    const modes = w.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
-    if (!modes.includes(initialStates.fire_mode))
-      dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
-  }, [activeTokenId, equipment])
-
   // ── Helpers ─────────────────────────────────────────────────────────────
+  // Remontés ici (au-dessus de leur emplacement d'origine plus bas, cf. "── Helpers ──" après le
+  // early-return) — isPnj est nécessaire dès le bloc clic-direct ci-dessous, avant ce early-return
+  // (Rules of Hooks). isDroneGmManaged/isGmManaged suivent pour ne pas casser leur propre usage plus
+  // bas (allGmManaged) — aucun ne dépend de rien calculé entre les deux emplacements.
   const isPnj = (entry) => {
     const token = tokens.find(tk => tk.id === entry.token_id)
     if (!token?.character_id) return false
@@ -234,6 +255,49 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return char?.type === 'drone' && !char.user_id
   }
   const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
+
+  // ── Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) ──────────────────────
+  // Même hook que CombatActionWindow (PJ)/useDroneDeclare, cf. useCombatClickAttack.js. Placé ici
+  // (avant le early-return `allGmManaged.length === 0` plus bas, Rules of Hooks) — `equipment` est déjà
+  // disponible à ce point (state, ligne 85), donc pas de duplication de dérivation nécessaire ici
+  // contrairement à CombatActionWindow (allInventoryItems y était aussi déjà dispo, dérivation
+  // dupliquée là-bas uniquement par cohérence de patron entre les 2 fichiers).
+  const clickIsActivePnj = activePnjEntry && isPnj(activePnjEntry) && !activePnjEntry.has_announced
+  const clickAllWeapons = clickIsActivePnj
+    ? [equipment[activeTokenId]?.weaponMg, equipment[activeTokenId]?.weaponMd,
+       equipment[activeTokenId]?.weapon2M, equipment[activeTokenId]?.weaponTr].filter(Boolean)
+    : []
+  const clickMeleeWeapon  = clickAllWeapons.find(w => w.ref_category === 'Arme de contact') ?? null
+  const clickRangedWeapon = clickAllWeapons.find(w => w.ref_fire_mode) ?? null
+  const resolveGmClickAttackMode = (distanceM) => {
+    if (!clickRangedWeapon) return { mode: 'melee', band: null }
+    if (!clickMeleeWeapon) return { mode: 'ranged', band: resolveWeaponRangeBand(distanceM, clickRangedWeapon.ref_range).band }
+    if (distanceM <= resolveMeleeReachM(clickMeleeWeapon.ref_range)) return { mode: 'melee', band: null }
+    return { mode: 'ranged', band: resolveWeaponRangeBand(distanceM, clickRangedWeapon.ref_range).band }
+  }
+  useCombatClickAttack({
+    enabled: clickIsActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
+    battlemapId,
+    tokenId: activeTokenId,
+    tokenPos: activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
+    moveDestination: pendingMove
+      ? { pos_x: pendingMove.targetPosX, pos_y: pendingMove.targetPosY, pos_z: pendingMove.targetPosZ ?? 0 }
+      : null,
+    resolveMode: resolveGmClickAttackMode,
+    showTargetRecap,
+    registerAmbientAttackHandler,
+    onMeleeTarget:   (tid) => setMeleeTargets([tid]),
+    onAssaultTarget: (tid) => setAssaultTargets([tid]),
+  })
+
+  // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
+  useEffect(() => {
+    const w = equipment[activeTokenId]?.weapon
+    if (!w?.ref_fire_mode) return
+    const modes = w.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
+    if (!modes.includes(initialStates.fire_mode))
+      dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: modes[0] })
+  }, [activeTokenId, equipment])
 
   const getLabel = (tokenId) => tokens.find(tk => tk.id === tokenId)?.label ?? tokenId
   const isRanged = (tokenId) => !!equipment[tokenId]?.weapon?.ref_fire_mode
@@ -346,7 +410,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       attack:   assaultTargets.length > 0 ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau: weapon?.lunette_niveau ?? 0 }) : null,
       melee:    meleeTargets.length > 0 ? meleeTargets : null,
       reload:   mapAction === 'reload'   ? {} : null,
-      interact: mapAction === 'interact' ? {} : null,
     },
     state: decl, quick: decl.quick, entry: activePnjEntry,
     isDualWield, bulletCount: effectiveBulletCount ?? null,
@@ -372,17 +435,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || (isActiveDrone && droneDeclare.canDeclare)
 
   // ── Déplacement direct ───────────────────────────────────────────────────
-  const handleStartMove = () => {
-    if (!onEnterMoveMode || !activeTokenId || !activeToken) return
-    setIsSelectingOnMap(true)
-    onEnterMoveMode(
-      DEFAULT_PNJ_ALLURES, activeTokenId,
-      { x: activeToken.pos_x, z: activeToken.pos_y },
-      (sel) => { setPendingMove(sel); setIsSelectingOnMap(false) },
-      () => { setPendingMove(null); setIsSelectingOnMap(false) },
-    )
-  }
-
   // ── Assaut direct (Tir Multi, docs/PLAN_TIRMULTI.md) ──────────────────────
   // UX (retour Saar) : un seul clic suffit pour le cas courant — tant qu'aucune cible n'est encore
   // posée, le premier choix remplit toute la série (comportement par défaut, pas de N clics sur la
@@ -523,7 +575,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           : null,
         melee:    meleeCaC.length > 0 ? meleeCaC : null,
         reload:   mapAction === 'reload',
-        interact: mapAction === 'interact',
       },
       quick: { ...decl.quick },
     })
@@ -539,11 +590,20 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── Attack actif (visuellement) ───────────────────────────────────────────
   const isAttackActive = assaultTargets.length > 0 || (combatTargetMode?.tokenId === activeTokenId && !isMeleeSetup)
 
+  // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination PNJ a
+  // été posée et attend validation — pas pendant le simple survol (option 1, décision Saar).
+  const hasPendingPlainMove = combatMoveMode?.tokenId === activeTokenId && !!pendingMoveSelection && decl.combatMode !== 'charge'
+  // Ajouté (pas remplacé isSelectingOnMap, qui conflate move-Charge et ciblage tuile pour le MJ,
+  // contrairement au PJ qui a 2 flags séparés) — le clic direct (useCombatClickAttack.js) arme
+  // combatTargetMode sans jamais positionner isSelectingOnMap, la fenêtre restait donc visible
+  // pendant ce flux (retour Saar 2026-07-31).
+  const isTargetingViaClick = combatTargetMode?.tokenId === activeTokenId
+
   // ─────────────────────────────────────────────────────────────────────────
   // RENDU
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap) ? 'none' : 'auto' }}>
+    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
@@ -653,8 +713,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         onClick={() => {
                           if (disabled) return
                           if (a.k === 'move') {
-                            if (pendingMove) { setPendingMove(null); return }
-                            handleStartMove()
+                            // Survol permanent (COMBAT-DEPLACEMENT-HOVER) — ce clic n'efface plus
+                            // qu'une sélection déjà posée, plus d'entrée manuelle en mode déplacement.
+                            if (pendingMove) setPendingMove(null)
                           } else if (a.k === 'attack') {
                             if (isAttackActive) {
                               setAssaultTargets([])
@@ -779,7 +840,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           {isActiveDrone && (
             <DroneDeclareSection
               pendingMove={droneDeclare.pendingMove}
-              onMoveToggle={() => droneDeclare.pendingMove ? droneDeclare.clearPendingMove() : droneDeclare.handleStartMove(activeToken)}
+              onMoveToggle={() => droneDeclare.pendingMove && droneDeclare.clearPendingMove()}
               hasPassed={droneDeclare.hasPassed}
               onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
               droneWeapons={droneDeclare.droneWeapons}

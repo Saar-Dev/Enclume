@@ -368,9 +368,10 @@ function SessionContent({ campaignId }) {
   useEntitySocket({ setRadialMenu, setMoveTarget })
   // useCombatUIState AVANT useCombatSocket — handleModeReset passé comme onModeReset (P-R14-1)
   const {
-    combatMoveMode, pendingMoveSelection, combatTargetMode, combatCameraCenter,
+    combatMoveMode, pendingMoveSelection, combatTargetMode, targetRecap, combatCameraCenter,
     handleModeReset, handleEnterMoveMode, handleValidateMove,
     handleCancelPendingMove, handleEnterTargetMode, handleValidateTarget,
+    registerAmbientAttackHandler, handleAmbientTokenClick, showTargetRecap,
   } = useCombatUIState()
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
   const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
@@ -644,6 +645,7 @@ function SessionContent({ campaignId }) {
               combatMoveMode={combatMoveMode}
               pendingMoveSelection={pendingMoveSelection}
               combatTargetMode={combatTargetMode}
+              onAmbientTokenClick={handleAmbientTokenClick}
               losMode={losMode}
               onLosCancel={handleLosCancel}
               onLosResult={handleLosResult}
@@ -1216,8 +1218,11 @@ function SessionContent({ campaignId }) {
           onValidateMove={handleValidateMove}
           onCancelPendingMove={handleCancelPendingMove}
           combatTargetMode={combatTargetMode}
+          targetRecap={targetRecap}
           onEnterTargetMode={handleEnterTargetMode}
           onValidateTarget={handleValidateTarget}
+          registerAmbientAttackHandler={registerAmbientAttackHandler}
+          showTargetRecap={showTargetRecap}
           pjPreview={combatSocket.pjPreview}
           damagePayload={combatSocket.damagePayload}
           damageResults={combatSocket.damageResults}

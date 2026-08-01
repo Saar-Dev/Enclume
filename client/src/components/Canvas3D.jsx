@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo, Component } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { MapControls, Grid, Text, Billboard } from '@react-three/drei'
+import { MapControls, Grid, Text, Billboard, useTexture } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
@@ -103,11 +103,14 @@ function TokenActiveDisk({ isActive }) {
 }
 
 // ─── Anneau de base du token ──────────────────────────────────────────────────
-function TokenRing({ color, isSelected, isDragging, opacity }) {
+function TokenRing({ color, isSelected, opacity }) {
   const ringRef = useRef()
   const t = useRef(0)
 
-  const baseY = isDragging ? 0.1 : 0.6
+  // baseY était calibré pour un corps flottant à Y_OFFSET=0.5 (0.6 ≈ ce flottement + 0.1 au sol) —
+  // le corps est maintenant à 0 (retour Saar 2026-08-01), donc l'anneau reste toujours près du sol,
+  // plus de distinction dragging/non-dragging nécessaire (les deux convergeaient déjà vers ~0.1).
+  const baseY = 0.1
   const baseOpacity = opacity ?? 0.5
 
   useFrame((_, delta) => {
@@ -135,7 +138,7 @@ function TokenRing({ color, isSelected, isDragging, opacity }) {
 }
 
 // ─── Token individuel ─────────────────────────────────────────────────────────
-const Y_OFFSET = 0.5
+const Y_OFFSET = 0
 
 // Filet de sécurité : si useGLTF échoue (404, GLB invalide, etc.), rend la capsule
 // au lieu de noircir le canvas entier. La capsule est le dernier recours, pas le fallback normal.
@@ -224,10 +227,59 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 })
   )
 }
 
+// Réticule de ciblage — remplace l'anneau plein pour le survol "attaquable" (retour Saar 2026-08-01).
+// client/public/assets/reticule2.svg (coins ouverts, dédié au ciblage — le déplacement est revenu aux
+// cases pleines/fil de fer d'origine, cf. plus bas dans ce fichier : tuilé sur plusieurs cases, le
+// réticule donnait un rendu confus). Trait forcé en blanc dans le SVG (au lieu de currentColor
+// d'origine) : chargé comme texture bitmap standard hors DOM, currentColor s'y résoudrait en noir
+// (valeur initiale CSS) et empêcherait la teinte dynamique ci-dessous (material.color, multiplication
+// blanc × couleur). Couleur #D94A4A choisie parmi les 4 proposées — rouge, convention "cible hostile"
+// déjà utilisée par l'ancien anneau. Pulsation : même patron que TokenRing (isSelected) juste
+// au-dessus — échelle + opacité oscillantes via useFrame. Hauteur : 1.5 puis +25% (retour Saar
+// 2026-08-01, deux passes). Billboard = toujours face caméra. useTexture suspend le chargement.
+function TargetReticule({ color = '#D94A4A', opacity = 1 }) {
+  const texture = useTexture('/assets/reticule2.svg')
+  const meshRef = useRef()
+  const materialRef = useRef()
+  const t = useRef(0)
+  useFrame((_, delta) => {
+    t.current += delta
+    const time = t.current
+    const s = 1 + Math.sin(time * 2.5) * 0.08
+    if (meshRef.current) meshRef.current.scale.set(s, s, 1)
+    if (materialRef.current) materialRef.current.opacity = opacity * (0.75 + Math.sin(time * 4) * 0.25)
+  })
+  return (
+    <Billboard position={[0, 0.9, 0]}>
+      <mesh ref={meshRef}>
+        <planeGeometry args={[1.3 * 1.15 * 1.1, 1.3 * 1.5 * 1.25 * 1.1]} />
+        <meshBasicMaterial ref={materialRef} map={texture} color={color} transparent opacity={opacity} depthWrite={false} />
+      </mesh>
+    </Billboard>
+  )
+}
+
+// Réticule à plat au sol — case survolée en mode déplacement UNIQUEMENT (retour Saar 2026-08-01 :
+// remplace le curseur fil de fer, mais seulement lui — jamais le chemin à plusieurs cases, source du
+// rendu confus précédent avec une seule instance à la fois, pas de risque de superposition). Version
+// volontairement simple (pas de halo/ombre cette fois — jamais isolé/validé séparément avant le
+// retour en arrière global) : +0.02 de hauteur gardé (change rien de risqué), le reste peut être
+// rajouté séparément si voulu une fois cette base confirmée.
+function GroundCursorReticule({ position }) {
+  const texture = useTexture('/assets/reticule.svg')
+  const liftedPosition = position ? [position[0], position[1] + 0.02, position[2]] : position
+  return (
+    <mesh position={liftedPosition} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={texture} color="#ffffff" transparent depthWrite={false} />
+    </mesh>
+  )
+}
+
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
-function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1, statusEffectsMode = 'enforced' }) {
+function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1, statusEffectsMode = 'enforced', isAmbientTargetHover = false }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
 
@@ -283,7 +335,11 @@ function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState
       }}
     >
       <TokenActiveDisk isActive={isActive} />
-      <TokenRing color={color} isSelected={isSelected} isDragging={isDragging} opacity={sceneOpacity * (isGmLayer ? 0.25 : 0.5)} />
+      <TokenRing color={color} isSelected={isSelected} opacity={sceneOpacity * (isGmLayer ? 0.25 : 0.5)} />
+      {/* Anneau ciblage — la case de ce token est survolée pendant le mode déplacement ambiant (curseur
+          "attaquable" façon XCOM 2, retour Saar 2026-07-31). Détection par case dans handlePointerMove
+          (occupation, pas un hit du mesh) — isAmbientTargetHover reçu du parent, jamais recalculé ici. */}
+      {isAmbientTargetHover && <TargetReticule opacity={sceneOpacity} />}
       <TokenGlbErrorBoundary key={glbUrl} color={color} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity}>
         <TokenGlbBody glbUrl={glbUrl} isGmLayer={isGmLayer} tiltX={tiltX} tiltZ={tiltZ} sceneOpacity={sceneOpacity} />
       </TokenGlbErrorBoundary>
@@ -413,6 +469,7 @@ function Scene({
   combatMoveMode,
   pendingMoveSelection,
   combatTargetMode,
+  onAmbientTokenClick,
   defaultTokenGlbUrl,
   losMode,
   onLosCancel,
@@ -503,6 +560,10 @@ function Scene({
   const losModeRef = useRef(null)
   losModeRef.current = losMode
 
+  // ─── Clic ambiant sur token adverse — P40 : ref miroir (COMBAT-CLICK-AUTOSOLVE) ──────────────
+  const onAmbientTokenClickRef = useRef(null)
+  onAmbientTokenClickRef.current = onAmbientTokenClick
+
   // ─── Chemin pathfinding combat (Sprint Pathfinding) ──────────────────────
   const [currentPath, setCurrentPath] = useState([])
   const currentPathRef = useRef([])
@@ -523,14 +584,27 @@ function Scene({
   // Position curseur snappé (Three.js floor coords) — visible uniquement en mode combat
   const [combatCursorPos, setCombatCursorPos] = useState(null)
 
-  // Nettoyage chemin + curseur quand on quitte le mode déplacement
+  // Token survolé pendant le mode déplacement ambiant — anneau "ciblage" (retour Saar 2026-07-31,
+  // inspiré XCOM 2 : le curseur signale un clic-attaque plutôt qu'un clic-déplacement). Gardé ici
+  // (pas de calcul LOS/distance au survol, juste un indicateur visuel local) — la mesure serveur
+  // reste déclenchée uniquement au clic (useCombatClickAttack.js), décision déjà actée.
+  const [ambientHoverTokenId, setAmbientHoverTokenId] = useState(null)
+  // Ref miroir (P40) — lu dans handlePointerUp, écrit dans handlePointerMove uniquement.
+  const hoveredOccupantTokenRef = useRef(null)
+
+  // Nettoyage chemin + curseur quand on quitte le mode déplacement OU qu'un autre mode explicite
+  // prend la priorité (ciblage/LOS/visée entité) — combatMoveMode reste non-null en arrière-plan
+  // (survol ambiant, COMBAT-DEPLACEMENT-HOVER), sans ce garde le chemin/curseur resterait affiché
+  // par-dessus le ciblage (retour Saar 2026-07-31).
   useEffect(() => {
-    if (!combatMoveMode) {
+    if (!combatMoveMode || combatTargetMode || losMode?.active || moveTarget) {
       setCombatCursorPos(null)
       setCurrentPath([])
       lastCellRef.current = null
+      hoveredOccupantTokenRef.current = null
+      setAmbientHoverTokenId(null)
     }
-  }, [combatMoveMode])
+  }, [combatMoveMode, combatTargetMode, losMode, moveTarget])
 
   const dragRef = useRef({
     active: false,
@@ -660,10 +734,22 @@ function Scene({
     return map
   }, [voxels])
 
+  // Précédence unique du survol de déplacement ambiant — un seul point de vérité (COMBAT-
+  // DEPLACEMENT-HOVER, 2026-07-31), consulté par handlePointerMove/handlePointerUp ci-dessous :
+  // ciblage Attaque/CaC, LOS et visée entité passent toujours devant. handleDragStart n'en a pas
+  // besoin (il vérifie déjà target/LOS avant sa propre garde combatMoveMode, par construction).
+  // 3 vérifications indépendantes recopiées étaient la cause du bug initial (2 des 3 oubliées).
+  const combatMoveHasPriority = useCallback(() =>
+    !!combatMoveModeRef.current && !combatTargetModeRef.current && !losModeRef.current?.active && !moveTarget,
+  [moveTarget])
+
+
   const handleDragStart = useCallback((e, token) => {
     e.stopPropagation()
     if (e.nativeEvent.button !== 0) return
-    if (combatMoveModeRef.current) return
+    // Ciblage/LOS explicites d'abord — priorité sur le survol de déplacement ambiant (COMBAT-
+    // DEPLACEMENT-HOVER, 2026-07-31) : ce dernier est désormais actif en permanence par défaut, il ne
+    // doit jamais avaler un clic sur un token quand un mode explicite (Attaque/CaC/LOS) est en cours.
     if (combatTargetModeRef.current) {
       combatTargetModeRef.current.onPendingTarget(token.id, e.clientX, e.clientY)
       return
@@ -672,6 +758,11 @@ function Scene({
       onTokenClick(token)
       return
     }
+    // Survol ambiant actif — géré uniquement par handlePointerUp (case occupée, hoveredOccupantTokenRef)
+    // pour couvrir tout clic dans la case du token, pas seulement un hit direct sur son mesh (retour
+    // Saar 2026-07-31, docs/BUGIDENTIFIE.md COMBAT-CLICK-AUTOSOLVE). Ne rien faire ici évite un double
+    // déclenchement (pointerdown ici + pointerup dans handlePointerUp pour le même clic).
+    if (combatMoveModeRef.current) return
     clearLine()
 
     if (!isGm) {
@@ -693,18 +784,45 @@ function Scene({
   }, [isGm, user, characters, onTokenClick, clearLine])
 
   const handlePointerMove = useCallback((e) => {
-    // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
-    if (combatMoveModeRef.current) {
+    // ─── Mode déplacement combat — seulement si aucun mode explicite n'est prioritaire ─────────
+    if (combatMoveHasPriority()) {
       const destination = raycastWorldSupport(e.clientX, e.clientY)
       if (!destination) return
+      const mode = combatMoveModeRef.current
+      // Une case occupée par un autre token n'est jamais une destination de déplacement — c'est une
+      // interaction avec ce token à la place (retour Saar 2026-07-31 : "clic sur case sous token = pas
+      // de déplacement, interaction avec le token" — un seul geste possible, jamais les deux forcés en
+      // séquence). Détection par case (tolérance 0,75 m = demi-case, `.claude/rules/world.md`), pas par
+      // hit du mesh du token — couvre tout clic dans la case, même si le modèle 3D ne la remplit pas
+      // entièrement. Source unique pour la surbrillance ci-dessous ET le clic dans handlePointerUp
+      // (hoveredOccupantTokenRef) — jamais un second système de détection en parallèle.
+      const occupyingToken = tokensRef.current.find(t =>
+        t.id !== mode.tokenId &&
+        Math.abs(t.pos_x - destination.x) < 0.75 &&
+        Math.abs(t.pos_y - destination.z) < 0.75
+      ) ?? null
+      hoveredOccupantTokenRef.current = occupyingToken
+      setAmbientHoverTokenId(prev => (prev === (occupyingToken?.id ?? null) ? prev : (occupyingToken?.id ?? null)))
+      if (occupyingToken) {
+        if (lastCellRef.current !== null) {
+          lastCellRef.current = null
+          setCombatCursorPos(null)
+          currentPathRef.current = []
+          setCurrentPath([])
+        }
+        return
+      }
       const key = `${Math.round(destination.x * 4)}:${Math.round(destination.y * 4)}:${Math.round(destination.z * 4)}`
       if (key !== lastCellRef.current) {
         lastCellRef.current = key
         setCombatCursorPos(destination)
-        const mode = combatMoveModeRef.current
         void requestWorldPathPreview(mode, destination)
       }
       return
+    }
+    if (hoveredOccupantTokenRef.current) {
+      hoveredOccupantTokenRef.current = null
+      setAmbientHoverTokenId(null)
     }
 
     // ─── Mode visée entité — prioritaire sur le drag token ───────────────────
@@ -788,13 +906,21 @@ function Scene({
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview])
+  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview, combatMoveHasPriority])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
-    // ─── Mode déplacement combat — prioritaire sur tout ───────────────────────
-    if (combatMoveModeRef.current) {
+    // ─── Mode déplacement combat — seulement si aucun mode explicite n'est prioritaire ─────────
+    if (combatMoveHasPriority()) {
       const mode = combatMoveModeRef.current
+      // Case cliquée occupée par un autre token — interaction avec ce token, jamais un déplacement
+      // (retour Saar 2026-07-31 : un seul geste possible par clic, pas de séquence forcée
+      // déplacement-puis-action). hoveredOccupantTokenRef posé par handlePointerMove (même détection
+      // par case, source unique).
+      if (hoveredOccupantTokenRef.current) {
+        onAmbientTokenClickRef.current?.(hoveredOccupantTokenRef.current, e.clientX, e.clientY)
+        return
+      }
       const path = currentPathRef.current
       if (!path || path.length < 2) return  // inaccessible ou destination = départ
       const dest = path[path.length - 1]
@@ -877,7 +1003,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, combatMoveHasPriority])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -1100,14 +1226,16 @@ function Scene({
             isGmLayer={token.layer === 'gm'}
             sceneOpacity={1}
             statusEffectsMode={statusEffectsMode}
+            isAmbientTargetHover={ambientHoverTokenId === token.id}
           />
         )
       })}
 
       {/* ── Chemin déplacement combat (Sprint Pathfinding) ──────────────── */}
-      {/* Cases colorées par allure sur le chemin A* vers le curseur.         */}
-      {/* Bleu = lente, vert = moyenne, orange = rapide, rouge = max          */}
-      {/* Les points sont exprimés dans l'espace monde canonique (pieds).     */}
+      {/* Cases colorées par allure sur le chemin A* vers le curseur — retour à la version d'origine     */}
+      {/* (retour Saar 2026-08-01 : le réticule tuilé sur plusieurs cases donnait un rendu confus,        */}
+      {/* cf. capture). Bleu=lente, vert=moyenne, orange=rapide, rouge=max.                               */}
+      {/* Les points sont exprimés dans l'espace monde canonique (pieds).                                 */}
       {combatMoveMode && currentPath.map((cell, i) => (
         <group key={`path-${i}`} position={[cell.x, cell.y + 0.05, cell.z]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -1119,35 +1247,13 @@ function Scene({
               depthWrite={false}
             />
           </mesh>
-          {i > 0 && (
-            <Billboard position={[0, 0.32, 0]} follow>
-              <Text
-                fontSize={0.12}
-                color="#ffffff"
-                outlineWidth={0.018}
-                outlineColor="#0f172a"
-                anchorX="center"
-                anchorY="middle"
-              >
-                {`${cell.mode === 'climb' ? 'grimpe' : cell.mode === 'stairs' ? 'esc.' : 'sol'} ${cell.factor !== 1 ? `${cell.distanceM.toFixed(1)} m ×${cell.factor.toFixed(2)} = ` : ''}${cell.segmentCostM.toFixed(1)} m`}
-              </Text>
-            </Billboard>
-          )}
         </group>
       ))}
 
-      {/* ── Cursor wireframe case survolée en mode déplacement combat ────── */}
-      {combatMoveMode && combatCursorPos && (() => {
-        return (
-          <mesh
-            position={[combatCursorPos.x, combatCursorPos.y + 0.05, combatCursorPos.z]}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial color="#ffffff" wireframe />
-          </mesh>
-        )
-      })()}
+      {/* ── Réticule blanche — case survolée en mode déplacement combat ──── */}
+      {combatMoveMode && combatCursorPos && (
+        <GroundCursorReticule position={[combatCursorPos.x, combatCursorPos.y + 0.05, combatCursorPos.z]} />
+      )}
 
       {/* ── Case destination sélectionnée — surbrillance bleue (Bug B) ─────── */}
       {combatMoveMode && pendingMoveSelection && (() => {
@@ -1271,7 +1377,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced' }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced' }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
@@ -1544,6 +1650,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           combatMoveMode={combatMoveMode}
           pendingMoveSelection={pendingMoveSelection}
           combatTargetMode={combatTargetMode}
+          onAmbientTokenClick={onAmbientTokenClick}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
           losMode={losMode}
           onLosCancel={onLosCancel}

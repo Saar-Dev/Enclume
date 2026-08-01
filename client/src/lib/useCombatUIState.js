@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 export function useCombatUIState() {
   const [combatMoveMode,       setCombatMoveMode]       = useState(null)
@@ -6,10 +6,38 @@ export function useCombatUIState() {
   const [combatTargetMode,     setCombatTargetMode]     = useState(null)
   const [combatCameraCenter,   setCombatCameraCenter]   = useState(null)
 
+  // Recap flottant temporaire (LOS/distance/portée) au clic direct sur un token — texte pur, aucune
+  // fenêtre, 2s (Saar 2026-07-31, répété explicitement) — cycle de vie totalement indépendant de
+  // combatTargetMode (jamais lié à une validation/annulation), déclenché directement par
+  // useCombatClickAttack.js.
+  const [targetRecap, setTargetRecap] = useState(null)
+  const targetRecapTimerRef = useRef(null)
+  const showTargetRecap = useCallback((recap, screenPos) => {
+    if (targetRecapTimerRef.current) clearTimeout(targetRecapTimerRef.current)
+    setTargetRecap({ ...recap, screenPos })
+    targetRecapTimerRef.current = setTimeout(() => setTargetRecap(null), 2000)
+  }, [])
+  const clearTargetRecap = useCallback(() => {
+    if (targetRecapTimerRef.current) clearTimeout(targetRecapTimerRef.current)
+    targetRecapTimerRef.current = null
+    setTargetRecap(null)
+  }, [])
+
+  // Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) — décision Saar 2026-07-31
+  // (docs/BUGIDENTIFIE.md COMBAT-CLICK-AUTOSOLVE, scope réduit). Un seul appelant "actif" à la fois
+  // (PJ/PNJ/drone déclarant, exactement comme combatMoveMode/combatTargetMode) — enregistré via ref,
+  // jamais un state (pas de re-render nécessaire, mêmes patrons que les refs miroir de Canvas3D.jsx).
+  const ambientAttackHandlerRef = useRef(null)
+  const registerAmbientAttackHandler = useCallback((fn) => { ambientAttackHandlerRef.current = fn }, [])
+  const handleAmbientTokenClick = useCallback((token, screenX, screenY) => {
+    ambientAttackHandlerRef.current?.(token, screenX, screenY)
+  }, [])
+
   // combatCameraCenter intentionnellement NON reset — caméra reste sur la dernière position
   const handleModeReset = useCallback(() => {
     setCombatMoveMode(null); setCombatTargetMode(null); setPendingMoveSelection(null)
-  }, [])
+    clearTargetRecap()
+  }, [clearTargetRecap])
 
   const handleEnterMoveMode = useCallback((allures, tokenId, tokenPos, onMoveSelected, onCancel) => {
     const wrappedSelected = (sel) => {
@@ -38,6 +66,9 @@ export function useCombatUIState() {
 
   const handleCancelPendingMove = useCallback(() => setPendingMoveSelection(null), [])
 
+  // Flux tuile Attaque/CaC classique uniquement (le clic direct ne passe plus par ici, cf.
+  // useCombatClickAttack.js — appelle onMeleeTarget/onAssaultTarget directement) : armé vide, la cible
+  // est choisie dans un second clic séparé (onPendingTarget).
   const handleEnterTargetMode = useCallback((tokenId, tokenPos, onTargetSelected, onCancel, mode = 'ranged') => {
     const wrappedSelected = (targetTokenId) => {
       onTargetSelected(targetTokenId)
@@ -48,7 +79,7 @@ export function useCombatUIState() {
       setCombatTargetMode(null)
     }
     setCombatTargetMode({
-      tokenId, mode, pendingTargetId: null,
+      tokenId, mode, pendingTargetId: null, pendingTargetScreenPos: null,
       onTargetSelected: wrappedSelected,
       onCancel: wrappedCancel,
       onPendingTarget: (id, screenX, screenY) => {
@@ -71,6 +102,7 @@ export function useCombatUIState() {
     combatMoveMode,
     pendingMoveSelection,
     combatTargetMode,
+    targetRecap,
     combatCameraCenter,
     handleModeReset,
     handleEnterMoveMode,
@@ -78,5 +110,8 @@ export function useCombatUIState() {
     handleCancelPendingMove,
     handleEnterTargetMode,
     handleValidateTarget,
+    registerAmbientAttackHandler,
+    handleAmbientTokenClick,
+    showTargetRecap,
   }
 }

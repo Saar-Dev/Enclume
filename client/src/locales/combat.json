@@ -17,6 +17,10 @@
     "validateButton": "Valider",
     "cancelButton": "Annuler",
     "cancelMoveButton": "Annuler le déplacement",
+    "targetRecap": {
+      "losClear": "Ligne de vue dégagée",
+      "losBlocked": "Ligne de vue bloquée"
+    },
     "stunDialog": {
       "rollButton": "Lancer 1D6{{suffix}} tours",
       "durationPlaceholder": "Durée (tours)"
@@ -260,10 +264,6 @@
     "reload": {
       "label": "Rechargement",
       "tooltip": "Recharger son arme — aucun tir ni corps à corps possible ce tour. Coût INI : 0."
-    },
-    "interact": {
-      "label": "Interagir",
-      "tooltip": "Utiliser un mécanisme simple (actionner un interrupteur, ouvrir une porte, saisir un objet) -3 à -5."
     }
   },
   "quickActions": {

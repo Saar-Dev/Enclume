@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useReducer } from 'react'
+import { useState, useEffect, useMemo, useRef, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
 import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
 import { useDraggable } from '../lib/useDraggable.js'
@@ -18,8 +18,11 @@ import {
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { flattenItemsBySlot, resolveHandWeapons, handSlotDisplayRows } from '../../../shared/weaponSlots.js'
 import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
+import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
+import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
@@ -71,7 +74,8 @@ export function StateSelector({ stateKey, def, current, initial, onChange, disab
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
-  onEnterMoveMode, onEnterTargetMode,
+  onEnterMoveMode, combatMoveMode, pendingMoveSelection, combatTargetMode, onEnterTargetMode,
+  battlemapId, registerAmbientAttackHandler, showTargetRecap,
 }) {
   const { t } = useTranslation('combat')
   const { roster, phase, actions, activeTokenId, currentTurn } = useCombatStore()
@@ -147,9 +151,87 @@ export default function CombatActionWindow({
   const droneDeclare = useDroneDeclare({
     charId:           playerToken?.character_id ?? null,
     tokenId:          playerToken?.id ?? null,
+    tokenPos:         playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
     allures,
     onEnterMoveMode,
     onEnterTargetMode,
+    moveHoverEnabled: isDrone,
+    combatMoveMode,
+    pendingMoveSelection,
+    battlemapId,
+    registerAmbientAttackHandler,
+    showTargetRecap,
+  })
+
+  // Déplacement : survol/preview toujours actif par défaut, sans clic préalable sur la tuile
+  // (décision Saar, COMBAT-DEPLACEMENT-HOVER) — suspendu pendant ciblage Attaque/CaC et pendant
+  // Charge/Retraite (ces deux derniers gèrent leur propre entrée avec des allures restreintes).
+  const effectiveAllures = useMemo(
+    () => (isStunned && allures ? { lente: allures.lente, moyenne: allures.moyenne } : allures),
+    [isStunned, allures],
+  )
+  useAutoMoveMode({
+    enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
+      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite',
+    allures: effectiveAllures,
+    tokenId: playerToken?.id ?? null,
+    tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
+    combatMoveMode,
+    onEnterMoveMode,
+    onMoveSelected: (sel) => setMoveSelection(sel),
+    onCancel: () => {},
+  })
+
+  // --- clic direct sur un token adverse (sans tuile Attaque/CaC préalable) --
+  // useCombatClickAttack.js — même patron/contrainte que useAutoMoveMode ci-dessus : appelé ici (avant
+  // le early-return `playerTokensInRoster.length === 0` plus bas, Rules of Hooks) donc ne peut pas
+  // référencer meleeWeapons/selectedWeapon/clearAttackState/clearMeleeState (calculés après ce point).
+  // Dérivations dupliquées volontairement (meleeWeapons/selectedWeapon recalculés) plutôt que remonter
+  // tout le bloc plus bas — patch ciblé, ne pas réordonner un fichier de 1500 lignes pour ça.
+  const clickMeleeWeapons = allInventoryItems.filter(item =>
+    (item.slots?.includes('MG') || item.slots?.includes('MD') || item.slots?.includes('2M')) &&
+    item.ref_category === 'Arme de contact'
+  )
+  const { primaryWeapon: clickRangedWeapon } = resolveHandWeapons(assaultWeapons)
+  const resolveClickAttackMode = (distanceM) => {
+    const hasMelee = clickMeleeWeapons.length > 0
+    if (!clickRangedWeapon) return { mode: 'melee', band: null }
+    if (!hasMelee) return { mode: 'ranged', band: resolveWeaponRangeBand(distanceM, clickRangedWeapon.ref_range).band }
+    if (distanceM <= resolveMeleeReachM(clickMeleeWeapons[0]?.ref_range)) return { mode: 'melee', band: null }
+    return { mode: 'ranged', band: resolveWeaponRangeBand(distanceM, clickRangedWeapon.ref_range).band }
+  }
+  useCombatClickAttack({
+    enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
+      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite',
+    battlemapId,
+    tokenId: playerToken?.id ?? null,
+    tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
+    moveDestination: moveSelection
+      ? { pos_x: moveSelection.targetPosX, pos_y: moveSelection.targetPosY, pos_z: moveSelection.targetPosZ ?? 0 }
+      : null,
+    resolveMode: resolveClickAttackMode,
+    showTargetRecap,
+    registerAmbientAttackHandler,
+    // Réinitialisations manuelles (miroir clearAttackState/clearMeleeState, définies plus bas et
+    // inaccessibles ici pour la même raison Rules of Hooks) — même liste de setters, ne pas diverger
+    // si l'une des deux évolue.
+    onMeleeTarget: (tid) => {
+      dispatch({ type: 'SELECT_ATTACK' })
+      setMapSelected(prev => { const n = new Set(prev); n.delete('attack'); n.add('melee'); return n })
+      setAssaultPendingTokenIds([]); setAssaultCount(1); setAssaultBulletCount(null)
+      setAssaultVariantAB('A'); setIsDualWield(false); setAimTranches(0)
+      setAimedLocation(null); setInTargetMode(false)
+      setMeleePendingTokenIds([tid])
+    },
+    onAssaultTarget: (tid) => {
+      dispatch({ type: 'SELECT_ATTACK' })
+      setMapSelected(prev => { const n = new Set(prev); n.delete('melee'); n.add('attack'); return n })
+      setMeleePendingTokenIds([]); setMeleeCount(1); setSelectedMeleeWeaponId(undefined)
+      setIsDualWieldMelee(false); setInMeleeTargetMode(false)
+      if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
+      dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
+      setAssaultPendingTokenIds([tid])
+    },
   })
 
   // --- etats initiaux (reference debut de tour pour calcul delta) -----------
@@ -305,7 +387,9 @@ export default function CombatActionWindow({
     const timer = setTimeout(() => {
       socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, {
         tokenId,
-        actions:          [...mapSelected],
+        // 'move' n'entre plus jamais dans mapSelected (survol ambiant, COMBAT-DEPLACEMENT-HOVER) —
+        // ajouté ici explicitement pour que l'aperçu GM reste fidèle dès qu'une destination est posée.
+        actions:          moveSelection ? [...mapSelected, 'move'] : [...mapSelected],
         assaultTargetIds: [...assaultPendingTokenIds],
         meleeTargetIds:   [...meleePendingTokenIds],
         moveDestination: moveSelection
@@ -497,18 +581,10 @@ export default function CombatActionWindow({
   }
 
   // --- deplacement zone select ---------------------------------------------
+  // Le survol/preview est désormais permanent par défaut (useAutoMoveMode ci-dessus) — ce clic ne
+  // sert plus qu'à effacer une sélection déjà posée (COMBAT-DEPLACEMENT-HOVER).
   const handleZoneSelectClick = () => {
-    if (moveSelection) { setMoveSelection(null); return }
-    if (!allures) return
-    setInMoveMode(true)
-    setMoveSelection(null)
-    const effectiveAllures = isStunned ? { lente: allures.lente, moyenne: allures.moyenne } : allures
-    onEnterMoveMode(
-      effectiveAllures, playerToken.id,
-      { x: playerToken.pos_x, z: playerToken.pos_y },
-      (sel) => { setMoveSelection(sel); setInMoveMode(false) },
-      () => { setInMoveMode(false) }
-    )
+    if (moveSelection) setMoveSelection(null)
   }
 
   // --- choix cible assaut (index = slot dans la série Tir Multi) -----------
@@ -645,7 +721,6 @@ export default function CombatActionWindow({
             }))
           : null,
         reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
-        interact: mapSelected.has('interact'),
       },
       quick: {
         observer: decl.quick.observer,
@@ -869,7 +944,17 @@ export default function CombatActionWindow({
     )
   }
 
-  const isHidden    = inMoveMode || inTargetMode || inMeleeTargetMode || droneDeclare.isSelectingOnMap
+  // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination a été
+  // posée et attend "Valider" — pas pendant le simple survol, sinon la fenêtre resterait masquée en
+  // continu pendant tout le tour (option 1, décision Saar).
+  const hasPendingOwnMove = combatMoveMode?.tokenId === playerToken?.id && !!pendingMoveSelection
+  // Masquage du ciblage dérivé de combatTargetMode (état partagé, useCombatUIState) plutôt que des
+  // flags locaux inTargetMode/inMeleeTargetMode — ces derniers ne sont positionnés que par le flux tuile
+  // Attaque/CaC classique ; le clic direct (useCombatClickAttack.js) arme combatTargetMode sans jamais
+  // toucher ces flags, donc la fenêtre restait visible pendant ce flux (retour Saar 2026-07-31). Les deux
+  // flags restent utilisés ailleurs (gate de useCombatClickAttack/useAutoMoveMode), juste plus ici.
+  const isTargeting = combatTargetMode?.tokenId === playerToken?.id
+  const isHidden    = inMoveMode || isTargeting || droneDeclare.isSelectingOnMap || hasPendingOwnMove
   const showAssault = attackSelected
   const showReload  = reloadSelected && !showAssault
   const showMelee   = meleeSelected  && !showAssault && !showReload
@@ -963,7 +1048,7 @@ export default function CombatActionWindow({
             {isDrone
               ? <DroneDeclareSection
                   pendingMove={droneDeclare.pendingMove}
-                  onMoveToggle={() => droneDeclare.pendingMove ? droneDeclare.clearPendingMove() : droneDeclare.handleStartMove(playerToken)}
+                  onMoveToggle={() => droneDeclare.pendingMove && droneDeclare.clearPendingMove()}
                   hasPassed={droneDeclare.hasPassed}
                   onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
                   droneWeapons={droneDeclare.droneWeapons}
@@ -1017,7 +1102,7 @@ export default function CombatActionWindow({
                   )
                 }
 
-                // Statiquement désactivé (multi, interact)
+                // Statiquement désactivé (aucune entrée MAP_ACTIONS actuelle, gardé au cas où)
                 if (a.active === false) {
                   return (
                     <div key={a.k} title={t(a.tooltip)} style={{ ...W.itemGreyed, ...span2 }}>
@@ -1045,8 +1130,9 @@ export default function CombatActionWindow({
                         if (!canActivate) return
                         // Bug A : Charge/Retraite gèrent le déplacement internalement — chip 'move' inerte
                         if (decl.combatMode === 'charge' || decl.combatMode === 'retraite') return
-                        handleMapToggle(a.k)
-                        if (!mapSelected.has(a.k)) handleZoneSelectClick()
+                        // Survol permanent (COMBAT-DEPLACEMENT-HOVER) — ce clic n'efface plus qu'une
+                        // sélection déjà posée, il n'entre plus en mode déplacement (déjà ambiant).
+                        handleZoneSelectClick()
                       }}
                     >
                       <span style={W.itemLabel}>{t(a.l)}</span>

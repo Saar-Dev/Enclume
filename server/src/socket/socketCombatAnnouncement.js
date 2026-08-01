@@ -61,7 +61,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
 
   // ─── COMBAT:ACTION_DECLARE v2 ─────────────────────────────────────────
   // Joueur (ou GM pour un PNJ) déclare son action pendant la phase ANNOUNCEMENT.
-  // Payload v2 : { tokenId, state:{position,weapon,fire_mode,cover,vitesse}, mapActions:{move?,attack?,melee?,multi?,interact?}, quick:{observer,reperer,phrase} }
+  // Payload v2 : { tokenId, state:{position,weapon,fire_mode,cover,vitesse}, mapActions:{move?,attack?,melee?,multi?}, quick:{observer,reperer,phrase} }
   socket.on(WS.COMBAT_ACTION_DECLARE, async ({ tokenId, state, mapActions, quick }) => {
     try {
       const { phase: _gPhase, sub_phase: _gSubPhase } = await db('combat_state').where({ campaign_id: campaignId }).first() ?? {}
@@ -201,7 +201,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle — aucune action de Test possible' })
             return
           }
-          if (mapActions?.interact || mapActions?.reload) {
+          if (mapActions?.reload) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Blessure mortelle — aucune action de Test possible' })
             return
           }
@@ -537,14 +537,6 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             })
           }
         }
-      }
-
-      if (mapActions?.interact) {
-        actionRows.push({
-          campaign_id: campaignId, token_id: tokenId,
-          action_key: 'interact', type: 'micro', sequence: 2,
-          modifiers: JSON.stringify({ ini_mod: 0 }), status: 'pending',
-        })
       }
 
       if (mapActions?.reload) {

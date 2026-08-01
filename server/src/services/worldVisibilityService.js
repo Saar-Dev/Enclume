@@ -1,6 +1,6 @@
 import db from '../db/knex.js'
 
-import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
+import { dbPositionToWorldPoint, distanceBetweenWorldPointsM } from '../../../shared/world/worldMetrics.js'
 import {
   actorEyePoint,
   checkWorldCoverage,
@@ -77,11 +77,19 @@ export function evaluateWorldVisibility({
   targetProfile = {},
   profileByTokenId = {},
   effectRegions = [],
+  // Position hypothétique du token source (forme DB pos_x/pos_y/pos_z) — déclaration ANNONCE non
+  // encore confirmée (destination de déplacement déjà posée mais pas résolue). Le token source doit
+  // quand même exister et être en 'world-feet' (identité, exclusion interceptors) ; seul le point
+  // utilisé pour la géométrie change. Jamais pour targetToken : on ne mesure jamais contre une
+  // position hypothétique adverse.
+  sourcePositionOverride = null,
 } = {}) {
   if (sourceToken?.position_space !== 'world-feet' || targetToken?.position_space !== 'world-feet') {
     return Object.freeze({ status: 'legacy-position', line: null, coverage: null, interceptors: [] })
   }
-  const sourceFeet = dbPositionToWorldPoint(sourceToken)
+  const sourceFeet = sourcePositionOverride
+    ? dbPositionToWorldPoint(sourcePositionOverride)
+    : dbPositionToWorldPoint(sourceToken)
   const targetFeet = dbPositionToWorldPoint(targetToken)
   const normalizedSource = normalizeVisibilityProfile(sourceProfile)
   const normalizedTarget = normalizeVisibilityProfile(targetProfile)
@@ -115,6 +123,7 @@ export function evaluateWorldVisibility({
   return Object.freeze({
     status: line.clear ? 'clear' : 'blocked',
     worldRevision: snapshot.worldRevision,
+    distanceM: distanceBetweenWorldPointsM(sourceFeet, targetFeet, snapshot.metrics),
     line,
     coverage,
     interceptors,
@@ -127,6 +136,7 @@ export async function evaluateBattlemapVisibility({
   targetToken,
   sourceProfile = {},
   targetProfile = {},
+  sourcePositionOverride = null,
   database = db,
 } = {}) {
   const elevatorRuntime = await reconcileBattlemapElevators({
@@ -157,6 +167,7 @@ export async function evaluateBattlemapVisibility({
       effectRegions: runtimeContext?.regions || [],
       sourceProfile,
       targetProfile,
+      sourcePositionOverride,
     }),
     elevatorRuntime: Object.freeze({
       changed: elevatorRuntime.changed,
