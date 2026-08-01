@@ -401,6 +401,33 @@ si un sprint nettoyage est ouvert.
 **Prochaine étape** : sprint nettoyage — revoir ces effets (et chercher d'éventuelles occurrences
 similaires dans les autres fichiers Combat) sans changer le comportement visible.
 
+**Traité partiellement (2026-08-01)** — analyse cas par cas de chaque occurrence avant correctif
+(consigne de la dette elle-même) :
+- `client/src/components/DicePanel.jsx:290` **corrigé** — `setMfPreview(null)` retiré du corps de
+  l'effet ; la visibilité du preview est désormais dérivée du render (`mfSourcesValid =
+  mfSources.some(s => s.ref_id && s.ref_label)`, gate ajouté au JSX), l'effet ne conserve que le
+  chemin asynchrone (debounce + fetch). Comportement inchangé : le preview disparaît toujours
+  instantanément dès qu'aucune source n'est valide, sans attendre le debounce.
+- `client/src/character/DroneWindow.jsx:107`, `client/src/components/CombatCacModifiersWindow.jsx:77-83`,
+  `client/src/components/CombatModifiersWindow.jsx:~131` **non corrigés, analysés** — dans les 3 cas,
+  le composant n'est jamais remonté par un `key` propre à l'identifiant qui change
+  (`character.id`/`meleeOrAssaultAction?.id`/`assaultAction?.id`) : le parent (`SessionPage.jsx` /
+  `CombatOverlay.jsx`, chantiers en cours) le rend conditionnellement mais peut faire transiter la prop
+  d'une valeur à une autre sans jamais démonter/remonter (ex. boucle de résolution PNJ/drone enchaînant
+  plusieurs actions CaC sans fermer la fenêtre). Le `setState` synchrone dans l'effet n'est donc **pas
+  un vestige** ici — il compense l'absence de remount. Le correctif propre (passer `key={...}` depuis
+  le parent, éliminer complètement l'effet de reset) nécessite de toucher `SessionPage.jsx`/
+  `CombatOverlay.jsx`, tous deux dans le chantier UI Combat en cours — non touchés pour ne pas
+  s'entremêler avec ce chantier. Alternative sans toucher le parent (dériver au render via comparaison
+  d'un id précédent) jugée plus invasive que le gain pour une dette basse priorité — laissée telle
+  quelle.
+
+**Testé** : ESLint sur `DicePanel.jsx` — 0 erreur (vs 1 avant) ; `npm run build` (client) propre.
+**Non testé** : scénario réel en jeu (formulaire de macro avec sources valides/invalides, vérifier
+l'affichage instantané du seuil) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, comportement utilisateur inchangé.
+
 ---
 
 ### Dette VX1 — getVoxelSurfaceTop : pas de cas slope/wedge

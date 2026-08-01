@@ -283,11 +283,15 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
       .catch(() => {})
   }, [isOpen, effectiveCharId])
 
+  // Au moins une source valide — dérivé du render, pas d'un effet (I18N-LINT3) : gate l'affichage
+  // du preview instantanément dès que les sources deviennent invalides, sans attendre le debounce.
+  const mfSourcesValid = mfSources.some(s => s.ref_id && s.ref_label)
+
   // ── Live preview seuil — debounce 500ms ───────────────────────────────────
   useEffect(() => {
     if (!showMacroForm || !effectiveCharId) return
     const valid = mfSources.filter(s => s.ref_id && s.ref_label)
-    if (valid.length === 0) { setMfPreview(null); return }
+    if (valid.length === 0) return
     clearTimeout(previewTimerRef.current)
     previewTimerRef.current = setTimeout(() => {
       api.post(`/char-sheet/${effectiveCharId}/macro-preview`, { sources: valid, modifier: mfModifier })
@@ -876,7 +880,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
                     onChange={e => setMfModifier(parseInt(e.target.value, 10) || 0)}
                     style={{ ...styles.macroFormInput, width: 52, textAlign: 'center' }}
                   />
-                  {mfPreview !== null && (
+                  {mfSourcesValid && mfPreview !== null && (
                     <span style={{ ...styles.monoSm, fontSize: 10, color: '#aa8a30', marginLeft: 4 }}>
                       {t('dice.thresholdLabel')} : <strong>{mfPreview}</strong>
                     </span>
