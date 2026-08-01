@@ -157,6 +157,7 @@
     "surpriseMessage": "Vous etes surpris. Lancez 1d20 pour determiner votre initiative.",
     "rollInitiativeButton": "Lancer le de d'initiative",
     "surprisedCannotAct": "Vous etes surpris — vous ne pouvez pas agir ce tour.",
+    "mortallyWoundedBanner": "Blessure mortelle — aucune action de Test possible. Seuls Déplacement et Passer le tour restent disponibles.",
     "resolutionPhaseShort": "Phase 2 - Resolution",
     "targetPrefix": "Cible : ",
     "rushedTag": "Precipite (-5)",

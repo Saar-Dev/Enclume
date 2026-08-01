@@ -102,7 +102,7 @@ aucun recours. Décision Saar (2026-07-19) : pas prioritaire, pas dans ce correc
 
 ---
 
-### Dette WNDMORT-UI — Fenêtre de déclaration : pas de repli visuel pour Blessure mortelle
+### Dette WNDMORT-UI — Fenêtre de déclaration : pas de repli visuel pour Blessure mortelle ✅ Session (2026-08-01)
 
 **Symptôme** : Aucun cas observé en jeu — trouvé en clôturant WNDMORT (Session 166).
 
@@ -118,6 +118,29 @@ découvre la restriction seulement en essayant et en recevant l'erreur, pas avan
 d'avertissement + désactivation des sections Attaque/CaC/Interaction/Rechargement, garder Déplacement/
 Passer actifs. Décision Saar : pas dans ce correctif (le serveur reste l'autorité, ceci n'est que de
 l'ergonomie).
+
+**Décision (Saar, 2026-08-01)** : validé, scope inchangé (Interaction n'existe plus depuis
+COMBAT-INTERAGIR-SYNC, donc Attaque/CaC/Rechargement uniquement).
+
+**Correctif codé (2026-08-01)** — `client/src/components/CombatActionWindow.jsx` :
+- Nouveau fetch `GET /char-sheet/:characterId/wounds` sur `[playerToken?.character_id]`, même patron
+  que le fetch allures existant. `isTestBlockingWound(wounds)` (`shared/woundConstants.js`, même
+  fonction que le garde serveur — pas de logique dupliquée) → state `mortallyWounded`.
+- Bandeau (`W.mortalWoundBanner`, couleur `SEVERITY_COLORS.mortelle` réutilisée depuis
+  `woundConstants.js`, pas une couleur inventée) affiché en tête de la fenêtre de déclaration.
+- Tuiles Attaque/CaC/Rechargement grisées (même style `W.itemGreyed` que le grisage "assommé" déjà
+  existant, priorité sur les grisages spécifiques type "munitions vides"). Déplacement et Passer le
+  tour restent actifs tels quels — la restriction plus fine (Allure lente uniquement, immobilisation
+  si Blessure mortelle aux jambes) reste imposée par le serveur, non dupliquée côté client (scope
+  validé = ergonomie de base, pas la parité totale avec le garde serveur).
+- Nouvelle clé `combat.json` `actionWindow.mortallyWoundedBanner`.
+
+**Testé** : ESLint sur `CombatActionWindow.jsx` (0 erreur, 6 warnings `exhaustive-deps` préexistants
+inchangés) ; JSON valide ; `npm run build` (client) propre.
+**Non testé** : scénario réel en jeu (personnage avec Blessure mortelle en résolution — bandeau visible,
+tuiles grisées, Déplacement/Passer toujours cliquables) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, aucun changement pour un personnage non mortellement blessé.
 
 ---
 

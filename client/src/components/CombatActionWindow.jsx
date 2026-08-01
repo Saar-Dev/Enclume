@@ -19,6 +19,7 @@ import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '..
 import { flattenItemsBySlot, resolveHandWeapons, handSlotDisplayRows } from '../../../shared/weaponSlots.js'
 import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
@@ -102,6 +103,7 @@ export default function CombatActionWindow({
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
   const [declareError, setDeclareError] = useState(null)
+  const [mortallyWounded, setMortallyWounded] = useState(false)
 
   // --- actions sur la carte (multi-select) ----------------------------------
   const [mapSelected, setMapSelected] = useState(new Set())
@@ -302,6 +304,19 @@ export default function CombatActionWindow({
     load()
     return () => { cancelled = true }
   }, [playerToken?.id])
+
+  // --- fetch blessures — Blessure mortelle bloque Attaque/CaC/Rechargement -
+  // (WNDMORT-UI, docs/BUGIDENTIFIE.md) — même garde que le serveur (isTestBlockingWound), Déplacement
+  // et Passer le tour restent actifs ici (le serveur affine encore la restriction sur l'allure).
+  useEffect(() => {
+    const charId = playerToken?.character_id
+    if (!charId) { setMortallyWounded(false); return }
+    let cancelled = false
+    api.get(`/char-sheet/${charId}/wounds`)
+      .then(res => { if (!cancelled) setMortallyWounded(isTestBlockingWound(res.data.wounds)) })
+      .catch(() => { if (!cancelled) setMortallyWounded(false) })
+    return () => { cancelled = true }
+  }, [playerToken?.character_id])
 
   // --- écoute COMBAT_DECLARE_ERROR — message temporaire (3s) ---------------
   useEffect(() => {
@@ -978,6 +993,10 @@ export default function CombatActionWindow({
     }}>
       <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitle')}</div>
 
+      {mortallyWounded && (
+        <div style={W.mortalWoundBanner}>{t('actionWindow.mortallyWoundedBanner')}</div>
+      )}
+
       <div className="combat-win-body">
         {/* ---- Panneau gauche ---- */}
         <div style={W.leftPanel}>
@@ -1060,6 +1079,16 @@ export default function CombatActionWindow({
               {MAP_ACTIONS.map(a => {
                 const isActive = mapSelected.has(a.k)
                 const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
+
+                // Blessure mortelle (WNDMORT-UI) : Attaque/CaC/Rechargement interdits — priorité sur
+                // les grisages spécifiques ci-dessous (assommé, munitions vides...).
+                if (mortallyWounded && (a.k === 'attack' || a.k === 'melee' || a.k === 'reload')) {
+                  return (
+                    <div key={a.k} title={t('actionWindow.mortallyWoundedBanner')} style={{ ...W.itemGreyed, ...span2 }}>
+                      <span style={W.itemLabel}>{t(a.l)}</span>
+                    </div>
+                  )
+                }
 
                 // Assaut/CaC grisé si assommé
                 if ((a.k === 'attack' || a.k === 'melee') && isStunned) {
@@ -1584,6 +1613,17 @@ const W = {
     fontSize: 10,
     color: '#5b8dee',
     fontWeight: 600,
+  },
+  mortalWoundBanner: {
+    margin: '6px 10px 0',
+    padding: '6px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#e0a0a0',
+    background: `${SEVERITY_COLORS.mortelle}33`,
+    border: `1px solid ${SEVERITY_COLORS.mortelle}`,
+    textAlign: 'center',
   },
   surpriseText: {
     padding: '14px 14px 0',
