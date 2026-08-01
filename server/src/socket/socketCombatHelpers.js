@@ -1651,6 +1651,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       attackerSheetId: sheetAttaquant.id,
       naturalWeaponCharMutationId,
       defenderCharacterName: defenderCharacter.name,
+      // Distinct de attackerUsername (compte ayant lancé le dé, DICE_RESULT) — identité narrative du
+      // personnage attaquant, consommée par resolveMeleeDefensePj pour le prompt de défense (MELEE-ATKNAME).
+      attackerCharacterName: character.name ?? 'Inconnu',
     }
 
     // ── Branchement défenseur (PLAN_RW_SYSCOMBAT.md §2.4, Lot 2) ───────────────
@@ -1917,7 +1920,7 @@ async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
 // fait plus tard dans confirmMeleeDefense, pas ici.
 async function resolveMeleeDefensePj(io, campaignId, ctx, emissions) {
   const {
-    attackerTokenId, targetTokenId, attackerUsername, rollAttaque, chancesAttaque,
+    attackerTokenId, targetTokenId, attackerCharacterName, rollAttaque, chancesAttaque,
     defenderSkillTotal, defenderEffectiveMalus, multiMalusDefenseur, defenderUserId,
   } = ctx
   await db('combat_pending').insert({ campaign_id: campaignId, token_id: targetTokenId, type: 'melee_defense', payload: ctx })
@@ -1926,7 +1929,7 @@ async function resolveMeleeDefensePj(io, campaignId, ctx, emissions) {
 
   // Cibler le socket du défenseur PJ
   const prompt = {
-    attackerName:    attackerUsername,
+    attackerName:    attackerCharacterName,
     attackerTokenId,
     defenderTokenId: targetTokenId,
     rollAttaque,

@@ -658,7 +658,7 @@ sous-état, défense) avant tout correctif.
 
 ---
 
-### Dette MELEE-ATKNAME — Fenêtre défense CaC : « [Compte] vous attaque » au lieu du nom du personnage
+### Dette MELEE-ATKNAME — Fenêtre défense CaC : « [Compte] vous attaque » au lieu du nom du personnage ✅ Session (2026-08-01)
 
 **Symptôme** : signalé par Saar (2026-07-28) en testant `docs/PLAN_RW_SYSCOMBAT.md` Lot 4 (Tir, sans
 rapport direct) — la fenêtre de défense CaC affiche « Saar (GM) vous attaque » au lieu du nom du
@@ -685,6 +685,30 @@ sur le cas réel de Saar, puis séparer les deux usages — `attackerUsername`/`
 `attackerName` du prompt de défense. Vérifier aussi si le même besoin existe côté Tir/PJ (pas de fenêtre
 de défense équivalente aujourd'hui, donc pas de symptôme visible, mais à vérifier avant de généraliser
 le correctif). Sans rapport avec `docs/PLAN_RW_SYSCOMBAT.md` Lots 3-4 (code non touché par ce chantier).
+
+**Cause racine [VÉRIFIÉ par lecture, non instrumenté en jeu]** : pas de `[DBG-MELEE-ATKNAME]` posé — la
+chaîne `userRow?.username ?? character.name ?? 'Inconnu'` est un enchaînement `??` déterministe, sans
+ambiguïté d'exécution (async, cache, ordre d'événements) qu'une instrumentation runtime trancherait
+différemment de la lecture : dès que `character.user_id` est renseigné, `userRow.username` gagne
+toujours, pour tout token PJ (et tout token GM avec un `user_id` de test comme celui de Saar). Confirmé
+par grep : `attackerName` n'a qu'un seul point de consommation dans tout le fichier (`resolveMeleeDefensePj`)
+— pas de généralisation nécessaire côté Tir (aucune fenêtre de défense équivalente, confirmé).
+
+**Correctif codé (2026-08-01)** — `commonPending` (construit dans `resolveMeleeAction`) gagne un champ
+`attackerCharacterName: character.name ?? 'Inconnu'`, symétrique du `defenderCharacterName:
+defenderCharacter.name` déjà existant juste au-dessus (précédent direct, même patron). `attackerUsername`/
+`attackerColor` restent inchangés pour `DICE_RESULT`/`emitShockDiceResult` (tous leurs autres usages,
+non touchés). `resolveMeleeDefensePj` consomme désormais `attackerCharacterName` au lieu de
+`attackerUsername` pour `attackerName` du prompt — aucun changement client (`CombatOverlay.jsx` lit
+toujours `meleeDefensePrompt.attackerName`, seule la valeur serveur change).
+
+**Testé** : `node --check socketCombatHelpers.js` ; suite serveur complète `node --test` (151/151 ✅ —
+aucun test dédié à `resolveMeleeAction`/`resolveMeleeDefensePj` n'existe dans le dépôt, confirmé par
+recherche).
+**Non testé** : scénario réel en jeu (PJ attaquant CaC un autre PJ, vérifier que la fenêtre de défense
+affiche le nom du personnage et non celui du compte) — jamais rejoué, à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, aucun changement pour `DICE_RESULT`/attribution des jets.
 
 ---
 
