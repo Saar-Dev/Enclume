@@ -428,6 +428,36 @@ l'affichage instantané du seuil) — à la charge de Saar.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, comportement utilisateur inchangé.
 
+**Traité (suite, 2026-08-01)** — chantier UI Combat commité entre-temps, `CombatOverlay.jsx` n'est
+plus bloqué. Vraie mise en œuvre du correctif `key` esquissé ci-dessus, mais **seulement là où c'est
+sûr** (analyse rendu par rendu, pas un copier-coller entre les deux fenêtres CaC/Assaut) :
+- `CombatCacModifiersWindow.jsx` **corrigé** — vérifié dans `CombatOverlay.jsx` : les deux sites de
+  rendu (`isGm`/joueur) sont gatés uniquement sur `activeMeleeAction`/`playerActiveMeleeAction`, aucune
+  clause de repli du type `|| attackResult` qui garderait la fenêtre montée après que l'id retombe à
+  `null`. `key={activeMeleeAction.id}`/`key={playerActiveMeleeAction.id}` ajouté aux deux rendus ;
+  l'effet de reset (5 states) supprimé entièrement dans le composant — un nouveau slot CaC démonte/
+  remonte, tous les `useState` repartent de leur valeur initiale naturellement (élimine la classe de
+  bug plutôt que de la contourner : plus besoin de se souvenir d'ajouter un reset pour un futur state).
+- `CombatModifiersWindow.jsx` **toujours pas corrigé, cause précise identifiée** : contrairement à la
+  fenêtre CaC, son rendu joueur (`CombatOverlay.jsx` ~L.312) est gaté
+  `(playerActiveAssaultAction && assaultPrecheckOk === true) || attackResult` — la fenêtre reste
+  volontairement montée après résolution (le temps d'afficher `attackResult`) alors que
+  `assaultAction` (donc l'id qui alimenterait un `key`) est déjà retombé à `null`. Un `key={assaultAction?.id}`
+  démonterait la fenêtre pile au moment d'afficher le résultat, effet de bord clairement pire que le
+  `setState` synchrone actuel. **Ne pas appliquer le même correctif ici** sans revoir ce flux
+  affichage-résultat en profondeur — hors scope d'un nettoyage ponctuel.
+- `client/src/character/DroneWindow.jsx:107`, `useDroneDeclare.js:34-40` — toujours non traités,
+  même diagnostic qu'avant (pas de `key` côté `SessionPage.jsx`/`CombatActionWindow.jsx`/
+  `CombatGmDeclareWindow.jsx`) ; ces fichiers ne sont plus bloqués par un chantier externe mais le
+  correctif n'a pas été retenté cette session — à reprendre si un sprint nettoyage dédié s'ouvre.
+
+**Testé (suite)** : ESLint sur `CombatCacModifiersWindow.jsx`/`CombatOverlay.jsx` — 0 erreur
+`set-state-in-effect` (vs 1 avant sur le premier), 0 nouvelle erreur sur le second ; `npm run build`
+(client) propre.
+**Non testé (suite)** : scénario réel en jeu (CaC PJ et PNJ/drone GM, résolution d'une série
+d'attaques CaC enchaînées sans fermer la fenêtre, position de fenêtre conservée via `localStorage`
+après remount) — à la charge de Saar.
+
 ---
 
 ### Dette VX1 — getVoxelSurfaceTop : pas de cas slope/wedge

@@ -73,14 +73,9 @@ export default function CombatCacModifiersWindow({ socket, activeRosterEntry, is
   const cibleToken     = tokens.find(t => t.id === meleeOrAssaultAction?.target_token_id)
   const cibleCharId    = cibleToken?.character_id ?? null
 
-  // Reset quand un nouveau slot CaC devient actif
-  useEffect(() => {
-    setSituationAtk([])
-    setSituationDef([])
-    setTaille('moyenne')
-    setWeaponSkill(null)
-    setIsRolling(false)
-  }, [meleeOrAssaultAction?.id])
+  // Plus de reset explicite ici (I18N-LINT3) : le parent (CombatOverlay.jsx) monte ce composant avec
+  // key={meleeOrAssaultAction.id} — un nouveau slot CaC démonte/remonte le composant, tous les useState
+  // repartent de leur valeur initiale naturellement, y compris tout futur state ajouté ici.
 
   // Fetch compétence liée à l'arme attaquant (pour la pill)
   useEffect(() => {

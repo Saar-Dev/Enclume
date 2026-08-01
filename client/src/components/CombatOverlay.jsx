@@ -346,6 +346,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Phase RÉSOLUTION — CaC humanoïde PNJ ou drone (GM) */}
       {isGm && phase === 'RESOLUTION' && activeMeleeAction && gmActiveCharacter?.type !== 'pj' && precheckOk === true && (
         <CombatCacModifiersWindow
+          key={activeMeleeAction.id}
           socket={socket}
           activeRosterEntry={gmActiveEntry}
           isDrone={gmActiveCharacter?.type === 'drone'}
@@ -355,6 +356,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
       {/* Phase RÉSOLUTION — CaC PJ (joueur) */}
       {!isGm && phase === 'RESOLUTION' && playerActiveMeleeAction && precheckOk === true && (
         <CombatCacModifiersWindow
+          key={playerActiveMeleeAction.id}
           socket={socket}
           activeRosterEntry={playerRosterEntry}
           isDrone={false}
