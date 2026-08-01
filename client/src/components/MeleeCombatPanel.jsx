@@ -63,7 +63,7 @@ const P = {
 }
 
 // Chips inline pour les boutons de nombre d'attaques
-function CountChip({ n, label, tooltip, selected, onClick }) {
+function CountChip({ label, tooltip, selected, onClick }) {
   return (
     <div
       title={tooltip}
@@ -273,9 +273,9 @@ export default function MeleeCombatPanel({
         <div style={P.section}>
           <div style={P.sectionTitle}>{t('meleeCombatPanel.attackCountSection')}</div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <CountChip n={1} label={t('meleeCombatPanel.chip1.label')} tooltip={t('meleeCombatPanel.chip1.tooltip')} selected={meleeCount === 1} onClick={() => onMeleeCountChange(1, meleeCount)} />
-            <CountChip n={2} label={t('meleeCombatPanel.chip2.label')} tooltip={t('meleeCombatPanel.chip2.tooltip')} selected={meleeCount === 2} onClick={() => onMeleeCountChange(2, meleeCount)} />
-            <CountChip n={3} label={t('meleeCombatPanel.chip3.label')} tooltip={t('meleeCombatPanel.chip3.tooltip')} selected={meleeCount === 3} onClick={() => onMeleeCountChange(3, meleeCount)} />
+            <CountChip label={t('meleeCombatPanel.chip1.label')} tooltip={t('meleeCombatPanel.chip1.tooltip')} selected={meleeCount === 1} onClick={() => onMeleeCountChange(1, meleeCount)} />
+            <CountChip label={t('meleeCombatPanel.chip2.label')} tooltip={t('meleeCombatPanel.chip2.tooltip')} selected={meleeCount === 2} onClick={() => onMeleeCountChange(2, meleeCount)} />
+            <CountChip label={t('meleeCombatPanel.chip3.label')} tooltip={t('meleeCombatPanel.chip3.tooltip')} selected={meleeCount === 3} onClick={() => onMeleeCountChange(3, meleeCount)} />
           </div>
         </div>
       )}

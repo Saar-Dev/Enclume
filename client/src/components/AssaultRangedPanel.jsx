@@ -111,7 +111,8 @@ export default function AssaultRangedPanel({
   aimedLocation,        // string | null — Viser une Localisation précise (COM9, docs/PLAN_TIRVISE v2.md)
   onAimedLocationChange, // (loc | null) => void
   // Tir Multi (docs/PLAN_TIRMULTI.md) — série de 1 à 3 tirs, malus -5/2 tirs ou -7/3 tirs (LdB p.218)
-  assaultCount,             // 1 | 2 | 3
+  // assaultCount (brut) volontairement non déstructuré ici — seul effectiveAssaultCount (calculé par
+  // le parent) pilote ce panneau, cf. I18N-LINT2. Le parent continue de le passer sans effet.
   effectiveAssaultCount,    // 1 | 2 | 3 — 1 si currentFireMode !== 'CC' (D6, calculé par le parent)
   onAssaultCountChange,     // (n) => void
   multiShotIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)

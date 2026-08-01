@@ -507,6 +507,33 @@ utilisée mais oubliée en route) avant de supprimer aveuglément. Les warnings 
 méritent une vérification séparée (une dépendance manquante peut être intentionnelle — ex. pattern
 `*Ref` documenté `docs/SYSTEME/REACT.md` P40 — ou un vrai bug de staleness).
 
+**Traité partiellement (2026-08-01)** — 2 occurrences vérifiées vestige mort et supprimées, 1
+clarifiée comme faux positif (pas touchée), le reste (fichiers du chantier UI Combat en cours,
+`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`/`CombatModifiersWindow.jsx`, + warnings
+`exhaustive-deps`) laissé en l'état, non réévalué :
+- `MeleeCombatPanel.jsx` `CountChip({ n, ... })` — vérifié : les 3 sites d'appel passent `n={1|2|3}`
+  mais seul `label` (déjà le texte i18n complet, ex. "1 attaque") est rendu dans le JSX du composant —
+  `n` n'a jamais qu'une seule consommation possible et elle est absente, vestige confirmé mort (pas de
+  bug fonctionnel cachant un affichage manquant). Prop + les 3 passages `n={...}` supprimés.
+- `AssaultRangedPanel.jsx` `assaultCount` — vérifié : le composant utilise uniquement
+  `effectiveAssaultCount` (calculé par le parent, gate déjà correct sur `currentFireMode`) partout où
+  un nombre de tirs est affiché ou comparé (chips sélectionnées, boucle de rendu des cibles) — aucune
+  branche ne devrait lire la valeur brute à la place. Retiré de la déstructuration uniquement ; les
+  parents (`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx`, chantier UI Combat en cours, non
+  touchés) continuent de passer la prop sans effet.
+- `CombatTimeline.jsx` `motion` — confirmé faux positif : `<motion.div>` est bien présent 2 fois dans
+  le JSX (`grep` direct sur le fichier). ESLint (`no-unused-vars`, cette version `10.8.0`) ne reconnaît
+  visiblement pas `<Namespace.Member>` en JSX comme un usage de `Namespace` — problème d'outillage, pas
+  de code mort. **Ne pas supprimer cet import.** Root cause non creusée plus loin (configuration
+  ESLint/plugin JSX) — hors scope d'une correction de bug ponctuelle.
+
+**Testé** : ESLint sur les 2 fichiers modifiés — 0 erreur (vs 1 chacun avant) ; `npm run build` (client)
+propre.
+**Non testé** : scénario réel en jeu (déclarer une attaque CaC 1/2/3, un Tir Multi 1/2/3) — à la charge
+de Saar, aucun changement de comportement attendu (suppression de props/params non lus).
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, comportement utilisateur inchangé.
+
 ---
 
 ### Dette INI3 — current_initiative ≤ 0 : report au tour suivant non implémenté
