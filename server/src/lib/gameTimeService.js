@@ -8,6 +8,21 @@ function assertValidDelta(deltaMinutes) {
   }
 }
 
+// game_time_minutes / game_time_resolved_minutes sont des colonnes `integer` Postgres (migration 217)
+// — écrire hors de ce range fait planter la requête SQL (erreur Postgres brute, remontée telle quelle
+// au client par errorHandler.js sur un 500). Vérifié ici, au point unique où displayedAfter/
+// resolvedAfter sont réellement calculés avant écriture (performTimeAdjustment, partagé par les 3
+// points d'entrée qui écrivent ces colonnes) plutôt que sur deltaMinutes seul : c'est la somme, pas le
+// delta isolé, qui doit tenir dans la colonne.
+const PG_INTEGER_MIN = -2147483648
+const PG_INTEGER_MAX = 2147483647
+
+function assertWithinPgInteger(value, label) {
+  if (value < PG_INTEGER_MIN || value > PG_INTEGER_MAX) {
+    throw new AppError(400, `${label} dépasserait les bornes de l'entier Postgres (${PG_INTEGER_MIN} à ${PG_INTEGER_MAX})`)
+  }
+}
+
 // Mutation brute (campagne déjà verrouillée par l'appelant, FOR UPDATE) — jamais exportée seule,
 // aucun garde ici : adjustGameTime et confirmPendingAdvance ont chacun leur propre condition
 // d'appel légitime (l'un refuse un saut pendant qu'un autre est en attente, l'autre est précisément
@@ -17,6 +32,8 @@ async function performTimeAdjustment(trx, campaign, deltaMinutes) {
   const resolvedBefore = campaign.game_time_resolved_minutes
   const displayedAfter = displayedBefore + deltaMinutes
   const resolvedAfter = Math.max(resolvedBefore, displayedAfter)
+  assertWithinPgInteger(displayedAfter, 'game_time_minutes')
+  assertWithinPgInteger(resolvedAfter, 'game_time_resolved_minutes')
 
   await trx('campaigns').where({ id: campaign.id }).update({
     game_time_minutes: displayedAfter,
@@ -70,6 +87,12 @@ export async function requestGameTimeAdvance(campaignId, deltaMinutes) {
 
     const displayedAfter = campaign.game_time_minutes + deltaMinutes
     const resolvedAfter = Math.max(campaign.game_time_resolved_minutes, displayedAfter)
+    // Vérifié avant previewDueEcheances (pas seulement dans performTimeAdjustment plus bas) : sinon
+    // un delta hors bornes serait comparé tel quel à next_due_minutes (colonne integer) par cette
+    // requête, ou pire, silencieusement posé en pending_advance_delta_minutes pour échouer seulement
+    // plus tard à la confirmation.
+    assertWithinPgInteger(displayedAfter, 'game_time_minutes')
+    assertWithinPgInteger(resolvedAfter, 'game_time_resolved_minutes')
     const dueInteractive = await previewDueEcheances(campaignId, resolvedAfter)
 
     if (dueInteractive.length === 0) {

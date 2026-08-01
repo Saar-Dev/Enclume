@@ -83,6 +83,32 @@ test('adjustGameTime : les 4 cas resolved/displayed + delta=0 rejeté', { skip }
   }
 })
 
+test('adjustGameTime : refuse un delta qui ferait déborder game_time_minutes au-delà de l\'integer Postgres', { skip }, async () => {
+  const fixture = await createRealFixture({ displayed: 1000, resolved: 1000 })
+  try {
+    await assert.rejects(
+      adjustGameTime(fixture.campaign.id, 2147483647),
+      (err) => err instanceof AppError && err.statusCode === 400,
+    )
+    const campaign = await getCampaign(fixture.campaign.id)
+    assert.equal(campaign.game_time_minutes, 1000) // inchangé, transaction annulée
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('adjustGameTime : refuse un delta très négatif qui dépasserait le minimum integer Postgres', { skip }, async () => {
+  const fixture = await createRealFixture({ displayed: 1000, resolved: 1000 })
+  try {
+    await assert.rejects(
+      adjustGameTime(fixture.campaign.id, -3000000000),
+      (err) => err instanceof AppError && err.statusCode === 400,
+    )
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
 test('adjustGameTime : refuse tant qu\'une avance est déjà en attente', { skip }, async () => {
   const fixture = await createRealFixture()
   try {
@@ -125,6 +151,20 @@ test('requestGameTimeAdvance : chemin rapide identique à adjustGameTime quand r
     assert.equal(r.pending, false)
     assert.equal(r.displayedAfter, 1500)
     assert.equal(r.resolvedAfter, 1500)
+    const campaign = await getCampaign(fixture.campaign.id)
+    assert.equal(campaign.pending_advance_delta_minutes, null)
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+test('requestGameTimeAdvance : refuse un delta hors bornes avant de le poser en pending', { skip }, async () => {
+  const fixture = await createRealFixture({ displayed: 1000, resolved: 1000 })
+  try {
+    await assert.rejects(
+      requestGameTimeAdvance(fixture.campaign.id, 2147483647),
+      (err) => err instanceof AppError && err.statusCode === 400,
+    )
     const campaign = await getCampaign(fixture.campaign.id)
     assert.equal(campaign.pending_advance_delta_minutes, null)
   } finally {

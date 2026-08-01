@@ -22,6 +22,12 @@ Pour les mods d'armes (Lunette, ATI, Mémoire, Projecteur...), lire aussi `docs/
 
 - La FSM combat orchestre initiative, compétences, actions, dégâts, armures et états non spatiaux.
 - Toute décision spatiale utilise les services `world*` et `movementBudgetService`.
+- Phase ANNONCE : les joueurs déclarent l'action qu'ils veulent, y compris une action apparemment
+  impossible au moment de la déclaration (portée insuffisante, LOS bloquée...) — ce n'est jamais à
+  cette phase de refuser une déclaration pour un motif qui peut changer d'ici la résolution (un
+  personnage peut se mettre à portée, se découvrir ou se cacher entre-temps). Seule la phase
+  RÉSOLUTION vérifie ce qui est réellement possible, au moment de l'exécution (Décision Saar,
+  2026-07-31).
 - Le combat ne lit directement ni `surface_data`, ni Three.js, ni `voxel_data`.
 - Le client envoie une intention; serveur et FSM décident du résultat et publient l'état accepté.
 - Sous verrou, recalculer le mouvement puis distance, portée, LOS, couverture et effets depuis la

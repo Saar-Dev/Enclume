@@ -1,4 +1,5 @@
 import { WS } from '../../../shared/events.js'
+import { resolveMeleeReachM } from '../../../shared/combatRange.js'
 import db from '../db/knex.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -10,6 +11,7 @@ import { getMutationEffects } from '../services/mutationService.js'
 import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
+import { checkLOSForPrecheck } from '../lib/losService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import {
@@ -100,32 +102,47 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
           .first()
         if (action?.target_token_id) {
           // allonge XOR : weapon_inv_id (humanoïde) ou drone_weapon_inv_id (drone) — contrainte migration 76
-          let allonge = 0
+          let referenceRange = null
           if (action.weapon_inv_id) {
             const w = await db('char_inventory')
               .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
               .where({ 'char_inventory.id': action.weapon_inv_id })
               .select('ref_equipment.range as ref_range')
               .first()
-            allonge = parseInt(w?.ref_range) || 0
+            referenceRange = w?.ref_range
           } else if (action.drone_weapon_inv_id) {
             const w = await db('drone_weapons')
               .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
               .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
               .select('ref_equipment.range as ref_range')
               .first()
-            allonge = parseInt(w?.ref_range) || 0
+            referenceRange = w?.ref_range
           }
           const measurement = await measureBattlemapTokenDistance({
             sourceTokenId: tokenId,
             targetTokenId: action.target_token_id,
           })
-          if (measurement.status !== 'ok' || measurement.distanceM > 3 + allonge) {
+          if (measurement.status !== 'ok' || measurement.distanceM > resolveMeleeReachM(referenceRange)) {
             return callback({ ok: false })
           }
         }
       }
-      // LOS assault : vérifié à la résolution dans resolveAssaultAction → checkCombatLOS
+      // 4. LOS check Tir — même rôle que le range check CaC ci-dessus : avertir tôt (avant d'ouvrir
+      // CombatModifiersWindow) plutôt que de laisser la résolution finale seule juge. Décision Saar
+      // 2026-07-31 (.claude/rules/combat.md §Autorité) : la résolution reste seule AUTORITAIRE — ce
+      // precheck ne fait que réutiliser checkLOSForPrecheck (même moteur canonique
+      // evaluateBattlemapVisibility que resolveAssaultAction → checkCombatLOS), jamais une 2e logique.
+      // { ok:false } n'est pas un blocage dur côté client : CombatOverlay affiche un bandeau "LOS
+      // bloquée" avec un bouton "Continuer quand même" (déjà en place, jusqu'ici jamais atteint).
+      if (actionKey === 'assault') {
+        const action = await db('combat_actions')
+          .where({ campaign_id: campaignId, token_id: tokenId, type: 'assault', status: 'pending', turn_number: state.current_turn })
+          .first()
+        if (action?.target_token_id) {
+          const clear = await checkLOSForPrecheck(db, tokenId, action.target_token_id)
+          if (!clear) return callback({ ok: false })
+        }
+      }
       console.log(`[DBG] PRECHECK ${actionKey} token:${tokenId} → ok:true`)
       callback({ ok: true })
     } catch (err) {

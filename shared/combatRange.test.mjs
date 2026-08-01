@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseWeaponRangeBands, resolveWeaponRangeBand } from './combatRange.js'
+import { parseWeaponRangeBands, resolveWeaponRangeBand, resolveMeleeReachM } from './combatRange.js'
 
 test('parse les cinq bandes Polaris exprimees en metres', () => {
   assert.deepEqual(parseWeaponRangeBands('40/150/300/600 (1 000)'), [40, 150, 300, 600, 1000])
@@ -13,4 +13,11 @@ test('parse les cinq bandes Polaris exprimees en metres', () => {
 
 test('une portee unique choisit volontairement la bande la moins favorable', () => {
   assert.equal(resolveWeaponRangeBand(50, '100').band, 'extreme')
+})
+
+test('resolveMeleeReachM : 3m de base + allonge parsee, mains nues = 0', () => {
+  assert.equal(resolveMeleeReachM(null), 3)
+  assert.equal(resolveMeleeReachM(undefined), 3)
+  assert.equal(resolveMeleeReachM('1'), 4)
+  assert.equal(resolveMeleeReachM('abc'), 3)
 })

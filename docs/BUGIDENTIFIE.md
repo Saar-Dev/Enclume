@@ -853,10 +853,31 @@ même plan a posé le patron inverse (rejet propre via `AppError`) pour `calenda
 **Code impliqué** : `server/src/lib/gameTimeService.js` (`adjustGameTime`) ;
 `server/src/routes/campaigns.js` (route `POST /:id/game-time/adjust`).
 
-**Prochaine étape** : ajouter une borne explicite sur `deltaMinutes` (et/ou sur `displayedAfter`/
-`resolvedAfter` calculés) dans `adjustGameTime`, avec `AppError(400, ...)` — même patron que les
-bornes déjà posées sur `calendar_start_year`/`action_timer_sec` par ce lot. À faire avant que Lot 2
-n'ajoute un appelant automatique supplémentaire de cette fonction.
+**Correctif codé (2026-08-01, Saar)** — borne posée sur la valeur réellement écrite (`displayedAfter`/
+`resolvedAfter`), pas sur `deltaMinutes` seul : c'est la somme avec l'état existant de la campagne, pas
+le delta isolé, qui doit tenir dans la colonne `integer` :
+- `server/src/lib/gameTimeService.js` — nouvelle `assertWithinPgInteger(value, label)`
+  (`AppError(400, ...)`, bornes `-2147483648`/`2147483647`), appelée au point unique où
+  `displayedAfter`/`resolvedAfter` sont calculés avant écriture (`performTimeAdjustment`, partagé par
+  `adjustGameTime`/`requestGameTimeAdvance`/`confirmPendingAdvance` — un seul point de vérité pour les
+  3 écrivains de ces colonnes). Garde dupliquée une fois de plus tôt dans `requestGameTimeAdvance`
+  (avant `previewDueEcheances`) pour ne pas poser un `pending_advance_delta_minutes` voué à échouer
+  uniquement à la confirmation, et pour ne pas comparer une valeur hors bornes à une colonne `integer`
+  dans cette requête de preview.
+- `server/src/lib/gameTimeService.test.mjs` — 3 nouveaux tests (DB réelle) : overflow haut et bas sur
+  `adjustGameTime` (transaction annulée, `game_time_minutes` inchangé en base), overflow sur
+  `requestGameTimeAdvance` (rien posé en pending).
+
+**Testé** : `node --env-file=../.env --test server/src/lib/gameTimeService.test.mjs` (14/14 ✅, DB
+réelle) ; suite serveur complète `node --test` (148/148 ✅) ; `node --check` sur les 2 fichiers touchés
+(pas d'ESLint configuré côté serveur).
+**Non testé** : aucun scénario en jeu applicable — `GameTimeWidget.jsx`/`SectionGameRules.jsx` restent
+bornés par construction et ne peuvent pas produire un delta pareil ; ce correctif protège uniquement un
+appel direct à l'API ou un futur consommateur automatique (Lot 2+), déjà couvert par les tests DB
+ci-dessus.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar`, aucun risque — pur ajout d'un garde, comportement
+inchangé pour toute valeur déjà dans les bornes.
 
 ---
 
@@ -1048,3 +1069,47 @@ Code impliqué : client/src/components/VoxelBuilderTab.jsx (ou composant d’éd
 Cause racine [INCONNU] : Non investigué.
 
 Prochaine étape : Identifier le composant responsable de l’édition de voxels, vérifier si la fonctionnalité est seulement masquée ou jamais construite.
+
+## UI Combat — sélection de cible (proposé Session 2026-07-31, Saar)
+
+### Dette COMBAT-LOS-PRECHECK-DIVERGENCE — Precheck Tir sans check LOS/portée, doc contradictoire ✅ Session (2026-08-01)
+
+**Symptôme [OBSERVÉ, lecture de code]** : `docs/SYSTEME/COMBAT_FLUX.md:175` décrit un check LOS au
+precheck du Tir (`checkLOSForPrecheck`, `server/src/lib/losService.js:99-108`), mais cette fonction
+n’est plus appelée depuis `COMBAT_ACTION_PRECHECK` (`socketCombatResolution.js:52-135`) — retrait
+mentionné dans `docs/Old/JOURNAL5.md:897`. Le precheck Tir (`actionKey===’assault’`) ne vérifie
+aujourd’hui ni portée ni LOS (commentaire en dur L.128 : "LOS assault : vérifié à la résolution"). Seule
+la résolution finale (`checkCombatLOS`, `resolveAssaultAction`) vérifie réellement.
+
+**Décision (Saar, 2026-07-31)** : le check est voulu — pas une divergence de doc à corriger, un vrai
+manque de code à combler. Principe explicité et noté durablement dans `.claude/rules/combat.md`
+§Autorité : la phase ANNONCE laisse déclarer n’importe quelle action même apparemment impossible (les
+conditions peuvent changer d’ici la résolution) ; seule la phase RÉSOLUTION vérifie ce qui est
+réellement possible au moment de l’exécution. Ce precheck (`COMBAT_ACTION_PRECHECK`) a lieu **dans**
+la phase RÉSOLUTION (juste avant d’ouvrir la fenêtre modificateurs, avant de perdre du temps sur une
+action déjà impossible) — melee fait déjà ce check (portée), assault doit faire de même (LOS),
+cohérence entre les deux chemins.
+
+**Prochaine étape** : réintégrer l’appel à `checkLOSForPrecheck` dans `COMBAT_ACTION_PRECHECK` pour
+`actionKey===’assault’`, même patron que le check de portée déjà actif pour `melee`. Petit correctif
+ciblé, pas de nouvelle conception.
+
+**Correctif codé (2026-07-31)** — réintégration de l'appel à `checkLOSForPrecheck` dans
+`COMBAT_ACTION_PRECHECK` pour `actionKey==='assault'`, même patron que le check de portée CaC juste
+au-dessus (`socketCombatResolution.js`). Le check portée CaC lui-même a été factorisé au passage :
+nouvelle `resolveMeleeReachM(referenceRange)` dans `shared/combatRange.js` (3m de base + allonge de
+l'arme, formule jusqu'ici dupliquée à 3 endroits — precheck humanoïde, résolution humanoïde, résolution
+drone — regroupée en un point pour le site touché ici, comportement inchangé). Décision de principe
+consignée durablement dans `.claude/rules/combat.md` §Autorité (ANNONCE laisse tout déclarer, seule
+RÉSOLUTION vérifie).
+
+**Testé** : suite serveur complète `node --test` (148/148 ✅, dont `shared/combatRange.test.mjs` avec un
+nouveau test pour `resolveMeleeReachM`) ; `node --check` sur `socketCombatResolution.js`.
+**Non testé** : aucun scénario réel de Tir bloqué par LOS vérifié en jeu — jamais atteint en situation
+réelle depuis que ce correctif existe. C'est le point à lever avant de retirer cette dette du registre.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar`, comportement inchangé pour tout Tir dont la cible est
+déjà visible (LOS dégagée).
+
+---
+

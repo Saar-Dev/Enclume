@@ -35,6 +35,13 @@ export function parseWeaponRangeBands(referenceRange) {
   return Object.freeze(thresholds)
 }
 
+// Portée CaC = 3m (base LdB) + allonge de l'arme de contact équipée (ref_equipment.range).
+// Formule dupliquée à 3 endroits (precheck humanoïde, résolution humanoïde, résolution drone) —
+// source unique désormais, comportement inchangé (parseInt identique aux 3 sites d'origine).
+export function resolveMeleeReachM(referenceRange) {
+  return 3 + (parseInt(referenceRange) || 0)
+}
+
 export function resolveWeaponRangeBand(distanceM, referenceRange) {
   const distance = Number(distanceM)
   if (!Number.isFinite(distance) || distance < 0) throw new RangeError('La distance de tir doit etre positive ou nulle')
