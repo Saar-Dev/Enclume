@@ -1316,26 +1316,6 @@ natives ou texture répétée) pour écarter définitivement la piste drei.
 
 ---
 
-### BOUCLIER-CHANCE1 — Test de Chance du Petit bouclier sans Réussite/Échec critique câblés
-
-**Symptôme** : `damageService.resolveTargetHit` (consommé par `confirmDamage`/`socketCombatHelpers.js`)
-émet un `DICE_RESULT` pour le Test de Chance du Petit bouclier (`rollChance`/`chanceThreshold`/
-`chanceSuccess`, `docs/PLAN_BOUCLIER.md` Lot C) avec `isCriticalSuccess`/`isCriticalFail` figés à
-`false` en dur — contrairement aux autres jets contre un Seuil (attaque/défense), jamais branché sur
-`resolveTestOutcome` (`shared/polarisTestResolution.js`).
-
-**Trouvé en** : implémentant `docs/PLAN_TEST_CRITIQUE.md` (refonte RAW marge/critique), en auditant
-tous les `isCriticalSuccess: false` du fichier pour distinguer les vrais Tests des simples jets de
-dégâts/narration. Celui-ci est structurellement un vrai Test binaire contre un seuil (`rollChance <=
-chanceThreshold`), donc un candidat légitime — mais hors du périmètre discuté avec Saar pour ce
-chantier (portée = combat CaC/Tir/drone + Test de Choc examiné et exclu, ce Test de Chance n'avait pas
-été identifié à ce moment-là).
-
-**Prochaine étape** : décision Saar — l'inclure dans une prochaine passe (branchement direct sur
-`resolveTestOutcome`, même patron que les autres sites) ou le laisser tel quel si aucune Réussite/
-Échec critique n'est jugée pertinente pour ce Test précis.
-
----
 Bug B‑VX — Modification faces voxel non exposée dans l’UI
 
 Symptôme : Impossible de modifier les faces d’un voxel existant via l’interface, alors que la fonction de modification existe probablement côté moteur.
