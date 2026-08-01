@@ -68,7 +68,7 @@ prioritaire, à nettoyer un jour)
 | Cluster | Bugs | Fichier principal | Priorité |
 |---|---|---|---|
 | **F — Ghosts + portraits** | COM16 | `CombatTimeline.jsx` + `CombatOverlay.jsx` + `useCombatSocket.js` | Moyenne |
-| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT2 + I18N-LINT3 + I18N-LINT4 | divers | Basse |
+| **H — Dettes techniques** | TC1 + DCO1 + VX1 + AU1 + INI1 + INI2 + INI3 + TOK1 + MAP1 + COM14 + DASH1 + I18N-LINT2 + I18N-LINT3 | divers | Basse |
 | **Q — UI divers** | UI2 + UI3 | composants dés + chat | Basse |
 
 **Règle d'or :** valider le cluster A avant B, B avant C, etc. Validation fonctionnelle obligatoire entre clusters.
@@ -378,9 +378,20 @@ touchées par le retrofit i18n.
   (`setMapAction`, `setMeleeAttackCount`, etc.) dans le corps de l'effet `[activeTokenId]`. Démasqué
   en clôturant REFS-RENDER (Session 182) — même mécanisme : ESLint n'atteignait pas cette ligne tant
   que les erreurs `react-hooks/refs` du même fichier bloquaient l'analyse plus loin.
+- `client/src/lib/useDroneDeclare.js:34-40` — même famille, reset de 6 states dans l'effet
+  `[tokenId]`. Préexistant Session 165 (confirmé `git show HEAD`), non touché par le chantier
+  COMBAT-DEPLACEMENT-HOVER (2026-07-31) — juste démasqué en lintant ce fichier pour la première fois
+  cette session.
+- `client/src/components/DicePanel.jsx:290` — `setMfPreview(null)` dans le corps de l'effet debounce
+  `[showMacroForm, mfSources, mfModifier, effectiveCharId]`. Préexistant (confirmé `git show HEAD`),
+  démasqué en clôturant I18N-LINT4 (même fichier, session 2026-08-01), sans rapport avec ce correctif.
+- `client/src/character/DroneWindow.jsx:107` — `setLoading(true)` dans le corps de l'effet de fetch
+  `[character.id]`. Préexistant, démasqué au même moment (extension du correctif I18N-LINT4 à ce
+  fichier, même pattern drag/resize copié).
 
-Dans les trois cas, ESLint signale un `setState` appelé directement dans le corps de l'effet (pas dans
-un callback d'intervalle/événement), pouvant provoquer des rendus en cascade.
+Cette dette n'est plus limitée aux fichiers Combat (titre historique) — au moins deux occurrences hors
+combat confirmées ci-dessus. Dans tous les cas, ESLint signale un `setState` appelé directement dans le
+corps de l'effet (pas dans un callback d'intervalle/événement), pouvant provoquer des rendus en cascade.
 
 **Cause racine [HYPOTHÈSE]** : détection ESLint statique, non instrumentée. Les deux semblent
 fonctionner en pratique (pas de symptôme rapporté), mais le pattern n'est pas celui recommandé par
@@ -402,7 +413,7 @@ similaires dans les autres fichiers Combat) sans changer le comportement visible
 
 ---
 
-### Dette I18N-LINT4 — `handleDragEnd` référencé avant déclaration dans `DicePanel.jsx`
+### Dette I18N-LINT4 — `handleDragEnd` référencé avant déclaration dans `DicePanel.jsx` ✅ Session (2026-08-01)
 
 **Symptôme** : Aucun cas observé en jeu — trouvé par ESLint (`react-hooks/immutability`) en retouchant
 `DicePanel.jsx` pour le chantier i18n (`docs/PLAN_LOCALISATION.md` Lot 4, 2026-07-25), sans rapport
@@ -414,13 +425,59 @@ retire son propre listener `pointerup` en le référençant dans son propre corp
 `const handleDragEnd = ...` soit complète ; fonctionne à l'exécution (la closure capture la référence
 à l'appel, pas à la déclaration) mais viole l'ordre de déclaration attendu par la règle.
 
-**Cause racine [HYPOTHÈSE]** : détection ESLint statique uniquement, non instrumentée ni reproduite en
-jeu. Pattern probablement copié tel quel dans d'autres gestionnaires de drag du projet — à vérifier
-avant correctif pour éviter une régression isolée qui laisserait les autres occurrences incohérentes.
+**Cause racine [VÉRIFIÉ]** : détection ESLint statique confirmée — `git stash` de la seule modification
+de `DicePanel.jsx` fait réapparaître exactement l'erreur `react-hooks/immutability` décrite ci-dessus
+(`handleDragEnd` accessed before it is declared), rien d'autre. Pattern effectivement copié tel quel
+ailleurs : `grep` sur `removeEventListener('pointerup', handle*End)` trouve 2 occurrences
+supplémentaires identiques dans `client/src/character/CharacterWindow.jsx` (drag header **et** resize
+bas-droite) et `client/src/character/DroneWindow.jsx` (drag header **et** resize bas-droite) — 3
+fichiers, 5 handlers au total, tous corrigés ensemble (même cause racine dupliquée, la dette elle-même
+avertissait de ce risque).
 
-**Prochaine étape** : pas de symptôme observé, priorité basse — corriger en réordonnant
-`handleDragEnd`/`handleDragMove` ou en passant par une `ref` stable, même patron que
-`CombatActionWindow.jsx` si un précédent existe déjà.
+**Correctif codé (2026-08-01)** — remplacement du couple `addEventListener`/`removeEventListener`
+manuel par un `AbortController` par geste (drag, resize) : `handleDragStart`/`handleResizeStart` créent
+le controller et l'attachent aux deux listeners (`{ signal }`) ; `handleDragEnd`/`handleResizeEnd`
+appellent seulement `controller.abort()` — n'ont plus besoin de se référencer eux-mêmes ni de dépendre
+de `handleDragMove`/`handleResizeMove`, élimine la classe de bug plutôt que de réordonner à l'identique.
+Cleanup au démontage simplifié en conséquence (un seul `abort()` par geste, plus de dépendances).
+Fichiers : `client/src/components/DicePanel.jsx`, `client/src/character/CharacterWindow.jsx`,
+`client/src/character/DroneWindow.jsx`.
+
+**Testé** : ESLint sur les 3 fichiers — l'erreur `react-hooks/immutability` disparaît dans les 3 (0
+nouvelle erreur introduite, vérifié par `git stash`/comparaison avant-après) ; `npm run build` (client)
+propre.
+**Non testé** : scénario réel en jeu (glisser/redimensionner les 3 fenêtres — Dés, Personnage, Drone —
+plusieurs fois de suite, vérifier l'absence de listener fantôme) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, comportement utilisateur inchangé (mêmes gestes, même résultat
+visuel).
+
+**Trouvé en clôturant** : 2 dettes hors scope, ajoutées séparément à ce registre — nouvelles occurrences
+d'[I18N-LINT3](#dette-i18n-lint3--setstate-synchrone-dans-un-useeffect-plusieurs-fichiers-combat) dans
+`DicePanel.jsx`/`DroneWindow.jsx`, et `DroneWindow.jsx` `detruit` (champ socket jamais consommé —
+voir dette **DRONE-DETRUIT1** ci-dessous).
+
+---
+
+### Dette DRONE-DETRUIT1 — `DRONE_INTEGRITY_UPDATED` : champ `detruit` reçu mais jamais appliqué à l'état
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en clôturant I18N-LINT4 (ESLint `no-unused-vars` sur
+`DroneWindow.jsx:128`, découvert en corrigeant le pattern drag/resize du même fichier, sans rapport).
+
+**Code impliqué** : `client/src/character/DroneWindow.jsx:126-134` — le handler de
+`WS.DRONE_INTEGRITY_UPDATED` déstructure `{ characterId, integrite_actuelle, damages, detruit }` mais
+`setDrone(prev => prev ? { ...prev, integrite_actuelle, damages } : prev)` ne propage jamais `detruit`.
+`grep` confirme qu'aucun rendu du composant ne lit `drone?.detruit` — si ce champ existe côté serveur
+(à vérifier) et qu'un drone est détruit pendant que la fenêtre est ouverte, l'état affiché ne le reflète
+qu'après un rechargement complet (nouveau fetch initial), pas en temps réel.
+
+**Cause racine [INCONNU]** : pas encore investigué si `detruit` est réellement émis avec une valeur
+utile par le serveur (à vérifier côté `socketCombatHelpers.js`/dégâts drone) ni si un affichage
+"détruit" est prévu/attendu dans cette fenêtre.
+
+**Prochaine étape** : vérifier l'émetteur serveur de `DRONE_INTEGRITY_UPDATED`, puis décider si
+`detruit` doit gater l'UI (désactiver armes/programmes, bandeau "détruit") — décision produit avant
+correctif.
 
 ---
 
@@ -852,6 +909,11 @@ même plan a posé le patron inverse (rejet propre via `AppError`) pour `calenda
 
 **Code impliqué** : `server/src/lib/gameTimeService.js` (`adjustGameTime`) ;
 `server/src/routes/campaigns.js` (route `POST /:id/game-time/adjust`).
+
+**Prochaine étape** : ajouter une borne explicite sur `deltaMinutes` (et/ou sur `displayedAfter`/
+`resolvedAfter` calculés) dans `adjustGameTime`, avec `AppError(400, ...)` — même patron que les
+bornes déjà posées sur `calendar_start_year`/`action_timer_sec` par ce lot. À faire avant que Lot 2
+n'ajoute un appelant automatique supplémentaire de cette fonction.
 
 **Correctif codé (2026-08-01, Saar)** — borne posée sur la valeur réellement écrite (`displayedAfter`/
 `resolvedAfter`), pas sur `deltaMinutes` seul : c'est la somme avec l'état existant de la campagne, pas

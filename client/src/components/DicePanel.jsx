@@ -265,6 +265,7 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
   const [mfPreview,       setMfPreview]     = useState(null)
 
   const dragState          = useRef(null)
+  const dragAbortRef       = useRef(null)
   const nameInputRef       = useRef(null)
   const pendingFormulaRef  = useRef(null)
   const previewTimerRef    = useRef(null)
@@ -330,23 +331,22 @@ export default function DicePanel({ socket, mode, sidebarVisible, sidebarWidth }
 
   const handleDragEnd = useCallback(() => {
     dragState.current = null
-    document.removeEventListener('pointermove', handleDragMove)
-    document.removeEventListener('pointerup',   handleDragEnd)
-  }, [handleDragMove])
+    dragAbortRef.current?.abort()
+    dragAbortRef.current = null
+  }, [])
 
   const handleDragStart = useCallback((e) => {
     e.preventDefault()
     dragState.current = { startX: e.clientX, startY: e.clientY, originX: pos.x, originY: pos.y }
-    document.addEventListener('pointermove', handleDragMove)
-    document.addEventListener('pointerup',   handleDragEnd)
+    const controller = new AbortController()
+    dragAbortRef.current = controller
+    document.addEventListener('pointermove', handleDragMove, { signal: controller.signal })
+    document.addEventListener('pointerup',   handleDragEnd,  { signal: controller.signal })
   }, [pos, handleDragMove, handleDragEnd])
 
   useEffect(() => {
-    return () => {
-      document.removeEventListener('pointermove', handleDragMove)
-      document.removeEventListener('pointerup',   handleDragEnd)
-    }
-  }, [handleDragMove, handleDragEnd])
+    return () => dragAbortRef.current?.abort()
+  }, [])
 
   // ── Dés ────────────────────────────────────────────────────────────────────
   // Clic gauche : même type → n++  |  nouveau type → switch (garde mod)

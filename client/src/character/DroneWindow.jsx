@@ -54,7 +54,8 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
   useEffect(() => { sizeRef.current = size }, [size])
 
   // ─── Drag header ──────────────────────────────────────────────────────────
-  const dragState = useRef(null)
+  const dragState   = useRef(null)
+  const dragAbortRef = useRef(null)
 
   const handleDragMove = useCallback((e) => {
     if (!dragState.current) return
@@ -68,9 +69,9 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
 
   const handleDragEnd = useCallback(() => {
     dragState.current = null
-    document.removeEventListener('pointermove', handleDragMove)
-    document.removeEventListener('pointerup',   handleDragEnd)
-  }, [handleDragMove])
+    dragAbortRef.current?.abort()
+    dragAbortRef.current = null
+  }, [])
 
   const handleDragStart = useCallback((e) => {
     if (e.target.closest('button,input,select,textarea')) return
@@ -79,17 +80,16 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
       startX: e.clientX, startY: e.clientY,
       originX: posRef.current.x, originY: posRef.current.y,
     }
-    document.addEventListener('pointermove', handleDragMove)
-    document.addEventListener('pointerup',   handleDragEnd)
+    const controller = new AbortController()
+    dragAbortRef.current = controller
+    document.addEventListener('pointermove', handleDragMove, { signal: controller.signal })
+    document.addEventListener('pointerup',   handleDragEnd,  { signal: controller.signal })
   }, [handleDragMove, handleDragEnd])
 
   // Cleanup si démonté pendant drag
   useEffect(() => {
-    return () => {
-      document.removeEventListener('pointermove', handleDragMove)
-      document.removeEventListener('pointerup',   handleDragEnd)
-    }
-  }, [handleDragMove, handleDragEnd])
+    return () => dragAbortRef.current?.abort()
+  }, [])
 
   // ─── Onglets ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('sheet')
@@ -134,7 +134,8 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
   }, [socket, character.id])
 
   // ─── Resize handle bas-droite ──────────────────────────────────────────────
-  const resizeState = useRef(null)
+  const resizeState   = useRef(null)
+  const resizeAbortRef = useRef(null)
 
   const handleResizeMove = useCallback((e) => {
     if (!resizeState.current) return
@@ -148,9 +149,9 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
 
   const handleResizeEnd = useCallback(() => {
     resizeState.current = null
-    document.removeEventListener('pointermove', handleResizeMove)
-    document.removeEventListener('pointerup',   handleResizeEnd)
-  }, [handleResizeMove])
+    resizeAbortRef.current?.abort()
+    resizeAbortRef.current = null
+  }, [])
 
   const handleResizeStart = useCallback((e) => {
     e.preventDefault()
@@ -159,16 +160,15 @@ export default function DroneWindow({ character, isGm, onClose, socket }) {
       startX: e.clientX, startY: e.clientY,
       originW: sizeRef.current.w, originH: sizeRef.current.h,
     }
-    document.addEventListener('pointermove', handleResizeMove)
-    document.addEventListener('pointerup',   handleResizeEnd)
+    const controller = new AbortController()
+    resizeAbortRef.current = controller
+    document.addEventListener('pointermove', handleResizeMove, { signal: controller.signal })
+    document.addEventListener('pointerup',   handleResizeEnd,  { signal: controller.signal })
   }, [handleResizeMove, handleResizeEnd])
 
   useEffect(() => {
-    return () => {
-      document.removeEventListener('pointermove', handleResizeMove)
-      document.removeEventListener('pointerup',   handleResizeEnd)
-    }
-  }, [handleResizeMove, handleResizeEnd])
+    return () => resizeAbortRef.current?.abort()
+  }, [])
 
   // ─── Rendu ─────────────────────────────────────────────────────────────────
   return (

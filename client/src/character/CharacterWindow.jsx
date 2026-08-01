@@ -84,7 +84,8 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
   useEffect(() => { sizeRef.current = size }, [size])
 
   // ─── Drag header ──────────────────────────────────────────────────────────
-  const dragState = useRef(null)
+  const dragState   = useRef(null)
+  const dragAbortRef = useRef(null)
 
   // Handlers stables — dépendances vides, lisent pos/size via refs
   const handleDragMove = useCallback((e) => {
@@ -99,9 +100,9 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
 
   const handleDragEnd = useCallback(() => {
     dragState.current = null
-    document.removeEventListener('pointermove', handleDragMove)
-    document.removeEventListener('pointerup',   handleDragEnd)
-  }, [handleDragMove])
+    dragAbortRef.current?.abort()
+    dragAbortRef.current = null
+  }, [])
 
   const handleDragStart = useCallback((e) => {
     if (e.target.closest('button')) return
@@ -110,12 +111,15 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
       startX: e.clientX, startY: e.clientY,
       originX: posRef.current.x, originY: posRef.current.y,
     }
-    document.addEventListener('pointermove', handleDragMove)
-    document.addEventListener('pointerup',   handleDragEnd)
+    const controller = new AbortController()
+    dragAbortRef.current = controller
+    document.addEventListener('pointermove', handleDragMove, { signal: controller.signal })
+    document.addEventListener('pointerup',   handleDragEnd,  { signal: controller.signal })
   }, [handleDragMove, handleDragEnd])
 
   // ─── Resize handle bas-droite ──────────────────────────────────────────────
-  const resizeState = useRef(null)
+  const resizeState   = useRef(null)
+  const resizeAbortRef = useRef(null)
 
   const handleResizeMove = useCallback((e) => {
     if (!resizeState.current) return
@@ -129,9 +133,9 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
 
   const handleResizeEnd = useCallback(() => {
     resizeState.current = null
-    document.removeEventListener('pointermove', handleResizeMove)
-    document.removeEventListener('pointerup',   handleResizeEnd)
-  }, [handleResizeMove])
+    resizeAbortRef.current?.abort()
+    resizeAbortRef.current = null
+  }, [])
 
   const handleResizeStart = useCallback((e) => {
     e.preventDefault()
@@ -140,19 +144,19 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
       startX: e.clientX, startY: e.clientY,
       originW: sizeRef.current.w, originH: sizeRef.current.h,
     }
-    document.addEventListener('pointermove', handleResizeMove)
-    document.addEventListener('pointerup',   handleResizeEnd)
+    const controller = new AbortController()
+    resizeAbortRef.current = controller
+    document.addEventListener('pointermove', handleResizeMove, { signal: controller.signal })
+    document.addEventListener('pointerup',   handleResizeEnd,  { signal: controller.signal })
   }, [handleResizeMove, handleResizeEnd])
 
   // Cleanup si démonté pendant drag ou resize
   useEffect(() => {
     return () => {
-      document.removeEventListener('pointermove', handleDragMove)
-      document.removeEventListener('pointerup',   handleDragEnd)
-      document.removeEventListener('pointermove', handleResizeMove)
-      document.removeEventListener('pointerup',   handleResizeEnd)
+      dragAbortRef.current?.abort()
+      resizeAbortRef.current?.abort()
     }
-  }, [handleDragMove, handleDragEnd, handleResizeMove, handleResizeEnd])
+  }, [])
 
   // ─── Feedback save ────────────────────────────────────────────────────────
   const [saved,       setSaved]       = useState(false)
