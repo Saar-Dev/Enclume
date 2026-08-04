@@ -225,13 +225,27 @@ Cinq colonnes TEXT enum sur `combat_roster`, toutes NOT NULL avec DEFAULT.
 
 | Colonne | Migration | CHECK values | Default | Persistance | Reset endTurn |
 |---|---|---|---|---|---|
-| `state_position` | 56 | `'standing'\|'crouching'\|'prone'` | `'standing'` | **par tour** | → `'standing'` |
+| `state_position` | 56 | `'standing'\|'crouching'\|'prone'` | `'standing'` | **combat** | inchangé (corrigé, voir note) |
 | `state_weapon` | 56 | `'holstered'\|'ready'\|'drawn'` | `'holstered'` | **combat** | inchangé |
 | `state_fire_mode` | 58 | `'cc'\|'rc'\|'rl'` | `'cc'` | **combat** | inchangé |
 | `state_cover` | 58 | `'exposed'\|'partial'\|'important'` | `'exposed'` | **par tour** | → `'exposed'` |
 | `state_vitesse` | 58 | `'normal'\|'delayed'\|'rushed'` | `'normal'` | **par tour** | → `'normal'` |
 
-**Règle :** `state_weapon` et `state_fire_mode` survivent entre les tours (posture d'arme réelle). `state_position`, `state_cover`, `state_vitesse` se réinitialisent à chaque nouveau tour.
+**Règle :** `state_position`, `state_weapon` et `state_fire_mode` survivent entre les tours (posture
+réelle du personnage — changer de position a un coût d'Initiative dédié, REGLESYSCOMBAT.md, qui n'a de
+sens que si la position obtenue persiste). `state_cover`, `state_vitesse` se réinitialisent à chaque
+nouveau tour.
+
+> **Correctif `state_position` (2026-08, `docs/PLANS/PLAN_CHARACTER_STATES.md` Lot 2b)** :
+> `state_position` était à tort reset à `'standing'` dans `endTurn()` — corrigé. **Autorité du broadcast
+> client** (ce que voit le joueur/MJ) déplacée vers une table dédiée `character_states`
+> (`server/src/lib/characterStateService.js`), ancrée sur `token_id` — un catalogue extensible
+> (`ref_character_state_values`) y ajoute déjà une 4ᵉ position, `'kneeling'` (à genou, LdB), pas encore
+> exposée via `COMBAT_ACTION_DECLARE`/`COMBAT_INIT_STATE` (`VALID_POS`/`CHECK` encore limités aux 3
+> valeurs historiques). `combat_roster.state_position`/`state_weapon` restent la colonne écrite et
+> restent l'autorité lue directement par `socketCombatAnnouncement.js` (`entry`, coût d'Initiative +
+> validation Tir Visé) — leur retrait est différé (Lot 2c, `PLAN_CHARACTER_STATES.md` §3), pas encore
+> fait.
 
 **Labels UI (français) :**
 - `state_position` : `'standing'`→ Debout, `'crouching'`→ Accroupi, `'prone'`→ Couché
@@ -311,10 +325,9 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 **endTurn :** reset colonnes per-turn + nettoyage JSONB :
 ```js
 await db('combat_roster').where({ campaign_id, status: 'active' }).update({
-  state_position: 'standing',
   state_cover:    'exposed',
   state_vitesse:  'normal',
-  // state_weapon et state_fire_mode : inchangés (persistent)
+  // state_position, state_weapon, state_fire_mode : inchangés (persistent — voir note Lot 2b ci-dessus)
   // state_character : pas de flags per-turn définis en V1 — is_stunned persiste intentionnellement
 })
 ```
@@ -351,11 +364,10 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
 await db('combat_roster').where({ campaign_id, status: 'active' }).update({
   has_announced:     false,
   has_resolved:      false,
-  state_position:    'standing',   // per-turn
   state_cover:       'exposed',    // per-turn
   state_vitesse:     'normal',     // per-turn (remplace l'ancien flag is_rushed dans state_character — migration 58)
   state_combat_mode: 'normal',     // per-turn
-  // state_weapon, state_fire_mode : inchangés (persistent combat)
+  // state_position, state_weapon, state_fire_mode : inchangés (persistent combat — voir note Lot 2b ci-dessus)
   // state_character : is_stunned persiste intentionnellement (non per-turn)
 })
 // 2. combat_actions N'EST PLUS vidée (Session 159, §6bis point 5 du plan archivé) — chaque ligne porte

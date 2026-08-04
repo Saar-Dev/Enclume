@@ -1,13 +1,22 @@
 # PLAN_CHARACTER_STATES.md — Autorité unique des états persistants de personnage (position, arme)
 
-> Créé : 2026-07-26 (dev/Saar). Statut : **planification uniquement, aucun code écrit.**
-> Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
-> chantier clos, contenu durable transféré vers un nouveau `docs/SYSTEME/ETATS_PERSONNAGE.md` (modèle :
-> `docs/SYSTEME/BLESSURES.md`, même famille de sujet — condition persistante de personnage).
-> Responsabilité unique de ce document : déplacer l'autorité de `state_position`/`state_weapon` hors de
-> `combat_roster` (éphémère) vers une entité durable, et corriger le reset erroné de `state_position` en
-> fin de tour. Prérequis pour `docs/PLAN_RW_TOKEN` (Phase 7), qui consommera cette autorité pour piloter
-> les postures animées — mais ce plan ne traite aucune animation.
+> Créé : 2026-07-26 (dev/Saar). **Clos 2026-08-04 — Lots 0/1/2a/2b faits et validés en jeu réel.**
+> Contenu durable transféré vers `docs/SYSTEME/ETATS_PERSONNAGE.md` (modèle : `docs/SYSTEME/BLESSURES.md`) ;
+> `docs/SYSTEME/COMBAT.md` corrigé (le bug `state_position` y était documenté comme comportement voulu).
+> Archivé ici (`docs/RegleDocumentaire.md` Règle 10) — document conservé pour son historique de décision
+> (§0.3bis, §0.4bis, §3.1), pas pour être relu comme référence active : voir `ETATS_PERSONNAGE.md`.
+>
+> **Lot 2c non fait, différé explicitement** (décision Saar, hors périmètre de cette clôture) : retrait
+> des colonnes `combat_roster.state_position`/`state_weapon` + migration de `entry`
+> (`socketCombatAnnouncement.js:139`) vers `characterStateService`. Codex/Kiwi ne font plus partie du
+> projet (plus d'urgence fusion) — clôture prévue avec `docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7) quand ce
+> chantier animations reprendra, pas avant. Voir `ETATS_PERSONNAGE.md` pour l'état vivant de cette
+> limite tant qu'elle dure.
+>
+> Responsabilité originale de ce document : déplacer l'autorité de `state_position`/`state_weapon` hors
+> de `combat_roster` (éphémère) vers une entité durable, et corriger le reset erroné de `state_position`
+> en fin de tour — les deux faits pour le broadcast client (Lot 2b) ; le retrait complet de l'ancienne
+> colonne reste ouvert (Lot 2c, ci-dessus).
 
 ---
 

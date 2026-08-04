@@ -94,3 +94,55 @@ fonctionnel en navigateur par Saar** (création salle/mur/connecteur/matériau).
 (pas de suite Playwright dédiée à l'éditeur de surface).
 **Données** : aucune migration, aucun effet runtime — code client uniquement.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` applicable si besoin.
+
+---
+
+## Session (Saar) — 2026-08-04 — `PLAN_CHARACTER_STATES.md` Lots 0-2b clos, Lot 2c différé
+
+**Contexte** : `combat_roster.state_position`/`state_weapon` sont supprimées à `COMBAT_END` (table
+éphémère) — un personnage perdait sa posture entre deux combats, et `endTurn()` remettait à tort
+`state_position` à `'standing'` à chaque fin de tour (contraire à REGLESYSCOMBAT.md : le coût
+d'Initiative d'un changement de position n'a de sens que si la position obtenue persiste).
+
+**Lot 0** — nouvelle autorité additive : `ref_character_state_values` (catalogue extensible) +
+`character_states` (ancrée sur `token_id`, pas `character_id` — un GM peut poser plusieurs tokens
+partageant le même `character_id`, chacun avec son propre état), `characterStateService.js` (point de
+résolution unique, miroir `woundService.js`). Migration `229` — dernière appliquée était 227, aucune
+pending.
+
+**Lot 1** — double-écriture shadow (méthode Scientist, même dispositif que `PLAN_RW_SYSCOMBAT.md §2.3`)
+aux 3 sites qui écrivent `combat_roster.state_position`/`state_weapon`, dans la même transaction,
+comparaison `[DBG-DECOUPLAGE]` jamais bloquante.
+
+**Lot 2a** — 5 endroits dupliquaient le même spread de mise en forme du broadcast roster (trouvé en
+vérifiant l'inventaire du plan avant Lot 0 : le plan d'origine n'en citait qu'1). Extraction
+`buildBroadcastRoster` (`server/src/lib/combatRosterBroadcast.js`) — seule la mise en forme mutualisée,
+chaque site garde son propre `io.emit` (payloads hétérogènes).
+
+**Lot 2b** — `buildBroadcastRoster` devient async, source `state_position`/`state_weapon` depuis
+`characterStateService.getCharacterStatesForTokens` (batché) au lieu des colonnes `combat_roster`, et
+retrait du reset fautif dans `endTurn()`. **Portée volontairement limitée au broadcast** (analyse à
+charge en session) : `socketCombatAnnouncement.js:139` (`entry`) lit encore `combat_roster` directement
+pour une règle de jeu serveur authentique (coût d'Initiative + validation Tir Visé, `isAimEligible`) —
+couper cette écriture aurait cassé cette validation. `combat_roster.state_position`/`state_weapon`
+restent donc écrites, `characterStateShadowCheck.js` reste actif.
+
+**Lot 2c (retrait des colonnes + migration de `entry`) différé** : Saar a indiqué que Codex et Kiwi ne
+font plus partie du projet (plus d'urgence fusion), et souhaite clôturer ce point avec
+`docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7 — animations, qui doit de toute façon consommer cette même table)
+plutôt que maintenant. Suivi : `docs/EN_COURS.md` (ETATSPERS-LOT2C), `docs/SYSTEME/ETATS_PERSONNAGE.md`.
+
+**Documentation** : `docs/SYSTEME/ETATS_PERSONNAGE.md` créé (contenu durable, modèle `BLESSURES.md`) ;
+`docs/SYSTEME/COMBAT.md` corrigé (documentait le bug `state_position` comme comportement voulu) ;
+`docs/PLANS/PLAN_CHARACTER_STATES.md` archivé dans `docs/Old/`.
+
+**Testé** : migration 229 up/down/re-up ; `characterStateService`/`combatRosterBroadcast` contre la DB
+de dev (contraintes unique/FK, atomicité transaction, batching) ; `combatRosterBroadcast.test.mjs` (2
+tests, patron rollback) ; 4 sessions de combat réelles par Saar au fil des lots — persistance de
+position confirmée, effet cumulé des mods de position sur plusieurs tours validé comme comportement
+voulu, Tir Visé toujours refusé après un changement d'état déclaré, aucun `[DBG-DECOUPLAGE]` sur aucune.
+**Non testé** : Lot 2c — différé, hors périmètre de cette clôture (décision Saar).
+**Données** : migration `229` (nouvelle table, additive). Aucune autre migration — les colonnes
+`combat_roster.state_position`/`state_weapon` ne sont pas retirées (Lot 2c).
+**Retour arrière** : 4 commits isolés sur `dev/Saar` (`96d04ef`, `60d3d31`, `e7c6d60`, `ba77a1a`), chacun
+testé et confirmé par Saar avant le suivant.
