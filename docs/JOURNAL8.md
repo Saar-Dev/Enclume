@@ -279,3 +279,43 @@ Annonce (question de règle du jeu ouverte, pas d'architecture — non tranchée
 `PLAN_COMBAT_MODE_AMBIANT.md` §4).
 **Données** : aucune — 100 % client, aucune migration.
 **Retour arrière** : commit isolé sur `dev/Saar`, aucun changement serveur.
+
+---
+
+## Session (Saar) — 2026-08-04 — CLICKATTACK-MOVECONFLICT1 clos (clic sur token adverse déclenchait un déplacement au lieu d'une attaque)
+
+**Contexte** : suite directe d'ALLURE-TURNGATE1 (même session de signalement, `docs/BUGIDENTIFIE.md`,
+`docs/PLANS/PLAN_COMBAT_MODE_AMBIANT.md`) — traité isolément après clôture du premier, un seul bug à la
+fois. Symptôme : cliquer un token adverse en combat proposait un déplacement vers la case occupée par
+la cible plutôt qu'une attaque.
+
+**Cause racine [HYPOTHÈSE renforcée par lecture, non instrumentée en exécution]** : `Canvas3D.jsx` —
+la détection « case occupée par un token » (censée transformer un clic en attaque plutôt qu'en
+déplacement) n'était calculée que pendant le survol (`handlePointerMove`, écrite dans
+`hoveredOccupantTokenRef`). Le clic (`handlePointerUp`) se contentait de lire cette ref sans jamais la
+revérifier sur la destination réelle du chemin de déplacement calculé. Sans `pointermove` ayant mis à
+jour la ref exactement sur la cible juste avant le clic (curseur immobile depuis avant l'armement du
+survol ambiant, léger écart entre le point brut survolé et l'extrémité du chemin renvoyé par le
+serveur), un déplacement pouvait partir vers une case en réalité occupée — correspond exactement au
+symptôme décrit.
+
+**Correctif** — `client/src/components/Canvas3D.jsx` seul :
+- Détection d'occupation extraite dans un helper unique `findOccupantAt(destination, excludeTokenId)`,
+  réutilisé par le survol (comportement inchangé) et rappelé, fraîchement, dans `handlePointerUp` sur
+  la destination réelle du chemin (`dest.x`/`dest.z`) juste avant de committer un déplacement — élimine
+  la dépendance à l'ordre des événements (classe de bug supprimée) plutôt qu'un rustinage de timing.
+
+**Explicitement non corrigé** (causes distinctes, un seul bug à la fois) : le résiduel drone hérité
+d'ALLURE-TURNGATE1 et l'absence de garde de tour sur `useCombatClickAttack` — regroupés dans une
+nouvelle dette dédiée, **CLICKATTACK-TURNGATE1** (`docs/BUGIDENTIFIE.md`), aucun symptôme observé en
+jeu à ce jour.
+
+**Testé** : ESLint sur `Canvas3D.jsx` — 16 problèmes (13 erreurs, 3 warnings) avant **et** après le
+correctif, tous préexistants (pattern refs P40 déjà présent ailleurs dans le fichier, vérifié par
+`git stash`) — 0 nouvelle erreur introduite ; `npm run build` (client) propre. **Confirmé fonctionnel
+en jeu par Saar (2026-08-04)**.
+**Non testé** : le résiduel drone et le cas PJ hors-tour (CLICKATTACK-TURNGATE1, aucun symptôme
+observé, non prioritaire).
+**Données** : aucune — 100 % client, aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar`, aucun changement serveur, aucun changement de
+comportement pour un clic sur case libre.

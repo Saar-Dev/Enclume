@@ -411,21 +411,77 @@ fichier (`useDroneDeclare.js`) partagé entre les deux bugs.
 
 ---
 
-### Bug CLICKATTACK-MOVECONFLICT1 — Cliquer sur un token adverse déclenche un déplacement au lieu d'une attaque
+### Bug CLICKATTACK-MOVECONFLICT1 — Cliquer sur un token adverse déclenche un déplacement au lieu d'une attaque ✅ Session (Saar, 2026-08-04)
 
 **Symptôme** : signalé par Saar (2026-08-04) — il n'est pas possible de cliquer sur un token pour
 l'attaquer sans déclencher un déplacement à destination de la case occupée par sa cible.
 
-**Cause racine [INCONNU]** : non investigué — analyse annulée (2026-08-04, même raison
-qu'ALLURE-TURNGATE1).
+**Cause racine [HYPOTHÈSE renforcée par lecture, non instrumentée en jeu — pas d'accès navigateur côté
+Claude]** : `Canvas3D.jsx` — la détection « case occupée par un autre token » (censée transformer un
+clic en attaque plutôt qu'en déplacement, `hoveredOccupantTokenRef`) n'était calculée que pendant le
+survol (`handlePointerMove`, sur pointermove). Le clic (`handlePointerUp`) se contentait de **lire**
+cette ref sans jamais la revérifier sur la destination réelle du chemin de déplacement calculé
+(`dest`, extrémité du path serveur). Si aucun `pointermove` n'avait mis à jour la ref exactement sur
+la cible juste avant le clic (curseur immobile depuis avant l'armement du survol ambiant
+COMBAT-DEPLACEMENT-HOVER, ou léger écart entre le point brut survolé et l'extrémité du chemin renvoyé
+par le serveur), un déplacement partait quand même — vers une case en réalité occupée par la cible.
+Correspond exactement au symptôme décrit (« déplacement à destination de la case occupée »).
 
-**Hérite un résiduel d'ALLURE-TURNGATE1** (ci-dessus, confirmé Session 2026-08-04) : le survol
-déplacement et le clic-attaque du drone (MJ) partagent un seul réglage (`moveHoverEnabled`,
-`useDroneDeclare.js`) — corriger l'un sans l'autre n'a pas été possible, donc le drone reste affecté
-par les deux bugs jusqu'à ce que celui-ci soit traité.
+**Correctif codé (2026-08-04)** — `client/src/components/Canvas3D.jsx` uniquement :
+- Extraction de la détection d'occupation (déjà présente dans `handlePointerMove`) en un helper unique
+  `findOccupantAt(destination, excludeTokenId)`, réutilisé tel quel par le survol (comportement
+  inchangé) et appelé une seconde fois, fraîchement, dans `handlePointerUp` sur la destination réelle
+  du chemin (`dest.x`/`dest.z`) juste avant de committer un déplacement — élimine la dépendance à
+  l'ordre des événements (classe de bug supprimée, pas un rustinage de timing) plutôt que de chercher à
+  garantir qu'un `pointermove` a toujours lieu avant le clic.
 
-**Prochaine étape** : à traiter isolément, un seul bug à la fois — reproduire/instrumenter avant toute
-hypothèse.
+**Explicitement non corrigé (causes distinctes, un seul bug à la fois)** :
+- Le résiduel drone hérité d'ALLURE-TURNGATE1 (`moveHoverEnabled` partagé entre survol et clic-attaque
+  dans `useDroneDeclare.js`) — reste affecté.
+- L'absence de garde de tour sur `useCombatClickAttack` dans `CombatActionWindow.jsx` (`enabled` sans
+  `isMyTurnInAnnouncement`/`isMyTurnInResolution`, contrairement à `useAutoMoveMode` post
+  ALLURE-TURNGATE1, déjà noté en commentaire dans le fichier) — gap réel, non traité ici.
+
+**Testé** : ESLint sur `Canvas3D.jsx` — 16 problèmes (13 erreurs, 3 warnings) avant **et** après le
+correctif, tous préexistants (pattern refs P40 déjà présent ailleurs dans le fichier, vérifié par
+`git stash`/comparaison) — 0 nouvelle erreur introduite ; `npm run build` (client) propre.
+**Confirmé fonctionnel en jeu par Saar (2026-08-04)** — clic sur token adverse propose désormais
+l'attaque plutôt qu'un déplacement.
+**Données** : aucune, 100% client, aucune migration.
+**Retour arrière** : commit isolé, aucun changement de comportement pour un clic sur case libre (chemin
+inchangé) ni pour le drone/la fenêtre GM (résiduels non touchés, voir CLICKATTACK-TURNGATE1 ci-dessous).
+
+---
+
+### Dette CLICKATTACK-TURNGATE1 — `useCombatClickAttack` jamais gardé par le tour, contrairement à `useAutoMoveMode`
+
+**Symptôme** : Aucun cas observé en jeu à ce jour — trouvé en corrigeant CLICKATTACK-MOVECONFLICT1
+(2026-08-04), en comparant le câblage de `useCombatClickAttack` à celui de `useAutoMoveMode`
+(ALLURE-TURNGATE1, clos).
+
+**Contexte [VÉRIFIÉ par lecture]** : `useAutoMoveMode` s'arme désormais uniquement si c'est réellement
+le tour du déclarant (`isMyTurnInAnnouncement`/`isMyTurnInResolution` côté PJ, `isActivePnj` côté
+MJ/PNJ, ALLURE-TURNGATE1). `useCombatClickAttack`, le hook jumeau qui arme le clic-attaque ambiant
+(même patron, même fichier `useCombatClickAttack.js`), n'a jamais reçu la même contrainte :
+- `CombatActionWindow.jsx` (PJ, non-drone) : `enabled` ne vérifie ni `isMyTurnInAnnouncement` ni
+  `isMyTurnInResolution` — écart explicitement noté en commentaire lors de la correction
+  d'ALLURE-TURNGATE1 (« bug séparé, volontairement non touché »).
+- `useDroneDeclare.js` (drone, PJ **et** MJ) : `useAutoMoveMode`/`useCombatClickAttack` partagent un
+  seul flag `moveHoverEnabled` — côté PJ (`CombatActionWindow.jsx`, `moveHoverEnabled: isDrone`),
+  aucun garde de tour du tout ; côté MJ (`CombatGmDeclareWindow.jsx`, `moveHoverEnabled:
+  !!activeDroneCharId`), garde partiel (dérive de `activeTokenId`, le slot actif) mais sans le
+  `!has_announced` que `isActivePnj` possède pour le cas non-drone.
+
+**Impact potentiel** : le clic-attaque ambiant peut rester armé (handler enregistré via
+`registerAmbientAttackHandler`) hors du tour du déclarant concerné — pas de symptôme confirmé en jeu
+(le survol/déplacement, lui, est maintenant correctement gardé et prioritaire dans `Canvas3D.jsx`), mais
+écart structurel avec le patron validé d'ALLURE-TURNGATE1.
+
+**Prochaine étape** : appliquer le même garde que `useAutoMoveMode` aux 3 appelants de
+`useCombatClickAttack` — `isMyTurnInAnnouncement`/`isMyTurnInResolution` (`CombatActionWindow.jsx`),
+séparer `moveHoverEnabled` en deux flags distincts si le survol et le clic-attaque doivent un jour
+diverger dans `useDroneDeclare.js`, ajouter `!has_announced` au garde MJ-drone. Session dédiée, pas un
+correctif d'urgence (aucun symptôme observé).
 
 ---
 

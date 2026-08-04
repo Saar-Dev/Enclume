@@ -1,8 +1,9 @@
 # PLAN_COMBAT_MODE_AMBIANT.md — Correction du cycle de vie des modes d'interaction ambiants en combat
 
-> Version : V0.4 — 2026-08-04
-> Statut : **Confirmé fonctionnel en jeu (PJ, MJ non-drone) — résiduel drone reporté sur
-> CLICKATTACK-MOVECONFLICT1 (`docs/BUGIDENTIFIE.md`). Compte-rendu : `docs/JOURNAL8.md`.**
+> Version : V0.5 — 2026-08-04
+> Statut : **Confirmé fonctionnel en jeu (PJ, MJ non-drone). CLICKATTACK-MOVECONFLICT1 clos
+> (2026-08-04, `Canvas3D.jsx`, confirmé fonctionnel en jeu) — résiduel drone reporté sur
+> CLICKATTACK-TURNGATE1 (`docs/BUGIDENTIFIE.md`). Compte-rendu : `docs/JOURNAL8.md`.**
 > Responsabilité unique : cartographier l'état actuel, nommer le défaut structurel réel (et écarter
 > ceux qui n'en sont pas) pour le « mode ambiant » (survol déplacement + clic-attaque direct) en
 > combat côté client.

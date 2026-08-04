@@ -743,6 +743,19 @@ function Scene({
     !!combatMoveModeRef.current && !combatTargetModeRef.current && !losModeRef.current?.active && !moveTarget,
   [moveTarget])
 
+  // Détection "case occupée par un autre token" — source unique, consultée au survol
+  // (handlePointerMove) ET à nouveau, fraîche, au clic (handlePointerUp) — CLICKATTACK-MOVECONFLICT1 :
+  // un déplacement ne doit jamais atterrir sur une case occupée, même si aucun `pointermove` n'a mis à
+  // jour la détection sur cette position exacte juste avant le clic (ex. curseur immobile depuis avant
+  // l'armement du survol). Tolérance 0,75 m = demi-case (`.claude/rules/world.md`).
+  const findOccupantAt = useCallback((destination, excludeTokenId) =>
+    tokensRef.current.find(t =>
+      t.id !== excludeTokenId &&
+      Math.abs(t.pos_x - destination.x) < 0.75 &&
+      Math.abs(t.pos_y - destination.z) < 0.75
+    ) ?? null,
+  [])
+
 
   const handleDragStart = useCallback((e, token) => {
     e.stopPropagation()
@@ -796,11 +809,7 @@ function Scene({
       // hit du mesh du token — couvre tout clic dans la case, même si le modèle 3D ne la remplit pas
       // entièrement. Source unique pour la surbrillance ci-dessous ET le clic dans handlePointerUp
       // (hoveredOccupantTokenRef) — jamais un second système de détection en parallèle.
-      const occupyingToken = tokensRef.current.find(t =>
-        t.id !== mode.tokenId &&
-        Math.abs(t.pos_x - destination.x) < 0.75 &&
-        Math.abs(t.pos_y - destination.z) < 0.75
-      ) ?? null
+      const occupyingToken = findOccupantAt(destination, mode.tokenId)
       hoveredOccupantTokenRef.current = occupyingToken
       setAmbientHoverTokenId(prev => (prev === (occupyingToken?.id ?? null) ? prev : (occupyingToken?.id ?? null)))
       if (occupyingToken) {
@@ -906,7 +915,7 @@ function Scene({
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview, combatMoveHasPriority])
+  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview, combatMoveHasPriority, findOccupantAt])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
@@ -924,6 +933,16 @@ function Scene({
       const path = currentPathRef.current
       if (!path || path.length < 2) return  // inaccessible ou destination = départ
       const dest = path[path.length - 1]
+      // Vérification fraîche sur la destination réelle du chemin (pas seulement le dernier survol) —
+      // CLICKATTACK-MOVECONFLICT1 : sans `pointermove` ayant recalculé hoveredOccupantTokenRef pile sur
+      // cette position juste avant le clic (curseur immobile depuis avant l'armement du survol, léger
+      // écart entre point survolé et extrémité du chemin renvoyé par le serveur), un déplacement pouvait
+      // partir vers une case en réalité occupée par la cible.
+      const destOccupant = findOccupantAt({ x: dest.x, z: dest.z }, mode.tokenId)
+      if (destOccupant) {
+        onAmbientTokenClickRef.current?.(destOccupant, e.clientX, e.clientY)
+        return
+      }
       const result = selectCombatMovementForCost(dest.spentM, mode.allures)
       if (!result) return  // hors portée max
       // Le payload de combat conserve les noms DB PE14, mais contient des mètres monde exacts.
@@ -1003,7 +1022,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, combatMoveHasPriority])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, combatMoveHasPriority, findOccupantAt])
 
   useEffect(() => {
     const canvas = gl.domElement
