@@ -14,6 +14,7 @@ import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { isTestBlockingWound, isMortalWoundImmobilized } from '../../../shared/woundConstants.js'
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
+import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
 
 // Fetch arme équipée en main pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
 // appellent ce même fetch, jamais deux copies divergentes du même bloc DB). Aucune règle métier ici :
@@ -354,8 +355,9 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // Matrices de coût de transition INI (miroir de STATE_DEFS dans combatSections.js)
+      // position : shared/combatStatePositionCost.js — autorité unique client+serveur (docs/PLANS/PLAN_KNEELING_POSITION.md Lot 1)
       const STATE_COSTS = {
-        position:  { standing: { crouching: -3, prone: -5 }, crouching: { standing: -3, prone: -5 }, prone: { standing: -10, crouching: -10 } },
+        position:  POSITION_TRANSITION_COST,
         weapon:    { holstered: { ready: -3, drawn: -5 }, ready: { holstered: -5, drawn: -3 }, drawn: { holstered: -10, ready: -3 } },
         fire_mode: { cc: { rc: -3, rl: -3 }, rc: { cc: -3, rl: -3 }, rl: { cc: -3, rc: -3 } },
         cover:     {},

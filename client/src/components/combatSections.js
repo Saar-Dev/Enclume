@@ -1,4 +1,5 @@
 import { getAimIniCost } from '../../../shared/combatExclusiveActions.js'
+import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
 
 // Definitions d'etats -- matrices de transition INI
 // stateTransitionCost(def, from, to) -> delta INI (0 si from === to)
@@ -14,11 +15,8 @@ export const STATE_DEFS = {
       { k: 'crouching', l: 'states.position.crouching.label', short: 'states.position.crouching.short' },
       { k: 'prone',     l: 'states.position.prone.label',     short: 'states.position.prone.short'     },
     ],
-    cost: {
-      standing:  { crouching: -3, prone:     -5  },
-      crouching: { standing:  -3, prone:     -5  },
-      prone:     { standing: -10, crouching: -10 },
-    },
+    // shared/combatStatePositionCost.js — autorité unique client+serveur (docs/PLANS/PLAN_KNEELING_POSITION.md Lot 1)
+    cost: POSITION_TRANSITION_COST,
   },
   weapon: {
     label: 'states.weapon.label',
