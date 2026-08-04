@@ -36,6 +36,15 @@ propre grille et sa logique voxel, n'est importé ni rendu nulle part dans l'app
 passage à l'éditeur de salles actuel `SurfaceEditorScene.jsx`/`surface_data`. Trouvé en lisant le
 fichier pour rendre la grille visuelle dynamique — cette grille morte n'a pas été touchée, non
 prioritaire, à nettoyer un jour)
+2026-08-04 (Saar) — `docs/Old/PLAN_TEST_CRITIQUE.md` Lot 3 codé (tooltips degré RAW + popup
+Réussite critique/Catastrophe, non testé en navigateur, détail `EN_COURS.md`) ; ajout et clôture
+immédiate de CARDTYPE1 (`cardType` — envoyé par le serveur pour `shock_test`/`drone_damage`,
+`statusService.js:229` et `socketCombatHelpers.js:2304` — jamais forwardé par `onDiceResult`
+(`useSessionSocket.js`) vers le message stocké côté client, alors que `Sidebar.jsx` le lisait déjà
+`msg.cardType` pour choisir le libellé de détail : dead code silencieux préexistant. Trouvé en câblant
+le tooltip de degré du Lot 3, qui a besoin de ce champ pour exclure le Test de Choc [pas de degré RAW
+applicable, mécanique à deux seuils]. Corrigé au passage, même destructure que l'ajout de
+`catastropheRisk`, sans rapport avec ce chantier)
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---

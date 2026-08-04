@@ -1,10 +1,11 @@
 # PLAN — Résolution des Tests : Réussite/Échec critique par marge (pas par valeur de dé)
 
-> Statut (2026-07-31) : **Lot 1 (RAW everywhere, refonte architecturale) ✅ clos, confirmé fonctionnel
+> Statut (2026-08-04) : **Lot 1 (RAW everywhere, refonte architecturale) ✅ clos, confirmé fonctionnel
 > en jeu par Saar** — détail §9. **Lot 2 (bonus de maîtrise/moitié d'AN sur Réussite critique) ✅ codé,
-> non testé en navigateur** — détail §10. Lot 3 (tooltips explicatifs) reste à faire, sur confirmation
-> de Saar. Décision de principe (§4) : **règle RAW partout, pas de
-> toggle de campagne** — l'hypothèse du toggle `marge`/`fixe` envisagée en cadrage v1 est abandonnée.
+> non testé en navigateur** — détail §10. **Lot 3 (tooltips explicatifs + popup Réussite
+> critique/Catastrophe) ✅ codé, non testé en navigateur** — détail §11. Décision de principe (§4) :
+> **règle RAW partout, pas de toggle de campagne** — l'hypothèse du toggle `marge`/`fixe` envisagée en
+> cadrage v1 est abandonnée.
 > Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois
 > les Lots 2/3 clos ou explicitement abandonnés, contenu durable à transférer vers
 > `docs/SYSTEME/COMBAT.md` à ce moment-là.
@@ -263,3 +264,56 @@ suffisent.
 **Prochaine étape** : Saar teste en navigateur (viser un jet dont le résultat tombe pile sur le seuil,
 via macro ou en ajustant temporairement les stats, pour provoquer une Réussite critique observable) ;
 puis Lot 3 (tooltips) ou clôture du chantier.
+
+---
+
+## 11. Clôture Lot 3 (2026-08-04) — tooltips explicatifs + popup Réussite critique/Catastrophe
+
+**Tooltips degré (LdB p.203-204)** : `MR_TABLE` (`shared/polarisTestResolution.js`) porte désormais une
+`key` par palier (pas de texte — `deJustesse`, `correct`, `assezBon`, `bon`, `tresBon`, `excellent`,
+`parfait`, `extraordinaire`, `heroique`, `legendaire` côté réussite ; `deJustesse`, `mediocre`,
+`assezMauvais`, `mauvais`, `tresMauvais`, `execrable`, `catastrophique` côté échec — `deJustesse`
+partagé, même mot des deux côtés). Nouvelle fonction `getMrDegreeKey(mr)`, même pattern que
+`getMrModifier`. Résolu en FR uniquement côté client (`combat.json` §`degree.*`), le serveur continue
+de ne transmettre que `mr` brut (déjà présent dans les payloads `DICE_RESULT` avant ce Lot, jamais lu
+côté client jusqu'ici). `Sidebar.jsx` : `title=` (tooltip natif, même pattern que les boutons
+"Détail du calcul"/"Jet au MJ" déjà présents) sur le badge de résultat "déplacement" et le badge
+"skillcheck"/combat générique, format `Degré (+modificateur)`. Exclu : Test de Choc (`cardType ===
+'shock_test'`, mécanique à deux seuils, pas de degré RAW applicable — §9), macros (le serveur
+n'envoie pas `mr` pour `MACRO_ROLL_RESULT`) et `/roll` libre (hors périmètre RAW du chantier entier,
+§9).
+
+**Trouvaille en cours de route** : `cardType` (envoyé par le serveur pour `shock_test`/`drone_damage`,
+`statusService.js:229` et `socketCombatHelpers.js:2304`) n'était jamais forwardé par
+`onDiceResult` (`useSessionSocket.js`) vers le message stocké, alors que `Sidebar.jsx` le lisait déjà
+(`msg.cardType`) pour choisir le libellé de détail — dead code silencieux préexistant, pas introduit
+par ce Lot. Corrigé au passage (même destructure que l'ajout de `catastropheRisk`) : condition
+nécessaire pour que la garde `shock_test` du tooltip fonctionne réellement.
+
+**Popup Réussite critique/Catastrophe** — décision Saar (2026-08-04) : texte seul pour l'instant
+("Réussite critique" / "Catastrophe"), architecture pensée pour qu'un futur vrai effet visuel ne
+remplace que le rendu, jamais le déclenchement. `sessionStore.js` porte l'état (`criticalEffect:
+{ kind, id }`, un seul à la fois v1) + actions `triggerCriticalEffect`/`clearCriticalEffect`.
+`useSessionSocket.js` déclenche sur `isCriticalSuccess` (`onDiceResult` ET `onMacroRollResult`, cette
+dernière n'ayant pas `catastropheRisk` côté serveur — Catastrophe non câblée sur les macros, non
+demandé) ou `catastropheRisk` (`onDiceResult` uniquement, priorité à la Réussite critique si les deux
+étaient vrais — structurellement exclusif, `resolveTestOutcome` ne renvoie jamais isSuccess et
+!isSuccess ensemble). Nouveau `CriticalEffectOverlay.jsx`, monté une fois dans `SessionPage.jsx`
+(bannière plein écran, ~2,2s, `prefers-reduced-motion` respecté). Libellé "Catastrophe" choisi par
+Saar en connaissance de cause — signalé avant codage que le RAW p.204 ("CATASTROPHES (OPTIONNEL)")
+traite la Catastrophe comme une décision MJ, jamais automatique ; le popup se déclenche en réalité sur
+`catastropheRisk` (le risque existe), pas sur une Catastrophe confirmée par le MJ.
+
+**Testé** : `node --test shared/polarisTestResolution.test.mjs` (20/20, dont les 8 nouveaux cas
+`getMrDegreeKey`) ; `node --check` sur `polarisTestResolution.js` ; `combat.json` validé JSON ;
+`eslint` propre (0 erreur) sur les 5 fichiers `.jsx`/`.js` client touchés — seuls avertissements
+`react-hooks/exhaustive-deps` déjà présents avant ce Lot (dépendances manquantes préexistantes dans
+`useSessionSocket.js`/`SessionPage.jsx`, non retouchées, hors périmètre) ; `vite build` complet sans
+erreur.
+**Non testé** : scénario réel en navigateur (tooltip au survol, popup Réussite critique/Catastrophe en
+combat et via macro) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : purement additif, rien encore committé — `git diff`/`git checkout` suffisent.
+**Prochaine étape** : Saar valide en navigateur ; si confirmé, clôturer le chantier entier (archiver ce
+document vers `docs/Old/`, transférer le contenu durable vers `docs/SYSTEME/COMBAT.md`, retirer la
+Règle 10 temporaire de `docs/RegleDocumentaire.md`).

@@ -51,6 +51,36 @@ skillTotal = calcAN(na_attr1) + calcAN(na_attr2) + mastery
 | 22–24 | +5 |
 | ≥ 25 | +6 |
 
+## Résolution des Tests — marge/critique/Catastrophe (RAW p.201-205)
+
+Autorité unique : `shared/polarisTestResolution.js` — `resolveTestOutcome(roll, seuil)`.
+`combatAttackRoll.js` (combat) et `polarisTestService.js` (Tests génériques, `MACRO_ROLL`,
+Blessures) délèguent tous les deux, aucune copie locale de la règle.
+
+- **Marge de réussite** = résultat du dé lu directement (pas `seuil - roll`). **Marge d'échec** =
+  `roll - seuil`. Asymétrique, confirmé par le texte RAW (p.203) — ne pas uniformiser les deux formules.
+- **Réussite critique** = `roll === seuil`, sauf `seuil >= 20` où seul `roll === 20` compte (p.205).
+  Bonus automatique (pas une option MJ) ajouté à la Marge de réussite uniquement, jamais au dé ni à
+  `isSuccess` : niveau de maîtrise pour un Test de Compétence, moitié de l'AN (arrondi inférieur) pour
+  un Test d'Attribut seul — `getCriticalSuccessBonus`/`applyCriticalSuccessBonus`.
+- **Échec critique** = `roll === 20` sur un Test qui peut échouer (`seuil < 20`) — retest immédiat
+  (`applyCriticalFailReroll`), cumulé sur la Marge d'échec.
+- **Catastrophe** = simple **risque** signalé (`catastropheRisk`, Marge d'échec ≥15 en valeur absolue),
+  **jamais automatique** — décision MJ pure (p.204, encadré "OPTIONNEL"), le moteur ne la déclenche
+  jamais lui-même.
+- **Degré RAW** (`MR_TABLE`, p.203-204) — modificateur numérique + clé de degré (`getMrModifier`/
+  `getMrDegreeKey`), résolue en FR uniquement côté client (`combat.json` §`degree.*`) : tooltip sur les
+  badges de résultat (`Sidebar.jsx`).
+- **Popup client** Réussite critique/Catastrophe (texte seul v1, `CriticalEffectOverlay.jsx`) —
+  déclenché sur `isCriticalSuccess`/`catastropheRisk` (`sessionStore.js`/`useSessionSocket.js`).
+- **Exclu structurellement** : Test de Choc (`statusService.js`, deux seuils gradués ok/étourdi/
+  inconscient, pas un Test binaire contre un seuil unique) ; `dice_config`/`DICE_ROLL` (jets libres non
+  liés à un Seuil).
+
+Historique de conception, audit des sites migrés et décisions détaillées : `docs/Old/PLAN_TEST_CRITIQUE.md`.
+
+---
+
 ## Pattern de fetch — réutiliser sans réinventer
 
 Handler `DICE_ROLL` (`socket/index.js` ~lignes 680-695) implémente la chaîne complète. Tout nouveau handler nécessitant un skill total serveur doit **copier ce pattern** :

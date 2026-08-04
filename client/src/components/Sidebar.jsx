@@ -8,6 +8,7 @@ import { useEntityStore } from '../stores/entityStore'
 import { useCombatStore } from '../stores/combatStore'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
+import { getMrDegreeKey, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
 import { DeclareLogContent } from './CombatDeclareLog.jsx'
@@ -486,6 +487,18 @@ function DiceBreakdownPopover({ popover, popoverRef }) {
   )
 }
 
+// Tooltip explicatif du degré RAW (LdB p.203-204) associé à une marge de réussite/échec —
+// undefined si mr absent (macro, /roll libre) ou Test de Choc (mécanique à deux seuils, pas de
+// degré applicable, docs/PLANS/PLAN_TEST_CRITIQUE.md §9).
+function formatMrDegreeTitle(tCombat, mr, cardType) {
+  if (mr == null || cardType === 'shock_test') return undefined
+  const key = getMrDegreeKey(mr)
+  if (!key) return undefined
+  const modifier = getMrModifier(mr)
+  const sign = modifier > 0 ? '+' : ''
+  return `${tCombat(`degree.${key}`)} (${sign}${modifier})`
+}
+
 // ─── Sidebar principale ───────────────────────────────────────────────────────
 export default function Sidebar({
   mode, onModeChange, renderMode2D,
@@ -511,6 +524,7 @@ export default function Sidebar({
 }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { t: tCombat } = useTranslation('combat')
   const { user, setUser } = useAuthStore()
   const { characters, members, isGm, addCharacter } = useCharacterStore()
   const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
@@ -2194,7 +2208,7 @@ export default function Sidebar({
                           </div>
                           {/* Badge résultat avec marge de réussite */}
                           <div style={{ paddingLeft: '2px' }}>
-                            <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'}>
+                            <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'} title={formatMrDegreeTitle(tCombat, msg.mr, msg.cardType)}>
                               {msg.isSuccess
                                 ? t('sidebar.displacementSuccess', { mr: msg.mr })
                                 : t('sidebar.displacementFail', { mr: msg.mr })
@@ -2239,7 +2253,7 @@ export default function Sidebar({
                         </div>
                         {/* Badge résultat */}
                         <div style={{ paddingLeft: '2px' }}>
-                          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'}>
+                          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'} title={formatMrDegreeTitle(tCombat, msg.mr, msg.cardType)}>
                             {msg.isSuccess ? t('sidebar.entityActionSuccess') : t('sidebar.entityActionFail')}
                           </span>
                         </div>

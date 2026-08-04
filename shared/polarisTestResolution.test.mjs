@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier, MR_TABLE } from './polarisTestResolution.js'
+import { resolveTestOutcome, applyCriticalFailReroll, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier, getMrDegreeKey, MR_TABLE } from './polarisTestResolution.js'
 
 // Lancement manuel (aucun script npm test dans le projet) :
 //   node --test shared/polarisTestResolution.test.mjs
@@ -141,6 +141,16 @@ test('getMrModifier couvre toute la plage échec (LdB p.209)', () => {
   assert.equal(getMrModifier(-25), -8)
   assert.equal(getMrModifier(-35), -9)
   assert.equal(getMrModifier(-1000), -9)
+})
+
+test('getMrDegreeKey — une clé par palier, "deJustesse" partagé entre réussite et échec proches de 0', () => {
+  assert.equal(getMrDegreeKey(0), 'deJustesse')
+  assert.equal(getMrDegreeKey(-1), 'deJustesse')
+  assert.equal(getMrDegreeKey(7), 'bon')
+  assert.equal(getMrDegreeKey(-7), 'mauvais')
+  assert.equal(getMrDegreeKey(35), 'legendaire')
+  assert.equal(getMrDegreeKey(-15), 'catastrophique')
+  assert.equal(getMrDegreeKey(-1000), 'catastrophique')
 })
 
 test('MR_TABLE — aucun trou ni recouvrement entre paliers consécutifs', () => {

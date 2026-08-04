@@ -550,5 +550,24 @@
       "importante": "Obscurité importante",
       "totale": "Obscurité totale (impossible)"
     }
-  }
+  },
+  "degree": {
+    "deJustesse": "De justesse",
+    "correct": "Correct",
+    "assezBon": "Assez bon",
+    "bon": "Bon",
+    "tresBon": "Très bon",
+    "excellent": "Excellent",
+    "parfait": "Parfait",
+    "extraordinaire": "Extraordinaire",
+    "heroique": "Héroïque",
+    "legendaire": "Légendaire",
+    "mediocre": "Médiocre",
+    "assezMauvais": "Assez mauvais",
+    "mauvais": "Mauvais",
+    "tresMauvais": "Très mauvais",
+    "execrable": "Exécrable",
+    "catastrophique": "Catastrophique"
+  },
+  "catastrophePopup": "Catastrophe"
 }

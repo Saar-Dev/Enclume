@@ -46,8 +46,10 @@ Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
-Aucun chantier actif au 2026-08-01 (worktree clean, dernier commit `POL1`). Prochaine étape : reprendre
-le triage `docs/BUGIDENTIFIE.md` / `docs/ROADMAP.md` selon la priorité choisie par Saar.
+**TEST_CRITIQUE Lot 3** (tooltips degré + popup Réussite critique/Catastrophe) ✅ codé
+(2026-08-04), **non testé en navigateur** — détail `docs/Old/PLAN_TEST_CRITIQUE.md` §11 (archivé,
+Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Résolution des Tests"). Prochaine
+étape : validation par Saar (tooltip au survol des badges de résultat, popup en combat et via macro).
 
 ---
 

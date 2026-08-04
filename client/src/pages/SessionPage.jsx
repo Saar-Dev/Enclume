@@ -24,6 +24,7 @@ import Canvas3D from '../components/Canvas3D'
 import Canvas2D from '../components/Canvas2D'
 import Editor3D from '../components/Editor3D'
 import Sidebar from '../components/Sidebar'
+import CriticalEffectOverlay from '../components/CriticalEffectOverlay'
 import DicePanel from '../components/DicePanel'
 import EnvironmentalResultQueue from '../components/EnvironmentalResultQueue'
 import CharacterWindow from '../character/CharacterWindow'
@@ -573,6 +574,7 @@ function SessionContent({ campaignId }) {
 
   return (
     <div style={styles.container}>
+      <CriticalEffectOverlay />
       {/* ─── Barre GM supérieure ─────────────────────────────────────────── */}
       {isGm && (
         <div style={styles.gmBar}>

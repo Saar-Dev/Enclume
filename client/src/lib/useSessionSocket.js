@@ -9,7 +9,7 @@ import { useCampaignStore } from '../stores/campaignStore'
 
 export function useSessionSocket() {
   const socket = useSocket()
-  const { setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage } = useSessionStore()
+  const { setOnlineUsers, addOnlineUser, removeOnlineUser, addMessage, triggerCriticalEffect } = useSessionStore()
   const { upsertCharacter } = useCharacterStore()
   const { addDocument, updateDocument, removeDocument } = useLibraryStore()
   const { updateCampaign } = useCampaignStore()
@@ -63,29 +63,38 @@ export function useSessionSocket() {
     }
     const onCharacterUpdated = (updatedCharacter) => upsertCharacter(updatedCharacter)
     const onDiceResult = ({ userId, username, color, formula, rolls, total,
-      isCriticalSuccess, isCriticalFail, seed, timestamp, skillLabel, mechanicalTotal,
-      chancesDeReussite, diffLabel, isSuccess, interactionType, mr, targetName,
+      isCriticalSuccess, isCriticalFail, catastropheRisk, seed, timestamp, skillLabel, mechanicalTotal,
+      chancesDeReussite, diffLabel, isSuccess, interactionType, cardType, mr, targetName,
       localisation, severity, severityColor, secret, breakdown }) => {
       addMessage({
         id: `dice-${userId}-${timestamp}`, type: 'dice', user: username, color,
         formula, rolls, total, isCriticalSuccess, isCriticalFail,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         skillLabel, mechanicalTotal, chancesDeReussite, diffLabel, isSuccess,
-        interactionType, mr, targetName, localisation, severity, severityColor,
+        interactionType, cardType, mr, targetName, localisation, severity, severityColor,
         secret: secret || false, breakdown,
       })
       if (skillLabel === undefined) {
         setLastDiceRoll({ rolls, dieType: formula.replace(/^\d+/, '').split('+')[0].split('-')[0], seed, timestamp, color })
       }
+      // Popup explicatif (docs/PLANS/PLAN_TEST_CRITIQUE.md Lot 3) — Réussite critique prioritaire sur
+      // le simple risque de Catastrophe si jamais les deux étaient vrais (structurellement exclusifs,
+      // resolveTestOutcome : isSuccess ou non, jamais les deux).
+      if (isCriticalSuccess) triggerCriticalEffect('critical_success')
+      else if (catastropheRisk) triggerCriticalEffect('catastrophe_risk')
     }
     const onMacroRollResult = ({ characterName, color, sourceLabel, rollResult, threshold,
-      isSuccess, isCriticalSuccess, isCriticalFail, formattedMessage, secret, timestamp }) =>
+      isSuccess, isCriticalSuccess, isCriticalFail, formattedMessage, secret, timestamp }) => {
       addMessage({
         id: `macro-${timestamp}`, type: 'dice', interactionType: 'macro_result',
         characterName, color, sourceLabel, rollResult, threshold, isSuccess,
         isCriticalSuccess, isCriticalFail, formattedMessage, secret: secret || false,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
+      // Catastrophe non câblée côté macro (le serveur ne calcule pas encore catastropheRisk pour
+      // MACRO_ROLL) — seule la Réussite critique déclenche le popup ici.
+      if (isCriticalSuccess) triggerCriticalEffect('critical_success')
+    }
     const onError = (err) => {
       const msg = err?.message ?? String(err)
       console.error('[WS] Erreur serveur:', msg)

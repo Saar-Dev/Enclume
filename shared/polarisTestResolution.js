@@ -15,33 +15,42 @@
 // (aucune route ne la modifie, vérifié) : même statut que AN_TABLE, pas de raison de vivre en DB.
 export const MR_TABLE = [
   // ── Réussites (mr >= 0) ──
-  { min: 0, max: 2, modifier: 0 },   // De justesse
-  { min: 3, max: 4, modifier: 1 },   // Correct
-  { min: 5, max: 6, modifier: 2 },   // Assez bon
-  { min: 7, max: 9, modifier: 3 },   // Bon
-  { min: 10, max: 12, modifier: 4 }, // Très bon
-  { min: 13, max: 14, modifier: 5 }, // Excellent
-  { min: 15, max: 19, modifier: 6 }, // Parfait
-  { min: 20, max: 24, modifier: 7 }, // Extraordinaire
-  { min: 25, max: 34, modifier: 8 }, // Héroïque
-  { min: 35, max: null, modifier: 9 }, // Légendaire
+  { min: 0, max: 2, modifier: 0, key: 'deJustesse' },
+  { min: 3, max: 4, modifier: 1, key: 'correct' },
+  { min: 5, max: 6, modifier: 2, key: 'assezBon' },
+  { min: 7, max: 9, modifier: 3, key: 'bon' },
+  { min: 10, max: 12, modifier: 4, key: 'tresBon' },
+  { min: 13, max: 14, modifier: 5, key: 'excellent' },
+  { min: 15, max: 19, modifier: 6, key: 'parfait' },
+  { min: 20, max: 24, modifier: 7, key: 'extraordinaire' },
+  { min: 25, max: 34, modifier: 8, key: 'heroique' },
+  { min: 35, max: null, modifier: 9, key: 'legendaire' },
 
   // ── Échecs (mr < 0) ──
-  { min: -2, max: -1, modifier: 0 },    // De justesse
-  { min: -4, max: -3, modifier: -1 },   // Médiocre
-  { min: -6, max: -5, modifier: -2 },   // Assez mauvais
-  { min: -9, max: -7, modifier: -3 },   // Mauvais
-  { min: -12, max: -10, modifier: -4 }, // Très mauvais
-  { min: -14, max: -13, modifier: -5 }, // Exécrable
-  { min: -19, max: -15, modifier: -6 }, // Catastrophique (risque)
-  { min: -24, max: -20, modifier: -7 }, // Catastrophique (risque)
-  { min: -34, max: -25, modifier: -8 }, // Catastrophique (risque)
-  { min: null, max: -35, modifier: -9 }, // Catastrophique (risque) — pas de plancher (symétrique du null haut)
+  { min: -2, max: -1, modifier: 0, key: 'deJustesse' },
+  { min: -4, max: -3, modifier: -1, key: 'mediocre' },
+  { min: -6, max: -5, modifier: -2, key: 'assezMauvais' },
+  { min: -9, max: -7, modifier: -3, key: 'mauvais' },
+  { min: -12, max: -10, modifier: -4, key: 'tresMauvais' },
+  { min: -14, max: -13, modifier: -5, key: 'execrable' },
+  { min: -19, max: -15, modifier: -6, key: 'catastrophique' }, // Catastrophique (risque)
+  { min: -24, max: -20, modifier: -7, key: 'catastrophique' }, // Catastrophique (risque)
+  { min: -34, max: -25, modifier: -8, key: 'catastrophique' }, // Catastrophique (risque)
+  { min: null, max: -35, modifier: -9, key: 'catastrophique' }, // Catastrophique (risque) — pas de plancher (symétrique du null haut)
 ]
 
 export function getMrModifier(mr) {
   const row = MR_TABLE.find(r => (r.min === null || mr >= r.min) && (r.max === null || mr <= r.max))
   return row?.modifier ?? 0
+}
+
+// getMrDegreeKey(mr) — clé de degré (LdB p.203-204, table "Marges & modificateurs"), pas de texte.
+// Résolue en FR côté client via t('combat.degree.' + clé) — le serveur (qui appelle aussi mr) ne
+// consomme jamais cette clé, il transmet mr tel quel (§4 LOCALISATION.md, aucun texte FR figé côté
+// serveur).
+export function getMrDegreeKey(mr) {
+  const row = MR_TABLE.find(r => (r.min === null || mr >= r.min) && (r.max === null || mr <= r.max))
+  return row?.key ?? null
 }
 
 // Seuil de Marge d'échec (en valeur absolue) à partir duquel une Catastrophe devient possible
