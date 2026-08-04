@@ -10,6 +10,8 @@ import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHel
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getAdvantages } from '../services/advantageService.js'
 import { getAllModStatusCodes } from '../services/weaponModService.js'
+import { setCharacterState } from '../lib/characterStateService.js'
+import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -126,7 +128,17 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         current_turn: 1,
         action_timer_sec: actionTimerSec,
       })
-      const insertedRoster = await db('combat_roster').insert(rosterRows).returning('*')
+      const insertedRoster = await db.transaction(async (trx) => {
+        const rows = await trx('combat_roster').insert(rosterRows).returning('*')
+        // Lot 1 (shadow, docs/PLANS/PLAN_CHARACTER_STATES.md §3) — state_position n'a pas de colonne
+        // seedée ici (toujours le défaut 'standing'), seul state_weapon PNJ ('drawn') s'écarte du
+        // défaut ('holstered') et mérite une ligne character_states.
+        for (const row of rows) {
+          if (row.state_weapon !== 'holstered') await setCharacterState(trx, row.token_id, 'weapon', row.state_weapon)
+          await shadowCheckCharacterState(trx, row.token_id, { position: row.state_position, weapon: row.state_weapon })
+        }
+        return rows
+      })
 
       // Joueurs surpris (non-PNJ) : émettre COMBAT_SURPRISE_ROLL via fetchSockets
       const surprisedPlayers = rosterData.filter(({ token, is_pnj }) =>
@@ -311,14 +323,20 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         if (character.type !== 'pnj') return
       } else if (character.user_id !== user.id) return
 
-      await db('combat_roster')
-        .where({ campaign_id: campaignId, token_id: tokenId })
-        .update({
-          state_position:  position,
-          state_weapon:    weapon,
-          state_fire_mode: fire_mode,
-          state_character: db.raw('state_character || ?::jsonb', [JSON.stringify({ init_state_confirmed: true })]),
-        })
+      await db.transaction(async (trx) => {
+        await trx('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .update({
+            state_position:  position,
+            state_weapon:    weapon,
+            state_fire_mode: fire_mode,
+            state_character: trx.raw('state_character || ?::jsonb', [JSON.stringify({ init_state_confirmed: true })]),
+          })
+        // Lot 1 (shadow, docs/PLANS/PLAN_CHARACTER_STATES.md §3)
+        await setCharacterState(trx, tokenId, 'position', position)
+        await setCharacterState(trx, tokenId, 'weapon', weapon)
+        await shadowCheckCharacterState(trx, tokenId, { position, weapon })
+      })
 
       const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
       const broadcastRoster = updatedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)

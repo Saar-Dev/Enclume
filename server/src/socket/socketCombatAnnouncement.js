@@ -12,6 +12,8 @@ import { planBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { hasEnoughAmmo, parseAmmoCapacity } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { isTestBlockingWound, isMortalWoundImmobilized } from '../../../shared/woundConstants.js'
+import { setCharacterState } from '../lib/characterStateService.js'
+import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 
 // Fetch arme équipée en main pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
 // appellent ce même fetch, jamais deux copies divergentes du même bloc DB). Aucune règle métier ici :
@@ -587,20 +589,29 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // UPDATE combat_roster — états + initiative + has_announced
-      const [updated] = await db('combat_roster')
-        .where({ campaign_id: campaignId, token_id: tokenId })
-        .update({
-          state_position:    state.position     ?? entry.state_position,
-          state_weapon:      state.weapon       ?? entry.state_weapon,
-          state_fire_mode:   state.fire_mode ?? entry.state_fire_mode,
-          state_cover:       state.cover        ?? entry.state_cover,
-          state_vitesse:     state.vitesse      ?? entry.state_vitesse,
-          state_combat_mode: state.combat_mode  ?? entry.state_combat_mode,
-          initiative:        db.raw('initiative + ?', [iniDelta]),
-          has_announced:     true,
-          updated_at:        db.fn.now(),
-        })
-        .returning(['initiative'])
+      const resolvedPosition = state.position ?? entry.state_position
+      const resolvedWeapon   = state.weapon   ?? entry.state_weapon
+      const [updated] = await db.transaction(async (trx) => {
+        const rows = await trx('combat_roster')
+          .where({ campaign_id: campaignId, token_id: tokenId })
+          .update({
+            state_position:    resolvedPosition,
+            state_weapon:      resolvedWeapon,
+            state_fire_mode:   state.fire_mode ?? entry.state_fire_mode,
+            state_cover:       state.cover        ?? entry.state_cover,
+            state_vitesse:     state.vitesse      ?? entry.state_vitesse,
+            state_combat_mode: state.combat_mode  ?? entry.state_combat_mode,
+            initiative:        trx.raw('initiative + ?', [iniDelta]),
+            has_announced:     true,
+            updated_at:        trx.fn.now(),
+          })
+          .returning(['initiative'])
+        // Lot 1 (shadow, docs/PLANS/PLAN_CHARACTER_STATES.md §3)
+        await setCharacterState(trx, tokenId, 'position', resolvedPosition)
+        await setCharacterState(trx, tokenId, 'weapon', resolvedWeapon)
+        await shadowCheckCharacterState(trx, tokenId, { position: resolvedPosition, weapon: resolvedWeapon })
+        return rows
+      })
 
       const updatedInitiative = updated.initiative
 
