@@ -76,7 +76,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
 
       // Valeurs autorisées par état
       const VALID_STATES = {
-        position:     ['standing', 'crouching', 'prone'],
+        position:     ['standing', 'crouching', 'kneeling', 'prone'],
         weapon:       ['holstered', 'ready', 'drawn'],
         fire_mode:    ['cc', 'rc', 'rl'],
         cover:        ['exposed', 'partial', 'important'],

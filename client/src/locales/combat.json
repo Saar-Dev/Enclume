@@ -219,6 +219,7 @@
       "label": "POSTURE",
       "standing":  { "label": "Debout",   "short": "Deb." },
       "crouching": { "label": "Accroupi", "short": "Acc." },
+      "kneeling":  { "label": "À genou",  "short": "Gen." },
       "prone":     { "label": "Couché",   "short": "Couc." }
     },
     "weapon": {

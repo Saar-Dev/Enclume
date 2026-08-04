@@ -306,7 +306,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
   // déclare celui d'un PNJ (sans user_id, donc sans fenêtre joueur dédiée).
   socket.on(WS.COMBAT_INIT_STATE, async ({ tokenId, position, weapon, fire_mode }) => {
     try {
-      const VALID_POS = new Set(['standing', 'crouching', 'prone'])
+      const VALID_POS = new Set(['standing', 'crouching', 'kneeling', 'prone'])
       const VALID_WPN = new Set(['holstered', 'ready', 'drawn'])
       const VALID_FM  = new Set(['cc', 'rc', 'rl'])
       if (!VALID_POS.has(position) || !VALID_WPN.has(weapon) || !VALID_FM.has(fire_mode)) return

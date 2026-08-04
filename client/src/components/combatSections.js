@@ -13,6 +13,7 @@ export const STATE_DEFS = {
     states: [
       { k: 'standing',  l: 'states.position.standing.label',  short: 'states.position.standing.short'  },
       { k: 'crouching', l: 'states.position.crouching.label', short: 'states.position.crouching.short' },
+      { k: 'kneeling',  l: 'states.position.kneeling.label',  short: 'states.position.kneeling.short'  },
       { k: 'prone',     l: 'states.position.prone.label',     short: 'states.position.prone.short'     },
     ],
     // shared/combatStatePositionCost.js — autorité unique client+serveur (docs/PLANS/PLAN_KNEELING_POSITION.md Lot 1)
