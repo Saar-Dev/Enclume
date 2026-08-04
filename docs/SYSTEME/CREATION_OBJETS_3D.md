@@ -1,3 +1,4 @@
+/SYSTEME/CREATION_OBJETS_3D.md
 # Créer et intégrer un objet 3D
 
 Ce document est le contrat de fabrication des GLB intégrés à Enclume. Il couvre les objets libres, prépare les objets fixés à un mur et distingue les connecteurs structurels comme les portes.

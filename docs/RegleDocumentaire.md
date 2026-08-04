@@ -5,61 +5,44 @@
 > Ce document définit les règles de classement de la documentation.
 > Ces règles sont considérées comme des invariants.
 > Aucun document ne peut les enfreindre.
-
 ---
 
 # Règle 1 — Une responsabilité par document
-
 Chaque document possède une responsabilité unique.
-
 Un document ne traite jamais deux responsabilités différentes.
-
 ---
 
 # Règle 2 — Une information = un seul endroit
-
 Une définition ne doit exister qu'une seule fois.
-
 Les autres documents utilisent un lien ou une référence.
-
 Jamais de duplication volontaire.
-
 ---
 
 # Règle 3 — Les documents sont classés par responsabilité, jamais par taille
-
 La taille d'un document n'est jamais un critère.
-
 Le découpage est déterminé uniquement par la responsabilité du document.
-
 ---
 
 # Règle 4 — FOUNDATION
-
 FOUNDATION décrit les règles globales du projet.
 
 Il contient uniquement :
-
 * conventions d'architecture ;
 * conventions de développement ;
 * invariants techniques ;
 * règles documentaires.
 
 Il ne contient jamais :
-
 * les règles Polaris ;
 * les domaines métier ;
 * les API ;
 * les schémas SQL.
-
 ---
 
 # Règle 5 — VOCABULARY
-
 VOCABULARY est le dictionnaire officiel du projet.
 
 Il contient uniquement :
-
 * concepts Polaris ;
 * concepts Enclume ;
 * acronymes ;
@@ -68,21 +51,17 @@ Il contient uniquement :
 * identifiants historiques.
 
 Il ne contient jamais :
-
 * architecture ;
 * SQL ;
 * API ;
 * React ;
 * logique métier.
-
 ---
 
 # Règle 6 — DOMAINS
-
 Un document de domaine décrit un domaine fonctionnel.
 
 Exemples :
-
 * CHARACTER
 * COMBAT
 * INVENTORY
