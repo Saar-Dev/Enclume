@@ -108,6 +108,31 @@ dans ce payload (recalculés depuis la nouvelle autorité), **aucun fichier clie
 `state_fire_mode`, `state_cover`, `state_vitesse`, `state_combat_mode` : colonnes voisines, non
 concernées par ce plan (voir §5).
 
+### 0.4bis Correctif d'inventaire (session courante, vérification avant Lot 0) — le broadcast n'a pas un seul point de construction
+
+> L'inventaire ci-dessus, en listant `COMBAT_ROSTER_UPDATED (socketCombatState.js:321-323)` comme
+> l'unique point de construction du payload lu par le client, était incomplet. Vérifié par grep
+> exhaustif du pattern de sanitization avant d'écrire la migration Lot 0.
+
+Le pattern `roster.map(({ surprise_roll: _sr, ...rest }) => rest)` (spread brut de la ligne
+`combat_roster`, retrait de `surprise_roll` uniquement) est dupliqué **5 fois** dans 2 fichiers, sur
+3 événements WS distincts :
+
+| Fichier | Ligne | Événement |
+|---|---|---|
+| `socketCombatState.js` | 146 | `COMBAT_STARTED` |
+| `socketCombatState.js` | 324 | `COMBAT_ROSTER_UPDATED` (init state) |
+| `socketCombatState.js` | 412 | `COMBAT_ROSTER_UPDATED` (surprise result) |
+| `socketCombatHelpers.js` | 205 | `COMBAT_PHASE_CHANGED` (résolution) |
+| `socketCombatHelpers.js` | 1139 | `COMBAT_PHASE_CHANGED` (nouveau tour) |
+
+Sans correction, un Lot 2 qui ne patche que le site cité dans l'inventaire d'origine ferait disparaître
+`state_position`/`state_weapon` du broadcast juste après `COMBAT_START` et après chaque changement de
+phase (colonnes retirées de `combat_roster`, donc absentes du spread `...rest` aux 4 autres sites) —
+régression visuelle silencieuse à l'écran GM/joueur, non couverte par l'invariant §4 tel qu'écrit.
+Conséquence actée en §3 (Lot 2 restructuré en sous-étapes) — pas une nouvelle divergence de règle de
+jeu, une correction de la carte du terrain avant d'y toucher.
+
 ### 0.5 Hors périmètre confirmé pendant la conception (Saar, session courante)
 
 - **`state_vitesse` (`rushed`/`delayed`/`normal`)** : mécanisme Précipiter/Retarder son Action, sans
@@ -203,9 +228,10 @@ Aucun autre fichier ne touche `character_states` directement — même disciplin
 
 | Lot | Contenu | Risque | Statut |
 |---|---|---|---|
-| **Lot 0** | Migration `XXX_create_character_states.js` (numéro impair à vérifier contre les fichiers présents et `knex_migrations` au moment de coder, `CLAUDE.md` §5 — non figé ici) : `ref_character_state_values` + `character_states` + seed (y compris `kneeling`), `characterStateService.js`. Aucune lecture/écriture existante modifiée — `combat_roster.state_position`/`state_weapon` restent l'autorité en prod. | Faible — ajout pur, rien de consommé encore | Non commencé |
+| **Lot 0** | Migration `229_character_states.js` (numéro vérifié : dernière migration appliquée = 227, `knex migrate:list` sans pending, `CLAUDE.md` §5) : `ref_character_state_values` + `character_states` + seed (y compris `kneeling`), `characterStateService.js`. Aucune lecture/écriture existante modifiée — `combat_roster.state_position`/`state_weapon` restent l'autorité en prod. | Faible — ajout pur, rien de consommé encore | Non commencé |
 | **Lot 1 (shadow)** | Chaque écriture actuelle (`socketCombatState.js:117/315-316`, `socketCombatAnnouncement.js:601-602`) appelle aussi `setCharacterState(tokenId, ..., trx)` **dans la même transaction** que l'`UPDATE combat_roster` qu'elle double-écrit (§2.2). `endTurn()` pas encore touché. Comparaison des deux sources en jeu réel (log `[DBG-DECOUPLAGE]` sur écart, jamais bloquant), méthode Scientist — même dispositif que `PLAN_RW_SYSCOMBAT.md` Lot 1. | Faible — double-écriture transactionnelle, aucune lecture basculée | Non commencé |
-| **Lot 2 (cutover + correctif du bug)** | `COMBAT_ROSTER_UPDATED` (`socketCombatState.js:321-323`) construit `state_position`/`state_weapon` depuis `characterStateService.getCharacterStates(tokenId)` au lieu des colonnes `combat_roster`. Retrait de la ligne `state_position: 'standing'` dans `endTurn()` (§0.2). Retrait des colonnes `state_position`/`state_weapon` + leurs `CHECK` de `combat_roster` une fois la lecture basculée et validée. | Moyen — touche la construction du broadcast lu par 4 fichiers client (§0.4) ; voir prérequis §3.1 | Non commencé |
+| **Lot 2a (dédup broadcast)** | Extraction d'un helper unique (ex. `buildBroadcastRoster(rows)`) remplaçant les 5 occurrences du spread `roster.map(({ surprise_roll: _sr, ...rest }) => rest)` recensées en §0.4bis. Comportement identique bit-à-bit — pur regroupement, aucune source de donnée changée. Prérequis mécanique de Lot 2b : sans lui, le cutover ne peut être appliqué qu'à un site sur 5. | Faible — refactor sans changement de comportement, 5 sites à repasser en test réel | Non commencé |
+| **Lot 2b (cutover + correctif du bug)** | Le helper Lot 2a construit `state_position`/`state_weapon` depuis `characterStateService.getCharacterStates(tokenId)` au lieu des colonnes `combat_roster`, aux 5 sites d'un coup. Retrait de la ligne `state_position: 'standing'` dans `endTurn()` (§0.2). Retrait des colonnes `state_position`/`state_weapon` + leurs `CHECK` de `combat_roster` une fois la lecture basculée et validée. | Moyen — touche la construction du broadcast lu par 4 fichiers client (§0.4) ; voir prérequis §3.1 | Non commencé |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le retrait des colonnes `combat_roster` n'intervient qu'**après** confirmation
@@ -260,19 +286,21 @@ moment-là.
 ## 7. Validation attendue à la clôture de chaque lot
 
 - **Testé (Lot 0)** : migration up/down, insertion/lecture via `characterStateService`, contrainte
-  unique `(character_id, axis)` vérifiée.
+  unique `(token_id, axis)` vérifiée (§0.3bis — ancre corrigée, pas `character_id`).
 - **Testé (Lot 1)** : session de combat réelle (Saar) avec au moins un changement de position et un
   changement d'arme déclarés — aucun `[DBG-DECOUPLAGE]`.
-- **Testé (Lot 2)** : session de combat réelle couvrant plusieurs tours consécutifs avec un personnage
+- **Testé (Lot 2a)** : comportement du broadcast identique bit-à-bit après extraction du helper — même
+  session de combat que Lot 1, aucun écart visuel sur les 5 événements recensés en §0.4bis.
+- **Testé (Lot 2b)** : session de combat réelle couvrant plusieurs tours consécutifs avec un personnage
   resté accroupi/à genou sans re-déclaration — vérification visuelle des 4 fenêtres client (§0.4)
   inchangées à l'écran.
-- **Testé (Lot 2, équilibrage)** : confirmation explicite de Saar que l'effet cumulé des mods de position
+- **Testé (Lot 2b, équilibrage)** : confirmation explicite de Saar que l'effet cumulé des mods de position
   sur plusieurs tours (§3.1) est le comportement voulu — distinct de « le code ne plante pas ».
-- **Non testé** : ce qui reste après le lot en cours — marquer `⚠️ clos partiel` tant que les 3 lots ne
+- **Non testé** : ce qui reste après le lot en cours — marquer `⚠️ clos partiel` tant que les 4 lots ne
   sont pas fermés.
-- **Données** : migration Lot 0 (nouvelle table), pas de nouvelle donnée avant Lot 2 ; suppression de
-  colonnes `combat_roster` en fin de Lot 2 seulement.
-- **Retour arrière** : chaque lot est un commit isolé ; Lot 2 nécessite en plus le tag/backup avant
+- **Données** : migration Lot 0 (nouvelle table), pas de nouvelle donnée avant Lot 2b ; suppression de
+  colonnes `combat_roster` en fin de Lot 2b seulement.
+- **Retour arrière** : chaque lot est un commit isolé ; Lot 2b nécessite en plus le tag/backup avant
   suppression des colonnes `combat_roster` (`CLAUDE.md` §11 — risque de perte de données).
 
 ---
@@ -281,16 +309,16 @@ moment-là.
 
 | Fichier | Action | Lot |
 |---|---|---|
-| `server/src/db/migrations/XXX_create_character_states.js` | Créer (numéro à vérifier, §3) | 0 |
+| `server/src/db/migrations/229_character_states.js` | Créer (numéro vérifié, §3) | 0 |
 | `server/src/lib/characterStateService.js` | Créer | 0 |
-| `server/src/socket/socketCombatState.js:117,315-316` | Modifier (double-write puis lecture) | 1-2 |
+| `server/src/socket/socketCombatState.js:117,315-316` | Modifier (double-write puis lecture) | 1, 2b |
 | `server/src/socket/socketCombatAnnouncement.js:601-602` | Modifier (double-write) | 1 |
-| `server/src/socket/socketCombatHelpers.js:1046` | Modifier (retrait du reset fautif) | 2 |
-| `server/src/socket/socketCombatState.js:321-323` (`COMBAT_ROSTER_UPDATED`) | Modifier (source du broadcast) | 2 |
-| `server/src/db/migrations/56_combat_v2.js` équivalent — nouvelle migration `down` | Retrait colonnes `state_position`/`state_weapon` + `CHECK` de `combat_roster` | 2 |
-| `docs/SYSTEME/COMBAT.md:198-208,761` | Mettre à jour (colonnes retirées, nouvelle autorité) | 2 (clôture) |
+| helper de broadcast (nouveau, emplacement à choisir au Lot 2a — candidat : `server/src/lib/combatRosterBroadcast.js`, un fichier = une responsabilité, §0.4bis) | Créer, puis appeler aux 5 sites recensés en §0.4bis | 2a |
+| `server/src/socket/socketCombatHelpers.js:1074` | Modifier (retrait du reset fautif) | 2b |
+| `server/src/db/migrations/56_combat_v2.js` équivalent — nouvelle migration `down` | Retrait colonnes `state_position`/`state_weapon` + `CHECK` de `combat_roster` | 2b |
+| `docs/SYSTEME/COMBAT.md:198-208,761` | Mettre à jour (colonnes retirées, nouvelle autorité) | 2b (clôture) |
 | `docs/SYSTEME/ETATS_PERSONNAGE.md` | Créer (contenu durable, en-tête du présent document) | Clôture |
 | `docs/PLAN_CHARACTER_STATES.md` | Archiver dans `docs/Old/` | Clôture |
 
-Aucun fichier client (§0.4) n'apparaît dans ce tableau — c'est l'invariant §4, à revérifier si le Lot 2
+Aucun fichier client (§0.4) n'apparaît dans ce tableau — c'est l'invariant §4, à revérifier si le Lot 2b
 s'écarte du plan.
