@@ -146,3 +146,39 @@ voulu, Tir Visé toujours refusé après un changement d'état déclaré, aucun 
 `combat_roster.state_position`/`state_weapon` ne sont pas retirées (Lot 2c).
 **Retour arrière** : 4 commits isolés sur `dev/Saar` (`96d04ef`, `60d3d31`, `e7c6d60`, `ba77a1a`), chacun
 testé et confirmé par Saar avant le suivant.
+
+---
+
+## Session (Saar) — 2026-08-04 — `PLAN_KNEELING_POSITION.md` clos (« à genou » jouable)
+
+**Contexte** : en clôturant `PLAN_CHARACTER_STATES.md` (ETP2), trouvé en run à vide que `kneeling`
+existait déjà dans le catalogue `ref_character_state_values` (Lot 0 de ce plan) mais restait
+inatteignable en jeu — aucun coût d'Initiative RAW nommé pour cette position
+(`REGLESYSCOMBAT.md:929-941` ne cite que « S'accroupir/Se redresser » -3 et « Se jeter à terre » -5).
+Décision Saar : `kneeling` coûte exactement ce que coûte `crouching`, y compris pour la transition
+directe `crouching↔kneeling` (gratuite — tranchée explicitement en relecture à charge du plan, seule
+paire que la consigne initiale ne couvrait pas).
+
+**Lot 1** — dédoublonnage préalable : la table de coût de transition de position existait en 2 copies
+manuellement synchronisées (`STATE_COSTS.position` serveur, `STATE_DEFS.position.cost` client) — même
+dette que celle déjà corrigée ailleurs dans ce projet pour les mods de situation
+(`PLAN_RW_SYSCOMBAT.md`). Extraction `shared/combatStatePositionCost.js`, comportement identique
+bit-à-bit (valeurs vérifiées égales avant extraction), premier test automatisé sur cette table.
+
+**Lot 2** — migration `231` (élargit `chk_state_position` à 4 valeurs, testée up/down/re-up), entrée
+`kneeling` dans la table partagée, sélecteur client (`STATE_DEFS.position.states`), libellé i18n
+(`combat.json`, "À genou"/"Gen."). **Trouvaille au codage** : un balayage de vérification avant de
+demander le test en jeu a révélé un 3e verrou serveur absent de l'inventaire initial du plan —
+`VALID_STATES.position` (`socketCombatAnnouncement.js:79`, handler `COMBAT_ACTION_DECLARE` — la
+déclaration de tour normale, distincte de `VALID_POS` qui ne gate que l'état initial) — corrigé avant
+de livrer, sans quoi `kneeling` aurait été rejeté silencieusement à chaque tour.
+
+**Testé** : `shared/combatStatePositionCost.test.mjs` (2 tests), migration up/down/re-up (contrainte
+vérifiée directement en base via `pg_get_constraintdef`), ESLint propre. Validé en jeu réel par Saar à
+deux reprises (Lot 1 : coût inchangé pour standing/crouching/prone ; Lot 2 : déclaration `kneeling` en
+état initial et en déclaration de tour, coût correct, Tir Visé toujours refusé après transition,
+libellé affiché correctement).
+**Non testé** : rien de connu — chantier clos sans dette ouverte.
+**Données** : migration `231` (élargissement `CHECK`, aucune donnée existante affectée).
+**Retour arrière** : 2 commits isolés sur `dev/Saar` (Lot 1 `0a67633`, Lot 2 à committer), chacun testé
+et confirmé par Saar avant le suivant.

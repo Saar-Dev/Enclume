@@ -1,12 +1,14 @@
 # PLAN_KNEELING_POSITION.md — Ajout de la position « à genou » (kneeling)
 
-> Créé : 2026-08-04 (dev/Saar). Statut : **planification uniquement, aucun code écrit.**
-> Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
-> chantier clos, contenu durable transféré dans `docs/SYSTEME/COMBAT.md` (matrices de transition) et
-> `docs/SYSTEME/ETATS_PERSONNAGE.md` (ETP2, mis à jour plutôt que dupliqué).
-> Responsabilité unique de ce document : rendre `kneeling` réellement sélectionnable en jeu (catalogue
-> déjà en place depuis `PLAN_CHARACTER_STATES.md` Lot 0, mais jamais atteignable). Ne traite aucune
-> autre règle de jeu, aucune autre valeur d'état.
+> Créé : 2026-08-04 (dev/Saar). **Clos 2026-08-04 — Lots 1 et 2 faits et validés en jeu réel.**
+> Contenu durable transféré vers `docs/SYSTEME/COMBAT.md` (matrices de transition, labels) et
+> `docs/SYSTEME/ETATS_PERSONNAGE.md` (ETP2, corrigé plutôt que dupliqué).
+> Archivé ici (`docs/RegleDocumentaire.md` Règle 10) — conservé pour son historique de décision (§0.2,
+> coût `crouching↔kneeling`), pas pour être relu comme référence active.
+> Responsabilité originale : rendre `kneeling` réellement sélectionnable en jeu (catalogue déjà en place
+> depuis `PLAN_CHARACTER_STATES.md` Lot 0, mais jamais atteignable). Fait — 3 verrous serveur trouvés et
+> corrigés (`VALID_POS`, `VALID_STATES.position` — ce dernier absent de l'inventaire initial, trouvé au
+> codage — et le `CHECK` de `combat_roster`).
 
 ---
 
@@ -94,7 +96,7 @@ redevient un seul edit.
 | Lot | Contenu | Risque | Statut |
 |---|---|---|---|
 | **Lot 1 (dédoublonnage)** | Créer `shared/combatStatePositionCost.js` avec le triplet actuel (`standing`/`crouching`/`prone`, valeurs inchangées). Basculer `socketCombatAnnouncement.js` et `combatSections.js` pour l'importer au lieu de définir `STATE_COSTS.position`/`STATE_DEFS.position.cost` localement. Comportement identique bit-à-bit — aucune nouvelle valeur. | Faible — refactor pur | **Clos** — test unitaire vert, ESLint propre, validé en jeu réel par Saar (coût Initiative inchangé) |
-| **Lot 2 (ajout kneeling)** | Migration (numéro à vérifier au moment de coder, actuellement 231 libre) : élargir `chk_state_position` à 4 valeurs. `VALID_POS` (`socketCombatState.js`) + entrée `kneeling` dans `POSITION_TRANSITION_COST` (§1, coût = alias `crouching`) + `STATE_DEFS.position.states` (`combatSections.js`) + `states.position.kneeling` (`combat.json`, labels "À genou"/"Genou"). | Faible-moyen — migration additive (élargit une contrainte, aucune donnée existante affectée) + synchronisation client/serveur/i18n | Non commencé |
+| **Lot 2 (ajout kneeling)** | Migration `231` : élargir `chk_state_position` à 4 valeurs (testée up/down/re-up). `VALID_POS` (`socketCombatState.js`, `COMBAT_INIT_STATE`) + `VALID_STATES.position` (`socketCombatAnnouncement.js:79`, `COMBAT_ACTION_DECLARE` — **3e verrou trouvé au codage, absent de l'inventaire initial**) + entrée `kneeling` dans `POSITION_TRANSITION_COST` (§1, coût = alias `crouching`, `crouching↔kneeling` gratuit) + `STATE_DEFS.position.states` (`combatSections.js`) + `states.position.kneeling` (`combat.json`, "À genou"/"Gen."). | Faible-moyen — migration additive + synchronisation client/serveur/i18n | **Clos** — testé en jeu réel (Saar) : déclaration initiale et déclaration de tour, coût Initiative correct, Tir Visé toujours refusé après transition, libellé affiché correctement |
 
 Chaque lot = un commit isolé, testé et confirmé par Saar avant le lot suivant (`CLAUDE.md` §5, §11).
 
@@ -133,6 +135,7 @@ Chaque lot = un commit isolé, testé et confirmé par Saar avant le lot suivant
 | `client/src/components/combatSections.js` | Modifier (import au lieu de `STATE_DEFS.position.cost` inline ; Lot 2 : `states` +kneeling) | 1, 2 |
 | `server/src/db/migrations/231_kneeling_position.js` (numéro à confirmer) | Créer | 2 |
 | `server/src/socket/socketCombatState.js` (`VALID_POS`) | Modifier | 2 |
+| `server/src/socket/socketCombatAnnouncement.js` (`VALID_STATES.position`, ligne 79) — **3e point de validation trouvé au codage, absent de l'inventaire initial** : gate du handler `COMBAT_ACTION_DECLARE` (déclaration normale à chaque tour), distinct de `VALID_POS` (`COMBAT_INIT_STATE`, état initial seulement) | Modifier | 2 |
 | `client/src/locales/combat.json` (`states.position.kneeling` — label "À genou", short "Gen." pour rester cohérent avec "Deb."/"Acc."/"Couc.") | Modifier | 2 |
 | `shared/combatStatePositionCost.test.mjs` | Créer (premier filet automatisé sur cette table, fonction pure) | 1 |
 | `docs/SYSTEME/COMBAT.md` (matrices de transition, table persistance) | Mettre à jour | 2 (clôture) |

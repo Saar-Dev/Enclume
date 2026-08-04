@@ -225,7 +225,7 @@ Cinq colonnes TEXT enum sur `combat_roster`, toutes NOT NULL avec DEFAULT.
 
 | Colonne | Migration | CHECK values | Default | Persistance | Reset endTurn |
 |---|---|---|---|---|---|
-| `state_position` | 56 | `'standing'\|'crouching'\|'prone'` | `'standing'` | **combat** | inchangé (corrigé, voir note) |
+| `state_position` | 56, élargie 231 | `'standing'\|'crouching'\|'kneeling'\|'prone'` | `'standing'` | **combat** | inchangé (corrigé, voir note) |
 | `state_weapon` | 56 | `'holstered'\|'ready'\|'drawn'` | `'holstered'` | **combat** | inchangé |
 | `state_fire_mode` | 58 | `'cc'\|'rc'\|'rl'` | `'cc'` | **combat** | inchangé |
 | `state_cover` | 58 | `'exposed'\|'partial'\|'important'` | `'exposed'` | **par tour** | → `'exposed'` |
@@ -239,16 +239,22 @@ nouveau tour.
 > **Correctif `state_position` (2026-08, `docs/PLANS/PLAN_CHARACTER_STATES.md` Lot 2b)** :
 > `state_position` était à tort reset à `'standing'` dans `endTurn()` — corrigé. **Autorité du broadcast
 > client** (ce que voit le joueur/MJ) déplacée vers une table dédiée `character_states`
-> (`server/src/lib/characterStateService.js`), ancrée sur `token_id` — un catalogue extensible
-> (`ref_character_state_values`) y ajoute déjà une 4ᵉ position, `'kneeling'` (à genou, LdB), pas encore
-> exposée via `COMBAT_ACTION_DECLARE`/`COMBAT_INIT_STATE` (`VALID_POS`/`CHECK` encore limités aux 3
-> valeurs historiques). `combat_roster.state_position`/`state_weapon` restent la colonne écrite et
-> restent l'autorité lue directement par `socketCombatAnnouncement.js` (`entry`, coût d'Initiative +
-> validation Tir Visé) — leur retrait est différé (Lot 2c, `PLAN_CHARACTER_STATES.md` §3), pas encore
-> fait.
+> (`server/src/lib/characterStateService.js`), ancrée sur `token_id`. `combat_roster.state_position`/
+> `state_weapon` restent la colonne écrite et restent l'autorité lue directement par
+> `socketCombatAnnouncement.js` (`entry`, coût d'Initiative + validation Tir Visé) — leur retrait est
+> différé (Lot 2c, `PLAN_CHARACTER_STATES.md` §3), pas encore fait.
+>
+> **`kneeling` — 4ᵉ position (2026-08, `docs/Old/PLAN_KNEELING_POSITION.md`, archivé)** : « à genou »
+> (REGLESYSCOMBAT.md:929-930) manquait au code depuis toujours. Catalogue ajouté Lot 0 de
+> `PLAN_CHARACTER_STATES.md`, réellement jouable depuis ce chantier — migration `231` (élargit
+> `chk_state_position`), `VALID_POS` (`socketCombatState.js`, état initial) et `VALID_STATES.position`
+> (`socketCombatAnnouncement.js:79`, déclaration de tour — deux verrous distincts, tous les deux
+> corrigés). Coût d'Initiative : le LdB ne nomme aucune valeur pour `kneeling` — décision Saar, alias
+> exact de `crouching` sur toute paire vers/depuis `standing`/`prone` ; transition directe
+> `crouching↔kneeling` gratuite (postures mécaniquement équivalentes partout ailleurs dans le système).
 
 **Labels UI (français) :**
-- `state_position` : `'standing'`→ Debout, `'crouching'`→ Accroupi, `'prone'`→ Couché
+- `state_position` : `'standing'`→ Debout, `'crouching'`→ Accroupi, `'kneeling'`→ À genou, `'prone'`→ Couché
 - `state_weapon` : `'holstered'`→ Rangée, `'ready'`→ Main sur l'arme, `'drawn'`→ Au clair
 - `state_fire_mode` : `'cc'`→ Coup par coup, `'rc'`→ Rafale courte, `'rl'`→ Rafale longue
 - `state_cover` : `'exposed'`→ Découvert, `'partial'`→ Partielle (50%), `'important'`→ Importante (75%)
@@ -256,10 +262,11 @@ nouveau tour.
 
 **Matrices de transition INI :**
 ```
-POSITION:
-  standing  → { crouching: -3, prone: -5 }
-  crouching → { standing:  -3, prone: -5 }
-  prone     → { standing: -10, crouching: -10 }
+POSITION (autorité unique : shared/combatStatePositionCost.js, docs/Old/PLAN_KNEELING_POSITION.md) :
+  standing  → { crouching: -3, kneeling: -3, prone: -5 }
+  crouching → { standing:  -3, kneeling:  0, prone: -5 }
+  kneeling  → { standing:  -3, crouching:  0, prone: -5 }  // alias crouching, sauf crouching↔kneeling (gratuit)
+  prone     → { standing: -10, crouching: -10, kneeling: -10 }
 
 WEAPON:
   holstered → { ready: -3, drawn: -5 }
