@@ -27,4 +27,31 @@ export function useAutoMoveMode({ enabled, allures, tokenId, tokenPos, combatMov
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, allures, tokenId, tokenPos?.x, tokenPos?.z, onEnterMoveMode, combatMoveMode])
+
+  // Désarmement (docs/BUGIDENTIFIE.md ALLURE-TURNGATE1) — ce hook savait s'armer mais jamais se
+  // désarmer : dès que `enabled` redevenait faux (tour/phase terminé pour ce déclarant), le mode
+  // restait affiché indéfiniment, le réarmement ci-dessus contredisant aussitôt tout nettoyage externe
+  // (`handleModeReset`, useCombatUIState) tant que `enabled` restait vrai entre-temps. Ref miroir (même
+  // patron que Canvas3D.jsx/useCombatClickAttack.js) : assignation directe en rendu, lue seulement dans
+  // les nettoyages ci-dessous — garantit de lire l'état réel au moment du désarmement, jamais une
+  // valeur capturée au dernier changement de `enabled`.
+  const stateRef = useRef({})
+  stateRef.current = { combatMoveMode, tokenId }
+
+  const prevEnabledRef = useRef(enabled)
+  useEffect(() => {
+    if (prevEnabledRef.current && !enabled) {
+      const { combatMoveMode: current, tokenId: ownTokenId } = stateRef.current
+      if (current?.tokenId === ownTokenId) current.onCancel()
+    }
+    prevEnabledRef.current = enabled
+  }, [enabled])
+
+  // Démontage du composant appelant (ex. CombatGmDeclareWindow, qui ne monte qu'en phase ANNONCE) —
+  // filet indépendant de la transition `enabled` ci-dessus, pour le cas où le composant disparaît sans
+  // jamais revoir `enabled` passer à faux dans un rendu.
+  useEffect(() => () => {
+    const { combatMoveMode: current, tokenId: ownTokenId } = stateRef.current
+    if (current?.tokenId === ownTokenId) current.onCancel()
+  }, [])
 }

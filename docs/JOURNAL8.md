@@ -182,3 +182,100 @@ libellé affiché correctement).
 **Données** : migration `231` (élargissement `CHECK`, aucune donnée existante affectée).
 **Retour arrière** : 2 commits isolés sur `dev/Saar` (Lot 1 `0a67633`, Lot 2 à committer), chacun testé
 et confirmé par Saar avant le suivant.
+
+---
+
+## Session (Saar) — 2026-08-04 — `PLAN_CHAT.md` Phase 1 (module `server/src/chat/`, rien branché)
+
+**Contexte** : préparation à l'implantation de `docs/PLANS/PLAN_CHAT.md` (chat persistant, dette CH1).
+Avant de coder, correction préalable de CLAUDE.md §5 : la règle de numérotation pair(Codex)/impair
+(Claude) des migrations est abrogée (Codex/Kiwi hors projet, décision Saar 2026-08-04) — numérotation
+strictement séquentielle désormais. Dernière migration réelle avant ce chantier : 231.
+
+**Revue de complétude avant codage** (Saar : "SI ET SEULEMENT SI ce plan est sérieux et complet") :
+audit du plan V1.0 contre l'état réel du dépôt (dépendances serveur, patrons d'autorisation
+existants). 5 écarts trouvés et tranchés explicitement, documentés dans `PLAN_CHAT.md` §16 plutôt que
+corrigés en silence :
+- **Autorisation absente** (`chatRoutes.js`/`socketChat.js` ne vérifiaient l'appartenance à la
+  campagne nulle part) → pattern repris de `tradeRoutes.js` (`requireAuth` + `campaign_members`).
+- **Schéma whisper incomplet** (`recipients` cité §10 sans colonne en §4.1) → ajout
+  `chat_messages.recipient_user_id` + canal dédié `channel_id = 'whisper'`.
+- **Dépendances inexistantes** (Zod, lib de sanitization Markdown, ni l'une ni l'autre dans
+  `server/package.json`, aucun autre module serveur n'utilise Zod) → validateur et sanitizer maison
+  (`chatValidation.js`, `chatSanitizer.js` — échappement HTML puis whitelist regex des 4 patterns
+  Markdown autorisés, blocs code protégés d'une réinterprétation gras/italique).
+- **Migration sans `down()`** → complétée, pattern `231_kneeling_position.js`.
+- **i18n** (trouvé en écrivant `chatCommands.js`, pas dans l'audit initial) : les réponses de
+  commandes (`/help`, `/w`, `/gm`) prévues par le plan renvoyaient du texte FR figé — violation directe
+  de `.claude/rules/i18n.md`. Corrigé en `i18nKey` (namespace `chat.commands.*`), pattern
+  `system:true`+`i18nKey` déjà en place (`socketCombatHelpers.js`/`useSessionSocket.js`). Les entrées
+  `client/src/locales/` restent à créer en Phase 3 (rendu), pas avant.
+
+**Codé** (rien branché dans l'existant — le handler `CHAT_MESSAGE` de `socketDice.js` continue de
+fonctionner tel quel) : migration `232_chat_messages.js` ; `shared/events.js` (+`CHAT_SEND`,
+`CHAT_MESSAGE_CREATED`, `CHAT_MESSAGE_DELETED`, `CHAT_ERROR`) ; `server/src/chat/` complet
+(`eventBus.js`, `chatValidation.js`, `chatSanitizer.js`, `chatRepository.js`, `chatService.js`,
+`chatCommands.js` — `/help`/`/w`/`/gm` réellement enregistrés, `/r`/`/roll` volontairement exclus du
+registre en V1 §15 — `chatRoutes.js`, `chatBroadcast.js`, `socketChat.js`). Messages Builders
+(`combatDamage.js` etc.) délibérément non codés en Phase 1 : dépendent d'une réconciliation de topics
+(`combat.damage` vs `COMBAT_ATTACK_RESULT`/`COMBAT_DAMAGE_RESULT` réels) qui n'a de sens qu'au moment
+du branchement Phase 3-4.
+
+**Testé** : 33 tests (5 fichiers `.test.mjs`, Node test runner, écritures DB réelles + nettoyage
+explicite, patron `woundReviewService.test.mjs`) — validation, sanitization (XSS + bug code/markdown
+trouvé et corrigé en cours d'écriture), rate limit 10 msg/s/utilisateur, filtrage whisper (un tiers non
+concerné ne reçoit rien, vérifié avec 3 sockets mockées), `/help`/`/w`/`/gm`, enforcement de
+permission (`permission: 'gm'` déclaré par le plan mais jamais vérifié — ajouté), bypass `/r`. Migration
+232 auto-appliquée par nodemon et vérifiée en base. Confirmé fonctionnel par Saar.
+**Non testé** : tout ce qui suppose le branchement réel (Phase 2 — mount du router, appel à
+`registerChatHandlers` depuis `socket/index.js`, double-écriture derrière `CHAT_PERSISTENCE_ENABLED`).
+Aucun scénario navigateur : Phase 1 n'expose aucune UI.
+**Données** : migration `232` (table `chat_messages`, additive, réversible).
+**Retour arrière** : tout le chantier est un commit isolé sur `dev/Saar` — revert seul suffit
+(`server/src/chat/` neuf, `shared/events.js`/`CLAUDE.md`/docs modifiés uniquement de façon additive).
+
+---
+
+## Session (Saar) — 2026-08-04 — ALLURE-TURNGATE1 clos (panneau allure/déplacement visible hors tour)
+
+**Contexte** : signalement direct de 3 bugs (`docs/BUGIDENTIFIE.md`) — seul ALLURE-TURNGATE1 traité
+dans cette session, les deux autres (CLICKATTACK-MOVECONFLICT1, SIDEBAR-CDL-CONTRAST1) restent en
+attente. Une première passe d'analyse groupant les 3 bugs avec hypothèses de cause a été retirée en
+cours de session (violation de la règle « un bug à la fois » + demande explicite de Saar de noter sans
+diagnostiquer) avant toute reprise propre.
+
+**Décision Saar** : demande initiale d'un rework plutôt qu'un correctif ponctuel («la priorité du
+projet a toujours été la qualité »). Recherche (React « Don't Sync State, Derive It », sélecteurs
+Redux, XState) et relecture critique du rework proposé (V0.1, 6 fichiers) ont montré qu'il était
+surdimensionné — la vraie cause était concentrée dans un seul fichier. Périmètre resserré à 3 fichiers
+(V0.2/V0.3, `docs/PLANS/PLAN_COMBAT_MODE_AMBIANT.md`), validé avant tout code.
+
+**Cause racine [VÉRIFIÉ]** : `useAutoMoveMode.js` (survol déplacement ambiant, décision
+COMBAT-DEPLACEMENT-HOVER 2026-07-31) savait s'armer via effet mais jamais se désarmer — le nettoyage
+existant (`handleModeReset`, câblé sur `COMBAT_END`/`PHASE_CHANGED`/`COMBAT_SLOT_ADVANCED`) était
+immédiatement contredit par un réarmement automatique, la condition `enabled` des 3 appelants
+(PJ/MJ/drone) ne vérifiant jamais la phase ni le tour.
+
+**Correctif** :
+- `client/src/lib/useAutoMoveMode.js` — désarmement ajouté (transition `enabled` vrai→faux et
+  démontage, ref miroir), corrige les 3 appelants en un seul endroit.
+- `client/src/components/CombatActionWindow.jsx` — `isMyTurnInResolution`/`isMyTurnInAnnouncement`
+  (déjà existants, corrects) remontés avant le hook, ajoutés à `enabled`.
+- `client/src/components/CombatGmDeclareWindow.jsx` — `isActivePnj` (déjà existant, correct) remonté
+  avant le hook, remplace `!activeDroneCharId` dans `enabled` (appel non-drone).
+
+**Explicitement exclu** : le drone (MJ) — `moveHoverEnabled` (`useDroneDeclare.js`) pilote à la fois le
+survol et le clic-attaque ; corriger l'un aurait changé l'autre (CLICKATTACK-MOVECONFLICT1, bug séparé,
+non traité). Le drone reste donc affecté par ALLURE-TURNGATE1 — résiduel documenté sur
+CLICKATTACK-MOVECONFLICT1.
+
+**Testé** : ESLint sur les 3 fichiers (0 régression, comparé via `git stash` à l'état avant
+modification ; l'erreur préexistante `set-state-in-effect` de `CombatGmDeclareWindow.jsx` n'est pas
+liée) ; `npm run build` (client) propre ; relecture manuelle multi-angles (React StrictMode, ordre de
+montage/démontage, transitions de phase, cas multi-personnages) avant tout code. **Confirmé fonctionnel
+en jeu par Saar** (PJ et MJ, hors drone).
+**Non testé** : le cas drone (exclu du périmètre) ; le cas multi-personnages d'un même joueur en
+Annonce (question de règle du jeu ouverte, pas d'architecture — non tranchée, voir
+`PLAN_COMBAT_MODE_AMBIANT.md` §4).
+**Données** : aucune — 100 % client, aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar`, aucun changement serveur.

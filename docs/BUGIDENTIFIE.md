@@ -44,7 +44,13 @@ immédiate de CARDTYPE1 (`cardType` — envoyé par le serveur pour `shock_test`
 `msg.cardType` pour choisir le libellé de détail : dead code silencieux préexistant. Trouvé en câblant
 le tooltip de degré du Lot 3, qui a besoin de ce champ pour exclure le Test de Choc [pas de degré RAW
 applicable, mécanique à deux seuils]. Corrigé au passage, même destructure que l'ajout de
-`catastropheRisk`, sans rapport avec ce chantier)
+`catastropheRisk`, sans rapport avec ce chantier) ; 2026-08-04 (Saar) — signalement direct de 3 bugs
+combat/UI, simple ajout au registre (symptôme uniquement, aucune analyse) : ALLURE-TURNGATE1 (fenêtre
+allure/déplacement visible hors tour), CLICKATTACK-MOVECONFLICT1 (clic sur token adverse déclenche un
+déplacement au lieu d'une attaque), SIDEBAR-CDL-CONTRAST1 (Récapitulatif des Déclarations illisible
+dans la Sidebar). Une première passe avait analysé les 3 en même temps avec hypothèses de cause —
+retirée (violation de la règle "un bug à la fois" + demande explicite de Saar de noter sans corriger),
+conclusions à considérer comme fausses/non avenues.
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
@@ -356,6 +362,84 @@ console.log('[DBG-ID]', { variable1, variable2 })
 
 **Prochaine étape** : [Action exacte à prendre — cluster, sprint, ou investigation.]
 ```
+
+---
+
+### Bug ALLURE-TURNGATE1 — Fenêtre allure/déplacement visible hors tour, en déclaration comme en résolution ✅ Session (Saar, 2026-08-04) — confirmé PJ/MJ, résiduel drone
+
+**Symptôme** : signalé par Saar (2026-08-04) — au lancement d'un combat, un joueur voit la fenêtre de
+sélection d'allure/déplacement alors que ce n'est pas son tour d'agir. Visible en permanence pendant
+la phase ANNONCE ("aucune logique" apparente côté joueur), et même visible pendant la phase
+RÉSOLUTION.
+
+**Reproduction confirmée (Saar)** : sans exception, tout le long du combat, pour le joueur comme pour
+le MJ.
+
+**Cause racine [VÉRIFIÉ par lecture]** : `useAutoMoveMode.js` (armement automatique du survol
+déplacement, décision COMBAT-DEPLACEMENT-HOVER 2026-07-31) savait s'armer mais jamais se désarmer.
+Ses 3 appelants (`CombatActionWindow.jsx` PJ, `CombatGmDeclareWindow.jsx` MJ/PNJ, `useDroneDeclare.js`
+drone) n'avaient aucune condition de phase/tour dans leur `enabled` — alors que ce booléen existe déjà,
+correct, ailleurs dans les 2 premiers fichiers (`isMyTurnInResolution`/`isMyTurnInAnnouncement` côté
+PJ, `isActivePnj` côté MJ). Le nettoyage existant (`handleModeReset`, câblé sur
+`COMBAT_END`/`PHASE_CHANGED`/`COMBAT_SLOT_ADVANCED`) était immédiatement contredit par le réarmement
+automatique tant que `enabled` restait vrai. Détail complet de l'analyse (recherche, alternatives
+écartées) : `docs/PLANS/PLAN_COMBAT_MODE_AMBIANT.md`.
+
+**Correctif codé (2026-08-04)** :
+- `client/src/lib/useAutoMoveMode.js` — ajout du désarmement manquant (transition `enabled` vrai→faux
+  et démontage), via le même `onCancel` que le bouton "Annuler" existant. Corrige les 3 appelants en un
+  seul endroit.
+- `client/src/components/CombatActionWindow.jsx` — `isMyTurnInResolution`/`isMyTurnInAnnouncement`
+  remontés avant le hook (contrainte d'ordre des hooks, pas de duplication), ajoutés à `enabled`.
+- `client/src/components/CombatGmDeclareWindow.jsx` — `isActivePnj` remonté avant le hook, remplace
+  `!activeDroneCharId` dans `enabled` (appel non-drone uniquement).
+
+**Explicitement non corrigé** : le drone (MJ) — son survol et son clic-attaque partagent un seul
+réglage (`moveHoverEnabled`, `useDroneDeclare.js`) ; le corriger toucherait aussi
+CLICKATTACK-MOVECONFLICT1, bug séparé. Reste donc affecté par ALLURE-TURNGATE1 pour le cas drone
+seulement.
+
+**Testé** : ESLint sur les 3 fichiers (0 nouvelle erreur/warning — comparé à l'état avant modification
+via `git stash`, aucune régression introduite ; l'erreur `set-state-in-effect` de
+`CombatGmDeclareWindow.jsx:151` est préexistante, sans rapport) ; `npm run build` (client) propre.
+**Confirmé fonctionnel en jeu par Saar (2026-08-04)** — PJ et MJ (non-drone).
+**Données** : aucune, 100% client, aucune migration.
+**Retour arrière** : commit isolé, aucun changement serveur.
+
+**Résiduel** : le cas drone (MJ) n'est pas couvert — voir CLICKATTACK-MOVECONFLICT1 ci-dessous, même
+fichier (`useDroneDeclare.js`) partagé entre les deux bugs.
+
+---
+
+### Bug CLICKATTACK-MOVECONFLICT1 — Cliquer sur un token adverse déclenche un déplacement au lieu d'une attaque
+
+**Symptôme** : signalé par Saar (2026-08-04) — il n'est pas possible de cliquer sur un token pour
+l'attaquer sans déclencher un déplacement à destination de la case occupée par sa cible.
+
+**Cause racine [INCONNU]** : non investigué — analyse annulée (2026-08-04, même raison
+qu'ALLURE-TURNGATE1).
+
+**Hérite un résiduel d'ALLURE-TURNGATE1** (ci-dessus, confirmé Session 2026-08-04) : le survol
+déplacement et le clic-attaque du drone (MJ) partagent un seul réglage (`moveHoverEnabled`,
+`useDroneDeclare.js`) — corriger l'un sans l'autre n'a pas été possible, donc le drone reste affecté
+par les deux bugs jusqu'à ce que celui-ci soit traité.
+
+**Prochaine étape** : à traiter isolément, un seul bug à la fois — reproduire/instrumenter avant toute
+hypothèse.
+
+---
+
+### Bug SIDEBAR-CDL-CONTRAST1 — Récapitulatif des Déclarations illisible dans la Sidebar
+
+**Symptôme** : signalé par Saar (2026-08-04) — la fenêtre "Récapitulatif des Déclarations" intégrée
+au chat de la Sidebar (`Déclarations · Tour N`) est illisible, texte bleu foncé sur fond bleu marine.
+Saar demande d'en profiter pour séparer ce module (1 fichier = 1 responsabilité).
+
+**Cause racine [INCONNU]** : non investigué — analyse annulée (2026-08-04, même raison
+qu'ALLURE-TURNGATE1).
+
+**Prochaine étape** : à traiter isolément, un seul bug à la fois — reproduire/instrumenter avant toute
+hypothèse.
 
 ---
 

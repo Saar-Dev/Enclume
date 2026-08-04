@@ -169,6 +169,27 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // Sync states initiaux depuis rosterEntry
   const activePnjEntry = activeTokenId ? roster.find(r => r.token_id === activeTokenId) : null
+
+  // ── Helpers déclarant actif — remontés ici (avant les hooks ambiants plus bas, Rules of Hooks) pour
+  // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) : le survol déplacement PNJ ne doit s'armer que si le slot
+  // actif est réellement un PNJ pas encore déclaré, jamais tout le temps. Anciens emplacements (isPnj/
+  // isDroneGmManaged/isGmManaged après le early-return, isActivePnj/isActiveDrone juste avant) retirés,
+  // même contenu, pas dupliqué. Aucun ne dépend de rien calculé entre l'ancien et le nouvel emplacement.
+  const isPnj = (entry) => {
+    const token = tokens.find(tk => tk.id === entry.token_id)
+    if (!token?.character_id) return false
+    return characters.find(c => c.id === token.character_id)?.type === 'pnj'
+  }
+  const isDroneGmManaged = (entry) => {
+    const token = tokens.find(tk => tk.id === entry.token_id)
+    if (!token?.character_id) return false
+    const char = characters.find(c => c.id === token.character_id)
+    return char?.type === 'drone' && !char.user_id
+  }
+  const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
+  const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)           && !activePnjEntry.has_announced
+  const isActiveDrone = activePnjEntry && isDroneGmManaged(activePnjEntry) && !activePnjEntry.has_announced
+
   const initialStates = activePnjEntry
     ? {
         position:  activePnjEntry.state_position  ?? 'standing',
@@ -227,8 +248,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Déplacement PNJ (non-drone) : survol/preview ambiant par défaut, même patron que le drone
   // ci-dessus et que CombatActionWindow (COMBAT-DEPLACEMENT-HOVER) — suspendu pendant Charge (géré
   // en interne par handleStartCharge) et pendant toute autre sélection en cours (isSelectingOnMap).
+  // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — `isActivePnj` (remplace `!activeDroneCharId`) exclut
+  // aussi bien le drone que le cas où le slot actif est un PJ ou un PNJ déjà déclaré : le survol ne
+  // s'arme que si le slot actif est réellement un PNJ pas encore déclaré. `moveHoverEnabled` (drone,
+  // ci-dessus) volontairement non touché — partagé avec useCombatClickAttack dans useDroneDeclare.js,
+  // bug séparé (CLICKATTACK-MOVECONFLICT1).
   useAutoMoveMode({
-    enabled: !activeDroneCharId && !isSelectingOnMap && decl.combatMode !== 'charge',
+    enabled: isActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
     allures: DEFAULT_PNJ_ALLURES,
     tokenId: activeTokenId,
     tokenPos: activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
@@ -237,24 +263,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     onMoveSelected: (sel) => setPendingMove(sel),
     onCancel: () => {},
   })
-
-  // ── Helpers ─────────────────────────────────────────────────────────────
-  // Remontés ici (au-dessus de leur emplacement d'origine plus bas, cf. "── Helpers ──" après le
-  // early-return) — isPnj est nécessaire dès le bloc clic-direct ci-dessous, avant ce early-return
-  // (Rules of Hooks). isDroneGmManaged/isGmManaged suivent pour ne pas casser leur propre usage plus
-  // bas (allGmManaged) — aucun ne dépend de rien calculé entre les deux emplacements.
-  const isPnj = (entry) => {
-    const token = tokens.find(tk => tk.id === entry.token_id)
-    if (!token?.character_id) return false
-    return characters.find(c => c.id === token.character_id)?.type === 'pnj'
-  }
-  const isDroneGmManaged = (entry) => {
-    const token = tokens.find(tk => tk.id === entry.token_id)
-    if (!token?.character_id) return false
-    const char = characters.find(c => c.id === token.character_id)
-    return char?.type === 'drone' && !char.user_id
-  }
-  const isGmManaged = (entry) => isPnj(entry) || isDroneGmManaged(entry)
 
   // ── Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) ──────────────────────
   // Même hook que CombatActionWindow (PJ)/useDroneDeclare, cf. useCombatClickAttack.js. Placé ici
@@ -314,9 +322,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   if (allGmManaged.length === 0) return null
 
-  // ── Dériver l'entité active (PNJ ou drone) ────────────────────────────────
-  const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)        && !activePnjEntry.has_announced
-  const isActiveDrone = activePnjEntry && isDroneGmManaged(activePnjEntry) && !activePnjEntry.has_announced
+  // isActivePnj/isActiveDrone remontés avant les hooks ambiants (cf. juste après activePnjEntry plus
+  // haut) — pas dupliqués ici.
   const activeToken = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
   const isStunnedActivePnj = activeToken?.statuses?.includes('stunned') ?? false
 

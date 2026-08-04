@@ -99,6 +99,28 @@ export default function CombatActionWindow({
   const isStunned   = playerToken?.statuses?.includes('stunned') ?? false
   const isDrone     = playerChar?.type === 'drone'
 
+  // Déclarant légitime — remonté ici (avant les hooks ambiants plus bas, même contrainte d'ordre des
+  // hooks que useCombatClickAttack) pour ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) : le survol
+  // déplacement ne doit s'armer que si c'est réellement mon tour, jamais tout le temps. Ancien
+  // emplacement de ce bloc retiré plus bas (§ derives resolution / derive announce), même contenu,
+  // pas dupliqué.
+  // docs/PLAN_COMBAT_TIMELINE.md Lot B — activeTokenId dérive de currentStep.tokenId.
+  const resolveSlotTid = phase === 'RESOLUTION' ? activeTokenId : null
+  const isMyTurnInResolution = resolveSlotTid != null
+    && playerTokensInRoster.some(tk => tk.id === resolveSlotTid)
+  // Fallback : calcul depuis le roster si activeTokenId pas encore reçu (race condition COMBAT_SLOT_ADVANCED)
+  const computedAnnounceTokenId = activeTokenId ?? (
+    phase === 'ANNOUNCEMENT'
+      ? [...roster]
+          .filter(r => !r.has_announced && r.status === 'active')
+          .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
+      : null
+  )
+  const isMyTurnInAnnouncement = phase === 'ANNOUNCEMENT'
+    && computedAnnounceTokenId != null
+    && playerTokensInRoster.some(tk => tk.id === computedAnnounceTokenId)
+    && !rosterEntry?.has_announced
+
   // --- etats tactiques partagés (useReducer) --------------------------------
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
@@ -176,7 +198,11 @@ export default function CombatActionWindow({
   )
   useAutoMoveMode({
     enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
-      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite',
+      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite' &&
+      // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — le survol ne s'arme que si c'est réellement mon tour
+      // de déclarer/résoudre, jamais tout le temps. `useCombatClickAttack` ci-dessous, bug séparé
+      // (CLICKATTACK-MOVECONFLICT1), volontairement non touché.
+      (phase === 'ANNOUNCEMENT' ? isMyTurnInAnnouncement : phase === 'RESOLUTION' && isMyTurnInResolution),
     allures: effectiveAllures,
     tokenId: playerToken?.id ?? null,
     tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
@@ -422,25 +448,8 @@ export default function CombatActionWindow({
   if (playerTokensInRoster.length === 0) return null
 
   // --- derives resolution --------------------------------------------------
-  // docs/PLAN_COMBAT_TIMELINE.md Lot B — activeTokenId dérive désormais de currentStep.tokenId (le pas
-  // courant de l'échelle), plus de active_slot_idx/roster trié (colonne supprimée, migration 174).
-  const resolveSlotTid = phase === 'RESOLUTION' ? activeTokenId : null
-  const isMyTurnInResolution = resolveSlotTid != null
-    && playerTokensInRoster.some(tk => tk.id === resolveSlotTid)
-
-  // --- derive announce : mon tour si activeTokenId correspond à l'un de mes tokens ---
-  // Fallback : calcul depuis le roster si activeTokenId pas encore reçu (race condition COMBAT_SLOT_ADVANCED)
-  const computedAnnounceTokenId = activeTokenId ?? (
-    phase === 'ANNOUNCEMENT'
-      ? [...roster]
-          .filter(r => !r.has_announced && r.status === 'active')
-          .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
-      : null
-  )
-  const isMyTurnInAnnouncement = phase === 'ANNOUNCEMENT'
-    && computedAnnounceTokenId != null
-    && playerTokensInRoster.some(tk => tk.id === computedAnnounceTokenId)
-    && !rosterEntry?.has_announced
+  // resolveSlotTid/isMyTurnInResolution/computedAnnounceTokenId/isMyTurnInAnnouncement remontés avant
+  // les hooks ambiants (cf. juste après rosterEntry plus haut) — pas dupliqués ici.
   const myActions = actions.filter(a => playerTokensInRoster.some(tk => tk.id === a.token_id)
     && (resolveSlotTid ? a.token_id === resolveSlotTid : a.token_id === playerToken?.id)
   )

@@ -56,7 +56,7 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- Dernière migration appliquée : **229** (`229_character_states.js`) — détail complet et historique
+- Dernière migration appliquée : **232** (`232_chat_messages.js`) — détail complet et historique
   des migrations : `docs/ASBUILT.md` § Base de données
 
 ---
@@ -67,12 +67,14 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 
 | ID | Description | Priorité |
 |---|---|---|
+| **CLICKATTACK-MOVECONFLICT1** | Clic sur token adverse déclenche un déplacement au lieu d'une attaque. Signalé Saar 2026-08-04, non analysé. Hérite aussi le résiduel drone d'ALLURE-TURNGATE1 (clos, `docs/BUGIDENTIFIE.md`) — même fichier `useDroneDeclare.js` | À investiguer |
+| **SIDEBAR-CDL-CONTRAST1** | Récapitulatif des Déclarations illisible dans la Sidebar (texte bleu foncé sur fond bleu marine) — Saar demande d'en profiter pour séparer le module. Signalé 2026-08-04, non analysé | À investiguer |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
 | **HORLOGE-TEST1** | `adjustGameTime` (Lot 1, `gameTimeService.js`) sans aucun test automatisé — seule la projection pure `shared/gameTime.js` est testée, trouvé en analyse à charge avant le Lot 2, détail `docs/BUGIDENTIFIE.md` | À faire avant/pendant le Lot 2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
-| CH1 | Historique chat perdu au F5 (rechargement page) — chantier persistance (table messages, endpoint relecture, pagination), pas un correctif isolé, voir `docs/ROADMAP.md` "Chat persistant" | Chantier dédié — doc alignée Session 166 (Saar) |
+| CH1 | Historique chat perdu au F5 (rechargement page) — Phase 1 (`docs/PLANS/PLAN_CHAT.md`) ✅ clos et confirmé 2026-08-04 : module `server/src/chat/` codé et testé (33 tests), rien branché dans l'existant. Reste Phases 2 (double-écriture) à 4 (bascule client + nettoyage) | Chantier dédié — Phase 1 close, Phase 2 non commencée |
 | COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque (signalé Saar, non instrumenté) | À investiguer |
 | FEAT4 | Aura de portée CaC (3m + allonge arme) autour du personnage actif | Basse — sprint futur |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
