@@ -15,6 +15,17 @@ export async function getCharacterStates(db, tokenId) {
   return result
 }
 
+// getCharacterStatesForTokens — variante batchée (Lot 2b, docs/PLANS/PLAN_CHARACTER_STATES.md §3) pour
+// un roster de plusieurs tokens : un seul whereIn au lieu d'un getCharacterStates par token (broadcast
+// roster). Retourne une Map<tokenId, { position, weapon }>, défauts appliqués comme getCharacterStates.
+export async function getCharacterStatesForTokens(db, tokenIds) {
+  const result = new Map(tokenIds.map(id => [id, { ...AXIS_DEFAULTS }]))
+  if (tokenIds.length === 0) return result
+  const rows = await db('character_states').whereIn('token_id', tokenIds).select('token_id', 'axis', 'value_code')
+  for (const { token_id, axis, value_code } of rows) result.get(token_id)[axis] = value_code
+  return result
+}
+
 // setCharacterState — upsert, ou DELETE si valueCode égale le défaut de l'axe (§2.1). La contrainte
 // FK (axis, value_code) → ref_character_state_values porte la validation des valeurs : jamais de
 // re-validation JS dupliquée ici.

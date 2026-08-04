@@ -1,9 +1,13 @@
 // characterStateShadowCheck.js
-// Dispositif TEMPORAIRE — Lot 1 de docs/PLANS/PLAN_CHARACTER_STATES.md, méthode Scientist (même
-// dispositif que docs/PLANS/PLAN_RW_SYSCOMBAT.md §2.3) : compare la valeur combat_roster (autorité
-// actuelle, seule utilisée en aval pendant cette phase) à character_states (nouvelle autorité en
-// construction) juste après chaque double-écriture. Écart loggé, jamais bloquant.
-// Supprimé au commit qui clôture le Lot 2b — jamais laissé en double-écriture permanente.
+// Dispositif Lot 1 de docs/PLANS/PLAN_CHARACTER_STATES.md, méthode Scientist (même dispositif que
+// docs/PLANS/PLAN_RW_SYSCOMBAT.md §2.3) : compare la valeur combat_roster à character_states juste
+// après chaque double-écriture. Écart loggé, jamais bloquant.
+// Statut révisé au Lot 2b (§3.1) : la suppression des colonnes combat_roster.state_position/
+// state_weapon est différée (Codex hors projet, clôture alignée sur PLAN_RW_TOKEN.md plus tard) —
+// combat_roster reste écrit et reste l'autorité lue par socketCombatAnnouncement.js (`entry`, coût
+// d'Initiative + validation Tir Visé). Ce fichier reste donc actif au-delà du Lot 1 comme garde-fou de
+// cohérence entre les deux sources, pas seulement comme filet avant cutover — à retirer seulement
+// quand combat_roster.state_position/state_weapon seront effectivement supprimées.
 
 import { getCharacterStates } from './characterStateService.js'
 

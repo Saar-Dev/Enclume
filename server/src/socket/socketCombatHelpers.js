@@ -203,7 +203,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
       .select('roster.token_id', 'ts.status_code', 'ts.data')
     await resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)
 
-    const broadcastRoster = buildBroadcastRoster(fullRoster)
+    const broadcastRoster = await buildBroadcastRoster(db, fullRoster)
 
     pendingMaps.combatPreviews.delete(campaignId)
 
@@ -1063,16 +1063,19 @@ export async function forceAdvanceResolution(io, campaignId, pendingMaps) {
 // clôture du Tour est marquée 'skipped' explicitement (le joueur n'a pas confirmé son action à temps).
 export async function endTurn(io, campaignId, pendingMaps) {
   try {
-    // PC18 — reset announced/resolved + états per-tour (position/cover/vitesse)
+    // PC18 — reset announced/resolved + états per-tour (cover/vitesse)
     // INI4 (docs/BUGIDENTIFIE.md) — reset initiative=base_ini en fin de tour (REGLESYSCOMBAT p.213) :
     // sans ça, les modificateurs d'Initiative (Précipiter/Dégainer/S'accroupir...) s'accumulaient
     // tour après tour au lieu d'être réinitialisés.
+    // state_position retiré de ce reset (docs/PLANS/PLAN_CHARACTER_STATES.md §0.2) : contrairement à
+    // state_cover/state_vitesse, changer de position a un coût d'Initiative dédié (REGLESYSCOMBAT.md
+    // §"Position du personnage") qui n'a de sens que si la position obtenue persiste — rien dans le
+    // texte ne prévoit de reset automatique en fin de tour.
     await db('combat_roster')
       .where({ campaign_id: campaignId, status: 'active' })
       .update({
         has_announced:     false,
         has_resolved:      false,
-        state_position:    'standing',
         state_cover:       'exposed',
         state_vitesse:     'normal',
         state_combat_mode: 'normal',
@@ -1137,7 +1140,7 @@ export async function endTurn(io, campaignId, pendingMaps) {
     const roster = await db('combat_roster')
       .where({ campaign_id: campaignId })
       .orderBy('initiative', 'desc')
-    const broadcastRoster = buildBroadcastRoster(roster)
+    const broadcastRoster = await buildBroadcastRoster(db, roster)
 
     await setFSMSubPhase(db, campaignId, null)
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })

@@ -156,7 +156,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       }
 
       // Broadcast COMBAT_STARTED — sans surprise_roll (PC25)
-      const broadcastRoster = buildBroadcastRoster(insertedRoster)
+      const broadcastRoster = await buildBroadcastRoster(db, insertedRoster)
       io.to(campaignId).emit(WS.COMBAT_STARTED, { roster: broadcastRoster, phase: 'ROSTER' })
 
       console.log('###### DEBUT COMBAT #############')
@@ -340,7 +340,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       })
 
       const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
-      const broadcastRoster = buildBroadcastRoster(updatedRoster)
+      const broadcastRoster = await buildBroadcastRoster(db, updatedRoster)
       io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
 
       console.log(`[WS] combat:init_state — ${user.username} pos:${position} wpn:${weapon} fm:${fire_mode}`)
@@ -428,7 +428,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // Broadcast roster mis à jour — sans surprise_roll (PC25)
       const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
       console.log(`[DBG] surprise_result: roster fetched count=${updatedRoster.length} initiatives=${JSON.stringify(updatedRoster.map(r => ({ t: r.token_id.slice(-6), ini: r.initiative })))}`)
-      const broadcastRoster = buildBroadcastRoster(updatedRoster)
+      const broadcastRoster = await buildBroadcastRoster(db, updatedRoster)
       io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
 
       console.log(`[WS] combat:surprise_result — ${user.username} token:${tokenId} roll:${diceRoll} success:${isSuccess} ini:${isSuccess ? diceRoll : 0}`)

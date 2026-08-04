@@ -231,23 +231,23 @@ Aucun autre fichier ne touche `character_states` directement — même disciplin
 | **Lot 0** | Migration `229_character_states.js` (numéro vérifié : dernière migration appliquée = 227, `knex migrate:list` sans pending, `CLAUDE.md` §5) : `ref_character_state_values` + `character_states` + seed (y compris `kneeling`), `characterStateService.js`. Aucune lecture/écriture existante modifiée — `combat_roster.state_position`/`state_weapon` restent l'autorité en prod. | Faible — ajout pur, rien de consommé encore | **Clos** (commit `96d04ef`) |
 | **Lot 1 (shadow)** | Chaque écriture actuelle (`socketCombatState.js:117/315-316`, `socketCombatAnnouncement.js:601-602`) appelle aussi `setCharacterState(tokenId, ..., trx)` **dans la même transaction** que l'`UPDATE combat_roster` qu'elle double-écrit (§2.2). `endTurn()` pas encore touché. Comparaison des deux sources en jeu réel (log `[DBG-DECOUPLAGE]` sur écart, jamais bloquant), méthode Scientist — même dispositif que `PLAN_RW_SYSCOMBAT.md` Lot 1 (`characterStateShadowCheck.js`, temporaire, supprimé au Lot 2b). | Faible — double-écriture transactionnelle, aucune lecture basculée | **Clos** — session de combat réelle (Saar), plusieurs changements position/arme + fin de tour, aucun `[DBG-DECOUPLAGE]` |
 | **Lot 2a (dédup broadcast)** | Helper unique `buildBroadcastRoster(rows)` (`server/src/lib/combatRosterBroadcast.js`), remplace les 5 occurrences du spread recensées en §0.4bis — seule la mise en forme est extraite, chaque site garde son propre `io.emit` (payloads hétérogènes : `phase`, `actions`... — même discipline que `PLAN_RW_SYSCOMBAT.md` §2.5.c, ne pas sur-extraire). Comportement identique bit-à-bit. Prérequis mécanique de Lot 2b : sans lui, le cutover ne peut être appliqué qu'à un site sur 5. | Faible — refactor sans changement de comportement | **Clos** — `combatRosterBroadcast.test.mjs` (3 tests) + 2 sessions de combat réelles (Saar) couvrant les 5 sites, dont un token surpris, aucun `[DBG-DECOUPLAGE]` |
-| **Lot 2b (cutover + correctif du bug)** | Le helper Lot 2a construit `state_position`/`state_weapon` depuis `characterStateService.getCharacterStates(tokenId)` au lieu des colonnes `combat_roster`, aux 5 sites d'un coup. Retrait de la ligne `state_position: 'standing'` dans `endTurn()` (§0.2). Retrait des colonnes `state_position`/`state_weapon` + leurs `CHECK` de `combat_roster` une fois la lecture basculée et validée. | Moyen — touche la construction du broadcast lu par 4 fichiers client (§0.4) ; voir prérequis §3.1 | Non commencé |
+| **Lot 2b (cutover broadcast + correctif du bug)** | `buildBroadcastRoster` (async) construit `state_position`/`state_weapon` depuis `characterStateService.getCharacterStatesForTokens` (batché) au lieu des colonnes `combat_roster`, aux 5 sites d'un coup. Retrait de la ligne `state_position: 'standing'` dans `endTurn()` (§0.2). **Portée revue en analyse à charge (session courante)** : `combat_roster.state_position`/`state_weapon` restent écrites (Lot 1 inchangé, `characterStateShadowCheck.js` reste actif) — `socketCombatAnnouncement.js:139` (`entry`, coût d'Initiative §391-394 + validation Tir Visé `isAimEligible` §404) lit ces colonnes directement pour une règle de jeu serveur authentique, pas de l'affichage : arrêter l'écriture aurait cassé cette validation. | Moyen — touche la construction du broadcast lu par 4 fichiers client (§0.4) ; voir prérequis §3.1 | **Clos** — session de combat réelle (Saar) : persistance de position confirmée, effet cumulé validé comme voulu, Tir Visé toujours refusé après changement d'état, aucun `[DBG-DECOUPLAGE]` |
+| **Lot 2c (retrait colonnes + écriture, différé)** | Migrer `entry` (`socketCombatAnnouncement.js`) vers `characterStateService`, arrêter la double-écriture combat_roster, retirer `characterStateShadowCheck.js`, retirer les colonnes `state_position`/`state_weapon` + leurs `CHECK`. **Explicitement différé** (décision Saar, session courante) : Codex/Kiwi ne font plus partie du projet (§3.1), plus d'urgence fusion — clôture alignée sur `docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7) quand ce chantier animations reprendra, pas avant. | Moyen — suppression de colonnes, migration `down` dédiée, tag/backup (`CLAUDE.md` §11) | **Différé, hors périmètre de la clôture de ce document** |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
-(`CLAUDE.md` §5, §11). Le retrait des colonnes `combat_roster` n'intervient qu'**après** confirmation
-que le Lot 2 fonctionne en jeu réel — pas dans le même commit que le basculement de lecture.
+(`CLAUDE.md` §5, §11).
 
-### 3.1 Prérequis avant de clore le Lot 2
+### 3.1 Prérequis avant de clore le Lot 2b (Lot 2c différé, voir ci-dessus)
 
-- **Compatibilité fusion** `[INCONNU]` : `CLAUDE.md` §3/§5 exige qu'une migration reste rétrocompatible
-  avec le code encore déployé pendant la fusion. Le dépôt `dev/monde` (Codex, `/home/codex/Enclume-integrated`)
-  n'est pas accessible depuis ce worktree — vérifier avec Codex ou par lecture du dépôt distant si son
-  code touche `combat_roster.state_position`/`state_weapon` avant de supprimer ces colonnes.
+- **Compatibilité fusion** — RÉSOLU (Saar, session courante) : Codex et Kiwi ne font plus partie du
+  projet, plus de risque de casser un travail parallèle sur `dev/monde`. N'est donc plus un blocage
+  pour le Lot 2b (qui de toute façon ne touche à aucun schéma). Le Lot 2c reste volontairement différé,
+  non pour un risque de fusion, mais pour être clos avec `PLAN_RW_TOKEN.md` (décision Saar).
 - **Validation d'équilibrage, pas seulement technique** : corriger le bug §0.2 change le comportement de
   jeu au-delà du correctif — un adversaire qui reste couché encaisse désormais les mods de position
   (CaC/Tir) tour après tour, effet cumulé jamais vécu ainsi à la table jusqu'ici (le bug le masquait).
   Demander à Saar une confirmation explicite que ce comportement cumulé est le comportement voulu, en
-  jeu réel, avant de clore le Lot 2 — pas seulement « le code fonctionne ».
+  jeu réel, avant de clore le Lot 2b — pas seulement « le code fonctionne ».
 
 ---
 
@@ -255,10 +255,14 @@ que le Lot 2 fonctionne en jeu réel — pas dans le même commit que le bascule
 
 - **Lot 0-1** : comportement identique bit-à-bit — `combat_roster.state_position`/`state_weapon`
   restent l'unique source lue par le jeu, `character_states` n'est qu'une copie miroir en construction.
-- **Lot 2** : le payload `COMBAT_ROSTER_UPDATED` garde les clés `state_position`/`state_weapon` avec la
-  même forme — **aucun des 4 fichiers client du §0.4 ne doit changer**. Seule la source serveur change.
+- **Lot 2b** : les 5 payloads de broadcast (§0.4bis) gardent les clés `state_position`/`state_weapon`
+  avec la même forme — **aucun des 4 fichiers client du §0.4 ne doit changer**. Seule la source du
+  *broadcast* change. `combat_roster.state_position`/`state_weapon` restent l'autorité lue par
+  `socketCombatAnnouncement.js` (`entry`) pour le coût d'Initiative et la validation Tir Visé — ce n'est
+  **pas** un déplacement complet de l'autorité (ça, c'est Lot 2c, différé), seulement de ce qui est
+  montré au client.
 - Un personnage qui s'accroupit reste accroupi tant qu'il ne change pas explicitement d'état (fin du
-  bug §0.2) — comportement observable à valider en jeu réel avant clôture du Lot 2.
+  bug §0.2) — comportement observable à valider en jeu réel avant clôture du Lot 2b.
 - Aucune règle de jeu autre que le correctif §0.2 ne change. Aucun nouvel événement WS (`COMBAT_INIT_STATE`
   et `COMBAT_ROSTER_UPDATED` réutilisés tels quels).
 
@@ -293,15 +297,17 @@ moment-là.
   session de combat que Lot 1, aucun écart visuel sur les 5 événements recensés en §0.4bis.
 - **Testé (Lot 2b)** : session de combat réelle couvrant plusieurs tours consécutifs avec un personnage
   resté accroupi/à genou sans re-déclaration — vérification visuelle des 4 fenêtres client (§0.4)
-  inchangées à l'écran.
+  inchangées à l'écran. Vérifier aussi qu'un Tir Visé reste refusé après un changement de position
+  déclaré (validation `isAimEligible`, non touchée par ce Lot mais dépendante du même bug corrigé).
 - **Testé (Lot 2b, équilibrage)** : confirmation explicite de Saar que l'effet cumulé des mods de position
   sur plusieurs tours (§3.1) est le comportement voulu — distinct de « le code ne plante pas ».
-- **Non testé** : ce qui reste après le lot en cours — marquer `⚠️ clos partiel` tant que les 4 lots ne
-  sont pas fermés.
-- **Données** : migration Lot 0 (nouvelle table), pas de nouvelle donnée avant Lot 2b ; suppression de
-  colonnes `combat_roster` en fin de Lot 2b seulement.
-- **Retour arrière** : chaque lot est un commit isolé ; Lot 2b nécessite en plus le tag/backup avant
-  suppression des colonnes `combat_roster` (`CLAUDE.md` §11 — risque de perte de données).
+- **Non testé** : Lot 2c (retrait colonnes/écriture) — différé, hors périmètre de clôture de ce document
+  (§3, décision Saar). Le document se clôt avec `⚠️ clos partiel` assumé sur ce point précis, pas un
+  oubli.
+- **Données** : migration Lot 0 (nouvelle table), aucune autre migration dans ce document — Lot 2c
+  (suppression de colonnes `combat_roster`) est différé à un futur chantier aligné sur
+  `PLAN_RW_TOKEN.md`.
+- **Retour arrière** : chaque lot est un commit isolé.
 
 ---
 
@@ -313,12 +319,14 @@ moment-là.
 | `server/src/lib/characterStateService.js` | Créer | 0 |
 | `server/src/socket/socketCombatState.js:117,315-316` | Modifier (double-write puis lecture) | 1, 2b |
 | `server/src/socket/socketCombatAnnouncement.js:601-602` | Modifier (double-write) | 1 |
-| helper de broadcast (nouveau, emplacement à choisir au Lot 2a — candidat : `server/src/lib/combatRosterBroadcast.js`, un fichier = une responsabilité, §0.4bis) | Créer, puis appeler aux 5 sites recensés en §0.4bis | 2a |
-| `server/src/socket/socketCombatHelpers.js:1074` | Modifier (retrait du reset fautif) | 2b |
-| `server/src/db/migrations/56_combat_v2.js` équivalent — nouvelle migration `down` | Retrait colonnes `state_position`/`state_weapon` + `CHECK` de `combat_roster` | 2b |
-| `docs/SYSTEME/COMBAT.md:198-208,761` | Mettre à jour (colonnes retirées, nouvelle autorité) | 2b (clôture) |
-| `docs/SYSTEME/ETATS_PERSONNAGE.md` | Créer (contenu durable, en-tête du présent document) | Clôture |
-| `docs/PLAN_CHARACTER_STATES.md` | Archiver dans `docs/Old/` | Clôture |
+| `server/src/lib/combatRosterBroadcast.js` | Créer (Lot 2a, sync), rendre async + sourcer `characterStateService` | 2a, 2b |
+| `server/src/lib/characterStateService.js` | Ajouter `getCharacterStatesForTokens` (batché) | 2b |
+| `server/src/socket/socketCombatHelpers.js` (`endTurn`) | Modifier (retrait du reset fautif `state_position`) | 2b |
+| `server/src/socket/socketCombatAnnouncement.js:139` (`entry`) + `server/src/lib/characterStateShadowCheck.js` (retrait) | Non touché au Lot 2b — prévu au Lot 2c différé | 2c (différé) |
+| `server/src/db/migrations/56_combat_v2.js` équivalent — nouvelle migration `down` | Retrait colonnes `state_position`/`state_weapon` + `CHECK` de `combat_roster` | 2c (différé) |
+| `docs/SYSTEME/COMBAT.md:198-208,761` | Mettre à jour (nouvelle autorité du broadcast) | 2b (clôture) |
+| `docs/SYSTEME/ETATS_PERSONNAGE.md` | Créer (contenu durable, en-tête du présent document) | Clôture (Lot 2b) |
+| `docs/PLAN_CHARACTER_STATES.md` | Archiver dans `docs/Old/` — colonnes `combat_roster` encore présentes, documenté comme différé (Lot 2c) | Clôture (Lot 2b) |
 
 Aucun fichier client (§0.4) n'apparaît dans ce tableau — c'est l'invariant §4, à revérifier si le Lot 2b
 s'écarte du plan.
