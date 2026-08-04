@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   surfaceBlockingForTool,
   normalizeSurfaceMaterialPreset,
+  normalizedSurfaceMaterial,
   makeSurfaceMaterial,
   toolForMaterialFace,
   pickTextureVariant,
@@ -62,6 +63,28 @@ test('normalizeSurfaceMaterialPreset — fusionne materialPreset du tool', () =>
   assert.strictEqual(result.material, 'wood')
   assert.strictEqual(result.wear, 50)
   assert.strictEqual(result.paint, '#6f7f8e') // conservé du défaut
+})
+
+test('normalizedSurfaceMaterial — applique un profil brut directement (pas un tool)', () => {
+  // Régression : normalizedSurfaceMaterial(profile) doit étaler le profil reçu tel quel, à la
+  // différence de normalizeSurfaceMaterialPreset(tool) qui va chercher tool.materialPreset.
+  const result = normalizedSurfaceMaterial({ paint: '#123456' })
+  assert.strictEqual(result.paint, '#123456')
+  assert.strictEqual(result.material, 'steel') // conservé du défaut, non fourni dans le profil
+})
+
+test('normalizedSurfaceMaterial et normalizeSurfaceMaterialPreset restent deux fonctions distinctes', () => {
+  // Régression Lot 1c : ces deux fonctions ont été fusionnées par erreur sous un seul nom, ce qui
+  // faisait retomber SurfaceRoomPanel/SurfaceWallPanel sur le preset par défaut à chaque ouverture,
+  // écrasant silencieusement le matériau personnalisé déjà enregistré.
+  assert.notStrictEqual(normalizedSurfaceMaterial, normalizeSurfaceMaterialPreset)
+
+  const rawProfile = { paint: '#123456' }
+  // Le même objet passé à normalizeSurfaceMaterialPreset (qui attend un tool avec .materialPreset)
+  // ne doit PAS être lu comme un profil direct : il retombe sur le défaut.
+  assert.strictEqual(normalizeSurfaceMaterialPreset(rawProfile).paint, '#6f7f8e')
+  // alors que normalizedSurfaceMaterial applique bien le profil brut.
+  assert.strictEqual(normalizedSurfaceMaterial(rawProfile).paint, '#123456')
 })
 
 test("makeSurfaceMaterial — retourne null si le mode est 'texture'", () => {

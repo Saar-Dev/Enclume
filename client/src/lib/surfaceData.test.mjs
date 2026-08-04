@@ -12,6 +12,7 @@ import {
   deleteSurfaceRoom,
   expandRoomsToSurface,
   findRoomAtCell,
+  findRoomsInSelection,
   getRoomFootprintCells,
   getRoomBoundaryWallRuns,
   getWallRenderBox,
@@ -21,6 +22,7 @@ import {
   roomFootprintRectangles,
   roomsWallRenderPaths,
   roomsWallSegments,
+  roomToSurfaceToolPatch,
   wallProfileVerticalProgresses,
 } from './surfaceData.js'
 import {
@@ -64,6 +66,48 @@ function room(id, level, heightLevels = 1) {
     blocksWater: true,
   }
 }
+
+test('findRoomsInSelection reste exportée par le barrel et trouve les salles contenues dans la sélection', () => {
+  // Régression : le barrel avait cessé de réexporter cette fonction (avec getWallRenderBox,
+  // roomsWallRenderPaths, makeWallsFromDrag) après le découpage en modules — plantage garanti au
+  // premier clic de sélection multi-cases dans l'éditeur.
+  const outer = { ...room('outer', 0), maxX: 2, maxZ: 2 }
+  const surface = emptySurface({ rooms: { outer } })
+
+  const hits = findRoomsInSelection(surface, { start: { x: 0, z: 0 }, end: { x: 2, z: 2 } }, 0)
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0].id, 'outer')
+  assert.equal(findRoomsInSelection(surface, { start: { x: 5, z: 5 }, end: { x: 6, z: 6 } }, 0).length, 0)
+})
+
+test('roomToSurfaceToolPatch applique le défaut plafond gris (#6b7280) sans affecter le sol', () => {
+  // Régression : profileOrDefault avait disparu à l'extraction, remplacée par un `|| null` qui
+  // perdait ce défaut spécifique au plafond (les autres faces retombent sur le preset générique).
+  const bareRoom = room('bare', 0)
+  const patch = roomToSurfaceToolPatch(bareRoom)
+
+  assert.equal(patch.materialProfiles.ceiling.paint, '#6b7280')
+  assert.equal(patch.materialProfiles.floor.paint, '#6f7f8e')
+})
+
+test('applyRoomWallAppearance retombe sur un preset complet (jamais null) sans interiorMaterial fourni', () => {
+  // Régression : sans profileOrDefault, l'absence d'interiorMaterial stockait null au lieu d'un
+  // preset par défaut complet.
+  const bareRoom = room('bare-wall', 0)
+  const west = getRoomBoundaryWallRuns(bareRoom).find(run => run.side === 'west')
+  const result = applyRoomWallAppearance(
+    emptySurface({ rooms: { 'bare-wall': bareRoom } }),
+    'bare-wall',
+    west.edgeKeys,
+    {},
+  )
+
+  assert.equal(result.error, null)
+  const stored = result.surfaceData.rooms['bare-wall'].wallAppearanceProfiles[0].interiorMaterial
+  assert.notEqual(stored, null)
+  assert.equal(stored.material, 'steel')
+  assert.equal(stored.paint, '#6f7f8e')
+})
 
 test('une passerelle se pose avec les apparences canoniques Sol et Plafond', () => {
   const surface = emptySurface()

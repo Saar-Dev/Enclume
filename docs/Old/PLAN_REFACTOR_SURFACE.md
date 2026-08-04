@@ -1,8 +1,13 @@
 PLAN_REFACTOR_SURFACE.md — V4 finale
 
 Version : 2026-08-03 — V4
-Statut : ✅ Lot 0 terminé, plan complet prêt pour Lot 1a.
-Responsabilité unique : stratégie de refactor de client/src/lib/surfaceData.js.
+Statut : ✅ TERMINÉ ET DÉPLOYÉ (2026-08-04) — vérifié fonction par fonction par Claude, 4 défauts
+d'assemblage corrigés (réexports barrel manquants, `normalizedSurfaceMaterial` fusionnée à tort,
+`profileOrDefault` perdue, cycle d'imports avec `surfaceData.js`), déployé dans `client/src/lib/` et
+validé fonctionnel en navigateur par Saar. Archivé (Règle 10, RegleDocumentaire.md) — contenu durable
+transféré dans `docs/SYSTEME/MOTEUR_MONDE.md` §2.1 (liste des modules) et le compte-rendu complet dans
+`docs/JOURNAL8.md` (Session (Saar) — 2026-08-04 — `PLAN_REFACTOR_SURFACE.md` vérifié et déployé).
+Responsabilité unique (historique) : stratégie de refactor de client/src/lib/surfaceData.js.
 1. Objectif
 
 Restructurer client/src/lib/surfaceData.js (~1500 lignes) en modules à responsabilité unique, sans modifier le format surface_data v12 ni le comportement observable de l'éditeur. Le projet est en phase de développement, sans risque de perte de données.
