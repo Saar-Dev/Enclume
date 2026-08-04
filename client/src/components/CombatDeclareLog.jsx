@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
@@ -81,20 +80,24 @@ export function DeclareLogContent({ maxHeight }) {
   )
 }
 
-export default function CombatDeclareLogSidebar() {
+// Panneau intégré au tab chat de Sidebar.jsx — contrôlé (isOpen/onToggle) : l'état plié/déplié
+// appartient au parent, qui ne démonte/remonte ce composant qu'au changement de phase (ANNONCE/
+// RÉSOLUTION) — un state interne ici perdrait le choix de l'utilisateur à chaque transition.
+export function CombatDeclareLogChatPanel({ isOpen, onToggle }) {
   const { t } = useTranslation('combat')
   const { currentTurn } = useCombatStore()
-  const [isOpen, setIsOpen] = useState(true)
 
   return (
-    <div className="cdl-window">
-      <div className="cdl-titlebar" onClick={() => setIsOpen(v => !v)}>
-        <span className="cdl-title">{t('declareLog.title', { turn: currentTurn })}</span>
-        <span className="cdl-toggle">{isOpen ? '▼' : '▶'}</span>
+    <div className="cdl-chat">
+      <div className="cdl-chat-header" onClick={onToggle}>
+        <span>{t('declareLog.title', { turn: currentTurn })}</span>
+        <span>{isOpen ? '▼' : '▶'}</span>
       </div>
-      <div className={`cdl-body${isOpen ? '' : ' cdl-body--hidden'}`}>
-        <DeclareLogContent />
-      </div>
+      {isOpen && (
+        <div className="cdl-chat-body">
+          <DeclareLogContent />
+        </div>
+      )}
     </div>
   )
 }

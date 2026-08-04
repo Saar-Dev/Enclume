@@ -11,7 +11,7 @@ import { WS } from '../../../shared/events.js'
 import { getMrDegreeKey, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
-import { DeclareLogContent } from './CombatDeclareLog.jsx'
+import { CombatDeclareLogChatPanel } from './CombatDeclareLog.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
 import GameTimeWidget from './GameTimeWidget.jsx'
 import BlessuresReviewPanel from './BlessuresReviewPanel.jsx'
@@ -533,7 +533,7 @@ export default function Sidebar({
     [activeCampaignId, messagesByCampaign],
   )
   const { blueprints, refreshBuiltinModels } = useEntityStore()
-  const { phase, currentTurn } = useCombatStore()
+  const { phase } = useCombatStore()
   const surfaceToolState = {
     mode: 'select',
     level: 0,
@@ -1819,8 +1819,16 @@ export default function Sidebar({
                             return (
                               <button
                                 key={block.id}
-                                onClick={() => onMaterialChange({ texId: block.id, geo: 'cube', r: 0 })}
-                                title={block.label}
+                                onClick={() => {
+  onMaterialChange({ texId: block.id, geo: 'cube', r: 0 })
+  // Applique la texture à la face active de l'outil surface
+  const face = surfaceToolState.materialFace || 'floor'
+  onSurfaceToolChange?.({
+    ...surfaceToolState,
+    surfaceMaterialMode: 'texture',
+    [`${face === 'floor' ? 'floorTexId' : face === 'ceiling' ? 'ceilingTexId' : 'wallInteriorTexId'}`]: block.id,
+  })
+}}
                                 style={{
                                   ...styles.matBtn,
                                   backgroundImage: texUrl ? `url(${texUrl})` : 'none',
@@ -1967,17 +1975,7 @@ export default function Sidebar({
         {activeTab === 'chat' && (
           <>
             {(phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && (
-              <div className="cdl-chat">
-                <div className="cdl-chat-header" onClick={() => setCdlOpen(v => !v)}>
-                  <span>Déclarations · Tour {currentTurn}</span>
-                  <span>{cdlOpen ? '▼' : '▶'}</span>
-                </div>
-                {cdlOpen && (
-                  <div className="cdl-chat-body">
-                    <DeclareLogContent />
-                  </div>
-                )}
-              </div>
+              <CombatDeclareLogChatPanel isOpen={cdlOpen} onToggle={() => setCdlOpen(v => !v)} />
             )}
             <div style={styles.messages}>
               {messages.length === 0 && (

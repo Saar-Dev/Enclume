@@ -319,3 +319,47 @@ observé, non prioritaire).
 **Données** : aucune — 100 % client, aucune migration.
 **Retour arrière** : commit isolé sur `dev/Saar`, aucun changement serveur, aucun changement de
 comportement pour un clic sur case libre.
+
+---
+
+## Session (Saar) — 2026-08-04 — SIDEBAR-CDL-CONTRAST1 clos (Récapitulatif des Déclarations illisible + séparation module)
+
+**Contexte** : 3ᵉ et dernier bug du signalement groupé du jour (`docs/BUGIDENTIFIE.md`), après
+ALLURE-TURNGATE1 et CLICKATTACK-MOVECONFLICT1. Saar demandait en plus d'en profiter pour séparer le
+module (1 fichier = 1 responsabilité). Plan présenté et soumis à relecture critique avant tout code —
+2 failles trouvées et corrigées dans le plan initial (voir ci-dessous) avant que Saar ne tranche via
+la boussole du projet (architecture robuste/pérenne, qualité > vitesse, refactor autorisé si le
+matériau de base ne suffit pas).
+
+**Cause racine [VÉRIFIÉ par lecture — cascade CSS déterministe]** : `index.css` portait deux variantes
+sombres du même panneau (`.cdl-body`, fenêtre flottante GM morte ; `.cdl-chat`, version chat réellement
+utilisée). `.cdl-body` surchargeait toutes les couleurs de texte du panneau de base (pensé pour un fond
+clair) ; `.cdl-chat` ne surchargeait que le fond, oubliant le texte — resté bleu foncé (`#1a2a3a`) sur
+fond quasi-noir (`#0d0d16`).
+
+**Relecture critique du plan initial — 2 failles trouvées avant tout code** :
+1. L'état plié/déplié (`cdlOpen`, local à `Sidebar.jsx`, survit aux montages/démontages du bloc)
+   deviendrait un state interne perdu à chaque transition de phase si le nouveau composant le gérait
+   lui-même — corrigé en composant contrôlé (`isOpen`/`onToggle`).
+2. Le plan initial proposait de *fusionner* les couleurs `.cdl-body`/`.cdl-chat` dans des sélecteurs
+   partagés, en supposant les deux variantes vivantes — invalide une fois `.cdl-window`/`.cdl-body`
+   supprimés (JSX repurposé) : correction en *déplacement* des valeurs + suppression du bloc CSS
+   orphelin entier, plus l'ajout d'une règle `.combat-declare-log-actor` manquante (séparateur entre
+   déclarants, pas seulement les couleurs).
+
+**Correctif codé** :
+- `index.css` — palette déplacée `.cdl-body → .cdl-chat`, bloc `.cdl-window*` (code mort documenté
+  depuis Session 106c, `docs/Old/ARCHI_REWORK.md`) supprimé entièrement.
+- `CombatDeclareLog.jsx` — `CombatDeclareLogSidebar` (mort, mauvais nom) → `CombatDeclareLogChatPanel`
+  (export nommé, contrôlé, nom qui décrit ce qu'il fait réellement).
+- `Sidebar.jsx` — bloc inline (header/toggle/texte FR en dur) remplacé par l'import/usage du composant ;
+  `cdlOpen` déplacé en props, pas dupliqué ; `currentTurn` retiré (devenu inutile ici, même source
+  `useCombatStore` côté composant).
+
+**Testé** : ESLint (`Sidebar.jsx`/`CombatDeclareLog.jsx`) — 0 erreur, 0 warning ; `npm run build`
+(client) propre. **Confirmé fonctionnel en jeu par Saar (2026-08-04)** — lisibilité OK.
+**Données** : aucune — 100 % client, aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar`, `DeclareLogContent` (corps du log) inchangé.
+
+Les 3 bugs signalés en bloc ce jour (ALLURE-TURNGATE1, CLICKATTACK-MOVECONFLICT1,
+SIDEBAR-CDL-CONTRAST1) sont désormais tous clos et confirmés en jeu.

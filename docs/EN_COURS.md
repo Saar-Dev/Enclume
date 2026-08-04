@@ -68,7 +68,6 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 | ID | Description | Priorité |
 |---|---|---|
 | **CLICKATTACK-TURNGATE1** | `useCombatClickAttack` jamais gardé par le tour, contrairement à `useAutoMoveMode` (ALLURE-TURNGATE1) — trouvé en clôturant CLICKATTACK-MOVECONFLICT1, aucun symptôme observé en jeu à ce jour, détail `docs/BUGIDENTIFIE.md` | Basse — pas de symptôme confirmé |
-| **SIDEBAR-CDL-CONTRAST1** | Récapitulatif des Déclarations illisible dans la Sidebar (texte bleu foncé sur fond bleu marine) — Saar demande d'en profiter pour séparer le module. Signalé 2026-08-04, non analysé | À investiguer |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |

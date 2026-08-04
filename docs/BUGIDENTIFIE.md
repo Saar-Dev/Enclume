@@ -485,17 +485,52 @@ correctif d'urgence (aucun symptôme observé).
 
 ---
 
-### Bug SIDEBAR-CDL-CONTRAST1 — Récapitulatif des Déclarations illisible dans la Sidebar
+### Bug SIDEBAR-CDL-CONTRAST1 — Récapitulatif des Déclarations illisible dans la Sidebar ✅ Session (Saar, 2026-08-04)
 
 **Symptôme** : signalé par Saar (2026-08-04) — la fenêtre "Récapitulatif des Déclarations" intégrée
 au chat de la Sidebar (`Déclarations · Tour N`) est illisible, texte bleu foncé sur fond bleu marine.
 Saar demande d'en profiter pour séparer ce module (1 fichier = 1 responsabilité).
 
-**Cause racine [INCONNU]** : non investigué — analyse annulée (2026-08-04, même raison
-qu'ALLURE-TURNGATE1).
+**Cause racine [VÉRIFIÉ par lecture — pure cascade CSS, déterministe]** : `index.css` définissait deux
+variantes sombres du même panneau de log (`.cdl-body`, fenêtre flottante GM `CombatDeclareLogSidebar`,
+REWORK-10 ; `.cdl-chat`, version intégrée au chat Sidebar, seule réellement utilisée). `.cdl-body`
+surchargeait correctement toutes les couleurs de texte du panneau de base (`.combat-declare-log-name`/
+`-detail`/`-ini`/`-icon`/`-actor`, pensées pour un fond clair — commentaire d'origine "fond très clair
+pour différencier des fenêtres d'interface"). `.cdl-chat` ne surchargeait que le fond
+(`.combat-declare-log-body { background: transparent }`), oubliant les couleurs de texte : celui-ci
+gardait sa teinte "fond clair" (`#1a2a3a`, bleu très foncé) sur le fond `#0d0d16` de `.cdl-chat-body`
+(quasi-noir) → illisible. `.combat-declare-log-actor` (séparateur visuel entre déclarants) souffrait du
+même oubli, indépendamment de la couleur du texte.
 
-**Prochaine étape** : à traiter isolément, un seul bug à la fois — reproduire/instrumenter avant toute
-hypothèse.
+**Trouvé en marge** : `CombatDeclareLogSidebar` (export par défaut de `CombatDeclareLog.jsx`, markup
+`.cdl-window`/`.cdl-titlebar`/`.cdl-body`) n'était importé nulle part — code mort déjà documenté comme
+tel (`docs/Old/ARCHI_REWORK.md:100-101`, approche « sidebar fixe gauche » abandonnée Session 106c,
+« nettoyage sprint futur » jamais fait). `Sidebar.jsx` avait aussi un texte "Déclarations · Tour
+{currentTurn}" codé en dur en FR (`.claude/rules/i18n.md`), alors que la clé i18n `declareLog.title`
+existait déjà et était utilisée par le composant mort juste à côté.
+
+**Correctif codé (2026-08-04, périmètre validé par Saar — contraste + séparation module)** :
+- `client/src/index.css` — palette lisible déplacée de `.cdl-body .combat-declare-log-*` vers
+  `.cdl-chat .combat-declare-log-*` (mêmes valeurs, + ajout de la règle `-actor`/`:first-child`
+  manquante) ; bloc entier `.cdl-window`/`.cdl-titlebar`/`.cdl-title`/`.cdl-toggle`/`.cdl-body`/
+  `.cdl-body--hidden`/`.cdl-empty` supprimé (orphelin après repurposing ci-dessous, zéro autre
+  consommateur vérifié par grep exhaustif).
+- `client/src/components/CombatDeclareLog.jsx` — `CombatDeclareLogSidebar` (default export, mort)
+  remplacé par `CombatDeclareLogChatPanel` (export nommé) : composant **contrôlé** (`isOpen`/
+  `onToggle` en props, pas de state interne — l'ancien `useState` local aurait perdu l'état plié/
+  déplié choisi par l'utilisateur à chaque remontage du bloc, conditionné par la phase de combat),
+  markup `.cdl-chat`/`.cdl-chat-header`/`.cdl-chat-body`, titre via `t('declareLog.title', { turn })`.
+- `client/src/components/Sidebar.jsx` — bloc inline (header + toggle + texte figé) remplacé par
+  `<CombatDeclareLogChatPanel isOpen={cdlOpen} onToggle={...} />` ; l'état `cdlOpen`/`setCdlOpen` reste
+  dans `Sidebar.jsx` (déplacé, pas dupliqué) ; `currentTurn` retiré de la déstructuration
+  `useCombatStore()` (devenu inutilisé ici, lu en interne par le nouveau composant, même source
+  `useCombatStore`, aucune divergence).
+
+**Testé** : ESLint sur `Sidebar.jsx`/`CombatDeclareLog.jsx` — 0 erreur, 0 warning ; `npm run build`
+(client) propre. **Confirmé fonctionnel en jeu par Saar (2026-08-04)** — lisibilité OK.
+**Données** : aucune, 100% client, aucune migration.
+**Retour arrière** : commit isolé, aucun changement de comportement pour le corps du log
+(`DeclareLogContent`, inchangé) ni pour son usage ailleurs.
 
 ---
 
