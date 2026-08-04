@@ -12,6 +12,7 @@ import { getAdvantages } from '../services/advantageService.js'
 import { getAllModStatusCodes } from '../services/weaponModService.js'
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
+import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -155,7 +156,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       }
 
       // Broadcast COMBAT_STARTED — sans surprise_roll (PC25)
-      const broadcastRoster = insertedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+      const broadcastRoster = buildBroadcastRoster(insertedRoster)
       io.to(campaignId).emit(WS.COMBAT_STARTED, { roster: broadcastRoster, phase: 'ROSTER' })
 
       console.log('###### DEBUT COMBAT #############')
@@ -339,7 +340,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       })
 
       const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
-      const broadcastRoster = updatedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+      const broadcastRoster = buildBroadcastRoster(updatedRoster)
       io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
 
       console.log(`[WS] combat:init_state — ${user.username} pos:${position} wpn:${weapon} fm:${fire_mode}`)
@@ -427,7 +428,7 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       // Broadcast roster mis à jour — sans surprise_roll (PC25)
       const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
       console.log(`[DBG] surprise_result: roster fetched count=${updatedRoster.length} initiatives=${JSON.stringify(updatedRoster.map(r => ({ t: r.token_id.slice(-6), ini: r.initiative })))}`)
-      const broadcastRoster = updatedRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+      const broadcastRoster = buildBroadcastRoster(updatedRoster)
       io.to(campaignId).emit(WS.COMBAT_ROSTER_UPDATED, { roster: broadcastRoster })
 
       console.log(`[WS] combat:surprise_result — ${user.username} token:${tokenId} roll:${diceRoll} success:${isSuccess} ini:${isSuccess ? diceRoll : 0}`)

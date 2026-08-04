@@ -7,6 +7,7 @@ import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
 import { computeAttackRoll } from '../lib/combatAttackRoll.js'
+import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
@@ -202,7 +203,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
       .select('roster.token_id', 'ts.status_code', 'ts.data')
     await resolveEnvironmentalHazardTicks(io, db, campaignId, hazardRows)
 
-    const broadcastRoster = fullRoster.map(({ surprise_roll: _sr, ...rest }) => rest)
+    const broadcastRoster = buildBroadcastRoster(fullRoster)
 
     pendingMaps.combatPreviews.delete(campaignId)
 
@@ -1136,7 +1137,7 @@ export async function endTurn(io, campaignId, pendingMaps) {
     const roster = await db('combat_roster')
       .where({ campaign_id: campaignId })
       .orderBy('initiative', 'desc')
-    const broadcastRoster = roster.map(({ surprise_roll: _sr, ...rest }) => rest)
+    const broadcastRoster = buildBroadcastRoster(roster)
 
     await setFSMSubPhase(db, campaignId, null)
     io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT', roster: broadcastRoster })
