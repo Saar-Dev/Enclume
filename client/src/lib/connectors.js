@@ -2,8 +2,20 @@
 // Extrait de surfaceData.js, Lot 3a du PLAN_REFACTOR_SURFACE.md
 
 import { clampNumber, formatLevel, sameLevel } from './surfaceUtils.js'
-import { STORY_HEIGHT, levelToY, getRoomFloorThickness } from './surfaceCore.js'
-import { SURFACE_FINE, getToolLevel, getToolMovementMultiplier, getToolFloorThickness, getFloorThickness, floorKey, normalizeSurfaceData, findRoomAtCell, roomIncludesCell } from './surfaceData.js'
+import {
+  STORY_HEIGHT,
+  levelToY,
+  getRoomFloorThickness,
+  SURFACE_FINE,
+  getToolLevel,
+  getToolMovementMultiplier,
+  getToolFloorThickness,
+  getFloorThickness,
+  floorKey,
+  normalizeSurfaceData,
+  roomIncludesCell,
+} from './surfaceCore.js'
+import { findRoomAtCell } from './surfaceRooms.js'
 import { wallPointDistanceToPanel, roomsWallSegments } from './roomWalls.js'
 
 // ----- Connecteur : blocage -----

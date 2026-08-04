@@ -1,48 +1,65 @@
+// SurfaceEditorScene.jsx — imports corrigés pour le plan de refactor
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Grid, Line, MapControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import SurfaceDungeonScene, { ConnectorSegment } from './SurfaceDungeonScene.jsx'
+
+// Modules refactorisés
 import {
-  SURFACE_FINE,
-  STORY_HEIGHT,
-  applyBridgeSelection,
-  applyCeilingSelection,
-  applyDoorConnector,
-  applyElevatorConnector,
-  applyFloorSelection,
-  applyLadderConnector,
-  applyRoomSelectionWithResult,
-  applyStairSelection,
-  applyWallDrag,
+  normalizeSurfaceData,
+  normalizeCellSelection,
   computeSurfaceGridExtent,
+  applyFloorSelection,
+  applyCeilingSelection,
+  applyBridgeSelection,
+  applyStairSelection,
+  applyRoomSelectionWithResult,
   eraseSurfaceSelection,
   findRoomAtCell,
   findRoomsInSelection,
-  getToolCeilingHeight,
-  getToolCeilingThickness,
+  roomToSurfaceToolPatch,
+  isWorldPointVisibleAtLevel,
+  parseFloorKey,
+  makeStairFromSelection,
+  stairStepBoxes,
+  SURFACE_FINE,
   getToolElevation,
   getToolFloorThickness,
-  getRoomBaseY,
+  getToolCeilingHeight,
+  getToolCeilingThickness,
   getToolRoomHeightLevels,
-  getToolWallThicknessFine,
-  getWallRenderBox,
-  isWorldPointVisibleAtLevel,
+} from '../lib/surfaceData.js' // Fonctions restées dans surfaceData.js
+
+import {
+  STORY_HEIGHT,
   levelToY,
-  makeStairFromSelection,
+  yToLevel,
+  getRoomBaseY,
+} from '../lib/surfaceCore.js'
+
+import {
+  roomsWallSegments,
+  roomsWallRenderPaths,
+} from '../lib/roomWalls.js'
+
+import {
+  applyDoorConnector,
+  applyElevatorConnector,
+  applyLadderConnector,
   makeDoorConnectorFromWallPoint,
   makeElevatorConnectorFromCell,
   makeLadderConnectorFromCell,
+} from '../lib/connectors.js'
+
+import {
+  getWallRenderBox,
   makeWallsFromDrag,
-  normalizeSurfaceData,
-  parseFloorKey,
-  normalizeCellSelection,
-  roomToSurfaceToolPatch,
-  roomsWallRenderPaths,
-  roomsWallSegments,
-  stairStepBoxes,
-  yToLevel,
-} from '../lib/surfaceData.js'
+  applyWallDrag,
+  getToolWallThicknessFine,
+} from '../lib/surfaceGeometry.js'
+
 import {
   makeRoomBoundaryArc,
   roomBoundaryContours,

@@ -7,7 +7,7 @@ import {
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
-import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
+import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 
 const PANEL_W = 310
 const PANEL_H_EST = 680

@@ -39,7 +39,14 @@ export function normalizeSurfaceMaterialPreset(tool) {
     ...(tool?.materialPreset || tool?.proceduralMaterial || {}),
   }
 }
-export const normalizedSurfaceMaterial = normalizeSurfaceMaterialPreset
+
+// Distincte de normalizeSurfaceMaterialPreset(tool) : prend un profil de matériau brut
+// directement (pas un tool avec .materialPreset imbriqué). Ex-surfaceMaterial.js, unifiée
+// ici pour éliminer le fichier séparé sans changer le contrat des appelants existants
+// (SurfaceMaterialEditor.jsx, SurfaceRoomPanel.jsx, SurfaceWallPanel.jsx).
+export function normalizedSurfaceMaterial(profile) {
+  return { ...DEFAULT_SURFACE_MATERIAL_PRESET, ...(profile || {}) }
+}
 
 // ----- Fabrication de matériau procédural -----
 

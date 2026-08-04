@@ -1,23 +1,22 @@
 // surfaceGeometry.js — Géométrie des murs (rendu, drag, bounds)
 // Extrait de surfaceData.js, Lot 5a du PLAN_REFACTOR_SURFACE.md
 
-import { clampNumber, formatLevel } from './surfaceUtils.js'
-import { STORY_HEIGHT } from './surfaceCore.js'
-import { SURFACE_FINE } from './surfaceData.js'
+import { formatLevel } from './surfaceUtils.js'
+import {
+  STORY_HEIGHT,
+  SURFACE_FINE,
+  getToolElevation,
+  getToolFloorThickness,
+  getToolLevel,
+  getToolWallHeightLevels,
+  normalizeSurfaceData,
+} from './surfaceCore.js'
 import {
   materialOrTextureForTool,
   surfaceBlockingForTool,
   toolForMaterialFace,
 } from './materialDecision.js'
 import { addMissingWalls } from './roomWalls.js'
-import {
-  getToolElevation,
-  getToolFloorThickness,
-  getToolLevel,
-  getToolMovementMultiplier,
-  getToolWallHeightLevels,
-  normalizeSurfaceData,
-} from './surfaceData.js'
 
 // ----- Épaisseurs de mur -----
 

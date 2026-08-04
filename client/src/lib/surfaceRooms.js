@@ -1,15 +1,13 @@
 // surfaceRooms.js — Gestion des pièces (création, modification, suppression, recherche)
 // Extrait de surfaceData.js, Lot 6a du PLAN_REFACTOR_SURFACE.md
 
-import { hashString, formatLevel, sameLevel } from './surfaceUtils.js'
-import { STORY_HEIGHT, levelToY, yToLevel, getRoomBaseY, getRoomHeightLevels } from './surfaceCore.js'
-import { SURFACE_FINE } from './surfaceData.js'
+import { hashString, sameLevel } from './surfaceUtils.js'
+import { DEFAULT_SURFACE_MATERIAL_PRESET } from './proceduralMaterials.js'
 import { surfaceBlockingForTool, materialOrTextureForTool, toolForMaterialFace } from './materialDecision.js'
-import { getToolWallThicknessFine, getWallFineBounds } from './surfaceGeometry.js'
+import { getToolWallThicknessFine } from './surfaceGeometry.js'
 import {
   buildMergedRoomVerticalProfile,
   makeRoomBoundaryArc,
-  multiPolygonArea,
   multiPolygonContainsPoint,
   roomBoundaryEdges,
   roomBoundaryWallRuns,
@@ -22,7 +20,12 @@ import {
   normalizeWallElevationProfile,
 } from '../../../shared/world/roomGeometry.js'
 import {
-  getToolElevation,
+  STORY_HEIGHT,
+  levelToY,
+  yToLevel,
+  getRoomBaseY,
+  getRoomHeightLevels,
+  SURFACE_FINE,
   getToolLevel,
   getToolRoomHeightLevels,
   getToolFloorThickness,
@@ -30,18 +33,23 @@ import {
   getToolMovementMultiplier,
   getRoomFloorThickness,
   getRoomCeilingThickness,
-  getRoomHeight,
-  getRoomTopY,
   normalizeSurfaceData,
   normalizeCellSelection,
   roomCellKey,
   getRoomFootprintCells,
-  roomIncludesCell,
   DEFAULT_SURFACE_DATA,
-} from './surfaceData.js'
+} from './surfaceCore.js'
 
 const DEFAULT_FLOOR_THICKNESS = 0.25
 const STAIR_STEPS_PER_CELL = 4 // utilisé par makeRoomFromSelection pour le seed visuel uniquement
+
+function profileOrDefault(profile, patch = {}) {
+  return {
+    ...DEFAULT_SURFACE_MATERIAL_PRESET,
+    ...(profile || {}),
+    ...patch,
+  }
+}
 
 // ===================================================================
 // Helpers internes
@@ -62,21 +70,6 @@ function rawRoomBounds(room) {
     minZ: Math.min(minZ, maxZ),
     maxZ: Math.max(minZ, maxZ),
   }
-}
-
-function parseRoomCell(value) {
-  if (typeof value === 'string') {
-    const [rawX, rawZ] = value.split(':')
-    const x = Number(rawX)
-    const z = Number(rawZ)
-    if (Number.isInteger(x) && Number.isInteger(z)) return { x, z }
-  }
-  if (value && typeof value === 'object') {
-    const x = Number(value.x)
-    const z = Number(value.z)
-    if (Number.isInteger(x) && Number.isInteger(z)) return { x, z }
-  }
-  return null
 }
 
 function sortRoomCells(cells) {
@@ -926,7 +919,7 @@ export function applyRoomWallAppearance(surfaceData, roomId, edgeKeys, appearanc
   const selectedSet = new Set(selected)
   const normalized = {
     interiorTex: appearance?.interiorTex || null,
-    interiorMaterial: appearance?.interiorMaterial || null,
+    interiorMaterial: profileOrDefault(appearance?.interiorMaterial),
   }
   const remaining = (selectedRoom.wallAppearanceProfiles || []).flatMap(entry => {
     const retainedKeys = (entry?.edgeKeys || []).map(String).filter(key => !selectedSet.has(key))
@@ -990,9 +983,9 @@ export function roomToSurfaceToolPatch(room) {
     ceilingTexId: room.ceilingTex || null,
     wallInteriorTexId: roomWallInteriorTex(room),
     materialProfiles: {
-      floor: room.floorMaterial || null,
-      ceiling: room.ceilingMaterial || null,
-      wallInterior: wallInterior || null,
+      floor: profileOrDefault(room.floorMaterial),
+      ceiling: profileOrDefault(room.ceilingMaterial, room.ceilingMaterial ? {} : { paint: '#6b7280' }),
+      wallInterior: profileOrDefault(wallInterior),
     },
   }
 }

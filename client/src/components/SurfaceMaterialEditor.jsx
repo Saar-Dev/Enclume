@@ -4,7 +4,7 @@ import {
   PROCEDURAL_MATERIAL_PRESETS,
   PROCEDURAL_PATTERN_PRESETS,
 } from '../lib/proceduralMaterials.js'
-import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
+import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 
 export default function SurfaceMaterialEditor({ profile, onChange }) {
   const { t } = useTranslation('builder')

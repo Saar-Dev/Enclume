@@ -68,7 +68,12 @@ Principes obligatoires :
 - des `wallAppearanceProfiles` pour l'apparence propre aux faces de chaque mur logique ;
 - un calcul client d'étanchéité utilisé pour le rendu de l'eau.
 
-Cet ensemble reste normalisé et rendu côté client par `client/src/lib/surfaceData.js`. À la
+Cet ensemble reste normalisé et rendu côté client via `client/src/lib/surfaceData.js`, qui n'est plus
+qu'un barrel : la logique réelle est répartie par responsabilité unique dans `surfaceCore.js`
+(constantes, forme du document, getters), `materialDecision.js` (décision matériau/texture),
+`surfaceGeometry.js` (murs libres), `roomWalls.js` (murs de salle), `connectors.js` (portes,
+ascenseurs, échelles), `surfaceRooms.js` (salles) et `surfaceStairs.js` (escaliers). Les consommateurs
+externes (composants React, tests) continuent d'importer `surfaceData.js` sans changement. À la
 sauvegarde, `shared/world/surfaceDocument.js` le valide côté serveur, le normalise en version 12 et
 persiste les UUID physiques absents. `shared/world/worldCompiler.js` en dérive ensuite le snapshot
 physique autoritaire. Le renderer n'utilise pas encore ce snapshot pour fabriquer ses meshes.

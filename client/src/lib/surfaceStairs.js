@@ -2,12 +2,8 @@
 // Extrait de surfaceData.js, Lot 7a du PLAN_REFACTOR_SURFACE.md
 
 import { formatLevel } from './surfaceUtils.js'
-import { STORY_HEIGHT } from './surfaceCore.js'
 import {
-  surfaceBlockingForTool,
-  materialOrTextureForTool,
-} from './materialDecision.js'
-import {
+  STORY_HEIGHT,
   getToolElevation,
   getToolFloorThickness,
   getToolStairRise,
@@ -15,7 +11,11 @@ import {
   getSupportThickness,
   normalizeCellSelection,
   normalizeSurfaceData,
-} from './surfaceData.js'
+} from './surfaceCore.js'
+import {
+  surfaceBlockingForTool,
+  materialOrTextureForTool,
+} from './materialDecision.js'
 
 const STAIR_STEPS_PER_CELL = 4
 

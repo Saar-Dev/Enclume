@@ -1,13 +1,13 @@
 // roomWalls.js — Assemblage des murs de pièces
 // Extrait de surfaceData.js, Lot 2a du PLAN_REFACTOR_SURFACE.md
 
-import { formatLevel, hashString, sameLevel } from './surfaceUtils.js'
+import { formatLevel, hashString } from './surfaceUtils.js'
 import {
   STORY_HEIGHT,
+  SURFACE_FINE,
   getRoomBaseY,
   getRoomHeightLevels,
 } from './surfaceCore.js'
-import { SURFACE_FINE } from './surfaceData.js'
 import {
   roomVerticalSlices,
   sampleWallArcGeometry,

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import SurfaceMaterialEditor from './SurfaceMaterialEditor.jsx'
 import FloatingPanelSection from './FloatingPanelSection.jsx'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
-import { normalizedSurfaceMaterial } from '../lib/surfaceMaterial.js'
+import { normalizedSurfaceMaterial } from '../lib/materialDecision.js'
 import { getRoomBaseY, yToLevel } from '../lib/surfaceData.js'
 
 const PANEL_W = 330
