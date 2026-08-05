@@ -8,7 +8,7 @@
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 
 > Architecture physique complète : `docs/SYSTEME/MOTEUR_MONDE.md`.
-> Ordre de migration : `docs/PLAN_MOTEUR_MONDE.md`.
+> Ordre de migration : `docs/Old/PLAN_MOTEUR_MONDE.md` (archivé, chantier clos).
 > Fusion avec le projet combat : `docs/FUSION_PROJET_COUSIN.md`.
 > Environnements et déploiement commun : `docs/WORKFLOW_FUSION.md`.
 

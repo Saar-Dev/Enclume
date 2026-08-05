@@ -13,7 +13,7 @@
 Documents associés :
 
 - `docs/SYSTEME/SURFACES_SALLES.md` — contrat de l'éditeur Salle et des surfaces ;
-- `docs/PLAN_MOTEUR_MONDE.md` — ordre de migration et critères de validation ;
+- `docs/Old/PLAN_MOTEUR_MONDE.md` — ordre de migration et critères de validation (archivé, chantier clos) ;
 - `docs/FUSION_PROJET_COUSIN.md` — procédure et autorités de la fusion combat/monde ;
 - `docs/WORKFLOW_FUSION.md` — worktrees, branches, ports, données et déploiement de l'instance commune ;
 - `docs/SYSTEME/COMBAT.md` — déroulement du combat consommateur du moteur de monde ;
