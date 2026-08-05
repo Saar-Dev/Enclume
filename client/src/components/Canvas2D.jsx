@@ -191,7 +191,7 @@ function Token2D({ token, isDragging, dragPos, onDragStart, statusEffectsMode })
 // routes serveur que Canvas3D (teleport MJ / world-move joueur) — pas de hook partagé (décision
 // inversée le 2026-07-28, cf. plan), pas de prévisualisation combat (hors périmètre v1). Lit
 // tokens/characters/user directement depuis les stores, pas via des props relais (Canvas3D.jsx:527-528).
-function TokenLayer({ battlemapId, statusEffectsMode, onTokenDoubleClick, controlsRef }) {
+function TokenLayer({ battlemapId, statusEffectsMode, onTokenDoubleClick, controlsRef, onCharacterDrop }) {
   const { camera, gl } = useThree()
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
   // Plan de la carte — normale +Z, à l'origine locale (le plan texturé est toujours posé à z=0).
@@ -285,15 +285,30 @@ function TokenLayer({ battlemapId, statusEffectsMode, onTokenDoubleClick, contro
       }
     }
 
+    // Drop d'une carte personnage depuis la Sidebar — même conversion plan que le déplacement de
+    // token ci-dessus (world_x → local x, world_z → local y, cf. en-tête de fichier).
+    const handleDragOver = (e) => e.preventDefault()
+    const handleDrop = (e) => {
+      e.preventDefault()
+      const characterId = e.dataTransfer.getData('characterId')
+      if (!characterId) return
+      const hit = raycastPlane(e.clientX, e.clientY)
+      onCharacterDrop?.(characterId, hit ? { x: hit.x, y: TRIVIAL_ROOM_FLOOR_Y, z: hit.y } : null)
+    }
+
     canvas.addEventListener('pointermove', handlePointerMove)
     canvas.addEventListener('pointerup', handlePointerUp)
     canvas.addEventListener('pointerleave', handlePointerUp)
+    canvas.addEventListener('dragover', handleDragOver)
+    canvas.addEventListener('drop', handleDrop)
     return () => {
       canvas.removeEventListener('pointermove', handlePointerMove)
       canvas.removeEventListener('pointerup', handlePointerUp)
       canvas.removeEventListener('pointerleave', handlePointerUp)
+      canvas.removeEventListener('dragover', handleDragOver)
+      canvas.removeEventListener('drop', handleDrop)
     }
-  }, [gl, raycastPlane, isGm, battlemapId, onTokenDoubleClick, updateToken, controlsRef])
+  }, [gl, raycastPlane, isGm, battlemapId, onTokenDoubleClick, updateToken, controlsRef, onCharacterDrop])
 
   return (
     <>
@@ -311,7 +326,7 @@ function TokenLayer({ battlemapId, statusEffectsMode, onTokenDoubleClick, contro
   )
 }
 
-export default function Canvas2D({ battlemap, onTokenDoubleClick, statusEffectsMode = 'enforced' }) {
+export default function Canvas2D({ battlemap, onTokenDoubleClick, statusEffectsMode = 'enforced', onCharacterDrop }) {
   const { t } = useTranslation()
   const bounds = useMemo(() => trivialRoomBounds(battlemap), [battlemap])
   const controlsRef = useRef(null)
@@ -368,6 +383,7 @@ export default function Canvas2D({ battlemap, onTokenDoubleClick, statusEffectsM
         statusEffectsMode={statusEffectsMode}
         onTokenDoubleClick={onTokenDoubleClick}
         controlsRef={controlsRef}
+        onCharacterDrop={onCharacterDrop}
       />
     </Canvas>
   )

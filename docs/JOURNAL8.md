@@ -533,3 +533,46 @@ attendue mais pas observés isolément.
 **Données** : aucune migration.
 **Retour arrière** : commits `f72dd61` (correctif) sur `dev/Saar`, isolés du chantier
 inventaire/Sidebar parallèle.
+
+---
+
+## Session (Saar) — 2026-08-05 — Drop personnage : position curseur au lieu d'un point fixe
+
+**Contexte** : trouvé en testant le lot 4b du chantier `PLAN_REFACTOR_SIDEBAR.md` (extraction de
+`SidebarCharactersTab.jsx`) — le drag&drop d'une carte personnage depuis la Sidebar vers la carte ne
+créait aucun token sur certaines cartes. Bug préexistant, sans lien avec le refactor Sidebar en cours
+(confirmé par lecture : la fonction en cause vit dans `SessionPage.jsx`, non touché par ce chantier).
+
+**Cause racine** : `handleCharacterDrop` (`SessionPage.jsx`) envoyait systématiquement
+`destination: { x: 0, y: 0, z: 0 }`, quel que soit l'endroit réel du lâcher. Côté serveur,
+`resolveBattlemapPlacement` (`server/src/routes/tokens.js`) cherche une surface praticable libre
+**près de cette destination** et renvoie 409 si rien n'est trouvé à proximité — erreur avalée en
+`console.error` seul côté client, sans retour visible. Sur une carte sans rien construit près de
+l'origine, le drop échouait donc toujours, silencieusement.
+
+**Correctif** : la destination envoyée au serveur est maintenant la position monde réelle sous le
+curseur au moment du lâcher, calculée dans `Canvas3D.jsx`/`Canvas2D.jsx` (seuls composants ayant accès
+à la caméra/scène Three.js) via les fonctions de raycast déjà existantes (`raycastWorldSupport` /
+`raycastGround` en 3D — même repli MJ→sol que le déplacement de token existant ;`raycastPlane` en
+2D) — aucune nouvelle méthode de calcul, réutilisation du patron déjà en place pour le déplacement de
+token par pointeur. Un nouveau prop `onCharacterDrop(characterId, worldPosition)` remonte jusqu'à
+`SessionPage.jsx`, qui garde seul la responsabilité de l'appel API — seule la résolution spatiale a
+changé de place, conforme à `world.md` ("le client envoie une intention, le serveur recalcule la
+position atteinte"). Le serveur reste inchangé, déjà autoritaire.
+
+**Effet de bord assumé** : la destination pouvant désormais être n'importe où visible à l'écran (pas
+seulement près de l'origine), un échec 409 réel (drop loin de toute construction) devient possible en
+pratique là où avant seul un point fixe pouvait échouer. Retour visible ajouté en conséquence : message
+`declare_error` dans le chat (réutilise le rendu déjà existant dans `Sidebar.jsx`, aucun nouveau
+composant) au lieu du silence précédent.
+
+**Testé** : `eslint` (erreurs préexistantes sur `Canvas3D.jsx` vérifiées une à une contre le diff,
+aucune dans le code ajouté), `npm run build` (propre). **Confirmé fonctionnel en jeu par Saar
+(2026-08-05)** — drop positionné correctement.
+**Non testé** : le rayon de recherche exact de `resolveBattlemapPlacement` (comportement déduit du
+message d'erreur et de la route, pas lu directement dans `worldMovementService.js`) ; message d'erreur
+visible non déclenché en situation réelle (cas limite, pas testé par Saar).
+**Données** : aucune migration. Nouvelle clé i18n `session.tokenDropNoSurface` (`fr.json`).
+**Retour arrière** : commit isolé à venir sur `dev/Saar`, distinct du lot Sidebar 4a/4b (fichiers
+disjoints : `SessionPage.jsx`/`Canvas3D.jsx`/`Canvas2D.jsx`/`fr.json` contre
+`Sidebar.jsx`/`SidebarHelpModal.jsx`/`SidebarCharactersTab.jsx`).

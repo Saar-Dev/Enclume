@@ -477,6 +477,7 @@ function Scene({
   cameraMode,
   displayLevel = 0,
   statusEffectsMode = 'enforced',
+  onCharacterDrop,
 }) {
   const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
@@ -1034,6 +1035,28 @@ function Scene({
     }
   }, [handlePointerMove, handlePointerUp, gl])
 
+  // ─── Drop d'une carte personnage depuis la Sidebar ─────────────────────────
+  // Même repli support→sol que le drag de token (8.C ci-dessus, ligne ~894) : un MJ peut viser hors
+  // de toute géométrie construite, un joueur reste contraint au support réel.
+  useEffect(() => {
+    const canvas = gl.domElement
+    const handleDragOver = (e) => e.preventDefault()
+    const handleDrop = (e) => {
+      e.preventDefault()
+      const characterId = e.dataTransfer.getData('characterId')
+      if (!characterId) return
+      let destination = raycastWorldSupport(e.clientX, e.clientY)
+      if (!destination && isGm) destination = raycastGround(e.clientX, e.clientY)
+      onCharacterDrop?.(characterId, destination)
+    }
+    canvas.addEventListener('dragover', handleDragOver)
+    canvas.addEventListener('drop', handleDrop)
+    return () => {
+      canvas.removeEventListener('dragover', handleDragOver)
+      canvas.removeEventListener('drop', handleDrop)
+    }
+  }, [gl, raycastWorldSupport, raycastGround, isGm, onCharacterDrop])
+
   useEffect(() => {
     const canvas = gl.domElement
     const prevent = (e) => e.preventDefault()
@@ -1396,7 +1419,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced' }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
@@ -1677,6 +1700,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           statusEffectsMode={statusEffectsMode}
           cameraMode={mode}
           displayLevel={displayLevel}
+          onCharacterDrop={onCharacterDrop}
         />
       )}
     </Canvas>

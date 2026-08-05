@@ -80,7 +80,7 @@ function SessionContent({ campaignId }) {
   const { tokens, setTokens, addToken, removeToken } = useTokenStore()
   const { characters, isGm, setCharacters, setMembers } = useCharacterStore()
   const { battlemap, battlemaps, setBattlemap, setBattlemaps, setFolders } = useMapStore()
-  const { setActiveCampaign, setPendingEntityId } = useSessionStore()
+  const { setActiveCampaign, setPendingEntityId, addMessage } = useSessionStore()
   const { entities, setEntities, fetchBlueprints } = useEntityStore()
   const { phase: combatPhase } = useCombatStore()
   const { setDocuments } = useLibraryStore()
@@ -348,9 +348,14 @@ function SessionContent({ campaignId }) {
     if (!exists) setStatusPanel(null)
   }, [statusPanel, tokens])
 
-  // Drop depuis la Sidebar — crée un token au centre de la carte
+  // Drop depuis la Sidebar — crée un token à la position monde ciblée par le curseur au lâcher.
+  // worldPosition est calculée par Canvas3D/Canvas2D (raycast, seuls à avoir accès à la caméra/scène
+  // Three.js) — repli sur le centre de la carte si le canvas actif n'a pas pu résoudre de position
+  // (ex. lâché hors zone de rendu). Le serveur reste autoritaire : il cherche la surface praticable la
+  // plus proche de cette destination (resolveBattlemapPlacement) et rejette si rien n'est trouvé à
+  // proximité — cas signalé au joueur/MJ plutôt qu'avalé silencieusement.
   // Le serveur broadcastera TOKEN_CREATED à toute la room — pas d'emit client.
-  const handleCharacterDrop = useCallback(async (characterId) => {
+  const handleCharacterDrop = useCallback(async (characterId, worldPosition) => {
     if (!battlemap?.id) return
 
     const character = characters.find(c => c.id === characterId)
@@ -360,15 +365,21 @@ function SessionContent({ campaignId }) {
       const res = await api.post(`/battlemaps/${battlemap.id}/tokens`, {
         character_id: characterId,
         label: character.name,
-        destination: { x: 0, y: 0, z: 0 },
+        destination: worldPosition || { x: 0, y: 0, z: 0 },
         color: character.color,
         layer,
       })
       addToken(res.data.token)
     } catch (err) {
       console.error('Erreur création token :', err)
+      addMessage({
+        id: `token-drop-error-${Date.now()}`,
+        type: 'declare_error',
+        text: t('session.tokenDropNoSurface'),
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
     }
-  }, [battlemap?.id, characters, layer])
+  }, [battlemap?.id, characters, layer, addMessage, t])
 
   // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget…)
   useTokenSocket()
@@ -605,21 +616,14 @@ function SessionContent({ campaignId }) {
         </div>
       )}
       <div style={styles.mainArea}>
-      <div
-        style={styles.canvas}
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => {
-          e.preventDefault()
-          const characterId = e.dataTransfer.getData('characterId')
-          if (characterId) handleCharacterDrop(characterId)
-        }}
-      >
+      <div style={styles.canvas}>
         {canvasVisible && (battlemap?.render_mode === '2d'
           ? <Canvas2D
               key={battlemap.id}
               battlemap={battlemap}
               onTokenDoubleClick={handleTokenDoubleClick}
               statusEffectsMode={statusEffectsMode}
+              onCharacterDrop={handleCharacterDrop}
             />
           : mode === 'edit'
           ? <Editor3D
@@ -664,6 +668,7 @@ function SessionContent({ campaignId }) {
                 : null}
               displayLevel={displayLevel}
               statusEffectsMode={statusEffectsMode}
+              onCharacterDrop={handleCharacterDrop}
             />
         )}
         {!canvasVisible && (

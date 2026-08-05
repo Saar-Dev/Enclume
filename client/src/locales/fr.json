@@ -166,6 +166,7 @@
     "actionOutOfRange": "Trop loin pour interagir",
     "tokenSkipped": "{{label}} a été passé",
     "stun_blocked": "Action impossible, vous êtes {{statut}}",
+    "tokenDropNoSurface": "Aucune surface praticable trouvée à cet endroit — personnage non placé",
     "combatEnd": "Terminer le combat",
     "combatMode": "Mode Combat",
     "combat": "Combat",
