@@ -20,7 +20,7 @@ export const useCharacterStore = create((set) => ({
     characters: [...state.characters, character],
   })),
 
-  // Suppression — handleDelete dans CharacterModal
+  // Suppression — handleDelete dans CharacterWindow
   removeCharacter: (characterId) => set((state) => ({
     characters: state.characters.filter(c => c.id !== characterId),
   })),

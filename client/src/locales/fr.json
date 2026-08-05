@@ -379,10 +379,8 @@
   "character": {
     "tabSheet": "Fiche",
     "tabMateriel": "Matériel",
-    "tabNotes": "Notes",
     "tabBio": "Bio & Info",
     "tabSettings": "Paramètres",
-    "sheetPlaceholder": "Fiche personnage — Phase 3",
     "illustrationPlaceholder": "Illustration — Phase 3",
     "descriptionLabel": "Description",
     "descriptionPlaceholder": "Visible par tous les joueurs...",

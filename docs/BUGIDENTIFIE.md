@@ -1219,6 +1219,104 @@ confirmation formelle est encore jugée nécessaire avant de coder le correctif.
 
 ---
 
+### Dette CHARMODAL-DEAD1 — `CharacterModal` (ex-Sidebar.jsx) jamais monté nulle part ✅ close (2026-08-05)
+
+**Symptôme** : aucun, trouvé en extrayant `CharacterModal` de `client/src/components/Sidebar.jsx` vers
+son propre fichier (`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`, lot 2, 2026-08-05) — pas un bug rapporté par
+Saar, une trouvaille hors scope pendant le chantier de refactor.
+
+**Code impliqué** : `client/src/components/CharacterModal.jsx` (343 l. depuis l'extraction ; avant,
+`Sidebar.jsx:51-381` sur le commit précédent). Composant complet et fonctionnel : onglets
+Fiche/Notes/Paramètres, upload portrait/GLB, renommage inline, notes GM, toggle visibilité,
+assignation propriétaire, suppression — toute la logique et les appels `api.put/post/delete` sont
+présents et corrects en lecture.
+
+**Cause racine `[OBSERVÉ]`** : `grep -n "CharacterModal" client/src/components/Sidebar.jsx` sur le
+commit `HEAD` précédent ce lot (avant toute modification de cette session) ne trouve que la
+déclaration de la fonction (`function CharacterModal(...)`), aucun usage JSX (`<CharacterModal`)
+ailleurs dans le fichier. La fonction n'était pas exportée (locale à `Sidebar.jsx`), donc aucun autre
+fichier n'aurait pu la monter non plus. Confirmé également après extraction : `grep -rn
+"<CharacterModal" client/src` ne trouve rien en dehors de sa propre définition.
+
+**Hypothèse non vérifiée** : `client/src/character/CharacterWindow.jsx` (actuellement modifié dans le
+chantier inventaire en cours, hors scope de cette investigation) pourrait être le remplaçant réel de
+cette modale — auquel cas `CharacterModal` est un résidu d'une itération antérieure jamais nettoyé.
+Non confirmé : pas de comparaison fonctionnelle faite entre les deux composants.
+
+**Prochaine étape** : Saar à trancher — (a) si `CharacterModal` est bien remplacé par
+`CharacterWindow.jsx`, supprimer `CharacterModal.jsx` (et retirer son import inutilisé dans
+`Sidebar.jsx`) dans un commit dédié ; (b) si non, comprendre pourquoi une fonctionnalité apparemment
+complète (upload GLB de personnage, notes GM) n'est jamais accessible en jeu — potentiellement une
+régression ancienne (bouton d'ouverture retiré par erreur ailleurs dans `Sidebar.jsx` sans que la
+modale elle-même ne soit nettoyée). Pas d'action prise dans ce lot : extraction fidèle du comportement
+existant, y compris son absence d'utilisation.
+
+**Hypothèse confirmée `[VÉRIFIÉ]` (2026-08-05)** : comparaison fonctionnelle faite entre
+`CharacterModal.jsx` et `client/src/character/CharacterWindow.jsx` — l'en-tête de `CharacterWindow.jsx`
+déclare lui-même « Extraite de Sidebar.jsx (CharacterModal) et transformée en fenêtre flottante
+indépendante ». Vérifié point par point : renommage inline, toggle visibilité, upload portrait, upload
+GLB, description, notes GM, assignation propriétaire, suppression — les 8 handlers de `CharacterModal`
+ont un équivalent fonctionnellement identique dans `CharacterWindow.jsx` (mêmes appels
+`api.put/post/delete`, mêmes gardes `isGm`/`isOwner`). `CharacterWindow.jsx` va plus loin (fiche
+personnage réelle via `CharacterSheet.jsx`, système d'inventaire complet, panneaux armure/armes,
+`PossessionNotes`) là où l'onglet « Fiche » de `CharacterModal` n'était qu'un placeholder
+(`t('character.sheetPlaceholder')`). Aucune fonctionnalité perdue pour les joueurs — option (a)
+retenue.
+
+**Correctif appliqué (2026-08-05)** — résidu mort supprimé intégralement :
+- `client/src/components/CharacterModal.jsx` supprimé (jamais commité, aucune perte).
+- Import mort retiré (`Sidebar.jsx:33`).
+- 27 clés de style exclusives à `CharacterModal` retirées de `Sidebar.styles.js` (bloc « Modale
+  character » + `modalTabs`/`notesContent`/`fieldLabel`/`textarea`/`settings*`/`deleteCharBtn`) ; `select`
+  et `charColor` conservées (toujours utilisées par `Sidebar.jsx`). En-tête du fichier corrigé — il
+  n'a jamais été consommé par `DiceBreakdownPopover.jsx` (vérifié par grep), seule l'affirmation du
+  commentaire était fausse.
+- Commentaire obsolète corrigé dans `characterStore.js:23` (référençait `CharacterModal`, `handleDelete`
+  vit désormais dans `CharacterWindow`).
+- Clés i18n orphelines `character.tabNotes` et `character.sheetPlaceholder` retirées de `fr.json`
+  (`tabSheet`/`tabSettings`/`illustrationPlaceholder` conservées, toujours utilisées par
+  `CharacterWindow.jsx`).
+- `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` — gel du lot 3 (audit `Sidebar.styles.js`) levé, décision
+  consignée.
+
+**Testé** : `grep -rn "CharacterModal" client/src` ne retourne plus aucun résultat (suppression complète,
+aucune référence orpheline). `grep -rn "styles\.(modalOverlay|modalPanel|...)" ` sur les 27 clés
+retirées confirmé à 0 usage restant dans `Sidebar.jsx` avant suppression. Build/lint client à faire
+(voir étape suivante de la session).
+**Non testé** : rendu réel en navigateur de `Sidebar.jsx` (liste personnages, config, chat — zones non
+touchées fonctionnellement par ce nettoyage, seule la couche style/import a changé) — à la charge de
+Saar si un doute apparaît, mais aucun changement de comportement attendu.
+**Données** : aucune.
+**Retour arrière** : aucun commit encore créé à ce stade — `git diff`/`git status` seuls, retour arrière
+trivial (fichiers non commités).
+
+---
+
+### Dette CHARSTORE-NULLISH1 — `characterStore.js:15` — `?? false` mort après un `===`
+
+**Symptôme** : aucun, trouvé par ESLint en vérifiant `characterStore.js` pendant la clôture de
+CHARMODAL-DEAD1 (2026-08-05) — pas un bug de comportement, une erreur de lint sur du code préexistant
+non touché par ce nettoyage.
+
+**Code impliqué** : `client/src/stores/characterStore.js:15` —
+`isGm: members.find(m => m.id === userId)?.role === 'gm' ?? false`.
+
+**Cause racine `[OBSERVÉ]`** : `x?.role === 'gm'` est une comparaison stricte, elle ne peut renvoyer que
+`true` ou `false`, jamais `null`/`undefined` — le `?? false` qui suit est donc du code mort (ESLint
+`no-constant-binary-expression`). Aucun impact fonctionnel : la valeur produite est identique avec ou
+sans le `?? false`.
+
+**Prochaine étape** : retirer le `?? false` superflu (`isGm: members.find(m => m.id === userId)?.role === 'gm'`)
+dans un commit dédié, hors périmètre du nettoyage CHARMODAL-DEAD1.
+
+**Testé** : `npx eslint client/src/stores/characterStore.js` — 1 erreur, confirmée pointer sur cette
+ligne, aucune autre dans le fichier.
+**Non testé** : correctif non appliqué (hors scope de cette session).
+**Données** : aucune.
+**Retour arrière** : sans objet, aucun correctif appliqué.
+
+---
+
 ### Dette MELEE-ATKNAME — Fenêtre défense CaC : « [Compte] vous attaque » au lieu du nom du personnage ✅ Session (2026-08-01)
 
 **Symptôme** : signalé par Saar (2026-07-28) en testant `docs/PLAN_RW_SYSCOMBAT.md` Lot 4 (Tir, sans

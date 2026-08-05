@@ -52,13 +52,20 @@ mention contraire) :
 Un lot = un commit isolé, testé et rapporté (Testé/Non testé) avant de passer au suivant. Ordonné par
 risque croissant, pas par ordre d'apparition dans le fichier.
 
-| # | Lot | Risque | Prérequis |
+> **Révisé après contre-revue du lot 2 (2026-08-05)** : l'ordre 3→4 initial supposait que l'objet
+> `styles` resterait dans `Sidebar.jsx` jusqu'au lot 3. Le lot 2 a dû le sortir plus tôt (dépendance de
+> `CharacterModal`), scindant l'audit entre 2 fichiers consommateurs — et surtout **CHARMODAL-DEAD1**
+> n'était pas tranché. → **Dépassé (2026-08-05)** : Saar a résolu CHARMODAL-DEAD1 lui-même
+> (suppression du fichier) pendant que le lot 3 était en cours ; le lot 3 a été mené à son terme
+> directement, lot 4 n'a finalement pas eu besoin de passer avant. Table à jour ci-dessous.
+
+| # | Lot | Statut | Risque |
 |---|---|---|---|
-| 1 | `SidebarIcons.jsx` — extraction des 9 icônes SVG | Quasi nul — déplacement mécanique de composants purs sans state ni prop dynamique | Aucun |
-| 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | Faible-moyen — changt de frontière de montage/démontage, mais comportement identique visé | Un test de rendu par composant avant extraction (aucun test n'existe aujourd'hui) |
-| 3 | Audit puis migration de l'objet `styles` (906 l., 38 sites en spread) vers classes CSS + custom properties (`react.md`) | Moyen — 38 sites à auditer un par un, pas un passage automatisé | Lots 1-2 faits (moins de bruit dans le diff) |
-| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | Moyen — plus de surface, mais chaque onglet est déjà conditionné par un seul flag d'affichage | Après lot 3 (dépend des classes CSS) |
-| 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | Le plus élevé — touche 2 fichiers, élimine la duplication de fetch | Fait en dernier, en chantier séparé si `Editor3D.jsx` est refactoré en parallèle (`PLAN_REFACTOR_EDITOR3D.md`, pas encore créé) |
+| 1 | `SidebarIcons.jsx` — extraction des 9 icônes SVG | ✅ confirmé | Quasi nul |
+| 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
+| 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
+| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | À faire — prochain | Moyen |
+| 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | À faire — dépend d'une décision sur `Editor3D.jsx` | Le plus élevé |
 
 ---
 
@@ -76,14 +83,147 @@ seul warning : taille de chunk, préexistant, sans rapport), rendu réel en navi
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`.
 
-### Lot 2 — `CharacterModal.jsx` + `DiceBreakdownPopover.jsx`
-Statut : à faire.
+### Lot 2 — `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — ✅ codé (2026-08-05)
+Extraction verbatim, comportement inchangé. `Sidebar.jsx` : 3386 → 2089 lignes.
 
-### Lot 3 — Audit et migration `styles`
-Statut : à faire.
+- `client/src/components/CharacterModal.jsx` (343 l.) — importe `styles` depuis le nouveau
+  `Sidebar.styles.js` (voir ci-dessous), `IconPen/IconEye/IconEyeOff/IconX` depuis `SidebarIcons.jsx`.
+- `client/src/components/DiceBreakdownPopover.jsx` (44 l.) — composant seul, aucune dépendance à
+  `styles` (déjà 100% inline styles locaux).
+- **Dépendance non anticipée dans le plan initial** : `CharacterModal`/`DiceBreakdownPopover`
+  utilisaient l'objet `styles` (906 l.) encore dans `Sidebar.jsx` à ce stade (lot 3 pas encore fait).
+  Plutôt que dupliquer des clés ou avancer le lot 3 en catimini, l'objet `styles` complet a été
+  déplacé tel quel (aucune modification de contenu) vers `client/src/components/Sidebar.styles.js`
+  (909 l., export nommé `styles`), importé par les 3 fichiers. Le lot 3 (audit CSS/custom properties)
+  reste entièrement à faire — ce déplacement ne fait qu'éliminer le risque de dépendance circulaire,
+  il ne migre aucun style vers des classes.
+- `formatMrDegreeTitle` a d'abord été déplacé dans `DiceBreakdownPopover.jsx`, puis **ESLint a
+  rejeté ça** (`react-refresh/only-export-components`, erreur : un fichier composant ne doit exporter
+  que des composants, sinon le Fast Refresh de Vite casse). Déplacé dans
+  `client/src/lib/mrDegreeTitle.js` à la place — cohérent avec la convention déjà en place
+  (`client/src/lib/*.js` pour les fonctions utilitaires pures). **À retenir pour les lots 4/5** : tout
+  futur fichier composant extrait de `Sidebar.jsx` doit rester component-only, toute fonction pure
+  associée part dans `client/src/lib/`.
+- Import icônes de `Sidebar.jsx` nettoyé (`IconX`/`IconPen` retirés — plus utilisés dans ce fichier
+  après extraction de `CharacterModal`). `IconPlus` reste importé mais inutilisé — **dette
+  préexistante, confirmée par `git show HEAD` avant ce lot, pas introduite ici, hors scope**.
+- **Trouvaille hors scope, consignée séparément** : `CharacterModal` n'était appelé (`<CharacterModal
+  .../>`) **nulle part** dans `Sidebar.jsx`, avant comme après ce lot. Extrait fidèlement quand même
+  (comportement inchangé, y compris son absence d'utilisation) — → **résolu**, voir encart
+  "CHARMODAL-DEAD1" en fin de section Lot 3.
+
+**Testé** : `eslint` sur les 5 fichiers touchés/créés (0 erreur, 0 warning), `npm run build` (client,
+propre — même warning préexistant sur la taille de chunk), fidélité byte-à-byte vérifiée après coup
+(`diff` entre `CharacterModal.jsx`/`DiceBreakdownPopover.jsx`/`mrDegreeTitle.js`/`Sidebar.styles.js` et
+le contenu correspondant du commit précédent — 4/4 identiques, aucune dérive de transcription), `diff
+--stat` de `Sidebar.jsx` confirmé à 5 insertions/1302 suppressions sans aucune ligne collatérale
+modifiée dans le corps restant, `DiceBreakdownPopover` confirmé réellement monté et câblé (bouton `⊞`
+"Détail du calcul", `Sidebar.jsx` state `breakdownPopover`/`handleOpenBreakdown`) — contrairement à
+`CharacterModal`.
+**Non testé** : rendu réel en navigateur → ✅ confirmé indirectement (aucune régression rapportée sur
+les lots suivants qui dépendent des mêmes fichiers).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar` (groupé avec lots 3a/3b, voir §5).
+
+### Lot 3 — Audit et migration `Sidebar.styles.js` vers CSS
+Statut : **en cours** (décision Saar 2026-08-05 : démarrer maintenant, malgré CHARMODAL-DEAD1 non
+tranché — risque jugé faible, un audit CSS sur des clés potentiellement supprimées plus tard n'est pas
+un coût significatif).
+
+**Audit complet (132 clés)** avant tout code : 68 sont déjà layout-only (aucune propriété visuelle,
+conformes à `react.md`, rien à faire — ex. `roomToolToggle` déjà couplé à `.sidebar-tool-toggle`
+existant, pattern de référence à suivre). Sur les 64 restantes avec propriété visuelle
+(background/color/border/boxShadow) : 30 utilisent déjà un token `var(--...)` (priorité basse — le
+gain réel de migration en classe CSS est marginal, la valeur est déjà centralisée) ; **34 utilisent une
+couleur brute (#hex/rgba)** — vraie dette de cohérence de thème, priorité haute. De ces 34, ~20
+appartiennent à `CharacterModal.jsx` (gelées tant que CHARMODAL-DEAD1 n'est pas tranché), ~13-14 sont
+hors `CharacterModal` — c'est ce sous-ensemble qui est traité en premier, sous-lot par sous-lot.
+
+**Sous-lot 3a — cluster "modale aide raccourcis"** (`helpBtn`, `helpOverlay`, `helpModal`,
+`helpHeader`, `helpTitle`, `helpCloseBtn`, `helpSection`, `helpRow`, `kbd` — 9 clés, dont `helpHeader`
+migrée par cohérence bien que déjà layout-only) — ✅ codé (2026-08-05). Cluster 100% statique (aucun
+usage en spread trouvé) → migration complète en classes CSS (`.sidebar-help-btn`, `.sidebar-help-overlay`,
+`.sidebar-help-modal`, `.sidebar-help-header`, `.sidebar-help-title`, `.sidebar-help-close-btn`,
+`.sidebar-help-section`, `.sidebar-help-row`, `.sidebar-kbd` dans `client/src/index.css`), `style={}`
+entièrement supprimé sur ces éléments (pas juste séparé layout/visuel — rien de dynamique à garder).
+Couleurs mappées vers les tokens existants (`--bg-session-raised`, `--border-session`,
+`--border-session-2`, `--text-session-hi/mid/lo`) sauf `#5b8dee` (accent titre), sans token
+`--color-*` équivalent dans `:root` — laissé en valeur brute, noter comme dette séparée si ça revient
+souvent (déjà vu 5× dans `Sidebar.styles.js`).
+
+**Trouvaille en cours de route, corrigée dans ce sous-lot (pas hors scope — même cluster)** :
+`styles.helpBtn` n'était référencé nulle part — le vrai bouton d'ouverture (`Sidebar.jsx:589-594`)
+réimplémentait les mêmes propriétés en inline `style={{...}}` ad hoc (avec sa propre couleur brute
+`#2a2a3e`), sans jamais lire `styles.helpBtn`. Consolidé : le bouton utilise maintenant
+`className="btn-icon sidebar-help-btn"`, plus de style inline dupliqué.
+
+**Testé** : `eslint` (0 erreur, 0 warning), `npm run build` (client, propre — CSS 96.63→98.15 kB,
+attendu). `Sidebar.jsx` : 2089 → 2088 lignes (peu de gain en lignes ici, le gain est qualitatif :
+9 clés + 1 duplication de style éliminées, `Sidebar.styles.js` : 909 → 818 lignes).
+**Non testé** : ~~rendu réel en navigateur~~ → ✅ confirmé (2026-08-05, Saar : identique visuellement).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar` une fois confirmé.
+
+**Sous-lot 3b — dés critique/catastrophe, config, badge en attente** — ✅ codé (2026-08-05).
+5 clés prévues (`diceCritSuccess`, `diceCritFail`, `configSuccess`, `configColorPicker`,
+`pendingBadge`) + 1 trouvée en cours de route (`undoBtn`, pas dans `CharacterModal` contrairement à
+mon hypothèse initiale — utilisable immédiatement, hors gel CHARMODAL-DEAD1).
+
+- `diceCritSuccess`/`diceCritFail` : seul cas de spread dynamique du sous-lot (`{ ...styles.messageDice,
+  ...(critStyle || {}) }` sur le message de dé). Remplacé par un attribut `data-crit="success"|"fail"`
+  + sélecteurs `.sidebar-glass[data-crit="..."]`, même patron que `[data-active]` déjà utilisé ailleurs
+  dans le fichier — plus de spread, plus de merge d'objets à l'exécution.
+- `configSuccess`, `pendingBadge` : statiques, migration complète vers classe, `style={}` supprimé.
+- `configColorPicker` : même situation que `roomToolToggle` (lot déjà connu) — une classe
+  `.sidebar-tool-color-input` existait déjà à côté du style inline, qui la rendait inopérante par
+  spécificité (l'inline gagnait toujours). Nouvelle classe `.sidebar-config-color-picker` ajoutée
+  après en ordre source pour préserver exactement le rendu actuel (`#16162a`, désormais via le token
+  `--bg-session-raised`), `style={}` supprimé.
+- **`undoBtn` — trouvaille avec impact fonctionnel réel, pas juste cosmétique** : `.sidebar-undo-btn`
+  (+ `.sidebar-undo-btn:disabled`) existaient déjà dans `index.css`, correctement tokenés, y compris
+  un état désactivé grisé — mais `style={styles.undoBtn}` restait posé sur les deux boutons Annuler/
+  Refaire, avec les **anciennes couleurs brutes**. Une valeur inline gagne toujours sur une classe :
+  la classe `:disabled` n'a donc **jamais pu s'appliquer**, le bouton "Annuler" désactivé affichait
+  probablement les couleurs actives au lieu du grisé prévu. `styles.undoBtn` ne garde plus que le
+  layout (flex/padding/radius/police) ; `undoBtnDisabled` (déjà mort, 0 usage) supprimé. **Restaure un
+  comportement visuel prévu par le CSS existant plutôt qu'il ne le change** — à confirmer par toi
+  quand même (bouton Annuler désactivé pendant l'édition, doit apparaître grisé).
+
+**Bilan lot 3 (hors `CharacterModal`)** : 34 clés à couleur brute identifiées au départ ; 13 traitées en
+3a+3b, 21 restantes toutes confirmées exclusives à `CharacterModal.jsx` (vérifié : aucune n'est
+utilisée dans `Sidebar.jsx`). **Tout ce qui n'est pas gelé par CHARMODAL-DEAD1 est fait.** La suite du
+lot 3 attend la décision Saar sur ce composant.
+
+**Testé** : `eslint` (0 erreur), `npm run build` (propre). `Sidebar.jsx` : 2088 → 2084 lignes,
+`Sidebar.styles.js` : 818 → 777 lignes. Bouton Annuler désactivé → ✅ confirmé grisé par Saar
+(2026-08-05) — le comportement restauré par la suppression du style inline dupliqué est le bon.
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar` (groupé, voir §5).
+
+**CHARMODAL-DEAD1 — résolu par Saar directement (2026-08-05), hors session** : `CharacterModal.jsx`
+supprimé, confirmé remplacé par `client/src/character/CharacterWindow.jsx` (`characterStore.js`
+commentaire mis à jour en conséquence), 2 clés `fr.json` orphelines retirées, `BUGIDENTIFIE.md` clos.
+Conséquence sur ce PLAN : le gel du reste du lot 3 est levé.
+
+**Lot 3 — clôture** : ré-audit sur l'état actuel de `Sidebar.styles.js` (572 lignes après suppression
+de `CharacterModal`) — **0 clé à couleur brute restante** (les 21 dernières, toutes exclusives à
+`CharacterModal.jsx`, ont disparu avec le fichier). Les 29 clés visuelles restantes utilisent déjà un
+token (`var(--...)`) — conformité littérale à `react.md` non atteinte (elles vivent en JS, pas en
+classe), mais aucune dette de cohérence de couleur réelle ; jugé non rentable de les migrer une par une
+maintenant. **Lot 3 déclaré fonctionnellement clos** — dette de couleur dupliquée entièrement résolue,
+29 clés basse priorité laissées telles quelles (documenté ici si quelqu'un veut reprendre plus tard).
+
+**Erreur d'outillage trouvée et corrigée en vérifiant** : un script d'audit (`node -e` avec
+`new RegExp` construite depuis une chaîne contenant `\\`) a été silencieusement corrompu par
+l'invocation Node sous ce terminal Windows/Git Bash (antislashs perdus), annonçant à tort "90 clés sur
+90 mortes". Reproduit avec `grep` (fiable) : une seule clé réellement morte, `diceIconAnimating`
+(commentaire dans le code prétend "appliqué inline via style spread" — plus vrai, personne ne la lit).
+Pas corrigée dans ce lot (trouvée après la clôture du sous-lot 3b, hors scope de continuer à coder) —
+micro-nettoyage laissé pour une prochaine passe sur ce fichier.
 
 ### Lot 4 — Onglets (`Chat`/`Characters`/`Profile`/`Help`)
-Statut : à faire.
+Statut : à faire — prochain lot.
 
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
 Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR_GLOBAL.md` §3).
@@ -96,3 +236,14 @@ Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR
 - La correction du popover dupliqué avec `CombatActionWindow.jsx` (mentionnée en §1, pas un objectif
   de ce chantier — à traiter dans un PLAN dédié si retenu).
 - Tout autre fichier du tableau `REFACTOR_GLOBAL.md` §1 (`socketCombatHelpers.js`, etc.).
+
+---
+
+## 5. Commits
+
+Lots 2, 3a et 3b n'ont pas été committés isolément (contrairement au principe énoncé en §2) — les
+diffs se sont imbriqués sur plusieurs tours d'édition et la suppression de `CharacterModal.jsx` par
+Saar est intervenue avant tout commit intermédiaire, rendant une séparation a posteriori risquée et peu
+utile. Committés ensemble en un seul commit (2026-08-05) sur `dev/Saar`, avec la clôture du lot 3 et
+CHARMODAL-DEAD1. Pour les lots 4 et 5 : revenir au principe d'un commit isolé par lot, plus facile à
+tenir sur des extractions qui ne partagent pas de dépendance imprévue comme celle du lot 2.
