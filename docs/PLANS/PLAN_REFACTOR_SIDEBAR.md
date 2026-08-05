@@ -64,7 +64,7 @@ risque croissant, pas par ordre d'apparition dans le fichier.
 | 1 | `SidebarIcons.jsx` — extraction des 9 icônes SVG | ✅ confirmé | Quasi nul |
 | 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
 | 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
-| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | À faire — prochain | Moyen |
+| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b ✅ confirmés, 4c/4d à faire — détail §3 | Moyen |
 | 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | À faire — dépend d'une décision sur `Editor3D.jsx` | Le plus élevé |
 
 ---
@@ -223,7 +223,39 @@ Pas corrigée dans ce lot (trouvée après la clôture du sous-lot 3b, hors scop
 micro-nettoyage laissé pour une prochaine passe sur ce fichier.
 
 ### Lot 4 — Onglets (`Chat`/`Characters`/`Profile`/`Help`)
-Statut : à faire — prochain lot.
+Statut : en cours. Ordre revu à charge, du plus simple au plus risqué (4a→4d), un commit isolé par
+sous-lot (retour au principe initial, contrairement au regroupement exceptionnel des lots 2/3).
+
+**4a — `SidebarHelpModal.jsx`** — ✅ confirmé (2026-08-05). Extraction pure, aucun état propre —
+`showHelp`/`setShowHelp` restent dans `Sidebar.jsx` (le bouton qui ouvre la modale vit dans la barre
+d'outils permanente, pas dans la modale). `Sidebar.jsx` : 2084 → ~2050 lignes.
+**Testé** : `eslint` (0 erreur), `npm run build` (propre), rendu réel confirmé par Saar (identique
+avant/après, modes jeu et édition).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé à venir sur `dev/Saar`.
+
+**4b — `SidebarCharactersTab.jsx`** — ✅ confirmé (2026-08-05). Formulaire de création, liste avec
+drag&drop vers la carte, et tout l'état associé (`showNewChar`, `newCharName`, `newCharType`,
+`creating`, handlers de drag/clic) déménagés en bloc — plus rien n'en reste dans `Sidebar.jsx`. Le
+composant lit `characters`/`isGm`/`addCharacter` directement depuis `useCharacterStore` (même patron
+que `CharacterWindow.jsx`), reçoit `campaignId`/`onOpenCharacter` en props.
+
+**Trouvaille hors scope, corrigée séparément (pas dans ce lot)** : le drag&drop vers la carte ne
+fonctionnait pas (bug préexistant, sans lien avec cette extraction) — cause racine et correctif
+détaillés dans `docs/JOURNAL8.md` (session « Drop personnage : position curseur au lieu d'un point
+fixe »).
+
+**Testé** : `eslint` (0 erreur), `npm run build` (propre), rendu réel confirmé par Saar (création,
+drag vers la carte — après correctif drag&drop ci-dessus —, clic pour ouvrir la fiche).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé à venir sur `dev/Saar`.
+
+**4c — `SidebarProfileTab.jsx`** et **4d — hooks + `SidebarChatTab.jsx`/`SidebarChatMessage.jsx`** :
+à faire — voir architecture détaillée décidée le 2026-08-05 (hooks `useDiceBreakdownPopover` et
+`useSidebarPendingActionsBadge` dans `client/src/lib/`, popover fermé au changement d'onglet — décision
+Saar).
 
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
 Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR_GLOBAL.md` §3).

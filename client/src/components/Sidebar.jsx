@@ -31,6 +31,8 @@ import {
 } from './SidebarIcons.jsx'
 import { styles } from './Sidebar.styles.js'
 import DiceBreakdownPopover from './DiceBreakdownPopover.jsx'
+import SidebarHelpModal from './SidebarHelpModal.jsx'
+import SidebarCharactersTab from './SidebarCharactersTab.jsx'
 import { formatMrDegreeTitle } from '../lib/mrDegreeTitle.js'
 
 const SIDEBAR_MIN = 220
@@ -72,7 +74,7 @@ export default function Sidebar({
   const { t } = useTranslation()
   const { t: tCombat } = useTranslation('combat')
   const { user, setUser } = useAuthStore()
-  const { characters, members, isGm, addCharacter } = useCharacterStore()
+  const { characters, members, isGm } = useCharacterStore()
   const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
   const messages = useMemo(
     () => messagesByCampaign[activeCampaignId] || [],
@@ -345,12 +347,6 @@ export default function Sidebar({
   const [objectSearch, setObjectSearch] = useState('')
   const [refreshingObjects, setRefreshingObjects] = useState(false)
 
-  // Formulaire de création de personnage
-  const [showNewChar, setShowNewChar] = useState(false)
-  const [newCharName, setNewCharName] = useState('')
-  const [newCharType, setNewCharType] = useState('pnj')
-  const [creating, setCreating] = useState(false)
-
   // Modale character — déléguée à SessionPage via onOpenCharacter
 
   // Onglet Config — profil utilisateur
@@ -516,51 +512,6 @@ export default function Sidebar({
     const rect = e.currentTarget.getBoundingClientRect()
     setBreakdownPopover({ msgId: msg.id, breakdown: msg.breakdown, rect })
   }, [breakdownPopover])
-
-  // ─── CRÉER UN PERSONNAGE ─────────────────────────────────────────────────
-  const handleCreateCharacter = async (e) => {
-    e.preventDefault()
-    if (!newCharName.trim()) return
-    setCreating(true)
-    try {
-      const res = await api.post(`/campaigns/${campaignId}/characters`, {
-        name: newCharName.trim(),
-        type: newCharType,
-      })
-      addCharacter(res.data.character)
-      setNewCharName('')
-      setNewCharType('pnj')
-      setShowNewChar(false)
-    } catch (err) {
-      console.error('Erreur création personnage :', err)
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  // ─── DRAG CHARACTER ──────────────────────────────────────────────────────
-  const handleDragStart = (e, character) => {
-    e.dataTransfer.setData('characterId', character.id)
-    e.dataTransfer.effectAllowed = 'copy'
-  }
-
-  // ─── OUVRIR MODALE CHARACTER ─────────────────────────────────────────────
-  // La charCard est draggable. On distingue clic (modale) de drag (canvas).
-  // dragStartPos stocke la position au mousedown pour détecter si c'est un vrai clic.
-  const dragStartPos = useRef(null)
-
-  const handleCardMouseDown = (e) => {
-    dragStartPos.current = { x: e.clientX, y: e.clientY }
-  }
-
-  const handleCardClick = (e, character) => {
-    if (!dragStartPos.current) return
-    const dx = Math.abs(e.clientX - dragStartPos.current.x)
-    const dy = Math.abs(e.clientY - dragStartPos.current.y)
-    // Si la souris a bougé de plus de 4px, c'est un drag — pas un clic
-    if (dx > 4 || dy > 4) return
-    onOpenCharacter?.(character)
-  }
 
   return (
     <div className="sidebar-panel" style={{ ...styles.sidebar, width }}>
@@ -1871,84 +1822,7 @@ export default function Sidebar({
 
         {/* ── Persos ── */}
         {activeTab === 'persos' && (
-          <div style={styles.persosList}>
-
-            {/* Bouton créer — GM uniquement */}
-            {isGm && (
-              <button
-                className="btn"
-                style={{ width: '100%', marginBottom: '8px' }}
-                onClick={() => setShowNewChar(v => !v)}
-              >
-                {t('sidebar.newCharacter')}
-              </button>
-            )}
-
-            {/* Formulaire création */}
-            {isGm && showNewChar && (
-              <form onSubmit={handleCreateCharacter} style={{ ...styles.newCharForm, flexDirection: 'column', gap: '6px' }}>
-                <select
-                  className="sidebar-tool-field" style={styles.select}
-                  value={newCharType}
-                  onChange={e => setNewCharType(e.target.value)}
-                >
-                  <option value="pnj">{t('drone.typeHumanoid')}</option>
-                  <option value="drone">{t('drone.typeDrone')}</option>
-                  <option value="armure" disabled>{t('drone.typeArmor')}</option>
-                </select>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <input
-                    className="sidebar-tool-field" style={styles.chatInput}
-                    placeholder={t('sidebar.characterNamePlaceholder')}
-                    value={newCharName}
-                    onChange={e => setNewCharName(e.target.value)}
-                    autoFocus
-                  />
-                  <button
-                    className="btn-icon"
-                    type="submit"
-                    disabled={creating || !newCharName.trim()}
-                    style={{ color: 'var(--color-primary)' }}
-                  >
-                    {creating ? '…' : '✓'}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Liste des personnages */}
-            {characters.length === 0 && (
-              <p style={styles.emptyMsg}>{t('sidebar.noCharacters')}</p>
-            )}
-
-            {characters.map(char => (
-              <div
-                key={char.id}
-                draggable
-                onMouseDown={handleCardMouseDown}
-                onDragStart={e => handleDragStart(e, char)}
-                onClick={e => handleCardClick(e, char)}
-                className="sidebar-glass"
-                style={styles.charCard}
-                title={t('sidebar.dragToMap')}
-              >
-                {/* Pastille couleur */}
-                <div style={{ ...styles.charColor, background: char.color }} />
-                <div style={styles.charInfo}>
-                  <span style={styles.charName}>{char.name}</span>
-                  {char.owner_username && (
-                    <span style={styles.charOwner}>{char.owner_username}</span>
-                  )}
-                </div>
-                {/* Indicateur visibilité — GM uniquement */}
-                {isGm && !char.visible && (
-                  <span style={styles.charHidden} title={t('sidebar.hiddenFromPlayers')}>
-                    <IconEyeOff />
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+          <SidebarCharactersTab campaignId={campaignId} onOpenCharacter={onOpenCharacter} />
         )}
 
         {/* ── Biblio ── */}
@@ -2040,43 +1914,7 @@ export default function Sidebar({
       )}
 
       {/* ─── Modale aide raccourcis ───────────────────────────────────────── */}
-      {showHelp && (
-        <div className="sidebar-help-overlay" onClick={() => setShowHelp(false)}>
-          <div className="sidebar-help-modal" onClick={e => e.stopPropagation()}>
-            <div className="sidebar-help-header">
-              <span className="sidebar-help-title">{t('sidebar.helpTitle')}</span>
-              <button className="sidebar-help-close-btn" onClick={() => setShowHelp(false)}>×</button>
-            </div>
-
-            {mode !== 'edit' && (
-              <>
-                <div className="sidebar-help-section">{t('sidebar.helpSectionPlay')}</div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Alt</kbd><span>{t('sidebar.helpAlt')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">/r formule</kbd><span>{t('sidebar.helpDiceRoll')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Drag</kbd><span>{t('sidebar.helpDrag')}</span></div>
-              </>
-            )}
-
-            {mode === 'edit' && (
-              <>
-                <div className="sidebar-help-section">{t('sidebar.helpSectionEdit')}</div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Clic gauche</kbd><span>{t('sidebar.helpVoxelPlace')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Clic droit</kbd><span>{t('sidebar.helpVoxelErase')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">R</kbd><span>{t('sidebar.helpVoxelRotate')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">1</kbd><span>{t('sidebar.helpGeoCube')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">2</kbd><span>{t('sidebar.helpGeoDalleB')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">3</kbd><span>{t('sidebar.helpGeoDalleH')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">4</kbd><span>{t('sidebar.helpGeoSlope')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">5</kbd><span>{t('sidebar.helpGeoWedge')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Ctrl+Z</kbd><span>{t('sidebar.helpUndo')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Ctrl+Y</kbd><span>{t('sidebar.helpRedo')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Suppr</kbd><span>{t('sidebar.helpDelete')}</span></div>
-                <div className="sidebar-help-row"><kbd className="sidebar-kbd">Alt</kbd><span>{t('sidebar.helpEntitiesHighlight')}</span></div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <SidebarHelpModal mode={mode} open={showHelp} onClose={() => setShowHelp(false)} />
       <DiceBreakdownPopover popover={breakdownPopover} popoverRef={popoverRef} />
     </div>
   )
