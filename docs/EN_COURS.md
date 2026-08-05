@@ -144,6 +144,10 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 - **D2 Jets Favoris** — drag-to-reorder macros (sort_order UI)
 - **i18n équipement/builder/dés** — Lot 1 (Combat) clos item 108, reste Lots 2-4, voir
   `docs/PLAN_LOCALISATION.md` (norme : `docs/SYSTEME/LOCALISATION.md`)
+- **Chat multi-canal (optionnel)** — idée Saar 2026-08-05 : bouton bascule "classique / multi-canal"
+  dans l'onglet Profil de la Sidebar. Backend déjà prêt pour partie (`chat_messages.channel_id`,
+  `whisper` déjà fonctionnel) — dépend de la Phase 3/4 de `docs/PLANS/PLAN_CHAT.md` (client
+  "conscient des canaux") posée d'abord. Pas obligatoire, PLAN dédié à écrire si repris.
 
 ---
 
