@@ -1,5 +1,8 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-07-30 — Fatigue & Dommages : Lot 3 clos (Chute/Acide/Décompression/Feu,
+> Dernière mise à jour : 2026-08-05 — Refonte UX Matériel : Étapes 0-5 closes et confirmées
+> fonctionnelles par Saar (`docs/PLANS/PLAN_INVENTORY_UX.md`, drag & drop complet). Retrait différé des
+> `<select>` Sac/Coffre/Slot dans `InventoryPanel.jsx` (accessibilité clavier à traiter d'abord).
+> 2026-07-30 — Fatigue & Dommages : Lot 3 clos (Chute/Acide/Décompression/Feu,
 > `docs/PLAN_FATIGUE_DOMMAGES.md` §9), confirmé fonctionnel par Saar en navigateur. Prochaine étape du
 > chantier : Lot 4 (Fatigue).
 > 2026-07-30 — Exo-armures : Lot 0 clos, Lot 1 rédigé et prêt à coder
@@ -8,7 +11,7 @@
 > 2026-07-30 — précision sur "Ergonomie et pédagogie des règles" (besoin concret
 > noté en tranchant `docs/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
 > 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
-> Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL6.md`.
+> Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL8.md`.
 > **Bugs et dettes techniques** : voir le registre unique `docs/BUGIDENTIFIE.md`.
 
 ---
@@ -55,6 +58,19 @@
 - Exo-armures (`docs/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis, Lot 0 cadrage clos — **Lot 1
   (Fondations) rédigé et prêt à coder**, analyse à charge faite ; Lots 2/3 définis mais pas encore
   rédigés en détail, indépendants de `PLAN_TEST_CRITIQUE.md` ; seul le Lot 8 en dépend)
+- Refonte UX Matériel (`docs/PLANS/PLAN_INVENTORY_UX.md`, plan en 10 étapes — **Étapes 0-5 closes et
+  confirmées fonctionnelles par Saar 2026-08-05** : source unique de vérité inventaire, bandeau
+  poids/sols, réorganisation Armes/Conteneurs, drag & drop complet avec dialogue de conflit
+  main/2-mains). Reste Étapes 6-9 (filtres/pagination catalogue GM, confirmation suppression, bouton
+  "Prendre dans le Sac", polish). Décision Saar en cours de route : la grille 2 colonnes (Étape 4) est
+  annulée après test, retour à l'empilement vertical ; la zone "2 Mains" dédiée est supprimée (fusionnée
+  dans Main Directrice/Secondaire)
+- Retrait des `<select>` Sac/Coffre et Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : ils
+  deviennent redondants une fois le drag & drop en place) — **différé** : nécessite d'abord un
+  `KeyboardSensor` `@dnd-kit` pour ne pas régresser l'accessibilité clavier exigée par
+  `PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne supporte actuellement que la souris/tactile dans cette
+  interface, `PointerSensor` seul). Option alternative : accepter explicitement le compromis
+  d'accessibilité si le clavier n'est pas un besoin réel pour ce groupe de jeu
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté

@@ -2,18 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { useCharacterStore } from '../stores/characterStore'
+import { useInventoryData } from '../lib/useInventoryData.js'
 import SilhouettePanel from './SilhouettePanel.jsx'
 import LocationPanel   from './LocationPanel.jsx'
-import ContainerPanel  from './ContainerPanel.jsx'
 
-export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
+export default function ArmorWoundPanel({ characterId, canEdit, dragItem = null }) {
   const { t } = useTranslation('charSheet')
-  const [wounds,     setWounds]     = useState([])
-  const [inventory,  setInventory]  = useState([])
-  const [totalWeight, setTotalWeight] = useState(0)
-  const [threshold,   setThreshold]   = useState(0)
-  const [loading,    setLoading]    = useState(true)
-  const hasLoadedRef = useRef(false)
+  const [wounds,        setWounds]        = useState([])
+  const [woundsLoading, setWoundsLoading] = useState(true)
+  const hasLoadedWoundsRef = useRef(false)
 
   const setStoreWounds = useCharacterStore(s => s.setWounds)
   const storeWounds    = useCharacterStore(s => s.woundsByCharId[characterId])
@@ -23,53 +20,33 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
     if (storeWounds !== undefined) setWounds(storeWounds)
   }, [storeWounds])
 
-  const load = useCallback(async () => {
-    const showSpinner = !hasLoadedRef.current
-    if (showSpinner) setLoading(true)
-    try {
-      const [wRes, invRes] = await Promise.all([
-        api.get(`/char-sheet/${characterId}/wounds`),
-        api.get(`/char-sheet/${characterId}/inventory`),
-      ])
-      setWounds(wRes.data.wounds || [])
-      setStoreWounds(characterId, wRes.data.wounds || [])
-      setInventory(invRes.data.items || [])
-      setTotalWeight(invRes.data.total_weight ?? 0)
-      setThreshold(invRes.data.threshold ?? 0)
-    } catch (err) {
-      console.error('Erreur chargement ArmorWoundPanel :', err)
-    } finally {
-      hasLoadedRef.current = true
-      if (showSpinner) setLoading(false)
-    }
-  }, [characterId, setStoreWounds])
-
-  useEffect(() => {
-    load()
-  }, [load, reloadKey])
-
-  const handleInventoryChange = useCallback((updatedItem) => {
-    setInventory(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i))
-  }, [])
-
-  const handleWoundsReload = useCallback(async () => {
+  const loadWounds = useCallback(async () => {
+    const showSpinner = !hasLoadedWoundsRef.current
+    if (showSpinner) setWoundsLoading(true)
     try {
       const res = await api.get(`/char-sheet/${characterId}/wounds`)
       setWounds(res.data.wounds || [])
       setStoreWounds(characterId, res.data.wounds || [])
     } catch (err) {
-      console.error('Erreur rechargement wounds :', err)
+      console.error('Erreur chargement blessures :', err)
+    } finally {
+      hasLoadedWoundsRef.current = true
+      if (showSpinner) setWoundsLoading(false)
     }
   }, [characterId, setStoreWounds])
 
-  if (loading) {
+  useEffect(() => {
+    loadWounds()
+  }, [loadWounds])
+
+  // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
+  const { items: inventory, loading: inventoryLoading } = useInventoryData(characterId)
+
+  const handleWoundsReload = loadWounds
+
+  if (woundsLoading || inventoryLoading) {
     return <div style={{ color: '#5a5a7a', fontSize: 12, padding: '16px 0' }}>{t('common.loading')}</div>
   }
-
-  // ── Couleur poids ─────────────────────────────────────────────────────────
-  const weightRatio  = threshold > 0 ? totalWeight / threshold : 0
-  const weightColor  = weightRatio >= 1 ? '#e05c5c' : weightRatio >= 0.75 ? '#FFA500' : '#5a5a7a'
-  const weightFmt    = (n) => n % 1 === 0 ? n : n.toFixed(1)
 
   // ── Disposition 3 colonnes ─────────────────────────────────────────────────
   // Gauche  : Tête, Bras G, Jambe G
@@ -83,15 +60,8 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
     wounds,
     characterId,
     canEdit,
-    onInventoryChange: handleInventoryChange,
+    dragItem,
     onWoundsReload: handleWoundsReload,
-  }
-
-  const sharedContainerProps = {
-    items: inventory,
-    characterId,
-    canEdit,
-    onInventoryChange: handleInventoryChange,
   }
 
   return (
@@ -107,16 +77,7 @@ export default function ArmorWoundPanel({ characterId, canEdit, reloadKey }) {
 
         {/* ── Colonne centre ───────────────────────────────────────── */}
         <div style={s.colCenter}>
-          <div style={s.containerGroup}>
-            <ContainerPanel type="D"  label={t('armorWoundPanel.backpackLabel')} {...sharedContainerProps} />
-            <ContainerPanel type="Ce" label={t('armorWoundPanel.beltLabel')}  {...sharedContainerProps} />
-          </div>
-          <div style={{ position: 'relative' }}>
-            <span style={{ ...s.weightLabel, color: weightColor }}>
-              {weightFmt(totalWeight)} / {weightFmt(threshold)} kg
-            </span>
-            <SilhouettePanel wounds={wounds} />
-          </div>
+          <SilhouettePanel wounds={wounds} />
         </div>
 
         {/* ── Colonne droite ───────────────────────────────────────── */}
@@ -151,18 +112,5 @@ const s = {
     flexDirection: 'column',
     gap: 8,
     minWidth: 0,
-  },
-  containerGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 0,
-  },
-  weightLabel: {
-    position: 'absolute',
-    top: 6,
-    left: 4,
-    fontSize: 10,
-    zIndex: 1,
-    pointerEvents: 'none',
   },
 }

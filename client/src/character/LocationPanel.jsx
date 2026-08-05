@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDroppable, useDraggable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import {
   WOUND_SEVERITIES, WOUND_MAX_COUNTS, SEVERITY_COLORS,
 } from '../../../shared/woundConstants.js'
@@ -8,6 +10,7 @@ import {
 } from '../../../shared/armorConstants.js'
 import { polarisRound } from '../../../shared/polarisUtils.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
+import { setItemSlot } from '../lib/inventoryMutations.js'
 import api from '../lib/api.js'
 
 function calcMillefeuille(items, field) {
@@ -28,7 +31,7 @@ export default function LocationPanel({
   wounds,
   characterId,
   canEdit,
-  onInventoryChange,
+  dragItem = null,
   onWoundsReload,
 }) {
   const { t } = useTranslation('charSheet')
@@ -74,12 +77,11 @@ export default function LocationPanel({
     const existingParts = item?.slots ?? []
     const newSlot = [...new Set([...existingParts, slotCode])].join('/')
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
-      onInventoryChange(res.data.item)
+      await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
       setEquipError(err.response?.data?.error || t('containerPanel.equipError'))
     }
-  }, [characterId, slotCode, items, onInventoryChange, t])
+  }, [characterId, slotCode, items, t])
 
   const handleUnequip = useCallback(async (itemId) => {
     setEquipError(null)
@@ -94,12 +96,33 @@ export default function LocationPanel({
           return remaining.length > 0 ? remaining.join('/') : null
         })()
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
-      onInventoryChange(res.data.item)
+      await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
       setEquipError(err.response?.data?.error || t('containerPanel.unequipError'))
     }
-  }, [characterId, slotCode, items, onInventoryChange, t])
+  }, [characterId, slotCode, items, t])
+
+  // PLAN_INVENTORY_UX.md §5.3/§5.4 — zone cible du drag & drop. Même règle de validité que le <select>
+  // ci-dessous (availableItems + plafond 3 couches) : un drop hors de cet ensemble est un refus
+  // silencieux, sans requête (§5.4 "règle cliente violée").
+  // Pas de useCallback ici : `data` (ci-dessous) est de toute façon recréé à chaque rendu, et
+  // equippedItems/availableItems ne sont pas eux-mêmes mémoïsés (dérivés d'un simple .filter()).
+  const handleDrop = (droppedItem) => {
+    if (!canEdit || equippedItems.length >= 3) return
+    if (!availableItems.some(i => i.id === droppedItem.id)) return
+    handleEquip(droppedItem.id)
+  }
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: `location-${characterId}-${location}`,
+    data: { onDrop: handleDrop },
+    disabled: !canEdit,
+  })
+
+  // PLAN_INVENTORY_UX.md §5.4 — bordure bleue (cible valide) vs rouge (invalide), pas la même couleur
+  // systématique au survol. `dragItem` vient de CharacterWindow (activeDragItem), transmis via
+  // ArmorWoundPanel — c'est l'item en cours de glissement, pas nécessairement destiné à cette zone.
+  const isValidDrop = dragItem != null && equippedItems.length < 3 && availableItems.some(i => i.id === dragItem.id)
 
   // ── Handlers blessures ─────────────────────────────────────────────────────
   const woundsHere = wounds.filter(w => w.location === location)
@@ -132,7 +155,13 @@ export default function LocationPanel({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={s.panel}>
+    <div
+      ref={setNodeRef}
+      style={{
+        ...s.panel,
+        ...(isOver && dragItem ? (isValidDrop ? s.panelDropOver : s.panelDropInvalid) : null),
+      }}
+    >
 
       {/* Header */}
       <div style={s.header}>
@@ -154,25 +183,7 @@ export default function LocationPanel({
 
         {/* Couches individuelles */}
         {equippedItems.map(item => (
-          <div key={item.id} style={s.equippedRow}>
-            <div
-              style={s.equippedName}
-              title={item.ref_category === 'Bouclier'
-                ? t('locationPanel.shieldUnequipHint', { name: item.custom_name || item.ref_name })
-                : (item.custom_name || item.ref_name)}
-            >
-              {item.custom_name || item.ref_name || '—'}
-              {item.ref_category === 'Bouclier' && <span style={s.shieldTag}> {t('locationPanel.shieldTag')}</span>}
-            </div>
-            <div style={s.equippedStats}>
-              {item.ref_protection       != null && <span>E{item.ref_protection}</span>}
-              {item.ref_protection_shock != null && <span>P{item.ref_protection_shock}</span>}
-              {item.ref_malus_cat && <span>{item.ref_malus_cat}</span>}
-            </div>
-            {canEdit && (
-              <button style={s.unequipBtn} onClick={() => handleUnequip(item.id)} title={t('containerPanel.unequipTooltip')}>×</button>
-            )}
-          </div>
+          <EquippedArmorRow key={item.id} item={item} canEdit={canEdit} onUnequip={handleUnequip} t={t} />
         ))}
 
         {/* Dropdown ajout couche */}
@@ -256,6 +267,45 @@ export default function LocationPanel({
   )
 }
 
+// PLAN_INVENTORY_UX.md §5.2 — source draggable pour le déséquipement (drop vers Sac/Ceinture dans
+// InventoryPanel.jsx). Composant séparé : useDraggable est un hook, ne peut pas être appelé dans le
+// .map() du parent (règle des hooks — un composant par ligne, pas une boucle d'appels de hook).
+function EquippedArmorRow({ item, canEdit, onUnequip, t }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `loc-${item.id}`,
+    data: { item },
+    disabled: !canEdit,
+  })
+  const dragStyle = transform ? {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  } : undefined
+
+  return (
+    <div ref={setNodeRef} style={{ ...s.equippedRow, ...dragStyle }} {...listeners} {...attributes}>
+      <div
+        style={s.equippedName}
+        title={item.ref_category === 'Bouclier'
+          ? t('locationPanel.shieldUnequipHint', { name: item.custom_name || item.ref_name })
+          : (item.custom_name || item.ref_name)}
+      >
+        {item.custom_name || item.ref_name || '—'}
+        {item.ref_category === 'Bouclier' && <span style={s.shieldTag}> {t('locationPanel.shieldTag')}</span>}
+      </div>
+      <div style={s.equippedStats}>
+        {item.ref_protection       != null && <span>E{item.ref_protection}</span>}
+        {item.ref_protection_shock != null && <span>P{item.ref_protection_shock}</span>}
+        {item.ref_malus_cat && <span>{item.ref_malus_cat}</span>}
+      </div>
+      {canEdit && (
+        <button style={s.unequipBtn} onClick={() => onUnequip(item.id)} title={t('containerPanel.unequipTooltip')}>×</button>
+      )}
+    </div>
+  )
+}
+
 const s = {
   panel: {
     background: '#1a1a2e',
@@ -265,6 +315,17 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
+  },
+  // Survol drag & drop valide (PLAN_INVENTORY_UX.md §5.4) — polish complet en Étape 6 du sous-découpage,
+  // ce minimum rend la zone cible visible dès maintenant.
+  panelDropOver: {
+    borderColor: '#5b8dee',
+    boxShadow: '0 0 0 1px #5b8dee inset',
+  },
+  panelDropInvalid: {
+    borderColor: '#e05c5c',
+    boxShadow: '0 0 0 1px #e05c5c inset',
+    cursor: 'no-drop',
   },
   header: {
     display: 'flex',

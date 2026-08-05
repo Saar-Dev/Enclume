@@ -426,3 +426,73 @@ supprimé au profit d'`isActivePnj`.
 `npm run build` (client) propre. **Confirmé fonctionnel en jeu par Saar (2026-08-05)**.
 **Données** : aucune, 100% client, aucune migration.
 **Retour arrière** : commit `b306b05`, isolé, 4 fichiers.
+
+---
+
+## Session (Saar) — 2026-08-05 — PLAN_INVENTORY_UX Étapes 0-5 : refonte ergonomique de l'onglet Matériel
+
+**Contexte** : chantier de refonte de l'onglet Matériel de la fiche personnage (`docs/PLANS/PLAN_INVENTORY_UX.md`,
+V1.5, relu et vérifié par exploration croisée client/serveur avant tout code — toutes les affirmations
+`[VÉRIFIÉ]` du plan confirmées contre le code réel, y compris les numéros de ligne). Plan en 10 étapes ;
+Étapes 0 à 5 traitées cette session, chacune testée et confirmée par Saar avant la suivante.
+
+**Étape 0 — Socle de données** : `characterStore.js` étendu (`inventoryByCharId`, `thresholdByCharId`,
+`iniPenaltyByCharId`, `solsByCharId`, `handPrefByCharId`, garde `inventoryFetchEpoch` contre la course
+fetch-vs-subscribe). Nouveaux modules `inventoryDataSync.js` (fetch initial dédupliqué par characterId
++ `refreshDerivedTotals` ciblé) et `useInventoryData.js` (façade React). `useCharacterSocket.js`/
+`useWizardInventorySync.js` écrivent désormais directement dans le store depuis les WS
+`INVENTORY_ADDED/UPDATED/REMOVED` — `WS.SOLS_UPDATED` câblé pour la première fois côté client (aucun
+listener n'existait avant, trou du plan original comblé). `shared/inventoryMath.js` (nouveau) porte
+`computeTotalWeight`, importé par le client **et** `inventoryService.js` (autorité unique de la
+formule de poids, refactor serveur pur sans changement de comportement). `upsertInventoryItem` corrigé
+en no-op si le characterId n'a jamais été peuplé par un fetch complet (sinon un event WS pour un
+personnage non consulté par ce client créait une entrée partielle, bloquant silencieusement le futur
+fetch initial de ce personnage).
+
+**Étape 1 — InventoryBanner.jsx** (nouveau) : jauge de poids (barre + %) toujours visible, migrée de
+l'overlay `ArmorWoundPanel.jsx` (weightColor/weightRatio) et du header `InventoryPanel.jsx`. Asymétrie
+sols (un non-GM ne peut que diminuer, 403 serveur sinon) bornée côté client — l'input refuse la saisie
+plutôt que de laisser un 403 surprendre l'utilisateur, trou identifié dans le plan original.
+
+**Étapes 2-3 — Réorganisation Armes/Conteneurs** : Sac/Ceinture déplacés d'`ArmorWoundPanel.jsx` vers
+une nouvelle section "Conteneurs portés" dans `WeaponPanel.jsx`, avec le bouton Customisation (moding)
+à sa suite (`onOpenModing` reroutée depuis `CharacterWindow.jsx`, `ModingWindow.jsx` inchangé).
+
+**Étape 4 — Grille 2 colonnes puis annulation** : codée conforme au plan (seuil sur `size.w` de la
+fenêtre flottante, pas un media query CSS — la largeur pertinente est celle de `CharacterWindow.jsx`,
+pas du viewport), validée par Saar, puis **annulée après un second test** (bloc trop massif, silhouette
+écrasée) : retour à l'empilement vertical d'origine.
+
+**Étape 5 — Drag & drop** : `@dnd-kit/core` + `@dnd-kit/utilities` installés (`@dnd-kit/sortable` du
+plan original écarté, inutile pour des zones distinctes plutôt qu'une liste réordonnée). Mutations
+réseau+store extraites dans `inventoryMutations.js` (`setItemSlot`/`setItemContainer`/`deleteItem`),
+réutilisées par les `<select>` existants et le nouveau drag & drop — même chemin, aucune logique
+dupliquée. `DndContext` unique au niveau `CharacterWindow.jsx` (zones source et cible réparties dans
+des composants frères) ; chaque zone cible fournit son propre callback via `data.onDrop`, le routeur
+central ne fait que le déclencher. IDs `dnd-kit` préfixés par contexte de rendu (`inv-`, `loc-`,
+`weapon-`, `container-`) : un item équipé apparaît simultanément dans la liste plate d'InventoryPanel
+et dans son panneau d'équipement, même `item.id`, deux nœuds draggables distincts. Dialogue de conflit
+main/2M (`window.confirm`, pattern déjà existant pour la suppression de personnage) uniquement sur le
+chemin drag (409 serveur) — le chemin bouton existant garde son auto-déséquipement silencieux, les deux
+coexistent sans régression. Feedback visuel bordure bleue (cible valide)/rouge (invalide) basé sur
+l'item réellement en cours de glissement (`activeDragItem`), pas un simple survol générique.
+
+**Décisions Saar après démonstration** (hors texte du plan, documentées dans `PLAN_INVENTORY_UX.md`
+V1.6) : zone "2 Mains" dédiée supprimée — une arme 2 mains déposée sur Main Directrice OU Secondaire
+s'équipe directement sur le bon slot (`resolveTargetSlot`), le choix Trépied devient un bouton
+apparaissant *après* l'équipement plutôt qu'un `<select>` préalable. Retrait des `<select>` Sac/Coffre
+et Slot dans `InventoryPanel.jsx` (redondants avec le drag & drop) noté dans `docs/ROADMAP.md` —
+différé : nécessite un `KeyboardSensor` dnd-kit d'abord pour ne pas régresser l'accessibilité clavier
+exigée par le plan §5.5 (implémentation actuelle : `PointerSensor` seul).
+
+**Testé** : `eslint` ciblé sur chaque lot de fichiers (0 erreur dans le diff à chaque étape) et
+`npm run build` (client) propres tout du long. **Confirmé fonctionnel en jeu par Saar** à chaque étape
+(0-3 en bloc, 4 puis son annulation, 5 avec scénario de conflit main/2M explicite, empilement vertical
+et fusion 2-mains en clôture).
+**Non testé** : round-trip HTTP authentifié scripté ; accessibilité clavier du drag & drop (jamais
+implémentée, cf. ci-dessus).
+**Données** : migration `shared/inventoryMath.js` — aucune migration DB, refactor serveur pur
+(`inventoryService.js`) sans changement de comportement observable.
+**Retour arrière** : commit isolé à venir sur `dev/Saar`, hors du chantier chat parallèle
+(`server/src/chat/`, `Sidebar.jsx`/`CharacterModal.jsx`/`DiceBreakdownPopover.jsx` en cours par
+ailleurs, non touchés).

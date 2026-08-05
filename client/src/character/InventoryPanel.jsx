@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
+import { useCharacterStore } from '../stores/characterStore.js'
+import { useInventoryData } from '../lib/useInventoryData.js'
+import { setItemSlot, setItemContainer, deleteItem } from '../lib/inventoryMutations.js'
+import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
@@ -10,16 +16,12 @@ const VALID_SLOTS     = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'MG', 'MD', '2M', 'Tr
 // (`item.container`, envoyé tel quel à l'API) ne change jamais, seul l'affichage passe par t().
 const CONTAINER_LABEL_KEYS = { Sac: 'inventoryPanel.container.Sac', Ceinture: 'inventoryPanel.container.Ceinture', Coffre: 'inventoryPanel.container.Coffre' }
 
-export default function InventoryPanel({ characterId, canEdit, isGm, onInventoryMutated = () => {}, reloadKey = 0, onOpenModing = () => {} }) {
+export default function InventoryPanel({ characterId, canEdit, isGm }) {
   const { t } = useTranslation('charSheet')
-  const [items,       setItems]       = useState([])
-  const [sols,        setSols]        = useState(0)
-  const [totalWeight, setTotalWeight] = useState(0)
-  const [iniPenalty,  setIniPenalty]  = useState(0)
-  const [threshold,   setThreshold]   = useState(0)
-  const [loading,     setLoading]     = useState(true)
-  const [editingSols, setEditingSols] = useState(false)
-  const [solsInput,   setSolsInput]   = useState('0')
+  // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
+  // poids/sols/malus INI sont affichés par InventoryBanner.jsx (Étape 1), pas ici.
+  const { items, loading } = useInventoryData(characterId)
+  const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
 
   // ── Catalogue GM ──────────────────────────────────────────────────────────
   const [addOpen,       setAddOpen]       = useState(false)
@@ -30,30 +32,6 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
   const [addQty,        setAddQty]        = useState(1)
   const [addContainer,  setAddContainer]  = useState('Coffre')
   const [adding,        setAdding]        = useState(false)
-
-  const hasLoadedRef = useRef(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const showSpinner = !hasLoadedRef.current
-    if (showSpinner) setLoading(true)
-    api.get(`/char-sheet/${characterId}/inventory`)
-      .then(res => {
-        if (cancelled) return
-        setItems(res.data.items)
-        setSols(res.data.sols)
-        setSolsInput(String(res.data.sols))
-        setTotalWeight(res.data.total_weight)
-        setIniPenalty(res.data.ini_penalty)
-        setThreshold(res.data.threshold)
-      })
-      .catch(err => console.error('Erreur chargement inventaire :', err))
-      .finally(() => {
-        hasLoadedRef.current = true
-        if (!cancelled && showSpinner) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [characterId, reloadKey])
 
   const availableContainers = useMemo(() => {
     const list = ['Coffre']
@@ -69,49 +47,56 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
 
   const handleMoveContainer = useCallback(async (itemId, newContainer) => {
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { container: newContainer })
-      const updated = res.data.item
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, container: updated.container } : i))
-      onInventoryMutated()
+      await setItemContainer(characterId, itemId, newContainer)
     } catch (err) {
       console.error('Erreur déplacement container :', err)
     }
-  }, [characterId, onInventoryMutated])
+  }, [characterId])
 
   const handleEquip = useCallback(async (itemId, newSlot) => {
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: newSlot })
-      const updated = res.data.item
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, slots: updated.slots, container: updated.container } : i))
-      onInventoryMutated()
+      await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
       console.error('Erreur équipement :', err)
     }
-  }, [characterId, onInventoryMutated])
+  }, [characterId])
 
   const handleDelete = useCallback(async (itemId) => {
     try {
-      await api.delete(`/char-sheet/${characterId}/inventory/${itemId}`)
-      setItems(prev => prev.filter(i => i.id !== itemId))
-      onInventoryMutated()
+      await deleteItem(characterId, itemId)
     } catch (err) {
       console.error('Erreur suppression item :', err)
     }
-  }, [characterId, onInventoryMutated])
+  }, [characterId])
 
-  const handleSolsSave = useCallback(async () => {
-    setEditingSols(false)
-    const value = parseInt(solsInput, 10)
-    if (isNaN(value) || value < 0 || value === sols) { setSolsInput(String(sols)); return }
+  // PLAN_INVENTORY_UX.md §4.3/§5.3 — zone cible Sac/Ceinture : déplacement entre conteneurs (item non
+  // équipé) ET déséquipement (item équipé, LocationPanel/WeaponCard/ContainerPanel) en un seul geste —
+  // le drop détermine l'état final voulu (déséquipé, dans ce conteneur). Pas de useCallback : voir
+  // LocationPanel.jsx (React Compiler ne préserve pas une mémoïsation manuelle sur des valeurs non
+  // mémoïsées comme `items`).
+  const handleDropToContainer = async (droppedItem, targetContainer) => {
     try {
-      const res = await api.put(`/char-sheet/${characterId}/sols`, { sols: value })
-      setSols(res.data.sols)
-      setSolsInput(String(res.data.sols))
+      if (droppedItem.slots?.length > 0) {
+        await setItemSlot(characterId, droppedItem.id, null)
+      }
+      if (droppedItem.container !== targetContainer) {
+        await setItemContainer(characterId, droppedItem.id, targetContainer)
+      }
     } catch (err) {
-      console.error('Erreur sauvegarde sols :', err)
-      setSolsInput(String(sols))
+      console.error('Erreur drag & drop conteneur :', err)
     }
-  }, [characterId, sols, solsInput])
+  }
+
+  const sacDrop = useDroppable({
+    id: `container-Sac-${characterId}`,
+    data: { onDrop: (item) => { if (canEdit) handleDropToContainer(item, 'Sac') } },
+    disabled: !canEdit,
+  })
+  const ceintureDrop = useDroppable({
+    id: `container-Ceinture-${characterId}`,
+    data: { onDrop: (item) => { if (canEdit) handleDropToContainer(item, 'Ceinture') } },
+    disabled: !canEdit,
+  })
 
   // ── Handlers catalogue GM ─────────────────────────────────────────────────
 
@@ -148,28 +133,16 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
         quantity:     addQty,
       })
       const newItems = res.data.items || [res.data.item]
-      setItems(prev => {
-        let next = prev
-        for (const newItem of newItems) {
-          const existing = next.find(i => i.id === newItem.id)
-          next = existing ? next.map(i => i.id === newItem.id ? newItem : i) : [...next, newItem]
-        }
-        return next
-      })
-      // Recalculer les stats côté client (simple refresh)
-      const inv = await api.get(`/char-sheet/${characterId}/inventory`)
-      setTotalWeight(inv.data.total_weight)
-      setIniPenalty(inv.data.ini_penalty)
-      setThreshold(inv.data.threshold)
+      for (const newItem of newItems) upsertInventoryItem(characterId, newItem)
+      refreshDerivedTotals(characterId) // item ajouté → poids porté affecté (shared/inventoryMath.js)
       setSelectedRef(null)
       setSearchQuery('')
-      onInventoryMutated()
     } catch (err) {
       console.error('Erreur ajout item :', err)
     } finally {
       setAdding(false)
     }
-  }, [characterId, selectedRef, addContainer, addQty, onInventoryMutated])
+  }, [characterId, selectedRef, addContainer, addQty, upsertInventoryItem])
 
   // ── Filtre catalogue ──────────────────────────────────────────────────────
 
@@ -198,56 +171,21 @@ export default function InventoryPanel({ characterId, canEdit, isGm, onInventory
     <div style={s.root}>
       <div style={s.separator} />
 
-      {/* ── Header stats ───────────────────────────────────────────────── */}
-      <div style={s.header}>
-        <span style={s.statLabel}>
-          {t('inventoryPanel.weightLabel')}&nbsp;
-          <span style={{ color: iniPenalty > 0 ? '#FF6B6B' : '#c0c0d0' }}>
-            {totalWeight.toFixed(1)} kg
-          </span>
-          <span style={{ color: '#4a4a60' }}> / {threshold.toFixed(1)} kg</span>
-        </span>
-        {iniPenalty > 0 && (
-          <span style={{ ...s.statLabel, color: '#FF6B6B' }}>{t('inventoryPanel.iniPenalty', { value: iniPenalty })}</span>
-        )}
-        <span style={{ ...s.statLabel, display: 'flex', alignItems: 'center', gap: 4 }}>
-          {t('inventoryPanel.solLabel')}&nbsp;
-          {editingSols && canEdit ? (
-            <input
-              style={s.solsInput}
-              value={solsInput}
-              onChange={e => setSolsInput(e.target.value)}
-              onBlur={handleSolsSave}
-              onKeyDown={e => {
-                if (e.code === 'Enter')  { e.preventDefault(); handleSolsSave() }
-                if (e.code === 'Escape') { setSolsInput(String(sols)); setEditingSols(false) }
-              }}
-              autoFocus
-            />
-          ) : (
-            <span
-              style={{ color: '#c0c0d0', cursor: canEdit ? 'pointer' : 'default', textDecoration: canEdit ? 'underline dotted' : 'none' }}
-              onClick={() => { if (canEdit) { setSolsInput(String(sols)); setEditingSols(true) } }}
-            >
-              {sols}
-            </span>
-          )}
-        </span>
-      </div>
-
-      {/* ── Bouton "Customisation" (docs/PLAN_MODING.md Phase A) ─────────── */}
-      {canEdit && (
-        <button onClick={onOpenModing} style={{ ...s.addToggleBtn, marginBottom: 8 }}>
-          {t('inventoryPanel.modingButton')}
-        </button>
-      )}
-
       {/* ── Items par container ────────────────────────────────────────── */}
       {CONTAINER_ORDER.map(container => {
         const list = itemsByContainer[container]
-        if (!list?.length) return null
+        // Sac/Ceinture restent visibles vides (conteneur possédé mais rien dedans) — sinon aucune
+        // zone où déposer un premier item par drag & drop (PLAN_INVENTORY_UX.md §4.3/§5.3). Coffre
+        // inchangé : n'apparaît que s'il contient quelque chose.
+        const drop = container === 'Sac' ? sacDrop : container === 'Ceinture' ? ceintureDrop : null
+        const showEmpty = drop && availableContainers.includes(container)
+        if (!list?.length && !showEmpty) return null
         return (
-          <div key={container} style={{ marginBottom: 8 }}>
+          <div
+            key={container}
+            ref={drop?.setNodeRef}
+            style={{ marginBottom: 8, ...(drop?.isOver && canEdit ? s.containerDropOver : null) }}
+          >
             <div style={s.containerLabel}>{t(CONTAINER_LABEL_KEYS[container])}</div>
             {list.map(item => (
               <ItemRow
@@ -372,8 +310,25 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
   // sur un objet non-arme dont ces champs seraient renseignés par erreur de saisie catalogue.
   const isWeaponLike = item.ref_family === 'Armes' || item.ref_category === 'Bouclier'
 
+  // PLAN_INVENTORY_UX.md §5.2 — l'item entier (icône + nom + stats) est la source draggable ; les
+  // <select>/bouton restent cliquables normalement grâce au seuil de distance du sensor (CharacterWindow.jsx).
+  // Préfixe `inv-` : un item équipé apparaît AUSSI ici (avec son slot entre crochets, ligne ci-dessous)
+  // en plus de LocationPanel/WeaponCard/ContainerPanel — même item.id, deux nœuds draggables distincts
+  // rendus simultanément, l'id dnd-kit doit donc être unique par contexte de rendu, pas juste par item.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `inv-${item.id}`,
+    data: { item },
+    disabled: !canEdit,
+  })
+  const dragStyle = transform ? {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  } : undefined
+
   return (
-    <div style={s.itemRow}>
+    <div ref={setNodeRef} style={{ ...s.itemRow, ...dragStyle }} {...listeners} {...attributes}>
       <span style={s.itemName}>
         {name}
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
@@ -419,15 +374,15 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
 const s = {
   root:      { marginTop: 8 },
   separator: { height: 1, backgroundColor: '#2a2a3e', margin: '12px 0' },
-  header:    { display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12, fontSize: 12 },
-  statLabel: { color: '#5a5a7a' },
-  solsInput: {
-    width: 60, background: '#0e0e1a', border: '1px solid #5b8dee',
-    borderRadius: 4, padding: '1px 4px', color: '#c0c0d0', fontSize: 12, outline: 'none',
-  },
   containerLabel: {
     fontSize: 10, color: '#4a4a60', textTransform: 'uppercase',
     letterSpacing: '0.07em', marginBottom: 2, marginTop: 8,
+  },
+  // Survol drag & drop valide (PLAN_INVENTORY_UX.md §5.4, polish complet en sous-lot 6).
+  containerDropOver: {
+    outline: '1px solid #5b8dee',
+    outlineOffset: 2,
+    borderRadius: 4,
   },
   itemRow: {
     display: 'flex', alignItems: 'center', gap: 6,

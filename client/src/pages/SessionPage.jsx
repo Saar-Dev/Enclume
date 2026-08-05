@@ -382,7 +382,9 @@ function SessionContent({ campaignId }) {
   } = useCombatUIState()
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
   const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
-  const { woundVersions } = useCharacterSocket()
+  // PLAN_INVENTORY_UX.md §3.2 — les handlers WOUND_*/INVENTORY_*/SOLS_UPDATED écrivent directement
+  // dans characterStore ; ce hook n'est plus consommé ici que pour ses effets (abonnement socket).
+  useCharacterSocket()
   const {
     loadMap,
     mapContextMenu, setMapContextMenu, mapContextMenuRef,
@@ -1129,7 +1131,6 @@ function SessionContent({ campaignId }) {
           character={{ ...selectedCharacter, _currentUserId: user?.id }}
           isGm={isGm}
           onClose={() => setSelectedCharacterId(null)}
-          inventoryReloadKey={woundVersions[selectedCharacter?.id] ?? 0}
         />
       )}
 

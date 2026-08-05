@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import { useDraggable } from '../lib/useDraggable.js'
+import { useModingRefreshSync } from '../lib/useModingRefreshSync.js'
 
 // ModingWindow — docs/PLAN_MODING.md Phase A : installation d'un module d'arme (accessoire)
 // depuis l'inventaire sur une arme. Rangement pur, aucun effet mécanique (Phase B, hors scope).
@@ -9,13 +10,15 @@ import { useDraggable } from '../lib/useDraggable.js'
 
 const PANEL_W = 460
 
-export default function ModingWindow({ characterId, canEdit, onClose, reloadKey = 0, onInventoryMutated = () => {} }) {
+export default function ModingWindow({ characterId, canEdit, onClose }) {
   const { t } = useTranslation('charSheet')
   const { pos, onHeaderMouseDown } = useDraggable(
     'moding-window-pos',
     { top: 100, left: window.innerWidth - PANEL_W - 60 },
     PANEL_W,
   )
+  // PLAN_INVENTORY_UX.md §3.2 — signal local, ne dépend plus du reloadKey hérité de CharacterWindow.
+  const reloadKey = useModingRefreshSync(characterId)
 
   const [weapons,         setWeapons]         = useState([])
   const [installableMods, setInstallableMods] = useState([])
@@ -61,13 +64,12 @@ export default function ModingWindow({ characterId, canEdit, onClose, reloadKey 
       })
       setWeapons(res.data.weapons)
       setInstallableMods(res.data.installableMods)
-      onInventoryMutated()
     } catch (err) {
       setErrorMsg(err.response?.data?.error?.message || t('modingWindow.installError'))
     } finally {
       setInstallingId(null)
     }
-  }, [characterId, selectedId, installingId, onInventoryMutated, t])
+  }, [characterId, selectedId, installingId, t])
 
   const selectedWeapon = weapons.find(w => w.id === selectedId) ?? null
 

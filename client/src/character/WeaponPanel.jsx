@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDroppable, useDraggable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
+import { useCharacterStore } from '../stores/characterStore.js'
+import { useInventoryData } from '../lib/useInventoryData.js'
+import { setItemSlot } from '../lib/inventoryMutations.js'
+import ContainerPanel from './ContainerPanel.jsx'
 import api from '../lib/api.js'
 
 const WEAPON_SLOTS = ['MG', 'MD', '2M', 'Tr']
@@ -38,6 +44,14 @@ function getSlotInfo(refLocation) {
   return { type: 'unknown', defaultSlot: '' }
 }
 
+// Décision Saar 2026-08-05 : plus de zone "2 Mains" séparée — équiper une arme 2 mains dans Main
+// Directrice ou Secondaire l'équipe automatiquement sur le bon slot (2M/Tr), couvrant les deux mains.
+// `handSlot` = zone visée par l'utilisateur (clic ou drop) ; ignoré si l'arme n'est pas 1 main.
+function resolveTargetSlot(item, handSlot) {
+  const info = getSlotInfo(item?.ref_location)
+  return info.type === '1H' ? handSlot : info.defaultSlot
+}
+
 function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAmmoSelect,
                       onReload, onUnequip, error }) {
   const { t } = useTranslation('charSheet')
@@ -47,8 +61,23 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
   const handSlot      = handSlotOf(weapon.slots)
   const slotKey       = SLOT_LABEL_KEYS[handSlot]
 
+  // PLAN_INVENTORY_UX.md §5.2 — source draggable pour le déséquipement (drop vers Sac/Ceinture dans
+  // InventoryPanel.jsx). Préfixe `weapon-` : même item.id que sa ligne dans InventoryPanel (rendue
+  // simultanément), l'id dnd-kit doit être unique par contexte de rendu (cf. LocationPanel.jsx).
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `weapon-${weapon.id}`,
+    data: { item: weapon },
+    disabled: !canEdit,
+  })
+  const dragStyle = transform ? {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  } : undefined
+
   return (
-    <div style={s.weaponCard}>
+    <div ref={setNodeRef} style={{ ...s.weaponCard, ...dragStyle }} {...listeners} {...attributes}>
       <div style={s.weaponHeader}>
         <span style={s.slotBadge}>{slotKey ? t(slotKey) : handSlot}</span>
         <span style={s.weaponName}>{weapon.custom_name || weapon.ref_name || '—'}</span>
@@ -133,39 +162,17 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
   )
 }
 
-export default function WeaponPanel({ characterId, canEdit, reloadKey, onInventoryMutated = () => {} }) {
+export default function WeaponPanel({ characterId, canEdit, onOpenModing = () => {}, dragItem = null }) {
   const { t } = useTranslation('charSheet')
-  const [items,       setItems]       = useState([])
-  const [loading,     setLoading]     = useState(true)
   const [errors,      setErrors]      = useState({})
-  const [handPref,    setHandPref]    = useState('R')
   const [equipDir,    setEquipDir]    = useState('')
   const [equipSec,    setEquipSec]    = useState('')
-  const [equip2MId,   setEquip2MId]   = useState('')
-  const [equip2MSlot, setEquip2MSlot] = useState('2M')
   const [equipping,   setEquipping]   = useState(false)
   const [ammoSelected, setAmmoSelected] = useState({})
 
-  const hasLoadedRef = useRef(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const showSpinner = !hasLoadedRef.current
-    if (showSpinner) setLoading(true)
-    api.get(`/char-sheet/${characterId}/inventory`)
-      .then(res => {
-        if (!cancelled) {
-          setItems(res.data.items || [])
-          setHandPref(res.data.hand_pref || 'R')
-        }
-      })
-      .catch(err => console.error('Erreur chargement WeaponPanel :', err))
-      .finally(() => {
-        hasLoadedRef.current = true
-        if (!cancelled && showSpinner) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [characterId, reloadKey])
+  // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
+  const { items, handPref, loading } = useInventoryData(characterId)
+  const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
 
   // ── Données dérivées ────────────────────────────────────────────────────────
 
@@ -202,18 +209,6 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
     (i.ref_location || '').split('/').includes('Tr')
   ), [items])
 
-  const available1H = useMemo(
-    () => availableWeapons.filter(i => getSlotInfo(i.ref_location).type === '1H'),
-    [availableWeapons],
-  )
-
-  const available2M = useMemo(
-    () => availableWeapons.filter(i =>
-      ['2M', '2M_Tr', 'Tr'].includes(getSlotInfo(i.ref_location).type)
-    ),
-    [availableWeapons],
-  )
-
   // ── Helpers ammo ────────────────────────────────────────────────────────────
 
   const ammoNameForRef = useCallback((refId) => {
@@ -247,13 +242,11 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
   const handleUnequip = useCallback(async (weaponItem) => {
     clearError(weaponItem.id)
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${weaponItem.id}`, { slot: null })
-      setItems(prev => prev.map(i => i.id === weaponItem.id ? res.data.item : i))
-      onInventoryMutated()
+      await setItemSlot(characterId, weaponItem.id, null)
     } catch (err) {
       setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || t('weaponPanel.unequipError') }))
     }
-  }, [characterId, onInventoryMutated, t])
+  }, [characterId, t])
 
   const handleReload = useCallback(async (weaponItem) => {
     clearError(weaponItem.id)
@@ -264,66 +257,129 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
       const res = await api.post(`/char-sheet/${characterId}/inventory/${weaponItem.id}/reload`, {
         ammo_item_id: selectedId,
       })
-      setItems(prev => prev.map(i => i.id === weaponItem.id ? res.data.item : i))
+      upsertInventoryItem(characterId, res.data.item)
     } catch (err) {
       setErrors(prev => ({ ...prev, [weaponItem.id]: err.response?.data?.error?.message || t('weaponPanel.reloadError') }))
     }
-  }, [characterId, availableAmmoFor, ammoSelected, t])
+  }, [characterId, upsertInventoryItem, availableAmmoFor, ammoSelected, t])
 
-  const handleEquipItem = useCallback(async (itemId, slot) => {
-    if (!itemId || !slot) return
+  // Pas de useCallback : availableWeapons/equippedWeapons ne sont pas mémoïsés (dérivés d'un simple
+  // .filter()), React Compiler ne peut pas préserver une mémoïsation manuelle dessus (cf. LocationPanel.jsx).
+  const handleEquipItem = async (itemId, handSlot) => {
+    if (!itemId || !handSlot) return
+    const item = availableWeapons.find(w => w.id === itemId)
+    const slot = resolveTargetSlot(item, handSlot)
     const isTwoHand     = slot === '2M' || slot === 'Tr'
     const conflictSlots = isTwoHand ? ['MG', 'MD', '2M', 'Tr'] : [slot, '2M', 'Tr']
     const conflicts     = equippedWeapons.filter(w => w.id !== itemId && w.slots?.some(s => conflictSlots.includes(s)))
     setEquipping(true)
     try {
       for (const c of conflicts) {
-        const r = await api.put(`/char-sheet/${characterId}/inventory/${c.id}`, { slot: null })
-        setItems(prev => prev.map(i => i.id === c.id ? r.data.item : i))
+        await setItemSlot(characterId, c.id, null)
       }
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot })
-      setItems(prev => prev.map(i => i.id === itemId ? res.data.item : i))
-      setEquipDir(''); setEquipSec(''); setEquip2MId('')
+      await setItemSlot(characterId, itemId, slot)
+      setEquipDir(''); setEquipSec('')
       setErrors(prev => { const n = { ...prev }; delete n.equip; return n })
-      onInventoryMutated()
     } catch (err) {
       setErrors(prev => ({ ...prev, equip: err.response?.data?.error?.message || t('weaponPanel.equipError') }))
     } finally {
       setEquipping(false)
     }
-  }, [characterId, equippedWeapons, onInventoryMutated, t])
+  }
 
-  const handleSelect2M = useCallback((itemId) => {
-    setEquip2MId(itemId)
-    if (!itemId) { setEquip2MSlot('2M'); return }
-    const item = available2M.find(i => i.id === itemId)
-    setEquip2MSlot(getSlotInfo(item?.ref_location).defaultSlot || '2M')
-  }, [available2M])
+  // PLAN_INVENTORY_UX.md §4.2/§5.3 — chemin drag & drop, distinct de handleEquipItem (bouton, qui
+  // déséquipe silencieusement les conflits). Ici : tentative directe, et seulement SI le serveur
+  // rejette (409) on propose le dialogue de confirmation avant de déséquiper.
+  const handleDropEquip = async (droppedItem, handSlot) => {
+    const slot = resolveTargetSlot(droppedItem, handSlot)
+    try {
+      await setItemSlot(characterId, droppedItem.id, slot)
+      setErrors(prev => { const n = { ...prev }; delete n.equip; return n })
+    } catch (err) {
+      if (err.response?.status === 409) {
+        const isTwoHand     = slot === '2M' || slot === 'Tr'
+        const conflictSlots = isTwoHand ? ['MG', 'MD', '2M', 'Tr'] : [slot, '2M', 'Tr']
+        const conflicts     = equippedWeapons.filter(w => w.id !== droppedItem.id && w.slots?.some(s => conflictSlots.includes(s)))
+        const names         = conflicts.map(w => w.custom_name || w.ref_name).join(', ')
+        if (conflicts.length > 0 && window.confirm(t('weaponPanel.conflictConfirm', { names }))) {
+          try {
+            for (const c of conflicts) await setItemSlot(characterId, c.id, null)
+            await setItemSlot(characterId, droppedItem.id, slot)
+            setErrors(prev => { const n = { ...prev }; delete n.equip; return n })
+          } catch (err2) {
+            setErrors(prev => ({ ...prev, equip: err2.response?.data?.error?.message || t('weaponPanel.equipError') }))
+          }
+        }
+        return
+      }
+      setErrors(prev => ({ ...prev, equip: err.response?.data?.error?.message || t('weaponPanel.equipError') }))
+    }
+  }
+
+  // Décision Saar 2026-08-05 : une arme 2 mains déposée sur Main Directrice OU Secondaire s'équipe
+  // directement en 2M/Tr (resolveTargetSlot) — plus de zone "2 Mains" dédiée. `equipped2MDrop` reste
+  // pour le cas où une arme 2 mains est déjà équipée (swap par drop sur sa propre carte).
+  const dirDrop = useDroppable({
+    id: `weapon-dir-${characterId}`,
+    data: { onDrop: (item) => { if (canEdit && availableWeapons.some(i => i.id === item.id)) handleDropEquip(item, dirSlot) } },
+    disabled: !canEdit,
+  })
+  const secDrop = useDroppable({
+    id: `weapon-sec-${characterId}`,
+    data: { onDrop: (item) => { if (canEdit && availableWeapons.some(i => i.id === item.id)) handleDropEquip(item, secSlot) } },
+    disabled: !canEdit,
+  })
+  const equipped2MDrop = useDroppable({
+    id: `weapon-2m-${characterId}`,
+    data: { onDrop: (item) => { if (canEdit && availableWeapons.some(i => i.id === item.id)) handleDropEquip(item, dirSlot) } },
+    disabled: !canEdit,
+  })
+
+  // PLAN_INVENTORY_UX.md §5.4 — bordure bleue (cible valide) vs rouge (invalide) au survol. Même
+  // condition de validité pour les 3 zones désormais (n'importe quelle arme disponible peut être
+  // déposée dans n'importe laquelle, resolveTargetSlot choisit le bon slot final).
+  const isHandValid   = dragItem != null && availableWeapons.some(i => i.id === dragItem.id)
+  const dirZoneStyle  = dirDrop.isOver && dragItem ? (isHandValid ? s.zoneDropOver : s.zoneDropInvalid) : null
+  const secZoneStyle  = secDrop.isOver && dragItem ? (isHandValid ? s.zoneDropOver : s.zoneDropInvalid) : null
+  const twoMZoneStyle = equipped2MDrop.isOver && dragItem ? (isHandValid ? s.zoneDropOver : s.zoneDropInvalid) : null
+
+  // Décision Saar 2026-08-05 — "un choix après le drop" : équiper une arme 2M_Tr atterrit d'abord sur
+  // 2M (resolveTargetSlot), ce bouton bascule ensuite vers/depuis Tr sur l'arme déjà équipée. Même
+  // item que l'un des deux slots WEAPON_SLOTS — jamais de conflit avec un autre item (lui-même seul
+  // occupant du groupe), pas besoin du flux de confirmation.
+  const handleToggleTripod = async () => {
+    if (!weapon2M) return
+    clearError(weapon2M.id)
+    const targetSlot = weapon2M.slots?.includes('Tr') ? '2M' : 'Tr'
+    try {
+      await setItemSlot(characterId, weapon2M.id, targetSlot)
+    } catch (err) {
+      setErrors(prev => ({ ...prev, [weapon2M.id]: err.response?.data?.error?.message || t('weaponPanel.equipError') }))
+    }
+  }
 
   // ── Rendu ────────────────────────────────────────────────────────────────────
 
   if (loading) return null
 
-  const hasAnything = equippedWeapons.length > 0 ||
-    (canEdit && (available1H.length > 0 || available2M.length > 0))
-
-  if (!hasAnything) {
-    return (
-      <div style={s.root}>
-        <div style={s.separator} />
-        <div style={s.emptyMsg}>{t('weaponPanel.noWeaponEquipped')}</div>
-      </div>
-    )
-  }
+  const hasAnything = equippedWeapons.length > 0 || (canEdit && availableWeapons.length > 0)
 
   return (
     <div style={s.root}>
       <div style={s.separator} />
+
+      {!hasAnything ? (
+        <div style={s.emptyMsg}>{t('weaponPanel.noWeaponEquipped')}</div>
+      ) : (
+      <>
       <div style={s.sectionLabel}>{t('weaponPanel.equippedWeaponsTitle')}</div>
 
       {weapon2M ? (
         /* ── Mode DEUX MAINS ──────────────────────────────────────────────── */
-        <div style={s.sectionTwoHands}>
+        <div
+          ref={equipped2MDrop.setNodeRef}
+          style={{ ...s.sectionTwoHands, ...twoMZoneStyle }}
+        >
           <div style={s.colHeader}>{t('weaponPanel.twoHandsSectionTitle')}</div>
           <WeaponCard
             weapon={weapon2M}
@@ -339,9 +395,10 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
           {weapon2M.slots?.includes('Tr') && !hasTrepied && (
             <div style={s.warning}>{t('weaponPanel.tripodMissingWarning')}</div>
           )}
-          {weapon2M.slots?.includes('2M') && hasTrepied &&
-           getSlotInfo(weapon2M.ref_location).type === '2M_Tr' && (
-            <div style={s.info}>{t('weaponPanel.tripodAvailableInfo')}</div>
+          {canEdit && hasTrepied && getSlotInfo(weapon2M.ref_location).type === '2M_Tr' && (
+            <button style={s.equipBtn} onClick={handleToggleTripod}>
+              {weapon2M.slots?.includes('Tr') ? t('weaponPanel.switchToTwoHands') : t('weaponPanel.switchToTripod')}
+            </button>
           )}
         </div>
       ) : (
@@ -350,7 +407,10 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
           <div style={s.twoColGrid}>
 
             {/* Colonne DIRECTRICE */}
-            <div style={s.col}>
+            <div
+              ref={dirDrop.setNodeRef}
+              style={{ ...s.col, ...dirZoneStyle }}
+            >
               <div style={s.colHeader}>
                 {isAmbi ? t('weaponPanel.leftHandLabel') : t('weaponPanel.dirHandLabel')}
               </div>
@@ -366,7 +426,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                   onUnequip={handleUnequip}
                   error={errors[weaponDir.id]}
                 />
-              ) : canEdit && available1H.length > 0 && (
+              ) : canEdit && availableWeapons.length > 0 && (
                 <div style={s.equipCol}>
                   <select
                     style={s.select}
@@ -374,7 +434,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     onChange={e => setEquipDir(e.target.value)}
                   >
                     <option value="">{t('containerPanel.equipPlaceholder')}</option>
-                    {available1H.map(i => (
+                    {availableWeapons.map(i => (
                       <option key={i.id} value={i.id}>
                         {i.custom_name || i.ref_name}
                       </option>
@@ -392,7 +452,10 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             </div>
 
             {/* Colonne SECONDAIRE */}
-            <div style={s.col}>
+            <div
+              ref={secDrop.setNodeRef}
+              style={{ ...s.col, ...secZoneStyle }}
+            >
               <div style={s.colHeader}>
                 {isAmbi
                   ? t('weaponPanel.rightHandLabel')
@@ -411,7 +474,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                   onUnequip={handleUnequip}
                   error={errors[weaponSec.id]}
                 />
-              ) : canEdit && available1H.length > 0 && (
+              ) : canEdit && availableWeapons.length > 0 && (
                 <div style={s.equipCol}>
                   <select
                     style={s.select}
@@ -419,7 +482,7 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
                     onChange={e => setEquipSec(e.target.value)}
                   >
                     <option value="">{t('containerPanel.equipPlaceholder')}</option>
-                    {available1H.map(i => (
+                    {availableWeapons.map(i => (
                       <option key={i.id} value={i.id}>
                         {i.custom_name || i.ref_name}
                       </option>
@@ -437,49 +500,39 @@ export default function WeaponPanel({ characterId, canEdit, reloadKey, onInvento
             </div>
 
           </div>
-
-          {/* Section DEUX MAINS (toujours visible si armes dispo) */}
-          {canEdit && available2M.length > 0 && (
-            <div style={s.sectionTwoHands}>
-              <div style={s.colHeader}>{t('weaponPanel.twoHandsSectionTitle')}</div>
-              <div style={s.equipCol}>
-                <select
-                  style={s.select}
-                  value={equip2MId}
-                  onChange={e => handleSelect2M(e.target.value)}
-                >
-                  <option value="">{t('weaponPanel.equipTwoHandsPlaceholder')}</option>
-                  {available2M.map(i => (
-                    <option key={i.id} value={i.id}>
-                      {i.custom_name || i.ref_name}
-                    </option>
-                  ))}
-                </select>
-                {equip2MId &&
-                 getSlotInfo(available2M.find(i => i.id === equip2MId)?.ref_location).type === '2M_Tr' && (
-                  <select
-                    style={{ ...s.select, width: 'auto', flexShrink: 0 }}
-                    value={equip2MSlot}
-                    onChange={e => setEquip2MSlot(e.target.value)}
-                  >
-                    <option value="2M">{t('weaponPanel.twoHandsNoTripod')}</option>
-                    <option value="Tr">{t('weaponPanel.slotLabels.Tr')}</option>
-                  </select>
-                )}
-                <button
-                  style={s.equipBtn}
-                  onClick={() => handleEquipItem(equip2MId, equip2MSlot)}
-                  disabled={!equip2MId || equipping}
-                >
-                  {t('weaponPanel.equipButton')}
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
 
       {errors.equip && <div style={s.errorMsg}>{errors.equip}</div>}
+      </>
+      )}
+
+      {/* ── Conteneurs portés (PLAN_INVENTORY_UX.md Étape 3) — migrés depuis ArmorWoundPanel.jsx ── */}
+      <div style={s.separator} />
+      <div style={s.sectionLabel}>{t('weaponPanel.carriedContainersTitle')}</div>
+      <div style={s.containerGroup}>
+        <ContainerPanel
+          type="D"
+          label={t('armorWoundPanel.backpackLabel')}
+          items={items}
+          characterId={characterId}
+          canEdit={canEdit}
+        />
+        <ContainerPanel
+          type="Ce"
+          label={t('armorWoundPanel.beltLabel')}
+          items={items}
+          characterId={characterId}
+          canEdit={canEdit}
+        />
+      </div>
+
+      {/* ── Bouton "Customisation" — déplacé depuis InventoryPanel.jsx (Étape 3) ──────────── */}
+      {canEdit && (
+        <button onClick={onOpenModing} style={s.modingBtn}>
+          {t('inventoryPanel.modingButton')}
+        </button>
+      )}
     </div>
   )
 }
@@ -489,6 +542,29 @@ const s = {
   separator:    { height: 1, backgroundColor: '#2a2a3e', margin: '12px 0' },
   sectionLabel: { fontSize: 10, color: '#4a4a60', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 },
   emptyMsg:     { fontSize: 12, color: '#3a3a5a', fontStyle: 'italic', textAlign: 'center', padding: '8px 0' },
+  containerGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0,
+    marginBottom: 8,
+  },
+  // Survol drag & drop (PLAN_INVENTORY_UX.md §5.4) — bleu valide / rouge invalide.
+  zoneDropOver: {
+    outline: '1px solid #5b8dee',
+    outlineOffset: 2,
+    borderRadius: 4,
+  },
+  zoneDropInvalid: {
+    outline: '1px solid #e05c5c',
+    outlineOffset: 2,
+    borderRadius: 4,
+    cursor: 'no-drop',
+  },
+  modingBtn: {
+    background: 'none', border: '1px solid #2a2a3e', borderRadius: 4,
+    color: '#5a5a7a', cursor: 'pointer', fontSize: 11, padding: '4px 10px',
+    width: '100%', textAlign: 'left',
+  },
 
   twoColGrid: {
     display: 'grid',

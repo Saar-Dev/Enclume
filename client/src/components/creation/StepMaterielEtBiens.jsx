@@ -16,7 +16,7 @@ import { PRO_ADV_CATEGORY_RULE_KEYS } from './proAdvCategoryRuleKeys.js'
 export default function StepMaterielEtBiens({ characterId, isGmView, onPrev, onNext, advancing }) {
   const { t } = useTranslation('creation')
   const step4Data = useCreationStore(s => s.step4Data)
-  const reloadKey = useWizardInventorySync(characterId)
+  useWizardInventorySync(characterId)
 
   // Récap des jauges (§1 du plan) — step4Data.careers[].proAdvantages déjà dans le store
   // (getStep4State le renvoie par carrière), aucune donnée serveur supplémentaire à charger.
@@ -67,7 +67,6 @@ export default function StepMaterielEtBiens({ characterId, isGmView, onPrev, onN
             characterId={characterId}
             canEdit={isGmView}
             isGm={isGmView}
-            reloadKey={reloadKey}
           />
         </div>
 

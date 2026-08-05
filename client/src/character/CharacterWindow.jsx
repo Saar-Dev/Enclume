@@ -16,11 +16,13 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useCharacterStore } from '../stores/characterStore'
 import api from '../lib/api.js'
 import CharacterSheet from './CharacterSheet.jsx'
 import ArmorWoundPanel from './ArmorWoundPanel.jsx'
 import WeaponPanel from './WeaponPanel.jsx'
+import InventoryBanner from './InventoryBanner.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
 import ModingWindow from './ModingWindow.jsx'
 import PossessionNotes from '../components/creation/PossessionNotes.jsx'
@@ -65,7 +67,7 @@ const IconX = () => (
 )
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function CharacterWindow({ character, isGm, onClose, inventoryReloadKey = 0, forceReadOnly = false }) {
+export default function CharacterWindow({ character, isGm, onClose, forceReadOnly = false }) {
   const { t } = useTranslation()
   const { members, updateCharacter, removeCharacter } = useCharacterStore()
 
@@ -174,18 +176,41 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
   }, [])
 
   // ─── État UI ───────────────────────────────────────────────────────────────
-  const [inventoryVersion, setInventoryVersion] = useState(0)
-  const bumpInventoryVersion = useCallback(() => setInventoryVersion(v => v + 1), [])
+  // PLAN_INVENTORY_UX.md §3.2 — ArmorWoundPanel/WeaponPanel/InventoryPanel lisent characterStore
+  // directement (useInventoryData.js) ; plus de reloadKey/onInventoryMutated à orchestrer ici.
   const [modingOpen, setModingOpen] = useState(false) // docs/PLAN_MODING.md Phase A
 
-  // Reload ArmorWoundPanel/WeaponPanel/InventoryPanel quand INVENTORY_* arrive via SessionPage
-  const prevInventoryKeyRef = useRef(0)
-  useEffect(() => {
-    if (inventoryReloadKey !== prevInventoryKeyRef.current) {
-      prevInventoryKeyRef.current = inventoryReloadKey
-      bumpInventoryVersion()
-    }
-  }, [inventoryReloadKey, bumpInventoryVersion])
+  // ─── Drag & drop inventaire (PLAN_INVENTORY_UX.md Étape 5) ─────────────────────
+  // Nommage distinct de handleDragStart/handleDragEnd plus haut (déplacement de LA FENÊTRE elle-même,
+  // pointerdown sur le header) — deux mécanismes de "drag" totalement différents dans ce même fichier.
+  // DndContext ne fait que router : chaque zone cible (LocationPanel, WeaponPanel, InventoryPanel...)
+  // fournit son propre callback via `data.onDrop`, elle garde l'intégralité de sa logique existante
+  // (calcul de slot composite, résolution de conflit, message d'erreur i18n) — pas de duplication ici.
+  const [activeDragItem, setActiveDragItem] = useState(null)
+
+  const handleItemDragStart = useCallback((event) => {
+    setActiveDragItem(event.active.data.current?.item ?? null)
+  }, [])
+
+  const handleItemDragEnd = useCallback((event) => {
+    setActiveDragItem(null)
+    const { active, over } = event
+    if (!over) return
+    const item   = active.data.current?.item
+    const onDrop = over.data.current?.onDrop
+    if (item && onDrop) onDrop(item)
+  }, [])
+
+  const handleItemDragCancel = useCallback(() => {
+    setActiveDragItem(null)
+  }, [])
+
+  // Seuil de déplacement avant activation du drag (défaut dnd-kit = 0px) : sans lui, un simple clic
+  // sur un <select>/<button> à l'intérieur d'une ligne draggable pourrait déclencher un drag au lieu
+  // du clic natif.
+  const itemDragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  )
 
   const [activeTab,   setActiveTab]   = useState('sheet')
   const [saving,      setSaving]      = useState(false)
@@ -398,29 +423,45 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
           />
         )}
 
-        {/* Onglet Matériel */}
+        {/* Onglet Matériel — empilement vertical (Étape 4 du plan, grille 2 colonnes, annulée sur
+            décision Saar 2026-08-05 : bloc trop massif, silhouette écrasée). */}
         {activeTab === 'materiel' && (
-          <>
+          <DndContext
+            sensors={itemDragSensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleItemDragStart}
+            onDragEnd={handleItemDragEnd}
+            onDragCancel={handleItemDragCancel}
+          >
             <ArmorWoundPanel
               characterId={character.id}
               canEdit={effectiveIsGm || effectiveIsOwner}
-              reloadKey={inventoryVersion}
+              dragItem={activeDragItem}
             />
             <WeaponPanel
               characterId={character.id}
               canEdit={effectiveIsGm || effectiveIsOwner}
-              reloadKey={inventoryVersion}
-              onInventoryMutated={bumpInventoryVersion}
+              onOpenModing={() => setModingOpen(true)}
+              dragItem={activeDragItem}
+            />
+            <InventoryBanner
+              characterId={character.id}
+              canEdit={effectiveIsGm || effectiveIsOwner}
+              isGm={effectiveIsGm}
             />
             <InventoryPanel
               characterId={character.id}
               canEdit={effectiveIsGm || effectiveIsOwner}
               isGm={effectiveIsGm}
-              reloadKey={inventoryVersion}
-              onInventoryMutated={bumpInventoryVersion}
-              onOpenModing={() => setModingOpen(true)}
             />
-          </>
+            <DragOverlay>
+              {activeDragItem && (
+                <div style={s.dragGhost}>
+                  {activeDragItem.custom_name || activeDragItem.ref_name}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
 
         {/* Onglet Bio & Info */}
@@ -597,8 +638,6 @@ export default function CharacterWindow({ character, isGm, onClose, inventoryRel
         characterId={character.id}
         canEdit={effectiveIsGm || effectiveIsOwner}
         onClose={() => setModingOpen(false)}
-        reloadKey={inventoryVersion}
-        onInventoryMutated={bumpInventoryVersion}
       />
     )}
 
@@ -736,6 +775,17 @@ const s = {
     textAlign: 'center',
     padding: '24px 0',
     margin: 0,
+  },
+
+  dragGhost: {
+    padding: '4px 10px',
+    background: '#1a1a2e',
+    border: '1px solid #5b8dee',
+    borderRadius: 6,
+    color: '#c0c0d0',
+    fontSize: 12,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+    pointerEvents: 'none',
   },
 
   // Onglet Bio

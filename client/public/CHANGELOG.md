@@ -1,3 +1,21 @@
+## v197 — 2026-08-05 — Onglet Matériel : glisser-déposer et réorganisation
+
+### Client
+- [feat] Nouveau bandeau poids + sols toujours visible en haut de l'onglet Matériel (barre de jauge
+  colorée selon la charge portée), même si la liste d'inventaire est repliée plus bas.
+- [feat] Le Sac et la Ceinture s'affichent maintenant sous les armes (au lieu d'à côté de la silhouette),
+  avec le bouton "Modification d'arme" (ex-"Customisation") juste en dessous.
+- [feat] Glisser-déposer : équiper une armure ou une arme, déplacer un objet entre Sac/Ceinture/Coffre,
+  ou déséquiper en glissant vers l'inventaire — en plus des menus déroulants existants, qui restent
+  disponibles.
+- [feat] Une arme à deux mains s'équipe désormais en la glissant sur la Main Directrice **ou**
+  Secondaire, sans zone séparée. Si un trépied est disponible, un bouton pour basculer dessus apparaît
+  après l'équipement.
+- [feat] En cas de conflit (mains déjà occupées) lors d'un glisser-déposer, une confirmation demande
+  avant de déséquiper l'arme en place.
+- [fix] Un joueur non-MJ ne peut plus saisir un montant de sols supérieur à son solde actuel — avant,
+  la saisie était acceptée puis rejetée par le serveur sans message clair.
+
 ## v196 — 2026-07-31 — Froid
 
 ### Client

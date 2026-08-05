@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDraggable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { ARMOR_CATEGORY_MALUS } from '../../../shared/armorConstants.js'
-import api from '../lib/api.js'
+import { setItemSlot } from '../lib/inventoryMutations.js'
 
-export default function ContainerPanel({ type, label, items, characterId, canEdit, onInventoryChange }) {
+export default function ContainerPanel({ type, label, items, characterId, canEdit }) {
   const { t } = useTranslation('charSheet')
   const [equipError, setEquipError] = useState(null)
 
@@ -15,23 +17,36 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
   const handleEquip = useCallback(async (itemId) => {
     setEquipError(null)
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot: type })
-      onInventoryChange(res.data.item)
+      await setItemSlot(characterId, itemId, type)
     } catch (err) {
       setEquipError(err.response?.data?.error || t('containerPanel.equipError'))
     }
-  }, [characterId, type, onInventoryChange, t])
+  }, [characterId, type, t])
 
   const handleUnequip = useCallback(async () => {
     if (!equippedItem) return
     setEquipError(null)
     try {
-      const res = await api.put(`/char-sheet/${characterId}/inventory/${equippedItem.id}`, { slot: null })
-      onInventoryChange(res.data.item)
+      await setItemSlot(characterId, equippedItem.id, null)
     } catch (err) {
       setEquipError(err.response?.data?.error || t('containerPanel.unequipError'))
     }
-  }, [characterId, equippedItem, onInventoryChange, t])
+  }, [characterId, equippedItem, t])
+
+  // PLAN_INVENTORY_UX.md §5.2 — source draggable pour le déséquipement. Préfixe `container-` : même
+  // item.id que sa ligne dans InventoryPanel (rendue simultanément) — cf. LocationPanel.jsx. Pas de
+  // .map() ici (un seul équipé possible par D/Ce), useDraggable reste appelé au niveau du composant.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `container-${type}-${characterId}`,
+    data: { item: equippedItem },
+    disabled: !canEdit || !equippedItem,
+  })
+  const dragStyle = transform ? {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  } : undefined
 
   return (
     <div style={s.panel}>
@@ -40,7 +55,7 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
       </div>
 
       {equippedItem ? (
-        <div style={s.equippedRow}>
+        <div ref={setNodeRef} style={{ ...s.equippedRow, ...dragStyle }} {...listeners} {...attributes}>
           <div style={s.equippedName} title={equippedItem.custom_name || equippedItem.ref_name}>
             {equippedItem.custom_name || equippedItem.ref_name || '—'}
           </div>

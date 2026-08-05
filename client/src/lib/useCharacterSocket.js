@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { WS } from '../../../shared/events.js'
 import { useCharacterStore } from '../stores/characterStore'
 import { useSocket } from './SocketContext'
+import { refreshDerivedTotals } from './inventoryDataSync.js'
 import api from './api.js'
 
 export function useCharacterSocket() {
   const socket = useSocket()
   const { updateCharacter } = useCharacterStore()
   const setWounds = useCharacterStore(s => s.setWounds)
-  const [woundVersions, setWoundVersions] = useState({})
+  const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
+  const removeInventoryItem = useCharacterStore(s => s.removeInventoryItem)
+  const setSols = useCharacterStore(s => s.setSols)
 
   useEffect(() => {
     if (!socket) return
@@ -33,19 +36,36 @@ export function useCharacterSocket() {
         .then(res => setWounds(characterId, res.data.wounds || []))
         .catch(() => {})
     }
-    const onInventoryAdded = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    // PLAN_INVENTORY_UX.md Étape 0 — écriture directe dans characterStore (source unique de vérité,
+    // ArmorWoundPanel/WeaponPanel/InventoryPanel lisent via useInventoryData.js). refreshDerivedTotals
+    // (poids/malus recalculés côté serveur) n'est déclenché que si ce characterId est déjà suivi par ce
+    // client (quelqu'un a son onglet Matériel ouvert ici) — upsertInventoryItem est lui-même un no-op
+    // sinon (characterStore.js), donc la garde après l'upsert est fiable.
+    const onInventoryAdded = ({ characterId, item }) => {
+      if (!characterId || !item) return
+      upsertInventoryItem(characterId, item)
+      if (useCharacterStore.getState().inventoryByCharId[characterId] !== undefined) {
+        refreshDerivedTotals(characterId)
+      }
     }
-    const onInventoryUpdated = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    const onInventoryUpdated = ({ characterId, item }) => {
+      if (!characterId || !item) return
+      upsertInventoryItem(characterId, item)
+      if (useCharacterStore.getState().inventoryByCharId[characterId] !== undefined) {
+        refreshDerivedTotals(characterId)
+      }
     }
-    const onInventoryRemoved = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    const onInventoryRemoved = ({ characterId, itemId }) => {
+      if (!characterId || !itemId) return
+      removeInventoryItem(characterId, itemId)
+      if (useCharacterStore.getState().inventoryByCharId[characterId] !== undefined) {
+        refreshDerivedTotals(characterId)
+      }
     }
-    // docs/PLAN_MODING.md — sans ce handler, WS.MOD_INSTALLED serait émis dans le vide côté client
-    // (même mécanisme de rafraîchissement que les 3 events INVENTORY_* ci-dessus).
-    const onModInstalled = ({ characterId }) => {
-      if (characterId) setWoundVersions(prev => ({ ...prev, [characterId]: (prev[characterId] ?? 0) + 1 }))
+    // PLAN_INVENTORY_UX.md §3.3 — jusqu'ici émis par le serveur mais écouté par aucun client (sols ne
+    // se rafraîchissait qu'au prochain fetch complet d'InventoryPanel). Écrit directement dans le store.
+    const onSolsUpdated = ({ characterId, sols }) => {
+      if (characterId) setSols(characterId, sols)
     }
 
     socket.on(WS.WOUND_ADDED,       onWoundAdded)
@@ -54,7 +74,7 @@ export function useCharacterSocket() {
     socket.on(WS.INVENTORY_ADDED,   onInventoryAdded)
     socket.on(WS.INVENTORY_UPDATED, onInventoryUpdated)
     socket.on(WS.INVENTORY_REMOVED, onInventoryRemoved)
-    socket.on(WS.MOD_INSTALLED,     onModInstalled)
+    socket.on(WS.SOLS_UPDATED,      onSolsUpdated)
 
     return () => {
       socket.off(WS.WOUND_ADDED,       onWoundAdded)
@@ -63,11 +83,10 @@ export function useCharacterSocket() {
       socket.off(WS.INVENTORY_ADDED,   onInventoryAdded)
       socket.off(WS.INVENTORY_UPDATED, onInventoryUpdated)
       socket.off(WS.INVENTORY_REMOVED, onInventoryRemoved)
-      socket.off(WS.MOD_INSTALLED,     onModInstalled)
+      socket.off(WS.SOLS_UPDATED,      onSolsUpdated)
     }
   }, [socket])
-  // [socket] uniquement — updateCharacter, setWounds (Zustand actions) et setWoundVersions (setter useState)
-  // sont des références stables, non listées dans les deps (même pattern que useTokenSocket).
-
-  return { woundVersions }
+  // [socket] uniquement — updateCharacter, setWounds, upsertInventoryItem, removeInventoryItem, setSols
+  // (actions Zustand) sont des références stables, non listées dans les deps (même pattern que
+  // useTokenSocket).
 }

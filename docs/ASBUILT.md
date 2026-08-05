@@ -1460,6 +1460,52 @@ scripté.
 
 ---
 
+## Inventaire — refonte UX + drag & drop (`docs/PLANS/PLAN_INVENTORY_UX.md` Étapes 0-5, session 2026-08-05)
+
+### Client
+- Source unique de vérité inventaire : `characterStore.js` (`inventoryByCharId`, `thresholdByCharId`,
+  `iniPenaltyByCharId`, `solsByCharId`, `handPrefByCharId`), garde `inventoryFetchEpoch` contre la
+  course fetch-vs-subscribe. `inventoryDataSync.js`/`useInventoryData.js` (nouveaux) : fetch initial
+  dédupliqué par characterId, `refreshDerivedTotals` ciblé après mutation WS. `useCharacterSocket.js`/
+  `useWizardInventorySync.js` écrivent directement dans le store depuis `INVENTORY_*`/`SOLS_UPDATED`
+  (ce dernier n'avait jamais de listener côté client avant ce chantier).
+- `InventoryBanner.jsx` (nouveau) : jauge de poids toujours visible (barre + %), sols éditables avec
+  asymétrie MJ/joueur bornée côté client (le serveur rejette déjà toute augmentation par un non-GM,
+  403 — l'UI ne laisse plus la saisie aller jusque-là).
+- `ArmorWoundPanel.jsx`/`WeaponPanel.jsx`/`InventoryPanel.jsx` : Sac/Ceinture déplacés d'ArmorWoundPanel
+  vers une section "Conteneurs portés" dans WeaponPanel, avec le bouton Customisation (moding) à sa
+  suite. Empilement vertical (Blessures/Armures puis Armes) — une grille 2 colonnes a été codée puis
+  annulée après test par Saar (bloc trop massif, silhouette écrasée).
+- Drag & drop (`@dnd-kit/core` + `@dnd-kit/utilities`, pas `sortable` — inutile pour des zones
+  distinctes) : équiper une armure/arme, déplacer entre Sac/Ceinture/Coffre, déséquiper en glissant
+  vers l'inventaire. `inventoryMutations.js` (nouveau) porte les mutations réseau+store partagées entre
+  les `<select>`/boutons existants et le drag & drop — aucune logique dupliquée. Dialogue de confirmation
+  (`window.confirm`) uniquement sur le chemin drag en cas de conflit main/2M (409 serveur) ; le chemin
+  bouton garde son auto-déséquipement silencieux, les deux coexistent. Feedback bordure bleue (cible
+  valide) / rouge (invalide) basé sur l'item réellement en cours de glissement.
+- Zone "2 Mains" dédiée supprimée (décision Saar après démonstration) : une arme 2 mains déposée sur
+  Main Directrice ou Secondaire s'équipe directement sur le bon slot (2M/Tr, `resolveTargetSlot`), la
+  seconde main est couverte automatiquement. Le choix Trépied (si disponible) devient un bouton
+  apparaissant après l'équipement, plus un `<select>` préalable.
+- **Écart RAW explicite et documenté** : aucun — refonte purement ergonomique, aucune règle Polaris
+  modifiée (conteneurs 1+S+S, 3 couches max, asymétrie sols inchangés).
+
+### Serveur
+- `inventoryService.js` : `total_weight` recalculé via `shared/inventoryMath.js` (`computeTotalWeight`,
+  nouveau module partagé client/serveur — autorité unique de la formule, refactor pur sans changement
+  de comportement). Aucune autre route ni migration touchée — chantier 100% client hormis ce refactor.
+
+### État
+✅ Étapes 0-5 codées et confirmées fonctionnelles en navigateur par Saar (source de données, bandeau
+poids/sols, réorganisation Armes/Conteneurs, drag & drop complet avec scénario de conflit main/2M).
+Tests : `eslint` ciblé (0 erreur à chaque étape) et `npm run build` client propres tout du long.
+**Reste à faire** (Étapes 6-9, `docs/ROADMAP.md`) : filtres/pagination catalogue GM, dialogue de
+confirmation suppression, bouton "Prendre dans le Sac" (Coffre → Sac), retrait des `<select>`
+Sac/Coffre/Slot dans InventoryPanel.jsx (différé — accessibilité clavier du drag & drop à traiter
+d'abord, `KeyboardSensor` dnd-kit non encore branché). Non testé : round-trip HTTP authentifié scripté.
+
+---
+
 ## Pièges actifs — tous domaines
 
 | Code | Description |

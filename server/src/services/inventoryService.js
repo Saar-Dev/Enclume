@@ -11,6 +11,7 @@ import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { isEquippableLocation } from '../lib/inventoryRules.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
+import { computeTotalWeight } from '../../../shared/inventoryMath.js'
 
 export const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
 export const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce', 'MG', 'MD', '2M', 'Tr']
@@ -219,11 +220,7 @@ export async function getInventory(characterId, campaignId) {
     )
     .orderBy('char_inventory.created_at', 'asc')
 
-  const totalWeight = items.reduce((sum, item) => {
-    if (item.container === 'Coffre') return sum
-    if (item.ref_weight == null) return sum
-    return sum + item.ref_weight * item.quantity
-  }, 0)
+  const totalWeight = computeTotalWeight(items)
 
   const threshold  = forValue * multiplier
   const iniPenalty = settings.encumbrance_enabled
