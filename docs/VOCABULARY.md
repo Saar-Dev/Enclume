@@ -58,6 +58,9 @@ runtime_revision	Compteur incrémenté à chaque modification de l'état runtime
 entityStore	Store Zustand gérant les instances d'entités (entities[]) et les blueprints (blueprints{}). Les blueprints sont accumulés et jamais vidés entre les cartes.	useEntityStore. Autorité : docs/SYSTEME/CORE.md.
 surfaceDocument (serveur)	Module de validation et normalisation du document surface_data côté serveur. Rejette les champs obsolètes, normalise la version, injecte les worldId manquants.	shared/world/surfaceDocument.js. Autorité : docs/SYSTEME/SURFACES_SALLES.md.
 Éditeur de monde (world builder)	Ensemble des outils permettant au MJ de construire des cartes 3D : édition de surfaces (salles, murs, connecteurs), pose d'entités libres, édition voxel legacy.	Orchestré par Editor3D.jsx. Documents de référence : SURFACES_SALLES.md, ENTITES.md, EDITEUR.md.
+Canal (chat)	Sous-espace de discussion persistant à l'intérieur d'une campagne. V1 : `general` (broadcast room) et `whisper` (privé, filtré par destinataire) ; pas encore choisi par l'utilisateur en UI, pas de canaux additionnels.	chat_messages.channel_id. Autorité : docs/PLANS/PLAN_CHAT.md.
+Type de message (chat)	Discriminant du contenu d'un message persisté (TEXT, DICE, WHISPER, COMBAT_DAMAGE, SYSTEM_JOIN…) — distinct du canal, sert au rendu client (MessageRendererRegistry).	chat_messages.type. Autorité : docs/PLANS/PLAN_CHAT.md.
+Whisper (message privé)	Message chat de type WHISPER, visible uniquement de l'expéditeur et du destinataire (`recipient_user_id`), jamais broadcast à la room de campagne. Persisté comme les autres messages.	chat_messages.recipient_user_id, server/src/chat/socketChat.js. Autorité : docs/PLANS/PLAN_CHAT.md.
 Conventions de nommage
 
 (… section inchangée …)

@@ -53,6 +53,11 @@ export const WS = {
 
   // Chat
   CHAT_MESSAGE: 'chat:message',
+  // Chat persistant (docs/PLANS/PLAN_CHAT.md Phase 1) — pas encore émis, module non branché
+  CHAT_SEND:            'chat:send',             // client → serveur : { channelId, type, payload }
+  CHAT_MESSAGE_CREATED: 'chat:message_created',   // serveur → room/socket : message persisté
+  CHAT_MESSAGE_DELETED: 'chat:message_deleted',   // serveur → room : { id, channelId }
+  CHAT_ERROR:           'chat:error',             // serveur → socket émetteur : erreur métier (pattern TRADE_ERROR/WIZARD_ERROR)
 
   // Entités interactables
   ENTITY_ACTION_REQUEST:    'entity:action_request',    // joueur → serveur : demande d'interaction

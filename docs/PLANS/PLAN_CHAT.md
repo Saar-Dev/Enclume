@@ -1,7 +1,61 @@
 Module Chat Persistant
 
-    Version 1.0 — 2026-08-01
-    Statut : Prêt pour revue
+    Version 1.1 — 2026-08-04 (revue de complétude avant implantation Phase 1, voir §16)
+    Statut : Validé pour implantation Phase 1
+
+16. Revue de complétude (2026-08-04, avant codage Phase 1)
+
+Écarts trouvés entre ce plan (V1.0) et l'état réel du dépôt, tranchés explicitement avant de coder
+(aucun n'est un raccourci silencieux) :
+
+    Numérotation migration : §4.3 disait "après 227". La règle de parité pair(Codex)/impair(Claude)
+    de CLAUDE.md §5 est abrogée (Codex/Kiwi hors projet, 2026-08-04) — numérotation séquentielle.
+    Dernière migration réelle = 231 → cette migration est la 232.
+
+    Autorisation absente (§5.4, §5.5) : ni chatRoutes.js ni socketChat.js ne vérifiaient
+    l'appartenance à la campagne. Décision : réutiliser le pattern exact de tradeRoutes.js
+    (`requireAuth` + vérification `campaign_members` avant toute lecture/écriture/suppression REST).
+    Côté socket, la room de campagne fait déjà foi (même convention que socketDice.js existant).
+
+    Schéma whisper incomplet (§4.1 vs §10) : la table ne portait aucune colonne pour cibler un
+    destinataire, alors que §10 décrit `recipients: [senderId, targetId]`. Un payload JSONB non
+    indexé ne permet pas de filtrer correctement qui a le droit de voir un whisper. Décision :
+    ajouter `recipient_user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL` à la table
+    (§4.1 mis à jour) et un canal dédié `channel_id = 'whisper'` (pas de mélange avec `general`).
+
+    Validation/sanitization (§5.1, §11) supposaient Zod + une lib de sanitization Markdown.
+    Aucune des deux n'est dans server/package.json, et aucun autre module serveur n'utilise Zod
+    (vérifié). Décision : pas de nouvelle dépendance pour ce module — `chatValidation.js` est un
+    validateur maison (longueur/type/forme), `chatSanitizer.js` échappe le HTML puis applique une
+    whitelist regex des 4 patterns autorisés (gras/italique/code/citation).
+
+    Migration sans `down()` (§4.1) : complété avec un rollback symétrique, pattern
+    `231_kneeling_position.js`.
+
+    Nommage événements (§5.5, §14) : `chat:message.created`/`chat:message.deleted` utilisaient un
+    point, absent de toute autre entrée de `shared/events.js` (convention `namespace:verbe_snake`
+    uniquement). Renommés `CHAT_MESSAGE_CREATED`/`CHAT_MESSAGE_DELETED`/`CHAT_SEND` →
+    `chat:message_created`/`chat:message_deleted`/`chat:send`.
+
+    i18n (§5.6, §9) : les réponses de commandes (`/help`, `/w`, `/gm`) du plan initial renvoyaient du
+    texte français figé ("Usage : /w <joueur> <message>", etc.) — violation directe de
+    `.claude/rules/i18n.md` ("le serveur n'émet jamais de texte FR figé destiné à l'utilisateur").
+    `chatCommands.js` renvoie désormais des clés `i18nKey` (namespace `chat.commands.*`), résolues
+    côté client en Phase 3 (pattern déjà en place : `socketCombatHelpers.js` + `useSessionSocket.js`,
+    `system: true` + `i18nKey`). Les entrées `client/src/locales/*.json` correspondantes seront créées
+    en Phase 3, pas maintenant (rien n'émet encore ces clés).
+
+    Permission de commande (§5.6) : chaque commande déclare `permission` ('player'/'gm') mais
+    `CommandRegistry.execute` du plan ne le vérifiait jamais. Enforcement ajouté (rejet si
+    `permission === 'gm'` et `!context.isGm`) — aucune commande V1 n'est actuellement 'gm', mais le
+    champ ne doit pas rester mort.
+
+Statut : ces 5 points ferment les seuls trous bloquant une Phase 1 sérieuse (schéma DB + squelette
+module, rien branché dans l'existant). Les écarts déjà identifiés en Phase 3-4 (structure
+`sessionStore.messagesByCampaign` sans `channelId`, topic `combat.damage` vs événements réels de
+`shared/events.js`, i18n des nouveaux libellés) restent ouverts et seront traités au moment de ces
+phases, pas maintenant — ils ne bloquent pas la Phase 1 car rien n'est branché dans l'existant à ce
+stade.
 
 1. Objectif
 
@@ -52,6 +106,7 @@ CREATE TABLE chat_messages (
     channel_id TEXT NOT NULL DEFAULT 'general',
     sender_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     character_id UUID REFERENCES characters(id) ON DELETE SET NULL,
+    recipient_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     type TEXT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -61,6 +116,9 @@ CREATE TABLE chat_messages (
 CREATE INDEX idx_chat_messages_cursor
     ON chat_messages (campaign_id, channel_id, created_at DESC, id DESC);
 
+-- recipient_user_id : NULL sauf channel_id = 'whisper' (destinataire du message privé).
+-- Voir §16 — ajouté à la revue de complétude, absent du schéma initial V1.0.
+
 4.2 Justification des colonnes
 Colonne	Justification
 id BIGSERIAL	Tri temporel, performant pour curseur, natif PostgreSQL
@@ -68,13 +126,14 @@ campaign_id	Scope campagne (chat par campagne)
 channel_id TEXT	Anticipation canaux multiples (général, combat, privé)
 sender_user_id	Auteur humain, nullable pour messages système
 character_id	Personnage lié, nullable pour messages joueur pur
+recipient_user_id	Destinataire d'un whisper (`channel_id = 'whisper'`), NULL sinon — ajouté §16
 type TEXT	Discriminant : TEXT, DICE, COMBAT_DAMAGE, SYSTEM_JOIN, etc.
 payload JSONB	Données métier brutes (formule, résultats, texte, etc.)
 created_at	Horodatage serveur autoritaire
 deleted_at	Suppression douce, pas de perte de données
 4.3 Migration
 
-Numéro impair (Claude) — prochain disponible après 227.
+232 (numérotation séquentielle, voir §16 — la convention pair/impair de CLAUDE.md §5 est abrogée).
 5. Module serveur server/src/chat/
 5.1 Structure des fichiers
 text

@@ -95,7 +95,9 @@ git fetch origin
 
 ### Migrations
 
-- Numéros pairs : Codex / moteur monde ; numéros impairs : Claude / règles.
+- Numérotation strictement séquentielle : prendre le prochain entier libre après la dernière
+  migration présente, tous devs confondus. L'alternance pair (Codex/moteur monde) / impair
+  (Claude/règles) est abolie — Codex et Kiwi ne font plus partie du projet (2026-08-04).
 - Vérifier les fichiers présents et `knex_migrations` avant de choisir un numéro.
 - Une migration doit être rétrocompatible avec le code encore déployé pendant la fusion.
 - Migration, test et éventuel script de réparation forment un commit isolé sur la branche de travail.
