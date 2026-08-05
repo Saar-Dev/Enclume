@@ -11,6 +11,7 @@ import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
@@ -1249,13 +1250,17 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // arme a été trouvée : une arme réelle peut légitimement avoir ref_damage_h vide.
     let weapon = null, damageFormula = '1D4'
     if (weaponInvId) {
-      weapon = await db('char_inventory')
-        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where({ 'char_inventory.id': weaponInvId })
-        .select('ref_equipment.damage_h as ref_damage_h', 'char_inventory.equipment_id',
-                'ref_equipment.range as ref_range')
-        .first()
-      if (weapon) damageFormula = weapon.ref_damage_h ?? null
+      // MELEE-INHAND (docs/BUGIDENTIFIE.md) — getOwnedHandWeapon (inventoryService.js) est l'autorité
+      // unique ownership + en-main + catégorie, réutilisée par toute la chaîne combat (Tir et CaC,
+      // Déclaration et Résolution). Le garde de Déclaration (socketCombatAnnouncement.js) couvre le
+      // cas normal ; ceci revérifie à la Résolution (l'arme a pu être transférée/rangée entre-temps),
+      // jamais une confiance aveugle dans une donnée déjà stockée — même philosophie que l'arme
+      // secondaire (COM24, plus bas).
+      const ownedWeapon = await getOwnedHandWeapon(character.id, weaponInvId, { slotCodes: ['MG', 'MD', '2M'], category: 'Arme de contact' })
+      if (ownedWeapon?.inHand && ownedWeapon.categoryOk) {
+        weapon = ownedWeapon
+        damageFormula = weapon.ref_damage_h ?? null
+      }
     }
 
     // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec weaponInvId
@@ -1429,16 +1434,8 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // l'ancien scan d'inventaire, ne s'applique plus en mains nues/arme naturelle avec 2 armes rangées.
     let deuxArmesBonus = 0
     if (action.offhand_weapon_inv_id && action.offhand_weapon_inv_id !== weaponInvId) {
-      const offhandWeapon = await db('char_inventory')
-        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where({ 'char_inventory.id': action.offhand_weapon_inv_id, 'char_inventory.character_id': character.id })
-        .select('ref_equipment.category as ref_category')
-        .first()
-      const offhandInHand = offhandWeapon && await db('char_inventory_slots')
-        .where({ char_inventory_id: action.offhand_weapon_inv_id })
-        .whereIn('slot_code', ['MG', 'MD'])
-        .first()
-      if (offhandWeapon?.ref_category === 'Arme de contact' && offhandInHand) {
+      const offhandWeapon = await getOwnedHandWeapon(character.id, action.offhand_weapon_inv_id, { slotCodes: ['MG', 'MD'], category: 'Arme de contact' })
+      if (offhandWeapon?.inHand && offhandWeapon.categoryOk) {
         deuxArmesBonus = 3
       }
     }
@@ -2412,20 +2409,14 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 
 // Fetch arme + mods installés pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
 // utilisent ce même fetch en Résolution, jamais deux copies divergentes des colonnes/jointures).
-async function fetchAssaultWeaponAndMods(weaponInvId) {
+// ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — ownership + en-main revérifiés via
+// getOwnedHandWeapon (inventoryService.js), autorité unique déjà utilisée à la Déclaration
+// (socketCombatAnnouncement.js) et pour le CaC (MELEE-INHAND) : avant ce correctif, cette fonction ne
+// vérifiait ni l'un ni l'autre à la Résolution, malgré le commentaire ci-dessus affirmant "jamais deux
+// copies divergentes" — cette copie-ci avait simplement perdu les deux contrôles en cours de route.
+async function fetchAssaultWeaponAndMods(weaponInvId, characterId) {
   const [weapon, installedMods] = await Promise.all([
-    db('char_inventory')
-      .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-      .where({ 'char_inventory.id': weaponInvId })
-      .select(
-        'ref_equipment.damage_h as ref_damage_h',
-        'char_inventory.equipment_id',
-        'char_inventory.ammo_remaining',
-        'ref_equipment.ammo_count as ref_ammo_count',
-        'ref_equipment.range as ref_range',
-        'ref_equipment.category as ref_category',
-      )
-      .first(),
+    getOwnedHandWeapon(characterId, weaponInvId, { slotCodes: WEAPON_SLOTS }).then(item => item?.inHand ? item : null),
     // Groupe 1 (docs/PLAN_MODING_PHASEB.md) — mods installés sur l'arme utilisée, jointure fraîche
     // ref_equipment (pas le mod_slot snapshotté sur char_inventory_mods, qui ne sert qu'à la
     // contrainte UNIQUE d'exclusivité). mod_key/state (docs/PLAN_MODDING_REFONTE.md Phase 1) :
@@ -2475,7 +2466,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     }
 
     const [{ weapon: primaryWeapon, installedMods: primaryMods }, rosterTireur, settings] = await Promise.all([
-      fetchAssaultWeaponAndMods(action.weapon_inv_id),
+      fetchAssaultWeaponAndMods(action.weapon_inv_id, character.id),
       db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
       // Options de campagne — fetch unique réutilisé pour l'encombrement, la décision dual-wield et
       // le décompte munitions PNJ plus bas dans cette fonction (un seul fetch, jamais trois).
@@ -2500,7 +2491,7 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
 
     let offhandWeapon = null, offhandMods = [], offhandAmmoOk = false
     if (action.offhand_weapon_inv_id) {
-      const fetched = await fetchAssaultWeaponAndMods(action.offhand_weapon_inv_id)
+      const fetched = await fetchAssaultWeaponAndMods(action.offhand_weapon_inv_id, character.id)
       // CHOC1 : ne jamais tester ref_damage_h pour savoir si une arme a été trouvée — une arme Choc
       // pur (Flex...) en main secondaire est réelle et doit pouvoir tirer. equipment_id est présent
       // dès que la ligne char_inventory existe, indépendamment du join.

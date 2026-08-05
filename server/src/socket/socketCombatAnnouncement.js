@@ -15,24 +15,14 @@ import { isTestBlockingWound, isMortalWoundImmobilized } from '../../../shared/w
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 
-// Fetch arme équipée en main pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
-// appellent ce même fetch, jamais deux copies divergentes du même bloc DB). Aucune règle métier ici :
-// la main directrice bloque le tour sur échec (messages dédiés dans l'appelant), la main non-directrice
-// dégrade silencieusement en tir simple (shared/ammoRules.js::resolveDualWieldFire).
-async function fetchHandWeaponForAssault(weaponInvId, characterId) {
-  const weapon = await db('char_inventory')
-    .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-    .where({ 'char_inventory.id': weaponInvId, 'char_inventory.character_id': characterId })
-    .select('char_inventory.ammo_remaining', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count')
-    .first()
-  if (!weapon) return { weapon: null, inHand: false }
-  const inHandRow = await db('char_inventory_slots')
-    .where({ char_inventory_id: weaponInvId })
-    .whereIn('slot_code', ['MG', 'MD', '2M', 'Tr'])
-    .first()
-  return { weapon, inHand: !!inHandRow }
-}
+// MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
+// "arme possédée et en main" passe désormais entièrement par getOwnedHandWeapon
+// (inventoryService.js), autorité unique pour le combat (Tir et CaC, principale et secondaire,
+// Déclaration et Résolution). L'ancien fetchHandWeaponForAssault (SQL brut local à ce fichier) est
+// supprimé — c'était l'une des réimplémentations divergentes qui a permis à l'arme principale CaC
+// et à la résolution du Tir de ne jamais recevoir ce contrôle.
 
 async function planCombatWorldMovement(token, character, move) {
   if (token.position_space !== 'world-feet') throw new RangeError('Le token utilise encore une position legacy')
@@ -272,14 +262,14 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut impossible — aucune arme sélectionnée' })
             return
           }
-          const { weapon, inHand } = await fetchHandWeaponForAssault(weaponInvId, character.id)
+          const weapon = await getOwnedHandWeapon(character.id, weaponInvId, { slotCodes: WEAPON_SLOTS })
           if (!weapon) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme sélectionnée est introuvable dans l'inventaire (transférée entre-temps ?)" })
             return
           }
           // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
           // stricte sur char_inventory.slot — composite-safe.
-          if (!inHand) {
+          if (!weapon.inHand) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
             return
           }
@@ -327,9 +317,9 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // renseigné par le client dès que la série dépasse 1 tir, mais on ne fait pas confiance à ça.
           let offhandAmmoOk = false
           if (isDualWield && offhandWeaponInvId && mapActions.attack.length === 1) {
-            const { weapon: offhandWeapon, inHand: offhandInHand } = await fetchHandWeaponForAssault(offhandWeaponInvId, character.id)
+            const offhandWeapon = await getOwnedHandWeapon(character.id, offhandWeaponInvId, { slotCodes: WEAPON_SLOTS })
             const offhandFireModeOk = offhandWeapon?.ref_fire_mode ? offhandWeapon.ref_fire_mode.toUpperCase().includes(fireMode) : true
-            if (offhandWeapon && offhandInHand && offhandFireModeOk) {
+            if (offhandWeapon?.inHand && offhandFireModeOk) {
               offhandAmmoOk = hasEnoughAmmo(offhandWeapon.ammo_remaining, totalBulletsNeeded, { isPnj: character.type === 'pnj', pnjUnlimitedAmmo: pnjUnlimited })
             }
           }
@@ -499,6 +489,20 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           return
         }
 
+        // MELEE-INHAND (docs/BUGIDENTIFIE.md) — l'arme principale n'était jamais revalidée (ni
+        // ownership, ni en-main), contrairement à l'arme secondaire ci-dessous et à l'arme principale
+        // Tir. Un blocage clair est ici le bon comportement (même traitement que l'arme principale
+        // Tir) — le client ne propose jamais un choix en dehors des armes de contact en main
+        // (`CombatActionWindow.jsx` meleeWeapons), donc aucune déclaration légitime existante ne peut
+        // être rejetée par ce garde.
+        if (!isDrone && firstMelee.weaponInvId) {
+          const primaryWeapon = await getOwnedHandWeapon(character.id, firstMelee.weaponInvId, { slotCodes: ['MG', 'MD', '2M'], category: 'Arme de contact' })
+          if (!primaryWeapon?.inHand || !primaryWeapon.categoryOk) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Corps à corps impossible — l'arme sélectionnée n'est pas en main (transférée entre-temps ?)" })
+            return
+          }
+        }
+
         // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — revalidé serveur, jamais fait confiance
         // au payload client (`core.md`). Dégradation silencieuse si invalide (arme secondaire
         // introuvable, pas en main, mauvaise catégorie, identique à la principale) — jamais de
@@ -507,29 +511,21 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         let validatedOffhandWeaponInvId = null
         if (!isDrone && firstMelee.isDualWield && firstMelee.weaponInvId && firstMelee.offhandWeaponInvId
             && firstMelee.offhandWeaponInvId !== firstMelee.weaponInvId) {
-          const offhandWeapon = await db('char_inventory')
-            .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-            .where({ 'char_inventory.id': firstMelee.offhandWeaponInvId, 'char_inventory.character_id': character.id })
-            .select('ref_equipment.category as ref_category')
-            .first()
-          const offhandInHand = offhandWeapon && await db('char_inventory_slots')
-            .where({ char_inventory_id: firstMelee.offhandWeaponInvId })
-            .whereIn('slot_code', ['MG', 'MD'])
-            .first()
-          if (offhandWeapon?.ref_category === 'Arme de contact' && offhandInHand) {
+          const offhandWeapon = await getOwnedHandWeapon(character.id, firstMelee.offhandWeaponInvId, { slotCodes: ['MG', 'MD'], category: 'Arme de contact' })
+          if (offhandWeapon?.inHand && offhandWeapon.categoryOk) {
             validatedOffhandWeaponInvId = firstMelee.offhandWeaponInvId
           }
         }
 
         for (const {
-          targetTokenId: meleeTargetId, weaponInvId: meleeWeaponId, droneWeaponInvId: meleeDroneWeaponId,
+          targetTokenId: meleeTargetId, droneWeaponInvId: meleeDroneWeaponId,
           naturalWeaponCharMutationId: meleeNaturalWeaponId,
         } of mapActions.melee) {
           if (meleeTargetId) {
             actionRows.push({
               campaign_id: campaignId, token_id: tokenId,
               action_key: 'melee', type: 'melee', sequence: 3,
-              weapon_inv_id:       meleeDroneWeaponId ? null : (meleeWeaponId ?? null),
+              weapon_inv_id:       meleeDroneWeaponId ? null : (firstMelee.weaponInvId ?? null),
               offhand_weapon_inv_id: meleeDroneWeaponId ? null : validatedOffhandWeaponInvId,
               drone_weapon_inv_id: meleeDroneWeaponId ?? null,
               // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Un drone n'a

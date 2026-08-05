@@ -97,6 +97,26 @@ const skillTotal   = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
 // attrs = résultat de db('char_attributes').where({ char_sheet_id: sheet.id })
 ```
 
+### Résolution d'arme — ownership + en-main + catégorie (MELEE-INHAND/ASSAULT-INHAND-RESOLUTION)
+
+Toute résolution d'un `weaponInvId` reçu du client (Tir ou CaC, arme principale ou secondaire,
+Déclaration ou Résolution) passe par `getOwnedHandWeapon(characterId, itemId, { slotCodes, category })`
+(`server/src/services/inventoryService.js`) — **jamais** une requête `char_inventory` réécrite à la
+main. Avant cette autorité (2026-08-05), 5 réimplémentations SQL divergentes coexistaient (Tir
+Déclaration, CaC secondaire Déclaration+Résolution, Tir Résolution) et 2 sites n'avaient aucun
+contrôle du tout (CaC principale, Tir Résolution) — cause racine de MELEE-INHAND et
+ASSAULT-INHAND-RESOLUTION (`docs/BUGIDENTIFIE.md`).
+
+`slotCodes` n'a pas de défaut implicite : chaque appelant énonce explicitement quels emplacements sont
+légitimes pour son cas (`WEAPON_SLOTS` = `MG/MD/2M/Tr` pour une arme principale Tir ; `MG/MD/2M` pour
+une arme principale CaC — jamais Tr, un trépied ne se manie pas au corps à corps ; `MG/MD` pour toute
+arme secondaire — jamais 2M ni Tr, on ne peut pas tenir une arme à deux mains ou montée dans la main
+non directrice). `category` est optionnel : `'Arme de contact'` pour le CaC, absent pour le Tir
+(aucun contrôle de catégorie n'existait avant pour le Tir — préservé tel quel, pas une extension de
+scope). Retourne `null` si l'objet n'existe pas ou n'appartient pas au personnage (indiscernable,
+comme un objet inaccessible) ; sinon l'item complet enrichi de `inHand`/`categoryOk` — l'appelant
+choisit s'il distingue les deux dans son message joueur.
+
 ---
 
 ## Fonctions charStats.js — référence complète

@@ -983,7 +983,7 @@ dans `calcAllures`/`getCharacterMovementBudget` — session dédiée, hors scope
 ---
 
 
-### Dette MELEE-INHAND — Arme principale CaC jamais vérifiée "en main" à la résolution
+### Dette MELEE-INHAND — Arme principale CaC jamais vérifiée "en main" à la résolution ✅ Session (Saar, 2026-08-05)
 
 **Symptôme** : Aucun cas observé en jeu — trouvé en codant COM24 (Session 176), en écrivant la
 revalidation de l'arme secondaire (en-main, catégorie, propriétaire) pour le bonus "deux armes".
@@ -1001,6 +1001,79 @@ déclarations aujourd'hui acceptées, changement de comportement non demandé).
 
 **Prochaine étape** : session dédiée — même patron que `fetchHandWeaponForAssault`, à appliquer à
 l'arme principale CaC si jugé prioritaire.
+
+**Analyse approfondie (2026-08-05)** — [VÉRIFIÉ par instrumentation, pas seulement par lecture] : test
+isolé (fixtures réelles, requête exacte du code en place, nettoyage explicite) confirmant qu'un
+`weaponInvId` appartenant à un **autre personnage** faisait résoudre les dégâts de cette arme (ex.
+`1D10+1`) au lieu de mains nues (`1D4`) — ni ownership ni en-main n'étaient vérifiés, à aucun des deux
+points (Déclaration `socketCombatAnnouncement.js`, Résolution `socketCombatHelpers.js`). Un
+correctif ad hoc (tenté puis annulé, décision Saar) aurait constitué une **5ᵉ réimplémentation**
+quasi-identique du même contrôle SQL (`fetchHandWeaponForAssault`, le contrôle secondaire CaC de
+COM24 à la déclaration et à la résolution, et cette arme principale CaC) — cause racine réelle :
+aucune autorité unique pour "arme possédée et en main", malgré une couche de service
+(`server/src/services/inventoryService.js`, déjà utilisée par les routes et `modingService.js`) déjà
+en mesure de la porter (`getItemWithRef` fait déjà 90% du travail en une requête, `WEAPON_SLOTS` déjà
+défini).
+
+**Correctif codé (2026-08-05)** — refactor plutôt que rustine, décision explicite (Saar : "si un bug
+peut être l'occasion d'un rework, on en profite, peu importe le temps") :
+- `server/src/services/inventoryService.js` — nouvelle fonction exportée `getOwnedHandWeapon(characterId,
+  itemId, { slotCodes, category })`, autorité unique désormais consommée par tout le combat. Construite
+  sur `getItemWithRef` existante (ajout du seul champ manquant, `char_inventory.character_id`), pas une
+  requête réinventée. `slotCodes` est un paramètre **obligatoire** (pas de défaut implicite) : force
+  chaque appelant à énoncer explicitement les emplacements légitimes pour son cas (arme à deux mains
+  valide en principale, jamais en secondaire). Retourne `null` si l'objet n'existe pas ou n'appartient
+  pas au personnage (indiscernable, comme avant) ; sinon l'item complet + `inHand`/`categoryOk`
+  (l'appelant choisit s'il distingue les deux dans son message joueur). 7 tests dédiés
+  (`inventoryService.test.mjs`).
+- `server/src/socket/socketCombatAnnouncement.js` — `fetchHandWeaponForAssault` (réimplémentation
+  locale) supprimée, ses 2 sites d'appel (Tir principale + secondaire) migrés vers
+  `getOwnedHandWeapon`. Garde bloquant ajouté pour l'arme principale CaC (le trou documenté par cette
+  dette). Contrôle de l'arme secondaire CaC (COM24) migré vers la même fonction (élimine sa propre
+  copie SQL).
+- `server/src/socket/socketCombatHelpers.js` — `resolveMeleeAction` (arme principale ET secondaire) et
+  `fetchAssaultWeaponAndMods` (Tir, résolution — voir **ASSAULT-INHAND-RESOLUTION** ci-dessous) migrés
+  vers `getOwnedHandWeapon`. Le repli "mains nues" existant (arme introuvable) est préservé à
+  l'identique pour le cas "trouvée mais invalide" (`weapon = null` avant tout calcul de dégâts) — pas
+  de nouveau comportement inventé, la classe de bug est éliminée à la source (une seule fonction, plus
+  aucune requête SQL de résolution d'arme dupliquée dans ces 2 fichiers).
+
+**Testé** : `node --env-file=.env --test server/src/services/inventoryService.test.mjs` (7/7 ✅,
+fixtures réelles, ownership/en-main/catégorie/slots-refusés/sans-catégorie/paramètres-absents) ; suite
+serveur complète `node --test` (192/192 ✅, dont les 7 nouveaux) ; `node --check` sur les 3 fichiers.
+**Non testé** : scénario réel en jeu (CaC et Tir, arme principale et secondaire, déclaration normale
+avec arme en main — aucun changement de comportement attendu) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, aucun changement pour une déclaration avec une arme réellement
+possédée et en main (seul chemin que les clients PJ/MJ peuvent produire).
+
+---
+
+### Dette ASSAULT-INHAND-RESOLUTION — Tir : ownership/en-main jamais revérifiés à la résolution (primaire et secondaire) ✅ Session (Saar, 2026-08-05)
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en corrigeant MELEE-INHAND (2026-08-05), en vérifiant
+si le Tir faisait vraiment ce que son propre commentaire prétendait ("même philosophie que le
+dual-wield Tir... l'arme principale, l'allonge, etc. sont toutes refetchées ici").
+
+**Contexte [VÉRIFIÉ par lecture, confirmé par la migration]** : `resolveAssaultAction`
+(`socketCombatHelpers.js`) fetchait l'arme principale **et** secondaire via
+`fetchAssaultWeaponAndMods(weaponInvId)` — cette fonction ne filtrait **ni** `char_inventory.character_id`
+**ni** `char_inventory_slots` (en-main), contrairement à `fetchHandWeaponForAssault` utilisée à la
+Déclaration. La revalidation "avec l'état munitions le plus frais" existait (`hasEnoughAmmo` recalculé),
+mais pas la revalidation ownership/en-main elle-même.
+
+**Correctif codé (2026-08-05)** — même chantier que MELEE-INHAND, même autorité :
+`fetchAssaultWeaponAndMods` prend désormais `characterId` en paramètre et délègue à
+`getOwnedHandWeapon` (`slotCodes: WEAPON_SLOTS`, pas de filtre de catégorie — comportement historique du
+Tir préservé, jamais vérifié avant ce correctif). Les 2 sites d'appel (`resolveAssaultAction`, arme
+principale + secondaire) mis à jour pour passer `character.id`.
+
+**Testé** : suite serveur complète `node --test` (192/192 ✅, `fetchAssaultWeaponAndMods` exercée
+indirectement par les tests existants du Tir).
+**Non testé** : scénario réel en jeu (Tir principal et deux-armes, munitions, mode de tir — aucun
+changement de comportement attendu pour une déclaration légitime) — à la charge de Saar.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, aucun changement pour un Tir déjà à jour.
 
 ---
 

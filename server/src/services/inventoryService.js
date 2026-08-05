@@ -87,6 +87,7 @@ export async function getItemWithRef(itemId) {
     .where({ 'char_inventory.id': itemId })
     .select(
       'char_inventory.id',
+      'char_inventory.character_id',
       'char_inventory.equipment_id',
       'char_inventory.container',
       // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau) remplace `slot` (texte, colonne
@@ -122,6 +123,34 @@ export async function getItemWithRef(itemId) {
       'ref_equipment.ammo_count as ref_ammo_count',
     )
     .first()
+}
+
+// Résolution canonique d'une arme "possédée et en main" — autorité unique pour le combat (Tir et
+// CaC, arme principale et secondaire, Déclaration et Résolution). Avant cette fonction, chaque
+// site d'appel réimplémentait ce contrôle en SQL brut (fetchHandWeaponForAssault, le contrôle
+// arme secondaire CaC de COM24, et l'arme principale CaC qui n'en avait aucun) avec des listes de
+// slots divergentes selon le fichier — cause racine de MELEE-INHAND et ASSAULT-INHAND-RESOLUTION
+// (docs/BUGIDENTIFIE.md, session 2026-08-05). `slotCodes` est un paramètre obligatoire (pas de
+// défaut implicite) : force chaque appelant à énoncer explicitement quels emplacements sont
+// légitimes pour son cas (ex. arme à deux mains valide en principale, jamais en secondaire).
+//
+// Contrat de retour :
+// - `null` si l'objet n'existe pas ou n'appartient pas à `characterId` — les deux cas sont
+//   indiscernables pour l'appelant (même patron que l'ancien fetchHandWeaponForAssault, dont la
+//   requête combinait déjà id + character_id) : un objet qui n'est pas le vôtre est, du point de vue
+//   du combat, aussi inaccessible qu'un objet qui n'existe pas.
+// - Sinon l'item complet (mêmes champs que getItemWithRef) enrichi de `inHand`/`categoryOk`
+//   (booléens) — trouvé et possédé, mais l'appelant décide s'il distingue "pas en main" de
+//   "mauvaise catégorie" dans son message (ex. `fetchHandWeaponForAssault` : "introuvable" vs
+//   "pas en main" restent deux messages différents pour le joueur).
+export async function getOwnedHandWeapon(characterId, itemId, { slotCodes, category = null } = {}) {
+  if (!itemId || !characterId) return null
+  const item = await getItemWithRef(itemId)
+  if (!item || item.character_id !== characterId) return null
+  const allowedSlots = slotCodes instanceof Set ? slotCodes : new Set(slotCodes)
+  const inHand = (item.slots ?? []).some(slot => allowedSlots.has(slot))
+  const categoryOk = !category || item.ref_category === category
+  return { ...item, inHand, categoryOk }
 }
 
 // Retourne le nombre de coups à charger lors de l'équipement initial d'une arme à feu.
