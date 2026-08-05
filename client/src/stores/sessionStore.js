@@ -21,14 +21,66 @@ export const useSessionStore = create((set) => ({
     return { onlineUsers: next }
   }),
 
+  // Dédup par id (PLAN_CHAT.md §8.2) — un message chat persisté (id numérique de chat_messages) peut
+  // arriver deux fois : une fois via l'historique paginé (setMessages/prependMessages), une fois via
+  // chat:message_created temps réel si les deux se chevauchent au chargement. Les autres types de
+  // messages (dés, système, actions...) ont un id construit avec un timestamp, jamais de collision.
   addMessage: (message) => set((state) => {
     const cid = state.activeCampaignId
     if (!cid) return {}
     const existing = state.messagesByCampaign[cid] || []
+    if (message.id != null && existing.some((m) => m.id === message.id)) return {}
     return {
       messagesByCampaign: {
         ...state.messagesByCampaign,
         [cid]: [...existing, message],
+      },
+    }
+  }),
+
+  // setMessages/prependMessages (PLAN_CHAT.md §8.2, §8.4/§8.5) — chargement initial et pagination
+  // ascendante de l'historique persisté. channelId n'est pas encore un axe de stockage séparé (pas de
+  // vue multi-canal en V1, cf. EN_COURS.md Roadmap "Chat multi-canal") : les messages TEXT/WHISPER
+  // rejoignent le même flux unique que les autres types, channelId reste une métadonnée par message
+  // (déjà suffisant pour un futur filtre, sans restructurer le store à ce moment-là).
+  // Fusion plutôt que remplacement : des messages temps réel (dice, système, chat) ont pu arriver
+  // pendant le chargement de l'historique (§8.4) — un simple replace les perdrait.
+  setMessages: (campaignId, channelId, messages) => set((state) => {
+    const existing = state.messagesByCampaign[campaignId] || []
+    const incomingIds = new Set(messages.map((m) => m.id))
+    const keptExisting = existing.filter((m) => m.id == null || !incomingIds.has(m.id))
+    return {
+      messagesByCampaign: {
+        ...state.messagesByCampaign,
+        [campaignId]: [...messages, ...keptExisting],
+      },
+    }
+  }),
+
+  // Pagination ascendante (scroll infini, §8.5) — l'appelant fournit déjà les messages en ordre
+  // chronologique (plus ancien en premier) ; l'API renvoie ses pages en DESC, la conversion est la
+  // responsabilité de l'appelant (useChatSocket.js), pas du store.
+  prependMessages: (campaignId, channelId, olderMessages) => set((state) => {
+    const existing = state.messagesByCampaign[campaignId] || []
+    const existingIds = new Set(existing.map((m) => m.id))
+    const deduped = olderMessages.filter((m) => m.id == null || !existingIds.has(m.id))
+    return {
+      messagesByCampaign: {
+        ...state.messagesByCampaign,
+        [campaignId]: [...deduped, ...existing],
+      },
+    }
+  }),
+
+  // Suppression douce (§8.2) — retire le message du flux local ; pas de placeholder "message
+  // supprimé" en V1 (non spécifié au plan, pas de dette silencieuse, juste hors scope V1).
+  removeMessage: (campaignId, messageId) => set((state) => {
+    const existing = state.messagesByCampaign[campaignId]
+    if (!existing) return {}
+    return {
+      messagesByCampaign: {
+        ...state.messagesByCampaign,
+        [campaignId]: existing.filter((m) => m.id !== messageId),
       },
     }
   }),
