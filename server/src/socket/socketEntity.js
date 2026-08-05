@@ -97,6 +97,22 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
       const overrides = entity.interaction_overrides?.[interactionId] || {}
       const defaultDifficulty = overrides.difficulty_dc ?? interaction.difficulty_dc
 
+      // COMBAT-INTERAGIR-DISTANCE (docs/BUGIDENTIFIE.md) — le serveur reste seul autoritaire sur
+      // la portée, même mesure que ENTITY_MOVE_REQUEST plus bas (measureBattlemapTokenEntityDistance
+      // réutilisée telle quelle, pas de calcul dupliqué). Posé avant la branche "pas de mécanique"
+      // pour couvrir aussi les interactions sans compétence, jusqu'ici résolues sans aucun contrôle.
+      const actorToken = await db('tokens')
+        .where({ character_id: characterId, battlemap_id: entity.battlemap_id })
+        .first()
+      const measurement = actorToken
+        ? await measureBattlemapTokenEntityDistance({ tokenId: actorToken.id, entityId })
+        : { status: 'no-token' }
+      const effectiveRange = overrides.range ?? interaction.range ?? 1.5
+      if (measurement.status !== 'ok' || measurement.distanceM > effectiveRange) {
+        socket.emit(WS.ENTITY_ACTION_RESULT, { requestId, isApproved: false, reason: 'out_of_range' })
+        return
+      }
+
       // Guard — pas de mécanique (skill_id ni attribute_id) → résolution directe sans GM
       if (!interaction.skill_id && !interaction.attribute_id) {
         await resolveEntityState(entityId, interactionId, campaignId, io)

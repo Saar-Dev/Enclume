@@ -163,6 +163,7 @@
     "noGm": "Aucun MJ connecté",
     "actionRefused": "Action refusée par le MJ",
     "mortallyWoundedNoTest": "Blessure mortelle — aucune action de Test possible",
+    "actionOutOfRange": "Trop loin pour interagir",
     "tokenSkipped": "{{label}} a été passé",
     "stun_blocked": "Action impossible, vous êtes {{statut}}",
     "combatEnd": "Terminer le combat",

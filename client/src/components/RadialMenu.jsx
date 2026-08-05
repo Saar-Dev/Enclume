@@ -52,9 +52,14 @@ export default function RadialMenu({
   const slices = [...interactions]
   if (isGm) slices.push(GM_SLICE)
 
-  // Apercu UX seulement ; le serveur refait la meme mesure 3D autoritaire a l'execution.
+  // Apercu UX seulement ; le serveur refait la meme mesure 3D autoritaire a l'execution
+  // (COMBAT-INTERAGIR-DISTANCE, docs/BUGIDENTIFIE.md — couvre désormais toute interaction, pas
+  // seulement le déplacement).
   const isOutOfRange = (slice) => {
-    if (slice.move_type !== 'displacement') return false
+    if (slice.id === GM_SLICE.id) return false
+    // MJ hors déplacement → ENTITY_ACTION_GM_DIRECT, qui ignore la portée par conception
+    // (raccourci sans arbitrage, cf. socketEntity.js) ; ne pas bloquer ici ce que le serveur autorise.
+    if (isGm && slice.move_type !== 'displacement') return false
     if (!actorToken || !entity) return false
     if (actorToken.position_space !== 'world-feet') return true
     const dist = distanceBetweenWorldPointsM(

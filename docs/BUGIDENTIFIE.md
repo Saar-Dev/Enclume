@@ -1587,7 +1587,7 @@ payload serveur `socketCombatAnnouncement.js`), clés i18n `mapActions.interact.
 
 ---
 
-### Dette COMBAT-INTERAGIR-DISTANCE — Distance d’interaction (1,5m) non vérifiée côté serveur pour le flux générique
+### Dette COMBAT-INTERAGIR-DISTANCE — Distance d’interaction (1,5m) non vérifiée côté serveur pour le flux générique ✅ Session (Saar, 2026-08-05)
 
 **Symptôme [VÉRIFIÉ]** : la vérification de distance (1,5m = 1 case, cf. `.claude/rules/world.md`)
 existe déjà pour `ENTITY_MOVE_REQUEST` (portes, `socketEntity.js:497-500` — `overrides.range ??
@@ -1605,6 +1605,44 @@ ne pas dupliquer le calcul).
 
 **Prochaine étape** : ajouter le même garde que `ENTITY_MOVE_REQUEST`, refus serveur clair si hors
 portée.
+
+**Analyse approfondie (2026-08-05)** — la lecture complète du handler révèle un périmètre plus large
+que le symptôme initial : la branche "pas de mécanique" (`socketEntity.js`, ni `skill_id` ni
+`attribute_id` → `resolveEntityState` direct, sans passer par le MJ) n'avait elle non plus aucun
+contrôle de distance — un levier ou une porte non verrouillée s'actionnait jusqu'ici instantanément
+depuis n'importe où sur la carte, sans aucun jet. Correspond au même invariant manquant (aucune mesure
+3D avant d'agir sur une entité), pas un second bug séparé.
+
+**Correctif codé (2026-08-05)** — un seul garde, posé avant la séparation des deux branches, couvre
+les deux :
+- `server/src/socket/socketEntity.js` (`ENTITY_ACTION_REQUEST`) — token acteur résolu côté serveur
+  (`tokens.where({ character_id: characterId, battlemap_id: entity.battlemap_id })`, pas besoin d'un
+  nouveau champ client), `measureBattlemapTokenEntityDistance({ tokenId, entityId })` réutilisée telle
+  quelle (même fonction que `ENTITY_MOVE_REQUEST`, aucun calcul de distance dupliqué), gate sur
+  `overrides.range ?? interaction.range ?? 1.5` (même défaut, confirmé non-seedé ailleurs en base — la
+  règle dure demandée par Saar). Échec → `ENTITY_ACTION_RESULT { isApproved:false, reason:'out_of_range' }`,
+  même forme que `timeout`/`no_gm`/`mortally_wounded` déjà existants.
+- `client/src/lib/useEntitySocket.js` — nouvelle branche `reason === 'out_of_range'` dans
+  `onEntityActionResult`, même patron que les 3 branches existantes.
+- `client/src/locales/fr.json` — nouvelle clé `session.actionOutOfRange`. `en.json` non touché (gelé,
+  `.claude/rules/i18n.md`).
+- `client/src/components/RadialMenu.jsx` (`isOutOfRange`) — généralisée à toute interaction (plus
+  seulement `move_type==='displacement'`), pour que l'aperçu client redevienne cohérent avec son propre
+  commentaire ("le serveur refait la même mesure 3D autoritaire à l'exécution"). Exclusion explicite du
+  MJ hors déplacement (`isGm && slice.move_type !== 'displacement'`) — `ENTITY_ACTION_GM_DIRECT` ignore
+  la portée par conception (raccourci sans arbitrage, comportement existant non touché) ; l'appliquer
+  côté aperçu aurait bloqué visuellement une action que le serveur autorise réellement.
+
+**Testé** : `node --check socketEntity.js` ; suite serveur complète `node --env-file=.env --test
+"server/src/**/*.test.mjs"` (185/185 ✅, aucun test dédié à `ENTITY_ACTION_REQUEST` dans le dépôt) ;
+ESLint sur les 2 fichiers client touchés — 0 nouvelle erreur/warning (2 warnings `exhaustive-deps`
+préexistants confirmés par `git stash`, sans rapport) ; JSON valide ; `npm run build` (client) propre.
+**Non testé** : scénario réel en jeu (joueur clique une entité hors de portée avec/sans compétence,
+vérifie le refus et le message ; MJ toujours capable d'agir à distance hors déplacement) — à la charge
+de Saar avant de considérer cette dette close et de la retirer du registre.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, aucun changement pour une interaction déjà à portée ; le raccourci
+MJ (`ENTITY_ACTION_GM_DIRECT`) reste inchangé.
 
 ---
 

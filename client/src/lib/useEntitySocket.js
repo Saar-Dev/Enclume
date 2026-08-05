@@ -59,7 +59,9 @@ export function useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBa
             ? t('session.noGm')
             : reason === 'mortally_wounded'
               ? t('session.mortallyWoundedNoTest')
-              : t('session.actionRefused')
+              : reason === 'out_of_range'
+                ? t('session.actionOutOfRange')
+                : t('session.actionRefused')
         addMessage({
           id: `entity-result-${requestId}`,
           system: true,
