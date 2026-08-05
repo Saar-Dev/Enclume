@@ -34,6 +34,15 @@
 > (pas des résumés) — `pascalorg/editor` (21k★, éditeur R3F actif) pour `Editor3D.jsx`,
 > `ArnoldSmith86/virtualtabletop` (VTT Node.js en production) pour la question des revisions/conflits
 > d'écriture. Détail et pistes actionnables en §8.1.
+>
+> **Note — `CharacterModal` obsolète (2026-08-05, suite du même jour)** : §2 ci-dessous liste encore
+> `CharacterModal` comme l'un des 3 composants internes de `Sidebar.jsx` à extraire (table, et étapes 1
+> et 3 de l'ordre conseillé). Cette analyse date d'avant le Lot 2 de `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`
+> (extraction réelle, même jour) et sa clôture de la dette CHARMODAL-DEAD1 (`docs/BUGIDENTIFIE.md`) :
+> `CharacterModal` était déjà mort (jamais monté, remplacé par `client/src/character/CharacterWindow.jsx`)
+> et a depuis été supprimé du dépôt. §2 n'est pas réécrit ligne à ligne (mesure de taille initiale,
+> conservée telle quelle par cohérence avec la méthode décrite en tête de doc) — toute reprise de ce
+> PLAN doit lire `CharacterModal` comme déjà traité, hors périmètre d'une future extraction.
 
 ---
 
