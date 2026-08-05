@@ -43,13 +43,14 @@ const s = {
   wrapper: {
     padding: '8px 0',
     width: '100%',
+    height: '100%',
     display: 'flex',
     justifyContent: 'center',
+    alignItems: 'center',
   },
 
   svg: {
-    width: '50%',
-    maxWidth: '160px',
+    width: '80%',
     height: 'auto',
   },
 }

@@ -1,3 +1,25 @@
+## v198 — 2026-08-05 — Onglet Matériel : catalogue, suppression, Coffre
+
+### Client
+- [feat] Catalogue GM : filtres par famille, catégorie, rareté et poids maximum, et pagination réelle
+  (20 objets par page) à la place de la limite fixe à 50 résultats.
+- [feat] Suppression d'un objet : une confirmation est désormais demandée avant de le retirer
+  définitivement.
+- [feat] Message explicite quand le Sac ou la Ceinture n'est pas équipé, au lieu d'une section absente.
+- [feat] Le Coffre est maintenant visuellement séparé du Sac/Ceinture porté, avec une info-bulle
+  "Stockage distant".
+- [feat] Boutons "Sac" (prendre depuis le Coffre) et "Coffre" (ranger depuis le Sac/la Ceinture) sur
+  chaque objet, en remplacement du menu déroulant de conteneur.
+- [feat] Les slots équipés affichent un libellé lisible (ex. "Bras D", "Main G") au lieu du code brut
+  (BD, MG…).
+- [feat] La silhouette (blessures) est centrée horizontalement et verticalement, et agrandie.
+- [fix] Les vignettes de dégâts d'arme (inventaire) n'affichent plus le chiffre en gras.
+- [fix] Cliquer sur le menu déroulant d'équipement d'un objet ne fait plus accidentellement suivre
+  l'objet au curseur comme un glisser-déposer.
+- [fix] Le menu déroulant d'équipement (inventaire) ne propose plus que les emplacements réellement
+  compatibles avec l'objet — une arme à deux mains ne pouvait à tort être équipée sur une localisation
+  corporelle (ex. Tête).
+
 ## v197 — 2026-08-05 — Onglet Matériel : glisser-déposer et réorganisation
 
 ### Client
@@ -6,8 +28,7 @@
 - [feat] Le Sac et la Ceinture s'affichent maintenant sous les armes (au lieu d'à côté de la silhouette),
   avec le bouton "Modification d'arme" (ex-"Customisation") juste en dessous.
 - [feat] Glisser-déposer : équiper une armure ou une arme, déplacer un objet entre Sac/Ceinture/Coffre,
-  ou déséquiper en glissant vers l'inventaire — en plus des menus déroulants existants, qui restent
-  disponibles.
+  ou déséquiper en glissant vers l'inventaire.
 - [feat] Une arme à deux mains s'équipe désormais en la glissant sur la Main Directrice **ou**
   Secondaire, sans zone séparée. Si un trépied est disponible, un bouton pour basculer dessus apparaît
   après l'équipement.

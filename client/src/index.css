@@ -1022,6 +1022,13 @@ Convention :
   gap: 3px;
 }
 
+/* ── Vignettes de dégâts (arme) — chiffre sans gras (demande Saar 2026-08-05,
+   override de .badge .num { font-weight:700 }, scopé à ces deux variantes) ── */
+.badge.badge-damage-normal .num,
+.badge.badge-damage-choc .num {
+  font-weight: 500;
+}
+
 /* ── .doc-row — ligne liste document (card-row) ─────────────────── */
 .doc-row {
   display: flex;
@@ -1216,6 +1223,145 @@ Convention :
 .sidebar-msg-action {
   background: rgba(168,85,247,0.08);
   border: 1px solid rgba(168,85,247,0.3);
+}
+
+/* ── SIDEBAR — modale aide raccourcis (PLAN_REFACTOR_SIDEBAR.md, lot 3) ───
+   Cluster 100% statique (aucune valeur dynamique) : entièrement en classes, pas de style={} résiduel.
+   #5b8dee (accent titre) n'a pas de token --color-* équivalent dans :root (différent de
+   --wiz-blue-bright #2FD7FF) — laissé en valeur brute, migration de token hors scope de ce lot. */
+.sidebar-help-btn {
+  position: absolute;
+  top: 8px;
+  right: 34px;
+  z-index: 10;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-session-2);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-help-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 40px;
+  background: rgba(0,0,0,0.5);
+}
+.sidebar-help-modal {
+  background: var(--bg-session-raised);
+  border: 1px solid var(--border-session-2);
+  border-radius: 10px;
+  padding: 16px;
+  width: calc(100% - 32px);
+  max-height: calc(100% - 80px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+.sidebar-help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.sidebar-help-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b8dee;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.sidebar-help-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-session-lo);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.sidebar-help-section {
+  font-size: 10px;
+  color: var(--text-session-lo);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.sidebar-help-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-session-mid);
+  padding: 3px 0;
+}
+.sidebar-kbd {
+  background: var(--border-session);
+  border: 1px solid var(--border-session-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  color: var(--text-session-hi);
+  font-family: monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── SIDEBAR — dés critique/catastrophe, config, badge en attente (lot 3, sous-lot 3b) ───
+   rgba(76,175,119,*) / rgba(224,92,92,*) correspondent à --color-success-soft #4caf77 et
+   --color-danger-soft #e05b5b, mais aucun token --color-*-soft-rgb n'existe pour composer une
+   opacité via var() — valeurs brutes conservées telles quelles (comportement identique à avant),
+   introduire ces tokens est une décision de design system séparée, hors scope de ce lot. */
+.sidebar-glass[data-crit="success"] {
+  background: rgba(76,175,119,0.1);
+  border: 1px solid rgba(76,175,119,0.3);
+}
+.sidebar-glass[data-crit="fail"] {
+  background: rgba(224,92,92,0.1);
+  border: 1px solid rgba(224,92,92,0.3);
+}
+.sidebar-config-success {
+  font-size: 12px;
+  color: var(--color-success-soft);
+  background-color: rgba(76,175,119,0.1);
+  border: 1px solid rgba(76,175,119,0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0;
+}
+.sidebar-config-color-picker {
+  width: 36px;
+  height: 32px;
+  padding: 2px;
+  background-color: var(--bg-session-raised);
+  cursor: pointer;
+}
+.sidebar-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-danger-soft);
+  color: #fff;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: middle;
+  line-height: 1;
 }
 
 /* ── GameTimeWidget — horloge de campagne, un seul afficheur (pas 5 boutons) ─── */

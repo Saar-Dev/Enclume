@@ -1,7 +1,13 @@
 # ROADMAP — Projet Enclume
 > Dernière mise à jour : 2026-08-05 — Refonte UX Matériel : Étapes 0-5 closes et confirmées
-> fonctionnelles par Saar (`docs/PLANS/PLAN_INVENTORY_UX.md`, drag & drop complet). Retrait différé des
-> `<select>` Sac/Coffre/Slot dans `InventoryPanel.jsx` (accessibilité clavier à traiter d'abord).
+> fonctionnelles par Saar (`docs/PLANS/PLAN_INVENTORY_UX.md`, drag & drop complet). Étapes 6-8 codées
+> (filtres/pagination catalogue GM, confirmation suppression + séparation Coffre, bouton "Prendre dans
+> le Sac"), Étape 9 codée partiellement (libellés de slot) — toutes non testées en navigateur. Retrait
+> différé du `<select>` de Slot dans `InventoryPanel.jsx` (accessibilité clavier à traiter d'abord) ;
+> le `<select>` de container (Sac/Coffre), lui, a été retiré (demande directe Saar 2026-08-05, bouton
+> "Ranger dans le Coffre" ajouté en compensation). Bug drag & drop corrigé au passage : cliquer un
+> élément interactif (select/input/bouton) dans une ligne draggable déclenchait un drag —
+> `InteractiveAwarePointerSensor` (CharacterWindow.jsx) filtre l'activation sur ces éléments.
 > 2026-07-30 — Fatigue & Dommages : Lot 3 clos (Chute/Acide/Décompression/Feu,
 > `docs/PLAN_FATIGUE_DOMMAGES.md` §9), confirmé fonctionnel par Saar en navigateur. Prochaine étape du
 > chantier : Lot 4 (Fatigue).
@@ -61,16 +67,22 @@
 - Refonte UX Matériel (`docs/PLANS/PLAN_INVENTORY_UX.md`, plan en 10 étapes — **Étapes 0-5 closes et
   confirmées fonctionnelles par Saar 2026-08-05** : source unique de vérité inventaire, bandeau
   poids/sols, réorganisation Armes/Conteneurs, drag & drop complet avec dialogue de conflit
-  main/2-mains). Reste Étapes 6-9 (filtres/pagination catalogue GM, confirmation suppression, bouton
-  "Prendre dans le Sac", polish). Décision Saar en cours de route : la grille 2 colonnes (Étape 4) est
-  annulée après test, retour à l'empilement vertical ; la zone "2 Mains" dédiée est supprimée (fusionnée
-  dans Main Directrice/Secondaire)
-- Retrait des `<select>` Sac/Coffre et Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : ils
-  deviennent redondants une fois le drag & drop en place) — **différé** : nécessite d'abord un
-  `KeyboardSensor` `@dnd-kit` pour ne pas régresser l'accessibilité clavier exigée par
-  `PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne supporte actuellement que la souris/tactile dans cette
-  interface, `PointerSensor` seul). Option alternative : accepter explicitement le compromis
-  d'accessibilité si le clavier n'est pas un besoin réel pour ce groupe de jeu
+  main/2-mains). **Étapes 6-8 codées 2026-08-05, non testées en navigateur** (filtres/pagination
+  catalogue GM, confirmation suppression + séparation visuelle Coffre, bouton "Prendre dans le Sac").
+  **Étape 9 codée partiellement** (libellés de slot traduits) — le retrait du `<select>` de Slot reste
+  différé (accessibilité clavier, voir ci-dessous). Décision Saar en cours de route : la grille 2
+  colonnes (Étape 4) est annulée après test, retour à l'empilement vertical ; la zone "2 Mains" dédiée
+  est supprimée (fusionnée dans Main Directrice/Secondaire) ; silhouette centrée horiz./vertical et
+  agrandie à 80% de l'espace disponible (`SilhouettePanel.jsx`/`ArmorWoundPanel.jsx`) ; gras retiré des
+  vignettes de dégâts (`index.css` `.badge-damage-normal/.badge-damage-choc .num`)
+- Retrait du `<select>` de Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : redondant une
+  fois le drag & drop en place) — **différé** : nécessite d'abord un `KeyboardSensor` `@dnd-kit` pour
+  ne pas régresser l'accessibilité clavier exigée par `PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne supporte
+  actuellement que la souris/tactile dans cette interface, `PointerSensor` seul). Option alternative :
+  accepter explicitement le compromis d'accessibilité si le clavier n'est pas un besoin réel pour ce
+  groupe de jeu. Le `<select>` de container (Sac/Coffre) a lui été retiré 2026-08-05 (demande directe
+  Saar, même compromis d'accessibilité accepté pour ce select-là) — bouton "Ranger dans le Coffre"
+  ajouté en compensation fonctionnelle (aucune zone de drop Coffre n'existe, §5.3)
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté

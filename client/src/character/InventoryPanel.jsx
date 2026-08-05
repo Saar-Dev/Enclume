@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { DAMAGE_TYPE_BADGES } from '../lib/damageTypeBadges.js'
+import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
+import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
 import { setItemSlot, setItemContainer, deleteItem } from '../lib/inventoryMutations.js'
@@ -10,7 +12,38 @@ import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
+// Sous-ensemble affiché dans la boucle accordéon — Coffre est rendu séparément (§10 point 3 du plan :
+// stockage distant, jamais mélangé au Sac/Ceinture portés).
+const CARRIED_CONTAINERS = ['Sac', 'Ceinture']
+// Message affiché quand le conteneur n'est ni équipé ni occupé (PLAN_INVENTORY_UX.md §1.1 point 4).
+const CONTAINER_EMPTY_MESSAGE_KEYS = { Sac: 'inventoryPanel.noSacMessage', Ceinture: 'inventoryPanel.noCeintureMessage' }
 const VALID_SLOTS     = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'MG', 'MD', '2M', 'Tr']
+// Libellés traduits pour les codes de slot cryptiques (PLAN_INVENTORY_UX.md problème #3) — armures :
+// SLOT_TO_WOUND_LOCATION + LOCATION_I18N_KEYS (mêmes clés que WeaponPanel/LocationPanel) ; armes :
+// clés `weaponPanel.slotLabels.*` déjà définies, réutilisées telles quelles (une info = un endroit).
+const SLOT_LABEL_I18N_KEYS = {
+  ...Object.fromEntries(Object.entries(SLOT_TO_WOUND_LOCATION).map(([code, loc]) => [code, LOCATION_I18N_KEYS[loc]])),
+  MG: 'weaponPanel.slotLabels.MG', MD: 'weaponPanel.slotLabels.MD',
+  '2M': 'weaponPanel.slotLabels.2M', Tr: 'weaponPanel.slotLabels.Tr',
+}
+const CATALOG_PAGE_SIZE = 20
+
+// Slots réellement proposables pour un item donné, dérivés de `ref_location` (même parsing que
+// getSlotInfo dans WeaponPanel.jsx) — le menu déroulant ne doit jamais offrir un code hors sujet
+// (armure sur une arme, arme sur une localisation corporelle). Bug corrigé Saar 2026-08-05 : le
+// Breather (arme 2 mains) s'équipait sur "Tête" faute de filtre.
+function slotOptionsForItem(item) {
+  const locs = (item.ref_location || '').split('/').filter(Boolean)
+  if (locs.length === 0) return []
+  if (locs.includes('M')) return ['MG', 'MD'] // arme une main : main directrice ou secondaire
+  if (locs.includes('2M')) {
+    // Arme 2 mains, compatible trépied ou non : seul 2M est proposé ici — le trépied se choisit
+    // après équipement via le bouton dédié de WeaponPanel (switchToTripod), jamais depuis ce menu.
+    // "Tr" reste réservé à l'item Trépied lui-même (branche ci-dessous, demande Saar 2026-08-05).
+    return ['2M']
+  }
+  return locs.filter(l => VALID_SLOTS.includes(l))
+}
 
 // Libellé affiché (clé i18n namespace charSheet) pour chaque code container — le code lui-même
 // (`item.container`, envoyé tel quel à l'API) ne change jamais, seul l'affichage passe par t().
@@ -28,6 +61,11 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
   const [catalog,       setCatalog]       = useState([])
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const [searchQuery,   setSearchQuery]   = useState('')
+  const [filterFamily,   setFilterFamily]   = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [filterRarity,   setFilterRarity]   = useState('')
+  const [filterMaxWeight, setFilterMaxWeight] = useState('')
+  const [catalogPage,    setCatalogPage]    = useState(1)
   const [selectedRef,   setSelectedRef]   = useState(null)  // item ref_equipment sélectionné
   const [addQty,        setAddQty]        = useState(1)
   const [addContainer,  setAddContainer]  = useState('Coffre')
@@ -87,6 +125,10 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
     }
   }
 
+  // Bouton "Ranger dans le Coffre" (ItemRow) — même logique que le drop Sac/Ceinture : déséquiper
+  // d'abord si nécessaire (aucune zone de drop Coffre n'existe, §5.3 ne définit que Sac/Ceinture).
+  const handleSendToVault = (item) => handleDropToContainer(item, 'Coffre')
+
   const sacDrop = useDroppable({
     id: `container-Sac-${characterId}`,
     data: { onDrop: (item) => { if (canEdit) handleDropToContainer(item, 'Sac') } },
@@ -113,6 +155,11 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
     setAddOpen(prev => !prev)
     setSelectedRef(null)
     setSearchQuery('')
+    setFilterFamily('')
+    setFilterCategory('')
+    setFilterRarity('')
+    setFilterMaxWeight('')
+    setCatalogPage(1)
     setAddQty(1)
     setAddContainer(currentAvailableContainers[0] || 'Coffre')
   }, [addOpen, catalogLoaded])
@@ -144,17 +191,38 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
     }
   }, [characterId, selectedRef, addContainer, addQty, upsertInventoryItem])
 
-  // ── Filtre catalogue ──────────────────────────────────────────────────────
+  // ── Filtres catalogue ────────────────────────────────────────────────────
+  // Facettes déduites du catalogue chargé (même pattern que `families` dans TradeWindow.jsx:484),
+  // pas d'appel serveur dédié — le catalogue est déjà entièrement chargé en une requête.
+  const catalogFamilies   = useMemo(() => [...new Set(catalog.map(i => i.family))].filter(Boolean).sort(), [catalog])
+  const catalogCategories = useMemo(() => [...new Set(catalog.map(i => i.category))].filter(Boolean).sort(), [catalog])
+  const catalogRarities   = useMemo(() => [...new Set(catalog.map(i => i.rarity))].filter(Boolean).sort(), [catalog])
 
   const filteredCatalog = useMemo(() => {
-    if (!searchQuery.trim()) return catalog.slice(0, 50)
-    const q = searchQuery.toLowerCase()
-    return catalog.filter(i =>
-      i.name.toLowerCase().includes(q) ||
-      i.category.toLowerCase().includes(q) ||
-      i.family.toLowerCase().includes(q)
-    ).slice(0, 50)
-  }, [catalog, searchQuery])
+    const q = searchQuery.trim().toLowerCase()
+    const maxWeight = filterMaxWeight === '' ? null : parseFloat(filterMaxWeight)
+    return catalog.filter(i => {
+      if (q && !(i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q) || i.family.toLowerCase().includes(q))) return false
+      if (filterFamily && i.family !== filterFamily) return false
+      if (filterCategory && i.category !== filterCategory) return false
+      if (filterRarity && i.rarity !== filterRarity) return false
+      if (maxWeight != null && !isNaN(maxWeight) && (i.weight == null || i.weight > maxWeight)) return false
+      return true
+    })
+  }, [catalog, searchQuery, filterFamily, filterCategory, filterRarity, filterMaxWeight])
+
+  const catalogPageCount = Math.max(1, Math.ceil(filteredCatalog.length / CATALOG_PAGE_SIZE))
+  const pagedCatalog = useMemo(() => {
+    const safePage = Math.min(catalogPage, catalogPageCount)
+    return filteredCatalog.slice((safePage - 1) * CATALOG_PAGE_SIZE, safePage * CATALOG_PAGE_SIZE)
+  }, [filteredCatalog, catalogPage, catalogPageCount])
+
+  // Toute mutation d'un filtre ou de la recherche ramène à la page 1 — sinon une page 3 vide reste
+  // affichée après un filtre qui réduit le nombre de résultats.
+  const handleFilterChange = useCallback((setter) => (value) => {
+    setter(value)
+    setCatalogPage(1)
+  }, [])
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
@@ -171,20 +239,29 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
     <div style={s.root}>
       <div style={s.separator} />
 
-      {/* ── Items par container ────────────────────────────────────────── */}
-      {CONTAINER_ORDER.map(container => {
+      {/* ── Sac / Ceinture portés ─────────────────────────────────────── */}
+      {CARRIED_CONTAINERS.map(container => {
         const list = itemsByContainer[container]
-        // Sac/Ceinture restent visibles vides (conteneur possédé mais rien dedans) — sinon aucune
-        // zone où déposer un premier item par drag & drop (PLAN_INVENTORY_UX.md §4.3/§5.3). Coffre
-        // inchangé : n'apparaît que s'il contient quelque chose.
-        const drop = container === 'Sac' ? sacDrop : container === 'Ceinture' ? ceintureDrop : null
-        const showEmpty = drop && availableContainers.includes(container)
-        if (!list?.length && !showEmpty) return null
+        // Sac/Ceinture restent visibles vides tant qu'ils sont équipés (conteneur possédé mais rien
+        // dedans) — sinon aucune zone où déposer un premier item par drag & drop
+        // (PLAN_INVENTORY_UX.md §4.3/§5.3).
+        const drop = container === 'Sac' ? sacDrop : ceintureDrop
+        const isAvailable = availableContainers.includes(container)
+        if (!list?.length && !isAvailable) {
+          // Conteneur ni équipé ni occupé — message explicite plutôt que section absente
+          // (PLAN_INVENTORY_UX.md §1.1 point 4).
+          return (
+            <div key={container} style={{ marginBottom: 8 }}>
+              <div style={s.containerLabel}>{t(CONTAINER_LABEL_KEYS[container])}</div>
+              <p style={s.emptyContainerMsg}>{t(CONTAINER_EMPTY_MESSAGE_KEYS[container])}</p>
+            </div>
+          )
+        }
         return (
           <div
             key={container}
-            ref={drop?.setNodeRef}
-            style={{ marginBottom: 8, ...(drop?.isOver && canEdit ? s.containerDropOver : null) }}
+            ref={drop.setNodeRef}
+            style={{ marginBottom: 8, ...(drop.isOver && canEdit ? s.containerDropOver : null) }}
           >
             <div style={s.containerLabel}>{t(CONTAINER_LABEL_KEYS[container])}</div>
             {list.map(item => (
@@ -194,6 +271,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
                 canEdit={canEdit}
                 availableContainers={availableContainers}
                 onMoveContainer={handleMoveContainer}
+                onSendToVault={handleSendToVault}
                 onEquip={handleEquip}
                 onDelete={handleDelete}
               />
@@ -206,6 +284,29 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
         <p style={{ color: '#4a4a60', fontSize: 12, fontStyle: 'italic', textAlign: 'center', margin: '16px 0' }}>
           {t('inventoryPanel.emptyInventory')}
         </p>
+      )}
+
+      {/* ── Coffre — stockage distant, séparé visuellement du Sac/Ceinture porté
+          (PLAN_INVENTORY_UX.md §10 point 3) ──────────────────────────────── */}
+      {itemsByContainer.Coffre?.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={s.separator} />
+          <div className="has-tooltip" data-tooltip={t('inventoryPanel.vaultTooltip')} style={s.containerLabel}>
+            {t(CONTAINER_LABEL_KEYS.Coffre)}
+          </div>
+          {itemsByContainer.Coffre.map(item => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              canEdit={canEdit}
+              availableContainers={availableContainers}
+              onMoveContainer={handleMoveContainer}
+              onSendToVault={handleSendToVault}
+              onEquip={handleEquip}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
       )}
 
       {/* ── Bloc "Ajouter" — GM uniquement ────────────────────────────── */}
@@ -258,20 +359,43 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
                   </div>
                 </div>
               ) : (
-                /* ── Recherche dans le catalogue ─────────────────────── */
+                /* ── Recherche + filtres dans le catalogue ───────────── */
                 <>
                   <input
                     style={s.searchInput}
                     placeholder={t('inventoryPanel.searchPlaceholder')}
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={e => handleFilterChange(setSearchQuery)(e.target.value)}
                     autoFocus
                   />
+                  <div style={s.filterRow}>
+                    <select value={filterFamily} onChange={e => handleFilterChange(setFilterFamily)(e.target.value)} style={s.selectSmall}>
+                      <option value="">{t('inventoryPanel.filterAllFamily')}</option>
+                      {catalogFamilies.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    <select value={filterCategory} onChange={e => handleFilterChange(setFilterCategory)(e.target.value)} style={s.selectSmall}>
+                      <option value="">{t('inventoryPanel.filterAllCategory')}</option>
+                      {catalogCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={filterRarity} onChange={e => handleFilterChange(setFilterRarity)(e.target.value)} style={s.selectSmall}>
+                      <option value="">{t('inventoryPanel.filterAllRarity')}</option>
+                      {catalogRarities.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      placeholder={t('inventoryPanel.filterMaxWeightPlaceholder')}
+                      value={filterMaxWeight}
+                      onChange={e => handleFilterChange(setFilterMaxWeight)(e.target.value)}
+                      style={s.weightInput}
+                    />
+                  </div>
                   <div style={s.catalogList}>
                     {filteredCatalog.length === 0 && (
                       <div style={{ color: '#4a4a60', fontSize: 11, padding: 8 }}>{t('inventoryPanel.noResult')}</div>
                     )}
-                    {filteredCatalog.map(refItem => (
+                    {pagedCatalog.map(refItem => (
                       <div
                         key={refItem.id}
                         style={s.catalogRow}
@@ -281,12 +405,28 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
                         <span style={{ color: '#4a4a60', fontSize: 10 }}>{refItem.category}</span>
                       </div>
                     ))}
-                    {!searchQuery && catalog.length > 50 && (
-                      <div style={{ color: '#4a4a60', fontSize: 10, padding: '4px 8px' }}>
-                        {t('inventoryPanel.moreItemsHint', { count: catalog.length - 50 })}
-                      </div>
-                    )}
                   </div>
+                  {filteredCatalog.length > 0 && (
+                    <div style={s.paginationRow}>
+                      <button
+                        onClick={() => setCatalogPage(p => Math.max(1, p - 1))}
+                        disabled={catalogPage <= 1}
+                        style={s.pageBtn}
+                      >
+                        {t('inventoryPanel.pagePrev')}
+                      </button>
+                      <span style={{ color: '#5a5a7a' }}>
+                        {t('inventoryPanel.pageIndicator', { page: Math.min(catalogPage, catalogPageCount), total: catalogPageCount, count: filteredCatalog.length })}
+                      </span>
+                      <button
+                        onClick={() => setCatalogPage(p => Math.min(catalogPageCount, p + 1))}
+                        disabled={catalogPage >= catalogPageCount}
+                        style={s.pageBtn}
+                      >
+                        {t('inventoryPanel.pageNext')}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -297,21 +437,22 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
   )
 }
 
-function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip, onDelete }) {
+function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
-
-  const containerOptions = availableContainers.includes(item.container)
-    ? availableContainers
-    : [item.container, ...availableContainers]
 
   // Même filtre que WeaponPanel.jsx (`availableWeapons`) — les colonnes ref_damage_h/ref_shock
   // existent sur toute la table ref_equipment, pas seulement les armes ; ne pas afficher le badge
   // sur un objet non-arme dont ces champs seraient renseignés par erreur de saisie catalogue.
   const isWeaponLike = item.ref_family === 'Armes' || item.ref_category === 'Bouclier'
 
+  // Slots réellement compatibles avec cet item (bug Saar 2026-08-05 : le Breather, arme 2 mains,
+  // s'équipait sur "Tête" — le menu proposait tous les codes sans filtrer par ref_location).
+  const slotOptions = slotOptionsForItem(item)
+
   // PLAN_INVENTORY_UX.md §5.2 — l'item entier (icône + nom + stats) est la source draggable ; les
-  // <select>/bouton restent cliquables normalement grâce au seuil de distance du sensor (CharacterWindow.jsx).
+  // <select>/bouton restent cliquables normalement grâce à InteractiveAwarePointerSensor
+  // (CharacterWindow.jsx, ignore le pointerdown sur les éléments interactifs imbriqués).
   // Préfixe `inv-` : un item équipé apparaît AUSSI ici (avec son slot entre crochets, ligne ci-dessous)
   // en plus de LocationPanel/WeaponCard/ContainerPanel — même item.id, deux nœuds draggables distincts
   // rendus simultanément, l'id dnd-kit doit donc être unique par contexte de rendu, pas juste par item.
@@ -332,7 +473,9 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
       <span style={s.itemName}>
         {name}
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
-        {item.slots?.length > 0 && <span style={s.itemSlot}> [{item.slots.join('/')}]</span>}
+        {item.slots?.length > 0 && (
+          <span style={s.itemSlot}> [{item.slots.map(sl => SLOT_LABEL_I18N_KEYS[sl] ? t(SLOT_LABEL_I18N_KEYS[sl]) : sl).join('/')}]</span>
+        )}
       </span>
       {isWeaponLike && DAMAGE_TYPE_BADGES.map(({ key, field, className, i18nKey }) => item[field] && (
         <span key={key} className={`badge badge-compact ${className}`} style={s.itemDamageBadge}>{t(i18nKey)} <span className="num">{item[field]}</span></span>
@@ -342,28 +485,38 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onEquip,
       )}
       {canEdit && (
         <>
-          <select
-            value={item.container}
-            onChange={e => onMoveContainer(item.id, e.target.value)}
-            style={s.selectSmall}
-          >
-            {containerOptions.map(c => (
-              <option key={c} value={c}>{t(CONTAINER_LABEL_KEYS[c])}</option>
-            ))}
-          </select>
-          {item.container === 'Sac' && (
+          {item.container === 'Sac' && slotOptions.length > 0 && (
             <select
               value={item.slots?.length === 1 ? item.slots[0] : ''}
               onChange={e => onEquip(item.id, e.target.value || null)}
               style={{ ...s.selectSmall, color: item.slots?.length > 0 ? '#5b8dee' : '#4a4a60' }}
             >
               <option value="">{t('inventoryPanel.slotPlaceholder')}</option>
-              {VALID_SLOTS.map(sl => (
-                <option key={sl} value={sl}>{sl}</option>
+              {slotOptions.map(sl => (
+                <option key={sl} value={sl}>{t(SLOT_LABEL_I18N_KEYS[sl])}</option>
               ))}
             </select>
           )}
-          <button onClick={() => onDelete(item.id)} style={s.deleteBtn} title={t('inventoryPanel.deleteTooltip')}>✕</button>
+          {/* PLAN_INVENTORY_UX.md §4.4 — Coffre → Sac en un clic, PUT container:'Sac'. */}
+          {item.container === 'Coffre' && availableContainers.includes('Sac') && (
+            <button onClick={() => onMoveContainer(item.id, 'Sac')} style={s.takeToSacBtn} title={t('inventoryPanel.takeToSacTooltip')}>
+              {t('inventoryPanel.takeToSacButton')}
+            </button>
+          )}
+          {/* Symétrique de "Prendre dans le Sac" — remplace le <select> container retiré (demande
+              Saar 2026-08-05). Seule voie restante vers Coffre : aucune zone de drop Coffre n'existe
+              (PLAN_INVENTORY_UX.md §5.3 ne définit que Sac/Ceinture comme cibles de drop). Réutilise
+              handleDropToContainer (déséquipe d'abord si l'item est équipé, comme le drag & drop). */}
+          {item.container !== 'Coffre' && (
+            <button onClick={() => onSendToVault(item)} style={s.takeToSacBtn} title={t('inventoryPanel.sendToVaultTooltip')}>
+              {t('inventoryPanel.sendToVaultButton')}
+            </button>
+          )}
+          <button
+            onClick={() => { if (window.confirm(t('inventoryPanel.deleteConfirm', { name }))) onDelete(item.id) }}
+            style={s.deleteBtn}
+            title={t('inventoryPanel.deleteTooltip')}
+          >✕</button>
         </>
       )}
     </div>
@@ -377,6 +530,9 @@ const s = {
   containerLabel: {
     fontSize: 10, color: '#4a4a60', textTransform: 'uppercase',
     letterSpacing: '0.07em', marginBottom: 2, marginTop: 8,
+  },
+  emptyContainerMsg: {
+    fontSize: 11, color: '#4a4a60', fontStyle: 'italic', margin: '4px 0',
   },
   // Survol drag & drop valide (PLAN_INVENTORY_UX.md §5.4, polish complet en sous-lot 6).
   containerDropOver: {
@@ -401,6 +557,10 @@ const s = {
     background: 'none', border: 'none', color: '#5a5a7a',
     cursor: 'pointer', fontSize: 11, padding: '1px 4px', flexShrink: 0,
   },
+  takeToSacBtn: {
+    background: 'rgba(91,141,238,0.1)', border: '1px solid rgba(91,141,238,0.3)', borderRadius: 4,
+    color: '#5b8dee', cursor: 'pointer', fontSize: 10, padding: '1px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+  },
 
   // Bloc ajout GM
   addToggleBtn: {
@@ -417,8 +577,23 @@ const s = {
     borderRadius: 4, padding: '4px 8px', color: '#c0c0d0', fontSize: 12,
     outline: 'none', boxSizing: 'border-box', marginBottom: 6,
   },
+  filterRow: {
+    display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6,
+  },
+  weightInput: {
+    width: 70, background: '#16162a', border: '1px solid #2a2a3e',
+    borderRadius: 4, padding: '1px 4px', color: '#9090a8', fontSize: 11, outline: 'none',
+  },
   catalogList: {
     maxHeight: 200, overflowY: 'auto', borderRadius: 4,
+  },
+  paginationRow: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+    marginTop: 6, fontSize: 11,
+  },
+  pageBtn: {
+    background: 'none', border: '1px solid #2a2a3e', borderRadius: 4,
+    color: '#9090a8', cursor: 'pointer', fontSize: 11, padding: '2px 8px',
   },
   catalogRow: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',

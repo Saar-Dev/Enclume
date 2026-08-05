@@ -1,8 +1,10 @@
 PLAN_INVENTORY_UX.md — Refonte ergonomique de l’onglet Matériel
 
-    Version : V1.6 — 2026-08-05
+    Version : V1.7 — 2026-08-05
     Statut : Étapes 0 à 5 codées, testées et confirmées fonctionnelles en navigateur par Saar
-    (2026-08-05). Étapes 6 à 9 non commencées — voir `docs/ROADMAP.md`.
+    (2026-08-05). Étapes 6 à 8 codées (2026-08-05), **non testées en navigateur**. Étape 9 codée
+    partiellement (uniformisation des libellés de slot uniquement — voir écart ci-dessous), reste non
+    testée en navigateur.
 
     Écarts tranchés par Saar en cours de route (documentés, pas des raccourcis silencieux) :
     - Étape 4 (grille 2 colonnes) **annulée** après test : bloc équipement trop massif, silhouette
@@ -15,9 +17,20 @@ PLAN_INVENTORY_UX.md — Refonte ergonomique de l’onglet Matériel
       la seconde main est couverte automatiquement. Le choix Trépied (2M ↔ Tr) devient un bouton
       apparaissant *après* l'équipement (`weaponPanel.switchToTripod`/`switchToTwoHands`), plus un
       `<select>` préalable.
-    - Retrait des `<select>` Sac/Coffre et Slot dans InventoryPanel.jsx (redondants avec le drag & drop)
-      **différé** — nécessite d'abord un `KeyboardSensor` dnd-kit pour ne pas régresser
-      l'accessibilité clavier exigée par §5.5. Noté dans `docs/ROADMAP.md`.
+    - Retrait du `<select>` Sac/Coffre (déplacement de container) dans InventoryPanel.jsx : demandé
+      explicitement par Saar 2026-08-05, **fait** malgré la réserve d'accessibilité clavier notée
+      ci-dessous (§5.5) — le `<select>` de Slot (équipement), lui, reste en place, non concerné par
+      cette demande. Aucune zone de drop Coffre n'existant (§5.3), un nouveau bouton symétrique
+      "Ranger dans le Coffre" (Sac/Ceinture → Coffre, déséquipe d'abord si besoin) complète "Prendre
+      dans le Sac" (Étape 8) pour ne perdre aucun chemin fonctionnel. Le retrait du `<select>` de Slot
+      reste **différé** — nécessite un `KeyboardSensor` dnd-kit pour ne pas régresser l'accessibilité
+      clavier exigée par §5.5. Noté dans `docs/ROADMAP.md`.
+    - Bug drag & drop trouvé en testant l'Étape 6/9 : cliquer sur le `<select>` de Slot (ou tout
+      élément interactif imbriqué dans une ligne draggable) déclenchait un drag au lieu d'ouvrir le
+      menu — le seuil de distance (6px) seul ne suffisait pas, dnd-kit capture le pointerdown sur les
+      descendants avant l'évaluation du seuil. Corrigé par `InteractiveAwarePointerSensor`
+      (CharacterWindow.jsx, pattern officiel dnd-kit — ignore l'activation sur select/input/
+      textarea/button/option), remplace le simple `PointerSensor` partout dans l'onglet Matériel.
 
     Bug d'exécution évité (Étape 0) : ModingWindow.jsx exclu de la bascule store (§3.2) avec son propre
     signal de rafraîchissement, sinon perdu à la suppression du reloadKey legacy. Règle asymétrique
@@ -383,10 +396,10 @@ Zone « Ceinture » (dans inventaire)	PUT /inventory/:id { container: 'Ceinture'
 Étape 3 ✅ confirmé 2026-08-05	Ajouter la section « Conteneurs portés » dans WeaponPanel.jsx, en dessous des armes. Y intégrer les ContainerPanel. Déplacer le bouton Customisation (moding) d’InventoryPanel.jsx vers WeaponPanel.jsx (prop `onOpenModing` reroutée depuis CharacterWindow.jsx ; ModingWindow.jsx lui-même inchangé).	WeaponPanel.jsx, ContainerPanel.jsx (inchangé), InventoryPanel.jsx, CharacterWindow.jsx	Vérifier que le Sac et la Ceinture s’affichent et fonctionnent dans leur nouvelle position, et que le bouton Customisation ouvre toujours ModingWindow avec l’ensemble des armes possédées.
 Étape 4 ❌ annulée 2026-08-05	Modifier CharacterWindow.jsx pour afficher les deux blocs en grille 2 colonnes (responsive) au lieu de l’empilement vertical. **Codée puis annulée après test** (bloc trop massif, silhouette écrasée) — retour à l'empilement vertical d'origine, décision Saar.	CharacterWindow.jsx	Vérifié : empilement vertical confirmé fonctionnel.
 Étape 5 ✅ confirmé 2026-08-05	Ajouter le drag & drop dans InventoryPanel et les zones d’équipement, y compris le dialogue de confirmation en cas de conflit main/2M rejeté par le serveur (§4.2, §5.3).	InventoryPanel.jsx, WeaponPanel.jsx, LocationPanel.jsx	Scénario : équiper une arme par drag, équiper une armure par drag, déplacer entre conteneurs par drag, ET le scénario de conflit main/2M avec confirmation (§7.2) — c'est cette étape qui construit ce flux, il doit être vérifié ici, pas seulement listé globalement en §7.2.
-Étape 6	Améliorer le catalogue GM (filtres, pagination).	InventoryPanel.jsx	Vérifier les filtres, la pagination, et l’ajout d’un item.
-Étape 7	Ajouter les dialogues de confirmation (suppression) et les messages d’information (conteneurs conditionnels). Séparer visuellement le Coffre de l’accordéon Sac/Ceinture, avec tooltip « Stockage distant » (pattern `data-tooltip` existant, WeaponPanel.jsx:56).	InventoryPanel.jsx	Vérifier que le dialogue apparaît avant suppression, que le message s’affiche si pas de sac, que le Coffre est visuellement distinct avec sa tooltip.
-Étape 8	Ajouter le bouton « Prendre dans le Sac » pour les items du Coffre.	InventoryPanel.jsx	Vérifier que l’item passe du Coffre au Sac en un clic.
-Étape 9	Nettoyage et polish : retirer le <select> de slot pour les armes dans InventoryPanel (redondant), uniformiser les libellés de slot.	InventoryPanel.jsx, WeaponPanel.jsx	Vérifier qu’aucune régression n’est introduite.
+Étape 6 ⚠️ codé 2026-08-05, non testé navigateur	Filtres catalogue GM (famille, catégorie, rareté, poids max — facettes déduites du catalogue chargé, pattern `families` de TradeWindow.jsx) et pagination réelle 20/page (remplace le `slice(0,50)`). `weight` ajouté au SELECT de `GET /api/equipment` (colonne déjà en base, absente du payload).	InventoryPanel.jsx, server/src/routes/equipment.js	Vérifier les 4 filtres (seuls ou combinés), la pagination (Précédent/Suivant, indicateur), et l'ajout d'un item après filtrage.
+Étape 7 ⚠️ codé 2026-08-05, non testé navigateur	Confirmation avant suppression (`window.confirm`, pattern déjà utilisé WeaponPanel.jsx conflit main/2M). Message explicite si Sac/Ceinture non équipé et vide. Coffre séparé visuellement de l'accordéon Sac/Ceinture avec tooltip « Stockage distant » (pattern `data-tooltip` existant, WeaponPanel.jsx:56).	InventoryPanel.jsx	Vérifier que le dialogue apparaît avant suppression (annuler conserve l'item), que le message s'affiche si pas de sac/ceinture, que le Coffre est visuellement distinct avec sa tooltip.
+Étape 8 ⚠️ codé 2026-08-05, non testé navigateur	Bouton « Prendre dans le Sac » pour les items du Coffre (PUT container:'Sac' en un clic).	InventoryPanel.jsx	Vérifier que l'item passe du Coffre au Sac en un clic.
+Étape 9 ⚠️ codé partiellement 2026-08-05, non testé navigateur	Libellés de slot traduits (T/C/BG/BD/JG/JD/MG/MD/2M/Tr → libellés, réutilise `LOCATION_I18N_KEYS`/`SLOT_TO_WOUND_LOCATION`/`weaponPanel.slotLabels.*`) sur le `<select>` de Slot et le badge `[...]` de ligne. Le retrait du `<select>` de Slot reste différé (§10 — KeyboardSensor). Le `<select>` de container (Sac/Coffre), lui, a été retiré hors plan initial sur demande directe de Saar 2026-08-05 (voir écart en tête de document) — un bouton « Ranger dans le Coffre » complète « Prendre dans le Sac » pour ne perdre aucun chemin.	InventoryPanel.jsx	Vérifier qu'aucune régression n'est introduite ; vérifier spécifiquement le bug corrigé en même temps (clic sur le `<select>` de Slot n'entraîne plus l'item vers le curseur — `InteractiveAwarePointerSensor`, CharacterWindow.jsx).
 6.2 Compatibilité ascendante
 
     Les routes API (/inventory, /sols) ne sont pas modifiées. Le serveur n’est pas impacté.

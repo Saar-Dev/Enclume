@@ -112,5 +112,9 @@ const s = {
     flexDirection: 'column',
     gap: 8,
     minWidth: 0,
+    // Centrage vertical de la silhouette sur la hauteur des colonnes gauche/droite (demande Saar
+    // 2026-08-05) — alignSelf:'stretch' ignore le alignItems:'start' du grid parent pour cette
+    // colonne, SilhouettePanel se centre ensuite dans la hauteur ainsi obtenue.
+    alignSelf: 'stretch',
   },
 }

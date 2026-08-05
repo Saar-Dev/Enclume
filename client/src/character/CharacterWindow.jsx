@@ -28,6 +28,26 @@ import ModingWindow from './ModingWindow.jsx'
 import PossessionNotes from '../components/creation/PossessionNotes.jsx'
 import TokenStyleEditor from './TokenStyleEditor.jsx'
 
+// ─── Drag & drop items (PLAN_INVENTORY_UX.md §5) ──────────────────────────────
+// Un <select>/<button>/<input> imbriqué dans une ligne draggable reçoit le pointerdown natif AVANT
+// le seuil de distance de dnd-kit (le pointerdown démarre le tracking même pour un simple clic) —
+// bug observé Saar 2026-08-05 : cliquer le <select> de slot faisait suivre l'item au curseur au lieu
+// d'ouvrir le menu. Fix officiel dnd-kit (docs "Sensors" — ignorer les éléments interactifs à
+// l'activation) plutôt qu'un rustine par composant.
+const INTERACTIVE_TAGS = new Set(['SELECT', 'OPTION', 'INPUT', 'TEXTAREA', 'BUTTON'])
+class InteractiveAwarePointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown',
+      handler: ({ nativeEvent: event }) => {
+        if (!event.isPrimary || event.button !== 0) return false
+        if (event.target instanceof Element && INTERACTIVE_TAGS.has(event.target.tagName)) return false
+        return true
+      },
+    },
+  ]
+}
+
 // ─── Constantes fenêtre ───────────────────────────────────────────────────────
 const WIN_INIT_W = 720
 const WIN_INIT_H = 600
@@ -205,11 +225,10 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
     setActiveDragItem(null)
   }, [])
 
-  // Seuil de déplacement avant activation du drag (défaut dnd-kit = 0px) : sans lui, un simple clic
-  // sur un <select>/<button> à l'intérieur d'une ligne draggable pourrait déclencher un drag au lieu
-  // du clic natif.
+  // Seuil de déplacement (6px) pour le drag sur les zones non interactives + filtre
+  // InteractiveAwarePointerSensor (ci-dessus) pour les <select>/<button>/<input> imbriqués.
   const itemDragSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(InteractiveAwarePointerSensor, { activationConstraint: { distance: 6 } }),
   )
 
   const [activeTab,   setActiveTab]   = useState('sheet')
