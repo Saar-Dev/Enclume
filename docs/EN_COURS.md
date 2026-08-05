@@ -67,7 +67,6 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 
 | ID | Description | Priorité |
 |---|---|---|
-| ~~**CLICKATTACK-TURNGATE1**~~ | ~~`useCombatClickAttack` jamais gardé par le tour, contrairement à `useAutoMoveMode`~~ | ⚠️ clos partiel — Session (Saar, 2026-08-05) : garde de tour unifié (`isMyTurnToAct`) + dédup `isActivePnj`/`isActiveDrone` codés, build/lint propres, scénario réel navigateur non testé |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
@@ -126,7 +125,6 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 | **WNDMORT-UI** | Fenêtre de déclaration sans repli visuel pour Blessure mortelle — le serveur rejette déjà, l'UI ne prévient pas avant. Détail `BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-01, décision Saar : validé) : bandeau d'avertissement + tuiles grisées codés, scénario réel navigateur non testé |
 | **WNDMORT-HORSCOMBAT** | Test générique hors-combat (`socketEntity.js`) non gardé pour Blessure mortelle. Détail `BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-01, décision Saar : bandeau centré) : garde + bandeau centré codés, scénario réel navigateur non testé |
 | **ETATSPERS-LOT2C** | `combat_roster.state_position`/`state_weapon` non retirées — `entry` (`socketCombatAnnouncement.js:139`, coût d'Initiative + validation Tir Visé) toujours lu directement depuis `combat_roster`, pas encore migré vers `characterStateService`. Détail `docs/SYSTEME/ETATS_PERSONNAGE.md` | Basse — différé volontairement (Codex/Kiwi hors projet, plus d'urgence fusion) ; clôture alignée sur `docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7) quand ce chantier reprendra |
-| **COMBAT-INTERAGIR-DISTANCE** | Distance d'interaction (1,5m) non vérifiée côté serveur pour `ENTITY_ACTION_REQUEST` (compétence *et* résolution directe sans MJ) — trouvé en auditant l'autorité spatiale du monde. Détail `docs/BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-05) : garde serveur + retour `out_of_range` + aperçu client codés, 185/185 tests serveur verts, build/lint clients propres, scénario réel navigateur non testé |
 
 ---
 

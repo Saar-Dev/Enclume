@@ -514,12 +514,10 @@ nouvelle logique inventée :
 préexistants et sans rapport (confirmé par `git stash`/comparaison ligne à ligne : l'erreur
 `set-state-in-effect` est la dette I18N-LINT3 déjà trackée, non touchée ici) ; `npm run build` (client)
 propre.
-**Non testé** : scénario réel en jeu — clic-attaque PJ/PNJ/drone hors tour (doit être refusé/absent),
-clic-attaque et survol pendant le tour légitime (doit fonctionner comme avant), drone d'un joueur au
-slot actif côté vue MJ (ambiant ne doit plus s'armer) — à la charge de Saar.
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)**.
 **Données** : aucune, 100% client, aucune migration.
-**Retour arrière** : commit isolé, aucun changement de comportement pendant le tour légitime du
-déclarant (PJ, PNJ ou drone MJ).
+**Retour arrière** : commit isolé (`b306b05`), aucun changement de comportement pendant le tour
+légitime du déclarant (PJ, PNJ ou drone MJ).
 
 ---
 
@@ -1675,12 +1673,10 @@ les deux :
 "server/src/**/*.test.mjs"` (185/185 ✅, aucun test dédié à `ENTITY_ACTION_REQUEST` dans le dépôt) ;
 ESLint sur les 2 fichiers client touchés — 0 nouvelle erreur/warning (2 warnings `exhaustive-deps`
 préexistants confirmés par `git stash`, sans rapport) ; JSON valide ; `npm run build` (client) propre.
-**Non testé** : scénario réel en jeu (joueur clique une entité hors de portée avec/sans compétence,
-vérifie le refus et le message ; MJ toujours capable d'agir à distance hors déplacement) — à la charge
-de Saar avant de considérer cette dette close et de la retirer du registre.
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)**.
 **Données** : aucune migration.
-**Retour arrière** : commit isolé, aucun changement pour une interaction déjà à portée ; le raccourci
-MJ (`ENTITY_ACTION_GM_DIRECT`) reste inchangé.
+**Retour arrière** : commit isolé (`6ba0353`), aucun changement pour une interaction déjà à portée ; le
+raccourci MJ (`ENTITY_ACTION_GM_DIRECT`) reste inchangé.
 
 ---
 

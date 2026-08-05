@@ -363,3 +363,66 @@ fond quasi-noir (`#0d0d16`).
 
 Les 3 bugs signalés en bloc ce jour (ALLURE-TURNGATE1, CLICKATTACK-MOVECONFLICT1,
 SIDEBAR-CDL-CONTRAST1) sont désormais tous clos et confirmés en jeu.
+
+---
+
+## Session (Saar) — 2026-08-05 — COMBAT-INTERAGIR-DISTANCE : garde de portée serveur pour les interactions génériques
+
+**Contexte** : triage complet de `docs/BUGIDENTIFIE.md` demandé par Saar, sélection motivée d'un bug
+au périmètre décidé (règle dure 1,5m déjà actée par Saar) et au correctif non ambigu (patron déjà
+validé en jeu par `ENTITY_MOVE_REQUEST`), plutôt qu'un bug bloqué par une décision produit.
+
+**Cause racine [VÉRIFIÉ par lecture]** : `ENTITY_ACTION_REQUEST` (`socketEntity.js`) ne vérifiait
+aucune distance avant d'agir sur une entité — ni pour les interactions à compétence (arbitrage MJ), ni
+pour la résolution directe sans MJ (`resolveEntityState`, appelée immédiatement quand l'interaction n'a
+ni `skill_id` ni `attribute_id`). Ce second cas, plus grave, n'était pas explicite dans le texte
+d'origine de la dette — trouvé en lisant le handler en entier avant de coder. Le mécanisme jumeau
+`ENTITY_MOVE_REQUEST`, juste à côté dans le même fichier, faisait déjà ce qu'il fallait
+(`measureBattlemapTokenEntityDistance` + `overrides.range ?? interaction.range ?? 1.5`).
+
+**Correctif** : un seul garde, posé avant la séparation des deux branches, réutilisant telle quelle
+`measureBattlemapTokenEntityDistance` (aucun calcul de distance dupliqué) — token acteur résolu côté
+serveur depuis `characterId`+`battlemap_id` (pas besoin d'un nouveau champ client). Échec → nouveau
+`reason:'out_of_range'` sur `ENTITY_ACTION_RESULT`, même forme que `timeout`/`no_gm`/`mortally_wounded`
+déjà existants (`useEntitySocket.js`, `session.actionOutOfRange` dans `fr.json`). Aperçu client
+(`RadialMenu.jsx`) généralisé à toute interaction (plus seulement le déplacement), avec exclusion
+explicite du raccourci MJ (`ENTITY_ACTION_GM_DIRECT`, qui ignore la portée par conception).
+
+**Testé** : suite serveur complète `node --test` (185/185 ✅) ; ESLint (0 nouvelle erreur/warning,
+confirmé par `git stash`) ; `npm run build` (client) propre. **Confirmé fonctionnel en jeu par Saar
+(2026-08-05)**.
+**Données** : aucune migration.
+**Retour arrière** : commit `6ba0353`, isolé, 4 fichiers ; `ENTITY_ACTION_GM_DIRECT` inchangé.
+
+---
+
+## Session (Saar) — 2026-08-05 — CLICKATTACK-TURNGATE1 : garde de tour unifié pour le clic-attaque ambiant
+
+**Contexte** : bug suivant du même triage, sélectionné pour la même raison (cause déjà vérifiée par
+lecture, correctif qui réutilise un patron déjà validé en jeu — `ALLURE-TURNGATE1` — aucune décision
+produit à trancher).
+
+**Cause racine [VÉRIFIÉ par lecture]** : `useCombatClickAttack` (clic direct sur un token adverse pour
+proposer une attaque) n'avait jamais reçu le garde de tour appliqué à son hook jumeau
+`useAutoMoveMode` (`ALLURE-TURNGATE1`) — écart explicitement noté en commentaire lors de la correction
+de ce dernier, jamais traité depuis.
+
+**Analyse approfondie avant correctif** — lecture complète de `CombatGmDeclareWindow.jsx` (pas
+seulement les 3 lignes visées), même invariant élargi, pas des bugs séparés :
+- `clickIsActivePnj` était un doublon exact d'`isActivePnj` (même expression, déjà calculée plus haut
+  dans le même fichier) — aucune contrainte technique ne justifiait la duplication.
+- `moveHoverEnabled: !!activeDroneCharId` (drone) manquait `!has_announced` (gap documenté) **et**
+  n'excluait pas un drone possédé par un joueur, alors que `isActiveDrone` (déjà calculée, déjà utilisée
+  par `canDeclare` pour la même distinction) le fait déjà — le survol/clic-attaque ambiant du MJ pouvait
+  s'armer pour un drone qui n'est pas de son ressort.
+
+**Correctif** : réutilisation systématique de variables déjà existantes, aucune logique nouvelle —
+nouvelle constante unique `isMyTurnToAct` (`CombatActionWindow.jsx`) réutilisée par les 3 hooks
+ambiants (`useAutoMoveMode`, `useCombatClickAttack`, `moveHoverEnabled` drone) au lieu de réécrire le
+même ternaire à chaque site ; `isActiveDrone` remplace `!!activeDroneCharId` ; `clickIsActivePnj`
+supprimé au profit d'`isActivePnj`.
+
+**Testé** : ESLint (9 problèmes avant/après, identiques, confirmés préexistants par `git stash`) ;
+`npm run build` (client) propre. **Confirmé fonctionnel en jeu par Saar (2026-08-05)**.
+**Données** : aucune, 100% client, aucune migration.
+**Retour arrière** : commit `b306b05`, isolé, 4 fichiers.
