@@ -1041,8 +1041,10 @@ peut être l'occasion d'un rework, on en profite, peu importe le temps") :
 **Testé** : `node --env-file=.env --test server/src/services/inventoryService.test.mjs` (7/7 ✅,
 fixtures réelles, ownership/en-main/catégorie/slots-refusés/sans-catégorie/paramètres-absents) ; suite
 serveur complète `node --test` (192/192 ✅, dont les 7 nouveaux) ; `node --check` sur les 3 fichiers.
-**Non testé** : scénario réel en jeu (CaC et Tir, arme principale et secondaire, déclaration normale
-avec arme en main — aucun changement de comportement attendu) — à la charge de Saar.
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)** — scénario de combat normal (arme en main)
+testé. **Non revérifié spécifiquement depuis ce correctif** : CaC/Tir à deux armes (dual-wield),
+déclaration MJ pour un PNJ, drone — même mécanisme, aucune raison de régression attendue, mais pas
+observés isolément après le refactor.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, aucun changement pour une déclaration avec une arme réellement
 possédée et en main (seul chemin que les clients PJ/MJ peuvent produire).
@@ -1070,10 +1072,47 @@ principale + secondaire) mis à jour pour passer `character.id`.
 
 **Testé** : suite serveur complète `node --test` (192/192 ✅, `fetchAssaultWeaponAndMods` exercée
 indirectement par les tests existants du Tir).
-**Non testé** : scénario réel en jeu (Tir principal et deux-armes, munitions, mode de tir — aucun
-changement de comportement attendu pour une déclaration légitime) — à la charge de Saar.
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)**, même scénario de combat que MELEE-INHAND.
+**Non revérifié spécifiquement** : Tir à deux armes (dual-wield), Tir Multi, déclaration MJ/drone.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, aucun changement pour un Tir déjà à jour.
+
+---
+
+### Dette RELOAD-INHAND — Rechargement d'une arme non vérifiée "en main"
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en vérifiant, pendant MELEE-INHAND, tous les
+consommateurs restants de `char_inventory`/`char_inventory_slots` dans `socketCombatHelpers.js`.
+
+**Contexte [VÉRIFIÉ par lecture]** : `resolveReload` (`socketCombatHelpers.js`, branche
+`action.weapon_inv_id` fourni) vérifie l'ownership (`character_id`) et que l'objet a un `caliber`
+(donc une arme à feu), mais jamais `char_inventory_slots` — un objet rangé (Coffre/Sac) peut donc
+être "rechargé". Impact pratique quasi nul : `resolveAssaultAction` exige désormais l'en-main
+(ASSAULT-INHAND-RESOLUTION) pour tirer, donc une arme rechargée hors des mains reste inutilisable en
+Tir — juste des munitions consommées sur un objet qu'on ne peut pas encore utiliser.
+
+**Code impliqué** : `server/src/socket/socketCombatHelpers.js` — `resolveReload`, branche
+`action?.weapon_inv_id` (~ligne 1986).
+
+**Prochaine étape** : si traité, réutiliser `getOwnedHandWeapon` (même autorité que MELEE-INHAND/
+ASSAULT-INHAND-RESOLUTION) plutôt qu'ajouter un 7ᵉ contrôle ad hoc — basse priorité, aucun impact
+fonctionnel actif.
+
+---
+
+### Dette ASSAULT-CATEGORY — Tir : aucune vérification de catégorie sur l'arme (historique, non traité)
+
+**Symptôme** : Aucun cas observé en jeu — trouvé en migrant `fetchAssaultWeaponAndMods`/
+`fetchHandWeaponForAssault` vers `getOwnedHandWeapon` (ASSAULT-INHAND-RESOLUTION) : contrairement au
+CaC (`category: 'Arme de contact'`), le Tir n'a jamais vérifié que l'objet est bien une arme à feu —
+seuls `ref_fire_mode`/`ammo_count` étant `null` pour un non-firearm limitent les dégâts pratiques
+(mode de tir incompatible, munitions absentes bloquent déjà la déclaration/résolution par les gardes
+existants). Comportement préexistant, délibérément non étendu par MELEE-INHAND/
+ASSAULT-INHAND-RESOLUTION (hors scope, ces deux dettes ne parlaient que d'ownership/en-main).
+
+**Prochaine étape** : décision Saar — ajouter `category` (quelle valeur exacte pour "arme à feu" ?
+plusieurs catégories possibles selon le catalogue) à l'appel `getOwnedHandWeapon` des 2 sites Tir, ou
+laisser tel quel (aucun symptôme, gardes annexes déjà limitants).
 
 ---
 

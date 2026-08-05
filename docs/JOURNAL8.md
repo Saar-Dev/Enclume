@@ -496,3 +496,39 @@ implémentée, cf. ci-dessus).
 **Retour arrière** : commit isolé à venir sur `dev/Saar`, hors du chantier chat parallèle
 (`server/src/chat/`, `Sidebar.jsx`/`CharacterModal.jsx`/`DiceBreakdownPopover.jsx` en cours par
 ailleurs, non touchés).
+
+---
+
+## Session (Saar) — 2026-08-05 — MELEE-INHAND + ASSAULT-INHAND-RESOLUTION : autorité unique arme en main
+
+**Contexte** : un premier correctif MELEE-INHAND avait été codé et commité sans lecture complète du
+contrat de session (pas d'explication préalable, pas d'instrumentation, cause simplement "vérifiée
+par lecture" alors que la méthode du projet exige une observation en exécution) — reproché à raison
+par Saar, commit annulé (`git reset` + restauration ciblée, aucune perte pour les chantiers
+parallèles en cours dans le même worktree). Repris intégralement avec la méthode correcte.
+
+**Instrumentation réelle** : test isolé (hors dépôt, lecture seule, fixtures réelles nettoyées)
+rejouant la requête vulnérable exacte — confirmé qu'un `weaponInvId` appartenant à un autre
+personnage résolvait ses dégâts (`1D10+1`) au lieu de mains nues. Bug passé de `[HYPOTHÈSE]` à
+`[VÉRIFIÉ]` avant tout correctif.
+
+**Prise de recul architecturale (demandée explicitement par Saar, "peu importe le temps")** : plutôt
+qu'un correctif ponctuel (qui aurait constitué une 5ᵉ réimplémentation SQL divergente du même
+contrôle), recherche d'une autorité existante avant d'en écrire une nouvelle — trouvé
+`server/src/services/inventoryService.js` (couche déjà utilisée par les routes et `modingService.js`,
+possédant déjà `WEAPON_SLOTS` et `getItemWithRef`, mais jamais consommée par le combat).
+
+**Correctif** : nouvelle fonction `getOwnedHandWeapon(characterId, itemId, { slotCodes, category })`,
+autorité unique. Migration des 6 sites de résolution d'arme (Tir + CaC, principale + secondaire,
+Déclaration + Résolution) — `fetchHandWeaponForAssault` (réimplémentation locale) supprimée. Invariant
+documenté dans `docs/SYSTEME/COMBAT.md` §"Pattern de fetch". 2 trouvailles annexes loggées sans
+correctif (RELOAD-INHAND, ASSAULT-CATEGORY — basse priorité, hors scope).
+
+**Testé** : `inventoryService.test.mjs` (7/7, ownership/en-main/catégorie/slots-refusés) ; suite
+serveur complète (192/192) ; `node --check` sur les 3 fichiers. **Confirmé fonctionnel en jeu par
+Saar (2026-08-05)** — scénario de combat normal. Non revérifiés spécifiquement : dual-wield (CaC et
+Tir), déclaration MJ/PNJ, drone — même mécanisme, aucune régression attendue mais pas observés
+isolément.
+**Données** : aucune migration.
+**Retour arrière** : commits `f72dd61` (correctif) sur `dev/Saar`, isolés du chantier
+inventaire/Sidebar parallèle.
