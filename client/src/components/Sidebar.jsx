@@ -26,14 +26,15 @@ import {
   PROCEDURAL_PATTERN_PRESETS,
 } from '../lib/proceduralMaterials.js'
 import {
-  IconEdit, IconPlay, IconEye, IconEyeOff, IconRuler, IconPlus, IconDice,
+  IconEdit, IconPlay, IconEye, IconEyeOff, IconRuler, IconPlus,
 } from './SidebarIcons.jsx'
 import { styles } from './Sidebar.styles.js'
 import DiceBreakdownPopover from './DiceBreakdownPopover.jsx'
 import SidebarHelpModal from './SidebarHelpModal.jsx'
 import SidebarCharactersTab from './SidebarCharactersTab.jsx'
 import SidebarProfileTab from './SidebarProfileTab.jsx'
-import { formatMrDegreeTitle } from '../lib/mrDegreeTitle.js'
+import { renderMessage } from './MessageRendererRegistry.jsx'
+import { useChatSocket } from '../lib/useChatSocket.js'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -79,6 +80,10 @@ export default function Sidebar({
     () => messagesByCampaign[activeCampaignId] || [],
     [activeCampaignId, messagesByCampaign],
   )
+  // PLAN_CHAT.md Phase 3e — historique persisté + temps réel (chat:message_created/_deleted).
+  // Scroll infini (loadOlderMessages/hasMore) pas encore câblé à un IntersectionObserver ici —
+  // suivi séparé, ne bloque pas ce qui corrige réellement CH1 (survie au F5).
+  useChatSocket(campaignId)
   const { blueprints, refreshBuiltinModels } = useEntityStore()
   const { phase } = useCombatStore()
   const surfaceToolState = {
@@ -458,7 +463,10 @@ export default function Sidebar({
       return
     }
 
-    socket?.emit(WS.CHAT_MESSAGE, { text })
+    // /help, /w, /gm sont interceptés côté serveur (socketChat.js, chatCommandRegistry) — le
+    // client envoie le texte brut, pas de parsing dupliqué ici (vérifié dans le code déjà écrit
+    // en Phase 1, la prose du plan §9 suggérait un parsing client qui n'existe pas réellement).
+    socket?.emit(WS.CHAT_SEND, { channelId: 'general', type: 'TEXT', payload: { text } })
     setChatInput('')
   }
 
@@ -1433,334 +1441,16 @@ export default function Sidebar({
               {messages.length === 0 && (
                 <p style={styles.emptyMsg}>{t('chat.placeholder')}</p>
               )}
-              {messages.map(msg => {
-                if (msg.system) {
-                  return (
-                    <div key={msg.id} style={styles.messageSystem}>
-                      <span style={msg.error ? styles.msgSystemErrorText : styles.msgSystemText}>{msg.text}</span>
-                      <span style={styles.msgTime}>{msg.time}</span>
-                    </div>
-                  )
-                }
-                if (msg.type === 'entity_action') {
-                  // Visible uniquement par le GM
-                  if (!isGm) return null
-                  return (
-                    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
-                      <div style={styles.actionHeader}>
-                        <span style={styles.actionIcon}>⚔</span>
-                        <span style={styles.actionTitle}>
-                          {t('sidebar.actionPending', { playerName: msg.playerName, interactionLabel: msg.interactionLabel })}
-                        </span>
-                        <span style={styles.msgTime}>{msg.time}</span>
-                      </div>
-                      <span style={styles.actionSub}>{t('sidebar.actionOn', { entityLabel: msg.entityLabel })}</span>
-                      {msg.skillId && (
-                        <div style={styles.actionMeta}>
-                          <span>{t('sidebar.actionSkill')} : <strong>{msg.skillId}</strong></span>
-                          <span>{t('sidebar.actionDC')} : <strong>{msg.defaultDifficulty}</strong></span>
-                        </div>
-                      )}
-                      <div style={styles.actionBtns}>
-                        <button className="btn btn-success" style={styles.btnAccept} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, false, 0) }}>
-                          {t('sidebar.actionAccept')}
-                        </button>
-                        <button className="btn" style={styles.btnAuto} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, true, true, 0) }}>
-                          {t('sidebar.actionAuto')}
-                        </button>
-                        <button className="btn btn-danger" style={styles.btnRefuse} onClick={() => { setPendingActionCount(p => Math.max(0, p - 1)); onEntityActionResolve?.(msg.requestId, false, false, 0) }}>
-                          {t('sidebar.actionRefuse')}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                }
-                if (msg.type === 'sell_request') {
-                  if (!isGm) return null
-                  return (
-                    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
-                      <div style={styles.actionHeader}>
-                        <span style={styles.actionIcon}>🏪</span>
-                        <span style={styles.actionTitle}>
-                          {t('sidebar.sellRequest', {
-                            charName: msg.fromCharName,
-                            merchant: msg.merchantName || 'GM',
-                          })}
-                        </span>
-                        <span style={styles.msgTime}>{msg.time}</span>
-                      </div>
-                      <div style={styles.actionSub}>
-                        {msg.itemCount} objet{msg.itemCount !== 1 ? 's' : ''} — {msg.solsProposed} S
-                      </div>
-                      <div style={styles.actionBtns}>
-                        <button
-                          className="btn btn-success" style={styles.btnAccept}
-                          onClick={() => {
-                            setPendingActionCount(p => Math.max(0, p - 1))
-                            onOpenTrade?.({ mode: 'reventes' })
-                          }}
-                        >
-                          {t('sidebar.sellRequestView')}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                }
-                if (msg.type === 'exchange_offer') {
-                  return (
-                    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
-                      <div style={styles.actionHeader}>
-                        <span style={styles.actionIcon}>🔄</span>
-                        <span style={styles.actionTitle}>
-                          {t('sidebar.exchangeOffer', { charName: msg.fromCharName })}
-                        </span>
-                        <span style={styles.msgTime}>{msg.time}</span>
-                      </div>
-                      <div style={styles.actionSub}>
-                        {msg.itemCount} objet{msg.itemCount !== 1 ? 's' : ''}{msg.solsOffer > 0 ? ` — ${msg.solsOffer} S` : ''}
-                      </div>
-                      <div style={styles.actionBtns}>
-                        <button
-                          className="btn btn-success" style={styles.btnAccept}
-                          onClick={() => {
-                            setPendingActionCount(p => Math.max(0, p - 1))
-                            onOpenExchange?.({ incomingOffer: { offerId: msg.offerId, fromCharName: msg.fromCharName, items: msg.items, solsOffer: msg.solsOffer, expiresAt: msg.expiresAt, toCharId: msg.toCharId } })
-                          }}
-                        >
-                          {t('sidebar.exchangeOfferView')}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                }
-                if (msg.type === 'declare_error') {
-                  return (
-                    <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
-                      <div style={styles.diceHeader}>
-                        <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
-                        {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
-                        <span style={styles.msgTime}>{msg.username ? ` · ${msg.time}` : msg.time}</span>
-                      </div>
-                      <div style={{ paddingLeft: '2px', fontSize: 12, color: '#c0c0d0' }}>{msg.text}</div>
-                      <div style={{ paddingLeft: '2px' }}>
-                        <span className="badge badge-fail">ÉCHEC</span>
-                      </div>
-                    </div>
-                  )
-                }
-                if (msg.type === 'resolve_move_blocked') {
-                  return (
-                    <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }}>
-                      <div style={styles.diceHeader}>
-                        <span style={{ ...styles.diceIcon, color: '#c05050' }}>⊗</span>
-                        {msg.username && <span style={{ ...styles.msgUser, color: '#c05050' }}>{msg.username}</span>}
-                        <span style={styles.msgTime}>{msg.username ? ` · ${msg.time}` : msg.time}</span>
-                      </div>
-                      <div style={{ paddingLeft: '2px', fontSize: 12, color: '#c0c0d0' }}>{msg.text}</div>
-                      <div style={{ paddingLeft: '2px' }}>
-                        <span className="badge badge-fail">{msg.partial ? 'PARTIEL' : 'BLOQUÉ'}</span>
-                      </div>
-                    </div>
-                  )
-                }
-                if (msg.type === 'dice') {
-                  const isAnimating = animatingDiceId === msg.id
-
-                  // ── Macro favori (PLAN 13) ─────────────────────────────────
-                  if (msg.interactionType === 'macro_result') {
-                    const successStyle = msg.isSuccess
-                      ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
-                      : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
-                    return (
-                      <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
-                        <div style={styles.diceHeader}>
-                          <span style={{ ...styles.diceIcon, color: msg.color || '#aa8a30' }}>★</span>
-                          <span style={{ ...styles.msgUser, color: msg.color || '#aa8a30' }}>{msg.characterName}</span>
-                          <span style={styles.msgTime}> · {msg.time}</span>
-                          {msg.secret && <span style={{ fontSize: 9, marginLeft: 4 }}>🔒</span>}
-                        </div>
-                        <div style={{ paddingLeft: '2px', fontSize: '12px', color: '#c0c0d0', lineHeight: 1.4 }}>
-                          {msg.formattedMessage}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: '2px', marginTop: 3 }}>
-                          <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 14, fontWeight: 700, color: '#dde7ee' }}>
-                            {msg.rollResult}
-                          </span>
-                          <span style={{ fontSize: 10, color: '#456575' }}>/ {msg.threshold}</span>
-                          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'}>
-                            {msg.isSuccess ? t('sidebar.macroSuccess') : t('sidebar.macroFail')}
-                            {msg.isCriticalSuccess ? ` ${t('sidebar.macroCritical')}` : msg.isCriticalFail ? ` ${t('sidebar.macroFumble')}` : ''}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  }
-
-                  // ── Jet d'interaction entité — affichage structuré ──────────
-                  if (msg.skillLabel !== undefined) {
-                    const successStyle = msg.isSuccess
-                      ? { background: 'rgba(76,175,119,0.07)', border: '1px solid rgba(76,175,119,0.2)' }
-                      : { background: 'rgba(224,92,92,0.07)', border: '1px solid rgba(224,92,92,0.2)' }
-
-                    // ── Dégâts combat (PJ confirme) ─────────────────────────
-                    if (msg.interactionType === 'combat_damage') {
-                      return (
-                        <div key={msg.id} className="sidebar-glass" style={{
-                          ...styles.messageDice,
-                          background: (msg.severityColor ?? '#FF6B6B') + '18',
-                          border: `1px solid ${(msg.severityColor ?? '#FF6B6B')}44`,
-                        }}>
-                          <div style={styles.diceHeader}>
-                            <span style={{ ...styles.diceIcon, color: msg.severityColor ?? msg.color }}>⚔</span>
-                            <span style={{ ...styles.msgUser, color: msg.severityColor ?? msg.color }}>{msg.user}</span>
-                            <span style={styles.msgTime}> · {msg.time}</span>
-                          </div>
-                          <div style={{ paddingLeft: '2px', fontSize: '13px', color: '#c0c0d0' }}>
-                            <strong style={{ color: msg.severityColor ?? '#c0c0d0' }}>{msg.total}</strong> dégâts
-                            {' '}à <strong>{msg.localisation}</strong>
-                            {' '}de <strong>{msg.targetName}</strong>
-                          </div>
-                          {msg.severity && (
-                            <span className="badge" style={{ color: msg.severityColor, background: msg.severityColor + '22', boxShadow: `inset 0 0 0 1px ${msg.severityColor}66` }}>
-                              {msg.severity}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    }
-
-                  // ── Déplacement d'entité ────────────────────────────────
-                    if (msg.interactionType === 'displacement') {
-                      return (
-                        <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
-                          {/* En-tête : icône + nom + heure */}
-                          <div style={styles.diceHeader}>
-                            <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
-                              <IconDice />
-                            </span>
-                            <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
-                            <span style={styles.msgTime}> · {msg.time}</span>
-                            {msg.breakdown && (
-                              <button onClick={(e) => handleOpenBreakdown(e, msg)} title="Détail du calcul" style={{ marginLeft: 'auto', background: breakdownPopover?.msgId === msg.id ? 'rgba(91,141,238,0.2)' : 'none', border: '1px solid rgba(91,141,238,0.25)', borderRadius: 3, padding: '1px 5px', cursor: 'pointer', color: '#5b8dee', fontSize: 10, lineHeight: 1 }}>⊞</button>
-                            )}
-                          </div>
-                          {/* Corps : "Jet de Force" + résultat du dé en grand */}
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
-                            <span style={styles.diceFormula}>{t('sidebar.displacementJet', { attr: msg.skillLabel })}</span>
-                            <span style={styles.diceTotal}>{msg.total}</span>
-                          </div>
-                          {/* Détail : difficulté · seuil */}
-                          <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
-                            {t('sidebar.displacementDetail', {
-                              dif: msg.diffLabel,
-                              seuil: msg.chancesDeReussite,
-                            })}
-                          </div>
-                          {/* Badge résultat avec marge de réussite */}
-                          <div style={{ paddingLeft: '2px' }}>
-                            <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'} title={formatMrDegreeTitle(tCombat, msg.mr, msg.cardType)}>
-                              {msg.isSuccess
-                                ? t('sidebar.displacementSuccess', { mr: msg.mr })
-                                : t('sidebar.displacementFail', { mr: msg.mr })
-                              }
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    }
-
-                    // ── Skillcheck ──────────────────────────────────────────
-                    return (
-                      <div key={msg.id} className="sidebar-glass" style={{ ...styles.messageDice, ...successStyle }}>
-                        {/* En-tête : icône + nom + heure */}
-                        <div style={styles.diceHeader}>
-                          <span style={{ ...styles.diceIcon, color: msg.color || '#5b8dee' }}>
-                            <IconDice />
-                          </span>
-                          <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
-                          <span style={styles.msgTime}> · {msg.time}</span>
-                          {msg.breakdown && (
-                            <button onClick={(e) => handleOpenBreakdown(e, msg)} title="Détail du calcul" style={{ marginLeft: 'auto', background: breakdownPopover?.msgId === msg.id ? 'rgba(91,141,238,0.2)' : 'none', border: '1px solid rgba(91,141,238,0.25)', borderRadius: 3, padding: '1px 5px', cursor: 'pointer', color: '#5b8dee', fontSize: 10, lineHeight: 1 }}>⊞</button>
-                          )}
-                        </div>
-                        {/* Corps : nom compétence + résultat du dé en grand */}
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', paddingLeft: '2px' }}>
-                          <span style={styles.diceFormula}>{msg.skillLabel}</span>
-                          <span style={styles.diceTotal}>{msg.total}</span>
-                        </div>
-                        {/* Détail : compétence · difficulté · seuil */}
-                        <div style={{ paddingLeft: '2px', fontSize: '11px', color: '#64748b' }}>
-                          {t(msg.cardType === 'drone_damage'
-                            ? 'sidebar.droneActionDetail'
-                            : msg.cardType === 'shock_test'
-                            ? 'sidebar.shockTestDetail'
-                            : 'sidebar.entityActionDetail',
-                          {
-                            skill: msg.mechanicalTotal,
-                            dif: msg.diffLabel,
-                            seuil: msg.chancesDeReussite,
-                          })}
-                        </div>
-                        {/* Badge résultat */}
-                        <div style={{ paddingLeft: '2px' }}>
-                          <span className={msg.isSuccess ? 'badge badge-success' : 'badge badge-fail'} title={formatMrDegreeTitle(tCombat, msg.mr, msg.cardType)}>
-                            {msg.isSuccess ? t('sidebar.entityActionSuccess') : t('sidebar.entityActionFail')}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  }
-
-                  // ── Jet normal (/r formule) ─────────────────────────────────
-                  const critAttr = msg.isCriticalSuccess ? 'success' : msg.isCriticalFail ? 'fail' : undefined
-                  return (
-                    <div key={msg.id} className="sidebar-glass" data-crit={critAttr} style={styles.messageDice}>
-                      {/* En-tête : icône animée + nom + heure */}
-                      <div style={styles.diceHeader}>
-                        <span
-                          className={isAnimating ? 'dice-icon-animating' : undefined}
-                          style={{
-                            ...styles.diceIcon,
-                            color: msg.color || '#5b8dee',
-                          }}
-                        >
-                          <IconDice />
-                        </span>
-                        <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
-                        <span style={styles.msgTime}> · {msg.time}</span>
-                        {/* Jet secret — visible uniquement par lanceur + GM */}
-                        {msg.secret && (
-                          <span style={{ fontSize: 11, opacity: 0.8 }} title="Jet au MJ — invisible aux autres joueurs">🔒</span>
-                        )}
-                        {/* Badge critique — affiché uniquement si configuré */}
-                        {msg.isCriticalSuccess && (
-                          <span className="badge badge-success">{t('dice.criticalSuccess')}</span>
-                        )}
-                        {msg.isCriticalFail && (
-                          <span className="badge badge-fail">{t('dice.criticalFail')}</span>
-                        )}
-                      </div>
-                      {/* Corps : formule + rolls individuels + total */}
-                      <div style={styles.diceBody}>
-                        <span style={styles.diceFormula}>{msg.formula}</span>
-                        <span style={styles.diceRolls}>
-                          {'['}{msg.rolls.join(', ')}{']'}
-                        </span>
-                        <span style={styles.diceEquals}>=</span>
-                        <span style={styles.diceTotal}>{msg.total}</span>
-                      </div>
-                    </div>
-                  )
-                }
-                // Message chat standard
-                return (
-                  <div key={msg.id} style={styles.message}>
-                    <span style={{ ...styles.msgUser, color: msg.color || '#5b8dee' }}>{msg.user}</span>
-                    <span style={styles.msgTime}> · {msg.time}</span>
-                    <p style={styles.msgText}>{msg.text}</p>
-                  </div>
-                )
-              })}
+              {messages.map(msg => renderMessage(msg, {
+                t, tCombat, isGm,
+                animatingDiceId,
+                breakdownPopoverMsgId: breakdownPopover?.msgId,
+                onOpenBreakdown: handleOpenBreakdown,
+                setPendingActionCount,
+                onEntityActionResolve,
+                onOpenTrade,
+                onOpenExchange,
+              }))}
               {/* Ancre auto-scroll — div vide en fin de liste */}
               <div ref={messagesEndRef} />
             </div>

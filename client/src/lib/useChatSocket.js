@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useSocket } from './SocketContext'
 import { useSessionStore } from '../stores/sessionStore'
@@ -26,6 +27,7 @@ async function fetchChannelPage(campaignId, channelId, cursor) {
 // Pas encore appelé nulle part (Phase 3c) — Sidebar.jsx bascule dessus en Phase 3e.
 export function useChatSocket(campaignId) {
   const socket = useSocket()
+  const { t } = useTranslation()
   const { setMessages, prependMessages, addMessage, removeMessage } = useSessionStore()
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [hasMore, setHasMore] = useState(false)
@@ -65,7 +67,20 @@ export function useChatSocket(campaignId) {
   // ─── Temps réel ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return
-    const onCreated = (message) => addMessage(message)
+    // Réponse de commande (/help, usage /w...) — socketChat.js l'émet aussi via
+    // CHAT_MESSAGE_CREATED (system:true, i18nKey/params/timestamp bruts, jamais persistée),
+    // même mécanisme de résolution que COMBAT_SYSTEM_NOTICE (useSessionSocket.js).
+    const onCreated = (message) => {
+      if (message.system) {
+        addMessage({
+          id: `sys-${message.i18nKey}-${message.timestamp}`, system: true,
+          text: t(message.i18nKey, message.params),
+          time: new Date(message.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        })
+        return
+      }
+      addMessage(message)
+    }
     const onDeleted = ({ id }) => removeMessage(campaignId, id)
     socket.on(WS.CHAT_MESSAGE_CREATED, onCreated)
     socket.on(WS.CHAT_MESSAGE_DELETED, onDeleted)
@@ -73,7 +88,7 @@ export function useChatSocket(campaignId) {
       socket.off(WS.CHAT_MESSAGE_CREATED, onCreated)
       socket.off(WS.CHAT_MESSAGE_DELETED, onDeleted)
     }
-  }, [socket, campaignId, addMessage, removeMessage])
+  }, [socket, campaignId, addMessage, removeMessage, t])
 
   // ─── Scroll infini — pagination ascendante sur les deux canaux, fusionnée ──────────────────────
   const loadOlderMessages = useCallback(async () => {
