@@ -17,6 +17,12 @@ import { getAdvantages } from '../services/advantageService.js'
 import { resolveEcheanceNow } from '../lib/echeanceService.js'
 import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
+import { sendMessage as sendChatMessage } from '../chat/chatService.js'
+
+// PLAN_CHAT.md §12 Phase 2 — double-écriture (shadow write, pattern Strangler Fig). Absent/non "true"
+// = comportement strictement inchangé. Lu une seule fois au chargement du module, pas à chaque
+// message (cohérent avec un redémarrage nécessaire pour changer un flag d'environnement).
+const CHAT_PERSISTENCE_ENABLED = process.env.CHAT_PERSISTENCE_ENABLED === 'true'
 
 export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
   // ─── DICE:ROLL ─────────────────────────────────────────────────────────
@@ -323,6 +329,20 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       text,
       timestamp: new Date().toISOString(),
     })
+
+    // Double-écriture Phase 2 (PLAN_CHAT.md §12) — effet de bord additionnel, jamais bloquant. Le
+    // broadcast ci-dessus est déjà parti : un échec de persistance (rate limit, validation) ne doit
+    // jamais atteindre le client ni perturber le chat existant. Rien ne lit encore cette table
+    // (Phase 3) — un message manquant ici est un trou d'historique acceptable, pas une corruption.
+    if (CHAT_PERSISTENCE_ENABLED) {
+      try {
+        await sendChatMessage({
+          campaignId, channelId: 'general', senderUserId: user.id, type: 'TEXT', payload: { text },
+        })
+      } catch (err) {
+        console.error('[Chat] Double-écriture Phase 2 échouée (non bloquant) :', err.message)
+      }
+    }
   })
 
   // ─── CHARACTER:UPDATED ─────────────────────────────────────────────────
