@@ -1063,10 +1063,45 @@ flux d'émission :
 resignalé sans nouveau détail de scénario. On attend une nouvelle occurrence en jeu avant de continuer
 — ne pas coder sur la base du code lu seul, contradictoire avec le symptôme.
 
+**Point d'attention tranché (2026-08-05)** — le composant client non identifié en Session 176 est
+`client/src/components/CombatOverlay.jsx:275-279` : bandeau MJ (« En attente de défense ») affiché dès
+que `subPhase === 'AWAITING_DEFENSE'` dans `combatStore` (Zustand), sans dépendance à l'affichage du
+jet d'attaque. Trace confirmée sur le code actuel (pas la version Session 176) :
+- `resolveMeleeDefensePj` (`socketCombatHelpers.js:1925-1948`) — l.1932 `await broadcastCurrentSubPhase(io, campaignId)`
+  est un **émission directe et immédiate** (`broadcastCurrentSubPhase` → `db('combat_state')...` puis
+  `broadcastTimelineState` → `io.emit(WS.COMBAT_TIMELINE_UPDATED, ...)`), exécutée et complètement
+  `await`ée **avant** que `emissions.push({ event: WS.COMBAT_MELEE_DEFENSE_PROMPT, ... })` (l.1945) ne
+  soit même ajouté au tableau `emissions`.
+- Le jet d'attaque (`DICE_RESULT`) a été poussé dans ce même tableau `emissions` **plus tôt**, dans
+  `resolveMeleeAction` (avant l'appel à `resolveMeleeDefensePj`) — mais il reste non envoyé tant que
+  l'appelant de plus haut niveau (`socketCombatResolution.js`, `flushEmissions`) ne vide pas le
+  tableau, ce qui n'arrive qu'après le retour complet de `resolveMeleeAction`.
+- Conséquence observable, sans ambiguïté d'exécution (ordre garanti par un seul `await` synchrone, pas
+  une course) : `COMBAT_TIMELINE_UPDATED` (subPhase → `AWAITING_DEFENSE`) part sur le réseau **avant**
+  `DICE_RESULT` de l'attaque, alors que dans le déroulé métier l'attaque a bien été résolue en premier.
+  Côté client, `CombatOverlay.jsx` bascule donc le bandeau MJ « En attente de défense » **avant** que
+  le jet d'attaque n'ait eu le temps de s'afficher — ce qui correspond au symptôme rapporté par Saar
+  (GM) : « le jet de défense semble se lancer avant le jet d'attaque ».
+
+**Statut** : `[HYPOTHÈSE forte, lecture directe du code actuel, cohérente avec le rôle GM du témoin et
+le scénario multi-défenseurs (chaque défenseur PJ repasse par ce même chemin)]` — pas encore
+instrumenté en exécution ni confirmé par une nouvelle occurrence en jeu. Le mécanisme causal identifié
+n'a pas besoin d'une race condition pour se produire (ordre déterministe par construction, pas une
+fenêtre de timing aléatoire) — une instrumentation `[DBG-COM27]` la confirmerait mais n'est
+probablement pas nécessaire pour trancher, contrairement à ce qui était supposé en Session 176.
+
+**Piste de correctif (non codée, à valider avec Saar avant d'y toucher)** : faire porter le
+`COMBAT_TIMELINE_UPDATED` de `broadcastCurrentSubPhase` par le même tableau `emissions` que le reste
+de la résolution (ou le placer après le flush de l'attaque), plutôt qu'un `io.emit` direct — mais
+`broadcastCurrentSubPhase` est appelé depuis 3 sites (`armAwaitingDamage`, `resolveMeleeDefensePj`,
+et un 3ᵉ non revérifié dans cette passe) avec des tableaux `emissions` potentiellement différents :
+changement à examiner site par site avant de coder, pas un correctif mécanique uniforme.
+
 **Prochaine étape** : si le symptôme se reproduit, capturer précisément : nombre de défenseurs,
 inversion entre attaque/défense du même échange vs entre deux échanges différents, qui contrôlait quel
-personnage. Puis instrumenter `[DBG-COM27]` horodaté aux 3 points d'émission (attaque, changement de
-sous-état, défense) avant tout correctif.
+personnage — pour confirmer que ce mécanisme (et pas un autre) est bien en cause. Puis instrumenter
+`[DBG-COM27]` horodaté aux 3 points d'émission (attaque, changement de sous-état, défense) si une
+confirmation formelle est encore jugée nécessaire avant de coder le correctif.
 
 ---
 
