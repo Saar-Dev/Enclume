@@ -64,7 +64,7 @@ risque croissant, pas par ordre d'apparition dans le fichier.
 | 1 | `SidebarIcons.jsx` — extraction des 9 icônes SVG | ✅ confirmé | Quasi nul |
 | 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
 | 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
-| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b ✅ confirmés, 4c/4d à faire — détail §3 | Moyen |
+| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d gelé (superseded par `PLAN_CHAT.md` Phase 3) — détail §3 | Moyen |
 | 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | À faire — dépend d'une décision sur `Editor3D.jsx` | Le plus élevé |
 
 ---
@@ -252,10 +252,31 @@ drag vers la carte — après correctif drag&drop ci-dessus —, clic pour ouvri
 **Données** : aucune.
 **Retour arrière** : commit isolé à venir sur `dev/Saar`.
 
-**4c — `SidebarProfileTab.jsx`** et **4d — hooks + `SidebarChatTab.jsx`/`SidebarChatMessage.jsx`** :
-à faire — voir architecture détaillée décidée le 2026-08-05 (hooks `useDiceBreakdownPopover` et
-`useSidebarPendingActionsBadge` dans `client/src/lib/`, popover fermé au changement d'onglet — décision
-Saar).
+**4c — `SidebarProfileTab.jsx`** — ✅ confirmé (2026-08-05). Réglages compte (pseudo/couleur), liste
+des connectés, bouton Quitter, et tout l'état associé (`configUsername`, `configColor`, `configSaving`,
+`configSuccess`, `handleConfigSave`) déménagés en bloc. Le `useEffect` de préremplissage au changement
+d'onglet devient un effet au montage (équivalent : ce composant n'existe que quand l'onglet est actif).
+Lit `user`/`setUser` (`useAuthStore`), `members`/`characters` (`useCharacterStore`), `onlineUsers`
+(`useSessionStore`) directement — `useAuthStore` et les destructures `members`/`onlineUsers`/`characters`
+devenus inutiles, retirés de `Sidebar.jsx`. Reçoit `onReconnectSocket` en prop.
+
+**Testé** : `eslint` (0 erreur), `npm run build` (propre), rendu réel confirmé par Saar (changement
+pseudo/couleur, liste des connectés, bouton Quitter).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé à venir sur `dev/Saar`.
+
+**4d — hooks + `SidebarChatTab.jsx`** : **gelé (2026-08-05, décision Saar)**, superseded par
+`docs/PLANS/PLAN_CHAT.md` Phase 3. Architecture initialement prévue (hooks `useDiceBreakdownPopover` /
+`useSidebarPendingActionsBadge` dans `client/src/lib/`, séparation conteneur/rendu des messages) —
+abandonnée en cours de route en relisant `PLAN_CHAT.md` §8.1/§8.3/§14 : la Phase 3 de ce chantier
+remplace explicitement à la fois l'envoi des messages (`useChatSocket.js` "remplace les trois hooks
+actuels pour l'ajout de messages") ET leur rendu (`MessageRendererRegistry.js` "remplace la cascade
+if/else de Sidebar.jsx") — soit la quasi-totalité de ce que le lot 4d aurait construit. Construire une
+architecture maintenant pour la voir remplacée à la Phase 3 aurait été du travail jetable, et deux
+chantiers décidant chacun séparément "comment rendre un message de chat" aurait violé l'autorité unique
+d'une décision métier. Le bloc chat (~300 lignes) reste donc inchangé dans `Sidebar.jsx` en attendant
+`PLAN_CHAT.md` Phase 3 — voir ce plan pour la suite.
 
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
 Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR_GLOBAL.md` §3).

@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useAuthStore } from '../stores/authStore'
 import { useCharacterStore } from '../stores/characterStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
@@ -33,6 +32,7 @@ import { styles } from './Sidebar.styles.js'
 import DiceBreakdownPopover from './DiceBreakdownPopover.jsx'
 import SidebarHelpModal from './SidebarHelpModal.jsx'
 import SidebarCharactersTab from './SidebarCharactersTab.jsx'
+import SidebarProfileTab from './SidebarProfileTab.jsx'
 import { formatMrDegreeTitle } from '../lib/mrDegreeTitle.js'
 
 const SIDEBAR_MIN = 220
@@ -73,9 +73,8 @@ export default function Sidebar({
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { t: tCombat } = useTranslation('combat')
-  const { user, setUser } = useAuthStore()
-  const { characters, members, isGm } = useCharacterStore()
-  const { messagesByCampaign, activeCampaignId, onlineUsers } = useSessionStore()
+  const { isGm } = useCharacterStore()
+  const { messagesByCampaign, activeCampaignId } = useSessionStore()
   const messages = useMemo(
     () => messagesByCampaign[activeCampaignId] || [],
     [activeCampaignId, messagesByCampaign],
@@ -349,12 +348,6 @@ export default function Sidebar({
 
   // Modale character — déléguée à SessionPage via onOpenCharacter
 
-  // Onglet Config — profil utilisateur
-  const [configUsername, setConfigUsername] = useState('')
-  const [configColor, setConfigColor] = useState('')
-  const [configSaving, setConfigSaving] = useState(false)
-  const [configSuccess, setConfigSuccess] = useState(false)
-
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
@@ -370,43 +363,6 @@ export default function Sidebar({
   // Popover breakdown — null ou { msgId, breakdown, rect }
   const [breakdownPopover, setBreakdownPopover] = useState(null)
   const popoverRef = useRef(null)
-
-  // Initialiser les champs config quand on ouvre l'onglet
-  useEffect(() => {
-    if (activeTab === 'profil' && user) {
-      setConfigUsername(user.username || '')
-      setConfigColor(user.color || '#4A90D9')
-      setConfigSuccess(false)
-    }
-  }, [activeTab, user])
-
-  // ─── CONFIG — Sauvegarde profil ──────────────────────────────────────────
-  const handleConfigSave = useCallback(async (e) => {
-    e.preventDefault()
-    setConfigSaving(true)
-    setConfigSuccess(false)
-    const body = {}
-    if (configUsername.trim() && configUsername.trim() !== user?.username) body.username = configUsername.trim()
-    if (configColor && configColor !== user?.color) body.color = configColor
-    if (Object.keys(body).length === 0) {
-      setConfigSaving(false)
-      return
-    }
-    try {
-      const res = await api.put('/users/me', body)
-      setUser(res.data.user)
-      setConfigSuccess(true)
-      // Si le username a changé, forcer reconnexion socket via SessionPage
-      // pour que le nouveau JWT soit lu (socket.user.username mis à jour)
-      if (body.username) {
-        onReconnectSocket?.()
-      }
-    } catch (err) {
-      console.error('Erreur sauvegarde config :', err)
-    } finally {
-      setConfigSaving(false)
-    }
-  }, [configUsername, configColor, user, setUser, onReconnectSocket])
 
   // ─── RESIZE ─────────────────────────────────────────────────────────────
   const onMouseDown = (e) => {
@@ -1832,82 +1788,7 @@ export default function Sidebar({
 
         {/* ── Profil — réglages compte + séparateur + liste connectés ── */}
         {activeTab === 'profil' && (
-          <>
-            {/* Réglages compte */}
-            <div style={styles.configContent}>
-              {configSuccess && (
-                <p className="sidebar-config-success">{t('sidebar.configSaved')}</p>
-              )}
-              <form onSubmit={handleConfigSave}>
-                <div style={styles.configField}>
-                  <label style={styles.configLabel}>{t('sidebar.configUsername')}</label>
-                  <input
-                    className="sidebar-tool-field" style={styles.configInput}
-                    value={configUsername}
-                    onChange={e => setConfigUsername(e.target.value)}
-                  />
-                </div>
-                <div style={styles.configField}>
-                  <label style={styles.configLabel}>{t('sidebar.configColor')}</label>
-                  <div style={styles.configColorRow}>
-                    <input
-                      type="color"
-                      value={configColor}
-                      onChange={e => setConfigColor(e.target.value)}
-                      className="sidebar-tool-color-input sidebar-config-color-picker"
-                    />
-                    <span style={{ ...styles.configLabel, color: configColor }}>{configColor}</span>
-                  </div>
-                </div>
-                <button className="btn" style={{ width:'100%', marginTop:'8px' }} type="submit" disabled={configSaving}>
-                  {configSaving ? '…' : t('common.save')}
-                </button>
-              </form>
-            </div>
-
-            {/* Séparateur */}
-            <div className="sidebar-separator" style={styles.profilSeparator} />
-
-            {/* Liste des connectés */}
-            <div style={styles.playersList}>
-              {members.length === 0 && (
-                <p style={styles.emptyMsg}>{t('sidebar.noPlayers')}</p>
-              )}
-              {members.map(member => {
-                const isOnline = onlineUsers.has(member.id)
-                const character = characters.find(c => c.user_id === member.id)
-                return (
-                  <div key={member.id} className="sidebar-glass" style={styles.playerCard}>
-                    <div style={{
-                      ...styles.onlineDot,
-                      background: isOnline ? 'var(--color-success-soft)' : 'var(--border-session-2)',
-                    }} />
-                    <div style={styles.playerInfo}>
-                      <div style={styles.playerNameRow}>
-                        <span style={styles.playerName}>{member.username}</span>
-                        <span className={member.role === 'gm' ? 'badge badge-gm' : 'badge badge-player'}>
-                          {member.role === 'gm' ? t('sidebar.roleGM') : t('sidebar.rolePlayer')}
-                        </span>
-                      </div>
-                      {character && (
-                        <span style={styles.playerCharacter}>↳ {character.name}</span>
-                      )}
-                    </div>
-                    <span style={{ ...styles.onlineLabel, color: isOnline ? 'var(--color-success-soft)' : 'var(--border-session-2)' }}>
-                      {isOnline ? t('sidebar.online') : t('sidebar.offline')}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Quitter la session */}
-            <div style={{ padding: '8px 12px 12px' }}>
-              <button className="btn btn-ghost" style={{ width:'100%', padding:'8px 0' }} onClick={() => navigate('/dashboard')}>
-                {t('sidebar.quit')}
-              </button>
-            </div>
-          </>
+          <SidebarProfileTab onReconnectSocket={onReconnectSocket} />
         )}
 
       </div>
