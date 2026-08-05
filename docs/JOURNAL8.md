@@ -526,9 +526,10 @@ correctif (RELOAD-INHAND, ASSAULT-CATEGORY — basse priorité, hors scope).
 
 **Testé** : `inventoryService.test.mjs` (7/7, ownership/en-main/catégorie/slots-refusés) ; suite
 serveur complète (192/192) ; `node --check` sur les 3 fichiers. **Confirmé fonctionnel en jeu par
-Saar (2026-08-05)** — scénario de combat normal. Non revérifiés spécifiquement : dual-wield (CaC et
-Tir), déclaration MJ/PNJ, drone — même mécanisme, aucune régression attendue mais pas observés
-isolément.
+Saar (2026-08-05)** — scénario de combat normal, et Tir à deux armes (PJ avec un pistolet dans
+chaque main, `fetchAssaultWeaponAndMods` exercée en vrai sur les deux mains). Non revérifiés
+spécifiquement : CaC à deux armes, déclaration MJ/PNJ, drone — même mécanisme, aucune régression
+attendue mais pas observés isolément.
 **Données** : aucune migration.
 **Retour arrière** : commits `f72dd61` (correctif) sur `dev/Saar`, isolés du chantier
 inventaire/Sidebar parallèle.

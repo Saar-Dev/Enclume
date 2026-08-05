@@ -1041,10 +1041,10 @@ peut être l'occasion d'un rework, on en profite, peu importe le temps") :
 **Testé** : `node --env-file=.env --test server/src/services/inventoryService.test.mjs` (7/7 ✅,
 fixtures réelles, ownership/en-main/catégorie/slots-refusés/sans-catégorie/paramètres-absents) ; suite
 serveur complète `node --test` (192/192 ✅, dont les 7 nouveaux) ; `node --check` sur les 3 fichiers.
-**Confirmé fonctionnel en jeu par Saar (2026-08-05)** — scénario de combat normal (arme en main)
-testé. **Non revérifié spécifiquement depuis ce correctif** : CaC/Tir à deux armes (dual-wield),
-déclaration MJ pour un PNJ, drone — même mécanisme, aucune raison de régression attendue, mais pas
-observés isolément après le refactor.
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)** — scénario de combat normal (arme en main) ET
+Tir à deux armes (PJ avec un pistolet dans chaque main) testés. **Non revérifié spécifiquement** :
+CaC à deux armes (dual-wield mêlée), déclaration MJ pour un PNJ, drone — même mécanisme, aucune
+raison de régression attendue, mais pas observés isolément après le refactor.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, aucun changement pour une déclaration avec une arme réellement
 possédée et en main (seul chemin que les clients PJ/MJ peuvent produire).
@@ -1072,8 +1072,10 @@ principale + secondaire) mis à jour pour passer `character.id`.
 
 **Testé** : suite serveur complète `node --test` (192/192 ✅, `fetchAssaultWeaponAndMods` exercée
 indirectement par les tests existants du Tir).
-**Confirmé fonctionnel en jeu par Saar (2026-08-05)**, même scénario de combat que MELEE-INHAND.
-**Non revérifié spécifiquement** : Tir à deux armes (dual-wield), Tir Multi, déclaration MJ/drone.
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)** — inclut spécifiquement le Tir à deux armes
+(PJ avec un pistolet dans chaque main), donc `fetchAssaultWeaponAndMods` exercée en vrai sur les
+deux mains (principale ET secondaire), pas seulement la principale. **Non revérifié** : Tir Multi,
+déclaration MJ pour un PNJ, drone.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, aucun changement pour un Tir déjà à jour.
 
