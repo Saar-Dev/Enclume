@@ -32,6 +32,7 @@ import entitiesRouter from './routes/entities.js'
 import equipmentRouter from './routes/equipment.js'
 import documentsRouter from './routes/documents.js'
 import { merchantsRouter, tradeLogRouter } from './routes/tradeRoutes.js'
+import { chatRouter } from './chat/chatRoutes.js'
 import creationRouter from './routes/creation.js'
 import vaultRouter from './routes/vault.js'
 import { BUILTIN_MODELS_ROOT, syncBuiltinModels } from './lib/builtinModelCatalog.js'
@@ -124,6 +125,7 @@ app.use('/api/equipment', equipmentRouter)
 app.use('/api/campaigns/:campaignId/documents', documentsRouter)
 app.use('/api/campaigns/:campaignId/merchants', merchantsRouter)
 app.use('/api/campaigns/:campaignId/trade-log', tradeLogRouter)
+app.use('/api/campaigns/:campaignId/chat', chatRouter)
 app.use('/api/creation', creationRouter)
 app.use('/api/vault', vaultRouter)
 

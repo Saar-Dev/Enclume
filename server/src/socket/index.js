@@ -8,6 +8,7 @@ import { registerCombatHandlers } from './socketCombat.js'
 import { pickNextTimelineStep } from './socketCombatHelpers.js'
 import { registerTradeHandlers } from './socketTrade.js'
 import { registerWizardHandlers } from './socketWizard.js'
+import { registerChatHandlers } from '../chat/socketChat.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
 // DÃ©clarÃ©e hors de initSocket â€” une seule instance, partagÃ©e entre toutes les connexions.
@@ -186,6 +187,7 @@ const initSocket = (io) => {
         registerEntityHandlers(io, socket, context, pendingEntityActions)
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
         registerTradeHandlers(io, socket, context)
+        registerChatHandlers(io, socket, context)
         // registerWizardHandlers déjà appelé plus haut, avant SESSION_JOINED (voir commentaire ligne
         // ~59) — pas ici, doublon supprimé (aurait enregistré wizard:join/wizard:lock_update deux
         // fois sur le même socket).
