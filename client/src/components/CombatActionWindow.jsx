@@ -121,6 +121,12 @@ export default function CombatActionWindow({
     && playerTokensInRoster.some(tk => tk.id === computedAnnounceTokenId)
     && !rosterEntry?.has_announced
 
+  // CLICKATTACK-TURNGATE1 (docs/BUGIDENTIFIE.md) — source unique du "c'est mon tour", réutilisée par
+  // les 3 hooks ambiants ci-dessous (useAutoMoveMode, useCombatClickAttack, moveHoverEnabled drone).
+  // Avant ce correctif, ce ternaire n'était écrit qu'une fois (useAutoMoveMode, ALLURE-TURNGATE1) et
+  // absent des deux autres — un seul calcul nommé élimine le risque de divergence future entre les 3.
+  const isMyTurnToAct = phase === 'ANNOUNCEMENT' ? isMyTurnInAnnouncement : phase === 'RESOLUTION' && isMyTurnInResolution
+
   // --- etats tactiques partagés (useReducer) --------------------------------
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
@@ -181,7 +187,9 @@ export default function CombatActionWindow({
     allures,
     onEnterMoveMode,
     onEnterTargetMode,
-    moveHoverEnabled: isDrone,
+    // CLICKATTACK-TURNGATE1 — flag partagé par le survol et le clic-attaque du drone (useDroneDeclare) :
+    // corriger ici ferme les deux gaps en un seul endroit, pas besoin de séparer en deux flags distincts.
+    moveHoverEnabled: isDrone && isMyTurnToAct,
     combatMoveMode,
     pendingMoveSelection,
     battlemapId,
@@ -197,12 +205,10 @@ export default function CombatActionWindow({
     [isStunned, allures],
   )
   useAutoMoveMode({
+    // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — le survol ne s'arme que si c'est réellement mon tour
+    // de déclarer/résoudre, jamais tout le temps (isMyTurnToAct, source unique ci-dessus).
     enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
-      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite' &&
-      // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — le survol ne s'arme que si c'est réellement mon tour
-      // de déclarer/résoudre, jamais tout le temps. `useCombatClickAttack` ci-dessous, bug séparé
-      // (CLICKATTACK-MOVECONFLICT1), volontairement non touché.
-      (phase === 'ANNOUNCEMENT' ? isMyTurnInAnnouncement : phase === 'RESOLUTION' && isMyTurnInResolution),
+      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite' && isMyTurnToAct,
     allures: effectiveAllures,
     tokenId: playerToken?.id ?? null,
     tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
@@ -231,8 +237,10 @@ export default function CombatActionWindow({
     return { mode: 'ranged', band: resolveWeaponRangeBand(distanceM, clickRangedWeapon.ref_range).band }
   }
   useCombatClickAttack({
+    // CLICKATTACK-TURNGATE1 (docs/BUGIDENTIFIE.md) — même garde de tour que useAutoMoveMode
+    // ci-dessus (isMyTurnToAct) : ce hook jumeau n'avait jamais reçu la contrainte de tour.
     enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
-      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite',
+      decl.combatMode !== 'charge' && decl.combatMode !== 'retraite' && isMyTurnToAct,
     battlemapId,
     tokenId: playerToken?.id ?? null,
     tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,

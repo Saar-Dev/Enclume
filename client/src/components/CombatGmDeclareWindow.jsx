@@ -238,7 +238,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     allures:          DEFAULT_PNJ_ALLURES,
     onEnterMoveMode,
     onEnterTargetMode,
-    moveHoverEnabled: !!activeDroneCharId,
+    // CLICKATTACK-TURNGATE1 (docs/BUGIDENTIFIE.md) — `isActiveDrone` (déjà la source unique "drone
+    // géré par le MJ, pas encore déclaré", cf. ligne 191) remplace `!!activeDroneCharId` : fermait le
+    // survol/clic-attaque au bon moment (has_announced) et exclut aussi un drone appartenant à un
+    // joueur (isDroneGmManaged exige `!char.user_id`) — trouvé en corrigeant ce bug : sans ce filtre,
+    // ce flag armait déjà pour un drone de joueur simplement parce qu'il était le slot actif, alors que
+    // `canDeclare` plus bas ignore ce cas (pas l'affaire du MJ). Ferme les deux hooks ambiants d'un coup
+    // (flag partagé, useDroneDeclare.js).
+    moveHoverEnabled: isActiveDrone,
     combatMoveMode,
     pendingMoveSelection,
     battlemapId,
@@ -248,11 +255,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Déplacement PNJ (non-drone) : survol/preview ambiant par défaut, même patron que le drone
   // ci-dessus et que CombatActionWindow (COMBAT-DEPLACEMENT-HOVER) — suspendu pendant Charge (géré
   // en interne par handleStartCharge) et pendant toute autre sélection en cours (isSelectingOnMap).
-  // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — `isActivePnj` (remplace `!activeDroneCharId`) exclut
-  // aussi bien le drone que le cas où le slot actif est un PJ ou un PNJ déjà déclaré : le survol ne
-  // s'arme que si le slot actif est réellement un PNJ pas encore déclaré. `moveHoverEnabled` (drone,
-  // ci-dessus) volontairement non touché — partagé avec useCombatClickAttack dans useDroneDeclare.js,
-  // bug séparé (CLICKATTACK-MOVECONFLICT1).
+  // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — `isActivePnj` exclut aussi bien le drone que le cas où
+  // le slot actif est un PJ ou un PNJ déjà déclaré : le survol ne s'arme que si le slot actif est
+  // réellement un PNJ pas encore déclaré. `moveHoverEnabled` (drone, ci-dessus) reçoit désormais le
+  // même traitement via `isActiveDrone` (CLICKATTACK-TURNGATE1).
   useAutoMoveMode({
     enabled: isActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
     allures: DEFAULT_PNJ_ALLURES,
@@ -265,13 +271,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   })
 
   // ── Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) ──────────────────────
-  // Même hook que CombatActionWindow (PJ)/useDroneDeclare, cf. useCombatClickAttack.js. Placé ici
-  // (avant le early-return `allGmManaged.length === 0` plus bas, Rules of Hooks) — `equipment` est déjà
-  // disponible à ce point (state, ligne 85), donc pas de duplication de dérivation nécessaire ici
-  // contrairement à CombatActionWindow (allInventoryItems y était aussi déjà dispo, dérivation
-  // dupliquée là-bas uniquement par cohérence de patron entre les 2 fichiers).
-  const clickIsActivePnj = activePnjEntry && isPnj(activePnjEntry) && !activePnjEntry.has_announced
-  const clickAllWeapons = clickIsActivePnj
+  // Même hook que CombatActionWindow (PJ)/useDroneDeclare, cf. useCombatClickAttack.js. `isActivePnj`
+  // (calculé plus haut, ligne 190, avant les hooks ambiants — Rules of Hooks) est déjà disponible ici :
+  // CLICKATTACK-TURNGATE1 a retiré `clickIsActivePnj`, doublon exact de `isActivePnj` sans raison
+  // technique (aucune contrainte d'ordre des hooks ne les distinguait, seuls des `const` de rendu).
+  // `equipment` est déjà disponible à ce point (state, ligne 85), donc pas de duplication de dérivation
+  // nécessaire ici contrairement à CombatActionWindow (allInventoryItems y était aussi déjà dispo,
+  // dérivation dupliquée là-bas uniquement par cohérence de patron entre les 2 fichiers).
+  const clickAllWeapons = isActivePnj
     ? [equipment[activeTokenId]?.weaponMg, equipment[activeTokenId]?.weaponMd,
        equipment[activeTokenId]?.weapon2M, equipment[activeTokenId]?.weaponTr].filter(Boolean)
     : []
@@ -284,7 +291,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return { mode: 'ranged', band: resolveWeaponRangeBand(distanceM, clickRangedWeapon.ref_range).band }
   }
   useCombatClickAttack({
-    enabled: clickIsActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
+    enabled: isActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
     battlemapId,
     tokenId: activeTokenId,
     tokenPos: activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,

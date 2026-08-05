@@ -453,7 +453,7 @@ inchangé) ni pour le drone/la fenêtre GM (résiduels non touchés, voir CLICKA
 
 ---
 
-### Dette CLICKATTACK-TURNGATE1 — `useCombatClickAttack` jamais gardé par le tour, contrairement à `useAutoMoveMode`
+### Dette CLICKATTACK-TURNGATE1 — `useCombatClickAttack` jamais gardé par le tour, contrairement à `useAutoMoveMode` ✅ Session (Saar, 2026-08-05)
 
 **Symptôme** : Aucun cas observé en jeu à ce jour — trouvé en corrigeant CLICKATTACK-MOVECONFLICT1
 (2026-08-04), en comparant le câblage de `useCombatClickAttack` à celui de `useAutoMoveMode`
@@ -482,6 +482,44 @@ MJ/PNJ, ALLURE-TURNGATE1). `useCombatClickAttack`, le hook jumeau qui arme le cl
 séparer `moveHoverEnabled` en deux flags distincts si le survol et le clic-attaque doivent un jour
 diverger dans `useDroneDeclare.js`, ajouter `!has_announced` au garde MJ-drone. Session dédiée, pas un
 correctif d'urgence (aucun symptôme observé).
+
+**Analyse approfondie (2026-08-05)** — en lisant `CombatGmDeclareWindow.jsx` en entier avant de coder,
+2 constats supplémentaires, même invariant ("c'est mon tour"/"c'est mon slot"), pas des bugs séparés :
+- `clickIsActivePnj` (ligne 273) était un **doublon exact** de `isActivePnj` (ligne 190, déjà calculé
+  plus haut, avant les hooks ambiants) — même expression, aucune contrainte d'ordre des hooks ne les
+  distinguait (ce sont de simples `const`, pas des hooks). Reliquat probable du câblage initial de
+  `useCombatClickAttack` sans avoir vérifié qu'`isActivePnj` existait déjà à portée.
+- `moveHoverEnabled: !!activeDroneCharId` (drone) n'excluait pas seulement `!has_announced` (gap déjà
+  documenté ci-dessus) mais aussi l'appartenance : `activeDroneCharId` accepte **tout** drone actif au
+  slot, y compris un drone possédé par un joueur, alors que `isActiveDrone` (déjà calculé ligne 191,
+  déjà utilisé par `canDeclare` pour la même distinction) exige `isDroneGmManaged` (`!char.user_id`).
+  Avant ce correctif, le survol/clic-attaque ambiant du MJ pouvait donc s'armer pour le drone d'un
+  joueur simplement parce qu'il était le slot actif — sans qu'aucun bouton "Déclarer" ne soit jamais
+  disponible pour ce cas côté MJ (`canDeclare` l'ignore déjà). Même catégorie de bug que
+  CLICKATTACK-TURNGATE1 (affordance ambiante armée sans garde canonique), pas un symptôme séparé.
+
+**Correctif codé (2026-08-05)** — réutilisation systématique des variables déjà existantes, aucune
+nouvelle logique inventée :
+- `CombatActionWindow.jsx` — nouvelle constante unique `isMyTurnToAct` (même ternaire que celui qui
+  n'existait qu'inline dans `useAutoMoveMode`), réutilisée par `useAutoMoveMode.enabled`,
+  `useCombatClickAttack.enabled` (garde manquant, cœur de cette dette) et
+  `moveHoverEnabled: isDrone && isMyTurnToAct` (ferme le cas drone PJ). Élimine le risque qu'un futur
+  4ᵉ hook ambiant réécrive ce ternaire une 3ᵉ fois avec une variante légèrement différente.
+- `CombatGmDeclareWindow.jsx` — `moveHoverEnabled: isActiveDrone` (remplace `!!activeDroneCharId`,
+  ferme `!has_announced` **et** l'appartenance joueur en un seul remplacement) ; `clickIsActivePnj`
+  supprimé, ses 2 usages remplacés par `isActivePnj` (déduplication, aucun changement de comportement
+  pour le cas PNJ non-drone — expression strictement identique).
+
+**Testé** : ESLint sur les 2 fichiers — 9 problèmes (1 erreur, 8 warnings) avant **et** après, tous
+préexistants et sans rapport (confirmé par `git stash`/comparaison ligne à ligne : l'erreur
+`set-state-in-effect` est la dette I18N-LINT3 déjà trackée, non touchée ici) ; `npm run build` (client)
+propre.
+**Non testé** : scénario réel en jeu — clic-attaque PJ/PNJ/drone hors tour (doit être refusé/absent),
+clic-attaque et survol pendant le tour légitime (doit fonctionner comme avant), drone d'un joueur au
+slot actif côté vue MJ (ambiant ne doit plus s'armer) — à la charge de Saar.
+**Données** : aucune, 100% client, aucune migration.
+**Retour arrière** : commit isolé, aucun changement de comportement pendant le tour légitime du
+déclarant (PJ, PNJ ou drone MJ).
 
 ---
 
