@@ -43,22 +43,21 @@ export function useSessionSocket() {
     // docs/PLAN_FATIGUE_DOMMAGES.md §7 (Lot 1) — payload minimal (pas le campaign complet, resolved
     // ne quitte jamais le serveur), merge partiel via updateCampaign comme les autres champs live.
     const onGameTimeAdjusted = ({ gameTimeMinutes }) => updateCampaign({ game_time_minutes: gameTimeMinutes })
-    // system:true (COM29, dual-wield dégradé) — message serveur porté par une clé i18n, jamais un
-    // texte figé (même mécanisme que les messages système join/leave ci-dessus), résolue ici pour
-    // rester cohérent avec la langue active du client qui l'affiche.
     const onChatMessage = (payload) => {
-      if (payload.system) {
-        addMessage({
-          id: `sys-${payload.i18nKey}-${payload.timestamp}`, system: true,
-          text: t(payload.i18nKey),
-          time: new Date(payload.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        })
-        return
-      }
       const { userId, username, color, text, timestamp } = payload
       addMessage({
         id: `${userId}-${timestamp}`, user: username, color, text,
         time: new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      })
+    }
+    // Notice système combat (ex. COM29 dual-wield dégradé) — clé i18n résolue ici pour rester
+    // cohérent avec la langue active du client (même mécanisme que les messages join/leave
+    // ci-dessus). Événement dédié shared/events.js — plus un détournement de CHAT_MESSAGE.
+    const onCombatSystemNotice = (payload) => {
+      addMessage({
+        id: `sys-${payload.i18nKey}-${payload.timestamp}`, system: true,
+        text: t(payload.i18nKey, payload.params),
+        time: new Date(payload.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
     }
     const onCharacterUpdated = (updatedCharacter) => upsertCharacter(updatedCharacter)
@@ -110,6 +109,7 @@ export function useSessionSocket() {
     socket.on(WS.CAMPAIGN_SETTINGS_UPDATED, onCampaignUpdated)
     socket.on(WS.CAMPAIGN_GAME_TIME_ADJUSTED, onGameTimeAdjusted)
     socket.on(WS.CHAT_MESSAGE,              onChatMessage)
+    socket.on(WS.COMBAT_SYSTEM_NOTICE,      onCombatSystemNotice)
     socket.on(WS.CHARACTER_UPDATED,         onCharacterUpdated)
     socket.on(WS.DICE_RESULT,               onDiceResult)
     socket.on(WS.MACRO_ROLL_RESULT,         onMacroRollResult)
@@ -124,6 +124,7 @@ export function useSessionSocket() {
       socket.off(WS.SESSION_USER_LEFT,         onUserLeft)
       socket.off(WS.CAMPAIGN_SETTINGS_UPDATED, onCampaignUpdated)
       socket.off(WS.CHAT_MESSAGE,              onChatMessage)
+      socket.off(WS.COMBAT_SYSTEM_NOTICE,      onCombatSystemNotice)
       socket.off(WS.CHARACTER_UPDATED,         onCharacterUpdated)
       socket.off(WS.DICE_RESULT,               onDiceResult)
       socket.off(WS.MACRO_ROLL_RESULT,         onMacroRollResult)

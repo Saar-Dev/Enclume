@@ -130,6 +130,10 @@ export const WS = {
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }
   COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ ou GM : prompt D6 durée { tokenId, outcome }
   COMBAT_STUN_CONFIRM:           'combat:stun_confirm',            // PJ ou GM → serveur : lancer le D6 { tokenId }
+  // Notice système combat — retour éphémère à un seul joueur (pas un message de chat persistant,
+  // cf. docs/PLANS/PLAN_CHAT.md). Remplace un détournement de CHAT_MESSAGE (COM29 dual-wield),
+  // même famille que COMBAT_DECLARE_ERROR/TRADE_ERROR/WIZARD_ERROR.
+  COMBAT_SYSTEM_NOTICE:          'combat:system_notice',           // serveur → socket (ou room fallback) : { i18nKey, params?, timestamp }
 
   // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B)
   COMBAT_TIMELINE_UPDATED:       'combat:timeline_updated',        // serveur → room : entrées du Tour en cours + étape courante { turnNumber, entries, currentStep }

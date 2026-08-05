@@ -2712,18 +2712,18 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       breakdown,
     } })
 
-    // Tir à deux armes dégradé (COM29) — message système privé, uniquement pour le propriétaire du
+    // Tir à deux armes dégradé (COM29) — notice système privée, uniquement pour le propriétaire du
     // personnage (PJ : le joueur ; PNJ : pas de user_id, fallback vers le socket courant = le MJ qui
     // résout ce tour). Jamais de blocage (fires ne peut pas être null ici, déjà écarté plus haut) —
     // seulement une explication, cohérente avec le reste du fichier ("dès qu'un truc marche pas, le
     // système doit dire pourquoi"). i18n : clé résolue côté client (useSessionSocket.js), jamais de
-    // texte figé envoyé par le serveur.
+    // texte figé envoyé par le serveur. Événement dédié (pas CHAT_MESSAGE) : ce n'est pas un message
+    // de chat persistant, juste un retour éphémère à ce joueur (docs/PLANS/PLAN_CHAT.md).
     if (degraded) {
       emissions.push({
         to: 'user', userId: character.user_id ?? null, fallback: 'socket',
-        event: WS.CHAT_MESSAGE,
+        event: WS.COMBAT_SYSTEM_NOTICE,
         data: {
-          system: true,
           i18nKey: degraded === 'offhand' ? 'session.dualWieldAmmoOutOffhand' : 'session.dualWieldAmmoOutPrimary',
           timestamp: new Date().toISOString(),
         },
