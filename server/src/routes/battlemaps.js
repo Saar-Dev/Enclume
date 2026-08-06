@@ -612,6 +612,9 @@ router.post('/:id/world-effects/definitions', requireAuth, async (req, res, next
       input: req.body,
       userId: req.user.id,
     })
+    req.app.get('io').to(battlemap.campaign_id).emit(WS.WORLD_RUNTIME_UPDATED, {
+      battlemapId: battlemap.id, runtimeRevision: battlemap.runtime_revision, kind: 'effect-definition-created',
+    })
     res.status(201).json({ definition })
   } catch (error) {
     if (error?.code === '23505') return next(new AppError(409, 'Effect key already exists'))

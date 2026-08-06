@@ -110,7 +110,9 @@ fichier, dont 3 composants React internes non exportés (`CharacterModal`, `Dice
 - Le fetch `/battlemaps/:id/world-effects` est appelé indépendamment dans `Sidebar.jsx:739-747` et
   `Editor3D.jsx:1242-1243,1515` — aucun store/hook partagé (`entityStore`/`mapStore` n'exposent rien
   de tel), alors que la règle `react.md` demande "Les stores contiennent l'état partagé; éviter une
-  seconde copie locale divergente".
+  seconde copie locale divergente". **Repris et creusé le 2026-08-06** : un 3ᵉ fichier
+  (`Canvas3D.jsx`) fait le même doublon, non repéré ici initialement — cadrage complet et correctif
+  dans `docs/PLANS/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, ne pas retraiter ce point ici.
 
 **Découpage naturel proposé** (ordre suggéré, chaque extraction est un lot indépendant) :
 1. `Sidebar.styles.js` ou migration vers classes CSS `sidebar-*` (déjà en partie utilisées) —

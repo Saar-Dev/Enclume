@@ -1,9 +1,10 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
+import { useWorldRuntimeStore } from '../stores/worldRuntimeStore.js'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
@@ -282,30 +283,13 @@ export default function Sidebar({
     surfaceToolState.mode,
   ])
 
-  const [worldEffects, setWorldEffects] = useState({ definitions: [], instances: [] })
+  // worldEffects vient du store partagé (PLAN_WORLD_RUNTIME_EFFECTS_STORE.md) — pas de fetch ni de
+  // listener ici, ce panneau n'est visible que pendant que Editor3D.jsx est monté (mode === 'edit'),
+  // qui synchronise déjà le store en continu.
+  const worldEffects = useWorldRuntimeStore(s => s.worldEffects)
+  const fetchWorldEffects = useWorldRuntimeStore(s => s.fetchWorldEffects)
   const [customEffectOpen, setCustomEffectOpen] = useState(false)
   const [customEffectDraft, setCustomEffectDraft] = useState({ key: '', label: '', movementMultiplier: 1, note: '' })
-
-  const refreshWorldEffects = useCallback(async () => {
-    if (!battlemapId) return setWorldEffects({ definitions: [], instances: [] })
-    try {
-      const { data } = await api.get(`/battlemaps/${battlemapId}/world-effects`)
-      setWorldEffects(data.worldEffects || { definitions: [], instances: [] })
-    } catch (error) {
-      console.error('[Sidebar] Erreur chargement effets monde :', error)
-    }
-  }, [battlemapId])
-
-  useEffect(() => { refreshWorldEffects() }, [refreshWorldEffects])
-
-  useEffect(() => {
-    if (!socket || !battlemapId) return undefined
-    const onRuntimeUpdate = event => {
-      if (String(event?.battlemapId) === String(battlemapId)) refreshWorldEffects()
-    }
-    socket.on(WS.WORLD_RUNTIME_UPDATED, onRuntimeUpdate)
-    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, onRuntimeUpdate)
-  }, [socket, battlemapId, refreshWorldEffects])
 
   const createCustomEffect = async () => {
     if (!battlemapId || !customEffectDraft.key.trim() || !customEffectDraft.label.trim()) return
@@ -319,7 +303,7 @@ export default function Sidebar({
           ? [{ event: 'traverse', type: 'note', label: customEffectDraft.label.trim(), note: customEffectDraft.note }]
           : [],
       })
-      await refreshWorldEffects()
+      await fetchWorldEffects(battlemapId)
       updateSurfaceTool({ effectDefinitionKey: data.definition.key, mode: 'effect' })
       setCustomEffectDraft({ key: '', label: '', movementMultiplier: 1, note: '' })
       setCustomEffectOpen(false)
@@ -332,7 +316,7 @@ export default function Sidebar({
     if (!battlemapId) return
     try {
       await api.delete(`/battlemaps/${battlemapId}/world-effects/instances/${instanceId}`)
-      await refreshWorldEffects()
+      await fetchWorldEffects(battlemapId)
     } catch (error) {
       console.error('[Sidebar] Suppression effet refusée :', error)
     }

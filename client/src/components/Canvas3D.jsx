@@ -10,6 +10,7 @@ import { getCombatPathColor, selectCombatMovementForCost } from '../../../shared
 import { WS } from '../../../shared/events.js'
 import { loadVoxelTextures } from '../lib/voxelTextures.js'
 import { useCameraLOS } from '../lib/useCameraLOS.js'
+import { useWorldRuntimeSync } from '../lib/useWorldRuntimeSync.js'
 import CulledVoxelScene from './CulledVoxelScene.jsx'
 import DungeonTerrainScene from './DungeonTerrainScene.jsx'
 import SurfaceDungeonScene from './SurfaceDungeonScene.jsx'
@@ -1428,57 +1429,15 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
   const [textureMaterials, setTextureMaterials] = useState({})
   const [entityTextureMaterials, setEntityTextureMaterials] = useState({})
-  const [runtimeEffectRegions, setRuntimeEffectRegions] = useState([])
-  const [runtimeElevatorStates, setRuntimeElevatorStates] = useState({})
   const [surfaceConnectorPanel, setSurfaceConnectorPanel] = useState(null)
   const [blocksReady, setBlocksReady] = useState(false)
   const [selectedTokenId, setSelectedTokenId] = useState(null)
 
-  const refreshRuntimeEffects = useCallback(async () => {
-    if (!battlemap?.id) return setRuntimeEffectRegions([])
-    try {
-      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-effects`)
-      setRuntimeEffectRegions(data.worldEffects?.regions || [])
-    } catch (error) {
-      console.error('[Canvas3D] Erreur chargement effets monde :', error)
-    }
-  }, [battlemap?.id])
-
-  useEffect(() => { refreshRuntimeEffects() }, [refreshRuntimeEffects])
-
-  const refreshRuntimeElevators = useCallback(async () => {
-    if (!battlemap?.id) return setRuntimeElevatorStates({})
-    try {
-      const { data } = await api.get(`/battlemaps/${battlemap.id}/world-elevators`)
-      setRuntimeElevatorStates(data.worldElevators?.states || {})
-    } catch (error) {
-      console.error('[Canvas3D] Erreur chargement ascenseurs monde :', error)
-    }
-  }, [battlemap?.id])
-
-  useEffect(() => { refreshRuntimeElevators() }, [refreshRuntimeElevators])
-
-  const elevatorsAreTransitioning = useMemo(
-    () => Object.values(runtimeElevatorStates).some(state => ['closing', 'moving', 'opening'].includes(state?.phase)),
-    [runtimeElevatorStates],
-  )
-
-  useEffect(() => {
-    if (!elevatorsAreTransitioning) return undefined
-    const timer = window.setInterval(refreshRuntimeElevators, 300)
-    return () => window.clearInterval(timer)
-  }, [elevatorsAreTransitioning, refreshRuntimeElevators])
-
-  useEffect(() => {
-    if (!socket || !battlemap?.id) return undefined
-    const handleRuntimeUpdate = event => {
-      if (String(event?.battlemapId) !== String(battlemap.id)) return
-      if (event?.kind !== 'elevator-clock') refreshRuntimeElevators()
-      if (!String(event?.kind || '').startsWith('elevator-')) refreshRuntimeEffects()
-    }
-    socket.on(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
-    return () => socket.off(WS.WORLD_RUNTIME_UPDATED, handleRuntimeUpdate)
-  }, [socket, battlemap?.id, refreshRuntimeEffects, refreshRuntimeElevators])
+  const {
+    worldEffects,
+    runtimeElevatorStates,
+    refreshRuntimeElevators,
+  } = useWorldRuntimeSync(battlemap?.id, socket)
 
   // ─── Liseré surbrillance entités (touche Alt) ─────────────────────────────
   // PE16 : e.code obligatoire (invariant AZERTY/QWERTY)
@@ -1671,7 +1630,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           surfaceData={surfaceData}
           textureMaterials={textureMaterials}
           entityTextureMaterials={entityTextureMaterials}
-          runtimeEffectRegions={runtimeEffectRegions}
+          runtimeEffectRegions={worldEffects.regions}
           runtimeFeatureStates={runtimeElevatorStates}
           socket={socket}
           battlemapId={battlemap?.id}
