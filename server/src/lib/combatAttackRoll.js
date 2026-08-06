@@ -1,7 +1,7 @@
-import { resolveTestOutcome } from '../../../shared/polarisTestResolution.js'
+import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestResolution.js'
 
 /**
- * combatAttackRoll.js — Noyau pur du jet d'attaque combat (CaC + Tir)
+ * combatAttackRoll.js — Noyau pur du jet d'attaque et du dégât brut CaC (CaC + Tir)
  *
  * Fonction PURE — aucun accès DB, aucune I/O (pas de console.log), aucun appel non déterministe.
  * Toutes les données sont passées en paramètre, y compris le jet de dé déjà effectué (parseDice
@@ -41,4 +41,17 @@ export function computeAttackRoll({ skillLabel, skillTotal, contributions, total
     ],
     ...outcome,
   }
+}
+
+/**
+ * Dégât brut CaC — même formule aux 5 sites de socketCombatHelpers.js qui la dupliquaient
+ * (PLAN_RW_SYSCOMBAT.md §2.7) : `resolveDefenselessTarget`, `resolveMeleeDefensePnj`,
+ * `resolveMeleeDefenseDrone`, `confirmMeleeDefense`, `confirmDamage` (branche 'melee').
+ *
+ * Fonction PURE — aucun accès DB. Le caller fournit rawDice déjà lancé (getEffectiveMeleeDamage,
+ * damageService.js) et mr déjà résolu (bonus Réussite critique inclus, cf. resolveMeleeAction) —
+ * cette fonction ne fait que sommer.
+ */
+export function computeMeleeRawDamage({ rawDice, mr, modDom, combatModeBonus }) {
+  return rawDice + getMrModifier(mr) + (modDom ?? 0) + (combatModeBonus ?? 0)
 }

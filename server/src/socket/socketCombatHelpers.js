@@ -6,7 +6,7 @@ import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
-import { computeAttackRoll } from '../lib/combatAttackRoll.js'
+import { computeAttackRoll, computeMeleeRawDamage } from '../lib/combatAttackRoll.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -717,8 +717,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         })
         // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
         // même table que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
-        const modDomAttaque = getMrModifier(mrAttaque)
-        const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + (combatModeBonus ?? 0)
+        const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
         const hitResult = await damageService.resolveTargetHit(io, db, meleeCampaignId, {
           degautsBruts, characterIdCible, cibleType: 'pj',
           char_sheet_id_cible,
@@ -838,8 +837,7 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       effectiveChocDsl = meleeRolled.choc
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
       // même table que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
-      const modDomAttaqueMelee = getMrModifier(mr)
-      degautsBruts = rawDice + modDomAttaqueMelee + (modDom ?? 0) + (combatModeBonus ?? 0)
+      degautsBruts = computeMeleeRawDamage({ rawDice, mr, modDom, combatModeBonus })
     } else {
       // getEffectiveWeaponDamage peut renvoyer null si l'arme a été désequipée/transférée entre la
       // Déclaration et cette Confirmation (fenêtre réelle côté PJ, contrairement au PNJ immédiat) —
@@ -1716,8 +1714,7 @@ async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
       weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
     // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
-    const modDomAttaque = getMrModifier(mrAttaque)
-    const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+    const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
     if (cibleType === 'drone') {
       const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
       if (droneSheet) {
@@ -1855,8 +1852,7 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
       weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
     // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
-    const modDomAttaque = getMrModifier(mrAttaque)
-    const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+    const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
     const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
       degautsBruts,
       characterIdCible,
@@ -1916,8 +1912,7 @@ async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
       // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul,
       // déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
-      const modDomAttaque = getMrModifier(mrAttaque)
-      const degautsBruts = rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus
+      const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
       const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
       await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {

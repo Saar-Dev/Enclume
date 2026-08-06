@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { computeAttackRoll } from './combatAttackRoll.js'
+import { computeAttackRoll, computeMeleeRawDamage } from './combatAttackRoll.js'
 
 // Lancement manuel (aucun script npm test dans le projet, PLAN_RW_SYSCOMBAT.md §2.2) :
 //   node --test server/src/lib/combatAttackRoll.test.mjs
@@ -131,4 +131,44 @@ test('cas réaliste Tir — portée moyenne + mode de tir + taille + couverture 
   assert.equal(r.seuil, 11)
   assert.equal(r.isSuccess, false) // 12 > 11
   assert.equal(r.mr, -1)
+})
+
+// computeMeleeRawDamage — dédup des 5 sites socketCombatHelpers.js (PLAN_RW_SYSCOMBAT.md §2.7).
+
+test('computeMeleeRawDamage — modDom et combatModeBonus à 0, mr>=0 (assezBon, +2)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 8, mr: 5, modDom: 0, combatModeBonus: 0 }), 10)
+})
+
+test('computeMeleeRawDamage — modDom/combatModeBonus null/undefined traités comme 0 (sites différés confirmMeleeDefense/confirmDamage, §2.7.a)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 6, mr: -3, modDom: null, combatModeBonus: undefined }), 5)
+})
+
+test('computeMeleeRawDamage — mr positif élevé (héroïque, +8)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 10, mr: 30, modDom: 3, combatModeBonus: 3 }), 24)
+})
+
+test('computeMeleeRawDamage — mr négatif extrême (catastrophique, -9)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 10, mr: -40, modDom: 0, combatModeBonus: 0 }), 1)
+})
+
+test('computeMeleeRawDamage — mr nul (deJustesse, +0)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 5, mr: 0, modDom: 1, combatModeBonus: 0 }), 6)
+})
+
+test('computeMeleeRawDamage — cas réaliste attaquant PNJ touche défenseur PJ (confirmMeleeDefense, site #4)', () => {
+  // Couteau 1D6=4, mr=7 (bon +3), modDom(FOR)=2, pas de mode combat
+  assert.equal(computeMeleeRawDamage({ rawDice: 4, mr: 7, modDom: 2, combatModeBonus: 0 }), 9)
+})
+
+test('computeMeleeRawDamage — cas réaliste défenseur PNJ, mode Charge actif (resolveMeleeDefensePnj, site #2)', () => {
+  // Dague=5, mr=10 (très bon +4), modDom=1, Charge +3
+  assert.equal(computeMeleeRawDamage({ rawDice: 5, mr: 10, modDom: 1, combatModeBonus: 3 }), 13)
+})
+
+test('computeMeleeRawDamage — cas réaliste cible drone (resolveMeleeDefenseDrone, site #3)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 7, mr: -5, modDom: 0, combatModeBonus: 0 }), 5)
+})
+
+test('computeMeleeRawDamage — cas réaliste cible sans défense DEF5 (resolveDefenselessTarget, site #1)', () => {
+  assert.equal(computeMeleeRawDamage({ rawDice: 9, mr: 15, modDom: 2, combatModeBonus: 0 }), 17)
 })

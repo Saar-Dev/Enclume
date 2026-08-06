@@ -790,3 +790,45 @@ tous confirmés par Saar.
 **Données** : aucune migration — chantier 100% code (client + une route serveur).
 **Retour arrière** : `git revert` du commit de clôture (déplacement de fichier + patchs
 documentaires) ; le code fonctionnel lui-même est dans `5e3dc84`, déjà publié séparément.
+
+---
+
+## Session (Saar) — 2026-08-06 — `PLAN_RW_SYSCOMBAT.md` Lot 5 : `computeMeleeRawDamage`
+
+Réouverture du chantier de découpage `socketCombatHelpers.js` (Lots 0-4 clos depuis le 2026-07-28) —
+Lot 5, cadré le jour même (§2.7 du plan) : noyau pur dédupliquant
+`degautsBruts = rawDice + getMrModifier(mr) + modDom + combatModeBonus`, présent à l'identique à 5
+sites (`resolveDefenselessTarget`, `resolveMeleeDefensePnj`, `resolveMeleeDefenseDrone`,
+`confirmMeleeDefense`, `confirmDamage` branche `melee`) — trouvé en cadrant le chantier, jamais dans le
+périmètre des Lots 0-4 (qui excluaient `damageService.js`, cette duplication vivait côté appelant).
+
+Les 5 sites ont été relus intégralement (pas seulement grep) avant de coder pour confirmer que le
+fichier n'avait pas dérivé depuis la dernière réactualisation du plan (2026-08-06, post-commit
+`d496481`) — confirmé stable. `computeMeleeRawDamage` ajoutée à `server/src/lib/combatAttackRoll.js`
+(même famille que `computeAttackRoll`, import `getMrModifier` ajouté à `shared/polarisTestResolution.js`
+déjà importé pour `resolveTestOutcome`). Les 5 sites remplacent uniquement leur ligne finale de calcul
+— aucun changement à `getEffectiveMeleeDamage` (DB, paramètres propres à chaque site préservés) ni à la
+branche `assault` de `confirmDamage` (formule différente, `modDegatsMode`, hors périmètre §2.7.a).
+
+**Nuance méthodologique relevée en clôture** (question directe de Saar : « pourquoi pas satisfait du
+Lot 5 ? ») : le script d'équivalence jetable écrit pour la vérification (§2.7.c.2, sans DB) réimplémente
+l'ancienne formule en local plutôt que d'appeler le code réellement supprimé — sa valeur probante est
+donc plus faible qu'annoncé initialement. Aucune conséquence sur le code livré (correct, confirmé par
+les tests unitaires à valeurs calculées à la main et la relecture ligne à ligne du diff, qui restent la
+vraie garantie de ce Lot) — seulement sur la façon dont la vérification avait été présentée. Rien à
+recoder.
+
+**Testé** : `node --test server/src/lib/combatAttackRoll.test.mjs` (18/18 — 9 tests Lot 1 inchangés + 9
+nouveaux `computeMeleeRawDamage`, bornes `modDom`/`combatModeBonus` à 0/null/undefined, `mr` sur toute
+la table `MR_TABLE`, un cas réaliste par site) ; `node --check` propre sur les 2 fichiers serveur
+touchés ; diff relu ligne à ligne (aucune clé renommée, `getMrModifier` toujours utilisé par la branche
+Tir hors périmètre — vérifié par grep, aucune référence orpheline) ; session de jeu réelle Saar
+confirmée (« Enclume fonctionne, combat validé »).
+**Non testé** : aucun reste connu sur le périmètre de ce Lot.
+**Données** : aucune migration, aucun effet runtime.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+Prochaine étape : Lot 6 (`resolveDroneAssaultAction`, §2.8) — les numéros de ligne cités dans le plan
+sont déjà caducs après ce Lot (fonction déplacée de L.2103 à L.2098, delta non trivial car 3 des 5
+sites du Lot 5 précèdent cette fonction dans le fichier) : à revérifier avant de coder, pas à déduire
+du texte du plan tel quel.
