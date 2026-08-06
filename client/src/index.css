@@ -3715,3 +3715,48 @@ Convention :
     animation: none;
   }
 }
+
+/* CatastropheReviewQueue.jsx — docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1 */
+.catastrophe-review-overlay {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+}
+.catastrophe-review-card {
+  width: 320px;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+}
+.catastrophe-review-title {
+  font-weight: 700;
+}
+.catastrophe-review-entry-name {
+  font-weight: 600;
+}
+.catastrophe-review-entry-effect {
+  opacity: 0.85;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+.catastrophe-review-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.catastrophe-review-override-row {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.catastrophe-review-queue-badge {
+  position: fixed;
+  top: 4px;
+  right: 4px;
+}

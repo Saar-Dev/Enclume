@@ -65,19 +65,29 @@ Blessures) délèguent tous les deux, aucune copie locale de la règle.
   un Test d'Attribut seul — `getCriticalSuccessBonus`/`applyCriticalSuccessBonus`.
 - **Échec critique** = `roll === 20` sur un Test qui peut échouer (`seuil < 20`) — retest immédiat
   (`applyCriticalFailReroll`), cumulé sur la Marge d'échec.
-- **Catastrophe** = simple **risque** signalé (`catastropheRisk`, Marge d'échec ≥15 en valeur absolue),
-  **jamais automatique** — décision MJ pure (p.204, encadré "OPTIONNEL"), le moteur ne la déclenche
-  jamais lui-même.
+- **Catastrophe** = `catastropheRisk` (Marge d'échec ≥15 en valeur absolue) déclenche en combat un
+  **jet 1D10 automatique** sur la table RAW "CATASTROPHES EN COMBAT" (`REGLESYSCOMBAT.md:714-743`,
+  p.219-220) — persisté (`pending_catastrophes`), présenté au MJ dans une file de validation
+  (`CatastropheReviewQueue.jsx`). **Le jet est automatique, l'application ne l'est jamais** : le MJ
+  confirme l'entrée tirée ou reprend la main (override, autre entrée 1-10), puis narre lui-même
+  l'effet — aucune des 10 entrées n'est mécanisée (décision Saar 2026-08-06, chantier arrêté après le
+  moteur : les conséquences restent narratives en permanence, pas une étape intermédiaire en attente
+  d'un Lot 2). Hors combat, `catastropheRisk` reste un simple flag, sans jet ni file — décision MJ pure,
+  RAW p.204 encadré "OPTIONNEL". `maybeTriggerCatastrophe`/`catastropheService.js` sont l'autorité
+  unique du déclenchement (7 sites combat, `MACRO_ROLL` inclus sous garde combat actif).
 - **Degré RAW** (`MR_TABLE`, p.203-204) — modificateur numérique + clé de degré (`getMrModifier`/
   `getMrDegreeKey`), résolue en FR uniquement côté client (`combat.json` §`degree.*`) : tooltip sur les
   badges de résultat (`Sidebar.jsx`).
 - **Popup client** Réussite critique/Catastrophe (texte seul v1, `CriticalEffectOverlay.jsx`) —
-  déclenché sur `isCriticalSuccess`/`catastropheRisk` (`sessionStore.js`/`useSessionSocket.js`).
+  déclenché sur `isCriticalSuccess`/`catastropheRisk` (`sessionStore.js`/`useSessionSocket.js`),
+  indépendant de la file de validation MJ ci-dessus (l'un informe tous les joueurs, l'autre ne sert
+  qu'au MJ pour choisir la conséquence).
 - **Exclu structurellement** : Test de Choc (`statusService.js`, deux seuils gradués ok/étourdi/
   inconscient, pas un Test binaire contre un seuil unique) ; `dice_config`/`DICE_ROLL` (jets libres non
   liés à un Seuil).
 
-Historique de conception, audit des sites migrés et décisions détaillées : `docs/Old/PLAN_TEST_CRITIQUE.md`.
+Historique de conception, audit des sites migrés et décisions détaillées : `docs/Old/PLAN_TEST_CRITIQUE.md`
+(marge/critique) et `docs/Old/PLAN_CATASTROPHE_RISK.md` (jet automatique + file de validation MJ).
 
 ---
 

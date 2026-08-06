@@ -570,5 +570,49 @@
     "execrable": "Exécrable",
     "catastrophique": "Catastrophique"
   },
-  "catastrophePopup": "Catastrophe"
+  "catastrophePopup": "Catastrophe",
+  "catastrophe": {
+    "overridePlaceholder": "Reprendre la main…",
+    "applyOverride": "Appliquer",
+    "maladresse": {
+      "name": "Maladresse",
+      "effect": "Le personnage perd toutes ses actions pendant le Tour suivant."
+    },
+    "armeInutilisable": {
+      "name": "Arme inutilisable",
+      "effect": "Tombe au sol (armes blanches), s'enraye (armes à feu), ou se casse (mauvaise qualité, cordes d'arc/arbalète) — peut aussi faire perdre le bouclier."
+    },
+    "mauvaiseCible": {
+      "name": "Mauvaise cible",
+      "effect": "Touche une autre cible que celle visée (la plus proche, allié ou ennemi)."
+    },
+    "oups": {
+      "name": "Oups !",
+      "effect": "Le personnage s'inflige lui-même des dommages (armes blanches)."
+    },
+    "positionDesavantageuse": {
+      "name": "Position désavantageuse",
+      "effect": "Tous les adversaires ont +5 pour le toucher."
+    },
+    "confusion": {
+      "name": "Confusion",
+      "effect": "Malus de -5 à toutes les actions pendant 2 Tours de combat."
+    },
+    "boum": {
+      "name": "Boum !",
+      "effect": "Surcharge, explosion d'une batterie ou d'une munition (endommage peut-être l'arme)."
+    },
+    "panneSysteme": {
+      "name": "Panne d'un système",
+      "effect": "Un système du personnage tombe en panne."
+    },
+    "monOeil": {
+      "name": "Mon œil !",
+      "effect": "Le personnage ne voit plus rien pendant 1 Tour."
+    },
+    "desequilibre": {
+      "name": "Déséquilibre",
+      "effect": "Le personnage trébuche ou tombe."
+    }
+  }
 }

@@ -14,6 +14,7 @@ import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { measureBattlemapTokenEntityDistance } from '../services/worldSpatialQueryService.js'
 import { executeBattlemapRigidPairMovement } from '../services/worldForcedMovementService.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
+import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 
 // ─── Helper — résolution état entité après succès ─────────────────────────────
 // Lit target_state_id de l'interaction, met à jour current_state_id en base,
@@ -367,6 +368,16 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
           mr,
           breakdown,
         })
+        // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — Poussée/Traction
+        // n'est pas scopé combat (§8 point 1), maybeTriggerCatastrophe applique lui-même la garde
+        // combat actif : aucun effet hors combat, garde jamais dupliquée ici.
+        const actorTokenForCatastrophe = await db('tokens')
+          .where({ character_id: pending.characterId }).first()
+        if (actorTokenForCatastrophe) {
+          await maybeTriggerCatastrophe(io, pending.campaignId, actorTokenForCatastrophe.id, catastropheRisk, {
+            site: 'entity_action', actorTokenId: actorTokenForCatastrophe.id, targetTokenId: null,
+          })
+        }
 
         if (isSuccess) {
           await resolveEntityState(pending.entityId, pending.interactionId, pending.campaignId, io)

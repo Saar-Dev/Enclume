@@ -130,6 +130,11 @@ export const WS = {
   COMBAT_STUN_EXPIRED:           'combat:stun_expired',            // serveur → room : étourdissement expiré en fin de tour { tokenId }
   COMBAT_STUN_PROMPT:            'combat:stun_prompt',             // serveur → socket PJ ou GM : prompt D6 durée { tokenId, outcome }
   COMBAT_STUN_CONFIRM:           'combat:stun_confirm',            // PJ ou GM → serveur : lancer le D6 { tokenId }
+  // Catastrophe automatique en combat (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — jet 1D10 RAW
+  // "CATASTROPHES EN COMBAT" toujours filtré par une validation MJ avant application réelle.
+  CATASTROPHE_PENDING:           'combat:catastrophe_pending',     // serveur → room (filtré MJ côté client) : nouvelle entrée en attente { id, tokenId, tableEntry, context, rolledAt }
+  CATASTROPHE_RESOLVE:           'combat:catastrophe_resolve',     // GM → serveur : { pendingId, override? } — override = numéro d'entrée 1-10 alternatif, absent = confirme le jet tel quel
+  CATASTROPHE_APPLIED:           'combat:catastrophe_applied',     // serveur → room : effet réellement appliqué après validation MJ { id, tokenId, appliedEntry }
   // Notice système combat — retour éphémère à un seul joueur (pas un message de chat persistant,
   // cf. docs/PLANS/PLAN_CHAT.md). Remplace un détournement de CHAT_MESSAGE (COM29 dual-wield),
   // même famille que COMBAT_DECLARE_ERROR/TRADE_ERROR/WIZARD_ERROR.

@@ -9,6 +9,8 @@ import { pickNextTimelineStep } from './socketCombatHelpers.js'
 import { registerTradeHandlers } from './socketTrade.js'
 import { registerWizardHandlers } from './socketWizard.js'
 import { registerChatHandlers } from '../chat/socketChat.js'
+import { registerCatastropheHandlers } from './socketCatastrophe.js'
+import { listPendingCatastrophes } from '../lib/catastropheService.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
 // DÃ©clarÃ©e hors de initSocket â€” une seule instance, partagÃ©e entre toutes les connexions.
@@ -176,6 +178,23 @@ const initSocket = (io) => {
                 })
               }
             }
+
+            // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — resync MJ
+            // reconnectant : source de vérité serveur (pending_catastrophes), jamais un état client
+            // perdu au rafraîchissement (§4/§8, distinction assumée avec EnvironmentalResultQueue.jsx).
+            // GM uniquement, même patron que la file de validation elle-même.
+            if (member.role === 'gm') {
+              const pendingCatastrophes = await listPendingCatastrophes(campaignId)
+              for (const pc of pendingCatastrophes) {
+                socket.emit(WS.CATASTROPHE_PENDING, {
+                  id: pc.id,
+                  tokenId: pc.token_id,
+                  tableEntry: pc.table_entry,
+                  context: pc.context,
+                  rolledAt: pc.rolled_at,
+                })
+              }
+            }
           }
         } catch (err) {
           console.warn('[WS] session:join â€” combat state sync error (non bloquant):', err.message)
@@ -188,6 +207,7 @@ const initSocket = (io) => {
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
         registerTradeHandlers(io, socket, context)
         registerChatHandlers(io, socket, context)
+        registerCatastropheHandlers(io, socket, context)
         // registerWizardHandlers déjà appelé plus haut, avant SESSION_JOINED (voir commentaire ligne
         // ~59) — pas ici, doublon supprimé (aurait enregistré wizard:join/wizard:lock_update deux
         // fois sur le même socket).

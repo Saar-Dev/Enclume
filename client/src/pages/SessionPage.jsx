@@ -27,6 +27,7 @@ import Sidebar from '../components/Sidebar'
 import CriticalEffectOverlay from '../components/CriticalEffectOverlay'
 import DicePanel from '../components/DicePanel'
 import EnvironmentalResultQueue from '../components/EnvironmentalResultQueue'
+import CatastropheReviewQueue from '../components/CatastropheReviewQueue'
 import CharacterWindow from '../character/CharacterWindow'
 import DroneWindow from '../character/DroneWindow'
 import RadialMenu from '../components/RadialMenu'
@@ -1219,6 +1220,9 @@ function SessionContent({ campaignId }) {
 
       {/* ─── EnvironmentalResultQueue — toujours monté, jamais gaté au mode combat ───── */}
       <EnvironmentalResultQueue socket={socket} />
+
+      {/* ─── CatastropheReviewQueue — toujours monté, MJ uniquement, jamais gaté au mode ── */}
+      <CatastropheReviewQueue socket={socket} />
 
       {/* ─── CombatOverlay — position:fixed, z-index 1000, visible en mode combat ── */}
       {mode === 'combat' && (

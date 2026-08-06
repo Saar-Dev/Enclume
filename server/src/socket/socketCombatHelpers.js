@@ -15,6 +15,7 @@ import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.j
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
 import { resolveEnvironmentalHazardTicks, getAllHazardCodes } from '../lib/environmentalHazardService.js'
+import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 import { measureBattlemapTokenDistance, tokenDistanceM } from '../services/worldSpatialQueryService.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
 import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/combatRange.js'
@@ -646,6 +647,11 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       isSuccess:         defenseSuccess,
       mr:                mrDefense,
       breakdown:         breakdownDefPj,
+    })
+    // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — no-op hors combat/sans
+    // risque, garde centralisée dans maybeTriggerCatastrophe, jamais dupliquée ici.
+    await maybeTriggerCatastrophe(io, meleeCampaignId, tokenId, defenseOutcome.catastropheRisk, {
+      site: 'melee_defense', actorTokenId: tokenId, targetTokenId: attackerTokenId,
     })
 
     // 3. Résultat opposition → room
@@ -1519,6 +1525,10 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       mr:                attaqueOutcome.mr,
       breakdown:         breakdownAtk,
     } })
+    // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, attaqueOutcome.catastropheRisk, {
+      site: 'melee_attack', actorTokenId: action.token_id, targetTokenId,
+    })
 
     // ── 2. Cible ──────────────────────────────────────────────────────────────
     const targetToken = await db('tokens').where({ id: targetTokenId }).first()
@@ -1824,6 +1834,10 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
     mr:                mrDefense,
     breakdown:         breakdownDef,
   } })
+  // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
+  await maybeTriggerCatastrophe(io, campaignId, targetTokenId, defenseOutcome.catastropheRisk, {
+    site: 'melee_defense_pnj', actorTokenId: targetTokenId, targetTokenId: attackerTokenId,
+  })
 
   emissions.push({ to: 'room', event: WS.COMBAT_MELEE_RESULT, data: {
     attaquantId: attackerTokenId, defenseurId: targetTokenId,
@@ -2260,6 +2274,10 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       chancesDeReussite, isSuccess,
       breakdown: breakdownDrone,
     } })
+    // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, droneOutcome.catastropheRisk, {
+      site: 'drone_attack', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
+    })
 
     if (!isSuccess) {
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
@@ -2711,6 +2729,10 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       mr,
       breakdown,
     } })
+    // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1).
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
+      site: 'assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
+    })
 
     // Tir à deux armes dégradé (COM29) — notice système privée, uniquement pour le propriétaire du
     // personnage (PJ : le joueur ; PNJ : pas de user_id, fallback vers le socket courant = le MJ qui

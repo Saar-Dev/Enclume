@@ -18,6 +18,7 @@ import { resolveEcheanceNow } from '../lib/echeanceService.js'
 import { computeWoundInfectionThreshold } from '../lib/woundEvolutionService.js'
 import { broadcastWoundUpdate } from '../lib/woundReviewService.js'
 import { sendMessage as sendChatMessage } from '../chat/chatService.js'
+import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 
 // PLAN_CHAT.md §12 Phase 2 — double-écriture (shadow write, pattern Strangler Fig). Absent/non "true"
 // = comportement strictement inchangé. Lu une seule fois au chargement du module, pas à chaque
@@ -200,7 +201,12 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       // ── 5-6. Jet 1d20 + Succès/critique/Catastrophe — règle absolue Polaris, extraite dans
       // server/src/lib/polarisTestService.js (docs/PLAN_FATIGUE_DOMMAGES.md, résolveur de Test
       // générique) : point d'entrée unique partagé avec les futures échéances serveur autonomes.
-      const { roll: rollResult, seed, isSuccess, isCriticalSuccess, isCriticalFail } = await resolvePolarisTest(threshold, criticalSuccessBonus)
+      // catastropheRisk : calculé par resolvePolarisTest mais silencieusement absent du payload
+      // jusqu'ici — trouvé en analyse à charge (docs/PLANS/PLAN_CATASTROPHE_RISK.md §3/§8, 2ᵉ passe) :
+      // MACRO_ROLL est un 7ᵉ site valide pour la Catastrophe automatique en combat (Lutte, Manœuvre
+      // d'armure, tout Test résolu par macro pendant un Tour), sous la même garde combat actif que les
+      // 6 autres sites (maybeTriggerCatastrophe, jamais une émission inconditionnelle).
+      const { roll: rollResult, seed, isSuccess, isCriticalSuccess, isCriticalFail, catastropheRisk } = await resolvePolarisTest(threshold, criticalSuccessBonus)
 
       // ── 7. Substitution template ──────────────────────────────────
       const sourceLabel  = macro.sources.map(s => s.ref_label).join(' + ')
@@ -233,6 +239,7 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
         isSuccess,
         isCriticalSuccess,
         isCriticalFail,
+        catastropheRisk,
         formattedMessage,
         secret,
         seed,
@@ -248,6 +255,16 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
         }
       } else {
         io.to(campaignId).emit(WS.MACRO_ROLL_RESULT, payload)
+      }
+
+      // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1, 7ᵉ site) — garde combat
+      // actif appliquée par maybeTriggerCatastrophe lui-même, jamais dupliquée ici (décision Saar :
+      // "si et seulement si combat en cours").
+      const actorTokenForCatastrophe = await db('tokens').where({ character_id: characterId }).first()
+      if (actorTokenForCatastrophe) {
+        await maybeTriggerCatastrophe(io, campaignId, actorTokenForCatastrophe.id, catastropheRisk, {
+          site: 'macro_roll', actorTokenId: actorTokenForCatastrophe.id, targetTokenId: null,
+        })
       }
 
       console.log(`[WS] macro:roll — ${user.username} : ${macro.label} = ${rollResult}/${threshold} → ${successText}${secret ? ' [secret]' : ''}`)

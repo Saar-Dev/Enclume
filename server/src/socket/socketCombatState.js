@@ -13,6 +13,7 @@ import { getAllModStatusCodes } from '../services/weaponModService.js'
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
+import { purgePendingCatastrophes } from '../lib/catastropheService.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -246,6 +247,10 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       }
 
       await db('combat_pending').where({ campaign_id: campaignId }).delete()
+      // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1, §4) — aucune Catastrophe
+      // combat non résolue ne traverse la fin du combat, même patron que combat_pending/combat_roster
+      // ci-dessous (décision assumée, différente des statuts environnementaux du Lot 3).
+      await purgePendingCatastrophes(campaignId, db)
       await db('combat_roster').where({ campaign_id: campaignId }).delete()
       await db('combat_state').where({ campaign_id: campaignId }).delete()
 
