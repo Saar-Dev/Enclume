@@ -139,6 +139,14 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
     data: { onDrop: (item) => { if (canEdit) handleDropToContainer(item, 'Ceinture') } },
     disabled: !canEdit,
   })
+  // Coffre — stockage distant mais toujours disponible (pas de condition d'équipement comme
+  // Sac/Ceinture) : cible de drop symétrique, manquante jusqu'ici (§5.3 du plan ne définissait que
+  // Sac/Ceinture comme cibles, trouvé en clôturant PLAN_INVENTORY_UX.md).
+  const coffreDrop = useDroppable({
+    id: `container-Coffre-${characterId}`,
+    data: { onDrop: (item) => { if (canEdit) handleDropToContainer(item, 'Coffre') } },
+    disabled: !canEdit,
+  })
 
   // ── Handlers catalogue GM ─────────────────────────────────────────────────
 
@@ -287,14 +295,19 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
       )}
 
       {/* ── Coffre — stockage distant, séparé visuellement du Sac/Ceinture porté
-          (PLAN_INVENTORY_UX.md §10 point 3) ──────────────────────────────── */}
-      {itemsByContainer.Coffre?.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <div style={s.separator} />
-          <div className="has-tooltip" data-tooltip={t('inventoryPanel.vaultTooltip')} style={s.containerLabel}>
-            {t(CONTAINER_LABEL_KEYS.Coffre)}
-          </div>
-          {itemsByContainer.Coffre.map(item => (
+          (PLAN_INVENTORY_UX.md §10 point 3). Toujours rendu (pas de condition d'équipement, à la
+          différence de Sac/Ceinture) : cible de drop permanente, même vide — sinon aucune zone où
+          déposer un premier item par drag & drop. ──────────────────────────────── */}
+      <div
+        ref={coffreDrop.setNodeRef}
+        style={{ marginTop: 12, ...(coffreDrop.isOver && canEdit ? s.containerDropOver : null) }}
+      >
+        <div style={s.separator} />
+        <div className="has-tooltip" data-tooltip={t('inventoryPanel.vaultTooltip')} style={s.containerLabel}>
+          {t(CONTAINER_LABEL_KEYS.Coffre)}
+        </div>
+        {itemsByContainer.Coffre?.length > 0 ? (
+          itemsByContainer.Coffre.map(item => (
             <ItemRow
               key={item.id}
               item={item}
@@ -305,9 +318,11 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
               onEquip={handleEquip}
               onDelete={handleDelete}
             />
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <p style={s.emptyContainerMsg}>{t('inventoryPanel.emptyVaultMessage')}</p>
+        )}
+      </div>
 
       {/* ── Bloc "Ajouter" — GM uniquement ────────────────────────────── */}
       {isGm && (

@@ -1,6 +1,7 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-07-08 — Session 141 (SKILL_MIN conditionné par OPT-07 `skill_prerequisites`)
+> Dernière mise à jour : 2026-08-06 — Clôture refonte UX Matériel (`docs/Old/PLAN_INVENTORY_UX.md`) :
+> source unique de vérité inventaire (characterStore), drag & drop, catalogue GM filtré, §5/§7 revus.
 > Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire — 51 migrations appliquées
 
 ---
@@ -51,19 +52,35 @@ server/src/routes/character/
   ref.js              — 3 routes données de référence
 
 client/src/character/
-  CharacterWindow.jsx  — fenêtre flottante drag+resize — 4 onglets : Fiche/Bio/Matériel/Paramètres
+  CharacterWindow.jsx  — fenêtre flottante drag+resize — 4 onglets : Fiche/Bio/Matériel/Paramètres.
+                         Porte le DndContext unique de l'onglet Matériel (drag & drop inventaire,
+                         docs/Old/PLAN_INVENTORY_UX.md) — un DndContext par fenêtre de personnage,
+                         donc pas de drag & drop possible entre deux CharacterWindow différentes.
   CharacterSheet.jsx   — orchestrateur Modules 1–6 + effectiveMalus + Initiative (session 52)
   SkillsPanel.jsx      — Module 5 Compétences (arborescence CHC session 4)
   AdvantagesPanel.jsx  — Module 6 Avantages & Désavantages (lift-state-up session 50)
-  InventoryPanel.jsx   — NOUVEAU session 51 — inventaire joueur + bloc ajout GM (catalogue 636 items)
-  ArmorWoundPanel.jsx  — NOUVEAU session 53 — orchestrateur onglet Matériel : wounds+inventory, 3 colonnes
-  LocationPanel.jsx    — NOUVEAU session 53 — une localisation (Tête/Corps/Bras/Jambe) : multi-couches + grille blessures
-  ContainerPanel.jsx   — NOUVEAU session 53 — Sac/Ceinture/Coffre : équipement conteneur
-  SilhouettePanel.jsx  — NOUVEAU session 53 — SVG silhouette 50%, colorée par pire blessure par localisation
+  ArmorWoundPanel.jsx  — orchestrateur onglet Matériel, colonne blessures/armures : localisations +
+                         silhouette uniquement (Sac/Ceinture/Coffre déplacés vers WeaponPanel.jsx,
+                         chantier UX Matériel 2026-08-05/06)
+  WeaponPanel.jsx      — armes équipées (MG/MD/2M/Tr) + section "Conteneurs portés" (Sac/Ceinture via
+                         ContainerPanel.jsx) + bouton Customisation (moding)
+  InventoryBanner.jsx  — bandeau poids/sols toujours visible (même inventaire replié) — jauge de poids,
+                         sols éditables avec asymétrie MJ/joueur
+  InventoryPanel.jsx   — inventaire (Sac/Ceinture/Coffre) + catalogue GM filtré/paginé + drag & drop
+  LocationPanel.jsx    — une localisation (Tête/Corps/Bras/Jambe) : multi-couches + grille blessures
+  ContainerPanel.jsx   — Sac/Ceinture/Coffre : équipement conteneur (monté dans WeaponPanel.jsx)
+  SilhouettePanel.jsx  — SVG silhouette, colorée par pire blessure par localisation
+
+client/src/lib/
+  useInventoryData.js    — sélecteur characterStore.inventoryByCharId + fetch initial dédupliqué
+  inventoryMutations.js  — setItemSlot/setItemContainer/deleteItem, mutations réseau+store partagées
+                            entre les `<select>`/boutons et le drag & drop
+  inventoryDataSync.js   — refreshDerivedTotals (poids/seuil recalculés après mutation locale)
 
 shared/
   woundConstants.js    — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS
   armorConstants.js    — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
+  inventoryMath.js     — computeTotalWeight, autorité unique client/serveur du poids porté
 
 server/src/db/migrations/
   33_char_ref_genotypes.js           — ref_genotypes + seed 4 génotypes
@@ -413,19 +430,37 @@ AdvantagesPanel.handleTogglePolaris(skillId)
      → Fix prévu session 5
 ```
 
-### Chargement onglet Matériel (ArmorWoundPanel)
+### Onglet Matériel — inventaire (source unique de vérité, docs/Old/PLAN_INVENTORY_UX.md Étape 0)
+
+`characterStore.js` porte `inventoryByCharId`/`thresholdByCharId`/`solsByCharId` par personnage, avec
+une garde `inventoryFetchEpoch` : une réponse de fetch périmée (un upsert WS plus récent a déjà eu
+lieu) est ignorée au lieu d'écraser le store.
 
 ```
-ArmorWoundPanel.useEffect([load, reloadKey])
-  → Promise.all([
-      GET /:id/wounds   → { wounds, wound_penalty }
-      GET /:id/inventory → { items, sols, total_weight, threshold }
-    ])
-  → setWounds + setItems (états locaux ArmorWoundPanel)
+useInventoryData(characterId)  (lib/useInventoryData.js)
+  → si inventoryByCharId[characterId] absent : GET /:id/inventory → store.setInventory (1 fois)
+  → sélecteur réactif sur le store pour ArmorWoundPanel/WeaponPanel/InventoryBanner/InventoryPanel/
+    StepMaterielEtBiens (Wizard) — plus de fetch local par panneau, plus de reloadKey.
 
-Resync : CharacterWindow.inventoryVersion (state) bumped par InventoryPanel.onInventoryMutated
-  → passé comme reloadKey à ArmorWoundPanel → déclenche useEffect → rechargement complet
+Mutation (auteur) :
+  <select>/bouton/drag → inventoryMutations.js (setItemSlot/setItemContainer/deleteItem)
+    → PUT/DELETE /:id/inventory/:itemId → réponse HTTP déjà autoritaire → store.upsert/removeInventoryItem
+    → refreshDerivedTotals(characterId) (inventoryDataSync.js) recalcule poids/seuil affichés
+  Pas d'écriture spéculative : l'auteur attend la réponse HTTP, jamais l'écho WS.
+
+Autres clients connectés :
+  useCharacterSocket.js écoute INVENTORY_ADDED/UPDATED/REMOVED/SOLS_UPDATED
+    → écrit directement dans le store (upsert/remove), idempotent avec l'écriture de l'auteur.
+
+ModingWindow.jsx reste hors du store (forme de donnée différente, /moding/state) — son propre hook
+local écoute les mêmes events WS, filtré par characterId, pour se rafraîchir indépendamment.
 ```
+
+Drag & drop (`@dnd-kit/core`, DndContext unique dans `CharacterWindow.jsx` pour tout l'onglet Matériel,
+`InteractiveAwarePointerSensor` filtre l'activation sur les `<select>`/`<input>`/`<button>` imbriqués) :
+chaque zone cible (LocationPanel, WeaponPanel, InventoryPanel Sac/Ceinture/Coffre) fournit son
+`data.onDrop`, routé par `CharacterWindow.handleItemDragEnd` — aucune logique dupliquée, chaque zone
+garde sa propre résolution (slot composite, conflit main/2M → confirmation sur 409).
 
 ### Distribution XP — GM (CharacterSheet)
 
@@ -580,9 +615,12 @@ Groupes CHC : jamais dans isVisible — visibles si ≥ 1 enfant visible
 ### `CharacterWindow.jsx`
 Fenêtre flottante drag+resize. Dimensions : 720×600 init, 500×400 min. Centrée au montage, clampée dans le viewport. Onglets : **Fiche / Bio & Info / Matériel / Paramètres**. Feedback ✓ vert 1s après save.
 
-State `inventoryVersion` (entier) + callback `bumpInventoryVersion` — bridge de resync entre InventoryPanel (qui mute) et ArmorWoundPanel (qui charge). Passé comme `reloadKey` à ArmorWoundPanel.
+Onglet Matériel : empilement vertical (une grille 2 colonnes a été codée puis annulée après test,
+bloc trop massif). Porte le `DndContext` unique (drag & drop inventaire, §5) englobant ArmorWoundPanel/
+WeaponPanel/InventoryBanner/InventoryPanel — `InteractiveAwarePointerSensor` (défini dans ce fichier)
+ignore l'activation du drag sur les éléments interactifs imbriqués dans une ligne draggable.
 
-**Props :** `{ character, isGm, onClose }`
+**Props :** `{ character, isGm, onClose, forceReadOnly }`
 **isOwner :** `character.user_id != null && character.user_id === character._currentUserId` (PC6)
 
 **Routes VTT utilisées (domaine VTT — pas des routes Character) :**
@@ -617,6 +655,27 @@ Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3
 **Liste affichée :** badge `MUT` (orange) pour les mutations | badge `ATR` (gris) pour les textes libres. Les pouvoirs Polaris sont dans `char_skills` (is_learned=true), **pas** dans `char_advantages` — ils n'apparaissent pas dans cette liste.
 
 `refMutations` chargé au montage (PC16). `refSkillsPolaris` + `charSkillsPolaris` chargés à l'ouverture de la modale (guard : chargé une seule fois).
+
+### `ArmorWoundPanel.jsx` / `WeaponPanel.jsx` / `InventoryBanner.jsx` / `InventoryPanel.jsx`
+Onglet Matériel — quatre panneaux lisant `characterStore` par sélecteur (§5), plus de fetch local.
+
+- **ArmorWoundPanel.jsx** : localisations (LocationPanel × 6) + silhouette (SilhouettePanel), colorée
+  par pire blessure. Ne porte plus les conteneurs (déplacés vers WeaponPanel).
+- **WeaponPanel.jsx** : armes équipées (affichage contextuel Dir/Sec ou 2M/Tr selon `resolveTargetSlot`),
+  section "Conteneurs portés" (ContainerPanel × Sac/Ceinture), bouton Customisation (`onOpenModing`,
+  ouvre `ModingWindow.jsx`, prop reroutée depuis `CharacterWindow.jsx`).
+- **InventoryBanner.jsx** : jauge de poids (barre + %, couleur selon ratio — indépendante de
+  `SEVERITY_COLORS` des blessures) + solde en sols, éditable inline si `canEdit` avec asymétrie
+  MJ/joueur (un non-GM ne peut que diminuer, borné côté client, 403 déjà renvoyé côté serveur sinon).
+- **InventoryPanel.jsx** : accordéon Sac/Ceinture (message explicite si non équipé), Coffre séparé
+  visuellement (tooltip "Stockage distant" — à ne pas confondre avec le Coffre de compte,
+  `docs/VOCABULARY.md`), catalogue GM filtré (famille/catégorie/rareté/poids max) + paginé (20/page),
+  confirmation avant suppression. Boutons "Sac"/"Coffre" et zones de drop symétriques pour les
+  déplacements entre les trois conteneurs (le Coffre reste toujours rendu, même vide, pour offrir une
+  cible de drop).
+
+**Props communes :** `characterId`, `canEdit` (`isGm || isOwner`) ; `WeaponPanel` reçoit en plus
+`onOpenModing` ; `InventoryPanel`/`InventoryBanner` reçoivent aussi `isGm` (catalogue, édition sols).
 
 ---
 

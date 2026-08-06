@@ -1460,7 +1460,7 @@ scripté.
 
 ---
 
-## Inventaire — refonte UX + drag & drop (`docs/PLANS/PLAN_INVENTORY_UX.md` Étapes 0-5, session 2026-08-05)
+## Inventaire — refonte UX + drag & drop (`docs/Old/PLAN_INVENTORY_UX.md`, chantier clos 2026-08-06)
 
 ### Client
 - Source unique de vérité inventaire : `characterStore.js` (`inventoryByCharId`, `thresholdByCharId`,
@@ -1489,20 +1489,39 @@ scripté.
   apparaissant après l'équipement, plus un `<select>` préalable.
 - **Écart RAW explicite et documenté** : aucun — refonte purement ergonomique, aucune règle Polaris
   modifiée (conteneurs 1+S+S, 3 couches max, asymétrie sols inchangés).
+- Catalogue GM (`InventoryPanel.jsx`) : filtres famille/catégorie/rareté/poids max (facettes déduites
+  du catalogue déjà chargé, pattern `families` de `TradeWindow.jsx`), pagination réelle 20/page à la
+  place du `slice(0,50)`. `weight` ajouté au `SELECT` de `GET /api/equipment` (colonne déjà en base,
+  absente du payload jusque-là).
+- Suppression : confirmation (`window.confirm`, pattern déjà utilisé pour le conflit main/2M) avant
+  de retirer un objet.
+- Coffre : séparé visuellement du Sac/Ceinture avec tooltip "Stockage distant" (pattern `data-tooltip`
+  existant), toujours rendu même vide (sinon aucune cible de drop pour un premier objet). Boutons
+  "Sac" (Coffre→Sac) et "Coffre" (Sac/Ceinture→Coffre) en remplacement du `<select>` de container
+  retiré (demande directe Saar). Zone de drop `useDroppable` pour le Coffre ajoutée après coup (trouvé
+  en clôturant le chantier, testé par Saar — le drag Sac/Ceinture↔Coffre ne fonctionnait que dans le
+  sens Coffre→Sac/Ceinture, l'inverse n'avait jamais eu de cible de drop).
+- Libellés de slot traduits (`SLOT_TO_WOUND_LOCATION`/`LOCATION_I18N_KEYS`/`weaponPanel.slotLabels.*`)
+  sur le `<select>` de Slot et le badge `[...]` de ligne, au lieu des codes bruts (T/BD/MG/2M…). Le
+  retrait du `<select>` de Slot reste différé (`docs/ROADMAP.md` — nécessite un `KeyboardSensor`
+  dnd-kit pour ne pas régresser l'accessibilité clavier).
+- Bug corrigé au passage : cliquer un élément interactif (`<select>`/`<input>`/`<button>`) imbriqué
+  dans une ligne draggable déclenchait un drag au lieu d'ouvrir le menu — `InteractiveAwarePointerSensor`
+  (`CharacterWindow.jsx`, pattern officiel dnd-kit) filtre l'activation sur ces éléments.
 
 ### Serveur
 - `inventoryService.js` : `total_weight` recalculé via `shared/inventoryMath.js` (`computeTotalWeight`,
   nouveau module partagé client/serveur — autorité unique de la formule, refactor pur sans changement
-  de comportement). Aucune autre route ni migration touchée — chantier 100% client hormis ce refactor.
+  de comportement).
+- `equipment.js` : `weight` ajouté au `SELECT` de `GET /api/equipment` (Étape 6, ci-dessus). Aucune
+  autre route ni migration touchée — chantier 100% client hormis ces deux points.
 
 ### État
-✅ Étapes 0-5 codées et confirmées fonctionnelles en navigateur par Saar (source de données, bandeau
-poids/sols, réorganisation Armes/Conteneurs, drag & drop complet avec scénario de conflit main/2M).
-Tests : `eslint` ciblé (0 erreur à chaque étape) et `npm run build` client propres tout du long.
-**Reste à faire** (Étapes 6-9, `docs/ROADMAP.md`) : filtres/pagination catalogue GM, dialogue de
-confirmation suppression, bouton "Prendre dans le Sac" (Coffre → Sac), retrait des `<select>`
-Sac/Coffre/Slot dans InventoryPanel.jsx (différé — accessibilité clavier du drag & drop à traiter
-d'abord, `KeyboardSensor` dnd-kit non encore branché). Non testé : round-trip HTTP authentifié scripté.
+✅ Chantier clos (Étapes 0-9, `docs/Old/PLAN_INVENTORY_UX.md`) — confirmé fonctionnel en navigateur
+par Saar, y compris le fix de la zone de drop Coffre trouvé pendant la clôture. Tests : `eslint` ciblé
+(0 erreur à chaque étape) et `npm run build` client propres tout du long. Reste différé (hors ce
+chantier, suivi séparément dans `docs/ROADMAP.md`) : retrait du `<select>` de Slot (accessibilité
+clavier, `KeyboardSensor` dnd-kit non encore branché). Non testé : round-trip HTTP authentifié scripté.
 
 ---
 

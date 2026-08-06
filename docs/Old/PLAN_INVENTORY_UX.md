@@ -1,5 +1,11 @@
 PLAN_INVENTORY_UX.md — Refonte ergonomique de l’onglet Matériel
 
+> **ARCHIVÉ 2026-08-06 (`docs/RegleDocumentaire.md` Règle 10) — chantier clos, Étapes 0-9 confirmées
+> fonctionnelles en navigateur par Saar (y compris le fix de la zone de drop Coffre trouvé pendant la
+> clôture). Contenu durable transféré vers `docs/SYSTEME/CHARACTER.md` (§2/§5/§7) et `docs/ASBUILT.md`.
+> Reste différé (hors ce chantier, suivi séparément) : retrait du `<select>` de Slot dans
+> `InventoryPanel.jsx`, `docs/ROADMAP.md`.**
+
     Version : V1.7 — 2026-08-05
     Statut : Étapes 0 à 5 codées, testées et confirmées fonctionnelles en navigateur par Saar
     (2026-08-05). Étapes 6 à 8 codées (2026-08-05), **non testées en navigateur**. Étape 9 codée

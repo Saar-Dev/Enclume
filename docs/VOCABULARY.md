@@ -34,7 +34,8 @@ Concepts Enclume
 
 Concepts n'existant pas dans Polaris mais créés par le projet.
 Concept	Description	Implémentation
-Coffre	Espace de stockage hors campagne, transfert = copie jamais déplacement. Jamais "Vault" UI	vaultService.js
+Coffre (compte)	Espace de stockage hors campagne, transfert = copie jamais déplacement. Jamais "Vault" UI	vaultService.js
+Coffre (conteneur inventaire)	Ambiguïté de nom avec "Coffre (compte)" ci-dessus — concept distinct sans rapport : valeur de `char_inventory.container` pour un objet du même personnage rangé hors du Sac/de la Ceinture portés (stockage distant mais toujours dans cette fiche). Transfert = déplacement (mutation du champ `container`), jamais une copie.	char_inventory.container, InventoryPanel.jsx, docs/Old/PLAN_INVENTORY_UX.md
 reconcileCreation	Endpoint unique et idempotent du Wizard	creationService.js
 wizard_locked_at	Bascule fiche assistant → fiche runtime	char_sheet.wizard_locked_at
 Verrou (Wizard collaboratif)	Gel d'une option par le MJ pendant la création	wizard_locks

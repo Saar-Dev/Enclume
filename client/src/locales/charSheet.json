@@ -101,6 +101,7 @@
     "deleteConfirm": "Supprimer {{name}} ? Cette action est irréversible.",
     "noSacMessage": "Pas de sac équipé — équipez un sac à dos (emplacement Dos)",
     "noCeintureMessage": "Pas de ceinture équipée — équipez une ceinture (emplacement Ceinture)",
+    "emptyVaultMessage": "Coffre vide",
     "vaultTooltip": "Stockage distant",
     "takeToSacButton": "Sac",
     "takeToSacTooltip": "Prendre dans le Sac",

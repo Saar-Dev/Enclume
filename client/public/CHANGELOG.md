@@ -1,3 +1,10 @@
+## v199 — 2026-08-06 — Onglet Matériel : glisser-déposer vers/depuis le Coffre
+
+### Client
+- [fix] Glisser un objet du Sac ou de la Ceinture vers le Coffre (et inversement) fonctionne
+  maintenant — seuls les boutons "Sac"/"Coffre" fonctionnaient jusque-là.
+- [fix] Le Coffre reste visible même vide, pour pouvoir y déposer un premier objet par glisser-déposer.
+
 ## v198 — 2026-08-05 — Onglet Matériel : catalogue, suppression, Coffre
 
 ### Client

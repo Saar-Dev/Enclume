@@ -692,3 +692,41 @@ joueur / avance du temps (Guérison-Infection), animation d'apparition des badge
 appliquées depuis le 2026-07-30).
 **Retour arrière** : additif sur fichiers existants + un fichier déplacé (`git mv`) — `git revert` du
 commit de clôture suffit, aucune donnée affectée.
+
+---
+
+## Session (Saar) — 2026-08-06 — Clôture Refonte UX Matériel (Étapes 6-9) + fix drag&drop Coffre
+
+**Validation Étapes 6-9** (`docs/Old/PLAN_INVENTORY_UX.md`, codées 2026-08-05, restaient non testées
+en navigateur) : checklist groupée soumise à Saar (filtres/pagination catalogue GM, confirmation
+suppression, séparation Coffre + tooltip, boutons "Prendre dans le Sac"/"Ranger dans le Coffre",
+libellés de slot traduits, non-régression du fix `InteractiveAwarePointerSensor`) — **tout confirmé
+fonctionnel**.
+
+**Bug trouvé en testant** : drag & drop Sac/Ceinture → Coffre (et inversement) impossible, seuls les
+boutons fonctionnaient. Cause : `InventoryPanel.jsx` n'a jamais eu de zone `useDroppable` pour le
+Coffre — décision documentée du plan §5.3 ("aucune zone de drop Coffre n'existe"), qui s'est révélée
+être un manque plutôt qu'un choix définitif à l'usage. Complication additionnelle trouvée à la lecture :
+le bloc Coffre ne se rendait que s'il contenait déjà des objets (`length > 0`), donc même après l'ajout
+de la zone de drop, aucune cible visible pour y déposer un premier objet. Corrigé : `coffreDrop`
+(`useDroppable`, symétrique à `sacDrop`/`ceintureDrop`, réutilise `handleDropToContainer` existant) +
+le bloc Coffre est désormais toujours rendu, avec un message "Coffre vide" (nouvelle clé i18n
+`inventoryPanel.emptyVaultMessage`) au lieu de disparaître.
+
+**Hygiène documentaire de clôture** : plan archivé (`git mv` vers `docs/Old/`, bandeau de clôture
+Règle 10), contenu durable transféré vers `docs/SYSTEME/CHARACTER.md` (§2 structure des fichiers,
+§5 flux de données inventaire — remplace l'ancien flux `reloadKey`/`inventoryVersion` devenu obsolète
+depuis l'Étape 0, §7 nouvelles entrées ArmorWoundPanel/WeaponPanel/InventoryBanner/InventoryPanel) et
+`docs/ASBUILT.md` (section Inventaire étendue aux Étapes 6-9 + fix Coffre). `docs/ROADMAP.md` et
+`docs/EN_COURS.md` (retrait dette `INVUX-679`) mis à jour. `docs/VOCABULARY.md` : ambiguïté trouvée en
+documentant — "Coffre" désignait déjà le stockage de compte (`vaultService.js`, transfert = copie) et
+désigne aussi, sans rapport, une valeur de `char_inventory.container` (transfert = déplacement) —
+distinction ajoutée pour éviter la confusion future.
+
+**Testé** : les 6 scénarios de la checklist Étapes 6-9 confirmés en navigateur par Saar ; `eslint`
+propre sur `InventoryPanel.jsx` après le fix Coffre.
+**Non testé** : le fix de la zone de drop Coffre lui-même (Sac/Ceinture↔Coffre par drag) — codé après
+la validation de Saar, reste à confirmer en navigateur.
+**Données** : aucune migration — chantier 100% client (une clé i18n ajoutée).
+**Retour arrière** : un fichier déplacé (`git mv`, plan archivé) + patchs ciblés sur fichiers existants
+— `git revert` du commit de clôture suffit, aucune donnée affectée.
