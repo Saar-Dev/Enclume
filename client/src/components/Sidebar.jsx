@@ -4,12 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useEntityStore } from '../stores/entityStore'
-import { useCombatStore } from '../stores/combatStore'
 import api from '../lib/api.js'
 import { WS } from '../../../shared/events.js'
 import GeometryIcon from './GeometryIcon.jsx'
 import LibraryPanel from './LibraryPanel.jsx'
-import { CombatDeclareLogChatPanel } from './CombatDeclareLog.jsx'
 import Object3DPreview from './Object3DPreview.jsx'
 import GameTimeWidget from './GameTimeWidget.jsx'
 import BlessuresReviewPanel from './BlessuresReviewPanel.jsx'
@@ -33,8 +31,10 @@ import DiceBreakdownPopover from './DiceBreakdownPopover.jsx'
 import SidebarHelpModal from './SidebarHelpModal.jsx'
 import SidebarCharactersTab from './SidebarCharactersTab.jsx'
 import SidebarProfileTab from './SidebarProfileTab.jsx'
-import { renderMessage } from './MessageRendererRegistry.jsx'
+import SidebarChatTab from './SidebarChatTab.jsx'
 import { useChatSocket } from '../lib/useChatSocket.js'
+import { useDiceBreakdownPopover } from '../lib/useDiceBreakdownPopover.js'
+import { useSidebarPendingActionsBadge } from '../lib/useSidebarPendingActionsBadge.js'
 
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 500
@@ -73,7 +73,6 @@ export default function Sidebar({
 }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { t: tCombat } = useTranslation('combat')
   const { isGm } = useCharacterStore()
   const { messagesByCampaign, activeCampaignId } = useSessionStore()
   const messages = useMemo(
@@ -85,7 +84,6 @@ export default function Sidebar({
   // suivi séparé, ne bloque pas ce qui corrige réellement CH1 (survie au F5).
   useChatSocket(campaignId)
   const { blueprints, refreshBuiltinModels } = useEntityStore()
-  const { phase } = useCombatStore()
   const surfaceToolState = {
     mode: 'select',
     level: 0,
@@ -342,11 +340,6 @@ export default function Sidebar({
 
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
-  const [pendingActionCount, setPendingActionCount] = useState(0)
-  const prevEntityActionCountRef = useRef(0)
-  const prevSellRequestCountRef    = useRef(0)
-  const prevExchangeOfferCountRef  = useRef(0)
-  const [chatInput, setChatInput] = useState('')
   const [showHelp, setShowHelp] = useState(false)
   const [objectSearch, setObjectSearch] = useState('')
   const [refreshingObjects, setRefreshingObjects] = useState(false)
@@ -357,17 +350,8 @@ export default function Sidebar({
   const startX = useRef(0)
   const startWidth = useRef(0)
 
-  // Réf pour l'auto-scroll — pointe sur un div vide en fin de liste de messages
-  const messagesEndRef = useRef(null)
-
-  // Animation dé — id du dernier message dé reçu, nettoyé après 800ms
-  // Utilise useState (pas useRef) car doit déclencher un re-render pour l'animation CSS
-  const [animatingDiceId, setAnimatingDiceId] = useState(null)
-  const [cdlOpen, setCdlOpen] = useState(true)
-
-  // Popover breakdown — null ou { msgId, breakdown, rect }
-  const [breakdownPopover, setBreakdownPopover] = useState(null)
-  const popoverRef = useRef(null)
+  const { pendingActionCount, setPendingActionCount } = useSidebarPendingActionsBadge(messages, isGm)
+  const { breakdownPopover, popoverRef, handleOpenBreakdown } = useDiceBreakdownPopover()
 
   // ─── RESIZE ─────────────────────────────────────────────────────────────
   const onMouseDown = (e) => {
@@ -397,85 +381,6 @@ export default function Sidebar({
       window.removeEventListener('mouseup', onMouseUp)
     }
   }, [onClose, onWidthChange])
-
-  // ─── AUTO-SCROLL messages ────────────────────────────────────────────────
-  // Se déclenche à chaque nouveau message — scroll vers le bas
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // ─── Badge GM — actions entités en attente ───────────────────────────────
-  useEffect(() => {
-    if (!isGm) return
-    const entityCount = messages.filter(m => m.type === 'entity_action').length
-    const sellCount     = messages.filter(m => m.type === 'sell_request').length
-    const exchangeCount = messages.filter(m => m.type === 'exchange_offer').length
-    let delta = 0
-    if (entityCount   > prevEntityActionCountRef.current)  delta += entityCount   - prevEntityActionCountRef.current
-    if (sellCount     > prevSellRequestCountRef.current)   delta += sellCount     - prevSellRequestCountRef.current
-    if (exchangeCount > prevExchangeOfferCountRef.current) delta += exchangeCount - prevExchangeOfferCountRef.current
-    if (delta > 0) setPendingActionCount(prev => prev + delta)
-    prevEntityActionCountRef.current   = entityCount
-    prevSellRequestCountRef.current    = sellCount
-    prevExchangeOfferCountRef.current  = exchangeCount
-  }, [messages, isGm])
-
-  // ─── ANIMATION dé — Option B ─────────────────────────────────────────────
-  // Détecte le dernier message de type 'dice', stocke son id pendant 800ms,
-  // puis le remet à null pour retirer l'animation CSS.
-  // useRef lastDiceId évite de relancer le timer si un non-dé arrive entre temps.
-  const lastDiceIdRef = useRef(null)
-  useEffect(() => {
-    const lastDice = [...messages].reverse().find(m => m.type === 'dice')
-    if (!lastDice || lastDice.id === lastDiceIdRef.current) return
-    lastDiceIdRef.current = lastDice.id
-    setAnimatingDiceId(lastDice.id)
-    const timer = setTimeout(() => setAnimatingDiceId(null), 800)
-    return () => clearTimeout(timer)
-  }, [messages])
-
-  useEffect(() => {
-    if (!breakdownPopover) return
-    const onMouse = (e) => { if (popoverRef.current && !popoverRef.current.contains(e.target)) setBreakdownPopover(null) }
-    const onKey   = (e) => { if (e.key === 'Escape') setBreakdownPopover(null) }
-    document.addEventListener('mousedown', onMouse)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onMouse)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [breakdownPopover])
-
-  // ─── CHAT ────────────────────────────────────────────────────────────────
-  const sendMessage = (e) => {
-    e.preventDefault()
-    const text = chatInput.trim()
-    if (!text) return
-
-    // Commandes dés : /r <formule> ou /roll <formule>
-    // Le client émet DICE_ROLL — le serveur calcule et broadcaste DICE_RESULT.
-    // Le message ne part PAS dans le chat.
-    const diceMatch = text.match(/^\/r(?:oll)?\s+(.+)$/i)
-    if (diceMatch) {
-      const formula = diceMatch[1].trim()
-      if (formula) socket?.emit(WS.DICE_ROLL, { formula })
-      setChatInput('')
-      return
-    }
-
-    // /help, /w, /gm sont interceptés côté serveur (socketChat.js, chatCommandRegistry) — le
-    // client envoie le texte brut, pas de parsing dupliqué ici (vérifié dans le code déjà écrit
-    // en Phase 1, la prose du plan §9 suggérait un parsing client qui n'existe pas réellement).
-    socket?.emit(WS.CHAT_SEND, { channelId: 'general', type: 'TEXT', payload: { text } })
-    setChatInput('')
-  }
-
-  const handleOpenBreakdown = useCallback((e, msg) => {
-    e.stopPropagation()
-    if (breakdownPopover?.msgId === msg.id) { setBreakdownPopover(null); return }
-    const rect = e.currentTarget.getBoundingClientRect()
-    setBreakdownPopover({ msgId: msg.id, breakdown: msg.breakdown, rect })
-  }, [breakdownPopover])
 
   return (
     <div className="sidebar-panel" style={{ ...styles.sidebar, width }}>
@@ -1433,37 +1338,15 @@ export default function Sidebar({
 
         {/* ── Chat ── */}
         {activeTab === 'chat' && (
-          <>
-            {(phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && (
-              <CombatDeclareLogChatPanel isOpen={cdlOpen} onToggle={() => setCdlOpen(v => !v)} />
-            )}
-            <div style={styles.messages}>
-              {messages.length === 0 && (
-                <p style={styles.emptyMsg}>{t('chat.placeholder')}</p>
-              )}
-              {messages.map(msg => renderMessage(msg, {
-                t, tCombat, isGm,
-                animatingDiceId,
-                breakdownPopoverMsgId: breakdownPopover?.msgId,
-                onOpenBreakdown: handleOpenBreakdown,
-                setPendingActionCount,
-                onEntityActionResolve,
-                onOpenTrade,
-                onOpenExchange,
-              }))}
-              {/* Ancre auto-scroll — div vide en fin de liste */}
-              <div ref={messagesEndRef} />
-            </div>
-            <form onSubmit={sendMessage} style={styles.chatForm}>
-              <input
-                className="sidebar-tool-field" style={styles.chatInput}
-                placeholder={t('chat.placeholder')}
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-              />
-              <button className="btn-icon" type="submit" style={{ color: 'var(--color-primary)', fontSize: '14px' }}>➤</button>
-            </form>
-          </>
+          <SidebarChatTab
+            socket={socket}
+            breakdownPopover={breakdownPopover}
+            onOpenBreakdown={handleOpenBreakdown}
+            setPendingActionCount={setPendingActionCount}
+            onEntityActionResolve={onEntityActionResolve}
+            onOpenTrade={onOpenTrade}
+            onOpenExchange={onOpenExchange}
+          />
         )}
 
         {/* ── Persos ── */}

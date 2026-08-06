@@ -64,7 +64,7 @@ risque croissant, pas par ordre d'apparition dans le fichier.
 | 1 | `SidebarIcons.jsx` — extraction des 9 icônes SVG | ✅ confirmé | Quasi nul |
 | 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
 | 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
-| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d partiellement satisfait par `PLAN_CHAT.md` Phase 3 (rendu + envoi faits), extraction conteneur + 2 hooks restants — détail §3 | Moyen |
+| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d ✅ codé (2026-08-06) — rendu navigateur à confirmer par Saar, détail §3 | Moyen |
 | 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | À faire — dépend d'une décision sur `Editor3D.jsx` | Le plus élevé |
 
 ---
@@ -266,21 +266,60 @@ pseudo/couleur, liste des connectés, bouton Quitter).
 **Données** : aucune.
 **Retour arrière** : commit isolé à venir sur `dev/Saar`.
 
-**4d — hooks + `SidebarChatTab.jsx`** : gelé le 2026-08-05 (superseded par `PLAN_CHAT.md` Phase 3),
-**partiellement satisfait depuis** — Phase 3 close le 2026-08-05 (`docs/Old/PLAN_CHAT.md`, archivé,
-détail architecture `docs/SYSTEME/CHAT.md`).
+**4d — hooks + `SidebarChatTab.jsx`** — ✅ codé (2026-08-06). Anciennement gelé (superseded par
+`PLAN_CHAT.md` Phase 3), partiellement satisfait par cette dernière (rendu + envoi/historique, détail
+ci-dessous conservé), puis repris et clos comme lot Sidebar normal une fois le blocage levé.
 
-- **Rendu** : fait, via `client/src/components/MessageRendererRegistry.jsx` (Phase 3d) — remplace la
-  cascade if/else de 330 lignes que `SidebarChatMessage.jsx` aurait construite. Périmètre plus large
-  que prévu : gère aussi les types déjà existants (dés, actions entité, trade, combat), pas seulement
-  le nouveau format persisté.
-- **Envoi + historique** : fait, via `client/src/lib/useChatSocket.js` (Phase 3c/3e) — remplace ce que
-  l'envoi/réception du conteneur `SidebarChatTab.jsx` aurait fait pour le texte tapé.
-- **Reste non fait** : les deux hooks `useDiceBreakdownPopover`/`useSidebarPendingActionsBadge`
-  (popover "Détail du calcul" et badge de compteur d'actions en attente — toujours inline dans
-  `Sidebar.jsx`) et l'extraction du conteneur lui-même (`SidebarChatTab.jsx` — formulaire d'envoi,
-  scroll, panneau CDL, toujours dans `Sidebar.jsx`). Plus aucun blocage externe — peut reprendre
-  comme un lot Sidebar normal si retenu, risque faible (pure extraction, comportement inchangé).
+- **Rendu** : fait plus tôt, via `client/src/components/MessageRendererRegistry.jsx` (Phase 3d) —
+  remplace la cascade if/else de 330 lignes que `SidebarChatMessage.jsx` aurait construite. Périmètre
+  plus large que prévu : gère aussi les types déjà existants (dés, actions entité, trade, combat), pas
+  seulement le nouveau format persisté.
+- **Envoi + historique** : fait plus tôt, via `client/src/lib/useChatSocket.js` (Phase 3c/3e) —
+  remplace ce que l'envoi/réception du conteneur `SidebarChatTab.jsx` aurait fait pour le texte tapé.
+- **Fait maintenant** : `client/src/lib/useDiceBreakdownPopover.js` (popover "Détail du calcul") et
+  `client/src/lib/useSidebarPendingActionsBadge.js` (badge de compteur d'actions en attente) —
+  extraits en hooks (convention déjà posée par `useChatSocket.js` : les hooks vivent dans
+  `client/src/lib/`, pas dans un dossier `hooks/`). Les deux **restent appelés depuis `Sidebar.jsx`**,
+  pas depuis `SidebarChatTab.jsx` : le popover et le badge sont rendus au niveau racine / sur le
+  bouton d'onglet, visibles quel que soit l'onglet actif — les déplacer dans le composant d'onglet
+  aurait changé leur portée de rendu. `client/src/components/SidebarChatTab.jsx` (nouveau, 123 l.)
+  reçoit `socket`, `breakdownPopover`, `onOpenBreakdown`, `setPendingActionCount`,
+  `onEntityActionResolve`, `onOpenTrade`, `onOpenExchange` en props ; lit `messages`/`phase`/`isGm`/
+  `t`/`tCombat` directement via les stores et l'i18n (même patron que `SidebarCharactersTab.jsx`/
+  `SidebarProfileTab.jsx`, lots 4b/4c) — `chatInput`, `cdlOpen`, `animatingDiceId`, `messagesEndRef`,
+  les effets auto-scroll/animation dé et `sendMessage` déménagés en bloc. `Sidebar.jsx` :
+  1492 → 1375 lignes ; `tCombat`/`useCombatStore`/`phase` et les imports `renderMessage`/
+  `CombatDeclareLogChatPanel` retirés (plus utilisés ailleurs dans le fichier, vérifié par recherche
+  exhaustive avant suppression). Le `<style>` keyframes de l'animation dé reste dans `Sidebar.jsx`
+  (déjà commenté "indépendant de l'onglet", aucun gain à le déplacer, risque nul à le laisser).
+
+**Trouvaille en cours de route, corrigée dans ce lot (pas hors scope — même fichier)** : `eslint`
+(`eslint-plugin-react-hooks` v7, règle `react-hooks/set-state-in-effect` basée sur le compilateur
+React) a rejeté l'effet d'animation du dé tel que déplacé verbatim. Vérifié que ce n'est pas une
+régression de l'extraction : relint de l'ancien `Sidebar.jsx` (`git show HEAD:...`) directement dans
+`client/src/components/` (pour que la config eslint s'applique) — 0 erreur sur le même code, l'analyseur
+abandonne silencieusement sur un composant de cette taille (limite connue du compilateur React, aucun
+diagnostic remonté en mode bailout). En l'isolant dans un petit composant, l'analyseur devient capable
+de le lire et révèle un **vrai bug latent** : l'effet original, keyé sur `[messages]`, annulait le
+timer d'extinction (800ms) dès qu'un message *quelconque* arrivait (pas seulement un dé) sans jamais
+le relancer si ce n'était pas un nouveau dé — `setAnimatingDiceId(null)` n'était alors jamais rappelé,
+l'icône dé restait animée indéfiniment si un message texte arrivait avant la fin des 800ms. Corrigé en
+scindant l'effet (pattern React documenté "adjusting state during render" pour le déclenchement +
+effet dédié keyé sur `animatingDiceId` pour l'extinction, indépendant des messages non-dé) — même
+timing (800ms), même déclencheur (nouveau message dé), plus de fenêtre où l'animation reste bloquée.
+Aucun `eslint-disable` introduit (aucun précédent dans le dépôt pour cette règle ni pour une autre —
+gardé ainsi).
+
+**Testé** : `eslint` sur les 4 fichiers touchés/créés (0 erreur, 0 warning — y compris après le
+correctif d'effet), `npm run build` (client, propre — mêmes avertissements préexistants : taille de
+chunk, temps plugin), serveur relancé sans erreur et usage général en navigateur confirmé par Saar
+(2026-08-06, aucune régression visible — pas de check-list spécifique exécutée).
+**Non testé** : le scénario précis du bug corrigé (lancer un dé puis envoyer un message texte avant
+800ms — vérifier que l'icône s'éteint normalement au lieu de rester bloquée) n'a pas été rejoué
+explicitement. Risque jugé faible (correction logique directe, cf. analyse ci-dessus) — laissé en
+`⚠️ clos partiel` sur ce seul point, pas bloquant pour la suite.
+**Données** : aucune.
+**Retour arrière** : commit isolé à venir sur `dev/Saar`.
 
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
 Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR_GLOBAL.md` §3).
