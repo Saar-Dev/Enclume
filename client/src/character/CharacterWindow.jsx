@@ -462,11 +462,13 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
               canEdit={effectiveIsGm || effectiveIsOwner}
               onOpenModing={() => setModingOpen(true)}
               dragItem={activeDragItem}
-            />
-            <InventoryBanner
-              characterId={character.id}
-              canEdit={effectiveIsGm || effectiveIsOwner}
-              isGm={effectiveIsGm}
+              inventoryBanner={
+                <InventoryBanner
+                  characterId={character.id}
+                  canEdit={effectiveIsGm || effectiveIsOwner}
+                  isGm={effectiveIsGm}
+                />
+              }
             />
             <InventoryPanel
               characterId={character.id}

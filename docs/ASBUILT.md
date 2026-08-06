@@ -1508,6 +1508,12 @@ scripté.
 - Bug corrigé au passage : cliquer un élément interactif (`<select>`/`<input>`/`<button>`) imbriqué
   dans une ligne draggable déclenchait un drag au lieu d'ouvrir le menu — `InteractiveAwarePointerSensor`
   (`CharacterWindow.jsx`, pattern officiel dnd-kit) filtre l'activation sur ces éléments.
+- Polish post-clôture (demande directe Saar 2026-08-06, réduction de la verticalité de l'onglet) :
+  Sac/Ceinture passent en 2 colonnes (au lieu d'empilés), puis en dessous la jauge poids/sols et le
+  bouton Customisation passent aussi en 2 colonnes (jauge à gauche). `InventoryBanner.jsx` reste
+  inchangé et autonome — `WeaponPanel.jsx` le reçoit en prop (`inventoryBanner`, élément React déjà
+  construit par `CharacterWindow.jsx`) pour le positionner sans lui faire connaître son propre
+  emplacement dans la mise en page.
 
 ### Serveur
 - `inventoryService.js` : `total_weight` recalculé via `shared/inventoryMath.js` (`computeTotalWeight`,

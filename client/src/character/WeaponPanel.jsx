@@ -162,7 +162,7 @@ function WeaponCard({ weapon, canEdit, compatAmmos, ammoName, ammoSelected, onAm
   )
 }
 
-export default function WeaponPanel({ characterId, canEdit, onOpenModing = () => {}, dragItem = null }) {
+export default function WeaponPanel({ characterId, canEdit, onOpenModing = () => {}, dragItem = null, inventoryBanner = null }) {
   const { t } = useTranslation('charSheet')
   const [errors,      setErrors]      = useState({})
   const [equipDir,    setEquipDir]    = useState('')
@@ -507,10 +507,11 @@ export default function WeaponPanel({ characterId, canEdit, onOpenModing = () =>
       </>
       )}
 
-      {/* ── Conteneurs portés (PLAN_INVENTORY_UX.md Étape 3) — migrés depuis ArmorWoundPanel.jsx ── */}
+      {/* ── Conteneurs portés (PLAN_INVENTORY_UX.md Étape 3) — migrés depuis ArmorWoundPanel.jsx.
+          2 colonnes (demande directe Saar 2026-08-06, limiter la verticalité). ───────────────── */}
       <div style={s.separator} />
       <div style={s.sectionLabel}>{t('weaponPanel.carriedContainersTitle')}</div>
-      <div style={s.containerGroup}>
+      <div style={s.twoColGrid}>
         <ContainerPanel
           type="D"
           label={t('armorWoundPanel.backpackLabel')}
@@ -527,12 +528,22 @@ export default function WeaponPanel({ characterId, canEdit, onOpenModing = () =>
         />
       </div>
 
-      {/* ── Bouton "Customisation" — déplacé depuis InventoryPanel.jsx (Étape 3) ──────────── */}
-      {canEdit && (
-        <button onClick={onOpenModing} style={s.modingBtn}>
-          {t('inventoryPanel.modingButton')}
-        </button>
-      )}
+      {/* ── Jauge poids/sols + Modification d'arme — 2 colonnes, jauge à gauche (demande directe
+          Saar 2026-08-06). InventoryBanner reste un composant à part entière
+          (docs/SYSTEME/CHARACTER.md §7) — CharacterWindow.jsx le passe en prop plutôt que de le
+          rendre en sibling, uniquement pour le positionner ici. ──────────────────────────────── */}
+      <div style={s.twoColGrid}>
+        <div style={s.col}>
+          {inventoryBanner}
+        </div>
+        <div style={{ ...s.col, justifyContent: 'center' }}>
+          {canEdit && (
+            <button onClick={onOpenModing} style={s.modingBtn}>
+              {t('inventoryPanel.modingButton')}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -542,12 +553,6 @@ const s = {
   separator:    { height: 1, backgroundColor: '#2a2a3e', margin: '12px 0' },
   sectionLabel: { fontSize: 10, color: '#4a4a60', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 },
   emptyMsg:     { fontSize: 12, color: '#3a3a5a', fontStyle: 'italic', textAlign: 'center', padding: '8px 0' },
-  containerGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 0,
-    marginBottom: 8,
-  },
   // Survol drag & drop (PLAN_INVENTORY_UX.md §5.4) — bleu valide / rouge invalide.
   zoneDropOver: {
     outline: '1px solid #5b8dee',

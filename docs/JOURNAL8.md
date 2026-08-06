@@ -730,3 +730,24 @@ la validation de Saar, reste à confirmer en navigateur.
 **Données** : aucune migration — chantier 100% client (une clé i18n ajoutée).
 **Retour arrière** : un fichier déplacé (`git mv`, plan archivé) + patchs ciblés sur fichiers existants
 — `git revert` du commit de clôture suffit, aucune donnée affectée.
+
+---
+
+## Session (Saar) — 2026-08-06 — Onglet Matériel : polish mise en page (verticalité)
+
+Confirmé fonctionnel : le fix de la zone de drop Coffre (session précédente) fonctionne en navigateur.
+
+**Demande directe Saar** : réduire la verticalité de l'onglet Matériel. Sac/Ceinture passent en 2
+colonnes (`WeaponPanel.jsx`, réutilise le pattern grid déjà en place pour Dir/Sec). La jauge poids/sols
+et le bouton "Modification d'arme" passent aussi en 2 colonnes, sous Sac/Ceinture (jauge à gauche,
+bouton à droite — ordre et position ajustés une fois par retour direct de Saar après premier essai).
+`InventoryBanner.jsx` reste un composant autonome : `CharacterWindow.jsx` le construit et le passe en
+prop `inventoryBanner` à `WeaponPanel.jsx`, qui décide seul de sa position — pas de connaissance de la
+mise en page dans `InventoryBanner.jsx` lui-même. Contenu durable transféré vers
+`docs/SYSTEME/CHARACTER.md` §7 et `docs/ASBUILT.md`.
+
+**Testé** : `eslint` propre et `vite build` propre à chaque itération. **Confirmé fonctionnel en
+navigateur par Saar.**
+**Non testé** : aucun reste connu sur le périmètre de cette session.
+**Données** : aucune — chantier 100% client.
+**Retour arrière** : patchs ciblés sur fichiers existants — `git revert` du commit suffit.

@@ -662,11 +662,16 @@ Onglet Matériel — quatre panneaux lisant `characterStore` par sélecteur (§5
 - **ArmorWoundPanel.jsx** : localisations (LocationPanel × 6) + silhouette (SilhouettePanel), colorée
   par pire blessure. Ne porte plus les conteneurs (déplacés vers WeaponPanel).
 - **WeaponPanel.jsx** : armes équipées (affichage contextuel Dir/Sec ou 2M/Tr selon `resolveTargetSlot`),
-  section "Conteneurs portés" (ContainerPanel × Sac/Ceinture), bouton Customisation (`onOpenModing`,
-  ouvre `ModingWindow.jsx`, prop reroutée depuis `CharacterWindow.jsx`).
+  puis en dessous, pour limiter la verticalité (demande directe Saar 2026-08-06, réutilise le pattern
+  grid 2 colonnes déjà en place pour Dir/Sec) : section "Conteneurs portés" (ContainerPanel × Sac/
+  Ceinture) sur une rangée, puis jauge (`InventoryBanner`, prop `inventoryBanner` — reçue en élément
+  React tout fait depuis `CharacterWindow.jsx`, qui ne la rend plus en sibling séparé) et bouton
+  Customisation (`onOpenModing`, ouvre `ModingWindow.jsx`) sur la rangée suivante.
 - **InventoryBanner.jsx** : jauge de poids (barre + %, couleur selon ratio — indépendante de
   `SEVERITY_COLORS` des blessures) + solde en sols, éditable inline si `canEdit` avec asymétrie
   MJ/joueur (un non-GM ne peut que diminuer, borné côté client, 403 déjà renvoyé côté serveur sinon).
+  Composant autonome (aucune connaissance de son emplacement) — c'est WeaponPanel qui décide de sa
+  position via la prop `inventoryBanner`.
 - **InventoryPanel.jsx** : accordéon Sac/Ceinture (message explicite si non équipé), Coffre séparé
   visuellement (tooltip "Stockage distant" — à ne pas confondre avec le Coffre de compte,
   `docs/VOCABULARY.md`), catalogue GM filtré (famille/catégorie/rareté/poids max) + paginé (20/page),

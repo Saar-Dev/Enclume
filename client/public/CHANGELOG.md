@@ -1,3 +1,10 @@
+## v200 — 2026-08-06 — Onglet Matériel : mise en page plus compacte
+
+### Client
+- [chg] Sac et Ceinture s'affichent maintenant côte à côte au lieu d'être empilés.
+- [chg] La jauge de poids/sols et le bouton "Modification d'arme" s'affichent également côte à côte,
+  sous le Sac et la Ceinture (jauge à gauche).
+
 ## v199 — 2026-08-06 — Onglet Matériel : glisser-déposer vers/depuis le Coffre
 
 ### Client
