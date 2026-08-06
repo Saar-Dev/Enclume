@@ -751,3 +751,42 @@ navigateur par Saar.**
 **Non testé** : aucun reste connu sur le périmètre de cette session.
 **Données** : aucune — chantier 100% client.
 **Retour arrière** : patchs ciblés sur fichiers existants — `git revert` du commit suffit.
+
+---
+
+## Session (Saar) — 2026-08-06 — Clôture World Runtime Effects Store (validation navigateur)
+
+`docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md` (Lots A-C) avait été codé et committé (`5e3dc84`)
+lors d'une session précédente, mais restait `en cours` faute de validation navigateur — la
+documentation elle-même était en retard (statuts par lot encore sur "commit isolé à venir" alors que
+les trois lots avaient été fusionnés en un seul commit déjà publié sur `origin/dev/Saar`).
+
+**Vérification indépendante avant clôture** (au-delà de la lecture du code et du message du commit
+précédent) : relecture des 5 fichiers touchés (`worldRuntimeStore.js`, `useWorldRuntimeSync.js`,
+`Sidebar.jsx`, `Editor3D.jsx`, `Canvas3D.jsx`, `battlemaps.js`) confirmant le comportement décrit par
+chaque lot ; relint (mêmes 13 erreurs + 12 warnings préexistants documentés, 0 nouveau) ; rebuild
+client propre ; `node --check` sur la route serveur.
+
+**Validation navigateur** (checklist soumise à Saar, 5 scénarios) : régions d'effets runtime visibles
+en 3D, création/suppression d'un effet personnalisé dans le panneau MJ de la Sidebar avec mise à jour
+immédiate, bascule mode édition/jeu sans perte des régions affichées, transition d'ascenseur avec
+poll 300ms fluide, et surtout le correctif serveur — propagation de la création d'un effet
+personnalisé à un second client connecté à la même campagne sans action de sa part (bug qui existait
+avant ce chantier : seul l'auteur de l'action voyait sa liste se rafraîchir). **Tout confirmé par
+Saar.**
+
+**Hygiène documentaire de clôture** : plan archivé (`git mv` vers `docs/Old/`, bandeau de clôture
+Règle 10), contenu durable transféré vers `docs/SYSTEME/EDITEUR.md` §7 (réécrit pour décrire
+l'architecture store/hook plutôt que les 3 fetchs dupliqués historiques) et `docs/ASBUILT.md`
+(nouvelle section dédiée). `docs/EN_COURS.md` : retrait de la ligne de dette `WORLDRUNTIME1`.
+`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` (Lot 5) et `docs/PLANS/REFACTOR_GLOBAL.md` (§2, §6) : mis à
+jour pour refléter la dépendance résolue et confirmée — `SurfaceEditorPanel.jsx` (reste du Lot 5)
+peut maintenant être extrait, pas encore commencé. `docs/ROADMAP.md` : paragraphe Lot 5 raccourci
+(narrative de blocage devenue obsolète une fois la dépendance levée).
+
+**Testé** : cf. vérification indépendante ci-dessus (lint/build/syntaxe) + les 5 scénarios navigateur,
+tous confirmés par Saar.
+**Non testé** : aucun reste connu sur le périmètre de ce chantier.
+**Données** : aucune migration — chantier 100% code (client + une route serveur).
+**Retour arrière** : `git revert` du commit de clôture (déplacement de fichier + patchs
+documentaires) ; le code fonctionnel lui-même est dans `5e3dc84`, déjà publié séparément.

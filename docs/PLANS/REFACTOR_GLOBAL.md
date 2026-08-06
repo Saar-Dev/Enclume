@@ -112,7 +112,7 @@ fichier, dont 3 composants React internes non exportés (`CharacterModal`, `Dice
   de tel), alors que la règle `react.md` demande "Les stores contiennent l'état partagé; éviter une
   seconde copie locale divergente". **Repris et creusé le 2026-08-06** : un 3ᵉ fichier
   (`Canvas3D.jsx`) fait le même doublon, non repéré ici initialement — cadrage complet et correctif
-  dans `docs/PLANS/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, ne pas retraiter ce point ici.
+  dans `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md` (clos 2026-08-06), ne pas retraiter ce point ici.
 
 **Découpage naturel proposé** (ordre suggéré, chaque extraction est un lot indépendant) :
 1. `Sidebar.styles.js` ou migration vers classes CSS `sidebar-*` (déjà en partie utilisées) —
@@ -340,7 +340,11 @@ une règle unilatérale de ce document (voir précision dans la section `socketC
    extraction des composants déjà isolés (`CharacterModal`, `DiceBreakdownPopover`) avec un test de
    rendu par composant extrait.
 4. `Sidebar.jsx` / `Editor3D.jsx` — hook `useWorldEffects` partagé pour supprimer la duplication de
-   fetch `world-effects` (dépend du lot 2).
+   fetch `world-effects` — **fait et confirmé, indépendamment du lot 2** : traité en chantier dédié
+   (`docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, `useWorldRuntimeSync.js` +
+   `worldRuntimeStore.js`, clos 2026-08-06, confirmé fonctionnel en navigateur par Saar, hors
+   périmètre de la décomposition plus large d'`Editor3D.jsx` du lot 2). Ne reste, côté `Sidebar.jsx`,
+   que l'extraction de la palette JSX (`SurfaceEditorPanel.jsx`, Lot 5 de `PLAN_REFACTOR_SIDEBAR.md`).
 5. Le reste (CharacterSheet, CombatActionWindow, SessionPage, char-sheet.js, creationService.js) —
    même constat d'absence de tests dédiés à traiter au cas par cas, à séquencer un par un à la
    demande ; pas de blocage fonctionnel identifié aujourd'hui qui imposerait un ordre entre eux.

@@ -1,6 +1,12 @@
 # PLAN_WORLD_RUNTIME_EFFECTS_STORE — Autorité unique pour les effets/ascenseurs runtime
 
-> Statut : en cours. Créé 2026-08-06 (Saar + Claude), extrait de la décision d'architecture bloquant
+> **ARCHIVÉ 2026-08-06 (`docs/RegleDocumentaire.md` Règle 10) — chantier clos, Lots A-C confirmés
+> fonctionnels en navigateur par Saar (régions d'effets 3D, transition d'ascenseur, bascule
+> édition/jeu, panneau MJ, propagation de l'émission corrigée entre plusieurs clients). Contenu
+> durable transféré vers `docs/SYSTEME/EDITEUR.md` §7 et `docs/ASBUILT.md`. Débloque le Lot 5 de
+> `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` (reste : extraction de `SurfaceEditorPanel.jsx`).**
+
+> Statut : clos. Créé 2026-08-06 (Saar + Claude), extrait de la décision d'architecture bloquant
 > `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` Lot 5 (`REFACTOR_GLOBAL.md` §3). Responsabilité unique
 > (`RegleDocumentaire.md` Règle 1) : ce PLAN ne traite que la synchronisation des effets/ascenseurs
 > runtime — pas la décomposition plus large d'`Editor3D.jsx` (5 responsabilités documentées dans
@@ -112,10 +118,13 @@ aucune régression, aucune dette préexistante masquée par ce lot.
 
 **Testé** : `eslint` sur les 4 fichiers (0 nouvelle erreur/avertissement introduit — voir vérification
 ci-dessus), `npm run build` (client, propre — même avertissement préexistant de taille de chunk).
+Reconfirmé indépendamment le 2026-08-06 après coup (relecture de session) : relint des 5 fichiers du
+chantier (0 erreur/warning nouveau, mêmes 13 erreurs + 3 warnings préexistants dans `Canvas3D.jsx`,
+mêmes 9 warnings dans `Editor3D.jsx`), `npm run build` propre.
 **Non testé** : rendu réel en navigateur (régions d'effets visibles en 3D, transition d'ascenseur avec
 poll 300ms, bascule mode édition/jeu).
 **Données** : aucune.
-**Retour arrière** : commit isolé à venir sur `dev/Saar`.
+**Retour arrière** : commit `5e3dc84` (fusionné avec les lots B et C — voir §5).
 
 ### Lot B — `Sidebar.jsx` lit le store, plus de fetch local — ✅ codé (2026-08-06)
 Fichiers : `client/src/components/Sidebar.jsx`.
@@ -124,11 +133,12 @@ Invariant respecté : panneau de gestion des effets MJ identique à l'utilisateu
 `deleteRuntimeEffect` appellent directement l'action `fetchWorldEffects` du store après leur requête,
 pour un retour visuel immédiat identique à avant. Import `useCallback` devenu inutile, retiré.
 
-**Testé** : `eslint` (0 erreur, 0 warning), `npm run build` (propre).
+**Testé** : `eslint` (0 erreur, 0 warning), `npm run build` (propre). Reconfirmé indépendamment
+le 2026-08-06 (relecture de session) : mêmes résultats.
 **Non testé** : rendu réel en navigateur (panneau effets MJ en mode édition — liste, création,
 suppression).
 **Données** : aucune.
-**Retour arrière** : commit isolé à venir sur `dev/Saar`.
+**Retour arrière** : commit `5e3dc84` (fusionné avec les lots A et C — voir §5).
 
 ### Lot C — Correctif serveur (émission manquante) — ✅ codé (2026-08-06)
 Fichier : `server/src/routes/battlemaps.js` — `POST /:id/world-effects/definitions` émet désormais
@@ -146,17 +156,39 @@ ligne mécaniquement identique aux 4 routes sœurs déjà en production. Risque 
 faible pour ne pas justifier de bâtir l'infrastructure de test HTTP/socket de ce fichier pour une seule
 ligne — à réévaluer si `battlemaps.js` reçoit un jour une suite de tests plus large.
 
-**Testé** : `node --check` (syntaxe valide).
+**Testé** : `node --check` (syntaxe valide). Reconfirmé indépendamment le 2026-08-06 (relecture de
+session) : même résultat.
 **Non testé** : scénario réel (GM crée un effet personnalisé, un autre client connecté à la même
 campagne voit sa liste d'effets se rafraîchir sans action de sa part — c'est précisément le
 comportement que ce correctif ajoute, invisible pour l'auteur de l'action qui avait déjà son rappel
 local).
 **Données** : aucune.
-**Retour arrière** : commit isolé à venir sur `dev/Saar`.
+**Retour arrière** : commit `5e3dc84` (fusionné avec les lots A et B — voir §5).
 
 ---
 
 ## 5. Commits
 
-Un commit par lot, testé et rapporté (Testé/Non testé) avant le suivant — cf. méthode
-`PLAN_REFACTOR_SIDEBAR.md` §2.
+Un commit par lot, testé et rapporté (Testé/Non testé) avant le suivant était le principe annoncé —
+**non tenu en pratique** : les lots A, B et C ont été committés ensemble en un seul commit
+(`5e3dc84`, 2026-08-06), les diffs des trois lots s'étant imbriqués sur la même session sans point
+de coupure propre entre eux (même précédent documenté pour les lots 2/3a/3b de
+`PLAN_REFACTOR_SIDEBAR.md` §5). Rapport Testé/Non testé conservé séparément par lot ci-dessus malgré
+le commit unique, pour ne pas perdre la granularité de ce qui a été vérifié pour chacun.
+
+---
+
+## 6. Statut réel (relecture de session, 2026-08-06)
+
+Les trois lots sont codés, committés et déjà publiés (`5e3dc84`, `dev/Saar` à jour avec
+`origin/dev/Saar` — vérifié par `git log origin/dev/Saar..dev/Saar`, aucun commit local non publié).
+Vérification indépendante (au-delà du commit) : lecture des 5 fichiers modifiés
+confirmant le comportement décrit dans chaque lot, relint (mêmes 13 erreurs + 12 warnings
+préexistants, 0 nouveau), rebuild client propre, `node --check` sur la route serveur — tout conforme
+aux affirmations du commit.
+
+**Clôture (2026-08-06)** : les 5 scénarios navigateur soumis à Saar sont tous confirmés (régions
+d'effets 3D, création/suppression d'effet personnalisé dans le panneau MJ, bascule édition/jeu,
+transition d'ascenseur avec poll 300ms, propagation de l'émission serveur corrigée entre plusieurs
+clients connectés à la même campagne). PLAN archivé (`docs/RegleDocumentaire.md` Règle 10), contenu
+durable transféré vers `docs/SYSTEME/EDITEUR.md` §7 et `docs/ASBUILT.md`.

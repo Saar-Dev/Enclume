@@ -1531,6 +1531,37 @@ clavier, `KeyboardSensor` dnd-kit non encore branché). Non testé : round-trip 
 
 ---
 
+## World runtime effects/ascenseurs — store partagé (`docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, chantier clos 2026-08-06)
+
+### Client
+- `client/src/stores/worldRuntimeStore.js` (nouveau, Zustand) : autorité unique pour `worldEffects`
+  (`definitions`/`instances`/`regions`/`featureStates`) et `runtimeElevatorStates` d'une battlemap,
+  actions `fetchWorldEffects(battlemapId)`/`fetchRuntimeElevators(battlemapId)`. Remplace 3 fetchs
+  indépendants historiques de `Sidebar.jsx`/`Editor3D.jsx`/`Canvas3D.jsx` sur les mêmes endpoints.
+- `client/src/lib/useWorldRuntimeSync.js` (nouveau hook) : cycle de vie complet (fetch initial, poll
+  300 ms pendant transition d'ascenseur, écoute `WS.WORLD_RUNTIME_UPDATED` avec filtrage par `kind`).
+  Appelé une seule fois par session, depuis `Editor3D.jsx` ou `Canvas3D.jsx` (mutuellement exclusifs).
+- `Sidebar.jsx` ne fetch plus rien elle-même : lit `worldEffects` via `useWorldRuntimeStore`, son
+  panneau n'étant visible que pendant qu'`Editor3D.jsx` est monté (mode édition) et synchronise déjà
+  le store. `createCustomEffect`/`deleteRuntimeEffect` rappellent `fetchWorldEffects` directement
+  après leur requête pour un retour visuel immédiat côté auteur.
+- Détail complet et invariants actifs : `docs/SYSTEME/EDITEUR.md` §7.
+
+### Serveur
+- `server/src/routes/battlemaps.js` : `POST /:id/world-effects/definitions` émet désormais
+  `WS.WORLD_RUNTIME_UPDATED` (`kind: 'effect-definition-created'`) — seule route du cluster
+  `world-effects` qui n'émettait rien, bug trouvé en écrivant ce chantier. Sans ce correctif, la
+  création d'un effet personnalisé n'était visible que par son auteur (rappel local), jamais propagée
+  aux autres clients connectés à la même campagne.
+
+### État
+✅ Chantier clos — codé et confirmé fonctionnel en navigateur par Saar (régions d'effets 3D,
+transition d'ascenseur avec poll 300 ms, bascule édition/jeu, panneau MJ liste/création/suppression,
+propagation de l'émission corrigée entre plusieurs clients). Tests : `eslint`/`npm run build`/
+`node --check` propres (reconfirmés indépendamment à la clôture).
+
+---
+
 ## Pièges actifs — tous domaines
 
 | Code | Description |

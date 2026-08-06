@@ -130,18 +130,11 @@
   1-4c ✅ clos et confirmés. **Lot 4d** ✅ codé 2026-08-06 (extraction `SidebarChatTab.jsx` + hooks
   `useDiceBreakdownPopover`/`useSidebarPendingActionsBadge`), rendu général confirmé par Saar en
   navigateur, un seul scénario précis non rejoué (`⚠️ clos partiel`, détail dans le PLAN). **Lot 5**
-  (`SurfaceEditorPanel.jsx`) **dépend désormais de** `docs/PLANS/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`
-  (nouveau, 2026-08-06) — la décision d'architecture qui bloquait le Lot 5 s'est révélée plus large que
-  prévu en creusant : pas 2 mais **3 fichiers** (`Sidebar.jsx`/`Editor3D.jsx`/`Canvas3D.jsx`) fetchent
-  indépendamment les mêmes effets/ascenseurs runtime, avec un vrai coût (fetch+listener actifs même hors
-  mode édition côté `Sidebar.jsx`) et un bug serveur trouvé en vérifiant (`POST
-  .../world-effects/definitions` n'émet aucun `WORLD_RUNTIME_UPDATED`, contrairement à ses routes
-  soeurs). Séquence : coder `PLAN_WORLD_RUNTIME_EFFECTS_STORE.md` (Lots A-C) d'abord — `SurfaceEditorPanel.jsx`
-  devient trivial une fois le store en place, ne pas l'extraire avant sous peine d'hériter du doublon.
-  **Lots A-C ✅ codés 2026-08-06** (store + hook partagés, `Sidebar.jsx` migré, correctif serveur de
-  l'émission manquante), non testés en navigateur — confirmation Saar nécessaire avant de reprendre le
-  Lot 5 de `PLAN_REFACTOR_SIDEBAR.md`. Chantier orthogonal au cluster combat, aucune dépendance croisée
-  avec RW_SYSCOMBAT/COMBATANT_CONTEXT)
+  (`SurfaceEditorPanel.jsx`) bloquait sur une dépendance résolue depuis : `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`
+  (store `worldRuntimeStore.js` + hook `useWorldRuntimeSync.js` partagés, correctif serveur de
+  l'émission manquante) **clos et confirmé fonctionnel en navigateur par Saar (2026-08-06)** —
+  `SurfaceEditorPanel.jsx` peut maintenant être extrait, devenu trivial (lit le store directement,
+  comme `Sidebar.jsx` déjà migré). Reste à faire : l'extraction elle-même, pas encore commencée)
 - Moral (règle avancée, explicitement optionnelle au RAW) — `docs/PLANS/PLAN_MORAL.md` (stub) +
   `docs/REGLES/REGLE_MORAL.md` (RAW transcrit). Aucune dépendance technique identifiée avec le reste de
   la roadmap — priorité basse, à caser selon préférence produit plutôt que contrainte

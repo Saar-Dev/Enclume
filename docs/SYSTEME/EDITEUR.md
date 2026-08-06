@@ -146,18 +146,39 @@ entityTextureMaterials = {
 
 Les blueprints sans pack_id sont ignorés (PEF5).
 7. Effets runtime et ascenseurs
+
+Autorité unique côté client : `client/src/stores/worldRuntimeStore.js` (Zustand — `worldEffects`,
+`runtimeElevatorStates` + actions `fetchWorldEffects`/`fetchRuntimeElevators`) et
+`client/src/lib/useWorldRuntimeSync.js` (cycle de vie : fetch initial, poll pendant transition,
+écoute socket). Remplace 3 fetchs indépendants historiques (`Sidebar.jsx`/`Editor3D.jsx`/
+`Canvas3D.jsx`) — chantier `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md` (archivé, contenu durable
+ici).
+
+`useWorldRuntimeSync(battlemapId, socket)` est appelé **une seule fois par session**, depuis
+`Editor3D.jsx` OU `Canvas3D.jsx` selon le mode (mutuellement exclusifs sur une carte 3D — jamais
+montés ensemble). `Sidebar.jsx` ne l'appelle pas et ne fetch rien elle-même : elle lit `worldEffects`
+directement via `useWorldRuntimeStore`, ce qui est sûr car son panneau de gestion des effets n'est
+visible que pendant qu'`Editor3D.jsx` est monté (mode === 'edit') et synchronise déjà le store.
+
 7.1 Effets runtime
 
-Au montage, GET /battlemaps/:id/world-effects charge les définitions et instances d'effets.
-Les régions sont affichées comme des volumes translucides dans SurfaceEditorScene. L'écoute
-WS.WORLD_RUNTIME_UPDATED rafraîchit les effets en temps réel. La barre latérale permet de
-créer des effets personnalisés et de supprimer des instances existantes.
+Au montage, `fetchWorldEffects` appelle `GET /battlemaps/:id/world-effects` et peuple le store
+(`definitions`, `instances`, `regions`, `featureStates`). Les régions sont affichées comme des
+volumes translucides dans `SurfaceEditorScene`. L'écoute `WS.WORLD_RUNTIME_UPDATED` rafraîchit les
+effets en temps réel, sauf pour les événements `elevator-*` (ignorés côté effets). La barre latérale
+permet de créer des effets personnalisés (`POST .../world-effects/definitions`) et de supprimer des
+instances existantes (`DELETE .../world-effects/instances/:id`) — chaque mutation rappelle
+`fetchWorldEffects` directement pour un retour visuel immédiat côté auteur, en plus de l'émission
+`WORLD_RUNTIME_UPDATED` qui propage aux autres clients connectés à la même campagne (la route de
+création de définition n'émettait auparavant rien — corrigé dans le même chantier).
+
 7.2 Ascenseurs
 
-Au montage, GET /battlemaps/:id/world-elevators charge l'état des ascenseurs. Si au moins un
-ascenseur est en transition (closing, moving, opening), un polling de 300 ms est activé
-(setInterval) pour suivre le déplacement de la cabine. L'écoute WS.WORLD_RUNTIME_UPDATED
-déclenche également un rafraîchissement.
+Au montage, `fetchRuntimeElevators` appelle `GET /battlemaps/:id/world-elevators` et peuple
+`runtimeElevatorStates`. Si au moins un ascenseur est en transition (`closing`, `moving`, `opening`),
+un polling de 300 ms est activé (`setInterval`) pour suivre le déplacement de la cabine. L'écoute
+`WS.WORLD_RUNTIME_UPDATED` déclenche aussi un rafraîchissement, sauf pour l'événement
+`elevator-clock` (tick d'horloge, ignoré côté ascenseurs pour éviter un fetch inutile à chaque tick).
 8. Panneaux flottants
 
 Trois panneaux contextuels s'ouvrent automatiquement lors de la sélection d'un élément :

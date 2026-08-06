@@ -65,7 +65,7 @@ risque croissant, pas par ordre d'apparition dans le fichier.
 | 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
 | 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
 | 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d ✅ codé (2026-08-06) — rendu navigateur à confirmer par Saar, détail §3 | Moyen |
-| 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | À faire — dépend d'une décision sur `Editor3D.jsx` | Le plus élevé |
+| 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) — le hook partagé prévu pour la duplication de fetch `world-effects` est fait et confirmé (`useWorldRuntimeSync.js` + `worldRuntimeStore.js`, `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, clos 2026-08-06) ; reste seulement l'extraction de la palette JSX | À faire | Moyen (dépendance la plus lourde levée) |
 
 ---
 
@@ -322,7 +322,12 @@ explicitement. Risque jugé faible (correction logique directe, cf. analyse ci-d
 **Retour arrière** : commit isolé à venir sur `dev/Saar`.
 
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
-Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR_GLOBAL.md` §3).
+Statut : le hook partagé est fait et confirmé, indépendamment de toute décision sur `Editor3D.jsx` —
+traité comme chantier dédié (`docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, Lots A-C, clos
+2026-08-06, confirmé fonctionnel en navigateur par Saar). Reste à faire ici : extraction de
+`SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets hors de `Sidebar.jsx`), qui peut
+désormais lire `worldEffects` directement depuis `useWorldRuntimeStore` comme le fait déjà
+`Sidebar.jsx` — pas encore commencée.
 
 ---
 
