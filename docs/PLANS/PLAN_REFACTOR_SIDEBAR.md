@@ -64,7 +64,7 @@ risque croissant, pas par ordre d'apparition dans le fichier.
 | 1 | `SidebarIcons.jsx` — extraction des 9 icônes SVG | ✅ confirmé | Quasi nul |
 | 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
 | 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
-| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d gelé (superseded par `PLAN_CHAT.md` Phase 3) — détail §3 | Moyen |
+| 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d partiellement satisfait par `PLAN_CHAT.md` Phase 3 (rendu + envoi faits), extraction conteneur + 2 hooks restants — détail §3 | Moyen |
 | 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) + hook `useWorldEffects(battlemapId, socket)` partagé avec `Editor3D.jsx` | À faire — dépend d'une décision sur `Editor3D.jsx` | Le plus élevé |
 
 ---
@@ -266,17 +266,21 @@ pseudo/couleur, liste des connectés, bouton Quitter).
 **Données** : aucune.
 **Retour arrière** : commit isolé à venir sur `dev/Saar`.
 
-**4d — hooks + `SidebarChatTab.jsx`** : **gelé (2026-08-05, décision Saar)**, superseded par
-`docs/PLANS/PLAN_CHAT.md` Phase 3. Architecture initialement prévue (hooks `useDiceBreakdownPopover` /
-`useSidebarPendingActionsBadge` dans `client/src/lib/`, séparation conteneur/rendu des messages) —
-abandonnée en cours de route en relisant `PLAN_CHAT.md` §8.1/§8.3/§14 : la Phase 3 de ce chantier
-remplace explicitement à la fois l'envoi des messages (`useChatSocket.js` "remplace les trois hooks
-actuels pour l'ajout de messages") ET leur rendu (`MessageRendererRegistry.js` "remplace la cascade
-if/else de Sidebar.jsx") — soit la quasi-totalité de ce que le lot 4d aurait construit. Construire une
-architecture maintenant pour la voir remplacée à la Phase 3 aurait été du travail jetable, et deux
-chantiers décidant chacun séparément "comment rendre un message de chat" aurait violé l'autorité unique
-d'une décision métier. Le bloc chat (~300 lignes) reste donc inchangé dans `Sidebar.jsx` en attendant
-`PLAN_CHAT.md` Phase 3 — voir ce plan pour la suite.
+**4d — hooks + `SidebarChatTab.jsx`** : gelé le 2026-08-05 (superseded par `PLAN_CHAT.md` Phase 3),
+**partiellement satisfait depuis** — Phase 3 close le 2026-08-05 (`docs/Old/PLAN_CHAT.md`, archivé,
+détail architecture `docs/SYSTEME/CHAT.md`).
+
+- **Rendu** : fait, via `client/src/components/MessageRendererRegistry.jsx` (Phase 3d) — remplace la
+  cascade if/else de 330 lignes que `SidebarChatMessage.jsx` aurait construite. Périmètre plus large
+  que prévu : gère aussi les types déjà existants (dés, actions entité, trade, combat), pas seulement
+  le nouveau format persisté.
+- **Envoi + historique** : fait, via `client/src/lib/useChatSocket.js` (Phase 3c/3e) — remplace ce que
+  l'envoi/réception du conteneur `SidebarChatTab.jsx` aurait fait pour le texte tapé.
+- **Reste non fait** : les deux hooks `useDiceBreakdownPopover`/`useSidebarPendingActionsBadge`
+  (popover "Détail du calcul" et badge de compteur d'actions en attente — toujours inline dans
+  `Sidebar.jsx`) et l'extraction du conteneur lui-même (`SidebarChatTab.jsx` — formulaire d'envoi,
+  scroll, panneau CDL, toujours dans `Sidebar.jsx`). Plus aucun blocage externe — peut reprendre
+  comme un lot Sidebar normal si retenu, risque faible (pure extraction, comportement inchangé).
 
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
 Statut : à faire — dépend d'une décision sur `Editor3D.jsx` (voir `REFACTOR_GLOBAL.md` §3).

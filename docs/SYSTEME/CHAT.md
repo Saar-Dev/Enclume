@@ -1,273 +1,252 @@
 Documentation exhaustive de l'existant
 
-    Version 1.0 — 2026-08-01
-    Rédigé d'après l'analyse de 14 fichiers (serveur + client + shared)
+    Version 2.0 — 2026-08-05 (réécriture post-migration, PLAN_CHAT.md Phases 1-3 closes)
+    Version 1.0 (2026-08-01) archivée en historique de conversation — décrivait le système
+    éphémère pré-migration, entièrement remplacé par ce qui suit.
 
 1. Vue d'ensemble
 
-Le chat est le hub d'interaction textuelle de la session de jeu. Il reçoit du texte libre, des commandes slash, des jets de dés, des résultats de macros, des annonces de combat, des dégâts, des demandes d'arbitrage entité, des offres de trade, et des notifications système (connexion/déconnexion, erreurs, tours de combat sautés).
-Propriétés fondamentales
+Le chat texte (messages tapés + whispers) est désormais persisté en base (table `chat_messages`),
+survit au rechargement (F5) et se paginer par curseur. Les autres types de messages du flux
+(dés, macros, actions entité, trade, combat, notices système) restent éphémères, non persistés,
+routés par les mécanismes historiques — cohabitation assumée, pas une migration à moitié faite
+(voir §9, Strangler Fig, Phase 4 non commencée).
 
-    Éphémère : rien n'est persisté, tout est perdu au rechargement (F5).
+Propriétés fondamentales (texte persisté)
 
-    Temps réel : les messages transitent uniquement par WebSocket (Socket.IO), jamais par HTTP.
+    Persistant : table `chat_messages`, survit au F5, paginé par curseur (`created_at`, `id`).
 
-    Identifiants clients : les IDs de message sont fabriqués côté client par concaténation de strings (pas d'UUID serveur).
+    Double transport : REST pour l'historique (`GET /campaigns/:id/chat/messages`), WebSocket
+    pour l'envoi et le temps réel (`chat:send` → `chat:message_created`/`chat:message_deleted`).
 
-    Absence de module : le code du chat est éclaté entre 5 fichiers serveur et 3 hooks client.
+    Deux canaux : `general` (public, room de campagne) et `whisper` (privé, filtré par
+    `recipient_user_id`) — pas de canaux visibles dans l'UI, les deux se mélangent dans un seul
+    flux chronologique côté client (V1, voir EN_COURS.md Roadmap "Chat multi-canal").
+
+    Commandes slash côté serveur : `/help`, `/w <joueur> <message>`, `/gm <message>` interceptées
+    et exécutées par `chatCommandRegistry` (`server/src/chat/socketChat.js`) — le client envoie le
+    texte brut, aucun parsing dupliqué. `/r`/`/roll` restent une exception client (§5).
+
+    Validation, sanitization, rate limiting : 2000 caractères max, échappement HTML + whitelist
+    Markdown (gras/italique/code/citation), 10 messages/s/utilisateur.
+
+Propriétés fondamentales (types non migrés — dés, actions, combat, système)
+
+    Éphémères, comme avant la migration : perdus au F5.
+
+    IDs fabriqués côté client par concaténation de strings.
+
+    Toujours dispersés entre plusieurs fichiers serveur et hooks client (§7).
 
 2. Architecture
-text
-
-┌─────────────────────────────────────────────────────────────────┐
-│                        SIDE SERVEUR                              │
-│                                                                  │
-│  socket/index.js          → SESSION_USER_JOINED / LEFT           │
-│  socket/socketDice.js     → CHAT_MESSAGE (texte)                 │
-│                           → DICE_RESULT (dés libres)              │
-│                           → MACRO_ROLL_RESULT (macros)            │
-│  socket/socketEntity.js   → DICE_RESULT (interactions entité)    │
-│                           → ENTITY_ACTION_PENDING (arbitrage GM)  │
-│  socket/socketTrade.js    → TRADE_SELL_REQUEST (vente GM)        │
-│                           → TRADE_OFFER_RECEIVED (échange PJ)    │
-│  socket/socketCombat*.js  → COMBAT_ATTACK_RESULT (dégâts combat) │
-│                           → COMBAT_DECLARE_ERROR                 │
-│                           → COMBAT_RESOLVE_MOVE_BLOCKED           │
-│                           → COMBAT_TURN_SKIPPED                   │
-│                           → DICE_RESULT (dégâts, choc, drones)   │
-└─────────────────────────────────────────────────────────────────┘
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                              SIDE SERVEUR                                  │
+│                                                                             │
+│  server/src/chat/                                                         │
+│    chatService.js      sendMessage/getHistory/deleteMessage — point       │
+│                         d'entrée unique, valide+sanitize+persiste+diffuse │
+│    chatRepository.js   Accès Postgres (Knex), curseur created_at/id       │
+│    chatRoutes.js       REST /campaigns/:campaignId/chat/messages          │
+│    socketChat.js       WS chat:send → chatCommandRegistry ou sendMessage  │
+│    chatCommands.js     /help /w /gm — i18nKey, jamais de texte figé       │
+│    chatSanitizer.js    Échappement HTML + whitelist Markdown              │
+│    chatValidation.js   Longueur, type, forme                              │
+│    chatBroadcast.js    Diffusion partagée REST/WS (room ou user ciblé     │
+│                         pour un whisper)                                  │
+│    eventBus.js         Existe, aucun module métier n'y publie encore      │
+│                         (Message Builders — hors scope V1, §9)            │
+│                                                                             │
+│  Chemins non migrés (inchangés, cohabitent) :                             │
+│    socket/socketDice.js       CHAT_MESSAGE (legacy, plus jamais émis par  │
+│                                la saisie réelle — Phase 4 le retirera),   │
+│                                DICE_RESULT, MACRO_ROLL_RESULT             │
+│    socket/socketCombatHelpers.js → COMBAT_SYSTEM_NOTICE (notice ciblée,   │
+│                                un seul joueur, jamais persistée),         │
+│                                COMBAT_ATTACK_RESULT, COMBAT_DECLARE_ERROR,│
+│                                COMBAT_RESOLVE_MOVE_BLOCKED                │
+│    socket/socketEntity.js     ENTITY_ACTION_PENDING, TRADE_SELL_REQUEST  │
+│    socket/socketTrade.js      TRADE_OFFER_RECEIVED                       │
+└───────────────────────────────────────────────────────────────────────────┘
                               │
-                     WebSocket (Socket.IO)
+              REST (historique)  +  WebSocket (temps réel + legacy)
                               │
-┌─────────────────────────────────────────────────────────────────┐
-│                        SIDE CLIENT                               │
-│                                                                  │
-│  useSessionSocket.js  → CHAT_MESSAGE, DICE_RESULT,               │
-│                         MACRO_ROLL_RESULT, SESSION_*             │
-│  useEntitySocket.js   → ENTITY_ACTION_PENDING,                   │
-│                         ENTITY_ACTION_RESULT,                    │
-│                         ENTITY_MOVE_RESULT,                      │
-│                         TRADE_SELL_REQUEST,                      │
-│                         TRADE_OFFER_RECEIVED                     │
-│  useCombatSocket.js   → COMBAT_DECLARE_ERROR,                    │
-│                         COMBAT_RESOLVE_MOVE_BLOCKED,             │
-│                         COMBAT_TURN_SKIPPED                      │
-│                         │                                        │
-│                  ┌──────┴──────┐                                 │
-│                  │  addMessage │  (sessionStore.js)              │
-│                  └──────┬──────┘                                 │
-│                         ▼                                        │
-│              messagesByCampaign[campaignId]                      │
-│                         │                                        │
-│                         ▼                                        │
-│                   Sidebar.jsx (rendu)                            │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                               SIDE CLIENT                                  │
+│                                                                             │
+│  lib/useChatSocket.js   Nouveau, unique pour le texte persisté :          │
+│                         charge l'historique (general+whisper fusionnés,   │
+│                         triés chronologiquement) au montage, écoute       │
+│                         chat:message_created/_deleted, expose             │
+│                         loadOlderMessages (scroll infini — construit,     │
+│                         PAS ENCORE câblé à un IntersectionObserver, §10)  │
+│  lib/useSessionSocket.js  Inchangé pour SESSION_*/DICE_RESULT/            │
+│                         MACRO_ROLL_RESULT/COMBAT_SYSTEM_NOTICE ; la       │
+│                         branche CHAT_MESSAGE reste écoutée mais plus      │
+│                         jamais émise par la saisie réelle (dormante)      │
+│  lib/useEntitySocket.js   Inchangé (ENTITY_ACTION_*, TRADE_*)            │
+│  lib/useCombatSocket.js   Inchangé (COMBAT_DECLARE_ERROR, etc.)          │
+│                         │                                                 │
+│                  ┌──────┴──────┐                                          │
+│                  │  addMessage │  (sessionStore.js — dédup par id)       │
+│                  │ setMessages │  (historique initial, fusion pas replace)│
+│                  │prependMessages│ (scroll infini)                       │
+│                  │removeMessage│  (suppression douce)                    │
+│                  └──────┬──────┘                                          │
+│                         ▼                                                 │
+│              messagesByCampaign[campaignId]  (flux unique, non partitionné│
+│                                                par canal — §1, V1)         │
+│                         │                                                 │
+│                         ▼                                                 │
+│      components/MessageRendererRegistry.jsx  (dispatch par type)          │
+│                         │                                                 │
+│                         ▼                                                 │
+│              components/Sidebar.jsx  (conteneur, formulaire d'envoi)      │
+└───────────────────────────────────────────────────────────────────────────┘
+```
 
-3. Détail des flux par type de message
-3.1 Message texte standard
-Étape	Fichier	Détail
-Émission	Sidebar.jsx:335	socket?.emit(WS.CHAT_MESSAGE, { text })
-Réception serveur	socketDice.js	Handler CHAT_MESSAGE
-Enrichissement	socketDice.js	getUserColor() → { userId, username, color, text, timestamp }
-Broadcast	socketDice.js	io.to(campaignId).emit(WS.CHAT_MESSAGE, payload)
-Réception client	useSessionSocket.js:onChatMessage	addMessage({ id, user, color, text, time })
-Rendu	Sidebar.jsx:message	Bloc standard
+3. Base de données — `chat_messages` (migration 232)
+```sql
+CREATE TABLE chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    channel_id TEXT NOT NULL DEFAULT 'general',
+    sender_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    character_id UUID REFERENCES characters(id) ON DELETE SET NULL,
+    recipient_user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- whisper uniquement
+    type TEXT NOT NULL,               -- 'TEXT' | 'WHISPER' en V1
+    payload JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ            -- suppression douce
+);
+CREATE INDEX idx_chat_messages_cursor
+    ON chat_messages (campaign_id, channel_id, created_at DESC, id DESC);
+```
 
-Format payload reçu par le client :
-js
-
+Forme renvoyée par l'API (`chatService.toClientMessage`) :
+```json
 {
-  userId: "uuid",
-  username: "Saar",
-  color: "#4A90D9",
-  text: "Bonjour !",
-  timestamp: "2026-08-01T12:00:00.000Z"   // ISO 8601
+  "id": 254,
+  "channelId": "general",
+  "type": "TEXT",
+  "payload": { "text": "Bonjour !" },
+  "author": { "id": "uuid", "username": "Saar", "color": "#4A90D9" },
+  "character": null,
+  "recipientUserId": null,
+  "createdAt": "2026-08-05T21:22:18.196Z"
 }
+```
 
-Format stocké dans le store :
-js
+4. Flux — texte persisté (TEXT/WHISPER)
+| Étape | Fichier | Détail |
+|---|---|---|
+| Saisie | `Sidebar.jsx` `sendMessage` | `/r`\/`/roll` interceptés localement (inchangé) ; sinon texte brut envoyé tel quel |
+| Émission | `Sidebar.jsx` | `socket.emit(WS.CHAT_SEND, { channelId: 'general', type: 'TEXT', payload: { text } })` |
+| Réception serveur | `socketChat.js` | Détecte une commande slash (`/help`/`/w`/`/gm`) ou un message normal |
+| Commande | `chatCommands.js` via `chatCommandRegistry` | Réponse privée (i18nKey, non persistée) ou message WHISPER persisté |
+| Message normal | `chatService.sendMessage` | Rate limit → validation → sanitization → persistance → enrichissement auteur |
+| Diffusion | `chatBroadcast.js` | Room entière (`general`) ou seulement expéditeur+destinataire (`whisper`) |
+| Réception client | `useChatSocket.js` `onCreated` | `system:true` (réponse commande) résolu en texte i18n ; sinon `addMessage(message)` tel quel |
+| Rendu | `MessageRendererRegistry.jsx` `renderText`/`renderWhisper` | Whisper : même corps + indicateur 🔒 |
 
+Historique initial (`useChatSocket.js`, au montage de `Sidebar.jsx`) : deux appels REST fusionnés
+(`channelId=general` + `channelId=whisper`, un whisper vit dans un canal séparé côté API — sans
+les deux, les whispers disparaîtraient de la vue au chargement), triés par `createdAt` croissant,
+fusionnés (pas remplacés) avec ce qui est déjà arrivé en temps réel pendant le chargement.
+
+5. Flux — types non migrés (inchangés depuis avant la migration)
+
+Tous les autres types de messages continuent d'utiliser exactement le même mécanisme qu'avant
+(voir version 1.0 de ce document, en historique de conversation, pour le détail complet) :
+dés libres (`/r`, `DICE_ROLL`/`DICE_RESULT`), macros, actions entité, trade, combat
+(`COMBAT_ATTACK_RESULT`, `COMBAT_DECLARE_ERROR`, `COMBAT_RESOLVE_MOVE_BLOCKED`), messages système
+join/leave. Un seul changement : la notice "dual-wield dégradé" (COM29) a migré de `CHAT_MESSAGE`
+vers `COMBAT_SYSTEM_NOTICE` (événement dédié, `socketCombatHelpers.js` — trouvé en préparant la
+Phase 3 : c'était le seul endroit du fichier à détourner `CHAT_MESSAGE` au lieu de suivre le
+patron "un événement par situation" déjà utilisé partout ailleurs).
+
+6. Commandes slash
+| Commande | Où | Détail |
+|---|---|---|
+| `/r <formule>`, `/roll <formule>` | Client (`Sidebar.jsx`), inchangé | Jamais envoyé comme message chat — flux `DICE_ROLL`/`DICE_RESULT` direct. Hors scope V1 de la migration (`PLAN_CHAT.md` §15) |
+| `/help` | Serveur (`chatCommandRegistry`) | Liste les commandes, réponse privée non persistée |
+| `/w <joueur> <message>` | Serveur | Crée un message `WHISPER`, persisté, visible seulement de l'expéditeur et du destinataire |
+| `/gm <message>` | Serveur | Whisper vers le MJ de la campagne |
+
+7. Store Zustand (`sessionStore.js`)
+```js
 {
-  id: "uuid-2026-08-01T12:00:00.000Z",   // concaténé côté client
-  user: "Saar",
-  color: "#4A90D9",
-  text: "Bonjour !",
-  time: "12:00"                           // reformaté HH:MM
+  messagesByCampaign: {},   // { [campaignId]: Message[] } — flux unique, pas partitionné par canal
+  addMessage(message)       // dédup par id (un message chat peut arriver 2x : historique + temps réel)
+  setMessages(campaignId, channelId, messages)     // historique initial — fusionne, ne remplace pas
+  prependMessages(campaignId, channelId, older)    // scroll infini — dédup par id
+  removeMessage(campaignId, messageId)             // suppression douce — retire du flux local
 }
+```
 
-3.2 Message système (connexion / déconnexion)
-Étape	Fichier	Détail
-Trigger	socket/index.js:SESSION_JOIN	Un utilisateur rejoint/quitte la room
-Émission	socket/index.js	socket.to(campaignId).emit(WS.SESSION_USER_JOINED, { userId, username })
-Réception client	useSessionSocket.js:onUserJoined	addMessage({ id: 'sys-join-...', system: true, text: t('session.userJoined', { username }), time })
+8. Rendu — `MessageRendererRegistry.jsx`
 
-Format stocké :
-js
+Remplace l'ancienne cascade if/else de `Sidebar.jsx` (330 lignes). Dispatch : `msg.system` →
+rendu système ; `registry[msg.type]` connu (`entity_action`, `sell_request`, `exchange_offer`,
+`declare_error`, `resolve_move_blocked`, `dice`, `TEXT`, `WHISPER`) → renderer dédié ; sinon repli
+texte simple. `dice` garde ses sous-branches internes (macro/combat_damage/déplacement/skillcheck/
+jet normal) en une seule entrée de registre — les séparer exigerait une clé de discrimination
+absente de la donnée.
 
-{
-  id: "sys-join-uuid-1234567890",
-  system: true,
-  text: "Saar a rejoint la session",   // i18n
-  time: "12:00"
-}
+9. État de la migration (Strangler Fig, `PLAN_CHAT.md` archivé — `docs/Old/PLAN_CHAT.md`)
 
-3.3 Message système i18n générique
+| Phase | Statut |
+|---|---|
+| 1 — Table + module, rien branché | ✅ close |
+| 2 — Double-écriture non bloquante (`CHAT_PERSISTENCE_ENABLED`) | ✅ close |
+| 3 — Bascule client (lecture, rendu, envoi) | ✅ close, confirmée en jeu par Saar (2026-08-05) |
+| 4 — Nettoyage (retirer `CHAT_MESSAGE`/ancien listener, Message Builders sur l'EventBus, canaux visibles) | Non commencée — basse priorité, rien ne dépend de son retrait |
 
-Le serveur peut émettre CHAT_MESSAGE avec { system: true, i18nKey, timestamp }. Le client résout i18nKey via t(). Cas documenté : COM29 (dual-wield dégradé). Le handler est useSessionSocket.js:onChatMessage, branche payload.system.
-3.4 Jet de dés libre (/r)
-Étape	Fichier	Détail
-Parsing	Sidebar.jsx:339	text.match(/^\/r(?:oll)?\s+(.+)$/i)
-Émission	Sidebar.jsx:341	socket?.emit(WS.DICE_ROLL, { formula })
-Traitement serveur	socketDice.js:DICE_ROLL	parseDice(formula) → rolls, total, critiques
-Broadcast	socketDice.js	io.to(campaignId).emit(WS.DICE_RESULT, payload)
-Réception client	useSessionSocket.js:onDiceResult	addMessage({ type: 'dice', formula, rolls, total, ... })
-Rendu	Sidebar.jsx:dice	Bloc dé avec icône
+10. Limites connues / dette assumée
 
-Format stocké :
-js
+    Scroll infini construit (`loadOlderMessages`/`hasMore` dans `useChatSocket.js`) mais pas câblé
+    à un `IntersectionObserver` dans `Sidebar.jsx` — au-delà de 50 messages, l'historique le plus
+    ancien reste inaccessible depuis l'UI pour l'instant.
 
-{
-  id: "dice-uuid-timestamp",
-  type: 'dice',
-  user: "Saar",
-  color: "#4A90D9",
-  formula: "1d20+3",
-  rolls: [15],
-  total: 18,
-  isCriticalSuccess: false,
-  isCriticalFail: false,
-  time: "12:00"
-}
+    Canaux non visibles dans l'UI (V1 assumé) — general et whisper se mélangent dans un seul flux
+    chronologique côté client, distingués seulement par l'indicateur 🔒 sur les whispers.
 
-3.5 Macro favori
-Étape	Fichier	Détail
-Émission	DicePanel.jsx	socket.emit(WS.MACRO_ROLL, { macroId, characterId, secret? })
-Traitement serveur	socketDice.js:MACRO_ROLL	Calcul seuil (compétence/attribut + malus), jet 1d20, substitution template
-Broadcast	socketDice.js	io.to(campaignId).emit(WS.MACRO_ROLL_RESULT, payload)
-Réception client	useSessionSocket.js:onMacroRollResult	addMessage({ type: 'dice', interactionType: 'macro_result', ... })
-Rendu	Sidebar.jsx:macro_result	Bloc étoile avec message formaté
-3.6 Action entité (demande d'arbitrage)
-Étape	Fichier	Détail
-Demande joueur	socketEntity.js:ENTITY_ACTION_REQUEST	Le joueur demande une interaction
-Notification GM	socketEntity.js	gmSocket.emit(WS.ENTITY_ACTION_PENDING, { requestId, playerName, ... })
-Conversion chat	useEntitySocket.js:onEntityActionPending	addMessage({ type: 'entity_action', gmOnly: true, ... })
-Rendu	Sidebar.jsx:entity_action	Bloc avec boutons Accepter / Auto / Refuser
-3.7 Action entité (résultat)
+    `CHAT_MESSAGE` et son listener (`useSessionSocket.js`) restent vivants mais dormants (plus
+    jamais émis par la saisie réelle) — retrait prévu en Phase 4, pas un risque actif.
 
-L'arbitrage du GM (ENTITY_ACTION_RESOLVE) déclenche un jet serveur, dont le résultat est diffusé via DICE_RESULT avec des champs supplémentaires : skillLabel, mechanicalTotal, chancesDeReussite, isSuccess, mr, breakdown, interactionType.
-interactionType	Rendu dans Sidebar
-undefined (skillcheck)	Bloc dé avec compétence, badge succès/échec
-'displacement'	Bloc poussée/traction avec MR
-'combat_damage'	Bloc épée avec dégâts, localisation, sévérité
-3.8 Trade (vente, échange)
-Événement serveur	Listener client	Type dans le store	Rendu
-TRADE_SELL_REQUEST	useEntitySocket.js:onSellRequest	'sell_request'	Bloc vente GM avec bouton Voir
-TRADE_OFFER_RECEIVED	useEntitySocket.js:onOfferReceived	'exchange_offer'	Bloc échange avec bouton Voir
-3.9 Messages de combat
-Type store	Événement WS	Listener client	Rendu
-'declare_error'	COMBAT_DECLARE_ERROR	useCombatSocket.js:onDeclareError	Bloc erreur (⊗)
-'resolve_move_blocked'	COMBAT_RESOLVE_MOVE_BLOCKED	useCombatSocket.js:onResolveMoveBlocked	Bloc blocage
-système (skip)	COMBAT_TURN_SKIPPED	useCombatSocket.js:onTurnSkipped	system: true
-dégâts combat	COMBAT_ATTACK_RESULT → DICE_RESULT	useSessionSocket.js:onDiceResult	Bloc épée
-choc	DICE_RESULT (depuis statusService)	useSessionSocket.js:onDiceResult	Bloc skillcheck
-drone damage	DICE_RESULT	useSessionSocket.js:onDiceResult	Bloc skillcheck
-4. Commandes slash
-Commande	Implémentation	Fichier
-/r <formule>	Regex + DICE_ROLL	Sidebar.jsx:339-342
-/roll <formule>	Alias de /r	idem
-/help	Non implémenté	—
+    Message Builders (`combatDamage`, `diceRoll`, `systemJoin`...) jamais branchés sur l'EventBus —
+    dés, combat, actions entité restent éphémères, hors scope V1.
 
-La commande est interceptée avant l'émission CHAT_MESSAGE : le texte saisi n'est jamais envoyé comme message.
-5. Store Zustand (sessionStore.js)
-js
+11. Fichiers impliqués
+Serveur — nouveau module (7)
+| Fichier | Rôle |
+|---|---|
+| `server/src/chat/chatService.js` | Logique centrale : valide, sanitize, persiste, diffuse |
+| `server/src/chat/chatRepository.js` | Accès Postgres (Knex) |
+| `server/src/chat/chatRoutes.js` | REST `/campaigns/:campaignId/chat/*` |
+| `server/src/chat/socketChat.js` | WS `chat:send` |
+| `server/src/chat/chatCommands.js` | `/help /w /gm` |
+| `server/src/chat/chatSanitizer.js` | Échappement HTML + whitelist Markdown |
+| `server/src/chat/chatValidation.js` | Longueur, type, forme |
+| `server/src/chat/chatBroadcast.js` | Diffusion partagée REST/WS |
 
-{
-  onlineUsers: new Set(),
-  messagesByCampaign: {},       // { [campaignId]: Message[] }
-  activeCampaignId: null,
-  pendingEntityId: null,
+Serveur — chemins non migrés (inchangés)
+| Fichier | Rôle |
+|---|---|
+| `socket/socketDice.js` | `CHAT_MESSAGE` (dormant), `DICE_ROLL`/`DICE_RESULT`, `MACRO_ROLL` |
+| `socket/socketCombatHelpers.js` | `COMBAT_SYSTEM_NOTICE`, `COMBAT_ATTACK_RESULT`, etc. |
+| `socket/socketEntity.js`, `socket/socketTrade.js` | Actions entité, trade |
 
-  addMessage(message)           // push en fin de tableau pour la campagne active
-  resetSession()                // vide tout
-}
+Client (5)
+| Fichier | Rôle |
+|---|---|
+| `components/Sidebar.jsx` | Conteneur : formulaire d'envoi, appel à `renderMessage()` |
+| `components/MessageRendererRegistry.jsx` | Rendu par type |
+| `lib/useChatSocket.js` | Historique + temps réel texte persisté |
+| `lib/useSessionSocket.js` | `SESSION_*`, `DICE_RESULT`, `MACRO_ROLL_RESULT`, `COMBAT_SYSTEM_NOTICE` |
+| `stores/sessionStore.js` | `messagesByCampaign`, setters |
 
-Aucune pagination, aucun chargement asynchrone, aucun setter setMessages ou prependMessages.
-6. Rendu dans Sidebar.jsx
-
-Le rendu itère sur messages.map(...) avec une cascade if/else basée sur msg.type et msg.system :
-Condition	Rendu
-msg.system	Texte centré italique (join/leave, skip tour, erreurs)
-msg.type === 'entity_action'	Bloc arbitrage GM (visible si isGm)
-msg.type === 'sell_request'	Bloc vente GM
-msg.type === 'exchange_offer'	Bloc échange PJ
-msg.type === 'declare_error'	Bloc erreur combat
-msg.type === 'resolve_move_blocked'	Bloc blocage déplacement
-msg.type === 'dice'	Bloc dé (plusieurs sous-types selon interactionType)
-Défaut	Bloc texte standard
-7. Fichiers impliqués
-Serveur (5)
-Fichier	Rôle dans le chat
-socket/index.js	SESSION_USER_JOINED/LEFT
-socket/socketDice.js	CHAT_MESSAGE (texte), DICE_ROLL (dés), MACRO_ROLL (macros)
-socket/socketEntity.js	ENTITY_ACTION_PENDING, DICE_RESULT (interactions)
-socket/socketTrade.js	TRADE_SELL_REQUEST, TRADE_OFFER_RECEIVED
-socket/socketCombat*.js	COMBAT_ATTACK_RESULT, COMBAT_DECLARE_ERROR, COMBAT_RESOLVE_MOVE_BLOCKED, COMBAT_TURN_SKIPPED
-Client (4)
-Fichier	Rôle dans le chat
-components/Sidebar.jsx	Input, commandes slash, rendu de tous les types
-lib/useSessionSocket.js	Listeners CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, SESSION_*
-lib/useEntitySocket.js	Listeners ENTITY_ACTION_*, TRADE_SELL_REQUEST, TRADE_OFFER_RECEIVED
-lib/useCombatSocket.js	Listeners COMBAT_DECLARE_ERROR, COMBAT_RESOLVE_MOVE_BLOCKED, COMBAT_TURN_SKIPPED
-stores/sessionStore.js	Stockage messagesByCampaign, setter addMessage
 Shared (1)
-Fichier	Rôle
-shared/events.js	Constantes de tous les événements WebSocket
-8. Problèmes et limites
-Problème	Impact
-Aucune persistance	Tout est perdu au F5.
-Pas d'UUID serveur	IDs clients non garantis uniques, impossibles à utiliser pour la déduplication.
-Handler CHAT_MESSAGE noyé dans socketDice.js	Pas de séparation des responsabilités, impossible à faire évoluer isolément.
-Trois hooks clients distincts appellent addMessage	Aucune couche d'abstraction ; un changement de format message impacterait tous les hooks.
-Pas de limite de taille	Pas de validation serveur sur la longueur du texte.
-Pas de rate limiting	Pas de protection contre le spam (sauf pour les offres trade, qui ont leur propre limite).
-Pas de sanitization	Le texte brut est rendu dans des <p> sans échappement.
-Pas de typage explicite sur les messages texte standard (pas de champ type: 'text').	
-Aucune pagination	messages.map() sur tout le tableau.
-Pas de /help	Demandé.
-Pas de messagerie privée	Demandé.
-9. Événements WebSocket utilisés par le chat
-Constante	Émetteur serveur	Listener client	Type store
-CHAT_MESSAGE	socketDice.js	useSessionSocket.js	texte / système i18n
-DICE_RESULT	socketDice.js, socketEntity.js, socketCombatHelpers.js, statusService.js	useSessionSocket.js, useEntitySocket.js	'dice'
-MACRO_ROLL_RESULT	socketDice.js	useSessionSocket.js	'dice'
-SESSION_USER_JOINED	socket/index.js	useSessionSocket.js	system: true
-SESSION_USER_LEFT	socket/index.js	useSessionSocket.js	system: true
-ENTITY_ACTION_PENDING	socketEntity.js	useEntitySocket.js	'entity_action'
-ENTITY_ACTION_RESULT	socketEntity.js	useEntitySocket.js	system: true
-ENTITY_MOVE_RESULT	socketEntity.js	useEntitySocket.js	system: true
-TRADE_SELL_REQUEST	socketTrade.js	useEntitySocket.js	'sell_request'
-TRADE_OFFER_RECEIVED	socketTrade.js	useEntitySocket.js	'exchange_offer'
-COMBAT_DECLARE_ERROR	socketCombatResolution.js	useCombatSocket.js	'declare_error'
-COMBAT_RESOLVE_MOVE_BLOCKED	socketCombatResolution.js	useCombatSocket.js	'resolve_move_blocked'
-COMBAT_TURN_SKIPPED	socketCombat*.js	useCombatSocket.js	system: true
-COMBAT_ATTACK_RESULT	socketCombatHelpers.js	useCombatSocket.js → état local + DICE_RESULT	'dice'
-10. Types de messages dans le store
-Champ type	Champ system	Origine
-absent	undefined	Texte standard
-absent	true	Join/leave, skip tour, résultats entité
-'dice'	undefined	Dés, macros, dégâts combat
-'entity_action'	undefined	Demande arbitrage GM
-'sell_request'	undefined	Demande vente GM
-'exchange_offer'	undefined	Offre échange PJ
-'declare_error'	undefined	Erreur déclaration combat
-'resolve_move_blocked'	undefined	Blocage déplacement combat
-11. Conclusion
-
-Le chat actuel est un système de messagerie temps réel éphémère, sans persistance, sans module dédié, sans validation, mais avec une couverture fonctionnelle déjà riche (12 types de messages, 14 événements WebSocket, rendu conditionnel). Le rework devra :
-
-    Créer un module chat autonome (chatService.js + socketChat.js).
-    Ajouter une persistance (table chat_messages, endpoint REST).
-    Unifier les trois points d'entrée client vers un seul service.
-    Ajouter la validation (longueur, rate limiting).
-    Implémenter /help et la messagerie privée.
-    Supporter la pagination pour l'historique.
+| Fichier | Rôle |
+|---|---|
+| `shared/events.js` | `CHAT_SEND`, `CHAT_MESSAGE_CREATED`, `CHAT_MESSAGE_DELETED`, `CHAT_ERROR`, `COMBAT_SYSTEM_NOTICE` + registre historique |

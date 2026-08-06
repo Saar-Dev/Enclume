@@ -576,3 +576,81 @@ visible non déclenché en situation réelle (cas limite, pas testé par Saar).
 **Retour arrière** : commit isolé à venir sur `dev/Saar`, distinct du lot Sidebar 4a/4b (fichiers
 disjoints : `SessionPage.jsx`/`Canvas3D.jsx`/`Canvas2D.jsx`/`fr.json` contre
 `Sidebar.jsx`/`SidebarHelpModal.jsx`/`SidebarCharactersTab.jsx`).
+
+---
+
+## Session (Saar) — 2026-08-05 — PLAN_CHAT.md Phases 1-3 closes : chat persistant
+
+**Contexte** : chantier repris et poursuivi dans cette session à partir d'une Phase 1 déjà codée
+(module `server/src/chat/` + migration 232, non committée) trouvée dans le worktree partagé.
+Vérifiée avant de construire dessus (priorité CLAUDE.md — le code observé prime sur la mémoire) :
+33 tests réellement exécutés contre PostgreSQL réel (`node --env-file=../.env --test`, piège trouvé
+— sans `--env-file`, 12 tests skip silencieusement faute de `DATABASE_URL`), rien branché dans
+l'existant (grep confirmé). Formalisée en commit (`d41cf6b`) avant d'enchaîner.
+
+**Phase 2 — double-écriture** (`c79bf65`) : le handler `CHAT_MESSAGE` existant (`socketDice.js`)
+appelle désormais `chatService.sendMessage()` en plus de son broadcast direct inchangé, derrière
+`CHAT_PERSISTENCE_ENABLED` (défaut `false`). Recherche faite avant de coder (Strangler Fig / shadow
+write, pattern confirmé par la littérature pro) — le pattern Outbox (cohérence garantie entre deux
+stores durables) écarté explicitement : un seul côté est durable ici, l'autre (broadcast) est déjà
+éphémère, une écriture manquante est un trou d'historique acceptable en Phase 2, pas une corruption.
+Vérifié en base directement (`SELECT * FROM chat_messages`) après activation manuelle du flag par
+Saar — fonctionnel, confirmé par la donnée, pas par le comportement UI (qui ne lit encore rien).
+
+**Correctif annexe trouvé en préparant la Phase 3** (`a0bb41a`) : la notice "dual-wield dégradé"
+(COM29, `socketCombatHelpers.js`) détournait `CHAT_MESSAGE` au lieu de suivre le patron "un
+événement dédié par situation" déjà utilisé partout ailleurs dans ce fichier. Nouvel événement
+`COMBAT_SYSTEM_NOTICE` (`shared/events.js`) — un retour éphémère à un joueur n'est pas un message de
+chat persistant, les deux concepts ne devaient pas partager un événement, d'autant que `CHAT_MESSAGE`
+allait devenir spécifiquement l'entrée du chat persisté.
+
+**Phase 3 — bascule client**, en 5 sous-lots isolés (discipline "un problème à la fois" maintenue
+malgré la taille du morceau) :
+- **3a** (`a12d33b`) : branchement serveur — `chatRouter` monté sur `/api/campaigns/:campaignId/chat`,
+  `registerChatHandlers` dans `socket/index.js`. Serveur redémarré réellement pour vérifier (pas
+  qu'un `node --check`) — tous les imports résolvent, arrêté sur port déjà utilisé (process existant).
+- **3b** (`dc8240a`) : extensions `sessionStore.js` (`setMessages`/`prependMessages`/`removeMessage`,
+  dédup par id sur `addMessage`). Décision consciente : `channelId` reste une métadonnée par message,
+  pas un axe de stockage séparé — pas de vue multi-canal en V1, restructurer le store pour une
+  fonctionnalité différée aurait été prématuré.
+- **3c** (`db27128`) : `useChatSocket.js` — historique initial, temps réel, scroll infini. Trouvaille :
+  l'historique doit charger `general` ET `whisper` (deux appels fusionnés triés chronologiquement),
+  un whisper vivant dans un canal séparé côté API. Vérifié avant 3d : forme exacte des données
+  confirmée en appelant `getHistory()` directement sur les 2 messages réels en base (pas une
+  hypothèse — `createdAt`, `author.username/color`, pagination, tout correspondait).
+- **3d** (`991f51b`) : `MessageRendererRegistry.jsx` — extraction fidèle de la cascade if/else de
+  330 lignes vers un registre type → renderer, plus `TEXT`/`WHISPER` pour le nouveau format. Trouvé
+  en vérifiant : le fichier doit être `.jsx` (pas `.js` comme suggéré au plan) — ce projet n'active
+  le parsing JSX que sur cette extension, et le build précédent ne le prouvait pas (fichier jamais
+  importé donc jamais réellement parsé par esbuild).
+- **3e** (`4fe00f6`) : bascule réelle — `Sidebar.jsx` émet `chat:send` au lieu de `CHAT_MESSAGE`,
+  rend via `renderMessage()`. Seul point de rupture réel du chantier (tout le reste était additif,
+  jamais bloquant) — décision explicite prise avant de coder : pas de flag runtime supplémentaire
+  pour ce cutover (aurait doublé la surface de code à maintenir juste pour un risque visible
+  immédiatement, pas un risque silencieux comme la Phase 2), `git revert` du commit isolé comme
+  filet, cohérent avec le reste du chantier. Trouvaille en câblant : la prose du plan §9 ("parsing
+  client des commandes") ne correspondait pas au code déjà écrit — `socketChat.js` fait déjà tout le
+  parsing `/help /w /gm` côté serveur, le client envoie le texte brut. Deuxième trouvaille : les
+  réponses de commande arrivent via `CHAT_MESSAGE_CREATED` avec `system:true` + `i18nKey` brut,
+  même mécanisme de résolution que `COMBAT_SYSTEM_NOTICE` — ajouté à `useChatSocket.js`.
+
+**Confirmé fonctionnel en jeu par Saar (2026-08-05)** immédiatement après 3e : F5 conserve
+l'historique (les 2 messages de test envoyés pendant la Phase 2 sont réapparus), nouveaux messages
+persistés et affichés normalement.
+
+**Documentation de clôture** : `docs/SYSTEME/CHAT.md` entièrement réécrit (décrivait encore l'ancien
+système éphémère), `docs/PLANS/PLAN_CHAT.md` archivé vers `docs/Old/`, `docs/EN_COURS.md` — entrée
+CH1 (bug d'origine, résolu) retirée, remplacée par `CHAT-SCROLL1` (scroll infini construit mais pas
+câblé — seul reste concret de la Phase 4), `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` lot 4d mis à jour
+(rendu + envoi désormais satisfaits par cette Phase 3, reste conteneur + 2 hooks, non bloqué).
+
+**Testé** : 192/192 tests serveur (dont les 5 fichiers dédiés chat, 33 tests) à chaque étape,
+`eslint` (0 erreur) sur chaque fichier client touché, `npm run build` propre, serveur démarré
+réellement (3a). Scénario réel confirmé par Saar après 3e (F5, envoi, persistance).
+**Non testé** : `/help`/`/w`/`/gm` en situation réelle (server-side déjà testé unitairement,
+33/33) ; scroll infini (non câblé, `CHAT-SCROLL1`) ; whisper réel (aucun en base pour vérifier le
+chargement d'historique, dépend d'un `/w` réel).
+**Données** : migration 232 (`chat_messages`), déjà appliquée. Aucune donnée existante affectée
+(table neuve).
+**Retour arrière** : 8 commits isolés sur `dev/Saar` (`d41cf6b`, `c79bf65`, `a0bb41a`, `a12d33b`,
+`dc8240a`, `db27128`, `991f51b`, `4fe00f6`) — chacun revertable indépendamment, `git log` fait foi.
