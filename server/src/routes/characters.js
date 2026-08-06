@@ -104,9 +104,9 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
 
   const ownership = await resolveOwnership(db, { campaignId, userId: user_id })
   const color = ownership.color
-  const type = typeOverride === 'drone' ? 'drone' : ownership.type
+  const type = typeOverride === 'drone' || typeOverride === 'exo' ? typeOverride : ownership.type
 
-  // Transaction unique : le personnage et sa fiche (char_sheet ou drone_sheet) naissent
+  // Transaction unique : le personnage et sa fiche (char_sheet, drone_sheet ou exo_sheet) naissent
   // ensemble — jamais de personnage sans fiche, jamais de fenêtre de course à la
   // création lazy (cf. commentaire migration 132_char_sheet_dedupe_and_unique.js).
   const character = await db.transaction(async (trx) => {
@@ -121,6 +121,10 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
     if (type === 'drone') {
       const damages = initDamages('corps', WOUND_MAX_COUNTS)
       await trx('drone_sheet').insert({ character_id: character.id, damages: JSON.stringify(damages) })
+    } else if (type === 'exo') {
+      // template_id absent : aucun sélecteur de template en création (Sidebar), assigné plus tard
+      // via PUT /:characterId/exo — état "non configurée" valide (docs/PLANS/PLAN_EXOARMURE.md §6.5).
+      await trx('exo_sheet').insert({ character_id: character.id })
     } else {
       await createEmptySheet(trx, character.id)
     }
@@ -175,12 +179,12 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
 
   // Recalcul type/color si user_id change — GM uniquement (user_id absent des updates joueur).
   // resolveOwnership dérive depuis campaign_members.role (docs/PLAN_CHARACTER_SERVICE.md) :
-  // color toujours réappliquée, type seulement si le personnage n'est pas un drone (un drone
-  // garde son type quelle que soit l'assignation).
+  // color toujours réappliquée, type seulement si le personnage n'est pas un drone/une exo-armure
+  // (ces types gardent leur type quelle que soit l'assignation).
   if ('user_id' in updates) {
     const ownership = await resolveOwnership(db, { campaignId: character.campaign_id, userId: updates.user_id })
     updates.color = ownership.color
-    if (character.type !== 'drone') updates.type = ownership.type
+    if (character.type !== 'drone' && character.type !== 'exo') updates.type = ownership.type
   }
 
   // updated_at systématique sur tout PUT

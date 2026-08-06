@@ -1,13 +1,34 @@
 # PLAN — Système Exo-Armures
 
-> Statut : Lot 0 (cadrage architecture) clos, Lot 1 (Fondations) rédigé et prêt à coder (§6),
-> 2026-07-30. **Improvisation interdite (consigne explicite Saar 2026-07-30)** — architecture validée
-> contre des dépôts pro réels (Lancer/Foundry VTT, MekHQ) avant tout code. Rien n'est codé. 2 des 3
-> questions RAW tranchées (§2.1, §2.2) ; **§2.3 (seuil de Catastrophe) en stand-by**, dépend de
+> Statut : Lot 0 (cadrage architecture) clos, Lot 1 (Fondations) ✅ codé (2026-08-06), **non testé en
+> navigateur**. Lot 2 (Substitution d'attributs) resserré et **partiellement** codé (2026-08-06) :
+> mouvement (VIT) ✅ codé, plafond de Compétence (Manœuvre d'armure) et 1 seule Attaque/Tour
+> **⏸️ bloqués** en attendant un refactor de `socketCombatHelpers.js` (mis en pause côté Saar, chantier
+> séparé à planifier) — détail §7. **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
+> — architecture validée contre des dépôts pro réels (Lancer/Foundry VTT, MekHQ) avant tout code. 2 des
+> 3 questions RAW tranchées (§2.1, §2.2) ; **§2.3 (seuil de Catastrophe) en stand-by**, dépend de
 > `docs/PLAN_TEST_CRITIQUE.md` (chantier séparé, en pause côté Saar) — bloque uniquement le Lot 8.
 > Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
 > chantier clos, contenu durable transféré vers `docs/SYSTEME/EXOARMURE.md` (à créer) et
 > `docs/VOCABULARY.md`.
+>
+> **Corrections de dérive au moment de coder le Lot 1 (2026-08-06)**, plan rédigé le 2026-07-30 :
+> - Numéro de migration réservé (`225`) déjà pris entre-temps par un autre chantier (Fatigue/Dommages,
+>   `225_token_statuses_data.js`) — migration réellement posée : **`233_exo_sheet.js`** (dernière
+>   migration présente au moment de coder : `232_chat_messages.js`).
+> - Stub UI `value="armure" disabled` déplacé de `Sidebar.jsx` vers
+>   `client/src/components/SidebarCharactersTab.jsx:88` (extraction Sidebar antérieure au plan) —
+>   activé au même endroit (`value="exo"`, `disabled` retiré).
+> - **Trou trouvé en relisant `char-sheet.js:69-91`** (absent de l'analyse à charge du 2026-07-30) :
+>   `router.param('characterId')` gate toutes les routes du fichier sur `isOwner || isGm || isDrone` —
+>   sans bypass équivalent, un pilote non-propriétaire/non-GM aurait reçu un 403 avant même d'atteindre
+>   `exoIsGmOrOwnerOrPilot` dans les handlers PUT, contredisant la décision §6.3. Corrigé : `isExo`
+>   ajouté au bypass, même patron que `isDrone` (lecture ouverte à tout membre de campagne, écriture
+>   gardée séparément par route).
+> - §6.3 contenait une contradiction interne (« exige `template_id` dans le payload ») laissée par
+>   inadvertance après la correction du point 1 de l'analyse à charge (`template_id` nullable). Codé
+>   selon la version tranchée : `template_id` absent accepté à la création (§6.5, invariant "non
+>   configurée").
 >
 > Source RAW : `docs/REGLES/REGLEARMURE.md` (extrait Livre de Base Polaris, p.323-329). Autorité
 > supérieure à ce PLAN et à `docs/MANUELEXOARMURE.md` — en cas de contradiction, RAW gagne
@@ -407,7 +428,7 @@ question à reposer à Saar sauf s'il tient spécifiquement à `'armure'` comme 
 ### 6.7 Validation prévue
 
 - `node --check` sur les fichiers touchés/créés.
-- Test Node ciblé (`225_exo_sheet.test.mjs`) : up/down, CHECK, cascade `character_id`, `template_id`
+- Test Node ciblé (`233_exo_sheet.test.mjs`) : up/down, CHECK, cascade `character_id`, `template_id`
   nullable + `SET NULL` au lieu de RESTRICT (corrigé, point 1) — en conditions réelles si connexion
   PostgreSQL disponible dans l'environnement d'exécution, sinon signalé explicitement en **Non testé**.
 - Scénario réel navigateur (à la charge de Saar, comme d'habitude) : créer une exo-armure de test
@@ -416,3 +437,166 @@ question à reposer à Saar sauf s'il tient spécifiquement à `'armure'` comme 
   (tester aussi le rejet si la cible n'est pas `pj`/`pnj`, point 6), assigner `template_id` une fois un
   template inséré à la main en dev, ajuster `itg_*_max`/`itg_*_current` via
   `PUT /:characterId/exo/integrity`.
+
+---
+
+## 7. Lot 2 — Substitution d'attributs — resserré et partiellement codé (2026-08-06)
+
+> Lot 2 n'avait qu'une ligne de description (§3) contrairement au Lot 1. En creusant le code réel
+> avant de coder, deux blocages sont apparus — le lot est resserré en conséquence (décision Saar).
+
+### 7.1 Découverte — `socketCombatHelpers.js` bloque toute intégration combat
+
+`resolveMeleeAction` et l'équivalent tir (`socketCombatHelpers.js`, ~2800 lignes) interrogent
+`char_sheet` directement par `character.id` à ~8 endroits (attaquant CaC ~1243, défenseur CaC ~1546,
+tireur ~2571, + lookups cible), avec un garde `if (!sheetAttaquant) return { suspend:false }`. Aucun
+personnage sans `char_sheet` ne peut donc attaquer aujourd'hui — **pas même un drone**, qui subit le
+même garde. Il n'existe donc aucun patron existant de "combattant qui emprunte les compétences d'un
+autre personnage" à reproduire pour le pilote d'exo-armure.
+
+**Décision Saar (2026-08-06) : le refactor de `socketCombatHelpers.js` nécessaire pour accueillir
+cette redirection est mis en pause**, chantier séparé — **cadré depuis, `docs/PLANS/PLAN_COMBATANT_CONTEXT.md`
+(2026-08-06)**. Point de couture unique retenu : `resolveCombatantTestContext(character, skillId)`
+(`server/src/lib/combatantContextService.js`, Lots A-G) — 7 sites recensés par lecture intégrale (pas
+8, l'estimation ci-dessus), pas une table de dispatch mais des guard clauses par `character.type`. Ce
+Lot 2 (plafond Manœuvre d'armure, 1 seule Attaque/Tour) **reprendra une fois ce plan-là avancé**
+(au moins son Lot G) — ne pas redémarrer cette section avant.
+
+**Conséquence sur le découpage du Lot 2** — tout ce qui dépend de la résolution combat est bloqué :
+- **Plafond de Compétence par Manœuvre d'armure** — ⏸️ bloqué (dépend du refactor).
+- **1 seule Attaque/Tour** — ⏸️ bloqué (dépend du refactor — inutile de gater une résolution qui ne
+  fonctionne pas encore pour ce type de personnage).
+- **Substitution VIT pour le mouvement** — ✅ codé (§7.3) : vit dans `movementBudgetService.js`,
+  fichier autonome, pas concerné par la pause.
+- **BLD** (protection) — pas encore attaqué, dépend aussi du pipeline de dégâts (Lot 4) et donc
+  indirectement du même refactor.
+
+### 7.2 RAW — Manœuvre d'armure (texte complet fourni par Saar, 2026-08-06)
+
+À réutiliser telle quelle quand le refactor combat reprend :
+
+> Manœuvre d'armures […] Attributs associés : COO/ADA. Compétence limitative pour : toutes les
+> actions physiques en armure, notamment Acrobatie/Équilibre, Athlétisme, Escalade ou les Compétences
+> de combat au contact. **Les Compétences de combat à distance ne sont, elles, pas limitées.**
+> [...] De nombreuses armures — dites "hybrides" — peuvent être utilisées dans plusieurs milieux
+> différents : le personnage doit développer la Compétence qui correspond à chaque milieu.
+> - Armures atmosphériques (X)
+> - Armures externes (y compris armures de Surface)
+> - Armures sous-marines
+> - Armures spatiales (-3)
+> Note : en milieu sous-marin ou en apesanteur, la Compétence de Manœuvre d'armure appropriée
+> **remplace** Manœuvres 0G / Manœuvres sous-marines, annulant les pénalités de milieu normalement
+> subies sans assistance mécanique.
+
+Conséquences pour l'implémentation future (pas codées maintenant) :
+- Le plafond ne s'applique **jamais** aux Compétences de combat à distance — ce n'est pas une
+  simplification v1, c'est la règle RAW elle-même (contrairement à ma formulation initiale "combat
+  uniquement en v1" qui laissait entendre une restriction temporaire).
+  Le périmètre v1 confirmé par Saar (2026-08-06) est donc : plafond sur les Compétences de combat au
+  contact uniquement (le sous-ensemble RAW-exact) ; Acrobatie/Athlétisme/Escalade hors combat →
+  reportées en v2.
+- 4 spécialités déjà présentes dans `ref_skills` (migration 105) :
+  `MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES`, `__ARMURES_EXTERNES`, `__ARMURES_SOUS_MARINES`,
+  `__ARMURES_SPATIALES` — marqueurs `(X)`/`(-3)` à vérifier en base contre le texte RAW ci-dessus
+  avant tout code (pas fait, hors scope tant que le refactor est en pause).
+
+### 7.3 Armement exo — vérifié, rien à construire
+
+Hypothèse initiale (Saar) : les armes utilisables par une exo-armure seraient toutes catégorisées
+sous une compétence dédiée ("Arme sous-marine"). **Vérifié faux en l'état** — `ARMES_SOUS_MARINES`
+est une compétence déjà existante (`ref_skills`, `skill_group: 'Combat (tir)'`), déjà utilisée par
+les armes à harpon/torpille des plongeurs humains (migration 135), sans lien avec les exo-armures.
+Aucune arme à l'échelle exo n'existe encore dans `ref_equipment` (catalogue exo pas commencé, Lot 5e).
+**Conclusion : le mécanisme déjà en place (`ref_equipment_skill_assoc` → skill_id de l'arme,
+`char-sheet.js`/`socketCombatHelpers.js` ligne ~1322-1324) s'applique tel quel à un pilote d'exo —
+`ARMES_SOUS_MARINES` est simplement la bonne compétence pour une arme sous-marine, humaine ou
+pilotée. Rien de nouveau à construire pour la catégorisation des armes.**
+
+### 7.4 Mouvement (VIT) — ✅ codé (2026-08-06)
+
+RAW (`REGLEARMURE.md:107-122`) : *"[VIT] est comparable à l'Agilité et aux Compétences Athlétisme et
+Hybride des êtres humains [...] lorsqu'il s'agit de déterminer leur capacité de déplacement [...]
+utilisez simplement la Vitesse"*. VIT remplace donc **à la fois** la Coordination (base) et
+l'Athlétisme (plafond) humains — pas seulement l'un des deux. `calcAllures(vit, vit)`
+(`shared/polarisUtils.js`) est réutilisé tel quel, aucune nouvelle formule.
+
+`server/src/services/movementBudgetService.js` — `getCharacterMovementBudget` branche désormais sur
+`characters.type` (nouvelle requête `characters` en tête, avant l'ancien accès direct à `char_sheet`)
+et délègue à `getExoMovementBudget` pour `type === 'exo'` :
+- Vitesse choisie : Surface tentée en premier, puis Sous-marine en repli (`getExoMovementBudget`,
+  `movementBudgetService.js`) — **limitation documentée** : le moteur monde n'a aujourd'hui aucun
+  signal d'immersion en temps réel (dette EAU1, `docs/EN_COURS.md` — nappe d'eau ambiante retirée
+  2026-07-29). À corriger quand ce signal existera, sans changer la signature de la fonction (un seul
+  point de bascule, l'ordre du tableau `milieux` dans `getExoMovementBudget`). Revu et étendu §7.5
+  après vérification contre 16 armures RAW réelles (mode `pilot`/`blocked` par milieu).
+- `template_id` absent (exo "non configurée", Lot 1 §6.5) → erreur explicite plutôt qu'un budget
+  silencieusement nul.
+- Aucun changement aux 4 call sites existants (`socketCombatAnnouncement.js`, `socketToken.js`,
+  `battlemaps.js`, `socketCombatResolution.js`) — la branche est interne à
+  `getCharacterMovementBudget`, transparente pour les appelants.
+
+**Non testé** : scénario réel navigateur (déplacer un token exo en combat/hors combat) — dépend du
+Lot 1 non encore testé en navigateur (aucune exo-armure réelle en base pour l'instant).
+
+### 7.5 Vérification "stockabilité" contre 16 armures RAW réelles (2026-08-06)
+
+Demande Saar : vérifier que les armures RAW (`REGLEARMURE.md` p.339-348 — Explora, Typhon, Nymph 1-A,
+Série A, Vanguard, Sylph 56, Vauban, Condor, Cougar, Mentor, Heimdall-Pyrelia, Ouraken, Odin, Vulcain,
+Moloch, Orka) sont représentables dans le schéma `ref_exo_templates` (migration 233, pas encore
+appliquée — éditée directement, pas de nouvelle migration).
+
+**Confirmé correct sans changement :**
+- Résistance aux Dommages — toujours exactement la valeur de `EXO_RD_TABLE` (catégorie), sur les 16
+  exemples sans exception. Valide la décision Lot 1 §2.1 (pas stockée par template).
+- Blindage, Exo-Force — varient indépendamment de la catégorie (Explora/Typhon même catégorie,
+  Blindage 15 vs 17) → colonnes par instance de template, correctement modélisées.
+
+**Gaps trouvés et corrigés (migration 233 éditée, pas de nouvelle migration puisque non appliquée) :**
+1. **Vitesse** — un simple entier par milieu ne suffisait pas. 3 colonnes ajoutées par milieu
+   (`underwater_movement_mode`/`surface_movement_mode`, CHECK `'vit'|'pilot'|'blocked'`,
+   `speeds_extra jsonb`) :
+   - `'pilot'` — RAW Armure Explora, "à terre : capacité de déplacement du personnage" : le mouvement
+     délègue entièrement au budget humain du pilote. `getExoMovementBudget` (§7.4) redirige de façon
+     récursive vers `getCharacterMovementBudget(pilot_character_id, gait)`.
+   - `'blocked'` — RAW Armure Vulcain, "à terre : -" (incapable de se déplacer hors de l'eau) : milieu
+     sauté, repli sur l'autre.
+   - `speeds_extra` (narratif, **non consommé** par `getExoMovementBudget`) — plusieurs armures
+     donnent 2 vitesses par milieu (ex. "10 exo-palmes / 20 propulseur" sous l'eau). RAW
+     (`REGLEARMURE.md:249-255`) : seul le déplacement naturel compte pour le mouvement de combat
+     standard — un propulseur project hors de portée en 1-2 Tours, mécanique d'évasion narrative
+     distincte, pas un choix d'Allure. `base_speed_*` porte donc uniquement le mode naturel.
+2. **Descriptif/commerce** — `manufacturer`, `price`, `rarity`, `tech_level` (texte : la source donne
+   "III"/"III-IV", jamais un entier propre, donc pas le même type que `ref_equipment.tech_level`),
+   `autonomy` (texte, comme `drone_sheet.autonomie`) — présents dans 100% des exemples RAW, absents du
+   schéma initial. Ajoutés.
+3. **Systèmes auxiliaires / Armement par défaut du template** — chaque armure RAW liste 10-25 items.
+   Toujours hors scope, déjà couvert par le renvoi au Lot 5e (§3) — pas une nouvelle dette.
+
+**Testé :** `node --check` sur les fichiers touchés. Test migration étendu (`233_exo_sheet.test.mjs`,
+toujours non exécuté faute de `DATABASE_URL` local).
+
+### 7.6 Bug trouvé et corrigé — `getModDom()` (`server/src/lib/charStats.js`)
+
+Question Saar en vérifiant §7.5 : le Modificateur de Dommages des exo-armures utilise-t-il une table
+différente de celle des personnages ? Réponse vérifiée : **non** — RAW (`REGLEARMURE.md:130-131`)
+confirme explicitement la même formule. Mais la vérification a révélé un vrai bug dans le code
+existant, **affectant tous les personnages** (pas spécifique aux exo-armures) : l'extrapolation de
+`MOD_DOM_TABLE` (LdB p.113, tranches de 2 points) au-delà de sa dernière tranche connue (20-21 → +5)
+utilisait `Math.floor((for_na-21)/2)` au lieu de `Math.ceil(...)` — faux de -1 sur tout écart impair.
+
+Vérifié contre 16 armures RAW réelles (7 cas discriminants, écart impair) : `Typhon EXF 30 → +10 (pas
++9)`, `Condor EXF 42 → +16 (pas +15)`, `Mentor EXF 50 → +20 (pas +19)`, `Odin EXF 60 → +25 (pas +24)`,
+`Vulcain EXF 62 → +26 (pas +25)`, `Moloch/Orka EXF 68 → +29 (pas +28)` — `ceil` correct sur 7/7 cas
+discriminants, `floor` sur 0/7. Confirmé aussi par la continuation naturelle des tranches de
+`MOD_DOM_TABLE` elle-même (tranches de 2 : 22-23→+6, 24-25→+7...), pas seulement un ajustement pour
+coller aux exemples.
+
+**Corrigé** (`charStats.js:172-179`), avec test dédié (`charStats.test.mjs`, nouveau fichier — aucun
+test n'existait pour ce module) : table basse + 12 valeurs d'extrapolation vérifiées contre les 16
+armures RAW. **Testé :** `node --test src/lib/charStats.test.mjs` — 2/2 passent.
+
+**Portée de la correction** : `getModDom` est utilisée pour tout personnage avec FOR_na > 21 en
+dégâts au contact (pas seulement les exo-armures, cf. `getModDom` appelée depuis
+`socketCombatHelpers.js` pour le CaC humain) — correction déjà en production dès ce commit, pas
+conditionnée à l'avancement du chantier Exo-armures. **Non testé** : impact réel en jeu sur un
+personnage FOR_na > 21 (aucun cas connu actuellement en base, `[INCONNU]`).

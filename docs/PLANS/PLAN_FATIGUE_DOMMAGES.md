@@ -98,6 +98,20 @@
 > (§11) : le rattrapage d'un grand saut de temps s'étale sur plusieurs avances plutôt qu'en une seule
 > fois — confirmé souhaité par Saar après explication, pas un raccourci silencieux. Détail complet :
 > §11, `docs/EN_COURS.md` item 110.
+> **2026-08-06 — Lot 6 (Noyade/Asphyxie) : cadrage détaillé rédigé (§12)** après relecture RAW complète
+> (p.243-244, Souffle p.169-174 `ATTRIBUTS.md`) + exploration du code réel (`calcSouffle` jamais
+> décrémenté nulle part, `asphyxia` déjà réservé dans `VALID_STATUS_CODES`/`TokenPresentation.jsx` mais
+> toggle nu sans effet mécanique, `resolveEnvironmentalHazardTicks` du Lot 3 toujours orienté dégâts) +
+> réflexion UI/UX dédiée avec Saar (aucun code écrit). Décision structurante : Retenir son souffle est
+> une **action déclarée par le propriétaire du token** (RadialMenu), pas une exposition MJ comme
+> Acide/Feu/Froid — bascule le mécanisme hors du patron `TokenStatusPanel` des Lots 3/5. **Correction
+> RAW en cours de réflexion** : le texte source décrit deux phases distinctes (apnée volontaire, aucune
+> urgence, puis 2D6 Tours de suffocation active avant l'inconscience), jamais un jet de dégâts nulle
+> part dans ce chapitre — contrairement à Acide/Feu/Décompression, `resolveEnvironmentalHazardTicks`
+> est donc structurellement incompatible (pas juste sous-optimal), confirmant un service dédié sans
+> logique de dégâts. Cette relecture a aussi révélé que le badge `asphyxia` existant (libellé "Asphyxie")
+> ne peut pas représenter la Phase 1 (apnée tranquille) sans induire le joueur en erreur — un second
+> status_code est nécessaire. Aucun code écrit, cadrage prêt pour implémentation.
 > Source : `docs/REGLES/FATIGUE&DOMMAGES.md` (extrait Livre de Base Polaris, p.242-251).
 
 ---
@@ -2029,16 +2043,159 @@ narrativement, voir RAW retenu ci-dessus).
 
 ## 12. Lot 6 — Noyade/Asphyxie
 
-**Dépend de** : Lot 0 uniquement — délibérément indépendant de l'horloge. Le compte à rebours
-d'inconscience (2D6 Tours de combat) est un délai de combat, réutilise le mécanisme du Lot 3
-(tick `onTurnStart`/`token_statuses`). Le compte à rebours de mort (5-7 minutes réelles) est plus
-fin que la granularité quart d'heure de l'horloge (Lot 1) — reste un minuteur narratif tenu par le
-MJ, non automatisé dans ce lot.
+> Cadrage rédigé avec Saar le 2026-08-06, après relecture RAW complète et réflexion UI/UX dédiée
+> (plusieurs passes). **Aucun code écrit.** Taille S, dépend du Lot 0 uniquement — délibérément
+> indépendant de l'horloge de campagne (Lot 1/2) : tout le mécanisme est Tour-scope, comme les
+> dangers environnementaux du Lot 3.
 
-- Consomme `calcSouffle` déjà calculé. Souffle à 0 → déclenche le compte à rebours d'inconscience
-  via le mécanisme du Lot 3.
-- Réanimation (Premiers soins) : Test avec malus fonction du temps écoulé — calcul simple, aucun
-  nouvel état persistant.
+### RAW (p.244, `docs/REGLES/FATIGUE&DOMMAGES.md:190-204`)
+
+> *"Un personnage commence à se noyer ou à s'asphyxier quand il n'a plus de points de Souffle...
+> Il sombre alors dans l'inconscience en 2D6 Tours de combat, et subit toutes les complications de
+> la noyade (arrêt respiratoire, puis arrêt cardiaque). Si rien n'est fait pour lui, le personnage
+> meurt au bout de quelques minutes (5 à 7 minutes environ). Avant cela, un personnage compétent en
+> Premiers soins peut toutefois tenter de le réanimer... son Test subit un malus égal au double du
+> nombre de minutes qui se sont écoulées depuis que l'individu a cessé de respirer... Dans une eau
+> glaciale (0°C ou moins)... le malus est alors simplement égal au nombre de minutes d'asphyxie."*
+
+Hyperventilation (p.243) : technique optionnelle prise **avant** de retenir son souffle — Test
+d'Athlétisme secret (le joueur n'est jamais informé du résultat), réussite = +modificateur de Tours
+de Souffle, échec = -modificateur. Nécessite ~10 Tours sans autre action au préalable.
+
+### Analyse à charge (2026-08-06)
+
+1. **`calcSouffle` (`shared/polarisUtils.js:187`) n'est décrémenté nulle part** — c'est une formule
+   pure ((CON_na+VOL_na)/2 + mod, en Tours), utilisée uniquement comme valeur affichée/macro
+   (`char-sheet.js:1342`, `CharacterSheet.jsx:118`). Aucun compteur vivant n'existe : à construire
+   entièrement.
+2. **Le RAW décrit 3 paliers de gravité, pas 2** — trouvé en questionnant un doublon apparent
+   ("pourquoi un décompte de Souffle PUIS encore 2D6 Tours avant l'inconscience ?") : ce n'est pas
+   redondant, ce sont deux phénomènes distincts physiologiquement enchaînés :
+   - **Phase 1 — Apnée volontaire** (durée = `calcSouffle`) : le personnage va bien, aucune
+     complication.
+   - **Phase 2 — Suffocation active** (durée = 2D6 Tours supplémentaires, démarre à Souffle=0) :
+     arrêt respiratoire puis cardiaque en cours, encore récupérable.
+   - **Phase 3 — Inconscient**, puis mort narrative (5-7 minutes réelles) si rien n'est fait.
+3. **Aucun jet de dégâts nulle part dans ce chapitre** — contrairement à Acide/Feu/Décompression
+   (Lot 3), Noyade/Asphyxie est une pure cascade de statut (compteur → inconscience → mort), jamais
+   un jet physique. `resolveEnvironmentalHazardTicks` (`environmentalHazardService.js:79`) appelle
+   `resolveTargetHit` sans condition à chaque ligne — **structurellement incompatible** avec ce lot,
+   pas seulement sous-optimal. Confirme un service dédié, sans logique de dégâts.
+4. **Le badge `asphyxia` existant ne peut représenter que la Phase 2.** `asphyxia` est déjà réservé
+   (`VALID_STATUS_CODES`, `socketToken.js:158` ; catégorie `dot`, `TokenPresentation.jsx:19`) mais
+   son libellé i18n est **"Asphyxie"** (`fr.json:907`) — l'utiliser pour la Phase 1 (apnée
+   tranquille, aucune urgence) afficherait un état de détresse à un personnage qui va bien. Un
+   second status_code est nécessaire pour la Phase 1, voir Architecture retenue.
+5. **`token.statuses` transmis au client est un tableau de codes bruts uniquement**
+   (`battlemaps.js:752`, `statusService.js:13` : `rows.map(r => r.status_code)`), jamais le `.data`
+   JSON de la ligne — et `TOKEN_STATUS_UPDATED` (`statusService.js:15`) ne transporte que
+   `{ tokenId, statuses, statusExpiries }`. Le compteur de Souffle restant (nécessaire à l'affichage
+   des points bleus) n'atteint donc jamais le client aujourd'hui — extension ciblée du payload
+   nécessaire, pas une réécriture du contrat.
+6. **Aucune migration nécessaire.** `token_statuses.status_code` est `text` sans contrainte
+   CHECK/enum (`68_token_statuses.js:6`) — un nouveau code est un ajout JS pur (`VALID_STATUS_CODES`,
+   `STATUS_CATEGORY`). `token_statuses.data` (jsonb, migration `225_token_statuses_data.js`) existe
+   déjà et couvre le besoin de compteur par instance, même patron que les dangers du Lot 3 et
+   `hypothermia` du Lot 5.
+7. **Aucun tracker visuel à pips/cases n'existe ailleurs à réutiliser** — vérifié contre le
+   compteur de Fatigue (Lot 4, `CharacterSheet.jsx:1134`) : c'est du texte (`"Fatigué (2/3)"`), pas
+   un composant graphique. Le "point bleu" du token est un composant neuf.
+8. **RadialMenu (`TokenRadialMenu.jsx`) a ses 8 secteurs déjà occupés**, aucun sous-menu n'existe
+   dans ce composant — chaque secteur déclenche une action immédiate ou ouvre une surface séparée
+   (patron déjà établi par `statuts`→`TokenStatusPanel`, `échange`→fenêtre, `viser`→mode). Décidé :
+   secteur `jet` retiré (jamais eu de consommateur réel, contrairement à `déplacer` qui porte un
+   libellé i18n réservé `"Portée de déplacement"`, `fr.json:881`, non retenu pour ce lot), remplacé
+   par un secteur `souffle`.
+
+### Architecture retenue
+
+- **Déclenchement — action du propriétaire du token, pas une exposition MJ.** Contrairement à
+  Acide/Feu/Froid (Lots 3/5, appliqués par le MJ via `TokenStatusPanel`), Retenir son souffle est
+  déclaré par le joueur sur son propre PJ ou par le MJ sur un PNJ — même gate `isOwner || isGm`
+  (`SessionPage.jsx:449-450`) que le secteur `viser` déjà existant. Aucune détection automatique de
+  submersion (hors périmètre moteur monde, `EnvironmentalResultQueue`/`world*` non concernés ici).
+- **RadialMenu** : secteur `souffle` remplace `jet`. Au clic, ouvre un petit panneau flottant à 2
+  boutons — **"Retenir son souffle"** / **"Hyperventiler"** — pas une roue imbriquée (première
+  interaction à deux niveaux du composant, coût de conception jugé disproportionné pour un mécanisme
+  RAW-rare ; le panneau reste au même niveau d'abstraction que les surfaces déjà ouvertes par
+  `statuts`/`échange`).
+  - **Retenir son souffle** : pose `breath_hold` (nouveau status_code) avec
+    `data: { remaining: calcSouffle(...), max: calcSouffle(...) }`.
+  - **Hyperventiler** : lance un Test d'Athlétisme secret (v1 — voir point suivant), applique le
+    modificateur de réussite/échec à `max`/`remaining` **avant** de poser `breath_hold` — une
+    variante de "Retenir", pas une action indépendante.
+- **Secret d'Hyperventilation — assoupli en v1, écart RAW documenté.** Le RAW exige un résultat
+  caché même au lanceur ; le `secret` déjà codé dans `socketDice.js`/`MACRO_ROLL`
+  (`secret: true` = visible lanceur+MJ, cache uniquement les autres joueurs) ne va pas jusque-là.
+  v1 réutilise ce `secret` existant tel quel (décision Saar, écart RAW assumé, `CLAUDE.md` §1.9).
+  **v2 (roadmap, hors ce lot)** : vrai secret caché du lanceur lui-même — capacité générique à
+  construire si besoin, aucun autre consommateur actuel dans le projet.
+- **Deux status_code, un par phase** (analyse à charge point 2 et 4) :
+  - **`breath_hold`** (nouveau) — Phase 1, apnée. `data.remaining` décrémenté d'un point par Tour
+    (palier discret au tick, pas d'animation continue) par le nouveau service dédié (ci-dessous).
+    Affichage : composant neuf, points bleus au-dessus du token (pas dans la rangée d'icônes plates
+    de `TokenStatusBadges` — sémantique différente, "combien reste-t-il" vs "cet état est actif").
+    Plafond d'affichage à **10 points visibles** ; au-delà, un point représente
+    `⌈max/10⌉` points de Souffle réels (généralisation de "un point = deux points" au-delà de 20
+    aussi, pas seulement 11-20 — évite un palier arbitraire supplémentaire).
+  - **`asphyxia`** (déjà réservé, catégorie `dot`) — Phase 2, suffocation active, 2D6 Tours. Garde le
+    badge plat existant (`TokenStatusBadges`), pas de visuel dédié — la tension visuelle "points qui
+    s'assombrissent" est spécifique à la Phase 1.
+  - **`unconscious`** (déjà existant et câblé, chantier Choc) — Phase 3, réutilisé tel quel à la fin
+    du décompte `asphyxia`.
+  - Transition automatique dans les 3 sens (`breath_hold`→`asphyxia` à `remaining=0`, jet 2D6 pour
+    initialiser le compteur `asphyxia` ; `asphyxia`→`unconscious` à expiration), portée par le
+    service dédié ci-dessous, pas par le MJ.
+- **Service dédié, sans logique de dégâts** (analyse à charge point 3) — nouveau fichier, ex.
+  `server/src/lib/breathHoldService.js` : décrément par Tour, transition de phase, action
+  `clearBreathHold` (retrait manuel, ex. le personnage refait surface — même patron que `clearHazard`
+  du Lot 3). Appelé au même point d'orchestration que Lot 3 (`startResolutionPhase`,
+  `socketCombatHelpers.js`), boucle indépendante des hazards à dégâts — jamais une extension de
+  `resolveEnvironmentalHazardTicks`.
+- **Extension du wire nécessaire** (analyse à charge point 5) : `TOKEN_STATUS_UPDATED` doit porter le
+  `data` (ou au minimum `remaining`/`max`) des statuts qui en ont besoin pour l'affichage — extension
+  ciblée du payload existant, pas un nouvel événement.
+- **Réanimation et mort** : restent narratives/MJ, aucun nouvel état persistant, non automatisées —
+  cohérent avec les autres pans discrétionnaires MJ déjà tranchés ailleurs dans ce plan (mort de
+  Faim/soif, temps de décompression).
+
+### Fichiers concernés (aucun code écrit à ce stade)
+
+| Fichier | Rôle |
+|---|---|
+| `server/src/socket/socketToken.js` (`VALID_STATUS_CODES`) | ajoute `breath_hold` |
+| `client/src/components/TokenPresentation.jsx` (`STATUS_CATEGORY`) | ajoute `breath_hold: 'dot'` (ou nouvelle catégorie si la couleur bleue doit être distincte des rouges `dot` existants — à trancher en codant) |
+| `server/src/lib/breathHoldService.js` (nouveau) | `startBreathHold`, `resolveHyperventilation` (jet secret v1), tick de décompte + transitions de phase, `clearBreathHold` |
+| `server/src/socket/socketCombatHelpers.js` (`startResolutionPhase`) | nouvel appel au tick `breathHoldService`, même site que le tick hazards Lot 3, boucle indépendante |
+| `server/src/lib/statusService.js` (`emitTokenStatusUpdated`) | étendre le payload `TOKEN_STATUS_UPDATED` pour transporter `data`/`remaining` des statuts qui en ont besoin |
+| `client/src/components/TokenRadialMenu.jsx` | secteur `jet` retiré, secteur `souffle` ajouté (2 boutons : Retenir / Hyperventiler) |
+| `client/src/components/TokenPresentation.jsx` (nouveau composant, ex. `BreathHoldIndicator`) | points bleus au-dessus du token, plafond 10, palier discret par Tour |
+| `client/src/locales/fr.json` (`tokenRadial.*`, `status.*`) | clé `tokenRadial.souffle`/`detailSouffle` (remplace `jet`/`detailJet`, retirés), `status.breathHold` |
+
+### i18n
+
+- Suit le patron déjà en place : `useTranslation()`/`t('clé')`, clé ajoutée avant usage JSX,
+  namespace `fr.json` (`tokenRadial.*`/`status.*`, mêmes namespaces que les secteurs et statuts déjà
+  existants, aucun nouveau fichier de namespace nécessaire pour ce volume).
+
+### Hors périmètre de ce lot
+
+- Détection automatique de submersion (moteur monde) — déclenchement toujours manuel.
+- Horloge de campagne (Lot 1/2) — tout le mécanisme est Tour-scope, aucune échéance de jeu.
+- Compte à rebours de mort (5-7 minutes réelles) et malus de Réanimation — narratifs/MJ, non
+  automatisés (confirmé, cohérent avec les autres pans narratifs déjà tranchés dans ce plan).
+- Secret d'Hyperventilation "vrai", caché du lanceur — v2 roadmap, pas ce lot.
+- Nom exact du wedge/couleur de catégorie `STATUS_CATEGORY` pour `breath_hold` (bleu, distinct des
+  `dot` rouges existants) — détail visuel à trancher en codant, n'affecte pas l'architecture.
+
+### Validation prévue
+
+- Test Node ciblé sur `breathHoldService` : décompte Phase 1 jusqu'à 0, transition vers Phase 2 (jet
+  2D6), transition Phase 2→`unconscious` à expiration, `clearBreathHold` à chaque phase.
+- Vérification manuelle : secteur `souffle` (Retenir/Hyperventiler), affichage points bleus
+  (plafond 10, ratio au-delà), transition visuelle des 3 phases en combat réel, retrait manuel.
+- Nouveau concept Enclume (statuts `breath_hold`/phases Noyade) à ajouter dans `docs/VOCABULARY.md`
+  une fois codé (`CLAUDE.md` §2).
 
 ---
 
@@ -2160,8 +2317,11 @@ navigateur.
 Saar en navigateur. Point d'entrée partagé (`setFatiguePoints`) et registre de malus
 (`activeMalusRegistry.js`) désormais en place pour les Lots 5/7/8/9/10.
 
-Les Lots 6 à 10 restent planifiés dans leurs grandes lignes seulement ; plusieurs points marqués
+**Lot 5 ✅ clos (2026-07-31)** — Froid (§11), confirmé fonctionnel par Saar en navigateur.
+
+**Lot 6 (Noyade/Asphyxie) — cadrage détaillé rédigé (§12), 2026-08-06.** Réflexion RAW + UI/UX
+complète avec Saar, aucun code écrit. Prêt pour implémentation sur confirmation de Saar.
+
+Les Lots 7 à 10 restent planifiés dans leurs grandes lignes seulement ; plusieurs points marqués
 « à vérifier/trancher en codant » sont volontairement laissés ouverts (ils dépendent de détails du
-code réel au moment d'écrire chaque lot, pas d'une décision produit à prendre maintenant). Prochain
-lot à reprendre : **Lot 5 (Froid)** — détail §11, dépend des Lots 1/2/4 (tous clos), sur confirmation
-de Saar.
+code réel au moment d'écrire chaque lot, pas d'une décision produit à prendre maintenant).

@@ -115,7 +115,7 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 | `REGLES/REGLEARMURE.md` | Règles d'armure, bouclier, exo-armure — **voir aussi MANUELEXOARMURE.md** | 2026-06-12 |
 | `REGLES/REGLEBOUCLIER.md` | Règles spécifiques du bouclier | 2026-07-18 |
 | `REGLES/REGLEDRONE.md` | Règles des drones (autonomie, programmes) | 2026-06-05 |
-| `REGLES/REGLEMATERIEL.md` | Équipement général, matériel | 2026-07-16 |
+| `REGLES/REGLE_USURE&INTEGRITE.md` | Équipement général, NT, Intégrité, Tests de panne, usure, réparation | 2026-08-06 |
 
 ### 4.3 Blessures et fatigue
 | Document | Responsabilité | Date |

@@ -388,6 +388,350 @@ passent maintenant uniformément par `resolveChoc()`, même précédence et mêm
 `node --check` OK, suite `shared/*.test.mjs` 237/237 (0 régression), script isolé Palier 1 re-passé
 intégralement (mêmes 15/15 assertions qu'avant le correctif).
 
+---
+
+# Chantier — Refactor socketCombatHelpers.js (2026-08-06)
+
+> Nouveau chantier, méthodologie `docs/METHODO_PLAN.md` v2.2 appliquée à la lettre (demande explicite
+> Saar). Ancien contenu ci-dessus conservé (barré/annoté seulement, jamais effacé) — chantier CHOC1
+> clos, sans rapport.
+
+## Phase 0 — Inventaire documentaire (en cours)
+
+### Fichiers lus intégralement
+- `docs/EN_COURS.md` [VÉRIFIÉ] — aucune ligne `🔒 En cours` sur ce chantier, pas de conflit connu.
+- `docs/VOCABULARY.md` [VÉRIFIÉ] — rien de spécifique socket/combat helpers à part les concepts déjà connus.
+- `.claude/rules/combat.md` [VÉRIFIÉ] — **trouvaille** : ses globs `paths` (`server/src/services/combat*.js`,
+  `server/src/services/*Combat*.js`, `server/src/routes/combat*.js`) ne couvrent PAS
+  `server/src/socket/socketCombatHelpers.js`. Cette règle ne se charge donc jamais automatiquement pour
+  ce fichier — lu manuellement pour compenser. À signaler à Saar (pas corrigé sans validation, hors
+  scope du refactor lui-même sauf si Saar veut l'inclure).
+- `.claude/rules/core.md` [VÉRIFIÉ] — `server/src/**` couvre bien le fichier, s'applique.
+- `docs/SYSTEME/ARCHITECTURE_SOCKET.md` [VÉRIFIÉ] — carte moduleuse socket : `socketCombatHelpers.js`
+  déjà identifié comme le seul module non encore découpé par domaine fonctionnel (contient
+  `resolveMeleeAction, resolveAssaultAction, resolveDroneAssaultAction, etc.` — "etc." vague, à
+  cartographier précisément Phase 1). Référence un `docs/SYSTEME/FSM_COMBAT.md` qui **n'existe pas**
+  (vérifié, absent du repo et absent d'INDEX.md) — doc manquant, pas bloquant (combatFSM.js déjà
+  résumé dans SERVICES_COMBAT.md §6).
+- `docs/SYSTEME/SERVICES_COMBAT.md` [VÉRIFIÉ] — architecture `server/src/lib/*Service.js`, contrat de
+  signature (`io, db, campaignId, params`), table des pièges F2/F4/A13/B3/B4/P49/Choc.
+- `docs/SYSTEME/COMBAT_FLUX.md` [VÉRIFIÉ] — **document le plus utile pour ce chantier** : décrit
+  pipeline par pipeline (assaut distance, CaC, drone, choc/stun, endTurn) avec le fichier exact de
+  chaque morceau. Confirme que `socketCombatHelpers.js` porte au moins : `startResolutionPhase`,
+  `resolveAssaultAction`, `resolveDroneAssaultAction`, `resolveMeleeAction`, `calcDroneRD`,
+  `resolveDroneIntegrityLoss` — et probablement `advanceSlot`/`advanceTimeline`/`pickNextTimelineStep`
+  (mentionnés ailleurs dans EN_COURS.md comme vivant dans ce fichier). Matrice d'adéquation RAW +
+  table d'écarts actifs (STUN2, §6.7, RW17-1, RW18-1...) — utile pour Phase 5 (ne pas régresser).
+- `docs/SYSTEME/CONVENTIONS.md` [VÉRIFIÉ] — index §18/§19 des pièges actifs, plusieurs codes combat
+  (PC27/28/29/39, P49/51/55) déjà croisés avec COMBAT.md/COMBAT_FLUX.md.
+- `docs/SYSTEME/COMBAT.md` [VÉRIFIÉ, lu intégralement 1289 lignes] — données personnage, calculs,
+  colonnes état combat_roster, échelle de phases (`combat_timeline_entries`,
+  `pickNextTimelineStep`/`advanceTimeline` explicitement situés dans `socketCombatHelpers.js`),
+  attaques multiples CaC 4b/Tir Multi, shape `combat_actions`, pièges PC-CaC1-8.
+
+### Pas encore lu (Phase 0 restante, à trancher avec Saar)
+- `docs/SYSTEME/COMBAT REFERENCE.md` (680 lignes) — grep ciblé fait (mentions `socketCombatHelpers.js`
+  aux lignes 208/336/485/672), pas de lecture intégrale. Contenu = matrice RAW/implémentation, pas
+  d'architecture de fichier supplémentaire vs COMBAT_FLUX.md. **Décision prise sans demander à Saar** :
+  suffisant en referencement ciblé pour Phase 0, pas de lecture intégrale nécessaire pour un refactor
+  (pas une nouvelle mécanique) — à relire ciblé en Phase 5 si un pipeline précis est déplacé.
+- `docs/REGLES/REGLESYSCOMBAT.md` (1783 lignes, RAW brut) — pas lu intégralement cette session.
+  [INFÉRÉ] : un refactor de structure (déplacer/scinder du code sans changer le comportement) n'exige
+  pas la même lecture RAW exhaustive qu'une nouvelle mécanique (CLAUDE.md §13 vise l'implémentation
+  d'une mécanique, pas son déplacement). À confirmer : le scope Saar est-il *structure pure* (aucun
+  changement de comportement) ou une occasion d'aussi corriger des écarts RAW documentés en route ?
+  **Question ouverte, à poser à Saar avant Phase 1.**
+
+## Décisions prises
+- Saar (2026-08-06) : scope demandé = **structure pure**, aucun changement de comportement/RAW.
+- Saar (2026-08-06) : « aucune idée » sur l'existence d'autres documents — vérification approfondie
+  demandée avant de conclure. Faite (ci-dessous) : **trouvaille majeure**.
+
+## TROUVAILLE MAJEURE (2026-08-06) — le refactor demandé a déjà eu lieu, 4 lots clos
+
+`docs/PLANS/PLAN_RW_SYSCOMBAT.md` (767 lignes, créé 2026-07-25) [VÉRIFIÉ intégralement lu] planifiait
+exactement ce chantier — découpage structure-pure de `resolveMeleeAction`/`resolveAssaultAction` dans
+`socketCombatHelpers.js`, méthodologie déjà très proche de METHODO_PLAN (recherche externe, [VÉRIFIÉ]/
+correctifs a posteriori documentés, lots séquentiels validés un par un). **Lots 0 à 4 tous marqués
+✅ Clos (2026-07-25 → 2026-07-28)**, committés sur `dev/Saar` (Lot 3 cite le hash `ef12136`).
+
+**Vérifié dans le code réel (pas seulement le plan) [VÉRIFIÉ]** :
+- `server/src/lib/combatAttackRoll.js` existe (44 lignes) — noyau pur `computeAttackRoll` (Lot 1).
+- `server/src/lib/combatAttackRoll.test.mjs` existe (134 lignes) — premier test automatisé sur ce
+  calcul (Lot 1).
+- `socketCombatHelpers.js` contient `armAwaitingDamage` (L.401, Lot 3), `resolveDefenselessTarget`
+  (L.1689), `resolveMeleeDefensePnj` (L.1758, Lot 2), `resolveAssaultHitPj` (L.2859, Lot 4).
+- Le fichier reste à 3038 lignes aujourd'hui (cohérent avec §3.1 du plan : "631 lignes ne deviennent
+  pas ~500, restent proches de 600" — l'extraction déplace/isole, ne réduit pas drastiquement le total).
+
+**Ce que ces 4 lots N'ONT PAS fait** (§5 du plan, explicitement hors périmètre, toujours ouvert) :
+- Correctif COM27 (toujours listé actif dans `EN_COURS.md`, "en attente de décision Saar").
+- `COMBAT_DAMAGE_CONFIRM`/`COMBAT_MELEE_DEFENSE_CONFIRM` — "autres monolithes notés Session 95-3,
+  ~213/~261 lignes" — jamais planifiés.
+- INFRA-2 (généralisation `emissions[]`).
+- Dette i18n des labels FR figés dans `breakdown` (`DICE_RESULT`).
+- La duplication resserrée notée par `REFACTOR_GLOBAL.md` §4 (calcul brut `degautsBruts = rawDice +
+  modDomAttaque + ... + combatModeBonus`, répété 5× lignes 708-714/826-834/1708-1713/1843-1848/
+  1901-1909) — **statut réel incertain** : `PLAN_RW_SYSCOMBAT.md §0.2` exclut explicitement
+  `damageService` de son périmètre, donc cette duplication précise n'a probablement pas été touchée par
+  les 4 lots — mais les numéros de ligne cités par `REFACTOR_GLOBAL.md` (2026-08-05) datent d'après les
+  4 lots, donc a priori toujours exacts. **Pas vérifié davantage dans cette session** — à confirmer en
+  Phase 1 si ce chantier repart sur cet axe précis.
+
+**Incohérence documentaire trouvée** : `docs/PLANS/REFACTOR_GLOBAL.md` (2026-08-05, donc écrit APRÈS la
+clôture des 4 lots) analyse `socketCombatHelpers.js` **sans jamais mentionner `PLAN_RW_SYSCOMBAT.md`,
+`computeAttackRoll` ni `armAwaitingDamage`** (grep confirmé, zéro résultat) — il redécouvre le problème
+depuis zéro et recommande une posture différente (« pas de refactor proactif, attendre COM27 ») sans
+se positionner par rapport au travail déjà fait. `PLAN_RW_SYSCOMBAT.md` lui-même n'a jamais été archivé
+vers `docs/Old/` malgré sa propre Règle 10 ("à archiver une fois le chantier clos") — probablement un
+oubli de clôture plutôt qu'un abandon, `JOURNAL8.md:165` le cite déjà comme précédent pour un autre
+chantier (`state_position`/Session récente), donc le travail est bien connu et intégré ailleurs dans la
+mémoire durable du projet, juste pas formellement refermé.
+
+**Conclusion avant de continuer** : ne pas repartir de zéro sur une Phase 1 qui redécouvrirait ce qui
+est déjà fait. Retourner vers Saar avec ce constat avant de proposer un scope de "Lot 5".
+
+## Phase 1 (2026-08-06) — lecture intégrale des 5 fonctions non/partiellement refactorées
+
+Priorité Saar actée : "casser les monolithes" + robuste/pérenne/adaptative — longueur totale du
+fichier explicitement écartée comme métrique cible (confirmé par Saar après mon explication).
+Cartographie complète obtenue par grep des déclarations top-level (`export async function` /
+`async function`), [VÉRIFIÉ] tailles exactes recoupées avec `REFACTOR_GLOBAL.md` (concordance à
+quelques lignes près malgré son analyse antérieure aux 4 lots).
+
+**Lu intégralement [VÉRIFIÉ]** :
+- `resolveMeleeAction` (1235-1689, 454 l.) — déjà une coquille légitime (Lot 2) : résolution attaquant
+  complète (arme/arme naturelle/distance/skill/11 modificateurs RAW réels) → `computeAttackRoll` →
+  résolution défenseur → dispatch 4 branches déjà extraites. Taille = complexité RAW réelle, pas un
+  mélange de responsabilités.
+- `resolveAssaultAction` (2433-2859, 426 l.) — même verdict côté Tir (Lot 4) : LOS, dual-wield COM29,
+  bouclier, portée, skill, `computeAttackRoll`, décompte munitions, dispatch 3 branches touche déjà
+  extraites + 2 branches raté inline (justifiées, 8-15 l. chacune).
+- `confirmMeleeDefense` (551-773, 222 l.) — **jamais restructurée au-delà du calcul de breakdown**
+  (Lot 2 §2.4.h). Contient encore inline : jet défense + mode combat + terrain instable +
+  `computeAttackRoll` (réutilisé, bien) + résolution opposition + **branchement PJ/PNJ attaquant après
+  hit non extrait** (L.663-751, ~88 l., même genre de guard clause que Lot 2/4 mais jamais fait ici).
+- `confirmDamage` (773-1020, 247 l.) — **jamais touchée par RW_SYSCOMBAT** (§5, explicitement hors
+  périmètre). FIFO dequeue + branchement melee/assault (calcul dégâts distinct) + branchement
+  drone/non-drone cible + ~6 émissions WS distinctes (DICE_RESULT ×3-4, COMBAT_DAMAGE_RESULT,
+  COMBAT_ATTACK_RESULT). La plus dense des 5, jamais recevu le traitement Lot 2/4.
+- `resolveDroneAssaultAction` (2089-2417, 328 l.) — **jamais touchée**, volontairement (F2,
+  `SERVICES_COMBAT.md` : ne pas uniformiser avec Pj/Pnj). Mais F2 protège contre la fusion
+  inter-fonctions (drone/pnj/pj attaquant), **pas** contre une extraction interne à cette fonction
+  elle-même. Contient 3 branches cible mutuellement exclusives inline par `return` précoce (drone
+  L.2286-2313, PNJ L.2316-2367, PJ L.2369-2402) — exactement la même forme que ce que Lot 2
+  (`resolveMeleeDefensePnj`/`Drone`/`Pj`) et Lot 4 (`resolveAssaultHitPnjDrone`/`PnjNormal`/`Pj`) ont
+  déjà extrait ailleurs dans ce même fichier, jamais appliqué ici.
+
+**Duplication `degautsBruts` CaC — confirmée par grep [VÉRIFIÉ], pas supposée** : formule
+`rawDice + getMrModifier(mr) + (modDom??0) + combatModeBonus` répétée **exactement 5 fois** :
+`resolveDefenselessTarget` (L.1709-1710), `resolveMeleeDefensePnj` (L.1844-1845),
+`resolveMeleeDefenseDrone` (L.1905-1906), `confirmMeleeDefense` (L.714-715), `confirmDamage`
+(L.835-836, branche melee). Compte exact identique à celui de `REFACTOR_GLOBAL.md` §4 malgré des
+numéros de ligne différents (fichier modifié depuis) — la duplication elle-même a bien survécu aux
+4 lots (hors périmètre explicite, `PLAN_RW_SYSCOMBAT.md` §0.2 : `damageService` seul exclu, pas
+l'enveloppe `degautsBruts` côté appelant). Le Tir a sa propre formule distincte (`+modDegatsMode` au
+lieu de `+modDom+combatModeBonus`), pas concernée. Le drone a une 3ᵉ forme, encore plus simple
+(`rawDice + modDomAttaque` seul, 2 occurrences internes à `resolveDroneAssaultAction`).
+
+## Phase 2 — Candidats concrets pour un "Lot 5+" (même méthode que Lots 0-4, jamais réinventée)
+
+Tous suivent exactement le patron déjà validé 2× dans ce fichier (noyau pur type Lot 1, ou guard
+clauses → fonctions sœurs type Lot 2/4) — aucune nouvelle architecture à inventer, juste l'appliquer
+aux zones qui y ont échappé :
+
+1. **`computeMeleeRawDamage`** — noyau pur (mirroir `computeAttackRoll`), consommé par les 5 sites
+   confirmés. Risque faible, patron identique au Lot 1 déjà éprouvé.
+2. **Branchement post-hit de `confirmMeleeDefense`** (PJ/PNJ attaquant, L.663-751) → 2 fonctions sœurs,
+   patron identique au Lot 2.
+3. **3 branches cible de `resolveDroneAssaultAction`** (drone/PNJ/PJ, L.2286-2402) → 3 fonctions sœurs,
+   patron identique au Lot 2/4 — ne viole pas F2 (F2 = ne pas fusionner entre types d'attaquant, pas
+   ne pas extraire en interne).
+4. **`confirmDamage`** — le plus dense, jamais traité, mériterait sa propre analyse à charge dédiée
+   avant de proposer un découpage (branchement melee/assault + drone/non-drone + FIFO dequeue) — ne
+   pas le trancher à la légère dans cette synthèse.
+
+Prochaine étape : retour vers Saar avec ces 4 candidats, demander lequel/lesquels prioriser et dans
+quel ordre (CLAUDE.md §6.8 : un plan = un problème, chaque candidat = un lot séparé à valider
+indépendamment, même discipline que RW_SYSCOMBAT §3).
+
+## Phase 4 (2026-08-06) — Lots 5/6/7 rédigés dans PLAN_RW_SYSCOMBAT.md (décision Saar : continuité du
+chantier existant, pas un nouveau document)
+
+§2.7/2.8/2.9 + mises à jour §3 (tableau)/§3.2 (nouveau, confirmDamage=Lot 8 non cadré)/§5/§6 ajoutées.
+Détail dans le fichier lui-même, pas dupliqué ici.
+
+## Analyse à charge du Lot 5 (2026-08-06, demandée par Saar juste après la rédaction)
+
+**Erreur trouvée et corrigée** : la recommandation de placement initiale (`damageService.js`,
+justifiée par « `getMrModifier` y est déjà importé ») était **fausse** — vérifié par grep,
+`damageService.js` n'a aucune relation avec `shared/polarisTestResolution.js`. C'est
+`combatAttackRoll.js` qui importe déjà ce module (`resolveTestOutcome`). Recommandation inversée dans
+le plan, avec la correction documentée en place (pas réécrite en silence, même discipline que le
+document original aux §2.4/§2.6).
+
+**Trouvaille annexe, non corrigée (hors scope)** : `docs/SYSTEME/SERVICES_COMBAT.md` §5 documente
+`server/src/lib/mrTable.js` (`getMrTable`, piège A13) — **fichier inexistant** dans le dépôt actuel
+`[VÉRIFIÉ]` (absent de `server/src/lib/`, aucune référence résiduelle). Remplacé à un moment par la
+table statique `MR_TABLE` de `shared/polarisTestResolution.js` sans mise à jour de la doc. Signalé dans
+le plan (§2.7.b), pas corrigé — à traiter séparément si Saar le souhaite.
+
+**Confirmé, résiste à la critique** : compte exact de 5 sites (re-vérifié par grep indépendant sur tout
+le fichier, patron `degautsBruts.*=.*rawDice.*modDom` → exactement 5 correspondances) ; `getMrModifier`
+réellement pur/synchrone (lookup sur tableau statique, aucun accès DB malgré la ressemblance de nom
+avec l'ancien `mrTable.js`) ; `combatModeBonus` garanti numérique aux 3 sites "immédiats" (tracé jusqu'à
+sa construction dans `resolveMeleeAction` L.1417) ; aucun usage de `modDomAttaque` au-delà de la ligne
+de somme aux 5 sites (rien ne casse en l'encapsulant) ; `damageService.test.mjs` réellement absent
+(corrigé vers extension de `combatAttackRoll.test.mjs` à la place).
+
+## Roadmap (2026-08-06) — docs/ROADMAP.md mis à jour
+
+Chantier RW_SYSCOMBAT rouvert + Lots 5-7 ajoutés au changelog et à "Chantiers futurs". Point important
+vérifié en croisant `docs/EN_COURS.md` : **EXOARM-COMBATFILE** (blocage Exo-armures Lot 2) attend un
+refactor du couplage `char_sheet` en dur (~8 sites dans `socketCombatHelpers.js`, bloque tout
+combattant sans fiche humaine classique — pilote d'exo, drone) — **ce n'est pas ce que les Lots 5-7
+adressent** (dédup + découpage de branches, aucun ne touche aux fetchs `char_sheet`). Explicité dans le
+roadmap pour ne pas laisser croire que ce chantier débloque Exo-armures.
+
+## Analyse à charge du Lot 6 (2026-08-06)
+
+**Corrigé** : `cibleToken` retiré du `ctx` proposé — vérifié champ par champ, aucune des 3 branches ne
+le lit (sert seulement à dériver `cibleCharacter` **avant** le dispatch, reste dans la coquille). Champ
+mort, pas un bug, mais contraire au principe déjà appliqué aux Lots 2/4 (ne transporter que ce qui est
+réellement lu).
+
+**Deux oublis comblés** (absents de la première rédaction, trouvés en relisant la fonction entière
+plutôt que ma propre synthèse) :
+- Invariant "pas de transaction, ordre des `await` à préserver" (§2.4.j/§2.6.d) — présent dans les
+  écritures de Lot 6 (`resolveDroneIntegrityLoss`, `resolveTargetHit`, `armAwaitingDamage`), jamais
+  mentionné dans ma première version de §2.8.
+- 6ᵉ scénario de vérification manquant : `resolveTargetHit` peut renvoyer `null` sur la branche
+  PNJ/décor (L.2330), silence total — même famille que le scénario "drone sans fiche" déjà noté, mais
+  jamais listé pour la branche PNJ.
+
+**Confirmé, résiste à la critique** : l'invariant F2 (`SERVICES_COMBAT.md:245`, cité mot pour mot —
+"3 branches distinctes (drone cible, PNJ cible, PJ cible). Ne pas uniformiser.") correspond exactement
+aux 3 branches identifiées, extraction en 3 fonctions séparées = conforme, pas une violation ; les 2
+appelants externes (re-vérifiés par grep) ; aucune collision de nom pour
+`resolveDroneAssaultHitDrone`/`Pnj`/`Pj` ; `damageService.fetchCibleNA` réellement exporté
+(`damageService.js:251`), appelable directement sans transporter la fermeture locale.
+
+## TROUVAILLE TRANSVERSE (2026-08-06) — socketCombatHelpers.js modifié pendant la session, pas par moi
+
+`git status` : le fichier est modifié en dehors de mes actions. Une session parallèle code
+`docs/PLANS/PLAN_CATASTROPHE_RISK.md` Lot 1 (`server/src/lib/catastropheService.js` +
+`shared/catastropheEffectTable.js` créés, `maybeTriggerCatastrophe(...)` câblé à 4 endroits :
+`confirmMeleeDefense`, `resolveMeleeAction`, `resolveMeleeDefensePnj`, `resolveDroneAssaultAction` —
+exactement les 4 fonctions au cœur des Lots 5/6/7). Vérifié précisément : les 4 insertions tombent
+toutes dans la partie "coquille" (juste après le `DICE_RESULT` du jet, avant dispatch), **aucune ne
+tombe dans un bloc que je propose d'extraire** — architecture des Lots 5-7 non affectée sur le fond.
+Mais tous les numéros de ligne cités dans §2.7-2.9 sont décalés (+5/+6 lignes par site en cascade).
+Ne pas coder contre ces numéros sans réactualisation — même précédent que §0.5 du plan original
+(Session 176 non committée). Ligne pour ligne du Lot 7 réactualisées lors de son analyse à charge
+(ci-dessous) ; Lots 5/6 encore sur les anciens numéros, à refaire avant de coder.
+
+## Analyse à charge du Lot 7 (2026-08-06)
+
+**Deux oublis comblés** (même pattern que le Lot 6, signe que la première passe de rédaction des 3
+lots a un point faible systématique : les scénarios de silence pré-existant et l'invariant
+transaction/ordre des `await`) :
+- 4ᵉ scénario de vérification manquant : branche PNJ, `resolveTargetHit` renvoie `null` (L.729,
+  `return` nu) — silence total préservé, jamais listé.
+- Invariant "pas de transaction, ordre des `await` à préserver" — absent de la première rédaction,
+  ajouté pour cohérence avec §2.4.j/§2.6.d/§2.8.d.
+
+**Confirmé, résiste à la critique** : le `ctx` est propre cette fois — vérifié champ par champ contre
+l'usage réel des 2 branches, aucun champ mort trouvé (contrairement au Lot 6). L'exhaustivité du
+binaire PJ/PNJ (pas de 3ᵉ cas drone) vérifiée à la source réelle du dispatch
+(`socketCombatResolution.js:371`, pas seulement inférée de `COMBAT_FLUX.md`) — un attaquant drone ne
+peut structurellement jamais atteindre cette fonction. Limite pré-existante notée (enum `characters.type`
+extensible à `'vehicle'`, tomberait dans la branche PNJ par défaut) — pas un problème introduit par ce
+Lot. Les 2 appelants réellement re-vérifiés par grep cette fois (pas seulement hérités par référence à
+une section précédente comme l'affirmait la première rédaction).
+
+**Bilan des 3 analyses à charge (Lots 5/6/7) : chacune a trouvé au moins une erreur ou un oubli réel.**
+Aucun code encore écrit pour ces 3 lots — tout le travail de cette session reste au niveau plan.
+
+## Réactualisation des lignes Lot 5 + Lot 6 (2026-08-06, demandé par Saar)
+
+Les 8 sites (5 du Lot 5, 3 branches + callers du Lot 6) relus intégralement dans l'état actuel du
+fichier (post-insertion Catastrophe) et corrigés dans `PLAN_RW_SYSCOMBAT.md` — pas de recalcul par
+offset, chaque site re-vérifié par lecture directe. `socketCombatResolution.js` confirmé non touché
+par le travail parallèle (`git diff --stat` vide) — la référence `:372` reste valide telle quelle.
+Grep de contrôle final sur les anciens numéros : zéro résultat, plus aucune ligne obsolète dans le
+document. Les 3 lots (5/6/7) sont maintenant cohérents avec l'état réel du fichier à cet instant —
+si le travail parallèle Catastrophe continue d'avancer avant que ces lots soient codés, une nouvelle
+réactualisation sera nécessaire (même précédent que §0.5 du plan original).
+
+## Clôture confirmée du chantier parallèle Catastrophe (2026-08-06)
+
+Saar confirme : `docs/PLANS/PLAN_CATASTROPHE_RISK.md` Lot 1 clos et committé (`d496481`), Lots 2/3
+explicitement abandonnés (décision Saar : conséquences narratives en permanence), document archivé
+vers `docs/Old/`. `git status` confirme `socketCombatHelpers.js` propre (plus aucun diff en suspens).
+Re-vérifié les 9 lignes déjà réactualisées (8 sites Lot 5/6 + fonctions repères) contre l'état final
+committé : **identiques**, aucune dérive supplémentaire introduite par la clôture. Disclaimers des
+§2.7/§2.8/§2.9 mis à jour pour refléter le statut "clos et committé" au lieu de "en cours". `docs/
+SYSTEME/COMBAT.md` §"Résolution des Tests" vérifié réellement mis à jour comme annoncé par le plan clos
+(l'ancien texte "jamais automatique" a bien disparu, remplacé par une description exacte du nouveau
+mécanisme) — claim de clôture du plan Catastrophe vérifié, pas pris pour acquis.
+
+**Conclusion** : les Lots 5/6/7 de `PLAN_RW_SYSCOMBAT.md` sont maintenant stables et codables sans
+réserve de numérotation. Plus aucun blocage connu côté ligne de code pour démarrer.
+
+## PLAN_COMBATANT_CONTEXT.md rédigé (2026-08-06) — cadrage EXOARM-COMBATFILE
+
+Saar valide l'approche (dispatch par type, jamais de duplication pilote↔exo) et tranche la question RAW
+ouverte : attributs = ceux du pilote, sauf FOR→EXF (confirmé `MANUEL_EXOARMURE.md:171,175`). Recherche
+externe faite (pas juste réutilisée) : Lancer `flow_api.md` (architecture Flow — étapes composables sur
+état partagé, point d'entrée unique par Actor source) + Starfinder crew skills (chaque poste roule sa
+propre Compétence) — 2 confirmations indépendantes du même principe que F2 déjà en vigueur dans ce
+fichier. 7 sites `char_sheet` recensés par lecture intégrale (pas "~8" de l'estimation initiale de
+l'autre agent) — trouvaille : 1 seul bloque vraiment (attaquant CaC), les 6 autres dégradent
+silencieusement vers Seuil 0 plutôt que planter, nuance absente du cadrage initial.
+
+Plan écrit : `combatantContextService.js`, point d'entrée `resolveCombatantTestContext`, dispatch guard
+clauses, 7 lots A-G (A-F migrent le chemin humain sans changement de comportement, G ajoute le
+squelette exo). Doc croisées mises à jour : `EN_COURS.md` (item EXOARM-COMBATFILE corrigé — les drones
+ne sont PAS bloqués comme l'affirmait la ligne précédente, vérifié faux), `ROADMAP.md`,
+`PLAN_EXOARMURE.md` §7.1 (renvoi croisé, 2 phrases seulement, fichier actif d'un autre agent — signalé
+à Saar par transparence).
+
+## Analyse à charge de PLAN_COMBATANT_CONTEXT.md (2026-08-06, demandée par Saar avant tout code)
+
+**Risque réel trouvé, pas cosmétique** : la première rédaction avait les Lots B-F appeler le dispatcher
+complet (`resolveCombatantTestContext`) — mais `resolveExoTestContext` n'existe qu'au Lot G. Un
+personnage `type='exo'` qui atteindrait un des 7 sites entre les Lots B et G aurait fait planter le
+serveur (`ReferenceError`). Vérifié que ce risque n'est pas théorique : la migration 233 existe déjà
+sur disque (non committée) et P53 (`CONVENTIONS.md`) confirme que nodemon peut déjà l'avoir appliquée —
+impossible de garantir que `type='exo'` est inaccessible en base pendant les Lots B-F. **Corrigé** :
+Lots B-F appellent `resolveHumanoidTestContext` directement (jamais le dispatcher), le dispatcher n'est
+assemblé et les 7 sites rebranchés dessus qu'au Lot G, en une seule fois — sûr indépendamment de l'état
+réel de la migration en base, jamais besoin de le vérifier empiriquement.
+
+**Précision de contrat** : le "contrat de sortie" avait 2 paliers dans la première rédaction (Seuil
+complet / NA seules) — en fait 3. Le site #1 (`isTargetDefenseless`) n'a besoin que de `sheetId` pour
+aller chercher les blessures, pas des NA du tout — sur-cadré dans la version précédente, corrigé avant
+que ça se propage dans le code au moment du Lot C.
+
+**Confirmé, résiste à la critique** : le compte de 7 sites (re-vérifié par un grep plus large,
+`char_sheet` sans filtrer `char_sheet_id`, aucun 8ᵉ site trouvé).
+
+## Questions ouvertes
+1. Scope du refactor : structure pure (fichier trop gros, même comportement, split en modules) vs
+   opportunité de corriger des dettes déjà documentées en chemin (STUN2, RW17-1, §6.7, PC-CaC...) ?
+   Impacte directement si `REGLESYSCOMBAT.md` doit être lu intégralement (Détecteur de dérive §13 ne
+   s'applique qu'à une mécanique implémentée, pas un déplacement de code).
+2. `.claude/rules/combat.md` ne route pas vers `server/src/socket/socketCombatHelpers.js` (glob
+   manquant) — corriger le glob dans ce chantier, ou signalement séparé hors scope ?
+3. Existe-t-il d'autres documents pertinents pour ce fichier précis que Saar connaîtrait et que
+   l'inventaire (INDEX.md) n'aurait pas fait remonter ? (question Phase 0 standard, piège méthodologie)
+
+## Pauses réflexives
+- Après ARCHITECTURE_SOCKET.md + SERVICES_COMBAT.md + COMBAT_FLUX.md : périmètre du fichier commence à
+  être clair (orchestration des pipelines de résolution CaC/Tir/Drone + échelle de phases + calculs RD
+  drone), mais la liste exacte des fonctions et leurs tailles respectives ne sera connue qu'en lisant le
+  fichier réel (Phase 1) — ne pas préjuger de la découpe cible avant cette lecture.
+
 ## Reste à vérifier (prochaines étapes)
 
 - [x] Vérifier s'il y a d'autres endroits (hors CaC/tir) qui lisent `ref_damage_h`/formula d'une arme

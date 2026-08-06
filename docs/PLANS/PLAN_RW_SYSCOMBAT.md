@@ -1,10 +1,15 @@
-# PLAN_RW_SYSCOMBAT.md — Découpage de `resolveMeleeAction` / `resolveAssaultAction`
+# PLAN_RW_SYSCOMBAT.md — Découpage structurel de `socketCombatHelpers.js`
 
-> Créé : 2026-07-25 (dev/Saar). Statut : **planification uniquement, aucun code écrit.**
-> Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
-> chantier clos, contenu durable (nouvelle convention de fichier) transféré vers
-> `docs/SYSTEME/COMBAT.md`.
-> Responsabilité unique de ce document : planifier le découpage structurel de ces deux fonctions.
+> Créé : 2026-07-25 (dev/Saar). Lots 0-4 : **✅ clos** (2026-07-25 → 2026-07-28, committés
+> `4ec91b3`…`41b9632`, cf. §3).
+> **Rouvert 2026-08-06 (dev/Saar)** : Lots 5-7 ajoutés en continuité directe de ce même chantier
+> (décision Saar — "c'est la continuité de ce chantier tout simplement"), méthodologie
+> `docs/METHODO_PLAN.md` appliquée pour le cadrage. Statut Lots 5-7 : **planification uniquement,
+> aucun code écrit.** Le document n'est donc pas archivé vers `docs/Old/` — le chantier reste actif.
+> Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois
+> **tous** les lots (0-7, et tout lot ultérieur) clos, contenu durable (nouvelle convention de fichier)
+> transféré vers `docs/SYSTEME/COMBAT.md`.
+> Responsabilité unique de ce document : planifier le découpage structurel de ces fonctions.
 > Aucune règle de jeu n'est modifiée par ce plan — pas un sujet RAW, un sujet d'architecture serveur.
 
 ---
@@ -624,6 +629,300 @@ drone) avant clôture, comme aux Lots précédents.
 
 ---
 
+## 2.7 Architecture retenue — Lot 5 (`computeMeleeRawDamage`, dédup du calcul brut CaC)
+
+> Cadrage 2026-08-06, méthode `docs/METHODO_PLAN.md`. Trouvaille faite en relisant le fichier à jour
+> (post Lots 0-4, pas l'audit `docs/PLANS/REFACTOR_GLOBAL.md` du 2026-08-05 qui l'avait déjà signalée
+> sans le vérifier sur le code réel) : la duplication existe toujours, elle n'a jamais été dans le
+> périmètre des Lots 0-4 (§0.2 exclut `damageService.js`, cette duplication vit côté appelant, pas
+> dans ce fichier).
+>
+> **Lignes réactualisées 2026-08-06** (2ᵉ passe, après le Lot 7) — la session parallèle
+> `docs/PLANS/PLAN_CATASTROPHE_RISK.md` Lot 1 (**clos et committé depuis**, `d496481` — non committée
+> au moment de cette réactualisation) a inséré `maybeTriggerCatastrophe(...)` à plusieurs endroits du
+> fichier depuis la première rédaction de cette section ; les 5 sites ci-dessous ont été relus
+> intégralement à nouveau, pas seulement décalés par calcul, puis re-vérifiés identiques après la
+> clôture du chantier Catastrophe (aucune dérive supplémentaire au commit final). Aucun changement
+> d'architecture — uniquement les numéros de ligne.
+
+**a) Les 5 sites `[VÉRIFIÉ]` par lecture directe (pas seulement grep) — même formule, deux variantes
+de contexte.** Tous calculent `degautsBruts = rawDice + getMrModifier(mr) + modDom + combatModeBonus`
+juste après un appel à `damageService.getEffectiveMeleeDamage`, mais avec deux formes de garde
+différentes, à préserver à l'identique — **ne pas les uniformiser silencieusement** :
+
+| # | Site | Appel `getEffectiveMeleeDamage` | Formule `degautsBruts` |
+|---|---|---|---|
+| 1 | `resolveDefenselessTarget` L.1715-1720 | `{ weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula }` | `rawDice + modDomAttaque + (modDom ?? 0) + combatModeBonus` |
+| 2 | `resolveMeleeDefensePnj` L.1854-1859 | idem #1 | idem #1 |
+| 3 | `resolveMeleeDefenseDrone` L.1913-1920 | idem #1 | idem #1 |
+| 4 | `confirmMeleeDefense` L.715-721 | `{ weaponInvId, fallbackFormula }` (**sans** `naturalWeaponCharMutationId`/`charSheetId` — §2.4.b, formule mutation déjà figée) | `rawDice + modDomAttaque + (modDom ?? 0) + (combatModeBonus ?? 0)` |
+| 5 | `confirmDamage` L.833-842 (branche `melee`) | idem #4 | idem #4 |
+
+**Nuance à préserver, pas une incohérence à corriger** : les sites 1-3 (même tick que la Déclaration)
+n'ont jamais besoin de `combatModeBonus ?? 0` — la valeur vient de `commonPending.combatModeBonus`,
+toujours un nombre (`resolveMeleeAction` L.1423, était L.1417 : `combatModeAtk === 'charge' ? 3 : 0`), jamais
+`null`/`undefined`. Les sites 4-5 (chemin différé, valeur relue depuis `combat_pending.payload` en
+base) le sécurisent par prudence défensive. Le noyau extrait sécurise systématiquement les deux (`??
+0` sur les deux paramètres numériques) — comportement identique aux 5 sites (le garde ne change jamais
+rien pour les sites 1-3, il était déjà toujours un nombre), donc aucune régression, juste une garde
+uniforme au lieu d'une garde à deux vitesses.
+
+**b) Le noyau — pure, même famille que `computeAttackRoll` mais un objet différent (dégât, pas Seuil).**
+Ne fait **que**
+la somme finale ; l'appel `getEffectiveMeleeDamage` (DB) reste dans chaque coquille, avec ses propres
+paramètres propres à chaque site (point a, pas unifié — la fenêtre de péremption arme diffère
+réellement entre sites immédiats et différés, RW_SYSCOMBAT §2.4.b déjà documenté).
+
+```js
+// server/src/lib/combatAttackRoll.js — voisinage de computeAttackRoll (même famille : noyau pur de
+// résolution combat, jet d'attaque ET dégât brut — en-tête du fichier à élargir d'une phrase).
+// Fonction PURE — aucun accès DB. Le caller fournit rawDice déjà lancé et mr déjà résolu
+// (bonus Réussite critique inclus, cf. resolveMeleeAction).
+export function computeMeleeRawDamage({ rawDice, mr, modDom, combatModeBonus }) {
+  return rawDice + getMrModifier(mr) + (modDom ?? 0) + (combatModeBonus ?? 0)
+}
+```
+
+**Placement — corrigé après analyse à charge (2026-08-06), erreur de la version précédente de cette
+section trouvée en vérifiant plutôt que supposée.** Cette section recommandait `damageService.js`
+avec pour justification *« `getMrModifier` y est déjà importé »* — **faux, vérifié par grep** :
+`damageService.js` n'importe rien de `shared/polarisTestResolution.js` (`getMrModifier`, `MR_TABLE`,
+`resolveTestOutcome` en sont absents). C'est `combatAttackRoll.js` qui importe déjà ce module partagé
+(`resolveTestOutcome`, ligne 1) — ajouter `computeMeleeRawDamage` là revient à ajouter un seul nom à un
+import déjà ouvert, plutôt que d'introduire une dépendance nouvelle dans `damageService.js`. Second
+argument : le contrat « Fonction PURE » de `combatAttackRoll.js` est déjà déclaré et testé
+(`combatAttackRoll.test.mjs`), un terrain plus sûr qu'un fichier qui mélange déjà des fonctions async à
+DB (`getEffectiveMeleeDamage`, `resolveTargetHit`). **Recommandation corrigée : `combatAttackRoll.js`**
+— coût : élargir sa phrase d'en-tête ("jet d'attaque" → "jet d'attaque et dégât brut CaC") et son import
+`shared/polarisTestResolution.js` (ajouter `getMrModifier` à la liste déjà importée). `damageService.js`
+reste une option défendable (colocalisation avec `getEffectiveMeleeDamage`, qui produit `rawDice`) mais
+n'est plus le choix "déjà câblé" que cette section affirmait à tort — décision finale laissée à Saar.
+Aucun changement à `getEffectiveMeleeDamage`/`resolveTargetHit` dans les deux cas — la frontière §0.2
+n'est pas rouverte.
+
+**Trouvaille annexe en creusant ce point (hors périmètre du Lot 5, signalée pas corrigée)** :
+`docs/SYSTEME/SERVICES_COMBAT.md` §5 documente `server/src/lib/mrTable.js` (`getMrTable()`,
+singleton-promise, piège A13 "mrTablePromise peut cacher une Promise rejetée") — **ce fichier n'existe
+plus dans le dépôt** `[VÉRIFIÉ]` (absent de `server/src/lib/`, aucune référence restante à `getMrTable`/
+`mrTablePromise` dans `server/`). Le mécanisme a été remplacé à un moment par la table statique
+`MR_TABLE` (`shared/polarisTestResolution.js`, "ex-migration 46 `polaris_mr`") sans que la doc système
+soit mise à jour. Documentation obsolète, sans rapport avec ce chantier — à corriger séparément
+(`docs/SYSTEME/SERVICES_COMBAT.md`), pas dans ce Lot.
+
+**c) Vérification — shadow-mode possible, contrairement aux Lots 2-4.** `computeMeleeRawDamage` est
+pure (aucune DB, aucun emit) : contrairement aux branches défenseur/attaquant, elle peut être vérifiée
+par calcul en parallèle sans risque de doubler un effet de bord réel — même méthode que le Lot 1
+(Scientist), mais proportionnée à la taille réelle du problème (4 termes, pas 24 spread-conditionnels) :
+1. Test unitaire dédié — **corrigé avec le placement (ci-dessus)** : `combatAttackRoll.test.mjs`
+   existe déjà (Lot 1) et couvre déjà `computeAttackRoll` selon le modèle RV4 (§7) ; y ajouter un bloc
+   `describe('computeMeleeRawDamage', ...)` plutôt que créer un nouveau fichier — cas bornes (`modDom`/
+   `combatModeBonus` à 0, `null`, `undefined`), `mr` positif/négatif/nul, au moins un cas réaliste par
+   site (CaC PJ normal, CaC PNJ normal, drone, sans-défense).
+2. Script d'équivalence (sans DB, comme Lot 2 §7) : ancienne formule inline vs `computeMeleeRawDamage`
+   sur un jeu de valeurs représentatif des 5 sites.
+3. Session de jeu réelle Saar couvrant au moins 3 des 5 chemins (ex. CaC PNJ auto-résolution, CaC
+   défenseur PJ après confirmation, cible sans défense) — les 2 restants (drone, PJ attaquant via
+   `confirmDamage`) confirmés par relecture du diff si non exercés en jeu, comme le Lot 4 l'a accepté
+   pour ses cas non couverts individuellement.
+
+**d) Contrat à préserver.** Aucune fonction extraite ne gagne de logique conditionnelle nouvelle — les
+5 sites gardent chacun leur propre appel `getEffectiveMeleeDamage` (paramètres différents, préservés
+tels quels, point a) et n'échangent que la ligne finale de calcul contre un appel au noyau. Risque
+faible : pas d'écriture DB, pas d'émission déplacée, la seule chose qui change est l'endroit où
+`rawDice + getMrModifier(mr) + modDom + combatModeBonus` est écrit (5 fois → 1 fois).
+
+---
+
+## 2.8 Architecture retenue — Lot 6 (`resolveDroneAssaultAction`, branchement cible)
+
+> Cadrage 2026-08-06. Ne touche pas à l'invariant F2 (`docs/SYSTEME/SERVICES_COMBAT.md` §8) : F2
+> interdit de **fusionner** les branches Pj/Pnj/Drone **entre elles** (attaquant humanoïde vs drone vs
+> défenseur), pas d'extraire les branches **internes** à `resolveDroneAssaultAction` elle-même — exactement
+> ce que les Lots 2 et 4 ont déjà fait ailleurs dans ce fichier (`resolveMeleeDefensePnj`/`Drone`/`Pj`,
+> `resolveAssaultHitPj`/`PnjDrone`/`PnjNormal`), jamais appliqué ici jusqu'à présent.
+>
+> **Lignes réactualisées 2026-08-06** (2ᵉ passe, même raison que §2.7 — chantier Catastrophe **clos et
+> committé depuis**, `d496481`, lignes re-vérifiées stables après coup) — `maybeTriggerCatastrophe(io,
+> campaignId, action.token_id, droneOutcome.catastropheRisk, ...)` est désormais insérée L.2277-2280,
+> juste avant le guard `!isSuccess` : confirme, sur un 4ᵉ site, que ces insertions restent chaque fois
+> dans la coquille, jamais dans une branche extraite (même constat que §2.7, §2.9). Fonction déplacée à
+> L.2103 (était L.2089).
+
+**a) Les 3 branches réelles `[VÉRIFIÉ]` par lecture intégrale (état actuel, relu une 2ᵉ fois après
+l'insertion Catastrophe).** Toutes mutuellement exclusives par `return` précoce, après le jet et le
+guard `!isSuccess` (L.2282-2289, laissé inline — 8 lignes, même raison que les branches "raté" du
+Lot 4, extraction plus coûteuse que le gain) :
+1. **Cible drone** (L.2304-2331, 28 l.) — `parseDice` direct sur `weapon.effective_formula`,
+   `getMrModifier(mr)`, `calcDroneDegatsNets`, `resolveDroneIntegrityLoss`, 2 émissions.
+2. **Cible PNJ ou décor** (L.2334-2385, 52 l.) — `fetchCibleNA`, `parseDice`, `damageService.resolveTargetHit`,
+   3 émissions, `applyStun` conditionnel.
+3. **Cible PJ** (L.2387-2420, 34 l.) — `fetchCibleNA`, `armAwaitingDamage` (Lot 3), prompt conditionnel,
+   `return { suspend: true, emissions }` (seule branche qui suspend — les deux autres retournent
+   implicitement en fin de fonction avec `suspend: false`, cohérent avec le contrat déjà établi).
+
+**b) Dispatch — guard clauses, pas de table, même style que Lot 2/4 (`docs/SYSTEME/SERVICES_COMBAT.md`
+§8, catalogue Fowler « guard clauses »).** 3 fonctions sœurs, aucune ne se re-branche elle-même :
+`resolveDroneAssaultHitDrone`, `resolveDroneAssaultHitPnj`, `resolveDroneAssaultHitPj`
+(`io, campaignId, ctx, emissions`), voisinage immédiat de `resolveDroneAssaultAction` (même patron que
+Lot 2/4 : fonctions extraites juste après leur coquille appelante).
+
+**c) Contexte à transporter — champ par champ, corrigé après analyse à charge (2026-08-06).**
+Contrairement à Lot 2 (`commonPending` déjà persisté), aucun objet de contexte préexistant ici (même
+situation que Lot 4, §2.6.c). `ctx` assemblé par la coquille juste avant le dispatch (après le calcul
+de `formula`, L.2296) : `{ action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor,
+userId, now }`. **`cibleToken` retiré de la version précédente de cette section** — vérifié champ par
+champ dans les 3 branches (pas seulement supposé) : aucune des trois ne lit `cibleToken` directement,
+il ne sert qu'à dériver `cibleCharacter` **avant** le dispatch (L.2292-2295, reste dans la coquille) —
+l'inclure dans `ctx` n'aurait rien cassé (champ mort, pas un bug) mais contredit le principe déjà
+énoncé §2.6.c/§0.3 (charStats.js) de ne transporter que ce qui est réellement lu. Chaque branche
+utilise des sous-ensembles différents (`portee` uniquement lu par la branche PJ, `now` non lu par la
+branche PJ) — cohérent avec Lot 2/4, qui transportent déjà des champs non utilisés par toutes les
+branches. `fetchCibleNA` (fermeture locale L.2301) **ne voyage pas dans `ctx`** — chaque fonction
+extraite appelle directement `damageService.fetchCibleNA(db, charId, sheetId)` (déjà importé au niveau
+module, aucune fermeture à transporter, `[VÉRIFIÉ]` export réel à `damageService.js:251`) : cohérent
+avec la convention déjà en place, `ctx` reste un objet de données pur, jamais de fonction, dans les 7
+fonctions déjà extraites aux Lots 2 et 4. `io`/`campaignId`/`emissions` restent des paramètres séparés
+(même convention que Lot 2 §2.4.c, Lot 4 §2.6.c).
+
+**d) Contrat à préserver — appelant vérifié `[VÉRIFIÉ]` par grep, re-confirmé 2ᵉ passe.**
+`resolveDroneAssaultAction` a 2 appelants : `socketCombatResolution.js:372` (externe, fichier non
+touché par le travail parallèle Catastrophe, `[VÉRIFIÉ]` `git diff --stat` vide sur ce fichier) et
+`resolveAssaultAction:2457` (dispatch attaquant drone, était L.2439) — plus son propre rappel récursif
+pour l'interception LOS (L.2194, était L.2180, hors périmètre, déjà existant, ne traverse jamais les 3
+branches cible). Extraire les branches cible ne change ni la signature ni le contrat
+`{ suspend, emissions }` de `resolveDroneAssaultAction` elle-même — les deux appelants externes ne
+voient aucune différence. Aucune fonction extraite ne gagne de `try/catch` propre — même invariant que
+§2.4.k/§2.6.d, la propagation remonte au catch unique de la coquille (L.2422, était L.2404).
+**Ajout (analyse à charge, absent de la version précédente)** : aucune transaction ne protège ces
+écritures — `[VÉRIFIÉ]` par lecture de la fonction entière, aucun `db.transaction(` ici (même constat
+que §2.4.j/§2.6.d pour le reste du fichier) — l'extraction doit préserver le même ordre exact d'`await`
+dans chaque branche (fetch cible → jet dégâts → écriture DB → émission), pas seulement les mêmes appels.
+
+**e) Vérification — fixture jetable, pas de shadow-mode (écritures DB + émissions), même méthode que
+Lots 2/4.** Scénarios minimaux, **6 pas 5** (un scénario ajouté en analyse à charge) :
+1. Cible drone, avec `drone_sheet` → intégrité décrémentée.
+2. Cible drone, **sans** `drone_sheet` → aucune émission (comportement actuel L.2306 `if (!droneSheet)
+   return`, était L.2288, silence total — à documenter comme pré-existant si conservé, même piège que
+   §2.6.e).
+3. Cible PNJ → dégâts auto-résolus + localisation + shock si déclenché.
+4. Cible décor (`!cibleCharacter`) → même chemin que PNJ (branche b actuelle teste `!cibleCharacter ||
+   type==='pnj'` ensemble, à préserver).
+5. Cible PJ → prompt émis (`suspend:true`).
+6. **Cible PNJ/décor, `damageService.resolveTargetHit` renvoie `null`** (L.2348 `if (hitResult ===
+   null) return { suspend: false, emissions }`, était L.2330) — silence total, même famille que le
+   scénario 2 (drone sans fiche), manqué dans la première rédaction de cette section (trouvé en
+   relisant la branche b ligne par ligne pour l'analyse à charge, pas seulement décrit de mémoire).
+
+Plus une session de jeu réelle Saar (au moins tir drone → PNJ et drone → PJ) avant clôture.
+
+---
+
+## 2.9 Architecture retenue — Lot 7 (`confirmMeleeDefense`, branchement post-hit attaquant)
+
+> Cadrage 2026-08-06. `docs/PLANS/PLAN_RW_SYSCOMBAT.md` §5 (version d'origine) listait déjà
+> `confirmMeleeDefense`/`confirmDamage` comme « autres monolithes... à planifier séparément si
+> souhaité » — ce Lot couvre la partie `confirmMeleeDefense` de cette dette annoncée. `confirmDamage`
+> reste hors périmètre de ce Lot (voir §3.2, analyse dédiée nécessaire avant de le détailler).
+>
+> **Lignes réactualisées après analyse à charge (2026-08-06)** — une session parallèle a inséré
+> `maybeTriggerCatastrophe(...)` (`docs/PLANS/PLAN_CATASTROPHE_RISK.md` Lot 1, **clos et committé
+> depuis**, `d496481` — en cours, non committé au moment de la rédaction initiale de cette section)
+> juste avant ce bloc (L.651-655) : les numéros de ligne ci-dessous sont ceux de l'état actuel du
+> fichier, re-lus pour cette analyse, pas ceux de la première rédaction de cette section (qui datent
+> d'avant cette insertion). L'insertion tombe entièrement dans la coquille (avant `if (hit)`), aucun
+> impact sur l'architecture ou le contrat de ce Lot — seulement sur les numéros de ligne cités.
+
+**a) La branche réelle `[VÉRIFIÉ]` par lecture intégrale de l'état actuel — L.669-757, 89 lignes, un
+seul axe (type de l'attaquant), pas de sous-branche cachée.** Après résolution de l'opposition (jet
+défense + `computeAttackRoll`, déjà propre, non touché ici) :
+1. **Attaquant PJ** (L.670-708) — `armAwaitingDamage` (Lot 3) + recherche du socket attaquant +
+   émission du prompt (`fetchSockets`, pattern différent des autres sites : cherche le socket par
+   `user?.id`, pas par room), `suspendForDamage = true` (variable locale de la coquille, lue après le
+   bloc `if(hit)`, doit rester lisible par la coquille — voir point c). `socket` peut être `null`
+   (appelant `forceAdvanceResolution`, L.1034 — `[VÉRIFIÉ]` par grep, voir point e) : le repli
+   `else if (socket)` ne s'exécute alors simplement pas, comportement déjà existant à préserver tel
+   quel, pas une nouvelle garde à ajouter.
+2. **Attaquant PNJ** (L.709-756) — `getEffectiveMeleeDamage` + `computeMeleeRawDamage` (Lot 5, une fois
+   codé — sinon la formule inline actuelle) + `damageService.resolveTargetHit` + émission +
+   `applyStun` conditionnel. **Retour silencieux préexistant** : `if (hitResult === null) return`
+   (L.729, `return` nu) — même famille que le silence déjà documenté au Lot 6 (§2.8.e scénario 6),
+   absent de la première rédaction de cette section, ajouté en scénario de vérification (point f).
+
+**b) Dispatch — guard clause simple, 2 branches seulement (pas de table).** Fonctions sœurs
+`resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx, emissions)` (retourne `{ suspendForDamage:
+bool }`, seule fonction de ce Lot qui a besoin de retourner autre chose que rien, puisque
+`confirmMeleeDefense` doit savoir si elle appelle `advanceTimeline` ensuite — point c) et
+`resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx, emissions)` (void, comme les branches PNJ des
+Lots 2/4). **Exhaustivité du binaire PJ/PNJ vérifiée à la source (analyse à charge)** : un attaquant
+drone ne peut jamais atteindre `confirmMeleeDefense` — `socketCombatResolution.js:371` route déjà
+`character.type === 'drone'` vers `resolveDroneAssaultAction`, jamais vers `resolveMeleeAction` (donc
+jamais vers ce défenseur-PJ-suspend, `[VÉRIFIÉ]` par lecture directe du dispatcher, pas juste inféré de
+`COMBAT_FLUX.md`). Limite pré-existante à noter, pas à corriger ici : `characters.type` est un enum
+« extensible » (PC27, `docs/SYSTEME/COMBAT.md`) — un futur type `'vehicle'` tomberait dans la branche
+`else` (PNJ) par défaut, comme c'est déjà le cas aujourd'hui avec ce binaire non exhaustif sur le
+papier ; ce Lot préserve ce comportement existant à l'identique, n'introduit aucune régression.
+
+**c) Différence de contrat avec Lots 2/4/6 — `suspendForDamage` doit remonter à la coquille, pas
+seulement `{ suspend, emissions }`.** Contrairement aux fonctions extraites aux Lots 2/4/6 (retour
+uniforme `{ suspend, emissions }` immédiatement consommé par l'appelant externe de la coquille),
+`confirmMeleeDefense` n'est **pas** elle-même une branche qu'un autre appelant consomme de cette
+façon — elle a sa propre logique après le bloc `if(hit)` (L.758 : `if (!suspendForDamage) { await
+advanceTimeline(...) }`). La fonction sœur PJ doit donc retourner `{ suspendForDamage: true }`,
+consommé explicitement par la coquille avant sa propre décision d'appeler `advanceTimeline`. Ne pas
+copier aveuglément le contrat `{ suspend, emissions }` des Lots précédents ici — ce serait un mauvais
+transfert de convention entre deux formes de fonction différentes (point relevé en analyse à charge
+avant de figer cette section, pour ne pas répéter l'erreur déjà corrigée 2 fois dans ce document aux
+§2.4/§2.6).
+
+**d) Contexte à transporter — vérifié champ par champ contre l'usage réel des deux branches (analyse à
+charge, aucun champ mort trouvé cette fois, contrairement au Lot 6).** `ctx` = sous-ensemble de
+`pending` (déjà destructuré en tête de `confirmMeleeDefense`, L.569-581) + les valeurs calculées
+localement nécessaires aux deux branches : `attackerTokenId, attackerCharacter, attackerUsername,
+attackerColor, rollAttaque, chancesAttaque, mrAttaque, damageFormula, weaponInvId, modDom,
+combatModeBonus, characterIdCible, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+targetName, userId, tokenId, meleeCampaignId` (renommage local de `campaignId` déjà présent dans la
+fonction actuelle) + `socket` (fallback prompt PJ, point a — peut être `null`, préserver tel quel).
+`rollAttaque`/`chancesAttaque` ne sont lus que par la branche PNJ (champ `roll`/`chancesDeReussite` de
+`COMBAT_ATTACK_RESULT`) — présents dans `ctx` quand même, même convention que les Lots précédents (un
+`ctx` partagé ne veut pas dire que chaque champ sert à chaque branche). Aucune clé de `pending` n'est
+renommée — même règle que tous les lots précédents (payload persisté, §2.4.b).
+
+**e) Contrat à préserver — 2 appelants re-vérifiés `[VÉRIFIÉ]` par grep cette session (pas seulement
+hérités de §2.4.e comme l'affirmait la version précédente de ce point) :**
+`socketCombatResolution.js:426` (handler `COMBAT_MELEE_DEFENSE_CONFIRM`) et
+`socketCombatHelpers.js:1034` (`forceAdvanceResolution`, `forced:true`, `socket:null` — cohérent avec
+le point a). Aucun des deux n'est affecté par une extraction interne à cette fonction (le Lot 7 ne
+change ni sa signature ni son contrat externe). Aucune fonction extraite ne gagne de `try/catch` propre
+(même invariant que §2.4.k/§2.6.d) — la propagation remonte au catch unique de `confirmMeleeDefense`
+(L.767). **Ajout (analyse à charge, absent de la version précédente)** : aucune transaction ne protège
+ces écritures — `[VÉRIFIÉ]`, même constat que §2.4.j/§2.6.d/§2.8.d (une seule `db.transaction(` dans
+tout le fichier, sans rapport) — préserver le même ordre exact d'`await` dans chaque branche.
+
+**f) Vérification — fixture jetable, même méthode que Lots 2/4/6.** Scénarios minimaux, **4 pas 3**
+(un scénario ajouté en analyse à charge) :
+1. Défenseur PJ confirme sa défense, touché par un attaquant PJ → prompt de dégâts émis,
+   `suspendForDamage:true`, `advanceTimeline` **non** appelé par la coquille.
+2. Défenseur PJ confirme sa défense, touché par un attaquant PNJ → dégâts auto-résolus,
+   `advanceTimeline` appelé.
+3. Défenseur PJ confirme sa défense, raté → aucune des deux branches, `advanceTimeline` appelé
+   directement (déjà couvert par la coquille non modifiée).
+4. **Défenseur PJ confirme sa défense, touché par un attaquant PNJ, `resolveTargetHit` renvoie `null`**
+   (point a.2) → retour silencieux préservé, `advanceTimeline` quand même appelé ensuite par la
+   coquille (`suspendForDamage` reste `false`, jamais mis à jour par la branche PNJ) — scénario manqué
+   dans la première rédaction de cette section, même famille que le Lot 6 scénario 6.
+
+Plus une session de jeu réelle Saar (au moins un cas attaquant PJ et un cas attaquant PNJ après
+confirmation de défense) avant clôture.
+
+**g) Recommandation de séquençage — Lot 5 avant Lots 6-7, sans être bloquant.** Si le Lot 5
+(`computeMeleeRawDamage`) est codé en premier, les branches PNJ des Lots 6 (drone→PNJ, formule plus
+simple, sans `modDom`/`combatModeBonus`, pas concernée par Lot 5) et 7 (attaquant PNJ, §2.9.b) naissent
+directement sur le noyau au lieu d'une formule inline à corriger ensuite. Pas un blocage dur — si l'ordre
+inverse est préféré, le Lot 5 devra juste relire l'emplacement à jour du site #4 (§2.7.a) après
+extraction du Lot 7, pas un problème structurel, juste une note pour qui code.
+
+---
+
 ## 3. Découpage en lots — un seul problème par lot, validé avant le suivant
 
 **Prérequis à tous les lots (§0.5)** : travail Session 176 validé en jeu et committé (ou mis de côté
@@ -636,6 +935,9 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 | **Lot 2** | `resolveMeleeAction` (4 branches défenseur) **+ `confirmMeleeDefense`** (même dette de breakdown dupliqué côté PJ, trouvée en analyse à charge, point h) — détail §2.4 | Moyen — touche à des `await db(...)` et à la construction des émissions `COMBAT_MELEE_RESULT`/`COMBAT_ATTACK_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (9 scénarios, §2.4.f), pas de shadow-mode possible (effets de bord) | **✅ Clos (2026-07-27)** — `node --check` propre, 9 tests Lot 1 toujours au vert (noyau non touché), équivalence numérique ancienne formule/`computeAttackRoll` vérifiée sur 7 cas (script jetable, sans DB), 7 scénarios de fixture jetable en base réelle (0 résidu après coup), puis session de jeu réelle Saar (CaC PNJ auto-résolution + cible sans défense après étourdissement) confirmée sans régression — vérifié aussi en base (2 blessures correctement écrites, une par chemin de code touché). Alerte initiale de Saar (« résolutions manquantes ») retombée sur deux comportements corrects non liés au Lot 2 (attaque hors portée rejetée, PNJ étourdi auto-skip) |
 | **Lot 3** | Extraction `armAwaitingDamage` (§2.5) : 3 sites dupliqués (`confirmMeleeDefense`, `resolveDroneAssaultAction`, `resolveAssaultAction`) fusionnés sur un seul point d'insert/FSM/broadcast/comptage ; émission du prompt inchangée par site (§2.5.b) | Faible — comportement identique bit-à-bit (même insert, même comptage, même condition d'émission) ; pas de changement d'ordre d'émission, donc pas un correctif de COM27 (§2.5.d le rend seulement moins coûteux plus tard) | **✅ Clos (2026-07-28)** — diff relu ligne à ligne (mêmes clés/valeurs de payload, mêmes `campaignId`/`tokenId` par site), `node --check` propre, 9 tests Lot 1 toujours au vert (fichier non touché), puis 3 scénarios de jeu réels confirmés par Saar (§6) — committé (`ef12136`) |
 | **Lot 4** | Branchement attaquant de `resolveAssaultAction` (§2.6) — extraction `resolveAssaultHitPj`/`resolveAssaultHitPnjDrone`/`resolveAssaultHitPnjNormal` (3 fonctions-feuilles sœurs, calcul commun `degautsBruts` remonté en coquille, §2.6.b) ; branches "raté" (PJ/PNJ) laissées inline (§2.6.b) | Moyen — écritures DB (`armAwaitingDamage`, `resolveDroneIntegrityLoss`, `damageService.resolveTargetHit`) et émissions `COMBAT_ATTACK_RESULT`/`COMBAT_ATTACK_PLAYER_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (6 scénarios, §2.6.f), pas de shadow-mode possible | **✅ Clos (2026-07-28)** — diff relu ligne à ligne (code déplacé à l'identique, aucune clé renommée), `node --check` propre, 9 tests Lot 1 toujours au vert, puis confirmé en jeu par Saar (Tir PNJ touche une cible normale observé dans le log serveur, reste des scénarios confirmé globalement par Saar sans détail par cas) — committé. Trouvé en testant, sans rapport avec ce Lot : MELEE-ATKNAME (`docs/BUGIDENTIFIE.md`, fenêtre défense CaC affiche le nom du compte au lieu du personnage) |
+| **Lot 5** | `computeMeleeRawDamage` (§2.7) — noyau pur dédupliquant `degautsBruts = rawDice + MR + modDom + combatModeBonus`, présent à 5 sites confirmés (`resolveDefenselessTarget`, `resolveMeleeDefensePnj`, `resolveMeleeDefenseDrone`, `confirmMeleeDefense`, `confirmDamage`) | Faible — comportement identique bit-à-bit (garde `?? 0` déjà toujours vraie aux 3 sites qui ne l'avaient pas, §2.7.a), pas d'écriture DB ni d'émission touchée, shadow-mode possible (fonction pure) | **Planifié (2026-08-06), non codé** |
+| **Lot 6** | Branchement cible de `resolveDroneAssaultAction` (§2.8) — extraction `resolveDroneAssaultHitDrone`/`resolveDroneAssaultHitPnj`/`resolveDroneAssaultHitPj`, même patron que Lots 2/4, ne viole pas F2 (extraction interne, pas de fusion inter-branches) | Moyen — écritures DB + émissions, vérification par fixture jetable (5 scénarios, §2.8.e), pas de shadow-mode possible | **Planifié (2026-08-06), non codé** |
+| **Lot 7** | Branchement post-hit de `confirmMeleeDefense` (§2.9) — extraction `resolveMeleeDefenseHitAttackerPj`/`resolveMeleeDefenseHitAttackerPnj`, contrat de retour différent des Lots précédents (`suspendForDamage` remonté explicitement, §2.9.c) | Moyen — écritures DB + émissions, vérification par fixture jetable (3 scénarios, §2.9.f), pas de shadow-mode possible | **Planifié (2026-08-06), non codé** |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le Lot 0 est séparé du Lot 1 parce qu'il porte un invariant différent (autorité
@@ -663,6 +965,21 @@ de l'**attaquant** (PJ diffère les dégâts / PNJ résout immédiatement, avec 
 imbriqué). Hors périmètre du Lot 2 tel que planifié (§2.4) ; à traiter dans un lot séparé si souhaité,
 pas mélangé ici (`CLAUDE.md` §13, un plan = un problème). **Repris par le Lot 4 (§2.6, 2026-07-28).**
 
+### 3.2 Ce que les Lots 5-7 ne résolvent pas — `confirmDamage` reste entièrement ouvert
+
+`confirmDamage` (`socketCombatHelpers.js`, 247 lignes, jamais touchée par aucun lot) est la fonction la
+plus dense des 5 relues le 2026-08-06 (`docs/JOURNALTEMP.md`, chantier réouvert) : FIFO dequeue
+(`combat_pending`, plusieurs entrées possibles pour le même token) + branchement `pendingType ===
+'melee'` vs `'assault'` (calcul de dégâts distinct par branche, formule Tir avec `modDegatsMode` au lieu
+de `modDom`/`combatModeBonus` — pas la même duplication que le Lot 5, qui ne couvre que la branche
+`melee` de cette fonction, §2.7.a site #5) + branchement cible drone/non-drone + jusqu'à 6 émissions WS
+distinctes (localisation, Test de Chance bouclier, dégâts, message narratif, résultat final). **Pas de
+découpage proposé ici** — mériterait sa propre analyse à charge (Phase 1/2 `METHODO_PLAN.md` dédiée)
+avant de figer une architecture, plutôt qu'un découpage improvisé en fin de session sur les 3 lots
+précédents. Candidate naturelle pour un **Lot 8**, à cadrer séparément quand Saar voudra enchaîner —
+non bloquant pour les Lots 5-7 ci-dessus, qui ne touchent pas `confirmDamage` (sauf la branche `melee`
+de son calcul de dégâts, couverte par le Lot 5 seul, §2.7.a).
+
 ---
 
 ## 4. Invariant de ce chantier
@@ -684,9 +1001,13 @@ Aucune règle de jeu ne change. Aucune migration, aucun nouvel événement WS, a
   ailleurs ; ne pas le résoudre incidemment "pendant qu'on y est" (`CLAUDE.md` §13, un plan = un
   problème).
 - `COMBAT_DAMAGE_CONFIRM`/`COMBAT_MELEE_DEFENSE_CONFIRM` (autres monolithes notés Session 95-3,
-  ~213/~261 lignes) — hors périmètre de ce document, à planifier séparément si souhaité.
+  ~213/~261 lignes) — **mis à jour 2026-08-06** : `COMBAT_MELEE_DEFENSE_CONFIRM`
+  (`confirmMeleeDefense`) désormais couvert par le Lot 7 (§2.9, branchement post-hit uniquement — le
+  reste de la fonction, jet de défense + `computeAttackRoll`, était déjà propre). `COMBAT_DAMAGE_CONFIRM`
+  (`confirmDamage`) reste entièrement hors périmètre — voir §3.2, candidate Lot 8 à cadrer séparément.
 - INFRA-2 (généralisation du pattern `emissions[]`) — recoupe le Lot 3, décision à prendre à ce
-  moment-là, pas ici.
+  moment-là, pas ici. Toujours hors périmètre des Lots 5-7 (aucun ne touche à la forme des émissions,
+  seulement au calcul de dégâts et au dispatch de branches déjà émettrices).
 - **Dette i18n des labels de `breakdown`** : le serveur émet du FR figé (`'Compétence'`,
   `'Précipitation'`, `'Seuil'`...) dans `DICE_RESULT`, en tension avec `.claude/rules/i18n.md` (« le
   serveur n'émet jamais de texte FR figé destiné à l'utilisateur ») — dette **préexistante**, pas créée
@@ -731,6 +1052,24 @@ Aucune règle de jeu ne change. Aucune migration, aucun nouvel événement WS, a
 Les 4 lots de ce plan sont maintenant clos — tout gap architectural restant sur `resolveMeleeAction`/
 `resolveAssaultAction` (INFRA-2, COM27, `COMBAT_DAMAGE_CONFIRM`/`COMBAT_MELEE_DEFENSE_CONFIRM`) reste
 documenté §5, hors périmètre de ce document.
+
+**À valider à la clôture (Lot 5, §2.7)** : test unitaire ajouté à `combatAttackRoll.test.mjs` (nouveau
+bloc, fichier existant modifié — pas un fichier séparé) + script d'équivalence (5 sites, sans DB) +
+`node --check` + suite `combatAttackRoll.test.mjs` complète toujours au vert + session de jeu réelle
+couvrant au moins 3 des 5 chemins (§2.7.c) + confirmation Saar sur le placement (`combatAttackRoll.js`
+recommandé après analyse à charge, §2.7.b — corrigé d'une erreur de justification de la version
+précédente).
+
+**À valider à la clôture (Lot 6, §2.8)** : `node --check` propre, diff relu ligne à ligne (aucune clé
+`ctx` renommée), 5 scénarios de fixture jetable (§2.8.e, 0 résidu) + session de jeu réelle (tir drone →
+PNJ et → PJ au minimum).
+
+**À valider à la clôture (Lot 7, §2.9)** : `node --check` propre, diff relu ligne à ligne, attention
+particulière au contrat de retour `{ suspendForDamage }` (§2.9.c, différent des Lots précédents) — un
+test manuel explicite que `advanceTimeline` n'est PAS appelé quand l'attaquant est un PJ (sinon
+régression silencieuse du sous-état `AWAITING_DAMAGE`, même famille de bug que le correctif Session 165
+déjà documenté §"Bug réel" de `docs/SYSTEME/COMBAT.md`) + 3 scénarios de fixture jetable (§2.9.f) +
+session de jeu réelle (au moins un attaquant PJ et un attaquant PNJ après confirmation de défense).
 
 ---
 

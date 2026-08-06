@@ -21,7 +21,7 @@ Table Exo-Force (Annexe)	p.402	Correspondance EXF → modificateur de Dommages
 
 Sources connexes (règles qui s'appliquent aux armures sans être dans le chapitre dédié) :
 
-    docs/REGLES/REGLEMATERIEL.md p.273-274 — règles d'Intégrité du matériel, Tests de panne.
+    docs/REGLES/REGLE_USURE&INTEGRITE.md p.273-274 — règles d'Intégrité du matériel, Tests de panne.
 
     Chapitre Combat — déplacements, initiative, attaques multiples.
 
@@ -138,7 +138,7 @@ Cette section décrit comment le sous-système « exo-armures » s'articule avec
 
 3.3 Lien avec le système d'équipement et d'Intégrité
 
-    Les systèmes auxiliaires et l'armement de l'armure utilisent le même concept d'Intégrité que l'équipement standard (voir docs/REGLES/REGLEMATERIEL.md p.273-274).
+    Les systèmes auxiliaires et l'armement de l'armure utilisent le même concept d'Intégrité que l'équipement standard (voir docs/REGLES/REGLE_USURE&INTEGRITE.md p.273-274).
 
     Chaque système/arme possède une Intégrité maximale (usure) et une Intégrité courante.
 

@@ -126,7 +126,7 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 | ~~**WNDMORT**~~ | ~~Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests~~ | ⚠️ clos partiel Session 166 (Saar), item 100 — codé, scénario réel navigateur non testé |
 | **WNDMORT-UI** | Fenêtre de déclaration sans repli visuel pour Blessure mortelle — le serveur rejette déjà, l'UI ne prévient pas avant. Détail `BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-01, décision Saar : validé) : bandeau d'avertissement + tuiles grisées codés, scénario réel navigateur non testé |
 | **WNDMORT-HORSCOMBAT** | Test générique hors-combat (`socketEntity.js`) non gardé pour Blessure mortelle. Détail `BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-01, décision Saar : bandeau centré) : garde + bandeau centré codés, scénario réel navigateur non testé |
-| **EXOARM-COMBATFILE** | Chantier Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`) Lot 1 codé (non testé navigateur), Lot 2 resserré : mouvement (VIT) codé, plafond de Compétence (Manœuvre d'armure) et "1 seule Attaque/Tour" bloqués — `socketCombatHelpers.js` (résolution combat, ~2800 lignes, `char_sheet` câblé en dur à ~8 endroits) a besoin d'un refactor avant d'accueillir un combattant sans fiche humaine propre (pilote d'exo, mais aussi drone — même garde les bloque déjà tous les deux). Refactor mis en pause par Saar, chantier séparé à planifier | En attente de planification du refactor `socketCombatHelpers.js` |
+| **EXOARM-COMBATFILE** | Chantier Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`) Lot 1 codé (non testé navigateur), Lot 2 resserré : mouvement (VIT) codé, plafond de Compétence (Manœuvre d'armure) et "1 seule Attaque/Tour" bloqués — `socketCombatHelpers.js` fait 7 fetchs `char_sheet` directs (pas ~8, recompté), avec garde bloquante pour un pilote d'exo (pas les drones — vérifié, `resolveDroneAssaultAction` ne passe jamais par `char_sheet`, `drone_programs.level` sert directement de Seuil, correctif de cette ligne). Refactor planifié : `docs/PLANS/PLAN_COMBATANT_CONTEXT.md` (2026-08-06, Lots A-G, recherche Lancer/Starfinder) | Planifié, prêt à coder (Lot A) |
 | **ETATSPERS-LOT2C** | `combat_roster.state_position`/`state_weapon` non retirées — `entry` (`socketCombatAnnouncement.js:139`, coût d'Initiative + validation Tir Visé) toujours lu directement depuis `combat_roster`, pas encore migré vers `characterStateService`. Détail `docs/SYSTEME/ETATS_PERSONNAGE.md` | Basse — différé volontairement (Codex/Kiwi hors projet, plus d'urgence fusion) ; clôture alignée sur `docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7) quand ce chantier reprendra |
 | **CATASTROPHE-L1** | Catastrophe automatique en combat — chantier arrêté après le moteur (décision Saar 2026-08-06, `docs/Old/PLAN_CATASTROPHE_RISK.md`, archivé) : jet 1D10 + validation MJ codés et testés (8 tests Node, PostgreSQL réel), les 10 conséquences restent définitivement narratives (MJ applique à la main, aucune mécanisation prévue). Scénario réel navigateur non testé (déclenchement en combat, fenêtre `CatastropheReviewQueue.jsx`, resync MJ à la reconnexion) | ⚠️ clos partiel — validation navigateur par Saar |
 
@@ -145,6 +145,48 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 - **D2 Jets Favoris** — drag-to-reorder macros (sort_order UI)
 - **i18n équipement/builder/dés** — Lot 1 (Combat) clos item 108, reste Lots 2-4, voir
   `docs/PLAN_LOCALISATION.md` (norme : `docs/SYSTEME/LOCALISATION.md`)
+- **Usure/Intégrité du matériel + Test de panne** — idée Saar 2026-08-06, née de l'analyse
+  préliminaire post-clôture de `docs/Old/PLAN_CATASTROPHE_RISK.md` (§ ci-dessous). RAW complet et déjà
+  transcrit : `docs/REGLES/REGLE_USURE&INTEGRITE.md` p.273-274 (Intégrité 0-25, malus par palier,
+  Test de panne 1D20 sous l'Intégrité, **et surtout : sur une Catastrophe au Test de panne, l'objet
+  perd 1D6 ITG et s'arrête de fonctionner jusqu'à réparation par un technicien expert — "une arme peut
+  même exploser" si Intégrité ≤ 0**). Cette mécanique RAW existante unifie nativement 3 entrées de la
+  table Catastrophe combat plutôt que de les traiter séparément : #2 Arme inutilisable, #7 Boum
+  (explosion si ITG≤0), #8 Panne d'un système — construire ce chantier EN PREMIER rendrait les 3
+  mécanisables sans rien inventer côté RAW, contrairement à l'hypothèse initiale d'un "Échec critique
+  maison" pour #8. Plan stub déjà créé par Saar : `docs/PLANS/PLAN_USURE&INTEGRITE.md`. **Doublon de
+  documentation résolu (2026-08-06)** : `REGLEMATERIEL.md` et `REGLE_USURE&INTEGRITE.md` fusionnés en
+  un seul document (`REGLE_USURE&INTEGRITE.md`, doublons/sections mêlées de l'extraction PDF
+  recomposés) — `REGLEMATERIEL.md` supprimé, citations mises à jour dans `SYSTEME/INDEX.md`,
+  `SYSTEME/COMBAT.md`, `MANUELS/MANUEL_EXOARMURE.md`. **Restent à mettre à jour, hors worktree** :
+  `docs/PLANS/PLAN_EXOARMURE.md:64` cite encore `REGLEMATERIEL.md` — fichier activement modifié par
+  l'autre agent, non touché ici, à signaler.
+- **Catastrophe #1 Maladresse — décalage temporel avec `is_surprised`** — vérifié contre RAW
+  (`REGLESYSCOMBAT.md:186-188`) et le code (`socketCombatHelpers.js:1206-1208`) : Surprise RAW bloque
+  le Tour **en cours** puis libère le suivant, Maladresse bloque le Tour **suivant** (l'inverse) — pas
+  un simple alias de `is_surprised`, à cadrer (décaler la pose du flag ou statut dédié) si ce
+  sous-chantier est repris.
+- **Catastrophe #3 Mauvaise cible** — cadrage numérique manquant : "la plus proche" n'a pas de rayon
+  défini, et Saar penche pour un tirage aléatoire parmi les cibles proches plutôt que strictement la
+  plus proche au sens géométrique. `measureBattlemapTokenDistance` (`worldSpatialQueryService.js`)
+  déjà confirmé réutilisable pour la mesure elle-même (analyse à charge `PLAN_CATASTROPHE_RISK.md`
+  §9.5) — reste le seuil "proche" à définir.
+- **Catastrophe #5 Position désavantageuse** — modificateur temporaire +5 pour toucher, durée 1 Tour
+  (précisé par Saar, RAW ne donnait pas de durée explicite). Nouveau statut sibling à `isTargetDefenseless`
+  (DEF5), jamais fusionné avec lui (effet RAW différent — voir analyse à charge `PLAN_CATASTROPHE_RISK.md`
+  §9.3).
+- **Catastrophe #7 Boum / armes spéciales / grenades** — dépend du chantier Usure/Intégrité ci-dessus
+  pour la partie "explosion si Intégrité ≤ 0". Plan stub déjà créé par Saar :
+  `docs/PLANS/PLAN_ARMES_SPECIALES.md` (pointe vers `docs/REGLES/REGLES_ARMES_SPECIALES.md`, pas encore lu).
+- **Objets au sol** (chantier neuf, pas de plan existant) — un item d'inventaire peut se retrouver au
+  sol sur la battlemap, volontairement (drag&drop ou bouton "lâcher") ou involontairement (Catastrophe
+  #2). Nécessite une nouvelle Entité Interactive (apparence 3D/token générique, à concevoir) pour le
+  représenter dans le monde.
+- **Ramasser un item au sol** (dépend d'"Objets au sol" ci-dessus) — symétrique à "Interagir avec une
+  entité", **vérifié toujours actif aujourd'hui** (pas mort depuis le rework du World Builder) :
+  `SessionPage.jsx` (`handleEntityAction:476`, appelé en 546/1175, flux GM-direct vs arbitrage joueur
+  via `ENTITY_ACTION_REQUEST`) → `socketEntity.js:64` (`ENTITY_ACTION_REQUEST` serveur). Base technique
+  réutilisable confirmée, pas juste supposée.
 - **Chat multi-canal (optionnel)** — idée Saar 2026-08-05 : bouton bascule "classique / multi-canal"
   dans l'onglet Profil de la Sidebar. Backend déjà prêt pour partie (`chat_messages.channel_id`,
   `whisper` déjà fonctionnel) — dépend de la Phase 3/4 de `docs/PLANS/PLAN_CHAT.md` (client

@@ -1075,9 +1075,10 @@ PJ différé `COMBAT_DAMAGE_CONFIRM`).
   munitions IEM ciblent des systèmes électroniques (exo-armure, vaisseaux) qui n'existent pas encore
   dans le projet ; construire le mécanisme maintenant reviendrait à câbler une brique sans aucun
   consommateur réel. Le Test de panne lui-même (1D20 sous l'Intégrité de l'objet, `docs/REGLES/
-  REGLEMATERIEL.md` p.273-274) dépend aussi d'un seuil "Catastrophe" jamais formalisé numériquement
-  dans le projet — mécanique transversale (combat, tests, blessures, pouvoirs Polaris), candidate à un
-  chantier dédié séparé, pas à improviser ici.
+  REGLE_USURE&INTEGRITE.md` p.273-274) n'est toujours pas codé (aucun système d'Intégrité du matériel
+  en base) — mais le seuil "Catastrophe" dont il dépend est désormais formalisé (§"Résolution des
+  Tests" ci-dessus, Marge d'échec ≥15) : reste un chantier séparé (Usure/Intégrité, `docs/EN_COURS.md`
+  Roadmap), plus bloqué par l'absence de seuil.
 - **Shrapnel — zone d'effet** : armure/dégression par portée câblées (tableau ci-dessus), mais le
   ciblage multi-cibles (cône 3m) n'existe pas dans le pipeline combat (cible unique partout). Décision
   Saar : le ciblage se fera par cases adjacentes calculées par le futur builder monde, pas par

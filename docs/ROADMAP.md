@@ -1,5 +1,51 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-08-06 — Refonte UX Matériel (`docs/Old/PLAN_INVENTORY_UX.md`) **clôturée**,
+> Dernière mise à jour : 2026-08-06 — **Revue de dépendances inter-chantiers (Saar)**, deux erreurs
+> corrigées dans ce document. (1) **RW_SYSCOMBAT Lots 5-7 et COMBATANT_CONTEXT ne sont pas
+> indépendants**, contrairement à ce qu'affirmait l'entrée ci-dessous : `resolveDroneAssaultAction` est
+> édité par les deux (sites #4/#5 du couplage `char_sheet` chez COMBATANT_CONTEXT = exactement la
+> fonction que RW_SYSCOMBAT Lot 6 restructure). Ordre correct : **RW_SYSCOMBAT 5-7 avant
+> COMBATANT_CONTEXT** — greffer le dispatch exo sur une fonction qui va être réextraite juste après
+> double le travail. (2) `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` (chantier actif, Lots 1-4c clos, Lot 4d
+> prêt à reprendre sans blocage, Lot 5 bloqué sur une décision `Editor3D.jsx` distincte —
+> `REFACTOR_GLOBAL.md` §3) manquait entièrement de ce document, ajouté ci-dessous. Trois nouveaux stubs
+> pas encore intégrés à la prospective avant aujourd'hui, ajoutés ci-dessous : `PLAN_USURE&INTEGRITE.md`
+> (RAW transcrit, tête de chaîne du cluster Catastrophe/Matériel), `PLAN_ARMES_SPECIALES.md` (RAW
+> transcrit, dépend partiellement d'Usure/Intégrité), `PLAN_MORAL.md` (règle RAW optionnelle, aucune
+> dépendance, priorité basse). Fatigue Lot 6 (Noyade/Asphyxie, `PLAN_FATIGUE_DOMMAGES.md` §12) : le
+> cadrage actuel exclut explicitement le déclenchement automatique — si une Catastrophe (panne
+> d'équipement de plongée via Usure/Intégrité) doit pouvoir déclencher l'état automatiquement, c'est un
+> changement de périmètre du lot, pas encore tranché par Saar.
+>
+> 2026-08-06 — **`docs/PLANS/PLAN_COMBATANT_CONTEXT.md` créé** : cadrage complet
+> du refactor attendu par EXOARM-COMBATFILE (`docs/EN_COURS.md`) — recherche externe (Lancer VTT
+> `flow_api.md`, Starfinder crew skills, étend `PLAN_EXOARMURE.md` §4 sans la refaire), 7 sites
+> `char_sheet` en dur recensés par lecture intégrale (pas ~8, l'estimation initiale — et 1 seul des 7
+> bloque vraiment l'action, les 6 autres dégradent silencieusement vers un Seuil de 0 plutôt que de
+> planter). Architecture retenue : point de couture unique `resolveCombatantTestContext` (nouveau
+> `server/src/lib/combatantContextService.js`), dispatch par guard clauses (`pj`/`pnj` inchangés,
+> `exo` nouveau), jamais de duplication de stats pilote↔exo. Découpage en 7 lots (A-G), Lots A-F
+> migrent le chemin humain sans changement de comportement, Lot G ajoute le squelette exo (ne débloque
+> pas encore EXOARM-COMBATFILE à lui seul — dépend aussi du détail RAW dans `PLAN_EXOARMURE.md` Lot 2).
+>
+> `docs/PLANS/PLAN_RW_SYSCOMBAT.md` **rouvert** le même jour (Lots 0-4 clos depuis le 2026-07-28,
+> continuité du même chantier décidée par Saar) : Lots 5-7 planifiés (aucun code écrit) — Lot 5 dédup du
+> calcul de dégâts bruts CaC (5 sites), Lot 6 découpage du branchement cible de
+> `resolveDroneAssaultAction`, Lot 7 découpage du branchement post-hit de `confirmMeleeDefense`.
+> Analyse à charge du Lot 5 faite : une erreur de placement corrigée (`combatAttackRoll.js`, pas
+> `damageService.js` comme écrit d'abord), une dette documentaire annexe trouvée et signalée
+> (`docs/SYSTEME/SERVICES_COMBAT.md` §5 décrit un fichier `mrTable.js` qui n'existe plus). **Corrigé
+> 2026-08-06 (revue de dépendances) : ce chantier n'est pas distinct de `PLAN_COMBATANT_CONTEXT.md`
+> ci-dessus** — Lot 6 restructure `resolveDroneAssaultAction`, exactement la fonction que
+> COMBATANT_CONTEXT édite à ses sites #4/#5. À séquencer RW_SYSCOMBAT 5-7 puis COMBATANT_CONTEXT.
+> 2026-08-06 — Exo-armures : Lot 1 (Fondations) ✅ codé, non testé navigateur ;
+> Lot 2 (Substitution d'attributs) resserré — mouvement (VIT) ✅ codé, plafond de Compétence (Manœuvre
+> d'armure) et "1 seule Attaque/Tour" **⏸️ bloqués** (dépendent d'un refactor de
+> `socketCombatHelpers.js`, mis en pause, chantier séparé à planifier — détail `docs/EN_COURS.md`
+> item EXOARM-COMBATFILE). En vérifiant la stockabilité de 16 armures RAW réelles contre le schéma :
+> schéma `ref_exo_templates` étendu (modes de mouvement, champs descriptif/commerce) + bug trouvé et
+> corrigé dans `getModDom()` (`charStats.js`, extrapolation au-delà de FOR_na 21 — affecte tous les
+> personnages, pas seulement les exo-armures). Détail complet `docs/PLANS/PLAN_EXOARMURE.md` §6-§7.
+> 2026-08-06 — Refonte UX Matériel (`docs/Old/PLAN_INVENTORY_UX.md`) **clôturée**,
 > Étapes 0-9 confirmées fonctionnelles en navigateur par Saar. Dernier fix trouvé en clôturant : la
 > zone de drop Coffre manquait côté `InventoryPanel.jsx` (seul le sens Coffre→Sac/Ceinture avait une
 > cible, `useDroppable` ajoutée pour Sac/Ceinture→Coffre, Coffre toujours rendu même vide). Contenu
@@ -63,10 +109,61 @@
 - Résolution des Tests critiques/Catastrophe par marge, pas par valeur de dé (`docs/PLAN_TEST_CRITIQUE.md`,
   cadrage v1 **en pause côté Saar** — doit revenir avec la lecture RAW exacte de la table de marge
   avant de trancher) — bloque uniquement le Lot 8 (Réparation) d'Exo-armures, aucune autre dépendance
-- Fatigue, Maladies/Poisons, Drogues, Irradiations, Faim/soif, dangers environnementaux (Froid/Noyade), horloge de campagne — `docs/PLAN_FATIGUE_DOMMAGES.md`, plan en 10 lots. **Lots 0-3 clos et codés** (horloge de campagne, moteur d'échéances, Blessures/Guérison, Chute/Acide/Décompression/Feu — confirmés fonctionnels par Saar). Prochaine étape : Lot 4 (Fatigue)
-- Exo-armures (`docs/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis, Lot 0 cadrage clos — **Lot 1
-  (Fondations) rédigé et prêt à coder**, analyse à charge faite ; Lots 2/3 définis mais pas encore
-  rédigés en détail, indépendants de `PLAN_TEST_CRITIQUE.md` ; seul le Lot 8 en dépend)
+- Fatigue, Maladies/Poisons, Drogues, Irradiations, Faim/soif, dangers environnementaux (Froid/Noyade), horloge de campagne — `docs/PLANS/PLAN_FATIGUE_DOMMAGES.md`, plan en 10 lots. **Lots 0-3 clos et codés** (horloge de campagne, moteur d'échéances, Blessures/Guérison, Chute/Acide/Décompression/Feu — confirmés fonctionnels par Saar). Prochaine étape : Lot 4 (Fatigue), indépendant du reste. **Lot 6 (Noyade/Asphyxie)** cadré en détail (§12, 2026-08-06) mais **décision en attente** : le cadrage actuel exclut le déclenchement automatique (toujours volontaire, joueur/MJ) — si une Catastrophe (panne d'équipement de plongée via Usure/Intégrité, ci-dessous) doit pouvoir le déclencher, c'est un changement de périmètre à trancher avant de coder ce lot, pas juste une dépendance d'ordre
+- Usure/Intégrité du matériel + Test de panne — `docs/PLANS/PLAN_USURE&INTEGRITE.md` (stub) +
+  `docs/REGLES/REGLE_USURE&INTEGRITE.md` (RAW transcrit p.273-274). Justifié seul par RAW (acquisition/
+  gestion d'équipement), et tête de chaîne du cluster Catastrophe/Matériel : mécanise gratuitement 3
+  entrées de la table Catastrophe combat (#2 Arme inutilisable, #7 Boum si Intégrité≤0, #8 Panne) sans
+  rien inventer côté RAW — à construire en premier dans ce cluster. `docs/REGLES/REGLEMATERIEL.md`
+  fusionné dedans et supprimé (2026-08-06)
+- Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes...) — `docs/PLANS/PLAN_ARMES_SPECIALES.md`
+  (stub) + `docs/REGLES/REGLES_ARMES_SPECIALES.md` (RAW transcrit). Les mécaniques de gerbe/saisie/AoE
+  sont autonomes et cadrables dès maintenant ; seule la partie "explosion si Intégrité≤0" de la
+  Catastrophe #7 dépend d'Usure/Intégrité ci-dessus
+- Objets au sol (nouvelle entité interactive, pour représenter un item lâché ou une arme inutilisable
+  après Catastrophe #2) → Ramasser un item au sol (dépend directement du premier). Dépend de la
+  confirmation que la pose libre d'entité (`docs/SYSTEME/ENTITES.md`, palette éditeur) est toujours
+  fonctionnelle après la refonte du moteur monde — aucun bug ouvert ni route morte trouvés en vérifiant
+  le code (2026-08-06), mais non testé en navigateur ; vérification rapide à faire avant de cadrer ce
+  chantier
+- `Sidebar.jsx` — découpage structurel (`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`, créé 2026-08-05, Lots
+  1-4c ✅ clos et confirmés. **Lot 4d** ✅ codé 2026-08-06 (extraction `SidebarChatTab.jsx` + hooks
+  `useDiceBreakdownPopover`/`useSidebarPendingActionsBadge`), rendu général confirmé par Saar en
+  navigateur, un seul scénario précis non rejoué (`⚠️ clos partiel`, détail dans le PLAN). **Lot 5**
+  (`SurfaceEditorPanel.jsx`) **dépend désormais de** `docs/PLANS/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`
+  (nouveau, 2026-08-06) — la décision d'architecture qui bloquait le Lot 5 s'est révélée plus large que
+  prévu en creusant : pas 2 mais **3 fichiers** (`Sidebar.jsx`/`Editor3D.jsx`/`Canvas3D.jsx`) fetchent
+  indépendamment les mêmes effets/ascenseurs runtime, avec un vrai coût (fetch+listener actifs même hors
+  mode édition côté `Sidebar.jsx`) et un bug serveur trouvé en vérifiant (`POST
+  .../world-effects/definitions` n'émet aucun `WORLD_RUNTIME_UPDATED`, contrairement à ses routes
+  soeurs). Séquence : coder `PLAN_WORLD_RUNTIME_EFFECTS_STORE.md` (Lots A-C) d'abord — `SurfaceEditorPanel.jsx`
+  devient trivial une fois le store en place, ne pas l'extraire avant sous peine d'hériter du doublon.
+  **Lots A-C ✅ codés 2026-08-06** (store + hook partagés, `Sidebar.jsx` migré, correctif serveur de
+  l'émission manquante), non testés en navigateur — confirmation Saar nécessaire avant de reprendre le
+  Lot 5 de `PLAN_REFACTOR_SIDEBAR.md`. Chantier orthogonal au cluster combat, aucune dépendance croisée
+  avec RW_SYSCOMBAT/COMBATANT_CONTEXT)
+- Moral (règle avancée, explicitement optionnelle au RAW) — `docs/PLANS/PLAN_MORAL.md` (stub) +
+  `docs/REGLES/REGLE_MORAL.md` (RAW transcrit). Aucune dépendance technique identifiée avec le reste de
+  la roadmap — priorité basse, à caser selon préférence produit plutôt que contrainte
+- Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis, Lot 0 cadrage clos — **Lot 1
+  (Fondations) ✅ codé, non testé navigateur** ; **Lot 2 (Substitution d'attributs) resserré** :
+  mouvement (VIT) ✅ codé, plafond de Compétence + "1 seule Attaque/Tour" ⏸️ bloqués en attendant le
+  refactor du couplage `char_sheet` en dur dans `socketCombatHelpers.js` — **désormais cadré**,
+  `docs/PLANS/PLAN_COMBATANT_CONTEXT.md` (2026-08-06, Lots A-G, prêt à coder). **Corrigé 2026-08-06** :
+  dépend de `docs/PLANS/PLAN_RW_SYSCOMBAT.md` Lots 5-7 (voir ci-dessous, `resolveDroneAssaultAction`
+  partagée) — coder RW_SYSCOMBAT 5-7 d'abord, COMBATANT_CONTEXT ensuite, sinon le dispatch exo est écrit
+  contre du code que RW_SYSCOMBAT va réextraire juste après ; voir EXOARM-COMBATFILE `docs/EN_COURS.md` ;
+  Lot 3 défini mais pas encore rédigé en détail ; indépendants de `PLAN_TEST_CRITIQUE.md`, seul le Lot 8
+  en dépend)
+- `socketCombatHelpers.js` — découpage structurel (`docs/PLANS/PLAN_RW_SYSCOMBAT.md`, chantier créé
+  2026-07-25, Lots 0-4 ✅ clos 2026-07-28 : noyau `computeAttackRoll` pur, dédup `armAwaitingDamage`,
+  branchements défenseur CaC et attaquant Tir extraits en fonctions sœurs. **Rouvert 2026-08-06** :
+  Lots 5-7 planifiés, aucun code écrit — dédup calcul dégâts bruts CaC (5 sites), découpage
+  `resolveDroneAssaultAction` (branchement cible) et `confirmMeleeDefense` (branchement post-hit).
+  Lot 8 (`confirmDamage`, jamais traité) identifié mais pas encore cadré. **Corrigé 2026-08-06 : ce
+  chantier est un prérequis d'Exo-armures**, pas un chantier indépendant — Lot 6 touche
+  `resolveDroneAssaultAction`, la même fonction que 2 des 7 sites `char_sheet` de
+  `PLAN_COMBATANT_CONTEXT.md`. À coder avant COMBATANT_CONTEXT)
 - Retrait du `<select>` de Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : redondant une
   fois le drag & drop en place) — **différé** : nécessite d'abord un `KeyboardSensor` `@dnd-kit` pour
   ne pas régresser l'accessibilité clavier exigée par `docs/Old/PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne

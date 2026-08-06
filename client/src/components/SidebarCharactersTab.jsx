@@ -85,7 +85,7 @@ export default function SidebarCharactersTab({ campaignId, onOpenCharacter }) {
           >
             <option value="pnj">{t('drone.typeHumanoid')}</option>
             <option value="drone">{t('drone.typeDrone')}</option>
-            <option value="armure" disabled>{t('drone.typeArmor')}</option>
+            <option value="exo">{t('drone.typeArmor')}</option>
           </select>
           <div style={{ display: 'flex', gap: '6px' }}>
             <input

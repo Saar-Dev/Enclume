@@ -960,7 +960,7 @@
   "drone": {
     "typeHumanoid": "Humanoïde",
     "typeDrone": "Drone",
-    "typeArmor": "Armure (bientôt)",
+    "typeArmor": "Exo-armure",
     "destroyedBadge": "Détruit",
     "tabSheet": "Fiche",
     "tabWeapons": "Armes",

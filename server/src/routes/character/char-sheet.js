@@ -81,8 +81,11 @@ router.param('characterId', async (req, res, next, characterId) => {
 
     const isOwner = character.user_id && character.user_id === req.user.id
     const isDrone = character.type === 'drone'
-    // Drones : tout membre de la campagne peut lire — les routes d'écriture gardent req.isGm
-    if (!isOwner && !req.isGm && !isDrone) {
+    const isExo = character.type === 'exo'
+    // Drones/exo-armures : tout membre de la campagne peut lire — les routes d'écriture gardent
+    // req.isGm (drone) ou exoIsGmOrOwnerOrPilot (exo, résolution async du pilote lié — un pilote
+    // sans lien de propriété doit pouvoir lire la fiche qu'il pilote, cf. PLAN_EXOARMURE.md §6.3).
+    if (!isOwner && !req.isGm && !isDrone && !isExo) {
       return next(new AppError(403, 'You do not have permission to access this sheet'))
     }
 
@@ -1804,6 +1807,129 @@ router.delete('/:characterId/drone/weapons/:weaponId', async (req, res, next) =>
     if (!deleted) throw new AppError(404, 'Weapon not found')
 
     res.json({ message: 'Weapon deleted' })
+  } catch (err) { next(err) }
+})
+
+// ─── Routes exo-armure ──────────────────────────────────────────────────────────
+// Ownership : router.param laisse passer tous les membres pour les exo-armures (isExo bypass,
+// même patron que le drone — patron confirmé Saar 2026-08-06, docs/PLANS/PLAN_EXOARMURE.md §6.3).
+// Écritures : GM, propriétaire (characters.user_id) OU pilote lié (exo_sheet.pilot_character_id ->
+// characters.user_id) — décision Saar 2026-07-30, tranchée pour donner au pilote les pleins droits
+// de modification sur l'armure qu'il pilote, pas seulement la possibilité de s'en dissocier.
+
+// Helper — GM, propriétaire OU pilote lié (référence croisée, donc async contrairement à
+// droneIsGmOrOwner qui ne lit que la ligne characters déjà chargée par router.param).
+async function exoIsGmOrOwnerOrPilot(req, exoSheet) {
+  if (req.isGm) return true
+  if (req.character.user_id && req.character.user_id === req.user.id) return true
+  if (!exoSheet?.pilot_character_id) return false
+  const pilot = await db('characters').where({ id: exoSheet.pilot_character_id }).first()
+  return !!(pilot?.user_id && pilot.user_id === req.user.id)
+}
+
+// GET /:characterId/exo — fiche + jointure ref_exo_templates
+router.get('/:characterId/exo', async (req, res, next) => {
+  try {
+    const exo = await db('exo_sheet')
+      .where({ 'exo_sheet.character_id': req.params.characterId })
+      .leftJoin('ref_exo_templates', 'exo_sheet.template_id', 'ref_exo_templates.id')
+      .select(
+        'exo_sheet.*',
+        'ref_exo_templates.name as template_name',
+        'ref_exo_templates.category as template_category',
+        'ref_exo_templates.environment as template_environment',
+        'ref_exo_templates.base_exoforce as template_base_exoforce',
+        'ref_exo_templates.base_speed_underwater as template_base_speed_underwater',
+        'ref_exo_templates.base_speed_surface as template_base_speed_surface',
+        'ref_exo_templates.underwater_movement_mode as template_underwater_movement_mode',
+        'ref_exo_templates.surface_movement_mode as template_surface_movement_mode',
+        'ref_exo_templates.speeds_extra as template_speeds_extra',
+        'ref_exo_templates.base_blindage as template_base_blindage',
+        'ref_exo_templates.malus_init_underwater as template_malus_init_underwater',
+        'ref_exo_templates.malus_init_surface as template_malus_init_surface',
+        'ref_exo_templates.manufacturer as template_manufacturer',
+        'ref_exo_templates.price as template_price',
+        'ref_exo_templates.rarity as template_rarity',
+        'ref_exo_templates.tech_level as template_tech_level',
+        'ref_exo_templates.autonomy as template_autonomy',
+      )
+      .first()
+    if (!exo) return res.json({ exo: null })
+
+    res.json({ exo })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/exo — fiche descriptive (pilot_character_id, template_id)
+router.put('/:characterId/exo', async (req, res, next) => {
+  try {
+    const exoSheet = await db('exo_sheet').where({ character_id: req.params.characterId }).first()
+    if (!exoSheet) throw new AppError(404, 'Exo sheet not found')
+    if (!await exoIsGmOrOwnerOrPilot(req, exoSheet)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { pilot_character_id, template_id } = req.body
+    const updates = {}
+
+    if (pilot_character_id !== undefined) {
+      if (pilot_character_id !== null) {
+        // Invariant Lot 1 (§6.5) : un pilote est toujours un personnage humain (pj/pnj) — un drone
+        // ou une autre exo-armure assigné comme pilote est un non-sens RAW, rejeté explicitement.
+        // Référence croisée inter-lignes : ne peut pas être portée par un CHECK Postgres.
+        const target = await db('characters').where({ id: pilot_character_id }).first()
+        if (!target || !['pj', 'pnj'].includes(target.type)) {
+          throw new AppError(400, 'pilot_character_id must reference a pj or pnj character')
+        }
+      }
+      updates.pilot_character_id = pilot_character_id
+    }
+    if (template_id !== undefined) updates.template_id = template_id
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    let exo
+    try {
+      ;[exo] = await db('exo_sheet')
+        .where({ character_id: req.params.characterId })
+        .update(updates)
+        .returning('*')
+    } catch (err) {
+      // Index unique partiel exo_sheet_pilot_unique — traduire l'erreur Postgres brute
+      if (err.constraint === 'exo_sheet_pilot_unique') {
+        throw new AppError(409, 'This character already pilots another exo-suit')
+      }
+      throw err
+    }
+
+    res.json({ exo })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/exo/integrity — Intégrité Structure/Exosquelette/Générateur (max + current)
+router.put('/:characterId/exo/integrity', async (req, res, next) => {
+  try {
+    const exoSheet = await db('exo_sheet').where({ character_id: req.params.characterId }).first()
+    if (!exoSheet) throw new AppError(404, 'Exo sheet not found')
+    if (!await exoIsGmOrOwnerOrPilot(req, exoSheet)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const {
+      itg_structure_max, itg_structure_current,
+      itg_exosquelette_max, itg_exosquelette_current,
+      itg_generator_max, itg_generator_current,
+    } = req.body
+    const updates = {}
+    if (itg_structure_max        !== undefined) updates.itg_structure_max = itg_structure_max
+    if (itg_structure_current    !== undefined) updates.itg_structure_current = itg_structure_current
+    if (itg_exosquelette_max     !== undefined) updates.itg_exosquelette_max = itg_exosquelette_max
+    if (itg_exosquelette_current !== undefined) updates.itg_exosquelette_current = itg_exosquelette_current
+    if (itg_generator_max        !== undefined) updates.itg_generator_max = itg_generator_max
+    if (itg_generator_current    !== undefined) updates.itg_generator_current = itg_generator_current
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const [exo] = await db('exo_sheet')
+      .where({ character_id: req.params.characterId })
+      .update(updates)
+      .returning('*')
+
+    res.json({ exo })
   } catch (err) { next(err) }
 })
 

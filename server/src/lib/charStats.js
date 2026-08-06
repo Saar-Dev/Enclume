@@ -171,7 +171,12 @@ export function calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutat
 
 export function getModDom(for_na) {
   if (for_na > 21) {
-    return 5 + Math.floor((for_na - 21) / 2)
+    // Continuation de MOD_DOM_TABLE au-delà de sa dernière tranche connue (20-21 → +5) : mêmes
+    // tranches de 2 points (22-23 → +6, 24-25 → +7...), donc ceil et non floor. Confirmé contre 16
+    // armures RAW réelles (docs/REGLES/REGLEARMURE.md, Exo-Force 25 à 68) — floor donnait un résultat
+    // correct sur les écarts pairs mais faux d'exactement -1 sur tous les écarts impairs (bug trouvé
+    // en vérifiant la stockabilité du chantier Exo-armures, docs/PLANS/PLAN_EXOARMURE.md).
+    return 5 + Math.ceil((for_na - 21) / 2)
   }
   const result = lookupTable(MOD_DOM_TABLE, for_na, 'mod')
   return result ?? 0
