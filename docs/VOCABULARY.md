@@ -26,8 +26,10 @@ Convention documentaire
 
 Chaque concept documenté possède lorsque cela est pertinent : un nom métier, un identifiant de code, une implémentation de référence, une source d'autorité.
 Concepts métier Polaris
-
-(… section inchangée …)
+Concept	Description	Implémentation
+Stabilisation	Test de Premiers soins immédiat sur Blessure critique à risque d'hémorragie, mortelle ou membre détruit — échelle minute par minute, distincte de Guérison/Infection. Hors périmètre de l'échéancier de campagne (cadence trop rapide pour un MJ qui avance le temps par grands sauts).	is_stabilized (character_wounds), LocationPanel.jsx
+Guérison (blessure)	Évolution périodique (jours/semaines) d'une blessure Moyenne+ vers une gravité inférieure. Résolue par le MJ à sa discrétion (3 issues : Amélioration / Échec / Catastrophe) — jamais un jet serveur.	wound_healing_check (shared/echeanceTypeRegistry.js), woundEvolutionService.js. Autorité : docs/PLANS/PLAN_BLESSURES_GUERISON.md §3.2
+Infection (blessure)	Test de Constitution périodique (tous les 2 jours) contre l'aggravation d'une blessure non soignée (à partir de Moyenne), malus cumulatif par période sans soin. Garde un vrai jet (auto ou joueur), contrairement à la Guérison.	wound_infection_check (shared/echeanceTypeRegistry.js), woundEvolutionService.js. Autorité : docs/PLANS/PLAN_BLESSURES_GUERISON.md §3.3
 Concepts Enclume
 
 Concepts n'existant pas dans Polaris mais créés par le projet.

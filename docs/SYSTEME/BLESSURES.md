@@ -154,6 +154,67 @@ chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
 Si `res.data.promoted === true`, le serveur a supprimé la ligne source.
 **Toujours `GET /wounds` complet** — jamais `setWounds(prev => [...prev, wound])` sur une promotion.
 
+## Guérison et Infection (échéancier de campagne)
+
+Consommateur du moteur d'échéances générique (`game_echeances`, `docs/PLAN_FATIGUE_DOMMAGES.md` §8).
+Autorité complète (archivée) : `docs/Old/PLAN_BLESSURES_GUERISON.md`.
+
+```
+server/src/lib/woundEvolutionService.js  — les 2 handlers ci-dessous
+shared/echeanceTypeRegistry.js           — condition_type → handler, interactive: true
+server/src/routes/campaigns.js           — routes ci-dessous
+client/src/components/BlessuresReviewPanel.jsx  — écran de revue MJ groupé
+client/src/components/PendingRollsPanel.jsx     — jets joueurs en attente (Infection)
+```
+
+`interactive: true` — jamais résolus par le balayage automatique `sweepDueEcheances`, toujours via
+`resolveEcheanceNow` (Lot 2), appelée dès qu'une réponse MJ/joueur est connue.
+
+**`wound_healing_check`** — jamais de jet serveur pour son propre résultat ; lit `payload.mjChoice`
+(`amelioration` / `echec` / `catastrophe`) déjà fourni par le MJ dans `BlessuresReviewPanel`. Table de
+durée (`WOUND_HEALING`, `shared/woundConstants.js`) :
+
+| Gravité | Durée | Soins constants | Forme |
+|---|---|---|---|
+| Moyenne | 3 jours | Non | échéance unique |
+| Grave | 1 semaine | Non | échéance unique |
+| Critique | 3 semaines | Oui | hebdomadaire, 3 occurrences |
+| Mortelle | 5 semaines | Oui | hebdomadaire, 5 occurrences |
+
+Légère guérit seule, sans échéance ni Test. `echec`/`catastrophe` engendrent une `wound_infection_check`.
+
+**`wound_infection_check`** — garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement
+`WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`), rythme fixe 2 jours. Seuil calculé par
+`computeWoundInfectionThreshold` = NA(Constitution) + `WOUND_INFECTION[severity].baseModifier` - malus
+de cases (-2/case au-delà de la première) - malus de périodes sans soin (-2/période) :
+
+| Gravité | Modificateur | S'infecte même en réussite |
+|---|---|---|
+| Moyenne | +5 | Non |
+| Grave | +0 | Non |
+| Critique | -5 | Oui |
+| Mortelle | -10 | Oui |
+
+Mortelle non soignée : délai de survie (Constitution ou Constitution/2 heures) calculé et affiché au
+MJ, jamais appliqué automatiquement — la mort reste narrative, à la charge du MJ.
+
+**Routes** (`campaigns.js`, toutes vérifient `game_echeances.campaign_id === :id`) :
+`POST .../game-time/request-advance|confirm-advance|cancel-advance`,
+`GET .../game-echeances/pending-review` (GM), `GET .../game-echeances/my-pending-rolls`,
+`POST .../game-echeances/:id/healing-choice`, `POST .../game-echeances/:id/infection-mode`.
+
+**Événements** (`shared/events.js`) : `CAMPAIGN_ADVANCE_PENDING`/`_RESOLVED`/`_CANCELLED`,
+`GAME_ECHEANCE_RESOLVED`, `WOUND_INFECTION_ROLL` (client→serveur) ; `WOUND_UPDATED` réutilisé tel
+quel (pas un nouvel événement) pour resynchroniser la fiche personnage après résolution.
+
+**Pièges** :
+
+| Code | Description |
+|---|---|
+| — | `character_wounds.occurred_at_game_minutes` ancré sur `campaigns.game_time_resolved_minutes`, jamais `game_time_minutes` (affiché) — sinon une blessure posée après un recul MJ de l'horloge peut déclencher son échéance dès la prochaine avance, sans qu'aucune minute ne se soit écoulée |
+| — | Fusion de `payload` avant `resolveEcheanceNow` (`healing-choice`/`infection-mode`) : toujours une expression SQL atomique (`payload \|\| ?::jsonb`), jamais un lire-puis-écrire JS |
+| — | `wound_infection_check` n'est jamais créée à la naissance de la blessure — uniquement en conséquence d'un Échec/Catastrophe du `wound_healing_check` |
+
 ## Pièges inventaire
 
 | Code | Description |

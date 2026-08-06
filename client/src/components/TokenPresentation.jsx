@@ -189,6 +189,7 @@ export function TokenStatusBadges({ statuses, statusEffectsMode = 'enforced', of
           return (
             <img
               key={code}
+              className="badge-status-appear"
               src={`/assets/status/${code}.svg`}
               width={28}
               height={28}

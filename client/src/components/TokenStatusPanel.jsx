@@ -280,22 +280,24 @@ export default function TokenStatusPanel({
       }}
     >
       {/* En-tête */}
-      <div style={{
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '2px',
-        color: 'rgba(70,198,230,0.7)',
-        textTransform: 'uppercase',
-        marginBottom: 10,
-        userSelect: 'none',
-      }}>
-        {token?.label || '?'} — {(fallForm || fallResult)
-          ? tCombat(fallResult ? 'fallPanel.resultTitle' : 'fallPanel.title')
-          : hazardForm
-            ? tCombat(hazardForm.mode === 'expose' ? 'hazardPanel.exposeTitle' : 'hazardPanel.clearTitle', { label: t(`status.${hazardForm.code}`) })
-            : coldForm
-              ? tCombat('coldExposurePanel.exposeTitle')
-              : t('tokenRadial.statuts')}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+        <div style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '2px',
+          color: 'rgba(70,198,230,0.7)',
+          textTransform: 'uppercase',
+          userSelect: 'none',
+        }}>
+          {token?.label || '?'} — {(fallForm || fallResult)
+            ? tCombat(fallResult ? 'fallPanel.resultTitle' : 'fallPanel.title')
+            : hazardForm
+              ? tCombat(hazardForm.mode === 'expose' ? 'hazardPanel.exposeTitle' : 'hazardPanel.clearTitle', { label: t(`status.${hazardForm.code}`) })
+              : coldForm
+                ? tCombat('coldExposurePanel.exposeTitle')
+                : t('tokenRadial.statuts')}
+        </div>
+        <button type="button" className="btn btn-icon" onClick={onClose} title={t('common.close')}>✕</button>
       </div>
 
       {fallForm ? (

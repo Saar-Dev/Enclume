@@ -654,3 +654,41 @@ chargement d'historique, dépend d'un `/w` réel).
 (table neuve).
 **Retour arrière** : 8 commits isolés sur `dev/Saar` (`d41cf6b`, `c79bf65`, `a0bb41a`, `a12d33b`,
 `dc8240a`, `db27128`, `991f51b`, `4fe00f6`) — chacun revertable indépendamment, `git log` fait foi.
+
+---
+
+## Session (Saar) — 2026-08-06 — Blessures : Guérison/Infection (clôture) + polish badges de statut
+
+**Blessures — Guérison/Infection** (`docs/Old/PLAN_BLESSURES_GUERISON.md`, archivé ce jour) : le
+chantier était déjà entièrement codé (moteur `woundEvolutionService.js`, routes `campaigns.js`,
+écran de revue MJ `BlessuresReviewPanel.jsx`, panneau joueur `PendingRollsPanel.jsx`) depuis les
+sessions du 2026-07-30, dernière étape ouverte = validation navigateur. Reprise ce jour : vérification
+fichier par fichier de tout le circuit (routes, socket, service, handlers, client) contre le plan,
+dernière lacune trouvée — §9 du plan demandait une entrée `docs/VOCABULARY.md` "Guérison"/"Infection"
+jamais ajoutée, comblée (section "Concepts métier Polaris", jusque-là un simple placeholder vide,
+premier contenu réel : Stabilisation/Guérison/Infection). Contenu durable transféré vers
+`docs/SYSTEME/BLESSURES.md` (nouvelle section "Guérison et Infection").
+
+**Polish badges de statut** (Chantier 11 — Module Blessures, Étape 4, `docs/ROADMAP.md`) : animation
+d'apparition ajoutée sur `TokenStatusBadges` (`TokenPresentation.jsx`) — chaque `<img key={code}>` ne
+se (re)monte que pour un statut réellement nouveau (Étourdi/Inconscient/Coma inclus), donc une
+animation CSS au montage (`.badge-status-appear`, `index.css` : scale 0 → 2× → 1 sur 0.3s, repli
+`prefers-reduced-motion` comme le reste du projet) ne rejoue jamais sur les badges déjà affichés.
+Ces badges étant du DOM (`<Html>` de drei), l'animation est en CSS, pas en Three.js. Reste ouvert :
+l'animation propre aux Tests de Choc (fenêtre/résultat), si distincte de ce polish — non traité ici.
+
+**Croix de fermeture** (`TokenStatusPanel.jsx`, demande directe Saar "on en profite") : bouton
+`btn btn-icon` + `✕` dans l'en-tête, patron repris tel quel d'`ExchangeWindow.jsx`
+(`onClick={onClose}`, `title={t('common.close')}`) — s'ajoute aux fermetures déjà existantes
+(clic dehors, Échap), aucune n'est retirée.
+
+**Testé** : suite serveur complète 192/192 (`node --env-file=../.env --test "src/**/*.test.mjs"`,
+inclut les 66 tests dédiés Guérison/Infection), `eslint` propre sur les 3 fichiers client touchés
+(`TokenPresentation.jsx`, `TokenStatusPanel.jsx`, `index.css` non concerné par eslint), `vite build`
+propre à chaque étape. **Confirmé fonctionnel en navigateur par Saar** : écran de revue MJ / panneau
+joueur / avance du temps (Guérison-Infection), animation d'apparition des badges, croix de fermeture.
+**Non testé** : aucun reste connu sur le périmètre de cette session.
+**Données** : aucune migration (le chantier Guérison/Infection avait déjà ses migrations 219/221/223
+appliquées depuis le 2026-07-30).
+**Retour arrière** : additif sur fichiers existants + un fichier déplacé (`git mv`) — `git revert` du
+commit de clôture suffit, aucune donnée affectée.

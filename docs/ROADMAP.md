@@ -1,5 +1,9 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-08-05 — Refonte UX Matériel : Étapes 0-5 closes et confirmées
+> Dernière mise à jour : 2026-08-06 — Blessures : Guérison/Infection
+> (`docs/Old/PLAN_BLESSURES_GUERISON.md`) clos, confirmé fonctionnel par Saar en navigateur ;
+> contenu durable transféré vers `docs/SYSTEME/BLESSURES.md`. Chantier 11 (Module Blessures) : badges
+> de statut — animation d'apparition ajoutée, confirmée fonctionnelle (détail `docs/JOURNAL8.md`).
+> 2026-08-05 — Refonte UX Matériel : Étapes 0-5 closes et confirmées
 > fonctionnelles par Saar (`docs/PLANS/PLAN_INVENTORY_UX.md`, drag & drop complet). Étapes 6-8 codées
 > (filtres/pagination catalogue GM, confirmation suppression + séparation Coffre, bouton "Prendre dans
 > le Sac"), Étape 9 codée partiellement (libellés de slot) — toutes non testées en navigateur. Retrait
@@ -15,8 +19,8 @@
 > (`docs/PLAN_EXOARMURE.md`) ; entrée "Catastrophes" remplacée par le chantier formel
 > `docs/PLAN_TEST_CRITIQUE.md` (cadrage en pause côté Saar).
 > 2026-07-30 — précision sur "Ergonomie et pédagogie des règles" (besoin concret
-> noté en tranchant `docs/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
-> 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
+> noté en tranchant `docs/Old/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
+> 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/Old/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
 > Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL8.md`.
 > **Bugs et dettes techniques** : voir le registre unique `docs/BUGIDENTIFIE.md`.
 
@@ -25,7 +29,8 @@
 ## Phase 2 — Battlemap 3D + session de jeu (en cours)
 
 ### Chantier 11 — Module Blessures
-- Étape 4 : Polish — animations Tests de Choc, états santé (Étourdi/Inconscient/Coma) — 🔲
+- Étape 4 : Polish — animation Tests de Choc restante (apparition des badges de statut faite,
+  `docs/JOURNAL8.md`) — 🔲
 
 ### Chantier `PLAN_MUTATION2.md` — Mutations & Avantages
 - Lot 7 : Narratif/économie (priorité basse) — 🔲
@@ -34,7 +39,7 @@
 - `revers` — 🔲
 - `skill_natural_prog` — 🔲
 - `celebrity` — 🔲
-- Membres détruits (distinction Mortelle vs Membre détruit, `docs/PLAN_BLESSURES_GUERISON.md` §3.2/§8
+- Membres détruits (distinction Mortelle vs Membre détruit, `docs/Old/PLAN_BLESSURES_GUERISON.md` §3.2/§8
   — décision Saar 2026-07-29 : différé, la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant
   que cette option n'existe pas) — 🔲
 
@@ -86,7 +91,7 @@
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté
-  2026-07-30 en cadrant `docs/PLAN_BLESSURES_GUERISON.md` — afficher les règles de Guérison/Infection
+  2026-07-30 en cadrant `docs/Old/PLAN_BLESSURES_GUERISON.md` — afficher les règles de Guérison/Infection
   dans l'UI, tooltips envisagés, pas encore cadré)
 - Export PDF fiche personnage
 - Wizard création à deux (GM + joueur)
