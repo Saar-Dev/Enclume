@@ -1,3 +1,12 @@
+## v201 — 2026-08-07 — Nouveaux curseurs et réticules de combat
+
+### Client
+- [feat] Nouveau curseur animé pendant le déplacement en combat (case survolée), qui bascule
+  automatiquement sur un curseur de ciblage au survol d'un adversaire.
+- [chg] Les cases du chemin de déplacement affichent maintenant le même réticule que la case survolée,
+  toujours coloré selon l'allure (bleu/vert/orange/rouge).
+- [chg] Nouveau réticule de ciblage (coins lumineux) autour des tokens et entités visées.
+
 ## v200 — 2026-08-06 — Onglet Matériel : mise en page plus compacte
 
 ### Client

@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo, Component } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { MapControls, Grid, Text, Billboard, useTexture } from '@react-three/drei'
+import { MapControls, Grid, Text, Billboard } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
 import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
@@ -19,6 +19,9 @@ import SurfaceConnectorPanel from './SurfaceConnectorPanel.jsx'
 import EntityMesh from './EntityMesh.jsx'
 import DiceRoller from './DiceRoller.jsx'
 import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPresentation.jsx'
+import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
+import SceneCursorOverlay from './SceneCursorOverlay.jsx'
+import { useSceneCursor } from '../lib/useSceneCursor.js'
 import {
   computeSurfaceGridExtent,
   hasSurfaceContent,
@@ -228,55 +231,6 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 })
   )
 }
 
-// Réticule de ciblage — remplace l'anneau plein pour le survol "attaquable" (retour Saar 2026-08-01).
-// client/public/assets/reticule2.svg (coins ouverts, dédié au ciblage — le déplacement est revenu aux
-// cases pleines/fil de fer d'origine, cf. plus bas dans ce fichier : tuilé sur plusieurs cases, le
-// réticule donnait un rendu confus). Trait forcé en blanc dans le SVG (au lieu de currentColor
-// d'origine) : chargé comme texture bitmap standard hors DOM, currentColor s'y résoudrait en noir
-// (valeur initiale CSS) et empêcherait la teinte dynamique ci-dessous (material.color, multiplication
-// blanc × couleur). Couleur #D94A4A choisie parmi les 4 proposées — rouge, convention "cible hostile"
-// déjà utilisée par l'ancien anneau. Pulsation : même patron que TokenRing (isSelected) juste
-// au-dessus — échelle + opacité oscillantes via useFrame. Hauteur : 1.5 puis +25% (retour Saar
-// 2026-08-01, deux passes). Billboard = toujours face caméra. useTexture suspend le chargement.
-function TargetReticule({ color = '#D94A4A', opacity = 1 }) {
-  const texture = useTexture('/assets/reticule2.svg')
-  const meshRef = useRef()
-  const materialRef = useRef()
-  const t = useRef(0)
-  useFrame((_, delta) => {
-    t.current += delta
-    const time = t.current
-    const s = 1 + Math.sin(time * 2.5) * 0.08
-    if (meshRef.current) meshRef.current.scale.set(s, s, 1)
-    if (materialRef.current) materialRef.current.opacity = opacity * (0.75 + Math.sin(time * 4) * 0.25)
-  })
-  return (
-    <Billboard position={[0, 0.9, 0]}>
-      <mesh ref={meshRef}>
-        <planeGeometry args={[1.3 * 1.15 * 1.1, 1.3 * 1.5 * 1.25 * 1.1]} />
-        <meshBasicMaterial ref={materialRef} map={texture} color={color} transparent opacity={opacity} depthWrite={false} />
-      </mesh>
-    </Billboard>
-  )
-}
-
-// Réticule à plat au sol — case survolée en mode déplacement UNIQUEMENT (retour Saar 2026-08-01 :
-// remplace le curseur fil de fer, mais seulement lui — jamais le chemin à plusieurs cases, source du
-// rendu confus précédent avec une seule instance à la fois, pas de risque de superposition). Version
-// volontairement simple (pas de halo/ombre cette fois — jamais isolé/validé séparément avant le
-// retour en arrière global) : +0.02 de hauteur gardé (change rien de risqué), le reste peut être
-// rajouté séparément si voulu une fois cette base confirmée.
-function GroundCursorReticule({ position }) {
-  const texture = useTexture('/assets/reticule.svg')
-  const liftedPosition = position ? [position[0], position[1] + 0.02, position[2]] : position
-  return (
-    <mesh position={liftedPosition} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial map={texture} color="#ffffff" transparent depthWrite={false} />
-    </mesh>
-  )
-}
-
 // Token individuel — gère drag, lerp, ring, label.
 // glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
 // Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
@@ -479,6 +433,8 @@ function Scene({
   displayLevel = 0,
   statusEffectsMode = 'enforced',
   onCharacterDrop,
+  hoveringEntityRef,
+  hoveringTokenRef,
 }) {
   const { t } = useTranslation()
   const { camera, gl, scene } = useThree()
@@ -593,6 +549,15 @@ function Scene({
   const [ambientHoverTokenId, setAmbientHoverTokenId] = useState(null)
   // Ref miroir (P40) — lu dans handlePointerUp, écrit dans handlePointerMove uniquement.
   const hoveredOccupantTokenRef = useRef(null)
+
+  // Survol ambiant d'un token pendant le déplacement combat = curseur CIBLE, pas CASE (retour Saar
+  // 2026-08-07 : "curseur_case ne laisse jamais sa place" — le curseur doit basculer sur le token
+  // survolé exactement comme TargetReticule le fait déjà via isAmbientTargetHover ci-dessous, même
+  // source unique `ambientHoverTokenId`). Miroir dans une ref fournie par le parent (pas de state)
+  // pour que SceneCursorOverlay le lise à chaque pointermove sans re-render du sous-arbre Scene.
+  useEffect(() => {
+    if (hoveringTokenRef) hoveringTokenRef.current = ambientHoverTokenId != null
+  }, [ambientHoverTokenId, hoveringTokenRef])
 
   // Nettoyage chemin + curseur quand on quitte le mode déplacement OU qu'un autre mode explicite
   // prend la priorité (ciblage/LOS/visée entité) — combatMoveMode reste non-null en arrière-plan
@@ -1036,6 +1001,13 @@ function Scene({
     }
   }, [handlePointerMove, handlePointerUp, gl])
 
+  // Survol EntityMesh — écrit dans une ref (pas de state, pattern P40) consultée par
+  // SceneCursorOverlay pour supprimer CURSEUR_CIBLE sur une entité interactive non-cible (ex.
+  // coffre) pendant le mode Ciblage combat (retour Saar 2026-08-07).
+  const handleEntityHover = useCallback((entity, hovering) => {
+    if (hoveringEntityRef) hoveringEntityRef.current = hovering
+  }, [hoveringEntityRef])
+
   // ─── Drop d'une carte personnage depuis la Sidebar ─────────────────────────
   // Même repli support→sol que le drag de token (8.C ci-dessus, ligne ~894) : un MJ peut viser hors
   // de toute géométrie construite, un joueur reste contraint au support réel.
@@ -1220,6 +1192,7 @@ function Scene({
             altPressed={altPressed}
             isGmOnly={entity.gm_only && isGm}
             onEntityClick={onEntityClick}
+            onHover={handleEntityHover}
             sceneOpacity={1}
           />
         )
@@ -1275,28 +1248,18 @@ function Scene({
       })}
 
       {/* ── Chemin déplacement combat (Sprint Pathfinding) ──────────────── */}
-      {/* Cases colorées par allure sur le chemin A* vers le curseur — retour à la version d'origine     */}
-      {/* (retour Saar 2026-08-01 : le réticule tuilé sur plusieurs cases donnait un rendu confus,        */}
-      {/* cf. capture). Bleu=lente, vert=moyenne, orange=rapide, rouge=max.                               */}
+      {/* Un RETICULE_CASE par case du chemin A* vers le curseur, teinté par allure (retour Saar          */}
+      {/* 2026-08-07 : le réticule remplace la case pleine colorée d'origine et prend sa couleur —        */}
+      {/* un seul système visuel sur tout le chemin, plus de réticule blanche séparée sur la case          */}
+      {/* survolée). Bleu=lente, vert=moyenne, orange=rapide, rouge=max.                                  */}
       {/* Les points sont exprimés dans l'espace monde canonique (pieds).                                 */}
       {combatMoveMode && currentPath.map((cell, i) => (
-        <group key={`path-${i}`} position={[cell.x, cell.y + 0.05, cell.z]}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[0.9, 0.9]} />
-            <meshBasicMaterial
-              color={getCombatPathColor(cell.spentM, combatMoveMode.allures)}
-              transparent
-              opacity={0.5}
-              depthWrite={false}
-            />
-          </mesh>
-        </group>
+        <GroundCursorReticule
+          key={`path-${i}`}
+          position={[cell.x, cell.y, cell.z]}
+          color={getCombatPathColor(cell.spentM, combatMoveMode.allures)}
+        />
       ))}
-
-      {/* ── Réticule blanche — case survolée en mode déplacement combat ──── */}
-      {combatMoveMode && combatCursorPos && (
-        <GroundCursorReticule position={[combatCursorPos.x, combatCursorPos.y + 0.05, combatCursorPos.z]} />
-      )}
 
       {/* ── Case destination sélectionnée — surbrillance bleue (Bug B) ─────── */}
       {combatMoveMode && pendingMoveSelection && (() => {
@@ -1424,6 +1387,17 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
+
+  const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, losMode })
+  const [canvasEl, setCanvasEl] = useState(null)
+  // Écrite par Scene (survol EntityMesh) — ref pour éviter un re-render du sous-arbre Scene à
+  // chaque survol (pattern P40), lue par SceneCursorOverlay pour supprimer CURSEUR_CIBLE sur une
+  // entité interactive non-cible (ex. coffre, retour Saar 2026-08-07).
+  const hoveringEntityRef = useRef(false)
+  // Écrite par Scene (miroir de ambientHoverTokenId) — même pattern, lue par SceneCursorOverlay pour
+  // basculer sur CURSEUR_CIBLE au survol d'un token pendant le déplacement combat (retour Saar
+  // 2026-08-07 : "curseur_case ne laisse jamais sa place").
+  const hoveringTokenRef = useRef(false)
 
   const [voxels, setVoxels] = useState({})
   const surfaceData = normalizeSurfaceData(battlemap?.surface_data)
@@ -1621,7 +1595,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
       camera={{ position: [15, 15, 15], fov: 60 }}
       style={{ background: '#0f172a' }}
       onClick={handleCanvasClick}
-      onCreated={({ gl }) => { gl.shadowMap.enabled = true }}
+      onCreated={({ gl }) => { gl.shadowMap.enabled = true; setCanvasEl(gl.domElement) }}
     >
       <Skydome preset="ocean_floor" />
       {blocksReady && (
@@ -1660,9 +1634,17 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           cameraMode={mode}
           displayLevel={displayLevel}
           onCharacterDrop={onCharacterDrop}
+          hoveringEntityRef={hoveringEntityRef}
+          hoveringTokenRef={hoveringTokenRef}
         />
       )}
     </Canvas>
+    <SceneCursorOverlay
+      canvasEl={canvasEl}
+      mode={sceneCursor}
+      hoveringEntityRef={hoveringEntityRef}
+      hoveringTokenRef={hoveringTokenRef}
+    />
     {surfaceConnectorPanel && selectedSurfaceConnector && (
       <SurfaceConnectorPanel
         connector={selectedSurfaceConnector}

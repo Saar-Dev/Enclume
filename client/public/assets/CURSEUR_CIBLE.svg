@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="-64 -64 128 128"
+     width="40"
+     height="40">
+
+    <defs>
+        <filter id="glow"
+                x="-60%" y="-60%"
+                width="220%"
+                height="220%">
+            <feGaussianBlur stdDeviation="2.2" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <!-- Une seule branche -->
+        <g id="arm">
+            <!-- Segment principal -->
+            <rect x="-2" y="-50" width="4" height="22" rx="1"/>
+            <!-- Trois petits segments -->
+            <rect x="-1" y="-22" width="2" height="3" rx="1"/>
+            <rect x="-1" y="-16" width="2" height="3" rx="1"/>
+            <rect x="-1" y="-10" width="2" height="3" rx="1"/>
+        </g>
+    </defs>
+
+    <g fill="#ffffff" filter="url(#glow)">
+        <use href="#arm"/>
+        <use href="#arm" transform="rotate(90)"/>
+        <use href="#arm" transform="rotate(180)"/>
+        <use href="#arm" transform="rotate(270)"/>
+    </g>
+
+</svg>

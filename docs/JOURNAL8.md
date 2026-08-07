@@ -1052,3 +1052,70 @@ au redémarrage du serveur (nodemon en dev), cohérent avec l'archi mono-instanc
 avec `socketTrade.js` déjà sur ce même modèle.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit — aucune donnée persistante
 affectée, aucun état DB créé.
+
+---
+
+## Session (Saar) — 2026-08-07 — Curseurs et réticules combat (CASE/CIBLE)
+
+**Contexte** : remplacement de `client/public/assets/reticule.svg`/`reticule2.svg` par 4 assets dédiés
+fournis par Saar — `CURSEUR_CASE.svg`/`CURSEUR_CIBLE.svg` (curseur souris sur le canvas 3D) et
+`RETICULE_CASE.svg`/`RETICULE_CIBLE.svg` (réticules 3D existantes : case de déplacement et billboard
+de ciblage sur token). Demande explicite de Saar en cours de route : retirer à `Canvas3D.jsx` la
+responsabilité curseurs/réticules (extraction dédiée).
+
+**Décisions et détours** :
+- `TargetReticule`/`GroundCursorReticule` extraites vers `SceneReticules.jsx` (nouveau), assets
+  basculés sur `RETICULE_CIBLE.svg`/`RETICULE_CASE.svg`. `currentColor` remplacé par `#ffffff` explicite
+  dans les deux SVG — invariant déjà documenté dans le code d'origine : chargés comme texture Three.js
+  hors DOM, `currentColor` y résout en noir et casse la teinte dynamique (`material.color` multiplié).
+- `GroundCursorReticule` accepte désormais un prop `color`. Le chemin de déplacement combat
+  (`currentPath`) n'affiche plus des carrés pleins colorés par allure + une réticule blanche séparée
+  sur la case survolée : chaque case du chemin affiche directement le réticule, teinté par
+  `getCombatPathColor` — un seul système visuel (retour Saar : « le réticule est censé prendre les
+  couleurs d'allure, sur TOUTES les cases »).
+- `RETICULE_CASE.svg` : retour à la technique de masque de l'ancien `reticule.svg` (fond blanc plein
+  troué par la forme) sur demande Saar (« inversion transparence/couleur »), toujours teinté par allure.
+- Curseurs souris CASE/CIBLE : premier essai en `cursor: url()` natif — **abandonné**. Deux limites
+  navigateur découvertes en testant : (1) aucun navigateur n'anime une image de curseur référencée en
+  CSS (Saar voulait une pulsation sur CASE) ; (2) `CURSEUR_CIBLE.svg` (masque + filtre + `<use>`) ne se
+  rendait jamais comme curseur natif (« curseur_cible toujours totalement invisible »), alors que
+  `CURSEUR_CASE.svg` (masque + `<path>` simple) fonctionnait. Remplacé par `SceneCursorOverlay.jsx`
+  (nouveau) : un `<img>` DOM classique qui suit la souris (`position:fixed` + `clientX`/`clientY` bruts,
+  pas de calcul de rect nécessaire), animé en CSS (`index.css`, `@keyframes` pulsation), avec le curseur
+  natif du canvas masqué (`cursor:none`) tant qu'un mode est actif.
+- **Cause racine** du symptôme restant (« curseur_case ne cède jamais sa place ») : le mode de curseur
+  ne réagissait qu'à `combatTargetMode`/`losMode` (mode Ciblage explicite, rare), jamais au survol
+  ambiant d'un token pendant `combatMoveMode` (`ambientHoverTokenId`) — pourtant déjà la source de
+  l'anneau rouge `TargetReticule` existant sur les tokens survolés. `combatMoveMode` restant actif en
+  arrière-plan tout du long, CIBLE ne pouvait jamais apparaître dans ce flux. Corrigé par
+  `hoveringTokenRef`, miroir de `ambientHoverTokenId` (pattern P40 — ref écrite dans `Scene`, lue par
+  l'overlay à chaque `pointermove`, aucun re-render du sous-arbre 3D). Un seul curseur actif à la fois
+  garanti par une fonction de résolution unique (`resolveMode`), utilisée à la fois pour choisir
+  l'image affichée et pour masquer le curseur natif — plus de risque de désynchronisation.
+- Suppression de CURSEUR_CIBLE au survol d'une entité interactive non-cible (coffre, etc.) : `EntityMesh`
+  avait déjà un callback `onHover(entity, bool)` jamais branché dans `Canvas3D.jsx` — câblé via
+  `handleEntityHover` → `hoveringEntityRef` (même pattern miroir), lu par l'overlay.
+- `CURSEUR_CIBLE.svg` inversé une fois (ère curseur natif, cohérence avec CASE), puis ré-inversé
+  (retour à une croix blanche + lueur sur fond transparent, masque retiré) une fois passé en `<img>`
+  DOM — le « trou dans un aplat blanc » ne fonctionnait pas comme réticule de ciblage une fois rendu
+  normalement (plus les contraintes du curseur natif qui l'avaient motivé).
+
+**Fichiers touchés** : `client/src/components/Canvas3D.jsx` (extraction, câblage, rendu du chemin),
+`client/src/components/SceneReticules.jsx` (nouveau), `client/src/components/SceneCursorOverlay.jsx`
+(nouveau), `client/src/lib/useSceneCursor.js` (nouveau), `client/src/index.css` (classes
+`.scene-cursor-overlay*` + animations), `client/public/assets/CURSEUR_CASE.svg`/`CURSEUR_CIBLE.svg`/
+`RETICULE_CASE.svg`/`RETICULE_CIBLE.svg` (nouveaux), `client/public/assets/reticule.svg`/`reticule2.svg`
+(supprimés, plus référencés).
+
+**Testé** : `npm run build` (client) après chaque étape, propre à chaque fois. Confirmé fonctionnel en
+jeu par Saar : animation de pulsation CASE, bascule CASE↔CIBLE au survol d'un token pendant le
+déplacement combat (« Parfait, fonctionnel »), cases du chemin teintées par allure via le réticule,
+réticule ciblage/case inversés comme demandé.
+**Non testé** : suppression de CURSEUR_CIBLE au survol d'une entité interactive (coffre/porte) en mode
+Ciblage combat explicite (`combatTargetMode`/`losMode`) — code non modifié depuis l'écriture initiale,
+mais jamais observable avant la correction de la cause racine ci-dessus (rien à supprimer tant que
+CIBLE n'apparaissait jamais) ; dernière teinte de `CURSEUR_CIBLE.svg` (retour croix blanche + lueur,
+non inversée) pas encore revue par Saar en navigateur.
+**Données** : aucune migration, aucun effet runtime serveur — uniquement assets statiques et composants
+client.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit — aucun état serveur/DB affecté.

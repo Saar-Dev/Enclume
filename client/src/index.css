@@ -3760,3 +3760,29 @@ Convention :
   top: 4px;
   right: 4px;
 }
+
+/* ── Curseur custom canvas 3D (SceneCursorOverlay.jsx) ─────────────────────── */
+.scene-cursor-overlay {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -20px;
+  pointer-events: none;
+  z-index: 60;
+}
+.scene-cursor-overlay-case {
+  animation: scene-cursor-pulse-case 1.8s ease-in-out infinite;
+}
+.scene-cursor-overlay-cible {
+  animation: scene-cursor-pulse-cible 1s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(217, 74, 74, 0.65));
+}
+@keyframes scene-cursor-pulse-case {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+@keyframes scene-cursor-pulse-cible {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50% { transform: scale(1.12) rotate(6deg); opacity: 1; }
+}

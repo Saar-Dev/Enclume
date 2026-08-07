@@ -12,38 +12,6 @@
 > Cette règle existe parce que ce fichier a grossi jusqu'à 386 Ko / 4083 lignes avant nettoyage
 ---
 
-## CHANTIER PARALLÈLE — MOTEUR DE MONDE
-
-Branche `codex/world-engine-integration`, sans modification du dépôt de l'autre développeur.
-
-- Phases 0 à 14 terminées : contrat métrique, document canonique, compilateur, navigation serveur,
-  LOS/couverture, structures verticales, régions/effets runtime, cabine d'ascenseur mobile et
-  branchement spatial complet du combat, tranches d'étage isolées avec profondeur visible dans les
-  seuls volumes multniveau, murs courbes physiques, empreintes exclusives de salles non
-  rectangulaires, fusion de volumes à hauteurs différentes et profils verticaux de murs.
-- `surface_data` v12 porte tranches verticales, arcs et apparences intérieures canoniques. Salle,
-  mur et objet sélectionnés utilisent des panneaux contextuels déplaçables ; les réglages longs sont
-  repliables et la barre latérale d'édition ne conserve que les outils réellement actifs.
-- Un profil de mur couvre la hauteur totale de la salle. Une passerelle liée par `clipRoomId` est
-  intersectée avec la même empreinte intérieure au rendu, dans le snapshot et dans la navigation.
-- `entities.state.transform.scale` est partagé par le rendu, l'occupation et la LOS ; une mutation
-  d'apparence ne peut pas désynchroniser le volume physique.
-- Les anciennes cartes voxel ne sont pas une cible de compatibilité. Elles peuvent seulement servir
-  de fixtures et peuvent être supprimées si elles gênent le modèle canonique.
-- L'ascenseur est une cabine physique mobile : aucune arête verticale ou téléportation ne doit être
-  réintroduite. Ses passagers sont attachés à son repère local durable.
-- Le combat déclare désormais une destination ; le serveur dérive l'allure, replanifie sous verrou
-  et applique l'arrêt réel. Portées, contact, interactions, LOS et couverture sont mesurés dans le
-  monde 3D canonique.
-- Les autorités voxel/Redis/pathfinder historiques ont été supprimées. Aucune rétrocompatibilité
-  des cartes anciennes n'est exigée.
-- Prochaine étape : validation fonctionnelle Playwright et manuelle sur une carte canonique
-  multi-étages, puis revue d'intégration avec la prochaine tête du projet combat.
-
-Référence obligatoire : `docs/SYSTEME/MOTEUR_MONDE.md`.
-
----
-
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
 **TEST_CRITIQUE Lot 3** (tooltips degré + popup Réussite critique/Catastrophe) ✅ codé
@@ -67,6 +35,7 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 
 | ID | Description | Priorité |
 |---|---|---|
+| **MONDEVALID1** | Moteur de monde (fusion Kiwi/Codex 2026-07-15, `caaf1af`, `shared/world/`, doc canonique `docs/SYSTEME/MOTEUR_MONDE.md`) : fondation active de tous les chantiers Étages/Ascenseur/Déplacement depuis — jamais validé en jeu réel sur une carte multi-étages complète (Playwright + manuel), seulement par tests Node (77+) et par l'usage indirect au fil des sessions | Moyenne — rien de cassé observé à ce jour, mais aucune validation end-to-end dédiée |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
@@ -132,6 +101,7 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 | **EXOARM-COMBATFILE** | Chantier Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`) Lot 1 codé (non testé navigateur), Lot 2 resserré : mouvement (VIT) codé, plafond de Compétence (Manœuvre d'armure) et "1 seule Attaque/Tour" bloqués — `socketCombatHelpers.js` fait 7 fetchs `char_sheet` directs (pas ~8, recompté), avec garde bloquante pour un pilote d'exo (pas les drones — vérifié, `resolveDroneAssaultAction` ne passe jamais par `char_sheet`, `drone_programs.level` sert directement de Seuil, correctif de cette ligne). Refactor planifié : `docs/PLANS/PLAN_COMBATANT_CONTEXT.md` (2026-08-06, Lots A-G, recherche Lancer/Starfinder) | Planifié, prêt à coder (Lot A) |
 | **ETATSPERS-LOT2C** | `combat_roster.state_position`/`state_weapon` non retirées — `entry` (`socketCombatAnnouncement.js:139`, coût d'Initiative + validation Tir Visé) toujours lu directement depuis `combat_roster`, pas encore migré vers `characterStateService`. Détail `docs/SYSTEME/ETATS_PERSONNAGE.md` | Basse — différé volontairement (Codex/Kiwi hors projet, plus d'urgence fusion) ; clôture alignée sur `docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7) quand ce chantier reprendra |
 | **CATASTROPHE-L1** | Catastrophe automatique en combat — chantier arrêté après le moteur (décision Saar 2026-08-06, `docs/Old/PLAN_CATASTROPHE_RISK.md`, archivé) : jet 1D10 + validation MJ codés et testés (8 tests Node, PostgreSQL réel), les 10 conséquences restent définitivement narratives (MJ applique à la main, aucune mécanisation prévue). Scénario réel navigateur non testé (déclenchement en combat, fenêtre `CatastropheReviewQueue.jsx`, resync MJ à la reconnexion) | ⚠️ clos partiel — validation navigateur par Saar |
+| **SECU-EMAIL1** | Le serveur de déploiement actuel n'a aucune mécanique d'envoi d'email — bloque toute fonctionnalité qui en dépendrait (vérification d'adresse à l'inscription, notification de blocage SECU-1, reset de mot de passe par email). Signalé par Saar 2026-08-07, hors périmètre du correctif SECU-1 en cours | Basse — infra manquante, à noter pour plus tard |
 
 ---
 
