@@ -895,11 +895,23 @@ défense + `computeAttackRoll`, déjà propre, non touché ici) :
    (appelant `forceAdvanceResolution`, L.1034 — `[VÉRIFIÉ]` par grep, voir point e) : le repli
    `else if (socket)` ne s'exécute alors simplement pas, comportement déjà existant à préserver tel
    quel, pas une nouvelle garde à ajouter.
-2. **Attaquant PNJ** (L.709-756) — `getEffectiveMeleeDamage` + `computeMeleeRawDamage` (Lot 5, une fois
-   codé — sinon la formule inline actuelle) + `damageService.resolveTargetHit` + émission +
-   `applyStun` conditionnel. **Retour silencieux préexistant** : `if (hitResult === null) return`
-   (L.729, `return` nu) — même famille que le silence déjà documenté au Lot 6 (§2.8.e scénario 6),
-   absent de la première rédaction de cette section, ajouté en scénario de vérification (point f).
+2. **Attaquant PNJ** (L.709-756) — `getEffectiveMeleeDamage` + `computeMeleeRawDamage` (Lot 5, codé et
+   clos) + `damageService.resolveTargetHit` + émission + `applyStun` conditionnel.
+   ~~Retour silencieux préexistant : `if (hitResult === null) return`~~ — **corrigé après vérification
+   au cadrage du Lot 6 (2026-08-07), même piège que son scénario 6** : `[VÉRIFIÉ]` par lecture intégrale
+   de `resolveTargetHit` (`damageService.js:296-310`), son seul `return null` est
+   `if (cibleType === 'drone') return null` — or l'appel ici (L.722) passe `cibleType: 'pj'` en
+   **littéral codé en dur**, jamais une variable, jamais `'drone'`. Le garde `if (hitResult === null)
+   return` (L.728) est donc structurellement inatteignable par ce chemin, comme le scénario 6 du Lot 6
+   l'était pour `resolveDroneAssaultHitPnj` — non détecté à la rédaction initiale de cette section car
+   la même vérification (lire le corps entier de `resolveTargetHit`) n'avait pas été refaite ici,
+   pourtant c'est la même fonction. **Erreur additionnelle et indépendante trouvée dans la version
+   précédente de ce point** : même *si* ce chemin était atteignable, l'affirmation du point (f.4)
+   ci-dessous (« `advanceTimeline` quand même appelé ensuite ») serait fausse — ce `return` est nu, à
+   l'intérieur du `try` de `confirmMeleeDefense` elle-même, il sort de **toute la fonction**
+   immédiatement, sautant l'étape 5 (`advanceTimeline`, L.763-765) qui vient après. Sans conséquence
+   pratique tant que le chemin reste inatteignable, mais la description du comportement était
+   erronée dans les deux sens (atteignabilité ET conséquence).
 
 **b) Dispatch — guard clause simple, 2 branches seulement (pas de table).** Fonctions sœurs
 `resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx, emissions)` (retourne `{ suspendForDamage:
@@ -951,18 +963,17 @@ change ni sa signature ni son contrat externe). Aucune fonction extraite ne gagn
 ces écritures — `[VÉRIFIÉ]`, même constat que §2.4.j/§2.6.d/§2.8.d (une seule `db.transaction(` dans
 tout le fichier, sans rapport) — préserver le même ordre exact d'`await` dans chaque branche.
 
-**f) Vérification — fixture jetable, même méthode que Lots 2/4/6.** Scénarios minimaux, **4 pas 3**
-(un scénario ajouté en analyse à charge) :
+**f) Vérification — fixture jetable, même méthode que Lots 2/4/6.** Scénarios minimaux, **3** (le 4ᵉ de
+la version précédente est retiré — corrigé 2026-08-07, voir point a.2 : `resolveTargetHit` ne peut pas
+renvoyer `null` via ce chemin, `cibleType: 'pj'` y est un littéral codé en dur, pas une variable ;
+construire un fixture pour ce scénario serait soit impossible sans trafiquer artificiellement le code
+testé, soit trompeur — même conclusion que le Lot 6 scénario 6) :
 1. Défenseur PJ confirme sa défense, touché par un attaquant PJ → prompt de dégâts émis,
    `suspendForDamage:true`, `advanceTimeline` **non** appelé par la coquille.
 2. Défenseur PJ confirme sa défense, touché par un attaquant PNJ → dégâts auto-résolus,
    `advanceTimeline` appelé.
 3. Défenseur PJ confirme sa défense, raté → aucune des deux branches, `advanceTimeline` appelé
    directement (déjà couvert par la coquille non modifiée).
-4. **Défenseur PJ confirme sa défense, touché par un attaquant PNJ, `resolveTargetHit` renvoie `null`**
-   (point a.2) → retour silencieux préservé, `advanceTimeline` quand même appelé ensuite par la
-   coquille (`suspendForDamage` reste `false`, jamais mis à jour par la branche PNJ) — scénario manqué
-   dans la première rédaction de cette section, même famille que le Lot 6 scénario 6.
 
 Plus une session de jeu réelle Saar (au moins un cas attaquant PJ et un cas attaquant PNJ après
 confirmation de défense) avant clôture.
