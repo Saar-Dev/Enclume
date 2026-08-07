@@ -65,7 +65,7 @@ risque croissant, pas par ordre d'apparition dans le fichier.
 | 2 | `CharacterModal.jsx` + `DiceBreakdownPopover.jsx` — composants déjà isolés, juste à déplacer | ✅ confirmé (`CharacterModal.jsx` supprimé depuis, cf. CHARMODAL-DEAD1 — `DiceBreakdownPopover.jsx` reste) | Faible-moyen |
 | 3 | Audit et migration `Sidebar.styles.js` vers classes CSS + custom properties (`react.md`) | ✅ clos fonctionnellement (dette couleur brute résolue, 29 clés basse priorité laissées) | Moyen |
 | 4 | Onglets `SidebarChatTab.jsx`, `SidebarCharactersTab.jsx`, `SidebarProfileTab.jsx`, `SidebarHelpModal.jsx` | 4a/4b/4c ✅ confirmés, 4d ✅ codé (2026-08-06) — rendu navigateur à confirmer par Saar, détail §3 | Moyen |
-| 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) — le hook partagé prévu pour la duplication de fetch `world-effects` est fait et confirmé (`useWorldRuntimeSync.js` + `worldRuntimeStore.js`, `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, clos 2026-08-06) ; reste seulement l'extraction de la palette JSX | À faire | Moyen (dépendance la plus lourde levée) |
+| 5 | `SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets) — le hook partagé prévu pour la duplication de fetch `world-effects` est fait et confirmé (`useWorldRuntimeSync.js` + `worldRuntimeStore.js`, `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, clos 2026-08-06) ; reste seulement l'extraction de la palette JSX | ✅ confirmé (2026-08-07, Saar) | Moyen (dépendance la plus lourde levée) |
 
 ---
 
@@ -324,10 +324,60 @@ explicitement. Risque jugé faible (correction logique directe, cf. analyse ci-d
 ### Lot 5 — `SurfaceEditorPanel.jsx` + `useWorldEffects` partagé
 Statut : le hook partagé est fait et confirmé, indépendamment de toute décision sur `Editor3D.jsx` —
 traité comme chantier dédié (`docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, Lots A-C, clos
-2026-08-06, confirmé fonctionnel en navigateur par Saar). Reste à faire ici : extraction de
-`SurfaceEditorPanel.jsx` (palette textures/connecteurs/effets hors de `Sidebar.jsx`), qui peut
-désormais lire `worldEffects` directement depuis `useWorldRuntimeStore` comme le fait déjà
-`Sidebar.jsx` — pas encore commencée.
+2026-08-06, confirmé fonctionnel en navigateur par Saar). Extraction de `SurfaceEditorPanel.jsx` —
+✅ codé (2026-08-07).
+
+Extraction verbatim (comportement inchangé) : tout le bloc "PALETTE TEXTURES (mode édition)"
+(onglets Monde/Entités, undo/redo, modes room/wall/stair/bridge/effect/connector, palette matériaux
+procéduraux, palette blueprints d'entités) déménagé en bloc, avec toute la logique qui ne servait
+qu'à lui — `surfaceToolState`/`updateSurfaceTool`, matériaux de surface (`updateSurfaceMaterial`),
+filtrage des blueprints connecteurs (porte/ascenseur/échelle), slots de couleur de modèle, l'effet de
+synchronisation du connecteur sélectionné, et les effets runtime MJ (`worldEffects`,
+`createCustomEffect`, `deleteRuntimeEffect`). `Sidebar.jsx` : 1359 → 290 lignes.
+`client/src/components/SurfaceEditorPanel.jsx` (nouveau, ~1100 l.) lit `useEntityStore`
+(`blueprints`/`refreshBuiltinModels`) et `useWorldRuntimeStore` (`worldEffects`/`fetchWorldEffects`)
+directement, comme le font déjà les onglets extraits au lot 4 — `Sidebar.jsx` continue de recevoir
+`activeEditorTab`/`activeMaterial`/`availableBlocks`/`activeBlueprint`/`surfaceTool`/`canSurfaceUndo`/
+`canSurfaceRedo`/`battlemapId` (et callbacks associés) de son propre parent (`SessionPage.jsx`, non
+modifié — contrat de props de `Sidebar.jsx` inchangé) et les repasse tels quels au nouveau composant.
+`navigate` (react-router) et `useEntityStore`/`useWorldRuntimeStore` retirés de `Sidebar.jsx` (plus
+utilisés là, uniquement dans le composant extrait).
+
+Extraction faite mécaniquement par découpage de lignes exactes (`sed`) plutôt que retranscription
+manuelle, pour éliminer le risque de dérive de transcription sur un bloc de cette taille (~850 lignes
+JSX + ~250 lignes de logique) — vérifié ensuite par lecture complète du fichier assemblé avant
+écriture définitive. Rendu navigateur confirmé fonctionnel par Saar (2026-08-07).
+
+**Trouvaille corrigée dans ce lot (pas hors scope — conséquence directe de l'extraction)** : une
+extraction "verbatim" copie le code à l'identique mais peut changer sa durée de vie si le composant
+qui le porte change. `Sidebar.jsx` reste monté en continu tant que la sidebar est visible (vérifié
+`SessionPage.jsx:737`, rendu conditionné sur `sidebarVisible`, pas sur `mode`) — avant ce lot,
+`objectSearch`, `refreshingObjects`, `customEffectOpen` et `customEffectDraft` étaient des `useState`
+locaux à `Sidebar.jsx`, donc survivaient à un aller-retour Édition → Jeu → Édition (seul le JSX qui
+les affichait disparaissait, pas le composant). En les déplaçant tels quels dans
+`SurfaceEditorPanel.jsx` — lui-même démonté/remonté à chaque bascule de mode puisque
+`{mode === 'edit' && <SurfaceEditorPanel .../>}` — ces 4 états se seraient réinitialisés à chaque
+bascule (recherche de la palette Entités effacée, brouillon "Nouvel effet MJ" perdu). Repéré en
+analyse à charge avant confirmation navigateur par Saar, pas par test manuel. Corrigé en remontant
+les 4 `useState` dans `Sidebar.jsx` et en les passant en props contrôlées à `SurfaceEditorPanel`
+(même patron que `surfaceTool`/`onSurfaceToolChange` déjà en place) — comportement à nouveau
+identique à avant le lot 5.
+
+**Point de vigilance noté, pas corrigé (hors scope de ce lot, chantier déjà clos)** : le même schéma
+(état local perdu quand le composant qui le porte est démonté par un changement d'onglet/mode) existe
+potentiellement dans `SidebarCharactersTab.jsx`/`SidebarProfileTab.jsx` (lot 4b/4c, ✅ confirmés) —
+ces composants ne sont montés que lorsque `activeTab` les sélectionne. `[HYPOTHÈSE]` non
+instrumentée, non testée ici : un brouillon de nouveau personnage en cours de saisie pourrait se
+perdre en changeant d'onglet puis en revenant. Lots déjà clos et confirmés par Saar, pas rouverts
+sans nouvelle demande — à vérifier si le sujet revient.
+
+**Testé** : `eslint` sur les 2 fichiers (0 erreur, 0 warning) après le correctif, `npm run build`
+(client, propre — même avertissement préexistant sur la taille de chunk, sans rapport), rendu réel en
+navigateur confirmé par Saar (2026-08-07).
+**Non testé** : le scénario précis du correctif (taper une recherche ou ouvrir "Nouvel effet MJ" puis
+basculer Édition → Jeu → Édition) n'a pas été rejoué explicitement après le correctif.
+**Données** : aucune.
+**Retour arrière** : rien n'est committé — commit isolé à venir sur `dev/Saar`.
 
 ---
 
