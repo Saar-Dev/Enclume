@@ -665,93 +665,21 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       multiMalusDefenseur: pending.multiMalusDefenseur ?? 0,
     })
 
-    // 4. Dégâts si touche
+    // 4. Dégâts si touche — branchement post-hit sur le type de l'attaquant (PLAN_RW_SYSCOMBAT.md §2.9).
     if (hit) {
+      const ctx = {
+        attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
+        rollAttaque, chancesAttaque, mrAttaque,
+        damageFormula, weaponInvId, modDom, combatModeBonus,
+        characterIdCible, char_sheet_id_cible,
+        for_na_cible, con_na_cible, vol_na_cible,
+        targetName, userId, tokenId, socket,
+      }
       if (attackerCharacter.type === 'pj') {
-        // PJ attaquant : invite à lancer les dés de dégâts (CombatDamageWindow existant). Plusieurs
-        // entrées peuvent désormais coexister pour le même attaquant (attaques multiples CaC touchant
-        // chacune un défenseur PJ distinct, docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO
-        // par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre entrée n'attendait
-        // déjà (sinon le joueur perdrait de vue le prompt encore non résolu de la précédente).
-        const pendingDamageCount = await armAwaitingDamage(io, meleeCampaignId, attackerTokenId, {
-          type: 'melee',
-          campaignId: meleeCampaignId,
-          targetTokenId: tokenId,
-          characterIdCible,
-          char_sheet_id_cible,
-          modDom,
-          mr: mrAttaque,
-          combatModeBonus,
-          formula: damageFormula,
-          weaponInvId,
-          for_na_cible,
-          con_na_cible,
-          vol_na_cible,
-          tireurUsername: attackerUsername,
-          tireurColor: attackerColor,
-          userId,
-          targetName,
-        })
-        if (pendingDamageCount === 1) {
-          // Trouver le socket de l'attaquant PJ
-          const sockets = await io.fetchSockets()
-          const attackerSocket = sockets.find(s =>
-            s.campaignId === meleeCampaignId && s.user?.id === attackerCharacter.user_id
-          )
-          const prompt = { tokenId: attackerTokenId, formula: damageFormula, targetName }
-          if (attackerSocket) {
-            attackerSocket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)
-          } else if (socket) {
-            socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
-          }
-        }
-        suspendForDamage = true
+        const result = await resolveMeleeDefenseHitAttackerPj(io, meleeCampaignId, ctx)
+        suspendForDamage = result.suspendForDamage
       } else {
-        // PNJ attaquant : résolution auto des dégâts. CHOC1 : point de résolution unique (voir
-        // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6) — pas de re-fetch arme naturelle ici
-        // (appel différé, formule mutation déjà résolue et stable dans damageFormula, voir
-        // commentaire de la fonction), seule l'arme équipée est re-fetchée (fenêtre de péremption
-        // réelle : désequipée entre Déclaration et confirmation de défense).
-        const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-          weaponInvId, fallbackFormula: damageFormula,
-        })
-        // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2) :
-        // même table que le pipeline Assaut, jamais câblée côté CaC jusqu'ici.
-        const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
-        const hitResult = await damageService.resolveTargetHit(io, db, meleeCampaignId, {
-          degautsBruts, characterIdCible, cibleType: 'pj',
-          char_sheet_id_cible,
-          for_na_cible, con_na_cible, vol_na_cible,
-          chocDsl: effectiveChocDsl,
-          treatAsContact: true,
-        })
-        if (hitResult === null) return
-        const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
-
-        if (shockResult) {
-          statusService.emitShockDiceResult(io, meleeCampaignId, shockResult, userId, attackerUsername, attackerColor)
-        }
-
-        io.to(meleeCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
-          tireurId:    attackerTokenId,
-          cibleId:     tokenId,
-          localisation,
-          degautsBruts,
-          degatsNets,
-          severity:    finalSeverity,
-          is_lethal,
-          isSuccess:   true,
-          isPnj:       true,
-          roll:        rollAttaque,
-          chancesDeReussite: chancesAttaque,
-          shockResult,
-        })
-        if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-          statusService.applyStun(io, db, meleeCampaignId, {
-            targetTokenId: tokenId, outcome: shockResult.outcome,
-            userId, username: attackerUsername, color: attackerColor,
-          }).catch(err => console.error('[WS] applyStun error:', err.message))
-        }
+        await resolveMeleeDefenseHitAttackerPnj(io, meleeCampaignId, ctx)
       }
     }
 
@@ -765,6 +693,112 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     }
   } catch (err) {
     console.error('[WS] confirmMeleeDefense error:', err.message)
+  }
+}
+
+// Attaquant PJ après un hit confirmé en défense CaC — invite à lancer les dégâts (CombatDamageWindow
+// existant), même primitive que les Lots 2/4/6 (armAwaitingDamage). Ne fait pas partie de la file
+// emissions[] de resolveMeleeAction : confirmMeleeDefense émet en direct (PLAN_RW_SYSCOMBAT.md §2.4.l),
+// ce Lot ne l'harmonise pas au passage (§2.9.b).
+async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
+  const {
+    attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
+    damageFormula, weaponInvId, modDom, mrAttaque, combatModeBonus,
+    characterIdCible, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    targetName, userId, tokenId, socket,
+  } = ctx
+  // Plusieurs entrées peuvent désormais coexister pour le même attaquant (attaques multiples CaC
+  // touchant chacune un défenseur PJ distinct, docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO
+  // par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre entrée n'attendait
+  // déjà (sinon le joueur perdrait de vue le prompt encore non résolu de la précédente).
+  const pendingDamageCount = await armAwaitingDamage(io, campaignId, attackerTokenId, {
+    type: 'melee',
+    campaignId,
+    targetTokenId: tokenId,
+    characterIdCible,
+    char_sheet_id_cible,
+    modDom,
+    mr: mrAttaque,
+    combatModeBonus,
+    formula: damageFormula,
+    weaponInvId,
+    for_na_cible,
+    con_na_cible,
+    vol_na_cible,
+    tireurUsername: attackerUsername,
+    tireurColor: attackerColor,
+    userId,
+    targetName,
+  })
+  if (pendingDamageCount === 1) {
+    // Trouver le socket de l'attaquant PJ
+    const sockets = await io.fetchSockets()
+    const attackerSocket = sockets.find(s =>
+      s.campaignId === campaignId && s.user?.id === attackerCharacter.user_id
+    )
+    const prompt = { tokenId: attackerTokenId, formula: damageFormula, targetName }
+    if (attackerSocket) {
+      attackerSocket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)
+    } else if (socket) {
+      socket.emit(WS.COMBAT_DAMAGE_PROMPT, prompt)  // fallback : même socket (rare)
+    }
+  }
+  return { suspendForDamage: true }
+}
+
+// Attaquant PNJ après un hit confirmé en défense CaC — résolution auto des dégâts, même primitives que
+// resolveMeleeDefensePnj (Lot 2/5). `if (hitResult === null) return` : garde structurellement morte via
+// ce chemin (cibleType: 'pj' est un littéral codé en dur, resolveTargetHit ne renvoie null que pour
+// cibleType === 'drone', PLAN_RW_SYSCOMBAT.md §2.9.a.2) — conservée telle quelle, pas retirée.
+async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
+  const {
+    attackerTokenId, attackerUsername, attackerColor,
+    damageFormula, weaponInvId, modDom, mrAttaque, combatModeBonus,
+    characterIdCible, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    rollAttaque, chancesAttaque, userId, tokenId,
+  } = ctx
+  // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6) —
+  // pas de re-fetch arme naturelle ici (appel différé, formule mutation déjà résolue et stable dans
+  // damageFormula), seule l'arme équipée est re-fetchée (fenêtre de péremption réelle : désequipée
+  // entre Déclaration et confirmation de défense).
+  const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
+    weaponInvId, fallbackFormula: damageFormula,
+  })
+  // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
+  const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
+  const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+    degautsBruts, characterIdCible, cibleType: 'pj',
+    char_sheet_id_cible,
+    for_na_cible, con_na_cible, vol_na_cible,
+    chocDsl: effectiveChocDsl,
+    treatAsContact: true,
+  })
+  if (hitResult === null) return
+  const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+
+  if (shockResult) {
+    statusService.emitShockDiceResult(io, campaignId, shockResult, userId, attackerUsername, attackerColor)
+  }
+
+  io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+    tireurId:    attackerTokenId,
+    cibleId:     tokenId,
+    localisation,
+    degautsBruts,
+    degatsNets,
+    severity:    finalSeverity,
+    is_lethal,
+    isSuccess:   true,
+    isPnj:       true,
+    roll:        rollAttaque,
+    chancesDeReussite: chancesAttaque,
+    shockResult,
+  })
+  if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+    statusService.applyStun(io, db, campaignId, {
+      targetTokenId: tokenId, outcome: shockResult.outcome,
+      userId, username: attackerUsername, color: attackerColor,
+    }).catch(err => console.error('[WS] applyStun error:', err.message))
   }
 }
 

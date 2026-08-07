@@ -2167,3 +2167,92 @@ normalisation des valeurs existantes est un préalable.
 **Prochaine étape** : chantier dédié — audit des valeurs distinctes de `family`/`category`, puis
 recherche élargie (pas seulement sous-chaîne) + bouton "Voir plus" ouvrant une page listant tout le
 catalogue sans limite de 50.
+
+---
+
+## Trouvés en testant `docs/PLANS/PLAN_RW_SYSCOMBAT.md` Lot 7 (Session Saar, 2026-08-07)
+
+Sans rapport avec le Lot 7 lui-même (branchement post-hit de `confirmMeleeDefense`) — trouvés en
+testant en jeu réel, notés ici plutôt que corrigés dans la foulée (`CLAUDE.md` §13, un plan = un
+problème).
+
+### Bug ANNONCE-PRECHECK-STALE1 — "Action non autorisée dans cet état de combat (phase:ANNOUNCEMENT, sous-état:?)" en fin de combat
+
+**Symptôme** : signalé par Saar (2026-08-07) — message d'erreur reçu côté client juste avant/pendant la
+clôture d'un combat.
+
+**Règle** : aucune — bug technique FSM/synchronisation client, pas une règle de jeu.
+
+**Code impliqué** : `server/src/socket/socketCombatResolution.js:70` (émission `COMBAT_DECLARE_ERROR`
+sur `COMBAT_ACTION_PRECHECK` rejeté par `canTransition`) ; `server/src/socket/socketCombatHelpers.js`
+`endTurn` (`setFSMSubPhase(db, campaignId, null)` puis `COMBAT_PHASE_CHANGED { phase: 'ANNOUNCEMENT' }`)
+; `client/src/lib/useCombatSocket.js:99-114` (`onPhaseChanged`, clear déjà partiel de `actions`/prompts
+sur `phase === 'ANNOUNCEMENT'`).
+
+**Cause racine [HYPOTHÈSE]** : un `COMBAT_ACTION_PRECHECK` envoyé par un client après le passage en
+`ANNOUNCEMENT` (déclenché par `endTurn`, seul point du code qui met `sub_phase` à `null`, ce qui
+correspond exactement au `sous-état:?` du message) — pattern déjà documenté une fois
+(`docs/Old/JOURNAL5.md:434`, correctif partiel `client/public/CHANGELOG.md:934` — `setActions([])` sur
+`onPhaseChanged`). Ce correctif existant a été vérifié toujours présent (`useCombatSocket.js:105-113`)
+mais ne couvre peut-être pas toute la surface d'état client responsable du renvoi (JOURNAL5 mentionne
+aussi `assaultPrecheckId`, une variable distincte de `actions`, jamais vérifiée cette session). Non
+confirmé — pas reproduit ni instrumenté, aucun log serveur sur le chemin de rejet (contrairement au
+chemin `ok:true`, ligne symétrique juste après dans le même fichier).
+
+**Vérifié sans rapport avec Lot 7** : le diff du Lot 7 ne touche ni `endTurn`, ni
+`COMBAT_PHASE_CHANGED`, ni aucun fichier client — le seul point où Lot 7 aurait pu influer
+(`advanceTimeline` appelé au bon moment) est prouvé correct par fixture jetable (10 passes, preuve
+directe sur `combat_state.current_turn`/`phase`, voir `docs/JOURNAL8.md`).
+
+**[DBG-ANNONCE1] suggestion** :
+```js
+// server/src/socket/socketCombatResolution.js:70, juste avant l'emit COMBAT_DECLARE_ERROR
+console.log('[DBG-ANNONCE1]', { tokenId, actionKey, phase: state?.phase, subPhase: state?.sub_phase, userId: user?.id })
+```
+
+**Prochaine étape** : obtenir de Saar le détail exact de la séquence (quel joueur, quelle action, à quel
+moment par rapport au clic "Fin de combat") pour confirmer si c'est le pattern déjà connu (JOURNAL5) ou
+une régression distincte, avant tout correctif.
+
+---
+
+### Bug CATASTROPHE-SCOPE1 — Une Catastrophe semble affecter deux protagonistes au lieu du seul lanceur de dé
+
+**Symptôme** : signalé par Saar (2026-08-07) — une Catastrophe déclenchée en combat semble impacter à la
+fois l'attaquant et le défenseur, alors que RAW (LdB p.204-205, "CATASTROPHES (OPTIONNEL)") la rattache
+à l'Échec critique d'un Test précis, donc au seul personnage qui a raté ce Test.
+
+**Règle** : LdB p.204-205 — la Catastrophe est une conséquence de l'Échec critique du lanceur du Test,
+pas des deux parties d'un test d'opposition.
+
+**Code impliqué** : `server/src/lib/catastropheService.js` (`maybeTriggerCatastrophe` /
+`createPendingCatastrophe` / `resolvePendingCatastrophe`), appelé avec `{ site, actorTokenId,
+targetTokenId }` depuis `resolveMeleeAction`, `resolveAssaultAction`, `confirmMeleeDefense`,
+`resolveDroneAssaultAction`.
+
+**Cause racine [INCONNU]** : pas de log capturé cette session pour tracer où l'effet se propage à un
+second personnage. Deux points vérifiés qui excluent une piste : (1) `createPendingCatastrophe` insère
+une seule ligne `pending_catastrophes` pour un seul `token_id` (le rôleur), `actorTokenId`/
+`targetTokenId` ne sont que des métadonnées dans `context`, jamais utilisés pour cibler une seconde
+écriture ; (2) `EFFECT_HANDLERS` (`applyCatastropheEffect`) est **vide** — Lot 1 du chantier Catastrophe
+n'a mécanisé aucune entrée de la table, l'application reste narrative/manuelle par le MJ
+(`resolvePendingCatastrophe` retourne `{ mechanized: false }` systématiquement). Donc le serveur
+n'applique aujourd'hui aucun effet mécanique à qui que ce soit — la duplication perçue par Saar est soit
+(a) un artefact d'affichage côté client (`CatastropheReviewQueue.jsx`, pas encore vérifié), soit (b)
+**deux jets de Catastrophe indépendants dans le même échange** (attaquant ET défenseur ont chacun pu
+déclencher `catastropheRisk` sur leur propre Test au même tour de résolution — CaC oppose toujours deux
+jets, RAW p.222 — produisant deux lignes `pending_catastrophes` distinctes vues comme "une seule
+Catastrophe à deux victimes" dans la file de validation MJ) — hypothèse (b) non vérifiée mais la plus
+probable au vu du code lu.
+
+**[DBG-CATASTROPHE1] suggestion** :
+```js
+// catastropheService.js, dans maybeTriggerCatastrophe, avant l'appel à createPendingCatastrophe
+console.log('[DBG-CATASTROPHE1]', { campaignId, tokenId, catastropheRisk, site: context?.site, actorTokenId: context?.actorTokenId, targetTokenId: context?.targetTokenId })
+```
+
+**Prochaine étape** : reproduire en jeu avec `[DBG-CATASTROPHE1]` actif pour confirmer/infirmer
+l'hypothèse (b) — si deux lignes `pending_catastrophes` distinctes apparaissent bien pour le même
+échange CaC, ce n'est pas un bug mais deux Catastrophes RAW-conformes indépendantes mal présentées côté
+MJ (correctif alors côté `CatastropheReviewQueue.jsx`, pas côté serveur). Investigation dédiée, hors
+périmètre de `PLAN_RW_SYSCOMBAT.md`.

@@ -893,3 +893,77 @@ contrat de retour diffère (`suspendForDamage` remonté explicitement plutôt qu
 uniforme), et sa vérification doit prouver une **absence** (`advanceTimeline` non appelé quand
 l'attaquant est PJ) — une forme de test que les fixtures des Lots 2/4/6 (toutes construites pour
 vérifier des présences) ne couvrent pas encore. À concevoir avant de coder, pas pendant.
+
+---
+
+## Session (Saar) — 2026-08-07 — `PLAN_RW_SYSCOMBAT.md` Lot 7 : branchement post-hit `confirmMeleeDefense` + clôture du chantier
+
+Extraction du branchement post-hit (type de l'attaquant) de `confirmMeleeDefense` (§2.9 du plan) en 2
+fonctions sœurs `resolveMeleeDefenseHitAttackerPj`/`resolveMeleeDefenseHitAttackerPnj`. Écart trouvé au
+codage : §2.9.b prescrivait une signature `(io, campaignId, ctx, emissions)` copiée par convenance de
+celle des Lots 2/4/6 — paramètre mort, `confirmMeleeDefense` n'utilise aucun tableau `emissions[]`, elle
+émet en direct (§2.4.l, déjà documenté comme volontaire). Codé sans ce paramètre, plan corrigé en
+conséquence. Contrat de retour distinct des Lots précédents : la branche PJ retourne `{ suspendForDamage
+: true }`, consommé explicitement par la coquille avant sa propre décision d'appeler `advanceTimeline`.
+
+**Trouvaille en auto-critique, avant tout retour de Saar** : la première version de la fixture jetable
+prouvait `suspendForDamage` en vérifiant `combat_state.sub_phase === 'AWAITING_DAMAGE'` — preuve
+insuffisante. `endTurn` (`socketCombatHelpers.js:1141-1147`) ne touche jamais `sub_phase`, seulement
+`phase`/`current_turn` : un bug réel (suspendForDamage mal remonté, `advanceTimeline` appelé à tort)
+aurait laissé `sub_phase` inchangé lui aussi, donc le test serait resté vert même en cas de régression.
+Corrigé avec une preuve directe (`current_turn`/`phase` inchangés après l'appel — la seule chose que
+`endTurn` modifie s'il est atteint), rejouée 5 fois avec jets réels, 5/5 OK.
+
+**Vérification — fixture jetable en base réelle**, 3 scénarios (§2.9.f) : attaquant PJ touche (prompt
+dégâts + `suspendForDamage`), attaquant PNJ touche (dégâts auto-résolus, blessure "légère" garantie par
+construction — `for_na`/`con_na` à 0 → RD hors table → aucune échéance de guérison créée, cleanup
+simplifié), raté (aucune des deux branches). **10 passes** avec jets de dés réels non mockés
+(`crypto.randomInt`), 0 échec, cleanup vérifié 0 résidu à chaque passe. Un résidu d'un essai antérieur
+au script (avant correctif de la contrainte `chk_combat_phase` — `phase` doit être `ROSTER`/
+`ANNOUNCEMENT`/`RESOLUTION`, pas une valeur libre) repéré et nettoyé séparément (1 campagne + 1 user +
+1 battlemap en cascade). 18 tests unitaires `combatAttackRoll.test.mjs` + suite complète serveur (204
+tests) toujours au vert.
+
+**Session de jeu réelle Saar** : un seul des deux chemins exercé — attaquant PNJ touche un défenseur PJ
+(`resolveMeleeDefenseHitAttackerPnj`), confirmé fonctionnel (dégâts calculés, combat continue
+normalement ensuite). Le chemin attaquant PJ (`resolveMeleeDefenseHitAttackerPj`) n'a pas pu être
+reproduit par Saar — reste couvert par fixture seulement, `⚠️ clos partiel` (`EN_COURS.md`).
+
+**Deux bugs trouvés en testant, sans rapport avec ce Lot, documentés `docs/BUGIDENTIFIE.md`** (pas
+corrigés — un plan = un problème, `CLAUDE.md` §13) :
+- **ANNONCE-PRECHECK-STALE1** — "Action non autorisée (phase:ANNOUNCEMENT, sous-état:?)" en fin de
+  combat. Vérifié sans rapport avec le diff du Lot 7 (`endTurn`/`COMBAT_PHASE_CHANGED`/client non
+  touchés) ; pattern déjà documenté une fois (`docs/Old/JOURNAL5.md`), correctif partiel existant
+  (`useCombatSocket.js`) qui ne couvre peut-être pas toute la surface d'état client. `[HYPOTHÈSE]` non
+  instrumentée, repro précise à obtenir de Saar.
+- **CATASTROPHE-SCOPE1** — une Catastrophe semble affecter deux protagonistes au lieu du seul lanceur
+  de dé. Vérifié : le serveur n'applique aujourd'hui aucun effet mécanique (`EFFECT_HANDLERS` vide,
+  Lot 1 du chantier Catastrophe) et chaque `pending_catastrophes` est scopée à un seul `token_id` —
+  hypothèse la plus probable : deux jets de Catastrophe indépendants (attaquant + défenseur, un test
+  d'opposition en produit toujours deux) mal présentés comme une seule entrée dans la file MJ.
+  `[INCONNU]`, investigation dédiée hors périmètre.
+- Vérifié à cette occasion (demande explicite Saar) : le moteur RAW critique/catastrophe
+  (`shared/polarisTestResolution.js`) est conforme au texte cité (bonus de maîtrise ajouté à la Marge,
+  jamais au résultat du dé ; Échec critique = relance + cumul ; seuil Catastrophe = Marge ≥ 15) — le
+  doute de Saar est plus probablement expliqué par CATASTROPHE-SCOPE1 que par un calcul de marge faux.
+
+**Décision de clôture du chantier (Saar, 2026-08-07)** : pas de Lot 8. `confirmDamage` (247 lignes,
+même classe de dette que les fonctions traitées par ce chantier) reste entièrement intacte — le plan
+lui-même (§3.2) la décrit comme structurellement différente (FIFO + branchement CaC/Tir + drone +
+jusqu'à 6 émissions), méritant son propre cadrage `METHODO_PLAN.md` plutôt qu'une extension rapide du
+patron Lot 2/4/6/7. Non urgent, repris séparément si Saar le souhaite un jour — pas ouvert dans
+`EN_COURS.md` tant que non décidé.
+
+**Testé** : `node --check` propre, diff relu ligne à ligne (code déplacé à l'identique, aucune clé `ctx`
+renommée, même ordre exact d'`await`), 18 tests `combatAttackRoll.test.mjs` + 204 tests suite serveur
+complète au vert, fixture jetable 3 scénarios × 10 passes (jets réels) + re-vérification ciblée 5 passes
+(preuve directe `suspendForDamage`), cleanup vérifié 0 résidu à chaque fois, session de jeu réelle Saar
+confirmée pour le chemin attaquant PNJ.
+**Non testé** : chemin attaquant PJ (`resolveMeleeDefenseHitAttackerPj`) en jeu réel — Saar ne peut pas
+reproduire ce cas actuellement, reste `⚠️ clos partiel` (`EN_COURS.md`). ANNONCE-PRECHECK-STALE1 et
+CATASTROPHE-SCOPE1 non instrumentés, non corrigés.
+**Données** : aucune migration, aucun effet runtime en dehors du code déplacé.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit — aucune donnée vivante affectée.
+
+Chantier `PLAN_RW_SYSCOMBAT.md` (Lots 0-7) conclu à ce stade — Lot 8 (`confirmDamage`) non engagé,
+décision explicite Saar, non urgent.

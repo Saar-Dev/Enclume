@@ -4,11 +4,15 @@
 > `4ec91b3`…`41b9632`, cf. §3).
 > **Rouvert 2026-08-06 (dev/Saar)** : Lots 5-7 ajoutés en continuité directe de ce même chantier
 > (décision Saar — "c'est la continuité de ce chantier tout simplement"), méthodologie
-> `docs/METHODO_PLAN.md` appliquée pour le cadrage. Statut Lots 5-7 : **planification uniquement,
-> aucun code écrit.** Le document n'est donc pas archivé vers `docs/Old/` — le chantier reste actif.
-> Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois
-> **tous** les lots (0-7, et tout lot ultérieur) clos, contenu durable (nouvelle convention de fichier)
-> transféré vers `docs/SYSTEME/COMBAT.md`.
+> `docs/METHODO_PLAN.md` appliquée pour le cadrage. Lots 5-6 : **✅ clos**. Lot 7 : **⚠️ clos partiel**
+> (2026-08-07) — codé, fixture jetable validée, confirmé en jeu pour l'attaquant PNJ seulement ; le
+> chemin attaquant PJ (`resolveMeleeDefenseHitAttackerPj`) n'a pas pu être reproduit par Saar, reste
+> couvert par fixture seulement (détail `docs/JOURNAL8.md`).
+> **Chantier conclu à ce stade (décision Saar, 2026-08-07)** : pas de Lot 8. `confirmDamage` (§3.2)
+> reste hors périmètre, non urgent — à cadrer séparément si repris un jour.
+> Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
+> Lot 7 confirmé sans réserve (chemin attaquant PJ testé en jeu), contenu durable (nouvelle convention
+> de fichier) transféré vers `docs/SYSTEME/COMBAT.md`.
 > Responsabilité unique de ce document : planifier le découpage structurel de ces fonctions.
 > Aucune règle de jeu n'est modifiée par ce plan — pas un sujet RAW, un sujet d'architecture serveur.
 
@@ -914,11 +918,14 @@ défense + `computeAttackRoll`, déjà propre, non touché ici) :
    erronée dans les deux sens (atteignabilité ET conséquence).
 
 **b) Dispatch — guard clause simple, 2 branches seulement (pas de table).** Fonctions sœurs
-`resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx, emissions)` (retourne `{ suspendForDamage:
+`resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx)` (retourne `{ suspendForDamage:
 bool }`, seule fonction de ce Lot qui a besoin de retourner autre chose que rien, puisque
 `confirmMeleeDefense` doit savoir si elle appelle `advanceTimeline` ensuite — point c) et
-`resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx, emissions)` (void, comme les branches PNJ des
-Lots 2/4). **Exhaustivité du binaire PJ/PNJ vérifiée à la source (analyse à charge)** : un attaquant
+`resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx)` (void, comme les branches PNJ des
+Lots 2/4). **Corrigé au codage (2026-08-07)** : la signature `(..., emissions)` de cette section
+(copiée par convenance de celle des Lots 2/4/6) aurait ajouté un paramètre mort — `confirmMeleeDefense`
+n'utilise aucun tableau `emissions[]`, elle émet en direct (§2.4.l, déjà documenté comme volontaire, à
+ne pas harmoniser). Signature réellement codée sans `emissions`. **Exhaustivité du binaire PJ/PNJ vérifiée à la source (analyse à charge)** : un attaquant
 drone ne peut jamais atteindre `confirmMeleeDefense` — `socketCombatResolution.js:371` route déjà
 `character.type === 'drone'` vers `resolveDroneAssaultAction`, jamais vers `resolveMeleeAction` (donc
 jamais vers ce défenseur-PJ-suspend, `[VÉRIFIÉ]` par lecture directe du dispatcher, pas juste inféré de
@@ -1001,7 +1008,7 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 | **Lot 4** | Branchement attaquant de `resolveAssaultAction` (§2.6) — extraction `resolveAssaultHitPj`/`resolveAssaultHitPnjDrone`/`resolveAssaultHitPnjNormal` (3 fonctions-feuilles sœurs, calcul commun `degautsBruts` remonté en coquille, §2.6.b) ; branches "raté" (PJ/PNJ) laissées inline (§2.6.b) | Moyen — écritures DB (`armAwaitingDamage`, `resolveDroneIntegrityLoss`, `damageService.resolveTargetHit`) et émissions `COMBAT_ATTACK_RESULT`/`COMBAT_ATTACK_PLAYER_RESULT`/`DICE_RESULT` ; vérification par fixture jetable (6 scénarios, §2.6.f), pas de shadow-mode possible | **✅ Clos (2026-07-28)** — diff relu ligne à ligne (code déplacé à l'identique, aucune clé renommée), `node --check` propre, 9 tests Lot 1 toujours au vert, puis confirmé en jeu par Saar (Tir PNJ touche une cible normale observé dans le log serveur, reste des scénarios confirmé globalement par Saar sans détail par cas) — committé. Trouvé en testant, sans rapport avec ce Lot : MELEE-ATKNAME (`docs/BUGIDENTIFIE.md`, fenêtre défense CaC affiche le nom du compte au lieu du personnage) |
 | **Lot 5** | `computeMeleeRawDamage` (§2.7) — noyau pur dédupliquant `degautsBruts = rawDice + MR + modDom + combatModeBonus`, présent à 5 sites confirmés (`resolveDefenselessTarget`, `resolveMeleeDefensePnj`, `resolveMeleeDefenseDrone`, `confirmMeleeDefense`, `confirmDamage`) | Faible — comportement identique bit-à-bit (garde `?? 0` déjà toujours vraie aux 3 sites qui ne l'avaient pas, §2.7.a), pas d'écriture DB ni d'émission touchée, shadow-mode possible (fonction pure) | **✅ Clos (2026-08-06)** — 18 tests unitaires OK (`combatAttackRoll.test.mjs`), `node --check` propre, diff relu ligne à ligne (aucune clé renommée, import `getMrModifier` toujours utilisé par la branche Tir hors périmètre), session de jeu réelle Saar confirmée (« Enclume fonctionne, combat validé ») |
 | **Lot 6** | Branchement cible de `resolveDroneAssaultAction` (§2.8) — extraction `resolveDroneAssaultHitDrone`/`resolveDroneAssaultHitPnj`/`resolveDroneAssaultHitPj`, même patron que Lots 2/4, ne viole pas F2 (extraction interne, pas de fusion inter-branches) | Moyen — écritures DB + émissions, vérification par fixture jetable (5 scénarios, §2.8.e), pas de shadow-mode possible | **✅ Clos (2026-08-07)** — `node --check` propre, 18 tests Lot 1/5 toujours au vert, diff relu ligne à ligne, fixture jetable durcie (6 scénarios dont 1 armure ajouté, 20 passes, 420 assertions, 0 échec, 0 résidu confirmé y compris nettoyage a posteriori de 2 campagnes orphelines d'essais antérieurs), session de jeu réelle Saar confirmée fonctionnelle |
-| **Lot 7** | Branchement post-hit de `confirmMeleeDefense` (§2.9) — extraction `resolveMeleeDefenseHitAttackerPj`/`resolveMeleeDefenseHitAttackerPnj`, contrat de retour différent des Lots précédents (`suspendForDamage` remonté explicitement, §2.9.c) | Moyen — écritures DB + émissions, vérification par fixture jetable (3 scénarios, §2.9.f), pas de shadow-mode possible | **Planifié (2026-08-06), non codé** |
+| **Lot 7** | Branchement post-hit de `confirmMeleeDefense` (§2.9) — extraction `resolveMeleeDefenseHitAttackerPj`/`resolveMeleeDefenseHitAttackerPnj`, contrat de retour différent des Lots précédents (`suspendForDamage` remonté explicitement, §2.9.c) | Moyen — écritures DB + émissions, vérification par fixture jetable (3 scénarios, §2.9.f), pas de shadow-mode possible | **Codé (2026-08-07), fixture jetable validée — ⚠️ en attente session de jeu réelle Saar avant clôture** |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le Lot 0 est séparé du Lot 1 parce qu'il porte un invariant différent (autorité
