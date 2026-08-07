@@ -5,6 +5,10 @@ import crypto from 'crypto'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
+import {
+  getLoginBlockRetrySecs, recordLoginFailure, resetLoginLimiters,
+  getRegisterBlockRetrySecs, recordRegisterFailure,
+} from '../lib/authRateLimit.js'
 
 const router = Router()
 const SALT_ROUNDS = 12
@@ -34,12 +38,23 @@ const PLAYER_COLORS = [
 
 const randomColor = () => PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)]
 
+function rejectRateLimited(res, retrySecs, message) {
+  res.set('Retry-After', String(retrySecs))
+  throw new AppError(429, message)
+}
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   const { email, password, username, inviteCode } = req.body
 
   if (!email || !password || !username || !inviteCode) {
     throw new AppError(400, 'Email, password, username and invite code are required')
+  }
+
+  const ipAddr = req.ip
+  const registerRetrySecs = await getRegisterBlockRetrySecs(ipAddr)
+  if (registerRetrySecs > 0) {
+    rejectRateLimited(res, registerRetrySecs, 'Too many registration attempts, please try again later')
   }
 
   const envCode = process.env.REGISTRATION_CODE
@@ -50,6 +65,7 @@ router.post('/register', async (req, res) => {
   const submitted = Buffer.from(String(inviteCode).slice(0, 8).padEnd(8, '\0'))
   const expected  = Buffer.from(envCode)
   if (!crypto.timingSafeEqual(submitted, expected)) {
+    await recordRegisterFailure(ipAddr)
     throw new AppError(403, 'Invalid invite code')
   }
 
@@ -59,6 +75,7 @@ router.post('/register', async (req, res) => {
 
   const existing = await db('users').where({ email }).first()
   if (existing) {
+    await recordRegisterFailure(ipAddr)
     throw new AppError(409, 'Email already in use')
   }
 
@@ -87,15 +104,26 @@ router.post('/login', async (req, res) => {
     throw new AppError(400, 'Email and password are required')
   }
 
+  const ipAddr = req.ip
+
+  const loginRetrySecs = await getLoginBlockRetrySecs(ipAddr, email)
+  if (loginRetrySecs > 0) {
+    rejectRateLimited(res, loginRetrySecs, 'Too many login attempts, please try again later')
+  }
+
   const user = await db('users').where({ email }).first()
   if (!user) {
+    await recordLoginFailure(ipAddr, email, { userExists: false })
     throw new AppError(401, 'Invalid credentials')
   }
 
   const valid = await bcrypt.compare(password, user.password_hash)
   if (!valid) {
+    await recordLoginFailure(ipAddr, email, { userExists: true })
     throw new AppError(401, 'Invalid credentials')
   }
+
+  await resetLoginLimiters(ipAddr, email)
 
   const token = jwt.sign(
     { id: user.id, email: user.email, username: user.username },

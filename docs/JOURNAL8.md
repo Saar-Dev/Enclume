@@ -967,3 +967,88 @@ CATASTROPHE-SCOPE1 non instrumentés, non corrigés.
 
 Chantier `PLAN_RW_SYSCOMBAT.md` (Lots 0-7) conclu à ce stade — Lot 8 (`confirmDamage`) non engagé,
 décision explicite Saar, non urgent.
+
+## Session (Saar) — 2026-08-07 — SECU-1 : rate limiting login/register
+
+**Contexte** : `docs/AUDIT.md` SECU-1 — `/api/auth/login` et `/api/auth/register` sans aucune
+limitation de tentatives depuis l'audit du 2026-07-25, non corrigé malgré 97 commits (RC4 :
+`rate-limiter-flexible` déjà en dépendance et déjà utilisé sur `socketTrade.js`, jamais étendu à
+l'auth). Demande explicite Saar de suivre les recommandations pro plutôt qu'un simple portage du
+pattern trade.
+
+**Recherche avant code** (demande explicite Saar, docs/pratiques pro plutôt que réinventer) : recette
+officielle de brute-force protection publiée par l'auteur de `rate-limiter-flexible`
+(wiki + gist animir), cohérente avec OWASP Credential Stuffing Prevention Cheat Sheet et Authentication
+Cheat Sheet — deux paliers combinés (compte ciblé + IP volumétrique), reset uniquement sur succès,
+consommation d'échec seulement si le compte existe (évite de créer une clé mémoire par email
+énuméré). Saar a ensuite demandé une sévérité supérieure à la recette de base, avec un mécanisme
+d'escalade (récidive après un premier blocage → blocage aggravé) que la lib ne fournit pas nativement.
+
+**Architecture retenue** — `server/src/lib/authRateLimit.js` (nouveau, testé indépendamment de la DB
+et des routes Express) :
+- Login, palier email+IP : 5 échecs → bloqué 1h ; toute récidive après ce blocage → 24h.
+- Login, palier IP (tous comptes confondus) : 10 échecs/24h → IP bloquée 24h ; récidive → 7 jours.
+- Escalade implémentée via un second petit limiteur « indicateur » (`points:1`) par palier : posé au
+  premier blocage, lu avant chaque nouvel échec — s'il est déjà posé, le blocage aggravé est forcé
+  directement via `RateLimiterMemory.block()` au lieu de repasser par le compteur normal.
+- Remise à zéro complète (compteur + indicateur) des deux paliers sur tout succès de connexion.
+- Register : un seul palier IP, 10 échecs/1h, non escalade (`REGISTRATION_CODE` reste la vraie
+  barrière, SECU-2 non traité ici, toujours Basse).
+- `server/src/routes/auth.js` : gating (`get()`, sans consommer) avant toute requête DB/bcrypt —
+  un attaquant bloqué ne fait plus tourner bcrypt — puis consommation uniquement sur échec réel,
+  réponse `429` + header `Retry-After` si bloqué.
+
+**Deux bugs réels trouvés en écrivant les tests avant la mise en prod** (pas juste des ajustements de
+chiffres) :
+1. `rate-limiter-flexible` ne bloque qu'au dépassement strict de `points` (le (N+1)-ième échec, pas le
+   N-ième) — `points` fixé à N-1 (4 et 9) pour que « 5 échecs bloque » corresponde bien au 5e échec.
+   Trouvé parce que le test de blocage utilisait à tort `remainingPoints <= 0` (vrai un cran trop tôt),
+   corrigé en `consumedPoints > limiter.points` (le même test que celui utilisé en interne par la lib).
+2. `duration: 30 * DAY` en millisecondes dépasse la limite 32 bits de `setTimeout` Node
+   (`TimeoutOverflowWarning` observé en test) — le timer de nettoyage interne de la lib se serait
+   déclenché après 1ms au lieu de 30 jours, effaçant compteur et indicateur d'escalade presque
+   immédiatement en production. Remplacé par `duration: 0` (aucune auto-expiration, seul un succès
+   réinitialise) — plus fidèle à la spec de toute façon (aucune décroissance dans le temps demandée).
+
+**Documentation** : `docs/AUDIT.md` SECU-1 annoté `[CORRIGÉ 2026-08-07]`. Dette hors-périmètre notée en
+cours de session (remarque Saar) : `SECU-EMAIL1` (`docs/EN_COURS.md`) — le serveur de déploiement
+actuel n'a aucune mécanique d'envoi d'email, bloque toute fonctionnalité qui en dépendrait à l'avenir.
+
+**Analyse critique demandée par Saar après premier codage** — relecture à charge du correctif tout
+juste posé, pas seulement une confirmation :
+- Point fort vérifié : la clé composite email+IP (pas email seul) pour le palier ciblé empêche un
+  attaquant distant de verrouiller le compte d'une victime depuis sa propre IP (DoS par lockout,
+  faille classique documentée OWASP) — c'est la raison d'être de la composition dans la recette
+  officielle, pas un détail cosmétique.
+- **Nouveau bug trouvé** : le correctif du bug d'overflow (`duration: 0`) ouvrait une fuite mémoire —
+  sans nettoyage automatique, une IP d'attaque qui n'aura jamais de succès reste en mémoire pour
+  toujours. Confirmé par la doc officielle de la lib (wiki "Memory" : limite dure 2 147 483s/~24,8j
+  pour `RateLimiterMemory`, `setTimeout` 32 bits). Corrigé : fenêtre bornée à 20 jours
+  (`LONG_MEMORY_SEC`) au lieu de 0 — élimine l'overflow et la fuite mémoire, concession documentée
+  (auto-reset après 20j d'inactivité totale, pas seulement sur succès). Garde de non-régression
+  ajoutée : le fichier de test écoute `process.on('warning')` et échoue si une
+  `TimeoutOverflowWarning` apparaît, peu importe la valeur exacte choisie plus tard — vérifié qu'il
+  détecte bien la régression (repro manuelle avec l'ancienne valeur 30j, warning capturée).
+- **Limite connue, non corrigée** (décision produit, pas un correctif de code) : le mécanisme
+  d'escalade ne se réinitialise que sur succès — sans email (SECU-EMAIL1), CAPTCHA ni outil admin,
+  un joueur légitime multipliant les erreurs de frappe n'a aucune échappatoire sinon le redémarrage
+  complet du serveur (efface tous les compteurs de tous les utilisateurs, pas un outil ciblé). Signalé
+  à Saar dans `docs/AUDIT.md` SECU-1, à trancher (accepter tel quel pour un petit groupe fermé, ou
+  outiller un déblocage ciblé email/IP plus tard).
+
+**Testé** : `node --test src/lib/authRateLimit.test.mjs` — 7/7 (paliers email+IP et IP sous seuil puis
+bloqués, escalade après récidive, reset complet sur succès, non-consommation email+IP pour compte
+inexistant, register, garde anti-régression `TimeoutOverflowWarning`). Suite serveur complète rejouée
+après le changement — 211 tests, 119 pass, 92 skip (DB indisponible en session), 0 fail, aucune
+régression. `node --check` propre sur les 3 fichiers touchés/créés.
+**Non testé** : scénario réel en navigateur (tentatives de connexion répétées, vérification du 429 et
+du header `Retry-After` côté client) — le client actuel n'a pas de gestion dédiée de ce code d'erreur,
+`[INCONNU]` si un message utilisateur adapté s'affiche ou si l'erreur générique suffit ; à valider par
+Saar. Comportement sous VRAI écoulement du temps (le fait qu'un blocage 1h se lève bien après 1h) non
+observé en conditions réelles — déduit du code de la lib (`blockDuration` correctement isolé de la
+fenêtre de 20j), pas chronométré en dehors des tests synchrones.
+**Données** : aucune migration. Nouvel état en mémoire process (limiteurs `RateLimiterMemory`) — perdu
+au redémarrage du serveur (nodemon en dev), cohérent avec l'archi mono-instance actuelle (INFRA-8) et
+avec `socketTrade.js` déjà sur ce même modèle.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit — aucune donnée persistante
+affectée, aucun état DB créé.

@@ -15,6 +15,18 @@
 > Objectif de cet audit : ne pas maximiser le nombre de constats, mais identifier le plus petit
 > ensemble de **causes racines** expliquant le plus de symptômes. Voir §Synthèse finale.
 
+> **Rafraîchissement 2026-08-07 (Claude)** — sur demande explicite de Saar, dans le cadre d'un point
+> d'étape général du projet. Méthode : `git log`/diff depuis le commit d'origine de cet audit
+> (`ef12136`, 2026-07-28) jusqu'à `HEAD` — 97 commits — puis re-vérification ciblée par lecture directe
+> du code pour les findings les plus prioritaires (§E d'origine) et ceux visés par un chantier de
+> refactor dédié depuis. **Ce n'est pas un nouvel audit complet** : B/C/D ne sont pas repris item par
+> item, seuls les items marqués `[MISE À JOUR 2026-08-07]` ci-dessous ont été re-vérifiés dans le code ;
+> le reste garde sa dernière valeur connue (2026-07-25) et n'a pas été recontrôlé cette fois. Constat
+> global : le plus haut ROI de l'audit d'origine (SECU-1) n'a reçu aucun correctif malgré 97 commits ;
+> le chantier de refactor le plus lourd de la période (`PLAN_RW_SYSCOMBAT.md` Lots 0-7, dédié à RC1) a
+> produit de vrais gains (tests, dédup, extraction de fonctions pures) mais **pas** la réduction de
+> lignes attendue sur les deux fonctions ciblées — voir INFRA-1.
+
 ---
 
 ## Sommaire
@@ -76,6 +88,23 @@ sans effet de bord (résolution d'arme, calcul MR/dégâts) avant de toucher à 
 **Priorité** : Moyenne (pas bloquant, mais le coût ne fera qu'augmenter — chaque sprint combat futur
 paiera l'intérêt de cette dette).
 
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — `resolveMeleeAction` : **720 lignes**
+(`socketCombatHelpers.js:1273-1993`, contre 631 le 2026-07-25). `resolveAssaultAction` : **568 lignes**
+(`:2497-3065`, contre 518). Les deux fonctions sont **plus grandes qu'au moment de l'audit**, malgré un
+chantier dédié entier (`docs/PLANS/PLAN_RW_SYSCOMBAT.md`, Lots 0-7, 2026-07-25 → 2026-08-07, conclu à
+ce stade). Ce n'est pas un échec du chantier : son propre §3.1 prévenait explicitement dès le Lot 1 que
+« 631 lignes ne deviennent pas ~500, elles restent proches de 600 » — l'objectif n'a jamais été la
+réduction de lignes mais la déduplication (`armAwaitingDamage`, `computeMeleeRawDamage`), l'extraction
+de noyaux purs testés (`combatAttackRoll.js`, 18 tests unitaires — le premier filet automatisé sur ce
+code, qui n'en avait aucun) et la séparation de branches sœurs (`resolveDroneAssaultAction`,
+365 lignes, désormais une fonction à part). Ces gains sont réels et vérifiés. Mais le risque que
+l'audit d'origine pointait — nouvelles features ajoutées inline plus vite que le découpage n'avance —
+s'est concrétisé pendant le chantier lui-même (deux-armes, branchement drone, `confirmMeleeDefense`
+post-hit). **`confirmDamage` (247 lignes) n'a jamais été touchée par aucun lot** — candidate explicite
+« Lot 8 » dans le plan, non cadrée. Recommandation affinée : si ce chantier reprend, fixer un objectif
+de lignes chiffré et mesuré à la clôture (pas seulement « découpé »), sans quoi la même dérive se
+reproduira.
+
 ---
 
 ### INFRA-2 — Pattern d'émission incohérent au sein du même sous-système
@@ -109,6 +138,19 @@ point d'appel) pourquoi telle émission doit rester immédiate — actuellement 
 émission directe volontaire d'un oubli.
 
 **Priorité** : Haute — c'est la cause racine probable d'un bug déjà signalé par Saar deux fois.
+
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — le mécanisme est intact et maintenant **documenté comme
+connu et volontairement différé**, pas seulement découvert. `armAwaitingDamage`
+(`socketCombatHelpers.js:402-410`, Lot 3, 2026-07-28) factorise l'appel direct
+`broadcastCurrentSubPhase` pour 3 sites (`confirmMeleeDefense`, `resolveDroneAssaultAction`,
+`resolveAssaultAction`) — son commentaire précise explicitement : « L'émission du prompt reste à
+l'appelant : elle diffère réellement d'un site à l'autre (direct vs `emissions[]`) — ne pas la tirer
+dans ce helper harmoniserait un comportement d'émission au passage, hors périmètre du Lot 3. » Même
+schéma dans `resolveMeleeDefensePj` (`:1965-1988`) : `broadcastCurrentSubPhase` en direct ligne 1972,
+`emissions.push` du prompt de défense ligne 1985 — après. Le refactor a donc **déplacé et dédupliqué**
+le point de bascule sans le corriger, et l'a rendu partagé par 3 flux au lieu d'1 seul. Cohérent avec
+`docs/EN_COURS.md` COM27 (« en attente de décision Saar »). C'est désormais le correctif le moins cher
+et le plus précisément localisé de tout l'audit — 2 points d'appel identifiés par leur ligne exacte.
 
 ---
 
@@ -171,6 +213,17 @@ fonctionnel, c'est l'occasion d'extraire les sous-domaines déjà visuellement s
 monde vs gestion personnages).
 
 **Priorité** : Basse.
+
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — deux fichiers de la liste ont eu un chantier dédié depuis et
+ont réellement rétréci : `Sidebar.jsx` **3737 → 306 lignes** (`PLAN_REFACTOR_SIDEBAR.md`, Lots 1-5,
+clos 2026-08-07) et `surfaceData.js` **3370 → 557 lignes** (`PLAN_REFACTOR_SURFACE.md`, clos
+2026-08-04, avec tests de non-régression dédiés sur 4 bugs). Gains réels et vérifiés — ce sont les deux
+seuls fichiers de la liste d'origine à avoir bougé. Les autres, non touchés par un plan dédié, se sont
+comportés exactement comme prévu par la recommandation d'origine (stables ou en légère croissance
+organique) : `SurfaceDungeonScene.jsx` 2258→2164, `Editor3D.jsx` 1970→1932, `Canvas3D.jsx` 1647→1680,
+`CombatActionWindow.jsx` 1612→1753, `CombatGmDeclareWindow.jsx` 1202→1284. Rien à corriger — confirme
+que l'approche « seulement au moment où le fichier est de toute façon retouché » fonctionne quand elle
+est appliquée.
 
 ---
 
@@ -319,6 +372,16 @@ sans validation de Saar.
 
 **Priorité** : Basse à Moyenne (le coût de collision est faible mais récurrent).
 
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — les 12 collisions d'origine (44, 45, 75, 76, 79, 80, 81, 82,
+83, 95, 108, 109) sont toujours présentes telles quelles (historiques, non corrigées mais déjà
+neutralisées via `knex_migrations`, sans nouveau cas). **Aucune nouvelle collision** dans les 97
+commits depuis l'audit (dernière migration : 234). La cause racine elle-même a changé : `CLAUDE.md` §5
+a abandonné la convention pair/impair pour une numérotation strictement séquentielle le 2026-08-04, en
+cohérence avec le départ de Codex/Kiwi — il n'y a plus de deuxième branche qui choisit un numéro en
+parallèle sans se synchroniser. Le script de garde-fou proposé reste pertinent mais n'a plus
+d'urgence : rétrograder à **Basse — dormante**, à reconsidérer seulement si un second développeur actif
+rejoint le projet.
+
 ---
 
 ## C. Sécurité
@@ -353,6 +416,53 @@ bloque rien structurellement.
 
 **Priorité** : Haute.
 
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — toujours aucun rate limiting sur `server/src/routes/auth.js`
+(`login`/`register`), `rate-limiter-flexible` toujours utilisé nulle part ailleurs que
+`socketTrade.js`. Zéro ligne changée sur ce fichier en 97 commits. Reste, sans changement, le meilleur
+ROI de tout l'audit — correctif trivial (pattern déjà en place dans le projet), gravité élevée, non
+fait depuis 2 semaines.
+
+**[CORRIGÉ 2026-08-07]** Rate limiting posé sur `/login` et `/register`, moteur extrait dans
+`server/src/lib/authRateLimit.js` (testé indépendamment, `authRateLimit.test.mjs`, 7 tests). Au-delà
+du simple portage du pattern `socketTrade.js`, décision Saar d'une sévérité plus élevée que la
+recette officielle `rate-limiter-flexible` (cf. wiki/gist animir) : deux paliers combinés côté
+login — par compte ciblé (email+IP, 5 échecs → 1h) et par IP (volumétrique, 10 échecs/24h → 24h) —
+avec un mécanisme d'escalade que la lib ne fournit pas nativement (`RateLimiterMemory.block()` posé
+manuellement) : toute récidive après un premier blocage l'aggrave directement (24h puis 7j côté IP),
+sans repasser par le compteur normal ; remise à zéro complète uniquement sur succès. `/register` garde
+un palier IP simple non escalade (10 échecs/1h), le `REGISTRATION_CODE` restant la vraie barrière
+(SECU-2, toujours Basse, non traité ici).
+
+Trois bugs réels trouvés et corrigés en écrivant les tests avant la mise en prod, pas de simples
+ajustements de chiffres :
+1. `points: N` bloque au dépassement strict, donc au (N+1)-ième échec, pas au N-ième — `points` fixé
+   à N-1 pour que « 5 échecs bloque » corresponde bien au 5e.
+2. Une fenêtre `duration: 30 jours` dépasse la limite documentée de RateLimiterMemory (2 147 483s,
+   ~24,8j, wiki officiel "Memory" — contrainte `setTimeout` 32 bits) et aurait fait s'auto-purger le
+   compteur après 1ms en production (`TimeoutOverflowWarning`).
+3. Le correctif initial du bug 2 (`duration: 0`, jamais d'auto-expiration) en ouvrait un nouveau : sans
+   nettoyage automatique, une IP d'attaque qui ne se connectera jamais avec succès laisse une entrée
+   **permanente** en mémoire — un attaquant distribué sur des milliers d'IP peut faire grossir la Map
+   sans limite. Retenu à la place : fenêtre bornée à 20 jours (`LONG_MEMORY_SEC`, sous la limite avec
+   marge) — élimine l'overflow et la fuite mémoire, au prix d'un auto-reset après 20j d'inactivité
+   totale sur une clé (concession documentée, pas un raccourci silencieux — CLAUDE.md §1.9). Un test
+   générique (écoute `process.on('warning')`) garantit qu'aucune régression future sur ces durées ne
+   repasse inaperçue.
+
+**Limite connue, acceptée telle quelle (décision Saar 2026-08-07)** : le mécanisme d'escalade est
+volontairement sévère et ne se réinitialise que sur succès — sans email (SECU-EMAIL1) ni CAPTCHA ni
+outil admin, un joueur légitime qui se trompe répétitivement de mot de passe n'a aujourd'hui **aucune
+échappatoire** sinon le redémarrage complet du serveur (efface tous les compteurs de tous les
+utilisateurs). Saar a tranché : risque accepté tel quel pour ce groupe fermé, pas d'outil de déblocage
+ciblé pour l'instant. À reconsidérer seulement si ce point pose problème en usage réel.
+
+**SECU-2 (énumération email) — laissée en l'état, décision Saar 2026-08-07** : la correction "propre"
+demande un canal email (pour prévenir l'utilisateur légitime hors bande plutôt que via la réponse
+HTTP), donc SMTP/service transactionnel + domaine avec DNS contrôlé (SPF/DKIM). Disproportionné pour
+ce projet vu le `REGISTRATION_CODE` déjà obligatoire (seul quelqu'un avec le code peut tester la route)
+et le groupe fermé — reste Basse, non traité. Se résoudrait gratuitement si `SECU-EMAIL1` est comblé un
+jour pour une autre raison (reset de mot de passe).
+
 ---
 
 ### SECU-2 — Énumération d'emails via `/api/auth/register`
@@ -385,6 +495,8 @@ ouverte au public).
 
 **Priorité** : Basse (le `REGISTRATION_CODE` obligatoire réduit déjà fortement la surface
 d'exploitation réelle — seul quelqu'un possédant déjà le code d'invitation peut tester cette route).
+
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — inchangé (`auth.js:62`, même 409 explicite). Toujours Basse.
 
 ---
 
@@ -433,6 +545,10 @@ si ce n'est pas déjà le cas (à vérifier — non auditée ici).
 
 **Priorité** : Moyenne — vérifier d'abord la configuration MinIO réelle avant de prioriser un
 correctif applicatif (le facteur limitant n'est peut-être pas dans ce code).
+
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` mécanisme — inchangé (`upload.js`, toujours `file.mimetype`
+déclaré, pas de vérification magic-bytes). La configuration réelle des en-têtes MinIO recommandée en
+action prioritaire §E n'a toujours pas été vérifiée — reste `[INCONNU]`.
 
 ---
 
@@ -548,6 +664,13 @@ dossier existant) sur les 2 points d'émission identifiés ici précisément (li
 plutôt que sur des points génériques, ce qui devrait trancher la question en une seule séance de jeu
 de test.
 
+**[MISE À JOUR 2026-08-07]** `[VÉRIFIÉ]` — voir INFRA-2 ci-dessus : le mécanisme exact décrit ici
+(émission directe de `broadcastCurrentSubPhase` avant le flush du `DICE_RESULT`/prompt de défense) est
+toujours en place, à `socketCombatHelpers.js:1972` (`resolveMeleeDefensePj`) et `:405`
+(`armAwaitingDamage`, désormais partagé par 3 flux). `docs/EN_COURS.md` confirme le même diagnostic
+daté du 2026-08-05, toujours au statut « en attente de décision Saar (coder le correctif ou attendre
+confirmation) » — l'instrumentation recommandée ici n'a pas encore tranché entre corriger et confirmer.
+
 ---
 
 ### BUG-2 — Filtre MIME d'upload accepte un type générique sans vérification de contenu
@@ -607,4 +730,36 @@ Par coût de correction croissant :
    avec Saar avant implémentation.
 
 Tout le reste (§B/§C restants) est classé Basse priorité — observations utiles pour la prochaine fois
+
+---
+
+### [MISE À JOUR 2026-08-07] Synthèse du rafraîchissement
+
+97 commits depuis l'audit d'origine, presque tous du contenu jeu (Fatigue/Dommages, Blessures/Guérison,
+Chat, Inventaire, Catastrophe, Battlemap 2D, États personnage) plutôt que des correctifs de cet audit.
+Sur les 4 actions listées ci-dessus le 2026-07-25 :
+
+1. **SECU-1 — toujours pas fait.** Zéro ligne changée. Reste la meilleure action au monde en rapport
+   effort/impact de tout ce document. Recommandation inchangée, priorité inchangée, deux semaines de
+   plus sans correctif.
+2. **BUG-1/COM27 — toujours pas tranché**, mais désormais mieux compris : le mécanisme est confirmé
+   partagé par 3 flux (`armAwaitingDamage`) au lieu d'1, avec un commentaire de code qui documente
+   explicitement l'avoir laissé de côté (Lot 3, 2026-07-28). Le coût de ne pas trancher augmente à
+   mesure que d'autres flux s'appuient sur le même helper.
+3. **SECU-3/MinIO — non vérifié**, toujours `[INCONNU]`.
+4. **INFRA-9 — la question s'est résolue d'elle-même**, pas par le script proposé mais par le départ de
+   Codex/Kiwi (2026-08-04) : plus de deuxième branche, plus de collision possible. Rétrogradé.
+
+En revanche, deux chantiers non listés dans les priorités d'origine ont produit les meilleurs résultats
+mesurables de la période : **`PLAN_REFACTOR_SIDEBAR.md`** et **`PLAN_REFACTOR_SURFACE.md`** ont
+réellement fait fondre deux des sept fichiers listés en INFRA-4 (-92 % et -83 %), et
+**`PLAN_RW_SYSCOMBAT.md`** a doté `resolveMeleeAction`/`resolveAssaultAction` de leur premier filet de
+tests automatisés — sans réduire leur taille, contrairement à l'attente implicite de l'audit d'origine.
+Enseignement pour le prochain rafraîchissement : mesurer les plans de refactor sur leur objectif déclaré
+(dédup, tests, extraction pure), pas sur une réduction de lignes qu'ils n'ont jamais promise.
+
+**Nouvelle priorité 1 recommandée pour la suite** : SECU-1 (inchangé, toujours le meilleur ROI) puis
+une décision explicite Saar sur BUG-1/COM27 (corriger maintenant que les 2 points sont localisés avec
+précision, ou documenter formellement le report) — les deux ne demandent ni sprint ni exploration
+supplémentaire, seulement une décision.
 qu'un fichier concerné est de toute façon retouché, mais ne justifie pas un chantier dédié à froid.
