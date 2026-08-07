@@ -91,6 +91,7 @@
 - Upload screenshot éditeur → MinIO — 🔲
 - Jets Favoris : drag‑to‑reorder macros (UI) — 🔲
 - Paramètre campagne GM entity move mode (reporté) — 🔲
+- Commande de chat MJ `/healall` — réinitialise les blessures de tous les tokens du playground — 🔲
 
 ---
 

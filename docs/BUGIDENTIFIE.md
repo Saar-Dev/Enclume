@@ -51,6 +51,10 @@ déplacement au lieu d'une attaque), SIDEBAR-CDL-CONTRAST1 (Récapitulatif des D
 dans la Sidebar). Une première passe avait analysé les 3 en même temps avec hypothèses de cause —
 retirée (violation de la règle "un bug à la fois" + demande explicite de Saar de noter sans corriger),
 conclusions à considérer comme fausses/non avenues.
+2026-08-07 (Saar) — signalement direct de 2 bugs, simple ajout au registre (symptôme uniquement,
+aucune analyse) : ENTITYCLICK1 (clic sur une entité interactive — porte, échelle, coffre — sans effet ;
+analyse du code du world builder à faire), DISPLAYLEVEL-COMBAT1 (impossible de changer de displayLevel
+— donc d'accéder aux autres étages — pendant un combat).
 > Index priorité → [`docs/EN_COURS.md`](EN_COURS.md) §Dettes actives
 
 ---
