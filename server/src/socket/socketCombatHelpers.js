@@ -2290,134 +2290,151 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       : null
     const formula = weapon.effective_formula.replace(/\s/g, '')
 
-    // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
-    // (extrait le 2026-07-30, docs/PLAN_FATIGUE_DOMMAGES.md §9 point structurel 2 : fermeture
-    // auparavant privée à cette fonction, désormais partagée avec le Lot 3 Chute/Feu/Acide).
-    const fetchCibleNA = (charId, sheetId) => damageService.fetchCibleNA(db, charId, sheetId)
-
-    // 8a. Cible = drone (§7.6 — blindage + RD intégrité, auto-resolve)
-    if (cibleCharacter?.type === 'drone') {
-      const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
-      if (!droneSheet) return { suspend: false, emissions }
-      const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
-      const modDomAttaque = getMrModifier(mr)
-      const degautsBruts  = rawDice + modDomAttaque
-      const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
-      await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
-      const newIntegrite = degatsNets >= 30 ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
-      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
-        userId, username: tireurUsername, color: tireurColor,
-        formula, rolls: dmgRolls, total: degautsBruts,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: dmgSeed, timestamp: now,
-        skillLabel: `Dégâts — ${cibleCharacter.name} · Intégrité : ${droneSheet.integrite_actuelle} → ${newIntegrite}`,
-        mechanicalTotal: rawDice,
-        diffLabel: `+${modDomAttaque} MR · −${etqDrone} blindage · RD ${rdDrone}`,
-        chancesDeReussite: degatsNets,
-        isSuccess: degatsNets > 0,
-        cardType: 'drone_damage',
-      } })
-      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-        tireurId: action.token_id, cibleId: action.target_token_id,
-        localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
-        severity: null, is_lethal: false, isSuccess: true, shockResult: null,
-      } })
-      return { suspend: false, emissions }
-    }
-
-    // 8b. Cible = PNJ : auto-resolve
-    if (!cibleCharacter || cibleCharacter.type === 'pnj') {
-      const cibleSheet    = cibleCharacter ? await db('char_sheet').where({ character_id: cibleCharacter.id }).first() : null
-      const { for_na, con_na, vol_na } = cibleSheet ? await fetchCibleNA(cibleCharacter.id, cibleSheet.id) : { for_na: 8, con_na: 8, vol_na: 8 }
-
-      const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
-      const modDomAttaque = getMrModifier(mr)
-      const degautsBruts  = rawDice + modDomAttaque
-      const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-        degautsBruts,
-        characterIdCible: cibleCharacter?.id ?? null,
-        cibleType:        cibleCharacter?.type ?? null,
-        char_sheet_id_cible: cibleSheet?.id ?? null,
-        for_na_cible: for_na, con_na_cible: con_na, vol_na_cible: vol_na,
-      })
-      if (hitResult === null) return { suspend: false, emissions }
-      const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-              is_lethal, finalSeverity, shockResult } = hitResult
-
-      if (shockResult) {
-        statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
-      }
-
-      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
-        userId, username: tireurUsername, color: tireurColor,
-        formula: '1d20', rolls: locRolls, total: rollLoc,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: locSeed, timestamp: now,
-        skillLabel: 'Localisation — Drone', mechanicalTotal: rollLoc, diffLabel: '',
-        chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation, isSuccess: true,
-      } })
-      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
-        userId, username: tireurUsername, color: tireurColor,
-        formula, rolls: dmgRolls, total: degautsBruts,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: dmgSeed, timestamp: now,
-        skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
-        mechanicalTotal: rawDice, diffLabel: `Armure:${etq ?? 0} RD:${rd}`,
-        chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
-      } })
-      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-        tireurId: action.token_id, cibleId: action.target_token_id,
-        localisation, degautsBruts, degatsNets,
-        severity: finalSeverity, is_lethal, isSuccess: true, shockResult: shockResult ?? null,
-      } })
-      if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-        statusService.applyStun(io, db, campaignId, {
-          targetTokenId: action.target_token_id, outcome: shockResult.outcome,
-          userId, username: tireurUsername, color: tireurColor,
-        }).catch(err => console.error('[WS] applyStun error:', err.message))
-      }
-      return { suspend: false, emissions }
-    }
-
-    // 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT
-    const cibleSheet    = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
-    const { for_na, con_na, vol_na } = cibleSheet
-      ? await fetchCibleNA(cibleCharacter.id, cibleSheet.id)
-      : { for_na: 8, con_na: 8, vol_na: 8 }
-    const targetName = cibleCharacter.name ?? 'Cible'
-
-    // Plusieurs entrées peuvent désormais coexister pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
-    // §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre
-    // entrée n'attendait déjà.
-    const pendingDamageCount = await armAwaitingDamage(io, campaignId, action.token_id, {
-      campaignId,
-      targetTokenId:       action.target_token_id,
-      characterIdCible:    cibleCharacter.id,
-      cibleType:           null,
-      char_sheet_id_cible: cibleSheet?.id ?? null,
-      mr, portee,
-      fire_mode_bonus_dmg: 0,
-      formula,
-      for_na_cible:  for_na,
-      con_na_cible:  con_na,
-      vol_na_cible:  vol_na,
-      tireurUsername, tireurColor, userId, targetName,
-      type: 'assault', modDom: null, combatModeBonus: null,
-      targetUserId: cibleCharacter.user_id,
-    })
-    if (pendingDamageCount === 1) {
-      const damagePayload = { tokenId: action.token_id, formula, targetName }
-      emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
-    }
-    // Même correctif que resolveAssaultAction/confirmMeleeDefense (Saar, 2026-07-19) — AWAITING_DAMAGE
-    // vient d'être posé juste au-dessus, sous-état FSM bloquant : ne jamais laisser advanceTimeline
-    // s'exécuter juste après côté appelant.
-    return { suspend: true, emissions }
+    // Branchement cible (PLAN_RW_SYSCOMBAT.md §2.8, Lot 6) — guard clauses, même style que Lots 2/4.
+    // Aucune des 3 fonctions sœurs n'a son propre try/catch : toute exception remonte à ce catch
+    // unique, qui vide alors `emissions` — comportement existant préservé à l'identique.
+    const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now }
+    if (cibleCharacter?.type === 'drone') return await resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions)
+    if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveDroneAssaultHitPnj(io, campaignId, ctx, emissions)
+    return await resolveDroneAssaultHitPj(io, campaignId, ctx, emissions)
 
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
     return { suspend: false, emissions: [] }
   }
+}
+
+// ── Branches cible de resolveDroneAssaultAction (PLAN_RW_SYSCOMBAT.md §2.8, Lot 6) ─────────────────
+// Extraites de resolveDroneAssaultAction — ctx assemblé par la coquille juste avant le dispatch.
+// Aucune de ces fonctions n'a son propre try/catch (même invariant que Lots 2/4) : toute exception
+// remonte au catch unique de resolveDroneAssaultAction.
+
+// 8a. Cible = drone (§7.6 — blindage + RD intégrité, auto-resolve)
+async function resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions) {
+  const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
+  const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
+  if (!droneSheet) return { suspend: false, emissions }
+  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+  const modDomAttaque = getMrModifier(mr)
+  const degautsBruts  = rawDice + modDomAttaque
+  const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
+  await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, action.target_token_id, droneSheet, degatsNets)
+  const newIntegrite = degatsNets >= 30 ? 0 : Math.max(0, droneSheet.integrite_actuelle - 1)
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId, username: tireurUsername, color: tireurColor,
+    formula, rolls: dmgRolls, total: degautsBruts,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: dmgSeed, timestamp: now,
+    skillLabel: `Dégâts — ${cibleCharacter.name} · Intégrité : ${droneSheet.integrite_actuelle} → ${newIntegrite}`,
+    mechanicalTotal: rawDice,
+    diffLabel: `+${modDomAttaque} MR · −${etqDrone} blindage · RD ${rdDrone}`,
+    chancesDeReussite: degatsNets,
+    isSuccess: degatsNets > 0,
+    cardType: 'drone_damage',
+  } })
+  emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+    tireurId: action.token_id, cibleId: action.target_token_id,
+    localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
+    severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+  } })
+  return { suspend: false, emissions }
+}
+
+// 8b. Cible = PNJ ou décor : auto-resolve
+async function resolveDroneAssaultHitPnj(io, campaignId, ctx, emissions) {
+  const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
+  const cibleSheet = cibleCharacter ? await db('char_sheet').where({ character_id: cibleCharacter.id }).first() : null
+  // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
+  // (extrait le 2026-07-30, docs/PLAN_FATIGUE_DOMMAGES.md §9 point structurel 2).
+  const { for_na, con_na, vol_na } = cibleSheet
+    ? await damageService.fetchCibleNA(db, cibleCharacter.id, cibleSheet.id)
+    : { for_na: 8, con_na: 8, vol_na: 8 }
+
+  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+  const modDomAttaque = getMrModifier(mr)
+  const degautsBruts  = rawDice + modDomAttaque
+  const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+    degautsBruts,
+    characterIdCible: cibleCharacter?.id ?? null,
+    cibleType:        cibleCharacter?.type ?? null,
+    char_sheet_id_cible: cibleSheet?.id ?? null,
+    for_na_cible: for_na, con_na_cible: con_na, vol_na_cible: vol_na,
+  })
+  if (hitResult === null) return { suspend: false, emissions }
+  const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
+          is_lethal, finalSeverity, shockResult } = hitResult
+
+  if (shockResult) {
+    statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+  }
+
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId, username: tireurUsername, color: tireurColor,
+    formula: '1d20', rolls: locRolls, total: rollLoc,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: locSeed, timestamp: now,
+    skillLabel: 'Localisation — Drone', mechanicalTotal: rollLoc, diffLabel: '',
+    chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation, isSuccess: true,
+  } })
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId, username: tireurUsername, color: tireurColor,
+    formula, rolls: dmgRolls, total: degautsBruts,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: dmgSeed, timestamp: now,
+    skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
+    mechanicalTotal: rawDice, diffLabel: `Armure:${etq ?? 0} RD:${rd}`,
+    chancesDeReussite: degatsNets, isSuccess: degatsNets > 0,
+  } })
+  emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+    tireurId: action.token_id, cibleId: action.target_token_id,
+    localisation, degautsBruts, degatsNets,
+    severity: finalSeverity, is_lethal, isSuccess: true, shockResult: shockResult ?? null,
+  } })
+  if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+    statusService.applyStun(io, db, campaignId, {
+      targetTokenId: action.target_token_id, outcome: shockResult.outcome,
+      userId, username: tireurUsername, color: tireurColor,
+    }).catch(err => console.error('[WS] applyStun error:', err.message))
+  }
+  return { suspend: false, emissions }
+}
+
+// 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT (seule branche qui suspend)
+async function resolveDroneAssaultHitPj(io, campaignId, ctx, emissions) {
+  const { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId } = ctx
+  const cibleSheet = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
+  const { for_na, con_na, vol_na } = cibleSheet
+    ? await damageService.fetchCibleNA(db, cibleCharacter.id, cibleSheet.id)
+    : { for_na: 8, con_na: 8, vol_na: 8 }
+  const targetName = cibleCharacter.name ?? 'Cible'
+
+  // Plusieurs entrées peuvent désormais coexister pour le même token (docs/PLAN_COMBAT_ACTION_QUEUE.md
+  // §3) — consommées FIFO par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre
+  // entrée n'attendait déjà.
+  const pendingDamageCount = await armAwaitingDamage(io, campaignId, action.token_id, {
+    campaignId,
+    targetTokenId:       action.target_token_id,
+    characterIdCible:    cibleCharacter.id,
+    cibleType:           null,
+    char_sheet_id_cible: cibleSheet?.id ?? null,
+    mr, portee,
+    fire_mode_bonus_dmg: 0,
+    formula,
+    for_na_cible:  for_na,
+    con_na_cible:  con_na,
+    vol_na_cible:  vol_na,
+    tireurUsername, tireurColor, userId, targetName,
+    type: 'assault', modDom: null, combatModeBonus: null,
+    targetUserId: cibleCharacter.user_id,
+  })
+  if (pendingDamageCount === 1) {
+    const damagePayload = { tokenId: action.token_id, formula, targetName }
+    emissions.push({ to: 'user', userId: cibleCharacter.user_id, event: WS.COMBAT_DAMAGE_PROMPT, data: damagePayload, fallback: 'socket' })
+  }
+  // Même correctif que resolveAssaultAction/confirmMeleeDefense (Saar, 2026-07-19) — AWAITING_DAMAGE
+  // vient d'être posé juste au-dessus, sous-état FSM bloquant : ne jamais laisser advanceTimeline
+  // s'exécuter juste après côté appelant.
+  return { suspend: true, emissions }
 }
 
 // Fetch arme + mods installés pour un Assaut — factorisé (COM29 : main directrice ET non-directrice

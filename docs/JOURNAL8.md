@@ -832,3 +832,64 @@ Prochaine étape : Lot 6 (`resolveDroneAssaultAction`, §2.8) — les numéros d
 sont déjà caducs après ce Lot (fonction déplacée de L.2103 à L.2098, delta non trivial car 3 des 5
 sites du Lot 5 précèdent cette fonction dans le fichier) : à revérifier avant de coder, pas à déduire
 du texte du plan tel quel.
+
+---
+
+## Session (Saar) — 2026-08-07 — `PLAN_RW_SYSCOMBAT.md` Lot 6 : branchement cible `resolveDroneAssaultAction`
+
+Extraction du branchement cible (drone/PNJ/PJ) de `resolveDroneAssaultAction` (§2.8 du plan) en 3
+fonctions sœurs `resolveDroneAssaultHitDrone`/`Pnj`/`Pj`, même patron que les Lots 2/4 (guard clauses,
+`ctx` assemblé par la coquille, aucune fonction extraite n'a son propre `try/catch`). Fonction relue
+intégralement à l'état réel du fichier avant de coder (L.2098, décalée de -5 vs le texte du plan après
+le Lot 5) — structure interne (3 branches de 28/52/34 lignes) confirmée identique malgré le décalage.
+Le closure `fetchCibleNA` de la coquille a disparu (chaque fonction extraite appelle
+`damageService.fetchCibleNA(db, ...)` directement), cohérent avec l'usage déjà en place ailleurs dans
+le fichier.
+
+**Vérification — première fixture jetable en base réelle de ce chantier** (les Lots 2/4 avaient utilisé
+la méthode mais leurs scripts n'avaient jamais été committés, donc pas de recette à reprendre) :
+campagne/battlemap (`surface_data` vide, mêmes modalités que `worldService.test.mjs`)/personnages/
+tokens construits à la main, `resolveDroneAssaultAction` appelée pour de vrai avec un `io` mocké
+(`to().emit()` uniquement) et `programme.level: 20` pour garantir `isSuccess` sur tout jet 1d20 possible.
+5 scénarios initiaux tous OK. **Trouvaille en cours de route** : le 6ᵉ scénario prévu au plan
+(`resolveTargetHit` renvoie `null` pour une cible PNJ) s'est révélé structurellement inatteignable —
+lecture intégrale de `damageService.resolveTargetHit` : son seul `return null` est sur `cibleType ===
+'drone'`, un cas que `resolveDroneAssaultHitPnj` ne reçoit jamais (intercepté plus tôt par le guard
+`cibleCharacter?.type === 'drone'` de la coquille). Corrigé dans le plan — pas un bug, une prémisse de
+scénario erronée de la rédaction initiale du §2.8.e.
+
+**Faux bug évité en vérifiant avant de conclure** : le premier passage signalait un rollback silencieux
+d'`applyWound` (`condition_type "wound_healing_check" absent de shared/echeanceTypeRegistry.js`) —
+pas un défaut du serveur réel : ce registre est peuplé par effet de bord via l'import de
+`server/src/lib/echeanceHandlerRegistrations.js` dans `server/src/index.js`, jamais exécuté par un
+script isolé qui n'importe que `socketCombatHelpers.js`. Ajouté cet import au fixture — écart disparu.
+
+**Durcissement après relecture critique** (Saar : « corrections avant de commit ? », réponse : rien à
+corriger dans le code livré, seulement dans la rigueur de la vérification, faite puisque le temps ne
+manquait pas) : assertions resserrées (valeur exacte plutôt que tolérante, nom d'event vérifié plutôt
+que seulement la forme du payload), scénario supplémentaire cible PNJ **avec armure** sur les 6 slots
+réels (`shared/armorConstants.js` LOC_TABLE) — jamais exercé par la première version, confirmant que
+`damageService.resolveTargetHit` engage réellement `etq` quand une armure existe (`diffLabel:
+"Armure:3..."`) — et 20 passes de la suite complète avec de vrais jets de dés (non mockés) : 420
+assertions, 0 échec. **Résidu de mes tout premiers essais trouvé et nettoyé** : 2 campagnes de test
+orphelines restées en base (échecs de contraintes `chk_dp_source`/`drone_programs_level_check` avant
+d'avoir trouvé les bonnes valeurs, survenus hors du bloc `try/finally` du fixture) — supprimées
+explicitement, cascade FK vérifiée (`characters`/`battlemaps` → `campaigns` = `ON DELETE CASCADE`), 0
+résidu confirmé sur les 4 tables concernées après coup. Sans rapport avec la validité du Lot 6 lui-même
+(échecs survenus avant toute exécution de `resolveDroneAssaultAction`).
+
+**Testé** : `node --check` propre, 18 tests Lot 1/5 toujours au vert (fichiers non touchés), diff relu
+ligne à ligne (corps des 3 branches déplacé verbatim, `ctx` vérifié champ par champ contre l'usage réel,
+aucune clé renommée) ; fixture jetable en base réelle — 6 scénarios, 20 passes, 420 assertions, 0 échec,
+0 résidu ; session de jeu réelle Saar confirmée fonctionnelle (tir drone → PNJ et → PJ, « Enclume
+fonctionne, combat validé »).
+**Non testé** : aucun reste connu sur le périmètre de ce Lot.
+**Données** : aucune migration, aucun effet runtime — le résidu DB trouvé et nettoyé n'était pas un
+effet du code livré, mais de mes propres essais de mise au point du script de fixture.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+Prochaine étape : Lot 7 (`confirmMeleeDefense`, §2.9) — le plus sensible des trois derniers lots : son
+contrat de retour diffère (`suspendForDamage` remonté explicitement plutôt que `{ suspend, emissions }`
+uniforme), et sa vérification doit prouver une **absence** (`advanceTimeline` non appelé quand
+l'attaquant est PJ) — une forme de test que les fixtures des Lots 2/4/6 (toutes construites pour
+vérifier des présences) ne couvrent pas encore. À concevoir avant de coder, pas pendant.
