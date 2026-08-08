@@ -18,33 +18,36 @@
 
 const OLD_AMMO_EFFECTS = 'DMG=SET(1D6+2);CHOC=SET(BP:5D10,C:4D10,M:3D10,L:2D10,E:1D10);TXT=FX=ASSOMMANTE'
 
+// Matché par `name`, pas par `id` : le seed ref_equipment génère un UUID par import, donc les ID
+// codés en dur ne sont valides que sur l'instance où la migration a été écrite (constaté 2026-08-08,
+// serveur Kiwi réimporté indépendamment — voir docs/SERVEURDISTANTKIWI.md, migration 209).
 const FIXES = [
   {
-    id: '30985a34-876d-4c0e-89d0-5f49cab10809', // Darts 7.62 mm ST - Projectile SAP
+    name: 'Darts 7.62 mm ST - Projectile SAP',
     newAmmoEffects: 'DMG=BASE;TXT=FX=SAP|DEPTH=>500M_X0.5|DEPTH=>=1000M_DISABLE',
   },
   {
-    id: '4795d390-04ee-4697-8d9c-d8eb77480ccd', // Flèche - Projectile IEM
+    name: 'Flèche - Projectile IEM',
     newAmmoEffects: 'DMG=MUL(0.5);TXT=FX=IEM(TEST_PANNE:-1/2D10_ARME)',
   },
 ]
 
 export const up = async (knex) => {
-  for (const { id, newAmmoEffects } of FIXES) {
-    const row = await knex('ref_equipment').where({ id }).select('ammo_effects').first()
-    if (!row) throw new Error(`ref_equipment introuvable : ${id}`)
+  for (const { name, newAmmoEffects } of FIXES) {
+    const row = await knex('ref_equipment').where({ name }).select('id', 'ammo_effects').first()
+    if (!row) throw new Error(`ref_equipment introuvable : ${name}`)
     if (row.ammo_effects !== OLD_AMMO_EFFECTS) {
-      throw new Error(`ammo_effects inattendu pour ${id} (déjà modifié ?) : ${row.ammo_effects}`)
+      throw new Error(`ammo_effects inattendu pour ${name} (déjà modifié ?) : ${row.ammo_effects}`)
     }
-    await knex('ref_equipment').where({ id }).update({ ammo_effects: newAmmoEffects })
+    await knex('ref_equipment').where({ id: row.id }).update({ ammo_effects: newAmmoEffects })
   }
 }
 
 export const down = async (knex) => {
-  for (const { id, newAmmoEffects } of FIXES) {
-    const row = await knex('ref_equipment').where({ id }).select('ammo_effects').first()
+  for (const { name, newAmmoEffects } of FIXES) {
+    const row = await knex('ref_equipment').where({ name }).select('id', 'ammo_effects').first()
     if (row?.ammo_effects === newAmmoEffects) {
-      await knex('ref_equipment').where({ id }).update({ ammo_effects: OLD_AMMO_EFFECTS })
+      await knex('ref_equipment').where({ id: row.id }).update({ ammo_effects: OLD_AMMO_EFFECTS })
     }
   }
 }
