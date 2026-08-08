@@ -363,6 +363,7 @@ export default function WeaponPanel({ characterId, canEdit, onOpenModing = () =>
   if (loading) return null
 
   const hasAnything = equippedWeapons.length > 0 || (canEdit && availableWeapons.length > 0)
+  console.log('[DBG-ARMEDND]', { canEdit, hasAnything, items: items.map(i => ({ id: i.id, name: i.custom_name || i.ref_name, ref_family: i.ref_family, ref_category: i.ref_category, ref_location: i.ref_location, container: i.container, slots: i.slots })) })
 
   return (
     <div style={s.root}>
