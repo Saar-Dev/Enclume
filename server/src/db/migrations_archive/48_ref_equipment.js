@@ -1,17 +1,14 @@
 /**
- * DRAFT — Phase 1 PLAN_MIGRATIONS_REFONTE — schéma consolidé ref_equipment*
+ * Migration 48 — ref_equipment
  *
- * Remplace, à terme, les 18 migrations archivées (48, 53, 73, 75, 76d, 83, 87, 135, 141, 142,
- * 160, 168, 178, 182, 184, 190, 209, 235) pour la partie SCHÉMA du cluster ref_equipment.
- * Généré et recoupé via migra (schéma public complet, vide vs vtt) + pg_dump --schema-only
- * filtré sur les 4 tables (2026-08-08) — zéro écart entre les deux sources.
- * Style calqué sur la migration 48 d'origine (createTable + CHECK en raw SQL), étendu avec les
- * colonnes/contraintes ajoutées depuis par 87/141/142/168/178/182/184/190.
+ * Catalogue de référence statique des équipements Polaris.
+ * Schéma défini et validé session 46 — JOURNALBDD.md fait foi.
+ * Données saisies manuellement par le GM.
  *
- * Tables créées (ordre des dépendances) :
- *   1. ref_equipment             — catalogue principal
- *   2. ref_equipment_skills      — items ↔ compétences boostées/requises (FK externe ref_skills)
- *   3. ref_equipment_skill_assoc — items ↔ compétences d'utilisation (FK externe ref_skills)
+ * Tables créées (dans l'ordre des dépendances) :
+ *   1. ref_equipment            — catalogue principal
+ *   2. ref_equipment_skills     — items ↔ compétences boostées/requises
+ *   3. ref_equipment_skill_assoc — items ↔ compétences d'utilisation
  *   4. ref_equipment_ammo_compat — munitions ↔ armes éligibles (auto-référence)
  */
 
@@ -73,16 +70,6 @@ export const up = async (knex) => {
     table.text('ammo_effects')
 
     table.timestamps(true, true)
-
-    // Génération / Mods (ex-migrations 87, 141, 142, 168, 178, 182, 184, 190)
-    table.integer('generation')
-    table.text('mod_slot')
-    table.boolean('mod_requires_aim').notNullable().defaultTo(false)
-    table.integer('shield_atk_malus')
-    table.text('shield_extra_locations')
-    table.text('mod_key')
-    table.string('shock_mechanism', 20)
-    table.boolean('shock_reduced_by_armor').notNullable().defaultTo(true)
   })
 
   // CHECK constraints — raw SQL pour fiabilité maximale indépendamment de la version Knex
@@ -93,9 +80,7 @@ export const up = async (knex) => {
       ADD CONSTRAINT chk_eq_init_mod    CHECK (init_mod IS NULL OR init_mod < 0),
       ADD CONSTRAINT chk_eq_fire_mode   CHECK (fire_mode IS NULL OR fire_mode IN ('CC','RC','RL','CC/RC','CC/RL','RC/RL','CC/RC/RL','-')),
       ADD CONSTRAINT chk_eq_linked_attr CHECK (linked_attr IS NULL OR linked_attr IN ('FOR','CON','COO','ADA','PER','INT','VOL','PRE')),
-      ADD CONSTRAINT chk_eq_malus_cat   CHECK (malus_cat IS NULL OR malus_cat IN ('S','A','B','C','D')),
-      ADD CONSTRAINT chk_eq_shield_atk_malus      CHECK (shield_atk_malus IS NULL OR shield_atk_malus < 0),
-      ADD CONSTRAINT chk_eq_shield_extra_locations CHECK (shield_extra_locations IS NULL OR shield_extra_locations IN ('C','C/T'))
+      ADD CONSTRAINT chk_eq_malus_cat   CHECK (malus_cat IS NULL OR malus_cat IN ('S','A','B','C','D'))
   `)
 
   // 2. Junction : items ↔ compétences boostées/requises
@@ -117,8 +102,6 @@ export const up = async (knex) => {
   })
 
   // 4. Junction : munitions ↔ armes éligibles (auto-référence sur ref_equipment)
-  // EQAMMOCOMPAT1 (BUGIDENTIFIE.md) : jamais consommée côté jeu, jamais peuplée — conservée telle
-  // quelle en attendant décision Saar (retrait vs conservation), hors périmètre Phase 1.
   await knex.schema.createTable('ref_equipment_ammo_compat', (table) => {
     table.uuid('ammo_id').notNullable()
       .references('id').inTable('ref_equipment').onDelete('CASCADE')

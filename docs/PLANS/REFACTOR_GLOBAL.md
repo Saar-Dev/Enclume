@@ -44,6 +44,39 @@
 > conservée telle quelle par cohérence avec la méthode décrite en tête de doc) — toute reprise de ce
 > PLAN doit lire `CharacterModal` comme déjà traité, hors périmètre d'une future extraction.
 
+> **Contre-revue à charge — passe 3 (2026-08-07, Claude, demande Saar)** : le classement §1 est
+> obsolète sur ses deux lignes les plus importantes, vérifié par mesure directe — `Sidebar.jsx`
+> **3449 → 306 lignes** (sorti du classement, Règle 10 ci-dessous appliquée à l'item 3) ;
+> `socketCombatHelpers.js` **3047 → 3106 lignes** — devenu le plus gros fichier du dépôt, malgré
+> (pas grâce à) l'item 1 ci-dessous. `char-sheet.js` a aussi bougé, moins visiblement : 1825 → 1951.
+> Reste du tableau non revérifié ligne à ligne (pas d'écart matériel attendu ailleurs).
+>
+> **Item 1 (`socketCombatHelpers.js`) — mise à jour et correction de métrique** : `PLAN_RW_SYSCOMBAT.md`
+> Lots 5-7 sont clos (Lot 7 ⚠️ partiel, confirmation PJ en attente) — plus "planifiés". Déclenchés en
+> pratique comme "continuité du chantier" (décision Saar 2026-08-06), pas par la confirmation de COM27
+> que cet item posait comme porte d'entrée ; COM27 reste non tranché à ce jour. Le fichier a **grossi**
+> pendant ces lots (3047→3106) malgré la déduplication de `computeMeleeRawDamage` (Lot 5) et
+> l'extraction de branches sœurs (`resolveDroneAssaultAction` Lot 6, `confirmMeleeDefense` Lot 7) — ces
+> extractions restent **intra-fichier** (nouvelles fonctions nommées, pas de nouveau fichier), à la
+> différence de Sidebar. C'est une conséquence directe de F2 (ne pas fusionner Pj/Pnj/Drone) : **la
+> réduction de la taille de ce fichier n'est pas un critère de succès atteignable tant que F2 tient** —
+> ne pas mesurer ce chantier à l'aune du tableau §1. Seul reste réellement non traité : `confirmDamage`
+> (247 lignes, jamais touchée par aucun lot, candidate "Lot 8" non cadrée).
+>
+> **Item 2 (`Editor3D.jsx`) — statut inchangé, à signaler pour une reprise future** : aucune ligne de
+> code touchée depuis la rédaction de ce plan. Reste l'unique item du classement avec une recherche
+> externe déjà faite et deux techniques concrètement actionnables identifiées (§8.1 — batching
+> transactionnel, égalité sémantique avant commit) : le travail de cadrage est fait, seule l'extraction
+> reste à faire.
+>
+> **Items 3 et 4 — clos, retirés de §6 (Règle 10)** : `Sidebar.jsx` (`PLAN_REFACTOR_SIDEBAR.md`, Lots
+> 1-5, clos 2026-08-07, 3449→306 lignes) et le hook `useWorldEffects` partagé
+> (`PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, clos 2026-08-06) sont maintenant deux chantiers terminés, pas
+> des recommandations ouvertes — voir §6 mis à jour. Note pour l'historique : l'exigence "test de rendu
+> par composant extrait" posée pour l'item 3 n'a pas été appliquée (zéro fichier de test créé pour les
+> composants extraits) — la clôture s'est faite par confirmation navigateur manuelle, même pratique que
+> l'item 1, sans que ce plan ait été mis à jour pour l'assumer.
+
 ---
 
 ## 1. Vue d'ensemble
@@ -327,27 +360,27 @@ mode de validation (tests de caractérisation vs. pratique établie `node --chec
 clôture Testé/Non testé manuelle) est une décision à prendre avec Saar au moment de chaque lot, pas
 une règle unilatérale de ce document (voir précision dans la section `socketCombatHelpers.js` ci-dessus) :
 
-1. `socketCombatHelpers.js` — **pas en refactor proactif** : investiguer d'abord **COM27**
-   (`docs/EN_COURS.md`, jet de défense qui semble se lancer avant le jet d'attaque). Si la cause
-   racine touche ce fichier, la corriger est l'occasion d'extraire le fragment `computeMeleeRawDamage`
-   dupliqué (5 occurrences identifiées, avec la nuance de paramètres optionnels notée plus haut) —
-   jamais les branches Pj/Pnj/Drone (interdit par F2, `SERVICES_COMBAT.md`). C'est le fichier au
-   risque le plus élevé (autorité serveur combat) : il justifie de passer en premier *par le risque*,
-   pas par la facilité.
+1. `socketCombatHelpers.js` — **[MISE À JOUR 2026-08-07]** Lots 5-7 clos (Lot 7 ⚠️ partiel), voir la
+   contre-revue passe 3 ci-dessus : ne pas juger ce chantier sur la taille du fichier (F2 l'empêche
+   structurellement de baisser). Ce qui reste réellement ouvert : `confirmDamage` (247 lignes, jamais
+   traitée), à cadrer séparément si repris — pas un refactor proactif non plus, même logique
+   d'entrée (occasion d'un bug réel) que le reste de cet item.
 2. `Editor3D.jsx` — extraction des 5 hooks d'infrastructure documentés par `EDITEUR.md` (autosave,
    undo/redo, textures, effets runtime, panneaux), avec mise à jour du document dans le même commit.
-3. `Sidebar.jsx` — audit site par site des 38 compositions de style avant migration CSS, puis
-   extraction des composants déjà isolés (`CharacterModal`, `DiceBreakdownPopover`) avec un test de
-   rendu par composant extrait.
-4. `Sidebar.jsx` / `Editor3D.jsx` — hook `useWorldEffects` partagé pour supprimer la duplication de
-   fetch `world-effects` — **fait et confirmé, indépendamment du lot 2** : traité en chantier dédié
-   (`docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`, `useWorldRuntimeSync.js` +
-   `worldRuntimeStore.js`, clos 2026-08-06, confirmé fonctionnel en navigateur par Saar, hors
-   périmètre de la décomposition plus large d'`Editor3D.jsx` du lot 2). Ne reste, côté `Sidebar.jsx`,
-   que l'extraction de la palette JSX (`SurfaceEditorPanel.jsx`, Lot 5 de `PLAN_REFACTOR_SIDEBAR.md`).
+   **[MISE À JOUR 2026-08-07]** Non commencé — seul item du classement encore intégralement à faire
+   alors que la recherche externe (§8.1) est déjà prête à l'emploi.
+3. **[CLOS — retiré]** `Sidebar.jsx` : traité par `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` (Lots 1-5, clos
+   2026-08-07), bien au-delà de la portée décrite ici (3449→306 lignes, pas seulement l'audit de
+   styles). Voir contre-revue passe 3 pour la réserve sur les tests de rendu non ajoutés.
+4. **[CLOS — retiré]** Hook `useWorldEffects` partagé : `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`
+   (clos 2026-08-06). La palette JSX de `Sidebar.jsx` (`SurfaceEditorPanel.jsx`) qui restait en
+   suspens ici a été extraite le 2026-08-07 (Lot 5 de `PLAN_REFACTOR_SIDEBAR.md`, clôture du plan) —
+   plus rien en attente côté `Sidebar.jsx`/`Editor3D.jsx` sur ce point précis.
 5. Le reste (CharacterSheet, CombatActionWindow, SessionPage, char-sheet.js, creationService.js) —
    même constat d'absence de tests dédiés à traiter au cas par cas, à séquencer un par un à la
    demande ; pas de blocage fonctionnel identifié aujourd'hui qui imposerait un ordre entre eux.
+   **[MISE À JOUR 2026-08-07]** Intouchés comme prévu, sauf `char-sheet.js` qui a grossi
+   (1825→1951) organiquement — ne change pas la conclusion, juste à noter.
 
 ---
 

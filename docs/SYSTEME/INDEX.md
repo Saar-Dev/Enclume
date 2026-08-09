@@ -1,6 +1,6 @@
 # INDEX.md — Carte documentaire d’Enclume
 
-> Version : 2026-08-04 — refonte complète, dossier SYSTEME entièrement audité.
+> Version : 2026-08-07 — ajout SYSTEME/TRADE.md (Marchands & Échange).
 > Statut : Document de navigation pour humains et agents IA.
 > Lire ceci en premier pour savoir où trouver une information.
 
@@ -80,7 +80,12 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 | `SYSTEME/LOCALISATION.md` | Système d'internationalisation (i18n), namespaces, pattern serveur de traduction | ✅ Vérifié (2026-07-23) |
 | `SYSTEME/MANIFESTE_OBJETS_3D.example.json` | Exemple de manifeste d'asset 3D (non .md) | Référence |
 
-### 3.5 Éditeur & création
+### 3.5 Marchands & Échange
+| Document | Responsabilité | Statut |
+|----------|----------------|--------|
+| `SYSTEME/TRADE.md` | Marchands (catalogue, achat), échange PJ↔PJ, revente PJ→GM, transfert direct | ✅ Vérifié (2026-08-07) |
+
+### 3.6 Éditeur & création
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
 | `SYSTEME/EDITEUR.md` | Infrastructure de l'éditeur : onglets, undo/redo, sauvegarde, chargement textures | ✅ Vérifié (2026-08-02) |

@@ -1,12 +1,29 @@
 import { useEffect, useState } from 'react'
 
-// Curseur custom du canvas 3D — overlay DOM (Saar 2026-08-07), remplace `cursor: url()` natif.
-// Raison : le curseur natif n'est ni animable (aucun navigateur n'anime un SVG référencé en
-// `cursor:`, image figée) ni fiable pour un SVG avec masque/filtre/<use> (CURSEUR_CIBLE restait
-// invisible). Un <img> DOM classique n'a aucune de ces limites — rendu standard, CSS animable.
-// Position : `position: fixed` + clientX/clientY bruts — pas de calcul de rect nécessaire,
-// fixed est déjà relatif au viewport comme clientX/clientY. `pointer-events: none` impératif :
-// l'overlay ne doit jamais intercepter les événements destinés au canvas en dessous.
+// Curseur custom du canvas 3D — deux mécanismes distincts, choisis selon le besoin (Saar 2026-08-07,
+// 2026-08-08) :
+// 1. CASE/CIBLE (mode Déplacement/Ciblage combat) — overlay DOM (<img> qui suit la souris), PAS
+//    `cursor: url()` natif. Raison : aucun navigateur n'anime un SVG référencé en `cursor:` (image
+//    figée dès chargement — vérifié MDN + retours terrain, cf. commentaire resolveMode ci-dessous) et
+//    CASE/CIBLE sont animés (pulsation). Un <img> DOM classique n'a pas cette limite.
+// 2. Défaut hors combat (CURSEUR.svg) — `cursor: url()` NATIF, à l'inverse. Raison : pas besoin
+//    d'animation ici, et la précision prime (retour Saar : "le clic doit se faire sur la pointe de la
+//    flèche, comme un curseur système, on ne sacrifie pas la précision à la beauté"). Un overlay DOM
+//    suivant la souris via pointermove a toujours un frame de retard sur la position réelle du curseur
+//    OS (resynchronisé au pointermove suivant) — un curseur natif est composé par le navigateur à la
+//    position exacte, sans ce délai. Pour une simple flèche non animée, natif est strictement plus
+//    précis. Vérifié MDN (`cursor` CSS property, 2026-08-08) : le hotspot `x y` dans
+//    `url(img) x y, <fallback>` est en pixels de l'image, origine coin haut-gauche — correspond à la
+//    taille "naturelle" du SVG (attributs `width`/`height`), pas au viewBox. Sans hotspot explicite,
+//    le point de clic par défaut est (0,0) — le coin haut-gauche de l'image, jamais centré — d'où
+//    l'obligation de le calculer explicitlement pour une flèche (pointe hors du coin de l'image).
+//    Taille max recommandée par les navigateurs : 32×32 (limite dure ~128×128 avant rejet silencieux
+//    de l'image, retombée sur le mot-clé de secours) — CURSEUR.svg rendu à 32×29 (retour Saar
+//    2026-08-08 : le rendu initial à 40×36, même échelle que CASE/CIBLE, paraissait plus gros qu'un
+//    curseur système standard ~32px).
+// Position (overlay CASE/CIBLE) : `position: fixed` + clientX/clientY bruts — pas de calcul de rect
+// nécessaire, fixed est déjà relatif au viewport comme clientX/clientY. `pointer-events: none`
+// impératif : l'overlay ne doit jamais intercepter les événements destinés au canvas en dessous.
 // hoveringEntityRef : ref (pas state) écrite par Scene au survol d'une EntityMesh — lue à chaque
 // pointermove pour supprimer CURSEUR_CIBLE sur une entité interactive non-cible (ex. coffre),
 // sans re-render du sous-arbre Scene à chaque survol (pattern P40, cf. Canvas3D.jsx).
@@ -23,21 +40,37 @@ function resolveMode(mode, hoveringEntityRef, hoveringTokenRef) {
   return resolved
 }
 
-export default function SceneCursorOverlay({ canvasEl, mode, hoveringEntityRef, hoveringTokenRef }) {
+// Hotspot (7 2) : pointe de la flèche dans CURSEUR.svg repérée par lecture du path source (sommet où
+// convergent les deux segments hauts, ~(38,13) sur le viewBox 178×161 d'origine), mise à l'échelle du
+// rendu 32×29. Non vérifiée visuellement (pas de rendu navigateur possible ici), à confirmer/ajuster
+// par Saar (2 nombres à corriger si le clic ne tombe pas exactement sur la pointe).
+const DEFAULT_CURSOR = 'url(/assets/CURSEUR.svg) 7 2, auto'
+
+// inCombat : combat actif (`combatStore.phase !== null`) — hors CASE/CIBLE, le curseur reste le
+// défaut système pendant un combat (retour Saar : "valable tout le temps, sauf le mode combat"),
+// CURSEUR.svg réservé à l'exploration/préparation hors combat.
+function resolveCursorStyle(resolvedMode, inCombat) {
+  if (resolvedMode) return 'none' // overlay DOM affiche CASE/CIBLE par-dessus
+  if (!inCombat) return DEFAULT_CURSOR
+  return 'auto'
+}
+
+export default function SceneCursorOverlay({ canvasEl, mode, hoveringEntityRef, hoveringTokenRef, inCombat = false }) {
   const [pos, setPos] = useState(null)
 
-  // Masquage immédiat du curseur natif dès le changement de mode explicite (combatMoveMode/
-  // combatTargetMode/losMode), sans attendre un pointermove — sinon le curseur natif resterait
-  // visible jusqu'au premier mouvement de souris après l'entrée en mode.
+  // Masquage/bascule immédiate du curseur natif dès le changement de mode explicite (combatMoveMode/
+  // combatTargetMode/losMode) ou de phase de combat, sans attendre un pointermove — sinon le curseur
+  // natif resterait dans l'état précédent jusqu'au premier mouvement de souris.
   useEffect(() => {
     if (!canvasEl) return
-    canvasEl.style.cursor = mode ? 'none' : 'auto'
-  }, [canvasEl, mode])
+    canvasEl.style.cursor = resolveCursorStyle(mode, inCombat)
+  }, [canvasEl, mode, inCombat])
 
   useEffect(() => {
     if (!canvasEl) return
     const onMove = (e) => {
-      canvasEl.style.cursor = resolveMode(mode, hoveringEntityRef, hoveringTokenRef) ? 'none' : 'auto'
+      const resolvedMode = resolveMode(mode, hoveringEntityRef, hoveringTokenRef)
+      canvasEl.style.cursor = resolveCursorStyle(resolvedMode, inCombat)
       setPos({ x: e.clientX, y: e.clientY })
     }
     const onLeave = () => {
@@ -50,7 +83,7 @@ export default function SceneCursorOverlay({ canvasEl, mode, hoveringEntityRef, 
       canvasEl.removeEventListener('pointermove', onMove)
       canvasEl.removeEventListener('pointerleave', onLeave)
     }
-  }, [canvasEl, mode, hoveringEntityRef, hoveringTokenRef])
+  }, [canvasEl, mode, hoveringEntityRef, hoveringTokenRef, inCombat])
 
   if (!pos) return null
 

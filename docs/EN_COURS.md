@@ -21,11 +21,23 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 
 ---
 
+🔒 En cours (Saar) : `docs/PLANS/PLAN_MIGRATIONS_REFONTE.md` Phase 1 — Lot C (bascule locale) fait
+et vérifié ; reste Lot C.5 (confirmation secondaire serveur distant) + validation module Arme en
+jeu par Saar avant clôture
+
+---
+
 ## État global
 
 - Phase 0 ✅ / Phase 1 ✅ / Phase 2 en cours
-- Dernière migration appliquée : **232** (`232_chat_messages.js`) — détail complet et historique
-  des migrations : `docs/ASBUILT.md` § Base de données
+- Dernière migration appliquée : **234** (`234_pending_catastrophes.js`) — détail complet et
+  historique des migrations : `docs/ASBUILT.md` § Base de données
+- `PLAN_MIGRATIONS_REFONTE.md` Phase 1 (2026-08-08) : 18 migrations `ref_equipment*` (48→235) +
+  seed hors chaîne archivées (`server/src/db/migrations_archive/`), remplacées par 3 fichiers
+  consolidés (`48_ref_equipment.js`, `48b_ref_equipment_data.js`,
+  `137b_ref_equipment_archive_side_effects.js`) — schéma+données testés bit-à-bit contre `vtt`,
+  `knex_migrations` réconcilié (198 lignes, 0 pending). Bascule locale confirmée ; reste la
+  confirmation secondaire distant + validation module Arme en jeu avant clôture complète.
 
 ---
 
@@ -37,10 +49,11 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 |---|---|---|
 | **MONDEVALID1** | Moteur de monde (fusion Kiwi/Codex 2026-07-15, `caaf1af`, `shared/world/`, doc canonique `docs/SYSTEME/MOTEUR_MONDE.md`) : fondation active de tous les chantiers Étages/Ascenseur/Déplacement depuis — jamais validé en jeu réel sur une carte multi-étages complète (Playwright + manuel), seulement par tests Node (77+) et par l'usage indirect au fil des sessions | Moyenne — rien de cassé observé à ce jour, mais aucune validation end-to-end dédiée |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
+| **SEED-ID-DETERM** | `server/src/db/seeds/2_seed_equipment.js` laisse PostgreSQL générer l'`id` de `ref_equipment` à l'insertion (idempotence garantie par `name` seul, pas par `id`) — deux instances seedées séparément ont des `id` différents pour la même ligne. Découvert via migration 209 (`id` codé en dur valide en local, absent sur Kiwi) — invariant ajouté à `.claude/rules/core.md` pour éviter la récidive côté migrations, mais la cause à la racine (seed non-déterministe) reste non traitée : un `id` stable (dérivé de la source Excel, ex. UUID v5 sur une clé source) rendrait `id` portable comme `name` l'est déjà | Basse — pas bloquant tant que les migrations matchent par `name`, confort/robustesse à terme |
 | **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
 | **HORLOGE-TEST1** | `adjustGameTime` (Lot 1, `gameTimeService.js`) sans aucun test automatisé — seule la projection pure `shared/gameTime.js` est testée, trouvé en analyse à charge avant le Lot 2, détail `docs/BUGIDENTIFIE.md` | À faire avant/pendant le Lot 2 |
-| EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. 1 item (TMP II) a une entrée visiblement erronée (`ANALYSE_EMPATHIQUE`). Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
+| EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. ~~1 item (TMP II) avait une entrée erronée (`ANALYSE_EMPATHIQUE`)~~ — supprimée 2026-08-08 (Lot A `PLAN_MIGRATIONS_REFONTE.md`, décision Saar), table à 31 lignes cohérentes. Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | **CHAT-SCROLL1** | Scroll infini chat construit (`loadOlderMessages`/`hasMore`, `useChatSocket.js`) mais pas câblé à un `IntersectionObserver` dans `Sidebar.jsx` — au-delà de 50 messages, l'historique le plus ancien reste inaccessible depuis l'UI. Détail `docs/SYSTEME/CHAT.md` §10 | Basse — Phase 4 `PLAN_CHAT.md` (archivé `docs/Old/`), pas commencée |
 | COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque — mécanisme causal identifié 2026-08-05 (`broadcastCurrentSubPhase` émet `COMBAT_TIMELINE_UPDATED` avant le flush du `DICE_RESULT` d'attaque, bandeau MJ `CombatOverlay.jsx:275` réagit en premier), `[HYPOTHÈSE forte]` non instrumentée, détail `docs/BUGIDENTIFIE.md` | En attente de décision Saar (coder le correctif ou attendre confirmation) |
 | FEAT4 | Aura de portée CaC (3m + allonge arme) autour du personnage actif | Basse — sprint futur |
@@ -50,6 +63,7 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 | **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
 | **CHARSTORE-NULLISH1** | `characterStore.js:15` — `?? false` mort après un `===` (ESLint `no-constant-binary-expression`), préexistant, repéré en clôturant CHARMODAL-DEAD1. Détail `docs/BUGIDENTIFIE.md` | Très basse — cosmétique lint, aucun impact fonctionnel |
 | **EAU1** | Nappe d'eau ambiante `computeSurfaceWaterCells`/`WaterSheets` retirée (improvisation client hors autorité serveur, décision Saar 2026-07-29) — eau en jeu recentrée sur l'effet runtime "inondation" déjà câblé (compartiments + `runtimeEffectRegions`). Codé, tests/build/lint OK | Basse — validation en jeu par Saar avant clôture |
+| **CURSEUR-DEFAUT1** | `CURSEUR.svg` (flèche) — curseur natif (`cursor: url()`, PAS overlay DOM, choix motivé par la précision du hotspot, cf. `SceneCursorOverlay.jsx`) par défaut hors combat, jamais pendant un combat (`combatStore.phase`), et jamais hors du canvas 3D (retour Sidebar au curseur système = comportement attendu, portée volontairement limitée au playground). Taille 32×29 + hotspot `7 2` (retour Saar 2026-08-08, taille initiale 40×36 jugée trop grosse vs curseur système ~32px), calculé par lecture du path source, non vérifié visuellement. Fond opaque du SVG source retiré (jugé non intentionnel). Codé, build OK | Basse — validation en jeu par Saar (précision du clic sur la pointe, taille, fond transparent voulu) avant clôture |
 | **DEPLACEMENT3** | Latence résiduelle ~0,5-1s au premier "Déplacement" après un déplacement validé — confirme la piste notée dans DEPLACEMENT1 (`runtime_revision` bump sur simple déplacement de token invalide aussi le cache structurel) | Très basse — "rien de gênant" (Saar) |
 | **TOURTRANSITION1** | Latence + message "En attente de {{nom}}" en chaînant plusieurs actions de PNJ (`CombatActionWindow.jsx:772-782`) — non instrumenté | Très basse — "rien de gênant" (Saar) |
 | **PLAN_RW_SYSCOMBAT Lot 7** | `confirmMeleeDefense` branchement post-hit codé + fixture jetable validée (10 passes) + confirmé en jeu pour l'attaquant PNJ. Chemin attaquant PJ (`resolveMeleeDefenseHitAttackerPj`) non testé en jeu (Saar ne peut pas reproduire ce cas actuellement) — reste couvert par fixture seulement. Détail `docs/JOURNAL8.md` | ⚠️ clos partiel — confirmation PJ vs PJ en attente |

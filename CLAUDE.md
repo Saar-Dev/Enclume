@@ -1,8 +1,9 @@
 # CLAUDE.md — Contrat commun du projet Enclume
 
-> Version proposée : 2026-07-15.
-> Ce contrat s'applique aux espaces Claude/règles et Codex/moteur monde après validation et
-> installation dans le dépôt.
+> Version : 2026-07-15, mise à jour 2026-08-07 (retrait des références à la collaboration
+> Codex/Kiwi, close depuis le 2026-08-04 — voir §3).
+> Rédigé à l'origine pour les espaces Claude/règles et Codex/moteur monde ; s'applique aujourd'hui
+> au seul espace Claude/règles.
 
 ---
 
@@ -28,8 +29,6 @@ règles domaine > `MANUEL` > `PLAN`.
 ## 2. Routage des règles
 
 - Claude charge `.claude/rules/*.md` selon leur frontmatter `paths`.
-- Codex lit manuellement `.claude/rules/conventions.md`, puis chaque règle dont un `paths`
-  correspond aux fichiers qu'il va toucher.
 - Une règle domaine ne remplace jamais la lecture du fichier source concerné.
 - Avant un nouveau concept métier, lire ou mettre à jour `docs/VOCABULARY.md`.
 - Avant un nouveau document, lire `docs/RegleDocumentaire.md` et vérifier sa responsabilité unique.
@@ -47,15 +46,17 @@ règles domaine > `MANUEL` > `PLAN`.
 | Développeur | Branche | Dépôt serveur | Client/API |
 |---|---|---|---|
 | Claude / règles | `dev/Saar` | `/home/didier/Enclume` | `8193/8194` |
-| Codex / moteur monde | `dev/monde` | `/home/codex/Enclume-integrated` | `8293/8294` |
-| Validation commune | `integration` | `/home/codex/Enclume-fusion` | `8393/8394` |
 
-- Ne jamais développer directement dans `integration` ou `master`.
-- Ne jamais modifier le worktree de l'autre développeur pendant son travail.
-- `.env`, PostgreSQL, MinIO, caches et `node_modules` restent propres à chaque instance.
-- La fusion du code ne fusionne jamais implicitement les données vivantes.
-- Le workflow complet et le retour arrière sont dans `docs/WORKFLOW_FUSION.md`.
-- Les autorités combat/monde sont dans `docs/FUSION_PROJET_COUSIN.md`.
+Depuis le départ de Codex et Kiwi (2026-08-04), `dev/Saar` est la seule branche de développement
+active. `dev/monde` et `integration` subsistent dans l'historique Git (dépôts et ports associés
+arrêtés), sans contributeur ni instance serveur actuels.
+
+- Ne jamais développer directement dans `master`.
+- `.env`, PostgreSQL, MinIO, caches et `node_modules` restent propres à l'instance de travail.
+- Le protocole de fusion à deux développeurs (workflow complet, retour arrière, autorités
+  combat/monde partagées) est archivé — `docs/Old/WORKFLOW_FUSION.md` et
+  `docs/Old/FUSION_PROJET_COUSIN.md` — et ne s'applique plus tant qu'un second développeur actif ne
+  rejoint pas le projet.
 
 ---
 
@@ -73,10 +74,10 @@ git fetch origin
 - Si la branche possède un upstream publié, avancer uniquement avec `git merge --ff-only`.
 - Ne jamais utiliser un `git pull` aveugle, `reset --hard`, `checkout --` ou nettoyage destructif.
 - Si l'upstream n'existe pas encore, ne pas inventer de synchronisation : signaler la publication
-  manquante et suivre `WORKFLOW_FUSION.md`.
-- Avant fusion : noter les têtes, créer les tags de restauration et sauvegarder code, DB et assets.
-- Après validation commune : replacer les deux branches de travail sur le commit `integration`
-  seulement lorsque toutes leurs contributions sont déjà absorbées.
+  manquante.
+- Le protocole de fusion multi-branches (têtes, tags de restauration, sauvegardes, réalignement
+  post-validation) est archivé avec les documents cités en §3 ; il ne s'applique pas tant qu'il n'y
+  a qu'un développeur actif.
 
 ---
 
@@ -193,9 +194,10 @@ Toute clôture indique :
 
 Le détail courant vit uniquement dans `docs/EN_COURS.md`.
 
-Base commune initiale : tag `baseline/common-20260715`, branches `dev/Saar`, `dev/monde` et
-`integration`, trois arbres identiques au commit documenté par le workflow. L'instance commune est
-un sas de validation, jamais un espace de développement direct.
+Depuis le départ de Codex et Kiwi (2026-08-04), il n'y a plus d'instance de validation commune
+active ni de synchronisation multi-branches en cours. `dev/Saar` avance seule vers `master`, sous
+revue de Saar avant tout push. Si une collaboration reprend, repartir du protocole archivé cité en
+§3 plutôt que du tag `baseline/common-20260715`, qui n'a jamais été créé dans le dépôt.
 
 ---
 

@@ -1,6 +1,6 @@
 VOCABULARY.md — Contrat sémantique officiel d'Enclume
 
-    Version : V2.1 — enrichi session 2026-08-02 (termes world builder)
+    Version : V2.2 — enrichi session 2026-08-07 (Marchand, Revente PJ→GM, autorité TRADE.md)
 
     Statut : Source de vérité (non exhaustif — à enrichir à chaque ambiguïté rencontrée)
 
@@ -44,7 +44,9 @@ Verrou (Wizard collaboratif)	Gel d'une option par le MJ pendant la création	wiz
 Pool de personnages	Écran MJ listant les personnages en création	docs/PLAN_WIZARDCOLLAB.md
 Actions Exclusives (registre)	Pattern pour une action interdisant toute autre action le même tour	shared/combatExclusiveActions.js
 DSL effets munitions	Syntaxe TYPE=ACTION(VALEUR) pour les effets de munitions	ref_equipment.ammo_effects
-Échange (PJ↔PJ)	Déplacement d'item entre personnages de joueurs différents, double validation	tradeService.js
+Échange (PJ↔PJ)	Déplacement d'item entre personnages de joueurs différents, double validation. Couvre aussi le transfert direct sans double validation vers un drone dont le PJ est seul propriétaire.	tradeService.js. Autorité : docs/SYSTEME/TRADE.md.
+Marchand	Entité de campagne (créée par le MJ) exposant un catalogue filtré (seuils NT/niveau/génération/rareté + règles FAM/CAT/ITEM) et un modificateur de prix. Distinct du domaine « Trade » qui le contient.	table merchants, tradeService.js. Autorité : docs/SYSTEME/TRADE.md.
+Revente (PJ→GM)	Proposition de vente d'objets par un PJ à un marchand ; le MJ accepte, refuse ou fait une contre-offre. Distincte de l'Échange PJ↔PJ (destinataire = MJ, pas un autre PJ).	trade_offers.type='SELL', tradeService.js. Autorité : docs/SYSTEME/TRADE.md.
 Charge électrique	Munition générique pour armes à batterie sans calibre réel	docs/PLAN_CAC_BATTERIE.md
 Vocabulaire d'effets (effects[])	Taxonomie JSONB commune pour les conséquences mécaniques	shared/careerAdvantages.js, shared/setbackEffects.js
 Provenance des octrois	Colonne distinguant l'origine d'un octroi (creation_step5, campaign, revers…)	char_advantages.acquired_during, char_mutations.source

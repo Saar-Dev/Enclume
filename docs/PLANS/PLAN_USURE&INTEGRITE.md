@@ -1,1 +1,1 @@
-Lire @REGLE_USURE&INTEGRITE.md
+Lire @MANUEL_USURE.md pour rédiger le plan

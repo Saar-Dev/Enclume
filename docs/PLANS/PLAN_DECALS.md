@@ -44,13 +44,9 @@ dimensions
 couleur éventuelle
 
 Pas de collision.
-
 Pas de navigation.
-
 Pas de LOS.
-
 Pas de physique.
-
 Uniquement de l'apparence.
 
 Étape 3 — Intégration dans surface_data
@@ -91,32 +87,20 @@ Le mesh du mur reste inchangé.
 Étape 5 — Outil d'édition
 
 Workflow :
-
 Sélection
-
 ↓
-
 Décoration murale
-
 ↓
-
 Choix du motif
-
 ↓
-
 Survol du mur
-
 ↓
-
 Prévisualisation
-
 ↓
-
 Clic
-
 ↓
-
 Placement
+
 Étape 6 — Persistance
 
 À vérifier :

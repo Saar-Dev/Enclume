@@ -1389,6 +1389,9 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   const { isGm } = useCharacterStore()
 
   const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, losMode })
+  // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
+  // ne s'affiche jamais pendant un combat (retour Saar 2026-08-08), même sans mode armé.
+  const combatPhase = useCombatStore(s => s.phase)
   const [canvasEl, setCanvasEl] = useState(null)
   // Écrite par Scene (survol EntityMesh) — ref pour éviter un re-render du sous-arbre Scene à
   // chaque survol (pattern P40), lue par SceneCursorOverlay pour supprimer CURSEUR_CIBLE sur une
@@ -1644,6 +1647,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
       mode={sceneCursor}
       hoveringEntityRef={hoveringEntityRef}
       hoveringTokenRef={hoveringTokenRef}
+      inCombat={combatPhase != null}
     />
     {surfaceConnectorPanel && selectedSurfaceConnector && (
       <SurfaceConnectorPanel

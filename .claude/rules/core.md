@@ -24,3 +24,9 @@ paths:
 - Nettoyer listeners, rooms, timers, locks et ressources lors d'une déconnexion ou d'un échec.
 - REST et Socket.IO d'une même fonctionnalité partagent le même service métier autoritaire.
 - Ne pas créer de stockage spatial Redis: le moteur monde et PostgreSQL portent ces responsabilités.
+- Une migration qui cible une ligne d'une table peuplée par seed (ex. `ref_equipment`) ne référence
+  jamais son `id` en dur : les seeds (`server/src/db/seeds/`) laissent PostgreSQL générer l'UUID à
+  l'insertion et ne garantissent l'idempotence que par clé métier (`name`) — deux instances seedées
+  indépendamment ont des `id` différents pour la même ligne. Matcher par la clé métier de la table
+  (vérifiée dans le seed correspondant), jamais par `id` (vécu : migration 209, `id` codé en dur
+  valide en local, introuvable sur Kiwi seedé séparément).

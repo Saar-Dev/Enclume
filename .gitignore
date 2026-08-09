@@ -15,6 +15,9 @@ test-results/
 *.log
 npm-debug.log*
 
+# Sauvegardes DB locales (pg_dump, jamais commit — trop volumineux, données de campagne)
+/backups/
+
 # Système
 .DS_Store
 *.suo
