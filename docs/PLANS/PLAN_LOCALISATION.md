@@ -13,6 +13,10 @@
 > 🟡 **Lot 4 (Outils dés, 1 fichier — `DiceCalibrationPage.jsx` exclu, décision Saar 2026-07-25) codé,
 > parcours navigateur non testé** — détail §3sexies. **Les 4 lots sont maintenant codés** ; archivage
 > de ce plan dans `docs/ASBUILT.md` différé jusqu'à validation navigateur complète.
+> 🔴 **Lot 5 (données de référence `ref_*` en base, ~1500 lignes / 10 tables) découvert le 2026-08-11,
+> hors du périmètre couvert par ce plan jusqu'ici — corrigé, voir §7. Architecture décidée (colonnes
+> JSONB `<champ>_i18n`, `docs/SYSTEME/LOCALISATION.md` §6) — exécution (audit par table, migrations,
+> helper de résolution, retrofit consommateurs) non commencée.**
 
 ---
 
@@ -419,3 +423,62 @@ texte en dur restant confirmé par ré-audit (script §1).
 **Les 4 lots de `docs/PLAN_LOCALISATION.md` sont maintenant entièrement codés.** Aucun n'a de
 confirmation navigateur — la session de test groupée reste à faire avant d'archiver ce plan dans
 `docs/ASBUILT.md` (Règle 10, `docs/RegleDocumentaire.md`).
+
+---
+
+## 7. Lot 5 — Données de référence `ref_*` en base (découvert 2026-08-11)
+
+**Écart avec ce plan, corrigé ici** : ce plan devait couvrir l'ensemble du texte nécessitant une
+traduction (demande Saar d'origine), mais la méthode d'audit du §1 ne scanne que les `.jsx` du client
+(`grep` sur les composants) — par construction, elle ne pouvait pas trouver le texte de jeu stocké en
+base dans les tables `ref_*` (avantages, mutations, compétences, carrières...). Ce texte est aujourd'hui
+français en dur dans les colonnes `name`/`label`/`description`, affiché directement par les composants
+consommateurs (`adv.name`, pas de `t()`) — la même catégorie de dette que ce plan traite pour le JSX,
+mais dans un autre entrepôt.
+
+**Découverte** : en corrigeant `docs/BUG WIZARD.md` bug #16 (`ref_advantages.name` contenait des
+termes anglais non traduits — « Sens diminué (hearing) »), Saar a posé la question de principe : la
+norme i18n (`docs/SYSTEME/LOCALISATION.md`) vise à pouvoir ajouter EN/DE/JAP sans tout refaire — objectif
+produit toujours FR seul aujourd'hui (`LOCALISATION.md` §1/§5 inchangés), mais l'architecture doit être
+prête. Cela ne peut pas se faire lot de bug en lot de bug sur les tables `ref_*` sans risquer
+l'incohérence ; d'où ce Lot 5 dédié.
+
+**Ampleur réelle** (comptée en base le 2026-08-11, pas estimée) :
+
+| Table | Colonnes | Lignes |
+|---|---|---|
+| `ref_equipment` | name, description | 678 |
+| `ref_career_random_benefits` | description | 370 |
+| `ref_skills` | label, description | 249 |
+| `ref_advantages` | name, description | 79 |
+| `ref_mutations` | name, description | 45 |
+| `ref_careers` | name, description | 37 |
+| `ref_setbacks` | name, description | 27 |
+| `ref_backgrounds` | name, description | 22 |
+| `ref_mutation_subtypes` | name, description | 8 |
+| `ref_genotypes` | label, description | 4 |
+
+Total : **~1519 lignes, 10 tables**. Pour comparaison, les Lots 1-4 combinés traitaient 32 fichiers
+`.jsx` (quelques centaines de chaînes courtes) — un ordre de grandeur différent, et une nature de texte
+différente (`description` contient souvent des paragraphes RAW retranscrits, pas des libellés courts).
+
+**Choix d'architecture — décidé le 2026-08-11**, après recherche des pratiques pro (deux options
+initialement envisagées, deux problèmes différents en réalité — sources dans `docs/JOURNAL8.md`,
+session 2026-08-11) :
+
+- Clés `react-i18next` classiques (`client/src/locales/`) — écarté pour ce volume : ~1500 lignes,
+  dont des paragraphes entiers, alourdiraient le bundle JS à chaque langue ajoutée (le build actuel
+  avertit déjà d'un chunk de 3,9 Mo avant tout ajout). La pratique pro sépare justement texte UI
+  (i18next) et contenu de catalogue (mécanisme dédié) — les traiter par le même canal était l'erreur
+  de départ, pas un vrai dilemme A/B.
+- Table de traduction normalisée séparée — écartée aussi : jointure à chaque lecture, complexité non
+  justifiée à ce volume (recommandation pro : au-delà de plusieurs dizaines de milliers de lignes).
+- **Retenu : colonne JSONB par champ traduisible, directement sur chaque table `ref_*`**
+  (`name_i18n`, `description_i18n`, clé = code langue). Cohérent avec l'usage JSONB déjà établi dans
+  ce projet (`campaigns.settings`, `char_pc_ledger.skill_allocations`), pas de jointure, pas de
+  migration de schéma pour ajouter une langue plus tard. Détail complet du mécanisme (résolution,
+  repli `fr`, transition table par table) : `docs/SYSTEME/LOCALISATION.md` §6.
+
+**Statut** : 🔴 architecture décidée, exécution non commencée. Reste à écrire avant de coder : audit
+de lots détaillé (ordre des 10 tables, quel champ dans quelle table en premier — comme §2 pour le
+JSX), forme exacte du helper de résolution serveur unique.

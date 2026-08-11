@@ -1357,3 +1357,176 @@ migration (pas un changement de schéma SQL, JSONB existant). Réversible par Sa
 Réglages de campagne (décoche la case) si le défaut ne convient pas à l'usage réel.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit pour le code ; la donnée campagne
 peut être rebasculée manuellement dans les Réglages.
+
+## Session (Saar) — 2026-08-11 — `docs/BUG WIZARD.md` bug #12 (mutation Parasite, jet 1D4)
+
+**Contexte** : bug #12 seul — « Le personnage abrite 1D4 parasites » (`REGLE_MUTATION.md:179`), aucun
+jet effectué nulle part pour déterminer ce nombre.
+
+**Solution du doc écartée avant de coder** : le doc proposait d'ajouter un champ `count` ad hoc dans
+l'objet de résultat de `rollOneMutation`, avec un cas spécial `mutation_id === 'parasite'` codé en dur,
+propagé à la main jusqu'au serveur. Lecture du schéma réel : `char_mutations.count` existe déjà, mais
+avec un sens générique établi et actif ailleurs — « nombre de fois cette mutation a été choisie »,
+consommé directement par la vue SQL `char_mutation_effects` (migrations 109/127/128,
+`(cm.count - 1) * stack_deltas`). Réutiliser cette colonne pour « nombre de parasites » l'aurait
+surchargée de deux sens différents sur la même colonne — mine potentielle pour l'implémentation future
+des effets mécaniques de Parasite (`EN_COURS.md` MUT3 Lot 7, actuellement non câblés).
+
+**Cause racine réelle et solution retenue** : "Parasite" a exactement la même structure RAW que
+"Caractère génétique animal" (`REGLE_MUTATION.md:32`, "Lancez 1D4" aussi) — mutation_id 6, déjà
+entièrement géré par le mécanisme sous-type existant : `ref_mutation_subtypes` (colonne `d4_roll`
+déjà nommée pour ça), `has_subtable` sur `ref_mutations`, `rollOneMutation`
+(`Step3Mutations.jsx:141-163`, pioche déjà uniformément dans `mut.subtable`), la modale d'achat
+manuel (`pendingSubtype`/`handleSelectSubtype`, déjà générique), `getStep3State`
+(`mutationsMeta[].subtypeDbName`, déjà générique) et `WizardReview.jsx` (déjà générique). "Parasite"
+avait seulement `has_subtable: false` et aucune ligne dans `ref_mutation_subtypes` — un trou de
+donnée, pas un trou de code.
+
+**Corrigé** : migration 238 — `has_subtable: true` sur "Parasite" (matché par `name`, jamais
+`mutation_id` qui est un serial dépendant du seed de l'instance, cf. `.claude/rules/core.md`), 4
+lignes `ref_mutation_subtypes` ("1 parasite" à "4 parasites", `d4_roll` 1-4, `mod_*` à 0 — les effets
+mécaniques restent MUT3 Lot 7, non touchés ici pour ne pas câbler une partie du sujet en douce).
+**Aucune ligne de code client ou serveur modifiée.**
+
+**Testé** : suite serveur complète 220/220. Vérification fonctionnelle réelle (pas seulement lecture
+de code) : simulation de la requête `GET /mutations` (nesting subtable) confirmée sur "Parasite" ;
+fixture réelle (personnage + `char_mutations` avec `subtype_id` = "3 parasites") relue via
+`getStep3State` → `mutationsMeta[0].subtypeDbName === "3 parasites"` confirmé, donc le Récap Étape 7
+affichera bien « Parasite — 3 parasites » sans changement de `WizardReview.jsx`.
+**Non testé** : tirage aléatoire réel et achat manuel en navigateur (Step3Mutations.jsx, Math.random()
+côté client, non observable depuis Node).
+**Données** : migration 238, additive (nouvelle donnée de référence, `down()` fourni). Aucun
+personnage existant affecté (aucun `char_mutations` existant ne référence "Parasite" dans cette base).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; `down()` de la migration 238
+retire proprement les 4 sous-types et repasse `has_subtable` à `false`.
+
+## Session (Saar) — 2026-08-11 — `docs/BUG WIZARD.md` bug #13/#14 (diffusion live Avantages & Revers)
+
+**Contexte** : bug #13/#14 seul (la numérotation interne du doc est incohérente entre son tableau et
+ses sections détaillées — deux entrées différentes portent "#13" ; la section détaillée pertinente
+est en réalité titrée "Bug #14"). Sujet : le MJ ne voit pas en temps réel les choix du joueur
+(avantages professionnels, tirages 1D10) dans la sous-étape « Avantages & Revers » de l'Étape 4.
+
+**Diagnostic confirmé** : `Step4Experience.jsx`, le `useEffect` de diffusion live appelait
+`onLiveChange?.(buildPayload())`, mais sa liste de dépendances (dupliquée à la main, pas dérivée du
+corps de `buildPayload`) omettait `proAdvantages`/`randomPicks` — pourtant lus par `buildPayload`.
+Confirmé indépendamment du code source par `npx eslint` : warning `react-hooks/exhaustive-deps` sur
+cet effet avant correctif.
+
+**Fix retenu, différent de la solution proposée par le doc** : ajouter les 2 champs manquants à la
+liste de deps de l'effet aurait corrigé cette instance mais laissé le mécanisme fragile — toute
+future évolution de `buildPayload` (nouveau champ) referait dériver silencieusement les deux listes,
+exactement la cause de ce bug. `buildPayload` passé en `useCallback` avec sa propre liste de deps
+(vérifiable par ESLint contre son propre corps, pas indirectement via un effet distant) ; l'effet de
+diffusion se réduit à `useEffect(() => { onLiveChange?.(buildPayload()) }, [buildPayload, onLiveChange])`.
+Élimine la classe de bug, pas seulement l'instance.
+
+**Vérifié avant de considérer la boucle infinie écartée** : ce composant a déjà un incident réel
+documenté (« Maximum update depth exceeded », trouvé par Saar en test réel, cf. commentaire
+`validSetbackRolls`) causé par une dépendance recréée à chaque rendu sans mémoïsation. Chaque
+dépendance du nouveau `useCallback` revérifiée une par une : primitives (age, finalAge, originGeo...)
+ou `useState` (careers, proAdvantages, randomPicks, skillAllocations...) — référence stable tant que
+le state ne change pas réellement — ou déjà mémoïsée (`validSetbackRolls`, `useMemo`). `onLiveChange4`
+(`WizardCreation.jsx`) est lui-même un `useCallback([])` à deps vides, stable par construction — même
+garantie qu'avant le fix, aucune régression possible sur ce point précis.
+
+**Chaîne de diffusion revérifiée jusqu'au bout** (pas supposée) : `buildPayload` → `onLiveChange4`
+(stable) → `emitLiveRef.current` → `emitLive` (`WizardLockSync.jsx`) → `socket.emit(WS.WIZARD_LIVE_UPDATE, ...)`.
+Confirmé par lecture directe de `WizardLockSync.jsx`, pas supposé sur la seule foi du commentaire du
+doc ("Aucune modification du serveur n'est nécessaire").
+
+**Testé** : `npx eslint src/components/creation/Step4Experience.jsx` — warning `react-hooks/exhaustive-deps`
+disparu (reste une erreur `no-unused-vars` préexistante sur `showSetbacks`, sans rapport, non touchée).
+`npx vite build` — build client OK.
+**Non testé** : scénario réel navigateur (MJ observateur pendant qu'un joueur modifie ses avantages
+pro/tirages à l'Étape 4).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-11 — `docs/BUG WIZARD.md` bug #16 (traductions ref_advantages)
+
+**Contexte** : bug #16 seul — noms d'avantages/désavantages avec un terme anglais entre parenthèses
+non traduit (« Sens diminué (hearing) », « Faiblesse naturelle (drug) », etc.).
+
+**Diagnostic confirmé** : `ref_advantages.name` contient directement le texte final affiché — `grep`
+sur `Step5Advantages.jsx` et `AdvantagesPanel.jsx` confirme `adv.name`/`dis.name` rendus tels quels,
+aucune indirection i18n (contrairement au mécanisme sous-type des mutations, `subtypeDbName`/i18n
+fallback, déjà traité cette session pour bug #2/#12). Correction à la source (donnée), seule autorité,
+couvre tous les consommateurs (Wizard Étape 5, Récap Étape 7 via `getStep5State.advantagesMeta`,
+fiche personnage `AdvantagesPanel.jsx`) sans dupliquer la logique.
+
+**Périmètre vérifié avant de coder** : 46 lignes de `ref_advantages.name` contiennent des parenthèses,
+mais la plupart sont déjà en français (« Carte au trésor (1 PC) », « Phobie (maladies) »...). Seules
+14 lignes sont réellement anglaises : les 5 sens (« Sens développé »/« Sens diminué » × vue/ouïe/
+odorat/toucher/goût, RAW `REGLE_AVANTAGES.md:96-97,204`) et « maladie »/« drogue » (« Faiblesse
+naturelle »/« Résistance naturelle augmentée » × disease/drug). « poison » et « radiation » sont
+laissés tels quels : mots identiques en français (`REGLE_AVANTAGES.md:154` "poisons, maladies,
+radiations ou drogues").
+
+**Corrigé** : migration 239, 14 `UPDATE` par `advantage_id` (clé métier stable — texte fixe, pas de
+serial, vérifié sur le schéma avant de matcher dessus).
+
+**Note du doc écartée après vérification** : BUG WIZARD.md affirmait que ce correctif "entraîne la
+validation de PLAN_LOCALISATION". Fichier retrouvé (`docs/PLANS/PLAN_LOCALISATION.md`, pas
+`docs/PLAN_LOCALISATION.md` comme écrit) — lu en entier : ce chantier couvre le texte JSX en dur sans
+`useTranslation` (Combat/Équipement/Builder/Dice), sujet disjoint des données `ref_advantages`.
+Aucune mention de ce bug dans ce plan. Affirmation du doc fausse, aucune action prise dessus.
+
+**Testé** : re-scan complet `ref_advantages.name` après migration — 46 lignes avec parenthèses
+restantes, toutes vérifiées en français ; re-scan `description` (regex mots anglais suspects) — 0
+résultat. Suite serveur complète 220/220.
+**Non testé** : rendu réel navigateur (Étape 5, Récap, fiche personnage).
+**Données** : migration 239, `UPDATE` sur données de référence existantes (pas de nouvelle ligne),
+`down()` fourni. Aucun impact sur `char_advantages` (la table référence `advantage_id`, pas `name`).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; `down()` de la migration 239
+restaure les 14 valeurs anglaises.
+
+## Session (Saar) — 2026-08-11 — Décision d'architecture : i18n du contenu de catalogue (`ref_*`)
+
+**Contexte** : en clôturant bug #16, Saar a posé une question de principe — pourquoi laisser "poison"/
+"radiation" tels quels (mots identiques en FR) alors que "la norme i18n" demande une traduction pour
+chaque mot, pour pouvoir ajouter EN/DE/JAP plus tard sans tout refaire. Vérification faite :
+`docs/SYSTEME/LOCALISATION.md` documente déjà que le multi-langue actif n'est pas un objectif produit
+(§1/§5, décision Saar 2026-07-23) — pas de contradiction sur l'objectif produit, mais Saar confirme
+vouloir l'architecture prête dès maintenant, sans relancer le multi-langue actif.
+
+**Écart trouvé** : `docs/PLANS/PLAN_LOCALISATION.md` — que Saar pensait avoir déjà couvert ce sujet —
+ne scanne que le texte `.jsx` des composants (§1, méthode d'audit par `grep`). Il ne pouvait par
+construction pas trouver le texte de jeu stocké en base dans les 10 tables `ref_*` (~1519 lignes,
+compté en base, pas estimé : `ref_equipment` 678, `ref_career_random_benefits` 370, `ref_skills` 249,
+`ref_advantages` 79, `ref_mutations` 45, `ref_careers` 37, `ref_setbacks` 27, `ref_backgrounds` 22,
+`ref_mutation_subtypes` 8, `ref_genotypes` 4).
+
+**Recherche menée avant de trancher** (demande explicite Saar : "on suit les bonnes pratiques des
+pros, documente-toi") — le cadrage initial en "Option A (clés i18next) vs Option B (table de
+traduction séparée)" s'est révélé être une fausse alternative : la pratique pro traite texte UI et
+contenu de catalogue comme deux problèmes distincts, jamais par le même canal. Pour un volume de
+~1500 lignes avec des champs `description` parfois longs (paragraphes RAW retranscrits), la pratique
+recommandée n'est ni l'un ni l'autre : une colonne JSONB par champ traduisible directement sur la
+table `ref_*` (évite le gonflement du bundle JS d'i18next et la jointure d'une table séparée). Sources :
+- Database Designs for Multilingual Apps (dev.to/dwarvesf) — 3 patterns (colonnes par langue/JSONB/
+  table de traduction), JSONB recommandé pour un volume modeste sans requêtes complexes.
+- SimpleLocalize, ButterCMS — séparation texte UI (i18next/fichiers) vs contenu (mécanisme dédié),
+  traitées comme deux problèmes différents dans la pratique professionnelle.
+
+**Décision retenue** : colonnes JSONB `<champ>_i18n` (ex. `name_i18n`, `description_i18n`) sur chaque
+table `ref_*`, clé = code langue, seul `fr` peuplé aujourd'hui. Cohérent avec l'usage JSONB déjà établi
+dans le projet (`campaigns.settings`, `char_pc_ledger.skill_allocations`) — pas un nouveau pattern.
+Résolution centralisée par un helper serveur unique (à écrire au Lot 5), jamais dupliquée par table ;
+le client continue de recevoir une chaîne déjà résolue, jamais l'objet JSONB brut (même principe
+d'autorité serveur que `LOCALISATION.md` §4).
+
+**Corrigé** :
+- `docs/SYSTEME/LOCALISATION.md` — nouveau §6 documentant ce mécanisme, §5 mis à jour (le contenu de
+  catalogue n'est plus "hors périmètre"), en-tête/statut datés 2026-08-11, référence `PLAN_LOCALISATION.md`
+  corrigée (mauvais chemin : `docs/PLAN_LOCALISATION.md` n'existe pas, le fichier réel est sous
+  `docs/PLANS/`).
+- `docs/PLANS/PLAN_LOCALISATION.md` §7 (Lot 5) — remplace le fork Option A/B non tranché par la
+  décision et ses sources, statut mis à jour en tête de fichier.
+
+**Non fait, volontairement** : aucune migration, aucun code. La décision d'architecture est prise et
+documentée ; l'exécution (audit détaillé par table, ordre des lots, forme du helper de résolution,
+retrofit de tous les consommateurs `adv.name`/`mut.name`/etc.) reste un chantier à part entière, pas
+improvisé derrière cette décision.
+**Testé** : n/a (documentation uniquement).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

@@ -225,7 +225,13 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev, 
     setCareers(prev => prev.filter((_, i) => i !== index))
   }
 
-  const buildPayload = () => {
+  // useCallback (pas une fonction nue) : sa propre liste de deps est vérifiable par ESLint
+  // (react-hooks/exhaustive-deps) contre le corps de la fonction elle-même — bug #13/#14
+  // (docs/BUG WIZARD.md) : proAdvantages/randomPicks étaient lus ici mais absents de la liste de
+  // deps *manuellement dupliquée* sur l'ancien useEffect plus bas, qui ne pouvait pas être vérifiée
+  // par lint contre ce corps. En centralisant la liste ici, tout futur champ ajouté à buildPayload
+  // et oublié dans ces deps redeviendra un warning ESLint, pas un bug de diffusion silencieux.
+  const buildPayload = useCallback(() => {
     const careerEntries = careers.map(c => ({
       career_id: c.career_id,
       years: c.years,
@@ -233,24 +239,28 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev, 
       randomPicks: randomPicks[c.career_id] || [],
     }))
     return {
-  age,
-  finalAge,
-  originGeo,
-  originSoc,
-  training,
-  higherEd,
-  geoName,
-  geoNation,
-  socNation,
-  careers: careerEntries,
-  skillAllocations,
-  openedSkills,
-  autodidacteAllocations,
-  setbackRolls: validSetbackRolls,
-  pcSpent: totalPC,
-  appliedSkills: Object.values(conditionalChoices),
-}
-  }
+      age,
+      finalAge,
+      originGeo,
+      originSoc,
+      training,
+      higherEd,
+      geoName,
+      geoNation,
+      socNation,
+      careers: careerEntries,
+      skillAllocations,
+      openedSkills,
+      autodidacteAllocations,
+      setbackRolls: validSetbackRolls,
+      pcSpent: totalPC,
+      appliedSkills: Object.values(conditionalChoices),
+    }
+  }, [
+    age, finalAge, originGeo, originSoc, training, higherEd, geoName, geoNation, socNation,
+    careers, proAdvantages, randomPicks, skillAllocations, openedSkills, autodidacteAllocations,
+    validSetbackRolls, totalPC, conditionalChoices,
+  ])
 
   const handleSubmit = () => {
     onNext?.(buildPayload())
@@ -258,16 +268,13 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev, 
 
   // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — réutilise buildPayload (même
   // forme que la soumission finale), jamais persisté ni validé côté serveur, purement cosmétique.
-  // Déps = les champs bruts que buildPayload lit, pas la fonction elle-même (recréée à chaque rendu,
-  // la lister ferait tourner l'effet en boucle sans rien apporter — même patron que l'effet
-  // liveYears juste au-dessus).
+  // buildPayload est stable (useCallback ci-dessus) : ne se recrée que si l'une de ses propres deps
+  // change réellement, donc pas de risque de boucle à la lister ici (même patron que l'effet
+  // liveYears juste au-dessus, deps toutes primitives/stables — cf. l'incident "Maximum update depth
+  // exceeded" documenté sur validSetbackRolls plus haut, qui reste mémoïsé via useMemo).
   useEffect(() => {
     onLiveChange?.(buildPayload())
-  }, [
-    age, finalAge, originGeo, originSoc, training, higherEd, geoName, geoNation, socNation,
-    careers, skillAllocations, openedSkills, autodidacteAllocations, validSetbackRolls, totalPC,
-    conditionalChoices, onLiveChange,
-  ])
+  }, [buildPayload, onLiveChange])
 
   // ─── Navigation ────────────────────────────────────────────────
   const advanceSubStep = (next) => {

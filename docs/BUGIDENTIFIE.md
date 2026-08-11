@@ -41,15 +41,12 @@
 | 13 | Points déjà investis dans les compétences professionnelles mal calculés. | Wizard | Bug | Haute | `SYSTEME/PERSONNAGE_CALCULS.md`. |
 | 14 | Prérequis des métiers techniquement présents mais invisibles/incompréhensibles (ex. Pilote de chasseur). | Wizard | Amélioration UX | Haute | Affichage des prérequis. |
 | 15 | Compétences inabordables non grisées, causant des soldes négatifs. | Wizard | Bug (validation) | Haute | Logique de points disponibles. |
-| 16 | Avantages & Revers : pas de broadcast vers le MJ. | Wizard | Bug (broadcast) | Haute | Événements WS. |
 | 17 | Tirages d'avantages optionnels consomment des PC. | Wizard | Bug (calcul PC) | Haute | `REGLE_AVANTAGES.md`. |
 | 18 | Métiers affichés par UUID dans le récapitulatif (régression). | Wizard | Bug | Bloquant | Jointure/sérialisation. |
 | 19 | Page Avantages & Désavantages très chargée, à regrouper par famille. | Wizard | Amélioration UX | Moyenne | `REGLE_AVANTAGES.md`, `REGLEREVERS.md`. |
 | 20 | Équipement : joueur doit proposer une wishlist en naviguant dans `ref_equipment`, afficher le descriptif. | Wizard | Fonctionnalité manquante | Haute | Step 6, `SYSTEME/TRADE.md`. |
 | 21 | Afficher le type de munition des armes, lien arme↔munitions. | Wizard | Fonctionnalité manquante | Haute | Modèle arme, `REGLESMUNITIONS.md`. |
 | 22 | Borner le maximum de points d'attributs selon RAW. | Wizard | Bug (règle absente) | Haute | `REGLES/ATTRIBUTS.md`. |
-| 25 | Désavantage Parasite : jet pour nombre de parasites non implémenté. | Wizard | Comportement incomplet | Moyenne | `REGLE_MUTATION.md` / `REGLEREVERS.md`. |
-| 30-31 | Traductions manquantes : "Sens diminué (hearing)", "Faiblesse naturelle (drug)". | Localisation | Bug (i18n) | Moyenne | `SYSTEME/LOCALISATION.md`. |
 | 32 | Implants : rien n'existe. Règle RAW à identifier, mécanique à concevoir. | Items | Hors scope | Basse (à planifier) | Chantier à part. |
 | 34 | Module arme disparu de la fiche (gap local/distant, en cours par Saar). | Playground | Bug (régression) | Critique (en cours) | `equipment-admin.html`, migration. |
 

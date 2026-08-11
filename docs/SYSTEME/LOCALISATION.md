@@ -1,17 +1,22 @@
 # SYSTEME/LOCALISATION.md — i18n client, namespaces, pattern serveur
 
-> Dernière mise à jour : 2026-07-23.
+> Dernière mise à jour : 2026-08-11.
 >
-> Statut : **Norme active. Anglais gelé (non chargé, non maintenu) — seul le FR est un objectif produit.**
+> Statut : **Norme active. Anglais gelé (non chargé, non maintenu) — seul le FR est un objectif produit
+> aujourd'hui.** Depuis le 2026-08-11 (décision Saar, `docs/BUG WIZARD.md` bug #16), l'architecture doit
+> rester prête à ajouter EN/DE/JAP sans réécriture — voir §6 pour le contenu de catalogue (`ref_*`), qui
+> suit un mécanisme distinct de l'UI décrit aux §1-4.
 >
 > Lire pour : tout composant React affichant du texte, tout message système émis par le serveur, tout
-> ajout de clé de traduction, toute discussion sur la taille ou le découpage de `client/src/locales/`.
+> ajout de clé de traduction, toute discussion sur la taille ou le découpage de `client/src/locales/`,
+> toute donnée de référence (`ref_*`) affichée à un joueur/MJ.
 
 Documents associés :
 
 - `.claude/rules/i18n.md` — invariants courts, auto-chargés sur les fichiers concernés.
-- `docs/PLAN_LOCALISATION.md` — chantier temporaire de résorption de la dette actuelle (Règle 10,
-  `docs/RegleDocumentaire.md` — sera archivé une fois clos).
+- `docs/PLANS/PLAN_LOCALISATION.md` — chantier temporaire de résorption de la dette actuelle (Règle 10,
+  `docs/RegleDocumentaire.md` — sera archivé une fois clos). Lots 1-4 : UI/.jsx. Lot 5 (§7 du plan) :
+  contenu de catalogue, cf. §6 ci-dessous pour le mécanisme retenu.
 - `.claude/rules/react.md` — règle générale d'origine (`t('section.cle')`, jamais de string figée),
   ce document en est le détail faisant autorité.
 
@@ -150,3 +155,54 @@ namespacé (ex. un message combat va dans `combat.json`).
 - Support multi-langue actif (sélecteur de langue, `en.json` chargé) — non demandé, non planifié.
 - i18n des logs serveur, des noms de tables/colonnes, des codes internes (`COM9`, `PC29`...).
 - Pluralisation avancée / formats de date localisés — non rencontrés à ce jour dans le projet.
+- Contenu de catalogue (`ref_*`) — **n'est plus hors périmètre** depuis le 2026-08-11 ; suit §6, pas
+  `client/src/locales/`.
+
+---
+
+## 6. Contenu de catalogue (`ref_*`) — mécanisme distinct de l'UI
+
+### 6.1 Pourquoi un mécanisme séparé
+
+Les §1-4 ci-dessus couvrent le texte d'interface (boutons, labels, tooltips, messages système) :
+quelques centaines de chaînes courtes, réécrites par un développeur dans le JSX, changent rarement.
+Le contenu de catalogue (`ref_advantages`, `ref_mutations`, `ref_skills`, `ref_careers`,
+`ref_equipment`, `ref_backgrounds`, `ref_setbacks`, `ref_mutation_subtypes`, `ref_genotypes`,
+`ref_career_random_benefits`) est d'une autre nature : ~1500 lignes (compté le 2026-08-11), des champs
+`description` qui sont parfois des paragraphes entiers retranscrits du Livre de Base, alimentées par
+seed/migration plutôt que par un composant.
+
+Passer ce contenu par `react-i18next` (clé par ligne dans `client/src/locales/`) grossirait le bundle
+JS client de tout le catalogue à chaque langue ajoutée (le build `vite` avertit déjà d'un chunk de
+3,9 Mo avant tout ajout) — inadapté à ce volume. Une table de traduction normalisée séparée
+(`ref_advantages_i18n(advantage_id, lang, name, description)`) évite ce problème mais impose une
+jointure par lecture. Pratique retenue après recherche (bonnes pratiques pro, pas une préférence
+locale — voir sources dans `docs/JOURNAL8.md`, session 2026-08-11) : **une colonne JSONB par champ
+traduisible, directement sur la table `ref_*` existante**, cohérente avec l'usage JSONB déjà établi
+dans ce projet (`campaigns.settings`, `char_pc_ledger.skill_allocations`) — pas un nouveau pattern à
+apprendre, pas de jointure, aucune migration de schéma requise pour ajouter une langue.
+
+### 6.2 Mécanisme
+
+- Chaque colonne traduisible existante (`name`, `label`, `description`) est doublée d'une colonne
+  JSONB `<champ>_i18n` (ex. `name_i18n`, `description_i18n`), clé = code langue ISO (`fr`, `en`, `de`,
+  `jp`...), valeur = texte dans cette langue. Exemple : `{"fr": "Sens diminué (vue)"}`.
+- Aujourd'hui, seule la clé `fr` est peuplée (objectif produit inchangé — FR seul). Ajouter une langue
+  plus tard = peupler une nouvelle clé sur les lignes existantes (script de traduction/migration de
+  données), jamais une migration de schéma ni un changement de code de résolution.
+- Résolution : un helper serveur unique (à créer au Lot 5, pas dupliqué par table) lit
+  `row[`${champ}_i18n`][locale] ?? row[`${champ}_i18n`].fr ?? row[champ]` — repli sur `fr`, puis sur
+  l'ancienne colonne brute tant que la migration d'un `ref_*` donné n'est pas faite (transition
+  table par table, jamais un big-bang sur les 10 tables). La locale du joueur n'existe pas encore
+  comme concept dans le projet (FR seul) : au lancement du Lot 5, `locale` sera fixé à `'fr'` en dur
+  côté serveur, remplacé plus tard par un vrai champ utilisateur/campagne le jour où une deuxième
+  langue devient un objectif produit.
+- Le client continue de recevoir une chaîne déjà résolue (`adv.name`), jamais l'objet JSONB brut ni de
+  logique de repli côté client — le serveur reste la seule autorité de résolution, même principe que
+  §4 (le client ne décide jamais de la langue affichée).
+
+### 6.3 Statut
+
+Décision d'architecture prise le 2026-08-11 ; exécution (audit par table, migrations, helper de
+résolution, retrofit des consommateurs) non commencée — plan détaillé à écrire dans
+`docs/PLANS/PLAN_LOCALISATION.md` §7 (Lot 5) avant tout code.
