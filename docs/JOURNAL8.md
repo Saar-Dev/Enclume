@@ -1573,3 +1573,50 @@ cause côté client.
 **Non testé** : reproduction du bug original en navigateur (impossible sans pas-à-pas).
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-11 — WIZ13 (suite) : cause racine trouvée grâce au log
+
+**Contexte** : quelques minutes après la 1re passe de WIZ13 (garde-fou + log, sans cause client
+trouvée), Saar reproduit lui-même précisément : nouveau personnage, Étape 1, clic "Suivant" →
+"Fiche introuvable". Le log `[DBG-WIZNULL]` ajouté juste avant confirme immédiatement
+`POST /api/creation/null/reconcile` — la chaîne littérale "null" dans l'URL, comme prévu.
+
+**Cause racine, trouvée par lecture de code (pas par nouvelle hypothèse au hasard)** : Saar est MJ de
+sa campagne. L'effet "Hygiène de navigation" (`WizardCreation.jsx:86-93`, avant fix) :
+```js
+useEffect(() => {
+  if (!urlSheetId && isGmView) resetCreation()
+}, [urlSheetId, isGmView, resetCreation])
+```
+teste `isGmView` seul pour détecter "un MJ revient de consulter le brouillon d'un autre joueur". Or
+`startCreation` (même fichier, commentaire déjà présent avant ce fix) pose aussi `isGmView: true` pour
+tout MJ démarrant SON PROPRE personnage — rôle réel de campagne, ajouté pour un bug différent
+(bouton Matériel Étape 6 invisible pour un MJ créant pour lui-même). Personne n'avait répercuté ce
+changement de sens sur cet effet. Séquence exacte : `startCreation()` pose `{sheetId, isGmView:true,
+...}` → l'effet se redéclenche (sa dépendance `isGmView` vient de changer) → `!urlSheetId && isGmView`
+est vrai (aucune des deux conditions ne distingue "mon propre personnage" de "celui d'un autre") →
+`resetCreation()` efface `sheetId` (et `isGmView`, et `step`) quelques instants après leur pose. Au
+clic "Suivant" de l'Étape 1, le `sheetId` lu par `advanceStep` est déjà retombé à `null`.
+
+**Signal correct trouvé** : `ownerUserId` (store) n'a lui qu'un seul sens — le propriétaire du dernier
+brouillon chargé via `loadExistingSheet` (Lot A3, résolution serveur, jamais posé par `startCreation`).
+Pour un MJ créant son propre personnage, `ownerUserId` reste `null` (jamais touché). Pour un MJ qui
+vient de consulter le brouillon du joueur A, `ownerUserId` vaut l'id de A — différent du sien.
+`ownerUserId !== user.id` distingue donc sans ambiguïté les deux cas, contrairement à `isGmView` seul.
+
+**Corrigé** : condition remplacée par `!urlSheetId && ownerUserId && ownerUserId !== user?.id`,
+`isGmView` retiré des deps de cet effet (reste utilisé ailleurs dans le fichier pour son propre rôle
+d'affichage MJ, non touché). Vérifié par relecture du scénario original (MJ consultant le brouillon
+d'un autre puis revenant au sien) : `ownerUserId` de ce brouillon est bien différent du sien,
+`resetCreation()` se déclenche toujours correctement dans ce cas — comportement legacy préservé.
+
+**Corrigé (1re passe, conservé)** : le garde-fou serveur (`resolveSheetAccess`) reste en place —
+défense en profondeur, ce bug précis n'était pas le seul chemin possible vers un `sheetId` malformé.
+
+**Testé** : ESLint clean sur `WizardCreation.jsx`, `vite build` propre. Trace logique complète du
+scénario réel (MJ créant son propre personnage) et du scénario original que l'effet doit préserver
+(MJ quittant le brouillon d'un autre joueur) — les deux aboutissent au comportement attendu.
+**Non testé** : navigateur (impossible à observer depuis Node — dépend du timing réel des effets
+React/re-renders, pas simulable statiquement avec certitude absolue, seulement par trace logique).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

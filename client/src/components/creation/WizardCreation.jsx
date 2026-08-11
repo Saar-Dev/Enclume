@@ -35,7 +35,7 @@ export default function WizardCreation() {
     ambiance: storeAmbiance,
     randomMutationsEnabled,
     femininBonusEnabled,
-    isGmView, guideModeActive, setGuideModeActive,
+    isGmView, ownerUserId, guideModeActive, setGuideModeActive,
     stateSyncVersion,
   } = useCreationStore()
 
@@ -85,12 +85,22 @@ export default function WizardCreation() {
 
   // Hygiène de navigation — même invariant que le nettoyage de room côté serveur (WIZARD_JOIN,
   // Lot A1) : la route sans :sheetId représente toujours SON PROPRE personnage, jamais l'état
-  // laissé par un MJ qui vient de consulter celui d'un autre joueur (isGmView=true dans le store).
-  // Sans ce garde-fou, quitter le personnage du joueur A pour /creation (le sien) afficherait
-  // silencieusement le shell avec les données de A tant que l'utilisateur n'a pas rafraîchi.
+  // laissé par un MJ qui vient de consulter celui d'un autre joueur. Sans ce garde-fou, quitter le
+  // personnage du joueur A pour /creation (le sien) afficherait silencieusement le shell avec les
+  // données de A tant que l'utilisateur n'a pas rafraîchi.
+  //
+  // WIZ13 (docs/EN_COURS.md, 2026-08-11) : la condition testait `isGmView` seul, mais ce champ a
+  // depuis un double sens (commentaire startCreation ci-dessus, action) — "rôle réel de campagne"
+  // ET "vient de consulter le brouillon d'un autre". Un MJ démarrant SON PROPRE personnage obtient
+  // aussi isGmView=true (son rôle de campagne), sans jamais avoir consulté personne d'autre — la
+  // condition se déclenchait donc juste après startCreation(), effaçant le sheetId tout juste créé
+  // (reconcile suivant envoyé avec sheetId=null → 404 "Fiche introuvable"). `ownerUserId` ne porte
+  // qu'un seul sens (le propriétaire du dernier brouillon chargé via loadExistingSheet, jamais posé
+  // par startCreation) — comparé à l'utilisateur courant, il distingue sans ambiguïté "je viens de
+  // consulter quelqu'un d'autre" de "je démarre le mien".
   useEffect(() => {
-    if (!urlSheetId && isGmView) resetCreation()
-  }, [urlSheetId, isGmView, resetCreation])
+    if (!urlSheetId && ownerUserId && ownerUserId !== user?.id) resetCreation()
+  }, [urlSheetId, ownerUserId, user?.id, resetCreation])
 
   // ─── Fenêtre fiche personnage (lecture seule) ────────────────────────────
   const [peekOpen, setPeekOpen] = useState(false)
