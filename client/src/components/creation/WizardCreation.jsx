@@ -328,8 +328,11 @@ export default function WizardCreation() {
         )}
 
         {step === 4 && (
+          // WIZ15 : pas de key ici — Step4Experience porte lui-même la sous-navigation locale
+          // (subStep) non remontée ; gmSyncKey descend en prop normale, appliqué comme key plus bas
+          // uniquement sur la partie qui doit se resynchroniser (docs/JOURNAL8.md 2026-08-11).
           <Step4Experience
-            key={gmSyncKey}
+            gmSyncKey={gmSyncKey}
             initialData={liveOr(liveStep4Data, step4Data)}
             pcDispo={stepBudget}
             onLiveChange={onLiveChange4}

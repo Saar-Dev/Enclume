@@ -667,53 +667,60 @@ export default function CareersAllocator({
           </div>
         )}
 
-        <div className="wiz4-board">
-          <div className="wiz4-boardhead">
-            <span className="wiz4-h">
-              {t('step4.career_board_title')} <span className="wiz4-boardhint">— {t('step4.career_board_hint')}</span>
-            </span>
-            <span className={`wiz4-poolrem${allocationResult.remaining === 0 && allocationResult.budget > 0 ? ' ok' : ''}`}>
-              <span className="wiz4-mono">{allocationResult.remaining}</span> {t('step4.career_points_remaining')}
-            </span>
-          </div>
-          <div className="wiz4-scroll">
-            {boardGroups.map(g => (
-              <div key={g.family} className="wiz4-bgrp">
-                <div className="wiz4-bgrplbl">{g.family}</div>
-                {g.skills.map(row => (
-                  <div
-                    key={row.skillId}
-                    className={`wiz4-skill${hoverCareerId && row.provenance.some(p => p.key === hoverCareerId) ? ' hl' : ''}`}
-                  >
-                    <div className="wiz4-skmain">
-                      <span className="wiz4-sklabel">{skillLabel(row.skillId)}</span>
-                      <div className="wiz4-prov">
-                        {row.provenance.map(p => (
-                          <span key={p.key} className="wiz4-provtag" style={{ background: p.color }}>{p.label}</span>
-                        ))}
+        {/* Bug #23 (docs/BUG WIZARD.md) : le board se répartit sur les compétences des carrières
+            AJOUTÉES (selectedCareers, via handleAdd) — sans condition, il s'affichait dès le montage
+            (uniquement les compétences d'origine dans ce cas), donnant l'impression que la répartition
+            "compte" avant même qu'une année de profession soit confirmée. Le statut en pied de page
+            (career_status_none) reste le seul message tant qu'aucune carrière n'est ajoutée. */}
+        {selectedCareers.length > 0 && (
+          <div className="wiz4-board">
+            <div className="wiz4-boardhead">
+              <span className="wiz4-h">
+                {t('step4.career_board_title')} <span className="wiz4-boardhint">— {t('step4.career_board_hint')}</span>
+              </span>
+              <span className={`wiz4-poolrem${allocationResult.remaining === 0 && allocationResult.budget > 0 ? ' ok' : ''}`}>
+                <span className="wiz4-mono">{allocationResult.remaining}</span> {t('step4.career_points_remaining')}
+              </span>
+            </div>
+            <div className="wiz4-scroll">
+              {boardGroups.map(g => (
+                <div key={g.family} className="wiz4-bgrp">
+                  <div className="wiz4-bgrplbl">{g.family}</div>
+                  {g.skills.map(row => (
+                    <div
+                      key={row.skillId}
+                      className={`wiz4-skill${hoverCareerId && row.provenance.some(p => p.key === hoverCareerId) ? ' hl' : ''}`}
+                    >
+                      <div className="wiz4-skmain">
+                        <span className="wiz4-sklabel">{skillLabel(row.skillId)}</span>
+                        <div className="wiz4-prov">
+                          {row.provenance.map(p => (
+                            <span key={p.key} className="wiz4-provtag" style={{ background: p.color }}>{p.label}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="wiz4-ctl">
+                        <span className="wiz4-base">{row.current > 0 ? t('step4.career_base', { n: row.current }) : '—'}</span>
+                        <button
+                          className={`wiz4-sbtn${row.target <= (baseMastery[row.skillId] ?? 0) ? ' dis' : ''}`}
+                          onClick={() => handleAllocDec(row)}
+                          disabled={row.target <= (baseMastery[row.skillId] ?? 0)}
+                        >−</button>
+                        <span className="wiz4-val">{row.target}</span>
+                        <button
+                          className={`wiz4-sbtn${allocationResult.remaining <= 0 || row.target >= row.cap ? ' dis' : ''}`}
+                          onClick={() => handleAllocInc(row)}
+                          disabled={allocationResult.remaining <= 0 || row.target >= row.cap}
+                        >＋</button>
+                        <span className="wiz4-total">+{row.target}</span>
                       </div>
                     </div>
-                    <div className="wiz4-ctl">
-                      <span className="wiz4-base">{row.current > 0 ? t('step4.career_base', { n: row.current }) : '—'}</span>
-                      <button
-                        className={`wiz4-sbtn${row.target <= (baseMastery[row.skillId] ?? 0) ? ' dis' : ''}`}
-                        onClick={() => handleAllocDec(row)}
-                        disabled={row.target <= (baseMastery[row.skillId] ?? 0)}
-                      >−</button>
-                      <span className="wiz4-val">{row.target}</span>
-                      <button
-                        className={`wiz4-sbtn${allocationResult.remaining <= 0 || row.target >= row.cap ? ' dis' : ''}`}
-                        onClick={() => handleAllocInc(row)}
-                        disabled={allocationResult.remaining <= 0 || row.target >= row.cap}
-                      >＋</button>
-                      <span className="wiz4-total">+{row.target}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="wiz4-foot">
           <button className="wiz4-prev" onClick={onPrev}>{t('step4.prev')}</button>

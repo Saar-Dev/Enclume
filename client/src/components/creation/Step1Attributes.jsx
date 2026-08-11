@@ -479,7 +479,11 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
                 <option value="">{t('step1.handPlaceholder')}</option>
                 <option value="R" disabled={isLockedForPlayer(handOptionKey('R'))}>{t('step1.handRight')}</option>
                 <option value="L" disabled={isLockedForPlayer(handOptionKey('L'))}>{t('step1.handLeft')}</option>
-                <option value="A">{t('step1.handAmbi')}</option>
+                {/* WIZ16 (docs/BUG WIZARD.md #19) : "A" jamais choisi manuellement (Lancez 2D10,
+                    REGLE_CREATION.md:1304-1311 — un résultat < 20 doit passer par l'Avantage
+                    Ambidextre payant, pas une sélection gratuite). Reste sélectionnable une fois
+                    acquise (jet gagnant, ou fiche rechargée avec l'Avantage déjà possédé). */}
+                <option value="A" disabled={handPref !== 'A'}>{t('step1.handAmbi')}</option>
               </select>
               <button type="button" className="wiz1-pc-btn" onClick={handleRollHandPref}>
                 {t('step1.handRoll')}
@@ -559,6 +563,15 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
           {t('step1.next')} →
         </button>
       </div>
+
+      {/* WIZ17 (docs/BUG WIZARD.md #20) : canNext combine nom ET répartition valide — sans ce bloc,
+          un nom vide grise "Suivant" sans aucune explication (seul le cas répartition invalide en
+          avait une, ci-dessous). Indépendant de validation.valide : peut s'afficher en même temps. */}
+      {charName.trim().length === 0 && (
+        <p className="wiz1-budget-warning">
+          {t('step1.name_required_warning')}
+        </p>
+      )}
 
       {!validation.valide && (
         <p className="wiz1-budget-warning">

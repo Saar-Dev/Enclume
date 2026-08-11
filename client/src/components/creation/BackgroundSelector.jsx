@@ -38,6 +38,13 @@ export default function BackgroundSelector({
 
   return (
     <div style={s.container}>
+      {/* WIZ19 (docs/BUG WIZARD.md #22) : contenu variable (AutodidacteAllocator peut être long)
+          scrolle indépendamment de `nav`, qui reste toujours visible en bas — même patron que
+          StepMaterielEtBiens.jsx (container overflow:hidden + scroll flex:1/overflowY:auto/
+          minHeight:0 + nav flexShrink:0 en dehors du scroll), pas de position:sticky (absent du
+          reste du projet) ni de max-height propre à AutodidacteAllocator (aurait isolé son scroll
+          du reste du contenu de l'étape). */}
+      <div style={s.scroll}>
       <h2 style={s.title}>{title}</h2>
 
       {extraInfo && (
@@ -189,6 +196,7 @@ export default function BackgroundSelector({
           )}
         </div>
       )}
+      </div>
 
       <div style={s.nav}>
         <button style={s.backBtn} onClick={onPrev}>
@@ -219,6 +227,14 @@ export default function BackgroundSelector({
 const s = {
   container: {
     flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  scroll: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -398,9 +414,11 @@ choiceSkillName: {
   nav: {
     display: 'flex',
     gap: '12px',
-    marginTop: '4px',
     flexWrap: 'wrap',
     justifyContent: 'center',
+    flexShrink: 0,
+    padding: '12px 20px',
+    borderTop: '1px solid #1e1e2e',
   },
   backBtn: {
     padding: '8px 18px',

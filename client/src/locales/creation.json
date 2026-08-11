@@ -58,6 +58,7 @@
     "pcColPoints": "Amélioration",
     "budget_warning": "Il reste {{n}} point(s) non dépensé(s), ils seront perdus — clique à nouveau sur Suivant pour continuer quand même.",
     "hard_block_warning": "La répartition actuelle n'est plus valide (probablement suite à un changement de Sexe) — ajuste les points ci-dessus avant de continuer.",
+    "name_required_warning": "Entrez un nom de personnage pour continuer.",
     "chcTitle": "Chance",
     "chcBase": "Chance de départ",
     "chcDesc": "La Chance est un Attribut particulier qui représente la capacité du personnage à bénéficier de temps à autre d'un coup de pouce du destin. Son score dépend de l'ambiance de campagne choisie par le MJ.",
@@ -84,7 +85,7 @@
 	"handLeft": "Gaucher",
 	"handAmbi": "Ambidextre",
 	"handPlaceholder": "—",
-	"handRoll": "Définir"
+	"handRoll": "Lancer 2D10"
   },
   "step2": {
     "attrPreview": "Aperçu des Attributs",

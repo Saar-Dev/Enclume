@@ -29,13 +29,9 @@
 | # | Description (affinée) | Domaine | Type | Priorité | Orientation |
 |---|---|---|---|---|---|
 | 1 | Absence totale de tooltips d'explication dans le wizard (priorité Step 4 Profession). Aucun système existant. | Wizard | Amélioration UX | Haute | Créer un système de tooltips. |
-| 2 | Main directrice : règle RAW impose aléatoire. Le joueur peut sélectionner manuellement, "Définir" tire au sort mais ne bloque pas. | Wizard | Bug (écart RAW) | Haute | `REGLE_CREATION.md`, flux Step 1. |
-| 3 | Bouton Suivant grisé si nom vide, sans message explicatif. | Wizard | Amélioration UX | Moyenne | Validation et retour visuel. |
 | 5 | Tableau des attributs trop large (layout). | Wizard | Amélioration UX | Basse | CSS responsive de l'étape 2. |
-| 6 | UI actuelle : deux voies ("Acheter ses mutations"/"Aléatoire"), "aucune mutation" pas assez visible. | Wizard | Amélioration UX | Haute | `REGLE_MUTATION.md`, composants Step 3. |
 | 7 | Broadcast incohérent : Step 1 temps réel, Step 4 envoie directement au récapitulatif et y reste. | Wizard | Bug (broadcast) | Haute | `PERSONNAGE_WIZARD.md`, flux WS. |
 | 8 | Boutons -/+ non harmonisés sur tout le wizard. | Wizard | Amélioration UX | Basse | Composants d'incrémentation. |
-| 9 | Sous-étape Autodidacte très longue, bouton Suivant rejeté en bas. | Wizard | Amélioration UX | Moyenne | Mise en page, conteneurs. |
 | 10 | Page Profession dense : grille de compétences apparaît avant sélection, retirer description des compétences pro. | Wizard | Bug (affichage) | Haute | Rendu conditionnel Step 4. |
 | 11 | Symbole /!\\ trop petit. | Wizard | Amélioration UX | Basse | Icône d'avertissement. |
 | 13 | Points déjà investis dans les compétences professionnelles mal calculés. | Wizard | Bug | Haute | `SYSTEME/PERSONNAGE_CALCULS.md`. |
@@ -227,61 +223,7 @@
 
 # --------------
 
-Bug #2 — Main directrice sélectionnable manuellement (écart RAW)
-
-Ce que le code montre :
-
-    L’état handPref est initialisé à '' (ligne 47). Le <select> (lignes 328-336) propose trois options manuelles : R, L, A. Le joueur peut les choisir librement à tout moment.
-
-    Le bouton handleRollHandPref (ligne 102-105) simule un jet 2D10 et positionne handPref à 'R', 'L' ou 'A'. C’est un « Définir » qui applique le résultat RAW.
-
-    Mais après ce tirage, le <select> reste modifiable. Aucune propriété disabled n’est posée sur le <select> après l’appel de handleRollHandPref. Le joueur peut donc immédiatement changer manuellement.
-
-    L’option Ambidextre ('A') est accessible manuellement sans aucun coût, ce qui contredit aussi la règle (l’Ambidextre est un Avantage payant, pas un résultat libre).
-
-Verdict : Le bug est confirmé à la lecture du code. Le correctif consisterait à :
-
-    Rendre le <select> disabled après un tirage réussi (c’est-à-dire dès que handPref !== ''), ou
-
-    Supprimer complètement le <select> et ne proposer que le bouton « Définir » (avec impossibilité de changer ensuite), sauf achat explicite de l’Avantage Ambidextre qui débloquerait 'A'.
-
-Note : Le commentaire ligne 101 dit « pattern client pur, identique au tirage aléatoire de Step3Mutations.jsx ». Si Step3Mutations.jsx empêche la modification après tirage, il y a une incohérence de pattern.
-
-Bug #3 — Bouton Suivant grisé sans explication si le nom est vide
-
-Ce que le code montre :
-
-    canNext = charName.trim().length > 0 && validation.valide (ligne 124).
-
-    Le bouton « Suivant » (ligne 393-398) a disabled={!canNext}.
-
-    Le message d’erreur conditionnel (lignes 401-410) n’apparaît que si !validation.valide (bloc ligne 401) ou si budgetWarned (ligne 406). Aucun message spécifique pour le cas où seul le nom est vide et la validation est valide par ailleurs.
-
-    Résultat : le bouton est grisé, le joueur ne voit rien lui indiquant pourquoi.
-
-Verdict : Le bug est confirmé. Il suffit d’ajouter un message explicite lorsque !canNext et que charName.trim().length === 0, par exemple « Entrez un nom pour continuer ».
-
 Bug 22 non existant, verification faite.
-
-Bug #6 — « Aucune mutation » pas assez visible
-
-Ce que le code montre :
-
-    La carte « Aucune mutation » est rendue dans l'écran d'achat (method === 'chosen'), lignes 246-249 :
-    jsx
-
-    <div style={st.noneCard} onClick={handleNone}>
-      <span style={st.noneTitle}>{t('step3.none')}</span>
-      <p style={st.noneDesc}>{t('step3.noneDesc')}</p>
-    </div>
-
-    Elle est positionnée au-dessus de la grille des mutations, avec un style discret : bordure #1e1e2e, fond semi-transparent rgba(6,6,14,0.6), texte gris #5a5a7a / #3a3a5e.
-
-    Elle est visuellement similaire à une carte normale mais avec un style moins contrasté.
-
-Verdict : Le choix de conception est compréhensible (la grille est le choix principal), mais le manque de contraste et l'absence d'icône ou de bouton explicite peuvent la rendre invisible pour un débutant. Solution possible : utiliser un bouton « Aucune mutation » distinct, ou augmenter le contraste.
-
-Note : Il n'y a pas de troisième voie dans le code actuel (contrairement au signalement beta : « OU troisième choix »). L'écran de choix n'a que deux cartes : Achat et Aléatoire.
 
 Bug #25 — Parasite : jet de dé non implémenté
 
@@ -309,37 +251,6 @@ Ce que le code montre :
     Donc un solde négatif est rejeté côté serveur. Mais cette validation n'a lieu qu'à la réconciliation, pas en temps réel dans le composant client.
 
 Verdict : Le bug #15 est purement client. Le composant Step4Experience.jsx (ou CareersAllocator.jsx) doit griser les boutons + quand le coût dépasse le budget disponible. Le serveur rejette déjà correctement, mais l'expérience utilisateur est dégradée car le joueur découvre l'erreur seulement en soumettant.
-
-Bug #9 — Sous-étape Autodidacte très longue, bouton Suivant tout en bas
-
-Ce que le code montre :
-
-    BackgroundSelector est un composant générique partagé par plusieurs sous-étapes (origine géo, sociale, formation, études supérieures). Il n'est pas spécifique à l'Autodidacte.
-
-    Quand selectedItem.isAutodidacte est vrai, le composant <AutodidacteAllocator> est rendu dans le flux normal du conteneur (lignes ~138-142), avant la barre de navigation :
-    jsx
-
-    {selectedItem.isAutodidacte && (
-      <AutodidacteAllocator
-        refSkills={refSkills}
-        allocations={autodidacteAllocations}
-        onChange={onAutodidacteAllocationsChange}
-      />
-    )}
-
-    La barre de navigation (s.nav, boutons Précédent/Suivant) est rendue après tous les détails, tout en bas du conteneur. Aucun footer sticky ou position fixed n'est utilisé.
-
-    Le conteneur lui-même a display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px 20px', gap: '18px'. Rien ne garantit que le bouton reste visible si le contenu est long.
-
-Verdict : La cause est confirmée. Le composant AutodidacteAllocator (dont la hauteur est potentiellement très grande — 7 points à répartir sur une longue liste de compétences) est inséré dans le flux normal, repoussant le bouton Suivant hors de l'écran. Le correctif doit soit :
-
-    Rendre la barre de navigation sticky (position: sticky; bottom: 0; avec fond opaque), ou
-
-    Donner une hauteur maximale à AutodidacteAllocator avec scroll interne, ou
-
-    Faire les deux.
-
-Fichier à modifier : BackgroundSelector.jsx (style de la navigation) et/ou AutodidacteAllocator.jsx (hauteur maximale).
 
 Bug #10 — Grille de répartition visible avant sélection d'une profession
 

@@ -26,11 +26,42 @@ const SUB_STEPS = {
 
 const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
-export default function Step4Experience({ initialData, pcDispo, onNext, onPrev, onLiveChange }) {
-  const { t } = useTranslation('creation')
-  const { sheetId, step1Data, step2Data, step5Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, setStep4Data } = useCreationStore()
+// WIZ15 (docs/EN_COURS.md, 2026-08-11) : Step4ExperienceInner porte `key={gmSyncKey}` — remonté à
+// chaque écho WIZARD_STATE_SYNC côté MJ (WizardCreation.jsx) pour que ses ~15 useState(initialData)
+// se resynchronisent avec les données fraîches du joueur (patron nécessaire : recommandation React
+// officielle contre un useEffect qui listerait chaque champ à la main — cf. bug #13/#14 cette même
+// session, une dépendance oubliée redevient un bug de désynchronisation silencieuse).
+//
+// Mais subStep/highestSubStep (sous-navigation Âge/Origines/Carrières/Récap) sont un état 100% local
+// à l'UI, sans rapport avec les données synchronisées — les remonter avec le reste envoyait le MJ sur
+// Récap à chaque modification du joueur, quelle que soit la sous-étape qu'il regardait (bug remonté
+// par Saar). Solution retenue après vérification de la doc React officielle
+// (react.dev/learn/preserving-and-resetting-state, "Option 1 : séparer le composant en deux") : ce
+// wrapper NON remonté porte l'état de navigation, Step4ExperienceInner (remonté) porte les données.
+// Aucune logique déplacée — subStep/setSubStep/highestSubStep/setHighestSubStep gardent les mêmes
+// noms partout dans Step4ExperienceInner, juste reçus en props au lieu d'un useState local.
+export default function Step4Experience({ gmSyncKey, initialData, ...rest }) {
   const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
   const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
+  return (
+    <Step4ExperienceInner
+      key={gmSyncKey}
+      initialData={initialData}
+      subStep={subStep}
+      setSubStep={setSubStep}
+      highestSubStep={highestSubStep}
+      setHighestSubStep={setHighestSubStep}
+      {...rest}
+    />
+  )
+}
+
+function Step4ExperienceInner({
+  initialData, pcDispo, onNext, onPrev, onLiveChange,
+  subStep, setSubStep, highestSubStep, setHighestSubStep,
+}) {
+  const { t } = useTranslation('creation')
+  const { sheetId, step1Data, step2Data, step5Data, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, setStep4Data } = useCreationStore()
   const [age, setAge] = useState(initialData?.age ?? 16)
   const [originGeo, setOriginGeo] = useState(initialData?.originGeo ?? null)
   const [originSoc, setOriginSoc] = useState(initialData?.originSoc ?? null)
@@ -528,6 +559,12 @@ const s = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    // WIZ19 (docs/BUG WIZARD.md #22) : minHeight:0 nécessaire pour que le scroll interne de
+    // BackgroundSelector.jsx (flex:1/overflowY:auto) se déclenche réellement — sans ça, un flex
+    // item hérite d'un min-height:auto qui le fait grandir avec son contenu au lieu de se borner à
+    // l'espace disponible, et c'est alors WizardCreation.jsx (body: overflow:hidden) qui coupe tout
+    // au lieu de laisser défiler.
+    minHeight: 0,
   },
   subSteps: {
     display: 'flex',

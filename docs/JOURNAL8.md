@@ -1620,3 +1620,196 @@ scénario réel (MJ créant son propre personnage) et du scénario original que 
 React/re-renders, pas simulable statiquement avec certitude absolue, seulement par trace logique).
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-11 — WIZ14 : grille de répartition visible avant carrière ajoutée (bug #23)
+
+**Contexte** : Saar remonte en test réel (indépendamment de `docs/BUG WIZARD.md` #23, déjà catalogué)
+que la grille de répartition des points de compétences (Step 4 Profession) s'affiche avant que le
+nombre d'années d'une profession soit confirmé.
+
+**Confirmé par lecture** : `<div className="wiz4-board">` (`CareersAllocator.jsx`) n'avait aucune
+condition — rendu à chaque fois, y compris avec `selectedCareers` vide (dans ce cas seules les
+compétences d'origine y apparaissent, mais la section reste visible et laisse croire qu'une
+répartition est en cours). Diagnostic du doc confirmé exact, y compris la précision de Saar :
+`selectedCareers` est déjà le tableau des carrières **ajoutées** via `handleAdd` (bouton "Ajouter",
+après confirmation des années) — pas la carrière en cours de sélection/édition dans la colonne de
+gauche (`selectedCareerId`/`years`, état de saisie séparé). Un seul et même correctif couvre donc la
+formulation du doc ("avant sélection d'une profession") et celle de Saar ("avant confirmation des
+années") : `selectedCareers.length > 0`.
+
+**Corrigé** : `wiz4-board` enveloppé dans `{selectedCareers.length > 0 && (...)}`. Le statut en pied
+de page (`career_status_none`, déjà existant) reste le seul message tant qu'aucune carrière n'est
+ajoutée — pas de nouveau texte à traduire.
+
+**Testé** : ESLint clean, `vite build` propre. Confirmé en navigateur par Saar (2026-08-11).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-11 — WIZ15 : granularité du suivi MJ sur Step 4 (gmSyncKey)
+
+**Contexte** : Saar remonte que sur Step 4 (Profession), dès que le joueur modifie une sous-étape, le
+MJ est renvoyé sur "Récap" et ne peut rien voir.
+
+**Cause confirmée** : `gmSyncKey` (`WizardCreation.jsx`, `isGmView ? gm-sync-${stateSyncVersion} :
+undefined`) est posé en `key` sur chacun des 5 composants d'étape — un remontage complet force leurs
+`useState(initialData)` à se resynchroniser dès qu'un `WIZARD_STATE_SYNC` arrive (nécessaire : sans
+ça le MJ verrait des données périmées, exigence déjà posée par Saar). Mais `Step4Experience.jsx` est
+le seul des 5 à porter sa propre sous-navigation locale (`subStep` : Âge/Origines/Formation/Carrières/
+Avantages & Revers/Récap) — un état UI qui n'a rien à voir avec les données synchronisées. Le
+remontage la réinitialisait aussi, et comme `initialData` existe déjà (le joueur a avancé), elle
+repart directement sur `SUB_STEPS.SUMMARY`.
+
+**Recherche avant de coder** (analyse à charge demandée par Saar avant d'implémenter) : le plan
+initial ("déplacer `subStep` dans le store Zustand") a été révisé après vérification de la doc
+officielle React (`react.dev/learn/preserving-and-resetting-state`) — un `key` changeant est fait pour
+tout réinitialiser d'un coup ; quand une partie de l'état doit rester locale pendant qu'une autre se
+resynchronise depuis les props, le pattern documenté est de séparer le composant en deux (wrapper
+externe jamais remonté + composant interne remonté). Préféré au store Zustand : ne mélange pas une
+préoccupation UI propre à Step4 avec les données de personnage partagées par tout le Wizard.
+
+**Corrigé** : `Step4Experience.jsx` scindé — le nom `Step4Experience` (export par défaut) devient un
+wrapper fin qui porte `useState` pour `subStep`/`highestSubStep` (jamais remonté, car
+`WizardCreation.jsx` ne pose plus `key={gmSyncKey}` dessus) ; l'ancien corps entier (~480 lignes,
+inchangé) est renommé `Step4ExperienceInner`, reçoit `subStep`/`setSubStep`/`highestSubStep`/
+`setHighestSubStep` en props au lieu d'un `useState` local — mêmes noms de variables partout dans le
+corps, donc **aucune ligne de logique déplacée ou réécrite**, seules 2 déclarations changent de forme.
+`gmSyncKey` descend désormais en prop normale depuis `WizardCreation.jsx`, appliqué comme `key` React
+uniquement sur `Step4ExperienceInner`.
+
+**Testé** : ESLint clean sur les deux fichiers touchés (seule erreur restante, `showSetbacks` non
+utilisé, déjà confirmée préexistante avant cette session — bug #13/#14). `vite build` propre.
+Vérifié par lecture que `gmSyncKey` n'est référencé nulle part ailleurs dans le fichier, et que le
+wrapper externe n'est lui-même remonté que par la navigation normale entre étapes (`step === 4`),
+jamais par un changement de `gmSyncKey` seul. Confirmé en navigateur par Saar (2026-08-11).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ16 : main directrice, Ambidextre sélectionnable sans coût (bug #19)
+
+**Contexte** : `docs/BUG WIZARD.md` #19, classé "Mineurs – UI/ergonomie". Diagnostic du doc : le
+`<select>` main directrice de Step1 reste actif après le tirage 2D10, et l'option "Ambidextre" est
+accessible sans coût.
+
+**Vérifié avant de coder** (lecture `Step1Attributes.jsx`, `identityService.js`,
+`creationService.js`, `ref_advantages`, `REGLE_CREATION.md:1301-1311`) : le problème réel dépasse
+l'ergonomie. RAW : main directrice = jet 2D10 (2-15 Droitier, 16-19 Gaucher, 20 Ambidextre) ; en
+dessous de 20, Ambidextre ne s'obtient que par l'achat de l'Avantage dédié — confirmé en base
+(`ref_advantages.advantage_id = 'adv_002'`, `cost_pc: 1`, `mod_identity: {hand_pref: "A"}`). Et
+`hand_pref` n'est pas cosmétique : il détermine la priorité de slot d'arme en défense CaC
+(`socketCombatHelpers.js:1651`, `slotPriority`). Un joueur pouvait donc obtenir gratuitement l'effet
+mécanique d'un Avantage payant.
+
+**Options écartées avant le correctif final** :
+- **Garde serveur** (vérifier qu'un Avantage/mutation actif couvre `hand_pref: 'A'` avant d'accepter
+  la soumission) : écartée — le jet 2D10 gagnant est, comme tous les tirages du Wizard (mutations,
+  avantages pro 1D10), calculé côté client en `Math.random()` sans aller-retour serveur (pattern déjà
+  établi ailleurs dans le code). Le serveur ne peut pas distinguer un vrai 20 d'une valeur forgée — une
+  garde aurait aussi rejeté à tort un jet gagnant légitime, et créé une incohérence avec tous les
+  autres tirages Wizard, non protégés par choix architectural assumé.
+- **Exemption MJ** sur la restriction ("A" non sélectionnable manuellement) : écartée après vérification
+  — le trait est une propriété du personnage, pas un privilège du rôle MJ ; RAW ne prévoit aucune
+  exception pour un PJ créé par le MJ pour un joueur absent (`EN_COURS.md` DBG-C1). Le MJ dispose de
+  toute façon déjà d'un accès freeform à `hand_pref` hors Wizard via `PUT /char-sheet/:id/identity`
+  (`char-sheet.js:168`), sans garde sur l'état du Wizard — pas besoin d'un second chemin de contournement
+  à l'intérieur du Wizard lui-même.
+
+**Corrigé** : `Step1Attributes.jsx` — `<option value="A" disabled={handPref !== 'A'}>` : non
+sélectionnable manuellement, reste affichée/conservée si déjà acquise (jet gagnant, ou fiche rechargée
+avec l'Avantage déjà possédé). Le bouton de tirage (`handleRollHandPref`) pose l'état directement via
+`setHandPref`, hors du `<select>` — non affecté par `disabled`. Renommé au passage : le bouton
+"Définir" (vague) devient "Lancer 2D10" (`creation.json`, `step1.handRoll`), aligné sur la convention
+"Lancer 1D20"/"Lancer 1D10" déjà utilisée pour les autres tirages du Wizard.
+
+**Effet de bord noté, hors périmètre** : un retour à l'étape 1 après achat de l'Avantage Ambidextre à
+l'étape 5, suivi d'un changement manuel vers R/L puis validation, écrirait `hand_pref` sans repasser
+par `recomputeIdentity` (celui-ci n'est appelé que par les blocs STEP3/STEP5, jamais STEP1) —
+incohérence pré-existante, indépendante de ce bug, à traiter séparément si remontée.
+
+**Testé** : ESLint clean (`Step1Attributes.jsx` — seule erreur restante, `poolBase` non utilisé,
+confirmée préexistante par `git diff` avant cette session). `vite build` propre. Vérifié en base
+l'existence et le coût réel de `adv_002 "Ambidextre"`. Confirmé en navigateur par Saar (2026-08-11).
+**Non testé** : —
+**Données** : aucune migration — modification de code et de traduction uniquement.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ17 : bouton "Suivant" grisé sans explication si nom vide (bug #20)
+
+**Contexte** : `docs/BUG WIZARD.md` #20. `canNext` (`Step1Attributes.jsx`) combine
+`charName.trim().length > 0` ET `validation.valide` — mais seul le second cas (répartition
+d'Attributs invalide) affichait un message conditionnel (`hard_block_warning`). Un nom vide grisait
+le bouton sans qu'aucun texte n'explique pourquoi.
+
+**Corrigé** : nouveau bloc conditionnel indépendant, affiché dès que `charName.trim().length === 0`
+— peut apparaître en même temps que `hard_block_warning` si les deux causes sont réunies (pas
+mutuellement exclusif, contrairement à `hard_block_warning`/`budget_warning` qui le sont via
+`validation.valide`). Nouvelle clé `step1.name_required_warning` (`creation.json`).
+
+**Testé** : ESLint clean (seule erreur restante, `poolBase` non utilisé, confirmée préexistante).
+`vite build` propre. Confirmé en navigateur par Saar (2026-08-11).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ18 : carte "Aucune mutation" peu visible (bug #21)
+
+**Contexte** : `docs/BUG WIZARD.md` #21. La carte "Aucune mutation" (`Step3Mutations.jsx`, écran
+d'achat) était stylée en très faible contraste — `noneTitle` `#5a5a7a`, `noneDesc` `#3a3a5e`, bordure
+`#1e1e2e` identique au fond — contre `#c0c0d0`/`#6a6a8a` pour une carte mutation normale
+(`cardName`/`cardDesc`). Une entrée `BUGIDENTIFIE.md` liée signalait aussi l'absence d'une
+"troisième voie" — vérifié faux : l'écran de choix n'a que deux cartes (Achat/Aléatoire) par
+conception, "Aucune mutation" est une action à l'intérieur de l'écran Achat, pas un troisième choix
+de méthode. Entrée supprimée avec le reste (malentendu, pas un bug).
+
+**Corrigé** : couleurs de `noneTitle`/`noneIcon` remontées à `#9090c8` (teinte déjà utilisée ailleurs
+dans le fichier pour `cardVariant`), `noneDesc` remonté à `#6a6a8a` (identique à `cardDesc`), bordure
+éclaircie à `#3a3a52`. Icône "⊘" ajoutée avant le titre — pas de librairie d'icônes dans ce fichier
+(uniquement des glyphes unicode inline déjà présents, ex. "→"), reste cohérent avec le style local
+plutôt que d'introduire une nouvelle dépendance pour un seul usage.
+
+**Testé** : ESLint clean. `vite build` propre. Confirmé en navigateur par Saar (2026-08-11).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ19 : bouton "Suivant" inatteignable en Autodidacte (bug #22)
+
+**Contexte** : `docs/BUG WIZARD.md` #22 (registre `BUGIDENTIFIE.md`, doublon sous "Bug #9"). En
+sous-étape Formation, quand `AutodidacteAllocator` (répartition de 7 points sur une longue liste de
+compétences) est affiché, le bouton "Suivant" de `BackgroundSelector.jsx` devenait inaccessible.
+
+**Vérifié avant de coder, plus sévère que le diagnostic du doc** : `BackgroundSelector.jsx` n'avait
+aucun scroll interne (`s.container` : flex/column simple, contenu grandit avec `AutodidacteAllocator`).
+Mais son ancêtre `WizardCreation.jsx` (`body: { overflow: 'hidden' }`) coupe tout excédent de hauteur
+sans offrir de scroll de secours — le bouton n'était donc pas juste "tout en bas" (atteignable en
+scrollant la page), il pouvait être purement et simplement invisible/inatteignable, aucun ascendant
+n'exposant de barre de défilement.
+
+**Corrigé** : plutôt que `position: sticky` (absent du reste du projet, introduirait un nouveau
+patron) ou une `max-height` propre à `AutodidacteAllocator` seul (aurait isolé son scroll du reste du
+contenu de l'étape, incohérent visuellement), repris le patron déjà utilisé par
+`StepMaterielEtBiens.jsx` pour le même problème (contenu variable + nav qui doit rester visible) :
+`container` (`overflow:hidden`) > `scroll` (nouveau, `flex:1, minHeight:0, overflowY:auto`, contient
+tout le contenu variable) + `nav` (sibling, `flexShrink:0`, hors du scroll — toujours visible).
+Appliqué à `BackgroundSelector.jsx`, partagé par les 3 sous-étapes Origine géo/Origine sociale/
+Formation (pas seulement Autodidacte — la même classe de bug touchait potentiellement toute
+sélection avec beaucoup de détails affichés). `Step4Experience.jsx` : `minHeight: 0` ajouté sur son
+propre `container` — sans ça, le scroll interne de `BackgroundSelector` ne se serait jamais déclenché
+(un flex item hérite d'un `min-height: auto` qui le fait grandir avec son contenu au lieu de se
+borner à l'espace disponible, gotcha CSS classique des scrolls imbriqués en flexbox).
+
+**Testé** : ESLint clean sur les deux fichiers touchés. `vite build` propre. Point signalé comme
+sensible (scroll imbriqué flexbox, notoirement fragile) — confirmé fonctionnel en navigateur par
+Saar (2026-08-11).
+**Non testé** : —
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

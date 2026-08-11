@@ -319,6 +319,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
         </div>
 
         <div style={st.noneCard} onClick={handleNone}>
+          <span style={st.noneIcon} aria-hidden="true">⊘</span>
           <span style={st.noneTitle}>{t('step3.none')}</span>
           <p style={st.noneDesc}>{t('step3.noneDesc')}</p>
         </div>
@@ -623,20 +624,23 @@ const st = {
     padding: 0,
   },
 
-  // Aucune mutation
+  // Aucune mutation — bug #21 (docs/BUG WIZARD.md) : contraste initial (#5a5a7a/#3a3a5e sur fond
+  // quasi-noir, bordure identique au fond) rendait cette carte quasi invisible à côté de la grille
+  // d'achat. Rapproché du contraste des cartes mutation (cardName #c0c0d0, cardDesc #6a6a8a) + icône.
   noneCard: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     padding: '10px 14px',
     marginBottom: '12px',
-    border: '1px solid #1e1e2e',
+    border: '1px solid #3a3a52',
     borderRadius: '6px',
     backgroundColor: 'rgba(6,6,14,0.6)',
     cursor: 'pointer',
   },
-  noneTitle: { color: '#5a5a7a', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' },
-  noneDesc: { color: '#3a3a5e', fontSize: '11px', lineHeight: '1.5', margin: 0 },
+  noneIcon: { color: '#9090c8', fontSize: '16px', flexShrink: 0 },
+  noneTitle: { color: '#9090c8', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap' },
+  noneDesc: { color: '#6a6a8a', fontSize: '11px', lineHeight: '1.5', margin: 0 },
 
   // Grille achat
   grid: {
