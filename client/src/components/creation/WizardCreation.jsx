@@ -103,7 +103,11 @@ export default function WizardCreation() {
   }, [campaignId, setCampaignId])
 
   const pcDispo = getPcDispo()
-  const stepBudget = getStepBudget()
+  // step vaut déjà 3, 4 ou 5 au moment où stepBudget est effectivement consommé (chaque
+  // pcDispo={stepBudget} ci-dessous est gated par le step === N correspondant, un seul actif à la
+  // fois) — exclut la contribution déjà committed de l'étape en cours pour éviter le double
+  // décompte au retour sur une étape déjà validée (bug #4, docs/BUG WIZARD.md, cf. creationStore.js).
+  const stepBudget = getStepBudget(step)
   const ambiance = storeAmbiance ?? 'INTERMEDIAIRE'
 
   const navigateToStep = (target) => {
@@ -168,9 +172,13 @@ export default function WizardCreation() {
     setPeekLoading(true)
     setStepError(null)
     try {
+      // useCreationStore.getState() (pas les variables step1Data..step5Data fermées par ce render) —
+      // même cause racine que celle documentée sur advanceStep : un applyStateSync/loadExistingSheet
+      // survenu entre le dernier rendu et ce clic laisserait ces closures obsolètes (docs/BUG WIZARD.md #1).
+      const s = useCreationStore.getState()
       await api.post(`/creation/${sheetId}/reconcile`, {
-        step1: step1Data, step2: step2Data, step3: step3Data,
-        step4: step4Data, step5: step5Data,
+        step1: s.step1Data, step2: s.step2Data, step3: s.step3Data,
+        step4: s.step4Data, step5: s.step5Data,
       })
       const res = await api.get(`/creation/${sheetId}/preview`)
       setPeekCharacter(res.data.character)
@@ -190,9 +198,11 @@ export default function WizardCreation() {
     setFinalizing(true)
     setStepError(null)
     try {
+      // Même garde que openPeek ci-dessus — docs/BUG WIZARD.md #1 et #3.
+      const s = useCreationStore.getState()
       await api.post(`/creation/${sheetId}/reconcile`, {
-        step1: step1Data, step2: step2Data, step3: step3Data,
-        step4: step4Data, step5: step5Data,
+        step1: s.step1Data, step2: s.step2Data, step3: s.step3Data,
+        step4: s.step4Data, step5: s.step5Data,
         finalize: true,
       })
       resetCreation()

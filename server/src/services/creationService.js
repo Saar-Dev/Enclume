@@ -245,8 +245,8 @@ export async function getStep5RefData(campaignId) {
 // le reconciler écrit réellement (les champs purement locaux au composant React, jamais envoyés au
 // serveur — ex. Step4Experience.jsx `setbackResolution`, `geoName` — n'ont pas de contrepartie ici,
 // ils sont déjà perdus au moindre rechargement pour le joueur lui-même, avant même ce chantier).
-// Step4 volontairement absent : sa reconstruction (skillAllocations vs bonus de background dans
-// char_skills.mastery, à vérifier) est plus risquée et traitée séparément avant d'être ajoutée ici.
+// Step4 volontairement absent de ce groupe : sa lecture est plus complexe (jointures carrières,
+// skillAllocations/autodidacteAllocations persistées à part) — voir getStep4State plus bas.
 
 export async function getStep1State(sheetId) {
   const [identity, archetype, attrRows, ledger] = await Promise.all([
@@ -280,41 +280,72 @@ export async function getStep2State(sheetId) {
   }
 }
 
+// mutationsMeta : consommée par WizardReview.jsx (Récap Étape 7, `step3Data?.mutationsMeta`), pas
+// seulement à la soumission comme le suggérait un commentaire client obsolète (Step3Mutations.jsx) —
+// jamais reconstruite ici avant, donc effacée par le premier écho WIZARD_STATE_SYNC (auto-inclus
+// pour l'émetteur, cf. bug #3) : les mutations disparaissaient du Récap bien que persistées.
+// subtype_name : soit déjà du texte affichable (ref_mutation_subtypes.name, mutations has_subtable
+// type Caractère génétique animal), soit un code brut (ref_mutations.subtype, ex. 'hearing') que le
+// client doit traduire via t('step3.subtype_labels.<code>') — même convention que
+// Step3Mutations.jsx#variantLabel, jamais dupliquée côté serveur (i18n.md : aucun texte visible codé
+// en dur hors client).
 export async function getStep3State(sheetId) {
   const [mutations, ledger] = await Promise.all([
-    db('char_mutations').where({ char_sheet_id: sheetId }).whereIn('source', ['chosen', 'random'])
-      .select('mutation_id', 'subtype_id', 'source'),
+    db('char_mutations as cm')
+      .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
+      .leftJoin('ref_mutation_subtypes as rms', 'rms.subtype_id', 'cm.subtype_id')
+      .where({ 'cm.char_sheet_id': sheetId }).whereIn('cm.source', ['chosen', 'random'])
+      .select('cm.mutation_id', 'cm.subtype_id', 'cm.source', 'rm.name', 'rm.cost_pc', 'rm.subtype',
+        'rms.name as subtype_db_name'),
     db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
   ])
   const method = mutations.some(m => m.source === 'random') ? 'random'
-    : mutations.some(m => m.source === 'chosen') ? 'chosen' : null
+    : mutations.some(m => m.source === 'chosen') ? 'chosen' : 'none'
   const list = mutations.map(m => ({ mutation_id: m.mutation_id, subtype_id: m.subtype_id }))
+  const meta = mutations.map(m => ({
+    mutation_id: m.mutation_id,
+    name: m.name,
+    subtype: m.subtype ?? null,
+    subtypeDbName: m.subtype_db_name ?? null,
+    cost_pc: m.cost_pc,
+  }))
   return {
     method,
     mutations: method === 'chosen' ? list : [],
     kept: method === 'random' ? list : [],
+    mutationsMeta: meta,
     pcSpent: ledger?.pc_spent_step3 ?? 0,
   }
 }
 
+// advantagesMeta/pcNet : mêmes raisons que mutationsMeta ci-dessus — advantagesMeta consommée par
+// WizardReview.jsx, pcNet par creationStore.js (getPcDispo/getStepBudget, header + formule de budget
+// des étapes 3/4/5, bug #4 docs/BUG WIZARD.md). pcNet reconstruit depuis le ledger (déjà recalculé
+// intégralement à chaque reconcile STEP5, jamais depuis les lignes char_advantages elles-mêmes —
+// même valeur, source plus directe).
 export async function getStep5State(sheetId) {
-  const rows = await db('char_advantages')
-    .where({ char_sheet_id: sheetId, acquired_during: 'creation_step5' })
-    .whereNull('removed_at')
-    .select('advantage_id')
-  return { advantages: rows.map(r => r.advantage_id) }
+  const [rows, ledger] = await Promise.all([
+    db('char_advantages as ca')
+      .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
+      .where({ 'ca.char_sheet_id': sheetId, 'ca.acquired_during': 'creation_step5' })
+      .whereNull('ca.removed_at')
+      .select('ca.advantage_id', 'ra.name', 'ra.type', 'ra.cost_pc'),
+    db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
+  ])
+  return {
+    advantages: rows.map(r => r.advantage_id),
+    advantagesMeta: rows.map(r => ({ advantage_id: r.advantage_id, name: r.name, type: r.type, cost_pc: r.cost_pc })),
+    pcNet: (ledger?.pc_gained_desavantages ?? 0) - (ledger?.pc_spent_step5 ?? 0),
+  }
 }
 
-// Best-effort (§0, décision Saar sur cette trouvaille) : skillAllocations/autodidacteAllocations
-// ne sont PAS reconstructibles proprement — upsertSkillBonus (bonus de background) est additif sur
-// char_skills.mastery, l'allocation Step4 du joueur écrit ensuite en SET (.merge) par-dessus, sans
-// laisser de trace de quelle part vient d'où. Les rejouer demanderait de dupliquer tout le moteur de
-// calcul de background (resolveStep4Backgrounds/getBackgroundSkillsToApply/resolveAutodidacteSkills)
-// en lecture — risque de divergence avec le chemin d'écriture, pour un gain cosmétique (les points
-// réellement dépensés restent corrects dans char_skills, seule la ré-édition du tableau repart de
-// zéro). Ces deux champs reviennent donc vides à la réouverture — même catégorie déjà acceptée que
-// Step4Experience.jsx `setbackResolution`/`geoName` (jamais envoyés au serveur, perdus au moindre
-// rechargement même pour le joueur, pas une régression introduite ici).
+// skillAllocations/autodidacteAllocations : persistées telles que soumises dans
+// char_pc_ledger.skill_allocations/autodidacte_allocations (bloc STEP4 ci-dessous), jamais
+// recalculées depuis char_skills.mastery — une reconstruction demanderait de dupliquer tout le
+// moteur de calcul de background (resolveStep4Backgrounds/getBackgroundSkillsToApply/
+// resolveAutodidacteSkills) en lecture, avec risque de divergence face au chemin d'écriture (bug
+// #3, docs/BUG WIZARD.md : un écho serveur incomplet ici, renvoyé y compris à l'auteur de sa propre
+// soumission via WIZARD_STATE_SYNC, effaçait les compétences à la réconciliation suivante).
 export async function getStep4State(sheetId) {
   const [archetype, careerRows, ledger, skillRows] = await Promise.all([
     db('char_archetype').where({ char_sheet_id: sheetId }).first(),
@@ -343,7 +374,16 @@ export async function getStep4State(sheetId) {
   }
 
   return {
-    age: archetype?.age ?? 16,
+    // base_age (pas age, qui est l'âge FINAL courant du personnage, utilisé aussi hors Wizard —
+    // char-sheet.js) : Step4Experience.jsx réutilise cette valeur comme point de départ local, un
+    // écho de l'âge final ici provoquait un cumul à chaque réhydratation (bug #5, docs/BUG WIZARD.md).
+    age: archetype?.base_age ?? 16,
+    // finalAge : consommée par WizardReview.jsx (Récap, `step4Data?.finalAge ?? step4Data?.age`) —
+    // avant le fix base_age ci-dessus, `age` (alors = âge final) servait accidentellement de repli
+    // correct pour ce champ manquant ; le séparer sans exposer finalAge aurait cassé le Récap
+    // (affichage de l'âge de base au lieu de l'âge final). archetype.age reste la même colonne,
+    // inchangée par le fix base_age.
+    finalAge: archetype?.age ?? null,
     originGeo: archetype?.origin_geo ?? null,
     originSoc: archetype?.origin_soc ?? null,
     training: archetype?.training_base ?? null,
@@ -360,8 +400,8 @@ export async function getStep4State(sheetId) {
       setbacks: c.setbacks ?? [],
     })),
     openedSkills: skillRows.map(r => r.skill_id),
-    skillAllocations: {},
-    autodidacteAllocations: {},
+    skillAllocations: ledger?.skill_allocations ?? {},
+    autodidacteAllocations: ledger?.autodidacte_allocations ?? {},
   }
 }
 
@@ -1145,8 +1185,16 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           .where({ char_sheet_id: sheetId, attr_id: attr })
           .update({ pc_modifier: (ageEffects[attr] ?? 0) + careerDelta })
       }
-      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ age: finalAge })
-      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step4: pc4 ?? 0 })
+      await trx('char_archetype').where({ char_sheet_id: sheetId }).update({ age: finalAge, base_age: baseAge })
+      await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({
+        pc_spent_step4: pc4 ?? 0,
+        // Persistées telles que soumises, jamais recalculées (cf. getStep4State) — source unique
+        // pour que l'écho serveur après reconcile (WIZARD_STATE_SYNC, y compris vers l'auteur de la
+        // soumission) reste fidèle et ne vide pas ces champs à la prochaine réconciliation (bug #3,
+        // docs/BUG WIZARD.md).
+        skill_allocations: JSON.stringify(step4.skillAllocations || {}),
+        autodidacte_allocations: JSON.stringify(step4.autodidacteAllocations || {}),
+      })
 
       // Célébrité / points de compétence gagnés par tirage — set absolu (aucun autre écrivain
       // pendant la création : xp_available n'est touché qu'en jeu via routes/character/char-sheet.js,

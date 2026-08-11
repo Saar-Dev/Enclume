@@ -38,7 +38,6 @@
 | 9 | Sous-étape Autodidacte très longue, bouton Suivant rejeté en bas. | Wizard | Amélioration UX | Moyenne | Mise en page, conteneurs. |
 | 10 | Page Profession dense : grille de compétences apparaît avant sélection, retirer description des compétences pro. | Wizard | Bug (affichage) | Haute | Rendu conditionnel Step 4. |
 | 11 | Symbole /!\\ trop petit. | Wizard | Amélioration UX | Basse | Icône d'avertissement. |
-| 12 | "Méthode de mutation invalide : null" sur "Voir ma fiche" et Step 4. | Wizard | Bug | Bloquant | `SYSTEME/CHARACTER.md`, `REGLE_MUTATION.md`. |
 | 13 | Points déjà investis dans les compétences professionnelles mal calculés. | Wizard | Bug | Haute | `SYSTEME/PERSONNAGE_CALCULS.md`. |
 | 14 | Prérequis des métiers techniquement présents mais invisibles/incompréhensibles (ex. Pilote de chasseur). | Wizard | Amélioration UX | Haute | Affichage des prérequis. |
 | 15 | Compétences inabordables non grisées, causant des soldes négatifs. | Wizard | Bug (validation) | Haute | Logique de points disponibles. |
@@ -49,11 +48,8 @@
 | 20 | Équipement : joueur doit proposer une wishlist en naviguant dans `ref_equipment`, afficher le descriptif. | Wizard | Fonctionnalité manquante | Haute | Step 6, `SYSTEME/TRADE.md`. |
 | 21 | Afficher le type de munition des armes, lien arme↔munitions. | Wizard | Fonctionnalité manquante | Haute | Modèle arme, `REGLESMUNITIONS.md`. |
 | 22 | Borner le maximum de points d'attributs selon RAW. | Wizard | Bug (règle absente) | Haute | `REGLES/ATTRIBUTS.md`. |
-| 23 | Organe sensoriel manquant coûte des PC au lieu d'en donner. | Wizard | Bug (signe inversé) | Haute | `REGLEREVERS.md`, calcul PC. |
 | 25 | Désavantage Parasite : jet pour nombre de parasites non implémenté. | Wizard | Comportement incomplet | Moyenne | `REGLE_MUTATION.md` / `REGLEREVERS.md`. |
 | 26 | L'âge progresse à chaque boucle sans jamais régresser. | Wizard | Bug (état persistant) | Haute | Store de création, `PERSONNAGE_WIZARD.md`. |
-| 27 | Finalisation : toutes les compétences remises à zéro. | Wizard | Bug | Bloquant | Service de finalisation, `SYSTEME/CHARACTER.md`. |
-| 28-29 | Finalisation : message "PC insuffisants : X requis" incohérent (solde 0 ou positif). | Wizard | Bug (validation) | Bloquant | Condition de solde. |
 | 30-31 | Traductions manquantes : "Sens diminué (hearing)", "Faiblesse naturelle (drug)". | Localisation | Bug (i18n) | Moyenne | `SYSTEME/LOCALISATION.md`. |
 | 32 | Implants : rien n'existe. Règle RAW à identifier, mécanique à concevoir. | Items | Hors scope | Basse (à planifier) | Chantier à part. |
 | 33 | Mode progression : compétences limitatives augmentables sans prérequis. | Playground | Bug (validation) | Haute | `SYSTEME/PERSONNAGE_CALCULS.md`. |
@@ -233,3 +229,160 @@
 - Toutes les entrées marquées `✅` ou closes dans les sessions récentes (2026-07-29 à 2026-08-05) ont été supprimées.
 - Les fonctionnalités non-bugs (COMBAT-INTERAGIR-AUTOMOVE, COMBAT-CLICK-RECAP, COMBAT-CLICK-AUTOSOLVE, INVENTAIRE-RECHERCHE-CATEGORIE) ont été retirées du registre et doivent être replacées dans `docs/ROADMAP.md`.
 - La section BETA est temporaire ; ses éléments seront dispatchés dans les clusters existants ou de nouveaux clusters après analyse initiale.
+
+# --------------
+
+Bug #2 — Main directrice sélectionnable manuellement (écart RAW)
+
+Ce que le code montre :
+
+    L’état handPref est initialisé à '' (ligne 47). Le <select> (lignes 328-336) propose trois options manuelles : R, L, A. Le joueur peut les choisir librement à tout moment.
+
+    Le bouton handleRollHandPref (ligne 102-105) simule un jet 2D10 et positionne handPref à 'R', 'L' ou 'A'. C’est un « Définir » qui applique le résultat RAW.
+
+    Mais après ce tirage, le <select> reste modifiable. Aucune propriété disabled n’est posée sur le <select> après l’appel de handleRollHandPref. Le joueur peut donc immédiatement changer manuellement.
+
+    L’option Ambidextre ('A') est accessible manuellement sans aucun coût, ce qui contredit aussi la règle (l’Ambidextre est un Avantage payant, pas un résultat libre).
+
+Verdict : Le bug est confirmé à la lecture du code. Le correctif consisterait à :
+
+    Rendre le <select> disabled après un tirage réussi (c’est-à-dire dès que handPref !== ''), ou
+
+    Supprimer complètement le <select> et ne proposer que le bouton « Définir » (avec impossibilité de changer ensuite), sauf achat explicite de l’Avantage Ambidextre qui débloquerait 'A'.
+
+Note : Le commentaire ligne 101 dit « pattern client pur, identique au tirage aléatoire de Step3Mutations.jsx ». Si Step3Mutations.jsx empêche la modification après tirage, il y a une incohérence de pattern.
+
+Bug #3 — Bouton Suivant grisé sans explication si le nom est vide
+
+Ce que le code montre :
+
+    canNext = charName.trim().length > 0 && validation.valide (ligne 124).
+
+    Le bouton « Suivant » (ligne 393-398) a disabled={!canNext}.
+
+    Le message d’erreur conditionnel (lignes 401-410) n’apparaît que si !validation.valide (bloc ligne 401) ou si budgetWarned (ligne 406). Aucun message spécifique pour le cas où seul le nom est vide et la validation est valide par ailleurs.
+
+    Résultat : le bouton est grisé, le joueur ne voit rien lui indiquant pourquoi.
+
+Verdict : Le bug est confirmé. Il suffit d’ajouter un message explicite lorsque !canNext et que charName.trim().length === 0, par exemple « Entrez un nom pour continuer ».
+
+Bug 22 non existant, verification faite.
+
+Bug #6 — « Aucune mutation » pas assez visible
+
+Ce que le code montre :
+
+    La carte « Aucune mutation » est rendue dans l'écran d'achat (method === 'chosen'), lignes 246-249 :
+    jsx
+
+    <div style={st.noneCard} onClick={handleNone}>
+      <span style={st.noneTitle}>{t('step3.none')}</span>
+      <p style={st.noneDesc}>{t('step3.noneDesc')}</p>
+    </div>
+
+    Elle est positionnée au-dessus de la grille des mutations, avec un style discret : bordure #1e1e2e, fond semi-transparent rgba(6,6,14,0.6), texte gris #5a5a7a / #3a3a5e.
+
+    Elle est visuellement similaire à une carte normale mais avec un style moins contrasté.
+
+Verdict : Le choix de conception est compréhensible (la grille est le choix principal), mais le manque de contraste et l'absence d'icône ou de bouton explicite peuvent la rendre invisible pour un débutant. Solution possible : utiliser un bouton « Aucune mutation » distinct, ou augmenter le contraste.
+
+Note : Il n'y a pas de troisième voie dans le code actuel (contrairement au signalement beta : « OU troisième choix »). L'écran de choix n'a que deux cartes : Achat et Aléatoire.
+
+Bug #25 — Parasite : jet de dé non implémenté
+
+Ce que le code montre :
+
+    La logique de tirage aléatoire (rollOneMutation, finalizeRoll) ne contient aucune trace d'un traitement spécial pour la mutation Parasite(s). Le tirage se contente de choisir aléatoirement dans la table, sans demander de jet supplémentaire.
+
+    La fiche de mutation Parasite (dans mutations chargées depuis l'API) a probablement un champ has_subtable ou special_effect décrivant la règle RAW (jet pour déterminer le nombre), mais le code ne l'exploite pas.
+
+Verdict : Fonctionnalité absente du composant. Le tirage de la mutation Parasite fonctionne, mais le sous-jet pour déterminer le nombre de parasites n'est pas implémenté.
+
+Bug 18 déjà corrigé. verification faite.
+
+Bug #15 — Compétences inabordables non grisées → soldes négatifs
+
+Ce que le code montre :
+
+    Le serveur valide strictement le budget de compétences via computeSkillAllocation :
+    js
+
+    if (err.code === 'over_budget') {
+      throw new AppError(400, `Budget de compétences dépassé : ${err.totalCost} pts dépensés sur ${err.budget} disponibles`)
+    }
+
+    Donc un solde négatif est rejeté côté serveur. Mais cette validation n'a lieu qu'à la réconciliation, pas en temps réel dans le composant client.
+
+Verdict : Le bug #15 est purement client. Le composant Step4Experience.jsx (ou CareersAllocator.jsx) doit griser les boutons + quand le coût dépasse le budget disponible. Le serveur rejette déjà correctement, mais l'expérience utilisateur est dégradée car le joueur découvre l'erreur seulement en soumettant.
+
+Bug #9 — Sous-étape Autodidacte très longue, bouton Suivant tout en bas
+
+Ce que le code montre :
+
+    BackgroundSelector est un composant générique partagé par plusieurs sous-étapes (origine géo, sociale, formation, études supérieures). Il n'est pas spécifique à l'Autodidacte.
+
+    Quand selectedItem.isAutodidacte est vrai, le composant <AutodidacteAllocator> est rendu dans le flux normal du conteneur (lignes ~138-142), avant la barre de navigation :
+    jsx
+
+    {selectedItem.isAutodidacte && (
+      <AutodidacteAllocator
+        refSkills={refSkills}
+        allocations={autodidacteAllocations}
+        onChange={onAutodidacteAllocationsChange}
+      />
+    )}
+
+    La barre de navigation (s.nav, boutons Précédent/Suivant) est rendue après tous les détails, tout en bas du conteneur. Aucun footer sticky ou position fixed n'est utilisé.
+
+    Le conteneur lui-même a display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px 20px', gap: '18px'. Rien ne garantit que le bouton reste visible si le contenu est long.
+
+Verdict : La cause est confirmée. Le composant AutodidacteAllocator (dont la hauteur est potentiellement très grande — 7 points à répartir sur une longue liste de compétences) est inséré dans le flux normal, repoussant le bouton Suivant hors de l'écran. Le correctif doit soit :
+
+    Rendre la barre de navigation sticky (position: sticky; bottom: 0; avec fond opaque), ou
+
+    Donner une hauteur maximale à AutodidacteAllocator avec scroll interne, ou
+
+    Faire les deux.
+
+Fichier à modifier : BackgroundSelector.jsx (style de la navigation) et/ou AutodidacteAllocator.jsx (hauteur maximale).
+
+Bug #10 — Grille de répartition visible avant sélection d'une profession
+
+Ce que le code montre :
+
+Le board de compétences (lignes ~220-270) est rendu sans aucune condition. Le bloc <div className="wiz4-board"> est présent à tous les coups, même si selectedCareers est vide. Aucune vérification du type {selectedCareers.length > 0 && ...} n'existe avant d'afficher la grille.
+
+Verdict : Confirmé. La grille de répartition des points de compétences apparaît avant que le joueur n'ait ajouté la moindre profession. Le correctif est simple : envelopper le board dans une condition selectedCareers.length > 0.
+
+Bug #13 — Points déjà investis mal calculés
+
+Ce que le code montre :
+
+Le calcul est entièrement délégué à computeSkillAllocation (importée depuis shared/careerSkills.js), qui prend state.skillAllocations et le contexte (carrières, bonus d'origine, plafonds). CareersAllocator ne fait qu'afficher le résultat (allocationResult.remaining, allocationResult.budget, allocationResult.errors). Aucun calcul local ne pourrait diverger.
+
+Verdict : Si les points déjà investis sont mal calculés, la cause est dans computeSkillAllocation ou dans la manière dont le contexte est construit (skillAllocationCtx). Le composant lui-même est innocent. Pour vérifier, il faut lire shared/careerSkills.js.
+
+Bug #15 — Compétences inabordables non grisées
+
+Ce que le code montre :
+
+Les boutons + sont déjà désactivés côté client via handleAllocInc :
+js
+
+const handleAllocInc = (row) => {
+    if (allocationResult.remaining <= 0 || row.target >= row.cap) return
+    dispatch(...)
+}
+
+Et dans le rendu :
+js
+
+<button
+    className={`wiz4-sbtn${...}`}
+    onClick={() => handleAllocInc(row)}
+    disabled={allocationResult.remaining <= 0 || row.target >= row.cap}
+>＋</button>
+
+Le grisage fonctionne donc déjà côté client pour le budget de points de compétence.
+
+Verdict : Le bug #15 n'est pas présent dans CareersAllocator. Si un testeur a vu des soldes négatifs, c'est probablement via l'Autodidacte (AutodidacteAllocator dans BackgroundSelector) ou via les boutons -/+ d'une autre étape (Step 1, Step 3, Step 5). Pour les compétences professionnelles, la validation temps réel est déjà en place.

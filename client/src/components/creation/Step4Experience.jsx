@@ -442,9 +442,10 @@ export default function Step4Experience({ initialData, pcDispo, onNext, onPrev, 
 
 {subStep === SUB_STEPS.CAREERS && (
   <CareersAllocator
-    // pcDispo (prop) est getStepBudget() côté WizardCreation — toujours brut, jamais affecté
-    // par la dépense en cours de cette étape. CareersAllocator soustrait lui-même son propre
-    // totalPC (somme des années déjà choisies) : aucune compensation à faire ici.
+    // pcDispo (prop) est getStepBudget(step) côté WizardCreation — exclut explicitement la
+    // dépense déjà committed de CETTE étape (bug #4, docs/BUG WIZARD.md : sans l'exclusion, un
+    // retour sur l'étape déjà validée la double-comptait). CareersAllocator soustrait lui-même son
+    // propre totalPC (somme des années déjà choisies) : aucune compensation supplémentaire ici.
     pcDispo={pcDispo - (higherEd ? 1 : 0)}
     selectedCareers={careers}
     careers={refData.careers}

@@ -13,7 +13,13 @@ export default function WizardReview({ step1Data, step2Data, step3Data, step4Dat
   const { t } = useTranslation('creation')
 
   const displayAge = step4Data?.finalAge ?? step4Data?.age ?? '?'
-  const mutations = step3Data?.mutationsMeta ?? []
+  // subtypeDbName (ref_mutation_subtypes.name, ex. "Caractère félin") est déjà du texte affichable ;
+  // subtype (ref_mutations.subtype, ex. 'hearing') est un code brut à traduire ici — même convention
+  // que Step3Mutations.jsx#variantLabel, jamais dupliquée côté serveur (getStep3State).
+  const mutations = (step3Data?.mutationsMeta ?? []).map(m => ({
+    ...m,
+    subtype_name: m.subtypeDbName ?? (m.subtype ? t(`step3.subtype_labels.${m.subtype}`) : null),
+  }))
   const advantagesMeta = step5Data?.advantagesMeta ?? []
   const advantages = advantagesMeta.filter(a => a.type === 'advantage')
   const disadvantages = advantagesMeta.filter(a => a.type === 'disadvantage')

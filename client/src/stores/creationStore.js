@@ -74,15 +74,20 @@ export const useCreationStore = create((set, get) => ({
   // Step5Advantages) : ne lit JAMAIS liveYears, uniquement les valeurs committed des autres
   // étapes. Ces composants font leur propre soustraction de ce qu'ils allouent en interne ;
   // leur passer une valeur déjà nette de la dépense en cours créerait un double décompte.
-  getStepBudget: () => {
+  // `excludeStep` (3, 4 ou 5) omet la contribution déjà committed de l'étape en cours d'édition —
+  // sans lui, revisiter une étape déjà validée soustrayait deux fois sa propre dépense (une fois
+  // ici via stepNData.pcSpent/pcNet déjà committed, une fois via le recalcul local du composant
+  // sur sa propre sélection courante) — bug #4, docs/BUG WIZARD.md ("PC insuffisants" alors que le
+  // budget affiché semblait suffisant).
+  getStepBudget: (excludeStep) => {
     const s = get()
     const genoCost = computeGenoCost(s)
     return PC_TOTAL
-      - (s.step1Data?.pcSpent ?? 0)
-      - genoCost
-      - (s.step3Data?.pcSpent ?? 0)
-      - (s.step4Data?.pcSpent ?? 0)
-      + (s.step5Data?.pcNet ?? 0)
+      - (excludeStep === 1 ? 0 : (s.step1Data?.pcSpent ?? 0))
+      - (excludeStep === 2 ? 0 : genoCost)
+      - (excludeStep === 3 ? 0 : (s.step3Data?.pcSpent ?? 0))
+      - (excludeStep === 4 ? 0 : (s.step4Data?.pcSpent ?? 0))
+      + (excludeStep === 5 ? 0 : (s.step5Data?.pcNet ?? 0))
   },
 
   setStep: (step) => set({ step }),

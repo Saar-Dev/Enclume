@@ -305,7 +305,10 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   // RENDU — Méthode ACHAT
   // ══════════════════════════════════════════════════════════════════════
   if (method === 'chosen') {
-    const availableMutations = mutations.filter(m => m.cost_pc >= 0 && m.cost_pc <= pcLeft)
+    // cost_pc < 0 = mutation désavantageuse choisie délibérément : la RAW l'autorise dans l'écran
+    // d'achat et elle rapporte des PC (docs/REGLES/REGLE_CREATION.md:761-767), donc jamais bloquée
+    // par le budget restant — seul un coût positif est plafonné par pcLeft (docs/BUG WIZARD.md #2).
+    const availableMutations = mutations.filter(m => m.cost_pc < 0 || m.cost_pc <= pcLeft)
 
     return (
       <div style={st.container}>
@@ -341,9 +344,11 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
                   <span style={st.cardName}>{mut.name}</span>
                   <span style={{
                     ...st.cardCost,
-                    color: mut.cost_pc > 0 ? '#5b8dee' : '#888',
+                    color: mut.cost_pc > 0 ? '#5b8dee' : mut.cost_pc < 0 ? '#7fd48a' : '#888',
                   }}>
-                    {mut.cost_pc > 0 ? `−${mut.cost_pc} PC` : t('step3.free')}
+                    {mut.cost_pc > 0 ? `−${mut.cost_pc} PC`
+                      : mut.cost_pc < 0 ? t('step3.gain', { amount: -mut.cost_pc })
+                      : t('step3.free')}
                   </span>
                   {showLockToggle && (
                     <WizardLockToggle locked={isLocked(optionKey)} onToggle={() => toggleLock(optionKey)} />

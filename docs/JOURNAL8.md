@@ -1119,3 +1119,192 @@ non inversée) pas encore revue par Saar en navigateur.
 **Données** : aucune migration, aucun effet runtime serveur — uniquement assets statiques et composants
 client.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit — aucun état serveur/DB affecté.
+
+## Session (Saar) — 2026-08-11 — `docs/BUG WIZARD.md` bugs #1-5 (un par un)
+
+**Contexte** : reprise de `docs/BUG WIZARD.md` (liste de bugs beta-testeurs du Wizard de création),
+traités un par un sur demande explicite de Saar. Pour chacun, l'analyse déjà écrite dans le doc a été
+revérifiée contre le code réel avant correction — plusieurs diagnostics initiaux se sont révélés faux
+ou incomplets (cause racine sous-estimée), jamais appliqués tels quels.
+
+**Bug #1 — « Méthode de mutation invalide : null »** : diagnostic du doc confirmé à l'identique par le
+code. `getStep3State` (`creationService.js`) renvoyait `method: null` pour un personnage n'ayant que
+des mutations `'revers'` ; `reconcileCreation` rejette tout `step3.method` hors de
+`['chosen','random','none']`. `openPeek`/`handleTerminate` (`WizardCreation.jsx`) lisaient les
+variables fermées du rendu au lieu de `useCreationStore.getState()`, contrairement à `advanceStep`
+(pattern déjà en place juste au-dessus, avec un commentaire documentant un bug réel similaire).
+Corrigé : `null` → `'none'` ; `openPeek`/`handleTerminate` passés à `getState()`.
+
+**Bug #2 — Organe sensoriel manquant coûte des PC au lieu d'en donner** : le doc affirmait « aucune
+modification de code nécessaire », faux. Table RAW réelle relue (`docs/REGLES/REGLE_CREATION.md:760-884`,
+la source citée par la migration 118 déjà en place) : la migration 118 avait corrigé les *montants*
+(1/1/2/3 au lieu de 0/0/1/2) mais gardé le *signe positif* — la mutation coûtait encore des PC au lieu
+d'en rapporter (`cost_pc` négatif = convention déjà utilisée par `Purulence`, `cost_pc:-2`, dette
+`EN_COURS.md` MUT1 déjà repérée). Second problème, en code cette fois : `Step3Mutations.jsx:308`
+(`cost_pc >= 0`) excluait de l'écran d'achat toute mutation désavantageuse, contredisant
+`REGLE_CREATION.md:761-767` (« le joueur peut également choisir de donner des mutations
+désavantageuses à son personnage... qui rapportent le nombre de PC indiqué »). Corrigé : migration 235
+(signe cost_pc, 4 lignes `Organe sensoriel manquant`) + filtre `availableMutations` (`cost_pc < 0 ||
+cost_pc <= pcLeft`) + affichage `+X PC` (nouvelle clé i18n `step3.gain`) + `method_choose_desc` mis à
+jour (affirmait à tort que les désavantageuses étaient réservées au tirage). Effet de bord légitime :
+`Purulence` redevient aussi achetable (même règle RAW, même filtre) — dette MUT1 close par ricochet.
+
+**Bug #3 — Finalisation : compétences remises à zéro** : cause racine différente et plus sévère que ce
+que documentait le bug (pas un cas rare lié au MJ — déterministe pour tout joueur solo). Chaîne
+vérifiée : `routes/creation.js` diffuse `WIZARD_STATE_SYNC` à `io.to(room)` — room entière, **émetteur
+inclus** (contrairement à `WIZARD_LIVE_UPDATE` qui exclut l'émetteur via `socket.to`).
+`WizardLockSync.jsx` applique cet écho sans filtrage MJ/joueur. `getStep4State` renvoyait
+`skillAllocations: {}` en dur (reconstruction jugée trop risquée, commentaire d'origine assumant que
+cette perte était « cosmétique », les points restant corrects en base). Cette hypothèse est fausse :
+`openPeek`/`handleTerminate` renvoient toujours `step1..step5` complets, y compris un `step4` jamais
+retouché depuis sa validation initiale mais corrompu par l'écho — `reconcileCreation` (ligne ~865)
+supprime et réinsère `char_skills` à partir de ce payload vide dès que `step4` est présent. Tentative
+initiale de fix rejetée avant codage : arrêter le renvoi de `step4` casse `finalize` (`isComplete =
+!!(step1 && step2 && step3 && step4 && step5)` calculé sur le payload reçu, pas l'état serveur).
+Corrigé : migration 236 (`char_pc_ledger.skill_allocations`/`autodidacte_allocations`, jsonb),
+persistées telles que soumises (jamais recalculées) dans le bloc STEP4 de `reconcileCreation`, lues
+par `getStep4State`. Vérifié que `vaultService.js#cloneRows` (clonage Vault) fait un `SELECT *`/spread
+— aucune adaptation nécessaire là-bas.
+
+**Bug #4 — « PC insuffisants : X requis » avec 0 PC restants** : cause du doc (`pc_postcreation`)
+écartée — colonne jamais écrite nulle part dans le serveur, toujours 0. Vraie cause, vérifiée par
+simulation numérique : `getStepBudget()` (`creationStore.js`, prop `pcDispo` de `Step3Mutations`,
+`CareersAllocator` et `Step5Advantages` via `WizardCreation.jsx`) incluait la contribution PC **déjà
+committed** de l'étape en cours d'édition (`step3Data.pcSpent`/`step4Data.pcSpent`/`step5Data.pcNet`),
+alors que le composant recalcule cette même contribution en direct sur sa sélection locale — double
+comptage à tout retour sur une étape déjà validée. Le commentaire d'origine de `getStepBudget()`
+visait explicitement à éviter ce cas (« leur passer une valeur déjà nette... créerait un double
+décompte ») sans l'implémenter correctement ; même confusion explicite dans un commentaire de
+`Step4Experience.jsx:445` (« toujours brut, jamais affecté »). Corrigé : `getStepBudget(excludeStep)`
+omet la contribution de l'étape passée en paramètre ; `WizardCreation.jsx` appelle `getStepBudget(step)`
+(un seul point d'appel, `step` vaut déjà 3/4/5 au bon moment). Même dette que `EN_COURS.md` WIZ-2,
+close par le même fix (portée plus large que CareersAllocator seul, comme documenté sur place).
+
+**Rework écarté** : Saar avait préparé `docs/PLANS/PLAN_RW_WIZARD.md` (sync live MJ/joueur, remount
+`gmSyncKey`) en se demandant s'il fallait l'engager pour couvrir #3 et les bugs liés aux allers-retours
+entre étapes. Analyse à charge : le plan cible la perte de position de navigation du MJ (`subStep`) au
+remount — un problème réel mais mineur (papercut MJ) — pas la cause réelle de #3 (déterministe, sans
+MJ, via l'auto-écho `WIZARD_STATE_SYNC`). Le rework, même complet, n'aurait pas fermé #3 ni #5 (âge —
+nécessite une colonne `base_age` séparée, indépendant du remount). Rework non engagé ; seule sa Phase 1
+(retrait `gmSyncKey` étape 4) reste une piste mineure séparée si un jour priorisée.
+
+**Bug #5/#15 — L'âge progresse à chaque test sans jamais régresser** : diagnostic du doc confirmé par
+le code, sur le même principe que #3. `reconcileCreation` (bloc STEP4) écrit l'âge **final**
+(`baseAge + higherEdYears + totalCareerYears`) dans `char_archetype.age`. `getStep4State` renvoyait ce
+même champ comme âge de **base** au client ; `Step4Experience.jsx` réutilise `initialData.age` comme
+point de départ (`useState`), donc chaque réhydratation (reload, ou l'auto-écho `WIZARD_STATE_SYNC` du
+bug #3) repart de l'âge final précédent et cumule. Vérifié que `char_archetype.age` sert aussi hors
+Wizard comme âge courant du personnage (`char-sheet.js:222`, édition fiche) — son sens ne devait pas
+changer. Corrigé (Option A du doc) : migration 237 (`char_archetype.base_age`, nullable), écrite en
+parallèle de `age` dans le bloc STEP4, lue par `getStep4State` à la place de `age`. Aucun changement
+client nécessaire. Personnages déjà en cours de création avec un âge déjà cumulé non réparés
+rétroactivement (`base_age` NULL → repli 16 à la prochaine reprise) — pas de nouvelle corruption,
+pas de réparation automatique de l'existant.
+
+**Correction de processus documentaire (Saar)** : après clôture des bugs #1-4, `docs/BUGIDENTIFIE.md`
+et `docs/EN_COURS.md` avaient été mis à jour en parallèle (entrées barrées + note dans les deux). Saar
+a corrigé : `BUGIDENTIFIE.md` a sa propre règle d'hygiène (ligne 8, « tout bug clos est SUPPRIMÉ de ce
+registre ») — une clôture s'y **supprime**, ne s'y annote jamais ; `docs/EN_COURS.md` est le seul
+foyer de suivi d'un bug corrigé (ligne barrée + `⚠️ clos partiel` jusqu'à validation en jeu, puis
+retrait complet + JOURNAL). `docs/BUG WIZARD.md` (liste de pistes fournie par Saar pour cette tâche)
+n'entre pas dans ce circuit et n'a pas vocation à survivre. Les 4 entrées `BUGIDENTIFIE.md` retirées ;
+`EN_COURS.md` complété (WIZ5 = bug #1, WIZ6 = bug #3 ; #2/#4 déjà couverts par MUT1/WIZ-2 existants).
+Mémoire `feedback_doc_updates.md` corrigée en conséquence.
+
+**Audit round-trip suite à une question directe de Saar** (« l'architecture du Wizard est-elle remise
+en cause par ce genre de bugs ? ») : plutôt que de répondre par une réassurance non vérifiée, audit
+complet de chaque `getStepNState` contre son bloc d'écriture correspondant et contre chaque
+consommateur client (`WizardReview.jsx` en particulier, jamais vérifié jusqu'ici). Trouvé 4 champs
+manquants, tous du même mécanisme que #3 (écho `WIZARD_STATE_SYNC` auto-inclus pour l'émetteur,
+`getStepNState` incomplet) :
+- `getStep3State` ne renvoyait pas `mutationsMeta` (nom/coût/sous-type des mutations) — consommé par
+  `WizardReview.jsx:16` pour le Récap. Les mutations, bien que persistées en base, disparaissaient
+  purement visuellement du Récap dès le premier écho.
+- `getStep5State` ne renvoyait ni `advantagesMeta` (même défaut, Récap) ni `pcNet` — ce dernier
+  consommé par `creationStore.js` (`getPcDispo`/`getStepBudget`, y compris ma propre correction du
+  bug #4) : après tout écho suivant la soumission de l'étape 5, le budget PC global oubliait
+  entièrement la contribution de cette étape (passait à 0 au lieu du net réel).
+- `getStep4State` ne renvoyait pas `finalAge`, consommé par `WizardReview.jsx:15`
+  (`step4Data?.finalAge ?? step4Data?.age`). **Régression que mon propre fix du bug #5 aurait
+  introduite seule** : avant ce fix, `age` (alors égal à l'âge final par le bug lui-même) servait de
+  repli accidentel à ce champ manquant ; en séparant `base_age`, ce repli serait devenu l'âge de base
+  au lieu de l'âge final sur le Récap. Trouvé et corrigé dans la même session, avant tout commit.
+
+Correctifs : les trois fonctions enrichies (jointures `ref_mutations`/`ref_mutation_subtypes` pour
+#3, `ref_advantages` + ledger pour #5, `archetype.age` exposé sous un nom dédié pour #4) — aucune
+migration nécessaire, toutes les données sources existaient déjà, seule la lecture était incomplète.
+`subtype`/`subtypeDbName` : le serveur ne traduit jamais de texte visible (`i18n.md`) — renvoie soit
+le nom déjà affichable (`ref_mutation_subtypes.name`), soit un code brut que `WizardReview.jsx`
+traduit via `t('step3.subtype_labels.<code>')`, même convention que `Step3Mutations.jsx#variantLabel`.
+Vérifié par exécution réelle (pas seulement lecture statique) : script `.mjs` dans le scratchpad,
+`getStep3State`/`getStep4State`/`getStep5State` appelées contre 5 fiches réelles en base — jointures
+valides, `pcNet: -5` cohérent pour un avantage à 5 PC, mutations correctement résolues par nom.
+
+**Conclusion de l'audit (réponse aux deux questions de Saar)** : (1) les correctifs de cette session
+(bugs #1-5 + cet audit) aggradent l'architecture — ils comblent des lacunes de modélisation
+(donnée absente, colonne à double sens) en réutilisant exactement les conventions déjà en place
+(mêmes tables, même pattern jointure, même séparation client/serveur pour l'i18n), sans mécanisme
+parallèle ni cas spécial. (2) l'architecture de navigation du Wizard (aller-retour libre, remontage
+par étape, `highestStep` comme garde) n'est pas en cause — chaque bug trouvé est une même classe
+récurrente et désormais bien identifiée (`getStepNState` incomplet par rapport à ce que le client
+réinjecte après écho), jamais un défaut du modèle de navigation lui-même. Le remount MJ (`gmSyncKey`,
+`docs/PLANS/PLAN_RW_WIZARD.md`) reste un problème distinct, mineur, déjà écarté du périmètre. Reste
+un risque non éliminé structurellement : rien n'empêche aujourd'hui qu'un futur champ ajouté au
+payload d'une étape souffre du même oubli — seule la vigilance/l'audit au cas par cas le détecte pour
+l'instant, pas un test automatisé dédié (piste non engagée, à évaluer si Saar la juge utile).
+
+**Garde-fou round-trip (Saar : « garde-fou d'abord »)** — la piste ci-dessus engagée immédiatement.
+Nouveau test `server/src/services/creationRoundTrip.test.mjs` : crée une fiche réelle (fixture
+`users`/`campaigns`/`campaign_members` + `startCreation`, nettoyage par cascade FK sur suppression
+de la campagne), soumet un payload représentatif des 5 étapes (mutation désavantageuse avec sous-type,
+carrière avec compétence allouée, avantage + désavantage), lit l'état via `getStepNState`, **renvoie
+ce résultat tel quel comme second `reconcileCreation`** — exactement ce que fait `openPeek`/
+`handleTerminate` — puis vérifie que le résultat ne bouge plus (`deepEqual`, rejoué une 3e fois pour
+confirmer un point fixe stable, pas une simple convergence). Assertions explicites sur chacun des
+bugs #3 (la compétence allouée ne doit pas être effacée) et #5 (l'âge ne doit pas cumuler), plus les
+4 champs de l'audit. Carrière de test choisie sans aucun prérequis (« Marchand », `ref_career_
+prerequisites` vide, aucun min d'Attribut/génotype requis) pour ne pas avoir à construire un
+personnage complexe juste pour satisfaire l'éligibilité.
+
+Vérifié que le garde-fou détecte réellement une régression (pas un test qui passe trivialement) :
+`age: archetype?.base_age` retransformé temporairement en `archetype?.age` (bug #5 réintroduit) →
+le test échoue et affiche exactement le symptôme réel (`age: 21` puis `22` au round-trip suivant,
+diff `deepEqual` explicite) ; fix restauré → vert à nouveau. Suite serveur complète rejouée après
+restauration : 220/220 tests passent (aucune régression ailleurs).
+
+Trouvé au passage (hors périmètre, documenté sans corriger) : `DeprecationWarning` pg (« client
+already executing a query ») pendant le bloc STEP5 — `addAdvantage` (`advantageService.js`) lance un
+`Promise.all` de plusieurs requêtes sur la même transaction/connexion, pattern déjà présent ailleurs
+dans le fichier, jamais exercé bout-en-bout par un test avant celui-ci. Aucune erreur aujourd'hui,
+deviendra un throw en pg 9 — `docs/EN_COURS.md` WIZ-ROUNDTRIP-DEPWARN.
+
+**Fichiers touchés** : `server/src/services/creationService.js` (`getStep1State`..`getStep5State`,
+bloc STEP4), `server/src/services/creationRoundTrip.test.mjs` (nouveau),
+`server/src/db/migrations/235_fix_ref_mutations_organe_sensoriel_manquant_sign.js`,
+`236_char_pc_ledger_skill_allocations.js`, `237_char_archetype_base_age.js` (nouveaux),
+`client/src/components/creation/WizardCreation.jsx` (`openPeek`, `handleTerminate`, `stepBudget`),
+`client/src/components/creation/Step3Mutations.jsx` (filtre achat, affichage coût),
+`client/src/components/creation/Step4Experience.jsx` (commentaire corrigé),
+`client/src/components/creation/WizardReview.jsx` (traduction subtype),
+`client/src/stores/creationStore.js` (`getStepBudget`), `client/src/locales/creation.json`
+(`step3.gain`, `method_choose_desc`), `docs/BUG WIZARD.md` (statuts #1-4), `docs/BUGIDENTIFIE.md`
+(items 12/23/27/28-29 supprimés), `docs/EN_COURS.md` (MUT1, WIZ-2, WIZ5-8, WIZ-ROUNDTRIP-DEPWARN).
+
+**Testé** : chaque cause racine vérifiée contre le code réel (pas la mémoire ni le doc) avant de coder ;
+`node --check` sur les fichiers serveur modifiés et les migrations ; `eslint` sur les fichiers client
+modifiés (exit 0) ; migrations 235/236/237 appliquées automatiquement par le watcher nodemon et
+vérifiées en base (valeurs `cost_pc`, colonnes `jsonb`/`base_age` créées) ; simulation numérique du
+double comptage #4 (19 affiché avant fix vs 16 réel, 16 après fix) ; `getStep3State`/`getStep4State`/
+`getStep5State` exécutées réellement contre 5 fiches en base après l'audit ; **nouveau test round-trip
+automatisé, vérifié rouge/vert (régression réintroduite puis restaurée)** ; suite serveur complète
+220/220 après restauration.
+**Non testé** : les 5 bugs + l'audit ne sont vérifiés qu'en base/tests automatisés, rien n'a été
+rejoué en navigateur (création de personnage réelle bout en bout, avec MJ observateur pour #1/#3,
+Récap Étape 7 pour l'audit). ⚠️ clos partiel pour l'ensemble (le garde-fou couvre la non-régression
+serveur, pas le rendu client réel).
+**Données** : migrations 235 (signe cost_pc, `ref_mutations`), 236 (`char_pc_ledger.skill_allocations`/
+`autodidacte_allocations`) et 237 (`char_archetype.base_age`) — additives/nullables, aucun personnage
+existant affecté rétroactivement, rétrocompatibles. Le test round-trip nettoie intégralement ses
+données (cascade FK sur suppression de la campagne de test) — vérifié aucun résidu après exécution.
+**Retour arrière** : `down()` fourni sur les trois migrations ; le reste est un commit isolé sur
+`dev/Saar`, `git revert` suffit.
