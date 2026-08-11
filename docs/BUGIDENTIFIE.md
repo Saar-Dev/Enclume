@@ -49,10 +49,8 @@
 | 21 | Afficher le type de munition des armes, lien arme↔munitions. | Wizard | Fonctionnalité manquante | Haute | Modèle arme, `REGLESMUNITIONS.md`. |
 | 22 | Borner le maximum de points d'attributs selon RAW. | Wizard | Bug (règle absente) | Haute | `REGLES/ATTRIBUTS.md`. |
 | 25 | Désavantage Parasite : jet pour nombre de parasites non implémenté. | Wizard | Comportement incomplet | Moyenne | `REGLE_MUTATION.md` / `REGLEREVERS.md`. |
-| 26 | L'âge progresse à chaque boucle sans jamais régresser. | Wizard | Bug (état persistant) | Haute | Store de création, `PERSONNAGE_WIZARD.md`. |
 | 30-31 | Traductions manquantes : "Sens diminué (hearing)", "Faiblesse naturelle (drug)". | Localisation | Bug (i18n) | Moyenne | `SYSTEME/LOCALISATION.md`. |
 | 32 | Implants : rien n'existe. Règle RAW à identifier, mécanique à concevoir. | Items | Hors scope | Basse (à planifier) | Chantier à part. |
-| 33 | Mode progression : compétences limitatives augmentables sans prérequis. | Playground | Bug (validation) | Haute | `SYSTEME/PERSONNAGE_CALCULS.md`. |
 | 34 | Module arme disparu de la fiche (gap local/distant, en cours par Saar). | Playground | Bug (régression) | Critique (en cours) | `equipment-admin.html`, migration. |
 
 ---

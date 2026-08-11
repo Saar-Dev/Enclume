@@ -1308,3 +1308,52 @@ existant affecté rétroactivement, rétrocompatibles. Le test round-trip nettoi
 données (cascade FK sur suppression de la campagne de test) — vérifié aucun résidu après exécution.
 **Retour arrière** : `down()` fourni sur les trois migrations ; le reste est un commit isolé sur
 `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-11 — `docs/BUG WIZARD.md` bug #7 (compétences à prérequis SKILL_MIN)
+
+**Contexte** : suite de la session précédente, bug #7 seul (« Playground – Augmentation possible des
+compétences limitatives sans prérequis »). Diagnostic du doc revérifié contre le code réel avant toute
+correction.
+
+**Lecture** : `char-sheet.js` (`POST /:characterId/skills/buy`) revalide déjà `SKILL_MIN` côté serveur
+depuis une base fraîche (jamais l'état client), via `calcSkillTotal` (`server/src/lib/charStats.js`,
+autorité unique déjà partagée avec socketDice/socketEntity/socketCombat) — gaté par
+`settings.skill_prerequisites` (OPT-07). `SkillsPanel.jsx` masque le bouton d'achat avec exactement la
+même condition côté client (`skillPrerequisitesEnabled`). Les deux sont cohérents entre eux : ce
+n'était donc pas un bug de désynchronisation client/serveur comme le supposait le doc — le mécanisme
+est solide (`✅ Session 141` déjà noté dans `EN_COURS.md` OPT-W1), aucun bricolage à corriger, aucun
+rework nécessaire.
+
+**Le vrai gap** : `SETTINGS_SCHEMA.skill_prerequisites.default` était `false`
+(`campaignSettingsService.js`). Vérifié dans `docs/REGLES/REGLECOMPETENCE.md` p.190 : le marqueur †
+est présenté par le LdB lui-même comme « COMPÉTENCE PRÉ-REQUISE NÉCESSAIRE (OPTIONNEL) » — variante
+optionnelle du LdB, mais dont le défaut RAW est actif. 84 lignes réelles dans
+`ref_skill_requirements` (vérifié en base, pas supposé) — mécanique substantielle, pas un stub. Note
+de Saar déjà présente dans `docs/BUG WIZARD.md` : « Si elle existe, il faut qu'elle soit active par
+défaut ».
+
+**Effet de bord trouvé avant de coder** (justifie la pause de confirmation) : la base réelle montre que
+la campagne « La Forêt Maudite » a déjà `settings.skill_prerequisites: false` **explicite** en JSONB
+(écrit dès la première sauvegarde de la page Réglages — `CampaignSettingsPage.jsx` envoie l'objet
+`settings` complet à chaque `PUT`, jamais un diff). Changer uniquement le défaut du schéma n'aurait
+donc eu aucun effet sur la seule campagne réelle concernée par le bug signalé par les beta-testeurs.
+Décision Saar (question posée) : basculer le défaut ET la campagne existante.
+
+**Corrigé** :
+- `server/src/lib/campaignSettingsService.js` — `skill_prerequisites.default` → `true`, commenté (LdB
+  p.190, lien vers cette session).
+- Campagne « La Forêt Maudite » (`7997c6ce-...`) — `settings.skill_prerequisites` → `true` en base,
+  même pattern de merge JSONB atomique que la route `PUT /campaigns/:id`.
+
+**Testé** : `campaignSettingsService.test.mjs` référence `SETTINGS_SCHEMA` dynamiquement (aucune valeur
+en dur) — non cassé par le changement de défaut, confirmé par la suite complète 220/220. Valeur en
+base revérifiée par requête indépendante après écriture. `ref_skill_requirements` (84 lignes SKILL_MIN
+réelles) confirmé en base.
+**Non testé** : achat réel d'une compétence gated (ex. Chirurgie sans Médecine 10) en mode Progression
+navigateur, sur une campagne avec l'option maintenant active. ⚠️ clos partiel — détail `docs/EN_COURS.md`
+WIZ9.
+**Données** : un `UPDATE` ciblé sur `campaigns.settings` (une ligne, « La Forêt Maudite ») — pas de
+migration (pas un changement de schéma SQL, JSONB existant). Réversible par Saar lui-même dans la page
+Réglages de campagne (décoche la case) si le défaut ne convient pas à l'usage réel.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit pour le code ; la donnée campagne
+peut être rebasculée manuellement dans les Réglages.

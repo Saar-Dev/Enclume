@@ -8,7 +8,11 @@ export const SETTINGS_SCHEMA = {
   polaris_latent:        { type: 'boolean', default: false },
   random_pro_advantages: { type: 'boolean', default: true },
   revers:                { type: 'boolean', default: false },
-  skill_prerequisites:   { type: 'boolean', default: false },
+  // OPT-07 — LdB p.190 la présente comme une règle "NÉCESSAIRE (OPTIONNEL)" : le défaut RAW du jeu
+  // est donc actif, contrairement aux options qui simplifient une règle non marquée optionnelle
+  // dans le livre. docs/BUG WIZARD.md #7 : le mécanisme (serveur + client, calcSkillTotal partagé)
+  // était déjà correct, seul ce défaut était en désaccord avec le RAW.
+  skill_prerequisites:   { type: 'boolean', default: true },
   skill_max_level:       { type: 'boolean', default: false },
   skill_natural_prog:    { type: 'boolean', default: false },
   young_penalty:         { type: 'boolean', default: false },
