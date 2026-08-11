@@ -1530,3 +1530,46 @@ retrofit de tous les consommateurs `adv.name`/`mut.name`/etc.) reste un chantier
 improvisé derrière cette décision.
 **Testé** : n/a (documentation uniquement).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-11 — WIZ13 : crash `invalid input syntax for type uuid: "null"`
+
+**Contexte** : signalement beta-testeur, sans pas-à-pas reproductible — "beaucoup navigué d'une étape
+à l'autre pour expérimenter des builds ou découvrir les possibilités". Message d'erreur brut collé par
+Saar : `select * from char_sheet where id = $1 limit $2 - invalid input syntax for type uuid: "null"`.
+
+**Confirmé par lecture** : `resolveSheetAccess` (`creationService.js:414`, garde d'accès partagée par
+le middleware REST `router.param('sheetId')` et les 3 handlers WebSocket `socketWizard.js`) fait
+`db('char_sheet').where({ id: sheetId }).first()` sans valider le format avant d'interroger la base.
+La chaîne littérale entre guillemets dans l'erreur pg ("null") confirme que ce n'est pas un SQL NULL
+mais une vraie chaîne de 4 caractères — nécessairement produite côté client par un template
+`` `/creation/${sheetId}/...` `` interpolé alors que `sheetId` valait JS `null`/`undefined`.
+
+**Cause côté client tracée mais NON confirmée** — chaque chemin identifié s'est révélé déjà gardé
+avant d'utiliser `sheetId` :
+- Nouvelle création (Step0 → Step1) : `startCreation()` est `await`é avant `setStep(1)`, `sheetId`
+  déjà résolu dans le store au moment où Step1 (qui ne le consomme même pas) rend.
+- Reprise via URL (`urlSheetId`) : tant que `urlSheetId !== sheetId`, seul un écran de chargement rend
+  (`WizardCreation.jsx:220-228`), jamais les étapes réelles.
+- Reset MJ (`resetCreation`, quittant le brouillon d'un joueur) : `step` et `sheetId` repassent à 0/
+  `null` dans le **même** `set()` Zustand — pas de fenêtre où une étape encore montée lirait un
+  `sheetId` déjà nul (hypothèse initiale envisagée, écartée après lecture du code réel).
+- `CharacterPoolPage.jsx` (liste de brouillons + démarrage pour un joueur) : les deux `navigate()`
+  utilisent un `sheetId` qui vient de `char_sheet.id`, clé primaire `NOT NULL` — structurellement ne
+  peut pas être `null` pour une ligne réellement retournée par la requête serveur.
+
+Aucun autre chemin trouvé. Cause racine côté client non identifiée — pas de correctif client tenté
+sur une hypothèse non vérifiée (règle du protocole : ne jamais coder sur un `[HYPOTHÈSE]`).
+
+**Corrigé, indépendamment de la cause exacte** : garde-fou format UUID dans `resolveSheetAccess`,
+avant toute requête — `AppError(404, 'Fiche introuvable')` propre au lieu du crash pg brut, plus un
+log `console.warn('[DBG-WIZNULL] ...')` capturant la valeur reçue et l'userId. Bénéfice réel même sans
+cause confirmée : plus aucun signalement "erreur SQL brute" possible pour ce chemin, et si le bug se
+reproduit, le log donnera enfin un point d'entrée concret (timing, utilisateur) pour remonter à la
+cause côté client.
+
+**Testé** : suite serveur complète 220/220. Vérification directe de `resolveSheetAccess` : `sheetId:
+"null"` → `AppError` propre + log `[DBG-WIZNULL]` (au lieu du crash) ; un vrai `sheetId` UUID existant
+→ passe le garde-fou sans effet, échoue plus loin comme avant (comportement légitime inchangé).
+**Non testé** : reproduction du bug original en navigateur (impossible sans pas-à-pas).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

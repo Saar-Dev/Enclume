@@ -411,7 +411,19 @@ export async function getStep4State(sheetId) {
 // WebSocket (§0 5e passe du plan — la duplication réelle à éliminer était REST vs WS, pas un
 // isGm générique inventé).
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function resolveSheetAccess(sheetId, userId) {
+  // Garde-fou format — sans ça, un sheetId malformé (ex. la chaîne littérale "null", produite côté
+  // client par un template `${sheetId}` interpolé alors que sheetId vaut JS null/undefined) fait
+  // planter la requête Postgres brute ("invalid input syntax for type uuid") au lieu d'un 404 propre.
+  // [DBG-WIZNULL] : signalement beta-testeur 2026-08-11, cause client exacte non reproduite (pas de
+  // pas-à-pas disponible) — log volontairement conservé pour capturer le contexte si ça se reproduit.
+  if (!UUID_RE.test(sheetId)) {
+    console.warn(`[DBG-WIZNULL] resolveSheetAccess : sheetId malformé reçu "${sheetId}" (userId=${userId})`)
+    throw new AppError(404, 'Fiche introuvable')
+  }
+
   const sheet = await db('char_sheet').where({ id: sheetId }).first()
   if (!sheet) throw new AppError(404, 'Fiche introuvable')
 
