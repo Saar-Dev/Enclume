@@ -2653,6 +2653,8 @@ Convention :
   box-shadow: 0 0 0 1px rgba(47,215,255,.35);
 }
 .wiz4-railrow.added { border-color: #3a6b4e; }
+.wiz4-railrow.ineligible { opacity: .5; }
+.wiz4-railrow.ineligible:hover { opacity: .75; }
 
 .wiz4-railbody { min-width: 0; flex: 1; }
 .wiz4-railname {

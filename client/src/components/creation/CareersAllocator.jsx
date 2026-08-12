@@ -34,7 +34,10 @@ function formatReason(t, r) {
 }
 
 const initialReducerState = ([initialSkillAllocations, initialOpenedSkills]) => ({
-  filter: 'eligible',
+  // Bug #29 : montrer tout par défaut (avec indication visuelle du blocage) plutôt que de cacher
+  // les métiers inaccessibles — un joueur qui vise "Espion" plus tard doit voir qu'il faut d'abord
+  // X années de Contrebandier, pas deviner que le métier existe.
+  filter: 'all',
   selectedCareerId: null,
   years: 1,
   activeTab: 'metier',
@@ -443,25 +446,35 @@ export default function CareersAllocator({
           const committed = selectedCareers.find(sc => sc.career_id === c.id)
           const firstTitle = getTitleForYears(c.titles, 1)
           const rowLockedForPlayer = isLockedForPlayer(careerOptionKey(c.code))
+          // Bug #29 : un métier inaccessible reste visible et cliquable (le panneau de détail
+          // explique déjà pourquoi, voir eligibility.reasons plus bas) — seul le rail manquait
+          // l'indication. Fusionné avec l'avertissement géographique existant (WIZ25) dans une
+          // seule zone de survol/icône plutôt que d'empiler deux ⚠ sur une ligne déjà dense.
+          const careerElig = eligibilityById.get(c.id)
+          const ineligible = !added && !(careerElig?.eligible ?? true)
+          const warningDetails = [
+            ineligible ? careerElig.reasons.map(r => formatReason(t, r)).join(' · ') : null,
+            c.restricted_geographic_origin ? c.geographic_origin_details : null,
+          ].filter(Boolean).join(' — ')
           return (
             <div
               key={c.id}
-              className={`wiz4-railrow${selectedCareerId === c.id ? ' sel' : ''}${added ? ' added' : ''}${rowLockedForPlayer ? ' locked-indicator' : ''}`}
+              className={`wiz4-railrow${selectedCareerId === c.id ? ' sel' : ''}${added ? ' added' : ''}${rowLockedForPlayer ? ' locked-indicator' : ''}${ineligible ? ' ineligible' : ''}`}
               onClick={() => dispatch({ type: 'SELECT_CAREER', id: c.id, committedYears: committed?.years })}
               onMouseEnter={() => dispatch({ type: 'SET_HOVER', id: c.id })}
               onMouseLeave={() => dispatch({ type: 'SET_HOVER', id: null })}
             >
               <div className="wiz4-railbody">
                 <div
-                  onMouseEnter={c.restricted_geographic_origin
-                    ? (e) => handleRestrEnter(c.geographic_origin_details, e) : undefined}
-                  onMouseLeave={c.restricted_geographic_origin ? handleRestrLeave : undefined}
+                  onMouseEnter={warningDetails
+                    ? (e) => handleRestrEnter(warningDetails, e) : undefined}
+                  onMouseLeave={warningDetails ? handleRestrLeave : undefined}
                 >
                   <div className="wiz4-railname">{c.name}</div>
                   <div className="wiz4-railmeta">
                     <span className="wiz4-mono">{formatSalary(firstTitle)}</span>
                     <span>{firstTitle?.title}</span>
-                    {c.restricted_geographic_origin && (
+                    {warningDetails && (
                       <span className="wiz4-restr">⚠</span>
                     )}
                   </div>

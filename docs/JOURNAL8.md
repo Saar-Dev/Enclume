@@ -2091,6 +2091,51 @@ dérivé côté client sans migration : un groupe de plus de 2 items = comportem
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
 
 -----
+## Session (Saar) — 2026-08-12 — WIZ27 : bandeau tutoriel par étape (bug #18/#27)
+
+**Contexte** : bug #27 (tooltip génotype manquant, Step 2) renvoie vers le bug #18 (absence de
+texte de tutoriel en haut de chaque étape — textes déjà rédigés par Saar, composant à créer).
+Saar choisit d'implémenter le chantier complet #18 plutôt qu'un tooltip isolé sur Step 2.
+
+**Vérifié avant codage** :
+- `StepTutorial` n'existe nulle part dans le code (`grep` négatif) — le doc était à jour sur ce
+  point précis.
+- Le doc liste 7 fichiers d'étape (Step0 à "Step 6 — Récapitulatif") en reprenant sa propre
+  numérotation. La numérotation réelle du code diverge : `WizardCreation.jsx` a un step
+  supplémentaire, `StepMaterielEtBiens.jsx` (`step === 6`, "Matériel et biens"), inséré après la
+  rédaction du bug #18 — le Récapitulatif du doc correspond en réalité à `step === 7`
+  (`WizardReview.jsx`). Aucun texte de tutoriel n'existe pour ce step 6, absent du périmètre
+  d'origine du bug.
+- Le doc prévoit des fichiers séparés `creation.fr.json`/`creation.en.json` avec synchronisation
+  anglaise. Le projet n'a qu'un seul fichier `creation.json` (contenu français direct) — l'anglais
+  est gelé (`i18n.md`, décision `LOCALISATION.md` §6, session antérieure). Suivi la convention
+  réelle, pas celle du doc.
+- Un badge d'info existe déjà par étape (`wizard.info_stepN`, dans l'en-tête `WizardHeader`) —
+  vérifié : un simple libellé de quelques mots ("Type génétique"), pas le paragraphe explicatif
+  demandé. Aucun chevauchement fonctionnel, les deux coexistent à des emplacements différents.
+
+**Corrigé** :
+- `StepTutorial.jsx` (nouveau) : lit `stepN.tutorial` (namespace `creation`), ne rend rien si la
+  clé est absente (`defaultValue: ''`) — pas de fallback moche affiché à l'écran pour un step sans
+  texte. Un seul point d'intégration dans `WizardCreation.jsx` (branche `step === 0` avant
+  `Step0Method`, et une fois avant `<div style={st.body}>` pour tous les autres steps) plutôt que
+  dans chacun des 7 composants d'étape comme le suggérait le doc — élimine la duplication de
+  markup, et couvre naturellement les sous-étapes de `Step4Experience.jsx` (le tutoriel reste
+  affiché puisqu'il vit au niveau du parent, pas remonté/redémonté par la navigation interne du
+  step).
+- `index.css` : `.wiz-tutorial`/`.wiz-tutorial-icon`/`.wiz-tutorial-text`, même patron que
+  `.wiz-error` (bordure gauche 3px, fond légèrement teinté) en bleu-gris plutôt que rouge, icône
+  ℹ️.
+- `creation.json` : clés `step0.tutorial`, `step1.tutorial` … `step5.tutorial`, `step7.tutorial`
+  (textes de Saar repris tels quels). `step6.tutorial` volontairement absent — Matériel et biens
+  n'a pas encore de texte.
+
+**Testé** : ESLint clean. `vite build` propre. JSON valide.
+**Non testé** : navigateur — affichage sur les 6 steps couverts, absence de bandeau sur Step 6.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+-----
 ## Session (Saar) — 2026-08-12 — Rôle administrateur, page /admin, gestion des utilisateurs
 
 **Contexte** : parti d'une demande de système de ticket de bug côté joueurs/MJ, recentré par Saar sur
@@ -2188,3 +2233,40 @@ sans navigateur (hors périmètre Lot 2, le script d'import à usage unique a su
 traçabilité).
 **Retour arrière** : rien committé sur ce chantier au moment de la rédaction de cette entrée — voir
 commit qui suit immédiatement dans l'historique pour le détail exact des fichiers.
+
+-----
+## Session (Saar) — 2026-08-12 — WIZ28 : prérequis de carrière invisibles (bug #29)
+
+**Contexte** : capture d'écran de Saar (`CareersAllocator.jsx`, Step4 Profession) — le filtre
+"Accessibles" (actif par défaut) masque simplement les métiers dont le prérequis n'est pas rempli
+(ex. années dans un autre métier). Saar demande explicitement une recherche UX avant de coder :
+faut-il cacher, ou tout afficher avec une indication visuelle ?
+
+**Recherche menée (WebSearch)** : consensus net dans les patrons de talent tree/skill tree
+professionnels (Path of Exile, WoW, XCOM) — toujours tout afficher (cacher retire une info de
+planification utile au joueur), grisé + tooltip expliquant le prérequis manquant au survol, jamais
+de rouge (réservé aux erreurs/blocages urgents, pas à "pas encore accessible").
+
+**Vérifié avant de coder** : toute la mécanique d'éligibilité existait déjà côté client —
+`evaluateCareerEligibility` (`shared/careerEligibility.js`, fonction pure déjà partagée
+client/serveur) calculée pour chaque carrière dans `eligibilityById` (`CareersAllocator.jsx`), déjà
+utilisée pour griser le bouton "Ajouter" et afficher la raison dans le panneau de détail. Le filtre
+"Accessibles" utilisait déjà ce même calcul pour cacher les lignes. **Rien à construire côté
+logique métier — uniquement une lacune d'affichage sur le rail gauche.**
+
+**Corrigé** :
+- Filtre par défaut : `'eligible'` → `'all'` (`initialReducerState`).
+- Ligne du rail : nouvelle classe `.wiz4-railrow.ineligible` (`opacity: .5`), posée quand la carrière
+  n'est ni ajoutée ni éligible.
+- Icône ⚠ + tooltip : fusionnés avec l'avertissement géographique existant (WIZ25) dans la même zone
+  de survol plutôt que d'empiler deux icônes sur une ligne déjà dense — `warningDetails` concatène
+  la raison d'inéligibilité (`formatReason`, déjà utilisé ailleurs dans ce fichier) et le détail
+  géographique s'ils s'appliquent tous les deux.
+- Un métier déjà ajouté (`added`) n'est jamais grisé même s'il redevient inéligible entre-temps
+  (ex. la carrière prérequise est retirée après coup) — éviter la contradiction visuelle avec le
+  badge "✓ Retenu".
+
+**Testé** : ESLint clean. `vite build` propre. Navigateur — confirmé par Saar ("Parfait. validé.").
+**Non testé** : —.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
