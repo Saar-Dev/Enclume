@@ -9,6 +9,23 @@ const computeGenoCost = (s) => !s.step2Data ? 0
   : s.step2Data.genotypeId === 'HUMAIN' ? 0
   : s.step2Data.isDeserter ? 4 : 5
 
+// Partagé par startCreation() et loadExistingSheet() (docs/EN_COURS.md, 2026-08-12) — reconstruit au
+// mieux la progression depuis la présence de données réelles par étape (aucun suivi serveur de la
+// progression — architecture client-primary) : imprécis par nature, sans conséquence sur les données
+// elles-mêmes (déjà toutes chargées), seulement sur l'écran affiché en premier.
+const computeHighestStep = ({ step2, step3, step4, step5, creationState }) => {
+  let highestStep = 1
+  if (step2?.genotypeId) highestStep = 2
+  if (step3?.method) highestStep = 3
+  if (step4?.careers?.length > 0) highestStep = 4
+  if (highestStep === 4 && step5?.advantages?.length > 0) highestStep = 5
+  // Step6 ne persiste aucune donnée d'étape (docs/PLAN_WIZARD_MATERIEL.md §3bis) — l'heuristique de
+  // contenu ci-dessus ne peut jamais la détecter. creation_state est le seul indice disponible à
+  // froid (hors session live, où applyStateSync couvre déjà le cas via WIZARD_STATE_SYNC).
+  if (creationState === 'step6_done') highestStep = Math.max(highestStep, 7)
+  return highestStep
+}
+
 export const useCreationStore = create((set, get) => ({
   step: 0,
   highestStep: 0,
@@ -161,12 +178,29 @@ export const useCreationStore = create((set, get) => ({
     set({ isStarting: true, startError: null })
     try {
       const res = await api.post('/creation/start', { campaignId })
-      const { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isGm } = res.data
+      const {
+        sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled,
+        randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isGm,
+        step1, step2, step3, step4, step5, creationState,
+      } = res.data
+      // Bug réel (docs/EN_COURS.md, 2026-08-12) : ce flux (Step0 → "Suivant") servait aussi bien un
+      // nouveau brouillon qu'une reprise d'un brouillon existant (idempotence côté serveur,
+      // creationService.js#startCreation), mais step1..step5 n'étaient jamais appliqués au store —
+      // une reprise repartait donc sur les valeurs par défaut du formulaire, en désaccord silencieux
+      // avec l'état réellement persisté (bloquant dès qu'un attribut est verrouillé par le MJ,
+      // destructeur sinon : le prochain "Suivant" écrasait les choix déjà faits). Même correctif que
+      // loadExistingSheet ci-dessous, `computeHighestStep` partagée pour ne pas dupliquer l'heuristique.
+      const highestStep = computeHighestStep({ step2, step3, step4, step5, creationState })
       // isGmView = rôle réel de campagne (docs/PLAN_WIZARD_MATERIEL.md), pas seulement "MJ en train
       // d'observer le brouillon d'un autre" (loadExistingSheet) — un MJ démarrant son propre brouillon
       // via ce flux normal doit aussi être reconnu comme MJ sur Step6 (bug réel corrigé).
-      set({ sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isGmView: !!isGm, isStarting: false })
-      return { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled }
+      set({
+        sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled,
+        reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isGmView: !!isGm, isStarting: false,
+        step1Data: step1, step2Data: step2, step3Data: step3, step4Data: step4, step5Data: step5,
+        step: highestStep, highestStep,
+      })
+      return { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, highestStep }
     } catch (err) {
       const msg = err.response?.data?.error?.message || err.response?.data?.message || `Erreur ${err.response?.status ?? 'réseau'}`
       set({ startError: msg, isStarting: false })
@@ -190,15 +224,7 @@ export const useCreationStore = create((set, get) => ({
         reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled,
       } = res.data
 
-      let highestStep = 1
-      if (step2?.genotypeId) highestStep = 2
-      if (step3?.method) highestStep = 3
-      if (step4?.careers?.length > 0) highestStep = 4
-      if (highestStep === 4 && step5?.advantages?.length > 0) highestStep = 5
-      // Step6 ne persiste aucune donnée d'étape (docs/PLAN_WIZARD_MATERIEL.md §3/§3bis) — l'heuristique
-      // de contenu ci-dessus ne peut jamais la détecter. creation_state est le seul indice disponible
-      // à froid (hors session live, où applyStateSync couvre déjà le cas via WIZARD_STATE_SYNC).
-      if (creationState === 'step6_done') highestStep = Math.max(highestStep, 7)
+      const highestStep = computeHighestStep({ step2, step3, step4, step5, creationState })
 
       set({
         sheetId, characterId, campaignId,

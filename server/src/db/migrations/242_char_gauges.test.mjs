@@ -3,9 +3,20 @@ import assert from 'node:assert/strict'
 
 import db from '../knex.js'
 import { up, down } from './242_char_gauges.js'
+import { assertTableExists, assertColumnsExist, assertConstraintExists } from './testHelpers/schemaAssertions.mjs'
 
 // Lancement manuel : node --env-file=../.env --test server/src/db/migrations/242_char_gauges.test.mjs
 const skip = !process.env.DATABASE_URL
+
+// Tourne toujours, contrairement aux tests transactionnels ci-dessous (sautés dès que la migration a
+// déjà tourné en dev) — détecte une dérive entre ce fichier et le schéma réel (SCHEMADRIFT-EXOTEMPLATES1,
+// docs/JOURNAL8.md 2026-08-12).
+test('schéma réel — char_gauges + char_inventory.validated_by_gm portent les colonnes/contrainte de la migration 242', { skip }, async () => {
+  await assertTableExists(db, 'char_gauges')
+  await assertColumnsExist(db, 'char_gauges', ['char_sheet_id', 'category_key', 'value'])
+  await assertConstraintExists(db, 'char_gauges', 'chk_gauges_value_non_negative')
+  await assertColumnsExist(db, 'char_inventory', ['validated_by_gm'])
+})
 
 async function createFixture(trx) {
   const [gm] = await trx('users')

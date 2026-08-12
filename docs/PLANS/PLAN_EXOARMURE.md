@@ -551,7 +551,10 @@ appliquée — éditée directement, pas de nouvelle migration).
 - Blindage, Exo-Force — varient indépendamment de la catégorie (Explora/Typhon même catégorie,
   Blindage 15 vs 17) → colonnes par instance de template, correctement modélisées.
 
-**Gaps trouvés et corrigés (migration 233 éditée, pas de nouvelle migration puisque non appliquée) :**
+**Gaps trouvés (corrigés initialement en éditant 233 directement, sous l'hypothèse erronée qu'elle
+n'avait pas encore tourné — elle l'avait déjà été le même jour, 09:50:27. Réparé le 2026-08-12,
+SCHEMADRIFT-EXOTEMPLATES1 : 233 restauré à son contenu réellement exécuté, ces colonnes portées pour
+de bon par `243_ref_exo_templates_movement_and_commerce.js`, détail `docs/JOURNAL8.md`) :**
 1. **Vitesse** — un simple entier par milieu ne suffisait pas. 3 colonnes ajoutées par milieu
    (`underwater_movement_mode`/`surface_movement_mode`, CHECK `'vit'|'pilot'|'blocked'`,
    `speeds_extra jsonb`) :
@@ -572,8 +575,11 @@ appliquée — éditée directement, pas de nouvelle migration).
 3. **Systèmes auxiliaires / Armement par défaut du template** — chaque armure RAW liste 10-25 items.
    Toujours hors scope, déjà couvert par le renvoi au Lot 5e (§3) — pas une nouvelle dette.
 
-**Testé :** `node --check` sur les fichiers touchés. Test migration étendu (`233_exo_sheet.test.mjs`,
-toujours non exécuté faute de `DATABASE_URL` local).
+**Testé (2026-08-06) :** `node --check` sur les fichiers touchés.
+**Testé (2026-08-12, réparation SCHEMADRIFT-EXOTEMPLATES1) :** `233_exo_sheet.test.mjs` +
+`243_ref_exo_templates_movement_and_commerce.test.mjs` exécutés contre PostgreSQL réel (30/30 tests
+migrations verts, suite serveur complète 244/244), rejeu intégral depuis une base neuve diffé
+octet-pour-octet contre la base réelle (`\d ref_exo_templates` identique) — détail `docs/JOURNAL8.md`.
 
 ### 7.6 Bug trouvé et corrigé — `getModDom()` (`server/src/lib/charStats.js`)
 

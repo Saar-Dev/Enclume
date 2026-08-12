@@ -2355,4 +2355,70 @@ Saar en conversation — pas rejouée par l'agent.
 n'ont pas été recoupés un par un dans cette passe — seuls les tickets `BETA-*` l'ont été.
 **Données** : un `UPDATE` en base (BETA-32 → `suspended`, via le service applicatif).
 **Retour arrière** : `docs/EN_COURS.md`/`docs/JOURNAL8.md` — commit isolé, `git revert` suffit.
+
+-----
+## Session (Saar) — 2026-08-12 — SCHEMADRIFT-EXOTEMPLATES1 : migration 233 réparée + angle mort des tests de migration fermé
+
+**Contexte** : premier ticket traité du tri (Tier 1 — fondations). `ref_exo_templates` (233_exo_sheet.js,
+`docs/PLANS/PLAN_EXOARMURE.md`) avait été édité le 2026-08-06 pour ajouter 8 colonnes/2 contraintes
+(mode de déplacement, `speeds_extra`, descriptif/commerce), sous l'hypothèse "pas encore appliquée"
+(§7.5 du plan). Faux : `knex_migrations` la datait de 09:50:27 le même jour, avant l'édition.
+
+**Consigne explicite de Saar avant de coder** : « on vérifie », rigueur maximale, sûr à 100 % —
+aucun correctif accepté sur la base d'une simple relecture.
+
+**Vérifié (pas supposé), dans l'ordre** :
+1. `\d ref_exo_templates` en base réelle confirme l'absence exacte des 8 colonnes/2 contraintes
+   décrites dans le fichier — dérive réelle, pas une hypothèse.
+2. `exo_sheet` (même migration) : aucune dérive, conforme au fichier.
+3. `ref_exo_templates`/`exo_sheet` : 0 ligne, aucun personnage `type='exo'` — correctif purement
+   additif, zéro donnée en jeu.
+4. Rejeu de la chaîne complète (206 migrations) sur une base neuve jetable (`vtt_schema_check`,
+   supprimée après usage) : succès — confirme que restaurer 233 + ajouter une migration 243 ne casse
+   rien pour un environnement neuf.
+5. `git log` : `233_exo_sheet.js` committé une seule fois (`66f4219`), déjà poussé sur
+   `origin/dev/Saar`. Seul développeur actif (`CLAUDE.md` §3) → aucun risque qu'un autre clone ait
+   tourné sur une version intermédiaire. Retoucher le fichier ajoute un commit correctif normal, pas
+   une réécriture d'historique partagé.
+6. Exécution réelle de `233_exo_sheet.test.mjs` contre la base : passait (✔) sans rien vérifier — le
+   test commence par `if (await db.schema.hasTable('exo_sheet')) return`, un faux vert dès que la
+   migration a déjà tourné (le cas normal en dev, nodemon l'applique à l'écriture du fichier). Ce
+   même patron `alreadyApplied` existe dans **9 fichiers** de test de migration du projet — angle
+   mort structurel, pas un accident isolé sur 233.
+7. Diff colonne par colonne des 8 autres migrations testées par ce patron (154, 155, 221, 223, 234,
+   240, 241, 242) contre le schéma réel : **aucune autre dérive trouvée**. Seule `ref_exo_templates`
+   était affectée.
+
+**Corrigé** :
+- `233_exo_sheet.js` restauré à son contenu réellement exécuté le 2026-08-06 (retrait des 8
+  colonnes/2 contraintes) — `down()` inchangé (dropTableIfExists, déjà cohérent). En-tête du fichier
+  documente la restauration et pointe vers 243.
+- `243_ref_exo_templates_movement_and_commerce.js` (nouvelle migration) : porte pour de bon les 8
+  colonnes/2 contraintes, avec les commentaires RAW déplacés depuis 233 (raisonnement mouvement
+  pilot/blocked/speeds_extra, descriptif/commerce).
+- `server/src/db/migrations/testHelpers/schemaAssertions.mjs` (nouveau, sous-dossier — un helper posé
+  directement dans `migrations/` casse `knex migrate:latest`, `NaturalMigrationSource` traite tout
+  `.js`/`.mjs` du dossier comme candidat migration sauf `*.test.mjs`) : 3 fonctions
+  (`assertTableExists`/`assertColumnsExist`/`assertConstraintExists`) qui lisent l'état réel de la
+  base sans passer par `up()`/`down()`.
+- **Les 9 fichiers de test existants + le nouveau test de 243** reçoivent chacun un test
+  supplémentaire, gardé seulement par `!DATABASE_URL` (jamais par `alreadyApplied`) — c'est ce test
+  qui aurait détecté la dérive dès le 2026-08-06 au lieu du 2026-08-12. Les listes de colonnes
+  dupliquées dans les tests transactionnels existants sont remplacées par des constantes partagées
+  (une seule source par fichier).
+- `docs/PLANS/PLAN_EXOARMURE.md` §7.5 : référence `243_...` au lieu de « 233 éditée ».
+- Ticket `SCHEMADRIFT-EXOTEMPLATES1` → `resolved` (`ticketService.updateTicket`, attribué au compte
+  admin de Saar).
+
+**Testé** : `node --check` sur les 13 fichiers touchés/créés. Migration 243 appliquée en base réelle
+(nodemon, confirmé par `knex_migrations` et `\d ref_exo_templates`). Suite de tests migrations complète
+rejouée contre la base réelle : **30/30 verts**, y compris les 10 nouvelles assertions de schéma
+inconditionnelles (chacune a réellement interrogé la base, pas de skip). Suite serveur complète :
+**244/244 verts**, aucune régression. Rejeu intégral depuis une base neuve (207 migrations, 233
+restauré + 243) : `\d ref_exo_templates` diffé et identique octet-pour-octet contre la base réelle.
+**Non testé** : scénario réel navigateur — sans objet ici (0 ligne en jeu, aucun écran ne lit encore
+`ref_exo_templates`, chantier Exo-armures toujours au Lot 1/2 bloqué).
+**Données** : migration 243 (additive, `down()` fourni, aucune ligne existante affectée — table vide).
+**Retour arrière** : `down()` de 243 supprime proprement les 8 colonnes/2 contraintes. Reste un commit
+isolé sur `dev/Saar`, `git revert` suffit.
 BETA-32 rebasculable via `/admin/tickets` si besoin.

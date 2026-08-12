@@ -467,8 +467,17 @@ export async function toggleWizardLock(sheetId, step, optionKey, locked) {
 
 const ATTR_IDS_START = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
+// Bug réel (2026-08-12, docs/EN_COURS.md) : la reprise d'un brouillon existant via ce chemin (Step0
+// → "Suivant") ne relisait jamais char_attributes/char_identity/etc. — le joueur repartait sur les
+// valeurs par défaut du formulaire, en désaccord silencieux avec l'état réellement persisté (visible
+// et bloquant dès qu'un attribut est verrouillé par le MJ, silencieux et destructeur sinon : un
+// "Suivant" réécrasait les choix déjà faits). getStep1State..getStep5State sont appelés APRÈS la
+// résolution de la transaction (jamais `trx` dedans) : `startCreation` insère un nouveau brouillon
+// via `trx`, ces lecteurs utilisent tous la connexion `db` ambiante — les appeler avant le commit
+// risquerait de ne pas voir les lignes tout juste insérées (isolation READ COMMITTED, connexions
+// distinctes). Même chemin que `/state` (routes/creation.js), aucune logique dupliquée.
 export async function startCreation(campaignId, userId) {
-  return db.transaction(async (trx) => {
+  const result = await db.transaction(async (trx) => {
     // Idempotence (docs/PLAN_WIZARDCOLLAB.md §0 5e passe, Lot A3) : un brouillon actif existe déjà
     // pour cet utilisateur dans cette campagne → le retourner au lieu d'en créer un second. Sans
     // ça, un MJ démarrant un brouillon via targetUserId (routes/creation.js) pour un joueur qui,
@@ -520,6 +529,16 @@ export async function startCreation(campaignId, userId) {
       youngPenaltyEnabled: settings.young_penalty,
     }
   })
+
+  const [step1, step2, step3, step4, step5, sheetRow] = await Promise.all([
+    getStep1State(result.sheetId),
+    getStep2State(result.sheetId),
+    getStep3State(result.sheetId),
+    getStep4State(result.sheetId),
+    getStep5State(result.sheetId),
+    db('char_sheet').where({ id: result.sheetId }).select('creation_state').first(),
+  ])
+  return { ...result, step1, step2, step3, step4, step5, creationState: sheetRow?.creation_state ?? null }
 }
 
 // ─── Enforcement des verrous MJ (Wizard collaboratif, docs/PLAN_WIZARDCOLLAB.md §4.5) ──────────
@@ -548,6 +567,17 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
       for (const [attrId, level] of Object.entries(step1.attributes)) {
         const key = attrOptionKey(attrId)
         if (lockedKeys.has(key) && level !== persistedByAttr.get(attrId)) {
+          // Instrumentation bug signalé (2026-08-12, EN_COURS.md) : distingue "MJ a changé la valeur
+          // persistée pendant que le joueur avait déjà l'assistant ouvert" (submitted = ancienne
+          // valeur locale figée) de "le joueur a lui-même fait bouger la valeur soumise sans toucher
+          // au spinner verrouillé" (ex. bascule Sexe, qui décale FOR/COO/PRE via le bonus féminin —
+          // submitted != persisted ET != à toute valeur jamais posée par le MJ). Retirer une fois la
+          // cause tranchée.
+          console.log(
+            `[DBG][WizardLock] violation attribut — sheetId=${sheetId} attrId=${attrId} ` +
+            `submitted=${level} persisted=${persistedByAttr.get(attrId)} ` +
+            `isFeminin=${step1.isFeminin} attributesSoumis=${JSON.stringify(step1.attributes)}`
+          )
           throw new AppError(400, `Option verrouillée par le MJ : attribut ${attrId}`)
         }
       }
@@ -556,6 +586,10 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
     const persistedKey = handOptionKey(persistedIdentity?.hand_pref ?? null)
     const submittedKey = handOptionKey(step1.handPref ?? null)
     if (isSingleChoiceLockViolation({ lockedKeys, submittedKey, persistedKey })) {
+      console.log(
+        `[DBG][WizardLock] violation main directrice — sheetId=${sheetId} ` +
+        `submitted=${step1.handPref ?? null} persisted=${persistedIdentity?.hand_pref ?? null}`
+      )
       throw new AppError(400, 'Option verrouillée par le MJ : main directrice')
     }
   }
@@ -567,6 +601,7 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
     const persistedKey = persistedArchetype?.genotype_id != null ? genotypeOptionKey(persistedArchetype.genotype_id) : null
     const submittedKey = step2.genotypeId != null ? genotypeOptionKey(step2.genotypeId) : null
     if (isSingleChoiceLockViolation({ lockedKeys, submittedKey, persistedKey })) {
+      console.log(`[DBG][WizardLock] violation génotype — sheetId=${sheetId} submitted=${submittedKey} persisted=${persistedKey}`)
       throw new AppError(400, 'Option verrouillée par le MJ : génotype')
     }
   }
@@ -583,6 +618,7 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
     const submittedKeys = new Set(submittedList.map(m => mutationOptionKey(m.mutation_id)))
     const violations = findSetLockViolations({ lockedKeys, submittedKeys, persistedKeys })
     if (violations.length) {
+      console.log(`[DBG][WizardLock] violation mutation — sheetId=${sheetId} violations=${JSON.stringify(violations)} submitted=${JSON.stringify([...submittedKeys])} persisted=${JSON.stringify([...persistedKeys])}`)
       throw new AppError(400, `Option verrouillée par le MJ : mutation ${violations[0]}`)
     }
   }
@@ -600,18 +636,21 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
     const originGeoPersistedKey = persistedArchetype4?.origin_geo != null ? originGeoOptionKey(persistedArchetype4.origin_geo) : null
     const originGeoSubmittedKey = step4.originGeo != null ? originGeoOptionKey(step4.originGeo) : null
     if (isSingleChoiceLockViolation({ lockedKeys, submittedKey: originGeoSubmittedKey, persistedKey: originGeoPersistedKey })) {
+      console.log(`[DBG][WizardLock] violation origine géo — sheetId=${sheetId} submitted=${originGeoSubmittedKey} persisted=${originGeoPersistedKey}`)
       throw new AppError(400, 'Option verrouillée par le MJ : origine géographique')
     }
 
     const originSocPersistedKey = persistedArchetype4?.origin_soc != null ? originSocOptionKey(persistedArchetype4.origin_soc) : null
     const originSocSubmittedKey = step4.originSoc != null ? originSocOptionKey(step4.originSoc) : null
     if (isSingleChoiceLockViolation({ lockedKeys, submittedKey: originSocSubmittedKey, persistedKey: originSocPersistedKey })) {
+      console.log(`[DBG][WizardLock] violation origine sociale — sheetId=${sheetId} submitted=${originSocSubmittedKey} persisted=${originSocPersistedKey}`)
       throw new AppError(400, 'Option verrouillée par le MJ : origine sociale')
     }
 
     const trainingPersistedKey = persistedArchetype4?.training_base != null ? trainingOptionKey(persistedArchetype4.training_base) : null
     const trainingSubmittedKey = step4.training != null ? trainingOptionKey(step4.training) : null
     if (isSingleChoiceLockViolation({ lockedKeys, submittedKey: trainingSubmittedKey, persistedKey: trainingPersistedKey })) {
+      console.log(`[DBG][WizardLock] violation formation de base — sheetId=${sheetId} submitted=${trainingSubmittedKey} persisted=${trainingPersistedKey}`)
       throw new AppError(400, 'Option verrouillée par le MJ : formation de base')
     }
 
@@ -630,6 +669,7 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
     )
     const violations = findSetLockViolations({ lockedKeys, submittedKeys, persistedKeys })
     if (violations.length) {
+      console.log(`[DBG][WizardLock] violation carrière — sheetId=${sheetId} violations=${JSON.stringify(violations)} submitted=${JSON.stringify([...submittedKeys])} persisted=${JSON.stringify([...persistedKeys])}`)
       throw new AppError(400, `Option verrouillée par le MJ : carrière ${violations[0]}`)
     }
   }
@@ -646,6 +686,7 @@ async function enforceWizardLocks(trx, sheetId, { step1, step2, step3, step4, st
     const submittedKeys = new Set((step5.advantages ?? []).map(advantageOptionKey))
     const violations = findSetLockViolations({ lockedKeys, submittedKeys, persistedKeys })
     if (violations.length) {
+      console.log(`[DBG][WizardLock] violation avantage — sheetId=${sheetId} violations=${JSON.stringify(violations)} submitted=${JSON.stringify([...submittedKeys])} persisted=${JSON.stringify([...persistedKeys])}`)
       throw new AppError(400, `Option verrouillée par le MJ : avantage ${violations[0]}`)
     }
   }

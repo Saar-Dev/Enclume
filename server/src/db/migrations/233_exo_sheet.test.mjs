@@ -3,6 +3,32 @@ import assert from 'node:assert/strict'
 
 import db from '../knex.js'
 import { up, down } from './233_exo_sheet.js'
+import { assertTableExists, assertColumnsExist, assertConstraintExists } from './testHelpers/schemaAssertions.mjs'
+
+const EXO_SHEET_COLUMNS = [
+  'character_id', 'template_id', 'pilot_character_id',
+  'itg_structure_max', 'itg_structure_current',
+  'itg_exosquelette_max', 'itg_exosquelette_current',
+  'itg_generator_max', 'itg_generator_current',
+  'avaries_legeres', 'avaries_moyennes', 'avaries_graves',
+  'avaries_critiques', 'avaries_catastrophiques',
+  'equipped_systems', 'hardpoints', 'isolated_systems', 'damaged_systems',
+]
+const REF_EXO_TEMPLATES_COLUMNS = ['base_speed_underwater', 'base_speed_surface']
+
+// Tourne toujours (contrairement au test transactionnel ci-dessous, sauté dès que la migration a
+// déjà tourné en dev) — c'est ce test qui aurait détecté SCHEMADRIFT-EXOTEMPLATES1 dès son
+// apparition le 2026-08-06 plutôt que le 2026-08-12.
+test('schéma réel — exo_sheet/ref_exo_templates portent toutes les colonnes/contraintes de la migration 233', {
+  skip: !process.env.DATABASE_URL,
+}, async () => {
+  await assertTableExists(db, 'exo_sheet')
+  await assertTableExists(db, 'ref_exo_templates')
+  await assertColumnsExist(db, 'exo_sheet', EXO_SHEET_COLUMNS)
+  await assertColumnsExist(db, 'ref_exo_templates', REF_EXO_TEMPLATES_COLUMNS)
+  await assertConstraintExists(db, 'ref_exo_templates', 'chk_exo_template_category')
+  await assertConstraintExists(db, 'ref_exo_templates', 'chk_exo_template_environment')
+})
 
 test('migration 233 ajoute exo_sheet/ref_exo_templates et revient proprement', {
   skip: !process.env.DATABASE_URL,
@@ -15,20 +41,12 @@ test('migration 233 ajoute exo_sheet/ref_exo_templates et revient proprement', {
 
     assert.equal(await trx.schema.hasTable('ref_exo_templates'), true)
     assert.equal(await trx.schema.hasTable('exo_sheet'), true)
-    for (const col of [
-      'character_id', 'template_id', 'pilot_character_id',
-      'itg_structure_max', 'itg_structure_current',
-      'itg_exosquelette_max', 'itg_exosquelette_current',
-      'itg_generator_max', 'itg_generator_current',
-      'avaries_legeres', 'avaries_moyennes', 'avaries_graves',
-      'avaries_critiques', 'avaries_catastrophiques',
-      'equipped_systems', 'hardpoints', 'isolated_systems', 'damaged_systems',
-    ]) assert.equal(await trx.schema.hasColumn('exo_sheet', col), true, `colonne ${col} absente`)
-    for (const col of [
-      'base_speed_underwater', 'base_speed_surface',
-      'underwater_movement_mode', 'surface_movement_mode', 'speeds_extra',
-      'manufacturer', 'price', 'rarity', 'tech_level', 'autonomy',
-    ]) assert.equal(await trx.schema.hasColumn('ref_exo_templates', col), true, `colonne ${col} absente`)
+    for (const col of EXO_SHEET_COLUMNS) {
+      assert.equal(await trx.schema.hasColumn('exo_sheet', col), true, `colonne ${col} absente`)
+    }
+    for (const col of REF_EXO_TEMPLATES_COLUMNS) {
+      assert.equal(await trx.schema.hasColumn('ref_exo_templates', col), true, `colonne ${col} absente`)
+    }
 
     // CHECK constraint refuse un type hors-liste
     await assert.rejects(
@@ -36,14 +54,6 @@ test('migration 233 ajoute exo_sheet/ref_exo_templates et revient proprement', {
         campaign_id: trx.raw('gen_random_uuid()'), name: 'test', type: 'vehicule',
       }),
       /chk_character_type/,
-    )
-
-    // CHECK constraint refuse un mode de mouvement hors-liste
-    await assert.rejects(
-      trx('ref_exo_templates').insert({
-        name: 'bad-mode', category: 'exo-1', environment: 'hybrid', surface_movement_mode: 'fly',
-      }),
-      /chk_exo_template_surface_mode/,
     )
 
     // Cascade character_id + template_id passe à NULL si le template référencé est supprimé

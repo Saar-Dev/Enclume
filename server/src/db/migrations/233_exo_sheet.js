@@ -8,6 +8,13 @@
  * Tables créées :
  *   1. ref_exo_templates — catalogue des modèles (comme ref_equipment, migration 48)
  *   2. exo_sheet         — instance (comme drone_sheet, migration 71)
+ *
+ * Contenu restauré (2026-08-12, SCHEMADRIFT-EXOTEMPLATES1) à ce qui a été réellement exécuté le
+ * 2026-08-06 09:50:27 (knex_migrations). Ce fichier avait été édité après cette exécution pour
+ * ajouter 8 colonnes/2 contraintes sur `ref_exo_templates` (mode de déplacement, `speeds_extra`,
+ * descriptif/commerce — cf. PLAN_EXOARMURE.md §7.5), sous l'hypothèse erronée qu'il n'avait pas
+ * encore tourné. Une migration déjà appliquée ne se retouche jamais (CLAUDE.md §5) : ces colonnes
+ * vivent désormais dans `243_ref_exo_templates_movement_and_commerce.js`, qui les ajoute pour de bon.
  */
 
 export const up = async (knex) => {
@@ -28,36 +35,11 @@ export const up = async (knex) => {
     t.integer('depth_limit')
     t.integer('depth_crush')
     t.integer('base_exoforce').notNullable().defaultTo(0)
-
-    // Vitesse — vérifié contre 16 armures RAW réelles (REGLEARMURE.md p.339-348) : une simple paire
-    // d'entiers ne suffit pas. 3 cas réels au-delà de "une valeur numérique normale" :
-    //   - "à terre : capacité de déplacement du personnage" (Explora) → mode='pilot', le mouvement
-    //     redirige vers le pilote humain (getCharacterMovementBudget récursif), base_speed_* ignorée.
-    //   - "à terre : -" (Vulcain, incapable de se déplacer hors de l'eau) → mode='blocked'.
-    //   - Un même milieu offre souvent 2 valeurs (ex. "10 exo-palmes / 20 propulseur" sous l'eau) —
-    //     RAW (REGLEARMURE.md:249-255) : seul le déplacement naturel compte pour le mouvement de
-    //     combat standard (un propulseur project hors de portée en 1-2 Tours, mécanique d'évasion
-    //     narrative distincte, pas un choix d'Allure). base_speed_* porte donc uniquement le mode
-    //     naturel ; les modes secondaires vont dans speeds_extra (narratif, non consommé par
-    //     movementBudgetService).
     t.integer('base_speed_underwater')
     t.integer('base_speed_surface')
-    t.text('underwater_movement_mode').notNullable().defaultTo('vit')
-    t.text('surface_movement_mode').notNullable().defaultTo('vit')
-    t.jsonb('speeds_extra').notNullable().defaultTo('[]')
-
     t.integer('base_blindage').notNullable().defaultTo(0)
     t.integer('malus_init_underwater').notNullable().defaultTo(0)
     t.integer('malus_init_surface').notNullable().defaultTo(0)
-
-    // Descriptif/commerce — présents dans 100% des exemples RAW (REGLEARMURE.md p.339-348), absents
-    // du schéma initial. tech_level en texte (pas un entier comme ref_equipment.tech_level) : la
-    // source donne "III", "III-IV"... jamais un entier propre.
-    t.text('manufacturer')
-    t.integer('price')
-    t.text('rarity')
-    t.text('tech_level')
-    t.text('autonomy')
 
     t.timestamps(true, true)
   })
@@ -67,11 +49,7 @@ export const up = async (knex) => {
       ADD CONSTRAINT chk_exo_template_category CHECK (category IN
         ('exo-alpha', 'exo-0', 'exo-1', 'exo-2', 'exo-3', 'exo-4', 'exo-5', 'exo-6', 'exo-omega')),
       ADD CONSTRAINT chk_exo_template_environment CHECK (environment IN
-        ('submarine', 'surface', 'hybrid', 'atmospheric', 'spatial', 'industrial')),
-      ADD CONSTRAINT chk_exo_template_underwater_mode CHECK (underwater_movement_mode IN
-        ('vit', 'pilot', 'blocked')),
-      ADD CONSTRAINT chk_exo_template_surface_mode CHECK (surface_movement_mode IN
-        ('vit', 'pilot', 'blocked'))
+        ('submarine', 'surface', 'hybrid', 'atmospheric', 'spatial', 'industrial'))
   `)
 
   // 3 — Fiche exo-armure (1 ligne par exo-armure, PK = character_id)

@@ -118,6 +118,17 @@
 - Jets Favoris : drag‑to‑reorder macros (UI) — 🔲
 - Paramètre campagne GM entity move mode (reporté) — 🔲
 - Commande de chat MJ `/healall` — réinitialise les blessures de tous les tokens du playground — 🔲
+- Sprint Drones 2d — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md` — 🔲
+- Sprint Drones 2e — `resolveDroneAutoAction` — 🔲
+- Sprint Drones 3 — Télépilotage (drone lié à PJ pilote) — 🔲
+- Sprint CaC 4b — validation fonctionnelle requise avant — 🔲
+- Sprint Annonce v2 — actions précédentes en lecture seule (`GmDeclareWindow` + `ActionWindow`) — 🔲
+  *(migré depuis `docs/EN_COURS.md`, doublon retiré de là-bas)*
+- Sprint Tooltips Compétences — `SkillsPanel` bouton ⓘ (déjà codé Session 73) — 🔲
+- Sprint Waypoints — déplacement points intermédiaires (déclaration serveur, alt+clic) — 🔲
+- Sprint Page Santé Serveur — `/api/health/detailed` (mémoire, uptime, températures) — 🔲
+- i18n équipement/builder/dés — Lot 1 (Combat) clos, reste Lots 2-4 — voir `docs/PLAN_LOCALISATION.md`
+  (norme : `docs/SYSTEME/LOCALISATION.md`) — 🔲
 
 ---
 
@@ -142,17 +153,32 @@
   gestion d'équipement), et tête de chaîne du cluster Catastrophe/Matériel : mécanise gratuitement 3
   entrées de la table Catastrophe combat (#2 Arme inutilisable, #7 Boum si Intégrité≤0, #8 Panne) sans
   rien inventer côté RAW — à construire en premier dans ce cluster. `docs/REGLES/REGLEMATERIEL.md`
-  fusionné dedans et supprimé (2026-08-06)
+  fusionné dedans et supprimé (2026-08-06) — reste une citation obsolète non corrigée,
+  `docs/PLANS/PLAN_EXOARMURE.md:64` pointe encore vers ce fichier supprimé
 - Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes...) — `docs/PLANS/PLAN_ARMES_SPECIALES.md`
   (stub) + `docs/REGLES/REGLES_ARMES_SPECIALES.md` (RAW transcrit). Les mécaniques de gerbe/saisie/AoE
   sont autonomes et cadrables dès maintenant ; seule la partie "explosion si Intégrité≤0" de la
   Catastrophe #7 dépend d'Usure/Intégrité ci-dessus
+- Catastrophe #1 Maladresse — décalage temporel avec `is_surprised` : vérifié contre RAW
+  (`REGLESYSCOMBAT.md:186-188`) et le code (`socketCombatHelpers.js:1206-1208`) — Surprise RAW bloque
+  le Tour **en cours** puis libère le suivant, Maladresse bloque le Tour **suivant** (l'inverse) — pas
+  un simple alias de `is_surprised`, à cadrer (décaler la pose du flag ou statut dédié) si ce
+  sous-chantier est repris. Migré depuis `docs/EN_COURS.md`
+- Catastrophe #3 Mauvaise cible — cadrage numérique manquant : "la plus proche" n'a pas de rayon
+  défini, Saar penche pour un tirage aléatoire parmi les cibles proches plutôt que strictement la plus
+  proche au sens géométrique. `measureBattlemapTokenDistance` (`worldSpatialQueryService.js`) déjà
+  confirmé réutilisable pour la mesure elle-même — reste le seuil "proche" à définir. Migré depuis
+  `docs/EN_COURS.md`
+- Catastrophe #5 Position désavantageuse — modificateur temporaire +5 pour toucher, durée 1 Tour
+  (précisé par Saar, RAW ne donnait pas de durée explicite). Nouveau statut sibling à
+  `isTargetDefenseless` (DEF5), jamais fusionné avec lui (effet RAW différent). Migré depuis
+  `docs/EN_COURS.md`
 - Objets au sol (nouvelle entité interactive, pour représenter un item lâché ou une arme inutilisable
-  après Catastrophe #2) → Ramasser un item au sol (dépend directement du premier). Dépend de la
-  confirmation que la pose libre d'entité (`docs/SYSTEME/ENTITES.md`, palette éditeur) est toujours
-  fonctionnelle après la refonte du moteur monde — aucun bug ouvert ni route morte trouvés en vérifiant
-  le code (2026-08-06), mais non testé en navigateur ; vérification rapide à faire avant de cadrer ce
-  chantier
+  après Catastrophe #2) → Ramasser un item au sol (dépend directement du premier). Base technique
+  **vérifiée réutilisable, pas juste supposée** : `SessionPage.jsx` (`handleEntityAction:476`, appelé
+  en 546/1175, flux GM-direct vs arbitrage joueur via `ENTITY_ACTION_REQUEST`) →
+  `socketEntity.js:64` (`ENTITY_ACTION_REQUEST` serveur), toujours actif aujourd'hui (pas mort depuis
+  le rework du World Builder) — symétrique à "Interagir avec une entité"
 - `Sidebar.jsx` — découpage structurel (`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`, créé 2026-08-05, Lots
   1-4c ✅ clos et confirmés. **Lot 4d** ✅ codé 2026-08-06 (extraction `SidebarChatTab.jsx` + hooks
   `useDiceBreakdownPopover`/`useSidebarPendingActionsBadge`), rendu général confirmé par Saar en
@@ -198,7 +224,7 @@
   "Sac"/"Coffre" ajoutés en compensation fonctionnelle, et une zone de drop Coffre a été ajoutée
   2026-08-06 (manquait à la clôture du chantier, `docs/ASBUILT.md`)
 - Tourelles / armes lourdes fixes (entités interactives)
-- Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles `docs/BUGIDENTIFIE.md` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
+- Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles suivies via `bug_tickets`/`/admin/tickets` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté
   2026-07-30 en cadrant `docs/Old/PLAN_BLESSURES_GUERISON.md` — afficher les règles de Guérison/Infection
   dans l'UI, tooltips envisagés, pas encore cadré)
@@ -209,11 +235,15 @@
   inventaire réel lui-même
 - Chat persistant (historique)
 - Chat MP (messagerie privée)
+- Chat multi-canal (optionnel) — idée Saar 2026-08-05 : bouton bascule "classique / multi-canal" dans
+  l'onglet Profil de la Sidebar. Backend déjà prêt en partie (`chat_messages.channel_id`, `whisper`
+  déjà fonctionnel) — dépend de la Phase 3/4 de `docs/PLANS/PLAN_CHAT.md` (client "conscient des
+  canaux") posée d'abord. Pas obligatoire, PLAN dédié à écrire si repris. Migré depuis `docs/EN_COURS.md`
 - Mode spectateur
 - Sauvegarde/export carte 3D
 - Battlemap 2D (illustration ou tokens sur fond 2D) — `docs/PLAN_BATTLEMAP2D.md`, plan en 4 lots, Lot 0 (cadrage) clos, aucun code
 - Spotlight / bibliothèque de présentation (personnage, document, indice) — besoin identifié pendant le cadrage Battlemap 2D, plan encore à écrire
-- Eau structurelle authorée (lacs, sas et calles sèches de navires, ponts d'arrimage) — nécessite un outil d'édition dédié + compilation serveur dans le `WorldSnapshot`, pas une reconstruction géométrique côté client. Option différée de la dette `docs/BUGIDENTIFIE.md` EAU1 ; v2, décision Saar 2026-07-29 ("peut largement attendre")
+- Eau structurelle authorée (lacs, sas et calles sèches de navires, ponts d'arrimage) — nécessite un outil d'édition dédié + compilation serveur dans le `WorldSnapshot`, pas une reconstruction géométrique côté client. Option différée de la dette EAU1 (`docs/EN_COURS.md`) ; v2, décision Saar 2026-07-29 ("peut largement attendre")
 
 ---
 

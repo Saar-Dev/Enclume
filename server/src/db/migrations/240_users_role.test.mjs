@@ -3,6 +3,19 @@ import assert from 'node:assert/strict'
 
 import db from '../knex.js'
 import { up, down } from './240_users_role.js'
+import { assertColumnsExist, assertConstraintExists } from './testHelpers/schemaAssertions.mjs'
+
+const USERS_ROLE_COLUMNS = ['role', 'role_granted_by', 'role_granted_at']
+
+// Tourne toujours, contrairement aux tests transactionnels ci-dessous (sautés dès que la migration a
+// déjà tourné en dev) — détecte une dérive entre ce fichier et le schéma réel (SCHEMADRIFT-EXOTEMPLATES1,
+// docs/JOURNAL8.md 2026-08-12).
+test('schéma réel — users porte les colonnes/contrainte role de la migration 240', {
+  skip: !process.env.DATABASE_URL,
+}, async () => {
+  await assertColumnsExist(db, 'users', USERS_ROLE_COLUMNS)
+  await assertConstraintExists(db, 'users', 'chk_users_role')
+})
 
 test('migration 240 ajoute role/role_granted_by/role_granted_at avec défaut, et revient proprement', {
   skip: !process.env.DATABASE_URL,
@@ -13,7 +26,7 @@ test('migration 240 ajoute role/role_granted_by/role_granted_at avec défaut, et
   await assert.rejects(db.transaction(async (trx) => {
     await up(trx)
 
-    for (const column of ['role', 'role_granted_by', 'role_granted_at']) {
+    for (const column of USERS_ROLE_COLUMNS) {
       assert.equal(await trx.schema.hasColumn('users', column), true, `colonne manquante: ${column}`)
     }
 
