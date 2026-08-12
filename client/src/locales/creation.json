@@ -16,8 +16,12 @@
       "start": "Commencer"
     }
   },
+  "step0": {
+    "tutorial": "Vous allez créer votre personnage. Vous disposez de 20 Points de Création (PC) à répartir entre toutes les étapes. Vous pouvez vous inspirer des archétypes proposés ou répartir librement vos points selon le concept de votre personnage. Chaque PC dépensé améliore un aspect : attributs, années d'expérience, avantages... Les Désavantages, eux, rapportent des PC supplémentaires."
+  },
   "step1": {
     "title": "Étape 1/5 — Attributs",
+    "tutorial": "Définissez les aptitudes physiques et mentales essentielles de votre personnage : ses Attributs. Le score de base de chaque Attribut est de 7. Vous disposez d'une réserve de points d'Attributs pour les améliorer. Vous pouvez aussi dépenser des PC pour obtenir plus de points d'Attributs (1 PC = +2 points) mais attention, les PCs sont communs à toutes les étapes de création et les niveaux 16 à 20 coûtent de plus en plus cher.",
     "attrFOR": "FOR",
     "attrCON": "CON",
     "attrCOO": "COO",
@@ -88,6 +92,7 @@
 	"handRoll": "Lancer 2D10"
   },
   "step2": {
+    "tutorial": "Choisissez la nature génétique de votre personnage. Par défaut, vous êtes un humain normal (gratuit, sans modificateurs). Vous pouvez aussi choisir un type Hybride (naturel, géno-hybride ou techno-hybride), capable de survivre sous l'eau, mais cela coûte des PC et modifie vos Attributs. Certains Hybrides subissent des Désavantages importants. Le MJ peut déconseiller les Hybrides aux joueurs débutants.",
     "attrPreview": "Aperçu des Attributs",
 	"rowBase": "Niveau de base",
 	"rowBaseRaw": "Base brute",
@@ -188,6 +193,7 @@
   },
   "step3": {
     "title": "Étape 3/5 — Capacités spéciales",
+    "tutorial": "Votre personnage possède-t-il des particularités hors du commun ? Cette étape concerne les Mutations (avantageuses, neutres ou désavantageuses) et la maîtrise de la Force Polaris. Deux méthodes : acheter les mutations souhaitées avec des PC, ou effectuer un tirage aléatoire gratuit (résultat imprévisible). Vous pouvez aussi n'acheter aucune mutation.",
     "method_choose": "Acheter des mutations",
     "method_random": "Tirage aléatoire",
     "method_choose_desc": "Parcourez la table des mutations et achetez celles qui correspondent à votre personnage. Chaque mutation avantageuse a un coût en PC. Les mutations neutres sont gratuites. Vous pouvez aussi choisir une mutation désavantageuse : elle est alors considérée comme un Désavantage et vous rapporte le nombre de PC indiqué.",
@@ -239,6 +245,7 @@
   },
   "step4": {
     "title": "Expérience préliminaire",
+    "tutorial": "Vous allez définir le passé de votre personnage : son âge de départ, ses origines (géographique, sociale), sa formation, puis une ou plusieurs Professions. Chaque année d'expérience professionnelle coûte 1 PC et donne 10 points de Compétence à répartir, des avantages, et des économies. L'âge final dépendra du nombre d'années passées dans ces professions.",
     "setback_none": "Aucun revers à ce stade de votre carrière.",
     "sub_age": "Âge",
     "sub_geo_origin": "Origine",
@@ -335,6 +342,7 @@
     "career_status_adv_over": "Budget d'avantages professionnels dépassé — un tirage converti en points a réduit le budget après coup, corrige la répartition d'une carrière.",
     "career_alloc_warning": "Des points restent non dépensés, ils seront perdus — clique à nouveau sur Suivant pour continuer quand même.",
     "career_random_title": "Tirage 1D10 (optionnel)",
+    "career_random_note": "Un tirage retire 5 points du budget Avantages professionnels de cette tranche (ci-dessus) — jamais des points de Compétence.",
     "career_random_block": "Tranche {{n}} (5 ans)",
     "career_random_roll_btn": "Lancer 1D10",
     "career_random_rolling": "Jet en cours…",
@@ -448,6 +456,7 @@
   },
   "step5": {
     "title": "Étape 5/5 — Avantages & Désavantages",
+    "tutorial": "Complétez votre personnage avec des Avantages (capacités innées, ressources, bonus divers) et/ou des Désavantages (défauts handicapants). Les Avantages coûtent des PC. Les Désavantages en rapportent. Certains sont uniques, d'autres cumulables. Attention à ne pas surcharger le personnage en Désavantages, au risque de le rendre injouable.",
     "advantages_section": "Avantages",
     "disadvantages_section": "Désavantages",
     "pc_remaining": "PC restants : {{n}}",
@@ -504,10 +513,11 @@
   },
   "materiel": {
     "gaugesTitle": "Jauges d'Avantages professionnels",
-    "gaugesDesc": "Récapitulatif purement informatif — c'est au MJ de juger ce qu'un objet ou un bien coûte en jauge.",
+    "gaugesDesc": "Ressource gérée par le MJ (+/-) — valeur de départ calculée depuis vos Avantages professionnels, indépendante ensuite.",
     "gaugesEmpty": "Aucune jauge acquise en Expérience préliminaire.",
     "inventoryTitle": "Matériel",
-    "inventoryPlayerHint": "Le MJ peut ajouter du matériel ici en fonction de vos jauges. Rien à faire de ton côté.",
+    "inventoryPlayerHint": "Construisez librement la liste du matériel que vous souhaitez emporter — le MJ validera chaque objet un par un, en échange de vos jauges.",
+    "pendingValidationHint": "En attente de validation du MJ sur au moins un objet.",
     "notesTitle": "Biens non matériels",
     "notesDesc": "Propriétés, étals, planques… texte libre, modifiable par le joueur et le MJ.",
     "notesEmpty": "Aucun bien noté pour l'instant.",
@@ -516,5 +526,8 @@
     "notesError": "Une erreur est survenue.",
     "prev": "Précédent",
     "next": "Suivant"
+  },
+  "step7": {
+    "tutorial": "Vérifiez l'ensemble de votre fiche de personnage avant de terminer. Tous vos choix sont affichés ici : Attributs, Génotype, Mutations, Professions, Compétences, Avantages et Économies. Vous pouvez revenir en arrière pour modifier ce qui ne vous convient pas. Quand tout est prêt, verrouillez votre fiche pour commencer à jouer."
   }
 }

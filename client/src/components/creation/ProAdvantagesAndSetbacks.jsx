@@ -10,7 +10,7 @@ import { useSocket } from '../../lib/SocketContext.jsx'
 import { useAuthStore } from '../../stores/authStore.js'
 import DiceRoller from '../DiceRoller.jsx'
 import DiceLights from '../DiceLights.jsx'
-import { PRO_ADV_CATEGORY_RULE_KEYS } from './proAdvCategoryRuleKeys.js'
+import { PRO_ADV_CATEGORY_RULE_KEYS } from '../../../../shared/proAdvCategoryRuleKeys.js'
 
 // dieType (pour le visuel 3D uniquement, P56 : absent du payload DICE_RESULT serveur) — dérivé de
 // la formule elle-même plutôt que deviné par contexte, valable pour tout domaine (base ou sous-jet).
@@ -414,6 +414,7 @@ export default function ProAdvantagesAndSetbacks({
                 {randomProAdvantagesEnabled !== false && (career.randomBenefits ?? []).length > 0 && blockCount > 0 && (
                   <>
                     <span className="wiz4-h">{t('step4.career_random_title')}</span>
+                    <p className="wiz4-note">{t('step4.career_random_note')}</p>
                     {Array.from({ length: blockCount }).map((_, blockIndex) => {
                       const pick = randomPicksForCareer.find(p => p.blockIndex === blockIndex)
                       const rolledRow = pick ? (career.randomBenefits ?? []).find(r => r.roll === pick.roll) : null

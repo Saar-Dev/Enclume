@@ -2270,3 +2270,48 @@ logique métier — uniquement une lacune d'affichage sur le rail gauche.**
 **Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+-----
+## Session (Saar) — 2026-08-12 — WIZ29 : tirage 1D10 semble coûter des points de Compétence (bug #11)
+
+**Contexte** : `docs/BUG WIZARD.md` #11, déjà analysé en amont — le tirage 1D10 d'avantages
+professionnels (Step4, sous-étape Avantages & Revers) retire 5 points du budget "Avantages
+professionnels" de la tranche de 5 ans concernée, jamais des points de Compétence. Mécanique
+conforme RAW (`computeRandomBudgetDelta`, `shared/careerAdvantages.js`) — le bug était uniquement
+une confusion d'affichage, jamais un problème de calcul.
+
+**Vérifié avant de coder** : le bloc "Tirage 1D10 (optionnel)" (`ProAdvantagesAndSetbacks.jsx`) est
+rendu juste en dessous du bloc "Avantages professionnels" avec son compteur "pt(s) à répartir",
+mais rien dans le texte ne relie explicitement les deux — un joueur voit son solde baisser après un
+tirage sans qu'aucun libellé ne dise dans quel budget.
+
+**Corrigé** : note `wiz4-note` ajoutée sous le titre "Tirage 1D10 (optionnel)" — précise
+explicitement que le tirage retire 5 points du budget Avantages professionnels affiché juste
+au-dessus, jamais des points de Compétence. Clé i18n `step4.career_random_note`. Aucun changement
+de logique — correctif de clarté uniquement, comme demandé par l'analyse du doc.
+
+**Rappel à l'ordre de Saar** : ce bug a été choisi et codé sans présentation ni autorisation
+préalable ("bug suivant" pris à tort comme blanc-seing pour choisir et coder le suivant sans
+validation). Reconnu explicitement — plus aucun bug ne sera codé sans présentation + feu vert
+explicite, quelle que soit sa taille apparente.
+
+**Analyse à charge demandée par Saar avant clôture** : la note affirmait "retire 5 points"
+inconditionnellement — faux pour un métier sans catégorie de points (`categories.length === 0` →
+`budget = 0` inconditionnel, `careerAdvantages.js:14-18`, tirage purement narratif dans ce cas).
+Vérifié en base réelle (script Knex ad hoc, pas supposé) : **zéro carrière n'a actuellement de
+catégories vides** — Chasseur de primes était le seul cas, une véritable faute de données déjà
+corrigée par la migration `186_fix_chasseur_primes_data.js` (une migration antérieure, 120, avait
+affirmé à tort l'absence RAW d'avantages professionnels pour ce métier ; RAW réel : "5 points/an :
+Célébrité, Relations, Matériel"). Conclusion : la branche `budget=0` du code est un garde-fou
+défensif contre une erreur de données déjà survenue, pas une mécanique RAW active — ajouter une
+condition dans la note serait de la complexité pour un état qui n'a plus d'instance réelle. Note
+conservée inconditionnelle. Risque résiduel assumé et documenté : le "5" est en dur dans le texte
+(pas lu depuis la constante du code), mais cohérent avec le patron déjà en place sur la clé voisine
+`career_random_block` ("5 ans" également en dur).
+
+**Testé** : ESLint clean. `vite build` propre. JSON valide. Navigateur — confirmé par Saar
+("Parfait.") après relecture à charge du correctif (stabilité, absence de bricolage, sérieux
+architectural).
+**Non testé** : —.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
