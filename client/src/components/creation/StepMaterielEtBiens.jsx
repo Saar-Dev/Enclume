@@ -5,40 +5,46 @@
 // note) écrivent immédiatement en base via des endpoints déjà existants (InventoryPanel.jsx,
 // PossessionNotes.jsx), jamais bufferisées dans le store puis reconciliées comme les steps 1-5.
 
-import { useMemo } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useCreationStore } from '../../stores/creationStore'
 import InventoryPanel from '../../character/InventoryPanel.jsx'
 import PossessionNotes from './PossessionNotes.jsx'
 import { useWizardInventorySync } from '../../lib/useWizardInventorySync.js'
-import { PRO_ADV_CATEGORY_RULE_KEYS } from './proAdvCategoryRuleKeys.js'
+import { useInventoryData } from '../../lib/useInventoryData.js'
+import { useGaugesData } from '../../lib/useGaugesData.js'
+import { adjustGauge } from '../../lib/gaugesMutations.js'
 
-export default function StepMaterielEtBiens({ characterId, isGmView, onPrev, onNext, advancing }) {
+export default function StepMaterielEtBiens({ characterId, isGmView, isOwner, onPrev, onNext, advancing }) {
   const { t } = useTranslation('creation')
-  const step4Data = useCreationStore(s => s.step4Data)
   useWizardInventorySync(characterId)
+  const canEdit = isGmView || isOwner
+  const isGm = isGmView
 
-  // Récap des jauges (§1 du plan) — step4Data.careers[].proAdvantages déjà dans le store
-  // (getStep4State le renvoie par carrière), aucune donnée serveur supplémentaire à charger.
-  // Regroupé par clé de règle normalisée (proAdvCategoryRuleKeys.js, déjà utilisé par Step4 pour le
-  // même problème) — pas par libellé brut, qui varie d'un lot de seed à l'autre pour la même
-  // catégorie réelle ("Cache/Planque" vs "Planque/Cache").
-  const gauges = useMemo(() => {
-    const totals = {}
-    const fallbackLabels = {}
-    for (const career of step4Data?.careers ?? []) {
-      for (const [rawCategory, points] of Object.entries(career.proAdvantages ?? {})) {
-        const key = PRO_ADV_CATEGORY_RULE_KEYS[rawCategory] ?? rawCategory
-        totals[key] = (totals[key] ?? 0) + points
-        if (!fallbackLabels[key]) fallbackLabels[key] = rawCategory
-      }
+  // PLAN_WIZARD_MATERIEL_GAUGES.md §0 point 5/§5 — ressource persistée (char_gauges), plus un calcul
+  // théorique en lecture seule depuis step4Data : la valeur de départ était le total théorique au
+  // moment du seed serveur (creationService.js), mais devient ensuite indépendante (gérée par le MJ).
+  const { gauges } = useGaugesData(characterId)
+  const gaugeEntries = Object.entries(gauges).map(([key, value]) => ({
+    key, value, label: t(`step4.pro_adv_rules.${key}.title`, { defaultValue: key }),
+  }))
+  const [adjustingKey, setAdjustingKey] = useState(null)
+  const handleAdjustGauge = useCallback(async (categoryKey, delta) => {
+    setAdjustingKey(categoryKey)
+    try {
+      await adjustGauge(characterId, categoryKey, delta)
+    } catch (err) {
+      console.error('Erreur ajustement jauge :', err)
+    } finally {
+      setAdjustingKey(null)
     }
-    return Object.entries(totals).map(([key, points]) => ({
-      key,
-      points,
-      label: t(`step4.pro_adv_rules.${key}.title`, { defaultValue: fallbackLabels[key] }),
-    }))
-  }, [step4Data, t])
+  }, [characterId])
+
+  // Blocage joueur (§0 point 4) : jamais bloquant si aucun item proposé, bloqué tant qu'il en reste
+  // un non validé sinon. Même hook que InventoryPanel (useInventoryData.js, façade store dédupliquée)
+  // — pas de callback remonté depuis InventoryPanel, la donnée est déjà partagée par le store.
+  const { items: inventoryItems } = useInventoryData(characterId)
+  const pendingCount = inventoryItems.filter(i => !i.validated_by_gm).length
+  const playerBlocked = !isGm && pendingCount > 0
 
   return (
     <div style={s.container}>
@@ -46,14 +52,28 @@ export default function StepMaterielEtBiens({ characterId, isGmView, onPrev, onN
         <div style={s.block}>
           <h3 style={s.blockTitle}>{t('materiel.gaugesTitle')}</h3>
           <p style={s.desc}>{t('materiel.gaugesDesc')}</p>
-          {gauges.length === 0 ? (
+          {gaugeEntries.length === 0 ? (
             <p style={s.empty}>{t('materiel.gaugesEmpty')}</p>
           ) : (
             <div style={s.gaugeGrid}>
-              {gauges.map(g => (
+              {gaugeEntries.map(g => (
                 <div key={g.key} style={s.gaugeRow}>
                   <span style={s.gaugeLabel}>{g.label}</span>
-                  <span style={s.gaugeValue}>{g.points}</span>
+                  {isGm && (
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleAdjustGauge(g.key, -1)}
+                      disabled={adjustingKey === g.key}
+                    >−</button>
+                  )}
+                  <span style={s.gaugeValue}>{g.value}</span>
+                  {isGm && (
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleAdjustGauge(g.key, 1)}
+                      disabled={adjustingKey === g.key}
+                    >+</button>
+                  )}
                 </div>
               ))}
             </div>
@@ -62,11 +82,11 @@ export default function StepMaterielEtBiens({ characterId, isGmView, onPrev, onN
 
         <div style={s.block}>
           <h3 style={s.blockTitle}>{t('materiel.inventoryTitle')}</h3>
-          {!isGmView && <p style={s.desc}>{t('materiel.inventoryPlayerHint')}</p>}
+          {!isGm && <p style={s.desc}>{t('materiel.inventoryPlayerHint')}</p>}
           <InventoryPanel
             characterId={characterId}
-            canEdit={isGmView}
-            isGm={isGmView}
+            canEdit={canEdit}
+            isGm={isGm}
           />
         </div>
 
@@ -77,7 +97,8 @@ export default function StepMaterielEtBiens({ characterId, isGmView, onPrev, onN
 
       <div style={s.nav}>
         <button className="btn btn-ghost" onClick={onPrev}>← {t('materiel.prev')}</button>
-        <button className="btn btn-gold" onClick={onNext} disabled={advancing}>
+        {playerBlocked && <p style={s.blockedHint}>{t('materiel.pendingValidationHint')}</p>}
+        <button className="btn btn-gold" onClick={onNext} disabled={advancing || playerBlocked}>
           {advancing ? '…' : t('materiel.next')} →
         </button>
       </div>
@@ -100,4 +121,5 @@ const s = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '12px 20px', borderTop: '1px solid #1e1e2e', flexShrink: 0,
   },
+  blockedHint: { color: '#c07050', fontSize: 11, margin: 0 },
 }

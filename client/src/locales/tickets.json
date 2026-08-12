@@ -44,7 +44,8 @@
       "domain": "Domaine",
       "clusterLabel": "Cluster (filtre texte)",
       "clusterLabelPlaceholder": "ex. Cluster N",
-      "all": "Tous"
+      "all": "Tous",
+      "hideClosed": "Masquer résolus / doublons / rejetés"
     },
     "originLabels": {
       "player": "Joueur",
@@ -71,6 +72,19 @@
     "clusterLabel": "Cluster",
     "clusterLabelEditPlaceholder": "Libellé de cluster (ex. Cluster N)",
     "linkedBugCode": "Code lié",
-    "reportedBy": "Signalé par"
+    "linkedBugCodePlaceholder": "Code (ex. WIZ-12)",
+    "reportedBy": "Signalé par",
+    "stats": {
+      "open": "ouverts",
+      "closed": "résolus",
+      "total": "total"
+    },
+    "bulk": {
+      "selectAll": "Tout sélectionner",
+      "selected": "{{count}} sélectionné(s)",
+      "statusPlaceholder": "Changer le statut…",
+      "apply": "Appliquer",
+      "cancel": "Annuler"
+    }
   }
 }

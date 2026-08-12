@@ -12,6 +12,7 @@ export function useCharacterSocket() {
   const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
   const removeInventoryItem = useCharacterStore(s => s.removeInventoryItem)
   const setSols = useCharacterStore(s => s.setSols)
+  const setGauge = useCharacterStore(s => s.setGauge)
 
   useEffect(() => {
     if (!socket) return
@@ -67,6 +68,10 @@ export function useCharacterSocket() {
     const onSolsUpdated = ({ characterId, sols }) => {
       if (characterId) setSols(characterId, sols)
     }
+    // PLAN_WIZARD_MATERIEL_GAUGES.md §6 — écriture directe, même patron que onSolsUpdated.
+    const onGaugeUpdated = ({ characterId, categoryKey, value }) => {
+      if (characterId) setGauge(characterId, categoryKey, value)
+    }
 
     socket.on(WS.WOUND_ADDED,       onWoundAdded)
     socket.on(WS.WOUND_UPDATED,     onWoundUpdated)
@@ -75,6 +80,7 @@ export function useCharacterSocket() {
     socket.on(WS.INVENTORY_UPDATED, onInventoryUpdated)
     socket.on(WS.INVENTORY_REMOVED, onInventoryRemoved)
     socket.on(WS.SOLS_UPDATED,      onSolsUpdated)
+    socket.on(WS.GAUGE_UPDATED,     onGaugeUpdated)
 
     return () => {
       socket.off(WS.WOUND_ADDED,       onWoundAdded)
@@ -84,9 +90,10 @@ export function useCharacterSocket() {
       socket.off(WS.INVENTORY_UPDATED, onInventoryUpdated)
       socket.off(WS.INVENTORY_REMOVED, onInventoryRemoved)
       socket.off(WS.SOLS_UPDATED,      onSolsUpdated)
+      socket.off(WS.GAUGE_UPDATED,     onGaugeUpdated)
     }
   }, [socket])
-  // [socket] uniquement — updateCharacter, setWounds, upsertInventoryItem, removeInventoryItem, setSols
-  // (actions Zustand) sont des références stables, non listées dans les deps (même pattern que
+  // [socket] uniquement — updateCharacter, setWounds, upsertInventoryItem, removeInventoryItem, setSols,
+  // setGauge (actions Zustand) sont des références stables, non listées dans les deps (même pattern que
   // useTokenSocket).
 }

@@ -1069,7 +1069,10 @@ router.post('/:characterId/quick-equip', async (req, res, next) => {
 router.post('/:characterId/inventory', async (req, res, next) => {
   try {
     const characterId = req.params.characterId
-    const result = await inventoryService.addItem(characterId, req.body)
+    // PLAN_WIZARD_MATERIEL_GAUGES.md §3 — validated_by_gm dérivé serveur (req.isGm), jamais lu du
+    // payload : un item ajouté par le joueur part en attente, un item ajouté par le MJ (ou fusionné
+    // sur un stack par le MJ) part directement validé.
+    const result = await inventoryService.addItem(characterId, req.body, req.isGm)
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.type === 'stack') {
@@ -1092,6 +1095,11 @@ router.post('/:characterId/inventory', async (req, res, next) => {
 router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
   try {
     const { characterId, itemId } = req.params
+    // PLAN_WIZARD_MATERIEL_GAUGES.md §3 — seul le MJ peut faire transiter validated_by_gm ; la route
+    // n'avait auparavant aucune garde isGm (les autres champs restent ouverts owner/MJ comme avant).
+    if (req.body.validated_by_gm !== undefined && !req.isGm) {
+      throw new AppError(403, 'Seul le MJ peut valider un item')
+    }
     const item = await inventoryService.updateItem(characterId, itemId, req.body)
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
@@ -1135,6 +1143,53 @@ router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
     }
     req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
     res.json({ item: result.item })
+  } catch (err) { next(err) }
+})
+
+// ─── GET /api/char-sheet/:characterId/gauges ────────────────────────────────────
+// PLAN_WIZARD_MATERIEL_GAUGES.md §3 — owner ou MJ (garde déjà posée par router.param), partagée
+// Wizard Step6 + fiche permanente. Même précédent que GET .../inventory : sans cette route,
+// characterStore.gaugesByCharId ne se peuple jamais au premier chargement.
+router.get('/:characterId/gauges', async (req, res, next) => {
+  try {
+    const sheet = await db('char_sheet').where({ character_id: req.params.characterId }).first()
+    if (!sheet) return res.json({ gauges: [] })
+    const gauges = await db('char_gauges').where({ char_sheet_id: sheet.id }).select('category_key', 'value')
+    res.json({ gauges })
+  } catch (err) { next(err) }
+})
+
+// ─── PATCH /api/char-sheet/:characterId/gauges/:categoryKey ────────────────────
+// body: { delta } — MJ only. PLAN_WIZARD_MATERIEL_GAUGES.md §3/§10 (décision Saar 2026-08-12) :
+// une jauge ne peut jamais devenir négative — clampée ici, jamais une erreur bloquante pour le MJ ;
+// le CHECK chk_gauges_value_non_negative (migration 242) reste le filet de sécurité contre une
+// course entre deux écritures concurrentes. Room résolue comme les autres routes inventaire
+// (resolveInventoryBroadcastRoom), pas comme SOLS_UPDATED : la jauge est éditable dès Step6, un
+// brouillon actif ne doit pas être révélé à toute la room de campagne (même raison que quick-equip/
+// addItem, docs/PLAN_WIZARD_MATERIEL.md §2).
+router.patch('/:characterId/gauges/:categoryKey', async (req, res, next) => {
+  try {
+    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+
+    const { characterId, categoryKey } = req.params
+    const { delta } = req.body
+    if (!Number.isInteger(delta)) throw new AppError(400, 'delta doit être un entier')
+
+    const sheet = await db('char_sheet').where({ character_id: characterId }).first()
+    if (!sheet) throw new AppError(404, 'Sheet not found')
+
+    const [updated] = await db('char_gauges')
+      .insert({ char_sheet_id: sheet.id, category_key: categoryKey, value: Math.max(0, delta) })
+      .onConflict(['char_sheet_id', 'category_key'])
+      .merge({ value: db.raw('GREATEST(0, char_gauges.value + ?)', [delta]) })
+      .returning('*')
+
+    const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
+    req.app.get('io').to(room).emit(WS.GAUGE_UPDATED, {
+      characterId, categoryKey, value: updated.value,
+    })
+
+    res.json({ categoryKey, value: updated.value })
   } catch (err) { next(err) }
 })
 

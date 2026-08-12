@@ -23,6 +23,7 @@ export function useWizardInventorySync(characterId) {
   const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
   const removeInventoryItem = useCharacterStore(s => s.removeInventoryItem)
   const setSols = useCharacterStore(s => s.setSols)
+  const setGauge = useCharacterStore(s => s.setGauge)
 
   useEffect(() => {
     if (!socket || !characterId) return
@@ -54,17 +55,27 @@ export function useWizardInventorySync(characterId) {
       if (cid !== characterId) return
       setSols(characterId, sols)
     }
+    // PLAN_WIZARD_MATERIEL_GAUGES.md §6 — jauges éditables dès Step6 (stepper MJ dans
+    // StepMaterielEtBiens.jsx), room de diffusion scopée wizard comme l'inventaire (même raison,
+    // char-sheet.js resolveInventoryBroadcastRoom) : ce hook doit aussi écouter GAUGE_UPDATED, pas
+    // seulement useCharacterSocket.js (qui ne couvre que la fiche permanente).
+    const onGaugeUpdated = ({ characterId: cid, categoryKey, value }) => {
+      if (cid !== characterId) return
+      setGauge(characterId, categoryKey, value)
+    }
 
     socket.on(WS.INVENTORY_ADDED, onAdded)
     socket.on(WS.INVENTORY_UPDATED, onUpdated)
     socket.on(WS.INVENTORY_REMOVED, onRemoved)
     socket.on(WS.SOLS_UPDATED, onSolsUpdated)
+    socket.on(WS.GAUGE_UPDATED, onGaugeUpdated)
 
     return () => {
       socket.off(WS.INVENTORY_ADDED, onAdded)
       socket.off(WS.INVENTORY_UPDATED, onUpdated)
       socket.off(WS.INVENTORY_REMOVED, onRemoved)
       socket.off(WS.SOLS_UPDATED, onSolsUpdated)
+      socket.off(WS.GAUGE_UPDATED, onGaugeUpdated)
     }
-  }, [socket, characterId, upsertInventoryItem, removeInventoryItem, setSols])
+  }, [socket, characterId, upsertInventoryItem, removeInventoryItem, setSols, setGauge])
 }

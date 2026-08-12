@@ -1,5 +1,23 @@
 # ROADMAP — Projet Enclume
-> Dernière mise à jour : 2026-08-06 — **Revue de dépendances inter-chantiers (Saar)**, deux erreurs
+> Dernière mise à jour : 2026-08-12 — **Point de situation (Saar)**, synchronisation avec l'état réel
+> du projet (dernière mise à jour datait du 2026-08-06, plusieurs chantiers avancés depuis sans y être
+> reflétés). Registre de bugs migré : `docs/BUGIDENTIFIE.md` **archivé** (`docs/Old/`, 2026-08-12),
+> source unique désormais la table `bug_tickets` / écran `/admin/tickets` (`docs/SYSTEME/TICKETS.md`)
+> — toute référence à `BUGIDENTIFIE.md` plus bas dans ce document est obsolète. Rôle administrateur +
+> page `/admin` construits et confirmés en navigateur en local (rien poussé à ce stade). Triage Wizard
+> (2026-08-11/12, `docs/BUG WIZARD.md`) : une quinzaine de bugs (WIZ5 à WIZ29) codés, la plupart
+> `⚠️ clos partiel` (codé, scénario réel navigateur non testé) — WIZ6/27/28/29 seuls confirmés
+> fonctionnels en navigateur par Saar ; détail complet `docs/JOURNAL8.md` (sessions 2026-08-11 et
+> 2026-08-12), non repris ligne à ligne ici (bugs suivis par ticket, pas chantiers prospectifs).
+> **Chantier non tracé jusqu'ici, ajouté ci-dessous** : Jauges de Matériel
+> (`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md`) — codé de bout en bout (worktree actuel, non
+> committé), non testé en navigateur ; répond partiellement à la dette "Matériel → objets réels"
+> déjà listée plus bas. `docs/PLANS/PLAN_RW_SYSCOMBAT.md` a avancé au-delà du Lot 7 déjà noté plus
+> bas : Lot 8a codé et testé (unitaire + diff), en attente de validation en jeu ; Lot 8b abandonné
+> (absorbé par le Lot 8c après analyse à charge) ; Lot 8c codé (diff relu), en attente fixture jetable
+> ET session de jeu réelle — aucune des deux faite, ne pas considérer ce lot clos.
+>
+> 2026-08-06 — **Revue de dépendances inter-chantiers (Saar)**, deux erreurs
 > corrigées dans ce document. (1) **RW_SYSCOMBAT Lots 5-7 et COMBATANT_CONTEXT ne sont pas
 > indépendants**, contrairement à ce qu'affirmait l'entrée ci-dessous : `resolveDroneAssaultAction` est
 > édité par les deux (sites #4/#5 du couplage `char_sheet` chez COMBATANT_CONTEXT = exactement la
@@ -66,7 +84,8 @@
 > noté en tranchant `docs/Old/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
 > 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/Old/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
 > Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL8.md`.
-> **Bugs et dettes techniques** : voir le registre unique `docs/BUGIDENTIFIE.md`.
+> **Bugs et dettes techniques** : voir le registre unique `bug_tickets` / écran `/admin/tickets`
+> (`docs/SYSTEME/TICKETS.md`) — `docs/BUGIDENTIFIE.md` est archivé depuis le 2026-08-12.
 
 ---
 
@@ -88,6 +107,13 @@
   que cette option n'existe pas) — 🔲
 
 ### Autres chantiers immédiats
+- **Jauges de Matériel & liste d'attente Wizard** (`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md`, cadré
+  et codé le 2026-08-12) — droits joueur sur `InventoryPanel` en Step6, validation MJ item par item,
+  jauges (`char_gauges`) qui passent de calcul en lecture seule à ressource de personnage persistante
+  gérée par le MJ, visible Wizard + fiche permanente (`GaugesPanel.jsx`). **Codé de bout en bout,
+  non committé, non testé en navigateur** — prochaine étape : validation par Saar. Répond en partie à
+  la dette "Matériel → objets réels" ci-dessous (§ Chantiers futurs) sans la clore entièrement (le
+  transfert catalogue ↔ inventaire réel reste hors périmètre de ce plan, cf. son §9)
 - Upload screenshot éditeur → MinIO — 🔲
 - Jets Favoris : drag‑to‑reorder macros (UI) — 🔲
 - Paramètre campagne GM entity move mode (reporté) — 🔲
@@ -152,12 +178,16 @@
 - `socketCombatHelpers.js` — découpage structurel (`docs/PLANS/PLAN_RW_SYSCOMBAT.md`, chantier créé
   2026-07-25, Lots 0-4 ✅ clos 2026-07-28 : noyau `computeAttackRoll` pur, dédup `armAwaitingDamage`,
   branchements défenseur CaC et attaquant Tir extraits en fonctions sœurs. **Rouvert 2026-08-06** :
-  Lots 5-7 planifiés, aucun code écrit — dédup calcul dégâts bruts CaC (5 sites), découpage
-  `resolveDroneAssaultAction` (branchement cible) et `confirmMeleeDefense` (branchement post-hit).
-  Lot 8 (`confirmDamage`, jamais traité) identifié mais pas encore cadré. **Corrigé 2026-08-06 : ce
-  chantier est un prérequis d'Exo-armures**, pas un chantier indépendant — Lot 6 touche
-  `resolveDroneAssaultAction`, la même fonction que 2 des 7 sites `char_sheet` de
-  `PLAN_COMBATANT_CONTEXT.md`. À coder avant COMBATANT_CONTEXT)
+  Lots 5-6 ✅ clos (dédup calcul dégâts bruts CaC, découpage `resolveDroneAssaultAction`). Lot 7
+  ⚠️ clos partiel (`confirmMeleeDefense`, branchement post-hit) — codé, confirmé en jeu pour
+  l'attaquant PNJ seulement, chemin attaquant PJ non reproductible par Saar à ce jour, couvert par
+  fixture seule. **Rouvert 2026-08-11** : Lot 8 (`confirmDamage`) cadré — Lot 8a (noyau pur
+  `computeAssaultRawDamage`) codé et testé (11 tests unitaires, diff relu), en attente de validation
+  en jeu ; Lot 8b abandonné (absorbé par le Lot 8c après analyse à charge) ; Lot 8c (branchement cible
+  drone/non-drone) codé, diff relu, **aucune fixture jetable ni session de jeu réelle faite** — ne pas
+  considérer ce lot clos. **Corrigé 2026-08-06 : ce chantier est un prérequis d'Exo-armures**, pas un
+  chantier indépendant — Lot 6 touche `resolveDroneAssaultAction`, la même fonction que 2 des 7 sites
+  `char_sheet` de `PLAN_COMBATANT_CONTEXT.md`. À coder avant COMBATANT_CONTEXT)
 - Retrait du `<select>` de Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : redondant une
   fois le drag & drop en place) — **différé** : nécessite d'abord un `KeyboardSensor` `@dnd-kit` pour
   ne pas régresser l'accessibilité clavier exigée par `docs/Old/PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne
@@ -174,7 +204,9 @@
   dans l'UI, tooltips envisagés, pas encore cadré)
 - Export PDF fiche personnage
 - Wizard création à deux (GM + joueur)
-- Matériel → objets réels (conversion dans inventaire)
+- Matériel → objets réels (conversion dans inventaire) — partiellement couvert par le chantier Jauges
+  de Matériel ci-dessus (§ Autres chantiers immédiats), qui ne traite pas le transfert catalogue ↔
+  inventaire réel lui-même
 - Chat persistant (historique)
 - Chat MP (messagerie privée)
 - Mode spectateur

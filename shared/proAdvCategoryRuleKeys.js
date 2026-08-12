@@ -3,6 +3,11 @@
 // même règle LdB (variantes de formulation entre lots de seed : "Cache/Planque" et "Planque/Cache",
 // singulier/pluriel, etc.).
 //
+// Déplacé de client/src/components/creation/ vers shared/ (PLAN_WIZARD_MATERIEL_GAUGES.md §2) :
+// creationService.js (server) doit appliquer la même normalisation que StepMaterielEtBiens.jsx
+// (client) pour la clé de catégorie des jauges — une seule carte, jamais dupliquée entre les deux
+// côtés (même patron que shared/careerAdvantages.js, déjà importé des deux côtés).
+//
 // Catégories rencontrées en base SANS règle correspondante ici (volontairement absentes — aucune
 // source RAW documentée sous docs/REGLES/ pour ces libellés, ne pas inventer de contenu) :
 // Accessoires pour armes, Bouclier, Charges électriques (confirmé erreur de copié-collé dans le

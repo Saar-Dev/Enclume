@@ -21,10 +21,16 @@ export default function AdminTicketsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [savingId, setSavingId] = useState(null)
+  const [stats, setStats] = useState(null)
 
   const [originFilter, setOriginFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [clusterFilter, setClusterFilter] = useState('')
+  const [hideClosed, setHideClosed] = useState(true)
+
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   useEffect(() => { document.title = 'Enclume — Tickets' }, [])
 
@@ -32,15 +38,27 @@ export default function AdminTicketsPage() {
     setLoading(true)
     const params = {}
     if (originFilter) params.origin = originFilter
-    if (statusFilter) params.status = statusFilter
+    if (statusFilter) {
+      params.status = statusFilter
+    } else if (hideClosed) {
+      params.activeOnly = 'true'
+    }
     if (clusterFilter) params.clusterLabel = clusterFilter
     api.get('/admin/tickets', { params })
       .then(res => setTickets(res.data.tickets))
       .catch(() => setError(tt('admin.errorLoad')))
       .finally(() => setLoading(false))
-  }, [originFilter, statusFilter, clusterFilter, tt])
+  }, [originFilter, statusFilter, clusterFilter, hideClosed, tt])
 
   useEffect(() => { load() }, [load])
+
+  // Compte global, jamais affecté par les filtres de la vue courante (récap topbar) — rafraîchi
+  // après chaque écriture pour rester juste sans recharger toute la page.
+  const loadStats = useCallback(() => {
+    api.get('/admin/tickets/stats').then(res => setStats(res.data)).catch(() => {})
+  }, [])
+
+  useEffect(() => { loadStats() }, [loadStats])
 
   const patchTicket = async (id, patch) => {
     setSavingId(id)
@@ -48,10 +66,44 @@ export default function AdminTicketsPage() {
       const res = await api.patch(`/admin/tickets/${id}`, patch)
       setTickets(prev => prev.map(ticket => ticket.id === id ? res.data.ticket : ticket))
       setError(null)
+      loadStats()
     } catch (err) {
       setError(err.response?.data?.error?.message || tt('admin.errorSave'))
     } finally {
       setSavingId(null)
+    }
+  }
+
+  const toggleSelect = id => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelected(prev => prev.size === tickets.length ? new Set() : new Set(tickets.map(t => t.id)))
+  }
+
+  const applyBulkStatus = async () => {
+    if (!bulkStatus || selected.size === 0) return
+    setBulkSaving(true)
+    try {
+      const results = await Promise.allSettled(
+        [...selected].map(id => api.patch(`/admin/tickets/${id}`, { status: bulkStatus }))
+      )
+      const updatedById = new Map(
+        results.filter(r => r.status === 'fulfilled').map(r => [r.value.data.ticket.id, r.value.data.ticket])
+      )
+      setTickets(prev => prev.map(ticket => updatedById.get(ticket.id) ?? ticket))
+      if (results.some(r => r.status === 'rejected')) setError(tt('admin.errorSave'))
+      else setError(null)
+      setSelected(new Set())
+      setBulkStatus('')
+      loadStats()
+    } finally {
+      setBulkSaving(false)
     }
   }
 
@@ -64,6 +116,14 @@ export default function AdminTicketsPage() {
 
       <div style={S.header}>
         <span onClick={() => navigate('/admin')} style={S.backBtn}>← {tt('admin.backToAdmin')}</span>
+        <div style={{ flex: 1 }} />
+        {stats && (
+          <div style={S.statsBar}>
+            <span style={S.statItem}><b style={S.statOpen}>{stats.open}</b> {tt('admin.stats.open')}</span>
+            <span style={S.statItem}><b style={S.statClosed}>{stats.closed}</b> {tt('admin.stats.closed')}</span>
+            <span style={S.statItem}>{stats.total} {tt('admin.stats.total')}</span>
+          </div>
+        )}
       </div>
 
       <div style={S.body}>
@@ -95,6 +155,15 @@ export default function AdminTicketsPage() {
               placeholder={tt('admin.filters.clusterLabelPlaceholder')}
             />
           </label>
+          <label style={S.filterCheckbox}>
+            <input
+              type="checkbox"
+              checked={hideClosed}
+              disabled={!!statusFilter}
+              onChange={e => setHideClosed(e.target.checked)}
+            />
+            <span style={S.filterLabel}>{tt('admin.filters.hideClosed')}</span>
+          </label>
         </div>
 
         {loading ? (
@@ -102,22 +171,54 @@ export default function AdminTicketsPage() {
         ) : tickets.length === 0 ? (
           <p style={S.muted}>{tt('admin.noTickets')}</p>
         ) : (
-          groups.map(group => (
-            <div key={group.origin} style={S.originGroup}>
-              <h2 style={S.originTitle}>{tt(`admin.originLabels.${group.origin}`)}</h2>
-              <div style={S.list}>
-                {group.items.map(ticket => (
-                  <TicketRow
-                    key={`${ticket.id}-${ticket.cluster_label || ''}`}
-                    ticket={ticket}
-                    tt={tt}
-                    saving={savingId === ticket.id}
-                    onPatch={patch => patchTicket(ticket.id, patch)}
-                  />
-                ))}
-              </div>
+          <>
+            <div style={S.bulkBar}>
+              <label style={S.filterCheckbox}>
+                <input
+                  type="checkbox"
+                  checked={selected.size > 0 && selected.size === tickets.length}
+                  ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < tickets.length }}
+                  onChange={toggleSelectAll}
+                />
+                <span style={S.filterLabel}>
+                  {selected.size > 0 ? tt('admin.bulk.selected', { count: selected.size }) : tt('admin.bulk.selectAll')}
+                </span>
+              </label>
+              {selected.size > 0 && (
+                <>
+                  <select style={S.select} value={bulkStatus} disabled={bulkSaving} onChange={e => setBulkStatus(e.target.value)}>
+                    <option value="">{tt('admin.bulk.statusPlaceholder')}</option>
+                    {STATUSES.map(s => <option key={s} value={s}>{tt(`admin.statusLabels.${s}`)}</option>)}
+                  </select>
+                  <button className="btn" disabled={!bulkStatus || bulkSaving} onClick={applyBulkStatus}>
+                    {tt('admin.bulk.apply')}
+                  </button>
+                  <button className="btn btn-ghost" disabled={bulkSaving} onClick={() => setSelected(new Set())}>
+                    {tt('admin.bulk.cancel')}
+                  </button>
+                </>
+              )}
             </div>
-          ))
+
+            {groups.map(group => (
+              <div key={group.origin} style={S.originGroup}>
+                <h2 style={S.originTitle}>{tt(`admin.originLabels.${group.origin}`)}</h2>
+                <div style={S.list}>
+                  {group.items.map(ticket => (
+                    <TicketRow
+                      key={`${ticket.id}-${ticket.cluster_label || ''}-${ticket.linked_bug_code || ''}`}
+                      ticket={ticket}
+                      tt={tt}
+                      saving={savingId === ticket.id}
+                      selected={selected.has(ticket.id)}
+                      onToggleSelect={() => toggleSelect(ticket.id)}
+                      onPatch={patch => patchTicket(ticket.id, patch)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
 
@@ -125,18 +226,38 @@ export default function AdminTicketsPage() {
   )
 }
 
-// Keyée par `${id}-${cluster_label}` dans le parent : un remount (plutôt qu'un effet de
-// resynchronisation) réinitialise clusterDraft quand la valeur vient du serveur (rechargement de
-// liste), sans jamais écraser une saisie locale en cours — patron recommandé par React pour l'état
+// Keyée par `${id}-${cluster_label}-${linked_bug_code}` dans le parent : un remount (plutôt qu'un
+// effet de resynchronisation) réinitialise les drafts quand la valeur vient du serveur (rechargement
+// de liste), sans jamais écraser une saisie locale en cours — patron recommandé par React pour l'état
 // dérivé d'une prop (https://react.dev/learn/you-might-not-need-an-effect).
-function TicketRow({ ticket, tt, saving, onPatch }) {
+function TicketRow({ ticket, tt, saving, selected, onToggleSelect, onPatch }) {
   const [clusterDraft, setClusterDraft] = useState(ticket.cluster_label || '')
+  const [codeDraft, setCodeDraft] = useState(ticket.linked_bug_code || '')
+  const [titleDraft, setTitleDraft] = useState(ticket.title)
 
   return (
     <div style={S.row}>
+      <input type="checkbox" checked={selected} onChange={onToggleSelect} style={S.rowCheckbox} />
+      <div className={`ticket-priority-chip${ticket.priority ? ` priority-${ticket.priority}` : ''}`} />
       <div style={S.rowMain}>
         <div style={S.rowTop}>
-          <span style={S.rowTitle}>{ticket.title}</span>
+          <input
+            style={S.codeInput}
+            value={codeDraft}
+            disabled={saving}
+            placeholder={tt('admin.linkedBugCodePlaceholder')}
+            title={tt('admin.linkedBugCode')}
+            onChange={e => setCodeDraft(e.target.value)}
+            onBlur={() => { if (codeDraft !== (ticket.linked_bug_code || '')) onPatch({ linked_bug_code: codeDraft }) }}
+          />
+          <input
+            className="ticket-title-input"
+            style={S.rowTitleInput}
+            value={titleDraft}
+            disabled={saving}
+            onChange={e => setTitleDraft(e.target.value)}
+            onBlur={() => { if (titleDraft.trim() && titleDraft !== ticket.title) onPatch({ title: titleDraft }) }}
+          />
           <span className="badge">{tt(`form.categoryOptions.${ticket.category}`)}</span>
           {ticket.domain && <span className="badge">{tt(`form.domainOptions.${ticket.domain}`)}</span>}
         </div>
@@ -190,22 +311,32 @@ const S = {
   pageTitle: { fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 22px' },
   errorBanner: { backgroundColor: 'rgba(224,92,92,0.12)', border: '1px solid var(--color-danger)', borderRadius: '6px', padding: '8px 16px', color: 'var(--color-danger)', fontSize: '13px', margin: '0 0 16px', cursor: 'pointer' },
 
+  statsBar: { display: 'flex', gap: '16px' },
+  statItem: { fontSize: '12px', color: 'var(--text-secondary)' },
+  statOpen: { color: 'var(--color-warning)' },
+  statClosed: { color: 'var(--color-success)' },
+
   body: { flex: 1, maxWidth: '900px', width: '100%', margin: '0 auto', padding: '24px' },
   muted: { color: 'var(--text-muted)', fontSize: '12px' },
 
-  filters: { display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '24px' },
+  filters: { display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-end' },
   filterField: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  filterCheckbox: { display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '6px', cursor: 'pointer' },
   filterLabel: { fontSize: '12px', color: 'var(--text-secondary)' },
   select: { backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '6px 8px', color: 'var(--text-primary)', fontSize: '12px' },
+
+  bulkBar: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', padding: '8px 10px', backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '6px' },
 
   originGroup: { marginBottom: '24px' },
   originTitle: { fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' },
 
   list: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  row: { display: 'flex', gap: '16px', backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px 14px', flexWrap: 'wrap' },
+  row: { display: 'flex', alignItems: 'flex-start', gap: '16px', backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px 14px', flexWrap: 'wrap' },
+  rowCheckbox: { marginTop: '4px', flexShrink: 0 },
   rowMain: { flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '4px' },
   rowTop: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-  rowTitle: { fontSize: '14px', color: 'var(--text-primary)', fontWeight: '600' },
+  codeInput: { width: '84px', flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-primary)', background: 'var(--color-primary-muted)', border: '1px solid var(--border-subtle)', borderRadius: '4px', padding: '3px 6px' },
+  rowTitleInput: { flex: 1, minWidth: '160px', fontSize: '14px', color: 'var(--text-primary)', fontWeight: '600', background: 'transparent', border: '1px solid transparent', borderRadius: '4px', padding: '2px 4px' },
   rowDescription: { fontSize: '13px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap' },
   rowMeta: { display: 'flex', gap: '12px', marginTop: '4px' },
 

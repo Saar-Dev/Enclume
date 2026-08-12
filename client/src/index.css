@@ -939,6 +939,26 @@ Convention :
 }
 .badge .num { font-family: var(--font-mono); font-weight: 700; letter-spacing: 0; }
 
+/* ── .ticket-priority-chip — barre de criticité (AdminTicketsPage) ─── */
+.ticket-priority-chip {
+  width: 4px;
+  border-radius: 2px;
+  align-self: stretch;
+  flex-shrink: 0;
+  background: var(--border-subtle);
+}
+.ticket-priority-chip.priority-low { background: var(--text-muted); }
+.ticket-priority-chip.priority-medium { background: var(--color-gold); }
+.ticket-priority-chip.priority-high { background: var(--color-warning); }
+.ticket-priority-chip.priority-critical { background: var(--color-danger); }
+
+.ticket-title-input:hover,
+.ticket-title-input:focus {
+  border-color: var(--border-subtle);
+  background: var(--bg-app);
+  outline: none;
+}
+
 /* ── .badge.badge-gm ────────────────────────────────────────────── */
 .badge.badge-gm {
   color: var(--color-primary);
@@ -2438,6 +2458,32 @@ Convention :
   gap: 10px;
   margin-top: 6px;
   flex-wrap: wrap;
+}
+
+/* ── Wizard — bandeau tutoriel permanent (bug #18) ────────────────── */
+.wiz-tutorial {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  margin: 10px 20px;
+  background: rgba(144, 144, 200, 0.06);
+  border: 1px solid rgba(144, 144, 200, 0.25);
+  border-radius: 6px;
+}
+
+.wiz-tutorial-icon {
+  flex-shrink: 0;
+  color: #9090c8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wiz-tutorial-text {
+  color: #9090c8;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .wiz-info-badge {

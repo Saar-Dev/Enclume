@@ -1,7 +1,7 @@
 import { resolveTestOutcome, getMrModifier } from '../../../shared/polarisTestResolution.js'
 
 /**
- * combatAttackRoll.js — Noyau pur du jet d'attaque et du dégât brut CaC (CaC + Tir)
+ * combatAttackRoll.js — Noyau pur du jet d'attaque et du dégât brut (CaC + Tir)
  *
  * Fonction PURE — aucun accès DB, aucune I/O (pas de console.log), aucun appel non déterministe.
  * Toutes les données sont passées en paramètre, y compris le jet de dé déjà effectué (parseDice
@@ -54,4 +54,23 @@ export function computeAttackRoll({ skillLabel, skillTotal, contributions, total
  */
 export function computeMeleeRawDamage({ rawDice, mr, modDom, combatModeBonus }) {
   return rawDice + getMrModifier(mr) + (modDom ?? 0) + (combatModeBonus ?? 0)
+}
+
+/**
+ * Dégât brut Tir — même formule aux 2 sites de socketCombatHelpers.js qui la dupliquaient
+ * (PLAN_RW_SYSCOMBAT.md §2.10, Lot 8a) : `resolveAssaultAction` (préparation commune attaquant PNJ,
+ * calcul immédiat) et `confirmDamage` (branche `assault`, calcul différé attaquant PJ). Pendant Tir
+ * de `computeMeleeRawDamage` — jamais couvert par le Lot 5, qui ne visait que la formule CaC.
+ *
+ * Le bonus de mode de tir (`fireModeBonusDmg`, ex. rafale/automatique) ne s'applique qu'à courte
+ * portée ou moins (RAW) — vérifié identique aux deux sites d'origine (`['bout_portant', 'courte']`).
+ * N'a aucun rapport avec `combatModeBonus` (Charge CaC) : le Tir n'a pas d'équivalent, jamais ajouté
+ * ici sans nouvelle vérification RAW.
+ *
+ * Fonction PURE — aucun accès DB. Le caller fournit rawDice déjà lancé (getEffectiveWeaponDamage /
+ * repli formule stockée, damageService.js) et mr déjà résolu par computeAttackRoll.
+ */
+export function computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg }) {
+  const isShortRange = ['bout_portant', 'courte'].includes(portee)
+  return rawDice + getMrModifier(mr) + (isShortRange ? (fireModeBonusDmg ?? 0) : 0)
 }

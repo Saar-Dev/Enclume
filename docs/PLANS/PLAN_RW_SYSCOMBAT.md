@@ -8,8 +8,9 @@
 > (2026-08-07) — codé, fixture jetable validée, confirmé en jeu pour l'attaquant PNJ seulement ; le
 > chemin attaquant PJ (`resolveMeleeDefenseHitAttackerPj`) n'a pas pu être reproduit par Saar, reste
 > couvert par fixture seulement (détail `docs/JOURNAL8.md`).
-> **Chantier conclu à ce stade (décision Saar, 2026-08-07)** : pas de Lot 8. `confirmDamage` (§3.2)
-> reste hors périmètre, non urgent — à cadrer séparément si repris un jour.
+> **Rouvert 2026-08-11 (dev/Saar)** : Lot 8 (`confirmDamage`) cadré — §2.10. **Lot 8a codé et testé
+> (unitaire + diff), en attente validation en jeu. Lot 8c codé (diff relu), en attente fixture jetable
+> ET session de jeu réelle — aucune des deux faite, ne pas considérer ce lot clos.**
 > Document temporaire (`docs/RegleDocumentaire.md` Règle 10) — à archiver dans `docs/Old/` une fois le
 > Lot 7 confirmé sans réserve (chemin attaquant PJ testé en jeu), contenu durable (nouvelle convention
 > de fichier) transféré vers `docs/SYSTEME/COMBAT.md`.
@@ -994,6 +995,234 @@ extraction du Lot 7, pas un problème structurel, juste une note pour qui code.
 
 ---
 
+## 2.10 Architecture retenue — Lot 8 (`confirmDamage`, cadrage complet)
+
+> Cadrage 2026-08-11, méthode `docs/METHODO_PLAN.md` (Phase 0-2 : `docs/SYSTEME/SERVICES_COMBAT.md`,
+> `.claude/rules/combat.md`, `.claude/rules/core.md`, `combatAttackRoll.js`/`.test.mjs`,
+> `confirmDamage` relue intégralement (L.812-1046), comparée à 4 sites analogues ailleurs dans le
+> fichier). Remplace le renvoi « non cadré » de §3.2 — cette section est la référence désormais.
+>
+> **Corrigé après analyse à charge (2026-08-11, même session)** — deux erreurs trouvées avant tout
+> code, corrigées ci-dessous plutôt que laissées en encart contradictoire : (1) le 8b initial
+> (extraction du bloc de calcul melee/assault en fonctions sœurs) contredisait un précédent déjà
+> tranché par ce même document (Lot 4, §2.6.b : un bloc calcul-seul, sans écriture ni émission, reste
+> inline dans la coquille) — retiré ; (2) en compensation, 8c est élargi aux **deux** branches cible
+> (drone ET non-drone), pas seulement drone, pour rester cohérent avec le patron guard-clause des
+> Lots 2/4/6/7 une fois 8b absent. Une nuance factuelle vérifiée en traçant les valeurs à la source
+> (pas seulement en comparant le texte des formules) est ajoutée au point b).
+
+**a) Constat `[VÉRIFIÉ]` par lecture intégrale — 4 responsabilités indépendantes empilées, pas 1.**
+`confirmDamage` (812-1046, 235 lignes réelles) cumule : dequeue FIFO + re-armement de la file
+(812-844) ; calcul du dégât brut, branché `pendingType === 'melee'` vs `'assault'` (855-898) ;
+branchement cible drone/non-drone (899-943) ; jusqu'à 6 émissions WS distinctes pour le cas non-drone
+(954-1042 : `COMBAT_DAMAGE_RESULT`, `DICE_RESULT` localisation, `DICE_RESULT` Test de Chance bouclier,
+`DICE_RESULT` dégâts, `DICE_RESULT` narratif, `COMBAT_ATTACK_RESULT`).
+
+**b) Duplication réelle trouvée, symétrique du Lot 5, jamais traitée.** `[VÉRIFIÉ]` par lecture directe
+des deux sites : la formule `degautsBruts = rawDice + modDomAttaque + modDegatsMode` (avec
+`modDomAttaque = getMrModifier(mr)` et `modDegatsMode = isShortRange(portee) ? fireModeBonusDmg : 0`)
+est identique, caractère pour caractère, à `confirmDamage` L.894-897 (branche `assault`) et
+`resolveAssaultAction` L.2869-2885 (préparation commune avant dispatch vers
+`resolveAssaultHitPnjDrone`/`resolveAssaultHitPnjNormal`, Lot 4 §2.6.a.2). C'est le pendant Tir exact de
+ce que le Lot 5 a traité côté CaC (`computeMeleeRawDamage`) — le Lot 5 scope son titre à « dédup du
+calcul brut **CaC** » sans exclusion motivée du Tir ; ce n'était pas une décision, juste un angle mort.
+Les branches attaquant-drone (`resolveDroneAssaultAction`/`forceAdvanceResolution` direct, L.2352-2353,
+2388-2389) utilisent une formule **différente et plus simple** (`rawDice + modDomAttaque`, sans
+`modDegatsMode` — programme de drone, pas arme à feu humaine) : à ne pas fusionner avec celle-ci, même
+principe que F2 (`docs/SYSTEME/SERVICES_COMBAT.md` §8) appliqué par analogie — deux mécaniques
+distinctes, pas trois variantes d'une même formule.
+
+**b-bis) Vérifié à la source, pas seulement au texte — `authoritativeRangeBand`/`portee` et
+`fire_mode_bonus_dmg` sont la même grandeur sous deux noms, à deux étapes du pipeline.** `[VÉRIFIÉ]`
+par traçage : `resolveAssaultHitPj` (L.2949-2969, branche PJ différée) construit le payload persisté
+avec `portee: authoritativeRangeBand` (L.2956) et `fire_mode_bonus_dmg: action.fire_mode_bonus_dmg ??
+0` (L.2958) — ce sont exactement les valeurs relues plus tard dans `confirmDamage` sous les noms
+`portee`/`fire_mode_bonus_dmg` (destructuring `pending`, L.848). Pas une coïncidence de nommage : la
+même grandeur, capturée sous son nom « autoritatif » pendant la résolution active, renommée une fois
+persistée dans `combat_pending.payload` — cohérent avec le reste du fichier (`commonPending`, Lot 2
+§2.4.b, même transformation de nommage au moment de la persistance).
+
+**Asymétrie réelle trouvée, mais hors du périmètre de la somme extraite — à documenter, pas à
+corriger.** Le repli quand `getEffectiveWeaponDamage` renvoie `null` diffère entre les deux sites :
+`confirmDamage` (L.884-888) retombe sur `parseDice(formula.replace(...))` sans garder — si
+`pending.formula` était vide, l'appel se ferait quand même ; le site immédiat PNJ
+(`resolveAssaultAction` L.2880-2884) garde explicitement `weapon.ref_damage_h ? parseDice(...) : 0`,
+jamais d'appel sur une chaîne vide. Cette asymétrie vit entièrement **en amont** de `rawDice` (dans le
+fetch/repli, pas dans la somme finale) — `computeAssaultRawDamage` prend `rawDice` déjà résolu en
+paramètre, exactement le contrat de `computeMeleeRawDamage` (§2.7.b : « le caller fournit rawDice déjà
+lancé »), donc cette différence de repli reste entièrement dans chaque coquille, invisible pour le
+noyau. Ne pas l'unifier au passage — pas le sujet de ce Lot, et la fenêtre de péremption arme diffère
+réellement entre un site immédiat et un site différé (même raisonnement déjà posé pour
+`getEffectiveMeleeDamage`, §2.4.b).
+
+**c) Corrigé après une 2ᵉ analyse à charge (2026-08-11, lecture intégrale des corps de fonction au lieu
+d'extraits partiels) — la version précédente de ce point citait la mauvaise fonction (`resolveMeleeDefensePnj`
+pour des lignes 1752-1763 qui appartiennent en réalité à `resolveDefenselessTarget`, 1731-1798 —
+`resolveMeleeDefensePnj` commence à 1799, vérifié par grep des frontières de fonction) et concluait à
+tort « rien à faire ». En relisant les 4 sites intégralement (pas seulement leurs premières lignes), le
+tableau réel est différent :
+
+**Groupe A — duplication réelle et exacte, 3 sites, hors périmètre de `confirmDamage`.**
+`resolveDefenselessTarget` (sous-cas `cibleType === 'drone'`, L.1752-1763), `resolveMeleeDefenseDrone`
+(L.1938-1958) et `resolveAssaultHitPnjDrone` (L.2994-3012, Lot 4) exécutent le **même bloc caractère
+pour caractère** : `calcDroneDegatsNets` → `resolveDroneIntegrityLoss` → une unique émission
+`COMBAT_ATTACK_RESULT` via `emissions[]` avec exactement les mêmes clés dans le même ordre
+(`tireurId, cibleId, localisation: null, degautsBruts, degatsNets, severity: null, is_lethal: false,
+isSuccess: true, isPnj: true, roll, chancesDeReussite, shockResult: null`) — seuls les noms de
+variables locales diffèrent (`attackerTokenId`/`action.token_id`, `chancesAttaque`/`chancesDeReussite`),
+pas la forme. Candidate réelle à un futur **Lot 9** (`resolveDroneHitAsSecondaryTarget` ou nom
+équivalent, 2 sites CaC + 1 site Tir) — **non traité ici** : aucun de ces 3 sites n'est dans
+`confirmDamage`, cette trouvaille est adjacente au cadrage de ce Lot 8, pas dedans (`CLAUDE.md` §6.8,
+un plan = un problème). Signalé pour ne pas être perdu, pas cadré en détail.
+
+**Groupe B — `resolveDroneAssaultHitDrone` (L.2347-2374, Lot 6) diffère réellement**, `[VÉRIFIÉ]` par
+lecture intégrale : deux émissions (`DICE_RESULT` avec `cardType:'drone_damage'`, puis
+`COMBAT_ATTACK_RESULT` avec `localisation: droneSheet.localisation_ref ?? 'corps'`, sans `isPnj`/`roll`/
+`chancesDeReussite`) — attaquant-drone, pas PNJ/CaC, forme différente confirmée, à ne pas fusionner
+avec le Groupe A.
+
+**Groupe C — `confirmDamage` (899-930) diffère aussi réellement**, déjà correctement identifié dans la
+version précédente de ce point : trois émissions direct-emit (`COMBAT_DAMAGE_RESULT` au socket,
+`DICE_RESULT`, `COMBAT_ATTACK_RESULT` sans `isPnj`/`roll`/`chancesDeReussite`) — contexte différé PJ,
+style direct-emit cohérent avec §2.4.l. **Confirmé sans duplication actionnable avec les Groupes A/B —
+la conclusion originale de ce point tient pour `confirmDamage` spécifiquement, seule son
+justification (citation erronée) était fausse.** Lot 8c reste donc valide tel que cadré au point e).
+
+**d) FIFO dequeue+re-armement (812-844) — hors périmètre, décision déjà actée.** Le Lot 3 (§2.5.e) a
+déjà examiné ce bloc et explicitement refusé de le fondre dans `armAwaitingDamage` : forme différente
+(pas d'insert, pas de comptage), complexifierait la signature pour 2 lignes économisées. Ce Lot confirme
+cette exclusion, ne la rouvre pas.
+
+**e) Découpage retenu — 2 sous-lots indépendants (8b retiré, voir bandeau de tête), risque croissant,
+chacun validé avant le suivant (même discipline que les Lots 0-7, `CLAUDE.md` §6.8).**
+
+| Sous-lot | Contenu | Risque | Vérification |
+|---|---|---|---|
+| **8a** | Noyau pur `computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg })` dans `combatAttackRoll.js` (voisinage de `computeMeleeRawDamage`) — 2 sites basculés : `confirmDamage` L.894-897, `resolveAssaultAction` L.2869-2885. Le bloc calcul-seul (fetch + repli) reste inline dans chaque coquille, seule la ligne finale de somme change — même précédent que Lot 5 (§2.7.d) et Lot 4 (§2.6.b, calcul-seul jamais extrait en fonction sœur) | Faible — fonction pure, shadow-mode possible (comme Lot 5), aucune écriture DB ni émission déplacée | Tests ajoutés à `combatAttackRoll.test.mjs` (mêmes bornes que Lot 5 : `mr` sur toute `MR_TABLE`, `fireModeBonusDmg` null/0/valeur, `portee` courte/moyenne/longue/bout_portant) + script d'équivalence sans DB + `node --check` |
+| **8c** | Branchement cible (899-943) extrait en **deux** fonctions sœurs `resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket)` / `resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket)`, dispatch guard-clause depuis la coquille — même patron que Lots 2/4/6/7 (aucune branche gardée « en coquille » par exception, contrairement à la version initiale de cette ligne qui ne visait que drone) | Moyen-fort — écritures DB (`resolveTargetHit`/`resolveDroneIntegrityLoss`) + jusqu'à 6 émissions réelles, direct-emit (pas `emissions[]`, même style que `confirmMeleeDefense`, §2.4.l) | Fixture jetable, même méthode que Lots 2/4/6/7 (scénarios : melee→non-drone, assault→non-drone, →drone avec/sans `drone_sheet`, armure présente, aimedLocation) + session de jeu réelle Saar |
+
+**f) Contrat à préserver (commun aux 3 sous-lots).** `confirmDamage` a 2 appelants `[VÉRIFIÉ]` par grep :
+le handler `COMBAT_DAMAGE_CONFIRM` (`socketCombatResolution.js`) et `forceAdvanceResolution`
+(`socketCombatHelpers.js:1048-1057`, `forced:true`). Aucune fonction extraite ne gagne de `try/catch`
+propre — la propagation remonte au catch unique de `confirmDamage` (L.1043), même invariant que
+§2.4.k/§2.6.d/§2.8.d/§2.9.e. Aucune transaction ne protège ces écritures aujourd'hui (`[VÉRIFIÉ]`, même
+constat répété à chaque lot précédent) — préserver le même ordre exact d'`await`. Aucune clé de `pending`
+n'est renommée (payload persisté, lu par nom, §2.4.b).
+
+**g) Recommandation de séquençage.** 8a d'abord (risque quasi nul, mirroir direct du Lot 5 déjà validé
+en jeu, indépendant de 8c). 8c ensuite — bénéficie de 8a (le calcul de `degautsBruts` que `ctx` doit
+transporter passe par le noyau, une seule ligne à tracer plutôt que le bloc inline complet).
+
+**h) Cadrage détaillé de 8c (2026-08-11, après clôture code de 8a) — dispatch, pas de fusion.** Même
+style guard-clause que Lots 2/4/6/7 : `resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket)` /
+`resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket)`, toutes deux `void` (pas de contrat
+`{ suspend, emissions }` — `confirmDamage` n'a rien à décider après le dispatch, contrairement à
+`confirmMeleeDefense`/§2.9.c). **Précision trouvée en 2ᵉ relecture (aucune fonction encore codée à ce
+stade)** : le `campaignId` transmis aux deux fonctions n'est **pas** le paramètre `campaignId` de
+`confirmDamage` lui-même, mais `pendingCampaignId` (`pending.campaignId`, destructuré L.847) —
+`[VÉRIFIÉ]` par lecture, tout le bloc `try` (855-1043) utilise exclusivement `pendingCampaignId` dans
+chaque `io.to(...)`/`resolveTargetHit`/`resolveDroneIntegrityLoss`/`applyStun`, jamais le `campaignId`
+de fonction (celui-ci ne sert qu'au bloc FIFO, 812-844, avant que `pending` soit même destructuré). La
+coquille appelle donc littéralement `if (cibleType === 'drone' && characterIdCible) { await
+resolveDamageConfirmDroneTarget(io, pendingCampaignId, ctx, socket); return } await
+resolveDamageConfirmNormalTarget(io, pendingCampaignId, ctx, socket)` — écrire `campaignId` à la place
+de `pendingCampaignId` au moment de coder serait une régression silencieuse (deux valeurs identiques en
+pratique dans l'immense majorité des cas, mais pas garanties identiques par construction).
+
+**i) `cibleType==='drone'` et `hitResult === null` — vérifié à la source, pas supposé par analogie aux
+Lots 6/7.** `[VÉRIFIÉ]` par lecture de l'assignation réelle (`resolveAssaultAction`, L.2825-2831) :
+`cibleCharacter` n'est jamais peuplé autrement qu'à partir de `cibleToken.character_id` — donc
+`cibleType === 'drone'` implique toujours `characterIdCible` non-nul (même source), jamais l'inverse.
+Le guard `&& characterIdCible` de la coquille est donc **redondant mais inoffensif** (toujours vrai
+quand `cibleType==='drone'`) — préservé tel quel, pas « nettoyé » au passage (`CLAUDE.md` §7, ne pas
+toucher au-delà du périmètre). Conséquence directe : le dispatch drone/normal est **exhaustif** sur
+`cibleType==='drone'` — `resolveDamageConfirmNormalTarget` ne peut donc jamais recevoir
+`cibleType==='drone'`, donc `resolveTargetHit` (F4, `docs/SYSTEME/SERVICES_COMBAT.md` §8) n'y renvoie
+jamais `null` par ce chemin. `if (hitResult === null) return` (L.942) est **mort par construction**
+dans la branche normale — même famille de garde que Lot 6 scénario 6 (§2.8.e) et Lot 7 point a.2
+(§2.9.a), mais c'est la première fois que ce fait est établi par traçage direct plutôt que par
+analogie. Conservé tel quel (code défensif existant, pas retiré).
+
+**i-bis) Découverte annexe, sans impact sur ce Lot.** En traçant ce même point côté CaC
+(`resolveMeleeDefenseHitAttackerPj`, L.714-732, le payload que `armAwaitingDamage` persiste pour le
+chemin `melee`), `cibleType` n'y est **jamais inclus** — `confirmDamage` le lit donc toujours comme
+`null` (valeur par défaut du destructuring, L.847) pour toute entrée `pendingType === 'melee'`. Cohérent
+avec la RAW : un défenseur CaC drone ne suspend jamais vers `confirmMeleeDefense`/`confirmDamage`
+(`resolveMeleeDefenseDrone`, Lot 2, l'auto-résout immédiatement, §2.4.a) — la branche drone de
+`confirmDamage` n'est donc, dans les faits, **atteignable que par le chemin `assault`**. N'affecte pas
+le découpage (le dispatch reste générique sur `cibleType`, correct pour les deux `pendingType`) mais
+explique pourquoi aucun scénario « melee → cible drone » ne figure au point k) — il est structurellement
+impossible, pas oublié.
+
+**j) `ctx` à transporter — vérifié champ par champ contre l'usage réel des deux branches (pas de champ
+mort trouvé, même exigence que les Lots précédents).** Assemblé dans la coquille juste après le bloc de
+calcul (855-898, Lot 8a), avant le dispatch :
+
+```js
+const resolvedTreatAsContact = pendingType === 'melee' ? true : (treatAsContact ?? false)
+const ctx = {
+  degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl, effectiveAmmoFx,
+  characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+  tireurUsername, tireurColor, userId, targetName, targetTokenId, tokenId, aimedLocation,
+  treatAsContact: resolvedTreatAsContact,
+}
+```
+
+`tokenId` = paramètre de `confirmDamage` lui-même (le token **attaquant**, pas `targetTokenId` qui est
+la cible lue depuis `pending`) — nécessaire pour `tireurId` dans les émissions `COMBAT_ATTACK_RESULT`
+des deux branches, à ne pas confondre. `cibleType` voyage dans `ctx` bien qu'il ne serve qu'à la
+branche normale (même convention que Lots 2/4/6 : un `ctx` partagé ne veut pas dire que chaque champ
+sert aux deux branches). `pendingType` lui-même ne traverse pas dans `ctx` — sa seule utilité restante
+(le ternaire `treatAsContact`) est déjà résolue avant assemblage, cohérent avec le principe déjà posé
+§2.6.c/§2.9.d de transporter des valeurs résolues plutôt que la matière première d'une décision.
+
+**Répartition réelle par branche** — drone : `degautsBruts, characterIdCible, targetTokenId, tokenId,
+tireurColor, tireurUsername, userId, dmgRolls, resolvedFormula, rawDice, dmgSeed`. Normal : tout le
+reste (`cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible, effectiveChocDsl,
+effectiveAmmoFx, aimedLocation, treatAsContact, targetName`, plus `degautsBruts/tokenId/targetTokenId/
+tireurUsername/tireurColor/userId/dmgRolls/resolvedFormula/rawDice/dmgSeed` déjà listés côté drone).
+
+**Deux nuances trouvées en 2ᵉ relecture, à préserver telles quelles au moment de coder (pas des
+champs `ctx` — des détails d'implémentation internes à chaque fonction extraite) :**
+- `now` (`new Date().toISOString()`) est calculé **deux fois indépendamment** dans le code actuel — une
+  fois dans la branche drone (L.908), une fois dans la branche normale (L.972). Ne pas le faire voyager
+  par `ctx` : chaque fonction extraite doit garder son propre calcul local, exactement comme aujourd'hui
+  (deux appels réellement indépendants, pas une valeur unique à partager).
+- `shockResult` est émis **brut** dans `COMBAT_DAMAGE_RESULT` (L.960, branche normale) mais
+  `shockResult ?? null` dans le `COMBAT_ATTACK_RESULT` final de la même branche (L.1039) — deux
+  traitements différents de la même valeur à deux émissions différentes. Ne pas homogénéiser au passage
+  (même principe que §2.4.l pour `confirmMeleeDefense`/`resolveMeleeAction`, deux styles distincts
+  préservés sans chercher à les unifier) : recopier les deux formes exactement telles quelles.
+
+**k) Contrat à préserver et invariants (mêmes que tous les Lots précédents, re-vérifiés pour ce
+Lot).** `confirmDamage` a 2 appelants `[VÉRIFIÉ]` par grep (point f) déjà posé) — inchangés par ce
+découpage, aucune signature externe ne bouge. Aucune fonction extraite ne gagne de `try/catch` propre —
+la propagation remonte au catch unique de `confirmDamage` (L.1043), invariant déjà réaffirmé à chaque
+Lot. Aucune transaction ne protège ces écritures — préserver le même ordre exact d'`await` dans chaque
+branche (fetch/calc → écriture DB → émissions), pas seulement les mêmes appels. Aucune clé de `pending`
+n'est renommée. `socket` reste un paramètre de fonction séparé (comme `io`/`campaignId`), pas un champ
+`ctx` — cohérent avec la convention déjà établie (§2.6.c).
+
+**l) Vérification — fixture jetable, pas de shadow-mode (écritures DB + émissions réelles), même
+méthode que Lots 2/4/6/7.** Scénarios minimaux, **5** (pas de scénario « melee → drone », voir i-bis) :
+1. `pendingType: 'melee'` → cible normale (PJ) → dégâts auto-résolus, `COMBAT_ATTACK_RESULT` sans
+   `rollLoc` (localisation déjà connue au contact — `rollLoc === null`, vérifier que le premier
+   `DICE_RESULT` conditionnel n'émet pas).
+2. `pendingType: 'assault'` → cible normale (PNJ) → dégâts + localisation à distance (`rollLoc !==
+   null`, `DICE_RESULT` "Localisation — Distance" émis).
+3. `pendingType: 'assault'` → cible drone, avec `drone_sheet` → intégrité décrémentée, 3 émissions
+   direct-emit (`COMBAT_DAMAGE_RESULT` au socket, `DICE_RESULT`, `COMBAT_ATTACK_RESULT`).
+4. `pendingType: 'assault'` → cible drone, **sans** `drone_sheet` → aucune émission (comportement
+   pré-existant à préserver, même piège que §2.8.e scénario 2).
+5. `pendingType: 'assault'` → cible normale avec armure sur un slot réel + Test de Chance bouclier
+   déclenché → `DICE_RESULT` "Test de Chance — Bouclier" émis (`rollChance !== null`), vérifie la
+   branche jamais exercée par les scénarios 1-2.
+
+Plus une session de jeu réelle Saar (au moins un cas `melee` et un cas `assault`, cible normale et
+cible drone si possible) avant clôture — même exigence que tous les Lots précédents à écriture DB.
+
+---
+
 ## 3. Découpage en lots — un seul problème par lot, validé avant le suivant
 
 **Prérequis à tous les lots (§0.5)** : travail Session 176 validé en jeu et committé (ou mis de côté
@@ -1009,6 +1238,8 @@ par décision explicite de Saar). Worktree propre au démarrage de chaque lot.
 | **Lot 5** | `computeMeleeRawDamage` (§2.7) — noyau pur dédupliquant `degautsBruts = rawDice + MR + modDom + combatModeBonus`, présent à 5 sites confirmés (`resolveDefenselessTarget`, `resolveMeleeDefensePnj`, `resolveMeleeDefenseDrone`, `confirmMeleeDefense`, `confirmDamage`) | Faible — comportement identique bit-à-bit (garde `?? 0` déjà toujours vraie aux 3 sites qui ne l'avaient pas, §2.7.a), pas d'écriture DB ni d'émission touchée, shadow-mode possible (fonction pure) | **✅ Clos (2026-08-06)** — 18 tests unitaires OK (`combatAttackRoll.test.mjs`), `node --check` propre, diff relu ligne à ligne (aucune clé renommée, import `getMrModifier` toujours utilisé par la branche Tir hors périmètre), session de jeu réelle Saar confirmée (« Enclume fonctionne, combat validé ») |
 | **Lot 6** | Branchement cible de `resolveDroneAssaultAction` (§2.8) — extraction `resolveDroneAssaultHitDrone`/`resolveDroneAssaultHitPnj`/`resolveDroneAssaultHitPj`, même patron que Lots 2/4, ne viole pas F2 (extraction interne, pas de fusion inter-branches) | Moyen — écritures DB + émissions, vérification par fixture jetable (5 scénarios, §2.8.e), pas de shadow-mode possible | **✅ Clos (2026-08-07)** — `node --check` propre, 18 tests Lot 1/5 toujours au vert, diff relu ligne à ligne, fixture jetable durcie (6 scénarios dont 1 armure ajouté, 20 passes, 420 assertions, 0 échec, 0 résidu confirmé y compris nettoyage a posteriori de 2 campagnes orphelines d'essais antérieurs), session de jeu réelle Saar confirmée fonctionnelle |
 | **Lot 7** | Branchement post-hit de `confirmMeleeDefense` (§2.9) — extraction `resolveMeleeDefenseHitAttackerPj`/`resolveMeleeDefenseHitAttackerPnj`, contrat de retour différent des Lots précédents (`suspendForDamage` remonté explicitement, §2.9.c) | Moyen — écritures DB + émissions, vérification par fixture jetable (3 scénarios, §2.9.f), pas de shadow-mode possible | **Codé (2026-08-07), fixture jetable validée — ⚠️ en attente session de jeu réelle Saar avant clôture** |
+| **Lot 8a** | Noyau pur `computeAssaultRawDamage` (§2.10.e) — dédup formule dégât brut Tir, 2 sites (`confirmDamage`, `resolveAssaultAction`) | Faible — fonction pure, shadow-mode possible | **✅ Codé (2026-08-11)** — 11 tests unitaires OK, `node --check` propre, diff relu ligne à ligne, ⚠️ en attente session de jeu réelle Saar |
+| **Lot 8c** | Branchement cible drone/non-drone de `confirmDamage` extrait en 2 fonctions sœurs (§2.10.e, détail complet §2.10.h-l — 8b retiré après analyse à charge, absorbé par ce lot) | Moyen-fort — écritures DB + jusqu'à 6 émissions | **Codé (2026-08-11)**, `node --check` propre, diff relu ligne à ligne — ⚠️ **aucune fixture jetable ni session de jeu réelle encore faite**, ne pas clore |
 
 Chaque lot = un commit isolé sur `dev/Saar`, testé et confirmé par Saar avant le lot suivant
 (`CLAUDE.md` §5, §11). Le Lot 0 est séparé du Lot 1 parce qu'il porte un invariant différent (autorité
@@ -1036,20 +1267,11 @@ de l'**attaquant** (PJ diffère les dégâts / PNJ résout immédiatement, avec 
 imbriqué). Hors périmètre du Lot 2 tel que planifié (§2.4) ; à traiter dans un lot séparé si souhaité,
 pas mélangé ici (`CLAUDE.md` §13, un plan = un problème). **Repris par le Lot 4 (§2.6, 2026-07-28).**
 
-### 3.2 Ce que les Lots 5-7 ne résolvent pas — `confirmDamage` reste entièrement ouvert
+### 3.2 Ce que les Lots 5-7 ne résolvaient pas — `confirmDamage`, cadré au Lot 8 (§2.10)
 
-`confirmDamage` (`socketCombatHelpers.js`, 247 lignes, jamais touchée par aucun lot) est la fonction la
-plus dense des 5 relues le 2026-08-06 (`docs/JOURNALTEMP.md`, chantier réouvert) : FIFO dequeue
-(`combat_pending`, plusieurs entrées possibles pour le même token) + branchement `pendingType ===
-'melee'` vs `'assault'` (calcul de dégâts distinct par branche, formule Tir avec `modDegatsMode` au lieu
-de `modDom`/`combatModeBonus` — pas la même duplication que le Lot 5, qui ne couvre que la branche
-`melee` de cette fonction, §2.7.a site #5) + branchement cible drone/non-drone + jusqu'à 6 émissions WS
-distinctes (localisation, Test de Chance bouclier, dégâts, message narratif, résultat final). **Pas de
-découpage proposé ici** — mériterait sa propre analyse à charge (Phase 1/2 `METHODO_PLAN.md` dédiée)
-avant de figer une architecture, plutôt qu'un découpage improvisé en fin de session sur les 3 lots
-précédents. Candidate naturelle pour un **Lot 8**, à cadrer séparément quand Saar voudra enchaîner —
-non bloquant pour les Lots 5-7 ci-dessus, qui ne touchent pas `confirmDamage` (sauf la branche `melee`
-de son calcul de dégâts, couverte par le Lot 5 seul, §2.7.a).
+**Mise à jour 2026-08-11** : `confirmDamage` était laissée entièrement ouverte par les Lots 5-7 (seule
+sa branche `melee` était couverte par le Lot 5, §2.7.a site #5). Cadrage complet fait — voir §2.10 pour
+l'architecture retenue (3 sous-lots 8a/8b/8c) et §3 pour leur statut.
 
 ---
 
@@ -1148,6 +1370,30 @@ test manuel explicite que `advanceTimeline` n'est PAS appelé quand l'attaquant 
 régression silencieuse du sous-état `AWAITING_DAMAGE`, même famille de bug que le correctif Session 165
 déjà documenté §"Bug réel" de `docs/SYSTEME/COMBAT.md`) + 3 scénarios de fixture jetable (§2.9.f) +
 session de jeu réelle (au moins un attaquant PJ et un attaquant PNJ après confirmation de défense).
+
+**Testé (Lot 8a, §2.10)** : 11 nouveaux tests ajoutés à `combatAttackRoll.test.mjs` (courte/bout_portant
+avec bonus, moyenne/longue/extrême sans bonus, `portee: null` sans throw, `fireModeBonusDmg` null/
+undefined traité comme 0, `mr` héroïque/catastrophique, un cas réaliste par site — valeurs vérifiées à
+la main contre `MR_TABLE`, une erreur trouvée et corrigée en cours de rédaction : `mr=4` est "correct
++1", pas "bon +2") + `node --check` propre sur les 2 fichiers touchés + diff relu ligne à ligne (aucune
+clé renommée, ordre des opérations préservé aux deux sites, `getMrModifier` toujours utilisé par
+ailleurs dans `socketCombatHelpers.js` — import non orphelin) + suite complète : seul
+`combatAttackRoll.test.mjs` importe les fichiers touchés (`[VÉRIFIÉ]` par grep), 29/29 verts.
+**Non testé :** aucune session de jeu réelle — la formule est vérifiée statiquement (tests + diff), pas
+encore observée en combat réel (Tir PNJ immédiat et Tir PJ différé à courte portée avec mode rafale).
+
+**Codé (Lot 8c, §2.10.h-l)** : `node --check` propre, diff relu ligne à ligne dans les deux sens (rien
+oublié en comparant l'ancien bloc au nouveau, rien ajouté en comparant le nouveau à `ctx`) — les deux
+nuances trouvées en analyse à charge (`now` local à chaque fonction, `shockResult` traité différemment
+aux deux émissions de la branche normale) confirmées préservées dans le diff final. Pas d'ESLint
+serveur configuré dans ce dépôt (seul `client/eslint.config.js` existe) — cohérent avec la pratique déjà
+établie sur ce fichier aux Lots précédents.
+**Non testé — aucun des deux, à faire avant toute clôture** : (1) fixture jetable (5 scénarios définis
+§2.10.l : melee→normal, assault→normal, assault→drone avec/sans `drone_sheet`, assault→normal avec
+armure/Test de Chance bouclier) ; (2) session de jeu réelle Saar. Ce Lot touche des écritures DB
+(`resolveDroneIntegrityLoss`, `resolveTargetHit`, `applyStun`) et jusqu'à 6 émissions WS réelles — au
+même niveau de risque que les Lots 2/4/6/7, qui ont tous exigé les deux avant clôture. **Ne pas
+considérer ce Lot clos tant que ces deux étapes ne sont pas faites.**
 
 ---
 

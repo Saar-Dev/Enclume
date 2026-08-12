@@ -24,6 +24,7 @@ import ArmorWoundPanel from './ArmorWoundPanel.jsx'
 import WeaponPanel from './WeaponPanel.jsx'
 import InventoryBanner from './InventoryBanner.jsx'
 import InventoryPanel from './InventoryPanel.jsx'
+import GaugesPanel from './GaugesPanel.jsx'
 import ModingWindow from './ModingWindow.jsx'
 import PossessionNotes from '../components/creation/PossessionNotes.jsx'
 import TokenStyleEditor from './TokenStyleEditor.jsx'
@@ -475,6 +476,7 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
               canEdit={effectiveIsGm || effectiveIsOwner}
               isGm={effectiveIsGm}
             />
+            <GaugesPanel characterId={character.id} isGm={effectiveIsGm} />
             <DragOverlay>
               {activeDragItem && (
                 <div style={s.dragGhost}>

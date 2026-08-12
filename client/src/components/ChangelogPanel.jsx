@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 const ACCENT = '#3aaa6a'
+const WARN = '#f0a04b'
 const MONO = { fontFamily: "'Share Tech Mono', monospace" }
 
 const TAGS = {
@@ -187,6 +188,23 @@ export default function ChangelogPanel() {
             ))}
           </div>
 
+          {/* Signalement — bloc dédié, distinct du footer build pour rester visible */}
+          <div
+            onClick={() => navigate('/tickets/new', { state: { fromPath: window.location.pathname } })}
+            style={{
+              margin: '0 16px 10px', padding: '9px 12px',
+              position: 'relative', zIndex: 1,
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: `${WARN}1a`, border: `1px solid ${WARN}66`, borderRadius: 6,
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: 13, color: WARN, lineHeight: 1 }}>⚠</span>
+            <span style={{ ...MONO, fontSize: 11, color: WARN, letterSpacing: '0.03em', fontWeight: 600 }}>
+              {t('changelog.reportBug')}
+            </span>
+          </div>
+
           {/* Footer */}
           <div style={{
             padding: '8px 16px', borderTop: `1px solid ${ACCENT}33`,
@@ -196,13 +214,6 @@ export default function ChangelogPanel() {
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT }} />
             <span style={{ ...MONO, fontSize: 8, color: '#3a6050', letterSpacing: '0.1em' }}>
               BUILD {releases[0]?.version ?? '—'} · OK
-            </span>
-            <div style={{ flex: 1 }} />
-            <span
-              onClick={() => navigate('/tickets/new', { state: { fromPath: window.location.pathname } })}
-              style={{ ...MONO, fontSize: 8, color: '#3a6050', letterSpacing: '0.05em', cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              {t('changelog.reportBug')}
             </span>
           </div>
         </>

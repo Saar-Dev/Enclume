@@ -31,8 +31,7 @@ partir sur les Avantages professionnels automati￾ques (voir plus haut)
 ASSASSIN
 AVANTAGES PROFESSIONNELS ALÉATOIRES 
 (OPTIONNEL)
-Tous les 5 ans, le joueur peut choisir d’effectuer libre￾ment un jet d’1D10 dans la liste suivante, au lieu de répartir 
-ses 5 points d’Avantages professionnels automatiques :
+Tous les 5 ans, le joueur peut choisir d’effectuer libre￾ment un jet d’1D10 dans la liste suivante, au lieu de répartir ses 5 points d’Avantages professionnels automatiques :
 1. Attribut augmenté : Adaptation +1
 2. Prestation : le personnage a effectué un travail parti￾culièrement remarqué. Points de compétence +1, Célé-
 brité + 2, Falsification +2, Corruption/Chantage +2.

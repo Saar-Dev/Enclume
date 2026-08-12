@@ -7,7 +7,7 @@ import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { SLOT_TO_WOUND_LOCATION } from '../../../shared/armorConstants.js'
 import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
-import { setItemSlot, setItemContainer, deleteItem } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer, deleteItem, validateItem } from '../lib/inventoryMutations.js'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
 import api from '../lib/api.js'
 
@@ -104,6 +104,14 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
       await deleteItem(characterId, itemId)
     } catch (err) {
       console.error('Erreur suppression item :', err)
+    }
+  }, [characterId])
+
+  const handleValidate = useCallback(async (itemId) => {
+    try {
+      await validateItem(characterId, itemId)
+    } catch (err) {
+      console.error('Erreur validation item :', err)
     }
   }, [characterId])
 
@@ -277,11 +285,13 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
                 key={item.id}
                 item={item}
                 canEdit={canEdit}
+                isGm={isGm}
                 availableContainers={availableContainers}
                 onMoveContainer={handleMoveContainer}
                 onSendToVault={handleSendToVault}
                 onEquip={handleEquip}
                 onDelete={handleDelete}
+                onValidate={handleValidate}
               />
             ))}
           </div>
@@ -324,8 +334,9 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
         )}
       </div>
 
-      {/* ── Bloc "Ajouter" — GM uniquement ────────────────────────────── */}
-      {isGm && (
+      {/* ── Bloc "Ajouter" — owner ou MJ (PLAN_WIZARD_MATERIEL_GAUGES.md §0.1/§4 : le joueur a
+          les mêmes droits d'ajout que le MJ, seule la validation par item reste MJ only) ──── */}
+      {canEdit && (
         <div style={{ marginTop: 12 }}>
           <button onClick={() => handleToggleAdd(availableContainers)} style={s.addToggleBtn}>
             {addOpen ? t('inventoryPanel.closeAddPanel') : t('inventoryPanel.openAddPanel')}
@@ -338,10 +349,16 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
               ) : selectedRef ? (
                 /* ── Confirmation ajout ──────────────────────────────── */
                 <div style={s.confirmPanel}>
-                  <div style={{ color: '#c0c0d0', fontSize: 12, marginBottom: 8 }}>
+                  <div style={{ color: '#c0c0d0', fontSize: 12, marginBottom: 4 }}>
                     <strong>{selectedRef.name}</strong>
                     <span style={{ color: '#4a4a60' }}> — {selectedRef.category}</span>
+                    {selectedRef.caliber != null && (
+                      <span style={{ color: '#5b8dee' }}> · {t('inventoryPanel.caliberLabel')} {selectedRef.caliber}</span>
+                    )}
                   </div>
+                  {selectedRef.description && (
+                    <p style={{ color: '#6a6a8a', fontSize: 11, margin: '0 0 8px' }}>{selectedRef.description}</p>
+                  )}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <label style={s.addLabel}>
                       {t('inventoryPanel.qtyLabel')}
@@ -452,7 +469,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
   )
 }
 
-function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete }) {
+function ItemRow({ item, canEdit, isGm, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -485,7 +502,11 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onSendTo
 
   return (
     <div ref={setNodeRef} style={{ ...s.itemRow, ...dragStyle }} {...listeners} {...attributes}>
-      <span style={s.itemName}>
+      <span
+        style={s.itemName}
+        className={item.ref_description ? 'has-tooltip' : undefined}
+        data-tooltip={item.ref_description || undefined}
+      >
         {name}
         {item.quantity > 1 && <span style={s.itemQty}> ×{item.quantity}</span>}
         {item.slots?.length > 0 && (
@@ -495,8 +516,22 @@ function ItemRow({ item, canEdit, availableContainers, onMoveContainer, onSendTo
       {isWeaponLike && DAMAGE_TYPE_BADGES.map(({ key, field, className, i18nKey }) => item[field] && (
         <span key={key} className={`badge badge-compact ${className}`} style={s.itemDamageBadge}>{t(i18nKey)} <span className="num">{item[field]}</span></span>
       ))}
+      {item.ref_caliber != null && (
+        <span style={s.itemWeight}>{t('inventoryPanel.caliberLabel')} {item.ref_caliber}</span>
+      )}
       {item.ref_weight != null && (
         <span style={s.itemWeight}>{(item.ref_weight * item.quantity).toFixed(1)} kg</span>
+      )}
+      {/* PLAN_WIZARD_MATERIEL_GAUGES.md §4 — bouton actionnable MJ only, uniquement sur les items en
+          attente ; un item déjà validé affiche un badge statique (pas la peine de refaire cliquer le
+          MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur). */}
+      {isGm && !item.validated_by_gm && (
+        <button onClick={() => onValidate(item.id)} style={s.validateBtn} title={t('inventoryPanel.validateTooltip')}>
+          {t('inventoryPanel.validateButton')}
+        </button>
+      )}
+      {item.validated_by_gm && (
+        <span className="badge badge-compact" style={s.validatedBadge}>{t('inventoryPanel.validatedBadge')}</span>
       )}
       {canEdit && (
         <>
@@ -575,6 +610,13 @@ const s = {
   takeToSacBtn: {
     background: 'rgba(91,141,238,0.1)', border: '1px solid rgba(91,141,238,0.3)', borderRadius: 4,
     color: '#5b8dee', cursor: 'pointer', fontSize: 10, padding: '1px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+  },
+  validateBtn: {
+    background: 'rgba(90,200,120,0.12)', border: '1px solid rgba(90,200,120,0.35)', borderRadius: 4,
+    color: '#5ac878', cursor: 'pointer', fontSize: 10, padding: '1px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+  },
+  validatedBadge: {
+    color: '#5ac878', borderColor: 'rgba(90,200,120,0.35)', flexShrink: 0, fontSize: 10,
   },
 
   // Bloc ajout GM

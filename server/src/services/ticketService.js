@@ -7,6 +7,10 @@ export const CATEGORIES = ['bug', 'balance', 'suggestion', 'other']
 export const STATUSES = ['new', 'triaged', 'in_progress', 'suspended', 'resolved', 'wont_fix', 'duplicate']
 export const PRIORITIES = ['low', 'medium', 'high', 'critical']
 
+// Statuts considérés "clos" — autorité unique pour la vue admin par défaut (masqués tant qu'aucun
+// statut précis n'est demandé explicitement, cf. listTickets/activeOnly).
+export const CLOSED_STATUSES = ['resolved', 'wont_fix', 'duplicate']
+
 // Origine calculée serveur, jamais fournie par le client (PLAN_TICKETS.md §3.2) : un joueur ne peut
 // pas se déclarer lui-même "admin". Ordre de priorité : admin > gm (dans au moins une campagne) >
 // player. 'log' n'est jamais atteint par ce chemin — réservé à un futur appelant non humain.
@@ -53,16 +57,29 @@ export async function listTicketsForReporter(reporterId) {
     .orderBy('created_at', 'desc')
 }
 
-export async function listTickets({ origin, status, domain, clusterLabel } = {}) {
+export async function listTickets({ origin, status, domain, clusterLabel, activeOnly } = {}) {
   const query = db('bug_tickets')
     .leftJoin('users', 'bug_tickets.reporter_id', 'users.id')
     .select('bug_tickets.*', 'users.username as reporter_username')
     .orderBy('bug_tickets.created_at', 'desc')
   if (origin) query.andWhere({ origin })
-  if (status) query.andWhere('bug_tickets.status', status)
+  if (status) {
+    query.andWhere('bug_tickets.status', status)
+  } else if (activeOnly) {
+    query.whereNotIn('bug_tickets.status', CLOSED_STATUSES)
+  }
   if (domain) query.andWhere({ domain })
   if (clusterLabel) query.andWhereILike('cluster_label', `%${clusterLabel}%`)
   return query
+}
+
+// Compte global (jamais filtré par la vue admin en cours) — alimente le récap chiffré topbar.
+export async function getTicketCounts() {
+  const rows = await db('bug_tickets').select('status').count('* as count').groupBy('status')
+  const byStatus = Object.fromEntries(rows.map(r => [r.status, Number(r.count)]))
+  const total = Object.values(byStatus).reduce((sum, n) => sum + n, 0)
+  const closed = CLOSED_STATUSES.reduce((sum, s) => sum + (byStatus[s] || 0), 0)
+  return { total, open: total - closed, closed, byStatus }
 }
 
 export async function updateTicket(actorId, id, patch) {
@@ -85,6 +102,13 @@ export async function updateTicket(actorId, id, patch) {
       throw new AppError(400, `priority doit être l'une de : ${PRIORITIES.join(', ')} (ou null)`)
     }
     update.priority = patch.priority
+  }
+
+  if (patch.title !== undefined) {
+    if (!patch.title?.trim()) {
+      throw new AppError(400, 'title ne peut pas être vide')
+    }
+    update.title = patch.title.trim()
   }
 
   if (patch.cluster_label !== undefined) update.cluster_label = patch.cluster_label || null

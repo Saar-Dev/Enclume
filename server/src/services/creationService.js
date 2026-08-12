@@ -14,6 +14,7 @@ import { getSetbackBlockCount, resolveSetback, mapSetbackToCareerBlock } from '.
 import { resolveSetbackEffects } from '../../../shared/setbackEffects.js'
 import { aggregateTraitGauges, applyFractionalLoss } from '../../../shared/traitAggregation.js'
 import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
+import { PRO_ADV_CATEGORY_RULE_KEYS } from '../../../shared/proAdvCategoryRuleKeys.js'
 import { addAdvantage, grantAdvantage } from './advantageService.js'
 import { addMutation } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -1127,6 +1128,30 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
           ],
           years: career.years,
         })
+      }
+
+      // Seed idempotent des jauges de matériel (PLAN_WIZARD_MATERIEL_GAUGES.md §2/§0bis point 6) —
+      // hors de la boucle carrières ci-dessus : agrégé sur TOUTES les carrières avant upsert, pas
+      // per-career, sinon deux carrières contribuant à la même clé normalisée (ex. "Cache/Planque"
+      // + "Planque/Cache", même règle LdB) se marcheraient dessus via ON CONFLICT DO NOTHING au lieu
+      // de s'additionner comme le fait déjà le total théorique affiché (StepMaterielEtBiens.jsx).
+      // char_gauges n'est JAMAIS recalculé/écrasé une fois une catégorie vue une première fois — la
+      // valeur de départ correspond au total théorique à l'instant de cette réconciliation, jamais
+      // resynchronisée automatiquement ensuite (indépendance actée §0 point 5).
+      const gaugeTotals = {}
+      for (const career of careersData) {
+        for (const [rawCategory, points] of Object.entries(career.proAdvantages || {})) {
+          if (!(points > 0)) continue
+          const key = PRO_ADV_CATEGORY_RULE_KEYS[rawCategory] ?? rawCategory
+          gaugeTotals[key] = (gaugeTotals[key] ?? 0) + points
+        }
+      }
+      const gaugeRows = Object.entries(gaugeTotals).map(([category_key, value]) => ({
+        char_sheet_id: sheetId, category_key, value,
+      }))
+      if (gaugeRows.length > 0) {
+        await trx('char_gauges').insert(gaugeRows)
+          .onConflict(['char_sheet_id', 'category_key']).ignore()
       }
 
       // Q2 — validation globale du coût compétences (shared/careerSkills.js, Lot 1/2).

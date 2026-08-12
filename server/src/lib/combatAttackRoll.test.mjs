@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { computeAttackRoll, computeMeleeRawDamage } from './combatAttackRoll.js'
+import { computeAttackRoll, computeMeleeRawDamage, computeAssaultRawDamage } from './combatAttackRoll.js'
 
 // Lancement manuel (aucun script npm test dans le projet, PLAN_RW_SYSCOMBAT.md §2.2) :
 //   node --test server/src/lib/combatAttackRoll.test.mjs
@@ -171,4 +171,53 @@ test('computeMeleeRawDamage — cas réaliste cible drone (resolveMeleeDefenseDr
 
 test('computeMeleeRawDamage — cas réaliste cible sans défense DEF5 (resolveDefenselessTarget, site #1)', () => {
   assert.equal(computeMeleeRawDamage({ rawDice: 9, mr: 15, modDom: 2, combatModeBonus: 0 }), 17)
+})
+
+// computeAssaultRawDamage — dédup des 2 sites socketCombatHelpers.js (PLAN_RW_SYSCOMBAT.md §2.10, Lot 8a).
+
+test('computeAssaultRawDamage — courte portée, bonus de mode de tir appliqué', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 10, mr: 5, portee: 'courte', fireModeBonusDmg: 4 }), 16)
+})
+
+test('computeAssaultRawDamage — bout portant, bonus appliqué (même palier que courte)', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 10, mr: 5, portee: 'bout_portant', fireModeBonusDmg: 4 }), 16)
+})
+
+test('computeAssaultRawDamage — portée moyenne, bonus ignoré même si fourni non nul', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 10, mr: 5, portee: 'moyenne', fireModeBonusDmg: 4 }), 12)
+})
+
+test('computeAssaultRawDamage — portée longue, bonus ignoré', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 8, mr: 0, portee: 'longue', fireModeBonusDmg: 6 }), 8)
+})
+
+test('computeAssaultRawDamage — portée extrême, bonus ignoré', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 8, mr: 0, portee: 'extreme', fireModeBonusDmg: 6 }), 8)
+})
+
+test('computeAssaultRawDamage — portee null (arme de contact, category === armement_contact) — pas courte portée, bonus ignoré, aucun throw', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 6, mr: 0, portee: null, fireModeBonusDmg: 3 }), 6)
+})
+
+test('computeAssaultRawDamage — fireModeBonusDmg null/undefined à courte portée traités comme 0 (sites confirmDamage/resolveAssaultAction gardent déjà ?? 0 en amont, garde uniforme ici quand même)', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 7, mr: -3, portee: 'courte', fireModeBonusDmg: null }), 6)
+  assert.equal(computeAssaultRawDamage({ rawDice: 7, mr: -3, portee: 'courte', fireModeBonusDmg: undefined }), 6)
+})
+
+test('computeAssaultRawDamage — mr positif élevé (héroïque, +8), longue portée', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 12, mr: 30, portee: 'longue', fireModeBonusDmg: 0 }), 20)
+})
+
+test('computeAssaultRawDamage — mr négatif extrême (catastrophique, -9), courte portée avec bonus', () => {
+  assert.equal(computeAssaultRawDamage({ rawDice: 10, mr: -40, portee: 'courte', fireModeBonusDmg: 2 }), 3)
+})
+
+test('computeAssaultRawDamage — cas réaliste attaquant PNJ immédiat touche cible normale (resolveAssaultAction, préparation commune)', () => {
+  // Fusil 3d10=18, mr=4 (correct +1, MR_TABLE), portée moyenne (bonus tir ignoré même si arme en rafale +3)
+  assert.equal(computeAssaultRawDamage({ rawDice: 18, mr: 4, portee: 'moyenne', fireModeBonusDmg: 3 }), 19)
+})
+
+test('computeAssaultRawDamage — cas réaliste attaquant PJ différé (confirmDamage, branche assault), courte portée rafale', () => {
+  // Pistolet-mitrailleur 2d10=11, mr=7 (bon +3), courte portée, rafale +2
+  assert.equal(computeAssaultRawDamage({ rawDice: 11, mr: 7, portee: 'courte', fireModeBonusDmg: 2 }), 16)
 })

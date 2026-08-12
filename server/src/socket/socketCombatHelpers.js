@@ -6,7 +6,7 @@ import * as woundService from '../lib/woundService.js'
 import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { canTransition, setFSMSubPhase } from '../lib/combatFSM.js'
-import { computeAttackRoll, computeMeleeRawDamage } from '../lib/combatAttackRoll.js'
+import { computeAttackRoll, computeMeleeRawDamage, computeAssaultRawDamage } from '../lib/combatAttackRoll.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -891,158 +891,189 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       // (Lot C1) : ammoFx reste null dans ce repli, jamais reconstruit depuis une donnée partielle.
       effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
       effectiveAmmoFx  = effectiveDamage ? effectiveDamage.tags?.FX ?? null : null
-      const modDomAttaque = getMrModifier(mr)
-      const isShortRange = ['bout_portant', 'courte'].includes(portee)
-      const modDegatsMode = isShortRange ? fire_mode_bonus_dmg : 0
-      degautsBruts = rawDice + modDomAttaque + modDegatsMode
+      // PLAN_RW_SYSCOMBAT.md §2.10 (Lot 8a) — noyau pur, même formule que resolveAssaultAction.
+      degautsBruts = computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg: fire_mode_bonus_dmg })
     }
-    // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6)
+    // PLAN_RW_SYSCOMBAT.md §2.10 (Lot 8c) — ctx assemblé une fois, dispatch guard-clause vers les
+    // fonctions sœurs cible (drone/normal), même patron que Lots 2/4/6/7. treatAsContact résolu ici
+    // (Bouclier, docs/PLAN_BOUCLIER.md Lot B — CaC toujours "au contact", Tir dérivé de la nature de
+    // l'arme, calculé côté resolveAssaultAction et transporté).
+    const ctx = {
+      degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl, effectiveAmmoFx,
+      characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+      tireurUsername, tireurColor, userId, targetName, targetTokenId, tokenId, aimedLocation,
+      treatAsContact: pendingType === 'melee' ? true : (treatAsContact ?? false),
+    }
+    // Branche drone — cible sans char_sheet, résistance = blindage + intégrité×2 (§7.6). Atteignable
+    // uniquement via pendingType 'assault' (le payload melee différé n'inclut jamais cibleType, §2.10.i-bis).
     if (cibleType === 'drone' && characterIdCible) {
-      const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
-      if (droneSheet) {
-        const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
-        await resolveDroneIntegrityLoss(io, pendingCampaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
-        if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
-          rollLoc: null, locLabel: null,
-          degautsBruts, degatsNets: degatsNetsDrone,
-          dmgRolls, severity: null, severityColor: tireurColor, shockResult: null,
-        })
-        const now = new Date().toISOString()
-        io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-          userId, username: tireurUsername, color: tireurColor,
-          formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
-          isCriticalSuccess: false, isCriticalFail: false,
-          seed: dmgSeed, timestamp: now,
-          skillLabel: `Dégâts — drone`,
-          mechanicalTotal: rawDice,
-          diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
-          chancesDeReussite: degatsNetsDrone,
-          isSuccess: degatsNetsDrone > 0,
-        })
-        io.to(pendingCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
-          tireurId: tokenId, cibleId: targetTokenId,
-          localisation: null,
-          degautsBruts, degatsNets: degatsNetsDrone,
-          severity: null, is_lethal: false, isSuccess: true, shockResult: null,
-        })
-      }
+      await resolveDamageConfirmDroneTarget(io, pendingCampaignId, ctx, socket)
       return
     }
-
-    const hitResult = await damageService.resolveTargetHit(io, db, pendingCampaignId, {
-      degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
-      for_na_cible, con_na_cible, vol_na_cible,
-      chocDsl: effectiveChocDsl,
-      ammoFx: effectiveAmmoFx,
-      forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
-      // Bouclier (docs/PLAN_BOUCLIER.md Lot B) — CaC toujours "au contact" ; à distance, dérivé de
-      // la nature de l'arme (armes de jet/trait, calculé côté resolveAssaultAction et transporté ici).
-      treatAsContact: pendingType === 'melee' ? true : (treatAsContact ?? false),
-    })
-    if (hitResult === null) return
-    const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
-            is_lethal, finalSeverity, shockResult,
-            rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
-
-    if (shockResult) {
-      statusService.emitShockDiceResult(io, pendingCampaignId, shockResult, userId, tireurUsername, tireurColor)
-    }
-
-    const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
-
-    // 6. COMBAT_DAMAGE_RESULT → socket tireur uniquement (affichage fenêtre)
-    if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
-      rollLoc,
-      locLabel: LOCATION_LABELS[localisation] ?? localisation,
-      degautsBruts,
-      degatsNets,
-      dmgRolls,
-      severity: finalSeverity,
-      severityColor,
-      shockResult,
-    })
-
-    // Stun — applyStun après l'émission pour ne pas bloquer l'affichage des dégâts
-    if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-      statusService.applyStun(io, db, pendingCampaignId, {
-        targetTokenId, outcome: shockResult.outcome,
-        userId, username: tireurUsername, color: tireurColor,
-      }).catch(err => console.error('[WS] applyStun error:', err.message))
-    }
-
-    // 7. DICE_RESULT broadcast chat
-    const now = new Date().toISOString()
-    // Localisation visée (COM9) — rollLoc/locRolls/locSeed sont null, pas de carte de jet à
-    // afficher (aucun jet n'a eu lieu, jamais un jet gaspillé pour l'affichage).
-    if (rollLoc !== null) {
-      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-        userId, username: tireurUsername, color: tireurColor,
-        formula: '1d20', rolls: locRolls, total: rollLoc,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: locSeed, timestamp: now,
-        skillLabel: 'Localisation — Distance',
-        mechanicalTotal: rollLoc, diffLabel: '',
-        chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
-        isSuccess: true,
-      })
-    }
-    // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot C) — même patron que rollLoc :
-    // null quand non applicable (pas de Petit bouclier en jeu), rien à afficher.
-    if (rollChance !== null) {
-      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-        userId, username: tireurUsername, color: tireurColor,
-        formula: '1d20', rolls: chanceRolls, total: rollChance,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: chanceSeed, timestamp: now,
-        skillLabel: `Test de Chance — Bouclier (${LOCATION_LABELS[localisation] ?? localisation})`,
-        mechanicalTotal: rollChance, diffLabel: '',
-        chancesDeReussite: chanceThreshold,
-        isSuccess: chanceSuccess,
-      })
-    }
-    io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-      userId, username: tireurUsername, color: tireurColor,
-      formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
-      isCriticalSuccess: false, isCriticalFail: false,
-      seed: dmgSeed, timestamp: now,
-      skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
-      mechanicalTotal: rawDice,
-      diffLabel: `ETQ:${etq ?? 0} RD:${rd}`,
-      chancesDeReussite: degatsNets,
-      isSuccess: degatsNets > 0,
-    })
-
-    // 8. Message narratif combat_damage
-    if (finalSeverity) {
-      io.to(pendingCampaignId).emit(WS.DICE_RESULT, {
-        userId, username: tireurUsername, color: severityColor,
-        formula: '', rolls: [], total: degatsNets,
-        isCriticalSuccess: false, isCriticalFail: false,
-        seed: '', timestamp: now,
-        interactionType: 'combat_damage',
-        skillLabel: `${tireurUsername} inflige ${degatsNets} dégâts`,
-        targetName,
-        localisation: LOCATION_LABELS[localisation] ?? localisation,
-        severity: finalSeverity,
-        severityColor,
-        isSuccess: true,
-      })
-    }
-
-    io.to(pendingCampaignId).emit(WS.COMBAT_ATTACK_RESULT, {
-      tireurId:    tokenId,
-      cibleId:     targetTokenId,
-      localisation,
-      degautsBruts,
-      degatsNets,
-      severity:    finalSeverity,
-      is_lethal,
-      isSuccess:   true,
-      shockResult: shockResult ?? null,
-    })
+    await resolveDamageConfirmNormalTarget(io, pendingCampaignId, ctx, socket)
   } catch (err) {
     console.error('[WS] confirmDamage error:', err.message)
   }
+}
+
+// ─── Branches cible de confirmDamage (PLAN_RW_SYSCOMBAT.md §2.10, Lot 8c) ────────────────────────────
+// Extraites de confirmDamage — ctx assemblé par la coquille juste après le calcul de dégât (Lot 8a).
+// Aucune de ces fonctions n'a son propre try/catch : toute exception remonte au catch unique de
+// confirmDamage. Émission directe (pas emissions[]) — même style que confirmMeleeDefense (§2.4.l).
+
+async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
+  const {
+    degautsBruts, characterIdCible, targetTokenId, tokenId,
+    tireurColor, tireurUsername, userId, dmgRolls, resolvedFormula, rawDice, dmgSeed,
+  } = ctx
+  const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
+  if (!droneSheet) return
+  const { etqDrone, rdDrone, degatsNets: degatsNetsDrone } = calcDroneDegatsNets(droneSheet, degautsBruts)
+  await resolveDroneIntegrityLoss(io, campaignId, characterIdCible, targetTokenId, droneSheet, degatsNetsDrone)
+  if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
+    rollLoc: null, locLabel: null,
+    degautsBruts, degatsNets: degatsNetsDrone,
+    dmgRolls, severity: null, severityColor: tireurColor, shockResult: null,
+  })
+  const now = new Date().toISOString()
+  io.to(campaignId).emit(WS.DICE_RESULT, {
+    userId, username: tireurUsername, color: tireurColor,
+    formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: dmgSeed, timestamp: now,
+    skillLabel: `Dégâts — drone`,
+    mechanicalTotal: rawDice,
+    diffLabel: `Blindage:${etqDrone} RD:${rdDrone}`,
+    chancesDeReussite: degatsNetsDrone,
+    isSuccess: degatsNetsDrone > 0,
+  })
+  io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+    tireurId: tokenId, cibleId: targetTokenId,
+    localisation: null,
+    degautsBruts, degatsNets: degatsNetsDrone,
+    severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+  })
+}
+
+// Cible = PJ/PNJ/décor. `hitResult === null` structurellement inatteignable ici — le dispatch de la
+// coquille garantit cibleType !== 'drone' (§2.10.i, seul cas où resolveTargetHit renvoie null, F4
+// docs/SYSTEME/SERVICES_COMBAT.md §8) — garde conservée telle quelle, pas retirée.
+async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
+  const {
+    degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
+    for_na_cible, con_na_cible, vol_na_cible, effectiveChocDsl, effectiveAmmoFx,
+    aimedLocation, treatAsContact, tireurUsername, tireurColor, userId, targetName,
+    targetTokenId, tokenId, dmgRolls, resolvedFormula, rawDice, dmgSeed,
+  } = ctx
+  const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+    degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
+    for_na_cible, con_na_cible, vol_na_cible,
+    chocDsl: effectiveChocDsl,
+    ammoFx: effectiveAmmoFx,
+    forcedSlotCode: aimedLocation ? LOCATION_TO_SLOT[aimedLocation] : null,
+    treatAsContact,
+  })
+  if (hitResult === null) return
+  const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
+          is_lethal, finalSeverity, shockResult,
+          rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
+
+  if (shockResult) {
+    statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+  }
+
+  const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
+
+  // 6. COMBAT_DAMAGE_RESULT → socket tireur uniquement (affichage fenêtre)
+  if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
+    rollLoc,
+    locLabel: LOCATION_LABELS[localisation] ?? localisation,
+    degautsBruts,
+    degatsNets,
+    dmgRolls,
+    severity: finalSeverity,
+    severityColor,
+    shockResult,
+  })
+
+  // Stun — applyStun après l'émission pour ne pas bloquer l'affichage des dégâts
+  if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+    statusService.applyStun(io, db, campaignId, {
+      targetTokenId, outcome: shockResult.outcome,
+      userId, username: tireurUsername, color: tireurColor,
+    }).catch(err => console.error('[WS] applyStun error:', err.message))
+  }
+
+  // 7. DICE_RESULT broadcast chat
+  const now = new Date().toISOString()
+  // Localisation visée (COM9) — rollLoc/locRolls/locSeed sont null, pas de carte de jet à
+  // afficher (aucun jet n'a eu lieu, jamais un jet gaspillé pour l'affichage).
+  if (rollLoc !== null) {
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId, username: tireurUsername, color: tireurColor,
+      formula: '1d20', rolls: locRolls, total: rollLoc,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: locSeed, timestamp: now,
+      skillLabel: 'Localisation — Distance',
+      mechanicalTotal: rollLoc, diffLabel: '',
+      chancesDeReussite: LOCATION_LABELS[localisation] ?? localisation,
+      isSuccess: true,
+    })
+  }
+  // Test de Chance du Petit bouclier (docs/PLAN_BOUCLIER.md Lot C) — même patron que rollLoc :
+  // null quand non applicable (pas de Petit bouclier en jeu), rien à afficher.
+  if (rollChance !== null) {
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId, username: tireurUsername, color: tireurColor,
+      formula: '1d20', rolls: chanceRolls, total: rollChance,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: chanceSeed, timestamp: now,
+      skillLabel: `Test de Chance — Bouclier (${LOCATION_LABELS[localisation] ?? localisation})`,
+      mechanicalTotal: rollChance, diffLabel: '',
+      chancesDeReussite: chanceThreshold,
+      isSuccess: chanceSuccess,
+    })
+  }
+  io.to(campaignId).emit(WS.DICE_RESULT, {
+    userId, username: tireurUsername, color: tireurColor,
+    formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: dmgSeed, timestamp: now,
+    skillLabel: `Dégâts — ${LOCATION_LABELS[localisation] ?? localisation}`,
+    mechanicalTotal: rawDice,
+    diffLabel: `ETQ:${etq ?? 0} RD:${rd}`,
+    chancesDeReussite: degatsNets,
+    isSuccess: degatsNets > 0,
+  })
+
+  // 8. Message narratif combat_damage
+  if (finalSeverity) {
+    io.to(campaignId).emit(WS.DICE_RESULT, {
+      userId, username: tireurUsername, color: severityColor,
+      formula: '', rolls: [], total: degatsNets,
+      isCriticalSuccess: false, isCriticalFail: false,
+      seed: '', timestamp: now,
+      interactionType: 'combat_damage',
+      skillLabel: `${tireurUsername} inflige ${degatsNets} dégâts`,
+      targetName,
+      localisation: LOCATION_LABELS[localisation] ?? localisation,
+      severity: finalSeverity,
+      severityColor,
+      isSuccess: true,
+    })
+  }
+
+  io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+    tireurId:    tokenId,
+    cibleId:     targetTokenId,
+    localisation,
+    degautsBruts,
+    degatsNets,
+    severity:    finalSeverity,
+    is_lethal,
+    isSuccess:   true,
+    shockResult: shockResult ?? null,
+  })
 }
 
 // ─── forceAdvanceResolution — outil MJ générique (docs/PLAN_COMBAT_TIMELINE.md Lot D) ──────────────
@@ -2866,9 +2897,6 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
       // soit un drone ou non (`[VÉRIFIÉ]`, PLAN_RW_SYSCOMBAT.md §2.6.a) — calculés une seule fois ici,
       // avant le guard-clause vers la fonction-feuille adaptée (§2.6.b, aucune fonction-type qui
       // re-branche elle-même, même précédent que resolveMeleeDefenseDrone/Pnj au Lot 2).
-      const modDomAttaque = getMrModifier(mr)
-      const isShortRange = ['bout_portant', 'courte'].includes(authoritativeRangeBand)
-      const modDegatsMode = isShortRange ? (action.fire_mode_bonus_dmg ?? 0) : 0
       // Munition chargée (Chantier 11 Étape 2 Lot A, docs/PLAN_ARMES_DSL.md) — point de résolution
       // unique, repli automatique sur damage_h brut si aucune munition/DSL malformé. Repli
       // supplémentaire ici si getEffectiveWeaponDamage renvoie null (arme désequipée entre le fetch
@@ -2882,7 +2910,8 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         : weapon.ref_damage_h
           ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total
           : 0
-      const degautsBruts = rawDice + modDomAttaque + modDegatsMode
+      // PLAN_RW_SYSCOMBAT.md §2.10 (Lot 8a) — noyau pur, même formule que confirmDamage (branche assault).
+      const degautsBruts = computeAssaultRawDamage({ rawDice, mr, portee: authoritativeRangeBand, fireModeBonusDmg: action.fire_mode_bonus_dmg })
 
       if (cibleCharacter?.type === 'drone') {
         return await resolveAssaultHitPnjDrone(io, campaignId, { ...ctx, degautsBruts }, emissions)

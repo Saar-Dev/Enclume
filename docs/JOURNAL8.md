@@ -2315,3 +2315,44 @@ architectural).
 **Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+-----
+## Session (Saar) — 2026-08-12 — Triage `bug_tickets` : recoupement contre `docs/BUG WIZARD.md`/`EN_COURS.md`, clôtures WIZ6/WIZ27
+
+**Contexte** : à la demande de Saar, revue des 46 tickets de `bug_tickets` (import initial
+`BUGIDENTIFIE.md` + tickets `BETA-*` du round de beta-test Wizard) pour repérer ceux déjà corrigés
+sans que le statut en base le reflète — Saar se souvenait que « un certain nombre » l'étaient déjà.
+
+**Constat** : recoupement systématique code lié (`linked_bug_code`) ↔ `docs/BUG WIZARD.md` (table de
+statuts) ↔ `docs/EN_COURS.md` (dettes actives). Trouvé :
+- 3 tickets `resolved` en base alors que le correctif associé était encore marqué « non testé
+  navigateur » dans les deux docs : **BETA-1** (#18 tooltips → `EN_COURS.md` WIZ27), **BETA-13** (#9
+  points déjà investis, même cause racine que WIZ6), **BETA-17** (#11 note tirage 1D10 → WIZ29, déjà
+  retiré de la table entre-temps, état antérieur non revérifié).
+- **BETA-20** (#30 wishlist matériel) marqué `resolved` alors que le chantier était encore non
+  committé dans ce worktree au moment du contrôle.
+- **BETA-34** (module arme disparu) marqué `resolved` avec un `admin_notes` interne demandant
+  explicitement confirmation, jamais levée depuis l'import.
+- **BETA-32** (implants, #32) marqué `new` alors que déjà analysé et explicitement écarté par Saar
+  (« chantier à part, pas traité maintenant », `docs/BUG WIZARD.md` #32) — mauvaise classification,
+  pas un oubli de triage : `new` implique non-trié, alors que la décision existait déjà.
+
+**Décisions Saar** :
+- BETA-1/13/17/20/34 : confirmés testés en navigateur par Saar → restent `resolved` en base, aucune
+  écriture nécessaire.
+- BETA-32 : basculé `suspended` — appliqué via `ticketService.updateTicket()` (script Node ad hoc,
+  attribué au compte admin de Saar pour poser `reviewed_by`/`reviewed_at` normalement, pas de
+  `UPDATE` SQL brut hors service).
+- `docs/EN_COURS.md` WIZ6/WIZ27 : passés en ✅ Résolu — **ligne conservée, pas de retrait** : écart
+  volontaire à la discipline habituelle du fichier (§ en-tête, clôture confirmée = retrait +
+  compte-rendu ici) sur demande explicite de Saar pour cette fois précise.
+
+**Testé** : `getTicketCounts()` (nouvelle fonction, cf. session ticket UI) vérifié contre la base
+réelle (46 tickets, arithmétique cohérente : 34 ouverts/12 clos avant l'ajustement BETA-32). La
+validation navigateur des 5 tickets BETA-1/13/17/20/34 est actée par la confirmation explicite de
+Saar en conversation — pas rejouée par l'agent.
+**Non testé** : les ~30 tickets restants (`triaged`/`suspended`, clusters A-T non liés au Wizard)
+n'ont pas été recoupés un par un dans cette passe — seuls les tickets `BETA-*` l'ont été.
+**Données** : un `UPDATE` en base (BETA-32 → `suspended`, via le service applicatif).
+**Retour arrière** : `docs/EN_COURS.md`/`docs/JOURNAL8.md` — commit isolé, `git revert` suffit.
+BETA-32 rebasculable via `/admin/tickets` si besoin.

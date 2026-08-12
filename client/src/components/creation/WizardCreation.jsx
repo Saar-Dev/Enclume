@@ -15,6 +15,7 @@ import Step4Experience from './Step4Experience'
 import Step5Advantages from './Step5Advantages'
 import StepMaterielEtBiens from './StepMaterielEtBiens'
 import WizardReview from './WizardReview'
+import StepTutorial from './StepTutorial'
 import { SocketProvider } from '../../lib/SocketContext.jsx'
 import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 
@@ -48,6 +49,11 @@ export default function WizardCreation() {
   // locale (initialData ne sert qu'au montage initial de son point de vue, jamais un live-overlay
   // sur lui-même).
   const liveOr = (live, committed) => (isGmView && live != null ? live : committed)
+  // PLAN_WIZARD_MATERIEL_GAUGES.md §0bis point 7/§5 — même comparaison déjà faite ligne ~103
+  // (ownerUserId vs user?.id, remise à zéro d'un brouillon d'un autre joueur) : ownerUserId était
+  // déjà dans le store (setOwnerUserId), juste jamais dérivé en isOwner ni transmis à un composant
+  // de step avant ce chantier.
+  const isOwner = !!ownerUserId && ownerUserId === user?.id
 
   // Callbacks stables (useCallback, jamais des fléchées inline) — WizardCreation et Step4Experience
   // s'abonnent au store entier sans sélecteur (useCreationStore() déjà ainsi avant ce chantier),
@@ -243,6 +249,7 @@ export default function WizardCreation() {
         {startError && (
           <div className="wiz-error">{startError}</div>
         )}
+        <StepTutorial step={0} />
         <Step0Method
           onNext={async () => {
             if (isStarting) return
@@ -280,6 +287,7 @@ export default function WizardCreation() {
       {stepError && (
         <div className="wiz-error">{stepError}</div>
       )}
+      <StepTutorial step={step} />
 
       <div style={st.body}>
         {step === 1 && (
@@ -363,6 +371,7 @@ export default function WizardCreation() {
           <StepMaterielEtBiens
             characterId={characterId}
             isGmView={isGmView}
+            isOwner={isOwner}
             onPrev={() => { setStepError(null); setStep(5) }}
             onNext={advanceStep6}
             advancing={advancing}

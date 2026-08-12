@@ -90,6 +90,7 @@ export async function getItemWithRef(itemId) {
       'char_inventory.character_id',
       'char_inventory.equipment_id',
       'char_inventory.container',
+      'char_inventory.validated_by_gm',
       // Lot C (docs/PLAN_INVENTORY_SLOTS.md) : `slots` (tableau) remplace `slot` (texte, colonne
       // retirée) — seule source d'affichage désormais.
       db.raw(`(SELECT array_agg(slot_code ORDER BY slot_code) FROM char_inventory_slots WHERE char_inventory_id = char_inventory.id) as slots`),
@@ -196,6 +197,7 @@ export async function getInventory(characterId, campaignId) {
       'char_inventory.id',
       'char_inventory.equipment_id',
       'char_inventory.container',
+      'char_inventory.validated_by_gm',
       // Lot C (docs/PLAN_INVENTORY_SLOTS.md) — voir getItemWithRef.
       db.raw(`(SELECT array_agg(slot_code ORDER BY slot_code) FROM char_inventory_slots WHERE char_inventory_id = char_inventory.id) as slots`),
       'char_inventory.quantity',
@@ -274,7 +276,8 @@ export async function quickEquip(characterId, equipment_id, slot) {
   const conflict = await _handSlotConflict(characterId, [slot])
   if (conflict) throw new AppError(409, `Slot ${slot} déjà occupé`)
 
-  const quickInsertData = { character_id: characterId, equipment_id, container: 'Sac', quantity: 1 }
+  // Route déjà MJ only (char-sheet.js) — validated_by_gm: true directement, même raison que addItem.
+  const quickInsertData = { character_id: characterId, equipment_id, container: 'Sac', quantity: 1, validated_by_gm: true }
   const autoAmmo = await resolveAmmoInit(equipment_id, slot)
   if (autoAmmo !== null) quickInsertData.ammo_remaining = autoAmmo
 
@@ -290,7 +293,11 @@ export async function quickEquip(characterId, equipment_id, slot) {
 // POST /:characterId/inventory
 // Retourne { type: 'stack'|'single'|'multi', item, items } — la route choisit l'event socket et
 // la forme de réponse HTTP à partir de `type`, sans dupliquer la logique métier.
-export async function addItem(characterId, payload) {
+// isGm : dérive validated_by_gm (PLAN_WIZARD_MATERIEL_GAUGES.md §3) — jamais lu du payload client.
+// Un item ajouté par le MJ (ou fusionné sur un stack par le MJ) part directement validé ; un ajout
+// joueur, même sur un stack déjà validé, remet la ligne fusionnée en attente (le statut reflète
+// toujours le rôle du dernier auteur, jamais un statut hérité d'un ajout précédent d'un autre rôle).
+export async function addItem(characterId, payload, isGm = false) {
   const {
     equipment_id,
     container: containerIn,
@@ -372,7 +379,7 @@ export async function addItem(characterId, payload) {
     if (existing) {
       const [updated] = await db('char_inventory')
         .where({ id: existing.id })
-        .update({ quantity: existing.quantity + quantity, updated_at: db.fn.now() })
+        .update({ quantity: existing.quantity + quantity, validated_by_gm: isGm, updated_at: db.fn.now() })
         .returning('*')
       const item = await getItemWithRef(updated.id)
       return { type: 'stack', item }
@@ -384,6 +391,7 @@ export async function addItem(characterId, payload) {
     equipment_id: equipment_id ?? null,
     container,
     quantity,
+    validated_by_gm: isGm,
   }
   if (custom_name !== undefined) insertData.custom_name = custom_name
   if (custom_desc !== undefined) insertData.custom_desc = custom_desc
@@ -426,17 +434,20 @@ export async function updateItem(characterId, itemId, payload) {
     .where({ id: itemId, character_id: characterId }).first()
   if (!existing) throw new AppError(404, 'Item not found')
 
-  const { container, slot, quantity, custom_name, custom_desc, notes, custom_props, current_ammo } = payload
+  const { container, slot, quantity, custom_name, custom_desc, notes, custom_props, current_ammo, validated_by_gm } = payload
   const updates = {}
 
-  if (container    !== undefined) updates.container    = container
-  if (slot         !== undefined) updates.slot         = slot
-  if (quantity     !== undefined) updates.quantity     = quantity
-  if (custom_name  !== undefined) updates.custom_name  = custom_name
-  if (custom_desc  !== undefined) updates.custom_desc  = custom_desc
-  if (notes        !== undefined) updates.notes        = notes
-  if (custom_props !== undefined) updates.custom_props = custom_props
-  if (current_ammo !== undefined) updates.current_ammo = current_ammo
+  if (container       !== undefined) updates.container       = container
+  if (slot            !== undefined) updates.slot             = slot
+  if (quantity        !== undefined) updates.quantity         = quantity
+  if (custom_name     !== undefined) updates.custom_name      = custom_name
+  if (custom_desc     !== undefined) updates.custom_desc      = custom_desc
+  if (notes           !== undefined) updates.notes            = notes
+  if (custom_props    !== undefined) updates.custom_props     = custom_props
+  if (current_ammo    !== undefined) updates.current_ammo     = current_ammo
+  // Autorisation (MJ only) déjà appliquée par la route (PLAN_WIZARD_MATERIEL_GAUGES.md §3) —
+  // updateItem reste la même fonction owner+MJ pour tous les autres champs, pas de check ici.
+  if (validated_by_gm !== undefined) updates.validated_by_gm  = validated_by_gm
 
   // P13 — guard avant updated_at
   if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')

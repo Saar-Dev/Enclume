@@ -71,6 +71,9 @@
     "reloadError": "Erreur rechargement",
     "equipError": "Erreur équipement"
   },
+  "gaugesPanel": {
+    "title": "Jauges d'Avantages professionnels"
+  },
   "inventoryPanel": {
     "loading": "Chargement inventaire…",
     "weightLabel": "Poids :",
@@ -107,6 +110,10 @@
     "takeToSacTooltip": "Prendre dans le Sac",
     "sendToVaultButton": "Coffre",
     "sendToVaultTooltip": "Ranger dans le Coffre",
+    "caliberLabel": "Calibre",
+    "validateButton": "Validé",
+    "validateTooltip": "Valider cet objet",
+    "validatedBadge": "Validé",
     "container": {
       "Sac": "Sac",
       "Ceinture": "Ceinture",

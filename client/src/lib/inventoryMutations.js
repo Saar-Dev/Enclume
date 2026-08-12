@@ -27,3 +27,11 @@ export async function deleteItem(characterId, itemId) {
   useCharacterStore.getState().removeInventoryItem(characterId, itemId)
   refreshDerivedTotals(characterId)
 }
+
+// PLAN_WIZARD_MATERIEL_GAUGES.md §4 — MJ only côté serveur (char-sheet.js rejette validated_by_gm
+// si !req.isGm), pas de poids affecté ici, pas de refreshDerivedTotals.
+export async function validateItem(characterId, itemId) {
+  const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { validated_by_gm: true })
+  useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
+  return res.data.item
+}

@@ -144,4 +144,25 @@ export const useCharacterStore = create((set) => ({
   setSols: (charId, sols) => set((state) => ({
     solsByCharId: { ...state.solsByCharId, [charId]: sols },
   })),
+
+  // PLAN_WIZARD_MATERIEL_GAUGES.md §6 — { [categoryKey]: value }, pas de tableau : une jauge est
+  // toujours adressée par sa clé, jamais itérée en liste par le store (les composants font ça).
+  gaugesByCharId: {},
+
+  // Premier chargement — remplace entièrement les jauges de ce characterId (GET .../gauges).
+  setGauges: (charId, gauges) => set((state) => ({
+    gaugesByCharId: {
+      ...state.gaugesByCharId,
+      [charId]: Object.fromEntries((gauges ?? []).map(g => [g.category_key, g.value])),
+    },
+  })),
+
+  // Handler WS GAUGE_UPDATED, ou réponse HTTP du PATCH local — écriture directe sans refetch (même
+  // patron que setSols).
+  setGauge: (charId, categoryKey, value) => set((state) => ({
+    gaugesByCharId: {
+      ...state.gaugesByCharId,
+      [charId]: { ...state.gaugesByCharId[charId], [categoryKey]: value },
+    },
+  })),
 }))

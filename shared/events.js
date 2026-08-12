@@ -82,6 +82,9 @@ export const WS = {
   INVENTORY_UPDATED: 'inventory:updated',  // serveur → room : item modifié
   INVENTORY_REMOVED: 'inventory:removed',  // serveur → room : item supprimé
   SOLS_UPDATED:      'sols:updated',       // serveur → room : solde sols modifié
+  // PLAN_WIZARD_MATERIEL_GAUGES.md §7 — room résolue comme les autres routes inventaire
+  // (resolveInventoryBroadcastRoom), pas comme SOLS_UPDATED : les jauges sont éditables dès Step6.
+  GAUGE_UPDATED:     'gauge:updated',      // serveur → room : jauge de matériel modifiée (delta MJ)
 
   // Moding (docs/PLAN_MODING.md Phase A) — event dédié plutôt que détourner INVENTORY_UPDATED sur
   // une ligne d'arme qui, elle, ne change pas réellement (les mods vivent dans une table séparée)
