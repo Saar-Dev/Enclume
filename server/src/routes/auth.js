@@ -145,7 +145,7 @@ router.post('/logout', (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   const user = await db('users')
     .where({ id: req.user.id })
-    .select(['id', 'email', 'username', 'color'])
+    .select(['id', 'email', 'username', 'color', 'role'])
     .first()
 
   if (!user) {

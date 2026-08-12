@@ -616,10 +616,12 @@ Enclume/
 │   │   └── main.jsx
 │   └── vite.config.js
 ├── server/
-│   ├── public/
-│   │   └── equipment-admin.html        # NOUVEAU 47 — page admin saisie équipements (servie via express.static)
 │   ├── diff_equip.mjs                  # NOUVEAU 48 — outil diff BDD vs STEP1 champ par champ (post-seed)
 │   ├── src/
+│   │   ├── admin/
+│   │   │   └── ref-equipment-tool.html # Déplacé/renommé PLAN_ADMIN Lot 2 (ex server/public/equipment-admin.html,
+│   │   │                                  servi sans garde via express.static) — servi par GET /api/admin/tools/equipment,
+│   │   │                                  requireAuth+requireAdmin (routes/adminTools.js)
 │   │   ├── db/
 │   │   │   ├── migrations/             # 79 migrations stables. Session 83 : 71–74 (drone_sheet, drone_sheet_fix, drone_programs_catalog, fix_ref_skills). Session 84 : 75_ammo_caliber_names_fix. Sessions 86–93 : 76–79.
 │   │   │   ├── seeds/
@@ -706,6 +708,7 @@ Enclume/
 | Stockage fichiers | MinIO | Bucket unique |
 | Auth | JWT httpOnly cookie | 7 jours |
 | Inscription | Code d'invitation `REGISTRATION_CODE` dans `.env` | 8 chiffres, `timingSafeEqual`, guard 500 si absent |
+| Bootstrap admin | `ADMIN_BOOTSTRAP_EMAIL` dans `.env` | Une valeur par instance, promotion idempotente au démarrage (`bootstrapAdmin.js`) ; absent = no-op, aucune promotion automatique |
 | Rechargement combat | `campaigns.settings.reload_mode` (JSONB, migration 104) | `'magazine'` (défaut) ou `'topup'` — configurable dans CampaignSettingsPage, lu via `campaignSettingsService.getCampaignSettings()` |
 
 ---

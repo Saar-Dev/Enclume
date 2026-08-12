@@ -36,6 +36,11 @@ import { chatRouter } from './chat/chatRoutes.js'
 import creationRouter from './routes/creation.js'
 import vaultRouter from './routes/vault.js'
 import { BUILTIN_MODELS_ROOT, syncBuiltinModels } from './lib/builtinModelCatalog.js'
+import { bootstrapAdminFromEnv } from './lib/bootstrapAdmin.js'
+import adminToolsRouter from './routes/adminTools.js'
+import adminUsersRouter from './routes/adminUsers.js'
+import ticketsRouter from './routes/tickets.js'
+import adminTicketsRouter from './routes/adminTickets.js'
 import { createCorsOriginValidator, parseClientOrigins } from './lib/clientOrigins.js'
 import './lib/echeanceHandlerRegistrations.js' // effet de bord : peuple shared/echeanceTypeRegistry.js
 
@@ -122,6 +127,10 @@ app.use('/api/entity-blueprints', entityBlueprintsRouter)
 app.use('/api/battlemaps/:id/entities', entitiesRouter)
 app.use('/api/entities', entitiesRouter)
 app.use('/api/equipment', equipmentRouter)
+app.use('/api/admin', adminToolsRouter)
+app.use('/api/admin/users', adminUsersRouter)
+app.use('/api/admin/tickets', adminTicketsRouter)
+app.use('/api/tickets', ticketsRouter)
 app.use('/api/campaigns/:campaignId/documents', documentsRouter)
 app.use('/api/campaigns/:campaignId/merchants', merchantsRouter)
 app.use('/api/campaigns/:campaignId/trade-log', tradeLogRouter)
@@ -146,6 +155,7 @@ const startServer = async () => {
 
     // Migrations — applique toutes les migrations en attente au démarrage
     await db.migrate.latest()
+    await bootstrapAdminFromEnv()
     await syncBuiltinModels()
     console.log('Migrations à jour')
 

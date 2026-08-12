@@ -145,7 +145,17 @@ export default function DashboardPage() {
             </button>
           )}
 
-          <button className="btn-icon">
+          {/* Lien Administration — visible uniquement si role admin global (docs/PLANS/PLAN_ADMIN.md) */}
+          {user?.role === 'admin' && (
+            <button
+              className="btn-icon"
+              onClick={() => navigate('/admin')}
+            >
+              {t('dashboard.admin')}
+            </button>
+          )}
+
+          <button className="btn-icon" onClick={() => navigate('/me')}>
             {user?.username}
           </button>
 

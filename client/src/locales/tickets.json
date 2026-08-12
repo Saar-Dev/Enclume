@@ -1,0 +1,76 @@
+{
+  "form": {
+    "backToDashboard": "Retour au tableau de bord",
+    "title": "Signaler un problème",
+    "intro": "Bug, déséquilibre de règle ou suggestion : ce formulaire part directement vers l'équipe.",
+    "category": "Catégorie",
+    "categoryOptions": {
+      "bug": "Bug — quelque chose ne fonctionne pas",
+      "balance": "Déséquilibre de règle",
+      "suggestion": "Suggestion",
+      "other": "Autre"
+    },
+    "domain": "Domaine",
+    "domainPlaceholder": "Choisir un domaine (optionnel)",
+    "domainOptions": {
+      "monde": "Monde et déplacement",
+      "combat": "Combat",
+      "personnage": "Personnage et fiche",
+      "wizard": "Création de personnage",
+      "marchands": "Marchands et échanges",
+      "editeur": "Éditeur / Atelier du GM",
+      "infrastructure": "Compte, connexion, technique",
+      "autre": "Autre"
+    },
+    "titleLabel": "Titre",
+    "titlePlaceholder": "Résumé en quelques mots",
+    "description": "Description",
+    "descriptionPlaceholder": "Que s'est-il passé ? Que t'attendais-tu à voir à la place ?",
+    "submit": "Envoyer",
+    "submitting": "Envoi…",
+    "success": "Signalement envoyé — merci.",
+    "errorSubmit": "Échec de l'envoi, réessaie dans un instant.",
+    "errorRequired": "Titre et description sont requis."
+  },
+  "admin": {
+    "backToAdmin": "Retour à l'administration",
+    "title": "Tickets",
+    "errorLoad": "Échec du chargement des tickets.",
+    "errorSave": "Échec de l'enregistrement.",
+    "noTickets": "Aucun ticket pour ces filtres.",
+    "filters": {
+      "origin": "Origine",
+      "status": "Statut",
+      "domain": "Domaine",
+      "clusterLabel": "Cluster (filtre texte)",
+      "clusterLabelPlaceholder": "ex. Cluster N",
+      "all": "Tous"
+    },
+    "originLabels": {
+      "player": "Joueur",
+      "gm": "MJ",
+      "admin": "Admin",
+      "log": "Log"
+    },
+    "statusLabels": {
+      "new": "Nouveau",
+      "triaged": "Trié",
+      "in_progress": "En cours",
+      "suspended": "Suspendu",
+      "resolved": "Résolu",
+      "wont_fix": "Ne sera pas corrigé",
+      "duplicate": "Doublon"
+    },
+    "priorityLabels": {
+      "low": "Basse",
+      "medium": "Moyenne",
+      "high": "Haute",
+      "critical": "Critique"
+    },
+    "priorityPlaceholder": "Priorité (non posée)",
+    "clusterLabel": "Cluster",
+    "clusterLabelEditPlaceholder": "Libellé de cluster (ex. Cluster N)",
+    "linkedBugCode": "Code lié",
+    "reportedBy": "Signalé par"
+  }
+}

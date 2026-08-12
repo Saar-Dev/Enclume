@@ -1,5 +1,14 @@
 # BUGIDENTIFIE.md — Registre des bugs actifs
 
+> **ARCHIVÉ le 2026-08-12** — remplacé par le système de tickets (`bug_tickets`, écran
+> `/admin/tickets`). Les 45 entrées encore actives de ce fichier (sections "Clusters actifs"/"Détail
+> des bugs" + table BETA, hors deux entrées déjà déclarées résolues plus bas dans ce document) ont
+> été importées en base par `server/src/scripts/importBugIdentifie.js` — chaque ticket importé porte
+> l'identifiant d'origine dans `linked_bug_code` pour traçabilité. La méthode de triage (§ci-dessous)
+> reste la référence, recopiée dans `docs/SYSTEME/TICKETS.md` §4. Contenu durable :
+> **`docs/SYSTEME/TICKETS.md`** — lire ce document pour l'état stable. Compte-rendu de clôture :
+> `docs/JOURNAL8.md`, session 2026-08-12. Ce fichier ne reçoit plus aucune nouvelle entrée.
+
 > Dernière mise à jour : 2026-08-09 — Nettoyage post-beta (retrait de toutes les entrées closes,
 > intégration de la liste des bugs beta-testeurs dans une section temporaire).
 

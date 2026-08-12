@@ -2089,3 +2089,102 @@ dérivé côté client sans migration : un groupe de plus de 2 items = comportem
 **Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+-----
+## Session (Saar) — 2026-08-12 — Rôle administrateur, page /admin, gestion des utilisateurs
+
+**Contexte** : parti d'une demande de système de ticket de bug côté joueurs/MJ, recentré par Saar sur
+la fondation manquante — aucun rôle admin global n'existait (seul `campaign_members.role` par
+campagne). Conception dans `docs/PLANS/PLAN_ADMIN.md` (méthodologie `METHODO_PLAN.md`), 3 lots validés
+un par un, plusieurs erreurs réelles trouvées et corrigées en cours de route plutôt qu'après coup :
+gate initial de `equipment.js` qui aurait cassé l'inventaire de tout joueur (corrigé avant code),
+bootstrap par migration invalide pour une valeur différente par instance (remplacé par
+`ADMIN_BOOTSTRAP_EMAIL`), `equipment-admin.html` gaté côté API seulement alors que la page elle-même
+restait publique (déplacée hors de `server/public/`), test de migration qui aurait avorté sa propre
+transaction Postgres, garde "dernier admin" recadrée après recherche (better-auth#3651) pour être un
+invariant général plutôt qu'un cas particulier d'auto-rétrogradation.
+
+**Construit** :
+- **Lot 1** — `users.role`/`role_granted_by`/`role_granted_at` + contrainte `CHECK`
+  (`240_users_role.js`), `bootstrapAdmin.js` (promotion idempotente par variable d'environnement au
+  démarrage), `requireAdmin.js` (fail-closed, relit toujours la base, jamais le JWT).
+- **Lot 2** — `requireAdmin` sur les 3 routes de mutation d'`equipment.js` (GET gameplay intacts) et
+  sur `health.js`. Page `/admin` (`AdminPage.jsx`), `AdminRoute` côté client. `equipment-admin.html`
+  déplacé/renommé (`server/src/admin/ref-equipment-tool.html`), servi par une route authentifiée
+  (`routes/adminTools.js`) au lieu d'`express.static` sans garde.
+- **Lot 3** — `adminUserService.js` (liste + `changeUserRole` avec garde dernier admin),
+  `routes/adminUsers.js`, `AdminUsersPage.jsx` (confirmation avant tout changement de rôle).
+- **Hors plan, ajouté en cours de session** : `MePage.jsx` (`/me`) — profil self-service complet
+  (username/email/couleur/mot de passe), manquant pour permettre à un admin bootstrap de changer son
+  mot de passe temporaire ; lien depuis le nom de compte du Dashboard.
+- Documentation durable transférée vers `docs/SYSTEME/ADMIN.md` (Règle 10) ; `PLAN_ADMIN.md` gardé
+  pour son détail de conception, pas encore archivé (instance distante non testée).
+
+**Testé** : 10 tests automatisés (`bootstrapAdmin.test.mjs`, `adminUserService.test.mjs`) exécutés
+pour de vrai contre PostgreSQL local (Docker, actif sur ce poste), 10/10 verts, y compris la garde
+dernier admin réellement déclenchée. `eslint`/`vite build` propres à chaque lot. Confirmé par Saar en
+navigateur sur l'instance locale : bootstrap (compte promu en base), bouton "Administration" visible,
+chaque tuile de `/admin` (Santé, Dice, BDD, Utilisateurs), changement de mot de passe via `/me`.
+**Non testé** ⚠️ : instance distante — rien committé/poussé à ce stade, donc pas encore atteignable.
+**Données** : migration `240_users_role.js`, appliquée (auto, nodemon) sur l'instance locale
+uniquement.
+**Retour arrière** : rien committé sur ce chantier — fichiers listés ci-dessus encore dans le
+worktree local, aux côtés de modifications non liées d'autres sessions en cours (Wizard). `git diff`
+ciblé sur les fichiers cités si besoin, jamais un `git checkout .` global.
+
+-----
+## Session (Saar) — 2026-08-12 — Système de tickets (Lots 1-2) + fusion BUGIDENTIFIE.md
+
+**Contexte** : demande initiale du tout premier échange de la journée (interface de ticket de bug
+joueur/GM), mise en pause le temps de construire la fondation admin (session précédente ci-dessus),
+reprise une fois `docs/SYSTEME/ADMIN.md` disponible. Conception dans `docs/PLANS/PLAN_TICKETS.md`
+(archivé), recherche externe citée avant codage : bonnes pratiques de formulaire de bug report
+(priorité/sévérité posées par l'équipe, jamais par le rapporteur), GitHub Issues (labels texte libres
+plutôt que colonnes figées — a directement simplifié le design du regroupement), FreeScout
+(`app/Conversation.php` réel, patron `closed_by_user_id`/`closed_at` — confirme le patron
+`reviewed_by`/`reviewed_at` déjà utilisé côté Enclume). En cours de conception, Saar demande la fusion
+complète avec l'ancien `docs/BUGIDENTIFIE.md` — actée mais découpée en Lot 2 séparé plutôt que codée
+d'un coup avec le formulaire de base, le temps de vérifier l'impact réel (méthode de triage utilisée
+par Claude pendant le code, ligne d'autorité `EN_COURS.md`).
+
+**Construit** :
+- **Lot 1** — table `bug_tickets` (migration `241_bug_tickets.js`, 4 `CHECK`, patron
+  `vault_transfer_requests`), `ticketService.js` (`createTicket` avec `origin` calculé serveur —
+  admin > MJ membre de campagne > joueur, jamais déclaré par le client — `listTickets`/
+  `listTicketsForReporter`, `updateTicket` avec provenance `reviewed_by`/`reviewed_at`), routes
+  `POST /api/tickets`, `GET /api/tickets/mine`, `GET`/`PATCH /api/admin/tickets`. Client :
+  `ReportTicketPage.jsx` (`/tickets/new`, formulaire minimal — ni priorité ni sévérité, posées par
+  l'admin au triage), `AdminTicketsPage.jsx` (`/admin/tickets`, liste groupée par origine, filtres,
+  édition inline du `cluster_label` en texte libre), tuile "Tickets" activée sur `/admin`, lien
+  "Signaler un problème" dans le footer du Changelog, namespace i18n dédié `tickets.json`.
+- **Lot 2** — `server/src/scripts/importBugIdentifie.js` : transcription manuelle (pas un parseur
+  markdown — le fichier source mélange 3 formats différents) du contenu de l'ancien
+  `docs/BUGIDENTIFIE.md` (sections Clusters/Détail + table BETA), 45 tickets créés, `origin='admin'`,
+  `linked_bug_code` posé à l'identifiant d'origine. Deux entrées BETA (#18, #22) exclues — le fichier
+  source les déclarait lui-même résolues dans ses propres notes de fin. Deux divergences réelles
+  trouvées entre `EN_COURS.md` et `BUGIDENTIFIE.md` pendant la transcription (cluster UI2/UI3 ;
+  CS4/CS5/COM20/COM21 absents du registre `BUGIDENTIFIE.md`) — documentées dans les `admin_notes`
+  des tickets concernés et dans le script, pas corrigées silencieusement. `docs/EN_COURS.md` nettoyé
+  des 14 dettes désormais suivies en base (avec enrichissement de 4 tickets dont la description
+  `EN_COURS.md` était plus complète que celle de `BUGIDENTIFIE.md` avant suppression de la ligne, pour
+  ne pas perdre l'information). `docs/Old/BUGIDENTIFIE.md` archivé (bandeau de redirection).
+- Documentation durable : `docs/SYSTEME/TICKETS.md` (architecture, invariants, méthodologie de
+  triage reprise de l'ancien `BUGIDENTIFIE.md`), `docs/VOCABULARY.md` (+Ticket, +Cluster (ticket)),
+  `docs/SYSTEME/INDEX.md` mis à jour. `docs/Old/PLAN_TICKETS.md` archivé.
+
+**Testé** : migration 241 — 5/5 tests (colonnes, insert valide, `down`, les 4 `CHECK`) contre
+PostgreSQL local réel. `ticketService.js` — 11/11 tests contre la base locale réelle (origine
+calculée correctement selon des lignes `users`/`campaign_members` réellement insérées, filtres,
+provenance, rejets 400/404). `eslint`/`vite build` propres (2 erreurs trouvées et corrigées en cours
+de route : variable inutilisée, `setState` synchrone dans un effet — remplacé par le patron `key`
+recommandé par React plutôt qu'un effet de resynchronisation). Script d'import exécuté pour de vrai
+contre la base locale (45 tickets créés, comptages vérifiés par requête directe). Confirmé par Saar en
+navigateur sur l'instance locale : signalement joueur (auto-signalé un ticket de test), écran
+`/admin/tickets` fonctionnel, import visible.
+**Non testé** ⚠️ : instance distante — rien poussé à ce stade. CLI terminal pour créer des tickets
+sans navigateur (hors périmètre Lot 2, le script d'import à usage unique a suffi pour la bascule).
+**Données** : migrations `241_bug_tickets.js` (appliquée, auto nodemon, instance locale), import de
+45 lignes `bug_tickets` via `importBugIdentifie.js` (exécuté une fois, script conservé pour
+traçabilité).
+**Retour arrière** : rien committé sur ce chantier au moment de la rédaction de cette entrée — voir
+commit qui suit immédiatement dans l'historique pour le détail exact des fichiers.

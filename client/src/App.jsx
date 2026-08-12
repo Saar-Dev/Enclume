@@ -14,11 +14,28 @@ import HealthPage from './pages/HealthPage'
 import WizardCreationPage from './pages/WizardCreationPage'
 import CharacterPoolPage from './pages/CharacterPoolPage'
 import DiceCalibrationPage from './pages/DiceCalibrationPage' // OUTIL DEV — vérification/calibration des dés
+import AdminPage from './pages/AdminPage'
+import AdminUsersPage from './pages/AdminUsersPage'
+import AdminTicketsPage from './pages/AdminTicketsPage'
+import ReportTicketPage from './pages/ReportTicketPage'
+import MePage from './pages/MePage'
 
 function ProtectedRoute({ children }) {
   const { user, isLoading } = useAuthStore()
   if (isLoading) return null
   if (!user) return <Navigate to="/login" replace />
+  return children
+}
+
+// Réservé role==='admin'. Nécessaire en plus de la garde serveur (requireAdmin) pour
+// /dev/dice-calibration, qui n'a aucune route serveur à qui déléguer cette décision — voir
+// docs/PLANS/PLAN_ADMIN.md §2.2. Le garde isLoading doit précéder le test de role, sinon un user pas
+// encore chargé (fetch /auth/me async) pourrait être lu à tort comme "pas admin".
+function AdminRoute({ children }) {
+  const { user, isLoading } = useAuthStore()
+  if (isLoading) return null
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'admin') return <Navigate to="/dashboard" replace />
   return children
 }
 
@@ -67,11 +84,26 @@ export default function App() {
           <ProtectedRoute><VaultPage /></ProtectedRoute>
         } />
         <Route path="/health" element={
-          <ProtectedRoute><HealthPage /></ProtectedRoute>
+          <AdminRoute><HealthPage /></AdminRoute>
         } />
         {/* OUTIL DEV — vérification/calibration des dés (tous types) */}
         <Route path="/dev/dice-calibration" element={
-          <ProtectedRoute><DiceCalibrationPage /></ProtectedRoute>
+          <AdminRoute><DiceCalibrationPage /></AdminRoute>
+        } />
+        <Route path="/admin" element={
+          <AdminRoute><AdminPage /></AdminRoute>
+        } />
+        <Route path="/admin/users" element={
+          <AdminRoute><AdminUsersPage /></AdminRoute>
+        } />
+        <Route path="/admin/tickets" element={
+          <AdminRoute><AdminTicketsPage /></AdminRoute>
+        } />
+        <Route path="/tickets/new" element={
+          <ProtectedRoute><ReportTicketPage /></ProtectedRoute>
+        } />
+        <Route path="/me" element={
+          <ProtectedRoute><MePage /></ProtectedRoute>
         } />
 		<Route path="/campaigns/:campaignId/creation" element={
 			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>

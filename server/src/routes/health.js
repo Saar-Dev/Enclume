@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
+import { requireAdmin } from '../middleware/requireAdmin.js'
 import os from 'os'
 import { exec } from 'child_process'
 import { promisify } from 'util'
@@ -114,7 +115,7 @@ async function readServices() {
   }
 }
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireAdmin, async (req, res) => {
   const totalMem = os.totalmem()
   const freeMem = os.freemem()
 

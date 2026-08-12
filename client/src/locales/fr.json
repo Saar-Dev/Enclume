@@ -57,7 +57,47 @@
     "joinCard": "Rejoindre une campagne",
     "codePlaceholder": "#code-invitation",
     "renameError": "Erreur lors du renommage",
-    "vaultCard": "Mon Coffre"
+    "vaultCard": "Mon Coffre",
+    "admin": "Administration"
+  },
+  "admin": {
+    "backToDashboard": "Tableau de bord",
+    "title": "Administration",
+    "tileHealth": "Santé serveur",
+    "tileDice": "Calibration des dés",
+    "tileEquipment": "Catalogue équipement",
+    "tileUsers": "Utilisateurs",
+    "tileTickets": "Tickets",
+    "comingSoon": "Bientôt"
+  },
+  "me": {
+    "backToDashboard": "Tableau de bord",
+    "title": "Mon compte",
+    "username": "Nom d'affichage",
+    "email": "Email",
+    "color": "Couleur",
+    "passwordSectionTitle": "Changer le mot de passe",
+    "currentPassword": "Mot de passe actuel",
+    "newPassword": "Nouveau mot de passe",
+    "newPasswordConfirm": "Confirmer le nouveau mot de passe",
+    "passwordMismatch": "Les deux mots de passe ne correspondent pas",
+    "currentPasswordRequired": "Le mot de passe actuel est requis pour le changer",
+    "nothingToSave": "Aucune modification à enregistrer",
+    "saved": "Modifications enregistrées",
+    "errorSave": "Erreur lors de l'enregistrement"
+  },
+  "adminUsers": {
+    "backToAdmin": "Administration",
+    "title": "Utilisateurs",
+    "errorLoad": "Impossible de charger la liste des utilisateurs",
+    "errorSave": "Erreur lors du changement de rôle",
+    "roleAdmin": "Admin",
+    "roleUser": "Joueur",
+    "promote": "Promouvoir",
+    "demote": "Rétrograder",
+    "confirmPromoteTitle": "Promouvoir cet utilisateur",
+    "confirmDemoteTitle": "Rétrograder cet administrateur",
+    "confirmText": "Confirmer le changement de rôle de {{username}} ?"
   },
   "vault": {
     "pageTitle": "Mon Coffre",
@@ -936,7 +976,8 @@
       "faux-bug": "FAUX BUG"
     },
     "openTitle": "Afficher le changelog",
-    "reduceTitle": "Réduire"
+    "reduceTitle": "Réduire",
+    "reportBug": "Signaler un problème"
   },
   "library": {
     "newDocument": "+ Nouveau document",

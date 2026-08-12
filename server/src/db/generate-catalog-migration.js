@@ -3,14 +3,15 @@
  *
  * Contexte (docs/BUGIDENTIFIE.md, "module Arme KO" 2026-08-08) : ref_equipment.location (et
  * potentiellement d'autres colonnes) est corrigé après coup, à la main, via l'éditeur catalogue GM
- * (server/public/equipment-admin.html, PUT /equipment/:id) — jamais capturé par une migration, donc
- * jamais propagé à une instance seedée séparément (serveur distant). Ce script compare, ligne par
- * ligne et colonne par colonne, ce que le seed (STEP1_cleaned_data.js, via equipmentMapping.js —
- * même logique que 2_seed_equipment.js, pas dupliquée) produirait, contre l'état réel de la base
- * LOCALE (considérée à jour/curée). Tout écart = une correction jamais capturée.
+ * (server/src/admin/ref-equipment-tool.html, servi par GET /api/admin/tools/equipment depuis
+ * PLAN_ADMIN Lot 2, PUT /equipment/:id) — jamais capturé par une migration, donc jamais propagé à
+ * une instance seedée séparément (serveur distant). Ce script compare, ligne par ligne et colonne
+ * par colonne, ce que le seed (STEP1_cleaned_data.js, via equipmentMapping.js — même logique que
+ * 2_seed_equipment.js, pas dupliquée) produirait, contre l'état réel de la base LOCALE (considérée
+ * à jour/curée). Tout écart = une correction jamais capturée.
  *
- * Règle (décision Saar 2026-08-08) : plus aucune correction via equipment-admin.html tant que ce
- * générateur n'a pas tourné et que son résultat n'a pas été relu et commité.
+ * Règle (décision Saar 2026-08-08) : plus aucune correction via cet éditeur tant que ce générateur
+ * n'a pas tourné et que son résultat n'a pas été relu et commité.
  *
  * Usage :
  *   node generate-catalog-migration.js            → rapport seul (aucun fichier écrit)
@@ -115,7 +116,8 @@ async function main() {
   const body = `// ${filename}
 //
 // Corrections catalogue faites après coup, à la main, via l'éditeur GM
-// (server/public/equipment-admin.html, PUT /equipment/:id) et jamais capturées par une migration —
+// (server/src/admin/ref-equipment-tool.html, GET /api/admin/tools/equipment, PUT /equipment/:id)
+// et jamais capturées par une migration —
 // donc jamais propagées à une instance seedée séparément (cause racine du bug "module Arme KO",
 // docs/BUGIDENTIFIE.md, 2026-08-08). Généré MÉCANIQUEMENT par
 // server/src/db/generate-catalog-migration.js depuis l'écart entre le seed (STEP1_cleaned_data.js)

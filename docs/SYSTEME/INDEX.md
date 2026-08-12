@@ -1,6 +1,7 @@
 # INDEX.md — Carte documentaire d’Enclume
 
-> Version : 2026-08-07 — ajout SYSTEME/TRADE.md (Marchands & Échange).
+> Version : 2026-08-12 — ajout SYSTEME/ADMIN.md (rôle administrateur, page /admin) et
+> SYSTEME/TICKETS.md (système de tickets, remplace BUGIDENTIFIE.md archivé).
 > Statut : Document de navigation pour humains et agents IA.
 > Lire ceci en premier pour savoir où trouver une information.
 
@@ -70,6 +71,8 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
 | `SYSTEME/CORE.md` | Auth, stores, WebSocket, migrations | ✅ Vérifié (2026-07-16) |
+| `SYSTEME/ADMIN.md` | Rôle administrateur global, page `/admin`, garde dernier admin, outils gérés | ✅ Vérifié (2026-08-12) |
+| `SYSTEME/TICKETS.md` | Système de tickets (`bug_tickets`), formulaire `/tickets/new`, triage `/admin/tickets`, méthodologie | ✅ Vérifié (2026-08-12) |
 | `SYSTEME/CONVENTIONS.md` | Règles immuables et pièges actifs (codes P/PE/PI/PEF) | ✅ Vérifié (2026-07-29) |
 | `SYSTEME/ARCHITECTURE_SOCKET.md` | Architecture modulaire des WebSockets, coordinateur, hooks client | ✅ Vérifié (2026-07-20) |
 | `SYSTEME/REACT.md` | Conventions React : hooks, dependency arrays, patterns, raccourcis clavier | ✅ Vérifié (2026-07-29) |
@@ -157,7 +160,6 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 | `EN_COURS.md` | Dettes actives et prochaine étape | Vivant |
 | `ROADMAP.md` | Planification des sprints futurs | Vivant |
 | `JOURNAL8.md` | Décisions et validations durables de la session | Vivant |
-| `BUGIDENTIFIE.md` | Détail technique des bugs connus | Vivant |
 | `AUDIT.md` | Audit du projet | Référence |
 | `SERVEURDISTANTKIWI.md` | Configuration du serveur distant (Kiwi) | Utilitaire |
 | `METHODO_PLAN.md` | Méthodologie de conception des PLANS | Guide |

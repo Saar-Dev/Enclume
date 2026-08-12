@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 const ACCENT = '#3aaa6a'
@@ -39,6 +40,7 @@ function parseChangelog(text) {
 
 export default function ChangelogPanel() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [open, setOpen]       = useState(false)
   const [releases, setReleases] = useState([])
 
@@ -194,6 +196,13 @@ export default function ChangelogPanel() {
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT }} />
             <span style={{ ...MONO, fontSize: 8, color: '#3a6050', letterSpacing: '0.1em' }}>
               BUILD {releases[0]?.version ?? '—'} · OK
+            </span>
+            <div style={{ flex: 1 }} />
+            <span
+              onClick={() => navigate('/tickets/new', { state: { fromPath: window.location.pathname } })}
+              style={{ ...MONO, fontSize: 8, color: '#3a6050', letterSpacing: '0.05em', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              {t('changelog.reportBug')}
             </span>
           </div>
         </>

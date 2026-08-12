@@ -2,20 +2,26 @@
  * equipment.js — API CRUD pour le catalogue ref_equipment
  *
  * Monté sous /api/equipment dans index.js.
- * Utilisé par la page d'administration standalone (server/public/equipment-admin.html).
+ * Utilisé par la page d'administration standalone (server/src/admin/ref-equipment-tool.html, servie
+ * par GET /api/admin/tools/equipment, requireAdmin — routes/adminTools.js), MAIS aussi par du
+ * gameplay normal en lecture (InventoryPanel, MerchantsPage, DroneWindow) — voir
+ * docs/PLANS/PLAN_ADMIN.md §0.3/§2.1. NE JAMAIS gater les 3 routes GET derrière requireAdmin : ça
+ * casserait l'inventaire de tout joueur. Seules les 3 routes de mutation (POST/PUT/DELETE), qui ne
+ * sont appelées que par cet outil, passent sous requireAdmin.
  *
  * Routes :
- *   GET  /api/equipment           — liste toutes les lignes (colonnes résumé)
- *   GET  /api/equipment/ref/skills — liste ref_skills pour dropdowns
- *   GET  /api/equipment/:id        — item complet + junction data
- *   POST /api/equipment            — crée un item + lignes junction
- *   PUT  /api/equipment/:id        — remplace un item + junction tables (remplacement total)
- *   DELETE /api/equipment/:id      — supprime (cascade FK sur junction tables)
+ *   GET  /api/equipment           — liste toutes les lignes (colonnes résumé) — requireAuth (gameplay)
+ *   GET  /api/equipment/ref/skills — liste ref_skills pour dropdowns — requireAuth (gameplay)
+ *   GET  /api/equipment/:id        — item complet + junction data — requireAuth (gameplay)
+ *   POST /api/equipment            — crée un item + lignes junction — requireAdmin
+ *   PUT  /api/equipment/:id        — remplace un item + junction tables (remplacement total) — requireAdmin
+ *   DELETE /api/equipment/:id      — supprime (cascade FK sur junction tables) — requireAdmin
  */
 
 import { Router } from 'express'
 import db from '../db/knex.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireAdmin } from '../middleware/requireAdmin.js'
 
 const router = Router()
 
@@ -85,7 +91,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
 })
 
 // ─── POST /api/equipment ──────────────────────────────────────────────────────
-router.post('/', requireAuth, async (req, res, next) => {
+router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { skills = [], skill_assoc = [], ammo_compat = [], ...rawFields } = req.body
     const fields = sanitize(rawFields)
@@ -124,7 +130,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 })
 
 // ─── PUT /api/equipment/:id ───────────────────────────────────────────────────
-router.put('/:id', requireAuth, async (req, res, next) => {
+router.put('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params
     const { skills = [], skill_assoc = [], ammo_compat = [], ...rawFields } = req.body
@@ -180,7 +186,7 @@ router.put('/:id', requireAuth, async (req, res, next) => {
 
 // ─── DELETE /api/equipment/:id ────────────────────────────────────────────────
 // Les junction tables cascadent via FK ON DELETE CASCADE
-router.delete('/:id', requireAuth, async (req, res, next) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const deleted = await db('ref_equipment').where({ id: req.params.id }).delete()
     if (!deleted) return res.status(404).json({ error: { message: 'Item introuvable' } })

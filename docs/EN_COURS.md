@@ -7,7 +7,10 @@
 > 2. Écrire le compte-rendu détaillé (contexte, décisions, fichiers touchés, **Testé / Non testé /
 >    Données / Retour arrière**) dans `docs/JOURNAL8.md`, format `## Session N (Dev) — Date — Titre`.
 > 3. Ne laisser ici que ce qui reste vraiment ouvert — un `⚠️ clos partiel` (code fait, navigateur non testé) reste une ligne active tant que Saar ne l'a pas confirmé en jeu.
-> 4. Le détail technique d'un bug reste dans `docs/BUGIDENTIFIE.md` (autorité unique) — ne pas le dupliquer ici au-delà d'une ligne de suivi (ID, description courte, priorité).
+> 4. Le détail technique d'un bug suivi par le système de tickets vit dans `bug_tickets` (autorité
+>    unique, écran `/admin/tickets`) — ne pas le dupliquer ici au-delà d'une ligne de suivi (ID,
+>    description courte, priorité) pour ce qui n'y est pas encore. `docs/BUGIDENTIFIE.md` est archivé
+>    (`docs/Old/`, 2026-08-12) : son contenu a été importé en base, voir `docs/SYSTEME/TICKETS.md`.
 >
 > Cette règle existe parce que ce fichier a grossi jusqu'à 386 Ko / 4083 lignes avant nettoyage
 ---
@@ -43,32 +46,25 @@ jeu par Saar avant clôture
 
 ## Dettes actives
 
-> Détail technique de chaque bug → [`docs/BUGIDENTIFIE.md`](BUGIDENTIFIE.md)
+> Détail technique des bugs suivis en base → écran admin `/admin/tickets` (`bug_tickets`,
+> `docs/SYSTEME/TICKETS.md`). Une partie des dettes ci-dessous (ex-`BUGIDENTIFIE.md`) y vit
+> désormais et n'apparaît plus ici — ce tableau garde ce qui n'a pas encore migré.
 
 | ID | Description | Priorité |
 |---|---|---|
 | **MONDEVALID1** | Moteur de monde (fusion Kiwi/Codex 2026-07-15, `caaf1af`, `shared/world/`, doc canonique `docs/SYSTEME/MOTEUR_MONDE.md`) : fondation active de tous les chantiers Étages/Ascenseur/Déplacement depuis — jamais validé en jeu réel sur une carte multi-étages complète (Playwright + manuel), seulement par tests Node (77+) et par l'usage indirect au fil des sessions | Moyenne — rien de cassé observé à ce jour, mais aucune validation end-to-end dédiée |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **SEED-ID-DETERM** | `server/src/db/seeds/2_seed_equipment.js` laisse PostgreSQL générer l'`id` de `ref_equipment` à l'insertion (idempotence garantie par `name` seul, pas par `id`) — deux instances seedées séparément ont des `id` différents pour la même ligne. Découvert via migration 209 (`id` codé en dur valide en local, absent sur Kiwi) — invariant ajouté à `.claude/rules/core.md` pour éviter la récidive côté migrations, mais la cause à la racine (seed non-déterministe) reste non traitée : un `id` stable (dérivé de la source Excel, ex. UUID v5 sur une clé source) rendrait `id` portable comme `name` l'est déjà | Basse — pas bloquant tant que les migrations matchent par `name`, confort/robustesse à terme |
-| **ASCENSEUR1** | World builder : fenêtre de propriétés d'un ascenseur s'ouvre puis se ferme aussitôt (spécifique ascenseur, pas porte/échelle). Suspendu — non reproductible au moment du signalement suivant, détail `docs/BUGIDENTIFIE.md` | En attente d'une nouvelle occurrence |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
-| **HORLOGE-TEST1** | `adjustGameTime` (Lot 1, `gameTimeService.js`) sans aucun test automatisé — seule la projection pure `shared/gameTime.js` est testée, trouvé en analyse à charge avant le Lot 2, détail `docs/BUGIDENTIFIE.md` | À faire avant/pendant le Lot 2 |
 | EQSKILLS1 | `ref_equipment_skills` ("compétences boostées/requises") jamais consommée en jeu — seulement écrite/relue par l'API admin `routes/equipment.js`, aucun calcul ne la lit. ~~1 item (TMP II) avait une entrée erronée (`ANALYSE_EMPATHIQUE`)~~ — supprimée 2026-08-08 (Lot A `PLAN_MIGRATIONS_REFONTE.md`, décision Saar), table à 31 lignes cohérentes. Fusion avec `ref_equipment_skill_assoc` possible mais non prioritaire | Basse |
 | **CHAT-SCROLL1** | Scroll infini chat construit (`loadOlderMessages`/`hasMore`, `useChatSocket.js`) mais pas câblé à un `IntersectionObserver` dans `Sidebar.jsx` — au-delà de 50 messages, l'historique le plus ancien reste inaccessible depuis l'UI. Détail `docs/SYSTEME/CHAT.md` §10 | Basse — Phase 4 `PLAN_CHAT.md` (archivé `docs/Old/`), pas commencée |
-| COM27 | CaC multi-attaque : jet de défense semble se lancer avant le jet d'attaque — mécanisme causal identifié 2026-08-05 (`broadcastCurrentSubPhase` émet `COMBAT_TIMELINE_UPDATED` avant le flush du `DICE_RESULT` d'attaque, bandeau MJ `CombatOverlay.jsx:275` réagit en premier), `[HYPOTHÈSE forte]` non instrumentée, détail `docs/BUGIDENTIFIE.md` | En attente de décision Saar (coder le correctif ou attendre confirmation) |
-| FEAT4 | Aura de portée CaC (3m + allonge arme) autour du personnage actif | Basse — sprint futur |
 | — | "Changer le mode de tir" — non implémenté | Moyenne — sprint futur |
 | — | Sprint Annonce v2 — actions en lecture seule | Moyenne — sprint futur |
 | DR2 | Drone : déplacement absent | Basse — sprint futur |
 | **CSPLAYERSTAB** | `CampaignSettingsPage.jsx` — avertissement React (mélange `background`/`backgroundColor` entre `s.navItem`/`s.navItemActive`) sur les onglets de réglages campagne — préexistant, repéré en testant `docs/PLAN_VAULT.md` Lot 4 (onglet "Joueurs"). Cosmétique, aucun impact fonctionnel | Très basse |
-| **CHARSTORE-NULLISH1** | `characterStore.js:15` — `?? false` mort après un `===` (ESLint `no-constant-binary-expression`), préexistant, repéré en clôturant CHARMODAL-DEAD1. Détail `docs/BUGIDENTIFIE.md` | Très basse — cosmétique lint, aucun impact fonctionnel |
 | **EAU1** | Nappe d'eau ambiante `computeSurfaceWaterCells`/`WaterSheets` retirée (improvisation client hors autorité serveur, décision Saar 2026-07-29) — eau en jeu recentrée sur l'effet runtime "inondation" déjà câblé (compartiments + `runtimeEffectRegions`). Codé, tests/build/lint OK | Basse — validation en jeu par Saar avant clôture |
 | **CURSEUR-DEFAUT1** | `CURSEUR.svg` (flèche) — curseur natif (`cursor: url()`, PAS overlay DOM, choix motivé par la précision du hotspot, cf. `SceneCursorOverlay.jsx`) par défaut hors combat, jamais pendant un combat (`combatStore.phase`), et jamais hors du canvas 3D (retour Sidebar au curseur système = comportement attendu, portée volontairement limitée au playground). Taille 32×29 + hotspot `7 2` (retour Saar 2026-08-08, taille initiale 40×36 jugée trop grosse vs curseur système ~32px), calculé par lecture du path source, non vérifié visuellement. Fond opaque du SVG source retiré (jugé non intentionnel). Codé, build OK | Basse — validation en jeu par Saar (précision du clic sur la pointe, taille, fond transparent voulu) avant clôture |
-| **DEPLACEMENT3** | Latence résiduelle ~0,5-1s au premier "Déplacement" après un déplacement validé — confirme la piste notée dans DEPLACEMENT1 (`runtime_revision` bump sur simple déplacement de token invalide aussi le cache structurel) | Très basse — "rien de gênant" (Saar) |
-| **TOURTRANSITION1** | Latence + message "En attente de {{nom}}" en chaînant plusieurs actions de PNJ (`CombatActionWindow.jsx:772-782`) — non instrumenté | Très basse — "rien de gênant" (Saar) |
 | **PLAN_RW_SYSCOMBAT Lot 7** | `confirmMeleeDefense` branchement post-hit codé + fixture jetable validée (10 passes) + confirmé en jeu pour l'attaquant PNJ. Chemin attaquant PJ (`resolveMeleeDefenseHitAttackerPj`) non testé en jeu (Saar ne peut pas reproduire ce cas actuellement) — reste couvert par fixture seulement. Détail `docs/JOURNAL8.md` | ⚠️ clos partiel — confirmation PJ vs PJ en attente |
-| **ANNONCE-PRECHECK-STALE1** | "Action non autorisée dans cet état de combat (phase:ANNOUNCEMENT, sous-état:?)" en fin de combat — pattern déjà connu (JOURNAL5) potentiellement pas entièrement corrigé, `[HYPOTHÈSE]` non instrumentée. Détail `docs/BUGIDENTIFIE.md` | Basse — repro précise à obtenir de Saar avant d'instrumenter |
-| **CATASTROPHE-SCOPE1** | Une Catastrophe semble affecter deux protagonistes au lieu du seul lanceur de dé — `[INCONNU]`, hypothèse la plus probable : deux jets de Catastrophe indépendants (attaquant+défenseur) mal présentés dans la file MJ, pas un vrai partage d'effet. Détail `docs/BUGIDENTIFIE.md` | Basse — investigation dédiée, hors périmètre RW_SYSCOMBAT |
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
@@ -82,8 +78,6 @@ jeu par Saar avant clôture
 | **MUT3** | Effets mécaniques des mutations et avantages — Lots 1-6 (attributs, résistances, armure/arme naturelle, déblocage de compétences, identité sex/is_fertile/hand_pref) ✅ clos et fonctionnels. Reste Lot 7 (Narratif/économie, priorité basse) — `docs/Old/PLAN_MUTATION2.md` (archivé, chantier clos) | Lot 7 à détailler quand Saar voudra enchaîner |
 | **COM20** | Phase 1 : afficher arme (munitions + type) | Moyenne — Cluster N |
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
-| **UI2** | Alignement dés | Basse — Cluster Q |
-| **UI3** | Dé 100 : affichage chat | Basse — Cluster Q |
 | ~~**WIZ-2**~~ | ~~Deux compteurs PC (header store vs CareersAllocator local)~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — cause racine plus large que CareersAllocator seul (Step3Mutations/Step5Advantages aussi), `getStepBudget(excludeStep)` corrigé, `docs/BUG WIZARD.md` #4 — codé, scénario réel navigateur non testé |
 | **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
 | ~~**WIZ5**~~ | ~~« Méthode de mutation invalide : null » sur « Voir ma fiche »/Terminer (Étape 4) — `getStep3State` renvoyait `method: null`, `openPeek`/`handleTerminate` lisaient des variables fermées~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — `'none'` + `useCreationStore.getState()`, détail `docs/JOURNAL8.md` — codé, scénario réel navigateur non testé |
@@ -113,13 +107,10 @@ jeu par Saar avant clôture
 | ~~**INI4**~~ | ~~`initiative` jamais remise à `base_ini` en fin de tour~~ | ⚠️ clos partiel Session 166 (Saar), item 96 — codé, scénario réel navigateur non testé |
 | ~~**INI5**~~ | ~~CaC : forfait Initiative de déclaration (-3/-5) doublon sans base RAW avec le décalage de phase~~ | ⚠️ clos partiel Session 176 (Saar), item 111 — audit tranché, retiré, scénario réel navigateur non testé |
 | ~~**COM24**~~ | ~~Bonus "deux armes" (+3 CaC) déconnecté de l'arme réellement déclarée~~ | ⚠️ clos partiel Session 176 (Saar), item 112 — codé (mécanisme complet, miroir Tir), scénario réel navigateur non testé |
-| **RELOAD-INHAND** | `resolveReload` (weapon_inv_id fourni) ne vérifie pas `char_inventory_slots` — trouvé en clôturant MELEE-INHAND. Détail `docs/BUGIDENTIFIE.md` | Très basse — impact quasi nul, Tir exige déjà l'en-main |
-| **ASSAULT-CATEGORY** | Tir : aucune vérification de catégorie sur l'arme, contrairement au CaC — trouvé en clôturant ASSAULT-INHAND-RESOLUTION. Détail `docs/BUGIDENTIFIE.md` | Basse — comportement historique, décision Saar à prendre |
 | ~~**MELEE-MR**~~ | ~~Dégâts CaC calculés sans le MR (dette Session 67)~~ | ⚠️ clos partiel Session 166 (Saar), item 97 — codé, scénario réel navigateur non testé |
 | ~~**DEF5**~~ | ~~« Cible sans défense » (+5, pas d'opposition) absent en tir ET en CaC~~ | ⚠️ clos partiel Session 166 (Saar), item 98 — codé, scénario réel navigateur non testé ; tir de drone non couvert |
 | ~~**SURPRISE1**~~ | ~~`is_surprised` jamais remis à `false` après `COMBAT_START`~~ | ⚠️ clos partiel Session 176 (Saar), item 110 — codé, scénario réel navigateur non testé |
 | ~~**TIRIMP**~~ | ~~Garde serveur absent sur « Tir impossible »~~ | ⚠️ clos partiel Session 166 (Saar), item 99 — codé, scénario réel navigateur non testé |
-| **COUVERTURE_TOTALE** | « Couverture totale » (tir) n'existe nulle part, ni client ni serveur — trouvé en clôturant TIRIMP. Détail `BUGIDENTIFIE.md` | Basse — à regrouper avec le futur chantier Tir en aveugle |
 | ~~**WNDMORT**~~ | ~~Malus blessure « mortelle » codé -20 fixe au lieu de bloquer les Tests~~ | ⚠️ clos partiel Session 166 (Saar), item 100 — codé, scénario réel navigateur non testé |
 | **WNDMORT-UI** | Fenêtre de déclaration sans repli visuel pour Blessure mortelle — le serveur rejette déjà, l'UI ne prévient pas avant. Détail `BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-01, décision Saar : validé) : bandeau d'avertissement + tuiles grisées codés, scénario réel navigateur non testé |
 | **WNDMORT-HORSCOMBAT** | Test générique hors-combat (`socketEntity.js`) non gardé pour Blessure mortelle. Détail `BUGIDENTIFIE.md` | ⚠️ clos partiel — Session (Saar, 2026-08-01, décision Saar : bandeau centré) : garde + bandeau centré codés, scénario réel navigateur non testé |

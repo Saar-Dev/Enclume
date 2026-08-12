@@ -5,6 +5,7 @@ import creation from './locales/creation.json'
 import combat from './locales/combat.json'
 import charSheet from './locales/charSheet.json'
 import builder from './locales/builder.json'
+import tickets from './locales/tickets.json'
 
 i18n
   .use(initReactI18next)
@@ -16,6 +17,7 @@ i18n
         combat: combat,
         charSheet: charSheet,
         builder: builder,
+        tickets: tickets,
       },
     },
     lng: 'fr',

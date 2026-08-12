@@ -1,6 +1,6 @@
 VOCABULARY.md — Contrat sémantique officiel d'Enclume
 
-    Version : V2.2 — enrichi session 2026-08-07 (Marchand, Revente PJ→GM, autorité TRADE.md)
+    Version : V2.3 — enrichi session 2026-08-12 (Ticket, Cluster (ticket), autorité TICKETS.md)
 
     Statut : Source de vérité (non exhaustif — à enrichir à chaque ambiguïté rencontrée)
 
@@ -68,6 +68,9 @@ surfaceDocument (serveur)	Module de validation et normalisation du document surf
 Canal (chat)	Sous-espace de discussion persistant à l'intérieur d'une campagne. V1 : `general` (broadcast room) et `whisper` (privé, filtré par destinataire) ; pas encore choisi par l'utilisateur en UI, pas de canaux additionnels.	chat_messages.channel_id. Autorité : docs/PLANS/PLAN_CHAT.md.
 Type de message (chat)	Discriminant du contenu d'un message persisté (TEXT, DICE, WHISPER, COMBAT_DAMAGE, SYSTEM_JOIN…) — distinct du canal, sert au rendu client (MessageRendererRegistry).	chat_messages.type. Autorité : docs/PLANS/PLAN_CHAT.md.
 Whisper (message privé)	Message chat de type WHISPER, visible uniquement de l'expéditeur et du destinataire (`recipient_user_id`), jamais broadcast à la room de campagne. Persisté comme les autres messages.	chat_messages.recipient_user_id, server/src/chat/socketChat.js. Autorité : docs/PLANS/PLAN_CHAT.md.
+Administrateur (rôle)	Rôle global d'un compte (`users.role`, 'user'/'admin'), distinct du rôle par campagne (`campaign_members.role`, gm/player). Donne accès aux outils d'administration (page /admin, catalogue équipement, santé serveur, gestion des utilisateurs). Promu via `ADMIN_BOOTSTRAP_EMAIL` (bootstrap, une valeur par instance) ou par un autre administrateur. Pas d'historique des promotions/rétrogradations — état courant seulement, avec provenance du dernier changement (`role_granted_by`/`role_granted_at`).	users.role, server/src/middleware/requireAdmin.js, server/src/lib/bootstrapAdmin.js. Autorité : docs/SYSTEME/ADMIN.md.
+Ticket	Signalement d'un bug, d'un déséquilibre de règle ou d'une suggestion, par un compte joueur/MJ/admin (`origin`, calculé serveur, jamais déclaré par le client) ou par un mécanisme automatique (`origin='log'`, non construit à ce jour). Remplace l'ancien registre manuel `docs/BUGIDENTIFIE.md` (archivé) — priorité et sévérité sont posées par l'admin au triage, jamais par le rapporteur.	bug_tickets, server/src/services/ticketService.js. Autorité : docs/SYSTEME/TICKETS.md.
+Cluster (ticket)	Regroupement manuel de tickets à cause racine identique ou proche, porté par un champ texte libre (`cluster_label`), pas une table de référence. Reprend le mot et la logique de l'ancien regroupement `BUGIDENTIFIE.md` ("Cluster A"…"Cluster U"), qui reste la référence historique pour les tickets importés (`linked_bug_code`).	bug_tickets.cluster_label. Autorité : docs/SYSTEME/TICKETS.md.
 Conventions de nommage
 
 (… section inchangée …)
