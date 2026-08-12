@@ -454,7 +454,12 @@
     "pc_cost": "{{n}} PC",
     "prev": "Précédent",
     "validate": "Finaliser le personnage",
-    "loading": "Chargement..."
+    "loading": "Chargement...",
+    "family_limit_counter": "{{n}}/{{max}} sélectionné(s)",
+    "family_selected": "Choisi : {{name}}",
+    "family_choose_hint": "Cliquer pour choisir ({{count}} variantes)",
+    "choose_variant": "Choisir une variante",
+    "cancel": "Annuler"
   },
   "wizard": {
     "step": "Étape {{current}} / {{total}}",

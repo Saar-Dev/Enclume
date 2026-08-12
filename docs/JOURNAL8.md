@@ -2058,3 +2058,34 @@ grille plate actuelle, inchangée. Rejeté : refonte en deux colonnes, et fusion
 **Non testé** : navigateur — rendu des blocs famille, compteur, sélection dans un groupe limité.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+**Révision (2026-08-12)** — capture d'écran réelle : le regroupement inline ne réduit pas assez le
+défilement, plusieurs familles (Carte au trésor, Concession, Parts, Sens développé/diminué,
+Résistance/Faiblesse naturelle augmentée, Déséquilibre mental, Phobie) sont en réalité des **paliers
+d'un même avantage/désavantage** (1 PC → 5 PC, texte quasi identique), pas des variantes distinctes
+à comparer côte à côte. Saar demande de vérifier si le mécanisme existe déjà ailleurs dans le Wizard
+avant d'en construire un nouveau.
+
+**Réutilisé plutôt que recréé** : `Step3Mutations.jsx` a exactement ce besoin déjà résolu —
+`has_subtable`/`subtable`, une mutation-parent ouvrant une modal de choix de sous-type
+(`pendingSubtype`, `handleSelectSubtype`, styles `overlay`/`modal`/`subtypeBtn`). `ref_advantages`
+n'a pas cette structure explicite (juste `family`/`family_limit` sur des lignes soeurs à plat) —
+dérivé côté client sans migration : un groupe de plus de 2 items = comportement "a_subtable".
+
+**Corrigé** : seuil sur la taille du groupe.
+- Familles ≤2 membres : inchangé (WIZ26 initial, `renderFamilyBlock`, cartes côte à côte).
+- Familles ≥3 membres : `renderFamilySummaryCard` — une seule carte (nom de famille, coût min-max,
+  palier choisi affiché une fois sélectionné) ouvre une modal (`pendingFamily`) listant les paliers,
+  patron repris de Step3 (overlay + `subtypeBtn` + description). `handleSelectFamilyVariant` retire
+  d'abord toute variante de la même famille déjà choisie avant d'ajouter la nouvelle (family_limit=1
+  partout en données actuelles) ; re-cliquer la variante déjà choisie la retire sans rien
+  sélectionner. Verrou MJ (`isLockedForPlayer`/`WizardLockToggle`) et budget PC (désactivation par
+  palier, pas par carte entière — `familyRemaining` recrédite le coût du palier déjà choisi avant de
+  comparer) préservés à l'intérieur de la modal, pas seulement sur la grille plate.
+- `creation.json` : clés `family_selected`, `family_choose_hint`, `choose_variant`, `cancel`.
+
+**Testé** : ESLint clean. `vite build` propre. Navigateur — confirmé fonctionnel par Saar
+("Beaucoup mieux. validé et fonctionnel.").
+**Non testé** : —.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

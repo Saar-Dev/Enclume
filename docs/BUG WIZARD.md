@@ -904,6 +904,7 @@ Impact
     Aucune modification fonctionnelle. Améliore l'ergonomie sur écrans étroits.
 ----
 Bug #28 — Avantages & Désavantages à regrouper par famille (Step 5)
+✅ Corrigé et testé en navigateur (2026-08-12)
 **Fix réel (2026-08-12)** — `family` vérifié en base (`ref_advantages`, migration 92) : ce n'est
 **pas** une taxonomie complète (« Capacités innées », « Ressources »...) comme le supposait
 l'analyse ci-dessous, mais un champ technique étroit servant uniquement `family_limit` côté serveur
@@ -912,7 +913,14 @@ l'analyse ci-dessous, mais un champ technique étroit servant uniquement `family
 famille. Décision Saar (option validée) : grouper uniquement les items qui ont une `family`, sous
 un en-tête famille + compteur "X/Y sélectionné(s)" ; le reste de la grille (majorité) reste
 inchangé. `Step5Advantages.jsx` : `groupByFamily()`, blocs `familyBlock`, clé i18n
-`step5.family_limit_counter`. ESLint clean, build client OK — codé, non testé navigateur.
+`step5.family_limit_counter`.
+**Révision (2026-08-12)** — capture d'écran réelle : plusieurs familles sont en fait des paliers
+d'un même avantage (1 à 5 PC, texte quasi identique), le regroupement inline ne réduisait pas
+assez le défilement. Réutilise le patron déjà existant pour les mutations à sous-types
+(`Step3Mutations.jsx`, `has_subtable`/`subtable`) : familles ≤2 membres inchangées (côte à côte),
+familles ≥3 membres repliées en une carte-résumé + modal de choix de palier (`pendingFamily`,
+`handleSelectFamilyVariant`), verrou MJ et budget PC préservés à l'intérieur de la modal.
+ESLint clean, build client OK — codé, non testé navigateur.
 Analyse
 
 Le composant Step5Advantages.jsx affiche actuellement tous les avantages et désavantages sous forme de cartes dans une grille unique, sans regroupement. Les données reçues de l'API contiennent pourtant un champ family (utilisé par la contrainte family_limit côté serveur). Ce champ est ignoré lors de l'affichage.
