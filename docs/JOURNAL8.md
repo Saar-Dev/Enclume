@@ -1848,8 +1848,9 @@ de `index.css`, remplacées par `wiz-spin-btn` dans `Step1Attributes.jsx` (2 usa
 
 **Testé** : ESLint clean. `vite build` propre. Grep de confirmation : aucune référence résiduelle à
 `wiz1-spin-btn`/`wiz4-stepbtn` dans le code (seulement dans le commentaire explicatif de
-`index.css`).
-**Non testé** : navigateur (rendu visuel réel des boutons fusionnés).
+`index.css`). Navigateur — confirmé par Saar (testé à chaque bug avant de passer au suivant,
+clarifié rétroactivement le 2026-08-12, voir mémoire `feedback_bug_suivant_means_tested`).
+**Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
 
@@ -1890,9 +1891,9 @@ parallèle.
   pendant le rendu.
 
 **Testé** : ESLint clean (seule erreur restante, `showSetbacks`, confirmée préexistante). `vite
-build` propre.
-**Non testé** : navigateur — scénario réel (MJ qui rejoint une fiche pendant qu'un joueur est actif
-sur une sous-étape autre que Récap).
+build` propre. Navigateur — confirmé par Saar (clarifié rétroactivement le 2026-08-12, voir mémoire
+`feedback_bug_suivant_means_tested`).
+**Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
 
@@ -1960,8 +1961,9 @@ aucun autre élément interactif à l'intérieur) referme. Repris le patron over
 `z-index: 1500` — au-dessus du contenu Wizard courant (max observé 1100), en dessous des overlays
 système critiques (2000+).
 
-**Testé** : ESLint clean. `vite build` propre.
-**Non testé** : navigateur.
+**Testé** : ESLint clean. `vite build` propre. Navigateur — confirmé par Saar (clarifié
+rétroactivement le 2026-08-12, voir mémoire `feedback_bug_suivant_means_tested`).
+**Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
 
@@ -1979,8 +1981,9 @@ confirmé exact.
 **Corrigé** : `font-size: 13px` + `line-height: 1` ajoutés directement sur `.wiz4-restr`
 (`index.css`), sans toucher `.wiz4-railmeta` ni le reste de la ligne (salaire, rang).
 
-**Testé** : `vite build` propre (CSS pur, ESLint non pertinent).
-**Non testé** : navigateur.
+**Testé** : `vite build` propre (CSS pur, ESLint non pertinent). Navigateur — confirmé par Saar
+(clarifié rétroactivement le 2026-08-12, voir mémoire `feedback_bug_suivant_means_tested`).
+**Non testé** : —.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
 
@@ -2014,7 +2017,44 @@ de préfixe) et réutilisé tel quel dans `CareersAllocator.jsx`, avec l'ajout d
   700ms choisi comme délai par défaut (aucune valeur précise demandée par Saar), ajustable si le
   ressenti en usage réel ne convient pas.
 
+**Testé** : ESLint clean. `vite build` propre. Navigateur — confirmé par Saar (clarifié
+rétroactivement le 2026-08-12, voir mémoire `feedback_bug_suivant_means_tested`) ; délai 700ms non
+signalé comme gênant.
+**Non testé** : —.
+
+-----
+## Session (Saar) — 2026-08-12 — WIZ26 : regroupement Step5 Avantages/Désavantages (bug #28)
+
+**Contexte** : Saar juge la page Step5 chargée, propose d'abord deux colonnes Avantages/
+Désavantages, puis valide plutôt l'option catalogué en `docs/BUG WIZARD.md` #28 : regrouper par
+famille.
+
+**Vérification avant codage** : le doc suppose que `family` (`ref_advantages`) est une taxonomie
+complète ("Capacités innées", "Ressources", "Relations"...). Faux — vérifié en lisant la migration
+92 et `advantageConstraints.js` : `family` sert uniquement la contrainte `family_limit`
+(variantes mutuellement exclusives d'un même avantage/désavantage — Phobie 5 variantes,
+Déséquilibre mental 6, Allergie 3, Sens développé 5, Secret/Recherché/Infirmité 2 chacun,
+quelques familles à 1 membre). La grande majorité des ~50+ items ont `family: null` et ne
+rentreraient dans aucun groupe si on appliquait la solution du doc telle quelle.
+
+**Décision (Saar, question posée)** : grouper uniquement les items qui ont une `family` réelle,
+sous un bloc dédié avec en-tête + compteur "X/Y sélectionné(s)" ; le reste (majorité) garde la
+grille plate actuelle, inchangée. Rejeté : refonte en deux colonnes, et fusion des deux options.
+
+**Corrigé** :
+- `Step5Advantages.jsx` : `groupByFamily(items)` sépare `ungrouped` (family null) de `families`
+  (regroupées par valeur de `family`, avec `limit` = `family_limit` du premier item du groupe).
+  Cartes extraites en `renderAdvCard`/`renderDisCard` (réutilisées pour la grille plate et les
+  blocs famille — pas de JSX dupliqué). Nouveau `renderFamilyBlock(fam, renderCard)` : en-tête
+  (nom de famille + compteur) et grille des membres du groupe.
+- Compteur purement informatif — pas de blocage de sélection ajouté côté client à la limite
+  atteinte (déjà appliqué côté serveur, `advantageConstraints.js`) : hors scope de ce bug, à
+  traiter séparément si Saar le souhaite (constat noté, pas un correctif silencieux).
+- `creation.json` : clé `step5.family_limit_counter` ("{{n}}/{{max}} sélectionné(s)").
+- Noms de famille affichés bruts (contenu catalogue DB, même traitement que `adv.name`/`dis.name`
+  déjà dans ce fichier — décision i18n catalogue, `LOCALISATION.md` §6).
+
 **Testé** : ESLint clean. `vite build` propre.
-**Non testé** : navigateur — délai/zone de déclenchement à valider en usage réel.
+**Non testé** : navigateur — rendu des blocs famille, compteur, sélection dans un groupe limité.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

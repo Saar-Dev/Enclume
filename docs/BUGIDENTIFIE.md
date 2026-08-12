@@ -29,7 +29,6 @@
 | # | Description (affinée) | Domaine | Type | Priorité | Orientation |
 |---|---|---|---|---|---|
 | 1 | Absence totale de tooltips d'explication dans le wizard (priorité Step 4 Profession). Aucun système existant. | Wizard | Amélioration UX | Haute | Créer un système de tooltips. |
-| 5 | Tableau des attributs trop large (layout). | Wizard | Amélioration UX | Basse | CSS responsive de l'étape 2. |
 | 7 | Broadcast incohérent : Step 1 temps réel, Step 4 envoie directement au récapitulatif et y reste. | Wizard | Bug (broadcast) | Haute | `PERSONNAGE_WIZARD.md`, flux WS. |
 | 10 | Page Profession dense : grille de compétences apparaît avant sélection, retirer description des compétences pro. | Wizard | Bug (affichage) | Haute | Rendu conditionnel Step 4. |
 | 11 | Symbole /!\\ trop petit. | Wizard | Amélioration UX | Basse | Icône d'avertissement. |
@@ -38,7 +37,6 @@
 | 15 | Compétences inabordables non grisées, causant des soldes négatifs. | Wizard | Bug (validation) | Haute | Logique de points disponibles. |
 | 17 | Tirages d'avantages optionnels consomment des PC. | Wizard | Bug (calcul PC) | Haute | `REGLE_AVANTAGES.md`. |
 | 18 | Métiers affichés par UUID dans le récapitulatif (régression). | Wizard | Bug | Bloquant | Jointure/sérialisation. |
-| 19 | Page Avantages & Désavantages très chargée, à regrouper par famille. | Wizard | Amélioration UX | Moyenne | `REGLE_AVANTAGES.md`, `REGLEREVERS.md`. |
 | 20 | Équipement : joueur doit proposer une wishlist en naviguant dans `ref_equipment`, afficher le descriptif. | Wizard | Fonctionnalité manquante | Haute | Step 6, `SYSTEME/TRADE.md`. |
 | 21 | Afficher le type de munition des armes, lien arme↔munitions. | Wizard | Fonctionnalité manquante | Haute | Modèle arme, `REGLESMUNITIONS.md`. |
 | 22 | Borner le maximum de points d'attributs selon RAW. | Wizard | Bug (règle absente) | Haute | `REGLES/ATTRIBUTS.md`. |
