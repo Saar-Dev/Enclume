@@ -49,10 +49,14 @@ async function resolveStep4Backgrounds(trx, { originGeo, originSoc, training, hi
     ? await resolveBackground(trx, 'higher_ed', higherEd, 'education_scolaire')
     : null
 
-  if (!geoRow) throw new AppError(400, `Origine géographique inconnue : ${originGeo}`)
-  if (!socRow) throw new AppError(400, `Origine sociale inconnue : ${originSoc}`)
-  if (!trainRow) throw new AppError(400, `Formation inconnue : ${training}`)
-  if (higherEd && !higherEdRow) throw new AppError(400, `Études supérieures inconnues : ${higherEd}`)
+  // i18nKey (docs/EN_COURS.md, 2026-08-12) : message brut conservé (log serveur, fallback client),
+  // mais le joueur ne doit plus voir "Origine géographique inconnue : null" sans explication — cause
+  // la plus fréquente : reprise d'un brouillon atterrie sur Récap sans être passée par ces
+  // sous-étapes (Step4Experience.jsx, corrigé dans le même lot).
+  if (!geoRow) throw new AppError(400, `Origine géographique inconnue : ${originGeo}`, 'wizard.errors.unknownGeoOrigin')
+  if (!socRow) throw new AppError(400, `Origine sociale inconnue : ${originSoc}`, 'wizard.errors.unknownSocialOrigin')
+  if (!trainRow) throw new AppError(400, `Formation inconnue : ${training}`, 'wizard.errors.unknownTraining')
+  if (higherEd && !higherEdRow) throw new AppError(400, `Études supérieures inconnues : ${higherEd}`, 'wizard.errors.unknownHigherEd')
 
   return { geoRow, socRow, trainRow, higherEdRow }
 }

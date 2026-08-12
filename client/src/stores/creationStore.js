@@ -181,7 +181,7 @@ export const useCreationStore = create((set, get) => ({
       const {
         sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled,
         randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isGm,
-        step1, step2, step3, step4, step5, creationState,
+        step1, step2, step3, step4, step5, creationState, ownerUserId,
       } = res.data
       // Bug réel (docs/EN_COURS.md, 2026-08-12) : ce flux (Step0 → "Suivant") servait aussi bien un
       // nouveau brouillon qu'une reprise d'un brouillon existant (idempotence côté serveur,
@@ -194,11 +194,17 @@ export const useCreationStore = create((set, get) => ({
       // isGmView = rôle réel de campagne (docs/PLAN_WIZARD_MATERIEL.md), pas seulement "MJ en train
       // d'observer le brouillon d'un autre" (loadExistingSheet) — un MJ démarrant son propre brouillon
       // via ce flux normal doit aussi être reconnu comme MJ sur Step6 (bug réel corrigé).
+      // ownerUserId (docs/EN_COURS.md, 2026-08-12) : jamais posé par ce flux avant — `isOwner`
+      // (WizardCreation.jsx) en dépend, lui-même condition de `canEdit` en Step6
+      // (PLAN_WIZARD_MATERIEL_GAUGES.md §5) — sans lui, un joueur ne pouvait jamais éditer sa propre
+      // wishlist. Sûr vis-à-vis du garde WIZ13 (ligne ~121 de WizardCreation.jsx, resetCreation si
+      // ownerUserId !== user.id) : ce flux ne transmet jamais targetUserId (aucun appelant client),
+      // ownerUserId vaut donc toujours l'utilisateur courant ici.
       set({
         sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled,
         reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, isGmView: !!isGm, isStarting: false,
         step1Data: step1, step2Data: step2, step3Data: step3, step4Data: step4, step5Data: step5,
-        step: highestStep, highestStep,
+        step: highestStep, highestStep, ownerUserId,
       })
       return { sheetId, characterId, ambiance, randomMutationsEnabled, femininBonusEnabled, randomProAdvantagesEnabled, reversEnabled, skillMaxLevelEnabled, youngPenaltyEnabled, highestStep }
     } catch (err) {

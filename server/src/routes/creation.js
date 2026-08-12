@@ -82,7 +82,12 @@ router.post('/start', async (req, res, next) => {
     // docs/PLAN_WIZARD_MATERIEL.md) — sans ça, un MJ démarrant un brouillon pour lui-même (flux normal,
     // jamais passé par loadExistingSheet) ne pouvait jamais être reconnu comme MJ sur Step6, bug réel
     // remonté par Saar (aucun bouton "Ajouter du matériel" visible alors qu'il est bien MJ).
-    res.json({ ...result, isGm: member.role === 'gm' })
+    // ownerUserId (docs/EN_COURS.md, 2026-08-12) : même angle mort, côté joueur cette fois — jamais
+    // renvoyé par ce flux normal (Step0 → "Suivant"), donc `isOwner` (WizardCreation.jsx, calculé
+    // depuis ce champ) restait toujours faux pour un joueur sur SON PROPRE personnage. `canEdit`
+    // (StepMaterielEtBiens.jsx §5 de PLAN_WIZARD_MATERIEL_GAUGES.md) en dépend directement : un joueur
+    // ne pouvait jamais ajouter d'objet à sa wishlist en Step6, quel que soit le personnage.
+    res.json({ ...result, isGm: member.role === 'gm', ownerUserId })
   } catch (err) { next(err) }
 })
 

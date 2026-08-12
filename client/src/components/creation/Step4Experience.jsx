@@ -26,6 +26,45 @@ const SUB_STEPS = {
 
 const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
+const HIGHER_ED_TRAINING_CODE = 'education_scolaire'
+
+// Bug réel (docs/EN_COURS.md, 2026-08-12) : getStep4State (creationService.js) ne renvoie jamais
+// `null` — `age` a un défaut (16), les autres champs valent `null`/`[]`/`{}` — donc `initialData` est
+// TOUJOURS un objet pour toute reprise ayant dépassé Step0, même sans aucun choix réel sur Step4.
+// L'ancien `initialData ? SUMMARY : AGE` atterrissait donc systématiquement sur Récap, qui plantait
+// au clic sur "Terminer" (resolveStep4Backgrounds rejette origine/formation null, message qui ne
+// disait rien de plus). Remplacé par la première sous-étape réellement incomplète, dans l'ordre
+// énuméré par Saar (origine, milieu, formation, étude, profession).
+// Avantages & Revers ajoutés après coup (docs/EN_COURS.md, 2026-08-12, suite du bug jauges vides) :
+// exclus une première fois (état conditionnel, aucun champ "visité" persisté), mais une reprise avec
+// carrières déjà choisies sautait alors TOUJOURS cette sous-étape en atterrissant direct sur Récap —
+// aucune jauge de matériel ne pouvait plus jamais être semée pour un personnage repris (confirmé en
+// base : carrière avec `pro_advantages: {}`, aucune ligne `char_gauges`). Heuristique : si aucune
+// carrière ne porte de Pro-Avantage choisi ET qu'aucun tirage de Revers n'existe, considéré comme
+// "jamais visité" → renvoyé là. Cas limite assumé, même famille que `higherEd` ci-dessous : une
+// carrière qui n'offre RÉELLEMENT aucun Pro-Avantage (ou reversEnabled=false + aucun bloc de Revers)
+// y sera revisitée sans jamais rien avoir à cocher — pas un plantage, juste une repasse mineure,
+// aucun champ persisté ne permettant de faire mieux sans données supplémentaires (settings, catalogue
+// carrières) indisponibles à ce stade du montage.
+// Cas limite assumé : `higherEd` vaut `null` aussi bien "non visité" que "explicitement sauté"
+// (handleSkipHigherEd) — aucun flag persisté ne distingue les deux. Un joueur revenant après avoir
+// sauté cette sous-étape peut s'y voir renvoyé une fois de plus ; jamais un plantage (`null` y est
+// une valeur valide côté serveur), juste une repasse mineure.
+function computeInitialSubStep(initialData) {
+  if (!initialData) return SUB_STEPS.AGE
+  if (initialData.originGeo == null) return SUB_STEPS.GEO_ORIGIN
+  if (initialData.originSoc == null) return SUB_STEPS.SOCIAL_ORIGIN
+  if (initialData.training == null) return SUB_STEPS.TRAINING
+  if (initialData.training === HIGHER_ED_TRAINING_CODE && initialData.higherEd == null) return SUB_STEPS.HIGHER_ED
+  if (!initialData.careers || initialData.careers.length === 0) return SUB_STEPS.CAREERS
+  const hasAnyProAdvantage = initialData.careers.some(
+    c => c.proAdvantages && Object.keys(c.proAdvantages).length > 0
+  )
+  const hasAnySetbackRoll = (initialData.setbackRolls?.length ?? 0) > 0
+  if (!hasAnyProAdvantage && !hasAnySetbackRoll) return SUB_STEPS.ADVANTAGES_AND_SETBACKS
+  return SUB_STEPS.SUMMARY
+}
+
 // WIZ15 (docs/EN_COURS.md, 2026-08-11) : Step4ExperienceInner porte `key={gmSyncKey}` — remonté à
 // chaque écho WIZARD_STATE_SYNC côté MJ (WizardCreation.jsx) pour que ses ~15 useState(initialData)
 // se resynchronisent avec les données fraîches du joueur (patron nécessaire : recommandation React
@@ -53,7 +92,7 @@ export default function Step4Experience({ gmSyncKey, initialData, ...rest }) {
   // initial et pas seulement pour les mises à jour suivantes.
   const liveSubStep = gmSyncKey != null ? initialData?.subStep : undefined
   const liveSubStepValid = liveSubStep && SUB_STEP_ORDER.includes(liveSubStep)
-  const initialSubStep = liveSubStepValid ? liveSubStep : (initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
+  const initialSubStep = liveSubStepValid ? liveSubStep : computeInitialSubStep(initialData)
   const [subStep, setSubStep] = useState(initialSubStep)
   const [highestSubStep, setHighestSubStep] = useState(initialSubStep)
 
@@ -156,7 +195,7 @@ function Step4ExperienceInner({
   const filteredTrainings = refData.trainings
     .filter(t => t.parent_code === originSoc || t.parent_code === null)
     .map(enrichBg)
-  const showHigherEd = training === 'education_scolaire'
+  const showHigherEd = training === HIGHER_ED_TRAINING_CODE
   const filteredHigherEds = showHigherEd ? refData.higherEds.map(enrichBg) : []
 
   // ─── Éléments sélectionnés (avec détails) ──────────────────────

@@ -1,11 +1,22 @@
 # Wizard/Fiche — Jauges de Matériel & liste d'attente (wish-list)
 
-> Statut : **en conception, non codé**. Document temporaire (`docs/RegleDocumentaire.md` Règle 10) —
-> à archiver ou fusionner dans un DOMAIN/SYSTEM une fois la fonctionnalité stable en jeu réel.
+> Statut : **codé et validé en navigateur par Saar (2026-08-12)**. Document temporaire
+> (`docs/RegleDocumentaire.md` Règle 10) — reste ici tant que la fonctionnalité n'est pas « stable en
+> jeu réel » (usage en partie, pas seulement cette validation de développement) ; à archiver ou
+> fusionner dans un DOMAIN/SYSTEM une fois ce seuil atteint.
 > Suite de `docs/Old/PLAN_WIZARD_MATERIEL.md` (Step6 "Matériel & Biens", codé et confirmé le
 > 2026-07-24) — ce document ne répète pas ce qui y est déjà tranché (portée diffusion inventaire,
 > notes narratives, marqueur `step6`), il couvre uniquement l'extension discutée avec Saar le
 > 2026-08-12.
+>
+> **Validation 2026-08-12 (détail `docs/JOURNAL8.md`)** : 3 bugs bloquants trouvés au premier test
+> réel et corrigés — `ownerUserId` jamais renvoyé par `startCreation` (flux normal du joueur), donc
+> `canEdit` toujours faux pour un joueur sur son propre personnage ; `Step4Experience.jsx` sautait la
+> sous-étape "Avantages & Revers" pour un brouillon repris avec carrières déjà choisies, empêchant
+> tout Pro-Avantage "Matériel" d'être choisi donc toute jauge d'être semée ; bouton "Ajouter"
+> (`InventoryPanel.jsx`) quasi invisible, remis en avant. Non testé dans cette passe : +/- MJ sur une
+> jauge (code vérifié correct, pas de clic confirmé par Saar), `GaugesPanel.jsx` fiche permanente
+> (seul le parcours Wizard Step6 a été confirmé).
 
 ---
 

@@ -19,6 +19,19 @@ import StepTutorial from './StepTutorial'
 import { SocketProvider } from '../../lib/SocketContext.jsx'
 import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 
+// i18nKey optionnel (AppError.js, errorHandler.js) : mêmes clés que WIZARD_ERROR côté socket
+// (namespace `creation`, `wizard.errors.*`) — résolu ici en priorité, fallback sur le message brut
+// serveur pour toutes les AppError non encore migrées (docs/EN_COURS.md, 2026-08-12). Factorisé une
+// seule fois : les 4 sites d'appel (advanceStep, advanceStep6, openPeek, handleTerminate) avaient ce
+// bloc dupliqué à l'identique.
+const extractErrorMessage = (err, t) => {
+  const i18nKey = err.response?.data?.error?.i18nKey
+  if (i18nKey) return t(i18nKey)
+  return err.response?.data?.error?.message
+    || err.response?.data?.message
+    || `Erreur ${err.response?.status ?? 'réseau'}`
+}
+
 export default function WizardCreation() {
   const { t } = useTranslation('creation')
   const { campaignId, sheetId: urlSheetId } = useParams()
@@ -150,10 +163,7 @@ export default function WizardCreation() {
       setHighestStep(nextStep)
       setStep(nextStep)
     } catch (err) {
-      const msg = err.response?.data?.error?.message
-        || err.response?.data?.message
-        || `Erreur ${err.response?.status ?? 'réseau'}`
-      setStepError(msg)
+      setStepError(extractErrorMessage(err, t))
     } finally {
       setAdvancing(false)
     }
@@ -174,10 +184,7 @@ export default function WizardCreation() {
       setHighestStep(7)
       setStep(7)
     } catch (err) {
-      const msg = err.response?.data?.error?.message
-        || err.response?.data?.message
-        || `Erreur ${err.response?.status ?? 'réseau'}`
-      setStepError(msg)
+      setStepError(extractErrorMessage(err, t))
     } finally {
       setAdvancing(false)
     }
@@ -201,10 +208,7 @@ export default function WizardCreation() {
       setPeekIsGm(res.data.isGm)
       setPeekOpen(true)
     } catch (err) {
-      const msg = err.response?.data?.error?.message
-        || err.response?.data?.message
-        || `Erreur ${err.response?.status ?? 'réseau'}`
-      setStepError(msg)
+      setStepError(extractErrorMessage(err, t))
     } finally {
       setPeekLoading(false)
     }
@@ -224,10 +228,7 @@ export default function WizardCreation() {
       resetCreation()
       navigate('/')
     } catch (err) {
-      const msg = err.response?.data?.error?.message
-        || err.response?.data?.message
-        || `Erreur ${err.response?.status ?? 'réseau'}`
-      setStepError(msg)
+      setStepError(extractErrorMessage(err, t))
       setFinalizing(false)
     }
   }
@@ -254,10 +255,11 @@ export default function WizardCreation() {
           onNext={async () => {
             if (isStarting) return
             setStep0Data({ method: 'point_buy' })
+            // startCreation() pose déjà `step`/`highestStep` corrects (nouveau brouillon → 1, reprise
+            // d'un brouillon existant → étape atteinte réellement, docs/EN_COURS.md 2026-08-12) —
+            // un setStep(1) forcé ici écraserait une reprise et re-régresserait aussi step1Data.
             try {
               await startCreation(campaignId)
-              setHighestStep(1)
-              setStep(1)
             } catch { /* startError stocké dans le store */ }
           }}
         />

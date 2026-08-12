@@ -508,7 +508,11 @@
     "errors": {
       "accessDenied": "Accès refusé à ce brouillon.",
       "gmOnly": "Seul le MJ peut poser un verrou.",
-      "invalidLock": "Verrou invalide."
+      "invalidLock": "Verrou invalide.",
+      "unknownGeoOrigin": "Origine géographique manquante — retournez à la sous-étape Origine géographique de l'Étape 4 pour la choisir.",
+      "unknownSocialOrigin": "Milieu social manquant — retournez à la sous-étape Milieu social de l'Étape 4 pour le choisir.",
+      "unknownTraining": "Formation manquante — retournez à la sous-étape Formation de l'Étape 4 pour la choisir.",
+      "unknownHigherEd": "Études supérieures invalides — retournez à la sous-étape Études de l'Étape 4 pour vérifier votre choix."
     }
   },
   "materiel": {

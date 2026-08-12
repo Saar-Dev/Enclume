@@ -1,3 +1,16 @@
+## v202 — 2026-08-12 — Wizard : wishlist de matériel et jauges
+
+### Client
+- [feat] Étape 6 (Matériel & Biens) : le joueur peut désormais proposer librement des objets à son
+  MJ (mêmes droits que le MJ sur le catalogue), qui les valide ou les supprime un par un.
+- [feat] Jauges de ressource (Matériel, Bar, Atelier, Cabine…) affichées en Étape 6 et sur l'onglet
+  Matériel de la fiche de personnage — ajustables par le MJ (+/-), indépendantes une fois initialisées.
+- [feat] La fiche d'objet affiche maintenant sa description et, pour une arme, le calibre de munition
+  à apporter.
+- [chg] Le bouton "Ajouter" du panneau Matériel est plus visible.
+- [fix] Un joueur reprenant un personnage déjà en cours de création peut à nouveau avancer normalement
+  dans l'Étape 4 (Expérience préliminaire) sans message d'erreur technique.
+
 ## v201 — 2026-08-07 — Nouveaux curseurs et réticules de combat
 
 ### Client

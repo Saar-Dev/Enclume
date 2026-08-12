@@ -338,7 +338,13 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
           les mêmes droits d'ajout que le MJ, seule la validation par item reste MJ only) ──── */}
       {canEdit && (
         <div style={{ marginTop: 12 }}>
-          <button onClick={() => handleToggleAdd(availableContainers)} style={s.addToggleBtn}>
+          {/* Mis en avant (feedback Saar 2026-08-12, "le bouton Ajouter... je ne l'avais pas du tout
+              vu") — était un bouton fantôme (fond transparent, texte gris 11px), quasi invisible en
+              bas de panneau alors que c'est l'action principale du joueur en Step6. `.btn.btn-gold`
+              (index.css) : même classe que "Suivant" en Step6 (StepMaterielEtBiens.jsx), déjà le
+              standard du projet pour une action principale (react.md : bouton = className, jamais un
+              style ad hoc). */}
+          <button className="btn btn-gold" onClick={() => handleToggleAdd(availableContainers)} style={{ width: '100%' }}>
             {addOpen ? t('inventoryPanel.closeAddPanel') : t('inventoryPanel.openAddPanel')}
           </button>
 
@@ -619,12 +625,6 @@ const s = {
     color: '#5ac878', borderColor: 'rgba(90,200,120,0.35)', flexShrink: 0, fontSize: 10,
   },
 
-  // Bloc ajout GM
-  addToggleBtn: {
-    background: 'none', border: '1px solid #2a2a3e', borderRadius: 4,
-    color: '#5a5a7a', cursor: 'pointer', fontSize: 11, padding: '4px 10px',
-    width: '100%', textAlign: 'left',
-  },
   addPanel: {
     marginTop: 6, background: '#0e0e1a', border: '1px solid #2a2a3e',
     borderRadius: 6, padding: 10,

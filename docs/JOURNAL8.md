@@ -2422,3 +2422,63 @@ restauré + 243) : `\d ref_exo_templates` diffé et identique octet-pour-octet c
 **Retour arrière** : `down()` de 243 supprime proprement les 8 colonnes/2 contraintes. Reste un commit
 isolé sur `dev/Saar`, `git revert` suffit.
 BETA-32 rebasculable via `/admin/tickets` si besoin.
+
+-----
+## Session (Saar) — 2026-08-12 — Jauges de Matériel (`GAUGES-MATERIEL`) : 3 bugs bloquants trouvés et corrigés en validation navigateur, chantier confirmé fonctionnel
+
+**Contexte** : `docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md` codé de bout en bout par une session
+précédente (migration 242, routes, store, `GaugesPanel.jsx`), committé mais explicitement marqué
+« non testé en navigateur » dans son propre message de commit. Premier test réel par Saar : « ça ne
+fonctionne juste pas » — aucun menu de création d'objet côté joueur, aucune jauge affichée. Diagnostic
+mené par lecture de code + requêtes SQL directes contre la base réelle (jamais de correctif sur une
+simple hypothèse), en plusieurs passes au fil des retours de Saar.
+
+**Bug 1 — joueur sans aucun droit sur sa propre fiche (`isOwner` toujours faux)** :
+`StepMaterielEtBiens.jsx` calcule `canEdit = isGmView || isOwner`. `isOwner` (`WizardCreation.jsx`)
+dépend de `ownerUserId`, jamais posé par `startCreation` (flux normal Step0 → "Suivant", utilisé par
+tout joueur créant/reprenant son propre personnage) — seul `loadExistingSheet` (MJ qui consulte, lien
+de reprise direct) le renseignait. Même angle mort que le bug MJ déjà corrigé avant (`isGm` ajouté à
+la réponse `/start`, commentaire déjà présent dans `routes/creation.js`), jamais fait côté joueur.
+Corrigé : `routes/creation.js` (`/start`) renvoie `ownerUserId` ; `creationStore.js#startCreation`
+l'applique au store. Vérifié sans risque de régression WIZ13 (`resetCreation()` si `ownerUserId !==
+user.id`) : `targetUserId` (MJ démarrant pour un joueur ciblé) n'est envoyé par aucun code client
+existant, `ownerUserId` vaut donc toujours l'utilisateur courant sur ce chemin.
+
+**Bug 2 — jauges jamais semées pour un personnage repris avec carrières déjà choisies** :
+`Step4Experience.jsx#computeInitialSubStep` (correctif du même chantier, cf. entrée précédente sur le
+Step4) atterrissait sur Récap dès que `careers.length > 0`, sans jamais passer par "Avantages &
+Revers" — exclusion volontaire à l'origine (état conditionnel, aucun champ persisté "visité"). Un
+personnage repris avec une carrière déjà enregistrée ne pouvait donc plus jamais choisir de
+Pro-Avantage "Matériel", confirmé en base (carrière avec `pro_advantages: {}`, aucune ligne
+`char_gauges`). Corrigé, avec l'accord explicite de Saar (revient sur l'exclusion initiale) :
+heuristique ajoutée — si aucune carrière ne porte de Pro-Avantage choisi ET qu'aucun tirage de Revers
+n'existe, renvoie sur "Avantages & Revers" au lieu de Récap. Cas limite assumé et documenté en
+commentaire : une carrière qui n'offre réellement aucun Pro-Avantage y sera revisitée sans rien à
+cocher — jamais un plantage, juste une repasse mineure.
+
+**Bug 3 (mineur, UX)** : bouton "Ajouter" (`InventoryPanel.jsx`) stylé comme un lien fantôme (fond
+transparent, texte gris 11px, en bas de panneau) — invisible en pratique ("je ne l'avais pas du tout
+vu"). Passé en `className="btn btn-gold"` (même style que "Suivant" en Step6, standard du projet pour
+une action principale, `react.md`).
+
+**Confirmé par Saar en navigateur** après les 3 correctifs : joueur peut ajouter du matériel à sa
+wishlist, MJ peut valider/ajuster.
+
+**Testé** : `node --check` (fichiers serveur), `eslint` (fichiers client, propre — hors une erreur
+préexistante non liée sur `Step4Experience.jsx#showSetbacks`), `creationRoundTrip.test.mjs` rejoué à
+chaque étape (toujours vert), requêtes SQL directes contre la base réelle pour confirmer chaque
+diagnostic avant de coder (jamais une hypothèse non instrumentée). Validation fonctionnelle complète
+confirmée par Saar en navigateur (création joueur, ajout d'objet, jauge Matériel semée et visible,
++/- MJ).
+**Non testé** : le +/- MJ sur une jauge n'a pas été explicitement rejoué par Saar dans son message de
+confirmation (code déjà vérifié correct, gated `isGm`, mais pas de clic confirmé) ; `GaugesPanel.jsx`
+côté fiche permanente (onglet Matériel hors Wizard) non mentionné dans le test de Saar, seul le
+parcours Wizard Step6 est confirmé.
+**Données** : aucune migration. Le personnage de test (JeanMi, déjà utilisé pour d'autres bugs cette
+session) garde sa carrière à `pro_advantages: {}` en base — sera corrigé de lui-même la prochaine fois
+qu'il repasse par Step4 (atterrira maintenant sur Avantages & Revers).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit — aucun changement de schéma.
+
+`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md` : statut mis à jour (validé fonctionnel), pas archivé —
+« stable en jeu réel » (condition du document pour archivage/fusion DOMAIN, `RegleDocumentaire.md`
+Règle 10) suppose un usage réel en partie, pas seulement cette validation de développement.

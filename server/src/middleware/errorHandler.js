@@ -5,6 +5,6 @@ export const errorHandler = (err, req, res, next) => {
   console.error(`[${statusCode}] ${req.method} ${req.path}${who} — ${message}`)
   if (statusCode === 500) console.error(err.stack)
   res.status(statusCode).json({
-    error: { status: statusCode, message }
+    error: { status: statusCode, message, ...(err.i18nKey && { i18nKey: err.i18nKey }) }
   })
 }
