@@ -1813,3 +1813,208 @@ Saar (2026-08-11).
 **Non testé** : —
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ20 : boutons +/- non harmonisés (bug #24)
+
+**Contexte** : `docs/BUG WIZARD.md` #24 scope à tort sur "les 3 allocateurs Step4" (`wiz4-sbtn`) —
+vérifié identiques, aucune incohérence là (aucune règle CSS parent-spécifique ne surcharge
+`.wiz4-sbtn`, `index.css`). Le même registre porte un item plus large, `BUGIDENTIFIE.md` #8 :
+"Boutons -/+ non harmonisés **sur tout le wizard**" — c'est là que ça se confirme.
+
+**Vérifié** : 3 classes CSS pour le même pattern +/- stepper dans le Wizard :
+- `.wiz1-spin-btn` (Step1, points d'Attributs) — cyan, 24×24, radius 4px, font 14px.
+- `.wiz4-stepbtn` (Step4, années de carrière) — cyan quasi identique, 26×26, radius 6px, font 15px.
+- `.wiz4-sbtn` (Step4, grilles de points — compétences carrière, Autodidacte, avantages pro) — gris
+  discret, 22×22, radius 5px, font 13px.
+
+Plus une incohérence de glyphe : `+` ASCII dans `wiz1-spin-btn`, `＋` pleine chasse partout ailleurs.
+
+**Décision (soumise à Saar avant de toucher du CSS partagé entre 3 fichiers)** : les deux variantes
+"cyan" (`wiz1-spin-btn`/`wiz4-stepbtn`) servent le même rôle sémantique — ajuster une quantité
+proéminente, une seule instance visible à la fois (points d'Attributs, années de carrière) —
+manifestement la même intention réimplémentée deux fois avec des valeurs dérivées, pas un choix
+délibéré. `wiz4-sbtn` sert un rôle différent (grille dense, beaucoup de lignes répétées) où un style
+plus discret limite le bruit visuel — conservé distinct. Option confirmée par Saar plutôt que tout
+fusionner en une seule classe.
+
+**Corrigé** : nouvelle classe partagée `.wiz-spin-btn` (`index.css`, convention `wiz-*` déjà utilisée
+pour les éléments transverses du Wizard — `wiz-btn-start`, `wiz-stepper`, etc., placée à côté de
+`wiz-btn-start`). `wiz1-spin-btn` et `wiz4-stepbtn` (styles + règles `:hover`/`:disabled`) supprimées
+de `index.css`, remplacées par `wiz-spin-btn` dans `Step1Attributes.jsx` (2 usages) et
+`CareersAllocator.jsx` (2 usages, contrôle années de carrière). Glyphe `+` ASCII de
+`Step1Attributes.jsx` uniformisé en `＋`. `.wiz4-sbtn` non touché.
+
+**Testé** : ESLint clean. `vite build` propre. Grep de confirmation : aucune référence résiduelle à
+`wiz1-spin-btn`/`wiz4-stepbtn` dans le code (seulement dans le commentaire explicatif de
+`index.css`).
+**Non testé** : navigateur (rendu visuel réel des boutons fusionnés).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ21 : MJ renvoyé sur Récap en rejoignant Step4
+
+**Contexte** : Saar remonte, après validation de WIZ15, qu'un MJ **rejoignant** une fiche déjà avancée
+sur Step4 (Profession) est encore renvoyé vers Récap. Distinct de WIZ15 (qui corrigeait le remontage
+*pendant* l'observation — `gmSyncKey`/`key` — pas le calcul du premier montage).
+
+**Cause confirmée** : `Step4Experience.jsx` (wrapper externe) — `useState(initialData ?
+SUB_STEPS.SUMMARY : SUB_STEPS.AGE)`, jamais retouché par WIZ15, ne distingue pas "joueur qui reprend
+son propre brouillon" (Récap a du sens) de "MJ qui observe" (veut voir où en est réellement le
+joueur).
+
+**Recherche avant de coder** (Saar a demandé si une solution existait déjà ailleurs dans le Wizard,
+et si elle valait la peine d'être harmonisée) : aucun précédent — Step4 est le seul des 5 steps à
+avoir une sous-navigation, rien à harmoniser avec les autres. Mais le canal de diffusion live
+existant (`onLiveChange`/`liveStep4Data`, purement éphémère, jamais persisté — déjà utilisé pour
+l'âge, les carrières, etc.) est le bon point d'accroche : réutilisé plutôt qu'un nouveau mécanisme
+parallèle.
+
+**Corrigé** :
+- `Step4ExperienceInner` : `subStep` (déjà reçu en prop depuis WIZ15) ajouté à l'appel `onLiveChange`
+  — `onLiveChange?.({ ...buildPayload(), subStep })` — jamais dans `buildPayload()` lui-même, qui
+  reste utilisé tel quel par `handleSubmit`/`onNext` (soumission serveur) : un état de navigation UI
+  n'a rien à faire dans le payload persisté.
+- `Step4Experience` (wrapper externe) : suit `initialData?.subStep` (le miroir live reçu), mais
+  uniquement côté MJ (`gmSyncKey != null`, même signal qu'`isGmView` côté `WizardCreation.jsx`) —
+  jamais côté joueur, dont la saisie locale reste prioritaire (§2.5 du plan collab, déjà la règle
+  pour le reste de la diffusion live). Utilisé à la fois pour l'état initial (le flux
+  `WIZARD_LIVE_UPDATE` ne rejoue rien à l'arrivée — `WizardLockSync.jsx` — donc une valeur déjà en
+  store au montage doit être prise immédiatement) et pour les mises à jour suivantes.
+- ESLint a rejeté un premier essai en `useEffect` + `setState` (`react-hooks/set-state-in-effect`) —
+  repris avec le pattern officiel "adjusting state during render" (react.dev), déjà utilisé ailleurs
+  dans le projet (`SidebarChatTab.jsx`) : comparaison à une copie précédente en state, ajustée
+  pendant le rendu.
+
+**Testé** : ESLint clean (seule erreur restante, `showSetbacks`, confirmée préexistante). `vite
+build` propre.
+**Non testé** : navigateur — scénario réel (MJ qui rejoint une fiche pendant qu'un joueur est actif
+sur une sous-étape autre que Récap).
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ22 : "Compétences professionnelles" redondant avec la grille
+
+**Contexte** : capture d'écran de Saar (Step4 Profession, `CareersAllocator.jsx`) — carrière
+"Sous-marinier" survolée (pas ajoutée) affiche son bloc "Compétences professionnelles" juste
+au-dessus de la grille "Répartition des points de compétence", laquelle reflète en réalité
+"Soldat/Milicien" (seule carrière réellement ajoutée). Les deux blocs peuvent donc porter sur des
+métiers différents sans que rien ne le distingue à l'écran — "les deux sur un même écran n'ont aucun
+sens" (Saar).
+
+**Vérifié** : la grille elle-même est correcte — un budget de points partagé entre toutes les
+carrières *ajoutées* (`boardSkillIds`, `CareersAllocator.jsx`), cohérent avec le texte RAW du
+tutoriel Step4 ("chaque année d'expérience professionnelle... donne 10 points de Compétence à
+répartir"). Le vrai problème est la coexistence du bloc informatif "Compétences professionnelles"
+(carrière *survolée*, éventuellement non ajoutée) avec la grille (carrières *ajoutées*) — deux
+échelles différentes présentées côte à côte sans distinction.
+
+**Premier jet erroné** : bloc "Compétences professionnelles" supprimé purement et simplement,
+"Compétences au choix" conservé. Repéré comme faux par Saar en test réel via capture d'écran (métier
+survolé "Assassin", pas encore ajouté, aucune compétence conditionnelle) : l'écran affichait un
+espace quasiment vide entre l'en-tête et la barre de navigation — l'aperçu des compétences offertes
+par le métier (seule information disponible avant de cliquer "Ajouter") avait disparu, alors que
+Saar avait demandé un affichage **conditionnel** ("soit... soit...", pas une suppression). Erreur de
+lecture de sa demande, pas un choix technique délibéré.
+
+**Corrigé** : bloc "Compétences professionnelles" réintégré, conditionné à `!isAdded` — visible tant
+que le métier survolé n'est pas ajouté (rien d'autre ne montre ses compétences à ce stade), masqué
+une fois ajouté (la grille en dessous le montre alors, en interactif, ce qui rend l'aperçu statique
+redondant). "Compétences au choix" inchangé. `groupedSkills`, CSS `.wiz4-groups`/`.wiz4-chips`/
+`.wiz4-chip` et clé i18n `career_skills_pro` (retirés par erreur avec le premier jet) restaurés à
+l'identique.
+
+**Testé** : ESLint clean. `vite build` propre (confirme aussi `creation.json` toujours un JSON
+valide après restauration de la clé).
+**Non testé** : navigateur.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ23 : agrandissement au clic de l'illustration de métier
+
+**Contexte** : Saar demande, suite à de bons retours sur les illustrations de métier (Step4
+Profession), de pouvoir cliquer dessus pour l'agrandir/rétrécir.
+
+**Périmètre vérifié avant de coder** : l'illustration existe à 4 endroits du Wizard
+(`Step0Method.jsx`, `Step2Genotype.jsx`, `Step3Mutations.jsx`, `CareersAllocator.jsx`), mais sous
+deux patrons différents. Step0/Step2/Step3 utilisent l'image comme fond d'une carte **cliquable
+pour sélectionner** l'option (`wiz-card`/`wiz2-card`, `onClick` déjà pris par la sélection) — y
+ajouter un agrandissement entrerait en conflit avec ce clic existant. Seul `CareersAllocator.jsx`
+(`wiz4-illus`) est une image autonome, non cliquable pour autre chose : la vignette du métier
+survolé dans le panneau de détail, à côté du texte. Portée limitée à cet unique emplacement — les 3
+autres non traités, à revoir séparément si Saar veut un affordance différente là-bas (ex. une icône
+loupe séparée plutôt que le clic direct).
+
+**Corrigé** : `CareersAllocator.jsx` — clic sur `.wiz4-illus` (vignette recadrée, `object-fit:
+cover`) ouvre un overlay plein écran montrant l'illustration entière (`object-fit: contain`, jusqu'à
+720px/90vw × 85vh) ; clic n'importe où dans l'overlay (fond ou image, aucun `stopPropagation`,
+aucun autre élément interactif à l'intérieur) referme. Repris le patron overlay déjà existant
+(`SidebarHelpModal.jsx` : fond cliquable pour fermer) plutôt qu'une nouvelle bibliothèque de modale.
+`z-index: 1500` — au-dessus du contenu Wizard courant (max observé 1100), en dessous des overlays
+système critiques (2000+).
+
+**Testé** : ESLint clean. `vite build` propre.
+**Non testé** : navigateur.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ24 : icône ⚠ trop petite (bug #25)
+
+**Contexte** : `docs/BUG WIZARD.md` #25. Icône de restriction géographique (`wiz4-restr`, rail des
+métiers Step4) trop petite pour être bien visible.
+
+**Vérifié** : `.wiz4-restr` (`CareersAllocator.jsx`, seul usage) n'a pas de `font-size` propre —
+hérite de `.wiz4-railmeta` (10px), la taille du texte salaire/rang environnant. Diagnostic du doc
+confirmé exact.
+
+**Corrigé** : `font-size: 13px` + `line-height: 1` ajoutés directement sur `.wiz4-restr`
+(`index.css`), sans toucher `.wiz4-railmeta` ni le reste de la ligne (salaire, rang).
+
+**Testé** : `vite build` propre (CSS pur, ESLint non pertinent).
+**Non testé** : navigateur.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-11 — WIZ25 : tooltip restriction géographique sur titre + sous-titre
+
+**Contexte** : suite à WIZ24 (icône ⚠ agrandie), Saar demande — capture d'écran à l'appui (métier
+"BARMAN") — que le tooltip de restriction géographique apparaisse au survol de l'ensemble
+titre+sous-titre du métier (rail gauche Step4), pas seulement l'icône elle-même, et après un délai
+plutôt qu'instantanément.
+
+**Constat** : le `title` HTML natif (posé sur `.wiz4-restr` seul) ne peut être ni élargi à une autre
+zone de déclenchement, ni configuré en délai — le comportement (délai fixe contrôlé par le
+navigateur, zone = l'élément exact) n'est pas ajustable. Un tooltip custom est nécessaire.
+
+**Réutilisé plutôt que recréé** : le patron de tooltip custom existait déjà (`Step1Attributes.jsx`,
+`tooltip`/`showTooltip`, positionné via `getBoundingClientRect()`, classe `.wiz1-tooltip`) — mais
+sans délai (affichage instantané au `onMouseEnter`) et scoped au nom "Step1". Renommé `wiz-tooltip`
+(transverse, même décision que `.wiz-spin-btn`/WIZ20 : une classe utilisée par plus d'un step change
+de préfixe) et réutilisé tel quel dans `CareersAllocator.jsx`, avec l'ajout du délai qui manquait
+(`setTimeout`/`clearTimeout`, 700ms, nettoyé au démontage et au `mouseleave`).
+
+**Corrigé** :
+- `index.css` : `.wiz1-tooltip` → `.wiz-tooltip` (aucun changement de style, juste le nom).
+  `Step1Attributes.jsx` mis à jour en conséquence.
+- `CareersAllocator.jsx` : le `title` natif retiré de `.wiz4-restr` (aurait fait doublon avec le
+  tooltip custom, l'icône étant à l'intérieur de la zone de déclenchement). Bloc titre+sous-titre
+  (`wiz4-railname` + `wiz4-railmeta`) enveloppé d'un conteneur portant `onMouseEnter`/`onMouseLeave`
+  (posés uniquement si `restricted_geographic_origin`, sinon `undefined` — pas de handler inutile).
+  700ms choisi comme délai par défaut (aucune valeur précise demandée par Saar), ajustable si le
+  ressenti en usage réel ne convient pas.
+
+**Testé** : ESLint clean. `vite build` propre.
+**Non testé** : navigateur — délai/zone de déclenchement à valider en usage réel.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

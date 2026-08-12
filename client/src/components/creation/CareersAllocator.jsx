@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { evaluateCareerEligibility } from '../../../../shared/careerEligibility.js'
 import { computeSkillAllocation, getSkillCap } from '../../../../shared/careerSkills.js'
@@ -126,6 +126,32 @@ export default function CareersAllocator({
     initialReducerState
   )
   const { filter, selectedCareerId, years, activeTab, hoverCareerId } = state
+  // WIZ23 : agrandissement au clic de l'illustration de métier (retours positifs de Saar, veut les
+  // rendre plus visibles) — la vignette est recadrée (`object-fit: cover`), l'agrandi montre
+  // l'illustration entière (`object-fit: contain`). Pas besoin de réinitialiser au changement de
+  // métier : le fond plein écran de l'agrandi bloque tout clic sur la liste tant qu'il est ouvert.
+  const [illusZoomed, setIllusZoomed] = useState(false)
+
+  // WIZ25 : la restriction géographique (icône ⚠, `wiz4-restr`) n'affichait son détail qu'au survol
+  // du glyphe lui-même (`title` natif) — trop petit pour être une cible fiable (Saar, capture
+  // d'écran). Tooltip custom (même patron que `wiz-tooltip`/Step1Attributes.jsx) déclenché sur
+  // l'ensemble titre + sous-titre du métier, avec un délai (le `title` natif n'est pas configurable
+  // en délai ni en zone de déclenchement).
+  const RESTR_TOOLTIP_DELAY_MS = 700
+  const [restrTooltip, setRestrTooltip] = useState(null)
+  const restrTooltipTimer = useRef(null)
+  useEffect(() => () => clearTimeout(restrTooltipTimer.current), [])
+  const handleRestrEnter = (details, event) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    clearTimeout(restrTooltipTimer.current)
+    restrTooltipTimer.current = setTimeout(() => {
+      setRestrTooltip({ desc: details, top: rect.top, left: rect.left + rect.width / 2 })
+    }, RESTR_TOOLTIP_DELAY_MS)
+  }
+  const handleRestrLeave = () => {
+    clearTimeout(restrTooltipTimer.current)
+    setRestrTooltip(null)
+  }
 
   const careersById = useMemo(() => new Map((careers ?? []).map(c => [c.id, c])), [careers])
   const refSkillsById = useMemo(() => new Map((refSkills ?? []).map(s => [s.id, s])), [refSkills])
@@ -337,6 +363,11 @@ export default function CareersAllocator({
     onAdd(career.id, career.name, career.titles, years)
   }
 
+  // WIZ22 correction (docs/JOURNAL8.md, 2026-08-11) : supprimé par erreur en premier jet — Saar
+  // voulait un affichage conditionnel ("soit... soit..."), pas une suppression pure. Aperçu utile
+  // tant que le métier n'est pas ajouté (rien à voir dans la grille pour lui) ; redondant une fois
+  // ajouté (la grille plus bas le montre déjà, en interactif) — condition `!isAdded` posée au niveau
+  // du rendu JSX plus bas, pas ici.
   const groupedSkills = career ? career.skills.filter(sk => !sk.conditional).reduce((acc, sk) => {
     ;(acc[sk.family] ??= []).push(sk)
     return acc
@@ -390,6 +421,7 @@ export default function CareersAllocator({
   }
 
   return (
+    <>
     <div className="wiz4-cols">
       <div className="wiz4-rail">
         <div className="wiz4-seg">
@@ -420,13 +452,19 @@ export default function CareersAllocator({
               onMouseLeave={() => dispatch({ type: 'SET_HOVER', id: null })}
             >
               <div className="wiz4-railbody">
-                <div className="wiz4-railname">{c.name}</div>
-                <div className="wiz4-railmeta">
-                  <span className="wiz4-mono">{formatSalary(firstTitle)}</span>
-                  <span>{firstTitle?.title}</span>
-                  {c.restricted_geographic_origin && (
-                    <span className="wiz4-restr" title={c.geographic_origin_details}>⚠</span>
-                  )}
+                <div
+                  onMouseEnter={c.restricted_geographic_origin
+                    ? (e) => handleRestrEnter(c.geographic_origin_details, e) : undefined}
+                  onMouseLeave={c.restricted_geographic_origin ? handleRestrLeave : undefined}
+                >
+                  <div className="wiz4-railname">{c.name}</div>
+                  <div className="wiz4-railmeta">
+                    <span className="wiz4-mono">{formatSalary(firstTitle)}</span>
+                    <span>{firstTitle?.title}</span>
+                    {c.restricted_geographic_origin && (
+                      <span className="wiz4-restr">⚠</span>
+                    )}
+                  </div>
                 </div>
                 {added && (
                   <span className="wiz4-retenu">✓ {t('step4.career_retained')} · {committed.years} an(s)</span>
@@ -471,6 +509,7 @@ export default function CareersAllocator({
                   className="wiz4-illus"
                   src={`/${career.illustration}`}
                   alt={career.name}
+                  onClick={() => setIllusZoomed(true)}
                 />
               )}
               <div className="wiz4-dinfo">
@@ -486,13 +525,13 @@ export default function CareersAllocator({
                     <div className="wiz4-yearctl">
                       <span className="wiz4-h">{t('step4.career_years_in')}</span>
                       <button
-                        className="wiz4-stepbtn"
+                        className="wiz-spin-btn"
                         onClick={() => dispatch({ type: 'SET_YEARS', years: years - 1 })}
                         disabled={years <= 1}
                       >−</button>
                       <span className="wiz4-yearval">{years} an(s)</span>
                       <button
-                        className="wiz4-stepbtn"
+                        className="wiz-spin-btn"
                         onClick={() => dispatch({ type: 'SET_YEARS', years: years + 1 })}
                         disabled={years >= Math.min(50, remainingPC)}
                       >＋</button>
@@ -569,23 +608,25 @@ export default function CareersAllocator({
                       <div className="wiz4-geo">{career.geographic_origin_details}</div>
                     </div>
                   )}
-                  <div className="wiz4-block">
-                    <span className="wiz4-h">{t('step4.career_skills_pro')}</span>
-                    <div className="wiz4-groups">
-                      {Object.entries(groupedSkills).map(([family, skills]) => (
-                        <div key={family}>
-                          <div className="wiz4-grplbl">{family}</div>
-                          <div className="wiz4-chips">
-                            {skills.map(sk => (
-                              <span key={sk.skill_id} className="wiz4-chip">
-                                {skillLabel(sk.skill_id)}
-                              </span>
-                            ))}
+                  {!isAdded && (
+                    <div className="wiz4-block">
+                      <span className="wiz4-h">{t('step4.career_skills_pro')}</span>
+                      <div className="wiz4-groups">
+                        {Object.entries(groupedSkills).map(([family, skills]) => (
+                          <div key={family}>
+                            <div className="wiz4-grplbl">{family}</div>
+                            <div className="wiz4-chips">
+                              {skills.map(sk => (
+                                <span key={sk.skill_id} className="wiz4-chip">
+                                  {skillLabel(sk.skill_id)}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {choiceGroups.length > 0 && (
                     <div className="wiz4-block">
@@ -736,5 +777,16 @@ export default function CareersAllocator({
         )}
       </div>
     </div>
+    {illusZoomed && career?.illustration && (
+      <div className="wiz4-illus-overlay" onClick={() => setIllusZoomed(false)}>
+        <img className="wiz4-illus-zoomed" src={`/${career.illustration}`} alt={career.name} />
+      </div>
+    )}
+    {restrTooltip && (
+      <div className="wiz-tooltip" style={{ top: restrTooltip.top, left: restrTooltip.left }}>
+        {restrTooltip.desc}
+      </div>
+    )}
+    </>
   )
 }

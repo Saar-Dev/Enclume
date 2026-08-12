@@ -326,9 +326,9 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
                 return (
                   <td key={id} className="wiz1-td">
                     <div className={`wiz1-spinner${lockedForPlayer ? ' locked' : ''}`}>
-                      <button className="wiz1-spin-btn" disabled={lockedForPlayer || !canDecrement(id)} onClick={() => handleModPC(id, -1)}>−</button>
+                      <button className="wiz-spin-btn" disabled={lockedForPlayer || !canDecrement(id)} onClick={() => handleModPC(id, -1)}>−</button>
                       <span className="wiz1-spin-value">{modPC[id]}</span>
-                      <button className="wiz1-spin-btn" disabled={lockedForPlayer || !canIncrement(id)} onClick={() => handleModPC(id, +1)}>+</button>
+                      <button className="wiz-spin-btn" disabled={lockedForPlayer || !canIncrement(id)} onClick={() => handleModPC(id, +1)}>＋</button>
                     </div>
                   </td>
                 )
@@ -587,7 +587,7 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
 
       {tooltip && (
         <div
-          className="wiz1-tooltip"
+          className="wiz-tooltip"
           style={{ top: tooltip.top, left: tooltip.left }}
         >
           {tooltip.desc}

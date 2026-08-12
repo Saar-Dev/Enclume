@@ -2292,6 +2292,41 @@ Convention :
   box-shadow: 0 0 28px rgba(80,240,255,.5);
 }
 
+/* WIZ20 (docs/BUG WIZARD.md #24 / BUGIDENTIFIE.md #8) : stepper +/- "proéminent" (une seule
+   instance visible à la fois) — remplace .wiz1-spin-btn (Step1, points d'Attributs) et
+   .wiz4-stepbtn (Step4, années de carrière), quasi identiques mais dérivées à des valeurs
+   différentes. .wiz4-sbtn (grilles denses de points de compétences) reste distinct par choix :
+   un style plus discret y limite le bruit visuel sur de nombreuses lignes répétées. */
+.wiz-spin-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: rgba(47,215,255,.07);
+  border: 1px solid rgba(47,215,255,.3);
+  color: var(--wiz-blue-bright);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  clip-path: none;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: background .15s, box-shadow .15s;
+}
+.wiz-spin-btn:hover {
+  background: rgba(47,215,255,.18);
+  box-shadow: 0 0 8px rgba(47,215,255,.3);
+  filter: none;
+}
+.wiz-spin-btn:disabled {
+  opacity: .3;
+  cursor: default;
+  pointer-events: none;
+}
+
 @keyframes wizPulse {
   0%, 100% { opacity: .7; }
   50% { opacity: 1; }
@@ -2639,7 +2674,7 @@ Convention :
 }
 .wiz4-mono { font-family: 'Share Tech Mono', monospace; font-variant-numeric: tabular-nums; }
 .wiz4-railmeta .wiz4-mono { color: #e0a85c; }
-.wiz4-restr { color: #e0a85c; font-weight: 600; }
+.wiz4-restr { color: #e0a85c; font-weight: 600; font-size: 13px; line-height: 1; }
 .wiz4-retenu {
   display: inline-flex;
   align-items: center;
@@ -2692,6 +2727,32 @@ Convention :
   border: 1px solid var(--wiz-glass-border);
   object-fit: cover;
   object-position: top left;
+  cursor: pointer;
+  transition: filter .15s;
+}
+.wiz4-illus:hover { filter: brightness(1.15); }
+
+/* WIZ23 : agrandissement au clic (retours positifs de Saar sur ces illustrations) — vignette
+   recadrée (cover) vs. agrandi montrant l'image entière (contain), même patron overlay que
+   SidebarHelpModal.jsx (clic sur le fond = fermer). */
+.wiz4-illus-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(0,0,0,0.75);
+  cursor: pointer;
+}
+.wiz4-illus-zoomed {
+  max-width: min(90vw, 720px);
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--wiz-glass-border);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6);
 }
 .wiz4-dinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .wiz4-dtitle { font: 600 19px/1.1 'Inter', sans-serif; color: var(--wiz-white); }
@@ -2702,24 +2763,6 @@ Convention :
 
 .wiz4-yearctl { display: flex; align-items: center; gap: 8px; }
 .wiz4-yearval { font: 700 15px 'Share Tech Mono', monospace; color: var(--wiz-white); min-width: 52px; text-align: center; }
-.wiz4-stepbtn {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: rgba(47,215,255,.07);
-  border: 1px solid rgba(47,215,255,.3);
-  color: var(--wiz-blue-bright);
-  font-size: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  clip-path: none;
-  transition: background .15s, box-shadow .15s;
-}
-.wiz4-stepbtn:hover { background: rgba(47,215,255,.18); box-shadow: 0 0 8px rgba(47,215,255,.3); filter: none; }
-.wiz4-stepbtn:disabled { opacity: .3; cursor: default; pointer-events: none; }
 
 .wiz4-addbtn {
   font: 600 12px 'Inter', sans-serif;
@@ -3169,32 +3212,6 @@ Convention :
   gap: 5px;
 }
 
-.wiz1-spin-btn {
-  width: 24px;
-  height: 24px;
-  border: 1px solid rgba(47,215,255,.3);
-  border-radius: 4px;
-  background: rgba(47,215,255,.07);
-  color: var(--wiz-blue-bright);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  padding: 0;
-  clip-path: none;
-  text-transform: none;
-  letter-spacing: 0;
-  transition: background .15s, box-shadow .15s;
-}
-.wiz1-spin-btn:hover {
-  background: rgba(47,215,255,.18);
-  box-shadow: 0 0 8px rgba(47,215,255,.3);
-  filter: none;
-}
-
 .wiz1-spin-value {
   display: inline-block;
   min-width: 22px;
@@ -3464,7 +3481,9 @@ Convention :
 }
 
 /* ── Tooltip ─────────────────────────────────────────────────────── */
-.wiz1-tooltip {
+/* WIZ25 : renommée wiz1-tooltip → wiz-tooltip (transverse) — réutilisée par CareersAllocator.jsx
+   (Step4), plus une classe propre à Step1 (même patron que .wiz-spin-btn, WIZ20). */
+.wiz-tooltip {
   position: fixed;
   background: rgba(6,18,35,.95);
   border: 1px solid rgba(47,215,255,.2);

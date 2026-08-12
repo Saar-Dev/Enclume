@@ -41,8 +41,37 @@ const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 // Aucune logique déplacée — subStep/setSubStep/highestSubStep/setHighestSubStep gardent les mêmes
 // noms partout dans Step4ExperienceInner, juste reçus en props au lieu d'un useState local.
 export default function Step4Experience({ gmSyncKey, initialData, ...rest }) {
-  const [subStep, setSubStep] = useState(initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
-  const [highestSubStep, setHighestSubStep] = useState(() => initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
+  // WIZ21 (docs/EN_COURS.md, 2026-08-11) : un MJ qui rejoint une fiche déjà avancée atterrissait
+  // systématiquement sur Récap (choix ci-dessous, correct pour un joueur qui reprend son propre
+  // brouillon, pas pour un MJ observateur). Uniquement côté MJ (gmSyncKey non nul — même signal que
+  // `isGmView` côté WizardCreation.jsx), on suit la sous-étape réellement affichée chez le joueur via
+  // le canal de diffusion live déjà existant (`subStep` ajouté à onLiveChange plus bas dans
+  // Step4ExperienceInner) — jamais côté joueur, dont la saisie locale reste toujours prioritaire
+  // (§2.5, même règle que le reste de la diffusion live). `WIZARD_LIVE_UPDATE` (WizardLockSync.jsx)
+  // est un flux purement direct (le serveur ne rejoue rien à l'arrivée) : `liveSubStep` peut déjà
+  // être présent au montage (le joueur était actif juste avant), d'où son utilisation dès l'état
+  // initial et pas seulement pour les mises à jour suivantes.
+  const liveSubStep = gmSyncKey != null ? initialData?.subStep : undefined
+  const liveSubStepValid = liveSubStep && SUB_STEP_ORDER.includes(liveSubStep)
+  const initialSubStep = liveSubStepValid ? liveSubStep : (initialData ? SUB_STEPS.SUMMARY : SUB_STEPS.AGE)
+  const [subStep, setSubStep] = useState(initialSubStep)
+  const [highestSubStep, setHighestSubStep] = useState(initialSubStep)
+
+  // Pattern "adjusting state during render" (react.dev/learn/you-might-not-need-an-effect), déjà
+  // utilisé ailleurs dans le projet (SidebarChatTab.jsx) — évite un setState synchrone en corps
+  // d'effet (react-hooks/set-state-in-effect) : comparaison à une copie précédente en state, ajustée
+  // pendant le rendu plutôt qu'après coup.
+  const [prevLiveSubStep, setPrevLiveSubStep] = useState(liveSubStep)
+  if (liveSubStep !== prevLiveSubStep) {
+    setPrevLiveSubStep(liveSubStep)
+    if (liveSubStepValid) {
+      setSubStep(liveSubStep)
+      setHighestSubStep(prev => (
+        SUB_STEP_ORDER.indexOf(liveSubStep) > SUB_STEP_ORDER.indexOf(prev) ? liveSubStep : prev
+      ))
+    }
+  }
+
   return (
     <Step4ExperienceInner
       key={gmSyncKey}
@@ -303,9 +332,15 @@ function Step4ExperienceInner({
   // change réellement, donc pas de risque de boucle à la lister ici (même patron que l'effet
   // liveYears juste au-dessus, deps toutes primitives/stables — cf. l'incident "Maximum update depth
   // exceeded" documenté sur validSetbackRolls plus haut, qui reste mémoïsé via useMemo).
+  //
+  // WIZ21 (docs/EN_COURS.md, 2026-08-11) : `subStep` ajouté UNIQUEMENT ici, jamais dans buildPayload
+  // lui-même — buildPayload est aussi utilisé tel quel par handleSubmit (onNext, soumission au
+  // serveur), qui n'a rien à faire d'un état de navigation UI. Permet au wrapper externe
+  // (Step4Experience) de suivre côté MJ la sous-étape réellement affichée chez le joueur, sans
+  // mélanger cette préoccupation avec le payload persisté.
   useEffect(() => {
-    onLiveChange?.(buildPayload())
-  }, [buildPayload, onLiveChange])
+    onLiveChange?.({ ...buildPayload(), subStep })
+  }, [buildPayload, subStep, onLiveChange])
 
   // ─── Navigation ────────────────────────────────────────────────
   const advanceSubStep = (next) => {

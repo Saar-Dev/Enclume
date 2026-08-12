@@ -31,7 +31,6 @@
 | 1 | Absence totale de tooltips d'explication dans le wizard (priorité Step 4 Profession). Aucun système existant. | Wizard | Amélioration UX | Haute | Créer un système de tooltips. |
 | 5 | Tableau des attributs trop large (layout). | Wizard | Amélioration UX | Basse | CSS responsive de l'étape 2. |
 | 7 | Broadcast incohérent : Step 1 temps réel, Step 4 envoie directement au récapitulatif et y reste. | Wizard | Bug (broadcast) | Haute | `PERSONNAGE_WIZARD.md`, flux WS. |
-| 8 | Boutons -/+ non harmonisés sur tout le wizard. | Wizard | Amélioration UX | Basse | Composants d'incrémentation. |
 | 10 | Page Profession dense : grille de compétences apparaît avant sélection, retirer description des compétences pro. | Wizard | Bug (affichage) | Haute | Rendu conditionnel Step 4. |
 | 11 | Symbole /!\\ trop petit. | Wizard | Amélioration UX | Basse | Icône d'avertissement. |
 | 13 | Points déjà investis dans les compétences professionnelles mal calculés. | Wizard | Bug | Haute | `SYSTEME/PERSONNAGE_CALCULS.md`. |
