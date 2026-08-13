@@ -26,6 +26,7 @@ import {
   getModDom, calcDroneRD, calcDroneDegatsNets,
 } from '../lib/charStats.js'
 import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
+import { resolveHumanoidTestContext } from '../lib/combatantContextService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
@@ -1474,6 +1475,23 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       totalWeight, forNA: for_na_attaquant, settings,
     })
     const modDom = getModDom(for_na_attaquant)
+
+    // [DBG-DECOUPLAGE] Scientist (PLAN_RW_SYSCOMBAT.md §2.3, PLAN_COMBATANT_CONTEXT.md Lot A) — chemin
+    // combatantContextService.js observé en parallèle, jamais consommé en aval. Le bloc inline
+    // ci-dessus reste seul utilisé pendant cette phase ; retiré au Lot B une fois confirmé sans écart
+    // sur une session de jeu réelle.
+    const shadowCtx = await resolveHumanoidTestContext(db, character, skillId)
+    const shadowInline = {
+      skillTotal: attackerSkillTotal, effectiveMalus: effectiveMalusAttaquant, modDom,
+      for_na: for_na_attaquant, sheetId: sheetAttaquant.id, mastery: charSkill?.mastery ?? 0,
+    }
+    const shadowService = shadowCtx && {
+      skillTotal: shadowCtx.skillTotal, effectiveMalus: shadowCtx.effectiveMalus, modDom: shadowCtx.modDom,
+      for_na: shadowCtx.for_na, sheetId: shadowCtx.sheetId, mastery: shadowCtx.mastery,
+    }
+    if (JSON.stringify(shadowInline) !== JSON.stringify(shadowService)) {
+      console.warn(`[DBG-DECOUPLAGE] resolveMeleeAction attaquant — inline:${JSON.stringify(shadowInline)} service:${JSON.stringify(shadowService)}`)
+    }
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
     if (rosterAttaquant?.state_combat_mode === 'charge' && distanceMChk <= 3) {
