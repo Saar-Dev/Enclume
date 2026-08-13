@@ -590,20 +590,17 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     const modeCombatDefPj = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
 
     // Terrain instable défenseur PJ — compétence limitative ACROBATIE_EQUILIBRE
+    // PLAN_COMBATANT_CONTEXT.md Lot C — objet minimal { id, campaign_id } reconstruit, même patron
+    // que resolveMeleeDefensePnj (ni l'un ni l'autre ne reçoit la ligne characters complète).
     let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
     if (pendingSituationDef.includes('cac_terrain_instable') && char_sheet_id_cible) {
-      const [attrsCibleDef, archetypeCibleDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsCibleDef] = await Promise.all([
-        db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
-        db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
-        db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
-        db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
-        getMutationEffects(char_sheet_id_cible),
-      ])
-      const genoCibleDef = archetypeCibleDef?.genotype_id
-        ? await db('ref_genotypes').where({ id: archetypeCibleDef.genotype_id }).first() : null
-      acrobatieDefTotal = acrobatieRefDef
-        ? calcSkillTotal(attrsCibleDef, acrobatieCharDef, acrobatieRefDef, genoCibleDef, mutationEffectsCibleDef)
-        : defenderSkillTotal
+      // Repli sur defenderSkillTotal préservé tel quel si ACROBATIE_EQUILIBRE est absente du catalogue
+      // (garde défensive héritée de l'ancien code, même patron que resolveMeleeAction Lot B).
+      const acrobatieRefDef = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
+      if (acrobatieRefDef) {
+        const ctxAcrobatieDef = await resolveHumanoidTestContext(db, { id: characterIdCible, campaign_id: meleeCampaignId }, 'ACROBATIE_EQUILIBRE')
+        acrobatieDefTotal = ctxAcrobatieDef?.skillTotal ?? defenderSkillTotal
+      }
       terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
     }
 
@@ -1610,17 +1607,11 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     if (sheetCible) {
       char_sheet_id_cible = sheetCible.id
 
-      // Round 1 — parallèle : données défenseur + armes de contact équipées
-      const [attrsCible, archetypeCible, identityCible, woundsCible, invCible, defContactWeapons, mutationEffectsCible] = await Promise.all([
-        db('char_attributes').where({ char_sheet_id: sheetCible.id }),
-        db('char_archetype').where({ char_sheet_id: sheetCible.id }).first(),
+      // Détermination de l'arme/compétence du défenseur (priorité main directrice) — reste local,
+      // hors contrat de resolveHumanoidTestContext, même principe que la résolution skillId côté
+      // attaquant (Lot B).
+      const [identityCible, defContactWeapons] = await Promise.all([
         db('char_identity').where({ char_sheet_id: sheetCible.id }).first(),
-        db('character_wounds').where({ char_sheet_id: sheetCible.id }),
-        db('char_inventory')
-          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-          .where({ 'char_inventory.character_id': defenderCharacter.id })
-          .select('char_inventory.container', 'char_inventory.quantity',
-                  'ref_equipment.weight as ref_weight'),
         // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
         // stricte sur char_inventory.slot — composite-safe.
         db('char_inventory_slots as cis')
@@ -1630,7 +1621,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
           .whereIn('cis.slot_code', ['MD', 'MG', '2M'])
           .where('ref_equipment.category', 'Arme de contact')
           .select('cis.slot_code as slot', 'char_inventory.equipment_id'),
-        getMutationEffects(sheetCible.id),
       ])
 
       // B1 — compétence défenseur selon arme équipée (priorité main directrice)
@@ -1642,32 +1632,18 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         if (assoc) defSkillId = assoc.skill_id
       }
 
-      // Round 2 — parallèle : compétence défenseur + génotype
-      const [charSkillDef, refSkillDef, genoCible] = await Promise.all([
-        db('char_skills').where({ char_sheet_id: sheetCible.id, skill_id: defSkillId }).first(),
-        db('ref_skills').where({ id: defSkillId }).first(),
-        archetypeCible?.genotype_id
-          ? db('ref_genotypes').where({ id: archetypeCible.genotype_id }).first()
-          : Promise.resolve(null),
-      ])
-
-      for_na_cible = calcAttributeNA(attrsCible, 'FOR', genoCible, mutationEffectsCible)
-      con_na_cible = calcAttributeNA(attrsCible, 'CON', genoCible, mutationEffectsCible)
-      vol_na_cible = calcAttributeNA(attrsCible, 'VOL', genoCible, mutationEffectsCible)
-
-      if (refSkillDef) {
-        defenderSkillTotal = calcSkillTotal(attrsCible, charSkillDef, refSkillDef, genoCible, mutationEffectsCible)
-        defenderMastery = charSkillDef?.mastery ?? 0
+      // PLAN_COMBATANT_CONTEXT.md Lot C — point de couture unique pour le contexte de Test du
+      // défenseur (Seuil, malus, mastery). Garde explicite dès l'écriture (leçon Lot B, §Analyse à
+      // charge) : resolveHumanoidTestContext refait son propre fetch char_sheet indépendant.
+      const ctxCible = await resolveHumanoidTestContext(db, defenderCharacter, defSkillId)
+      if (ctxCible) {
+        defenderSkillTotal = ctxCible.skillTotal
+        defenderEffectiveMalus = ctxCible.effectiveMalus
+        defenderMastery = ctxCible.mastery
+        for_na_cible = ctxCible.for_na
+        con_na_cible = ctxCible.con_na
+        vol_na_cible = ctxCible.vol_na
       }
-
-      // for_na_cible déjà calculé ci-dessus (calcAttributeNA) — corrige PI4, plus de valeur brute séparée
-      const totalWeightDef = invCible.reduce((sum, i) =>
-        (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
-      )
-      defenderEffectiveMalus = calcActiveMalus({
-        wounds: woundsCible, fatiguePoints: sheetCible.fatigue_points,
-        totalWeight: totalWeightDef, forNA: for_na_cible, settings,
-      })
     }
 
     // Lot 2 (PLAN_RW_SYSCOMBAT.md §2.4.b) : commonPending sert désormais de contexte partagé aux 4
@@ -1828,21 +1804,18 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
   const defCombatMode = rosterDef?.state_combat_mode ?? 'normal'
   const modeCombatDef = defCombatMode === 'offensif' ? -5 : defCombatMode === 'charge' ? -7 : defCombatMode === 'defensif' ? 3 : defCombatMode === 'retraite' ? 5 : 0
   // Terrain instable défenseur PNJ — compétence limitative ACROBATIE_EQUILIBRE
-  // attrsCible/genoCible hors scope (déclarés dans if(sheetCible)) → re-fetch conditionnel
+  // PLAN_COMBATANT_CONTEXT.md Lot C — objet minimal { id, campaign_id } reconstruit : cette fonction
+  // ne reçoit que characterIdCible/char_sheet_id_cible via ctx, jamais la ligne characters complète.
+  // resolveHumanoidTestContext ne lit que ces deux champs (vérifié dans son propre code).
   let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
   if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
-    const [attrsDef, archetypeDef, acrobatieCharDef, acrobatieRefDef, mutationEffectsDef] = await Promise.all([
-      db('char_attributes').where({ char_sheet_id: char_sheet_id_cible }),
-      db('char_archetype').where({ char_sheet_id: char_sheet_id_cible }).first(),
-      db('char_skills').where({ char_sheet_id: char_sheet_id_cible, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
-      db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
-      getMutationEffects(char_sheet_id_cible),
-    ])
-    const genoDef = archetypeDef?.genotype_id
-      ? await db('ref_genotypes').where({ id: archetypeDef.genotype_id }).first() : null
-    acrobatieDefTotal = acrobatieRefDef
-      ? calcSkillTotal(attrsDef, acrobatieCharDef, acrobatieRefDef, genoDef, mutationEffectsDef)
-      : defenderSkillTotal
+    // Repli sur defenderSkillTotal préservé tel quel si ACROBATIE_EQUILIBRE est absente du catalogue
+    // (garde défensive héritée de l'ancien code, même patron que resolveMeleeAction Lot B).
+    const acrobatieRefDef = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
+    if (acrobatieRefDef) {
+      const ctxAcrobatieDef = await resolveHumanoidTestContext(db, { id: characterIdCible, campaign_id: campaignId }, 'ACROBATIE_EQUILIBRE')
+      acrobatieDefTotal = ctxAcrobatieDef?.skillTotal ?? defenderSkillTotal
+    }
     terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
   }
 
