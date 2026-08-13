@@ -3,8 +3,10 @@
 > Statut : Lot 0 (cadrage architecture) clos, Lot 1 (Fondations) ✅ codé (2026-08-06), **non testé en
 > navigateur**. Lot 2 (Substitution d'attributs) resserré et **partiellement** codé (2026-08-06) :
 > mouvement (VIT) ✅ codé, plafond de Compétence (Manœuvre d'armure) et 1 seule Attaque/Tour
-> **⏸️ bloqués** en attendant un refactor de `socketCombatHelpers.js` (mis en pause côté Saar, chantier
-> séparé à planifier) — détail §7. **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
+> **⏸️ bloqués** — refactor `socketCombatHelpers.js` cadré et **majoritairement clos**
+> (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md` Lots A-F ✅, 2026-08-13) ; reste son Lot G, bloqué à son tour
+> sur une seule pièce manquante de **ce** plan-ci : `computeExoStats` (contrat précis §7.1, aucune
+> implémentation n'existe encore dans le code) — détail §7. **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
 > — architecture validée contre des dépôts pro réels (Lancer/Foundry VTT, MekHQ) avant tout code. 2 des
 > 3 questions RAW tranchées (§2.1, §2.2) ; **§2.3 (seuil de Catastrophe) en stand-by**, dépend de
 > `docs/PLAN_TEST_CRITIQUE.md` (chantier séparé, en pause côté Saar) — bloque uniquement le Lot 8.
@@ -456,11 +458,69 @@ autre personnage" à reproduire pour le pilote d'exo-armure.
 
 **Décision Saar (2026-08-06) : le refactor de `socketCombatHelpers.js` nécessaire pour accueillir
 cette redirection est mis en pause**, chantier séparé — **cadré depuis, `docs/PLANS/PLAN_COMBATANT_CONTEXT.md`
-(2026-08-06)**. Point de couture unique retenu : `resolveCombatantTestContext(character, skillId)`
-(`server/src/lib/combatantContextService.js`, Lots A-G) — 7 sites recensés par lecture intégrale (pas
-8, l'estimation ci-dessus), pas une table de dispatch mais des guard clauses par `character.type`. Ce
-Lot 2 (plafond Manœuvre d'armure, 1 seule Attaque/Tour) **reprendra une fois ce plan-là avancé**
-(au moins son Lot G) — ne pas redémarrer cette section avant.
+(2026-08-06)**. Point de couture unique retenu : `resolveHumanoidTestContext(db, character, skillId)`
+(`server/src/lib/combatantContextService.js`) — 7 sites recensés par lecture intégrale (pas 8,
+l'estimation ci-dessus), pas une table de dispatch mais des guard clauses par `character.type`.
+
+**Mise à jour 2026-08-13 : Lots A-F de `PLAN_COMBATANT_CONTEXT.md` clos** (détail complet
+`docs/JOURNAL8.md` session du même jour) — les 7 sites recensés migrent tous vers ce point d'entrée
+unique, plus aucune réimplémentation inline de la chaîne attrs/archetype/skills/mutations, validé en
+jeu réel sur `pj`/`pnj`. **Reste uniquement le Lot G** (dispatcher `resolveCombatantTestContext` +
+branche `resolveExoTestContext`) — et ce lot G est **bloqué sur une dépendance externe qui n'existe
+nulle part dans le code aujourd'hui** (`grep computeExoStats` sur tout `server/src/` et `shared/` :
+zéro résultat). Ce Lot 2 (plafond Manœuvre d'armure, 1 seule Attaque/Tour) **reprendra une fois
+`PLAN_COMBATANT_CONTEXT.md` Lot G clos** — ne pas redémarrer cette section avant.
+
+#### Besoins précis de `PLAN_COMBATANT_CONTEXT.md` Lot G sur `computeExoStats` — à livrer par ce Lot 2
+
+Le squelette déjà écrit dans `PLAN_COMBATANT_CONTEXT.md` §3.4 est :
+
+```js
+async function resolveExoTestContext(db, exoCharacter, skillId) {
+  const exoSheet = await db('exo_sheet').where({ character_id: exoCharacter.id }).first()
+  if (!exoSheet?.pilot_character_id) return null
+  const pilot = await db('characters').where({ id: exoSheet.pilot_character_id }).first()
+  const pilotCtx = await resolveHumanoidTestContext(db, pilot, skillId)
+  const exoStats = await computeExoStats(db, exoSheet)  // ← dépendance de ce Lot 2
+  return { ...pilotCtx, for_na: exoStats.exf }           // FOR → EXF, §0.2 de ce plan
+}
+```
+
+**Contrat précis attendu de `computeExoStats`** (à figer au moment de coder ce Lot 2, pas avant) :
+
+1. **Fonction pure, pas d'accès DB** — cohérent avec `charStats.js:4` (*"aucun accès DB"*, doctrine
+   déjà établie dans ce projet) et avec la décision §1.7 de ce plan-ci qui la qualifie déjà de
+   *"fonction de service pure"*. Signature attendue : `computeExoStats(exoSheet, template)` — pas
+   `computeExoStats(db, exoSheet)`. Le join `exo_sheet.template_id → ref_exo_templates` reste à la
+   charge de l'appelant (`resolveExoTestContext`, dans l'autre plan), jamais interne à cette fonction.
+2. **Retour minimal exigé par le Lot G** : `{ exf: number, ... }` — `exf` est le seul champ
+   effectivement consommé aujourd'hui (substitution FOR→EXF, §0.2). `vit` n'est pas nécessaire ici
+   (mouvement déjà traité séparément, `movementBudgetService.js`, §7.4) ; `bld` non plus (pipeline de
+   dégâts, Lot 4, hors périmètre de ce point de couture). Rien n'empêche que la fonction retourne les
+   trois par cohérence architecturale — juste noter qu'un retour partiel ne bloquerait pas ce Lot G.
+3. **`template_id` NULL** (exo "non configurée", Lot 1 §6.5) — `computeExoStats` doit soit refuser cet
+   appel explicitement (lever ou retourner `null`/`exf: null`), soit documenter clairement qu'elle
+   suppose un `template` déjà résolu et non-null, laissant à l'appelant la responsabilité du garde.
+   **Ne pas laisser un `NaN`/`undefined` silencieux se propager jusqu'au Seuil de Test** — ce serait
+   exactement le genre de trou qu'un `[DBG-DECOUPLAGE]` aurait dû attraper ailleurs dans ce chantier.
+4. **Angle mort réel trouvé en écrivant ce besoin, pas encore résolu, à traiter *dans* le Lot G (pas
+   ici)** : le squelette ci-dessus fait `{ ...pilotCtx, for_na: exoStats.exf }` — mais `pilotCtx.effectiveMalus`
+   et `pilotCtx.modDom` ont déjà été calculés par `resolveHumanoidTestContext` **avec le `for_na` du
+   pilote**, pas l'EXF. Écraser `for_na` après coup dans l'objet retourné ne recalcule pas ces deux
+   champs, alors que ce plan-ci exige justement leur substitution (§2.1 *"Lot 4 réutilise
+   `getModDom(exf)`"*, §2.2 *"Encombrement sur EXF... réutilise `calcEncumbrancePenalty` en substituant
+   EXF à FOR_na"*). Le squelette actuel de `resolveExoTestContext` est donc **incomplet en l'état** —
+   corrigé quand le Lot G sera réellement codé (probablement : recalcul explicite de `effectiveMalus`/
+   `modDom` avec `exoStats.exf`, au prix d'un second petit fetch wounds/inventory/settings côté
+   `resolveExoTestContext`, même compromis déjà accepté ailleurs dans ce chantier pour des duplications
+   mineures). **Ne change rien aux besoins de ce Lot 2** — noté ici pour que la personne qui code ce
+   Lot 2 ne soit pas surprise si `computeExoStats` est rappelée avec des arguments légèrement
+   différents de ce squelette une fois le Lot G réellement écrit.
+5. **Priorité de livraison** : `computeExoStats` seule débloque le Lot G — elle ne dépend d'aucune
+   autre pièce de ce Lot 2 (ni le plafond de Compétence, ni "1 seule Attaque/Tour", tous deux des
+   gardes de Déclaration/Résolution qui ne concernent pas la résolution du contexte de Test). Si ce
+   Lot 2 est découpé en sous-étapes, livrer `computeExoStats` en premier permet au Lot G de démarrer
+   sans attendre la fermeture complète de ce Lot 2.
 
 **Conséquence sur le découpage du Lot 2** — tout ce qui dépend de la résolution combat est bloqué :
 - **Plafond de Compétence par Manœuvre d'armure** — ⏸️ bloqué (dépend du refactor).
