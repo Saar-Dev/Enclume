@@ -141,12 +141,20 @@ test('resolveHumanoidTestContext — mutation active avec modificateur PRE (ref_
   }
 })
 
-test('resolveHumanoidTestContext — skillId absent de ref_skills : skillTotal 0, mastery 0', { skip }, async () => {
-  const fx = await createFixture()
+test('resolveHumanoidTestContext — skillId absent de ref_skills : skillTotal 0, mastery 0, mais effectiveMalus/for_na/modDom restent calculés (Lot D, tireur sans compétence associée)', { skip }, async () => {
+  const fx = await createFixture({ FOR: 14 })
+  await db('character_wounds').insert({ char_sheet_id: fx.sheet.id, location: 'corps', severity: 'grave' })
   try {
     const ctx = await resolveHumanoidTestContext(db, fx.character, 'SKILL_INEXISTANT_TEST_XYZ')
     assert.equal(ctx.skillTotal, 0)
     assert.equal(ctx.mastery, 0)
+    // Palier complet malgré l'absence de Compétence trouvée — contrairement au palier NA seul
+    // (skillId=null), effectiveMalus/for_na/modDom doivent rester présents : c'est précisément ce
+    // que resolveAssaultAction (Lot D) exploite quand ref_equipment_skill_assoc ne trouve pas l'arme.
+    assert.equal(ctx.for_na, 14)
+    assert.equal(ctx.modDom, getModDom(14))
+    assert.equal(ctx.effectiveMalus, -5) // WOUND_PENALTIES.grave
+    assert.equal(ctx.sheetId, fx.sheet.id)
   } finally {
     await cleanup(fx)
   }

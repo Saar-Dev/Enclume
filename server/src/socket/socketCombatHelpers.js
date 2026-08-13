@@ -2630,19 +2630,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
     // l'encombrement et plus bas pour le décompte munitions PNJ (un seul fetch, jamais trois).
 
     if (sheetTireur) {
-      const [attrsTireur, archetypeTireur, skillAssoc, woundsTireur, invTireur, mutationEffectsTireur] = await Promise.all([
-        db('char_attributes').where({ char_sheet_id: sheetTireur.id }),
-        db('char_archetype').where({ char_sheet_id: sheetTireur.id }).first(),
-        db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first(),
+      const [woundsTireur, skillAssoc] = await Promise.all([
         db('character_wounds').where({ char_sheet_id: sheetTireur.id }),
-        db('char_inventory')
-          .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-          .where({ 'char_inventory.character_id': character.id })
-          .select(
-            'char_inventory.container', 'char_inventory.quantity',
-            'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str',
-          ),
-        getMutationEffects(sheetTireur.id),
+        db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first(),
       ])
 
       // WNDMORT — défense en profondeur, même raison que resolveMeleeAction (garde principal à la
@@ -2655,31 +2645,19 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         return { suspend: false, emissions }
       }
 
-      const genoTireur = archetypeTireur?.genotype_id
-        ? await db('ref_genotypes').where({ id: archetypeTireur.genotype_id }).first()
-        : null
-
-      if (skillAssoc) {
-        const [refSkill, charSkill] = await Promise.all([
-          db('ref_skills').where({ id: skillAssoc.skill_id }).first(),
-          db('char_skills').where({ char_sheet_id: sheetTireur.id, skill_id: skillAssoc.skill_id }).first(),
-        ])
-        if (refSkill) {
-          skillTotal = calcSkillTotal(attrsTireur, charSkill, refSkill, genoTireur, mutationEffectsTireur)
-          skillMastery = charSkill?.mastery ?? 0
-        }
+      // PLAN_COMBATANT_CONTEXT.md Lot D — point de couture unique pour le contexte de Test du
+      // tireur. skillAssoc peut être absent (arme du catalogue sans compétence associée — un vrai
+      // trou de catalogue, pas seulement une garde défensive) : chaîne vide plutôt que null/undefined
+      // pour forcer le palier complet — effectiveMalus/for_na restent nécessaires même sans
+      // Compétence identifiée, alors que null routerait vers le palier NA seul (§3.3 du plan, pensé
+      // pour les cibles passives #4/#5/#7 qui ne testent jamais rien, pas pour un tireur actif dont
+      // seule la Compétence est inconnue).
+      const ctxTireur = await resolveHumanoidTestContext(db, character, skillAssoc?.skill_id ?? '')
+      if (ctxTireur) {
+        skillTotal = ctxTireur.skillTotal
+        skillMastery = ctxTireur.mastery
+        effectiveMalus = ctxTireur.effectiveMalus
       }
-
-      // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
-      const for_na_tireur = calcAttributeNA(attrsTireur, 'FOR', genoTireur, mutationEffectsTireur)
-      const totalWeight = invTireur.reduce((sum, i) => {
-        if (i.container === 'Coffre' || i.ref_weight == null) return sum
-        return sum + i.ref_weight * i.quantity
-      }, 0)
-      effectiveMalus = calcActiveMalus({
-        wounds: woundsTireur, fatiguePoints: sheetTireur.fatigue_points,
-        totalWeight, forNA: for_na_tireur, settings,
-      })
     }
 
     const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0
