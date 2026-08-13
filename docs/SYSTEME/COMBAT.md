@@ -91,21 +91,32 @@ Historique de conception, audit des sites migrés et décisions détaillées : `
 
 ---
 
-## Pattern de fetch — réutiliser sans réinventer
+## Contexte de Test d'un combattant — resolveHumanoidTestContext
 
-Handler `DICE_ROLL` (`socket/index.js` ~lignes 680-695) implémente la chaîne complète. Tout nouveau handler nécessitant un skill total serveur doit **copier ce pattern** :
+Autorité unique pour résoudre le contexte de Test (Seuil, malus, ModDom) d'un combattant humanoïde
+(`pj`/`pnj`, traités identiquement) : `server/src/lib/combatantContextService.js` —
+`resolveHumanoidTestContext(db, character, skillId)`. **Jamais** de fetch inline
+`char_attributes`/`char_archetype`/`char_skills`/`ref_skills`/`character_wounds`/`char_inventory` →
+`calcSkillTotal`/`calcAttributeNA`/`calcActiveMalus` recopié à la main dans un nouveau handler —
+historique : cette chaîne a existé 7 fois avec des variations mineures dans `socketCombatHelpers.js`
+avant unification (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md`, archivé une fois le chantier clos).
 
-```js
-const charSkillRow = await db('char_skills')
-  .where({ char_sheet_id: sheet.id, skill_id: skillId }).first()
-const refSkill     = await db('ref_skills').where({ id: skillId }).first()
-const archetype    = await db('char_archetype').where({ char_sheet_id: sheet.id }).first()
-const genotypeRow  = archetype?.genotype_id
-  ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
-  : null
-const skillTotal   = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow)
-// attrs = résultat de db('char_attributes').where({ char_sheet_id: sheet.id })
-```
+Deux paliers selon `skillId` :
+- **`skillId` fourni** (acteur qui teste — attaquant CaC, tireur, défenseur CaC) : palier complet
+  `{ skillTotal, effectiveMalus, modDom, for_na, con_na, vol_na, sheetId, mastery }`. Passer une
+  chaîne vide `''` (jamais `null`) si le skillId n'est pas encore connu au moment de l'appel (ex.
+  arme du catalogue sans `ref_equipment_skill_assoc`) — `null` route vers le palier NA seul
+  ci-dessous et perdrait `effectiveMalus`/`for_na` pour un acteur actif.
+- **`skillId=null`** (cible passive — ne teste jamais rien, seule sa résistance aux dégâts compte) :
+  palier NA seul `{ for_na, con_na, vol_na, sheetId }`, sans fetch Compétence. Délègue en interne à
+  `damageService.fetchCibleNA(db, characterId, charSheetId)` — autorité pré-existante (2026-07-30,
+  `docs/PLAN_FATIGUE_DOMMAGES.md` §9), ne jamais la réimplémenter ni la contourner.
+
+`null` (la fonction elle-même, pas le palier) si le personnage n'a pas de `char_sheet` — jamais
+d'exception, comportement gracieux à gérer par l'appelant (retour anticipé ou repli selon le site).
+
+Un personnage `type='exo'` passe par une branche dédiée (`resolveExoTestContext`, dispatcher
+`resolveCombatantTestContext`) — pas encore assemblée (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md` Lot G).
 
 ### Résolution d'arme — ownership + en-main + catégorie (MELEE-INHAND/ASSAULT-INHAND-RESOLUTION)
 
@@ -220,6 +231,9 @@ Le plafond d'une ligne non touchée se calcule séparément via `getSkillCap(ski
 ---
 
 ## Données nécessaires par rôle en combat
+
+> Vue conceptuelle des données par rôle — l'implémentation réelle passe par `resolveHumanoidTestContext`
+> (Tireur/Défenseur, section ci-dessus) et `damageService.fetchCibleNA` (Cible), jamais un fetch ad hoc.
 
 **Tireur :**
 - `char_attributes` + `char_archetype → ref_genotypes` → pour `calcSkillTotal`

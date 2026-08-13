@@ -2482,3 +2482,79 @@ qu'il repasse par Step4 (atterrira maintenant sur Avantages & Revers).
 `docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md` : statut mis à jour (validé fonctionnel), pas archivé —
 « stable en jeu réel » (condition du document pour archivage/fusion DOMAIN, `RegleDocumentaire.md`
 Règle 10) suppose un usage réel en partie, pas seulement cette validation de développement.
+
+-----
+
+## Session (Saar) — 2026-08-13 — PLAN_COMBATANT_CONTEXT Lots A-F : point de couture unique du contexte de Test combat
+
+**Contexte** : `EXOARM-COMBATFILE` bloquait `PLAN_EXOARMURE.md` Lot 2 — `socketCombatHelpers.js`
+recalculait la chaîne attrs/archetype/charSkill/refSkill/wounds/inventory/mutationEffects →
+`calcSkillTotal`/`calcAttributeNA`/`calcActiveMalus` séparément à 7 endroits, aucun point d'entrée
+unique pour brancher un pilote d'exo-armure. `docs/PLANS/PLAN_COMBATANT_CONTEXT.md` (2026-08-06)
+prévoyait 7 lots (A-G) : construire `combatantContextService.js`, migrer les 7 sites un par un, puis
+seulement au Lot G ajouter la branche `exo`.
+
+**Lot A** — `server/src/lib/combatantContextService.js` (`resolveHumanoidTestContext`) créé, extrait
+du site attaquant CaC (le plus complet des 7). Branché en mode Scientist (`[DBG-DECOUPLAGE]`,
+patron déjà en place `PLAN_RW_SYSCOMBAT.md` §2.3) en parallèle du chemin inline, jamais consommé.
+9 tests unitaires (fixture DB réelle) : skill trouvée/absente/inconnue, mains nues, mastery,
+génotype, mutation (2 gaps de couverture fermés en cours de route — la branche génotype/mutation
+n'était testée par aucun code du projet avant ce lot), blessure, encombrement.
+
+**Lot B** — Site attaquant CaC branché, chemin inline retiré, **seulement après confirmation par
+Saar** que le dispositif Scientist n'avait déclenché aucun `[DBG-DECOUPLAGE]` sur 3 combats CaC réels
+(dont un à modificateurs cumulés multi-adversaires + deux-armes). Analyse à charge post-lot : un
+`ctx`/`ctxAcrobatie` pouvait théoriquement être `null` (fenêtre de concurrence entre le garde initial
+et le fetch interne du service) sans garde — corrigé avant qu'un vrai incident ne le révèle.
+
+**Lot C** — Défenseur CaC. Le plan groupait le site #1 (`isTargetDefenseless`) avec le site #3
+(défenseur) par proximité thématique — vérifié en lisant le code : `isTargetDefenseless` n'appelle
+jamais `calcSkillTotal`, rien à refactorer, retiré du lot. À l'inverse, `grep calcSkillTotal(` a
+révélé 2 duplicatas invisibles à l'audit initial du plan (basé sur un grep `char_sheet`, qui ne voit
+pas un site réutilisant un `char_sheet_id` déjà résolu) : `resolveMeleeDefensePnj` et
+`confirmMeleeDefense` recalculaient chacun la Compétence Acrobatie/Équilibre pour le terrain
+instable. Périmètre élargi à 3 sites après validation explicite de Saar. Garde `null` posée dès
+l'écriture cette fois (leçon du Lot B).
+
+**Lot D** — Tireur (`resolveAssaultAction`). Un `grep` plus large (`char_attributes`/`char_archetype`/
+`ref_genotypes`/`getMutationEffects` sur tout le fichier) n'a cette fois trouvé aucun duplicata caché
+— site #6 confirmé isolé. Nuance réelle trouvée avant codage : le tireur n'a pas d'équivalent "mains
+nues" — si `ref_equipment_skill_assoc` ne trouve pas l'arme (trou de catalogue réel), l'ancien code
+calculait quand même `effectiveMalus`/`for_na`. Passer `skillId=null` aurait routé vers le palier "NA
+seul" (pensé pour les cibles passives) et perdu ces champs pour un tireur actif — évité en passant
+`''` (force le palier complet, comportement verrouillé par un test unitaire renforcé). Confirmé en
+jeu réel (2 tirs, PNJ et PJ, aucune erreur).
+
+**Lot E** — Investigué, aucun changement dans `socketCombatHelpers.js`. Les 3 sites que le plan
+assignait à ce lot (#4/#5/#7, cibles Tir/Drone) étaient **déjà** unifiés via
+`damageService.fetchCibleNA`, extrait le 2026-07-30 dans un chantier antérieur
+(`PLAN_FATIGUE_DOMMAGES.md` §9) — jamais recroisé par l'audit initial du plan (créé le 2026-08-06).
+En creusant, découvert que le palier "NA seul" de `combatantContextService.js` (écrit au Lot A,
+jamais exercé par aucun site réel jusque-là) réimplémentait ce même calcul sans le savoir — corrigé
+avant que ce lot n'en fasse le premier vrai appelant : délègue désormais à `fetchCibleNA`.
+
+**Lot F** — Nettoyage. `grep` de contrôle confirmant les 7 fetchs `char_sheet` restants sont tous
+légitimes (garde locale ou alimentation exclusive de `resolveHumanoidTestContext`/`fetchCibleNA`,
+plus aucune réimplémentation inline). Imports morts retirés (`calcSkillTotal`/`calcAttributeNA`/
+`getModDom`/`calcActiveMalus`/`getMutationEffects`/`calcDroneRD` — `calcDroneDegatsNets` conservé,
+toujours utilisé). `docs/SYSTEME/COMBAT.md` : la section "Pattern de fetch — réutiliser sans
+réinventer" disait littéralement *"copier ce pattern"* en montrant l'ancien anti-patron — corrigée en
+"Contexte de Test d'un combattant", pointant vers `resolveHumanoidTestContext`/`fetchCibleNA`.
+
+**Testé** : `node --check` sur tous les fichiers touchés à chaque lot, suite `combatantContextService.test.mjs`
+(9 tests, verte à chaque lot), smoke-test de chargement du module après le nettoyage d'imports (Lot F).
+Confirmé en jeu réel : Lot B (3 combats CaC dont un à modificateurs cumulés), Lot D (2 tirs réels PNJ+PJ),
+Lot C bloc principal (2 défenses CaC supplémentaires observées lors des tests Lot D/E).
+**Non testé** : les 2 branches "terrain instable défenseur" du Lot C (`resolveMeleeDefensePnj`/
+`confirmMeleeDefense`) — nécessitent le choix explicite du modificateur situationnel
+`cac_terrain_instable` à la Déclaration (pas de détection automatique côté défenseur, contrairement à
+l'attaquant), jamais sélectionné dans les combats de test disponibles à ce jour.
+**Données** : aucune migration sur l'ensemble des lots A-F — lecture seule partout.
+**Retour arrière** : chaque lot est un commit isolé (`8a6bd34`, `b3ab641`, `9b8c230`, `a542ddb`,
+`01accf0`, `4916088`, `2aa7568`, et le commit de Lot F) — `git revert` suffit pour n'importe lequel,
+aucune donnée vivante affectée.
+
+Reste ouvert (`EN_COURS.md` EXOARM-COMBATFILE, réduit à ce qui est actif) : validation jeu réel du
+terrain instable défenseur (Lot C) ; Lot G (dispatcher `resolveCombatantTestContext` +
+`resolveExoTestContext`) — seul lot qui débloquera réellement `PLAN_EXOARMURE.md` Lot 2, dépend aussi
+de `computeExoStats` (calcul externe, autre plan) non encore construit.

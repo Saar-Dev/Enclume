@@ -10,7 +10,6 @@ import { computeAttackRoll, computeMeleeRawDamage, computeAssaultRawDamage } fro
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { checkCombatLOS } from '../lib/losService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getMutationEffects } from '../services/mutationService.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 import { calcWeaponModBonus } from '../services/modingService.js'
 import { resolveModHooks, getAllCombatMods } from '../services/weaponModService.js'
@@ -21,11 +20,7 @@ import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatEx
 import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/combatRange.js'
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
-import {
-  calcSkillTotal, calcAttributeNA,
-  getModDom, calcDroneRD, calcDroneDegatsNets,
-} from '../lib/charStats.js'
-import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
+import { calcDroneDegatsNets } from '../lib/charStats.js'
 import { resolveHumanoidTestContext } from '../lib/combatantContextService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
