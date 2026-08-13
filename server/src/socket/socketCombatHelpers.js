@@ -1435,10 +1435,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       // PLAN_COMBATANT_CONTEXT.md Lot B — point de couture unique pour le contexte de Test de
       // l'attaquant (Seuil, malus, ModDom), remplace le fetch inline attrs/archetype/charSkill/
       // refSkill/mutationEffects dupliqué 7 fois (validé par Scientist au Lot A, 3 combats CaC réels
-      // sans écart, dont un à modificateurs cumulés). Jamais null ici : sheetAttaquant est déjà
-      // garanti non-null par le garde plus haut, sur le même char_sheet.
+      // sans écart, dont un à modificateurs cumulés). Ne devrait pas être null (même char_sheet que
+      // sheetAttaquant, garanti plus haut) — mais resolveHumanoidTestContext refait son propre fetch
+      // char_sheet indépendant, plusieurs await plus tard : garde explicite plutôt qu'une confiance
+      // aveugle dans une fenêtre de concurrence entre les deux lectures (suppression de personnage).
       resolveHumanoidTestContext(db, character, skillId),
     ])
+    if (!ctx) return { suspend: false, emissions }
     const shieldAtkMalus = targetShield?.malus ?? 0
     // DEF5 — doit être connu AVANT le jet d'attaque, même raison que shieldAtkMalus ci-dessus.
     const targetDefenseless = await isTargetDefenseless(campaignId, targetTokenId, settings)
@@ -1509,7 +1512,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       const acrobatieRefSkill = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
       if (acrobatieRefSkill) {
         const ctxAcrobatie = await resolveHumanoidTestContext(db, character, 'ACROBATIE_EQUILIBRE')
-        acrobatieTotal = ctxAcrobatie.skillTotal
+        acrobatieTotal = ctxAcrobatie?.skillTotal ?? attackerSkillTotal
       }
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
