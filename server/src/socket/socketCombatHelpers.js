@@ -1394,17 +1394,8 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       if (skillAssoc) skillId = skillAssoc.skill_id
     }
 
-    const [attrsAttaquant, archetypeAttaquant, charSkill, refSkill, woundsAttaquant, invAttaquant, rosterTokens, mutationEffectsAttaquant, settings, targetShield] = await Promise.all([
-      db('char_attributes').where({ char_sheet_id: sheetAttaquant.id }),
-      db('char_archetype').where({ char_sheet_id: sheetAttaquant.id }).first(),
-      db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: skillId }).first(),
-      db('ref_skills').where({ id: skillId }).first(),
+    const [woundsAttaquant, rosterTokens, settings, targetShield, ctx] = await Promise.all([
       db('character_wounds').where({ char_sheet_id: sheetAttaquant.id }),
-      db('char_inventory')
-        .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-        .where({ 'char_inventory.character_id': character.id })
-        .select('char_inventory.container', 'char_inventory.quantity',
-                'ref_equipment.weight as ref_weight', 'ref_equipment.min_str as ref_min_str'),
       // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
       // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
       db('tokens as t')
@@ -1427,7 +1418,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
           'c.type as char_type',
           db.raw(`COALESCE(MAX(CASE WHEN re.range ~ '^[0-9]+$' THEN re.range::INTEGER ELSE 0 END), 0) as max_allonge`)
         ),
-      getMutationEffects(sheetAttaquant.id),
       getCampaignSettings(db, campaignId),
       // Bouclier de la CIBLE (docs/PLAN_BOUCLIER.md Lot B) — malus au Test d'attaque de l'attaquant,
       // dérivé automatiquement de l'équipement de la cible, jamais un choix MJ (§3.3). Doit être connu
@@ -1442,14 +1432,17 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         .where('ref_equipment.category', 'Bouclier')
         .select('ref_equipment.shield_atk_malus as malus')
         .first(),
+      // PLAN_COMBATANT_CONTEXT.md Lot B — point de couture unique pour le contexte de Test de
+      // l'attaquant (Seuil, malus, ModDom), remplace le fetch inline attrs/archetype/charSkill/
+      // refSkill/mutationEffects dupliqué 7 fois (validé par Scientist au Lot A, 3 combats CaC réels
+      // sans écart, dont un à modificateurs cumulés). Jamais null ici : sheetAttaquant est déjà
+      // garanti non-null par le garde plus haut, sur le même char_sheet.
+      resolveHumanoidTestContext(db, character, skillId),
     ])
     const shieldAtkMalus = targetShield?.malus ?? 0
     // DEF5 — doit être connu AVANT le jet d'attaque, même raison que shieldAtkMalus ci-dessus.
     const targetDefenseless = await isTargetDefenseless(campaignId, targetTokenId, settings)
     const sansDefenseBonus = targetDefenseless ? 5 : 0
-    const genoAttaquant = archetypeAttaquant?.genotype_id
-      ? await db('ref_genotypes').where({ id: archetypeAttaquant.genotype_id }).first()
-      : null
 
     // WNDMORT — défense en profondeur : le garde principal est à la Déclaration
     // (socketCombatAnnouncement.js), ceci couvre seulement le cas rare où l'attaquant devient
@@ -1461,37 +1454,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       } })
       return { suspend: false, emissions }
     }
-    const attackerSkillTotal = refSkill ? calcSkillTotal(attrsAttaquant, charSkill, refSkill, genoAttaquant, mutationEffectsAttaquant) : 0
-    // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations) — corrige PI4
-    // (docs/PLAN_MUTATION2.md Lot 1), calculée une fois et réutilisée (modDom/encombrement).
-    const for_na_attaquant = calcAttributeNA(attrsAttaquant, 'FOR', genoAttaquant, mutationEffectsAttaquant)
-    const totalWeight = invAttaquant.reduce((sum, i) =>
-      (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
-    )
-    // Registre de malus actifs (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4) — blessure/encombrement/
-    // fatigue agrégés en un seul point, plus jamais recalculés en dur ici.
-    const effectiveMalusAttaquant = calcActiveMalus({
-      wounds: woundsAttaquant, fatiguePoints: sheetAttaquant.fatigue_points,
-      totalWeight, forNA: for_na_attaquant, settings,
-    })
-    const modDom = getModDom(for_na_attaquant)
-
-    // [DBG-DECOUPLAGE] Scientist (PLAN_RW_SYSCOMBAT.md §2.3, PLAN_COMBATANT_CONTEXT.md Lot A) — chemin
-    // combatantContextService.js observé en parallèle, jamais consommé en aval. Le bloc inline
-    // ci-dessus reste seul utilisé pendant cette phase ; retiré au Lot B une fois confirmé sans écart
-    // sur une session de jeu réelle.
-    const shadowCtx = await resolveHumanoidTestContext(db, character, skillId)
-    const shadowInline = {
-      skillTotal: attackerSkillTotal, effectiveMalus: effectiveMalusAttaquant, modDom,
-      for_na: for_na_attaquant, sheetId: sheetAttaquant.id, mastery: charSkill?.mastery ?? 0,
-    }
-    const shadowService = shadowCtx && {
-      skillTotal: shadowCtx.skillTotal, effectiveMalus: shadowCtx.effectiveMalus, modDom: shadowCtx.modDom,
-      for_na: shadowCtx.for_na, sheetId: shadowCtx.sheetId, mastery: shadowCtx.mastery,
-    }
-    if (JSON.stringify(shadowInline) !== JSON.stringify(shadowService)) {
-      console.warn(`[DBG-DECOUPLAGE] resolveMeleeAction attaquant — inline:${JSON.stringify(shadowInline)} service:${JSON.stringify(shadowService)}`)
-    }
+    const attackerSkillTotal = ctx.skillTotal
+    const effectiveMalusAttaquant = ctx.effectiveMalus
+    const modDom = ctx.modDom
 
     const rosterAttaquant = await db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first()
     if (rosterAttaquant?.state_combat_mode === 'charge' && distanceMChk <= 3) {
@@ -1539,13 +1504,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     const tailleMod = TAILLE_MODS[confirmedModifiers?.taille ?? 'moyenne']?.mod ?? 0
     let terrainInstableMod = 0, acrobatieTotal = attackerSkillTotal
     if (terrainInstable) {
-      const [acrobatieRefSkill, acrobatieCharSkill] = await Promise.all([
-        db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first(),
-        db('char_skills').where({ char_sheet_id: sheetAttaquant.id, skill_id: 'ACROBATIE_EQUILIBRE' }).first(),
-      ])
-      acrobatieTotal = acrobatieRefSkill
-        ? calcSkillTotal(attrsAttaquant, acrobatieCharSkill, acrobatieRefSkill, genoAttaquant, mutationEffectsAttaquant)
-        : attackerSkillTotal
+      // Repli sur attackerSkillTotal préservé tel quel si ACROBATIE_EQUILIBRE est absente du
+      // catalogue (ne devrait jamais survenir en pratique — garde défensive héritée de l'ancien code).
+      const acrobatieRefSkill = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
+      if (acrobatieRefSkill) {
+        const ctxAcrobatie = await resolveHumanoidTestContext(db, character, 'ACROBATIE_EQUILIBRE')
+        acrobatieTotal = ctxAcrobatie.skillTotal
+      }
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
     }
 
@@ -1582,13 +1547,13 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     })
     const { seuil: chancesAttaque, breakdown: breakdownAtk } = attaqueOutcome0
     // Réussite critique (p.204, docs/PLAN_TEST_CRITIQUE.md Lot 2) : bonus = niveau de maîtrise de la
-    // Compétence utilisée pour l'attaque (charSkill, ci-dessus) — appliqué AVANT le reroll d'Échec
+    // Compétence utilisée pour l'attaque (ctx.mastery, ci-dessus) — appliqué AVANT le reroll d'Échec
     // critique (mutuellement exclusifs, l'ordre entre les deux est sans effet). mrAttaque (post-bonus)
     // est ensuite threadé via commonPending pour que resolveDefenselessTarget/resolveMeleeDefensePnj/
     // resolveMeleeDefenseDrone/confirmMeleeDefense l'utilisent tel quel au lieu de recalculer un
     // resolveTestOutcome(rollAttaque, chancesAttaque) nu qui perdrait ce bonus (le bonus conditionne
     // aussi bien la comparaison mrAttaque>mrDefense que le ModDom des dégâts).
-    const attaqueOutcomeCrit = applyCriticalSuccessBonus(attaqueOutcome0, getCriticalSuccessBonus({ masteryLevel: charSkill?.mastery ?? 0 }))
+    const attaqueOutcomeCrit = applyCriticalSuccessBonus(attaqueOutcome0, getCriticalSuccessBonus({ masteryLevel: ctx.mastery }))
     const attaqueOutcome = await resolveCriticalFailReroll(attaqueOutcomeCrit)
     console.log(`[WS] melee attaque — roll:${rollAttaque} Seuil:${chancesAttaque} token:${action.token_id}`)
     console.log(`[DBG] melee seuil — skill:${attackerSkillTotal} eff:${effectiveMalusAttaquant} mode:${attackModeBonus} rush:${isRushedMod} multi:${multiMalusAttaquant} multiAtk:${multiAttackMalus} sit:${situationModComp} taille:${tailleMod} terrain:${terrainInstableMod} deuxArmes:${deuxArmesBonus} bouclier:${shieldAtkMalus} sansDefense:${sansDefenseBonus} → seuil:${chancesAttaque}`)
