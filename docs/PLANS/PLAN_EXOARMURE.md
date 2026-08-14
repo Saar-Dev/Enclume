@@ -522,6 +522,49 @@ async function resolveExoTestContext(db, exoCharacter, skillId) {
    Lot 2 est découpé en sous-étapes, livrer `computeExoStats` en premier permet au Lot G de démarrer
    sans attendre la fermeture complète de ce Lot 2.
 
+**`computeExoStats` — ✅ codée (2026-08-13)**, `shared/exoStats.js` (pas `server/src/lib/`, fonction
+pure sans DB, même famille que `shared/polarisUtils.js`/`shared/exoConstants.js` — réutilisable
+côté client sans dupliquer la formule). Signature `computeExoStats(exoSheet, template)`, retour
+`{ exf, bld, rd }` (`bld`/`rd` ajoutés par cohérence architecturale au-delà du strict besoin du Lot G
+— `vit` volontairement exclu, déjà porté par `movementBudgetService.js` §7.4). `template` absent/`null`
+→ retourne `null` (jamais de `NaN` silencieux, point 3 ci-dessus).
+
+Deux points RAW non tranchés par le texte source (`REGLEARMURE.md:565-621`), décidés par Saar
+(session 2026-08-13/14) — pas un raccourci silencieux (§1.9) :
+- Exosquelette et Générateur réduisent l'EXF de façon **cumulative**, pas indépendamment — mais
+  **jamais par deux `floor` séquentiels**. Analyse à charge (2026-08-14) : `exo_sheet` ne garde aucun
+  historique de quel composant a été touché en premier (§1.7, "recalculées à chaque lecture", pas de
+  journal d'événements) — un double floor dans un ordre choisi (Exosquelette d'abord, comme codé en
+  premier jet) inventerait donc un ordre RAW inexistant. Vérifié par calcul exhaustif :
+  `floor(floor(x×a)×b) ≠ floor(floor(x×b)×a)` dans 225 cas sur la plage réaliste (EXF 20-70,
+  Intégrité 0-15) — ex. EXF base 21, Exosquelette à 7, Générateur à 3 → 7 dans un ordre, 6 dans
+  l'autre. **Corrigé** : les deux facteurs se combinent en une seule multiplication avec un seul
+  arrondi final (`floor(base × facteur_exosquelette × facteur_générateur)`) — commutatif par
+  construction, plus aucun ordre à trancher.
+- Générateur à Intégrité ≤ 0 → **EXF = 0** (le RAW dit seulement "l'armure n'est plus alimentée",
+  sans le formuler explicitement en EXF — contrairement à `MANUEL_EXOARMURE.md` qui l'affirmait sans
+  le sourcer).
+
+**Trouvaille distincte pendant cette lecture, non corrigée ici** (CLAUDE.md §6.8, un plan = un seul
+problème) : `getExoMovementBudget` (`movementBudgetService.js`, §7.4 déjà clos) n'applique aucune
+réduction de Vitesse liée aux paliers Exosquelette/Générateur, alors que le RAW réduit aussi la
+Vitesse "déplacement naturel" à ces mêmes paliers (`REGLEARMURE.md:567-568,589-590,595-596`). Ouvert
+comme ticket séparé `EXOARM-VIT-PALIERS1` (`bug_tickets`, confirmé par Saar), pas dans `EN_COURS.md`.
+
+**Robustesse ajoutée en analyse à charge (2026-08-14)** : `EXO_RD_TABLE` vérifiée ligne à ligne contre
+le RAW (`REGLEARMURE.md:90-98`, exacte) ; `computeExoStats` lève désormais une erreur explicite si
+`template.category` n'est pas une clé de `EXO_RD_TABLE`, plutôt qu'un repli silencieux sur `0`
+(indiscernable de la valeur RD réelle d'exo-alpha) — même doctrine que le point 3 du contrat Lot G
+("jamais un NaN/undefined silencieux").
+
+**Testé (2026-08-14)** : `shared/exoStats.test.mjs` (18 tests) — les deux exemples chiffrés littéraux
+du RAW (EXF 68/Exosquelette 8 → 45, Blindage 34/Structure 7 → 22), le cumul Exosquelette+Générateur
+à arrondi unique, un cas de régression documentant l'ancien bug d'ordre (EXF 21, Exosquelette 7,
+Générateur 3 → 7 quel que soit l'ordre), les bornes exactes des 3 paliers (11/10, 6/5, 1/0), et le
+rejet d'une catégorie RD inconnue. `node --check` sur les deux fichiers. **Non testé** : intégration
+réelle via `resolveExoTestContext`/Lot G (autre plan, pas encore codé) — cette fonction n'est appelée
+par aucun code de production pour l'instant.
+
 **Conséquence sur le découpage du Lot 2** — tout ce qui dépend de la résolution combat est bloqué :
 - **Plafond de Compétence par Manœuvre d'armure** — ⏸️ bloqué (dépend du refactor).
 - **1 seule Attaque/Tour** — ⏸️ bloqué (dépend du refactor — inutile de gater une résolution qui ne

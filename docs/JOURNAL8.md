@@ -2558,3 +2558,63 @@ Reste ouvert (`EN_COURS.md` EXOARM-COMBATFILE, réduit à ce qui est actif) : va
 terrain instable défenseur (Lot C) ; Lot G (dispatcher `resolveCombatantTestContext` +
 `resolveExoTestContext`) — seul lot qui débloquera réellement `PLAN_EXOARMURE.md` Lot 2, dépend aussi
 de `computeExoStats` (calcul externe, autre plan) non encore construit.
+
+---
+
+## Session (Saar) — 2026-08-14 — `PLAN_EXOARMURE.md` §7.1 : `computeExoStats` codée
+
+**Contexte** : dernière dépendance externe bloquant `PLAN_COMBATANT_CONTEXT.md` Lot G (cf. entrée
+ci-dessus) — `computeExoStats(exoSheet, template)`, jamais construite (`grep` vide sur `server/src/`
+et `shared/` avant ce jour). Contrat de sortie déjà figé par `PLAN_EXOARMURE.md` §7.1 : fonction pure
+sans DB, retour minimal `{ exf, ... }`, jamais de `NaN`/`undefined` silencieux si `template_id` est
+`NULL`.
+
+**Codé** : `shared/exoStats.js` — pas `server/src/lib/charStats.js` (périmètre explicitement disjoint
+depuis Lot 1 §1.2, "pas de passage par charStats.js" pour l'exo), fichier `shared/` par cohérence avec
+`shared/polarisUtils.js`/`shared/exoConstants.js` (fonction pure réutilisable côté client sans
+dupliquer la formule). Retour `{ exf, bld, rd }` — `bld`/`rd` ajoutés par cohérence architecturale
+au-delà du strict besoin du Lot G ; `vit` explicitement exclu (déjà porté par
+`movementBudgetService.js` §7.4, éviter une deuxième autorité). `template` absent → `null`.
+
+**Deux ambiguïtés RAW soumises à Saar avant codage** (`REGLEARMURE.md:565-621` ne les tranche pas
+explicitement) : Exosquelette+Générateur cumulent-ils leur réduction d'EXF, et le Générateur détruit
+implique-t-il EXF=0 ? Les deux confirmées par Saar.
+
+**Analyse à charge demandée par Saar avant clôture** — un vrai problème trouvé, un non-problème
+écarté, deux renforcements :
+1. **Bug réel** : le premier jet appliquait le cumul Exosquelette/Générateur par deux `floor`
+   séquentiels (Exosquelette d'abord). Calcul exhaustif : `floor(floor(x×a)×b) ≠ floor(floor(x×b)×a)`
+   dans 225 cas sur la plage réaliste (EXF 20-70, Intégrité 0-15) — ex. EXF 21/Exosquelette 7/
+   Générateur 3 → 7 dans un ordre, 6 dans l'autre. Cause racine : `exo_sheet` ne garde aucun
+   historique de quel composant a été touché en premier (§1.7, "recalculées à chaque lecture"), donc
+   choisir un ordre revenait à trancher une question RAW inexistante sans le dire. **Corrigé** :
+   arrondi unique sur `base × facteur_exosquelette × facteur_générateur` (commutatif par
+   construction) — confirmé par Saar après reformulation ("il n'y a pas d'ordre chronologique
+   disponible, une seule multiplication").
+2. **Non-problème vérifié** : `EXO_RD_TABLE` (`shared/exoConstants.js`, codée au Lot 1) confrontée
+   ligne à ligne à `REGLEARMURE.md:90-98` — exacte, rien à corriger.
+3. **Renforcement** : `computeExoStats` levait silencieusement `rd=0` pour une catégorie absente de
+   `EXO_RD_TABLE` (repli `?? 0`, indiscernable de la valeur réelle d'exo-alpha) — remplacé par une
+   erreur explicite.
+4. **Renforcement** : tests initiaux (14) ne couvraient aucune borne exacte de palier (11/10, 6/5,
+   1/0) ni le cas de divergence d'ordre — 4 tests ajoutés (18 au total), dont un test de régression
+   documentant explicitement l'ancien bug d'ordre.
+
+**Trouvaille distincte, non corrigée ici** (CLAUDE.md §6.8, un plan = un seul problème) :
+`getExoMovementBudget` (`movementBudgetService.js`, §7.4 déjà clos) n'applique aucune réduction de
+Vitesse liée aux paliers Exosquelette/Générateur alors que le RAW le prévoit aux mêmes lignes. Ouvert
+comme ticket `EXOARM-VIT-PALIERS1` (`bug_tickets`, confirmé par Saar) plutôt que dans `EN_COURS.md`.
+
+**Testé** : `node --check` sur `shared/exoStats.js`/`shared/exoStats.test.mjs` ; `node --test` — 18/18
+verts (2 exemples chiffrés littéraux du RAW, cumul à arrondi unique, régression du bug d'ordre, bornes
+exactes des 3 paliers, rejet de catégorie RD inconnue).
+**Non testé** : intégration réelle via `resolveExoTestContext`/Lot G — cette fonction n'est appelée
+par aucun code de production pour l'instant, le Lot G reste à coder (`PLAN_COMBATANT_CONTEXT.md`).
+**Données** : aucune migration. 1 ticket créé dans `bug_tickets` (`EXOARM-VIT-PALIERS1`, via script
+jetable exécuté puis supprimé, même patron que `server/src/scripts/importBugIdentifie.js`).
+**Retour arrière** : additif, rien branché en production — `git revert` du commit suffit, aucune
+donnée vivante affectée.
+
+Reste ouvert (`EN_COURS.md` EXOARM-COMBATFILE) : Lot G (dispatcher `resolveCombatantTestContext` +
+`resolveExoTestContext`, `PLAN_COMBATANT_CONTEXT.md`) — plus aucune dépendance externe bloquante,
+prêt à démarrer ; validation jeu réel du terrain instable défenseur (Lot C, portée close depuis).
