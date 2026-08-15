@@ -5,7 +5,7 @@
 // docs/PLANS/PLAN_COMBATANT_CONTEXT.md §3.2-3.4 — Lot G : dispatcher resolveCombatantTestContext +
 // branche exo assemblés ici, seul point d'entrée que socketCombatHelpers.js doit appeler désormais
 // (jamais resolveHumanoidTestContext directement, sauf ce fichier lui-même et ses tests).
-import { calcSkillTotal, calcAttributeNA, getModDom } from './charStats.js'
+import { calcSkillTotal, calcAttributeNA, getModDom, calcLimitedSkillTotal } from './charStats.js'
 import { calcActiveMalus } from './activeMalusRegistry.js'
 import { getCampaignSettings } from './campaignSettingsService.js'
 import { getMutationEffects } from '../services/mutationService.js'
@@ -33,7 +33,15 @@ import { computeExoStats } from '../../../shared/exoStats.js'
 // reste utilisée pour toute Compétence qui la testerait, §0.2 PLAN_COMBATANT_CONTEXT.md, "jamais aux
 // autres calculs d'Attribut"). `undefined` par défaut : aucun changement de comportement pour un
 // appelant humanoïde direct.
-export async function resolveHumanoidTestContext(db, character, skillId, { forNAOverride } = {}) {
+// `limitingSkillId` (interne, réservé au plafond de Compétence de Manœuvre d'armure ci-dessous, mais
+// générique — REGLECOMPETENCE.md:29-34 "Compétence limitative" — donc réutilisable un jour par un
+// appelant humanoïde direct, ex. Acrobatie/Équilibre en v2) : quand fourni, `skillTotal` est plafonné
+// via `calcLimitedSkillTotal` au niveau de cette Compétence limitative, recalculée depuis les mêmes
+// `attrs`/`geno`/`mutationEffects` déjà chargés — seuls `charSkill`/`refSkill` de la limitative sont
+// fetchés en plus (2 requêtes, même `Promise.all`), jamais un second fetch complet wounds/inventory/
+// settings (superflu : la Compétence limitative n'a pas besoin de son propre `effectiveMalus`/
+// `modDom`, seul son `skillTotal` sert de plafond).
+export async function resolveHumanoidTestContext(db, character, skillId, { forNAOverride, limitingSkillId } = {}) {
   const sheet = await db('char_sheet').where({ character_id: character.id }).first()
   if (!sheet) return null
 
@@ -42,7 +50,10 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
     return { sheetId: sheet.id, for_na: forNAOverride ?? for_na, con_na, vol_na }
   }
 
-  const [attrs, archetype, mutationEffects, charSkill, refSkill, wounds, inventory, settings] = await Promise.all([
+  const [
+    attrs, archetype, mutationEffects, charSkill, refSkill, wounds, inventory, settings,
+    limitingCharSkill, limitingRefSkill,
+  ] = await Promise.all([
     db('char_attributes').where({ char_sheet_id: sheet.id }),
     db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
     getMutationEffects(sheet.id),
@@ -54,6 +65,8 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
       .where({ 'char_inventory.character_id': character.id })
       .select('char_inventory.container', 'char_inventory.quantity', 'ref_equipment.weight as ref_weight'),
     getCampaignSettings(db, character.campaign_id),
+    limitingSkillId ? db('char_skills').where({ char_sheet_id: sheet.id, skill_id: limitingSkillId }).first() : null,
+    limitingSkillId ? db('ref_skills').where({ id: limitingSkillId }).first() : null,
   ])
   const geno = archetype?.genotype_id
     ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -63,8 +76,14 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
   const con_na = calcAttributeNA(attrs, 'CON', geno, mutationEffects)
   const vol_na = calcAttributeNA(attrs, 'VOL', geno, mutationEffects)
 
-  const skillTotal = refSkill ? calcSkillTotal(attrs, charSkill, refSkill, geno, mutationEffects) : 0
+  let skillTotal = refSkill ? calcSkillTotal(attrs, charSkill, refSkill, geno, mutationEffects) : 0
   const mastery = charSkill?.mastery ?? 0
+
+  if (limitingSkillId) {
+    if (!limitingRefSkill) throw new Error(`Compétence limitative introuvable dans ref_skills : ${limitingSkillId}`)
+    const limitingSkillTotal = calcSkillTotal(attrs, limitingCharSkill, limitingRefSkill, geno, mutationEffects)
+    skillTotal = calcLimitedSkillTotal(skillTotal, limitingSkillTotal)
+  }
 
   const totalWeight = inventory.reduce((sum, i) =>
     (i.container === 'Coffre' || i.ref_weight == null) ? sum : sum + i.ref_weight * i.quantity, 0
@@ -100,7 +119,59 @@ async function resolvePilot(db, exoCharacter) {
   return { pilot, exoSheet }
 }
 
-async function resolveExoTestContext(db, exoCharacter, skillId) {
+// Manœuvre d'armure — 4 spécialités RAW (REGLEARMURE.md p.325, texte complet PLAN_EXOARMURE.md §7.2),
+// indexées sur `ref_exo_templates.environment`. La colonne DB a 6 valeurs possibles
+// (233_exo_sheet.js:51-52 — chk_exo_template_environment), 2 de plus que les spécialités RAW :
+// - `industrial` : pas un milieu au sens Manœuvre d'armure (RAW ne le nomme pas), plutôt un usage —
+//   tranché "en suspens" par Saar (2026-08-15, aucun template industriel n'existe encore, table
+//   `ref_exo_templates` vide) — pas de repli silencieux (même doctrine que computeExoStats §7.1 point
+//   3 : rejeter explicitement plutôt que deviner une spécialité).
+// - `hybrid` : "de nombreuses armures hybrides peuvent être utilisées dans plusieurs milieux
+//   différents [...] le personnage doit développer la Compétence qui correspond à chaque milieu"
+//   (REGLEARMURE.md, cité PLAN_EXOARMURE.md §7.2) — RAW veut la spécialité du milieu où le pilote se
+//   bat RÉELLEMENT à cet instant ("se retrouve à la surface... utilisera Armure externe"), information
+//   que le moteur monde n'expose pas en temps réel (même lacune EAU1 que `getExoMovementBudget`,
+//   movementBudgetService.js §7.4). **Ce qui suit n'approxime PAS "où est le pilote maintenant"** —
+//   ça vérifie seulement si ce template peut au moins bouger en surface (`surface_movement_mode`,
+//   colonne dont la valeur par défaut est `'vit'`, jamais `'blocked'` sauf réglage explicite) : en
+//   pratique, la quasi-totalité des templates hybrides résoudront donc toujours vers Armures externes,
+//   quel que soit le milieu réel du combat. Choix délibéré par défaut (documenté, pas caché) tant que
+//   le signal d'immersion temps réel n'existe pas — à corriger le jour où il existera, un seul point
+//   de bascule ci-dessous.
+const EXO_MANEUVER_SKILL_BY_ENVIRONMENT = {
+  submarine: 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES',
+  surface: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES',
+  atmospheric: 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES',
+  spatial: 'MANOEUVRE_DARMURE__ARMURES_SPATIALES',
+}
+
+function resolveManeuverSkillId(template) {
+  if (template.environment === 'industrial') {
+    throw new Error(
+      "ref_exo_templates.environment='industrial' n'a pas de spécialité Manœuvre d'armure RAW " +
+      "définie (décision Saar 2026-08-15 : en suspens) — trancher le mapping avant d'utiliser ce " +
+      'template dans un Test de combat au contact.'
+    )
+  }
+  if (template.environment === 'hybrid') {
+    return template.surface_movement_mode === 'blocked'
+      ? EXO_MANEUVER_SKILL_BY_ENVIRONMENT.submarine
+      : EXO_MANEUVER_SKILL_BY_ENVIRONMENT.surface
+  }
+  const skillId = EXO_MANEUVER_SKILL_BY_ENVIRONMENT[template.environment]
+  if (!skillId) {
+    throw new Error(`ref_exo_templates.environment='${template.environment}' non géré par resolveManeuverSkillId`)
+  }
+  return skillId
+}
+
+// `meleeSkillCap` (booléen, fourni par l'appelant — resolveCombatantTestContext/socketCombatHelpers.js
+// sait, lui, s'il résout un Test de combat au contact ou non ; ce fichier ne classe pas les
+// `skillId` par nature) : PLAN_EXOARMURE.md §7.2, RAW "le niveau de Manœuvre d'armure limite [...] les
+// Compétences de combat [...] au contact. Les Compétences de combat à distance ne sont, elles, pas
+// limitées." — jamais activé pour un tireur ni pour les sites Acrobatie/Équilibre (v2, hors périmètre
+// de ce Lot 2).
+async function resolveExoTestContext(db, exoCharacter, skillId, { meleeSkillCap } = {}) {
   const { pilot, exoSheet } = await resolvePilot(db, exoCharacter)
   if (!pilot) return null
 
@@ -116,12 +187,15 @@ async function resolveExoTestContext(db, exoCharacter, skillId) {
   const exoStats = computeExoStats(exoSheet, template)
   if (!exoStats) return null
 
+  // template est garanti non-null ici (computeExoStats retourne null sans template, ci-dessus).
+  const limitingSkillId = meleeSkillCap ? resolveManeuverSkillId(template) : undefined
+
   // forNAOverride propage l'EXF à for_na/modDom/l'encombrement de effectiveMalus, calculés depuis le
   // départ avec l'EXF plutôt que rafistolés après coup (un `modDom`/`effectiveMalus` déjà calculés
   // avec la FOR du pilote puis simplement écrasés en surface resterait faux — trouvé en relisant ce
-  // fichier, corrigé avant qu'un vrai combat n'en dépende). skillTotal n'est pas affecté (voir
-  // commentaire sur resolveHumanoidTestContext) : c'est le comportement RAW voulu, pas un oubli.
-  return resolveHumanoidTestContext(db, pilot, skillId, { forNAOverride: exoStats.exf })
+  // fichier, corrigé avant qu'un vrai combat n'en dépende). skillTotal n'est affecté que si
+  // `limitingSkillId` est fourni (plafond de Compétence, sinon comportement RAW voulu, pas un oubli).
+  return resolveHumanoidTestContext(db, pilot, skillId, { forNAOverride: exoStats.exf, limitingSkillId })
 }
 
 // PLAN_COMBATANT_CONTEXT.md §3.2 (Lot G) — Point d'entrée unique : socketCombatHelpers.js ne doit
@@ -129,8 +203,8 @@ async function resolveExoTestContext(db, exoCharacter, skillId) {
 // pas de table (§1 du plan, doctrine Fowler déjà appliquée dans ce fichier) — seulement 2 branches
 // réelles aujourd'hui (pj/pnj traités identiquement, exo). Les drones n'appellent jamais ce point
 // d'entrée (§3.5 du plan — drone_programs.level sert directement de Seuil, aucun char_sheet impliqué).
-export async function resolveCombatantTestContext(db, character, skillId) {
-  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId)
+export async function resolveCombatantTestContext(db, character, skillId, { meleeSkillCap } = {}) {
+  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId, { meleeSkillCap })
   return resolveHumanoidTestContext(db, character, skillId)
 }
 

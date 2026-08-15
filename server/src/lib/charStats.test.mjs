@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { getModDom } from './charStats.js'
+import { getModDom, calcLimitedSkillTotal } from './charStats.js'
 
 test('getModDom — table basse (LdB p.113, tranches de 2 points)', () => {
   assert.equal(getModDom(1), -6)
@@ -30,4 +30,13 @@ test('getModDom — extrapolation au-delà de 21 (vérifiée contre 16 armures R
   assert.equal(getModDom(60), 25)  // Armure Odin (échelle humaine)
   assert.equal(getModDom(62), 26)  // Armure Vulcain (échelle humaine)
   assert.equal(getModDom(68), 29)  // Moloch / Orka (échelle humaine)
+})
+
+// Compétence limitative (REGLECOMPETENCE.md:29-34) — patron générique, première instance
+// PLAN_EXOARMURE.md Lot 2 (Manœuvre d'armure → Compétences de combat au contact).
+test('calcLimitedSkillTotal — plafonne au minimum des deux valeurs', () => {
+  assert.equal(calcLimitedSkillTotal(18, 12), 12)  // le plafond mord
+  assert.equal(calcLimitedSkillTotal(9, 12), 9)    // le plafond ne mord pas
+  assert.equal(calcLimitedSkillTotal(12, 12), 12)  // égalité
+  assert.equal(calcLimitedSkillTotal(5, 0), 0)     // pilote sans aucune formation dans la limitative
 })

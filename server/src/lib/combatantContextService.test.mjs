@@ -41,7 +41,7 @@ async function cleanup({ campaign, gm }) {
 // (exo_sheet + ref_exo_templates réels, character_id distinct du pilote — MANUEL_EXOARMURE.md §3.1,
 // deux personnages jamais fusionnés). `templateOverrides` permet de forcer une exo "non configurée"
 // (template_id null) ou sans pilote assigné, cas de repli §6.5/§7.1.
-async function createExoFixture({ withPilot = true, withTemplate = true, pilotAttrOverrides = {}, integrityOverrides = {} } = {}) {
+async function createExoFixture({ withPilot = true, withTemplate = true, pilotAttrOverrides = {}, integrityOverrides = {}, templateFields = {} } = {}) {
   const pilotFx = await createFixture(pilotAttrOverrides)
   const [exoCharacter] = await db('characters')
     .insert({ campaign_id: pilotFx.campaign.id, user_id: pilotFx.gm.id, name: 'Exo test', type: 'exo' })
@@ -52,6 +52,7 @@ async function createExoFixture({ withPilot = true, withTemplate = true, pilotAt
       .insert({
         name: 'Modèle test', category: 'exo-1', environment: 'surface',
         base_exoforce: 68, base_blindage: 34,
+        ...templateFields,
       })
       .returning('*')
   }
@@ -286,6 +287,125 @@ test('resolveCombatantTestContext — exo sans template ("non configurée", PLAN
   try {
     const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
     assert.equal(ctx, null)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+// PLAN_EXOARMURE.md Lot 2 — plafond de Compétence par Manœuvre d'armure (REGLECOMPETENCE.md:29-34
+// "Compétence limitative", REGLEARMURE.md p.325). Testé au contact seul (`meleeSkillCap: true`,
+// jamais activé par défaut — le tir et l'Acrobatie/Équilibre restent hors périmètre de ce Lot).
+
+test('resolveCombatantTestContext — meleeSkillCap: le plafond mord si le pilote n\'est pas formé à la spécialité (surface → Armures externes)', { skip }, async () => {
+  const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 } })
+  // Pilote très formé en CaC mais jamais en Manœuvre d'armure : le plafond doit mordre.
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fx.sheet.id })
+    const refCombat = await db('ref_skills').where({ id: 'COMBAT_A_MAINS_NUES' }).first()
+    const refManeuver = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES' }).first()
+    assert.ok(refManeuver, 'MANOEUVRE_DARMURE__ARMURES_EXTERNES doit être seedée (migration 37)')
+    const uncapped = calcSkillTotal(attrs, { mastery: 10 }, refCombat, null, null)
+    const maneuverTotal = calcSkillTotal(attrs, undefined, refManeuver, null, null)
+    assert.ok(maneuverTotal < uncapped, 'précondition du test — le plafond doit réellement mordre')
+
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+    assert.equal(ctx.skillTotal, maneuverTotal)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — meleeSkillCap: pas d\'effet si la Manœuvre d\'armure du pilote dépasse déjà la Compétence testée', { skip }, async () => {
+  const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 9, COO: 16, ADA: 14 } })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 1 })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES', mastery: 15 })
+  try {
+    const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+    assert.equal(ctx.skillTotal, uncapped.skillTotal)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — meleeSkillCap absent (défaut) : jamais de plafond, même si la Manœuvre d\'armure serait plus basse (tir/Acrobatie, hors périmètre)', { skip }, async () => {
+  const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 } })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.skillTotal, uncapped.skillTotal)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — meleeSkillCap: mapping direct submarine/atmospheric/spatial vers la bonne spécialité', { skip }, async () => {
+  const mapping = [
+    ['submarine', 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES'],
+    ['atmospheric', 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES'],
+    ['spatial', 'MANOEUVRE_DARMURE__ARMURES_SPATIALES'],
+  ]
+  for (const [environment, expectedSkillId] of mapping) {
+    const fx = await createExoFixture({
+      pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+      templateFields: { environment },
+    })
+    await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+    try {
+      const attrs = await db('char_attributes').where({ char_sheet_id: fx.sheet.id })
+      const refManeuver = await db('ref_skills').where({ id: expectedSkillId }).first()
+      assert.ok(refManeuver, `${expectedSkillId} doit être seedée`)
+      const expectedCap = calcSkillTotal(attrs, undefined, refManeuver, null, null)
+
+      const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+      assert.equal(ctx.skillTotal, expectedCap, `environment=${environment} doit plafonner via ${expectedSkillId}`)
+    } finally {
+      await cleanupExo(fx)
+    }
+  }
+})
+
+test('resolveCombatantTestContext — meleeSkillCap: hybrid utilise Armures externes sauf si la Surface est explicitement bloquée (EAU1, même signal que getExoMovementBudget)', { skip }, async () => {
+  const fxExterne = await createExoFixture({
+    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+    templateFields: { environment: 'hybrid' },  // surface_movement_mode par défaut : 'vit', pas bloqué
+  })
+  await db('char_skills').insert({ char_sheet_id: fxExterne.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fxExterne.sheet.id })
+    const refExternes = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES' }).first()
+    const expectedCap = calcSkillTotal(attrs, undefined, refExternes, null, null)
+    const ctx = await resolveCombatantTestContext(db, fxExterne.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+    assert.equal(ctx.skillTotal, expectedCap)
+  } finally {
+    await cleanupExo(fxExterne)
+  }
+
+  const fxSousMarine = await createExoFixture({
+    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+    templateFields: { environment: 'hybrid', surface_movement_mode: 'blocked' },
+  })
+  await db('char_skills').insert({ char_sheet_id: fxSousMarine.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fxSousMarine.sheet.id })
+    const refSousMarine = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES' }).first()
+    const expectedCap = calcSkillTotal(attrs, undefined, refSousMarine, null, null)
+    const ctx = await resolveCombatantTestContext(db, fxSousMarine.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+    assert.equal(ctx.skillTotal, expectedCap)
+  } finally {
+    await cleanupExo(fxSousMarine)
+  }
+})
+
+test('resolveCombatantTestContext — meleeSkillCap: environment=industrial rejette explicitement (décision Saar 2026-08-15, en suspens)', { skip }, async () => {
+  const fx = await createExoFixture({ templateFields: { environment: 'industrial' } })
+  try {
+    await assert.rejects(
+      () => resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true }),
+      /industrial/
+    )
   } finally {
     await cleanupExo(fx)
   }

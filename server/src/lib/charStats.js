@@ -167,6 +167,18 @@ export function calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutat
   return base + mastery
 }
 
+// ─── Compétence limitative (REGLECOMPETENCE.md:29-34) ────────────────────────
+// RAW : "le niveau d'une telle Compétence limite celui de la Compétence à
+// laquelle elle est associée" — patron générique (autres cas RAW : Acrobatie/
+// Équilibre limite Combat à mains nues en équilibre précaire, une Compétence de
+// langue limite Éloquence/Persuasion, Endurance limite la résistance à la
+// Fatigue). Première instance codée ici (Manœuvre d'armure → Compétences de
+// combat au contact, docs/PLANS/PLAN_EXOARMURE.md Lot 2) — à réutiliser tel
+// quel pour tout futur cas de Compétence limitative, jamais réinventé.
+export function calcLimitedSkillTotal(skillTotal, limitingSkillTotal) {
+  return Math.min(skillTotal, limitingSkillTotal)
+}
+
 // ─── Modificateur de Dommages ─────────────────────────────────────────────────
 
 export function getModDom(for_na) {
