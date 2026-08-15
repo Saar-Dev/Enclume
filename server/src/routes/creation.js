@@ -9,7 +9,10 @@
  *
  * Routes :
  *   POST   /api/creation/start                  — démarre un brouillon (character + char_sheet),
- *                                                  idempotent, targetUserId réservé au MJ
+ *                                                  idempotent, targetUserId réservé au MJ.
+ *                                                  campaignId omis → brouillon Coffre-native (pas
+ *                                                  de campagne), toujours pour l'utilisateur
+ *                                                  connecté, targetUserId alors refusé (400)
  *   GET    /api/creation/campaign/:campaignId/drafts — brouillons actifs de la campagne (Lot A3)
  *   GET    /api/creation/:sheetId/state         — état réconcilié complet (step1-5, Lot A3 —
  *                                                  step4.skillAllocations best-effort, voir creationService.js)
@@ -59,7 +62,14 @@ router.param('sheetId', async (req, res, next, sheetId) => {
 router.post('/start', async (req, res, next) => {
   try {
     const { campaignId, targetUserId } = req.body
-    if (!campaignId) return next(new AppError(400, 'campaignId requis'))
+
+    // Coffre-native (pas de campagne) : aucun MJ, aucune notion de brouillon ciblé pour un autre
+    // joueur — le personnage n'appartient qu'à l'utilisateur connecté, dans son propre Coffre.
+    if (!campaignId) {
+      if (targetUserId) return next(new AppError(400, "targetUserId n'a pas de sens sans campaignId"))
+      const result = await startCreation(null, req.user.id)
+      return res.json({ ...result, isGm: false, ownerUserId: req.user.id })
+    }
 
     const member = await db('campaign_members')
       .where({ campaign_id: campaignId, user_id: req.user.id })

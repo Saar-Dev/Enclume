@@ -2707,3 +2707,120 @@ pas — routage de la confirmation de défense d'un exo notamment, jamais tranch
 
 `PLAN_COMBATANT_CONTEXT.md` est clos (Lots A-G tous confirmés) — à archiver vers `docs/Old/` une fois
 `docs/SYSTEME/COMBAT.md` mis à jour (fait dans ce commit) et `EN_COURS.md` nettoyé.
+
+---
+
+## Session (Saar) — 2026-08-15 — Création de personnage directement dans le Coffre (sans campagne)
+
+**Contexte** : demande initiale simple en apparence (Dashboard, carte Coffre — permettre de créer un
+personnage sans forcer le choix d'une campagne). L'investigation a montré que l'infrastructure
+existait déjà partiellement (migration 129 : `characters.vault_id`/`campaign_id` nullable + contrainte
+`chk_characters_campaign_xor_vault`), mais qu'aucun chemin natif n'existait — un personnage Coffre
+n'existait jusqu'ici que par clonage d'un personnage de campagne déjà terminé (`vaultService.js
+cloneToVault`). Tout le pipeline (Wizard, `char-sheet.js`, socket) vérifiait une appartenance
+`campaign_members` à chaque contrôle d'accès, sans branche pour un personnage sans campagne.
+Décision Saar : le flag PJ/PNJ n'est pas structurant (un personnage peut changer de rôle plus tard) —
+un personnage Coffre-native est toujours créé `type: 'pj'`.
+
+**Fichiers modifiés** :
+- `server/src/services/characterOwnershipService.js` — `resolveOwnership` : branche `!campaignId` →
+  `type: 'pj'` toujours, aucune lecture `campaign_members`.
+- `server/src/services/vaultCoreService.js` (nouveau) — `getOrCreateVault` extrait de
+  `vaultService.js` pour éviter un cycle d'import (`vaultService.js` importe déjà `lockWizard` depuis
+  `creationService.js`, qui a maintenant besoin de `getOrCreateVault`).
+- `server/src/services/vaultService.js` — importe/réexporte `getOrCreateVault` depuis le nouveau
+  module, surface publique inchangée.
+- `server/src/services/creationService.js` — `startCreation` : `campaignId` optionnel (normalisé
+  `undefined`→`null`), résolution du Vault hors transaction (accesseur paresseux idempotent, pas
+  transactionnel avec l'appelant — un Vault vide orphelin en cas de rollback est inoffensif),
+  idempotence et insert conditionnés vault/campagne. `resolveSheetAccess` : branche
+  `campaign_id == null` → accès = propriétaire uniquement, `isGm: false` (aucun MJ possible sans
+  campagne).
+- `server/src/routes/creation.js` — `POST /start` : `campaignId` optionnel, `targetUserId` refusé
+  sans campagne (aucune notion de MJ ciblant un autre joueur).
+- `server/src/routes/character/char-sheet.js` — `router.param('characterId')` : branche Coffre-native
+  gatée sur `char_sheet.wizard_locked_at IS NULL` — préserve l'invariant documenté dans
+  `vaultService.js` (« un personnage en Vault est un instantané figé, jamais traversé par les routes
+  de mutation de char-sheet.js ») : accessible seulement tant que le Wizard est encore en cours
+  (étape Matériel & Biens), plus jamais après verrouillage, même pour le propriétaire.
+- `server/src/services/inventoryService.js` — `addItem` : paramètre `isGm` renommé `autoValidate`
+  (le service n'a plus besoin de connaître la notion de campagne ; nommer `isGm` un booléen vrai en
+  l'absence de tout MJ aurait été trompeur).
+- `server/src/socket/index.js` — `SESSION_JOIN` : branche solo si `campaignId` absent — pas de
+  vérification `campaign_members`, pas de room à rejoindre, mais `SESSION_JOINED` quand même émis
+  (sinon `ready` ne passe jamais à vrai côté client) et `registerWizardHandlers` reste posé (room
+  `wizard:<sheetId>`, indépendante de toute campagne — vérifié par lecture complète de
+  `socketWizard.js`, qui réutilise `resolveSheetAccess` sans réimplémentation).
+- `client/src/pages/DashboardPage.jsx` — option « Pas de campagne (Coffre uniquement) » dans le
+  sélecteur existant (sentinelle `NO_CAMPAIGN`, distincte de la chaîne vide).
+- `client/src/App.jsx` — routes `/vault/creation` et `/vault/creation/:sheetId`, réutilisent
+  `WizardCreationPage` tel quel (`WizardCreation.jsx` n'a nécessité aucune modification — `campaignId`
+  simplement absent des `useParams()`, déjà toléré par `startCreation`/`SocketProvider`).
+- `client/src/locales/fr.json` — clé `dashboard.noCampaignOption`.
+- `server/src/services/creationVaultNative.test.mjs` (nouveau), `inventoryService.test.mjs` (étendu) —
+  voir Testé.
+
+**Testé** : `creationVaultNative.test.mjs` (4 tests, PostgreSQL réel — création avec `vault_id` posé/
+`campaign_id` NULL, idempotence un seul Vault, accès propriétaire OK, accès tiers refusé 403) ;
+`inventoryService.test.mjs` (9 tests dont 2 nouveaux sur `autoValidate`) ; `creationRoundTrip.test.mjs`
+(non-régression chemin campagne, inchangé) — 14/14 verts en un seul passage. `node --check` sur les 10
+fichiers serveur touchés, `eslint` propre sur les fichiers client touchés. **Confirmé fonctionnel en
+navigateur par Saar** (parcours complet Dashboard → Coffre → Pas de campagne → Wizard → Terminer).
+**Non testé** : transfert Coffre → campagne d'un personnage créé par ce nouveau chemin (le mécanisme
+existant `requestImport`/`approveImport` devrait fonctionner sans modification — `creation_state`/
+`wizard_locked_at` posés identiquement à un personnage cloné — mais jamais exercé avec cette origine).
+**Données** : aucune migration (infrastructure déjà en place depuis la migration 129).
+**Retour arrière** : rien committé avant ce commit — `git revert` du commit suffit, aucune donnée
+vivante affectée en dehors des personnages créés par les utilisateurs via ce nouveau chemin.
+
+**Hors périmètre, confirmé pas oublié** (décision Saar — un lot à la fois) :
+- Création instantanée (drone/exo, sans Wizard) sans campagne — équivalent Coffre de
+  `POST /api/campaigns/:campaignId/characters`. Drone déjà supporté par le Coffre (registre
+  `vaultService.js`), exo-armure bloquée par un manque préexistant (`COMPANION_REGISTRY` ne connaît
+  pas encore `exo` — indépendant de ce chantier, `PLAN_EXOARMURE.md` en cours ailleurs).
+- Navire — n'existe pas comme type de personnage dans le code, aucun ticket ne peut le couvrir
+  aujourd'hui.
+
+---
+
+## Session (Saar) — 2026-08-15 — WIZ5 : régression du saut d'étape (toute création atterrissait à l'étape 3)
+
+**Contexte** : signalé par Saar en testant le chantier ci-dessus — toute création de personnage,
+Coffre ou campagne, sautait de l'étape 0 (choix de méthode) directement à l'étape 3 (Mutations).
+Diagnostic à charge avant correctif (règle du projet) : `git diff` sur `creationService.js` ne touche
+ni `getStep3State` ni aucun code lié — reproduit à l'identique sur le chemin **campagne**, jamais
+modifié par le chantier en cours, confirmant que le bug était préexistant et indépendant du Coffre.
+
+**Cause racine** trouvée dans `docs/EN_COURS.md` : **WIZ5** (correctif du 2026-08-11, avant ce
+chantier, marqué à l'époque « clos partiel — scénario réel navigateur non testé »). Avant WIZ5,
+`getStep3State` renvoyait `method: null` pour une fiche neuve, causant « Méthode de mutation
+invalide : null » sur Terminer/Voir ma fiche. Le correctif a changé le défaut en `method: 'none'`
+(valeur légitime acceptée par la validation serveur de `reconcileCreation`), mais côté client
+`computeHighestStep` (`creationStore.js`) testait `if (step3?.method) highestStep = 3` — `'none'` est
+une chaîne non vide, donc vraie, même sur une fiche où l'étape 2 n'a jamais été touchée. Le correctif
+WIZ5 a soigné un bug pour en créer un autre, jamais vérifié en navigateur à l'époque.
+
+**Correctif** : `computeHighestStep` rendu séquentiel — chaque étape n'est retenue que si la
+précédente l'est déjà (`step3Done = step2Done && !!step3?.method`, etc.), généralisant le seul garde-
+fou qui existait déjà (step4→step5 seul était conditionné sur `highestStep === 4` avant ce correctif ;
+step2→step3 et step3→step4 ne l'étaient pas). Vérifié par table de vérité exécutée à part (6 scénarios
+dont la fiche neuve du bug rapporté, une reprise réelle à chaque étape, et le marqueur `step6_done`).
+
+**Limite résiduelle connue, non corrigée** (décision explicite — hors périmètre du bug signalé) : si un
+joueur termine l'étape 2 puis ferme l'onglet sans jamais avoir ouvert l'étape 3, la reprise affiche
+quand même l'étape 3 avec « Aucune mutation » pré-sélectionné au lieu d'un formulaire vierge —
+`method: 'none'` ne distingue pas « jamais visité » de « visité, aucune mutation choisie », et rien en
+base ne permet de le faire aujourd'hui (`char_pc_ledger.pc_spent_step3` a le même défaut `0` dans les
+deux cas). Pas un saut d'étape entière (l'utilisateur atterrit sur l'étape juste suivante, pas plus
+loin) — cohérent avec la philosophie déjà documentée de `computeHighestStep` (« imprécis par nature »).
+Une résolution complète demanderait une migration (marqueur explicite « étape 3 soumise »).
+
+**Fichiers modifiés** : `client/src/stores/creationStore.js` (`computeHighestStep` uniquement).
+
+**Testé** : table de vérité (script Node jetable, 6 scénarios, non conservé) — comportement conforme.
+`eslint` propre. **Confirmé fonctionnel en navigateur par Saar.**
+**Non testé** : le cas résiduel documenté ci-dessus (accepté tel quel, pas un regression de ce
+correctif — déjà présent dans le comportement WIZ5 d'origine).
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, `git revert` suffit — aucune donnée vivante affectée (fonction pure,
+aucune écriture).

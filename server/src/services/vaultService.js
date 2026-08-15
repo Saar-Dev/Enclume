@@ -5,6 +5,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { lockWizard } from './creationService.js'
+import { getOrCreateVault } from './vaultCoreService.js'
 
 // ─── Registre par type de compagnon (PLAN_VAULT.md "Registre par type de compagnon") ───────────
 // Groupe A (pj/pnj) : arbre char_sheet, deux niveaux d'indirection. La plupart des tables sont
@@ -100,24 +101,12 @@ async function cloneRows(trx, table, fkColumn, oldFkValue, newFkValue) {
 }
 
 // ─── Vault (une par compte) ──────────────────────────────────────────────────────────────────
+// getOrCreateVault vit dans vaultCoreService.js, pas ici (cycle d'import avec creationService.js
+// — voir commentaire de ce module), importé ci-dessus pour l'usage interne de cloneToVault et
+// réexporté tel quel : la surface publique de vaultService.js ne change pas pour ses appelants
+// existants.
 
-export async function getOrCreateVault(userId) {
-  const existing = await db('vaults').where({ user_id: userId }).first()
-  if (existing) return existing
-  try {
-    const [vault] = await db('vaults').insert({ user_id: userId }).returning('*')
-    return vault
-  } catch (err) {
-    // vaults.user_id est UNIQUE : deux appels concurrents (double-clic, deux onglets) peuvent
-    // tous les deux échouer à trouver un Vault existant puis se percuter sur l'INSERT — le second
-    // retombe sur le Vault créé entre-temps par le premier plutôt que de planter en 500.
-    if (err.code === '23505') {
-      const raceWinner = await db('vaults').where({ user_id: userId }).first()
-      if (raceWinner) return raceWinner
-    }
-    throw err
-  }
-}
+export { getOrCreateVault }
 
 export async function listVaultCharacters(userId) {
   const vault = await db('vaults').where({ user_id: userId }).first()

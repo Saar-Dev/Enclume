@@ -83,6 +83,14 @@ export default function App() {
         <Route path="/vault" element={
           <ProtectedRoute><VaultPage /></ProtectedRoute>
         } />
+        {/* Création directement dans le Coffre, sans campagne — même WizardCreationPage que
+            /campaigns/:campaignId/creation, campaignId simplement absent des params */}
+        <Route path="/vault/creation" element={
+          <ProtectedRoute><WizardCreationPage /></ProtectedRoute>
+        } />
+        <Route path="/vault/creation/:sheetId" element={
+          <ProtectedRoute><WizardCreationPage /></ProtectedRoute>
+        } />
         <Route path="/health" element={
           <AdminRoute><HealthPage /></AdminRoute>
         } />

@@ -230,6 +230,17 @@ export async function getInventory(characterId, campaignId) {
       'ref_equipment.ammo_count as ref_ammo_count',
       'ref_equipment.description as ref_description',
       'ref_equipment.price as ref_price',
+      // Export Excel (docs/PLANS/PLAN_EXPORTEXCEL.md, Lot 2 fichier 4/5) — champs `ref_equipment`
+      // pas encore sélectionnés jusqu'ici, nécessaires pour les plages `InventaireObjNT`/
+      // `InventaireObjFabricant`/`InventaireObjNation`/`InventaireObjInit`. Ajout pur (aucun champ
+      // retiré) : sans effet sur les appelants existants de `getInventory()`. `damage_v_low`/
+      // `damage_v_high` volontairement exclus : jamais lus par le moteur de combat réel
+      // (`damageService.js` n'utilise que `damage_h`), résidus non exploités sur 13/717 lignes.
+      'ref_equipment.tech_level as ref_tech_level',
+      'ref_equipment.manufacturer as ref_manufacturer',
+      'ref_equipment.nation as ref_nation',
+      'ref_equipment.init_mod as ref_init_mod',
+      'ref_equipment.rarity as ref_rarity',
       // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — niveau de la Lunette installée sur
       // cette arme (NULL si aucune) : sous-requête scalaire, réutilise le fetch /inventory déjà
       // effectué par CombatActionWindow.jsx plutôt qu'un nouvel appel réseau dédié.
@@ -240,6 +251,21 @@ export async function getInventory(characterId, campaignId) {
           AND re2.mod_slot = 'optique' AND re2.mod_requires_aim = true
         LIMIT 1
       ) as lunette_niveau`),
+      // Export Excel (Lot 2 fichier 4/5) — liste des mods installés sur cette arme
+      // (`InventaireModInstalles`), `mod_name` déjà dénormalisé sur `char_inventory_mods` au moment
+      // de l'installation (pas besoin de rejoindre `ref_equipment`).
+      db.raw(`(
+        SELECT string_agg(mod_name, ', ' ORDER BY installed_at)
+        FROM char_inventory_mods
+        WHERE weapon_inv_id = char_inventory.id
+      ) as mods_installed`),
+      // Export Excel (Lot 2 fichier 4/5) — `current_ammo` est un UUID (`ref_equipment.id`, migration
+      // 52), jamais résolu en nom lisible par cette fonction jusqu'ici (les appelants existants
+      // traitent l'UUID eux-mêmes) : champ dédié, ne change pas `current_ammo` pour ne rien casser
+      // côté client.
+      db.raw(`(
+        SELECT name FROM ref_equipment WHERE id = char_inventory.current_ammo
+      ) as current_ammo_name`),
       // Compétence liée à l'arme (COM20, docs/BUGIDENTIFIE.md) — même table que
       // socketCombatHelpers.js (résolution), affichage uniquement ici (tooltip fenêtre déclaration).
       db.raw(`(
@@ -293,11 +319,13 @@ export async function quickEquip(characterId, equipment_id, slot) {
 // POST /:characterId/inventory
 // Retourne { type: 'stack'|'single'|'multi', item, items } — la route choisit l'event socket et
 // la forme de réponse HTTP à partir de `type`, sans dupliquer la logique métier.
-// isGm : dérive validated_by_gm (PLAN_WIZARD_MATERIEL_GAUGES.md §3) — jamais lu du payload client.
-// Un item ajouté par le MJ (ou fusionné sur un stack par le MJ) part directement validé ; un ajout
-// joueur, même sur un stack déjà validé, remet la ligne fusionnée en attente (le statut reflète
-// toujours le rôle du dernier auteur, jamais un statut hérité d'un ajout précédent d'un autre rôle).
-export async function addItem(characterId, payload, isGm = false) {
+// autoValidate : dérive validated_by_gm (PLAN_WIZARD_MATERIEL_GAUGES.md §3) — jamais lu du payload
+// client. Vrai si le MJ ajoute l'item, ou s'il n'y a pas de MJ à attendre (personnage Coffre-native,
+// sans campagne — aucun MJ ne peut jamais rejoindre pour valider, char-sheet.js calcule ce cas au
+// call site). Un item ajouté par le MJ (ou fusionné sur un stack par le MJ) part directement validé ;
+// un ajout joueur, même sur un stack déjà validé, remet la ligne fusionnée en attente (le statut
+// reflète toujours le rôle du dernier auteur, jamais un statut hérité d'un ajout précédent).
+export async function addItem(characterId, payload, autoValidate = false) {
   const {
     equipment_id,
     container: containerIn,
@@ -379,7 +407,7 @@ export async function addItem(characterId, payload, isGm = false) {
     if (existing) {
       const [updated] = await db('char_inventory')
         .where({ id: existing.id })
-        .update({ quantity: existing.quantity + quantity, validated_by_gm: isGm, updated_at: db.fn.now() })
+        .update({ quantity: existing.quantity + quantity, validated_by_gm: autoValidate, updated_at: db.fn.now() })
         .returning('*')
       const item = await getItemWithRef(updated.id)
       return { type: 'stack', item }
@@ -391,7 +419,7 @@ export async function addItem(characterId, payload, isGm = false) {
     equipment_id: equipment_id ?? null,
     container,
     quantity,
-    validated_by_gm: isGm,
+    validated_by_gm: autoValidate,
   }
   if (custom_name !== undefined) insertData.custom_name = custom_name
   if (custom_desc !== undefined) insertData.custom_desc = custom_desc

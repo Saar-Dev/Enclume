@@ -5,6 +5,11 @@ import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
 import ChangelogPanel from '../components/ChangelogPanel'
 
+// Sentinelle du sélecteur de création de personnage — distincte de la chaîne vide, qui reste
+// "rien choisi encore" (désactive le bouton). Un personnage créé sans campagne vit uniquement
+// dans le Coffre de son propriétaire (routes/creation.js POST /start accepte campaignId absent).
+const NO_CAMPAIGN = '__NO_CAMPAIGN__'
+
 export default function DashboardPage() {
   const { user, clearUser } = useAuthStore()
   const navigate = useNavigate()
@@ -194,6 +199,7 @@ export default function DashboardPage() {
                       onChange={e => setCreateCharCampaignId(e.target.value)}
                     >
                       <option value="">{t('vault.selectCampaignPlaceholder')}</option>
+                      <option value={NO_CAMPAIGN}>{t('dashboard.noCampaignOption')}</option>
                       {campaigns.map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
@@ -205,7 +211,9 @@ export default function DashboardPage() {
                       <button
                         className="btn"
                         disabled={!createCharCampaignId}
-                        onClick={() => navigate(`/campaigns/${createCharCampaignId}/creation`)}
+                        onClick={() => navigate(
+                          createCharCampaignId === NO_CAMPAIGN ? '/vault/creation' : `/campaigns/${createCharCampaignId}/creation`
+                        )}
                       >
                         {t('dashboard.createCharacter')}
                       </button>

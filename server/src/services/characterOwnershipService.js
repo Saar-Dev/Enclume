@@ -17,17 +17,23 @@ export const DEFAULT_CHARACTER_COLOR = '#4A90D9'
 // drone avec un propriétaire hérite de sa couleur comme n'importe quel PNJ
 // (comportement existant, préservé).
 //
+// campaignId absent (création directe dans le Coffre, sans campagne) : aucun rôle de campagne à
+// lire — le personnage n'appartient qu'à son propriétaire, toujours 'pj'. Le flag pj/pnj n'est de
+// toute façon pas structurant (décision Saar) : un personnage peut changer de rôle plus tard via
+// PUT /api/characters/:id une fois réellement rattaché à une campagne.
+//
 // db accepte indifféremment le knex par défaut (hors transaction) ou un trx
 // actif — pas de garantie transactionnelle systématique, TOCTOU documenté
 // dans docs/PLAN_CHARACTER_SERVICE.md §6.
 export async function resolveOwnership(db, { campaignId, userId }) {
   if (!userId) return { user_id: null, type: 'pnj', color: DEFAULT_CHARACTER_COLOR }
 
-  const [owner, member] = await Promise.all([
-    db('users').where({ id: userId }).select('color').first(),
-    db('campaign_members').where({ campaign_id: campaignId, user_id: userId }).first(),
-  ])
+  const owner = await db('users').where({ id: userId }).select('color').first()
   if (!owner) throw new AppError(404, 'Utilisateur introuvable')
+
+  if (!campaignId) return { user_id: userId, type: 'pj', color: owner.color }
+
+  const member = await db('campaign_members').where({ campaign_id: campaignId, user_id: userId }).first()
   if (!member) throw new AppError(400, "Cet utilisateur n'est pas membre de cette campagne")
 
   return { user_id: userId, type: member.role === 'player' ? 'pj' : 'pnj', color: owner.color }

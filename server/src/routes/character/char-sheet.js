@@ -9,6 +9,7 @@
  *
  * Routes :
  *   GET    /api/char-sheet/:characterId              — fiche complète (toutes tables)
+ *   GET    /api/char-sheet/:characterId/export-excel — export .xlsx (docs/PLANS/PLAN_EXPORTEXCEL.md)
  *   POST   /api/char-sheet/:characterId              — crée une fiche vide
  *   PUT    /api/char-sheet/:characterId/identity     — sauvegarde identité
  *   PUT    /api/char-sheet/:characterId/archetype    — sauvegarde archétype
@@ -53,6 +54,7 @@ import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addA
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { cloneToVault } from '../../services/vaultService.js'
 import { createEmptySheet } from '../../services/charSheetService.js'
+import { buildCharacterExportWorkbook } from '../../services/excelExportAssembler.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
@@ -70,6 +72,25 @@ router.param('characterId', async (req, res, next, characterId) => {
   try {
     const character = await db('characters').where({ id: characterId }).first()
     if (!character) return next(new AppError(404, 'Character not found'))
+
+    // Personnage Coffre-native (campaign_id NULL, vault_id posé) : pas de campaign_members à lire,
+    // accès réservé au propriétaire — et seulement tant que le Wizard n'est pas verrouillé (encore
+    // un brouillon, ex. Step6 "Matériel & Biens" qui passe par les routes inventaire/jauges de ce
+    // fichier). Un personnage Coffre déjà terminé est un instantané figé par conception
+    // (vaultService.js) : char-sheet.js ne doit jamais le muter, même pour son propriétaire, une
+    // fois wizard_locked_at posé — sinon n'importe quelle route de ce fichier (compétences, XP,
+    // blessures...) redeviendrait accessible sur un personnage censé être gelé. Seul routes/
+    // vault.js (lecture/renommage/suppression, scope volontairement réduit) reste autorisé après.
+    if (character.campaign_id == null) {
+      if (character.user_id !== req.user.id) return next(new AppError(403, 'You do not have permission to access this sheet'))
+
+      const sheet = await db('char_sheet').where({ character_id: characterId }).select('wizard_locked_at').first()
+      if (!sheet || sheet.wizard_locked_at) return next(new AppError(403, 'You do not have permission to access this sheet'))
+
+      req.character = character
+      req.isGm = false
+      return next()
+    }
 
     const member = await db('campaign_members')
       .where({ campaign_id: character.campaign_id, user_id: req.user.id })
@@ -125,6 +146,23 @@ router.get('/:characterId', async (req, res, next) => {
       settings,
       mutationEffects,
     })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /api/char-sheet/:characterId/export-excel ───────────────────────────
+// Export fiche personnage vers le classeur Excel (docs/PLANS/PLAN_EXPORTEXCEL.md, Lot 3).
+// `req.character.campaign_id` déjà vérifié par router.param ci-dessus — jamais une valeur fournie
+// par le client (risque identifié Lot 1, §4).
+router.get('/:characterId/export-excel', async (req, res, next) => {
+  try {
+    const buffer = await buildCharacterExportWorkbook(req.params.characterId, req.character.campaign_id)
+
+    const safeName = (req.character.name || 'Personnage').replace(/[^a-zA-Z0-9À-ÿ _-]/g, '').trim() || 'Personnage'
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`)
+    res.send(buffer)
   } catch (err) {
     next(err)
   }
@@ -1071,8 +1109,11 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     const characterId = req.params.characterId
     // PLAN_WIZARD_MATERIEL_GAUGES.md §3 — validated_by_gm dérivé serveur (req.isGm), jamais lu du
     // payload : un item ajouté par le joueur part en attente, un item ajouté par le MJ (ou fusionné
-    // sur un stack par le MJ) part directement validé.
-    const result = await inventoryService.addItem(characterId, req.body, req.isGm)
+    // sur un stack par le MJ) part directement validé. Personnage Coffre-native (campaign_id NULL) :
+    // aucun MJ ne peut jamais rejoindre pour valider — auto-validé, sinon l'objet resterait bloqué
+    // en attente pour toujours (Saar, décision explicite : pas de validation MJ hors campagne).
+    const autoValidate = req.isGm || req.character.campaign_id == null
+    const result = await inventoryService.addItem(characterId, req.body, autoValidate)
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.type === 'stack') {

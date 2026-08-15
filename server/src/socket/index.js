@@ -37,9 +37,32 @@ const initSocket = (io) => {
 
     // â”€â”€â”€ SESSION:JOIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Le client rejoint la room d'une campagne
-    // Payload : { campaignId }
+    // Payload : { campaignId } - campaignId absent = session solo (Wizard Coffre-native, creation
+    // de personnage sans campagne). Voir branche dediee juste ci-dessous.
     socket.on(WS.SESSION_JOIN, async ({ campaignId }) => {
       try {
+        // Session solo (pas de campagne) : aucune room de campagne a rejoindre, aucun autre
+        // utilisateur ne peut jamais y avoir acces (meme invariant que vaultService.js - "un Vault
+        // n'a pas de room a notifier, personne d'autre n'y a acces"). SESSION_JOINED est quand meme
+        // emis : c'est ce qui fait passer `ready` a vrai cote client (useSocketReady(), SocketContext.jsx)
+        // et debloque le reste du Wizard (WizardLockSync.jsx). registerWizardHandlers reste pose -
+        // room `wizard:<sheetId>`, independante de toute campagne (socketWizard.js ne lit jamais
+        // campaignId), necessaire a la synchro live de l'etape Materiel & Biens. Les handlers
+        // specifiques a une campagne (tokens, des, entites, combat, echanges, chat) ne sont en
+        // revanche jamais poses ici : aucun n'a de sens pour un personnage seul dans son Coffre, et
+        // ca evite de leur faire porter un campaignId null qu'ils n'ont jamais eu a gerer jusqu'ici.
+        if (!campaignId) {
+          registerWizardHandlers(io, socket, { campaignId: null, user: socket.user, isGm: false })
+          socket.emit(WS.SESSION_JOINED, {
+            campaignId: null,
+            userId: socket.user.id,
+            username: socket.user.username,
+            role: null,
+            onlineUserIds: [],
+          })
+          return
+        }
+
         // VÃ©rifier que l'utilisateur est bien membre de la campagne
         const member = await db('campaign_members')
           .where({ campaign_id: campaignId, user_id: socket.user.id })

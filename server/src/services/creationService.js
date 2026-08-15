@@ -20,6 +20,7 @@ import { addMutation } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { applyMutationIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
 import { resolveOwnership } from './characterOwnershipService.js'
+import { getOrCreateVault } from './vaultCoreService.js'
 import {
   attrOptionKey, handOptionKey, genotypeOptionKey, mutationOptionKey, careerOptionKey, advantageOptionKey,
   originGeoOptionKey, originSocOptionKey, trainingOptionKey, careerWaiveOptionKey,
@@ -435,6 +436,14 @@ export async function resolveSheetAccess(sheetId, userId) {
   const character = await db('characters').where({ id: sheet.character_id }).first()
   if (!character) throw new AppError(404, 'Personnage introuvable')
 
+  // Personnage Coffre-native (créé sans campagne, character.vault_id posé) : pas de
+  // campaign_members à lire, accès réservé au seul propriétaire — jamais de notion de MJ ici
+  // (aucun MJ ne peut rejoindre un personnage qui n'est rattaché à aucune campagne).
+  if (character.campaign_id == null) {
+    if (character.user_id !== userId) throw new AppError(403, "Vous n'avez pas accès à cette fiche")
+    return { sheet, character, isGm: false }
+  }
+
   const member = await db('campaign_members')
     .where({ campaign_id: character.campaign_id, user_id: userId })
     .first()
@@ -481,15 +490,29 @@ const ATTR_IDS_START = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 // risquerait de ne pas voir les lignes tout juste insérées (isolation READ COMMITTED, connexions
 // distinctes). Même chemin que `/state` (routes/creation.js), aucune logique dupliquée.
 export async function startCreation(campaignId, userId) {
+  // Normalisation défensive : campaignId peut arriver `undefined` (champ omis du payload client),
+  // jamais garanti `null` explicite. Les branches ci-dessous et getCampaignSettings distinguent
+  // "falsy → Coffre" par simple `if (campaignId)` / `?? null`, mais Knex ne traite pas forcément
+  // `undefined` et `null` de façon identique dans un `.where({...})` objet — normalisé une seule
+  // fois ici plutôt que de laisser un `undefined` traîner jusqu'à une requête SQL.
+  campaignId = campaignId || null
+
+  // Coffre-native (pas de campagne) : le Vault est résolu une seule fois, hors transaction —
+  // getOrCreateVault (vaultCoreService.js) est un accesseur paresseux idempotent sur sa propre
+  // connexion, pas conçu pour être transactionnel avec l'appelant. Si le reste de startCreation
+  // échoue ensuite et rollback, le Vault fraîchement créé reste (vide, sans personnage) : inoffensif,
+  // le prochain appel le retrouvera via son UNIQUE(user_id) plutôt que d'en recréer un second.
+  const vaultId = campaignId ? null : (await getOrCreateVault(userId)).id
+
   const result = await db.transaction(async (trx) => {
     // Idempotence (docs/PLAN_WIZARDCOLLAB.md §0 5e passe, Lot A3) : un brouillon actif existe déjà
-    // pour cet utilisateur dans cette campagne → le retourner au lieu d'en créer un second. Sans
-    // ça, un MJ démarrant un brouillon via targetUserId (routes/creation.js) pour un joueur qui,
-    // sans le savoir, en démarre un second via le flux normal (ou l'inverse) créerait un doublon
-    // orphelin — s'applique dans les deux sens, même vérification.
+    // pour cet utilisateur dans cette campagne (ou dans son Coffre) → le retourner au lieu d'en
+    // créer un second. Sans ça, un MJ démarrant un brouillon via targetUserId (routes/creation.js)
+    // pour un joueur qui, sans le savoir, en démarre un second via le flux normal (ou l'inverse)
+    // créerait un doublon orphelin — s'applique dans les deux sens, même vérification.
     const existing = await trx('char_sheet as cs')
       .join('characters as c', 'c.id', 'cs.character_id')
-      .where({ 'c.campaign_id': campaignId, 'c.user_id': userId })
+      .where(campaignId ? { 'c.campaign_id': campaignId, 'c.user_id': userId } : { 'c.vault_id': vaultId, 'c.user_id': userId })
       .whereNull('cs.wizard_locked_at')
       .select('cs.id as sheetId', 'c.id as characterId')
       .first()
@@ -500,10 +523,14 @@ export async function startCreation(campaignId, userId) {
       characterId = existing.characterId
     } else {
       // type/color dérivés de l'appartenance réelle (docs/PLAN_CHARACTER_SERVICE.md) — un GM
-      // utilisant le Wizard pour lui-même obtient un PNJ, pas un PJ codé en dur.
+      // utilisant le Wizard pour lui-même obtient un PNJ, pas un PJ codé en dur. Sans campagne,
+      // resolveOwnership retombe toujours sur 'pj' (aucun rôle de campagne à dériver).
       const ownership = await resolveOwnership(trx, { campaignId, userId })
       const [character] = await trx('characters')
-        .insert({ campaign_id: campaignId, user_id: ownership.user_id, name: 'Brouillon', type: ownership.type, color: ownership.color, visible: false })
+        .insert({
+          campaign_id: campaignId ?? null, vault_id: vaultId ?? null,
+          user_id: ownership.user_id, name: 'Brouillon', type: ownership.type, color: ownership.color, visible: false,
+        })
         .returning(['id'])
 
       const [sheet] = await trx('char_sheet')

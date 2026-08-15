@@ -31,10 +31,16 @@ jeu par Saar avant clôture
 🔒 En cours (Saar) : `docs/PLANS/PLAN_EXPORTEXCEL.md` — export fiche Wizard vers
 `Fiche Polaris Online - Vierge.xlsx` par plages nommées. Lot 0 quasi fini (reste 0b : Saar ouvre le
 fichier dans son Excel/LibreOffice réel). Lot 1 (`characterExportService.js`) fait, testé sur 30
-personnages réels. Lot 2 : fichiers 1/5 (identité/génotype/attributs/argent), 2/5 (compétences) et
-3/5 (avantages/désavantages) faits et testés sur personnages réels (`excelExportWriter.js`).
-Prochain fichier : 4/5 (mapping + writer Inventaire, pas encore cadré). Rien commité pour l'instant
-— à faire au prochain point d'étape confirmé.
+personnages réels. Lot 2 réécrit avec `xlsx-populate` (remplace `xlsx`/SheetJS qui détruisait la
+mise en forme du classeur à l'export — régression réelle trouvée par Saar) : mise en forme, dessins,
+commentaires (reconstruits manuellement, `xlsx-populate` n'a pas d'API commentaires) et valeurs tous
+revérifiés par recalcul LibreOffice réel. Modèle Excel dans MinIO (migration 244). Lot 3 codé (route
+export-excel + bouton `CharacterWindow.jsx`) — **testé en navigateur par Saar** : export fonctionnel,
+mais bug trouvé (`#VALEUR!`/`###` en cascade sur `Baboulinet`, génotype jamais choisi au Wizard →
+`Liste_TypeGen` vide → `ATTMTGFor` texte au lieu de nombre → cascade). Corrigé (`writeGenotype` :
+`genotype_id` absent = "Humain", même convention que `CharacterSheet.jsx`), revérifié par recalcul
+LibreOffice réel (zéro nouvelle erreur, cascade disparue). **Reste à confirmer par Saar : réexport
+navigateur avec le correctif.** Rien commité pour l'instant.
 
 ---
 
@@ -87,7 +93,6 @@ Prochain fichier : 4/5 (mapping + writer Inventaire, pas encore cadré). Rien co
 | **COM21** | Collision tokens : deuxième bloqué | Moyenne — Cluster N |
 | ~~**WIZ-2**~~ | ~~Deux compteurs PC (header store vs CareersAllocator local)~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — cause racine plus large que CareersAllocator seul (Step3Mutations/Step5Advantages aussi), `getStepBudget(excludeStep)` corrigé, `docs/BUG WIZARD.md` #4 — codé, scénario réel navigateur non testé |
 | **WIZ-3** | Formation "apprentissage_technique" → choix de spécialité non implémenté | Moyenne — COUCHE 4c |
-| ~~**WIZ5**~~ | ~~« Méthode de mutation invalide : null » sur « Voir ma fiche »/Terminer (Étape 4) — `getStep3State` renvoyait `method: null`, `openPeek`/`handleTerminate` lisaient des variables fermées~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — `'none'` + `useCreationStore.getState()`, détail `docs/JOURNAL8.md` — codé, scénario réel navigateur non testé |
 | ~~**WIZ6**~~ | ~~Finalisation : compétences remises à zéro — écho `WIZARD_STATE_SYNC` auto-diffusé à l'émetteur avec `skillAllocations: {}` (getStep4State), réinjecté par `openPeek`/`handleTerminate`~~ | ✅ Résolu — persistance brute `char_pc_ledger.skill_allocations`/`autodidacte_allocations` (migration 236), confirmé en navigateur par Saar (2026-08-12, triage ticket BETA-13 sur `/admin/tickets`). Détail `docs/JOURNAL8.md` |
 | ~~**WIZ7**~~ | ~~Étape 7 : l'âge progresse à chaque test sans jamais régresser — `char_archetype.age` stocke l'âge final, `getStep4State` le renvoyait comme âge de base, cumul à chaque réhydratation~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — colonne `base_age` séparée (migration 237), détail `docs/JOURNAL8.md` — codé, scénario réel navigateur non testé ; personnages déjà en cours de création non réparés rétroactivement (`base_age` NULL → repli 16) |
 | ~~**WIZ8**~~ | ~~Audit round-trip suite à la question de Saar sur l'architecture : `getStep3State`/`getStep5State` ne renvoyaient pas `mutationsMeta`/`advantagesMeta`/`pcNet`, consommés par `WizardReview.jsx` (Récap) et `creationStore.js` (budget PC) — effacés dès le premier écho `WIZARD_STATE_SYNC` (même mécanisme que #3). `getStep4State` manquait aussi `finalAge` (régression que le fix WIZ7 aurait introduite seule)~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — 4 champs ajoutés, requêtes vérifiées contre des fiches réelles en base (pas seulement lues statiquement), détail `docs/JOURNAL8.md` — codé, scénario réel navigateur non testé |
@@ -107,6 +112,7 @@ Prochain fichier : 4/5 (mapping + writer Inventaire, pas encore cadré). Rien co
 | **OPT-W2** | `style={}` visuel dans les 7 fichiers `client/src/components/campaignSettings/*` (convention CSS) | Basse |
 | ~~**MUT1**~~ | ~~`Purulence` (`mutation_id` 30) — `cost_pc = -2` en base, incohérent avec la convention positive des autres mutations "Désavantage" (Difformités) ; `Step3Mutations.jsx:254` (`cost_pc >= 0`) pourrait l'exclure de la liste achetable~~ | ⚠️ clos partiel Session (Saar, 2026-08-11) — confirmé réel (pas juste Purulence : Organe sensoriel manquant aussi), corrigé `docs/BUG WIZARD.md` #2 — codé, scénario réel navigateur non testé |
 | **ADV3** | Bénéfices de carrière débloquant l'accès à une compétence (mutation/compétence "développée automatiquement" via tirage) — non géré, aucun câblage vers `char_skills`/`char_mutations` | Moyenne — roadmap Session 141 suite 12 |
+| **WIZ5B** | `getStep3State` ne distingue pas « étape 3 jamais visitée » de « visitée, aucune mutation choisie » — les deux renvoient `method: 'none'` (nécessaire côté serveur pour que `reconcileCreation` accepte un resubmit total). Résidu du correctif WIZ5/`computeHighestStep` (2026-08-15, `docs/JOURNAL8.md`) : une reprise entre l'étape 2 et l'étape 3 jamais visitée affiche l'étape 3 pré-remplie sur « Aucune mutation » au lieu d'un formulaire vierge — pas un saut d'étape, juste une pré-sélection trompeuse | Basse — résolution complète demanderait une migration (marqueur explicite « étape 3 soumise ») |
 | **WIZ4** | `Step4Experience.jsx` — le mini-stepper (`isClickable`) ne revalide jamais les blocages durs de la sous-step quittée (ex. retirer sa seule carrière puis cliquer directement sur une sous-step déjà "reachable"). Filet serveur (`reconcileCreation` STEP4) empêche toute donnée invalide persistée — juste un rejet tardif au lieu d'un blocage immédiat | Basse — architecture navigation mini-stepper |
 | **WIZLOCK1** | 2 fiches trouvées `creation_state='complete'` mais `wizard_locked_at` jamais posé, avant le correctif d'atomicité Session 141 (suite 14) — `handleTerminate` faisait 2 appels réseau séparés (`reconcile` puis `lock`), toute coupure entre les deux laissait la fiche bloquée. Corrigé pour les finalisations futures ; dette documente seulement l'historique | Basse — historique, pas un risque actif |
 | **DOC1** | `docs/VOCABULARY.md` était un squelette vide depuis sa création, jamais réellement adopté par le protocole. Peuplé Session 141 (suite 18) avec un premier seed réel — reste à enrichir au fil des sessions | Basse — enrichissement continu |

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS } from './inventoryService.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS, addItem } from './inventoryService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/inventoryService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -127,6 +127,30 @@ test('getOwnedHandWeapon — itemId ou characterId absent : null sans exception'
   const result2 = await getOwnedHandWeapon(null, 'some-item-id', { slotCodes: ['MG'] })
   assert.equal(result1, null)
   assert.equal(result2, null)
+})
+
+// addItem/autoValidate (PLAN_WIZARD_MATERIEL_GAUGES.md §3, étendu pour la création Coffre-native
+// sans campagne, char-sheet.js) — inventoryService.js ne connaît pas la notion de campagne, le
+// paramètre est un booléen brut décidé par l'appelant. Ces deux tests couvrent le seul contrat qui
+// revient à ce fichier : autoValidate pilote validated_by_gm sur l'item inséré, rien d'autre.
+test('addItem — autoValidate=true : l\'item part directement validated_by_gm=true', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { custom_name: 'Babiole', quantity: 1 }, true)
+    assert.equal(item.validated_by_gm, true)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — autoValidate=false (défaut) : l\'item part en attente, validated_by_gm=false', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item } = await addItem(fx.owner.id, { custom_name: 'Babiole', quantity: 1 })
+    assert.equal(item.validated_by_gm, false)
+  } finally {
+    await cleanup(fx)
+  }
 })
 
 test.after(async () => { await db.destroy() })

@@ -13,12 +13,27 @@ const computeGenoCost = (s) => !s.step2Data ? 0
 // mieux la progression depuis la présence de données réelles par étape (aucun suivi serveur de la
 // progression — architecture client-primary) : imprécis par nature, sans conséquence sur les données
 // elles-mêmes (déjà toutes chargées), seulement sur l'écran affiché en premier.
+//
+// Invariant obligatoire : chaque étape n'est jamais considérée atteinte si la précédente ne l'est
+// pas — jamais un simple test indépendant par étape (piège WIZ5, docs/EN_COURS.md, 2026-08-11 :
+// getStep3State ne peut pas distinguer "step3 jamais visitée" de "method 'none' choisi
+// explicitement", les deux renvoient method: 'none' — nécessaire côté serveur pour que reconcile-
+// Creation accepte toujours une valeur non nulle sur un resubmit total (openPeek/handleTerminate),
+// mais ambigu si lu isolément côté client : sans le chaînage ci-dessous, une fiche neuve où step2
+// est vide sautait quand même à l'étape 3). Chaque `*Done` ne peut devenir vrai que si le précédent
+// l'est déjà — reproduit ce que seul step4→step5 vérifiait avant ce correctif, généralisé aux autres
+// transitions plutôt que rustiné au seul cas signalé.
 const computeHighestStep = ({ step2, step3, step4, step5, creationState }) => {
+  const step2Done = !!step2?.genotypeId
+  const step3Done = step2Done && !!step3?.method
+  const step4Done = step3Done && step4?.careers?.length > 0
+  const step5Done = step4Done && step5?.advantages?.length > 0
+
   let highestStep = 1
-  if (step2?.genotypeId) highestStep = 2
-  if (step3?.method) highestStep = 3
-  if (step4?.careers?.length > 0) highestStep = 4
-  if (highestStep === 4 && step5?.advantages?.length > 0) highestStep = 5
+  if (step2Done) highestStep = 2
+  if (step3Done) highestStep = 3
+  if (step4Done) highestStep = 4
+  if (step5Done) highestStep = 5
   // Step6 ne persiste aucune donnée d'étape (docs/PLAN_WIZARD_MATERIEL.md §3bis) — l'heuristique de
   // contenu ci-dessus ne peut jamais la détecter. creation_state est le seul indice disponible à
   // froid (hors session live, où applyStateSync couvre déjà le cas via WIZARD_STATE_SYNC).
