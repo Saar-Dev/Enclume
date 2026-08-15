@@ -374,6 +374,7 @@ export default function WizardCreation() {
             characterId={characterId}
             isGmView={isGmView}
             isOwner={isOwner}
+            hasCampaign={!!campaignId}
             onPrev={() => { setStepError(null); setStep(5) }}
             onNext={advanceStep6}
             advancing={advancing}
@@ -413,6 +414,7 @@ export default function WizardCreation() {
           character={{ ...peekCharacter, _currentUserId: user.id }}
           isGm={peekIsGm}
           forceReadOnly
+          hasCampaign={!!campaignId}
           onClose={() => setPeekOpen(false)}
         />
       )}

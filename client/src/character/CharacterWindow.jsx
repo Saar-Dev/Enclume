@@ -88,7 +88,7 @@ const IconX = () => (
 )
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function CharacterWindow({ character, isGm, onClose, forceReadOnly = false }) {
+export default function CharacterWindow({ character, isGm, onClose, forceReadOnly = false, hasCampaign = true }) {
   const { t } = useTranslation()
   const { members, updateCharacter, removeCharacter } = useCharacterStore()
 
@@ -475,6 +475,7 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
               characterId={character.id}
               canEdit={effectiveIsGm || effectiveIsOwner}
               isGm={effectiveIsGm}
+              hasCampaign={hasCampaign}
             />
             <GaugesPanel characterId={character.id} isGm={effectiveIsGm} />
             <DragOverlay>

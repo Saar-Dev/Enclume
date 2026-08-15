@@ -273,7 +273,12 @@ export async function getStep1State(sheetId) {
     hair: identity?.hair ?? '',
     build: identity?.build ?? '',
     distinctiveSigns: identity?.distinctive_signs ?? '',
-    handPref: identity?.hand_pref ?? '',
+    // Contrairement aux champs texte libre ci-dessus, handPref est une valeur contrainte (R/L/A,
+    // reconcileCreation§STEP1) — '' n'appartient pas à ce domaine et se faisait rejeter par la
+    // validation serveur si réinjectée telle quelle (openPeek/handleTerminate renvoient ce state
+    // tel quel, sans repasser par la normalisation `handPref || null` de Step1Attributes.jsx).
+    // null est la seule valeur "pas encore choisi" valide, comme height/weight au-dessus.
+    handPref: identity?.hand_pref ?? null,
     attributes: Object.fromEntries(attrRows.map(r => [r.attr_id, r.base_level])),
   }
 }

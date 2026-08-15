@@ -14,7 +14,7 @@ import { useInventoryData } from '../../lib/useInventoryData.js'
 import { useGaugesData } from '../../lib/useGaugesData.js'
 import { adjustGauge } from '../../lib/gaugesMutations.js'
 
-export default function StepMaterielEtBiens({ characterId, isGmView, isOwner, onPrev, onNext, advancing }) {
+export default function StepMaterielEtBiens({ characterId, isGmView, isOwner, hasCampaign = true, onPrev, onNext, advancing }) {
   const { t } = useTranslation('creation')
   useWizardInventorySync(characterId)
   const canEdit = isGmView || isOwner
@@ -87,6 +87,7 @@ export default function StepMaterielEtBiens({ characterId, isGmView, isOwner, on
             characterId={characterId}
             canEdit={canEdit}
             isGm={isGm}
+            hasCampaign={hasCampaign}
           />
         </div>
 

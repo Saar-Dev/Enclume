@@ -139,4 +139,39 @@ test('round-trip Wizard : getStepNState après reconcile est fidèle et idempote
   }
 })
 
+// Isolé du test round-trip ci-dessus à dessein : son step5 accorde adv_002 (Ambidextre), qui pose
+// mécaniquement char_identity.hand_pref='A' — une valeur valide non vide qui masquerait totalement
+// le bug ci-dessous (trouvé 2026-08-15, Saar : "Main directrice invalide : " à l'Étape 7 sur un
+// personnage n'ayant jamais choisi de main directrice). getStep1State renvoyait handPref: '' pour
+// une fiche où hand_pref est NULL en base ('' n'est pas dans le domaine R/L/A, contrairement aux
+// champs texte libre qui utilisent le même défaut à raison) — openPeek/handleTerminate renvoient ce
+// state tel quel (WizardCreation.jsx), sans repasser par la normalisation `handPref || null` du
+// composant Step1Attributes.jsx, donc le round-trip serveur rejetait sa propre valeur "non choisi".
+test('round-trip Étape 1 : main directrice jamais choisie reste null, jamais réinjectée en chaîne vide invalide', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    const { sheetId } = fixture
+    await reconcileCreation(sheetId, {
+      step1: {
+        charName: 'Repro handPref', playerName: '', pcSpent: 0, isFeminin: false,
+        attributes: { FOR: 7, CON: 7, COO: 7, ADA: 7, PER: 7, INT: 7, VOL: 7, PRE: 7 },
+        // handPref volontairement absent — reproduit exactement le payload envoyé par
+        // Step1Attributes.jsx quand le joueur n'a pas encore choisi de main directrice.
+      },
+    }, false)
+
+    const step1 = await getStep1State(sheetId)
+    assert.equal(step1.handPref, null, 'handPref doit rester null, jamais une chaîne vide (hors du domaine R/L/A)')
+
+    // Simule exactement openPeek/handleTerminate (Étape 7) : renvoie tel quel ce que getStepNState
+    // vient de produire — doit passer sans lever "Main directrice invalide".
+    await assert.doesNotReject(
+      () => reconcileCreation(sheetId, { step1 }, false),
+      'réinjecter le state tel quel ne doit jamais rejeter la propre sortie du serveur'
+    )
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
 test.after(async () => { await db.destroy() })

@@ -2824,3 +2824,56 @@ correctif — déjà présent dans le comportement WIZ5 d'origine).
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, `git revert` suffit — aucune donnée vivante affectée (fonction pure,
 aucune écriture).
+
+---
+
+## Session (Saar) — 2026-08-15 — Deux bugs trouvés en testant le Coffre-native : main directrice tardive + badge Validé trompeur
+
+**Bug 1 — « Main directrice invalide : » à l'Étape 7.** Signalé « trop tard pour l'afficher, il faut
+le réclamer Étape 1 » — clarifié avec Saar : le champ reste optionnel (narratif, non bloquant,
+`REGLE_CREATION.txt:1317-1324`), la demande portait sur l'erreur elle-même, pas sur le rendre
+obligatoire. Cause racine : `getStep1State` (`creationService.js`) renvoyait `handPref: identity?.
+hand_pref ?? ''` — une chaîne vide n'appartient pas au domaine contraint R/L/A (contrairement aux
+champs texte libre voisins, où `?? ''` est le bon défaut). Un NULL en base (jamais choisi) devenait
+donc `''` à chaque resynchronisation serveur (`WIZARD_STATE_SYNC`, reprise), et `openPeek`/
+`handleTerminate` (Étape 7, `WizardCreation.jsx`) renvoient le state du store tel quel, sans repasser
+par la normalisation `handPref || null` propre au composant `Step1Attributes.jsx` — le serveur
+rejetait alors sa propre valeur « non choisi ». Corrigé : `?? null`, cohérent avec `height`/`weight`
+juste au-dessus dans la même fonction.
+
+Diagnostic vérifié empiriquement avant correctif (pas seulement par lecture) : script jetable
+confirmant `char_identity.hand_pref` réellement NULL en base et `getStep1State` renvoyant bien `''`
+dans l'ancien code. Découverte annexe en écrivant le test dédié : `creationRoundTrip.test.mjs`
+existant ne détectait PAS ce bug malgré un scénario a priori équivalent — son Étape 5 accorde
+l'avantage adv_002 (Ambidextre), qui pose mécaniquement `hand_pref='A'` en base, masquant totalement
+le défaut `?? ''` avant même qu'il s'exprime. Nouveau test isolé de cet effet de bord.
+
+**Bug 2 — badge « Validé » affiché sans MJ possible (Coffre).** Le bouton « Valider »
+(`InventoryPanel.jsx`) était déjà correctement gardé par `isGm` (toujours faux sans campagne). Mais le
+badge « Validé » (`item.validated_by_gm`) s'affichait pour tout le monde, sans condition de MJ — et
+depuis l'auto-validation ajoutée à la session précédente (Coffre-native), un objet Coffre est
+*toujours* `validated_by_gm: true`, donnant l'illusion d'une validation qui n'a jamais eu lieu. Pas
+gérable via `isGm` seul : en vraie campagne, le badge doit continuer à s'afficher pour le joueur
+(confirmation que le MJ a validé son objet) — il fallait un signal distinct « pas de campagne du
+tout », inexistant jusqu'ici. Nouvelle prop `hasCampaign` (défaut `true`, aucun appelant existant à
+modifier), dérivée de `!!campaignId` (`WizardCreation.jsx`, `useParams()`), traversant
+`StepMaterielEtBiens.jsx`/`CharacterWindow.jsx` → `InventoryPanel.jsx` → `ItemRow` (composant interne,
+deux points de rendu — Sac/Ceinture et le conteneur "Coffre" du personnage lui-même, sans rapport avec
+le Coffre-compte, qui avait le même défaut).
+
+**Fichiers modifiés** :
+- `server/src/services/creationService.js` — `getStep1State`, une ligne.
+- `server/src/services/creationRoundTrip.test.mjs` — nouveau test dédié (round-trip Étape 1, isolé de
+  l'effet de bord Ambidextre).
+- `client/src/character/InventoryPanel.jsx` — prop `hasCampaign` sur le composant et sur `ItemRow`
+  (interne), badge gaté.
+- `client/src/components/creation/StepMaterielEtBiens.jsx`, `client/src/character/CharacterWindow.jsx`,
+  `client/src/components/creation/WizardCreation.jsx` — transmission de `hasCampaign`.
+
+**Testé** : `creationRoundTrip.test.mjs` (2/2, dont le nouveau, vérifié qu'il échoue sans le correctif
+avant de le valider avec), suite complète Coffre-native + inventaire (15/15). `eslint` propre sur les
+4 fichiers client touchés. **Confirmé fonctionnel en navigateur par Saar** (les deux scénarios : Étape
+1 sans main directrice → Terminer ; Étape 6/7 Matériel en Coffre → plus de badge trompeur).
+**Non testé** : rien d'identifié restant sur ces deux bugs précis.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé, `git revert` suffit.

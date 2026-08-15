@@ -49,7 +49,13 @@ function slotOptionsForItem(item) {
 // (`item.container`, envoyé tel quel à l'API) ne change jamais, seul l'affichage passe par t().
 const CONTAINER_LABEL_KEYS = { Sac: 'inventoryPanel.container.Sac', Ceinture: 'inventoryPanel.container.Ceinture', Coffre: 'inventoryPanel.container.Coffre' }
 
-export default function InventoryPanel({ characterId, canEdit, isGm }) {
+// hasCampaign (défaut true — aucun appelant existant n'a besoin de le préciser) : un personnage
+// Coffre-native (sans campagne) a autoValidate forcé côté serveur (char-sheet.js, aucun MJ ne peut
+// jamais exister pour lui) — item.validated_by_gm y vaut donc toujours true sans qu'aucune validation
+// n'ait réellement eu lieu. Le bouton "Valider" est déjà correctement gaté par isGm (toujours faux
+// sans campagne) ; seul le badge "Validé" doit en plus être masqué, sous peine d'afficher une fausse
+// confirmation sur chaque objet.
+export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign = true }) {
   const { t } = useTranslation('charSheet')
   // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
   // poids/sols/malus INI sont affichés par InventoryBanner.jsx (Étape 1), pas ici.
@@ -286,6 +292,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
                 item={item}
                 canEdit={canEdit}
                 isGm={isGm}
+                hasCampaign={hasCampaign}
                 availableContainers={availableContainers}
                 onMoveContainer={handleMoveContainer}
                 onSendToVault={handleSendToVault}
@@ -322,6 +329,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
               key={item.id}
               item={item}
               canEdit={canEdit}
+              hasCampaign={hasCampaign}
               availableContainers={availableContainers}
               onMoveContainer={handleMoveContainer}
               onSendToVault={handleSendToVault}
@@ -475,7 +483,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm }) {
   )
 }
 
-function ItemRow({ item, canEdit, isGm, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate }) {
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -530,13 +538,16 @@ function ItemRow({ item, canEdit, isGm, availableContainers, onMoveContainer, on
       )}
       {/* PLAN_WIZARD_MATERIEL_GAUGES.md §4 — bouton actionnable MJ only, uniquement sur les items en
           attente ; un item déjà validé affiche un badge statique (pas la peine de refaire cliquer le
-          MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur). */}
+          MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur).
+          hasCampaign : sans campagne, validated_by_gm est toujours vrai (auto-validation serveur,
+          aucun MJ ne peut jamais exister) — afficher le badge serait une fausse confirmation, jamais
+          issue d'une vraie validation. */}
       {isGm && !item.validated_by_gm && (
         <button onClick={() => onValidate(item.id)} style={s.validateBtn} title={t('inventoryPanel.validateTooltip')}>
           {t('inventoryPanel.validateButton')}
         </button>
       )}
-      {item.validated_by_gm && (
+      {hasCampaign && item.validated_by_gm && (
         <span className="badge badge-compact" style={s.validatedBadge}>{t('inventoryPanel.validatedBadge')}</span>
       )}
       {canEdit && (
