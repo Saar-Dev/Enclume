@@ -91,17 +91,28 @@ Historique de conception, audit des sites migrés et décisions détaillées : `
 
 ---
 
-## Contexte de Test d'un combattant — resolveHumanoidTestContext
+## Contexte de Test d'un combattant — resolveCombatantTestContext
 
-Autorité unique pour résoudre le contexte de Test (Seuil, malus, ModDom) d'un combattant humanoïde
-(`pj`/`pnj`, traités identiquement) : `server/src/lib/combatantContextService.js` —
-`resolveHumanoidTestContext(db, character, skillId)`. **Jamais** de fetch inline
+Autorité unique pour résoudre le contexte de Test (Seuil, malus, ModDom) d'un combattant, **quel que
+soit son type** : `server/src/lib/combatantContextService.js` —
+`resolveCombatantTestContext(db, character, skillId)`. **Jamais** de fetch inline
 `char_attributes`/`char_archetype`/`char_skills`/`ref_skills`/`character_wounds`/`char_inventory` →
 `calcSkillTotal`/`calcAttributeNA`/`calcActiveMalus` recopié à la main dans un nouveau handler —
 historique : cette chaîne a existé 7 fois avec des variations mineures dans `socketCombatHelpers.js`
-avant unification (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md`, archivé une fois le chantier clos).
+avant unification (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md`, archivé une fois le chantier clos, Lots A-G).
+`socketCombatHelpers.js` n'appelle plus jamais `resolveHumanoidTestContext` directement — toujours ce
+dispatcher, y compris pour un `pj`/`pnj` (branche identique à avant, juste indirecte).
 
-Deux paliers selon `skillId` :
+Dispatcher, guard clauses (pas de table — 2 branches réelles) :
+```js
+export async function resolveCombatantTestContext(db, character, skillId) {
+  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId)
+  return resolveHumanoidTestContext(db, character, skillId)
+}
+```
+
+**Branche humanoïde (`resolveHumanoidTestContext`, `pj`/`pnj` traités identiquement)** — deux paliers
+selon `skillId` :
 - **`skillId` fourni** (acteur qui teste — attaquant CaC, tireur, défenseur CaC) : palier complet
   `{ skillTotal, effectiveMalus, modDom, for_na, con_na, vol_na, sheetId, mastery }`. Passer une
   chaîne vide `''` (jamais `null`) si le skillId n'est pas encore connu au moment de l'appel (ex.
@@ -115,8 +126,48 @@ Deux paliers selon `skillId` :
 `null` (la fonction elle-même, pas le palier) si le personnage n'a pas de `char_sheet` — jamais
 d'exception, comportement gracieux à gérer par l'appelant (retour anticipé ou repli selon le site).
 
-Un personnage `type='exo'` passe par une branche dédiée (`resolveExoTestContext`, dispatcher
-`resolveCombatantTestContext`) — pas encore assemblée (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md` Lot G).
+**Branche exo (`resolveExoTestContext`, Lot G)** — un personnage `type='exo'` n'a jamais de
+`char_sheet` propre (il a une `exo_sheet` — c'est un personnage séparé du pilote,
+`MANUEL_EXOARMURE.md` §3.1, jamais fusionnés, jamais de stats copiées de l'un vers l'autre) :
+1. `exo_sheet.pilot_character_id` → le pilote (`pj`/`pnj`), résolu via `resolveHumanoidTestContext`.
+   `null` si aucun pilote assigné.
+2. `exo_sheet.template_id` → `ref_exo_templates`, puis `computeExoStats(exoSheet, template)`
+   (`shared/exoStats.js`, fonction pure, EXF/BLD/RD dérivés des paliers d'Intégrité courants,
+   `MANUEL_EXOARMURE.md` §4.8). `null` si aucun template assigné ("armure non configurée", état valide
+   depuis `PLAN_EXOARMURE.md` Lot 1 §6.5) — dans ce cas `resolveExoTestContext` retourne `null` plutôt
+   que de laisser passer les stats du pilote sans l'override EXF.
+3. Retour = contexte du pilote, avec `for_na`/`modDom` **recalculés** depuis l'EXF (pas simplement
+   substitués après coup — `modDom = getModDom(exf)`, sinon la valeur déjà calculée avec la FOR du
+   pilote resterait, bug réel trouvé en codant ce lot). `skillTotal`/`con_na`/`vol_na`/`mastery`/
+   `sheetId` restent ceux du pilote, inchangés — seule substitution actée à ce jour
+   (`MANUEL_EXOARMURE.md` §4.1 : *"La FOR du pilote est ignorée pour les dommages au contact et la
+   capacité de port. On utilise l'EXF."*). `calcSkillTotal` recalcule l'Attribut testé directement
+   depuis les `char_attributes` bruts du pilote, indépendamment de cette substitution — une Compétence
+   qui testerait la FOR utilise donc la FOR *propre* du pilote, jamais l'EXF.
+
+`resolveHumanoidTestContext(db, character, skillId, { forNAOverride })` : le 4ᵉ paramètre (interne,
+réservé à `resolveExoTestContext`) porte cette substitution — `undefined` par défaut, aucun changement
+pour un appelant humanoïde direct.
+
+**Piège corrigé en codant le Lot G** : `char_sheet_id_cible`/`for_na_cible`/`con_na_cible`/
+`vol_na_cible` (consommés par le pipeline de dégâts si l'attaque touche — `resolveTargetHit`/
+`applyWound`, distinct du Test de défense lui-même) restent au repli neutre préexistant (8/8/8/`null`)
+pour un défenseur `exo`, **jamais** dérivés du pilote : l'armure a son propre pipeline de dégâts
+(Intégrité/Avaries/RD fixe par catégorie, `MANUEL_EXOARMURE.md` §4.6-4.7), pas encore construit
+(`PLAN_EXOARMURE.md` Lot 4) — les y faire pointer vers le pilote écrirait une Blessure humaine en
+contournant complètement l'armure.
+
+**`resolveCombatantSheetId(db, character)`** — identité seule (`sheetId`, `pilot.char_sheet.id` pour un
+exo), sans le reste du contexte de Test. Pour les appelants qui ont besoin de savoir « quelle fiche
+représente ce combattant » avant même de connaître le `skillId` à tester (ex. défenseur CaC : la main
+directrice, lue sur cette fiche, détermine l'arme équipée donc la Compétence à tester — ordre imposé).
+Coût minimal pour un humain (1 requête, identique au fetch `char_sheet` direct qu'il remplace) ; ne pas
+l'utiliser quand `skillId` est déjà connu, `resolveCombatantTestContext` fait tout en un seul appel.
+
+**Hors périmètre de ce point de couture** (`PLAN_EXOARMURE.md`, pas ce fichier) : le routage de la
+confirmation de défense pour un `type='exo'` (`resolveMeleeAction` n'a pas de branche `'exo'`, retombe
+sur le chemin PJ) ; le comptage multi-adversaires (`atkEnemyType`/`defEnemyType` traitent tout `exo`
+comme `'pj'` par défaut de code) ; le pipeline de dégâts exo en tant que cible (ci-dessus, Lot 4).
 
 ### Résolution d'arme — ownership + en-main + catégorie (MELEE-INHAND/ASSAULT-INHAND-RESOLUTION)
 
@@ -232,7 +283,7 @@ Le plafond d'une ligne non touchée se calcule séparément via `getSkillCap(ski
 
 ## Données nécessaires par rôle en combat
 
-> Vue conceptuelle des données par rôle — l'implémentation réelle passe par `resolveHumanoidTestContext`
+> Vue conceptuelle des données par rôle — l'implémentation réelle passe par `resolveCombatantTestContext`
 > (Tireur/Défenseur, section ci-dessus) et `damageService.fetchCibleNA` (Cible), jamais un fetch ad hoc.
 
 **Tireur :**

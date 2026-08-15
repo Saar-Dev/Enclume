@@ -2618,3 +2618,92 @@ donnée vivante affectée.
 Reste ouvert (`EN_COURS.md` EXOARM-COMBATFILE) : Lot G (dispatcher `resolveCombatantTestContext` +
 `resolveExoTestContext`, `PLAN_COMBATANT_CONTEXT.md`) — plus aucune dépendance externe bloquante,
 prêt à démarrer ; validation jeu réel du terrain instable défenseur (Lot C, portée close depuis).
+
+## Session (Saar) — 2026-08-15 — PLAN_COMBATANT_CONTEXT Lot G : dispatcher exo assemblé
+
+**Contexte** : dernier lot du plan — assembler `resolveCombatantTestContext` (dispatcher) +
+`resolveExoTestContext` (`combatantContextService.js`) et rebrancher les sites `pj`/`pnj` dessus, pour
+qu'un pilote d'exo-armure obtienne enfin un Seuil de Test dérivé de son pilote (attributs/Compétences)
+avec l'Exo-Force à la place de la Force (`MANUEL_EXOARMURE.md` §4.1).
+
+**Décision produit actée avec Saar avant le code** : l'exo-armure est bien un personnage séparé du
+pilote, avec son propre token sur le plateau (confirmé par lecture de `MANUEL_EXOARMURE.md` §3.1,
+déjà écrit ainsi). Le token du pilote pendant qu'il pilote (`MANUEL_EXOARMURE.md` §6.3, laissé ouvert
+par le MANUEL et par `PLAN_EXOARMURE.md` Lot 1 §6.6, "hors périmètre v1") est tranché : **aucune
+mécanique serveur** — inutilisé/retiré du plateau à la charge des joueurs/MJ. Si le MJ oublie de
+retirer un des deux tokens, le personnage peut agir deux fois : comportement accepté, pas un bug à
+corriger. À reporter dans `PLAN_EXOARMURE.md` (§6.3) quand ce document sera repris.
+
+**Écart trouvé entre le texte du plan (§2, audit du 2026-08-06) et le code réel** — les Lots C/E,
+clos depuis, avaient déjà réduit les "7 sites" à 6 appelants réels de `resolveHumanoidTestContext`
+(site #1 `isTargetDefenseless` jamais migré — ne lit pas `calcSkillTotal`, Lot C ; sites cibles
+Tir/Drone #4/#5/#7 déjà unifiés via `damageService.fetchCibleNA`, jamais via ce service, Lot E) — plan
+non mis à jour en conséquence. Périmètre réel du Lot G : les 6 appelants directs restants.
+
+**3 bugs trouvés en creusant au-delà du remplacement direct des appels** (`CLAUDE.md` — cause racine,
+pas de rustine) :
+1. **Le vrai blocage n'était pas l'appel à `resolveHumanoidTestContext` lui-même** mais un fetch
+   `char_sheet` + garde *antérieur*, séparé, dans chacune des 3 fonctions concernées (attaquant CaC
+   `resolveMeleeAction`, défenseur CaC même fonction, tireur `resolveAssaultAction`) — un pilote d'exo
+   (jamais de `char_sheet` propre) y retournait avant même d'atteindre le point que le plan ciblait.
+   Corrigé aux 3 sites : le garde d'existence passe maintenant par `resolveCombatantTestContext`
+   (attaquant/tireur, un seul appel — la détermination du skillId a été avancée dans la fonction,
+   aucune dépendance ne s'y opposait) ou `resolveCombatantSheetId` (défenseur — nouvelle fonction,
+   identité seule, coût minimal pour un humain : 1 requête, identique à l'ancien fetch direct ; la
+   main directrice du défenseur doit être connue avant de savoir quelle Compétence tester, donc avant
+   de pouvoir appeler le dispatcher complet).
+2. **`modDom` (dégâts au contact) restait calculé avec la Force du pilote** dans mon premier jet : en
+   ne remplaçant que `for_na` dans le retour de `resolveExoTestContext` sans recalculer `modDom` (déjà
+   calculé plus tôt, à l'intérieur de `resolveHumanoidTestContext`, avec la FOR du pilote). Contraire à
+   `MANUEL_EXOARMURE.md` §4.6 ("modificateur appliqué à l'EXF... et non à la Force du pilote"). Corrigé
+   proprement : `resolveHumanoidTestContext` accepte un paramètre interne `forNAOverride` (`undefined`
+   par défaut, aucun changement pour un appelant humanoïde direct) qui recalcule `for_na`/`modDom`/
+   l'encombrement de `effectiveMalus` depuis l'EXF dès le départ — jamais `skillTotal`
+   (`calcSkillTotal` recalcule l'Attribut depuis `attrs` bruts, indépendant de ce paramètre : la FOR
+   propre du pilote reste utilisée pour toute Compétence qui la testerait, §0.2 du plan, "jamais aux
+   autres calculs d'Attribut"). Même bug de "recalcul oublié" aurait touché l'encombrement sans ce
+   paramètre — trouvé en relisant `calcActiveMalus`, corrigé avant qu'un vrai combat n'en dépende.
+3. **Risque d'écrire une Blessure humaine directement sur le pilote** en contournant l'armure : en
+   laissant `char_sheet_id_cible`/`for_na_cible`/`con_na_cible`/`vol_na_cible` (consommés plus loin par
+   `resolveTargetHit`/`applyWound` — pipeline de dégâts, pas le Test de défense lui-même) refléter le
+   pilote pour un défenseur exo touché. Le pipeline de dégâts de l'armure (Intégrité/Avaries/RD fixe
+   par catégorie) n'existe pas encore (`PLAN_EXOARMURE.md` Lot 4, hors périmètre de ce plan). Corrigé :
+   ces 4 valeurs restent au repli neutre préexistant (8/8/8/`null`) pour un défenseur exo — exactement
+   le comportement d'avant ce chantier (`applyWound` retourne déjà `null` sans écrire si
+   `charSheetId` est vide, vérifié dans `woundService.js`) — seul le Seuil de défense de l'armure
+   (dérivé du pilote) est corrigé, pas ce qui se passe si l'attaque touche.
+
+**Fichiers modifiés** :
+- `server/src/lib/combatantContextService.js` — `resolveExoTestContext` (interne) + dispatcher exporté
+  `resolveCombatantTestContext` + `resolveCombatantSheetId` (identité seule) ; `resolvePilot` (interne,
+  autorité unique exo→pilote, partagée par les deux) ; `resolveHumanoidTestContext` étendue du
+  paramètre optionnel `forNAOverride`.
+- `server/src/socket/socketCombatHelpers.js` — 6 sites rebranchés sur le dispatcher ; 3 gardes
+  d'existence (`sheetAttaquant`/`sheetCible`/`sheetTireur`) remplacés ; `char_sheet_id_cible` et les 3
+  NA cible protégés pour un défenseur exo (point 3 ci-dessus) ; import mis à jour.
+- `server/src/lib/combatantContextService.test.mjs` — 9 tests ajoutés (18 au total) : nominal exo,
+  palier NA seul sans `modDom`, paliers d'Intégrité dégradés (formule exacte §4.8.2, cumul un seul
+  floor), pas de pilote, pas de template ("non configurée"), non-régression du dispatch humain,
+  `resolveCombatantSheetId` (humain/exo/sans pilote).
+
+**Testé** : `node --check` sur les 2 fichiers de code ; `node --test` sur
+`combatantContextService.test.mjs` — 18/18 verts contre PostgreSQL réel (0 résidu après coup,
+vérifié). `PLAN_COMBATANT_CONTEXT.md` §6 (validation attendue Lot G) : "un Test résolu sans crash,
+skillTotal/for_na correctement dérivés du pilote/de l'EXF" — couvert par les tests ci-dessus.
+**Non testé** : scénario réel en navigateur — aucune exo-armure réelle en jeu, cohérent avec le plan
+lui-même ("Lot G seul n'est pas jouable de bout en bout" tant que `PLAN_EXOARMURE.md` Lot 2 n'existe
+pas — routage de la confirmation de défense d'un exo notamment, jamais tranché, voir ci-dessous).
+**Données** : aucune migration — lecture seule, comme les Lots A-F.
+**Retour arrière** : commit isolé, `git revert` suffit — aucune donnée vivante affectée.
+
+**Hors périmètre, confirmé pas oublié** :
+- Routage de la confirmation de défense pour un type `'exo'` dans `resolveMeleeAction` (`if
+  (defenderCharacter.type === 'pnj') ... else resolveMeleeDefensePj` — aucune branche `'exo'`,
+  retombe sur le chemin PJ) — appartient à `PLAN_EXOARMURE.md` Lot 2.
+- `atkEnemyType`/`defEnemyType` (comptage multi-adversaires, `character.type === 'pj' ? 'pnj' : 'pj'`)
+  traite tout `exo` comme `'pj'` par défaut de code, pas par décision — correct seulement si le pilote
+  est un PJ. Dette distincte, notée dans `EN_COURS.md`, pas corrigée ici (un plan = un problème).
+- Pipeline de dégâts exo en tant que cible (point 3 ci-dessus) — `PLAN_EXOARMURE.md` Lot 4.
+
+`PLAN_COMBATANT_CONTEXT.md` est clos (Lots A-G tous confirmés) — à archiver vers `docs/Old/` une fois
+`docs/SYSTEME/COMBAT.md` mis à jour (fait dans ce commit) et `EN_COURS.md` nettoyé.

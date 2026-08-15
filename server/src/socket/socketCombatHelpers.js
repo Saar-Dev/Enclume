@@ -21,7 +21,7 @@ import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/comb
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
-import { resolveHumanoidTestContext } from '../lib/combatantContextService.js'
+import { resolveCombatantTestContext, resolveCombatantSheetId } from '../lib/combatantContextService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
@@ -586,14 +586,16 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
 
     // Terrain instable défenseur PJ — compétence limitative ACROBATIE_EQUILIBRE
     // PLAN_COMBATANT_CONTEXT.md Lot C — objet minimal { id, campaign_id } reconstruit, même patron
-    // que resolveMeleeDefensePnj (ni l'un ni l'autre ne reçoit la ligne characters complète).
+    // que resolveMeleeDefensePnj (ni l'un ni l'autre ne reçoit la ligne characters complète). Sans
+    // `.type`, sans conséquence : gardé par `char_sheet_id_cible` (Lot G, toujours null pour un
+    // défenseur exo), jamais atteint pour un exo.
     let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
     if (pendingSituationDef.includes('cac_terrain_instable') && char_sheet_id_cible) {
       // Repli sur defenderSkillTotal préservé tel quel si ACROBATIE_EQUILIBRE est absente du catalogue
       // (garde défensive héritée de l'ancien code, même patron que resolveMeleeAction Lot B).
       const acrobatieRefDef = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
       if (acrobatieRefDef) {
-        const ctxAcrobatieDef = await resolveHumanoidTestContext(db, { id: characterIdCible, campaign_id: meleeCampaignId }, 'ACROBATIE_EQUILIBRE')
+        const ctxAcrobatieDef = await resolveCombatantTestContext(db, { id: characterIdCible, campaign_id: meleeCampaignId }, 'ACROBATIE_EQUILIBRE')
         acrobatieDefTotal = ctxAcrobatieDef?.skillTotal ?? defenderSkillTotal
       }
       terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
@@ -1302,9 +1304,6 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     if (!targetTokenId) return { suspend: false, emissions }
 
     // ── 1. Données attaquant ──────────────────────────────────────────────────
-    const sheetAttaquant = await db('char_sheet').where({ character_id: character.id }).first()
-    if (!sheetAttaquant) return { suspend: false, emissions }
-
     // Arme + formule dégâts + allonge
     // CHOC1 (prérequis Palier 1, docs/PLAN_CHOC1.md) : damageFormula = null signifie "arme équipée
     // sans dégât physique" (catégorie Choc pur, ex. Dague neurale Brain) — à distinguer de '1D4'
@@ -1325,6 +1324,27 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       }
     }
 
+    // Skill associé à l'arme (via ref_equipment_skill_assoc) ou COMBAT_A_MAINS_NUES (mains nues) —
+    // déterminé ici, avant tout accès à la fiche de l'attaquant (déplacé depuis plus bas dans la
+    // fonction, PLAN_COMBATANT_CONTEXT.md Lot G) : ni l'arme naturelle ni la distance ci-dessous n'en
+    // dépendent, alors que le contexte de Test qui suit en a besoin — un seul calcul, pas un fetch
+    // d'identité séparé suivi d'un second calcul complet plus loin.
+    let skillId = 'COMBAT_A_MAINS_NUES'
+    if (weapon?.equipment_id) {
+      const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
+      if (skillAssoc) skillId = skillAssoc.skill_id
+    }
+
+    // PLAN_COMBATANT_CONTEXT.md Lot G — point de couture unique pour le contexte de Test de
+    // l'attaquant (Seuil, malus, ModDom, sheetId). Remplace l'ancien fetch inline `char_sheet` + garde
+    // (bloquait silencieusement tout personnage sans char_sheet propre — notamment un pilote
+    // d'exo-armure : l'exo est un personnage séparé du pilote, MANUEL_EXOARMURE.md §3.1, jamais de
+    // char_sheet propre ; resolveCombatantTestContext va chercher celle du pilote et l'utilise, avec
+    // l'Exo-Force à la place de la Force, §4.1 du manuel). `null` si l'attaquant n'a ni char_sheet
+    // (humain) ni pilote résolvable (exo) — repli gracieux identique à l'ancien garde.
+    const ctx = await resolveCombatantTestContext(db, character, skillId)
+    if (!ctx) return { suspend: false, emissions }
+
     // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec weaponInvId
     // (radio unique côté client). Revalidation serveur complète : appartenance de la mutation au
     // personnage attaquant + éligibilité (statut `grappled` réel de la cible pour Crocs/Corne).
@@ -1332,7 +1352,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     if (naturalWeaponCharMutationId) {
       const naturalWeaponMutation = await db('char_mutations as cm')
         .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
-        .where({ 'cm.id': naturalWeaponCharMutationId, 'cm.char_sheet_id': sheetAttaquant.id, 'cm.status': 'active' })
+        .where({ 'cm.id': naturalWeaponCharMutationId, 'cm.char_sheet_id': ctx.sheetId, 'cm.status': 'active' })
         .select('rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple')
         .first()
       if (naturalWeaponMutation?.natural_weapon_formula) {
@@ -1379,15 +1399,8 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       return { suspend: false, emissions }
     }
 
-    // Skill associé à l'arme (via ref_equipment_skill_assoc) ou COMBAT_A_MAINS_NUES (mains nues)
-    let skillId = 'COMBAT_A_MAINS_NUES'
-    if (weapon?.equipment_id) {
-      const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
-      if (skillAssoc) skillId = skillAssoc.skill_id
-    }
-
-    const [woundsAttaquant, rosterTokens, settings, targetShield, ctx] = await Promise.all([
-      db('character_wounds').where({ char_sheet_id: sheetAttaquant.id }),
+    const [woundsAttaquant, rosterTokens, settings, targetShield] = await Promise.all([
+      db('character_wounds').where({ char_sheet_id: ctx.sheetId }),
       // Tous les tokens actifs du roster avec leur type et leur allonge max (arme de contact équipée).
       // Utilisé pour le calcul multi-adversaires (positions post-déplacement garanties).
       db('tokens as t')
@@ -1424,16 +1437,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         .where('ref_equipment.category', 'Bouclier')
         .select('ref_equipment.shield_atk_malus as malus')
         .first(),
-      // PLAN_COMBATANT_CONTEXT.md Lot B — point de couture unique pour le contexte de Test de
-      // l'attaquant (Seuil, malus, ModDom), remplace le fetch inline attrs/archetype/charSkill/
-      // refSkill/mutationEffects dupliqué 7 fois (validé par Scientist au Lot A, 3 combats CaC réels
-      // sans écart, dont un à modificateurs cumulés). Ne devrait pas être null (même char_sheet que
-      // sheetAttaquant, garanti plus haut) — mais resolveHumanoidTestContext refait son propre fetch
-      // char_sheet indépendant, plusieurs await plus tard : garde explicite plutôt qu'une confiance
-      // aveugle dans une fenêtre de concurrence entre les deux lectures (suppression de personnage).
-      resolveHumanoidTestContext(db, character, skillId),
     ])
-    if (!ctx) return { suspend: false, emissions }
     const shieldAtkMalus = targetShield?.malus ?? 0
     // DEF5 — doit être connu AVANT le jet d'attaque, même raison que shieldAtkMalus ci-dessus.
     const targetDefenseless = await isTargetDefenseless(campaignId, targetTokenId, settings)
@@ -1503,7 +1507,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       // catalogue (ne devrait jamais survenir en pratique — garde défensive héritée de l'ancien code).
       const acrobatieRefSkill = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
       if (acrobatieRefSkill) {
-        const ctxAcrobatie = await resolveHumanoidTestContext(db, character, 'ACROBATIE_EQUILIBRE')
+        const ctxAcrobatie = await resolveCombatantTestContext(db, character, 'ACROBATIE_EQUILIBRE')
         acrobatieTotal = ctxAcrobatie?.skillTotal ?? attackerSkillTotal
       }
       terrainInstableMod = Math.min(0, acrobatieTotal - attackerSkillTotal)
@@ -1594,19 +1598,22 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     )
 
     // ── 3. Données défenseur ──────────────────────────────────────────────────
-    const sheetCible = await db('char_sheet').where({ character_id: defenderCharacter.id }).first()
+    // Identité seule (pas encore le contexte de Test complet) : la main directrice du défenseur doit
+    // être connue AVANT de savoir quelle Compétence tester (choix de l'arme équipée), donc avant de
+    // pouvoir appeler resolveCombatantTestContext avec un skillId réel — même coût qu'avant ce
+    // chantier pour un défenseur humain (1 requête), résout aussi le pilote pour un défenseur exo
+    // (PLAN_COMBATANT_CONTEXT.md Lot G, combatantContextService.js).
+    const sheetIdCible = await resolveCombatantSheetId(db, defenderCharacter)
     let defenderSkillTotal = 0, defenderEffectiveMalus = 0, defenderMastery = 0
     let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
     let char_sheet_id_cible = null
 
-    if (sheetCible) {
-      char_sheet_id_cible = sheetCible.id
-
+    if (sheetIdCible) {
       // Détermination de l'arme/compétence du défenseur (priorité main directrice) — reste local,
-      // hors contrat de resolveHumanoidTestContext, même principe que la résolution skillId côté
+      // hors contrat de resolveCombatantTestContext, même principe que la résolution skillId côté
       // attaquant (Lot B).
       const [identityCible, defContactWeapons] = await Promise.all([
-        db('char_identity').where({ char_sheet_id: sheetCible.id }).first(),
+        db('char_identity').where({ char_sheet_id: sheetIdCible }).first(),
         // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
         // stricte sur char_inventory.slot — composite-safe.
         db('char_inventory_slots as cis')
@@ -1627,17 +1634,28 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         if (assoc) defSkillId = assoc.skill_id
       }
 
-      // PLAN_COMBATANT_CONTEXT.md Lot C — point de couture unique pour le contexte de Test du
-      // défenseur (Seuil, malus, mastery). Garde explicite dès l'écriture (leçon Lot B, §Analyse à
-      // charge) : resolveHumanoidTestContext refait son propre fetch char_sheet indépendant.
-      const ctxCible = await resolveHumanoidTestContext(db, defenderCharacter, defSkillId)
+      // PLAN_COMBATANT_CONTEXT.md Lot C/G — point de couture unique pour le contexte de Test du
+      // défenseur (Seuil, malus, mastery), y compris la branche exo (pilote + EXF).
+      const ctxCible = await resolveCombatantTestContext(db, defenderCharacter, defSkillId)
       if (ctxCible) {
         defenderSkillTotal = ctxCible.skillTotal
         defenderEffectiveMalus = ctxCible.effectiveMalus
         defenderMastery = ctxCible.mastery
-        for_na_cible = ctxCible.for_na
-        con_na_cible = ctxCible.con_na
-        vol_na_cible = ctxCible.vol_na
+        // for_na_cible/con_na_cible/vol_na_cible/char_sheet_id_cible n'alimentent PAS le Test de
+        // défense ci-dessus (déjà réglé) mais le pipeline de dégâts SI l'attaque touche
+        // (resolveTargetHit plus loin : RD, armure, écriture de Blessure). Jamais dérivés du pilote
+        // pour un défenseur exo : l'armure a son propre pipeline de dégâts (Intégrité/Avaries/RD fixe
+        // par catégorie, MANUEL_EXOARMURE.md §4.6-4.7), pas encore construit
+        // (PLAN_EXOARMURE.md Lot 4, hors périmètre de ce chantier) — appliquer la formule de RD
+        // humaine avec l'EXF du pilote produirait un nombre faux, et char_sheet_id_cible=sheet du
+        // pilote ferait écrire une Blessure humaine sur le pilote en contournant l'armure. Restent au
+        // repli neutre préexistant (8/8/8/null) pour un défenseur exo, comme avant ce chantier.
+        if (defenderCharacter.type !== 'exo') {
+          for_na_cible = ctxCible.for_na
+          con_na_cible = ctxCible.con_na
+          vol_na_cible = ctxCible.vol_na
+          char_sheet_id_cible = ctxCible.sheetId
+        }
       }
     }
 
@@ -1679,7 +1697,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       confirmedModifiers,
       situationDef: confirmedModifiers?.situationDef ?? [],
       targetTokenId,
-      attackerSheetId: sheetAttaquant.id,
+      attackerSheetId: ctx.sheetId,
       naturalWeaponCharMutationId,
       defenderCharacterName: defenderCharacter.name,
       // Distinct de attackerUsername (compte ayant lancé le dé, DICE_RESULT) — identité narrative du
@@ -1801,14 +1819,16 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
   // Terrain instable défenseur PNJ — compétence limitative ACROBATIE_EQUILIBRE
   // PLAN_COMBATANT_CONTEXT.md Lot C — objet minimal { id, campaign_id } reconstruit : cette fonction
   // ne reçoit que characterIdCible/char_sheet_id_cible via ctx, jamais la ligne characters complète.
-  // resolveHumanoidTestContext ne lit que ces deux champs (vérifié dans son propre code).
+  // Sans `.type`, donc toujours traité comme humanoïde par resolveCombatantTestContext — sans
+  // conséquence : ce bloc est gardé par `char_sheet_id_cible` (Lot G, toujours null pour un défenseur
+  // exo — voir resolveMeleeAction §3, pipeline de dégâts), jamais atteint pour un exo.
   let terrainInstableModDef = 0, acrobatieDefTotal = defenderSkillTotal
   if ((confirmedModifiers?.situationDef ?? []).includes('cac_terrain_instable') && char_sheet_id_cible) {
     // Repli sur defenderSkillTotal préservé tel quel si ACROBATIE_EQUILIBRE est absente du catalogue
     // (garde défensive héritée de l'ancien code, même patron que resolveMeleeAction Lot B).
     const acrobatieRefDef = await db('ref_skills').where({ id: 'ACROBATIE_EQUILIBRE' }).first()
     if (acrobatieRefDef) {
-      const ctxAcrobatieDef = await resolveHumanoidTestContext(db, { id: characterIdCible, campaign_id: campaignId }, 'ACROBATIE_EQUILIBRE')
+      const ctxAcrobatieDef = await resolveCombatantTestContext(db, { id: characterIdCible, campaign_id: campaignId }, 'ACROBATIE_EQUILIBRE')
       acrobatieDefTotal = ctxAcrobatieDef?.skillTotal ?? defenderSkillTotal
     }
     terrainInstableModDef = Math.min(0, acrobatieDefTotal - defenderSkillTotal)
@@ -2616,23 +2636,29 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
 
     let skillTotal = 0, effectiveMalus = 0, skillMastery = 0
 
-    const sheetTireur = character?.id
-      ? await db('char_sheet').where({ character_id: character.id }).first()
-      : null
-
     // Munitions (COM25) et dual-wield (COM29) déjà résolus plus haut, avant sélection de l'arme
     // effective — `settings` (options de campagne) fetché à ce moment-là, réutilisé ici pour
     // l'encombrement et plus bas pour le décompte munitions PNJ (un seul fetch, jamais trois).
+    // skillAssoc ne dépend d'aucune fiche (juste de l'arme déjà résolue) — calculé avant le contexte
+    // de Test, pas gardé derrière un fetch `char_sheet` inline comme avant ce chantier
+    // (PLAN_COMBATANT_CONTEXT.md Lot G) : ce garde bloquait un pilote d'exo-armure (l'exo est un
+    // personnage séparé du pilote, sans char_sheet propre, MANUEL_EXOARMURE.md §3.1).
+    const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
 
-    if (sheetTireur) {
-      const [woundsTireur, skillAssoc] = await Promise.all([
-        db('character_wounds').where({ char_sheet_id: sheetTireur.id }),
-        db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first(),
-      ])
-
+    // PLAN_COMBATANT_CONTEXT.md Lot D/G — point de couture unique pour le contexte de Test du
+    // tireur, y compris la branche exo (pilote + EXF). skillAssoc peut être absent (arme du catalogue
+    // sans compétence associée — un vrai trou de catalogue, pas seulement une garde défensive) :
+    // chaîne vide plutôt que null/undefined pour forcer le palier complet — effectiveMalus/for_na
+    // restent nécessaires même sans Compétence identifiée, alors que null routerait vers le palier NA
+    // seul (§3.3 du plan, pensé pour les cibles passives #4/#5/#7 qui ne testent jamais rien, pas pour
+    // un tireur actif dont seule la Compétence est inconnue).
+    const ctxTireur = await resolveCombatantTestContext(db, character, skillAssoc?.skill_id ?? '')
+    if (ctxTireur) {
       // WNDMORT — défense en profondeur, même raison que resolveMeleeAction (garde principal à la
       // Déclaration, ceci couvre seulement le cas rare d'un tireur mortellement blessé entre sa
-      // Déclaration et sa Résolution).
+      // Déclaration et sa Résolution). ctxTireur.sheetId : celle du pilote pour un tireur exo — une
+      // blessure mortelle du pilote doit bloquer le Test de l'armure, §0.2 PLAN_COMBATANT_CONTEXT.md.
+      const woundsTireur = await db('character_wounds').where({ char_sheet_id: ctxTireur.sheetId })
       if (isTestBlockingWound(woundsTireur)) {
         emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
           username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
@@ -2640,19 +2666,9 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
         return { suspend: false, emissions }
       }
 
-      // PLAN_COMBATANT_CONTEXT.md Lot D — point de couture unique pour le contexte de Test du
-      // tireur. skillAssoc peut être absent (arme du catalogue sans compétence associée — un vrai
-      // trou de catalogue, pas seulement une garde défensive) : chaîne vide plutôt que null/undefined
-      // pour forcer le palier complet — effectiveMalus/for_na restent nécessaires même sans
-      // Compétence identifiée, alors que null routerait vers le palier NA seul (§3.3 du plan, pensé
-      // pour les cibles passives #4/#5/#7 qui ne testent jamais rien, pas pour un tireur actif dont
-      // seule la Compétence est inconnue).
-      const ctxTireur = await resolveHumanoidTestContext(db, character, skillAssoc?.skill_id ?? '')
-      if (ctxTireur) {
-        skillTotal = ctxTireur.skillTotal
-        skillMastery = ctxTireur.mastery
-        effectiveMalus = ctxTireur.effectiveMalus
-      }
+      skillTotal = ctxTireur.skillTotal
+      skillMastery = ctxTireur.mastery
+      effectiveMalus = ctxTireur.effectiveMalus
     }
 
     const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0

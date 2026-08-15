@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { resolveHumanoidTestContext } from './combatantContextService.js'
+import { resolveHumanoidTestContext, resolveCombatantTestContext, resolveCombatantSheetId } from './combatantContextService.js'
 import { calcSkillTotal, calcEncumbrancePenalty, getModDom } from './charStats.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/combatantContextService.test.mjs
@@ -35,6 +35,42 @@ async function createFixture(attrOverrides = {}) {
 async function cleanup({ campaign, gm }) {
   await db('campaigns').where({ id: campaign.id }).del()
   await db('users').where({ id: gm.id }).del()
+}
+
+// PLAN_COMBATANT_CONTEXT.md Lot G — fixture pilote (char_sheet réel, réutilise createFixture) + exo
+// (exo_sheet + ref_exo_templates réels, character_id distinct du pilote — MANUEL_EXOARMURE.md §3.1,
+// deux personnages jamais fusionnés). `templateOverrides` permet de forcer une exo "non configurée"
+// (template_id null) ou sans pilote assigné, cas de repli §6.5/§7.1.
+async function createExoFixture({ withPilot = true, withTemplate = true, pilotAttrOverrides = {}, integrityOverrides = {} } = {}) {
+  const pilotFx = await createFixture(pilotAttrOverrides)
+  const [exoCharacter] = await db('characters')
+    .insert({ campaign_id: pilotFx.campaign.id, user_id: pilotFx.gm.id, name: 'Exo test', type: 'exo' })
+    .returning('*')
+  let template = null
+  if (withTemplate) {
+    [template] = await db('ref_exo_templates')
+      .insert({
+        name: 'Modèle test', category: 'exo-1', environment: 'surface',
+        base_exoforce: 68, base_blindage: 34,
+      })
+      .returning('*')
+  }
+  const [exoSheet] = await db('exo_sheet')
+    .insert({
+      character_id: exoCharacter.id,
+      template_id: template?.id ?? null,
+      pilot_character_id: withPilot ? pilotFx.character.id : null,
+      itg_structure_current: integrityOverrides.structure ?? 20,
+      itg_exosquelette_current: integrityOverrides.exosquelette ?? 20,
+      itg_generator_current: integrityOverrides.generator ?? 20,
+    })
+    .returning('*')
+  return { ...pilotFx, exoCharacter, exoSheet, template }
+}
+
+async function cleanupExo(fx) {
+  await cleanup(fx)  // cascade characters/char_sheet/exo_sheet via campaign_id/character_id
+  if (fx.template) await db('ref_exo_templates').where({ id: fx.template.id }).del()
 }
 
 test.after(async () => { await db.destroy() })
@@ -185,5 +221,113 @@ test('resolveHumanoidTestContext — inventaire au-dessus du seuil FOR×3 : effe
     assert.equal(ctx.effectiveMalus, expectedMalus)
   } finally {
     await cleanup(fx)
+  }
+})
+
+// PLAN_COMBATANT_CONTEXT.md Lot G — resolveCombatantTestContext (dispatcher) + branche exo.
+
+test('resolveCombatantTestContext — exo avec pilote+template : for_na/modDom viennent de l\'EXF, skillTotal/con_na/vol_na du pilote', { skip }, async () => {
+  const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 14, CON: 9, VOL: 12 } })
+  try {
+    const pilotCtx = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.ok(ctx, 'contexte exo attendu (pilote + template présents)')
+    // itg_* par défaut à 20 (>= 11) → integrityFactor=1 des deux côtés → EXF = base_exoforce brut.
+    assert.equal(ctx.for_na, fx.template.base_exoforce)
+    assert.equal(ctx.modDom, getModDom(fx.template.base_exoforce))
+    // Tout le reste vient du pilote, inchangé — la FOR du pilote (14) n'apparaît nulle part ici,
+    // seule l'EXF (68) compte pour for_na/modDom (MANUEL_EXOARMURE.md §4.1).
+    assert.equal(ctx.skillTotal, pilotCtx.skillTotal)
+    assert.equal(ctx.con_na, 9)
+    assert.equal(ctx.vol_na, 12)
+    assert.equal(ctx.sheetId, fx.sheet.id)
+    assert.equal(ctx.mastery, pilotCtx.mastery)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — exo, skillId=null (palier NA seul) : for_na=EXF, pas de modDom', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, null)
+    assert.deepEqual(ctx, { sheetId: fx.sheet.id, for_na: fx.template.base_exoforce, con_na: 10, vol_na: 10 })
+    assert.ok(!('modDom' in ctx), 'palier NA seul : pas de modDom, ni pour un humain ni pour un exo')
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — Intégrité Exosquelette/Générateur dégradées : EXF reflète les paliers (MANUEL_EXOARMURE.md §4.8.2)', { skip }, async () => {
+  // Exosquelette à 8 (palier 6-10, ×2/3) et Générateur à 3 (palier 1-5, ×1/2) — cumulatifs, un seul
+  // floor (décision Saar, shared/exoStats.js). base_exoforce=68 → 68×2/3×1/2 = 22,67 → floor 22.
+  const fx = await createExoFixture({ integrityOverrides: { exosquelette: 8, generator: 3 } })
+  try {
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.for_na, 22)
+    assert.equal(ctx.modDom, getModDom(22))
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — exo sans pilote assigné : null', { skip }, async () => {
+  const fx = await createExoFixture({ withPilot: false })
+  try {
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx, null)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — exo sans template ("non configurée", PLAN_EXOARMURE.md §6.5) : null, jamais les stats nues du pilote', { skip }, async () => {
+  const fx = await createExoFixture({ withTemplate: false })
+  try {
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx, null)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — dispatch pj/pnj inchangé (pas de régression du dispatcher sur le chemin humanoïde)', { skip }, async () => {
+  const fx = await createFixture({ FOR: 14 })
+  try {
+    const direct = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const viaDispatcher = await resolveCombatantTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    assert.deepEqual(viaDispatcher, direct)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveCombatantSheetId — humain : sheetId propre, 1 seule requête équivalente au fetch direct d\'avant ce chantier', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const sheetId = await resolveCombatantSheetId(db, fx.character)
+    assert.equal(sheetId, fx.sheet.id)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('resolveCombatantSheetId — exo avec pilote : sheetId du pilote, pas de l\'exo (qui n\'en a pas)', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const sheetId = await resolveCombatantSheetId(db, fx.exoCharacter)
+    assert.equal(sheetId, fx.sheet.id)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantSheetId — exo sans pilote assigné : null', { skip }, async () => {
+  const fx = await createExoFixture({ withPilot: false })
+  try {
+    const sheetId = await resolveCombatantSheetId(db, fx.exoCharacter)
+    assert.equal(sheetId, null)
+  } finally {
+    await cleanupExo(fx)
   }
 })
