@@ -2,7 +2,7 @@ import { WS } from '../../../shared/events.js'
 import socketAuth from './auth.js'
 import db from '../db/knex.js'
 import { registerTokenHandlers } from './socketToken.js'
-import { registerDiceHandlers } from './socketDice.js'
+import { registerDiceHandlers, registerDiceRollHandler } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerCombatHandlers } from './socketCombat.js'
 import { pickNextTimelineStep } from './socketCombatHelpers.js'
@@ -48,11 +48,19 @@ const initSocket = (io) => {
         // et debloque le reste du Wizard (WizardLockSync.jsx). registerWizardHandlers reste pose -
         // room `wizard:<sheetId>`, independante de toute campagne (socketWizard.js ne lit jamais
         // campaignId), necessaire a la synchro live de l'etape Materiel & Biens. Les handlers
-        // specifiques a une campagne (tokens, des, entites, combat, echanges, chat) ne sont en
-        // revanche jamais poses ici : aucun n'a de sens pour un personnage seul dans son Coffre, et
-        // ca evite de leur faire porter un campaignId null qu'ils n'ont jamais eu a gerer jusqu'ici.
+        // specifiques a une campagne (tokens, entites, combat, echanges, chat) restent hors de cette
+        // branche : aucun n'a de sens pour un personnage seul dans son Coffre. registerDiceRollHandler
+        // (PAS registerDiceHandlers en entier) EST pose ici (bug reel, docs/EN_COURS.md WIZ28) :
+        // l'etape 4 "Avantages & Revers" du Wizard lance des jets 1D10/1D100
+        // (ProAdvantagesAndSetbacks.jsx) meme en creation Coffre-native sans campagne
+        // (/vault/creation) - sans handler pose, DICE_ROLL emis dans le vide, aucun DICE_RESULT ne
+        // revient jamais, le bouton reste bloque sur "Jet en cours..." indefiniment. Seul DICE_ROLL,
+        // pas le reste de registerDiceHandlers (MACRO_ROLL/WOUND_INFECTION_ROLL/CHAT_MESSAGE/
+        // CHARACTER_UPDATED) : aucun n'a de sens hors campagne, inutile d'exposer cette surface-la
+        // pour un personnage seul dans son Coffre.
         if (!campaignId) {
           registerWizardHandlers(io, socket, { campaignId: null, user: socket.user, isGm: false })
+          registerDiceRollHandler(io, socket, { campaignId: null, user: socket.user, isGm: false })
           socket.emit(WS.SESSION_JOINED, {
             campaignId: null,
             userId: socket.user.id,

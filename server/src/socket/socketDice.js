@@ -25,15 +25,24 @@ import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 // message (cohérent avec un redémarrage nécessaire pour changer un flag d'environnement).
 const CHAT_PERSISTENCE_ENABLED = process.env.CHAT_PERSISTENCE_ENABLED === 'true'
 
-export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
-  // ─── DICE:ROLL ─────────────────────────────────────────────────────────
+// ─── DICE:ROLL ───────────────────────────────────────────────────────────
+// Extrait de registerDiceHandlers (docs/EN_COURS.md WIZ28) : seul jet nécessaire à un socket sans
+// campagne (Wizard Coffre-native, /vault/creation — ProAdvantagesAndSetbacks.jsx y lance des jets
+// 1D10/1D100 sans jamais avoir de room). Enregistré seul dans ce cas plutôt que via
+// registerDiceHandlers en entier — MACRO_ROLL/WOUND_INFECTION_ROLL/CHAT_MESSAGE/CHARACTER_UPDATED
+// n'ont aucun sens pour un personnage seul dans son Coffre (macro liée à une session de jeu réelle,
+// chat de campagne, etc.) et gardent chacun leur propre garde `if (!campaignId) return` conçue pour
+// un contexte de campagne — les exposer quand même sur un socket solo ajouterait une surface qui ne
+// sert à rien et qui devrait, en silence, continuer de compter sur ces gardes-là pour rester inerte.
+export function registerDiceRollHandler(io, socket, { campaignId, user, isGm }) {
   // Le client demande un jet de dés.
   // Le serveur est le seul responsable du calcul — jamais le client.
   // Payload : { formula, secret? } — ex: "2d6+3", "d20", "3d6"
   // secret=true : broadcast uniquement au lanceur + GM (PE2 socket.data.role)
+  // campaignId absent = session solo (voir commentaire de module ci-dessus) : pas de config de dés
+  // (critique/fumble, propre à une campagne) ni de room à notifier — seul le lanceur reçoit son
+  // propre résultat, même invariant que SESSION_JOIN pour ce cas (index.js).
   socket.on(WS.DICE_ROLL, async ({ formula, secret = false }) => {
-    if (!campaignId) return
-
     try {
       const { rolls, total, formula: normalizedFormula, dieType, seed } = await parseDice(formula)
 
@@ -42,20 +51,22 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       let isCriticalSuccess = false
       let isCriticalFail = false
 
-      try {
-        const campaign = await db('campaigns').where({ id: campaignId }).select('dice_config').first()
-        const diceConfig = campaign?.dice_config
+      if (campaignId) {
+        try {
+          const campaign = await db('campaigns').where({ id: campaignId }).select('dice_config').first()
+          const diceConfig = campaign?.dice_config
 
-        if (diceConfig && dieType) {
-          const dieCfg = diceConfig[dieType]
-          if (dieCfg?.success) {
-            isCriticalSuccess = total >= dieCfg.success.min && total <= dieCfg.success.max
+          if (diceConfig && dieType) {
+            const dieCfg = diceConfig[dieType]
+            if (dieCfg?.success) {
+              isCriticalSuccess = total >= dieCfg.success.min && total <= dieCfg.success.max
+            }
+            if (dieCfg?.fail) {
+              isCriticalFail = total >= dieCfg.fail.min && total <= dieCfg.fail.max
+            }
           }
-          if (dieCfg?.fail) {
-            isCriticalFail = total >= dieCfg.fail.min && total <= dieCfg.fail.max
-          }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
       const timestamp = new Date().toISOString()
       const payload = {
@@ -72,7 +83,10 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
         secret: secret || false,
       }
 
-      if (secret) {
+      if (!campaignId) {
+        // Solo (pas de room) : personne d'autre à notifier, jamais de GM à chercher.
+        socket.emit(WS.DICE_RESULT, payload)
+      } else if (secret) {
         // Jet au MJ : visible uniquement par le lanceur et le(s) GM (PE2)
         socket.emit(WS.DICE_RESULT, payload)
         if (!isGm) {
@@ -89,6 +103,12 @@ export function registerDiceHandlers(io, socket, { campaignId, user, isGm }) {
       console.error(`[WS] dice:roll error (${user.username}) : ${err.message}`)
     }
   })
+}
+
+// Handlers de campagne — jamais posés pour un socket solo (voir registerDiceRollHandler ci-dessus).
+export function registerDiceHandlers(io, socket, context) {
+  registerDiceRollHandler(io, socket, context)
+  const { campaignId, user, isGm } = context
 
   // ─── MACRO:ROLL ────────────────────────────────────────────────────────
   // Payload : { macroId, characterId, secret? }

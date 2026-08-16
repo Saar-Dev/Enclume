@@ -16,6 +16,7 @@ import Step5Advantages from './Step5Advantages'
 import StepMaterielEtBiens from './StepMaterielEtBiens'
 import WizardReview from './WizardReview'
 import StepTutorial from './StepTutorial'
+import WizardStepErrorBoundary from './WizardStepErrorBoundary.jsx'
 import { SocketProvider } from '../../lib/SocketContext.jsx'
 import { POOL_AMBIANCE } from '../../../../shared/polarisUtils.js'
 
@@ -292,6 +293,7 @@ export default function WizardCreation() {
       <StepTutorial step={step} />
 
       <div style={st.body}>
+      <WizardStepErrorBoundary key={step} message={t('wizard.crash_message')} reloadLabel={t('wizard.crash_reload')}>
         {step === 1 && (
           <Step1Attributes
             key={gmSyncKey}
@@ -406,7 +408,7 @@ export default function WizardCreation() {
             </div>
           </div>
         )}
-
+      </WizardStepErrorBoundary>
       </div>
 
       {peekOpen && peekCharacter && (

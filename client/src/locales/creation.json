@@ -505,6 +505,8 @@
     "unlock_option": "Déverrouiller cette option",
     "waive_prereq": "Lever les prérequis de cette profession pour ce joueur",
     "waive_prereq_short": "Sans prérequis",
+    "crash_message": "Une erreur est survenue sur cette étape. Rien n'est perdu côté serveur — recharge la page pour reprendre là où tu en étais.",
+    "crash_reload": "Recharger la page",
     "errors": {
       "accessDenied": "Accès refusé à ce brouillon.",
       "gmOnly": "Seul le MJ peut poser un verrou.",
