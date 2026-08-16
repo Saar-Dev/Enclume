@@ -6,10 +6,8 @@ import { requireRole } from '../middleware/role.js'
 import { multerUpload, multerGlb } from '../middleware/upload.js'
 import getMinioClient, { BUCKET } from '../lib/minio.js'
 import { WS } from '../../../shared/events.js'
-import { WOUND_MAX_COUNTS } from '../../../shared/woundConstants.js'
-import { initDamages } from '../../../shared/droneConstants.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
-import { createEmptySheet } from '../services/charSheetService.js'
+import { createCompanionSheet } from '../services/charSheetService.js'
 import { resolveOwnership } from '../services/characterOwnershipService.js'
 
 // ─── Router imbriqué ──────────────────────────────────────────────────────────
@@ -118,16 +116,7 @@ router.post('/', requireAuth, requireRole('gm'), async (req, res) => {
         'description', 'gm_notes', 'created_at', 'updated_at',
       ])
 
-    if (type === 'drone') {
-      const damages = initDamages('corps', WOUND_MAX_COUNTS)
-      await trx('drone_sheet').insert({ character_id: character.id, damages: JSON.stringify(damages) })
-    } else if (type === 'exo') {
-      // template_id absent : aucun sélecteur de template en création (Sidebar), assigné plus tard
-      // via PUT /:characterId/exo — état "non configurée" valide (docs/PLANS/PLAN_EXOARMURE.md §6.5).
-      await trx('exo_sheet').insert({ character_id: character.id })
-    } else {
-      await createEmptySheet(trx, character.id)
-    }
+    await createCompanionSheet(trx, { characterId: character.id, type })
 
     return character
   })
@@ -145,23 +134,51 @@ export default router
 // Même pattern que tokensRouter monté sous /api/tokens.
 export const actionsRouter = Router()
 
+actionsRouter.use(requireAuth)
+
+// ─── Ownership/appartenance sur toutes les routes /:id ───────────────────────
+// Personnage Coffre-native (campaign_id NULL) : pas de campaign_members à lire, accès réservé au
+// seul propriétaire (isGm toujours false — aucune notion de MJ hors campagne, docs/EN_COURS.md
+// 2026-08-16). Même patron que char-sheet.js/vault.js router.param — auparavant dupliqué
+// (vérification campaign_members identique) dans PUT /:id, POST /:id/portrait,
+// PUT /:id/token-style, POST /:id/glb : CharacterWindow.jsx (réutilisée par le Coffre) appelle ces
+// quatre routes, toutes échouaient pour un personnage du Coffre avant ce correctif.
+actionsRouter.param('id', async (req, res, next, id) => {
+  try {
+    const character = await db('characters').where({ id }).first()
+    if (!character) return next(new AppError(404, 'Character not found'))
+
+    if (character.campaign_id == null) {
+      if (character.user_id !== req.user.id) {
+        return next(new AppError(403, 'You do not have permission to access this character'))
+      }
+      req.character = character
+      req.isGm = false
+      req.isOwner = true
+      return next()
+    }
+
+    const member = await db('campaign_members')
+      .where({ campaign_id: character.campaign_id, user_id: req.user.id })
+      .first()
+    if (!member) return next(new AppError(403, 'You are not a member of this campaign'))
+
+    req.character = character
+    req.isGm = member.role === 'gm'
+    req.isOwner = !!(character.user_id && character.user_id === req.user.id)
+    next()
+  } catch (err) { next(err) }
+})
+
 // PUT /api/characters/:id
 // GM ou propriétaire du personnage (user_id).
 // GM : peut modifier tous les champs dont description et gm_notes.
 // Owner : peut modifier name, visible et description uniquement. Jamais gm_notes.
-actionsRouter.put('/:id', requireAuth, async (req, res) => {
-  const character = await db('characters').where({ id: req.params.id }).first()
-  if (!character) throw new AppError(404, 'Character not found')
+actionsRouter.put('/:id', async (req, res) => {
+  const character = req.character
+  const isGm = req.isGm
 
-  const member = await db('campaign_members')
-    .where({ campaign_id: character.campaign_id, user_id: req.user.id })
-    .first()
-  if (!member) throw new AppError(403, 'You are not a member of this campaign')
-
-  const isGm = member.role === 'gm'
-  const isOwner = character.user_id && character.user_id === req.user.id
-
-  if (!isGm && !isOwner) {
+  if (!isGm && !req.isOwner) {
     throw new AppError(403, 'You do not have permission to modify this character')
   }
 
@@ -220,23 +237,25 @@ actionsRouter.put('/:id', requireAuth, async (req, res) => {
   // Broadcaster CHARACTER_UPDATED à toute la room — le serveur est seul émetteur.
   // gm_notes filtré avant broadcast — jamais envoyé aux joueurs.
   // updated_at inclus dans characterPublic — cohérence avec TOKEN_MOVED.
+  // Personnage Coffre (campaign_id NULL) : aucune room à notifier, personne d'autre n'y a accès
+  // (même invariant que vaultService.js) — émission sautée plutôt que io.to(null).
   const { gm_notes: _gm_notes, ...characterPublic } = updatedCharacter
-  const io = req.app.get('io')
-  io.to(updatedCharacter.campaign_id).emit(WS.CHARACTER_UPDATED, characterPublic)
+  if (updatedCharacter.campaign_id) {
+    const io = req.app.get('io')
+    io.to(updatedCharacter.campaign_id).emit(WS.CHARACTER_UPDATED, characterPublic)
+  }
 
   res.json({ character: updatedCharacter })
 })
 
 // DELETE /api/characters/:id
-// GM uniquement.
-actionsRouter.delete('/:id', requireAuth, async (req, res) => {
-  const character = await db('characters').where({ id: req.params.id }).first()
-  if (!character) throw new AppError(404, 'Character not found')
+// GM uniquement — y compris pour un personnage du Coffre (req.isGm toujours false hors campagne,
+// cf. router.param ci-dessus) : la suppression d'un personnage du Coffre passe exclusivement par
+// DELETE /api/vault/characters/:id (routes/vault.js, scope réduit, déjà propriétaire-only).
+actionsRouter.delete('/:id', async (req, res) => {
+  const character = req.character
 
-  const member = await db('campaign_members')
-    .where({ campaign_id: character.campaign_id, user_id: req.user.id })
-    .first()
-  if (!member || member.role !== 'gm') {
+  if (!req.isGm) {
     throw new AppError(403, 'GM role required to delete a character')
   }
 
@@ -282,8 +301,11 @@ async function broadcastCharacterUpdate(characterId, app) {
     .first()
 
   const { gm_notes: _gm_notes, ...characterPublic } = updatedCharacter
-  const io = app.get('io')
-  io.to(updatedCharacter.campaign_id).emit(WS.CHARACTER_UPDATED, characterPublic)
+  // Personnage Coffre (campaign_id NULL) : aucune room à notifier — voir PUT /:id ci-dessus.
+  if (updatedCharacter.campaign_id) {
+    const io = app.get('io')
+    io.to(updatedCharacter.campaign_id).emit(WS.CHARACTER_UPDATED, characterPublic)
+  }
 
   return updatedCharacter
 }
@@ -296,21 +318,9 @@ async function broadcastCharacterUpdate(characterId, app) {
 // portrait_url stocke le chemin MinIO (objectName) — pas une URL complète.
 // L'URL d'affichage côté client : ${VITE_API_URL}/api/assets/${character.portrait_url}
 actionsRouter.post('/:id/portrait',
-  requireAuth,
   multerUpload.single('portrait'),
   async (req, res) => {
-    const character = await db('characters').where({ id: req.params.id }).first()
-    if (!character) throw new AppError(404, 'Character not found')
-
-    const member = await db('campaign_members')
-      .where({ campaign_id: character.campaign_id, user_id: req.user.id })
-      .first()
-    if (!member) throw new AppError(403, 'You are not a member of this campaign')
-
-    const isGm = member.role === 'gm'
-    const isOwner = character.user_id && character.user_id === req.user.id
-
-    if (!isGm && !isOwner) {
+    if (!req.isGm && !req.isOwner) {
       throw new AppError(403, 'You do not have permission to upload a portrait for this character')
     }
 
@@ -397,18 +407,8 @@ function validateTokenStyle(body) {
   }
 }
 
-actionsRouter.put('/:id/token-style', requireAuth, async (req, res) => {
-  const character = await db('characters').where({ id: req.params.id }).first()
-  if (!character) throw new AppError(404, 'Character not found')
-
-  const member = await db('campaign_members')
-    .where({ campaign_id: character.campaign_id, user_id: req.user.id })
-    .first()
-  if (!member) throw new AppError(403, 'You are not a member of this campaign')
-
-  const isGm = member.role === 'gm'
-  const isOwner = character.user_id && character.user_id === req.user.id
-  if (!isGm && !isOwner) {
+actionsRouter.put('/:id/token-style', async (req, res) => {
+  if (!req.isGm && !req.isOwner) {
     throw new AppError(403, 'You do not have permission to edit this character\'s token style')
   }
 
@@ -430,18 +430,9 @@ actionsRouter.put('/:id/token-style', requireAuth, async (req, res) => {
 // L'URL d'affichage côté client : ${VITE_API_URL}/api/assets/${character.glb_url}
 // (assets.js ignore les query params lors de la construction du filePath MinIO)
 actionsRouter.post('/:id/glb',
-  requireAuth,
   multerGlb.single('glb'),
   async (req, res) => {
-    const character = await db('characters').where({ id: req.params.id }).first()
-    if (!character) throw new AppError(404, 'Character not found')
-
-    const member = await db('campaign_members')
-      .where({ campaign_id: character.campaign_id, user_id: req.user.id })
-      .first()
-    if (!member) throw new AppError(403, 'You are not a member of this campaign')
-
-    if (member.role !== 'gm' && character.user_id !== req.user.id) {
+    if (!req.isGm && !req.isOwner) {
       throw new AppError(403, 'GM role or character ownership required to upload a 3D model')
     }
 

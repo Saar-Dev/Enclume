@@ -28,19 +28,71 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 et vérifié ; reste Lot C.5 (confirmation secondaire serveur distant) + validation module Arme en
 jeu par Saar avant clôture
 
-🔒 En cours (Saar) : `docs/PLANS/PLAN_EXPORTEXCEL.md` — export fiche Wizard vers
-`Fiche Polaris Online - Vierge.xlsx` par plages nommées. Lot 0 quasi fini (reste 0b : Saar ouvre le
-fichier dans son Excel/LibreOffice réel). Lot 1 (`characterExportService.js`) fait, testé sur 30
-personnages réels. Lot 2 réécrit avec `xlsx-populate` (remplace `xlsx`/SheetJS qui détruisait la
-mise en forme du classeur à l'export — régression réelle trouvée par Saar) : mise en forme, dessins,
-commentaires (reconstruits manuellement, `xlsx-populate` n'a pas d'API commentaires) et valeurs tous
-revérifiés par recalcul LibreOffice réel. Modèle Excel dans MinIO (migration 244). Lot 3 codé (route
-export-excel + bouton `CharacterWindow.jsx`) — **testé en navigateur par Saar** : export fonctionnel,
-mais bug trouvé (`#VALEUR!`/`###` en cascade sur `Baboulinet`, génotype jamais choisi au Wizard →
-`Liste_TypeGen` vide → `ATTMTGFor` texte au lieu de nombre → cascade). Corrigé (`writeGenotype` :
-`genotype_id` absent = "Humain", même convention que `CharacterSheet.jsx`), revérifié par recalcul
-LibreOffice réel (zéro nouvelle erreur, cascade disparue). **Reste à confirmer par Saar : réexport
-navigateur avec le correctif.** Rien commité pour l'instant.
+🔒 En cours (Saar) : Coffre — refonte page `/vault` (topbar illustrée, création directe pj/drone/exo,
+catalogue équipement). **Codé, testé serveur, build client propre — navigateur pas encore validé de
+bout en bout** (2 passages partiels de Saar ont déjà fait remonter et corriger 3 défauts, détail
+ci-dessous). Interdiction formelle actée (inchangée) : jamais réutiliser `users.role='admin'` comme
+raccourci d'autorisation (`.claude/rules/core.md`, `CLAUDE.md` §13).
+
+**Philosophie produit actée** : le Coffre est un espace personnel — le propriétaire y expérimente
+librement (personnages, drone, exo), sans plafond ni coût interne. Le contrôle se fait à la
+frontière, au transfert vers une campagne : le MJ cible juge (approuve/refuse), pas un flag
+technique côté Coffre.
+
+**Serveur, testé (313/313, PostgreSQL réel)** :
+- `char-sheet.js` — gel `wizard_locked_at` retiré sur la branche Coffre, nouveau `req.isVaultOwner`
+  (accepté sur les routes de construction : attributs/compétences/XP/sols/mutations/avantages —
+  jamais sur les routes de session réelle, fatigue/quick-equip/jauge, qui restent `isGm` strict).
+- `vaultService.js` — `cloneCharacterDeep` n'exige plus `creation_state==='complete'` ;
+  `VAULT-REGISTRY-DRIFT1` corrigé (6 tables non couvertes par le garde-fou anti-dérive, dont
+  `exo_sheet` — jamais eu d'entrée — et `char_inventory_slots`, double FK, clonage dédié) ; nouveau
+  test `vaultCloneRegistry.test.mjs`.
+- `vault.js` — `POST /characters` (création directe pj/drone/exo, propriétaire seule autorité).
+- `charSheetService.js` — `createCompanionSheet` extraite (branchement par type auparavant dupliqué,
+  jamais testé, dans `routes/characters.js`) ; nouveau test `charSheetService.test.mjs`.
+- `characters.js` (`actionsRouter`) — même correctif `isVaultOwner`-like (`req.isOwner`) sur
+  `PUT /:id`/`POST /:id/portrait`/`PUT /:id/token-style`/`POST /:id/glb`, jamais retouché avant :
+  `CharacterWindow.jsx` (réutilisée pour le Coffre) en dépend pour renommer/décrire/uploader un
+  portrait. `DELETE /:id` reste GM strict (suppression Coffre = `vault.js` uniquement).
+- Bugs trouvés et corrigés au passage : `PUT /sols` et `broadcastCharacterUpdate` émettaient
+  `io.to(campaign_id)` sans garde (`null` pour un Coffre) — conditionné à `campaign_id` non nul.
+
+**Client, build+eslint propres** :
+- `VaultPage.jsx` — topbar `vault.webp` (`.vault-topbar`), 4 boutons de création, clic-ligne pour
+  ouvrir, tags de type (`.badge-type-*`).
+- `VaultCharacterPage.jsx` (nouveau, `/vault/characters/:id`) — dispatcher par type : `drone` →
+  `DroneWindow`, `exo` → message explicite (fenêtre dédiée jamais construite, gap préexistant à tout
+  le projet, ticket `ARMORWINDOW-MISSING1`), `pj`/`pnj` → `CharacterWindow`.
+- `EquipmentCatalogPage.jsx` (nouveau, `/equipment`) — catalogue `ref_equipment` lecture seule,
+  aucun travail serveur requis, libellés repris de `ref-equipment-tool.html`.
+- Skin réel de l'appli repris sur les 3 pages (`className="app-shell"`, classes `.btn`/`.btn-ghost`/
+  `.btn-danger`) après un premier jet en styles inline inventés, repéré par Saar — voir PC47
+  ci-dessous.
+
+**Tickets ouverts, différés (hors périmètre Coffre)** : `COFFRE-INVROOM1` (room socket inventaire
+Wizard pour un Coffre-natif jamais verrouillé), `ARMORWINDOW-MISSING1` (fenêtre exo-armure,
+chantier à part).
+
+**Reste à faire** :
+- Validation navigateur complète (créer drone/exo, uploader un portrait, demander un transfert,
+  catalogue équipement, revoir le style corrigé) — rien cliqué depuis les derniers correctifs.
+- Enrichir la vue MJ (`listPendingRequestsForCampaign`, `vaultService.js:274-291`) d'un vrai aperçu
+  de fiche avant approbation (aujourd'hui : nom/type/demandeur seulement) — optionnel, mais c'est
+  désormais le seul filtre du système.
+
+🔒 En cours (Saar) : `docs/PLANS/PLAN_FICHE_HORSLIGNE.md` — fiche personnage utilisable hors
+connexion. Deux tentatives précédentes abandonnées (export Excel, puis fichier HTML autonome — voir
+`docs/Old/[OBSOLETE]` pour l'historique) après des défauts structurels de format/plateforme
+(styles détruits, commentaires/cases à cocher/fonctions modernes mal traduits par Excel ; page web
+incapable de réécrire son propre fichier sans l'API File System Access, limitée à Chrome/Edge).
+Décision finale actée : transformer Enclume en PWA (`vite-plugin-pwa`, rien d'existant aujourd'hui) —
+la fiche personnage vivante reste l'unique source, mise en cache pour consultation hors-ligne,
+file d'écriture locale (IndexedDB) pour blessures/équipement/expérience rejouée au retour réseau,
+dernier arrivé écrase (décision explicite de Saar, pas de gestion de conflit). Impression via feuille
+de style dédiée. **Aucun nouveau design à produire** : le design, c'est `char_sheet` (`CharacterSheet.jsx`)
+déjà existant, réutilisé tel quel (structure fonctionnelle croisée avec la fiche officielle Polaris,
+aucune lacune). **Plan complet, prêt pour Lot A** (retrait du code Excel). Rien codé ni commité pour
+l'instant.
 
 ---
 
@@ -169,6 +221,7 @@ contenu fusionné là-bas pour ne plus dupliquer les dettes entre les deux docum
 - PC44 — `io.fetchSockets()` nécessaire quand le GM clique Agir pour un slot joueur (socket ≠ joueur)
 - PC45 — `combat_actions.type` (serveur, valeur brute) ≠ `action_key` (client, clé UI) — deux colonnes distinctes, valeurs identiques pour 'melee'. Confondre les deux → 0 résultat sur les queries
 - PC46 — `meleePrecheckId` dans `CombatOverlay` : `activeMeleeAction?.id ?? playerActiveMeleeAction?.id ?? null` — stable en RESOLUTION. `useEffect` doit inclure `[meleePrecheckId, socket]` — re-tourne à chaque reconnexion (SocketProvider crée nouvelle instance)
+- PC47 — Nouvelle page React : ne jamais styler les boutons en inline (`style={{backgroundColor...}}`) — toujours `className="btn"`/`.btn-ghost`/`.btn-danger` (`.claude/rules/react.md`, déjà écrit, pas suivi une première fois sur `VaultPage.jsx`/`VaultCharacterPage.jsx`/`EquipmentCatalogPage.jsx`). Fond de page : comparer avec une page sœur existante (`DashboardPage.jsx` porte `className="app-shell"` — dégradé + halo animé, "réutilisable (skin Wizard)", `index.css:508`) avant d'inventer un `backgroundColor` plat — sinon la nouvelle page détonne visuellement, trouvé seulement après coup par Saar en navigateur
 - PL-Q1 — `getSemanticHTML()` Quill 2.0 retourne vide — utiliser `querySelector('.ql-editor').innerHTML`
 - PL-Q2 — Quill insère la toolbar comme `previousElementSibling`, pas à l'intérieur du container — guard `classList.contains('ql-container')`
 - PL-Q3 — `containerRef.current` peut être null dans le cleanup React 19 — toujours capturer en variable locale en début d'effect

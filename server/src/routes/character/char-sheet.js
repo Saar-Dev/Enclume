@@ -4,8 +4,16 @@
  * Monté sous /api/char-sheet dans index.js.
  *
  * Ownership : router.use(requireAuth) + router.param('characterId', ...) assurent
- * auth + ownership (owner OU GM) avant chaque handler. req.character et req.isGm
- * sont disponibles dans toutes les routes /:characterId.
+ * auth + ownership (owner OU GM) avant chaque handler. req.character, req.isGm et
+ * req.isVaultOwner sont disponibles dans toutes les routes /:characterId.
+ *
+ * req.isVaultOwner (personnage Coffre, campaign_id NULL — propriétaire déjà vérifié par
+ * router.param) : le propriétaire d'un personnage du Coffre a les mêmes pouvoirs qu'un MJ sur SA
+ * PROPRE fiche — le Coffre est un espace personnel, aucun contrôle interne de plausibilité/coût,
+ * le MJ de la campagne cible juge à l'approbation du transfert (docs/EN_COURS.md, décision Saar
+ * 2026-08-16). Ne JAMAIS l'utiliser comme substitut de `req.isGm` sur une route qui n'a de sens
+ * qu'en session réelle (fatigue, quick-equip, validation de jauge) — seules les routes de
+ * CONSTRUCTION (attributs, compétences, XP, sols, mutations, avantages) l'acceptent.
  *
  * Routes :
  *   GET    /api/char-sheet/:characterId              — fiche complète (toutes tables)
@@ -74,21 +82,16 @@ router.param('characterId', async (req, res, next, characterId) => {
     if (!character) return next(new AppError(404, 'Character not found'))
 
     // Personnage Coffre-native (campaign_id NULL, vault_id posé) : pas de campaign_members à lire,
-    // accès réservé au propriétaire — et seulement tant que le Wizard n'est pas verrouillé (encore
-    // un brouillon, ex. Step6 "Matériel & Biens" qui passe par les routes inventaire/jauges de ce
-    // fichier). Un personnage Coffre déjà terminé est un instantané figé par conception
-    // (vaultService.js) : char-sheet.js ne doit jamais le muter, même pour son propriétaire, une
-    // fois wizard_locked_at posé — sinon n'importe quelle route de ce fichier (compétences, XP,
-    // blessures...) redeviendrait accessible sur un personnage censé être gelé. Seul routes/
-    // vault.js (lecture/renommage/suppression, scope volontairement réduit) reste autorisé après.
+    // accès réservé au seul propriétaire (ownership). Ancien gel sur wizard_locked_at retiré
+    // (docs/EN_COURS.md, 2026-08-16) : le Coffre est désormais un espace personnel librement
+    // éditable par son propriétaire, sans limite de temps ni de statut Wizard — le contrôle se fait
+    // à la frontière (approbation MJ au transfert vers une campagne, vaultService.js), jamais ici.
     if (character.campaign_id == null) {
       if (character.user_id !== req.user.id) return next(new AppError(403, 'You do not have permission to access this sheet'))
 
-      const sheet = await db('char_sheet').where({ character_id: characterId }).select('wizard_locked_at').first()
-      if (!sheet || sheet.wizard_locked_at) return next(new AppError(403, 'You do not have permission to access this sheet'))
-
       req.character = character
       req.isGm = false
+      req.isVaultOwner = true
       return next()
     }
 
@@ -99,6 +102,7 @@ router.param('characterId', async (req, res, next, characterId) => {
 
     req.character = character
     req.isGm     = member.role === 'gm'
+    req.isVaultOwner = false
 
     const isOwner = character.user_id && character.user_id === req.user.id
     const isDrone = character.type === 'drone'
@@ -282,7 +286,7 @@ router.put('/:characterId/archetype', async (req, res, next) => {
 // GM uniquement — le niveau de base et le modificateur PC sont hors contrôle joueur.
 router.put('/:characterId/attributes', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'Only the GM can modify attributes')
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'Only the GM can modify attributes')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -438,7 +442,7 @@ router.put('/:characterId/skills/toggle-learned', async (req, res, next) => {
 // Les joueurs augmentent leur maîtrise exclusivement via POST /skills/buy.
 router.put('/:characterId/skills', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'Only the GM can modify skills directly')
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'Only the GM can modify skills directly')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -510,7 +514,7 @@ router.put('/:characterId/chc', async (req, res, next) => {
 // Le GM peut ajuster indépendamment le total reçu et le disponible.
 router.put('/:characterId/xp', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'Only the GM can modify XP')
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'Only the GM can modify XP')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -714,7 +718,7 @@ router.get('/:characterId/advantages', async (req, res, next) => {
 // ─── POST /api/char-sheet/:characterId/advantages — GM uniquement (octroi narratif) ──
 router.post('/:characterId/advantages', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -830,7 +834,7 @@ router.get('/:characterId/mutation-effects', async (req, res, next) => {
 // ─── POST /api/char-sheet/:characterId/mutations — GM uniquement ──────────────
 router.post('/:characterId/mutations', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -850,7 +854,7 @@ router.post('/:characterId/mutations', async (req, res, next) => {
 // ─── DELETE /api/char-sheet/:characterId/mutations/:id — GM uniquement ────────
 router.delete('/:characterId/mutations/:id', async (req, res, next) => {
   try {
-    if (!req.isGm) throw new AppError(403, 'GM uniquement')
+    if (!req.isGm && !req.isVaultOwner) throw new AppError(403, 'GM uniquement')
 
     const sheet = await db('char_sheet')
       .where({ character_id: req.params.characterId })
@@ -1056,7 +1060,7 @@ router.put('/:characterId/sols', async (req, res, next) => {
       .where({ character_id: req.params.characterId }).first()
     if (!sheet) throw new AppError(404, 'Sheet not found')
 
-    if (sols > sheet.sols && !req.isGm) {
+    if (sols > sheet.sols && !req.isGm && !req.isVaultOwner) {
       throw new AppError(403, 'Seul le MJ peut augmenter le total de sols')
     }
 
@@ -1065,10 +1069,17 @@ router.put('/:characterId/sols', async (req, res, next) => {
       .update({ sols, updated_at: db.fn.now() })
       .returning('*')
 
-    req.app.get('io').to(req.character.campaign_id).emit(WS.SOLS_UPDATED, {
-      characterId: req.params.characterId,
-      sols: updated.sols,
-    })
+    // Un personnage du Coffre (campaign_id NULL) n'a personne à notifier — même invariant que
+    // vaultService.js ("un Vault n'a pas de room à notifier, personne d'autre n'y a accès").
+    // io.to(null) n'aurait pas planté (room sans socket), mais l'émetteur n'aurait jamais reçu la
+    // confirmation de sa propre action en retour socket — bug latent trouvé en ouvrant cette route
+    // au propriétaire du Coffre (docs/EN_COURS.md, 2026-08-16).
+    if (req.character.campaign_id) {
+      req.app.get('io').to(req.character.campaign_id).emit(WS.SOLS_UPDATED, {
+        characterId: req.params.characterId,
+        sols: updated.sols,
+      })
+    }
 
     res.json({ sols: updated.sols })
   } catch (err) { next(err) }

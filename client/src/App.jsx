@@ -9,6 +9,8 @@ import SessionPage from './pages/SessionPage'
 import CampaignSettingsPage from './components/campaignSettings/CampaignSettingsPage'
 import WorkshopPage from './pages/WorkshopPage'
 import VaultPage from './pages/VaultPage'
+import VaultCharacterPage from './pages/VaultCharacterPage'
+import EquipmentCatalogPage from './pages/EquipmentCatalogPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
 import WizardCreationPage from './pages/WizardCreationPage'
@@ -82,6 +84,14 @@ export default function App() {
         } />
         <Route path="/vault" element={
           <ProtectedRoute><VaultPage /></ProtectedRoute>
+        } />
+        {/* Fiche standalone d'un personnage du Coffre — édition complète hors session, docs/EN_COURS.md */}
+        <Route path="/vault/characters/:id" element={
+          <ProtectedRoute><VaultCharacterPage /></ProtectedRoute>
+        } />
+        {/* Catalogue ref_equipment, lecture seule, ouvert à tout utilisateur — docs/ROADMAP.md */}
+        <Route path="/equipment" element={
+          <ProtectedRoute><EquipmentCatalogPage /></ProtectedRoute>
         } />
         {/* Création directement dans le Coffre, sans campagne — même WizardCreationPage que
             /campaigns/:campaignId/creation, campaignId simplement absent des params */}

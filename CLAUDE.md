@@ -215,6 +215,8 @@ STOP si l'une de ces situations apparaît :
 - nouveau fichier `docs/*.md` créé sans vérifier sa responsabilité unique (`docs/RegleDocumentaire.md`) ;
 - mécanique de combat implémentée sans avoir lu `docs/REGLES/REGLESYSCOMBAT.md` dans la session ;
 - migration sans audit du numéro, du journal et du redémarrage automatique ;
+- `users.role === 'admin'` réutilisé comme raccourci d'autorisation pour un besoin métier plus étroit
+  (ex. « MJ hors campagne ») — détail et justification dans `.claude/rules/core.md` ;
 - « Je code ? » posé une deuxième fois sur le même sujet — plan complet, coder directement ;
 - plan couvrant deux bugs ou problèmes ou plus ;
 - modification du dépôt, de la base ou des assets de l'autre développeur ;

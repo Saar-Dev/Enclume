@@ -30,3 +30,10 @@ paths:
   indépendamment ont des `id` différents pour la même ligne. Matcher par la clé métier de la table
   (vérifiée dans le seed correspondant), jamais par `id` (vécu : migration 209, `id` codé en dur
   valide en local, introuvable sur Kiwi seedé séparément).
+- **Interdiction formelle : ne jamais réutiliser `users.role === 'admin'` (`requireAdmin`) comme
+  autorisation de confort pour un besoin métier plus étroit** (ex. « qui a le droit de créer un
+  drone/une exo-armure hors campagne »). `admin` ouvre déjà la gestion des utilisateurs
+  (`adminUsers.js`), les tickets admin (`adminTickets.js`) et le CRUD complet de `ref_equipment`
+  (`equipment.js`) — l'emprunter pour autre chose donnerait ces droits-là à quiconque reçoit la
+  permission visée. Une autorisation métier nouvelle (ex. MJ hors campagne) exige sa propre colonne/
+  rôle explicite, jamais un détournement du rôle admin global.

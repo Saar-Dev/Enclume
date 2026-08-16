@@ -186,7 +186,9 @@ export default function DashboardPage() {
 
             {/* COFFRE (Vault) — illustration fixe non modifiable, toujours en première position */}
             <div className="card campaign-card" onClick={() => navigate('/vault')}>
-              <div className="vault-cover" />
+              <div className="vault-cover">
+                <img src="/assets/vault.webp" alt="" />
+              </div>
               <div style={styles.cardHeader}>
                 <span style={styles.cardTitle}>{t('dashboard.vaultCard')}</span>
               </div>

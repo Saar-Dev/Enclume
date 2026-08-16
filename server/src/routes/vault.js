@@ -1,8 +1,12 @@
 // vault.js — PLAN_VAULT.md Étapes 5+6. Routes /api/vault/*.
-// Deux familles distinctes de char-sheet.js par conception (voir PLAN_VAULT.md "Architecture
-// cible") : un personnage en Vault est un instantané figé, jamais traversé par les routes de
-// mutation de char-sheet.js. Ownership seule ici (pas de campaign_members — un Vault n'a pas de
-// membres).
+// Scope volontairement réduit ici (lecture, renommage, suppression, demande de transfert) —
+// l'édition complète (identité, attributs, compétences, inventaire...) passe par char-sheet.js,
+// ouverte au propriétaire via req.isVaultOwner depuis le chantier Coffre (docs/EN_COURS.md,
+// 2026-08-16) : un personnage du Coffre n'est PLUS un instantané figé par défaut, c'est un espace
+// personnel librement éditable par son propriétaire (ancien invariant "gelé dès wizard_locked_at",
+// PLAN_VAULT.md "Architecture cible", abandonné — le contrôle se fait désormais à la frontière, au
+// transfert vers une campagne, pas par un flag technique interne). Ownership seule ici (pas de
+// campaign_members — un Vault n'a pas de membres).
 
 import { Router } from 'express'
 import db from '../db/knex.js'
@@ -10,7 +14,14 @@ import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
   listVaultCharacters, requestImport, approveImport, rejectImport, listPendingRequestsForCampaign,
+  getOrCreateVault,
 } from '../services/vaultService.js'
+import { createCompanionSheet } from '../services/charSheetService.js'
+import { resolveOwnership } from '../services/characterOwnershipService.js'
+
+// Types créables directement dans le Coffre — jamais 'pnj' (n'a de sens qu'au sein d'un roster de
+// campagne, cf. resolveOwnership) ni 'vaisseau' (pas encore implémenté, COMPANION_REGISTRY).
+const VAULT_CREATABLE_TYPES = ['pj', 'drone', 'exo']
 
 const router = Router()
 
@@ -33,6 +44,41 @@ router.get('/characters', async (req, res, next) => {
   try {
     const characters = await listVaultCharacters(req.user.id)
     res.json({ characters })
+  } catch (err) { next(err) }
+})
+
+// POST /api/vault/characters — création directe dans le Coffre (sans Wizard), propriétaire = seule
+// autorité (docs/EN_COURS.md, 2026-08-16 — "propriétaire du Coffre = seule autorité", aucune notion
+// de MJ hors campagne, cf. l'interdiction formelle de réutiliser users.role='admin' comme raccourci
+// ici). Miroir de POST /api/campaigns/:campaignId/characters (routes/characters.js) sans campagne :
+// même autorité de couleur (resolveOwnership avec campaignId=null retombe toujours sur 'pj', color
+// dérivée de l'utilisateur) et même autorité de fiche (createCompanionSheet, désormais partagée par
+// les deux routes plutôt que dupliquée).
+router.post('/characters', async (req, res, next) => {
+  try {
+    const { name, type } = req.body
+    if (typeof name !== 'string' || !name.trim()) throw new AppError(400, 'Nom invalide')
+    if (!VAULT_CREATABLE_TYPES.includes(type)) {
+      throw new AppError(400, `type doit être l'un de : ${VAULT_CREATABLE_TYPES.join(', ')}`)
+    }
+
+    const vault = await getOrCreateVault(req.user.id)
+    const ownership = await resolveOwnership(db, { campaignId: null, userId: req.user.id })
+
+    const character = await db.transaction(async (trx) => {
+      const [character] = await trx('characters')
+        .insert({
+          vault_id: vault.id, user_id: req.user.id, name: name.trim(),
+          color: ownership.color, visible: false, type,
+        })
+        .returning('*')
+
+      await createCompanionSheet(trx, { characterId: character.id, type })
+
+      return character
+    })
+
+    res.status(201).json({ character })
   } catch (err) { next(err) }
 })
 

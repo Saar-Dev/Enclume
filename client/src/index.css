@@ -734,19 +734,23 @@ DASHBOARD EXTENSION
   border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
-  background: linear-gradient(135deg, #2a2010, #14100a);
 }
 
-.vault-cover::before {
-  content: "🔒";
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 48px;
-  opacity: 0.5;
-  pointer-events: none;
+.vault-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* VAULT TOPBAR — bandeau de la page /vault (VaultPage.jsx), même illustration que .vault-cover
+   (Dashboard) en fond, dégradé bas pour la lisibilité du titre/boutons posés dessus. */
+.vault-topbar {
+  position: relative;
+  background-image: linear-gradient(to bottom, rgba(10,10,14,0.35) 0%, rgba(10,10,14,0.92) 100%), url('/assets/vault.webp');
+  background-size: cover;
+  background-position: center;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 /* ENTITY PENDING — sablier animé au-dessus de l'entité en attente du GM */
@@ -971,6 +975,28 @@ Convention :
   color: var(--color-success-soft);
   background: rgba(76,175,119,0.12);
   border: 1px solid rgba(76,175,119,0.45);
+}
+
+/* ── .badge.badge-type-* — type de personnage (Coffre), une couleur par catégorie ── */
+.badge.badge-type-pj {
+  color: var(--color-primary);
+  background: rgba(47,215,255,0.12);
+  border: 1px solid rgba(47,215,255,0.45);
+}
+.badge.badge-type-drone {
+  color: var(--color-warning);
+  background: rgba(240,160,75,0.12);
+  border: 1px solid rgba(240,160,75,0.45);
+}
+.badge.badge-type-exo {
+  color: var(--color-gold);
+  background: rgba(245,197,66,0.12);
+  border: 1px solid rgba(245,197,66,0.45);
+}
+.badge.badge-type-vaisseau {
+  color: var(--color-success);
+  background: rgba(29,209,161,0.12);
+  border: 1px solid rgba(29,209,161,0.45);
 }
 
 /* ── .badge.badge-success ───────────────────────────────────────── */

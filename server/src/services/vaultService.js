@@ -4,7 +4,6 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { lockWizard } from './creationService.js'
 import { getOrCreateVault } from './vaultCoreService.js'
 
 // ─── Registre par type de compagnon (PLAN_VAULT.md "Registre par type de compagnon") ───────────
@@ -15,12 +14,23 @@ import { getOrCreateVault } from './vaultCoreService.js'
 const CHAR_SHEET_KEYED_TABLES = [
   'char_identity', 'char_archetype', 'char_attributes', 'char_skills', 'char_mutations',
   'char_polaris', 'char_personal_advantages', 'char_careers', 'char_traits', 'char_pc_ledger',
-  'char_advantages', 'char_advantage_notes', 'character_wounds',
+  'char_advantages', 'char_advantage_notes', 'character_wounds', 'char_gauges',
 ]
-const CHARACTER_KEYED_TABLES_GROUP_A = ['char_inventory', 'character_macros']
+// char_inventory sort de cette liste (ci-dessous, VAULT-REGISTRY-DRIFT1) : char_inventory_slots
+// référence à la fois character_id ET char_inventory_id, le clonage générique cloneRows() ne
+// remappe qu'une seule colonne FK à la fois — nécessite cloneInventoryWithSlots dédiée.
+const CHARACTER_KEYED_TABLES_GROUP_A = ['character_macros']
 
-async function lockClonedWizard(trx, { newSheetId }) {
-  await lockWizard(newSheetId, trx)
+// Ancien nom lockClonedWizard — renommée (docs/EN_COURS.md, 2026-08-16) : n'appelle plus
+// lockWizard() (creationService.js), dont la précondition creation_state==='complete' n'a plus
+// lieu d'être ici (Piège P6 retiré, voir cloneCharacterDeep). Un clone est toujours un personnage
+// "réel" dès sa création, quel que soit l'état d'avancement de la source — poser wizard_locked_at
+// directement, sans passer par le contrat (plus applicable) de lockWizard(). wizard_locks n'est
+// jamais cloné (absent du registre par conception, verrous MJ propres au Wizard collaboratif) —
+// rien à nettoyer sur le nouveau char_sheet, contrairement à lockWizard().
+async function stampClonedAsFinal(trx, { newSheetId }) {
+  if (!newSheetId) return
+  await trx('char_sheet').where({ id: newSheetId }).update({ wizard_locked_at: trx.fn.now() })
 }
 
 async function resetDroneIntegrity(trx, { newCharacterId }) {
@@ -30,18 +40,74 @@ async function resetDroneIntegrity(trx, { newCharacterId }) {
     .update({ integrite_actuelle: sheet.integrite_max, damages: '{}' })
 }
 
+// VAULT-REGISTRY-DRIFT1 — exo_sheet n'a jamais eu d'entrée (COMPANION_REGISTRY disait "futur : exo"
+// depuis PLAN_VAULT.md sans jamais être construit). Clone + remise à neuf en UNE seule insertion,
+// jamais un cloneRows générique suivi d'un UPDATE correctif : exo_sheet_pilot_unique (index unique
+// partiel sur pilot_character_id) rejette l'insertion d'entrée si on copie le pilote de la source
+// tel quel (constaté : "duplicate key value violates unique constraint exo_sheet_pilot_unique" —
+// l'ancienne fiche existe encore avec ce même pilote au moment du clonage). pilot_character_id doit
+// être NULL dès l'INSERT, jamais un état transitoire. Même philosophie que resetDroneIntegrity côté
+// intégrité/avaries : un export reste un "modèle réutilisable", pas un instantané endommagé.
+async function cloneExoSheet(trx, { sourceCharacterId, newCharacterId }) {
+  const sheet = await trx('exo_sheet').where({ character_id: sourceCharacterId }).first()
+  if (!sheet) return
+  const { character_id: _oldCharacterId, ...rest } = sheet
+  await trx('exo_sheet').insert({
+    ...rest,
+    character_id: newCharacterId,
+    itg_structure_current: sheet.itg_structure_max,
+    itg_exosquelette_current: sheet.itg_exosquelette_max,
+    itg_generator_current: sheet.itg_generator_max,
+    avaries_legeres: 0,
+    avaries_moyennes: 0,
+    avaries_graves: 0,
+    avaries_critiques: 0,
+    avaries_catastrophiques: 0,
+    damaged_systems: '{}',
+    pilot_character_id: null,
+  })
+}
+
+// VAULT-REGISTRY-DRIFT1 — char_inventory_slots a deux FK réelles (char_inventory_id ET
+// character_id) : cloneRows() générique ne peut remapper qu'une seule colonne. Clone char_inventory
+// d'abord (une seule requête, ordre défini par le tableau d'insertion — PostgreSQL préserve l'ordre
+// d'un INSERT...VALUES...RETURNING multi-lignes, garantie documentée, pas une coïncidence dont on
+// dépend à l'aveugle), construit la correspondance ancien id → nouveau id par position, puis clone
+// les slots en remappant les deux colonnes via cette correspondance.
+async function cloneInventoryWithSlots(trx, { oldCharacterId, newCharacterId }) {
+  const oldItems = await trx('char_inventory').where({ character_id: oldCharacterId })
+  if (oldItems.length === 0) return
+
+  const toInsert = oldItems.map(({ id, ...rest }) => ({ ...rest, character_id: newCharacterId }))
+  const newItems = await trx('char_inventory').insert(toInsert).returning('*')
+
+  const idMap = new Map(oldItems.map((old, i) => [old.id, newItems[i].id]))
+
+  const oldSlots = await trx('char_inventory_slots').where({ character_id: oldCharacterId })
+  if (oldSlots.length === 0) return
+
+  const slotsToInsert = oldSlots.map(({ char_inventory_id, slot_code }) => ({
+    char_inventory_id: idMap.get(char_inventory_id),
+    character_id: newCharacterId,
+    slot_code,
+  }))
+  await trx('char_inventory_slots').insert(slotsToInsert)
+}
+
 const COMPANION_REGISTRY = {
   pj: {
     hasCharSheet: true,
     charSheetKeyed: CHAR_SHEET_KEYED_TABLES,
     characterKeyed: CHARACTER_KEYED_TABLES_GROUP_A,
-    onClone: lockClonedWizard,
+    hasInventory: true,
+    onClone: stampClonedAsFinal,
   },
   pnj: {
     hasCharSheet: true,
     charSheetKeyed: CHAR_SHEET_KEYED_TABLES,
     characterKeyed: CHARACTER_KEYED_TABLES_GROUP_A,
-    onClone: lockClonedWizard,
+    hasInventory: true,
+    onClone: stampClonedAsFinal,
   },
   drone: {
     hasCharSheet: false,
@@ -49,13 +115,29 @@ const COMPANION_REGISTRY = {
     characterKeyed: ['drone_sheet', 'drone_programs', 'drone_weapons'],
     onClone: resetDroneIntegrity,
   },
-  // futur : exo: {...}, vaisseau: {...} — une entrée de plus, jamais une modification du reste
-  // de ce fichier (voir PLAN_VAULT.md "Registre par type de compagnon").
+  exo: {
+    hasCharSheet: false,
+    charSheetKeyed: [],
+    // exo_sheet n'est PAS dans characterKeyed : cloneExoSheet la clone elle-même (voir sa
+    // documentation — piège exo_sheet_pilot_unique), extraTables la garde couverte par le
+    // garde-fou anti-dérive sans repasser par le cloneRows générique.
+    characterKeyed: [],
+    extraTables: ['exo_sheet'],
+    onClone: cloneExoSheet,
+  },
+  // futur : vaisseau: {...} — une entrée de plus, jamais une modification du reste de ce fichier
+  // (voir PLAN_VAULT.md "Registre par type de compagnon").
 }
 
 // Tables qui référencent characters/char_sheet mais décrivent un état de session/campagne ou une
 // transaction, pas le personnage lui-même — jamais clonées (PLAN_VAULT.md Étape 0).
-const EXCLUDED_TABLES = new Set(['tokens', 'trade_log', 'trade_offers', 'vault_transfer_requests'])
+// wizard_locks/game_echeances/chat_messages ajoutées VAULT-REGISTRY-DRIFT1 (2026-08-16) — verrous MJ
+// du Wizard collaboratif, échéances de jeu liées à une campagne précise, historique de chat : les
+// trois décrivent un état de session/workflow, jamais le personnage lui-même.
+const EXCLUDED_TABLES = new Set([
+  'tokens', 'trade_log', 'trade_offers', 'vault_transfer_requests',
+  'wizard_locks', 'game_echeances', 'chat_messages',
+])
 
 // ─── Garde-fou anti-dérive (PLAN_VAULT.md "Garde-fou anti-dérive") ──────────────────────────────
 // Vérifie, à chaque clonage, que toute table ayant une vraie FK vers characters/char_sheet est soit
@@ -70,6 +152,12 @@ async function assertRegistryUpToDate(trx) {
     if (entry.hasCharSheet) registered.add('char_sheet')
     entry.charSheetKeyed.forEach(t => registered.add(t))
     entry.characterKeyed.forEach(t => registered.add(t))
+    // hasInventory : char_inventory/char_inventory_slots clonées par cloneInventoryWithSlots
+    // (double FK, hors du tableau characterKeyed générique) — toujours couvertes par le registre.
+    if (entry.hasInventory) { registered.add('char_inventory'); registered.add('char_inventory_slots') }
+    // extraTables : tables clonées par une fonction onClone dédiée plutôt que characterKeyed
+    // générique (ex. exo_sheet) — toujours couvertes par le registre.
+    entry.extraTables?.forEach(t => registered.add(t))
   }
 
   const { rows } = await trx.raw(`
@@ -152,13 +240,11 @@ export async function cloneCharacterDeep(sourceCharacterId, { campaignId, vaultI
     if (entry.hasCharSheet) {
       sourceSheet = await trx('char_sheet').where({ character_id: sourceCharacterId }).first()
       if (!sourceSheet) throw new AppError(500, 'Fiche personnage introuvable — incohérence')
-      // Piège P6 (PLAN_VAULT.md) : un brouillon Wizard inachevé ne doit pas pouvoir être transféré
-      // (resterait bloqué à moitié fini, sans mécanisme pour reprendre le Wizard hors contexte).
-      // Vérifié ici, avant tout travail, plutôt que de laisser échouer lockClonedWizard en fin de
-      // clonage (fail-fast, message clair, transaction annulée immédiatement).
-      if (sourceSheet.creation_state !== 'complete') {
-        throw new AppError(400, 'Personnage non finalisé — impossible de le transférer')
-      }
+      // Ancien Piège P6 (PLAN_VAULT.md) retiré (docs/EN_COURS.md, 2026-08-16) : un brouillon Wizard
+      // inachevé pouvait rester bloqué dans le Coffre faute de mécanisme de reprise hors contexte —
+      // n'a plus lieu d'être, le Coffre n'exige plus wizard_locked_at pour rester éditable
+      // (char-sheet.js), et "fini" n'est plus un flag technique à valider ici mais un jugement du MJ
+      // cible à l'approbation du transfert (philosophie "confiance à la frontière").
     }
 
     const { id: _oldCharId, ...charRest } = source
@@ -181,8 +267,11 @@ export async function cloneCharacterDeep(sourceCharacterId, { campaignId, vaultI
     for (const table of entry.characterKeyed) {
       await cloneRows(trx, table, 'character_id', sourceCharacterId, newChar.id)
     }
+    if (entry.hasInventory) {
+      await cloneInventoryWithSlots(trx, { oldCharacterId: sourceCharacterId, newCharacterId: newChar.id })
+    }
 
-    await entry.onClone?.(trx, { newCharacterId: newChar.id, newSheetId })
+    await entry.onClone?.(trx, { sourceCharacterId, newCharacterId: newChar.id, newSheetId })
 
     return newChar
   }

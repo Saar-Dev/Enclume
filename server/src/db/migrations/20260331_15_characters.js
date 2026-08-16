@@ -2,8 +2,13 @@
  * Migration 15 — Table characters
  * Un character = toute entité de la librairie : PJ, PNJ, véhicule, drone, etc.
  * user_id nullable — NULL signifie entité GM (PNJ, objet interactif).
- * glb_url et portrait_url prévus mais non utilisés en V1 (upload Phase suivante).
  * visible contrôle la visibilité de l'entité pour les joueurs dans la librairie.
+ *
+ * Commentaire corrigé 2026-08-16 (schéma inchangé, migration déjà appliquée, jamais retouchée —
+ * CLAUDE.md §5) : glb_url et portrait_url sont utilisés depuis longtemps — upload complet
+ * (MinIO, multer) via POST /api/characters/:id/portrait et /glb (routes/characters.js), affichage
+ * via CharacterWindow.jsx. La mention "non utilisés en V1, Phase suivante" était obsolète, trouvée
+ * fausse en vérifiant le code réel pendant le chantier Coffre (docs/EN_COURS.md).
  */
 
 export const up = async (knex) => {
