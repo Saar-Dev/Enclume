@@ -1,8 +1,10 @@
 # CHARACTER.md — Documentation technique du domaine Character
 > Domaine : Fiche personnage Polaris & modules joueur
-> Dernière mise à jour : 2026-08-06 — Clôture refonte UX Matériel (`docs/Old/PLAN_INVENTORY_UX.md`) :
-> source unique de vérité inventaire (characterStore), drag & drop, catalogue GM filtré, §5/§7 revus.
-> Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire — 51 migrations appliquées
+> Dernière mise à jour : 2026-08-16 — Clôture `docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md` :
+> ressource `char_gauges` (jauges de matériel, gérées MJ) + validation MJ item par item de l'inventaire
+> (`char_inventory.validated_by_gm`), §3/§4/§5/§7 revus.
+> Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire + Jauges de matériel — 52
+> migrations appliquées
 
 ---
 
@@ -16,7 +18,7 @@
 6. [Logique métier — règles de calcul](#6-logique-métier--règles-de-calcul)
 7. [Composants React](#7-composants-react)
 8. [Conventions et règles du domaine](#8-conventions-et-règles-du-domaine)
-9. [Pièges PC1–PC19](#9-pièges-pc1pc19)
+9. [Pièges PC1–PC24](#9-pièges-pc1pc24)
 
 ---
 
@@ -67,6 +69,8 @@ client/src/character/
   InventoryBanner.jsx  — bandeau poids/sols toujours visible (même inventaire replié) — jauge de poids,
                          sols éditables avec asymétrie MJ/joueur
   InventoryPanel.jsx   — inventaire (Sac/Ceinture/Coffre) + catalogue GM filtré/paginé + drag & drop
+  GaugesPanel.jsx       — jauges de matériel (char_gauges), onglet Matériel, stepper +/- MJ only
+                          (`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md`)
   LocationPanel.jsx    — une localisation (Tête/Corps/Bras/Jambe) : multi-couches + grille blessures
   ContainerPanel.jsx   — Sac/Ceinture/Coffre : équipement conteneur (monté dans WeaponPanel.jsx)
   SilhouettePanel.jsx  — SVG silhouette, colorée par pire blessure par localisation
@@ -76,6 +80,12 @@ client/src/lib/
   inventoryMutations.js  — setItemSlot/setItemContainer/deleteItem, mutations réseau+store partagées
                             entre les `<select>`/boutons et le drag & drop
   inventoryDataSync.js   — refreshDerivedTotals (poids/seuil recalculés après mutation locale)
+  useGaugesData.js       — sélecteur characterStore.gaugesByCharId + fetch initial dédupliqué (même
+                            patron que useInventoryData), consommé par GaugesPanel.jsx ET
+                            StepMaterielEtBiens.jsx (Wizard Step6)
+  gaugesDataSync.js      — populateGauges(characterId), dédup par characterId, appelable hors composant
+  gaugesMutations.js     — adjustGauge (PATCH .../gauges/:categoryKey + écriture store), MJ only côté
+                            serveur
 
 shared/
   woundConstants.js    — WOUND_LOCATIONS / SEVERITIES / MAX_COUNTS / PENALTIES / SEVERITY_COLORS
@@ -96,6 +106,7 @@ server/src/db/migrations/
   49_character_wounds.js             — character_wounds (UUID PK, FK char_sheet CASCADE, location/severity/is_stabilized/idx)
   50_char_inventory.js               — char_inventory (possessions joueur) + char_sheet.sols INTEGER DEFAULT 0
   51_inventory_slot_codes.js         — nullifie slots stales B/J (regex) → passage vers codes BG/BD/JG/JD
+  242_char_gauges.js                 — char_gauges (jauges de matériel) + char_inventory.validated_by_gm
 
 scripts SQL correctifs (appliqués manuellement, hors migrations Knex) :
   fix_ref_skills.sql                — parents fantômes, markers, typos
@@ -298,10 +309,24 @@ PK = `id UUID`. FK `character_id → characters.id ON DELETE CASCADE`. FK `equip
 | slot | TEXT | nullable | localisation équipée — mono : `'T'`/`'C'`/`'BG'`/`'BD'`/`'JG'`/`'JD'`/`'D'`/`'Ce'` — multi : `'BG/BD'` |
 | quantity | INTEGER | NOT NULL DEFAULT 1 | |
 | custom_props | JSONB | nullable | propriétés libres (items manuels) |
+| validated_by_gm | BOOLEAN | NOT NULL DEFAULT false | Migration 242. Dérivé serveur uniquement (`req.isGm` à l'insertion/fusion de stack), jamais accepté du payload client — sinon un joueur s'auto-valide par un simple PUT. Bloque la progression du joueur en Wizard Step6 tant qu'il reste un item `false` (§5) |
 | created_at | TIMESTAMPTZ | DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | DEFAULT now() | |
 
 > **Règle PI8 :** le serveur utilise `LIKE '%/CODE/%'` pour les queries multi-slot, jamais `WHERE slot = code`.
+
+---
+
+#### `char_gauges`
+PK composite `(char_sheet_id, category_key)`. FK `char_sheet_id → char_sheet.id ON DELETE CASCADE`. Migration 242. Ressource de personnage indépendante — jamais recalculée/écrasée par le cycle de réconciliation Wizard Step1-5, contrairement à `char_traits`/`gauge_delta` ou `char_pc_ledger`.
+
+| Colonne | Type | Contrainte | Notes |
+|---|---|---|---|
+| char_sheet_id | UUID | PK FK NOT NULL | |
+| category_key | TEXT | PK NOT NULL | Clé de catégorie Pro-Avantage normalisée (`shared/proAdvCategoryRuleKeys.js`, même normalisation client/serveur) |
+| value | INT | NOT NULL DEFAULT 0 CHECK ≥ 0 | Backstop DB — le clamp normal se fait côté route (`GREATEST(0, value + delta)`, §4) |
+
+Seedée une fois par catégorie (upsert `ON CONFLICT DO NOTHING`, `server/src/services/creationService.js`, cycle de réconciliation Wizard Step4/Avantages) : valeur de départ = total théorique des Pro-Avantages professionnels agrégé sur toutes les carrières du personnage. Une catégorie déjà vue n'est plus jamais retouchée par le seed, même si le joueur modifie ses carrières ensuite — ensuite entièrement gérée par le MJ (+/-, §4).
 
 ---
 
@@ -366,10 +391,17 @@ Ownership : owner ou GM. `router.param('characterId')` pré-charge le character.
 | Méthode | Route | Description |
 |---|---|---|
 | GET | `/:characterId/inventory` | `{ items[], sols, total_weight, threshold }` |
-| POST | `/:characterId/inventory` | Ajoute item — vérifie `isContainerAvailable()` pour Sac/Ceinture (PI1/PI2), broadcast INVENTORY_ADDED |
-| PUT | `/:characterId/inventory/:itemId` | Modifie slot/container/quantité — LIKE query multi-slot (PI8), broadcast INVENTORY_UPDATED |
+| POST | `/:characterId/inventory` | Ajoute item — vérifie `isContainerAvailable()` pour Sac/Ceinture (PI1/PI2), broadcast INVENTORY_ADDED. `validated_by_gm = req.isGm` à l'insertion ; même règle à la fusion de stack (item déjà existant même équipement/container/slot) — reflète toujours le rôle du dernier auteur |
+| PUT | `/:characterId/inventory/:itemId` | Modifie slot/container/quantité — LIKE query multi-slot (PI8), broadcast INVENTORY_UPDATED. Rejette `validated_by_gm` dans le payload si `!req.isGm` (403) — seul le MJ peut faire passer un item à `true` |
 | DELETE | `/:characterId/inventory/:itemId` | Supprime item, broadcast INVENTORY_REMOVED |
 | PUT | `/:characterId/sols` | Modifie solde sols (GM ou owner), broadcast SOLS_UPDATED |
+
+#### Jauges de matériel (`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md`, partagées Wizard Step6 + fiche permanente)
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/:characterId/gauges` | `{ gauges: [{ category_key, value }] }` — owner ou GM |
+| PATCH | `/:characterId/gauges/:categoryKey` | `{ delta }` — **MJ only**. Clamp serveur `GREATEST(0, value + delta)` (jamais bloquant pour un MJ qui descend sous 0, cf. `CHECK` §3), broadcast GAUGE_UPDATED sur `resolveInventoryBroadcastRoom(characterId, campaignId)` — même helper que les routes inventaire, pour ne pas révéler l'existence d'un brouillon Wizard à toute la room de campagne |
 
 ---
 
@@ -461,6 +493,29 @@ Drag & drop (`@dnd-kit/core`, DndContext unique dans `CharacterWindow.jsx` pour 
 chaque zone cible (LocationPanel, WeaponPanel, InventoryPanel Sac/Ceinture/Coffre) fournit son
 `data.onDrop`, routé par `CharacterWindow.handleItemDragEnd` — aucune logique dupliquée, chaque zone
 garde sa propre résolution (slot composite, conflit main/2M → confirmation sur 409).
+
+### Jauges de matériel (char_gauges, même patron que l'inventaire)
+
+`characterStore.js` porte `gaugesByCharId` par personnage (`{ [charId]: { [categoryKey]: value } }`).
+
+```
+useGaugesData(characterId)  (lib/useGaugesData.js)
+  → si gaugesByCharId[characterId] absent : GET /:id/gauges → store.setGauges (1 fois)
+  → sélecteur réactif pour GaugesPanel.jsx (fiche permanente) ET StepMaterielEtBiens.jsx (Wizard
+    Step6) — même hook, deux points de montage.
+
+Mutation (auteur, MJ only) :
+  Stepper +/- → gaugesMutations.js (adjustGauge)
+    → PATCH /:id/gauges/:categoryKey → réponse HTTP déjà autoritaire → store.setGauge
+
+Autres clients connectés :
+  useCharacterSocket.js (fiche permanente) ET useWizardInventorySync.js (Wizard, indépendant du
+  premier) écoutent tous les deux GAUGE_UPDATED → écriture directe dans le store, sans refetch —
+  nécessaire séparément dans les deux hooks car les jauges sont éditables dès le Wizard Step6.
+```
+
+Onglet Matériel (fiche permanente) : `GaugesPanel.jsx` reste compact (pas de grille 2 colonnes,
+cf. §7 note historique) — masqué (`return null`) si le personnage n'a aucune jauge semée.
 
 ### Distribution XP — GM (CharacterSheet)
 
@@ -682,6 +737,18 @@ Onglet Matériel — quatre panneaux lisant `characterStore` par sélecteur (§5
 **Props communes :** `characterId`, `canEdit` (`isGm || isOwner`) ; `WeaponPanel` reçoit en plus
 `onOpenModing` ; `InventoryPanel`/`InventoryBanner` reçoivent aussi `isGm` (catalogue, édition sols).
 
+**Bouton "Validé" (`InventoryPanel.jsx`)** : visible MJ only, seulement sur les items
+`validated_by_gm=false` — un item déjà validé affiche un badge statique, pas un bouton actionnable.
+Désaccord MJ = suppression directe, pas de troisième état "refusé" (cohérent avec la philosophie
+"le jeu de rôle se joue sur la confiance" déjà en place pour l'inventaire).
+
+### `GaugesPanel.jsx`
+Onglet Matériel, fiche permanente — affiche les jauges `char_gauges` (§3), stepper +/- MJ only.
+Rester compact : une grille 2 colonnes a déjà été tentée et rejetée sur ce même onglet ("bloc trop
+massif, silhouette écrasée"). Masqué si le personnage n'a aucune jauge semée.
+
+**Props :** `characterId`, `isGm`.
+
 ---
 
 ## 8. Conventions et règles du domaine
@@ -701,7 +768,7 @@ Onglet Matériel — quatre panneaux lisant `characterStore` par sélecteur (§5
 
 ---
 
-## 9. Pièges PC1–PC22
+## 9. Pièges PC1–PC24
 
 **PC1** — `char_name` ≠ `characters.name`. Ne jamais synchroniser.
 
@@ -746,3 +813,7 @@ Onglet Matériel — quatre panneaux lisant `characterStore` par sélecteur (§5
 **PC21** — Guard synchrone sur achat XP. `setBuyingSkillId` est asynchrone (React batch) — ne jamais l'utiliser comme guard contre les double-clics. Pattern correct : `const isBuyingRef = useRef(false)` + `isBuyingRef.current = true` avant le try, `false` dans le finally. `buyingSkillId` reste uniquement pour l'affichage UI (bouton `…` + disabled).
 
 **PC22** — Bug Force Polaris : `handleTogglePolaris` appelle `PUT /skills` qui est **GM uniquement**. Un joueur possédant muta_029 peut voir les pouvoirs Polaris dans la modale mais reçoit 403 en tentant de les activer. Fix prévu session 5 : créer une route dédiée owner+GM pour toggler `is_learned` sur les pouvoirs Polaris uniquement.
+
+**PC23** — `char_inventory.validated_by_gm` ne doit jamais être accepté tel quel depuis le payload client (POST/PUT). Toujours dérivé serveur (`req.isGm`) — sinon un joueur s'auto-valide par un simple appel réseau, la route n'ayant sinon aucune garde `isGm` dessus. Même règle à la fusion de stack (`inventoryService.js`, item déjà existant même équipement/container/slot) : sans elle, un joueur peut ajouter une quantité arbitraire sur une ligne déjà validée sans repasser par le MJ.
+
+**PC24** — `char_gauges`/`char_traits`(`gauge_delta`)/`char_pc_ledger` ne sont pas interchangeables malgré des noms voisins : les deux derniers sont vidés et recalculés en bloc à chaque réconciliation Wizard Step1-5 (aucune persistance incrémentale), donc impropres à porter un ajustement MJ post-création qui doit survivre à un retour du joueur sur ces étapes. `char_gauges` est volontairement hors de ce cycle — seedée une fois par catégorie (`ON CONFLICT DO NOTHING`), jamais réécrite ensuite par `creationService.js`.

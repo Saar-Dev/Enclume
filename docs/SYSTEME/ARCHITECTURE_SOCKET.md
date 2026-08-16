@@ -30,7 +30,8 @@ SocketProvider (créé dans SessionPage)
  ├── useEntitySocket()       — écoute MAP_SWITCH, ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT
  ├── useCombatSocket()       — écoute les 18 événements COMBAT_* ; expose 12 états UI (reloadResult, damagePayload, etc.)
  ├── useSessionSocket()      — écoute SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, DOC_*, 'error'
- ├── useCharacterSocket()    — écoute WOUND_ADDED/UPDATED/REMOVED, INVENTORY_ADDED/UPDATED/REMOVED ; expose woundVersions
+ ├── useCharacterSocket()    — écoute WOUND_ADDED/UPDATED/REMOVED, INVENTORY_ADDED/UPDATED/REMOVED,
+ │                            SOLS_UPDATED, GAUGE_UPDATED ; expose woundVersions
  └── useCombatUIState()      — état UI combat sans socket : combatMoveMode, combatTargetMode, etc.
 
 2. Point d'entrée serveur

@@ -2500,10 +2500,18 @@ coder.
 
 **Testé** : les deux scénarios restants confirmés par Saar en navigateur — stepper +/- MJ sur une
 jauge (Wizard Step6) et `GaugesPanel.jsx` fiche permanente (onglet Matériel).
-**Non testé** : usage réel en partie (seuil « stable en jeu réel », `RegleDocumentaire.md` Règle 10) —
-condition d'archivage/fusion du document, pas encore atteinte ; le plan reste actif.
+**Non testé** : usage réel en partie (aucun scénario bloquant identifié — décision explicite de Saar
+de clore et archiver sur la base de cette validation de développement, sans attendre un usage en
+partie réelle).
 **Données** : aucune migration, aucun changement de code.
 **Retour arrière** : sans objet (documentation uniquement).
+
+**Clôture (même jour)** : `docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md` archivé vers `docs/Old/` sur
+demande explicite de Saar (`docs/RegleDocumentaire.md` Règle 10). Contenu durable transféré dans
+`docs/SYSTEME/CHARACTER.md` (schéma `char_gauges`/`validated_by_gm`, routes `.../gauges`, flux
+store/socket, `GaugesPanel.jsx`, pièges PC23/PC24) et `docs/SYSTEME/ARCHITECTURE_SOCKET.md`
+(`GAUGE_UPDATED`, `SOLS_UPDATED` ajouté au passage — même hook `useCharacterSocket.js`, absent de la
+liste par oubli antérieur, sans rapport avec ce chantier).
 
 -----
 
