@@ -14,9 +14,14 @@
 > `canEdit` toujours faux pour un joueur sur son propre personnage ; `Step4Experience.jsx` sautait la
 > sous-étape "Avantages & Revers" pour un brouillon repris avec carrières déjà choisies, empêchant
 > tout Pro-Avantage "Matériel" d'être choisi donc toute jauge d'être semée ; bouton "Ajouter"
-> (`InventoryPanel.jsx`) quasi invisible, remis en avant. Non testé dans cette passe : +/- MJ sur une
-> jauge (code vérifié correct, pas de clic confirmé par Saar), `GaugesPanel.jsx` fiche permanente
-> (seul le parcours Wizard Step6 a été confirmé).
+> (`InventoryPanel.jsx`) quasi invisible, remis en avant.
+>
+> **Validation 2026-08-16** : les deux points restés non testés le 2026-08-12 sont confirmés par
+> Saar en navigateur — stepper +/- MJ sur une jauge (Wizard Step6) et `GaugesPanel.jsx` fiche
+> permanente (onglet Matériel, hors Wizard). Audit du code contre chaque section de ce plan (§1-§8)
+> fait avant cette validation, aucun écart trouvé. Chantier intégralement codé et validé en
+> développement ; reste le seuil « stable en jeu réel » (usage en partie réelle, pas seulement cette
+> validation) avant archivage/fusion (`docs/RegleDocumentaire.md` Règle 10).
 
 ---
 

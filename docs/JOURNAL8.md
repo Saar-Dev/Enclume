@@ -2485,6 +2485,28 @@ Règle 10) suppose un usage réel en partie, pas seulement cette validation de d
 
 -----
 
+## Session (Saar) — 2026-08-16 — Jauges de Matériel (`GAUGES-MATERIEL`) : clôture des deux derniers points non testés
+
+**Contexte** : les deux réserves laissées ouvertes par la validation du 2026-08-12 (stepper +/- MJ
+sur une jauge, `GaugesPanel.jsx` côté fiche permanente hors Wizard) n'avaient encore jamais été
+rejouées explicitement par Saar.
+
+**Fait avant validation** : audit du code réel (pas du journal) contre chaque section du plan
+(migration 242, routes `char-sheet.js`, `creationService.js`, `characterStore.js`, `gaugesDataSync.js`/
+`useGaugesData.js`/`gaugesMutations.js`, handlers `GAUGE_UPDATED` dans `useCharacterSocket.js` ET
+`useWizardInventorySync.js`, `isOwner`/`canEdit`/`pendingCount`, insertion `GaugesPanel.jsx` dans
+`CharacterWindow.jsx`, clés i18n) — aucun écart trouvé avec `PLAN_WIZARD_MATERIEL_GAUGES.md`, rien à
+coder.
+
+**Testé** : les deux scénarios restants confirmés par Saar en navigateur — stepper +/- MJ sur une
+jauge (Wizard Step6) et `GaugesPanel.jsx` fiche permanente (onglet Matériel).
+**Non testé** : usage réel en partie (seuil « stable en jeu réel », `RegleDocumentaire.md` Règle 10) —
+condition d'archivage/fusion du document, pas encore atteinte ; le plan reste actif.
+**Données** : aucune migration, aucun changement de code.
+**Retour arrière** : sans objet (documentation uniquement).
+
+-----
+
 ## Session (Saar) — 2026-08-13 — PLAN_COMBATANT_CONTEXT Lots A-F : point de couture unique du contexte de Test combat
 
 **Contexte** : `EXOARM-COMBATFILE` bloquait `PLAN_EXOARMURE.md` Lot 2 — `socketCombatHelpers.js`
