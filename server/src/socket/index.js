@@ -137,6 +137,25 @@ const initSocket = (io) => {
             const currentPreview = combatPreviews.get(campaignId)
             if (currentPreview) socket.emit(WS.COMBAT_ANNOUNCE_PREVIEW, currentPreview)
 
+            // Restauration combat_pending sur reconnexion en phase ANNOUNCEMENT — jet de Réaction
+            // "surprise" en attente (ticket "Blocage - Joueur surpris au premier tour", 9e7aa7d5).
+            // Bloc distinct du C3 ci-dessous (RESOLUTION) : phase différente, même patron.
+            if (activeCombat.phase === 'ANNOUNCEMENT') {
+              const userToken = await db('tokens')
+                .join('characters', 'tokens.character_id', 'characters.id')
+                .where({ 'tokens.campaign_id': campaignId, 'characters.user_id': socket.user.id })
+                .select('tokens.id as token_id')
+                .first()
+              if (userToken) {
+                const pendingSurprise = await db('combat_pending')
+                  .where({ campaign_id: campaignId, token_id: userToken.token_id, type: 'surprise' })
+                  .first()
+                if (pendingSurprise) {
+                  socket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: userToken.token_id })
+                }
+              }
+            }
+
             // C3 — restauration combat_pending sur reconnexion en phase RESOLUTION
             if (activeCombat.phase === 'RESOLUTION') {
               // Échelle de phases (docs/PLAN_COMBAT_TIMELINE.md Lot B) — un reconnectant doit revoir

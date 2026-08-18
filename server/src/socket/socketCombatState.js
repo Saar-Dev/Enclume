@@ -142,19 +142,11 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         return rows
       })
 
-      // Joueurs surpris (non-PNJ) : émettre COMBAT_SURPRISE_ROLL via fetchSockets
-      const surprisedPlayers = rosterData.filter(({ token, is_pnj }) =>
-        surprisedTokenIds.includes(token.id) && !is_pnj
-      )
-      if (surprisedPlayers.length > 0) {
-        const roomSockets = await io.in(campaignId).fetchSockets()
-        for (const { token, character } of surprisedPlayers) {
-          const targetSocket = roomSockets.find(s => s.data.userId === character?.user_id)
-          if (targetSocket) {
-            targetSocket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: token.id })
-          }
-        }
-      }
+      // Le prompt COMBAT_SURPRISE_ROLL n'est PAS émis ici — la phase est encore ROSTER, et la FSM
+      // (combatFSM.js) n'accepte COMBAT_SURPRISE_RESULT que depuis ANNOUNCEMENT. Un prompt livré ici
+      // serait affiché côté joueur avant d'être réellement actionnable (ticket "Blocage - Joueur
+      // surpris au premier tour", 9e7aa7d5) — émis à COMBAT_ANNOUNCE_START à la place, une fois la
+      // phase effectivement ouverte.
 
       // Broadcast COMBAT_STARTED — sans surprise_roll (PC25)
       const broadcastRoster = await buildBroadcastRoster(db, insertedRoster)
@@ -288,6 +280,30 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
 
       io.to(campaignId).emit(WS.COMBAT_PHASE_CHANGED, { phase: 'ANNOUNCEMENT' })
 
+      // PJ surpris pas encore résolus (surprise_roll IS NULL — les PNJ surpris ont déjà leur jet auto
+      // posé à COMBAT_START) : le prompt de jet de Réaction n'est légitime qu'à partir d'ici, seule
+      // phase où la FSM accepte COMBAT_SURPRISE_RESULT (combatFSM.js) — cf. commentaire COMBAT_START.
+      // Ligne combat_pending durable (même patron que melee_defense/damage/stun, cf. resync
+      // server/src/socket/index.js) pour survivre à une reconnexion, + émission live en best-effort
+      // pour un joueur déjà connecté.
+      const surprisedPending = await db('combat_roster')
+        .where({ campaign_id: campaignId, is_surprised: true, status: 'active' })
+        .whereNull('surprise_roll')
+      if (surprisedPending.length > 0) {
+        const roomSockets = await io.in(campaignId).fetchSockets()
+        for (const entry of surprisedPending) {
+          await db('combat_pending').insert({
+            campaign_id: campaignId, token_id: entry.token_id, type: 'surprise', payload: {},
+          })
+          const token = await db('tokens').where({ id: entry.token_id }).first()
+          const character = token?.character_id
+            ? await db('characters').where({ id: token.character_id }).first()
+            : null
+          const targetSocket = roomSockets.find(s => s.data.userId === character?.user_id)
+          if (targetSocket) targetSocket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: entry.token_id })
+        }
+      }
+
       // PC17 — timers auto-skip uniquement si action_timer_sec > 0
       await startAnnouncementTimers(io, campaignId, updated.action_timer_sec, user.id, pendingMaps)
 
@@ -374,6 +390,11 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         .where({ campaign_id: campaignId, token_id: tokenId })
         .first()
       if (!entry || !entry.is_surprised) return
+
+      // Prompt consommé — même patron que melee_defense/stun (socketCombatResolution.js).
+      await db('combat_pending')
+        .where({ campaign_id: campaignId, token_id: tokenId, type: 'surprise' })
+        .delete()
 
       // Génération serveur du d20 — résultat non manipulable par le client
       const { rolls, total: diceRoll, seed } = await parseDice('1d20')

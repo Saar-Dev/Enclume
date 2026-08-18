@@ -2907,3 +2907,109 @@ avant de le valider avec), suite complète Coffre-native + inventaire (15/15). `
 **Non testé** : rien d'identifié restant sur ces deux bugs précis.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-16 — Coffre : clôture, validation navigateur complète
+
+Chantier `/vault` (topbar illustrée, création directe pj/drone/exo, catalogue équipement) confirmé
+terminé et validé de bout en bout par Saar en navigateur — les deux bugs restants après les passages
+partiels précédents (main directrice tardive, badge Validé trompeur, session ci-dessus) sont les
+derniers trouvés ; aucun défaut supplémentaire remonté sur ce passage de validation final. Retiré de
+`docs/EN_COURS.md` (bloc `🔒 En cours (Saar)`).
+
+**Philosophie produit actée** : le Coffre est un espace personnel — le propriétaire y expérimente
+librement (personnages, drone, exo), sans plafond ni coût interne. Le contrôle se fait à la
+frontière, au transfert vers une campagne : le MJ cible juge (approuve/refuse), pas un flag
+technique côté Coffre.
+
+**Serveur (313/313, PostgreSQL réel)** :
+- `char-sheet.js` — gel `wizard_locked_at` retiré sur la branche Coffre, `req.isVaultOwner` (routes de
+  construction uniquement : attributs/compétences/XP/sols/mutations/avantages — jamais fatigue/
+  quick-equip/jauge, qui restent `isGm` strict).
+- `vaultService.js` — `cloneCharacterDeep` n'exige plus `creation_state==='complete'` ;
+  `VAULT-REGISTRY-DRIFT1` corrigé (6 tables non couvertes par le garde-fou anti-dérive, dont
+  `exo_sheet` et `char_inventory_slots`, double FK, clonage dédié) ; test `vaultCloneRegistry.test.mjs`.
+- `vault.js` — `POST /characters` (création directe pj/drone/exo, propriétaire seule autorité).
+- `charSheetService.js` — `createCompanionSheet` extraite (branchement par type auparavant dupliqué,
+  jamais testé, dans `routes/characters.js`) ; test `charSheetService.test.mjs`.
+- `characters.js` (`actionsRouter`) — `req.isOwner` sur `PUT /:id`/`POST /:id/portrait`/
+  `PUT /:id/token-style`/`POST /:id/glb` (dépendance `CharacterWindow.jsx` réutilisée pour le Coffre).
+  `DELETE /:id` reste GM strict (suppression Coffre = `vault.js` uniquement).
+- Bugs trouvés et corrigés au passage : `PUT /sols` et `broadcastCharacterUpdate` émettaient
+  `io.to(campaign_id)` sans garde (`null` pour un Coffre) — conditionné à `campaign_id` non nul.
+
+**Client** :
+- `VaultPage.jsx` — topbar `vault.webp`, 4 boutons de création, clic-ligne pour ouvrir, tags de type.
+- `VaultCharacterPage.jsx` (`/vault/characters/:id`) — dispatcher par type : `drone` → `DroneWindow`,
+  `exo` → message explicite (fenêtre dédiée jamais construite, gap préexistant, ticket
+  `ARMORWINDOW-MISSING1`), `pj`/`pnj` → `CharacterWindow`.
+- `EquipmentCatalogPage.jsx` (`/equipment`) — catalogue `ref_equipment` lecture seule.
+- Skin réel de l'appli repris sur les 3 pages (`className="app-shell"`, `.btn`/`.btn-ghost`/
+  `.btn-danger`) après un premier jet en styles inline inventés — voir PC47 (`docs/EN_COURS.md`
+  "Points de vigilance permanents").
+
+**Tickets ouverts, différés (hors périmètre Coffre, suivi `bug_tickets`)** : `COFFRE-INVROOM1` (room
+socket inventaire Wizard pour un Coffre-natif jamais verrouillé), `ARMORWINDOW-MISSING1` (fenêtre
+exo-armure, chantier à part).
+
+**Hors scope, noté pour plus tard, pas bloquant** : enrichir la vue MJ
+(`listPendingRequestsForCampaign`, `vaultService.js:274-291`) d'un vrai aperçu de fiche avant
+approbation (aujourd'hui : nom/type/demandeur seulement) — optionnel, seul filtre du système à ce jour.
+
+**Testé** : validation navigateur complète par Saar (création drone/exo, upload portrait, demande de
+transfert, catalogue équipement, style corrigé) — aucune régression, aucun défaut restant.
+**Non testé** : —
+**Données** : aucune migration dans cette clôture (migrations déjà appliquées lors du codage initial).
+**Retour arrière** : commits déjà en place sur `dev/Saar`.
+
+---
+
+## Session (Saar) — 2026-08-18 — Ticket "Blocage - Joueur surpris au premier tour"
+
+Premier bug traité via le nouveau système de tickets (`bug_tickets`, ticket `9e7aa7d5`, sans
+`linked_bug_code`) plutôt que depuis `docs/EN_COURS.md`. Symptôme rapporté : joueur surpris sans
+aucune interface pour agir, MJ sans moyen de lui passer le tour — combat bloqué en phase Annonce.
+
+**Cause racine `[VÉRIFIÉ]`** : défaut de fenêtre temporelle entre deux composants du flux de Surprise
+qui devaient être synchronisés mais ne l'étaient pas. `COMBAT_START` (`socketCombatState.js`) émettait
+le prompt `COMBAT_SURPRISE_ROLL` immédiatement — donc en phase `ROSTER` — alors que la FSM
+(`combatFSM.js`) n'autorise `COMBAT_SURPRISE_RESULT` (réponse du joueur) et `COMBAT_SKIP_PLAYER`
+(passer le tour côté MJ) que depuis la phase `ANNOUNCEMENT`. Un joueur cliquant sur son bouton de jet
+avant que le MJ ait cliqué "Commencer l'annonce" — séquence naturelle puisque le bouton apparaît dès
+`COMBAT_START` — se faisait rejeter silencieusement par la FSM (`console.warn` serveur uniquement),
+alors que le client avait déjà effacé son interface de façon optimiste (`SessionPage.jsx`, aucun accusé
+de réception attendu). Second défaut aggravant : ce prompt n'était qu'un `emit` socket one-shot
+(`fetchSockets`), jamais persisté — un joueur non connecté à cet instant précis, ou qui se reconnectait
+ensuite, ne le recevait jamais.
+
+**Correctif** — réutilise le patron déjà établi dans le projet pour les prompts de combat durables
+(`combat_pending`, déjà utilisé pour `melee_defense`/`damage`/`stun`, restauré à la reconnexion) plutôt
+que d'inventer un mécanisme à part :
+- Migration `247_combat_pending_surprise.js` — `combat_pending.type` accepte désormais `'surprise'`
+  (contrainte CHECK étendue, additif, index unique partiel existant déjà applicable).
+- `socketCombatState.js` — le prompt n'est plus émis à `COMBAT_START` ; il est émis à
+  `COMBAT_ANNOUNCE_START` (une fois la phase réellement ANNOUNCEMENT), avec une ligne `combat_pending`
+  durable en plus de l'émission live ; la ligne est supprimée une fois le jet traité dans
+  `COMBAT_SURPRISE_RESULT` (succès ou échec).
+- `socket/index.js` — nouveau bloc de resync reconnexion (phase ANNOUNCEMENT, sibling du bloc existant
+  RESOLUTION/C3, non modifié) qui réémet le prompt depuis `combat_pending` si le joueur se reconnecte
+  avant d'avoir joué son jet.
+
+Le symptôme côté MJ ("Passer" absent) n'a pas été isolé séparément par instrumentation — l'hypothèse
+retenue (même défaut de fenêtre : la fenêtre de déclaration MJ peut s'afficher dès `COMBAT_STARTED`,
+avant que la FSM n'autorise `COMBAT_SKIP_PLAYER`) est cohérente avec la disparition du symptôme après
+correctif, confirmée par Saar en navigateur avec les deux rôles.
+
+**Trouvaille annexe, non traitée** : `CombatGmDeclareWindow.jsx` peut théoriquement s'afficher dès
+`COMBAT_STARTED` (phase ROSTER) pour n'importe quel combat, pas seulement un cas de surprise — un
+"Passer" cliqué à ce moment-là ne ferait rien (même défaut de fenêtre FSM, générique). Hors périmètre
+de ce correctif ; à ouvrir en ticket séparé si observé en jeu.
+
+**Testé** : migration appliquée et vérifiée en base (contrainte `chk_pending_type`), démarrage serveur
+propre (aucune erreur d'import/exécution), scénario complet confirmé par Saar en navigateur avec deux
+rôles (joueur surpris + MJ) — jet de Réaction accessible au bon moment, "Passer" fonctionnel.
+**Non testé** : reconnexion réelle d'un joueur surpris avant d'avoir joué son jet (le bloc de resync
+`socket/index.js` n'a pas été exercé en conditions réelles, seulement lu/vérifié statiquement).
+**Données** : migration 247 (additive, rétrocompatible).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; migration `down()` fournie.

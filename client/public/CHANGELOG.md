@@ -1,3 +1,12 @@
+## v203 — 2026-08-18 — Fix : combat bloqué avec un joueur surpris
+
+### Combat — Phase Annonce
+- [fix] Un joueur surpris au premier Tour de combat reçoit maintenant son jet de Réaction au bon
+  moment (une fois la phase d'Annonce réellement ouverte) au lieu de risquer de le perdre s'il
+  réagissait trop vite — le combat ne reste plus bloqué en attente de lui sans que le MJ puisse
+  passer son tour.
+- [fix] Le jet de Réaction en attente survit maintenant à une reconnexion du joueur.
+
 ## v202 — 2026-08-12 — Wizard : wishlist de matériel et jauges
 
 ### Client
