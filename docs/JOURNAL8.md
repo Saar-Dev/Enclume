@@ -3638,3 +3638,54 @@ changé.
 **Données** : migration 250 (additive, idempotente, `down()` fourni).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; `down()` restaure l'état
 d'origine si besoin.
+
+## Session (Saar) — 2026-08-19/20 — `PLAN_EXOARMURE.md` §12 : catalogue `ref_exo_equipment` + seed des 16 armures RAW
+
+**Contexte** : Saar a extrait `docs/REGLES/SEEDEXO.md` (RAW complet, 1709 lignes) — le catalogue des
+systèmes/armes montables sur une exo-armure et les ~16 armures prémade avec leur loadout par défaut.
+`ref_exo_templates` était à 0 ligne depuis sa création (migration 233, Lot 1) : aucune exo-armure
+réelle n'avait jamais existé en base, bloquant tout test navigateur des Lots 1-4. Deux passes
+d'analyse à charge (§12.1bis) ont d'abord verrouillé la taxonomie/le format de prix avant tout code
+("on ne suppose pas, jamais", exigé explicitement par Saar après une première passe déjà faite) : en-tête
+de tableau source faux trouvé (SEEDEXO.md:789, "SYSTÈMES FURTIFS" dupliqué contenant en réalité les
+Systèmes divers), Systèmes défensifs reclassés `family='arme'` (RAW explicite), prix non-flat repris
+en `price`+`price_modifier` (patron `ref_equipment` déjà résolu, pas réinventé).
+
+**Codé** — passe systématique complète des 1709 lignes en une session (pas seulement les en-têtes,
+contrairement à la première ébauche) :
+- Migration `251_ref_exo_equipment.js` — nouvelle table (schéma calqué `ref_equipment` : `family`
+  CHECK arme/systeme, `category`, `price`+`price_modifier`, `rarity`, `init_mod`/`fire_mode` avec les
+  mêmes CHECK). Deux colonnes propres au catalogue exo, chacune justifiée par plusieurs lignes RAW
+  réelles : `max_level` (plafonds "X/niv.") et `duration` (colonne Capacité, Supports vitaux).
+- Migration `252_seed_ref_exo_templates.js` — les 16 armures RAW (Explora, Typhon, Nymph 1-A, Série A,
+  Vanguard, Sylph 56, Vauban, Condor, Cougar, Mentor, Heimdall-Pyrelia, Ouraken, Odin, Vulcain, Moloch,
+  Orka), aucune colonne ajoutée (233+243 suffisaient déjà — `speeds_extra`/`underwater_movement_mode`/
+  `surface_movement_mode` couvrent déjà les cas Explora "vitesse du pilote" et Vulcain "bloqué à terre").
+- Migration `253_seed_ref_exo_equipment.js` — 84 lignes (arme=17, systeme=67), plus que l'estimation
+  initiale "~34 systèmes + ~10 armes" du §12.3 (chaque variante nommée compte séparément, comme le fait
+  le RAW lui-même). Une incohérence source de plus trouvée en transcrivant les données (pas seulement
+  les en-têtes) : Générateurs défensifs micro-ondes affichait une Disponibilité "210 (15)" (chiffre
+  parasite), corrigée en "10 (15)", documentée en tête de fichier de migration plutôt que corrigée
+  silencieusement.
+- 3 fichiers `.test.mjs` dédiés (patron `schemaAssertions.mjs`, même style que 233/243/250) : schéma
+  réel toujours vérifié, up/down transactionnel, CHECK constraints, et pour les seeds un test data qui
+  recontrôle des valeurs réelles en base (pas seulement "la migration a dû tourner sans erreur").
+
+**Vérifications indépendantes faites avant/après coup** : cross-check `computeExoStats` à Intégrité
+pleine contre les 16 fiches RAW (EXF/Blindage recalculés = valeurs de fiche, 16/16, pas une simple
+relecture du texte) ; RD par catégorie déjà confirmé contre `EXO_RD_TABLE` en amont (§12.1bis).
+
+**Testé** : 3 migrations testées up→down→up en CLI knex + suite serveur complète (`node --test`, 55
+fichiers, PostgreSQL réel) rejouée après coup — 348/348 verts, 0 régression. 7 tests dédiés
+251/252 + 2 dédiés 253.
+**Non testé** : navigateur réel — `ExoIdentityPanel.jsx` lit déjà `ref_exo_templates` pour son
+sélecteur Modèle, donc testable pour la première fois, mais pas piloté par Claude (pas de navigateur
+côté agent). `ref_exo_equipment` n'a aucun consommateur UI aujourd'hui (seed pur, en attente Lot 5e).
+**Non tranché, documenté §12.2/§12.4** : lien template↔loadout par défaut (penche "copie narrative",
+pas vérifié sur les 16 loadouts), pipeline de dégâts d'une exo qui tire (`resolveExoDamage` ne couvre
+que l'exo défenseur), formule de dégâts à escalade (`3D10 (+3/Tr)`, texte stocké tel quel), mécaniques
+secondaires (auto-réparation, malus d'Initiative par interface — pas encore posées à Saar).
+**Données** : migrations 251 (schéma) + 252/253 (100 lignes de données neuves au total), aucune table
+existante modifiée.
+**Retour arrière** : `down()` testé et propre sur les 3 migrations ; commit isolé sur `dev/Saar`
+(`8e9bb8f`), `git revert` suffit.
