@@ -3585,3 +3585,22 @@ de `motion.div`.
 **Non testé** : sans objet.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "HORLOGE-TEST1" — déjà résolu
+
+**Contexte** : ticket "adjustGameTime (gameTimeService.js) n'a aucun test automatisé — seule la
+projection pure shared/gameTime.js est testée." `server/src/lib/gameTimeService.test.mjs` existe
+depuis le commit "Blessures/Guérison Lot 2 (moteur d'échéances)" du 2026-07-30 — 13 jours **avant**
+l'import de ce ticket (2026-08-12). `adjustGameTime` y a 5 tests dédiés (4 cas resolved/displayed +
+delta=0 rejeté, débordement integer Postgres positif et négatif, garde avance en attente déjà posée,
+balayage automatique des échéances dans la même transaction) ; `requestGameTimeAdvance`/
+`confirmPendingAdvance`/`cancelPendingAdvance` sont couvertes aussi (14 tests au total). Ticket déjà
+obsolète au moment de son import, même schéma que DCO1 (2026-07-15) et BETA-7 (2026-08-11) plus tôt
+cette session.
+
+**Codé** : rien — la couverture demandée existe déjà.
+
+**Testé** : `node --test server/src/lib/gameTimeService.test.mjs` contre PostgreSQL réel — 14/14 verts.
+**Non testé** : sans objet.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
