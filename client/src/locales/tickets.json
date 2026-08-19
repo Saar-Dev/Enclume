@@ -85,6 +85,10 @@
       "statusPlaceholder": "Changer le statut…",
       "apply": "Appliquer",
       "cancel": "Annuler"
+    },
+    "create": {
+      "button": "+ Nouveau ticket",
+      "title": "Nouveau ticket"
     }
   }
 }

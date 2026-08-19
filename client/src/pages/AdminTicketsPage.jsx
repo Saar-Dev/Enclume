@@ -6,6 +6,10 @@ import api from '../lib/api'
 const ORIGINS = ['player', 'gm', 'admin', 'log']
 const STATUSES = ['new', 'triaged', 'in_progress', 'suspended', 'resolved', 'wont_fix', 'duplicate']
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
+// Miroir de ReportTicketPage.jsx (CATEGORY_KEYS/DOMAIN_KEYS) — même patron que ORIGINS/STATUSES/
+// PRIORITIES ci-dessus, `domain` n'a pas de CHECK serveur (TICKETS.md §5) donc rien à valider ici.
+const CATEGORY_KEYS = ['bug', 'balance', 'suggestion', 'other']
+const DOMAIN_KEYS = ['monde', 'combat', 'personnage', 'wizard', 'marchands', 'editeur', 'infrastructure', 'autre']
 
 // PLAN_TICKETS.md Lot 1 — écran de triage admin. `cluster_label` est un texte libre édité inline
 // (décision Saar §4.1 : "juste organiser des filtres", pas de table de référence séparée) — filtrer
@@ -31,6 +35,8 @@ export default function AdminTicketsPage() {
   const [selected, setSelected] = useState(() => new Set())
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkSaving, setBulkSaving] = useState(false)
+
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => { document.title = 'Enclume — Tickets' }, [])
 
@@ -107,6 +113,12 @@ export default function AdminTicketsPage() {
     }
   }
 
+  const handleTicketCreated = () => {
+    setCreating(false)
+    load()
+    loadStats()
+  }
+
   const groups = ORIGINS
     .map(origin => ({ origin, items: tickets.filter(ticket => ticket.origin === origin) }))
     .filter(group => group.items.length > 0)
@@ -127,7 +139,18 @@ export default function AdminTicketsPage() {
       </div>
 
       <div style={S.body}>
-        <h1 style={S.pageTitle}>{tt('admin.title')}</h1>
+        <div style={S.titleRow}>
+          <h1 style={S.pageTitle}>{tt('admin.title')}</h1>
+          {!creating && (
+            <button className="btn btn-ghost" onClick={() => setCreating(true)}>
+              {tt('admin.create.button')}
+            </button>
+          )}
+        </div>
+
+        {creating && (
+          <CreateTicketPanel tt={tt} onCreated={handleTicketCreated} onCancel={() => setCreating(false)} />
+        )}
 
         {error && <div style={S.errorBanner} onClick={() => setError(null)}>{error}</div>}
 
@@ -303,13 +326,113 @@ function TicketRow({ ticket, tt, saving, selected, onToggleSelect, onPatch }) {
   )
 }
 
+// Formulaire de création admin — mêmes 4 champs et mêmes clés i18n `form.*` que ReportTicketPage.jsx
+// (formulaire joueur), posté sur le même endpoint générique POST /tickets (origin dérivé serveur
+// depuis users.role — un admin y obtient déjà 'admin', aucune route dédiée nécessaire). Pas de champ
+// `context` : contrairement au signalement joueur (déclenché depuis un écran précis), une création
+// admin n'a pas de path/user_agent pertinent à capturer.
+function CreateTicketPanel({ tt, onCreated, onCancel }) {
+  const [category, setCategory] = useState('bug')
+  const [domain, setDomain] = useState('')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleSubmit = async e => {
+    e.preventDefault()
+    if (!title.trim() || !description.trim()) {
+      setError(tt('form.errorRequired'))
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await api.post('/tickets', { category, domain: domain || null, title, description })
+      onCreated()
+    } catch {
+      setError(tt('form.errorSubmit'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={S.createPanel}>
+      <h2 style={S.createTitle}>{tt('admin.create.title')}</h2>
+
+      {error && <div style={S.errorBanner} onClick={() => setError(null)}>{error}</div>}
+
+      <div style={S.createRow}>
+        <label style={S.filterField}>
+          <span style={S.filterLabel}>{tt('form.category')}</span>
+          <select style={S.select} value={category} onChange={e => setCategory(e.target.value)}>
+            {CATEGORY_KEYS.map(key => (
+              <option key={key} value={key}>{tt(`form.categoryOptions.${key}`)}</option>
+            ))}
+          </select>
+        </label>
+        <label style={S.filterField}>
+          <span style={S.filterLabel}>{tt('form.domain')}</span>
+          <select style={S.select} value={domain} onChange={e => setDomain(e.target.value)}>
+            <option value="">{tt('form.domainPlaceholder')}</option>
+            {DOMAIN_KEYS.map(key => (
+              <option key={key} value={key}>{tt(`form.domainOptions.${key}`)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label style={S.filterField}>
+        <span style={S.filterLabel}>{tt('form.titleLabel')}</span>
+        <input
+          style={S.select}
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder={tt('form.titlePlaceholder')}
+          maxLength={200}
+          required
+        />
+      </label>
+
+      <label style={S.filterField}>
+        <span style={S.filterLabel}>{tt('form.description')}</span>
+        <textarea
+          style={S.createTextarea}
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder={tt('form.descriptionPlaceholder')}
+          rows={4}
+          required
+        />
+      </label>
+
+      <div style={S.createFooter}>
+        <button type="button" className="btn btn-ghost" disabled={saving} onClick={onCancel}>
+          {tt('admin.bulk.cancel')}
+        </button>
+        <button type="submit" className="btn" disabled={saving}>
+          {saving ? tt('form.submitting') : tt('form.submit')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ─── Styles (même patron que AdminUsersPage.jsx) ──────────────────────────────
 const S = {
   container: { minHeight: '100vh', backgroundColor: 'var(--bg-app)', display: 'flex', flexDirection: 'column' },
   header: { display: 'flex', alignItems: 'center', padding: '0 24px', height: '52px', backgroundColor: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 },
   backBtn: { background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' },
-  pageTitle: { fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 22px' },
+  titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 22px' },
+  pageTitle: { fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 },
   errorBanner: { backgroundColor: 'rgba(224,92,92,0.12)', border: '1px solid var(--color-danger)', borderRadius: '6px', padding: '8px 16px', color: 'var(--color-danger)', fontSize: '13px', margin: '0 0 16px', cursor: 'pointer' },
+
+  createPanel: { display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '16px', marginBottom: '24px' },
+  createTitle: { fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 },
+  createRow: { display: 'flex', gap: '16px', flexWrap: 'wrap' },
+  createTextarea: { backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '8px 10px', color: 'var(--text-primary)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' },
+  createFooter: { display: 'flex', justifyContent: 'flex-end', gap: '8px' },
 
   statsBar: { display: 'flex', gap: '16px' },
   statItem: { fontSize: '12px', color: 'var(--text-secondary)' },

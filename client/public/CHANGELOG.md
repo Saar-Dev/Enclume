@@ -1,3 +1,9 @@
+## v207 — 2026-08-19 — Admin : création de ticket depuis l'écran de triage
+
+### Admin — Tickets
+- [feat] Un admin peut désormais créer un ticket directement depuis `/admin/tickets`, sans passer
+  par le formulaire "Signaler un problème".
+
 ## v206 — 2026-08-19 — Fix : badge "Validé" hors de propos hors Wizard
 
 ### Personnage — Inventaire

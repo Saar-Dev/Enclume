@@ -3345,3 +3345,28 @@ et en Coffre standalone, toujours visibles en Wizard Step 7 pour le MJ).
 `false`, même comportement attendu que Coffre/campagne — non revérifié séparément).
 **Données** : aucune migration, aucun changement serveur.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit (pas de migration à défaire).
+
+## Session (Saar) — 2026-08-19 — Ticket "Admin - Ticket - Créer un ticket"
+
+**Contexte** : suggestion — permettre la création d'un ticket directement depuis `/admin/tickets`,
+sans repasser par le formulaire joueur `/tickets/new`. `POST /api/tickets` (`ticketService.
+createTicket`) existait déjà et fonctionne pour tout compte authentifié : `origin` est dérivé
+serveur depuis `users.role`/`campaign_members.role` (`resolveOrigin`), donc un admin qui l'appelle
+obtient déjà `origin='admin'` sans rien à ajouter côté serveur — vérifié sur les tickets `origin=
+'admin'` déjà en base, tous créés par ce chemin. Aucune route ni service serveur créés.
+
+**Codé** : `AdminTicketsPage.jsx` — bouton "+ Nouveau ticket" à côté du titre, ouvrant
+`CreateTicketPanel` (nouveau composant local, même patron que `TicketRow` : état local, pas de
+remontée de draft). Mêmes 4 champs que `ReportTicketPage.jsx` (catégorie/domaine/titre/description),
+mêmes clés i18n `form.*` déjà chargées dans ce namespace et déjà réutilisées par cet écran pour les
+badges. `CATEGORY_KEYS`/`DOMAIN_KEYS` dupliqués localement, même convention que `ORIGINS`/`STATUSES`/
+`PRIORITIES` déjà en tête de fichier (miroir des CHECK serveur). Soumission → `POST /tickets` (pas
+`/admin/tickets`, qui reste lecture/patch only) → `load()` + `loadStats()` + fermeture du panneau.
+Pas de `context` envoyé (pas de path/user_agent pertinent pour une création admin, à la différence
+du signalement joueur). 2 nouvelles clés i18n (`admin.create.button`/`admin.create.title`).
+
+**Testé** : ESLint propre sur `AdminTicketsPage.jsx`, JSON `tickets.json` valide. Confirmé fonctionnel
+par Saar en navigateur (création depuis `/admin/tickets`, ticket apparu dans le groupe "Admin").
+**Non testé** : rien d'identifié restant.
+**Données** : aucune migration, aucun changement serveur.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
