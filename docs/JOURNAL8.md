@@ -3103,3 +3103,44 @@ fonctionnel par Saar en navigateur.
 **Non testé** : rien d'identifié restant sur ce ticket précis.
 **Données** : aucune migration.
 **Retour arrière** : commit isolé sur `dev/Saar` (`da22877`), `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-19 — Audit diffusion live du Wizard + clôture BETA-7
+
+Demande explicite de Saar : après plusieurs sessions/agents ayant touché la granularité de diffusion
+live du Wizard (WIZ11, WIZ15, WIZ21...), auditer à charge l'ensemble des steps/sous-étapes — quoi
+existe, câblage correct, homogène ? Pas un correctif ponctuel, une revue de code complète (orchestrateur
+`WizardCreation.jsx`, transport `useWizardLiveEmit.js`/`WizardLockSync.jsx`, store `creationStore.js`,
+route serveur `routes/creation.js#reconcile`, les 8 composants d'étape).
+
+**BETA-7** ("Step 1 diffuse en direct, Step 4 file au récap et y reste") — cause déjà traitée par
+**WIZ15 + WIZ21** (2026-08-11), un jour avant l'import en masse de l'ancien `BUGIDENTIFIE.md`
+(2026-08-12) qui a créé ce ticket sans recroiser les correctifs déjà landés. Confirmé résolu par Saar
+en navigateur (2026-08-19) — ticket passé à `resolved`, `admin_notes` documente le lien vers WIZ15/WIZ21.
+
+**Verdict architecture** : steps 1/2/3/5 partagent un patron `useEffect → onLiveChange` identique mot
+pour mot dans les 4 fichiers ; le transport (`useWizardLiveEmit`) et le store (`applyStateSync`/
+`applyLiveDraft`) traitent step1..step5 de façon générique, aucun cas spécial par step ; le serveur
+diffuse `WIZARD_STATE_SYNC` via un seul handler symétrique. Step 4 est plus sophistiqué (suit en plus
+la sous-étape du joueur) mais justifié — seule étape à sous-navigation. Step 6 (Matériel) réutilise à
+raison le canal temps réel existant de la fiche (`InventoryPanel.jsx`/`useWizardInventorySync`) plutôt
+qu'un canal Wizard dédié. Steps 0/7 n'ont légitimement rien à diffuser. **Pas "le bordel"** — une
+architecture réellement unifiée, correctement documentée inline.
+
+**Deux trouvailles réelles, non liées à BETA-7, à corriger séparément (Saar, autorisé 2026-08-19)** :
+1. `gmSyncKey`/`liveOr` (`WizardCreation.jsx`) et l'auto-scroll MJ (`creationStore.js#applyStateSync`)
+   réutilisent `isGmView` seul pour distinguer "MJ observant le brouillon d'un autre" — même ambiguïté
+   documentée que WIZ13 (`isGmView` = rôle de campagne, pas "observe quelqu'un d'autre"), corrigée à
+   l'époque sur un seul consommateur (`resetCreation`), jamais balayée sur ces trois autres. Impact réel
+   faible (remontage inutile mais sans perte de données pour un MJ créant son propre personnage) mais
+   même classe de bug.
+2. `computeInitialSubStep` (Step4Experience.jsx) et `getStep3State` (WIZ5B, déjà loggé) devinent chacun
+   séparément "cette étape a-t-elle déjà été visitée" faute de marqueur persisté — deux réinventions
+   indépendantes de la même béquille, chacune avec ses propres faux positifs déjà documentés comme
+   limitation acceptée.
+
+**Non testé** : rien — session d'analyse pure, aucun code modifié. Correctifs des points 1/2 à suivre
+dans une session séparée.
+**Données** : aucune.
+**Retour arrière** : sans objet (aucun code touché).
