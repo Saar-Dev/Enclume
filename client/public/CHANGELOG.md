@@ -1,3 +1,10 @@
+## v206 — 2026-08-19 — Fix : badge "Validé" hors de propos hors Wizard
+
+### Personnage — Inventaire
+- [fix] Le badge "Validé" et le bouton "Valider" (review MJ du matériel) n'apparaissent plus que
+  pendant la création de personnage (Étape 7 — Matériel) — ils n'ont plus de raison d'être sur la
+  fiche en cours de campagne, dans le Coffre ou à l'impression.
+
 ## v205 — 2026-08-19 — Fix : reprise du Wizard (Étape 3 et Étape 4)
 
 ### Wizard

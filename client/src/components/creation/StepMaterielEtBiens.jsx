@@ -88,6 +88,7 @@ export default function StepMaterielEtBiens({ characterId, isGmView, isOwner, ha
             canEdit={canEdit}
             isGm={isGm}
             hasCampaign={hasCampaign}
+            inWizard
           />
         </div>
 

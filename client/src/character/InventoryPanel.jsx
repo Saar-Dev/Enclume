@@ -55,7 +55,11 @@ const CONTAINER_LABEL_KEYS = { Sac: 'inventoryPanel.container.Sac', Ceinture: 'i
 // n'ait réellement eu lieu. Le bouton "Valider" est déjà correctement gaté par isGm (toujours faux
 // sans campagne) ; seul le badge "Validé" doit en plus être masqué, sous peine d'afficher une fausse
 // confirmation sur chaque objet.
-export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign = true }) {
+// inWizard (défaut false) : bouton "Valider" et badge "Validé" ne concernent que la review MJ du
+// matériel de départ en Wizard Step 7 (seul appelant à passer true, StepMaterielEtBiens.jsx) — sur
+// la fiche permanente (campagne, Coffre standalone) ou en export PDF, `validated_by_gm` reste
+// pertinent en base mais n'a pas à être exposé (décision Saar, ticket "Inventaire validé").
+export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign = true, inWizard = false }) {
   const { t } = useTranslation('charSheet')
   // PLAN_INVENTORY_UX.md §3 — source unique de vérité, plus de fetch local à ce panneau.
   // poids/sols/malus INI sont affichés par InventoryBanner.jsx (Étape 1), pas ici.
@@ -293,6 +297,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                 canEdit={canEdit}
                 isGm={isGm}
                 hasCampaign={hasCampaign}
+                inWizard={inWizard}
                 availableContainers={availableContainers}
                 onMoveContainer={handleMoveContainer}
                 onSendToVault={handleSendToVault}
@@ -330,6 +335,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
               item={item}
               canEdit={canEdit}
               hasCampaign={hasCampaign}
+              inWizard={inWizard}
               availableContainers={availableContainers}
               onMoveContainer={handleMoveContainer}
               onSendToVault={handleSendToVault}
@@ -483,7 +489,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   )
 }
 
-function ItemRow({ item, canEdit, isGm, hasCampaign = true, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate }) {
+function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, availableContainers, onMoveContainer, onSendToVault, onEquip, onDelete, onValidate }) {
   const { t } = useTranslation('charSheet')
   const name = item.custom_name || item.ref_name || t('inventoryPanel.unnamedItem')
 
@@ -541,13 +547,16 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, availableContainers,
           MJ sur ses propres ajouts, déjà validated_by_gm=true dès l'insertion côté serveur).
           hasCampaign : sans campagne, validated_by_gm est toujours vrai (auto-validation serveur,
           aucun MJ ne peut jamais exister) — afficher le badge serait une fausse confirmation, jamais
-          issue d'une vraie validation. */}
-      {isGm && !item.validated_by_gm && (
+          issue d'une vraie validation.
+          inWizard : review MJ du matériel de départ, propre à Wizard Step 7 — hors Wizard (fiche
+          permanente, Coffre standalone, export PDF), validated_by_gm reste correct en base mais
+          n'a pas à être exposé (ticket "Inventaire validé", décision Saar 2026-08-19). */}
+      {inWizard && isGm && !item.validated_by_gm && (
         <button onClick={() => onValidate(item.id)} style={s.validateBtn} title={t('inventoryPanel.validateTooltip')}>
           {t('inventoryPanel.validateButton')}
         </button>
       )}
-      {hasCampaign && item.validated_by_gm && (
+      {inWizard && hasCampaign && item.validated_by_gm && (
         <span className="badge badge-compact" style={s.validatedBadge}>{t('inventoryPanel.validatedBadge')}</span>
       )}
       {canEdit && (

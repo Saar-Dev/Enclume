@@ -3319,3 +3319,29 @@ jamais testés par fixture).
 **Données** : aucune migration — code seul, les colonnes `malus_init_*` existent depuis le Lot 1.
 **Retour arrière** : rien n'est encore committé à la fin de cette session — commit à faire séparément
 après revue.
+
+## Session (Saar) — 2026-08-19 — Ticket "Inventaire validé"
+
+**Contexte** : badge "Validé" / bouton "Valider" (`validated_by_gm`, `InventoryPanel.jsx#ItemRow`)
+visibles partout où le composant est monté — fiche permanente en campagne, Coffre standalone
+(`VaultCharacterPage.jsx`), export PDF (`CharacterPrintView.jsx`) — alors que la review MJ du
+matériel n'a de sens que pendant le Wizard Step 7 (Matériel). Pas une régression : `docs/Old/
+PLAN_WIZARD_MATERIEL_GAUGES.md` prévoyait explicitement le partage Wizard + fiche permanente à la
+conception ; décision produit de Saar de restreindre l'exposition au seul Wizard, `validated_by_gm`
+reste correct et inchangé en base (POST /inventory continue de dériver `autoValidate` de `req.isGm`,
+partout).
+
+**Codé** : nouvelle prop `inWizard` (défaut `false`) sur `InventoryPanel` et `ItemRow`
+(`InventoryPanel.jsx`), passée aux deux instanciations d'`ItemRow` (Sac/Ceinture, Coffre). Bouton et
+badge gatés par `inWizard && ...` en plus des conditions existantes (`isGm`/`hasCampaign`) — même
+idiome de *conditional rendering* déjà en place sur ce bloc (élément jamais monté dans le DOM à
+`false`, pas un masquage CSS), confirmé comme la bonne pratique sur question directe de Saar. Seul
+`StepMaterielEtBiens.jsx` (Wizard Step 7) passe `inWizard` ; `CharacterWindow.jsx` et
+`CharacterPrintView.jsx` inchangés, la valeur par défaut suffit.
+
+**Testé** : confirmé fonctionnel par Saar en navigateur (badge/bouton disparus en fiche de campagne
+et en Coffre standalone, toujours visibles en Wizard Step 7 pour le MJ).
+**Non testé** : export PDF (aucun changement de code sur ce chemin — `inWizard` non passé, défaut
+`false`, même comportement attendu que Coffre/campagne — non revérifié séparément).
+**Données** : aucune migration, aucun changement serveur.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit (pas de migration à défaire).
