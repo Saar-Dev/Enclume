@@ -3013,3 +3013,52 @@ rôles (joueur surpris + MJ) — jet de Réaction accessible au bon moment, "Pas
 `socket/index.js` n'a pas été exercé en conditions réelles, seulement lu/vérifié statiquement).
 **Données** : migration 247 (additive, rétrocompatible).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; migration `down()` fournie.
+
+## Session (Saar) — 2026-08-18 — `PLAN_EXOARMURE.md` Lot 2 : dérive documentaire corrigée + routage de la confirmation de défense pour un `type='exo'`
+
+**Contexte** : reprise du Lot 2 à la demande de Saar. `PLAN_EXOARMURE.md` §7 et `EN_COURS.md`
+(`EXOARM-COMBATFILE`) décrivaient encore le plafond de Compétence par Manœuvre d'armure et "1 seule
+Attaque/Tour" comme bloqués — faux : le commit `7247ebb` (2026-08-15, dans la foulée de la clôture du
+Lot G de `PLAN_COMBATANT_CONTEXT.md`) avait déjà codé le plafond de Compétence, sans jamais remettre à
+jour ces deux documents. Dérive documentaire pure, corrigée en premier (§7 du plan, ligne
+`EXOARM-COMBATFILE`) avant tout code — aucune ligne de code n'a changé pour cette partie.
+
+**"1 seule Attaque/Tour" — vérifié sans code nécessaire.** RAW (`REGLESYSCOMBAT.md:207`) : restriction
+sur la règle avancée optionnelle "Effectuer plusieurs Attaques par Tour" (p.218). Vérifié par lecture
+(`64_combat_mode.js` : 5 modes normal/offensif/charge/défensif/retraite, aucun "Enchaînement" ;
+`socketCombatAnnouncement.js` : aucune déclaration de marqueurs d'Initiative supplémentaires) : cette
+règle avancée n'est implémentée pour aucun type de personnage — chaque combattant ne peut déjà
+déclarer qu'une seule action par Tour (`combat_roster.has_announced`). Rien à plafonner tant que la
+règle de base n'existe pas. Décision documentée (§1.9 CLAUDE.md, pas un raccourci silencieux) : à
+rouvrir seulement si "Plusieurs Attaques par Tour" est un jour codée pour les humains.
+
+**Trou réel trouvé en clôturant le Lot 2 : routage de la confirmation de défense pour un `type='exo'`.**
+`resolveMeleeAction` (`socketCombatHelpers.js`) ne testait que `defenderCharacter.type ===
+'pnj'`/`'drone'` — un défenseur exo retombait sur `resolveMeleeDefensePj`, ciblant `defenderUserId =
+defenderCharacter.user_id` (propriétaire brut de la fiche exo), jamais le pilote actif
+(`exo_sheet.pilot_character_id`). Deux défauts distincts : (1) pilote PJ — prompt vers le mauvais
+utilisateur dès que propriétaire ≠ pilote ; (2) pilote PNJ — attente d'une confirmation qui ne vient
+jamais légitimement, alors que `resolveMeleeDefensePnj` auto-résout déjà ce cas pour tout défenseur
+PNJ normal, mais n'était jamais atteint pour un exo piloté par un PNJ.
+
+**Correctif** : `resolveCombatantSheetId` (`combatantContextService.js`, seul point d'appel dans
+`socketCombatHelpers.js`) étendue en `resolveCombatantIdentity(db, character)` →
+`{ sheetId, userId, effectiveType }` — réutilise le fetch `resolvePilot` déjà en place (jamais un
+second fetch `exo_sheet→characters`, invariant déjà documenté dans le fichier). `effectiveType` = type
+du personnage pour un humain, type du PILOTE pour un exo (repli `'pnj'` si aucun pilote assigné —
+auto-résolution, cohérent avec `defenderSkillTotal` qui reste à son défaut 0, jamais un blocage FSM en
+attente d'un clic qui ne viendra pas). `resolveMeleeAction` branche désormais sur `defenderEffectiveType`
+(pas `defenderCharacter.type`) pour la branche pnj/pj, et passe `defenderEffectiveUserId` (le pilote)
+comme `defenderUserId`. Les drones restent sur leur propre `defenderCharacter.type` (jamais pilotés,
+aucune indirection). Documentation vivante mise à jour en cohérence : `docs/SYSTEME/COMBAT.md`
+(dispatcher `meleeSkillCap`, `resolveCombatantIdentity`, routage défense exo).
+
+**Testé** : `node --check` sur les 3 fichiers modifiés. `combatantContextService.test.mjs` — 25/25
+verts contre PostgreSQL réel (dont les 18 tests du plafond de Compétence du 2026-08-15, jamais exécutés
+jusqu'ici faute de Postgres accessible dans les sessions précédentes ; 4 tests `resolveCombatantIdentity`
+nouveaux/mis à jour, dont un cas propriétaire de l'exo ≠ pilote — les fixtures précédentes utilisaient
+le même utilisateur pour les deux et n'auraient jamais pu détecter ce bug). **Non testé** : scénario réel
+en jeu (aucune exo-armure en base à ce jour, même limite que tout le chantier Exo-armures depuis le
+Lot 1).
+**Données** : aucune migration — code + documentation seulement.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

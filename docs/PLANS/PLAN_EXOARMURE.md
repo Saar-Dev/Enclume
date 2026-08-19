@@ -1,12 +1,16 @@
 # PLAN — Système Exo-Armures
 
 > Statut : Lot 0 (cadrage architecture) clos, Lot 1 (Fondations) ✅ codé (2026-08-06), **non testé en
-> navigateur**. Lot 2 (Substitution d'attributs) resserré et **partiellement** codé (2026-08-06) :
-> mouvement (VIT) ✅ codé, plafond de Compétence (Manœuvre d'armure) et 1 seule Attaque/Tour
-> **⏸️ bloqués** — refactor `socketCombatHelpers.js` cadré et **majoritairement clos**
-> (`docs/PLANS/PLAN_COMBATANT_CONTEXT.md` Lots A-F ✅, 2026-08-13) ; reste son Lot G, bloqué à son tour
-> sur une seule pièce manquante de **ce** plan-ci : `computeExoStats` (contrat précis §7.1, aucune
-> implémentation n'existe encore dans le code) — détail §7. **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
+> navigateur**. Lot 2 (Substitution d'attributs) — **dérive documentaire corrigée le 2026-08-18** :
+> cette section n'avait jamais été remise à jour après le 2026-08-06 alors que le travail avait
+> continué. État réel : mouvement (VIT) ✅ codé, `computeExoStats` ✅ codée (2026-08-13),
+> `docs/PLANS/PLAN_COMBATANT_CONTEXT.md` Lots A-G ✅ intégralement clos (2026-08-15, dispatcher +
+> branche exo assemblés), plafond de Compétence (Manœuvre d'armure) ✅ codé (commit `7247ebb`,
+> 2026-08-15, dans la foulée du Lot G), 1 seule Attaque/Tour **sans code nécessaire** (règle avancée
+> dont elle dépend jamais implémentée pour personne, voir §7.7), routage de la confirmation de défense
+> pour un `type='exo'` ✅ codé (2026-08-18, trou trouvé en clôturant ce Lot 2, §7.7). **Lot 2
+> intégralement codé** — reste la validation en jeu réel (aucune exo-armure en base à ce jour). Détail
+> complet §7. **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
 > — architecture validée contre des dépôts pro réels (Lancer/Foundry VTT, MekHQ) avant tout code. 2 des
 > 3 questions RAW tranchées (§2.1, §2.2) ; **§2.3 (seuil de Catastrophe) en stand-by**, dépend de
 > `docs/PLAN_TEST_CRITIQUE.md` (chantier séparé, en pause côté Saar) — bloque uniquement le Lot 8.
@@ -465,11 +469,22 @@ l'estimation ci-dessus), pas une table de dispatch mais des guard clauses par `c
 **Mise à jour 2026-08-13 : Lots A-F de `PLAN_COMBATANT_CONTEXT.md` clos** (détail complet
 `docs/JOURNAL8.md` session du même jour) — les 7 sites recensés migrent tous vers ce point d'entrée
 unique, plus aucune réimplémentation inline de la chaîne attrs/archetype/skills/mutations, validé en
-jeu réel sur `pj`/`pnj`. **Reste uniquement le Lot G** (dispatcher `resolveCombatantTestContext` +
-branche `resolveExoTestContext`) — et ce lot G est **bloqué sur une dépendance externe qui n'existe
-nulle part dans le code aujourd'hui** (`grep computeExoStats` sur tout `server/src/` et `shared/` :
-zéro résultat). Ce Lot 2 (plafond Manœuvre d'armure, 1 seule Attaque/Tour) **reprendra une fois
-`PLAN_COMBATANT_CONTEXT.md` Lot G clos** — ne pas redémarrer cette section avant.
+jeu réel sur `pj`/`pnj`.
+
+**Mise à jour 2026-08-15 : Lot G clos** (`docs/JOURNAL8.md` session du même jour) — dispatcher
+`resolveCombatantTestContext` + branche `resolveExoTestContext` assemblés dans
+`combatantContextService.js`, les 7 sites rebranchés dessus. **Le jour même, dans la foulée, le
+plafond de Compétence par Manœuvre d'armure a aussi été codé** (commit `7247ebb`) — détail §7.7,
+jamais reporté ici avant le 2026-08-18.
+
+**Mise à jour 2026-08-18 (dérive documentaire corrigée)** : en reprenant ce Lot 2 pour en faire
+l'inventaire, deux choses ressorties de la relecture du code réel (pas de la mémoire de conversation) :
+1. Le plafond de Compétence ci-dessus était déjà codé et fonctionnel, mais cette section ne le
+   reflétait pas — jamais mis à jour après le commit du 2026-08-15.
+2. "1 seule Attaque/Tour" ne demande aucun code aujourd'hui (§7.7) ; en revanche un vrai trou —
+   absent de l'inventaire d'origine du 2026-08-06 — a été trouvé : le routage de la confirmation de
+   défense pour un `type='exo'` (`resolveMeleeAction`) ignore le pilote et cible le propriétaire brut
+   de la fiche exo. Détail et correctif §7.7.
 
 #### Besoins précis de `PLAN_COMBATANT_CONTEXT.md` Lot G sur `computeExoStats` — à livrer par ce Lot 2
 
@@ -565,14 +580,60 @@ rejet d'une catégorie RD inconnue. `node --check` sur les deux fichiers. **Non 
 réelle via `resolveExoTestContext`/Lot G (autre plan, pas encore codé) — cette fonction n'est appelée
 par aucun code de production pour l'instant.
 
-**Conséquence sur le découpage du Lot 2** — tout ce qui dépend de la résolution combat est bloqué :
-- **Plafond de Compétence par Manœuvre d'armure** — ⏸️ bloqué (dépend du refactor).
-- **1 seule Attaque/Tour** — ⏸️ bloqué (dépend du refactor — inutile de gater une résolution qui ne
-  fonctionne pas encore pour ce type de personnage).
+**Conséquence sur le découpage du Lot 2** — état réel au 2026-08-18 (la liste ci-dessous datait du
+2026-08-06 et décrivait tout comme bloqué ; jamais mise à jour après coup, corrigé maintenant) :
+- **Plafond de Compétence par Manœuvre d'armure** — ✅ codé (commit `7247ebb`, 2026-08-15). Détail §7.7.
+- **1 seule Attaque/Tour** — pas un blocage : la règle avancée RAW dont cette restriction dépend
+  ("Effectuer plusieurs Attaques par Tour", `REGLESYSCOMBAT.md` p.218) n'est implémentée pour aucun
+  type de personnage dans ce projet — rien à plafonner tant qu'elle n'existe pas. Détail §7.7.
+- **Routage de la confirmation de défense pour un `type='exo'`** — ✅ codé (2026-08-18) — trou réel
+  trouvé en clôturant ce Lot 2 (absent de l'inventaire d'origine du 2026-08-06). Détail §7.7.
 - **Substitution VIT pour le mouvement** — ✅ codé (§7.3) : vit dans `movementBudgetService.js`,
-  fichier autonome, pas concerné par la pause.
-- **BLD** (protection) — pas encore attaqué, dépend aussi du pipeline de dégâts (Lot 4) et donc
-  indirectement du même refactor.
+  fichier autonome.
+- **BLD** (protection) — pas encore attaqué, dépend du pipeline de dégâts (Lot 4).
+
+### 7.7 Clôture réelle du Lot 2 (2026-08-18)
+
+**Plafond de Compétence par Manœuvre d'armure — ✅ codé (commit `7247ebb`, 2026-08-15).**
+`calcLimitedSkillTotal` (`charStats.js`) plafonne `skillTotal` (jamais `mastery` — le bonus de
+Réussite critique reste basé sur la maîtrise réelle, décision validée avec Saar). `resolveExoTestContext`
+(`combatantContextService.js`) résout la spécialité RAW applicable depuis `ref_exo_templates.environment`
+(mapping direct submarine/atmospheric/spatial ; hybrid replié sur Armures externes sauf
+`surface_movement_mode='blocked'`, repli documenté honnêtement tant qu'aucun signal d'immersion temps
+réel n'existe, EAU1 ; industrial rejeté explicitement, décision Saar 2026-08-15 en suspens). Câblé sur
+les 2 sites CaC de `socketCombatHelpers.js` (attaquant L.1348, défenseur L.1644) via `meleeSkillCap: true`
+— jamais pour le tir ni Acrobatie/Équilibre (RAW : seul le contact est limité). **Non testé** : les 24
+tests DB de `combatantContextService.test.mjs` (pas de PostgreSQL dans l'environnement de dev), aucun
+scénario réel en jeu (aucune exo-armure en base à ce jour).
+
+**1 seule Attaque/Tour — aucun code nécessaire (décision documentée, pas un raccourci silencieux,
+§1.9).** RAW (`REGLESYSCOMBAT.md:207`) : *"qu'une seule Attaque par Tour (si vous utilisez la règle
+avancée Effectuer plusieurs Attaques par Tour, page 218)"* — restriction sur une règle avancée
+optionnelle. Vérifié par lecture (`64_combat_mode.js` : 5 valeurs normal/offensif/charge/défensif/
+retraite, aucun mode "Enchaînement" ; `socketCombatAnnouncement.js` : aucune déclaration de marqueurs
+d'Initiative supplémentaires pour une deuxième Attaque) : cette règle avancée n'existe pour aucun type
+de personnage dans ce projet — chaque combattant ne peut déjà déclarer qu'une seule action par Tour
+(`combat_roster.has_announced`, booléen). Rien à plafonner tant que la règle de base n'existe pas.
+**À rouvrir uniquement le jour où "Plusieurs Attaques par Tour" serait implémentée pour les
+humains** — ce Lot 2 devra alors exclure explicitement le pilote d'exo-armure de ce bénéfice, un seul
+point de bascule (probablement `meleeSkillCap`/un flag jumeau dans `combatantContextService.js`).
+
+**Routage de la confirmation de défense pour un `type='exo'` — trou réel, en cours.** `resolveMeleeAction`
+(`socketCombatHelpers.js:1719-1725`) ne teste que `defenderCharacter.type === 'pnj'`/`'drone'` — un
+défenseur exo retombe donc sur `resolveMeleeDefensePj`, qui cible `defenderUserId = defenderCharacter.user_id`
+(propriétaire brut de la fiche exo), **jamais le pilote actif** (`exo_sheet.pilot_character_id`). Deux
+défauts distincts, pas un seul :
+1. Pilote **PJ** : le prompt de confirmation part vers le mauvais utilisateur dès que propriétaire ≠
+   pilote actif.
+2. Pilote **PNJ** : le code actuel attend une confirmation utilisateur qui ne viendra jamais
+   légitimement — `resolveMeleeDefensePnj` existe déjà et auto-résout sans prompt pour tout défenseur
+   PNJ normal, mais n'est jamais atteint pour un exo piloté par un PNJ.
+**✅ Codé (2026-08-18)** : la branche suit désormais le **type effectif du pilote**, pas le type brut de
+l'exo — `resolveCombatantSheetId` étendue en `resolveCombatantIdentity` (`combatantContextService.js`)
+retourne `{ sheetId, userId, effectiveType }`, `resolveMeleeAction` branche sur `effectiveType`. Détail
+complet et tests dans `docs/JOURNAL8.md` (session 2026-08-18) et `docs/SYSTEME/COMBAT.md` — pas
+dupliqué ici une deuxième fois (Règle 2 documentaire). **Testé** : `combatantContextService.test.mjs`
+25/25 verts contre PostgreSQL réel. **Non testé** : scénario réel en jeu (aucune exo-armure en base).
 
 ### 7.2 RAW — Manœuvre d'armure (texte complet fourni par Saar, 2026-08-06)
 

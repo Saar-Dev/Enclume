@@ -107,7 +107,7 @@ export async function resolveHumanoidTestContext(db, character, skillId, { forNA
 // §4.1), sauf la Force, remplacée par l'Exo-Force de l'armure pour les dommages au contact/port
 // (même §4.1 — seule substitution actée à ce jour, docs/PLANS/PLAN_COMBATANT_CONTEXT.md §0.2).
 // Une seule autorité pour « comment retrouver le pilote d'un exo » — resolveExoTestContext (contexte
-// de Test complet) et resolveCombatantSheetId (identité seule, plus bas) en ont toutes deux besoin ;
+// de Test complet) et resolveCombatantIdentity (identité seule, plus bas) en ont toutes deux besoin ;
 // jamais deux copies de ce fetch exo_sheet→characters.
 async function resolvePilot(db, exoCharacter) {
   const exoSheet = await db('exo_sheet').where({ character_id: exoCharacter.id }).first()
@@ -208,21 +208,34 @@ export async function resolveCombatantTestContext(db, character, skillId, { mele
   return resolveHumanoidTestContext(db, character, skillId)
 }
 
-// Identité seule (sheetId), sans le reste du contexte de Test — pour les appelants qui ont besoin de
-// savoir « quelle fiche représente ce combattant » avant même de connaître le skillId à tester (ex.
-// défenseur CaC : la main directrice, lue sur cette fiche, sert à choisir l'arme équipée donc la
-// Compétence à tester — ordre imposé, pas un choix). Coût minimal pour un humain : 1 requête
-// (`char_sheet`), identique au fetch direct qu'il remplace — seul le cas exo paie le coût réel
-// (exo_sheet + pilote + char_sheet du pilote). Ne pas utiliser ceci quand skillId est déjà connu :
-// resolveCombatantTestContext(db, character, skillId) fait tout en un seul appel, moins coûteux au
-// total qu'un appel ici suivi d'un second appel complet.
-export async function resolveCombatantSheetId(db, character) {
+// Identité de l'acteur EFFECTIF derrière un combattant, sans le reste du contexte de Test — pour les
+// appelants qui ont besoin de savoir « quelle fiche / quel utilisateur / quel type de branchement
+// combat représente ce combattant » avant même de connaître le skillId à tester (ex. défenseur CaC :
+// la main directrice, lue sur cette fiche, sert à choisir l'arme équipée donc la Compétence à tester
+// — ordre imposé, pas un choix). Coût minimal pour un humain : 1 requête (`char_sheet`), identique au
+// fetch direct qu'il remplace — seul le cas exo paie le coût réel (exo_sheet + pilote + char_sheet du
+// pilote), un seul fetch `resolvePilot`, jamais dupliqué avec resolveExoTestContext (§ci-dessus). Ne
+// pas utiliser ceci quand skillId est déjà connu : resolveCombatantTestContext(db, character, skillId)
+// fait tout en un seul appel, moins coûteux au total qu'un appel ici suivi d'un second appel complet.
+//
+// `effectiveType` — PLAN_EXOARMURE.md Lot 2 §7.7 (routage de la confirmation de défense pour un
+// `type='exo'`, trou trouvé en clôturant ce Lot). Pour un humain, c'est `character.type` tel quel.
+// Pour une exo-armure, c'est le type du PILOTE, jamais `'exo'` (qui n'est pas une branche exploitable
+// par un appelant qui dispatche pj/pnj/drone) : un exo piloté par un PNJ doit s'auto-résoudre comme
+// n'importe quel PNJ (le pilote ne "clique" jamais un bouton de confirmation), un exo piloté par un
+// PJ doit prompter CE pilote — jamais le propriétaire brut de la fiche exo, qui peut être quelqu'un
+// d'autre (le MJ qui a créé l'armure, un joueur qui ne la pilote plus). Exo sans pilote assigné :
+// repli `'pnj'` (auto-résolution — cohérent avec `skillTotal` qui reste à son défaut 0 côté appelant,
+// une armure inhabitée ne doit jamais bloquer la FSM en attendant une confirmation qui ne viendra
+// jamais). `userId` : `null` chaque fois qu'il n'est pas exploitable (exo sans pilote) — jamais
+// `undefined` silencieux.
+export async function resolveCombatantIdentity(db, character) {
   if (character.type === 'exo') {
     const { pilot } = await resolvePilot(db, character)
-    if (!pilot) return null
+    if (!pilot) return { sheetId: null, userId: null, effectiveType: 'pnj' }
     const sheet = await db('char_sheet').where({ character_id: pilot.id }).first()
-    return sheet?.id ?? null
+    return { sheetId: sheet?.id ?? null, userId: pilot.user_id ?? null, effectiveType: pilot.type }
   }
   const sheet = await db('char_sheet').where({ character_id: character.id }).first()
-  return sheet?.id ?? null
+  return { sheetId: sheet?.id ?? null, userId: character.user_id ?? null, effectiveType: character.type }
 }

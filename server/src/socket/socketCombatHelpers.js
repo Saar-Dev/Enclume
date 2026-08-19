@@ -21,7 +21,7 @@ import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/comb
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
-import { resolveCombatantTestContext, resolveCombatantSheetId } from '../lib/combatantContextService.js'
+import { resolveCombatantTestContext, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
@@ -1601,12 +1601,16 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     )
 
     // ── 3. Données défenseur ──────────────────────────────────────────────────
-    // Identité seule (pas encore le contexte de Test complet) : la main directrice du défenseur doit
-    // être connue AVANT de savoir quelle Compétence tester (choix de l'arme équipée), donc avant de
-    // pouvoir appeler resolveCombatantTestContext avec un skillId réel — même coût qu'avant ce
-    // chantier pour un défenseur humain (1 requête), résout aussi le pilote pour un défenseur exo
-    // (PLAN_COMBATANT_CONTEXT.md Lot G, combatantContextService.js).
-    const sheetIdCible = await resolveCombatantSheetId(db, defenderCharacter)
+    // Identité de l'acteur EFFECTIF derrière ce défenseur (pas encore le contexte de Test complet) :
+    // pour un humain c'est le personnage lui-même, pour un exo-armure c'est son pilote — la main
+    // directrice, le choix de l'arme équipée ET le routage de la confirmation de défense (branchement
+    // plus bas, PLAN_EXOARMURE.md Lot 2 §7.7) doivent tous les trois suivre le pilote, jamais la fiche
+    // exo brute. Connue AVANT de savoir quelle Compétence tester (choix de l'arme équipée), donc avant
+    // de pouvoir appeler resolveCombatantTestContext avec un skillId réel — même coût qu'avant ce
+    // chantier pour un défenseur humain (1 requête), résout aussi le pilote pour un défenseur exo (une
+    // seule fois, PLAN_COMBATANT_CONTEXT.md Lot G, combatantContextService.js).
+    const { sheetId: sheetIdCible, userId: defenderEffectiveUserId, effectiveType: defenderEffectiveType } =
+      await resolveCombatantIdentity(db, defenderCharacter)
     let defenderSkillTotal = 0, defenderEffectiveMalus = 0, defenderMastery = 0
     let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
     let char_sheet_id_cible = null
@@ -1698,7 +1702,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
       vol_na_cible,
       targetName,
       userId: character.user_id,
-      defenderUserId: defenderCharacter.user_id,
+      defenderUserId: defenderEffectiveUserId,
       confirmedModifiers,
       situationDef: confirmedModifiers?.situationDef ?? [],
       targetTokenId,
@@ -1713,10 +1717,16 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // ── Branchement défenseur (PLAN_RW_SYSCOMBAT.md §2.4, Lot 2) ───────────────
     // Ordre invariant (§2.4.i) : sans-défense d'abord, quel que soit le type de défenseur — sinon un
     // PNJ/PJ étourdi relancerait un jet de défense actif, contraire au RAW (REGLESYSCOMBAT.md:1055-1057).
+    // `defenderEffectiveType` (pas `defenderCharacter.type`) pour la branche pnj/pj — PLAN_EXOARMURE.md
+    // Lot 2 §7.7 : un exo piloté par un PNJ doit s'auto-résoudre comme n'importe quel PNJ (le pilote ne
+    // "clique" jamais un bouton de confirmation), un exo piloté par un PJ doit prompter CE pilote,
+    // jamais le type brut de la fiche exo (toujours 'exo', jamais une branche exploitable ici). Les
+    // drones restent sur leur propre type : jamais pilotés, aucune indirection à appliquer
+    // (PLAN_COMBATANT_CONTEXT.md §3.5).
     if (targetDefenseless) {
       return await resolveDefenselessTarget(io, campaignId, commonPending, emissions)
     }
-    if (defenderCharacter.type === 'pnj') {
+    if (defenderEffectiveType === 'pnj') {
       return await resolveMeleeDefensePnj(io, campaignId, commonPending, emissions)
     }
     if (defenderCharacter.type === 'drone') {

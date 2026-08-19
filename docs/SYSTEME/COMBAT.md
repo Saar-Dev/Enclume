@@ -105,11 +105,20 @@ dispatcher, y compris pour un `pj`/`pnj` (branche identique à avant, juste indi
 
 Dispatcher, guard clauses (pas de table — 2 branches réelles) :
 ```js
-export async function resolveCombatantTestContext(db, character, skillId) {
-  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId)
+export async function resolveCombatantTestContext(db, character, skillId, { meleeSkillCap } = {}) {
+  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId, { meleeSkillCap })
   return resolveHumanoidTestContext(db, character, skillId)
 }
 ```
+`meleeSkillCap` (booléen, `PLAN_EXOARMURE.md` Lot 2, commit `7247ebb` 2026-08-15) — plafond de
+Compétence par Manœuvre d'armure (REGLECOMPETENCE.md:29-34, "Compétence limitative") : uniquement pour
+les 2 sites CaC de `socketCombatHelpers.js` (attaquant, défenseur), jamais pour le tir ni
+Acrobatie/Équilibre (RAW : seul le contact au-delà de la Manœuvre d'armure est limité). Pour la branche
+exo, résout la spécialité RAW applicable depuis `ref_exo_templates.environment` (mapping direct
+submarine/atmospheric/spatial ; `hybrid` replié sur Armures externes sauf `surface_movement_mode`
+bloqué, EAU1 ; `industrial` rejeté explicitement, décision Saar 2026-08-15 en suspens) puis plafonne
+`skillTotal` du pilote via `calcLimitedSkillTotal` (`charStats.js`) — jamais `mastery` (le bonus de
+Réussite critique reste basé sur la maîtrise réelle).
 
 **Branche humanoïde (`resolveHumanoidTestContext`, `pj`/`pnj` traités identiquement)** — deux paliers
 selon `skillId` :
@@ -157,17 +166,31 @@ pour un défenseur `exo`, **jamais** dérivés du pilote : l'armure a son propre
 (`PLAN_EXOARMURE.md` Lot 4) — les y faire pointer vers le pilote écrirait une Blessure humaine en
 contournant complètement l'armure.
 
-**`resolveCombatantSheetId(db, character)`** — identité seule (`sheetId`, `pilot.char_sheet.id` pour un
-exo), sans le reste du contexte de Test. Pour les appelants qui ont besoin de savoir « quelle fiche
-représente ce combattant » avant même de connaître le `skillId` à tester (ex. défenseur CaC : la main
-directrice, lue sur cette fiche, détermine l'arme équipée donc la Compétence à tester — ordre imposé).
-Coût minimal pour un humain (1 requête, identique au fetch `char_sheet` direct qu'il remplace) ; ne pas
-l'utiliser quand `skillId` est déjà connu, `resolveCombatantTestContext` fait tout en un seul appel.
+**`resolveCombatantIdentity(db, character)`** → `{ sheetId, userId, effectiveType }` — identité de
+l'acteur EFFECTIF derrière un combattant, sans le reste du contexte de Test. Pour un humain : ses
+propres `sheetId`/`user_id`/`type`. Pour un exo-armure : ceux du **pilote** (jamais `'exo'` comme
+`effectiveType` — pas une branche exploitable par un appelant qui dispatche pj/pnj/drone), avec repli
+`{ sheetId: null, userId: null, effectiveType: 'pnj' }` si aucun pilote n'est assigné (auto-résolution,
+jamais un blocage en attente d'une confirmation qui ne viendrait jamais). Deux usages : (1) savoir
+« quelle fiche représente ce combattant » avant même de connaître le `skillId` à tester (ex. défenseur
+CaC : la main directrice, lue sur cette fiche, détermine l'arme équipée donc la Compétence à tester —
+ordre imposé) ; (2) router la confirmation de défense (`resolveMeleeAction`, ci-dessous) vers le bon
+utilisateur et vers la bonne branche pj/pnj. Coût minimal pour un humain (1 requête, identique au fetch
+`char_sheet` direct qu'il remplace) ; ne pas l'utiliser quand `skillId` est déjà connu,
+`resolveCombatantTestContext` fait tout en un seul appel.
 
-**Hors périmètre de ce point de couture** (`PLAN_EXOARMURE.md`, pas ce fichier) : le routage de la
-confirmation de défense pour un `type='exo'` (`resolveMeleeAction` n'a pas de branche `'exo'`, retombe
-sur le chemin PJ) ; le comptage multi-adversaires (`atkEnemyType`/`defEnemyType` traitent tout `exo`
-comme `'pj'` par défaut de code) ; le pipeline de dégâts exo en tant que cible (ci-dessus, Lot 4).
+**Routage de la confirmation de défense pour un `type='exo'`** (`PLAN_EXOARMURE.md` Lot 2 §7.7,
+2026-08-18) — `resolveMeleeAction` branche sur `defenderEffectiveType` (issu de
+`resolveCombatantIdentity`), pas sur `defenderCharacter.type` : un exo piloté par un PNJ s'auto-résout
+comme n'importe quel PNJ (`resolveMeleeDefensePnj`, le pilote ne "clique" jamais), un exo piloté par un
+PJ prompt CE pilote (`defenderUserId` = `userId` du pilote, jamais le propriétaire brut de la fiche
+exo). Les drones restent sur leur propre `defenderCharacter.type` — jamais pilotés, aucune indirection
+(§3.5 ci-dessus).
+
+**Hors périmètre de ce point de couture** (`PLAN_EXOARMURE.md`, pas ce fichier) : le comptage
+multi-adversaires (`atkEnemyType`/`defEnemyType` traitent tout `exo` comme `'pj'` par défaut de code,
+dette `EXOARM-MULTIADV1`, basse priorité) ; le pipeline de dégâts exo en tant que cible (ci-dessus,
+Lot 4).
 
 ### Résolution d'arme — ownership + en-main + catégorie (MELEE-INHAND/ASSAULT-INHAND-RESOLUTION)
 

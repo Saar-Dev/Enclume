@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { resolveHumanoidTestContext, resolveCombatantTestContext, resolveCombatantSheetId } from './combatantContextService.js'
+import { resolveHumanoidTestContext, resolveCombatantTestContext, resolveCombatantIdentity } from './combatantContextService.js'
 import { calcSkillTotal, calcEncumbrancePenalty, getModDom } from './charStats.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/combatantContextService.test.mjs
@@ -41,10 +41,19 @@ async function cleanup({ campaign, gm }) {
 // (exo_sheet + ref_exo_templates réels, character_id distinct du pilote — MANUEL_EXOARMURE.md §3.1,
 // deux personnages jamais fusionnés). `templateOverrides` permet de forcer une exo "non configurée"
 // (template_id null) ou sans pilote assigné, cas de repli §6.5/§7.1.
-async function createExoFixture({ withPilot = true, withTemplate = true, pilotAttrOverrides = {}, integrityOverrides = {}, templateFields = {} } = {}) {
+// `pilotType` (PLAN_EXOARMURE.md Lot 2 §7.7) : createFixture crée toujours un pilote 'pj' — bascule
+// le type après coup pour les tests de routage de la confirmation de défense (pilote PNJ). `exoOwnerId`
+// : par défaut le même utilisateur que le pilote (comportement historique de cette fixture, préservé
+// pour ne pas casser les tests existants) — les tests §7.7 le forcent à un utilisateur distinct pour
+// vérifier que resolveCombatantIdentity suit le PILOTE, jamais le propriétaire brut de la fiche exo.
+async function createExoFixture({ withPilot = true, withTemplate = true, pilotAttrOverrides = {}, integrityOverrides = {}, templateFields = {}, pilotType = null, exoOwnerId = null } = {}) {
   const pilotFx = await createFixture(pilotAttrOverrides)
+  if (pilotType) {
+    await db('characters').where({ id: pilotFx.character.id }).update({ type: pilotType })
+    pilotFx.character.type = pilotType
+  }
   const [exoCharacter] = await db('characters')
-    .insert({ campaign_id: pilotFx.campaign.id, user_id: pilotFx.gm.id, name: 'Exo test', type: 'exo' })
+    .insert({ campaign_id: pilotFx.campaign.id, user_id: exoOwnerId ?? pilotFx.gm.id, name: 'Exo test', type: 'exo' })
     .returning('*')
   let template = null
   if (withTemplate) {
@@ -422,31 +431,51 @@ test('resolveCombatantTestContext — dispatch pj/pnj inchangé (pas de régress
   }
 })
 
-test('resolveCombatantSheetId — humain : sheetId propre, 1 seule requête équivalente au fetch direct d\'avant ce chantier', { skip }, async () => {
+test('resolveCombatantIdentity — humain : sheetId/userId/effectiveType propres, 1 seule requête équivalente au fetch direct d\'avant ce chantier', { skip }, async () => {
   const fx = await createFixture()
   try {
-    const sheetId = await resolveCombatantSheetId(db, fx.character)
-    assert.equal(sheetId, fx.sheet.id)
+    const identity = await resolveCombatantIdentity(db, fx.character)
+    assert.deepEqual(identity, { sheetId: fx.sheet.id, userId: fx.character.user_id, effectiveType: 'pj' })
   } finally {
     await cleanup(fx)
   }
 })
 
-test('resolveCombatantSheetId — exo avec pilote : sheetId du pilote, pas de l\'exo (qui n\'en a pas)', { skip }, async () => {
-  const fx = await createExoFixture()
+// PLAN_EXOARMURE.md Lot 2 §7.7 — trou trouvé en clôturant ce Lot : resolveMeleeAction routait la
+// confirmation de défense vers characters.user_id de la fiche exo elle-même, jamais vers le pilote.
+// Ce test force un propriétaire distinct du pilote (exoOwnerId) pour vérifier que le fix suit bien le
+// second, pas le premier — les fixtures précédentes utilisaient le même utilisateur pour les deux et
+// n'auraient jamais pu détecter ce bug.
+test('resolveCombatantIdentity — exo avec pilote PJ : sheetId/userId du PILOTE, jamais du propriétaire brut de la fiche exo', { skip }, async () => {
+  const [otherOwner] = await db('users')
+    .insert({ email: `combatant-ctx-exoowner-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'combatant-ctx-exoowner' })
+    .returning('*')
+  const fx = await createExoFixture({ exoOwnerId: otherOwner.id })
   try {
-    const sheetId = await resolveCombatantSheetId(db, fx.exoCharacter)
-    assert.equal(sheetId, fx.sheet.id)
+    assert.notEqual(otherOwner.id, fx.character.user_id, 'précondition du test — propriétaire de l\'exo distinct du pilote')
+    const identity = await resolveCombatantIdentity(db, fx.exoCharacter)
+    assert.deepEqual(identity, { sheetId: fx.sheet.id, userId: fx.character.user_id, effectiveType: 'pj' })
+  } finally {
+    await cleanupExo(fx)
+    await db('users').where({ id: otherOwner.id }).del()
+  }
+})
+
+test('resolveCombatantIdentity — exo avec pilote PNJ : effectiveType \'pnj\' (auto-résolution, jamais un prompt de confirmation qui ne viendrait jamais)', { skip }, async () => {
+  const fx = await createExoFixture({ pilotType: 'pnj' })
+  try {
+    const identity = await resolveCombatantIdentity(db, fx.exoCharacter)
+    assert.deepEqual(identity, { sheetId: fx.sheet.id, userId: fx.character.user_id, effectiveType: 'pnj' })
   } finally {
     await cleanupExo(fx)
   }
 })
 
-test('resolveCombatantSheetId — exo sans pilote assigné : null', { skip }, async () => {
+test('resolveCombatantIdentity — exo sans pilote assigné : repli pnj (auto-résolution), sheetId/userId null', { skip }, async () => {
   const fx = await createExoFixture({ withPilot: false })
   try {
-    const sheetId = await resolveCombatantSheetId(db, fx.exoCharacter)
-    assert.equal(sheetId, null)
+    const identity = await resolveCombatantIdentity(db, fx.exoCharacter)
+    assert.deepEqual(identity, { sheetId: null, userId: null, effectiveType: 'pnj' })
   } finally {
     await cleanupExo(fx)
   }
