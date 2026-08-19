@@ -3433,3 +3433,20 @@ Saar en navigateur (personnage chargé au-delà du seuil ne dépasse plus l'Allu
 **Données** : aucune migration, aucun changement client (le budget vient du serveur à la déclaration
 du mouvement).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "CHARSTORE-NULLISH1"
+
+**Contexte** : `characterStore.js#setMembers` — `members.find(m => m.id === userId)?.role === 'gm' ??
+false`. `?.role === 'gm'` retourne déjà un booléen dans tous les cas (`===` ne produit jamais
+`undefined`/`null`, même quand `?.role` vaut `undefined`) — le `?? false` qui suit était du code mort,
+jamais atteignable (warning ESLint `no-constant-binary-expression`). Cosmétique, confirmé sans impact
+fonctionnel avant correctif (ticket lui-même le qualifiait ainsi).
+
+**Codé** : `?? false` retiré. Comportement strictement identique (`isGm` reste `true`/`false` dans
+tous les cas).
+
+**Testé** : ESLint propre sur `characterStore.js` (warning disparu). Aucun scénario navigateur
+nécessaire — comportement observable inchangé par construction.
+**Non testé** : rien d'identifié restant.
+**Données** : aucune migration, aucun changement serveur.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

@@ -12,7 +12,7 @@ export const useCharacterStore = create((set) => ({
   // userId = user?.id depuis authStore, passé par l'appelant
   setMembers: (members, userId) => set({
     members,
-    isGm: members.find(m => m.id === userId)?.role === 'gm' ?? false,
+    isGm: members.find(m => m.id === userId)?.role === 'gm',
   }),
 
   // Ajout simple — création depuis Sidebar (handleCreateCharacter)
