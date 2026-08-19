@@ -3495,3 +3495,93 @@ DB/réseau), y compris le test `FX` existant (non-régression sur le seul consom
 **Données** : aucune migration, catalogue `ref_equipment` inchangé (c'est le parseur qui était en
 cause, pas la donnée source).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — `PLAN_EXOARMURE.md` Lot 4 : Pipeline de dégâts
+
+**Contexte** : câblage de l'onglet Avaries de `ExoSheetWindow.jsx` (fenêtre fiche exo, même session) —
+le compteur reste vide sans ce lot, donc prérequis plutôt que sous-produit. RAW
+(`REGLEARMURE.md:317-407`) : seuils de Dommages 5/10/15/20/25/30 (Blindage retranché avant seuillage),
+compteur d'Avaries même principe que les Blessures (ligne pleine → case au niveau supérieur, ligne
+effacée), perte définitive d'ITG Structure sur transition 0→1 uniquement (pas à chaque coup). Table de
+cases/modificateurs transcrite depuis une capture Saar de la page 326, confirmée par Saar. Détail
+complet du raisonnement RAW, de l'analyse à charge et de la cartographie des sites de code :
+`docs/PLANS/PLAN_EXOARMURE.md` §11 (rédigé en amont, pas réécrit ici pour éviter la duplication).
+
+**2 décisions RAW tranchées par Saar avant code (§11.6)** : débordement de Catastrophique (2/2 pleines)
+→ Lot 4 s'arrête à la perte d'ITG + `destroyed: true`, protocole complet en Lot 6 ; ambiguïté
+Destruction (tableau "-2 ITG" vs texte narratif "vous pouvez considérer... tombe à 0") → le -2 chiffré
+fait foi, la phrase narrative reste une simplification optionnelle MJ, jamais appliquée par défaut.
+
+**Cartographie exhaustive avant code** : lecture personnelle intégrale de `socketCombatHelpers.js`,
+`socketCombatResolution.js`, `damageService.js` (doublée d'une première passe par agent, puis vérifiée
+site par site moi-même) — **10 sites**, pas les ~6 estimés au départ. 6 nouvelles branches
+`cibleType === 'exo'` (5 en miroir direct d'une branche drone déjà existante, 1 sans précédent). 4
+corrections de filature préexistantes, indépendantes du Lot 4 mais bloquantes pour lui : `cibleType`
+absent de la déstructuration `pending` et du `ctx` reconstruit dans `confirmMeleeDefense`, absent du
+payload `armAwaitingDamage` dans `resolveMeleeDefenseHitAttackerPj`, et carrément codé en dur à `'pj'`
+dans `resolveMeleeDefenseHitAttackerPnj` (garde `hitResult===null` structurellement morte jusqu'ici).
+Sans ces 4 corrections, une exo pilotée par un PJ serait restée cassée en CaC même après tout le reste.
+
+**Codé** :
+- `shared/exoConstants.js` — `EXO_AVARIE_TABLE`, `EXO_AVARIE_SEVERITY_ORDER`.
+- `shared/events.js` — `EXO_AVARIE_UPDATED`.
+- `server/src/lib/charStats.js` — `calcExoDegatsNets` (réutilise `stats.rd` déjà calculé par
+  `computeExoStats`, jamais une deuxième lecture de la table RD).
+- `server/src/lib/exoAvarieService.js` (nouveau) — `severityForExoDamage` (seuils propres, volontairement
+  pas un partage de `_severityForDamage` humain malgré des seuils numériquement identiques — deux
+  tables RAW indépendantes, coïncidence pas couplage) ; `applyExoAvarie` (transactionnel, `.forUpdate()`
+  même patron que `coldExposureService.js`/`fatigueService.js`, cascade de promotion récursive,
+  perte d'ITG sur transition 0→1) ; `resolveExoDamage` (orchestrateur `resolveExoContext` →
+  `calcExoDegatsNets` → `severityForExoDamage` → `applyExoAvarie`, point de couture unique réutilisé
+  par les 6 sites A plutôt que dupliqué).
+- `server/src/lib/damageService.js:310` — early-return `cibleType === 'exo'`, miroir du drone.
+- `server/src/socket/socketCombatHelpers.js` — les 10 sites (catégories A/B, détail `PLAN_EXOARMURE.md`
+  §11.4/§11.7). Commentaire du stub neutralisant (`resolveMeleeAction`) mis à jour, **le stub lui-même
+  n'est pas retiré** — décision prise en cours de code (pas dans le plan initial) : le nouveau pipeline
+  ne lit jamais `char_sheet_id_cible`/`for_na_cible` (passe par `characterIdCible`/`resolveExoContext`),
+  les laisser passer aurait changé un comportement hors périmètre (bonus terrain instable défenseur)
+  sans décision explicite.
+
+**Trouvaille en cours de relecture (pas dans le plan initial)** : ma première formulation du plan
+disait "perte d'ITG une fois par coup qualifiant" — faux, corrigé en analyse à charge avant tout code
+(le RAW dit explicitement que seul le *premier* franchissement d'un seuil coûte un point, pas chaque
+coup à ce palier). Autre trouvaille, distincte, en cartographiant les sites : `resolveAssaultAction:2974`
+— un tireur exo n'est jamais dispatché comme `'pj'` même piloté par un joueur (toujours auto-résolu
+comme PNJ pour le Tir, contrairement au CaC qui gère correctement le pilote) — anomalie côté attaquant,
+hors périmètre de ce lot (défenseur), signalée dans `PLAN_EXOARMURE.md` §11.4 pour ne pas être reperdue.
+
+**Testé** : `node --check` sur tous les fichiers modifiés ; chargement runtime réel (import direct des
+3 modules touchés, détecte les cycles) ; 15/15 tests `exoAvarieService.test.mjs` (seuils, cascade/
+promotion sur 3 paliers, transition 0→1 de la perte d'ITG, débordement Catastrophique→Destruction,
+Destruction directe inconditionnelle, plancher ITG à 0, orchestrateur complet avec BLD/RD réels contre
+un vrai template) ; 192/192 tests `server/src/lib/*.test.mjs`+`socket/*.test.mjs`+`shared/*.test.mjs`
+(aucune régression sur la suite existante).
+**Non testé** : scénario réel navigateur — `ref_exo_templates` toujours à 0 ligne (aucun modèle seedé,
+blocage indépendant du code), aucun des 10 sites de branchement n'a donc jamais vu passer un vrai
+combat exo. Seule la logique pure (`exoAvarieService`) est vérifiée contre PostgreSQL réel.
+**Données** : aucune migration — les colonnes `avaries_*`/`itg_structure_current` existent depuis le
+Lot 1 (migration 233).
+**Retour arrière** : rien n'est encore committé à la fin de cette session — commit à faire séparément
+après revue.
+
+## Session (Saar) — 2026-08-19 — Ticket "I18N-LINT2" — faux positif ESLint, rien à corriger
+
+**Contexte** : ticket "Variables/props inutilisées (ESLint) dans plusieurs fichiers Combat. Traité
+partiellement." Sur les 3 fichiers Combat remontant encore un souci ESLint (`CombatGmDeclareWindow.jsx`,
+`CombatModifiersWindow.jsx`, `CombatTimeline.jsx` — scan complet `npx eslint src`), les deux premiers
+n'ont plus que des erreurs `react-hooks/set-state-in-effect` (hors périmètre, voir I18N-LINT3). Seul
+`no-unused-vars` restant : `motion` (import `motion/react`) dans `CombatTimeline.jsx:3`.
+
+**Faux positif confirmé** : `motion.div` est utilisé 4 fois dans le fichier (lignes 172-232, animation
+des cartes de timeline) — le supprimer casserait le composant. `AnimatePresence`/`LayoutGroup`, importés
+à côté et utilisés en JSX direct (`<AnimatePresence>`), sont eux correctement reconnus par ESLint ;
+seul l'usage via accès membre (`<motion.div>`) semble échapper à l'analyse `no-unused-vars` de cette
+configuration — limitation d'outillage, pas du code mort.
+
+**Codé** : rien — aucune trace réelle à corriger sans casser le composant.
+
+**Testé** : `npx eslint src` (scan complet client), lecture directe du fichier confirmant les 4 usages
+de `motion.div`.
+**Non testé** : sans objet.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
