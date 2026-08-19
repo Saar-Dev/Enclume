@@ -1201,3 +1201,212 @@ efficace que la première rédaction) :
   modification.
 - Scénario réel navigateur (Saar) : aucune exo-armure en base à ce jour — même limite que le reste du
   chantier.
+
+---
+
+## 11. Lot 4 — Pipeline de dégâts (plan détaillé 2026-08-19, ✅ codé 2026-08-19)
+
+> Origine : câblage de l'onglet Avaries de `ExoSheetWindow.jsx` — le compteur reste vide sans ce lot,
+> donc pas un sous-produit du découpage de fenêtre mais un prérequis. Table transcrite depuis une
+> capture Saar de la page 326 (compteur d'Avaries), confirmée par Saar (2026-08-19). Analyse à charge
+> faite avant tout code (§11.3/§11.6), les 2 décisions RAW tranchées par Saar. Cartographie exhaustive
+> des sites de branchement `cibleType` faite avant code (§11.4) — 10 sites au lieu des ~6 estimés,
+> chacun personnellement vérifié ligne à ligne (pas seulement délégué). **Clôture** : détail complet
+> (fichiers, testé/non testé) dans `docs/JOURNAL8.md`, session 2026-08-19.
+
+### 11.1 RAW
+
+`REGLEARMURE.md:317-407` — seuils de Dommages (5/10/15/20/25/30 → Légère/Moyenne/Grave/Critique/
+Catastrophique/Destruction, Blindage retranché avant seuillage), compteur d'Avaries (même principe que
+le compteur de Blessures — ligne pleine → case au niveau supérieur, ligne effacée), et perte définitive
+d'ITG Structure : *"cette perte intervient bien dès qu'un de ces seuils est atteint, et non à chaque
+Avarie reçue dans l'un d'eux (une armure qui subit une première Avarie catastrophique perd
+définitivement un point, mais elle n'en perdra pas d'autre si elle subit ensuite une nouvelle Avarie de
+même gravité. [...] si elle subit ensuite une Destruction, elle perdra un nouveau point)"*
+(`REGLEARMURE.md:344-353`).
+
+### 11.2 Table transcrite (capture Saar, confirmée 2026-08-19)
+
+```js
+// shared/exoConstants.js
+export const EXO_AVARIE_TABLE = {
+  legere:         { threshold: 5,  maxCount: 5, incidentModifier: 0, itgLossStructure: 0 },
+  moyenne:        { threshold: 10, maxCount: 5, incidentModifier: 2, itgLossStructure: 0 },
+  grave:          { threshold: 15, maxCount: 4, incidentModifier: 4, itgLossStructure: 0 },
+  critique:       { threshold: 20, maxCount: 3, incidentModifier: 6, itgLossStructure: 1 },
+  catastrophique: { threshold: 25, maxCount: 2, incidentModifier: 8, itgLossStructure: 1 },
+  destruction:    { threshold: 30, itgLossStructure: 2 },  // pas de case/compteur — immédiat
+}
+```
+
+`incidentModifier` n'est pas consommé par ce lot (jet d'incident = Lot 5a) — transcrit ici pour n'avoir
+qu'une seule source RAW de cette table, pas dupliquée entre Lot 4 et Lot 5a.
+
+### 11.3 Mécanisme
+
+**`calcExoDegatsNets(exoSheet, template, degautsBruts)`** — nouveau, `server/src/lib/charStats.js`, à
+côté de `calcDroneRD`/`calcDroneDegatsNets:66-76` (même fichier tolère déjà les formules de cibles
+non-humaines). `bld = computeExoStats(exoSheet, template).bld` (déjà écrit, jamais dupliqué), `rd =
+EXO_RD_TABLE[template.category]` (déjà écrit). Formule : `Math.max(0, degautsBruts - bld + rd)` —
+**convention d'addition façon humaine** (`damageService.js:404`, RD positif = table affaiblit,
+négatif = renforce), **pas la soustraction façon drone** (`charStats.js:75`) : `EXO_RD_TABLE` a été
+transcrit directement depuis la même philosophie de signe que la table humaine (commentaire d'origine,
+`exoConstants.js:11`), pas construit comme une formule dérivée de l'Intégrité comme celle du drone.
+
+**`severityForExoDamage(net)`** — nouveau, pure, **volontairement pas un partage de
+`_severityForDamage`** (`damageService.js:270-278`, privée/non exportée) : les seuils 5/10/15/20/25/30
+sont identiques par coïncidence entre deux tables RAW indépendantes (Blessures LdB p.114 vs Avaries
+REGLEARMURE p.326) — les coupler créerait une fausse autorité commune, cassante si l'une des deux
+tables change un jour sans l'autre. Petite fonction dédiée (6 comparaisons), commentaire explicite sur
+la coïncidence pour qu'un futur lecteur ne "corrige" pas la duplication apparente.
+
+**`applyExoAvarie(io, db, campaignId, { characterId, severity })`** — nouveau,
+`server/src/lib/exoAvarieService.js` :
+1. Transaction DB (comme `woundService.js:20-28` — obligatoire, pas une lecture puis écriture séparées :
+   plusieurs coups simultanés sur la même exo au même Tour, rafale ou plusieurs attaquants, sinon
+   incrément perdu).
+2. Si `severity === 'destruction'` : perte ITG Structure = 2, **inconditionnelle** (pas de compteur
+   persistant pour ce palier — aucune colonne `avaries_destruction`), retourne `{ destroyed: true }`.
+3. Sinon, cascade récursive sur `avaries_legeres/moyennes/graves/critiques/catastrophiques` :
+   incrémente la ligne du `severity` reçu ; si le nouveau total dépasse `maxCount`, remet la ligne à 0
+   et se rappelle sur le palier suivant (`legere→moyenne→grave→critique→catastrophique→destruction`
+   pour le cas d'overflow depuis catastrophique, cf. §11.6).
+4. **Perte ITG Structure sur transition 0→1 uniquement** (pas à chaque coup) — vérifiée à la ligne où
+   la cascade *atterrit* réellement, direct ou après promotion : si `avaries_critiques`/
+   `avaries_catastrophiques` valait 0 avant cet incrément, applique `itgLossStructure` de ce palier ;
+   sinon aucune perte. Corrige une erreur de ma première formulation ("une fois par coup qualifiant"),
+   trouvée en analyse à charge — le RAW dit explicitement l'inverse (§11.1).
+5. Émet `WS.EXO_AVARIE_UPDATED` (nouveau, `shared/events.js`, même famille que
+   `DRONE_INTEGRITY_UPDATED:152`).
+
+### 11.4 Fichiers touchés
+
+> Cartographie exhaustive faite le 2026-08-19 (lecture personnelle intégrale de
+> `socketCombatHelpers.js`, `socketCombatResolution.js`, `damageService.js` — chaque site ci-dessous
+> vérifié ligne à ligne par moi, pas seulement délégué). Résultat très différent de l'estimation
+> initiale ("~6 sites miroir du drone") : **10 sites de code répartis en 2 catégories**, `docs/EN_COURS.md`
+> réajusté en conséquence. `socketCombatResolution.js` confirmé **hors périmètre** : aucun dispatcher
+> `cibleType`, aucun appel à `resolveTargetHit`, ne fait que déléguer aux handlers de
+> `socketCombatHelpers.js` ; ses imports `calcSkillTotal`/`calcDroneDegatsNets` sont morts (aucun autre
+> usage dans le fichier).
+
+- `shared/exoConstants.js` — `EXO_AVARIE_TABLE` (§11.2).
+- `server/src/lib/charStats.js` — `calcExoDegatsNets` (§11.3).
+- `server/src/lib/exoAvarieService.js` (nouveau) — `severityForExoDamage`, `applyExoAvarie` (§11.3).
+- `shared/events.js` — `EXO_AVARIE_UPDATED`.
+
+**A. Nouvelles branches `cibleType === 'exo'` (threading déjà correct, ajout seul) :**
+
+1. `damageService.js:310` — `if (cibleType === 'exo') return null`, miroir exact du early-return drone
+   déjà présent une ligne au-dessus.
+2. `socketCombatHelpers.js:1786` (`resolveDefenselessTarget`) — CaC, cible exo sans défense.
+3. `socketCombatHelpers.js:1923-1931` (`resolveMeleeDefensePnj`) — CaC, exo pilotée par PNJ, défense
+   active (aucune branche drone n'existe ici, un drone n'atteint jamais cette fonction — nouvelle
+   branche pure, pas un miroir).
+4. `socketCombatHelpers.js:917-921` (`confirmDamage`) — dégâts différés attaquant PJ, chemin partagé
+   CaC + Tir (seul site où `cibleType` arrive déjà intact de bout en bout sans aucune correction, cf.
+   catégorie B ci-dessous pour le CaC spécifiquement).
+5. `socketCombatHelpers.js:3131-3142` (`resolveAssaultHitPnjNormal`) — Tir immédiat, tireur PNJ ou exo,
+   cible exo.
+6. `socketCombatHelpers.js:2470-2472` (`resolveDroneAssaultAction`, dispatch cible) — Tir, tireur
+   **drone**, cible exo : aujourd'hui absorbée par erreur dans la branche PJ (`resolveDroneAssaultHitPj`,
+   `cibleType: null` codé en dur `:2591`, prompt adressé à `cibleCharacter.user_id` au lieu du pilote
+   `:2601`). Nouvelle branche `cibleCharacter?.type === 'exo'` **avant** le test `'pnj'`, nouvelle
+   fonction sœur `resolveDroneAssaultHitExo` (auto-résolution sans suspend, miroir de
+   `resolveDroneAssaultHitDrone:2486-2514`, jamais `resolveDroneAssaultHitPj` qui devient alors
+   inatteignable par une exo — pas la peine de réparer son payload cassé).
+
+**B. Corrections de filature préexistantes, nécessaires pour que (A.4) fonctionne réellement en CaC
+   quand l'exo est pilotée par un PJ (chaîne de 4 corrections, aucune seule ne suffit) :**
+
+7. `confirmMeleeDefense:578-590` — `cibleType` absent de la déstructuration de `pending` alors qu'il est
+   bien stocké en base (`commonPending.cibleType`, posé par `resolveMeleeAction:1711`) → l'ajouter.
+8. `confirmMeleeDefense:678-685` — `ctx` reconstruit pour les fonctions-filles post-hit, sans
+   `cibleType` non plus (perte indépendante de la précédente) → l'ajouter.
+9. `resolveMeleeDefenseHitAttackerPj:722-740` — payload `armAwaitingDamage` sans `cibleType` du tout
+   (trouvaille initiale qui a déclenché cette cartographie) → l'ajouter, désormais disponible via `ctx`.
+10. `resolveMeleeDefenseHitAttackerPnj:777-783` — `cibleType: 'pj'` **littéral codé en dur**, garde
+    `hitResult === null` structurellement morte (commentaire `:758-760` le confirme explicitement) →
+    remplacer par le vrai `cibleType` (désormais disponible) et ajouter ici aussi une branche
+    `cibleType === 'exo'` réelle (sinon le hit reste silencieusement sans effet, seul le `return`
+    changerait de raison).
+
+**Chaque branche exo (catégorie A et le nouveau bloc de la catégorie B point 10) suit le même patron** :
+`resolveExoContext(db, { id: characterIdCible })` (vérifié — ne lit que `.id`,
+`combatantContextService.js:112-113`, aucun fetch `characters` supplémentaire) → `calcExoDegatsNets` →
+`applyExoAvarie`.
+
+**Anomalie trouvée, hors périmètre de ce lot (attaquant, pas défenseur) :** `resolveAssaultAction:2974`
+— un tireur exo (`character.type==='exo'`) ne matche jamais `character.type === 'pj'`, donc un pilote PJ
+tirant depuis son exo est **toujours** auto-résolu comme un PNJ (aucun prompt `COMBAT_ATTACK_PLAYER_RESULT`/
+`CombatDamageWindow`) — asymétrie avec le CaC qui, lui, utilise correctement
+`resolveCombatantIdentity`/`defenderEffectiveType` (§3 du present lot). Confirmé par lecture directe,
+pas juste une hypothèse. Ne fait pas partie du pipeline de dégâts (Lot 4 = comment l'exo **encaisse**,
+pas comment elle **tire**) — signalé ici pour ne pas être reperdu, correction à trancher séparément.
+
+### 11.5 Hors périmètre explicite
+
+- Jet d'incident + localisation (1D10+modificateur, table de localisation) — Lot 5a.
+- Effets par localisation (fuite Structure, blocage Exosquelette, coupure Générateur, systèmes/armement
+  touchés, dégâts Pilote) — Lot 5b-5f.
+- Protocole complet de Destruction (Guillotine/Dernière chance, `REGLEARMURE.md:410-433`) — Lot 6, cf.
+  §11.6 pour la limite exacte de ce que Lot 4 fait en attendant.
+- Test de Chance pour réduire la sévérité des dégâts — **non codé même côté humain** (confirmé par
+  recherche dans `server/src`, aucune fonction `reduceWoundSeverity`/`chance_points`), hors scope ici,
+  pas une régression propre à l'exo.
+- Localisation D20/visée ciblée sur l'armure ("Viser un endroit particulier") — mécanique de Test
+  d'attaque, pas de résolution de dégâts.
+- Pression/écrasement en profondeur (Avarie légère automatique, `REGLEARMURE.md:1569-1580`) — Lot 7,
+  mécanique de mouvement/temps, pas de combat.
+
+### 11.6 Décisions en attente de Saar avant tout code
+
+1. **Débordement de Catastrophique** (2/2 pleines + nouveau coup) : la cascade §11.3 point 3 atterrit
+   sur `destruction`, dont le protocole complet est Lot 6 (pas construit). Proposition : Lot 4
+   s'arrête à appliquer la perte ITG (2, inconditionnelle) et retourner `{ destroyed: true }` au
+   caller (pattern `drone_sheet.damages.detruit`, `socketCombatHelpers.js:3200`), sans implémenter les
+   conséquences narratives (§411-433). **À confirmer.**
+2. **Ambiguïté RAW sur Destruction** : le tableau (§11.2) chiffre la perte à 2 points d'ITG Structure ;
+   le texte narratif (`REGLEARMURE.md:426`) dit *"vous pouvez considérer qu'après une destruction,
+   l'Intégrité de la Structure tombe à 0"*. Lecture proposée : la phrase 426 est une simplification
+   optionnelle offerte au MJ ("vous POUVEZ considérer"), pas une règle obligatoire qui remplacerait le
+   tableau — donc Lot 4 applique le -2 chiffré par défaut, jamais un snap-à-0. **À confirmer avant de
+   coder ce point précis** (les deux lectures sont défendables, je ne tranche pas seul un écart entre
+   deux passages du même livre).
+
+**Décision de Saar (2026-08-19) : les deux points ci-dessus confirmés tels que proposés.**
+
+### 11.7 Clôture (2026-08-19)
+
+Codé intégralement selon §11.1-§11.6, cartographie §11.4 vérifiée site par site (pas seulement
+déléguée à un agent — chaque citation relue personnellement avant modification).
+
+**Fichiers** :
+- `shared/exoConstants.js` — `EXO_AVARIE_TABLE`, `EXO_AVARIE_SEVERITY_ORDER`.
+- `shared/events.js` — `EXO_AVARIE_UPDATED`.
+- `server/src/lib/charStats.js` — `calcExoDegatsNets` (réutilise `stats.rd` de `computeExoStats`,
+  jamais une deuxième lecture de `EXO_RD_TABLE`).
+- `server/src/lib/exoAvarieService.js` (nouveau) — `severityForExoDamage`, `applyExoAvarie`
+  (transactionnel, `.forUpdate()`), `resolveExoDamage` (orchestrateur partagé par les 6 sites A).
+- `server/src/lib/exoAvarieService.test.mjs` (nouveau) — 15 tests (seuils, cascade/promotion,
+  transition 0→1 de la perte d'ITG, débordement Catastrophique→Destruction, Destruction directe
+  inconditionnelle, plancher ITG à 0, orchestrateur complet avec BLD/RD réels).
+- `server/src/lib/damageService.js:310` — early-return `cibleType === 'exo'`, miroir du drone.
+- `server/src/socket/socketCombatHelpers.js` — les 10 sites de §11.4 (catégories A et B), plus mise à
+  jour du commentaire du stub neutralisant (`resolveMeleeAction:1734-1745`) : **le stub n'est PAS
+  retiré** (décision prise en cours de code, pas dans le plan initial) — `char_sheet_id_cible`/
+  `for_na_cible`/etc restent neutres pour un défenseur exo, le nouveau pipeline ne les lit jamais
+  (passe par `characterIdCible`/`resolveExoContext`), les retirer aurait changé un comportement hors
+  périmètre (bonus terrain instable défenseur) sans decision explicite.
+
+**Testé** : `node --check` sur tous les fichiers modifiés, chargement runtime réel (import direct,
+détecte les cycles), 15/15 tests `exoAvarieService.test.mjs` + 192/192 tests suite complète
+`server/src/lib/*.test.mjs`+`socket/*.test.mjs`+`shared/*.test.mjs` (aucune régression).
+
+**Non testé** : scénario réel navigateur (aucune exo-armure en base, `ref_exo_templates` toujours à
+0 ligne — même blocage indépendant du code que le reste du chantier). Les 10 sites de branchement
+`cibleType` n'ont donc jamais vu passer un vrai combat exo — seule la logique pure
+(`exoAvarieService`) est vérifiée contre PostgreSQL réel.
+
+**Hors périmètre, non touché** : l'anomalie attaquant (`resolveAssaultAction:2974`, exo-tireur jamais
+dispatché comme PJ) signalée §11.4, laissée telle quelle par décision explicite.

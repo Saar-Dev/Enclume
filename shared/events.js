@@ -151,6 +151,9 @@ export const WS = {
   // Drones
   DRONE_INTEGRITY_UPDATED: 'drone:integrity_updated',  // serveur → room : intégrité drone mise à jour (combat)
 
+  // Exo-armures (PLAN_EXOARMURE.md Lot 4)
+  EXO_AVARIE_UPDATED: 'exo:avarie_updated',  // serveur → room : compteur d'Avaries/ITG exo mis à jour (combat)
+
   // Jets favoris — macros compétences (PLAN 13)
   MACRO_ROLL:        'macro:roll',         // joueur → serveur : exécuter une macro
   MACRO_ROLL_RESULT: 'macro:roll_result',  // serveur → socket : résultat + message formaté

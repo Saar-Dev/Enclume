@@ -308,6 +308,10 @@ export async function resolveTargetHit(io, db, campaignId, {
   armorReductionFactor = 1,
 }) {
   if (cibleType === 'drone') return null
+  // PLAN_EXOARMURE.md §11 (Lot 4) — une exo-armure n'a pas de char_sheet propre (jamais de Blessure
+  // possible ici) : résolution dédiée (Structure/BLD/RD/compteur d'Avaries) côté caller, même patron
+  // que le drone ci-dessus.
+  if (cibleType === 'exo') return null
 
   // 1. Localisation — visée (COM9, docs/PLAN_TIRVISE v2.md) ou 1D20 aléatoire (comportement
   // historique inchangé). rollLoc/locRolls/locSeed restent null quand visée — jamais un jet

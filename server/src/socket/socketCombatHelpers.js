@@ -21,6 +21,7 @@ import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/comb
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
+import * as exoAvarieService from '../lib/exoAvarieService.js'
 import {
   resolveCombatantTestContext, resolveCombatantIdentity,
   resolveExoContext, resolveManeuverSkillId, resolveHumanoidTestContext,
@@ -583,7 +584,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     defenderSkillTotal, defenderEffectiveMalus, defenderMastery,
     multiMalusDefenseur,
     damageFormula, weaponInvId, modDom, combatModeBonus,
-    characterIdCible, char_sheet_id_cible,
+    characterIdCible, cibleType, char_sheet_id_cible,
     for_na_cible, con_na_cible, vol_na_cible,
     targetName, userId,
     situationDef: pendingSituationDef = [],
@@ -679,7 +680,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
         attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
         rollAttaque, chancesAttaque, mrAttaque,
         damageFormula, weaponInvId, modDom, combatModeBonus,
-        characterIdCible, char_sheet_id_cible,
+        characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
         targetName, userId, tokenId, socket,
       }
@@ -712,18 +713,22 @@ async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
   const {
     attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
     damageFormula, weaponInvId, modDom, mrAttaque, combatModeBonus,
-    characterIdCible, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     targetName, userId, tokenId, socket,
   } = ctx
   // Plusieurs entrées peuvent désormais coexister pour le même attaquant (attaques multiples CaC
   // touchant chacune un défenseur PJ distinct, docs/PLAN_COMBAT_ACTION_QUEUE.md §3) — consommées FIFO
   // par COMBAT_DAMAGE_CONFIRM ; le prompt n'est émis ici que si aucune autre entrée n'attendait
   // déjà (sinon le joueur perdrait de vue le prompt encore non résolu de la précédente).
+  // cibleType (PLAN_EXOARMURE.md §11.4, catégorie B) — absent de ce payload jusqu'ici (repli implicite
+  // sur `undefined` côté confirmDamage, jamais un bug visible tant qu'aucun branchement `cibleType`
+  // n'existait pour un défenseur exo) : ajouté pour que confirmDamage puisse router correctement.
   const pendingDamageCount = await armAwaitingDamage(io, campaignId, attackerTokenId, {
     type: 'melee',
     campaignId,
     targetTokenId: tokenId,
     characterIdCible,
+    cibleType,
     char_sheet_id_cible,
     modDom,
     mr: mrAttaque,
@@ -755,14 +760,16 @@ async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
 }
 
 // Attaquant PNJ après un hit confirmé en défense CaC — résolution auto des dégâts, même primitives que
-// resolveMeleeDefensePnj (Lot 2/5). `if (hitResult === null) return` : garde structurellement morte via
-// ce chemin (cibleType: 'pj' est un littéral codé en dur, resolveTargetHit ne renvoie null que pour
-// cibleType === 'drone', PLAN_RW_SYSCOMBAT.md §2.9.a.2) — conservée telle quelle, pas retirée.
+// resolveMeleeDefensePnj (Lot 2/5). Atteint pour un défenseur `cibleType` 'pj' (humanoïde réel) ou
+// 'exo' (exo pilotée par un PJ, defenderEffectiveType suit le pilote) — jamais 'pnj' (routé plus tôt
+// vers resolveMeleeDefensePnj). cibleType venait d'un littéral codé en dur `'pj'` avant
+// PLAN_EXOARMURE.md §11.4 (catégorie B, point 10) : sans conséquence tant qu'aucun branchement exo
+// n'existait, mais aurait fait disparaître silencieusement les dégâts d'un défenseur exo — corrigé.
 async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
   const {
     attackerTokenId, attackerUsername, attackerColor,
     damageFormula, weaponInvId, modDom, mrAttaque, combatModeBonus,
-    characterIdCible, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+    characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     rollAttaque, chancesAttaque, userId, tokenId,
   } = ctx
   // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6) —
@@ -774,8 +781,25 @@ async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
   })
   // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
   const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
+
+  if (cibleType === 'exo') {
+    // PLAN_EXOARMURE.md §11.4 — resolveExoDamage gère déjà l'émission EXO_AVARIE_UPDATED ; ici, même
+    // rôle que le bloc COMBAT_ATTACK_RESULT du chemin humain juste en dessous, format propre à l'exo
+    // (pas de localisation/is_lethal — concepts humains, EXO_AVARIE_UPDATED porte déjà destroyed/itgLoss).
+    const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
+    if (exoResult) {
+      io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+        tireurId: attackerTokenId, cibleId: tokenId,
+        localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
+        severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
+        roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+      })
+    }
+    return
+  }
+
   const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-    degautsBruts, characterIdCible, cibleType: 'pj',
+    degautsBruts, characterIdCible, cibleType,
     char_sheet_id_cible,
     for_na_cible, con_na_cible, vol_na_cible,
     chocDsl: effectiveChocDsl,
@@ -918,6 +942,14 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       await resolveDamageConfirmDroneTarget(io, pendingCampaignId, ctx, socket)
       return
     }
+    // Branche exo — cible sans char_sheet, résistance = BLD/RD dérivés du template (PLAN_EXOARMURE.md
+    // §11.4, catégorie A, site 4). Contrairement au drone (§2.10.i-bis ci-dessus), le payload melee
+    // différé inclut désormais `cibleType` (catégorie B, resolveMeleeDefenseHitAttackerPj) — atteignable
+    // par CaC ET Tir.
+    if (cibleType === 'exo' && characterIdCible) {
+      await resolveDamageConfirmExoTarget(io, pendingCampaignId, ctx, socket)
+      return
+    }
     await resolveDamageConfirmNormalTarget(io, pendingCampaignId, ctx, socket)
   } catch (err) {
     console.error('[WS] confirmDamage error:', err.message)
@@ -963,9 +995,44 @@ async function resolveDamageConfirmDroneTarget(io, campaignId, ctx, socket) {
   })
 }
 
+// Cible exo — PLAN_EXOARMURE.md §11.4 (catégorie A, site 4), miroir de resolveDamageConfirmDroneTarget
+// ci-dessus. resolveExoDamage gère déjà l'émission EXO_AVARIE_UPDATED (exoAvarieService.js) ; ici,
+// même rôle que le bloc DICE_RESULT/COMBAT_ATTACK_RESULT du drone, format propre à l'exo.
+async function resolveDamageConfirmExoTarget(io, campaignId, ctx, socket) {
+  const {
+    degautsBruts, characterIdCible, targetTokenId, tokenId,
+    tireurColor, tireurUsername, userId, dmgRolls, resolvedFormula, rawDice, dmgSeed,
+  } = ctx
+  const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
+  if (!exoResult) return
+  if (socket) socket.emit(WS.COMBAT_DAMAGE_RESULT, {
+    rollLoc: null, locLabel: null,
+    degautsBruts, degatsNets: exoResult.degatsNets,
+    dmgRolls, severity: exoResult.severity, severityColor: tireurColor, shockResult: null,
+  })
+  const now = new Date().toISOString()
+  io.to(campaignId).emit(WS.DICE_RESULT, {
+    userId, username: tireurUsername, color: tireurColor,
+    formula: resolvedFormula, rolls: dmgRolls, total: degautsBruts,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: dmgSeed, timestamp: now,
+    skillLabel: `Dégâts — exo-armure`,
+    mechanicalTotal: rawDice,
+    diffLabel: `Blindage:${exoResult.bld} RD:${exoResult.rd}`,
+    chancesDeReussite: exoResult.degatsNets,
+    isSuccess: exoResult.degatsNets > 0,
+  })
+  io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
+    tireurId: tokenId, cibleId: targetTokenId,
+    localisation: null,
+    degautsBruts, degatsNets: exoResult.degatsNets,
+    severity: exoResult.severity, is_lethal: false, isSuccess: true, shockResult: null,
+  })
+}
+
 // Cible = PJ/PNJ/décor. `hitResult === null` structurellement inatteignable ici — le dispatch de la
-// coquille garantit cibleType !== 'drone' (§2.10.i, seul cas où resolveTargetHit renvoie null, F4
-// docs/SYSTEME/SERVICES_COMBAT.md §8) — garde conservée telle quelle, pas retirée.
+// coquille garantit cibleType !== 'drone' et !== 'exo' (§2.10.i/§11.4, seuls cas où resolveTargetHit
+// renvoie null, F4 docs/SYSTEME/SERVICES_COMBAT.md §8) — garde conservée telle quelle, pas retirée.
 async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
   const {
     degautsBruts, characterIdCible, cibleType, char_sheet_id_cible,
@@ -1667,11 +1734,15 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
         // défense ci-dessus (déjà réglé) mais le pipeline de dégâts SI l'attaque touche
         // (resolveTargetHit plus loin : RD, armure, écriture de Blessure). Jamais dérivés du pilote
         // pour un défenseur exo : l'armure a son propre pipeline de dégâts (Intégrité/Avaries/RD fixe
-        // par catégorie, MANUEL_EXOARMURE.md §4.6-4.7), pas encore construit
-        // (PLAN_EXOARMURE.md Lot 4, hors périmètre de ce chantier) — appliquer la formule de RD
-        // humaine avec l'EXF du pilote produirait un nombre faux, et char_sheet_id_cible=sheet du
-        // pilote ferait écrire une Blessure humaine sur le pilote en contournant l'armure. Restent au
-        // repli neutre préexistant (8/8/8/null) pour un défenseur exo, comme avant ce chantier.
+        // par catégorie, PLAN_EXOARMURE.md §11, Lot 4 ✅ codé 2026-08-19). Ce pipeline dédié
+        // (exoAvarieService.resolveExoDamage) résout tout depuis `characterIdCible` seul
+        // (resolveExoContext) — il n'a jamais besoin de char_sheet_id_cible/for_na_cible/etc, qui
+        // resteraient de toute façon ceux du PILOTE si on les laissait passer (appliquer la formule de
+        // RD humaine avec l'EXF du pilote produirait un nombre faux, et char_sheet_id_cible=sheet du
+        // pilote ferait écrire une Blessure humaine sur le pilote en contournant l'armure). Le repli
+        // neutre (8/8/8/null) reste donc volontairement en place pour un défenseur exo — pas une dette
+        // du Lot 4, une garde délibérée (`resolveTargetHit` retourne aussi `null` pour `cibleType ===
+        // 'exo'`, damageService.js:310, filet de sécurité si un site venait à les lire quand même).
         if (defenderCharacter.type !== 'exo') {
           for_na_cible = ctxCible.for_na
           con_na_cible = ctxCible.con_na
@@ -1792,6 +1863,17 @@ async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
           tireurId: attackerTokenId, cibleId: targetTokenId,
           localisation: null, degautsBruts, degatsNets: degatsNetsDrone,
           severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+          roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+        } })
+      }
+    } else if (cibleType === 'exo') {
+      // PLAN_EXOARMURE.md §11.4 (catégorie A, site 2) — miroir de la branche drone ci-dessus.
+      const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
+      if (exoResult) {
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+          tireurId: attackerTokenId, cibleId: targetTokenId,
+          localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
+          severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
           roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
         } })
       }
@@ -1920,6 +2002,22 @@ async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
     })
     // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
     const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
+
+    if (cibleType === 'exo') {
+      // PLAN_EXOARMURE.md §11.4 (catégorie A, site 3) — aucune branche drone n'existait ici (un drone
+      // n'atteint jamais cette fonction, §7.4/resolveMeleeDefenseDrone), branche nouvelle pure.
+      const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: characterIdCible, degautsBruts })
+      if (exoResult) {
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+          tireurId:    attackerTokenId, cibleId: targetTokenId,
+          localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
+          severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
+          roll: rollAttaque, chancesDeReussite: chancesAttaque, shockResult: null,
+        } })
+      }
+      return { suspend: false, emissions }
+    }
+
     const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
       degautsBruts,
       characterIdCible,
@@ -2468,6 +2566,12 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     // unique, qui vide alors `emissions` — comportement existant préservé à l'identique.
     const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now }
     if (cibleCharacter?.type === 'drone') return await resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions)
+    // PLAN_EXOARMURE.md §11.4 (catégorie A, site 6) — AVANT le test 'pnj' : sans cette branche, une exo
+    // (type ni 'drone' ni 'pnj') tombait par erreur dans resolveDroneAssaultHitPj (`cibleType: null`
+    // codé en dur, prompt adressé à cibleCharacter.user_id au lieu du pilote). Une exo n'a pas de
+    // défense active contre un tir (même absence que le drone, RAW) — auto-résolution immédiate, jamais
+    // de suspend/prompt.
+    if (cibleCharacter?.type === 'exo') return await resolveDroneAssaultHitExo(io, campaignId, ctx, emissions)
     if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveDroneAssaultHitPnj(io, campaignId, ctx, emissions)
     return await resolveDroneAssaultHitPj(io, campaignId, ctx, emissions)
 
@@ -2509,6 +2613,34 @@ async function resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions) {
     tireurId: action.token_id, cibleId: action.target_token_id,
     localisation: droneSheet.localisation_ref ?? 'corps', degautsBruts, degatsNets,
     severity: null, is_lethal: false, isSuccess: true, shockResult: null,
+  } })
+  return { suspend: false, emissions }
+}
+
+// 8a-bis. Cible = exo-armure (PLAN_EXOARMURE.md §11.4, catégorie A, site 6) — miroir de
+// resolveDroneAssaultHitDrone : auto-resolve, aucune défense active (même absence RAW que le drone).
+async function resolveDroneAssaultHitExo(io, campaignId, ctx, emissions) {
+  const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
+  const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
+  const modDomAttaque = getMrModifier(mr)
+  const degautsBruts  = rawDice + modDomAttaque
+  const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleCharacter.id, degautsBruts })
+  if (!exoResult) return { suspend: false, emissions }
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId, username: tireurUsername, color: tireurColor,
+    formula, rolls: dmgRolls, total: degautsBruts,
+    isCriticalSuccess: false, isCriticalFail: false,
+    seed: dmgSeed, timestamp: now,
+    skillLabel: `Dégâts — ${cibleCharacter.name}`,
+    mechanicalTotal: rawDice,
+    diffLabel: `+${modDomAttaque} MR · −${exoResult.bld} BLD · RD ${exoResult.rd}`,
+    chancesDeReussite: exoResult.degatsNets,
+    isSuccess: exoResult.degatsNets > 0,
+  } })
+  emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+    tireurId: action.token_id, cibleId: action.target_token_id,
+    localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
+    severity: exoResult.severity, is_lethal: false, isSuccess: true, shockResult: null,
   } })
   return { suspend: false, emissions }
 }
@@ -3128,6 +3260,21 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
     cibleToken, cibleCharacter, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     degautsBruts, effectiveDamage, rollAttaque, chancesDeReussite,
   } = ctx
+
+  if (cibleCharacter?.type === 'exo') {
+    // PLAN_EXOARMURE.md §11.4 (catégorie A, site 5) — Tir immédiat, tireur PNJ ou exo, cible exo.
+    const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleToken.character_id, degautsBruts })
+    if (exoResult) {
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+        tireurId: action.token_id, cibleId: action.target_token_id,
+        localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
+        severity: exoResult.severity, is_lethal: false, isSuccess: true,
+        isPnj: true, roll: rollAttaque, chancesDeReussite, shockResult: null,
+      } })
+    }
+    return { suspend: false, emissions }
+  }
+
   const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
     degautsBruts,
     characterIdCible: cibleToken.character_id,

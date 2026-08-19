@@ -15,6 +15,7 @@ import { WOUND_PENALTIES } from '../../../shared/woundConstants.js'
 import {
   polarisRound, calcAN, getGenotypeModForAttr, getMutationModForAttr, calcNA, RD_TABLE,
 } from '../../../shared/polarisUtils.js'
+import { computeExoStats } from '../../../shared/exoStats.js'
 
 // ─── Labels complets des attributs (LdB p.112-113) ───────────────────────────
 // Utilisés pour l'affichage dans le chat (jets de dés, résultats interactions).
@@ -73,6 +74,22 @@ export function calcDroneDegatsNets(droneSheet, degautsBruts) {
   const etqDrone = droneSheet.blindage ?? 0
   const rdDrone  = calcDroneRD(droneSheet.integrite_actuelle)
   return { etqDrone, rdDrone, degatsNets: Math.max(0, degautsBruts - etqDrone - rdDrone) }
+}
+
+// PLAN_EXOARMURE.md §11.3 — Dégâts nets exo-armure : degautsBruts − BLD(computeExoStats, dérivé de
+// l'Intégrité Structure courante) + RD(fixe par catégorie). `computeExoStats` retourne déjà `rd`
+// (exoStats.js:75-77, EXO_RD_TABLE appliqué + garde catégorie inconnue) — jamais relu séparément ici,
+// une seule autorité pour cette valeur. Convention d'ADDITION du RD façon humaine (damageService.js:404,
+// RD positif = affaiblit, négatif = renforce) — PAS la soustraction façon drone ci-dessus :
+// EXO_RD_TABLE a été transcrit directement depuis la même philosophie de signe que la table humaine
+// (exoConstants.js, commentaire d'origine), pas construit comme une formule dérivée de l'Intégrité
+// comme celle du drone.
+// Retourne null si aucun template n'est assigné — même garde que computeExoStats, jamais un NaN
+// silencieux (exoStats.js:59-61).
+export function calcExoDegatsNets(exoSheet, template, degautsBruts) {
+  const stats = computeExoStats(exoSheet, template)
+  if (!stats) return null
+  return { bld: stats.bld, rd: stats.rd, degatsNets: Math.max(0, degautsBruts - stats.bld + stats.rd) }
 }
 
 // ─── Table des modificateurs de difficulté (LdB p.404) ───────────────────────
