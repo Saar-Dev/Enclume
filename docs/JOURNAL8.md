@@ -3062,3 +3062,44 @@ en jeu (aucune exo-armure en base à ce jour, même limite que tout le chantier 
 Lot 1).
 **Données** : aucune migration — code + documentation seulement.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-19 — Ticket "Illustration fiche personnage"
+
+Deuxième bug traité via `bug_tickets` (ticket `e8946376`, sans `linked_bug_code`). Symptôme rapporté :
+impossible de changer l'illustration d'un personnage une fois qu'une première a été définie, échec
+silencieux ; placeholder de développement ("Illustration — Phase 3") resté visible en production.
+
+**Cause racine `[VÉRIFIÉ]`** : `POST /characters/:id/portrait` stocke l'image sous un nom d'objet MinIO
+fixe (`characters/<id>/illustration`, choix voulu — `putObject` écrase l'ancien, pas d'accumulation
+d'orphelins). Conséquence non anticipée : l'URL construite côté client
+(`${VITE_API_URL}/api/assets/${portrait_url}`) est donc **identique avant et après un remplacement**.
+Avec `Cache-Control: public, max-age=3600` sur la route qui sert l'asset (`assets.js`) et le fait qu'un
+`<img src>` React inchangé ne redéclenche même pas de requête réseau, l'ancienne image restait affichée
+jusqu'à une heure après un upload pourtant réussi côté serveur — d'où l'illusion d'un échec silencieux.
+Repéré aussi sur `TokenStyleEditor.jsx` (aperçu jamais rafraîchi) et `Canvas2D.jsx` (token sur la carte),
+même construction d'URL dupliquée aux deux endroits.
+
+**Correctif** — pas de nouveau mécanisme : la route jumelle `POST /characters/:id/glb` (90 lignes plus
+bas dans le même fichier) avait déjà résolu exactement ce problème via **P19** (`docs/SYSTEME/
+CONVENTIONS.md`, `docs/SYSTEME/ASSETS.md`) — `?v=<timestamp>` stocké directement dans la colonne URL,
+`assets.js` ignorant les query params pour résoudre la clé MinIO. `portrait_url` avait simplement été
+oublié quand cette convention a été établie (rien dans la doc ne le justifiait comme exception).
+`characters.js` aligné sur ce patron ; **aucun changement côté client** — les 3 sites de rendu lisent
+déjà `character.portrait_url` tel quel, ils héritent du paramètre automatiquement. Doc P19 et
+`ASSETS.md` corrigées pour refléter que la règle couvre aussi `portrait_url`, pas seulement `glb_url`.
+
+Piste explorée puis écartée en cours de route (Saar) : désactiver le cache globalement sur `/api/assets/*`
+plutôt que cibler l'URL — rejetée, la route sert aussi les GLB (jusqu'à 20 Mo) et les textures de
+battlemap, qui changent rarement ; et un `<img src>` inchangé ne redéclenche de toute façon aucune
+requête côté navigateur dans une SPA, indépendamment des en-têtes de cache serveur.
+
+Placeholder `illustrationPlaceholder` (`fr.json`) : `"Illustration — Phase 3"` → `"Aucune illustration"`.
+
+**Testé** : `node --check` sur `characters.js`, JSON valide (`fr.json`), démarrage serveur complet
+vérifié (Postgres/MinIO relancés après coupure Docker Desktop entre les deux sessions), confirmé
+fonctionnel par Saar en navigateur.
+**Non testé** : rien d'identifié restant sur ce ticket précis.
+**Données** : aucune migration.
+**Retour arrière** : commit isolé sur `dev/Saar` (`da22877`), `git revert` suffit.

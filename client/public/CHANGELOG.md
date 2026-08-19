@@ -1,3 +1,10 @@
+## v204 — 2026-08-19 — Fix : illustration de personnage jamais mise à jour
+
+### Personnage
+- [fix] Remplacer l'illustration d'un personnage déjà illustré fonctionne maintenant — la nouvelle
+  image s'affiche immédiatement (fiche, éditeur de style de token, token sur la carte).
+- [fix] Texte de développement oublié ("Illustration — Phase 3") remplacé par "Aucune illustration".
+
 ## v203 — 2026-08-18 — Fix : combat bloqué avec un joueur surpris
 
 ### Combat — Phase Annonce
