@@ -2,6 +2,7 @@ import db from '../db/knex.js'
 import { calcAttributeNA, calcSkillTotal } from '../lib/charStats.js'
 import { calcAllures } from '../../../shared/polarisUtils.js'
 import { getMutationEffects } from './mutationService.js'
+import { getInventory } from './inventoryService.js'
 
 export const MOVEMENT_GAITS = Object.freeze(['lente', 'moyenne', 'rapide', 'max'])
 
@@ -39,12 +40,13 @@ export async function getCharacterMovementBudget(characterId, gait) {
   const sheet = await db('char_sheet').where({ character_id: characterId }).first()
   if (!sheet) throw new Error('Character sheet not found for movement budget')
 
-  const [attributes, archetype, athletics, athleticsRef, mutationEffects] = await Promise.all([
+  const [attributes, archetype, athletics, athleticsRef, mutationEffects, inventory] = await Promise.all([
     db('char_attributes').where({ char_sheet_id: sheet.id }),
     db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
     db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'ATHLETISME' }).first(),
     db('ref_skills').where({ id: 'ATHLETISME' }).first(),
     getMutationEffects(sheet.id),
+    getInventory(characterId, character.campaign_id),
   ])
   const genotype = archetype?.genotype_id
     ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
@@ -58,6 +60,13 @@ export async function getCharacterMovementBudget(characterId, gait) {
     mutationEffects,
   )
   const allures = calcAllures(coordination, athleticsTotal)
+  // RAW REGLES_LdB.md:286-292 — l'Allure rapide est déjà "la vitesse d'un personnage qui court tout
+  // en étant chargé et/ou encombré" ; l'Allure maximale exige explicitement d'être "sans être
+  // encombré d'aucune manière". ini_penalty (inventoryService.js) est déjà l'autorité unique de
+  // "ce personnage est chargé" (poids porté > FOR × multiplier, 0 si encumbrance_enabled=false pour
+  // la campagne) — réutilisé tel quel plutôt qu'un second seuil : au-delà, l'Allure max retombe sur
+  // l'Allure rapide (aucun coût de déplacement ne peut plus la sélectionner, cf. selectMovementBudget).
+  if (inventory.ini_penalty > 0) allures.max = allures.rapide
   return Object.freeze({
     ...selectMovementBudget(allures, gait),
     allures: Object.freeze({ ...allures }),

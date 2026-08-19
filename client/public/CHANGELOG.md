@@ -1,3 +1,10 @@
+## v208 — 2026-08-19 — Fix : Allure Maximale accessible même chargé/encombré
+
+### Combat — Déplacement
+- [fix] Un personnage chargé au-delà de son seuil de poids porté (malus d'Initiative déjà actif) ne
+  peut plus courir à l'Allure Maximale en combat — conforme au Livre de Base, il est plafonné à
+  l'Allure Rapide.
+
 ## v207 — 2026-08-19 — Admin : création de ticket depuis l'écran de triage
 
 ### Admin — Tickets

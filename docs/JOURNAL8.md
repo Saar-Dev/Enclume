@@ -3403,3 +3403,33 @@ observable.
 **Données** : aucune migration, aucun changement client. Pas d'entrée `CHANGELOG.md` — correctif serveur
 sans impact visible utilisateur aujourd'hui.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "DEP1" — Allure Maximale accessible chargé/encombré
+
+**Contexte** : RAW (`REGLES_LdB.md:286-292`) — l'Allure rapide est déjà "la vitesse d'un personnage
+qui court tout en étant chargé et/ou encombré" ; l'Allure maximale exige explicitement d'être "sans
+être encombré d'aucune manière". `shared/polarisUtils.js#calcAllures` ne prenait aucun paramètre de
+poids — les 4 allures dérivaient uniquement de Coordination/Athlétisme, sans jamais consulter le poids
+porté. MUT4 (même session, voir plus haut) a été reporté juste avant celui-ci pour comparaison : ce
+ticket-ci restait mécanisable simplement car le projet a déjà une autorité unique pour "ce personnage
+est chargé" — `inventoryService.js#getInventory` calcule déjà `ini_penalty` (poids porté > FOR ×
+multiplicateur de campagne, 0 si `encumbrance_enabled=false`), consommé jusqu'ici pour le seul malus
+d'Initiative porté.
+
+**Codé** — `movementBudgetService.js#getCharacterMovementBudget` : appelle en plus `inventoryService.
+getInventory(characterId, character.campaign_id)` ; si `ini_penalty > 0`, `allures.max` est ramené à
+`allures.rapide` avant le calcul du budget — l'Allure maximale devient numériquement inaccessible
+(`selectMovementBudget`/`selectCombatMovementForCost` ne peuvent plus la sélectionner pour aucun coût).
+`calcAllures` lui-même non touché (fonction pure, réutilisée par `CharacterSheet.jsx`/
+`CombatActionWindow.jsx` pour un affichage informatif hors périmètre de ce bug — RAW qualifie
+d'ailleurs l'Allure maximale de valeur "à titre indicatif"). Ne concerne que les personnages humains
+(PJ/PNJ) — `getCharacterMovementBudget` bifurque déjà avant sur `type==='exo'` (Vitesse), et un drone
+n'a pas de `char_sheet` du tout (mouvement géré ailleurs, hors branche touchée).
+
+**Testé** : `node --check`, suite existante `movementBudgetService.test.mjs` (2/2 verts, aucune
+régression), rechargement nodemon sans erreur (`/api/health` 200 après coup). Confirmé fonctionnel par
+Saar en navigateur (personnage chargé au-delà du seuil ne dépasse plus l'Allure rapide en combat).
+**Non testé** : rien d'identifié restant.
+**Données** : aucune migration, aucun changement client (le budget vient du serveur à la déclaration
+du mouvement).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
