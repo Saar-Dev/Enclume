@@ -44,3 +44,19 @@ export async function assertConstraintExists(db, table, constraint) {
     `contrainte ${constraint} absente sur ${table} — dérive entre le fichier de migration et le schéma réel`,
   )
 }
+
+// expectedDefault : null pour "aucun défaut", sinon l'expression SQL exacte telle que Postgres la
+// renvoie (ex. "'[]'::jsonb", vérifiée via information_schema.columns.column_default) — jamais une
+// valeur JS convertie, la représentation Postgres est la seule source fiable (cf. SCHEMADRIFT-
+// BATTLEMAPSVOXEL1, docs/JOURNAL8.md 2026-08-19).
+export async function assertColumnDefault(db, table, column, expectedDefault) {
+  const { rows } = await db.raw(
+    `SELECT column_default FROM information_schema.columns WHERE table_name = ? AND column_name = ?`,
+    [table, column],
+  )
+  assert.equal(
+    rows[0]?.column_default ?? null,
+    expectedDefault,
+    `défaut de ${table}.${column} ne correspond pas — dérive entre le fichier de migration et le schéma réel`,
+  )
+}

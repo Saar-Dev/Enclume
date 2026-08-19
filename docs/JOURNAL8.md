@@ -3604,3 +3604,37 @@ cette session.
 **Non testé** : sans objet.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "SCHEMADRIFT-BATTLEMAPSVOXEL1"
+
+**Contexte** : `battlemaps.voxel_data` n'a aucun défaut en base réelle (vérifié : `column_default`
+NULL), alors que la migration d'origine (`20260330_13_battlemaps_voxel_data.js`) posait
+`defaultTo('[]')` — un défaut **tableau**, alors que `routes/battlemaps.js:872` traite `voxel_data`
+strictement comme un **objet** et rejette explicitement un tableau (`Array.isArray` → 400) ; la
+création d'un battlemap (`routes/battlemaps.js:184`) ne fournit d'ailleurs jamais `voxel_data`
+explicitement, dépendant entièrement de ce défaut, faux dès l'origine. Quelqu'un l'a corrigé
+directement en base (`DROP DEFAULT`) sans jamais l'écrire en migration — dérive constatée entre
+l'historique versionné et le schéma réel. Aucun impact fonctionnel aujourd'hui : le code de lecture
+(`current.voxel_data || {}`) tolère déjà `NULL`.
+
+**Codé** — même patron déjà établi pour `SCHEMADRIFT-EXOTEMPLATES1` (2026-08-12) :
+- `testHelpers/schemaAssertions.mjs` — nouveau helper `assertColumnDefault(db, table, column,
+  expectedDefault)`, même style que les 3 helpers existants (lit `information_schema.columns` en
+  base réelle, jamais via `up()`/`down()` — détecte une dérive même si la migration a déjà tourné).
+- Migration `250_battlemaps_voxel_data_drop_default.js` (numéro vérifié contre `knex_migrations`,
+  249 = dernière appliquée) — `up` : `ALTER TABLE battlemaps ALTER COLUMN voxel_data DROP DEFAULT`
+  (même syntaxe déjà utilisée dans `137b_ref_equipment_archive_side_effects.js`) ; `down` : restaure
+  `DEFAULT '[]'::jsonb` (état d'origine exact). Additif et idempotent — no-op sur une base qui a déjà
+  ce défaut retiré.
+- Test dédié : test "schéma réel" toujours actif + test transactionnel up/down classique (`assert.
+  rejects` sur un rollback volontaire, même patron que `242_char_gauges.test.mjs`).
+
+**Testé** : migration appliquée en base réelle via `db.migrate.latest()` (vérifié `knex_migrations`
+avant, P54 — batch 167, seule cette migration en attente). `node --test` sur le nouveau fichier (2/2
+verts) et sur `242_char_gauges.test.mjs` (non-régression du helper partagé, 3/3 verts). Serveur de dev
+relancé par Saar, confirmé fonctionnel.
+**Non testé** : rien d'identifié restant — correctif purement schéma, aucun comportement applicatif
+changé.
+**Données** : migration 250 (additive, idempotente, `down()` fourni).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; `down()` restaure l'état
+d'origine si besoin.
