@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import api from '../lib/api'
+import { useAuthStore } from './authStore'
 
 const PC_TOTAL = 20
 
@@ -169,10 +170,15 @@ export const useCreationStore = create((set, get) => ({
     }
     next.highestStep = hs
 
-    // Suivi "en direct" MJ uniquement (docs/PLAN_WIZARDCOLLAB.md, décision Saar) : avance l'écran
-    // affiché seulement si le MJ était déjà à la frontière avant ce sync (motif auto-scroll de
-    // chat) — jamais s'il a navigué en arrière pour relire une étape, il ne doit pas en être arraché.
-    if (s.isGmView && s.step === s.highestStep && hs > s.highestStep) next.step = hs
+    // Suivi "en direct" pour un observateur uniquement (docs/PLAN_WIZARDCOLLAB.md, décision Saar) :
+    // avance l'écran affiché seulement s'il était déjà à la frontière avant ce sync (motif auto-scroll
+    // de chat) — jamais s'il a navigué en arrière pour relire une étape, il ne doit pas en être arraché.
+    // `s.isGmView` seul confondait "observe le brouillon d'un autre" et "MJ créant son propre
+    // personnage" (audit docs/JOURNAL8.md 2026-08-19, point 1, même correctif que WizardCreation.jsx
+    // #gmSyncKey/#liveOr) — useAuthStore.getState() est le seul moyen propre de lire l'utilisateur
+    // courant depuis une action Zustand hors composant (aucun précédent contraire dans le projet).
+    const isObservingOther = !!s.ownerUserId && s.ownerUserId !== useAuthStore.getState().user?.id
+    if (isObservingOther && s.step === s.highestStep && hs > s.highestStep) next.step = hs
 
     return next
   }),

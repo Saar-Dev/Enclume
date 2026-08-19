@@ -9,22 +9,10 @@ import Step4Summary from './Step4Summary'
 import { useCreationStore } from '../../stores/creationStore'
 import { getSetbackBlockCount } from '../../../../shared/careerSetbacks.js'
 import { originGeoOptionKey, originSocOptionKey, trainingOptionKey } from '../../../../shared/wizardOptionKeys.js'
+import { SUB_STEPS, SUB_STEP_ORDER } from '../../../../shared/wizardStep4SubSteps.js'
 import api from '../../lib/api'
 
 const enrichBg = (bg) => ({ ...bg, ...(BG_META[bg.code] ?? {}) })
-
-const SUB_STEPS = {
-  AGE: 'age',
-  GEO_ORIGIN: 'geo_origin',
-  SOCIAL_ORIGIN: 'social_origin',
-  TRAINING: 'training',
-  HIGHER_ED: 'higher_ed',
-  CAREERS: 'careers',
-  ADVANTAGES_AND_SETBACKS: 'advantages_and_setbacks',
-  SUMMARY: 'summary',
-}
-
-const SUB_STEP_ORDER = Object.values(SUB_STEPS)
 
 const HIGHER_ED_TRAINING_CODE = 'education_scolaire'
 
@@ -39,29 +27,34 @@ const HIGHER_ED_TRAINING_CODE = 'education_scolaire'
 // exclus une première fois (état conditionnel, aucun champ "visité" persisté), mais une reprise avec
 // carrières déjà choisies sautait alors TOUJOURS cette sous-étape en atterrissant direct sur Récap —
 // aucune jauge de matériel ne pouvait plus jamais être semée pour un personnage repris (confirmé en
-// base : carrière avec `pro_advantages: {}`, aucune ligne `char_gauges`). Heuristique : si aucune
-// carrière ne porte de Pro-Avantage choisi ET qu'aucun tirage de Revers n'existe, considéré comme
-// "jamais visité" → renvoyé là. Cas limite assumé, même famille que `higherEd` ci-dessous : une
-// carrière qui n'offre RÉELLEMENT aucun Pro-Avantage (ou reversEnabled=false + aucun bloc de Revers)
-// y sera revisitée sans jamais rien avoir à cocher — pas un plantage, juste une repasse mineure,
-// aucun champ persisté ne permettant de faire mieux sans données supplémentaires (settings, catalogue
-// carrières) indisponibles à ce stade du montage.
-// Cas limite assumé : `higherEd` vaut `null` aussi bien "non visité" que "explicitement sauté"
-// (handleSkipHigherEd) — aucun flag persisté ne distingue les deux. Un joueur revenant après avoir
-// sauté cette sous-étape peut s'y voir renvoyé une fois de plus ; jamais un plantage (`null` y est
-// une valeur valide côté serveur), juste une repasse mineure.
+// base : carrière avec `pro_advantages: {}`, aucune ligne `char_gauges`). Heuristique de base : si
+// aucune carrière ne porte de Pro-Avantage choisi ET qu'aucun tirage de Revers n'existe, ambigu entre
+// "jamais visité" et "visité, rien à choisir" (carrière sans Pro-Avantage réel, ou reversEnabled=false)
+// — irréductible par chaînage (dernière sous-étape avant Récap, rien après elle à vérifier). Tranché
+// par `initialData.highestSubStep` (migration 248, char_sheet.wizard_progress) quand disponible ;
+// fiches créées avant cette migration retombent sur l'ancien défaut ("jamais visité").
+//
+// `higherEd` (null aussi bien "non visité" qu'"explicitement sauté", handleSkipHigherEd) résolu par
+// chaînage plutôt que par un marqueur dédié : `careers.length > 0` ne peut être vrai que si le joueur
+// a déjà dépassé cette sous-étape (navigation linéaire), donc renvoyer sur HIGHER_ED seulement tant
+// qu'aucune carrière n'a été ajoutée — même principe que WIZ5/computeHighestStep (creationStore.js).
 function computeInitialSubStep(initialData) {
   if (!initialData) return SUB_STEPS.AGE
   if (initialData.originGeo == null) return SUB_STEPS.GEO_ORIGIN
   if (initialData.originSoc == null) return SUB_STEPS.SOCIAL_ORIGIN
   if (initialData.training == null) return SUB_STEPS.TRAINING
-  if (initialData.training === HIGHER_ED_TRAINING_CODE && initialData.higherEd == null) return SUB_STEPS.HIGHER_ED
-  if (!initialData.careers || initialData.careers.length === 0) return SUB_STEPS.CAREERS
+  const noCareerYet = !initialData.careers || initialData.careers.length === 0
+  if (initialData.training === HIGHER_ED_TRAINING_CODE && initialData.higherEd == null && noCareerYet) return SUB_STEPS.HIGHER_ED
+  if (noCareerYet) return SUB_STEPS.CAREERS
   const hasAnyProAdvantage = initialData.careers.some(
     c => c.proAdvantages && Object.keys(c.proAdvantages).length > 0
   )
   const hasAnySetbackRoll = (initialData.setbackRolls?.length ?? 0) > 0
-  if (!hasAnyProAdvantage && !hasAnySetbackRoll) return SUB_STEPS.ADVANTAGES_AND_SETBACKS
+  if (!hasAnyProAdvantage && !hasAnySetbackRoll) {
+    const persistedIdx = initialData.highestSubStep ? SUB_STEP_ORDER.indexOf(initialData.highestSubStep) : -1
+    const advIdx = SUB_STEP_ORDER.indexOf(SUB_STEPS.ADVANTAGES_AND_SETBACKS)
+    return persistedIdx >= advIdx ? SUB_STEPS.SUMMARY : SUB_STEPS.ADVANTAGES_AND_SETBACKS
+  }
   return SUB_STEPS.SUMMARY
 }
 
@@ -361,8 +354,11 @@ function Step4ExperienceInner({
     validSetbackRolls, totalPC, conditionalChoices,
   ])
 
+  // highestSubStep (migration 248, char_sheet.wizard_progress) : même exception que `subStep` sur
+  // onLiveChange ci-dessous (WIZ21) — ajouté ici, jamais dans buildPayload lui-même, qui reste
+  // ignorant de la navigation UI. Le serveur (reconcileCreation) ne l'avance jamais en arrière.
   const handleSubmit = () => {
-    onNext?.(buildPayload())
+    onNext?.({ ...buildPayload(), highestSubStep })
   }
 
   // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — réutilise buildPayload (même

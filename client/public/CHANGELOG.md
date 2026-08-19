@@ -1,3 +1,11 @@
+## v205 — 2026-08-19 — Fix : reprise du Wizard (Étape 3 et Étape 4)
+
+### Wizard
+- [fix] Reprendre un personnage sans jamais être allé à l'Étape 3 (Mutations) ouvre maintenant un
+  formulaire vierge au lieu d'afficher "Aucune mutation" déjà pré-sélectionné.
+- [fix] Reprendre un personnage en cours d'Étape 4 (Expérience) atterrit maintenant sur la bonne
+  sous-étape (Avantages & Revers vs Récapitulatif) au lieu de deviner à tort d'après le contenu.
+
 ## v204 — 2026-08-19 — Fix : illustration de personnage jamais mise à jour
 
 ### Personnage

@@ -59,15 +59,23 @@ export default function WizardCreation() {
   // n'en est pas descendant, même contrainte documentée pour useSocket() dans WizardLockSync.jsx) :
   // la ref est déposée par WizardLockSync (descendant du Provider), lue ici de façon impérative.
   const emitLiveRef = useRef(() => {})
-  // Priorité au brouillon live côté MJ uniquement (§2.5) — le joueur voit toujours sa propre saisie
-  // locale (initialData ne sert qu'au montage initial de son point de vue, jamais un live-overlay
-  // sur lui-même).
-  const liveOr = (live, committed) => (isGmView && live != null ? live : committed)
   // PLAN_WIZARD_MATERIEL_GAUGES.md §0bis point 7/§5 — même comparaison déjà faite ligne ~103
   // (ownerUserId vs user?.id, remise à zéro d'un brouillon d'un autre joueur) : ownerUserId était
   // déjà dans le store (setOwnerUserId), juste jamais dérivé en isOwner ni transmis à un composant
   // de step avant ce chantier.
   const isOwner = !!ownerUserId && ownerUserId === user?.id
+  // Audit diffusion live du Wizard (docs/JOURNAL8.md, 2026-08-19, point 1) : `isGmView` seul confond
+  // "MJ observant le brouillon de quelqu'un d'autre" avec "MJ créant son propre personnage" (même
+  // ambiguïté que WIZ13, ownerUserId = rôle de campagne ET observation, corrigée à l'époque sur un
+  // seul consommateur — resetCreation ligne ~121). `isObservingOther` est la distinction réelle dont
+  // liveOr/gmSyncKey ont besoin : sans elle, un MJ créant son propre personnage se faisait remonter
+  // inutilement ses propres composants d'étape à chaque écho serveur (sans perte de données — c'est
+  // toujours sa propre donnée déjà committée — mais un remontage superflu, même classe de bug).
+  const isObservingOther = !!ownerUserId && !isOwner
+  // Priorité au brouillon live côté observateur uniquement (§2.5) — le joueur (et un MJ sur son propre
+  // personnage) voit toujours sa propre saisie locale (initialData ne sert qu'au montage initial de
+  // son point de vue, jamais un live-overlay sur lui-même).
+  const liveOr = (live, committed) => (isObservingOther && live != null ? live : committed)
 
   // Callbacks stables (useCallback, jamais des fléchées inline) — WizardCreation et Step4Experience
   // s'abonnent au store entier sans sélecteur (useCreationStore() déjà ainsi avant ce chantier),
@@ -83,12 +91,14 @@ export default function WizardCreation() {
   const onLiveChange4 = useCallback((data) => emitLiveRef.current(4, data), [])
   const onLiveChange5 = useCallback((data) => emitLiveRef.current(5, data), [])
 
-  // Force un remontage des composants d'étape uniquement côté MJ quand une donnée distante arrive
-  // (WIZARD_STATE_SYNC → applyStateSync incrémente stateSyncVersion) — leur useState(initialData)
-  // interne ne se resynchronise sinon jamais après le montage (comportement standard React, pas un
-  // oubli). Jamais côté joueur (isGmView=false) : sa propre saisie ne doit jamais être interrompue.
-  // Exigence Saar : une modification de l'un doit être IMMÉDIATEMENT visible chez l'autre.
-  const gmSyncKey = isGmView ? `gm-sync-${stateSyncVersion}` : undefined
+  // Force un remontage des composants d'étape uniquement pour un observateur quand une donnée
+  // distante arrive (WIZARD_STATE_SYNC → applyStateSync incrémente stateSyncVersion) — leur
+  // useState(initialData) interne ne se resynchronise sinon jamais après le montage (comportement
+  // standard React, pas un oubli). Jamais pour l'auteur des données (isObservingOther=false, qu'il
+  // s'agisse d'un joueur ou d'un MJ créant son propre personnage) : sa propre saisie ne doit jamais
+  // être interrompue. Exigence Saar : une modification de l'un doit être IMMÉDIATEMENT visible chez
+  // l'autre.
+  const gmSyncKey = isObservingOther ? `gm-sync-${stateSyncVersion}` : undefined
 
   const navigate = useNavigate()
   const [stepError, setStepError] = useState(null)

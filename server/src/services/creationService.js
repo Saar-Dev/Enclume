@@ -15,6 +15,7 @@ import { resolveSetbackEffects } from '../../../shared/setbackEffects.js'
 import { aggregateTraitGauges, applyFractionalLoss } from '../../../shared/traitAggregation.js'
 import { getAutodidacteEligibleIds, validateAutodidacteAllocations } from '../../../shared/autodidacte.js'
 import { PRO_ADV_CATEGORY_RULE_KEYS } from '../../../shared/proAdvCategoryRuleKeys.js'
+import { SUB_STEP_ORDER } from '../../../shared/wizardStep4SubSteps.js'
 import { addAdvantage, grantAdvantage } from './advantageService.js'
 import { addMutation } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -301,7 +302,7 @@ export async function getStep2State(sheetId) {
 // Step3Mutations.jsx#variantLabel, jamais dupliquée côté serveur (i18n.md : aucun texte visible codé
 // en dur hors client).
 export async function getStep3State(sheetId) {
-  const [mutations, ledger] = await Promise.all([
+  const [mutations, ledger, sheet] = await Promise.all([
     db('char_mutations as cm')
       .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
       .leftJoin('ref_mutation_subtypes as rms', 'rms.subtype_id', 'cm.subtype_id')
@@ -309,6 +310,7 @@ export async function getStep3State(sheetId) {
       .select('cm.mutation_id', 'cm.subtype_id', 'cm.source', 'rm.name', 'rm.cost_pc', 'rm.subtype',
         'rms.name as subtype_db_name'),
     db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
+    db('char_sheet').where({ id: sheetId }).select('wizard_progress').first(),
   ])
   const method = mutations.some(m => m.source === 'random') ? 'random'
     : mutations.some(m => m.source === 'chosen') ? 'chosen' : 'none'
@@ -326,6 +328,10 @@ export async function getStep3State(sheetId) {
     kept: method === 'random' ? list : [],
     mutationsMeta: meta,
     pcSpent: ledger?.pc_spent_step3 ?? 0,
+    // WIZ5B (migration 248) — distingue "jamais soumise" (false) de method:'none' explicitement
+    // choisi (true) : sans ça, Step3Mutations.jsx ne peut pas savoir si le formulaire doit s'ouvrir
+    // vierge ou pré-rempli sur "Aucune mutation".
+    visited: !!sheet?.wizard_progress?.step3_visited,
   }
 }
 
@@ -358,7 +364,7 @@ export async function getStep5State(sheetId) {
 // #3, docs/BUG WIZARD.md : un écho serveur incomplet ici, renvoyé y compris à l'auteur de sa propre
 // soumission via WIZARD_STATE_SYNC, effaçait les compétences à la réconciliation suivante).
 export async function getStep4State(sheetId) {
-  const [archetype, careerRows, ledger, skillRows] = await Promise.all([
+  const [archetype, careerRows, ledger, skillRows, sheet] = await Promise.all([
     db('char_archetype').where({ char_sheet_id: sheetId }).first(),
     // Jointure ref_careers (bug réel remonté par Saar, "de temps en temps" : les noms de profession
     // disparaissent au Récap et affichent l'UUID brut) — career_name/titles n'étaient jamais résolus
@@ -372,6 +378,7 @@ export async function getStep4State(sheetId) {
       .select('cc.*', 'rc.name as career_name'),
     db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
     db('char_skills').where({ char_sheet_id: sheetId, is_learned: true }).select('skill_id'),
+    db('char_sheet').where({ id: sheetId }).select('wizard_progress').first(),
   ])
 
   const careerIds = careerRows.map(c => c.career_id)
@@ -413,6 +420,10 @@ export async function getStep4State(sheetId) {
     openedSkills: skillRows.map(r => r.skill_id),
     skillAllocations: ledger?.skill_allocations ?? {},
     autodidacteAllocations: ledger?.autodidacte_allocations ?? {},
+    // Point 2 de l'audit diffusion live (docs/JOURNAL8.md, 2026-08-19, migration 248) — remplace
+    // l'inférence par contenu de computeInitialSubStep pour le seul cas irréductible par chaînage
+    // (Avantages & Revers jamais visité vs visité sans rien à choisir).
+    highestSubStep: sheet?.wizard_progress?.step4_highest_substep ?? null,
   }
 }
 
@@ -838,12 +849,20 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
         await recomputeIdentity(trx, sheetId, identityFields)
       }
       await trx('char_pc_ledger').where({ char_sheet_id: sheetId }).update({ pc_spent_step3: pc3 ?? 0 })
+      // wizard_progress.step3_visited (migration 248) — WIZ5B : getStep3State ne peut jamais renvoyer
+      // method:'none' pour une raison différente de "jamais soumise" sans ce marqueur, un formulaire
+      // jamais visité s'affichait pré-rempli sur "Aucune mutation" à la reprise.
+      await trx('char_sheet').where({ id: sheetId })
+        .update({ wizard_progress: trx.raw('wizard_progress || ?::jsonb', [JSON.stringify({ step3_visited: true })]) })
     }
 
     // ── STEP 4 : expérience ─────────────────────────────────────────────────────
     if (step4) {
-      const { age: baseAge, originGeo, originSoc, training, higherEd, careers: careersData, pcSpent: pc4 } = step4
+      const { age: baseAge, originGeo, originSoc, training, higherEd, careers: careersData, pcSpent: pc4, highestSubStep } = step4
       if (!baseAge || baseAge < 16) throw new AppError(400, 'Âge de base invalide')
+      if (highestSubStep != null && !SUB_STEP_ORDER.includes(highestSubStep)) {
+        throw new AppError(400, `Sous-étape invalide : ${highestSubStep}`)
+      }
       if (!Array.isArray(careersData) || careersData.length === 0) {
         throw new AppError(400, 'Au moins une carrière requise')
       }
@@ -1316,10 +1335,23 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       // celebrityFractions (Lot 6, Diffamation) appliquées ici, une seule fois, contre le total brut
       // déjà accumulé ci-dessus (shared/traitAggregation.js#applyFractionalLoss — le résolveur de
       // Revers n'a jamais accès à ce total, §5bis du plan).
-      await trx('char_sheet').where({ id: sheetId }).update({
+      const charSheetUpdate = {
         celebrity: applyFractionalLoss(characterEffectTotals.celebrity, characterEffectTotals.celebrityFractions),
         xp_available: characterEffectTotals.skillPoints,
-      })
+      }
+      // wizard_progress.step4_highest_substep (migration 248) — computeInitialSubStep
+      // (Step4Experience.jsx) ne peut pas distinguer "Avantages & Revers jamais visité" de "visité,
+      // rien à choisir" sans ce marqueur. Avance uniquement, jamais régressée (un resubmit partiel ou
+      // une reprise depuis une sous-étape antérieure ne doit jamais effacer une progression déjà plus
+      // loin) — comparé ici en JS, `sheet` déjà lu au début de la transaction (ligne ~738).
+      const currentHighestSubStep = sheet.wizard_progress?.step4_highest_substep ?? null
+      const currentIdx = currentHighestSubStep ? SUB_STEP_ORDER.indexOf(currentHighestSubStep) : -1
+      const submittedIdx = highestSubStep ? SUB_STEP_ORDER.indexOf(highestSubStep) : -1
+      const resolvedHighestSubStep = submittedIdx > currentIdx ? highestSubStep : currentHighestSubStep
+      if (resolvedHighestSubStep != null) {
+        charSheetUpdate.wizard_progress = trx.raw('wizard_progress || ?::jsonb', [JSON.stringify({ step4_highest_substep: resolvedHighestSubStep })])
+      }
+      await trx('char_sheet').where({ id: sheetId }).update(charSheetUpdate)
 
       // Traits (Lot C : Allié/Contact/Ennemi/Opposant/Employer) — recalculés intégralement à partir
       // de characterEffectTotals.traits (jamais accumulés entre deux appels, même principe que

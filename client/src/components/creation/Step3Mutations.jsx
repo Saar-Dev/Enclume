@@ -32,10 +32,15 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
       .finally(() => setLoading(false))
   }, [sheetId])
 
-  // 'none' est soumis via handleNone (sans méthode explicite) — on restaure en 'chosen'
-  // pour que l'écran achat soit visible avec la carte "Aucune mutation"
+  // 'none' est soumis via handleNone (sans méthode explicite) — on restaure en 'chosen' pour que
+  // l'écran achat soit visible avec la carte "Aucune mutation". `visited` (migration 248, WIZ5B) :
+  // getStep3State renvoie systématiquement method:'none' pour une fiche jamais soumise (défaut, pas
+  // un vrai choix) — sans ce marqueur, une Étape 3 jamais visitée s'ouvrait pré-remplie au lieu du
+  // formulaire vierge (choix de méthode).
   const [method, setMethod] = useState(
-    initialData?.method === 'none' ? 'chosen' : (initialData?.method ?? null)
+    !initialData?.visited ? null
+      : initialData.method === 'none' ? 'chosen'
+      : (initialData.method ?? null)
   )
   const [selected, setSelected] = useState(
     initialData?.method === 'chosen' ? (initialData.mutations ?? []) : []

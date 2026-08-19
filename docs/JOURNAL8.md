@@ -3144,3 +3144,51 @@ architecture réellement unifiée, correctement documentée inline.
 dans une session séparée.
 **Données** : aucune.
 **Retour arrière** : sans objet (aucun code touché).
+
+---
+
+## Session (Saar) — 2026-08-19 — Wizard : correctifs points 1 et 2 de l'audit diffusion live
+
+Suite de la session d'audit précédente. Priorités rappelées par Saar avant de trancher le point 2
+(qualité structurelle > vitesse, rework autorisé si ça renforce l'architecture) : choix du correctif
+racine (marqueur persisté) plutôt que du statu quo documenté.
+
+**Point 1 — `isGmView` confondait rôle de campagne et "observe le brouillon d'un autre"** (même
+ambiguïté que WIZ13, jamais balayée sur ces consommateurs) :
+- `WizardCreation.jsx` (`liveOr`, `gmSyncKey`) et `creationStore.js#applyStateSync` (auto-scroll MJ)
+  utilisent désormais `isObservingOther` (`ownerUserId` vs utilisateur courant), plus `isGmView` seul.
+  `creationStore.js` lit l'utilisateur courant via `useAuthStore.getState()` (première lecture
+  cross-store du projet, aucun précédent contraire, seule façon propre de le faire hors composant).
+- Usages légitimement liés au rôle (`WizardHeader`, `StepMaterielEtBiens#canEdit`) inchangés — ceux-là
+  parlent de permission, pas d'observation.
+- Impact réel avant correctif : un MJ créant son propre personnage se faisait remonter inutilement ses
+  composants d'étape à chaque écho serveur (pas de perte de données, juste un remontage superflu).
+
+**Point 2 — heuristiques "jamais visité" dupliquées (WIZ5B + Step4)**, résolu par migration plutôt
+qu'un simple croisement de commentaires :
+- **Migration 248** — `char_sheet.wizard_progress` JSONB (`{}` par défaut, additive), même convention
+  que `state_character` (PC39 : clé absente = valeur par défaut, jamais stocker "non atteint" en dur).
+- **WIZ5B fermé** : `wizard_progress.step3_visited` posé au premier reconcile Step3
+  (`creationService.js`) ; `getStep3State` l'expose (`visited`) ; `Step3Mutations.jsx` n'ouvre plus
+  pré-rempli sur "Aucune mutation" pour une étape jamais visitée — entrée retirée de `EN_COURS.md`.
+- **Step4** : deux ambiguïtés distinctes, deux traitements différents.
+  - `higherEd` (sauté vs jamais visité) : résolu **par chaînage** (`careers.length > 0` implique déjà
+    dépassé cette sous-étape, navigation linéaire) — même principe que WIZ5/`computeHighestStep`,
+    aucune donnée persistée nécessaire.
+  - Avantages & Revers (dernière sous-étape avant Récap, rien après elle à chaîner — irréductible) :
+    `wizard_progress.step4_highest_substep`, posé à la soumission réelle de Step4 (`handleSubmit`,
+    jamais dans `buildPayload`/`onLiveChange` — même séparation que `subStep` sur WIZ21), avancé
+    uniquement côté serveur (jamais régressé sur un resubmit partiel).
+- **`shared/wizardStep4SubSteps.js`** (nouveau) — `SUB_STEPS`/`SUB_STEP_ORDER` déplacés du client seul
+  vers un fichier partagé, consommé par `Step4Experience.jsx` ET `creationService.js` (validation
+  serveur de `highestSubStep` avant persistance — jamais fait confiance au client sans whitelist).
+
+**Testé** : migration appliquée et vérifiée en base, `node --check` (serveur), `eslint` propre sur les
+4 fichiers client touchés (seule erreur remontée, `showSetbacks` inutilisée dans Step4Experience.jsx,
+préexistante et hors diff), build client complet réussi, serveur de dev (nodemon) rechargé sans erreur
+après chaque édition (`/api/health` 200 après coup). **Confirmé par Saar** (scénarios de reprise Step3/
+Step4, MJ créant son propre personnage).
+**Non testé** : rien d'identifié restant sur ces deux points.
+**Données** : migration 248 (additive, rétrocompatible — fiches existantes retombent sur le
+comportement précédent tant que `wizard_progress` reste vide).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; migration `down()` fournie.
