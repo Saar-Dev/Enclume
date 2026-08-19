@@ -19,6 +19,7 @@ import {
   triggerActNow, triggerDelayedPass,
   resolveMeleeAction, resolveReloadAction,
   resolveDroneAssaultAction, resolveAssaultAction,
+  resolveExoStandUpAction,
   confirmMeleeDefense, confirmDamage,
   COMBAT_MODE_LABELS,
 } from './socketCombatHelpers.js'
@@ -244,9 +245,14 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       // titre, jamais un cas particulier de l'autre.
       let resolutionSuspended = false
       if (!rosterEntry?.has_resolved) {
+      // PLAN_EXOARMURE.md Lot 2bis §9.3 — 'exo_stand_up' exclu ici comme 'melee'/'assault' : sans
+      // cette ligne, l'action tombait dans "actions simples" (aucune branche ne la traite
+      // explicitement plus bas, seulement 'move_short'/'move_long'/'reload') et se retrouvait
+      // marquée 'resolved' sans jamais lancer le Test — trouvaille tardive, corrigée avant tout test
+      // réel en jeu (aucune exo-armure en base à ce jour pour l'avoir révélée autrement).
       const simpleActions = await db('combat_actions')
         .where({ campaign_id: campaignId, token_id: tokenId, status: 'pending', turn_number: state.current_turn })
-        .whereNotIn('type', ['melee', 'assault'])
+        .whereNotIn('type', ['melee', 'assault', 'exo_stand_up'])
         .orderBy('sequence', 'asc')
       for (const action of simpleActions) {
         if (action.type === 'move_short' || action.type === 'move_long') {
@@ -380,6 +386,14 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
                 await flushEmissions(io, socket, campaignId, meleeResult.emissions)
                 resolutionSuspended = meleeResult.suspend
               }
+            }
+          } else if (action.type === 'exo_stand_up') {
+            // PLAN_EXOARMURE.md Lot 2bis §9.3 — auto-résolu comme resolveMeleeDefensePnj (aucune
+            // confirmation joueur requise, jet + issue déjà déterminés côté serveur).
+            const standUpResult = await resolveExoStandUpAction(io, campaignId, action, character, pendingMaps)
+            if (standUpResult) {
+              await flushEmissions(io, socket, campaignId, standUpResult.emissions)
+              resolutionSuspended = standUpResult.suspend
             }
           }
         } catch (resolveErr) {

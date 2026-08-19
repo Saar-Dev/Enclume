@@ -147,3 +147,28 @@ export function isExclusiveDeclaration({ mapActions }) {
   if ((mapActions?.attack?.[0]?.aimTranches ?? 0) > 0) return { exclusive: true, reason: 'tir_vise' }
   return { exclusive: false, reason: null }
 }
+
+// Tenter de se relever (exo-armure, `state_position` prone → autre, PLAN_EXOARMURE.md Lot 2bis §9.2)
+// — exclusif dans tous les cas, réussite ou échec (Saar, 2026-08-18 : "oui, exclusivité de l'action").
+// Contrairement à Tir visé (isAimEligible), aucune condition sur l'état COURANT du personnage n'entre
+// ici : la transition de position EST l'action elle-même (détectée par l'appelant, pas ce fichier —
+// socketCombatAnnouncement.js sait déjà si `character.type === 'exo'` et `entry.state_position ===
+// 'prone'`), cette fonction ne vérifie que ce qui est déclaré EN PLUS. Même patron que
+// `getAimIneligibilityReasons` (liste de raisons, vide = éligible) — pas de table, un nombre de cas
+// trop faible pour la justifier.
+export function getExoStandUpIneligibilityReasons({ mapActions, quick }) {
+  const reasons = []
+  if (mapActions?.move) reasons.push('déplacement')
+  if (mapActions?.interact) reasons.push('interaction')
+  if (mapActions?.reload) reasons.push('rechargement')
+  if (Array.isArray(mapActions?.attack) && mapActions.attack.length > 0) reasons.push('tir')
+  if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) reasons.push('corps à corps')
+  if ((quick?.observer ?? 0) > 0) reasons.push('observation')
+  if ((quick?.reperer ?? 0) > 0) reasons.push('repérage')
+  if (quick?.phrase) reasons.push('phrase prononcée')
+  return reasons
+}
+
+export function isExoStandUpEligible(args) {
+  return getExoStandUpIneligibilityReasons(args).length === 0
+}

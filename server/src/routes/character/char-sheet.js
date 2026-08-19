@@ -17,7 +17,6 @@
  *
  * Routes :
  *   GET    /api/char-sheet/:characterId              — fiche complète (toutes tables)
- *   GET    /api/char-sheet/:characterId/export-excel — export .xlsx (docs/PLANS/PLAN_EXPORTEXCEL.md)
  *   POST   /api/char-sheet/:characterId              — crée une fiche vide
  *   PUT    /api/char-sheet/:characterId/identity     — sauvegarde identité
  *   PUT    /api/char-sheet/:characterId/archetype    — sauvegarde archétype
@@ -62,8 +61,8 @@ import { getAdvantages, grantAdvantage, removeAdvantage, getAdvantageNotes, addA
 import { getMutations, addMutation, removeMutation, getMutationEffects } from '../../services/mutationService.js'
 import { cloneToVault } from '../../services/vaultService.js'
 import { createEmptySheet } from '../../services/charSheetService.js'
-import { buildCharacterExportWorkbook } from '../../services/excelExportAssembler.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
+import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
 import { WS } from '../../../../shared/events.js'
@@ -129,7 +128,7 @@ router.get('/:characterId', async (req, res, next) => {
       .first()
 
     if (!sheet) {
-      return res.json({ sheet: null })
+      return res.json({ character: req.character, sheet: null })
     }
 
     const [identity, archetype, attributes, skills, settings, mutationEffects] = await Promise.all([
@@ -142,6 +141,7 @@ router.get('/:characterId', async (req, res, next) => {
     ])
 
     res.json({
+      character:  req.character,
       sheet,
       identity:   identity   || null,
       archetype:  archetype  || null,
@@ -150,23 +150,6 @@ router.get('/:characterId', async (req, res, next) => {
       settings,
       mutationEffects,
     })
-  } catch (err) {
-    next(err)
-  }
-})
-
-// ─── GET /api/char-sheet/:characterId/export-excel ───────────────────────────
-// Export fiche personnage vers le classeur Excel (docs/PLANS/PLAN_EXPORTEXCEL.md, Lot 3).
-// `req.character.campaign_id` déjà vérifié par router.param ci-dessus — jamais une valeur fournie
-// par le client (risque identifié Lot 1, §4).
-router.get('/:characterId/export-excel', async (req, res, next) => {
-  try {
-    const buffer = await buildCharacterExportWorkbook(req.params.characterId, req.character.campaign_id)
-
-    const safeName = (req.character.name || 'Personnage').replace(/[^a-zA-Z0-9À-ÿ _-]/g, '').trim() || 'Personnage'
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`)
-    res.send(buffer)
   } catch (err) {
     next(err)
   }
@@ -1925,13 +1908,14 @@ router.delete('/:characterId/drone/weapons/:weaponId', async (req, res, next) =>
 // de modification sur l'armure qu'il pilote, pas seulement la possibilité de s'en dissocier.
 
 // Helper — GM, propriétaire OU pilote lié (référence croisée, donc async contrairement à
-// droneIsGmOrOwner qui ne lit que la ligne characters déjà chargée par router.param).
-async function exoIsGmOrOwnerOrPilot(req, exoSheet) {
-  if (req.isGm) return true
-  if (req.character.user_id && req.character.user_id === req.user.id) return true
-  if (!exoSheet?.pilot_character_id) return false
-  const pilot = await db('characters').where({ id: exoSheet.pilot_character_id }).first()
-  return !!(pilot?.user_id && pilot.user_id === req.user.id)
+// droneIsGmOrOwner qui ne lit que la ligne characters déjà chargée par router.param). Délègue à
+// combatantContextService.js:isExoActorAuthorized (même autorité étendue à la déclaration de combat,
+// PLAN_EXOARMURE.md Lot 2bis §9.3, Règle 2 documentaire — une seule copie de ce prédicat). `exoSheet`
+// n'est plus utilisé ici (isExoActorAuthorized résout le pilote elle-même via resolveExoContext) —
+// un second aller-retour DB minime, accepté : ces deux sites sont des gardes ponctuelles avant PUT,
+// pas un chemin chaud, pas la peine d'étendre la signature partagée pour cette seule optimisation.
+async function exoIsGmOrOwnerOrPilot(req, _exoSheet) {
+  return isExoActorAuthorized(db, req.character, { isGm: req.isGm, userId: req.user.id })
 }
 
 // GET /:characterId/exo — fiche + jointure ref_exo_templates

@@ -119,6 +119,22 @@ async function resolvePilot(db, exoCharacter) {
   return { pilot, exoSheet }
 }
 
+// PLAN_EXOARMURE.md Lot 2bis §9.3 (analyse à charge 2026-08-18, optimisation retenue) — extrait de
+// resolveExoTestContext ci-dessous, qui faisait ce même fetch pilote+template inline. Un second
+// appelant (resolveExoStandUpAction, Lot 2bis) a besoin des mêmes trois valeurs — `template` pour
+// resolveManeuverSkillId, `pilot`/`exoStats` pour le Seuil du Test — sans repasser par
+// resolveExoTestContext qui referait le même aller-retour DB une seconde fois (Règle 2 documentaire :
+// une seule autorité pour « comment retrouver le pilote/template d'un exo »). `pilot`/`template`
+// restent `null` si respectivement aucun pilote/aucun template n'est assigné (états valides,
+// PLAN_EXOARMURE.md Lot 1 §6.5) — jamais un throw ici, la garde revient à chaque appelant.
+export async function resolveExoContext(db, exoCharacter) {
+  const { pilot, exoSheet } = await resolvePilot(db, exoCharacter)
+  const template = exoSheet?.template_id
+    ? await db('ref_exo_templates').where({ id: exoSheet.template_id }).first()
+    : null
+  return { pilot, exoSheet, template }
+}
+
 // Manœuvre d'armure — 4 spécialités RAW (REGLEARMURE.md p.325, texte complet PLAN_EXOARMURE.md §7.2),
 // indexées sur `ref_exo_templates.environment`. La colonne DB a 6 valeurs possibles
 // (233_exo_sheet.js:51-52 — chk_exo_template_environment), 2 de plus que les spécialités RAW :
@@ -145,7 +161,10 @@ const EXO_MANEUVER_SKILL_BY_ENVIRONMENT = {
   spatial: 'MANOEUVRE_DARMURE__ARMURES_SPATIALES',
 }
 
-function resolveManeuverSkillId(template) {
+// Exportée (PLAN_EXOARMURE.md Lot 2bis §9.3, analyse à charge 2026-08-18) — resolveExoStandUpAction
+// (socketCombatHelpers.js) en a besoin directement pour calculer le Seuil du Test de Manœuvre
+// d'armure lui-même, pas seulement pour plafonner une autre Compétence (meleeSkillCap ci-dessous).
+export function resolveManeuverSkillId(template) {
   if (template.environment === 'industrial') {
     throw new Error(
       "ref_exo_templates.environment='industrial' n'a pas de spécialité Manœuvre d'armure RAW " +
@@ -172,18 +191,17 @@ function resolveManeuverSkillId(template) {
 // limitées." — jamais activé pour un tireur ni pour les sites Acrobatie/Équilibre (v2, hors périmètre
 // de ce Lot 2).
 async function resolveExoTestContext(db, exoCharacter, skillId, { meleeSkillCap } = {}) {
-  const { pilot, exoSheet } = await resolvePilot(db, exoCharacter)
+  // Fetch unique pilote+exoSheet+template (resolveExoContext ci-dessus, Lot 2bis §9.3) — le join
+  // exo_sheet → ref_exo_templates reste à la charge de l'appelant final (contrat fixé
+  // PLAN_EXOARMURE.md §7.1 point 1), simplement mutualisé ici entre les deux consommateurs.
+  const { pilot, exoSheet, template } = await resolveExoContext(db, exoCharacter)
   if (!pilot) return null
 
-  const template = exoSheet.template_id
-    ? await db('ref_exo_templates').where({ id: exoSheet.template_id }).first()
-    : null
-  // computeExoStats (shared/exoStats.js) est synchrone et pure — le join exo_sheet → ref_exo_templates
-  // reste à la charge de cet appelant (contrat fixé PLAN_EXOARMURE.md §7.1 point 1). `null` si aucun
-  // template n'est assigné ("armure non configurée", MANUEL_EXOARMURE.md/PLAN_EXOARMURE.md §6.5) —
-  // dans ce cas aucun Test n'est possible : ne jamais laisser passer les stats du pilote sans
-  // l'override EXF, ce serait une violation silencieuse de la substitution FOR→EXF (§7.1 point 3,
-  // "jamais un NaN/undefined silencieux").
+  // computeExoStats (shared/exoStats.js) est synchrone et pure. `null` si aucun template n'est
+  // assigné ("armure non configurée", MANUEL_EXOARMURE.md/PLAN_EXOARMURE.md §6.5) — dans ce cas
+  // aucun Test n'est possible : ne jamais laisser passer les stats du pilote sans l'override EXF, ce
+  // serait une violation silencieuse de la substitution FOR→EXF (§7.1 point 3, "jamais un
+  // NaN/undefined silencieux").
   const exoStats = computeExoStats(exoSheet, template)
   if (!exoStats) return null
 
@@ -238,4 +256,21 @@ export async function resolveCombatantIdentity(db, character) {
   }
   const sheet = await db('char_sheet').where({ character_id: character.id }).first()
   return { sheetId: sheet?.id ?? null, userId: character.user_id ?? null, effectiveType: character.type }
+}
+
+// Permission « peut agir pour cet exo » — GM, propriétaire (`characters.user_id`) OU pilote lié
+// (`exo_sheet.pilot_character_id` → `characters.user_id`). Décision Saar 2026-07-30, tranchée à
+// l'origine pour l'édition de fiche (`char-sheet.js:exoIsGmOrOwnerOrPilot`, PLAN_EXOARMURE.md Lot 1
+// §6.3) — même autorité étendue ici à la déclaration de combat (Lot 2bis §9.3, trouvée en câblant le
+// côté MJ : sans elle, un pilote ≠ propriétaire ne pourrait jamais déclarer d'action pour l'exo qu'il
+// pilote, la garde générique de `socketCombatAnnouncement.js` traitant 'exo' comme 'pj' — propriétaire
+// brut seul — par défaut de code, pas par décision). Fonction agnostique du framework (`db`/booléens
+// nus, pas `req`) — `char-sheet.js` délègue à celle-ci plutôt que de garder sa propre copie (Règle 2
+// documentaire, une seule autorité). Réutilise `resolveExoContext` (un seul fetch pilote), jamais un
+// second aller-retour DB rien que pour cette vérification.
+export async function isExoActorAuthorized(db, exoCharacter, { isGm, userId }) {
+  if (isGm) return true
+  if (exoCharacter.user_id && exoCharacter.user_id === userId) return true
+  const { pilot } = await resolveExoContext(db, exoCharacter)
+  return !!(pilot?.user_id && pilot.user_id === userId)
 }

@@ -21,7 +21,14 @@ import { resolveWeaponRangeBand, resolveMeleeReachM } from '../../../shared/comb
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
-import { resolveCombatantTestContext, resolveCombatantIdentity } from '../lib/combatantContextService.js'
+import {
+  resolveCombatantTestContext, resolveCombatantIdentity,
+  resolveExoContext, resolveManeuverSkillId, resolveHumanoidTestContext,
+} from '../lib/combatantContextService.js'
+import { computeExoStats } from '../../../shared/exoStats.js'
+import { EXO_PRONE_RECOVERY_TABLE } from '../../../shared/exoConstants.js'
+import { setCharacterState } from '../lib/characterStateService.js'
+import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { LOCATION_LABELS, LOCATION_TO_SLOT, AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { SEVERITY_COLORS, isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getNaturalWeaponIneligibilityReasons } from '../../../shared/naturalWeapons.js'
@@ -262,7 +269,13 @@ async function buildTimelineEntries(campaignId, turnNumber, pendingActions, rost
 
   const seriesByTokenAndType = new Map()
   for (const action of pendingActions) {
-    if (action.type !== 'melee' && action.type !== 'assault') continue
+    // PLAN_EXOARMURE.md Lot 2bis §9.3 — 'exo_stand_up' rejoint 'melee'/'assault' ici (trouvaille
+    // tardive : sans cette ligne, l'action n'aurait jamais reçu d'entrée d'échelle et n'aurait donc
+    // jamais été résolue, malgré une ligne combat_actions correctement posée à l'Annonce). Toujours
+    // une série de longueur 1 (exclusivité de la déclaration, §9.2 — jamais deux exo_stand_up le même
+    // Tour pour le même token) : le regroupement par série ci-dessous n'a aucun effet particulier
+    // pour ce cas, computeSeriesPositions(ini, 1) se comporte comme une entrée simple.
+    if (action.type !== 'melee' && action.type !== 'assault' && action.type !== 'exo_stand_up') continue
     const key = `${action.token_id}:${action.type}`
     if (!seriesByTokenAndType.has(key)) seriesByTokenAndType.set(key, { tokenId: action.token_id, actions: [] })
     seriesByTokenAndType.get(key).actions.push(action)
@@ -2139,6 +2152,112 @@ export async function resolveReloadAction(io, socket, campaignId, character, act
     }
   }
   console.log(`[DBG] resolveReload — FIN. personnage ${characterId}`)
+}
+
+// ─── RÉSOLUTION "SE RELEVER" (EXO-ARMURE) ──────────────────────────────────
+// PLAN_EXOARMURE.md Lot 2bis §9.2/9.3 — Test de Manœuvre d'armure pour se redresser depuis 'prone'
+// (REGLEARMURE.md:381-395). Auto-résolu comme resolveMeleeDefensePnj/resolveDroneAssaultAction :
+// aucune confirmation joueur requise, le jet et l'issue sont déterminés ici même, suspend toujours
+// false. `exoCharacter` = le personnage exo lui-même (jamais son pilote — même convention que
+// resolveMeleeAction : `character` est l'acteur qui a déclaré, résolu par le dispatcher appelant
+// depuis token_id → characters).
+export async function resolveExoStandUpAction(io, campaignId, action, exoCharacter, pendingMaps) {
+  const emissions = []
+  const tokenId = action.token_id
+  const targetPosition = action.modifiers?.targetPosition
+
+  // Garde défensive — pas un cas normal (la déclaration exigeait déjà un pilote/template valides
+  // pour que l'exo soit en combat), mais pilote/template peuvent changer entre Annonce et Résolution
+  // (PUT /:characterId/exo reste ouvert pendant un combat). Repli gracieux, jamais un crash silencieux.
+  const { pilot, exoSheet, template } = await resolveExoContext(db, exoCharacter)
+  if (!pilot) {
+    emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: exoCharacter.name, message: 'Tentative de se relever annulée — aucun pilote assigné.',
+    } })
+    return { suspend: false, emissions }
+  }
+  const exoStats = computeExoStats(exoSheet, template)
+  if (!exoStats) {
+    emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: exoCharacter.name, message: 'Tentative de se relever annulée — armure non configurée (aucun modèle assigné).',
+    } })
+    return { suspend: false, emissions }
+  }
+
+  // resolveManeuverSkillId peut lever (environment='industrial', décision Saar 2026-08-15 en
+  // suspens) — laissé remonter volontairement : le try/catch englobant de socketCombatResolution.js
+  // (même bloc que melee/assault) l'intercepte déjà proprement (message explicite, échelle non
+  // bloquée), vérifié en analyse à charge PLAN_EXOARMURE.md §9.2, pas dupliqué ici.
+  const maneuverSkillId = resolveManeuverSkillId(template)
+  if (!(template.category in EXO_PRONE_RECOVERY_TABLE)) {
+    throw new Error(`resolveExoStandUpAction : catégorie exo inconnue de EXO_PRONE_RECOVERY_TABLE : ${template.category}`)
+  }
+  const categoryMod = EXO_PRONE_RECOVERY_TABLE[template.category]
+
+  const ctx = await resolveHumanoidTestContext(db, pilot, maneuverSkillId, { forNAOverride: exoStats.exf })
+
+  // Noyau pur combatAttackRoll.js (même primitif que resolveMeleeDefensePnj) — PAS
+  // polarisTestService.js/resolvePolarisTest (analyse à charge 2026-08-18, PLAN_EXOARMURE.md §9.2 :
+  // ce dernier ne produit ni breakdown ni bonus de Réussite critique, inadapté à un jet visible en chat).
+  const { total: roll, rolls, seed } = await parseDice('1d20')
+  const outcome0 = computeAttackRoll({
+    skillLabel: "Manœuvre d'armure", skillTotal: ctx.skillTotal, totalLabel: 'Seuil', rollAttaque: roll,
+    contributions: [
+      { label: `Catégorie ${template.category}`, value: categoryMod, type: categoryMod >= 0 ? 'bonus' : 'malus' },
+    ],
+  })
+  const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: ctx.mastery }))
+  const { seuil, breakdown, isSuccess, mr } = outcomeCrit
+  const outcome = await resolveCriticalFailReroll(outcomeCrit)
+
+  console.log(`[WS] exo se relever — token:${tokenId} roll:${roll}/${seuil} → ${isSuccess ? 'RÉUSSI' : 'ÉCHOUÉ (reste à terre)'}`)
+
+  emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+    userId: null, username: exoCharacter.name ?? 'Exo-armure', color: '#808080',
+    formula: '1d20', rolls, total: roll,
+    isCriticalSuccess: outcome.isCriticalSuccess, isCriticalFail: outcome.isCriticalFail,
+    catastropheRisk:   outcome.catastropheRisk,
+    seed, timestamp: new Date().toISOString(),
+    skillLabel:        "Tentative de se redresser (Manœuvre d'armure)",
+    mechanicalTotal:   ctx.skillTotal,
+    diffLabel:         seuil - ctx.skillTotal >= 0 ? `+${seuil - ctx.skillTotal}` : `${seuil - ctx.skillTotal}`,
+    chancesDeReussite: seuil,
+    isSuccess,
+    mr,
+    breakdown,
+  } })
+
+  // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — même règle que tout Test de
+  // combat en Résolution (omis puis corrigé en analyse à charge, PLAN_EXOARMURE.md §9.2).
+  // targetTokenId:null — Test sans adversaire, champ purement descriptif (vérifié catastropheService.js).
+  await maybeTriggerCatastrophe(io, campaignId, tokenId, outcome.catastropheRisk, {
+    site: 'exo_stand_up', actorTokenId: tokenId, targetTokenId: null,
+  })
+
+  // Échec : state_position reste 'prone' (déjà sa valeur) — aucune écriture. Rien d'autre ne
+  // s'exécute ce Tour, garanti par l'exclusivité de la déclaration (Annonce, pas ici).
+  if (isSuccess && targetPosition) {
+    const rosterEntry = await db('combat_roster').where({ campaign_id: campaignId, token_id: tokenId }).first()
+    await db.transaction(async (trx) => {
+      await trx('combat_roster')
+        .where({ campaign_id: campaignId, token_id: tokenId })
+        .update({ state_position: targetPosition, updated_at: trx.fn.now() })
+      // Lot 1 (shadow, docs/PLANS/PLAN_CHARACTER_STATES.md §3) — même patron que
+      // socketCombatAnnouncement.js/socketCombatState.js, weapon inchangé mais transmis pour que le
+      // contrôle de cohérence shadow reste exact (il compare position ET weapon ensemble).
+      await setCharacterState(trx, tokenId, 'position', targetPosition)
+      await shadowCheckCharacterState(trx, tokenId, { position: targetPosition, weapon: rosterEntry?.state_weapon })
+    })
+    // COMBAT_ROSTER_UPDATED (pas d'attente du prochain snapshot complet, endTurn) — même mécanisme
+    // que COMBAT_INIT_STATE (socketCombatState.js) pour une transition de state_position hors du
+    // flux d'Annonce standard : sans lui, les autres clients ne verraient la position à jour qu'à la
+    // fin du Tour.
+    const updatedRoster = await db('combat_roster').where({ campaign_id: campaignId })
+    const broadcastRoster = await buildBroadcastRoster(db, updatedRoster)
+    emissions.push({ to: 'room', event: WS.COMBAT_ROSTER_UPDATED, data: { roster: broadcastRoster } })
+  }
+
+  return { suspend: false, emissions }
 }
 
 // ─── RÉSOLUTION ASSAUT ──────────────────────────────────────────────────────

@@ -2,7 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { resolveHumanoidTestContext, resolveCombatantTestContext, resolveCombatantIdentity } from './combatantContextService.js'
+import {
+  resolveHumanoidTestContext, resolveCombatantTestContext, resolveCombatantIdentity,
+  resolveExoContext, resolveManeuverSkillId, isExoActorAuthorized,
+} from './combatantContextService.js'
 import { calcSkillTotal, calcEncumbrancePenalty, getModDom } from './charStats.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/combatantContextService.test.mjs
@@ -415,6 +418,105 @@ test('resolveCombatantTestContext — meleeSkillCap: environment=industrial reje
       () => resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true }),
       /industrial/
     )
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+// PLAN_EXOARMURE.md Lot 2bis §9.3 (analyse à charge 2026-08-18) — resolveExoContext extraite de
+// resolveExoTestContext pour être réutilisable par resolveExoStandUpAction (Lot 2bis) sans dupliquer
+// le fetch pilote+template. Ces tests vérifient la fonction isolément ET la non-régression de
+// resolveExoTestContext après le refactor (déjà couverte au-dessus par les tests
+// resolveCombatantTestContext existants, tous verts après le refactor — pas répétée ici).
+test('resolveExoContext — exo avec pilote+template : les trois valeurs résolues correctement', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const { pilot, exoSheet, template } = await resolveExoContext(db, fx.exoCharacter)
+    assert.equal(pilot.id, fx.character.id)
+    assert.equal(exoSheet.character_id, fx.exoCharacter.id)
+    assert.equal(template.id, fx.template.id)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveExoContext — exo sans pilote assigné : pilot null, template quand même résolu (indépendant du pilote)', { skip }, async () => {
+  const fx = await createExoFixture({ withPilot: false })
+  try {
+    const { pilot, template } = await resolveExoContext(db, fx.exoCharacter)
+    assert.equal(pilot, null)
+    assert.equal(template.id, fx.template.id)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveExoContext — exo sans template assigné ("non configurée") : template null, pilot quand même résolu', { skip }, async () => {
+  const fx = await createExoFixture({ withTemplate: false })
+  try {
+    const { pilot, template } = await resolveExoContext(db, fx.exoCharacter)
+    assert.equal(pilot.id, fx.character.id)
+    assert.equal(template, null)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+// resolveManeuverSkillId — fonction pure (pas de DB), déjà exercée indirectement par les tests
+// meleeSkillCap ci-dessus ; testée ici directement maintenant qu'elle est exportée (Lot 2bis).
+test('resolveManeuverSkillId — mapping direct par environment, industrial rejette', () => {
+  assert.equal(resolveManeuverSkillId({ environment: 'submarine' }), 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES')
+  assert.equal(resolveManeuverSkillId({ environment: 'surface' }), 'MANOEUVRE_DARMURE__ARMURES_EXTERNES')
+  assert.equal(resolveManeuverSkillId({ environment: 'atmospheric' }), 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES')
+  assert.equal(resolveManeuverSkillId({ environment: 'spatial' }), 'MANOEUVRE_DARMURE__ARMURES_SPATIALES')
+  assert.equal(resolveManeuverSkillId({ environment: 'hybrid', surface_movement_mode: 'vit' }), 'MANOEUVRE_DARMURE__ARMURES_EXTERNES')
+  assert.equal(resolveManeuverSkillId({ environment: 'hybrid', surface_movement_mode: 'blocked' }), 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES')
+  assert.throws(() => resolveManeuverSkillId({ environment: 'industrial' }), /industrial/)
+})
+
+// PLAN_EXOARMURE.md Lot 2bis §9.3 (trouvé en câblant le côté MJ) — isExoActorAuthorized, réutilisée
+// par socketCombatAnnouncement.js (déclaration de combat) ET char-sheet.js (édition de fiche,
+// délégation depuis exoIsGmOrOwnerOrPilot). Même décision Saar 2026-07-30 (Lot 1 §6.3) : GM,
+// propriétaire OU pilote lié.
+test('isExoActorAuthorized — GM toujours autorisé, quel que soit propriétaire/pilote', { skip }, async () => {
+  const [otherOwner] = await db('users')
+    .insert({ email: `combatant-ctx-authgm-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'combatant-ctx-authgm' })
+    .returning('*')
+  const fx = await createExoFixture({ exoOwnerId: otherOwner.id, withPilot: false })
+  try {
+    assert.equal(await isExoActorAuthorized(db, fx.exoCharacter, { isGm: true, userId: 'nimporte-qui' }), true)
+  } finally {
+    await cleanupExo(fx)
+    await db('users').where({ id: otherOwner.id }).del()
+  }
+})
+
+test('isExoActorAuthorized — propriétaire brut (characters.user_id) autorisé même sans pilote', { skip }, async () => {
+  const fx = await createExoFixture({ withPilot: false })
+  try {
+    assert.equal(await isExoActorAuthorized(db, fx.exoCharacter, { isGm: false, userId: fx.exoCharacter.user_id }), true)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('isExoActorAuthorized — pilote autorisé même si propriétaire est quelqu\'un d\'autre', { skip }, async () => {
+  const [otherOwner] = await db('users')
+    .insert({ email: `combatant-ctx-authpilot-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'combatant-ctx-authpilot' })
+    .returning('*')
+  const fx = await createExoFixture({ exoOwnerId: otherOwner.id })
+  try {
+    assert.equal(await isExoActorAuthorized(db, fx.exoCharacter, { isGm: false, userId: fx.character.user_id }), true)
+  } finally {
+    await cleanupExo(fx)
+    await db('users').where({ id: otherOwner.id }).del()
+  }
+})
+
+test('isExoActorAuthorized — ni GM, ni propriétaire, ni pilote : refusé', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    assert.equal(await isExoActorAuthorized(db, fx.exoCharacter, { isGm: false, userId: 'un-inconnu' }), false)
   } finally {
     await cleanupExo(fx)
   }

@@ -6,6 +6,7 @@ import { useTokenStore } from '../stores/tokenStore'
 import CombatRosterWindow from './CombatRosterWindow'
 import CombatTimeline from './CombatTimeline'
 import CombatActionWindow from './CombatActionWindow'
+import CombatExoActionWindow from './CombatExoActionWindow'
 import CombatPnjPanel from './CombatPnjPanel'
 import CombatGmDeclareWindow from './CombatGmDeclareWindow'
 import CombatModifiersWindow from './CombatModifiersWindow'
@@ -66,6 +67,16 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
   const gmActiveEntry = roster.find(e => e.token_id === activeTokenId) ?? null
   const gmActiveToken = gmActiveEntry ? tokens.find(tk => tk.id === gmActiveEntry.token_id) : null
   const gmActiveCharacter = gmActiveToken ? characters.find(c => c.id === gmActiveToken.character_id) : null
+
+  // PLAN_EXOARMURE.md Lot 2bis §8.5 — équivalent côté joueur de gmActiveCharacter ci-dessus : quel
+  // personnage occupe le slot actif d'Annonce, pour décider CombatExoActionWindow vs CombatActionWindow.
+  // Portée strictement ANNOUNCEMENT (§9.4) : aucune UI dédiée exo en RÉSOLUTION pour l'instant (Lots
+  // 3+ CaC/Tir/Intégrité) — CombatActionWindow continue de gérer ce cas comme avant, même s'il ne
+  // connaît pas encore character.type==='exo'. Dette assumée, pas un oubli : aucune exo-armure en jeu
+  // à ce jour pour l'exercer.
+  const activeTokenForPlayer     = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
+  const activeCharacterForPlayer = activeTokenForPlayer ? characters.find(c => c.id === activeTokenForPlayer.character_id) : null
+  const isActiveExoForPlayer     = !isGm && activeCharacterForPlayer?.type === 'exo' && activeCharacterForPlayer.user_id === user?.id
   // `currentStep?.kind !== 'delayed_turn'` (Session 159, retour Saar — « Plantage, pas d'action du
   // joueur ») : `activeTokenId` dérive de `currentStep.tokenId` quel que soit son `kind`, y compris au
   // tour obligatoire de fin de Tour d'un personnage en délai — sans cette garde (déjà présente côté
@@ -179,8 +190,17 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
+      {/* PLAN_EXOARMURE.md Lot 2bis §8.5/§9 — même fenêtre dédiée que côté joueur, réutilisée telle
+          quelle (prop isGm ajuste seulement la vérification de propriétaire — le serveur reste de
+          toute façon l'autorité, isExoActorAuthorized, combatantContextService.js). Remplace
+          CombatGmDeclareWindow pour ce seul cas plutôt que d'y ajouter un branchement isExo de plus
+          (§8.1) — même principe que le côté joueur ci-dessous. */}
+      {isGm && phase === 'ANNOUNCEMENT' && gmActiveCharacter?.type === 'exo' && (
+        <CombatExoActionWindow socket={socket} user={user} characters={characters} isGm />
+      )}
+
       {/* Phase ANNOUNCEMENT — fenêtre GM pour déclarer les actions des PNJs */}
-      {isGm && phase === 'ANNOUNCEMENT' && (
+      {isGm && phase === 'ANNOUNCEMENT' && gmActiveCharacter?.type !== 'exo' && (
         <CombatGmDeclareWindow
           socket={socket}
           characters={characters}
@@ -196,11 +216,20 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         />
       )}
 
+      {/* PLAN_EXOARMURE.md Lot 2bis §8.5/§9 — fenêtre dédiée exo-armure, ANNOUNCEMENT uniquement
+          (§9.4 : rien à afficher en RÉSOLUTION pour ce Lot). Remplace CombatActionWindow pour ce
+          seul cas plutôt que d'y ajouter un branchement isExo de plus (§8.1). */}
+      {isActiveExoForPlayer && phase === 'ANNOUNCEMENT' && (
+        <CombatExoActionWindow socket={socket} user={user} characters={characters} />
+      )}
+
       {/* ANNOUNCEMENT + RÉSOLUTION — fenêtre d'action pour les joueurs
           Masquée pendant la résolution d'un assaut PJ (CombatModifiersWindow prend le relais) et
           pendant le tour obligatoire d'un token en délai (panneau Agir maintenant/Passer dédié
-          ci-dessus, docs/PLAN_COMBAT_TIMELINE.md §6 point 2). */}
-      {!isGm && (phase === 'ANNOUNCEMENT' || (phase === 'RESOLUTION' && !playerActiveAssaultAction && !playerActiveMeleeAction && !attackResult && currentStep?.kind !== 'delayed_turn')) && (
+          ci-dessus, docs/PLAN_COMBAT_TIMELINE.md §6 point 2). Masquée aussi pendant le slot d'Annonce
+          d'un exo-armure joueur actif (CombatExoActionWindow prend le relais, ci-dessus). */}
+      {!isGm && !(isActiveExoForPlayer && phase === 'ANNOUNCEMENT')
+        && (phase === 'ANNOUNCEMENT' || (phase === 'RESOLUTION' && !playerActiveAssaultAction && !playerActiveMeleeAction && !attackResult && currentStep?.kind !== 'delayed_turn')) && (
         <CombatActionWindow
           socket={socket}
           user={user}

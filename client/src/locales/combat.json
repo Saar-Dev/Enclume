@@ -309,6 +309,12 @@
       "defaultDesc": "1D6"
     }
   },
+  "exoActionWindow": {
+    "title": "{{name}} — Exo-armure",
+    "proneHint": "L'armure est à terre. Se relever demande un Test de Manœuvre d'armure — un échec fait passer le Tour sans autre action.",
+    "standUpButton": "Tenter de se relever",
+    "sending": "Envoi..."
+  },
   "hazardPanel": {
     "exposeTitle": "Exposer — {{label}}",
     "clearTitle": "Retirer — {{label}}",

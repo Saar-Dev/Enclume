@@ -3192,3 +3192,87 @@ Step4, MJ créant son propre personnage).
 **Données** : migration 248 (additive, rétrocompatible — fiches existantes retombent sur le
 comportement précédent tant que `wizard_progress` reste vide).
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit ; migration `down()` fournie.
+
+## Session (Saar) — 2026-08-19 — `PLAN_EXOARMURE.md` Lot 2bis : Armure à terre + fondation UI dédiée exo-armure
+
+**Contexte** : reprise du chantier Exo-armures après clôture du Lot 2 (session 2026-08-18). Saar a
+demandé une fenêtre dédiée aux actions exo-armure plutôt que d'empiler des branches `isExo` dans
+`CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` (déjà alourdis par le précédent `isDrone`, 16/6
+occurrences scattées) — analyse à charge de l'architecture UI (`PLAN_EXOARMURE.md` §8) puis plan
+détaillé du mécanisme RAW (§9), amendé sur deux points après clarification Saar : (1) le Test se
+résout en phase RÉSOLUTION, jamais en Annonce (« rien ne se résout en phase Annonce, c'est dans le
+nom ») — correction d'une proposition initiale erronée ; (2) exclusivité totale de l'action, réussite
+et échec (confirmé après recherche BattleTech, déjà une source validée dans ce document, qui traite
+le relèvement d'un mech comme consommant toute la Phase de Mouvement quelle que soit l'issue).
+
+**RAW** : `REGLEARMURE.md:381-395` — Test de Manœuvre d'armure pour se redresser depuis `prone`,
+malus/bonus par catégorie (`EXO_PRONE_RECOVERY_TABLE`, déjà transcrite Lot 1, jamais consommée avant
+cette session).
+
+**Serveur — mécanisme (`resolveExoStandUpAction`, nouveau, `socketCombatHelpers.js`)** :
+- Déclaration (`socketCombatAnnouncement.js`) : détection `character.type==='exo' && prone → autre`,
+  garde d'exclusivité (`getExoStandUpIneligibilityReasons`, nouveau, `shared/combatExclusiveActions.js`
+  — rejet explicite si combiné à une attaque/un déplacement/une action rapide), nouvelle entrée
+  `combat_actions.type='exo_stand_up'` (migration `249`, même famille que `melee`/`assault` — entrée
+  d'échelle, pas une action simple), `state_position` **non écrit** à l'Annonce pour ce cas précis
+  (reste `'prone'` jusqu'à la Résolution — la position visée voyage dans `modifiers.targetPosition`).
+- Résolution (`socketCombatResolution.js` → `resolveExoStandUpAction`) : Seuil = Manœuvre d'armure du
+  pilote + malus catégorie, noyau `computeAttackRoll` (pas `resolvePolarisTest` — erreur de citation
+  trouvée et corrigée en analyse à charge : ce dernier ne produit ni `breakdown` ni bonus de Réussite
+  critique, inadapté à un jet visible en chat), bonus Réussite critique + reroll Échec critique +
+  Catastrophe automatique (omise puis ajoutée en analyse à charge — même règle que tout Test de
+  combat). Succès → écrit `state_position` + diffuse `COMBAT_ROSTER_UPDATED` immédiatement (sinon les
+  autres clients ne verraient la position à jour qu'à la prochaine fin de Tour) ; échec → aucune
+  écriture, rien d'autre ce Tour (garanti par l'exclusivité de la déclaration, pas par une annulation
+  a posteriori).
+- **Optimisation d'architecture retenue** (pas juste un fetch dupliqué toléré) : `resolveExoContext`
+  (nouveau, exporté, `combatantContextService.js`) extrait le fetch pilote+exoSheet+template commun,
+  autrefois inline dans `resolveExoTestContext` — un seul aller-retour DB, réutilisable par les Lots
+  4/5 à venir (Intégrité/Avaries auront le même besoin). `resolveManeuverSkillId` exportée (était
+  interne, réservée à `meleeSkillCap`).
+- **Trou de permission trouvé en câblant le côté MJ** (absent de l'analyse initiale) :
+  `socketCombatAnnouncement.js` ne connaissait aucune permission pour `type='exo'` — tombait dans le
+  `else` générique (propriétaire brut `characters.user_id` seul), rendant toute déclaration impossible
+  pour un pilote ≠ propriétaire. Corrigé par **`isExoActorAuthorized`** (nouveau, exporté,
+  `combatantContextService.js`) — GM, propriétaire OU pilote lié, même autorité que la décision Saar
+  du 2026-07-30 pour l'édition de fiche (Lot 1 §6.3). `char-sheet.js:exoIsGmOrOwnerOrPilot` refactorée
+  pour déléguer à cette même fonction plutôt que de garder sa propre copie (Règle 2 documentaire, une
+  seule autorité pour ce prédicat) — comportement strictement inchangé, vérifié par lecture.
+- **Deux listes blanches codées en dur trouvées en vérification finale**, après un premier jet
+  syntaxiquement propre mais jamais retracé de bout en bout : (1) `buildTimelineEntries`
+  (`socketCombatHelpers.js`) ne créait une entrée `combat_timeline_entries` que pour `type IN
+  ('melee','assault')` — sans `'exo_stand_up'` ajouté, l'action n'était **jamais** atteinte par
+  `step.kind==='entry'` ; (2) le bloc "actions simples" de `socketCombatResolution.js`
+  (`whereNotIn('type', ['melee','assault'])`) aurait **en plus** intercepté la même ligne en premier
+  et l'aurait marquée `resolved` sans jamais appeler `resolveExoStandUpAction` — silencieusement, sans
+  erreur. Les deux corrigées. Trouvé en retraçant explicitement le cycle de vie complet de l'action
+  (Annonce → `combat_actions` → `combat_timeline_entries` → dispatcher de Résolution) plutôt qu'en se
+  fiant à l'absence d'erreur de syntaxe/import — la classe d'erreur la plus dangereuse ici (silence
+  total, pas un crash) aurait été invisible sans cette relecture dédiée.
+
+**Client — fondation UI (`PLAN_EXOARMURE.md` §8)** : `CombatExoActionWindow.jsx` (nouveau,
+`client/src/components/`) — fenêtre minimale (bouton "Tenter de se relever" + hint, visible seulement
+si `state_position==='prone'`), réutilisée à l'identique côté joueur ET côté MJ (prop `isGm` ajuste
+uniquement la vérification de propriétaire côté client — le serveur reste l'autorité,
+`isExoActorAuthorized`). Montée par `CombatOverlay.jsx` à la place de `CombatActionWindow`/
+`CombatGmDeclareWindow` quand le slot d'Annonce actif est une exo-armure, en phase ANNOUNCEMENT
+uniquement (RÉSOLUTION reste hors périmètre de ce Lot — `CombatActionWindow` continue de gérer ce cas
+comme avant pour un exo, dette assumée, aucune exo-armure en jeu à ce jour pour l'exercer). Clés i18n
+`combat.json:exoActionWindow.*` (namespace déjà existant, patron `stunWindow` suivi).
+
+**Testé** : `node --check` sur tous les fichiers serveur touchés + chargement runtime réel (`import()`
+dynamique) confirmant la résolution de tous les nouveaux imports, sans exception. Migration `249`
+auto-appliquée par un serveur nodemon tiers actif (P53) dès l'écriture du fichier — vérifiée en base
+réelle (`pg_get_constraintdef`, contrainte exacte). `combatantContextService.test.mjs` : 33/33 verts
+contre PostgreSQL réel (9 nouveaux tests : `resolveExoContext` ×3, `resolveManeuverSkillId` ×1 direct,
+`isExoActorAuthorized` ×4 — dont un cas propriétaire≠pilote qui aurait détecté le trou de permission
+si ce test avait existé avant). `combatExclusiveActions.test.mjs` (nouveau fichier) : 6/6 verts sur
+`getExoStandUpIneligibilityReasons`. Client : ESLint propre (0 problème) + build production complet
+réussi (`vite build`), deux fois (avant et après l'ajout du support MJ).
+**Non testé** : scénario réel en jeu (aucune exo-armure en base à ce jour, même limite que tout le
+chantier depuis le Lot 1) — `resolveExoStandUpAction` elle-même n'a pas de test DB dédié (même
+précédent que `resolveMeleeAction`/`resolveAssaultAction`, jamais testées ainsi dans ce projet, socket
+handlers validés en jeu réel par Saar plutôt que par fixture).
+**Données** : migration `249` (additive, `chk_action_type` étendu à `'exo_stand_up'`).
+**Retour arrière** : rien n'est encore committé à la fin de cette session — commit à faire séparément
+après revue.

@@ -3,7 +3,7 @@ import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase, forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau } from '../../../shared/combatExclusiveActions.js'
+import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau, getExoStandUpIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
@@ -16,6 +16,7 @@ import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
+import { isExoActorAuthorized } from '../lib/combatantContextService.js'
 
 // MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
 // "arme possédée et en main" passe désormais entièrement par getOwnedHandWeapon
@@ -123,6 +124,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       } else if (character.type === 'drone') {
         const isOwner = character.user_id && character.user_id === user.id
         if (!isGm && !isOwner) return
+      } else if (character.type === 'exo') {
+        // PLAN_EXOARMURE.md Lot 2bis §9.3 (trouvé en câblant le côté MJ) — sans cette branche, 'exo'
+        // tombait dans le else générique ci-dessous (propriétaire brut seul), rendant la déclaration
+        // impossible pour un pilote ≠ propriétaire. Même autorité que l'édition de fiche (Lot 1 §6.3,
+        // combatantContextService.js:isExoActorAuthorized, une seule source pour "GM/propriétaire/pilote").
+        if (!(await isExoActorAuthorized(db, character, { isGm, userId: user.id }))) return
       } else {
         if (character.user_id !== user.id) return
       }
@@ -212,6 +219,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       const isDrone = character.type === 'drone'
+      const isExo   = character.type === 'exo'
 
       // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
       let assaultWeaponRefRange = null
@@ -420,6 +428,32 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         if (quick?.phrase) iniDelta += -3
       }
 
+      // PLAN_EXOARMURE.md Lot 2bis §9.2 — tentative de se relever (exo-armure, prone → autre
+      // position). Le coût d'Initiative ci-dessus s'applique déjà normalement (boucle STATE_COSTS.position
+      // dans le bloc !isDrone, inchangée) : ce qui change, c'est que la position ne sera PAS écrite
+      // immédiatement dans combat_roster (§ résolvedPosition plus bas) — elle attend un Test résolu en
+      // Résolution, exactement comme une attaque. `entry.state_position` = position AVANT cette
+      // déclaration, jamais reconstruite depuis le payload client (même garde que partout ailleurs
+      // dans ce fichier).
+      const isExoStandUpAttempt = isExo
+        && entry.state_position === 'prone'
+        && !!state.position && state.position !== 'prone'
+      if (isExoStandUpAttempt) {
+        // Exclusivité tranchée par Saar (2026-08-18, analyse à charge PLAN_EXOARMURE.md §9.2) : le
+        // personnage ne fait que ça ce Tour, réussite ou échec. Ne couvre que les mapActions/quick
+        // actions ("Action" au sens RAW) — pas les transitions d'état annexes (arme/couverture/vitesse),
+        // catégorie distincte dans le vocabulaire de ce fichier (STATE_COSTS vs MAP_ACTIONS/QUICK_ACTIONS,
+        // combatSections.js) : RAW ne dit rien qui interdise de dégainer une arme en même temps que la
+        // tentative, choix documenté plutôt qu'un silence.
+        const ineligible = getExoStandUpIneligibilityReasons({ mapActions, quick })
+        if (ineligible.length > 0) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, {
+            message: `Tenter de se relever : aucune autre action ce Tour (${ineligible.join(', ')})`,
+          })
+          return
+        }
+      }
+
       // Construction des lignes combat_actions (PC32 — sequence attribué serveur)
       const actionRows = []
 
@@ -539,6 +573,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         }
       }
 
+      // PLAN_EXOARMURE.md Lot 2bis §9.3 — miroir du patron melee/assault ci-dessus (sequence 3, une
+      // entrée d'échelle Test-gated). `targetPosition` = la position déclarée par le joueur (state.position,
+      // déjà validée contre VALID_STATES.position en tête de handler) : resolveExoStandUpAction
+      // (socketCombatHelpers.js) l'applique à combat_roster.state_position UNIQUEMENT si le Test réussit.
+      if (isExoStandUpAttempt) {
+        actionRows.push({
+          campaign_id: campaignId, token_id: tokenId,
+          action_key: 'exo_stand_up', type: 'exo_stand_up', sequence: 3,
+          modifiers: JSON.stringify({ targetPosition: state.position }),
+          status: 'pending',
+        })
+      }
+
       if (mapActions?.reload) {
         const reloadData = typeof mapActions.reload === 'object' ? mapActions.reload : {}
         actionRows.push({
@@ -587,7 +634,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       }
 
       // UPDATE combat_roster — états + initiative + has_announced
-      const resolvedPosition = state.position ?? entry.state_position
+      // PLAN_EXOARMURE.md Lot 2bis §9.2/9.3 — une tentative de se relever ne modifie PAS
+      // state_position ici : elle reste 'prone' (valeur inchangée d'entry) jusqu'à la Résolution du
+      // Test (resolveExoStandUpAction, socketCombatHelpers.js). La position visée par le joueur voyage
+      // dans la ligne combat_actions ci-dessus (modifiers.targetPosition), pas ici.
+      const resolvedPosition = isExoStandUpAttempt ? entry.state_position : (state.position ?? entry.state_position)
       const resolvedWeapon   = state.weapon   ?? entry.state_weapon
       const [updated] = await db.transaction(async (trx) => {
         const rows = await trx('combat_roster')
@@ -626,6 +677,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       else if (movementDeclaration) actionType = movementDeclaration.actionType
       else if (mapActions?.melee)  actionType = 'melee'
       else if (mapActions?.reload) actionType = 'reload'
+      else if (isExoStandUpAttempt) actionType = 'exo_stand_up'
 
       io.to(campaignId).emit(WS.COMBAT_ACTION_DECLARED, {
         tokenId,

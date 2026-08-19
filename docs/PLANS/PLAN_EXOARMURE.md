@@ -10,7 +10,11 @@
 > dont elle dépend jamais implémentée pour personne, voir §7.7), routage de la confirmation de défense
 > pour un `type='exo'` ✅ codé (2026-08-18, trou trouvé en clôturant ce Lot 2, §7.7). **Lot 2
 > intégralement codé** — reste la validation en jeu réel (aucune exo-armure en base à ce jour). Détail
-> complet §7. **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
+> complet §7. **Lot 2bis (Armure à terre) ✅ codé (2026-08-19, §9)** — fondation UI dédiée exo-armure
+> (§8) codée le même jour, migration `249`, `resolveExoStandUpAction`, `CombatExoActionWindow.jsx`
+> joueur+MJ. Trou de permission trouvé et corrigé au passage (`isExoActorAuthorized`, §9.3) : un
+> pilote ≠ propriétaire ne pouvait déclarer aucune action pour son exo, pas seulement se relever.
+> **Non testé en navigateur** (aucune exo-armure en base à ce jour). **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
 > — architecture validée contre des dépôts pro réels (Lancer/Foundry VTT, MekHQ) avant tout code. 2 des
 > 3 questions RAW tranchées (§2.1, §2.2) ; **§2.3 (seuil de Catastrophe) en stand-by**, dépend de
 > `docs/PLAN_TEST_CRITIQUE.md` (chantier séparé, en pause côté Saar) — bloque uniquement le Lot 8.
@@ -154,7 +158,10 @@ non figé — à valider avec Saar une fois la recherche externe (§4) intégré
 - **Lot 1 — Fondations** : migration `characters.type='exo'`, table `exo_sheet`, table
   `ref_exo_templates`, entrée `docs/VOCABULARY.md`. Pas de combat, juste fiche + création.
 - **Lot 2 — Substitution d'attributs** : EXF/VIT/BLD remplacent FOR/VIT/déplacement humains en
-  combat, plafond de Compétence par Manœuvre d'armure, 1 seule Attaque/Tour.
+  combat, plafond de Compétence par Manœuvre d'armure, 1 seule Attaque/Tour. **✅ codé (2026-08-18,
+  §7)**.
+- **Lot 2bis — Armure à terre** : Test de Manœuvre d'armure pour se redresser (§2.2, §9). **✅ codé
+  (2026-08-19, §9)**, non testé en navigateur.
 - **Lot 3 — Initiative** : `min(Réaction, Manœuvre d'armure) − malus environnemental (×2 hors-milieu)`,
   seuil différé (report au Tour suivant si Initiative ≤ 0).
 - **Lot 4 — Pipeline de dégâts** : Blindage/RD dynamiques par palier d'Intégrité (Structure), seuils
@@ -635,6 +642,19 @@ complet et tests dans `docs/JOURNAL8.md` (session 2026-08-18) et `docs/SYSTEME/C
 dupliqué ici une deuxième fois (Règle 2 documentaire). **Testé** : `combatantContextService.test.mjs`
 25/25 verts contre PostgreSQL réel. **Non testé** : scénario réel en jeu (aucune exo-armure en base).
 
+**Trouvaille en relisant §2.2 avant de clore ce Lot** : §2.2 assignait aussi le **Malus de Saisie/Lutte**
+(`EXO_GRAPPLE_MALUS_TABLE`, `shared/exoConstants.js`, déjà écrite au Lot 1) à ce Lot 2 — jamais vérifié
+depuis. **Vérifié (2026-08-18), même conclusion que "1 seule Attaque/Tour" : aucun code nécessaire.**
+`ARTS_MARTIAUX_LUTTE` (`ref_skills`) n'est référencée nulle part dans `socketCombatHelpers.js` ou
+ailleurs en résolution de combat — seulement dans les migrations de seed carrières (achat de la
+Compétence à la création). Le statut `grappled` existe (`token_statuses`), mais uniquement comme
+toggle manuel MJ/propriétaire (`TOKEN_STATUS_TOGGLE`, `socketToken.js:143-162`, même famille que
+`stunned`/`blinded`/`poisoned`) — jamais posé par un jet automatisé. La Lutte comme action de combat
+distincte (Test de Saisie en opposition, RAW p.225) n'est pas mécanisée dans ce projet, exactement
+comme "Plusieurs Attaques par Tour" — rien à plafonner tant qu'aucun Test de Lutte n'existe à plafonner.
+**À rouvrir si la Lutte est un jour mécanisée** (Test de Saisie automatisé) — `EXO_GRAPPLE_MALUS_TABLE`
+reste prête, juste jamais consommée.
+
 ### 7.2 RAW — Manœuvre d'armure (texte complet fourni par Saar, 2026-08-06)
 
 À réutiliser telle quelle quand le refactor combat reprend :
@@ -770,3 +790,284 @@ dégâts au contact (pas seulement les exo-armures, cf. `getModDom` appelée dep
 `socketCombatHelpers.js` pour le CaC humain) — correction déjà en production dès ce commit, pas
 conditionnée à l'avancement du chantier Exo-armures. **Non testé** : impact réel en jeu sur un
 personnage FOR_na > 21 (aucun cas connu actuellement en base, `[INCONNU]`).
+
+---
+
+## 8. Décision d'architecture UI — fenêtres dédiées exo-armure (2026-08-18 planifié, ✅ codé 2026-08-19)
+
+> Origine : en cadrant le Lot 2bis avec Saar, question ouverte sur où loger l'interface de "tenter de
+> se relever". Saar : *"l'interface actuelle, pour humanoïde, n'est sans doute pas adaptée à
+> l'interface Exo-armure [...] des fenêtres dédiées aux actions en exo-armure plutôt que tout mixer
+> dans les fenêtres humanoïdes [...] plus simple à coder et pour l'utilisateur."* Inventaire fait par
+> lecture réelle du code client (pas de suppositions) avant de trancher — détail ci-dessous.
+
+### 8.1 Constat — l'axe de découpage réel aujourd'hui
+
+Ce n'est pas "une fenêtre par type de personnage" mais "une fenêtre par contrôleur" :
+`CombatOverlay.jsx` (854 lignes) monte `CombatGmDeclareWindow.jsx` (1284 lignes) si `isGm`,
+`CombatActionWindow.jsx` (1753 lignes) si joueur (`client/src/components/CombatOverlay.jsx:184,204`)
+— chacune gère ensuite **tous les types** que son contrôleur possède, avec des branches
+`isDrone`/`!isDrone` scattées à l'intérieur (16 occurrences dans `CombatActionWindow.jsx`, 6 dans
+`CombatGmDeclareWindow.jsx`) qui masquent des sections entières (Position/Vitesse, Armement, Actions
+rapides, panneau d'assaut droit) plutôt que de dispatcher proprement.
+
+### 8.2 Ce qui est déjà générique (prouvé par le précédent drone)
+
+- `useAutoMoveMode.js` / `useCombatClickAttack.js` (`client/src/lib/`) — survol déplacement +
+  clic-attaque ambiants, déjà type-agnostiques (consommés indifféremment par le PJ direct et par
+  `useDroneDeclare.js` qui les enveloppe).
+- `useDraggable.js`, le transport socket/chat/dice (`DICE_RESULT`), `CombatDamageWindow.jsx` (jet de
+  dégâts post-touche) — déjà consommés indifféremment par PJ/PNJ/drone, aucune raison qu'un exo y
+  échappe.
+- La table `position` de `combatSections.js` (`STATE_DEFS.position`, composant `StateSelector`) —
+  `state_position` vit sur `combat_roster`, pas sur `char_sheet` : réutilisable telle quelle côté
+  affichage pour l'exo. Seul le **coût côté serveur** diverge pour la transition depuis `prone` (Test
+  au lieu d'un coût fixe, §9) — invisible pour ce composant d'affichage.
+
+### 8.3 Ce qui est humanoïde-only, sans équivalent à construire pour l'exo
+
+Encombrement/inventaire (`char_inventory`), blessures/fatigue, Tir visé/Lunette
+(`shared/combatExclusiveActions.js`). **`declarationReducer.js`/`DECLARATION_INITIAL`** (le
+`useReducer` qui porte tout l'état de déclaration humanoïde) — le précédent drone le contourne déjà
+entièrement : `useDroneDeclare.js` gère son propre état via de simples `useState` locaux, jamais ce
+reducer. Ce précédent tranche la question pour l'exo aussi : ne pas raccrocher au reducer humanoïde,
+construire un état local propre.
+
+### 8.4 Ce qui n'existe nulle part encore
+
+Affichage pilote (lecture `exo_sheet.pilot_character_id`), jauges d'Intégrité (Structure/
+Exosquelette/Générateur, Lot 4+), Avaries/Incidents (Lot 5+), sélection d'arme depuis
+`hardpoints`/`equipped_systems` (Lot 5e — pas `char_inventory`). **Brique immédiate (Lot 2bis, §9)** :
+déclarer/résoudre "Tenter de se relever" avec son jet et sa conséquence de fin de Tour en cas
+d'échec.
+
+### 8.5 Décision retenue
+
+Le drone a eu son propre hook (`useDroneDeclare.js`) mais pas sa propre fenêtre — suffisant parce que
+sa divergence reste limitée (armement + cible, rien d'autre, §8.1). L'exo diverge davantage dès ce
+lot et continuera à diverger à chaque lot suivant (pilote, Intégrité, Avaries, hardpoints) :
+empiler des `isExo` dans `CombatActionWindow.jsx`/`CombatGmDeclareWindow.jsx` reproduirait le même
+défaut que celui déjà visible avec `isDrone` (§8.1), en pire (plus de sections nouvelles à venir).
+
+**Retenu :**
+1. **`client/src/lib/useExoDeclare.js`** (nouveau, même forme que `useDroneDeclare.js`) — état local
+   propre (pas `declarationReducer`), compose `useAutoMoveMode`/`useCombatClickAttack` (génériques,
+   §8.2) tels quels.
+2. **`client/src/components/CombatExoActionWindow.jsx`** (nouveau) — monté par `CombatOverlay.jsx` à
+   la place de `CombatActionWindow` quand `character.type === 'exo'` (même point de branchement que
+   `isGm` aujourd'hui, `CombatOverlay.jsx:199-219`), pour le pilote joueur d'une exo. Réutilise
+   `StateSelector`/`STATE_DEFS.position` (§8.2), `useDraggable`, `CombatDamageWindow` (inchangé,
+   monté par `CombatOverlay.jsx` comme aujourd'hui) ; ne réutilise pas `declarationReducer` (§8.3).
+3. **Côté MJ** : pas de nouvelle fenêtre séparée — `CombatGmDeclareWindow.jsx` gère déjà "tout ce que
+   le MJ contrôle" par nature (son rôle actuel), une section dédiée `isExo`-branchée y suffit, à
+   condition qu'elle reste groupée (un seul bloc clairement délimité) plutôt que scattée comme
+   `isDrone` l'est aujourd'hui — pas un nouveau composant, une discipline de rédaction.
+
+**Portée immédiate (Lot 2bis, §9)** : `CombatExoActionWindow.jsx`/section MJ n'ont besoin de porter
+qu'une chose pour l'instant — le bouton "Tenter de se relever" (visible seulement si
+`entry.state_position === 'prone'`) + l'affichage du résultat du Test. Pilote/Intégrité/Avaries/
+hardpoints suivent aux lots suivants, sur le même squelette.
+
+**Hors périmètre de cette décision** : le contenu détaillé des lots 3-8 (pas encore instruits) ;
+`DroneWeaponPanel.jsx`/`DroneDeclareSection.jsx` (précédent drone, non touchés, juste lus comme
+référence).
+
+---
+
+## 9. Lot 2bis — Armure à terre (plan détaillé 2026-08-18, ✅ codé 2026-08-19)
+
+> **Clôture (2026-08-19)** : codé intégralement selon ce plan, y compris la correction (a) exclusivité
+> tranchée par Saar (« oui, exclusivité de l'action ») et la correction (b) primitif de résolution
+> (`computeAttackRoll`, pas `resolvePolarisTest` — erreur trouvée en analyse à charge). Détail complet
+> (fichiers, testé/non testé) : `docs/JOURNAL8.md`, session 2026-08-19. **Testé** : `node --check` +
+> chargement runtime + 33/33 tests `combatantContextService.test.mjs` + 6/6 `combatExclusiveActions.test.mjs`
+> + lint/build client propres. **Non testé** : scénario réel en jeu (aucune exo-armure en base).
+
+### 9.1 RAW
+
+`REGLEARMURE.md:381-395` (Armure à terre, optionnel — entrée dans le périmètre par décision §2.2) :
+
+> Si une armure de catégorie exo-1 et plus est mise à terre, à l'air libre, il faudra effectuer un
+> Test de Manœuvre d'armure pour la redresser, avec les malus suivants :
+> Exo-1 : +5 · Exo-2 : +3 · Exo-3 : +0 · Exo-4 : -3 · Exo-5 : -5 · Exo-6 : -7 · Exo-oméga : -10.
+> Sous l'eau, cela ne pose problème que si l'armure n'est pas équipée de palmes ou d'un système de
+> propulsion.
+
+Table déjà transcrite Lot 1 : `EXO_PRONE_RECOVERY_TABLE` (`shared/exoConstants.js`), jamais consommée
+à ce jour (vérifié `grep` — zéro résultat côté serveur).
+
+**Précision Saar (2026-08-18, RAW muet sur ce point)** : Test raté = reste à terre, **fin du Tour**
+pour ce personnage — pas de retry automatique au Tour suivant, le joueur redéclare explicitement la
+tentative au Tour suivant s'il le souhaite.
+
+**Correctif d'architecture (Saar, 2026-08-18)** : ma proposition initiale de résoudre ce Test en
+phase Annonce était fausse — *"rien ne se résout en phase Annonce. C'est dans le nom. Phase ANNONCE,
+phase RÉSOLUTION."* Cohérent avec l'invariant déjà écrit dans `.claude/rules/combat.md` ("Seule la
+phase RÉSOLUTION vérifie ce qui est réellement possible") — je l'avais lu comme portant seulement sur
+les cibles/portée/LOS, Saar clarifie qu'il porte sur toute résolution, sans exception. Le Test se
+résout donc en Résolution, exactement comme une attaque.
+
+### 9.2 Mécanisme retenu
+
+**Déclenchement** : `character.type === 'exo'` et `entry.state_position === 'prone'` et la position
+déclarée (`state.position`) ≠ `'prone'` — une tentative de se relever.
+
+**Exclusivité — ✅ tranchée (Saar, 2026-08-18) : exclusif dans tous les cas.** Question soulevée en
+analyse à charge (ma première rédaction extrapolait au succès une précision Saar qui ne portait
+littéralement que sur l'échec, §9.1) — confirmé explicitement par Saar : *"oui, exclusivité de
+l'action"*, sans distinction succès/échec. Cohérent avec le signal externe déjà noté (BattleTech,
+déjà une source validée dans ce document, §4) : *"the next movement phase can only be used to stand
+up"* — se relever y consomme toute la Phase de Mouvement même en cas de réussite. Architecture
+retenue : rejet à la **déclaration** si combiné à une attaque/un déplacement dans la même soumission
+(`COMBAT_DECLARE_ERROR`, même philosophie que `getAimIneligibilityReasons`/`isExclusiveDeclaration`,
+`shared/combatExclusiveActions.js`) — rien à annuler après coup à la Résolution, la déclaration
+elle-même garantit qu'aucune autre action n'existe pour ce Tour.
+
+**Coût d'Initiative** : inchangé — la table `POSITION_TRANSITION_COST` (`shared/combatStatePositionCost.js`,
+`prone → standing/crouching/kneeling : -10`) continue de s'appliquer telle quelle à la Déclaration ;
+elle modélise le temps physique de la tentative, indépendant de son issue. Ce qui change pour l'exo
+n'est *pas* ce coût mais le fait que l'écriture de `state_position` elle-même doit désormais **attendre
+la Résolution** (§9.3) au lieu d'être immédiate comme pour un humain.
+
+**Seuil du Test** : Compétence Manœuvre d'armure du **pilote** (résolution déjà existante,
+`resolveManeuverSkillId(template)` dans `combatantContextService.js` — actuellement fonction interne
+réservée à `meleeSkillCap`, **à exporter**, pas dupliquer, Règle 2 documentaire) `+`
+`EXO_PRONE_RECOVERY_TABLE[template.category]`.
+
+**Correction (analyse à charge, 2026-08-18)** : ma première rédaction citait `resolvePolarisTest`
+(`polarisTestService.js`) "même primitif que `fallDamageService.js`" — **vérifié faux en relisant les
+deux fichiers.** `resolvePolarisTest` ne produit ni `breakdown` (liste de contributions affichable),
+ni bonus de Réussite critique (`applyCriticalSuccessBonus`, jamais appelé dans `resolveFall`) ; et
+`fallDamageService.js` n'émet même pas de `DICE_RESULT` visible en chat pour ce Test — un jet
+interne, pas un jet public. Or ce Lot veut explicitement un jet visible (§9.1). **Le bon primitif est
+`computeAttackRoll`** (`server/src/lib/combatAttackRoll.js`), le même noyau pur que
+`resolveMeleeDefensePnj`/`resolveMeleeDefensePj` — c'est lui qui produit `breakdown` et s'articule
+avec `applyCriticalSuccessBonus`/`resolveCriticalFailReroll`/`maybeTriggerCatastrophe`, la chaîne
+complète déjà standard pour tout Test de combat affiché. Mécanisme corrigé :
+1. `parseDice('1d20')` (jet réel, comme tout Test de combat).
+2. `computeAttackRoll({ skillLabel: 'Manœuvre d'armure', skillTotal, totalLabel: 'Seuil', rollAttaque: roll, contributions: [{ label: 'Catégorie ' + template.category, value: EXO_PRONE_RECOVERY_TABLE[template.category], type: ... }] })`.
+3. `applyCriticalSuccessBonus(outcome, getCriticalSuccessBonus({ masteryLevel: ctx.mastery }))` puis
+   `resolveCriticalFailReroll(outcome)` — même séquence que `resolveMeleeDefensePnj`, pas une
+   variante maison.
+4. `maybeTriggerCatastrophe(io, campaignId, tokenId, outcome.catastropheRisk, { site: 'exo_stand_up', actorTokenId: tokenId, targetTokenId: null })`
+   — **omis de ma première rédaction**, à inclure : ce Test suit la même règle Catastrophe que tout
+   Test de combat en Résolution, `targetTokenId: null` accepté (champ descriptif seulement, vérifié
+   dans `catastropheService.js`, aucune structure imposée à `context`).
+5. `io.to(campaignId).emit(WS.DICE_RESULT, { ... skillLabel: 'Tentative de se redresser', breakdown, ... })`
+   — même forme que `resolveMeleeDefensePnj`.
+- **Succès** : `combat_roster.state_position` se met à jour vers la position déclarée (portée par
+  `combat_actions.modifiers.targetPosition`, §9.3 — jamais réécrite en amont, contrairement à un
+  humain).
+- **Échec** : `state_position` reste `'prone'` (déjà sa valeur — aucune écriture). Rien d'autre ne
+  s'exécute ce Tour, garanti par l'exclusivité de la déclaration ci-dessus — jamais par une logique
+  d'annulation a posteriori (aucune action à annuler, elle n'a jamais pu être déclarée en même temps).
+
+**Angle mort assumé, pas nouveau** : l'exemption sous-marine (palmes/propulseur) dépend d'un signal
+d'immersion temps réel que le moteur monde n'expose pas (dette **EAU1**, déjà acceptée pour
+`getExoMovementBudget`, `PLAN_EXOARMURE.md` §7.4). Le Test s'applique dans tous les cas plutôt que
+d'inventer une détection — même limitation documentée, pas une nouvelle compromission.
+
+**Deux points vérifiés en analyse à charge (2026-08-18), sans changement au plan :**
+- **`environment='industrial'` (template sans spécialité Manœuvre d'armure définie, décision Saar
+  2026-08-15 en suspens)** — `resolveManeuverSkillId` lève une exception dans ce cas. Vérifié sûr par
+  construction : le `try/catch` déjà en place dans `socketCombatResolution.js` autour de la
+  résolution d'entrée de timeline (`:337-393`, même bloc que `melee`/`assault`) intercepte déjà toute
+  exception, notifie `COMBAT_DECLARE_ERROR` et laisse l'échelle avancer — pas un nouveau risque de
+  plantage, juste un cas hérité gratuitement du patron existant.
+- **Aucun malus/bonus de combat lié à `state_position='prone'` n'existe aujourd'hui** (vérifié par
+  grep exhaustif sur `socketCombatHelpers.js`, zéro résultat) — pour aucun type de personnage,
+  humain compris. Seul le coût d'Initiative de la transition existe. Ça relativise (sans l'invalider)
+  l'idée que "l'ordre d'Initiative compte tactiquement" pour ce Test — l'argument retenu pour en
+  faire une entrée d'échelle plutôt qu'une action simple (§9.3) reste valable indépendamment
+  (Test probabiliste + jet visible en chat = même famille que `melee`/`assault` par construction,
+  pas besoin de l'argument tactique en plus). Dette générale préexistante, hors périmètre de ce lot.
+
+### 9.3 Fichiers touchés (plan, pas encore codé)
+
+- **Migration** (prochain numéro séquentiel disponible — à reconfirmer contre `knex_migrations` au
+  moment de coder, dernier numéro observé aujourd'hui : `247`) — étendre `chk_action_type`
+  (`combat_actions`, actuellement `'assault','move_short','move_long','micro','skip','reload','melee'`,
+  dernière touche migration `63_melee.js`) avec une nouvelle valeur `'exo_stand_up'`. Aucune nouvelle
+  colonne : `modifiers jsonb` (déjà nullable, déjà utilisée pour du payload libre par tous les autres
+  types) porte `{ targetPosition }` — le patron déjà en place pour `move_short`
+  (`ini_mod`)/`assault`/`melee` (`ref_range`, `dual_wield`...), pas une exception.
+- **`server/src/socket/socketCombatAnnouncement.js`** :
+  - Détection de la tentative (§9.2) au même point que la boucle `STATE_COSTS.position` actuelle
+    (`:381-390`) — garder le calcul d'`iniDelta` inchangé, mais **court-circuiter l'écriture
+    immédiate `state_position: resolvedPosition`** (`:596`) pour ce cas précis : le champ persisté
+    reste `'prone'`, la position visée voyage dans la nouvelle ligne `combat_actions` (`modifiers.targetPosition`)
+    en attendant la Résolution.
+  - Nouvelle entrée `actionRows` (miroir du patron `melee`/`assault` déjà en place, `:520-539` —
+    `type: 'exo_stand_up'`, `sequence: 3` comme les autres actions complexes).
+  - **Trouvaille critique en vérification finale (2026-08-19), après un premier jet fonctionnel en
+    apparence (`node --check` + imports propres) mais jamais exercé de bout en bout :** deux listes
+    blanches codées en dur, jamais mises à jour pour ce nouveau type, auraient rendu l'action
+    silencieusement inerte malgré une ligne `combat_actions` correctement posée :
+    1. `buildTimelineEntries` (`socketCombatHelpers.js`) filtrait `type !== 'melee' && type !== 'assault'`
+       — sans `'exo_stand_up'` ajouté à cette condition, l'action ne recevait **jamais** d'entrée
+       `combat_timeline_entries`, donc n'était jamais atteinte par `step.kind === 'entry'`.
+    2. `socketCombatResolution.js` (bloc "actions simples") filtrait `whereNotIn('type', ['melee', 'assault'])`
+       — sans `'exo_stand_up'` exclu ici aussi, l'action tombait dans le lot des "actions simples"
+       (aucune branche ne la traite, seulement `move_short`/`move_long`/`reload`) et se retrouvait
+       marquée `resolved` **sans jamais appeler `resolveExoStandUpAction`** — le pire des deux
+       silences (pas d'erreur, pas de crash, juste rien).
+    Corrigées toutes les deux, re-vérifiées (`node --check` + import runtime). Trouvé en retraçant le
+    cycle de vie complet de l'action plutôt qu'en faisant confiance à la seule absence d'erreur de
+    syntaxe — leçon retenue pour les futurs types d'action (Lots 4/5).
+  - Garde d'exclusivité (§9.2) : nouvelle fonction dans `shared/combatExclusiveActions.js` (fichier
+    déjà responsable de ce concept, `isAimEligible`/`isExclusiveDeclaration`) plutôt qu'un `if` ad hoc
+    local — cohérent avec Règle 2 documentaire (un seul endroit pour "qu'est-ce qui est exclusif").
+- **`server/src/socket/socketCombatResolution.js`** — nouvelle branche `else if (action.type ===
+  'exo_stand_up')` dans le dispatcher d'entrée de timeline (`:337-393`, même niveau que
+  `action.type === 'melee'`), appelant une nouvelle fonction serveur.
+- **`server/src/socket/socketCombatHelpers.js`** — `resolveExoStandUpAction(io, campaignId, action,
+  character, pendingMaps)`, dans ce fichier plutôt qu'un nouveau (pas juste par défaut : réutilise
+  directement `resolveCriticalFailReroll`, fonction interne non exportée de ce fichier, §9.2 —
+  la déplacer coûterait un export sans bénéfice). Suit le mécanisme corrigé §9.2 : résout
+  `{ pilot, exoSheet, template }` via **`resolveExoContext`** (nouveau, voir ci-dessous — un seul
+  fetch, pas deux), calcule `exoStats`/`maneuverSkillId` localement, appelle
+  `resolveHumanoidTestContext(db, pilot, maneuverSkillId, { forNAOverride: exoStats.exf })`
+  directement (déjà exportée) plutôt que de repasser par `resolveCombatantTestContext`/
+  `resolveExoTestContext` — ces deux-là referaient le même fetch pilote/template une seconde fois.
+- **`server/src/lib/combatantContextService.js`** — **analyse à charge, optimisation retenue (pas
+  juste une note) :** au lieu d'exporter seulement `resolveManeuverSkillId` et d'accepter un fetch
+  dupliqué comme "coût mineur déjà toléré ailleurs", extraire le fetch commun de
+  `resolveExoTestContext` (actuellement inline, `resolvePilot` + lookup `ref_exo_templates`) en une
+  nouvelle fonction exportée **`resolveExoContext(db, exoCharacter)`** → `{ pilot, exoSheet,
+  template }` (un seul aller-retour DB). `resolveExoTestContext` devient un consommateur de cette
+  fonction au lieu de dupliquer sa propre version — améliore le fichier existant au passage, pas
+  seulement le nouveau site. Réutilisable tel quel par les Lots 4/5 (Intégrité, Avaries), qui auront
+  le même besoin `{ pilot, exoSheet, template }`. Exporter aussi `resolveManeuverSkillId` (§9.2,
+  inchangé).
+- **Client** — `CombatExoActionWindow.jsx`/`useExoDeclare.js` (§8.5) : bouton "Tenter de se relever"
+  visible uniquement si `entry.state_position === 'prone'`, désactive toute autre déclaration ce Tour
+  (miroir client de la garde serveur §9.2, jamais la seule protection — `core.md`), affichage du
+  résultat du Test (réussite/échec) au retour de Résolution.
+
+### 9.4 Hors périmètre explicite de ce lot
+
+- Intégrité/Avaries/hardpoints (Lots 4-5) — le bouton "se relever" n'a besoin d'aucun d'eux.
+- La détection réelle de "à terre" (comment un exo se retrouve `state_position='prone'` en premier
+  lieu — déjà un mécanisme générique existant, pas propre à ce lot, aucun changement nécessaire).
+- Toute UI au-delà du strict bouton + résultat (§8.4 : pilote/Intégrité viendront aux lots suivants,
+  sur le même squelette).
+
+### 9.5 Validation prévue
+
+- `node --check` sur tous les fichiers serveur touchés.
+- Test migration (up/down/re-up, CHECK constraint) — même patron que `233_exo_sheet.test.mjs`.
+- **`resolveExoContext`** (nouveau, `combatantContextService.test.mjs`) : un seul appel DB par
+  invocation (vérifiable par équivalence avec l'ancien comportement inline de
+  `resolveExoTestContext`, même patron que les tests existants "dispatch pj/pnj inchangé" §7.7) ;
+  `resolveExoTestContext` continue de passer tous ses tests existants après le refactor (non-
+  régression, pas seulement le nouveau code).
+- Test ciblé sur `resolveExoStandUpAction` : seuil correct par catégorie (les 7 valeurs
+  `EXO_PRONE_RECOVERY_TABLE`), succès → écriture `state_position`, échec → `state_position` inchangé,
+  bonus de Réussite critique appliqué (mastery), reroll d'Échec critique déclenché, `maybeTriggerCatastrophe`
+  appelé quand `catastropheRisk` est vrai, `environment='industrial'` remonte une erreur propre (pas
+  un crash, §9.2) — contre PostgreSQL réel (accessible dans cet environnement, vérifié §7.7).
+- Garde d'exclusivité (`shared/combatExclusiveActions.js`) : test unitaire pur, sans DB — rejet si
+  combinée à une attaque/un déplacement, acceptée seule (§9.2, exclusivité tranchée).
+- Scénario réel navigateur (Saar) : aucune exo-armure en base à ce jour — **bloquant pour la
+  validation finale**, comme le reste du chantier depuis le Lot 1. Codable et testable en isolation
+  (migration + tests Node) sans attendre ce prérequis, mais pas confirmable en jeu avant.
