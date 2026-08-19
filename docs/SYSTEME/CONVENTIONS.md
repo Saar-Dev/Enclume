@@ -16,7 +16,7 @@
 - **`owner_id` tokens = mort** — ownership via `character_id → characters.user_id`
 - **`updated_at = db.fn.now()` APRÈS le guard `Object.keys`** (P13)
 - **`updated_at` jamais dans le JWT** (P14)
-- **`glb_url` avec `?v=timestamp`** (P19)
+- **URL MinIO à nom fixe (`glb_url`, `portrait_url`) avec `?v=timestamp`** (P19)
 - **`mat.clone()` avant mutation Three.js** (P20)
 - **`fetch()` console F12 : URL absolue + credentials**
 - **Calculs Polaris** — serveur calcule via `charStats.js`
@@ -52,7 +52,7 @@
 | P13 | `updated_at = db.fn.now()` après guard Object.keys | CONVENTIONS.md |
 | P14 | `updated_at` jamais dans le JWT | CORE.md |
 | P17 | Séparateur voxel = `":"` NON NÉGOCIABLE | VOXELS.md |
-| P19 | `glb_url` avec `?v=timestamp` obligatoire | ASSETS.md |
+| P19 | URL MinIO à nom fixe (`glb_url`, `portrait_url`) avec `?v=timestamp` obligatoire | ASSETS.md |
 | P20 | `mat.clone()` avant mutation matériau Three.js | CONVENTIONS.md |
 | P22 | `voxel_textures.id` = integer (exception UUID) | VOXELS.md |
 | P26 | `blocksReady = true` même si 0 textures | VOXELS.md |

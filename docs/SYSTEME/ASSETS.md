@@ -98,7 +98,7 @@ GET /api/assets/:folder/*filePath
   → stream.pipe(res)
 
 cover_url campaign = "campaigns/<campaign_id>/cover"
-portrait_url char  = "characters/<id>/illustration"
+portrait_url char  = "characters/<id>/illustration?v=<timestamp>"
 glb_url char       = "characters/<id>/model3D?v=<timestamp>"
 glb_url blueprint  = "glb/<blueprint_id>.glb?v=<timestamp>"
 glb_url builtin    = "builtin-models/<pack>/glb/<file>.glb?v=<mtime>-<size>"

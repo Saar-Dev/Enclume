@@ -315,7 +315,11 @@ async function broadcastCharacterUpdate(characterId, app) {
 // Accessible au GM et au propriétaire du character.
 // L'image est stockée sous characters/<id>/illustration (nom fixe, sans extension).
 // Le Content-Type est stocké dans les metadata MinIO — assets.js l'utilise pour la réponse.
-// portrait_url stocke le chemin MinIO (objectName) — pas une URL complète.
+// portrait_url stocke le chemin MinIO avec ?v=<timestamp> pour le cache busting (P19, même patron
+// que glb_url juste en dessous — assets.js ignore les query params lors de la construction du
+// filePath MinIO). Ticket "Illustration fiche personnage" (e8946376) : sans ce paramètre, l'URL ne
+// change jamais entre deux uploads (nom d'objet fixe) — ni le navigateur (Cache-Control: max-age=3600,
+// assets.js) ni React (<img src> inchangé ne redéclenche aucune requête) ne détectent le remplacement.
 // L'URL d'affichage côté client : ${VITE_API_URL}/api/assets/${character.portrait_url}
 actionsRouter.post('/:id/portrait',
   multerUpload.single('portrait'),
@@ -339,9 +343,12 @@ actionsRouter.post('/:id/portrait',
       { 'Content-Type': req.file.mimetype }
     )
 
+    // Timestamp pour cache busting (P19) — même construction que glb_url ci-dessous.
+    const portraitUrl = `${objectName}?v=${Date.now()}`
+
     await db('characters')
       .where({ id: req.params.id })
-      .update({ portrait_url: objectName, updated_at: db.fn.now() })
+      .update({ portrait_url: portraitUrl, updated_at: db.fn.now() })
 
     const updatedCharacter = await broadcastCharacterUpdate(req.params.id, req.app)
     res.json({ character: updatedCharacter })
