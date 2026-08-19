@@ -3450,3 +3450,21 @@ nécessaire — comportement observable inchangé par construction.
 **Non testé** : rien d'identifié restant.
 **Données** : aucune migration, aucun changement serveur.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "DCO1" — déjà résolu
+
+**Contexte** : ticket "onTokenRotate est du code mort dans Canvas3D/Scene", importé en base le
+2026-08-12 depuis `BUGIDENTIFIE.md`. Recherche exhaustive : `onTokenRotate` n'existe plus nulle part
+dans le code source (client ou serveur), seulement dans des docs archivées. `git log -S` le localise
+supprimé dans `def3e59` ("Session 142 (Saar) — Lot 8 PLAN_FUSION : nettoyage Canvas3D + placement
+libre MJ", 2026-07-15) — avec 3 autres props mortes (`moveLabels`, `announcementMarker`, import
+`yToLevel`) du même nettoyage. Le ticket était donc déjà obsolète au moment de son import (2026-08-12),
+un mois après la suppression réelle.
+
+**Codé** : rien — aucune trace à corriger. Ligne DCO1 retirée de `docs/EN_COURS.md` (même dette,
+jamais nettoyée après le commit `def3e59`).
+
+**Testé** : recherche exhaustive confirmant l'absence totale de `onTokenRotate` dans le code actuel.
+**Non testé** : sans objet.
+**Données** : aucune.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

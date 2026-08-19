@@ -186,7 +186,6 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
 | TC1 | `.gitattributes:3` — attribut invalide | Très basse |
-| DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
