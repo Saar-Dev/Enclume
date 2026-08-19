@@ -30,6 +30,7 @@ import EnvironmentalResultQueue from '../components/EnvironmentalResultQueue'
 import CatastropheReviewQueue from '../components/CatastropheReviewQueue'
 import CharacterWindow from '../character/CharacterWindow'
 import DroneWindow from '../character/DroneWindow'
+import ExoSheetWindow from '../character/ExoSheetWindow'
 import RadialMenu from '../components/RadialMenu'
 import TokenRadialMenu from '../components/TokenRadialMenu'
 import TokenStatusPanel from '../components/TokenStatusPanel'
@@ -253,12 +254,18 @@ function SessionContent({ campaignId }) {
     ? characters.find(c => c.id === selectedDroneId) ?? null
     : null
 
+  // Fenêtre exo-armure flottante — même pattern que selectedDroneId
+  const [selectedExoId, setSelectedExoId] = useState(null)
+  const selectedExo = selectedExoId
+    ? characters.find(c => c.id === selectedExoId) ?? null
+    : null
+
   // Dispatcher centralisé — route vers la bonne fenêtre selon character.type
-  // Extensible : ajouter un case 'armure' quand ArmorWindow sera implémentée
   const openSheet = useCallback((character) => {
     if (!character) return
     switch (character.type) {
       case 'drone': setSelectedDroneId(character.id); break
+      case 'exo':   setSelectedExoId(character.id); break
       default:      setSelectedCharacterId(character.id)
     }
   }, [])
@@ -1147,6 +1154,15 @@ function SessionContent({ campaignId }) {
           isGm={isGm}
           onClose={() => setSelectedDroneId(null)}
           socket={socket}
+        />
+      )}
+
+      {/* ─── ExoSheetWindow — flottante, déplaçable ─────────────────────────── */}
+      {selectedExo && (
+        <ExoSheetWindow
+          character={{ ...selectedExo, _currentUserId: user?.id }}
+          isGm={isGm}
+          onClose={() => setSelectedExoId(null)}
         />
       )}
 

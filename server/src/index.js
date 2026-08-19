@@ -30,6 +30,7 @@ import charRefRouter from './routes/character/ref.js'
 import entityBlueprintsRouter from './routes/entity-blueprints.js'
 import entitiesRouter from './routes/entities.js'
 import equipmentRouter from './routes/equipment.js'
+import exoTemplatesRouter from './routes/exoTemplates.js'
 import documentsRouter from './routes/documents.js'
 import { merchantsRouter, tradeLogRouter } from './routes/tradeRoutes.js'
 import { chatRouter } from './chat/chatRoutes.js'
@@ -127,6 +128,7 @@ app.use('/api/entity-blueprints', entityBlueprintsRouter)
 app.use('/api/battlemaps/:id/entities', entitiesRouter)
 app.use('/api/entities', entitiesRouter)
 app.use('/api/equipment', equipmentRouter)
+app.use('/api/exo-templates', exoTemplatesRouter)
 app.use('/api/admin', adminToolsRouter)
 app.use('/api/admin/users', adminUsersRouter)
 app.use('/api/admin/tickets', adminTicketsRouter)

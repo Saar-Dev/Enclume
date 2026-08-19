@@ -1106,6 +1106,33 @@
     "saving": "…",
     "saved": "Sauvegardé"
   },
+  "exo": {
+    "tabIdentity": "Identité",
+    "tabIntegrity": "Intégrité",
+    "tabAvaries": "Avaries",
+    "tabSystems": "Systèmes",
+    "tabComputer": "Ordinateur",
+    "tabSettings": "Réglages",
+    "pilotLabel": "Pilote",
+    "pilotNone": "Aucun pilote assigné",
+    "pilotSelectPlaceholder": "— Sélectionner un pilote —",
+    "templateLabel": "Modèle",
+    "templateNone": "Aucun modèle assigné",
+    "templateSelectPlaceholder": "— Sélectionner un modèle —",
+    "templateNoneAvailable": "Aucun modèle disponible dans le catalogue",
+    "statsTitle": "Caractéristiques",
+    "statsUnavailable": "Assigner un modèle pour calculer les caractéristiques",
+    "fieldExf": "EXF",
+    "fieldBld": "Blindage",
+    "fieldRd": "RD",
+    "integrityStructure": "Structure",
+    "integrityExosquelette": "Exosquelette",
+    "integrityGenerator": "Générateur",
+    "saving": "…",
+    "saveError": "Erreur de sauvegarde",
+    "comingSoon": "À venir — pas encore implémenté dans le chantier Exo-armures",
+    "sheetMissing": "Fiche exo-armure introuvable en base"
+  },
   "trade": {
     "merchants": {
       "pageTitle": "Marchands",
