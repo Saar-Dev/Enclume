@@ -55,7 +55,17 @@ export function parseAmmoEffects(raw) {
       for (const tag of rest.split('|')) {
         const tEq = tag.indexOf('=')
         if (tEq < 0) { if (tag.trim()) result.unknown.push(`TXT:${tag.trim()}`); continue }
-        result.tags[tag.slice(0, tEq).trim()] = tag.slice(tEq + 1).trim()
+        const tagKey   = tag.slice(0, tEq).trim()
+        const tagValue = tag.slice(tEq + 1).trim()
+        // Robustesse générique : une clé TXT= répétée (ex. catalogue Darts, DEPTH=>500M_X0.5 puis
+        // DEPTH=>=1000M_DISABLE) ne doit jamais écraser silencieusement la précédente — accumule en
+        // tableau. Ticket DARTS-TAGDUP : aucun consommateur de DEPTH aujourd'hui (seul FX est lu,
+        // damageService.js, jamais dupliqué en pratique — reste une string simple, non affecté).
+        if (tagKey in result.tags) {
+          result.tags[tagKey] = [].concat(result.tags[tagKey], tagValue)
+        } else {
+          result.tags[tagKey] = tagValue
+        }
       }
     } else {
       result.unknown.push(clause.trim())

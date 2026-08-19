@@ -3468,3 +3468,30 @@ jamais nettoyée après le commit `def3e59`).
 **Non testé** : sans objet.
 **Données** : aucune.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "DARTS-TAGDUP"
+
+**Contexte** : `shared/weaponAmmoDsl.js#parseAmmoEffects`, bloc `TXT=` — chaque sous-tag `clé=valeur`
+était écrit dans `result.tags[clé]` sans garde de collision. 10 lignes du catalogue (toutes les
+munitions "Darts", perforantes sous-marines) portent `TXT=...|DEPTH=>500M_X0.5|DEPTH=>=1000M_DISABLE`
+— deux seuils de profondeur légitimement distincts (RAW : au-delà de 500m portée ÷2, au-delà de 1000m
+arme inutilisable), mais la même clé `DEPTH` deux fois. Le second écrasait silencieusement le premier.
+
+**Question posée par Saar avant de coder** : sans aucun consommateur de `tags.DEPTH` (vérifié —
+`damageService.js` ne lit que `tags.FX`), comment "résoudre" ce ticket sans deviner une forme de
+données pour une mécanique de profondeur qui n'existe pas ? Reformulé et tranché avec Saar : impossible
+de corriger un *comportement* (aucun n'existe), possible de corriger la *robustesse du parseur* (ne
+plus perdre silencieusement une donnée présente dans la chaîne brute) sans y ajouter de mécanique de
+jeu. Décision Saar : option retenue.
+
+**Codé** : dans le bloc `TXT=`, une clé déjà vue accumule désormais en tableau
+(`tags.DEPTH = ['>500M_X0.5', '>=1000M_DISABLE']`) au lieu d'écraser — générique, pas spécifique à
+`DEPTH`. Le seul tag réellement consommé aujourd'hui (`tags.FX`, jamais dupliqué en pratique) reste une
+string simple, non affecté. Nouveau test dans `weaponAmmoDsl.test.mjs` couvrant le cas de double clé.
+
+**Testé** : `node --test shared/weaponAmmoDsl.test.mjs` — 17/17 verts (fonction pure, aucune dépendance
+DB/réseau), y compris le test `FX` existant (non-régression sur le seul consommateur réel).
+**Non testé** : sans objet — aucun consommateur à exercer en jeu.
+**Données** : aucune migration, catalogue `ref_equipment` inchangé (c'est le parseur qui était en
+cause, pas la donnée source).
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

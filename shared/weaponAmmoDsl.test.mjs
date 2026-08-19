@@ -20,6 +20,11 @@ test('parseAmmoEffects - TXT regroupe des sous-tags, dont FX', () => {
   assert.deepEqual(parsed.tags, { PEN: 'SET(15)', FX: 'APHC' })
 })
 
+test('parseAmmoEffects - une clé TXT répétée (catalogue Darts, DEPTH) s\'accumule au lieu d\'écraser', () => {
+  const parsed = parseAmmoEffects('DMG=BASE;TXT=DEPTH=>500M_X0.5|DEPTH=>=1000M_DISABLE')
+  assert.deepEqual(parsed.tags, { DEPTH: ['>500M_X0.5', '>=1000M_DISABLE'] })
+})
+
 test('parseAmmoEffects - null/vide/action ou cle inconnue -> unknown, jamais un throw', () => {
   assert.deepEqual(parseAmmoEffects(null), { dmg: null, choc: null, tags: {}, unknown: [] })
   const parsed = parseAmmoEffects('WTF=1;DMG=NOPE(1)')
