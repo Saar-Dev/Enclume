@@ -2,8 +2,10 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { parseDice } from '../lib/diceParser.js'
-import { calcAttributeNA } from '../lib/charStats.js'
+import { calcAttributeNA, calcSkillTotal } from '../lib/charStats.js'
 import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
+import { resolveCombatantIdentity, resolveExoContext, resolveManeuverSkillId } from '../lib/combatantContextService.js'
+import { getMutationEffects } from '../services/mutationService.js'
 import { getUserColor } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
 import { startAnnouncementTimers, startResolutionPhase } from './socketCombatHelpers.js'
@@ -67,6 +69,52 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           if (character?.type === 'drone') {
             // Drone : INI 12 fixe (LdB p.320), pas de char_sheet, pas de surprise
             rosterData.push({ token, base_ini: 12, character, is_pnj: false, forcedNotSurprised: true })
+            continue
+          }
+
+          if (character?.type === 'exo') {
+            // PLAN_EXOARMURE.md Lot 3 §10.2 — miroir du cas drone ci-dessus : l'exo n'a pas de
+            // char_sheet, ses stats de combat viennent du pilote. resolveExoContext (Lot 2bis) : un
+            // seul fetch pilote+template, pas de pilote/template assigné → base_ini reste à son
+            // défaut 0 (repli neutre, même esprit que "char_sheet introuvable" ci-dessous pour un
+            // humain — jamais un crash).
+            const { pilot, template } = await resolveExoContext(db, character)
+            let is_pnj = false
+            if (pilot && template) {
+              const pilotSheet = await db('char_sheet').where({ character_id: pilot.id }).first()
+              if (pilotSheet) {
+                const maneuverSkillId = resolveManeuverSkillId(template)
+                const [attrs, archetype, advantages, mutationEffects, maneuverCharSkill, maneuverRefSkill] = await Promise.all([
+                  db('char_attributes').where({ char_sheet_id: pilotSheet.id }),
+                  db('char_archetype').where({ char_sheet_id: pilotSheet.id }).first(),
+                  getAdvantages(pilotSheet.id),
+                  getMutationEffects(pilotSheet.id),
+                  db('char_skills').where({ char_sheet_id: pilotSheet.id, skill_id: maneuverSkillId }).first(),
+                  db('ref_skills').where({ id: maneuverSkillId }).first(),
+                ])
+                const genotypeRow = archetype?.genotype_id
+                  ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+                  : null
+                const ada_na = calcAttributeNA(attrs, 'ADA', genotypeRow)
+                const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
+                const reaction = calcREA(ada_na, per_na, getAdvantageModForAttr(advantages, 'reaction'))
+                const maneuverSkillTotal = maneuverRefSkill
+                  ? calcSkillTotal(attrs, maneuverCharSkill, maneuverRefSkill, genotypeRow, mutationEffects)
+                  : 0
+                // Malus d'Initiative — REGLEARMURE.md:136-146, doublé hors-milieu. EAU1 (aucun signal
+                // d'immersion temps réel, même limite que resolveManeuverSkillId/getExoMovementBudget) :
+                // 'submarine' suppose toujours "hors milieu" (surface par défaut) ; les autres
+                // environnements supposent toujours "dans leur milieu", jamais doublés.
+                const iniMalus = template.environment === 'submarine'
+                  ? template.malus_init_underwater * 2
+                  : template.malus_init_surface
+                base_ini = Math.min(reaction, maneuverSkillTotal) - iniMalus
+                is_pnj = pilot.type === 'pnj'
+              }
+            }
+            // Pas de pilote assigné : personne à qui adresser un jet de Surprise manuel — même
+            // traitement que le drone (forcedNotSurprised), pas un blocage silencieux.
+            rosterData.push({ token, base_ini, character, is_pnj, forcedNotSurprised: !pilot })
             continue
           }
 
@@ -299,7 +347,12 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           const character = token?.character_id
             ? await db('characters').where({ id: token.character_id }).first()
             : null
-          const targetSocket = roomSockets.find(s => s.data.userId === character?.user_id)
+          // PLAN_EXOARMURE.md Lot 3 §10.3 — character?.user_id seul ratait le pilote d'une exo-armure
+          // (propriétaire brut ≠ pilote effectif, même famille de bug que Lots 2/2bis) :
+          // resolveCombatantIdentity résout déjà correctement les deux cas (humain : son propre
+          // user_id, exo : celui du pilote), sans changement de comportement pour pj/pnj/drone.
+          const targetUserId = character ? (await resolveCombatantIdentity(db, character)).userId : null
+          const targetSocket = roomSockets.find(s => s.data.userId === targetUserId)
           if (targetSocket) targetSocket.emit(WS.COMBAT_SURPRISE_ROLL, { tokenId: entry.token_id })
         }
       }

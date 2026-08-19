@@ -14,7 +14,10 @@
 > (§8) codée le même jour, migration `249`, `resolveExoStandUpAction`, `CombatExoActionWindow.jsx`
 > joueur+MJ. Trou de permission trouvé et corrigé au passage (`isExoActorAuthorized`, §9.3) : un
 > pilote ≠ propriétaire ne pouvait déclarer aucune action pour son exo, pas seulement se relever.
-> **Non testé en navigateur** (aucune exo-armure en base à ce jour). **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
+> **Lot 3 (Initiative) ✅ codé (2026-08-19, §10)** — `min(Réaction, Manœuvre d'armure) − malus`
+> (`COMBAT_START`, `socketCombatState.js`), seuil différé volontairement non géré (décision Saar).
+> Même bug de routage trouvé une 3ᵉ fois (`is_pnj`/ciblage `COMBAT_SURPRISE_ROLL`) et corrigé au
+> passage. **Non testé en navigateur** (aucune exo-armure en base à ce jour). **Improvisation interdite (consigne explicite Saar 2026-07-30, réaffirmée 2026-08-06)**
 > — architecture validée contre des dépôts pro réels (Lancer/Foundry VTT, MekHQ) avant tout code. 2 des
 > 3 questions RAW tranchées (§2.1, §2.2) ; **§2.3 (seuil de Catastrophe) en stand-by**, dépend de
 > `docs/PLAN_TEST_CRITIQUE.md` (chantier séparé, en pause côté Saar) — bloque uniquement le Lot 8.
@@ -162,8 +165,9 @@ non figé — à valider avec Saar une fois la recherche externe (§4) intégré
   §7)**.
 - **Lot 2bis — Armure à terre** : Test de Manœuvre d'armure pour se redresser (§2.2, §9). **✅ codé
   (2026-08-19, §9)**, non testé en navigateur.
-- **Lot 3 — Initiative** : `min(Réaction, Manœuvre d'armure) − malus environnemental (×2 hors-milieu)`,
-  seuil différé (report au Tour suivant si Initiative ≤ 0).
+- **Lot 3 — Initiative** : `min(Réaction, Manœuvre d'armure) − malus environnemental (×2 hors-milieu)`.
+  Seuil différé **volontairement non géré** (décision Saar 2026-08-19, §10.1). **✅ codé (2026-08-19,
+  §10)**, non testé en navigateur.
 - **Lot 4 — Pipeline de dégâts** : Blindage/RD dynamiques par palier d'Intégrité (Structure), seuils
   d'Avarie (5/10/15/20/25/30), compteur d'Avaries. Tranche la question dommages-au-contact (§2).
 - **Lot 5 — Incidents** (splitté, trop volumineux pour un seul lot — 6 sous-lots, un seul à la fois) :
@@ -1071,3 +1075,129 @@ d'inventer une détection — même limitation documentée, pas une nouvelle com
 - Scénario réel navigateur (Saar) : aucune exo-armure en base à ce jour — **bloquant pour la
   validation finale**, comme le reste du chantier depuis le Lot 1. Codable et testable en isolation
   (migration + tests Node) sans attendre ce prérequis, mais pas confirmable en jeu avant.
+
+---
+
+## 10. Lot 3 — Initiative (plan détaillé 2026-08-19, ✅ codé 2026-08-19)
+
+> **Clôture (2026-08-19)** : codé selon ce plan, avec un affinement mineur en cours de route
+> (§10.3 — `is_pnj` réutilise directement `pilot.type` déjà résolu, pas un second appel
+> `resolveCombatantIdentity`). `node --check` + chargement runtime propres, 33/33
+> `combatantContextService.test.mjs` toujours verts (non-régression des fonctions réutilisées).
+> **Non testé** : scénario réel en jeu (aucune exo-armure en base à ce jour).
+
+### 10.1 RAW
+
+`REGLEARMURE.md:136-158`, deux règles distinctes (pas une seule) :
+
+> **Malus d'Initiative** — chaque armure possède un malus d'Initiative, qui agit au début du Tour de
+> combat sur le niveau d'Initiative du personnage [...] lorsque l'armure est utilisée dans un milieu
+> différent du milieu pour lequel elle a été conçue [...] le malus d'Initiative est doublé.
+>
+> **Initiative (optionnel)** — comparez les niveaux de Réaction et de Manœuvre d'armure du
+> personnage, et prenez le plus bas niveau des deux. D'autre part, les armures mécanisées imposent
+> également un malus d'Initiative au personnage. Si jamais l'Initiative d'un personnage est réduite à
+> 0 ou moins, son action est reportée au prochain Tour de combat (le personnage agit alors en premier).
+
+**Décision Saar (2026-08-19)** : le seuil différé (Initiative ≤ 0 → report au Tour suivant) **n'est
+pas géré, volontairement** — aucun mécanisme "Initiative ≤ 0" à construire. Une Initiative basse ou
+négative reste une valeur normale, triée naturellement en dernier par le tri existant
+(`rosterData.sort((a,b) => b.base_ini - a.base_ini ...)`, `socketCombatState.js`) — aucun code
+spécifique requis pour cette conséquence, elle découle déjà du tri actuel.
+
+**Décision par symétrie (raisonnement, à confirmer par Saar en testant)** : "niveau de Manœuvre
+d'armure" = `calcSkillTotal` seul (attributs + maîtrise + génotype/mutations), **sans**
+`effectiveMalus` (blessures/encombrement/fatigue) — même nature que "niveau de Réaction" (`base_ini`
+= `calcREA(ADA,PER)`, déjà calculé sans aucun malus de Test). Les deux membres de la comparaison RAW
+doivent être sur la même base (un niveau "brut", pas un Seuil de Test complet) pour que la
+comparaison ait un sens.
+
+### 10.2 Mécanisme retenu
+
+**Point d'ancrage** : `socketCombatState.js`, handler `COMBAT_START` — `base_ini` y est déjà calculé
+une fois par token, avec un précédent direct : `character?.type === 'drone'` court-circuite déjà tout
+le calcul humanoïde (Initiative fixe 12, RAW p.320, commentaire "PD1 — fetcher character en premier
+pour détecter le type avant d'accéder à char_sheet"). Un `else if (character?.type === 'exo')`
+symétrique, avant le fetch `char_sheet` (l'exo n'en a pas) :
+1. `resolveExoContext(db, exoCharacter)` → `{ pilot, exoSheet, template }` (déjà exporté, Lot 2bis).
+   Pas de pilote/template assigné → `base_ini = 0` (repli neutre, cohérent avec le comportement
+   gracieux déjà en place pour un `char_sheet` introuvable juste au-dessus, ligne `74-75`).
+2. Réaction du pilote : même calcul que la branche humanoïde (`calcREA(ada_na, per_na, mod_advantage)`)
+   mais sur les attributs/avantages du **pilote**, pas de l'exo.
+3. Manœuvre d'armure du pilote : `resolveManeuverSkillId(template)` (déjà exportée, Lot 2bis) →
+   `calcSkillTotal(attrs, charSkill, refSkill, geno, mutationEffects)` sur le pilote, même spécialité
+   que celle utilisée pour `meleeSkillCap`/le Test de se relever — une seule autorité pour "quelle
+   spécialité de Manœuvre d'armure s'applique", pas une resélection locale.
+4. `base_ini = min(REA_pilote, skillTotal_ManoeuvreArmure) − malus_init`.
+
+**Malus d'Initiative — quelle colonne, doublement hors-milieu** : `ref_exo_templates` porte déjà
+`malus_init_surface`/`malus_init_underwater` (Lot 1, jamais consommées). Même limitation EAU1 déjà
+acceptée pour `resolveManeuverSkillId`/`getExoMovementBudget` (aucun signal d'immersion temps réel) :
+- Templates `submarine` : `malus_init_underwater` **doublé** — hypothèse par défaut (aucun signal
+  temps réel ne peut confirmer que le pilote est réellement sous l'eau ; sans template sous-marin
+  connu utilisé hors de l'eau à ce jour, ce cas reste théorique) : à réévaluer si un signal
+  d'immersion existe un jour, un seul point de bascule ici. **Sauf** si `underwater_movement_mode`
+  vaut `'blocked'` (jamais aujourd'hui pour `submarine`, garde théorique cohérente avec le reste).
+- Templates `surface`/`atmospheric`/`spatial`/`hybrid` : `malus_init_surface`, **jamais doublé** (même
+  répli "surface par défaut" que `resolveManeuverSkillId`/`getExoMovementBudget` — cohérent avec leur
+  milieu prévu, pas hors-milieu par hypothèse).
+- Template `industrial` : rejeté explicitement (même garde que `resolveManeuverSkillId`, décision
+  Saar 2026-08-15 en suspens) — pas de repli silencieux sur un malus arbitraire.
+
+### 10.3 Trouvaille — `is_pnj`/routage Surprise, même famille de bug que Lots 2/2bis
+
+En lisant `COMBAT_START` pour brancher l'Initiative, trouvé **avant tout code** (pas après, cette
+fois) : `is_pnj = character?.type === 'pnj'` (ligne ~92) lit le type brut de l'exo — jamais `'pnj'` —
+et détermine à la fois (a) si la Surprise s'auto-résout côté serveur ou attend un jet manuel du
+joueur, et (b) le `state_weapon` initial (`'drawn'` PNJ vs `'holstered'` PJ). Une exo pilotée par un
+PNJ serait donc traitée comme un PJ pour la Surprise — **troisième occurrence du même bug de
+routage** que la confirmation de défense (Lot 2, §7.7) et la permission de déclaration (Lot 2bis,
+§9.3) : le type/propriétaire brut de la fiche exo utilisé au lieu du pilote effectif.
+
+**Aggravé par un second bug déjà présent, même famille** : le prompt `COMBAT_SURPRISE_ROLL`
+(`socketCombatState.js:~302`) cible `character?.user_id` (propriétaire brut) — jamais le pilote — pour
+trouver le socket à qui l'envoyer. Une exo surprise et pilotée par un PJ ≠ propriétaire ne recevrait
+jamais ce prompt ; une exo pilotée par un PNJ, avec `is_pnj` déjà faux, n'aurait de toute façon jamais
+dû recevoir ce prompt (auto-résolution attendue) mais le recevrait quand même, sans personne pour y
+répondre.
+
+**✅ Corrigé (2026-08-19)** — deux points, pas un seul mécanisme uniforme (affiné en codant, plus
+efficace que la première rédaction) :
+- **`is_pnj` dans `COMBAT_START`** — calculé directement depuis `pilot.type` (déjà résolu localement
+  par `resolveExoContext` pour l'Initiative, §10.2) plutôt que par un second appel
+  `resolveCombatantIdentity` qui referait un fetch déjà en main — un seul aller-retour DB, pas deux.
+- **Ciblage `COMBAT_SURPRISE_ROLL`** (fonction différente, `pilot` pas dans son scope) —
+  `(await resolveCombatantIdentity(db, character)).userId` au lieu de `character?.user_id`, seul
+  endroit où cette fonction était réellement nécessaire.
+
+### 10.4 Fichiers touchés (plan, pas encore codé)
+
+- **`server/src/socket/socketCombatState.js`** :
+  - `COMBAT_START` : branche `else if (character?.type === 'exo')` (§10.2), avant le fetch `char_sheet`
+    humanoïde — miroir exact du précédent `drone`.
+  - `is_pnj` (ligne ~92) : remplacé par `resolveCombatantIdentity` (§10.3) — s'applique à TOUS les
+    types, pas seulement exo (comportement humain/pnj/drone strictement inchangé, `effectiveType`
+    vaut déjà `character.type` pour eux).
+  - Ciblage `COMBAT_SURPRISE_ROLL` (ligne ~302) : `resolveCombatantIdentity` au lieu de
+    `character?.user_id` (§10.3).
+  - Import `resolveCombatantIdentity`, `resolveExoContext`, `resolveManeuverSkillId` depuis
+    `combatantContextService.js` ; `calcSkillTotal` depuis `charStats.js` (à vérifier si déjà importé
+    dans ce fichier).
+
+### 10.5 Hors périmètre explicite de ce lot
+
+- Le seuil différé (Initiative ≤ 0 → report au Tour suivant) — décision Saar §10.1, volontairement
+  non géré.
+- Toute détection réelle d'immersion (EAU1) — dette déjà documentée ailleurs, pas reprise ici.
+- Le pipeline de dégâts/Avaries (Lot 4), les Incidents (Lot 5) — aucune dépendance dans ce sens.
+
+### 10.6 Validation prévue
+
+- `node --check` + chargement runtime réel sur `socketCombatState.js`.
+- Pas de test DB dédié pour `COMBAT_START` lui-même (même précédent que le reste des handlers socket
+  de ce projet, jamais testés par fixture — §9.5) ; la logique réutilisée (`resolveCombatantIdentity`,
+  `resolveExoContext`, `resolveManeuverSkillId`) reste couverte par les tests existants
+  (`combatantContextService.test.mjs`), non-régression vérifiée en relançant la suite complète après
+  modification.
+- Scénario réel navigateur (Saar) : aucune exo-armure en base à ce jour — même limite que le reste du
+  chantier.

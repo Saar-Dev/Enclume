@@ -3276,3 +3276,46 @@ handlers validés en jeu réel par Saar plutôt que par fixture).
 **Données** : migration `249` (additive, `chk_action_type` étendu à `'exo_stand_up'`).
 **Retour arrière** : rien n'est encore committé à la fin de cette session — commit à faire séparément
 après revue.
+
+## Session (Saar) — 2026-08-19 — `PLAN_EXOARMURE.md` Lot 3 : Initiative
+
+**Contexte** : suite immédiate du Lot 2bis (même session). RAW (`REGLEARMURE.md:136-158`) : malus
+d'Initiative propre à chaque armure (déjà en base, `ref_exo_templates.malus_init_surface`/
+`malus_init_underwater`, Lot 1, jamais consommées), doublé hors-milieu ; Initiative = `min(Réaction,
+Manœuvre d'armure)` (règle optionnelle, incluse comme Saisie/Armure à terre §2.2) ; seuil différé
+(Initiative ≤ 0 → action reportée au Tour suivant). **Décision Saar (2026-08-19) : le seuil différé
+n'est pas géré, volontairement** — une Initiative basse/négative se trie simplement en dernier via le
+tri existant, aucun mécanisme "report au Tour suivant" à construire.
+
+**Codé** — `socketCombatState.js`, handler `COMBAT_START` : branche `else if (character?.type ===
+'exo')` symétrique au précédent déjà existant pour les drones (Initiative fixe, pas de `char_sheet`).
+Résout `resolveExoContext` (Lot 2bis, un seul fetch pilote+template), calcule Réaction du pilote
+(`calcREA`, même formule qu'un humain) et `skillTotal` de la spécialité Manœuvre d'armure du pilote
+(`resolveManeuverSkillId` + `calcSkillTotal`, mêmes fonctions que le plafond de Compétence/Armure à
+terre — aucune resélection locale de spécialité), `base_ini = min(réaction, skillTotal) − malus_init`.
+Malus doublé pour `environment='submarine'` (hypothèse EAU1 par défaut : aucun signal d'immersion
+temps réel, "surface" supposée sauf template sous-marin, même limite déjà acceptée ailleurs) ; pas de
+pilote/template assigné → `base_ini` reste à son défaut 0, jamais un crash.
+
+**Trouvaille — troisième occurrence du même bug de routage** (après confirmation de défense Lot 2 et
+permission de déclaration Lot 2bis), trouvée **avant** d'écrire le code cette fois (pas après) :
+`is_pnj` (`COMBAT_START`) et le ciblage du prompt `COMBAT_SURPRISE_ROLL` (`COMBAT_ANNOUNCE_START`)
+lisaient tous deux le type/propriétaire brut de la fiche exo, jamais le pilote. Corrigé :
+- `is_pnj` dans `COMBAT_START` — `pilot.type === 'pnj'`, réutilise directement le `pilot` déjà résolu
+  par `resolveExoContext` pour l'Initiative (affiné en codant : plus efficace qu'un second appel
+  `resolveCombatantIdentity` qui referait le même fetch).
+- Ciblage `COMBAT_SURPRISE_ROLL` — `resolveCombatantIdentity(db, character).userId` (fonction
+  différente, `pilot` hors de son scope) au lieu de `character?.user_id`.
+Sans pilote assigné : `forcedNotSurprised: true` (même traitement que le drone — personne à qui
+adresser un jet de Surprise manuel, pas un blocage silencieux).
+
+**Testé** : `node --check` + chargement runtime réel (`import()` dynamique) sur `socketCombatState.js`.
+`combatantContextService.test.mjs` : 33/33 toujours verts (non-régression des fonctions partagées
+réutilisées ici, `resolveExoContext`/`resolveManeuverSkillId`/`resolveCombatantIdentity`, aucune
+modifiée dans ce Lot).
+**Non testé** : scénario réel en jeu (aucune exo-armure en base à ce jour) ; pas de test DB dédié pour
+`COMBAT_START`/`COMBAT_ANNOUNCE_START` eux-mêmes (même précédent que tout socket handler de ce projet,
+jamais testés par fixture).
+**Données** : aucune migration — code seul, les colonnes `malus_init_*` existent depuis le Lot 1.
+**Retour arrière** : rien n'est encore committé à la fin de cette session — commit à faire séparément
+après revue.
