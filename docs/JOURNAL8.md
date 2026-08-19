@@ -3370,3 +3370,36 @@ par Saar en navigateur (création depuis `/admin/tickets`, ticket apparu dans le
 **Non testé** : rien d'identifié restant.
 **Données** : aucune migration, aucun changement serveur.
 **Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.
+
+## Session (Saar) — 2026-08-19 — Ticket "COFFRE-INVROOM1"
+
+**Contexte** : ticket écrit le 2026-08-16 (audit de code, `server/src/scripts/ticket_coffre_invroom.js`),
+supposant `char_sheet.wizard_locked_at` NULL en permanence pour un personnage Coffre "direct" (construit
+hors Wizard), faisant replier `resolveInventoryBroadcastRoom` vers une room `wizard:<sheetId>` jamais
+observée. **Prémisse obsolète** : `charSheetService.js#createEmptySheet` pose déjà `wizard_locked_at =
+now()` dès la création (même date, chantier Coffre) — cette branche ne se déclenche donc plus jamais
+pour ces personnages. La vraie fuite, trouvée en relisant le code plutôt qu'en faisant confiance au
+texte du ticket (CLAUDE.md §1) : la fonction retombe sur `return campaignId`, `null` pour un Coffre-
+natif, transmis tel quel à `io.to(room).emit(...)` sur 7 routes inventaire — exactement la même classe
+de bug déjà trouvée et corrigée sur `PUT /sols` (commentaire déjà présent dans le fichier, 2026-08-16 :
+« io.to(null) n'aurait pas planté... mais l'émetteur n'aurait jamais reçu la confirmation de sa propre
+action »), jamais répliquée sur `resolveInventoryBroadcastRoom`. Rendu pertinent par le commit
+`259d884` (Coffre : construction directe + catalogue équipement, juste avant cette session) qui rend
+ces routes désormais atteignables pour un personnage Coffre direct.
+
+**Codé** — `char-sheet.js` : `resolveInventoryBroadcastRoom` retourne explicitement `null` (au lieu de
+`campaignId` brut) ; nouvelle fonction `emitInventoryEvent(io, room, event, payload)` (garde `if
+(room)`) remplaçant les 10 appels `req.app.get('io').to(room).emit(...)` dispersés sur 7 routes
+(quick-equip, POST inventory ×3, PUT inventory, reload ×2, DELETE ×2, gauges) — centralisé une fois
+plutôt que le garde-fou dupliqué à chaque appelant.
+
+**Testé** : `node --check` sur le fichier serveur touché, rechargement nodemon sans erreur (`/api/
+health` 200 après coup). Confirmé fonctionnel par Saar (ajout d'item sur une fiche de campagne,
+chemin non-Coffre inchangé). Pas de scénario Coffre dédié testé : impact nul en pratique aujourd'hui
+(`VaultCharacterPage.jsx` ne monte pas `SocketProvider`, personne n'écoute la room de toute façon) —
+correctif préventif, même logique que celui déjà validé par Saar sur `/sols` avant que ce soit
+observable.
+**Non testé** : scénario Coffre réel (aucun listener socket sur cette page à ce jour pour l'exercer).
+**Données** : aucune migration, aucun changement client. Pas d'entrée `CHANGELOG.md` — correctif serveur
+sans impact visible utilisateur aujourd'hui.
+**Retour arrière** : commit isolé sur `dev/Saar`, `git revert` suffit.

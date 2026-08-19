@@ -1076,10 +1076,21 @@ router.put('/:characterId/sols', async (req, res, next) => {
 // (docs/PLAN_WIZARDCOLLAB.md §2.1, "diffusion scopée par ressource, jamais toute la campagne") :
 // un membre de la campagne non impliqué dans cette session Wizard ne doit pas apprendre qu'un
 // brouillon existe. Comportement inchangé (room de campagne) pour un personnage fini, en jeu réel.
+// Un personnage du Coffre (campaign_id NULL, wizard_locked_at posé dès la création —
+// charSheetService.js) n'a personne à notifier — même invariant que PUT /sols (2026-08-16, voir son
+// commentaire ci-dessous) : retourne explicitement null plutôt que de laisser passer un campaignId
+// déjà NULL vers `.to(room).emit()`. `emitInventoryEvent` (ci-dessous) saute l'émission dans ce cas,
+// centralisé une fois pour les 7 appelants plutôt qu'un `if (room)` dupliqué à chacun (ticket
+// COFFRE-INVROOM1 — la description d'origine visait la branche `wizard:`, obsolète depuis que
+// wizard_locked_at n'est plus jamais NULL pour un personnage Coffre direct ; la vraie fuite est ici).
 async function resolveInventoryBroadcastRoom(characterId, campaignId) {
   const sheet = await db('char_sheet').where({ character_id: characterId }).first()
   if (sheet && !sheet.wizard_locked_at) return `wizard:${sheet.id}`
-  return campaignId
+  return campaignId || null
+}
+
+function emitInventoryEvent(io, room, event, payload) {
+  if (room) io.to(room).emit(event, payload)
 }
 
 router.post('/:characterId/quick-equip', async (req, res, next) => {
@@ -1091,7 +1102,7 @@ router.post('/:characterId/quick-equip', async (req, res, next) => {
     const item = await inventoryService.quickEquip(characterId, equipment_id, slot)
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
-    req.app.get('io').to(room).emit(WS.INVENTORY_ADDED, { characterId, item })
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_ADDED, { characterId, item })
 
     res.status(201).json({ item })
   } catch (err) { next(err) }
@@ -1111,17 +1122,17 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.type === 'stack') {
-      req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
+      emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: result.item })
       return res.json({ item: result.item })
     }
     if (result.type === 'multi') {
       for (const item of result.items) {
-        req.app.get('io').to(room).emit(WS.INVENTORY_ADDED, { characterId, item })
+        emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_ADDED, { characterId, item })
       }
       return res.status(201).json({ item: result.items[0], items: result.items })
     }
 
-    req.app.get('io').to(room).emit(WS.INVENTORY_ADDED, { characterId, item: result.item })
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_ADDED, { characterId, item: result.item })
     res.status(201).json({ item: result.item })
   } catch (err) { next(err) }
 })
@@ -1138,7 +1149,7 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     const item = await inventoryService.updateItem(characterId, itemId, req.body)
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
-    req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item })
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item })
 
     res.json({ item })
   } catch (err) { next(err) }
@@ -1155,11 +1166,11 @@ router.post('/:characterId/inventory/:itemId/reload', async (req, res, next) => 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.ammoRemoved) {
-      req.app.get('io').to(room).emit(WS.INVENTORY_REMOVED, { characterId, itemId: result.ammoItemId })
+      emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_REMOVED, { characterId, itemId: result.ammoItemId })
     } else {
-      req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.ammoItem })
+      emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: result.ammoItem })
     }
-    req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.weapon })
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: result.weapon })
     res.json({ item: result.weapon })
   } catch (err) { next(err) }
 })
@@ -1173,10 +1184,10 @@ router.delete('/:characterId/inventory/:itemId', async (req, res, next) => {
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.deleted) {
-      req.app.get('io').to(room).emit(WS.INVENTORY_REMOVED, { characterId, itemId })
+      emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_REMOVED, { characterId, itemId })
       return res.json({ deleted: true, itemId })
     }
-    req.app.get('io').to(room).emit(WS.INVENTORY_UPDATED, { characterId, item: result.item })
+    emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: result.item })
     res.json({ item: result.item })
   } catch (err) { next(err) }
 })
@@ -1220,7 +1231,7 @@ router.patch('/:characterId/gauges/:categoryKey', async (req, res, next) => {
       .returning('*')
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
-    req.app.get('io').to(room).emit(WS.GAUGE_UPDATED, {
+    emitInventoryEvent(req.app.get('io'), room, WS.GAUGE_UPDATED, {
       characterId, categoryKey, value: updated.value,
     })
 
