@@ -1410,3 +1410,170 @@ détecte les cycles), 15/15 tests `exoAvarieService.test.mjs` + 192/192 tests su
 
 **Hors périmètre, non touché** : l'anomalie attaquant (`resolveAssaultAction:2974`, exo-tireur jamais
 dispatché comme PJ) signalée §11.4, laissée telle quelle par décision explicite.
+
+---
+
+## 12. Catalogue systèmes/armement exo — ébauche (2026-08-19, ⏸️ non validée, pas de code)
+
+> Origine : Saar a extrait `docs/REGLES/SEEDEXO.md` (RAW complet, 1710 lignes) — le catalogue des
+> systèmes/armes montables sur une exo-armure (§1) et ~16 armures RAW prémade complètes avec leur
+> loadout (§2). Trois questions posées, réponses vérifiées par lecture directe du code (pas de
+> supposition) :
+> 1. **Rien n'est prévu en BDD pour ces systèmes** — `exo_sheet.hardpoints`/`equipped_systems`/
+>    `isolated_systems`/`damaged_systems` (jsonb, migration 233) anticipent la donnée mais aucun
+>    catalogue ne les nourrit ; confirme le constat déjà fait §8.4/§11 (Lot 5e non instruit).
+> 2. **`ref_equipment` n'est pas seedé avec cet équipement** — vérifié par requête directe (678 lignes,
+>    8 familles : Armes/Equipement Général/Logiciels/Munitions/Protections/Vie quotidienne/Équipement
+>    informatique/Équipement médical, aucune catégorie exo).
+> 3. **`ref_equipment` n'est pas pertinent pour la majorité de ce catalogue** — son schéma
+>    (`migrations/48_ref_equipment.js`) porte des champs profondément humains
+>    (`location`/`malus_cat` = emplacement de blessure porté, `linked_attr`/`min_str` = attribut humain
+>    requis, `shield_*`/`mod_slot` = bouclier/modding humain) et un modèle de possession
+>    (`char_inventory`/`char_inventory_slots`, sac à dos personnel d'un personnage) qui ne correspond à
+>    rien pour un composant installé sur une exo, jamais porté par un humain.
+
+### 12.1 Proposition retenue (Saar, à affiner)
+
+- **`ref_exo_templates`** (table existante, migration 233+243 — **aucun renommage**, confirmé par
+  Saar) reçoit directement les ~16 armures prémade RAW comme nouvelles lignes.
+- **`ref_exo_equipment`** (nouvelle table, unique) — regroupe armes et systèmes exo. Taxonomie exacte
+  encore à finaliser (§12.1bis/§12.2 — la proposition initiale `family IN ('arme','systeme')` a un cas
+  qui ne colle pas au RAW, voir point 6 ci-dessous). **"armure" retiré du périmètre** — pas de 3ᵉ
+  famille, aucun composant d'armure vendu séparément identifié dans le texte RAW ; pas de catégorie
+  vide construite par anticipation.
+
+### 12.1bis Vérifications faites en analyse à charge (2 passes, 2026-08-19) — rien n'est resté supposé
+
+**Passe 1 — colonnes de `ref_exo_templates` :**
+1. **Résistance aux Dommages** : vérifiée manuellement sur les 16 armures contre `EXO_RD_TABLE`
+   (`exoConstants.js`) — concordance exacte à chaque fois (RD dépend uniquement de la catégorie, jamais
+   une valeur propre à l'armure malgré le texte narratif qui la réaffiche à côté du matériau de coque).
+   Confirmé, pas une supposition.
+2. **Modificateur de Dommages** : vérifié en recalculant `getModDom(EXF)` pour les 16 armures. Un bug
+   réel existait (`Math.floor` au lieu de `Math.ceil`, faux de -1 sur tout écart pair) mais **déjà
+   corrigé au Lot 2** (`charStats.js:201-212`, commentaire citant explicitement les mêmes 16 armures via
+   `REGLEARMURE.md`, qui contient le même catalogue qu'ici). Mon ébauche affirmait ce point de mémoire
+   sans le recalculer au moment de l'écrire — vérifié maintenant, ça tient, mais c'était de la chance
+   plus que de la rigueur la première fois.
+3. **Malus d'Initiative sous l'eau/à terre** : le texte RAW donne "à terre" = 2× "sous l'eau" pour
+   quasiment toutes les armures hybrides/sous-marines (vérifié sur 8 lignes). Risque identifié :
+   `socketCombatState.js:108-110` double `malus_init_underwater` automatiquement pour
+   `environment==='submarine'`, sans jamais lire `malus_init_surface` dans ce cas — semer cette colonne
+   pour une armure sous-marine est donc inoffensif mais inutile. Pour `environment==='hybrid'`, le code
+   lit `malus_init_surface` **directement, sans doublement automatique** — le RAW respecte déjà cette
+   convention 2× dans ses propres chiffres, donc semer les deux valeurs littéralement reste correct. Le
+   risque théorique (double-doublement) ne se matérialise pas, vérifié en lisant le code, pas supposé.
+
+**Passe 2 — colonnes de `ref_exo_equipment` (inventaire systématique des 8 tableaux de prix, grep des
+en-têtes, pas de mémoire) :**
+4. **Un en-tête de tableau est faux dans le fichier source** : le second tableau "SYSTÈMES FURTIFS"
+   (ligne 789) contient en réalité les *Systèmes divers* (Antivol, Autopilote, Câble d'alimentation,
+   Revêtement anti-radiations, Volet de sécurité, Système d'alerte) — artefact de transcription du PDF
+   source (répétition d'en-tête de page), pas une vraie catégorie furtive. Une catégorisation depuis les
+   en-têtes de tableau seuls aurait mal classé ces 6 lignes silencieusement.
+5. **Le prix n'est pas un entier plat** — vérifié sur plusieurs lignes réelles : Pince/Griffe =
+   `100 x (FOR x FOR)`, Volet de sécurité = `100 x BLD armure`, Amortisseurs de sauts =
+   `1000 x cat. de l'exo`, Dispositif d'auto-réparation = `2500 x niv. x NT`. `ref_equipment` a déjà
+   résolu exactement ce besoin (`price` integer + `price_modifier` string(50), migration 48) — à
+   réutiliser tel quel pour `ref_exo_equipment`, pas réinventer une deuxième solution.
+6. **"Systèmes défensifs" appartiennent à Armement, RAW explicite** (SEEDEXO.md:707-709 : *"les
+   systèmes défensifs font partie de la catégorie Armement, lorsqu'il s'agit de localiser un incident
+   survenu à la suite d'une Avarie"*) et ont une colonne Dom. (2D10+3/3D10+3, mécaniquement des armes de
+   contre-attaque). **Corrige la taxonomie §12.1** : `category='defensif'` ne peut pas rester sous
+   `family='systeme'`, doit suivre la classification RAW (`family='arme'`) — au moins pour la
+   localisation d'incident (Lot 5a), donc autant l'aligner dès le seed plutôt que diverger puis corriger.
+7. **Colonne "Capacité"** (durée, ex. "24 h" pour une réserve d'oxygène) présente sur le tableau
+   Supports vitaux — absente de l'inventaire de champs communs de la première ébauche.
+
+**Conclusion de ces deux passes** : aucune des deux tables n'est structurellement remise en cause, mais
+le détail (taxonomie exacte, forme du champ prix) était moins réglé que la première ébauche ne le
+présentait. Une passe systématique ligne-par-ligne sur l'intégralité du catalogue (pas seulement les
+en-têtes) reste nécessaire avant tout seed réel — probable qu'elle révèle d'autres cas comme les points
+4-7 ci-dessus.
+
+### 12.2 Points ouverts, non tranchés
+
+1. **Formule de dégâts des armes exo** — certaines armes ont une notation à escalade par Tour
+   (`3D10 (+3/Tr)`, hydro-foreuse/marteau-piqueur/scie/pince) absente de toute mécanique actuelle
+   (le DSL munitions, `shared/weaponAmmoDsl.js`, ne connaît pas ce motif). Stocker le texte tel quel au
+   catalogue ne bloque rien immédiatement (données), mais la résolution en combat (Lot 5e ou suivant)
+   devra soit l'ignorer (dégât fixe au premier Tour), soit être étendue — décision à prendre au moment
+   de câbler la résolution, pas au moment de seeder le catalogue.
+2. **Lien template ↔ loadout par défaut** — chaque armure RAW liste ses "Systèmes auxiliaires"/
+   "Armement" par défaut. Est-ce qu'on a besoin d'une table de jonction persistante
+   (`ref_exo_template_equipment`), ou est-ce qu'un seed ponctuel suffit (à la création d'un
+   `exo_sheet` sur ce template, copier le loadout par défaut dans `equipped_systems`/`hardpoints`, sans
+   garder de lien permanent vers le template au-delà) ? La donnée réellement consommée en jeu est
+   `exo_sheet.equipped_systems` (instance, peut diverger du loadout par défaut si un joueur modifie son
+   exo) — une table de jonction persistante n'est utile que si on veut un "reset au loadout d'usine" ou
+   un affichage "loadout de référence" dans l'UI. Pas tranché.
+   **Élément nouveau (run libre 2026-08-19), penche vers "seed ponctuel, pas de jonction FK"** :
+   vérifié que les 3 analyseurs sonscan du catalogue (Sea-Star/Abyss/Delta Azur, ligne 486-488)
+   partagent tous `niveau=12`, ne différant que par cibles/prix — une armure dont le loadout dit
+   "Analyseur sonscan niv. 12" ne désigne donc **aucun produit précis** du catalogue. Les descriptions
+   de loadout RAW sont plus lâches que les fiches catalogue : une table de jonction avec FK stricte vers
+   `ref_exo_equipment` serait invérifiable/ambiguë à peupler depuis le texte tel quel pour ce genre de
+   ligne — renforce l'option "copie narrative à la création", pas une garantie absolue (pas vérifié sur
+   l'intégralité des 16 loadouts).
+3. **Pipeline de dégâts d'une exo qui tire** — `resolveExoDamage` (Lot 4) couvre l'exo comme
+   **défenseur**. Une exo qui tire une arme de ce catalogue comme **attaquant** ne passe par aucun
+   pipeline existant (`getEffectiveWeaponDamage` suppose `char_inventory`) — à construire au moment de
+   câbler l'armement, pas avant.
+4. **Table des cases module Auto-réparation, malus d'Initiative par interface de contrôle** (§SEEDEXO
+   lignes 69-93) — mécaniques secondaires transcrites dans le texte mais pas encore reliées à une
+   décision de périmètre (optionnelles comme Armure à terre/Saisie l'ont été §2.2 ?). Pas encore posé
+   à Saar.
+5. ~~**Taxonomie `category` finale pour `family='systeme'`**~~ — ✅ tranché en codant (§12.4) :
+   Stabilisateurs/Amortisseurs de sauts restent sous `Systèmes de contrôle`, classement RAW littéral
+   (SEEDEXO.md range ces deux systèmes dans le même tableau que Interface de contrôle/SACEA/Contrôle de
+   pression) — pas de sous-catégorie "maniabilité" séparée construite par anticipation, l'ambiguïté
+   thématique n'avait pas de conséquence mécanique identifiée qui la justifierait.
+
+### 12.3 Hors périmètre de cette ébauche
+
+Le contenu détaillé du catalogue (transcription ligne à ligne des ~34 systèmes + ~10 armes + ~16
+loadouts) — nécessite sa propre session, pas un enchaînement immédiat sur cette ébauche. Le jet
+d'incident/Lot 5 (localisation, effets par composant) reste une brique séparée, déjà scindée §3.
+
+### 12.4 Codé et testé (2026-08-19/20) — schéma + seed complets, hors loadout/attaque
+
+Passe systématique faite : les 1709 lignes de `SEEDEXO.md` lues intégralement en une session, pas
+seulement les en-têtes de tableau (ce que §12.3 réclamait comme préalable). Trois migrations,
+chacune testée up→down→up en CLI et dotée de son fichier `.test.mjs` (patron `schemaAssertions.mjs`
+déjà en place pour 233/243) :
+
+- **251 — `ref_exo_equipment`** (schéma) : `family`(CHECK arme/systeme)/`category`/`name`/
+  `description`/`price`+`price_modifier`/`tech_level`/`rarity`/`max_level`/`duration`/`damage`/
+  `shock`/`range`/`init_mod`(CHECK)/`fire_mode`(CHECK)/`ammo_cost`. Aucune colonne "Cibles" (Analyseurs,
+  4 lignes/84, jamais consommées) — texte libre en `description` plutôt qu'une colonne construite par
+  anticipation.
+- **252 — seed `ref_exo_templates`** : les 16 armures RAW prémade, aucune colonne ajoutée (233+243
+  suffisaient). Cross-vérifié par recalcul `computeExoStats` à Intégrité pleine (EXF/Blindage
+  recalculés = valeurs de fiche, 16/16) en plus de la relecture ligne à ligne.
+- **253 — seed `ref_exo_equipment`** : 84 lignes (arme=17, systeme=67) — plus que l'estimation
+  initiale "~34+~10" du §12.3, chaque variante nommée comptant séparément comme le fait le RAW
+  lui-même. Taxonomie appliquée telle que verrouillée en §12.1bis/§12.2 : Systèmes défensifs sous
+  `family='arme'`, en-tête source faux (SEEDEXO.md:789, "SYSTÈMES FURTIFS" dupliqué) corrigé en
+  `Systèmes divers`. Une incohérence source de plus trouvée en transcrivant (pas en relisant les
+  en-têtes cette fois, une vraie ligne de donnée) : Générateurs défensifs micro-ondes affiche DIS
+  "210 (15)" (SEEDEXO.md:781) — chiffre parasite, corrigé en "10 (15)" (documenté en tête de fichier
+  de migration, pas silencieux).
+
+**Descriptions volontairement courtes** (garde-fous mécaniques, pas la prose RAW complète) — rien ne
+consomme ce texte aujourd'hui (aucune UI catalogue exo construite), l'enrichir peut attendre une UI
+réelle plutôt que de transcrire des paragraphes que personne ne lira d'ici là.
+
+**Toujours hors périmètre, inchangé depuis §12.2/§12.3** : lien template↔loadout (point 2, toujours
+pas tranché — penche narratif, pas vérifié sur les 16 loadouts), pipeline exo-attaquant (point 3),
+formule de dégâts à escalade (point 1, texte stocké tel quel), mécaniques secondaires
+auto-réparation/malus interface (point 4).
+
+**Testé** : `npm test` équivalent (`node --test`) sur toute la suite serveur (348 tests, 55 fichiers,
+PostgreSQL réel) après les 3 migrations — 348/348 verts, 0 régression. 7 tests dédiés 251/252 + 2
+dédiés 253 (schéma réel, CHECK constraints, up/down transactionnel, données réelles en base).
+**Non testé** : navigateur réel — `ref_exo_templates`/`ref_exo_equipment` ne sont interrogés par
+aucune UI de sélection de loadout aujourd'hui (`ExoIdentityPanel.jsx` lit déjà `ref_exo_templates`
+pour le sélecteur Modèle, ça devient donc testable en navigateur pour la première fois ; le catalogue
+`ref_exo_equipment` n'a en revanche aucun consommateur UI, seed pur en attendant Lot 5e).
+**Données** : 3 migrations (251/252/253), 100 lignes de données neuves au total (16+84), aucune
+table existante modifiée. **Retour arrière** : `down()` testé et propre sur les 3 migrations.
