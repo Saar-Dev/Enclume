@@ -28,58 +28,6 @@ Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Réso
 et vérifié ; reste Lot C.5 (confirmation secondaire serveur distant) + validation module Arme en
 jeu par Saar avant clôture
 
-🔒 En cours (Saar) : Coffre — refonte page `/vault` (topbar illustrée, création directe pj/drone/exo,
-catalogue équipement). **Codé, testé serveur, build client propre — navigateur pas encore validé de
-bout en bout** (2 passages partiels de Saar ont déjà fait remonter et corriger 3 défauts, détail
-ci-dessous). Interdiction formelle actée (inchangée) : jamais réutiliser `users.role='admin'` comme
-raccourci d'autorisation (`.claude/rules/core.md`, `CLAUDE.md` §13).
-
-**Philosophie produit actée** : le Coffre est un espace personnel — le propriétaire y expérimente
-librement (personnages, drone, exo), sans plafond ni coût interne. Le contrôle se fait à la
-frontière, au transfert vers une campagne : le MJ cible juge (approuve/refuse), pas un flag
-technique côté Coffre.
-
-**Serveur, testé (313/313, PostgreSQL réel)** :
-- `char-sheet.js` — gel `wizard_locked_at` retiré sur la branche Coffre, nouveau `req.isVaultOwner`
-  (accepté sur les routes de construction : attributs/compétences/XP/sols/mutations/avantages —
-  jamais sur les routes de session réelle, fatigue/quick-equip/jauge, qui restent `isGm` strict).
-- `vaultService.js` — `cloneCharacterDeep` n'exige plus `creation_state==='complete'` ;
-  `VAULT-REGISTRY-DRIFT1` corrigé (6 tables non couvertes par le garde-fou anti-dérive, dont
-  `exo_sheet` — jamais eu d'entrée — et `char_inventory_slots`, double FK, clonage dédié) ; nouveau
-  test `vaultCloneRegistry.test.mjs`.
-- `vault.js` — `POST /characters` (création directe pj/drone/exo, propriétaire seule autorité).
-- `charSheetService.js` — `createCompanionSheet` extraite (branchement par type auparavant dupliqué,
-  jamais testé, dans `routes/characters.js`) ; nouveau test `charSheetService.test.mjs`.
-- `characters.js` (`actionsRouter`) — même correctif `isVaultOwner`-like (`req.isOwner`) sur
-  `PUT /:id`/`POST /:id/portrait`/`PUT /:id/token-style`/`POST /:id/glb`, jamais retouché avant :
-  `CharacterWindow.jsx` (réutilisée pour le Coffre) en dépend pour renommer/décrire/uploader un
-  portrait. `DELETE /:id` reste GM strict (suppression Coffre = `vault.js` uniquement).
-- Bugs trouvés et corrigés au passage : `PUT /sols` et `broadcastCharacterUpdate` émettaient
-  `io.to(campaign_id)` sans garde (`null` pour un Coffre) — conditionné à `campaign_id` non nul.
-
-**Client, build+eslint propres** :
-- `VaultPage.jsx` — topbar `vault.webp` (`.vault-topbar`), 4 boutons de création, clic-ligne pour
-  ouvrir, tags de type (`.badge-type-*`).
-- `VaultCharacterPage.jsx` (nouveau, `/vault/characters/:id`) — dispatcher par type : `drone` →
-  `DroneWindow`, `exo` → message explicite (fenêtre dédiée jamais construite, gap préexistant à tout
-  le projet, ticket `ARMORWINDOW-MISSING1`), `pj`/`pnj` → `CharacterWindow`.
-- `EquipmentCatalogPage.jsx` (nouveau, `/equipment`) — catalogue `ref_equipment` lecture seule,
-  aucun travail serveur requis, libellés repris de `ref-equipment-tool.html`.
-- Skin réel de l'appli repris sur les 3 pages (`className="app-shell"`, classes `.btn`/`.btn-ghost`/
-  `.btn-danger`) après un premier jet en styles inline inventés, repéré par Saar — voir PC47
-  ci-dessous.
-
-**Tickets ouverts, différés (hors périmètre Coffre)** : `COFFRE-INVROOM1` (room socket inventaire
-Wizard pour un Coffre-natif jamais verrouillé), `ARMORWINDOW-MISSING1` (fenêtre exo-armure,
-chantier à part).
-
-**Reste à faire** :
-- Validation navigateur complète (créer drone/exo, uploader un portrait, demander un transfert,
-  catalogue équipement, revoir le style corrigé) — rien cliqué depuis les derniers correctifs.
-- Enrichir la vue MJ (`listPendingRequestsForCampaign`, `vaultService.js:274-291`) d'un vrai aperçu
-  de fiche avant approbation (aujourd'hui : nom/type/demandeur seulement) — optionnel, mais c'est
-  désormais le seul filtre du système.
-
 🔒 En cours (Saar) : `docs/PLANS/PLAN_FICHE_HORSLIGNE.md` — fiche personnage utilisable hors
 connexion. Deux tentatives précédentes abandonnées (export Excel, puis fichier HTML autonome — voir
 `docs/Old/[OBSOLETE]` pour l'historique) après des défauts structurels de format/plateforme
@@ -171,6 +119,7 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 | ID | Description | Priorité |
 |---|---|---|
 | **MONDEVALID1** | Moteur de monde (fusion Kiwi/Codex 2026-07-15, `caaf1af`, `shared/world/`, doc canonique `docs/SYSTEME/MOTEUR_MONDE.md`) : fondation active de tous les chantiers Étages/Ascenseur/Déplacement depuis — jamais validé en jeu réel sur une carte multi-étages complète (Playwright + manuel), seulement par tests Node (77+) et par l'usage indirect au fil des sessions | Moyenne — rien de cassé observé à ce jour, mais aucune validation end-to-end dédiée |
+| **ELEV-PERF1** | `reconcileBattlemapElevators` appelé en boucle pendant un combat réel (des centaines de fois sur un seul combat court, `battlemap:8f8d7184-013e-4af0-adcd-617908262d0f`) — transactions lentes récurrentes (100-350ms) et verrous montant jusqu'à 1,3s observés en log (`measureBattlemapTokenDistance` semble le redéclencher à chaque mesure de distance). Cause racine non investiguée — juste observé, pas encore lu. Signalé par Saar en validant le combat Exo-armures (2026-08-20) | **Haute** — dégrade une vraie session de jeu, à investiguer en session dédiée avant que ça s'aggrave |
 | **COM26** | 2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé — `description` et `ammo_effects` incohérents. Trouvé en corrigeant Lot B (migration 160) `docs/PLAN_ARMES_DSL.md` | Basse — à refaire lors de C1/C2 |
 | **SEED-ID-DETERM** | `server/src/db/seeds/2_seed_equipment.js` laisse PostgreSQL générer l'`id` de `ref_equipment` à l'insertion (idempotence garantie par `name` seul, pas par `id`) — deux instances seedées séparément ont des `id` différents pour la même ligne. Découvert via migration 209 (`id` codé en dur valide en local, absent sur Kiwi) — invariant ajouté à `.claude/rules/core.md` pour éviter la récidive côté migrations, mais la cause à la racine (seed non-déterministe) reste non traitée : un `id` stable (dérivé de la source Excel, ex. UUID v5 sur une clé source) rendrait `id` portable comme `name` l'est déjà | Basse — pas bloquant tant que les migrations matchent par `name`, confort/robustesse à terme |
 | **HORLOGE1** | Horloge de campagne (`GameTimeWidget`, Sidebar.jsx) codée pour être masquée en mode Combat et Édition (`Sidebar.jsx`, gate sur `mode`) | En attente de validation en jeu par Saar |
@@ -186,6 +135,7 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
 | TC1 | `.gitattributes:3` — attribut invalide | Très basse |
+| DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
 | VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
