@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
 import { WS } from '../../../shared/events.js'
-import { severityForExoDamage, applyExoAvarie, resolveExoDamage } from './exoAvarieService.js'
+import { severityForExoDamage, applyExoAvarie, removeExoAvarie, resolveExoDamage } from './exoAvarieService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/lib/exoAvarieService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -206,6 +206,70 @@ test('applyExoAvarie — severity absente : retourne null, aucune émission', { 
 test('applyExoAvarie — exo_sheet introuvable : retourne null', { skip }, async () => {
   const io = createFakeIo()
   const result = await applyExoAvarie(io, db, 'campaign-inexistante', { characterId: '00000000-0000-0000-0000-000000000000', severity: 'legere' })
+  assert.equal(result, null)
+})
+
+// ─── removeExoAvarie — outil de correction MJ (§13.2), pas la Réparation RAW ─────────────────────────
+
+test('removeExoAvarie — compteur à 1 : décrémente à 0, émet EXO_AVARIE_UPDATED', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const io = createFakeIo()
+    await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'legere' })
+    io.emitted.length = 0  // ignore l'émission de la pose, ne garder que celle du retrait
+
+    const result = await removeExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'legere' })
+    assert.equal(result.exoSheet.avaries_legeres, 0)
+    assert.equal(result.changed, true)
+    assert.equal(io.emitted.length, 1)
+    assert.equal(io.emitted[0].event, WS.EXO_AVARIE_UPDATED)
+  } finally { await cleanup(fx) }
+})
+
+test('removeExoAvarie — compteur déjà à 0 : succès silencieux, plancher respecté, aucune émission', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const io = createFakeIo()
+    const result = await removeExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'legere' })
+    assert.equal(result.exoSheet.avaries_legeres, 0)
+    assert.equal(result.changed, false)
+    assert.equal(io.emitted.length, 0)
+  } finally { await cleanup(fx) }
+})
+
+test('removeExoAvarie — ne restaure jamais l\'ITG perdue par une Avarie critique', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const io = createFakeIo()
+    await applyExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'critique' })
+    const result = await removeExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'critique' })
+    assert.equal(result.exoSheet.avaries_critiques, 0)
+    assert.equal(result.exoSheet.itg_structure_current, 19)  // toujours -1, jamais restauré
+  } finally { await cleanup(fx) }
+})
+
+test('removeExoAvarie — severity \'destruction\' : retourne null (aucune colonne, RAW "pas de case")', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const io = createFakeIo()
+    const result = await removeExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'destruction' })
+    assert.equal(result, null)
+    assert.equal(io.emitted.length, 0)
+  } finally { await cleanup(fx) }
+})
+
+test('removeExoAvarie — severity inconnue : retourne null', { skip }, async () => {
+  const fx = await createExoFixture()
+  try {
+    const io = createFakeIo()
+    const result = await removeExoAvarie(io, db, fx.campaign.id, { characterId: fx.exoCharacter.id, severity: 'bogus' })
+    assert.equal(result, null)
+  } finally { await cleanup(fx) }
+})
+
+test('removeExoAvarie — exo_sheet introuvable : retourne null', { skip }, async () => {
+  const io = createFakeIo()
+  const result = await removeExoAvarie(io, db, 'campaign-inexistante', { characterId: '00000000-0000-0000-0000-000000000000', severity: 'legere' })
   assert.equal(result, null)
 })
 

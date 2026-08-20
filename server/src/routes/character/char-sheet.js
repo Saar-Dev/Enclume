@@ -63,6 +63,8 @@ import { cloneToVault } from '../../services/vaultService.js'
 import { createEmptySheet } from '../../services/charSheetService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
+import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
+import { EXO_AVARIE_SEVERITY_ORDER } from '../../../../shared/exoConstants.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
 import { WS } from '../../../../shared/events.js'
@@ -2032,6 +2034,52 @@ router.put('/:characterId/exo/integrity', async (req, res, next) => {
       .returning('*')
 
     res.json({ exo })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/exo/avaries/:severity — pose une Avarie (GM, propriétaire ou pilote), même
+// fonction que le pipeline de combat (exoAvarieService.applyExoAvarie, PLAN_EXOARMURE.md §13.2) —
+// jamais une copie. `severity` vient du client pour la première fois (jusqu'ici toujours calculée
+// côté serveur par severityForExoDamage) : validée contre la liste blanche avant tout accès DB,
+// 'destruction' rejeté explicitement (RAW : aucune case pour ce palier).
+router.post('/:characterId/exo/avaries/:severity', async (req, res, next) => {
+  try {
+    const { severity } = req.params
+    if (severity === 'destruction' || !EXO_AVARIE_SEVERITY_ORDER.includes(severity)) {
+      throw new AppError(400, 'Invalid severity')
+    }
+
+    const exoSheet = await db('exo_sheet').where({ character_id: req.params.characterId }).first()
+    if (!exoSheet) throw new AppError(404, 'Exo sheet not found')
+    if (!await exoIsGmOrOwnerOrPilot(req, exoSheet)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const result = await applyExoAvarie(req.app.get('io'), db, req.character.campaign_id, {
+      characterId: req.params.characterId, severity,
+    })
+    if (!result) throw new AppError(404, 'Exo sheet not found')
+
+    res.json({ exo: result.exoSheet })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/exo/avaries/:severity — retire une Avarie, GM uniquement (PLAN_EXOARMURE.md
+// §13.2 : outil de correction MJ, aucune contrepartie RAW côté joueur — retirer une Avarie sans Test
+// n'a pas d'équivalent légitime, contrairement à la Guérison d'une Blessure). Pas de fetch exoSheet
+// préalable : req.isGm ne dépend pas de la fiche, et removeExoAvarie retourne déjà null sur "introuvable".
+router.delete('/:characterId/exo/avaries/:severity', async (req, res, next) => {
+  try {
+    const { severity } = req.params
+    if (severity === 'destruction' || !EXO_AVARIE_SEVERITY_ORDER.includes(severity)) {
+      throw new AppError(400, 'Invalid severity')
+    }
+    if (!req.isGm) throw new AppError(403, 'GM required')
+
+    const result = await removeExoAvarie(req.app.get('io'), db, req.character.campaign_id, {
+      characterId: req.params.characterId, severity,
+    })
+    if (!result) throw new AppError(404, 'Exo sheet not found')
+
+    res.json({ exo: result.exoSheet })
   } catch (err) { next(err) }
 })
 

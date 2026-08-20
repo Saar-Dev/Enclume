@@ -1163,6 +1163,7 @@ function SessionContent({ campaignId }) {
           character={{ ...selectedExo, _currentUserId: user?.id }}
           isGm={isGm}
           onClose={() => setSelectedExoId(null)}
+          socket={socket}
         />
       )}
 

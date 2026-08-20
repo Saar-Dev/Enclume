@@ -9,18 +9,12 @@
  * pour le jet d'incident, Lot 5a, hors périmètre ici).
  */
 
-import { EXO_AVARIE_TABLE, EXO_AVARIE_SEVERITY_ORDER } from '../../../shared/exoConstants.js'
+import {
+  EXO_AVARIE_TABLE, EXO_AVARIE_SEVERITY_ORDER, EXO_AVARIE_COLUMN_BY_SEVERITY as COLUMN_BY_SEVERITY,
+} from '../../../shared/exoConstants.js'
 import { WS } from '../../../shared/events.js'
 import { resolveExoContext } from './combatantContextService.js'
 import { calcExoDegatsNets } from './charStats.js'
-
-const COLUMN_BY_SEVERITY = {
-  legere:         'avaries_legeres',
-  moyenne:        'avaries_moyennes',
-  grave:          'avaries_graves',
-  critique:       'avaries_critiques',
-  catastrophique: 'avaries_catastrophiques',
-}
 
 // REGLEARMURE.md:317-407 (seuils p.326) — mêmes seuils numériques que la sévérité de Blessures
 // humaine (LdB p.114, damageService.js:_severityForDamage) mais VOLONTAIREMENT pas réutilisée : deux
@@ -126,6 +120,55 @@ export async function applyExoAvarie(io, db, campaignId, { characterId, severity
     destroyed: result.destroyed,
     itgLoss: result.itgLoss,
   })
+
+  return result
+}
+
+/**
+ * Retire une Avarie de `severity` à l'exo-armure `characterId` — outil de correction MJ
+ * (PLAN_EXOARMURE.md §13.2), pas la Réparation RAW (Test de Mécanique, Lot séparé). Décrémente le
+ * compteur, plancher à 0 — ne restaure JAMAIS l'ITG perdue ni ne redéfait une cascade de promotion
+ * passée (documenté, pas un oubli : symétrique en écriture avec applyExoAvarie, pas en effet).
+ * Émet `WS.EXO_AVARIE_UPDATED` **seulement si le compteur a réellement bougé** (`finalSeverity`/
+ * `destroyed`/`itgLoss` neutres, même forme qu'applyExoAvarie) — un compteur déjà à 0 est un succès
+ * silencieux, pas une diffusion à toute la campagne pour rien. Retourne `null` si `severity` est
+ * `'destruction'` ou inconnue (aucune colonne à décrémenter, RAW : "pas de case" pour ce palier), ou
+ * si `exo_sheet` introuvable.
+ */
+export async function removeExoAvarie(io, db, campaignId, { characterId, severity }) {
+  const column = COLUMN_BY_SEVERITY[severity]
+  if (!column) return null
+
+  let result
+  try {
+    result = await db.transaction(async (trx) => {
+      const exoSheet = await trx('exo_sheet').where({ character_id: characterId }).forUpdate().first()
+      if (!exoSheet) return null
+
+      const currentCount = exoSheet[column] ?? 0
+      if (currentCount === 0) return { exoSheet, changed: false }
+
+      const [updated] = await trx('exo_sheet')
+        .where({ character_id: characterId })
+        .update({ [column]: currentCount - 1 })
+        .returning('*')
+      return { exoSheet: updated, changed: true }
+    })
+  } catch (err) {
+    console.error('[exoAvarieService] removeExoAvarie — échec :', characterId, severity, err.message)
+    return null
+  }
+  if (!result) return null
+
+  if (result.changed) {
+    io.to(campaignId).emit(WS.EXO_AVARIE_UPDATED, {
+      characterId,
+      exoSheet: result.exoSheet,
+      finalSeverity: null,
+      destroyed: false,
+      itgLoss: 0,
+    })
+  }
 
   return result
 }

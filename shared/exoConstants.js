@@ -83,3 +83,15 @@ export const EXO_AVARIE_TABLE = {
 export const EXO_AVARIE_SEVERITY_ORDER = [
   'legere', 'moyenne', 'grave', 'critique', 'catastrophique', 'destruction',
 ]
+
+// Colonne exo_sheet par palier — déplacé depuis exoAvarieService.js (2026-08-20, Lot A) pour être
+// consommable côté client aussi (ExoAvariesPanel.jsx a besoin de savoir quelle colonne de `exo` lire
+// par palier, sans dupliquer ce mapping). 'destruction' volontairement absent : pas de colonne/case
+// persistante pour ce palier (§11.2).
+export const EXO_AVARIE_COLUMN_BY_SEVERITY = {
+  legere:         'avaries_legeres',
+  moyenne:        'avaries_moyennes',
+  grave:          'avaries_graves',
+  critique:       'avaries_critiques',
+  catastrophique: 'avaries_catastrophiques',
+}

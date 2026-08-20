@@ -2,11 +2,13 @@
  * ExoSheetWindow.jsx — Fenêtre flottante fiche exo-armure
  *
  * Patron repris de DroneWindow.jsx (fiche PK=character_id, pas de pipeline char_sheet) et de la
- * découpe en onglets/panneaux de CharacterWindow.jsx — un onglet par bloc de la fiche RAW officielle
- * (docs/PLANS/PLAN_EXOARMURE.md §8/§10, image de référence Saar 2026-08-19). Tous les onglets sont
- * posés dès maintenant ; ceux dont le service serveur n'existe pas encore (Avaries/Incidents Lot 5,
- * Systèmes Lot 5e, Ordinateur — aucune colonne en base) affichent un stub explicite plutôt qu'une
- * fonctionnalité muette.
+ * découpe en onglets larges de CharacterWindow.jsx — Fiche/Paramètres, pas un onglet par module
+ * (corrigé 2026-08-19, retour Saar : la première version posait un onglet par bloc RAW, ce que
+ * CharacterWindow ne fait pas — ses modules sont empilés en sections repliables à l'intérieur de
+ * l'onglet Feuille, voir CharacterSheet.jsx/CollapsibleBlock.jsx). Tous les modules sont posés dès
+ * maintenant ; ceux dont le service serveur n'existe pas encore (Systèmes/Ordinateur Lot C — aucune
+ * colonne/table en base, Incidents Lot 5) affichent un stub explicite plutôt qu'une fonctionnalité
+ * muette. Avaries câblée (Lot A, PLAN_EXOARMURE.md §13.2).
  *
  * Drag/resize : identique à DroneWindow/CharacterWindow (pointerdown header/handle → document).
  */
@@ -14,9 +16,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
+import { WS } from '../../../shared/events.js'
 import api from '../lib/api.js'
+import CollapsibleBlock from './CollapsibleBlock.jsx'
 import ExoIdentityPanel from './ExoIdentityPanel.jsx'
 import ExoIntegrityPanel from './ExoIntegrityPanel.jsx'
+import ExoAvariesPanel from './ExoAvariesPanel.jsx'
 import ExoSettingsPanel from './ExoSettingsPanel.jsx'
 
 const WIN_INIT_W = 680
@@ -29,7 +34,11 @@ const INITIAL_POS = {
   y: Math.max(0, Math.round((window.innerHeight - WIN_INIT_H) / 2)),
 }
 
-const TABS = ['identity', 'integrity', 'avaries', 'systems', 'computer', 'settings']
+// Onglets larges, même niveau de découpe que CharacterWindow.jsx (Feuille/Matériel/Bio/Paramètres) —
+// pas un onglet par module. Les sous-blocs de "sheet" (identity/integrity/avaries/systems/computer)
+// sont des sections repliables (SHEET_SECTIONS ci-dessous), pas des onglets.
+const OUTER_TABS = ['sheet', 'settings']
+const SHEET_SECTIONS = ['identity', 'integrity', 'avaries', 'systems', 'computer']
 
 // ─── Icônes ───────────────────────────────────────────────────────────────────
 const IconX = () => (
@@ -53,12 +62,11 @@ const IconEyeOff = () => (
 )
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function ExoSheetWindow({ character, isGm, onClose }) {
+export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
   const { t } = useTranslation()
   const { characters } = useCharacterStore()
 
   const isOwner = character.user_id != null && character.user_id === character._currentUserId
-  const canEdit = isGm || isOwner
 
   // ─── État fenêtre ──────────────────────────────────────────────────────────
   const [pos,  setPos]  = useState(INITIAL_POS)
@@ -107,12 +115,30 @@ export default function ExoSheetWindow({ character, isGm, onClose }) {
   }, [])
 
   // ─── Onglets ───────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('identity')
+  const [activeTab, setActiveTab] = useState('sheet')
+
+  // ─── Sections repliables de l'onglet Fiche (toutes ouvertes par défaut, même patron que
+  // CharacterSheet.jsx#DEFAULT_ACCORDION_STATE — sans la persistance localStorage, non demandée ici) ──
+  const [openSections, setOpenSections] = useState(() =>
+    Object.fromEntries(SHEET_SECTIONS.map(id => [id, true])))
+  const toggleSection = useCallback((id) => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }))
+  }, [])
 
   // ─── Données exo ───────────────────────────────────────────────────────────
   const [exo,       setExo]       = useState(null)
   const [templates, setTemplates] = useState([])
   const [loading,    setLoading]  = useState(true)
+
+  // canEdit dépend de exo.pilot_character_id (§6.3 : GM, propriétaire OU pilote lié ont tous les
+  // droits de modification, cf. exoIsGmOrOwnerOrPilot côté serveur) — recalculé ici, après l'état
+  // exo, pas au sommet du composant : avant le chargement de exo (pilote inconnu), canEdit retombe
+  // simplement sur isGm||isOwner, comportement déjà correct pendant le court délai de chargement.
+  // Trouvaille 2026-08-20 : isOwner seul ne reflétait jamais le pilote — un pilote non-propriétaire
+  // avait tous les contrôles désactivés côté client alors que le serveur acceptait déjà ses requêtes.
+  const isPilot = exo?.pilot_character_id != null &&
+    characters.find(c => c.id === exo.pilot_character_id)?.user_id === character._currentUserId
+  const canEdit = isGm || isOwner || isPilot
 
   useEffect(() => {
     let cancelled = false
@@ -131,6 +157,30 @@ export default function ExoSheetWindow({ character, isGm, onClose }) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [character.id])
+
+  // ─── Mise à jour temps réel — Avaries (combat) ─────────────────────────────
+  // Mirror DroneWindow.jsx:126-136 (WS.DRONE_INTEGRITY_UPDATED) — merge PARTIEL uniquement (avaries_*
+  // + itg_structure_current), jamais un remplacement complet de `exo` : GET /:characterId/exo renvoie
+  // exo_sheet.* PLUS une douzaine de champs template_* joints (:1933-1963) que ce payload ne porte
+  // pas — un remplacement complet effacerait l'onglet Identité au premier coup encaissé
+  // (PLAN_EXOARMURE.md §13.2, analyse à charge 2026-08-20).
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ characterId, exoSheet }) => {
+      if (characterId !== character.id) return
+      setExo(prev => prev ? {
+        ...prev,
+        avaries_legeres: exoSheet.avaries_legeres,
+        avaries_moyennes: exoSheet.avaries_moyennes,
+        avaries_graves: exoSheet.avaries_graves,
+        avaries_critiques: exoSheet.avaries_critiques,
+        avaries_catastrophiques: exoSheet.avaries_catastrophiques,
+        itg_structure_current: exoSheet.itg_structure_current,
+      } : prev)
+    }
+    socket.on(WS.EXO_AVARIE_UPDATED, handler)
+    return () => socket.off(WS.EXO_AVARIE_UPDATED, handler)
+  }, [socket, character.id])
 
   // ─── Resize handle bas-droite ──────────────────────────────────────────────
   const resizeState    = useRef(null)
@@ -237,7 +287,7 @@ export default function ExoSheetWindow({ character, isGm, onClose }) {
 
       {/* ── Onglets ── */}
       <div style={{ display: 'flex', borderBottom: '1px solid #1e1e2e', flexShrink: 0 }}>
-        {TABS.map(tab => (
+        {OUTER_TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -271,30 +321,54 @@ export default function ExoSheetWindow({ character, isGm, onClose }) {
           </p>
         )}
 
-        {!loading && exo && activeTab === 'identity' && (
-          <ExoIdentityPanel
-            characterId={character.id}
-            exo={exo}
-            templates={templates}
-            pilotCandidates={pilotCandidates}
-            canEdit={canEdit}
-            onExoUpdate={setExo}
-          />
-        )}
+        {/* Onglet Fiche — modules empilés en sections repliables, même patron que CharacterSheet.jsx
+            (jamais un onglet par module, cf. commentaire d'en-tête). */}
+        {!loading && exo && activeTab === 'sheet' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <CollapsibleBlock id="identity" title={t('exo.tabIdentity')} open={openSections.identity} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoIdentityPanel
+                  characterId={character.id}
+                  exo={exo}
+                  templates={templates}
+                  pilotCandidates={pilotCandidates}
+                  canEdit={canEdit}
+                  onExoUpdate={setExo}
+                />
+              </div>
+            </CollapsibleBlock>
 
-        {!loading && exo && activeTab === 'integrity' && (
-          <ExoIntegrityPanel
-            characterId={character.id}
-            exo={exo}
-            canEdit={canEdit}
-            onExoUpdate={setExo}
-          />
-        )}
+            <CollapsibleBlock id="integrity" title={t('exo.tabIntegrity')} open={openSections.integrity} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoIntegrityPanel
+                  characterId={character.id}
+                  exo={exo}
+                  canEdit={canEdit}
+                  onExoUpdate={setExo}
+                />
+              </div>
+            </CollapsibleBlock>
 
-        {!loading && exo && ['avaries', 'systems', 'computer'].includes(activeTab) && (
-          <p style={{ color: '#4a4a60', fontSize: '12px', fontStyle: 'italic', textAlign: 'center', padding: '24px 0' }}>
-            {t('exo.comingSoon')}
-          </p>
+            <CollapsibleBlock id="avaries" title={t('exo.tabAvaries')} open={openSections.avaries} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoAvariesPanel
+                  characterId={character.id}
+                  exo={exo}
+                  canEdit={canEdit}
+                  isGm={isGm}
+                  onExoUpdate={setExo}
+                />
+              </div>
+            </CollapsibleBlock>
+
+            {['systems', 'computer'].map(section => (
+              <CollapsibleBlock key={section} id={section} title={t(`exo.tab${section.charAt(0).toUpperCase()}${section.slice(1)}`)} open={openSections[section]} onToggle={toggleSection}>
+                <p style={{ color: '#4a4a60', fontSize: '12px', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
+                  {t('exo.comingSoon')}
+                </p>
+              </CollapsibleBlock>
+            ))}
+          </div>
         )}
 
         {!loading && exo && activeTab === 'settings' && (

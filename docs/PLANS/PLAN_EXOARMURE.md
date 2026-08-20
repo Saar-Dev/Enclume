@@ -1206,7 +1206,9 @@ efficace que la première rédaction) :
 
 ## 11. Lot 4 — Pipeline de dégâts (plan détaillé 2026-08-19, ✅ codé 2026-08-19)
 
-> Origine : câblage de l'onglet Avaries de `ExoSheetWindow.jsx` — le compteur reste vide sans ce lot,
+> Origine : câblage de la section Avaries de `ExoSheetWindow.jsx` (retour Saar 2026-08-19 : la fenêtre
+> a été repensée en onglets larges Fiche/Paramètres, modules empilés en sections repliables — plus un
+> onglet par module, voir en-tête du fichier) — le compteur reste vide sans ce lot,
 > donc pas un sous-produit du découpage de fenêtre mais un prérequis. Table transcrite depuis une
 > capture Saar de la page 326 (compteur d'Avaries), confirmée par Saar (2026-08-19). Analyse à charge
 > faite avant tout code (§11.3/§11.6), les 2 décisions RAW tranchées par Saar. Cartographie exhaustive
@@ -1499,22 +1501,24 @@ en-têtes) reste nécessaire avant tout seed réel — probable qu'elle révèle
    catalogue ne bloque rien immédiatement (données), mais la résolution en combat (Lot 5e ou suivant)
    devra soit l'ignorer (dégât fixe au premier Tour), soit être étendue — décision à prendre au moment
    de câbler la résolution, pas au moment de seeder le catalogue.
-2. **Lien template ↔ loadout par défaut** — chaque armure RAW liste ses "Systèmes auxiliaires"/
-   "Armement" par défaut. Est-ce qu'on a besoin d'une table de jonction persistante
-   (`ref_exo_template_equipment`), ou est-ce qu'un seed ponctuel suffit (à la création d'un
-   `exo_sheet` sur ce template, copier le loadout par défaut dans `equipped_systems`/`hardpoints`, sans
-   garder de lien permanent vers le template au-delà) ? La donnée réellement consommée en jeu est
-   `exo_sheet.equipped_systems` (instance, peut diverger du loadout par défaut si un joueur modifie son
-   exo) — une table de jonction persistante n'est utile que si on veut un "reset au loadout d'usine" ou
-   un affichage "loadout de référence" dans l'UI. Pas tranché.
-   **Élément nouveau (run libre 2026-08-19), penche vers "seed ponctuel, pas de jonction FK"** :
-   vérifié que les 3 analyseurs sonscan du catalogue (Sea-Star/Abyss/Delta Azur, ligne 486-488)
-   partagent tous `niveau=12`, ne différant que par cibles/prix — une armure dont le loadout dit
-   "Analyseur sonscan niv. 12" ne désigne donc **aucun produit précis** du catalogue. Les descriptions
-   de loadout RAW sont plus lâches que les fiches catalogue : une table de jonction avec FK stricte vers
-   `ref_exo_equipment` serait invérifiable/ambiguë à peupler depuis le texte tel quel pour ce genre de
-   ligne — renforce l'option "copie narrative à la création", pas une garantie absolue (pas vérifié sur
-   l'intégralité des 16 loadouts).
+2. ~~**Lien template ↔ loadout par défaut**~~ — **✅ tranché par Saar (2026-08-20)** : "armement et
+   armes sont des paramètres d'usine. Modifiable mais pré-made (cf. les modèles RAW)" — même
+   philosophie que la Base éditable (Lot B, §13.3) : le modèle pré-remplit, l'instance possède et peut
+   diverger ensuite. **Conséquence concrète, détaillée §13.4.4** : une table de jonction persistante
+   `ref_exo_template_equipment` **est** nécessaire (contrairement à la piste "seed ponctuel sans
+   jonction" envisagée ci-dessous le 2026-08-19) — pas pour rester une dépendance live (elle ne l'est
+   pas, elle n'est lue qu'au moment de la copie), mais parce qu'il faut bien une source structurée
+   *quelque part* pour ce que la copie recopie. L'ambiguïté trouvée ci-dessous (analyseurs sonscan de
+   niveau identique) ne bloque pas l'approche — elle se résout par le même échappatoire
+   `label_override` déjà retenu pour `exo_systems`/`exo_weapons`/`exo_programs` (§13.4.2/13.4.3),
+   pas par une nouvelle mécanique.
+   **Analyse d'origine (2026-08-19), conclusion partiellement dépassée par la décision ci-dessus, gardée
+   pour la traçabilité de l'ambiguïté relevée** : les 3 analyseurs sonscan du catalogue (Sea-Star/
+   Abyss/Delta Azur, ligne 486-488) partagent tous `niveau=12`, ne différant que par cibles/prix — une
+   armure dont le loadout dit "Analyseur sonscan niv. 12" ne désigne donc **aucun produit précis** du
+   catalogue avec certitude à partir du texte seul. Pas un argument contre la jonction persistante en
+   soi, juste la preuve que toutes les lignes ne pourront pas être résolues par FK stricte — certaines
+   demanderont un `label_override` ou un choix arbitraire documenté au moment de la transcription.
 3. **Pipeline de dégâts d'une exo qui tire** — `resolveExoDamage` (Lot 4) couvre l'exo comme
    **défenseur**. Une exo qui tire une arme de ce catalogue comme **attaquant** ne passe par aucun
    pipeline existant (`getEffectiveWeaponDamage` suppose `char_inventory`) — à construire au moment de
@@ -1577,3 +1581,695 @@ pour le sélecteur Modèle, ça devient donc testable en navigateur pour la prem
 `ref_exo_equipment` n'a en revanche aucun consommateur UI, seed pur en attendant Lot 5e).
 **Données** : 3 migrations (251/252/253), 100 lignes de données neuves au total (16+84), aucune
 table existante modifiée. **Retour arrière** : `down()` testé et propre sur les 3 migrations.
+
+---
+
+## 13. Finition de la fiche exo-armure — avant d'ouvrir le Lot 5 (planifié 2026-08-20)
+
+> Origine : proposition de Saar en reprenant ce chantier — plutôt que d'ouvrir le Lot 5 (Incidents,
+> sous-système RAW complet) alors que `ExoSheetWindow.jsx` a encore 3 sections en stub explicite
+> (Avaries/Systèmes/Ordinateur), finir la fiche d'abord. Ça débloque enfin un scénario de test
+> navigateur complet des Lots 1-4 (bloqué depuis le Lot 1) avant d'empiler un nouveau sous-système
+> dessus. Séquencement demandé par Saar : planification large d'abord (cette section), affinage lot
+> par lot ensuite — un seul lot détaillé/codé à la fois, comme le reste de ce plan.
+>
+> Deux sources d'inspiration fournies par Saar pendant cette session, traitées comme référence UI/UX
+> et précédent d'implémentation — **jamais comme autorité RAW** (hiérarchie documentaire CLAUDE.md §1,
+> Livre de Base > ... > PLAN ; une fiche Roll20 tierce n'a aucune autorité sur le texte source) :
+> - `docs/REGLES/FDEA.webp` — capture de la fiche d'armure mécanisée officielle du Livre de Base
+>   (mise en page RAW réelle : blocs Attributs/Informations/Dommages/Localisation des
+>   incidents/Ordinateur/Systèmes auxiliaires/Armement/Table des marges).
+> - Captures d'une fiche Roll20 tierce (feuille de perso Polaris communautaire) — inspiration de
+>   structuration de champs uniquement (ex. confirme le champ "Taille"/GAB absent de notre schéma).
+>
+> **Point signalé, hors périmètre de cette section** : le bloc "Table des marges de réussite et
+> d'échec" (bas de `FDEA.webp`) a été proposé comme piste pour débloquer `PLAN_TEST_CRITIQUE.md` §2.3
+> (seuil de Catastrophe, en stand-by) — **corrigé par Saar** : MR (Marge de Réussite) est déjà
+> implémentée pour les humanoïdes, la Catastrophe déjà codée, la table déjà présente dans
+> `shared/polarisUtils.js`. Sujet déjà traité ailleurs par Saar avec un autre agent, pas repris ici.
+
+### 13.1 Découpage retenu
+
+- **Lot A — Onglet Avaries** : câblage UI pur. Les données existent déjà (Lot 4,
+  `exoAvarieService.js`, §11) — aucune décision de fond, prêt à détailler/coder immédiatement.
+  Détail §13.2.
+- **Lot B — Base éditable (refactor)** : correction d'architecture demandée par Saar en vérifiant la
+  fiche RAW — aujourd'hui `computeExoStats(exoSheet, template)` et les fonctions qui en dépendent
+  (`resolveExoContext`, `calcExoDegatsNets`, `resolveManeuverSkillId`, `getExoMovementBudget`,
+  l'Initiative `COMBAT_START`) vont chercher RD/Blindage/EXF-de-base/Vitesse/Malus d'initiative **en
+  direct dans `ref_exo_templates`** à chaque lecture — l'instance n'a aucune colonne à elle pour ces
+  valeurs. Deux autorités possibles pour la même propriété (le template si présent, rien sinon) viole
+  Priorité #4 du CLAUDE.md. Décision Saar (2026-08-20) : à la création depuis un modèle, **copier**
+  les valeurs de base sur `exo_sheet` (nouvelles colonnes éditables) — `template_id` devient une
+  référence "pré-rempli depuis", plus jamais une dépendance live. Toute valeur de la fiche doit rester
+  modifiable par GM/propriétaire/pilote après coup, y compris les deux bornes d'une paire max/courant
+  (déjà le cas pour l'Intégrité, §6.1 point 4 — principe étendu à tout le reste). Ne remet pas en
+  cause §1.7 (stats *effectives*, dégradées par l'Intégrité, toujours recalculées à la volée — couche
+  différente, base éditable vs dérivé recalculé). Champ **Taille** (GAB) à ajouter au passage — confirmé
+  par Saar, non prioritaire, peut attendre une migration ultérieure si besoin. Pas encore détaillé lot
+  par lot (liste exacte des colonnes à copier, fichiers/fonctions à rebrancher).
+- **Lot C — Systèmes / Armement / Ordinateur** : les 4 colonnes jsonb de `exo_sheet`
+  (`equipped_systems`/`hardpoints`/`isolated_systems`/`damaged_systems`, migration 233, posées "par
+  anticipation" au Lot 1, jamais exploitées) ne portent pas nativement une Intégrité par ligne — or la
+  fiche RAW (`FDEA.webp`) montre un ITG par ligne de Systèmes auxiliaires ET d'Armement. **Précédent
+  trouvé et retenu** (lecture de `71_drone_sheet.js` + `73_drone_programs_catalog.js`, archivée mais
+  son contenu vit dans `48b_ref_equipment_data.js`, + routes `char-sheet.js:1646-1912`) : le drone a
+  déjà résolu exactement ce problème.
+  - `drone_sheet.ordinateur_gen`/`ordinateur_nt` — 2 colonnes seulement, tout le reste (Niveau max des
+    programmes, Gestion systèmes, Potentiel, Coût, Intégrité, Disponibilité) se dérive des formules
+    `docs/REGLES/REGLE_ORDINATEUR.md` (p.280-281, fournies par Saar 2026-08-20), jamais stocké — même
+    principe que `computeExoStats`.
+  - `drone_programs` — table réelle (pas jsonb) : `equipment_id` FK `ref_equipment` (catalogue
+    `family='Logiciels'`, déjà seedé, catalogue RAW p.281-282) + `label_override` (programme custom) +
+    `level`. C'est le bloc "Programmes" de la fiche Ordinateur, réutilisable tel quel — même catalogue,
+    aucune nouvelle donnée nécessaire pour un premier jet.
+  - `drone_weapons` — même patron, avec en plus les champs propres à l'instance (`contenance_chargeur`,
+    `ammo_restant`, et pour une arme hors catalogue : `name`/`damage_formula`/`portee`/`fire_mode`/`notes`).
+    Précédent direct pour Armement.
+  - Retenu pour l'exo : `exo_systems` et `exo_weapons` (mirror `drone_weapons` — catalogue
+    `ref_exo_equipment` `family='systeme'`/`'arme'` + ITG max/courant par ligne + option custom),
+    `exo_programs` (mirror exact `drone_programs`, réutilise le catalogue `ref_equipment
+    family='Logiciels'` existant), `exo_sheet.ordinateur_gen`/`ordinateur_nt` (mirror `drone_sheet`).
+    Une migration retire les 4 colonnes jsonb devenues mortes. Répond à §12.2 point 2 mieux que la
+    piste "copie jsonb à la création" envisagée là-bas — plus cohérent avec ce qui tourne déjà pour le
+    drone, et donne gratuitement une Intégrité par système/arme nécessaire de toute façon aux futurs
+    Lots 5c/5d/5e (incidents visant un système précis). Pas encore détaillé (schéma exact des 3
+    tables, routes, UI).
+- **Lot D — Modèles perso dans le Vault** (différé, dette documentée, pas un lot à détailler
+  maintenant) : Saar veut que GM/joueur puissent créer leur propre modèle d'exo-armure dans leur Vault
+  respectif, la liste RAW n'étant pas exhaustive. Vérifié dans le code (2026-08-20) : le Vault
+  (`vaults`/`vaultService.js`, migration 129) ne stocke aujourd'hui que des `characters` — aucun
+  mécanisme de catalogue personnel n'existe nulle part dans le projet, pour aucun domaine. Pas urgent :
+  une fois le Lot B fait, un GM/joueur peut déjà construire l'équivalent d'un modèle perso en partant
+  d'un template existant (ou d'aucun) et en éditant tous les champs à la main — seule manque la
+  **réutilisabilité** (sauvegarder ce jeu de valeurs pour créer plusieurs exo-armures identiques sans
+  tout retaper). Besoin de confort réel, pas un blocage technique — à ouvrir en session dédiée
+  (nouvelle colonne `owner_user_id`/`vault_id` nullable sur `ref_exo_templates`, filtrage à
+  l'affichage, probablement) quand Saar voudra vraiment le trancher.
+
+### 13.2 Lot A — Onglet Avaries — ✅ codé (2026-08-20)
+
+**Clôture** : codé intégralement selon le détail ci-dessous, y compris les correctifs trouvés en
+codant (émission WS conditionnée à un changement réel, `COLUMN_BY_SEVERITY` déplacé vers
+`shared/exoConstants.js` pour être réutilisable côté client) et une trouvaille séparée corrigée dans
+la foulée (`canEdit` de `ExoSheetWindow.jsx` ne testait jamais si l'utilisateur est le pilote lié —
+pré-existante, affecte aussi Identité/Intégrité, corrigée après confirmation explicite de Saar).
+
+**Testé** : `node --check`/lint sur tous les fichiers touchés (une vraie erreur de syntaxe trouvée et
+corrigée en cours de route — parenthèse manquante). 54/54 tests serveur contre PostgreSQL réel
+(`exoAvarieService.test.mjs` 21/21 dont 6 nouveaux pour `removeExoAvarie`, `combatantContextService.test.mjs`
+non-régression) + 204/204 sur l'ensemble `server/src/lib`/`server/src/socket`/migrations exo. Build
+client complet réussi.
+
+**Non testé** : scénario réel navigateur (poser/retirer des Avaries à la main, déclencher une Avarie
+réelle en combat et vérifier le rafraîchissement live, confirmer qu'un pilote non-propriétaire voit
+maintenant les contrôles actifs) — à la charge de Saar.
+
+**Données** : aucune migration (les colonnes `avaries_*` existent depuis le Lot 4).
+
+**Retour arrière** : pas de migration à annuler — un revert des fichiers listés ci-dessous suffit.
+
+**Fichiers touchés** : `shared/exoConstants.js` (`EXO_AVARIE_COLUMN_BY_SEVERITY` exportée),
+`server/src/lib/exoAvarieService.js` (`removeExoAvarie`), `server/src/lib/exoAvarieService.test.mjs`
+(6 tests), `server/src/routes/character/char-sheet.js` (2 routes), `client/src/character/ExoAvariesPanel.jsx`
+(nouveau), `client/src/character/ExoSheetWindow.jsx` (câblage + correctif `canEdit`/pilote),
+`client/src/pages/SessionPage.jsx` (prop `socket`), `client/src/locales/fr.json` (clés `exo.avarie*`).
+
+---
+
+### 13.2 Lot A — Onglet Avaries — détaillé, révisé après analyse à charge (2026-08-20)
+
+**Existant vérifié** :
+- `exo_sheet.avaries_legeres/moyennes/graves/critiques/catastrophiques` (migration 233) — déjà tenues
+  à jour par `applyExoAvarie` (`exoAvarieService.js`, Lot 4) à chaque dégât encaissé en combat.
+- `ExoSheetWindow.jsx:317-323` — la boucle `['avaries', 'systems', 'computer'].map(...)` rend le même
+  stub "à venir" pour les 3 sections. Lot A retire `'avaries'` de cette liste.
+- **Gap trouvé en vérifiant `DroneWindow.jsx` (précédent direct)** : `DroneWindow.jsx:126-136` écoute
+  `WS.DRONE_INTEGRITY_UPDATED` pour rafraîchir l'affichage pendant un combat en cours (le composant
+  reçoit `socket` en prop, `SessionPage.jsx`). `ExoSheetWindow.jsx` n'écoute aujourd'hui aucun
+  événement WS et ne reçoit même pas `socket` en prop — sans correctif, l'onglet Avaries resterait figé
+  pendant qu'un combat modifie les compteurs en direct. Inclus dans ce lot.
+
+**Rejeté après analyse à charge — champ numérique + PATCH brut (`PUT .../exo/integrity` étendu).**
+Deux défauts trouvés en creusant :
+1. **Mauvais précédent copié.** J'avais mirroré `ExoIntegrityPanel.jsx` (paire max/courant, simple)
+   alors que les Avaries sont structurellement un système à seuils/cascade, comme les Blessures
+   humaines — pas une paire de nombres. Le vrai précédent est `LocationPanel.jsx:131-145` : une
+   Blessure ne s'ajoute **jamais** par PATCH de compteur — un clic sur une case vide appelle `POST
+   /wounds` (le vrai service, cascade de promotion incluse), jamais un champ à valeur libre.
+2. **Violation d'autorité unique.** Un PATCH brut sur `avaries_*` contournerait `applyExoAvarie` et sa
+   perte d'ITG liée à la transition 0→1 (§11.1) — un MJ posant `avaries_critiques: 1` à la main
+   n'aurait aucune déduction d'ITG, un état que le combat réel ne produit jamais. Contraire à la
+   Priorité #4 CLAUDE.md et à la demande explicite de Saar de traiter la qualité structurelle avant la
+   rapidité.
+
+**Conception retenue — grille de cases à cocher, mirror `LocationPanel.jsx` :**
+
+- **Case vide → clic → pose une Avarie.** Nouvelle route `POST /:characterId/exo/avaries/:severity`
+  (permission `exoIsGmOrOwnerOrPilot`, patron `req.character.campaign_id` + `req.app.get('io')` déjà
+  établi ligne 861-914 de ce fichier pour `applyWound`/`restFatigue`) — appelle **directement**
+  `applyExoAvarie(io, db, req.character.campaign_id, { characterId, severity })`, la même fonction que
+  le combat, jamais une copie. Route traduit un retour `null` (exo_sheet introuvable) en 404 propre,
+  plutôt que de laisser fuiter un objet vide.
+  **Changement de frontière de confiance trouvé en analyse à charge** : jusqu'ici `severity` n'était
+  jamais fourni par un client — toujours calculé côté serveur par `severityForExoDamage()`. Cette
+  route l'expose pour la première fois dans un corps de requête. Ni `applyExoAvarie` ni
+  `resolveAvarieIncrement` ne valident que `severity` est une clé connue — une valeur invalide ferait
+  planter `EXO_AVARIE_TABLE[severity].maxCount` (`TypeError`) au milieu d'une transaction plutôt qu'un
+  400 propre. La route valide donc `severity` contre `EXO_AVARIE_SEVERITY_ORDER` (hors `'destruction'`,
+  rejeté explicitement) **avant** d'appeler le service — `core.md` : "Le serveur valide... les données
+  avant toute mutation."
+- **Case pleine → clic → retire une Avarie.** Nouvelle fonction sœur **`removeExoAvarie(io, db,
+  campaignId, { characterId, severity })`** dans `exoAvarieService.js` (même transaction/`.forUpdate()`
+  que `applyExoAvarie`) : décrémente la colonne du palier, plancher à 0, émet `EXO_AVARIE_UPDATED`
+  **seulement si le compteur a réellement changé** (trouvé en codant, 2026-08-20 — un compteur déjà à
+  0 est un succès silencieux, pas une diffusion à toute la campagne pour rien).
+  **Explicitement pas symétrique en effet** : ne restaure jamais l'ITG perdue ni ne redéfait une
+  cascade passée — outil d'arbitrage MJ, pas la Réparation RAW (Lot séparé, gated par un Test de
+  Mécanique, RAW p.327). Route miroir `DELETE /:characterId/exo/avaries/:severity`.
+  `severity === 'destruction'` rejeté par les deux routes (RAW : "pas de case" pour ce palier, §11.2)
+  — la ligne Destruction de l'UI n'a donc aucune case cliquable, juste le libellé + `itgLossStructure`
+  en lecture seule.
+  **Permission — tranchée par Saar (2026-08-20), analyse à charge faite : GM-only, pas
+  `exoIsGmOrOwnerOrPilot`.** Vérifié contre les deux précédents réels du fichier, pas juste supposé :
+  `DELETE /:characterId/wounds/:wid` ("Guérison") est Owner/GM — mais plusieurs routes de ce même
+  fichier sont déjà GM-only pour des actions d'arbitrage sans contrepartie RAW mécanisée (`PUT .../xp`,
+  `POST/DELETE .../advantages`, `DELETE .../mutations/:id`). Retirer une Avarie sans Test n'a aucun
+  équivalent légitime côté joueur (contrairement à la Guérison, qui a un sens narratif de self-service)
+  — appartient à la famille GM-only, pas à la famille self-service de la Guérison. Écart avec le
+  précédent Guérison noté ici mais **pas rouvert** : système différent, déjà en production, hors
+  périmètre de ce Lot. Garde `if (!req.isGm) throw new AppError(403, ...)` (patron déjà utilisé sur
+  `xp`/`advantages`/`mutations`), distincte de `exoIsGmOrOwnerOrPilot` qui reste sur la pose. Ce
+  cloisonnement referme aussi la question "le retrait est-il seulement nécessaire ?" (ci-dessus) :
+  l'abus potentiel (pilote non-propriétaire effaçant ses propres dégâts) qui motivait l'hésitation
+  disparaît structurellement une fois l'action GM-only — retrait conservé dans ce Lot A.
+- **UX** : aucune confirmation avant clic, cohérent avec le précédent Blessures (`LocationPanel.jsx`
+  n'en demande pas non plus, vérifié — aucun `window.confirm` dans ce fichier, y compris pour la
+  Blessure la plus grave). Tooltip sur les cases pleines rappelant que le retrait ne restaure pas
+  l'ITG (évite qu'un MJ s'attende à tort à une symétrie).
+- **Anti-double-appel — granularité ligne, pas case** (précisé, 2ᵉ tour d'analyse à charge 2026-08-20) :
+  toutes les cases vides d'une même ligne déclenchent la **même** action ("poser une Avarie de cette
+  sévérité", aucune identité par case, §13.2) — désactiver seulement la case cliquée pendant la requête
+  en vol permettrait de cliquer deux cases vides différentes de la même ligne et de poser deux Avaries
+  au lieu d'une (jamais de corruption serveur, juste un résultat surprenant). Corrigé : la **ligne
+  entière** se désactive pendant sa requête en cours, pas la case. L'état local se met à jour
+  **uniquement** depuis la réponse HTTP ou depuis l'événement WS reçu — jamais par un
+  incrément/décrément optimiste côté client — idempotent si les deux arrivent (l'auteur du clic est
+  aussi dans la `campaignId` room et reçoit son propre broadcast).
+- **Forme de la réponse HTTP — fixée** (précisé, 2ᵉ tour) : les deux routes répondent `{ exo }` (l'objet
+  `exo_sheet` mis à jour), pas le retour brut du service (`{ exoSheet, finalSeverity, destroyed,
+  itgLoss }`) — cohérence avec `PUT .../exo/integrity` et le reste des routes exo, un seul contrat de
+  réponse pour toute cette famille de routes.
+- **Bénéfice de construction** : élimine par nature le souci de validation de borne (plus de champ
+  brut à valider — chaque clic est une opération bornée).
+- **Angle mort vérifié et accepté, pas un oubli (analyse à charge 2026-08-20)** : `applyExoAvarie`/
+  `removeExoAvarie` diffusent via `io.to(campaignId).emit(...)` — le plan prenait `req.character.campaign_id`
+  sans garde. Or **une exo-armure peut vivre dans le Vault d'un joueur, hors campagne**
+  (`vault.js:24`, `VAULT_CREATABLE_TYPES` inclut `'exo'` ; `characters.campaign_id` nullable depuis la
+  migration 129, Vault). `ExoSheetWindow.jsx` n'est aujourd'hui monté que par `SessionPage.jsx`
+  (vérifié — inatteignable par l'UI actuelle pour un personnage Vault), mais les routes `char-sheet.js`
+  ne sont pas cantonnées à un contexte de campagne — un appel direct à l'API sur une exo-armure de
+  Vault passerait `campaignId = null`. `io.to(null).emit(...)` ne plante pas (room bidon, silencieux) —
+  la réponse HTTP reste correcte, l'auteur de l'action voit son propre état se mettre à jour (porté par
+  la réponse HTTP, pas seulement le WS) ; seule la diffusion aux autres clients d'une room inexistante
+  est un no-op, sans conséquence observable (une exo de Vault n'a par nature aucun public de campagne
+  à qui diffuser). **Comportement dégradé accepté, documenté ici pour qu'un futur lecteur ne le lise
+  pas comme un bug non traité** — même garde-fou déjà en place ailleurs dans ce fichier pour le même
+  cas (`char-sheet.js:1089`, `campaignId || null`, autre fonctionnalité), pas une réinvention.
+
+**Fichiers à toucher :**
+1. `server/src/lib/exoAvarieService.js` — nouvelle fonction `removeExoAvarie` (miroir structurel
+   d'`applyExoAvarie`, sans cascade ni perte d'ITG).
+2. `server/src/routes/character/char-sheet.js` — `POST`/`DELETE /:characterId/exo/avaries/:severity`
+   (nouvelles routes, patron `req.character.campaign_id`/`req.app.get('io')` déjà établi dans ce
+   fichier), rejet `severity === 'destruction'`.
+3. `client/src/character/ExoAvariesPanel.jsx` (nouveau) — grille de cases par palier (mirror
+   `LocationPanel.jsx`, pas `ExoIntegrityPanel.jsx`), lit `EXO_AVARIE_TABLE` (`shared/exoConstants.js`)
+   pour les colonnes lecture-seule "Modificateur d'incident"/"Perte définitive d'ITG". Ligne
+   Destruction : lecture seule, aucune case. **Deux droits distincts, pas un seul `canEdit`** : cases
+   vides cliquables pour GM/propriétaire/pilote (pose), cases pleines cliquables **seulement** pour
+   `isGm` (retrait) — inertes sinon pour propriétaire/pilote.
+4. `client/src/character/ExoSheetWindow.jsx` — retirer `'avaries'` de la boucle stub (:317), nouveau
+   bloc `<CollapsibleBlock>` montant `ExoAvariesPanel`. Ajouter la prop `socket` + `useEffect` d'écoute
+   `WS.EXO_AVARIE_UPDATED` (mirror `DroneWindow.jsx:126-136`) — **merge partiel uniquement**
+   (`avaries_*` + `itg_structure_current`, jamais un remplacement complet de `exo` : `GET
+   /:characterId/exo`, `char-sheet.js:1933-1963`, renvoie `exo_sheet.*` **plus une douzaine de champs
+   `template_*` joints** que le payload `EXO_AVARIE_UPDATED` ne contient pas — un remplacement complet
+   effacerait l'onglet Identité au premier coup encaissé).
+5. Site d'appel de `ExoSheetWindow` (probablement `SessionPage.jsx`, `openSheet`/`case 'exo'`) —
+   vérifier que `socket` y est déjà disponible (il l'est pour `DroneWindow`) et le passer en prop.
+6. `client/src/locales/fr.json` — bloc `"exo"` existant (vérifié, pas `charSheet.json`) : clés
+   manquantes (labels des 5 paliers + 2 colonnes + Destruction + tooltip de retrait).
+
+**Hors périmètre explicite** : Localisation des incidents / Effets des incidents (bloc visible sur
+`FDEA.webp` juste sous Avaries) — dépend du Lot 5a, pas encore ouvert. La vraie Réparation RAW (Test
+de Mécanique, efface une ligne entière) — Lot séparé, pas ce Lot A.
+
+**Validation prévue** : `node --check` sur les fichiers serveur touchés, tests `exoAvarieService.test.mjs`
+étendus pour `removeExoAvarie` (plancher à 0, rejet `destruction`, non-régression des 15 tests
+existants), lint + build client, scénario réel navigateur par Saar (poser/retirer des Avaries à la
+main, déclencher une Avarie réelle en combat et vérifier le rafraîchissement live pendant que la
+fenêtre reste ouverte, vérifier que l'onglet Identité survit à un `EXO_AVARIE_UPDATED`).
+
+### 13.3 Lot B — Base éditable (refactor) — détaillé (2026-08-20)
+
+**Existant vérifié — 4 points d'accès en dépendance live à `ref_exo_templates`, en plus de la lecture
+GET déjà connue :**
+1. `shared/exoStats.js#computeExoStats(exoSheet, template)` — lit `template.base_exoforce`,
+   `template.base_blindage`, `template.category`.
+2. `combatantContextService.js#resolveExoContext(db, exoCharacter)` (:130-136) — fait le join lui-même
+   (`db('ref_exo_templates').where({id: exoSheet.template_id}).first()`), retourne `{pilot, exoSheet,
+   template}`.
+3. `combatantContextService.js#resolveManeuverSkillId(template)` (:167-185) — lit `template.environment`,
+   `template.surface_movement_mode`.
+4. `movementBudgetService.js#getExoMovementBudget(characterId, gait)` (:89-124) — fait **son propre**
+   join séparé (`leftJoin('ref_exo_templates', ...)`), lit `base_speed_underwater/surface`,
+   `underwater_movement_mode/surface_movement_mode`.
+5. Initiative (`COMBAT_START`, `socketCombatState.js`, §10.2) — passe par `resolveExoContext` (point 2),
+   lit `template.malus_init_underwater/surface`, `template.environment`,
+   `template.underwater_movement_mode`.
+6. `server/src/lib/charStats.js#calcExoDegatsNets(exoSheet, template, degautsBruts)` (Lot 4, §11.3) —
+   passe `template` à `computeExoStats` en interne.
+7. **Client, même défaut dupliqué** : `ExoIdentityPanel.jsx:19-24` reconstruit un objet
+   `{base_exoforce, base_blindage, category}` à la main depuis les champs `exo.template_*` joints par
+   le GET, pour appeler `computeExoStats` côté client — même dépendance live, juste recopiée en JS au
+   lieu d'un JOIN SQL.
+8. `GET /:characterId/exo` (`char-sheet.js:1933-1963`) — 13 colonnes `template_*` jointes.
+9. `POST /characters` (type=exo) → `createCompanionSheet` (`charSheetService.js:45-48`) — insère un
+   `exo_sheet` **vide**, `template_id` toujours `NULL` à la création (aucun sélecteur au formulaire,
+   Lot 1 §6.5) : le seul point où `template_id` est réellement posé aujourd'hui est `PUT
+   /:characterId/exo` (:1966-1988), pas la création. **Conséquence directe pour ce Lot** : le
+   déclencheur de copie ne peut pas être "à la création" (ça n'arrive jamais avec un template) — il
+   doit vivre dans `PUT /:characterId/exo`, au moment où `template_id` est effectivement fourni.
+
+**Champs à copier** (mirror `ref_exo_templates`, nouvelles colonnes `exo_sheet`, toutes nullable —
+l'invariant "non configurée" de Lot 1 §6.5 survit, juste porté par un champ sentinelle différent, voir
+plus bas) : `category`, `environment`, `depth_operational`, `depth_limit`, `depth_crush`,
+`base_exoforce`, `base_blindage`, `base_speed_underwater`, `base_speed_surface`,
+`underwater_movement_mode`, `surface_movement_mode`, `speeds_extra`, `malus_init_underwater`,
+`malus_init_surface`, `manufacturer`, `price`, `rarity`, `tech_level`, `autonomy`, **+ `taille`, `type_batterie`,
+`type_coque`** (3 champs nouveaux, confirmés en comparant la fiche Roll20 tierce — absents de
+`ref_exo_templates` comme de `exo_sheet` aujourd'hui, tous trois texte libre narratif, aucun calcul ne
+les consomme).
+
+**CHECK constraints — valeurs exactes mirrorées de `233_exo_sheet.js`/`243_..._movement_and_commerce.js`,
+pas réinventées** :
+- `category IN ('exo-alpha','exo-0','exo-1','exo-2','exo-3','exo-4','exo-5','exo-6','exo-omega')`
+  (`233:49-50`).
+- `environment IN ('submarine','surface','hybrid','atmospheric','spatial','industrial')` (`233:51-52`).
+- `underwater_movement_mode IN ('vit','pilot','blocked')` / `surface_movement_mode IN
+  ('vit','pilot','blocked')` (`243:41-44`).
+
+**Divergence délibérée par rapport à `ref_exo_templates`, à documenter dans la migration pour qu'un
+futur lecteur ne la lise pas comme un oubli** : sur `ref_exo_templates`, `base_exoforce`/`base_blindage`/
+`malus_init_*`/`*_movement_mode` sont `NOT NULL DEFAULT ...` (une ligne catalogue est toujours une
+définition complète). Sur `exo_sheet`, ces mêmes colonnes doivent être **nullable, sans défaut** — un
+défaut non-nul romprait le sentinelle "non configurée" (toute nouvelle exo naîtrait "configurée" avec
+des valeurs arbitraires au lieu de `NULL`). Deux tables, deux sémantiques, pas un copier-coller
+mécanique du schéma source.
+
+**Nouveau sentinelle "non configurée"** : jusqu'ici `template_id IS NULL` signifiait "aucune stat
+calculable" (Lot 1 §6.5) — après ce Lot, `template_id` devient une simple référence, plus une
+dépendance de calcul. Retenu : `category IS NULL` devient le nouveau sentinelle (premier champ
+consommé par `computeExoStats`, et les champs copiés le sont toujours ensemble dans la même
+transaction — jamais une copie partielle, donc `category` seul est un proxy fiable pour "tous les
+champs de base sont renseignés").
+
+**Déclencheur de copie — `PUT /:characterId/exo`, uniquement quand `template_id` est fourni et
+résout un template réel.** Toujours une **copie complète, jamais une fusion intelligente** : choisir
+un nouveau modèle écrase les 19+3 champs ci-dessus avec les valeurs du modèle choisi, y compris s'ils
+avaient été personnalisés avant — comportement prévisible (« ce que vous voyez après sélection, c'est
+ce que le modèle donne »), pas de logique de fusion à deviner. **`template_id: null` (dissociation) ne
+réinitialise PAS les champs copiés** — une fois copiées, ces valeurs appartiennent à l'instance ;
+dissocier la référence ne doit pas effacer des données déjà possédées. Décision par défaut, à confirmer
+par Saar si un autre comportement est voulu.
+
+**Extraction en fonction de service dédiée — `applyExoTemplate(db, characterId, templateId)`** (analyse
+à charge 2026-08-20), pas une logique inline dans la route : §12.2 point 2 était encore ouvert au
+moment d'écrire ce Lot ("le modèle pré-remplit-il aussi le loadout Systèmes/Armement ?") — **tranché
+entre-temps par Saar : oui** (§13.4.4). Si la copie des stats de base avait été écrite directement dans
+le corps de la route `PUT /:characterId/exo`, le Lot C aurait dû rouvrir cette route déjà livrée pour y
+ajouter la copie du loadout. En l'isolant dans sa propre fonction dès ce Lot B, le Lot C n'a qu'à
+**étendre** `applyExoTemplate` d'une étape (insertion `exo_systems`/`exo_weapons` depuis
+`ref_exo_template_equipment`, §13.4.4) — la route, la permission, tout le reste du Lot B reste intact
+et non retesté pour rien.
+
+**Contrat précis** (`server/src/lib/combatantContextService.js` ou nouveau fichier — à trancher au
+moment de coder selon où vivent déjà les fonctions exo serveur, pas un nouveau fichier par principe) :
+- **Signature** : `async function applyExoTemplate(db, characterId, templateId)` → `exo_sheet` mis à
+  jour (`.returning('*')`) ou `null` si `templateId` ne résout aucune ligne `ref_exo_templates`
+  (mirror la convention "retour null sur introuvable" déjà en place, `applyExoAvarie`).
+- **`templateId` validé comme UUID avant toute requête** (analyse à charge 2026-08-20, même trouvaille
+  qu'au Lot A pour `severity`) : un `templateId` mal formé ferait planter Postgres
+  (`invalid input syntax for type uuid`) et fuiterait en 500 brut au lieu d'un 400 propre — validé
+  avant tout accès DB, pas laissé au hasard d'un format supposé correct.
+- **Transactionnel dès ce Lot B, verrou de ligne compris — pas seulement l'écriture** (révisé, analyse
+  à charge 2026-08-20). Une seule écriture (`UPDATE exo_sheet`) suffirait aujourd'hui sans verrou —
+  mais le Lot C y ajoutera un remplacement complet du loadout (`DELETE` puis `INSERT` dans
+  `exo_systems`/`exo_weapons`, §13.4.4), et **sans verrou**, deux sélections de modèle concurrentes sur
+  la même exo-armure pourraient intercaler leurs `DELETE`/`INSERT` respectifs et produire un loadout
+  mélangé des deux modèles — une vraie corruption de données, pas un état incohérent temporaire sans
+  suite. Corrigé : `SELECT ... FOR UPDATE` sur la ligne `exo_sheet` en première étape de la transaction
+  (même patron que `.forUpdate()` dans `applyExoAvarie`), avant toute écriture — sérialise
+  automatiquement l'extension future sans qu'elle ait à reposer son propre verrou. Même raisonnement
+  que l'extraction en fonction dédiée elle-même : poser la robustesse maintenant coûte une ligne,
+  la retrofiter sur du code déjà livré coûterait une réouverture complète.
+- **Route `PUT /:characterId/exo`** : `template_id` non-null dans le payload déclenche
+  `applyExoTemplate` (remplace l'ancien simple `updates.template_id = template_id`). **Exclusivité
+  revue** (analyse à charge 2026-08-20) : `template_id` non-null combiné à un autre champ dans la même
+  requête est désormais un **400 explicite**, pas un silence — ma première rédaction faisait ignorer
+  silencieusement les autres champs, un contrat d'API dangereux (un futur appelant qui combinerait les
+  deux perdrait une partie de sa mise à jour sans le savoir). Aucun coût réel : le client actuel
+  (`ExoIdentityPanel.jsx`) n'envoie de toute façon jamais `template_id` combiné à autre chose.
+  `template_id: null` (dissociation) reste un simple `updates.template_id = null` dans le patch
+  générique existant — ne passe jamais par `applyExoTemplate` (pas de copie à faire en sens inverse,
+  §13.3 déjà tranché : dissocier ne réinitialise rien).
+- **Validation avant écriture, pas de CHECK Postgres brut qui fuite en 500 — atomique** (précisé, 2ᵉ
+  tour d'analyse à charge 2026-08-20) : la route valide **tous** les champs contraints fournis
+  (`category`/`environment`/`underwater_movement_mode`/`surface_movement_mode`) contre les mêmes listes
+  blanches que les CHECK constraints (ci-dessus) avant le moindre `UPDATE` — si un seul champ échoue,
+  **aucun** n'est appliqué (tout ou rien), jamais une application partielle des champs valides pendant
+  qu'un champ invalide est rejeté séparément. Même discipline que la validation de `severity` au Lot A
+  (§13.2, "le serveur valide... les données avant toute mutation", `core.md`).
+- **Vérifié, pas un trou — `avaries_*`/`itg_*_current` ne sont jamais touchés par un changement de
+  modèle** (2ᵉ tour) : question posée puis vérifiée plutôt que supposée — ces champs ne font partie ni
+  de la copie de base ni d'aucune étape d'`applyExoTemplate`, donc un changement de modèle ne remet
+  jamais à zéro les dégâts/Intégrité accumulés. Comportement déjà correct par construction (ces champs
+  ne sont simplement jamais dans la liste des colonnes copiées), pas une décision explicite qu'il
+  fallait ajouter — juste confirmé plutôt que laissé en angle mort.
+- **Requêtes à réécrire explicitement, pas juste amputer d'un `.leftJoin` — vérifié fonction par
+  fonction, pas supposé** (analyse à charge 2026-08-20) : `resolvePilot`/`resolveExoContext`
+  (`combatantContextService.js`) font déjà un `SELECT *` implicite sur `exo_sheet` — les nouvelles
+  colonnes arrivent automatiquement, rien à réécrire au-delà de la suppression du join vers
+  `ref_exo_templates`. **`getExoMovementBudget` (`movementBudgetService.js:89-101`) fait en revanche une
+  liste de colonnes explicite** (`'exo_sheet.template_id', 'ref_exo_templates.base_speed_underwater',
+  ...`) — celle-là doit être réécrite ligne par ligne avec les nouveaux noms de colonnes natifs
+  (`exo_sheet.base_speed_underwater` etc.), pas seulement perdre son `.leftJoin`.
+
+**Migration — backfill obligatoire, pas seulement l'ajout de colonnes** (trouvé en analyse à charge,
+2026-08-20) : le catalogue `ref_exo_templates` vient d'être seedé cette semaine (§12.4) et une partie
+du travail de cette session (validation navigateur des Lots 1-4) suppose qu'une exo-armure réelle ait
+déjà `template_id` assigné. Ajouter les colonnes vides sans backfill ferait basculer silencieusement
+toute exo-armure déjà configurée en "non configurée" (nouveau sentinelle `category IS NULL`) dès le
+déploiement de cette migration. Le `up()` doit donc, après `ALTER TABLE`, exécuter un `UPDATE
+exo_sheet ... FROM ref_exo_templates WHERE exo_sheet.template_id = ref_exo_templates.id` copiant les
+mêmes colonnes qu'`applyExoTemplate` copiera à l'avenir — un backfill ponctuel (au moment de la
+migration), pas un mécanisme permanent. `taille`/`type_batterie`/`type_coque` n'ont aucune source sur
+`ref_exo_templates` — restent `NULL` pour les lignes existantes, rien à backfiller (attendu, pas un
+oubli).
+
+**Extension de whitelist — même route** : les 19 champs deviennent aussi éditables directement (pas
+seulement via sélection de modèle), même permission `exoIsGmOrOwnerOrPilot` déjà en place sur cette
+route — cohérent avec "toute valeur de la fiche modifiable" (§13.1).
+
+**Refactors de signature (suppression du paramètre `template`, lecture directe sur `exoSheet`) :**
+- `computeExoStats(exoSheet)` — plus de second paramètre.
+- `resolveManeuverSkillId(exoSheet)` — idem.
+- `resolveExoContext(db, exoCharacter)` — retourne `{ pilot, exoSheet }` ; le join `ref_exo_templates`
+  disparaît du chemin chaud. Si un appelant a encore besoin du nom du modèle d'origine pour affichage
+  (ex. "pré-rempli depuis : Armure Mentor"), fetch séparé et explicite à sa charge — jamais réintroduit
+  dans cette fonction partagée par tous les sites de combat.
+- `getExoMovementBudget` — supprime le `leftJoin`, lit `base_speed_*`/`*_movement_mode` directement sur
+  `exo_sheet`.
+- `COMBAT_START` (Initiative) — idem, lit `malus_init_*`/`environment`/`underwater_movement_mode`
+  directement sur `exoSheet` déjà résolu par `resolveExoContext`.
+- `calcExoDegatsNets(exoSheet, degautsBruts)` — un paramètre de moins.
+- `resolveExoDamage` (`exoAvarieService.js`) — garde `!exoSheet` mais remplace `!template` par
+  `!exoSheet.category` (nouveau sentinelle).
+- `ExoIdentityPanel.jsx:19-24` — supprime la reconstruction manuelle, appelle `computeExoStats(exo)`
+  directement.
+- `GET /:characterId/exo` — le join `ref_exo_templates` se réduit à `name as template_name` seul
+  (affichage "basé sur X"), les 12 autres colonnes `template_*` disparaissent (l'info vit maintenant
+  nativement sur `exo_sheet`, sous son propre nom de colonne, pas préfixée).
+
+**Disposition UI — tranchée (Saar, 2026-08-20) : copier la fiche RAW.** 19 nouveaux champs éditables
+ne rentrent pas dans l'onglet Identité actuel (Pilote/Modèle/Stats dérivées) — 2 nouvelles sections
+repliables dans `ExoSheetWindow.jsx`, calquées sur les 2 blocs de `FDEA.webp` : **"Attributs de
+l'Armure"** (RD/Blindage/EXF/Vitesse/Malus init — les 4 champs déjà dérivés par `computeExoStats`
+restent en lecture seule à côté de leurs bases éditables, pas fusionnés) et **"Informations sur
+l'Armure"** (Catégorie/NT/Taille/Profondeurs Optimale-Limite-Écrasement/Autonomie/Notes). Pilote/Modèle
+restent dans Identité (inchangé, déjà en place) — ces 2 nouveaux blocs portent uniquement les champs
+copiés depuis le template.
+
+**Détail de champs confirmé contre la fiche Roll20 tierce (captures Saar, 2026-08-20 — inspiration de
+présentation uniquement, cf. avertissement §13)** :
+- **Informations** : Type/Nom, Catégorie, NT, GAB (Taille), Prf. Optimale/Limite/Écrasement, Autonomie,
+  Malus de Saisie, Armure à terre, Notes — **+ un champ non prévu jusqu'ici, `type_batterie`** (texte
+  libre, ex. "Générateur thermoélectrique à radio-isotope") — ajouté à la liste des 19+1 champs
+  copiés/éditables.
+- **Attributs** : RD, type de coque (texte libre, narratif, pas consommé par un calcul — ajouté par
+  cohérence de présentation, comme `type_batterie`), Blindage, Exo-Force, MD (`getModDom`, déjà
+  calculé — affiché à titre indicatif, jamais une seconde autorité), Vitesse, Malus d'initiative.
+- **Non repris tel quel — ambigu, pas une donnée fiable** : la capture affiche 4 sous-valeurs
+  ("Vic/s Eau"/"Vic/s Terre"/"Mi's Eau"/"Mi's Terre") sous RD/Blindage/Volet/Exo-Force dont le sens
+  exact n'est pas clair (probablement un artefact de mise en page de la fiche tierce, pas une donnée
+  RAW distincte — `malus_init_underwater/surface` et `base_speed_underwater/surface` couvrent déjà la
+  distinction milieu/milieu). Pas adopté sans confirmation.
+- **Case "Volet de Sécurité sur Visière"** : ne devient pas une colonne `exo_sheet` — c'est un système
+  du catalogue (`ref_exo_equipment`, "Volet de sécurité", déjà seedé §12.4) que le Lot C représente
+  nativement via une ligne `exo_systems`, pas un booléen redondant sur la fiche de base.
+
+**Hors périmètre explicite** : Systèmes/Armement/Ordinateur (Lot C) — aucune interaction, colonnes
+différentes. Modèles perso Vault (Lot D) — ce Lot B les rend juste inutiles à attendre (§13.1).
+
+**Validation prévue** : migration testée up/down/re-up (patron `schemaAssertions.mjs`) **avec un cas
+dédié au backfill** — créer une ligne `exo_sheet` avec `template_id` assigné avant `up()`, vérifier
+qu'elle ressort avec les 19 champs correctement copiés après (pas seulement un test sur une base
+vierge, qui ne l'aurait jamais exercé) ; `applyExoTemplate` testé isolément (transaction, retour `null`
+sur `templateId` invalide, exclusivité vs. autres champs de la requête) ; non-régression des tests
+existants après refactor de signature (`exoAvarieService.test.mjs`, `combatantContextService.test.mjs`,
+`charStats.test.mjs`, `exoStats` si testé) ; `node --check` sur tous les fichiers touchés, build+lint
+client, scénario réel navigateur par Saar (sélectionner un modèle, vérifier la copie, éditer un champ
+copié à la main, changer de modèle et vérifier l'écrasement complet, dissocier le modèle et vérifier
+que les champs survivent).
+
+### 13.4 Lot C — Systèmes / Armement / Ordinateur — détaillé (2026-08-20)
+
+> **Deux corrections à la synthèse du 2026-08-20 (§13.1), trouvées en vérifiant le code réel du drone
+> avant de rédiger ce détail — pas juste supposées par analogie :**
+> 1. Le drone ne dérive **pas déjà** les stats Ordinateur. `drone_sheet.ordinateur_gen`/`ordinateur_nt`
+>    sont stockés (`71_drone_sheet.js:30-31`), mais rien dans le projet ne calcule Niveau max des
+>    programmes/Gestion systèmes/Potentiel/Coût à partir de ces deux valeurs — `DroneSheet.jsx:388-389`
+>    les affiche tels quels, aucun calcul. Le précédent donne la **forme de stockage**, pas les
+>    formules — celles-ci restent à écrire dans ce Lot.
+> 2. `drone_weapons` n'a **aucune** Intégrité par ligne (vérifié `76c_drone_weapons_schema.js` —
+>    `name`/`damage_formula`/`portee`/`fire_mode`/`notes`, pas de colonne ITG ; le drone ne track
+>    l'Intégrité qu'au niveau du drone entier, `drone_sheet.integrite_*`). La fiche RAW (`FDEA.webp`)
+>    montre pourtant un ITG par ligne de Systèmes/Armement — extension réelle par rapport au patron
+>    drone, pas une simple copie.
+
+#### 13.4.1 Ordinateur
+
+**Formules RAW** (`docs/REGLES/REGLE_ORDINATEUR.md` p.280-281, fournies par Saar) — nouveau fichier
+pur **`shared/computerStats.js`** (même famille que `exoStats.js`/`polarisUtils.js`, jamais un accès
+DB) :
+- `computeOrdinateurStats({ gen, nt })` → `{ niveauMaxProgrammes: gen + 2*nt, gestionSystemes: 10 +
+  gen*nt, potentiel: 10 + (gen*nt)*2, cout: 500*(gen*nt) }`.
+- Intégrité de départ (2D6+3 Gén I-II / 2D6+8 Gén III-VIII / 3D6+7 Gén IX-X) : **un jet**, pas une
+  formule pure — comme toute Intégrité de départ d'équipement (§ Intégrité du matériel, RAW p.273),
+  stockée une fois tirée, jamais recalculée. Pas dans `computeComputerStats`.
+- Coût du Blindage IEM (`(niv×niv)×200`) : fonction séparée, `niv` est un choix (équipement acheté),
+  pas dérivé de `gen`/`nt`.
+
+**Les 5 champs ne sont PAS homogènes — vérifié ligne à ligne contre `SEEDEXO.md` avant de trancher,
+pas deviné (analyse à charge 2026-08-20) : 3 mécanismes différents, pas une seule "copie".**
+
+1. **`ordinateur_gen`/`ordinateur_nt` — copiés depuis le template, comme les stats de base.** La ligne
+   "Ordinateur NT X, Gén. Y" apparaît dans le loadout de la quasi-totalité des 16 armures (vérifié,
+   pas un cas isolé) — c'est une donnée "d'usine" par modèle, même nature que EXF/Blindage.
+   **Conséquence concrète sur le Lot B déjà écrit** : `ref_exo_templates` a besoin de 2 colonnes
+   nouvelles (`ordinateur_gen`/`ordinateur_nt`, absentes aujourd'hui) — ajoutées dans la migration de
+   **ce** Lot C (rien avant C n'en a besoin), mais copiées par l'étape de copie de base
+   d'`applyExoTemplate` (Lot B, §13.3) qu'il faut étendre de 2 champs, **pas** par l'étape "loadout"
+   séparée (§13.4.4) — deux extensions différentes de la même fonction, pas une seule.
+2. **`ordinateur_integrite_max`/`ordinateur_integrite_current` — jamais copiés, un jet.** Le RAW est
+   explicite : l'Intégrité de départ d'un ordinateur dépend d'un jet selon sa génération (2D6+3 Gén
+   I-II / 2D6+8 Gén III-VIII / 3D6+7 Gén IX-X) — chaque exemplaire tire la sienne, une copie depuis le
+   template n'a pas de sens (deux exo du même modèle auraient la même Intégrité par construction, faux
+   RAW). **Troisième étape à ajouter dans `applyExoTemplate`** (après la copie de base, qui vient de
+   fixer `ordinateur_gen` dans la même transaction) : `parseDice` sur la formule correspondant à la
+   génération tout juste copiée, résultat stocké une fois pour toutes (comme toute Intégrité de départ
+   d'équipement, jamais recalculé).
+3. **`ordinateur_blindage_iem` — ni copié, ni tiré, manuel.** Vérifié : "Blindage IEM" n'apparaît que
+   sur 2-3 des 16 loadouts (Heimdall-Pyrelia, Odin, au moins un autre), et **jamais comme une valeur
+   propre à l'ordinateur** — toujours une note collective ("tous ces systèmes ont un Blindage IEM de
+   niv. 3", `SEEDEXO.md:1265,1470`), pas un champ isolable par computeur. Retenu : champ manuel,
+   directement éditable (même liste que les 22 champs du Lot B), jamais peuplé par `applyExoTemplate`
+   — ni copie ni jet ne conviennent à une donnée aussi inconsistante d'une armure à l'autre.
+
+**Colonnes `exo_sheet` (nouvelles)** : `ordinateur_gen` (smallint), `ordinateur_nt` (smallint),
+`ordinateur_blindage_iem` (integer, manuel), `ordinateur_integrite_max`/`ordinateur_integrite_current`
+(integer, tirés). Mirror `drone_sheet` pour les 2 premiers seulement — les 3 autres n'ont aucun
+équivalent côté drone.
+
+**Piste notée, pas engagée maintenant** : `DroneSheet.jsx` a les deux mêmes colonnes brutes
+(`ordinateur_gen`/`nt`) sans jamais afficher les valeurs dérivées — `computeComputerStats` pourrait
+lui bénéficier gratuitement une fois écrite. Hors périmètre de ce chantier exo, à proposer séparément
+si Saar veut l'étendre au drone.
+
+#### 13.4.2 Programmes — mirror exact `drone_programs`
+
+`exo_programs` (nouvelle table) : `id`, `character_id` FK `characters`, `equipment_id` FK
+`ref_equipment` nullable (catalogue `family='Logiciels'`, déjà seedé — **aucune nouvelle donnée**),
+`label_override` text nullable, `category` text (copié depuis `ref_equipment.category` à l'insert,
+même patron que `drone_programs`), `level` integer `checkBetween([0,30])`, `sort_order` smallint.
+Contrainte `equipment_id IS NOT NULL OR label_override IS NOT NULL` — **CHECK en base**, comme
+`chk_dp_source`. Routes `POST/PUT/DELETE /:characterId/exo/programs[/:id]` — mirror exact
+`char-sheet.js:1646-1757` (`droneIsGmOrOwner` → `exoIsGmOrOwnerOrPilot`).
+
+**Discipline retenue pour les 3 nouvelles tables (analyse à charge 2026-08-20)** : le précédent drone
+est lui-même incohérent — `drone_programs` impose "`equipment_id` OU `label_override`" par une
+contrainte CHECK en base (`chk_dp_source`), `drone_weapons` impose le même invariant **seulement
+côté route** (`if (!equipment_id && (!name || !damage_formula))`, aucun CHECK DB — un futur bug de
+route pourrait insérer une ligne invalide sans barrière). Retenu pour `exo_systems`/`exo_weapons`/
+`exo_programs` : **CHECK en base pour les trois**, pas un mirror aveugle de cette incohérence.
+**Permission — vérifiée, pas juste recopiée** : `exoIsGmOrOwnerOrPilot` réutilisée sur les 3 familles
+de routes sans barrière économique (aucun jet d'achat/disponibilité), **cohérent avec le précédent
+drone** (`drone_weapons`/`drone_programs` n'en ont pas non plus) — pas un trou nouveau introduit par
+l'exo, mais nommé explicitement plutôt que hérité en silence (même discipline que la permission
+retenue au Lot A).
+
+#### 13.4.3 Systèmes auxiliaires et Armement — mirror `drone_weapons` + extension Intégrité par ligne
+
+**Portée de ce Lot** : la fiche (liste, édition, catalogue) — **pas** la résolution combat d'une exo
+qui tire (§12.2 point 3, toujours non tranché, pipeline distinct à construire séparément). Une arme
+listée ici est une donnée de fiche, pas encore un système attaquable en combat.
+
+`exo_systems` : `id`, `character_id`, `equipment_id` FK `ref_exo_equipment` nullable
+(`family='systeme'`), `label_override`, `level` integer nullable (RAW : certains systèmes se
+facturent "X/niv." jusqu'à `ref_exo_equipment.max_level` — niveau choisi à l'achat, pas dérivé ;
+`null` pour un système à niveau fixe déjà porté par `name`/`description` du catalogue, §12.1bis point
+5), `integrite_max`/`integrite_current` integer (**nouveau, absent du patron drone** — point 2
+ci-dessus), `sort_order`.
+
+`exo_weapons` : même forme, `equipment_id` FK `ref_exo_equipment` (`family='arme'`), `label_override`,
+`integrite_max`/`integrite_current`, `sort_order`. **Volontairement pas** de `ammo_restant`/
+`contenance_chargeur` (contrairement à `drone_weapons`) — aucun mécanisme de tir/rechargement exo
+n'existe encore (§12.2 point 3) ; ajouter ces colonnes maintenant anticiperait une mécanique de combat
+non conçue. Portée/dégâts/mode de tir restent sur `ref_exo_equipment` (catalogue), pas dupliqués par
+ligne — une arme custom hors catalogue (`equipment_id NULL`) reste possible via `label_override` +
+`description` libre, sans les champs riches (`damage`/`range`/etc.) que seul un `equipment_id`
+valide fournit — cohérent avec le principe "catalogue = donnée structurée, custom = texte libre"
+déjà appliqué à `drone_weapons`.
+
+Même contrainte CHECK `equipment_id IS NOT NULL OR label_override IS NOT NULL` sur les deux tables
+(discipline retenue ci-dessus §13.4.2, pas un mirror de l'incohérence drone). Routes
+`POST/PUT/DELETE /:characterId/exo/systems[/:id]` et `/:characterId/exo/weapons[/:id]` — mirror
+`char-sheet.js:1760-1912` (armes drone), permission `exoIsGmOrOwnerOrPilot` (même vérification qu'au
+§13.4.2 — cohérent avec le précédent drone, pas de barrière économique).
+
+**Hardpoints — pas de contrainte de capacité modélisée.** RAW mentionne les hardpoints comme lieu de
+montage narratif ("armes montées sur les hardpoints", `MANUEL_EXOARMURE.md`), mais aucun nombre de
+slots par template n'apparaît sur la fiche officielle (`FDEA.webp`, bloc "Informations sur l'Armure" —
+pas de champ "nb hardpoints"). Décision : `exo_weapons`/`exo_systems` restent des listes libres, sans
+plafond de capacité — cohérent avec ce que la fiche réelle donne à voir, pas une mécanique RAW
+retirée par oubli.
+
+**Angle mort assumé pour Lot 5 (pas à corriger ici)** : les colonnes jsonb retirées
+(`isolated_systems`/`damaged_systems`) portaient l'intention "un système peut être isolé/en panne
+suite à un incident" (Lot 5c/5d/5e). `integrite_current` sur `exo_systems`/`exo_weapons` couvre la
+perte de points, mais pas forcément un état binaire "isolé du circuit" (RAW p.328, Générateur) —
+probable qu'une colonne `is_isolated`/statut dédiée soit nécessaire quand le Lot 5 sera conçu. Pas
+ajoutée maintenant : sa forme exacte dépend de mécaniques pas encore instruites, ajouter une colonne à
+l'aveugle recréerait le même défaut que les jsonb "posés par anticipation" du Lot 1. Une migration
+future l'ajoutera quand le Lot 5 sera réellement détaillé.
+
+**Migrations pour ce Lot — schéma et seed séparés**, même discipline déjà appliquée à
+`ref_exo_equipment` (251 schéma / 252 modèles / 253 équipement, §12.4) plutôt qu'un seul fichier
+géant : une migration schéma (crée `exo_systems`/`exo_weapons`/`exo_programs`/
+`ref_exo_template_equipment`, ajoute `ordinateur_gen`/`ordinateur_nt` à `ref_exo_templates`, les 5
+colonnes Ordinateur à `exo_sheet`, retire `equipped_systems`/`hardpoints`/`isolated_systems`/
+`damaged_systems`), une migration seed séparée pour les ~200-300 lignes de
+`ref_exo_template_equipment` transcrites (§13.4.4 — volume qui justifie à lui seul la séparation).
+`ref_exo_template_equipment.template_id` : `ON DELETE CASCADE` (une ligne de loadout n'a aucun sens
+sans son template, contrairement à `exo_sheet.template_id` qui reste `SET NULL` — une exo-armure
+existe indépendamment de son modèle d'origine, pas une ligne de loadout catalogue).
+
+**Corrigé — "colonnes mortes, jamais lues par aucun code" était faux, jamais vérifié côté écriture
+(analyse à charge 2026-08-20).** `vaultService.js:51-68` (`cloneExoSheet`, clonage Vault d'une
+exo-armure) écrit explicitement `damaged_systems: '{}'` à chaque clonage — supprimer la colonne sans
+toucher ce fichier casse le tout premier clonage d'exo-armure après déploiement (`column
+damaged_systems does not exist`). **`vaultService.js` rejoint donc la liste des fichiers touchés par
+ce Lot**, trois changements :
+1. Retirer la ligne `damaged_systems: '{}'` de `cloneExoSheet` (colonne supprimée).
+2. **Plus grave, sans rapport avec les jsonb** : `COMPANION_REGISTRY.exo.characterKeyed` (`:118-127`)
+   vaut `[]` aujourd'hui — un garde-fou anti-dérive existant (`assertRegistryUpToDate`,
+   `vaultCloneRegistry.test.mjs`) fait échouer `cloneCharacterDeep` en 500 pour **tout type de
+   personnage** si une table avec FK vers `characters` n'est ni enregistrée ni exclue. Les 3
+   nouvelles tables doivent y être ajoutées (`['exo_systems', 'exo_weapons', 'exo_programs']`),
+   même mécanisme générique déjà éprouvé pour le drone (`:115`,
+   `['drone_sheet', 'drone_programs', 'drone_weapons']`) — sinon ce Lot casse le clonage Vault de
+   n'importe quel personnage à son déploiement, pas seulement d'une exo.
+3. **Cohérence, pas obligation technique** : `cloneExoSheet` remet déjà `itg_structure/exosquelette/
+   generator_current` à leur max au clonage ("un export reste un modèle réutilisable, pas un
+   instantané endommagé") — ajouter le même traitement à `ordinateur_integrite_current` une fois la
+   colonne créée, par cohérence avec la philosophie déjà écrite dans cette fonction.
+
+**Client** : nouvelles sections dans `ExoSheetWindow.jsx` (`systems`/`computer` déjà dans
+`SHEET_SECTIONS`, retirés de la boucle stub comme `avaries` au Lot A) — `ExoSystemsPanel.jsx`,
+`ExoWeaponsPanel.jsx` (ou fusionnés en un seul si la fiche RAW les groupe visuellement — à revoir),
+`ExoComputerPanel.jsx`. Précédent direct `DroneWeaponPanel.jsx` à lire avant de coder (jamais fait à ce
+jour, seulement cité comme référence).
+
+**Hors périmètre explicite** : résolution combat d'une exo-attaquante (§12.2 point 3), formule de
+dégâts à escalade (§12.2 point 1), statut isolé/en panne (ci-dessus, Lot 5). Changer de modèle en plein
+combat (loadout remplacé sous une action en cours) — non concerné aujourd'hui, aucun pipeline combat
+ne lit encore `exo_weapons` (§12.2 point 3 toujours ouvert), mais à surveiller le jour où ce pipeline
+sera construit.
+
+**Validation prévue** : `shared/computerStats.js` testé unitairement contre les exemples chiffrés
+RAW (Gén V/NT III → coût 7500, programmes niv. max 11, 25 systèmes, 40 niveaux de programmes — exemple
+littéral du texte, p.280). Migration testée up/down/re-up. Tests routes (patron `drone_programs`/
+`drone_weapons` existants). `node --check`, build+lint client. Scénario réel navigateur par Saar.
+
+#### 13.4.4 Loadout par défaut — `ref_exo_template_equipment` (tranché par Saar, 2026-08-20)
+
+**Décision** : "armement et armes sont des paramètres d'usine. Modifiable mais pré-made (cf. les
+modèles RAW)" — répond à §12.2 point 2, resté ouvert depuis la première ébauche du catalogue
+(2026-08-19). Même philosophie que le Lot B (§13.3) : le modèle pré-remplit au moment de la sélection,
+l'instance possède ensuite et peut librement diverger — jamais une dépendance live relue en combat.
+
+**Nouvelle table `ref_exo_template_equipment`** (migration de ce Lot, aux côtés de
+`exo_systems`/`exo_weapons`/`exo_programs`) : `id`, `template_id` FK `ref_exo_templates`,
+`family` (CHECK `'arme'|'systeme'`, miroir `ref_exo_equipment`), `equipment_id` FK `ref_exo_equipment`
+nullable, `label_override` text nullable (même CHECK `equipment_id IS NOT NULL OR label_override IS
+NOT NULL` que les 3 tables sœurs, §13.4.2 — **nécessaire ici en particulier** : l'ambiguïté trouvée le
+2026-08-19 sur les analyseurs sonscan de niveau identique, sans discriminant fiable dans le texte
+source, se résout par `label_override` plutôt que par une FK devinée), `level` integer nullable
+(même sémantique "niveau acheté" que `exo_systems.level`), `sort_order`.
+
+**`applyExoTemplate` étendu (§13.3)** : après la copie des champs de base, insère une ligne
+`exo_systems`/`exo_weapons` par ligne `ref_exo_template_equipment` du template sélectionné —
+`integrite_current = integrite_max` (état neuf), niveau copié tel quel. Changer de modèle réapplique
+la même logique d'écrasement complet déjà actée pour les champs de base (§13.3) : les
+`exo_systems`/`exo_weapons` existants de l'instance sont remplacés par le loadout d'usine du nouveau
+modèle, pas fusionnés — cohérence avec la règle déjà posée, pas une règle séparée à inventer pour le
+loadout.
+
+**Reste réellement à faire, taille non négligeable** : transcrire les loadouts complets des 16
+armures depuis `docs/REGLES/SEEDEXO.md` (10 à 25 lignes par armure selon §12.3) — travail de
+transcription explicitement différé en 2026-08-19 ("nécessite sa propre session, pas un enchaînement
+immédiat"), maintenant confirmé nécessaire plutôt qu'optionnel. Pas une seed triviale : chaque ligne
+demande de retrouver la bonne entrée `ref_exo_equipment` (ou de trancher un `label_override` pour les
+cas ambigus type "Analyseur sonscan niv. 12"), sur les ~200-300 lignes cumulées des 16 loadouts —
+session de transcription dédiée à prévoir, pas un sous-produit du reste du Lot C.
+
+**Même migration seed — backfill `ordinateur_gen`/`ordinateur_nt` sur les 16 lignes `ref_exo_templates`
+existantes, pas seulement sur les nouvelles colonnes vides** (2ᵉ tour d'analyse à charge 2026-08-20,
+même famille de bug que le backfill du Lot B, côté catalogue cette fois). Les 16 lignes du catalogue
+existent déjà (migration 252, déjà appliquée) — ajouter les colonnes `ordinateur_gen`/`ordinateur_nt`
+sans les backfiller laisserait ces 16 lignes à `NULL`, et `applyExoTemplate` copierait silencieusement
+`NULL` sur toute nouvelle exo-armure créée depuis n'importe lequel de ces modèles : le bloc Ordinateur
+resterait vide partout, sans erreur ni signal. Pas un crash ni une casse d'une autre fonctionnalité
+(contrairement aux trouvailles Vault du 1er tour) — une dégradation silencieuse à corriger dans la
+même passe de transcription, puisque "Ordinateur NT X, Gén. Y" apparaît déjà dans le texte source de
+chaque armure (§13.4.1 point 1) et n'a pas besoin d'une seconde lecture du fichier.
+
+**Hors périmètre encore** : reste après cette décision, toujours pas tranché — la formule de dégâts à
+escalade (§12.2 point 1) et le pipeline exo-attaquant (§12.2 point 3), aucun lien avec le loadout par
+défaut lui-même.
+
+**Validation prévue (ajout)** : test de la cascade `applyExoTemplate` (sélection d'un modèle avec
+loadout → `exo_systems`/`exo_weapons` peuplés correctement, changement de modèle → ancien loadout
+entièrement remplacé), vérification manuelle d'un échantillon de loadouts transcrits contre
+`SEEDEXO.md` ligne à ligne (pas juste les totaux).
