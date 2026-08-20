@@ -232,8 +232,9 @@ function TokenFallbackBody({ color, isGmLayer, tiltX, tiltZ, sceneOpacity = 1 })
 }
 
 // Token individuel — gère drag, lerp, ring, label.
-// glbUrl : URL complète du GLB à charger (character.glb_url ou default_token_glb_url de campagne), ou null.
-// Si null → TokenFallbackBody (silhouette géométrique). Si défini → TokenGlbBody (modèle 3D).
+// glbUrl : URL complète du GLB à charger (character.glb_url, sinon le repli de campagne pour son
+// type — humanoïde/drone/exo, migration 256), ou null. Si null → TokenFallbackBody (silhouette
+// géométrique). Si défini → TokenGlbBody (modèle 3D).
 function TokenMesh({ token, glbUrl, isSelected, isActive, onDragStart, dragState, isGmLayer, sceneOpacity = 1, statusEffectsMode = 'enforced', isAmbientTargetHover = false }) {
   const color = token.user_color || token.color || '#4A90D9'
   const label = token.label || '?'
@@ -426,6 +427,8 @@ function Scene({
   combatTargetMode,
   onAmbientTokenClick,
   defaultTokenGlbUrl,
+  defaultTokenGlbUrlDrone,
+  defaultTokenGlbUrlExo,
   losMode,
   onLosCancel,
   onLosResult,
@@ -1227,9 +1230,15 @@ function Scene({
         )
       )).map(token => {
         const character = characters.find(c => c.id === token.character_id)
+        // Repli par type (migration 256) — drone/exo ont leur propre modèle de campagne, jamais
+        // celui de l'humanoïde par défaut ; toujours secondé par le repli codé en dur si le
+        // type-spécifique n'est pas non plus défini.
+        const defaultForType = character?.type === 'drone' ? defaultTokenGlbUrlDrone
+          : character?.type === 'exo' ? defaultTokenGlbUrlExo
+          : defaultTokenGlbUrl
         const glbUrl = character?.glb_url
           ? `${import.meta.env.VITE_API_URL}/api/assets/${character.glb_url}`
-          : (defaultTokenGlbUrl || HARDCODED_DEFAULT_TOKEN_URL)
+          : (defaultForType || HARDCODED_DEFAULT_TOKEN_URL)
         return (
           <TokenMesh
             key={token.id}
@@ -1383,7 +1392,7 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm } = useCharacterStore()
@@ -1630,6 +1639,8 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           combatTargetMode={combatTargetMode}
           onAmbientTokenClick={onAmbientTokenClick}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
+          defaultTokenGlbUrlDrone={defaultTokenGlbUrlDrone}
+          defaultTokenGlbUrlExo={defaultTokenGlbUrlExo}
           losMode={losMode}
           onLosCancel={onLosCancel}
           onLosResult={onLosResult}

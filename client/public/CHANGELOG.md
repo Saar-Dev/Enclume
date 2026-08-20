@@ -1,3 +1,10 @@
+## v209 — 2026-08-20 — Options de campagne : token 3D par défaut par type
+
+### Options de campagne
+- [feat] Le MJ peut désormais choisir un modèle 3D de repli distinct pour les drones et les
+  exo-armures sans token assigné, en plus de celui des personnages humanoïdes (Options de
+  campagne → Tokens).
+
 ## v208 — 2026-08-19 — Fix : Allure Maximale accessible même chargé/encombré
 
 ### Combat — Déplacement

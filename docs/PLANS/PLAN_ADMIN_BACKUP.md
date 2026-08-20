@@ -204,6 +204,8 @@ psql -h "$PG_HOST" -U "$PG_USER" -d vtt -tAc "
             SELECT glb_url AS object_key FROM entity_blueprints WHERE glb_url IS NOT NULL AND glb_url != ''
             UNION SELECT cover_url FROM campaigns WHERE cover_url IS NOT NULL AND cover_url != ''
             UNION SELECT default_token_glb_url FROM campaigns WHERE default_token_glb_url IS NOT NULL AND default_token_glb_url != ''
+            UNION SELECT default_token_glb_url_drone FROM campaigns WHERE default_token_glb_url_drone IS NOT NULL AND default_token_glb_url_drone != ''
+            UNION SELECT default_token_glb_url_exo FROM campaigns WHERE default_token_glb_url_exo IS NOT NULL AND default_token_glb_url_exo != ''
             UNION SELECT portrait_url FROM characters WHERE portrait_url IS NOT NULL AND portrait_url != ''
             UNION SELECT url FROM documents WHERE url IS NOT NULL AND url != ''
         ) AS assets

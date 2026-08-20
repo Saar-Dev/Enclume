@@ -204,7 +204,10 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PUT /api/campaigns/:id — modifier une campagne
 router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
-  const { name, status, default_battlemap_id, dice_config, default_token_glb_url, settings } = req.body
+  const {
+    name, status, default_battlemap_id, dice_config, default_token_glb_url,
+    default_token_glb_url_drone, default_token_glb_url_exo, settings,
+  } = req.body
   const updates = {}
   if (name !== undefined) updates.name = name
   if (status !== undefined) updates.status = status
@@ -218,6 +221,14 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
 
   if (default_token_glb_url !== undefined) {
     updates.default_token_glb_url = default_token_glb_url === null ? null : String(default_token_glb_url)
+  }
+  // Repli par type (drone/exo) — migration 256, demande Saar 2026-08-20 : même patron que le repli
+  // humanoïde ci-dessus, jamais une réinitialisation croisée d'un champ par un autre.
+  if (default_token_glb_url_drone !== undefined) {
+    updates.default_token_glb_url_drone = default_token_glb_url_drone === null ? null : String(default_token_glb_url_drone)
+  }
+  if (default_token_glb_url_exo !== undefined) {
+    updates.default_token_glb_url_exo = default_token_glb_url_exo === null ? null : String(default_token_glb_url_exo)
   }
 
   // settings — validation par clé contre SETTINGS_SCHEMA (source unique, partagée avec campaignSettingsService)
@@ -263,7 +274,11 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
   const [campaign] = await db('campaigns')
     .where({ id: req.params.id })
     .update(updates)
-    .returning(['id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config', 'default_token_glb_url', 'settings', 'created_at', 'updated_at'])
+    .returning([
+      'id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config',
+      'default_token_glb_url', 'default_token_glb_url_drone', 'default_token_glb_url_exo',
+      'settings', 'created_at', 'updated_at',
+    ])
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_SETTINGS_UPDATED, { campaign })
   res.json({ campaign })
 })
@@ -659,6 +674,42 @@ router.post('/:id/default-token', requireAuth, requireRole('gm'), multerGlb.sing
 
   res.json({ campaign })
 })
+
+// POST /api/campaigns/:id/default-token-drone — upload GLB token par défaut drone (GM uniquement)
+// POST /api/campaigns/:id/default-token-exo — idem exo-armure
+// Migration 256 (demande Saar 2026-08-20) : même patron que /default-token ci-dessus, un repli par
+// type au lieu d'un seul repli partagé humanoïde/drone/exo. Chemin MinIO/colonne dédiés par type —
+// une entrée par action plutôt qu'une route paramétrée (philosophie déjà retenue côté runtime caching,
+// vite.config.js : chaque route reste indépendante et lisible si une évolue seule plus tard).
+const DEFAULT_TOKEN_BY_TYPE_ROUTES = [
+  { path: 'default-token-drone', objectSuffix: 'default-token-drone', column: 'default_token_glb_url_drone' },
+  { path: 'default-token-exo', objectSuffix: 'default-token-exo', column: 'default_token_glb_url_exo' },
+]
+for (const { path, objectSuffix, column } of DEFAULT_TOKEN_BY_TYPE_ROUTES) {
+  router.post(`/:id/${path}`, requireAuth, requireRole('gm'), multerGlb.single('glb'), async (req, res) => {
+    if (!req.file) throw new AppError(400, 'No file uploaded')
+
+    const objectName = `campaigns/${req.params.id}/${objectSuffix}`
+    const minio = getMinioClient()
+
+    await minio.putObject(
+      BUCKET(),
+      objectName,
+      req.file.buffer,
+      req.file.size,
+      { 'Content-Type': 'model/gltf-binary' }
+    )
+
+    const glbUrl = `${objectName}?v=${Date.now()}`
+
+    const [campaign] = await db('campaigns')
+      .where({ id: req.params.id })
+      .update({ [column]: glbUrl, updated_at: db.fn.now() })
+      .returning(['id', column])
+
+    res.json({ campaign })
+  })
+}
 
 // GET /api/campaigns/:id/members — liste des membres
 router.get('/:id/members', requireAuth, requireRole('gm'), async (req, res) => {

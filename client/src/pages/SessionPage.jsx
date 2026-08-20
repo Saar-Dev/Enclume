@@ -674,6 +674,12 @@ function SessionContent({ campaignId }) {
               defaultTokenGlbUrl={campaign?.default_token_glb_url
                 ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url}`
                 : null}
+              defaultTokenGlbUrlDrone={campaign?.default_token_glb_url_drone
+                ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url_drone}`
+                : null}
+              defaultTokenGlbUrlExo={campaign?.default_token_glb_url_exo
+                ? `${import.meta.env.VITE_API_URL}/api/assets/${campaign.default_token_glb_url_exo}`
+                : null}
               displayLevel={displayLevel}
               statusEffectsMode={statusEffectsMode}
               onCharacterDrop={handleCharacterDrop}

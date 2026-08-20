@@ -36,6 +36,8 @@ export default function CampaignSettingsPage() {
           name: campaign.name,
           dice_config: campaign.dice_config,
           default_token_glb_url: campaign.default_token_glb_url ?? null,
+          default_token_glb_url_drone: campaign.default_token_glb_url_drone ?? null,
+          default_token_glb_url_exo: campaign.default_token_glb_url_exo ?? null,
           settings: { ...(campaign.settings || {}) },
         }
         setFormData(data)
