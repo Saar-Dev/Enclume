@@ -20,6 +20,8 @@ import { WS } from '../../../shared/events.js'
 import api from '../lib/api.js'
 import CollapsibleBlock from './CollapsibleBlock.jsx'
 import ExoIdentityPanel from './ExoIdentityPanel.jsx'
+import ExoAttributesPanel from './ExoAttributesPanel.jsx'
+import ExoInfoPanel from './ExoInfoPanel.jsx'
 import ExoIntegrityPanel from './ExoIntegrityPanel.jsx'
 import ExoAvariesPanel from './ExoAvariesPanel.jsx'
 import ExoSettingsPanel from './ExoSettingsPanel.jsx'
@@ -38,7 +40,7 @@ const INITIAL_POS = {
 // pas un onglet par module. Les sous-blocs de "sheet" (identity/integrity/avaries/systems/computer)
 // sont des sections repliables (SHEET_SECTIONS ci-dessous), pas des onglets.
 const OUTER_TABS = ['sheet', 'settings']
-const SHEET_SECTIONS = ['identity', 'integrity', 'avaries', 'systems', 'computer']
+const SHEET_SECTIONS = ['identity', 'attributes', 'info', 'integrity', 'avaries', 'systems', 'computer']
 
 // ─── Icônes ───────────────────────────────────────────────────────────────────
 const IconX = () => (
@@ -332,6 +334,28 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
                   exo={exo}
                   templates={templates}
                   pilotCandidates={pilotCandidates}
+                  canEdit={canEdit}
+                  onExoUpdate={setExo}
+                />
+              </div>
+            </CollapsibleBlock>
+
+            <CollapsibleBlock id="attributes" title={t('exo.tabAttributes')} open={openSections.attributes} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoAttributesPanel
+                  characterId={character.id}
+                  exo={exo}
+                  canEdit={canEdit}
+                  onExoUpdate={setExo}
+                />
+              </div>
+            </CollapsibleBlock>
+
+            <CollapsibleBlock id="info" title={t('exo.tabInfo')} open={openSections.info} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoInfoPanel
+                  characterId={character.id}
+                  exo={exo}
                   canEdit={canEdit}
                   onExoUpdate={setExo}
                 />

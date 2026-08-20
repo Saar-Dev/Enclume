@@ -10,8 +10,10 @@ const skip = !process.env.DATABASE_URL
 
 // PLAN_EXOARMURE.md §11 — fixture minimale (pas de pilote/char_sheet, applyExoAvarie ne les touche
 // jamais), même patron que createExoFixture (combatantContextService.test.mjs) mais réduit à ce dont
-// ce fichier a besoin. `withTemplate` : nécessaire pour resolveExoDamage (calcExoDegatsNets exige un
-// template assigné, BLD/RD sinon incalculables).
+// ce fichier a besoin. `withTemplate` : nécessaire pour resolveExoDamage (calcExoDegatsNets exige
+// exoSheet.category assigné, BLD/RD sinon incalculables). Lot B (§13.3, 2026-08-20) — les champs de
+// base vivent directement sur exo_sheet (plus un `template` joint) ; `ref_exo_templates` reste créée
+// en plus pour le lien `template_id`, mais n'est plus la source lue par resolveExoDamage.
 async function createExoFixture({ integrityOverrides = {}, withTemplate = false, templateFields = {} } = {}) {
   const [gm] = await db('users')
     .insert({ email: `exo-avarie-${Date.now()}-${Math.random()}@test.local`, password_hash: 'x', username: 'exo-avarie-gm' })
@@ -22,14 +24,11 @@ async function createExoFixture({ integrityOverrides = {}, withTemplate = false,
   const [exoCharacter] = await db('characters')
     .insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Exo test avaries', type: 'exo' })
     .returning('*')
+  const templateData = { category: 'exo-1', environment: 'surface', base_exoforce: 68, base_blindage: 34, ...templateFields }
   let template = null
   if (withTemplate) {
     [template] = await db('ref_exo_templates')
-      .insert({
-        name: 'Modèle test avaries', category: 'exo-1', environment: 'surface',
-        base_exoforce: 68, base_blindage: 34,
-        ...templateFields,
-      })
+      .insert({ name: 'Modèle test avaries', ...templateData })
       .returning('*')
   }
   const [exoSheet] = await db('exo_sheet')
@@ -39,6 +38,7 @@ async function createExoFixture({ integrityOverrides = {}, withTemplate = false,
       itg_structure_current: integrityOverrides.structure ?? 20,
       itg_exosquelette_current: integrityOverrides.exosquelette ?? 20,
       itg_generator_current: integrityOverrides.generator ?? 20,
+      ...(withTemplate ? templateData : {}),
     })
     .returning('*')
   return { gm, campaign, exoCharacter, exoSheet, template }

@@ -182,16 +182,16 @@ export async function removeExoAvarie(io, db, campaignId, { characterId, severit
  * roll/chancesDeReussite, etc. — laissé au caller, même invariant que `resolveDroneIntegrityLoss` qui
  * n'émet que `DRONE_INTEGRITY_UPDATED`, jamais `COMBAT_ATTACK_RESULT` à sa place).
  *
- * Retourne `null` si l'exo n'a pas de template assigné (aucune stat effective calculable,
- * `computeExoStats`/`calcExoDegatsNets`) — sinon `{ bld, rd, degatsNets, severity, destroyed, itgLoss }`
- * (`severity`/`destroyed`/`itgLoss` valent `null`/`false`/`0` si `degatsNets` reste sous le seuil
- * Légère, aucune Avarie à appliquer).
+ * Retourne `null` si l'exo n'a pas de base configurée (`exoSheet.category` NULL, nouvelle sentinelle
+ * Lot B §13.3 — aucune stat effective calculable, `computeExoStats`/`calcExoDegatsNets`) — sinon
+ * `{ bld, rd, degatsNets, severity, destroyed, itgLoss }` (`severity`/`destroyed`/`itgLoss` valent
+ * `null`/`false`/`0` si `degatsNets` reste sous le seuil Légère, aucune Avarie à appliquer).
  */
 export async function resolveExoDamage(io, db, campaignId, { characterId, degautsBruts }) {
-  const { exoSheet, template } = await resolveExoContext(db, { id: characterId })
-  if (!exoSheet || !template) return null
+  const { exoSheet } = await resolveExoContext(db, { id: characterId })
+  if (!exoSheet) return null
 
-  const netResult = calcExoDegatsNets(exoSheet, template, degautsBruts)
+  const netResult = calcExoDegatsNets(exoSheet, degautsBruts)
   if (!netResult) return null
 
   const { bld, rd, degatsNets } = netResult

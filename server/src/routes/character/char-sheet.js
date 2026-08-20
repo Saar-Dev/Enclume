@@ -64,7 +64,10 @@ import { createEmptySheet } from '../../services/charSheetService.js'
 import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
 import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
-import { EXO_AVARIE_SEVERITY_ORDER } from '../../../../shared/exoConstants.js'
+import { applyExoTemplate } from '../../lib/exoTemplateService.js'
+import {
+  EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
+} from '../../../../shared/exoConstants.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
 import { WS } from '../../../../shared/events.js'
@@ -1931,32 +1934,16 @@ async function exoIsGmOrOwnerOrPilot(req, _exoSheet) {
   return isExoActorAuthorized(db, req.character, { isGm: req.isGm, userId: req.user.id })
 }
 
-// GET /:characterId/exo — fiche + jointure ref_exo_templates
+// GET /:characterId/exo — fiche + nom du modèle d'origine (affichage seul, ex. "pré-rempli depuis :
+// Armure Mentor"). Lot B (§13.3, 2026-08-20) : plus de JOIN complet vers ref_exo_templates — les 19
+// champs de base vivent nativement sur exo_sheet.*, `template_id` n'est plus qu'une référence
+// d'origine.
 router.get('/:characterId/exo', async (req, res, next) => {
   try {
     const exo = await db('exo_sheet')
       .where({ 'exo_sheet.character_id': req.params.characterId })
       .leftJoin('ref_exo_templates', 'exo_sheet.template_id', 'ref_exo_templates.id')
-      .select(
-        'exo_sheet.*',
-        'ref_exo_templates.name as template_name',
-        'ref_exo_templates.category as template_category',
-        'ref_exo_templates.environment as template_environment',
-        'ref_exo_templates.base_exoforce as template_base_exoforce',
-        'ref_exo_templates.base_speed_underwater as template_base_speed_underwater',
-        'ref_exo_templates.base_speed_surface as template_base_speed_surface',
-        'ref_exo_templates.underwater_movement_mode as template_underwater_movement_mode',
-        'ref_exo_templates.surface_movement_mode as template_surface_movement_mode',
-        'ref_exo_templates.speeds_extra as template_speeds_extra',
-        'ref_exo_templates.base_blindage as template_base_blindage',
-        'ref_exo_templates.malus_init_underwater as template_malus_init_underwater',
-        'ref_exo_templates.malus_init_surface as template_malus_init_surface',
-        'ref_exo_templates.manufacturer as template_manufacturer',
-        'ref_exo_templates.price as template_price',
-        'ref_exo_templates.rarity as template_rarity',
-        'ref_exo_templates.tech_level as template_tech_level',
-        'ref_exo_templates.autonomy as template_autonomy',
-      )
+      .select('exo_sheet.*', 'ref_exo_templates.name as template_name')
       .first()
     if (!exo) return res.json({ exo: null })
 
@@ -1964,7 +1951,21 @@ router.get('/:characterId/exo', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// PUT /:characterId/exo — fiche descriptive (pilot_character_id, template_id)
+// Champs de base éditables directement (Lot B, §13.3) — mêmes 19 champs que ceux copiés par
+// applyExoTemplate + 3 nouveaux narratifs (taille/type_batterie/type_coque, sans équivalent côté
+// ref_exo_templates). Séparée de COPIED_FROM_TEMPLATE_COLUMNS (exoTemplateService.js/migration 254) :
+// cette liste-ci est "ce qu'un humain peut éditer à la main sur cette route", pas "ce qu'un modèle
+// copie" — les deux listes se recouvrent aujourd'hui mais n'ont pas la même raison d'exister.
+const EXO_BASE_WHITELIST_FIELDS = [
+  'category', 'environment', 'depth_operational', 'depth_limit', 'depth_crush',
+  'base_exoforce', 'base_blindage', 'base_speed_underwater', 'base_speed_surface',
+  'underwater_movement_mode', 'surface_movement_mode', 'speeds_extra',
+  'malus_init_underwater', 'malus_init_surface',
+  'manufacturer', 'price', 'rarity', 'tech_level', 'autonomy',
+  'taille', 'type_batterie', 'type_coque', 'notes',
+]
+
+// PUT /:characterId/exo — fiche descriptive (pilot_character_id, template_id) + base éditable (Lot B)
 router.put('/:characterId/exo', async (req, res, next) => {
   try {
     const exoSheet = await db('exo_sheet').where({ character_id: req.params.characterId }).first()
@@ -1972,6 +1973,22 @@ router.put('/:characterId/exo', async (req, res, next) => {
     if (!await exoIsGmOrOwnerOrPilot(req, exoSheet)) throw new AppError(403, 'GM, owner or pilot required')
 
     const { pilot_character_id, template_id } = req.body
+
+    // Sélection de modèle — exclusivité stricte (analyse à charge 2026-08-20) : template_id non-null
+    // combiné à un autre champ dans la même requête est un 400 explicite, jamais un silence qui
+    // ignorerait les autres champs (le client actuel n'envoie de toute façon jamais les deux
+    // ensemble). template_id: null (dissociation) reste un champ ordinaire du patch générique
+    // ci-dessous — ne réinitialise jamais les champs déjà copiés (§13.3, décision actée).
+    if (template_id !== undefined && template_id !== null) {
+      const otherFieldsProvided = Object.keys(req.body).some(k => k !== 'template_id')
+      if (otherFieldsProvided) {
+        throw new AppError(400, 'template_id must be sent alone — no other field in the same request')
+      }
+      const exo = await applyExoTemplate(db, req.params.characterId, template_id)
+      if (!exo) throw new AppError(404, 'Template not found')
+      return res.json({ exo })
+    }
+
     const updates = {}
 
     if (pilot_character_id !== undefined) {
@@ -1986,7 +2003,31 @@ router.put('/:characterId/exo', async (req, res, next) => {
       }
       updates.pilot_character_id = pilot_character_id
     }
-    if (template_id !== undefined) updates.template_id = template_id
+    if (template_id !== undefined) updates.template_id = null  // dissociation, cf. garde ci-dessus
+
+    for (const field of EXO_BASE_WHITELIST_FIELDS) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field]
+    }
+
+    // Validation tout-ou-rien des 4 champs contraints par CHECK (mêmes listes blanches que la
+    // migration 254) — avant le moindre UPDATE, jamais une application partielle des champs valides
+    // pendant qu'un champ invalide est rejeté séparément (même discipline que `severity` au Lot A).
+    if ('category' in updates && !EXO_CATEGORY_ORDER.includes(updates.category)) {
+      throw new AppError(400, 'Invalid category')
+    }
+    if ('environment' in updates && !EXO_ENVIRONMENT_VALUES.includes(updates.environment)) {
+      throw new AppError(400, 'Invalid environment')
+    }
+    if ('underwater_movement_mode' in updates && !EXO_MOVEMENT_MODE_VALUES.includes(updates.underwater_movement_mode)) {
+      throw new AppError(400, 'Invalid underwater_movement_mode')
+    }
+    if ('surface_movement_mode' in updates && !EXO_MOVEMENT_MODE_VALUES.includes(updates.surface_movement_mode)) {
+      throw new AppError(400, 'Invalid surface_movement_mode')
+    }
+    // jsonb round-trippé depuis un body JSON déjà désérialisé — même sérialisation explicite que
+    // exoTemplateService.js (sinon le driver pg écrit un littéral tableau Postgres, pas du JSON).
+    if ('speeds_extra' in updates) updates.speeds_extra = JSON.stringify(updates.speeds_extra)
+
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
 
     let exo

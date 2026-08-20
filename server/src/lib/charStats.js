@@ -84,10 +84,11 @@ export function calcDroneDegatsNets(droneSheet, degautsBruts) {
 // EXO_RD_TABLE a été transcrit directement depuis la même philosophie de signe que la table humaine
 // (exoConstants.js, commentaire d'origine), pas construit comme une formule dérivée de l'Intégrité
 // comme celle du drone.
-// Retourne null si aucun template n'est assigné — même garde que computeExoStats, jamais un NaN
-// silencieux (exoStats.js:59-61).
-export function calcExoDegatsNets(exoSheet, template, degautsBruts) {
-  const stats = computeExoStats(exoSheet, template)
+// Retourne null si exoSheet.category est NULL ("armure non configurée", PLAN_EXOARMURE.md §13.3
+// Lot B) — même garde que computeExoStats, jamais un NaN silencieux (exoStats.js:59-61). Plus de
+// paramètre `template` séparé depuis ce Lot B : exoSheet porte désormais sa propre base éditable.
+export function calcExoDegatsNets(exoSheet, degautsBruts) {
+  const stats = computeExoStats(exoSheet)
   if (!stats) return null
   return { bld: stats.bld, rd: stats.rd, degatsNets: Math.max(0, degautsBruts - stats.bld + stats.rd) }
 }

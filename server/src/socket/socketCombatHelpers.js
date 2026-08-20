@@ -2264,17 +2264,17 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
   const tokenId = action.token_id
   const targetPosition = action.modifiers?.targetPosition
 
-  // Garde défensive — pas un cas normal (la déclaration exigeait déjà un pilote/template valides
-  // pour que l'exo soit en combat), mais pilote/template peuvent changer entre Annonce et Résolution
+  // Garde défensive — pas un cas normal (la déclaration exigeait déjà un pilote/base configurée
+  // pour que l'exo soit en combat), mais pilote/exoSheet peuvent changer entre Annonce et Résolution
   // (PUT /:characterId/exo reste ouvert pendant un combat). Repli gracieux, jamais un crash silencieux.
-  const { pilot, exoSheet, template } = await resolveExoContext(db, exoCharacter)
+  const { pilot, exoSheet } = await resolveExoContext(db, exoCharacter)
   if (!pilot) {
     emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
       username: exoCharacter.name, message: 'Tentative de se relever annulée — aucun pilote assigné.',
     } })
     return { suspend: false, emissions }
   }
-  const exoStats = computeExoStats(exoSheet, template)
+  const exoStats = computeExoStats(exoSheet)
   if (!exoStats) {
     emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
       username: exoCharacter.name, message: 'Tentative de se relever annulée — armure non configurée (aucun modèle assigné).',
@@ -2286,11 +2286,11 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
   // suspens) — laissé remonter volontairement : le try/catch englobant de socketCombatResolution.js
   // (même bloc que melee/assault) l'intercepte déjà proprement (message explicite, échelle non
   // bloquée), vérifié en analyse à charge PLAN_EXOARMURE.md §9.2, pas dupliqué ici.
-  const maneuverSkillId = resolveManeuverSkillId(template)
-  if (!(template.category in EXO_PRONE_RECOVERY_TABLE)) {
-    throw new Error(`resolveExoStandUpAction : catégorie exo inconnue de EXO_PRONE_RECOVERY_TABLE : ${template.category}`)
+  const maneuverSkillId = resolveManeuverSkillId(exoSheet)
+  if (!(exoSheet.category in EXO_PRONE_RECOVERY_TABLE)) {
+    throw new Error(`resolveExoStandUpAction : catégorie exo inconnue de EXO_PRONE_RECOVERY_TABLE : ${exoSheet.category}`)
   }
-  const categoryMod = EXO_PRONE_RECOVERY_TABLE[template.category]
+  const categoryMod = EXO_PRONE_RECOVERY_TABLE[exoSheet.category]
 
   const ctx = await resolveHumanoidTestContext(db, pilot, maneuverSkillId, { forNAOverride: exoStats.exf })
 
@@ -2301,7 +2301,7 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
   const outcome0 = computeAttackRoll({
     skillLabel: "Manœuvre d'armure", skillTotal: ctx.skillTotal, totalLabel: 'Seuil', rollAttaque: roll,
     contributions: [
-      { label: `Catégorie ${template.category}`, value: categoryMod, type: categoryMod >= 0 ? 'bonus' : 'malus' },
+      { label: `Catégorie ${exoSheet.category}`, value: categoryMod, type: categoryMod >= 0 ? 'bonus' : 'malus' },
     ],
   })
   const outcomeCrit = applyCriticalSuccessBonus(outcome0, getCriticalSuccessBonus({ masteryLevel: ctx.mastery }))

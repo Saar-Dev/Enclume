@@ -121,18 +121,19 @@ async function resolvePilot(db, exoCharacter) {
 
 // PLAN_EXOARMURE.md Lot 2bis §9.3 (analyse à charge 2026-08-18, optimisation retenue) — extrait de
 // resolveExoTestContext ci-dessous, qui faisait ce même fetch pilote+template inline. Un second
-// appelant (resolveExoStandUpAction, Lot 2bis) a besoin des mêmes trois valeurs — `template` pour
-// resolveManeuverSkillId, `pilot`/`exoStats` pour le Seuil du Test — sans repasser par
-// resolveExoTestContext qui referait le même aller-retour DB une seconde fois (Règle 2 documentaire :
-// une seule autorité pour « comment retrouver le pilote/template d'un exo »). `pilot`/`template`
-// restent `null` si respectivement aucun pilote/aucun template n'est assigné (états valides,
-// PLAN_EXOARMURE.md Lot 1 §6.5) — jamais un throw ici, la garde revient à chaque appelant.
+// appelant (resolveExoStandUpAction, Lot 2bis) a besoin des mêmes valeurs — `exoSheet` pour
+// resolveManeuverSkillId, `pilot`/`exoStats` pour le Seuil du Test.
+// Lot B (§13.3, 2026-08-20) — le JOIN vers `ref_exo_templates` disparaît : `exoSheet` porte désormais
+// sa propre base éditable (category/base_exoforce/base_blindage/malus_init_*/...), copiée une fois
+// par `applyExoTemplate` au moment de la sélection du modèle. `template_id` reste sur `exo_sheet`
+// comme simple référence d'origine, plus une dépendance de calcul — un appelant qui a encore besoin
+// du nom du modèle pour affichage (ex. "pré-rempli depuis : Armure Mentor") fait son propre fetch
+// séparé, jamais réintroduit ici (fonction partagée par tous les sites de combat, chemin chaud).
+// `pilot` reste `null` si aucun pilote n'est assigné (état valide, PLAN_EXOARMURE.md Lot 1 §6.5) —
+// jamais un throw ici, la garde revient à chaque appelant.
 export async function resolveExoContext(db, exoCharacter) {
   const { pilot, exoSheet } = await resolvePilot(db, exoCharacter)
-  const template = exoSheet?.template_id
-    ? await db('ref_exo_templates').where({ id: exoSheet.template_id }).first()
-    : null
-  return { pilot, exoSheet, template }
+  return { pilot, exoSheet }
 }
 
 // Manœuvre d'armure — 4 spécialités RAW (REGLEARMURE.md p.325, texte complet PLAN_EXOARMURE.md §7.2),
@@ -164,22 +165,24 @@ const EXO_MANEUVER_SKILL_BY_ENVIRONMENT = {
 // Exportée (PLAN_EXOARMURE.md Lot 2bis §9.3, analyse à charge 2026-08-18) — resolveExoStandUpAction
 // (socketCombatHelpers.js) en a besoin directement pour calculer le Seuil du Test de Manœuvre
 // d'armure lui-même, pas seulement pour plafonner une autre Compétence (meleeSkillCap ci-dessous).
-export function resolveManeuverSkillId(template) {
-  if (template.environment === 'industrial') {
+// Lit `exoSheet.environment`/`exoSheet.surface_movement_mode` depuis le Lot B (§13.3, 2026-08-20) —
+// plus un `template` séparé, ces champs vivent directement sur exo_sheet.
+export function resolveManeuverSkillId(exoSheet) {
+  if (exoSheet.environment === 'industrial') {
     throw new Error(
-      "ref_exo_templates.environment='industrial' n'a pas de spécialité Manœuvre d'armure RAW " +
-      "définie (décision Saar 2026-08-15 : en suspens) — trancher le mapping avant d'utiliser ce " +
-      'template dans un Test de combat au contact.'
+      "exo_sheet.environment='industrial' n'a pas de spécialité Manœuvre d'armure RAW définie " +
+      "(décision Saar 2026-08-15 : en suspens) — trancher le mapping avant d'utiliser cette armure " +
+      'dans un Test de combat au contact.'
     )
   }
-  if (template.environment === 'hybrid') {
-    return template.surface_movement_mode === 'blocked'
+  if (exoSheet.environment === 'hybrid') {
+    return exoSheet.surface_movement_mode === 'blocked'
       ? EXO_MANEUVER_SKILL_BY_ENVIRONMENT.submarine
       : EXO_MANEUVER_SKILL_BY_ENVIRONMENT.surface
   }
-  const skillId = EXO_MANEUVER_SKILL_BY_ENVIRONMENT[template.environment]
+  const skillId = EXO_MANEUVER_SKILL_BY_ENVIRONMENT[exoSheet.environment]
   if (!skillId) {
-    throw new Error(`ref_exo_templates.environment='${template.environment}' non géré par resolveManeuverSkillId`)
+    throw new Error(`exo_sheet.environment='${exoSheet.environment}' non géré par resolveManeuverSkillId`)
   }
   return skillId
 }
@@ -191,22 +194,23 @@ export function resolveManeuverSkillId(template) {
 // limitées." — jamais activé pour un tireur ni pour les sites Acrobatie/Équilibre (v2, hors périmètre
 // de ce Lot 2).
 async function resolveExoTestContext(db, exoCharacter, skillId, { meleeSkillCap } = {}) {
-  // Fetch unique pilote+exoSheet+template (resolveExoContext ci-dessus, Lot 2bis §9.3) — le join
-  // exo_sheet → ref_exo_templates reste à la charge de l'appelant final (contrat fixé
-  // PLAN_EXOARMURE.md §7.1 point 1), simplement mutualisé ici entre les deux consommateurs.
-  const { pilot, exoSheet, template } = await resolveExoContext(db, exoCharacter)
+  // Fetch unique pilote+exoSheet (resolveExoContext ci-dessus, Lot 2bis §9.3). Depuis le Lot B
+  // (§13.3), exoSheet porte déjà sa propre base éditable — plus de JOIN ref_exo_templates à charge
+  // de l'appelant.
+  const { pilot, exoSheet } = await resolveExoContext(db, exoCharacter)
   if (!pilot) return null
 
-  // computeExoStats (shared/exoStats.js) est synchrone et pure. `null` si aucun template n'est
-  // assigné ("armure non configurée", MANUEL_EXOARMURE.md/PLAN_EXOARMURE.md §6.5) — dans ce cas
-  // aucun Test n'est possible : ne jamais laisser passer les stats du pilote sans l'override EXF, ce
-  // serait une violation silencieuse de la substitution FOR→EXF (§7.1 point 3, "jamais un
-  // NaN/undefined silencieux").
-  const exoStats = computeExoStats(exoSheet, template)
+  // computeExoStats (shared/exoStats.js) est synchrone et pure. `null` si exoSheet.category est NULL
+  // ("armure non configurée", nouvelle sentinelle Lot B, remplace l'ancien template_id IS NULL du Lot
+  // 1 §6.5) — dans ce cas aucun Test n'est possible : ne jamais laisser passer les stats du pilote
+  // sans l'override EXF, ce serait une violation silencieuse de la substitution FOR→EXF (§7.1 point
+  // 3, "jamais un NaN/undefined silencieux").
+  const exoStats = computeExoStats(exoSheet)
   if (!exoStats) return null
 
-  // template est garanti non-null ici (computeExoStats retourne null sans template, ci-dessus).
-  const limitingSkillId = meleeSkillCap ? resolveManeuverSkillId(template) : undefined
+  // exoSheet.category (donc les champs de base) est garanti non-null ici (computeExoStats retourne
+  // null sinon, ci-dessus).
+  const limitingSkillId = meleeSkillCap ? resolveManeuverSkillId(exoSheet) : undefined
 
   // forNAOverride propage l'EXF à for_na/modDom/l'encombrement de effectiveMalus, calculés depuis le
   // départ avec l'EXF plutôt que rafistolés après coup (un `modDom`/`effectiveMalus` déjà calculés

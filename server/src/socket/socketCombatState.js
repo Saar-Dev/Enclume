@@ -75,15 +75,15 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
           if (character?.type === 'exo') {
             // PLAN_EXOARMURE.md Lot 3 §10.2 — miroir du cas drone ci-dessus : l'exo n'a pas de
             // char_sheet, ses stats de combat viennent du pilote. resolveExoContext (Lot 2bis) : un
-            // seul fetch pilote+template, pas de pilote/template assigné → base_ini reste à son
-            // défaut 0 (repli neutre, même esprit que "char_sheet introuvable" ci-dessous pour un
-            // humain — jamais un crash).
-            const { pilot, template } = await resolveExoContext(db, character)
+            // seul fetch pilote+exoSheet, pas de pilote/base configurée (exoSheet.category NULL,
+            // sentinelle Lot B §13.3) → base_ini reste à son défaut 0 (repli neutre, même esprit que
+            // "char_sheet introuvable" ci-dessous pour un humain — jamais un crash).
+            const { pilot, exoSheet } = await resolveExoContext(db, character)
             let is_pnj = false
-            if (pilot && template) {
+            if (pilot && exoSheet?.category) {
               const pilotSheet = await db('char_sheet').where({ character_id: pilot.id }).first()
               if (pilotSheet) {
-                const maneuverSkillId = resolveManeuverSkillId(template)
+                const maneuverSkillId = resolveManeuverSkillId(exoSheet)
                 const [attrs, archetype, advantages, mutationEffects, maneuverCharSkill, maneuverRefSkill] = await Promise.all([
                   db('char_attributes').where({ char_sheet_id: pilotSheet.id }),
                   db('char_archetype').where({ char_sheet_id: pilotSheet.id }).first(),
@@ -105,9 +105,9 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
                 // d'immersion temps réel, même limite que resolveManeuverSkillId/getExoMovementBudget) :
                 // 'submarine' suppose toujours "hors milieu" (surface par défaut) ; les autres
                 // environnements supposent toujours "dans leur milieu", jamais doublés.
-                const iniMalus = template.environment === 'submarine'
-                  ? template.malus_init_underwater * 2
-                  : template.malus_init_surface
+                const iniMalus = exoSheet.environment === 'submarine'
+                  ? exoSheet.malus_init_underwater * 2
+                  : exoSheet.malus_init_surface
                 base_ini = Math.min(reaction, maneuverSkillTotal) - iniMalus
                 is_pnj = pilot.type === 'pnj'
               }

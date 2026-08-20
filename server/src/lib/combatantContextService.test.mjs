@@ -58,14 +58,16 @@ async function createExoFixture({ withPilot = true, withTemplate = true, pilotAt
   const [exoCharacter] = await db('characters')
     .insert({ campaign_id: pilotFx.campaign.id, user_id: exoOwnerId ?? pilotFx.gm.id, name: 'Exo test', type: 'exo' })
     .returning('*')
+  // Lot B (PLAN_EXOARMURE.md §13.3, 2026-08-20) — exo_sheet porte désormais sa propre base éditable
+  // (copiée depuis le template par applyExoTemplate en usage réel) : cette fixture simule cette copie
+  // directement à l'insertion, `ref_exo_templates` reste créée en plus pour le lien `template_id`
+  // (encore lu par certains tests via `fx.template`) mais n'est plus la source lue par
+  // computeExoStats/resolveManeuverSkillId.
+  const templateData = { category: 'exo-1', environment: 'surface', base_exoforce: 68, base_blindage: 34, ...templateFields }
   let template = null
   if (withTemplate) {
     [template] = await db('ref_exo_templates')
-      .insert({
-        name: 'Modèle test', category: 'exo-1', environment: 'surface',
-        base_exoforce: 68, base_blindage: 34,
-        ...templateFields,
-      })
+      .insert({ name: 'Modèle test', ...templateData })
       .returning('*')
   }
   const [exoSheet] = await db('exo_sheet')
@@ -76,6 +78,7 @@ async function createExoFixture({ withPilot = true, withTemplate = true, pilotAt
       itg_structure_current: integrityOverrides.structure ?? 20,
       itg_exosquelette_current: integrityOverrides.exosquelette ?? 20,
       itg_generator_current: integrityOverrides.generator ?? 20,
+      ...(withTemplate ? templateData : {}),
     })
     .returning('*')
   return { ...pilotFx, exoCharacter, exoSheet, template }
@@ -428,35 +431,36 @@ test('resolveCombatantTestContext — meleeSkillCap: environment=industrial reje
 // le fetch pilote+template. Ces tests vérifient la fonction isolément ET la non-régression de
 // resolveExoTestContext après le refactor (déjà couverte au-dessus par les tests
 // resolveCombatantTestContext existants, tous verts après le refactor — pas répétée ici).
-test('resolveExoContext — exo avec pilote+template : les trois valeurs résolues correctement', { skip }, async () => {
+test('resolveExoContext — exo avec pilote+template : pilot/exoSheet résolus correctement (Lot B : plus de template joint, exoSheet porte déjà category/base_exoforce)', { skip }, async () => {
   const fx = await createExoFixture()
   try {
-    const { pilot, exoSheet, template } = await resolveExoContext(db, fx.exoCharacter)
+    const { pilot, exoSheet } = await resolveExoContext(db, fx.exoCharacter)
     assert.equal(pilot.id, fx.character.id)
     assert.equal(exoSheet.character_id, fx.exoCharacter.id)
-    assert.equal(template.id, fx.template.id)
+    assert.equal(exoSheet.category, fx.template.category)
+    assert.equal(exoSheet.base_exoforce, fx.template.base_exoforce)
   } finally {
     await cleanupExo(fx)
   }
 })
 
-test('resolveExoContext — exo sans pilote assigné : pilot null, template quand même résolu (indépendant du pilote)', { skip }, async () => {
+test('resolveExoContext — exo sans pilote assigné : pilot null, exoSheet quand même résolu (indépendant du pilote)', { skip }, async () => {
   const fx = await createExoFixture({ withPilot: false })
   try {
-    const { pilot, template } = await resolveExoContext(db, fx.exoCharacter)
+    const { pilot, exoSheet } = await resolveExoContext(db, fx.exoCharacter)
     assert.equal(pilot, null)
-    assert.equal(template.id, fx.template.id)
+    assert.equal(exoSheet.category, fx.template.category)
   } finally {
     await cleanupExo(fx)
   }
 })
 
-test('resolveExoContext — exo sans template assigné ("non configurée") : template null, pilot quand même résolu', { skip }, async () => {
+test('resolveExoContext — exo sans template assigné ("non configurée") : exoSheet.category null, pilot quand même résolu', { skip }, async () => {
   const fx = await createExoFixture({ withTemplate: false })
   try {
-    const { pilot, template } = await resolveExoContext(db, fx.exoCharacter)
+    const { pilot, exoSheet } = await resolveExoContext(db, fx.exoCharacter)
     assert.equal(pilot.id, fx.character.id)
-    assert.equal(template, null)
+    assert.equal(exoSheet.category, null)
   } finally {
     await cleanupExo(fx)
   }

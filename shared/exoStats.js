@@ -52,27 +52,27 @@ function generatorExfFactor(itg) {
  * autorité sur la même donnée.
  *
  * @param {object} exoSheet — ligne exo_sheet (itg_structure_current, itg_exosquelette_current,
- *   itg_generator_current)
- * @param {object|null} template — ligne ref_exo_templates jointe (category, base_exoforce,
- *   base_blindage) ; null/absent si exoSheet.template_id est NULL ("armure non configurée",
- *   PLAN_EXOARMURE.md Lot 1 §6.5)
- * @returns {{exf: number, bld: number, rd: number}|null} null si aucun template n'est assigné —
+ *   itg_generator_current, category, base_exoforce, base_blindage — ces 3 derniers copiés depuis
+ *   le modèle choisi par applyExoTemplate, PLAN_EXOARMURE.md §13.3 Lot B ; plus de second paramètre
+ *   `template`, `exo_sheet` porte désormais sa propre base éditable, autorité unique)
+ * @returns {{exf: number, bld: number, rd: number}|null} null si `category` est NULL ("armure non
+ *   configurée", nouvelle sentinelle Lot B — remplace l'ancien `template_id IS NULL` du Lot 1 §6.5) —
  *   aucune stat effective n'est calculable (jamais un NaN/undefined silencieux)
  */
-export function computeExoStats(exoSheet, template) {
-  if (!template) return null
+export function computeExoStats(exoSheet) {
+  if (exoSheet.category == null) return null
 
   const exoFactor = integrityFactor(exoSheet.itg_exosquelette_current)
   const genFactor = generatorExfFactor(exoSheet.itg_generator_current)
-  const exf = Math.floor((template.base_exoforce ?? 0) * exoFactor * genFactor)
+  const exf = Math.floor((exoSheet.base_exoforce ?? 0) * exoFactor * genFactor)
 
   const structureFactor = integrityFactor(exoSheet.itg_structure_current)
-  const bld = Math.floor((template.base_blindage ?? 0) * structureFactor)
+  const bld = Math.floor((exoSheet.base_blindage ?? 0) * structureFactor)
 
-  if (!(template.category in EXO_RD_TABLE)) {
-    throw new Error(`computeExoStats: catégorie exo inconnue de EXO_RD_TABLE : ${template.category}`)
+  if (!(exoSheet.category in EXO_RD_TABLE)) {
+    throw new Error(`computeExoStats: catégorie exo inconnue de EXO_RD_TABLE : ${exoSheet.category}`)
   }
-  const rd = EXO_RD_TABLE[template.category]
+  const rd = EXO_RD_TABLE[exoSheet.category]
 
   return { exf, bld, rd }
 }

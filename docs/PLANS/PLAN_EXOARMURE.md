@@ -1831,6 +1831,55 @@ existants), lint + build client, scénario réel navigateur par Saar (poser/reti
 main, déclencher une Avarie réelle en combat et vérifier le rafraîchissement live pendant que la
 fenêtre reste ouverte, vérifier que l'onglet Identité survit à un `EXO_AVARIE_UPDATED`).
 
+### 13.3 Lot B — Base éditable (refactor) — ✅ codé (2026-08-20)
+
+**Clôture** : codé intégralement selon le détail ci-dessous. Deux trouvailles corrigées avant tout
+appelant réel : (1) `template.speeds_extra` revient de Postgres déjà désérialisé (jsonb → tableau JS)
+par le `SELECT` — le réinjecter tel quel dans l'`UPDATE` (`applyExoTemplate` et la route `PUT
+/:characterId/exo`) faisait planter Postgres ("invalid input syntax for type json", le driver
+sérialise un tableau JS en littéral Postgres, pas en JSON) — corrigé par un `JSON.stringify()`
+explicite avant écriture, même ré-encodage que le seed 252 ; (2) en comparant la disposition retenue à
+la fiche RAW réelle (`docs/REGLES/FDEA.webp`, relue directement, pas seulement décrite) plutôt qu'à la
+seule capture Roll20 tierce, 3 champs RAW étaient absents du plan initial — Malus de Saisie/Armure à
+terre (dérivés, `EXO_GRAPPLE_MALUS_TABLE`/`EXO_PRONE_RECOVERY_TABLE`, déjà dans `shared/exoConstants.js`,
+aucune colonne) et Notes (texte libre, nouvelle colonne) — les 3 ajoutés après confirmation explicite
+de Saar (migration 255 pour `notes`).
+
+**Testé** : `node --check` sur tous les fichiers serveur touchés. 78/78 tests serveur contre
+PostgreSQL réel (migrations 233/243/254/255, `combatantContextService.test.mjs` 33/33 non-régression
++ fixtures réécrites, `exoAvarieService.test.mjs` 21/21 non-régression, nouveau
+`exoTemplateService.test.mjs` 6/6, `movementBudgetService.test.mjs` 2/2 non-régression) +
+`charStats.test.mjs` 3/3 + `shared/exoStats.test.mjs` 18/18 réécrit (signature à un seul paramètre).
+Build client complet réussi, lint client propre sur les fichiers touchés (1 avertissement
+`react-hooks/set-state-in-effect` pré-existant sur `ExoSheetWindow.jsx`, confirmé hors diff de ce Lot,
+même trouvaille que le Lot A).
+
+**Non testé** : scénario réel navigateur (sélectionner un modèle, vérifier la copie des 19+3+1 champs,
+éditer un champ copié à la main, changer de modèle et vérifier l'écrasement complet, dissocier le
+modèle et vérifier que les champs personnalisés survivent, combat réel avec Initiative/dégâts/Manœuvre
+d'armure sur une exo utilisant la nouvelle base) — à la charge de Saar.
+
+**Données** : migrations 254 (22 colonnes + 4 CHECK + backfill — vérifié par un test dédié sur une
+ligne `exo_sheet` avec `template_id` déjà assigné avant `up()`) et 255 (`notes`), toutes deux déjà
+appliquées automatiquement par le watcher nodemon en développement.
+
+**Retour arrière** : `knex migrate:down` x2 (255 puis 254) restaure le schéma d'avant ce Lot ; sinon
+revert des fichiers listés ci-dessous.
+
+**Fichiers touchés** : `server/src/db/migrations/254_exo_sheet_base_stats.js`+test (nouveau),
+`server/src/db/migrations/255_exo_sheet_notes.js`+test (nouveau), `server/src/lib/exoTemplateService.js`
+(nouveau, `applyExoTemplate`)+test, `shared/exoStats.js` (signature 1 paramètre)+test,
+`server/src/lib/charStats.js` (`calcExoDegatsNets`), `server/src/lib/combatantContextService.js`
+(`resolveExoContext`/`resolveManeuverSkillId`)+test, `server/src/lib/exoAvarieService.js`
+(`resolveExoDamage`)+test, `server/src/socket/socketCombatHelpers.js`+`socketCombatState.js`,
+`server/src/services/movementBudgetService.js`, `server/src/routes/character/char-sheet.js` (GET
+simplifié, PUT étendu), `shared/exoConstants.js` (`EXO_ENVIRONMENT_VALUES`/`EXO_MOVEMENT_MODE_VALUES`),
+`client/src/character/ExoIdentityPanel.jsx` (calcul direct), `client/src/character/ExoAttributesPanel.jsx`
+(nouveau), `client/src/character/ExoInfoPanel.jsx` (nouveau), `client/src/character/ExoSheetWindow.jsx`
+(câblage 2 sections), `client/src/locales/fr.json` (clés `exo.tabAttributes/tabInfo/field*`).
+
+---
+
 ### 13.3 Lot B — Base éditable (refactor) — détaillé (2026-08-20)
 
 **Existant vérifié — 4 points d'accès en dépendance live à `ref_exo_templates`, en plus de la lecture

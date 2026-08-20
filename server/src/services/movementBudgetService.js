@@ -81,26 +81,27 @@ export async function getCharacterMovementBudget(characterId, gait) {
 // athletisme_total prennent la même valeur.
 //
 // Vérifié contre 16 armures RAW réelles (REGLEARMURE.md p.339-348) : un simple entier par milieu ne
-// suffit pas toujours — 3 modes possibles par milieu (ref_exo_templates.*_movement_mode) :
+// suffit pas toujours — 3 modes possibles par milieu (exo_sheet.*_movement_mode) :
 //   - 'vit'     : cas normal, base_speed_* alimente calcAllures.
 //   - 'pilot'   : "capacité de déplacement du personnage" (ex. Armure Explora, à terre) — le
 //     mouvement délègue entièrement au budget humain du pilote (récursion sur cette même fonction).
 //   - 'blocked' : "-" (ex. Armure Vulcain, incapable de se déplacer hors de l'eau) — milieu sauté.
+//
+// Lot B (PLAN_EXOARMURE.md §13.3, 2026-08-20) — plus de leftJoin ref_exo_templates : ces 4 colonnes
+// vivent désormais nativement sur exo_sheet (copiées par applyExoTemplate au moment de la sélection
+// du modèle), lues directement sur la ligne. Sentinelle "non configurée" : `category IS NULL`
+// (remplace l'ancien `template_id IS NULL` du Lot 1 §6.5).
 async function getExoMovementBudget(characterId, gait) {
   const exo = await db('exo_sheet')
-    .where({ 'exo_sheet.character_id': characterId })
-    .leftJoin('ref_exo_templates', 'exo_sheet.template_id', 'ref_exo_templates.id')
+    .where({ character_id: characterId })
     .select(
-      'exo_sheet.template_id',
-      'exo_sheet.pilot_character_id',
-      'ref_exo_templates.base_speed_underwater',
-      'ref_exo_templates.base_speed_surface',
-      'ref_exo_templates.underwater_movement_mode',
-      'ref_exo_templates.surface_movement_mode',
+      'category', 'pilot_character_id',
+      'base_speed_underwater', 'base_speed_surface',
+      'underwater_movement_mode', 'surface_movement_mode',
     )
     .first()
   if (!exo) throw new Error('Exo sheet not found for movement budget')
-  if (!exo.template_id) throw new Error('Exo-suit has no template assigned — movement undefined')
+  if (!exo.category) throw new Error('Exo-suit has no template assigned — movement undefined')
 
   // Choix du milieu : Surface par défaut, puis Sous-marine en repli. Le moteur monde n'a aujourd'hui
   // aucun signal d'immersion en temps réel (EAU1, docs/EN_COURS.md — nappe d'eau ambiante retirée)

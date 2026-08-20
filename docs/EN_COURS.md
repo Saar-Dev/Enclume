@@ -234,12 +234,21 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 (schéma `ref_exo_equipment`), 252 (seed 16 armures RAW dans `ref_exo_templates`, jusque-là vide —
 débloque enfin le test navigateur), 253 (seed 84 lignes de systèmes/armes dans `ref_exo_equipment`) —
 les 3 testées up→down→up, 348/348 tests serveur verts après coup, `.test.mjs` dédiés par migration
-(patron `schemaAssertions.mjs`). Lien template↔loadout et pipeline exo-attaquant restent hors
-périmètre (§12.2 points 2/3, pas tranchés). Reste la validation en jeu réel : Lots 2/2bis/3/4 au
-complet, les 2 branches "terrain instable défenseur" déjà en attente, et les onglets exo
-Avaries/Systèmes/Ordinateur restants. Token du pilote pendant qu'il pilote (`MANUEL_EXOARMURE.md`
-§6.3) reste géré à la table par décision actée, aucune mécanique serveur prévue | En attente —
-validation jeu réel (`ref_exo_templates` a maintenant 16 lignes, testable pour la première fois) |
+(patron `schemaAssertions.mjs`). Lien template↔loadout tranché depuis (§13.4.4, oui — Lot C).
+Pipeline exo-attaquant reste hors périmètre (§12.2 point 3, pas tranché). **Finition fiche exo
+(`PLAN_EXOARMURE.md` §13) — Lot A (Avaries) et Lot B (Base éditable, refactor architecture) codés et
+testés (2026-08-20)** : onglet Avaries câblé (grille de cases, `removeExoAvarie` GM-only) ; refactor
+Lot B — `exo_sheet` porte désormais nativement 22+1 champs (base_exoforce/blindage/category/
+environment/profondeurs/vitesses/malus_init/commerce + taille/type_batterie/type_coque/notes, migrations
+254/255), copiés par le nouveau `applyExoTemplate` (transactionnel, verrouillé) au lieu d'un JOIN live
+vers `ref_exo_templates` — `template_id` devient une simple référence d'origine, plus une dépendance
+de calcul (autorité unique, CLAUDE.md Priorité #4). `computeExoStats`/`calcExoDegatsNets`/
+`resolveManeuverSkillId`/Initiative/mouvement tous refactorés en conséquence, 2 nouvelles sections UI
+("Attributs de l'Armure"/"Informations sur l'Armure"). Reste : Lot C (Systèmes/Armement/Ordinateur,
+§13.4, planifié pas codé), Lot D (Vault, déféré), et toute la validation en jeu réel (Lots 1-4 + A/B
+au complet — `ref_exo_templates` a 16 lignes, testable pour la première fois). Token du pilote pendant
+qu'il pilote (`MANUEL_EXOARMURE.md` §6.3) reste géré à la table par décision actée, aucune mécanique
+serveur prévue | En attente — validation jeu réel |
 | **ETATSPERS-LOT2C** | `combat_roster.state_position`/`state_weapon` non retirées — `entry` (`socketCombatAnnouncement.js:139`, coût d'Initiative + validation Tir Visé) toujours lu directement depuis `combat_roster`, pas encore migré vers `characterStateService`. Détail `docs/SYSTEME/ETATS_PERSONNAGE.md` | Basse — différé volontairement (Codex/Kiwi hors projet, plus d'urgence fusion) ; clôture alignée sur `docs/PLANS/PLAN_RW_TOKEN.md` (Phase 7) quand ce chantier reprendra |
 | **CATASTROPHE-L1** | Catastrophe automatique en combat — chantier arrêté après le moteur (décision Saar 2026-08-06, `docs/Old/PLAN_CATASTROPHE_RISK.md`, archivé) : jet 1D10 + validation MJ codés et testés (8 tests Node, PostgreSQL réel), les 10 conséquences restent définitivement narratives (MJ applique à la main, aucune mécanisation prévue). Scénario réel navigateur non testé (déclenchement en combat, fenêtre `CatastropheReviewQueue.jsx`, resync MJ à la reconnexion) | ⚠️ clos partiel — validation navigateur par Saar |
 | **SECU-EMAIL1** | Le serveur de déploiement actuel n'a aucune mécanique d'envoi d'email — bloque toute fonctionnalité qui en dépendrait (vérification d'adresse à l'inscription, notification de blocage SECU-1, reset de mot de passe par email). Signalé par Saar 2026-08-07, hors périmètre du correctif SECU-1 en cours | Basse — infra manquante, à noter pour plus tard |

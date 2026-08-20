@@ -16,12 +16,11 @@ export default function ExoIdentityPanel({ characterId, exo, templates, pilotCan
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
 
+  // Lot B (PLAN_EXOARMURE.md §13.3, 2026-08-20) — exo porte désormais sa propre base éditable
+  // (category/base_exoforce/base_blindage copiés par applyExoTemplate), plus de reconstruction
+  // manuelle depuis `templates` : même autorité que le serveur (shared/exoStats.js), un seul calcul.
   const template = templates.find(tpl => tpl.id === exo.template_id) || null
-  const stats = template ? computeExoStats(exo, {
-    base_exoforce: template.base_exoforce,
-    base_blindage: template.base_blindage,
-    category: template.category,
-  }) : null
+  const stats = computeExoStats(exo)
 
   const handlePilotChange = async (e) => {
     const pilot_character_id = e.target.value || null

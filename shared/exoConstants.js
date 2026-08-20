@@ -8,6 +8,13 @@ export const EXO_CATEGORY_ORDER = [
   'exo-alpha', 'exo-0', 'exo-1', 'exo-2', 'exo-3', 'exo-4', 'exo-5', 'exo-6', 'exo-omega',
 ]
 
+// Whitelists CHECK exo_sheet (migration 254, chk_exo_sheet_environment/*_mode) — même valeurs,
+// consommées par la route PUT /:characterId/exo (Lot B §13.3) pour valider les champs de base
+// éditables directement avant toute écriture (tout ou rien), pas seulement pour la sélection de
+// modèle. Un seul endroit source, jamais réinventées.
+export const EXO_ENVIRONMENT_VALUES = ['submarine', 'surface', 'hybrid', 'atmospheric', 'spatial', 'industrial']
+export const EXO_MOVEMENT_MODE_VALUES = ['vit', 'pilot', 'blocked']
+
 // Résistance aux Dommages par catégorie (REGLEARMURE.md:90-98)
 export const EXO_RD_TABLE = {
   'exo-alpha': 0,
