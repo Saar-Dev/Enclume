@@ -25,6 +25,12 @@ async function createFixture() {
     .insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Exo test template', type: 'exo' })
     .returning('*')
   const [exoSheet] = await db('exo_sheet').insert({ character_id: exoCharacter.id }).returning('*')
+  // ref_exo_templates est un catalogue global, jamais scopé par campaign_id/character_id — supprimer
+  // la campagne/l'utilisateur ne le nettoie pas par cascade (trouvé après coup : des lignes "A"/"B"/
+  // "Modèle test exoTemplateService" polluaient le vrai catalogue en dev, visibles dans le sélecteur
+  // de modèle de l'UI réelle). Chaque template inséré par ce fixture est tracé ici et supprimé
+  // explicitement au cleanup — un des tests en insère 2 (écrasement complet), pas seulement 1.
+  const createdTemplateIds = []
   return {
     gm, campaign, exoCharacter, exoSheet,
     async insertTemplate(overrides = {}) {
@@ -42,9 +48,13 @@ async function createFixture() {
           ...overrides,
         })
         .returning('*')
+      createdTemplateIds.push(template.id)
       return template
     },
     async cleanup() {
+      if (createdTemplateIds.length > 0) {
+        await db('ref_exo_templates').whereIn('id', createdTemplateIds).del()
+      }
       await db('campaigns').where({ id: campaign.id }).del()
       await db('users').where({ id: gm.id }).del()
     },
