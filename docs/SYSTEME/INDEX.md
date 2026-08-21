@@ -88,7 +88,12 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 |----------|----------------|--------|
 | `SYSTEME/TRADE.md` | Marchands (catalogue, achat), échange PJ↔PJ, revente PJ→GM, transfert direct | ✅ Vérifié (2026-08-07) |
 
-### 3.6 Éditeur & création
+### 3.6 Exo-armures
+| Document | Responsabilité | Statut |
+|----------|----------------|--------|
+| `SYSTEME/EXOARMURE.md` | Schéma catalogue/instance, source exclusive d'équipement, services (applyExoTemplate, exoAvarieService, computeExoStats), routes, illustration | ✅ Vérifié (2026-08-21) |
+
+### 3.7 Éditeur & création
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
 | `SYSTEME/EDITEUR.md` | Infrastructure de l'éditeur : onglets, undo/redo, sauvegarde, chargement textures | ✅ Vérifié (2026-08-02) |

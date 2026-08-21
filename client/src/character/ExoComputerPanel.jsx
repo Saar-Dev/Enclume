@@ -18,7 +18,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
-import { computeOrdinateurStats, resolveActiveComputer } from '../../../shared/computerStats.js'
+import { computeOrdinateurStats, computeBlindageIemCost, resolveActiveComputer } from '../../../shared/computerStats.js'
 import { EXO_COMPUTER_ROLE_VALUES } from '../../../shared/exoConstants.js'
 
 function ProgramsList({ computer, programs, catalog, canEdit, onProgramsChange, characterId }) {
@@ -188,6 +188,11 @@ function ComputerCard({ computer, isActive, programs, catalog, canEdit, onFieldU
         <div>
           <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>{t('exo.computerBlindageIem')}</div>
           {field(t('exo.computerBlindageIem'), computer.blindage_iem, 'blindage_iem', '40px')}
+          {computer.blindage_iem != null && (
+            <div style={{ fontSize: '10px', color: '#8888a0', marginTop: '2px' }}>
+              {t('exo.computerBlindageIemCout', { cout: computeBlindageIemCost(computer.blindage_iem) })}
+            </div>
+          )}
         </div>
         <div>
           <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>{t('exo.itemIntegrity')}</div>

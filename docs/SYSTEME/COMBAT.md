@@ -140,9 +140,11 @@ d'exception, comportement gracieux à gérer par l'appelant (retour anticipé ou
 `MANUEL_EXOARMURE.md` §3.1, jamais fusionnés, jamais de stats copiées de l'un vers l'autre) :
 1. `exo_sheet.pilot_character_id` → le pilote (`pj`/`pnj`), résolu via `resolveHumanoidTestContext`.
    `null` si aucun pilote assigné.
-2. `exo_sheet.template_id` → `ref_exo_templates`, puis `computeExoStats(exoSheet, template)`
-   (`shared/exoStats.js`, fonction pure, EXF/BLD/RD dérivés des paliers d'Intégrité courants,
-   `MANUEL_EXOARMURE.md` §4.8). `null` si aucun template assigné ("armure non configurée", état valide
+2. `exo_sheet.template_id` → `ref_exo_templates`, puis `computeExoStats(exoSheet)` (signature à un seul
+   paramètre depuis le Lot B/migration 254 — le JOIN vers le template a été retiré, `exo_sheet` porte
+   nativement ses propres stats de base) (`shared/exoStats.js`, fonction pure, EXF/BLD/RD dérivés des
+   paliers d'Intégrité courants, `MANUEL_EXOARMURE.md` §4.8, détail complet `docs/SYSTEME/EXOARMURE.md`).
+   `null` si aucun template assigné ("armure non configurée", état valide
    depuis `PLAN_EXOARMURE.md` Lot 1 §6.5) — dans ce cas `resolveExoTestContext` retourne `null` plutôt
    que de laisser passer les stats du pilote sans l'override EXF.
 3. Retour = contexte du pilote, avec `for_na`/`modDom` **recalculés** depuis l'EXF (pas simplement
