@@ -25,7 +25,7 @@ export default function Step0Method({ onNext }) {
         <div className="wiz-cards">
           <div className="wiz-card wiz-card-disabled">
             <div className="wiz-card-media">
-              <img className="wiz-card-img" src={`${ASSETS_BASE}/s0_arch.webp`} alt="" />
+              <img className="wiz-card-img" src={`${ASSETS_BASE}/s0_archetype.webp`} alt="" />
               <div className="wiz-card-media-fade" />
             </div>
             <div className="wiz-card-body">
@@ -38,7 +38,7 @@ export default function Step0Method({ onNext }) {
 
           <div className="wiz-card wiz-card-active" onClick={onNext}>
             <div className="wiz-card-media">
-              <img className="wiz-card-img" src={`${ASSETS_BASE}/s0_libre.webp`} alt="" />
+              <img className="wiz-card-img" src={`${ASSETS_BASE}/s0_freeform.webp`} alt="" />
               <div className="wiz-card-media-fade" />
             </div>
             <div className="wiz-card-body">

@@ -270,7 +270,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
         <div className="wiz2-carousel">
 
           <div className="wiz2-card" onClick={() => setMethod('chosen')}>
-            <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_libre.webp`} alt="" />
+            <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_manual.webp`} alt="" />
             <div className="wiz2-vignette" />
             <div className="wiz2-card-top">
               <span className="wiz2-card-name">{t('step3.method_choose')}</span>
@@ -282,7 +282,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
 
           {randomMutationsEnabled !== false && (
             <div className="wiz2-card" onClick={() => setMethod('random')}>
-              <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_aleatoire.webp`} alt="" />
+              <img className="wiz2-card-img" src={`${ASSETS_BASE}/s2_random.webp`} alt="" />
               <div className="wiz2-vignette" />
               <div className="wiz2-card-top">
                 <span className="wiz2-card-name">{t('step3.method_random')}</span>

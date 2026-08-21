@@ -13,7 +13,7 @@ const ASSETS_BASE = '/assets'
 const GENO_IMAGES = {
   HUMAIN:  `${ASSETS_BASE}/s1_human.webp`,
   HYB_NAT: `${ASSETS_BASE}/s1_hybrid.webp`,
-  GEN_HYB: `${ASSETS_BASE}/s1_geno.webp`,
+  GEN_HYB: `${ASSETS_BASE}/s1_genohybrid.webp`,
   TEC_HYB: `${ASSETS_BASE}/s1_techno.webp`,
 }
 
