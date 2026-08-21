@@ -5,7 +5,11 @@ import db from '../knex.js'
 import { up, down } from './233_exo_sheet.js'
 import { assertTableExists, assertColumnsExist, assertConstraintExists } from './testHelpers/schemaAssertions.mjs'
 
-const EXO_SHEET_COLUMNS = [
+// Colonnes réellement créées par le up() de CETTE migration — inchangé, une migration déjà appliquée
+// ne se retouche jamais (CLAUDE.md §5). Utilisé par le test transactionnel ci-dessous, qui rejoue
+// up()/down() de 233 en isolation : à cet instant précis du replay, les 4 colonnes jsonb existent
+// bel et bien (elles ne sont retirées que par la migration 257, plus tard dans la chaîne).
+const EXO_SHEET_COLUMNS_AT_233 = [
   'character_id', 'template_id', 'pilot_character_id',
   'itg_structure_max', 'itg_structure_current',
   'itg_exosquelette_max', 'itg_exosquelette_current',
@@ -14,6 +18,14 @@ const EXO_SHEET_COLUMNS = [
   'avaries_critiques', 'avaries_catastrophiques',
   'equipped_systems', 'hardpoints', 'isolated_systems', 'damaged_systems',
 ]
+// Colonnes de 233 encore présentes dans le schéma réellement déployé aujourd'hui — utilisé par le
+// test "schéma réel" (toujours actif, SCHEMADRIFT-EXOTEMPLATES1) qui vérifie l'état ACTUEL de la
+// base, pas un instantané figé. Les 4 colonnes jsonb ont été retirées par la migration 257
+// (PLAN_EXOARMURE.md §13.4, 2026-08-21, jamais peuplées par aucun code de production) — les garder
+// ici ferait échouer ce test en permanence pour une dérive qui n'en est pas une.
+const EXO_SHEET_COLUMNS_TODAY = EXO_SHEET_COLUMNS_AT_233.filter(
+  col => !['equipped_systems', 'hardpoints', 'isolated_systems', 'damaged_systems'].includes(col)
+)
 const REF_EXO_TEMPLATES_COLUMNS = ['base_speed_underwater', 'base_speed_surface']
 
 // Tourne toujours (contrairement au test transactionnel ci-dessous, sauté dès que la migration a
@@ -24,7 +36,7 @@ test('schéma réel — exo_sheet/ref_exo_templates portent toutes les colonnes/
 }, async () => {
   await assertTableExists(db, 'exo_sheet')
   await assertTableExists(db, 'ref_exo_templates')
-  await assertColumnsExist(db, 'exo_sheet', EXO_SHEET_COLUMNS)
+  await assertColumnsExist(db, 'exo_sheet', EXO_SHEET_COLUMNS_TODAY)
   await assertColumnsExist(db, 'ref_exo_templates', REF_EXO_TEMPLATES_COLUMNS)
   await assertConstraintExists(db, 'ref_exo_templates', 'chk_exo_template_category')
   await assertConstraintExists(db, 'ref_exo_templates', 'chk_exo_template_environment')
@@ -41,7 +53,7 @@ test('migration 233 ajoute exo_sheet/ref_exo_templates et revient proprement', {
 
     assert.equal(await trx.schema.hasTable('ref_exo_templates'), true)
     assert.equal(await trx.schema.hasTable('exo_sheet'), true)
-    for (const col of EXO_SHEET_COLUMNS) {
+    for (const col of EXO_SHEET_COLUMNS_AT_233) {
       assert.equal(await trx.schema.hasColumn('exo_sheet', col), true, `colonne ${col} absente`)
     }
     for (const col of REF_EXO_TEMPLATES_COLUMNS) {

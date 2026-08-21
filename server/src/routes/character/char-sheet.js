@@ -67,7 +67,9 @@ import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
 import { applyExoTemplate } from '../../lib/exoTemplateService.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
+  EXO_COMPUTER_ROLE_VALUES,
 } from '../../../../shared/exoConstants.js'
+import { computeOrdinateurStats } from '../../../../shared/computerStats.js'
 import * as inventoryService from '../../services/inventoryService.js'
 import * as modingService from '../../services/modingService.js'
 import { WS } from '../../../../shared/events.js'
@@ -2121,6 +2123,456 @@ router.delete('/:characterId/exo/avaries/:severity', async (req, res, next) => {
     if (!result) throw new AppError(404, 'Exo sheet not found')
 
     res.json({ exo: result.exoSheet })
+  } catch (err) { next(err) }
+})
+
+// ─── Routes exo-armure — Systèmes / Armement / Programmes / Ordinateur (Lot C, PLAN_EXOARMURE.md
+// §13.4) ─────────────────────────────────────────────────────────────────────────────────────────
+// 4 familles, patron uniforme : une route GET dédiée par famille, jamais agrégée dans
+// GET /:characterId/exo (décision explicite 2026-08-21 — le précédent drone est lui-même asymétrique
+// entre programmes agrégés dans son GET principal et armes séparées, pas un choix délibéré à
+// reproduire). Permission uniforme `exoIsGmOrOwnerOrPilot` sur toutes les écritures (fiche éditable
+// normale, pas un outil de correction MJ comme les Avaries) — jamais la vérification inline
+// `req.character.user_id === req.user.id` que le drone réimplémente par erreur sur
+// PUT /drone/weapons/:id (incohérence préexistante, pas reproduite ici). Aucun fetch `exo_sheet`
+// séparé avant permission/écriture (contrairement aux routes Avaries plus haut) : `req.character` est
+// déjà résolu par `router.param('characterId')`, `exoIsGmOrOwnerOrPilot` fonctionne dessus seul, et le
+// lookup `{id, character_id}` de chaque PUT/DELETE filtre déjà l'appartenance — mirror le précédent le
+// plus proche (`drone_weapons`/`drone_programs` PUT/DELETE), pas les Avaries (compteurs sur la fiche
+// elle-même, pas des lignes filles).
+
+// Requêtes enrichies (jointure ref_exo_equipment → display_name) partagées entre GET (liste) et
+// POST/PUT (réponse d'une seule ligne) — trouvaille 2026-08-21 (Saar, test réel navigateur) : POST/PUT
+// renvoyaient la ligne brute `.returning('*')` sans jointure, contrairement à GET, donc sans
+// `display_name` ; l'ajout/l'édition d'un système ou d'une arme catalogue affichait "—" côté client
+// jusqu'au prochain GET (mirror manqué du précédent `drone_weapons`, qui refait bien cette jointure
+// après `insert`/`update`, `char-sheet.js:1842-1856,1885-1899`). Une seule fonction par table plutôt
+// que dupliquer le SELECT 3 fois (GET liste + POST + PUT) — même shape garanti partout.
+function selectExoSystemFields(query) {
+  return query
+    .leftJoin('ref_exo_equipment', 'exo_systems.equipment_id', 'ref_exo_equipment.id')
+    .select(
+      'exo_systems.*',
+      db.raw('COALESCE(exo_systems.label_override, ref_exo_equipment.name) as display_name'),
+      'ref_exo_equipment.description as ref_description',
+      'ref_exo_equipment.category as ref_category',
+    )
+}
+
+function selectExoWeaponFields(query) {
+  return query
+    .leftJoin('ref_exo_equipment', 'exo_weapons.equipment_id', 'ref_exo_equipment.id')
+    .select(
+      'exo_weapons.*',
+      db.raw('COALESCE(exo_weapons.label_override, ref_exo_equipment.name) as display_name'),
+      'ref_exo_equipment.description as ref_description',
+      'ref_exo_equipment.damage as ref_damage',
+      'ref_exo_equipment.shock as ref_shock',
+      'ref_exo_equipment.range as ref_range',
+      'ref_exo_equipment.fire_mode as ref_fire_mode',
+    )
+}
+
+// GET /:characterId/exo/systems
+router.get('/:characterId/exo/systems', async (req, res, next) => {
+  try {
+    const systems = await selectExoSystemFields(
+      db('exo_systems').where({ 'exo_systems.character_id': req.params.characterId })
+    )
+      .orderBy('exo_systems.sort_order', 'asc')
+      .orderBy('exo_systems.id', 'asc')
+    res.json({ systems })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/exo/systems — ajouter un système (catalogue ou custom via label_override)
+router.post('/:characterId/exo/systems', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { equipment_id, label_override, level, integrite_max, integrite_current, sort_order = 0 } = req.body
+    if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
+
+    if (equipment_id) {
+      const ref = await db('ref_exo_equipment').where({ id: equipment_id, family: 'systeme' }).first()
+      if (!ref) throw new AppError(400, 'Equipment not found or not a system')
+    }
+
+    const [inserted] = await db('exo_systems')
+      .insert({
+        character_id: req.params.characterId,
+        equipment_id: equipment_id ?? null,
+        label_override: label_override ?? null,
+        level: level ?? null,
+        integrite_max: integrite_max ?? null,
+        integrite_current: integrite_current ?? integrite_max ?? null,
+        sort_order,
+      })
+      .returning('id')
+    const system = await selectExoSystemFields(db('exo_systems').where({ 'exo_systems.id': inserted.id })).first()
+
+    res.status(201).json({ system })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/exo/systems/:systemId
+router.put('/:characterId/exo/systems/:systemId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { label_override, level, integrite_max, integrite_current, sort_order } = req.body
+    const updates = {}
+    if (label_override   !== undefined) updates.label_override   = label_override
+    if (level             !== undefined) updates.level             = level
+    if (integrite_max     !== undefined) updates.integrite_max     = integrite_max
+    if (integrite_current !== undefined) updates.integrite_current = integrite_current
+    if (sort_order        !== undefined) updates.sort_order        = sort_order
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const existing = await db('exo_systems')
+      .where({ id: req.params.systemId, character_id: req.params.characterId })
+      .first()
+    if (!existing) throw new AppError(404, 'System not found')
+
+    await db('exo_systems').where({ id: req.params.systemId }).update(updates)
+    const system = await selectExoSystemFields(db('exo_systems').where({ 'exo_systems.id': req.params.systemId })).first()
+    res.json({ system })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/exo/systems/:systemId
+router.delete('/:characterId/exo/systems/:systemId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const deleted = await db('exo_systems')
+      .where({ id: req.params.systemId, character_id: req.params.characterId })
+      .delete()
+    if (!deleted) throw new AppError(404, 'System not found')
+
+    res.json({ message: 'System deleted' })
+  } catch (err) { next(err) }
+})
+
+// GET /:characterId/exo/weapons
+router.get('/:characterId/exo/weapons', async (req, res, next) => {
+  try {
+    const weapons = await selectExoWeaponFields(
+      db('exo_weapons').where({ 'exo_weapons.character_id': req.params.characterId })
+    )
+      .orderBy('exo_weapons.sort_order', 'asc')
+      .orderBy('exo_weapons.id', 'asc')
+    res.json({ weapons })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/exo/weapons — ajouter une arme (catalogue ou custom via label_override)
+router.post('/:characterId/exo/weapons', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { equipment_id, label_override, integrite_max, integrite_current, sort_order = 0 } = req.body
+    if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
+
+    if (equipment_id) {
+      const ref = await db('ref_exo_equipment').where({ id: equipment_id, family: 'arme' }).first()
+      if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
+    }
+
+    const [inserted] = await db('exo_weapons')
+      .insert({
+        character_id: req.params.characterId,
+        equipment_id: equipment_id ?? null,
+        label_override: label_override ?? null,
+        integrite_max: integrite_max ?? null,
+        integrite_current: integrite_current ?? integrite_max ?? null,
+        sort_order,
+      })
+      .returning('id')
+    const weapon = await selectExoWeaponFields(db('exo_weapons').where({ 'exo_weapons.id': inserted.id })).first()
+
+    res.status(201).json({ weapon })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/exo/weapons/:weaponId
+router.put('/:characterId/exo/weapons/:weaponId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { label_override, integrite_max, integrite_current, sort_order } = req.body
+    const updates = {}
+    if (label_override   !== undefined) updates.label_override   = label_override
+    if (integrite_max     !== undefined) updates.integrite_max     = integrite_max
+    if (integrite_current !== undefined) updates.integrite_current = integrite_current
+    if (sort_order        !== undefined) updates.sort_order        = sort_order
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const existing = await db('exo_weapons')
+      .where({ id: req.params.weaponId, character_id: req.params.characterId })
+      .first()
+    if (!existing) throw new AppError(404, 'Weapon not found')
+
+    await db('exo_weapons').where({ id: req.params.weaponId }).update(updates)
+    const weapon = await selectExoWeaponFields(db('exo_weapons').where({ 'exo_weapons.id': req.params.weaponId })).first()
+    res.json({ weapon })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/exo/weapons/:weaponId
+router.delete('/:characterId/exo/weapons/:weaponId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const deleted = await db('exo_weapons')
+      .where({ id: req.params.weaponId, character_id: req.params.characterId })
+      .delete()
+    if (!deleted) throw new AppError(404, 'Weapon not found')
+
+    res.json({ message: 'Weapon deleted' })
+  } catch (err) { next(err) }
+})
+
+// GET /:characterId/exo/computers
+router.get('/:characterId/exo/computers', async (req, res, next) => {
+  try {
+    const computers = await db('exo_computers')
+      .where({ character_id: req.params.characterId })
+      .orderBy('sort_order', 'asc')
+      .orderBy('id', 'asc')
+    res.json({ computers })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/exo/computers — ajouter un ordinateur custom (au-delà du loadout de modèle,
+// §13.4.4) — Intégrité fournie directement par l'appelant (pas de jet serveur ici, contrairement à
+// applyExoTemplate : un ajout manuel n'est pas "neuf sorti d'usine", laissé au jugement MJ).
+router.post('/:characterId/exo/computers', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { role, gen, nt, blindage_iem, integrite_max, integrite_current, sort_order = 0 } = req.body
+    if (!EXO_COMPUTER_ROLE_VALUES.includes(role)) throw new AppError(400, 'Invalid role')
+    if (gen == null || nt == null) throw new AppError(400, 'gen et nt sont requis')
+
+    const [computer] = await db('exo_computers')
+      .insert({
+        character_id: req.params.characterId,
+        role, gen, nt,
+        blindage_iem: blindage_iem ?? null,
+        integrite_max: integrite_max ?? null,
+        integrite_current: integrite_current ?? integrite_max ?? null,
+        sort_order,
+      })
+      .returning('*')
+
+    res.status(201).json({ computer })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/exo/computers/:computerId
+router.put('/:characterId/exo/computers/:computerId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { role, gen, nt, blindage_iem, integrite_max, integrite_current, sort_order } = req.body
+    if (role !== undefined && !EXO_COMPUTER_ROLE_VALUES.includes(role)) throw new AppError(400, 'Invalid role')
+
+    const updates = {}
+    if (role              !== undefined) updates.role              = role
+    if (gen                !== undefined) updates.gen                = gen
+    if (nt                 !== undefined) updates.nt                 = nt
+    if (blindage_iem       !== undefined) updates.blindage_iem       = blindage_iem
+    if (integrite_max      !== undefined) updates.integrite_max      = integrite_max
+    if (integrite_current  !== undefined) updates.integrite_current  = integrite_current
+    if (sort_order         !== undefined) updates.sort_order         = sort_order
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+
+    const existing = await db('exo_computers')
+      .where({ id: req.params.computerId, character_id: req.params.characterId })
+      .first()
+    if (!existing) throw new AppError(404, 'Computer not found')
+
+    const [computer] = await db('exo_computers')
+      .where({ id: req.params.computerId })
+      .update(updates)
+      .returning('*')
+    res.json({ computer })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/exo/computers/:computerId — un programme rattaché survit (SET NULL,
+// migration 258), jamais entraîné dans la suppression.
+router.delete('/:characterId/exo/computers/:computerId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const deleted = await db('exo_computers')
+      .where({ id: req.params.computerId, character_id: req.params.characterId })
+      .delete()
+    if (!deleted) throw new AppError(404, 'Computer not found')
+
+    res.json({ message: 'Computer deleted' })
+  } catch (err) { next(err) }
+})
+
+// GET /:characterId/exo/programs
+router.get('/:characterId/exo/programs', async (req, res, next) => {
+  try {
+    const programs = await db('exo_programs')
+      .where({ 'exo_programs.character_id': req.params.characterId })
+      .leftJoin('ref_equipment', 'exo_programs.equipment_id', 'ref_equipment.id')
+      .select(
+        'exo_programs.id', 'exo_programs.character_id', 'exo_programs.equipment_id',
+        'exo_programs.label_override', 'exo_programs.category', 'exo_programs.level',
+        'exo_programs.exo_computer_id', 'exo_programs.sort_order',
+        'ref_equipment.name as program_name', 'ref_equipment.description as program_description',
+      )
+      .orderBy('exo_programs.sort_order', 'asc')
+      .orderBy('exo_programs.id', 'asc')
+    res.json({ programs })
+  } catch (err) { next(err) }
+})
+
+// POST /:characterId/exo/programs — ajouter un programme (catalogue ou custom).
+// exo_computer_id optionnel : le RAW ("Potentiel"/"Niveau max. des programmes") plafonne par
+// ORDINATEUR précis, jamais par armure entière — une exo peut porter 0/1/2 ordinateurs
+// (PLAN_EXOARMURE.md §13.4.1). Si fourni, valide contre CET ordinateur (mirror la validation déjà
+// existante côté drone, qui n'a jamais cette ambiguïté avec son ordinateur unique) ; si absent, aucune
+// validation — même comportement que le drone quand ordinateur_gen/nt sont NULL.
+router.post('/:characterId/exo/programs', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const { equipment_id, label_override, level, exo_computer_id, sort_order = 0 } = req.body
+    if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
+    if (level === undefined || level === null) throw new AppError(400, 'level is required')
+    if (level < 0 || level > 30) throw new AppError(400, 'level must be between 0 and 30')
+
+    let category
+    if (equipment_id) {
+      // family: 'Logiciels' — divergence volontaire par rapport à drone_programs (qui ne filtre pas),
+      // catalogue partagé et volontairement large (34 lignes couvrant esquive/pilotage de drone,
+      // sécurité/piratage d'ordinateur, médical, sciences — RAW traite l'Ordinateur comme un
+      // sous-système générique "incorporé à des ordinateurs de drones ou d'appareils",
+      // REGLE_ORDINATEUR.md:101, jamais un catalogue séparé par plateforme). Le filtre empêche
+      // seulement d'assigner une arme/armure comme "programme" par erreur — pas de sous-filtre par
+      // category (esquive/medical/...), laissé au jugement MJ comme RAW ne distingue pas non plus
+      // quel type de programme convient à quelle plateforme.
+      const ref = await db('ref_equipment').where({ id: equipment_id, family: 'Logiciels' }).select('category').first()
+      if (!ref) throw new AppError(404, 'Programme introuvable dans le catalogue')
+      category = ref.category
+    } else {
+      category = req.body.category
+      if (!category) throw new AppError(400, 'category requis pour un programme custom')
+    }
+
+    if (exo_computer_id) {
+      const computer = await db('exo_computers')
+        .where({ id: exo_computer_id, character_id: req.params.characterId })
+        .first()
+      if (!computer) throw new AppError(400, 'exo_computer_id must reference a computer belonging to this character')
+
+      const stats = computeOrdinateurStats({ gen: computer.gen, nt: computer.nt })
+      if (level > stats.niveauMaxProgrammes) throw new AppError(400, `Niveau max pour cet ordinateur : ${stats.niveauMaxProgrammes}`)
+      const row = await db('exo_programs').where({ exo_computer_id }).sum('level as total').first()
+      if ((Number(row.total) || 0) + level > stats.potentiel) {
+        throw new AppError(400, `Potentiel total dépassé (max : ${stats.potentiel})`)
+      }
+    }
+
+    const [program] = await db('exo_programs')
+      .insert({
+        character_id: req.params.characterId,
+        equipment_id: equipment_id ?? null,
+        label_override: label_override ?? null,
+        category,
+        level,
+        exo_computer_id: exo_computer_id ?? null,
+        sort_order,
+      })
+      .returning('*')
+
+    const enriched = { ...program }
+    if (equipment_id) {
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('name', 'description').first()
+      enriched.program_name = ref?.name ?? null
+      enriched.program_description = ref?.description ?? null
+    }
+
+    res.status(201).json({ program: enriched })
+  } catch (err) { next(err) }
+})
+
+// PUT /:characterId/exo/programs/:programId — level/exo_computer_id/sort_order modifiables.
+// Potentiel/Niveau max REVALIDÉS si level ou exo_computer_id changent — divergence assumée par
+// rapport au précédent drone_programs (qui ne revalide jamais au PUT, seulement les bornes 0-30 ;
+// gap préexistant non instrumenté ici, code neuf qui n'a pas de raison de le reproduire).
+router.put('/:characterId/exo/programs/:programId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const existing = await db('exo_programs')
+      .where({ id: req.params.programId, character_id: req.params.characterId })
+      .first()
+    if (!existing) throw new AppError(404, 'Program not found')
+
+    const { level, exo_computer_id, sort_order } = req.body
+    const updates = {}
+    if (level           !== undefined) updates.level           = level
+    if (exo_computer_id !== undefined) updates.exo_computer_id = exo_computer_id
+    if (sort_order      !== undefined) updates.sort_order      = sort_order
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
+    if (updates.level !== undefined && (updates.level < 0 || updates.level > 30)) {
+      throw new AppError(400, 'level must be between 0 and 30')
+    }
+
+    const effectiveComputerId = updates.exo_computer_id !== undefined ? updates.exo_computer_id : existing.exo_computer_id
+    const effectiveLevel = updates.level !== undefined ? updates.level : existing.level
+    if (effectiveComputerId) {
+      const computer = await db('exo_computers')
+        .where({ id: effectiveComputerId, character_id: req.params.characterId })
+        .first()
+      if (!computer) throw new AppError(400, 'exo_computer_id must reference a computer belonging to this character')
+
+      const stats = computeOrdinateurStats({ gen: computer.gen, nt: computer.nt })
+      if (effectiveLevel > stats.niveauMaxProgrammes) throw new AppError(400, `Niveau max pour cet ordinateur : ${stats.niveauMaxProgrammes}`)
+      const row = await db('exo_programs')
+        .where({ exo_computer_id: effectiveComputerId })
+        .andWhere('id', '!=', req.params.programId)
+        .sum('level as total').first()
+      if ((Number(row.total) || 0) + effectiveLevel > stats.potentiel) {
+        throw new AppError(400, `Potentiel total dépassé (max : ${stats.potentiel})`)
+      }
+    }
+
+    const [updated] = await db('exo_programs')
+      .where({ id: req.params.programId })
+      .update(updates)
+      .returning('*')
+
+    const enriched = { ...updated }
+    if (updated.equipment_id) {
+      const ref = await db('ref_equipment').where({ id: updated.equipment_id }).select('name', 'description').first()
+      enriched.program_name = ref?.name ?? null
+      enriched.program_description = ref?.description ?? null
+    }
+
+    res.json({ program: enriched })
+  } catch (err) { next(err) }
+})
+
+// DELETE /:characterId/exo/programs/:programId
+router.delete('/:characterId/exo/programs/:programId', async (req, res, next) => {
+  try {
+    if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
+
+    const deleted = await db('exo_programs')
+      .where({ id: req.params.programId, character_id: req.params.characterId })
+      .delete()
+    if (!deleted) throw new AppError(404, 'Program not found')
+
+    res.json({ message: 'Program deleted' })
   } catch (err) { next(err) }
 })
 

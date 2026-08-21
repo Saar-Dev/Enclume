@@ -1,17 +1,35 @@
 /**
  * exoTemplateService.js — Application d'un modèle de catalogue (`ref_exo_templates`) à une exo-armure
  *
- * PLAN_EXOARMURE.md §13.3 (Lot B — Base éditable). Extrait en fonction dédiée plutôt qu'inline dans la
- * route `PUT /:characterId/exo` (analyse à charge 2026-08-20) : §12.2 point 2 est tranché depuis —
- * choisir un modèle pré-remplit aussi le loadout Systèmes/Armement (Lot C, §13.4.4) — Lot C n'a donc
- * qu'à ÉTENDRE `applyExoTemplate` d'une étape, jamais rouvrir la route déjà livrée par ce Lot B.
+ * PLAN_EXOARMURE.md §13.3 (Lot B — Base éditable) + §13.4.4 (Lot C — loadout Systèmes/Armement/
+ * Ordinateur, extension 2026-08-21). Extrait en fonction dédiée plutôt qu'inline dans la route
+ * `PUT /:characterId/exo` (analyse à charge 2026-08-20) : choisir un modèle pré-remplit aussi le
+ * loadout (tranché par Saar, "armement et armes sont des paramètres d'usine. Modifiable mais
+ * pré-made") — Lot C étend `applyExoTemplate` d'une étape, jamais ne rouvre la route déjà livrée par
+ * ce Lot B.
  *
  * Toujours une copie COMPLÈTE, jamais une fusion intelligente : choisir un nouveau modèle écrase les
- * 19 champs ci-dessous avec les valeurs du modèle choisi, y compris s'ils avaient été personnalisés
- * avant — comportement prévisible, pas de logique de fusion à deviner (§13.3).
+ * 19 champs de base ET le loadout entier (exo_systems/exo_weapons/exo_computers) avec ceux du modèle
+ * choisi, y compris s'ils avaient été personnalisés avant — comportement prévisible, pas de logique
+ * de fusion à deviner (§13.3, étendu §13.4.4).
+ *
+ * Intégrité de départ du loadout — deux règles RAW distinctes, jamais unifiées à tort :
+ *   - `exo_systems`/`exo_weapons` : fixe à 20 (matériel neuf — décision Saar 2026-08-21, une armure
+ *     prémade RAW sort d'usine, pas de l'occasion). Pas de jet : la règle générale du catalogue
+ *     (SEEDEXO.md intro, "Intégrité = 2D6+6" pour du matériel d'occasion) ne s'applique pas ici.
+ *   - `exo_computers` : un JET par ligne, formule dépendant de la Génération
+ *     (`resolveOrdinateurIntegrityFormula`, shared/computerStats.js) — règle RAW propre aux
+ *     ordinateurs (docs/REGLES/REGLE_ORDINATEUR.md:91-93), sans alternative "neuf" dans le texte
+ *     source, donc non concernée par la décision ci-dessus.
  */
 
 import { AppError } from './AppError.js'
+import { parseDice } from './diceParser.js'
+import { resolveOrdinateurIntegrityFormula } from '../../../shared/computerStats.js'
+
+// Matériel neuf (décision Saar 2026-08-21, §13.4.4) — jamais un jet pour exo_systems/exo_weapons
+// copiés depuis un loadout de modèle, contrairement à exo_computers ci-dessous.
+const LOADOUT_NEW_INTEGRITY = 20
 
 // Même liste que `COPIED_FROM_TEMPLATE_COLUMNS` dans la migration 254 (server/src/db/migrations/
 // 254_exo_sheet_base_stats.js) — dupliquée volontairement, pas importée : une migration déjà appliquée
@@ -73,6 +91,62 @@ export async function applyExoTemplate(db, characterId, templateId) {
       .where({ character_id: characterId })
       .update({ template_id: templateId, ...copiedFields })
       .returning('*')
+
+    // Écrasement complet du loadout — même sémantique que les champs de base ci-dessus (§13.3),
+    // étendue au Lot C (§13.4.4). Le verrou FOR UPDATE posé sur exo_sheet plus haut sérialise déjà
+    // deux applications concurrentes du même personnage (toute requête concurrente bloque avant
+    // d'atteindre ces DELETE/INSERT), pas besoin d'un second verrou sur les tables enfants.
+    await trx('exo_systems').where({ character_id: characterId }).delete()
+    await trx('exo_weapons').where({ character_id: characterId }).delete()
+    await trx('exo_computers').where({ character_id: characterId }).delete()
+
+    const equipmentRows = await trx('ref_exo_template_equipment')
+      .where({ template_id: templateId })
+      .orderBy('sort_order', 'asc')
+    const systemsToInsert = equipmentRows
+      .filter(row => row.family === 'systeme')
+      .map(row => ({
+        character_id: characterId,
+        equipment_id: row.equipment_id,
+        label_override: row.label_override,
+        level: row.level,
+        integrite_max: LOADOUT_NEW_INTEGRITY,
+        integrite_current: LOADOUT_NEW_INTEGRITY,
+        sort_order: row.sort_order,
+      }))
+    const weaponsToInsert = equipmentRows
+      .filter(row => row.family === 'arme')
+      .map(row => ({
+        character_id: characterId,
+        equipment_id: row.equipment_id,
+        label_override: row.label_override,
+        integrite_max: LOADOUT_NEW_INTEGRITY,
+        integrite_current: LOADOUT_NEW_INTEGRITY,
+        sort_order: row.sort_order,
+      }))
+    if (systemsToInsert.length > 0) await trx('exo_systems').insert(systemsToInsert)
+    if (weaponsToInsert.length > 0) await trx('exo_weapons').insert(weaponsToInsert)
+
+    // Ordinateur(s) — un jet d'Intégrité PAR LIGNE, formule dépendant de SA PROPRE génération : un
+    // principal et un secours n'ont presque jamais la même génération (ex. Nymph 1-A : Gén. V vs
+    // Gén. II, deux formules RAW différentes) — jamais un seul jet réutilisé pour les deux.
+    const computerRows = await trx('ref_exo_template_computers')
+      .where({ template_id: templateId })
+      .orderBy('sort_order', 'asc')
+    for (const row of computerRows) {
+      const formula = resolveOrdinateurIntegrityFormula(row.gen)
+      const roll = await parseDice(formula)
+      await trx('exo_computers').insert({
+        character_id: characterId,
+        role: row.role,
+        gen: row.gen,
+        nt: row.nt,
+        integrite_max: roll.total,
+        integrite_current: roll.total,
+        sort_order: row.sort_order,
+      })
+    }
+
     return updated
   })
 }

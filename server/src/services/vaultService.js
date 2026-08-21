@@ -63,7 +63,6 @@ async function cloneExoSheet(trx, { sourceCharacterId, newCharacterId }) {
     avaries_graves: 0,
     avaries_critiques: 0,
     avaries_catastrophiques: 0,
-    damaged_systems: '{}',
     pilot_character_id: null,
   })
 }
@@ -120,8 +119,10 @@ const COMPANION_REGISTRY = {
     charSheetKeyed: [],
     // exo_sheet n'est PAS dans characterKeyed : cloneExoSheet la clone elle-même (voir sa
     // documentation — piège exo_sheet_pilot_unique), extraTables la garde couverte par le
-    // garde-fou anti-dérive sans repasser par le cloneRows générique.
-    characterKeyed: [],
+    // garde-fou anti-dérive sans repasser par le cloneRows générique. Les 4 tables ci-dessous
+    // (PLAN_EXOARMURE.md §13.4.3, migration 257) n'ont pas ce piège — character_id-keyed simple,
+    // clonées par le mécanisme générique comme drone_programs/drone_weapons ci-dessus.
+    characterKeyed: ['exo_systems', 'exo_weapons', 'exo_programs', 'exo_computers'],
     extraTables: ['exo_sheet'],
     onClone: cloneExoSheet,
   },

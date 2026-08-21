@@ -147,4 +147,87 @@ test('applyExoTemplate — templateId mal formé : AppError 400, jamais une erre
   }
 })
 
+// ─── Lot C (§13.4.4) — loadout Systèmes/Armement/Ordinateur ──────────────────────────────────────
+
+test('applyExoTemplate — copie le loadout exo_systems/exo_weapons avec Intégrité neuve fixe (20)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const template = await fx.insertTemplate()
+    await db('ref_exo_template_equipment').insert([
+      { template_id: template.id, family: 'systeme', label_override: 'Sonscan actif', sort_order: 0 },
+      { template_id: template.id, family: 'systeme', label_override: 'Communicateur Lénid', level: 3, sort_order: 1 },
+      { template_id: template.id, family: 'arme', label_override: 'Dague thermique', sort_order: 0 },
+    ])
+
+    await applyExoTemplate(db, fx.exoCharacter.id, template.id)
+
+    const systems = await db('exo_systems').where({ character_id: fx.exoCharacter.id }).orderBy('sort_order', 'asc')
+    const weapons = await db('exo_weapons').where({ character_id: fx.exoCharacter.id })
+    assert.equal(systems.length, 2)
+    assert.equal(weapons.length, 1)
+    assert.equal(systems[0].label_override, 'Sonscan actif')
+    assert.equal(systems[1].level, 3)
+    for (const row of [...systems, ...weapons]) {
+      assert.equal(row.integrite_max, 20, 'matériel neuf, jamais un jet (décision Saar 2026-08-21)')
+      assert.equal(row.integrite_current, 20)
+    }
+  } finally {
+    await fx.cleanup()
+  }
+})
+
+test('applyExoTemplate — copie exo_computers avec un jet d\'Intégrité PAR LIGNE, formule selon SA PROPRE génération', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const template = await fx.insertTemplate()
+    // Nymph 1-A réel (SEEDEXO.md:1029-1030) : principal Gén. V (palier 2d6+8, 10-20), secours Gén. II
+    // (palier 2d6+3, 5-15) — générations différentes, formules différentes, jamais le même jet réutilisé.
+    await db('ref_exo_template_computers').insert([
+      { template_id: template.id, role: 'principal', gen: 5, nt: 3, sort_order: 0 },
+      { template_id: template.id, role: 'secours', gen: 2, nt: 2, sort_order: 1 },
+    ])
+
+    await applyExoTemplate(db, fx.exoCharacter.id, template.id)
+
+    const computers = await db('exo_computers').where({ character_id: fx.exoCharacter.id }).orderBy('sort_order', 'asc')
+    assert.equal(computers.length, 2)
+    const [principal, secours] = computers
+    assert.equal(principal.role, 'principal')
+    assert.equal(principal.gen, 5)
+    assert.equal(principal.integrite_max, principal.integrite_current)
+    assert.ok(principal.integrite_max >= 10 && principal.integrite_max <= 20, `2d6+8 hors bornes : ${principal.integrite_max}`)
+    assert.equal(secours.role, 'secours')
+    assert.equal(secours.gen, 2)
+    assert.equal(secours.integrite_max, secours.integrite_current)
+    assert.ok(secours.integrite_max >= 5 && secours.integrite_max <= 15, `2d6+3 hors bornes : ${secours.integrite_max}`)
+  } finally {
+    await fx.cleanup()
+  }
+})
+
+test('applyExoTemplate — reselect d\'un second modèle remplace tout le loadout (aucune fusion)', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const templateA = await fx.insertTemplate({ name: 'A' })
+    await db('ref_exo_template_equipment').insert({ template_id: templateA.id, family: 'systeme', label_override: 'Système A' })
+    await db('ref_exo_template_computers').insert({ template_id: templateA.id, role: 'principal', gen: 1, nt: 1 })
+    await applyExoTemplate(db, fx.exoCharacter.id, templateA.id)
+
+    const templateB = await fx.insertTemplate({ name: 'B' })
+    await db('ref_exo_template_equipment').insert({ template_id: templateB.id, family: 'arme', label_override: 'Arme B' })
+    // Modèle B n'a aucun ref_exo_template_computers — l'ordinateur du modèle A ne doit pas survivre.
+    await applyExoTemplate(db, fx.exoCharacter.id, templateB.id)
+
+    const systems = await db('exo_systems').where({ character_id: fx.exoCharacter.id })
+    const weapons = await db('exo_weapons').where({ character_id: fx.exoCharacter.id })
+    const computers = await db('exo_computers').where({ character_id: fx.exoCharacter.id })
+    assert.equal(systems.length, 0, 'le système du modèle A doit avoir disparu')
+    assert.equal(weapons.length, 1)
+    assert.equal(weapons[0].label_override, 'Arme B')
+    assert.equal(computers.length, 0, 'l\'ordinateur du modèle A doit avoir disparu, modèle B n\'en a aucun')
+  } finally {
+    await fx.cleanup()
+  }
+})
+
 test.after(async () => { await db.destroy() })

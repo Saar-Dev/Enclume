@@ -184,7 +184,29 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 (schéma `ref_exo_equipment`), 252 (seed 16 armures RAW dans `ref_exo_templates`, jusque-là vide —
 débloque enfin le test navigateur), 253 (seed 84 lignes de systèmes/armes dans `ref_exo_equipment`) —
 les 3 testées up→down→up, 348/348 tests serveur verts après coup, `.test.mjs` dédiés par migration
-(patron `schemaAssertions.mjs`). Lien template↔loadout tranché depuis (§13.4.4, oui — Lot C).
+(patron `schemaAssertions.mjs`). Lien template↔loadout tranché depuis (§13.4.4, oui — Lot C). **Lot C — étape 1 (migration schéma
+257, PLAN_EXOARMURE.md §13.4) codée et testée contre PostgreSQL réel (2026-08-21)** : crée
+`exo_systems`/`exo_weapons`/`exo_programs`/`exo_computers` (instance) et `ref_exo_template_equipment`/
+`ref_exo_template_computers` (catalogue) — révision architecture Ordinateur actée avec Saar avant
+code (table dédiée `exo_computers`/`ref_exo_template_computers`, pas des colonnes scalaires : 4
+armures RAW/16 ont un ordinateur principal ET secours distincts). A immédiatement révélé et corrigé
+une régression réelle du garde-fou anti-dérive Vault (`assertRegistryUpToDate`) qui aurait cassé tout
+clonage Vault, tout type de personnage confondu. Suite ciblée 100/100. **`shared/computerStats.js`
+(formules Ordinateur + jet d'Intégrité par génération), `applyExoTemplate` étendu (loadout
+systèmes/armes à Intégrité neuve fixe 20 — décision Saar — + ordinateurs via jet par ligne), migration
+258 (`exo_programs.exo_computer_id`, Potentiel/Niveau max plafonnés par ordinateur précis, pas par
+armure — trou RAW trouvé et tranché avec Saar), et les 16 routes CRUD serveur (4 familles
+systèmes/armes/programmes/ordinateurs) codés et testés (2026-08-21)** — suite ciblée 101/101 + smoke
+test service-layer jetable, aucune régression. **Lot C entièrement codé (2026-08-21)** : panneaux
+client `ExoSystemsPanel.jsx`/`ExoWeaponsPanel.jsx`/`ExoComputerPanel.jsx` (disposition vérifiée contre
+la fiche RAW officielle `FDEA.webp` — Systèmes/Armement distincts, Programmes imbriqués sous
+Ordinateur), nouvelle route `GET /api/exo-equipment` (catalogue `ref_exo_equipment`, aucune n'existait
+côté client), câblage `ExoSheetWindow.jsx`. Relation ordinateur principal/secours précisée par Saar (le
+secours n'est actif que si le principal est HS, jamais en parallèle) : `resolveActiveComputer` affiche
+le bon badge. ESLint ciblé propre (0 nouveau problème), build client OK. **Reste avant jouable en jeu
+réel** : la session de transcription RAW du loadout des 16 modèles (§13.4.4, ~200-300 lignes,
+différée explicitement) et toute validation en navigateur par Saar (aucune n'a encore eu lieu sur ce
+Lot C).
 Pipeline exo-attaquant reste hors périmètre (§12.2 point 3, pas tranché). **Finition fiche exo
 (`PLAN_EXOARMURE.md` §13) — Lot A (Avaries) et Lot B (Base éditable, refactor architecture) codés et
 testés (2026-08-20)** : onglet Avaries câblé (grille de cases, `removeExoAvarie` GM-only) ; refactor

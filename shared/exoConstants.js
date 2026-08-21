@@ -15,6 +15,13 @@ export const EXO_CATEGORY_ORDER = [
 export const EXO_ENVIRONMENT_VALUES = ['submarine', 'surface', 'hybrid', 'atmospheric', 'spatial', 'industrial']
 export const EXO_MOVEMENT_MODE_VALUES = ['vit', 'pilot', 'blocked']
 
+// Whitelist CHECK exo_computers/ref_exo_template_computers (migration 257, chk_exo_computers_role/
+// chk_exo_template_computers_role) — RAW : "on peut monter plusieurs commandes différentes... comme
+// système de secours, mais jamais deux systèmes identiques à la fois" (docs/REGLES/SEEDEXO.md:22-24),
+// jamais plus de 2 exemplaires par armure (vérifié exhaustivement sur les 16 armures RAW,
+// PLAN_EXOARMURE.md §13.4.1). Consommée par les routes POST/PUT /:characterId/exo/computers[/:id].
+export const EXO_COMPUTER_ROLE_VALUES = ['principal', 'secours']
+
 // Résistance aux Dommages par catégorie (REGLEARMURE.md:90-98)
 export const EXO_RD_TABLE = {
   'exo-alpha': 0,

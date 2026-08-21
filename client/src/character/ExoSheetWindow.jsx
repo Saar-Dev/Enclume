@@ -5,10 +5,10 @@
  * découpe en onglets larges de CharacterWindow.jsx — Fiche/Paramètres, pas un onglet par module
  * (corrigé 2026-08-19, retour Saar : la première version posait un onglet par bloc RAW, ce que
  * CharacterWindow ne fait pas — ses modules sont empilés en sections repliables à l'intérieur de
- * l'onglet Feuille, voir CharacterSheet.jsx/CollapsibleBlock.jsx). Tous les modules sont posés dès
- * maintenant ; ceux dont le service serveur n'existe pas encore (Systèmes/Ordinateur Lot C — aucune
- * colonne/table en base, Incidents Lot 5) affichent un stub explicite plutôt qu'une fonctionnalité
- * muette. Avaries câblée (Lot A, PLAN_EXOARMURE.md §13.2).
+ * l'onglet Feuille, voir CharacterSheet.jsx/CollapsibleBlock.jsx). Avaries (Lot A), Systèmes/Armement/
+ * Ordinateur (Lot C, §13.4) câblés — seul Incidents (Lot 5, pas encore instruit) reste en stub.
+ * "weapons" ajoutée à SHEET_SECTIONS (2026-08-21) : la fiche RAW réelle (FDEA.webp) montre deux blocs
+ * "Systèmes auxiliaires"/"Armement" visuellement distincts, colonnes différentes — jamais fusionnés.
  *
  * Drag/resize : identique à DroneWindow/CharacterWindow (pointerdown header/handle → document).
  */
@@ -24,6 +24,9 @@ import ExoAttributesPanel from './ExoAttributesPanel.jsx'
 import ExoInfoPanel from './ExoInfoPanel.jsx'
 import ExoIntegrityPanel from './ExoIntegrityPanel.jsx'
 import ExoAvariesPanel from './ExoAvariesPanel.jsx'
+import ExoSystemsPanel from './ExoSystemsPanel.jsx'
+import ExoWeaponsPanel from './ExoWeaponsPanel.jsx'
+import ExoComputerPanel from './ExoComputerPanel.jsx'
 import ExoSettingsPanel from './ExoSettingsPanel.jsx'
 
 const WIN_INIT_W = 680
@@ -40,7 +43,7 @@ const INITIAL_POS = {
 // pas un onglet par module. Les sous-blocs de "sheet" (identity/integrity/avaries/systems/computer)
 // sont des sections repliables (SHEET_SECTIONS ci-dessous), pas des onglets.
 const OUTER_TABS = ['sheet', 'settings']
-const SHEET_SECTIONS = ['identity', 'attributes', 'info', 'integrity', 'avaries', 'systems', 'computer']
+const SHEET_SECTIONS = ['identity', 'attributes', 'info', 'integrity', 'avaries', 'systems', 'weapons', 'computer']
 
 // ─── Icônes ───────────────────────────────────────────────────────────────────
 const IconX = () => (
@@ -385,13 +388,23 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
               </div>
             </CollapsibleBlock>
 
-            {['systems', 'computer'].map(section => (
-              <CollapsibleBlock key={section} id={section} title={t(`exo.tab${section.charAt(0).toUpperCase()}${section.slice(1)}`)} open={openSections[section]} onToggle={toggleSection}>
-                <p style={{ color: '#4a4a60', fontSize: '12px', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
-                  {t('exo.comingSoon')}
-                </p>
-              </CollapsibleBlock>
-            ))}
+            <CollapsibleBlock id="systems" title={t('exo.tabSystems')} open={openSections.systems} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoSystemsPanel characterId={character.id} canEdit={canEdit} />
+              </div>
+            </CollapsibleBlock>
+
+            <CollapsibleBlock id="weapons" title={t('exo.tabWeapons')} open={openSections.weapons} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoWeaponsPanel characterId={character.id} canEdit={canEdit} />
+              </div>
+            </CollapsibleBlock>
+
+            <CollapsibleBlock id="computer" title={t('exo.tabComputer')} open={openSections.computer} onToggle={toggleSection}>
+              <div style={{ padding: '10px' }}>
+                <ExoComputerPanel characterId={character.id} canEdit={canEdit} />
+              </div>
+            </CollapsibleBlock>
           </div>
         )}
 

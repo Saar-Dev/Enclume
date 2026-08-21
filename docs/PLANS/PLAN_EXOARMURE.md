@@ -2094,6 +2094,180 @@ que les champs survivent).
 
 ### 13.4 Lot C — Systèmes / Armement / Ordinateur — détaillé (2026-08-20)
 
+> **Étape 1 (migration schéma) ✅ codée et testée contre PostgreSQL réel (2026-08-21)** —
+> `257_exo_loadout_schema.js`+test : crée `exo_systems`/`exo_weapons`/`exo_programs`/`exo_computers`
+> (instance) et `ref_exo_template_equipment`/`ref_exo_template_computers` (catalogue, révision
+> Ordinateur ci-dessus), retire les 4 colonnes jsonb mortes de `exo_sheet`. Appliquée automatiquement
+> par nodemon au démarrage serveur (P53) — a immédiatement révélé un régression réelle, pas seulement
+> hypothétique : `exo_systems`/`exo_weapons`/`exo_programs`/`exo_computers` portent une FK vers
+> `characters(id)` sans être enregistrées dans `COMPANION_REGISTRY` (`vaultService.js`), ce qui aurait
+> fait échouer `assertRegistryUpToDate` — donc **tout** clonage Vault, pour **tout** type de personnage
+> (pas seulement exo) — en 500 dès le prochain clonage. Corrigé dans la foulée (même commit que la
+> migration, pas différé) : retrait de `damaged_systems: '{}'` dans `cloneExoSheet` (colonne
+> supprimée), ajout des 4 nouvelles tables à `COMPANION_REGISTRY.exo.characterKeyed`. La remise à neuf
+> de `integrite_current` au clonage (§13.4.3 point 3 ci-dessous) reste différée — aucune ligne
+> `exo_systems`/`exo_weapons`/`exo_computers` n'existe encore en pratique (routes pas encore codées),
+> donc aucun risque actif tant que ce Lot n'est pas allé plus loin.
+> **Testé** : suite ciblée exo/vault contre PostgreSQL réel (100/100 : migrations 233/243/251/252/253/
+> 254/255/257, `exoTemplateService`, `exoAvarieService`, `combatantContextService`,
+> `movementBudgetService`, `vaultCloneRegistry` — ce dernier confirme explicitement que
+> `cloneCharacterDeep` réussit à nouveau pour pj/drone/exo). `233_exo_sheet.test.mjs` mis à jour (son
+> test "schéma réel" vérifiait encore les 4 colonnes retirées par 257 — corrigé en distinguant "ce que
+> 233 crée dans son propre replay transactionnel" de "ce qui survit dans le schéma déployé aujourd'hui",
+> jamais une modification de la logique `up()`/`down()` de 233 elle-même, CLAUDE.md §5). **Non testé** :
+> suite serveur complète (tentative avortée — collision de port avec le serveur dev de Saar déjà
+> lancé, pas retentée pour ne pas perturber sa session) ; reste des étapes 2+ de ce Lot (services,
+> routes, panneaux client) à coder avant toute validation navigateur.
+>
+> **Étape 2 (`shared/computerStats.js`) ✅ codée et testée (2026-08-21)** — `computeOrdinateurStats`
+> (4 formules RAW, exemple chiffré p.280 vérifié littéralement + un second jeu gen/nt distinct pour
+> confirmer qu'un principal et un secours de génération différente donnent bien des profils
+> différents) et `computeBlindageIemCost`, tous deux avec garde explicite `gen`/`nt`/`niv` absent →
+> `null` (jamais un NaN silencieux, `0` traité comme une valeur valide distincte de "absent"). L'Intégrité
+> de départ (jet, pas une formule) reste volontairement hors de ce fichier — à câbler dans
+> `applyExoTemplate` via `parseDice` (§13.4.1). **Testé** : `node --check` + 8/8 tests (fonction pure,
+> aucun accès DB, tourne toujours). **Non testé** : aucun appelant réel ne consomme encore cette
+> fonction (ni serveur ni client) — prochaine étape logique.
+>
+> **Étape 2bis (`resolveOrdinateurIntegrityFormula`) ✅ ajoutée à `computerStats.js` (2026-08-21)** —
+> table RAW directe (Gén. I-II → `2d6+3`, III-VIII → `2d6+8`, IX-X → `3d6+7`,
+> `REGLE_ORDINATEUR.md:91-93`), erreur explicite hors plage I-X. **Testé** : 2/2 tests (bornes exactes
+> des 3 paliers, rejet hors plage).
+>
+> **Étape 3 (`applyExoTemplate` étendu — loadout complet) ✅ codée et testée contre PostgreSQL réel
+> (2026-08-21)** — trou trouvé en préparant cette étape : ni `ref_exo_equipment` ni
+> `ref_exo_template_equipment` ne portaient de colonne Intégrité, contrairement à l'Ordinateur (qui a
+> sa propre table par Génération). Question posée à Saar (2026-08-21) : **Intégrité de départ de
+> `exo_systems`/`exo_weapons` copiés depuis un loadout = fixe à 20 (matériel neuf)**, jamais un jet —
+> tranché explicitement, distinct de la règle générale "matériel d'occasion 2D6+6" de l'intro
+> `SEEDEXO.md` (qui ne s'applique pas aux armures prémade RAW, sorties d'usine). L'Ordinateur garde
+> son propre jet par génération (règle RAW dédiée, aucune alternative "neuf" dans le texte source —
+> pas de contradiction avec la décision ci-dessus). `applyExoTemplate` : après la copie des champs de
+> base, écrase tout le loadout existant (`DELETE` sur `exo_systems`/`exo_weapons`/`exo_computers` du
+> personnage — même verrou `FOR UPDATE` déjà posé sur `exo_sheet` qui sérialise l'ensemble, pas de
+> second verrou nécessaire), puis réinsère depuis `ref_exo_template_equipment` (Intégrité fixe 20) et
+> `ref_exo_template_computers` (un `parseDice` **par ligne**, formule selon **sa propre** génération —
+> vérifié explicitement par test qu'un principal Gén. V et un secours Gén. II tirent deux formules
+> différentes, jamais le même jet réutilisé). **Testé** : suite ciblée 98/98 contre PostgreSQL réel
+> (`exoTemplateService` 9/9 dont les 3 nouveaux : Intégrité neuve fixe, jet par ligne avec bornes
+> vérifiées par formule, écrasement complet au changement de modèle — relancé 3x pour confirmer la
+> stabilité des assertions dépendant du hasard ; `computerStats` 10/10 ; migrations 233/254/257 ;
+> `exoAvarieService`/`combatantContextService`/`movementBudgetService`/`vaultCloneRegistry`, aucune
+> régression). **Non testé** : aucune route/UI ne consomme encore le loadout — reste à coder (routes
+> systèmes/armes/programmes/ordinateurs, panneaux client), puis la session de transcription RAW
+> (§13.4.4, ~200-300 lignes).
+>
+> **Étape 4 (migration 258 — `exo_programs.exo_computer_id`) ✅ codée et testée (2026-08-21)** — trou
+> trouvé en préparant les routes `POST/PUT /:characterId/exo/programs` : le RAW plafonne Potentiel/
+> Niveau max **par ordinateur** (`REGLE_ORDINATEUR.md:11,16`, singulier), or une exo peut porter 0/1/2
+> ordinateurs distincts (§13.4.1). Question posée à Saar : **`exo_computer_id` nullable, `ON DELETE
+> SET NULL`** (un programme survit à la suppression de son ordinateur, devient simplement "non géré"
+> plutôt que détruit — cohérent avec le texte RAW lui-même). **Testé** : 3/3 tests migration (schéma,
+> up/down, SET NULL vérifié explicitement par insertion + suppression réelle de l'ordinateur).
+>
+> **Étape 5 (routes serveur — 4 familles, 16 routes) ✅ codées (2026-08-21)** —
+> `char-sheet.js` : `GET/POST/PUT/DELETE` pour `/:characterId/exo/{systems,weapons,computers,programs}`,
+> patron uniforme (4 GET séparées, jamais agrégées dans `GET /:characterId/exo`, décision confirmée par
+> Saar — le précédent drone est asymétrique entre programmes bundlés et armes séparées, pas reproduit).
+> Permission uniforme `exoIsGmOrOwnerOrPilot`. Deux divergences assumées et documentées par rapport au
+> précédent drone (code neuf, pas de raison de reproduire ses lacunes connues) : (1) jamais la
+> vérification inline `req.character.user_id === req.user.id` que `PUT /drone/weapons/:id`
+> réimplémente au lieu de réutiliser son propre helper ; (2) `PUT /:characterId/exo/programs/:id`
+> **revalide** Potentiel/Niveau max si `level`/`exo_computer_id` changent (`drone_programs` ne le fait
+> jamais, gap préexistant non corrigé côté drone, juste pas reproduit ici). `exo_computer_id` optionnel
+> sur `POST/PUT /exo/programs` : si fourni, validé (appartenance au personnage + `computeOrdinateurStats`
+> pour Potentiel/Niveau max) ; si absent, aucune validation (mirror le comportement du drone quand
+> `ordinateur_gen`/`nt` sont NULL). **Testé** : `node --check` + import ESM réel du module (résout tous
+> les imports, aucune erreur d'enregistrement de route) + smoke test jetable (hors dépôt, scratchpad)
+> exerçant les requêtes knex réelles des 4 familles contre PostgreSQL réel — insert/update/delete
+> `exo_systems`/`exo_weapons`, deux `exo_computers` de rôles/générations distincts, calcul Potentiel
+> réel (Gén. V/NT III → 40, cohérent avec `computerStats`), détection d'un dépassement de Potentiel
+> simulée, et confirmation réelle que `exo_computer_id` passe à `NULL` (pas de cascade) quand
+> l'ordinateur est supprimé — 9/9. Suite ciblée existante 101/101, aucune régression. **Non testé** :
+> aucun scénario HTTP de bout en bout (ce projet n'a pas d'infrastructure de test HTTP, routes
+> validées par lecture + smoke test service-layer, comme tous les lots précédents) ; aucune UI ne les
+> consomme encore. Reste : panneaux client (`ExoSystemsPanel.jsx`/`ExoWeaponsPanel.jsx`/
+> `ExoProgramsPanel.jsx`/`ExoComputerPanel.jsx`), câblage `ExoSheetWindow.jsx`, clés i18n, puis la
+> session de transcription RAW (§13.4.4).
+>
+> **Précision RAW — relation principal/secours (Saar, 2026-08-21), à retenir pour le panneau client et
+> pour Lot 5** : le "secours" n'est **jamais actif en parallèle** du "principal" — il reste inactif
+> tant que le principal est fonctionnel, et ne prend le relais que lorsque celui-ci tombe HS (Intégrité
+> courante ≤ 0, même convention que le Générateur exo, `exoStats.js`). N'affecte ni le schéma
+> (257/258) ni `computeOrdinateurStats` (Potentiel/Niveau max restent des propriétés du matériel, pas
+> de son état d'activation — un programme installé sur le secours occupe bien son propre budget, prêt
+> à l'emploi même hors service) : l'activation est un état de combat/runtime dérivé, jamais stocké,
+> hors périmètre du Lot C (qui ne couvre que la fiche). **`resolveActiveComputer(computers)` ajoutée à
+> `computerStats.js`** (fonction pure, dérive l'ordinateur actif à partir d'`integrite_current`) pour
+> que le panneau client à venir puisse afficher correctement lequel des deux fonctionne réellement,
+> plutôt que de présenter les deux comme équivalents. **Testé** : 6/6 tests (principal fonctionnel,
+> relais au principal HS, aucun relais possible sans secours, cas à un seul ordinateur, aucun
+> ordinateur, les deux HS). 16/16 au total sur `computerStats.test.mjs`.
+>
+> **Précision RAW — catalogue "Programmes" (Saar, 2026-08-21)** : pas de liste de programmes propre
+> aux exo-armures dans le Livre de Base (confirmé — aucun des 16 loadouts `SEEDEXO.md` n'en liste),
+> parce que RAW traite l'Ordinateur comme un sous-système générique "incorporé à des ordinateurs de
+> drones ou d'appareils" (`REGLE_ORDINATEUR.md:101`) — un seul catalogue partagé, pas un par
+> plateforme. Vérifié en base : `ref_equipment` famille `'Logiciels'` (34 lignes) mélange
+> effectivement des programmes de comportement drone (Esquive, Pilotage, Contact, Balistique,
+> Bombardement), des programmes ordinateur génériques (Sécurité, Offensif, Cryptage, Décryptage,
+> Brise-code, Analyse senseurs, Communication...) et des programmes médicaux/scientifiques
+> (Chirurgie, Analyse médicale, Science botanique...) — une seule famille RAW, pas trois. **Corrigé
+> côté route** : `POST /:characterId/exo/programs` (§13.4.2/étape 5) ne filtrait sur aucune famille
+> (mirror strict de `drone_programs`, qui ne filtre pas non plus) — resserré à `family: 'Logiciels'`
+> (divergence documentée, empêche seulement d'assigner une arme/armure comme "programme" par erreur ;
+> pas de sous-filtre par `category` esquive/medical/etc., RAW ne distingue pas non plus quel programme
+> convient à quelle plateforme, jugement MJ). `drone_programs` non touché (hors périmètre, code
+> existant). **Testé** : `node --check` + réimport du module, aucune erreur.
+>
+> **Étape 6 (panneaux client) ✅ codée (2026-08-21) — Lot C entièrement codé.** Consultation directe de
+> la fiche RAW officielle (`docs/REGLES/FDEA.webp`) avant de trancher la disposition, plutôt que de
+> deviner : confirme que "Systèmes auxiliaires" et "Armement" sont deux blocs visuellement distincts
+> (colonnes différentes : Matériel/Niv./Description/ITG vs Dom./Choc/Portée/Ini./Mode de tir/Mun./
+> Notes/NT/ITG) — jamais fusionnés (§13.4.3 laissait la question ouverte) ; et que "Programmes" est
+> imbriqué **à l'intérieur** du bloc "Ordinateur" sur la fiche officielle, pas une section à part —
+> confirme le choix de scoper `exo_programs` par `exo_computer_id` (étape 4) au niveau UI aussi.
+> `ExoSystemsPanel.jsx`/`ExoWeaponsPanel.jsx` (catalogue `GET /api/exo-equipment`, nouvelle route —
+> aucune n'existait pour lister `ref_exo_equipment` côté client, trou trouvé en préparant ce panneau ;
+> mirror `exoTemplates.js`) + `ExoComputerPanel.jsx` (une carte par ordinateur avec badge Actif/En
+> veille via `resolveActiveComputer`, programmes imbriqués par ordinateur avec jauge Potentiel
+> utilisé/max en direct). `SHEET_SECTIONS` (`ExoSheetWindow.jsx`) étendue de `'weapons'`, stub retiré
+> pour les 3 sections. Clés i18n ajoutées sous `exo.*` (fr.json), `exo.category.*` non dupliquée —
+> réutilise `drone.category.*` (même catalogue `Logiciels` partagé, étape "précision programmes").
+> `exo.comingSoon` devenue orpheline, supprimée (dernier usage retiré par ce Lot). **Testé** : ESLint
+> ciblé sur les 4 fichiers touchés (0 erreur/0 warning sur les 3 nouveaux panneaux ; 1 erreur
+> `react-hooks/set-state-in-effect` sur `ExoSheetWindow.jsx` — préexistante, confirmée hors diff de ce
+> Lot, même trouvaille que le Lot A/B), lint complet du client (159 problèmes préexistants ailleurs
+> dans le repo, aucun nouveau), build client complet réussi. **Non testé** : scénario réel navigateur
+> (à la charge de Saar, comme toujours) — créer/éditer/retirer un système, une arme, un ordinateur
+> (principal + secours), un programme scopé par ordinateur, vérifier le badge Actif/En veille et la
+> jauge Potentiel en conditions réelles.
+>
+> **Reste avant que le Lot C soit jouable en jeu réel** : la session de transcription RAW (§13.4.4,
+> ~200-300 lignes de loadout `ref_exo_template_equipment`/`ref_exo_template_computers`, différée
+> explicitement à une session dédiée) — sans elle, `applyExoTemplate` copie un loadout vide pour les
+> 16 modèles existants (rien à copier, pas un bug, juste aucune donnée à copier). Le catalogue
+> `ref_exo_equipment` (Systèmes/Armement libres) et le catalogue `Logiciels` (Programmes) sont déjà
+> peuplés et utilisables dès maintenant, indépendamment de cette transcription.
+>
+> **Bug trouvé par Saar en premier test navigateur réel (2026-08-21)** : un système/une arme ajouté(e)
+> depuis le catalogue affiche "—" au lieu de son nom. Diagnostiqué en base avant tout correctif
+> (`GET` rejoué manuellement sur la ligne réelle de Saar : `display_name` correct, "Lance-harpons AV")
+> — donc pas un problème de données ni de `GET`. Cause racine trouvée par lecture : **`POST`/`PUT` sur
+> `exo_systems`/`exo_weapons` renvoyaient la ligne brute (`.returning('*')`, sans jointure
+> `ref_exo_equipment`)**, contrairement à `GET` — mirror manqué du précédent `drone_weapons`, qui
+> refait bien la jointure après `insert`/`update` (`char-sheet.js:1842-1856,1885-1899`, lu au moment
+> d'écrire ce Lot mais pas appliqué à ces deux routes précises). Le state client optimiste (POST) puis
+> toute édition (PUT, ex. Intégrité) réinjectait donc une ligne sans `display_name`, écrasant même une
+> valeur correcte lue juste avant par `GET`. Corrigé : `selectExoSystemFields`/`selectExoWeaponFields`
+> (helpers partagés, un seul SELECT par table au lieu de 3 copies GET/POST/PUT divergentes) — `POST`
+> insère puis rejoue le SELECT enrichi sur l'`id` retourné, `PUT` idem après l'`UPDATE`. **Testé** :
+> simulation directe du nouveau flux POST contre PostgreSQL réel (insert + re-select, `display_name`
+> correct), suite ciblée 95/95, `node --check` + réimport du module. **Non testé** : re-confirmation
+> navigateur par Saar (le correctif n'a pas encore été revu en conditions réelles après ce fix).
+
+
+
 > **Deux corrections à la synthèse du 2026-08-20 (§13.1), trouvées en vérifiant le code réel du drone
 > avant de rédiger ce détail — pas juste supposées par analogie :**
 > 1. Le drone ne dérive **pas déjà** les stats Ordinateur. `drone_sheet.ordinateur_gen`/`ordinateur_nt`
@@ -2106,8 +2280,27 @@ que les champs survivent).
 >    l'Intégrité qu'au niveau du drone entier, `drone_sheet.integrite_*`). La fiche RAW (`FDEA.webp`)
 >    montre pourtant un ITG par ligne de Systèmes/Armement — extension réelle par rapport au patron
 >    drone, pas une simple copie.
+>
+> **Troisième correction, trouvée en reprenant ce Lot le 2026-08-21 — le point 1 de §13.4.1 ci-dessous
+> était faux, pas juste incomplet.** L'analyse du 2026-08-20 affirmait "la ligne 'Ordinateur NT X,
+> Gén. Y' apparaît dans le loadout de la quasi-totalité des 16 armures" sans avoir compté combien
+> d'armures en montrent réellement DEUX. Vérification ligne à ligne de `SEEDEXO.md` (pas un sondage) :
+> **4 armures sur 16 (Nymph 1-A:1029-1030, Heimdall-Pyrelia:1402-1403, Odin:1497-1498,
+> Moloch:1612-1613) ont un ordinateur "principal" ET un ordinateur "secours" distincts, chacun avec
+> son propre NT/Gén.** Même mécanisme RAW que la redondance des interfaces de contrôle ("on peut
+> monter plusieurs commandes différentes sur un même appareil comme système de secours, mais jamais
+> deux systèmes identiques à la fois", `SEEDEXO.md:22-24`) — et le texte RAW liste d'ailleurs
+> l'Ordinateur **à l'intérieur** du bloc "Systèmes auxiliaires" de chaque fiche, jamais dans les
+> Attributs, cohérent avec un système redondant comme un autre plutôt qu'une stat de base unique.
+> Deux colonnes scalaires (`ordinateur_gen`/`ordinateur_nt` sur `exo_sheet`) ne peuvent physiquement
+> pas porter un second ordinateur — la transcription du loadout (§13.4.4) aurait perdu silencieusement
+> l'ordinateur de secours sur 25% du catalogue, sans erreur ni signal, la classe de bug que ce plan a
+> justement débusquée et corrigée à plusieurs reprises ailleurs (backfill Lot B, `computeExoStats`
+> "jamais un NaN silencieux", etc.). **Décision Saar (2026-08-21, question posée explicitement avant
+> tout code) : table dédiée plutôt que colonnes scalaires** — voir §13.4.1 réécrit ci-dessous, qui
+> remplace intégralement l'ancienne conclusion (barrée, gardée pour trace du raisonnement invalidé).
 
-#### 13.4.1 Ordinateur
+#### 13.4.1 Ordinateur — révisé (2026-08-21)
 
 **Formules RAW** (`docs/REGLES/REGLE_ORDINATEUR.md` p.280-281, fournies par Saar) — nouveau fichier
 pur **`shared/computerStats.js`** (même famille que `exoStats.js`/`polarisUtils.js`, jamais un accès
@@ -2120,41 +2313,55 @@ DB) :
 - Coût du Blindage IEM (`(niv×niv)×200`) : fonction séparée, `niv` est un choix (équipement acheté),
   pas dérivé de `gen`/`nt`.
 
-**Les 5 champs ne sont PAS homogènes — vérifié ligne à ligne contre `SEEDEXO.md` avant de trancher,
-pas deviné (analyse à charge 2026-08-20) : 3 mécanismes différents, pas une seule "copie".**
+**~~Les 5 champs ne sont PAS homogènes... 3 mécanismes différents, pas une seule "copie".~~ — analyse du
+2026-08-20 gardée pour trace, invalidée par la trouvaille du 2026-08-21 ci-dessus (point 1 supposait un
+seul ordinateur par armure). Les 3 mécanismes identifiés (copié / tiré / manuel) restent corrects
+individuellement — c'est la forme de stockage (scalaire vs ligne) qui change ci-dessous, pas la nature
+de chaque champ.**
 
-1. **`ordinateur_gen`/`ordinateur_nt` — copiés depuis le template, comme les stats de base.** La ligne
-   "Ordinateur NT X, Gén. Y" apparaît dans le loadout de la quasi-totalité des 16 armures (vérifié,
-   pas un cas isolé) — c'est une donnée "d'usine" par modèle, même nature que EXF/Blindage.
-   **Conséquence concrète sur le Lot B déjà écrit** : `ref_exo_templates` a besoin de 2 colonnes
-   nouvelles (`ordinateur_gen`/`ordinateur_nt`, absentes aujourd'hui) — ajoutées dans la migration de
-   **ce** Lot C (rien avant C n'en a besoin), mais copiées par l'étape de copie de base
-   d'`applyExoTemplate` (Lot B, §13.3) qu'il faut étendre de 2 champs, **pas** par l'étape "loadout"
-   séparée (§13.4.4) — deux extensions différentes de la même fonction, pas une seule.
-2. **`ordinateur_integrite_max`/`ordinateur_integrite_current` — jamais copiés, un jet.** Le RAW est
-   explicite : l'Intégrité de départ d'un ordinateur dépend d'un jet selon sa génération (2D6+3 Gén
-   I-II / 2D6+8 Gén III-VIII / 3D6+7 Gén IX-X) — chaque exemplaire tire la sienne, une copie depuis le
-   template n'a pas de sens (deux exo du même modèle auraient la même Intégrité par construction, faux
-   RAW). **Troisième étape à ajouter dans `applyExoTemplate`** (après la copie de base, qui vient de
-   fixer `ordinateur_gen` dans la même transaction) : `parseDice` sur la formule correspondant à la
-   génération tout juste copiée, résultat stocké une fois pour toutes (comme toute Intégrité de départ
-   d'équipement, jamais recalculé).
-3. **`ordinateur_blindage_iem` — ni copié, ni tiré, manuel.** Vérifié : "Blindage IEM" n'apparaît que
-   sur 2-3 des 16 loadouts (Heimdall-Pyrelia, Odin, au moins un autre), et **jamais comme une valeur
-   propre à l'ordinateur** — toujours une note collective ("tous ces systèmes ont un Blindage IEM de
-   niv. 3", `SEEDEXO.md:1265,1470`), pas un champ isolable par computeur. Retenu : champ manuel,
-   directement éditable (même liste que les 22 champs du Lot B), jamais peuplé par `applyExoTemplate`
-   — ni copie ni jet ne conviennent à une donnée aussi inconsistante d'une armure à l'autre.
+**Décision révisée — table dédiée, pas des colonnes scalaires sur `exo_sheet`/`ref_exo_templates`.**
+Un ordinateur exo est un système à cardinalité variable (0, 1 ou 2 par armure selon le RAW réel), exactement
+la même famille de besoin que `exo_systems`/`exo_weapons`/`exo_programs` juste en dessous (§13.4.2-13.4.3)
+— pas une stat de base à cardinalité fixe comme EXF/Blindage. Cohérent avec la doctrine déjà appliquée
+tout au long de ce chantier (une table par concept à cardinalité N, jamais des colonnes `_secours_*`
+dupliquées façon anti-patron `*_turns_left` déjà rejeté au cadrage §1.8).
 
-**Colonnes `exo_sheet` (nouvelles)** : `ordinateur_gen` (smallint), `ordinateur_nt` (smallint),
-`ordinateur_blindage_iem` (integer, manuel), `ordinateur_integrite_max`/`ordinateur_integrite_current`
-(integer, tirés). Mirror `drone_sheet` pour les 2 premiers seulement — les 3 autres n'ont aucun
-équivalent côté drone.
+**`ref_exo_template_computers`** (catalogue, migration de ce Lot) : `id`, `template_id` FK
+`ref_exo_templates` `ON DELETE CASCADE` (même sémantique que `ref_exo_template_equipment`, §13.4.4 —
+une ligne de loadout catalogue n'a aucun sens sans son template), `role text CHECK IN ('principal',
+'secours')`, `gen smallint NOT NULL`, `nt smallint NOT NULL`, `sort_order smallint`.
 
-**Piste notée, pas engagée maintenant** : `DroneSheet.jsx` a les deux mêmes colonnes brutes
-(`ordinateur_gen`/`nt`) sans jamais afficher les valeurs dérivées — `computeComputerStats` pourrait
-lui bénéficier gratuitement une fois écrite. Hors périmètre de ce chantier exo, à proposer séparément
-si Saar veut l'étendre au drone.
+**`exo_computers`** (instance, character_id-keyed comme `exo_systems`/`exo_weapons`/`exo_programs`) :
+`id`, `character_id` FK `characters` `ON DELETE CASCADE`, `role text CHECK IN ('principal','secours')`,
+`gen smallint NOT NULL`, `nt smallint NOT NULL`, `blindage_iem integer` (manuel, nullable — la
+trouvaille du 2026-08-20 tient toujours : "Blindage IEM" n'est jamais imputable à un ordinateur précis
+dans le texte source, encore moins de raison qu'il soit identique entre principal et secours une fois
+que les deux existent comme lignes distinctes), `integrite_max`/`integrite_current integer` (tirés,
+jamais copiés — RAW explicite : l'Intégrité de départ dépend d'un jet selon la génération, 2D6+3 Gén
+I-II / 2D6+8 Gén III-VIII / 3D6+7 Gén IX-X, chaque exemplaire tire la sienne), `sort_order smallint`.
+Pas de contrainte d'unicité `(character_id, role)` : rien dans le RAW n'interdit explicitement un
+exemplaire personnalisé avec deux ordinateurs "principal" après remplacement d'un composant — la seule
+règle citée ("jamais deux systèmes identiques à la fois") porte sur le catalogue standard, pas une
+garantie applicative à faire respecter en base.
+
+**`applyExoTemplate` étendu d'une étape supplémentaire** (même transaction que la copie de base et le
+loadout `exo_systems`/`exo_weapons`, §13.4.4) : pour chaque ligne `ref_exo_template_computers` du
+template sélectionné, insère une ligne `exo_computers` avec `gen`/`nt`/`role` copiés et
+`integrite_current = integrite_max` = résultat d'un `parseDice` sur la formule correspondant à `gen`
+(`server/src/lib/diceParser.js`, déjà utilisé partout ailleurs dans le projet — pas de nouvelle logique
+de dés). Changer de modèle réapplique le même écrasement complet déjà acté pour `exo_systems`/
+`exo_weapons` (§13.4.4) : les `exo_computers` existants sont remplacés par le loadout d'usine du
+nouveau modèle, pas fusionnés.
+
+**Formules dérivées** (`computeOrdinateurStats`, ci-dessous) appelées **par ligne** `exo_computers` —
+`ExoComputerPanel.jsx` affiche une carte par ordinateur (principal, puis secours s'il existe), jamais un
+seul jeu de stats agrégé pour l'armure entière.
+
+**Piste notée, pas engagée maintenant** : `drone_sheet.ordinateur_gen`/`ordinateur_nt` restent des
+colonnes scalaires (le drone n'a jamais de redondance dans son propre patron actuel) — `DroneSheet.jsx`
+n'affiche toujours aucune valeur dérivée, `computeComputerStats` pourrait lui bénéficier gratuitement
+une fois écrite, sans changer son schéma. Hors périmètre de ce chantier exo, à proposer séparément si
+Saar veut l'étendre au drone.
 
 #### 13.4.2 Programmes — mirror exact `drone_programs`
 
@@ -2226,13 +2433,15 @@ future l'ajoutera quand le Lot 5 sera réellement détaillé.
 **Migrations pour ce Lot — schéma et seed séparés**, même discipline déjà appliquée à
 `ref_exo_equipment` (251 schéma / 252 modèles / 253 équipement, §12.4) plutôt qu'un seul fichier
 géant : une migration schéma (crée `exo_systems`/`exo_weapons`/`exo_programs`/
-`ref_exo_template_equipment`, ajoute `ordinateur_gen`/`ordinateur_nt` à `ref_exo_templates`, les 5
-colonnes Ordinateur à `exo_sheet`, retire `equipped_systems`/`hardpoints`/`isolated_systems`/
-`damaged_systems`), une migration seed séparée pour les ~200-300 lignes de
-`ref_exo_template_equipment` transcrites (§13.4.4 — volume qui justifie à lui seul la séparation).
-`ref_exo_template_equipment.template_id` : `ON DELETE CASCADE` (une ligne de loadout n'a aucun sens
-sans son template, contrairement à `exo_sheet.template_id` qui reste `SET NULL` — une exo-armure
-existe indépendamment de son modèle d'origine, pas une ligne de loadout catalogue).
+`ref_exo_template_equipment`/`exo_computers`/`ref_exo_template_computers` (les deux dernières, révision
+2026-08-21 §13.4.1 — remplace l'idée initiale de colonnes `ordinateur_*` sur `exo_sheet`/
+`ref_exo_templates`), retire `equipped_systems`/`hardpoints`/`isolated_systems`/`damaged_systems`),
+une migration seed séparée pour les ~200-300 lignes de `ref_exo_template_equipment`/
+`ref_exo_template_computers` transcrites (§13.4.4 — volume qui justifie à lui seul la séparation).
+`ref_exo_template_equipment.template_id`/`ref_exo_template_computers.template_id` : `ON DELETE CASCADE`
+(une ligne de loadout n'a aucun sens sans son template, contrairement à `exo_sheet.template_id` qui
+reste `SET NULL` — une exo-armure existe indépendamment de son modèle d'origine, pas une ligne de
+loadout catalogue).
 
 **Corrigé — "colonnes mortes, jamais lues par aucun code" était faux, jamais vérifié côté écriture
 (analyse à charge 2026-08-20).** `vaultService.js:51-68` (`cloneExoSheet`, clonage Vault d'une
@@ -2244,15 +2453,22 @@ ce Lot**, trois changements :
 2. **Plus grave, sans rapport avec les jsonb** : `COMPANION_REGISTRY.exo.characterKeyed` (`:118-127`)
    vaut `[]` aujourd'hui — un garde-fou anti-dérive existant (`assertRegistryUpToDate`,
    `vaultCloneRegistry.test.mjs`) fait échouer `cloneCharacterDeep` en 500 pour **tout type de
-   personnage** si une table avec FK vers `characters` n'est ni enregistrée ni exclue. Les 3
-   nouvelles tables doivent y être ajoutées (`['exo_systems', 'exo_weapons', 'exo_programs']`),
+   personnage** si une table avec FK vers `characters` n'est ni enregistrée ni exclue. Les 4
+   nouvelles tables character_id-keyed doivent y être ajoutées (`['exo_systems', 'exo_weapons',
+   'exo_programs', 'exo_computers']` — révisé 2026-08-21, `exo_computers` inclus depuis §13.4.1),
    même mécanisme générique déjà éprouvé pour le drone (`:115`,
    `['drone_sheet', 'drone_programs', 'drone_weapons']`) — sinon ce Lot casse le clonage Vault de
    n'importe quel personnage à son déploiement, pas seulement d'une exo.
-3. **Cohérence, pas obligation technique** : `cloneExoSheet` remet déjà `itg_structure/exosquelette/
-   generator_current` à leur max au clonage ("un export reste un modèle réutilisable, pas un
-   instantané endommagé") — ajouter le même traitement à `ordinateur_integrite_current` une fois la
-   colonne créée, par cohérence avec la philosophie déjà écrite dans cette fonction.
+3. **Cohérence, pas obligation technique — étendue par la révision 2026-08-21** : `cloneExoSheet`
+   remet déjà `itg_structure/exosquelette/generator_current` à leur max au clonage ("un export reste un
+   modèle réutilisable, pas un instantané endommagé"). `exo_systems`/`exo_weapons`/`exo_computers`
+   passent par le `characterKeyed`/`cloneRows` générique (point 2 ci-dessus), qui copie
+   `integrite_current` tel quel — un export endommagé resterait endommagé dans le Coffre, contraire à
+   la même philosophie. `cloneExoSheet` (l'`onClone` de l'entrée `exo`) s'exécute **après** la boucle
+   `characterKeyed` (`cloneCharacterDeep`, ordre déjà vérifié dans le code) — lui ajouter un
+   `UPDATE exo_systems/exo_weapons/exo_computers SET integrite_current = integrite_max WHERE
+   character_id = newCharacterId` en fin de fonction couvre les 3 tables sans toucher au mécanisme
+   générique ni dupliquer la logique de remise à neuf.
 
 **Client** : nouvelles sections dans `ExoSheetWindow.jsx` (`systems`/`computer` déjà dans
 `SHEET_SECTIONS`, retirés de la boucle stub comme `avaries` au Lot A) — `ExoSystemsPanel.jsx`,
@@ -2285,15 +2501,21 @@ nullable, `label_override` text nullable (même CHECK `equipment_id IS NOT NULL 
 NOT NULL` que les 3 tables sœurs, §13.4.2 — **nécessaire ici en particulier** : l'ambiguïté trouvée le
 2026-08-19 sur les analyseurs sonscan de niveau identique, sans discriminant fiable dans le texte
 source, se résout par `label_override` plutôt que par une FK devinée), `level` integer nullable
-(même sémantique "niveau acheté" que `exo_systems.level`), `sort_order`.
+(même sémantique "niveau acheté" que `exo_systems.level`), `sort_order`. L'Ordinateur n'y transite pas
+— `ref_exo_template_computers` (§13.4.1, révision 2026-08-21) est sa propre table, pas une ligne
+`family` supplémentaire ici : contrairement à `exo_systems`/`exo_weapons`, une ligne Ordinateur porte
+`gen`/`nt` (deux entiers), pas un `equipment_id`/`label_override` — forme de données différente, table
+différente plutôt qu'un `family IN ('arme','systeme','ordinateur')` avec des colonnes qui ne
+s'appliqueraient qu'à un seul des trois cas.
 
 **`applyExoTemplate` étendu (§13.3)** : après la copie des champs de base, insère une ligne
 `exo_systems`/`exo_weapons` par ligne `ref_exo_template_equipment` du template sélectionné —
-`integrite_current = integrite_max` (état neuf), niveau copié tel quel. Changer de modèle réapplique
-la même logique d'écrasement complet déjà actée pour les champs de base (§13.3) : les
-`exo_systems`/`exo_weapons` existants de l'instance sont remplacés par le loadout d'usine du nouveau
-modèle, pas fusionnés — cohérence avec la règle déjà posée, pas une règle séparée à inventer pour le
-loadout.
+`integrite_current = integrite_max` (état neuf), niveau copié tel quel — **et une ligne `exo_computers`
+par ligne `ref_exo_template_computers`** (§13.4.1, même transaction, Intégrité tirée via `parseDice`
+plutôt que copiée). Changer de modèle réapplique la même logique d'écrasement complet déjà actée pour
+les champs de base (§13.3) : les `exo_systems`/`exo_weapons`/`exo_computers` existants de l'instance
+sont remplacés par le loadout d'usine du nouveau modèle, pas fusionnés — cohérence avec la règle déjà
+posée, pas une règle séparée à inventer pour le loadout.
 
 **Reste réellement à faire, taille non négligeable** : transcrire les loadouts complets des 16
 armures depuis `docs/REGLES/SEEDEXO.md` (10 à 25 lignes par armure selon §12.3) — travail de
@@ -2303,16 +2525,15 @@ demande de retrouver la bonne entrée `ref_exo_equipment` (ou de trancher un `la
 cas ambigus type "Analyseur sonscan niv. 12"), sur les ~200-300 lignes cumulées des 16 loadouts —
 session de transcription dédiée à prévoir, pas un sous-produit du reste du Lot C.
 
-**Même migration seed — backfill `ordinateur_gen`/`ordinateur_nt` sur les 16 lignes `ref_exo_templates`
-existantes, pas seulement sur les nouvelles colonnes vides** (2ᵉ tour d'analyse à charge 2026-08-20,
-même famille de bug que le backfill du Lot B, côté catalogue cette fois). Les 16 lignes du catalogue
-existent déjà (migration 252, déjà appliquée) — ajouter les colonnes `ordinateur_gen`/`ordinateur_nt`
-sans les backfiller laisserait ces 16 lignes à `NULL`, et `applyExoTemplate` copierait silencieusement
-`NULL` sur toute nouvelle exo-armure créée depuis n'importe lequel de ces modèles : le bloc Ordinateur
-resterait vide partout, sans erreur ni signal. Pas un crash ni une casse d'une autre fonctionnalité
-(contrairement aux trouvailles Vault du 1er tour) — une dégradation silencieuse à corriger dans la
-même passe de transcription, puisque "Ordinateur NT X, Gén. Y" apparaît déjà dans le texte source de
-chaque armure (§13.4.1 point 1) et n'a pas besoin d'une seconde lecture du fichier.
+**Même migration seed — une ligne `ref_exo_template_computers` par ordinateur trouvé dans le texte
+source, pas un backfill de colonnes** (révisé 2026-08-21, §13.4.1 : plus de colonnes `ordinateur_*` sur
+`ref_exo_templates` à remplir a posteriori — la table `ref_exo_template_computers` n'existe qu'à partir
+de cette migration, donc aucune ligne héritée à corriger, juste la transcription normale). Point de
+vigilance qui remplace l'ancien risque de backfill silencieux : **12 des 16 armures ont une seule ligne
+(role='principal'), 4 en ont deux (Nymph 1-A, Heimdall-Pyrelia, Odin, Moloch — role='principal' +
+role='secours', §13.4.1)** — vérifier ce compte exact pendant la transcription plutôt que supposer une
+ligne par armure par défaut, sous peine de perdre silencieusement les 4 ordinateurs de secours de la
+même façon que l'aurait fait l'ancien schéma scalaire.
 
 **Hors périmètre encore** : reste après cette décision, toujours pas tranché — la formule de dégâts à
 escalade (§12.2 point 1) et le pipeline exo-attaquant (§12.2 point 3), aucun lien avec le loadout par
