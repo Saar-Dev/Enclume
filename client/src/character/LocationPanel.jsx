@@ -11,7 +11,7 @@ import {
 import { polarisRound } from '../../../shared/polarisUtils.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 import { setItemSlot } from '../lib/inventoryMutations.js'
-import api from '../lib/api.js'
+import api, { isOfflineQueuedError } from '../lib/api.js'
 
 function calcMillefeuille(items, field) {
   const vals = items.map(i => i[field] ?? 0).filter(v => v > 0)
@@ -79,7 +79,7 @@ export default function LocationPanel({
     try {
       await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
-      setEquipError(err.response?.data?.error || t('containerPanel.equipError'))
+      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error || t('containerPanel.equipError')))
     }
   }, [characterId, slotCode, items, t])
 
@@ -98,7 +98,7 @@ export default function LocationPanel({
     try {
       await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
-      setEquipError(err.response?.data?.error || t('containerPanel.unequipError'))
+      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error || t('containerPanel.unequipError')))
     }
   }, [characterId, slotCode, items, t])
 
@@ -165,7 +165,18 @@ export default function LocationPanel({
 
       {/* Header */}
       <div style={s.header}>
-        {worstSev && <span style={{ ...s.headerDot, background: SEVERITY_COLORS[worstSev] }} />}
+        {/* `className="wound-severity-color"` + `--severity-bg` : pur ajout, sans effet ici (le fond
+            inline reste la seule source en usage normal). Sert uniquement à `CharacterPrintView.jsx`
+            (Lot D, PLAN_FICHE_HORSLIGNE.md) : la vue d'impression force fond blanc/texte noir partout
+            via une classe globale, sauf ces couleurs de sévérité qu'elle restaure explicitement via
+            cette variable (`index.css`) — pas touchable par un simple `background` inline puisque
+            cette même classe l'écrase ailleurs. */}
+        {worstSev && (
+          <span
+            className="wound-severity-color"
+            style={{ ...s.headerDot, background: SEVERITY_COLORS[worstSev], '--severity-bg': SEVERITY_COLORS[worstSev] }}
+          />
+        )}
         <span style={s.headerLabel}>{label}</span>
       </div>
 
@@ -227,6 +238,7 @@ export default function LocationPanel({
                   return (
                     <div
                       key={i}
+                      className="wound-severity-color"
                       onClick={() => handleBoxClick(sev, i)}
                       title={
                         w
@@ -237,6 +249,7 @@ export default function LocationPanel({
                         width: 13, height: 13,
                         border: `1px solid ${w ? '#5a5a7a' : '#2a2a3e'}`,
                         background: w ? SEVERITY_COLORS[sev] : 'transparent',
+                        '--severity-bg': w ? SEVERITY_COLORS[sev] : 'transparent',
                         cursor: canEdit ? 'pointer' : 'default',
                         borderRadius: 2,
                         position: 'relative',

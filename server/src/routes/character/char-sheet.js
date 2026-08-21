@@ -1936,16 +1936,18 @@ async function exoIsGmOrOwnerOrPilot(req, _exoSheet) {
   return isExoActorAuthorized(db, req.character, { isGm: req.isGm, userId: req.user.id })
 }
 
-// GET /:characterId/exo — fiche + nom du modèle d'origine (affichage seul, ex. "pré-rempli depuis :
-// Armure Mentor"). Lot B (§13.3, 2026-08-20) : plus de JOIN complet vers ref_exo_templates — les 19
-// champs de base vivent nativement sur exo_sheet.*, `template_id` n'est plus qu'une référence
-// d'origine.
+// GET /:characterId/exo — fiche + nom/illustration du modèle d'origine (affichage seul, ex.
+// "pré-rempli depuis : Armure Mentor"). Lot B (§13.3, 2026-08-20) : plus de JOIN complet vers
+// ref_exo_templates — les 19 champs de base vivent nativement sur exo_sheet.*, `template_id` n'est
+// plus qu'une référence d'origine. `template_illustration_url` ajoutée migration 263 (§15) : trouvée
+// manquante par Saar (RT-4/Vanguard sans illustration en réglages) — la jointure existait déjà, seule
+// la colonne n'était pas sélectionnée.
 router.get('/:characterId/exo', async (req, res, next) => {
   try {
     const exo = await db('exo_sheet')
       .where({ 'exo_sheet.character_id': req.params.characterId })
       .leftJoin('ref_exo_templates', 'exo_sheet.template_id', 'ref_exo_templates.id')
-      .select('exo_sheet.*', 'ref_exo_templates.name as template_name')
+      .select('exo_sheet.*', 'ref_exo_templates.name as template_name', 'ref_exo_templates.illustration_url as template_illustration_url')
       .first()
     if (!exo) return res.json({ exo: null })
 

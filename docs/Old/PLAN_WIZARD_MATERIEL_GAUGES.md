@@ -1,9 +1,11 @@
 # Wizard/Fiche — Jauges de Matériel & liste d'attente (wish-list)
 
-> Statut : **codé et validé en navigateur par Saar (2026-08-12)**. Document temporaire
-> (`docs/RegleDocumentaire.md` Règle 10) — reste ici tant que la fonctionnalité n'est pas « stable en
-> jeu réel » (usage en partie, pas seulement cette validation de développement) ; à archiver ou
-> fusionner dans un DOMAIN/SYSTEM une fois ce seuil atteint.
+> **Archivé le 2026-08-16** (`docs/RegleDocumentaire.md` Règle 10) — chantier codé et intégralement
+> validé en navigateur par Saar (2026-08-12 puis 2026-08-16, voir `docs/JOURNAL8.md`). Contenu durable
+> transféré dans `docs/SYSTEME/CHARACTER.md` (§3 schéma `char_gauges`/`validated_by_gm`, §4 routes
+> `.../gauges`, §5 flux, §7 `GaugesPanel.jsx`, §9 PC23/PC24) et `docs/SYSTEME/ARCHITECTURE_SOCKET.md`
+> (`GAUGE_UPDATED`). Ce document reste comme trace de la décision produit et du raisonnement
+> d'implémentation (§0/§0bis), plus comme référence technique à jour.
 > Suite de `docs/Old/PLAN_WIZARD_MATERIEL.md` (Step6 "Matériel & Biens", codé et confirmé le
 > 2026-07-24) — ce document ne répète pas ce qui y est déjà tranché (portée diffusion inventaire,
 > notes narratives, marqueur `step6`), il couvre uniquement l'extension discutée avec Saar le
@@ -19,9 +21,7 @@
 > **Validation 2026-08-16** : les deux points restés non testés le 2026-08-12 sont confirmés par
 > Saar en navigateur — stepper +/- MJ sur une jauge (Wizard Step6) et `GaugesPanel.jsx` fiche
 > permanente (onglet Matériel, hors Wizard). Audit du code contre chaque section de ce plan (§1-§8)
-> fait avant cette validation, aucun écart trouvé. Chantier intégralement codé et validé en
-> développement ; reste le seuil « stable en jeu réel » (usage en partie réelle, pas seulement cette
-> validation) avant archivage/fusion (`docs/RegleDocumentaire.md` Règle 10).
+> fait avant cette validation, aucun écart trouvé.
 
 ---
 

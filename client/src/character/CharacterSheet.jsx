@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../lib/api.js'
 import SkillsPanel from './SkillsPanel.jsx'
 import AdvantagesPanel from './AdvantagesPanel.jsx'
+import CollapsibleBlock from './CollapsibleBlock.jsx'
 import {
   calcAN, calcAllureMoy, calcAllures,
   calcNA, getGenotypeModForAttr, getMutationModForAttr,
@@ -1257,21 +1258,6 @@ function Field({ label, children, style }) {
   )
 }
 
-// Bloc repliable (accordéon) — en-tête cliquable + chevron, contenu masqué si fermé.
-// `open`/`onToggle` viennent de l'état `blockOpen` du composant principal (mémorisé par type de
-// fiche, owned/autres — voir loadAccordionState).
-function CollapsibleBlock({ id, title, open, onToggle, children }) {
-  return (
-    <div style={s.block}>
-      <div style={s.blockHeadRow} onClick={() => onToggle(id)}>
-        <span style={s.blockTitle}>{title}</span>
-        <span style={{ ...s.blockChevron, transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-      </div>
-      {open && children}
-    </div>
-  )
-}
-
 // Position/affichage de tooltip partagés par SecondaryField (cartes) et SecondaryListRow (liste).
 function useSecondaryTooltip(tooltip) {
   const ref = useRef(null)
@@ -1361,33 +1347,6 @@ const s = {
     padding: '32px',
   },
 
-  // Blocs
-  block: {
-    border: '1px solid #1e1e2e',
-    borderRadius: '6px',
-    overflow: 'hidden',
-  },
-  blockHeadRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '6px 10px',
-    backgroundColor: '#0e0e1a',
-    borderBottom: '1px solid #1e1e2e',
-    cursor: 'pointer',
-  },
-  blockTitle: {
-    fontSize: '10px',
-    fontWeight: '700',
-    color: '#5b8dee',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-  },
-  blockChevron: {
-    fontSize: '9px',
-    color: '#6a6a88',
-    transition: 'transform 0.15s ease',
-  },
   secondaryColumns: {
     display: 'flex',
     gap: '8px',

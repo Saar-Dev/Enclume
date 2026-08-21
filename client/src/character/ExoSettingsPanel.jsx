@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { useCharacterStore } from '../stores/characterStore'
 import api from '../lib/api.js'
 
-export default function ExoSettingsPanel({ character, isGm, isOwner, onClose }) {
+export default function ExoSettingsPanel({ character, isGm, isOwner, onClose, templateIllustrationUrl }) {
   const { t } = useTranslation()
   const { members, updateCharacter, removeCharacter } = useCharacterStore()
   const canEdit = isGm || isOwner
@@ -101,11 +101,13 @@ export default function ExoSettingsPanel({ character, isGm, isOwner, onClose }) 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-      {/* Portrait */}
+      {/* Portrait — priorité au portrait custom de cette exo (characters.portrait_url), sinon repli sur
+          l'illustration du modèle RAW d'origine (ref_exo_templates.illustration_url, migration 263) :
+          trouvé manquant par Saar (RT-4/Vanguard sans illustration) — le repli n'existait pas encore. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {character.portrait_url ? (
+        {(character.portrait_url || templateIllustrationUrl) ? (
           <img
-            src={`${import.meta.env.VITE_API_URL}/api/assets/${character.portrait_url}`}
+            src={`${import.meta.env.VITE_API_URL}/api/assets/${character.portrait_url || templateIllustrationUrl}`}
             alt={t('character.portraitAlt')}
             style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #2a2a3e' }}
           />

@@ -26,7 +26,8 @@
     "equipPlaceholder": "— Équiper —",
     "emptySlot": "Aucun {{label}}",
     "equipError": "Impossible d'équiper",
-    "unequipError": "Impossible de déséquiper"
+    "unequipError": "Impossible de déséquiper",
+    "offlineQueued": "Hors ligne — sera appliqué au retour du réseau"
   },
   "weaponPanel": {
     "slotLabels": {

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Illustrations Exo-Armures</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; background: #f0f2f5; color: #222; }
+
+    header { background: #1a1a2e; color: #d0c8ff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 17px; font-weight: 600; }
+    header .sub { font-size: 12px; color: #9890cc; margin-left: auto; }
+
+    main { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+    #feedback { min-height: 36px; margin-bottom: 12px; }
+    .msg-ok  { background: #d4f7dc; border: 1px solid #5cb85c; padding: 10px 14px; border-radius: 6px; color: #1a6b1a; font-size: 13px; }
+    .msg-err { background: #fde8e8; border: 1px solid #d9534f; padding: 10px 14px; border-radius: 6px; color: #9b1c1c; font-size: 13px; }
+
+    .table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: #2d2d4e; color: #d0c8ff; font-size: 11px; text-transform: uppercase;
+      letter-spacing: .5px; padding: 9px 12px; text-align: left; white-space: nowrap;
+    }
+    td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8f7ff; }
+
+    .thumb {
+      width: 48px; height: 48px; border-radius: 6px; object-fit: cover;
+      background: #eee; border: 1px solid #ddd; display: block;
+    }
+    .thumb-empty {
+      width: 48px; height: 48px; border-radius: 6px; background: #eee; border: 1px dashed #ccc;
+      display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999;
+    }
+
+    .btn-upload {
+      background: #6b5ce7; color: #fff; border: none; padding: 6px 14px;
+      border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .btn-upload:hover { background: #5a4cd4; }
+    .btn-upload:disabled { background: #bbb; cursor: default; }
+    input[type=file] { font-size: 12px; max-width: 180px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🖼 Admin — Illustrations Exo-Armures</h1>
+  <span class="sub">Catalogue ref_exo_templates — migration 263</span>
+</header>
+
+<main>
+  <div id="feedback"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Illustration</th>
+          <th>Modèle</th>
+          <th>Catégorie</th>
+          <th>Fichier</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="5" style="text-align:center; color:#999; padding:24px;">Chargement…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+async function apiFetch(url, options = {}) {
+  const r = await fetch(url, { credentials: 'include', ...options })
+  if (r.status === 204) return null
+  const json = await r.json().catch(() => ({ error: { message: r.statusText } }))
+  if (!r.ok) throw new Error(json.error?.message || 'Erreur serveur ' + r.status)
+  return json
+}
+
+function feedback(msg, isErr = false) {
+  const el = document.getElementById('feedback')
+  el.innerHTML = `<div class="${isErr ? 'msg-err' : 'msg-ok'}">${msg}</div>`
+  clearTimeout(feedback._t)
+  feedback._t = setTimeout(() => { el.innerHTML = '' }, isErr ? 8000 : 5000)
+}
+
+function thumbCell(template) {
+  if (!template.illustration_url) return '<div class="thumb-empty">—</div>'
+  return `<img class="thumb" src="/api/assets/${template.illustration_url}" alt="${template.name}">`
+}
+
+function renderRows(templates) {
+  const tbody = document.getElementById('rows')
+  if (!templates.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999; padding:24px;">Aucun modèle</td></tr>'
+    return
+  }
+  tbody.innerHTML = templates.map(t => `
+    <tr id="row-${t.id}">
+      <td>${thumbCell(t)}</td>
+      <td><strong>${t.name}</strong></td>
+      <td>${t.category || ''}</td>
+      <td><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="file-${t.id}"></td>
+      <td><button class="btn-upload" onclick="uploadIllustration('${t.id}')">Envoyer</button></td>
+    </tr>
+  `).join('')
+}
+
+async function loadTemplates() {
+  try {
+    const data = await apiFetch('/api/exo-templates')
+    renderRows(data.templates)
+  } catch (err) {
+    feedback('Erreur de chargement : ' + err.message, true)
+  }
+}
+
+async function uploadIllustration(id) {
+  const input = document.getElementById('file-' + id)
+  const file = input.files[0]
+  if (!file) {
+    feedback('Choisir un fichier avant d’envoyer.', true)
+    return
+  }
+
+  const btn = document.querySelector(`#row-${id} .btn-upload`)
+  btn.disabled = true
+  btn.textContent = 'Envoi…'
+
+  try {
+    const formData = new FormData()
+    formData.append('illustration', file)
+    const data = await apiFetch(`/api/exo-templates/${id}/illustration`, { method: 'POST', body: formData })
+    feedback(`Illustration mise à jour pour "${data.template.name}".`)
+    await loadTemplates()
+  } catch (err) {
+    feedback('Erreur upload : ' + err.message, true)
+    btn.disabled = false
+    btn.textContent = 'Envoyer'
+  }
+}
+
+loadTemplates()
+</script>
+
+</body>
+</html>

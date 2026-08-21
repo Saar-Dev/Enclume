@@ -223,6 +223,13 @@
   (demande directe Saar, même compromis d'accessibilité accepté pour ce select-là) — boutons
   "Sac"/"Coffre" ajoutés en compensation fonctionnelle, et une zone de drop Coffre a été ajoutée
   2026-08-06 (manquait à la clôture du chantier, `docs/ASBUILT.md`)
+- Fenêtre d'affichage/édition pour une exo-armure custom du Coffre (`type='exo'`, créée via
+  `VaultPage.jsx`/`vault.js` — `VaultCharacterPage.jsx` affiche aujourd'hui un placeholder, l'écran
+  ("ExoWindow") n'a jamais été construit). Trouvé en clôturant le chantier illustration exo-armures
+  (`docs/PLANS/PLAN_EXOARMURE.md` §15, 2026-08-21) : une exo custom hérite déjà de
+  `characters.portrait_url` (upload MinIO fonctionnel, même mécanisme qu'un personnage classique) —
+  rien à construire côté illustration, seulement l'écran lui-même n'existe pas pour l'afficher. Pas
+  prioritaire (Saar, 2026-08-21).
 - Tourelles / armes lourdes fixes (entités interactives)
 - Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles suivies via `bug_tickets`/`/admin/tickets` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté

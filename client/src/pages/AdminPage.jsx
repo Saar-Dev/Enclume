@@ -45,6 +45,14 @@ export default function AdminPage() {
           <div className="card-title">{t('admin.tileEquipment')}</div>
         </a>
 
+        <a
+          href={`${import.meta.env.VITE_API_URL}/api/admin/tools/exo-templates`}
+          className="card campaign-card"
+          style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+        >
+          <div className="card-title">{t('admin.tileExoTemplates')}</div>
+        </a>
+
         <div className="card campaign-card" onClick={() => navigate('/admin/users')}>
           <div className="card-title">{t('admin.tileUsers')}</div>
         </div>

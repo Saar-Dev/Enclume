@@ -414,6 +414,7 @@ export default function ExoSheetWindow({ character, isGm, onClose, socket }) {
             isGm={isGm}
             isOwner={isOwner}
             onClose={onClose}
+            templateIllustrationUrl={exo.template_illustration_url}
           />
         )}
       </div>

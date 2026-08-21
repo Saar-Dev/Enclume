@@ -637,6 +637,16 @@ export default function CharacterWindow({ character, isGm, onClose, forceReadOnl
               </button>
             )}
 
+            <a
+              href={`/characters/${character.id}/print`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn"
+              style={{ marginTop: '8px', display: 'inline-block', textAlign: 'center' }}
+            >
+              {t('character.print')}
+            </a>
+
             {effectiveIsGm && (
               <button style={s.deleteBtn} onClick={handleDelete}>
                 {t('character.deleteCharacter')}

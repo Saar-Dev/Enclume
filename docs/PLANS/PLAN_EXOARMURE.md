@@ -2593,7 +2593,15 @@ entièrement remplacé), vérification manuelle d'un échantillon de loadouts tr
 > révision précédente sont **annulées**, remplacées par des liens `ref_equipment_id`.
 >
 > **Liens `ref_equipment_id` confirmés pour la transcription** (aucune nouvelle ligne catalogue) :
-> - Fusil sonique incapaciteur (Condor) = "Fusil sonique d'attaque".
+> - **Correction 2026-08-21 (armure 8/16, Condor)** : Fusil sonique incapaciteur (Condor) = ~~"Fusil
+>   sonique d'attaque"~~ **"Fusil sonique incap. sirène"**. Erreur trouvée en vérifiant le catalogue avant
+>   d'écrire la transcription de Condor : la description de "Fusil sonique d'attaque" dit littéralement
+>   *"Contrairement au fusil sonique incapaciteur, l'onde est prévue pour causer des Dommages
+>   physiques"* — le catalogue distingue lui-même les deux armes par leur nom RAW, "d'attaque" n'est PAS
+>   l'incapaciteur. "Fusil sonique incap. sirène" (`damage_h` null, zone ~5m, ne peut viser une cible
+>   précise) correspond au profil "incapaciteur" (non létal, zone), cohérent avec le nom lui-même
+>   ("incap." = incapacitant). Rien encore appliqué en base à cette étape, correction purement
+>   documentaire.
 > - Lance-filet (Heimdall-Pyrelia) = "Lance-filet" (nom exact).
 > - Lance-flammes (Condor) = "Lance-flammes" (nom exact).
 > - Mitrailleuse lourde (Condor, Cougar) = "F67" (5D10+1 vs générique 5D10, portée max la plus proche
@@ -2738,3 +2746,1036 @@ entièrement remplacé), vérification manuelle d'un échantillon de loadouts tr
 > 11 tests toujours verts), suite serveur complète **414/414** verte. Ce correctif aurait été
 > découvert bien plus tard — et bien plus difficile à isoler — s'il avait fallu le trouver au milieu
 > de la transcription des 16 fiches plutôt qu'avant de commencer.
+>
+> #### Transcription armure 1/16 — Explora (SEEDEXO.md:909-941) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne contre le texte RAW exact (pas depuis la mémoire de conversation). `ref_exo_templates.name = 'Explora'`.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=3, nt=3`
+> ("Ordinateur N TIII, Gén. III" — "N TIII" artefact OCR de "NT III").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commande vocale
+> 2. Système respiratoire • Réserve d'oxygène, `level=1` (24h = 1 unité — convention `level` posée en
+>    transcrivant Typhon, appliquée rétroactivement ici pour la cohérence, voir note ci-dessous)
+> 3. Sonscan actif directionnel (migration 261 — RAW "directionel" est une coquille, même système)
+> 4. Sonscan passif (migration 261)
+> 5. Analyseur • Sea-Star (réutilisé pour "Analyseur sonscan")
+> 6. Radar (migration 261)
+> 7. Analyseur • Sea-Star (réutilisé une 2e fois pour "Analyseur radar" — même équipement_id, 2 lignes
+>    template distinctes, RAW confirme un modèle équivalent existe pour le radar)
+> 8. Communicateur pour armure • Lénid
+> 9. Communicateur pour armure • ComLink
+> 10. Régulateur thermique
+> 11. Système de filtrage hygiénique, `level=1` ("niv. 1")
+> 12. Système de navigation, `level=10` ("niv. 10")
+> 13. Détecteur d'acquisition
+> 14. Système d'assistance et de contrôle des exo-armures (SACEA)
+> 15. Contrôle de pression
+> 16. **`ref_equipment_id`** → Générateur de lumière Feu Follet (lien direct, pas cloné — aucun
+>     "portable" dans son texte RAW, cf. règle posée pour cette entrée précise)
+> 17. Affichage tactique ("Afficheur tactique" dans le loadout — même système, RAW pas rigoureux sur le nom)
+> 18. Analyseur environnemental (migration 261)
+> 19. Revêtement anti-radiations, `level=10` ("niv. 10" — RAW "anti-radiation" singulier, catalogue pluriel, même système)
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 20. **`ref_equipment_id`** → Dague Shark + `label_override='Dague Shark (rétractable)'` (annotation —
+>     Dague Shark est RAW "non rétractable", le loadout précise "rétractable" : détail de montage sur
+>     cette armure, préservé via l'annotation permise par la migration 262)
+> 21. Générateurs défensifs électrique (catalogue pluriel, loadout singulier "défensif" — même système)
+> 22. **`ref_equipment_id`** → Lance-harpon moyen ("10 charges" non annoté — quantité de munitions non
+>     trackée par le schéma `exo_weapons`, cohérent avec la convention 253 "rien ne consomme ce texte")
+>
+> Total : 19 systèmes + 3 armes + 1 ordinateur = 23 lignes pour cette seule armure. Reste 15 fiches.
+
+> #### Décision — `level` comme multiplicateur d'unités de 24h pour la réserve d'oxygène (2026-08-21, Saar)
+>
+> Trouvé en préparant l'armure 2/16 (Typhon) : `REGLEARMURE.md` (même texte RAW que SEEDEXO.md, corroboré
+> par l'artefact OCR identique "N TIII, Gén. III" présent dans les deux) montre que la durée de la
+> réserve d'oxygène n'est PAS fixe à 24h — Typhon = 48h, au moins 6 autres armures du corpus = 72h. Le
+> catalogue `ref_exo_equipment` n'a qu'une ligne "Système respiratoire • Réserve d'oxygène", `duration`
+> figée à "24 h", et `ref_exo_template_equipment` n'a ni colonne durée ni colonne quantité.
+>
+> Options posées à Saar : (1) cloner des lignes catalogue 48h/72h façon migration 261, (2) répéter la
+> ligne 24h ×2/×3 façon Modules annexes, (3) réutiliser `level` comme multiplicateur d'unités de 24h
+> (level=2→48h, level=3→72h). **Saar tranche : option 3.**
+>
+> Convention actée, à appliquer à chaque armure du corpus pour cette ligne précise : `level` = nombre
+> d'unités de 24h (level=1 par défaut/24h, explicite désormais même pour le cas de base — voir révision
+> Explora ci-dessus). Écart volontaire au sens habituel de `level` (ailleurs = un niveau RAW réel du
+> système, ex. "niv. 12") — documenté ici pour ne pas être un raccourci silencieux (CLAUDE.md §1.9),
+> propre à cette ligne d'équipement, pas une règle générale de `level`.
+
+> #### Transcription armure 2/16 — Typhon (SEEDEXO.md:942-996 / REGLEARMURE.md:1699-1749) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne contre le texte RAW exact, corroboré par `REGLEARMURE.md` (même texte source).
+> `ref_exo_templates.name = 'Typhon'`.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=3, nt=3`
+> ("Ordinateur NT III, Gén. III").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'` (annotation principal/secours, pas de colonne `role` sur cette table contrairement aux
+>    ordinateurs — même mécanisme que SACEA "(secours)" posé pour d'autres armures du corpus)
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'` (RAW nomme "Panneau de contrôle manuel", le catalogue "Commandes manuelles" — même
+>    système, catégorie "Systèmes de contrôle" identique à l'entrée 1 ; "(avant-bras)" du RAW non
+>    annoté — détail de montage non tracké par le schéma, précédent Explora/lance-harpon)
+> 3. Système respiratoire • Réserve d'oxygène, `level=2` (48h — convention actée ci-dessus)
+> 4. Régulateur thermique
+> 5. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 6. Système d'assistance et de contrôle des exo-armures (SACEA)
+> 7. Contrôle de pression
+> 8. Système de navigation, `level=10` ("niv. 10")
+> 9. Sonscan actif directionnel (migration 261)
+> 10. Sonscan passif (migration 261)
+> 11. Analyseur • Sea-Star, `level=12` (réutilisé pour "Analyseur sonscan niv. 12")
+> 12. Radar (migration 261)
+> 13. Analyseur • Sea-Star, `level=12` (réutilisé une 2e fois pour "Analyseur radar niv. 12" — même
+>     équipement_id, 2e ligne template distincte, même précédent qu'Explora)
+> 14. Communicateur pour armure • ComLink
+> 15. Communicateur pour armure • ComDive 200 (RAW "Comdiv 200" — coquille OCR confirmée, le catalogue a
+>     "ComDive", cohérent avec l'artefact "N TIII" déjà observé)
+> 16. Communicateur pour armure • Externe, `level=1` ("niv. 1")
+> 17. Système d'alimentation, `level=2` ("niv. 2")
+> 18. Antivol • Verrouillage, `level=7` ("Verrouillage anti-vol niv. 7" — catalogue a aussi "Antivol •
+>     Reconnaissance neuronale" mais RAW nomme "Verrouillage" explicitement pour cette armure ; le
+>     "(1 système au choix)" du RAW est la mécanique générale de personnalisation du modèle, pas une
+>     ambiguïté sur CETTE fiche précise)
+> 19. Dispositif de diagnostic
+> 20. Affichage tactique
+> 21. Dispositif d'auto-réparation • Centrale, `level=12` ("Centrale d'auto-réparation niv. 12")
+> 22-26. Dispositif d'auto-réparation • Module annexe **× 5 lignes répétées** ("Modules annexes pour 5
+>     systèmes" — description catalogue confirme littéralement "un module par système/arme à réparer" :
+>     la quantité se représente par répétition de la ligne, pas par un champ ; aucune colonne quantité
+>     sur ce schéma)
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 27. **`ref_equipment_id`** → Dague Shark + `label_override='Dague Shark (rétractable)'` (RAW "Dague
+>     rétractable (poing)", générique sans marque — même résolution qu'Explora : Dague Shark est RAW
+>     "non rétractable" en base, annotation posée pour cette armure)
+> 28. **`ref_equipment_id`** → Dague thermique Thermo IV (RAW "Dague thermique (poing)", seule dague
+>     thermique du catalogue général, pas d'ambiguïté — pas d'annotation nécessaire)
+> 29. Générateurs défensifs micro-ondes (RAW "Générateur défensif à champ micro-ondes", catalogue
+>     pluriel — même écart de nombre que "Générateurs défensifs électrique", pas une variante différente)
+> 30. **`ref_equipment_id`** → Lance-harpon moyen ("10 charges" non annoté, précédent Explora/253)
+>
+> Total : 26 systèmes + 4 armes + 1 ordinateur = 31 lignes pour cette seule armure. Reste 14 fiches.
+
+> #### Transcription armure 3/16 — Nymph 1-A (SEEDEXO.md:999-1041) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne contre le texte RAW exact. `ref_exo_templates.name = 'Nymph 1-A'`.
+>
+> **`ref_exo_template_computers`** (2 lignes, principal + secours) :
+> 1. `role='principal', gen=5, nt=3` ("Ordinateur NT III, Gén. V")
+> 2. `role='secours', gen=2, nt=2` ("Ordinateur NT II, Gén. II")
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commandes manuelles (RAW "Panneau de contrôle manuel (avant-bras)" — même
+>    match que Typhon #2 ; pas de secours à annoter ici, une seule interface pour cette armure)
+> 2. Système respiratoire • Réserve d'oxygène, `level=1` (24h — convention actée en 2/16)
+> 3. Régulateur thermique
+> 4. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+> 5. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>    (RAW liste 2 lignes SACEA distinctes principal/secours — même mécanisme d'annotation que
+>    l'interface de contrôle en 2/16, pas de colonne `role` sur cette table)
+> 6. Contrôle de pression
+> 7. Sonscan actif directionnel (migration 261)
+> 8. Sonscan passif (migration 261)
+> 9. Analyseur • Sea-Star, `level=12` ("Analyseur sonscan niv. 12" — pas de radar/analyseur radar pour
+>    cette armure, RAW ne les mentionne pas, contrairement à Typhon)
+> 10. Communicateur pour armure • Lénid
+> 11. Communicateur pour armure • ComLink
+> 12. Antivol • Verrouillage, `level=5` ("Verrouillage anti-vol niv. 5 (1 système au choix)" — même
+>     logique que Typhon #18, RAW nomme "Verrouillage" explicitement)
+> 13. **`ref_equipment_id`** → Générateur de lumière Feu Follet (lien direct, précédent Explora #16 —
+>     vérifié à nouveau : toujours family "Vie quotidienne" côté `ref_equipment`, pas de "portable" dans
+>     son texte RAW qui justifierait un clonage)
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 14. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire rétractable (poing)" — vérifié
+>     la description catalogue : contrairement à Dague Shark, rien n'y affirme "non rétractable" ; le
+>     mécanisme d'énergie qui "disparaît dès qu'on relâche la pression" est déjà cohérent avec
+>     "rétractable" sans contradiction à annoter — lien direct, pas de `label_override`)
+> 15. Générateurs défensifs électrique (RAW "Générateur défensif électrique", singulier — même écart de
+>     nombre que Typhon #29, catalogue toujours au pluriel)
+> 16. **`ref_equipment_id`** → Lance-harpon lourd ("10 charges" non annoté, précédent Explora/Typhon ;
+>     vérifié qu'il existe bien une entrée catalogue "Lance-harpon lourd" nue, distincte des variantes
+>     "à répétition Nihil" et de la ligne de dégâts "Pén. 3(H)")
+>
+> Total : 13 systèmes + 3 armes + 2 ordinateurs = 18 lignes pour cette seule armure. Reste 13 fiches.
+
+> #### Transcription armure 4/16 — Série A (SEEDEXO.md:1042-1080) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Série A'`. Note : la ligne "Régulateur thermique" isolée
+> à SEEDEXO.md:1081 (suivie du numéro de page "341") est un artefact OCR de rupture de page (le système
+> est déjà listé en position 3 ci-dessous) — pas une 13e ligne réelle, cohérent avec les autres artefacts
+> déjà rencontrés ("N TIII", "Armures mécanisées Armures mécanisées").
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=2, nt=3`
+> ("Ordinateur NT III, Gén. II").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commandes manuelles (RAW "Panneau de contrôle manuel (avant-bras)" — une
+>    seule interface ici, pas de secours à annoter)
+> 2. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 3. Régulateur thermique
+> 4. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 5. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance ici, pas
+>    d'annotation principal/secours (contrairement à Nymph 1-A)
+> 6. Contrôle de pression
+> 7. Système de navigation, `level=10` ("niv. 10")
+> 8. Sonscan actif directionnel (migration 261)
+> 9. Sonscan passif (migration 261)
+> 10. Analyseur • Sea-Star, `level=12` ("Analyseur sonscan niv. 12" — pas de radar pour cette armure)
+> 11. Communicateur pour armure • ComLink
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 12. **`ref_equipment_id`** → Dague Shark + `label_override='Dague Shark (rétractable)'` (RAW "Dague
+>     rétractable (poing)", générique — même résolution qu'Explora/Typhon)
+> 13. Générateurs défensifs électrique (RAW singulier "Générateur défensif électrique")
+> 14. **`ref_equipment_id`** → Lance-harpon moyen ("10 charges" non annoté, précédent constant)
+>
+> Total : 11 systèmes + 3 armes + 1 ordinateur = 15 lignes pour cette seule armure. Reste 12 fiches.
+>
+> *(Aperçu Vanguard, SEEDEXO.md:1085-1135, lu en même temps pour situer la coupure de page — sera traité
+> à son tour comme 5/16 : introduit "Pistolet lourd sous-marin à dards", "Verrouillage anti-vol niv. 7
+> (2 systèmes au choix)" et "Dispositif de diagnostic", rien de nouveau structurellement par rapport aux
+> catalogues déjà vérifiés pour 1-4/16, mais à re-vérifier terme à terme en son temps, pas anticipé ici.)*
+
+> #### Transcription armure 5/16 — Vanguard (SEEDEXO.md:1085-1135) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Vanguard'`. Note : "Pistolet lourd sous-marin à dards
+> (main)" apparaît en tête ET en fin de bloc Armement (SEEDEXO.md:1131 et 1135) — même artefact OCR de
+> rupture de page que "Régulateur thermique" en 4/16, un seul objet réel, pas deux lignes.
+>
+> **Trouvaille utile** : `ref_equipment` "Locard ExelP" (Armes sous-marines à projectiles) a pour
+> description exacte *"Identique au modèle utilisé sur les armures, mais un peu plus lourd à cause de
+> l'habillage (équivalent d'un pistolet lourd)..."* — preuve textuelle directe du catalogue lui-même
+> reliant cette arme "civile" à sa version montée sur exo-armure. Match plus solide que les résolutions
+> "qu'importe le nom" précédentes : ici le catalogue confirme lui-même l'équivalence, pas une déduction
+> de stats seule.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=3, nt=4`
+> ("Ordinateur NT IV, Gén. III").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'`
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 4. Régulateur thermique
+> 5. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 6. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance, pas d'annotation
+> 7. Contrôle de pression
+> 8. Système de navigation, `level=13` ("niv. 13")
+> 9. Sonscan actif directionnel (migration 261)
+> 10. Sonscan passif (migration 261)
+> 11. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X" cette fois — RAW ne
+>     précise pas de niveau pour cette armure précise, à ne pas confondre avec Typhon/Nymph/Série A qui
+>     en ont un ; transcrit tel quel, pas de niveau supposé par réflexe)
+> 12. Communicateur pour armure • ComDive 200 (RAW "Comdiv 200", même coquille OCR que Typhon)
+> 13. Communicateur pour armure • ComLink
+> 14. Système d'alimentation, `level=2` ("niv. 2")
+> 15. Antivol • Verrouillage, `level=7` ("Verrouillage anti-vol niv. 7 (2 systèmes au choix)" — même
+>     traitement que Typhon/Nymph 1-A, le "(2 systèmes au choix)" est la mécanique de personnalisation
+>     du modèle, pas une ambiguïté sur cette fiche)
+> 16. Dispositif de diagnostic
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 17. **`ref_equipment_id`** → Locard ExelP (RAW "Pistolet lourd sous-marin à dards (main)" — lien direct
+>     justifié par le texte catalogue lui-même, voir trouvaille ci-dessus)
+> 18. **`ref_equipment_id`** → Dague Shark + `label_override='Dague Shark (rétractable)'` (RAW "Dague
+>     rétractable (poing)", même résolution que 1/16, 2/16, 4/16)
+> 19. Générateurs défensifs électrique (RAW singulier)
+> 20. **`ref_equipment_id`** → Lance-harpon lourd ("10 charges" non annoté)
+>
+> Total : 16 systèmes + 4 armes + 1 ordinateur = 21 lignes pour cette seule armure. Reste 11 fiches.
+
+> #### Transcription armure 6/16 — Sylph 56 (SEEDEXO.md:1136-1183) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Sylph 56'`. Note : SEEDEXO.md:1168-1171 répète le titre,
+> le début de description et "Armures mécanisées Armures mécanisées"/numéro de page "342" en plein
+> milieu du bloc Systèmes — même artefact de rupture de page qu'en 4/16 et 5/16, la liste continue
+> directement après (Ordinateur NT IV... à la ligne 1172).
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=2, nt=4`
+> ("Ordinateur NT IV, Gén. II").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'`
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 4. Régulateur thermique
+> 5. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 6. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance, pas d'annotation
+> 7. Contrôle de pression
+> 8. Système de navigation, `level=13` ("niv. 13")
+> 9. Sonscan actif directionnel (migration 261)
+> 10. Sonscan passif (migration 261)
+> 11. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X", même cas que Vanguard)
+> 12. Communicateur pour armure • Lénid
+> 13. Communicateur pour armure • ComLink
+> 14. **`ref_equipment_id`** → Générateur de lumière Feu Follet (lien direct, précédent Explora/Nymph 1-A)
+> 15. Caméra (migration 261)
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 16. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire rétractable (poing)" — pas
+>     d'annotation, précédent Nymph 1-A #14)
+> 17. Générateurs défensifs électrique (RAW singulier)
+> 18. **`ref_equipment_id`** → Lance-harpon lourd ("10 charges" non annoté)
+>
+> Total : 15 systèmes + 3 armes + 1 ordinateur = 19 lignes pour cette seule armure. Reste 10 fiches.
+>
+> *(Aperçu Vauban, SEEDEXO.md:1184-1224, lu en même temps : introduit "Dispositif d'isolation amphibie",
+> "Indicateur d'acquisition" (à distinguer de "Détecteur d'acquisition" vu en 1/16 — à vérifier si même
+> catalogue ou variante différente au moment venu) et "Pistolet lourd" seul, sans "sous-marin à dards" —
+> probablement un autre équivalent catalogue que Locard ExelP puisque Vauban est "externe"/surface, pas
+> sous-marine. Rien anticipé, sera vérifié terme à terme comme 7/16.)*
+
+> #### Transcription armure 7/16 — Vauban (SEEDEXO.md:1184-1224) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Vauban'`.
+>
+> **Trouvailles de vérification** :
+> - "Indicateur d'acquisition" (RAW Vauban) ne correspond à aucune entrée catalogue distincte — seul
+>   "Détecteur d'acquisition" existe (même que 1/16 Explora #13) : coquille RAW confirmée, même système.
+> - "Dispositif d'isolation amphibie" → le catalogue n'a qu'une ligne "Dispositif d'isolation" dont la
+>   description est *"Amphibie (jusqu'à -10 m) si prix doublé."* — "amphibie" est une variante à prix
+>   doublé déjà documentée sur la même ligne catalogue, pas un système distinct. Annoté via
+>   `label_override` (contrairement à "avant-bras"/"bras" de pure localisation, ce détail a une
+>   incidence mécanique — prix — documentée par le RAW lui-même, cohérent avec l'annotation SACEA).
+> - "Pistolet lourd (main)" (générique, sans "sous-marin à dards" — Vauban est "externe"/surface, pas
+>   sous-marine) : 2 candidats catalogue trouvés via recherche de description ("pistolet lourd" en toutes
+>   lettres) — **Faucheur III** (Hadès/Hégémonie, 11,43 mm, explicitement *"inutilisable sous l'eau"*) et
+>   **MK 56** (Gladius/Culte du Trident, 12,7 mm, pas de restriction eau mentionnée). Choix retenu :
+>   **Faucheur III** — cohérence environnementale avec Vauban qui n'a aucune vitesse "sous l'eau" listée
+>   (uniquement "à terre : 20"), contrairement au fabricant RAW de Vauban ("empire des Généticiens") qui
+>   ne correspond à aucun des deux et ne permet donc pas de trancher par ce biais. **Retenu comme
+>   représentant générique canonique de "Pistolet lourd" (sans qualificatif sous-marin) pour la suite du
+>   corpus**, à réutiliser si le même terme générique réapparaît sur une armure de surface — décision
+>   posée ici, pas un choix arbitraire silencieux.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=3, nt=4`
+> ("Ordinateur NT IV, Gén. III").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'`
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 4. Régulateur thermique
+> 5. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 6. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance
+> 7. Contrôle de pression
+> 8. Système de navigation, `level=13` ("niv. 13")
+> 9. Dispositif d'isolation, `label_override='Dispositif d'isolation (amphibie)'` (voir trouvaille)
+> 10. Radar (migration 261)
+> 11. Analyseur • Sea-Star, **pas de `level`** (réutilisé pour "Analyseur radar" sans "niv. X" précisé)
+> 12. Communicateur pour armure • Externe, `level=3` ("niv. 3")
+> 13. Communicateur pour armure • ComLink
+> 14. Système d'alimentation, `level=2` ("niv. 2")
+> 15. Antivol • Verrouillage, `level=7` ("(2 systèmes au choix)" — même traitement que Vanguard)
+> 16. Dispositif de diagnostic
+> 17. Analyseur environnemental (migration 261)
+> 18. Détecteur d'acquisition (RAW "Indicateur d'acquisition" — voir trouvaille)
+> 19. Revêtement anti-radiations, `level=15` ("niv. 15")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 20. **`ref_equipment_id`** → Dague Shark + `label_override='Dague Shark (rétractable)'`
+> 21. Générateurs défensifs électrique (RAW singulier)
+> 22. **`ref_equipment_id`** → Faucheur III (RAW "Pistolet lourd (main)" générique — voir trouvaille)
+>
+> Total : 19 systèmes + 3 armes + 1 ordinateur = 23 lignes pour cette seule armure. Reste 9 fiches.
+
+> #### Transcription armure 8/16 — Condor (SEEDEXO.md:1225-1271) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Condor'`. Note : SEEDEXO.md:1251-1254 contient un
+> artefact OCR de rupture de page ("S if di i l" / "Ar" / "343" / "Armures mécanisées" — fragments
+> illisibles + numéro de page + running header), la liste Systèmes auxiliaires continue directement
+> après ("Senseurs auditifs..."), pas une perte de contenu réel.
+>
+> **Point non résolu, documenté sans être encodé** : la note RAW *"tous ces systèmes ont un Blindage
+> IEM de niv. 3"* (après le bloc Senseurs/Haut-parleur/Affichage/Analyseur env./Antivol/Diagnostic/
+> Réparation/Assistance médicale) n'a aucune colonne correspondante sur `ref_exo_template_equipment` ni
+> mécanique "Blindage IEM" identifiée ailleurs dans le projet à ce stade. Non encodé dans les lignes
+> ci-dessous — flavor RAW préservée ici en toutes lettres pour ne pas la perdre, decision à reprendre si
+> une mécanique Blindage IEM est un jour implémentée.
+>
+> **Ordinateurs sans rôle explicite** : RAW liste "Ordinateur NT IV, Gén. III" puis "Ordinateur NT IV,
+> Gén. II" sans étiquette "(principal)"/"(secours)" (contrairement à Nymph 1-A). Rôle assigné par ordre
+> d'apparition RAW (1er = principal, 2e = secours) — inférence, pas une certitude RAW, posée ici
+> explicitement plutôt que silencieusement.
+>
+> **`ref_exo_template_computers`** (2 lignes) :
+> 1. `role='principal', gen=3, nt=4` ("Ordinateur NT IV, Gén. III" — 1er de la liste, voir note ci-dessus)
+> 2. `role='secours', gen=2, nt=4` ("Ordinateur NT IV, Gén. II" — 2e de la liste)
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commande vocale, `label_override='Interface de contrôle • Commande vocale
+>    (principal)'` (RAW "(principale)")
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Radar (migration 261)
+> 4. Analyseur • Sea-Star, **pas de `level`** ("Analyseur radar" sans "niv. X")
+> 5. Détecteur de mouvements, `level=13` ("niv. 13")
+> 6. Dispositif d'isolation, `label_override='Dispositif d'isolation (amphibie)'`
+> 7. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance
+> 8. Système respiratoire • Réserve d'oxygène, `level=1` (RAW "Réserve oxygène (24 heures)", sans le
+>    préfixe "Système respiratoire" — même système, coquille RAW confirmée par précédent constant)
+> 9. Senseur auditif, `level=12`, `label_override='Senseur auditif (+2 options au choix)'` (le
+>    "price_modifier" catalogue "x nb d'options suppl." confirme que les options sont un multiplicateur
+>    de prix non tracké par une colonne dédiée — annoté pour traçabilité, même logique que "amphibie")
+> 10. Senseur visuel, `level=15`, `label_override='Senseur visuel (+2 options au choix)'`
+> 11. Communicateur pour armure • Haut-parleur
+> 12. Affichage tactique
+> 13. Analyseur environnemental (migration 261)
+> 14. Antivol • Reconnaissance neuronale (RAW "Système antivol à reconnaissance neurale")
+> 15. Dispositif de diagnostic
+> 16. Dispositif d'auto-réparation • Centrale, `level=12`
+> 17-26. Dispositif d'auto-réparation • Module annexe **× 10 lignes répétées** ("Modules annexes pour 10
+>     systèmes" — même mécanisme que Typhon #22-26, un module par ligne)
+> 27. Disp. d'assistance médicale, `level=5` ("niv. 5")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 28. **`ref_equipment_id`** → Dague neurale Brain (RAW "Dague neurale (poing)")
+> 29. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire (poing)", pas de qualificatif
+>     "rétractable" ici — pas d'annotation)
+> 30. **`ref_equipment_id`** → Fusil sonique incap. sirène (RAW "Fusil sonique incapaciteur" — voir
+>     correction ci-dessus)
+> 31. **`ref_equipment_id`** → F67 (RAW "Mitrailleuse lourde, 30 rafales longues (pivot épaule)" — déjà
+>     tranché dans une révision antérieure de ce document, confirmé indépendamment ici : description
+>     catalogue littéralement "Mitrailleuse lourde hégémonienne.")
+> 32. **`ref_equipment_id`** → Lance-flammes (RAW "Lance-flammes, 12 tirs (pivot épaule)", nom exact)
+>
+> Total : 27 systèmes + 5 armes + 2 ordinateurs = 34 lignes pour cette seule armure. Reste 8 fiches.
+
+> #### Transcription armure 9/16 — Cougar (SEEDEXO.md:1272-1314) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Cougar'`.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=3, nt=2`
+> ("Ordinateur NT II, Gén. III").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commande vocale, `label_override='Interface de contrôle • Commande vocale
+>    (principal)'`
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 4-7. Système respiratoire • Filtre à air **× 4 lignes répétées** ("Filtre à air, x4 (48h)" — RAW
+>    donne ici un "x4" explicite, contrairement à la durée d'oxygène : cohérent avec la convention
+>    "quantité explicite = répétition de ligne" déjà posée pour les Modules annexes, distincte de la
+>    convention `level`=multiplicateur posée pour la seule réserve d'oxygène de base)
+> 8. Dispositif d'isolation, `label_override='Dispositif d'isolation (amphibie)'`
+> 9. Stabilisateur (RAW "Stabilisateurs" pluriel — Cougar est exo-2, satisfait la restriction catalogue
+>    "Exo-1 et plus seulement" ; entrée simple, pas "Stabilisateur avancé" qui n'est pas mentionné en RAW)
+> 10. Amortisseurs de saut (RAW "Amortisseurs de sauts" — écart pluriel mineur, même système)
+> 11. Régulateur thermique
+> 12. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 13. Système d'alimentation, `level=4` ("niv. 4")
+> 14. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance
+> 15. Communicateur pour armure • Externe, `level=5` ("niv. 5")
+> 16. Communicateur pour armure • ComLink
+> 17. Radar (migration 261)
+> 18. Analyseur • Sea-Star, **pas de `level`** ("Analyseur radar" sans "niv. X")
+> 19. Calculateur de tir Nemrod (migration 261 — catalogue "Niveau fixe 12" intrinsèque à l'objet, pas
+>    un `level` variable ; RAW loadout n'écrit pas "niv. X" sur cette ligne, cohérent de laisser
+>    `level=null`)
+> 20. Détecteur d'acquisition (RAW "Indicateur d'acquisition" — même coquille que Vauban #18)
+> 21. Analyseur environnemental (migration 261)
+> 22. Revêtement anti-radiations, `level=13` ("niv. 13")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 23. **`ref_equipment_id`** → Dague thermique Thermo IV (RAW "Dague thermique (poing)")
+> 24. **`ref_equipment_id`** → Oxi4 (RAW "Canon d'assaut, 10 tirs (épaule)" — décision déjà actée dans une
+>     révision antérieure de ce document, non re-questionnée ici)
+> 25-26. **`ref_equipment_id`** → Lance-missiles Taille 2 **× 2 lignes répétées** ("Deux tubes
+>     lance-missiles taille 2 (de chaque coté du dos)" — quantité explicite "Deux", même convention que
+>     Filtre à air x4)
+>
+> Total : 22 systèmes + 4 armes + 1 ordinateur = 27 lignes pour cette seule armure. Reste 7 fiches.
+
+> #### Transcription armure 10/16 — Mentor (SEEDEXO.md:1316-1365) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Mentor'`. Note : SEEDEXO.md:1335-1338 contient un
+> artefact de rupture de page ("343", ", g" fragment illisible, "Armures mécanisées Armures mécanisées",
+> "344") en plein milieu du bloc Attributs — la liste continue sans perte réelle juste après.
+>
+> **Inférence posée, pas littérale** : RAW liste "Système d'assistance et de contrôle" puis "Système
+> d'assistance et de contrôle (secours)" — seule la 2e ligne est explicitement qualifiée. La 1re est
+> traitée comme "(principal)" par déduction (une paire secours implique un principal), pas parce que le
+> RAW l'écrit littéralement — posé ici explicitement plutôt que silencieusement, même prudence que
+> l'inférence d'ordre des ordinateurs en 8/16 (Condor).
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=4, nt=3`
+> ("Ordinateur NT III, Gén. IV").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commande vocale, `label_override='Interface de contrôle • Commande vocale
+>    (principal)'` (RAW "à commandes vocales (principale)", pluriel — même système)
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Sonscan actif directionnel (migration 261)
+> 4. Sonscan passif (migration 261)
+> 5. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X")
+> 6. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 7. Régulateur thermique
+> 8. Système de filtrage hygiénique, `level=2` ("niv. 2")
+> 9. Système d'alimentation, `level=2` ("niv. 2")
+> 10. Communicateur pour armure • Lénid
+> 11. Communicateur pour armure • ComLink
+> 12. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+>     (inféré, voir note ci-dessus)
+> 13. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>     (RAW explicite)
+> 14. Contrôle de pression
+> 15. **`ref_equipment_id`** → Générateur de lumière Feu Follet (lien direct, précédent constant)
+> 16. Balise de détresse (migration 261)
+> 17. Antivol • Verrouillage, `level=7` ("(1 système au choix)")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 18. **`ref_equipment_id`** → Canon à neutron (RAW "Canon à neutrons (épaule)", pluriel — catalogue
+>     singulier, même système ; description catalogue confirme "arme à énergie la plus répandue sous les
+>     mers")
+> 19. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire rétractable (poing)" — pas
+>     d'annotation, même résolution que Nymph 1-A/Sylph 56)
+> 20. Générateurs défensifs électrique (RAW singulier)
+> 21. **`ref_equipment_id`** → Lance-harpon lourd ("10 charges" non annoté)
+>
+> Total : 17 systèmes + 4 armes + 1 ordinateur = 22 lignes pour cette seule armure. Reste 6 fiches.
+
+> #### Transcription armure 11/16 — Heimdall-Pyrelia (SEEDEXO.md:1366-1415) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Heimdall-Pyrelia'`. 3 interfaces cette fois (1 principale
+> + 2 secours distinctes) et 2 ordinateurs (même inférence principal/secours que Mentor/Condor pour le
+> 1er non qualifié).
+>
+> **Trouvaille** : "Grappin magnétique" (RAW) → `ref_equipment` a "Grappin magnétique Rhaz" (Équipement
+> Général/Outillage), pas de qualificatif "portable" dans son texte, outil mécanique adaptable "à
+> n'importe quel lanceur" — traité comme une arme/un outil monté (précédent dague/harpon : lien direct),
+> **pas** cloné comme les capteurs Sonscan/Radar/Caméra (la règle "portable" posée le 2026-08-21 est
+> scopée aux capteurs électroniques, pas aux outils mécaniques).
+>
+> **Distinction quantité importante** : "Lance-filet, **2 tirs**" ≠ "**Deux** tubes lance-missiles"
+> (Cougar, 9/16). "2 tirs"/"10 charges" décrit la capacité de munitions d'UN seul lanceur monté (déjà
+> établi comme non tracké, précédent Explora), alors que "Deux tubes" compte des montages physiques
+> distincts (répété en lignes). Lance-filet reste donc **une seule ligne**, pas deux.
+>
+> **`ref_exo_template_computers`** (2 lignes) :
+> 1. `role='principal', gen=2, nt=4` ("Ordinateur NT IV, Gén. II" — non qualifié, inféré principal par
+>    opposition au 2e explicitement "(secours)")
+> 2. `role='secours', gen=1, nt=2` ("Ordinateur NT II, Gén. I (secours)")
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Interface neuronale de commande télépathique, `label_override='Interface
+>    neuronale de contrôle • Commandes télépathiques (principal)'` (RAW "Interface neuronale de
+>    contrôle à commandes télépathiques (principale)")
+> 2. Interface de contrôle • Commande vocale, `label_override='Interface de contrôle • Commande vocale
+>    (secours)'`
+> 3. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 4. Sonscan actif directionnel (migration 261)
+> 5. Sonscan passif (migration 261)
+> 6. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X")
+> 7. Système respiratoire • Réserve d'oxygène, `level=1` (24h)
+> 8. Régulateur thermique
+> 9. Communicateur pour armure • Lénid
+> 10. Communicateur pour armure • ComLink
+> 11. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+>     (inféré, même convention que Mentor)
+> 12. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>     (RAW explicite)
+> 13. Contrôle de pression
+> 14. **`ref_equipment_id`** → Générateur de lumière Feu Follet (lien direct, précédent constant)
+> 15. Balise de détresse (migration 261)
+> 16. Antivol • Verrouillage, `level=7` ("(1 système au choix)")
+> 17. **`ref_equipment_id`** → Grappin magnétique Rhaz (voir trouvaille ci-dessus)
+> 18. Affichage tactique
+> 19. Détecteur d'acquisition (nom RAW exact cette fois, pas de coquille)
+> 20. Disp. d'assistance médicale, `level=4` ("niv. 4")
+> 21. Atténuateur sonore, `level=3`, `label_override='Atténuateur sonore (Masqueur Tri-Magma)'`
+>     ("Masqueur Tri-Magma" = nom de modèle, pas un système distinct — max_level catalogue 7, niv. 3
+>     RAW dans la plage)
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 22. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire rétractable (poing)", pas
+>     d'annotation)
+> 23. **`ref_equipment_id`** → Lance-harpon lourd ("10 charges" non tracké)
+> 24. **`ref_equipment_id`** → Lance-filet ("2 tirs" non tracké — une seule ligne, voir distinction
+>     quantité ci-dessus ; nom exact déjà confirmé en révision antérieure de ce document)
+>
+> Total : 21 systèmes + 3 armes + 2 ordinateurs = 26 lignes pour cette seule armure. Reste 5 fiches.
+
+> #### Transcription armure 12/16 — Ouraken (SEEDEXO.md:1416-1470) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Ouraken'`. Note : SEEDEXO.md:1450-1451 ("345" / "Armures
+> mécanisées Armures mécanisées") est le même artefact de rupture de page que les précédents, la liste
+> continue sans perte. Même note RAW *"tous ces systèmes ont un Blindage IEM de niv. 3"* que Condor
+> (8/16) en fin de bloc — non encodée, pour la même raison (aucune colonne/mécanique correspondante).
+>
+> **Confirmation croisée utile** : les descriptions catalogue de "Lance-torpilles Taille 2" et
+> "Lance-torpilles Taille 3" (migration 261) citent déjà littéralement Ouraken ("Attesté (Ouraken,
+> Moloch)" / "Attesté (Ouraken, '1 torpille Taille 3 chacun')") — ces lignes ont été construites en
+> anticipant précisément cette armure lors d'une révision antérieure de ce document.
+>
+> **Résolution "2 lance-torpilles Taille 2, 1 torpille Taille 3 chacun"** : le catalogue ne sépare pas
+> tube-lanceur et torpille-munition — chaque ligne "Lance-torpilles Taille N" représente l'ensemble
+> tube+torpille de taille N (cohérent avec le tableau RAW "TAILLE, COÛT, DOMMAGES ET PORTÉE" déjà
+> transcrit dans ce document). RAW donne 2 informations de taille différentes ("Taille 2" pour le tube,
+> "Taille 3" pour la torpille qu'il tire) — résolu en retenant la taille de la **torpille effectivement
+> tirée** (Taille 3) pour le choix de la ligne catalogue, avec quantité 2 (répétition), le détail "tube
+> de montage Taille 2" n'étant pas séparément tracké (même statut que les charges/munitions non
+> trackées ailleurs). Cohérent avec la note catalogue pré-existante qui cite cette phrase exacte comme
+> justification de la ligne Taille 3.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=4, nt=3`
+> ("Ordinateur NT III, Gén. IV").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Filet neuronal, `label_override='Interface de contrôle • Filet neuronal
+>    (principal)'`
+> 2. Interface de contrôle • Commande vocale, `label_override='Interface de contrôle • Commande vocale
+>    (secours)'`
+> 3. Système respiratoire • Réserve d'oxygène, `level=3` (72h = 3 × 24h, convention 2/16)
+> 4. Sonscan actif directionnel (migration 261)
+> 5. Sonscan passif (migration 261)
+> 6. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X")
+> 7. Calculateur de tir Nemrod (migration 261 — RAW "Calculateur de tir" sans marque, seule entrée
+>    catalogue existante, aucune ambiguïté)
+> 8. Communicateur pour armure • Lénid
+> 9. Communicateur pour armure • ComLink
+> 10. Régulateur thermique
+> 11. Balise de détresse (migration 261)
+> 12. Système de filtrage hygiénique, `level=1` ("niv. 1")
+> 13. Système d'alimentation, `level=2` ("niv. 2")
+> 14. Système de navigation, `level=13` ("niv. 13")
+> 15. Détecteur d'acquisition
+> 16. Système d'assistance et de contrôle des exo-armures (SACEA) — une seule instance ici, pas
+>     d'annotation (contrairement à Mentor/Heimdall-Pyrelia)
+> 17. Contrôle de pression
+> 18. **`ref_equipment_id`** → Générateur de lumière Feu Follet
+> 19. Affichage tactique
+> 20. Champ IEM anti-torpille (champ sphère), `level=3` ("niv. 3")
+> 21. Autopilote, `level=12` ("niveau 12")
+> 22. Antivol • Reconnaissance neuronale (RAW "Antivol à reconnaissance neuronale")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 23. **`ref_equipment_id`** → Dague thermique Thermo IV (RAW "Dague thermique rétractable (poing)" —
+>     pas de contradiction dans la description catalogue, pas d'annotation, précédent Typhon)
+> 24. **`ref_equipment_id`** → Canon à neutron (RAW "Canon à neutrons (épaule)")
+> 25. **`ref_equipment_id`** → Lance-harpon lourd ("10 charges" non tracké)
+> 26. **`ref_equipment_id`** → Lance-harpons AV multiple (RAW "3 charges" — écart avec les "8 harpons"
+>     de la description catalogue, non tracké, même convention que les autres charges/munitions)
+> 27-28. **`ref_equipment_id`** → Lance-torpilles Taille 3 **× 2 lignes répétées** (voir résolution
+>     détaillée ci-dessus)
+>
+> Total : 22 systèmes + 6 armes + 1 ordinateur = 29 lignes pour cette seule armure. Reste 4 fiches.
+
+> #### Transcription armure 13/16 — Odin (SEEDEXO.md:1471-1521) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Odin'`.
+>
+> **`ref_exo_template_computers`** (2 lignes) :
+> 1. `role='principal', gen=2, nt=4` ("Ordinateur NT IV Gén. II" — non qualifié, inféré principal)
+> 2. `role='secours', gen=1, nt=2` ("Ordinateur NT II, Gén. I (secours)")
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'` (RAW "à commandes optiques" — variante de nom, même système "optique" que Typhon/
+>    Vanguard etc., pas une interface distincte)
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Sonscan actif directionnel (migration 261)
+> 4. Sonscan passif (migration 261)
+> 5. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X")
+> 6. Calculateur de tir Nemrod (migration 261, RAW "Calculateur de tir" sans marque)
+> 7. Régulateur thermique
+> 8. Communicateur pour armure • Lénid
+> 9. Communicateur pour armure • ComLink
+> 10. Système respiratoire • Réserve d'oxygène, `level=3` (72h)
+> 11. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+>     (inféré)
+> 12. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>     (RAW explicite)
+> 13. Contrôle de pression
+> 14. Balise de détresse (migration 261)
+> 15. Détecteur d'acquisition
+> 16. Disp. d'assistance médicale, `level=4` ("niv. 4")
+> 17. **`ref_equipment_id`** → Générateur de lumière Feu Follet
+> 18. Affichage tactique
+> 19. Champ IEM anti-torpille (champ sphère), `level=3` ("niv. 3")
+> 20. Centre de commande de drones (migration 261)
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 21. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire rétractable (poing)", pas
+>     d'annotation)
+> 22. **`ref_equipment_id`** → Canon à neutron (RAW "Canon à neutrons (épaule)")
+> 23. Générateurs défensifs micro-ondes (RAW "Générateur défensif à micro-ondes", variance mineure)
+> 24. **`ref_equipment_id`** → Lance-harpons AV multiple ("3 charges" non tracké)
+>
+> Total : 20 systèmes + 4 armes + 2 ordinateurs = 26 lignes pour cette seule armure. Reste 3 fiches.
+
+> #### Transcription armure 14/16 — Vulcain (SEEDEXO.md:1522-1584) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Vulcain'` (nom complet RAW "Armure de forage Vulcain").
+> Note : SEEDEXO.md:1532-1533 ("Armures mécanisées Armures mécanisées" / "346") même artefact de rupture
+> de page que les précédents. RAW précise en tête d'Armement : *"Ces systèmes sont des outils, mais ils
+> peuvent être utilisés comme des armes si l'occasion se présente"* — flavor, n'affecte pas le
+> classement `family=arme` de ces 3 lignes (déjà catalogué ainsi).
+>
+> **Confirmation croisée** : la description catalogue "Griffe mécanique" cite littéralement Vulcain
+> ("ex. Force 80 sur l'Armure de forage Vulcain") — construite en prévision exacte de cette armure.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=3, nt=3`
+> ("Ordinateur NT III, Gén. III").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'` (RAW "à commandes optiques", non qualifiée, inféré principal — pairée avec un
+>    "Panneau de contrôle manuel **de secours**" explicite juste après)
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Sonscan actif directionnel (migration 261)
+> 4. Sonscan passif (migration 261)
+> 5. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscan" sans "niv. X")
+> 6. Contrôle de pression
+> 7. Communicateur pour armure • Lénid
+> 8. Régulateur thermique
+> 9. Stabilisateur (Vulcain exo-3, satisfait "Exo-1 et plus seulement")
+> 10. Communicateur pour armure • ComLink
+> 11. Système respiratoire • Réserve d'oxygène, `level=3` (72h)
+> 12. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+>     (inféré)
+> 13. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>     (RAW explicite)
+> 14. **`ref_equipment_id`** → Générateur de lumière Feu Follet
+> 15. Caméra (migration 261)
+> 16. Autopilote, `level=10` ("niv. 10")
+> 17. Dispositif de diagnostic
+> 18. Balise de détresse (migration 261)
+> 19. Dispositif d'auto-réparation • Centrale, `level=12`
+> 20-29. Dispositif d'auto-réparation • Module annexe **× 10 lignes répétées** ("Modules annexes pour
+>     10 systèmes")
+> 30. Système d'alerte
+> 31. Système de filtrage hygiénique, `level=1` ("niv. 1")
+> 32. Système d'alimentation, `level=1` ("niv. 1")
+> 33. Système de navigation, `level=12` ("niv. 12")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 34. **`ref_equipment_id`** → Excavateur mécanique (RAW "Excavateur mécanique (main et avant-bras
+>     droit)", nom exact)
+> 35. **`ref_equipment_id`** → Griffe mécanique (RAW "Griffe mécanique, Force 80" — voir confirmation
+>     croisée ci-dessus)
+> 36. **`ref_equipment_id`** → Torche de forage Hydra (RAW "Torche de forage plasma Hydra", nom complet
+>     — même entrée catalogue)
+>
+> Total : 33 systèmes + 3 armes + 1 ordinateur = 37 lignes pour cette seule armure. Reste 2 fiches.
+
+> #### Transcription armure 15/16 — Moloch (SEEDEXO.md:1586-1657) — **notes prêtes à coder, une ligne bloquante**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Moloch'`. Note : SEEDEXO.md:1622-1631 contient un
+> artefact de rupture de page particulièrement dense — fragments illisibles ("NT ti é III", "me d", "Ar",
+> "A", "plusi", "l") **plus, fait notable, une réapparition littérale de "Coût : 1 450 000 sols" /
+> "Disponibilité (marché noir) : 5 (10)" qui sont les valeurs exactes de Vulcain (14/16)** — confirmation
+> que c'est bien un artefact de bas/haut de page (contenu de la page précédente qui déborde), pas une
+> donnée réelle de Moloch. La liste Systèmes auxiliaires continue sans perte à "Mémoire de cibles Mémo"
+> (ligne 1632).
+>
+> **Résolu (2026-08-21, Saar)** : "Lance-leurres, 6 leurres niv. 3" (RAW) — aucune correspondance
+> catalogue trouvée en le cherchant comme système fini (voir recherche exhaustive menée avant cette
+> résolution). Saar clarifie : "niv. 3" du RAW est en réalité une **Taille** (le leurre suit la même
+> grille Taille 1-10 que les torpilles/missiles, Ini. -7, Mode de tir CC, NT II), avec une table RAW
+> complète TAILLE/COÛT/DOMMAGES(néant)/PORTÉE/DIS fournie séparément. **Nouvelles lignes
+> `ref_exo_equipment` à créer** (10 lignes, Taille 1-10, catégorie "Torpilles et missiles" — même
+> mécanisme de montage en tube que Lance-torpilles/Lance-missiles, choix motivé par cohérence
+> structurelle, pas une certitude RAW littérale sur la catégorie) :
+>
+> | Taille | Coût | Portée | DIS (M. noir) | Attestation |
+> |---|---|---|---|---|
+> | 1 | 1 000 | Courte | 15 (20) | extensibilité |
+> | 2 | 2 000 | Courte | 15 (20) | extensibilité |
+> | 3 | 4 000 | Moyenne | 10 (15) | **Attesté (Moloch, "niv. 3")** |
+> | 4 | 10 000 | Moyenne | 10 (15) | extensibilité |
+> | 5 | 20 000 | Longue | 10 (15) | extensibilité |
+> | 6 | 40 000 | Longue | 5 (10) | extensibilité |
+> | 7 | 80 000 | Longue | 5 (10) | extensibilité |
+> | 8 | 100 000 | Extrême | 5 (10) | extensibilité |
+> | 9 | 200 000 | Extrême | -1 (5) | extensibilité |
+> | 10 | 250 000 | Extrême | -1 (5) | extensibilité |
+>
+> Constantes toutes tailles : `init_mod=-7`, `fire_mode='CC'`, `tech_level='II'`, `damage=null` (colonne
+> RAW "Dommages" vide sur les 10 lignes — un leurre ne fait pas de dégâts, c'est un objectif de
+> diversion, cohérent avec sa fonction). Rien encore appliqué — même statut "noter pas appliquer" que le
+> reste du catalogue de cette session, à coder avec le reste lors de l'écriture de la migration finale.
+>
+> **Ligne Moloch résolue** : `family=arme`, **`equipment_id`** → Lance-leurre Taille 3 (RAW "6 leurres"
+> = capacité de munitions, non trackée — même convention que "10 charges"/"3 charges" ailleurs, une
+> seule ligne).
+>
+> **Item non-système classé en `family=systeme` malgré son catalogue d'origine** : "Mémoire de cibles
+> Mémo" existe dans `ref_equipment` (family="Armes", catégorie "Accessoires pour armes" — un accessoire
+> d'arme, pas un système). RAW le liste pourtant dans "Systèmes auxiliaires" de Moloch, pas dans
+> "Armement". Le `family` sur `ref_exo_template_equipment` reflète l'emplacement RAW sur la fiche
+> (onglet Systèmes vs Armement), pas la classification du catalogue source — donc `family='systeme'`
+> pour cette ligne, cohérent avec où le joueur doit la voir sur la fiche.
+>
+> **`ref_exo_template_computers`** (2 lignes) :
+> 1. `role='principal', gen=3, nt=4` ("Ordinateur NT IV, Gén. III" — non qualifié, inféré principal)
+> 2. `role='secours', gen=2, nt=3` ("Ordinateur NT III, Gén. II (secours)")
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Commande vocale, `label_override='Interface de contrôle • Commande vocale
+>    (principal)'` (non qualifiée en RAW, inféré — pairée avec "Panneau...de secours" explicite)
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Sonscan actif directionnel (migration 261)
+> 4. Sonscan passif (migration 261)
+> 5. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscans" pluriel, coquille, sans "niv. X")
+> 6. Calculateur de tir Nemrod (migration 261, RAW "Calculateur de tir" sans marque)
+> 7. Communicateur pour armure • Lénid
+> 8. Communicateur pour armure • ComLink
+> 9. Détecteur d'acquisition
+> 10. Affichage tactique
+> 11. **`ref_equipment_id`** → Mémoire de cibles Mémo (voir note classification ci-dessus, `family='systeme'`)
+> 12. Régulateur thermique
+> 13. Stabilisateur (Moloch exo-4, satisfait "Exo-1 et plus seulement")
+> 14. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+>     (inféré)
+> 15. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>     (RAW explicite)
+> 16. Contrôle de pression
+> 17. Système respiratoire • Réserve d'oxygène, `level=3` (72h)
+> 18. Dispositif de diagnostic
+> 19. Dispositif d'auto-réparation • Centrale, `level=12`
+> 20-29. Dispositif d'auto-réparation • Module annexe **× 10 lignes répétées**
+> 30. Disp. d'assistance médicale, `level=5` (RAW "médical" — coquille, catalogue "médicale")
+> 31. Systèmes « Dernière chance » • Injection de drogues (RAW "Système Dernière chance (Injection de
+>     drogues)", nom exact hors guillemets)
+> 32. **`ref_equipment_id`** → Générateur de lumière Feu Follet
+> 33. Atténuateur sonore, `level=4` ("niv. 4", pas de marque cette fois contrairement à Heimdall-Pyrelia)
+> 34. Brouilleur sonscans Actif et passif, `level=3` (description catalogue confirme littéralement
+>     "Attesté (Moloch, 'niv. 3', SEEDEXO.md:1647)")
+> 35. Centre de commande de drones (migration 261)
+> 36. Balise de détresse (migration 261)
+> 37. Système de filtrage hygiénique, `level=1` ("niv. 1")
+> 38. Système d'alimentation, `level=2` ("niv. 2")
+> 39. Système de navigation, `level=13` ("niv. 13")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 40. **`ref_equipment_id`** → Dague moléc. Pulsar (RAW "Dague moléculaire rétractable (poing)", pas
+>     d'annotation)
+> 41. **`ref_equipment_id`** → Canon à neutron (RAW "Canon à neutrons (épaule)")
+> 42. **`ref_equipment_id`** → Lance-harpons AV multiple ("3 charges" non tracké)
+> 43-44. **`ref_equipment_id`** → Lance-torpilles Taille 2 **× 2 lignes répétées** ("Lance-torpilles
+>     Taille 2, 2 torpilles" — le texte d'intro RAW de l'armure confirme "les deux lance-torpilles sont
+>     alignés dans le dos" : 2 montages physiques distincts, pas une capacité de munitions sur 1 ligne)
+>
+> Total : 39 systèmes + 6 armes + 2 ordinateurs = 47 lignes pour cette seule armure (Lance-leurre résolu
+> ci-dessus). Reste 1 fiche (Orka, 16/16).
+
+> #### Transcription armure 16/16 — Orka (SEEDEXO.md:1658-1710) — **notes prêtes à coder, rien appliqué**
+>
+> Relu ligne à ligne. `ref_exo_templates.name = 'Orka'`. Dernière armure du corpus — rien de structurellement
+> nouveau, tous les termes déjà rencontrés dans les 15 armures précédentes.
+>
+> **`ref_exo_template_computers`** (1 ligne, pas de secours) : `role='principal', gen=4, nt=4`
+> ("Ordinateur NT IV, Gén. IV").
+>
+> **`ref_exo_template_equipment`, family=systeme** (toutes `equipment_id` sauf mention contraire) :
+> 1. Interface de contrôle • Visière optique, `label_override='Interface de contrôle • Visière optique
+>    (principal)'` (RAW "à commandes optiques", non qualifiée, inféré — pairée avec "Panneau...de
+>    secours" explicite)
+> 2. Interface de contrôle • Commandes manuelles, `label_override='Panneau de contrôle manuel
+>    (secours)'`
+> 3. Communicateur pour armure • Lénid
+> 4. Communicateur pour armure • ComLink
+> 5. Sonscan actif directionnel (migration 261)
+> 6. Sonscan passif (migration 261)
+> 7. Analyseur • Sea-Star, **pas de `level`** ("Analyseur sonscans" pluriel, coquille, sans "niv. X")
+> 8. Calculateur de tir Nemrod (migration 261, sans marque en RAW)
+> 9. Régulateur thermique
+> 10. Contrôle de pression
+> 11. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (principal)'`
+>     (inféré)
+> 12. Système d'assistance et de contrôle des exo-armures (SACEA), `label_override='SACEA (secours)'`
+>     (RAW explicite)
+> 13. Stabilisateur
+> 14. **`ref_equipment_id`** → Générateur de lumière Feu Follet
+> 15. Système respiratoire • Réserve d'oxygène, `level=3` (72h)
+> 16. Dispositif de diagnostic
+> 17. Dispositif d'auto-réparation • Centrale, `level=12`
+> 18-22. Dispositif d'auto-réparation • Module annexe **× 5 lignes répétées** ("Modules annexes pour 5
+>     systèmes")
+> 23. Système de filtrage hygiénique, `level=1` ("niv. 1")
+> 24. Système d'alimentation, `level=2` ("niv. 2")
+> 25. Système de navigation, `level=13` ("niv. 13")
+> 26. Caméra (migration 261 — RAW "Camera" sans accent, coquille)
+> 27. Affichage tactique
+> 28. Autopilote, `level=12` ("niveau 12")
+>
+> **`ref_exo_template_equipment`, family=arme** :
+> 29. **`ref_equipment_id`** → Locard ExelP (RAW "Pistolet lourd sous-marin à dards (main)" — déjà
+>     tranché dans une révision antérieure de ce document, qui cite Orka nommément)
+> 30. **`ref_equipment_id`** → Dague thermique Thermo IV (RAW "Dague thermique rétractable (poing)",
+>     pas d'annotation, précédent Ouraken)
+> 31. Générateurs défensifs électrique (RAW "Générateur défensif à décharges électriques" — variante
+>     verbeuse, même système)
+> 32. **`ref_equipment_id`** → Lance-harpons AV multiple ("5 charges" non tracké, comme "3 charges"
+>     ailleurs — la quantité de munitions n'est jamais trackée quelle que soit sa valeur)
+>
+> Total : 28 systèmes + 4 armes + 1 ordinateur = 33 lignes pour cette seule armure.
+>
+> ---
+>
+> ## 14. Bilan de la session de transcription RAW (2026-08-21) — 16/16 armures notées, rien appliqué
+>
+> Les 16 fiches du corpus RAW (SEEDEXO.md:909-1710) sont maintenant intégralement transcrites en notes
+> ci-dessus (§13.4.4 suite, sous-sections "Transcription armure X/16"). **Rien n'est encore appliqué en
+> base** — aucune migration écrite pour les données de loadout elles-mêmes, conformément à la consigne
+> "noter pas appliquer" tenue tout du long.
+>
+> **Total cumulé** (somme exacte des totaux par armure ci-dessus) : 16 armures, **431 lignes**
+> `ref_exo_template_equipment`/`ref_exo_template_computers` (23+31+18+15+21+19+23+34+27+22+26+29+26+37+47+33),
+> fourchette de 15 (Série A) à 47 (Moloch) lignes par armure selon la richesse du modèle. Plus 10
+> nouvelles lignes `ref_exo_equipment` (Lance-leurre Taille 1-10) à ajouter au catalogue (voir 15/16
+> ci-dessus, résolu avec Saar).
+>
+> **Aucun point bloquant restant** sur la donnée de loadout elle-même. Point hors périmètre de cette
+> transcription, soulevé par Saar le 2026-08-21 : champ illustration manquant sur `ref_exo_templates` —
+> voir §15 ci-dessous, investigation faite, plan à valider avant code.
+>
+> **Décisions structurelles actées pendant cette phase** (déjà documentées en détail à leur point
+> d'apparition ci-dessus, résumées ici pour mémoire) :
+> - `level` réutilisé comme multiplicateur d'unités de 24h **uniquement** pour la réserve d'oxygène de
+>   base (level=1→24h, 2→48h, 3→72h) — décision Saar, posée en 2/16 (Typhon).
+> - Quantité RAW explicite ("xN", "Deux", "2 tubes"...) = répétition de ligne catalogue ; quantité de
+>   munitions/charges ("10 charges", "3 charges") = jamais trackée, une seule ligne quelle que soit la
+>   valeur — deux conventions distinctes, à ne pas confondre (posé en 9/16 Cougar, clarifié en 11/16
+>   Heimdall-Pyrelia).
+> - "(principal)"/"(secours)" sur une paire d'interfaces/SACEA/ordinateurs non tous deux qualifiés en
+>   RAW → le non-qualifié est inféré "(principal)" par déduction, jamais une certitude RAW littérale —
+>   posé en 8/16 (Condor), répété ensuite.
+> - Une correction a été trouvée et documentée (pas silencieusement corrigée) : "Fusil sonique
+>   incapaciteur" (Condor) pointait à tort vers "Fusil sonique d'attaque" dans une révision antérieure
+>   de ce document — le catalogue distingue lui-même les deux armes par leur description, corrigé vers
+>   "Fusil sonique incap. sirène" (8/16).
+>
+> **✅ Codé et appliqué (2026-08-21)** — migration 264 (10 lignes catalogue Lance-leurre) et migration
+> 265 (seed complet du loadout, 431 lignes `ref_exo_template_equipment`/`ref_exo_template_computers`
+> sur les 16 `ref_exo_templates`, résolution par nom via `ref_exo_equipment`/`ref_equipment`, jamais
+> d'`id` en dur). Vérifié ligne à ligne : les 16 totaux exacts (23 à 47 selon l'armure) confirmés contre
+> la base réelle, exclusive arc respecté sur toutes les lignes (jamais 2 sources, jamais 0), contenu de
+> Moloch (cas le plus dense, 47 lignes) revérifié champ par champ. Piège trouvé en écrivant la
+> migration, pas seulement en la préparant : le catalogue utilise des apostrophes Unicode
+> incohérentes selon les lignes (`'` droite pour la plupart, `'` courbe U+2019 pour "Réserve
+> d'oxygène"/"Fluide oxygéné"/"Extracteur d'oxygène") — chaque nom vérifié par résolution programmatique
+> contre la base réelle avant écriture finale, pas recopié à la main depuis les notes. Un typo trouvé et
+> corrigé au passage : "Excavateur mécanique" écrit d'abord comme lien `ref_equipment_id` alors qu'il
+> est dans `ref_exo_equipment` (catalogue exo, migration 261).
+>
+> **Testé** : `265_seed_exo_template_loadout.test.mjs` (4/4 — totaux exacts, exclusive arc, contenu
+> Moloch, cycle down→up en transaction annulée) + suite serveur complète (422/422, 0 régression).
+> **Vérifié (lecture code)** : `applyExoTemplate` (`exoTemplateService.js:99-141`) copie déjà
+> `ref_exo_template_equipment`/`ref_exo_template_computers` vers `exo_systems`/`exo_weapons`/
+> `exo_computers` au moment de la sélection d'un template — construit en amont de cette session en
+> anticipant précisément ces 431 lignes (matériel neuf pour systèmes/armes, un jet par ligne pour les
+> ordinateurs selon Génération, décision Saar 2026-08-21 déjà actée dans ce fichier).
+>
+> **Testé en navigateur — confirmé par Saar (2026-08-21)** : sélection d'un modèle sur une exo réelle,
+> loadout complet visible dans les onglets Systèmes/Armement/Ordinateur. **Chantier de transcription RAW
+> + seed clos.**
+
+---
+
+## 15. Champ illustration manquant sur `ref_exo_templates` (soulevé par Saar, 2026-08-21) — ✅ codé
+
+> Constat : `ref_exo_templates` (16 lignes, une par armure prémade) n'a aucune colonne image — vérifié
+> par lecture directe du schéma (`id`, `name`, `category`, `environment`, profondeurs, stats de base,
+> `manufacturer`, `price`, `rarity`, `tech_level`, `autonomy` — pas de champ illustration/portrait/image).
+
+### 15.1 Deux patrons existants dans le projet, un seul pertinent ici
+
+Recherche faite avant de proposer quoi que ce soit (CLAUDE.md §7 — réutiliser l'existant avant d'inventer) :
+
+- **`ref_careers.illustration`** (`text`, migration `93_ref_careers.js`) — chemin relatif statique vers
+  `client/public/assets/` (ex. `assets/career_bartender.webp`), rempli par migration de seed
+  (107/109/112-116, renommé en 259), consommé directement `src={`/${career.illustration}`}` dans
+  `CareersAllocator.jsx`. **Aucune route d'upload** — les fichiers sont commités au dépôt client, la
+  colonne pointe dessus.
+- **`characters.portrait_url`** (`text`) — clé objet MinIO + cache-bust, alimentée par une route
+  d'upload dédiée (`POST /characters/:id/portrait`, `multer` + `uploadToMinio`), servie via
+  `GET /api/assets/:folder/*filePath`. Upload à l'exécution, propre à une instance de personnage.
+
+`ref_exo_templates` est un catalogue statique administré (16 lignes fixes, peuplé par migration —
+même nature que `ref_careers`, pas une entité de joueur créée à l'exécution comme `characters`). Le
+patron `ref_careers.illustration` est donc le plus proche structurellement : colonne `text` simple,
+chemin statique vers `client/public/assets/`, aucune infrastructure d'upload à construire.
+
+### 15.2 Proposition (à valider avant code, pas encore fait)
+
+- Migration : ajouter `illustration` (`text`, nullable) à `ref_exo_templates`, même type/nullabilité
+  que `ref_careers.illustration`.
+- Valeurs : chemin vers `client/public/assets/exo_<slug>.webp` (à fournir par Saar, comme les
+  illustrations de carrières) — **aucun asset image des 16 armures n'existe actuellement dans le dépôt**
+  (vérifié : aucun fichier `*exo*` sous `client/public/assets/`), donc soit les colonnes restent
+  `null` en attendant les fichiers, soit Saar fournit les images avant/pendant l'écriture de cette
+  migration.
+- UI : affichage dans la fiche exo-armure (composant à identifier au moment de coder — hors périmètre
+  de cette note, pas encore recherché) sur le même patron que `CareersAllocator.jsx`.
+- **Hors périmètre explicite** : pas de route d'upload à l'exécution (le patron `characters.portrait_url`
+  n'est pas retenu ici, sauf si Saar veut spécifiquement un upload GM en jeu plutôt que des assets
+  commités) — à confirmer avant de coder, c'est le seul point qui changerait l'architecture proposée.
+
+### 15.3 Codé (2026-08-21) — patron `characters.portrait_url` retenu, pas `ref_careers.illustration`
+
+Saar a tranché pour le patron MinIO (upload admin), pas le chemin statique — les 16 lignes
+`ref_exo_templates` existent déjà en base (migrations 252/253), donc aucune dépendance de séquencement
+avec la migration de seed du loadout (§14) : rien à faire/défaire.
+
+- **`server/src/db/migrations/263_exo_templates_illustration.js`** (+ `.test.mjs`, 2 tests passants) —
+  ajoute `illustration_url` (text, nullable) à `ref_exo_templates`. Appliquée.
+- **`server/src/routes/exoTemplates.js`** — `POST /:id/illustration` (`requireAuth` + `requireAdmin`,
+  `multerUpload`), même mécanique que `characters.js` `POST /:id/portrait` (clé MinIO fixe
+  `exo_templates/<id>/illustration`, cache-bust `?v=<timestamp>`). GET renvoie maintenant
+  `illustration_url`.
+- **`server/src/routes/adminTools.js`** + **`server/src/admin/exo-templates-tool.html`** (nouveau) —
+  `GET /api/admin/tools/exo-templates` (`requireAdmin`), page listant les 16 modèles avec vignette +
+  input fichier + bouton d'envoi par ligne, patron simplifié de `ref-equipment-tool.html`.
+- **`AdminPage.jsx`** + **`fr.json`** — tuile "Illustrations exo-armures".
+
+**Trouvaille annexe, non corrigée (hors périmètre, risque partagé avec portraits/couvertures déjà en
+prod)** : `server/src/routes/assets.js` a un commentaire "Auth requise — les assets ne sont pas
+publics" mais **aucun** `requireAuth` n'est réellement posé, ni sur la route ni à son montage
+(`index.js:105`). Signalé à Saar, pas traité ici.
+
+**Testé** : migration 263 (2/2 tests), syntaxe JS des fichiers serveur modifiés, JSON du script inline
+de l'outil admin, `fr.json` valide. **Non testé** : navigateur (upload réel via l'outil admin, affichage
+de la vignette).
+
+### 15.4 Bug trouvé par Saar et corrigé (2026-08-21) — illustration jamais affichée en fiche
+
+Reproduit : upload réussi côté admin (`ref_exo_templates.illustration_url` bien renseigné en base,
+vérifié pour Vanguard/RT-4), mais l'onglet Réglages d'une exo-armure utilisant ce modèle
+(`ExoSettingsPanel.jsx`) n'affichait rien. **Cause racine** : `GET /:characterId/exo`
+(`char-sheet.js:1943`) fait déjà un `leftJoin` vers `ref_exo_templates` (pour `template_name`, affiché
+ailleurs) mais ne sélectionnait jamais `illustration_url` — la donnée n'atteignait jamais le client, pas
+un problème de cache ni d'upload.
+
+Corrigé :
+- `char-sheet.js` — ajoute `ref_exo_templates.illustration_url as template_illustration_url` au
+  `.select()` existant (même JOIN, une colonne de plus).
+- `ExoSheetWindow.jsx` — passe `templateIllustrationUrl={exo.template_illustration_url}` à
+  `ExoSettingsPanel`.
+- `ExoSettingsPanel.jsx` — le portrait affiche en priorité `character.portrait_url` (upload propre à
+  cette exo), sinon replie sur `templateIllustrationUrl` (illustration du modèle RAW d'origine) — une
+  exo sans portrait custom montre désormais l'illustration de son modèle plutôt qu'un cadre vide.
+
+**Testé** : requête directe reproduisant le JOIN corrigé, confirmée pour RT-4/Vanguard (retourne bien
+`template_illustration_url`). Syntaxe serveur vérifiée. **Non testé** : navigateur (Saar à confirmer
+sur RT-4).

@@ -15,4 +15,10 @@ router.get('/tools/equipment', requireAuth, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'admin', 'ref-equipment-tool.html'))
 })
 
+// Illustration des 16 modèles ref_exo_templates (migration 263, PLAN_EXOARMURE.md §15) — même garde
+// que /tools/equipment, même raison (page servie sous requireAdmin, pas seulement ses appels POST).
+router.get('/tools/exo-templates', requireAuth, requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'admin', 'exo-templates-tool.html'))
+})
+
 export default router

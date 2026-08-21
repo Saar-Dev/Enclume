@@ -10,6 +10,8 @@ import CampaignSettingsPage from './components/campaignSettings/CampaignSettings
 import WorkshopPage from './pages/WorkshopPage'
 import VaultPage from './pages/VaultPage'
 import VaultCharacterPage from './pages/VaultCharacterPage'
+import CampaignCharacterSheetPage from './pages/CampaignCharacterSheetPage'
+import CharacterPrintPage from './pages/CharacterPrintPage'
 import EquipmentCatalogPage from './pages/EquipmentCatalogPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
@@ -78,6 +80,15 @@ export default function App() {
         } />
         <Route path="/campaigns/:campaignId/merchants" element={
           <ProtectedRoute><MerchantsPage /></ProtectedRoute>
+        } />
+        {/* Fiche standalone d'un personnage de campagne — hors session VTT, docs/PLANS/PLAN_FICHE_HORSLIGNE.md Lot B0 */}
+        <Route path="/campaigns/:campaignId/characters/:characterId/sheet" element={
+          <ProtectedRoute><CampaignCharacterSheetPage /></ProtectedRoute>
+        } />
+        {/* Vue d'impression — fiche complète en une page, lecture seule, docs/PLANS/PLAN_FICHE_HORSLIGNE.md Lot D.
+            Autorisation par personnage déjà appliquée serveur (char-sheet.js:router.param), pas dupliquée ici. */}
+        <Route path="/characters/:characterId/print" element={
+          <ProtectedRoute><CharacterPrintPage /></ProtectedRoute>
         } />
         <Route path="/workshop" element={
           <ProtectedRoute><WorkshopPage /></ProtectedRoute>

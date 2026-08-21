@@ -3879,3 +3879,29 @@ Convention :
   0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
   50% { transform: scale(1.12) rotate(6deg); opacity: 1; }
 }
+
+/* ─── Impression fiche personnage (Lot D, docs/PLANS/PLAN_FICHE_HORSLIGNE.md) ───────────────────
+   Le thème sombre de l'appli (conçu pour l'écran en jeu) est illisible sur cette vue — retour direct
+   de Saar après premier test réel : "fonctionnel mais illisible couleur". `.print-white-theme` force
+   fond blanc/texte noir sur TOUTE la vue `CharacterPrintView.jsx` (pas seulement à l'impression
+   papier — Saar l'a jugée illisible déjà à l'écran) — `!important` nécessaire car les couleurs
+   d'origine sont posées en style inline partout dans `CharacterSheet.jsx`/les panneaux (pas de
+   variables CSS existantes à redéfinir : les réécrire toutes serait un chantier de thème à part,
+   hors périmètre d'une vue d'impression, et risquerait l'apparence de la fiche vivante en jeu). Seule
+   exception explicitement voulue : les couleurs de sévérité des blessures (`.wound-severity-color`,
+   `--severity-bg` posé dans `LocationPanel.jsx`) — une règle plus spécifique les restaure malgré la
+   règle générale, sans toucher au fond inline d'origine (usage normal de l'appli inchangé). */
+.print-white-theme,
+.print-white-theme * {
+  background: #fff !important;
+  color: #000 !important;
+}
+.print-white-theme .wound-severity-color {
+  background: var(--severity-bg) !important;
+}
+
+@media print {
+  .print-only-hidden {
+    display: none !important;
+  }
+}
