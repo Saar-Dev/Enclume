@@ -195,6 +195,24 @@ export async function reconcileBattlemapElevators({
   database = db,
 } = {}) {
   const startedAt = Date.now()
+  // ELEV-PERF1 (retour Saar 2026-08-20) — appelé à chaque measureBattlemapTokenDistance, y compris
+  // pour des combats sur des cartes sans aucun ascenseur : poser un verrou pessimiste (forUpdate) et
+  // ouvrir une transaction pour une carte qui n'a rien à réconcilier ne fait que sérialiser des
+  // lectures sans rapport les unes avec les autres sur la même ligne `battlemaps`. `surface_data`
+  // n'est modifié qu'en édition de carte (Editor3D), jamais pendant un combat : le lire sans verrou
+  // pour vérifier la présence d'un connecteur elevator est donc sûr.
+  const unlockedBattlemap = await database('battlemaps').where({ id: battlemapId }).first()
+  if (!unlockedBattlemap) throw new RangeError('Battlemap inconnue')
+  if (elevatorDefinitionsFromBattlemap(unlockedBattlemap).length === 0) {
+    return Object.freeze({
+      battlemap: Object.freeze({ ...unlockedBattlemap }),
+      definitions: Object.freeze([]),
+      states: Object.freeze({}),
+      changed: false,
+      runtimeRevision: Number(unlockedBattlemap.runtime_revision || 0),
+      passengerTokens: Object.freeze([]),
+    })
+  }
   const result = await database.transaction(async trx => {
     const battlemap = await trx('battlemaps').where({ id: battlemapId }).forUpdate().first()
     const waitedMs = Date.now() - startedAt
