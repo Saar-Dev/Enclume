@@ -108,6 +108,7 @@ export async function applyExoTemplate(db, characterId, templateId) {
       .map(row => ({
         character_id: characterId,
         equipment_id: row.equipment_id,
+        ref_equipment_id: row.ref_equipment_id,
         label_override: row.label_override,
         level: row.level,
         integrite_max: LOADOUT_NEW_INTEGRITY,
@@ -119,6 +120,7 @@ export async function applyExoTemplate(db, characterId, templateId) {
       .map(row => ({
         character_id: characterId,
         equipment_id: row.equipment_id,
+        ref_equipment_id: row.ref_equipment_id,
         label_override: row.label_override,
         integrite_max: LOADOUT_NEW_INTEGRITY,
         integrite_current: LOADOUT_NEW_INTEGRITY,

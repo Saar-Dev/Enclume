@@ -2543,3 +2543,198 @@ défaut lui-même.
 loadout → `exo_systems`/`exo_weapons` peuplés correctement, changement de modèle → ancien loadout
 entièrement remplacé), vérification manuelle d'un échantillon de loadouts transcrits contre
 `SEEDEXO.md` ligne à ligne (pas juste les totaux).
+
+> **Révision 2026-08-21 (suite) — troisième branche `ref_equipment_id`, ✅ codée et testée contre
+> PostgreSQL réel** : trouvé en préparant la transcription elle-même, pas un sous-produit du reste du
+> Lot C — la moitié des lignes "Systèmes auxiliaires"/"Armement" des 16 fiches RAW ne sont pas des
+> systèmes propres aux armures (déjà couverts par `ref_exo_equipment`) mais des armes/senseurs
+> génériques du chapitre "Équipement" général (dagues, pistolets, mitrailleuses, sonscans, radars...),
+> vérifiés un par un contre `ref_equipment` (aucune entrée générique, que des produits de marque —
+> "Mitrailleuse lourde" n'existe que comme description de "F67"/"Ningram", jamais comme `name` — lier
+> à l'aveugle aurait été une FK devinée, interdit). Recherché et sourcé avant d'écrire le schéma
+> (`docs/JOURNAL8.md` pour le détail de la recherche) : pattern **exclusive arc**, une FK nullable par
+> catalogue cible + CHECK garantissant qu'une seule est renseignée — cf.
+> https://github.com/binkley/exclusive-arc-sql-example, https://waymondo.com/posts/are-exclusive-arcs-evil/.
+> Alternative rejetée : association polymorphique façon Rails (colonne `type`+`id`, sans vraie FK) —
+> casserait l'intégrité référentielle déjà garantie partout ailleurs dans ce schéma.
+>
+> **Migration 260** (`server/src/db/migrations/260_exo_equipment_dual_catalog.js`) : ajoute
+> `ref_equipment_id` (FK `ref_equipment`, `ON DELETE RESTRICT`) sur `exo_systems`/`exo_weapons`/
+> `ref_exo_template_equipment` (jamais `exo_programs` — déjà correctement câblé sur `ref_equipment`
+> seul depuis la migration 257, incohérence maintenant résorbée plutôt qu'ignorée) ; resserre au passage
+> le CHECK `chk_*_source` d'un simple `OR` (faille latente de la migration 257 : rien n'empêchait
+> `equipment_id`+`label_override` renseignés ensemble) vers une vraie exclusivité (somme des 3 branches
+> non-NULL = 1). `applyExoTemplate` étendu (copie `ref_equipment_id`), routes `POST /exo/systems`\
+> `/exo/weapons` (validation "exactement une source", `AppError 400` avant que Postgres ne rejette en
+> 500 brut) et leurs jointures GET/POST/PUT (`display_name`/`ref_damage`/`ref_shock`/`ref_range`/
+> `ref_fire_mode` via `COALESCE` sur les 2 catalogues) mis à jour. Client : `ExoSystemsPanel.jsx`/
+> `ExoWeaponsPanel.jsx` passent de 2 à 3 modes (catalogue armure / catalogue général `GET /api/equipment
+> ?family=Armes|Equipement Général` / personnalisé), clés i18n `exo.itemCatalogGeneral` ajoutée
+> (`fr.json`). **Testé** : 17 tests migration 260 (schéma + exclusive arc, les 4 combinaisons interdites
+> + les 3 branches seules, chaque cas de rejet dans sa propre transaction — une violation de CHECK avorte
+> toute la transaction Postgres en cours, piège trouvé en écrivant ces tests) + 1 nouveau test
+> `exoTemplateService` (copie `ref_equipment_id`) + smoke test jetable (jointure réelle, `display_name`
+> résolu correctement sur les 2 branches) + suite serveur complète 323/323 verte (aucune régression) +
+> build/lint client propres. **Non testé** : scénario réel navigateur (sélection catalogue général dans
+> l'UI).
+
+> **Révision 2026-08-21 (suite) — décisions de transcription CONFIRMÉES, pas encore codées** (Saar :
+> « noter, pas appliquer » — segmentation volontaire pour ne pas accumuler de décisions non écrites).
+> Aucune migration n'existe encore pour ce qui suit ; ce bloc est la seule trace durable tant que le
+> code n'est pas écrit.
+>
+> **Révision 2026-08-21 (suite 2) — méthode clarifiée par Saar, corrige une partie de ce qui précède** :
+> pour toute mention générique d'une arme/d'un équipement dans un loadout, **se référer en priorité à
+> `ref_equipment` (équivalent stats, peu importe la marque exacte) avant d'envisager une nouvelle ligne
+> `ref_exo_equipment`** — `ref_exo_equipment` reste réservé à ce qui n'existe nulle part ailleurs
+> (systèmes propres aux armures, objets sans aucune trace dans le chapitre général). Vérifié
+> concrètement : `ref_equipment` contient bien des correspondances exactes ou quasi-exactes pour les
+> dagues, lance-harpons et pistolets lourds — les lignes catalogue "inventées" pour ces armes dans la
+> révision précédente sont **annulées**, remplacées par des liens `ref_equipment_id`.
+>
+> **Liens `ref_equipment_id` confirmés pour la transcription** (aucune nouvelle ligne catalogue) :
+> - Fusil sonique incapaciteur (Condor) = "Fusil sonique d'attaque".
+> - Lance-filet (Heimdall-Pyrelia) = "Lance-filet" (nom exact).
+> - Lance-flammes (Condor) = "Lance-flammes" (nom exact).
+> - Mitrailleuse lourde (Condor, Cougar) = "F67" (5D10+1 vs générique 5D10, portée max la plus proche
+>   des 2 candidats trouvés).
+> - Canon d'assaut (Cougar) = "Oxi4" (6D10 identique, NT II identique au générique, contrairement à
+>   Telen II qui est NT III).
+> - Dague (standard) = "Dague Shark" (description RAW : "la lame n'est pas rétractable" — confirme que
+>   la version RAW-attestée "rétractable" des loadouts est un détail de montage sur l'armure, pas une
+>   arme différente).
+> - Dague thermique = "Dague thermique Thermo IV".
+> - Dague moléculaire = "Dague moléc. Pulsar".
+> - Dague neurale = "Dague neurale Brain".
+> - Lance-harpon moyen = "Lance-harpon moyen" (nom exact, 2D10+5).
+> - Lance-harpon lourd = "Lance-harpon lourd" (nom exact, 3D10+2).
+> - Pistolet lourd sous-marin à dards (Vanguard, Orka) = "Locard ExelP" (description RAW : "identique
+>   au modèle utilisé sur les armures... équivalent d'un pistolet lourd", Darts 5.56mm).
+> - Pistolet lourd (Vauban, variante surface sans "sous-marin à dards") = "Faucheur III" (explicitement
+>   "pistolet lourd" dans sa propre description, explicitement "inutilisable sous l'eau" — cohérent
+>   avec Vauban, armure de surface pure).
+>
+> - Générateur de lumière Feu follet = "Générateur de lumière Feu Follet" (nom exact, sans "portable" —
+>   contrairement aux entrées ci-dessous, celle-ci n'a pas d'équivalent "portable" séparé, lien direct).
+> - Analyseur sonscan **et** Analyseur radar (même logique, RAW confirmé : "il existe aussi des
+>   modèles équivalents pour l'analyse des échos radar") = `equipment_id` vers **"Analyseur • Sea-Star"**
+>   (déjà au catalogue `ref_exo_equipment`, migration 253 — niveau fixe 12, le moins cher des 3
+>   candidats niveau-12 identiques Sea-Star/Abyss/Delta Azur, "qu'importe le nom, les stats comptent").
+>   Aucune nouvelle ligne catalogue pour ces deux mentions.
+>
+> "Rétractable"/"secours"/"amphibie" etc. : annotation `label_override` posée à côté du
+> `equipment_id`/`ref_equipment_id` (les deux champs peuvent coexister dans ce sens précis — le CHECK
+> exclusive arc migration 260 interdit deux *sources*, pas une source + une note d'affichage), jamais
+> une ligne catalogue séparée.
+>
+> **Distinction "portable" vs "intégré à l'armure" (Saar, 2026-08-21)** : un sonar/radar/caméra/balise/
+> analyseur **"portable"** dans son texte RAW (`ref_equipment`) n'est PAS le même objet qu'un système
+> intégré à la coque d'une armure, même si les stats de base sont identiques — contrairement aux armes
+> (une dague reste une dague, montée ou tenue en main). Décision : **cloner** ces systèmes en nouvelles
+> lignes `ref_exo_equipment` (stats dérivées du produit portable, entrée distincte, jamais un simple
+> `ref_equipment_id`) — appliqué de façon cohérente aux 6 systèmes concernés (pas seulement
+> Sonscan/Radar comme demandé initialement, Caméra/Balise de détresse/Analyseur environnemental aussi,
+> par cohérence, confirmé par Saar).
+>
+> **Nouvelles lignes `ref_exo_equipment` à créer** :
+> - `family=systeme`, catégorie "Systèmes électroniques et informatiques" — **clonées d'un équivalent
+>   portable `ref_equipment`** (stats dérivées, même principe pour les 6) :
+>   - Sonscan actif directionnel ← "Sonscan actif portable Crysta" (2 milles nautiques, 14 800 sols)
+>   - Sonscan passif ← "Sonscan passif portable Lero" (7 milles nautiques, 16 800 sols)
+>   - Radar ← "Radar portable Oural" (2 km, 1 800 sols)
+>   - Caméra ← "Caméra Triton 245" (jusqu'à -6 000 m, 300 sols)
+>   - Balise de détresse ← "Balise de détresse portable Umar 57" (10 milles nautiques sous l'eau, 450 sols)
+>   - Analyseur environnemental ← "Analyseur environnemental Seryon P250" (6 700 sols)
+>   - Centre de commande de drones — **aucun équivalent trouvé** (ni portable ni autre), système
+>     réellement propre aux armures (Odin, Moloch — confirmé spécifique par Saar), pas de stats.
+> - `family=systeme`, catégorie "Systèmes furtifs" : Brouilleur sonscans Actif, Brouilleur sonscans
+>   Passif, Brouilleur sonscans Actif et passif (3 lignes, décision Saar — niveau/prix "par niv.",
+>   même patron qu'Atténuateur sonore ; Moloch n'atteste que la 3e, les 2 autres ajoutées par le même
+>   principe d'extensibilité déjà acté pour les dagues — pas d'équivalent `ref_equipment` cherché,
+>   concept propre au chapitre armures).
+> - `family=arme`, catégorie "Arme de contact" : Griffe mécanique (Dom.=MD/Modificateur de Dommages de
+>   l'exosquelette, FOR/Coût variables selon Force, DIS 20(20), NT II — distincte de "Pince/Griffe" déjà
+>   au catalogue, stats différentes), Torche de forage Hydra (5D10, FOR 15, Ini -7, Allonge +1, Coût
+>   15 000, Charge 1h(1500), DIS 5(5), NT III — description complète RAW donnée par Saar ; vérifié
+>   absent de `ref_equipment`).
+> - `family=arme`, nouvelle catégorie "Torpilles et missiles" : Lance-torpilles Taille 1/2/3 et
+>   Lance-missiles Taille 1/2/3 (6 lignes) — stats Dommages/Portée/DIS de la table RAW "TAILLE, COÛT,
+>   DOMMAGES ET PORTÉE DES TORPILLES" (confirmée applicable aux deux, Saar 2026-08-21 après relecture
+>   longue). Représente le tube intégré à l'armure (chargé), distinct des lanceurs "individuels"
+>   nommés du chapitre général (Kelvin IV/Ourso/Éperon/Stellar II/Molle AV) qui ne couvrent pas la
+>   Taille 3 nécessaire à Ouraken — pas un vrai substitut au montage exo. Taille 1 ajoutée par
+>   extensibilité (jamais citée dans les 16 fiches, justifiée par la table "Armures : Taille 1-3").
+>
+> **Marchands ignorent `ref_exo_equipment` — RÉSOLU en ticket, pas en code** (Saar, 2026-08-21) :
+> confirmé empiriquement (`tradeService.js#getCatalog:127`, `db('ref_equipment').select('*')`
+> exclusivement, zéro référence à `ref_exo_equipment`) — aucune des 84 lignes existantes (migration
+> 253) ni aucune future extension n'est vendable par un marchand. Pré-existant, pas causé par ce Lot.
+> Ticket `bug_tickets` ouvert plutôt que traité ici (`c9915238-ff6c-4073-8d13-75488f250d9b`, domaine
+> "marchands", catégorie bug) — décision explicite de segmentation, pas un oubli.
+>
+> **Senseurs auditifs/visuels niv. X (+N options au choix)** : pas de nouveau problème — `level`
+> existe déjà sur `exo_systems`/`ref_exo_template_equipment` (même mécanisme que Antivol niv. 7,
+> Système de navigation niv. 13). "niv. 12" = `level: 12` sur l'entrée catalogue "Senseur auditif"
+> déjà existante (migration 253). Le détail "(+2 options au choix)" reste non encodé — même
+> convention que "(1 système au choix)" pour l'Antivol.
+>
+> **Clone vs lien — règle finale confirmée (Saar, 2026-08-21, après aller-retour)** : un objet
+> "portable" (`ref_equipment`) dont l'usage reste possible **sans armure** (station, équipement
+> déporté) — Sonscan/Radar/Caméra/Balise de détresse/Analyseur environnemental — est un achat
+> indépendant de sa version intégrée à l'armure, jamais le même objet référencé deux fois : **cloné**
+> en nouvelle ligne `ref_exo_equipment`, avec la ligne `ref_equipment` d'origine citée dans la
+> `description` (pour qu'une future correction de prix/stats sur l'original pense à vérifier le clone
+> — mitigation du risque de dérive plutôt que le nier). À l'inverse, une arme de contact exo (dague,
+> pistolet, lance-harpon) n'a **pas** cette double vie — le RAW donne une formule mécanique explicite
+> liant ses dégâts à ceux de "sa version classique" (SEEDEXO.md:634-642) — donc **lien direct**
+> `ref_equipment_id`, jamais de clone. Deux règles différentes, chacune justifiée par un texte RAW
+> distinct, pas par souci de cohérence esthétique entre les deux catégories.
+>
+> **Question ouverte, non tranchée — pertinence de `ref_exo_equipment` comme table séparée** (soulevée
+> par Saar, 2026-08-21, "interrogation pas instruction") : le choix historique du projet est une table
+> `ref_equipment` unique regroupant tout (armes, protections, vie quotidienne, informatique/logiciels,
+> médical — y compris déjà `drone_weapons`/`exo_programs` qui y référencent directement, aucun
+> `ref_drone_equipment` séparé). `ref_exo_equipment` (migration 251, avant cette session) dévie de ce
+> paradigme. Auto-critique honnête après discussion : la justification technique ("schéma trop
+> différent", "isolation du picker") ne tient pas vraiment — `ref_equipment` tolère déjà des colonnes
+> massivement NULL selon la famille (design assumé), et `WHERE family = 'Exo-armure'` isolerait tout
+> aussi bien une famille dans une table unique qu'une table séparée. La seule vraie justification
+> restante : le contenu (Interface de contrôle, SACEA, Stabilisateur...) ne correspond à aucune des 8
+> familles existantes — mais ça n'imposait qu'une nouvelle famille, pas une nouvelle table. Si
+> `ref_exo_equipment` n'existait pas encore, étendre `ref_equipment` (cohérent avec le précédent
+> `drone_weapons`, CLAUDE.md §7 "réutiliser avant d'en créer") aurait probablement été le choix le
+> plus cohérent. **Mais elle existe déjà, codée et testée** (migrations 251/253/257/260,
+> `exoTemplateService.js`, routes `exoEquipment.js`/`char-sheet.js`, `ExoSystemsPanel.jsx`/
+> `ExoWeaponsPanel.jsx`, Lot C fonctionnel selon `EN_COURS.md`) — fusionner maintenant serait un
+> chantier de refonte, pas une correction mineure. **Prochaine étape actée avec Saar** : avant tout
+> audit d'impact de refonte, une passe d'auto-vérification (alignement/mémoire/instructions du modèle
+> lui-même, pas le projet) — puis seulement ensuite l'audit d'impact d'un éventuel chantier de fusion
+> `ref_exo_equipment` → `ref_equipment`. Rien n'est engagé, aucun code touché par cette question tant
+> que l'audit n'a pas eu lieu.
+>
+> **Audit d'impact fusion mené (2026-08-21)** — conclusion : ne pas fusionner maintenant. Obstacle
+> bloquant réel trouvé : `ref_equipment.tech_level` est `integer` (comparé numériquement dans
+> `tradeService.js`), `ref_exo_equipment.tech_level` est `text` ("III-IV", "Selon NT") — pas de
+> conversion triviale, touche `ref_equipment` dans son ensemble (678 lignes), pas seulement l'exo.
+> Fusionner résoudrait aussi le ticket marchand (`c9915238-ff6c-4073-8d13-75488f250d9b`) mais de façon
+> non maîtrisée. Rendrait aussi obsolète l'exclusive arc de la migration 260. Dette notée
+> `EN_COURS.md` (`EXOEQ-FUSION1`) plutôt que traitée dans ce Lot.
+>
+> **Migration 262 — correctif critique trouvé en relecture avant l'armure 1 (Saar a demandé une
+> analyse à charge explicite, "à ton rythme", avant tout code de transcription)** : le CHECK exclusive
+> arc de la migration 260 (`= 1` strict sur les 3 branches) rejette en réalité le patron "annotation"
+> sur lequel repose la transcription elle-même (ex. `equipment_id` vers SACEA + `label_override`
+> "(secours)", faute de colonne `role` sur `ref_exo_template_equipment` contrairement à
+> `ref_exo_template_computers`). **Vérifié concrètement contre PostgreSQL réel avant d'écrire le
+> correctif** (pas supposé) — l'insert échouait bien avec `chk_exo_systems_source`. 260 avait même un
+> test qui *garantissait* ce rejet : contradiction que je n'avais pas recroisée au moment de formuler
+> le besoin d'annotation, plusieurs tours de conversation plus tard. Nouveau CHECK (`server/src/db/
+> migrations/262_exo_equipment_source_check_fix.js`) : jamais les 2 vraies sources catalogue à la fois,
+> mais `label_override` peut coexister avec l'une des deux comme annotation, au moins un des 3 champs
+> renseigné. `validateExoEquipmentSource` (`char-sheet.js`) avait exactement le même défaut côté
+> application — corrigé en même temps (sinon la route aurait rejeté en 400 ce que le CHECK autorise
+> maintenant). **Testé** : 11 tests migration 262 (les 2 rejets permanents + les 5 combinaisons
+> valides dont les 2 nouvellement acceptées), 260 corrigé (retrait des 2 assertions devenues fausses,
+> 11 tests toujours verts), suite serveur complète **414/414** verte. Ce correctif aurait été
+> découvert bien plus tard — et bien plus difficile à isoler — s'il avait fallu le trouver au milieu
+> de la transcription des 16 fiches plutôt qu'avant de commencer.

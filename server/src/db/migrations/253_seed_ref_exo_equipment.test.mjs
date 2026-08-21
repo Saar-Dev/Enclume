@@ -6,16 +6,22 @@ import { up, down } from './253_seed_ref_exo_equipment.js'
 
 // Tourne toujours (contrairement au test transactionnel ci-dessous, sauté dès que la migration a
 // déjà tourné en dev) — vérifie l'état réel du catalogue contre docs/REGLES/SEEDEXO.md.
-test('données réelles — ref_exo_equipment porte les 84 lignes du catalogue avec la bonne répartition', {
+//
+// Assertions en `>=` plutôt qu'un total strict (révisé migration 261, PLAN_EXOARMURE.md §13.4.4
+// suite) : cette migration n'est plus la seule à peupler `ref_exo_equipment` — un total figé à 84
+// casse dès qu'une migration suivante y ajoute légitimement des lignes (constaté concrètement :
+// 261 en ajoute 18, total réel 102). Vérifie que CES 84 lignes sont toujours là, pas qu'il n'y en a
+// pas d'autres.
+test('données réelles — ref_exo_equipment porte au moins les 84 lignes du catalogue avec la bonne répartition', {
   skip: !process.env.DATABASE_URL,
 }, async () => {
   const total = (await db('ref_exo_equipment').count('id'))[0].count
-  assert.equal(Number(total), 84)
+  assert.ok(Number(total) >= 84, `au moins 84 lignes attendues, ${total} trouvées`)
 
   const byFamily = await db('ref_exo_equipment').select('family').count('id').groupBy('family')
   const familyCounts = Object.fromEntries(byFamily.map((r) => [r.family, Number(r.count)]))
-  assert.equal(familyCounts.arme, 17)
-  assert.equal(familyCounts.systeme, 67)
+  assert.ok(familyCounts.arme >= 17, `au moins 17 armes attendues, ${familyCounts.arme} trouvées`)
+  assert.ok(familyCounts.systeme >= 67, `au moins 67 systèmes attendus, ${familyCounts.systeme} trouvés`)
 
   // Systèmes défensifs classés family='arme' — décision RAW explicite (§12.1bis point 6)
   const defensifs = await db('ref_exo_equipment').where({ category: 'Systèmes défensifs' })
@@ -29,8 +35,9 @@ test('données réelles — ref_exo_equipment porte les 84 lignes du catalogue a
   assert.ok(diversNames.some((n) => n.startsWith('Antivol')))
   assert.ok(diversNames.some((n) => n === 'Autopilote'))
 
+  // >= 6, pas ===6 : migration 261 ajoute 3 lignes "Brouilleur sonscans" à cette même catégorie.
   const furtifs = await db('ref_exo_equipment').where({ category: 'Systèmes furtifs' })
-  assert.equal(furtifs.length, 6)
+  assert.ok(furtifs.length >= 6, `au moins 6 systèmes furtifs attendus, ${furtifs.length} trouvés`)
   assert.ok(furtifs.every((r) => !r.name.startsWith('Antivol')), 'Antivol ne doit pas être dans Systèmes furtifs')
 
   // Prix non-flat repris en price_modifier (§12.1bis point 5), pas perdus/aplati en un seul entier

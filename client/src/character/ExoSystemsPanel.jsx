@@ -1,11 +1,14 @@
 /**
  * ExoSystemsPanel.jsx — Onglet Systèmes de ExoSheetWindow
  *
- * Liste `exo_systems` (PLAN_EXOARMURE.md §13.4.3) — catalogue (`ref_exo_equipment`, family='systeme',
- * `GET /api/exo-equipment`) ou custom (label_override). Patron CRUD repris de
- * DroneSheet.jsx#ProgramsSection (catalogue/custom, ajout, suppression) + paire max/courant reprise de
- * ExoIntegrityPanel.jsx. Miroir structurel d'ExoWeaponsPanel.jsx (fiche RAW réelle, FDEA.webp : deux
- * blocs "SYSTÈMES AUXILIAIRES"/"ARMEMENT" distincts, colonnes différentes — jamais fusionnés).
+ * Liste `exo_systems` (PLAN_EXOARMURE.md §13.4.3) — 3 sources exclusives (exclusive arc, migration 260,
+ * §13.4.4 suite) : catalogue armure (`ref_exo_equipment`, family='systeme', `GET /api/exo-equipment`),
+ * catalogue général (`ref_equipment`, family='Equipement Général' — sonscans/radars/senseurs déjà
+ * catalogués ailleurs dans le jeu, pas de doublon à inventer), ou custom (label_override). Patron CRUD
+ * repris de DroneSheet.jsx#ProgramsSection (catalogue/custom, ajout, suppression) + paire max/courant
+ * reprise de ExoIntegrityPanel.jsx. Miroir structurel d'ExoWeaponsPanel.jsx (fiche RAW réelle,
+ * FDEA.webp : deux blocs "SYSTÈMES AUXILIAIRES"/"ARMEMENT" distincts, colonnes différentes — jamais
+ * fusionnés).
  *
  * `level` optionnel (contrairement à drone_programs) : seuls les systèmes facturés "X/niv." ont un
  * niveau (RAW, PLAN_EXOARMURE.md §12.1bis point 5) — un système à niveau fixe le porte déjà dans son
@@ -20,6 +23,7 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
   const { t } = useTranslation()
   const [systems, setSystems] = useState([])
   const [catalog, setCatalog] = useState([])
+  const [generalCatalog, setGeneralCatalog] = useState([])
   const [loading, setLoading] = useState(true)
 
   const [mode, setMode]           = useState('catalog')
@@ -34,10 +38,12 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
     Promise.all([
       api.get(`/char-sheet/${characterId}/exo/systems`),
       api.get('/exo-equipment', { params: { family: 'systeme' } }),
-    ]).then(([sysRes, catRes]) => {
+      api.get('/equipment', { params: { family: 'Equipement Général' } }),
+    ]).then(([sysRes, catRes, genRes]) => {
       if (cancelled) return
       setSystems(sysRes.data.systems || [])
       setCatalog(catRes.data.items || [])
+      setGeneralCatalog(genRes.data.items || [])
     }).catch(err => console.error('ExoSystemsPanel fetch:', err))
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -45,13 +51,16 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
 
   const handleAdd = async (e) => {
     e.preventDefault()
-    if (mode === 'catalog' && !selectedId) return
+    if (mode !== 'custom' && !selectedId) return
     if (mode === 'custom' && !customLabel.trim()) return
 
     setAdding(true)
     try {
+      const source = mode === 'catalog' ? { equipment_id: selectedId }
+        : mode === 'catalogGeneral' ? { ref_equipment_id: selectedId }
+        : { label_override: customLabel.trim() }
       const payload = {
-        ...(mode === 'catalog' ? { equipment_id: selectedId } : { label_override: customLabel.trim() }),
+        ...source,
         ...(level !== '' ? { level: parseInt(level, 10) } : {}),
         ...(integriteMax !== '' ? { integrite_max: parseInt(integriteMax, 10) } : {}),
       }
@@ -132,26 +141,27 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
       {canEdit && (
         <div style={{ marginTop: '8px' }}>
           <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-            <button type="button" className={`btn-toggle${mode === 'catalog' ? ' active' : ''}`} onClick={() => setMode('catalog')}>{t('exo.itemCatalog')}</button>
-            <button type="button" className={`btn-toggle${mode === 'custom' ? ' active' : ''}`} onClick={() => setMode('custom')}>{t('exo.itemCustom')}</button>
+            <button type="button" className={`btn-toggle${mode === 'catalog' ? ' active' : ''}`} onClick={() => { setMode('catalog'); setSelectedId('') }}>{t('exo.itemCatalog')}</button>
+            <button type="button" className={`btn-toggle${mode === 'catalogGeneral' ? ' active' : ''}`} onClick={() => { setMode('catalogGeneral'); setSelectedId('') }}>{t('exo.itemCatalogGeneral')}</button>
+            <button type="button" className={`btn-toggle${mode === 'custom' ? ' active' : ''}`} onClick={() => { setMode('custom'); setSelectedId('') }}>{t('exo.itemCustom')}</button>
           </div>
           <form onSubmit={handleAdd} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {mode === 'catalog' ? (
-              <select
-                value={selectedId} onChange={e => setSelectedId(e.target.value)}
-                style={{ flex: 1, minWidth: '160px', background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '4px', color: selectedId ? '#c0c0d0' : '#4a4a60', fontSize: '12px', padding: '4px 8px', outline: 'none' }}
-              >
-                <option value="">{t('exo.selectSystem')}</option>
-                {catalog.map(item => (
-                  <option key={item.id} value={item.id} title={item.description || ''}>{item.name}</option>
-                ))}
-              </select>
-            ) : (
+            {mode === 'custom' ? (
               <input
                 value={customLabel} onChange={e => setCustomLabel(e.target.value)}
                 placeholder={t('exo.itemCustomLabel')}
                 style={{ flex: 1, minWidth: '160px', background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '4px', color: '#c0c0d0', fontSize: '12px', padding: '4px 8px', outline: 'none' }}
               />
+            ) : (
+              <select
+                value={selectedId} onChange={e => setSelectedId(e.target.value)}
+                style={{ flex: 1, minWidth: '160px', background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '4px', color: selectedId ? '#c0c0d0' : '#4a4a60', fontSize: '12px', padding: '4px 8px', outline: 'none' }}
+              >
+                <option value="">{t('exo.selectSystem')}</option>
+                {(mode === 'catalog' ? catalog : generalCatalog).map(item => (
+                  <option key={item.id} value={item.id} title={item.description || ''}>{item.name}</option>
+                ))}
+              </select>
             )}
             <input
               type="number" value={level} onChange={e => setLevel(e.target.value)}
@@ -163,7 +173,7 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
               placeholder={t('exo.itemIntegrity')}
               style={{ width: '90px', background: '#16162a', border: '1px solid #1e1e2e', borderRadius: '4px', color: '#c0c0d0', fontSize: '12px', padding: '4px 6px', textAlign: 'center', outline: 'none' }}
             />
-            <button type="submit" className="btn-icon" disabled={adding || (mode === 'catalog' ? !selectedId : !customLabel.trim())} style={{ color: 'var(--color-primary)' }}>✓</button>
+            <button type="submit" className="btn-icon" disabled={adding || (mode === 'custom' ? !customLabel.trim() : !selectedId)} style={{ color: 'var(--color-primary)' }}>✓</button>
           </form>
         </div>
       )}

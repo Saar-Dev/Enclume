@@ -2148,13 +2148,19 @@ router.delete('/:characterId/exo/avaries/:severity', async (req, res, next) => {
 // jusqu'au prochain GET (mirror manqué du précédent `drone_weapons`, qui refait bien cette jointure
 // après `insert`/`update`, `char-sheet.js:1842-1856,1885-1899`). Une seule fonction par table plutôt
 // que dupliquer le SELECT 3 fois (GET liste + POST + PUT) — même shape garanti partout.
+// Jointure sur les 2 catalogues possibles depuis la migration 260 (exclusive arc §13.4.4 suite —
+// equipment_id → ref_exo_equipment, systèmes propres aux armures ; ref_equipment_id → ref_equipment,
+// armes/senseurs génériques déjà catalogués ailleurs dans le jeu, ex. drone_weapons). Jamais les deux
+// renseignés à la fois (CHECK migration 260), donc les COALESCE ci-dessous ne se recouvrent jamais en
+// pratique — écrits ainsi pour rester corrects même si l'ordre d'évaluation changeait.
 function selectExoSystemFields(query) {
   return query
     .leftJoin('ref_exo_equipment', 'exo_systems.equipment_id', 'ref_exo_equipment.id')
+    .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
     .select(
       'exo_systems.*',
-      db.raw('COALESCE(exo_systems.label_override, ref_exo_equipment.name) as display_name'),
-      'ref_exo_equipment.description as ref_description',
+      db.raw('COALESCE(exo_systems.label_override, ref_exo_equipment.name, ref_equipment.name) as display_name'),
+      db.raw('COALESCE(ref_exo_equipment.description, ref_equipment.description) as ref_description'),
       'ref_exo_equipment.category as ref_category',
     )
 }
@@ -2162,15 +2168,35 @@ function selectExoSystemFields(query) {
 function selectExoWeaponFields(query) {
   return query
     .leftJoin('ref_exo_equipment', 'exo_weapons.equipment_id', 'ref_exo_equipment.id')
+    .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
     .select(
       'exo_weapons.*',
-      db.raw('COALESCE(exo_weapons.label_override, ref_exo_equipment.name) as display_name'),
-      'ref_exo_equipment.description as ref_description',
-      'ref_exo_equipment.damage as ref_damage',
-      'ref_exo_equipment.shock as ref_shock',
-      'ref_exo_equipment.range as ref_range',
-      'ref_exo_equipment.fire_mode as ref_fire_mode',
+      db.raw('COALESCE(exo_weapons.label_override, ref_exo_equipment.name, ref_equipment.name) as display_name'),
+      db.raw('COALESCE(ref_exo_equipment.description, ref_equipment.description) as ref_description'),
+      db.raw('COALESCE(ref_exo_equipment.damage, ref_equipment.damage_h) as ref_damage'),
+      db.raw('COALESCE(ref_exo_equipment.shock, ref_equipment.shock) as ref_shock'),
+      db.raw('COALESCE(ref_exo_equipment.range, ref_equipment.range) as ref_range'),
+      db.raw('COALESCE(ref_exo_equipment.fire_mode, ref_equipment.fire_mode) as ref_fire_mode'),
     )
+}
+
+// Validation de la source d'une ligne exo_systems/exo_weapons — jamais les 2 vraies sources catalogue
+// à la fois, jamais aucune des 3 (equipment_id/ref_equipment_id/label_override, migration 260 +
+// 262 pour le CHECK en base). `label_override` peut coexister avec l'une des deux sources comme
+// annotation d'affichage (ex. "SACEA (secours)") — révision migration 262, trouvée en relecture
+// critique avant la transcription : la version précédente de cette fonction imposait "exactement une"
+// des 3, incohérente avec ce besoin. Le CHECK Postgres est l'autorité finale, mais valider ici évite
+// un 500 brut ("violates check constraint") au profit d'un AppError 400 lisible — même raisonnement
+// que templateId/UUID_RE dans exoTemplateService.js.
+function validateExoEquipmentSource({ equipment_id, ref_equipment_id, label_override }) {
+  if (equipment_id != null && equipment_id !== '' && ref_equipment_id != null && ref_equipment_id !== '') {
+    throw new AppError(400, 'equipment_id et ref_equipment_id ne peuvent pas être fournis ensemble')
+  }
+  const hasSource = (equipment_id != null && equipment_id !== '') || (ref_equipment_id != null && ref_equipment_id !== '')
+  const hasLabel = label_override != null && label_override !== ''
+  if (!hasSource && !hasLabel) {
+    throw new AppError(400, 'Fournir au moins un parmi equipment_id, ref_equipment_id, label_override')
+  }
 }
 
 // GET /:characterId/exo/systems
@@ -2190,18 +2216,23 @@ router.post('/:characterId/exo/systems', async (req, res, next) => {
   try {
     if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
 
-    const { equipment_id, label_override, level, integrite_max, integrite_current, sort_order = 0 } = req.body
-    if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
+    const { equipment_id, ref_equipment_id, label_override, level, integrite_max, integrite_current, sort_order = 0 } = req.body
+    validateExoEquipmentSource({ equipment_id, ref_equipment_id, label_override })
 
     if (equipment_id) {
       const ref = await db('ref_exo_equipment').where({ id: equipment_id, family: 'systeme' }).first()
       if (!ref) throw new AppError(400, 'Equipment not found or not a system')
+    }
+    if (ref_equipment_id) {
+      const ref = await db('ref_equipment').where({ id: ref_equipment_id }).first()
+      if (!ref) throw new AppError(400, 'Equipment not found')
     }
 
     const [inserted] = await db('exo_systems')
       .insert({
         character_id: req.params.characterId,
         equipment_id: equipment_id ?? null,
+        ref_equipment_id: ref_equipment_id ?? null,
         label_override: label_override ?? null,
         level: level ?? null,
         integrite_max: integrite_max ?? null,
@@ -2271,18 +2302,23 @@ router.post('/:characterId/exo/weapons', async (req, res, next) => {
   try {
     if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
 
-    const { equipment_id, label_override, integrite_max, integrite_current, sort_order = 0 } = req.body
-    if (!equipment_id && !label_override) throw new AppError(400, 'equipment_id ou label_override requis')
+    const { equipment_id, ref_equipment_id, label_override, integrite_max, integrite_current, sort_order = 0 } = req.body
+    validateExoEquipmentSource({ equipment_id, ref_equipment_id, label_override })
 
     if (equipment_id) {
       const ref = await db('ref_exo_equipment').where({ id: equipment_id, family: 'arme' }).first()
       if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
+    }
+    if (ref_equipment_id) {
+      const ref = await db('ref_equipment').where({ id: ref_equipment_id }).first()
+      if (!ref) throw new AppError(400, 'Equipment not found')
     }
 
     const [inserted] = await db('exo_weapons')
       .insert({
         character_id: req.params.characterId,
         equipment_id: equipment_id ?? null,
+        ref_equipment_id: ref_equipment_id ?? null,
         label_override: label_override ?? null,
         integrite_max: integrite_max ?? null,
         integrite_current: integrite_current ?? integrite_max ?? null,
