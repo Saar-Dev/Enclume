@@ -1,3 +1,9 @@
+## v212 — 2026-08-22 — Fix : prix des objets jamais affiché
+
+### Personnage — Inventaire
+- [fix] Le prix (en Sols) des objets s'affiche désormais dans l'inventaire, le catalogue et le
+  panneau de confirmation d'ajout — il existait déjà en base mais n'était visible nulle part.
+
 ## v211 — 2026-08-22 — Fix : revente limitée à 1 unité par objet
 
 ### Playground — Commerce

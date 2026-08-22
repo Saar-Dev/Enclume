@@ -3950,3 +3950,43 @@ confirmer côté MJ) — pas de test navigateur par Claude (protocole).
 **Données** : aucune migration, aucun effet sur les données existantes.
 **Retour arrière** : aucun risque — ajout pur côté client (nouvelle fonction + JSX conditionnel),
 aucune route/service serveur modifiée.
+
+---
+
+## Session (Saar) — 2026-08-22 — `WIZ43` : affichage du prix des objets (inventaire + catalogue)
+
+**Contexte** : "Bug suivant" (confirme implicitement INV4 sans le re-tester explicitement, cf.
+[[feedback_bug_suivant_means_tested]] en mémoire). Ticket suivant sélectionné : **WIZ43**, décrit
+comme "pur ajout d'affichage, donnée déjà là".
+
+**Vérification avant code** : partiellement confirmé, partiellement corrigé. `ItemRow`
+(objets possédés) : `ref_price` déjà renvoyé par `getInventory()` (`inventoryService.js:231`, ajout
+fait pour l'export Excel abandonné) — pur affichage à ajouter, comme annoncé. Catalogue + panneau de
+confirmation d'ajout (`refItem`/`selectedRef`, alimentés par `GET /api/equipment`) : **`price` n'était
+PAS sélectionné** par cette route (`equipment.js:68` ne listait que `id/family/category/name/
+description/tech_level/rarity/location/weight`) — contrairement à l'hypothèse du ticket, un ajout
+serveur était nécessaire ici, pas seulement du câblage client.
+
+**Aparté signalé, non traité (un problème à la fois)** : `selectedRef.caliber` (même panneau de
+confirmation) ne peut jamais s'afficher non plus, `caliber` n'étant pas sélectionné par cette même
+route — repéré en marge, distinct de WIZ43. **Saar a corrigé cette lecture** : le calibre s'affiche
+correctement dans `ItemRow` (objet déjà possédé, via `getInventory()` qui sélectionne bien `ref_caliber`)
+— le trou que j'avais vu ne concerne que le panneau de confirmation AVANT ajout (route différente),
+pas l'affichage général. Toujours hors périmètre de ce ticket, laissé de côté tel quel.
+
+**Codé** : `server/src/routes/equipment.js:68` — `price` ajouté au `.select()` (ajout pur). Client
+(`InventoryPanel.jsx`) — prix affiché sur `ItemRow` (même style que le badge poids), sur la ligne de
+catalogue (regroupé avec la catégorie pour ne pas casser le `space-between` à 2 colonnes existant), et
+dans le panneau de confirmation d'ajout. Format `${prix} S` non traduit — même convention déjà utilisée
+telle quelle pour "kg"/"S" ailleurs dans ce fichier et dans `TradeWindow.jsx` (unité de jeu, pas une
+phrase i18n).
+
+**Testé** : `node --check` sur `equipment.js` OK. Lint ciblé `InventoryPanel.jsx` : 0 erreur. `npm run
+build` (client) OK. Serveur dev déjà lancé par Saar (non redémarré) : `nodemon` a rechargé après
+l'édit, `GET /api/equipment` répond `401` sans crash (auth exigée, attendu), `/api/health` toujours
+`200` (pas de régression).
+**Non testé** : scénario réel navigateur (ouvrir l'inventaire, le catalogue, le panneau d'ajout —
+confirmer visuellement les 3 affichages).
+**Données** : aucune migration, aucun effet sur les données existantes.
+**Retour arrière** : aucun risque — ajouts purs (colonne en plus dans un `.select()`, JSX
+conditionnel), aucun champ retiré ni comportement existant modifié.

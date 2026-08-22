@@ -65,7 +65,7 @@ router.get('/ref/skills', requireAuth, async (req, res, next) => {
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const items = await db('ref_equipment')
-      .select('id', 'family', 'category', 'name', 'description', 'tech_level', 'rarity', 'location', 'weight')
+      .select('id', 'family', 'category', 'name', 'description', 'tech_level', 'rarity', 'location', 'weight', 'price')
       .modify(q => { if (req.query.family) q.where('family', req.query.family) })
       .orderBy('family')
       .orderBy('category')

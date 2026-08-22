@@ -379,6 +379,9 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                     {selectedRef.caliber != null && (
                       <span style={{ color: '#5b8dee' }}> · {t('inventoryPanel.caliberLabel')} {selectedRef.caliber}</span>
                     )}
+                    {selectedRef.price != null && (
+                      <span style={{ color: '#4a4a60' }}> · {selectedRef.price} S</span>
+                    )}
                   </div>
                   {selectedRef.description && (
                     <p style={{ color: '#6a6a8a', fontSize: 11, margin: '0 0 8px' }}>{selectedRef.description}</p>
@@ -458,7 +461,12 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
                         onClick={() => handleSelectRef(refItem)}
                       >
                         <span style={{ color: '#c0c0d0' }}>{refItem.name}</span>
-                        <span style={{ color: '#4a4a60', fontSize: 10 }}>{refItem.category}</span>
+                        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ color: '#4a4a60', fontSize: 10 }}>{refItem.category}</span>
+                          {refItem.price != null && (
+                            <span style={{ color: '#4a4a60', fontSize: 10 }}>{refItem.price} S</span>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -545,6 +553,9 @@ function ItemRow({ item, canEdit, isGm, hasCampaign = true, inWizard = false, av
       )}
       {item.ref_weight != null && (
         <span style={s.itemWeight}>{(item.ref_weight * item.quantity).toFixed(1)} kg</span>
+      )}
+      {item.ref_price != null && (
+        <span style={s.itemWeight}>{item.ref_price} S</span>
       )}
       {/* PLAN_WIZARD_MATERIEL_GAUGES.md §4 — bouton actionnable MJ only, uniquement sur les items en
           attente ; un item déjà validé affiche un badge statique (pas la peine de refaire cliquer le
