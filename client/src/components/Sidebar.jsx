@@ -56,9 +56,9 @@ export default function Sidebar({
     [activeCampaignId, messagesByCampaign],
   )
   // PLAN_CHAT.md Phase 3e — historique persisté + temps réel (chat:message_created/_deleted).
-  // Scroll infini (loadOlderMessages/hasMore) pas encore câblé à un IntersectionObserver ici —
-  // suivi séparé, ne bloque pas ce qui corrige réellement CH1 (survie au F5).
-  useChatSocket(campaignId)
+  // loadOlderMessages/hasMore/loadingOlder descendus vers SidebarChatTab (CHAT-SCROLL1) — un seul
+  // appel du hook ici, ne jamais le rappeler dans SidebarChatTab (double fetch/listeners socket).
+  const { loadOlderMessages, hasMore: hasMoreMessages, loadingOlder } = useChatSocket(campaignId)
   const [activeTab, setActiveTab] = useState('chat')
   const [toolsOpen, setToolsOpen] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -277,6 +277,9 @@ export default function Sidebar({
             onEntityActionResolve={onEntityActionResolve}
             onOpenTrade={onOpenTrade}
             onOpenExchange={onOpenExchange}
+            loadOlderMessages={loadOlderMessages}
+            hasMoreMessages={hasMoreMessages}
+            loadingOlder={loadingOlder}
           />
         )}
 

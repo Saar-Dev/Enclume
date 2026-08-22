@@ -20,6 +20,9 @@ export default function SidebarChatTab({
   onEntityActionResolve,
   onOpenTrade,
   onOpenExchange,
+  loadOlderMessages,
+  hasMoreMessages,
+  loadingOlder,
 }) {
   const { t } = useTranslation()
   const { t: tCombat } = useTranslation('combat')
@@ -61,9 +64,42 @@ export default function SidebarChatTab({
   // Réf pour l'auto-scroll — pointe sur un div vide en fin de liste de messages
   const messagesEndRef = useRef(null)
 
+  // Auto-scroll uniquement si un message est arrivé en FIN de liste (nouveau message temps réel) —
+  // pas si `messages` change parce que loadOlderMessages a préfixé de l'historique en tête (CHAT-
+  // SCROLL1) : sans cette distinction, charger l'historique en scrollant vers le haut ramenait
+  // aussitôt la vue tout en bas, rendant le scroll infini inutilisable. Le dernier id inchangé signe
+  // un préfixage ; un id différent signe une vraie arrivée.
+  const lastMessageIdRef = useRef(null)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const lastId = messages.length > 0 ? messages[messages.length - 1].id : null
+    if (lastId !== lastMessageIdRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+    lastMessageIdRef.current = lastId
   }, [messages])
+
+  // Scroll infini ascendant (CHAT-SCROLL1) — sentinelle en tête de liste, observée dans le
+  // conteneur scrollable lui-même (pas le viewport). Le repositionnement visuel au préfixage
+  // s'appuie sur le scroll anchoring natif du navigateur (actif par défaut, pas de recalcul manuel
+  // de scrollTop ici — à revoir seulement si Saar constate un saut visuel en test réel).
+  const messagesContainerRef = useRef(null)
+  const topSentinelRef = useRef(null)
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    const sentinel = topSentinelRef.current
+    if (!container || !sentinel) return undefined
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadOlderMessages?.()
+      },
+      { root: container, threshold: 0 },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+    // hasMoreMessages : re-brancher l'observer quand la sentinelle apparaît/disparaît (elle n'est
+    // rendue que si hasMoreMessages est vrai) — sans cette dépendance, un montage initial sans
+    // historique restant ne réobserverait jamais la sentinelle une fois qu'elle apparaît.
+  }, [loadOlderMessages, hasMoreMessages])
 
   const sendMessage = (e) => {
     e.preventDefault()
@@ -92,9 +128,13 @@ export default function SidebarChatTab({
       {(phase === 'ANNOUNCEMENT' || phase === 'RESOLUTION') && (
         <CombatDeclareLogChatPanel isOpen={cdlOpen} onToggle={() => setCdlOpen(v => !v)} />
       )}
-      <div style={styles.messages}>
+      <div style={styles.messages} ref={messagesContainerRef}>
+        {hasMoreMessages && <div ref={topSentinelRef} />}
         {messages.length === 0 && (
           <p style={styles.emptyMsg}>{t('chat.placeholder')}</p>
+        )}
+        {loadingOlder && (
+          <p style={styles.emptyMsg}>{t('chat.loadingOlder')}</p>
         )}
         {messages.map(msg => renderMessage(msg, {
           t, tCombat, isGm,

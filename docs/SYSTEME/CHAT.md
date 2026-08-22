@@ -78,8 +78,8 @@ Propriétés fondamentales (types non migrés — dés, actions, combat, systèm
 │                         charge l'historique (general+whisper fusionnés,   │
 │                         triés chronologiquement) au montage, écoute       │
 │                         chat:message_created/_deleted, expose             │
-│                         loadOlderMessages (scroll infini — construit,     │
-│                         PAS ENCORE câblé à un IntersectionObserver, §10)  │
+│                         loadOlderMessages (scroll infini — câblé à un     │
+│                         IntersectionObserver dans SidebarChatTab.jsx, §10)│
 │  lib/useSessionSocket.js  Inchangé pour SESSION_*/DICE_RESULT/            │
 │                         MACRO_ROLL_RESULT/COMBAT_SYSTEM_NOTICE ; la       │
 │                         branche CHAT_MESSAGE reste écoutée mais plus      │
@@ -204,9 +204,13 @@ absente de la donnée.
 
 10. Limites connues / dette assumée
 
-    Scroll infini construit (`loadOlderMessages`/`hasMore` dans `useChatSocket.js`) mais pas câblé
-    à un `IntersectionObserver` dans `Sidebar.jsx` — au-delà de 50 messages, l'historique le plus
-    ancien reste inaccessible depuis l'UI pour l'instant.
+    Scroll infini câblé (2026-08-22, CHAT-SCROLL1) : sentinelle en tête de `SidebarChatTab.jsx`,
+    observée via `IntersectionObserver` (root = le conteneur scrollable lui-même, pas le viewport) —
+    déclenche `loadOlderMessages` (`useChatSocket.js`, retourné par `Sidebar.jsx`, threadé en props
+    jusqu'à `SidebarChatTab.jsx`, jamais un second appel du hook). L'auto-scroll vers le bas
+    (`messagesEndRef`) ne se déclenche que si le DERNIER message change (vraie arrivée temps réel),
+    jamais lors d'un préfixage d'historique — sinon charger l'historique en scrollant vers le haut
+    ramenait aussitôt la vue en bas.
 
     Canaux non visibles dans l'UI (V1 assumé) — general et whisper se mélangent dans un seul flux
     chronologique côté client, distingués seulement par l'indicateur 🔒 sur les whispers.

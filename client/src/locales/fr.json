@@ -300,7 +300,8 @@
   },
   "chat": {
     "placeholder": "Message...",
-    "send": "Envoyer"
+    "send": "Envoyer",
+    "loadingOlder": "Chargement des messages précédents..."
   },
   "token": {
     "move": "Déplacer",

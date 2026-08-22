@@ -1,3 +1,9 @@
+## v213 — 2026-08-22 — Fix : scroll infini du chat
+
+### Chat
+- [fix] Faire remonter la liste des messages jusqu'en haut charge désormais automatiquement
+  l'historique plus ancien, au lieu de s'arrêter aux 50 derniers messages.
+
 ## v212 — 2026-08-22 — Fix : prix des objets jamais affiché
 
 ### Personnage — Inventaire

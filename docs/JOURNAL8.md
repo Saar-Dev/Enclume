@@ -3990,3 +3990,51 @@ confirmer visuellement les 3 affichages).
 **Données** : aucune migration, aucun effet sur les données existantes.
 **Retour arrière** : aucun risque — ajouts purs (colonne en plus dans un `.select()`, JSX
 conditionnel), aucun champ retiré ni comportement existant modifié.
+
+---
+
+## Session (Saar) — 2026-08-22 — `CHAT-SCROLL1` : câblage du scroll infini chat
+
+**Contexte** : après plusieurs tickets déjà résolus/clarifiés (INV5 constaté résolu en passant, COM26,
+TC1, DCO1, CSPLAYERSTAB, VX1 clarifié), sélection d'un ticket plus substantiel : `useChatSocket.js`
+exposait déjà `loadOlderMessages`/`hasMore`/`loadingOlder` (Phase 3e `PLAN_CHAT.md`) mais rien ne les
+consommait — `Sidebar.jsx:61` appelait le hook et jetait son retour, commentaire explicite "pas encore
+câblé, suivi séparé".
+
+**Diagnostic confirmé encore ouvert** (contrairement aux tickets précédents) : `grep` sur
+`Sidebar.jsx`/`useChatSocket.js` confirme le commentaire toujours exact, rien n'a bougé depuis.
+
+**Piège trouvé en concevant le câblage, pas juste en l'écrivant** : `SidebarChatTab.jsx` (où vit la
+vraie liste de messages scrollable, pas `Sidebar.jsx`) a déjà un effet `messagesEndRef.current
+?.scrollIntoView()` keyé sur `[messages]` — sans garde, cet effet aurait ramené la vue tout en bas à
+CHAQUE préfixage d'historique, rendant le scroll infini inutilisable dès la première utilisation
+(l'utilisateur scroll vers le haut pour lire l'historique, la vue saute aussitôt en bas). Corrigé en
+ne déclenchant l'auto-scroll que si le DERNIER message de `messages` change (vraie arrivée temps réel)
+— un préfixage en tête ne change jamais le dernier élément, donc ne déclenche plus le saut.
+
+**Décision d'architecture** : ne jamais rappeler `useChatSocket(campaignId)` une 2e fois dans
+`SidebarChatTab.jsx` pour obtenir `loadOlderMessages` localement — le hook a ses propres effets de
+fetch initial + listeners socket, un second appel aurait dupliqué les deux (messages en double,
+double abonnement). Threading par props depuis `Sidebar.jsx` (seul appelant du hook) à la place, même
+patron que `socket`/`breakdownPopover` déjà passés à ce composant.
+
+**Repositionnement visuel au préfixage** : pas de recalcul manuel de `scrollTop` (diff de
+`scrollHeight` avant/après) — appui sur le scroll anchoring natif du navigateur (actif par défaut
+Chrome/Firefox/Edge depuis des années), documenté en commentaire comme hypothèse à revérifier si Saar
+constate un saut visuel en test réel, plutôt que d'ajouter une mécanique de recalcul non demandée par
+avance (proportionné au risque réel, pas un renfort préventif non confirmé nécessaire).
+
+**Codé** : `Sidebar.jsx` — retour du hook capturé (`loadOlderMessages`/`hasMoreMessages`/
+`loadingOlder`), threadé en props vers `SidebarChatTab.jsx`. `SidebarChatTab.jsx` — sentinelle
+(`<div ref={topSentinelRef} />`, rendue seulement si `hasMoreMessages`) observée par un
+`IntersectionObserver` avec pour `root` le conteneur scrollable lui-même (`styles.messages`, déjà
+`overflowY:auto`) ; effet nettoyé (`observer.disconnect()`) au démontage/changement de deps ; message
+"Chargement..." pendant `loadingOlder` (nouvelle clé i18n `chat.loadingOlder`, `fr.json`). Auto-scroll
+corrigé (ci-dessus).
+
+**Testé** : lint ciblé (`Sidebar.jsx`/`SidebarChatTab.jsx`) : 0 erreur. `npm run build` (client) : OK.
+**Non testé** : scénario réel navigateur (charger >50 messages, scroller vers le haut, confirmer le
+chargement et l'absence de saut visuel/de retour intempestif en bas).
+**Données** : aucune migration, aucun effet sur les données existantes.
+**Retour arrière** : aucun risque — ajout d'un effet + props threadées, aucun comportement de chat
+existant retiré (envoi, temps réel, suppression douce inchangés).
