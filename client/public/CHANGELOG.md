@@ -1,3 +1,11 @@
+## v219 — 2026-08-22 — Fix : 5 munitions Darts 7.62/5.56mm ST avec le mauvais effet
+
+### Combat — Munitions
+- [fix] Les munitions "Projectile standard" 5.56mm ST et "APHC"/"assommant"/"explosif"/"standard"
+  7.62mm ST portaient l'effet d'une autre munition (une balle "standard" explosait, une "assommante"
+  aussi, une "perforante" ne perçait rien, une "explosive" ne faisait rien de spécial). Corrigé en
+  base — aucune action requise, effectif immédiatement.
+
 ## v218 — 2026-08-22 — Fix : bouton Annuler du déplacement combat + coût des compétences réservées
 
 ### Combat

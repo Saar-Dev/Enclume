@@ -4307,3 +4307,36 @@ montée pas-à-pas + coût cumulé ; WIZ38-UNDOFREE1 : descente au plancher paya
 compétence (X) au wizard pour WIZ38/WIZ38-UNDOFREE1).
 **Données** : aucune migration, aucun effet runtime hors ces fichiers client.
 **Retour arrière** : commit isolé, `git revert` suffit — aucune donnée persistée concernée.
+
+---
+
+## Session (Saar) — 2026-08-22 — `AMMO-STD-MISMATCH1` : 5 munitions Darts 7.62/5.56mm ST avec un FX= erroné
+
+Ticket initial ne signalait que 2 lignes ("Projectile standard" 5.56/7.62mm ST). Vérification via
+`shared/weaponAmmoDsl.js` (Lot C1) + `damageService.js` : dès que `tags.FX` correspond à une des 6
+familles mécaniques (`APHC`/`SAP`/`SLAP`/`HP`/`EXPLOSIVE`/`SHRAPNEL`), ce tag devient la **seule**
+autorité de dégâts/armure/Choc — les clauses `DMG=`/`CHOC=` catalogue deviennent cosmétiques pour
+cette ligne. `RANGE=AIR_X.../TXT=DEPTH=...` ne sont reconnus par aucune clé du parseur
+(`parseAmmoEffects` ne traite que `DMG`/`CHOC`/`TXT`) : purement décoratifs, aucun consommateur
+(cohérent avec `migrations_archive/209`, même conclusion déjà posée pour un cas voisin).
+
+En recroisant sur ce critère précis (pas la description, le code), 5 lignes avaient un `FX=` manquant
+ou emprunté à une autre munition, avec un vrai impact combat :
+- Darts 5.56mm ST **standard** : `FX=EXPLOSIVE` emprunté — explosait au lieu d'un dégât normal.
+- Darts 7.62mm ST **APHC** : `FX=` absent — ne perçait aucune armure.
+- Darts 7.62mm ST **assommant** : `FX=EXPLOSIVE` emprunté — explosait au lieu d'assommer.
+- Darts 7.62mm ST **explosif** : `FX=` absent — aucun effet, `DMG=BASE` nu.
+- Darts 7.62mm ST **standard** : `FX=IEM` emprunté — -50% dégâts + panne électronique parasite.
+
+Darts 7.62mm ST SAP/IEM déjà corrects (SAP réparé par la migration 209 archivée) — non touchés.
+Migration 312 (`ref_equipment`, matché par `name`, jamais par `id` — seed non déterministe entre
+instances) corrige les 5 lignes, assertion de la valeur `ammo_effects` attendue avant écriture,
+`down()` symétrique fourni.
+
+**Testé** : requête DB post-migration confirmant les 5 nouvelles valeurs ; `parseAmmoEffects` +
+`resolveAmmoMechanic` exécutés en isolation sur les valeurs corrigées (APHC résout bien
+`armorMulFactor`, "standard" ne résout plus aucun mécanisme).
+**Non testé** : scénario de tir réel en combat avec ces munitions.
+**Données** : migration 312 appliquée en local (`db.migrate.latest()`), 5 lignes `ref_equipment`
+modifiées (`ammo_effects` uniquement, aucune autre colonne).
+**Retour arrière** : `down()` fourni, restaure les valeurs d'origine exactes.
