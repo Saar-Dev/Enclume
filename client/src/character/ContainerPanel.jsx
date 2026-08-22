@@ -19,17 +19,29 @@ export default function ContainerPanel({ type, label, items, characterId, canEdi
     try {
       await setItemSlot(characterId, itemId, type)
     } catch (err) {
-      setEquipError(err.response?.data?.error || t('containerPanel.equipError'))
+      setEquipError(err.response?.data?.error?.message || t('containerPanel.equipError'))
     }
   }, [characterId, type, t])
 
+  // 409 = le bac (Sac/Ceinture) que ce contenant définit n'est pas vide (INV1) — jamais renvoyé au
+  // Coffre en silence (même invariant que INV7) : on demande confirmation, le message du serveur porte
+  // déjà le décompte exact, puis on retente avec confirmEmptyContainer si le joueur accepte.
   const handleUnequip = useCallback(async () => {
     if (!equippedItem) return
     setEquipError(null)
     try {
       await setItemSlot(characterId, equippedItem.id, null)
     } catch (err) {
-      setEquipError(err.response?.data?.error || t('containerPanel.unequipError'))
+      const message = err.response?.data?.error?.message
+      if (err.response?.status === 409 && message && window.confirm(message)) {
+        try {
+          await setItemSlot(characterId, equippedItem.id, null, { confirmEmptyContainer: true })
+        } catch (err2) {
+          setEquipError(err2.response?.data?.error?.message || t('containerPanel.unequipError'))
+        }
+        return
+      }
+      setEquipError(message || t('containerPanel.unequipError'))
     }
   }, [characterId, equippedItem, t])
 

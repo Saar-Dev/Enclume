@@ -176,12 +176,12 @@ test('applyExoTemplate — copie le loadout exo_systems/exo_weapons avec Intégr
   }
 })
 
-test('applyExoTemplate — copie ref_equipment_id (3e branche exclusive arc, migration 260) aux côtés de equipment_id', { skip }, async () => {
+test('applyExoTemplate — copie ref_equipment_id (catalogue unique depuis la fusion ref_exo_equipment, PLAN_EXOEQ_FUSION.md)', { skip }, async () => {
   const fx = await createFixture()
   try {
     const template = await fx.insertTemplate()
     const [genEquipment] = await db('ref_equipment')
-      .insert({ family: 'Armes', category: 'Arme de contact', name: 'Dague test exoTemplateService 260', tech_level: 1 })
+      .insert({ family: 'Armes', category: 'Arme de contact', name: 'Dague test exoTemplateService fusion', tech_level: 1 })
       .returning('*')
     await db('ref_exo_template_equipment').insert({
       template_id: template.id, family: 'arme', ref_equipment_id: genEquipment.id, sort_order: 0,
@@ -191,15 +191,13 @@ test('applyExoTemplate — copie ref_equipment_id (3e branche exclusive arc, mig
 
     const [weapon] = await db('exo_weapons').where({ character_id: fx.exoCharacter.id })
     assert.equal(weapon.ref_equipment_id, genEquipment.id)
-    assert.equal(weapon.equipment_id, null)
     assert.equal(weapon.label_override, null)
   } finally {
-    // Ordre obligatoire : ref_equipment_id est ON DELETE RESTRICT (migration 260) — fx.cleanup()
-    // d'abord (cascade campagne→character→exo_weapons, ET template→ref_exo_template_equipment,
-    // migration 257) pour libérer les deux lignes qui référencent encore ref_equipment, sinon RESTRICT
-    // bloque la suppression ci-dessous.
+    // Ordre obligatoire : ref_equipment_id est ON DELETE RESTRICT — fx.cleanup() d'abord (cascade
+    // campagne→character→exo_weapons, ET template→ref_exo_template_equipment) pour libérer les deux
+    // lignes qui référencent encore ref_equipment, sinon RESTRICT bloque la suppression ci-dessous.
     await fx.cleanup()
-    await db('ref_equipment').where({ name: 'Dague test exoTemplateService 260' }).del()
+    await db('ref_equipment').where({ name: 'Dague test exoTemplateService fusion' }).del()
   }
 })
 

@@ -197,28 +197,6 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
     })
   }
 
-  const handleCheckout = async () => {
-    if (!selMerchantId || cart.length === 0 || checkoutLoading || !myCharId) return
-    setCheckoutLoading(true)
-    setCheckoutMsg(null)
-    try {
-      await api.post(`/campaigns/${campaignId}/merchants/${selMerchantId}/buy`, {
-        charId: myCharId,
-        items:  cart.map(c => ({ equipmentId: c.item.id, qty: c.qty })),
-      })
-      setCheckoutMsg({ ok: true, text: t('trade.window.cart_success') })
-      setCart([])
-    } catch (err) {
-      const msg = err.response?.data?.error?.message || err.message
-      const text = msg === 'INSUFFICIENT_FUNDS'  ? t('trade.window.cart_insufficient')
-                 : msg === 'MERCHANT_CLOSED'      ? t('trade.window.cart_merchant_closed')
-                 : msg
-      setCheckoutMsg({ ok: false, text })
-    } finally {
-      setCheckoutLoading(false)
-    }
-  }
-
   // ── Échange — callbacks (gardés pour RadialMenu futur) ────────────────────
 
   const loadInventory = useCallback(async () => {
@@ -230,6 +208,29 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
     } catch (err) { console.error('[TradeWindow] inventory load:', err.message) }
     finally { setInvLoading(false) }
   }, [myCharId])
+
+  const handleCheckout = async () => {
+    if (!selMerchantId || cart.length === 0 || checkoutLoading || !myCharId) return
+    setCheckoutLoading(true)
+    setCheckoutMsg(null)
+    try {
+      await api.post(`/campaigns/${campaignId}/merchants/${selMerchantId}/buy`, {
+        charId: myCharId,
+        items:  cart.map(c => ({ equipmentId: c.item.id, qty: c.qty })),
+      })
+      setCheckoutMsg({ ok: true, text: t('trade.window.cart_success') })
+      setCart([])
+      loadInventory()
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message
+      const text = msg === 'INSUFFICIENT_FUNDS'  ? t('trade.window.cart_insufficient')
+                 : msg === 'MERCHANT_CLOSED'      ? t('trade.window.cart_merchant_closed')
+                 : msg
+      setCheckoutMsg({ ok: false, text })
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
 
   useEffect(() => {
     if ((playerTab === 'exchange' || playerTab === 'sell') && myInventory.length === 0 && !invLoading) loadInventory()

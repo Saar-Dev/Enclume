@@ -9,7 +9,7 @@ import { useCharacterStore } from '../stores/characterStore.js'
 import { useInventoryData } from '../lib/useInventoryData.js'
 import { setItemSlot, setItemContainer, deleteItem, validateItem } from '../lib/inventoryMutations.js'
 import { refreshDerivedTotals } from '../lib/inventoryDataSync.js'
-import api from '../lib/api.js'
+import api, { isOfflineQueuedError } from '../lib/api.js'
 
 const CONTAINER_ORDER = ['Sac', 'Ceinture', 'Coffre']
 // Sous-ensemble affiché dans la boucle accordéon — Coffre est rendu séparément (§10 point 3 du plan :
@@ -65,6 +65,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   // poids/sols/malus INI sont affichés par InventoryBanner.jsx (Étape 1), pas ici.
   const { items, loading } = useInventoryData(characterId)
   const upsertInventoryItem = useCharacterStore(s => s.upsertInventoryItem)
+  const [equipError, setEquipError] = useState(null)
 
   // ── Catalogue GM ──────────────────────────────────────────────────────────
   const [addOpen,       setAddOpen]       = useState(false)
@@ -102,12 +103,13 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   }, [characterId])
 
   const handleEquip = useCallback(async (itemId, newSlot) => {
+    setEquipError(null)
     try {
       await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
-      console.error('Erreur équipement :', err)
+      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error?.message || t('containerPanel.equipError')))
     }
-  }, [characterId])
+  }, [characterId, t])
 
   const handleDelete = useCallback(async (itemId) => {
     try {
@@ -264,6 +266,8 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   return (
     <div style={s.root}>
       <div style={s.separator} />
+
+      {equipError && <div style={s.equipError}>{equipError}</div>}
 
       {/* ── Sac / Ceinture portés ─────────────────────────────────────── */}
       {CARRIED_CONTAINERS.map(container => {
@@ -615,6 +619,11 @@ const s = {
     outline: '1px solid #5b8dee',
     outlineOffset: 2,
     borderRadius: 4,
+  },
+  equipError: {
+    fontSize: 10,
+    color: '#e05c5c',
+    marginBottom: 4,
   },
   itemRow: {
     display: 'flex', alignItems: 'center', gap: 6,

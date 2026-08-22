@@ -113,7 +113,22 @@ export default function DashboardPage() {
   const handleCopy = async (e, code, id) => {
     e.stopPropagation()
     try {
-      await navigator.clipboard.writeText(code)
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(code)
+      } else {
+        // Contexte non sécurisé (HTTP hors localhost, ex. serveur distant) : navigator.clipboard
+        // est absent — fallback historique, fonctionne aussi en HTTP.
+        const textarea = document.createElement('textarea')
+        textarea.value = code
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        if (!ok) throw new Error('execCommand copy failed')
+      }
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 1500)
     } catch {

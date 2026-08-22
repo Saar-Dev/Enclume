@@ -1153,10 +1153,15 @@ router.put('/:characterId/inventory/:itemId', async (req, res, next) => {
     if (req.body.validated_by_gm !== undefined && !req.isGm) {
       throw new AppError(403, 'Seul le MJ peut valider un item')
     }
-    const item = await inventoryService.updateItem(characterId, itemId, req.body)
+    const { item, cascadedItems } = await inventoryService.updateItem(characterId, itemId, req.body)
 
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
     emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item })
+    // Cascade INV1 (Sac à dos/Ceinture déséquipé, contenu renvoyé au Coffre) — un event par item
+    // déplacé, même mécanisme que ci-dessus, io.to inclut l'émetteur donc pas de refetch client requis.
+    for (const cascaded of cascadedItems) {
+      emitInventoryEvent(req.app.get('io'), room, WS.INVENTORY_UPDATED, { characterId, item: cascaded })
+    }
 
     res.json({ item })
   } catch (err) { next(err) }
@@ -2143,61 +2148,52 @@ router.delete('/:characterId/exo/avaries/:severity', async (req, res, next) => {
 // plus proche (`drone_weapons`/`drone_programs` PUT/DELETE), pas les Avaries (compteurs sur la fiche
 // elle-même, pas des lignes filles).
 
-// Requêtes enrichies (jointure ref_exo_equipment → display_name) partagées entre GET (liste) et
-// POST/PUT (réponse d'une seule ligne) — trouvaille 2026-08-21 (Saar, test réel navigateur) : POST/PUT
+// Requêtes enrichies (jointure ref_equipment → display_name) partagées entre GET (liste) et POST/PUT
+// (réponse d'une seule ligne) — trouvaille 2026-08-21 (Saar, test réel navigateur) : POST/PUT
 // renvoyaient la ligne brute `.returning('*')` sans jointure, contrairement à GET, donc sans
 // `display_name` ; l'ajout/l'édition d'un système ou d'une arme catalogue affichait "—" côté client
 // jusqu'au prochain GET (mirror manqué du précédent `drone_weapons`, qui refait bien cette jointure
 // après `insert`/`update`, `char-sheet.js:1842-1856,1885-1899`). Une seule fonction par table plutôt
 // que dupliquer le SELECT 3 fois (GET liste + POST + PUT) — même shape garanti partout.
-// Jointure sur les 2 catalogues possibles depuis la migration 260 (exclusive arc §13.4.4 suite —
-// equipment_id → ref_exo_equipment, systèmes propres aux armures ; ref_equipment_id → ref_equipment,
-// armes/senseurs génériques déjà catalogués ailleurs dans le jeu, ex. drone_weapons). Jamais les deux
-// renseignés à la fois (CHECK migration 260), donc les COALESCE ci-dessous ne se recouvrent jamais en
-// pratique — écrits ainsi pour rester corrects même si l'ordre d'évaluation changeait.
+// Un seul catalogue depuis la fusion ref_exo_equipment → ref_equipment (PLAN_EXOEQ_FUSION.md) —
+// l'exclusive arc à 2 sources (migrations 260/262, archivées) n'a plus lieu d'être : il ne reste
+// qu'une seule vraie source catalogue possible (`ref_equipment_id`), plus de COALESCE entre 2 tables.
 function selectExoSystemFields(query) {
   return query
-    .leftJoin('ref_exo_equipment', 'exo_systems.equipment_id', 'ref_exo_equipment.id')
     .leftJoin('ref_equipment', 'exo_systems.ref_equipment_id', 'ref_equipment.id')
     .select(
       'exo_systems.*',
-      db.raw('COALESCE(exo_systems.label_override, ref_exo_equipment.name, ref_equipment.name) as display_name'),
-      db.raw('COALESCE(ref_exo_equipment.description, ref_equipment.description) as ref_description'),
-      'ref_exo_equipment.category as ref_category',
+      db.raw('COALESCE(exo_systems.label_override, ref_equipment.name) as display_name'),
+      'ref_equipment.description as ref_description',
+      'ref_equipment.category as ref_category',
     )
 }
 
 function selectExoWeaponFields(query) {
   return query
-    .leftJoin('ref_exo_equipment', 'exo_weapons.equipment_id', 'ref_exo_equipment.id')
     .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
     .select(
       'exo_weapons.*',
-      db.raw('COALESCE(exo_weapons.label_override, ref_exo_equipment.name, ref_equipment.name) as display_name'),
-      db.raw('COALESCE(ref_exo_equipment.description, ref_equipment.description) as ref_description'),
-      db.raw('COALESCE(ref_exo_equipment.damage, ref_equipment.damage_h) as ref_damage'),
-      db.raw('COALESCE(ref_exo_equipment.shock, ref_equipment.shock) as ref_shock'),
-      db.raw('COALESCE(ref_exo_equipment.range, ref_equipment.range) as ref_range'),
-      db.raw('COALESCE(ref_exo_equipment.fire_mode, ref_equipment.fire_mode) as ref_fire_mode'),
+      db.raw('COALESCE(exo_weapons.label_override, ref_equipment.name) as display_name'),
+      'ref_equipment.description as ref_description',
+      'ref_equipment.damage_h as ref_damage',
+      'ref_equipment.shock as ref_shock',
+      'ref_equipment.range as ref_range',
+      'ref_equipment.fire_mode as ref_fire_mode',
     )
 }
 
-// Validation de la source d'une ligne exo_systems/exo_weapons — jamais les 2 vraies sources catalogue
-// à la fois, jamais aucune des 3 (equipment_id/ref_equipment_id/label_override, migration 260 +
-// 262 pour le CHECK en base). `label_override` peut coexister avec l'une des deux sources comme
-// annotation d'affichage (ex. "SACEA (secours)") — révision migration 262, trouvée en relecture
-// critique avant la transcription : la version précédente de cette fonction imposait "exactement une"
-// des 3, incohérente avec ce besoin. Le CHECK Postgres est l'autorité finale, mais valider ici évite
-// un 500 brut ("violates check constraint") au profit d'un AppError 400 lisible — même raisonnement
-// que templateId/UUID_RE dans exoTemplateService.js.
-function validateExoEquipmentSource({ equipment_id, ref_equipment_id, label_override }) {
-  if (equipment_id != null && equipment_id !== '' && ref_equipment_id != null && ref_equipment_id !== '') {
-    throw new AppError(400, 'equipment_id et ref_equipment_id ne peuvent pas être fournis ensemble')
-  }
-  const hasSource = (equipment_id != null && equipment_id !== '') || (ref_equipment_id != null && ref_equipment_id !== '')
+// Validation de la source d'une ligne exo_systems/exo_weapons — un seul catalogue depuis la fusion
+// (PLAN_EXOEQ_FUSION.md) : `ref_equipment_id` et/ou `label_override`, au moins un des deux renseigné
+// (`label_override` peut coexister comme annotation d'affichage, ex. "SACEA (secours)" — décision
+// migration 262 archivée, toujours valable). Le CHECK Postgres reste l'autorité finale, valider ici
+// évite un 500 brut au profit d'un AppError 400 lisible — même raisonnement que templateId/UUID_RE
+// dans exoTemplateService.js.
+function validateExoEquipmentSource({ ref_equipment_id, label_override }) {
+  const hasSource = ref_equipment_id != null && ref_equipment_id !== ''
   const hasLabel = label_override != null && label_override !== ''
   if (!hasSource && !hasLabel) {
-    throw new AppError(400, 'Fournir au moins un parmi equipment_id, ref_equipment_id, label_override')
+    throw new AppError(400, 'Fournir au moins un parmi ref_equipment_id, label_override')
   }
 }
 
@@ -2218,22 +2214,22 @@ router.post('/:characterId/exo/systems', async (req, res, next) => {
   try {
     if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
 
-    const { equipment_id, ref_equipment_id, label_override, level, integrite_max, integrite_current, sort_order = 0 } = req.body
-    validateExoEquipmentSource({ equipment_id, ref_equipment_id, label_override })
+    const { ref_equipment_id, label_override, level, integrite_max, integrite_current, sort_order = 0 } = req.body
+    validateExoEquipmentSource({ ref_equipment_id, label_override })
 
-    if (equipment_id) {
-      const ref = await db('ref_exo_equipment').where({ id: equipment_id, family: 'systeme' }).first()
-      if (!ref) throw new AppError(400, 'Equipment not found or not a system')
-    }
     if (ref_equipment_id) {
+      // Filtre famille seulement pour rejeter le mauvais catalogue exo (ex. poster une arme exo sur
+      // ce endpoint système) — tout item générique du catalogue (ni Exo-systeme ni Exo-arme) reste
+      // accepté sans restriction, même comportement que l'ancien branchement ref_equipment_id
+      // (pré-fusion) qui n'avait aucun filtre de famille.
       const ref = await db('ref_equipment').where({ id: ref_equipment_id }).first()
       if (!ref) throw new AppError(400, 'Equipment not found')
+      if (ref.family === 'Exo-arme') throw new AppError(400, 'Equipment not found or not a system')
     }
 
     const [inserted] = await db('exo_systems')
       .insert({
         character_id: req.params.characterId,
-        equipment_id: equipment_id ?? null,
         ref_equipment_id: ref_equipment_id ?? null,
         label_override: label_override ?? null,
         level: level ?? null,
@@ -2304,22 +2300,19 @@ router.post('/:characterId/exo/weapons', async (req, res, next) => {
   try {
     if (!await exoIsGmOrOwnerOrPilot(req)) throw new AppError(403, 'GM, owner or pilot required')
 
-    const { equipment_id, ref_equipment_id, label_override, integrite_max, integrite_current, sort_order = 0 } = req.body
-    validateExoEquipmentSource({ equipment_id, ref_equipment_id, label_override })
+    const { ref_equipment_id, label_override, integrite_max, integrite_current, sort_order = 0 } = req.body
+    validateExoEquipmentSource({ ref_equipment_id, label_override })
 
-    if (equipment_id) {
-      const ref = await db('ref_exo_equipment').where({ id: equipment_id, family: 'arme' }).first()
-      if (!ref) throw new AppError(400, 'Equipment not found or not a weapon')
-    }
     if (ref_equipment_id) {
+      // Symétrique de la route /exo/systems ci-dessus.
       const ref = await db('ref_equipment').where({ id: ref_equipment_id }).first()
       if (!ref) throw new AppError(400, 'Equipment not found')
+      if (ref.family === 'Exo-systeme') throw new AppError(400, 'Equipment not found or not a weapon')
     }
 
     const [inserted] = await db('exo_weapons')
       .insert({
         character_id: req.params.characterId,
-        equipment_id: equipment_id ?? null,
         ref_equipment_id: ref_equipment_id ?? null,
         label_override: label_override ?? null,
         integrite_max: integrite_max ?? null,

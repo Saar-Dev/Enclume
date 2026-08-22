@@ -10,7 +10,7 @@ import {
 } from '../../../shared/armorConstants.js'
 import { polarisRound } from '../../../shared/polarisUtils.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
-import { setItemSlot } from '../lib/inventoryMutations.js'
+import { setItemSlot, setItemContainer } from '../lib/inventoryMutations.js'
 import api, { isOfflineQueuedError } from '../lib/api.js'
 
 function calcMillefeuille(items, field) {
@@ -61,6 +61,18 @@ export default function LocationPanel({
     (!hasNonS || i.ref_malus_cat === 'S' || i.ref_malus_cat == null),
   )
 
+  // Candidats compatibles mais encore au Coffre — jamais proposés dans le <select> (le portage doit
+  // rester un geste explicite du joueur, cf. handleMoveContainer/InventoryPanel : décompte du poids
+  // porté). Sans indice, ce cas rendait le slot silencieusement vide (INV7) — même filtre que
+  // ci-dessus, container différent, pas de duplication de règle métier.
+  const storedCandidates = items.filter(i =>
+    i.ref_location?.split('/').includes(refCode) &&
+    i.container === 'Coffre' &&
+    !(i.slots?.includes(slotCode)) &&
+    !(pairSlot && !i.ref_location.includes('/') && i.slots?.includes(pairSlot)) &&
+    (!hasNonS || i.ref_malus_cat === 'S' || i.ref_malus_cat == null),
+  )
+
   // ── Mille-feuille ──────────────────────────────────────────────────────────
   const finalProt = calcMillefeuille(equippedItems, 'ref_protection')
   const finalChoc = calcMillefeuille(equippedItems, 'ref_protection_shock')
@@ -79,9 +91,18 @@ export default function LocationPanel({
     try {
       await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
-      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error || t('containerPanel.equipError')))
+      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error?.message || t('containerPanel.equipError')))
     }
   }, [characterId, slotCode, items, t])
+
+  const handleTakeToSac = useCallback(async (itemId) => {
+    setEquipError(null)
+    try {
+      await setItemContainer(characterId, itemId, 'Sac')
+    } catch (err) {
+      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error?.message || t('containerPanel.equipError')))
+    }
+  }, [characterId, t])
 
   const handleUnequip = useCallback(async (itemId) => {
     setEquipError(null)
@@ -98,7 +119,7 @@ export default function LocationPanel({
     try {
       await setItemSlot(characterId, itemId, newSlot)
     } catch (err) {
-      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error || t('containerPanel.unequipError')))
+      setEquipError(isOfflineQueuedError(err) ? t('containerPanel.offlineQueued') : (err.response?.data?.error?.message || t('containerPanel.unequipError')))
     }
   }, [characterId, slotCode, items, t])
 
@@ -218,6 +239,23 @@ export default function LocationPanel({
         )}
         {!canEdit && equippedItems.length === 0 && (
           <span style={s.emptySlot}>{t('locationPanel.noArmor')}</span>
+        )}
+
+        {/* Candidats compatibles laissés au Coffre — sans ceci le slot restait silencieusement vide
+            (INV7), sans qu'aucun message n'indique qu'une pièce existe mais doit d'abord être
+            portée. Le passage au Sac reste un geste explicite (décompte du poids porté), jamais
+            automatique au clic d'équiper. */}
+        {canEdit && storedCandidates.length > 0 && (
+          <div style={s.storedHint}>
+            {storedCandidates.map(i => (
+              <div key={i.id} style={s.storedCandidateRow}>
+                <span style={s.storedCandidateName}>{t('locationPanel.storedCandidate', { name: i.custom_name || i.ref_name })}</span>
+                <button onClick={() => handleTakeToSac(i.id)} style={s.takeToSacBtn} title={t('inventoryPanel.takeToSacTooltip')}>
+                  {t('inventoryPanel.takeToSacButton')}
+                </button>
+              </div>
+            ))}
+          </div>
         )}
 
         {equipError && <div style={s.equipError}>{equipError}</div>}
@@ -421,6 +459,37 @@ const s = {
     fontSize: 10,
     color: '#3a3a5a',
     fontStyle: 'italic',
+  },
+  storedHint: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    marginTop: 2,
+  },
+  storedCandidateRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  storedCandidateName: {
+    fontSize: 10,
+    color: '#5a5a7a',
+    fontStyle: 'italic',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  takeToSacBtn: {
+    background: 'rgba(91,141,238,0.1)',
+    border: '1px solid rgba(91,141,238,0.3)',
+    borderRadius: 4,
+    color: '#5b8dee',
+    cursor: 'pointer',
+    fontSize: 10,
+    padding: '1px 6px',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
   equipError: {
     fontSize: 10,

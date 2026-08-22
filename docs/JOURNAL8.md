@@ -3689,3 +3689,149 @@ secondaires (auto-réparation, malus d'Initiative par interface — pas encore p
 existante modifiée.
 **Retour arrière** : `down()` testé et propre sur les 3 migrations ; commit isolé sur `dev/Saar`
 (`8e9bb8f`), `git revert` suffit.
+
+---
+
+## Session (Saar) — 2026-08-22 — INV7 (slot d'équipement silencieusement absent) + INV1 (Sac à dos/Ceinture jamais réellement équipables)
+
+**Contexte** : signalé par Saar comme "armures humanoïdes n'ont pas de slot ouvert pour être
+équipées" sur le distant fraîchement resynchronisé, immédiatement soupçonné (par Saar) d'être une
+dérive de migration — écarté après lecture : le gate fautif est du code client identique en local et
+distant, aucun rapport avec le chantier migrations en parallèle.
+
+**INV7** — `InventoryPanel.jsx:564` (`ItemRow`) et `LocationPanel.jsx:58` (`availableItems`)
+n'affichaient un contrôle d'équipement que si l'item était déjà dans le container "Sac" — jamais s'il
+restait au Coffre (défaut de tout nouvel ajout), sans aucun message. **Premier correctif rejeté par
+Saar** : retirer purement la condition (le serveur relocalise déjà `container → 'Sac'` en équipant)
+cassait un invariant non négocié — porter doit rester un geste explicite du joueur (poids porté),
+jamais un effet de bord silencieux d'équiper. Correctif retenu : la condition reste, `LocationPanel.jsx`
+calcule en plus `storedCandidates` (items compatibles au Coffre) et affiche nom + bouton "Sac" dédié
+(réutilise `setItemContainer`) au lieu d'un menu silencieusement vide ; `InventoryPanel.jsx` avait déjà
+ce bouton, seul `handleEquip` ne remontait qu'un `console.error` — branché sur `equipError`/
+`isOfflineQueuedError` (même mécanisme que `LocationPanel.jsx`).
+
+**INV1** — diagnostic précédent ("aucun moyen d'équiper un sac") incomplet : `ContainerPanel.jsx`
+existait déjà et était déjà câblé (`WeaponPanel.jsx`, section "Conteneurs portés", slots `D`/`Ce`),
+non trouvé par l'analyse antérieure. Deux vrais manques dans `inventoryService.js` : (1)
+`isContainerAvailable`/`getDefaultContainer` testaient la simple possession d'un item
+`ref_location==='D'` n'importe où (Coffre inclus), pas son équipement réel — corrigé, lisent
+désormais `char_inventory_slots` directement ; (2) équiper le Sac à dos/la Ceinture (`slot='D'`/`'Ce'`)
+ne forçait jamais son propre `container` — seule exception parmi toutes les branches équipement du
+fichier — corrigé dans `addItem` et `updateItem`, symétrique confirmé par Saar pour Ceinture. Cascade
+au déséquipement (bac non vide) tranchée par Saar après analyse à charge UX proposée : avertissement
+puis confirmation explicite, jamais silencieux — `updateItem` refuse (409, décompte exact) sans
+`confirmEmptyContainer`, exécute la relocalisation en Coffre atomiquement dans la même transaction si
+confirmé ; `ContainerPanel.jsx` déclenche `window.confirm` sur ce refus précis. Diffusion multi-client
+des objets cascadés : réutilise l'event `INVENTORY_UPDATED` existant (un par objet), aucun nouveau
+mécanisme — `io.to(room)` inclut déjà l'émetteur, donc pas de refetch client à ajouter.
+
+**Piège trouvé et corrigé en cours de route** : forcer `container` sur `slot='D'`/`'Ce'` redéclenchait
+la validation générale `isContainerAvailable` juste après coup — aurait bloqué le tout premier
+équipement d'un sac (poule/œuf : "Sac" pas encore disponible au moment même où on le rend disponible).
+Contourné explicitement (`skipContainerAvailabilityCheck` dans `updateItem`, `containerSelfGranted`
+dans `addItem`).
+
+**Découvert en clôturant, sans rapport avec INV1/INV7** : `errorHandler.js` renvoie
+`{ error: { status, message, i18nKey } }` (un objet) — `err.response?.data?.error` seul (sans
+`.message`) affiche `[object Object]`. Pattern déjà correct ailleurs dans le projet (`WeaponPanel.jsx`
+et une majorité d'autres fichiers), mais copié en mauvais depuis du code déjà buggé
+(`LocationPanel.jsx`, pré-existant) dans les 3 fichiers touchés ici — corrigé. 7 autres fichiers du
+projet portent le même bug, non corrigés (hors périmètre), listés en pitfall `EN_COURS.md` (PC48).
+
+**Testé** : lint ciblé (`eslint`) sur les 6 fichiers client touchés — propre à chaque étape ;
+`node --check` sur les 2 fichiers serveur touchés — propre. Confirmé fonctionnel en jeu par Saar
+(équiper/déséquiper armure depuis le Coffre, Sac à dos et Ceinture, cascade avec objets dedans,
+messages d'erreur lisibles).
+**Non testé** : suite serveur `node --test` (pas d'accès DB locale dans cette session) — comportement
+vérifié uniquement par lecture croisée + confirmation en jeu de Saar, pas par un test automatisé
+dédié à `isContainerAvailable`/la cascade. Reste une dette : ajouter des tests Node pour ce chemin
+avant la prochaine session touchant `inventoryService.js`.
+**Données** : aucune migration.
+**Retour arrière** : diff isolé sur 8 fichiers (`inventoryService.js`, `char-sheet.js`,
+`inventoryMutations.js`, `InventoryPanel.jsx`, `LocationPanel.jsx`, `ContainerPanel.jsx`), pas encore
+committé au moment de la rédaction de cette entrée.
+
+## Session (Saar) — 2026-08-22 — `PLAN_MIGRATIONS_REFONTE.md` Phase 2 : refonte complète du système
+de migrations (~260 → 310 fichiers, une création + un seed par table) + clôture `PLAN_EXOEQ_FUSION.md`
+
+**Contexte et décision** : Saar reformule l'objectif en cours de session — pas seulement le cluster
+`ref_equipment` (Phase 1, déjà close), mais la totalité du projet : chaque table devient une migration
+de création + (si besoin) une migration de seed, plus aucun patch empilé dans le temps. Nouvelle base,
+`vtt` jamais touchée ni reclonée, aucune donnée jouée reprise (comptes, personnages, parties) sauf le
+compte admin. Priorités explicites de Saar tenues tout du long : qualité avant vitesse, vérifier même
+quand ça ne trouve rien, aucune limite de temps.
+
+**Méthode** : `migradiff` (fork maintenu de `migra`, pas l'original déprécié — corrigé après une
+première installation erronée) pour générer le schéma complet en une seule passe (99 tables, une
+seule fois, pas table par table) depuis un rejeu neuf des ~275 migrations existantes sur base jetable
+(`enclume_squash_check`, jamais `vtt`). Script de découpage maison (paren/quote-aware) pour répartir
+la sortie en fichiers par table, en 3 vagues strictement séparées : structure (colonnes seules),
+contraintes non-FK (index, PK, UNIQUE, CHECK), puis clés étrangères — nécessaire après avoir trouvé
+une vraie dépendance circulaire (`campaigns` ↔ `battlemaps`, chacune référence l'autre) qui aurait
+rendu impossible un fichier unique "table + ses propres FK" quel que soit l'ordre.
+
+**Audit avant confiance (pas supposé)** : comparaison systématique, table de référence par table de
+référence, entre `vtt` (vivante) et un rejeu neuf des migrations, en résolvant les FK vers des clés
+stables (`code`/`name`, jamais les `id` UUID aléatoires) pour ne pas se faire piéger par
+`SEED-ID-DETERM`. Résultat : la grande majorité déjà identique (confirme que Phase 1 et
+`PLAN_EXOEQ_FUSION.md` étaient bien complets) ; dérive réelle trouvée et tranchée avec Saar sur
+`ref_skills` (6 catégories ajoutées à la main sur `vtt`, jamais migrées ; ~20 corrections
+d'orthographe ; `ARTS_MARTIAUX.marker` tranché à `null`) et `ref_skill_requirements` (une faute de
+frappe d'origine corrigée à la main, jamais migrée, + 1 ligne ajoutée à la main) — version `vtt` fait
+foi dans tous les cas. Catalogue de textures (`texture_packs`/`texture_pack_categories`/
+`voxel_textures`) : Saar a tranché de ne pas l'importer du tout (tables créées vides, pour ne pas
+casser les 2 FK réelles qui pointent dessus — `battlemap_texture_usage`, `entity_blueprints`).
+
+**Bugs réels trouvés en testant, aucun deviné** :
+- Tri alphabétique par défaut de Knex casse l'ordre au-delà de 9 fichiers — confirme la nécessité du
+  `NaturalMigrationSource` déjà en place, pas un défaut à corriger.
+- Séquences Postgres non marquées `OWNED BY` dans les fichiers générés — un rollback laissait la
+  séquence orpheline, empêchant de rejouer la migration.
+- `knex('table').insert([])` lève une exception — les 2 tables de référence vides à ce jour
+  (`ref_career_prerequisites`, `ref_equipment_ammo_compat`) faisaient échouer leur propre seed.
+- Colonnes `jsonb` corrompues par un aller-retour driver `pg` (tableau JS réinjecté tel quel au lieu
+  d'être re-sérialisé en texte JSON).
+- `ref_exo_templates` devait être sourcée depuis la base de rejeu neuf, pas `vtt` : son `id` est un
+  UUID aléatoire (contrairement à `ref_equipment`, figé depuis la Phase 1/l'EXOEQ), le sourcer
+  différemment de ses tables filles (`ref_exo_template_equipment`/`computers`) cassait leurs FK.
+
+**Bascule réelle (accord explicite de Saar à chaque étape)** : ~250 fichiers actifs archivés (`git mv`,
+historique préservé — une collision de nom résolue, `48_ref_equipment.js` renommé
+`48_ref_equipment_phase1_consolidated.js` en l'archivant) ; 10 fichiers `PLAN_EXOEQ_FUSION.md`
+jamais committés supprimés (aucun historique Git à perdre, entièrement remplacés) ; 310 nouveaux
+fichiers déposés dans `server/src/db/migrations/`. Base réelle `enclumeBD` créée et migrée depuis le
+vrai dossier du dépôt (309/309 puis +1). Suite serveur complète relancée : 393/422 passent, les 29
+échecs vérifiés un par un — tous dans `migrations_archive/` (ancien cluster exo testant une table
+volontairement supprimée), zéro échec nouveau, zéro échec dans le code actif. Effet de bord positif
+non cherché : le test `PC49` (`id` de `ref_careers` codé en dur) passe désormais, `ref_careers` étant
+semée avec les données et `id` réels de `vtt`.
+
+Compte admin recréé (inscription normale par Saar via `/register`, serveur démarré temporairement
+avec `DATABASE_URL` sur `enclumeBD`) puis promu au redémarrage (`bootstrapAdminFromEnv`, vérifié en
+base : `role='admin'`). **Validé par Saar en usage réel.** `.env` repointé durablement sur `enclumeBD`.
+Mot de passe admin réinitialisé sur demande explicite de Saar (`AZERTY`, bcrypt/12 rounds — même
+mécanisme que l'inscription — à changer par Saar dans la foulée).
+
+**Ajout post-bascule (demande explicite de Saar)** : les 57 lignes de `bug_tickets` (hors périmètre
+initial des tables de référence) importées séparément (migration `310_bug_tickets_seed.js`, source
+`vtt`) — `reporter_id`/`reviewed_by` remappés de l'ancien `id` `vtt` vers le nouvel `id` admin
+`enclumeBD` (un seul auteur trouvé sur les 57 tickets : Saar lui-même).
+
+**Testé** : rejeu complet 1→310 sur base jetable (`enclume_full_test`) puis sur `enclumeBD` réelle,
+cycle up/rollback/re-up sur échantillon représentatif (dépendance circulaire + séquence), suite
+serveur complète (393/422, détail ci-dessus), démarrage serveur réel contre `enclumeBD` (MinIO,
+catalogue 3D, migrations, bootstrap admin), usage réel confirmé par Saar (connexion, changement de mot
+de passe en cours).
+**Non testé** : déploiement distant (Kiwi) — reste sur l'ancien jeu de migrations, hors périmètre de
+cette session, à traiter au prochain déploiement (`docs/SERVEURDISTANTKIWI.md`).
+**Données** : ~260 anciens fichiers de migration archivés (`server/src/db/migrations_archive/`), 310
+nouveaux fichiers actifs (`server/src/db/migrations/`), nouvelle base `enclumeBD` créée et peuplée,
+`vtt` conservée intacte et non supprimée, `.env` repointé sur `enclumeBD`.
+**Retour arrière** : `vtt` disponible intacte (jamais modifiée pendant tout ce chantier) — reste la
+base de repli immédiate en cas de problème, il suffit de repointer `DATABASE_URL` dessus. Les ~260
+anciens fichiers de migration restent archivés (pas supprimés) si une comparaison ligne à ligne est
+nécessaire plus tard.
+
+**Reste ouvert, hors périmètre de ce chantier** : `node --test` (sans argument) parcourt aussi
+`migrations_archive/` par défaut et exécute ses `.test.mjs` obsolètes — une exclusion de
+configuration reste à écrire, décision actée avec Saar de ne pas supprimer les fichiers.

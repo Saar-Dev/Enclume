@@ -9,9 +9,17 @@ import { refreshDerivedTotals } from './inventoryDataSync.js'
 // réseau + l'écriture store, jusqu'ici dupliqués à l'identique dans les 4 panneaux Matériel. Aucune
 // gestion d'erreur ici : chaque appelant garde son propre message i18n contextuel via try/catch.
 
-export async function setItemSlot(characterId, itemId, slot) {
-  const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, { slot })
+// confirmEmptyContainer : réservé au déséquipement d'un Sac à dos/Ceinture (slot 'D'/'Ce') dont le
+// bac contient encore des objets — le serveur refuse (409) sans cette confirmation explicite et
+// renvoie tous les objets déplacés au Coffre par socket s'il l'obtient (INV1, aucun changement direct
+// à faire ici : cascadedItems arrive via INVENTORY_UPDATED, useCharacterSocket.js les upsert déjà).
+export async function setItemSlot(characterId, itemId, slot, { confirmEmptyContainer } = {}) {
+  const res = await api.put(`/char-sheet/${characterId}/inventory/${itemId}`, {
+    slot,
+    ...(confirmEmptyContainer ? { confirmEmptyContainer } : null),
+  })
   useCharacterStore.getState().upsertInventoryItem(characterId, res.data.item)
+  refreshDerivedTotals(characterId) // slot D/Ce force un container → poids porté potentiellement affecté
   return res.data.item
 }
 

@@ -1,13 +1,14 @@
 /**
  * ExoWeaponsPanel.jsx — Onglet Armement de ExoSheetWindow
  *
- * Liste `exo_weapons` (PLAN_EXOARMURE.md §13.4.3) — 3 sources exclusives (exclusive arc, migration 260,
- * §13.4.4 suite) : catalogue armure (`ref_exo_equipment`, family='arme', `GET /api/exo-equipment`),
- * catalogue général (`ref_equipment`, family='Armes' — dagues/pistolets/mitrailleuses déjà cataloguées
- * ailleurs dans le jeu), ou custom (label_override). Miroir structurel d'ExoSystemsPanel.jsx, sans
- * `level` (absent du schéma exo_weapons — contrairement à exo_systems, aucune arme RAW ne se facture
- * "X/niv."). Affiche Dom./Portée/Mode de tir du catalogue quand disponibles (fiche RAW réelle,
- * FDEA.webp, bloc "ARMEMENT").
+ * Liste `exo_weapons` (PLAN_EXOARMURE.md §13.4.3) — 2 sources (`ref_equipment_id` ou `label_override`,
+ * simplifié depuis la fusion `ref_exo_equipment` → `ref_equipment`, PLAN_EXOEQ_FUSION.md). Regroupement
+ * visuel "Armes dédiées" (family='Exo-arme') / "Armes générales" (family='Armes' — dagues/pistolets/
+ * mitrailleuses déjà cataloguées ailleurs dans le jeu) conservé comme aide de navigation, les deux
+ * résolvent désormais vers le même champ. Miroir structurel d'ExoSystemsPanel.jsx, sans `level`
+ * (absent du schéma exo_weapons — contrairement à exo_systems, aucune arme RAW ne se facture "X/niv.").
+ * Affiche Dom./Portée/Mode de tir du catalogue quand disponibles (fiche RAW réelle, FDEA.webp, bloc
+ * "ARMEMENT").
  */
 
 import { useState, useEffect } from 'react'
@@ -31,7 +32,7 @@ export default function ExoWeaponsPanel({ characterId, canEdit }) {
     let cancelled = false
     Promise.all([
       api.get(`/char-sheet/${characterId}/exo/weapons`),
-      api.get('/exo-equipment', { params: { family: 'arme' } }),
+      api.get('/equipment', { params: { family: 'Exo-arme' } }),
       api.get('/equipment', { params: { family: 'Armes' } }),
     ]).then(([wRes, catRes, genRes]) => {
       if (cancelled) return
@@ -50,8 +51,7 @@ export default function ExoWeaponsPanel({ characterId, canEdit }) {
 
     setAdding(true)
     try {
-      const source = mode === 'catalog' ? { equipment_id: selectedId }
-        : mode === 'catalogGeneral' ? { ref_equipment_id: selectedId }
+      const source = mode !== 'custom' ? { ref_equipment_id: selectedId }
         : { label_override: customLabel.trim() }
       const payload = {
         ...source,

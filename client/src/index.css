@@ -3514,6 +3514,18 @@ Convention :
   padding: 14px;
 }
 
+/* Variante nichée dans wiz1-desc-grid (à côté de Main directrice) — pas de padding de carte propre,
+   déjà à l'intérieur du padding du bloc Description physique. */
+.wiz1-chc-row--compact {
+  padding: 0;
+  gap: 10px;
+}
+.wiz1-chc-row--compact .wiz1-chc-badge {
+  width: 40px;
+  height: 40px;
+  font-size: 17px;
+}
+
 .wiz1-chc-badge {
   display: inline-flex;
   align-items: center;

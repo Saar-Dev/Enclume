@@ -502,6 +502,13 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
               </div>
             )}
           </label>
+          <label className="wiz1-desc-field">
+            <span className="wiz1-desc-label">{t('step1.chcTitle')}</span>
+            <div className="wiz1-chc-row wiz1-chc-row--compact">
+              <span className="wiz1-chc-badge">{chc}</span>
+              <p className="wiz1-chc-desc">{t('step1.chcDesc')}</p>
+            </div>
+          </label>
         </div>
       </div>
 
@@ -536,15 +543,6 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Bloc Chance ── */}
-      <div className="wiz1-block">
-        <div className="wiz1-block-title">{t('step1.chcTitle')}</div>
-        <div className="wiz1-chc-row">
-          <span className="wiz1-chc-badge">{chc}</span>
-          <p className="wiz1-chc-desc">{t('step1.chcDesc')}</p>
         </div>
       </div>
 

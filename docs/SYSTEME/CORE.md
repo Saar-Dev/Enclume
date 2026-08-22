@@ -242,3 +242,24 @@ corrompues (vécu Session 135 : `decodeMojibake()` rappelée sur du texte déjà
 silencieuse, aucune erreur levée). **Procédure sûre** : `SELECT` la table `knex_migrations`
 (`WHERE name = '...'`) avant tout appel manuel à `up()`/`down()` ; pour un round-trip, ne jamais
 enchaîner deux `up()` sans `down()` entre les deux.
+
+### P55 — invariant durable : une table = une migration de création + une migration de seed, point
+Depuis la refonte complète (`PLAN_MIGRATIONS_REFONTE.md`, clos et archivé 2026-08-22, 310 fichiers) :
+plus aucune donnée de référence ne vit dans un seed hors chaîne (`server/src/db/seeds/`) ni dans une
+correction empilée sur une migration antérieure. Toute nouvelle table de référence suit ce même
+schéma : un fichier `NNN_table.js` (structure), un fichier `NNN_table_constraints.js` (index/PK/UNIQUE/
+CHECK/FK — jamais mélangés à la structure, une vraie dépendance circulaire trouvée en pratique entre
+`campaigns` et `battlemaps` interdit de faire autrement), et si la table porte des données de
+référence, un fichier `NNN_table_seed.js`. Avant de figer un seed depuis une base vivante (la base de
+travail active, quel que soit son nom), toujours auditer par clé naturelle (jamais par `id` UUID aléatoire, cf. `SEED-ID-DETERM`
+ci-dessous) contre un rejeu neuf des migrations — une donnée vivante peut avoir été corrigée à la main
+sans jamais être remontée en migration, un rejeu neuf seul ne suffit pas comme source de vérité
+aveugle.
+
+### P56 — `node --test` (sans argument) parcourt aussi `server/src/db/migrations_archive/`
+Les migrations archivées gardent leurs fichiers `.test.mjs` compagnons (traçabilité, jamais supprimés)
+— `node --test` les découvre et les exécute par défaut, alors qu'ils testent parfois un schéma
+délibérément retiré (ex. `ref_exo_equipment`, supprimé par la fusion exo). Échecs attendus,
+confinés à `migrations_archive/` — vérifier explicitement le chemin de chaque test en échec avant de
+conclure à une régression réelle. Exclusion de configuration à écrire (scope de test), pas une
+suppression de fichiers archivés.

@@ -22,23 +22,22 @@ export const WEAPON_SLOTS     = new Set(['MG', 'MD', '2M', 'Tr'])
 export const WEAPON_FAMILY = 'Armes'
 export const MOD_CATEGORY  = 'Accessoires pour armes'
 
+// Sac/Ceinture disponibles seulement si le contenant lui-même est réellement équipé (slot 'D'/'Ce'
+// dans char_inventory_slots) — pas simplement possédé quelque part, y compris au Coffre (INV1, Saar
+// 2026-08-22). Le seul geste qui ouvre ce bac est d'équiper le Sac à dos/la Ceinture (ContainerPanel).
 export async function isContainerAvailable(characterId, container) {
   if (container === 'Coffre') return true
-  const locationNeeded = container === 'Sac' ? 'D' : container === 'Ceinture' ? 'Ce' : null
-  if (!locationNeeded) return false
-  const row = await db('char_inventory')
-    .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-    .where({ 'char_inventory.character_id': characterId })
-    .where('ref_equipment.location', locationNeeded)
+  const slotNeeded = container === 'Sac' ? 'D' : container === 'Ceinture' ? 'Ce' : null
+  if (!slotNeeded) return false
+  const row = await db('char_inventory_slots')
+    .where({ character_id: characterId, slot_code: slotNeeded })
     .first()
   return !!row
 }
 
 export async function getDefaultContainer(characterId) {
-  const hasSac = await db('char_inventory')
-    .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-    .where({ 'char_inventory.character_id': characterId })
-    .where('ref_equipment.location', 'D')
+  const hasSac = await db('char_inventory_slots')
+    .where({ character_id: characterId, slot_code: 'D' })
     .first()
   return hasSac ? 'Sac' : 'Coffre'
 }
@@ -343,12 +342,20 @@ export async function addItem(characterId, payload, autoValidate = false) {
     : null
   const equippable = isEquippableLocation(equipRef?.location ?? null)
 
+  const resolvedSlot = slot ?? null
+  // Équiper le Sac à dos/la Ceinture (slot D/Ce) est justement l'action qui rend ce container
+  // disponible (isContainerAvailable) — un appelant qui fournirait déjà container:'Sac'/'Ceinture'
+  // en même temps que slot:'D'/'Ce' ne doit pas se heurter à une disponibilité que cette action même
+  // est en train de créer.
+  const containerSelfGranted = (resolvedSlot === 'D' && containerIn === 'Sac')
+    || (resolvedSlot === 'Ce' && containerIn === 'Ceinture')
+
   let container
   if (containerIn !== undefined) {
     if (!VALID_CONTAINERS.includes(containerIn)) {
       throw new AppError(400, `container invalide : ${containerIn}`)
     }
-    if (!(await isContainerAvailable(characterId, containerIn))) {
+    if (!containerSelfGranted && !(await isContainerAvailable(characterId, containerIn))) {
       throw new AppError(400, `Container "${containerIn}" non disponible`)
     }
     container = containerIn
@@ -356,7 +363,6 @@ export async function addItem(characterId, payload, autoValidate = false) {
     container = await getDefaultContainer(characterId)
   }
 
-  let resolvedSlot = slot ?? null
   if (resolvedSlot !== null) {
     if (!VALID_SLOTS.includes(resolvedSlot)) {
       throw new AppError(400, `slot invalide : ${resolvedSlot}`)
@@ -365,6 +371,9 @@ export async function addItem(characterId, payload, autoValidate = false) {
     if (isContainerSlotPost) {
       const conflict = await _handSlotConflict(characterId, [resolvedSlot])
       if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      // Équiper le Sac à dos/la Ceinture porte son propre poids (INV1) — même geste que l'armure/arme
+      // ci-dessous, mais ici le contenant devient son propre bac (il ne va pas "dans" lui-même).
+      container = resolvedSlot === 'D' ? 'Sac' : 'Ceinture'
     } else if (WEAPON_SLOTS.has(resolvedSlot)) {
       if (!(await isContainerAvailable(characterId, 'Sac'))) {
         throw new AppError(400, 'Sac non disponible — impossible d\'équiper une arme')
@@ -462,8 +471,15 @@ export async function updateItem(characterId, itemId, payload) {
     .where({ id: itemId, character_id: characterId }).first()
   if (!existing) throw new AppError(404, 'Item not found')
 
-  const { container, slot, quantity, custom_name, custom_desc, notes, custom_props, current_ammo, validated_by_gm } = payload
+  const { container, slot, quantity, custom_name, custom_desc, notes, custom_props, current_ammo, validated_by_gm, confirmEmptyContainer } = payload
   const updates = {}
+  // Déséquipement d'un Sac à dos/Ceinture dont le bac contient encore des objets (INV1) — renseigné
+  // plus bas, appliqué dans la même transaction que l'update principal.
+  let cascadeToCoffre = null
+  // Équiper le Sac à dos/la Ceinture est justement l'action qui rend 'Sac'/'Ceinture' disponible
+  // (isContainerAvailable) — la validation générale ci-dessous ne doit pas re-tester une disponibilité
+  // que cette action précise est en train de créer (sinon le tout premier équipement se bloque lui-même).
+  let skipContainerAvailabilityCheck = false
 
   if (container       !== undefined) updates.container       = container
   if (slot            !== undefined) updates.slot             = slot
@@ -503,6 +519,10 @@ export async function updateItem(characterId, itemId, payload) {
     if (isContainerSlotPut) {
       const conflict = await _handSlotConflict(characterId, [updates.slot], itemId)
       if (conflict) throw new AppError(409, 'Slot déjà occupé')
+      // Équiper le Sac à dos/la Ceinture porte son propre poids (INV1) — même geste que l'armure/arme
+      // ci-dessous, mais ici le contenant devient son propre bac (il ne va pas "dans" lui-même).
+      updates.container = updates.slot === 'D' ? 'Sac' : 'Ceinture'
+      skipContainerAvailabilityCheck = true
     } else if (isShield) {
       // Main + localisations armure composées en un seul contrôle — pas de P58 (un bouclier ne
       // couvre jamais BG et BD à la fois, cf. addItem : structurellement inapplicable) ni de
@@ -584,6 +604,25 @@ export async function updateItem(characterId, itemId, payload) {
       }
       updates.container = 'Sac'
     }
+  } else if (updates.slot === null) {
+    // Déséquipement — si l'item quittait un slot conteneur (D/Ce), le bac Sac/Ceinture qu'il
+    // définissait se ferme (INV1) : tout ce qu'il contenait doit repartir au Coffre, jamais
+    // silencieusement (même invariant que INV7 — le portage reste un geste explicite). Sans
+    // confirmation, refus explicite plutôt qu'une relocalisation surprise.
+    const existingSlotRows = await db('char_inventory_slots').where({ char_inventory_id: itemId }).select('slot_code')
+    const existingSlotCodes = existingSlotRows.map(r => r.slot_code)
+    const bucket = existingSlotCodes.includes('D') ? 'Sac' : existingSlotCodes.includes('Ce') ? 'Ceinture' : null
+    if (bucket) {
+      const itemsInBucket = await db('char_inventory')
+        .where({ character_id: characterId, container: bucket })
+        .whereNot('id', itemId)
+      if (itemsInBucket.length > 0) {
+        if (!confirmEmptyContainer) {
+          throw new AppError(409, `${bucket} contient encore ${itemsInBucket.length} objet(s) — les renvoyer au Coffre pour déséquiper ?`)
+        }
+        cascadeToCoffre = { bucket, itemIds: itemsInBucket.map(i => i.id) }
+      }
+    }
   }
 
   // Validation container (si fourni explicitement et pas déjà forcé à 'Sac' par slot)
@@ -591,7 +630,7 @@ export async function updateItem(characterId, itemId, payload) {
     if (!VALID_CONTAINERS.includes(updates.container)) {
       throw new AppError(400, `container invalide : ${updates.container}`)
     }
-    if (!(await isContainerAvailable(characterId, updates.container))) {
+    if (!skipContainerAvailabilityCheck && !(await isContainerAvailable(characterId, updates.container))) {
       throw new AppError(400, `Container "${updates.container}" non disponible`)
     }
   }
@@ -641,8 +680,21 @@ export async function updateItem(characterId, itemId, payload) {
     if (slotProvided) {
       await _writeSlots(trx, itemId, characterId, slotToWrite)
     }
+    if (cascadeToCoffre) {
+      await trx('char_inventory')
+        .where({ character_id: characterId, container: cascadeToCoffre.bucket })
+        .whereNot('id', itemId)
+        .update({ container: 'Coffre', updated_at: db.fn.now() })
+    }
   })
-  return getItemWithRef(itemId)
+  const item = await getItemWithRef(itemId)
+  // Diffusion des items déplacés en cascade : la route les broadcast individuellement (même event
+  // INVENTORY_UPDATED, io.to inclut l'émetteur) — aucun changement de contrat pour les autres
+  // appelants de updateItem, `item` reste la clé principale.
+  const cascadedItems = cascadeToCoffre
+    ? await Promise.all(cascadeToCoffre.itemIds.map(id => getItemWithRef(id)))
+    : []
+  return { item, cascadedItems }
 }
 
 // POST /:characterId/inventory/:itemId/reload

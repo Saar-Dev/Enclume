@@ -1,7 +1,9 @@
 # SERVEUR DISTANT — Documentation déploiement Enclume
 > Créé : 2026-06-01 — Session 68/69
-> Mis à jour : 2026-08-08 (session dépannage post-pull : DNS cassé + node_modules serveur désynchro,
-> voir P-SRV-9 et section Procédure git pull)
+> Mis à jour : 2026-08-21 (session dépannage post-pull, 67 commits de retard : récidive skip-worktree
+> sur client/package.json + nouveau sur client/package-lock.json (P-SRV-10), journal Knex désynchronisé
+> du schéma réel (P-SRV-11) — script de diagnostic pré-migration ajouté). Entrée précédente :
+> 2026-08-08 (DNS cassé + node_modules serveur désynchro, P-SRV-9 et section Procédure git pull)
 
 ---
 
@@ -100,6 +102,47 @@ WantedBy=multi-user.target
 ```
 
 ## Migrations (après chaque git pull avec nouvelles migrations)
+
+**Mécanisme réel (vérifié dans le code, `server/src/index.js:161`)** : `db.migrate.latest()`
+s'exécute sans garde d'environnement à **chaque démarrage du serveur**, local ou distant — ni
+`git pull` ni le script de diagnostic ci-dessous ne déclenchent quoi que ce soit par eux-mêmes ; c'est
+le prochain démarrage/redémarrage du process qui applique tout ce qui traîne sur le disque à ce
+moment-là. Sur le distant, ce n'est donc pas seulement `systemctl restart enclume-server` lancé
+volontairement après un pull qui migre — **tout redémarrage, y compris un crash suivi du
+`Restart=on-failure` du service**, applique aussi les migrations pending sans intervention. Conséquence
+directe : ne jamais pousser un commit de migration incomplet/WIP sur une branche que ce serveur peut
+tirer, même brièvement — un redémarrage non planifié pendant cette fenêtre appliquerait un état
+partiel. Le diagnostic ci-dessous reste la bonne pratique (repérer une dérive AVANT de risquer un
+redémarrage), mais ne remplace pas la discipline amont : migration testée et complète avant tout push.
+
+**Toujours lancer le diagnostic ci-dessous EN PREMIER, avant `migrate.latest()`** — ce serveur a un
+historique de désynchronisation entre le journal Knex et le schéma réel (P-SRV-11). Lecture seule,
+sans risque :
+
+```bash
+cd /home/didier/Enclume/server && node --input-type=module --env-file=../.env -e "
+import('./src/db/knex.js').then(async ({ default: db }) => {
+  const fs = await import('fs')
+  const path = await import('path')
+  const dir = path.join(process.cwd(), 'src/db/migrations')
+  const onDisk = fs.readdirSync(dir).filter(f => /\.(js|mjs|cjs)\$/.test(f) && !f.endsWith('.test.mjs'))
+  const applied = new Set((await db('knex_migrations').select('name')).map(r => r.name))
+  const missing = onDisk.filter(f => !applied.has(f)).sort()
+  console.log(missing.length === 0 ? 'Journal Knex synchronisé avec le disque.' : 'Présentes sur le disque, absentes du journal :')
+  missing.forEach(m => console.log(' -', m))
+  await db.destroy()
+  process.exit(0)
+}).catch(e => { console.error(e.message); process.exit(1) })
+"
+```
+
+Si la liste est vide, `migrate.latest()` ci-dessous passera normalement. Si elle ne l'est pas, **ne
+pas lancer `migrate.latest()` directement** : vérifier d'abord manuellement, pour chaque migration
+manquante, si son effet (colonnes/contraintes/tables) existe déjà réellement en base (cas
+`SCHEMADRIFT-EXOTEMPLATES1`, P-SRV-11) ou si le fichier qu'elle lit sur disque existe (cas des assets
+seed) — jamais supposer, jamais lancer `up()` une seconde fois sur une migration déjà effective. Une
+fois chaque cas tranché (ligne insérée à la main dans `knex_migrations` si l'effet existe déjà, ou
+correction du blocage sinon), relancer `migrate.latest()` normalement :
 
 ```bash
 cd /home/didier/Enclume/server && node --input-type=module --env-file=../.env -e "
@@ -207,14 +250,81 @@ Vérifier : `getent hosts registry.npmjs.org`. Pas de bounce d'interface ni de s
 
 À surveiller : si `resolvconf` est installé un jour, ce fix manuel deviendra inutile et potentiellement écrasé — repasser par la déclaration `dns-nameservers` native d'ifupdown à ce moment-là.
 
+### P-SRV-10 — Récidive skip-worktree sur client/package.json + nouveau sur client/package-lock.json
+Symptôme (2026-08-21) : `git pull`/`git reset --hard origin/dev/Saar` refusent avec
+`error: Entry 'client/package-lock.json' not uptodate. Cannot merge.` — persiste même après
+`git stash`, `git restore --staged`, `git checkout --`, et même après avoir vérifié que le fichier
+appartient bien à `didier` (pas un problème de droits) et retiré `assume-unchanged` (mauvaise piste,
+mauvais bit Git). Signal clé qui a fait trouver la vraie cause : juste après un `checkout --` réussi,
+`git status` annonçait une copie de travail propre, puis `pull` retrouvait aussitôt le fichier "pas à
+jour" — un fichier qui redevient sale entre deux commandes consécutives sur un dépôt calme signale un
+bit Git spécial posé dessus, pas une vraie modification.
+
+Cause racine : `client/package.json` (déjà cassé et corrigé une fois, session 82 — voir plus bas) et
+`client/package-lock.json` (nouveau, jamais documenté) avaient tous les deux `skip-worktree` posé,
+en violation directe de la règle de ce document ("ne jamais mettre en skip-worktree" pour ces deux
+fichiers précis). `git ls-files -v | grep "^S"` en a révélé **4** au lieu du seul `docker-compose.yml`
+attendu : `client/package-lock.json`, `client/package.json`, `client/src/lib/api.js` (celui-ci
+volontaire, session 70, voir tableau ci-dessous), `docker-compose.yml` (attendu).
+
+Fix (même geste que session 82, à refaire dès que ce piège réapparaît) :
+```bash
+git update-index --no-skip-worktree client/package-lock.json client/package.json
+git reset --hard origin/dev/Saar
+```
+
+**Cause de la récidive non identifiée** — probablement un `npm install` lancé directement sur le
+serveur qui a incité quelqu'un à re-figer ces fichiers à la main pour que Git arrête de les signaler
+modifiés, au lieu de simplement les committer ou les laisser identiques au dépôt. À surveiller à
+chaque session de dépannage post-pull : lancer `git ls-files -v | grep "^S"` en tout premier réflexe
+avant d'explorer d'autres pistes (droits, sparse-checkout, assume-unchanged — tous écartés cette
+fois-ci avant de trouver la vraie cause).
+
+### P-SRV-11 — Journal Knex désynchronisé du schéma réel (67 commits de retard, 2026-08-21)
+
+Symptôme : après avoir résolu P-SRV-10 (skip-worktree), `migrate.latest()` échoue sur la migration
+243 (`243_ref_exo_templates_movement_and_commerce.js`) : `column "underwater_movement_mode" of
+relation "ref_exo_templates" already exists`. Ce serveur n'avait pas été synchronisé depuis longtemps
+(67 commits de retard) et a accumulé de la dette sans jamais rejouer les migrations correspondantes.
+
+**Cause 1 — schéma déjà appliqué, jamais enregistré.** La migration 233 (`233_exo_sheet.js`) porte
+elle-même l'historique dans son commentaire : le 2026-08-06, elle avait été éditée après coup pour y
+ajouter 8 colonnes/2 contraintes sous l'hypothèse erronée qu'elle n'avait pas encore tourné (elle
+avait déjà été appliquée le jour même à 09:50:27). Corrigé le 2026-08-12
+(`SCHEMADRIFT-EXOTEMPLATES1`) : 233 restaurée à son contenu réellement exécuté, les 8 colonnes/2
+contraintes déplacées dans une vraie nouvelle migration, 243. Ce serveur a dû exécuter 233 dans sa
+version *cassée* (avant le 2026-08-12) — donc les colonnes/contraintes existent déjà réellement, mais
+243 n'a jamais été enregistrée comme faite dans `knex_migrations`.
+
+Diagnostic fait (jamais deviné) avant correctif : comparaison colonnes réelles
+(`information_schema.columns`) vs contenu de 243, puis contraintes réelles (`pg_constraint`) vs les 2
+CHECK que 243 ajoute — les deux confirmés identiques avant d'agir.
+
+Fix : insérer manuellement la ligne `243_ref_exo_templates_movement_and_commerce.js` dans
+`knex_migrations` (nouveau `batch`), **sans rejouer `up()`** — le schéma réel étant déjà exactement
+celui que la migration produirait.
+
+**Cause 2 — asset manquant pour une fonctionnalité abandonnée.** Migrations 244/245
+(`244_seed_polaris_export_template.js`, `245_update_polaris_export_template_column_widths.js`)
+échouent avec `ENOENT` sur `server/src/db/seed-assets/polaris-export/fiche-polaris-vierge.xlsx` —
+fichier jamais commité au dépôt (confirmé absent en local aussi, pas seulement sur ce serveur). Sans
+gravité : la migration 246 (`246_remove_polaris_export_template.js`) documente elle-même l'abandon de
+toute la piste Excel (remplacée par une fiche PWA hors-ligne, `PLAN_FICHE_HORSLIGNE.md`), et retire
+l'objet MinIO que 244/245 auraient créé. Aucune des trois ne touche une table/colonne. Fix : les 3
+marquées appliquées manuellement (même geste que ci-dessus), effet final strictement identique à si
+elles avaient réellement tourné (rien en base, rien dans MinIO, aucun code ne référence plus l'objet).
+
+**Prévention** : voir le script de diagnostic ajouté en tête de la section Migrations ci-dessus — à
+lancer systématiquement avant `migrate.latest()` sur ce serveur.
+
 ## Fichiers qui divergent entre local et serveur
 
-**Un seul fichier** a une vraie raison de diverger. Tous les autres sont pilotés par `.env`.
+**Un seul fichier a une vraie raison durable de diverger.** Tous les autres sont pilotés par `.env`.
 
 ```bash
-# État actuel — skip-worktree actif sur UN seul fichier (session 82)
 # Vérifier : git ls-files -v | grep "^S"
-# Résultat attendu : S docker-compose.yml
+# Résultat attendu : S docker-compose.yml — SEUL. Si client/package.json ou
+# client/package-lock.json apparaissent, voir P-SRV-10 ci-dessus (déjà vu 2 fois).
 ```
 
 | Fichier | Statut | Raison |

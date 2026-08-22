@@ -1,14 +1,16 @@
 /**
  * ExoSystemsPanel.jsx — Onglet Systèmes de ExoSheetWindow
  *
- * Liste `exo_systems` (PLAN_EXOARMURE.md §13.4.3) — 3 sources exclusives (exclusive arc, migration 260,
- * §13.4.4 suite) : catalogue armure (`ref_exo_equipment`, family='systeme', `GET /api/exo-equipment`),
- * catalogue général (`ref_equipment`, family='Equipement Général' — sonscans/radars/senseurs déjà
- * catalogués ailleurs dans le jeu, pas de doublon à inventer), ou custom (label_override). Patron CRUD
- * repris de DroneSheet.jsx#ProgramsSection (catalogue/custom, ajout, suppression) + paire max/courant
- * reprise de ExoIntegrityPanel.jsx. Miroir structurel d'ExoWeaponsPanel.jsx (fiche RAW réelle,
- * FDEA.webp : deux blocs "SYSTÈMES AUXILIAIRES"/"ARMEMENT" distincts, colonnes différentes — jamais
- * fusionnés).
+ * Liste `exo_systems` (PLAN_EXOARMURE.md §13.4.3) — 2 sources (`ref_equipment_id` ou `label_override`,
+ * simplifié depuis la fusion `ref_exo_equipment` → `ref_equipment`, PLAN_EXOEQ_FUSION.md : un seul
+ * catalogue désormais, plus d'exclusive arc à 3 branches). Le regroupement visuel "Systèmes dédiés"
+ * (family='Exo-systeme') / "Équipement général" (family='Equipement Général' — sonscans/radars/
+ * senseurs déjà catalogués ailleurs dans le jeu, pas de doublon à inventer) reste volontairement
+ * distinct malgré la fusion : c'est une aide de navigation pour le joueur, pas une contrainte du
+ * schéma — les deux résolvent désormais vers le même champ `ref_equipment_id`. Patron CRUD repris de
+ * DroneSheet.jsx#ProgramsSection (catalogue/custom, ajout, suppression) + paire max/courant reprise de
+ * ExoIntegrityPanel.jsx. Miroir structurel d'ExoWeaponsPanel.jsx (fiche RAW réelle, FDEA.webp : deux
+ * blocs "SYSTÈMES AUXILIAIRES"/"ARMEMENT" distincts, colonnes différentes — jamais fusionnés).
  *
  * `level` optionnel (contrairement à drone_programs) : seuls les systèmes facturés "X/niv." ont un
  * niveau (RAW, PLAN_EXOARMURE.md §12.1bis point 5) — un système à niveau fixe le porte déjà dans son
@@ -37,7 +39,7 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
     let cancelled = false
     Promise.all([
       api.get(`/char-sheet/${characterId}/exo/systems`),
-      api.get('/exo-equipment', { params: { family: 'systeme' } }),
+      api.get('/equipment', { params: { family: 'Exo-systeme' } }),
       api.get('/equipment', { params: { family: 'Equipement Général' } }),
     ]).then(([sysRes, catRes, genRes]) => {
       if (cancelled) return
@@ -56,8 +58,7 @@ export default function ExoSystemsPanel({ characterId, canEdit }) {
 
     setAdding(true)
     try {
-      const source = mode === 'catalog' ? { equipment_id: selectedId }
-        : mode === 'catalogGeneral' ? { ref_equipment_id: selectedId }
+      const source = mode !== 'custom' ? { ref_equipment_id: selectedId }
         : { label_override: customLabel.trim() }
       const payload = {
         ...source,

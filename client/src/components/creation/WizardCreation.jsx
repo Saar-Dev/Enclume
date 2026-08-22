@@ -289,7 +289,7 @@ export default function WizardCreation() {
         pcDispo={pcDispo}
         infos={getInfos(step, ambiance, t)}
         onStepClick={navigateToStep}
-        hasCharacter={!!step1Data}
+        hasCharacter={highestStep >= 5}
         onOpenPeek={openPeek}
         peekLoading={peekLoading}
         isGmView={isGmView}

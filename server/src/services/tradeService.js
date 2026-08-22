@@ -1,6 +1,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { isEquippableLocation } from '../lib/inventoryRules.js'
+import { removeItem } from './inventoryService.js'
 
 // ─── Marchands ────────────────────────────────────────────────────────────────
 
@@ -302,18 +303,20 @@ export async function executeSell(campaignId, { offerId, solsFinal }) {
     if (!offer) throw new Error('OFFER_NOT_FOUND')
     if (new Date(offer.expires_at) < new Date()) throw new Error('OFFER_EXPIRED')
 
-    // 2. Lock items + vérifier ownership (peuvent avoir changé depuis la proposition)
+    // 2. Lock items + vérifier ownership et quantité (peuvent avoir changé depuis la proposition)
     for (const item of offer.items_json) {
       const inv = await trx('char_inventory')
         .where({ id: item.char_inventory_id, character_id: offer.from_char_id })
         .forUpdate()
         .first()
       if (!inv) throw new Error('ITEM_UNAVAILABLE')
+      if (inv.quantity < (item.qty ?? 1)) throw new Error('ITEM_UNAVAILABLE')
     }
 
-    // 3. Supprimer les items de l'inventaire du vendeur
+    // 3. Retirer uniquement la quantité vendue (décrémente si le stack restant est > 0,
+    // supprime la ligne sinon — même service que modingService.js/DELETE inventaire)
     for (const item of offer.items_json) {
-      await trx('char_inventory').where({ id: item.char_inventory_id }).delete()
+      await removeItem(offer.from_char_id, item.char_inventory_id, item.qty ?? 1, trx)
     }
 
     // 4. Créditer le vendeur

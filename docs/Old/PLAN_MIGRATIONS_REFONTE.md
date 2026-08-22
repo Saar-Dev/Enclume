@@ -1,6 +1,10 @@
 # PLAN_MIGRATIONS_REFONTE — Consolidation du système de migrations
 
-> Statut : plan soumis à validation, **aucun fichier de migration touché, aucune base modifiée**.
+> Statut (2026-08-22) : Phase 1 faite et vérifiée. **Phase 2 engagée** (§5bis) — objectif reformulé par
+> Saar : la totalité du projet (~260 migrations), pas seulement `ref_equipment`, une création + un
+> seed par table, nouvelle base, `vtt` jamais touchée. Audit table par table des données de référence
+> en cours, décisions actées consignées en §5bis. **Aucun fichier de migration touché, aucune base
+> de travail (`vtt`) modifiée** — travail fait sur une base jetable séparée (`enclume_squash_check`).
 > Rédigé 2026-08-08 (Claude, sur demande explicite de Saar après l'incident migration 135/distant).
 > Règle 10 (`RegleDocumentaire.md`) : ce PLAN est temporaire — à la clôture, retiré ou archivé, tout
 > invariant durable qui en résulte va dans `docs/SYSTEME/CORE.md` ou une règle domaine, jamais laissé
@@ -268,14 +272,223 @@ reste un prérequis bloquant — ce n'est pas une option.
 
 ---
 
-## 5bis. Phase 2 — le reste du projet (différée, hors scope immédiat)
+## 5bis. Phase 2 — le reste du projet (ENGAGÉE, 2026-08-22)
 
-~217 migrations, ~85 tables restantes (liste complète en annexe §9), aucun défaut connu à ce jour.
-Reprend la même méthode (`migra` + audit + validation séquencée sur base jetable + sauvegarde avant
-réconciliation) une fois la Phase 1 validée et le bug fermé. Motivation indépendante et déjà valable
-en soi : le projet dépasse le seuil de ~200 migrations où la doc pro recommande de simplifier le
-setup d'un environnement neuf (§ Sources). Non détaillée lot par lot ici tant qu'elle n'est pas
-engagée — sera un ajout à ce document ou un nouveau PLAN dédié, au choix de Saar le moment venu.
+> Engagée sur demande explicite de Saar (2026-08-22), qui reformule l'objectif en clair : la
+> totalité des ~260 migrations (Phase 1 + `PLAN_EXOEQ_FUSION.md` comprises) devient, table par table,
+> **une migration de création + une migration de seed, point.** Nouvelle base (`vtt` jamais touchée,
+> jamais reclonée), seules les données de référence sont conservées — aucune donnée jouée (comptes,
+> personnages, parties), à l'exception du compte admin `d.lebosse@protonmail.com` recréé à part.
+> Priorité explicite de Saar pour tout ce chantier : qualité et sûreté avant vitesse, aucune limite de
+> temps, vérifier même quand ça ne trouve rien — repris ci-dessous à chaque étape.
+
+### Inventaire réel (2026-08-22, scripté, pas estimé)
+
+230 fichiers de migration actifs (hors `migrations_archive`) touchent ~92 tables. Répartition très
+inégale : `campaigns` (38 fichiers), `battlemaps` (25), `characters`/`ref_careers` (24),
+`users`/`char_sheet` (21)... jusqu'à 1 seul fichier pour la majorité des tables. La quasi-totalité de
+ces fichiers sont des `ALTER TABLE ADD COLUMN` d'évolution normale (pas le bug ref_equipment de la
+Phase 1) — `migra` absorbe cette évolution en une seule passe de diff, peu importe le nombre de
+fichiers historiques par table. Le vrai travail manuel ne porte que sur les tables de **référence**
+(catalogues `ref_*` + textures), où les données doivent être auditées avant d'être figées en seed.
+
+### Méthode affinée (corrige une hypothèse initiale invalidée par l'audit ci-dessous)
+
+Idée initiale : utiliser un rejeu complet des migrations (base neuve, zéro intervention manuelle)
+comme unique source de vérité pour les données de référence — plus fiable que `vtt` (vivante,
+modifiable à la main via l'admin), donc a priori non contaminée. **Invalidée par la vérification
+réelle** : `vtt` contient des corrections faites à la main (admin UI ou édition directe) jamais
+reportées dans une migration. Un squash aveugle depuis le rejeu seul aurait donc **effacé en silence**
+des corrections réelles. Méthode retenue : pour chaque table de référence, comparer explicitement
+`vtt` (vivante) contre un rejeu neuf, résoudre les FK vers des clés stables (`code`/`name`, pas les
+`id` UUID aléatoires, cf. `SEED-ID-DETERM`) pour ne pas se faire piéger par les `id` qui changent à
+chaque rejeu, et trancher au cas par cas — jamais figer une table sans cet audit.
+
+### Vérifications faites (2026-08-22)
+
+- Aucune extension Postgres exotique, aucune fonction/trigger, une seule vue (`char_mutation_effects_view`,
+  déjà patchée par 3 migrations successives 96/109/127/128 — capturée dans sa forme finale par `migra`).
+  PostgreSQL 16.13, `gen_random_uuid()` natif (pas besoin de `pgcrypto`).
+- `vtt` a bien ses 265 migrations à jour ; les 10 nouvelles EXOEQ (266-275) confirmées **non
+  appliquées** dessus (aucune contamination accidentelle malgré leur présence sur disque).
+- Base jetable `enclume_squash_check` créée (même instance Postgres que `vtt`, jamais `vtt` elle-même)
+  et rejeu complet 1→275 réussi (3 migrations mortes 244-246 neutralisées par le contournement déjà
+  documenté `SERVEURDISTANTKIWI.md` P-SRV-11 — aucune table/colonne concernée).
+- Audit table par table (comparaison par clé naturelle, `vtt` vivante vs rejeu neuf) sur les ~30
+  tables de référence + catalogues de textures. **Résultat : la grande majorité est déjà identique**
+  (`ref_careers` et son cluster de 8 tables liées, `ref_mutations`, `ref_backgrounds`, `ref_advantages`,
+  `ref_setbacks`, `ref_equipment` hors nouveauté exo, tout le loadout exo `ref_exo_template_*`) — la
+  Phase 1 et `PLAN_EXOEQ_FUSION.md` sont bien complètes et cohérentes, et le reste du catalogue de
+  règles n'a pas de dérive généralisée. La dérive trouvée est **localisée**, pas systémique.
+
+### Décisions actées avec Saar suite à l'audit (2026-08-22)
+
+| Table | Écart trouvé | Décision |
+|---|---|---|
+| `ref_skills` | 6 catégories (`MANOEUVRE_DARMURE`, `CONNAISSANCE_MILIEU_NATUREL`, `TACTIQUE`, `LANGUE_ETRANGERE`, `LANGAGES_SPECIFIQUES`, `LANGUE_ANCIENNE`) présentes sur `vtt`, absentes de toute migration | **Gardées** — la version `vtt` fait foi, à écrire dans la migration de seed finale |
+| `ref_skills` | ~20 corrections d'orthographe faites à la main sur `vtt` (ex. "Tir automatique"→"Tir automatiques", "Premier soin"→"Premier soins") jamais migrées | **Gardées** — version `vtt` fait foi |
+| `ref_skills` | `ARTS_MARTIAUX.marker` = `null` sur `vtt` vs `"(-3)"` dans les migrations d'origine | **Tranché : `null` (pas de -3)** — version `vtt` fait foi |
+| `ref_skill_requirements` | Faute de frappe d'origine (`PILOTAGE_NAVIRES_LEGERS` un seul `_`, ne correspond à aucune compétence réelle) corrigée à la main sur `vtt` (`PILOTAGE__NAVIRES_LEGERS`), jamais migrée ; + 1 ligne entière (`MAITRISE_DE_LA_FORCE_POLARIS`) ajoutée à la main, absente de toute migration | **Présumé : version `vtt` fait foi** (même principe que les 3 lignes ci-dessus, pas explicitement reconfirmé par Saar — à re-vérifier avant d'écrire le fichier final) |
+| Catalogue textures (`texture_packs`/`texture_pack_categories`/`voxel_textures`) | Pack "structure-station" présent en migration absent de `vtt` ; renommage "texture-5-baril-explosif"/"texture-5-baril-2" incohérent entre les deux | **Ce catalogue n'est PAS importé du tout** dans la nouvelle base — décision Saar, hors périmètre de la consolidation |
+| `ref_exo_templates.illustration_url` | Fichier binaire uploadé en direct sur `vtt`, aucune migration ne peut le reproduire | **Noté, hors SQL** — ré-upload manuel à prévoir séparément au moment de la bascule, pas un défaut de méthode |
+
+### Outillage validé (2026-08-22)
+
+`migradiff` installé (fork maintenu — pas l'original `migra` déprécié, corrigé après une première
+installation erronée) + `psycopg2-binary` (driver manquant). Testé sur le schéma complet du projet
+(`enclume_empty_check` vs `enclume_squash_check`, 99 tables) : diff propre, 2988 lignes, tables +
+séquences + contraintes + vue capturées correctement. Structure de sortie confirmée en 4 vagues
+strictement séparées, jamais entrelacées table par table : (1) séquences + `CREATE TABLE` nu (aucune
+table ne dépend d'une autre à ce stade, ordre alphabétique, aucun tri topologique nécessaire),
+(2) `CREATE INDEX`, (3) `ALTER TABLE ADD CONSTRAINT` (PK/UNIQUE/CHECK puis les 165 FK, une fois que
+toutes les tables existent), (4) vues. Décision : reprendre cette structure telle quelle pour le
+découpage plutôt que de forcer "table + ses propres FK" dans un seul fichier (qui aurait exigé un tri
+topologique manuel sur 92 tables — risque inutile que l'outil a déjà évité).
+
+### Points trouvés en analyse à charge avant découpage — tranchés avec Saar (2026-08-22)
+
+| Point | Problème | Décision |
+|---|---|---|
+| `knex_migrations`/`knex_migrations_lock` | Présentes dans le dump (Knex les crée lui-même dans la base de rejeu) — une migration qui les recréerait entrerait en conflit avec le bootstrap Knex de la nouvelle base | **Exclues** du découpage, jamais générées comme fichier de migration |
+| Séquences Postgres (6 tables : `chat_messages`, `pending_catastrophes`, `ref_mutation_subtypes`, `ref_mutations`, `token_statuses`, `voxel_textures`) | Seules `ref_mutations`/`ref_mutation_subtypes` reçoivent un seed à `id` explicite — sans `setval()`, la première vraie insertion entrerait en collision | Migration de seed de ces 2 tables **se termine par un `setval()`** avançant la séquence après le dernier `id` inséré |
+| Découpage par table : structure vs contraintes | Un fichier unique "table + ses FK" exigerait un tri topologique manuel sur 92 tables | **Confirmé (Saar)** : un fichier de structure (colonnes) + un fichier de contraintes/index (après que toutes les tables existent) par table, plus un fichier de seed pour les tables de référence — 3 vagues distinctes, toujours "une création + un seed" dans l'esprit |
+| `battlemap_texture_usage.voxel_texture_id` et `entity_blueprints.pack_id` référencent `voxel_textures`/`texture_packs` (catalogue exclu) | Sans ces tables, les 2 FK échouent (cible inexistante) | **Confirmé (Saar), option (a)** : `texture_packs`/`texture_pack_categories`/`voxel_textures` sont créées (structure seule, vides) pour garder l'intégrité référentielle de ces 2 tables — aucune donnée de catalogue importée |
+
+### Génération du schéma — faite et vérifiée (2026-08-22)
+
+Numérotation tranchée seul (pas reposée à Saar après refus explicite d'un questionnaire structuré sur
+ce point — voir mémoire `feedback_no_questionnaire`) : renumérotation fraîche à partir de 1, le dossier
+entier étant remplacé d'un coup (pas un remplacement partiel comme Phase 1/EXOEQ) — pattern standard
+des outils pro de squash (Rails/Django/Prisma, § Sources).
+
+Script de découpage écrit et **validé par un vrai cycle up→rollback→re-up** (pas seulement une
+génération visuelle), d'abord sur un échantillon de 9 tables choisies pour couvrir les cas difficiles,
+puis sur les 97 tables réelles (281 fichiers). Trois bugs réels trouvés et corrigés par ce test, aucun
+deviné :
+1. **Tri alphabétique par défaut de Knex** ("10_x" avant "2_y") casse l'ordre pour plus de 9 fichiers —
+   confirme la nécessité du `NaturalMigrationSource` déjà en place dans `knexfile.cjs` (tri numérique),
+   pas un défaut à corriger, juste à ne pas oublier dans les scripts de test.
+2. **Dépendance circulaire réelle trouvée** : `campaigns.default_battlemap_id` → `battlemaps.id` ET
+   `battlemaps.campaign_id` → `campaigns.id`. Un fichier "table + ses propres contraintes" ne peut pas
+   être sûr ici quel que soit l'ordre des fichiers. Corrigé en séparant la vague 2 (index +
+   contraintes PK/UNIQUE/CHECK, par table) de la vague 3 (clés étrangères, par table, strictement
+   après que TOUTES les vagues 2 de TOUTES les tables soient passées) — mirroring exact de ce que
+   `migra` fait déjà lui-même en un seul dump (indexes → PK/UNIQUE/CHECK → FK, jamais mélangé table
+   par table).
+3. **Séquences non marquées `OWNED BY`** dans les fichiers générés — `DROP TABLE ... CASCADE` ne
+   supprimait pas la séquence associée, un rollback puis re-application entrait en collision
+   ("relation already exists"). Corrigé : chaque fichier de structure inclut désormais l'instruction
+   `ALTER SEQUENCE ... OWNED BY` retrouvée dans le dump source.
+
+**Vérification finale** : `migra` entre `enclume_squash_check` (rejeu des 275 anciennes migrations) et
+`enclume_full_test` (rejeu des 281 nouveaux fichiers générés) ne montre que deux catégories d'écarts,
+aucun réel :
+- `knex_migrations`/`knex_migrations_lock` — normal, Knex les crée lui-même, volontairement exclues du
+  découpage (cf. tableau ci-dessus).
+- 6 contraintes CHECK (`chk_mut_sex`, `chk_mut_fertility`, `chk_mut_subtype`, `chk_eq_fire_mode`,
+  `chk_inventory_slots_code`, `chk_ref_setbacks_roll_range`) réapparaissent avec un texte DDL différent
+  mais **vérifié sémantiquement identique** (`pg_get_constraintdef` comparé ligne à ligne des deux
+  côtés) — un artefact connu de PostgreSQL quand une expression `ANY (ARRAY[...]::type[])` traverse
+  deux fois l'imprimante de contraintes de `migra`/Postgres (cast du tableau entier vs cast élément par
+  élément, même prédicat, même valeurs autorisées). Confirmé, pas juste supposé.
+
+**État de l'outillage** : script de découpage fonctionnel, 281 fichiers générés dans un dossier de
+travail (pas encore dans `server/src/db/migrations/` — en attente de la phase seed avant bascule
+réelle), testés up/rollback/re-up sur base jetable dédiée (`enclume_full_test`, jamais `vtt`).
+
+### Seeds écrits et suite complète validée (2026-08-22)
+
+28 migrations de seed générées (une par table de référence), source par table selon la règle établie
+avec Saar (§ précédente — `vtt` par défaut, `enclume_squash_check` pour `ref_equipment` et le cluster
+`ref_exo_template_*`). Deux bugs réels trouvés et corrigés en testant l'application complète (309
+fichiers, schéma + seeds) sur base jetable (`enclume_full_test`), aucun deviné :
+1. **`knex('table').insert([])` lève "The query is empty"** — les 2 tables de référence
+   actuellement vides (`ref_career_prerequisites`, `ref_equipment_ammo_compat`) faisaient échouer leur
+   propre migration de seed. Corrigé : `up()` ne fait rien si 0 ligne, au lieu d'appeler `insert([])`.
+2. **Colonnes `jsonb` corrompues** — `ref_genotypes.prereq_professions` (tableau JS relu depuis
+   Postgres) réinjecté tel quel via `knex().insert()` produit "invalid input syntax for type json" (le
+   driver `pg` sérialise un tableau JS en littéral tableau Postgres, pas en texte JSON). Corrigé :
+   toute valeur objet/tableau est re-sérialisée en chaîne JSON avant insertion.
+3. **`ref_exo_templates` doit être sourcée depuis `enclume_squash_check`, pas `vtt`** — son `id` est un
+   UUID aléatoire (contrairement à `ref_equipment`, dont l'`id` est figé depuis la Phase 1/l'EXOEQ) ;
+   le sourcer depuis `vtt` pendant que ses deux tables filles (`ref_exo_template_equipment/computers`)
+   restent sourcées depuis le rejeu neuf cassait leur clé étrangère (`id` différents entre les deux
+   instances). Coût accepté : `illustration_url` (upload MinIO, non reproductible en SQL) n'est plus
+   repris — déjà noté comme un ré-upload manuel séparé, pas une régression nouvelle.
+
+**Validation finale** : les 309 fichiers (281 schéma + 28 seed) appliqués sur une base strictement
+neuve — comptages de lignes vérifiés identiques aux attendus (`ref_skills` 249, `ref_careers` 37,
+`ref_career_skills` 901, `ref_equipment` 790, `ref_exo_template_equipment` 410...), séquences
+`ref_mutations`/`ref_mutation_subtypes` correctement avancées (`setval` vérifié = `max(id)` réel).
+**Suite de tests serveur complète (`node --test`) lancée contre cette base neuve : 374/388 passent.**
+Les 14 échecs sont **tous, sans exception**, dans `src/db/migrations_archive/` (9 anciens fichiers de
+test de l'ancien cluster exo, qui testent l'existence de `ref_exo_equipment` — table supprimée par la
+fusion, comportement attendu). **Zéro échec dans l'arbre actif** (`routes`, `services`, `lib`, `admin`,
+`chat`, `socket`, `middleware`, migrations actives). Effet de bord positif noté : le test `PC49`
+(`creationRoundTrip.test.mjs`, `id` de `ref_careers` codé en dur) passe désormais, puisque `ref_careers`
+est semé avec les données et `id` réels de `vtt` plutôt que régénérés aléatoirement — pas un correctif
+ciblé, une conséquence de la méthode.
+
+**Point orthogonal trouvé, hors périmètre de ce chantier** : `node --test` (sans argument) parcourt
+aussi `migrations_archive/` par défaut et exécute ses `.test.mjs` — comportement déjà présent avant ce
+chantier (Phase 1 et EXOEQ ont eu le même archivage), pas causé par ce travail. À signaler séparément
+pour une éventuelle exclusion de configuration, pas corrigé ici.
+
+### Lot C — bascule réelle faite (2026-08-22, accord explicite de Saar : "Ok pour transfert")
+
+- **Archivage** : ~250 fichiers actifs déplacés vers `migrations_archive/` (`git mv`, historique
+  préservé). Une collision de nom trouvée et résolue : l'ancien `48_ref_equipment.js` (session 46,
+  120 lignes, déjà archivé depuis longtemps) et l'actif `48_ref_equipment.js` (consolidé Phase 1, 137
+  lignes) portaient le même nom — l'actif renommé `48_ref_equipment_phase1_consolidated.js` en
+  l'archivant, aucun contenu perdu. Les 10 fichiers `266-275` de `PLAN_EXOEQ_FUSION.md` (jamais
+  committés, jamais appliqués à `vtt`) supprimés plutôt qu'archivés : aucun historique Git à préserver
+  pour des brouillons non commités, et entièrement remplacés par le même contenu dans la nouvelle
+  numérotation.
+- **Dépôt des 309 nouveaux fichiers** dans `server/src/db/migrations/` (281 schéma + 28 seed).
+- **Base réelle `enclumeBD` créée** (pas jetable, candidate à devenir la base de travail) — `migrate.latest()`
+  appliqué directement depuis le vrai dossier du dépôt (pas une copie de test) : 309/309 fichiers, aucune erreur.
+- **Suite de tests complète relancée contre `enclumeBD`** : 393/422 passent. Le delta de fichiers
+  découverts par `node --test` par rapport au test précédent (422 vs 388) vient de l'archivage lui-même
+  (les `.test.mjs` compagnons des ~250 fichiers archivés sont maintenant, eux aussi, dans
+  `migrations_archive/`, que `node --test` parcourt par défaut). **Vérifié explicitement (pas supposé)**
+  : les 29 échecs restent confinés aux 8 fichiers déjà connus (`251/253/257/260/261/262/264/265`,
+  ancien cluster exo, testent `ref_exo_equipment` — supprimée par la fusion, échec attendu) — zéro
+  échec nouveau, zéro échec dans l'arbre actif.
+- **Serveur démarré pour de vrai contre `enclumeBD`** (`node src/index.js`, 15s, arrêté proprement) :
+  connexion DB OK, `[BOOTSTRAP-ADMIN] Aucun compte "d.lebosse@protonmail.com" trouvé` (attendu — voir
+  ci-dessous), catalogue 3D (72 modèles) synchronisé sans erreur malgré le catalogue de textures vide
+  (confirme que l'option (a) — tables texture créées vides plutôt que absentes — évite bien tout
+  crash), MinIO connecté, migrations à jour.
+- **`.env` et `vtt` non touchés** — revérifié après coup : `DATABASE_URL` toujours sur `vtt`,
+  `knex_migrations` toujours à 229 lignes.
+
+**Reste, volontairement laissé à Saar** : l'inscription du compte admin elle-même (choix du mot de
+passe, geste de compte) — je n'ai pas keyé-frappe cette étape à sa place. Séquence exacte (§8ter déjà
+écrit) : démarrer le serveur avec `DATABASE_URL` sur `enclumeBD`, s'inscrire via l'UI normale
+(`d.lebosse@protonmail.com`, code `REGISTRATION_CODE` de `.env`), puis redémarrer pour que
+`bootstrapAdminFromEnv` promeuve le compte. Une fois confirmé en usage réel : `.env` de travail
+repointé durablement sur `enclumeBD`, `vtt` conservée sans suppression.
+
+**Point orthogonal à corriger séparément** : `node --test` par défaut parcourt aussi
+`migrations_archive/` — problème amplifié par cet archivage (beaucoup plus de fichiers concernés
+qu'avant). Une exclusion de configuration (pas une suppression de fichiers, décision actée avec Saar)
+reste à faire, hors périmètre de ce chantier.
+
+### Clôture (2026-08-22)
+
+Compte admin recréé et promu, confirmé en base (`role='admin'`). **Validé par Saar en usage réel.**
+`.env` repointé durablement sur `enclumeBD` (revérifié : le serveur démarre normalement dessus sans
+variable d'environnement ajoutée). `vtt` conservée, non supprimée.
+
+**Ajout post-bascule (demande explicite de Saar)** : les 57 lignes de `bug_tickets` (suivi de bugs en
+base, écran `/admin/tickets`) n'étaient pas dans le périmètre initial des tables de référence — importées
+séparément, migration `310_bug_tickets_seed.js`, source `vtt`. Un seul auteur trouvé sur les 57 tickets
+(`reporter_id`/`reviewed_by`, un seul id distinct) : le compte admin lui-même — `reporter_id`/`reviewed_by`
+remappés de l'ancien id `vtt` vers le nouvel id admin d'`enclumeBD` (même personne, même email), pas
+mis à `null`. Appliqué et vérifié : 57/57 lignes, un seul `reporter_id` distinct après remap.
+
+**Phase 1 (`ref_equipment`) et Phase 2 (le reste du projet) sont closes.** Reste, hors du périmètre
+migrations : le point orthogonal `node --test`/`migrations_archive` ci-dessus, à traiter séparément.
 
 ---
 

@@ -6,6 +6,7 @@ import { estimateSalaryFormula } from '../../../../shared/polarisUtils.js'
 import { careerOptionKey, careerWaiveOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
+import SkillInfoPopover, { SkillInfoButton } from '../SkillInfoPopover.jsx'
 
 // Couleur déterministe (hash → HSL) — rail + tags de provenance du board.
 function careerHexColor(code) {
@@ -155,6 +156,20 @@ export default function CareersAllocator({
     clearTimeout(restrTooltipTimer.current)
     setRestrTooltip(null)
   }
+
+  // Panel description compétence (i) — même patron que SkillsPanel.jsx (SkillInfoPopover.jsx).
+  const [detailPanel, setDetailPanel] = useState(null)
+  const detailPanelRef = useRef(null)
+  useEffect(() => {
+    if (!detailPanel) return
+    const handler = (e) => {
+      if (detailPanelRef.current && !detailPanelRef.current.contains(e.target)) {
+        setDetailPanel(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [detailPanel])
 
   const careersById = useMemo(() => new Map((careers ?? []).map(c => [c.id, c])), [careers])
   const refSkillsById = useMemo(() => new Map((refSkills ?? []).map(s => [s.id, s])), [refSkills])
@@ -747,6 +762,7 @@ export default function CareersAllocator({
                     >
                       <div className="wiz4-skmain">
                         <span className="wiz4-sklabel">{skillLabel(row.skillId)}</span>
+                        <SkillInfoButton skill={refSkillsById.get(row.skillId)} setDetailPanel={setDetailPanel} />
                         <div className="wiz4-prov">
                           {row.provenance.map(p => (
                             <span key={p.key} className="wiz4-provtag" style={{ background: p.color }}>{p.label}</span>
@@ -800,6 +816,11 @@ export default function CareersAllocator({
         {restrTooltip.desc}
       </div>
     )}
+    <SkillInfoPopover
+      popover={detailPanel}
+      popoverRef={detailPanelRef}
+      onClose={() => setDetailPanel(null)}
+    />
     </>
   )
 }

@@ -767,6 +767,16 @@ Enclume/
 
 ## Base de données — Migrations
 
+> **Refonte complète 2026-08-22** (`docs/Old/PLAN_MIGRATIONS_REFONTE.md` Phase 2, clos et archivé) :
+> la totalité des fichiers de migration décrits ci-dessous a été archivée (`server/src/db/migrations_archive/`,
+> jamais supprimée) et remplacée par 310 fichiers consolidés — une migration de création + une de
+> contraintes/index + (si besoin) une de seed, par table, dans `server/src/db/migrations/`. Nouvelle
+> base de travail `enclumeBD` (créée depuis ces seules migrations, aucune donnée jouée reprise sauf le
+> compte admin et `bug_tickets`) ; `vtt` conservée en réserve. **Le tableau ci-dessous reste la
+> référence du "pourquoi" historique de chaque colonne/table** (décisions, sessions, RAW) — il ne
+> correspond plus aux fichiers réels sur disque, `git log` sur `migrations_archive/` fait foi pour le
+> contenu exact. Invariant durable désormais actif : `docs/SYSTEME/CORE.md` P55/P56.
+
 | Migration | Contenu |
 |---|---|
 | 01→39 | voir JOURNAL archive |
@@ -777,7 +787,7 @@ Enclume/
 | 45_polaris_mr_table | polaris_mr (mr_min PK, mr_max nullable, dmax) + seed 6 lignes |
 | 46_polaris_mr_refonte | polaris_mr — colonne dmax → modifier (LdB p.209) — 20 lignes officielles |
 | 47_campaigns_cover_url | campaigns.cover_url TEXT nullable — illustration campagne |
-| *(48/53/73/75/76d/83/87/135/141/142/160/168/178/182/184/190/209/235 — archivées 2026-08-08, `server/src/db/migrations_archive/`, `docs/PLANS/PLAN_MIGRATIONS_REFONTE.md` Phase 1 Lot C. Remplacées par `48_ref_equipment.js`/`48b_ref_equipment_data.js`/`137b_ref_equipment_archive_side_effects.js` — schéma+données `ref_equipment*` consolidés, testés bit-à-bit contre `vtt` réel (diff exhaustif). Entrées historiques ci-dessous conservées pour le contexte "pourquoi", ne correspondent plus aux fichiers réels — `git log` sur `migrations_archive/` fait foi.)* | |
+| *(48/53/73/75/76d/83/87/135/141/142/160/168/178/182/184/190/209/235 — archivées 2026-08-08, `server/src/db/migrations_archive/`, `docs/Old/PLAN_MIGRATIONS_REFONTE.md` Phase 1 Lot C. Remplacées par `48_ref_equipment.js`/`48b_ref_equipment_data.js`/`137b_ref_equipment_archive_side_effects.js` — schéma+données `ref_equipment*` consolidés, testés bit-à-bit contre `vtt` réel (diff exhaustif). Entrées historiques ci-dessous conservées pour le contexte "pourquoi", ne correspondent plus aux fichiers réels — `git log` sur `migrations_archive/` fait foi.)* | |
 | 48_ref_equipment | ref_equipment (35 colonnes, 6 CHECK) + ref_equipment_skills + ref_equipment_skill_assoc + ref_equipment_ammo_compat |
 | 49_character_wounds | character_wounds (UUID PK, char_sheet_id FK CASCADE, location/severity CHECK, is_stabilized, idx) |
 | 50_char_inventory | char_inventory (UUID PK, FK characters CASCADE, FK ref_equipment SET NULL, container/slot/quantity/custom_props JSONB) + char_sheet.sols INTEGER |

@@ -135,9 +135,21 @@ function Step4ExperienceInner({
   const [conditionalChoices, setConditionalChoices] = useState(initialData?.conditionalChoices ?? {})
   const [careers, setCareers] = useState(initialData?.careers ?? [])
   const [skillAllocations, setSkillAllocations] = useState(initialData?.skillAllocations ?? {})
-  const [proAdvantages, setProAdvantages] = useState(initialData?.proAdvantages ?? {})
+  // proAdvantages/randomPicks : jamais envoyés à plat (buildPayload/getStep4State les imbriquent
+  // tous les deux sous careers[].proAdvantages/randomPicks, par carrière) — initialData?.proAdvantages
+  // était donc toujours undefined ici, quelle que soit la source (brouillon live ou état committé),
+  // remis à {} à chaque montage/remontage. Un MJ observateur (remontage sur WIZARD_STATE_SYNC/
+  // WIZARD_LIVE_UPDATE) ou un rechargement de page perdait donc systématiquement l'affichage des
+  // points déjà placés, alors même que la donnée réelle existait dans careers[]. Reconstruit ici la
+  // forme à plat attendue par ProAdvantagesAndSetbacks (clé career_id), à partir de la même source
+  // que buildPayload lit en sens inverse à la soumission.
+  const [proAdvantages, setProAdvantages] = useState(() => Object.fromEntries(
+    (initialData?.careers ?? []).map(c => [c.career_id, c.proAdvantages ?? {}])
+  ))
   const [openedSkills, setOpenedSkills] = useState(initialData?.openedSkills ?? [])
-  const [randomPicks, setRandomPicks] = useState(initialData?.randomPicks ?? {})
+  const [randomPicks, setRandomPicks] = useState(() => Object.fromEntries(
+    (initialData?.careers ?? []).map(c => [c.career_id, c.randomPicks ?? []])
+  ))
   const [setbackRolls, setSetbackRolls] = useState(initialData?.setbackRolls ?? [])
   // Résolution de Revers EN COURS (cascade chained_setback/subroll/choice pas encore committée dans
   // setbackRolls) — remontée ici pour survivre à une navigation entre sous-étapes (ex. Carrières
