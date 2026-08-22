@@ -134,9 +134,9 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 | INI1 | Surprise critique (roll=1) → initiative=1 | Basse |
 | INI2 | Initiative non recalculée après blessure en combat | Basse — post-REWORK-08 |
 | AU1 | `useDiceAudio.js` — sons dés | Basse |
-| TC1 | `.gitattributes:3` — attribut invalide | Très basse |
-| DCO1 | `onTokenRotate` dead code Canvas3D/Scene | Très basse |
-| VX1 | `getVoxelSurfaceTop` — pas de cas slope/wedge | Très basse |
+| ~~TC1~~ | ~~`.gitattributes:3` — attribut invalide~~ | ✅ Déjà résolu (vérifié 2026-08-22, `git log` : corrigé commit `264281f`, 2026-05-10, lignes parasites retirées) |
+| ~~DCO1~~ | ~~`onTokenRotate` dead code Canvas3D/Scene~~ | ✅ Déjà résolu (vérifié 2026-08-22 — confirmé aussi par `bug_tickets`/`admin_notes` : code supprimé Session 142, 2026-07-15, un mois avant l'import du ticket) |
+| VX1 | `getVoxelSurfaceTop` (`Canvas3D.jsx`, preview de rendu uniquement, pas d'autorité collision — `.claude/rules/world.md`/`voxels.md`) — pas de cas slope/wedge | Très basse — **clarifié 2026-08-22** : `slope`/`wedge` sont des placeholders cube en attendant leur vraie géométrie V2 (`Voxel.jsx:47-49`, "affinement V2" jamais fait) — rendu réel = cube plein aujourd'hui, donc `getVoxelSurfaceTop` renvoie déjà la bonne valeur pour ce qui s'affiche. Rien à corriger avant que la vraie géométrie V2 existe ; les deux devront être faits ensemble |
 | — | Kiwi P-SRV-5 — ports Docker non restreints | Infra |
 | — | Logs debug `index.js` — conservés volontairement | Infra |
 | **CS4** | Catégorie "Techniques" + liste compétences | Moyenne — Cluster O |
