@@ -3993,6 +3993,47 @@ conditionnel), aucun champ retiré ni comportement existant modifié.
 
 ---
 
+## Session (Saar) — 2026-08-22 — Migration complète des dettes `EN_COURS.md` vers `bug_tickets`
+
+**Contexte** : Saar recadre après plusieurs tickets de la table "Dettes actives" trouvés déjà résolus
+en vérifiant — le vrai problème signalé : la table s'était accumulée sans jamais migrer vers le
+système de tickets réel (`/admin/tickets`), contrairement à l'intention documentée dans son propre
+en-tête. Demande explicite : "go les transformer en ticket."
+
+**Méthode** : même patron que `importBugIdentifie.js` (script à usage unique, idempotent par
+`linked_bug_code`, réexécutable sans doublon) — nouveau `server/src/scripts/importEnCoursDettes.js`.
+75 entrées transcrites depuis `EN_COURS.md` (toutes les dettes encore ouvertes ou "clos partiel" en
+attente de validation, hors 3 exclusions délibérées : décision assumée "logs debug conservés",
+`WIZLOCK1`/historique révolu sans risque actif, `DOC1`/tâche d'enrichissement continu — aucune des
+trois n'est un bug à tracker).
+
+**Vérifications faites en chemin, pas suite à l'import mais avant** (le code prime sur la doc) :
+- `COM20`/`COM21` : marqués ✅ dans d'anciens journaux (Session 148/127) mais jamais nettoyés
+  d'`EN_COURS.md` — confirmés réellement résolus par lecture du code actuel
+  (`CombatGmDeclareWindow.jsx` affiche déjà munitions/type ; occupation de case gérée par
+  `worldSpatialQueryService.js`/`spatialIndex.js` après la refonte du moteur monde).
+- Ticket `221f493a` (migrations désynchronisées 233/243+244-246) : confirmé résolu par la refonte
+  complète des migrations de la session précédente — les anciens fichiers exacts sont dans
+  `migrations_archive/`. Écriture directe en base pour le clore refusée par le mode auto (mutation
+  hors code applicatif) — laissé à clore par Saar dans `/admin/tickets`.
+- `INV7-MIGRATION-LINK` mis à jour en conséquence (piste migration écartée pour INV7).
+
+**Résultat** : 131 tickets au total en base (57 avant + 74). Table "Dettes actives" d'`EN_COURS.md`
+réduite de ~75 lignes à 19 (historique déjà résolu + 3 exclusions assumées) — plus aucune dette
+ouverte dupliquée entre les deux systèmes. En-tête du tableau mis à jour : tout nouveau bug va
+directement dans `/admin/tickets`.
+
+**Testé** : script exécuté deux fois (74 puis +1 pour une ligne oubliée, `WNDMORT-HORSCOMBAT`) —
+idempotence confirmée (0 doublon au 2e run). Comptage final en base vérifié (131).
+**Non testé** : validation visuelle de l'écran `/admin/tickets` avec ce volume (pagination, filtres) —
+pas de test navigateur par Claude.
+**Données** : 75 lignes insérées dans `bug_tickets` (aucune modification de lignes existantes hors le
+script lui-même, aucune suppression).
+**Retour arrière** : suppression des lignes par `linked_bug_code` si nécessaire (aucune contrainte ne
+les lie à autre chose) — aucun risque, script purement additif.
+
+---
+
 ## Session (Saar) — 2026-08-22 — `CHAT-SCROLL1` : câblage du scroll infini chat
 
 **Contexte** : après plusieurs tickets déjà résolus/clarifiés (INV5 constaté résolu en passant, COM26,
