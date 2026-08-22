@@ -126,6 +126,7 @@ export default function Step2Genotype({ initialData, onNext, onPrev, onLiveChang
   const { t } = useTranslation('creation')
   const step1Data = useCreationStore(s => s.step1Data)
   const femininBonusEnabled = useCreationStore(s => s.femininBonusEnabled)
+  const setStep2Data = useCreationStore(s => s.setStep2Data)
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(2)
 
   const [selected, setSelected] = useState(() =>
@@ -173,12 +174,17 @@ export default function Step2Genotype({ initialData, onNext, onPrev, onLiveChang
     }
   }
 
-  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — même forme que le payload
-  // onNext, mais uniquement une fois un génotype effectivement choisi (avant, rien à montrer côté MJ,
-  // même garde que handleConfirm ci-dessus).
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) au MJ, ET commit continu dans le
+  // store (WIZ45, docs/EN_COURS.md) — même garde que handleConfirm (rien à committer tant qu'aucun
+  // génotype n'est choisi). Sans ce second appel, quitter Step2 sans cliquer "Suivant" (Précédent,
+  // stepper) abandonnait silencieusement le choix déjà fait ici.
   useEffect(() => {
-    if (selected) onLiveChange?.({ genotypeId: selected.id, isDeserter })
-  }, [selected, isDeserter, onLiveChange])
+    if (selected) {
+      const payload = { genotypeId: selected.id, isDeserter }
+      onLiveChange?.(payload)
+      setStep2Data(payload)
+    }
+  }, [selected, isDeserter, onLiveChange, setStep2Data])
 
   const modGenMap = useMemo(() => {
     if (!selected) return {}

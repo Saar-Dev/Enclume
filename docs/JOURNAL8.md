@@ -4079,3 +4079,73 @@ chargement et l'absence de saut visuel/de retour intempestif en bas).
 **Données** : aucune migration, aucun effet sur les données existantes.
 **Retour arrière** : aucun risque — ajout d'un effet + props threadées, aucun comportement de chat
 existant retiré (envoi, temps réel, suppression douce inchangés).
+
+## Session (Saar) — 2026-08-22 — Tri des tickets migrés en clusters + `WIZ45` : perte de données au Wizard sur navigation sans "Suivant"
+
+**Tri demandé par Saar** ("Tri des bugs en cluster... puis sélection d'un cluster/bug dans l'ordre
+décroissant de criticité") sur les 131 tickets `bug_tickets` (79 sans cluster après la migration de la
+session précédente). Regroupement réel (mécanique racine commune, pas juste même domaine) via
+`server/src/scripts/clusterEnCoursTickets.js` : Blessure mortelle (WNDMORT/-UI/-HORSCOMBAT), Initiative
+(INI1/2/4/5), Marqueur compétence (X)/(-3) (WIZ38+WIZ39), Step6 Matériel (WIZ40/41/42/44), Diffusion
+live MJ→PJ (WIZ11/32/33/34) — 17 tickets rattachés, le reste des 79 n'a pas de famille naturelle.
+
+**Sélection** : parmi les tickets `high`, `COM-RESO1` (critique) reste bloqué sans repro instrumentée ;
+`INV2` et `WIZ39` (dont `WIZ38` dépend) sont bloqués sur une décision produit de Saar (débit à
+l'ajout/validation MJ ; portée de la correction — seed seul ou personnages déjà créés) ; `WIZ13` et
+`EXOARM-COMBATFILE` sont déjà `in_progress`, en attente de validation jeu réel, pas de code. Seul
+`WIZ45` était immédiatement actionnable (cause déjà localisée, aucune décision produit en attente).
+
+**Cause racine (relecture complète du code, pas de la mémoire)** : plus large que le ticket ne le
+décrivait. `WizardCreation.jsx` ne committe chaque `stepNData` dans le store qu'au clic "Suivant"
+(`advanceStep`) ; "Précédent" et le stepper (`navigateToStep`) ne font qu'un `setStep(n)`, sans jamais
+toucher le store. `WizardReview` (Step7), `handleTerminate` (finalisation) et `openPeek` lisent tous le
+store, jamais l'état local du composant affiché — toute navigation hors "Suivant" abandonnait donc
+silencieusement l'édition en cours. Violation directe de `react.md` ("Les stores contiennent l'état
+partagé; éviter une seconde copie locale divergente").
+
+**Infrastructure de fix déjà à moitié en place** : chaque `StepN` calcule déjà, à chaque frappe, un
+payload complet via `onLiveChange` (pour la diffusion live MJ) — Step1 committait déjà `pcSpent` en
+direct (`onPcChange`) et Step4 committait déjà `liveYears` en direct (import store, précédent identique
+pour le seul compteur PC header), sans jamais avoir été généralisé aux autres champs.
+
+**Analyse à charge avant correctif** : vérification (pas supposition) que chaque payload `onLiveChange`
+correspond bien au payload `onNext` avant de les réutiliser tels quels. Deux écarts réels trouvés :
+Step3 omettait `mutationsMeta` (présent dans `onNext`) ; Step5 omettait `pcNet`/`advantagesMeta`, et son
+setter (`setStep5Data`) remplace intégralement (pas un merge) — câbler l'ancien payload partiel aurait
+effacé ces champs du store à chaque frappe (régression de budget). Corrigés avant câblage, pas après.
+
+**Codé** (5 fichiers, `client/src/components/creation/`) :
+- `Step1Attributes.jsx` : payload dédupliqué (`buildPayload`, mémoïsé) entre l'effet live et
+  `handleNextClick`, ce dernier appelait auparavant une copie quasi identique non trimée.
+- `Step2Genotype.jsx` : effet live committe désormais aussi dans `step2Data`.
+- `Step3Mutations.jsx` : `buildMutationsMeta` mémoïsé (`useCallback`, dépend de `mutations` seul),
+  ajouté au payload live des deux méthodes (`chosen`/`random`), commit dans `step3Data`.
+- `Step4Experience.jsx` : ancien effet `liveYears` (partiel, un seul champ) supprimé, généralisé — le
+  commit continu se fait désormais via le `buildPayload()` déjà complet de l'effet `onLiveChange`
+  existant.
+- `Step5Advantages.jsx` : `advantagesMeta` mémoïsé (`useMemo`, dépend de `selected`+`refData` — un
+  tableau recréé à chaque rendu aurait rebouclé l'effet, même incident "Maximum update depth exceeded"
+  déjà rencontré ailleurs dans le Wizard), `pcNet` calculé une fois et réutilisé par `handleNext`.
+
+**Effet de bord assumé** : le compteur PC du header (`getPcDispo`), auparavant figé pendant l'édition de
+Step2/3/5 (seuls Step1/4 étaient déjà live), se met désormais à jour en direct sur les 5 étapes — pas un
+correctif silencieux, changement de comportement visible à signaler à Saar.
+
+**Robustesse** : le serveur (`creationService.js#reconcileCreation`) revalide déjà `validateStep1` en
+transaction et rejette (400, rollback complet) toute soumission invalide à la réconciliation/
+finalisation — un brouillon transitoirement incomplet committé localement ne peut donc jamais être
+persisté de travers, le serveur reste l'autorité finale.
+
+**Testé** : lecture complète du code (WizardCreation.jsx, creationStore.js, les 5 Step*.jsx,
+creationService.js#reconcileCreation côté serveur) avant tout correctif. Lint ciblé sur les 5 fichiers
+modifiés : 0 erreur introduite (3 erreurs pré-existantes confirmées par `git stash`/lint/`git stash pop`
+sur `Step1Attributes.jsx#poolBase`, `Step2Genotype.jsx` avertissement React Compiler sur `modPCAttrs`,
+`Step4Experience.jsx#showSetbacks` — non liées à ce chantier, non traitées ici). `npx vite build` : OK.
+**Non testé** : scénario réel navigateur (éditer une étape, revenir en arrière via Précédent ou le
+stepper sans cliquer "Suivant", confirmer que Step7/finalisation reflètent bien l'édition) — c'est
+précisément le scénario que Saar avait signalé en beta-test, à revalider par lui.
+**Données** : aucune migration. `server/src/scripts/clusterEnCoursTickets.js` (nouveau, usage unique) a
+posé `cluster_label` sur 17 tickets existants, aucune autre écriture.
+**Retour arrière** : aucun risque de perte — le changement rend le store plus à jour, jamais moins ; en
+cas de régression comportementale (ex. header PC "instable" perçu comme gênant), revert ciblé des 5
+fichiers sans dépendance croisée avec d'autres chantiers en cours.

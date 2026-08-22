@@ -1,11 +1,12 @@
 // client/src/components/creation/Step3Mutations.jsx
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Canvas } from '@react-three/fiber'
 import api from '../../lib/api'
 import { WS } from '../../../../shared/events.js'
 import { useSocket } from '../../lib/SocketContext.jsx'
 import { useAuthStore } from '../../stores/authStore.js'
+import { useCreationStore } from '../../stores/creationStore'
 import { mutationOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
@@ -20,6 +21,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   const socket = useSocket()
   const { user } = useAuthStore()
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(3)
+  const setStep3Data = useCreationStore(s => s.setStep3Data)
 
   const [mutations, setMutations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -81,32 +83,42 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   const totalCost = selected.reduce((sum, m) => sum + (findMutation(m.mutation_id)?.cost_pc || 0), 0)
   const pcLeft = pcDispo - totalCost
 
-  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — même forme que onNext pour
-  // chaque méthode (mutationsMeta omis : purement cosmétique côté soumetteur, le composant MJ
-  // recevant ce brouillon comme initialData ne le lit pas, il recalcule via ses propres mutations de
-  // référence déjà chargées). Rien pour 'none' (handleNone soumet directement, pas d'état intermédiaire).
-  useEffect(() => {
-    if (method === 'chosen') {
-      onLiveChange?.({ method: 'chosen', mutations: selected, pcSpent: totalCost })
-    } else if (method === 'random') {
-      onLiveChange?.({ method: 'random', kept, removed, d20Result, pcSpent: pcDispo - pcAfterRemovals })
-    }
-  }, [method, selected, totalCost, kept, removed, d20Result, pcAfterRemovals, pcDispo, onLiveChange])
-
-  const showTooltip = (desc, event) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    setTooltip({ desc, top: rect.top, left: rect.left + rect.width / 2 })
-  }
-
-  const buildMutationsMeta = (items) => items.map(item => {
-    const mut = findMutation(item.mutation_id)
+  // useCallback (pas une fonction nue) : référencée par l'effet de commit continu ci-dessous (WIZ45,
+  // docs/EN_COURS.md) — une fonction recréée à chaque rendu forcerait cet effet à se redéclencher en
+  // boucle si elle figurait dans ses deps. Ne dépend que de `mutations` (référentiel chargé une fois).
+  const buildMutationsMeta = useCallback((items) => items.map(item => {
+    const mut = mutations.find(m => m.mutation_id === item.mutation_id)
     return {
       mutation_id: item.mutation_id,
       name: mut?.name ?? item.mutation_id,
       subtype_name: item.subtype_name ?? null,
       cost_pc: mut?.cost_pc ?? 0,
     }
-  })
+  }), [mutations])
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) au MJ, ET commit continu dans le
+  // store (WIZ45, docs/EN_COURS.md) — même forme complète que onNext pour chaque méthode, mutationsMeta
+  // désormais inclus : l'ancienne omission ("purement cosmétique côté soumetteur") supposait que ce
+  // payload ne servait jamais qu'à l'aperçu MJ, or il devient ici aussi la valeur committée localement
+  // — sans mutationsMeta, step3Data resterait incomplet pour WizardReview/finalisation tant que
+  // "Suivant" n'a pas été cliqué. Rien pour 'none' (handleNone soumet directement, pas d'état
+  // intermédiaire).
+  useEffect(() => {
+    if (method === 'chosen') {
+      const payload = { method: 'chosen', mutations: selected, pcSpent: totalCost, mutationsMeta: buildMutationsMeta(selected) }
+      onLiveChange?.(payload)
+      setStep3Data(payload)
+    } else if (method === 'random') {
+      const payload = { method: 'random', kept, removed, d20Result, pcSpent: pcDispo - pcAfterRemovals, mutationsMeta: buildMutationsMeta(kept) }
+      onLiveChange?.(payload)
+      setStep3Data(payload)
+    }
+  }, [method, selected, totalCost, kept, removed, d20Result, pcAfterRemovals, pcDispo, buildMutationsMeta, onLiveChange, setStep3Data])
+
+  const showTooltip = (desc, event) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    setTooltip({ desc, top: rect.top, left: rect.left + rect.width / 2 })
+  }
 
   // ─── Handlers ACHAT ─────────────────────────────────────────────────────
   const handleAdd = (mutationId) => {

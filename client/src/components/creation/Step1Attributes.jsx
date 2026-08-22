@@ -17,6 +17,7 @@ import {
 import { attrOptionKey, handOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
+import { useCreationStore } from '../../stores/creationStore'
 
 const ATTR_IDS = ['FOR', 'CON', 'COO', 'ADA', 'PER', 'INT', 'VOL', 'PRE']
 
@@ -34,6 +35,7 @@ const ATTR_DESCRIPTIONS = {
 export default function Step1Attributes({ initialData, ambiance, femininBonusEnabled, onNext, onPrev, onPcChange, onLiveChange }) {
   const { t } = useTranslation('creation')
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(1)
+  const { setStep1Data } = useCreationStore()
 
   const ROW_TOOLTIPS = {
     base: femininBonusEnabled
@@ -99,18 +101,37 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
     [baseAttrs, modPC]
   )
 
-  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — même forme que le payload
-  // onNext ci-dessous, jamais persisté ni validé côté serveur, purement cosmétique pour le MJ.
-  // Debounce déjà géré par useWizardLiveEmit (WizardCreation.jsx) : ici, un simple appel par
-  // changement, sans logique de timer dupliquée.
+  // Forme unique du payload Step1 (WIZ45, docs/EN_COURS.md) — auparavant dupliquée entre cet effet
+  // (non trimé) et handleNextClick (trimé), seule source réellement committée au store avant. Même
+  // patron que Step4Experience.jsx#buildPayload : une seule fonction mémoïsée, utilisée à la fois
+  // par la diffusion live ET par la soumission "Suivant".
+  const buildPayload = useCallback(() => ({
+    charName: charName.trim(),
+    playerName: playerName.trim(),
+    attributes: attributs,
+    pcSpent: pcAlloues,
+    isFeminin,
+    height: height === '' ? null : parseFloat(height),
+    weight: weight === '' ? null : parseFloat(weight),
+    skin: skin.trim(),
+    eyes: eyes.trim(),
+    hair: hair.trim(),
+    build: build.trim(),
+    distinctiveSigns: distinctiveSigns.trim(),
+    handPref: handPref || null,
+  }), [charName, playerName, attributs, pcAlloues, isFeminin, height, weight, skin, eyes, hair, build, distinctiveSigns, handPref])
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) au MJ, ET commit continu dans le
+  // store (WIZ45) : sans ce second appel, seul le clic "Suivant" écrivait step1Data, donc une
+  // navigation directe (Précédent, stepper) après édition perdait silencieusement les champs modifiés
+  // — le store ne contenait alors plus jamais que le dernier "Suivant" validé, pas la vraie saisie en
+  // cours. setStep1Data fait un merge (voir creationStore.js) mais buildPayload() renvoie déjà la
+  // forme complète, donc ce merge équivaut ici à un remplacement propre.
   useEffect(() => {
-    onLiveChange?.({
-      charName, playerName, attributes: attributs, pcSpent: pcAlloues, isFeminin,
-      height: height === '' ? null : parseFloat(height),
-      weight: weight === '' ? null : parseFloat(weight),
-      skin, eyes, hair, build, distinctiveSigns, handPref: handPref || null,
-    })
-  }, [charName, playerName, attributs, pcAlloues, isFeminin, height, weight, skin, eyes, hair, build, distinctiveSigns, handPref, onLiveChange])
+    const payload = buildPayload()
+    onLiveChange?.(payload)
+    setStep1Data(payload)
+  }, [buildPayload, onLiveChange, setStep1Data])
 
   const poolBase = POOL_AMBIANCE[ambiance] || 38
   // Validateur partagé (identique à celui appelé côté serveur à la réconciliation, pattern déjà
@@ -187,21 +208,7 @@ export default function Step1Attributes({ initialData, ambiance, femininBonusEna
       setWarnedAtValue(pointsRestants)
       return
     }
-    onNext({
-      charName: charName.trim(),
-      playerName: playerName.trim(),
-      attributes: attributs,
-      pcSpent: pcAlloues,
-      isFeminin,
-      height: height === '' ? null : parseFloat(height),
-      weight: weight === '' ? null : parseFloat(weight),
-      skin: skin.trim(),
-      eyes: eyes.trim(),
-      hair: hair.trim(),
-      build: build.trim(),
-      distinctiveSigns: distinctiveSigns.trim(),
-      handPref: handPref || null,
-    })
+    onNext(buildPayload())
   }
 
   const canIncrement = (attrId) => {

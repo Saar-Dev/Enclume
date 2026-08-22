@@ -214,14 +214,6 @@ function Step4ExperienceInner({
   const totalPC = (higherEd ? 1 : 0) + totalCareerYears
   const finalAge = age + (selectedHigherEdItem?.years_added ?? 0) + totalCareerYears
 
-  // Aperçu live du coût de l'étape 4 (avant soumission) — écrit directement dans le store
-  // (setStep4Data est stable par construction, pas besoin de callback-prop mémoïsée).
-  // getStepBudget() (consommé par CareersAllocator ci-dessous) ignore ce champ : seul
-  // getPcDispo() (header) le lit, donc pas de double décompte possible.
-  useEffect(() => {
-    setStep4Data({ liveYears: totalPC })
-  }, [totalPC, setStep4Data])
-
   // ─── OPT-06 (revers) — total cumulé, pas par carrière (shared/careerSetbacks.js) ───
   const setbackBlockCount = getSetbackBlockCount(totalCareerYears)
   const showSetbacks = !!reversEnabled && setbackBlockCount > 0
@@ -373,21 +365,24 @@ function Step4ExperienceInner({
     onNext?.({ ...buildPayload(), highestSubStep })
   }
 
-  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — réutilise buildPayload (même
-  // forme que la soumission finale), jamais persisté ni validé côté serveur, purement cosmétique.
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) au MJ, ET commit continu dans le
+  // store (WIZ45, docs/EN_COURS.md) — réutilise buildPayload (même forme que la soumission finale).
   // buildPayload est stable (useCallback ci-dessus) : ne se recrée que si l'une de ses propres deps
-  // change réellement, donc pas de risque de boucle à la lister ici (même patron que l'effet
-  // liveYears juste au-dessus, deps toutes primitives/stables — cf. l'incident "Maximum update depth
-  // exceeded" documenté sur validSetbackRolls plus haut, qui reste mémoïsé via useMemo).
+  // change réellement, donc pas de risque de boucle à la lister ici (cf. l'incident "Maximum update
+  // depth exceeded" documenté sur validSetbackRolls plus haut, qui reste mémoïsé via useMemo).
+  // Remplace l'ancien effet `liveYears` (qui ne committait que le coût PC en direct, pour le seul
+  // header) : celui-ci committait déjà un fragment de step4Data avant que "Suivant" ne soit cliqué,
+  // précisément pour éviter la classe de bug que WIZ45 a trouvée ailleurs (Précédent/stepper perdant
+  // les champs non validés) — généralisé ici à la totalité du payload plutôt que ce seul champ.
   //
-  // WIZ21 (docs/EN_COURS.md, 2026-08-11) : `subStep` ajouté UNIQUEMENT ici, jamais dans buildPayload
-  // lui-même — buildPayload est aussi utilisé tel quel par handleSubmit (onNext, soumission au
-  // serveur), qui n'a rien à faire d'un état de navigation UI. Permet au wrapper externe
-  // (Step4Experience) de suivre côté MJ la sous-étape réellement affichée chez le joueur, sans
-  // mélanger cette préoccupation avec le payload persisté.
+  // WIZ21 (docs/EN_COURS.md, 2026-08-11) : `subStep` ajouté UNIQUEMENT à la diffusion live, jamais au
+  // commit local — buildPayload reste ignorant de la navigation UI (le serveur ne l'avance jamais en
+  // arrière), même séparation que handleSubmit (onNext) ci-dessus.
   useEffect(() => {
-    onLiveChange?.({ ...buildPayload(), subStep })
-  }, [buildPayload, subStep, onLiveChange])
+    const payload = buildPayload()
+    onLiveChange?.({ ...payload, subStep })
+    setStep4Data(payload)
+  }, [buildPayload, subStep, onLiveChange, setStep4Data])
 
   // ─── Navigation ────────────────────────────────────────────────
   const advanceSubStep = (next) => {

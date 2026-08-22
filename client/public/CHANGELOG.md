@@ -1,3 +1,12 @@
+## v214 — 2026-08-22 — Fix : perte de données au Wizard sur navigation arrière
+
+### Création de personnage
+- [fix] Revenir en arrière (bouton Précédent ou clic sur une étape déjà atteinte) ne fait plus perdre
+  les modifications faites sur une étape sans avoir cliqué "Suivant" — la fiche récapitulative et la
+  finalisation reflètent désormais toujours la dernière saisie réelle.
+- [amélioration] Le compteur de Points de Création du bandeau se met à jour en direct pendant
+  l'édition de toutes les étapes (auparavant seulement Attributs et Expérience).
+
 ## v213 — 2026-08-22 — Fix : scroll infini du chat
 
 ### Chat

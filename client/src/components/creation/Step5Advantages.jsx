@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../../lib/api'
 import { advantageOptionKey } from '../../../../shared/wizardOptionKeys.js'
 import { useWizardLock } from '../../lib/useWizardLock.js'
 import WizardLockToggle from './WizardLockToggle.jsx'
+import { useCreationStore } from '../../stores/creationStore'
 
 export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext, onPrev, onLiveChange }) {
   const { t } = useTranslation('creation')
   const { isLocked, isLockedForPlayer, toggleLock, showLockToggle } = useWizardLock(5)
+  const setStep5Data = useCreationStore(s => s.setStep5Data)
   const [refData, setRefData] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(initialData?.advantages ?? [])
@@ -58,13 +60,26 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
     .reduce((s, a) => s + (a.cost_pc ?? 0), 0)
 
   const pcRemaining = pcDispo + pcGained - pcSpent
+  const pcNet = pcGained - pcSpent
 
-  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) — seul `advantages` est
-  // consommé par initialData côté MJ (pcNet/advantagesMeta ne servent qu'à la soumission finale,
-  // onNext ci-dessous), inutile de les recalculer à chaque bascule pour un affichage cosmétique.
+  // Mémoïsé (pas un .map() nu) — référencé par l'effet de commit continu ci-dessous : un nouveau
+  // tableau à chaque rendu redéclencherait cet effet en boucle (même incident "Maximum update depth
+  // exceeded" déjà rencontré et documenté sur Step4Experience.jsx#validSetbackRolls).
+  const advantagesMeta = useMemo(() => selected.map(id => {
+    const adv = refData.find(a => a.advantage_id === id)
+    return { advantage_id: id, name: adv?.name ?? id, type: adv?.type ?? 'unknown', cost_pc: adv?.cost_pc ?? 0 }
+  }), [selected, refData])
+
+  // Diffusion live (Lot A4, docs/PLAN_WIZARDCOLLAB.md §2.5/§6.4bis) au MJ, ET commit continu dans le
+  // store (WIZ45, docs/EN_COURS.md). pcNet/advantagesMeta étaient auparavant omis ici ("ne servent
+  // qu'à la soumission finale") — mais ce payload devient aussi la valeur committée localement :
+  // sans eux, step5Data resterait incomplet (pcNet manquant casserait le budget PC du header) tant
+  // que "Suivant" n'a pas été cliqué.
   useEffect(() => {
-    onLiveChange?.({ advantages: selected })
-  }, [selected, onLiveChange])
+    const payload = { advantages: selected, pcNet, advantagesMeta }
+    onLiveChange?.(payload)
+    setStep5Data(payload)
+  }, [selected, pcNet, advantagesMeta, onLiveChange, setStep5Data])
 
   const handleToggle = (advantageId, type, costPc) => {
     if (isLockedForPlayer(advantageOptionKey(advantageId))) return
@@ -90,11 +105,6 @@ export default function Step5Advantages({ initialData, sheetId, pcDispo, onNext,
   }
 
   const handleNext = () => {
-    const pcNet = pcGained - pcSpent
-    const advantagesMeta = selected.map(id => {
-      const adv = refData.find(a => a.advantage_id === id)
-      return { advantage_id: id, name: adv?.name ?? id, type: adv?.type ?? 'unknown', cost_pc: adv?.cost_pc ?? 0 }
-    })
     onNext?.({ advantages: selected, pcNet, advantagesMeta })
   }
 
