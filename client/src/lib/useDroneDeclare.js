@@ -47,7 +47,7 @@ export function useDroneDeclare({
 
   // Déplacement : plus de clic préalable — useAutoMoveMode maintient le survol/preview actif par
   // défaut tant qu'aucun ciblage Attaque n'est en cours (décision Saar, COMBAT-DEPLACEMENT-HOVER).
-  useAutoMoveMode({
+  const { rearm: rearmMove } = useAutoMoveMode({
     enabled: moveHoverEnabled && !isSelectingTarget,
     allures, tokenId, tokenPos, combatMoveMode,
     onEnterMoveMode,
@@ -99,6 +99,13 @@ export function useDroneDeclare({
 
   const clearPendingMove = useCallback(() => setPendingMove(null), [])
 
+  // COM-MOVEUI1 — même réarmement explicite que CombatActionWindow (PJ)/CombatGmDeclareWindow (PNJ),
+  // exposé tel quel à la tuile "Déplacement" du drone (DroneDeclareSection onMoveToggle).
+  const rearmDroneMove = useCallback(() => {
+    if (pendingMove) setPendingMove(null)
+    rearmMove()
+  }, [pendingMove, rearmMove])
+
   // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE
   const buildMapActions = useCallback(() => {
     const hasAttack = !!selectedDroneWeaponId && !!assaultTargetId
@@ -135,7 +142,7 @@ export function useDroneDeclare({
   return {
     droneWeapons, selectedDroneWeaponId, setSelectedDroneWeaponId,
     assaultTargetId, pendingMove, hasPassed, setHasPassed, isSelectingOnMap,
-    canDeclare, buildMapActions, clearPendingMove,
+    canDeclare, buildMapActions, clearPendingMove, rearmDroneMove,
     handleChooseTarget,
   }
 }

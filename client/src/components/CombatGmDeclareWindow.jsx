@@ -259,7 +259,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // le slot actif est un PJ ou un PNJ déjà déclaré : le survol ne s'arme que si le slot actif est
   // réellement un PNJ pas encore déclaré. `moveHoverEnabled` (drone, ci-dessus) reçoit désormais le
   // même traitement via `isActiveDrone` (CLICKATTACK-TURNGATE1).
-  useAutoMoveMode({
+  const { rearm: rearmMove } = useAutoMoveMode({
     enabled: isActivePnj && !isSelectingOnMap && decl.combatMode !== 'charge',
     allures: DEFAULT_PNJ_ALLURES,
     tokenId: activeTokenId,
@@ -727,9 +727,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                         onClick={() => {
                           if (disabled) return
                           if (a.k === 'move') {
-                            // Survol permanent (COMBAT-DEPLACEMENT-HOVER) — ce clic n'efface plus
-                            // qu'une sélection déjà posée, plus d'entrée manuelle en mode déplacement.
+                            // Survol permanent (COMBAT-DEPLACEMENT-HOVER) — ce clic efface une
+                            // sélection déjà posée, ET réarme le survol s'il a été désactivé par un
+                            // "Annuler" explicite (COM-MOVEUI1).
                             if (pendingMove) setPendingMove(null)
+                            rearmMove()
                           } else if (a.k === 'attack') {
                             if (isAttackActive) {
                               setAssaultTargets([])
@@ -854,7 +856,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           {isActiveDrone && (
             <DroneDeclareSection
               pendingMove={droneDeclare.pendingMove}
-              onMoveToggle={() => droneDeclare.pendingMove && droneDeclare.clearPendingMove()}
+              onMoveToggle={droneDeclare.rearmDroneMove}
               hasPassed={droneDeclare.hasPassed}
               onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
               droneWeapons={droneDeclare.droneWeapons}

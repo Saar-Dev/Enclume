@@ -204,7 +204,7 @@ export default function CombatActionWindow({
     () => (isStunned && allures ? { lente: allures.lente, moyenne: allures.moyenne } : allures),
     [isStunned, allures],
   )
-  useAutoMoveMode({
+  const { rearm: rearmMove } = useAutoMoveMode({
     // ALLURE-TURNGATE1 (docs/BUGIDENTIFIE.md) — le survol ne s'arme que si c'est réellement mon tour
     // de déclarer/résoudre, jamais tout le temps (isMyTurnToAct, source unique ci-dessus).
     enabled: !isDrone && allures !== null && !inTargetMode && !inMeleeTargetMode &&
@@ -615,10 +615,12 @@ export default function CombatActionWindow({
   }
 
   // --- deplacement zone select ---------------------------------------------
-  // Le survol/preview est désormais permanent par défaut (useAutoMoveMode ci-dessus) — ce clic ne
-  // sert plus qu'à effacer une sélection déjà posée (COMBAT-DEPLACEMENT-HOVER).
+  // Le survol/preview est permanent par défaut (useAutoMoveMode ci-dessus) — ce clic efface une
+  // sélection déjà posée, ET réarme le survol s'il a été désactivé par un "Annuler" explicite
+  // (COM-MOVEUI1) : seul moyen de sortir de ce désarmement avant la fin de l'activation en cours.
   const handleZoneSelectClick = () => {
     if (moveSelection) setMoveSelection(null)
+    rearmMove()
   }
 
   // --- choix cible assaut (index = slot dans la série Tir Multi) -----------
@@ -1082,7 +1084,7 @@ export default function CombatActionWindow({
             {isDrone
               ? <DroneDeclareSection
                   pendingMove={droneDeclare.pendingMove}
-                  onMoveToggle={() => droneDeclare.pendingMove && droneDeclare.clearPendingMove()}
+                  onMoveToggle={droneDeclare.rearmDroneMove}
                   hasPassed={droneDeclare.hasPassed}
                   onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
                   droneWeapons={droneDeclare.droneWeapons}

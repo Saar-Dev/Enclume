@@ -317,8 +317,19 @@ function Step4ExperienceInner({
     }])
   }
 
+  // WIZ4 (docs/EN_COURS.md) — isReachable (rendu plus bas) ne se fiait qu'à highestSubStep (position
+  // la plus loin jamais atteinte), jamais revalidé après coup : retirer sa seule carrière laissait
+  // Récap "reachable" par la sous-navigation, cliquable directement, alors que CAREERS redevient la
+  // sous-étape la plus loin réellement valide (même règle que noCareerYet dans
+  // computeInitialSubStep ci-dessus). Aucune perte de donnée possible dans les deux cas (le filet
+  // serveur reconcileCreation rejette déjà tout Step4 sans carrière) — seul le blocage passe
+  // d'un rejet tardif à l'ajout non-immédiat.
   const handleRemoveCareer = (index) => {
-    setCareers(prev => prev.filter((_, i) => i !== index))
+    const next = careers.filter((_, i) => i !== index)
+    setCareers(next)
+    if (next.length === 0 && SUB_STEP_ORDER.indexOf(SUB_STEPS.CAREERS) < SUB_STEP_ORDER.indexOf(highestSubStep)) {
+      setHighestSubStep(SUB_STEPS.CAREERS)
+    }
   }
 
   // useCallback (pas une fonction nue) : sa propre liste de deps est vérifiable par ESLint

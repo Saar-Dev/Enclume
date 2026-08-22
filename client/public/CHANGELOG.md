@@ -1,3 +1,30 @@
+## v218 — 2026-08-22 — Fix : bouton Annuler du déplacement combat + coût des compétences réservées
+
+### Combat
+- [fix] "Annuler" sur le panneau de déplacement fonctionne enfin : le survol de déplacement reste
+  désarmé jusqu'au tour suivant ou à un clic explicite sur la tuile "Déplacement", au lieu de se
+  rallumer instantanément. Cliquer sur un adversaire pour l'attaquer continue de fonctionner même
+  déplacement désarmé.
+
+### Création de personnage
+- [fix] Étape 4 (Profession) : monter le niveau d'une compétence réservée "(X)" jamais entraînée
+  facture désormais chaque palier un par un (déblocage à -3 puis chaque niveau), au lieu de facturer
+  d'un coup toute la montée dès le premier clic.
+- [fix] Redescendre une compétence réservée "(X)" jusqu'à son palier -3 facture bien le point de
+  déblocage, au lieu d'annuler gratuitement l'achat.
+
+## v217 — 2026-08-22 — Fix : mini-stepper Étape 4 ne revalidait pas Récap après retrait de carrière
+
+### Création de personnage
+- [fix] Retirer sa seule carrière referme désormais l'accès direct à "Récap" dans le mini-stepper de
+  l'Étape 4, qui restait cliquable après ce retrait alors que la carrière est requise.
+
+## v216 — 2026-08-22 — Fix : header du Wizard emporté par le scroll sur une étape longue
+
+### Création de personnage
+- [fix] Le bandeau (compteur de Points de Création, navigation d'étapes) reste désormais fixe en
+  haut de l'écran pendant que le contenu d'une étape longue défile — seul le contenu scrolle.
+
 ## v215 — 2026-08-22 — Fix : le bouton Ajouter ne débitait jamais de Sols
 
 ### Personnage — Inventaire

@@ -4192,3 +4192,118 @@ Coffre-native et campagne).
 (déjà utilisée par `tradeService.js`).
 **Retour arrière** : aucun risque de perte de personnage existant (aucun personnage réel actuellement,
 phase de développement, confirmé par Saar) — revert ciblé des 3 fichiers si nécessaire.
+
+## Session (Saar) — 2026-08-22 — `WIZ31` : header du Wizard emporté par le scroll sur une étape longue
+
+**Vérifié avant de coder** (toujours valide, pas périmé) : `.wiz-shell` (`index.css`) utilise
+`min-height: 100vh` — un plancher, jamais un plafond — et `st.body` (`WizardCreation.jsx`, conteneur
+du contenu de chaque étape) n'avait que `overflow: 'hidden'`, sans `minHeight: 0`. Un enfant flex sans
+`minHeight: 0` grandit avec son contenu au lieu de se contraindre : sur une étape longue, `st.body`
+poussait `.wiz-shell` au-delà du viewport, et c'est la page entière qui scrollait — emportant le
+header. L'Étape 7 (Récap) n'a jamais ce problème : elle a déjà le bon patron (`step6Sheet: { flex:1,
+overflowY:'auto', minHeight:0 }`), jamais généralisé aux étapes 1-6.
+
+**Codé** : `WizardCreation.jsx#st` — `body` : `overflow:'hidden'` → `overflowY:'auto', minHeight:0`
+(même patron que `step6Sheet`). `step6` : ajout de `minHeight:0` par précaution, pour que le scroll
+imbriqué de l'Étape 7 (`step6Sheet` à l'intérieur) continue de fonctionner correctement maintenant que
+son parent (`st.body`) scrolle lui aussi.
+
+**Testé** : lint (`WizardCreation.jsx`) : 0 erreur. `npx vite build` : OK.
+**Non testé** : scénario réel navigateur (étape longue — ex. Step4 Carrières avec plusieurs choix —
+confirmer que le header reste fixe pendant le scroll, et que l'Étape 7 scroll toujours correctement
+sans double barre de défilement).
+**Données** : aucune.
+**Retour arrière** : aucun risque — changement de style pur, 2 propriétés dans un seul fichier.
+
+## Session (Saar) — 2026-08-22 — `WIZ32` (clarifié, pas un bug) + `WIZ4` : mini-stepper Étape 4
+
+**WIZ32** — vérifié en profondeur avant tout code (`WizardCreation.jsx` + `docs/Old/PLAN_WIZARDCOLLAB.md`,
+le plan d'origine). Pas un bug : le plan documente explicitement (§2.5) "Réception — asymétrique,
+assumée" — seul le MJ observant un joueur voit son brouillon en direct, l'inverse volontairement non
+câblé en V1 pour éviter le risque de "double écrivain" (deux personnes tapant sur le même champ
+s'écraseraient sans mécanisme de fusion). L'"exigence Saar : IMMÉDIATEMENT visible" citée dans le code
+concerne autre chose (le commit "Suivant" vu par l'observateur, déjà symétrique et fonctionnel via
+`gmSyncKey`/`applyStateSync`) — pas la frappe en direct avant commit. Note ajoutée au ticket (statut
+inchangé, `new`) : voir le MJ taper en direct sur la fiche d'un joueur est une vraie fonctionnalité à
+concevoir, pas un correctif — décision produit nécessaire avant tout code si Saar la souhaite un jour.
+
+**WIZ4** — vérifié (`isReachable`/`isClickable`, mini-stepper Étape 4) : ne dépendait que de
+`highestSubStep` (position la plus loin jamais atteinte), jamais revalidé après coup. Retirer sa seule
+carrière laissait "Récap" cliquable directement alors que CAREERS redevient la sous-étape la plus loin
+réellement valide — même règle déjà utilisée par `computeInitialSubStep` (`noCareerYet` → `CAREERS`),
+pas une nouvelle règle inventée. Portée volontairement limitée au cas démontré par le ticket (retrait
+de carrière), pas une revalidation générale de tous les champs — le filet serveur
+(`reconcileCreation`) empêchait déjà toute persistance invalide, seul le blocage passait d'immédiat à
+tardif.
+
+**Codé** : `Step4Experience.jsx#handleRemoveCareer` — clampe `highestSubStep` à `SUB_STEPS.CAREERS`
+quand `careers` devient vide.
+
+**Testé** : lint (`Step4Experience.jsx`) : 0 erreur introduite (1 erreur pré-existante confirmée non
+liée). `npx vite build` : OK.
+**Non testé** : scénario réel navigateur (retirer sa seule carrière, vérifier que "Récap" redevient
+non cliquable dans le mini-stepper).
+**Données** : aucune.
+**Retour arrière** : aucun risque — un seul handler, 3 lignes ajoutées.
+
+## Session (Saar) — 2026-08-22 — Passe de vérification tickets `medium/new` + `CAR2`
+
+Vérification systématique des tickets `medium/new` restants avant tout code (5 des 6 précédents
+s'étant révélés périmés) : **CS4** et **CS5** déjà implémentés (clos), **OPT-W1** diagnostic corrigé
+(seuls `skill_natural_prog`/`celebrity` réellement sans câblage, "revers" déjà câblé), reporté par
+Saar (nécessite une brique passage du temps de campagne inexistante). **WIZ-3** confirmé corrigé par
+Saar hors session.
+
+**CAR2** — `ref_background_skills.skill_id` sans FK vers `ref_skills.id`, vérifié encore valide
+(aucune protection en base, contrairement à ce qui a été trouvé pour `background_id`). Migration 311
+ajoute la contrainte manquante, même patron que `ref_career_skills`/migration 252 (`ON DELETE
+RESTRICT`). Aucune ligne orpheline trouvée avant application.
+
+**Testé** : migration 311 appliquée et vérifiée (`pg_constraint`) en local. Aucune ligne orpheline.
+**Non testé** : aucun scénario applicatif à tester (contrainte préventive pure, aucun code
+consommateur ne dépendait de son absence).
+**Données** : migration 311 (schéma seul, aucune donnée modifiée).
+**Retour arrière** : `down()` fourni, aucun risque.
+
+---
+
+## Session (Saar) — 2026-08-22 — `COM-MOVEUI1` (panneau déplacement) + `WIZ38`/`WIZ38-UNDOFREE1` (coût compétence (X))
+
+**COM-MOVEUI1** — panneau de déplacement combat "toujours visible, réapparaît sans cesse". Root
+cause réelle (après une 1re tentative de refonte de la légende rejetée en jeu réel par Saar — moins
+d'info jugé moins ergonomique, entièrement revert) : le bouton "Annuler" ne désarmait rien —
+`useAutoMoveMode.js` réarmait inconditionnellement le survol dès que `combatMoveMode` redevenait
+faux tant que `enabled` restait vrai, sans distinguer une validation (réarmement voulu) d'une
+annulation explicite. Ajout d'un `dismissedRef` + `rearm()` exposé : "Annuler" désarme pour le reste
+de l'activation, levé par un nouveau tour ou un clic explicite sur la tuile "Déplacement" (qui
+réarme désormais, en plus d'effacer une sélection posée) — 3 sites d'appel (`CombatActionWindow` PJ,
+`CombatGmDeclareWindow` PNJ, `useDroneDeclare` drone). Effet de bord découvert en jeu réel par Saar :
+le clic-attaque ambiant sur un adversaire s'est retrouvé coupé aussi, car `Canvas3D.jsx` ne détectait
+"case occupée" (source du déclenchement clic-attaque) que sous la garde `combatMoveHasPriority()`,
+qui exigeait `combatMoveMode` truthy — sans lien métier avec le clic-attaque. Remplacé par
+`ambientMapClickActive()` (déplacement OU clic-attaque armé), `combatMoveHasPriority()` devenu mort
+supprimé.
+
+**WIZ38** — `CareersAllocator.jsx` (Étape 4, allocation de compétences) utilisait
+`baseMastery[skillId] ?? 0` comme point de départ des boutons +/- : pour une compétence réservée
+`(X)` jamais entraînée par une origine, la vraie base RAW est `-3` (`docs/SYSTEME/CHARACTER.md`
+PC11), pas 0 — un clic "+" sautait donc directement à la cible cliquée, facturant d'un coup toute la
+montée -3→cible au lieu de niveau par niveau. Ajout de `baseFor(skillId)` (origine si présente,
+sinon -3 pour un marker `(X)`, sinon 0). `shared/careerSkills.js#computeSkillAllocation` était déjà
+correct (bug confiné à l'UI de pas-à-pas).
+
+**WIZ38-UNDOFREE1** — trouvaille secondaire pendant WIZ38, ticketée puis confirmée à corriger par
+Saar dans la foulée : redescendre exactement à -3 supprimait l'allocation (coût 0) au lieu de
+facturer le point de déblocage (`calcSkillCost` facture 1 pt pour `target=-3` explicite). Ajout de
+`isReservedUnlearned(skillId)` + `floorIsPaid` sur l'action `ALLOC_SKILL` : le reducer ne supprime
+l'entrée que si le plancher n'est pas payant (compétence normale revenant à sa base réelle) ; sinon
+l'entrée à -3 est conservée.
+
+**Testé** : eslint + build client propres sur chaque fichier touché (comparaison stash HEAD pour
+`Canvas3D.jsx`, 17 problèmes préexistants identiques avant/après — aucune régression introduite).
+Traçage manuel complet des deux flux (COM-MOVEUI1 : annulation/réarmement/clic-attaque ; WIZ38 :
+montée pas-à-pas + coût cumulé ; WIZ38-UNDOFREE1 : descente au plancher payant).
+**Non testé** : scénario réel navigateur pour les trois (combat réel pour COM-MOVEUI1, achat d'une
+compétence (X) au wizard pour WIZ38/WIZ38-UNDOFREE1).
+**Données** : aucune migration, aucun effet runtime hors ces fichiers client.
+**Retour arrière** : commit isolé, `git revert` suffit — aucune donnée persistée concernée.

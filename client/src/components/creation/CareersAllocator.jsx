@@ -64,7 +64,12 @@ function careersReducer(state, action) {
     case 'ALLOC_SKILL': {
       const nextTarget = (state.skillAllocations[action.skillId] ?? action.base) + action.delta
       const allocations = { ...state.skillAllocations }
-      if (nextTarget <= action.base) delete allocations[action.skillId]
+      // WIZ38-UNDOFREE1 : pour une compétence (X) jamais entraînée par une origine, le plancher -3
+      // N'EST PAS l'état "jamais touché" (contrairement à une compétence normale revenant à sa base
+      // d'origine) — calcSkillCost facture 1 pt pour s'y tenir (shared/polarisUtils.js). Revenir à
+      // -3 doit donc conserver une allocation explicite, pas la supprimer comme si rien n'avait été
+      // dépensé. `action.floorIsPaid` distingue les deux cas (CareersAllocator.jsx#isReservedUnlearned).
+      if (nextTarget <= action.base && !action.floorIsPaid) delete allocations[action.skillId]
       else allocations[action.skillId] = nextTarget
       return { ...state, skillAllocations: allocations }
     }
@@ -275,6 +280,22 @@ export default function CareersAllocator({
     return map
   }, [selectedGeoItem, selectedSocItem, selectedTrainingItem, selectedHigherEdItem])
 
+  // WIZ38 — une compétence (X) jamais entraînée par une origine (aucune entrée baseMastery) part de
+  // -3, pas 0 (docs/SYSTEME/CHARACTER.md PC11) : calcSkillCost (shared/careerSkills.js) facture déjà
+  // le déblocage (-3) PUIS chaque niveau jusqu'à la cible en un seul appel — un base figé à tort à 0
+  // ici faisait sauter le +/- directement à la cible cliquée (ex. 1) en un clic, au lieu de chaque
+  // niveau intermédiaire (-3→-2→-1→0→1).
+  const baseFor = (skillId) => {
+    const b = baseMastery[skillId]
+    if (b !== undefined) return b
+    return refSkillsById.get(skillId)?.marker === '(X)' ? -3 : 0
+  }
+  // WIZ38-UNDOFREE1 — true seulement quand baseFor() retourne le -3 synthétique (aucune origine
+  // n'a réellement entraîné la compétence) : ce plancher est payant (calcSkillCost), contrairement
+  // à un retour à une base d'origine réelle (gratuit, ALLOC_SKILL doit alors supprimer l'entrée).
+  const isReservedUnlearned = (skillId) =>
+    baseMastery[skillId] === undefined && refSkillsById.get(skillId)?.marker === '(X)'
+
   // ── Moteur de coût global (Lot 1) ─────────────────────────────────
   const boardSkillIds = useMemo(() => {
     const ids = new Set(Object.keys(baseMastery))
@@ -326,7 +347,7 @@ export default function CareersAllocator({
   const boardGroups = useMemo(() => {
     const byFamily = {}
     for (const skillId of boardSkillIds) {
-      const current = baseMastery[skillId] ?? 0
+      const current = baseFor(skillId)
       const target = state.skillAllocations[skillId] ?? current
       const cap = getSkillCap(skillId, skillAllocationCtx)
       const family = refSkillsById.get(skillId)?.family ?? '?'
@@ -367,11 +388,11 @@ export default function CareersAllocator({
 
   const handleAllocInc = (row) => {
     if (allocationResult.remaining <= 0 || row.target >= row.cap) return
-    dispatch({ type: 'ALLOC_SKILL', skillId: row.skillId, delta: 1, base: baseMastery[row.skillId] ?? 0 })
+    dispatch({ type: 'ALLOC_SKILL', skillId: row.skillId, delta: 1, base: baseFor(row.skillId), floorIsPaid: isReservedUnlearned(row.skillId) })
   }
   const handleAllocDec = (row) => {
-    if (row.target <= (baseMastery[row.skillId] ?? 0)) return
-    dispatch({ type: 'ALLOC_SKILL', skillId: row.skillId, delta: -1, base: baseMastery[row.skillId] ?? 0 })
+    if (row.target <= baseFor(row.skillId)) return
+    dispatch({ type: 'ALLOC_SKILL', skillId: row.skillId, delta: -1, base: baseFor(row.skillId), floorIsPaid: isReservedUnlearned(row.skillId) })
   }
 
   const handleAdd = () => {
@@ -772,9 +793,9 @@ export default function CareersAllocator({
                       <div className="wiz4-ctl">
                         <span className="wiz4-base">{row.current > 0 ? t('step4.career_base', { n: row.current }) : '—'}</span>
                         <button
-                          className={`wiz4-sbtn${row.target <= (baseMastery[row.skillId] ?? 0) ? ' dis' : ''}`}
+                          className={`wiz4-sbtn${row.target <= row.current ? ' dis' : ''}`}
                           onClick={() => handleAllocDec(row)}
-                          disabled={row.target <= (baseMastery[row.skillId] ?? 0)}
+                          disabled={row.target <= row.current}
                         >−</button>
                         <span className="wiz4-val">{row.target}</span>
                         <button

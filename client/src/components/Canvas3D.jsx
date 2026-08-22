@@ -704,13 +704,21 @@ function Scene({
     return map
   }, [voxels])
 
-  // Précédence unique du survol de déplacement ambiant — un seul point de vérité (COMBAT-
-  // DEPLACEMENT-HOVER, 2026-07-31), consulté par handlePointerMove/handlePointerUp ci-dessous :
-  // ciblage Attaque/CaC, LOS et visée entité passent toujours devant. handleDragStart n'en a pas
-  // besoin (il vérifie déjà target/LOS avant sa propre garde combatMoveMode, par construction).
+  // Précédence unique du survol de déplacement ambiant et/ou du clic-attaque ambiant — un seul point
+  // de vérité (COMBAT-DEPLACEMENT-HOVER, 2026-07-31), consulté par handlePointerMove/handlePointerUp
+  // ci-dessous : ciblage Attaque/CaC, LOS et visée entité passent toujours devant. handleDragStart n'en
+  // a pas besoin (il vérifie déjà target/LOS avant sa propre garde combatMoveMode, par construction).
   // 3 vérifications indépendantes recopiées étaient la cause du bug initial (2 des 3 oubliées).
-  const combatMoveHasPriority = useCallback(() =>
-    !!combatMoveModeRef.current && !combatTargetModeRef.current && !losModeRef.current?.active && !moveTarget,
+  //
+  // COM-MOVEUI1 (2026-08-22) — "Annuler" désarme le survol de déplacement (combatMoveModeRef devient
+  // faux) mais ne doit jamais couper le clic-attaque ambiant (useCombatClickAttack,
+  // onAmbientTokenClickRef) : ce dernier reste une intention distincte, indépendante de l'offre de
+  // déplacement (retour Saar — "on peut toujours cliquer sur l'adversaire"). La détection "case
+  // occupée" ci-dessous reste donc active tant que l'un OU l'autre est armé ; seule la préview de
+  // chemin (case vide) exige encore combatMoveModeRef (gardée explicitement plus bas, `if (!mode)`).
+  const ambientMapClickActive = useCallback(() =>
+    (!!combatMoveModeRef.current || !!onAmbientTokenClickRef.current) &&
+    !combatTargetModeRef.current && !losModeRef.current?.active && !moveTarget,
   [moveTarget])
 
   // Détection "case occupée par un autre token" — source unique, consultée au survol
@@ -767,8 +775,8 @@ function Scene({
   }, [isGm, user, characters, onTokenClick, clearLine])
 
   const handlePointerMove = useCallback((e) => {
-    // ─── Mode déplacement combat — seulement si aucun mode explicite n'est prioritaire ─────────
-    if (combatMoveHasPriority()) {
+    // ─── Mode déplacement combat et/ou clic-attaque ambiant ────────────────────────────────────
+    if (ambientMapClickActive()) {
       const destination = raycastWorldSupport(e.clientX, e.clientY)
       if (!destination) return
       const mode = combatMoveModeRef.current
@@ -778,8 +786,11 @@ function Scene({
       // séquence). Détection par case (tolérance 0,75 m = demi-case, `.claude/rules/world.md`), pas par
       // hit du mesh du token — couvre tout clic dans la case, même si le modèle 3D ne la remplit pas
       // entièrement. Source unique pour la surbrillance ci-dessous ET le clic dans handlePointerUp
-      // (hoveredOccupantTokenRef) — jamais un second système de détection en parallèle.
-      const occupyingToken = findOccupantAt(destination, mode.tokenId)
+      // (hoveredOccupantTokenRef) — jamais un second système de détection en parallèle. `mode` peut
+      // être null (survol déplacement désarmé par "Annuler", COM-MOVEUI1) : l'exclusion du token
+      // survolant sa propre case ne s'applique alors plus, mais le clic-attaque se protège déjà
+      // lui-même du self-target (useCombatClickAttack.js).
+      const occupyingToken = findOccupantAt(destination, mode?.tokenId ?? null)
       hoveredOccupantTokenRef.current = occupyingToken
       setAmbientHoverTokenId(prev => (prev === (occupyingToken?.id ?? null) ? prev : (occupyingToken?.id ?? null)))
       if (occupyingToken) {
@@ -791,6 +802,7 @@ function Scene({
         }
         return
       }
+      if (!mode) return // déplacement désarmé et case vide — rien à prévisualiser
       const key = `${Math.round(destination.x * 4)}:${Math.round(destination.y * 4)}:${Math.round(destination.z * 4)}`
       if (key !== lastCellRef.current) {
         lastCellRef.current = key
@@ -885,12 +897,12 @@ function Scene({
       tiltX,
       tiltZ,
     })
-  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview, combatMoveHasPriority, findOccupantAt])
+  }, [raycastGround, raycastWorldSupport, moveTarget, isGm, requestWorldPathPreview, ambientMapClickActive, findOccupantAt])
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
-    // ─── Mode déplacement combat — seulement si aucun mode explicite n'est prioritaire ─────────
-    if (combatMoveHasPriority()) {
+    // ─── Mode déplacement combat et/ou clic-attaque ambiant ────────────────────────────────────
+    if (ambientMapClickActive()) {
       const mode = combatMoveModeRef.current
       // Case cliquée occupée par un autre token — interaction avec ce token, jamais un déplacement
       // (retour Saar 2026-07-31 : un seul geste possible par clic, pas de séquence forcée
@@ -900,6 +912,7 @@ function Scene({
         onAmbientTokenClickRef.current?.(hoveredOccupantTokenRef.current, e.clientX, e.clientY)
         return
       }
+      if (!mode) return // déplacement désarmé (COM-MOVEUI1) et case vide — rien à faire
       const path = currentPathRef.current
       if (!path || path.length < 2) return  // inaccessible ou destination = départ
       const dest = path[path.length - 1]
@@ -992,7 +1005,7 @@ function Scene({
     } catch (err) {
       console.error('Erreur déplacement token :', err)
     }
-  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, combatMoveHasPriority, findOccupantAt])
+  }, [onTokenSelect, updateToken, isGm, justSelectedRef, characters, user, onTokenDoubleClick, socket, moveTarget, onMoveCancel, onPointerUp, battlemapId, ambientMapClickActive, findOccupantAt])
 
   useEffect(() => {
     const canvas = gl.domElement

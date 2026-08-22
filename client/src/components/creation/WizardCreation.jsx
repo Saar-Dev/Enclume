@@ -447,8 +447,12 @@ function getInfos(step, ambiance, t) {
 }
 
 const st = {
-  body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  step6: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  // WIZ31 (docs/EN_COURS.md) — overflow:'hidden' seul ne scrolle jamais : sans minHeight:0, un
+  // enfant flex grandit avec son contenu au lieu de se contraindre, ce qui poussait .wiz-shell
+  // (min-height:100vh, pas un plafond) au-delà du viewport — la page entière scrollait alors,
+  // emportant le header. Même patron que step6Sheet ci-dessous (Étape 7, déjà correct).
+  body: { flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', minHeight: 0 },
+  step6: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 },
   step6Sheet: { flex: 1, overflowY: 'auto', minHeight: 0 },
   step6Nav: {
     display: 'flex',
