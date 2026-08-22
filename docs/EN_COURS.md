@@ -17,10 +17,12 @@
 
 ## ⚡ PROCHAINE ÉTAPE EXACTE
 
-**TEST_CRITIQUE Lot 3** (tooltips degré + popup Réussite critique/Catastrophe) ✅ codé
-(2026-08-04), **non testé en navigateur** — détail `docs/Old/PLAN_TEST_CRITIQUE.md` §11 (archivé,
-Règle 10 — contenu durable transféré dans `docs/SYSTEME/COMBAT.md` §"Résolution des Tests"). Prochaine
-étape : validation par Saar (tooltip au survol des badges de résultat, popup en combat et via macro).
+Rien d'épinglé ici — ce bloc pointait depuis le 2026-08-04 sur TEST_CRITIQUE Lot 3, jamais retouché
+depuis malgré plusieurs chantiers actifs entre-temps (constat Saar, 2026-08-22 : périmé). Migré en
+ticket `TEST_CRITIQUE-LOT3` (`bug_tickets`), même oubli que `CHAT-SCROLL1` ci-dessous — ni l'un ni
+l'autre n'étaient dans la liste d'exclusion volontaire de `importEnCoursDettes.js`. La prochaine étape
+réelle vit désormais uniquement dans `/admin/tickets` (Règle §10 CLAUDE.md) ; ne plus réutiliser ce
+bloc comme pointeur unique daté.
 
 ---
 
@@ -124,7 +126,7 @@ rejeu au retour réseau) avant de considérer le chantier clos et de committer.
 |---|---|---|
 | ~~**ELEV-PERF1**~~ | ~~`reconcileBattlemapElevators` appelé en boucle pendant un combat réel — transactions/verrous lents~~ | ✅ Résolu — cause racine : `reconcileBattlemapElevators` ouvrait une transaction + verrou pessimiste (`forUpdate` sur `battlemaps`) à chaque appel, y compris pour une carte sans aucun ascenseur (cas de `battlemap:8f8d7184-...` au moment du signalement — 0 connecteur elevator ; confirmé qu'aucune battlemap de la base n'en avait alors, tous les appelants payaient ce coût inutilement). Correctif : lecture non verrouillée + `elevatorDefinitionsFromBattlemap` avant d'entrer en transaction, retour immédiat si la liste est vide ; chemin "≥1 ascenseur" inchangé. Vérifié contre la base réelle sur les deux chemins (sans ascenseur : 9-12ms en régime stable vs 100-350ms/jusqu'à 1,3s avant ; avec ascenseur, après ajout d'un ascenseur de test sur cette même battlemap : reconciliation correcte, cabine niveau 0 porte ouverte). `server/src/services/worldElevatorService.js` |
 | ~~**COM26**~~ | ~~2 munitions catalogue (`Darts 7.62mm ST - Projectile SAP`, `Flèche - Projectile IEM`) portent le DSL Assommante par erreur de copié-collé~~ | ✅ Déjà résolu (constaté 2026-08-22, revérifié en base) — les deux lignes ont un `ammo_effects` cohérent avec leur description, plus aucune trace d'Assommante. Corrigé par une session antérieure sans mise à jour de ce ticket |
-| ~~**CHAT-SCROLL1**~~ | ~~Scroll infini chat construit mais pas câblé à un `IntersectionObserver`~~ | ⚠️ clos partiel Session (Saar, 2026-08-22) — sentinelle + `IntersectionObserver` câblés dans `SidebarChatTab.jsx` (`loadOlderMessages`/`hasMore`/`loadingOlder` threadés depuis `Sidebar.jsx`, un seul appel du hook), auto-scroll vers le bas corrigé pour ne plus se déclencher sur un préfixage d'historique. Détail `docs/SYSTEME/CHAT.md` §10, `docs/JOURNAL8.md`. Build/lint propres — scénario réel navigateur non testé (scroller au-delà de 50 messages, confirmer l'absence de saut visuel) |
+| ~~**CHAT-SCROLL1**~~ | ~~Scroll infini chat construit mais pas câblé à un `IntersectionObserver`~~ | ✅ Résolu — validé par Saar en navigateur (2026-08-22, scroll au-delà de 50 messages sans saut visuel). Migré en ticket `CHAT-SCROLL1` (`bug_tickets`, oublié de `importEnCoursDettes.js`) |
 | ~~**CSPLAYERSTAB**~~ | ~~`CampaignSettingsPage.jsx` — avertissement React mélange `background`/`backgroundColor`~~ | ✅ Déjà résolu (vérifié 2026-08-22) — `s.navItem`/`s.navItemActive` n'existent plus du tout dans ce fichier (refactor incidentel non documenté), plus aucune occurrence de `background:` |
 | ~~TC1~~ | ~~`.gitattributes:3` — attribut invalide~~ | ✅ Déjà résolu (vérifié 2026-08-22, `git log` : corrigé commit `264281f`, 2026-05-10, lignes parasites retirées) |
 | ~~DCO1~~ | ~~`onTokenRotate` dead code Canvas3D/Scene~~ | ✅ Déjà résolu (vérifié 2026-08-22 — confirmé aussi par `bug_tickets`/`admin_notes` : code supprimé Session 142, 2026-07-15, un mois avant l'import du ticket) |

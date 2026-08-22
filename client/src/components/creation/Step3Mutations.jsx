@@ -38,9 +38,16 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   // l'écran achat soit visible avec la carte "Aucune mutation". `visited` (migration 248, WIZ5B) :
   // getStep3State renvoie systématiquement method:'none' pour une fiche jamais soumise (défaut, pas
   // un vrai choix) — sans ce marqueur, une Étape 3 jamais visitée s'ouvrait pré-remplie au lieu du
-  // formulaire vierge (choix de méthode).
+  // formulaire vierge (choix de méthode). Mais `visited` (wizard_progress.step3_visited) n'est posé
+  // QUE par un vrai aller-retour serveur (premier reconcile Step3) — jamais par le commit continu
+  // local (WIZ45), qui ne l'inclut pas dans son payload. Un joueur qui choisit une méthode, tire (ou
+  // achète), puis revient en arrière AVANT tout "Suivant" voyait donc `method` retomber à `null`
+  // (écran de choix de méthode) à chaque remontage, alors que 'chosen'/'random' ne sont JAMAIS
+  // ambigus (contrairement à 'none') : leur seule présence prouve que l'étape a été visitée, sans
+  // avoir besoin de `visited`.
   const [method, setMethod] = useState(
-    !initialData?.visited ? null
+    initialData?.method === 'chosen' || initialData?.method === 'random' ? initialData.method
+      : !initialData?.visited ? null
       : initialData.method === 'none' ? 'chosen'
       : (initialData.method ?? null)
   )
@@ -50,7 +57,6 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
 
   // Aléatoire
   const [d20Result, setD20Result] = useState(initialData?.d20Result ?? null)
-  const [rollResults, setRollResults] = useState([])
   const [awaitingRoll, setAwaitingRoll] = useState(false)
   const [rollPayload, setRollPayload] = useState(null)
   const [kept, setKept] = useState(
@@ -58,6 +64,12 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
   )
   const [removed, setRemoved] = useState(
     initialData?.method === 'random' ? (initialData.removed ?? []) : []
+  )
+  // rollResults (résultats tirés en attente de Garder/Défausser) manquait à la restauration ET au
+  // commit continu ci-dessous (WIZ45 ne couvrait que kept/removed/d20Result) — un retour arrière
+  // avant d'avoir traité tous les résultats du tirage les effaçait silencieusement.
+  const [rollResults, setRollResults] = useState(
+    initialData?.method === 'random' ? (initialData.rollResults ?? []) : []
   )
   const [pcAfterRemovals, setPcAfterRemovals] = useState(
     initialData?.method === 'random' ? pcDispo - (initialData.pcSpent ?? 0) : pcDispo
@@ -82,6 +94,15 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
 
   const totalCost = selected.reduce((sum, m) => sum + (findMutation(m.mutation_id)?.cost_pc || 0), 0)
   const pcLeft = pcDispo - totalCost
+
+  // d20Result n'est jamais persisté côté serveur (getStep3State ne le renvoie pas — aucune colonne
+  // DB, purement un affichage informatif du tirage) : après une VRAIE soumission (Suivant cliqué),
+  // l'écho WIZARD_STATE_SYNC remplace step3Data par la reconstruction serveur, qui n'a que
+  // method/kept — d20Result retombe alors à null au remontage suivant. Se fier uniquement à
+  // d20Result pour savoir si l'écran doit proposer un nouveau tirage redemandait donc de relancer le
+  // dé à chaque retour sur cette étape après un aller-retour réel, même avec des mutations déjà
+  // gardées. kept/removed non vides prouvent tout autant qu'un tirage a déjà eu lieu.
+  const hasRandomResult = d20Result != null || kept.length > 0 || removed.length > 0
 
   // useCallback (pas une fonction nue) : référencée par l'effet de commit continu ci-dessous (WIZ45,
   // docs/EN_COURS.md) — une fonction recréée à chaque rendu forcerait cet effet à se redéclencher en
@@ -109,11 +130,11 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
       onLiveChange?.(payload)
       setStep3Data(payload)
     } else if (method === 'random') {
-      const payload = { method: 'random', kept, removed, d20Result, pcSpent: pcDispo - pcAfterRemovals, mutationsMeta: buildMutationsMeta(kept) }
+      const payload = { method: 'random', kept, removed, rollResults, d20Result, pcSpent: pcDispo - pcAfterRemovals, mutationsMeta: buildMutationsMeta(kept) }
       onLiveChange?.(payload)
       setStep3Data(payload)
     }
-  }, [method, selected, totalCost, kept, removed, d20Result, pcAfterRemovals, pcDispo, buildMutationsMeta, onLiveChange, setStep3Data])
+  }, [method, selected, totalCost, kept, removed, rollResults, d20Result, pcAfterRemovals, pcDispo, buildMutationsMeta, onLiveChange, setStep3Data])
 
   const showTooltip = (desc, event) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -497,7 +518,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
         </div>
       )}
 
-      {!d20Result && (
+      {!hasRandomResult && (
         <div style={st.rollSection}>
           <p style={st.rollDesc}>{t('step3.roll_desc')}</p>
           <button style={st.rollBtn} onClick={handleStartRoll} disabled={awaitingRoll}>
@@ -506,10 +527,10 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
         </div>
       )}
 
-      {d20Result && (
+      {hasRandomResult && (
         <div style={st.rollResults}>
           <div style={st.rollInfo}>
-            <span style={st.rollD20}>D20 = {d20Result}</span>
+            {d20Result != null && <span style={st.rollD20}>D20 = {d20Result}</span>}
             <span style={st.rollCount}>
               {t('step3.roll_count', { count: rollResults.length + kept.length + removed.length })}
             </span>
@@ -606,7 +627,7 @@ export default function Step3Mutations({ initialData, sheetId, pcDispo = 20, ran
             ← {t('step3.prev')}
           </button>
         )}
-        {d20Result && rollResults.length === 0 && (
+        {hasRandomResult && rollResults.length === 0 && (
           <button style={st.nextBtn} onClick={handleSubmitRandom}>
             {t('step3.next')} →
           </button>

@@ -193,21 +193,43 @@ function Step4ExperienceInner({
   }, [sheetId])
 
   // ─── Données filtrées ──────────────────────────────────────────
-  const enrichedGeoOrigins = refData.geoOrigins.map(enrichBg)
-  const filteredSocialOrigins = refData.socialOrigins
+  // Mémoïsés (WIZ38-CRASH1) : non mémoïsés, ces 4 tableaux/4 items recréaient de nouveaux objets à
+  // CHAQUE rendu (même sans changement d'origine/formation), rendant `baseMastery`/`boardSkillIds`
+  // (CareersAllocator.jsx, dépendent de selectedXItem) instables à leur tour — l'effet
+  // PRUNE_ALLOCATIONS (deps [boardSkillIds]) se redéclenchait alors à chaque rendu, remontait un
+  // nouvel objet skillAllocations au parent via onSkillAllocationsChange, qui re-render ce
+  // composant : boucle "Maximum update depth exceeded" confirmée en navigateur (stack
+  // [DBG-WIZCRASH], CareersAllocator.jsx:367).
+  const enrichedGeoOrigins = useMemo(() => refData.geoOrigins.map(enrichBg), [refData.geoOrigins])
+  const filteredSocialOrigins = useMemo(() => refData.socialOrigins
     .filter(s => s.parent_code === originGeo || s.parent_code === null)
-    .map(enrichBg)
-  const filteredTrainings = refData.trainings
+    .map(enrichBg), [refData.socialOrigins, originGeo])
+  const filteredTrainings = useMemo(() => refData.trainings
     .filter(t => t.parent_code === originSoc || t.parent_code === null)
-    .map(enrichBg)
+    .map(enrichBg), [refData.trainings, originSoc])
   const showHigherEd = training === HIGHER_ED_TRAINING_CODE
-  const filteredHigherEds = showHigherEd ? refData.higherEds.map(enrichBg) : []
+  const filteredHigherEds = useMemo(
+    () => (showHigherEd ? refData.higherEds.map(enrichBg) : []),
+    [refData.higherEds, showHigherEd]
+  )
 
   // ─── Éléments sélectionnés (avec détails) ──────────────────────
-  const selectedGeoItem = enrichedGeoOrigins.find(g => g.code === originGeo) || null
-  const selectedSocItem = filteredSocialOrigins.find(s => s.code === originSoc) || null
-  const selectedTrainingItem = filteredTrainings.find(t => t.code === training) || null
-  const selectedHigherEdItem = filteredHigherEds.find(h => h.code === higherEd) || null
+  const selectedGeoItem = useMemo(
+    () => enrichedGeoOrigins.find(g => g.code === originGeo) || null,
+    [enrichedGeoOrigins, originGeo]
+  )
+  const selectedSocItem = useMemo(
+    () => filteredSocialOrigins.find(s => s.code === originSoc) || null,
+    [filteredSocialOrigins, originSoc]
+  )
+  const selectedTrainingItem = useMemo(
+    () => filteredTrainings.find(t => t.code === training) || null,
+    [filteredTrainings, training]
+  )
+  const selectedHigherEdItem = useMemo(
+    () => filteredHigherEds.find(h => h.code === higherEd) || null,
+    [filteredHigherEds, higherEd]
+  )
 
   // ─── PC calculés ───────────────────────────────────────────────
   const totalCareerYears = careers.reduce((sum, c) => sum + c.years, 0)

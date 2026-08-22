@@ -4320,6 +4320,70 @@ cette ligne. `RANGE=AIR_X.../TXT=DEPTH=...` ne sont reconnus par aucune clé du 
 (`parseAmmoEffects` ne traite que `DMG`/`CHOC`/`TXT`) : purement décoratifs, aucun consommateur
 (cohérent avec `migrations_archive/209`, même conclusion déjà posée pour un cas voisin).
 
+## Session (Saar) — 2026-08-22 — Régression crash Step4 Profession (`WIZ38`) + `WIZ45` (jets de mutation non mémorisés au retour), validation navigateur complète
+
+**Contexte** : point de situation + tests de validation groupés (COM-MOVEUI1, WIZ13, CHAT-SCROLL1,
+WIZ38, WIZ45). Deux dettes documentaires trouvées en passant : `TEST_CRITIQUE-LOT3` (codé 2026-08-04,
+jamais migré dans `bug_tickets` lors de la migration du 2026-08-22, absent de la liste d'exclusion
+volontaire d'`importEnCoursDettes.js`) et `CHAT-SCROLL1` (même oubli) — les deux migrés en tickets,
+`CHAT-SCROLL1` directement `resolved` (validé par Saar : scroll au-delà de 50 messages sans saut
+visuel). `EN_COURS.md` : pointeur "PROCHAINE ÉTAPE EXACTE" périmé (datait du 2026-08-04, jamais
+retouché depuis) retiré.
+
+**Régression WIZ38 — Step4 Profession plante en boucle** (`Maximum update depth exceeded`,
+`WizardStepErrorBoundary`, stack `[DBG-WIZCRASH]` récupérée en navigateur par Saar) : préexistante,
+pas une régression du jour, juste jamais déclenchée avant. Cause confirmée par la stack — pas une
+hypothèse : `Step4Experience.jsx` recalculait `enrichedGeoOrigins`/`filteredSocialOrigins`/
+`filteredTrainings`/`filteredHigherEds` et les 4 `selectedXItem` qui en découlent à **chaque rendu**
+(aucun `useMemo`), produisant de nouveaux objets même sans changement d'origine/formation. Ces objets
+alimentent `baseMastery` puis `boardSkillIds` (`CareersAllocator.jsx`), donc eux aussi instables à
+chaque rendu → l'effet `PRUNE_ALLOCATIONS` (deps `[boardSkillIds]`) se redéclenchait à chaque rendu →
+`dispatch` → nouvel objet `skillAllocations` → `onSkillAllocationsChange` remonte ce nouvel objet au
+parent (`setSkillAllocations`) → re-render → nouveaux objets recréés → boucle. Corrigé : les 8
+valeurs mémoïsées (`useMemo`) dans `Step4Experience.jsx`. Confirmé fonctionnel par Saar en navigateur.
+Mécanique de coût des compétences réservées (X), objet initial du ticket `WIZ38`, non re-testée
+explicitement au-delà de cette confirmation — ticket laissé `in_progress`.
+
+**WIZ45 (suite) — jets de mutation aléatoire non mémorisés au retour sur Step3** : 3 causes
+distinctes trouvées, dans l'ordre où le test navigateur de Saar les a fait apparaître (un plan
+n'aurait pas pu les prédire toutes d'un coup — chacune corrigée avant de découvrir la suivante) :
+
+1. `rollResults` (mutations tirées, encore en attente de Garder/Défausser) n'était ni inclus dans le
+   commit continu (WIZ45 d'origine ne couvrait que `kept`/`removed`/`d20Result`) ni restauré depuis
+   `initialData` — un retour avant d'avoir tout décidé l'effaçait silencieusement. Corrigé.
+2. `method` (chosen/random) ne se restaurait jamais depuis un brouillon local (avant toute
+   soumission serveur) : gardé derrière `initialData.visited`, lui-même posé uniquement par un vrai
+   reconcile serveur (WIZ5B), jamais inclus dans le commit continu. Or `chosen`/`random` ne sont
+   jamais ambigus (contrairement à `none`, seule raison d'être de `visited`) — restaurés directement.
+3. **Cause réelle de la repro exacte de Saar** (aléatoire → Garder → Step4 → retour Step3, mutations
+   déjà gardées et déjà en base) : `getStep3State` (serveur, `creationService.js`) ne renvoie jamais
+   `d20Result` — aucune colonne en base, jamais persisté par conception (information purement
+   cosmétique, la donnée mécanique réelle est `kept`). Après la vraie soumission, l'écho
+   `WIZARD_STATE_SYNC` remplace `step3Data` par cette reconstruction serveur incomplète — `d20Result`
+   redevient `null`, et l'écran se fiait uniquement à lui pour savoir s'il fallait reproposer un
+   tirage, ignorant que `kept`/`removed` étaient déjà peuplés. Corrigé : nouvelle condition
+   `hasRandomResult = d20Result != null || kept.length > 0 || removed.length > 0`, utilisée aux 3
+   endroits concernés (écran tirage vs résultats, bouton Suivant) ; badge "D20 = X" masqué proprement
+   quand la valeur est inconnue plutôt que de forcer un nouveau jet.
+
+**Fichiers touchés** : `client/src/components/creation/Step4Experience.jsx` (mémoïsation, régression
+WIZ38), `client/src/components/creation/Step3Mutations.jsx` (3 correctifs WIZ45), `docs/EN_COURS.md`
+(pointeur périmé retiré, `CHAT-SCROLL1` clôturé).
+
+**Testé** : lint + build client propres à chaque étape ; scénario réel navigateur confirmé
+fonctionnel par Saar pour les deux régressions (Step4 Profession sans crash ; aléatoire → Garder →
+Step4 → retour Step3 sans redemande de jet).
+**Non testé** : mécanique de coût des compétences réservées (X) elle-même (objet initial `WIZ38`,
+au-delà du crash) ; méthode "achat manuel" (`chosen`) de Step3 avec retour arrière après soumission
+réelle (même classe de bug que le point 3 ci-dessus, jamais reproduite ni testée sur ce chemin —
+`mutationsMeta`/`selected` s'appuient sur `mutations`/`method` qui sont eux bien renvoyés par
+`getStep3State`, donc probablement épargnés, mais non vérifié).
+**Données** : aucune migration — les 2 tickets migrés (`TEST_CRITIQUE-LOT3`, `CHAT-SCROLL1`) et les
+mises à jour de statut (`WIZ13`/`COM-MOVEUI1`/`WIZ45` → `resolved`) vivent dans `bug_tickets`, pas en
+migration de schéma.
+**Retour arrière** : commits isolés sur `dev/Saar`, `git revert` suffit (aucun changement serveur ni
+migration).
+
 En recroisant sur ce critère précis (pas la description, le code), 5 lignes avaient un `FX=` manquant
 ou emprunté à une autre munition, avec un vrai impact combat :
 - Darts 5.56mm ST **standard** : `FX=EXPLOSIVE` emprunté — explosait au lieu d'un dégât normal.
