@@ -4149,3 +4149,46 @@ posé `cluster_label` sur 17 tickets existants, aucune autre écriture.
 **Retour arrière** : aucun risque de perte — le changement rend le store plus à jour, jamais moins ; en
 cas de régression comportementale (ex. header PC "instable" perçu comme gênant), revert ciblé des 5
 fichiers sans dépendance croisée avec d'autres chantiers en cours.
+
+## Session (Saar) — 2026-08-22 — `INV2` : le bouton Ajouter ne débitait jamais de Sols
+
+**Décision Saar** : débit à la validation MJ pour un personnage en campagne, débit à l'ajout pour un
+personnage Coffre-native (aucun MJ n'existe jamais pour valider — sans ce cas, le débit ne se
+produirait jamais pour ces personnages). Un ajout fait par le MJ lui-même reste gratuit dans les deux
+cas (geste privilégié, comportement préexistant préservé).
+
+**Vérifié avant de coder** : `inventoryService.js#addItem` ne lisait jamais `ref_equipment.price` ;
+seule différence MJ/joueur était `validated_by_gm`. `tradeService.js#executeBuy` débite déjà des Sols
+ailleurs (achat marchand) — repris comme référence de patron (verrou `forUpdate`, vérif AVANT
+décrément, jamais de décrément optimiste suivi d'un rollback).
+
+**Cause de l'ambiguïté apparente de la décision** : `autoValidate` (paramètre existant d'`addItem`)
+est vrai pour DEUX raisons distinctes — le MJ ajoute (geste privilégié) OU le personnage est
+Coffre-native (aucun MJ ne rejoindra jamais pour valider, `char-sheet.js`). Un nouveau paramètre
+`isGm` distinct d'`autoValidate` permet de ne facturer que le second cas à l'ajout, jamais le premier.
+
+**Codé** :
+- `inventoryService.js` : nouveau helper `_chargeSols(trx, characterId, amount)` (verrou `forUpdate`,
+  vérif puis décrément, `AppError(400)` si insuffisant). `addItem` sélectionne désormais `price`,
+  calcule `chargeAtAdd = autoValidate && !isGm` et facture dans la même transaction que l'insertion
+  (les 3 chemins : stack, multi, single). `updateItem` facture lors de la transition
+  `validated_by_gm` false→true (la seule façon dont un item peut porter `false` est un ajout joueur en
+  campagne — jamais un double débit d'un item déjà facturé à l'ajout).
+- `char-sheet.js` : route POST transmet désormais `req.isGm` à `addItem` en plus d'`autoValidate`.
+- `InventoryPanel.jsx` : `handleConfirmAdd` et `handleValidate` affichaient l'erreur serveur en
+  `console.error` silencieux — un refus (Sols insuffisants) laissait le joueur/MJ sans aucune
+  explication visible sur un clic sans effet. Basculés sur la bannière `equipError` déjà existante
+  (même patron que `handleEquip`). Nouvelle clé i18n `containerPanel.validateError`.
+
+**Testé** : `server/src/services/inventoryService.test.mjs` étendu de 9 à 15 tests (les 6 nouveaux
+contre PostgreSQL réel, pas de mock) : Coffre-native sols suffisants/insuffisants, ajout MJ jamais
+facturé, ajout joueur en campagne jamais facturé à l'ajout, validation MJ sols suffisants/insuffisants
+(rollback confirmé — aucun débit, item reste en attente). 15/15 vertes. Lint (`InventoryPanel.jsx`) :
+0 erreur. `npx vite build` (client) : OK. Aucun autre appelant d'`addItem` dans le code applicatif
+(vérifié par grep) — signature étendue sans casser de site d'appel existant.
+**Non testé** : scénario réel navigateur (ajout/validation en situation réelle, les deux contextes
+Coffre-native et campagne).
+**Données** : aucune migration — `ref_equipment.price` existait déjà, `char_sheet.sols` déjà en place
+(déjà utilisée par `tradeService.js`).
+**Retour arrière** : aucun risque de perte de personnage existant (aucun personnage réel actuellement,
+phase de développement, confirmé par Saar) — revert ciblé des 3 fichiers si nécessaire.

@@ -13,6 +13,19 @@ import { isEquippableLocation } from '../lib/inventoryRules.js'
 import { SYMMETRIC_SLOT_PAIRS, HAND_TO_ARM_SLOT } from '../../../shared/armorConstants.js'
 import { computeTotalWeight } from '../../../shared/inventoryMath.js'
 
+// INV2 (docs/EN_COURS.md) — débit des Sols, jusqu'ici jamais appliqué par le bouton Ajouter. Verrou
+// `forUpdate` + vérif AVANT décrément, même patron que tradeService.js#executeBuy (seul autre point
+// du projet qui débite déjà des Sols) — jamais de décrément optimiste suivi d'un rollback, toujours
+// lire le solde sous verrou d'abord.
+async function _chargeSols(trx, characterId, amount) {
+  if (amount <= 0) return
+  const sheet = await trx('char_sheet').where({ character_id: characterId }).forUpdate().first('sols')
+  if (!sheet || sheet.sols < amount) {
+    throw new AppError(400, `Sols insuffisants (requis : ${amount}, disponible : ${sheet?.sols ?? 0})`)
+  }
+  await trx('char_sheet').where({ character_id: characterId }).decrement('sols', amount)
+}
+
 export const VALID_CONTAINERS = ['Coffre', 'Sac', 'Ceinture']
 export const VALID_SLOTS      = ['T', 'C', 'BG', 'BD', 'JG', 'JD', 'D', 'Ce', 'MG', 'MD', '2M', 'Tr']
 export const ARMOR_SLOTS      = new Set(['T', 'C', 'BG', 'BD', 'JG', 'JD'])
@@ -324,7 +337,10 @@ export async function quickEquip(characterId, equipment_id, slot) {
 // call site). Un item ajouté par le MJ (ou fusionné sur un stack par le MJ) part directement validé ;
 // un ajout joueur, même sur un stack déjà validé, remet la ligne fusionnée en attente (le statut
 // reflète toujours le rôle du dernier auteur, jamais un statut hérité d'un ajout précédent).
-export async function addItem(characterId, payload, autoValidate = false) {
+// isGm : distinct d'autoValidate (INV2, docs/EN_COURS.md) — autoValidate peut être vrai pour une
+// raison qui n'a rien à voir avec un privilège MJ (Coffre-native). Sert uniquement à décider si le
+// débit de Sols a lieu ici (voir chargeAtAdd ci-dessous) ; ne change rien à validated_by_gm.
+export async function addItem(characterId, payload, autoValidate = false, isGm = false) {
   const {
     equipment_id,
     container: containerIn,
@@ -338,8 +354,16 @@ export async function addItem(characterId, payload, autoValidate = false) {
   }
 
   const equipRef = equipment_id
-    ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat').first()
+    ? await db('ref_equipment').where({ id: equipment_id }).select('location', 'malus_cat', 'price').first()
     : null
+
+  // INV2 — un MJ qui ajoute (ou fusionne sur un stack) ne débite jamais : geste privilégié, comme
+  // aujourd'hui. `autoValidate` peut être vrai pour une AUTRE raison (personnage Coffre-native, sans
+  // MJ possible) — dans ce cas précis, il n'y aura jamais de validation ultérieure à laquelle
+  // rattacher un débit différé, donc il faut débiter ici, immédiatement. Un ajout joueur en campagne
+  // (autoValidate faux) n'est jamais débité ici : le débit a lieu à la validation MJ (updateItem).
+  const chargeAtAdd = autoValidate && !isGm
+  const totalPrice = (equipRef?.price ?? 0) * quantity
   const equippable = isEquippableLocation(equipRef?.location ?? null)
 
   const resolvedSlot = slot ?? null
@@ -414,10 +438,13 @@ export async function addItem(characterId, payload, autoValidate = false) {
       })
       .first()
     if (existing) {
-      const [updated] = await db('char_inventory')
-        .where({ id: existing.id })
-        .update({ quantity: existing.quantity + quantity, validated_by_gm: autoValidate, updated_at: db.fn.now() })
-        .returning('*')
+      const [updated] = await db.transaction(async (trx) => {
+        if (chargeAtAdd) await _chargeSols(trx, characterId, totalPrice)
+        return trx('char_inventory')
+          .where({ id: existing.id })
+          .update({ quantity: existing.quantity + quantity, validated_by_gm: autoValidate, updated_at: db.fn.now() })
+          .returning('*')
+      })
       const item = await getItemWithRef(updated.id)
       return { type: 'stack', item }
     }
@@ -448,6 +475,7 @@ export async function addItem(characterId, payload, autoValidate = false) {
     const rows = Array.from({ length: quantity }, () => ({ ...insertData, quantity: 1 }))
     const intendedSlots = Array.from({ length: quantity }, (_, i) => i === 0 ? resolvedSlot : null)
     const inserted = await db.transaction(async (trx) => {
+      if (chargeAtAdd) await _chargeSols(trx, characterId, totalPrice)
       const insertedRows = await trx('char_inventory').insert(rows).returning('*')
       await Promise.all(insertedRows.map((r, i) => _writeSlots(trx, r.id, characterId, intendedSlots[i])))
       return insertedRows
@@ -457,6 +485,7 @@ export async function addItem(characterId, payload, autoValidate = false) {
   }
 
   const inserted = await db.transaction(async (trx) => {
+    if (chargeAtAdd) await _chargeSols(trx, characterId, totalPrice)
     const [row] = await trx('char_inventory').insert(insertData).returning('*')
     await _writeSlots(trx, row.id, characterId, resolvedSlot)
     return row
@@ -492,6 +521,19 @@ export async function updateItem(characterId, itemId, payload) {
   // Autorisation (MJ only) déjà appliquée par la route (PLAN_WIZARD_MATERIEL_GAUGES.md §3) —
   // updateItem reste la même fonction owner+MJ pour tous les autres champs, pas de check ici.
   if (validated_by_gm !== undefined) updates.validated_by_gm  = validated_by_gm
+
+  // INV2 (docs/EN_COURS.md) — un item ne peut porter validated_by_gm=false que s'il a été ajouté par
+  // un joueur en campagne (addItem#chargeAtAdd exclut ce cas précisément parce qu'une validation MJ
+  // suivra) : cette transition false→true est donc TOUJOURS la première fois qu'il est facturé,
+  // jamais un double débit d'un item déjà payé à l'ajout (Coffre-native, GM) — ceux-là démarrent déjà
+  // à true et ne retraversent jamais cette branche.
+  let chargeOnValidate = 0
+  if (validated_by_gm === true && existing.validated_by_gm === false) {
+    const equipRefForPrice = existing.equipment_id
+      ? await db('ref_equipment').where({ id: existing.equipment_id }).select('price').first()
+      : null
+    chargeOnValidate = (equipRefForPrice?.price ?? 0) * existing.quantity
+  }
 
   // P13 — guard avant updated_at
   if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update')
@@ -676,6 +718,7 @@ export async function updateItem(characterId, itemId, payload) {
   delete updates.slot
 
   await db.transaction(async (trx) => {
+    if (chargeOnValidate > 0) await _chargeSols(trx, characterId, chargeOnValidate)
     await trx('char_inventory').where({ id: itemId }).update(updates)
     if (slotProvided) {
       await _writeSlots(trx, itemId, characterId, slotToWrite)

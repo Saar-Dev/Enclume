@@ -1125,7 +1125,7 @@ router.post('/:characterId/inventory', async (req, res, next) => {
     // aucun MJ ne peut jamais rejoindre pour valider — auto-validé, sinon l'objet resterait bloqué
     // en attente pour toujours (Saar, décision explicite : pas de validation MJ hors campagne).
     const autoValidate = req.isGm || req.character.campaign_id == null
-    const result = await inventoryService.addItem(characterId, req.body, autoValidate)
+    const result = await inventoryService.addItem(characterId, req.body, autoValidate, req.isGm)
     const room = await resolveInventoryBroadcastRoom(characterId, req.character.campaign_id)
 
     if (result.type === 'stack') {

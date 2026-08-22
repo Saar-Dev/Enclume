@@ -27,6 +27,7 @@
     "emptySlot": "Aucun {{label}}",
     "equipError": "Impossible d'équiper",
     "unequipError": "Impossible de déséquiper",
+    "validateError": "Impossible de valider",
     "offlineQueued": "Hors ligne — sera appliqué au retour du réseau"
   },
   "weaponPanel": {

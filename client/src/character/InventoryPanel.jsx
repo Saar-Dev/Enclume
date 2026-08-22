@@ -119,13 +119,18 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
     }
   }, [characterId])
 
+  // INV2 (docs/EN_COURS.md) — la validation MJ peut désormais être refusée par le serveur (Sols
+  // insuffisants chez le joueur, inventoryService.js#_chargeSols) : un console.error silencieux
+  // laissait le MJ sans aucune explication sur un clic "Valider" sans effet visible. Même bannière
+  // que handleEquip ci-dessus (equipError, seule zone d'erreur du panneau).
   const handleValidate = useCallback(async (itemId) => {
+    setEquipError(null)
     try {
       await validateItem(characterId, itemId)
     } catch (err) {
-      console.error('Erreur validation item :', err)
+      setEquipError(err.response?.data?.error?.message || t('containerPanel.validateError'))
     }
-  }, [characterId])
+  }, [characterId, t])
 
   // PLAN_INVENTORY_UX.md §4.3/§5.3 — zone cible Sac/Ceinture : déplacement entre conteneurs (item non
   // équipé) ET déséquipement (item équipé, LocationPanel/WeaponCard/ContainerPanel) en un seul geste —
@@ -201,6 +206,7 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
   const handleConfirmAdd = useCallback(async () => {
     if (!selectedRef) return
     setAdding(true)
+    setEquipError(null)
     try {
       const res = await api.post(`/char-sheet/${characterId}/inventory`, {
         equipment_id: selectedRef.id,
@@ -213,11 +219,14 @@ export default function InventoryPanel({ characterId, canEdit, isGm, hasCampaign
       setSelectedRef(null)
       setSearchQuery('')
     } catch (err) {
-      console.error('Erreur ajout item :', err)
+      // INV2 (docs/EN_COURS.md) — un personnage Coffre-native (sans MJ) est désormais débité et peut
+      // être refusé ici même (sols insuffisants, inventoryService.js#_chargeSols) : un
+      // console.error silencieux laissait le joueur sans explication sur un clic sans effet.
+      setEquipError(err.response?.data?.error?.message || t('containerPanel.validateError'))
     } finally {
       setAdding(false)
     }
-  }, [characterId, selectedRef, addContainer, addQty, upsertInventoryItem])
+  }, [characterId, selectedRef, addContainer, addQty, upsertInventoryItem, t])
 
   // ── Filtres catalogue ────────────────────────────────────────────────────
   // Facettes déduites du catalogue chargé (même pattern que `families` dans TradeWindow.jsx:484),

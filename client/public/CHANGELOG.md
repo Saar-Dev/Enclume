@@ -1,3 +1,11 @@
+## v215 — 2026-08-22 — Fix : le bouton Ajouter ne débitait jamais de Sols
+
+### Personnage — Inventaire
+- [fix] Ajouter un objet débite désormais son prix : immédiatement pour un personnage hors campagne,
+  au moment de la validation MJ pour un personnage en campagne. Un ajout fait par le MJ reste gratuit.
+- [fix] Une validation ou un ajout refusé (Sols insuffisants) affiche maintenant un message clair au
+  lieu de ne rien faire silencieusement.
+
 ## v214 — 2026-08-22 — Fix : perte de données au Wizard sur navigation arrière
 
 ### Création de personnage

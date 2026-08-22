@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import db from '../db/knex.js'
-import { getOwnedHandWeapon, WEAPON_SLOTS, addItem } from './inventoryService.js'
+import { AppError } from '../lib/AppError.js'
+import { getOwnedHandWeapon, WEAPON_SLOTS, addItem, updateItem } from './inventoryService.js'
 
 // Lancement manuel : node --env-file=../.env --test server/src/services/inventoryService.test.mjs
 const skip = !process.env.DATABASE_URL
@@ -28,6 +29,12 @@ async function createFixture() {
 
   const meleeRef = await db('ref_equipment').where({ category: 'Arme de contact' }).first()
   const shieldRef = await db('ref_equipment').where({ category: 'Bouclier' }).first()
+  const pricedRef = await db('ref_equipment').where('price', '>', 0).first()
+
+  // INV2 (docs/EN_COURS.md) — char_sheet.sols, requis par _chargeSols (owner.id). 100000 : largement
+  // au-dessus du prix de pricedRef pour les tests "sols suffisants", ajusté au cas par cas pour les
+  // tests "sols insuffisants".
+  await db('char_sheet').insert({ character_id: owner.id, sols: 100000 })
 
   const [meleeInHand] = await db('char_inventory')
     .insert({ character_id: owner.id, equipment_id: meleeRef.id, container: 'Coffre', quantity: 1 })
@@ -44,7 +51,7 @@ async function createFixture() {
     .returning('*')
   await db('char_inventory_slots').insert({ char_inventory_id: shieldInHand.id, character_id: owner.id, slot_code: 'MD' })
 
-  return { gm, campaign, owner, other, meleeRef, shieldRef, meleeInHand, meleeStored, shieldInHand }
+  return { gm, campaign, owner, other, meleeRef, shieldRef, pricedRef, meleeInHand, meleeStored, shieldInHand }
 }
 
 async function cleanup({ campaign, gm }) {
@@ -148,6 +155,98 @@ test('addItem — autoValidate=false (défaut) : l\'item part en attente, valida
   try {
     const { item } = await addItem(fx.owner.id, { custom_name: 'Babiole', quantity: 1 })
     assert.equal(item.validated_by_gm, false)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+// INV2 (docs/EN_COURS.md) — le bouton Ajouter ne débitait jamais de Sols, malgré un prix déjà
+// présent en base (ref_equipment.price). Décision Saar 2026-08-22 : débit à l'ajout quand aucune
+// validation MJ n'aura jamais lieu (Coffre-native), débit à la validation MJ sinon — jamais pour un
+// ajout fait par le MJ lui-même (geste privilégié, comportement préexistant préservé).
+test('addItem — Coffre-native (autoValidate=true, isGm=false) avec sols suffisants : débite le prix', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const before = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, true, false)
+    assert.equal(item.validated_by_gm, true)
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, before.sols - fx.pricedRef.price)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — Coffre-native (autoValidate=true, isGm=false) avec sols insuffisants : rejette, aucun item ni débit', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    await db('char_sheet').where({ character_id: fx.owner.id }).update({ sols: fx.pricedRef.price - 1 })
+    await assert.rejects(
+      () => addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, true, false),
+      AppError
+    )
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, fx.pricedRef.price - 1, 'aucun débit — la transaction doit être annulée')
+    const count = await db('char_inventory').where({ character_id: fx.owner.id, equipment_id: fx.pricedRef.id }).count('* as n').first()
+    assert.equal(Number(count.n), 0, 'aucun item inséré')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — ajout MJ (isGm=true) : jamais débité même avec autoValidate=true', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const before = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, true, true)
+    assert.equal(item.validated_by_gm, true)
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, before.sols, 'geste MJ privilégié — jamais facturé')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('addItem — ajout joueur en campagne (autoValidate=false) : jamais débité à l\'ajout', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const before = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    const { item } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, false, false)
+    assert.equal(item.validated_by_gm, false)
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, before.sols, 'en attente de validation MJ — débit différé, pas ici')
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('updateItem — validation MJ (validated_by_gm false→true) avec sols suffisants : débite le prix', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item: pending } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, false, false)
+    const before = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    const { item } = await updateItem(fx.owner.id, pending.id, { validated_by_gm: true })
+    assert.equal(item.validated_by_gm, true)
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, before.sols - fx.pricedRef.price)
+  } finally {
+    await cleanup(fx)
+  }
+})
+
+test('updateItem — validation MJ avec sols insuffisants : rejette, reste en attente, aucun débit', { skip }, async () => {
+  const fx = await createFixture()
+  try {
+    const { item: pending } = await addItem(fx.owner.id, { equipment_id: fx.pricedRef.id, quantity: 1 }, false, false)
+    await db('char_sheet').where({ character_id: fx.owner.id }).update({ sols: fx.pricedRef.price - 1 })
+    await assert.rejects(
+      () => updateItem(fx.owner.id, pending.id, { validated_by_gm: true }),
+      AppError
+    )
+    const after = await db('char_sheet').where({ character_id: fx.owner.id }).first('sols')
+    assert.equal(after.sols, fx.pricedRef.price - 1, 'aucun débit')
+    const stillPending = await db('char_inventory').where({ id: pending.id }).first('validated_by_gm')
+    assert.equal(stillPending.validated_by_gm, false, 'reste en attente — la transaction doit être annulée')
   } finally {
     await cleanup(fx)
   }
