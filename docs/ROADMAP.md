@@ -1,4 +1,11 @@
 # ROADMAP — Projet Enclume
+> 2026-08-22 — **Rattrapage ciblé (Claude/Saar)** : deux entrées manquantes/périmées ajoutées à jour
+> de session — `PLAN_FICHE_HORSLIGNE.md` (PWA fiche hors-ligne, absent de ce document jusqu'ici) sous
+> "Autres chantiers immédiats", et l'entrée Exo-armures ci-dessous (§ Chantiers futurs) rafraîchie
+> (Lots 1-4/2bis + A-D réellement codés depuis, périmée depuis longtemps). Le reste du document n'a
+> **pas** été audité ligne à ligne cette session (RW_SYSCOMBAT/COMBATANT_CONTEXT/Sidebar notamment
+> datent toujours du 2026-08-06/12) — ne pas le considérer à jour au-delà de ces deux entrées.
+>
 > Dernière mise à jour : 2026-08-12 — **Point de situation (Saar)**, synchronisation avec l'état réel
 > du projet (dernière mise à jour datait du 2026-08-06, plusieurs chantiers avancés depuis sans y être
 > reflétés). Registre de bugs migré : `docs/BUGIDENTIFIE.md` **archivé** (`docs/Old/`, 2026-08-12),
@@ -114,6 +121,13 @@
   non committé, non testé en navigateur** — prochaine étape : validation par Saar. Répond en partie à
   la dette "Matériel → objets réels" ci-dessous (§ Chantiers futurs) sans la clore entièrement (le
   transfert catalogue ↔ inventaire réel reste hors périmètre de ce plan, cf. son §9)
+- **Fiche personnage hors-ligne (PWA)** (`docs/PLANS/PLAN_FICHE_HORSLIGNE.md`, cadré et codé
+  2026-08-16) — `vite-plugin-pwa` (cache réseau-first des routes fiche/campagne/équipement),
+  file d'écriture locale (`workbox-background-sync`, rejeu FIFO au retour réseau pour
+  blessure/équipement/achat compétence), vue d'impression dédiée (`CharacterPrintPage.jsx`). **5 lots
+  (A/B0/B/C/D) codés et vérifiés (build/lint/serveur)** — prochaine étape : validation navigateur
+  réelle du mode hors-ligne effectif (couper le réseau, agir, rétablir, confirmer le rejeu) et de
+  l'impression, avant de considérer le chantier clos
 - Upload screenshot éditeur → MinIO — 🔲
 - Jets Favoris : drag‑to‑reorder macros (UI) — 🔲
 - Paramètre campagne GM entity move mode (reporté) — 🔲
@@ -191,16 +205,17 @@
 - Moral (règle avancée, explicitement optionnelle au RAW) — `docs/PLANS/PLAN_MORAL.md` (stub) +
   `docs/REGLES/REGLE_MORAL.md` (RAW transcrit). Aucune dépendance technique identifiée avec le reste de
   la roadmap — priorité basse, à caser selon préférence produit plutôt que contrainte
-- Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis, Lot 0 cadrage clos — **Lot 1
-  (Fondations) ✅ codé, non testé navigateur** ; **Lot 2 (Substitution d'attributs) resserré** :
-  mouvement (VIT) ✅ codé, plafond de Compétence + "1 seule Attaque/Tour" ⏸️ bloqués en attendant le
-  refactor du couplage `char_sheet` en dur dans `socketCombatHelpers.js` — **désormais cadré**,
-  `docs/PLANS/PLAN_COMBATANT_CONTEXT.md` (2026-08-06, Lots A-G, prêt à coder). **Corrigé 2026-08-06** :
-  dépend de `docs/PLANS/PLAN_RW_SYSCOMBAT.md` Lots 5-7 (voir ci-dessous, `resolveDroneAssaultAction`
-  partagée) — coder RW_SYSCOMBAT 5-7 d'abord, COMBATANT_CONTEXT ensuite, sinon le dispatch exo est écrit
-  contre du code que RW_SYSCOMBAT va réextraire juste après ; voir EXOARM-COMBATFILE `docs/EN_COURS.md` ;
-  Lot 3 défini mais pas encore rédigé en détail ; indépendants de `PLAN_TEST_CRITIQUE.md`, seul le Lot 8
-  en dépend)
+- Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis — **entrée périmée depuis le
+  2026-08-06, rafraîchie 2026-08-22** : Lots 1-4, 2bis (armure à terre + fenêtre UI dédiée
+  `CombatExoActionWindow.jsx`), catalogue `ref_exo_equipment`/seed des 16 armures RAW, ainsi que
+  `PLAN_COMBATANT_CONTEXT.md` Lots A-G (dispatcher `resolveCombatantTestContext`/
+  `resolveExoTestContext`, Seuil de Test dérivé du pilote avec l'EXF à la place de la Force) sont
+  **tous codés et testés (Node/PostgreSQL réel)**, détail complet `docs/JOURNAL8.md` (sessions
+  2026-08-13 à 2026-08-20). **Aucune exo-armure jouée de bout en bout en combat réel à ce jour** —
+  seul reste ouvert, suivi comme ticket `EXOARM-COMBATFILE` (`bug_tickets`) plutôt que dupliqué ici :
+  validation en jeu réel (attaque CaC, initiative, prone/relever, pipeline de dégâts, plafond
+  Compétence/1 attaque-tour). `PLAN_RW_SYSCOMBAT.md` Lots 5-7 (dépendance documentée ci-dessous) sont
+  également clos depuis, cette dépendance n'est donc plus bloquante)
 - `socketCombatHelpers.js` — découpage structurel (`docs/PLANS/PLAN_RW_SYSCOMBAT.md`, chantier créé
   2026-07-25, Lots 0-4 ✅ clos 2026-07-28 : noyau `computeAttackRoll` pur, dédup `armAwaitingDamage`,
   branchements défenseur CaC et attaquant Tir extraits en fonctions sœurs. **Rouvert 2026-08-06** :
