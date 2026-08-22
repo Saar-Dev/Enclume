@@ -42,6 +42,7 @@ import adminToolsRouter from './routes/adminTools.js'
 import adminUsersRouter from './routes/adminUsers.js'
 import ticketsRouter from './routes/tickets.js'
 import adminTicketsRouter from './routes/adminTickets.js'
+import adminLogsRouter from './routes/adminLogs.js'
 import { createCorsOriginValidator, parseClientOrigins } from './lib/clientOrigins.js'
 import './lib/echeanceHandlerRegistrations.js' // effet de bord : peuple shared/echeanceTypeRegistry.js
 
@@ -132,6 +133,7 @@ app.use('/api/exo-templates', exoTemplatesRouter)
 app.use('/api/admin', adminToolsRouter)
 app.use('/api/admin/users', adminUsersRouter)
 app.use('/api/admin/tickets', adminTicketsRouter)
+app.use('/api/admin/logs', adminLogsRouter)
 app.use('/api/tickets', ticketsRouter)
 app.use('/api/campaigns/:campaignId/documents', documentsRouter)
 app.use('/api/campaigns/:campaignId/merchants', merchantsRouter)

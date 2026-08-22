@@ -61,6 +61,10 @@ export default function AdminPage() {
           <div className="card-title">{t('admin.tileTickets')}</div>
         </div>
 
+        <div className="card campaign-card" onClick={() => navigate('/admin/logs')}>
+          <div className="card-title">{t('admin.tileLogs')}</div>
+        </div>
+
       </div>
     </div>
   )

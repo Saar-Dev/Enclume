@@ -1,3 +1,9 @@
+## v210 — 2026-08-22 — Admin : écran de consultation des logs serveur
+
+### Admin — Logs
+- [feat] Nouvel écran `/admin/logs` (tuile "Logs serveur") : un admin peut consulter les dernières
+  lignes de log du serveur ou du client sans accès SSH au serveur distant.
+
 ## v209 — 2026-08-20 — Options de campagne : token 3D par défaut par type
 
 ### Options de campagne

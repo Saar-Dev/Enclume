@@ -71,7 +71,18 @@
     "tileExoTemplates": "Illustrations exo-armures",
     "tileUsers": "Utilisateurs",
     "tileTickets": "Tickets",
+    "tileLogs": "Logs serveur",
     "comingSoon": "Bientôt"
+  },
+  "adminLogs": {
+    "backToAdmin": "Administration",
+    "title": "Logs serveur",
+    "refresh": "Rafraîchir",
+    "lineCount": "{{count}} lignes",
+    "empty": "Aucune ligne de log.",
+    "errorLoad": "Impossible de charger les logs",
+    "unavailableNotLinux": "Les logs systemd ne sont pas disponibles sur cette instance (environnement de développement local).",
+    "unavailableGeneric": "journalctl est introuvable sur ce serveur."
   },
   "me": {
     "backToDashboard": "Tableau de bord",

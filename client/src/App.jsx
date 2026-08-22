@@ -21,6 +21,7 @@ import DiceCalibrationPage from './pages/DiceCalibrationPage' // OUTIL DEV — v
 import AdminPage from './pages/AdminPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminTicketsPage from './pages/AdminTicketsPage'
+import AdminLogsPage from './pages/AdminLogsPage'
 import ReportTicketPage from './pages/ReportTicketPage'
 import MePage from './pages/MePage'
 
@@ -127,6 +128,9 @@ export default function App() {
         } />
         <Route path="/admin/tickets" element={
           <AdminRoute><AdminTicketsPage /></AdminRoute>
+        } />
+        <Route path="/admin/logs" element={
+          <AdminRoute><AdminLogsPage /></AdminRoute>
         } />
         <Route path="/tickets/new" element={
           <ProtectedRoute><ReportTicketPage /></ProtectedRoute>

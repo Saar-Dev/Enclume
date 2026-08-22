@@ -3835,3 +3835,76 @@ nécessaire plus tard.
 **Reste ouvert, hors périmètre de ce chantier** : `node --test` (sans argument) parcourt aussi
 `migrations_archive/` par défaut et exécute ses `.test.mjs` obsolètes — une exclusion de
 configuration reste à écrire, décision actée avec Saar de ne pas supprimer les fichiers.
+
+---
+
+## Session (Saar) — 2026-08-22 — `ADMIN-LOGS1` : écran admin de consultation des logs serveur
+
+**Contexte** : ticket déjà posé dans `EN_COURS.md` (`ADMIN-LOGS1`, motivé par `COM-RESO1` — bug combat
+critique resté sans diagnostic faute d'accès SSH au serveur distant pendant un test avec le
+beta-testeur). Saar propose de commencer une session de correction de bugs par cet outil de suivi.
+
+**Constat avant code** : aucun logger structuré côté serveur (317 `console.*` bruts, pas de
+winston/pino) — la seule source de logs est le stdout du process. En local le serveur tourne via
+`nodemon` dans un terminal déjà visible, sans intérêt pour un viewer. Sur le serveur distant
+(`docs/SERVEURDISTANTKIWI.md`, en réalité l'instance `dev/Saar`, ports 8193/8194 — le nom du document
+date de la collaboration Kiwi, close depuis), le serveur tourne sous systemd (`enclume-server`) et les
+logs se consultent aujourd'hui via `journalctl -u enclume-server -f` en SSH manuel.
+
+**Décision d'architecture** : journald reste l'autorité des logs en prod (rotation/persistance déjà
+gérées par systemd) — construire un stockage de logs parallèle côté Node aurait dupliqué cette
+autorité (CLAUDE.md §1.4) pour un bénéfice nul. Précédent direct déjà en place et réutilisé :
+`server/src/routes/health.js` fait déjà de l'introspection système (`ps aux`/`df`/`systemctl
+is-active`) via `child_process.exec`, gated `requireAuth+requireAdmin`. Durcissement volontaire par
+rapport à ce précédent : `service`/`lines` viennent de `req.query` (entrée utilisateur), donc
+`execFile` (tableau d'arguments, aucun shell invoqué) plutôt que `exec` (chaîne) — une whitelist seule
+n'aurait pas suffi à écarter toute injection. Sortie demandée en `-o json` (un objet structuré par
+ligne) plutôt que du texte à parser. `console.error`/`console.warn` (stderr) vs `console.log` (stdout)
+donnent déjà à journald une distinction de priorité par défaut — pas besoin de migrer les 317 appels
+`console.*` vers un vrai logger pour avoir un minimum de sévérité affichée.
+
+**Vérification avant de coder, pas supposée** : la question de savoir si l'utilisateur `didier`
+(celui qui fait tourner `enclume-server`) peut lire son propre journal sans `sudo` était un
+[INCONNU] réel — la connexion SSH directe au serveur distant a été refusée par le mode auto (action
+jugée à risque plus large, raisonnablement bloquée). Saar a lancé la commande lui-même
+(`journalctl -u enclume-server -n 3 --no-pager`) : lecture réussie sans droit spécial, architecture
+validée avant tout code.
+
+**Codé** : `server/src/routes/adminLogs.js` (nouveau, `GET /api/admin/logs`, whitelist stricte
+`enclume-server`/`enclume-client`, `lines` clampé 20-2000, `execFile('journalctl', [...])`, réponse
+`{available:false}` explicite si `journalctl` absent ou plateforme non-Linux — jamais une erreur
+avalée) ; montage dans `server/src/index.js` ; `client/src/pages/AdminLogsPage.jsx` (nouveau, miroir
+`AdminUsersPage.jsx`/`AdminTicketsPage.jsx`) ; tuile dans `AdminPage.jsx` ; route `/admin/logs` dans
+`App.jsx` ; clés `admin.tileLogs`/`adminLogs.*` dans `fr.json` (`en.json` non touché, gelé).
+
+**Défaut trouvé et corrigé en cours de code** : le premier jet (`load` en `useCallback` invoqué par un
+`useEffect([load])`, patron identique à `AdminTicketsPage.jsx`) déclenchait
+`react-hooks/set-state-in-effect` (règle récente d'`eslint-plugin-react-hooks` v7, déjà présente sur
+10 fichiers pré-existants du projet, non liée à cette tâche). Plutôt que supprimer l'avertissement,
+effet réécrit selon le patron officiel React ("You Might Not Need An Effect", fetch basé sur des
+props/state) : fetch inliné dans l'effet + drapeau `ignore` en cleanup, qui écarte une réponse
+devenue obsolète si `service`/`lines` changent avant qu'elle revienne — corrige au passage une
+condition de course réelle que le premier jet et `AdminTicketsPage.jsx` n'avaient pas. Bouton
+"Rafraîchir" redéclenche le même effet via un `refreshToken` incrémenté au clic.
+
+**Testé** : `journalctl` lu avec succès par `didier` sur le serveur distant (ci-dessus). `npm run
+build` (client) : OK. `node --check` sur les fichiers serveur touchés : OK. `fr.json` : JSON valide.
+Serveur dev déjà lancé par Saar (non redémarré) : `nodemon` a rechargé après les édits,
+`GET /api/admin/logs` répond `401` sans crash (auth exigée, comme attendu), `/api/health` toujours
+`200` (pas de régression). Lint ciblé propre hors la note ci-dessus.
+**Non testé** : rendu réel dans le navigateur (tuile Admin, écran `/admin/logs`, affichage effectif
+des lignes) — pas de test navigateur par Claude (protocole). Comportement réel sur le serveur distant
+(retour effectif de `journalctl -o json`) non exercé au-delà de la vérification de permission.
+**Données** : aucune migration, aucun effet sur les données existantes.
+**Retour arrière** : aucun risque de perte — lecture seule côté serveur (`journalctl`), route
+entièrement nouvelle, aucune route/fichier existant modifié en profondeur (seuls des ajouts de
+montage/tuile/route).
+
+**Effet de bord positif, hors périmètre initial** : débloque potentiellement le diagnostic de
+`COM-RESO1` (double résolution combat critique, resté sans piste faute de logs accessibles) — prochaine
+occurrence en jeu, consulter `/admin/logs` (service `enclume-server`) au lieu de dépendre d'un accès
+SSH.
+
+**Reste ouvert** : mojibake déjà présent dans journald sur les caractères accentués (`ConnectÃ©` au
+lieu de `Connecté`, observé en vérifiant la permission ci-dessus) — pas causé par cet écran, existe déjà
+dans le flux capturé par systemd, non traité (hors périmètre, à signaler à Saar s'il gêne la lecture).
