@@ -3908,3 +3908,45 @@ SSH.
 **Reste ouvert** : mojibake déjà présent dans journald sur les caractères accentués (`ConnectÃ©` au
 lieu de `Connecté`, observé en vérifiant la permission ci-dessus) — pas causé par cet écran, existe déjà
 dans le flux capturé par systemd, non traité (hors périmètre, à signaler à Saar s'il gêne la lecture).
+
+---
+
+## Session (Saar) — 2026-08-22 — `INV4` : diagnostic périmé + ajout du contrôle de quantité à la revente
+
+**Contexte** : Saar demande de reprendre la correction de bugs, sélection libre d'un ticket. Écarté
+d'abord 3 tickets de `bug_tickets` nécessitant chacun un chantier dédié ou une décision produit
+préalable (`setState-in-effect` : 16 fichiers, collision réelle avec le chantier exo-armure en cours,
+déjà noté "hors session de triage" dans ses propres `admin_notes` ; `ArmorWindow` : composant entier à
+construire ; catalogue marchand ignorant `ref_exo_equipment` : décision produit à trancher d'abord).
+Choix retenu : **INV4** (`docs/EN_COURS.md`), décrit comme perte réelle de données à la revente,
+priorité Haute, root cause déjà verifiée par une session antérieure.
+
+**Vérification avant code (le code prime sur la mémoire/la doc, CLAUDE.md §1.1)** : lecture de
+`tradeService.js#executeSell` — le code réel (ligne 319) appelle déjà
+`removeItem(offer.from_char_id, item.char_inventory_id, item.qty ?? 1, trx)`, pas le `.delete()` brut
+que le ticket décrivait. **Le bug de perte totale du stack n'existe plus** — corrigé par une session
+antérieure sans mise à jour du ticket. Le serveur revalide aussi la quantité disponible à l'acceptation
+de l'offre (`inv.quantity < (item.qty ?? 1)` → rejet). Reste réel, confirmé en lisant `TradeWindow.jsx` :
+`toggleSellItem` (ligne 407-421) figeait `qty:1` sans aucun moyen de le changer — contrairement au
+côté achat (`cart`/`addToCart`/`removeFromCart`, même fichier, lignes ~183-198), qui a déjà un
+contrôle +/-. Le récap d'offre de vente n'affichait même pas la quantité.
+
+**Reformulation du scope actée avec Saar avant de coder** (le diagnostic initial ne tenait plus, donc
+pas une simple exécution du ticket tel quel) : au lieu d'un correctif de perte de données urgent, ajout
+d'une capacité UI manquante en réutilisant le patron déjà existant dans le même fichier.
+
+**Codé** : `changeSellQty(itemId, delta, maxQty)` (nouveau, `TradeWindow.jsx`, plafonné par
+`item.quantity` — revalidé de toute façon côté serveur à l'acceptation) ; contrôle +/- affiché sous
+chaque ligne d'inventaire sélectionnée pour la revente (`stopPropagation` pour ne pas redéclencher la
+désélection du clic sur la ligne) ; quantité affichée dans le récap d'offre (`×{qty}` si > 1, même
+convention que les affichages en lecture seule ailleurs dans le fichier).
+
+**Testé** : `npm run build` (client) OK. Lint ciblé sur `TradeWindow.jsx` : 6 erreurs pré-existantes
+(`no-unused-vars`, variables/fonctions de l'échange PJ↔PJ non liées à la revente) confirmées
+identiques avant/après mon changement par comparaison `git stash`/lint/`git stash pop` — aucune
+nouvelle erreur introduite.
+**Non testé** : scénario réel navigateur (sélectionner un stack, ajuster la quantité, proposer l'offre,
+confirmer côté MJ) — pas de test navigateur par Claude (protocole).
+**Données** : aucune migration, aucun effet sur les données existantes.
+**Retour arrière** : aucun risque — ajout pur côté client (nouvelle fonction + JSX conditionnel),
+aucune route/service serveur modifiée.

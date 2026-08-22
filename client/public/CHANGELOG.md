@@ -1,3 +1,9 @@
+## v211 — 2026-08-22 — Fix : revente limitée à 1 unité par objet
+
+### Playground — Commerce
+- [fix] La revente à un marchand permet désormais de choisir la quantité d'un objet empilé (contrôle
+  +/-), au lieu de toujours proposer une seule unité.
+
 ## v210 — 2026-08-22 — Admin : écran de consultation des logs serveur
 
 ### Admin — Logs

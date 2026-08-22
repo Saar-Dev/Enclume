@@ -420,6 +420,16 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
     })
   }
 
+  // Quantité proposée à la revente pour un item déjà sélectionné — plafonnée par le stack réellement
+  // possédé (`maxQty`, revalidé de toute façon côté serveur à l'acceptation, `executeSell`).
+  const changeSellQty = (itemId, delta, maxQty) => {
+    setSellItems(prev => prev.map(o => {
+      if (o.char_inventory_id !== itemId) return o
+      const next = Math.min(maxQty, Math.max(1, o.qty + delta))
+      return { ...o, qty: next }
+    }))
+  }
+
   const handleProposeSell = useCallback(() => {
     if (!socket || !myCharId || !selMerchantId || sellItems.length === 0) return
     socket.emit(WS.TRADE_SELL_PROPOSED, {
@@ -960,7 +970,8 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                     {!invLoading && myInventory.length === 0 && <p style={S.empty}>{t('trade.window.sell_no_items')}</p>}
                     {myInventory.map(item => {
                       const name       = item.custom_name || item.ref_name || '?'
-                      const isSelected = sellItems.some(o => o.char_inventory_id === item.id)
+                      const sellEntry  = sellItems.find(o => o.char_inventory_id === item.id)
+                      const isSelected = !!sellEntry
                       const catEntry   = catalog.find(c => c.id === item.equipment_id)
                       return (
                         <div
@@ -977,6 +988,21 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                             {item.quantity > 1 && <span style={{ fontSize: '12px', color: '#888' }}>×{item.quantity}</span>}
                             {isSelected && <span style={{ color: '#3aaa6a', fontSize: '13px', flexShrink: 0 }}>✓</span>}
                           </div>
+                          {isSelected && item.quantity > 1 && (
+                            <div style={S.qtyRow} onClick={e => e.stopPropagation()}>
+                              <button
+                                className="btn btn-ghost"
+                                style={S.qtyBtn}
+                                onClick={() => changeSellQty(item.id, -1, item.quantity)}
+                              >−</button>
+                              <span style={S.qtyVal}>{sellEntry.qty}</span>
+                              <button
+                                className="btn btn-ghost"
+                                style={S.qtyBtn}
+                                onClick={() => changeSellQty(item.id, 1, item.quantity)}
+                              >+</button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -999,7 +1025,7 @@ export default function TradeWindow({ campaignId, socket, onClose, isGm = true, 
                       <div style={{ marginTop: '4px', marginBottom: '4px' }}>
                         {sellItems.map(o => (
                           <div key={o.char_inventory_id} style={S.cartRow}>
-                            <span style={S.cartItemName}>{o.name}</span>
+                            <span style={S.cartItemName}>{o.name}{o.qty > 1 ? ` ×${o.qty}` : ''}</span>
                           </div>
                         ))}
                       </div>
