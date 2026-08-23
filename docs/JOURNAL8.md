@@ -4404,3 +4404,63 @@ instances) corrige les 5 lignes, assertion de la valeur `ammo_effects` attendue 
 **Données** : migration 312 appliquée en local (`db.migrate.latest()`), 5 lignes `ref_equipment`
 modifiées (`ammo_effects` uniquement, aucune autre colonne).
 **Retour arrière** : `down()` fourni, restaure les valeurs d'origine exactes.
+
+## Session (Saar) — 2026-08-23 — `WIZ46` : STEP3 effaçait les mutations Revers de STEP4
+
+**Contexte** : discussion sur la collaboration temps réel MJ/joueur dans le Wizard (double-écriture
+sur un même champ). Détour volontaire vers la question de fond posée par Saar (« l'architecture
+n'est-elle pas adaptée ? ») avant tout code sur le sujet initial, conformément à la clarification
+posée dans cette même session (qualité structurelle avant vitesse — voir mémoire
+`feedback_quality_over_speed_no_repeat_patches`) : audit complet des 7 étapes du Wizard
+(`reconcileCreation`/`getStepNState`, `creationService.js` lu intégralement) plutôt qu'une réponse
+d'intuition.
+
+**Résultat de l'audit** : l'architecture n'est globalement pas « bancale » — Steps 0/1/2/5/6/Récap
+saines, et les 2 bugs de resync déjà connus (`base_age`/`age`, `skill_allocations`/
+`autodidacte_allocations`) sont bien corrigés de façon durable (colonnes brutes dédiées), pas des
+rustines fragiles. Deux trous réels trouvés, non documentés avant cette session :
+
+1. **`WIZ46` (corrigé cette session)** : `reconcileCreation` §STEP3 (`creationService.js` ~L821)
+   supprimait `char_mutations` sans filtrer par `source` — efface au passage les mutations
+   `source='revers'` (propriété exclusive de STEP4), jamais réinsérées par STEP3 (qui ne réinsère que
+   `chosen`/`random`). Perte silencieuse si le joueur resoumet Step3 seul (« Changer de méthode » →
+   Suivant sans repasser par l'Étape 4). STEP4 fait déjà l'opération symétrique correctement filtrée
+   depuis l'origine (commentaire explicite déjà présent dans le code, ligne ~1019-1023) — STEP3
+   n'appliquait simplement pas la réciproque. Correctif : `.whereIn('source', ['chosen', 'random'])`
+   ajouté au `.del()`. Test ajouté `creationRoundTrip.test.mjs` (mutation `revers` posée directement
+   via `mutationService.addMutation`, resubmit Step3 seul, vérifie la survie de la ligne).
+2. **Step4 `openedSkills` non reconstructible (non corrigé, `bug_tickets` à créer si besoin)** : une
+   compétence « ouverte » via un groupe de choix sans allocation de points n'a pas de colonne brute
+   dédiée contrairement à `skillAllocations` — perdue au prochain resync. Même schéma causal que le
+   bug déjà corrigé, solution déjà connue, juste pas encore appliquée à ce champ. `[HYPOTHÈSE]`
+   code-tracée, non instrumentée en conditions réelles — laissé de côté, pas encore tiqueté.
+
+**Analyse à charge faite avant codage** (demandée explicitement par Saar) : le filtre proposé pour
+WIZ46 réintroduit un chemin vers un trou préexistant et distinct — les contraintes uniques
+`uq_char_mut_no_sub`/`uq_char_mut_with_sub` (`char_mutations`, migration
+`115_char_mutations_constraints.js`) ne sont pas partitionnées par `source`. Une mutation `revers`
+préservée par le nouveau filtre peut entrer en collision avec une mutation `chosen` du même
+`mutation_id` soumise ensuite (fusion silencieuse via `ON CONFLICT`, ou erreur 500 brute pour une
+mutation à sous-type). Vérifié que ce trou existe déjà aujourd'hui dans le sens inverse
+(`mutationService.js#addMutation`, appelé par STEP4 ligne ~1384, même `ON CONFLICT` non filtré) — pas
+une régression introduite par ce correctif, mais un trou qui mérite son propre arbitrage produit
+(sémantique de `count` : total toutes sources, ou par source ?). Tracé séparément, hors périmètre
+volontaire de ce lot : ticket `MUT-SRC-UNIQ1`.
+
+**Fichiers touchés** : `server/src/services/creationService.js` (le fix, 1 ligne + commentaire),
+`server/src/services/creationRoundTrip.test.mjs` (nouveau test), `server/src/scripts/
+create_ticket_wiz46_step3_wipes_revers.js` et `server/src/scripts/
+create_ticket_mutation_source_unicity.js` (scripts à usage unique, déjà exécutés).
+
+**Testé** : `node --env-file=.env --test server/src/services/creationRoundTrip.test.mjs` → 3/3 verts,
+dont le nouveau test.
+**Non testé** : ⚠️ clos partiel — scénario réel navigateur (MJ + joueur) non fait. Ticket `WIZ46`
+laissé `in_progress`, pas `resolved`, jusqu'à confirmation.
+**Données** : aucune migration, correctif de code pur. Aucune réparation rétroactive des mutations
+Revers déjà perdues avant ce correctif sur des fiches encore en brouillon (`wizard_locked_at IS
+NULL` — portée nécessairement limitée aux créations en cours, un personnage verrouillé n'appelle
+plus jamais `reconcile`).
+**Retour arrière** : aucune migration, `git revert` du commit suffit.
+
+Sujet initial (présence temps réel MJ/joueur sur un champ, double-écriture) resté en discussion,
+non implémenté cette session — voir `docs/EN_COURS.md` si repris plus tard.

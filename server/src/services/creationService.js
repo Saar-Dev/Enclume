@@ -818,7 +818,11 @@ export async function reconcileCreation(sheetId, { step1, step2, step3, step4, s
       if (previouslyActiveMutations.some(m => m.mod_sex)) identityFields.push('sex')
       if (previouslyActiveMutations.some(m => m.mod_fertility)) identityFields.push('is_fertile')
 
-      await trx('char_mutations').where({ char_sheet_id: sheetId }).del()
+      // Filtré par source (comme STEP4 fait déjà pour son propre wipe, ligne ~1024) : STEP3 n'est
+      // propriétaire que de 'chosen'/'random', jamais de 'revers' (octroyé par STEP4 — Revers/tirage
+      // de carrière). Un wipe non filtré ici effaçait silencieusement les mutations Revers au moindre
+      // resubmit de STEP3 seul (ex. "Changer de méthode" → Suivant sans repasser par l'Étape 4).
+      await trx('char_mutations').where({ char_sheet_id: sheetId }).whereIn('source', ['chosen', 'random']).del()
       const mutationsToInsert = step3Method === 'random' ? (step3Kept ?? []) : (step3Mutations ?? [])
       const mutationSource = step3Method === 'random' ? 'random' : 'chosen'
       for (const { mutation_id, subtype_id } of mutationsToInsert) {

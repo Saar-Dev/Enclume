@@ -21,6 +21,7 @@ import {
   startCreation, reconcileCreation,
   getStep1State, getStep2State, getStep3State, getStep4State, getStep5State,
 } from './creationService.js'
+import { addMutation } from './mutationService.js'
 
 const skip = !process.env.DATABASE_URL
 
@@ -169,6 +170,37 @@ test('round-trip Étape 1 : main directrice jamais choisie reste null, jamais r�
       () => reconcileCreation(sheetId, { step1 }, false),
       'réinjecter le state tel quel ne doit jamais rejeter la propre sortie du serveur'
     )
+  } finally {
+    await cleanup(fixture)
+  }
+})
+
+// Bug trouvé en corrigeant WIZ?? (docs/EN_COURS.md historique — trace détaillée bug_tickets) :
+// reconcileCreation §STEP3 supprimait TOUTES les char_mutations du personnage sans filtrer par
+// `source`, effaçant au passage les mutations 'revers' (propriété exclusive de STEP4). Reproduit ici
+// sans rejouer tout le mécanisme Disadvantage → grantedMutations : seule l'existence d'une ligne
+// source='revers' compte pour ce garde-fou, addMutation() (mutationService.js) est le même point
+// d'entrée que STEP4 utilise réellement (creationService.js, boucle grantedMutations).
+// mutation_id choisi dynamiquement, distinct de MUTATION_OREILLE_MANQUANTE_ID : évite de croiser le
+// trou d'unicité inter-source non corrigé par ce lot (index uq_char_mut_no_sub non partitionné par
+// source — cf. ticket dédié).
+test('round-trip Étape 3 : resubmit Step3 seul ne doit pas effacer une mutation Revers (Étape 4)', { skip }, async () => {
+  const fixture = await createFixture()
+  try {
+    const { sheetId } = fixture
+    const otherMutation = await db('ref_mutations')
+      .whereNot('mutation_id', MUTATION_OREILLE_MANQUANTE_ID)
+      .first('mutation_id')
+    await addMutation(sheetId, otherMutation.mutation_id, null, 'revers')
+
+    // Resubmit Step3 seul (payload partiel, pas de step4 dans cet appel) — simule "Changer de
+    // méthode" → Suivant sans repasser par l'Étape 4.
+    await reconcileCreation(sheetId, { step3: { method: 'none', mutations: [], pcSpent: 0 } }, false)
+
+    const reversRows = await db('char_mutations')
+      .where({ char_sheet_id: sheetId, source: 'revers', status: 'active' })
+    assert.equal(reversRows.length, 1, 'la mutation Revers ne doit pas être effacée par un resubmit Step3 seul')
+    assert.equal(reversRows[0].mutation_id, otherMutation.mutation_id)
   } finally {
     await cleanup(fixture)
   }
