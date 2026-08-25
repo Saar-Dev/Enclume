@@ -8,13 +8,19 @@
 > Les bugs actifs vivent dans `bug_tickets` (`/admin/tickets`, `docs/SYSTEME/TICKETS.md`), jamais ici.
 >
 > **Carte complète de la documentation** : `docs/SYSTEME/INDEX.md`. **Vision produit et versions
-> (v1/v2/v3/vX)** : `docs/FOUNDATION.md`. **État RAW chapitre par chapitre, avec ordre de
-> dépendances proposé pour le backend restant** : `docs/SYSTEME/COUVERTURE_RAW.md`. Les trois se
-> référencent mutuellement, aucun ne duplique le contenu d'un autre (Règle 2, `docs/RegleDocumentaire.md`).
+> (v1/v2/v3/vX)** : `docs/FOUNDATION.md`. **État RAW chapitre par chapitre** : `docs/SYSTEME/COUVERTURE_RAW.md`.
+> Les trois se référencent mutuellement, aucun ne duplique le contenu d'un autre (Règle 2, `docs/RegleDocumentaire.md`).
 >
-> **Philosophie actée (Saar, 2026-08-25)** : couverture RAW complète (backend) avant esthétique/
-> frontend, tant que des mécaniques entières manquent encore côté serveur (`docs/FOUNDATION.md` §2).
+> **Approche actuelle de Saar (2026-08-25, peut évoluer)** : couverture RAW complète (backend) avant
+> esthétique/frontend, tant que des mécaniques entières manquent encore côté serveur — **pas un
+> invariant** (retiré de `docs/FOUNDATION.md` pour cette raison), une priorité de travail assumée.
 >
+> **Correction (2026-08-25, analyse à charge)** : l'ordre de séquencement proposé plus bas
+> (Usure/Intégrité → AOE → Armes spéciales → ...) a été retiré — construit par déduction de
+> dépendances techniques (grep, fichiers qui se référencent), pas par une compréhension réelle du jeu
+> ni de ce qui compte pour Saar. Seul point confirmé par Saar : Usure/Intégrité et Informatique/
+> pannes sont nécessaires pour *finir* Exo-armures. Le reste de l'ordre reste à établir avec lui,
+> pas à déduire seul.
 > **Refondu le 2026-08-25** (Claude/Saar) — l'ancienne version accumulait un historique daté en tête
 > (2026-07-15 → 2026-08-23, ~110 lignes de blockquotes) jamais purgé, et **8 des 15 fichiers
 > `docs/PLANS/*.md` n'y apparaissaient nulle part** (`PLAN_ADMIN_BACKUP`, `PLAN_COMBAT_MODE_AMBIANT`,
@@ -50,13 +56,9 @@
 
 | Chantier | Doc | Pourquoi différé |
 |---|---|---|
-| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` (en-tête réel : `PLAN_ANIMATIONS.md`, nom de fichier trompeur — confirmé toujours d'actualité par Saar 2026-08-25 ; référencé par 7 fichiers dont 1 fichier de code réel, à mettre à jour si renommage) | Chantier esthétique/frontend — plan complet (8 phases, ~490 lignes), aucun code écrit. Reste valide mais non prioritaire tant que des mécaniques RAW entières manquent côté serveur (`docs/FOUNDATION.md` §2). **Pas totalement isolé** (trouvé 2026-08-25, analyse à charge) : `server/src/lib/characterStateShadowCheck.js` et `docs/SYSTEME/ETATS_PERSONNAGE.md` reportent volontairement un nettoyage (Lot 2c, colonnes legacy `combat_roster.state_position`/`state_weapon`) jusqu'à la Phase 7 de ce plan — urgence faible (le doc dit lui-même "plus d'urgence fusion" depuis le départ de Kiwi), mais pas zéro dette en attente |
+| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` (en-tête réel : `PLAN_ANIMATIONS.md`, nom de fichier trompeur — référencé par 7 fichiers dont 1 fichier de code réel) | Chantier esthétique/frontend, non prioritaire tant que des mécaniques RAW entières manquent côté serveur (approche actuelle de Saar, peut évoluer — voir banner en tête de ce document). **Pas totalement isolé** : `server/src/lib/characterStateShadowCheck.js`/`docs/SYSTEME/ETATS_PERSONNAGE.md` reportent un nettoyage jusqu'à la Phase 7 de ce plan (urgence faible). **Décalage trouvé (2026-08-25)** : le plan écrit démarre directement par le rig squelettique complet (Mixamo, Phase 1) — Saar décrit la séquence réellement voulue comme (1) animations spécifiques liées aux actions des tokens d'abord, (2) rig/masque squelettique ensuite pour l'animation continue. **Le document ne reflète pas cet ordre voulu** — à recadrer avant de le renommer ou d'y toucher, pas juste un problème de nom de fichier |
 
 ## 2. Chantiers à cadrer avant tout code
-
-> Voir `docs/SYSTEME/COUVERTURE_RAW.md` pour l'ordre de dépendances techniques proposé entre ces
-> chantiers (non encore validé par Saar) — Usure/Intégrité et la résolution de zone d'effet (AOE)
-> conditionnent plusieurs des lignes ci-dessous.
 
 | Chantier | Doc(s) | Ce qui manque |
 |---|---|---|
@@ -66,8 +68,8 @@
 | Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[HYPOTHÈSE, non vérifiée]** dépendrait en partie de la résolution AOE ci-dessus — déduit des noms de pouvoirs (Barrière, Onde de choc, Champ...), le texte RAW réel de ce chapitre n'a pas été lu. À vérifier avant de cadrer. Décision de scope nécessaire dans tous les cas (chapitre entier ou sous-ensemble prioritaire) |
 | Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
 | Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02). Chantier esthétique — cohérent avec la philosophie backend-first, à cadrer mais pas prioritaire |
-| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) et de "Tests critiques/Catastrophe par marge" (§3). Proposé comme premier chantier à cadrer dans `COUVERTURE_RAW.md` (débloque le plus de choses) |
-| Informatique et pannes (systèmes électroniques exo) | — (RAW transcrite : `REGLES/REGLE_ORDINATEUR.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Dépendance explicite d'Exo-armures (Saar) et d'Usure/Intégrité (même famille de mécanique — Test de panne) |
+| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`, jamais lu à ce jour). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — **confirmé par Saar (2026-08-25) : nécessaire pour finir Exo-armures**, avec Informatique/pannes ci-dessous |
+| Informatique et pannes (systèmes électroniques exo) | — (RAW transcrite : `REGLES/REGLE_ORDINATEUR.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. **Confirmé par Saar (2026-08-25) : nécessaire pour finir Exo-armures**, avec Usure/Intégrité ci-dessus |
 | Moral | `PLANS/PLAN_MORAL.md` | Stub (`Lire @REGLE_MORAL.md`). Règle RAW optionnelle, aucune dépendance technique identifiée — priorité basse, à caser selon préférence produit plutôt que contrainte |
 | Interactions porte/échelle en session | `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` | N'est pas un plan — une base de recherche (état du code, fichiers concernés, l'ascenseur comme seule référence fonctionnelle) en attente que Saar rédige le vrai plan à partir de ça. Origine : ticket `ENTITYCLICK1`. **Nuance (2026-08-25)** : le reste du bucket "interactions environnement" cité par Saar n'est pas un gap uniforme — la couverture (se cacher derrière un mur) est déjà largement implémentée (`state_cover`/`coverageModifier`), l'inondation a une infrastructure partielle (`BUILTIN_WORLD_EFFECTS`, propagation par compartiments) — détail `COUVERTURE_RAW.md` §8 |
 

@@ -133,26 +133,18 @@ plusieurs chantiers en dépendront durablement).
 
 ---
 
-## Ordre proposé (à valider avec Saar, `docs/ROADMAP.md` reflète l'état une fois tranché)
+## Ordre — retiré (2026-08-25, analyse à charge)
 
-Pas encore une décision — une proposition fondée sur les dépendances techniques trouvées ci-dessus,
-pas sur une préférence de contenu :
+Une première version de cette section proposait un ordre complet en 8 points (Usure/Intégrité → AOE
+→ Armes spéciales → Arts martiaux → Force Polaris → Informatique/pannes → Interactions → sous-marin).
+**Retiré** : construit par déduction de dépendances techniques trouvées par recherche de code (grep,
+fichiers qui se référencent), pas par une compréhension réelle du jeu ni de ce qui compte pour Saar —
+au moins un maillon (Force Polaris → AOE, §4/§9) reposait sur une hypothèse jamais vérifiée en lisant
+la RAW. Présenter ça comme un ordre "prêt à valider" était prématuré.
 
-1. **Usure & Intégrité du matériel** — prérequis explicite d'Exo-armures (Saar), débloque aussi
-   Informatique/pannes exo et une partie d'Armes spéciales. Cadrage à écrire en premier (stub
-   aujourd'hui).
-2. **Résolution de zone d'effet (AOE)** — brique technique partagée, prérequis d'Armes spéciales ET
-   de Force Polaris. Vaut la peine d'être cadrée/construite une fois, avant le contenu qui en dépend.
-3. **Armes spéciales** — une fois §1/§2 disponibles, cadrage RAW déjà transcrit, contenu borné (4
-   mécaniques).
-4. **Corps à corps / Arts martiaux** — indépendant de §1/§2, RAW déjà transcrite, aucun PLAN écrit —
-   peut être cadré en parallèle de §1-3.
-5. **Force Polaris** — le plus gros morceau (~40 pouvoirs), dépend de §2. Nécessite d'abord une
-   décision de scope (tout le chapitre ou un sous-ensemble).
-6. **Informatique/pannes exo** — dépend de §1, complète Exo-armures (§16 du plan).
-7. **Interactions environnement** — portes/échelles à cadrer (`PLAN_INTERACTIONS_CONNECTEURS.md`),
-   couverture déjà faite (juste à vérifier en jeu), inondation à vérifier avant de cadrer quoi que ce
-   soit.
-8. **Combat sous-marin** — reporté à v3 (Saar), après tout ce qui précède.
+**Seul point confirmé par Saar (2026-08-25)** : Usure & Intégrité du matériel et Informatique/pannes
+exo sont nécessaires pour finir Exo-armures. L'ordre entre les autres chantiers (Armes spéciales,
+Arts martiaux, Force Polaris, AOE, Interactions environnement, sous-marin) reste à établir avec Saar,
+pas à déduire seul depuis ce document.
 
 Exo-armures Étape A/B (déjà en cours, `docs/ROADMAP.md` §1) n'attend rien de cette liste — indépendant.
