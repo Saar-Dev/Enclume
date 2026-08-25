@@ -1,294 +1,100 @@
 # ROADMAP — Projet Enclume
-> 2026-08-23 (2e passe, point de situation Saar) — Retiré « Wizard création à deux » (doublon de la
-> passe précédente ci-dessous), Sidebar Lot 5 (extrait, commit `afc1e87`, plan clos), « Export PDF
-> fiche personnage » (plus d'actualité, remplacé par un export Google Sheets — chantier à cadrer),
-> « Matériel → objets réels » (déjà codé, confirmé par Saar). Jauges de Matériel : testé fonctionnel
-> par Saar, entrée fermée — mais bug trouvé au passage (playground = même pouvoir de création d'item
-> gratuit que Wizard Step6), ticket créé. Exo-armures : corrigé — pas juste "reste à valider", un
-> vrai bloquant trouvé (`ArmorWindow` jamais construite, ticket `ARMORWINDOW-MISSING1` déjà existant).
-> Décisions Saar obtenues dans la foulée : Google Sheets **remplace** la PWA (chantier PWA abandonné,
-> `docs/Old/PLAN_FICHE_HORSLIGNE.md`, 🔒 retiré d'`EN_COURS.md`, code des 5 lots resté commité mais
-> déprioritisé) ; "RW_SYSCOMBAT testé" couvre **tout le chantier** (Lot 7 + Lot 8a/8c) — chantier
-> `socketCombatHelpers.js` clos, ticket `PLAN_RW_SYSCOMBAT-LOT7` résolu.
+
+> **Rôle de ce document** : planification prospective — quoi reste à faire, ce qui est cadré ou pas,
+> ce qui bloque. Ce n'est **pas** un historique : les décisions déjà prises, le détail de ce qui est
+> clos et les comptes-rendus de session vivent dans `docs/JOURNAL8.md` (décisions/validations
+> durables) et `docs/ASBUILT.md` (ce qui est réellement déployé et stable). **Un chantier clos est
+> retiré d'ici**, jamais laissé en `~~barré~~` — s'il faut le retrouver, il est dans JOURNAL8/ASBUILT.
+> Les bugs actifs vivent dans `bug_tickets` (`/admin/tickets`, `docs/SYSTEME/TICKETS.md`), jamais ici.
 >
-> 2026-08-23 — Retrait de « Wizard création à deux (GM + joueur) » (§ Chantiers futurs) : entrée
-> périmée, ce chantier est en fait déjà codé et clos (`docs/Old/PLAN_WIZARDCOLLAB.md`), contenu
-> durable transféré vers `docs/SYSTEME/PERSONNAGE_WIZARD.md` §5 le même jour. Trouvé en mettant à jour
-> ce doc SYSTEME, pas une nouvelle vérification de tout ce document.
+> **Carte complète de la documentation** : `docs/SYSTEME/INDEX.md`. **Vision produit et versions
+> (v1/v2/v3/vX)** : `docs/FOUNDATION.md`. Les deux se référencent mutuellement, aucun des trois ne
+> duplique le contenu d'un autre (Règle 2, `docs/RegleDocumentaire.md`).
 >
-> 2026-08-22 — **Rattrapage ciblé (Claude/Saar)** : deux entrées manquantes/périmées ajoutées à jour
-> de session — `PLAN_FICHE_HORSLIGNE.md` (PWA fiche hors-ligne, absent de ce document jusqu'ici) sous
-> "Autres chantiers immédiats", et l'entrée Exo-armures ci-dessous (§ Chantiers futurs) rafraîchie
-> (Lots 1-4/2bis + A-D réellement codés depuis, périmée depuis longtemps). Le reste du document n'a
-> **pas** été audité ligne à ligne cette session (RW_SYSCOMBAT/COMBATANT_CONTEXT/Sidebar notamment
-> datent toujours du 2026-08-06/12) — ne pas le considérer à jour au-delà de ces deux entrées.
+> **Refondu le 2026-08-25** (Claude/Saar) — l'ancienne version accumulait un historique daté en tête
+> (2026-07-15 → 2026-08-23, ~110 lignes de blockquotes) jamais purgé, et **8 des 15 fichiers
+> `docs/PLANS/*.md` n'y apparaissaient nulle part** (`PLAN_ADMIN_BACKUP`, `PLAN_COMBAT_MODE_AMBIANT`,
+> `PLAN_DECALS`, `PLAN_ENVIRONNEMENT_MILIEUX`, `PLAN_INTERACTIONS_CONNECTEURS`, `PLAN_RW_EXPORT`,
+> `PLAN_RW_MATERIAUX`, `PLAN_RW_TOKEN`). Historique préservé intégralement dans `docs/JOURNAL8.md` ;
+> ce document ne garde désormais que l'état courant, un chantier = une ligne ou un bloc, jamais un
+> journal de qui a décidé quoi et quand (cette information vit dans JOURNAL8.md).
 >
-> Dernière mise à jour : 2026-08-12 — **Point de situation (Saar)**, synchronisation avec l'état réel
-> du projet (dernière mise à jour datait du 2026-08-06, plusieurs chantiers avancés depuis sans y être
-> reflétés). Registre de bugs migré : `docs/BUGIDENTIFIE.md` **archivé** (`docs/Old/`, 2026-08-12),
-> source unique désormais la table `bug_tickets` / écran `/admin/tickets` (`docs/SYSTEME/TICKETS.md`)
-> — toute référence à `BUGIDENTIFIE.md` plus bas dans ce document est obsolète. Rôle administrateur +
-> page `/admin` construits et confirmés en navigateur en local (rien poussé à ce stade). Triage Wizard
-> (2026-08-11/12, `docs/BUG WIZARD.md`) : une quinzaine de bugs (WIZ5 à WIZ29) codés, la plupart
-> `⚠️ clos partiel` (codé, scénario réel navigateur non testé) — WIZ6/27/28/29 seuls confirmés
-> fonctionnels en navigateur par Saar ; détail complet `docs/JOURNAL8.md` (sessions 2026-08-11 et
-> 2026-08-12), non repris ligne à ligne ici (bugs suivis par ticket, pas chantiers prospectifs).
-> **Chantier non tracé jusqu'ici, ajouté ci-dessous** : Jauges de Matériel
-> (`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md`) — codé de bout en bout (worktree actuel, non
-> committé), non testé en navigateur ; répond partiellement à la dette "Matériel → objets réels"
-> déjà listée plus bas. `docs/PLANS/PLAN_RW_SYSCOMBAT.md` a avancé au-delà du Lot 7 déjà noté plus
-> bas : Lot 8a codé et testé (unitaire + diff), en attente de validation en jeu ; Lot 8b abandonné
-> (absorbé par le Lot 8c après analyse à charge) ; Lot 8c codé (diff relu), en attente fixture jetable
-> ET session de jeu réelle — aucune des deux faite, ne pas considérer ce lot clos.
->
-> 2026-08-06 — **Revue de dépendances inter-chantiers (Saar)**, deux erreurs
-> corrigées dans ce document. (1) **RW_SYSCOMBAT Lots 5-7 et COMBATANT_CONTEXT ne sont pas
-> indépendants**, contrairement à ce qu'affirmait l'entrée ci-dessous : `resolveDroneAssaultAction` est
-> édité par les deux (sites #4/#5 du couplage `char_sheet` chez COMBATANT_CONTEXT = exactement la
-> fonction que RW_SYSCOMBAT Lot 6 restructure). Ordre correct : **RW_SYSCOMBAT 5-7 avant
-> COMBATANT_CONTEXT** — greffer le dispatch exo sur une fonction qui va être réextraite juste après
-> double le travail. (2) `docs/PLANS/PLAN_REFACTOR_SIDEBAR.md` (chantier actif, Lots 1-4c clos, Lot 4d
-> prêt à reprendre sans blocage, Lot 5 bloqué sur une décision `Editor3D.jsx` distincte —
-> `REFACTOR_GLOBAL.md` §3) manquait entièrement de ce document, ajouté ci-dessous. Trois nouveaux stubs
-> pas encore intégrés à la prospective avant aujourd'hui, ajoutés ci-dessous : `PLAN_USURE&INTEGRITE.md`
-> (RAW transcrit, tête de chaîne du cluster Catastrophe/Matériel), `PLAN_ARMES_SPECIALES.md` (RAW
-> transcrit, dépend partiellement d'Usure/Intégrité), `PLAN_MORAL.md` (règle RAW optionnelle, aucune
-> dépendance, priorité basse). Fatigue Lot 6 (Noyade/Asphyxie, `PLAN_FATIGUE_DOMMAGES.md` §12) : le
-> cadrage actuel exclut explicitement le déclenchement automatique — si une Catastrophe (panne
-> d'équipement de plongée via Usure/Intégrité) doit pouvoir déclencher l'état automatiquement, c'est un
-> changement de périmètre du lot, pas encore tranché par Saar.
->
-> 2026-08-06 — **`docs/PLANS/PLAN_COMBATANT_CONTEXT.md` créé** : cadrage complet
-> du refactor attendu par EXOARM-COMBATFILE (`docs/EN_COURS.md`) — recherche externe (Lancer VTT
-> `flow_api.md`, Starfinder crew skills, étend `PLAN_EXOARMURE.md` §4 sans la refaire), 7 sites
-> `char_sheet` en dur recensés par lecture intégrale (pas ~8, l'estimation initiale — et 1 seul des 7
-> bloque vraiment l'action, les 6 autres dégradent silencieusement vers un Seuil de 0 plutôt que de
-> planter). Architecture retenue : point de couture unique `resolveCombatantTestContext` (nouveau
-> `server/src/lib/combatantContextService.js`), dispatch par guard clauses (`pj`/`pnj` inchangés,
-> `exo` nouveau), jamais de duplication de stats pilote↔exo. Découpage en 7 lots (A-G), Lots A-F
-> migrent le chemin humain sans changement de comportement, Lot G ajoute le squelette exo (ne débloque
-> pas encore EXOARM-COMBATFILE à lui seul — dépend aussi du détail RAW dans `PLAN_EXOARMURE.md` Lot 2).
->
-> `docs/PLANS/PLAN_RW_SYSCOMBAT.md` **rouvert** le même jour (Lots 0-4 clos depuis le 2026-07-28,
-> continuité du même chantier décidée par Saar) : Lots 5-7 planifiés (aucun code écrit) — Lot 5 dédup du
-> calcul de dégâts bruts CaC (5 sites), Lot 6 découpage du branchement cible de
-> `resolveDroneAssaultAction`, Lot 7 découpage du branchement post-hit de `confirmMeleeDefense`.
-> Analyse à charge du Lot 5 faite : une erreur de placement corrigée (`combatAttackRoll.js`, pas
-> `damageService.js` comme écrit d'abord), une dette documentaire annexe trouvée et signalée
-> (`docs/SYSTEME/SERVICES_COMBAT.md` §5 décrit un fichier `mrTable.js` qui n'existe plus). **Corrigé
-> 2026-08-06 (revue de dépendances) : ce chantier n'est pas distinct de `PLAN_COMBATANT_CONTEXT.md`
-> ci-dessus** — Lot 6 restructure `resolveDroneAssaultAction`, exactement la fonction que
-> COMBATANT_CONTEXT édite à ses sites #4/#5. À séquencer RW_SYSCOMBAT 5-7 puis COMBATANT_CONTEXT.
-> 2026-08-06 — Exo-armures : Lot 1 (Fondations) ✅ codé, non testé navigateur ;
-> Lot 2 (Substitution d'attributs) resserré — mouvement (VIT) ✅ codé, plafond de Compétence (Manœuvre
-> d'armure) et "1 seule Attaque/Tour" **⏸️ bloqués** (dépendent d'un refactor de
-> `socketCombatHelpers.js`, mis en pause, chantier séparé à planifier — détail `docs/EN_COURS.md`
-> item EXOARM-COMBATFILE). En vérifiant la stockabilité de 16 armures RAW réelles contre le schéma :
-> schéma `ref_exo_templates` étendu (modes de mouvement, champs descriptif/commerce) + bug trouvé et
-> corrigé dans `getModDom()` (`charStats.js`, extrapolation au-delà de FOR_na 21 — affecte tous les
-> personnages, pas seulement les exo-armures). Détail complet `docs/PLANS/PLAN_EXOARMURE.md` §6-§7.
-> 2026-08-06 — Refonte UX Matériel (`docs/Old/PLAN_INVENTORY_UX.md`) **clôturée**,
-> Étapes 0-9 confirmées fonctionnelles en navigateur par Saar. Dernier fix trouvé en clôturant : la
-> zone de drop Coffre manquait côté `InventoryPanel.jsx` (seul le sens Coffre→Sac/Ceinture avait une
-> cible, `useDroppable` ajoutée pour Sac/Ceinture→Coffre, Coffre toujours rendu même vide). Contenu
-> durable transféré vers `docs/SYSTEME/CHARACTER.md` et `docs/ASBUILT.md`. Reste différé (suivi
-> séparément ci-dessous) : retrait du `<select>` de Slot, accessibilité clavier `KeyboardSensor` à
-> traiter d'abord.
-> 2026-08-06 — Blessures : Guérison/Infection
-> (`docs/Old/PLAN_BLESSURES_GUERISON.md`) clos, confirmé fonctionnel par Saar en navigateur ;
-> contenu durable transféré vers `docs/SYSTEME/BLESSURES.md`. Chantier 11 (Module Blessures) : badges
-> de statut — animation d'apparition ajoutée, confirmée fonctionnelle (détail `docs/JOURNAL8.md`).
-> 2026-07-30 — Fatigue & Dommages : Lot 3 clos (Chute/Acide/Décompression/Feu,
-> `docs/PLAN_FATIGUE_DOMMAGES.md` §9), confirmé fonctionnel par Saar en navigateur. Prochaine étape du
-> chantier : Lot 4 (Fatigue).
-> 2026-07-30 — Exo-armures : Lot 0 clos, Lot 1 rédigé et prêt à coder
-> (`docs/PLAN_EXOARMURE.md`) ; entrée "Catastrophes" remplacée par le chantier formel
-> `docs/PLAN_TEST_CRITIQUE.md` (cadrage en pause côté Saar).
-> 2026-07-30 — précision sur "Ergonomie et pédagogie des règles" (besoin concret
-> noté en tranchant `docs/Old/PLAN_BLESSURES_GUERISON.md` §8, affichage UI des règles de Guérison/Infection).
-> 2026-07-29 — ajout "Membres détruits" (Option de campagne, `docs/Old/PLAN_BLESSURES_GUERISON.md`, décision Saar de différer plutôt que de trancher la modélisation en base maintenant) ; ST1 (Badges statut token) clos en correctif ponctuel (28×28px taille écran fixe), retiré de "chantier UI/UX" ; ajout "Eau structurelle authorée" (v2, décision Saar suite dette EAU1) ; 2026-07-24 — Dette INI5 (forfait Initiative CaC) close, retirée (voir `docs/EN_COURS.md` item 111) ; 2026-07-21 — Moding Groupe 4 : chantier clos (Phases 1/3/4 codées et testées, dettes résiduelles dans `docs/BUGIDENTIFIE.md`).
-> Ce document est prospectif. L’historique complet est dans `docs/ASBUILT.md` et `docs/JOURNAL8.md`.
-> **Bugs et dettes techniques** : voir le registre unique `bug_tickets` / écran `/admin/tickets`
-> (`docs/SYSTEME/TICKETS.md`) — `docs/BUGIDENTIFIE.md` est archivé depuis le 2026-08-12.
+> **Correction le jour même** : `PLAN_COMBAT_MODE_AMBIANT.md`, listé ci-dessus comme absent de ce
+> document, était en fait un plan déjà entièrement implémenté et confirmé en jeu (4 bugs clos entre
+> le 2026-08-04 et le 2026-08-22) — sa présence dans `docs/PLANS/` était elle-même l'anomalie, pas son
+> absence d'ici. Archivé vers `docs/Old/` (Règle 10), commit `d653313`. Ne figure donc plus au §1
+> ci-dessous.
 
 ---
 
-## Phase 2 — Battlemap 3D + session de jeu (en cours)
+## 1. Chantiers actifs — prêts à reprendre sans cadrage supplémentaire
 
-### Chantier 11 — Module Blessures
-- Étape 4 : Polish — animation Tests de Choc restante (apparition des badges de statut faite,
-  `docs/JOURNAL8.md`) — 🔲
+| Chantier | Doc | État | Prochaine étape |
+|---|---|---|---|
+| Exo-armures (v2) | `PLANS/PLAN_EXOARMURE.md` | Lots 1-4 + 2bis codés et testés (Node/PostgreSQL). §16.2.1 (plafond Manœuvre d'armure généralisé), §16.2.2 (armures assistées) et §16.2.5 (milieu hybride manuel, sans repli automatique) codés et testés le 2026-08-25 (39/39 + 336/336, contre PostgreSQL réel). `ExoSheetWindow.jsx` existe et fonctionne (ticket `ARMORWINDOW-MISSING1` fermé — était périmé, la fiche existe depuis le commit `40c8231`) | §16.3 Étape A (déplacement combat exo) et §16.4 Étape B (attaque Tir/CaC) — dépendent de §16.2.3 (migration `exo_weapons.ammo_remaining`) et §16.2.4 (seed `skill_id`/`ammo_count`, 13 armes), deux tâches indépendantes, faisables en parallèle |
+| Silhouette d'avaries exo (UI) | — (pas de PLAN écrit) | Saar a produit `docs/PLANS/exo03.svg` (silhouette 6 zones, même découpage que le wound panel char_sheet). `client/src/components/BodySilhouetteSvg.jsx` existe déjà (mêmes 6 zones, `fillFor`/`strokeFor`/`onClickLocation` génériques), consommé par `SilhouettePanel.jsx` (onglet Matériel char_sheet) | À l'occasion (Saar) — voie naturelle : composant frère type `ExoAvariesPanel.jsx` réutilisant le patron `fillFor`/`strokeFor` de `BodySilhouetteSvg.jsx` avec les paths d'`exo03.svg`, pas un nouveau pattern |
+| Milieu par pièce (moteur monde) | `PLANS/PLAN_ENVIRONNEMENT_MILIEUX.md` | Architecture tranchée (Option A — `room.environment` statique, repli `battlemaps.default_environment`, 2026-08-24). Planification pure, rien codé | Implémenter §4 (schéma `surface_data`, compilateur, requête `getEnvironmentAtPosition`, éditeur Surface). Débloque la résolution propre du milieu hybride exo (§16.2.5 ci-dessus) **et** prépare v3 (sous-marin/abysses, `docs/FOUNDATION.md`) |
+| i18n Lots 1-4 (Combat/Équipement/Builder/Dés) | `PLANS/PLAN_LOCALISATION.md` §2-6 | Codés et commités, zéro texte en dur restant (vérifié par script de résolution i18next à chaque fichier) | Session de test navigateur groupée (décision Saar : pas de validation fichier par fichier) — puis archiver le plan dans `docs/ASBUILT.md` |
+| i18n Lot 5 (texte de catalogue `ref_*`, ~1519 lignes / 10 tables) | `PLANS/PLAN_LOCALISATION.md` §7 | Architecture tranchée (colonnes JSONB `<champ>_i18n` par table, 2026-08-11), exécution non commencée | Écrire l'audit de lots détaillé (ordre des 10 tables, quel champ en premier) puis exécuter. Ne dépend d'aucune validation produit — exécutable en autonomie |
+| Fatigue & Dommages | `PLANS/PLAN_FATIGUE_DOMMAGES.md` | Lots 0-3 clos et confirmés en navigateur (horloge de campagne, Blessures/Guérison, Chute/Acide/Décompression/Feu) | Lot 4 (Fatigue), indépendant du reste. Lot 6 (Noyade/Asphyxie) cadré (§12) mais **décision en attente** : déclenchement automatique par une Catastrophe (Usure/Intégrité) ou toujours volontaire ? |
 
-### Chantier `PLAN_MUTATION2.md` — Mutations & Avantages
-- Lot 7 : Narratif/économie (priorité basse) — 🔲
+## 2. Chantiers à cadrer avant tout code
 
-### Options de campagne
-- `revers` — 🔲
-- `skill_natural_prog` — 🔲
-- `celebrity` — 🔲
-- Membres détruits (distinction Mortelle vs Membre détruit, `docs/Old/PLAN_BLESSURES_GUERISON.md` §3.2/§8
-  — décision Saar 2026-07-29 : différé, la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant
-  que cette option n'existe pas) — 🔲
+| Chantier | Doc(s) | Ce qui manque |
+|---|---|---|
+| Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | Le fichier est une ligne (`Lire @REGLE_AMRES_SPECIALES.md` — typo dans le nom, le vrai fichier est `REGLES/REGLES_ARMES_SPECIALES.md`). RAW transcrite, zéro recherche code. Prérequis probable à vérifier avant de cadrer : le pipeline de combat gère-t-il déjà une résolution multi-cibles/zone d'effet, ou faut-il la construire ? |
+| Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit) |
+| Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02) |
+| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — prérequis partiel d'Armes spéciales et de "Tests critiques/Catastrophe par marge" (§3) |
+| Moral | `PLANS/PLAN_MORAL.md` | Stub (`Lire @REGLE_MORAL.md`). Règle RAW optionnelle, aucune dépendance technique identifiée — priorité basse, à caser selon préférence produit plutôt que contrainte |
+| Interactions porte/échelle en session | `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` | N'est pas un plan — une base de recherche (état du code, fichiers concernés, l'ascenseur comme seule référence fonctionnelle) en attente que Saar rédige le vrai plan à partir de ça. Origine : ticket `ENTITYCLICK1` |
+| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` | Plan très détaillé (8 phases, ~490 lignes, fichiers/migrations/routes listés) mais **aucune trace de code démarré**, jamais mentionné ailleurs dans ce document jusqu'à cette refonte. **Anomalie trouvée (2026-08-25)** : le fichier s'appelle `PLAN_RW_TOKEN.md` mais son propre en-tête est `# PLAN_ANIMATIONS.md` — nom de fichier trompeur pour la recherche/l'indexation. **À trancher avec Saar** : ce chantier est-il toujours d'actualité ? Si oui, renommer le fichier pour qu'il corresponde à son contenu réel |
 
-### Autres chantiers immédiats
-- ~~**Jauges de Matériel & liste d'attente Wizard**~~ (`docs/Old/PLAN_WIZARD_MATERIEL_GAUGES.md`,
-  archivé 2026-08-16) — **testé fonctionnel en navigateur par Saar (2026-08-22)**. Un bug trouvé au
-  passage : le playground donne au PJ le même pouvoir de création d'item catalogue sans coût que le
-  Wizard Step6 — ticket créé (`bug_tickets`, non clustré, à trier).
-- ~~**Fiche personnage hors-ligne (PWA)**~~ (`docs/Old/PLAN_FICHE_HORSLIGNE.md`) — **abandonné**
-  (décision Saar, 2026-08-23), remplacé par un besoin d'export Google Sheets, voir § Chantiers futurs.
-  Code des 5 lots (A/B0/B/C/D) resté commité, non retiré, seulement déprioritisé.
-- Upload screenshot éditeur → MinIO — 🔲
-- Jets Favoris : drag‑to‑reorder macros (UI) — 🔲
-- Paramètre campagne GM entity move mode (reporté) — 🔲
-- Commande de chat MJ `/healall` — réinitialise les blessures de tous les tokens du playground — 🔲
-- Sprint Drones 2d — auto-announcement drone → voir `docs/Old/PLAN_DRONESYSCOMBAT.md` — 🔲
-- Sprint Drones 2e — `resolveDroneAutoAction` — 🔲
-- Sprint Drones 3 — Télépilotage (drone lié à PJ pilote) — 🔲
-- Sprint CaC 4b — validation fonctionnelle requise avant — 🔲
-- Sprint Annonce v2 — actions précédentes en lecture seule (`GmDeclareWindow` + `ActionWindow`) — 🔲
-  *(migré depuis `docs/EN_COURS.md`, doublon retiré de là-bas)*
-- Sprint Tooltips Compétences — `SkillsPanel` bouton ⓘ (déjà codé Session 73) — 🔲
-- Sprint Waypoints — déplacement points intermédiaires (déclaration serveur, alt+clic) — 🔲
-- Sprint Page Santé Serveur — `/api/health/detailed` (mémoire, uptime, températures) — 🔲
-- i18n équipement/builder/dés — Lot 1 (Combat) clos, reste Lots 2-4 — voir `docs/PLAN_LOCALISATION.md`
-  (norme : `docs/SYSTEME/LOCALISATION.md`) — 🔲
+## 3. Bloqués
 
----
+| Chantier | Doc | Bloqué par |
+|---|---|---|
+| Sauvegarde automatique de l'instance | `PLANS/PLAN_ADMIN_BACKUP.md` | Lots 1-3 prêts à déployer, Lots 4-5 spécifiés pour activation future — attend le remplacement du serveur distant Kiwi par une instance stable (confirmé Saar, 2026-08-25) |
+| Battlemap 2D (illustration/tokens sur fond 2D) | `PLANS/PLAN_BATTLEMAP2D.md` | Lot 0 (cadrage) clos, aucun code. Non urgent, peu pertinent actuellement (confirmé Saar, 2026-08-25) |
+| Résolution des Tests critiques/Catastrophe par marge (pas par valeur de dé) | `Old/PLAN_TEST_CRITIQUE.md` | Cadrage v1 en pause côté Saar — doit revenir avec la lecture RAW exacte de la table de marge avant de trancher. Bloque uniquement le Lot 8 (Réparation) d'Exo-armures, aucune autre dépendance active |
 
-## Phase 3 — Polish + assets
-- Avatars utilisateur
-- Optimisation voxel face culling
-- Persistance viewport caméra
-- Reconnexion WebSocket
-- Favicon application
+## 4. Backlog — idée retenue, aucun PLAN écrit
 
----
-
-## Chantiers futurs — à planifier
-- Export Google Sheets (fiche personnage) — décision Saar 2026-08-23, remplace le chantier PWA fiche
-  hors-ligne abandonné (`docs/Old/PLAN_FICHE_HORSLIGNE.md`). Pas encore cadré (aucun PLAN écrit) :
-  scope exact (lecture seule vs édition, quelles données, authentification Google) à définir avant de
-  coder
+- **Export Google Sheets (fiche personnage)** — décision Saar 2026-08-23, remplace le chantier PWA fiche hors-ligne abandonné (`docs/Old/PLAN_FICHE_HORSLIGNE.md`, code des 5 lots resté commité mais déprioritisé ; `docs/Old/PLAN_RW_EXPORT.md`, rework de cette même PWA, périmé par le même abandon, archivé le 2026-08-25). Scope exact (lecture seule vs édition, quelles données, authentification Google) à définir avant de coder
 - Arts Martiaux (techniques offensives/défensives, Saisie/Lutte)
-- LOS & Raycast (replanifier avec Kiwi)
-- Résolution des Tests critiques/Catastrophe par marge, pas par valeur de dé (`docs/PLAN_TEST_CRITIQUE.md`,
-  cadrage v1 **en pause côté Saar** — doit revenir avec la lecture RAW exacte de la table de marge
-  avant de trancher) — bloque uniquement le Lot 8 (Réparation) d'Exo-armures, aucune autre dépendance
-- Fatigue, Maladies/Poisons, Drogues, Irradiations, Faim/soif, dangers environnementaux (Froid/Noyade), horloge de campagne — `docs/PLANS/PLAN_FATIGUE_DOMMAGES.md`, plan en 10 lots. **Lots 0-3 clos et codés** (horloge de campagne, moteur d'échéances, Blessures/Guérison, Chute/Acide/Décompression/Feu — confirmés fonctionnels par Saar). Prochaine étape : Lot 4 (Fatigue), indépendant du reste. **Lot 6 (Noyade/Asphyxie)** cadré en détail (§12, 2026-08-06) mais **décision en attente** : le cadrage actuel exclut le déclenchement automatique (toujours volontaire, joueur/MJ) — si une Catastrophe (panne d'équipement de plongée via Usure/Intégrité, ci-dessous) doit pouvoir le déclencher, c'est un changement de périmètre à trancher avant de coder ce lot, pas juste une dépendance d'ordre
-- Usure/Intégrité du matériel + Test de panne — `docs/PLANS/PLAN_USURE&INTEGRITE.md` (stub) +
-  `docs/REGLES/REGLE_USURE&INTEGRITE.md` (RAW transcrit p.273-274). Justifié seul par RAW (acquisition/
-  gestion d'équipement), et tête de chaîne du cluster Catastrophe/Matériel : mécanise gratuitement 3
-  entrées de la table Catastrophe combat (#2 Arme inutilisable, #7 Boum si Intégrité≤0, #8 Panne) sans
-  rien inventer côté RAW — à construire en premier dans ce cluster. `docs/REGLES/REGLEMATERIEL.md`
-  fusionné dedans et supprimé (2026-08-06) — reste une citation obsolète non corrigée,
-  `docs/PLANS/PLAN_EXOARMURE.md:64` pointe encore vers ce fichier supprimé
-- Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes...) — `docs/PLANS/PLAN_ARMES_SPECIALES.md`
-  (stub) + `docs/REGLES/REGLES_ARMES_SPECIALES.md` (RAW transcrit). Les mécaniques de gerbe/saisie/AoE
-  sont autonomes et cadrables dès maintenant ; seule la partie "explosion si Intégrité≤0" de la
-  Catastrophe #7 dépend d'Usure/Intégrité ci-dessus
-- Catastrophe #1 Maladresse — décalage temporel avec `is_surprised` : vérifié contre RAW
-  (`REGLESYSCOMBAT.md:186-188`) et le code (`socketCombatHelpers.js:1206-1208`) — Surprise RAW bloque
-  le Tour **en cours** puis libère le suivant, Maladresse bloque le Tour **suivant** (l'inverse) — pas
-  un simple alias de `is_surprised`, à cadrer (décaler la pose du flag ou statut dédié) si ce
-  sous-chantier est repris. Migré depuis `docs/EN_COURS.md`
-- Catastrophe #3 Mauvaise cible — cadrage numérique manquant : "la plus proche" n'a pas de rayon
-  défini, Saar penche pour un tirage aléatoire parmi les cibles proches plutôt que strictement la plus
-  proche au sens géométrique. `measureBattlemapTokenDistance` (`worldSpatialQueryService.js`) déjà
-  confirmé réutilisable pour la mesure elle-même — reste le seuil "proche" à définir. Migré depuis
-  `docs/EN_COURS.md`
-- Catastrophe #5 Position désavantageuse — modificateur temporaire +5 pour toucher, durée 1 Tour
-  (précisé par Saar, RAW ne donnait pas de durée explicite). Nouveau statut sibling à
-  `isTargetDefenseless` (DEF5), jamais fusionné avec lui (effet RAW différent). Migré depuis
-  `docs/EN_COURS.md`
-- Objets au sol (nouvelle entité interactive, pour représenter un item lâché ou une arme inutilisable
-  après Catastrophe #2) → Ramasser un item au sol (dépend directement du premier). Base technique
-  **vérifiée réutilisable, pas juste supposée** : `SessionPage.jsx` (`handleEntityAction:476`, appelé
-  en 546/1175, flux GM-direct vs arbitrage joueur via `ENTITY_ACTION_REQUEST`) →
-  `socketEntity.js:64` (`ENTITY_ACTION_REQUEST` serveur), toujours actif aujourd'hui (pas mort depuis
-  le rework du World Builder) — symétrique à "Interagir avec une entité"
-- ~~`Sidebar.jsx` — découpage structurel~~ (`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`) — **chantier clos**,
-  Lot 5 (extraction `SurfaceEditorPanel.jsx`) fait (commit `afc1e87`, "clôture du plan"), après les
-  Lots 1-4d déjà clos. Trouvé périmé le 2026-08-23 (roadmap disait encore l'extraction "pas encore
-  commencée").
-- Moral (règle avancée, explicitement optionnelle au RAW) — `docs/PLANS/PLAN_MORAL.md` (stub) +
-  `docs/REGLES/REGLE_MORAL.md` (RAW transcrit). Aucune dépendance technique identifiée avec le reste de
-  la roadmap — priorité basse, à caser selon préférence produit plutôt que contrainte
-- Exo-armures (`docs/PLANS/PLAN_EXOARMURE.md`, plan en 8 lots + Lot 2bis — **entrée périmée depuis le
-  2026-08-06, rafraîchie 2026-08-22** : Lots 1-4, 2bis (armure à terre + fenêtre UI dédiée
-  `CombatExoActionWindow.jsx`), catalogue `ref_exo_equipment`/seed des 16 armures RAW, ainsi que
-  `PLAN_COMBATANT_CONTEXT.md` Lots A-G (dispatcher `resolveCombatantTestContext`/
-  `resolveExoTestContext`, Seuil de Test dérivé du pilote avec l'EXF à la place de la Force) sont
-  **tous codés et testés (Node/PostgreSQL réel)**, détail complet `docs/JOURNAL8.md` (sessions
-  2026-08-13 à 2026-08-20). **Aucune exo-armure jouée de bout en bout en combat réel à ce jour**.
-  **Correction (2026-08-23)** : l'entrée précédente ("`ArmorWindow` jamais construite", ticket
-  `ARMORWINDOW-MISSING1`) était périmée — vérifié en ouvrant `docs/PLANS/PLAN_EXOARMURE.md` §16 :
-  `ExoSheetWindow.jsx` (fiche complète, 9 sous-panneaux) existe et est câblée dans
-  `SessionPage.jsx:openSheet` (`case 'exo'`) depuis le commit `40c8231` (2026-08-19), avant même la
-  création du ticket (2026-08-16) — le ticket sera clos séparément (`admin_notes`). Le vrai trou,
-  décrit par Saar en testant le jeu réel : `CombatExoActionWindow.jsx` est un stub délibérément
-  étroit (seuls "Tenter de se relever"/"Passer le tour" câblés) — une exo en Phase Annonce ne peut ni
-  se déplacer ni attaquer (Tir/CaC). Suivi par le ticket `EXOARM-COMBATFILE`. `PLAN_RW_SYSCOMBAT.md`
-  Lots 5-7 (dépendance documentée ci-dessous) sont également clos depuis, cette dépendance n'est donc
-  plus bloquante. Fondations pour l'attaque exo (plafond Manœuvre d'armure généralisé, armures
-  assistées, milieu hybride manuel) codées et testées le 2026-08-23 (§16.2.1/16.2.2/16.2.5 du plan) ;
-  l'Étape B (déclaration d'attaque Tir/CaC) reste à coder
-- Silhouette d'avaries pour `ExoSheetWindow.jsx` — Saar a produit `docs/PLANS/exo03.svg` (2026-08-25,
-  silhouette 6 zones : tête/corps/bras gauche/bras droit/jambe gauche/jambe droite), sur le même
-  principe visuel que le wound panel de `char_sheet` pour les emplacements d'Avaries de l'exo-armure.
-  Pas cadré, pas de plan écrit — à faire à l'occasion (Saar, 2026-08-25). **Correction (2026-08-25)** :
-  contrairement à ma première note, ce n'est pas une première pour le projet —
-  `client/src/components/BodySilhouetteSvg.jsx` existe déjà (mêmes 6 zones, paths génériques,
-  `fillFor`/`strokeFor`/`onClickLocation` en props), consommé aujourd'hui par
-  `SilhouettePanel.jsx` (onglet Matériel de `char_sheet`, `fillFor` piloté par la pire sévérité de
-  blessure par zone, `shared/woundConstants.js`) et pensé pour être réutilisé par un futur picker
-  interactif (viser une localisation précise). La voie naturelle serait donc un composant frère
-  (ex. `ExoAvariesPanel.jsx`) réutilisant le même patron `fillFor`/`strokeFor`, avec les paths
-  d'`exo03.svg` à la place de ceux de `BodySilhouetteSvg.jsx` — pas un nouveau pattern à inventer
-- ~~`socketCombatHelpers.js` — découpage structurel~~ (`docs/Old/PLAN_RW_SYSCOMBAT.md`, archivé,
-  contenu durable dans `docs/SYSTEME/COMBAT.md`) — **chantier
-  clos**, tous les lots validés en jeu réel par Saar (2026-08-23) : Lots 0-6 (noyau `computeAttackRoll`,
-  dédup dégâts bruts CaC, `resolveDroneAssaultAction`), Lot 7 (`confirmMeleeDefense`, attaquant PJ ET
-  PNJ — ticket `PLAN_RW_SYSCOMBAT-LOT7` clos), Lot 8a/8c (`confirmDamage`, noyau pur +
-  branchement drone/non-drone). Était un prérequis d'Exo-armures (Lot 6 touchait
-  `resolveDroneAssaultAction`, partagé avec `PLAN_COMBATANT_CONTEXT.md`) — cette dépendance est donc
-  également résolue.
-- Retrait du `<select>` de Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : redondant une
-  fois le drag & drop en place) — **différé** : nécessite d'abord un `KeyboardSensor` `@dnd-kit` pour
-  ne pas régresser l'accessibilité clavier exigée par `docs/Old/PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne
-  supporte actuellement que la souris/tactile dans cette interface, `PointerSensor` seul). Option
-  alternative : accepter explicitement le compromis d'accessibilité si le clavier n'est pas un besoin
-  réel pour ce groupe de jeu. Le `<select>` de container (Sac/Coffre) a lui été retiré 2026-08-05
-  (demande directe Saar, même compromis d'accessibilité accepté pour ce select-là) — boutons
-  "Sac"/"Coffre" ajoutés en compensation fonctionnelle, et une zone de drop Coffre a été ajoutée
-  2026-08-06 (manquait à la clôture du chantier, `docs/ASBUILT.md`)
-- Fenêtre d'affichage/édition pour une exo-armure custom du Coffre (`type='exo'`, créée via
-  `VaultPage.jsx`/`vault.js` — `VaultCharacterPage.jsx` affiche aujourd'hui un placeholder, l'écran
-  ("ExoWindow") n'a jamais été construit). Trouvé en clôturant le chantier illustration exo-armures
-  (`docs/PLANS/PLAN_EXOARMURE.md` §15, 2026-08-21) : une exo custom hérite déjà de
-  `characters.portrait_url` (upload MinIO fonctionnel, même mécanisme qu'un personnage classique) —
-  rien à construire côté illustration, seulement l'écran lui-même n'existe pas pour l'afficher. Pas
-  prioritaire (Saar, 2026-08-21).
+- LOS & Raycast (replanifier — dépôt Kiwi/dev-monde arrêté depuis le 2026-08-04, voir `CLAUDE.md` §3)
+- Fenêtre d'affichage/édition pour une exo-armure custom du Coffre (`VaultCharacterPage.jsx` affiche un placeholder, l'illustration hérite déjà de `characters.portrait_url` — seul l'écran manque). Pas prioritaire (Saar, 2026-08-21)
 - Tourelles / armes lourdes fixes (entités interactives)
-- Moding Groupe 4 (slot logiciel) — chantier clos (Session 167, architecture `docs/SYSTEME/MODING.md`, Phases 1/3/4 codées et testées) ; 4 dettes résiduelles suivies via `bug_tickets`/`/admin/tickets` (`MODING4-*`) ; migration Groupe 1/2 (Phase 2) reportée (Strangler Fig)
-- Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté
-  2026-07-30 en cadrant `docs/Old/PLAN_BLESSURES_GUERISON.md` — afficher les règles de Guérison/Infection
-  dans l'UI, tooltips envisagés, pas encore cadré)
-- Chat persistant (historique)
-- Chat MP (messagerie privée)
-- Chat multi-canal (optionnel) — idée Saar 2026-08-05 : bouton bascule "classique / multi-canal" dans
-  l'onglet Profil de la Sidebar. Backend déjà prêt en partie (`chat_messages.channel_id`, `whisper`
-  déjà fonctionnel) — dépend de la Phase 3/4 de `docs/PLANS/PLAN_CHAT.md` (client "conscient des
-  canaux") posée d'abord. Pas obligatoire, PLAN dédié à écrire si repris. Migré depuis `docs/EN_COURS.md`
+- Ergonomie et pédagogie des règles (explication proactive des bonus/malus en UI — tooltips envisagés, pas cadré)
+- Chat persistant (historique), Chat MP, Chat multi-canal (backend `chat_messages.channel_id`/`whisper` déjà partiel, dépend de `docs/Old/PLAN_CHAT.md` Phase 3/4 non reprise)
 - Mode spectateur
 - Sauvegarde/export carte 3D
-- Battlemap 2D (illustration ou tokens sur fond 2D) — `docs/PLAN_BATTLEMAP2D.md`, plan en 4 lots, Lot 0 (cadrage) clos, aucun code
-- Spotlight / bibliothèque de présentation (personnage, document, indice) — besoin identifié pendant le cadrage Battlemap 2D, plan encore à écrire
-- Eau structurelle authorée (lacs, sas et calles sèches de navires, ponts d'arrimage) — nécessite un outil d'édition dédié + compilation serveur dans le `WorldSnapshot`, pas une reconstruction géométrique côté client. Option différée de la dette EAU1 (`docs/EN_COURS.md`) ; v2, décision Saar 2026-07-29 ("peut largement attendre")
+- Spotlight / bibliothèque de présentation (personnage, document, indice) — besoin identifié en cadrant Battlemap 2D
+- Eau structurelle authorée (lacs, sas/calles sèches de navires, ponts d'arrimage) — nécessite un outil d'édition dédié + compilation serveur (`WorldSnapshot`), pas une reconstruction géométrique client. Différé (Saar, 2026-07-29 : "peut largement attendre")
+- Mutations & Avantages, narratif/économie (`docs/Old/PLAN_MUTATION2.md` Lot 7) — priorité basse
+
+## 5. Dettes ponctuelles ouvertes (non couvertes par un PLAN)
+
+- Module Blessures — animation Tests de Choc restante (l'apparition des badges de statut est faite)
+- Options de campagne à finir : `revers`, `skill_natural_prog`, `celebrity`
+- Membres détruits (distinction Mortelle vs Membre détruit) — différé (Saar 2026-07-29), la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant que cette option n'existe pas
+- Retrait du `<select>` de Slot dans `InventoryPanel.jsx` (redondant depuis le drag & drop) — différé : nécessite un `KeyboardSensor` `@dnd-kit` d'abord pour ne pas régresser l'accessibilité clavier (`PointerSensor` seul aujourd'hui), sauf si le compromis d'accessibilité est explicitement accepté
+- Upload screenshot éditeur → MinIO
+- Jets Favoris : drag-to-reorder macros (UI)
+- Paramètre campagne GM entity move mode (reporté)
+- Commande de chat MJ `/healall`
+- Sprint Drones 2d/2e/3 (auto-annonce, `resolveDroneAutoAction`, télépilotage)
+- Sprint CaC 4b — validation fonctionnelle requise avant
+- Sprint Annonce v2 — actions précédentes en lecture seule
+- Sprint Tooltips Compétences (`SkillsPanel` bouton ⓘ)
+- Sprint Waypoints — déplacement par points intermédiaires
+- Sprint Page Santé Serveur — `/api/health/detailed`
+- Moding Groupe 1/2 (slot logiciel legacy) — migration vers l'architecture Groupe 4 reportée (Strangler Fig), 4 dettes résiduelles suivies via `bug_tickets` (`MODING4-*`)
+- Avatars utilisateur, optimisation voxel face culling, persistance viewport caméra, reconnexion WebSocket, favicon application (Phase 3 — Polish + assets)
 
 ---
 
 ## Hors scope V1
+
 - Fog of war
 - Webcam / audio / vidéo
-- Sources lumineuses dynamiques
