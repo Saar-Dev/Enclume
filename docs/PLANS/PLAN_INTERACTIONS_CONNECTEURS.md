@@ -79,3 +79,39 @@ raison).
 **Données** : `surface_data.connectors` (document statique), table `world_elevator_passengers`
 (référence pour une éventuelle table équivalente porte si un état persistant au-delà de
 `connector.state` s'avère nécessaire).
+
+## Architecture retenue pour la persistance runtime (2026-08-25, vérifié par lecture directe)
+
+**Pas une table à créer** : `world_feature_states` (`battlemap_id`, `feature_id`, `state` JSONB,
+`version`, `updated_by` — migration `97_world_feature_states.js`) est **déjà la table générique**
+prévue pour ce cas exact. Preuves directes, pas déduites :
+
+- `doorGeometry(connector, surface, runtimeState)` (`shared/world/worldCompiler.js:455`) lit déjà
+  `runtimeState?.state || connector.state || 'closed'` — le compilateur attend cet état runtime par
+  connecteur depuis toujours, jamais alimenté pour une porte en pratique.
+- `setWorldFeatureState({ battlemapId, featureId, state, userId })`
+  (`server/src/services/worldEffectService.js:164`) existe déjà, générique : transaction, verrou de
+  ligne (`forUpdate`), versionné, `bumpRuntimeRevision` automatique dans la même transaction.
+  Utilisable tel quel pour un `feature_id` = UUID de porte, sans rien ajouter côté persistance.
+- L'ascenseur utilise cette **même table**, via `worldElevatorService.js` — le surplus
+  (`world_elevator_passengers`, cinématique de cabine, arrêts multi-niveaux) est une complexité
+  propre à l'ascenseur (cabine mobile physique), **non pertinente pour une porte** (état binaire
+  ouvert/fermé/verrouillé, aucune donnée RAW ne décrit davantage).
+- `.claude/rules/world.md` (préexistant, pas écrit pour ce chantier) : *« Document statique et état
+  runtime sont séparés : portes, ascenseurs, fluides, feu, gaz, objets mobiles et occupants évoluent
+  sans réécrire arbitrairement la géométrie source »* — portes et ascenseurs explicitement au même
+  niveau, la table `world_feature_states` est la brique déjà nommée pour ça.
+
+**Décision** : un handler dédié léger pour les portes (nouveau socket event, ex.
+`CONNECTOR_ACTION_REQUEST`), qui persiste via `setWorldFeatureState` directement (zéro nouvelle
+table/colonne), et **réutilise le patron d'arbitrage** déjà validé deux fois dans ce projet
+(`ENTITY_ACTION_REQUEST`/`RESOLVE` : Test optionnel → confirmation MJ → jet 1d20 → mise à jour d'état
+→ broadcast) — sans copier la complexité passagers/cinématique de l'ascenseur. Ni un clone de
+l'ascenseur, ni un déguisement en entité (les connecteurs restent structurels, `surface_data`, pas des
+objets libres — `docs/VOCABULARY.md`) : une troisième forme, plus légère, sur une table qui existe
+déjà pour ce rôle précis. Factoriser la portion générique du patron d'arbitrage (lookup GM, timeout,
+jet, bonus critique) en un helper partagé avec `socketEntity.js` plutôt que la recopier une 3e fois
+est recommandé au moment du code (Règle 2, `docs/RegleDocumentaire.md`), pas encore fait.
+
+**Reste réellement ouvert (RAW, pas architecture)** : quelles portes nécessitent un Test (verrouillée
+→ Sécurité/Force ?) vs une action libre — pas vérifié dans ce document, à trancher au cadrage réel.
