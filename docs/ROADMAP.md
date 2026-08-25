@@ -234,11 +234,17 @@
   assistées, milieu hybride manuel) codées et testées le 2026-08-23 (§16.2.1/16.2.2/16.2.5 du plan) ;
   l'Étape B (déclaration d'attaque Tir/CaC) reste à coder
 - Silhouette d'avaries pour `ExoSheetWindow.jsx` — Saar a produit `docs/PLANS/exo03.svg` (2026-08-25,
-  silhouette 5 zones : tête/corps/bras gauche/bras droit/jambe gauche/jambe droite), sur le même
-  principe visuel que le wound panel de `char_sheet` (`LocationPanel.jsx`) mais pour les emplacements
-  d'Avaries de l'exo-armure. Pas cadré, pas de plan écrit — à faire à l'occasion (Saar, 2026-08-25).
-  Note : `LocationPanel.jsx` n'a lui-même aucune silhouette SVG aujourd'hui (liste/tableau) — ce
-  serait donc une première pour le projet, pas un simple portage d'un composant existant
+  silhouette 6 zones : tête/corps/bras gauche/bras droit/jambe gauche/jambe droite), sur le même
+  principe visuel que le wound panel de `char_sheet` pour les emplacements d'Avaries de l'exo-armure.
+  Pas cadré, pas de plan écrit — à faire à l'occasion (Saar, 2026-08-25). **Correction (2026-08-25)** :
+  contrairement à ma première note, ce n'est pas une première pour le projet —
+  `client/src/components/BodySilhouetteSvg.jsx` existe déjà (mêmes 6 zones, paths génériques,
+  `fillFor`/`strokeFor`/`onClickLocation` en props), consommé aujourd'hui par
+  `SilhouettePanel.jsx` (onglet Matériel de `char_sheet`, `fillFor` piloté par la pire sévérité de
+  blessure par zone, `shared/woundConstants.js`) et pensé pour être réutilisé par un futur picker
+  interactif (viser une localisation précise). La voie naturelle serait donc un composant frère
+  (ex. `ExoAvariesPanel.jsx`) réutilisant le même patron `fillFor`/`strokeFor`, avec les paths
+  d'`exo03.svg` à la place de ceux de `BodySilhouetteSvg.jsx` — pas un nouveau pattern à inventer
 - ~~`socketCombatHelpers.js` — découpage structurel~~ (`docs/Old/PLAN_RW_SYSCOMBAT.md`, archivé,
   contenu durable dans `docs/SYSTEME/COMBAT.md`) — **chantier
   clos**, tous les lots validés en jeu réel par Saar (2026-08-23) : Lots 0-6 (noyau `computeAttackRoll`,
