@@ -69,9 +69,12 @@ Pulsion électromagnétique, Régénération moléculaire, Sensibilité psychiqu
 Sphère de gravité/répulsion organique/temporelle/terreur, Télékinésie, Téléportation, Tempête du flux,
 Tourbillon(s), Vortex psychique) + le flux Polaris (géographie, entités, plongée, possession).
 
-**Dépendance technique majeure** : une part significative de ces pouvoirs sont des effets de zone
-(barrières, ondes de choc, champs, sphères) — même prérequis d'infrastructure que les Armes spéciales
-à aire d'effet, voir §9. Aucun cadrage possible avant qu'une décision de scope soit prise (tout le
+**Dépendance technique — [HYPOTHÈSE, non vérifiée] (2026-08-25)** : une part significative de ces
+pouvoirs semble être des effets de zone (barrières, ondes de choc, champs, sphères), ce qui suggérerait
+le même prérequis d'infrastructure que les Armes spéciales à aire d'effet (§9) — mais cette déduction
+vient uniquement des **noms** des pouvoirs dans le sommaire, pas d'une lecture du texte RAW de ce
+chapitre (aucun `REGLES/REGLE_FORCE_POLARIS.md` n'a été ouvert). À vérifier avant de cadrer quoi que
+ce soit. Aucun cadrage possible dans tous les cas avant qu'une décision de scope soit prise (tout le
 chapitre, ou un sous-ensemble prioritaire de pouvoirs).
 
 ## 5. Expérience (LdB p.268-271)
@@ -82,7 +85,8 @@ chapitre, ou un sous-ensemble prioritaire de pouvoirs).
 
 | Sous-règle | État | Doc |
 |---|---|---|
-| Acquisition, Munitions spéciales, Armes étourdissantes/soniques, Accessoires pour armes, Armures/protections simples, Encombrement, Drones courants | ✅ | — |
+| Acquisition, Intégrité et qualité (p.277), Munitions spéciales, Armes étourdissantes/soniques, Accessoires pour armes, Armures/protections simples, Encombrement, Autres types de dommages, Drones courants | ✅ | — |
+| Tests et équipement (p.277) | ❓ | fait, à revérifier en jeu réel |
 | Intégrité du matériel, Tests de panne, Usure et détérioration, Réparation du matériel | 🔲 | `PLANS/PLAN_USURE&INTEGRITE.md` (stub, à cadrer) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) |
 | Grenades et autres armes à aire d'effet, Explosifs | 🔲 | `PLANS/PLAN_ARMES_SPECIALES.md`, nécessite la résolution de zone d'effet (§9) |
 | Champs de force portatifs, Micro-drones/nano-drones, Dégradation des armures simples | 🔲 | pas cadré, aucune dépendance connue |

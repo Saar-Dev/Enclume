@@ -19,9 +19,13 @@
 > (2026-07-15 → 2026-08-23, ~110 lignes de blockquotes) jamais purgé, et **8 des 15 fichiers
 > `docs/PLANS/*.md` n'y apparaissaient nulle part** (`PLAN_ADMIN_BACKUP`, `PLAN_COMBAT_MODE_AMBIANT`,
 > `PLAN_DECALS`, `PLAN_ENVIRONNEMENT_MILIEUX`, `PLAN_INTERACTIONS_CONNECTEURS`, `PLAN_RW_EXPORT`,
-> `PLAN_RW_MATERIAUX`, `PLAN_RW_TOKEN`). Historique préservé intégralement dans `docs/JOURNAL8.md` ;
-> ce document ne garde désormais que l'état courant, un chantier = une ligne ou un bloc, jamais un
-> journal de qui a décidé quoi et quand (cette information vit dans JOURNAL8.md).
+> `PLAN_RW_MATERIAUX`, `PLAN_RW_TOKEN`). Historique préservé, mais **pas uniquement dans
+> `docs/JOURNAL8.md`** comme annoncé initialement ici (correction, 2026-08-25 : vérifié après coup —
+> ex. le détail des 5 Lots de la PWA fiche hors-ligne a 0 occurrence dans JOURNAL8.md ; il vit dans
+> le PLAN archivé lui-même, `docs/Old/PLAN_FICHE_HORSLIGNE.md`, comme le veut la Règle 10). La bonne
+> formulation : l'historique vit dans JOURNAL8.md **et/ou** dans le PLAN archivé concerné — jamais
+> perdu, mais pas dans un seul endroit prévisible. Ce document ne garde désormais que l'état courant,
+> un chantier = une ligne ou un bloc, jamais un journal de qui a décidé quoi et quand.
 >
 > **Correction le jour même** : `PLAN_COMBAT_MODE_AMBIANT.md`, listé ci-dessus comme absent de ce
 > document, était en fait un plan déjà entièrement implémenté et confirmé en jeu (4 bugs clos entre
@@ -46,7 +50,7 @@
 
 | Chantier | Doc | Pourquoi différé |
 |---|---|---|
-| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` (en-tête réel : `PLAN_ANIMATIONS.md`, nom de fichier trompeur — confirmé toujours d'actualité par Saar 2026-08-25, à renommer un jour) | Chantier esthétique/frontend — plan complet (8 phases, ~490 lignes), aucun code écrit. Reste valide mais non prioritaire tant que des mécaniques RAW entières manquent côté serveur (`docs/FOUNDATION.md` §2) |
+| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` (en-tête réel : `PLAN_ANIMATIONS.md`, nom de fichier trompeur — confirmé toujours d'actualité par Saar 2026-08-25 ; référencé par 7 fichiers dont 1 fichier de code réel, à mettre à jour si renommage) | Chantier esthétique/frontend — plan complet (8 phases, ~490 lignes), aucun code écrit. Reste valide mais non prioritaire tant que des mécaniques RAW entières manquent côté serveur (`docs/FOUNDATION.md` §2). **Pas totalement isolé** (trouvé 2026-08-25, analyse à charge) : `server/src/lib/characterStateShadowCheck.js` et `docs/SYSTEME/ETATS_PERSONNAGE.md` reportent volontairement un nettoyage (Lot 2c, colonnes legacy `combat_roster.state_position`/`state_weapon`) jusqu'à la Phase 7 de ce plan — urgence faible (le doc dit lui-même "plus d'urgence fusion" depuis le départ de Kiwi), mais pas zéro dette en attente |
 
 ## 2. Chantiers à cadrer avant tout code
 
@@ -59,7 +63,7 @@
 | Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | Le fichier est une ligne (`Lire @REGLE_AMRES_SPECIALES.md` — typo dans le nom, le vrai fichier est `REGLES/REGLES_ARMES_SPECIALES.md`). RAW transcrite, zéro recherche code. Prérequis confirmé : la résolution de zone d'effet (AOE) — voir ligne dédiée ci-dessous, n'existe pas encore dans le pipeline de combat |
 | Résolution de zone d'effet (AOE) | — (aucun PLAN, brique d'infrastructure transversale) | N'existe pas dans le pipeline de combat actuel (vérifié par recherche, 2026-08-25). Prérequis partagé par Armes spéciales, Force Polaris et Tir de suppression/couverture (§9, `COUVERTURE_RAW.md`) — à construire une fois plutôt que trois |
 | Corps à corps avancé / Arts martiaux (techniques offensives/défensives, Saisie/Lutte) | — (RAW transcrite : `REGLES/REGLECACARTMARTIAUX.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Indépendant d'AOE/Usure — peut être cadré en parallèle |
-| Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). Dépend en partie de la résolution AOE ci-dessus. Décision de scope nécessaire avant tout cadrage (chapitre entier ou sous-ensemble prioritaire) |
+| Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[HYPOTHÈSE, non vérifiée]** dépendrait en partie de la résolution AOE ci-dessus — déduit des noms de pouvoirs (Barrière, Onde de choc, Champ...), le texte RAW réel de ce chapitre n'a pas été lu. À vérifier avant de cadrer. Décision de scope nécessaire dans tous les cas (chapitre entier ou sous-ensemble prioritaire) |
 | Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
 | Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02). Chantier esthétique — cohérent avec la philosophie backend-first, à cadrer mais pas prioritaire |
 | Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) et de "Tests critiques/Catastrophe par marge" (§3). Proposé comme premier chantier à cadrer dans `COUVERTURE_RAW.md` (débloque le plus de choses) |
