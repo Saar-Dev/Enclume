@@ -8,8 +8,12 @@
 > Les bugs actifs vivent dans `bug_tickets` (`/admin/tickets`, `docs/SYSTEME/TICKETS.md`), jamais ici.
 >
 > **Carte complète de la documentation** : `docs/SYSTEME/INDEX.md`. **Vision produit et versions
-> (v1/v2/v3/vX)** : `docs/FOUNDATION.md`. Les deux se référencent mutuellement, aucun des trois ne
-> duplique le contenu d'un autre (Règle 2, `docs/RegleDocumentaire.md`).
+> (v1/v2/v3/vX)** : `docs/FOUNDATION.md`. **État RAW chapitre par chapitre, avec ordre de
+> dépendances proposé pour le backend restant** : `docs/SYSTEME/COUVERTURE_RAW.md`. Les trois se
+> référencent mutuellement, aucun ne duplique le contenu d'un autre (Règle 2, `docs/RegleDocumentaire.md`).
+>
+> **Philosophie actée (Saar, 2026-08-25)** : couverture RAW complète (backend) avant esthétique/
+> frontend, tant que des mécaniques entières manquent encore côté serveur (`docs/FOUNDATION.md` §2).
 >
 > **Refondu le 2026-08-25** (Claude/Saar) — l'ancienne version accumulait un historique daté en tête
 > (2026-07-15 → 2026-08-23, ~110 lignes de blockquotes) jamais purgé, et **8 des 15 fichiers
@@ -38,17 +42,30 @@
 | i18n Lot 5 (texte de catalogue `ref_*`, ~1519 lignes / 10 tables) | `PLANS/PLAN_LOCALISATION.md` §7 | Architecture tranchée (colonnes JSONB `<champ>_i18n` par table, 2026-08-11), exécution non commencée | Écrire l'audit de lots détaillé (ordre des 10 tables, quel champ en premier) puis exécuter. Ne dépend d'aucune validation produit — exécutable en autonomie |
 | Fatigue & Dommages | `PLANS/PLAN_FATIGUE_DOMMAGES.md` | Lots 0-3 clos et confirmés en navigateur (horloge de campagne, Blessures/Guérison, Chute/Acide/Décompression/Feu) | Lot 4 (Fatigue), indépendant du reste. Lot 6 (Noyade/Asphyxie) cadré (§12) mais **décision en attente** : déclenchement automatique par une Catastrophe (Usure/Intégrité) ou toujours volontaire ? |
 
+## 1bis. Cadré, différé (priorité basse — philosophie backend-first)
+
+| Chantier | Doc | Pourquoi différé |
+|---|---|---|
+| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` (en-tête réel : `PLAN_ANIMATIONS.md`, nom de fichier trompeur — confirmé toujours d'actualité par Saar 2026-08-25, à renommer un jour) | Chantier esthétique/frontend — plan complet (8 phases, ~490 lignes), aucun code écrit. Reste valide mais non prioritaire tant que des mécaniques RAW entières manquent côté serveur (`docs/FOUNDATION.md` §2) |
+
 ## 2. Chantiers à cadrer avant tout code
+
+> Voir `docs/SYSTEME/COUVERTURE_RAW.md` pour l'ordre de dépendances techniques proposé entre ces
+> chantiers (non encore validé par Saar) — Usure/Intégrité et la résolution de zone d'effet (AOE)
+> conditionnent plusieurs des lignes ci-dessous.
 
 | Chantier | Doc(s) | Ce qui manque |
 |---|---|---|
-| Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | Le fichier est une ligne (`Lire @REGLE_AMRES_SPECIALES.md` — typo dans le nom, le vrai fichier est `REGLES/REGLES_ARMES_SPECIALES.md`). RAW transcrite, zéro recherche code. Prérequis probable à vérifier avant de cadrer : le pipeline de combat gère-t-il déjà une résolution multi-cibles/zone d'effet, ou faut-il la construire ? |
-| Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit) |
-| Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02) |
-| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — prérequis partiel d'Armes spéciales et de "Tests critiques/Catastrophe par marge" (§3) |
+| Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | Le fichier est une ligne (`Lire @REGLE_AMRES_SPECIALES.md` — typo dans le nom, le vrai fichier est `REGLES/REGLES_ARMES_SPECIALES.md`). RAW transcrite, zéro recherche code. Prérequis confirmé : la résolution de zone d'effet (AOE) — voir ligne dédiée ci-dessous, n'existe pas encore dans le pipeline de combat |
+| Résolution de zone d'effet (AOE) | — (aucun PLAN, brique d'infrastructure transversale) | N'existe pas dans le pipeline de combat actuel (vérifié par recherche, 2026-08-25). Prérequis partagé par Armes spéciales, Force Polaris et Tir de suppression/couverture (§9, `COUVERTURE_RAW.md`) — à construire une fois plutôt que trois |
+| Corps à corps avancé / Arts martiaux (techniques offensives/défensives, Saisie/Lutte) | — (RAW transcrite : `REGLES/REGLECACARTMARTIAUX.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Indépendant d'AOE/Usure — peut être cadré en parallèle |
+| Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). Dépend en partie de la résolution AOE ci-dessus. Décision de scope nécessaire avant tout cadrage (chapitre entier ou sous-ensemble prioritaire) |
+| Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
+| Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02). Chantier esthétique — cohérent avec la philosophie backend-first, à cadrer mais pas prioritaire |
+| Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) et de "Tests critiques/Catastrophe par marge" (§3). Proposé comme premier chantier à cadrer dans `COUVERTURE_RAW.md` (débloque le plus de choses) |
+| Informatique et pannes (systèmes électroniques exo) | — (RAW transcrite : `REGLES/REGLE_ORDINATEUR.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Dépendance explicite d'Exo-armures (Saar) et d'Usure/Intégrité (même famille de mécanique — Test de panne) |
 | Moral | `PLANS/PLAN_MORAL.md` | Stub (`Lire @REGLE_MORAL.md`). Règle RAW optionnelle, aucune dépendance technique identifiée — priorité basse, à caser selon préférence produit plutôt que contrainte |
-| Interactions porte/échelle en session | `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` | N'est pas un plan — une base de recherche (état du code, fichiers concernés, l'ascenseur comme seule référence fonctionnelle) en attente que Saar rédige le vrai plan à partir de ça. Origine : ticket `ENTITYCLICK1` |
-| Animations squelettiques de tokens | `PLANS/PLAN_RW_TOKEN.md` | Plan très détaillé (8 phases, ~490 lignes, fichiers/migrations/routes listés) mais **aucune trace de code démarré**, jamais mentionné ailleurs dans ce document jusqu'à cette refonte. **Anomalie trouvée (2026-08-25)** : le fichier s'appelle `PLAN_RW_TOKEN.md` mais son propre en-tête est `# PLAN_ANIMATIONS.md` — nom de fichier trompeur pour la recherche/l'indexation. **À trancher avec Saar** : ce chantier est-il toujours d'actualité ? Si oui, renommer le fichier pour qu'il corresponde à son contenu réel |
+| Interactions porte/échelle en session | `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` | N'est pas un plan — une base de recherche (état du code, fichiers concernés, l'ascenseur comme seule référence fonctionnelle) en attente que Saar rédige le vrai plan à partir de ça. Origine : ticket `ENTITYCLICK1`. **Nuance (2026-08-25)** : le reste du bucket "interactions environnement" cité par Saar n'est pas un gap uniforme — la couverture (se cacher derrière un mur) est déjà largement implémentée (`state_cover`/`coverageModifier`), l'inondation a une infrastructure partielle (`BUILTIN_WORLD_EFFECTS`, propagation par compartiments) — détail `COUVERTURE_RAW.md` §8 |
 
 ## 3. Bloqués
 
@@ -61,7 +78,6 @@
 ## 4. Backlog — idée retenue, aucun PLAN écrit
 
 - **Export Google Sheets (fiche personnage)** — décision Saar 2026-08-23, remplace le chantier PWA fiche hors-ligne abandonné (`docs/Old/PLAN_FICHE_HORSLIGNE.md`, code des 5 lots resté commité mais déprioritisé ; `docs/Old/PLAN_RW_EXPORT.md`, rework de cette même PWA, périmé par le même abandon, archivé le 2026-08-25). Scope exact (lecture seule vs édition, quelles données, authentification Google) à définir avant de coder
-- Arts Martiaux (techniques offensives/défensives, Saisie/Lutte)
 - LOS & Raycast (replanifier — dépôt Kiwi/dev-monde arrêté depuis le 2026-08-04, voir `CLAUDE.md` §3)
 - Fenêtre d'affichage/édition pour une exo-armure custom du Coffre (`VaultCharacterPage.jsx` affiche un placeholder, l'illustration hérite déjà de `characters.portrait_url` — seul l'écran manque). Pas prioritaire (Saar, 2026-08-21)
 - Tourelles / armes lourdes fixes (entités interactives)

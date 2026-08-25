@@ -28,6 +28,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
 | `FOUNDATION.md` | Mission, versions (v1-vX), invariant RAW, hiérarchies, orientation documentaire | ✅ Vérifié (2026-08-25) |
+| `SYSTEME/COUVERTURE_RAW.md` | État d'implémentation du Livre de Base, chapitre par chapitre — opérationnalise le principe "backend avant frontend" de FOUNDATION.md §2 | ✅ Créé (2026-08-25) |
 
 ---
 

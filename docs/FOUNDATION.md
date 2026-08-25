@@ -25,6 +25,15 @@ Un projet distinct, dérivé du VTT : jeu multijoueur de batailles tactiques en 
 Toute simplification, adaptation ou écart par rapport au RAW est une décision explicite,
 discutée et documentée — jamais un raccourci silencieux.
 
+### Ordre de priorité : backend avant frontend (Saar, 2026-08-25)
+
+Le système de règles Polaris est vaste — la couverture RAW complète du backend (Tests, Combat, États
+de santé, Force Polaris, Équipement, Armures mécanisées) prime sur le travail purement esthétique/
+frontend (silhouettes, animations, décors, polish visuel) tant qu'elle n'est pas achevée. État détaillé
+chapitre par chapitre : `docs/SYSTEME/COUVERTURE_RAW.md`. Conséquence concrète : un chantier
+esthétique (ex. `docs/PLANS/PLAN_RW_TOKEN.md`, animations de tokens) reste valide mais non prioritaire
+tant que des mécaniques RAW entières manquent encore côté serveur.
+
 ## 3. Hiérarchie de fidélité d'une règle de jeu
 
 > Cette hiérarchie répond à « à quel point ce que dit ce document/ce code est fidèle au Livre de

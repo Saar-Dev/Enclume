@@ -1,7 +1,13 @@
+> **Archivé le 2026-08-25** — Périmé par la décision Saar du 2026-08-23 (`docs/ROADMAP.md` §4) :
+> le chantier fiche hors-ligne/PWA qu'il proposait de reprendre est abandonné, remplacé par un besoin
+> d'export Google Sheets (pas encore cadré, aucun PLAN écrit). Les points « à trancher avec Saar »
+> ci-dessous n'ont jamais été tranchés — sans objet désormais. Archivé (`docs/RegleDocumentaire.md`
+> Règle 10), même sort que `docs/Old/PLAN_FICHE_HORSLIGNE.md` qu'il visait à poursuivre.
+
 PLAN_RW_EXPORT — Rework de la fiche hors-ligne (PWA) et de l’impression
 
     2026-08-16 · Version 2 (révisée après analyse critique)
-    Suite de docs/PLANS/PLAN_FICHE_HORSLIGNE.md et de docs/SYSTEME/FICHE_HORSLIGNE.md.
+    Suite de docs/Old/PLAN_FICHE_HORSLIGNE.md et de docs/SYSTEME/FICHE_HORSLIGNE.md.
     Statut : 🔴 PROPOSITION — aucun code écrit, points à trancher avec Saar (§3).
 
 0. Contexte
