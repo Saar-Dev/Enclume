@@ -233,6 +233,12 @@
   plus bloquante. Fondations pour l'attaque exo (plafond Manœuvre d'armure généralisé, armures
   assistées, milieu hybride manuel) codées et testées le 2026-08-23 (§16.2.1/16.2.2/16.2.5 du plan) ;
   l'Étape B (déclaration d'attaque Tir/CaC) reste à coder
+- Silhouette d'avaries pour `ExoSheetWindow.jsx` — Saar a produit `docs/PLANS/exo03.svg` (2026-08-25,
+  silhouette 5 zones : tête/corps/bras gauche/bras droit/jambe gauche/jambe droite), sur le même
+  principe visuel que le wound panel de `char_sheet` (`LocationPanel.jsx`) mais pour les emplacements
+  d'Avaries de l'exo-armure. Pas cadré, pas de plan écrit — à faire à l'occasion (Saar, 2026-08-25).
+  Note : `LocationPanel.jsx` n'a lui-même aucune silhouette SVG aujourd'hui (liste/tableau) — ce
+  serait donc une première pour le projet, pas un simple portage d'un composant existant
 - ~~`socketCombatHelpers.js` — découpage structurel~~ (`docs/Old/PLAN_RW_SYSCOMBAT.md`, archivé,
   contenu durable dans `docs/SYSTEME/COMBAT.md`) — **chantier
   clos**, tous les lots validés en jeu réel par Saar (2026-08-23) : Lots 0-6 (noyau `computeAttackRoll`,
