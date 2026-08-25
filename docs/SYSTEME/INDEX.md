@@ -1,7 +1,10 @@
 # INDEX.md — Carte documentaire d’Enclume
 
-> Version : 2026-08-12 — ajout SYSTEME/ADMIN.md (rôle administrateur, page /admin) et
-> SYSTEME/TICKETS.md (système de tickets, remplace BUGIDENTIFIE.md archivé).
+> Version : 2026-08-25 — section PLANS ajoutée (§6, pointeur vers docs/ROADMAP.md pour le statut),
+> entrée FOUNDATION.md rafraîchie (n'est plus un squelette), hiérarchie de chargement alignée sur
+> RegleDocumentaire.md §12/CLAUDE.md §1. Précédent : 2026-08-12 — ajout SYSTEME/ADMIN.md (rôle
+> administrateur, page /admin) et SYSTEME/TICKETS.md (système de tickets, remplace BUGIDENTIFIE.md
+> archivé).
 > Statut : Document de navigation pour humains et agents IA.
 > Lire ceci en premier pour savoir où trouver une information.
 
@@ -14,8 +17,9 @@ Il liste chaque document avec sa responsabilité unique, sa couche dans la hiér
 de chargement, et les conditions dans lesquelles un agent doit le lire.
 
 **Hiérarchie de chargement (pour IA) :**
-FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
-(chaque couche peut faire référence aux suivantes, jamais l’inverse).
+Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL → PLAN
+(chaque couche peut faire référence aux suivantes, jamais l'inverse — même hiérarchie que
+`docs/RegleDocumentaire.md` §12 et `CLAUDE.md` §1, à ne pas faire diverger).
 
 ---
 
@@ -23,7 +27,7 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `FOUNDATION.md` | Vision, invariants absolus du projet | Squelette (293 o) — À étoffer |
+| `FOUNDATION.md` | Mission, versions (v1-vX), invariant RAW, hiérarchies, orientation documentaire | ✅ Vérifié (2026-08-25) |
 
 ---
 
@@ -156,7 +160,32 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 
 ---
 
-## 6. META — Documentation du projet lui-même
+## 6. PLANS — Spécifications de chantier (temporaires, Règle 10)
+
+> `docs/PLANS/*.md` — un fichier par chantier, archivé ou supprimé une fois la fonctionnalité livrée
+> (contenu durable transféré au DOMAIN/SYSTEM concerné). **Le statut courant de chaque plan (prêt à
+> coder, à cadrer, bloqué, périmé) vit dans `docs/ROADMAP.md`, jamais dupliqué ici** — cette liste
+> n'indique que l'existence et le sujet du fichier.
+
+| Document | Sujet |
+|----------|-------|
+| `PLANS/PLAN_EXOARMURE.md` | Exo-armures (v2) |
+| `PLANS/PLAN_ENVIRONNEMENT_MILIEUX.md` | Milieu (submarine/surface/atmo/spatial) par pièce, moteur monde |
+| `PLANS/PLAN_LOCALISATION.md` | Résorption du texte en dur (i18n), client et données `ref_*` |
+| `PLANS/PLAN_FATIGUE_DOMMAGES.md` | Fatigue, blessures, dangers environnementaux, horloge de campagne |
+| `PLANS/PLAN_ARMES_SPECIALES.md` | Fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines |
+| `PLANS/PLAN_DECALS.md` | Décorations murales placées (câbles, panneaux) |
+| `PLANS/PLAN_RW_MATERIAUX.md` | Rework matériaux/textures (base PBR + procédural) |
+| `PLANS/PLAN_USURE&INTEGRITE.md` | Usure/Intégrité du matériel, Tests de panne |
+| `PLANS/PLAN_MORAL.md` | Règle optionnelle du Moral |
+| `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` | Interaction joueur porte/échelle en session |
+| `PLANS/PLAN_RW_TOKEN.md` | Animations squelettiques de tokens (en-tête réel : `PLAN_ANIMATIONS.md`) |
+| `PLANS/PLAN_ADMIN_BACKUP.md` | Sauvegarde automatique de l'instance |
+| `PLANS/PLAN_BATTLEMAP2D.md` | Battlemap en illustration/tokens 2D |
+
+---
+
+## 7. META — Documentation du projet lui-même
 
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
@@ -175,6 +204,10 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 
 ## Utilisation pour un agent IA
 
-1. **Au chargement d'une session** : lire `FOUNDATION.md` (si étoffé), puis `VOCABULARY.md`, puis cet index.
-2. **Lorsqu'un domaine est abordé** (ex: combat) : se référer à la section SYSTEME correspondante, puis aux REGLES associées, puis au MANUEL si applicable.
-3. **Pour une nouvelle fonctionnalité** : consulter d'abord les REGLES brutes, puis le MANUEL associé, avant de coder.
+1. **Au chargement d'une session** : lire `FOUNDATION.md`, puis `VOCABULARY.md`, puis cet index.
+2. **Pour savoir ce qui est actif/à faire** : `docs/ROADMAP.md` (chantiers) et `docs/EN_COURS.md`
+   (dettes/points de vigilance) — les bugs suivis vivent dans `bug_tickets` (`/admin/tickets`), pas
+   dans ces deux fichiers.
+3. **Lorsqu'un domaine est abordé** (ex: combat) : se référer à la section SYSTEME correspondante, puis aux REGLES associées, puis au MANUEL si applicable.
+4. **Pour une nouvelle fonctionnalité** : consulter d'abord les REGLES brutes, puis le MANUEL associé,
+   puis le PLAN s'il existe déjà (§6) et son statut dans `docs/ROADMAP.md`, avant de coder.

@@ -24,7 +24,13 @@ Un projet distinct, dérivé du VTT : jeu multijoueur de batailles tactiques en 
 Toute simplification, adaptation ou écart par rapport au RAW est une décision explicite,
 discutée et documentée — jamais un raccourci silencieux.
 
-## 3. Hiérarchie des sources de vérité
+## 3. Hiérarchie de fidélité d'une règle de jeu
+
+> Cette hiérarchie répond à « à quel point ce que dit ce document/ce code est fidèle au Livre de
+> Base ? ». Elle est **distincte** de la hiérarchie d'autorité documentaire (quel type de fichier
+> l'emporte en cas de contradiction entre deux `.md`), définie dans `docs/RegleDocumentaire.md` §12
+> et rappelée dans `CLAUDE.md` §1 — ne pas confondre les deux tables malgré le mot « hiérarchie »
+> commun aux deux.
 
 | Niveau | Rôle | Exemples |
 |---|---|---|
@@ -39,10 +45,19 @@ Toute contradiction entre CODE et REGLES est un bug, pas une feature.
 
 ## 4. Orientation dans la documentation
 
-- `INDEX.md` — carte complète de la documentation.
-- `VOCABULARY.md` — définitions des termes Polaris et Enclume.
-- `docs/SYSTEME/` — architecture technique du projet.
+Pour un agent qui découvre le projet, dans l'ordre :
+
+- `docs/SYSTEME/INDEX.md` — carte complète de la documentation (malgré son emplacement sous
+  `SYSTEME/`, c'est le point d'entrée pour tout le projet, pas seulement l'architecture technique).
+- `docs/VOCABULARY.md` — définitions des termes Polaris et Enclume, à vérifier avant d'introduire un
+  nouveau concept métier.
+- `docs/SYSTEME/` — architecture technique du projet (un domaine/système par fichier).
 - `docs/REGLES/` — règles brutes extraites du Livre de Base.
+- `docs/ROADMAP.md` — planification prospective : quels chantiers sont actifs, à cadrer ou bloqués.
+- `docs/EN_COURS.md` — dettes actives et point de vigilance courant (les bugs suivis vivent dans
+  `bug_tickets`, écran `/admin/tickets`, `docs/SYSTEME/TICKETS.md` — pas dans ce fichier).
+- `docs/PLANS/*.md` — spécification détaillée d'un chantier précis, temporaire (Règle 10) ; l'état de
+  chacun (prêt, à cadrer, bloqué, périmé) est résumé dans `docs/ROADMAP.md`, pas dupliqué ici.
 
 ## 5. Hors scope
 
