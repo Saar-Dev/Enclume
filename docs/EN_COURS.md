@@ -26,71 +26,13 @@ bloc comme pointeur unique daté.
 
 ---
 
-🔒 En cours (Saar) : `docs/PLANS/PLAN_FICHE_HORSLIGNE.md` — fiche personnage utilisable hors
-connexion. Deux tentatives précédentes abandonnées (export Excel, puis fichier HTML autonome — voir
-`docs/Old/[OBSOLETE]` pour l'historique) après des défauts structurels de format/plateforme
-(styles détruits, commentaires/cases à cocher/fonctions modernes mal traduits par Excel ; page web
-incapable de réécrire son propre fichier sans l'API File System Access, limitée à Chrome/Edge).
-Décision finale actée : transformer Enclume en PWA (`vite-plugin-pwa`, rien d'existant aujourd'hui) —
-la fiche personnage vivante reste l'unique source, mise en cache pour consultation hors-ligne,
-file d'écriture locale (IndexedDB) pour blessures/équipement/expérience rejouée au retour réseau,
-dernier arrivé écrase (décision explicite de Saar, pas de gestion de conflit). Impression via feuille
-de style dédiée. **Aucun nouveau design à produire** : le design, c'est `char_sheet` (`CharacterSheet.jsx`)
-déjà existant, réutilisé tel quel (structure fonctionnelle croisée avec la fiche officielle Polaris,
-aucune lacune). Analyse à charge du plan faite (2 passes) : correction actée sur la vue d'impression
-(`CharacterWindow.jsx` ne monte que l'onglet actif — une vraie vue dédiée à composer, pas du CSS pur),
-sur l'autorisation hors-ligne (le serveur garde ses contrôles de droits au rejeu, jamais désactivés),
-et découverte que `client/src/pages/VaultCharacterPage.jsx` fournit déjà le patron de route "hors
-session" réutilisable pour Lot B/D — mais uniquement pour le Coffre : creusé plus loin, aucune route
-légère n'existait pour un personnage de **campagne** (seule voie d'accès à `CharacterWindow` :
-`SessionPage.jsx`, session VTT complète). **Lot A fait et vérifié (2026-08-16)** : code Excel abandonné
-retiré (writer/assembleur/outil, gabarit `.xlsx`, route, bouton, clés i18n, dépendances
-`xlsx-populate`/`jszip` racine), migration de nettoyage MinIO `246` appliquée (objet confirmé absent).
-**Lot B0 fait et vérifié (2026-08-16)** : nouvelle route `/campaigns/:campaignId/characters/:characterId/sheet`
-(`CampaignCharacterSheetPage.jsx`), `isGm` calculé depuis l'appartenance réelle à la campagne (pas figé
-à `false`, différence assumée avec le patron Coffre), `char-sheet.js` étend sa réponse GET avec
-`character` (ajout pur). Build client + lint (zéro problème introduit) + démarrage serveur vérifiés.
-`characterExportService.js` conservé pour un usage futur éventuel. **Lot B fait et vérifié
-(2026-08-16)** : `vite-plugin-pwa` configuré (`client/vite.config.js`), mise en cache par préfixe
-d'URL (`char-sheet`/`char-ref`/`equipment`/`campaigns`/`characters`, tracé depuis les appels réels de
-`CharacterSheet.jsx` et panneaux — pas une liste figée), stratégie `NetworkFirst`. Bundle client
-(~4 Mo) dépassait la limite de précache Workbox par défaut (2 Mio) — `maximumFileSizeToCacheInBytes`
-relevé à 5 Mo (le vrai découpage du bundle est un chantier à part, hors périmètre). **Correction
-(analyse à charge, 2e passe)** : `navigateFallback` non activé par défaut par `generateSW` (vérifié
-types `workbox-build`) — sans lui, une navigation directe hors-ligne (favori, rafraîchissement) vers
-une route React Router comme celle du Lot B0 échouait, rendant toute la mise en cache API inutile
-(la page elle-même ne chargeait jamais). Corrigé : `navigateFallback: '/index.html'` +
-`navigateFallbackDenylist: [/^\/api\//]`, vérifié présent dans le `sw.js` généré. Vérifié : build
-prod (précache 6 entrées, `sw.js`/manifeste générés) + dev server (mêmes artefacts) + lint propre.
-`client/.gitignore` : `dev-dist` ajouté. **Lot C fait et vérifié (2026-08-16)** : pas de file
-IndexedDB maison — `workbox-background-sync` (déjà transitif via le Lot B) fait ça nativement, 5
-routes `runtimeCaching` dédiées (une par action réelle : ajout/stabilisation/suppression de blessure,
-équipement, achat de compétence — endpoints tracés depuis `LocationPanel.jsx`/`inventoryMutations.js`/
-`SkillsPanel.jsx`), `NetworkOnly` + `backgroundSync`, rejeu FIFO au retour réseau (dégradation
-gracieuse Safari/Firefox vérifiée dans le code source, pas la doc). Problème trouvé et corrigé : même
-mise en file réussie, `NetworkOnly` relance toujours une erreur à la page (vérifié dans le code source
-Workbox) — sans correctif, `LocationPanel.jsx` aurait affiché un faux message d'échec pour une action
-équipement en réalité acceptée. Ajouté `isOfflineQueuedError()` (`client/src/lib/api.js`) pour un
-message honnête à la place. Build + lint propres, dev server OK. **Non testé : navigateur réel**
-(couper le réseau, agir, rétablir, confirmer le rejeu). **Lot D fait et vérifié (2026-08-16)** :
-nouvelle route `/characters/:characterId/print` (`CharacterPrintPage.jsx`, indépendante de
-`campaignId` — sert aussi bien un personnage de campagne que du Coffre), nouveau composant
-`CharacterPrintView.jsx` composant `CharacterSheet` + panneaux Matériel l'un sous l'autre (pas le
-chrome de `CharacterWindow.jsx`, qui ne monte qu'un onglet à la fois). Lecture seule via
-`isGm={false}`/`isOwner={false}` — état déjà exercé (vue d'un personnage tiers en jeu), pas un
-nouveau mode. Feuille de style `@media print` (`index.css`) + lien "Imprimer" câblé dans
-`CharacterWindow.jsx` (pas encore sur les pages Coffre/campagne — accessible par URL directe en
-attendant). Build + lint propres sur les 5 fichiers touchés.
-
-Premier test réel par Saar (2026-08-16) sur la vue d'impression : fonctionnelle, deux retours
-corrigés — (1) thème sombre illisible même à l'écran (`.print-white-theme` dans `index.css`, fond
-blanc/texte noir forcés via `!important` sur toute la vue, couleurs de sévérité des blessures
-explicitement préservées via `--severity-bg`, ajout pur dans `LocationPanel.jsx`) ; (2) disposition
-Armure/Arme demandée en deux colonnes (`CharacterPrintView.jsx` restructuré). Build + lint propres.
-
-**Les 5 lots du plan (A/B0/B/C/D) sont codés et vérifiés (build/lint/serveur). Reste la validation
-en navigateur réel par Saar** (nouvel aperçu après ces deux correctifs, mode hors-ligne effectif,
-rejeu au retour réseau) avant de considérer le chantier clos et de committer.
+**Abandonné (Saar, 2026-08-23)** : `docs/Old/PLAN_FICHE_HORSLIGNE.md` (fiche personnage hors-ligne,
+PWA) — décision produit, remplacé par un besoin d'export Google Sheets (chantier distinct, pas encore
+cadré, voir `docs/ROADMAP.md` § Chantiers futurs). Les 5 lots (A/B0/B/C/D) restent commités
+(`vite-plugin-pwa`, routes hors session, cache Workbox, file `workbox-background-sync`, vue
+d'impression) — code non retiré, seulement déprioritisé ; la vue d'impression (Lot D) avait déjà été
+testée fonctionnelle en navigateur par Saar le 2026-08-16, le reste (mode hors-ligne effectif, rejeu
+réseau) n'a jamais été validé et ne le sera pas dans ce cadre. Plan déplacé vers `docs/Old/`.
 
 ---
 

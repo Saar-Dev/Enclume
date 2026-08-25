@@ -617,6 +617,39 @@ identité affichée = celle du personnage, pas du MJ) ; `SLOT_ACTIVE` au tour ob
 
 ---
 
+## Découpage socketCombatHelpers.js — noyau pur / coquille (PLAN_RW_SYSCOMBAT.md, clos 2026-08-23)
+
+Le calcul du jet d'attaque et du dégât brut (CaC + Tir) est extrait en noyau pur,
+`server/src/lib/combatAttackRoll.js` — aucun accès DB/IO, jet de dé toujours passé en paramètre
+(jamais lancé dans le noyau) :
+
+```javascript
+computeAttackRoll({ skillLabel, skillTotal, contributions, totalLabel, rollAttaque })
+// contributions = [{ label, value, type }] assemblée par l'appelant (pattern "liste de contributions",
+// même principe que le StatisticModifier de foundryvtt/pf2e) — un nouveau modificateur de jeu = une
+// entrée ajoutée par l'appelant, jamais une modification de signature. Retourne
+// { seuil, breakdown, isSuccess, mr }.
+
+computeMeleeRawDamage({ rawDice, mr, modDom, combatModeBonus })
+computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg })
+// Dégât brut CaC / Tir, dédupliqués — chacun était recalculé inline à plusieurs endroits avant ce
+// chantier.
+```
+
+`socketCombatHelpers.js` reste la coquille : résolution arme/portée/LOS, accès DB, branchement par
+type de combattant (PJ/PNJ/drone/exo), construction des payloads WS, logs `[DBG]`. Fonctions
+principales — rôle inchangé, assemblent désormais les `contributions` passées au noyau :
+- `resolveMeleeAction` / `resolveAssaultAction` — attaque CaC / Tir, branchement défenseur
+- `resolveDroneAssaultAction` — même flux, branchement cible drone/non-drone
+- `confirmMeleeDefense` — confirmation défenseur, branchement post-hit attaquant PJ/PNJ
+- `confirmDamage` — confirmation dégâts (file FIFO partagée CaC/Tir), branchement drone/non-drone
+
+Tables de valeurs partagées client/serveur (`shared/combatSituationMods.js`) : `RANGED_SITUATION_MODS`,
+`CAC_SITUATION_MODS`, `TAILLE_MODS`, `PORTEE_MOD_COMP` — plus de copie locale dupliquée côté client,
+une correction de valeur (errata LdB) devient un seul edit.
+
+---
+
 ## Attaques multiples — CaC 4b et Tir Multi (Session 165)
 
 RAW générique (LdB p.218-219, `docs/REGLES/REGLESYSCOMBAT.md:604-618`) : un personnage peut effectuer

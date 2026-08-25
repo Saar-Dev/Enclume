@@ -244,6 +244,10 @@ test('resolveHumanoidTestContext — inventaire au-dessus du seuil FOR×3 : effe
 
 test('resolveCombatantTestContext — exo avec pilote+template : for_na/modDom viennent de l\'EXF, skillTotal/con_na/vol_na du pilote', { skip }, async () => {
   const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 14, CON: 9, VOL: 12 } })
+  // Manœuvre d'armure haute (§16.2.1, plafond désormais inconditionnel) : ce test isole "skillTotal
+  // vient du pilote, pas de l'exo" du plafonnement (déjà couvert par ses propres tests plus haut) —
+  // sans ce char_skills, le plafond mordrait et fausserait l'assertion ci-dessous.
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES', mastery: 15 })
   try {
     const pilotCtx = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
     const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
@@ -307,11 +311,12 @@ test('resolveCombatantTestContext — exo sans template ("non configurée", PLAN
   }
 })
 
-// PLAN_EXOARMURE.md Lot 2 — plafond de Compétence par Manœuvre d'armure (REGLECOMPETENCE.md:29-34
-// "Compétence limitative", REGLEARMURE.md p.325). Testé au contact seul (`meleeSkillCap: true`,
-// jamais activé par défaut — le tir et l'Acrobatie/Équilibre restent hors périmètre de ce Lot).
+// PLAN_EXOARMURE.md §16.2.1 (2026-08-23, analyse à charge post-Lot G) — plafond de Compétence par
+// Manœuvre d'armure (REGLECOMPETENCE.md:29-34 "Compétence limitative", REGLEARMURE.md:202-207)
+// désormais INCONDITIONNEL pour tout Test exo (Tir compris — RAW ne distingue pas, contrairement à
+// l'ancienne doctrine `meleeSkillCap` de ce fichier, retirée), sauf armure assistée (§16.2.2 ci-dessous).
 
-test('resolveCombatantTestContext — meleeSkillCap: le plafond mord si le pilote n\'est pas formé à la spécialité (surface → Armures externes)', { skip }, async () => {
+test('resolveCombatantTestContext — le plafond mord si le pilote n\'est pas formé à la spécialité (surface → Armures externes)', { skip }, async () => {
   const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 } })
   // Pilote très formé en CaC mais jamais en Manœuvre d'armure : le plafond doit mordre.
   await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
@@ -324,29 +329,17 @@ test('resolveCombatantTestContext — meleeSkillCap: le plafond mord si le pilot
     const maneuverTotal = calcSkillTotal(attrs, undefined, refManeuver, null, null)
     assert.ok(maneuverTotal < uncapped, 'précondition du test — le plafond doit réellement mordre')
 
-    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
     assert.equal(ctx.skillTotal, maneuverTotal)
   } finally {
     await cleanupExo(fx)
   }
 })
 
-test('resolveCombatantTestContext — meleeSkillCap: pas d\'effet si la Manœuvre d\'armure du pilote dépasse déjà la Compétence testée', { skip }, async () => {
+test('resolveCombatantTestContext — pas d\'effet si la Manœuvre d\'armure du pilote dépasse déjà la Compétence testée', { skip }, async () => {
   const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 9, COO: 16, ADA: 14 } })
   await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 1 })
   await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES', mastery: 15 })
-  try {
-    const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
-    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
-    assert.equal(ctx.skillTotal, uncapped.skillTotal)
-  } finally {
-    await cleanupExo(fx)
-  }
-})
-
-test('resolveCombatantTestContext — meleeSkillCap absent (défaut) : jamais de plafond, même si la Manœuvre d\'armure serait plus basse (tir/Acrobatie, hors périmètre)', { skip }, async () => {
-  const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 } })
-  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
   try {
     const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
     const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
@@ -356,7 +349,26 @@ test('resolveCombatantTestContext — meleeSkillCap absent (défaut) : jamais de
   }
 })
 
-test('resolveCombatantTestContext — meleeSkillCap: mapping direct submarine/atmospheric/spatial vers la bonne spécialité', { skip }, async () => {
+test('resolveCombatantTestContext — un skillId de Tir (ex. ARMES_LOURDES) est désormais plafonné aussi (ancienne exclusion Tir retirée, §16.2.1)', { skip }, async () => {
+  const fx = await createExoFixture({ pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 } })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'ARMES_LOURDES', mastery: 10 })
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fx.sheet.id })
+    const refTir = await db('ref_skills').where({ id: 'ARMES_LOURDES' }).first()
+    const refManeuver = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES' }).first()
+    assert.ok(refTir, 'ARMES_LOURDES doit être seedée')
+    const uncapped = calcSkillTotal(attrs, { mastery: 10 }, refTir, null, null)
+    const maneuverTotal = calcSkillTotal(attrs, undefined, refManeuver, null, null)
+    assert.ok(maneuverTotal < uncapped, 'précondition du test — le plafond doit réellement mordre')
+
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'ARMES_LOURDES')
+    assert.equal(ctx.skillTotal, maneuverTotal)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — mapping direct submarine/atmospheric/spatial vers la bonne spécialité', { skip }, async () => {
   const mapping = [
     ['submarine', 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES'],
     ['atmospheric', 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES'],
@@ -374,7 +386,7 @@ test('resolveCombatantTestContext — meleeSkillCap: mapping direct submarine/at
       assert.ok(refManeuver, `${expectedSkillId} doit être seedée`)
       const expectedCap = calcSkillTotal(attrs, undefined, refManeuver, null, null)
 
-      const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
+      const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
       assert.equal(ctx.skillTotal, expectedCap, `environment=${environment} doit plafonner via ${expectedSkillId}`)
     } finally {
       await cleanupExo(fx)
@@ -382,45 +394,105 @@ test('resolveCombatantTestContext — meleeSkillCap: mapping direct submarine/at
   }
 })
 
-test('resolveCombatantTestContext — meleeSkillCap: hybrid utilise Armures externes sauf si la Surface est explicitement bloquée (EAU1, même signal que getExoMovementBudget)', { skip }, async () => {
-  const fxExterne = await createExoFixture({
+// PLAN_EXOARMURE.md §16.2.5, corrigé le 2026-08-23 (Saar) — une armure hybride peut couvrir 2, 3 ou 4
+// milieux RAW dans n'importe quelle combinaison, jamais forcément la surface, propre à chaque
+// exo-armure : aucun repli générique n'est RAW-correct. Une première version de ce correctif avait un
+// repli surface/sous-marine (retiré le jour même, jamais utilisé en jeu réel — aucune exo n'a encore
+// combattu). Sans choix explicite, le Test est impossible, jamais une supposition silencieuse.
+test('resolveCombatantTestContext — hybrid sans active_maneuver_environment posé : null (aucun repli automatique)', { skip }, async () => {
+  const fx = await createExoFixture({
     pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
-    templateFields: { environment: 'hybrid' },  // surface_movement_mode par défaut : 'vit', pas bloqué
+    templateFields: { environment: 'hybrid' },
   })
-  await db('char_skills').insert({ char_sheet_id: fxExterne.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
   try {
-    const attrs = await db('char_attributes').where({ char_sheet_id: fxExterne.sheet.id })
-    const refExternes = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_EXTERNES' }).first()
-    const expectedCap = calcSkillTotal(attrs, undefined, refExternes, null, null)
-    const ctx = await resolveCombatantTestContext(db, fxExterne.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
-    assert.equal(ctx.skillTotal, expectedCap)
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx, null)
   } finally {
-    await cleanupExo(fxExterne)
-  }
-
-  const fxSousMarine = await createExoFixture({
-    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
-    templateFields: { environment: 'hybrid', surface_movement_mode: 'blocked' },
-  })
-  await db('char_skills').insert({ char_sheet_id: fxSousMarine.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
-  try {
-    const attrs = await db('char_attributes').where({ char_sheet_id: fxSousMarine.sheet.id })
-    const refSousMarine = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES' }).first()
-    const expectedCap = calcSkillTotal(attrs, undefined, refSousMarine, null, null)
-    const ctx = await resolveCombatantTestContext(db, fxSousMarine.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true })
-    assert.equal(ctx.skillTotal, expectedCap)
-  } finally {
-    await cleanupExo(fxSousMarine)
+    await cleanupExo(fx)
   }
 })
 
-test('resolveCombatantTestContext — meleeSkillCap: environment=industrial rejette explicitement (décision Saar 2026-08-15, en suspens)', { skip }, async () => {
+// PLAN_EXOARMURE.md §16.2.5 (2026-08-23) — hybrid + choix manuel du pilote/MJ (active_maneuver_environment)
+// prioritaire sur l'heuristique surface_movement_mode ci-dessus.
+test('resolveCombatantTestContext — hybrid avec active_maneuver_environment posé : utilise le choix manuel, pas l\'heuristique', { skip }, async () => {
+  const fx = await createExoFixture({
+    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+    // surface_movement_mode par défaut ('vit') aurait résolu vers Armures externes — le choix manuel
+    // doit primer et résoudre vers Armures atmosphériques à la place.
+    templateFields: { environment: 'hybrid' },
+  })
+  // active_maneuver_environment n'existe que sur exo_sheet (pas ref_exo_templates) — posé séparément
+  // plutôt que via templateFields, qui alimente aussi l'insertion ref_exo_templates de la fixture.
+  await db('exo_sheet').where({ character_id: fx.exoCharacter.id }).update({ active_maneuver_environment: 'atmospheric' })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const attrs = await db('char_attributes').where({ char_sheet_id: fx.sheet.id })
+    const refAtmo = await db('ref_skills').where({ id: 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES' }).first()
+    const expectedCap = calcSkillTotal(attrs, undefined, refAtmo, null, null)
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.skillTotal, expectedCap)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — environment=industrial : null (Test impossible), jamais une exception qui remonte (§16.2.1)', { skip }, async () => {
   const fx = await createExoFixture({ templateFields: { environment: 'industrial' } })
   try {
-    await assert.rejects(
-      () => resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES', { meleeSkillCap: true }),
-      /industrial/
-    )
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx, null)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+// PLAN_EXOARMURE.md §16.2.2 (2026-08-23) — armures assistées (exo-alpha/exo-0, REGLEARMURE.md:186-198
+// "ARMURES ASSISTÉES" p.325 : "dans tous les cas, on n'utilise pas la Compétence Manœuvre d'armure").
+test('resolveCombatantTestContext — armure assistée (exo-alpha) : jamais de plafond, même si la Manœuvre d\'armure serait plus basse', { skip }, async () => {
+  const fx = await createExoFixture({
+    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+    templateFields: { category: 'exo-alpha' },
+  })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.skillTotal, uncapped.skillTotal)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+test('resolveCombatantTestContext — armure assistée (exo-0) : même comportement que exo-alpha', { skip }, async () => {
+  const fx = await createExoFixture({
+    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+    templateFields: { category: 'exo-0' },
+  })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.skillTotal, uncapped.skillTotal)
+  } finally {
+    await cleanupExo(fx)
+  }
+})
+
+// Combinaison non testée ailleurs (analyse à charge, 2026-08-23) : armure assistée ET environment
+// hybrid sur la même fiche — rien n'empêche cette combinaison en base (2 colonnes/CHECK indépendants),
+// isAssistedArmor doit primer et court-circuiter avant même que resolveManeuverSkillId (donc la
+// branche hybrid) soit atteinte.
+test('resolveCombatantTestContext — armure assistée hybride (exo-alpha + environment=hybrid) : toujours pas de plafond, resolveManeuverSkillId jamais atteinte', { skip }, async () => {
+  const fx = await createExoFixture({
+    pilotAttrOverrides: { FOR: 16, COO: 16, ADA: 6 },
+    templateFields: { category: 'exo-alpha', environment: 'hybrid' },
+  })
+  await db('char_skills').insert({ char_sheet_id: fx.sheet.id, skill_id: 'COMBAT_A_MAINS_NUES', mastery: 10 })
+  try {
+    const uncapped = await resolveHumanoidTestContext(db, fx.character, 'COMBAT_A_MAINS_NUES')
+    const ctx = await resolveCombatantTestContext(db, fx.exoCharacter, 'COMBAT_A_MAINS_NUES')
+    assert.equal(ctx.skillTotal, uncapped.skillTotal)
   } finally {
     await cleanupExo(fx)
   }
@@ -467,15 +539,48 @@ test('resolveExoContext — exo sans template assigné ("non configurée") : exo
 })
 
 // resolveManeuverSkillId — fonction pure (pas de DB), déjà exercée indirectement par les tests
-// meleeSkillCap ci-dessus ; testée ici directement maintenant qu'elle est exportée (Lot 2bis).
-test('resolveManeuverSkillId — mapping direct par environment, industrial rejette', () => {
+// ci-dessus ; testée ici directement maintenant qu'elle est exportée (Lot 2bis).
+test('resolveManeuverSkillId — mapping direct par environment (non-hybrid), industrial rejette', () => {
   assert.equal(resolveManeuverSkillId({ environment: 'submarine' }), 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES')
   assert.equal(resolveManeuverSkillId({ environment: 'surface' }), 'MANOEUVRE_DARMURE__ARMURES_EXTERNES')
   assert.equal(resolveManeuverSkillId({ environment: 'atmospheric' }), 'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES')
   assert.equal(resolveManeuverSkillId({ environment: 'spatial' }), 'MANOEUVRE_DARMURE__ARMURES_SPATIALES')
-  assert.equal(resolveManeuverSkillId({ environment: 'hybrid', surface_movement_mode: 'vit' }), 'MANOEUVRE_DARMURE__ARMURES_EXTERNES')
-  assert.equal(resolveManeuverSkillId({ environment: 'hybrid', surface_movement_mode: 'blocked' }), 'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES')
   assert.throws(() => resolveManeuverSkillId({ environment: 'industrial' }), /industrial/)
+})
+
+// PLAN_EXOARMURE.md §16.2.5, corrigé le 2026-08-23 (Saar) — une armure hybride peut couvrir 2, 3 ou 4
+// milieux RAW dans n'importe quelle combinaison, jamais forcément la surface, propre à chaque
+// exo-armure — AUCUN repli automatique n'est RAW-correct (contrairement à une première version de ce
+// correctif, qui devinait sous-marine/surface via `surface_movement_mode` — retirée le jour même,
+// jamais utilisée en jeu réel). Sans `active_maneuver_environment` posé, le Test est impossible.
+test('resolveManeuverSkillId — hybrid sans active_maneuver_environment : rejette (aucun repli)', () => {
+  assert.throws(
+    () => resolveManeuverSkillId({ environment: 'hybrid' }),
+    /active_maneuver_environment/
+  )
+})
+
+test('resolveManeuverSkillId — hybrid + active_maneuver_environment : résout vers la spécialité choisie, les 4 valeurs possibles', () => {
+  assert.equal(
+    resolveManeuverSkillId({ environment: 'hybrid', active_maneuver_environment: 'submarine' }),
+    'MANOEUVRE_DARMURE__ARMURES_SOUS_MARINES'
+  )
+  assert.equal(
+    resolveManeuverSkillId({ environment: 'hybrid', active_maneuver_environment: 'surface' }),
+    'MANOEUVRE_DARMURE__ARMURES_EXTERNES'
+  )
+  assert.equal(
+    resolveManeuverSkillId({ environment: 'hybrid', active_maneuver_environment: 'atmospheric' }),
+    'MANOEUVRE_DARMURE__ARMURES_ATMOSPHERIQUES'
+  )
+  assert.equal(
+    resolveManeuverSkillId({ environment: 'hybrid', active_maneuver_environment: 'spatial' }),
+    'MANOEUVRE_DARMURE__ARMURES_SPATIALES'
+  )
+  assert.throws(
+    () => resolveManeuverSkillId({ environment: 'hybrid', active_maneuver_environment: 'bogus' }),
+    /active_maneuver_environment/
+  )
 })
 
 // PLAN_EXOARMURE.md Lot 2bis §9.3 (trouvé en câblant le côté MJ) — isExoActorAuthorized, réutilisée

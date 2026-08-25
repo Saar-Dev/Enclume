@@ -3,7 +3,7 @@
 > Dernière mise à jour : 2026-08-11.
 >
 > Statut : **Norme active. Anglais gelé (non chargé, non maintenu) — seul le FR est un objectif produit
-> aujourd'hui.** Depuis le 2026-08-11 (décision Saar, `docs/BUG WIZARD.md` bug #16), l'architecture doit
+> aujourd'hui.** Depuis le 2026-08-11 (décision Saar, `docs/Old/BUG WIZARD.md` bug #16, archivé), l'architecture doit
 > rester prête à ajouter EN/DE/JAP sans réécriture — voir §6 pour le contenu de catalogue (`ref_*`), qui
 > suit un mécanisme distinct de l'UI décrit aux §1-4.
 >

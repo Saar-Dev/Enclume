@@ -1,5 +1,10 @@
 # PLAN_RW_SYSCOMBAT.md — Découpage structurel de `socketCombatHelpers.js`
 
+> **Chantier clos et archivé le 2026-08-23** — Lot 7 (chemin attaquant PJ) et Lot 8a/8c
+> (`confirmDamage`) confirmés en jeu réel par Saar, dernière réserve du plan levée. Contenu durable
+> transféré vers `docs/SYSTEME/COMBAT.md` (§"Découpage socketCombatHelpers.js — noyau pur / coquille").
+> Ticket `PLAN_RW_SYSCOMBAT-LOT7` (`bug_tickets`) résolu. Archivé (`docs/RegleDocumentaire.md` Règle 10).
+>
 > Créé : 2026-07-25 (dev/Saar). Lots 0-4 : **✅ clos** (2026-07-25 → 2026-07-28, committés
 > `4ec91b3`…`41b9632`, cf. §3).
 > **Rouvert 2026-08-06 (dev/Saar)** : Lots 5-7 ajoutés en continuité directe de ce même chantier

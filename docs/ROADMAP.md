@@ -1,4 +1,21 @@
 # ROADMAP — Projet Enclume
+> 2026-08-23 (2e passe, point de situation Saar) — Retiré « Wizard création à deux » (doublon de la
+> passe précédente ci-dessous), Sidebar Lot 5 (extrait, commit `afc1e87`, plan clos), « Export PDF
+> fiche personnage » (plus d'actualité, remplacé par un export Google Sheets — chantier à cadrer),
+> « Matériel → objets réels » (déjà codé, confirmé par Saar). Jauges de Matériel : testé fonctionnel
+> par Saar, entrée fermée — mais bug trouvé au passage (playground = même pouvoir de création d'item
+> gratuit que Wizard Step6), ticket créé. Exo-armures : corrigé — pas juste "reste à valider", un
+> vrai bloquant trouvé (`ArmorWindow` jamais construite, ticket `ARMORWINDOW-MISSING1` déjà existant).
+> Décisions Saar obtenues dans la foulée : Google Sheets **remplace** la PWA (chantier PWA abandonné,
+> `docs/Old/PLAN_FICHE_HORSLIGNE.md`, 🔒 retiré d'`EN_COURS.md`, code des 5 lots resté commité mais
+> déprioritisé) ; "RW_SYSCOMBAT testé" couvre **tout le chantier** (Lot 7 + Lot 8a/8c) — chantier
+> `socketCombatHelpers.js` clos, ticket `PLAN_RW_SYSCOMBAT-LOT7` résolu.
+>
+> 2026-08-23 — Retrait de « Wizard création à deux (GM + joueur) » (§ Chantiers futurs) : entrée
+> périmée, ce chantier est en fait déjà codé et clos (`docs/Old/PLAN_WIZARDCOLLAB.md`), contenu
+> durable transféré vers `docs/SYSTEME/PERSONNAGE_WIZARD.md` §5 le même jour. Trouvé en mettant à jour
+> ce doc SYSTEME, pas une nouvelle vérification de tout ce document.
+>
 > 2026-08-22 — **Rattrapage ciblé (Claude/Saar)** : deux entrées manquantes/périmées ajoutées à jour
 > de session — `PLAN_FICHE_HORSLIGNE.md` (PWA fiche hors-ligne, absent de ce document jusqu'ici) sous
 > "Autres chantiers immédiats", et l'entrée Exo-armures ci-dessous (§ Chantiers futurs) rafraîchie
@@ -114,20 +131,13 @@
   que cette option n'existe pas) — 🔲
 
 ### Autres chantiers immédiats
-- **Jauges de Matériel & liste d'attente Wizard** (`docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md`, cadré
-  et codé le 2026-08-12) — droits joueur sur `InventoryPanel` en Step6, validation MJ item par item,
-  jauges (`char_gauges`) qui passent de calcul en lecture seule à ressource de personnage persistante
-  gérée par le MJ, visible Wizard + fiche permanente (`GaugesPanel.jsx`). **Codé de bout en bout,
-  non committé, non testé en navigateur** — prochaine étape : validation par Saar. Répond en partie à
-  la dette "Matériel → objets réels" ci-dessous (§ Chantiers futurs) sans la clore entièrement (le
-  transfert catalogue ↔ inventaire réel reste hors périmètre de ce plan, cf. son §9)
-- **Fiche personnage hors-ligne (PWA)** (`docs/PLANS/PLAN_FICHE_HORSLIGNE.md`, cadré et codé
-  2026-08-16) — `vite-plugin-pwa` (cache réseau-first des routes fiche/campagne/équipement),
-  file d'écriture locale (`workbox-background-sync`, rejeu FIFO au retour réseau pour
-  blessure/équipement/achat compétence), vue d'impression dédiée (`CharacterPrintPage.jsx`). **5 lots
-  (A/B0/B/C/D) codés et vérifiés (build/lint/serveur)** — prochaine étape : validation navigateur
-  réelle du mode hors-ligne effectif (couper le réseau, agir, rétablir, confirmer le rejeu) et de
-  l'impression, avant de considérer le chantier clos
+- ~~**Jauges de Matériel & liste d'attente Wizard**~~ (`docs/Old/PLAN_WIZARD_MATERIEL_GAUGES.md`,
+  archivé 2026-08-16) — **testé fonctionnel en navigateur par Saar (2026-08-22)**. Un bug trouvé au
+  passage : le playground donne au PJ le même pouvoir de création d'item catalogue sans coût que le
+  Wizard Step6 — ticket créé (`bug_tickets`, non clustré, à trier).
+- ~~**Fiche personnage hors-ligne (PWA)**~~ (`docs/Old/PLAN_FICHE_HORSLIGNE.md`) — **abandonné**
+  (décision Saar, 2026-08-23), remplacé par un besoin d'export Google Sheets, voir § Chantiers futurs.
+  Code des 5 lots (A/B0/B/C/D) resté commité, non retiré, seulement déprioritisé.
 - Upload screenshot éditeur → MinIO — 🔲
 - Jets Favoris : drag‑to‑reorder macros (UI) — 🔲
 - Paramètre campagne GM entity move mode (reporté) — 🔲
@@ -156,6 +166,10 @@
 ---
 
 ## Chantiers futurs — à planifier
+- Export Google Sheets (fiche personnage) — décision Saar 2026-08-23, remplace le chantier PWA fiche
+  hors-ligne abandonné (`docs/Old/PLAN_FICHE_HORSLIGNE.md`). Pas encore cadré (aucun PLAN écrit) :
+  scope exact (lecture seule vs édition, quelles données, authentification Google) à définir avant de
+  coder
 - Arts Martiaux (techniques offensives/défensives, Saisie/Lutte)
 - LOS & Raycast (replanifier avec Kiwi)
 - Résolution des Tests critiques/Catastrophe par marge, pas par valeur de dé (`docs/PLAN_TEST_CRITIQUE.md`,
@@ -193,15 +207,10 @@
   en 546/1175, flux GM-direct vs arbitrage joueur via `ENTITY_ACTION_REQUEST`) →
   `socketEntity.js:64` (`ENTITY_ACTION_REQUEST` serveur), toujours actif aujourd'hui (pas mort depuis
   le rework du World Builder) — symétrique à "Interagir avec une entité"
-- `Sidebar.jsx` — découpage structurel (`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`, créé 2026-08-05, Lots
-  1-4c ✅ clos et confirmés. **Lot 4d** ✅ codé 2026-08-06 (extraction `SidebarChatTab.jsx` + hooks
-  `useDiceBreakdownPopover`/`useSidebarPendingActionsBadge`), rendu général confirmé par Saar en
-  navigateur, un seul scénario précis non rejoué (`⚠️ clos partiel`, détail dans le PLAN). **Lot 5**
-  (`SurfaceEditorPanel.jsx`) bloquait sur une dépendance résolue depuis : `docs/Old/PLAN_WORLD_RUNTIME_EFFECTS_STORE.md`
-  (store `worldRuntimeStore.js` + hook `useWorldRuntimeSync.js` partagés, correctif serveur de
-  l'émission manquante) **clos et confirmé fonctionnel en navigateur par Saar (2026-08-06)** —
-  `SurfaceEditorPanel.jsx` peut maintenant être extrait, devenu trivial (lit le store directement,
-  comme `Sidebar.jsx` déjà migré). Reste à faire : l'extraction elle-même, pas encore commencée)
+- ~~`Sidebar.jsx` — découpage structurel~~ (`docs/PLANS/PLAN_REFACTOR_SIDEBAR.md`) — **chantier clos**,
+  Lot 5 (extraction `SurfaceEditorPanel.jsx`) fait (commit `afc1e87`, "clôture du plan"), après les
+  Lots 1-4d déjà clos. Trouvé périmé le 2026-08-23 (roadmap disait encore l'extraction "pas encore
+  commencée").
 - Moral (règle avancée, explicitement optionnelle au RAW) — `docs/PLANS/PLAN_MORAL.md` (stub) +
   `docs/REGLES/REGLE_MORAL.md` (RAW transcrit). Aucune dépendance technique identifiée avec le reste de
   la roadmap — priorité basse, à caser selon préférence produit plutôt que contrainte
@@ -211,24 +220,27 @@
   `PLAN_COMBATANT_CONTEXT.md` Lots A-G (dispatcher `resolveCombatantTestContext`/
   `resolveExoTestContext`, Seuil de Test dérivé du pilote avec l'EXF à la place de la Force) sont
   **tous codés et testés (Node/PostgreSQL réel)**, détail complet `docs/JOURNAL8.md` (sessions
-  2026-08-13 à 2026-08-20). **Aucune exo-armure jouée de bout en bout en combat réel à ce jour** —
-  seul reste ouvert, suivi comme ticket `EXOARM-COMBATFILE` (`bug_tickets`) plutôt que dupliqué ici :
-  validation en jeu réel (attaque CaC, initiative, prone/relever, pipeline de dégâts, plafond
-  Compétence/1 attaque-tour). `PLAN_RW_SYSCOMBAT.md` Lots 5-7 (dépendance documentée ci-dessous) sont
-  également clos depuis, cette dépendance n'est donc plus bloquante)
-- `socketCombatHelpers.js` — découpage structurel (`docs/PLANS/PLAN_RW_SYSCOMBAT.md`, chantier créé
-  2026-07-25, Lots 0-4 ✅ clos 2026-07-28 : noyau `computeAttackRoll` pur, dédup `armAwaitingDamage`,
-  branchements défenseur CaC et attaquant Tir extraits en fonctions sœurs. **Rouvert 2026-08-06** :
-  Lots 5-6 ✅ clos (dédup calcul dégâts bruts CaC, découpage `resolveDroneAssaultAction`). Lot 7
-  ⚠️ clos partiel (`confirmMeleeDefense`, branchement post-hit) — codé, confirmé en jeu pour
-  l'attaquant PNJ seulement, chemin attaquant PJ non reproductible par Saar à ce jour, couvert par
-  fixture seule. **Rouvert 2026-08-11** : Lot 8 (`confirmDamage`) cadré — Lot 8a (noyau pur
-  `computeAssaultRawDamage`) codé et testé (11 tests unitaires, diff relu), en attente de validation
-  en jeu ; Lot 8b abandonné (absorbé par le Lot 8c après analyse à charge) ; Lot 8c (branchement cible
-  drone/non-drone) codé, diff relu, **aucune fixture jetable ni session de jeu réelle faite** — ne pas
-  considérer ce lot clos. **Corrigé 2026-08-06 : ce chantier est un prérequis d'Exo-armures**, pas un
-  chantier indépendant — Lot 6 touche `resolveDroneAssaultAction`, la même fonction que 2 des 7 sites
-  `char_sheet` de `PLAN_COMBATANT_CONTEXT.md`. À coder avant COMBATANT_CONTEXT)
+  2026-08-13 à 2026-08-20). **Aucune exo-armure jouée de bout en bout en combat réel à ce jour**.
+  **Correction (2026-08-23)** : l'entrée précédente ("`ArmorWindow` jamais construite", ticket
+  `ARMORWINDOW-MISSING1`) était périmée — vérifié en ouvrant `docs/PLANS/PLAN_EXOARMURE.md` §16 :
+  `ExoSheetWindow.jsx` (fiche complète, 9 sous-panneaux) existe et est câblée dans
+  `SessionPage.jsx:openSheet` (`case 'exo'`) depuis le commit `40c8231` (2026-08-19), avant même la
+  création du ticket (2026-08-16) — le ticket sera clos séparément (`admin_notes`). Le vrai trou,
+  décrit par Saar en testant le jeu réel : `CombatExoActionWindow.jsx` est un stub délibérément
+  étroit (seuls "Tenter de se relever"/"Passer le tour" câblés) — une exo en Phase Annonce ne peut ni
+  se déplacer ni attaquer (Tir/CaC). Suivi par le ticket `EXOARM-COMBATFILE`. `PLAN_RW_SYSCOMBAT.md`
+  Lots 5-7 (dépendance documentée ci-dessous) sont également clos depuis, cette dépendance n'est donc
+  plus bloquante. Fondations pour l'attaque exo (plafond Manœuvre d'armure généralisé, armures
+  assistées, milieu hybride manuel) codées et testées le 2026-08-23 (§16.2.1/16.2.2/16.2.5 du plan) ;
+  l'Étape B (déclaration d'attaque Tir/CaC) reste à coder
+- ~~`socketCombatHelpers.js` — découpage structurel~~ (`docs/Old/PLAN_RW_SYSCOMBAT.md`, archivé,
+  contenu durable dans `docs/SYSTEME/COMBAT.md`) — **chantier
+  clos**, tous les lots validés en jeu réel par Saar (2026-08-23) : Lots 0-6 (noyau `computeAttackRoll`,
+  dédup dégâts bruts CaC, `resolveDroneAssaultAction`), Lot 7 (`confirmMeleeDefense`, attaquant PJ ET
+  PNJ — ticket `PLAN_RW_SYSCOMBAT-LOT7` clos), Lot 8a/8c (`confirmDamage`, noyau pur +
+  branchement drone/non-drone). Était un prérequis d'Exo-armures (Lot 6 touchait
+  `resolveDroneAssaultAction`, partagé avec `PLAN_COMBATANT_CONTEXT.md`) — cette dépendance est donc
+  également résolue.
 - Retrait du `<select>` de Slot dans `InventoryPanel.jsx` (décision Saar 2026-08-05 : redondant une
   fois le drag & drop en place) — **différé** : nécessite d'abord un `KeyboardSensor` `@dnd-kit` pour
   ne pas régresser l'accessibilité clavier exigée par `docs/Old/PLAN_INVENTORY_UX.md` §5.5 (dnd-kit ne
@@ -250,11 +262,6 @@
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus ; besoin concret noté
   2026-07-30 en cadrant `docs/Old/PLAN_BLESSURES_GUERISON.md` — afficher les règles de Guérison/Infection
   dans l'UI, tooltips envisagés, pas encore cadré)
-- Export PDF fiche personnage
-- Wizard création à deux (GM + joueur)
-- Matériel → objets réels (conversion dans inventaire) — partiellement couvert par le chantier Jauges
-  de Matériel ci-dessus (§ Autres chantiers immédiats), qui ne traite pas le transfert catalogue ↔
-  inventaire réel lui-même
 - Chat persistant (historique)
 - Chat MP (messagerie privée)
 - Chat multi-canal (optionnel) — idée Saar 2026-08-05 : bouton bascule "classique / multi-canal" dans

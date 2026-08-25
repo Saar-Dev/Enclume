@@ -1,11 +1,18 @@
 # PLAN_FICHE_HORSLIGNE — Fiche personnage utilisable hors connexion (PWA)
 
+> **Abandonné le 2026-08-23** (décision produit, Saar) : remplacé par un besoin d'export Google
+> Sheets — chantier distinct, pas encore cadré (`docs/ROADMAP.md` § Chantiers futurs). Les 5 lots
+> décrits ci-dessous restent commités (`git log` — "Fiche hors-ligne Lots A-D") : code non retiré,
+> seulement déprioritisé. Seule la vue d'impression (Lot D) a été testée fonctionnelle en navigateur
+> (Saar, 2026-08-16) ; le mode hors-ligne effectif (coupure/rejeu réseau) n'a jamais été validé et ne
+> le sera pas dans ce cadre. Archivé (`docs/RegleDocumentaire.md` Règle 10).
+>
 > 2026-08-16 · Remplace `docs/Old/[OBSOLETE] PLAN_EXPORTEXCEL.md` et
 > `docs/Old/[OBSOLETE] PLAN_EXPORTHTML.md` (deux tentatives d'export vers un format tiers/un fichier
 > autonome, abandonnées — voir ces fichiers pour l'historique complet).
-> Statut : 🟡 LOTS A/B0/B/C/D CODÉS ET VÉRIFIÉS (build/lint/serveur) — **non testé en navigateur réel**
-> (comportement hors-ligne effectif, rejeu au retour réseau, rendu de la vue d'impression). Rien
-> commité pour l'instant.
+> Statut (avant abandon) : 🟡 LOTS A/B0/B/C/D CODÉS ET VÉRIFIÉS (build/lint/serveur) — non testé en
+> navigateur réel pour le mode hors-ligne effectif. Note originale "rien commité pour l'instant"
+> obsolète dès sa rédaction : les 5 lots ont en réalité été commités le jour même (`911d9aa`).
 
 ---
 

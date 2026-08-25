@@ -1,3 +1,10 @@
+> **Archivé le 2026-08-25** — Les 34 entrées de ce document sont toutes traitées : ✅ corrigées
+> (`Fix réel` annoté sous chaque ligne, détail dans `docs/JOURNAL8.md`, sessions du 2026-08-11/12),
+> analysées comme non reproductibles, ou tranchées explicitement par Saar (#17 implants à niveaux
+> non traité, #26 tableau attributs rejeté). Même campagne de beta-test et même date de clôture que
+> `docs/Old/BUGIDENTIFIE.md` (déjà archivé le 2026-08-12). Contenu durable déjà transféré vers
+> `docs/JOURNAL8.md` — archivé (`docs/RegleDocumentaire.md` Règle 10), pas de suivi actif restant.
+
 Liste des bugs – Wizard de création de personnage
 #	Bug / Remontée	Statut	Analyse & Correctif
 Critiques – Bloquants ou corruption			

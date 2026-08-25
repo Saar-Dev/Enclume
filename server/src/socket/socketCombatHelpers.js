@@ -1422,10 +1422,10 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
     // char_sheet propre ; resolveCombatantTestContext va chercher celle du pilote et l'utilise, avec
     // l'Exo-Force à la place de la Force, §4.1 du manuel). `null` si l'attaquant n'a ni char_sheet
     // (humain) ni pilote résolvable (exo) — repli gracieux identique à l'ancien garde.
-    // meleeSkillCap: true — PLAN_EXOARMURE.md Lot 2, plafond de Compétence par Manœuvre d'armure
-    // (RAW : limite les Compétences de combat au contact, jamais le tir) — site attaquant CaC, sans
-    // effet pour un attaquant pj/pnj (paramètre ignoré côté humain, combatantContextService.js).
-    const ctx = await resolveCombatantTestContext(db, character, skillId, { meleeSkillCap: true })
+    // Plafond de Compétence par Manœuvre d'armure (armure exo) — désormais inconditionnel côté
+    // `resolveExoTestContext` pour tout Test, plus un opt-in par appelant (PLAN_EXOARMURE.md §16.2.1,
+    // 2026-08-23 : RAW ne distingue pas Tir/CaC) ; sans effet pour un attaquant pj/pnj.
+    const ctx = await resolveCombatantTestContext(db, character, skillId)
     if (!ctx) return { suspend: false, emissions }
 
     // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec weaponInvId
@@ -1723,9 +1723,9 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
 
       // PLAN_COMBATANT_CONTEXT.md Lot C/G — point de couture unique pour le contexte de Test du
       // défenseur (Seuil, malus, mastery), y compris la branche exo (pilote + EXF).
-      // meleeSkillCap: true — même raison que le site attaquant ci-dessus (PLAN_EXOARMURE.md Lot 2) :
-      // le défenseur se défend au contact ici, jamais au tir.
-      const ctxCible = await resolveCombatantTestContext(db, defenderCharacter, defSkillId, { meleeSkillCap: true })
+      // Plafond Manœuvre d'armure désormais inconditionnel côté resolveExoTestContext (§16.2.1),
+      // même raison que le site attaquant ci-dessus.
+      const ctxCible = await resolveCombatantTestContext(db, defenderCharacter, defSkillId)
       if (ctxCible) {
         defenderSkillTotal = ctxCible.skillTotal
         defenderEffectiveMalus = ctxCible.effectiveMalus

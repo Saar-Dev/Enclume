@@ -83,33 +83,50 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
             if (pilot && exoSheet?.category) {
               const pilotSheet = await db('char_sheet').where({ character_id: pilot.id }).first()
               if (pilotSheet) {
-                const maneuverSkillId = resolveManeuverSkillId(exoSheet)
-                const [attrs, archetype, advantages, mutationEffects, maneuverCharSkill, maneuverRefSkill] = await Promise.all([
-                  db('char_attributes').where({ char_sheet_id: pilotSheet.id }),
-                  db('char_archetype').where({ char_sheet_id: pilotSheet.id }).first(),
-                  getAdvantages(pilotSheet.id),
-                  getMutationEffects(pilotSheet.id),
-                  db('char_skills').where({ char_sheet_id: pilotSheet.id, skill_id: maneuverSkillId }).first(),
-                  db('ref_skills').where({ id: maneuverSkillId }).first(),
-                ])
-                const genotypeRow = archetype?.genotype_id
-                  ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
-                  : null
-                const ada_na = calcAttributeNA(attrs, 'ADA', genotypeRow)
-                const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
-                const reaction = calcREA(ada_na, per_na, getAdvantageModForAttr(advantages, 'reaction'))
-                const maneuverSkillTotal = maneuverRefSkill
-                  ? calcSkillTotal(attrs, maneuverCharSkill, maneuverRefSkill, genotypeRow, mutationEffects)
-                  : 0
-                // Malus d'Initiative — REGLEARMURE.md:136-146, doublé hors-milieu. EAU1 (aucun signal
-                // d'immersion temps réel, même limite que resolveManeuverSkillId/getExoMovementBudget) :
-                // 'submarine' suppose toujours "hors milieu" (surface par défaut) ; les autres
-                // environnements supposent toujours "dans leur milieu", jamais doublés.
-                const iniMalus = exoSheet.environment === 'submarine'
-                  ? exoSheet.malus_init_underwater * 2
-                  : exoSheet.malus_init_surface
-                base_ini = Math.min(reaction, maneuverSkillTotal) - iniMalus
+                // is_pnj dépend seulement de l'existence du pilote — posé ici, jamais à l'intérieur du
+                // bloc maneuverSkillId ci-dessous, pour rester correct même si le Test de Manœuvre
+                // d'armure est impossible (armure hybride sans active_maneuver_environment posé,
+                // §16.2.5 — sinon un exo piloté par un PNJ retomberait sur le catch englobant plus bas,
+                // dont le is_pnj générique (character?.type==='pnj') est toujours faux pour une exo,
+                // cassant la Surprise auto-résolue PNJ, même famille de bug que le ticket "Blocage —
+                // Joueur surpris" déjà rencontré sur ce projet).
                 is_pnj = pilot.type === 'pnj'
+                // Test de Manœuvre d'armure impossible (environment='industrial' en suspens, ou
+                // 'hybrid' sans choix explicite, §16.2.5) : base_ini reste à son défaut 0, jamais un
+                // crash qui empêcherait tout le roster de démarrer — même esprit que "pas de pilote".
+                let maneuverSkillId = null
+                try {
+                  maneuverSkillId = resolveManeuverSkillId(exoSheet)
+                } catch (err) {
+                  console.warn(`[COMBAT_START] Manœuvre d'armure indéterminable pour exo ${character.id} (INI reste à 0) : ${err.message}`)
+                }
+                if (maneuverSkillId) {
+                  const [attrs, archetype, advantages, mutationEffects, maneuverCharSkill, maneuverRefSkill] = await Promise.all([
+                    db('char_attributes').where({ char_sheet_id: pilotSheet.id }),
+                    db('char_archetype').where({ char_sheet_id: pilotSheet.id }).first(),
+                    getAdvantages(pilotSheet.id),
+                    getMutationEffects(pilotSheet.id),
+                    db('char_skills').where({ char_sheet_id: pilotSheet.id, skill_id: maneuverSkillId }).first(),
+                    db('ref_skills').where({ id: maneuverSkillId }).first(),
+                  ])
+                  const genotypeRow = archetype?.genotype_id
+                    ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
+                    : null
+                  const ada_na = calcAttributeNA(attrs, 'ADA', genotypeRow)
+                  const per_na = calcAttributeNA(attrs, 'PER', genotypeRow)
+                  const reaction = calcREA(ada_na, per_na, getAdvantageModForAttr(advantages, 'reaction'))
+                  const maneuverSkillTotal = maneuverRefSkill
+                    ? calcSkillTotal(attrs, maneuverCharSkill, maneuverRefSkill, genotypeRow, mutationEffects)
+                    : 0
+                  // Malus d'Initiative — REGLEARMURE.md:136-146, doublé hors-milieu. EAU1 (aucun signal
+                  // d'immersion temps réel, même limite que resolveManeuverSkillId/getExoMovementBudget) :
+                  // 'submarine' suppose toujours "hors milieu" (surface par défaut) ; les autres
+                  // environnements supposent toujours "dans leur milieu", jamais doublés.
+                  const iniMalus = exoSheet.environment === 'submarine'
+                    ? exoSheet.malus_init_underwater * 2
+                    : exoSheet.malus_init_surface
+                  base_ini = Math.min(reaction, maneuverSkillTotal) - iniMalus
+                }
               }
             }
             // Pas de pilote assigné : personne à qui adresser un jet de Surprise manuel — même

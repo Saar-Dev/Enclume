@@ -50,7 +50,7 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 ### 3.2 Combat
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/COMBAT.md` | Architecture de combat, intégration avec le moteur monde | ✅ Vérifié (2026-07-21) |
+| `SYSTEME/COMBAT.md` | Architecture de combat, intégration avec le moteur monde | ✅ Vérifié (2026-08-23) |
 | `SYSTEME/COMBAT REFERENCE.md` | Source de vérité unique — règles LdB + implémentation, pipelines, écarts, matrice de régression, drones | ✅ Vérifié (2026-07-19) |
 | `SYSTEME/COMBAT_FLUX.md` | Flux de combat : initiative, tours, résolution | À jour (2026-07-20) |
 | `SYSTEME/SERVICES_COMBAT.md` | Services backend pour le combat | ✅ Vérifié (2026-07-21) |
@@ -65,7 +65,7 @@ FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL
 | `SYSTEME/CHARACTER_FLUX.md` | Flux de données, dépendances composants, synchronisation UI/API | ✅ Vérifié (2026-05-09) |
 | `SYSTEME/PERSONNAGE_API.md` | API serveur pour les personnages : routes, droits, événements WS | ✅ Vérifié (2026-07-19) |
 | `SYSTEME/PERSONNAGE_CALCULS.md` | Chaîne de calcul des attributs, compétences, seuils et résistances | ✅ Vérifié (2026-07-19) |
-| `SYSTEME/PERSONNAGE_WIZARD.md` | Assistant de création de personnage en 6 étapes, architecture client-primary | ✅ Vérifié (2026-07-21) |
+| `SYSTEME/PERSONNAGE_WIZARD.md` | Assistant de création de personnage en 6 étapes, architecture client-primary, collaboration temps réel MJ/joueur | ✅ Vérifié (2026-08-23) |
 
 ### 3.4 Infrastructure
 | Document | Responsabilité | Statut |

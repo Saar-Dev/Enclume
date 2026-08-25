@@ -164,7 +164,7 @@ const EXO_MANEUVER_SKILL_BY_ENVIRONMENT = {
 
 // Exportée (PLAN_EXOARMURE.md Lot 2bis §9.3, analyse à charge 2026-08-18) — resolveExoStandUpAction
 // (socketCombatHelpers.js) en a besoin directement pour calculer le Seuil du Test de Manœuvre
-// d'armure lui-même, pas seulement pour plafonner une autre Compétence (meleeSkillCap ci-dessous).
+// d'armure lui-même, pas seulement pour plafonner une autre Compétence (resolveExoTestContext ci-dessous).
 // Lit `exoSheet.environment`/`exoSheet.surface_movement_mode` depuis le Lot B (§13.3, 2026-08-20) —
 // plus un `template` séparé, ces champs vivent directement sur exo_sheet.
 export function resolveManeuverSkillId(exoSheet) {
@@ -176,9 +176,32 @@ export function resolveManeuverSkillId(exoSheet) {
     )
   }
   if (exoSheet.environment === 'hybrid') {
-    return exoSheet.surface_movement_mode === 'blocked'
-      ? EXO_MANEUVER_SKILL_BY_ENVIRONMENT.submarine
-      : EXO_MANEUVER_SKILL_BY_ENVIRONMENT.surface
+    // PLAN_EXOARMURE.md §16.2.5 (2026-08-23, corrigé le même jour — Saar) — RAW ("le personnage doit
+    // développer la Compétence qui correspond à chaque milieu") : une armure hybride peut couvrir 2, 3
+    // ou 4 des milieux RAW dans N'IMPORTE QUELLE combinaison, jamais forcément la surface, propre à
+    // chaque exo-armure — rien de générique n'est déductible de `environment='hybrid'` seul. **Aucun
+    // repli automatique** (tranché explicitement par Saar : "pas de fallback, c'est vraiment
+    // spécifique à chaque exo-armure") — une ancienne heuristique surface/sous-marine basée sur
+    // `surface_movement_mode` a été retirée d'ici le jour même de son introduction, avant tout usage
+    // réel (aucune exo n'a encore combattu) : elle supposait à tort que "hybrid" signifiait toujours
+    // "sous-marine ou surface", alors que la règle n'impose aucune paire fixe. Le pilote/MJ DOIT poser
+    // `active_maneuver_environment` explicitement (aucune détection temps réel du moteur monde,
+    // chantier séparé) — sans ce choix, le Test est impossible, jamais une supposition silencieuse.
+    if (!exoSheet.active_maneuver_environment) {
+      throw new Error(
+        "exo_sheet.environment='hybrid' sans exo_sheet.active_maneuver_environment posé — aucun " +
+        "repli automatique (armure hybride, milieu actif spécifique à chaque exo-armure, RAW ne " +
+        'permet aucune déduction générique) — le pilote/MJ doit choisir le milieu actif avant ce Test.'
+      )
+    }
+    const chosenSkillId = EXO_MANEUVER_SKILL_BY_ENVIRONMENT[exoSheet.active_maneuver_environment]
+    if (!chosenSkillId) {
+      throw new Error(
+        `exo_sheet.active_maneuver_environment='${exoSheet.active_maneuver_environment}' non géré ` +
+        'par resolveManeuverSkillId'
+      )
+    }
+    return chosenSkillId
   }
   const skillId = EXO_MANEUVER_SKILL_BY_ENVIRONMENT[exoSheet.environment]
   if (!skillId) {
@@ -187,13 +210,15 @@ export function resolveManeuverSkillId(exoSheet) {
   return skillId
 }
 
-// `meleeSkillCap` (booléen, fourni par l'appelant — resolveCombatantTestContext/socketCombatHelpers.js
-// sait, lui, s'il résout un Test de combat au contact ou non ; ce fichier ne classe pas les
-// `skillId` par nature) : PLAN_EXOARMURE.md §7.2, RAW "le niveau de Manœuvre d'armure limite [...] les
-// Compétences de combat [...] au contact. Les Compétences de combat à distance ne sont, elles, pas
-// limitées." — jamais activé pour un tireur ni pour les sites Acrobatie/Équilibre (v2, hors périmètre
-// de ce Lot 2).
-async function resolveExoTestContext(db, exoCharacter, skillId, { meleeSkillCap } = {}) {
+// PLAN_EXOARMURE.md §16.2.1 (2026-08-23, analyse à charge post-Lot G) — RAW (REGLEARMURE.md:202-207,
+// "Armures mécanisées — Actions") : "le niveau de la Compétence Manœuvre d'armure [...] limite
+// notamment le niveau des Compétences de combat, ainsi que toute autre Compétence servant à
+// accomplir une action physique." Aucune distinction Tir/CaC dans le texte source — contrairement à
+// l'ancienne doctrine de ce fichier (paramètre `meleeSkillCap`, retiré), qui ne plafonnait que 2 des 6
+// appelants réels (CaC) et jamais le tireur ni les 3 sites Acrobatie/Équilibre défensive. Le
+// plafonnement est donc désormais inconditionnel pour tout `skillId`, sauf l'exception §16.2.2
+// ci-dessous — plus un choix laissé à l'appelant, une seule doctrine, un seul endroit qui la connaît.
+async function resolveExoTestContext(db, exoCharacter, skillId) {
   // Fetch unique pilote+exoSheet (resolveExoContext ci-dessus, Lot 2bis §9.3). Depuis le Lot B
   // (§13.3), exoSheet porte déjà sa propre base éditable — plus de JOIN ref_exo_templates à charge
   // de l'appelant.
@@ -208,9 +233,38 @@ async function resolveExoTestContext(db, exoCharacter, skillId, { meleeSkillCap 
   const exoStats = computeExoStats(exoSheet)
   if (!exoStats) return null
 
+  // PLAN_EXOARMURE.md §16.2.2 (2026-08-23) — armures assistées (RAW, REGLEARMURE.md:186-198,
+  // "ARMURES ASSISTÉES" p.325) : "dans tous les cas, on n'utilise pas la Compétence Manœuvre
+  // d'armure." `exo_sheet.category` couvre déjà `exo-alpha`/`exo-0` (2 templates seedés, Explora/
+  // Typhon) — discriminant suffisant, aucune fiche dédiée nécessaire. Le pilote teste alors sa
+  // Compétence propre, non plafonnée, exactement comme s'il n'était pas en armure.
+  const isAssistedArmor = exoSheet.category === 'exo-alpha' || exoSheet.category === 'exo-0'
+
   // exoSheet.category (donc les champs de base) est garanti non-null ici (computeExoStats retourne
   // null sinon, ci-dessus).
-  const limitingSkillId = meleeSkillCap ? resolveManeuverSkillId(exoSheet) : undefined
+  let limitingSkillId
+  if (!isAssistedArmor) {
+    try {
+      limitingSkillId = resolveManeuverSkillId(exoSheet)
+    } catch (err) {
+      // environment='industrial' (aucun template ref_exo_templates ne l'utilise à ce jour, Saar
+      // 2026-08-15 "en suspens") ou valeur non mappée — Test impossible, même contrat que "pas de
+      // pilote"/"armure non configurée" ci-dessus (retour null, jamais une exception qui remonte
+      // jusqu'au socket handler). Avant §16.2.1, seuls 2 appelants passaient par ce chemin
+      // (`meleeSkillCap: true`) et un try/catch englobant (socketCombatResolution.js) suffisait ;
+      // le plafonnement étant maintenant inconditionnel pour tout Test exo, la garde doit vivre ici,
+      // au seul endroit qui connaît la doctrine, pas dupliquée dans chacun des 6 appelants.
+      // console.warn plutôt qu'un catch muet (analyse à charge, 2026-08-23) : les 2 seules causes
+      // documentées (industrial, active_maneuver_environment invalide) sont couvertes par les CHECK
+      // en base (chk_exo_sheet_category exclut 'industrial' de tout template existant tant qu'aucun
+      // n'est créé ; chk_exo_sheet_active_maneuver_environment restreint aux 4 valeurs mappées) — ce
+      // catch ne devrait donc jamais capturer autre chose qu'elles en usage réel ; le garder générique
+      // sans trace masquerait silencieusement un futur bug distinct (ex. faute de frappe dans
+      // EXO_MANEUVER_SKILL_BY_ENVIRONMENT) derrière le même "Test impossible" que les cas RAW attendus.
+      console.warn(`[combatantContextService] resolveExoTestContext — resolveManeuverSkillId a levé, Test traité comme impossible : ${err.message}`)
+      return null
+    }
+  }
 
   // forNAOverride propage l'EXF à for_na/modDom/l'encombrement de effectiveMalus, calculés depuis le
   // départ avec l'EXF plutôt que rafistolés après coup (un `modDom`/`effectiveMalus` déjà calculés
@@ -225,8 +279,8 @@ async function resolveExoTestContext(db, exoCharacter, skillId, { meleeSkillCap 
 // pas de table (§1 du plan, doctrine Fowler déjà appliquée dans ce fichier) — seulement 2 branches
 // réelles aujourd'hui (pj/pnj traités identiquement, exo). Les drones n'appellent jamais ce point
 // d'entrée (§3.5 du plan — drone_programs.level sert directement de Seuil, aucun char_sheet impliqué).
-export async function resolveCombatantTestContext(db, character, skillId, { meleeSkillCap } = {}) {
-  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId, { meleeSkillCap })
+export async function resolveCombatantTestContext(db, character, skillId) {
+  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId)
   return resolveHumanoidTestContext(db, character, skillId)
 }
 

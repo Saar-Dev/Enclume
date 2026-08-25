@@ -3779,3 +3779,430 @@ Corrigé :
 **Testé** : requête directe reproduisant le JOIN corrigé, confirmée pour RT-4/Vanguard (retourne bien
 `template_illustration_url`). Syntaxe serveur vérifiée. **Non testé** : navigateur (Saar à confirmer
 sur RT-4).
+
+---
+
+## 16. Lot — Actions de combat exo-armure (Déplacement + Attaque) — plan détaillé (2026-08-23)
+
+> Origine : ticket `ARMORWINDOW-MISSING1` (`bug_tickets`, créé 2026-08-16, statut `triaged`) décrivait
+> "la fiche exo-armure jamais construite" — **vérifié périmé en ouvrant ce chantier** : `ExoSheetWindow.jsx`
+> (fiche complète, 9 sous-panneaux) existe et est câblée dans `SessionPage.jsx:openSheet` depuis les
+> commits `40c8231`→`911d9aa` (2026-08-19 à 2026-08-21), avant même la création de ce ticket. Le ticket
+> sera clos séparément (admin_notes expliquant la découverte), pas objet de ce Lot.
+>
+> Le vrai trou, décrit directement par Saar en testant le jeu réel : **`CombatExoActionWindow.jsx`**
+> (Lot 2bis, §9 ci-dessus) est un stub délibérément étroit — seuls "Tenter de se relever" et "Passer le
+> tour" sont câblés (§9.4, "hors périmètre explicite de ce lot"). Une exo-armure en Phase Annonce ne
+> peut ni se déplacer, ni attaquer (Tir/CaC). Suivi par le ticket `EXOARM-COMBATFILE` ("Lots 1-4/A-D
+> intégralement codés, validation jeu réel manquante").
+
+### 16.1 Diagnostic — ce qui existe déjà et ce qui manque réellement
+
+Cartographie faite avant tout code (session 2026-08-23, lecture directe + agent Explore) :
+
+- **Déplacement** : `movementBudgetService.js:38-132` (`getExoMovementBudget`, 3 modes `'vit'`/`'pilot'`/
+  `'blocked'`) est déjà générique par `character.type`, consommé par `socketCombatAnnouncement.js:157`
+  — le moteur fonctionne déjà pour une exo, seule l'UI ne le déclenche jamais.
+- **Seuil de Test à l'attaque** : `resolveCombatantTestContext`→`resolveExoTestContext`
+  (`combatantContextService.js:196-231`) résout déjà le Seuil du pilote (EXF substituée à la Force) pour
+  n'importe quel `skillId` — mécanisme déjà éprouvé (Lot G, `PLAN_COMBATANT_CONTEXT.md`, archivé).
+- **Armes/hardpoints** : `exo_weapons` + routes `GET/POST/PUT/DELETE /char-sheet/:id/exo/weapons`
+  existent déjà (Lot C), exposent `ref_fire_mode`/`ref_damage`/`ref_range` via jointure `ref_equipment`
+  (fusion `PLAN_EXOEQ_FUSION.md`, `exo_weapons.ref_equipment_id` → `ref_equipment.id`, migration
+  `240_exo_weapons_foreign_keys.js`).
+- **Ce qui manque réellement** : rien ne construit une déclaration d'attaque exo. `socketCombatAnnouncement.js`
+  n'a de branche que pour `isDrone` (jamais `isExo`) dans la validation d'arme et l'écriture
+  `combat_actions`. `resolveAssaultAction` redirige tout `character.type==='drone'` vers un résolveur à
+  part (`resolveDroneAssaultAction`, Seuil à plat façon `programme.level`) — une exo ne doit **pas** y
+  aller, elle doit traverser le Seuil pilote+EXF via `resolveCombatantTestContext`, avec une arme
+  cherchée dans `exo_weapons` au lieu de `char_inventory`/`drone_weapons`.
+
+### 16.2 Corrections de fondation — avant toute nouvelle fonctionnalité (base saine avant de construire)
+
+Trois trouvailles faites en vérifiant le RAW à la source avant de coder (règle CLAUDE.md §1.9) — aucune
+n'est un problème introduit par ce Lot, mais construire l'attaque exo par-dessus sans les corriger
+reproduirait ou aggraverait une architecture déjà bancale. Décisions actées par Saar (2026-08-23,
+« le RAW prime, base saine avant de construire ») :
+
+#### 16.2.1 Plafonnement Manœuvre d'armure — généralisé à tout Test physique, pas seulement CaC — ✅ codé et testé (2026-08-23)
+
+**RAW (`REGLEARMURE.md:202-207`, "Armures mécanisées — Actions"), texte source, pas le résumé projet** :
+
+> « le niveau de la Compétence Manœuvre d'armure [...] limite notamment le niveau **des Compétences de
+> combat**, ainsi que **toute autre Compétence servant à accomplir une action physique**. »
+
+Aucune distinction Tir/CaC dans le texte. Le code actuel (`combatantContextService.js:190-195`)
+documente pourtant sa propre doctrine inverse : *« les Compétences de combat à distance ne sont, elles,
+pas limitées »*, et n'applique le plafond (`meleeSkillCap: true`) qu'à 2 des 6 appels réels de
+`resolveCombatantTestContext` (`socketCombatHelpers.js:1428,1728`, tous deux CaC). Les 4 autres appels
+— tireur (`:2921`, aucune option) et 3 sites Acrobatie/Équilibre défensive (`:612,1593,1941`, aucune
+option) — ne plafonnent jamais, alors qu'Acrobatie/Équilibre est explicitement une « Compétence [...]
+servant à accomplir une action physique » au sens RAW. **Bug latent déjà présent dans du code shippé**
+(Lot G) — invisible jusqu'ici car aucune exo-armure n'a encore combattu réellement (ni attaqué, ni
+défendu en Acrobatie/Équilibre).
+
+**Décision (Saar, RAW prime)** : retirer l'opt-in `meleeSkillCap` en tant que choix laissé à l'appelant.
+`resolveExoTestContext` applique le plafond Manœuvre d'armure **par défaut, pour tout `skillId`** —
+sauf l'exception §16.2.2 ci-dessous. Correctif isolé, testable seul :
+
+- `server/src/lib/combatantContextService.js` — `resolveExoTestContext` calcule toujours
+  `limitingSkillId` (sauf armure assistée), plus besoin du paramètre `meleeSkillCap` en entrée.
+- Les 6 sites `socketCombatHelpers.js` (612/1428/1593/1728/1921/2921) perdent leur option
+  `{ meleeSkillCap: true }`/absence d'option — un seul comportement, plus de divergence possible.
+- Test dédié : un pilote Tir 18 / Manœuvre d'armure 8 doit désormais tirer à 8, pas 18 (cas qui aurait
+  été silencieusement faux si Étape B avait été codée sans ce correctif).
+
+**Hors périmètre de ce correctif** : classer exhaustivement quelles Compétences du jeu sont "physiques"
+vs non — seuls les 6 sites déjà appelants existent aujourd'hui, aucune Compétence sociale/mentale
+n'est concernée à ce jour.
+
+#### 16.2.2 Armures assistées (exo-alpha/exo-0) — pas une exclusion, un cas déjà modélisable aujourd'hui — ✅ codé et testé (2026-08-23)
+
+**RAW (`REGLEARMURE.md:186-198`, encadré "ARMURES ASSISTÉES", p.325)** distingue deux cas pour les
+catégories `exo-alpha`/`exo-0` (et « quelques rares exo-1 ») :
+
+1. **Portées sans aucun exosquelette** : *« ce ne sont plus des armures mécanisées, mais des
+   protections simples [...] vous pouvez d'ailleurs les traiter comme telles »* — RAW dit explicitement
+   de les traiter comme de l'équipement standard. **Mécanisme concret, vérifié en base** : `ref_equipment`
+   porte déjà les catégories `'Armure simple'`/`'Protection'` avec les colonnes `protection`/
+   `protection_shock`/`protection_modifier`/`shock_reduced_by_armor` — c'est le système d'armure humaine
+   déjà en place, celui qui réduit les dégâts encaissés par n'importe quel pj/pnj. Une exo-alpha/exo-0
+   sans exosquelette est donc **une simple ligne `char_inventory` équipée par le PJ**, exactement comme
+   un gilet pare-balles : aucun `character.type='exo'`, aucun `exo_sheet`, aucun token séparé, aucun
+   pilote à assigner — sa `protection` s'ajoute directement au pipeline de dégâts humain existant. Rien
+   à construire pour ce cas ; seule question annexe (contenu catalogue, pas architecture, hors périmètre
+   de ce Lot) : vérifier que les items RAW spécifiques (armures de sécurité légères) sont déjà seedés.
+2. **Portées avec un « exosquelette d'assistance » léger (« armure assistée »/« semi-mécanisée »)** :
+   reste un objet distinct qui aide à porter le poids — mais *« dans tous les cas, on n'utilise pas la
+   Compétence Manœuvre d'armure »*.
+
+**Ce n'est pas un cas théorique/futur** : `exo_sheet.category` (CHECK `chk_exo_sheet_category`,
+`254_exo_sheet_base_stats.js:30-31,79`) accepte déjà `'exo-alpha'`/`'exo-0'`, et 2 des 16 templates
+seedés (`252_seed_ref_exo_templates.js`) sont catégorie `exo-alpha` (Explora, Typhon, environnement
+hybride) — un joueur peut déjà créer une exo de cette catégorie aujourd'hui. Sans traitement explicite,
+Étape B leur appliquerait à tort le plafond Manœuvre d'armure (§16.2.1) dès leur première attaque.
+
+**Décision (Saar, pas d'exclusion, intégrer maintenant)** : `exo_sheet.category` est déjà le
+discriminant nécessaire, **aucune fiche dédiée à construire** — le modèle de données existant couvre
+déjà ce cas, seule la logique de résolution du Test doit le respecter :
+
+- `resolveExoTestContext`/`resolveManeuverSkillId` (`combatantContextService.js`) : si
+  `exoSheet.category` ∈ `{'exo-alpha', 'exo-0'}`, ne jamais calculer `limitingSkillId` — le pilote teste
+  sa Compétence propre, non plafonnée, exactement comme un personnage sans armure. Implémente
+  directement la citation RAW ci-dessus.
+- **Point ouvert, à trancher avant de coder (pas silencieusement supposé)** : la substitution
+  Force→EXF (`§4.1` du MANUEL, dommages au contact/port) s'applique-t-elle aussi à une armure assistée,
+  ou le pilote garde-t-il sa propre Force ? Le texte RAW lu ne tranche que la Compétence Manœuvre
+  d'armure, jamais explicitement la substitution d'Attribut pour ce cas précis. **Proposition** : ne pas
+  toucher à `computeExoStats`/la substitution EXF dans ce Lot (comportement actuel inchangé, cohérent
+  avec le fait qu'aucune règle RAW trouvée ne dit le contraire) — à confirmer/creuser si un cas réel
+  d'armure assistée en combat le révèle nécessaire.
+- **Gap résiduel documenté, hors périmètre** : « quelques rares exo-1 » sans exosquelette (RAW) —
+  aujourd'hui `exo_sheet` n'a aucune colonne « avec/sans exosquelette » indépendante de `category`, donc
+  ce cas rare reste non modélisable (toute exo-1 est traitée comme mécanisée). Pas traité ici, pas un
+  oubli silencieux — à reprendre le jour où un template exo-1 sans exosquelette est réellement voulu.
+
+#### 16.2.3 Migration additive — munitions `exo_weapons`
+
+**RAW confirme que l'armement exo suit des munitions** (`REGLEARMURE.md:1410-1424`, table ARMEMENT,
+colonne « Mun. (Coût) », ex. Canon à neutrons « 10 (3 000) » — capacité 10, sauf exception explicite
+« générateur de très grande capacité → munitions illimitées », ligne 1407-1409). Le catalogue porte déjà
+cette donnée (`ref_equipment.ammo_count`, `character varying(50)`, `65_ref_equipment.js:26` — même
+colonne que l'armement humanoïde, réutilisée depuis la fusion `ref_exo_equipment`→`ref_equipment`) mais
+**`exo_weapons` n'a aucune colonne d'état runtime** (vérifié directement en base, `information_schema.
+columns` sur la table réelle — `id`/`character_id`/`ref_equipment_id`/`label_override`/`integrite_max`/
+`integrite_current`/`sort_order`, aucun `ammo_remaining`) — contrairement à `char_inventory.ammo_remaining`
+(`15_char_inventory.js:17`).
+
+**Correction (Saar) — quelle migration porte réellement `exo_weapons` aujourd'hui.** Le §16.1 ci-dessus
+citait à tort `migrations_archive/257_exo_loadout_schema.js` — ce n'est qu'un instantané historique
+pré-refonte (`PLAN_MIGRATIONS_REFONTE.md`, 2026-08-22), pas le fichier suivi par `knex_migrations` sur
+cette base. **Vérifié par lecture directe** : la table est réellement créée par
+`server/src/db/migrations/46_exo_weapons.js` (colonnes strictement identiques à celles observées en
+base ci-dessus), affinée ensuite par `143_exo_weapons_constraints.js` et `240_exo_weapons_foreign_keys.js`.
+
+**Pourquoi une nouvelle migration, jamais une édition de 46/143/240** : ces trois fichiers ont déjà
+tourné sur cette base (confirmé par leur présence dans `knex_migrations`) — les éditer ne changerait rien
+à la base actuelle (une migration n'est jouée qu'une fois) mais ferait diverger silencieusement tout
+futur environnement qui rejoue l'historique depuis zéro. Précédent réel déjà vécu sur ce projet, pas une
+crainte théorique : ticket `bug_tickets` `221f493a` (2026-08-21) — `233_exo_sheet.js` avait été édité
+après avoir déjà tourné (pensant à tort qu'il ne l'avait pas encore été), ce qui a fait planter
+`serverdocker` au `migrate.latest()` suivant (*"column already exists"*), nécessitant une chirurgie
+manuelle de `knex_migrations` pour s'en sortir. CLAUDE.md §5 encode déjà ce principe ("ne jamais appeler
+manuellement `up()` deux fois").
+
+**Décision (Saar, migration additive)** :
+
+- Nouvelle migration, prochain numéro libre confirmé (dernier fichier présent :
+  `312_fix_ammo_effects_darts_762_556.js`) → **`313_exo_weapons_ammo.js`** :
+  `ALTER TABLE exo_weapons ADD COLUMN ammo_remaining integer` (nullable — mirroir
+  exact de `char_inventory.ammo_remaining`, `NULL` = jamais chargée, même convention que
+  `weaponAmmoStatus`/`hasEnoughAmmo`, `shared/ammoRules.js`, réutilisées telles quelles plutôt que
+  réimplémentées pour l'exo).
+- Réutilise `ref_equipment.ammo_count` (déjà jointe via `exo_weapons.ref_equipment_id`) pour la capacité
+  max — aucune nouvelle colonne catalogue.
+- Rechargement (`mapActions.reload`) pour une arme exo : à inclure dans Étape B (§16.4) si le temps le
+  permet, sinon ticket de suivi immédiat plutôt qu'un oubli silencieux — une arme exo à sec sans
+  mécanisme de recharge la rendrait inutilisable pour le reste du combat.
+
+#### 16.2.4 Complétion du seed catalogue — `skill_id`/`ammo_count` pour les armes exo à distance
+
+**Trouvaille (analyse à charge du plan, 2026-08-23)** : `resolveCombatantTestContext(db, exoCharacter,
+skillAssoc.skill_id)` (§16.4) suppose que chaque arme exo a une Compétence associée dans
+`ref_equipment_skill_assoc`, comme les armes humaines. **Vérifié faux en base** — les deux tables sont
+fusionnées (`ref_equipment`, `family` distingue `'Armes'`/`'Exo-arme'`/etc., pattern préexistant, pas de
+doublon) mais le seed du Lot C (2026-08-22, périmètre "fiche uniquement", jamais de câblage combat) n'a
+jamais rempli `skill_id` ni `ammo_count` pour les 14 lignes `family='Exo-arme'` qui ont un `fire_mode`
+renseigné (donc de vraies armes à distance — les "Armes de contact" exo ont `fire_mode: null`, elles
+utilisent la Compétence CaC générique de l'armure, jamais un `skill_id` par arme, pas concernées ici).
+
+Sur ces 14 lignes, 10 sont des « Lance-leurre » (Taille 1-10) — **hors périmètre, exclues (Saar,
+2026-08-23)** : `REGLEARMURE.md:1298-1301` place torpilles/leurres dans le chapitre « Combat sous-marin »
+(p.364), jamais transcrit dans `docs/REGLES/*.md` (seulement le PDF source — pas d'extraction PDF par
+Claude, cf. mémoire session). Probablement une contre-mesure défensive, pas une attaque au sens Test-de-
+Tir classique — mécanisme à concevoir séparément une fois l'extrait RAW fourni par Saar, avant même de
+se poser la question `skill_id`/`ammo_count`. 9 des 10 tailles sont d'ailleurs déjà notées en base
+« non attestée dans les 16 fiches RAW — ajoutée par extensibilité » (seule Taille 3 confirmée, Moloch).
+
+Les 4 lignes restantes sont de vraies armes à distance, tranchées par Saar (2026-08-23, « tous les
+lance-harpon sont ARMES_SOUS_MARINES ») :
+
+| Arme | `skill_id` | `ammo_count` (dérivé de `ammo_cost`) |
+|---|---|---|
+| Canon à neutrons | `ARMES_LOURDES` (mirroir direct de "Canon à neutron", `family='Armes'`, même skill) | 10 (de `"10 (3 000)"`) |
+| Lance-harpons AV | `ARMES_SOUS_MARINES` | 1 (de `"1 (500)"`) |
+| Lance-harpons AV double | `ARMES_SOUS_MARINES` | 1 (de `"1 (500)"`) |
+| Lance-harpons AV multiple | `ARMES_SOUS_MARINES` | 1 (de `"1 (800)"`) |
+
+Règle de parsing confirmée régulière sur ces 4 lignes : dans `ammo_cost` (`character varying(50)`,
+format `"N (prix)"`), `N` avant la parenthèse est la capacité, la valeur entre parenthèses le coût de
+rechargement — fiable pour une migration de seed, pas de format irrégulier trouvé sur ces 4 lignes.
+
+**Correction (analyse à charge de ce §16.2.4, 2026-08-23)** — les « Armes de contact » exo n'échappent
+**pas** à ce trou. Affirmation initiale fausse (*« Compétence CaC générique de l'armure, pas de
+`skill_id` par arme »*), déduite d'un skillId de test (`COMBAT_A_MAINS_NUES`) sans vérifier le mécanisme
+réel. **Vérifié** : les 25+ armes de contact humaines (`family='Armes'`, catégorie `'Arme de contact'`)
+ont **toutes** un `skill_id` dans `ref_equipment_skill_assoc` — uniformément `COMBAT_ARME` (une seule
+Compétence pour tout le CaC armé, mais toujours résolue **via l'arme**, jamais codée en dur ailleurs —
+même mécanisme que le Tir, juste une Compétence unique en sortie). Les 9 armes de contact exo
+(Électro-pince, Excavateur mécanique, Griffe mécanique, Hydro-foreuse, Marteau-piqueur, Perceuse
+industrielle, Pince/Griffe, Scie industrielle, Torche de forage Hydra) ont `skill_id: null`, même trou.
+`resolveExoMeleeAction` (§16.4) doit donc résoudre sa Compétence via `skillAssoc` comme le Tir — pas de
+second mécanisme de résolution pour l'exo (autorité unique, CLAUDE.md §1.4). Pas de `ammo_count` pour
+ces 9 (armes de contact, cohérent avec leurs équivalents humains, également sans munitions).
+
+**Migration** (donnée, pas schéma — distincte de §16.2.3 qui ajoute la colonne runtime) : nouveau
+fichier de seed (prochain numéro libre à reconfirmer au moment de coder, après `313_exo_weapons_ammo.js`)
+insérant **13 lignes** `ref_equipment_skill_assoc` (colonnes `item_id`/`skill_id`, vérifiées — 4 Tir +
+9 CaC) et mettant à jour `ref_equipment.ammo_count` pour les 4 armes à distance (matchées par `name`,
+jamais par `id` en dur — `core.md`, règle déjà en place pour tout seed touchant une table peuplée par seed).
+
+#### 16.2.5 Choix manuel du milieu pour les armures hybrides — pis-aller provisoire — ⚠️ codé et testé, SUPERSEDÉ (2026-08-23)
+
+> **Statut mis à jour le même jour** : ce qui suit a été codé, puis Saar a arrêté le codage ("TU VAS
+> TROP VITE") en constatant que la vraie source de l'environnement doit être le World Builder
+> (chaque pièce construite porte son propre environnement, la carte sert de repli hors pièce) — pas un
+> réglage manuel par exo-armure. Conception complète de la solution définitive :
+> **`docs/PLANS/PLAN_ENVIRONNEMENT_MILIEUX.md`** (document séparé, capacité du moteur monde, pas propre
+> à l'exo-armure — `docs/RegleDocumentaire.md` Règle 13). Le contenu ci-dessous reste exact comme
+> **relevé de ce qui a été codé et pourquoi** (traçabilité) — il ne décrit plus la solution retenue à
+> terme ; ne pas re-coder dessus sans avoir lu le document séparé d'abord.
+
+**Trouvaille (Saar, 2026-08-23)** : le plafond Manœuvre d'armure (§16.2.1) et l'Initiative (`§4.3`
+MANUEL, Lot 3 déjà codé) dépendent tous deux d'une spécialité RAW (Armures externes/sous-marines/
+atmosphériques/spatiales) déduite de `exoSheet.environment`. Pour `submarine`/`surface`/`atmospheric`/
+`spatial`, aucune ambiguïté — la spécialité est une caractéristique fixe de l'armure. Pour `hybrid`
+(RAW : *« le personnage doit développer la Compétence qui correspond à chaque milieu »*, §7.2 du plan
+général), le milieu **réel** du combat tranche, mais rien dans le moteur monde n'expose "où est le
+pilote maintenant" (même lacune que `getExoMovementBudget`). Le code actuel (`resolveManeuverSkillId`,
+`combatantContextService.js:170-188`) approxime déjà cette limite : toujours "Armures externes" sauf si
+`surface_movement_mode==='blocked'` — documenté comme un défaut assumé, jamais un vrai choix.
+
+**Fonction unique, un seul correctif profite à 3 mécaniques déjà shippées** — `resolveManeuverSkillId`
+est appelée par `socketCombatState.js:86` (Initiative, Lot 3), `socketCombatHelpers.js:2289`
+("Tenter de se relever", Lot 2bis) et `combatantContextService.js:213` (Seuil de Test, Lot G/§16.2.1).
+Corriger cette fonction une seule fois répare aussi l'Initiative et le Se-relever déjà en production
+pour une armure hybride, pas seulement la nouvelle attaque de ce Lot.
+
+**Décision (Saar)** : en attendant un vrai système de détection d'environnement (chantier séparé, hors
+périmètre), laisser le pilote/MJ choisir manuellement la spécialité active.
+
+**Correction en cours de code (2026-08-23, Saar — "tu vas trop vite")** : la première version codée ici
+supposait qu'une armure hybride combine toujours sous-marine et surface (repli automatique via
+`surface_movement_mode`), hypothèse jamais vérifiée avant de coder. **Faux** : confirmé par Saar, une
+armure hybride peut couvrir **2, 3 ou 4** des 4 milieux RAW dans **n'importe quelle combinaison** —
+surface n'en fait pas forcément partie, c'est spécifique à chaque exo-armure, **aucun repli n'est
+RAW-correct**. Vérifié en base au passage : 5 templates `environment='hybrid'` existent déjà (Explora,
+Typhon, Vanguard, Sylph 56, Heimdall-Pyrelia — pas seulement 2 comme d'abord supposé), tous
+sous-marine/surface uniquement dans les données RAW transcrites à ce jour (aucune colonne
+atmosphérique/spatiale n'existe sur `exo_sheet`/`ref_exo_templates` — cohérent avec la décision Saar de
+ne pas traiter le déplacement en 0G/vol libre pour l'instant, hors périmètre de ce Lot). Le repli a été
+retiré le jour même, avant tout usage réel (aucune exo n'a encore combattu) :
+
+- Migration additive : `exo_sheet.active_maneuver_environment` (text, nullable, même domaine que
+  `environment` moins `hybrid`/`industrial` — `submarine`/`surface`/`atmospheric`/`spatial`), pertinente
+  uniquement quand `environment==='hybrid'`.
+- `resolveManeuverSkillId(exoSheet)` : si `environment==='hybrid'`, **exige** `active_maneuver_environment`
+  — lève une exception explicite s'il est absent (aucun repli, jamais une supposition silencieuse), sinon
+  résout directement via `EXO_MANEUVER_SKILL_BY_ENVIRONMENT[active_maneuver_environment]`.
+- `server/src/socket/socketCombatState.js` (Initiative, Lot 3) : `is_pnj` déplacé hors du bloc qui dépend
+  de `resolveManeuverSkillId` — trouvaille en implémentant ce correctif, pas une supposition. Avant ce
+  déplacement, un exo hybride sans choix posé (le cas normal maintenant, plus une exception rare) aurait
+  fait échouer le calcul d'Initiative pour cette exo et retomber sur le `catch` générique du token, dont
+  le `is_pnj` (`character?.type==='pnj'`) est toujours faux pour une exo — cassant la Surprise
+  auto-résolue PNJ, même famille de bug que le ticket "Blocage — Joueur surpris" déjà rencontré sur ce
+  projet. `base_ini` reste à 0 (Test impossible), `is_pnj` reste correct, jamais un crash qui bloquerait
+  tout le roster.
+- UI : sélecteur dans `ExoSettingsPanel.jsx` (ou section pertinente de `ExoSheetWindow.jsx`), visible
+  uniquement si `category`/`environment` est hybride, modifiable par qui a déjà `canEdit` (GM/propriétaire/
+  pilote — même autorité que le reste de la fiche) — un réglage que le joueur bascule lui-même quand sa
+  situation tactique change (sort de l'eau, etc.), pas une saisie par déclaration de combat. **Reste à
+  coder** (hors périmètre de la correction serveur ci-dessus, pas encore fait).
+- **Hors périmètre** : la détection automatique elle-même (dépend du moteur monde, chantier à part) ;
+  le déplacement en 0G/vol libre (décision Saar 2026-08-23, pas traité pour l'instant).
+
+**Clôture §16.2.1/§16.2.2/§16.2.5 (même commit, même fonction touchée) — 2026-08-23** :
+
+- `server/src/lib/combatantContextService.js` — `resolveExoTestContext` : plafond Manœuvre d'armure
+  inconditionnel (sauf armure assistée `exo-alpha`/`exo-0`, `isAssistedArmor`), `resolveManeuverSkillId`
+  levé désormais capturé en interne (retour `null`, jamais une exception qui remonte, `console.warn`
+  avant retour) ; paramètre `meleeSkillCap` retiré de `resolveCombatantTestContext`/`resolveExoTestContext`.
+  `resolveManeuverSkillId` : branche hybride corrigée deux fois le même jour — **aucun repli** désormais,
+  `active_maneuver_environment` obligatoire (voir correction ci-dessus).
+- `server/src/socket/socketCombatHelpers.js` — les 2 sites qui posaient encore `{ meleeSkillCap: true }`
+  (lignes ~1428/1728) simplifiés ; les 4 autres (tireur + 3 sites Acrobatie/Équilibre défensive) héritent
+  du plafonnement sans modification de leur appel, seule la fonction partagée a changé.
+- `server/src/socket/socketCombatState.js` — Initiative exo (Lot 3) : `is_pnj` isolé du calcul
+  `maneuverSkillId` (trouvaille du correctif no-fallback ci-dessus, cf. détail dans la section
+  précédente) ; `base_ini` reste 0 si le Test de Manœuvre d'armure est impossible, jamais un crash.
+- **Migration** : `313_exo_sheet_active_maneuver_environment.js` (`exo_sheet.active_maneuver_environment`,
+  nullable, CHECK 4 valeurs) — appliquée automatiquement (watcher nodemon), vérifiée dans `knex_migrations`.
+- **Testé** : `combatantContextService.test.mjs` réécrit/étendu (**39/39** contre PostgreSQL réel —
+  nouveaux cas : Tir désormais plafonné, armure assistée exo-alpha/exo-0 jamais plafonnée (y compris
+  combinée à `environment=hybrid`), hybrid **sans** choix manuel → `null` (aucun repli), hybrid + choix
+  manuel → les 4 spécialités, `environment=industrial` → `null` au lieu d'une exception qui remonte).
+  Suite serveur complète hors archive : **336/336**, aucune régression. `node --check` propre sur les 3
+  fichiers touchés.
+- **Non testé** : aucun scénario de combat réel en navigateur — ce correctif est invisible tant
+  qu'Étape B (déclaration d'attaque) n'est pas codée, MAIS l'Initiative (Lot 3) et "Tenter de se
+  relever" (Lot 2bis), déjà en production, sont directement affectés dès maintenant pour toute armure
+  hybride réelle (Test impossible tant que `active_maneuver_environment` n'est pas posé — et l'UI pour
+  le poser n'est pas encore codée, cf. "reste à coder" ci-dessus) — aucun scénario réel avec une armure
+  hybride ou assistée n'a encore été rejoué en jeu.
+- **Retour arrière** : commit isolé sur `dev/Saar`, migration additive (`down` fourni), `git revert`
+  suffit ; aucune donnée de production affectée (colonne nouvelle, nullable).
+
+### 16.3 Étape A — Déplacement combat exo (inchangée par les corrections ci-dessus)
+
+Aucune des trouvailles §16.2 ne concerne le déplacement — le moteur (`movementBudgetService.js`) est
+déjà correct et agnostique du plafonnement/de la catégorie assistée.
+
+- `client/src/components/CombatExoActionWindow.jsx` : brancher `useAutoMoveMode`+`useCombatClickAttack`
+  (patron `useDroneDeclare.js`), ajouter la déclaration `mapActions.move` + bouton de validation.
+- Petit endpoint serveur exposant les Allures exo au client (appelle `getExoMovementBudget`, ne
+  réimplémente pas les 3 modes côté client — CLAUDE.md §7, pas de logique dupliquée).
+- Aucune migration, aucun nouveau chemin de résolution serveur — le moteur existe déjà.
+
+### 16.4 Étape B — Attaque (Tir/CaC) combat exo
+
+Dépend de §16.2.1/16.2.2 codés et testés en premier (le Seuil de Test doit déjà être correct avant
+qu'une attaque exo puisse s'y appuyer), et de §16.2.4 pour le volet Tir précisément (`skillAssoc`
+n'existe pour aucune arme exo à distance sans ce seed — le CaC exo n'est pas concerné, il teste la
+Compétence générique de l'armure, jamais un `skill_id` par arme).
+
+- **Migration** : `combat_actions.exo_weapon_inv_id` (uuid, FK → `exo_weapons(id)` ON DELETE SET NULL,
+  mirroir exact de `drone_weapon_inv_id`, `76_combat_actions_drone.js`/`224_combat_actions_foreign_keys.js`)
+  + contrainte XOR étendue à 3 voies (`weapon_inv_id`/`drone_weapon_inv_id`/`exo_weapon_inv_id`, mirroir
+  `127_combat_actions_constraints.js:chk_weapon_xor`). Regroupée avec §16.2.3 si les deux migrations
+  sont voisines dans le temps, sinon séparées (une cause racine chacune, §5 contrat commun).
+- **Client** : `client/src/lib/useExoDeclare.js` (nouveau, mirroir `useDroneDeclare.js` — déplacement via
+  hooks partagés, dropdown arme unique depuis `/char-sheet/:id/exo/weapons`, cible unique, CaC/Tir selon
+  `ref_fire_mode`) + UI dans `CombatExoActionWindow.jsx` (mirroir `DroneDeclareSection.jsx`).
+- **Serveur — déclaration** (`socketCombatAnnouncement.js`) : branche `isExo` symétrique à `isDrone` —
+  - Validation `exoWeaponInvId` contre `exo_weapons` (appartenance au personnage), même patron que la
+    validation `droneWeaponInvId` (lignes 249-262).
+  - **Correction du garde Tir Multi (`:231`)** : `isDrone` → `isDrone || isExo` — RAW §4.5 MANUEL
+    (*« une armure mécanisée ne peut effectuer qu'une seule Attaque par Tour »*, cohérent avec
+    `REGLEARMURE.md:206-207`) exclut totalement le Tir Multi, y compris en CC. Sans cet ajout, le garde
+    actuel laisserait passer un Tir Multi exo en mode CC (bug qu'aurait introduit une implémentation
+    naïve de ce Lot).
+  - Écriture `combat_actions` : `exo_weapon_inv_id` peuplé, `weapon_inv_id`/`drone_weapon_inv_id` à
+    `null` pour une exo (même patron que les lignes 492-494/562-564).
+  - Garde « pas de pilote assigné » (`resolveExoTestContext` retourne `null`) : message d'erreur
+    explicite (« aucun pilote assigné — impossible d'attaquer »), jamais un crash silencieux — aucun
+    appelant existant ne gère ce cas pour un contexte attaquant à ce jour.
+- **Serveur — résolution** (`socketCombatHelpers.js`) : nouvelles `resolveExoAssaultAction`/
+  `resolveExoMeleeAction` — **pas** un branchement dans `resolveDroneAssaultAction` (Seuil à plat, non
+  RAW pour une exo) ni dans le pipeline humanoïde existant (arme cherchée dans le mauvais inventaire).
+  Structure : LOS/mesure de distance/résolution de bande de portée réutilisées (extraites en fonctions
+  partagées avec `resolveDroneAssaultAction` plutôt que recopiées une 3ᵉ fois, §16.6), Seuil via
+  `resolveCombatantTestContext(db, exoCharacter, skillAssoc.skill_id)` (désormais toujours plafonné par
+  défaut, §16.2.1), dégâts depuis `exo_weapons`/`ref_equipment` (`ref_damage`/EXF-modifié, `§4.6` MANUEL).
+- **Point RAW à revérifier avant de finaliser cette étape** (pas encore fait) : bonus/malus éventuels
+  liés aux Systèmes/Ordinateur (Lot C, `exo_computers`) sur un Test de Tir — aucune mention trouvée dans
+  les passages lus jusqu'ici, mais pas de recherche exhaustive de tout `REGLEARMURE.md`/`REGLE_ORDINATEUR.md`
+  sur ce point précis.
+
+### 16.5 Hors périmètre explicite de ce Lot
+
+- Incidents/Avaries déclenchés par une attaque subie (Lot 5, déjà scindé en 6 sous-lots ailleurs dans ce
+  document) — aucune dépendance dans ce sens.
+- « Quelques rares exo-1 sans exosquelette » (§16.2.2) — gap résiduel documenté, pas modélisable sans
+  nouvelle colonne, non demandé à ce jour.
+- Lance-leurre (10 lignes `ref_equipment`, §16.2.4) — exclu (Saar, 2026-08-23) : mécanique RAW dans le
+  chapitre « Combat sous-marin » (p.364), jamais transcrit dans `docs/REGLES/*.md`, probablement une
+  contre-mesure défensive plutôt qu'une attaque classique. Reprendre une fois l'extrait RAW fourni.
+- Viser un endroit particulier en Tir (RAW optionnel non retenu, `MANUEL_EXOARMURE.md §5.6`).
+- Refonte architecturale complète du dispatch par `character.type` (§16.6 ci-dessous — recommandation
+  bornée, pas une refonte).
+
+### 16.6 Dette d'architecture identifiée (if/else par type) — recommandation bornée, pas une refonte
+
+Recherche faite avant de proposer quoi que ce soit (CLAUDE.md §7) : le système Foundry VTT **Lancer**
+(jeu de mechas piloté par un humain, précédent le plus direct — [flow_api.md](https://github.com/Eranziel/foundryvtt-lancer/blob/master/docs/flow_api.md))
+résout ce même problème via des « Flows » — piles d'étapes composables et réutilisables, paramétrées par
+les données de l'arme/l'acteur plutôt que dupliquées par branche `if (type === X)`.
+
+Enclume fait aujourd'hui l'inverse : `isDrone`/`isExo` dispersés dans ~6 fichiers
+(`socketCombatAnnouncement.js`, `socketCombatResolution.js`, `socketCombatHelpers.js`,
+`movementBudgetService.js`, `CombatOverlay.jsx`, `combatantContextService.js`), et
+`resolveDroneAssaultAction` est déjà quasi-jumelle de `resolveAssaultAction` (LOS, mesure de distance,
+émissions — dupliquées). Une 3ᵉ fonction `resolveExoAssaultAction` copiée-collée aggraverait cette dette.
+
+**Recommandation retenue pour ce Lot** : DRY ciblé, pas de framework Flow — extraire les étapes
+réellement identiques entre `resolveDroneAssaultAction` et les nouvelles fonctions exo (mesure de
+distance, résolution de bande de portée, garde LOS CaC) en petites fonctions partagées. **Pas** de
+refonte du pipeline humanoïde (`resolveAssaultAction`/`resolveMeleeAction`, le plus testé/joué du
+projet) — risque disproportionné pour ce chantier. Si Saar veut un vrai registre de resolvers par type à
+terme, ça mérite son propre chantier, pas mélangé à celui-ci.
+
+### 16.7 Décisions actées par Saar (2026-08-23)
+
+1. RAW prime sur la doctrine existante du code → plafonnement Manœuvre d'armure généralisé (§16.2.1),
+   corrige un bug latent déjà shippé.
+2. Migration additive pour les munitions exo (§16.2.3).
+3. Armures assistées : pas d'exclusion — `exo_sheet.category` déjà suffisant comme discriminant
+   (§16.2.2), aucune fiche dédiée nécessaire, substitution EXF laissée inchangée (point ouvert documenté).
+4. Plan complet rédigé (ce document) avant tout code.
+5. Seed catalogue (§16.2.4, 2026-08-23) : `skill_id` des 4 armes exo à distance —
+   `ARMES_LOURDES` (Canon à neutrons), `ARMES_SOUS_MARINES` (les 3 Lance-harpons AV, « tous les
+   lance-harpon sont ARMES_SOUS_MARINES ») — étendu aux 9 armes de contact exo (`COMBAT_ARME`, trouvé en
+   analyse à charge du point précédent). Lance-leurre (10 lignes) exclu de ce Lot — mauvais chapitre
+   RAW, jamais transcrit dans le projet.
+6. Milieu des armures hybrides (§16.2.5, 2026-08-23) : choix manuel par le pilote/MJ
+   (`active_maneuver_environment`), en attendant une détection temps réel du moteur monde — corrige au
+   passage l'Initiative (Lot 3) et "Se relever" (Lot 2bis) déjà shippés, même fonction partagée.
+
+### 16.8 Ordre d'implémentation proposé (pour validation avant de coder quoi que ce soit)
+
+1. §16.2.1 (plafonnement généralisé) — correctif isolé sur code déjà shippé, testable seul.
+2. §16.2.2 (armures assistées) — même fichier, probablement même commit que le point 1.
+3. §16.2.5 (milieu hybride manuel) — même fonction (`resolveManeuverSkillId`) que les points 1-2,
+   probablement le même commit de correctifs fondation.
+4. §16.2.3 (migration schéma munitions) — indépendante, peut être faite en parallèle.
+5. §16.2.4 (seed `skill_id`/`ammo_count` des 13 armes) — indépendante, peut être faite en parallèle.
+6. Étape A (déplacement, §16.3).
+7. Étape B (attaque, §16.4) — dépend des points 1-5.
+
+Chaque point ci-dessus reste une étape vérifiable séparée (CLAUDE.md §6.5) — je ne code pas le point
+suivant avant validation du précédent.
