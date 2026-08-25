@@ -9,14 +9,15 @@ Il automatise les mécaniques complexes du système : combat, matériel et comp�
 
 | Version | Contenu | Statut |
 |---|---|---|
-| v1 | VTT permettant de combattre et de suivre une campagne de Polaris | Atteint à 99 % |
-| v2 | Système d'exo-armure | Prochaine étape |
-| v3 | Exploration et combat sous-marins (abysses) | Planifié |
+| v1 | VTT permettant de combattre et de suivre une campagne de Polaris | Moteur/boucle de jeu atteint à 99 % — la couverture RAW complète (armes spéciales, usure/intégrité, moral, etc.) reste un chantier continu, suivie dans `docs/ROADMAP.md`, pas un reste à faire pour clore v1 |
+| v2 | Système d'exo-armure | En cours (`docs/PLANS/PLAN_EXOARMURE.md`) |
+| v3 | Exploration et combat sous-marins (abysses) | Envisagé, non cadré — aucun PLAN écrit à ce jour ; `docs/PLANS/PLAN_ENVIRONNEMENT_MILIEUX.md` prépare l'infrastructure (détection de milieu) mais ne couvre pas le contenu v3 lui-même |
 | vX | Ouverture au public | Futur |
 
 ### Projet 2 — Jeu vidéo tactique
 
 Un projet distinct, dérivé du VTT : jeu multijoueur de batailles tactiques en équipe (style X-COM).
+**Idée future, non cadrée** — aucun document, aucun développement prévu à court terme.
 
 ## 2. Invariant absolu
 
