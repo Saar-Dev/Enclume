@@ -106,11 +106,14 @@ armures assistées, milieu hybride) codés et testés le 2026-08-25. Reste : Ét
 
 ## 8. Interactions avec l'environnement (transversal, pas un chapitre dédié du LdB)
 
-Bucket cité par Saar comme manquant, mais en réalité trois états très différents :
+Bucket cité par Saar comme manquant. **Re-vérifié le 2026-08-25 sur son instruction** ("a déjà une
+base dans le code, à vérifier") — état réel bien plus avancé que la première passe de ce document :
 
 | Interaction | État réel | Doc |
 |---|---|---|
-| Porte/échelle (ouvrir, verrouiller) | 🔲 non fait — seul l'ascenseur a une interaction joueur fonctionnelle aujourd'hui | `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` (base de recherche, pas encore un plan) |
+| Interagir avec une entité (skill check + confirmation MJ + jet, ex. levier/console) | ✅ **moteur générique entièrement construit et câblé** — `server/src/socket/socketEntity.js` (`ENTITY_ACTION_REQUEST`/`RESOLVE`), menu radial client (`SessionPage.jsx` `handleEntityAction`), éditeur complet (`EntityBuilderTab.jsx`, i18n fini). **Zéro blueprint n'utilise la fonctionnalité en base** — gap de contenu, pas de moteur | — |
+| Déplacer un objet (pousser/tirer, ex. caisse pour se couvrir) | ✅ **moteur générique entièrement construit et câblé** — `ENTITY_MOVE_REQUEST` (`socketEntity.js`, validation portée/direction/sens serveur PE27), `handleEntityMove` côté client. Même gap : aucun blueprint "caisse" n'existe | — |
+| Porte/échelle (ouvrir, verrouiller) | 🔲 **vrai gap, confirmé** — ce sont des `surface_data.connectors`, un système structurel séparé des entités, pas branché sur le moteur ci-dessus. Ascenseur seul fonctionnel (système dédié à part, `worldElevatorService.js`) | `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` (base de recherche) — décision d'architecture nécessaire : bespoke (mirroir ascenseur) ou faire passer les portes par le moteur d'entités ci-dessus |
 | Se cacher derrière un mur (couverture) | ✅ **déjà largement implémenté** — `state_cover`/`coverageModifier` dans `socketCombatHelpers.js`, intégré au calcul de Seuil du tireur | pas un gap réel, à vérifier seulement en jeu (navigateur) |
 | Inonder un environnement | 🟡 infrastructure partielle — `BUILTIN_WORLD_EFFECTS` inclut déjà `flooded`/« Inondé » et une propagation par compartiments (`shared/world/worldEffects.js`, `buildCompartmentPropagationGraph`) | reste à vérifier : un déclencheur MJ existe-t-il déjà, ou seulement la donnée/le rendu ? [À vérifier avant de cadrer quoi que ce soit ici] |
 
