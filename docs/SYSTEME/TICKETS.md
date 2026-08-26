@@ -37,7 +37,9 @@ Propriétés fondamentales
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                              SIDE SERVEUR                                  │
 │                                                                             │
-│  server/src/db/migrations/241_bug_tickets.js                              │
+│  server/src/db/migrations/4_bug_tickets.js (+ 101_..._constraints.js,      │
+│    198_..._foreign_keys.js, 310_..._seed.js) — corrigé 2026-08-26, pas     │
+│    "241_bug_tickets.js" (réattribué à game_echeances_foreign_keys.js)      │
 │    Table bug_tickets — id, reporter_id, origin, category, domain, title,   │
 │    description, context (jsonb), status, priority, cluster_label,          │
 │    linked_bug_code, admin_notes, reviewed_by/reviewed_at, created/updated. │
