@@ -23,6 +23,7 @@ import {
   confirmMeleeDefense, confirmDamage,
   COMBAT_MODE_LABELS,
 } from './socketCombatHelpers.js'
+import { resolveExoAssaultAction, resolveExoMeleeAction } from './socketCombatExo.js'
 
 async function flushEmissions(io, socket, campaignId, emissions, preloadedSockets = null) {
   const needsLookup = emissions.some(e => e.to === 'user')
@@ -365,7 +366,13 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
                 message: 'Tir non résolu — aucun modificateur reçu (fenêtre de modificateurs jamais ouverte côté client). L\'action est passée sans jet, prévenez le MJ.',
               })
             } else {
-              const assaultResult = await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+              // Exo routée directement ici (pas via resolveAssaultAction, contrairement au drone) —
+              // resolveExoAssaultAction vit dans socketCombatExo.js, qui importe déjà des helpers de
+              // socketCombatHelpers.js ; router l'exo depuis CE fichier-là créerait un import
+              // circulaire entre les deux modules (socketCombatResolution.js n'a pas ce problème).
+              const assaultResult = character.type === 'exo'
+                ? await resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+                : await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
               console.log(`[DBG] COMBAT_ACTION_CONFIRM — resolveAssaultAction terminé token:${tokenId}`)
               if (assaultResult) {
                 await flushEmissions(io, socket, campaignId, assaultResult.emissions)
@@ -382,6 +389,14 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               if (droneResult) {
                 await flushEmissions(io, socket, campaignId, droneResult.emissions)
                 resolutionSuspended = droneResult.suspend
+              }
+            } else if (character.type === 'exo') {
+              // PLAN_EXOARMURE.md §16.4 (Option B, Saar 2026-08-26) — vraie défense active de la
+              // cible, jamais l'auto-résolution simplifiée du CaC drone ci-dessus.
+              const exoMeleeResult = await resolveExoMeleeAction(io, campaignId, action, character, confirmedModifiers, pendingMaps)
+              if (exoMeleeResult) {
+                await flushEmissions(io, socket, campaignId, exoMeleeResult.emissions)
+                resolutionSuspended = exoMeleeResult.suspend
               }
             } else {
               const meleeResult = await resolveMeleeAction(io, campaignId, action, character, confirmedModifiers, pendingMaps)

@@ -77,7 +77,7 @@
 | Chantier | Doc(s) | Ce qui manque |
 |---|---|---|
 | Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | Le fichier est une ligne (`Lire @REGLE_AMRES_SPECIALES.md` — typo dans le nom, le vrai fichier est `REGLES/REGLES_ARMES_SPECIALES.md`). RAW transcrite, zéro recherche code. Prérequis confirmé : la résolution de zone d'effet (AOE) — voir ligne dédiée ci-dessous, n'existe pas encore dans le pipeline de combat |
-| **Résolution de zone d'effet (AOE) — priorité #1 (ordre du 2026-08-26)** | — (aucun PLAN, brique d'infrastructure transversale) | N'existe pas dans le pipeline de combat actuel (vérifié par recherche, 2026-08-25). Prérequis confirmé pour Armes spéciales (fusil à pompe/lance-flammes/grenades, RAW explicite), Tir de suppression/couverture, **et désormais confirmé aussi pour Force Polaris** (2026-08-26, lecture directe de `REGLEPOLARIS.md` — voir ligne dédiée, ce n'est plus une hypothèse). Le chantier le plus rentable de cette table : débloque 3 chantiers de contenu en une seule brique. À construire une fois plutôt que plusieurs fois (§9, `COUVERTURE_RAW.md`) |
+| **Résolution de zone d'effet (AOE) — priorité #1 (ordre du 2026-08-26)** | `PLANS/PLAN_AOE.md` (v7, 2026-08-26 — implémentation démarrée, §12 du doc tient l'avancement réel à jour) | **En cours de code.** Fait et testé : géométrie pure (`aoeShapes.js`), primitive de palier générique (`distanceBands.js`), requête spatiale en lot (`queryTokensInShape`), composition LOS (`evaluateAoeVisibility`), migration `317_combat_action_targets` appliquée — 3 bugs trouvés et corrigés en relecture (token MJ filtré des cibles, statut clair si lanceur invalide, garde anti-table-non-triée). En pause : branchement du payload `COMBAT_ACTION_DECLARE` (`socketCombatAnnouncement.js`). Catalogue de dégression **partiellement de-risqué seulement** : viable pour le fusil à pompe (`resolveWeaponRangeBand`/`ref_range` déjà exploitables), mais **8 types de grenades réels dans `ref_equipment` ont chacun une zone d'effet différente écrite en texte libre** (pas en donnée structurée) — nouvelle colonne catalogue nécessaire avant de brancher les grenades. Fumigène/à gaz confirmées hors périmètre AOE (relèvent de `worldEffects.js`/propagation par compartiments, pas d'une forme géométrique). | Architecture en couches actée (géométrie pure → requête spatiale monde → LOS par cible → résolution/dégression par arme), plus aucun point bloquant : dispersion 1D6 résolue (schéma fourni par Saar), mécanique de point de Chance reportée en backlog (ligne dédiée ci-dessous), correction MJ post-résolution ramenée à l'édition de fiche déjà existante (pas de nouvelle file de confirmation), risque de round bloqué couvert par un mécanisme déjà codé et générique (`COMBAT_SKIP_PLAYER`/`confirmDamage forced=true`), politique `ON DELETE` alignée sur le précédent déjà en base. Prêt pour le passage au code. Prérequis confirmé pour Armes spéciales, Tir de suppression/couverture, et Force Polaris — débloque 3 chantiers de contenu en une seule brique |
 | Corps à corps avancé / Arts martiaux (techniques offensives/défensives, Saisie/Lutte) | — (RAW transcrite : `REGLES/REGLECACARTMARTIAUX.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Indépendant d'AOE/Usure — peut être cadré en parallèle |
 | Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[VÉRIFIÉ] 2026-08-26** — `docs/REGLES/REGLEPOLARIS.md` existe et a été lu directement (la note du 25 cherchait le mauvais nom de fichier) : le cœur du mécanisme (Maîtriser/Libérer/Contrôler, Choc Polaris, Incidents 1D100) est indépendant de l'AOE et codable seul ; la majorité des pouvoirs ont réellement un paramètre Zone d'effet (confirmé, pas déduit) ; un sous-ensemble à cible unique (Contrôle mental confirmé, Dague psychique probable) ne dépend pas de l'AOE. **Premier lot réaliste sans attendre l'AOE** : cœur du mécanisme + pouvoirs à cible unique. Reste à faire avant cadrage complet : cataloguer les ~40 pouvoirs un par un (zone vs cible unique), pas fait en entier |
 | Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
@@ -106,6 +106,12 @@
 - Spotlight / bibliothèque de présentation (personnage, document, indice) — besoin identifié en cadrant Battlemap 2D
 - Eau structurelle authorée (lacs, sas/calles sèches de navires, ponts d'arrimage) — nécessite un outil d'édition dédié + compilation serveur (`WorldSnapshot`), pas une reconstruction géométrique client. Différé (Saar, 2026-07-29 : "peut largement attendre")
 - Mutations & Avantages, narratif/économie (`docs/Old/PLAN_MUTATION2.md` Lot 7) — priorité basse
+- **Mécanique de point de Chance** (décision Saar, 2026-08-26, cadrage `PLANS/PLAN_AOE.md` §5.2) —
+  ressource RAW transversale (relancer un jet, réduire la gravité d'une Blessure ou de Dommages
+  d'armure, forcer un Test de Chance) : bouton PJ "Utiliser sa Chance" à ajouter à plusieurs endroits.
+  Pas complexe en soi mais transversal — non urgent, aucun PLAN écrit. Tant que ce chantier n'est pas
+  fait, l'AOE (et tout Test de Chance en général) se résout sans option de dépense côté serveur, écart
+  RAW assumé
 
 ## 5. Dettes ponctuelles ouvertes (non couvertes par un PLAN)
 
@@ -128,6 +134,28 @@
   ↔ Character) — alimentée au fil de l'eau, pas une carte de dépendances exhaustive dédiée (décision
   explicite : le risque de péremption d'une carte sans déclencheur de mise à jour naturel dépasse sa
   valeur, voir discussion 2026-08-26).
+- **Dispatch de résolution combat (Tir/CaC × PJ/PNJ/Drone/Exo) — architecture incohérente, trouvé en
+  écrivant l'Exo-CaC (2026-08-26)**. Deux problèmes distincts, tous deux dans
+  `server/src/socket/socketCombatHelpers.js`/`socketCombatResolution.js`/`socketCombatExo.js` :
+  1. `resolveDroneAssaultAction` mélange encore Drone-Tir ET Drone-CaC dans une seule fonction
+     (branchement interne `isCaCWeapon`) — c'est la seule des 6 combinaisons type×action qui ne soit
+     pas déjà scindée (Humain-Tir/Humain-CaC/Exo-Tir/Exo-CaC le sont chacune, cf. `resolveAssaultAction`/
+     `resolveMeleeAction`/`socketCombatExo.js`).
+  2. Le point de dispatch (quelle fonction appeler selon `character.type` × `action.type`) est éclaté à
+     deux endroits avec deux styles différents : pour `'assault'`, le redirect drone vit *dans*
+     `resolveAssaultAction` elle-même (`character.type==='drone'` interne), alors que le redirect exo
+     vit *dans* `socketCombatResolution.js` (évite un import circulaire avec `socketCombatExo.js`,
+     qui importe déjà des helpers de `socketCombatHelpers.js`) ; pour `'melee'`, drone ET exo sont
+     tous deux routés depuis `socketCombatResolution.js`. Trois styles pour la même décision.
+
+  **Rework ciblé recommandé** (pas les 6 cases — voir ci-dessous) : scinder `resolveDroneAssaultAction`
+  en `resolveDroneAssaultAction`(Tir)/`resolveDroneMeleeAction`(CaC), et unifier tout le dispatch en un
+  seul endroit dans `socketCombatResolution.js` (une table `{characterType, actionType} → resolver`),
+  jamais un redirect caché à l'intérieur d'un résolveur humain. **Ne pas toucher**
+  `resolveAssaultAction`/`resolveMeleeAction` (le contenu humain lui-même, hors leur redirect drone à
+  retirer) — code le plus testé/joué du projet, aucun besoin fonctionnel de le réécrire, uniquement du
+  risque. Décision Saar (2026-08-26) : rework ciblé plutôt que les 6 modules complets, pas mélangé à
+  l'ajout de fonctionnalité — chantier à part, pas cadré plus finement à ce jour.
 - Module Blessures — animation Tests de Choc restante (l'apparition des badges de statut est faite)
 - Options de campagne à finir : `revers`, `skill_natural_prog`, `celebrity`
 - Membres détruits (distinction Mortelle vs Membre détruit) — différé (Saar 2026-07-29), la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant que cette option n'existe pas
