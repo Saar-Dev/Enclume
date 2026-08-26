@@ -156,7 +156,9 @@ anciens fichiers Redis, pathfinder client et LOS voxel ont été supprimés.
 
 ### 2.8 Persistance et révisions `[EXISTANT — PHASE 1]`
 
-La migration 152 ajoute trois compteurs :
+Trois compteurs (+ `runtime_revision`, quatrième colonne de la même table, dédiée à l'état runtime —
+voir ailleurs dans ce document), créés directement dans `3_battlemaps.js` (corrigé 2026-08-26 —
+"migration 152" pointe aujourd'hui vers `ref_backgrounds_constraints.js`, sans rapport) :
 
 - `world_revision` change après toute modification d'une source physique ;
 - `surface_revision` protège uniquement les éditions de `surface_data` ;
@@ -714,8 +716,10 @@ chemin traversé, pas seulement la case finale.
   facteurs séparés et explicables entre catégories ;
 - le renderer affiche les régions mais leur AABB déclaré, et non le mesh translucide, reste
   l'autorité physique ;
-- l'ancienne table `zones`, sans consommateur actif, est archivée par la migration 154. Aucun
-  adaptateur approximatif n'est maintenu.
+- l'ancienne table s'appelle en réalité `legacy_zones` depuis sa création (`48_legacy_zones.js`, jamais
+  renommée depuis « zones », contrainte de clé primaire dans `145_legacy_zones_constraints.js`), sans
+  consommateur actif — corrigé 2026-08-26, "migration 154" pointe aujourd'hui vers
+  `ref_career_equipment_constraints.js`, sans rapport. Aucun adaptateur approximatif n'est maintenu.
 
 Le combat consomme déjà les régions pour les coûts, la visibilité et les tests de terrain instable,
 et les traversées résolues sont journalisées. La traduction détaillée des hooks `test` ou `damage`
