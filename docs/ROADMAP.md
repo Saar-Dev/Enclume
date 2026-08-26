@@ -98,22 +98,23 @@
 
 ## 5. Dettes ponctuelles ouvertes (non couvertes par un PLAN)
 
-- **Audit doc SYSTEME vs code réel (2026-08-26)** — 7 agents ont audité les 33 docs `docs/SYSTEME/*.md`
-  contre le code réel (demande Saar : "point réel sur l'état réel du code réel"). Corrigés cette
-  session : `BLESSURES.md`, `LOCALISATION.md`, `ADMIN.md`, `ARCHITECTURE_SOCKET.md`,
-  `FICHE_HORSLIGNE.md`, `VOXELS.md`, `CONVENTIONS.md`, `SERVICES_COMBAT.md`, `CORE.md`,
-  `COMBAT REFERENCE.md`, `COMBAT_FLUX.md`, `CHARACTER.md`, `CHARACTER_FLUX.md`. Un vrai bug trouvé au
-  passage (pas juste un problème de doc) : ticket `bug_tickets`/`AUDIT-SYSTEME`
-  ("VOXEL_ADD/REMOVE/UPDATE et MAP_SWITCH/MAP_VIEWPORT — client émet, aucun handler serveur"),
-  émissions no-op silencieuses depuis le commit `d0ee0af`. **Reste à corriger** (même défaut
-  systémique — numéros de migration périmés depuis la refonte migrations 2026-08-22, trouvés par
-  l'audit mais pas encore appliqués) : `COMBAT.md` (numéros 56/57/58/63/81/164/174/231/254),
-  `MOTEUR_MONDE.md`, `DOMMAGES.md`, `ETATS_PERSONNAGE.md`, `MODING.md`, `CHAT.md`, `TRADE.md`,
-  `TICKETS.md`, `EXOARMURE.md` (+ contenu manquant : migration 313, armures assistées §16.2.2).
-  Mineur, non fait : `PERSONNAGE_API.md` (chemin `char-sheet.js` incomplet), `EDITEUR.md` (diagramme
-  suggère `EntityEditorScene`/`EditorScene` comme fichiers séparés, en réalité des fonctions internes
-  à `Editor3D.jsx`, `EditorScene` n'est plus rendue), `MATERIAUX.md` (chaîne `activeMaterial` non
-  tracée jusqu'à `SurfaceEditorPanel.jsx`, présentée à tort comme inconnue).
+- **Audit doc SYSTEME vs code réel (2026-08-26) — CLOS**, 25 des 33 docs `docs/SYSTEME/*.md`
+  corrigés (les 8 restants n'avaient aucune divergence trouvée par les 7 agents Explore). Trouvailles
+  les plus significatives : `COMBAT REFERENCE.md`/`COMBAT_FLUX.md` décrivaient un mécanisme de
+  résolution abandonné depuis la Session 159 ; `CHARACTER.md` décrivait un schéma `char_advantages`/
+  `ref_mutations` entièrement remplacé ; `EXOARMURE.md` décrivait `ref_exo_equipment` comme une table
+  vivante alors qu'elle a été fusionnée dans `ref_equipment` (`docs/Old/PLAN_EXOEQ_FUSION.md`) ;
+  `COMBAT.md` (section combattant exo) n'avait jamais été mise à jour avec les correctifs
+  §16.2.1/16.2.2/16.2.5 codés en tout début de cette session. Un vrai bug trouvé au passage (pas
+  juste un problème de doc) : ticket `bug_tickets`/`AUDIT-SYSTEME` ("VOXEL_ADD/REMOVE/UPDATE et
+  MAP_SWITCH/MAP_VIEWPORT — client émet, aucun handler serveur"), émissions no-op silencieuses depuis
+  le commit `d0ee0af`. Le défaut systémique (numéros de migration périmés depuis la refonte migrations
+  2026-08-22) a été corrigé dans tous les documents où il a été trouvé, avec vérification directe de
+  chaque numéro contre le fichier réel avant correction (pas de confiance aveugle dans les rapports
+  d'agents). **Non exhaustif malgré tout** : les agents ont eux-mêmes signalé des sections "non
+  vérifiées faute de temps" à l'intérieur de plusieurs docs corrigés (ex. la plupart des codes PC de
+  `CHARACTER.md` au-delà de PC6/PC22, `COMBAT REFERENCE.md` §6 tables RAW, `COMBAT_FLUX.md` §6-14
+  pipelines d'attaque) — à garder en tête, pas une garantie de complétude à 100 %.
 - Module Blessures — animation Tests de Choc restante (l'apparition des badges de statut est faite)
 - Options de campagne à finir : `revers`, `skill_natural_prog`, `celebrity`
 - Membres détruits (distinction Mortelle vs Membre détruit) — différé (Saar 2026-07-29), la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant que cette option n'existe pas
