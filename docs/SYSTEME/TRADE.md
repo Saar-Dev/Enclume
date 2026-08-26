@@ -79,7 +79,7 @@ autorité depuis.
 
 ## 3. Base de données
 
-### `merchants` (migration 84)
+### `merchants` (`49_merchants.js`, corrigé 2026-08-26 — pas "migration 84")
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -92,25 +92,27 @@ autorité depuis.
 | `rules` | JSONB `[]` | Filtres en cascade FAM → CAT → ITEM, voir §4 |
 | `allowed_char_ids` | TEXT[] | Liste blanche de personnages ; tableau vide = tous les PJ de la campagne autorisés |
 
-### `trade_offers` (migration 86, étendue 88/90)
+### `trade_offers` (`86_trade_offers.js`, colonnes ci-dessous toutes créées dans ce seul fichier —
+corrigé 2026-08-26, "étendue 88/90" décrivait une évolution pré-refonte archivée)
 
 | Colonne | Type | Rôle |
 |---|---|---|
-| `type` | TEXT `EXCHANGE`\|`SELL` | Distingue échange PJ↔PJ et revente PJ→GM (même table, migration 88) |
+| `type` | TEXT `EXCHANGE`\|`SELL` | Distingue échange PJ↔PJ et revente PJ→GM (même table, `86_trade_offers.js` — corrigé 2026-08-26, pas "migration 88") |
 | `from_char_id` | UUID | Toujours renseigné |
 | `to_char_id` | UUID nullable | `NULL` pour une revente (`SELL`, destinataire = le GM implicitement) |
-| `merchant_id` | UUID nullable | Marchand concerné par une revente (migration 90), `NULL` pour un échange |
+| `merchant_id` | UUID nullable | Marchand concerné par une revente (`86_trade_offers.js`, pas "migration 90"), `NULL` pour un échange |
 | `status` | TEXT | `PENDING` → `COUNTER_OFFERED` (SELL uniquement) → `ACCEPTED`\|`DECLINED`\|`CANCELLED` |
 | `items_json` | JSONB `[]` | Snapshot des objets proposés (`char_inventory_id`, nom, quantité, prix) |
 | `sols_offer` | INT | Sols proposés (échange) ou prix demandé (revente) |
-| `counter_sols` | INT nullable | Prix contre-offert par le GM (migration 90, `SELL` uniquement) |
+| `counter_sols` | INT nullable | Prix contre-offert par le GM (`86_trade_offers.js`, pas "migration 90", `SELL` uniquement) |
 | `expires_at` | TIMESTAMPTZ | Voir §6 — TTL fixe, pas lié à l'horloge de campagne malgré le commentaire de la migration 86 |
 
 **[OBSERVÉ]** Le commentaire de la migration 86 (`expires_at = NOW() + campaigns.tour_duration`)
 décrit une intention non implémentée : le code (`socketTrade.js`, `SELL_OFFER_TTL_SEC = 120`) fixe
 un TTL constant de 120 secondes pour les deux types d'offre, sans lien avec `campaigns.tour_duration`.
 
-### `trade_log` (migration 85, étendue 89/91)
+### `trade_log` (`85_trade_log.js`, CHECK `chk_trade_log_type` — incl. `player_sell` — dans
+`182_trade_log_constraints.js` ; corrigé 2026-08-26, "étendue 89/91" pointait vers `vaults.js`/`walls.js`, sans rapport)
 
 Livre de compte en lecture seule (GM), une ligne par transaction exécutée.
 
@@ -118,7 +120,7 @@ Livre de compte en lecture seule (GM), une ligne par transaction exécutée.
 |---|---|
 | `merchant_buy` | `buyFromMerchant` |
 | `player_transfer` | `acceptTransfer` (échange PJ↔PJ) |
-| `player_sell` | `executeSell` (revente PJ→GM, migration 89) |
+| `player_sell` | `executeSell` (revente PJ→GM, `182_trade_log_constraints.js` — pas "migration 89") |
 | `drone_reload` | Handler `TRADE_DRONE_TRANSFER` (migration 91) |
 | `gm_grant` | Réservé en base (contrainte CHECK), aucun code n'insère ce type actuellement |
 
@@ -294,15 +296,16 @@ Serveur (3)
 | `server/src/socket/socketTrade.js` | Handlers WS temps réel |
 | `server/src/routes/tradeRoutes.js` | REST marchands + journal |
 
-Migrations (6)
+Migrations — **corrigé (audit 2026-08-26)** : cette liste en 6 étapes historiques (84/85/86/88/89/90)
+décrit l'évolution pré-refonte (2026-08-22), archivée sous ces mêmes numéros dans
+`migrations_archive/`. Dans le dépôt actif, 88/89/90 ont été réattribués à des tables sans rapport
+(`vault_transfer_requests`, `vaults`, `voxel_textures`) et `merchants` a changé de numéro. Schéma réel :
+
 | Fichier | Rôle |
 |---|---|
-| `84_merchants.js` | Table `merchants` |
-| `85_trade_log.js` | Table `trade_log` |
-| `86_trade_offers.js` | Table `trade_offers` (échange PJ↔PJ) |
-| `88_trade_offers_sell.js` | Ajoute `type` (EXCHANGE/SELL), `to_char_id` nullable |
-| `89_trade_log_sell.js` | Ajoute `player_sell` au CHECK de `trade_log.type` |
-| `90_trade_offers_counter.js` | Ajoute `COUNTER_OFFERED`, `counter_sols`, `merchant_id` |
+| `49_merchants.js` | Table `merchants` (pas `84_merchants.js`) |
+| `85_trade_log.js` | Table `trade_log` — même numéro par coïncidence |
+| `86_trade_offers.js` | Table `trade_offers`, **avec `type`/`counter_sols`/`merchant_id` déjà inclus dans la création** — plus une évolution en 3 fichiers séparés (88/89/90) |
 
 Client (5)
 | Fichier | Rôle |
