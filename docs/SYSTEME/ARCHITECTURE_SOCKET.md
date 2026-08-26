@@ -5,7 +5,7 @@ SYSTEME/ARCHITECTURE_SOCKET.md — Architecture de communication temps réel
 
 1. Vue d'ensemble
 
-La communication temps réel repose sur Socket.io. Le serveur expose un coordinateur léger (server/src/socket/index.js, ~140 lignes) qui délègue chaque domaine à un module dédié. Côté client, un SocketProvider React fournit le socket via Contexte, et des hooks spécialisés consomment ce socket.
+La communication temps réel repose sur Socket.io. Le serveur expose un coordinateur léger (server/src/socket/index.js, 283 lignes au 2026-08-26 — corrigé, était ~140 lignes au moment du commit REWORK-08 d0ee0af d'origine, a grossi depuis avec la restauration combat_pending, Wizard et Catastrophe) qui délègue chaque domaine à un module dédié. Côté client, un SocketProvider React fournit le socket via Contexte, et des hooks spécialisés consomment ce socket.
 text
 
 Serveur :
@@ -21,8 +21,16 @@ index.js (coordinateur)
  │   │                                COMBAT_STUN_CONFIRM, COMBAT_APPLY_STUN, COMBAT_ACTION_PRECHECK
  │   └── socketCombatHelpers.js     — resolveMeleeAction, resolveAssaultAction, resolveDroneAssaultAction, etc.
  ├── socketTrade.js         — TRADE_*
- └── socketVoxel.js ? — les handlers VOXEL_ADD/REMOVE/UPDATE et MAP_SWITCH/MAP_VIEWPORT ne sont pas dans un module
-                        dédié (ils résident encore dans index.js). Voir dette D-SOCKET-1.
+ ├── socketWizard.js        — WIZARD_* (registerWizardHandlers, index.js:254)
+ └── socketCatastrophe.js   — Catastrophe (registerCatastropheHandlers, index.js:260) — les deux absents du reste de ce document jusqu'à cette correction
+
+**Corrigé (audit 2026-08-26) — pas une dette de modularisation, un vide fonctionnel** : les handlers
+VOXEL_ADD/REMOVE/UPDATE et MAP_SWITCH/MAP_VIEWPORT ne sont ni dans un module dédié ni "encore inline
+dans index.js" comme l'affirmait ce document — ils ont été **entièrement supprimés** au commit
+`d0ee0af` (destruction du système voxel terrain, remplacé par le builder Kiwi) et jamais recréés.
+Zéro occurrence dans tout `server/src/socket/`. Le client, lui, **continue d'émettre** ces événements
+(`Editor3D.jsx` pour VOXEL_*, `useBattlemapManager.js` pour MAP_SWITCH) — ce sont des émissions no-op
+silencieuses en production. Ticket créé (`bug_tickets`, cluster `AUDIT-SYSTEME`).
 
 Client :
 SocketProvider (créé dans SessionPage)
@@ -60,7 +68,12 @@ server/src/socket/index.js est la seule fonction exportée initSocket(io). Elle 
 
     Le handler disconnect est enregistré à l'intérieur de SESSION_JOIN, après les appels register*.
 
-Important : Il n'y a pas de module socketVoxel.js. Les handlers VOXEL_ADD, VOXEL_REMOVE, VOXEL_UPDATE, MAP_SWITCH et MAP_VIEWPORT sont encore inline dans index.js. Ce n'est pas un oubli — ils n'ont tout simplement pas été extraits lors du REWORK-08. Si vous devez les toucher, isolez-les d'abord.
+Important — **corrigé (audit 2026-08-26)** : il n'y a pas de module socketVoxel.js, mais ce n'est
+plus parce que ces handlers "résident encore dans index.js" — ils ont été supprimés au commit
+`d0ee0af` et n'existent nulle part côté serveur aujourd'hui, alors que le client les émet toujours
+(voir §2 ci-dessus, ticket `bug_tickets`/`AUDIT-SYSTEME`). Si vous devez toucher VOXEL_*/MAP_SWITCH,
+vérifiez d'abord si un handler doit être recréé ou si l'émission client doit être retirée comme code
+mort — ne partez pas du principe qu'un handler existe déjà quelque part.
 3. Maps globales persistantes
 
 Déclarées hors initSocket pour être partagées entre toutes les connexions :
@@ -132,7 +145,13 @@ export function useMonHook() {
 
 Obligatoire : les handlers sont nommés (const onX = ...) pour permettre un cleanup ciblé. socket.off(WS.X) sans handler supprimerait TOUS les listeners de cet événement.
 
-Piège P3 (résolu) : socket provenant de useSocket() est stable. Il n'a plus besoin d'être dans les dépendances des useCallback qui émettent.
+Piège P3 — **corrigé (audit 2026-08-26), ce document se trompait, `docs/SYSTEME/REACT.md` a la bonne
+version** : `socket` n'est **pas** stable (`SocketProvider` crée une nouvelle instance à chaque
+reconnexion) — `socket` **doit** rester dans les dépendances de tout `useCallback`/`useEffect` qui
+émet ou écoute. Vérifié dans le code réel : `handleEntityActionResolve`, `handleTokenSetRotation`,
+`handleSurpriseRolled` (`SessionPage.jsx:561-575`) incluent tous `[socket]`. Ne pas retirer `socket`
+d'un tableau de dépendances sous prétexte de ce piège — l'inverse causerait une régression
+(callback figé sur un ancien socket après reconnexion).
 7. Ordre d'enregistrement client
 
 Dans SessionContent, l'ordre est contraint :
@@ -152,7 +171,12 @@ Dans SessionContent, l'ordre est contraint :
 Violer cet ordre provoque des erreurs TDZ ou des références à des callbacks non encore définis.
 8. État actuel et dettes
 
-    socketVoxel.js n'existe pas — les handlers voxel sont encore inline dans index.js.
+    socketVoxel.js n'existe pas — corrigé (audit 2026-08-26) : pas parce que les handlers sont
+    encore inline dans index.js, mais parce qu'ils ont été supprimés (voir §2/§3 ci-dessus). Le
+    client émet toujours ces événements dans le vide — ticket bug_tickets/AUDIT-SYSTEME.
+
+    CORE.md liste les événements WS actifs mais omet plusieurs domaines entiers présents ici
+    (Wizard, Catastrophe) — à recouper si ce document est retouché.
 
     socketTrade.js existe mais n'a pas suivi le même pattern de modularisation fine ; son contenu est plus monolithique.
 

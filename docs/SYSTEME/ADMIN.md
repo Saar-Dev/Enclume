@@ -39,8 +39,11 @@ Propriétés fondamentales
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                              SIDE SERVEUR                                  │
 │                                                                             │
-│  server/src/db/migrations/240_users_role.js                               │
-│    Colonnes role/role_granted_by/role_granted_at + contrainte CHECK        │
+│  server/src/db/migrations/87_users.js (colonnes role/role_granted_by/      │
+│    role_granted_at) + 184_users_constraints.js (CHECK) +                   │
+│    270_users_foreign_keys.js (FK role_granted_by) — corrigé 2026-08-26,    │
+│    240_users_role.js n'existe qu'archivé (migrations_archive/), même       │
+│    numéro réattribué depuis à une autre table par la refonte migrations   │
 │                                                                             │
 │  server/src/lib/bootstrapAdmin.js                                         │
 │    bootstrapAdminFromEnv() — appelée dans index.js juste après             │
@@ -89,8 +92,10 @@ Propriétés fondamentales
 │    Routes : /admin, /admin/users, /health, /dev/dice-calibration          │
 │                                                                             │
 │  pages/AdminPage.jsx            Grille de tuiles (Santé, Dice, BDD lien   │
-│                                  direct hors SPA, Utilisateurs, Tickets   │
-│                                  désactivée — hors périmètre actuel)      │
+│                                  direct hors SPA, Utilisateurs, Tickets,  │
+│                                  ExoTemplates, Logs — corrigé 2026-08-26, │
+│                                  Tickets est active et fonctionnelle,     │
+│                                  pas désactivée, voir §5 plus bas)        │
 │  pages/AdminUsersPage.jsx       Liste + confirmation avant tout           │
 │                                  changement de rôle (jamais un clic seul) │
 │  pages/DashboardPage.jsx        Bouton "Administration" dans le header,   │
@@ -137,9 +142,12 @@ Propriétés fondamentales
 
 5. Hors périmètre actuel
 
-    Système de tickets de bug (table dédiée, formulaire joueur/MJ, vue de triage) — réutilisera
-    cette fondation (`role`/`requireAdmin`) une fois construit, chantier séparé. La tuile existe
-    sur `/admin`, désactivée.
+    **Corrigé (audit 2026-08-26)** : le système de tickets de bug décrit ci-dessous comme "hors
+    périmètre" est en réalité construit et actif — table `bug_tickets`, route `/admin/tickets`
+    (`AdminTicketsPage.jsx`, tuile cliquable dans `AdminPage.jsx`), formulaire joueur/MJ
+    `/tickets/new`. Détail complet : `docs/SYSTEME/TICKETS.md`. Réutilise bien la fondation
+    `role`/`requireAdmin` de ce document, comme prévu. Deux tuiles supplémentaires existent aussi,
+    non documentées jusqu'ici : ExoTemplates et Logs (`/admin/logs`, `AdminLogsPage.jsx`).
 
     MFA/2FA sur les comptes admin — écarté d'un renommage/identifiant décoratif au profit du
     rate-limiting déjà en place (`server/src/lib/authRateLimit.js`) ; MFA resterait la vraie piste
