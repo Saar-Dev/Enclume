@@ -2,6 +2,7 @@ import { WS } from '../../../shared/events.js'
 import socketAuth from './auth.js'
 import db from '../db/knex.js'
 import { registerTokenHandlers } from './socketToken.js'
+import { registerBattlemapHandlers } from './socketBattlemap.js'
 import { registerDiceHandlers, registerDiceRollHandler } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
 import { registerCombatHandlers } from './socketCombat.js'
@@ -252,6 +253,7 @@ const initSocket = (io) => {
 
         const context = { campaignId, user: socket.user, isGm: socket.role === 'gm' }
         registerTokenHandlers(io, socket, context)
+        registerBattlemapHandlers(io, socket, context)
         registerDiceHandlers(io, socket, context)
         registerEntityHandlers(io, socket, context, pendingEntityActions)
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })

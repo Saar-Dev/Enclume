@@ -17,14 +17,6 @@ export const WS = {
   TOKEN_STATUS_TOGGLE:  'token:status_toggle',   // client → serveur : { tokenId, statusCode }
   TOKEN_STATUS_UPDATED: 'token:status_updated',  // serveur → room   : { tokenId, statuses[] }
 
-  // Voxels (carte 3D)
-  VOXEL_ADD:     'voxel:add',
-  VOXEL_ADDED:   'voxel:added',
-  VOXEL_REMOVE:  'voxel:remove',
-  VOXEL_REMOVED: 'voxel:removed',
-  VOXEL_UPDATE:  'voxel:update',
-  VOXEL_UPDATED: 'voxel:updated',
-
   // Dés
   DICE_ROLL:   'dice:roll',
   DICE_RESULT: 'dice:result',

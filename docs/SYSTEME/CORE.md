@@ -168,10 +168,8 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | TOKEN_UPDATED | serveur | room | Token mis à jour (r, ou autres champs) |
 | TOKEN_CREATED | serveur | room | Token apparu |
 | TOKEN_DELETED | serveur | room | Token supprimé |
-| VOXEL_ADD/REMOVE/UPDATE | client (GM) | **personne** | **Périmé (audit 2026-08-26)** : le client (`Editor3D.jsx`) émet toujours, mais le handler serveur a été supprimé (commit `d0ee0af`) et jamais recréé — émission no-op silencieuse. Ticket `bug_tickets`/`AUDIT-SYSTEME` |
-| VOXEL_ADDED/REMOVED/UPDATED | serveur | room | **Jamais émis** — conséquence directe de la ligne au-dessus |
-| MAP_SWITCH | client (GM) | **personne** | **Périmé (audit 2026-08-26)**, même cause que VOXEL_* — `useBattlemapManager.js` émet toujours, aucun handler serveur |
-| MAP_VIEWPORT | client (GM) | **personne** | **Périmé (audit 2026-08-26)** — aucune occurrence dans `server/src`, mêmes symptômes |
+| MAP_SWITCH | client (GM) | room (sauf émetteur) | Déplacer le groupe vers une autre carte (`useBattlemapManager.js:handleGroupMove`) — relayé par `socketBattlemap.js` (résolu 2026-08-26, ticket `bug_tickets`/`AUDIT-SYSTEME` : le handler serveur avait été supprimé au commit `d0ee0af` et jamais recréé) |
+| MAP_VIEWPORT | — | — | Constante déclarée dans `shared/events.js`, jamais émise ni écoutée nulle part (ni client ni serveur) — vérifié lors de l'audit 2026-08-26, pas un bug (rien ne l'utilise) |
 | DICE_ROLL | client | serveur | Demander un jet |
 | DICE_RESULT | serveur | room | Résultat jet |
 | CHAT_MESSAGE | client/serveur | room | Message chat |

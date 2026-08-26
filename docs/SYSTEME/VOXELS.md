@@ -1,5 +1,8 @@
 # SYSTEME/VOXELS.md — Coordonnées, voxels, PE14
 > Source : SYSTEME.md §7–§8
+> Dernière mise à jour : 2026-08-26 — audit de compréhension approfondie (PE34 réécrit : calibration
+> `Y_OFFSET=0.5`/session 61 périmée depuis le 2026-08-01, formule réelle dépend de
+> `position_space` via `tokenFeetPoint()` ; référence migration voxel_data corrigée).
 > Lire pour : tout code touchant les voxels, coordonnées 3D, tokens (pos_x/y/z), overlays canvas
 
 ---
@@ -15,7 +18,8 @@
 
 ### Format voxel_data
 ```javascript
-// Base (migration 30) :
+// Base (colonne jsonb créée dans 3_battlemaps.js — corrigé 2026-08-26, "migration 30" pointe
+// aujourd'hui vers 30_combat_actions.js, sans rapport) :
 { "x:y:z": { "tex": N, "geo": "cube", "r": 0 } }
 // Clé "x:y:z" = convention Three.js brute (y=altitude, z=profondeur)
 
@@ -65,21 +69,42 @@ S'applique à : tokens, entités (PE14 = convention base de données). Ne s'appl
 
 ---
 
-## PE34 — Altitude pieds token en Three.js (session 61)
+## PE34 — Altitude pieds token en Three.js — corrigé 2026-08-26
+
+**Périmé.** Cette section décrivait la calibration `Y_OFFSET = 0.5` (session 61) : un corps flottant
+au-dessus du centre du voxel, pieds calculés à `pos_z + 1.0`. Le code actuel
+(`client/src/components/Canvas3D.jsx`) a changé cette calibration le 2026-08-01 (retour Saar, voir
+commentaire ligne 114) — `Y_OFFSET = 0`, le corps du token est rendu directement à l'origine du
+groupe, sans flottement.
+
+La formule réelle dépend de `tokens.position_space` (voir `MOTEUR_MONDE.md` §2.9), via l'unique
+fonction `tokenFeetPoint()` (`Canvas3D.jsx:73`, seule source consommée pour positionner le groupe
+Three.js d'un token — lignes 242, 397, 1099-1100) :
 
 ```javascript
-// Token group (lerpPos) centré à : Y = token.pos_z + 0.5 (centre du voxel)
-// Y_OFFSET = 0.5 (primitive au-dessus du centre) → pieds à : Y = token.pos_z + 1.0
-
-// Formule pieds token (Three.js Y) :
-const feetY = token.pos_z + 1.0
-
-// Pour un overlay au sol (anneau, cercle) — +0.05 évite le z-fighting :
-const overlayY = token.pos_z + 1.0 + 0.05
+function tokenFeetPoint(token) {
+  const legacyOffset = token?.position_space === 'world-feet' ? 0 : 0.5
+  return {
+    x: (Number(token?.pos_x) || 0) + legacyOffset,
+    y: (Number(token?.pos_z) || 0) + legacyOffset,   // altitude Three.js
+    z: (Number(token?.pos_y) || 0) + legacyOffset,
+  }
+}
 ```
-**Piège :** `token.pos_z + 0.5` = centre du voxel (intérieur) — overlays sols cachés.
-`token.pos_z + 1.0` = surface du sol = pieds du token.
-Cohérent avec PE29 (step-by-step collision à pos_z+1 = espace de marche).
+
+- Token canonique (`position_space === 'world-feet'`, toute nouvelle position depuis Phase 2) :
+  **`feetY = token.pos_z`** — `pos_z` stocke déjà l'altitude réelle des pieds en mètres, aucun décalage.
+- Token historique (`position_space === 'legacy-cell'`, jamais replacé par un MJ depuis) :
+  `feetY = token.pos_z + 0.5` — ancienne convention case, conservée uniquement en lecture tant que
+  la position n'est pas migrée explicitement (`MOTEUR_MONDE.md` §2.9).
+
+Aucun overlay client (anneau de sélection `TokenRing`, disque actif `TokenActiveDisk`) ne recalcule
+plus un `pos_z + 1.0 + 0.05` global : ces éléments sont rendus en enfants du groupe token, positionnés
+en coordonnées locales (`baseY = 0.1`) relatives au point pieds déjà résolu par `tokenFeetPoint`.
+
+`getVoxelSurfaceTop()` (`Canvas3D.jsx:84`, `v.y + 1.0` pour un cube) reste un calcul distinct et
+toujours actif : il sert à poser un token sur le dessus d'un voxel lors d'une création/replacement,
+pas à l'affichage courant d'un token déjà positionné en `world-feet`.
 
 ---
 
@@ -87,7 +112,7 @@ Cohérent avec PE29 (step-by-step collision à pos_z+1 = espace de marche).
 
 | Code | Description |
 |---|---|
-| P12 | Périmé (audit 2026-08-26) — décrivait un guard dans le handler serveur `VOXEL_ADD`, qui n'existe plus (supprimé au commit `d0ee0af`, jamais recréé). Le client (`Editor3D.jsx`) émet toujours cet événement sans qu'aucun serveur l'écoute — ticket `bug_tickets`/`AUDIT-SYSTEME`, détail `docs/SYSTEME/ARCHITECTURE_SOCKET.md` |
+| ~~P12~~ | Retiré (2026-08-26) — décrivait un guard dans le handler serveur `VOXEL_ADD`. Ticket `bug_tickets`/`AUDIT-SYSTEME` résolu : l'unique émetteur (`EditorScene`, fonction locale à `Editor3D.jsx`) n'était lui-même jamais rendu — code mort supprimé (fonction + helpers + les 6 constantes `VOXEL_*` de `shared/events.js`). Plus aucune trace du guard ni de l'événement, détail `docs/SYSTEME/ARCHITECTURE_SOCKET.md` |
 | P17 | Séparateur clé voxel = `":"` — `"x:y:z"` NON NÉGOCIABLE. Jamais `"x,y,z"` ni `"x-y-z"`. |
 | P22 | `voxel_textures.id` = integer — exception UUID du projet. `increments()` intentionnel. |
 | P26 | `blocksReady = true` même si 0 textures — ne pas conditionner sur la longueur du tableau |

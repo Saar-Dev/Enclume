@@ -50,7 +50,7 @@
 
 | Code | Description | Fichier thématique |
 |---|---|---|
-| P12 | VOXEL_ADD guard `if (!battlemapId) return` | VOXELS.md |
+| ~~P12~~ | Retiré (2026-08-26) — décrivait un guard dans le handler serveur `VOXEL_ADD`. Ticket `bug_tickets`/`AUDIT-SYSTEME` résolu : code mort supprimé des deux côtés (`EditorScene` n'était jamais rendu), plus aucune trace de l'événement | VOXELS.md |
 | P13 | `updated_at = db.fn.now()` après guard Object.keys | CONVENTIONS.md |
 | P14 | `updated_at` jamais dans le JWT | CORE.md |
 | P17 | Séparateur voxel = `":"` NON NÉGOCIABLE | VOXELS.md |

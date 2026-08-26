@@ -20,17 +20,27 @@ index.js (coordinateur)
  │   ├── socketCombatResolution.js  — COMBAT_ACTION_CONFIRM, COMBAT_DAMAGE_CONFIRM, COMBAT_MELEE_DEFENSE_CONFIRM,
  │   │                                COMBAT_STUN_CONFIRM, COMBAT_APPLY_STUN, COMBAT_ACTION_PRECHECK
  │   └── socketCombatHelpers.js     — resolveMeleeAction, resolveAssaultAction, resolveDroneAssaultAction, etc.
+ ├── socketBattlemap.js     — MAP_SWITCH (registerBattlemapHandlers, index.js:256 — créé, voir correction ci-dessous)
  ├── socketTrade.js         — TRADE_*
  ├── socketWizard.js        — WIZARD_* (registerWizardHandlers, index.js:254)
  └── socketCatastrophe.js   — Catastrophe (registerCatastropheHandlers, index.js:260) — les deux absents du reste de ce document jusqu'à cette correction
 
-**Corrigé (audit 2026-08-26) — pas une dette de modularisation, un vide fonctionnel** : les handlers
-VOXEL_ADD/REMOVE/UPDATE et MAP_SWITCH/MAP_VIEWPORT ne sont ni dans un module dédié ni "encore inline
-dans index.js" comme l'affirmait ce document — ils ont été **entièrement supprimés** au commit
-`d0ee0af` (destruction du système voxel terrain, remplacé par le builder Kiwi) et jamais recréés.
-Zéro occurrence dans tout `server/src/socket/`. Le client, lui, **continue d'émettre** ces événements
-(`Editor3D.jsx` pour VOXEL_*, `useBattlemapManager.js` pour MAP_SWITCH) — ce sont des émissions no-op
-silencieuses en production. Ticket créé (`bug_tickets`, cluster `AUDIT-SYSTEME`).
+**Résolu (ticket `bug_tickets`/`AUDIT-SYSTEME`, corrigé après l'audit du 2026-08-26)** : les handlers
+VOXEL_ADD/REMOVE/UPDATE et MAP_SWITCH/MAP_VIEWPORT avaient été **entièrement supprimés** au commit
+`d0ee0af` (destruction du système voxel terrain, remplacé par le builder Kiwi) sans être recréés, alors
+que le client continuait d'émettre — deux traitements distincts appliqués :
+- **VOXEL_ADD/REMOVE/UPDATE** : l'unique émetteur (`EditorScene`, fonction locale à `Editor3D.jsx`)
+  n'était lui-même jamais rendu dans l'arbre JSX (voir `docs/SYSTEME/EDITEUR.md` §1) — code mort des
+  deux côtés. Supprimé côté client (fonction + helpers exclusifs + les 6 constantes `VOXEL_*` de
+  `shared/events.js`), aucun handler serveur recréé : plus aucune trace nulle part.
+- **MAP_SWITCH** : émetteur réel et atteignable (`useBattlemapManager.js:handleMapSwitch`, bouton GM
+  "Déplacer le groupe") et auditeur client déjà en place (`useEntitySocket.js:onMapSwitch`) — seul le
+  relai serveur manquait. Handler recréé dans `socketBattlemap.js` : vérifie `isGm` et l'appartenance
+  du battlemap à la campagne, puis `socket.to(campaignId).emit(WS.MAP_SWITCH, ...)` (le GM a déjà
+  rafraîchi sa propre vue via le GET REST de `handleMapSwitch` — patron identique à
+  `WORLD_RUNTIME_UPDATED`, §7.1 `EDITEUR.md`).
+- **MAP_VIEWPORT** : aucune émission trouvée nulle part, ni client ni serveur — pas un handler manquant,
+  une constante déclarée et jamais utilisée. Rien à corriger côté code.
 
 Client :
 SocketProvider (créé dans SessionPage)
@@ -64,16 +74,14 @@ server/src/socket/index.js est la seule fonction exportée initSocket(io). Elle 
 
         Construit un objet context = { campaignId, user: socket.user, isGm: socket.role === 'gm' }.
 
-        Appelle tous les register* (token, dice, entity, combat, trade) en leur passant io, socket et context (et pendingEntityActions pour entity, pendingMaps pour combat).
+        Appelle tous les register* (token, battlemap, dice, entity, combat, trade) en leur passant io, socket et context (et pendingEntityActions pour entity, pendingMaps pour combat).
 
     Le handler disconnect est enregistré à l'intérieur de SESSION_JOIN, après les appels register*.
 
-Important — **corrigé (audit 2026-08-26)** : il n'y a pas de module socketVoxel.js, mais ce n'est
-plus parce que ces handlers "résident encore dans index.js" — ils ont été supprimés au commit
-`d0ee0af` et n'existent nulle part côté serveur aujourd'hui, alors que le client les émet toujours
-(voir §2 ci-dessus, ticket `bug_tickets`/`AUDIT-SYSTEME`). Si vous devez toucher VOXEL_*/MAP_SWITCH,
-vérifiez d'abord si un handler doit être recréé ou si l'émission client doit être retirée comme code
-mort — ne partez pas du principe qu'un handler existe déjà quelque part.
+Il n'y a pas de module socketVoxel.js — **plus aucun événement `VOXEL_*` n'existe nulle part dans le
+code** (client et serveur, résolu ticket `bug_tickets`/`AUDIT-SYSTEME`, voir §2 ci-dessus) : pas une
+dette de modularisation, rien à modulariser. `socketBattlemap.js` existe en revanche depuis cette même
+correction, pour `MAP_SWITCH`.
 3. Maps globales persistantes
 
 Déclarées hors initSocket pour être partagées entre toutes les connexions :
@@ -171,9 +179,8 @@ Dans SessionContent, l'ordre est contraint :
 Violer cet ordre provoque des erreurs TDZ ou des références à des callbacks non encore définis.
 8. État actuel et dettes
 
-    socketVoxel.js n'existe pas — corrigé (audit 2026-08-26) : pas parce que les handlers sont
-    encore inline dans index.js, mais parce qu'ils ont été supprimés (voir §2/§3 ci-dessus). Le
-    client émet toujours ces événements dans le vide — ticket bug_tickets/AUDIT-SYSTEME.
+    socketVoxel.js n'existe pas et n'a plus lieu d'exister — plus aucun événement VOXEL_* nulle part
+    dans le code (résolu, ticket bug_tickets/AUDIT-SYSTEME, voir §2/§3 ci-dessus).
 
     CORE.md liste les événements WS actifs mais omet plusieurs domaines entiers présents ici
     (Wizard, Catastrophe) — à recouper si ce document est retouché.

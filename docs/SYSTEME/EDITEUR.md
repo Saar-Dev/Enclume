@@ -2,6 +2,11 @@ SYSTEME/EDITEUR.md — Infrastructure commune de l'éditeur de monde
 
     Version : 1.0 — 2026-08-02
     Statut : Document de référence.
+    Audit de compréhension approfondie 2026-08-26 : §2 corrigé (démontage réel d'Editor3D au
+    basculement jeu/édition, contredisait §4.4 du même doc — confirmé contre SessionPage.jsx) ; §7
+    (worldRuntimeStore.js, useWorldRuntimeSync) et l'exclusivité mutuelle Editor3D/Canvas3D confirmés
+    contre le code. Ticket bug_tickets/AUDIT-SYSTEME résolu le même jour : EditorScene (code mort,
+    jamais rendue) supprimée, P12 retiré (§9.1) — voir aussi VOXELS.md/CONVENTIONS.md.
     Lire pour : comprendre le socle commun à tous les modes d'édition (surface, entité, voxel).
 
 Documents associés :
@@ -14,7 +19,7 @@ Documents associés :
 
     docs/SYSTEME/CORE.md — stores Zustand, événements WebSocket
 
-    docs/SYSTEME/CONVENTIONS.md — pièges actifs (P12, P13, P52-P54)
+    docs/SYSTEME/CONVENTIONS.md — pièges actifs (P13, P52-P54)
 
     docs/SYSTEME/MOTEUR_MONDE.md — compilation physique du monde
 
@@ -28,11 +33,13 @@ SessionPage
   └── Sidebar (onglets, outils, palette)
         └── Editor3D (coordination)
               ├── SurfaceEditorScene (outils surface — fichier séparé, client/src/components/SurfaceEditorScene.jsx)
-              ├── EntityEditorScene (pose/déplacement entités — corrigé 2026-08-26 : fonction définie
-              │     localement dans Editor3D.jsx, pas un fichier séparé)
-              └── EditorScene (voxels legacy — corrigé 2026-08-26 : fonction locale à Editor3D.jsx,
-                    **plus rendue nulle part** dans l'arbre JSX actuel, seules SurfaceEditorScene et
-                    EntityEditorScene le sont)
+              └── EntityEditorScene (pose/déplacement entités — corrigé 2026-08-26 : fonction définie
+                    localement dans Editor3D.jsx, pas un fichier séparé)
+
+EditorScene (édition voxel interactive legacy) a été **supprimée** (ticket `bug_tickets`/
+`AUDIT-SYSTEME`, résolu 2026-08-26) : la fonction n'était déjà plus rendue nulle part dans l'arbre JSX
+— code mort pur, aucune perte fonctionnelle. L'affichage en lecture seule des voxels d'une carte sans
+`surface_data` (cartes non migrées) reste assuré par `CulledVoxelScene`, rendu dans `EntityEditorScene`.
 
 Editor3D ne décrit pas lui-même le comportement des outils ; il fournit l'infrastructure
 partagée : sauvegarde, undo/redo, chargement des textures, effets runtime, panneaux flottants.
@@ -47,8 +54,14 @@ Le basculement est déclenché par le bouton Édition / Mode jeu dans la barre l
     En mode édition (mode === 'edit'), la barre latérale affiche la palette de textures, les
     outils de surface, les contrôles de matériaux, et l'onglet Entités.
 
-Le changement de mode ne démonte pas Editor3D — celui-ci reste monté et conserve son état
-interne. La sauvegarde est déclenchée au moment du basculement (cleanup useEffect).
+Corrigé 2026-08-26 — affirmation inverse au réel et contredite par §4.4 du même document. Le
+changement de mode DÉMONTE Editor3D : `client/src/pages/SessionPage.jsx` (~ligne 636) rend
+`mode === 'edit' ? <Editor3D .../> : <Canvas3D .../>` — un ternaire entre deux types de composants
+différents, sans `key` de stabilisation, que React démonte/remonte à chaque bascule. C'est exactement
+pour cette raison que le `useEffect` de cleanup décrit en §4.4 déclenche la sauvegarde « au basculement
+vers le mode jeu » — un composant qui resterait monté n'aurait pas besoin de ce cleanup. Aucun état
+interne d'Editor3D (undo/redo, files de sauvegarde) ne survit donc à un aller-retour édition → jeu ;
+seul l'état persisté côté serveur (surface_data, voxel_data) survit.
 3. Onglets de l'éditeur
 
 Deux onglets structurent l'édition :
@@ -197,7 +210,7 @@ fois — ouvrir un panneau ferme automatiquement les autres. Si l'élément sél
 9. Conventions et pièges
 9.1 Sauvegarde
 Code	Description
-P12	VOXEL_ADD : guard if (!battlemapId) return avant toute émission
+~~P12~~	Retiré (2026-08-26) — décrivait un guard dans le handler serveur VOXEL_ADD ; l'événement et son unique émetteur (EditorScene, jamais rendu) ont été supprimés (ticket bug_tickets/AUDIT-SYSTEME). Détail : CONVENTIONS.md §19, VOXELS.md
 P13	updated_at = db.fn.now() après le guard Object.keys — jamais avant
 9.2 Migrations
 Code	Description
