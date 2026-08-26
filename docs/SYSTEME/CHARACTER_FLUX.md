@@ -195,7 +195,7 @@ handleBoxClick(severity, index)
 
 **P49 — onWoundsReload est TOUJOURS un GET complet, jamais une mise à jour locale.** La promotion supprime des enregistrements sans retourner l'état complet — seul un rechargement est fiable.
 
-**Broadcasts WS :** le serveur émet `WOUND_ADDED`, `WOUND_UPDATED` ou `WOUND_REMOVED` sur la room `campaignId`. **Actuellement non écoutés côté client** — l'état wounds est géré localement par ArmorWoundPanel via `onWoundsReload`.
+**Broadcasts WS :** le serveur émet `WOUND_ADDED`, `WOUND_UPDATED` ou `WOUND_REMOVED` sur la room `campaignId`. **Corrigé (audit 2026-08-26)** : ces events sont bien écoutés côté client (`client/src/lib/useCharacterSocket.js`, vérifié) — ce document affirmait le contraire. `ArmorWoundPanel.jsx` utilise aussi désormais `characterStore` (`woundsByCharId`), non documenté dans ce fichier au moment de sa rédaction (2026-05-09, antérieur à `CHARACTER.md`).
 
 ---
 
@@ -348,7 +348,9 @@ Si `promoted=true` : le serveur a supprimé toute la ligne de la gravité infér
 | `INVENTORY_REMOVED` | DELETE /inventory/:id | `{ characterId, itemId }` |
 | `SOLS_UPDATED` | PUT /sols | `{ characterId, sols }` |
 
-**Note :** ces events sont émis mais non écoutés dans les composants Character actuellement — l'état est géré localement. À implémenter lors d'une session future si la synchronisation multi-fenêtres devient nécessaire.
+**Corrigé (audit 2026-08-26)** : faux aujourd'hui — tous ces events sont bien écoutés dans
+`client/src/lib/useCharacterSocket.js` (vérifié directement). Cette note décrivait un état antérieur
+à l'ajout de ce hook, jamais retirée depuis.
 
 ---
 
