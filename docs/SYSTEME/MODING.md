@@ -7,7 +7,10 @@ SYSTEME/MODING.md — Système de mods d'armes
 
     Source : docs/Old/[HISTORIQUE] PLAN_MODING_PHASEB.md (Groupe 1/2, shippé), docs/Old/[HISTORIQUE]
     PLAN_MODDING_REFONTE.md (Groupe 4, socle + mécaniques shippés, historique complet des 3 passages
-    d'analyse à charge), migrations 137/141/142/180/182/184. Ces deux PLAN sont archivés (Règle 10,
+    d'analyse à charge), migrations 65 (ref_equipment.mod_slot/mod_requires_aim/mod_key), 16
+    (char_inventory_mods), 113 (char_inventory_mods_constraints, dont uq_char_inv_mods_slot) — corrigé
+    2026-08-26, "137/141/142/180/182/184" pointaient vers des tables sans rapport (entities, exo_sheet,
+    exo_systems, token_statuses, trade_log, users). Ces deux PLAN sont archivés (Règle 10,
     docs/RegleDocumentaire.md) — ce document est désormais l'unique référence active.
 
     > Voir aussi : @SERVICES_COMBAT (services `server/src/lib/`), @COMBAT_FLUX (déroulement d'un tour).
@@ -46,7 +49,7 @@ ref_equipment.mod_key           TEXT nullable   -- routage registre Groupe 4 : '
 char_inventory_mods.mod_slot    TEXT nullable   -- snapshot de ref_equipment.mod_slot à l'installation
 char_inventory_mods.state       JSONB nullable  -- état persistant par mod installé (Groupe 4 uniquement)
 
-UNIQUE (weapon_inv_id, mod_slot) WHERE mod_slot IS NOT NULL   -- garde-fou d'exclusivité (migration 141)
+UNIQUE (weapon_inv_id, mod_slot) WHERE mod_slot IS NOT NULL   -- garde-fou d'exclusivité (index uq_char_inv_mods_slot, 113_char_inventory_mods_constraints.js — corrigé 2026-08-26, pas "migration 141")
 ```
 
 Trois axes orthogonaux, décidés séparément :
@@ -144,7 +147,8 @@ que dans le registre.
 `token_statuses` reste un **badge cosmétique** — la magnitude réelle d'un mod (ex. bonus croissant de
 l'ATI) vit uniquement dans `char_inventory_mods.state`, jamais recalculée depuis `token_statuses`.
 Écriture via `statusService.applyModStatus`/`clearModStatus` (upsert sur la contrainte UNIQUE de
-`token_statuses`, migration 68) — jamais un insert ad-hoc ailleurs.
+`token_statuses`, `180_token_statuses_constraints.js` — corrigé 2026-08-26, pas "migration 68") —
+jamais un insert ad-hoc ailleurs.
 
 ---
 
