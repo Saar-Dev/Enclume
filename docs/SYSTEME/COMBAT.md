@@ -141,8 +141,11 @@ d'exception, comportement gracieux à gérer par l'appelant (retour anticipé ou
 1. `exo_sheet.pilot_character_id` → le pilote (`pj`/`pnj`), résolu via `resolveHumanoidTestContext`.
    `null` si aucun pilote assigné.
 2. `exo_sheet.template_id` → `ref_exo_templates`, puis `computeExoStats(exoSheet)` (signature à un seul
-   paramètre depuis le Lot B/migration 254 — le JOIN vers le template a été retiré, `exo_sheet` porte
-   nativement ses propres stats de base) (`shared/exoStats.js`, fonction pure, EXF/BLD/RD dérivés des
+   paramètre depuis le Lot B — le JOIN vers le template a été retiré, `exo_sheet` porte nativement ses
+   propres stats de base, `base_exoforce`/`base_blindage` inclus directement dans la création
+   consolidée `44_exo_sheet.js` depuis la refonte migrations 2026-08-22 — corrigé 2026-08-26, "migration
+   254" pointait vers `ref_equipment_ammo_compat_foreign_keys.js`, sans rapport)
+   (`shared/exoStats.js`, fonction pure, EXF/BLD/RD dérivés des
    paliers d'Intégrité courants, `MANUEL_EXOARMURE.md` §4.8, détail complet `docs/SYSTEME/EXOARMURE.md`).
    `null` si aucun template assigné ("armure non configurée", état valide
    depuis `PLAN_EXOARMURE.md` Lot 1 §6.5) — dans ce cas `resolveExoTestContext` retourne `null` plutôt
@@ -343,13 +346,18 @@ Utilisé dans `COMBAT_ACTION_CONFIRM` pour convertir le slotCode issu du jet de 
 
 Cinq colonnes TEXT enum sur `combat_roster`, toutes NOT NULL avec DEFAULT.
 
+**Corrigé (audit 2026-08-26)** : les 5 colonnes sont créées directement dans `32_combat_roster.js`
+(pas de migrations 56/58 séparées, réattribuées depuis à `ref_career_equipment.js`/
+`ref_career_point_categories.js`) ; la contrainte `kneeling` vit dans `129_combat_roster_constraints.js`
+(pas "migration 231", réattribuée à `drone_programs_foreign_keys.js`).
+
 | Colonne | Migration | CHECK values | Default | Persistance | Reset endTurn |
 |---|---|---|---|---|---|
-| `state_position` | 56, élargie 231 | `'standing'\|'crouching'\|'kneeling'\|'prone'` | `'standing'` | **combat** | inchangé (corrigé, voir note) |
-| `state_weapon` | 56 | `'holstered'\|'ready'\|'drawn'` | `'holstered'` | **combat** | inchangé |
-| `state_fire_mode` | 58 | `'cc'\|'rc'\|'rl'` | `'cc'` | **combat** | inchangé |
-| `state_cover` | 58 | `'exposed'\|'partial'\|'important'` | `'exposed'` | **par tour** | → `'exposed'` |
-| `state_vitesse` | 58 | `'normal'\|'delayed'\|'rushed'` | `'normal'` | **par tour** | → `'normal'` |
+| `state_position` | `32` (création), `129` (CHECK incl. `kneeling`) | `'standing'\|'crouching'\|'kneeling'\|'prone'` | `'standing'` | **combat** | inchangé (corrigé, voir note) |
+| `state_weapon` | `32` | `'holstered'\|'ready'\|'drawn'` | `'holstered'` | **combat** | inchangé |
+| `state_fire_mode` | `32` | `'cc'\|'rc'\|'rl'` | `'cc'` | **combat** | inchangé |
+| `state_cover` | `32` | `'exposed'\|'partial'\|'important'` | `'exposed'` | **par tour** | → `'exposed'` |
+| `state_vitesse` | `32` | `'normal'\|'delayed'\|'rushed'` | `'normal'` | **par tour** | → `'normal'` |
 
 **Règle :** `state_position`, `state_weapon` et `state_fire_mode` survivent entre les tours (posture
 réelle du personnage — changer de position a un coût d'Initiative dédié, REGLESYSCOMBAT.md, qui n'a de
@@ -366,8 +374,9 @@ nouveau tour.
 >
 > **`kneeling` — 4ᵉ position (2026-08, `docs/Old/PLAN_KNEELING_POSITION.md`, archivé)** : « à genou »
 > (REGLESYSCOMBAT.md:929-930) manquait au code depuis toujours. Catalogue ajouté Lot 0 de
-> `PLAN_CHARACTER_STATES.md`, réellement jouable depuis ce chantier — migration `231` (élargit
-> `chk_state_position`), `VALID_POS` (`socketCombatState.js`, état initial) et `VALID_STATES.position`
+> `PLAN_CHARACTER_STATES.md`, réellement jouable depuis ce chantier — contrainte `chk_state_position`
+> (`129_combat_roster_constraints.js`, corrigé 2026-08-26 : pas "migration 231", réattribuée depuis à
+> `drone_programs_foreign_keys.js`), `VALID_POS` (`socketCombatState.js`, état initial) et `VALID_STATES.position`
 > (`socketCombatAnnouncement.js:79`, déclaration de tour — deux verrous distincts, tous les deux
 > corrigés). Coût d'Initiative : le LdB ne nomme aucune valeur pour `kneeling` — décision Saar, alias
 > exact de `crouching` sur toute paire vers/depuis `standing`/`prone` ; transition directe
@@ -410,7 +419,7 @@ VITESSE:
 
 ---
 
-## state_character JSONB — combat_roster (migration 57)
+## state_character JSONB — combat_roster (corrigé 2026-08-26 : créé directement dans `32_combat_roster.js`, pas "migration 57" — ce numéro pointe aujourd'hui vers `ref_career_equipment.js`, sans rapport)
 
 Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combinables pour statuts volatils.
 
@@ -420,7 +429,7 @@ Colonne `JSONB NOT NULL DEFAULT '{}'` sur `combat_roster`. Flags booléens combi
 | `is_stunned` | non (persistant) | −5 actions, allure moyenne max, ne peut pas attaquer | ✅ session 66 | ❌ sprint futur |
 | `is_rooted` | non | déplacement impossible | ❌ | ❌ |
 
-⚠️ **`is_rushed` supprimé** — migré vers `state_vitesse = 'rushed'` (migration 58). Toute lecture `state_character?.is_rushed` → remplacer par `rosterEntry.state_vitesse === 'rushed'`.
+⚠️ **`is_rushed` supprimé** — migré vers `state_vitesse = 'rushed'` (colonne créée directement dans `32_combat_roster.js` depuis la refonte migrations, corrigé 2026-08-26 — "migration 58" pointe aujourd'hui vers `ref_career_point_categories.js`, sans rapport). Toute lecture `state_character?.is_rushed` → remplacer par `rosterEntry.state_vitesse === 'rushed'`.
 
 **PC39 — Règles obligatoires :**
 - Clé absente = `false`. **Ne jamais stocker `false` explicitement.**
@@ -482,7 +491,10 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
 { activeSlotIdx: number, tokenId: string }
 // Émis par : skipPlayer (phase ANNOUNCEMENT). Ne concerne jamais la RÉSOLUTION depuis la refonte
 // Session 159 (échelle de phases, `combat_timeline_entries`) — la colonne `active_slot_idx` et la
-// fonction `advanceSlot` ont été retirées (migration 174).
+// fonction `advanceSlot` ont été retirées (Session 159 — corrigé 2026-08-26 : la refonte migrations
+// 2026-08-22 a recréé combat_state sans jamais réintroduire active_slot_idx, ce n'est pas une colonne
+// retirée par un numéro de migration précis ; "migration 174" pointe aujourd'hui vers
+// ref_mutations_constraints.js, sans rapport).
 ```
 
 ### endTurn — comportement serveur
@@ -492,7 +504,7 @@ await db('combat_roster').where({ campaign_id, status: 'active' }).update({
   has_announced:     false,
   has_resolved:      false,
   state_cover:       'exposed',    // per-turn
-  state_vitesse:     'normal',     // per-turn (remplace l'ancien flag is_rushed dans state_character — migration 58)
+  state_vitesse:     'normal',     // per-turn (remplace l'ancien flag is_rushed dans state_character — colonne créée directement dans 32_combat_roster.js, corrigé 2026-08-26)
   state_combat_mode: 'normal',     // per-turn
   // state_position, state_weapon, state_fire_mode : inchangés (persistent combat — voir note Lot 2b ci-dessus)
   // state_character : is_stunned persiste intentionnellement (non per-turn)
@@ -533,13 +545,15 @@ GET /battlemaps/:battlemapId/combat-ini → { iniPreview: [{ token_id, base_ini 
 - **PC25** : `surprise_roll` n'est **jamais** dans le broadcast `COMBAT_STARTED` (roster sans ce champ)
 - **Entités** (token sans `character_id`) → ignorées, jamais insérées en `combat_roster`
 - **combat_state** insérée : `{ campaign_id, battlemap_id, phase: 'ROSTER', current_turn: 1, action_timer_sec: 0 }`
-  (colonne `active_slot_idx` retirée — migration 174, Session 159 ; `sub_phase` nullable, non posé ici)
+  (colonne `active_slot_idx` retirée à la refonte migrations 2026-08-22 (Session 159), pas par un
+  numéro de migration précis — corrigé 2026-08-26 ; `sub_phase` nullable, non posé ici)
 
 ---
 
 ## Échelle de phases (Résolution) — combat_timeline_entries (Session 159)
 
-Remplace le parcours `combat_roster` trié par `active_slot_idx` (retiré, migration 174). La Résolution
+Remplace le parcours `combat_roster` trié par `active_slot_idx` (retiré à la refonte migrations
+2026-08-22, pas un numéro de migration précis — corrigé 2026-08-26). La Résolution
 avance entrée par entrée sur une échelle de phases réelle (LdB p.212-219), pas une liste de personnages
 parcourue une fois — un personnage avec une série d'attaques multiples occupe plusieurs entrées
 entrelacées avec les autres, pas un bloc résolu d'un coup.
@@ -735,7 +749,7 @@ et `AWAITING_DAMAGE`, plus seulement la défense CaC).
 }
 ```
 
-**Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`. **Melee** → `'melee'` (migration 63). CaC et Tir sont mutuellement exclusifs à la déclaration depuis Session 159 (`docs/REGLES/REGLESYSCOMBAT.md`, « Types d'Actions » — une seule Action de combat par Tour).
+**Type enum :** `move_lente` → `'move_short'`, toute autre `move_*` → `'move_long'`, autres → `'micro'`. **Melee** → `'melee'` (contrainte dans `127_combat_actions_constraints.js`, corrigé 2026-08-26 — "migration 63" pointe aujourd'hui vers `ref_careers.js`, sans rapport). CaC et Tir sont mutuellement exclusifs à la déclaration depuis Session 159 (`docs/REGLES/REGLESYSCOMBAT.md`, « Types d'Actions » — une seule Action de combat par Tour).
 **Une action complexe (`assault`/`melee`) déclarée génère aussi une ligne `combat_timeline_entries`** — voir « Échelle de phases » ci-dessous ; `move`/`reload`/`micro`/`skip` n'en génèrent jamais.
 **PC32 :** sequence attribuée serveur — jamais calculée côté client.
 **PC22 :** arme assault doit être en slot `'MG'` ou `'MD'` — rejeté sinon.
