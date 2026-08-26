@@ -65,6 +65,7 @@ import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
 import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
 import { applyExoTemplate } from '../../lib/exoTemplateService.js'
+import { getCharacterMovementBudget } from '../../services/movementBudgetService.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
@@ -2281,6 +2282,20 @@ router.delete('/:characterId/exo/systems/:systemId', async (req, res, next) => {
 
     res.json({ message: 'System deleted' })
   } catch (err) { next(err) }
+})
+
+// GET /:characterId/exo/movement — Allures (lente/moyenne/rapide/max, en mètres) pour le survol de
+// déplacement combat (PLAN_EXOARMURE.md §16.3). Le calcul VIT/3-modes (surface/sous-marine, délégation
+// au pilote, milieu bloqué) vit uniquement dans getExoMovementBudget (movementBudgetService.js) — ne
+// jamais le réimplémenter côté client (CLAUDE.md §7), cette route expose juste son résultat.
+router.get('/:characterId/exo/movement', async (req, res, next) => {
+  try {
+    const budget = await getCharacterMovementBudget(req.params.characterId, 'lente')
+    res.json({ allures: budget.allures })
+  } catch (err) {
+    if (err instanceof TypeError || err instanceof RangeError) return next(new AppError(400, err.message))
+    next(err)
+  }
 })
 
 // GET /:characterId/exo/weapons

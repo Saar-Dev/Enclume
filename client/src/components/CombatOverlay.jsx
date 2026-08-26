@@ -196,7 +196,14 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           CombatGmDeclareWindow pour ce seul cas plutôt que d'y ajouter un branchement isExo de plus
           (§8.1) — même principe que le côté joueur ci-dessous. */}
       {isGm && phase === 'ANNOUNCEMENT' && gmActiveCharacter?.type === 'exo' && (
-        <CombatExoActionWindow socket={socket} user={user} characters={characters} isGm />
+        <CombatExoActionWindow
+          socket={socket}
+          user={user}
+          characters={characters}
+          isGm
+          onEnterMoveMode={onEnterMoveMode}
+          combatMoveMode={combatMoveMode}
+        />
       )}
 
       {/* Phase ANNOUNCEMENT — fenêtre GM pour déclarer les actions des PNJs */}
@@ -220,7 +227,13 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           (§9.4 : rien à afficher en RÉSOLUTION pour ce Lot). Remplace CombatActionWindow pour ce
           seul cas plutôt que d'y ajouter un branchement isExo de plus (§8.1). */}
       {isActiveExoForPlayer && phase === 'ANNOUNCEMENT' && (
-        <CombatExoActionWindow socket={socket} user={user} characters={characters} />
+        <CombatExoActionWindow
+          socket={socket}
+          user={user}
+          characters={characters}
+          onEnterMoveMode={onEnterMoveMode}
+          combatMoveMode={combatMoveMode}
+        />
       )}
 
       {/* ANNOUNCEMENT + RÉSOLUTION — fenêtre d'action pour les joueurs

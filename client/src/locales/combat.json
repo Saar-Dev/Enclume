@@ -312,9 +312,8 @@
   "exoActionWindow": {
     "title": "{{name}} — Exo-armure",
     "proneHint": "L'armure est à terre. Se relever demande un Test de Manœuvre d'armure — un échec fait passer le Tour sans autre action.",
-    "normalHint": "Aucune action de combat n'est encore disponible pour les exo-armures (Systèmes/Armement à venir) — vous pouvez passer le Tour.",
+    "normalHint": "Choisissez une destination puis Déclarer, ou Déclarer directement pour passer le Tour. L'attaque (Tir/CaC) n'est pas encore disponible pour les exo-armures.",
     "standUpButton": "Tenter de se relever",
-    "passTurnButton": "Passer le tour",
     "sending": "Envoi..."
   },
   "hazardPanel": {
