@@ -13,8 +13,10 @@ Le JWT est signé avec `{ id, email, username }` — **pas `color`**.
 
 ### Côté client
 Au montage de l'app (`App.jsx`), `GET /auth/me` est appelé.
-La réponse retourne `{ id, email, username, color }` — depuis la DB, pas le JWT.
-`authStore.user` contient donc toujours : `{ id, email, username, color }`.
+La réponse retourne `{ id, email, username, color, role }` — depuis la DB, pas le JWT. **Corrigé
+(audit 2026-08-26)** : `role` manquait dans ce document alors qu'il est bien renvoyé
+(`routes/auth.js:148`) et que `docs/SYSTEME/ADMIN.md` en dépend directement (`authStore.user.role`).
+`authStore.user` contient donc toujours : `{ id, email, username, color, role }`.
 
 **Piège :** ne jamais supposer que `user.color` vient du JWT — il vient de GET /auth/me.
 **Piège :** `isLoading: true` par défaut dans authStore — les routes protégées attendent ce flag avant de rendre.
@@ -29,7 +31,7 @@ POST /auth/login { email, password }
   → bcrypt.compare → jwt.sign → res.cookie('token', ...)
 
 GET /auth/me  [requireAuth]
-  → db('users').select([id, email, username, color]) → res.json({ user })
+  → db('users').select([id, email, username, color, role]) → res.json({ user })
   Source de vérité côté client — appelé au montage de App.jsx.
 ```
 
@@ -166,10 +168,10 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | TOKEN_UPDATED | serveur | room | Token mis à jour (r, ou autres champs) |
 | TOKEN_CREATED | serveur | room | Token apparu |
 | TOKEN_DELETED | serveur | room | Token supprimé |
-| VOXEL_ADD/REMOVE/UPDATE | client (GM) | serveur | Édition voxel |
-| VOXEL_ADDED/REMOVED/UPDATED | serveur | room | Voxel mis à jour |
-| MAP_SWITCH | client (GM) | serveur | Basculer les joueurs |
-| MAP_VIEWPORT | client (GM) | serveur | Partager la caméra |
+| VOXEL_ADD/REMOVE/UPDATE | client (GM) | **personne** | **Périmé (audit 2026-08-26)** : le client (`Editor3D.jsx`) émet toujours, mais le handler serveur a été supprimé (commit `d0ee0af`) et jamais recréé — émission no-op silencieuse. Ticket `bug_tickets`/`AUDIT-SYSTEME` |
+| VOXEL_ADDED/REMOVED/UPDATED | serveur | room | **Jamais émis** — conséquence directe de la ligne au-dessus |
+| MAP_SWITCH | client (GM) | **personne** | **Périmé (audit 2026-08-26)**, même cause que VOXEL_* — `useBattlemapManager.js` émet toujours, aucun handler serveur |
+| MAP_VIEWPORT | client (GM) | **personne** | **Périmé (audit 2026-08-26)** — aucune occurrence dans `server/src`, mêmes symptômes |
 | DICE_ROLL | client | serveur | Demander un jet |
 | DICE_RESULT | serveur | room | Résultat jet |
 | CHAT_MESSAGE | client/serveur | room | Message chat |
@@ -200,7 +202,7 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | COMBAT_STATE_SYNC | serveur | socket joueur | Reconnexion en cours de combat |
 | COMBAT_ROSTER_UPDATED | serveur | room | Roster modifié (initiative, ordre) |
 | COMBAT_PHASE_CHANGED | serveur | room | Nouvelle phase + données |
-| COMBAT_SLOT_ADVANCED | serveur | room | Index slot courant |
+| COMBAT_SLOT_ADVANCED | serveur | room | **Description périmée (audit 2026-08-26)** — le moteur de résolution par `active_slot_idx` a été remplacé par `combat_timeline_entries`/`advanceTimeline` (Session 159, voir `docs/SYSTEME/COMBAT.md`) ; cet événement n'est plus émis qu'en phase ANNOUNCEMENT avec `activeSlotIdx` toujours à 0, pas "l'index slot courant" d'un mécanisme dynamique |
 | COMBAT_SURPRISE_ROLL | serveur | socket joueur surpris | Invite jet initiative |
 | COMBAT_SURPRISE_RESULT | client (joueur) | serveur | Résultat jet initiative surprise |
 | COMBAT_ANNOUNCE_START | client (GM) | serveur | Transition ROSTER → ANNOUNCEMENT |
@@ -215,6 +217,15 @@ socket.data.role   = member.role      // fetchSockets → ciblage GM (PE2)
 | COMBAT_DAMAGE_CONFIRM | client PJ | serveur | Déclenche calcul dégâts serveur |
 | COMBAT_DAMAGE_RESULT | serveur | socket tireur PJ | Résultats pour affichage fenêtre |
 | COMBAT_ATTACK_RESULT | serveur | room | Résumé dégâts broadcast |
+
+**Liste incomplète, corrigé (audit 2026-08-26)** — cette table omettait notamment
+`TOKEN_MOVE_REJECTED`, `TOKEN_SET_ROTATION`, `TOKEN_STATUS_TOGGLE`/`UPDATED`, `WOUND_INFECTION_ROLL`,
+`FATIGUE_TEST_RESULT`, `CHAT_MESSAGE_CREATED`/`DELETED`, `MOD_INSTALLED`, `CAMPAIGN_*`, `TRADE_*`,
+`WIZARD_*`, `WORLD_RUNTIME_UPDATED`, `COMBAT_DECLARE_ERROR`/`ACT_NOW`/`DELAYED_PASS`,
+`DRONE_INTEGRITY_UPDATED`, `EXO_AVARIE_UPDATED` — tous vérifiés présents et réellement émis. Deux
+domaines entiers de `server/src/socket/` sont absents de tout ce document : `socketWizard.js`
+(`WIZARD_*`) et `socketCatastrophe.js`. La liste exhaustive et à jour est `shared/events.js`, pas
+cette table — elle reste utile comme point d'entrée mais ne pas la considérer complète.
 
 ---
 
