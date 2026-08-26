@@ -21,7 +21,7 @@ import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import {
   isImpossibleRangedSituation, RANGED_SITUATION_MODS, sumRangedSituationMods,
   CAC_SITUATION_MODS, TAILLE_MODS, PORTEE_MOD_COMP,
-} from '../../../shared/combatExclusiveActions.js'
+} from '../../../shared/combatSituationMods.js'
 import {
   isTargetDefenseless,
   checkMeleeReach, resolveRangedDistance, resolveAttackLOS,
