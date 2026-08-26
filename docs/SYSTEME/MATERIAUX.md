@@ -48,7 +48,11 @@ activeMaterial est défini dans le composant parent (Editor3D.jsx) et passé à 
 
 [VÉRIFIÉ] — Editor3D.jsx : activeMaterial est passé en prop à SurfaceEditorScene. surfaceData.js : fallbackTexId dans materialOrTextureForTool.
 
-Chaînon manquant : le composant exact qui affiche les vignettes et définit activeMaterial n'a pas été identifié. BlockPalette.js et TexturePalette.js n'existent pas. La logique est probablement dans un composant parent non encore lu.
+Corrigé (audit 2026-08-26) — le chaînon est en fait traçable en 3 sauts depuis le code déjà cité par
+ce document : SessionPage.jsx (`onMaterialChange={setActiveMaterial}`, ligne ~763) → Sidebar.jsx
+(props `activeMaterial`/`onMaterialChange`, section "PALETTE TEXTURES" ligne ~199-206) →
+`SurfaceEditorPanel.jsx` (composant qui reçoit les deux et affiche les vignettes). BlockPalette.js et
+TexturePalette.js n'existent toujours pas — confirmé, ce n'était pas le bon nom à chercher.
 2.2 Décision automatique du mode
 
 Le champ surfaceMaterialMode (dans le tool) est défini automatiquement par roomToSurfaceToolPatch :
@@ -178,7 +182,7 @@ La fonction charge chaque PNG via THREE.TextureLoader et crée un tableau de 6 M
 
 Le rendu des surfaces peut utiliser ces textures via materialAt(textureMaterials, wall.frontTex, FACE.south). Cependant, le mécanisme qui définit interiorTex n'est pas exposé dans l'interface. La palette de textures visible dans l'éditeur alimente activeMaterial pour le mode voxel, et ce activeMaterial est propagé aux outils de surface comme fallbackTexId.
 
-Chaînon manquant : le composant exact qui affiche les vignettes et définit activeMaterial n'a pas été identifié.
+Corrigé (audit 2026-08-26) — voir §2.1 ci-dessus : le chaînon est `SurfaceEditorPanel.jsx`, via SessionPage.jsx → Sidebar.jsx.
 5.3 Distinction textures voxel / textures surface
 
 La table voxel_textures et l'API associée ne font pas de distinction entre les textures destinées aux voxels et celles destinées aux surfaces. Une texture chargée pour un voxel peut techniquement être utilisée sur un mur. Cependant, rien dans l'interface ne permet de choisir une texture pour une surface.

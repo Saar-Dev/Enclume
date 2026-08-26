@@ -1,7 +1,8 @@
 SYSTEME/PERSONNAGE_API.md — Routes REST de la fiche personnage
 
     Dernière mise à jour : 2026-07-19
-    Sources : server/src/routes/char-sheet.js, server/src/routes/characters.js, server/src/routes/creation.js
+    Sources : server/src/routes/character/char-sheet.js (corrigé 2026-08-26, sous-dossier character/
+    omis), server/src/routes/characters.js, server/src/routes/creation.js
     Lire pour : comprendre comment le client lit et modifie la fiche, et quels événements WS sont émis.
     Voir aussi : @PERSONNAGE_CALCULS pour la chaîne de calcul, @BLESSURES pour les blessures, @SERVICES_COMBAT pour les dégâts.
 
@@ -11,7 +12,7 @@ Deux routeurs Express, plus un troisième pour le Wizard.
 text
 
 /api/char-sheet/:characterId/...    ← Fiche, attributs, compétences, blessures, inventaire, macros
-    Fichier : server/src/routes/char-sheet.js
+    Fichier : server/src/routes/character/char-sheet.js
     Middleware : router.param('characterId') → vérifie propriétaire OU GM
     
 /api/campaigns/:campaignId/characters  ← Liste, création, édition, suppression des personnages

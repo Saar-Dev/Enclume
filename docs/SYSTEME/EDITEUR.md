@@ -27,9 +27,12 @@ text
 SessionPage
   └── Sidebar (onglets, outils, palette)
         └── Editor3D (coordination)
-              ├── SurfaceEditorScene (outils surface)
-              ├── EntityEditorScene (pose/déplacement entités)
-              └── EditorScene (voxels legacy)
+              ├── SurfaceEditorScene (outils surface — fichier séparé, client/src/components/SurfaceEditorScene.jsx)
+              ├── EntityEditorScene (pose/déplacement entités — corrigé 2026-08-26 : fonction définie
+              │     localement dans Editor3D.jsx, pas un fichier séparé)
+              └── EditorScene (voxels legacy — corrigé 2026-08-26 : fonction locale à Editor3D.jsx,
+                    **plus rendue nulle part** dans l'arbre JSX actuel, seules SurfaceEditorScene et
+                    EntityEditorScene le sont)
 
 Editor3D ne décrit pas lui-même le comportement des outils ; il fournit l'infrastructure
 partagée : sauvegarde, undo/redo, chargement des textures, effets runtime, panneaux flottants.
