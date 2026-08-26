@@ -17,7 +17,7 @@ server/src/lib/
 ├── damageService.js    — localisation, armure, dégâts nets, sévérité, blessure, shock
 ├── woundService.js     — insertion blessure + broadcast WOUND_ADDED
 ├── woundUtils.js       — utilitaires blessures (isShockTestRequired, resolveWoundInsertion, etc.)
-├── mrTable.js          — table MR Polaris (singleton-promise)
+├── (mrTable.js n'existe plus — corrigé 2026-08-26, voir §5)
 ├── combatFSM.js        — machine à états du combat (transitions, guards, sub_phase)
 └── socketUtils.js      — getUserColor, checkTokenOwnership
 
@@ -168,23 +168,13 @@ await applyWound(io, db, campaignId, {
 
     Retourne null si severity ou charSheetId absents, ou en cas d'erreur (ligne pleine → comportement normal).
 
-5. mrTable.js
-getMrTable
+5. mrTable.js — **N'EXISTE PLUS, corrigé (audit 2026-08-26)**
 
-Singleton-promise : un seul appel DB pour toute la durée de vie du serveur.
-js
-
-const mrTable = await getMrTable()
-// → [{ mr_min, mr_max, modifier }]
-
-Piège : le .then(r => r) est obligatoire pour convertir le QueryBuilder Knex en Promise native. Sans cela, chaque await ré-exécute la requête. Limitation connue (A13) : si la première requête échoue, la promesse rejetée est cachée pour tous les appels suivants.
-getModifier
-js
-
-getModifier(mrTable, mr)
-// → number (modificateur MR, 0 si non trouvé)
-
-Cherche la ligne où mr_min <= mr <= mr_max.
+`server/src/lib/mrTable.js` a été retiré (seule trace : `migrations_archive/45_polaris_mr_table.js`/
+`46_polaris_mr_refonte.js`, une refonte ancienne). **Autorité réelle** : `shared/polarisTestResolution.js`
+(`getMrModifier`/`getMrDegreeKey`, table `MR_TABLE` en mémoire, plus de fetch DB singleton-promise ni
+de piège A13 associé — ce risque n'existe plus). Consommé par `socketCombatHelpers.js` et
+`client/src/lib/mrDegreeTitle.js`. Confirmé cohérent avec `docs/SYSTEME/COMBAT.md`.
 6. combatFSM.js
 TRANSITIONS
 
@@ -244,10 +234,10 @@ text
 Code	Description
 F2	resolveDroneAssaultAction a 3 branches distinctes (drone cible, PNJ cible, PJ cible). Ne pas uniformiser.
 F4	Guard cibleType === 'drone' obligatoire dans resolveTargetHit — retourne null, caller gère l'intégrité drone séparément.
-A13	mrTablePromise peut cacher une Promise rejetée si la première requête DB échoue. Reset : mrTablePromise = null.
+A13	Périmé (audit 2026-08-26) — mrTable.js/mrTablePromise n'existent plus, MR_TABLE est désormais une table en mémoire (shared/polarisTestResolution.js), aucun risque de Promise rejetée cachée.
 B3/B4	Race condition non-exploitable entre DELETE combat_pending et setFSMSubPhase(SLOT_ACTIVE). Guard FSM bloque toute transition concurrente.
 P49	Promotion blessure : finalSeverity peut différer de severity. resolveTargetHit utilise finalSeverity pour le test de choc.
 Choc	Dommages virtuels : jamais de character_wounds créée. Seule la sévérité combinée pilote le Test de Choc.
 COMBAT_ACTION_CONFIRM	nextState() ne doit pas être utilisé pour cet événement. L'état final est décidé par les helpers.
 
-Sources : lecture directe de statusService.js, damageService.js, woundService.js, mrTable.js, combatFSM.js au 2026-07-19.
+Sources : lecture directe de statusService.js, damageService.js, woundService.js, combatFSM.js au 2026-07-19. mrTable.js retiré du code depuis, §5 corrigé (shared/polarisTestResolution.js) le 2026-08-26.
