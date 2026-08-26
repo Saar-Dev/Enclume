@@ -19,7 +19,7 @@ import api from '../lib/api.js'
 // carte manquait ici. Armement/hardpoints (Tir/CaC) restent hors périmètre — Étape B, §16.4.
 export default function CombatExoActionWindow({
   socket, user, characters, isGm = false,
-  onEnterMoveMode, combatMoveMode,
+  onEnterMoveMode, combatMoveMode, pendingMoveSelection,
 }) {
   const { t } = useTranslation('combat')
   const { roster, phase, activeTokenId } = useCombatStore()
@@ -166,8 +166,19 @@ export default function CombatExoActionWindow({
     })
   }
 
+  // Masquage pendant la sélection de destination (COM-MOVEUI1/CombatGmDeclareWindow#hasPendingPlainMove)
+  // — bug trouvé en jeu réel (2026-08-26, Saar) : sans ce masquage, rien ne guide le joueur vers le
+  // panneau flottant global (légende déplacement, bouton "Valider") une fois une case cliquée sur la
+  // carte — il reste sur cette fenêtre, ne valide jamais, et la sélection se perd silencieusement au
+  // clic sur DÉCLARER (mapActions.move: null, tour passé). Cache seulement une fois qu'une destination
+  // est réellement en attente (pendingMoveSelection), jamais pendant le simple survol ambiant.
+  const isSelectingOnMap = combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection
+
   return (
-    <div className="combat-float-win" style={{ position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+    <div className="combat-float-win" style={{
+      position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
+      opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto',
+    }}>
       <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>
         {t('exoActionWindow.title', { name: playerToken.label ?? playerChar.name })}
       </div>

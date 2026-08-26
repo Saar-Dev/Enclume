@@ -203,6 +203,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           isGm
           onEnterMoveMode={onEnterMoveMode}
           combatMoveMode={combatMoveMode}
+          pendingMoveSelection={pendingMoveSelection}
         />
       )}
 
@@ -233,6 +234,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           characters={characters}
           onEnterMoveMode={onEnterMoveMode}
           combatMoveMode={combatMoveMode}
+          pendingMoveSelection={pendingMoveSelection}
         />
       )}
 
