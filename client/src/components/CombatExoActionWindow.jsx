@@ -27,6 +27,7 @@ export default function CombatExoActionWindow({
   const [isDeclaring, setIsDeclaring] = useState(false)
   const [declareError, setDeclareError] = useState(null)
   const [allures, setAllures] = useState(null)
+  const [alluresError, setAlluresError] = useState(null)
   const [moveSelection, setMoveSelection] = useState(null)
 
   const { pos, onHeaderMouseDown } = useDraggable(
@@ -67,11 +68,23 @@ export default function CombatExoActionWindow({
   useEffect(() => {
     const charId = playerChar?.id
     setAllures(null)
+    setAlluresError(null)
     if (!charId) return
     let cancelled = false
     api.get(`/char-sheet/${charId}/exo/movement`)
       .then(r => { if (!cancelled) setAllures(r.data.allures) })
-      .catch(() => { if (!cancelled) setAllures(null) })
+      .catch(e => {
+        if (cancelled) return
+        setAllures(null)
+        // Catch auparavant totalement silencieux (bug trouvé en jeu réel, 2026-08-26 : une exo sans
+        // pilote/catégorie configurée passait son tour sans aucune explication, la tuile Déplacement
+        // restant grisée sans dire pourquoi). getExoMovementBudget (movementBudgetService.js) rejette
+        // par une Error générique (ni TypeError ni RangeError) dès que l'armure n'a ni pilote assigné
+        // ni catégorie/modèle configuré — le serveur répond alors 500, jamais 400 (server/src/routes/
+        // character/char-sheet.js, route /exo/movement) : message affiché tel quel, pas reformulé ici.
+        console.error('[CombatExoActionWindow] erreur fetch allures :', e)
+        setAlluresError(e.response?.data?.error?.message || e.response?.data?.message || e.message)
+      })
     return () => { cancelled = true }
   }, [playerChar?.id])
 
@@ -190,6 +203,9 @@ export default function CombatExoActionWindow({
               </div>
             )}
           </div>
+          {alluresError && !isProne && (
+            <div style={S.errorBanner}>⚠ {t('exoActionWindow.movementUnavailable', { reason: alluresError })}</div>
+          )}
         </div>
       </div>
 

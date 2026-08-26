@@ -314,7 +314,8 @@
     "proneHint": "L'armure est à terre. Se relever demande un Test de Manœuvre d'armure — un échec fait passer le Tour sans autre action.",
     "normalHint": "Choisissez une destination puis Déclarer, ou Déclarer directement pour passer le Tour. L'attaque (Tir/CaC) n'est pas encore disponible pour les exo-armures.",
     "standUpButton": "Tenter de se relever",
-    "sending": "Envoi..."
+    "sending": "Envoi...",
+    "movementUnavailable": "Déplacement indisponible — {{reason}}"
   },
   "hazardPanel": {
     "exposeTitle": "Exposer — {{label}}",
