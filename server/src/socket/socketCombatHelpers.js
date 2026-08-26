@@ -2787,6 +2787,213 @@ async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
 // getOwnedHandWeapon (inventoryService.js), autorité unique déjà utilisée à la Déclaration
 // (socketCombatAnnouncement.js) et pour le CaC (MELEE-INHAND) : avant ce correctif, cette fonction ne
 // vérifiait ni l'un ni l'autre à la Résolution, malgré le commentaire ci-dessus affirmant "jamais deux
+// ─── resolveExoAssaultAction — résolution Tir exo-armure (PLAN_EXOARMURE.md §16.4) ─────────────────
+// Appelée depuis resolveAssaultAction quand character.type === 'exo'. Mirroir structurel de
+// resolveDroneAssaultAction pour la portée/LOS (helpers partagés, §16.6) — mais le Seuil suit le
+// pipeline humanoïde réel (resolveCombatantTestContext → pilote + EXF + plafond Manœuvre d'armure
+// déjà appliqué, §16.2.1/16.2.2), pas un programme.level à plat comme un drone : un pilote d'exo est
+// un PJ/PNJ avec de vraies Compétences, contrairement à un drone. Dispatch de dégâts par type de
+// cible entièrement réutilisé (resolveAttackHit*, §16.6) — aucune réécriture de l'application des
+// dégâts, déjà générique.
+//
+// Simplifications documentées (RAW non couvert par ce Lot, pas un oubli silencieux, CLAUDE.md §1.9) :
+// - Bouclier adverse (malus Armes de jet/trait) omis — aucune arme exo cataloguée n'est de cette
+//   catégorie à ce jour (§16.2.4, 4 armes = Arme à énergie/Lance-harpon), toujours 0 en pratique.
+// - Mods d'arme (Lunette...), Tir visé, Localisation visée, dual-wield, Tir Multi : tous exclus dès
+//   la Déclaration (socketCombatAnnouncement.js) — aucune donnée à consommer ici.
+// - Arme exo "maison" (label_override sans ref_equipment_id) : `effective_formula` sera toujours null
+//   (exo_weapons n'a pas de colonne damage_formula propre, contrairement à drone_weapons) — bail-out
+//   gracieux ci-dessous, jamais un crash. Gap de schéma pré-existant (Lot C), pas introduit ici.
+export async function resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
+  console.log(`[DBG] resolveExoAssaultAction — début token:${action.token_id} exo_weapon:${action.exo_weapon_inv_id} target:${action.target_token_id}`)
+  try {
+    const emissions = []
+    if (isImpossibleRangedSituation(confirmedModifiers?.situation ?? [])) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: 'Tir impossible — Allure maximale du tireur ou obscurité totale',
+      } })
+      return { suspend: false, emissions }
+    }
+    if (!action.exo_weapon_inv_id || !action.target_token_id) return { suspend: false, emissions }
+
+    // 1. Arme exo — re-vérifiée à la Résolution (combat.md : seule la Résolution vérifie ce qui est
+    // réellement possible), jamais confiance au fetch de la Déclaration (arme a pu être retirée du
+    // loadout entre-temps, ownership rescopée sur character.id).
+    const weapon = await db('exo_weapons')
+      .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
+      .where({ 'exo_weapons.id': action.exo_weapon_inv_id, 'exo_weapons.character_id': character.id })
+      .select(
+        'exo_weapons.ref_equipment_id as equipment_id',
+        'exo_weapons.ammo_remaining',
+        'ref_equipment.range as ref_range',
+        'ref_equipment.damage_h as effective_formula',
+        db.raw(`COALESCE(exo_weapons.label_override, ref_equipment.name) as display_name`),
+      )
+      .first()
+
+    if (!weapon?.effective_formula) {
+      console.warn(`[WS] resolveExoAssaultAction — arme sans formule. exo_weapon_inv_id:${action.exo_weapon_inv_id}`)
+      emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+        userId: null, username: character.name ?? 'Exo-armure', color: '#808080',
+        formula: '—', rolls: [], total: 0,
+        isCriticalSuccess: false, isCriticalFail: false, seed: null,
+        timestamp: new Date().toISOString(),
+        skillLabel: 'Armement exo — arme sans formule de dégâts',
+        mechanicalTotal: 0, diffLabel: '', chancesDeReussite: 0, isSuccess: false,
+      } })
+      return { suspend: false, emissions }
+    }
+    const formula = weapon.effective_formula.replace(/\s/g, '')
+
+    // 2. Portée (helper partagé §16.6)
+    console.log(`[DBG] resolveExoAssaultAction — avant resolveRangedDistance`)
+    const range = await resolveRangedDistance({ action, character, refRange: weapon.ref_range, emissions })
+    console.log(`[DBG] resolveExoAssaultAction — après resolveRangedDistance, ok:${range.ok}`)
+    if (!range.ok) return { suspend: false, emissions }
+    const authoritativeRangeBand = range.band
+
+    // 3. LOS (helper partagé §16.6) — le rappel récursif reste local (identité de fonction propre).
+    if (!options.skipLos) {
+      console.log(`[DBG] resolveExoAssaultAction — avant resolveAttackLOS`)
+      const losResult = await resolveAttackLOS({ io, campaignId, action, character })
+      console.log(`[DBG] resolveExoAssaultAction — après resolveAttackLOS, blocked:${losResult.blocked} intercepted:${losResult.intercepted}`)
+      if (losResult.blocked) return { suspend: false, emissions }
+      if (losResult.intercepted) {
+        return resolveExoAssaultAction(io, campaignId,
+          { ...action, target_token_id: losResult.newTargetTokenId },
+          confirmedModifiers, character, pendingMaps, { skipLos: true })
+      }
+      options.coverageModifier = losResult.coverageModifier
+    }
+
+    const [rosterTireur, settings] = await Promise.all([
+      db('combat_roster').where({ campaign_id: campaignId, token_id: action.token_id }).first(),
+      getCampaignSettings(db, campaignId),
+    ])
+
+    const userRow = character.user_id
+      ? await db('users').where({ id: character.user_id }).select('color', 'username').first()
+      : null
+    const tireurColor    = userRow?.color    ?? '#808080'
+    const tireurUsername = userRow?.username ?? character.name ?? 'Exo-armure'
+
+    // 4. Compétence associée à l'arme (§16.2.4) — même autorité que resolveAssaultAction, jamais un
+    // skillId codé en dur. Chaîne vide si absente (force le palier complet plutôt que le palier NA
+    // seul — même convention que resolveAssaultAction, ligne ~2950 ci-dessous).
+    const skillAssoc = weapon.equipment_id
+      ? await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
+      : null
+
+    // 5. Contexte de Test du pilote — resolveCombatantTestContext dispatche déjà vers
+    // resolveExoTestContext pour character.type==='exo' (pilote + Exo-Force + plafond Manœuvre
+    // d'armure inconditionnel, §16.2.1/16.2.2). null si pas de pilote/armure non configurée/Test de
+    // Manœuvre impossible (hybride sans choix posé, §16.2.5) — jamais un crash, un jet à Seuil 0.
+    const ctxTireur = await resolveCombatantTestContext(db, character, skillAssoc?.skill_id ?? '')
+    if (!ctxTireur) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: 'Tir impossible — aucun pilote assigné, armure non configurée, ou Test de Manœuvre impossible (milieu hybride sans choix posé)',
+      } })
+      return { suspend: false, emissions }
+    }
+    // WNDMORT — défense en profondeur (garde principal à la Déclaration, ceci couvre le cas rare
+    // d'un pilote mortellement blessé entre Annonce et Résolution). ctxTireur.sheetId = celle du
+    // pilote (resolveExoTestContext), jamais celle de l'exo (qui n'en a pas).
+    const woundsTireur = await db('character_wounds').where({ char_sheet_id: ctxTireur.sheetId })
+    if (isTestBlockingWound(woundsTireur)) {
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name, message: 'Blessure mortelle (pilote) — aucune action de Test possible',
+      } })
+      return { suspend: false, emissions }
+    }
+
+    // DEF5 — cible sans défense, même règle que le Tir humanoïde (target-side, indépendant du tireur).
+    const targetDefenseless = await isTargetDefenseless(campaignId, action.target_token_id, settings)
+    const sansDefenseBonus = targetDefenseless ? 5 : 0
+
+    const porteeModComp    = PORTEE_MOD_COMP[authoritativeRangeBand]?.mod ?? 0
+    const situationModComp = sumRangedSituationMods(confirmedModifiers?.situation ?? [])
+    const tailleModComp    = TAILLE_MODS[confirmedModifiers?.taille]?.mod ?? 0
+    const isRushedMod      = rosterTireur?.state_vitesse === 'rushed' ? -5 : 0
+    const coverageModifier = options.coverageModifier ?? 0
+
+    const { total: rollAttaque, rolls: attackRolls, seed: attackSeed } = await parseDice('1d20')
+    const assaultOutcome0 = computeAttackRoll({
+      skillLabel: 'Compétence', skillTotal: ctxTireur.skillTotal, totalLabel: 'Seuil', rollAttaque,
+      contributions: [
+        { label: PORTEE_LABELS[authoritativeRangeBand] ?? authoritativeRangeBand, value: porteeModComp, type: porteeModComp > 0 ? 'bonus' : 'malus' },
+        { label: 'Cible sans défense', value: sansDefenseBonus, type: 'bonus' },
+        ...((confirmedModifiers?.situation ?? []).map(k => {
+          const v = RANGED_SITUATION_MODS[k]?.mod ?? 0
+          return { label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' }
+        })),
+        { label: TAILLE_LABELS[confirmedModifiers?.taille] ?? confirmedModifiers?.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' },
+        { label: 'Précipitation', value: isRushedMod, type: 'malus' },
+        { label: 'Malus santé / encombrement (pilote)', value: ctxTireur.effectiveMalus, type: 'malus' },
+        { label: 'Couverture cible', value: coverageModifier, type: 'malus' },
+      ],
+    })
+    const assaultOutcomeCrit = applyCriticalSuccessBonus(assaultOutcome0, getCriticalSuccessBonus({ masteryLevel: ctxTireur.mastery }))
+    const { seuil: chancesDeReussite, breakdown, isSuccess, mr } = assaultOutcomeCrit
+    const assaultOutcome = await resolveCriticalFailReroll(assaultOutcomeCrit)
+    console.log(`[WS] resolveExoAssaultAction — roll:${rollAttaque} Seuil:${chancesDeReussite} → ${isSuccess ? 'TOUCHE' : 'RATÉ'} MR:${mr}`)
+    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
+      userId: character.user_id ?? null, username: tireurUsername, color: tireurColor,
+      formula: '1d20', rolls: attackRolls, total: rollAttaque,
+      isCriticalSuccess: assaultOutcome.isCriticalSuccess, isCriticalFail: assaultOutcome.isCriticalFail,
+      catastropheRisk: assaultOutcome.catastropheRisk,
+      seed: attackSeed, timestamp: new Date().toISOString(),
+      skillLabel: `${weapon.display_name ?? 'Armement'} — Exo-armure`,
+      mechanicalTotal: ctxTireur.skillTotal,
+      diffLabel: chancesDeReussite - ctxTireur.skillTotal >= 0 ? `+${chancesDeReussite - ctxTireur.skillTotal}` : `${chancesDeReussite - ctxTireur.skillTotal}`,
+      chancesDeReussite, isSuccess, mr, breakdown,
+    } })
+    await maybeTriggerCatastrophe(io, campaignId, action.token_id, assaultOutcome.catastropheRisk, {
+      site: 'exo_assault', actorTokenId: action.token_id, targetTokenId: action.target_token_id,
+    })
+
+    // Décompte munitions (§16.2.3) — quel que soit le résultat (touché ou raté), même convention que
+    // le Tir humanoïde. Skip si ammo_remaining NULL (tracking désactivé — toute arme exo aujourd'hui,
+    // aucun mécanisme d'init/rechargement construit).
+    if (weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
+      const bulletsFired = action.bullet_count ?? 1
+      const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
+      await db('exo_weapons').where({ id: action.exo_weapon_inv_id }).update({ ammo_remaining: newRemaining })
+    }
+
+    if (!isSuccess) {
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+        tireurId: action.token_id, cibleId: action.target_token_id,
+        localisation: null, degautsBruts: 0, degatsNets: 0,
+        severity: null, is_lethal: false, isSuccess: false, shockResult: null,
+      } })
+      return { suspend: false, emissions }
+    }
+
+    // 6. Identifier la cible + dispatch dégâts — entièrement réutilisé (§16.6), aucune réécriture.
+    const cibleToken     = await db('tokens').where({ id: action.target_token_id }).first()
+    const cibleCharacter = cibleToken?.character_id
+      ? await db('characters').where({ id: cibleToken.character_id }).first()
+      : null
+    const now = new Date().toISOString()
+    const ctx = { action, cibleCharacter, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, now }
+    if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
+    if (cibleCharacter?.type === 'exo')   return await resolveAttackHitExo(io, campaignId, ctx, emissions)
+    if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
+    return await resolveAttackHitPj(io, campaignId, ctx, emissions)
+
+  } catch (err) {
+    console.error('[WS] resolveExoAssaultAction error:', err.message)
+    return { suspend: false, emissions: [] }
+  }
+}
+
+// Fetch arme + mods installés pour un Assaut — factorisé (COM29 : main directrice ET non-directrice
+// utilisent ce même fetch en Résolution, jamais deux copies divergentes des colonnes/jointures).
+// ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — ownership + en-main revérifiés via
+// getOwnedHandWeapon (inventoryService.js), autorité unique déjà utilisée à la Déclaration
+// (socketCombatAnnouncement.js) et pour le CaC (MELEE-INHAND) : avant ce correctif, cette fonction ne
 // copies divergentes" — cette copie-ci avait simplement perdu les deux contrôles en cours de route.
 async function fetchAssaultWeaponAndMods(weaponInvId, characterId) {
   const [weapon, installedMods] = await Promise.all([
@@ -2808,9 +3015,13 @@ export async function resolveAssaultAction(io, campaignId, action, confirmedModi
   console.log(`[DBG] resolveAssaultAction — début token:${action.token_id} type_perso:${character.type}`)
   try {
     const emissions = []
-    // Branchement drone — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT)
+    // Branchement drone/exo — avant le guard weapon_inv_id (§7 MANUELSYSCOMBAT). Exo (PLAN_EXOARMURE.md
+    // §16.4) : arme dans exo_weapons (mauvais inventaire sinon), jamais le pipeline humanoïde qui suit.
     if (character.type === 'drone') {
       return resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options)
+    }
+    if (character.type === 'exo') {
+      return resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options)
     }
     if (!action.weapon_inv_id || !action.target_token_id) return { suspend: false, emissions }
 

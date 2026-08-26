@@ -355,7 +355,10 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         console.log(`[DBG] COMBAT_ACTION_CONFIRM — avant résolution entrée ${step.entry.id} type:${action.type} token:${tokenId}`)
         try {
           if (action.type === 'assault') {
-            if (!confirmedModifiers && character.type !== 'drone') {
+            // Exo (PLAN_EXOARMURE.md §16.4) — même exemption que le drone : aucune UI
+            // CombatModifiersWindow câblée pour ce Lot, resolveExoAssaultAction gère
+            // confirmedModifiers=null via optional chaining (mêmes valeurs par défaut que le drone).
+            if (!confirmedModifiers && character.type !== 'drone' && character.type !== 'exo') {
               console.warn(`[WS] COMBAT_ACTION_CONFIRM — assault sans confirmedModifiers. token:${tokenId}`)
               io.to(campaignId).emit(WS.COMBAT_DECLARE_ERROR, {
                 username: token.label ?? 'ce personnage',
