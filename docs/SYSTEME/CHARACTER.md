@@ -50,8 +50,11 @@ Supprimer un `character` VTT supprime automatiquement toute sa fiche Polaris.
 
 ```
 server/src/routes/character/
-  char-sheet.js       — routes fiche personnage (22 routes : fiche + blessures + inventaire + sols)
-  ref.js              — 3 routes données de référence
+  char-sheet.js       — routes fiche personnage (corrigé 2026-08-26 : 2625 lignes / ~78 routes
+                        aujourd'hui, plus 22 — drone/exo/macros/moding/mutations/fatigue/clone-to-vault
+                        ajoutés depuis)
+  ref.js              — 4 routes données de référence (genotypes/skills/mutations/advantages —
+                        corrigé 2026-08-26, GET /advantages ajouté depuis, plus 3)
 
 client/src/character/
   CharacterWindow.jsx  — fenêtre flottante drag+resize — 4 onglets : Fiche/Bio/Matériel/Paramètres.
@@ -92,21 +95,19 @@ shared/
   armorConstants.js    — ARMOR_CATEGORY_MALUS / LOCATION_TO_SLOT / SLOT_TO_REF_LOCATION / LOCATION_TO_SVG / LOCATION_LABELS
   inventoryMath.js     — computeTotalWeight, autorité unique client/serveur du poids porté
 
-server/src/db/migrations/
-  33_char_ref_genotypes.js           — ref_genotypes + seed 4 génotypes
-  34_char_ref_skills.js              — ref_skills (structure)
-  35_char_ref_skill_requirements.js  — ref_skill_requirements (structure)
-  36_char_sheet.js                   — 5 tables dynamiques (char_sheet, char_identity, char_archetype, char_attributes, char_skills)
-  37_char_seed_skills.js             — seed ref_skills (247+ entrées)
-  38_char_seed_skill_requirements.js — seed prérequis
-  39_char_fix_ids.js                 — corrections IDs corrompus
-  40_char_advantages.js              — char_advantages + linked_skill_id sur ref_mutations
-  44_char_fix_encoding.js            — correction encodage UTF-8 ref_skills (12 lignes)
-  45_char_xp.js                      — xp_total + xp_available sur char_sheet
-  49_character_wounds.js             — character_wounds (UUID PK, FK char_sheet CASCADE, location/severity/is_stabilized/idx)
-  50_char_inventory.js               — char_inventory (possessions joueur) + char_sheet.sols INTEGER DEFAULT 0
-  51_inventory_slot_codes.js         — nullifie slots stales B/J (regex) → passage vers codes BG/BD/JG/JD
-  242_char_gauges.js                 — char_gauges (jauges de matériel) + char_inventory.validated_by_gm
+server/src/db/migrations/ — **corrigé (audit 2026-08-26)** : tous les numéros ci-dessous étaient ceux
+d'avant la refonte migrations (2026-08-22, `PLAN_MIGRATIONS_REFONTE.md`) — les anciens fichiers
+vivent désormais dans `migrations_archive/` sous ces mêmes numéros, réattribués dans le dépôt actif à
+des tables sans rapport. Un fichier de création + un fichier de seed par table, aujourd'hui :
+  72_ref_genotypes.js (+ seed 282)              — ref_genotypes
+  80_ref_skills.js (+ seed 283)                 — ref_skills
+  79_ref_skill_requirements.js (+ seed 284)     — ref_skill_requirements
+  22_char_sheet.js                              — char_sheet
+  9_char_advantages.js                          — char_advantages (schéma revu, voir §3bis plus bas)
+  27_character_wounds.js                        — character_wounds
+  15_char_inventory.js                          — char_inventory
+  13_char_gauges.js                             — char_gauges
+  18_char_mutations.js                          — char_mutations (nouvelle table, absente de la version précédente de ce document, voir §3bis)
 
 scripts SQL correctifs (appliqués manuellement, hors migrations Knex) :
   fix_ref_skills.sql                — parents fantômes, markers, typos
@@ -183,39 +184,43 @@ PK composite `(skill_id, type, value)`. FK `skill_id → ref_skills.id`.
 
 ---
 
-#### `ref_mutations`
-33 lignes. PK = `muta_numero TEXT`.
+#### `ref_mutations` — **schéma entièrement remplacé, corrigé (audit 2026-08-26)**
 
-| Colonne | Type | Contrainte | Notes |
-|---|---|---|---|
-| muta_numero | TEXT | PK NOT NULL | `muta_001` … `muta_033` |
-| nom | TEXT | NOT NULL | Nom affiché |
-| description | TEXT | nullable | |
-| linked_skill | TEXT | nullable | Label lisible de la compétence liée |
-| linked_skill_id | TEXT | nullable | ID `ref_skills` de la compétence débloquée |
-| mod_for … mod_per | INT | DEFAULT 0 | Modificateurs d'attributs (6 colonnes) |
-| mod_acrobatie … mod_discretion | INT | DEFAULT 0 | Bonus compétences (4 colonnes) |
-| res_armure … res_radiation | INT | DEFAULT 0 | Résistances (6 colonnes) |
-| nom_arme_naturelle | TEXT | nullable | |
-| degats_physiques / degats_choc | TEXT | nullable | Ex: `"2D10"` |
-| stack_mod_val | INT | nullable | Valeur de cumul |
-| stack_target_col | TEXT | nullable | Colonne cible du cumul |
+> Ce que ce document décrivait (PK `muta_numero TEXT`, colonnes `nom`/`mod_for`/`res_armure`/
+> `stack_mod_val`...) n'existe plus. Schéma réel vérifié dans `server/src/db/migrations/77_ref_mutations.js` :
 
-**Liens `linked_skill_id` peuplés (9 mutations) :**
+| Colonne | Type | Notes |
+|---|---|---|
+| mutation_id | INTEGER | PK, séquence (`ref_mutations_mutation_id_seq`) — plus `muta_numero TEXT` |
+| name | VARCHAR(100) | Nom affiché (anciennement `nom`) |
+| subtype, has_subtable | VARCHAR / BOOLEAN | Sous-types (table séparée `ref_mutation_subtypes`), ex. Parasite(s) |
+| cost_pc | INTEGER | Coût en PC, peut être négatif (désavantage) |
+| is_unique, is_stackable, stack_limit, stack_effect, stack_deltas | — | Cumul (`stack_deltas` JSONB) |
+| mod_FOR…mod_PRE | INTEGER | Modificateurs d'attributs (6 colonnes, casse majuscule réelle) |
+| mod_res_damage/shock/drugs/disease/poison/radiation | INTEGER | Résistances (anciennement `res_armure…res_radiation`) |
+| natural_armor, natural_weapon_formula, natural_weapon_choc_formula, natural_weapon_requires_grapple | — | Arme/armure naturelle |
+| d100_range_start/end | INTEGER | Tirage aléatoire (méthode "Tirage aléatoire" Step3 Wizard) |
+| ldb_page, description | — | Référence RAW |
 
-| muta_numero | linked_skill_id |
-|---|---|
-| muta_026 | MUTATION_AGILITE_CAUDALE |
-| muta_011 | MUTATION_CONTAGION |
-| muta_019 | MUTATION_CONTROLE_MOLECULAIRE |
-| muta_016 | MUTATION_EMPATHIE |
-| muta_020 | MUTATION_METAMORPHOSE |
-| muta_025 | MUTATION_PURULENCE |
-| muta_033 | MUTATION_RADIATIONS |
-| muta_031 | MUTATION_SONAR |
-| muta_029 | MAITRISE_DE_LA_FORCE_POLARIS |
+Le lien vers une Compétence débloquée (ancien `linked_skill_id`) n'est plus une colonne sur
+`ref_mutations` — vérifier `ref_skill_requirements` au moment du besoin plutôt que de se fier à cette
+table périmée pour la liste des 9 mutations concernées.
 
-muta_029 débloque aussi `MAITRISE_DE_LECHO_POLARIS` via `ref_skill_requirements` (même prérequis `muta_029`) — pas besoin de colonne array (PC14).
+#### `char_mutations` — table dynamique des mutations d'un personnage (n'existait pas dans ce document)
+
+| Colonne | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| char_sheet_id | UUID | FK |
+| mutation_id | INTEGER | FK → `ref_mutations.mutation_id` |
+| subtype_id | INTEGER nullable | FK → `ref_mutation_subtypes` |
+| source | TEXT, défaut `'chosen'` | `'chosen'` / `'random'` (Step3) / `'revers'` (Step4, WIZ46) |
+| status | TEXT, défaut `'active'` | |
+| count | INTEGER, défaut 1 | Nombre de fois choisie (ex. Parasite×N, Caractère génétique animal) |
+
+Routes : `GET/POST/DELETE /char-sheet/:characterId/mutations` (`char-sheet.js:792-859`, POST/DELETE
+**GM uniquement**) — confirmées exactes par `docs/SYSTEME/PERSONNAGE_API.md`, plus fiable que ce
+document sur ce périmètre.
 
 ---
 
@@ -331,17 +336,22 @@ Seedée une fois par catégorie (upsert `ON CONFLICT DO NOTHING`, `server/src/se
 ---
 
 #### `char_advantages`
-PK = `id UUID`. FK `char_sheet_id → char_sheet.id CASCADE`.
+**Schéma entièrement remplacé, corrigé (audit 2026-08-26)** — ce document décrivait `type`
+(`'MUTATION'`/`'OTHER'`), `muta_numero`, `level` : périmé, les mutations vivent désormais dans une
+table séparée `char_mutations` (voir §3 `ref_mutations` ci-dessus), `char_advantages` ne porte plus
+que les avantages/désavantages du catalogue `ref_advantages` (migration 53), avec soft-delete.
+Schéma réel vérifié dans `server/src/db/migrations/9_char_advantages.js` :
 
 | Colonne | Type | Contrainte | Notes |
 |---|---|---|---|
 | id | UUID | PK DEFAULT gen_random_uuid() | |
 | char_sheet_id | UUID | FK NOT NULL | |
-| type | TEXT | NOT NULL | `'MUTATION'` \| `'OTHER'` |
-| muta_numero | TEXT | nullable | FK logique vers `ref_mutations.muta_numero` |
-| level | INT | DEFAULT 1 | Niveau de la mutation (incrémenté si re-sélectionnée) |
-| description | TEXT | nullable | Texte libre pour type `'OTHER'` |
-| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| advantage_id | TEXT | NOT NULL | FK logique vers `ref_advantages` |
+| snapshot_data | JSONB | NOT NULL | Copie des valeurs au moment de l'acquisition (le catalogue peut changer sans affecter les personnages déjà créés) |
+| acquired_at | TIMESTAMPTZ | NOT NULL DEFAULT now() | |
+| acquired_during | TEXT | NOT NULL | Contexte d'acquisition (ex. étape Wizard) |
+| removed_at | TIMESTAMPTZ | nullable | Soft-delete — jamais un DELETE réel |
+| removal_reason | TEXT | nullable | |
 
 ---
 
@@ -353,7 +363,7 @@ PK = `id UUID`. FK `char_sheet_id → char_sheet.id CASCADE`.
 |---|---|---|
 | GET | `/genotypes` | Liste des 4 génotypes |
 | GET | `/skills` | Catalogue complet ref_skills + requirements imbriqués |
-| GET | `/mutations` | Catalogue complet ref_mutations trié par muta_numero |
+| GET | `/mutations` | Catalogue complet ref_mutations (corrigé 2026-08-26 : trié par `mutation_id`, plus `muta_numero`) |
 
 ### `/api/char-sheet/`
 
@@ -458,8 +468,7 @@ AdvantagesPanel.handleTogglePolaris(skillId)
   → setCharSkillsPolaris(updated)  ← state LOCAL à AdvantagesPanel
   ⚠️ NE remonte PAS vers CharacterSheet.charSkills
      → SkillsPanel ne voit pas le changement immédiatement
-  ⚠️ BUG PC22 : PUT /skills est GM uniquement — joueur reçoit 403
-     → Fix prévu session 5
+  PC22 corrigé (session 50, confirmé §4) : PUT /skills/toggle-learned, owner ou GM — plus de 403 joueur
 ```
 
 ### Onglet Matériel — inventaire (source unique de vérité, docs/Old/PLAN_INVENTORY_UX.md Étape 0)
@@ -704,7 +713,7 @@ Module 5 — Compétences. Groupement hiérarchique par famille (session 4) : gr
 Module 6 — Avantages & Désavantages. Liste chronologique + bouton +. Modale 3 étapes :
 - Étape 1 : choix type [Mutations] [Force Polaris*] [Autres] (*grisé si muta_029 absente)
 - Étape 2A : liste ref_mutations scrollable (mutations existantes = orange, re-sélectionnable pour incrément level)
-- Étape 2B : liste POUVOIRS_POLARIS — toggle is_learned dans char_skills (⚠️ PC22 : 403 pour joueur)
+- Étape 2B : liste POUVOIRS_POLARIS — toggle is_learned dans char_skills (PC22 corrigé, voir §4/§9)
 - Étape 2C : textarea 255 chars
 
 **Liste affichée :** badge `MUT` (orange) pour les mutations | badge `ATR` (gris) pour les textes libres. Les pouvoirs Polaris sont dans `char_skills` (is_learned=true), **pas** dans `char_advantages` — ils n'apparaissent pas dans cette liste.
@@ -812,7 +821,10 @@ massif, silhouette écrasée"). Masqué si le personnage n'a aucune jauge semée
 
 **PC21** — Guard synchrone sur achat XP. `setBuyingSkillId` est asynchrone (React batch) — ne jamais l'utiliser comme guard contre les double-clics. Pattern correct : `const isBuyingRef = useRef(false)` + `isBuyingRef.current = true` avant le try, `false` dans le finally. `buyingSkillId` reste uniquement pour l'affichage UI (bouton `…` + disabled).
 
-**PC22** — Bug Force Polaris : `handleTogglePolaris` appelle `PUT /skills` qui est **GM uniquement**. Un joueur possédant muta_029 peut voir les pouvoirs Polaris dans la modale mais reçoit 403 en tentant de les activer. Fix prévu session 5 : créer une route dédiée owner+GM pour toggler `is_learned` sur les pouvoirs Polaris uniquement.
+**PC22** — **Corrigé (session 50), confirmé par l'audit 2026-08-26** : `handleTogglePolaris` appelle
+désormais `PUT /skills/toggle-learned` (owner ou GM, aucune garde `isGm` — vérifié `char-sheet.js:394-428`).
+Cette entrée décrivait encore le bug d'origine (403 joueur, "fix prévu session 5") — périmée, la route
+dédiée décrite comme solution a bien été créée.
 
 **PC23** — `char_inventory.validated_by_gm` ne doit jamais être accepté tel quel depuis le payload client (POST/PUT). Toujours dérivé serveur (`req.isGm`) — sinon un joueur s'auto-valide par un simple appel réseau, la route n'ayant sinon aucune garde `isGm` dessus. Même règle à la fusion de stack (`inventoryService.js`, item déjà existant même équipement/container/slot) : sans elle, un joueur peut ajouter une quantité arbitraire sur une ligne déjà validée sans repasser par le MJ.
 
