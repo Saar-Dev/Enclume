@@ -8,7 +8,10 @@
 ## Architecture générale
 
 ```
-server/src/db/migrations/229_character_states.js  — schéma
+server/src/db/migrations/26_character_states.js (+ 123_character_states_constraints.js,
+  220_character_states_foreign_keys.js) — schéma (corrigé 2026-08-26 : pas "229_character_states.js",
+  ce numéro pointe aujourd'hui vers dice_rolls_foreign_keys.js ; l'ancien fichier n'existe plus
+  qu'archivé)
 server/src/lib/characterStateService.js            — point de résolution unique (lecture/écriture)
 server/src/lib/combatRosterBroadcast.js             — mise en forme du roster envoyé aux clients
 server/src/lib/characterStateShadowCheck.js          — garde-fou de cohérence combat_roster/character_states
@@ -89,6 +92,6 @@ comportement voulu par Saar en jeu réel avant clôture du Lot 2b.
 | Code | Description |
 |---|---|
 | ETP1 | `combat_roster.state_position`/`state_weapon` restent l'autorité de `entry` (validation serveur) — ne pas les considérer mortes tant que le Lot 2c n'a pas migré ce consommateur. |
-| ~~ETP2~~ | ~~`kneeling` inatteignable~~ — corrigé (`docs/Old/PLAN_KNEELING_POSITION.md`, indépendant du Lot 2c contrairement à ce qui était supposé ici) : migration `231` élargit le `CHECK`, `VALID_POS` (`socketCombatState.js`) **et** `VALID_STATES.position` (`socketCombatAnnouncement.js:79` — 2 verrous distincts, le second absent de l'inventaire initial) acceptent `kneeling`. Coût d'Initiative dans `shared/combatStatePositionCost.js` (alias `crouching`, décision Saar). |
+| ~~ETP2~~ | ~~`kneeling` inatteignable~~ — corrigé (`docs/Old/PLAN_KNEELING_POSITION.md`, indépendant du Lot 2c contrairement à ce qui était supposé ici) : la contrainte `chk_state_position` (`129_combat_roster_constraints.js`, corrigé 2026-08-26 — pas "migration 231", réattribuée à `drone_programs_foreign_keys.js`), `VALID_POS` (`socketCombatState.js`) **et** `VALID_STATES.position` (`socketCombatAnnouncement.js:79` — 2 verrous distincts, le second absent de l'inventaire initial) acceptent `kneeling`. Coût d'Initiative dans `shared/combatStatePositionCost.js` (alias `crouching`, décision Saar). |
 | ETP3 | `buildBroadcastRoster` est asynchrone (batch `getCharacterStatesForTokens`) — un site qui rebroadcasterait le roster sans `await` casserait silencieusement le payload (`state_position`/`state_weapon` undefined). |
 | ETP4 | Un token GM peut partager `character_id` avec d'autres tokens (§ancre ci-dessus) — ne jamais réintroduire une clé sur `character_id` pour cette table, ça fusionnerait l'état de plusieurs tokens distincts. |
