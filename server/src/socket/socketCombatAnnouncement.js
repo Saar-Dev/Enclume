@@ -237,8 +237,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // Tir Multi (docs/PLAN_TIRMULTI.md D6) — RAW « Attaques multiples » (p.218-219) ne couvre que
         // Tir simple/Tir à répétition (CC) pour un tireur humanoïde ; Rafale (RC/RL) et tireurs-drones
         // en sont exclus par défaut (RAW muet sur ces cas). Jamais fait confiance au seul masquage UI.
-        if (mapActions.attack.length > 1 && (isDrone || (state.fire_mode ?? 'cc').toUpperCase() !== 'CC')) {
-          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Tir Multi : Tir simple/Tir à répétition (CC) uniquement, personnage non-drone' })
+        // Exo-armure (PLAN_EXOARMURE.md §16.4) — REGLEARMURE.md:206-207/MANUEL §4.5 : « une armure
+        // mécanisée ne peut effectuer qu'une seule Attaque par Tour », y compris en Tir simple/CC —
+        // exclusion totale, pas seulement RC/RL.
+        if (mapActions.attack.length > 1 && (isDrone || isExo || (state.fire_mode ?? 'cc').toUpperCase() !== 'CC')) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Tir Multi : Tir simple/Tir à répétition (CC) uniquement, personnage non-drone et non-exo' })
           return
         }
         // D9 (tranché Saar) — une seule arme pour toute la série : rejette toute divergence entre les
@@ -272,6 +275,50 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             return
           }
           assaultWeaponRefRange = droneWeapon.ref_range ?? null
+        } else if (isExo) {
+          // Exo-armure (PLAN_EXOARMURE.md §16.4) : validation exoWeaponInvId contre exo_weapons —
+          // jamais char_inventory (arme dans le mauvais inventaire, §16.1) ni drone_weapons (Seuil à
+          // plat, non RAW pour une exo). Pas de notion "en main"/dual-wield (armes hardpoint) ni de
+          // mods (aucun système de mod exo à ce jour) — mirroir du bloc drone ci-dessus, pas du
+          // bloc humanoïde.
+          const { exoWeaponInvId } = firstAttack
+          if (!exoWeaponInvId) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut exo impossible — aucune arme exo sélectionnée' })
+            return
+          }
+          const exoWeapon = await db('exo_weapons')
+            .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
+            .where({ 'exo_weapons.id': exoWeaponInvId, 'exo_weapons.character_id': character.id })
+            .select('exo_weapons.*', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count')
+            .first()
+          if (!exoWeapon) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut exo impossible — l'arme exo sélectionnée est introuvable (désinstallée entre-temps ?)" })
+            return
+          }
+          // fire_mode — même contrôle défensif que l'arme humanoïde (ligne ci-dessous), même si les 4
+          // armes exo à distance connues à ce jour (§16.2.4) sont toutes CC uniquement : un futur ajout
+          // catalogue RC/RL ne doit pas passer silencieusement sans Compétence Tir Automatique associée
+          // (non géré ici, aucune arme exo RC/RL n'existe à ce jour — à revoir le jour où une apparaît).
+          const exoFireMode = (state.fire_mode ?? 'cc').toUpperCase()
+          if (exoWeapon.ref_fire_mode && !exoWeapon.ref_fire_mode.toUpperCase().includes(exoFireMode)) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: `Mode de tir ${exoFireMode} non disponible pour cette arme (modes compatibles : ${exoWeapon.ref_fire_mode})` })
+            return
+          }
+          assaultWeaponRefRange = exoWeapon.ref_range ?? null
+          // Munitions (§16.2.3) — fail-fast déclaratif, même autorité que l'arme humanoïde
+          // (shared/ammoRules.js, revérifiée à la Résolution). ammo_remaining NULL = tracking désactivé
+          // (aucun mécanisme de rechargement/init exo construit à ce jour, §16.2.3 — hasEnoughAmmo
+          // traite donc toute arme exo comme illimitée tant que ce chantier séparé n'est pas fait,
+          // jamais une supposition différente ici).
+          const exoBulletCount = firstAttack.bulletCount ?? 1
+          if (!hasEnoughAmmo(exoWeapon.ammo_remaining, exoBulletCount)) {
+            const capacity = parseAmmoCapacity(exoWeapon.ref_ammo_count)
+            const message = (capacity && exoBulletCount > capacity)
+              ? 'Action impossible — la capacité du chargeur ne permet pas ce tir'
+              : "Munitions insuffisantes, recharger d'abord"
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message })
+            return
+          }
         } else {
           // Humanoïde : validation char_inventory + PC23
           const { weaponInvId, offhandWeaponInvId, isDualWield } = firstAttack
@@ -375,16 +422,21 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Tir visé (LdB p.227-228, docs/PLAN_TIRVISE.md) — calculé une fois, réutilisé pour
       // iniDelta ci-dessous ET pour la ligne combat_actions (aim_bonus_comp) plus bas. Exclusif avec
       // Tir Multi (docs/PLAN_TIRMULTI.md D10, tranché Saar) — forcé à 0 dès que la série dépasse 1 tir,
-      // jamais confiance au seul masquage UI côté client.
-      const aimTranches = (hasAttackDeclared && mapActions.attack.length === 1)
+      // jamais confiance au seul masquage UI côté client. Exclu aussi pour une exo (PLAN_EXOARMURE.md
+      // §16.5, « Viser un endroit particulier en Tir » hors périmètre — étendu par le même principe au
+      // Tir visé/aimTranches, RAW non tranché pour une exo, aucune UI ne le propose côté client) —
+      // sans cette garde, `!isDrone` plus bas (ligne 446, englobe l'exo) laisserait passer un
+      // aimTranches falsifié par un client forgé (`core.md`, jamais confiance au client).
+      const aimTranches = (hasAttackDeclared && mapActions.attack.length === 1 && !isExo)
         ? (mapActions.attack[0]?.aimTranches ?? 0)
         : 0
       // Viser une Localisation précise (LdB p.229-230, COM9, docs/PLAN_TIRVISE v2.md) — annoncée ici
       // (même patron que Tir visé), aucun coût d'Initiative (contrairement à aimTranches). Validée
       // contre les clés réelles de AIMED_LOCATION_MALUS — jamais un slot forcé depuis une valeur
       // arbitraire envoyée par le client ; invalide → ignorée silencieusement (null), jamais un tour
-      // de combat cassé. Exclusive avec Tir Multi (D10), même garde que Tir visé ci-dessus.
-      const declaredAimedLocation = (hasAttackDeclared && mapActions.attack.length === 1)
+      // de combat cassé. Exclusive avec Tir Multi (D10), même garde que Tir visé ci-dessus — même
+      // exclusion exo, RAW explicitement hors périmètre (§16.5).
+      const declaredAimedLocation = (hasAttackDeclared && mapActions.attack.length === 1 && !isExo)
         ? (mapActions.attack[0]?.aimedLocation ?? null)
         : null
       const aimedLocationKey = declaredAimedLocation && AIMED_LOCATION_MALUS[declaredAimedLocation] !== undefined
@@ -491,23 +543,24 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // varie. aimTranches/aimedLocationKey sont déjà forcés à 0/null dès que length > 1 (D10).
       if (hasAttackDeclared) {
         for (const {
-          weaponInvId, offhandWeaponInvId, droneWeaponInvId, targetTokenId,
+          weaponInvId, offhandWeaponInvId, droneWeaponInvId, exoWeaponInvId, targetTokenId,
           bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp,
         } of mapActions.attack) {
           if (!targetTokenId) continue
           actionRows.push({
             campaign_id:          campaignId, token_id: tokenId,
             action_key:           'assault', type: 'assault', sequence: 3,
-            weapon_inv_id:        isDrone ? null : (weaponInvId ?? null),
-            offhand_weapon_inv_id: (isDrone || !isDualWield) ? null : (offhandWeaponInvId ?? null),
+            weapon_inv_id:        (isDrone || isExo) ? null : (weaponInvId ?? null),
+            offhand_weapon_inv_id: (isDrone || isExo || !isDualWield) ? null : (offhandWeaponInvId ?? null),
             drone_weapon_inv_id:  isDrone ? (droneWeaponInvId ?? null) : null,
+            exo_weapon_inv_id:    isExo ? (exoWeaponInvId ?? null) : null,
             target_token_id:      targetTokenId,
             fire_mode:            state.fire_mode ?? null,
             bullet_count:         bulletCount ?? null,
             fire_mode_bonus_comp: fireModeBonusComp ?? null,
             fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
-            aim_bonus_comp:       isDrone ? null : (getAimBonusComp(aimTranches, { lunetteNiveau }) || null),
-            aimed_location:       isDrone ? null : aimedLocationKey,
+            aim_bonus_comp:       (isDrone || isExo) ? null : (getAimBonusComp(aimTranches, { lunetteNiveau }) || null),
+            aimed_location:       (isDrone || isExo) ? null : aimedLocationKey,
             modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
             status:               'pending',
           })
@@ -519,11 +572,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // offhandWeaponInvId?, isDualWield? }, ...]
       if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) {
         const firstMelee = mapActions.melee[0]
+        // Exo-armure (PLAN_EXOARMURE.md §16.4) — même RAW que le garde Tir Multi ci-dessus
+        // (REGLEARMURE.md:206-207/MANUEL §4.5, « une seule Attaque par Tour ») : exclut aussi une
+        // série de CaC multiple, jamais seulement le Tir.
+        if (mapActions.melee.length > 1 && isExo) {
+          socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'CaC multiple impossible pour une exo-armure — une seule Attaque par Tour' })
+          return
+        }
         // D-CAC1 (miroir D9 Tir Multi) — même arme(s)/mode deux-armes pour toute la série : le
         // personnage ne change pas d'arme en main entre ses attaques du même Tour.
         const sameLoadoutAcrossSeries = mapActions.melee.every(m => (
           m.weaponInvId === firstMelee.weaponInvId &&
           m.droneWeaponInvId === firstMelee.droneWeaponInvId &&
+          m.exoWeaponInvId === firstMelee.exoWeaponInvId &&
           (m.offhandWeaponInvId ?? null) === (firstMelee.offhandWeaponInvId ?? null) &&
           !!m.isDualWield === !!firstMelee.isDualWield
         ))
@@ -538,10 +599,25 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // Tir) — le client ne propose jamais un choix en dehors des armes de contact en main
         // (`CombatActionWindow.jsx` meleeWeapons), donc aucune déclaration légitime existante ne peut
         // être rejetée par ce garde.
-        if (!isDrone && firstMelee.weaponInvId) {
+        if (!isDrone && !isExo && firstMelee.weaponInvId) {
           const primaryWeapon = await getOwnedHandWeapon(character.id, firstMelee.weaponInvId, { slotCodes: ['MG', 'MD', '2M'], category: 'Arme de contact' })
           if (!primaryWeapon?.inHand || !primaryWeapon.categoryOk) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Corps à corps impossible — l'arme sélectionnée n'est pas en main (transférée entre-temps ?)" })
+            return
+          }
+        }
+
+        // Exo-armure — validation exoWeaponInvId contre exo_weapons (§16.4, même patron que le Tir
+        // exo ci-dessus) : ownership seulement, pas de notion "en main" (armes hardpoint, toujours
+        // disponibles dès qu'installées) — mirroir de la branche drone, pas de la branche humanoïde.
+        if (isExo && firstMelee.exoWeaponInvId) {
+          const exoMeleeWeapon = await db('exo_weapons')
+            .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
+            .where({ 'exo_weapons.id': firstMelee.exoWeaponInvId, 'exo_weapons.character_id': character.id })
+            .select('ref_equipment.category')
+            .first()
+          if (!exoMeleeWeapon || exoMeleeWeapon.category !== 'Arme de contact') {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Corps à corps exo impossible — l'arme exo sélectionnée est introuvable ou n'est pas une arme de contact" })
             return
           }
         }
@@ -550,9 +626,9 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // au payload client (`core.md`). Dégradation silencieuse si invalide (arme secondaire
         // introuvable, pas en main, mauvaise catégorie, identique à la principale) — jamais de
         // blocage de l'attaque principale pour ça, même philosophie que le dual-wield Tir
-        // (shared/dualWieldRules.js, COM29).
+        // (shared/dualWieldRules.js, COM29). Exo exclue (RAW une seule Attaque/Tour, pas de dual-wield).
         let validatedOffhandWeaponInvId = null
-        if (!isDrone && firstMelee.isDualWield && firstMelee.weaponInvId && firstMelee.offhandWeaponInvId
+        if (!isDrone && !isExo && firstMelee.isDualWield && firstMelee.weaponInvId && firstMelee.offhandWeaponInvId
             && firstMelee.offhandWeaponInvId !== firstMelee.weaponInvId) {
           const offhandWeapon = await getOwnedHandWeapon(character.id, firstMelee.offhandWeaponInvId, { slotCodes: ['MG', 'MD'], category: 'Arme de contact' })
           if (offhandWeapon?.inHand && offhandWeapon.categoryOk) {
@@ -561,19 +637,21 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         }
 
         for (const {
-          targetTokenId: meleeTargetId, droneWeaponInvId: meleeDroneWeaponId,
+          targetTokenId: meleeTargetId, droneWeaponInvId: meleeDroneWeaponId, exoWeaponInvId: meleeExoWeaponId,
           naturalWeaponCharMutationId: meleeNaturalWeaponId,
         } of mapActions.melee) {
           if (meleeTargetId) {
+            const meleeIsSpecialized = !!(meleeDroneWeaponId || meleeExoWeaponId)
             actionRows.push({
               campaign_id: campaignId, token_id: tokenId,
               action_key: 'melee', type: 'melee', sequence: 3,
-              weapon_inv_id:       meleeDroneWeaponId ? null : (firstMelee.weaponInvId ?? null),
-              offhand_weapon_inv_id: meleeDroneWeaponId ? null : validatedOffhandWeaponInvId,
+              weapon_inv_id:       meleeIsSpecialized ? null : (firstMelee.weaponInvId ?? null),
+              offhand_weapon_inv_id: meleeIsSpecialized ? null : validatedOffhandWeaponInvId,
               drone_weapon_inv_id: meleeDroneWeaponId ?? null,
-              // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Un drone n'a
-              // pas de mutations, toujours null dans cette branche (même garde que weapon_inv_id).
-              natural_weapon_char_mutation_id: meleeDroneWeaponId ? null : (meleeNaturalWeaponId ?? null),
+              exo_weapon_inv_id:   meleeExoWeaponId ?? null,
+              // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Un drone/une exo
+              // n'a pas de mutations, toujours null dans cette branche (même garde que weapon_inv_id).
+              natural_weapon_char_mutation_id: meleeIsSpecialized ? null : (meleeNaturalWeaponId ?? null),
               target_token_id: meleeTargetId,
               modifiers: JSON.stringify({ ini_mod: -3 }),
               status: 'pending',
