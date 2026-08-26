@@ -16,7 +16,7 @@ import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
-import { isExoActorAuthorized } from '../lib/combatantContextService.js'
+import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 
 // MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
 // "arme possédée et en main" passe désormais entièrement par getOwnedHandWeapon
@@ -187,10 +187,19 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // (2026-07-19) : seules Déplacement (Allure lente, sauf Jambes) et Passer le tour restent
       // possibles — même patron que le stun guard ci-dessus. Pas de garde `status_effects_mode` ici :
       // c'est une blessure physique réelle (`character_wounds`), pas un statut cosmétique togglable.
+      //
+      // Bug trouvé en analyse à charge PLAN_EXOARMURE.md §16.4 (2026-08-26) : `character.id` n'a
+      // jamais de `char_sheet` pour une exo-armure (elle a une `exo_sheet`, MANUEL_EXOARMURE.md §3.1)
+      // — cette garde no-opait donc silencieusement pour toute exo depuis l'Étape A (déjà shippée) :
+      // un pilote mortellement blessé pouvait faire bouger son exo sans restriction d'allure. Une
+      // exo-armure ne teste jamais rien avec ses propres stats (elle n'en a pas) : c'est le pilote qui
+      // doit être mortellement blessé ou non — `resolveCombatantIdentity` (combatantContextService.js,
+      // déjà l'autorité unique pour "quelle fiche représente ce combattant") résout au bon `sheetId`
+      // dans les deux cas, jamais une seconde résolution ad hoc ici.
       if (character.type !== 'drone') {
-        const sheetMortal = await db('char_sheet').where({ character_id: character.id }).first()
-        const woundsMortal = sheetMortal
-          ? await db('character_wounds').where({ char_sheet_id: sheetMortal.id })
+        const { sheetId: mortalSheetId } = await resolveCombatantIdentity(db, character)
+        const woundsMortal = mortalSheetId
+          ? await db('character_wounds').where({ char_sheet_id: mortalSheetId })
           : []
         if (isTestBlockingWound(woundsMortal)) {
           if (hasAttackDeclared) {
