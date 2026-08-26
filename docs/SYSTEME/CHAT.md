@@ -105,7 +105,10 @@ Propriétés fondamentales (types non migrés — dés, actions, combat, systèm
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-3. Base de données — `chat_messages` (migration 232)
+3. Base de données — `chat_messages` (créée dans `29_chat_messages.js`, contraintes/index dans
+   `126_chat_messages_constraints.js` dont `idx_chat_messages_cursor`, FK dans
+   `223_chat_messages_foreign_keys.js` — corrigé 2026-08-26, pas "migration 232", réattribuée à
+   `drone_sheet_foreign_keys.js`)
 ```sql
 CREATE TABLE chat_messages (
     id BIGSERIAL PRIMARY KEY,
