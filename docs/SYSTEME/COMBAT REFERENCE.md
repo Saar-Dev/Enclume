@@ -6,6 +6,17 @@
 > intégrer » retiré (déjà livré), §6.5 Retarder mis à jour (implémenté Sessions 157-159, remplace
 > l'ancienne spec jamais construite), §7.1/§7.7 3 lignes drones passées à ✅, liens REGLEDRONE/PLAN_DRONE
 > corrigés.
+>
+> **Corrigé (audit 2026-08-26) — §1/§2/§5 décrivaient une architecture remplacée.** Le changelog
+> ci-dessus mentionne "§6.5 Retarder mis à jour (implémenté Sessions 157-159)" mais §1/§2/§5 n'avaient
+> pas suivi : la mécanique de résolution par `active_slot_idx`/`advanceSlot` a été retirée à cette
+> même refonte (Session 159), remplacée par `combat_timeline_entries`/`advanceTimeline`/
+> `pickNextTimelineStep` (`socketCombatHelpers.js`) — confirmé par `docs/SYSTEME/COMBAT.md` (à jour) et
+> vérifié : `active_slot_idx` n'existe dans aucune migration active, `advanceSlot` n'existe plus dans
+> le code, `COMBAT_SLOT_ADVANCED` n'est plus émis qu'en ANNOUNCEMENT avec `activeSlotIdx:0` figé.
+> **Pour le mécanisme de résolution réel, lire `docs/SYSTEME/COMBAT.md`, pas les sections ci-dessous**
+> — corrigées ponctuellement plutôt que réécrites pour ne pas dupliquer ce que COMBAT.md documente déjà
+> (Règle 2, `docs/RegleDocumentaire.md`). §3/§4/§6/§7 restent confirmés à jour (audit 2026-08-26).
 
 ---
 
@@ -21,7 +32,20 @@
 | current_turn | INT | Nom réel de la colonne (anciennement documenté « round ») |
 | phase | TEXT | `'ROSTER'` / `'ANNOUNCEMENT'` / `'RESOLUTION'` (nom réel de la colonne, anciennement documenté « current_phase ») |
 | sub_phase | TEXT | Non documenté à l'origine : `'SLOT_ACTIVE'`/`'AWAITING_DEFENSE'`/`'AWAITING_DAMAGE'` (migration 81, consommé par `combatFSM.js`) |
-| active_slot_idx | INT | Index slot courant (RESOLUTION) |
+| active_slot_idx | INT | **Périmé (audit 2026-08-26)** — n'existe plus, remplacé par la table `combat_timeline_entries` (voir ci-dessous). Colonne archivée uniquement (`migrations_archive/174_combat_timeline_resolution.js`) |
+
+### combat_timeline_entries — file de résolution réelle (remplace active_slot_idx, migration `34_combat_timeline_entries.js`)
+| Champ | Type | Note |
+|---|---|---|
+| id | PK UUID | — |
+| campaign_id, turn_number, token_id | — | Identifient l'entrée dans le tour courant |
+| combat_action_id | UUID | FK vers l'action `combat_actions` résolue par cette entrée |
+| declaration_group_id | UUID nullable | Regroupe des actions déclarées ensemble |
+| phase_position | INT nullable | Ordre de résolution au sein du tour |
+| status | TEXT, défaut `'scheduled'` | Avancement géré par `advanceTimeline`/`pickNextTimelineStep` (`socketCombatHelpers.js`), pas par un index simple |
+| resolved_at, resolution_snapshot | — | Traçabilité de la résolution |
+
+Détail complet du mécanisme : `docs/SYSTEME/COMBAT.md` (à jour), pas ce document.
 
 ### combat_roster — 1 ligne par token inscrit
 | Champ | Type | Note |
@@ -57,8 +81,8 @@ ROSTER ──(COMBAT_START)──> ANNOUNCEMENT ──(tous validés)──> RES
 | ROSTER | `COMBAT_START` | `calcREA` chaque token, résout surprise | `COMBAT_STARTED` + `COMBAT_SURPRISE_ROLL` (nom réel, event ciblé socket par socket, pas broadcast — anciennement documenté « COMBAT_SURPRISE_PROMPT ») |
 | ANNOUNCEMENT | `COMBAT_ACTION_DECLARE` | Insère `combat_actions`, applique mod INI sur `initiative` | `COMBAT_ACTION_DECLARED` |
 | ANNOUNCEMENT | Dernier slot validé | Screening SQL complétion, tri final roster | `COMBAT_PHASE_CHANGED` |
-| RESOLUTION | Avancement interne (`advanceSlot`, déclenché par les confirmations `COMBAT_ACTION_CONFIRM` etc.) | Consomme `combat_actions` ORDER BY sequence ASC — **aucun event `COMBAT_NEXT_SLOT` n'existe** | `COMBAT_SLOT_ADVANCED` (nom réel, anciennement documenté « COMBAT_SLOT_ACTIVATED ») |
-| RESOLUTION | Fin file actions | +`current_turn`, purge `combat_actions`, `endTurn` → ANNOUNCEMENT. **Reset `initiative = base_ini` ABSENT — dette confirmée, voir `BUGIDENTIFIE.md` INI4** | `COMBAT_PHASE_CHANGED` réémis — **aucun event `COMBAT_ROUND_INCREMENTED` n'existe** |
+| RESOLUTION | **Périmé (audit 2026-08-26)** — cette ligne décrivait `advanceSlot`, remplacé par `advanceTimeline`/`pickNextTimelineStep` opérant sur `combat_timeline_entries`, pas un index simple. Détail réel : `docs/SYSTEME/COMBAT.md` | — | `COMBAT_SLOT_ADVANCED` toujours émis mais seulement en ANNOUNCEMENT (`activeSlotIdx:0` figé) — plus le signal de progression RESOLUTION qu'il était |
+| RESOLUTION | Fin file actions | +`current_turn`, purge `combat_actions`, `endTurn` → ANNOUNCEMENT. INI4 (reset `initiative = base_ini`) — vérifier l'état actuel dans `bug_tickets`, `docs/BUGIDENTIFIE.md` est archivé | `COMBAT_PHASE_CHANGED` réémis |
 
 > ⚠️ **Alerte conformité :** `COMBAT_ACTION_DECLARE` doit être bloqué tant que le slot actif (ordre croissant) n'a pas atteint le token du joueur. Déclaration désordonnée = destruction de l'avantage tactique des hautes initiatives. **Vérifié conforme** : le garde existe bien (`socketCombatAnnouncement.js:98-108`, rejet `COMBAT_DECLARE_ERROR` hors tour).
 
@@ -148,7 +172,7 @@ registre.
 | Initialisation (calcREA + bris d'égalité masqué) | ✅ Conforme | Jet caché serveur, déterministe |
 | Ordre annonce (croissant strict) | ⚠️ Alerte | Risque déclaration désordonnée si guard absent — voir §2 |
 | Mutation INI (modificateurs immédiats) | ⚠️ Partiel | Gestion seuil ≤ 0 manquante — voir §3 |
-| Ordre résolution (décroissant strict) | ✅ Conforme | `activeSlotIdx` décroissant en INI |
+| Ordre résolution (décroissant strict) | ✅ Conforme | **Corrigé (audit 2026-08-26)** — plus `activeSlotIdx`, ordre géré via `combat_timeline_entries`/`advanceTimeline` (`docs/SYSTEME/COMBAT.md`) |
 | Séquence interne (Mouvement → Assaut) | ✅ Conforme | Contrainte `sequence` (1,2,3) en DB |
 | Fin de round (purge modes, états persistants) | ✅ Conforme | `endTurn` JSONB sélectif |
 
