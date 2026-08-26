@@ -34,34 +34,51 @@ catalogue vers une instance, au moment où un joueur/MJ choisit un modèle pour 
 
 ## 1. Schéma — catalogue
 
-### `ref_exo_templates` (migration 233, étendue 243/263) — 16 lignes seedées (252)
+### `ref_exo_templates` (`71_ref_exo_templates.js`, contraintes `168_...`, seed `307_...` — 16 lignes)
+
+> **Corrigé (audit 2026-08-26)** : numéros de migration périmés (233/243/252/263 → tous réattribués à
+> d'autres tables par la refonte 2026-08-22). Vérifié directement dans `71_ref_exo_templates.js`/
+> `168_ref_exo_templates_constraints.js`/`307_ref_exo_templates_seed.js`.
+
 PK `id`. `name`, `category` (CHECK exo-alpha/exo-0…6/exo-omega), `environment` (CHECK submarine/
 surface/hybrid/atmospheric/spatial/industrial), 3 profondeurs, `base_exoforce`, `base_blindage`,
 2 vitesses de base + 2 modes de mouvement (CHECK vit/pilot/blocked), `speeds_extra` jsonb (vitesses
 secondaires narratives, ex. propulseur — non consommé par le calcul de mouvement), 2 malus
 d'Initiative, `manufacturer`/`price`/`rarity`/`tech_level`/`autonomy` (commerce), `illustration_url`
-(text, nullable, migration 263 — §6).
+(text, nullable, créée directement dans `71_ref_exo_templates.js` — §6).
 
-### `ref_exo_equipment` (251, étendue par seeds 253/261/264) — ~104 lignes, systèmes/armes propres aux exo-armures
-PK `id`. `family` (CHECK arme/systeme), `category`, `name`, `description`, `price`/`price_modifier`/
-`tech_level`/`rarity`, `max_level` (plafond des systèmes facturés "×niv."), `duration` (ex. autonomie
-d'un support vital). Colonnes armement (`family='arme'` seulement) : `damage`, `shock`, `range`,
-`init_mod` (CHECK < 0), `fire_mode` (CHECK CC/RC/RL/combinaisons/'-'), `ammo_cost`.
+### `ref_exo_equipment` — **TABLE SUPPRIMÉE, corrigé (audit 2026-08-26) : fusionnée dans `ref_equipment`**
 
-Existe **séparément** de `ref_equipment` (catalogue général) parce que son schéma porte des colonnes
-profondément humaines sans équivalent pour un composant monté sur exo (`location`/`malus_cat` =
-emplacement de blessure porté, `linked_attr`/`min_str` = attribut humain requis, `char_inventory` =
-modèle de possession individuelle). Un système/arme qui a un équivalent exact dans `ref_equipment`
-(dague, lance-harpon, pistolet lourd...) n'a **jamais** de doublon ici — il est lié directement
-(§2). `ref_exo_equipment` ne contient que ce qui n'existe nulle part ailleurs, ou un capteur "portable"
-cloné volontairement (voir §2, note "clone vs lien").
+> Ce document décrivait `ref_exo_equipment` comme une table vivante et séparée, avec une justification
+> détaillée de pourquoi elle devait le rester. **Vérifié faux** : aucune trace de création de cette
+> table dans `server/src/db/migrations/` (recherche exhaustive) — seule mention restante, dans le
+> **contexte** d'un ticket `bug_tickets` déjà marqué `resolved` (`c9915238-...`, "Catalogue marchand
+> ignore ref_exo_equipment"). La fusion (`docs/Old/PLAN_EXOEQ_FUSION.md`) a bien eu lieu : les
+> systèmes/armes exo vivent désormais **dans `ref_equipment`** (`family='Exo-arme'`/`'Systeme'`, seed
+> `303_ref_equipment_seed.js`), au même titre que l'équipement humain — `tradeService.js:getCatalog`
+> (`db('ref_equipment').select('*')`) les voit donc déjà nativement, sans code séparé à écrire (d'où
+> le ticket déjà résolu).
 
-### `ref_exo_template_equipment` (257, seedée 265 — 431 lignes/16 modèles) — loadout de série
-PK `id`. `template_id` → `ref_exo_templates` CASCADE. `family` (CHECK arme/systeme). Source exclusive
-(§2) : `equipment_id` → `ref_exo_equipment` RESTRICT, `ref_equipment_id` → `ref_equipment` RESTRICT,
-`label_override` text. `level` (nullable — uniquement les systèmes facturés "×niv."). `sort_order`.
+### `ref_exo_template_equipment` (`70_...` création, contraintes `167_...`, FK `258_...`, seed
+`308_...` — 431 lignes/16 modèles) — loadout de série
 
-### `ref_exo_template_computers` (257, seedée 265) — 0 à 2 lignes par modèle
+> **Corrigé (audit 2026-08-26)** : ce document décrivait deux FK (`equipment_id` → `ref_exo_equipment`,
+> `ref_equipment_id` → `ref_equipment`). Vérifié dans `70_ref_exo_template_equipment.js`/
+> `258_ref_exo_template_equipment_foreign_keys.js` : **une seule** colonne équipement existe,
+> `ref_equipment_id` → `ref_equipment` RESTRICT — conséquence directe de la fusion ci-dessus, plus de
+> `equipment_id` du tout.
+
+PK `id`. `template_id` → `ref_exo_templates` CASCADE. `family` (CHECK arme/systeme). `ref_equipment_id`
+→ `ref_equipment` RESTRICT, `label_override` text — contrainte `chk_exo_template_equipment_source` :
+l'un des deux doit être renseigné. `level` (nullable — uniquement les systèmes facturés "×niv."). `sort_order`.
+
+### `ref_exo_template_computers` (`69_...` création, contraintes `166_...`, FK `257_...`, seed
+`309_...`) — 0 à 2 lignes par modèle
+
+> **Corrigé (audit 2026-08-26)** — numéros vérifiés directement ; par coïncidence, `257` reste
+> aujourd'hui `ref_exo_template_computers_foreign_keys.js` (toujours exo, contrairement à la plupart
+> des autres numéros de ce document).
+
 PK `id`. `template_id` CASCADE. `role` (CHECK valeurs `principal`/`secours` seulement — **pas** de
 contrainte d'unicité, rien n'empêche en base deux lignes `principal` sur le même modèle ; RAW l'interdit
 et c'est vérifié vrai sur les 16 modèles seedés, mais ce n'est pas un invariant appliqué par le schéma).
@@ -71,7 +88,10 @@ et c'est vérifié vrai sur les 16 modèles seedés, mais ce n'est pas un invari
 
 ## 2. Schéma — instance
 
-### `exo_sheet` (233, stats de base ajoutées 254, notes 255, colonnes jsonb retirées 257) — PK `character_id`
+### `exo_sheet` (`44_exo_sheet.js` — corrigé 2026-08-26 : création consolidée unique depuis la refonte
+migrations 2026-08-22, stats de base/notes/colonnes jsonb toutes incluses directement dans ce seul
+fichier, plus une évolution en 4 migrations séparées 233/254/255/257 comme décrit précédemment) — PK
+`character_id`
 `template_id` → `ref_exo_templates` SET NULL (référence d'origine seulement, pas une dépendance de
 calcul — voir §3). `pilot_character_id` → `characters` SET NULL, **index unique partiel** (un pilote ne
 vole jamais deux exo-armures à la fois).
@@ -84,17 +104,17 @@ int NOT NULL default 0. Pas de colonne pour le palier `destruction` (immédiat, 
 persistant à ce palier).
 
 19 colonnes de stats de base — **copiées** depuis `ref_exo_templates` par `applyExoTemplate` (§3),
-jamais lues par JOIN live après la migration 254 : `category`, `environment`, 3 profondeurs,
+jamais lues par JOIN live après leur copie (colonnes créées directement dans `44_exo_sheet.js`, pas "migration 254") : `category`, `environment`, 3 profondeurs,
 `base_exoforce`, `base_blindage`, 2 vitesses, 2 modes de mouvement, `speeds_extra`, 2 malus Init,
 `manufacturer`/`price`/`rarity`/`tech_level`/`autonomy`. Toutes nullables **sans défaut** — divergence
 délibérée par rapport au catalogue (un défaut non-nul romprait la sentinelle ci-dessous).
 
-**Sentinelle "armure non configurée"** : `category IS NULL`. Avant la migration 254 c'était
+**Sentinelle "armure non configurée"** : `category IS NULL`. Avant ce modèle de copie c'était
 `template_id IS NULL` — un exo peut aujourd'hui avoir un `template_id` (référence d'origine) tout en
 étant "non configuré" si ses stats de base n'ont jamais été copiées (cas théorique seulement,
 `applyExoTemplate` pose toujours les deux ensemble dans la même transaction).
 
-4 colonnes narratives (255), jamais calculées, aucun équivalent catalogue : `taille`, `type_batterie`,
+4 colonnes narratives (`44_exo_sheet.js`, pas "255" — corrigé 2026-08-26), jamais calculées, aucun équivalent catalogue : `taille`, `type_batterie`,
 `type_coque`, `notes`.
 
 **Retiré** (257, jamais consommé en production) : `equipped_systems`/`hardpoints`/`isolated_systems`/
@@ -106,23 +126,27 @@ Même patron `equipment_id`/`ref_equipment_id`/`label_override` que le catalogue
 propre jauge d'Intégrité, distincte des 3 jauges globales de `exo_sheet`). `exo_systems` a en plus
 `level` (systèmes facturés "×niv.") ; `exo_weapons` n'en a pas (aucune arme exo n'est facturée ainsi).
 
-### `exo_computers` (257) — 0 à 2 lignes par personnage
+### `exo_computers` (`42_exo_computers.js` — corrigé 2026-08-26, pas "257" qui est
+`ref_exo_template_computers_foreign_keys.js`, une table différente — le catalogue par modèle, pas
+l'instance par personnage) — 0 à 2 lignes par personnage
 `role` (CHECK principal/secours), `gen`, `nt`, `blindage_iem` (int, option achetée — niveau saisi
 librement, aucune validation serveur du coût). Coût RAW `(niv²)×200` sols (`docs/REGLES/
 REGLE_ORDINATEUR.md:97-99`) calculé par `computeBlindageIemCost` (`shared/computerStats.js`, testé) et
 affiché côté client (`ExoComputerPanel.jsx`) à titre informatif — jamais imposé côté serveur, aucune
 colonne sols/budget n'existe sur `exo_computers`. `integrite_max`/`integrite_current`.
 
-### `exo_programs` (257, `exo_computer_id` ajoutée 258)
+### `exo_programs` (`43_exo_programs.js`, FK/SET NULL dans `237_exo_programs_foreign_keys.js` —
+corrigé 2026-08-26, pas "257"/"258")
 `equipment_id` → `ref_equipment` RESTRICT (catalogue "Logiciels") **OU** `label_override` — simple OR,
 **pas** durci en source exclusive comme les tables d'équipement (pas de contrainte CHECK
 mutuellement-exclusive ici). `category`, `level` (CHECK 0-30). `exo_computer_id` → `exo_computers`
-**SET NULL** (258) : un programme orphelin devient "non géré/manuel" plutôt que supprimé en cascade —
+**SET NULL** (`237_exo_programs_foreign_keys.js`) : un programme orphelin devient "non géré/manuel" plutôt que supprimé en cascade —
 cohérent RAW, un logiciel ne disparaît pas avec l'ordinateur qui le faisait tourner.
 
 ### Autres colonnes touchées ailleurs
-`characters.type` CHECK étendu à `'exo'` (233). `combat_actions.type` CHECK étendu à `'exo_stand_up'`
-(249 — Manœuvre d'armure pour se relever, résolue comme une action de combat à part entière).
+`characters.type` CHECK étendu à `'exo'` (`125_characters_constraints.js`, pas "233" — corrigé
+2026-08-26). `combat_actions.type` CHECK étendu à `'exo_stand_up'`
+(`127_combat_actions_constraints.js`, pas "249" — Manœuvre d'armure pour se relever, résolue comme une action de combat à part entière).
 
 ---
 
@@ -162,7 +186,7 @@ Seul pont catalogue → instance. Transactionnel (`SELECT ... FOR UPDATE` sur `e
 toute l'opération). `templateId` validé comme UUID avant requête (400 explicite plutôt qu'une erreur
 Postgres brute).
 
-1. Copie les 19 colonnes de base (même liste que `COPIED_FROM_TEMPLATE_COLUMNS`, migration 254 —
+1. Copie les 19 colonnes de base (même liste que `COPIED_FROM_TEMPLATE_COLUMNS`, `44_exo_sheet.js` —
    dupliquée intentionnellement, une migration appliquée n'est jamais retouchée) + `template_id`.
 2. **Toujours un remplacement complet, jamais une fusion** : vide `exo_systems`/`exo_weapons`/
    `exo_computers` pour ce personnage, puis réinsère des copies fraîches depuis
@@ -193,7 +217,7 @@ est introuvable.
 
 ### `computeExoStats(exoSheet)` — `shared/exoStats.js`
 Pure, synchrone, sans accès DB. **Signature à un seul paramètre** (le second paramètre "template" a
-été retiré avec la migration 254 — ne pas se fier à une référence antérieure qui en mentionnerait deux).
+été retiré avec le passage au modèle de copie (`44_exo_sheet.js`) — ne pas se fier à une référence antérieure qui en mentionnerait deux).
 `null` si `category` est NULL (sentinelle non configurée). Sinon `{ exf, bld, rd }` :
 - `exf = floor(base_exoforce × facteur_exosquelette × facteur_générateur)` — **un seul plancher
   combiné**, jamais deux arrondis successifs (l'ordre des deux facteurs n'a pas de justification RAW,
@@ -230,11 +254,12 @@ Manœuvre d'armure pour se relever (`state_position==='prone'`) — auto-résolu
 `computeAttackRoll` contre le `skillTotal` du pilote (`resolveHumanoidTestContext` avec
 `forNAOverride: exf`), modificateur de catégorie depuis `EXO_PRONE_RECOVERY_TABLE`
 (`shared/exoConstants.js`). Enregistrée dans la FSM combat comme `combat_actions.type='exo_stand_up'`
-(migration 249).
+(`127_combat_actions_constraints.js`, pas "migration 249" — voir §2).
 
 ---
 
-## 6. Illustration (migration 263, 2026-08-21)
+## 6. Illustration (`illustration_url` créée directement dans `71_ref_exo_templates.js` — corrigé
+2026-08-26, pas "migration 263", 2026-08-21)
 
 Deux mécanismes distincts selon l'origine de l'exo-armure — jamais confondus :
 

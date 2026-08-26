@@ -105,20 +105,31 @@ dispatcher, y compris pour un `pj`/`pnj` (branche identique à avant, juste indi
 
 Dispatcher, guard clauses (pas de table — 2 branches réelles) :
 ```js
-export async function resolveCombatantTestContext(db, character, skillId, { meleeSkillCap } = {}) {
-  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId, { meleeSkillCap })
+export async function resolveCombatantTestContext(db, character, skillId) {
+  if (character.type === 'exo') return resolveExoTestContext(db, character, skillId)
   return resolveHumanoidTestContext(db, character, skillId)
 }
 ```
-`meleeSkillCap` (booléen, `PLAN_EXOARMURE.md` Lot 2, commit `7247ebb` 2026-08-15) — plafond de
-Compétence par Manœuvre d'armure (REGLECOMPETENCE.md:29-34, "Compétence limitative") : uniquement pour
-les 2 sites CaC de `socketCombatHelpers.js` (attaquant, défenseur), jamais pour le tir ni
-Acrobatie/Équilibre (RAW : seul le contact au-delà de la Manœuvre d'armure est limité). Pour la branche
-exo, résout la spécialité RAW applicable depuis `ref_exo_templates.environment` (mapping direct
-submarine/atmospheric/spatial ; `hybrid` replié sur Armures externes sauf `surface_movement_mode`
-bloqué, EAU1 ; `industrial` rejeté explicitement, décision Saar 2026-08-15 en suspens) puis plafonne
-`skillTotal` du pilote via `calcLimitedSkillTotal` (`charStats.js`) — jamais `mastery` (le bonus de
-Réussite critique reste basé sur la maîtrise réelle).
+**Mis à jour (2026-08-25, `PLAN_EXOARMURE.md` §16.2.1/16.2.2/16.2.5)** — `meleeSkillCap` n'existe
+plus, ni en paramètre du dispatcher ni côté appelants (`socketCombatHelpers.js`) : le plafond de
+Compétence par Manœuvre d'armure (REGLECOMPETENCE.md:29-34, "Compétence limitative") est désormais
+**inconditionnel pour tout `skillId`** côté exo — RAW ne distingue pas Tir/CaC (REGLEARMURE.md:202-207,
+"toute autre Compétence servant à accomplir une action physique"), l'ancienne exclusion Tir/Acrobatie
+était un bug latent jamais exercé en jeu réel. **Exception** : armures assistées (`exoSheet.category`
+∈ `{'exo-alpha', 'exo-0'}`, REGLEARMURE.md "Armures assistées" p.325 — *"on n'utilise pas la
+Compétence Manœuvre d'armure"*) ne sont jamais plafonnées, le pilote teste sa Compétence propre. Pour
+le reste (`environment` fixe), résout la spécialité RAW depuis `exoSheet.environment` (mapping direct
+submarine/surface/atmospheric/spatial ; `industrial` rejeté explicitement, décision Saar 2026-08-15 en
+suspens — `resolveManeuverSkillId` lève, capturé en interne, retourne `null`/Test impossible, jamais
+une exception qui remonte) puis plafonne `skillTotal` du pilote via `calcLimitedSkillTotal`
+(`charStats.js`) — jamais `mastery` (le bonus de Réussite critique reste basé sur la maîtrise réelle).
+**Milieu hybride (`environment==='hybrid'`)** : plus de repli automatique (l'ancienne heuristique
+"replié sur Armures externes sauf `surface_movement_mode` bloqué" a été retirée le jour de son
+introduction, avant tout usage réel — une armure hybride peut couvrir 2 à 4 milieux dans n'importe
+quelle combinaison, RAW ne permet aucune déduction générique) : `exo_sheet.active_maneuver_environment`
+(migration `313_exo_sheet_active_maneuver_environment.js`, nullable) doit être posé explicitement par
+le pilote/MJ, sinon Test impossible. Testé 39/39 (`combatantContextService.test.mjs`) + 336/336 suite
+serveur complète contre PostgreSQL réel (2026-08-25), aucune régression.
 
 **Branche humanoïde (`resolveHumanoidTestContext`, `pj`/`pnj` traités identiquement)** — deux paliers
 selon `skillId` :
