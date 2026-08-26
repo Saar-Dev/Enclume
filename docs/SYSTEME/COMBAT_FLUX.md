@@ -4,6 +4,19 @@
 > Sources : `socketCombatState.js`, `socketCombatAnnouncement.js`, `socketCombatResolution.js`, `socketCombatHelpers.js`, `statusService.js`, `combatFSM.js`
 > Lire pour : comprendre le déroulement complet d'un tour de combat, de la phase ROSTER jusqu'à endTurn.
 > Voir aussi : @SERVICES_COMBAT pour les signatures des services (dégâts, choc, FSM), @BLESSURES pour les blessures et armures, @PERSONNAGE_CALCULS pour la chaîne de calcul des attributs et compétences.
+>
+> **Corrigé (audit 2026-08-26) — document daté d'avant la refonte Session 159 (clôturée 2026-08-23,
+> `docs/SYSTEME/COMBAT.md`), jamais retouché depuis.** §4, §5 et §11 décrivent la résolution par
+> `active_slot_idx`/`advanceSlot`/`slots[active_slot_idx]`, remplacée par
+> `combat_timeline_entries`/`advanceTimeline`/`pickNextTimelineStep` — corrigés ponctuellement
+> ci-dessous, pas réécrits en détail (le mécanisme réel est documenté dans `docs/SYSTEME/COMBAT.md`,
+> ne pas le dupliquer ici, Règle 2). §5 mentionne aussi `collisionMoveToken(Redis)` — ce système
+> Redis n'existe plus non plus (voir `docs/SYSTEME/VOXELS.md`), l'autorité est désormais
+> `WorldSnapshot`/`spatialIndex.js`. §1 (diagramme FSM phase/sub_phase) reste correct dans ses états
+> et transitions (confirmé par `docs/SYSTEME/SERVICES_COMBAT.md`, `combatFSM.js` audité exact) — seule
+> la façon dont on atteint `SLOT_ACTIVE` a changé, pas les états eux-mêmes. §6-§10/§12-§14 (pipelines
+> d'attaque, dégâts, choc) n'ont pas été vérifiés par cet audit — probablement plus fiables (logique
+> interne, pas le wrapper de progression) mais à revérifier avant de s'y fier aveuglément.
 
 ---
 
@@ -150,14 +163,18 @@ GM uniquement (ou timer auto-skip). Guard FSM. Race condition guard (re-vérifie
 
 ---
 
-## 4. TRANSITION → RÉSOLUTION
+## 4. TRANSITION → RÉSOLUTION — périmé, corrigé (audit 2026-08-26)
 
 ### `startResolutionPhase()` — `socketCombatHelpers.js`
+
+Le bloc ci-dessous (`active_slot_idx=0`, `COMBAT_SLOT_ADVANCED{activeSlotIdx:0}`) décrit l'ancien
+mécanisme. La transition réelle peuple désormais `combat_timeline_entries` (une ligne par action à
+résoudre, `status='scheduled'`) et avance via `advanceTimeline`/`pickNextTimelineStep` — détail dans
+`docs/SYSTEME/COMBAT.md`, pas repris ici.
 ```
-UPDATE combat_state SET phase='RESOLUTION', active_slot_idx=0
+UPDATE combat_state SET phase='RESOLUTION'   -- plus de active_slot_idx
 setFSMSubPhase('SLOT_ACTIVE')
 EMIT COMBAT_PHASE_CHANGED { phase:'RESOLUTION', roster(DESC initiative), actions(pending ASC sequence) }
-EMIT COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: roster[0] }  // INI la plus haute
 ```
 
 ---
@@ -181,7 +198,7 @@ EMIT COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: roster[0] }  // INI la plu
 |---|---|
 | Guard FSM | `canTransition(phase, sub_phase, 'COMBAT_ACTION_CONFIRM')` |
 | Guard phase | `state.phase === 'RESOLUTION'` |
-| Guard slot actif | `slots[active_slot_idx].token_id === tokenId` (slots = roster DESC initiative) |
+| Guard slot actif | **Périmé** — `slots[active_slot_idx]` n'existe plus, l'entrée active vient de `combat_timeline_entries` (voir banner en tête de document) |
 | Guard ownership | `isGm` ou `character.user_id === user.id` |
 | ⚠️ is_stunned | **ABSENT** — pas de re-check (bug STUN2 actif) |
 
@@ -191,7 +208,8 @@ EMIT COMBAT_SLOT_ADVANCED { activeSlotIdx:0, tokenId: roster[0] }  // INI la plu
 ```
 type='move_short' / 'move_long' :
   → isCaseOccupied(battlemap_id, tx, ty, tz+1)  [PE29 : vérif espace de marche]
-  → Si libre : UPDATE tokens + collisionMoveToken(Redis) + EMIT TOKEN_MOVED
+  → Si libre : UPDATE tokens + EMIT TOKEN_MOVED  -- "collisionMoveToken(Redis)" périmé (audit 2026-08-26),
+     occupation gérée par spatialIndex.js/WorldSnapshot, voir docs/SYSTEME/VOXELS.md
   → Si occupé : ignoré silencieusement (log seulement)
 
 type='assault' :
@@ -215,7 +233,7 @@ Sinon (humanoïde) :
 ```
 
 ```
-Si !needsDefenseWait → advanceSlot(slots, active_slot_idx + 1)
+Si !needsDefenseWait → avance dans combat_timeline_entries (pickNextTimelineStep) — plus advanceSlot/active_slot_idx, périmé (audit 2026-08-26)
 ```
 
 ---
@@ -527,15 +545,13 @@ applyStunWithDuration() :
 
 ---
 
-## 11. `advanceSlot` / `endTurn`
+## 11. `advanceSlot` / `endTurn` — `advanceSlot` périmé, corrigé (audit 2026-08-26)
 
-### `advanceSlot`
-```
-Si nextIdx >= slots.length → endTurn()
-Sinon :
-  UPDATE combat_state SET active_slot_idx = nextIdx
-  EMIT COMBAT_SLOT_ADVANCED { activeSlotIdx: nextIdx, tokenId: slots[nextIdx] }
-```
+### ~~`advanceSlot`~~ → `advanceTimeline`/`pickNextTimelineStep`
+
+`advanceSlot`/`active_slot_idx` n'existent plus. La progression réelle avance dans
+`combat_timeline_entries` (`status`, `phase_position`) — détail du mécanisme :
+`docs/SYSTEME/COMBAT.md`, pas repris ici pour ne pas dupliquer une source déjà à jour.
 
 ### `endTurn`
 ```
@@ -552,8 +568,8 @@ DELETE combat_actions WHERE campaign_id
 
 UPDATE combat_state SET
   phase         = 'ANNOUNCEMENT',
-  current_turn  = current_turn + 1,
-  active_slot_idx = 0
+  current_turn  = current_turn + 1
+  -- plus de active_slot_idx (périmé, audit 2026-08-26)
 
 Purge statuts expirés :
   DELETE token_statuses WHERE expires_at_turn ≤ newTurn
