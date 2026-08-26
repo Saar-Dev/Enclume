@@ -19,8 +19,13 @@ WOUND_LOCATIONS = ['tete', 'corps', 'bras_droit', 'bras_gauche', 'jambe_droite',
 
 WOUND_SEVERITIES = ['legere', 'moyenne', 'grave', 'critique', 'mortelle']
 
-WOUND_PENALTIES = { legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: -20 }
-// calcWoundPenalty retourne le minimum (pire seul retenu)
+WOUND_PENALTIES = { legere: -1, moyenne: -3, grave: -5, critique: -10, mortelle: 0 }
+// mortelle=0 (pas -20) : REGLEBLESSURES.md dit "non applicable, le blessé ne peut entreprendre
+// aucune action demandant un Test" — le -20 était une extrapolation jamais confirmée par le LdB,
+// corrigé (WNDMORT, docs/BUGIDENTIFIE.md). 0 = défense en profondeur si isTestBlockingWound est
+// oublié par un appelant, pas une vraie valeur RAW.
+// calcWoundPenalty retourne le minimum ENTRE PLUSIEURS BLESSURES (pire seule retenue) — voir
+// correction ci-dessous : ça ne veut plus dire "malus santé non-cumulatif" au sens large.
 
 SEVERITY_COLORS = {
   legere: '#FFD700', moyenne: '#FFA500', grave: '#FF6B6B', critique: '#FF0000', mortelle: '#8B0000'
@@ -135,19 +140,29 @@ GET    /char-sheet/:id/weapon-skill/:weaponInvId
   → { skillId, skillLabel, skillTotal }   // null partout si arme sans compétence associée
 ```
 
-## P51 — effectiveMalus dans les jets
+## P51 — effectiveMalus dans les jets (périmé, corrigé ci-dessous en 153-158)
 
 ```javascript
-// socket/index.js — chancesDeReussite
-const woundPenalty       = calcWoundPenalty(wounds)         // ≤ 0, pire blessure seule
-const encumbrancePenalty = calcEncumbrancePenalty(weight, FOR)  // ≥ 0, règle maison
-effectiveMalus = woundPenalty - encumbrancePenalty           // ≤ 0
+// server/src/socket/socketEntity.js:323 — chancesDeReussite (PAS socket/index.js, cf. correction)
+effectiveMalus = calcActiveMalus({ wounds, fatiguePoints, totalWeight, forNA, settings })  // ≤ 0
 chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
 ```
 
-**Malus santé (blessures, fatigue) :** non-cumulatif — pire seul retenu (LdB p.236). `calcWoundPenalty` retourne déjà le minimum.
+**Corrigé (audit 2026-08-26, périmé depuis `docs/PLAN_FATIGUE_DOMMAGES.md` §10 Lot 4)** : le calcul
+`effectiveMalus` ne vit plus dans `socket/index.js` (fichier qui n'est qu'un routeur de handlers,
+aucune formule dedans) mais dans `server/src/socket/socketEntity.js:323`. Il n'est plus recalculé
+inline par site — un registre unique, `server/src/lib/activeMalusRegistry.js` (`calcActiveMalus`),
+**somme** trois sources indépendantes (`wound`, `encumbrance`, `fatigue`), une entrée par lot futur
+(Froid, Maladies/Poisons, Drogues, Irradiations) sans jamais retoucher les sites consommateurs.
+
+**Malus blessures (entre plusieurs blessures) :** non-cumulatif — pire seule retenue (LdB p.236).
+`calcWoundPenalty` retourne le minimum entre les blessures actives d'un même personnage.
 **Malus encombrement :** cumulatif (règle maison).
-**Jamais** cumuler deux sources de malus santé. **Jamais** appliquer sur un attribut — toujours sur le total du jet.
+**Malus fatigue :** cumulatif avec les deux précédents (`getFatigueLevelMalus`, exempté uniquement du
+Test de Fatigue lui-même, RAW l.976-979).
+**Entre les trois catégories (blessure/encombrement/fatigue) : cumulatif, pas "pire seul retenu"** —
+correction de ce document, cette phrase était fausse depuis le Lot 4. **Jamais** appliquer sur un
+attribut — toujours sur le total du jet.
 
 ## P49 — Promotion blessures
 

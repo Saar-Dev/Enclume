@@ -51,15 +51,22 @@ généralise ce pattern plutôt que d'en inventer un autre.
 
 ### 2.1 Répartition des namespaces
 
-| Namespace | Contenu | Sections actuelles concernées |
-|---|---|---|
-| `common.json` | Transverse, présent sur presque tout écran | `common`, `auth`, `errors`, `dashboard`, `sidebar`, `settings`, `profile`, `chat`, `health`, `token`, `battlemap`, `vault`, `library`, `changelog`, `trade` |
-| `charSheet.json` | Fiche personnage et tout ce qui l'entoure | `charSheet`, `advantages`, `skillsPanel`, `entityPanel`, `drone`, `los`, `status`, `radialMenu`, `tokenRadial` + retrofit équipement (`docs/PLAN_LOCALISATION.md` Lot 2) |
-| `combat.json` | **Nouveau**, n'existe pas encore | Tout le retrofit combat (`docs/PLAN_LOCALISATION.md` Lot 1) |
-| `builder.json` | Éditeurs monde/objets | `builder`, `surfaceEditor`, `texturePacks`, `workshop`, `entity` + retrofit Surface (Lot 3) |
-| `creation.json` | Wizard de création de personnage | Déjà namespace séparé — inchangé |
+> **Corrigé (audit 2026-08-26)** — ce tableau décrivait la cible du 2026-07-23, jamais réconciliée
+> avec l'état réel après exécution de `docs/PLAN_LOCALISATION.md` : il affirmait encore
+> `combat.json` **"n'existe pas encore"** alors qu'il existe et est chargé depuis la Session 173
+> (2026-07-24) — donc déjà faux au moment même de la dernière date de vérification revendiquée par ce
+> document (2026-07-23 < 2026-07-24). Table ci-dessous alignée sur `client/src/i18n.js` réel.
 
-Une section qui ne grossit pas (`trade`, `library`, `changelog`, `vault`...) reste dans `common.json`
+| Namespace | Contenu | État réel |
+|---|---|---|
+| `fr.json` | Transverse (namespace par défaut, `translation`) — **pas de fichier `common.json` séparé**, la redistribution envisagée en 2026-07-23 n'a jamais été faite (voir `docs/PLAN_LOCALISATION.md` §3, "écart réel vs plan initial") | `common`, `auth`, `errors`, `dashboard`, `sidebar`, `settings`, `profile`, `chat`, `health`, `token`, `battlemap`, `vault`, `library`, `changelog`, `trade`, `dice`, etc. |
+| `charSheet.json` | Fiche personnage et tout ce qui l'entoure | Existe, peuplé (Lot 2 du plan) — 9 sections (`locations`, `aimedLocationPicker`, `common`, `armorWoundPanel`, `containerPanel`, `weaponPanel`, `inventoryPanel`, `locationPanel`, `modingWindow`) |
+| `combat.json` | Retrofit combat | Existe depuis la Session 173 (2026-07-24, Lot 1 du plan), 30 sections top-level |
+| `builder.json` | Éditeurs monde/objets | Existe, peuplé (Lot 3 du plan) — 8 sections |
+| `creation.json` | Wizard de création de personnage | Namespace séparé, préexistant, inchangé |
+| `tickets.json` | Écran `/admin/tickets` et formulaire `/tickets/new` | Existe depuis le 2026-08-12 — **absent de ce tableau jusqu'à cette correction**, `docs/SYSTEME/TICKETS.md` en parle mais pas ici |
+
+Une section qui ne grossit pas (`trade`, `library`, `changelog`, `vault`...) reste dans `fr.json`
 tant qu'elle n'atteint pas une taille justifiant un fichier dédié (Règle 3, `docs/RegleDocumentaire.md`
 — le découpage suit la responsabilité, jamais un seuil de taille arbitraire ; ici le signal est "ce
 domaine a son propre écran/chantier dédié", pas un nombre de lignes).
@@ -144,7 +151,7 @@ emissions.push({
 text: t(payload.i18nKey)
 ```
 
-Les clés de messages système vivent dans `common.json` sous `session.*` (précédent :
+Les clés de messages système vivent dans `fr.json` sous `session.*` (précédent :
 `session.dualWieldAmmoOutPrimary`/`dualWieldAmmoOutOffhand`), sauf message spécifique à un domaine déjà
 namespacé (ex. un message combat va dans `combat.json`).
 
