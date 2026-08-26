@@ -1,8 +1,20 @@
-FICHE_HORSLIGNE.md — Documentation technique de la fiche personnage hors-ligne (PWA) et de l’impression
+> **Corrigé (audit 2026-08-26) — orphelin trouvé, pas archivé** : le chantier PWA/hors-ligne
+> qu'il décrit est **abandonné** (décision Saar, 2026-08-23, `docs/ROADMAP.md` §4) — remplacé par un
+> besoin d'export Google Sheets, pas encore cadré. Les plans associés
+> (`docs/Old/PLAN_FICHE_HORSLIGNE.md`, `docs/Old/PLAN_RW_EXPORT.md`) ont été archivés dans cette même
+> session ; ce document SYSTEME était resté orphelin, jamais mis à jour ni archivé, décrivant la PWA
+> comme une architecture active. **Le code n'a pas été retiré** (`vite-plugin-pwa` toujours présent,
+> `client/vite.config.js`) — seule la vue d'impression (Lot D) a été testée fonctionnelle en
+> navigateur (Saar, 2026-08-16) et reste réellement utilisée ; le reste (mode hors-ligne effectif,
+> rejeu réseau via `workbox-background-sync`) n'a jamais été validé et ne le sera pas dans ce cadre.
+> Ce document reste donc une référence technique valide pour la vue d'impression, mais **pas** pour
+> le reste — ne pas le lire comme "chantier actif".
+
+# FICHE_HORSLIGNE.md — Documentation technique de la fiche personnage hors-ligne (PWA) et de l'impression
 
     Domaine : Fiche personnage Polaris — consultation et modification hors connexion
     Dernière mise à jour : 2026-08-16 — Clôture des lots A/B0/B/C/D du plan docs/PLANS/PLAN_FICHE_HORSLIGNE.md
-    Statut : Architecture documentée — tests navigateur réels non effectués (comportement hors-ligne effectif, rejeu au retour réseau, rendu de la vue d’impression)
+    Statut : **Abandonné (2026-08-23), sauf vue d'impression (Lot D) toujours active** — voir banner ci-dessus
 
 Sommaire
 
