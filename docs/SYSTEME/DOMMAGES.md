@@ -33,7 +33,10 @@ Livre de Base le prévoit (voir §3).
 3 catégories RAW existent (arme normale + Choc gaté Tête, arme à Choc pur sans gate, munition
 spéciale sans gate) — détail complet, inventaire catalogue et décisions de scope :
 `docs/VOCABULARY.md` entrée "Dommages de Choc". Câblage des catégories 1/2 (armes/mutation Corne,
-`ref_equipment.shock_mechanism`, migration 190) **codé et vérifié par scripts isolés (2026-07-22)** —
+`ref_equipment.shock_mechanism`, colonne créée directement dans `65_ref_equipment.js` — corrigé
+2026-08-26, "migration 190" pointe aujourd'hui vers `world_effect_definitions_constraints.js`, sans
+rapport ; le fichier d'origine `190_choc1_palier1_shock_mechanism.js` n'existe plus qu'archivé)
+**codé et vérifié par scripts isolés (2026-07-22)** —
 `docs/PLAN_CHOC1.md`, détail Testé/Non testé `docs/JOURNALTEMP.md` Étape 11/12. En attente de
 confirmation en jeu par Saar avant absorption complète ici et retrait de `PLAN_CHOC1.md` (Règle 10) —
 tant que ce test n'est pas fait, ce plan reste la référence pour le détail catégories 1/2, pas encore
