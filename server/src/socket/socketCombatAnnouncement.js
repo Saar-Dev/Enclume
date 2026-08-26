@@ -610,7 +610,20 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // Exo-armure — validation exoWeaponInvId contre exo_weapons (§16.4, même patron que le Tir
         // exo ci-dessus) : ownership seulement, pas de notion "en main" (armes hardpoint, toujours
         // disponibles dès qu'installées) — mirroir de la branche drone, pas de la branche humanoïde.
-        if (isExo && firstMelee.exoWeaponInvId) {
+        // Contrôle UNCONDITIONNEL (contrairement à l'humain ci-dessus, dont le `if (weaponInvId)`
+        // est correct : le CaC à mains nues est RAW-légal pour un humain, COMBAT_A_MAINS_NUES) — une
+        // exo-armure n'a aucun repli "à mains nues" (§16.1, diagnostic corrigé : pas de Compétence CaC
+        // générique de l'armure, toute Attaque de contact exo passe par une Arme de contact équipée,
+        // résolue via skillAssoc comme le Tir). Sans ce rejet explicite, une déclaration sans
+        // exoWeaponInvId glissait silencieusement à travers vers la construction de ligne plus bas et
+        // y aurait pris weapon_inv_id/exo_weapon_inv_id tous les deux null — une ligne combat_actions
+        // orpheline, jamais rejetée à la Déclaration (trouvé en relecture à charge avant d'écrire le
+        // résolveur, jamais exercé en jeu réel).
+        if (isExo) {
+          if (!firstMelee.exoWeaponInvId) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Corps à corps exo impossible — aucune arme exo sélectionnée' })
+            return
+          }
           const exoMeleeWeapon = await db('exo_weapons')
             .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
             .where({ 'exo_weapons.id': firstMelee.exoWeaponInvId, 'exo_weapons.character_id': character.id })
