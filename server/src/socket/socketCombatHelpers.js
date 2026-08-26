@@ -2366,6 +2366,67 @@ export async function resolveExoStandUpAction(io, campaignId, action, exoCharact
 // Appelé depuis resolveAssaultAction quand character.type === 'drone'.
 // §7.3 MANUELSYSCOMBAT : D20 ≤ programme.level, modificateurs situationnels standard,
 // pas de malus blessures/encombrement, pas de Test de Choc.
+// ── Portée/LOS partagées entre résolveurs Tir/CaC (PLAN_EXOARMURE.md §16.6, DRY ciblé) ─────────────
+// Extraites de resolveDroneAssaultAction (portée/reach y étaient déjà des recopies de
+// resolveMeleeAction/resolveAssaultAction, cf. commentaires ci-dessous) pour que
+// resolveExoAssaultAction/resolveExoMeleeAction (Étape B) ne les recopient pas une 3ᵉ fois. Ne
+// touchent PAS resolveAssaultAction/resolveMeleeAction eux-mêmes — le pipeline humanoïde reste
+// inchangé, trop testé/joué pour un risque disproportionné (§16.6, décision documentée dans le plan).
+
+// Portée de corps à corps (allonge) — mesure + comparaison à resolveMeleeReachM. `emissions` reçoit
+// directement l'erreur (même convention que le reste de ce fichier, pas de valeur de retour ambiguë).
+async function checkMeleeReach({ action, character, refRange, emissions }) {
+  const meleeReachM = resolveMeleeReachM(refRange)
+  const measurement = await measureBattlemapTokenDistance({
+    sourceTokenId: action.token_id,
+    targetTokenId: action.target_token_id,
+  })
+  if (measurement.status !== 'ok' || measurement.distanceM > meleeReachM) {
+    emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name,
+      message: measurement.status === 'ok'
+        ? `Corps à corps impossible — distance : ${measurement.distanceM.toFixed(1)}m, portée max : ${meleeReachM}m`
+        : 'Corps à corps impossible — position incompatible avec le moteur de monde',
+    } })
+    return { ok: false }
+  }
+  return { ok: true }
+}
+
+// Portée à distance (Tir) — mesure + résolution de bande (shared/combatRange.js, autorité déjà
+// unique pour la bande elle-même — cette fonction ne fait qu'éviter de recopier la mesure+traduction
+// d'erreur autour).
+async function resolveRangedDistance({ action, character, refRange, emissions }) {
+  const measurement = await measureBattlemapTokenDistance({
+    sourceTokenId: action.token_id,
+    targetTokenId: action.target_token_id,
+  })
+  const range = measurement.status === 'ok'
+    ? resolveWeaponRangeBand(measurement.distanceM, refRange)
+    : { status: measurement.status, band: null }
+  if (range.status !== 'ok') {
+    emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+      username: character.name,
+      message: range.status === 'out-of-range'
+        ? `Tir impossible — cible hors de portée (${measurement.distanceM.toFixed(1)} m)`
+        : 'Tir impossible — portée ou position incompatible avec le moteur de monde',
+    } })
+    return { ok: false }
+  }
+  return { ok: true, band: range.band }
+}
+
+// LOS — le rappel récursif (nouvelle cible interceptée) reste à la charge de chaque appelant : ils
+// n'ont pas la même identité de fonction (resolveDroneAssaultAction/resolveExoAssaultAction doivent
+// se rappeler EUX-MÊMES avec skipLos:true), extraire jusque-là ajouterait un callback pour un gain
+// marginal — seule l'interprétation du résultat checkCombatLOS est partagée ici.
+async function resolveAttackLOS({ io, campaignId, action, character }) {
+  const los = await checkCombatLOS(io, db, campaignId, action, character)
+  if (los.result === 'blocked') return { blocked: true }
+  if (los.result === 'intercepted') return { blocked: false, intercepted: true, newTargetTokenId: los.newTargetTokenId }
+  return { blocked: false, intercepted: false, coverageModifier: los.coverageModifier ?? 0 }
+}
+
 export async function resolveDroneAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   console.log(`[DBG] resolveDroneAssaultAction — début token:${action.token_id} drone_weapon:${action.drone_weapon_inv_id} target:${action.target_token_id}`)
   try {
@@ -2408,60 +2469,34 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
     let authoritativeRangeBand = null
 
-    // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688) ──────────
+    // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688, extrait en helper §16.6) ──
     if (isCaCWeapon) {
-      const meleeReachM = resolveMeleeReachM(weapon?.ref_range)
-      const measurement = await measureBattlemapTokenDistance({
-        sourceTokenId: action.token_id,
-        targetTokenId: action.target_token_id,
-      })
-      if (measurement.status !== 'ok' || measurement.distanceM > meleeReachM) {
-        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-          username: character.name,
-          message: measurement.status === 'ok'
-            ? `Corps à corps impossible — distance : ${measurement.distanceM.toFixed(1)}m, portée max : ${meleeReachM}m`
-            : 'Corps à corps impossible — position incompatible avec le moteur de monde',
-        } })
-        return { suspend: false, emissions }
-      }
+      const reach = await checkMeleeReach({ action, character, refRange: weapon?.ref_range, emissions })
+      if (!reach.ok) return { suspend: false, emissions }
     }
 
     if (!isCaCWeapon) {
       console.log(`[DBG] resolveDroneAssaultAction — avant measureBattlemapTokenDistance (portée)`)
-      const measurement = await measureBattlemapTokenDistance({
-        sourceTokenId: action.token_id,
-        targetTokenId: action.target_token_id,
-      })
-      console.log(`[DBG] resolveDroneAssaultAction — après measureBattlemapTokenDistance, status:${measurement.status}`)
-      const range = measurement.status === 'ok'
-        ? resolveWeaponRangeBand(measurement.distanceM, weapon.ref_range)
-        : { status: measurement.status, band: null }
-      if (range.status !== 'ok') {
-        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-          username: character.name,
-          message: range.status === 'out-of-range'
-            ? `Tir impossible — cible hors de portée (${measurement.distanceM.toFixed(1)} m)`
-            : 'Tir impossible — portée ou position incompatible avec le moteur de monde',
-        } })
-        return { suspend: false, emissions }
-      }
+      const range = await resolveRangedDistance({ action, character, refRange: weapon.ref_range, emissions })
+      console.log(`[DBG] resolveDroneAssaultAction — après measureBattlemapTokenDistance, ok:${range.ok}`)
+      if (!range.ok) return { suspend: false, emissions }
       authoritativeRangeBand = range.band
     }
 
     // ── LOS check (distance uniquement) ────────────────────────────────────────
     if (!isCaCWeapon && !options.skipLos) {
       console.log(`[DBG] resolveDroneAssaultAction — avant checkCombatLOS`)
-      const los = await checkCombatLOS(io, db, campaignId, action, character)
-      console.log(`[DBG] resolveDroneAssaultAction — après checkCombatLOS, result:${los.result}`)
-      if (los.result === 'blocked') {
+      const losResult = await resolveAttackLOS({ io, campaignId, action, character })
+      console.log(`[DBG] resolveDroneAssaultAction — après checkCombatLOS, blocked:${losResult.blocked} intercepted:${losResult.intercepted}`)
+      if (losResult.blocked) {
         return { suspend: false, emissions }
       }
-      if (los.result === 'intercepted') {
+      if (losResult.intercepted) {
         return resolveDroneAssaultAction(io, campaignId,
-          { ...action, target_token_id: los.newTargetTokenId },
+          { ...action, target_token_id: losResult.newTargetTokenId },
           confirmedModifiers, character, pendingMaps, { skipLos: true })
       }
-      options.coverageModifier = los.coverageModifier ?? 0
+      options.coverageModifier = losResult.coverageModifier
     }
 
     console.log(`[DBG] resolveDroneAssaultAction — avant fetch programme drone`)
@@ -2565,15 +2600,15 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     // Aucune des 3 fonctions sœurs n'a son propre try/catch : toute exception remonte à ce catch
     // unique, qui vide alors `emissions` — comportement existant préservé à l'identique.
     const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now }
-    if (cibleCharacter?.type === 'drone') return await resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions)
+    if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
     // PLAN_EXOARMURE.md §11.4 (catégorie A, site 6) — AVANT le test 'pnj' : sans cette branche, une exo
-    // (type ni 'drone' ni 'pnj') tombait par erreur dans resolveDroneAssaultHitPj (`cibleType: null`
+    // (type ni 'drone' ni 'pnj') tombait par erreur dans resolveAttackHitPj (`cibleType: null`
     // codé en dur, prompt adressé à cibleCharacter.user_id au lieu du pilote). Une exo n'a pas de
     // défense active contre un tir (même absence que le drone, RAW) — auto-résolution immédiate, jamais
     // de suspend/prompt.
-    if (cibleCharacter?.type === 'exo') return await resolveDroneAssaultHitExo(io, campaignId, ctx, emissions)
-    if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveDroneAssaultHitPnj(io, campaignId, ctx, emissions)
-    return await resolveDroneAssaultHitPj(io, campaignId, ctx, emissions)
+    if (cibleCharacter?.type === 'exo') return await resolveAttackHitExo(io, campaignId, ctx, emissions)
+    if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
+    return await resolveAttackHitPj(io, campaignId, ctx, emissions)
 
   } catch (err) {
     console.error('[WS] resolveDroneAssaultAction error:', err.message)
@@ -2587,7 +2622,11 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
 // remonte au catch unique de resolveDroneAssaultAction.
 
 // 8a. Cible = drone (§7.6 — blindage + RD intégrité, auto-resolve)
-async function resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions) {
+// Renommée (PLAN_EXOARMURE.md §16.4/§16.6) — plus "drone"-spécifique : ctx est déjà assemblé par
+// l'appelant (resolveDroneAssaultAction OU resolveExoAssaultAction), cette fonction ne dépend que du
+// TYPE DE CIBLE, jamais de l'identité de l'attaquant. Un nom "Drone" prêtait à confusion dès qu'un
+// second appelant existerait — renommage pur, aucun changement de comportement.
+async function resolveAttackHitDrone(io, campaignId, ctx, emissions) {
   const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
   const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
   if (!droneSheet) return { suspend: false, emissions }
@@ -2618,8 +2657,8 @@ async function resolveDroneAssaultHitDrone(io, campaignId, ctx, emissions) {
 }
 
 // 8a-bis. Cible = exo-armure (PLAN_EXOARMURE.md §11.4, catégorie A, site 6) — miroir de
-// resolveDroneAssaultHitDrone : auto-resolve, aucune défense active (même absence RAW que le drone).
-async function resolveDroneAssaultHitExo(io, campaignId, ctx, emissions) {
+// resolveAttackHitDrone : auto-resolve, aucune défense active (même absence RAW que le drone).
+async function resolveAttackHitExo(io, campaignId, ctx, emissions) {
   const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
   const { total: rawDice, rolls: dmgRolls, seed: dmgSeed } = await parseDice(formula)
   const modDomAttaque = getMrModifier(mr)
@@ -2646,7 +2685,7 @@ async function resolveDroneAssaultHitExo(io, campaignId, ctx, emissions) {
 }
 
 // 8b. Cible = PNJ ou décor : auto-resolve
-async function resolveDroneAssaultHitPnj(io, campaignId, ctx, emissions) {
+async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
   const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
   const cibleSheet = cibleCharacter ? await db('char_sheet').where({ character_id: cibleCharacter.id }).first() : null
   // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
@@ -2705,7 +2744,7 @@ async function resolveDroneAssaultHitPnj(io, campaignId, ctx, emissions) {
 }
 
 // 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT (seule branche qui suspend)
-async function resolveDroneAssaultHitPj(io, campaignId, ctx, emissions) {
+async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
   const { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId } = ctx
   const cibleSheet = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
   const { for_na, con_na, vol_na } = cibleSheet
