@@ -26,8 +26,10 @@
 - **`effectiveMalus`** — `calcWoundPenalty(wounds) − calcEncumbrancePenalty(weight, FOR)` — toujours ≤ 0. Appliqué sur le total du jet, jamais sur un attribut (P51)
 - **`LOCATION_TO_SLOT` vs `SLOT_TO_REF_LOCATION`** — slotCode (BG/BD/JG/JD) pour les slots individuels, refCode (B/J) pour le lookup `ref_location` compat (PI7)
 - **`pendingEntityActions Map` hors `initSocket`** — une seule instance
-- **Collision map Redis** — convention PE14 partout (tokens, entités, voxels convertis)
-- **Voxels Redis** — convertis Three.js→PE14 dans `buildCollisionMap`/`add`/`remove`
+- **Périmé (audit 2026-08-26)** — "Collision map Redis"/"Voxels Redis" (`buildCollisionMap`/`add`/
+  `remove`) : ce système n'existe plus, supprimé (voir `docs/SYSTEME/VOXELS.md`, `.claude/rules/core.md`
+  "Ne pas créer de stockage spatial Redis"). Autorité réelle : `WorldSnapshot`/`spatialIndex.js`
+  (`docs/SYSTEME/MOTEUR_MONDE.md`). PE14 (conversion de coordonnées) reste valide pour tokens/entités.
 - **Acteur step-by-step** — collision à `pos_z+1` (espace de marche, pas sol)
 - **`stepsMax`** — `Math.min(dmax, stepsTarget)` — destination joueur respectée
 - **`resolveEntityState returning`** — doit inclure `battlemap_id` (PE26)
@@ -83,9 +85,9 @@
 | PE18 | `blueprint.pack_id` nullable — guard obligatoire | ASSETS.md |
 | PE21 | `r` tokens = 0-7 — `rotation.y = r * Math.PI / 4` | ENTITES.md |
 | PE22 | tunnel de swap `excludeIds = [tokenId, entityId]` dans `isCaseOccupied` | ENTITES.md |
-| PE23 | `buildCollisionMap` au SESSION_JOIN — pas au démarrage serveur | ENTITES.md |
-| PE24 | `collisionMoveToken` : hdel systématique ancienne case, hset conditionnel si `layer != 'gm'` | ENTITES.md |
-| PE25 | maintenance Redis dans REST — jamais dans handlers WS reliques | ENTITES.md |
+| PE23 | ~~`buildCollisionMap` au SESSION_JOIN~~ — **périmé (audit 2026-08-26), système Redis supprimé**, voir `docs/SYSTEME/VOXELS.md` | ENTITES.md |
+| PE24 | ~~`collisionMoveToken` : hdel/hset Redis~~ — **périmé (audit 2026-08-26)**, occupation gérée par `spatialIndex.js`/`WorldSnapshot` | ENTITES.md |
+| PE25 | ~~maintenance Redis dans REST~~ — **périmé (audit 2026-08-26)**, plus de stockage spatial Redis sur ce projet | ENTITES.md |
 | PE26 | `resolveEntityState` : `.returning()` doit inclure `battlemap_id` | ENTITES.md |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation) | ENTITES.md |
 | PE29 | Acteur step-by-step vérifié à `pos_z+1` (espace de marche) | ENTITES.md |

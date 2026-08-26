@@ -26,15 +26,18 @@
 payload[key] = { tex: v.tex, geo: v.geo, r: v.r }
 ```
 
-### Convention clés collision map Redis — voxels (PE28)
-```
-voxel_data stocke : "x:y_altitude:z_profondeur" (Three.js brut)
-Redis collision map : "x:z_profondeur:y_altitude" (PE14 base)
-Conversion dans buildCollisionMap/collisionAddVoxel/collisionRemoveVoxel :
-  const [vx, vy, vz] = voxelKey.split(':').map(Number)
-  const pe14Key = `${vx}:${vz}:${vy}`
-```
-**Convention Redis = PE14 partout (tokens, entités, voxels). Three.js = rendu uniquement.**
+### Collision — SUPPRIMÉ, corrigé (audit 2026-08-26)
+
+**Ce document décrivait une collision map Redis (`buildCollisionMap`/`collisionAddVoxel`/
+`collisionRemoveVoxel`, PE28) qui n'existe plus dans le code** — zéro occurrence vérifiée dans
+`server/src`, `client/src`, `shared/`. `.claude/rules/core.md` : *"Ne pas créer de stockage spatial
+Redis"* ; `.claude/rules/voxels.md` : *"Aucun calcul de collision [...] ne dépend des voxels"*.
+
+**Autorité réelle aujourd'hui** : `shared/world/spatialIndex.js` + le `WorldSnapshot` compilé par
+`shared/world/worldCompiler.js` (voir `docs/SYSTEME/MOTEUR_MONDE.md`, autorité unique collision/
+navigation/LOS/occupation). Redis ne porte plus aucune donnée spatiale sur ce projet — `voxel_data`
+(PostgreSQL, format ci-dessus) reste la seule source durable, jamais dupliquée dans un cache
+autoritaire séparé.
 
 ---
 
@@ -58,7 +61,7 @@ posZ = entity.pos_y + depth/2    // pos_y base = profondeur Z Three.js
 | `pos_y` | axe Z (profondeur) |
 | `pos_z` | axe Y (altitude) |
 
-S'applique à : tokens, entités, voxels Redis. Ne s'applique PAS aux clés voxel_data en base (Three.js brut).
+S'applique à : tokens, entités (PE14 = convention base de données). Ne s'applique PAS aux clés voxel_data en base (Three.js brut).
 
 ---
 
@@ -84,7 +87,7 @@ Cohérent avec PE29 (step-by-step collision à pos_z+1 = espace de marche).
 
 | Code | Description |
 |---|---|
-| P12 | `VOXEL_ADD` handler : guard `if (!battlemapId) return` en tête — battlemapId peut être null si carte non chargée |
+| P12 | Périmé (audit 2026-08-26) — décrivait un guard dans le handler serveur `VOXEL_ADD`, qui n'existe plus (supprimé au commit `d0ee0af`, jamais recréé). Le client (`Editor3D.jsx`) émet toujours cet événement sans qu'aucun serveur l'écoute — ticket `bug_tickets`/`AUDIT-SYSTEME`, détail `docs/SYSTEME/ARCHITECTURE_SOCKET.md` |
 | P17 | Séparateur clé voxel = `":"` — `"x:y:z"` NON NÉGOCIABLE. Jamais `"x,y,z"` ni `"x-y-z"`. |
 | P22 | `voxel_textures.id` = integer — exception UUID du projet. `increments()` intentionnel. |
 | P26 | `blocksReady = true` même si 0 textures — ne pas conditionner sur la longueur du tableau |
