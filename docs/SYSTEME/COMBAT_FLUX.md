@@ -17,6 +17,13 @@
 > la façon dont on atteint `SLOT_ACTIVE` a changé, pas les états eux-mêmes. §6-§10/§12-§14 (pipelines
 > d'attaque, dégâts, choc) n'ont pas été vérifiés par cet audit — probablement plus fiables (logique
 > interne, pas le wrapper de progression) mais à revérifier avant de s'y fier aveuglément.
+>
+> **Suite d'audit (2026-08-26) — §6-14 maintenant vérifiés.** Deux dettes documentées en §13 comme
+> actives se sont révélées résolues : **STUN2** (le guard `is_stunned` existe bien en RESOLUTION,
+> `socketCombatResolution.js:214`) et **RW17-1** (`COMBAT_DAMAGE_CONFIRM` drone délègue à
+> `confirmDamage()` qui calcule correctement la RD via `calcDroneDegatsNets`) — corrigées avec
+> historique conservé barré. Le reste de §6-14 (pipelines Assaut/CaC, Test de Choc, RD drone, pièges)
+> confirmé fidèle au code sur les points sondés.
 
 ---
 
@@ -200,7 +207,7 @@ EMIT COMBAT_PHASE_CHANGED { phase:'RESOLUTION', roster(DESC initiative), actions
 | Guard phase | `state.phase === 'RESOLUTION'` |
 | Guard slot actif | **Périmé** — `slots[active_slot_idx]` n'existe plus, l'entrée active vient de `combat_timeline_entries` (voir banner en tête de document) |
 | Guard ownership | `isGm` ou `character.user_id === user.id` |
-| ⚠️ is_stunned | **ABSENT** — pas de re-check (bug STUN2 actif) |
+| is_stunned | **Corrigé (audit 2026-08-26)** — re-check bien présent, contrairement à ce que cette ligne affirmait. Filet de sécurité explicitement commenté « Guard is_stunned (STUN2) » (`socketCombatResolution.js:214`, pour move/reload/micro qui ne passent pas par le PRECHECK), en plus du guard déjà existant sur `COMBAT_ACTION_PRECHECK` (même fichier, ~ligne 75-96). Voir aussi `COMBAT.md` §state_character (PC42 réglé). |
 
 #### Séquence d'exécution des actions (ASC sequence)
 
@@ -638,11 +645,16 @@ EMIT DRONE_INTEGRITY_UPDATED
 
 ### ⚠️ Écarts / Dettes
 
+> **Corrigé (audit 2026-08-26)** — STUN2 et RW17-1 étaient documentés ici comme dettes actives ;
+> vérifiés contre le code réel, les deux sont résolus (détail sous chaque ligne, conservées barrées
+> pour ne pas perdre la trace de la dette d'origine, cf. `docs/RegleDocumentaire.md` — ne pas
+> supprimer un historique sans plus-value).
+
 | ID | Règle LdB | État | Gravité |
 |---|---|---|---|
-| **STUN2** | Stunné ne peut pas attaquer | Guard en ANNOUNCEMENT seulement. Si stun reçu après déclaration → token peut encore exécuter son assaut en RESOLUTION. | Haute |
+| ~~**STUN2**~~ | Stunné ne peut pas attaquer | **Résolu** — guard `is_stunned` bien présent en RESOLUTION (`socketCombatResolution.js:214`, commentaire nommant explicitement STUN2), en plus du guard PRECHECK préexistant. Voir §5 ci-dessus. | — |
 | **§6.7** | `current_initiative = base_initiative` début de tour | `endTurn` ne remet **pas** `initiative = base_ini` — les deltas INI du tour persistaient | Moyenne (documentée) |
-| **RW17-1** | `calcDroneRD` disponible en résolution | Non importée dans `socketCombatResolution.js` → `COMBAT_DAMAGE_CONFIRM` drone bloqué | Haute (bug actif) |
+| ~~**RW17-1**~~ | `calcDroneRD` disponible en résolution | **Résolu autrement que prévu** — `COMBAT_DAMAGE_CONFIRM` délègue à `confirmDamage()` (`socketCombatHelpers.js`), qui appelle `calcDroneDegatsNets` (englobe `calcDroneRD` en interne) ; l'import direct de `calcDroneRD` dans `socketCombatResolution.js` reste absent mais n'est plus le chemin réel emprunté — pas de blocage constaté. | — |
 | **RW18-1** | Ordering émissions | `woundService`/`damageService` émettent avant `flushEmissions` dans certains paths | Moyenne |
 | Surprise PNJ | Test Réaction (`roll ≤ base_ini`) | PNJ : `initiative = base_ini + roll` (toujours, sans test) — divergence volontaire ? [INCONNU] | À valider |
 | §3 | INI ≤ 0 → action reportée | Non implémenté | Basse (documentée) |

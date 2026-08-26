@@ -1,4 +1,8 @@
 # SYSTEME/BLESSURES.md — Blessures, armures, malus Polaris
+> Audit de compréhension approfondie 2026-08-26 (suite) : WOUND_MAX_COUNTS et WOUND_HEALING
+> confirmés exacts contre `woundConstants.js` ; formule `computeWoundInfectionThreshold` corrigée
+> (les malus de cases/périodes sont conditionnels par gravité, pas universels — table étendue) ;
+> piège `occurred_at_game_minutes` confirmé par un test dédié (`woundUtils.test.mjs`).
 > Source : SYSTEME.md §16
 > Lire pour : wounds, ArmorWoundPanel, LocationPanel, mille-feuille, calculs P51
 
@@ -200,15 +204,18 @@ Légère guérit seule, sans échéance ni Test. `echec`/`catastrophe` engendren
 
 **`wound_infection_check`** — garde un vrai jet (auto `resolvePolarisTest` ou joueur via l'événement
 `WOUND_INFECTION_ROLL`, `server/src/socket/socketDice.js`), rythme fixe 2 jours. Seuil calculé par
-`computeWoundInfectionThreshold` = NA(Constitution) + `WOUND_INFECTION[severity].baseModifier` - malus
-de cases (-2/case au-delà de la première) - malus de périodes sans soin (-2/période) :
+`computeWoundInfectionThreshold` = NA(Constitution) + `WOUND_INFECTION[severity].baseModifier`, puis
+**seulement si activé pour cette gravité** (corrigé 2026-08-26 — la formule n'est pas uniforme, `if
+(rule.caseMalus)`/`if (rule.periodMalus)` dans `woundEvolutionService.js:158-168`) : malus de cases
+(-2/case au-delà de la première sur la même ligne localisation/gravité) et/ou malus de périodes sans
+soin (-2/période déjà écoulée) :
 
-| Gravité | Modificateur | S'infecte même en réussite |
-|---|---|---|
-| Moyenne | +5 | Non |
-| Grave | +0 | Non |
-| Critique | -5 | Oui |
-| Mortelle | -10 | Oui |
+| Gravité | Modificateur | Malus de cases | Malus de périodes | S'infecte même en réussite |
+|---|---|---|---|---|
+| Moyenne | +5 | Non | Non | Non |
+| Grave | +0 | Oui | Oui | Non |
+| Critique | -5 | Oui | Oui | Oui |
+| Mortelle | -10 | Oui | Non | Oui |
 
 Mortelle non soignée : délai de survie (Constitution ou Constitution/2 heures) calculé et affiché au
 MJ, jamais appliqué automatiquement — la mort reste narrative, à la charge du MJ.

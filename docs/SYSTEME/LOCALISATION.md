@@ -1,6 +1,10 @@
 # SYSTEME/LOCALISATION.md — i18n client, namespaces, pattern serveur
 
 > Dernière mise à jour : 2026-08-11.
+> Audit de compréhension approfondie 2026-08-26 (suite) : §2.2 corrigé — le namespace `tickets`
+> (déjà listé en §2.1 depuis la correction précédente) manquait dans l'extrait de code `i18n.js`,
+> alors que le vrai fichier le charge bien. §6 (contenu de catalogue) est une décision d'architecture
+> non encore exécutée — rien à vérifier contre le code par construction.
 >
 > Statut : **Norme active. Anglais gelé (non chargé, non maintenu) — seul le FR est un objectif produit
 > aujourd'hui.** Depuis le 2026-08-11 (décision Saar, `docs/Old/BUG WIZARD.md` bug #16, archivé), l'architecture doit
@@ -82,6 +86,7 @@ i18n.use(initReactI18next).init({
       charSheet: charSheet,
       combat: combat,
       builder: builder,
+      tickets: tickets,   // ajouté 2026-08-26 — manquait à cet extrait, présent dans le vrai i18n.js
     },
   },
   lng: 'fr',

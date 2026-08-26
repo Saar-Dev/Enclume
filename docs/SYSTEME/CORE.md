@@ -1,4 +1,9 @@
 # SYSTEME/CORE.md — Auth, Ownership, Stores, WebSocket
+> Audit de compréhension approfondie 2026-08-26 (suite) : `combatStore.js` (`advanceSlot`,
+> `activeSlotIdx` scope ANNOUNCEMENT) et `characterStore.upsertCharacter` (filtre `visible`)
+> reconfirmés exacts ; `setCombatState` complété (`subPhase`/`activeTokenId` manquaient à la
+> signature). Le reste (auth, ownership token, événements WS) avait déjà été corrigé plus tôt dans
+> cette même session.
 > Source : SYSTEME.md §1–§4
 > Lire pour : toute fonctionnalité touchant auth, tokens, stores Zustand, événements WS
 
@@ -93,7 +98,10 @@ if (!character || character.user_id !== user?.id) return
 }
 
 // Actions store :
-setCombatState({ phase, roster, actions, currentTurn, activeSlotIdx })
+setCombatState({ phase, subPhase, roster, actions, currentTurn, activeSlotIdx, activeTokenId })
+// corrigé 2026-08-26 : subPhase/activeTokenId manquaient à la signature listée ici
+// activeSlotIdx : ANNOUNCEMENT uniquement (COMBAT_SLOT_ADVANCED) — plus lu en RESOLUTION (Lot B,
+// combatStore.js:9)
 updateRoster(updatedRoster)
 addAction(action)
 setActions(actions)

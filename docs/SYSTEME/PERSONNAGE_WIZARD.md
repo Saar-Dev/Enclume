@@ -1,6 +1,9 @@
 SYSTEME/PERSONNAGE_WIZARD.md — Assistant de création de personnage
 
     Dernière mise à jour : 2026-08-23
+    Audit de compréhension approfondie 2026-08-26 : les 6 événements WIZARD_* (shared/events.js),
+    router.param('sheetId') (P-WIZ-1) et useSocketReady() (P-WIZ-6) confirmés ligne à ligne contre le
+    code. Aucune correction nécessaire — doc très à jour, cohérent avec le commit WIZ46 récent.
     Source : client/src/components/creation/WizardCreation.jsx, client/src/components/creation/WizardLockSync.jsx, client/src/lib/useWizardLiveEmit.js, client/src/stores/creationStore.js, server/src/services/creationService.js, server/src/routes/creation.js, shared/events.js
     Lire pour : comprendre le flux de création, les étapes, l'architecture client-primary, et la collaboration temps réel MJ/joueur.
     Voir aussi : @PERSONNAGE_CALCULS pour la chaîne de calcul, @PERSONNAGE_API pour les routes.

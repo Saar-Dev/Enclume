@@ -1,4 +1,10 @@
 # SYSTEME/CONVENTIONS.md — Règles immuables, pièges actifs §18+§19
+> Audit de compréhension approfondie 2026-08-26 (passe dédiée, au-delà des corrections déjà faites en
+> marge d'autres docs) : PE34 resynchronisé avec la correction faite dans VOXELS.md (citait encore
+> l'ancien offset périmé) ; PC28 identifié comme un code utilisé pour au moins 3 significations
+> distinctes non liées (collision non résolue, signalée plutôt que tranchée arbitrairement) ; PI10
+> entièrement stale (fichier/migration inexistants, remplacée par la référence réelle). PI9 confirmé
+> exact contre `errorHandler.js`.
 > Source : SYSTEME.md §18–§19
 > Lire pour : tout nouveau code — vérifier que la convention appliquée est documentée ici
 
@@ -91,7 +97,7 @@
 | PE26 | `resolveEntityState` : `.returning()` doit inclure `battlemap_id` | ENTITES.md |
 | PE27 | moveType calculé client (feedback) ET recalculé serveur (validation) | ENTITES.md |
 | PE29 | Acteur step-by-step vérifié à `pos_z+1` (espace de marche) | ENTITES.md |
-| PE34 | Pieds token Three.js : `pos_z + 1.0` (top voxel) — pas `pos_z + 0.5` | VOXELS.md |
+| PE34 | Corrigé 2026-08-26 — périmé depuis le 2026-08-01 : plus d'offset fixe. `feetY = pos_z` si `position_space='world-feet'` (défaut actuel), `pos_z + 0.5` seulement pour un token `legacy-cell` jamais replacé | VOXELS.md |
 | PC41 | Express 5 : routes sans `/` initial → 404 silencieux — toujours `'/:id/foo'` | CONVENTIONS.md |
 | PEF1 | `pack_id` obligatoire sur blueprint | ASSETS.md |
 | PEF2 | fakeTexObj : `{ id, pack_id, faces }` | ASSETS.md |
@@ -109,8 +115,8 @@
 | PI8 | POST `/inventory` : LIKE query pour multi-slot | BLESSURES.md |
 | PI11 | `polarisRound` : source unique `shared/polarisUtils.js` — jamais redéfinir localement | REACT.md |
 | PC27 | `!token.character_id` = Entité — jamais PNJ. PNJ = `character.type === 'pnj'` | COMBAT.md |
-| PC28 | `state_character.is_rushed` → lire depuis `combat_roster`, jamais depuis `combat_actions` | COMBAT.md |
+| PC28 | **Collision de code trouvée (audit 2026-08-26), non résolue** — au moins 3 significations distinctes coexistent sous ce même code : (a) lire l'état depuis `combat_roster`, jamais `combat_actions` (COMBAT.md, entrée historique de cette table) ; (b) `COMBAT_ACTION_DECLARE` — `state.*` du payload = valeurs cibles, le serveur recalcule l'iniDelta (COMBAT.md, section payload) ; (c) `combat_actions` n'est plus vidée à `endTurn` depuis Session 159, retrait du DELETE inconditionnel (commentaires réels dans `socketCombatHelpers.js`/migrations archivées). Ne pas se fier à "PC28" seul pour identifier lequel est visé — désambiguïser par le contexte. | COMBAT.md |
 | PC29 | `activeSlotIdx` indexe le roster **trié DESC initiative** — toujours `[...roster].sort((a,b) => b.initiative - a.initiative)` | COMBAT.md |
 | PC39 | `state_character` JSONB : merge par `||` — jamais écraser, jamais stocker `false` | COMBAT.md |
 | PI9 | Format erreur serveur : `{ error: { status, message } }` → toujours `.error.message` (pas `.error` brut) | CONVENTIONS.md |
-| PI10 | `2_seed_equipment.js` — ne jamais rejouer après migration 53 (doublon silencieux, pas de UNIQUE sur name) | CONVENTIONS.md |
+| PI10 | Corrigé 2026-08-26 — `2_seed_equipment.js`/"migration 53" n'existent pas (renumérotation 2026-08-22 : migration 2 = `battlemap_texture_usage`, 53 = `ref_advantages`, sans rapport). Seed réel : `303_ref_equipment_seed.js`. Risque de fond toujours réel — voir `.claude/rules/core.md` (seeds idempotents par clé métier, jamais par `id`, vécu migration 209) | CONVENTIONS.md |

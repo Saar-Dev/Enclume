@@ -1,6 +1,10 @@
 SYSTEME/SERVICES_COMBAT.md — Services métier de combat
 
     Dernière mise à jour : 2026-07-21 — ajout renvoi vers @MODING (mods d'armes).
+    Audit de compréhension approfondie 2026-08-26 (suite) : §7 corrigé (advanceSlot périmé →
+    advanceTimeline/pickNextTimelineStep) ; signature resolveTargetHit (forcedSlotCode,
+    treatAsContact) et table TRANSITIONS de combatFSM.js (dont COMBAT_ACT_NOW/COMBAT_DELAYED_PASS)
+    confirmées exactes contre le code.
 
     Lire pour : résolution de choc, étourdissement, dégâts, blessures, table MR, FSM combat.
 
@@ -228,7 +232,9 @@ text
 3. PJ tireur → COMBAT_DAMAGE_CONFIRM (lance les dés de dégâts)
 4. socketCombatResolution.js :
    a. canTransition('RESOLUTION', 'AWAITING_DAMAGE', 'COMBAT_DAMAGE_CONFIRM') → true
-   b. Résout les dégâts, advanceSlot
+   b. Résout les dégâts, avance dans combat_timeline_entries via advanceTimeline/pickNextTimelineStep
+      (corrigé 2026-08-26 — citait encore advanceSlot, retiré depuis la refonte Session 159, voir
+      docs/SYSTEME/COMBAT.md)
 
 8. Pièges principaux
 Code	Description

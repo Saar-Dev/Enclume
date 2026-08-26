@@ -1,6 +1,12 @@
 SYSTEME/MODING.md — Système de mods d'armes
 
     Dernière mise à jour : 2026-07-21 — Session 167 (Phases 1/3/4 codées et testées).
+    Audit de compréhension approfondie 2026-08-26 : malgré les 5 semaines écoulées, le point central
+    (§5/§6, Groupe 4 codé mais onBeforeAttack/onCalculateModifiers non câblés en résolution) reconfirmé
+    exact — seul onTurnStart est réellement appelé (`socketCombatHelpers.js:191`, commentaire
+    explicite ligne 2758 confirmant l'inutilisation actuelle). `applyModStatus`/`clearModStatus`
+    confirmés dans `statusService.js`. Aucune correction nécessaire au-delà des migrations déjà
+    réparées.
 
     Lire pour : comment un accessoire d'arme (mod) modifie une résolution de combat, exclusivité de
     slot à l'installation, architecture à hooks du Groupe 4.

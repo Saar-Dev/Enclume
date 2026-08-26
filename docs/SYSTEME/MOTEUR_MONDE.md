@@ -1,7 +1,10 @@
 # SYSTEME/MOTEUR_MONDE.md — architecture physique, navigation et visibilité
 
-> Dernière mise à jour : 2026-07-29 — cache LRU du compile structurel + état runtime documenté (§2.8,
-> DEPLACEMENT1) ; 2026-07-15 — moteur v12 conservé comme autorité dans l'intégration commune.
+> Dernière mise à jour : 2026-08-26 — audit de compréhension approfondie (§2.7/§11 complétés avec les
+> fichiers/services réels absents de l'inventaire, §2.2 documente `bumpBattlemapRuntimeRevision`
+> comme point de couplage Entités/Tokens ↔ moteur monde) ; 2026-07-29 — cache LRU du compile
+> structurel + état runtime documenté (§2.8, DEPLACEMENT1) ; 2026-07-15 — moteur v12 conservé comme
+> autorité dans l'intégration commune.
 >
 > Statut : **Phases 0 à 15 implémentées. Le snapshot est l'autorité physique de l'éditeur, de
 > la session et du combat.**
@@ -90,6 +93,15 @@ Redis et son hash de collision ont été supprimés. `shared/world/spatialIndex.
 Plusieurs occupants peuvent partager un bucket d'index sans s'écraser. Toute création,
 suppression, mutation d'état ou déplacement dynamique incrémente `runtime_revision`.
 
+Le helper partagé `bumpBattlemapRuntimeRevision` (`server/src/services/worldRuntimeService.js`)
+porte cet incrément hors des services de mouvement eux-mêmes. Il est appelé directement par le
+système Entités (`server/src/socket/socketEntity.js`, `server/src/routes/entities.js`, déjà
+documenté par `ENTITES.md` §7.4) et par le cycle de vie des tokens (`server/src/routes/tokens.js`,
+`server/src/lib/tokenLifecycle.js`, non documenté côté Tokens) — point de couplage réel entre ces
+deux systèmes et le cache du moteur monde (§2.8) (ajouté 2026-08-26 ; correction 2026-08-26 : la
+mention « non documenté ailleurs » était erronée pour le côté Entités — vérifié après lecture
+complète d'ENTITES.md, pas seulement grep du code).
+
 ### 2.3 Déplacement de combat `[EXISTANT — PHASE 7]`
 
 La déclaration ne stocke plus une simple case finale : elle conserve destination monde, allure
@@ -146,6 +158,14 @@ Le dossier `shared/world/` fournit désormais :
 - `index.js` : point d'entrée commun client/serveur ;
 - `spatialIndex.js` et `navigation.js` : index statique, occupation dynamique, graphe 3D pondéré et
   planification autoritaire ;
+- `visibility.js` : logique pure de ligne de vue et couverture (`traceVisibility`,
+  `checkWorldLineOfSight`, `checkWorldCoverage`, `findWorldInterceptors`, profils de posture) —
+  consommée par `server/src/services/worldVisibilityService.js` (§8, ajouté 2026-08-26) ;
+- `worldEffects.js` : registre versionné des cinq effets intégrés (§9), normalisation des
+  définitions/instances et propagation par compartiment eau/gaz (§10) (ajouté 2026-08-26) ;
+- `roomGeometry.js` (§7.2, murs courbes) et `elevatorRuntime.js` (§6, automate pur de cabine) :
+  détaillés dans leurs sections respectives, listés ici pour l'inventaire complet du dossier
+  (ajouté 2026-08-26) ;
 - soixante-dix-sept tests Node, dont Jon, les portes, les occupants multiples, les budgets partiels, le
   placement sur support, les canaux de matériaux, la couverture et les occluders dynamiques.
 
@@ -750,6 +770,14 @@ La machine à états de combat existante reste l'orchestrateur. Elle appelle :
 - `VisibilityService` pour ligne de vue et couverture ;
 - `EffectService` pour modificateurs, contraintes et hooks ;
 - `WorldQueryService` pour portée, proximité, occupation et intersection de régions.
+
+Noms réels (corrigé 2026-08-26, absents jusqu'ici de cette section) :
+`server/src/services/worldMovementService.js`, `worldVisibilityService.js`, `worldEffectService.js`,
+`worldSpatialQueryService.js` (portée : `tokenDistanceM` — l'occupation/intersection de régions
+passe par `spatialIndex.js`/`worldEffectService.js` directement, pas par ce fichier). Services
+additionnels non couverts par la liste conceptuelle ci-dessus mais consommés par le même contrat :
+`worldForcedMovementService.js` (mouvement forcé, §5.3), `worldElevatorService.js` (§6),
+`worldRuntimeService.js` (`bumpBattlemapRuntimeRevision`, §2.2), `worldService.js` (caches LRU, §2.8).
 
 Le combat ne duplique aucune formule spatiale. Portée, couverture et effets sont recalculés après la
 position réellement atteinte.

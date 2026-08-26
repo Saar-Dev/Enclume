@@ -1,5 +1,9 @@
 # SYSTEME/DOMMAGES.md — Les deux types de dommages Polaris
 
+> Audit de compréhension approfondie 2026-08-26 : `mod_res_shock` confirmé présent aux côtés de
+> `mod_res_damage/poison/disease/drugs/radiation` dans `char_mutation_effects_view`
+> (`281_char_mutation_effects_view_view.js`) et `ref_mutations` (`77_ref_mutations.js`) — cohérent
+> avec §4. Aucune autre correction nécessaire au-delà de la migration déjà réparée en §2.
 > Responsabilité unique (Règle 7 `RegleDocumentaire.md`, SYSTEM — "Damage" y est cité en exemple) :
 > le modèle des types de dommages et leur autorité de résolution. Ne décrit ni la FSM combat/sockets
 > (`SYSTEME/COMBAT.md`), ni les blessures/armures UI (`SYSTEME/BLESSURES.md`), ni le vocabulaire

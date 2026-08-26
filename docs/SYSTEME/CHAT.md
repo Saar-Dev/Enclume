@@ -1,5 +1,9 @@
 Documentation exhaustive de l'existant
 
+    Audit de compréhension approfondie 2026-08-26 : événements CHAT_* confirmés dans shared/events.js,
+    9 fichiers server/src/chat/ confirmés (comptage §11 corrigé), eventBus.js confirmé réellement
+    inerte (listenEvents() jamais appelé, aucun eventBus.publish nulle part dans server/). Aucune
+    autre correction nécessaire au-delà de la migration déjà réparée en §3.
     Version 2.0 — 2026-08-05 (réécriture post-migration, PLAN_CHAT.md Phases 1-3 closes)
     Version 1.0 (2026-08-01) archivée en historique de conversation — décrivait le système
     éphémère pré-migration, entièrement remplacé par ce qui suit.
@@ -225,7 +229,7 @@ absente de la donnée.
     dés, combat, actions entité restent éphémères, hors scope V1.
 
 11. Fichiers impliqués
-Serveur — nouveau module (7)
+Serveur — nouveau module (8, corrigé 2026-08-26 — comptage)
 | Fichier | Rôle |
 |---|---|
 | `server/src/chat/chatService.js` | Logique centrale : valide, sanitize, persiste, diffuse |

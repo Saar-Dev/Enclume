@@ -41,6 +41,7 @@ dommages, protections) est ✅ fait. Gaps identifiés :
 | Barrières (protection) | 🔲 | pas encore cadré, proche du chantier Armes spéciales |
 | Tir en aveugle, Combat en aveugle, Attaquer un personnage sans défense, Attaquer à mains nues un armé, Attaquer par surprise, Repérer le danger, Balles perdues, Tir instinctif, Ramper, Changer d'intention, Utiliser une arme lente | 🔲 | sous-règles ponctuelles, aucune dépendance identifiée, priorité basse |
 | Viser avec une arme auto, Tir de précision, Blessures dues au feu, Maladies et poisons, Tests et équipement | ❓ | fait, à revérifier en jeu réel |
+| Drones en combat — télépilotage (INI pilote, `min(programme_armement, TELEPILOTAGE_proprio)`, ciblage direct sans Détection/Ami-Ennemi), séquence autonome Détection→Ami/Ennemi→Armement avec retry −5 INI (12→7→2), cible acquise persistante, programmes Esquive (défense CaC) et Interception | 🔲 | Ajouté 2026-08-26 (gap trouvé en croisant `COUVERTURE_RAW.md` avec l'audit `COMBAT REFERENCE.md` §7.7, absent d'ici jusqu'à ce jour) — RAW transcrite (`REGLES/REGLEDRONE.md`), **aucun PLAN écrit**. Seul le mode autonome à INI 12 fixe + le jet générique `D20 ≤ programme.level` sont réellement câblés (`socketCombatState.js:62-66`, `socketCombatHelpers.js:2496`) ; le reste est une spec RAW transcrite mais jamais construite (`COMBAT REFERENCE.md` §7.7, matrice complète). Aucune dépendance identifiée avec les autres chantiers de cette liste — autonome. |
 
 ## 3. États de santé (LdB p.234-251)
 
@@ -69,13 +70,28 @@ Pulsion électromagnétique, Régénération moléculaire, Sensibilité psychiqu
 Sphère de gravité/répulsion organique/temporelle/terreur, Télékinésie, Téléportation, Tempête du flux,
 Tourbillon(s), Vortex psychique) + le flux Polaris (géographie, entités, plongée, possession).
 
-**Dépendance technique — [HYPOTHÈSE, non vérifiée] (2026-08-25)** : une part significative de ces
-pouvoirs semble être des effets de zone (barrières, ondes de choc, champs, sphères), ce qui suggérerait
-le même prérequis d'infrastructure que les Armes spéciales à aire d'effet (§9) — mais cette déduction
-vient uniquement des **noms** des pouvoirs dans le sommaire, pas d'une lecture du texte RAW de ce
-chapitre (aucun `REGLES/REGLE_FORCE_POLARIS.md` n'a été ouvert). À vérifier avant de cadrer quoi que
-ce soit. Aucun cadrage possible dans tous les cas avant qu'une décision de scope soit prise (tout le
-chapitre, ou un sous-ensemble prioritaire de pouvoirs).
+**Dépendance technique — [VÉRIFIÉ] (2026-08-26, correction de l'hypothèse du 25)** : le fichier RAW
+existe bel et bien sous le nom `docs/REGLES/REGLEPOLARIS.md` (1655 lignes) — la note du 25 affirmait
+à tort qu'aucun fichier n'existait (mauvais nom de fichier cherché). Lu directement pour trancher
+l'hypothèse :
+
+- **Le cœur du mécanisme** (Maîtriser/Libérer/Contrôler l'effet, Choc Polaris, Pouvoir incontrôlé,
+  Libération involontaire, table Incidents Polaris 1D100 complète) est indépendant de l'AOE — un Test
+  de Maîtrise puis un Test de Compétence, un jet de Choc, une table d'incidents. Codable seul.
+- **La majorité des ~40 pouvoirs nommés ont réellement un paramètre `Zone d'effet` + `Portée max. du
+  centre de la zone d'effet`** (confirmé en lisant Altération temporelle, Attaque psychique, Barrière
+  de force/moléculaire/psychique, Bête du flux, Brouillage, Cauchemar — 7/7 sur l'échantillon lu en
+  entier) — **l'hypothèse du 25 était juste**, ce n'est plus une déduction depuis des noms de sommaire.
+- **Mais ce n'est pas universel** : au moins Contrôle mental (portée + cible unique, la zone d'effet
+  n'existe que pour le cas de libération accidentelle/incontrôlée) et vraisemblablement Dague
+  psychique (pas de ligne "Zone d'effet" dans son bloc de stats) sont cible unique, sans dépendance AOE.
+
+**Conséquence pour le cadrage** : le chapitre n'est pas un bloc monolithique "tout ou rien derrière
+l'AOE". Un premier lot réaliste sans attendre l'AOE : le cœur du mécanisme + les pouvoirs à cible
+unique (Contrôle mental, Dague psychique, à confirmer une par une). Les pouvoirs à zone (majorité)
+suivent une fois l'AOE (§9) construite. Reste à faire avant tout code : lister précisément les ~40
+pouvoirs un par un (zone vs cible unique) — pas fait en entier ici, juste un échantillon suffisant
+pour trancher la dépendance elle-même.
 
 ## 5. Expérience (LdB p.268-271)
 
@@ -85,7 +101,8 @@ chapitre, ou un sous-ensemble prioritaire de pouvoirs).
 
 | Sous-règle | État | Doc |
 |---|---|---|
-| Acquisition, Intégrité et qualité (p.277), Munitions spéciales, Armes étourdissantes/soniques, Accessoires pour armes, Armures/protections simples, Encombrement, Autres types de dommages, Drones courants | ✅ | — |
+| Acquisition, Intégrité et qualité (p.277), Munitions spéciales, Armes étourdissantes/soniques, Accessoires pour armes, Armures/protections simples, Encombrement, Autres types de dommages | ✅ | — |
+| Drones courants — fiche, création, programmes, armes/ordinateurs | ✅ | — **mais leur comportement EN COMBAT a des gaps réels, voir §2** (télépilotage, séquence autonome, Esquive/Interception) — ne pas confondre "le drone existe et s'équipe" avec "le drone se comporte selon la RAW en combat" |
 | Tests et équipement (p.277) | ❓ | fait, à revérifier en jeu réel |
 | Intégrité du matériel, Tests de panne, Usure et détérioration, Réparation du matériel | 🔲 | `PLANS/PLAN_USURE&INTEGRITE.md` (stub, à cadrer) — **prérequis explicite d'Exo-armures** (Saar, 2026-08-25) |
 | Grenades et autres armes à aire d'effet, Explosifs | 🔲 | `PLANS/PLAN_ARMES_SPECIALES.md`, nécessite la résolution de zone d'effet (§9) |
@@ -101,7 +118,7 @@ armures assistées, milieu hybride) codés et testés le 2026-08-25. Reste : Ét
 
 | Sous-règle | État | Doc |
 |---|---|---|
-| Réparation (armure) | 🔲 | dépend de la résolution Tests critiques/Catastrophe par marge, `Old/PLAN_TEST_CRITIQUE.md` (cadrage en pause côté Saar) |
+| Réparation (armure) | 🔲 | **Corrigé (2026-08-26)** — n'est plus bloqué : `Old/PLAN_TEST_CRITIQUE.md` est clos (Lot 1 confirmé en navigateur par Saar 2026-07-30, Lots 2/3 codés), archivé, contenu durable transféré vers `COMBAT.md` §"Résolution des Tests" (`resolveTestOutcome`/`MR_TABLE`, vérifié actif aujourd'hui). Rien ne cadre encore ce sous-chantier (RAW MANUEL §4.12), mais plus aucun blocage technique — prêt à cadrer dès que priorisé |
 | Systèmes électroniques et informatiques, pannes | 🔲 | RAW transcrite (`REGLES/REGLE_ORDINATEUR.md`) — **aucun PLAN écrit**, gap trouvé 2026-08-25, dépendance explicite d'Exo-armures (Saar) |
 
 ## 8. Interactions avec l'environnement (transversal, pas un chapitre dédié du LdB)
@@ -136,18 +153,45 @@ plusieurs chantiers en dépendront durablement).
 
 ---
 
-## Ordre — retiré (2026-08-25, analyse à charge)
+## Ordre
 
-Une première version de cette section proposait un ordre complet en 8 points (Usure/Intégrité → AOE
-→ Armes spéciales → Arts martiaux → Force Polaris → Informatique/pannes → Interactions → sous-marin).
-**Retiré** : construit par déduction de dépendances techniques trouvées par recherche de code (grep,
-fichiers qui se référencent), pas par une compréhension réelle du jeu ni de ce qui compte pour Saar —
-au moins un maillon (Force Polaris → AOE, §4/§9) reposait sur une hypothèse jamais vérifiée en lisant
-la RAW. Présenter ça comme un ordre "prêt à valider" était prématuré.
+**Établi avec Saar (2026-08-26)**, après correction de l'hypothèse AOE↔Force Polaris (§4, maintenant
+[VÉRIFIÉ] par lecture directe de `REGLEPOLARIS.md`) :
 
-**Seul point confirmé par Saar (2026-08-25)** : Usure & Intégrité du matériel et Informatique/pannes
-exo sont nécessaires pour finir Exo-armures. L'ordre entre les autres chantiers (Armes spéciales,
-Arts martiaux, Force Polaris, AOE, Interactions environnement, sous-marin) reste à établir avec Saar,
-pas à déduire seul depuis ce document.
+**AOE → Portes → Exo Étape A/B → Usure/Intégrité + Informatique/pannes exo → Drones (télépilotage
+etc.) → [Armes spéciales + Tir de suppression, débloqués par l'AOE] → Force Polaris (Lot 1 : cœur +
+pouvoirs à cible unique) → Arts martiaux/Moral.**
 
-Exo-armures Étape A/B (déjà en cours, `docs/ROADMAP.md` §1) n'attend rien de cette liste — indépendant.
+**Corrigé (analyse à charge, 2026-08-26)** — Armes spéciales et Tir de suppression avaient été cités
+comme bénéficiaires de l'AOE dans le raisonnement, puis oubliés de la liste ordonnée elle-même lors
+d'un premier passage. Replacés ici, juste après Drones (aucune contrainte technique ne les positionne
+précisément — casables n'importe où après AOE, y compris avant Drones si préféré). Barrières
+(protection) suit la même logique qu'Armes spéciales, non listée séparément mais dans le même groupe.
+
+**Chantiers déjà "prêts" (`ROADMAP.md` §1) mais hors de cette séquence RAW** — indépendants des 9
+chantiers ci-dessus, casables en parallèle sans attendre quoi que ce soit de cette liste :
+Milieu par pièce (moteur monde — architecture déjà tranchée, prépare aussi v3 et le milieu hybride
+exo §16.2.5), Silhouette d'avaries exo (UI, composant frère de `BodySilhouetteSvg.jsx`), i18n Lot 5
+(catalogue `ref_*`), Fatigue Lot 4. Omis une première fois de cette discussion de séquence — pas
+abandonnés, juste sur une piste parallèle qui ne concerne pas la couverture RAW backend.
+
+- AOE en tête sur préférence explicite de Saar : une seule brique débloque 3 chantiers de contenu
+  (Armes spéciales, Tir de suppression, Force Polaris) — meilleur rendement de toute la liste.
+- AOE, Portes et Exo Étape A/B sont mutuellement indépendants sur le plan technique — leur ordre
+  relatif est un choix de priorité assumé, pas une dépendance.
+- Usure/Intégrité + Informatique/pannes suivent Exo Étape A/B : rendent l'exo-armure réellement
+  complète (dégradation, pannes) après que l'Étape A/B l'ait rendue jouable (déplacement/attaque).
+- Arts martiaux et Moral n'ont aucune dépendance technique identifiée — casables n'importe où dans
+  cette liste selon préférence produit, placés en fin par défaut faute de priorité exprimée.
+- Réparation (armure exo), marché légal/noir, champs de force portatifs, micro/nano-drones,
+  dégradation armures simples, sous-règles mineures de §1/§2/§3 : hors de cette séquence, sans ordre
+  particulier, à traiter au fil de l'eau une fois le bloc ci-dessus digéré.
+
+**Historique** : une première version de cette section (2026-08-25) proposait un ordre par déduction
+de dépendances techniques trouvées par recherche de code (grep), pas par compréhension du jeu — retiré
+le jour même, un maillon (Force Polaris → AOE) reposant sur une hypothèse jamais vérifiée en lisant la
+RAW. L'ordre ci-dessus a été établi différemment le lendemain : dépendances réelles vérifiées par
+lecture RAW directe, priorités discutées explicitement avec Saar plutôt que déduites seul.
+
+Exo-armures Étape A/B n'attend techniquement rien de cette liste — indépendant, placé après AOE/Portes
+par préférence de Saar, pas par contrainte.

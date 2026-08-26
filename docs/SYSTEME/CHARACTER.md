@@ -3,6 +3,13 @@
 > Dernière mise à jour : 2026-08-16 — Clôture `docs/PLANS/PLAN_WIZARD_MATERIEL_GAUGES.md` :
 > ressource `char_gauges` (jauges de matériel, gérées MJ) + validation MJ item par item de l'inventaire
 > (`char_inventory.validated_by_gm`), §3/§4/§5/§7 revus.
+>
+> Audit de compréhension approfondie 2026-08-26 (suite) : 2 références de migration encore stales
+> corrigées (`validated_by_gm`, `char_gauges` — toutes deux citaient "242", en réalité
+> `15_char_inventory.js`/`13_char_gauges.js`) ; routes mutations et toggle-learned confirmées ligne à
+> ligne (`char-sheet.js:792-859`, `:394-428`) ; séquence de seed `char_gauges` (`ON CONFLICT ...
+> ignore()`, agrégation multi-carrières) confirmée contre `creationService.js`. Trouvaille non
+> documentée avant ce jour : l'exception `isVaultOwner` sur les routes "GM uniquement" (§1).
 > Statut : Modules 1–6 + Module XP + Blessures + Armures + Inventaire + Jauges de matériel — 52
 > migrations appliquées
 
@@ -43,6 +50,16 @@ Supprimer un `character` VTT supprime automatiquement toute sa fiche Polaris.
 ### Ownership et accès
 
 > **Toutes les routes : joueur propriétaire (`characters.user_id === req.user.id`) OU rôle GM de la campagne.**
+
+**Ajouté (audit 2026-08-26) — exception `isVaultOwner` non documentée avant ce jour.** Sur un
+personnage Coffre (`campaign_id NULL`, voir `docs/VOCABULARY.md` "Coffre (compte)"), il n'existe
+aucun GM de campagne : `router.param('characterId')` (`char-sheet.js` ~ligne 100-111) pose alors
+`req.isVaultOwner = true` pour son propriétaire, qui obtient exactement les mêmes droits qu'un GM
+sur cette fiche précise. Toutes les routes marquées **GM uniquement** dans ce document (attributs
+`char-sheet.js:279`, skills `:435`, XP `:507`, mutations POST/DELETE `:827`/`:847`, augmentation de
+sols `:1053`) testent en réalité `!req.isGm && !req.isVaultOwner`, jamais `!req.isGm` seul — vérifié
+sur les 6 occurrences du fichier. Ne pas confondre avec un simple `isOwner` (PC6) : un joueur
+propriétaire d'un personnage de campagne normal n'a toujours pas ces droits.
 
 ---
 
@@ -314,7 +331,7 @@ PK = `id UUID`. FK `character_id → characters.id ON DELETE CASCADE`. FK `equip
 | slot | TEXT | nullable | localisation équipée — mono : `'T'`/`'C'`/`'BG'`/`'BD'`/`'JG'`/`'JD'`/`'D'`/`'Ce'` — multi : `'BG/BD'` |
 | quantity | INTEGER | NOT NULL DEFAULT 1 | |
 | custom_props | JSONB | nullable | propriétés libres (items manuels) |
-| validated_by_gm | BOOLEAN | NOT NULL DEFAULT false | Migration 242. Dérivé serveur uniquement (`req.isGm` à l'insertion/fusion de stack), jamais accepté du payload client — sinon un joueur s'auto-valide par un simple PUT. Bloque la progression du joueur en Wizard Step6 tant qu'il reste un item `false` (§5) |
+| validated_by_gm | BOOLEAN | NOT NULL DEFAULT false | Colonne de `15_char_inventory.js` (corrigé 2026-08-26, "migration 242" pointe aujourd'hui vers `242_legacy_zones_foreign_keys.js`, sans rapport). Dérivé serveur uniquement (`req.isGm` à l'insertion/fusion de stack), jamais accepté du payload client — sinon un joueur s'auto-valide par un simple PUT. Bloque la progression du joueur en Wizard Step6 tant qu'il reste un item `false` (§5) |
 | created_at | TIMESTAMPTZ | DEFAULT now() | |
 | updated_at | TIMESTAMPTZ | DEFAULT now() | |
 
@@ -323,7 +340,7 @@ PK = `id UUID`. FK `character_id → characters.id ON DELETE CASCADE`. FK `equip
 ---
 
 #### `char_gauges`
-PK composite `(char_sheet_id, category_key)`. FK `char_sheet_id → char_sheet.id ON DELETE CASCADE`. Migration 242. Ressource de personnage indépendante — jamais recalculée/écrasée par le cycle de réconciliation Wizard Step1-5, contrairement à `char_traits`/`gauge_delta` ou `char_pc_ledger`.
+PK composite `(char_sheet_id, category_key)`. FK `char_sheet_id → char_sheet.id ON DELETE CASCADE`. Table créée dans `13_char_gauges.js` (corrigé 2026-08-26, cohérent avec §2 — "migration 242" était faux ici aussi, même dérive que §2 avant sa propre correction). Ressource de personnage indépendante — jamais recalculée/écrasée par le cycle de réconciliation Wizard Step1-5, contrairement à `char_traits`/`gauge_delta` ou `char_pc_ledger`.
 
 | Colonne | Type | Contrainte | Notes |
 |---|---|---|---|
@@ -557,7 +574,10 @@ SkillsPanel.handleBuy(skill)
 
 ## 6. Logique métier — règles de calcul
 
-**Tout côté client JS pour l'affichage. Le serveur recalcule indépendamment via `server/src/lib/polaris.js` pour toute résolution mécanique (jets de dés, interactions entités).**
+**Tout côté client JS pour l'affichage. Le serveur recalcule indépendamment via `server/src/lib/charStats.js` pour toute résolution mécanique (jets de dés, interactions entités).** Corrigé 2026-08-26 —
+citait `polaris.js`, fichier inexistant (`server/src/lib/polaris.js` : zéro occurrence), et se
+contredisait déjà avec son propre PC20 (§9) qui cite correctement `charStats.js`. Trouvé en
+confrontant `PERSONNAGE_CALCULS.md`, qui a toujours cité le bon fichier.
 
 **Règle :** le client calcule pour la réactivité de l'UI (fiche personnage, totaux affichés). Le serveur est source de vérité pour toutes les valeurs utilisées dans une résolution mécanique. Les deux calculent indépendamment — le serveur ne fait jamais confiance au client pour une valeur mécanique.
 

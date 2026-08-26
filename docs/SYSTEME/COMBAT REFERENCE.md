@@ -17,6 +17,12 @@
 > **Pour le mécanisme de résolution réel, lire `docs/SYSTEME/COMBAT.md`, pas les sections ci-dessous**
 > — corrigées ponctuellement plutôt que réécrites pour ne pas dupliquer ce que COMBAT.md documente déjà
 > (Règle 2, `docs/RegleDocumentaire.md`). §3/§4/§6/§7 restent confirmés à jour (audit 2026-08-26).
+>
+> **Suite d'audit (2026-08-26)** : la mention "§6 confirmé à jour" ci-dessus était en fait incomplète —
+> §6.3 décrivait encore les Attaques Multiples comme une spec non construite (`multi_attack_malus`
+> en colonne stockée) alors que le mécanisme réel (compté à la volée, Session 165) est documenté dans
+> `COMBAT.md` depuis un moment — corrigé. 2 migrations encore stales corrigées (`sub_phase`,
+> `aimed_location`) et 1 citation de ligne fausse dans §7.7 (`socketCombatHelpers.js`).
 
 ---
 
@@ -31,7 +37,7 @@
 | campaign_id | PK UUID | — |
 | current_turn | INT | Nom réel de la colonne (anciennement documenté « round ») |
 | phase | TEXT | `'ROSTER'` / `'ANNOUNCEMENT'` / `'RESOLUTION'` (nom réel de la colonne, anciennement documenté « current_phase ») |
-| sub_phase | TEXT | Non documenté à l'origine : `'SLOT_ACTIVE'`/`'AWAITING_DEFENSE'`/`'AWAITING_DAMAGE'` (migration 81, consommé par `combatFSM.js`) |
+| sub_phase | TEXT | Non documenté à l'origine : `'SLOT_ACTIVE'`/`'AWAITING_DEFENSE'`/`'AWAITING_DAMAGE'` (colonne créée dans `33_combat_state.js`, contrainte `130_combat_state_constraints.js` — corrigé 2026-08-26, "migration 81" pointe aujourd'hui vers `81_texture_pack_categories.js`, sans rapport ; consommé par `combatFSM.js`) |
 | active_slot_idx | INT | **Périmé (audit 2026-08-26)** — n'existe plus, remplacé par la table `combat_timeline_entries` (voir ci-dessous). Colonne archivée uniquement (`migrations_archive/174_combat_timeline_resolution.js`) |
 
 ### combat_timeline_entries — file de résolution réelle (remplace active_slot_idx, migration `34_combat_timeline_entries.js`)
@@ -327,7 +333,15 @@ Double tranchant : si le bénéficiaire perd le test, l'adversaire peut casser l
 
 ---
 
-### 6.3 Attaques Multiples par Tour (LdB p.218-219)
+### 6.3 Attaques Multiples par Tour (LdB p.218-219) — ✅ Implémenté (Session 165)
+
+**Corrigé (audit 2026-08-26) — la sous-section « Implementation » ci-dessous décrivait une spec
+jamais construite ainsi (`multi_attack_malus` : zéro occurrence dans tout le code, seulement dans ce
+document et `docs/Old/COMPARATIF.md`).** Détail complet du mécanisme réel (CaC 4b +
+Tir Multi, `combat_timeline_entries`, `declaration_group_id`, `computeMultiAttackMalus` recompté à la
+volée sur les sœurs vivantes plutôt que stocké en colonne) : `docs/SYSTEME/COMBAT.md`
+§« Attaques multiples — CaC 4b et Tir Multi ». La règle RAW ci-dessous (malus, décalage de phase,
+plafond 3 attaques) reste exacte — seule la description de l'implémentation était fausse.
 
 **Regle avancee — doit etre annoncee lors de la declaration d'intention.**
 
@@ -344,10 +358,8 @@ Double tranchant : si le bénéficiaire perd le test, l'adversaire peut casser l
 
 **Actions exclusives incompatibles avec attaques multiples :** Charge, Tir vise, Rafale longue, Tir de suppression (voir 6.4).
 
-**Implementation :**
-- `CombatActionWindow` doit permettre de declarer N attaques (1/2/3) avec affichage du malus et des phases INI calculees.
-- `COMBAT_ACTION_DECLARE` insere N lignes dans `combat_actions` avec les sequences et initiative_at_execution calcules.
-- `combat_actions` stocke le `multi_attack_malus` (-5 ou -7) applique au jet.
+**Implémentation réelle** (pas la spec ci-dessous, jamais construite telle quelle) : voir
+`docs/SYSTEME/COMBAT.md` §« Attaques multiples ».
 
 ---
 
@@ -504,8 +516,10 @@ membre. Reste à la discrétion narrative du MJ.
 **Implémentation** — même patron que Tir visé (déclaration en phase 1, affinement en phase 2) :
 1. **ANNONCE** (`AssaultRangedPanel.jsx`, picker silhouette interactif) : le joueur choisit une zone
    (ou aucune = comportement aléatoire inchangé), stockée sur `combat_actions.aimed_location`
-   (migration 164, colonne texte nullable, même convention que `fire_mode`). **Aucun coût
-   d'Initiative** (contrairement à Tir visé).
+   (colonne créée directement dans `30_combat_actions.js`, corrigé 2026-08-26 — "migration 164"
+   pointe aujourd'hui vers `164_ref_equipment_skill_assoc_constraints.js`, sans rapport — colonne
+   texte nullable, même convention que `fire_mode`). **Aucun coût d'Initiative** (contrairement à
+   Tir visé).
 2. **RÉSOLUTION** (`resolveAssaultAction`, `socketCombatHelpers.js`) : le malus (`shared/
    armorConstants.js` `AIMED_LOCATION_MALUS`) est ajouté au Seuil, et le slot correspondant
    (`LOCATION_TO_SLOT`) est transmis à `damageService.resolveTargetHit` comme `forcedSlotCode` — qui
@@ -693,7 +707,7 @@ degats_nets = max(0, degats_bruts - blindage - rd)
 | Séquence Détection → Ami/Ennemi → Armement | LdB p.320 | À implémenter |
 | Retry détection à −5 INI (12→7→2) | LdB p.320 | À implémenter |
 | Cible acquise persistante | LdB p.320 | À implémenter |
-| Programmes = compétences directes (D20 ≤ niveau) | LdB p.281 | ✅ Implémenté (`programme.level + totalModComp + coverageModifier`, `socketCombatHelpers.js:1089-1120`) |
+| Programmes = compétences directes (D20 ≤ niveau) | LdB p.281 | ✅ Implémenté (`programme.level + totalModComp + coverageModifier`, `socketCombatHelpers.js:2496` — corrigé 2026-08-26, citait `:1089-1120`, zone sans rapport (localisation/bouclier) dans le fichier actuel) |
 | Télépilotage : `min(programme_armement_drone, TELEPILOTAGE_proprio)` | LdB p.319 | À implémenter (sprint télépilotage) |
 | Télépilotage : pas de Détection/Ami-Ennemi — cible directe | LdB p.319 | À implémenter (sprint télépilotage) |
 | Esquive programme (défense CaC) | LdB p.100 (drones de combat) | À implémenter |

@@ -1,4 +1,9 @@
 # SYSTEME/REACT.md — Règles React, dependency arrays, pièges hooks
+> Audit de compréhension approfondie 2026-08-26 : `handleTokenRotate`/`TOKEN_ROTATE` corrigés en
+> `handleTokenSetRotation`/`TOKEN_SET_ROTATION` (fonction/événement inexistants sous l'ancien nom,
+> vérifié `SessionPage.jsx`) ; prop Canvas3D `onTokenRotate` corrigée en `onTokenSetRotation`, liste
+> de props complétée ; table des handlers Échap complétée (5 réels, 3 documentés). `justSelectedRef`,
+> P40/P50/P57 reconfirmés exacts.
 > Source : SYSTEME.md §11–§14
 > Lire pour : tout useCallback/useEffect/useRef, lock éditeur, ordre déclaration React
 
@@ -24,7 +29,7 @@ DELETE /battlemaps/:id/editor-lock    → libère au démontage
 | `handleDragStart` (Canvas3D) | `isGm`, `user`, `characters` | ownership check stale |
 | raccourcis Digit1-5 (Editor3D) | `activeMaterial` | guard allowed_geometries stale |
 | `handleEntityActionResolve` (SessionPage) | `socket` | ENTITY_ACTION_RESOLVE silencieux |
-| `handleTokenRotate` (SessionPage) | `socket` | TOKEN_ROTATE silencieux |
+| `handleTokenSetRotation` (SessionPage) | `socket` | TOKEN_SET_ROTATION silencieux — corrigé 2026-08-26, cette ligne citait `handleTokenRotate`/`TOKEN_ROTATE`, qui n'existent pas sous ce nom dans `SessionPage.jsx` (vérifié `:565-567`) |
 | `handlePointerUp` (Canvas3D) | `onTokenRotate`, `characters`, `user` | rotation impossible |
 
 **Exception — actions Zustand :** stables par construction, pas besoin dans les deps.
@@ -104,13 +109,13 @@ if (e.code === 'AltLeft' || e.code === 'AltRight') { ... }
 
 ## Interfaces composants majeurs
 
-### Canvas3D — props (depuis SessionPage)
+### Canvas3D — props (depuis SessionPage) — corrigé 2026-08-26, liste partielle et un nom faux
 ```javascript
 <Canvas3D
   socket={socket}
   onTokenDoubleClick={handleTokenDoubleClick}
   onEntityClick={handleEntityClick}         // (entity, clientX, clientY)
-  onTokenRotate={handleTokenRotate}         // (tokenId)
+  onTokenSetRotation={handleTokenSetRotation} // corrigé — le prop réel n'est PAS onTokenRotate
   moveTarget={moveTarget}                   // null | { entity, interaction, tokenId }
   onMoveCancel={handleMoveCancel}
   dicePayload={lastDiceRoll}                // résultat DICE_RESULT pour animation
@@ -118,6 +123,9 @@ if (e.code === 'AltLeft' || e.code === 'AltRight') { ... }
   combatCameraCenter={combatCameraCenter}   // null | { x, z } coords DB (PE14)
   combatMoveMode={combatMoveMode}           // voir COMBAT.md shapes
   combatTargetMode={combatTargetMode}       // voir COMBAT.md shapes
+  // liste non exhaustive : mode, pendingMoveSelection, onAmbientTokenClick, losMode, onLosCancel,
+  // onLosResult, defaultTokenGlbUrl(Drone/Exo), displayLevel, statusEffectsMode, onCharacterDrop
+  // existent aussi (SessionPage.jsx:656-686) — ajouté 2026-08-26
 />
 ```
 
@@ -133,10 +141,12 @@ const justSelectedRef = useRef(false)
 // Passé en prop à Scene (stable par useRef)
 ```
 
-### Handlers Échap — 3 useEffects distincts (Canvas3D)
+### Handlers Échap — 5 useEffects distincts (Canvas3D) — corrigé 2026-08-26, étaient 3 documentés
 | Mode actif | Handler | Action |
 |---|---|---|
 | `moveTarget` (entité) | `e.key === 'Escape'` | `onMoveCancel?.()` |
 | `combatMoveMode` | `e.key === 'Escape'` | `combatMoveMode.onCancel()` |
 | `combatTargetMode` | `e.key === 'Escape'` | `combatTargetMode.onCancel()` |
+| (caméra libre) | `e.key === 'Escape'` | `setFreeCameraOverride(true)` — manquait à cette table |
+| `losMode` | `e.key === 'Escape'` | `onLosCancel?.()` — manquait à cette table |
 Chaque useEffect guard `if (!mode) return` — n'enregistre le listener que quand le mode est actif.

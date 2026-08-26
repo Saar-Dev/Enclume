@@ -1,4 +1,7 @@
 # SYSTEME/DICE.md — Flux dés, animation, DICE_RESULT
+> Audit de compréhension approfondie 2026-08-26 : P56 (`dieType` absent du payload) reconfirmé
+> ligne à ligne contre `socketDice.js`, cohérent avec `.claude/rules/dice.md`. Champ `secret` trouvé
+> manquant dans la liste « champs complets » du payload — ajouté.
 > Source : SYSTEME.md §10
 > Lire pour : tout code touchant les jets de dés (DICE_ROLL, DICE_RESULT, animation 3D, DiceRoller)
 
@@ -37,6 +40,10 @@ Dés V1 Html overlay : D10, D10_tens, D10_units (UV kite = V2 Blender)
   isCriticalSuccess, isCriticalFail,
   seed,               // XOR rolls — initialisé PRNG animation
   timestamp,
+  secret,             // bool, défaut false — ajouté 2026-08-26 (audit, absent malgré "champs
+                      // complets") : true → broadcast restreint au lanceur + GM uniquement
+                      // (socketDice.js, PE2 socket.data.role), pas à toute la room
+
   // Jets de compétence :
   skillLabel,         // défini → pas d'animation 3D (jets entité/combat)
   mechanicalTotal,    // total brut avant modificateurs

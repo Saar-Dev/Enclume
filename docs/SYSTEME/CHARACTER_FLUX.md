@@ -2,11 +2,31 @@
 > Complément technique de CHARACTER.md
 > Dernière mise à jour : 2026-05-09 — Session 55
 
+> **Audit de compréhension approfondie 2026-08-26 — dérive majeure trouvée et partiellement corrigée.**
+> Tout le côté inventaire/blessures de ce document (arbre des composants, `reloadKey`, chargement au
+> montage d'ArmorWoundPanel/InventoryPanel, flux équipement armure/container) décrit l'architecture
+> **avant** `docs/Old/PLAN_INVENTORY_UX.md` : depuis, `characterStore.js` (Zustand,
+> `inventoryByCharId`) via `useInventoryData.js` est la source unique, lue par ArmorWoundPanel/
+> WeaponPanel/InventoryBanner/InventoryPanel/StepMaterielEtBiens (Wizard) — confirmé
+> `client/src/character/CharacterWindow.jsx:200-201`, commentaire explicite : *« plus de
+> reloadKey/onInventoryMutated à orchestrer ici »*. `reloadKey`/`bumpInventoryVersion` survivent
+> uniquement pour `ModingWindow.jsx` (hors du store par choix, voir `CHARACTER.md` §5). Le détail
+> actuel et fiable de ce flux est dans **`CHARACTER.md` §5** — ne pas se fier aux sections marquées
+> ⚠️ PÉRIMÉ ci-dessous pour du code neuf ; elles sont conservées pour l'historique du chantier, pas
+> comme référence. Les flux compétences/attributs/XP/mutations (non touchés par ce chantier) restent
+> vérifiés exacts.
+
 Ce document décrit les flux de données, les dépendances entre composants, et les chaînes de chargement. À lire quand on modifie un composant Character.
 
 ---
 
 ## Arbre des composants
+
+⚠️ **PÉRIMÉ (audit 2026-08-26)** — onglet Matériel réorganisé depuis (chantier UX Matériel
+2026-08-05/06 + `PLAN_INVENTORY_UX.md`) : ContainerPanel a quitté ArmorWoundPanel pour WeaponPanel,
+GaugesPanel s'est ajouté, et l'état n'est plus « centralisé »/« local séparé » par panneau mais
+partagé via `characterStore` pour tous. Arbre réel détaillé dans `CHARACTER.md` §7. Conservé ici tel
+quel (2026-05-09) pour l'historique :
 
 ```
 SessionPage
@@ -70,6 +90,9 @@ openModal()
 
 ## Chargement au montage — ArmorWoundPanel
 
+⚠️ **PÉRIMÉ (audit 2026-08-26)** — `reloadKey` retiré, remplacé par `useInventoryData`/
+`characterStore`. Voir bannière en tête de doc et `CHARACTER.md` §5.
+
 ```
 ArmorWoundPanel(characterId, reloadKey)
   │
@@ -88,6 +111,9 @@ ArmorWoundPanel(characterId, reloadKey)
 ---
 
 ## Chargement au montage — InventoryPanel
+
+⚠️ **PÉRIMÉ (audit 2026-08-26)** — même correction : `characterStore`/`useInventoryData`, plus
+d'« état séparé d'ArmorWoundPanel » ni de mécanisme `reloadKey`. Voir `CHARACTER.md` §5.
 
 ```
 InventoryPanel(characterId)
@@ -201,6 +227,10 @@ handleBoxClick(severity, index)
 
 ## Flux équipement armure (LocationPanel)
 
+⚠️ **PÉRIMÉ (audit 2026-08-26)** — la mise à jour locale post-mutation décrite ici (`onInventoryChange`)
+est remplacée par l'écriture dans `characterStore` (`inventoryMutations.js`), lue par tous les
+panneaux via sélecteur. Le mécanisme serveur (PUT slot, règle 1+S+S) reste inchangé.
+
 ```
 handleEquip(itemId)
   → construit newSlot = join([...existingParts, slotCode])
@@ -222,6 +252,9 @@ handleUnequip(itemId)
 
 ## Flux équipement container (ContainerPanel)
 
+⚠️ **PÉRIMÉ (audit 2026-08-26)** — même correction que ci-dessus (`characterStore`), et ContainerPanel
+est désormais monté depuis `WeaponPanel.jsx`, plus `ArmorWoundPanel.jsx` (`CHARACTER.md` §7).
+
 ```
 handleEquip(itemId)
   → PUT /char-sheet/:id/inventory/:itemId { slot: type }   (type = 'D' ou 'Ce')
@@ -237,6 +270,10 @@ handleUnequip()
 ---
 
 ## Flux inventaire (InventoryPanel → reloadKey)
+
+⚠️ **PÉRIMÉ dans son ensemble (audit 2026-08-26)** — ce mécanisme `reloadKey`/`bumpInventoryVersion`
+n'existe plus pour ce flux (confirmé absent de `CharacterWindow.jsx` pour l'inventaire — commentaire
+explicite ligne 200-201). Flux réel : `CHARACTER.md` §5 « Onglet Matériel — inventaire ».
 
 ```
 InventoryPanel — mutation (ajout / suppression / déplacement container)
@@ -466,10 +503,13 @@ characters (VTT)
 - `onAdvantagesChange` est le seul canal de remontée vers CharacterSheet
 
 ### Modifier ArmorWoundPanel
-- État centralisé `wounds` et `inventory` : ne pas dupliquer dans les enfants
-- `handleInventoryChange` = mise à jour locale (map) — assez pour equip/unequip (item retourné complet)
-- `handleWoundsReload` = GET complet — obligatoire après toute mutation blessure (P49)
-- `reloadKey` déclenche un reload complet — ne pas l'utiliser à la légère
+⚠️ **PÉRIMÉ (audit 2026-08-26)** — `inventory` vient de `characterStore` par sélecteur pur (§5). Les
+blessures sont dans `characterStore.woundsByCharId` aussi, mais via un patron différent (corrigé
+2026-08-26, vérifié `ArmorWoundPanel.jsx`) : `ArmorWoundPanel` garde un `useState` local `wounds`,
+fait toujours son propre `GET /wounds` au montage (`loadWounds`) et écrit ensuite le résultat dans le
+store (`setStoreWounds`) — pas un sélecteur pur comme l'inventaire. `handleWoundsReload = loadWounds`
+(P49, GET complet après toute mutation blessure) reste donc bien valide. Plus de `reloadKey` dans les
+deux cas.
 
 ### Modifier LocationPanel
 - `slotCode` pour toute écriture en base (equip/unequip) — jamais `refCode`
@@ -478,6 +518,7 @@ characters (VTT)
 - Limite 3 couches vérifiée côté serveur ET côté client (`equippedItems.length < 3`)
 
 ### Modifier ContainerPanel
+- Monté depuis `WeaponPanel.jsx`, plus `ArmorWoundPanel.jsx` (corrigé 2026-08-26, `CHARACTER.md` §7)
 - Slot exclusif (`slot === type`) — pas de multi-slot, pas de mille-feuille
 - `availableItems` filtre `ref_location === type && slot === null` (item non déjà équipé ailleurs)
 

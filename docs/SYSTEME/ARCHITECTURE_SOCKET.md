@@ -1,6 +1,10 @@
 SYSTEME/ARCHITECTURE_SOCKET.md — Architecture de communication temps réel
 
     Dernière mise à jour : 2026-07-18
+    Audit de compréhension approfondie 2026-08-26 (suite) : référence à "SYSTEME/FSM_COMBAT.md"
+    corrigée (fichier inexistant, la vraie doc de combatFSM.js vit dans SERVICES_COMBAT.md §6) ;
+    double enregistrement spécial-casé de registerWizardHandlers (Coffre-native hors campagne +
+    avant SESSION_JOINED) documenté, absent jusqu'ici ; comptage useCombatSocket corrigé (21, pas 18).
     Lire pour : toute modification des flux WebSocket, du cycle de vie du socket, des hooks client ou des modules serveur.
 
 1. Vue d'ensemble
@@ -22,7 +26,8 @@ index.js (coordinateur)
  │   └── socketCombatHelpers.js     — resolveMeleeAction, resolveAssaultAction, resolveDroneAssaultAction, etc.
  ├── socketBattlemap.js     — MAP_SWITCH (registerBattlemapHandlers, index.js:256 — créé, voir correction ci-dessous)
  ├── socketTrade.js         — TRADE_*
- ├── socketWizard.js        — WIZARD_* (registerWizardHandlers, index.js:254)
+ ├── socketWizard.js        — WIZARD_* (registerWizardHandlers — corrigé 2026-08-26, appelé à
+ │                            index.js:63 ET :101, pas une seule fois à ":254", voir §2)
  └── socketCatastrophe.js   — Catastrophe (registerCatastropheHandlers, index.js:260) — les deux absents du reste de ce document jusqu'à cette correction
 
 **Résolu (ticket `bug_tickets`/`AUDIT-SYSTEME`, corrigé après l'audit du 2026-08-26)** : les handlers
@@ -46,7 +51,9 @@ Client :
 SocketProvider (créé dans SessionPage)
  ├── useTokenSocket()        — écoute TOKEN_MOVED, TOKEN_CREATED, TOKEN_DELETED, TOKEN_UPDATED, TOKEN_STATUS_UPDATED
  ├── useEntitySocket()       — écoute MAP_SWITCH, ENTITY_ACTION_PENDING, ENTITY_ACTION_RESULT, ENTITY_MOVE_RESULT
- ├── useCombatSocket()       — écoute les 18 événements COMBAT_* ; expose 12 états UI (reloadResult, damagePayload, etc.)
+ ├── useCombatSocket()       — écoute 21 événements COMBAT_* (corrigé 2026-08-26, comptage réel
+ │                            `socket.on(WS...)`, était 18) ; expose des états UI (reloadResult,
+ │                            damagePayload, etc.)
  ├── useSessionSocket()      — écoute SESSION_*, CHAT_MESSAGE, DICE_RESULT, MACRO_ROLL_RESULT, DOC_*, 'error'
  ├── useCharacterSocket()    — écoute WOUND_ADDED/UPDATED/REMOVED, INVENTORY_ADDED/UPDATED/REMOVED,
  │                            SOLS_UPDATED, GAUGE_UPDATED ; expose woundVersions
@@ -77,6 +84,18 @@ server/src/socket/index.js est la seule fonction exportée initSocket(io). Elle 
         Appelle tous les register* (token, battlemap, dice, entity, combat, trade) en leur passant io, socket et context (et pendingEntityActions pour entity, pendingMaps pour combat).
 
     Le handler disconnect est enregistré à l'intérieur de SESSION_JOIN, après les appels register*.
+
+**Ajouté (audit 2026-08-26) — `registerWizardHandlers` est spécial-casé, deux fois, pas dans le lot
+`register*` générique décrit ci-dessus :**
+- **Sans `campaignId`** (`index.js:62-73`, création Coffre-native `/vault/creation`, aucune campagne) :
+  branche dédiée qui retourne avant tout le reste — `registerWizardHandlers` posé avec
+  `campaignId: null`, plus `registerDiceRollHandler` **seul** (pas `registerDiceHandlers` en entier)
+  pour que les jets 1D10/1D100 de l'étape Avantages & Revers fonctionnent hors campagne (bug réel
+  corrigé, `docs/EN_COURS.md` WIZ28 — sans ce handler ciblé, `DICE_ROLL` partait dans le vide).
+- **Avec `campaignId`** (`index.js:101`) : posé délibérément **avant** l'émission de `SESSION_JOINED`,
+  alors que tous les autres `register*` restent après (§ci-dessous) — sinon une fenêtre réelle existe
+  où `WIZARD_JOIN`/`WIZARD_LOCK_UPDATE` arrivent avant que le serveur ait un listener, verrous MJ
+  inertes en silence (bug réel trouvé en test navigateur, `docs/PLAN_WIZARDCOLLAB.md`).
 
 Il n'y a pas de module socketVoxel.js — **plus aucun événement `VOXEL_*` n'existe nulle part dans le
 code** (client et serveur, résolu ticket `bug_tickets`/`AUDIT-SYSTEME`, voir §2 ci-dessus) : pas une
@@ -189,6 +208,8 @@ Violer cet ordre provoque des erreurs TDZ ou des références à des callbacks n
 
     Les anciens modules pendingMeleeDefense / pendingDamageActions / pendingStunActions ont été supprimés.
 
-    Le module combatFSM.js est documenté séparément dans SYSTEME/FSM_COMBAT.md.
+    Le module combatFSM.js est documenté séparément dans SYSTEME/SERVICES_COMBAT.md §6 — corrigé
+    2026-08-26, citait "SYSTEME/FSM_COMBAT.md", fichier qui n'existe pas (vérifié : aucun fichier
+    docs/SYSTEME/*FSM* sur le disque).
 
 Document généré depuis ARCHI_REWORK_DONE.md (REWORK-08, REWORK-09, REWORK-15, REWORK-11, REWORK-12, REWORK-14, REWORK-17).

@@ -4,6 +4,9 @@ SYSTEME/ENTITES.md — Entités libres du monde 3D
 
     Remplace l'ancienne version (système Redis obsolète).
     Statut : Document de référence.
+    Audit de compréhension approfondie 2026-08-26 : événements WS (§7.2), assertWallPlacementState,
+    withEntityScale, absence réelle de consommation du champ animations (§5.4) et fichiers de
+    référence (§9) confirmés contre le code. Aucune correction nécessaire.
     Lire pour : tout travail sur les entités 3D libres, leur cycle de vie, leur apparence et leur
     persistance.
 

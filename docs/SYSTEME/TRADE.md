@@ -1,5 +1,9 @@
 # SYSTEME/TRADE.md — Marchands et Échange
 
+> Audit de compréhension approfondie 2026-08-26 : `SELL_OFFER_TTL_SEC=120`, absence réelle d'émission
+> de `TRADE_MERCHANT_UPDATED`, `isEquippableLocation` (`inventoryRules.js`) et la route
+> `GET /merchants/my-sell-offer` confirmés exacts contre le code. Doc d'une fiabilité remarquable —
+> aucune correction de fond au-delà des migrations déjà réparées en §3/§12.
 > Responsabilité unique : le domaine transactionnel entre personnages et avec le MJ — catalogue
 > marchand + achat, échange PJ↔PJ, revente PJ→GM, transfert direct (ex. recharge de drone).
 > Autorité de la fiche personnage, de l'inventaire (`char_inventory`) et du solde `sols` :

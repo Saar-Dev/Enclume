@@ -1,6 +1,10 @@
 MATERIAUX.md — Système de matériaux de surface (état actuel, v2)
 
     Version : 2026-08-02 — document créé lors de l'audit du pipeline de matériaux, puis corrigé après analyse critique.
+    Audit de compréhension approfondie 2026-08-26 : DEFAULT_SURFACE_MATERIAL_PRESET,
+    OBSOLETE_ROOM_APPEARANCE_FIELDS, table pbrForProcedural (§4.3) et absence réelle d'invalidation du
+    cache procédural (§4.4) reconfirmés ligne à ligne contre le code. Doc d'une fiabilité remarquable —
+    aucune correction de fond nécessaire au-delà du chaînon déjà réparé le même jour (§2.1/§5.2).
 
     Statut : Document de référence décrivant l'existant.
     Lire pour : tout travail sur l'apparence des murs, sols, plafonds et le générateur procédural.

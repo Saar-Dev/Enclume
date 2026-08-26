@@ -1,5 +1,13 @@
 # SYSTEME/EXOARMURE.md — Architecture exo-armure (schéma, services, routes, catalogue)
 
+> Audit de compréhension approfondie 2026-08-26 (suite, priorité haute — chantier actif) : §5/§8
+> reconfirmés au caractère près contre `CombatExoActionWindow.jsx` — « se relever » et « passer le
+> tour » sont bien les deux seules actions réellement câblées (commentaire du code lui-même : portée
+> volontairement étroite, armement/hardpoints au Lot C). Trouvaille réelle : §7 citait une route
+> `GET /api/exo-equipment` et un fichier `exoEquipment.js` qui n'existent pas — le catalogue exo passe
+> en réalité par la route générique `GET /api/equipment` (confirmé dans `ExoSystemsPanel.jsx`) depuis
+> la fusion §1. Valeurs `family` corrigées (`Exo-arme`/`Exo-systeme`, pas `Systeme`) — vérifiées en
+> base réelle, pas seulement dans le code.
 > Source : `docs/PLANS/PLAN_EXOARMURE.md` (Lots 1-4, Lot B, catalogue §12-§14, illustration §15) — le
 > plan garde le détail du raisonnement et des décisions ; ce document garde l'état construit.
 > Règles RAW et intention de conception (attributs, dégâts, Intégrité, Incidents) : `docs/MANUELS/
@@ -54,8 +62,11 @@ d'Initiative, `manufacturer`/`price`/`rarity`/`tech_level`/`autonomy` (commerce)
 > table dans `server/src/db/migrations/` (recherche exhaustive) — seule mention restante, dans le
 > **contexte** d'un ticket `bug_tickets` déjà marqué `resolved` (`c9915238-...`, "Catalogue marchand
 > ignore ref_exo_equipment"). La fusion (`docs/Old/PLAN_EXOEQ_FUSION.md`) a bien eu lieu : les
-> systèmes/armes exo vivent désormais **dans `ref_equipment`** (`family='Exo-arme'`/`'Systeme'`, seed
-> `303_ref_equipment_seed.js`), au même titre que l'équipement humain — `tradeService.js:getCatalog`
+> systèmes/armes exo vivent désormais **dans `ref_equipment`** (`family='Exo-arme'`/`'Exo-systeme'` —
+> corrigé 2026-08-26, citait `'Systeme'` sans le préfixe ; vérifié en base réelle, deux valeurs
+> exactes, `ExoSystemsPanel.jsx` interroge aussi `family='Equipement Général'` pour les capteurs
+> portables — seed `303_ref_equipment_seed.js`), au même titre que l'équipement humain —
+> `tradeService.js:getCatalog`
 > (`db('ref_equipment').select('*')`) les voit donc déjà nativement, sans code séparé à écrire (d'où
 > le ticket déjà résolu).
 
@@ -291,7 +302,7 @@ patron que `ref-equipment-tool.html`), accessible depuis `/admin` → tuile "Ill
 |---|---|---|
 | `GET /api/exo-templates` | `requireAuth` | Liste les 16 modèles (colonnes résumé + `illustration_url`) — sélecteur |
 | `POST /api/exo-templates/:id/illustration` | `requireAdmin` | Upload illustration modèle (§6) |
-| `GET /api/exo-equipment?family=arme\|systeme` | `requireAuth` | Catalogue `ref_exo_equipment`, lecture seule |
+| ~~`GET /api/exo-equipment?family=arme\|systeme`~~ | — | **Périmé (audit 2026-08-26)** — cette route/ce fichier `exoEquipment.js` n'existe pas (vérifié, zéro occurrence de `exo-equipment` dans `server/src`). Conséquence directe de la fusion §1 : le catalogue exo se lit via la route générique `GET /api/equipment?family=Exo-arme\|Exo-systeme\|Equipement%20Général` (`equipment.js`, déjà documentée dans `ADMIN.md`), consommée directement par `ExoSystemsPanel.jsx`/`ExoWeaponsPanel.jsx` — pas de route dédiée. |
 | `GET /:characterId/exo` | ouvert (membre campagne) | `exo_sheet.*` + `template_name`/`template_illustration_url` joints |
 | `PUT /:characterId/exo` | `exoIsGmOrOwnerOrPilot` | 2 modes exclusifs : `template_id` seul → `applyExoTemplate` ; sinon patch des 19+4 champs de base + `pilot_character_id` |
 | `PUT /:characterId/exo/integrity` | idem | Patch des 6 colonnes `itg_*` |
@@ -302,8 +313,8 @@ patron que `ref-equipment-tool.html`), accessible depuis `/admin` → tuile "Ill
 | `GET/POST/PUT/DELETE /:characterId/exo/computers[/:id]` | idem | CRUD `exo_computers` — Intégrité fournie par l'appelant, pas de jet serveur ici (contraste avec `applyExoTemplate`) |
 | `GET/POST/PUT/DELETE /:characterId/exo/programs[/:id]` | idem | CRUD `exo_programs`, revalide Potentiel/Niveau max de l'ordinateur si `exo_computer_id` fourni |
 
-Toutes montées dans `server/src/routes/character/char-sheet.js` sauf les deux premières
-(`exoTemplates.js`) et `ref_exo_equipment` (`exoEquipment.js`).
+Toutes montées dans `server/src/routes/character/char-sheet.js` sauf `GET/POST /api/exo-templates*`
+(`exoTemplates.js`) — corrigé 2026-08-26, `exoEquipment.js` n'existe pas, voir ligne barrée ci-dessus.
 
 ---
 

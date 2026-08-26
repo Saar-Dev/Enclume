@@ -15,12 +15,24 @@
 > esthétique/frontend, tant que des mécaniques entières manquent encore côté serveur — **pas un
 > invariant** (retiré de `docs/FOUNDATION.md` pour cette raison), une priorité de travail assumée.
 >
-> **Correction (2026-08-25, analyse à charge)** : l'ordre de séquencement proposé plus bas
-> (Usure/Intégrité → AOE → Armes spéciales → ...) a été retiré — construit par déduction de
-> dépendances techniques (grep, fichiers qui se référencent), pas par une compréhension réelle du jeu
-> ni de ce qui compte pour Saar. Seul point confirmé par Saar : Usure/Intégrité et Informatique/
-> pannes sont nécessaires pour *finir* Exo-armures. Le reste de l'ordre reste à établir avec lui,
-> pas à déduire seul.
+> **Ordre établi avec Saar (2026-08-26)** — remplace la correction du 25 ci-dessous (conservée pour
+> l'historique de pourquoi un premier ordre déduit seul avait été retiré) : **AOE → Portes → Exo
+> Étape A/B → Usure/Intégrité + Informatique/pannes exo → Drones (télépilotage etc.) → Armes spéciales
+> + Tir de suppression (débloqués par l'AOE) → Force Polaris (Lot 1 : cœur + pouvoirs à cible unique)
+> → Arts martiaux/Moral (sans contrainte d'ordre entre eux)**. AOE en tête sur préférence explicite de
+> Saar (meilleur rendement : débloque 3 chantiers de contenu en une seule brique). Portes et Exo
+> restent mutuellement indépendants d'AOE — l'ordre entre les trois est un choix de priorité assumé,
+> pas une dépendance technique. **Hors de cette séquence, casables en parallèle sans dépendance** :
+> Milieu par pièce, Silhouette exo UI, i18n Lot 5, Fatigue Lot 4 (tous déjà "prêts" en §1 ci-dessous,
+> omis une première fois de la discussion de séquence — analyse à charge du 2026-08-26). Détail des
+> dépendances réelles vs priorités : `docs/SYSTEME/COUVERTURE_RAW.md` (section "Ordre").
+>
+> **Correction (2026-08-25, analyse à charge, historique)** : l'ordre de séquencement proposé plus bas
+> (Usure/Intégrité → AOE → Armes spéciales → ...) avait été retiré une première fois — construit par
+> déduction de dépendances techniques (grep, fichiers qui se référencent), pas par une compréhension
+> réelle du jeu ni de ce qui compte pour Saar. L'ordre ci-dessus, du 26, a été établi différemment :
+> discuté explicitement avec Saar, dépendances réelles vérifiées par lecture RAW directe (AOE↔Force
+> Polaris confirmé, pas déduit d'un nom de sommaire) plutôt que par grep de code.
 > **Refondu le 2026-08-25** (Claude/Saar) — l'ancienne version accumulait un historique daté en tête
 > (2026-07-15 → 2026-08-23, ~110 lignes de blockquotes) jamais purgé, et **8 des 15 fichiers
 > `docs/PLANS/*.md` n'y apparaissaient nulle part** (`PLAN_ADMIN_BACKUP`, `PLAN_COMBAT_MODE_AMBIANT`,
@@ -65,9 +77,9 @@
 | Chantier | Doc(s) | Ce qui manque |
 |---|---|---|
 | Armes spéciales (fouets/chaînes, fusil à pompe, lance-flammes, grenades/mines) | `PLANS/PLAN_ARMES_SPECIALES.md` | Le fichier est une ligne (`Lire @REGLE_AMRES_SPECIALES.md` — typo dans le nom, le vrai fichier est `REGLES/REGLES_ARMES_SPECIALES.md`). RAW transcrite, zéro recherche code. Prérequis confirmé : la résolution de zone d'effet (AOE) — voir ligne dédiée ci-dessous, n'existe pas encore dans le pipeline de combat |
-| Résolution de zone d'effet (AOE) | — (aucun PLAN, brique d'infrastructure transversale) | N'existe pas dans le pipeline de combat actuel (vérifié par recherche, 2026-08-25). **Confirmé par Saar** : prérequis pour Armes spéciales (fusil à pompe/lance-flammes/grenades, RAW explicite) et pour le Tir de suppression/couverture. Force Polaris probablement aussi, mais ce lien précis reste [HYPOTHÈSE] — voir ligne dédiée. À construire une fois plutôt que plusieurs fois (§9, `COUVERTURE_RAW.md`) |
+| **Résolution de zone d'effet (AOE) — priorité #1 (ordre du 2026-08-26)** | — (aucun PLAN, brique d'infrastructure transversale) | N'existe pas dans le pipeline de combat actuel (vérifié par recherche, 2026-08-25). Prérequis confirmé pour Armes spéciales (fusil à pompe/lance-flammes/grenades, RAW explicite), Tir de suppression/couverture, **et désormais confirmé aussi pour Force Polaris** (2026-08-26, lecture directe de `REGLEPOLARIS.md` — voir ligne dédiée, ce n'est plus une hypothèse). Le chantier le plus rentable de cette table : débloque 3 chantiers de contenu en une seule brique. À construire une fois plutôt que plusieurs fois (§9, `COUVERTURE_RAW.md`) |
 | Corps à corps avancé / Arts martiaux (techniques offensives/défensives, Saisie/Lutte) | — (RAW transcrite : `REGLES/REGLECACARTMARTIAUX.md`, **aucun PLAN écrit**, gap trouvé 2026-08-25) | Rien cadré. Indépendant d'AOE/Usure — peut être cadré en parallèle |
-| Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[HYPOTHÈSE, non vérifiée]** dépendrait en partie de la résolution AOE ci-dessus — déduit des noms de pouvoirs (Barrière, Onde de choc, Champ...), le texte RAW réel de ce chapitre n'a pas été lu. À vérifier avant de cadrer. Décision de scope nécessaire dans tous les cas (chapitre entier ou sous-ensemble prioritaire) |
+| Force Polaris (pouvoirs) | — (aucun PLAN écrit, absent de ce document jusqu'au 2026-08-25) | Chapitre entier non entamé, ~40 pouvoirs RAW nommés (détail `COUVERTURE_RAW.md` §4). **[VÉRIFIÉ] 2026-08-26** — `docs/REGLES/REGLEPOLARIS.md` existe et a été lu directement (la note du 25 cherchait le mauvais nom de fichier) : le cœur du mécanisme (Maîtriser/Libérer/Contrôler, Choc Polaris, Incidents 1D100) est indépendant de l'AOE et codable seul ; la majorité des pouvoirs ont réellement un paramètre Zone d'effet (confirmé, pas déduit) ; un sous-ensemble à cible unique (Contrôle mental confirmé, Dague psychique probable) ne dépend pas de l'AOE. **Premier lot réaliste sans attendre l'AOE** : cœur du mécanisme + pouvoirs à cible unique. Reste à faire avant cadrage complet : cataloguer les ~40 pouvoirs un par un (zone vs cible unique), pas fait en entier |
 | Décorations murales (décals) | `PLANS/PLAN_DECALS.md` **+** `PLANS/PLAN_RW_MATERIAUX.md` Lot 3 | **Chevauchement réel non résolu** (trouvé 2026-08-25) : Lot 3 de RW_MATERIAUX traite les décals comme motifs cuits dans la texture procédurale (`PATTERN_PRESETS`, uniforme ou en masque) ; `PLAN_DECALS.md` les traite comme objets placés individuellement (position/rotation/taille propres, clic pour poser). Deux réponses concurrentes à la même question. **À trancher avec Saar** avant de cadrer l'un ou l'autre : l'un remplace l'autre, ou les deux coexistent comme deux sous-lots complémentaires — puis fusionner les deux documents (Règle 11, une info = un endroit). Actuellement en analyse par un agent parallèle (2026-08-25) |
 | Rework matériaux/textures (texture de base + PBR + procédural par-dessus) | `PLANS/PLAN_RW_MATERIAUX.md` | Spécification complète (Lots 0-4, dont Lot 3 = décals ci-dessus), aucune trace de code démarré malgré une spec détaillée et datée (2026-08-02). Chantier esthétique — cohérent avec la philosophie backend-first, à cadrer mais pas prioritaire |
 | Usure & Intégrité du matériel | `PLANS/PLAN_USURE&INTEGRITE.md` | Stub (`Lire @MANUEL_USURE.md`, jamais lu à ce jour). Tête de chaîne du cluster Catastrophe/Matériel (mécanise 3 entrées de la table Catastrophe combat sans rien inventer côté RAW) — **confirmé par Saar (2026-08-25) : nécessaire pour finir Exo-armures**, avec Informatique/pannes ci-dessous |
@@ -80,7 +92,6 @@
 |---|---|---|
 | Sauvegarde automatique de l'instance | `PLANS/PLAN_ADMIN_BACKUP.md` | Lots 1-3 prêts à déployer, Lots 4-5 spécifiés pour activation future — attend le remplacement du serveur distant Kiwi par une instance stable (confirmé Saar, 2026-08-25) |
 | Battlemap 2D (illustration/tokens sur fond 2D) | `PLANS/PLAN_BATTLEMAP2D.md` | Lot 0 (cadrage) clos, aucun code. Non urgent, peu pertinent actuellement (confirmé Saar, 2026-08-25) |
-| Résolution des Tests critiques/Catastrophe par marge (pas par valeur de dé) | `Old/PLAN_TEST_CRITIQUE.md` | Cadrage v1 en pause côté Saar — doit revenir avec la lecture RAW exacte de la table de marge avant de trancher. Bloque uniquement le Lot 8 (Réparation) d'Exo-armures, aucune autre dépendance active |
 
 ## 4. Backlog — idée retenue, aucun PLAN écrit
 
@@ -98,23 +109,25 @@
 
 ## 5. Dettes ponctuelles ouvertes (non couvertes par un PLAN)
 
-- **Audit doc SYSTEME vs code réel (2026-08-26) — CLOS**, 25 des 33 docs `docs/SYSTEME/*.md`
-  corrigés (les 8 restants n'avaient aucune divergence trouvée par les 7 agents Explore). Trouvailles
-  les plus significatives : `COMBAT REFERENCE.md`/`COMBAT_FLUX.md` décrivaient un mécanisme de
-  résolution abandonné depuis la Session 159 ; `CHARACTER.md` décrivait un schéma `char_advantages`/
-  `ref_mutations` entièrement remplacé ; `EXOARMURE.md` décrivait `ref_exo_equipment` comme une table
-  vivante alors qu'elle a été fusionnée dans `ref_equipment` (`docs/Old/PLAN_EXOEQ_FUSION.md`) ;
-  `COMBAT.md` (section combattant exo) n'avait jamais été mise à jour avec les correctifs
-  §16.2.1/16.2.2/16.2.5 codés en tout début de cette session. Un vrai bug trouvé au passage (pas
-  juste un problème de doc) : ticket `bug_tickets`/`AUDIT-SYSTEME` ("VOXEL_ADD/REMOVE/UPDATE et
-  MAP_SWITCH/MAP_VIEWPORT — client émet, aucun handler serveur"), émissions no-op silencieuses depuis
-  le commit `d0ee0af`. Le défaut systémique (numéros de migration périmés depuis la refonte migrations
-  2026-08-22) a été corrigé dans tous les documents où il a été trouvé, avec vérification directe de
-  chaque numéro contre le fichier réel avant correction (pas de confiance aveugle dans les rapports
-  d'agents). **Non exhaustif malgré tout** : les agents ont eux-mêmes signalé des sections "non
-  vérifiées faute de temps" à l'intérieur de plusieurs docs corrigés (ex. la plupart des codes PC de
-  `CHARACTER.md` au-delà de PC6/PC22, `COMBAT REFERENCE.md` §6 tables RAW, `COMBAT_FLUX.md` §6-14
-  pipelines d'attaque) — à garder en tête, pas une garantie de complétude à 100 %.
+- **Audit de compréhension approfondie des 31 docs `docs/SYSTEME/*.md` (2026-08-26) — CLOS**, les
+  31 en statut 🔎 dans `INDEX.md` (upgrade depuis le premier passage ✅ plus superficiel du même jour,
+  25/33 par sondage d'agents). Deuxième passage : lecture intégrale de chaque doc par moi-même,
+  confrontation directe au code (pas de confiance aveugle dans un rapport d'agent), un fichier à la
+  fois. Trouvailles les plus significatives, au-delà des ~50 numéros de migration périmés (refonte
+  2026-08-22) déjà corrigés : `CHARACTER_FLUX.md` décrivait une architecture d'inventaire (`reloadKey`)
+  remplacée par `characterStore` sans que le doc ait suivi ; `COMBAT REFERENCE.md` §6.3 décrivait les
+  Attaques Multiples comme non construites alors qu'elles le sont depuis la Session 165 ; deux dettes
+  documentées comme actives (STUN2, RW17-1) se sont révélées déjà résolues ; `CONVENTIONS.md`
+  contenait une collision de code non résolue (PC28 utilisé pour 3 significations distinctes) ;
+  `EXOARMURE.md` citait une route/fichier `exo-equipment`/`exoEquipment.js` inexistants (le catalogue
+  passe par `/api/equipment`) — pertinent pour l'Étape B ci-dessus. Un vrai bug de code trouvé au
+  passage (pas juste un problème de doc) : ticket `bug_tickets`/`AUDIT-SYSTEME` ("VOXEL_ADD/REMOVE/
+  UPDATE et MAP_SWITCH/MAP_VIEWPORT — client émet, aucun handler serveur"), **résolu depuis** (code
+  mort supprimé, `MAP_SWITCH` recréé dans `socketBattlemap.js`). `docs/SYSTEME/INDEX.md` §8 (nouvelle
+  section) indexe les couplages inter-systèmes trouvés en route (Entités/Tokens ↔ Moteur monde, Coffre
+  ↔ Character) — alimentée au fil de l'eau, pas une carte de dépendances exhaustive dédiée (décision
+  explicite : le risque de péremption d'une carte sans déclencheur de mise à jour naturel dépasse sa
+  valeur, voir discussion 2026-08-26).
 - Module Blessures — animation Tests de Choc restante (l'apparition des badges de statut est faite)
 - Options de campagne à finir : `revers`, `skill_natural_prog`, `celebrity`
 - Membres détruits (distinction Mortelle vs Membre détruit) — différé (Saar 2026-07-29), la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant que cette option n'existe pas

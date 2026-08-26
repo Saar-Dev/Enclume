@@ -1,6 +1,10 @@
 SYSTEME/PERSONNAGE_CALCULS.md — Chaîne de calcul des personnages
 
     Dernière mise à jour : 2026-07-19
+    Audit de compréhension approfondie 2026-08-26 : toutes les fonctions citées (§4) confirmées
+    existantes avec la signature décrite dans shared/polarisUtils.js et server/src/lib/charStats.js —
+    aucune correction nécessaire ici. A permis de repérer une contradiction dans CHARACTER.md §6, qui
+    citait un fichier serveur inexistant (polaris.js) au lieu de charStats.js — corrigé sur place.
     Sources : shared/polarisUtils.js, server/src/lib/charStats.js
     Lire pour : comprendre où sont les calculs d'attributs, compétences, seuils et résistances.
     Voir aussi : @PERSONNAGE_API pour les routes, @BLESSURES pour les blessures, @SERVICES_COMBAT pour les dégâts.

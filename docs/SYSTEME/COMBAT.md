@@ -1,4 +1,10 @@
 # SYSTEME/COMBAT.md — Données personnage serveur, calculs combat, state_character
+> Audit de compréhension approfondie 2026-08-26 : lu intégralement (1447 lignes) et confronté au code
+> réel. Trouvaille principale : § « Rendu 3D combat — Canvas3D » décrivait un rendu par anneaux
+> concentriques remplacé depuis le 2026-08-07 par un réticule par case de chemin serveur — corrigé,
+> voir la sous-section concernée. Le reste du document (dispatcher combattant, échelle de phases,
+> attaques multiples, DSL munitions, tables de résolution) confronté au code par sondage ciblé sans
+> autre écart trouvé au-delà des migrations déjà corrigées plus tôt dans la session.
 > Source : SYSTEME.md §17
 > Lire pour : COMBAT_ACTION_CONFIRM, resolveAssaultAction, charStats.js, state_character
 > Règles LdB complètes (actions, déplacements, CaC, tir) : voir `docs/SYSTEME/REGLES_LdB.md`
@@ -335,8 +341,10 @@ Le plafond d'une ligne non touchée se calcule séparément via `getSkillCap(ski
   - arme snapshot (`ref_damage_h`, `ref_range`)
   - **TOUS les items `container != 'Coffre'`** → `totalWeight` pour `calcEncumbrancePenalty` (fetch séparé)
 - `character_wounds` → pour `calcWoundPenalty`
-- `combat_roster.state_character` → `is_rushed` pour le malus −5 Compétence
-  **PC28 :** lire `state_character` depuis `combat_roster`, jamais depuis `combat_actions` — les actions ne portent pas l'état courant du slot
+- `combat_roster.state_vitesse === 'rushed'` pour le malus −5 Compétence — corrigé 2026-08-26, cette
+  ligne citait encore `state_character.is_rushed`, contredisant §"state_character JSONB" du même
+  document (`is_rushed` migré vers `state_vitesse`, voir plus bas)
+  **PC28 :** lire l'état depuis `combat_roster`, jamais depuis `combat_actions` — les actions ne portent pas l'état courant du slot
 
 **Cible :**
 - `char_sheet WHERE character_id = X` → `char_sheet_id` (pour `resolveWoundInsertion`)
@@ -1426,18 +1434,25 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 
 ### Rendu 3D combat — Canvas3D
 
-#### Anneaux déplacement combat
-- Centré sur `myToken` : `cx = pos_x+0.5`, `cz = pos_y+0.5` (PE14)
-- Y : `pos_z + 1.0 + 0.05` (PE34 — pieds du token)
-- Group rotation `[-Math.PI/2, 0, 0]` (couché au sol)
-- `zones[0]` → `circleGeometry args=[radius, 64]`
-- `zones[i>0]` → `ringGeometry args=[prev.radius, radius, 64]`
-- Material : `transparent, opacity=0.25, depthWrite=false`
+#### Chemin de déplacement combat — corrigé 2026-08-26, entièrement périmé
 
-#### Cursor wireframe case survolée (combatMoveMode)
-- Mis à jour dans `handlePointerMove` : `{ x: Math.floor(worldPos.x), z: Math.floor(worldPos.z) }`
-- Y : `curToken.pos_z + 1.0 + 0.05` ou `0.1` si token non trouvé
-- `planeGeometry args=[1,1]` + wireframe blanc
+**Ce que décrivaient ces deux sous-sections (anneaux concentriques `zones[0]`/`zones[i>0]` en
+`circleGeometry`/`ringGeometry`, offset `pos_z + 1.0 + 0.05`) n'existe plus** — remplacé le
+2026-08-07 (retour Saar, commentaire explicite `Canvas3D.jsx:1273-1276`) par un réticule par case le
+long du chemin réellement calculé par le serveur, cohérent avec la note déjà présente plus haut dans
+ce même document (§ MOVE_ZONE_DEFS : *« un rayon client ou une distance à vol d'oiseau n'est plus
+une autorité de déplacement »*) — contradiction interne non remarquée jusqu'à cet audit.
+
+Flux réel :
+- `requestWorldPathPreview` (`Canvas3D.jsx:656`) appelle `POST /battlemaps/:id/world-path-preview`
+  (`MOTEUR_MONDE.md` §5.3 — aperçu serveur, jamais un rayon calculé côté client) avec le budget
+  `combatMoveMode.allures.max` ; construit `currentPath` à partir de `result.plan.segments` (points
+  déjà en espace monde canonique, mètres/pieds).
+- Rendu : un `<GroundCursorReticule>` (`SceneReticules.jsx`) par case de `currentPath`, coloré par
+  `getCombatPathColor(cell.spentM, combatMoveMode.allures)` (`shared/combatMovement.js`) — bleu/vert/
+  orange/rouge selon l'allure requise pour atteindre cette case, pas un jeu d'anneaux de portée fixes.
+- Case destination sélectionnée : surbrillance bleue à `pendingMoveSelection.targetPosZ + 0.06`
+  (`#3b82f6`, `planeGeometry`), pas l'ancien offset `+1.0+0.05`.
 
 #### Ligne de visée assaut (targetLinePoints)
 - `useMemo([combatTargetMode?.pendingTargetId])`

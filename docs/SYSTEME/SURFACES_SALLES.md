@@ -4,6 +4,12 @@
 > (bug `SALLENIV1` résolu, sol de salle plaqué à y=0 hors étage 0) ; section "Rendu de l'eau" ajoutée
 > puis mise à jour : nappe ambiante côté client retirée (dette `EAU1`), eau en jeu recentrée sur le
 > mécanisme canonique compartiments + effet runtime "inondation".
+>
+> Audit de compréhension approfondie 2026-08-26 : reconfronté au code réel (`getRoomBaseY`/
+> `getRoomTopY` bien présents dans le barrel `surfaceData.js` + `surfaceRooms.js`/`surfaceCore.js`/
+> `roomWalls.js` ; `computeSurfaceWaterCells` bien absent de tout le code source, seule trace dans ce
+> doc et un script d'import historique ; `addCompartments`/`sealedByDefault: room.blocksWater !== false`
+> confirmés ligne à ligne dans `worldCompiler.js`). Aucune correction nécessaire — doc fidèle au code.
 
 > Lire pour : tout code touchant `surface_data`, l’outil Salle, les murs de salles, les textures de sol/plafond/mur et l’étanchéité.
 

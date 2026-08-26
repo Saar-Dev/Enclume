@@ -1,6 +1,10 @@
 SYSTEME/PERSONNAGE_API.md — Routes REST de la fiche personnage
 
     Dernière mise à jour : 2026-07-19
+    Audit de compréhension approfondie 2026-08-26 (suite) : routes drone/quick-equip/moding
+    confirmées ligne à ligne, filtrage gm_notes avant broadcast CHARACTER_UPDATED confirmé
+    (`characters.js`, destructuring explicite avant les deux broadcasts). Aucune autre correction
+    nécessaire au-delà du chemin déjà réparé ci-dessous.
     Sources : server/src/routes/character/char-sheet.js (corrigé 2026-08-26, sous-dossier character/
     omis), server/src/routes/characters.js, server/src/routes/creation.js
     Lire pour : comprendre comment le client lit et modifie la fiche, et quels événements WS sont émis.

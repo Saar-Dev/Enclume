@@ -1,10 +1,12 @@
 # INDEX.md — Carte documentaire d’Enclume
 
-> Version : 2026-08-25 — section PLANS ajoutée (§6, pointeur vers docs/ROADMAP.md pour le statut),
-> entrée FOUNDATION.md rafraîchie (n'est plus un squelette), hiérarchie de chargement alignée sur
-> RegleDocumentaire.md §12/CLAUDE.md §1. Précédent : 2026-08-12 — ajout SYSTEME/ADMIN.md (rôle
-> administrateur, page /admin) et SYSTEME/TICKETS.md (système de tickets, remplace BUGIDENTIFIE.md
-> archivé).
+> Version : 2026-08-26 — §8 Carte de dépendances ajoutée (couplages inter-systèmes confirmés par
+> lecture de code, alimentée au fil de l'audit de compréhension approfondie) ; légende étendue avec
+> le statut 🔎 (distinct de ✅, voir §8). Précédent : 2026-08-25 — section PLANS ajoutée (§6, pointeur
+> vers docs/ROADMAP.md pour le statut), entrée FOUNDATION.md rafraîchie (n'est plus un squelette),
+> hiérarchie de chargement alignée sur RegleDocumentaire.md §12/CLAUDE.md §1. Avant : 2026-08-12 —
+> ajout SYSTEME/ADMIN.md (rôle administrateur, page /admin) et SYSTEME/TICKETS.md (système de
+> tickets, remplace BUGIDENTIFIE.md archivé).
 > Statut : Document de navigation pour humains et agents IA.
 > Lire ceci en premier pour savoir où trouver une information.
 
@@ -42,68 +44,70 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 
 ## 3. SYSTEME — Architecture technique
 
-> **Légende :** ✅ = vérifié par lecture complète en session.
+> **Légende :** ✅ = vérifié par lecture complète en session (fact-check ponctuel : numéros de
+> migration, noms de table, code cité). 🔎 = analysé en profondeur (doc confronté au code source
+> réel, dépendances vers d'autres systèmes tracées explicitement — voir §8 Carte de dépendances).
 > Les dates indiquées sont celles de dernière modification du fichier.
 
 ### 3.1 Moteur monde & spatial
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/MOTEUR_MONDE.md` | Compilation, navigation, collision, LOS, WorldSnapshot | ✅ Vérifié (2026-07-29) |
-| `SYSTEME/SURFACES_SALLES.md` | Éditeur de surface, salles, murs, connecteurs, profils, eau | ✅ Vérifié (2026-07-29) |
-| `SYSTEME/VOXELS.md` | Conventions de coordonnées 3D (PE14, PE34), pièges voxels | ✅ Vérifié (2026-05-25) |
+| `SYSTEME/MOTEUR_MONDE.md` | Compilation, navigation, collision, LOS, WorldSnapshot | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/SURFACES_SALLES.md` | Éditeur de surface, salles, murs, connecteurs, profils, eau | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/VOXELS.md` | Conventions de coordonnées 3D (PE14, PE34), pièges voxels | 🔎 Analysé en profondeur (2026-08-26) |
 
 ### 3.2 Combat
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/COMBAT.md` | Architecture de combat, intégration avec le moteur monde | ✅ Vérifié (2026-08-23) |
-| `SYSTEME/COMBAT REFERENCE.md` | Source de vérité unique — règles LdB + implémentation, pipelines, écarts, matrice de régression, drones | ✅ Vérifié (2026-07-19) |
-| `SYSTEME/COMBAT_FLUX.md` | Flux de combat : initiative, tours, résolution | À jour (2026-07-20) |
-| `SYSTEME/SERVICES_COMBAT.md` | Services backend pour le combat | ✅ Vérifié (2026-07-21) |
-| `SYSTEME/DOMMAGES.md` | Distinction dommages physiques/Choc, autorités de résolution | ✅ Vérifié (2026-07-22) |
-| `SYSTEME/BLESSURES.md` | Gestion des blessures, armures, malus, inventaire médical | ✅ Vérifié (2026-05-25) |
-| `SYSTEME/DICE.md` | Flux des dés, animation 3D, payload DICE_RESULT | ✅ Vérifié (2026-07-16) |
+| `SYSTEME/COMBAT.md` | Architecture de combat, intégration avec le moteur monde | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/COMBAT REFERENCE.md` | Source de vérité unique — règles LdB + implémentation, pipelines, écarts, matrice de régression, drones | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/COMBAT_FLUX.md` | Flux de combat : initiative, tours, résolution | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/SERVICES_COMBAT.md` | Services backend pour le combat | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/DOMMAGES.md` | Distinction dommages physiques/Choc, autorités de résolution | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/BLESSURES.md` | Gestion des blessures, armures, malus, inventaire médical | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/DICE.md` | Flux des dés, animation 3D, payload DICE_RESULT | 🔎 Analysé en profondeur (2026-08-26) |
 
 ### 3.3 Personnage
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/CHARACTER.md` | Architecture complète : schéma SQL, API, flux, logique métier, composants React, pièges PC1–PC22 | ✅ Vérifié (2026-07-16) |
-| `SYSTEME/CHARACTER_FLUX.md` | Flux de données, dépendances composants, synchronisation UI/API | ✅ Vérifié (2026-05-09) |
-| `SYSTEME/PERSONNAGE_API.md` | API serveur pour les personnages : routes, droits, événements WS | ✅ Vérifié (2026-07-19) |
-| `SYSTEME/PERSONNAGE_CALCULS.md` | Chaîne de calcul des attributs, compétences, seuils et résistances | ✅ Vérifié (2026-07-19) |
-| `SYSTEME/PERSONNAGE_WIZARD.md` | Assistant de création de personnage en 6 étapes, architecture client-primary, collaboration temps réel MJ/joueur | ✅ Vérifié (2026-08-23) |
+| `SYSTEME/CHARACTER.md` | Architecture complète : schéma SQL, API, flux, logique métier, composants React, pièges PC1–PC24 (corrigé 2026-08-26, était PC22) | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/CHARACTER_FLUX.md` | Flux de données, dépendances composants, synchronisation UI/API | 🔎 Analysé en profondeur (2026-08-26) — moitié inventaire/blessures périmée, voir bannière |
+| `SYSTEME/PERSONNAGE_API.md` | API serveur pour les personnages : routes, droits, événements WS | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/PERSONNAGE_CALCULS.md` | Chaîne de calcul des attributs, compétences, seuils et résistances | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/PERSONNAGE_WIZARD.md` | Assistant de création de personnage en 6 étapes, architecture client-primary, collaboration temps réel MJ/joueur | 🔎 Analysé en profondeur (2026-08-26) |
 
 ### 3.4 Infrastructure
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/CORE.md` | Auth, stores, WebSocket, migrations | ✅ Vérifié (2026-07-16) |
-| `SYSTEME/ADMIN.md` | Rôle administrateur global, page `/admin`, garde dernier admin, outils gérés | ✅ Vérifié (2026-08-12) |
-| `SYSTEME/TICKETS.md` | Système de tickets (`bug_tickets`), formulaire `/tickets/new`, triage `/admin/tickets`, méthodologie | ✅ Vérifié (2026-08-12) |
-| `SYSTEME/CONVENTIONS.md` | Règles immuables et pièges actifs (codes P/PE/PI/PEF) | ✅ Vérifié (2026-07-29) |
-| `SYSTEME/ARCHITECTURE_SOCKET.md` | Architecture modulaire des WebSockets, coordinateur, hooks client | ✅ Vérifié (2026-07-20) |
-| `SYSTEME/REACT.md` | Conventions React : hooks, dependency arrays, patterns, raccourcis clavier | ✅ Vérifié (2026-07-29) |
-| `SYSTEME/MODING.md` | Système de mods d'armes : deux générations coexistantes, registre à hooks | ✅ Vérifié (2026-07-21) |
-| `SYSTEME/CHAT.md` | Système de chat : architecture, flux, types de messages, événements WS | ✅ Vérifié (2026-08-04) |
-| `SYSTEME/ASSETS.md` | MinIO, textures, Atelier GM, uploads, chemins assets | ✅ Vérifié (2026-07-15) |
-| `SYSTEME/MATERIAUX.md` | Pipeline de matériaux procédural : génération, cache, flux de données | ✅ Vérifié (2026-08-02) |
-| `SYSTEME/LOCALISATION.md` | Système d'internationalisation (i18n), namespaces, pattern serveur de traduction | ✅ Vérifié (2026-07-23) |
+| `SYSTEME/CORE.md` | Auth, stores, WebSocket, migrations | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/ADMIN.md` | Rôle administrateur global, page `/admin`, garde dernier admin, outils gérés | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/TICKETS.md` | Système de tickets (`bug_tickets`), formulaire `/tickets/new`, triage `/admin/tickets`, méthodologie | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/CONVENTIONS.md` | Règles immuables et pièges actifs (codes P/PE/PI/PEF) | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/ARCHITECTURE_SOCKET.md` | Architecture modulaire des WebSockets, coordinateur, hooks client | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/REACT.md` | Conventions React : hooks, dependency arrays, patterns, raccourcis clavier | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/MODING.md` | Système de mods d'armes : deux générations coexistantes, registre à hooks | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/CHAT.md` | Système de chat : architecture, flux, types de messages, événements WS | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/ASSETS.md` | MinIO, textures, Atelier GM, uploads, chemins assets | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/MATERIAUX.md` | Pipeline de matériaux procédural : génération, cache, flux de données | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/LOCALISATION.md` | Système d'internationalisation (i18n), namespaces, pattern serveur de traduction | 🔎 Analysé en profondeur (2026-08-26) |
 | `SYSTEME/MANIFESTE_OBJETS_3D.example.json` | Exemple de manifeste d'asset 3D (non .md) | Référence |
 
 ### 3.5 Marchands & Échange
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/TRADE.md` | Marchands (catalogue, achat), échange PJ↔PJ, revente PJ→GM, transfert direct | ✅ Vérifié (2026-08-07) |
+| `SYSTEME/TRADE.md` | Marchands (catalogue, achat), échange PJ↔PJ, revente PJ→GM, transfert direct | 🔎 Analysé en profondeur (2026-08-26) |
 
 ### 3.6 Exo-armures
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/EXOARMURE.md` | Schéma catalogue/instance, source exclusive d'équipement, services (applyExoTemplate, exoAvarieService, computeExoStats), routes, illustration | ✅ Vérifié (2026-08-21) |
+| `SYSTEME/EXOARMURE.md` | Schéma catalogue/instance, source exclusive d'équipement, services (applyExoTemplate, exoAvarieService, computeExoStats), routes, illustration | 🔎 Analysé en profondeur (2026-08-26) |
 
 ### 3.7 Éditeur & création
 | Document | Responsabilité | Statut |
 |----------|----------------|--------|
-| `SYSTEME/EDITEUR.md` | Infrastructure de l'éditeur : onglets, undo/redo, sauvegarde, chargement textures | ✅ Vérifié (2026-08-02) |
-| `SYSTEME/CREATION_OBJETS_3D.md` | Guide de fabrication des GLB et rédaction du manifeste | ✅ Vérifié (2026-08-03) |
-| `SYSTEME/ENTITES.md` | Entités libres : cycle de vie, blueprints, placement, rendu, persistance | ✅ Vérifié v2.1 (2026-08-02) |
+| `SYSTEME/EDITEUR.md` | Infrastructure de l'éditeur : onglets, undo/redo, sauvegarde, chargement textures | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/CREATION_OBJETS_3D.md` | Guide de fabrication des GLB et rédaction du manifeste | 🔎 Analysé en profondeur (2026-08-26) |
+| `SYSTEME/ENTITES.md` | Entités libres : cycle de vie, blueprints, placement, rendu, persistance | 🔎 Analysé en profondeur (2026-08-26) |
 
 ---
 
@@ -200,6 +204,24 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `METHODO_PLAN.md` | Méthodologie de conception des PLANS | Guide |
 | `OPTIONS_CAMPAGNE.md` | Options de campagne pour le MJ | Référence |
 | `JOURNALTEMP.md` | Notes temporaires (non partagé) | Éphémère |
+
+---
+
+## 8. Carte de dépendances entre systèmes
+
+> Construite au fil de l'audit de compréhension approfondie (🔎, démarré 2026-08-26). Ne liste que
+> des couplages **confirmés par lecture de code**, pas des suppositions d'architecture. Chaque ligne
+> pointe vers le détail dans le SYSTEME concerné — cette table ne duplique pas l'explication, elle
+> sert d'index pour ne pas reperdre un couplage trouvé dans une session antérieure.
+
+| Système A | Système B | Nature du couplage | Détaillé dans |
+|---|---|---|---|
+| Entités (`socketEntity.js`, `entities.js`) | Moteur monde | Appelle directement `bumpBattlemapRuntimeRevision` (`worldRuntimeService.js`) pour invalider le cache runtime du snapshot | `MOTEUR_MONDE.md` §2.2 |
+| Tokens (`tokens.js`, `tokenLifecycle.js`) | Moteur monde | Idem — même helper, même mécanisme | `MOTEUR_MONDE.md` §2.2 |
+| Coffre de compte (`vaultService.js`, `vault.js`) | Character (`char-sheet.js`) | Un personnage Coffre (`campaign_id NULL`) n'a pas de GM de campagne : son propriétaire reçoit `req.isVaultOwner = true`, qui ouvre exactement les routes marquées « GM uniquement » (attributs, skills, XP, mutations, sols) sur cette fiche précise | `CHARACTER.md` §1 |
+
+*(Table à compléter à chaque système 🔎 analysé — ne pas la laisser diverger du contenu réel des
+docs qu'elle indexe.)*
 
 ---
 

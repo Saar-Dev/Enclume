@@ -1,5 +1,8 @@
 Documentation exhaustive de l'existant
 
+    Audit de compréhension approfondie 2026-08-26 : schéma `bug_tickets` (`4_bug_tickets.js`) et
+    routes `POST /api/tickets`/`GET /api/tickets/mine` confirmés colonne par colonne / route par
+    route contre le code. Aucune correction nécessaire au-delà de la migration déjà réparée en §2.
     Version 1.0 — 2026-08-12. Contenu durable transféré depuis `docs/PLANS/PLAN_TICKETS.md` (Règle
     10 — un PLAN est temporaire) une fois les Lots 1 et 2 codés, testés et confirmés par Saar en
     navigateur (locaux). La méthodologie de triage (§6) est reprise telle quelle de l'ancien

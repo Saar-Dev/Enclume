@@ -1,4 +1,8 @@
 # SYSTEME/ASSETS.md — MinIO, textures, faces entités, Atelier GM
+> Audit de compréhension approfondie 2026-08-26 : route `GET /api/assets/:folder/*` (`assets.js`),
+> service des modèles intégrés via `express.static(BUILTIN_MODELS_ROOT)` (pas MinIO,
+> `server/src/index.js:99`), `syncBuiltinModels()` au démarrage et redirect `/texture-packs` →
+> `/workshop` (`App.jsx`) confirmés exacts. Aucune correction nécessaire.
 > Source : SYSTEME.md §5–§6–§9
 > Lire pour : uploads MinIO, textures voxel/entité, WorkshopPage, chemins assets
 > Guide de fabrication GLB : `CREATION_OBJETS_3D.md`

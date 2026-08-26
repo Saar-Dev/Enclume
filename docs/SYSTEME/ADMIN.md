@@ -1,5 +1,9 @@
 Documentation exhaustive de l'existant
 
+    Audit de compréhension approfondie 2026-08-26 : ordre de démarrage (migrate.latest →
+    bootstrapAdminFromEnv → syncBuiltinModels, index.js:161-163), garde dernier admin (409,
+    adminUserService.js:31) et AdminLogsPage.jsx confirmés exacts. Aucune correction nécessaire
+    au-delà de ce qui l'avait déjà été (migration 87/184/270, statut Tickets).
     Version 1.0 — 2026-08-12. Contenu durable transféré depuis `docs/PLANS/PLAN_ADMIN.md`
     (Règle 10 — un PLAN est temporaire) une fois les 3 lots codés et testés en conditions réelles
     (base locale). Le PLAN garde le détail de conception (analyse critique, alternatives écartées,

@@ -3,6 +3,11 @@
 
 Ce document est le contrat de fabrication des GLB intégrés à Enclume. Il couvre les objets libres, prépare les objets fixés à un mur et distingue les connecteurs structurels comme les portes.
 
+> Audit de compréhension approfondie 2026-08-26 : `tools/validate-3d-manifest.mjs`, `syncBuiltinModels()`
+> (`server/src/index.js` au démarrage, `builtinModelCatalog.js`) et le format `editor_color_slots`
+> confirmés contre le code. Cohérent avec `ENTITES.md` (footprint, wall_mount) et `SURFACES_SALLES.md`
+> (rôles d'eau). Aucune correction nécessaire.
+
 Le modèle prêt à copier se trouve dans `docs/SYSTEME/MANIFESTE_OBJETS_3D.example.json`.
 
 ## Choisir le bon type
