@@ -295,15 +295,22 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut exo impossible — l'arme exo sélectionnée est introuvable (désinstallée entre-temps ?)" })
             return
           }
-          // fire_mode — même contrôle défensif que l'arme humanoïde (ligne ci-dessous), même si les 4
-          // armes exo à distance connues à ce jour (§16.2.4) sont toutes CC uniquement : un futur ajout
-          // catalogue RC/RL ne doit pas passer silencieusement sans Compétence Tir Automatique associée
-          // (non géré ici, aucune arme exo RC/RL n'existe à ce jour — à revoir le jour où une apparaît).
-          const exoFireMode = (state.fire_mode ?? 'cc').toUpperCase()
-          if (exoWeapon.ref_fire_mode && !exoWeapon.ref_fire_mode.toUpperCase().includes(exoFireMode)) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: `Mode de tir ${exoFireMode} non disponible pour cette arme (modes compatibles : ${exoWeapon.ref_fire_mode})` })
-            return
-          }
+          // fire_mode — bug trouvé en jeu réel (Saar, 2026-08-26) : comparer contre state.fire_mode
+          // était la mauvaise autorité. state.fire_mode modélise le sélecteur d'un PJ humain (une
+          // arme en main, un mode qu'on bascule — StateSelector/CombatActionWindow.jsx, coûte de
+          // l'Initiative en changeant, STATE_COSTS.fire_mode) ; une exo n'a pas cette notion, chaque
+          // hardpoint tire dans le(s) mode(s) fixe(s) de son arme (§16.4). Le client n'envoie jamais
+          // state.fire_mode pour une exo (CombatExoActionWindow.jsx) donc `state.fire_mode ?? 'cc'`
+          // retombait toujours sur 'CC' — bloquant toute arme RC/RL-only montée sur un hardpoint (ex.
+          // F67, Lance-flammes, catalogue "Armes" général attachable via `/exo/weapons` sans
+          // restriction de family, cf. char-sheet.js validateExoEquipmentSource). Mode dérivé
+          // directement de l'arme (premier mode listé si plusieurs, mirroir CombatActionWindow.jsx
+          // #availableFireModes/modes[0]) — jamais un état à faire correspondre.
+          // Compétence Tir Automatique (PC23, requise côté humanoïde pour RC/RL) — non vérifiée ici,
+          // question ouverte pour une exo (le pilote teste ses propres Compétences, cf.
+          // combatantContextService.js#resolveExoTestContext) : à trancher avec Saar avant d'ajouter
+          // ce gate, RAW non explicite pour une armure mécanisée (§16.2.4). Aucune résolution exo
+          // (socketCombatExo.js) ne lit le mode de tir à ce jour — rien à propager plus loin ici.
           assaultWeaponRefRange = exoWeapon.ref_range ?? null
           // Munitions (§16.2.3) — fail-fast déclaratif, même autorité que l'arme humanoïde
           // (shared/ammoRules.js, revérifiée à la Résolution). ammo_remaining NULL = tracking désactivé

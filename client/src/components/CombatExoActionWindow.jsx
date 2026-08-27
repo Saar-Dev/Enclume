@@ -4,6 +4,7 @@ import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
+import { useExoDeclare } from '../lib/useExoDeclare.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import api from '../lib/api.js'
 
@@ -16,10 +17,13 @@ import api from '../lib/api.js'
 // `<button className="btn">` génériques.
 // §16.3 (2026-08-26) ajoute le Déplacement — moteur déjà générique côté serveur
 // (movementBudgetService.js#getExoMovementBudget, consommé par /world-move), seul le survol/preview
-// carte manquait ici. Armement/hardpoints (Tir/CaC) restent hors périmètre — Étape B, §16.4.
+// carte manquait ici. §16.4 (2026-08-26) ajoute Tir/CaC (useExoDeclare.js, mirroir useDroneDeclare.js
+// — une seule arme sélectionnable, Tir Multi/CaC-multiple bloqués côté serveur pour une exo).
 export default function CombatExoActionWindow({
   socket, user, characters, isGm = false,
   onEnterMoveMode, combatMoveMode, pendingMoveSelection,
+  battlemapId, onEnterTargetMode,
+  registerAmbientAttackHandler, showTargetRecap,
 }) {
   const { t } = useTranslation('combat')
   const { roster, phase, activeTokenId } = useCombatStore()
@@ -108,6 +112,18 @@ export default function CombatExoActionWindow({
     onCancel: () => setMoveSelection(null),
   })
 
+  const exoDeclare = useExoDeclare({
+    charId: playerChar?.id ?? null,
+    tokenId: playerToken?.id ?? null,
+    tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
+    enabled: canDeclareNow && !isProne,
+    moveSelection,
+    onEnterTargetMode,
+    battlemapId,
+    registerAmbientAttackHandler,
+    showTargetRecap,
+  })
+
   if (!playerToken || !playerChar || !rosterEntry) return null
   // Vérification indépendante (pas seulement confiance au montage conditionnel de CombatOverlay.jsx)
   // — même discipline que CombatActionWindow, qui filtre aussi par user_id de son côté. Le MJ n'est
@@ -146,7 +162,7 @@ export default function CombatExoActionWindow({
   // inchangé quand le payload ne le fournit pas, pose seulement has_announced:true). Toujours
   // disponible, y compris à terre (alternative à "Tenter de se relever" ce Tour-là).
   const handleDeclare = () => {
-    if (!socket || isDeclaring) return
+    if (!socket || isDeclaring || !exoDeclare.canDeclare) return
     setIsDeclaring(true)
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
@@ -161,6 +177,7 @@ export default function CombatExoActionWindow({
               action_key: moveSelection.action_key,
             }
           : null,
+        ...exoDeclare.buildMapActions(),
       },
       quick: {},
     })
@@ -172,6 +189,17 @@ export default function CombatExoActionWindow({
   // carte — il reste sur cette fenêtre, ne valide jamais, et la sélection se perd silencieusement au
   // clic sur DÉCLARER (mapActions.move: null, tour passé). Cache seulement une fois qu'une destination
   // est réellement en attente (pendingMoveSelection), jamais pendant le simple survol ambiant.
+  //
+  // RETIRÉ (2026-08-27) : masquage identique branché sur combatTargetMode (ciblage Tir/CaC explicite)
+  // — régression réelle en jeu (Saar : "l'armure n'émet plus aucune action"), cause probable : ce
+  // gate n'a qu'une sortie normale (bouton Annuler générique, CombatOverlay.jsx:444) ; toute sélection
+  // de cible interrompue sans passer par ce bouton laisse combatTargetMode bloqué sur le token de
+  // l'exo — état partagé (useCombatUIState), pas remis à zéro entre deux Tours ni deux combats tant
+  // que la page n'est pas rechargée — rendant la fenêtre invisible ET non cliquable en permanence.
+  // Ajout fait de ma propre initiative pendant l'analyse à charge, pour un bug purement cosmétique
+  // (légende "Assaut" au lieu de "Corps à corps") — rapport bénéfice/risque plus tenable, retiré
+  // plutôt que patché à chaud. Root cause de fond (comment combatTargetMode doit s'auto-nettoyer)
+  // pas encore investiguée — à reprendre séparément si le besoin de masquage revient.
   const isSelectingOnMap = combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection
 
   return (
@@ -183,7 +211,14 @@ export default function CombatExoActionWindow({
         {t('exoActionWindow.title', { name: playerToken.label ?? playerChar.name })}
       </div>
 
-      <div className="combat-win-body" style={{ flexDirection: 'column' }}>
+      <div className="combat-win-body">
+        {/* .combat-win-body est display:flex sans flex-direction (row par défaut, CSS partagée avec
+            CombatActionWindow/CombatDamageWindow/CombatCacModifiersWindow/CombatModifiersWindow/
+            CombatStunWindow) — jamais surchargée en dur ici (repéré à charge, Saar 2026-08-26 : la
+            fenêtre exo était la seule à le faire). L'empilement vertical passe par ce panneau
+            interne (S.panel), mirroir exact de W.leftPanel (CombatActionWindow.jsx:1546, colonne
+            unique 360px) — même technique, jamais une deuxième façon de faire la même chose. */}
+        <div style={S.panel}>
         <div style={S.hint}>{isProne ? t('exoActionWindow.proneHint') : t('exoActionWindow.normalHint')}</div>
 
         <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
@@ -218,6 +253,64 @@ export default function CombatExoActionWindow({
             <div style={S.errorBanner}>⚠ {t('exoActionWindow.movementUnavailable', { reason: alluresError })}</div>
           )}
         </div>
+
+        {/* ARMEMENT — Tir/CaC exo (§16.4). Une seule arme sélectionnable (pas de dual-wield hardpoint),
+            jamais affiché à terre (isProne, mirroir de la tuile Déplacement ci-dessus). */}
+        {!isProne && (
+          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
+            <div style={S.sectionTitle}>{t('exoActionWindow.weaponSectionTitle')}</div>
+            <div style={S.itemsGrid}>
+              {exoDeclare.exoWeapons.length === 0 && (
+                <div style={{ ...S.itemLabel, gridColumn: 'span 2', padding: '5px 8px', opacity: 0.5 }}>
+                  {t('exoActionWindow.noWeapon')}
+                </div>
+              )}
+              {exoDeclare.exoWeapons.map(w => {
+                const isSelected = w.id === exoDeclare.selectedExoWeaponId
+                const isCaC = w.ref_category === 'Arme de contact'
+                // Vide = munitions suivies (ammo_remaining non NULL, §16.2.3) ET épuisées — même garde
+                // que socketCombatAnnouncement.js:314 (hasEnoughAmmo, bulletCount toujours 1 pour une
+                // exo, Tir Multi bloqué serveur). NULL = tracking désactivé, jamais grisé (mirroir
+                // DroneWeaponPanel#isEmpty, seule fenêtre d'armement à griser une arme vide ce jour).
+                const isEmpty = !isCaC && w.ammo_remaining != null && w.ammo_remaining <= 0
+                return (
+                  <div
+                    key={w.id}
+                    title={isEmpty ? t('exoActionWindow.emptyWeaponTitle') : undefined}
+                    style={{
+                      ...S.item, gridColumn: 'span 2',
+                      ...(isSelected ? S.itemSelected : {}), ...(isEmpty ? S.itemDisabled : {}),
+                    }}
+                    onClick={() => !isEmpty && exoDeclare.selectWeapon(w.id)}
+                  >
+                    <span style={S.itemLabel}>{w.display_name}</span>
+                    <span style={S.itemMod}>
+                      {isCaC
+                        ? t('actionLabels.melee')
+                        : (w.ammo_remaining != null
+                            ? t('exoActionWindow.ammoCount', { count: w.ammo_remaining })
+                            : t('actionLabels.assault'))}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            {exoDeclare.selectedExoWeaponId && (
+              <div
+                style={{ ...S.item, margin: '1px 6px' }}
+                onClick={() => exoDeclare.handleChooseTarget(playerToken)}
+              >
+                <span style={{ ...S.itemLabel, ...(exoDeclare.assaultTargetId ? { color: '#5b8dee' } : {}) }}>
+                  {exoDeclare.assaultTargetId
+                    ? `→ ${tokens.find(tk => tk.id === exoDeclare.assaultTargetId)?.label ?? '?'}`
+                    : t('common.chooseTargetButton')}
+                </span>
+                {exoDeclare.assaultTargetId && <span style={S.itemMod}>{t('common.changeButton')}</span>}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
       </div>
 
       <div className="combat-float-footer">
@@ -230,7 +323,12 @@ export default function CombatExoActionWindow({
               <span style={S.destination}>[{moveSelection.targetPosX}, {moveSelection.targetPosY}]</span>
             )}
           </div>
-          <button className="btn-tac" onClick={handleDeclare} disabled={isDeclaring}>
+          <button
+            className="btn-tac"
+            style={{ opacity: exoDeclare.canDeclare ? 1 : 0.4, cursor: exoDeclare.canDeclare ? 'pointer' : 'not-allowed' }}
+            onClick={handleDeclare}
+            disabled={isDeclaring || !exoDeclare.canDeclare}
+          >
             {isDeclaring ? t('exoActionWindow.sending') : t('actionWindow.declareActionButton')}
           </button>
         </div>
@@ -242,6 +340,14 @@ export default function CombatExoActionWindow({
 // Mêmes valeurs que W (CombatActionWindow.jsx) — non exporté par ce module, donc redéclaré ici plutôt
 // qu'importé, mais visuellement identique (même vocabulaire de tuile ACTION partout).
 const S = {
+  // Mirroir W.leftPanel (CombatActionWindow.jsx:1546) — flex '0 0 <largeur fenêtre>' au lieu de 360,
+  // seule valeur qui diffère (fenêtre exo = colonne unique 340px, jamais de rightPanel).
+  panel: {
+    flex: '0 0 340px',
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+  },
   hint: {
     padding: '8px 10px 2px',
     fontSize: 11,

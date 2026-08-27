@@ -2181,6 +2181,10 @@ function selectExoWeaponFields(query) {
       'ref_equipment.shock as ref_shock',
       'ref_equipment.range as ref_range',
       'ref_equipment.fire_mode as ref_fire_mode',
+      // ref_category — même discriminant Tir/CaC que le serveur (socketCombatExo.js,
+      // resolveExoMeleeAction : category !== 'Arme de contact'), jamais déduit côté client de
+      // fire_mode nul (coïncidence catalogue actuelle, pas la règle) — PLAN_EXOARMURE.md §16.4.
+      'ref_equipment.category as ref_category',
     )
 }
 

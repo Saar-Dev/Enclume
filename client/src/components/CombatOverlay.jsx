@@ -204,6 +204,10 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           onEnterMoveMode={onEnterMoveMode}
           combatMoveMode={combatMoveMode}
           pendingMoveSelection={pendingMoveSelection}
+          battlemapId={battlemap?.id}
+          onEnterTargetMode={onEnterTargetMode}
+          registerAmbientAttackHandler={registerAmbientAttackHandler}
+          showTargetRecap={showTargetRecap}
         />
       )}
 
@@ -235,6 +239,10 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           onEnterMoveMode={onEnterMoveMode}
           combatMoveMode={combatMoveMode}
           pendingMoveSelection={pendingMoveSelection}
+          battlemapId={battlemap?.id}
+          onEnterTargetMode={onEnterTargetMode}
+          registerAmbientAttackHandler={registerAmbientAttackHandler}
+          showTargetRecap={showTargetRecap}
         />
       )}
 
