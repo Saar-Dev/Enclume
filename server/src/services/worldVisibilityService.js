@@ -1,6 +1,10 @@
 import db from '../db/knex.js'
 
-import { dbPositionToWorldPoint, distanceBetweenWorldPointsM } from '../../../shared/world/worldMetrics.js'
+import {
+  dbPositionToWorldPoint,
+  distanceBetweenWorldPointsM,
+  worldPointToDbPosition,
+} from '../../../shared/world/worldMetrics.js'
 import {
   actorEyePoint,
   checkWorldCoverage,
@@ -13,6 +17,7 @@ import { effectOccludersFromRegions } from '../../../shared/world/worldEffects.j
 import { loadBattlemapRuntimeContext } from './worldEffectService.js'
 import { reconcileBattlemapElevators } from './worldElevatorService.js'
 import { normalizeEntityScale } from '../../../shared/world/entityTransform.js'
+import { queryTokensInShape } from './worldSpatialQueryService.js'
 
 function stateAt(entity) {
   return entity.states?.[entity.current_state_id] ?? entity.states?.[0] ?? null
@@ -127,6 +132,81 @@ export function evaluateWorldVisibility({
     line,
     coverage,
     interceptors,
+  })
+}
+
+/**
+ * evaluateAoeVisibility — couche 2+3 composées de la résolution de zone d'effet
+ * (docs/PLANS/PLAN_AOE.md §2.1/§2.2). Appelle `queryTokensInShape` UNE fois (réconciliation ascenseur
+ * + tokens + entités + runtimeContext), puis `evaluateWorldVisibility` (pur) pour chaque cible retenue
+ * par la géométrie, sur ces mêmes données chargées — jamais `evaluateBattlemapVisibility` en boucle,
+ * qui rechargerait tout (tokens, entités, ascenseur) à chaque cible.
+ *
+ * `losSource` (PLAN_AOE.md §6.4) :
+ * - 'caster'  — LOS depuis la position réelle du lanceur (armes à trajectoire directe).
+ * - 'origin'  — LOS depuis le centre de la zone (explosions/pouvoirs) : réutilise
+ *   `sourcePositionOverride` d'evaluateWorldVisibility, prévu à l'origine pour une position
+ *   hypothétique de déclaration ANNONCE, mais qui fait exactement ce qu'il faut ici — remplacer le
+ *   point géométrique source sans perdre l'identité du token (exclusion des interceptors, profil).
+ *   Détournement documenté, pas un nouveau mécanisme.
+ */
+export async function evaluateAoeVisibility({
+  battlemapId,
+  aoeShape,
+  casterToken,
+  losSource = 'caster',
+  casterProfile = {},
+  targetProfileByTokenId = {},
+  database = db,
+} = {}) {
+  if (losSource !== 'caster' && losSource !== 'origin') {
+    throw new RangeError(`losSource inconnu : ${losSource}`)
+  }
+  // Vérifié une fois, en amont — sans ça, un casterToken en position legacy ferait échouer
+  // evaluateWorldVisibility silencieusement pour CHAQUE cible de la boucle (hasLineOfSight: false
+  // partout, sans signal clair du pourquoi), au lieu d'un statut net immédiat comme le reste de ce
+  // fichier (evaluateBattlemapVisibility, measureBattlemapTokenDistance) le fait déjà pour ce cas.
+  if (casterToken?.position_space !== 'world-feet') {
+    return Object.freeze({ status: 'legacy-position', losSource, targets: Object.freeze([]) })
+  }
+  const query = await queryTokensInShape({ battlemapId, aoeShape, database })
+  const sourcePositionOverride = losSource === 'origin'
+    ? worldPointToDbPosition(aoeShape.origin)
+    : null
+
+  const tokensById = new Map(query.tokens.map(token => [token.id, token]))
+  const targets = query.targets.map(target => {
+    const targetToken = tokensById.get(target.tokenId)
+    const visibility = evaluateWorldVisibility({
+      snapshot: query.runtimeContext.snapshot,
+      sourceToken: casterToken,
+      targetToken,
+      tokens: query.tokens,
+      entities: query.entityRows,
+      effectRegions: query.runtimeContext.regions,
+      sourceProfile: casterProfile,
+      targetProfile: targetProfileByTokenId[target.tokenId] || {},
+      sourcePositionOverride,
+    })
+    return Object.freeze({
+      ...target,
+      hasLineOfSight: visibility.status === 'clear',
+      visibility,
+    })
+  })
+
+  return Object.freeze({
+    status: 'ok',
+    losSource,
+    targets: Object.freeze(targets),
+    // Réexposé (couche 4, PLAN_AOE.md §8 étape 8) — le seul chargement partagé couche 2/3 (§2.2) a déjà
+    // ces metrics ; les recharger séparément dans l'appelant violerait l'optimisation "un chargement, N
+    // tests" documentée ci-dessus. Nécessaire pour retester un candidat contre un couloir plus étroit
+    // (largeur réelle du palier de portée touché) après le filtre géométrique large de queryTokensInShape.
+    metrics: query.metrics,
+    worldRevision: query.worldRevision,
+    runtimeRevision: query.runtimeRevision,
+    elevatorRuntime: query.elevatorRuntime,
   })
 }
 

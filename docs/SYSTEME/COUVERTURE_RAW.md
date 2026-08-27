@@ -147,9 +147,10 @@ tous :
 
 Construire cette brique une seule fois (multi-cibles, résolution par zone/cône/rayon, application des
 dégâts/malus à chaque cible dans la zone) avant d'attaquer le contenu qui en dépend évite de la
-réinventer trois fois — mais reste à cadrer : aucun document ne décrit encore cette brique
-techniquement (candidat naturel : un nouveau `SYSTEME` une fois écrit, pas un `PLAN` isolé, puisque
-plusieurs chantiers en dépendront durablement).
+réinventer trois fois. **Cadrée depuis (2026-08-26)** : `docs/PLANS/PLAN_AOE.md` — classée en `PLAN`
+et non `SYSTEME` malgré la note initiale ci-dessus (analyse à charge : tous les `SYSTEME/*` de l'index
+sont confrontés au code réel existant, y insérer une architecture en cours de construction cassait cet
+invariant). Implémentation démarrée, avancement réel tenu à jour dans `PLAN_AOE.md` §12.
 
 ---
 

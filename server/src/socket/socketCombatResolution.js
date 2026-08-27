@@ -18,7 +18,7 @@ import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
   triggerActNow, triggerDelayedPass,
   resolveMeleeAction, resolveReloadAction,
-  resolveDroneAssaultAction, resolveAssaultAction,
+  resolveDroneAssaultAction, resolveAssaultAction, resolveAoeAssaultAction,
   resolveExoStandUpAction,
   confirmMeleeDefense, confirmDamage,
   COMBAT_MODE_LABELS,
@@ -370,9 +370,15 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               // resolveExoAssaultAction vit dans socketCombatExo.js, qui importe déjà des helpers de
               // socketCombatHelpers.js ; router l'exo depuis CE fichier-là créerait un import
               // circulaire entre les deux modules (socketCombatResolution.js n'a pas ce problème).
-              const assaultResult = character.type === 'exo'
-                ? await resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
-                : await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+              // AOE (docs/PLANS/PLAN_AOE.md §8 étape 8) — branché AVANT exo/humanoïde : une action
+              // 'assault' avec modifiers.aoe (fusil à pompe en zone, socketCombatAnnouncement.js) n'a
+              // jamais de target_token_id scalaire, elle emprunte son propre chemin de bout en bout
+              // (couches 1-4, combat_action_targets) plutôt que celui à cible unique.
+              const assaultResult = action.modifiers?.aoe
+                ? await resolveAoeAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+                : character.type === 'exo'
+                  ? await resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
+                  : await resolveAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps)
               console.log(`[DBG] COMBAT_ACTION_CONFIRM — resolveAssaultAction terminé token:${tokenId}`)
               if (assaultResult) {
                 await flushEmissions(io, socket, campaignId, assaultResult.emissions)

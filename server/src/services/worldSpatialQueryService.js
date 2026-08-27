@@ -2,8 +2,10 @@ import db from '../db/knex.js'
 import {
   dbPositionToWorldPoint,
   distanceBetweenWorldPointsM,
+  horizontalDistanceBetweenWorldPointsM,
 } from '../../../shared/world/worldMetrics.js'
 import { pointInsideEffectBounds } from '../../../shared/world/worldEffects.js'
+import { isPointInAoeShape } from '../../../shared/world/aoeShapes.js'
 import { loadBattlemapRuntimeContext } from './worldEffectService.js'
 import { reconcileBattlemapElevators } from './worldElevatorService.js'
 
@@ -122,6 +124,80 @@ export async function measureBattlemapTokenEntityDistance({
     token,
     entity,
     metrics: runtimeContext.snapshot.metrics,
+    worldRevision: runtimeContext.snapshot.worldRevision,
+    runtimeRevision: runtimeContext.runtimeRevision,
+    elevatorRuntime: Object.freeze({
+      changed: elevatorRuntime.changed,
+      runtimeRevision: elevatorRuntime.runtimeRevision,
+      passengerTokens: elevatorRuntime.passengerTokens,
+    }),
+  })
+}
+
+/**
+ * queryTokensInShape — couche 2 de la résolution de zone d'effet (docs/PLANS/PLAN_AOE.md §2.1).
+ * Requête EN LOT, pas une boucle d'appels pairwise : charge une seule fois tous les tokens/entités
+ * de la battlemap (après réconciliation ascenseur, comme measureBattlemapTokenDistance — une cabine
+ * en mouvement ne doit jamais laisser une AOE travailler sur une position périmée), puis filtre en
+ * mémoire avec la géométrie pure d'aoeShapes.js.
+ *
+ * Ne retourne comme cibles que les tokens (entités hors scope fonctionnel v1, PLAN_AOE.md §10) — mais
+ * charge aussi les entités et le runtimeContext complet, pour que la couche 3 (LOS, §2.2) réutilise ce
+ * même chargement sans requête DB supplémentaire, plutôt que de tout recharger par cible.
+ *
+ * `battlemapId` invalide (battlemap supprimée) : `reconcileBattlemapElevators` lève une RangeError
+ * dure plutôt qu'un statut — comportement volontairement laissé tel quel (fail-fast, cohérent avec
+ * `core.md` : le serveur ne doit jamais travailler sur un contexte invalide) ; l'appelant est
+ * responsable de ne fournir qu'un battlemapId déjà validé par son propre contexte (campagne/token),
+ * jamais une valeur brute non vérifiée venant du client.
+ */
+export async function queryTokensInShape({
+  battlemapId,
+  aoeShape,
+  database = db,
+} = {}) {
+  const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId, database })
+  const battlemap = elevatorRuntime.battlemap
+  const [tokens, entityRows, runtimeContext] = await Promise.all([
+    database('tokens').where({ battlemap_id: battlemap.id }),
+    database('entities')
+      .where({ 'entities.battlemap_id': battlemap.id })
+      .join('entity_blueprints', 'entities.blueprint_id', 'entity_blueprints.id')
+      .select(
+        'entities.id', 'entities.pos_x', 'entities.pos_y', 'entities.pos_z', 'entities.r',
+        'entities.current_state_id', 'entities.state', 'entity_blueprints.states', 'entity_blueprints.geometry',
+      ),
+    loadBattlemapRuntimeContext(battlemap, database),
+  ])
+  const metrics = runtimeContext.snapshot.metrics
+
+  const targets = []
+  for (const token of tokens) {
+    // Position legacy (pré-monde-compilé) : hors périmètre spatial, comme les fonctions pairwise
+    // ci-dessus — on l'exclut du résultat plutôt que de faire échouer toute la requête pour une seule
+    // ligne dépareillée (différence assumée avec le pairwise, qui n'a que 2 tokens et peut se permettre
+    // d'échouer net).
+    if (token.position_space !== 'world-feet') continue
+    // Token MJ (marqueur/preview, jamais un combattant réel) — même exclusion que
+    // visibilityActorsFromTokens ci-dessus (ligne ~67) pour les interceptors LOS. Sans ce filtre, un
+    // repère MJ invisible aux joueurs deviendrait une cible AOE valide, ce qui n'a aucun sens RAW.
+    if (token.layer === 'gm') continue
+    const point = dbPositionToWorldPoint(token)
+    if (!isPointInAoeShape(point, aoeShape, metrics)) continue
+    targets.push(Object.freeze({
+      tokenId: token.id,
+      distanceToOriginM: horizontalDistanceBetweenWorldPointsM(aoeShape.origin, point, metrics),
+      position: point,
+    }))
+  }
+
+  return Object.freeze({
+    status: 'ok',
+    targets: Object.freeze(targets),
+    tokens,
+    entityRows,
+    runtimeContext,
+    metrics,
     worldRevision: runtimeContext.snapshot.worldRevision,
     runtimeRevision: runtimeContext.runtimeRevision,
     elevatorRuntime: Object.freeze({

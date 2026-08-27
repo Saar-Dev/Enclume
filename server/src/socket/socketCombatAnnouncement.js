@@ -3,7 +3,7 @@ import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase, forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau, getExoStandUpIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
@@ -412,6 +412,23 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { message })
             return
           }
+
+          // Action exclusive AOE (Tir de suppression, Lance-flammes — PLAN_AOE.md §8 étape 7).
+          // Humanoïde uniquement pour l'instant (weapon.ref_category dispo ici) — drone/exo non
+          // couverts, pas de cas RAW identifié qui le nécessite à ce jour.
+          const exclusiveCheck = isExclusiveDeclaration({
+            mapActions, weaponCategory: weapon.ref_category, weaponName: weapon.ref_name,
+          })
+          if (exclusiveCheck.exclusive && exclusiveCheck.reason !== 'tir_vise') {
+            const reasons = getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry })
+            if (reasons.length > 0) {
+              socket.emit(WS.COMBAT_DECLARE_ERROR, {
+                username: character.name,
+                message: `Action exclusive : aucune autre action ni transition d'état ce Tour (${reasons.join(', ')})`,
+              })
+              return
+            }
+          }
         }
       }
 
@@ -550,10 +567,22 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // varie. aimTranches/aimedLocationKey sont déjà forcés à 0/null dès que length > 1 (D10).
       if (hasAttackDeclared) {
         for (const {
-          weaponInvId, offhandWeaponInvId, droneWeaponInvId, exoWeaponInvId, targetTokenId,
+          weaponInvId, offhandWeaponInvId, droneWeaponInvId, exoWeaponInvId, targetTokenId, aoe,
           bulletCount, fireModeBonusComp, fireModeBonusDmg, isDualWield, dualWieldBonusComp,
         } of mapActions.attack) {
-          if (!targetTokenId) continue
+          // AOE (docs/PLANS/PLAN_AOE.md §6/§8 étape 6b, fusil à pompe/tir de suppression uniquement —
+          // grenades en attente du catalogue §6.2bis) : un tir en zone n'a pas de targetTokenId, il a
+          // une direction visée à la place. `origin`/`amplitude` ne sont volontairement PAS envoyés
+          // par le client — l'origine est toujours la position réelle du tireur à la RÉSOLUTION,
+          // l'amplitude du fusil à pompe découle de bulletCount (déjà déclaré), celle du tir de
+          // suppression aussi (RAW, mètres additionnels par groupe de 5 balles) — jamais une valeur
+          // client à valider ici (`.claude/rules/combat.md` : seule la RÉSOLUTION recalcule depuis la
+          // position réellement atteinte, l'ANNONCE ne fait qu'enregistrer l'intention).
+          if (!targetTokenId && !aoe) continue
+          if (aoe && (typeof aoe.direction !== 'number' || !Number.isFinite(aoe.direction))) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Zone d'effet : direction invalide" })
+            return
+          }
           actionRows.push({
             campaign_id:          campaignId, token_id: tokenId,
             action_key:           'assault', type: 'assault', sequence: 3,
@@ -561,14 +590,14 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             offhand_weapon_inv_id: (isDrone || isExo || !isDualWield) ? null : (offhandWeaponInvId ?? null),
             drone_weapon_inv_id:  isDrone ? (droneWeaponInvId ?? null) : null,
             exo_weapon_inv_id:    isExo ? (exoWeaponInvId ?? null) : null,
-            target_token_id:      targetTokenId,
+            target_token_id:      targetTokenId ?? null,
             fire_mode:            state.fire_mode ?? null,
             bullet_count:         bulletCount ?? null,
             fire_mode_bonus_comp: fireModeBonusComp ?? null,
             fire_mode_bonus_dmg:  fireModeBonusDmg ?? null,
             aim_bonus_comp:       (isDrone || isExo) ? null : (getAimBonusComp(aimTranches, { lunetteNiveau }) || null),
             aimed_location:       (isDrone || isExo) ? null : aimedLocationKey,
-            modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0 }),
+            modifiers:            JSON.stringify({ ini_mod: 0, ref_range: assaultWeaponRefRange, dual_wield: isDualWield ?? false, dual_wield_bonus_comp: dualWieldBonusComp ?? 0, aoe: aoe ?? null }),
             status:               'pending',
           })
         }
@@ -734,9 +763,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Corps à corps : sélectionner une cible avant de valider.' })
         return
       }
-      // Idem Tir Multi (docs/PLAN_TIRMULTI.md) — au moins une cible sur la série de tirs.
-      if (hasAttackDeclared && !mapActions.attack.some(a => a.targetTokenId)) {
-        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Assaut (tir) : sélectionner une cible avant de valider.' })
+      // Idem Tir Multi (docs/PLAN_TIRMULTI.md) — au moins une cible OU une zone d'effet (AOE,
+      // PLAN_AOE.md §8 étape 6b) sur la série de tirs.
+      if (hasAttackDeclared && !mapActions.attack.some(a => a.targetTokenId || a.aoe)) {
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Assaut (tir) : sélectionner une cible ou viser une direction avant de valider.' })
         return
       }
 

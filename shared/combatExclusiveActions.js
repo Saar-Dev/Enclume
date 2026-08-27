@@ -139,13 +139,52 @@ export function isMultiShotEligible(args) {
   return getMultiShotIneligibilityReasons(args).length === 0
 }
 
-// Déclaration exclusive ? (registre — Charge/Rafale longue/Tir de suppression rejoindront cette
-// fonction dans leurs propres sessions dédiées, pas ici). Pour Tir visé, isAimEligible bloque déjà
-// le CaC (règle "rien d'autre ce tour") — ce garde reste la seule protection pour les futures
-// actions exclusives dont l'éligibilité sera plus permissive (ex. Charge exige un déplacement).
-export function isExclusiveDeclaration({ mapActions }) {
+// Déclaration exclusive ? Étendue (docs/PLANS/PLAN_AOE.md §8 étape 7, 2026-08-26) : Tir de
+// suppression et Lance-flammes rejoignent le Tir visé — Rafale longue "fusil à pompe" reste hors
+// scope (aucune donnée catalogue ne permet d'identifier un fusil à pompe : pas de category dédiée,
+// vérifié sur `ref_equipment` réel — fusionnera avec le travail catalogue de PLAN_AOE.md §6.2bis/6c).
+// - Tir de suppression n'a pas de marqueur catalogue possible (n'importe quelle arme automatique
+//   peut le faire, c'est une intention déclarée, pas une propriété de l'arme) : détecté via
+//   `mapActions.attack[0].aoe.mode === 'suppression'`, un champ que le client doit positionner.
+// - Lance-flammes est identifiable sans ambiguïté (`ref_category === 'Lanceur'`, `ref_name ===
+//   'Lance-flammes'` — vérifié sur le catalogue réel, seule arme de cette catégorie à ce jour).
+export function isExclusiveDeclaration({ mapActions, weaponCategory = null, weaponName = null }) {
   if ((mapActions?.attack?.[0]?.aimTranches ?? 0) > 0) return { exclusive: true, reason: 'tir_vise' }
+  const aoe = mapActions?.attack?.[0]?.aoe
+  if (aoe?.mode === 'suppression') return { exclusive: true, reason: 'tir_suppression' }
+  if (aoe && weaponCategory === 'Lanceur' && weaponName === 'Lance-flammes') {
+    return { exclusive: true, reason: 'lance_flammes' }
+  }
   return { exclusive: false, reason: null }
+}
+
+// Raisons d'inéligibilité pour une action exclusive AOE (Tir de suppression, Lance-flammes) —
+// interprétation stricte tranchée par Saar (2026-08-26) : la RAW générale (REGLESYSCOMBAT.md:707-710)
+// ne dit littéralement que "n'autorise pas d'autres Attaques", plus étroit que le Tir visé (qui a sa
+// propre clause d'immobilité en RAW). Saar a choisi d'aligner quand même sur la sévérité du Tir visé
+// déjà codé (getAimIneligibilityReasons), pour la cohérence — décision produit, pas une lecture RAW
+// littérale. Même patron (liste de raisons, vide = éligible), sans les préconditions propres au Tir
+// visé (bulletCount===1, arme déjà au clair...) qui n'ont pas de fondement RAW pour ces actions-ci.
+export function getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry }) {
+  const reasons = []
+  if (Array.isArray(mapActions?.attack) && mapActions.attack.length > 1) reasons.push('tir multiple')
+  if (state?.position !== entry?.state_position) reasons.push('changement de posture')
+  if (state?.weapon !== entry?.state_weapon) reasons.push('changement d\'arme')
+  if (state?.fire_mode !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
+  if (state?.cover !== entry?.state_cover) reasons.push('changement de couverture')
+  if (state?.vitesse !== entry?.state_vitesse) reasons.push('changement de vitesse')
+  if (mapActions?.move) reasons.push('déplacement')
+  if (mapActions?.interact) reasons.push('interaction')
+  if (mapActions?.reload) reasons.push('rechargement')
+  if (Array.isArray(mapActions?.melee) && mapActions.melee.length > 0) reasons.push('corps à corps')
+  if ((quick?.observer ?? 0) > 0) reasons.push('observation')
+  if ((quick?.reperer ?? 0) > 0) reasons.push('repérage')
+  if (quick?.phrase) reasons.push('phrase prononcée')
+  return reasons
+}
+
+export function isAoeExclusiveEligible(args) {
+  return getAoeExclusiveIneligibilityReasons(args).length === 0
 }
 
 // Tenter de se relever (exo-armure, `state_position` prone → autre, PLAN_EXOARMURE.md Lot 2bis §9.2)

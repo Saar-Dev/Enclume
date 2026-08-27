@@ -1,9 +1,10 @@
 VOCABULARY.md — Contrat sémantique officiel d'Enclume
 
-    Version : V2.4 — 2026-08-26 (analyse à charge post-audit) : "Source exclusive (catalogue
-    équipement)" corrigée (décrivait le catalogue dual ref_exo_equipment, fusionné depuis dans
-    ref_equipment) ; "Type de message (chat)" corrigée (chat_messages.type = TEXT/WHISPER seulement,
-    pas les types éphémères DICE/COMBAT_DAMAGE/SYSTEM_JOIN). Précédent : V2.3, enrichi session
+    Version : V2.5 — 2026-08-26 : ajout "Zone d'effet (AOE)" (nouveau concept, cadrage `docs/SYSTEME/
+    AOE.md` v1, rien codé). Précédent : V2.4, même jour (analyse à charge post-audit) : "Source
+    exclusive (catalogue équipement)" corrigée (décrivait le catalogue dual ref_exo_equipment, fusionné
+    depuis dans ref_equipment) ; "Type de message (chat)" corrigée (chat_messages.type = TEXT/WHISPER
+    seulement, pas les types éphémères DICE/COMBAT_DAMAGE/SYSTEM_JOIN). Avant : V2.3, enrichi session
     2026-08-12 (Ticket, Cluster (ticket), autorité TICKETS.md)
 
     Statut : Source de vérité (non exhaustif — à enrichir à chaque ambiguïté rencontrée)
@@ -41,6 +42,7 @@ Intégrité (composant exo-armure)	3 jauges indépendantes (Structure, Exosquele
 Avarie	Incident cumulatif causé par des dégâts nets suffisants sur une exo-armure — équivalent RAW d'une Blessure côté humain, mécanique et code séparés (coïncidence de seuils numériques, pas un couplage). 6 paliers (légère à destruction) ; le compteur du palier atteint cascade vers le palier supérieur s'il est déjà plein, même logique de principe que resolveWoundInsertion côté humain.	exo_sheet.avaries_*, exoAvarieService.js, shared/exoConstants.js#EXO_AVARIE_TABLE. Autorité : docs/MANUELS/MANUEL_EXOARMURE.md §2.4/§4.7
 Manœuvre d'armure	Compétence RAW spécialisée par milieu (sous-marine/surface/hybride/atmosphérique/spatiale) qui teste la capacité du pilote à manier son exo-armure ; plafonne aussi la Compétence de contact utilisée en Corps à Corps ("Compétence limitative").	resolveManeuverSkillId (combatantContextService.js). Autorité : docs/REGLES/REGLECOMPETENCE.md, docs/MANUELS/MANUEL_EXOARMURE.md §4.2
 Source exclusive (catalogue équipement)	**Corrigé (2026-08-26)** — cette entrée décrivait un catalogue dual (`ref_exo_equipment` séparé de `ref_equipment`) qui n'existe plus : la table `ref_exo_equipment` a été fusionnée dans `ref_equipment` (`family='Exo-arme'/'Exo-systeme'`, `docs/Old/PLAN_EXOEQ_FUSION.md`). Le patron réel aujourd'hui : une ligne d'équipement exo (modèle ou instance) référence `ref_equipment_id` (catalogue général, y compris les familles exo), **ou** porte un `label_override` texte libre pour un objet inventé — plus de second catalogue à exclure mutuellement. Contrainte CHECK toujours en base (un des deux champs renseigné). Un `label_override` peut coexister avec `ref_equipment_id` comme annotation d'affichage (ex. "SACEA (secours)").	`ref_equipment_id`/`label_override` (`ref_exo_template_equipment`, `exo_systems`, `exo_weapons`). Autorité : `docs/SYSTEME/EXOARMURE.md` §1/§2bis
+Zone d'effet (AOE)	Ajouté 2026-08-26, v2 le même jour (reclassement doc). Mécanisme transversal de résolution d'une attaque/d'un pouvoir touchant plusieurs cibles à la fois (cône, cercle/sphère, couloir), par opposition à une attaque cible unique. Couvre 4 patrons RAW distincts (fusil à pompe, lance-flammes, grenades/mines, tir de suppression) plus la majorité des pouvoirs Force Polaris — chacun avec sa propre table de dégression par distance, jamais une seule formule générique. Implémentation en cours (géométrie + requête spatiale + LOS codées et testées, branchement combat en pause).	`shared/world/aoeShapes.js`, `shared/world/distanceBands.js`, `worldSpatialQueryService.js#queryTokensInShape`, `worldVisibilityService.js#evaluateAoeVisibility`, migration `317_combat_action_targets` (appliquée). Autorité : `docs/PLANS/PLAN_AOE.md` §12 (avancement réel)
 Concepts Enclume
 
 Concepts n'existant pas dans Polaris mais créés par le projet.

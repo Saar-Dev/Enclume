@@ -1,4 +1,8 @@
-const RANGE_BANDS = Object.freeze([
+// Parenté avec shared/world/distanceBands.js#resolveDistanceBand (ajouté ultérieurement pour l'AOE,
+// docs/PLANS/PLAN_AOE.md §4) : même algorithme de recherche par seuils croissants, volontairement pas
+// fusionnés — ce fichier-ci tolère des seuils dégénérés (portée catalogue incomplète), l'autre les
+// refuse par construction. Voir le commentaire de tête de distanceBands.js pour le détail.
+export const RANGE_BANDS = Object.freeze([
   'bout_portant',
   'courte',
   'moyenne',
@@ -50,4 +54,33 @@ export function resolveWeaponRangeBand(distanceM, referenceRange) {
   const index = thresholds.findIndex(limit => distance <= limit + 1e-9)
   if (index < 0) return Object.freeze({ status: 'out-of-range', band: null, distanceM: distance, thresholds })
   return Object.freeze({ status: 'ok', band: RANGE_BANDS[index], distanceM: distance, thresholds })
+}
+
+// Fusil à pompe — largeur de la zone d'effet + modificateur de dégât par palier RAW
+// (docs/REGLES/REGLES_ARMES_SPECIALES.md). Trouvaille PLAN_AOE.md §4/v6 : ces paliers utilisent les
+// 5 MÊMES NOMS que RANGE_BANDS ci-dessus, indexés sur les seuils propres à l'arme réellement équipée
+// (Klauss : "2/7/14/28 (35)", ref_range) — pas une nouvelle table de seuils à part. Cette constante ne
+// fournit donc que la charge utile par nom de palier, jamais une nouvelle classification de distance :
+// `resolveWeaponRangeBand(distanceM, weapon.ref_range)` reste l'unique autorité de "quel palier".
+//
+// `widthM: null` pour bout_portant — RAW : "le tir ne touche qu'une cible", pas une zone géométrique
+// (couche 1 n'est pas sollicitée pour ce palier, cible unique classique).
+//
+// Seule arme du catalogue à ce jour (Klauss, confirmé Saar 2026-08-26/27) — étendre à un futur
+// deuxième fusil à pompe ne changerait rien ici (mêmes paliers RAW, seuils différents dans ref_range).
+export const SHOTGUN_SPREAD_BY_BAND = Object.freeze({
+  bout_portant: Object.freeze({ widthM: null, damageDice: '+1D10', savePossible: false }),
+  courte:       Object.freeze({ widthM: 1, damageDice: '+0',    savePossible: false }),
+  moyenne:      Object.freeze({ widthM: 2, damageDice: '-1D10', savePossible: false }),
+  longue:       Object.freeze({ widthM: 3, damageDice: '-2D10', savePossible: true, saveBonus: 0 }),
+  extreme:      Object.freeze({ widthM: 3, damageDice: '-3D10', savePossible: true, saveBonus: 5 }),
+})
+
+// resolveShotgunSpread — compose resolveWeaponRangeBand (classification) + SHOTGUN_SPREAD_BY_BAND
+// (charge utile) en un seul appel, pour ne jamais laisser un appelant indexer directement la table
+// avec un nom de palier mal orthographié.
+export function resolveShotgunSpread(distanceM, referenceRange) {
+  const range = resolveWeaponRangeBand(distanceM, referenceRange)
+  if (range.status !== 'ok') return range
+  return Object.freeze({ ...range, spread: SHOTGUN_SPREAD_BY_BAND[range.band] })
 }

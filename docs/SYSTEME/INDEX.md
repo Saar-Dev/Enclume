@@ -187,6 +187,7 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_RW_TOKEN.md` | Animations squelettiques de tokens (en-tête réel : `PLAN_ANIMATIONS.md`) |
 | `PLANS/PLAN_ADMIN_BACKUP.md` | Sauvegarde automatique de l'instance |
 | `PLANS/PLAN_BATTLEMAP2D.md` | Battlemap en illustration/tokens 2D |
+| `PLANS/PLAN_AOE.md` | Résolution de zone d'effet (AOE) — architecture en couches, prérequis Armes spéciales + Tir de suppression + Force Polaris |
 
 ---
 
