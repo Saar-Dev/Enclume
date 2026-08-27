@@ -674,6 +674,11 @@ type de combattant (PJ/PNJ/drone/exo), construction des payloads WS, logs `[DBG]
 principales — rôle inchangé, assemblent désormais les `contributions` passées au noyau :
 - `resolveMeleeAction` / `resolveAssaultAction` — attaque CaC / Tir, branchement défenseur
 - `resolveDroneAssaultAction` — même flux, branchement cible drone/non-drone
+- `resolveExoAssaultAction` / `resolveExoMeleeAction` (`socketCombatExo.js`, module séparé — évite un
+  import circulaire avec les helpers ci-dessus qu'il réutilise) — attaquant exo-armure, dispatché
+  depuis `socketCombatResolution.js` par `character.type`, jamais un branchement interne aux
+  résolveurs humains. Mécanique complète (arme/mode de tir/munitions/Initiative pilote) :
+  `docs/SYSTEME/EXOARMURE.md` §5, pas dupliquée ici.
 - `confirmMeleeDefense` — confirmation défenseur, branchement post-hit attaquant PJ/PNJ
 - `confirmDamage` — confirmation dégâts (file FIFO partagée CaC/Tir), branchement drone/non-drone
 

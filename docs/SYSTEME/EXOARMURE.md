@@ -1,9 +1,9 @@
 # SYSTEME/EXOARMURE.md — Architecture exo-armure (schéma, services, routes, catalogue)
 
 > Audit de compréhension approfondie 2026-08-26 (suite, priorité haute — chantier actif) : §5/§8
-> reconfirmés au caractère près contre `CombatExoActionWindow.jsx` — « se relever » et « passer le
-> tour » sont bien les deux seules actions réellement câblées (commentaire du code lui-même : portée
-> volontairement étroite, armement/hardpoints au Lot C). Trouvaille réelle : §7 citait une route
+> reconfirmés au caractère près contre `CombatExoActionWindow.jsx`. Depuis (2026-08-26/27, §16.3/§16.4
+> du plan) : Déplacement, Tir et CaC sont également câblés et validés en combat réel — §5 et §8
+> mis à jour en conséquence, ne plus se fier à la phrase d'origine de cet audit. Trouvaille réelle : §7 citait une route
 > `GET /api/exo-equipment` et un fichier `exoEquipment.js` qui n'existent pas — le catalogue exo passe
 > en réalité par la route générique `GET /api/equipment` (confirmé dans `ExoSystemsPanel.jsx`) depuis
 > la fusion §1. Valeurs `family` corrigées (`Exo-arme`/`Exo-systeme`, pas `Systeme`) — vérifiées en
@@ -267,6 +267,47 @@ Manœuvre d'armure pour se relever (`state_position==='prone'`) — auto-résolu
 (`shared/exoConstants.js`). Enregistrée dans la FSM combat comme `combat_actions.type='exo_stand_up'`
 (`127_combat_actions_constraints.js`, pas "migration 249" — voir §2).
 
+### Tir et Corps à corps (PLAN_EXOARMURE.md §16.3/§16.4, 2026-08-26/27)
+
+Déplacement, Tir et CaC sont construits et validés en combat réel (premier combat exo-armure
+fonctionnel du projet, 2026-08-27). `resolveExoAssaultAction`/`resolveExoMeleeAction` vivent dans
+`server/src/socket/socketCombatExo.js` (module dédié, pas `socketCombatHelpers.js` — éviterait un
+import circulaire avec les helpers de résolution génériques qu'il réutilise) ; le dispatch par
+`character.type` vit dans `socketCombatResolution.js`, jamais à l'intérieur de `resolveAssaultAction`/
+`resolveMeleeAction` humaines (contrairement au drone, dette documentée `docs/ROADMAP.md` §5).
+
+- **Arme** : résolue via `exo_weapon_inv_id` (colonne dédiée sur `combat_actions`, jamais
+  `weapon_inv_id`/`drone_weapon_inv_id`) contre `exo_weapons` LEFT JOIN `ref_equipment`. Aucune
+  restriction de `family` à l'attache (`char-sheet.js#validateExoEquipmentSource` exclut seulement
+  `family='Exo-systeme'`) — un hardpoint exo peut porter une arme du catalogue général "Armes"
+  (ex. F67, Lance-flammes), pas seulement les 13 armes `family='Exo-arme'` du seed d'origine.
+- **Tir vs CaC** : discriminé par `ref_equipment.category === 'Arme de contact'`, jamais par une
+  absence de `fire_mode` (coïncidence du catalogue actuel, pas la règle) — même discriminant
+  client (`CombatExoActionWindow.jsx`, champ `ref_category`) et serveur.
+- **Mode de tir** : dérivé directement de `exo_weapon.ref_fire_mode` (premier mode si l'arme en
+  propose plusieurs) — **jamais** de `state.fire_mode` (bug corrigé 2026-08-27 : ce champ modélise
+  le sélecteur d'un PJ humain, une arme en main dont on bascule le mode ; une exo n'a pas cette
+  notion, chaque hardpoint tire dans le(s) mode(s) fixe(s) de son arme). Compétence Tir Automatique
+  (PC23, requise côté humain pour RC/RL) **non vérifiée côté exo** — question RAW ouverte, pas
+  tranchée.
+- **CaC** : contrairement à l'humain (repli mains nues RAW-légal), une exo-armure n'a aucun repli
+  "à mains nues" — `exoWeaponInvId` obligatoire, rejet inconditionnel sinon. Défense active complète
+  côté cible (Option B tranchée Saar), pas l'auto-résolution simplifiée du CaC drone.
+- **Exclusions RAW** (REGLEARMURE.md:206-207/MANUEL §4.5, « une armure mécanisée ne peut effectuer
+  qu'une seule Attaque par Tour ») : Tir Multi et CaC multiple bloqués serveur, pas seulement masqués
+  côté UI. Pas de dual-wield (armes hardpoint), pas de Tir visé, pas d'`aim_bonus_comp`.
+- **Munitions** : `exo_weapons.ammo_remaining` (nullable = tracking désactivé = illimité tant qu'aucun
+  mécanisme de rechargement exo n'existe, §16.2.3).
+- **Initiative** : `Math.min(Réaction, Manœuvre d'armure) - malus_environnement`
+  (`socketCombatState.js`, calcul base_ini à `combat:start`) — un pilote sans rang dans la
+  Compétence Manœuvre d'armure correspondant à l'environnement de l'exo (`environment`/
+  `active_maneuver_environment`) plafonne son Initiative très bas voire à 0 : RAW-correct
+  (REGLEARMURE.md:202-207, « limite... toute Compétence servant à accomplir une action physique »),
+  pas un bug — une Initiative ≤ 0 en entrant en Résolution rend l'action `'lost'` (perdue,
+  silencieuse jusqu'au correctif 2026-08-27 ci-dessous). Alerte chat `session.initiativeLost`
+  (`COMBAT_SYSTEM_NOTICE`, `socketCombatHelpers.js#buildTimelineEntries`) émise pour toute action
+  perdue par Initiative insuffisante, générique à tout personnage (pas seulement exo).
+
 ---
 
 ## 6. Illustration (`illustration_url` créée directement dans `71_ref_exo_templates.js` — corrigé
@@ -331,7 +372,8 @@ Toutes montées dans `server/src/routes/character/char-sheet.js` sauf `GET/POST 
 | `ExoSystemsPanel.jsx` / `ExoWeaponsPanel.jsx` | CRUD `exo_systems`/`exo_weapons`, sélecteur catalogue exo **ou** général **ou** personnalisé |
 | `ExoComputerPanel.jsx` | Liste `exo_computers` + `exo_programs` imbriqués, badge Actif/En veille |
 | `ExoSettingsPanel.jsx` | Portrait (avec repli illustration modèle, §6), description, notes MJ, propriétaire, GLB, envoi au Coffre, suppression |
-| `CombatExoActionWindow.jsx` | Déclaration de tour en combat (joueur et MJ) — seules actions câblées à ce jour : se relever, passer le tour |
+| `CombatExoActionWindow.jsx` | Déclaration de tour en combat (joueur et MJ) — se relever, Déplacement, Tir, CaC (§5, 2026-08-26/27) |
+| `useExoDeclare.js` (`client/src/lib/`) | Hook Tir/CaC — mirroir `useDroneDeclare.js` : fetch armes, sélection, ciblage (`useCombatClickAttack.js`), garde `canDeclare` contre une arme sans cible |
 
 ---
 
