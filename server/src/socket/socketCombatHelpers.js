@@ -180,7 +180,7 @@ export async function startResolutionPhase(io, campaignId, pendingMaps) {
         .orderBy('initiative', 'desc'),
     ])
 
-    await buildTimelineEntries(campaignId, currentTurn, pendingActions, announcedRoster)
+    await buildTimelineEntries(io, campaignId, currentTurn, pendingActions, announcedRoster)
 
     // Groupe 4 (docs/PLAN_MODDING_REFONTE.md Phase 3) — tick de début de tour pour les mods à état
     // (ex. ATI : cumul de marge de réussite). Registre vide tant que Phase 4 n'est pas câblée :
@@ -264,7 +264,7 @@ async function computeMultiAttackMalus(actionId) {
 // de 500 en 500 (RAW -5 Initiative par attaque supplémentaire), avec un `declaration_group_id` commun
 // utilisé à la résolution pour recompter les sœurs vivantes (computeMultiAttackMalus). Une seule
 // implémentation pour les deux mécaniques — jamais deux copies divergentes du même calcul.
-async function buildTimelineEntries(campaignId, turnNumber, pendingActions, roster) {
+async function buildTimelineEntries(io, campaignId, turnNumber, pendingActions, roster) {
   const rosterByToken = new Map(roster.map(r => [r.token_id, r]))
   const rows = []
 
@@ -299,6 +299,27 @@ async function buildTimelineEntries(campaignId, turnNumber, pendingActions, rost
   }
 
   if (rows.length > 0) await db('combat_timeline_entries').insert(rows)
+
+  // Alerte chat Initiative insuffisante (retour Saar, 2026-08-27 — testé pour la première fois sur
+  // une exo-armure, mais générique à tout personnage, comme le reste de cette fonction) : une entrée
+  // 'lost' ci-dessus est silencieuse pour tout le monde tant qu'elle n'est jamais retentée
+  // (pickNextTimelineStep ne lit que 'scheduled') — sans ce message, l'action perdue est
+  // indiscernable d'un bug côté client. Un seul message par token (pas par entrée) même si sa série
+  // entière (Tir Multi/CaC multiple) est perdue d'un coup — même position de base pour toute la
+  // série, donc soit toutes perdues ensemble, soit aucune. COMBAT_SYSTEM_NOTICE (déjà utilisé pour
+  // dualWieldAmmoOutOffhand/Primary, session.json) — pas CHAT_MESSAGE, pas de texte figé.
+  const lostTokenIds = [...new Set(rows.filter(r => r.status === 'lost').map(r => r.token_id))]
+  if (lostTokenIds.length > 0) {
+    const lostTokens = await db('tokens').whereIn('id', lostTokenIds).select('id', 'label')
+    const timestamp = new Date().toISOString()
+    for (const { id, label } of lostTokens) {
+      io.to(campaignId).emit(WS.COMBAT_SYSTEM_NOTICE, {
+        i18nKey: 'session.initiativeLost',
+        params: { label: label ?? '?' },
+        timestamp,
+      })
+    }
+  }
 
   // [DBG] Session 159 (retour Saar, « Action retardée n'a pas fonctionné ») — Retarder ne porte
   // aucun effet visible sur un personnage sans action complexe (assault/melee) déclarée ce Tour :

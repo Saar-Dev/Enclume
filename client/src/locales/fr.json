@@ -244,6 +244,7 @@
     "mortallyWoundedNoTest": "Blessure mortelle — aucune action de Test possible",
     "actionOutOfRange": "Trop loin pour interagir",
     "tokenSkipped": "{{label}} a été passé",
+    "initiativeLost": "{{label}} — Initiative insuffisante, action perdue ce Tour",
     "stun_blocked": "Action impossible, vous êtes {{statut}}",
     "tokenDropNoSurface": "Aucune surface praticable trouvée à cet endroit — personnage non placé",
     "combatEnd": "Terminer le combat",
