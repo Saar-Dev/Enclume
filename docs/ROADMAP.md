@@ -156,6 +156,15 @@
   retirer) — code le plus testé/joué du projet, aucun besoin fonctionnel de le réécrire, uniquement du
   risque. Décision Saar (2026-08-26) : rework ciblé plutôt que les 6 modules complets, pas mélangé à
   l'ajout de fonctionnalité — chantier à part, pas cadré plus finement à ce jour.
+- **`useDroneDeclare.js#handleChooseTarget` fige le 5e argument de `onEnterTargetMode` à `'ranged'` en
+  dur** (trouvé en écrivant `useExoDeclare.js` par mirroir, 2026-08-26, corrigé côté exo uniquement,
+  pas touché côté drone — hors périmètre §16.4). Seul effet réel de ce paramètre : la légende flottante
+  affichée pendant la sélection (`CombatOverlay.jsx:426`, `combatTargetMode.mode === 'melee' ? 'Corps
+  à corps…' : 'Assaut…'`) — aucun filtrage de cible n'en dépend. Impact réel mineur (légende "Assaut"
+  affichée par erreur quand un joueur clique "Choisir une cible" pour un programme CaC du drone via le
+  bouton explicite, jamais via le clic direct sur un token qui ne passe pas par ce chemin) — mais même
+  ligne 426 est elle-même un texte FR codé en dur dans un `.jsx`, violation `i18n.md` préexistante, à
+  traiter ensemble plutôt que corrigée isolément au détour d'un autre chantier.
 - Module Blessures — animation Tests de Choc restante (l'apparition des badges de statut est faite)
 - Options de campagne à finir : `revers`, `skill_natural_prog`, `celebrity`
 - Membres détruits (distinction Mortelle vs Membre détruit) — différé (Saar 2026-07-29), la gravité Mortelle couvre Bras/Jambes comme Tête/Corps tant que cette option n'existe pas
