@@ -25,10 +25,23 @@ export function useCombatUIState() {
 
   // Clic direct sur un token adverse (sans tuile Attaque/CaC préalable) — décision Saar 2026-07-31
   // (docs/BUGIDENTIFIE.md COMBAT-CLICK-AUTOSOLVE, scope réduit). Un seul appelant "actif" à la fois
-  // (PJ/PNJ/drone déclarant, exactement comme combatMoveMode/combatTargetMode) — enregistré via ref,
-  // jamais un state (pas de re-render nécessaire, mêmes patrons que les refs miroir de Canvas3D.jsx).
+  // (PJ/PNJ/drone déclarant, exactement comme combatMoveMode/combatTargetMode) — le handler async
+  // lui-même est enregistré via ref (lu seulement dans un handler, pas besoin de re-render, mêmes
+  // patrons que les refs miroir de Canvas3D.jsx).
+  //
+  // `ambientAttackArmed` reflète en state *si* un handler est enregistré (une fenêtre de déclaration
+  // combat l'a armé). Nécessaire car `handleAmbientTokenClick` est un dispatcher `useCallback` stable,
+  // donc toujours vérité : le passer inconditionnellement à Canvas3D faisait croire à ce dernier que
+  // le clic-attaque ambiant était armé en permanence (`ambientMapClickActive`), gelant toute
+  // interaction token hors combat (sélection, drag&drop, menu radial). SessionPage ne passe la prop
+  // `onAmbientTokenClick` que si `ambientAttackArmed` — même convention "null quand inactif" que
+  // moveTarget / losMode.
   const ambientAttackHandlerRef = useRef(null)
-  const registerAmbientAttackHandler = useCallback((fn) => { ambientAttackHandlerRef.current = fn }, [])
+  const [ambientAttackArmed, setAmbientAttackArmed] = useState(false)
+  const registerAmbientAttackHandler = useCallback((fn) => {
+    ambientAttackHandlerRef.current = fn
+    setAmbientAttackArmed(!!fn)
+  }, [])
   const handleAmbientTokenClick = useCallback((token, screenX, screenY) => {
     ambientAttackHandlerRef.current?.(token, screenX, screenY)
   }, [])
@@ -112,6 +125,7 @@ export function useCombatUIState() {
     handleValidateTarget,
     registerAmbientAttackHandler,
     handleAmbientTokenClick,
+    ambientAttackArmed,
     showTargetRecap,
   }
 }

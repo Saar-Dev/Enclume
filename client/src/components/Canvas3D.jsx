@@ -716,6 +716,11 @@ function Scene({
   // déplacement (retour Saar — "on peut toujours cliquer sur l'adversaire"). La détection "case
   // occupée" ci-dessous reste donc active tant que l'un OU l'autre est armé ; seule la préview de
   // chemin (case vide) exige encore combatMoveModeRef (gardée explicitement plus bas, `if (!mode)`).
+  //
+  // `onAmbientTokenClickRef.current` vaut `null` tant qu'aucune fenêtre de déclaration combat n'a
+  // enregistré de handler (SessionPage ne passe la prop que si `ambientAttackArmed`, cf.
+  // useCombatUIState.js) : hors combat cette clause est donc fausse et l'interaction token normale
+  // (sélection, drag&drop, menu radial) reprend.
   const ambientMapClickActive = useCallback(() =>
     (!!combatMoveModeRef.current || !!onAmbientTokenClickRef.current) &&
     !combatTargetModeRef.current && !losModeRef.current?.active && !moveTarget,

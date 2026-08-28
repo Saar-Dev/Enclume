@@ -397,7 +397,7 @@ function SessionContent({ campaignId }) {
     combatMoveMode, pendingMoveSelection, combatTargetMode, targetRecap, combatCameraCenter,
     handleModeReset, handleEnterMoveMode, handleValidateMove,
     handleCancelPendingMove, handleEnterTargetMode, handleValidateTarget,
-    registerAmbientAttackHandler, handleAmbientTokenClick, showTargetRecap,
+    registerAmbientAttackHandler, handleAmbientTokenClick, ambientAttackArmed, showTargetRecap,
   } = useCombatUIState()
   const combatSocket = useCombatSocket({ isGm, setMode, onModeReset: handleModeReset })
   const { lastDiceRoll, setLastDiceRoll, gmSocketError, setGmSocketError } = useSessionSocket()
@@ -667,7 +667,7 @@ function SessionContent({ campaignId }) {
               combatMoveMode={combatMoveMode}
               pendingMoveSelection={pendingMoveSelection}
               combatTargetMode={combatTargetMode}
-              onAmbientTokenClick={handleAmbientTokenClick}
+              onAmbientTokenClick={ambientAttackArmed ? handleAmbientTokenClick : null}
               losMode={losMode}
               onLosCancel={handleLosCancel}
               onLosResult={handleLosResult}
