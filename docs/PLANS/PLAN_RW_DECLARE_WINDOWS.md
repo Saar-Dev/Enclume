@@ -142,19 +142,22 @@ de montage). Docs : `COMBAT.md` (§ flux client), `COMBAT_FLUX.md`, `SERVICES_CO
 > 1 ✅ → **fix Tir visé** ✅ (§5bis) → **2 ✅** (autorité partagée du coût INI + pastille projetée,
 > périmètre élargi « robuste » : a aussi extrait `shared/combatIniCost.js`, dédupliqué
 > `combatSections`/`socketCombatAnnouncement`, et branché la pastille dans les 3 pieds de fenêtre) →
-> **3 ✅** (bannière de refus de déclaration centralisée P57 + finitions module 2 — code fait, validation
-> navigateur Saar en attente) → **POINT FORMEL**.
+> **3 ✅** (bannière de refus de déclaration centralisée P57 + finitions module 2) → **POINT FORMEL**
+> → **7 ✅** (`InlineChip` → `CombatDeclareStateChip` + API `CombatDeclareState*` unifiée — code fait,
+> validation navigateur Saar en attente).
 >
-> **Décisions de scope (Saar 2026-08-28)** — les extractions à forte valeur sont faites ; ce qui reste
-> est du DRY d'UI à ROI modéré sur les 2 fichiers les moins testés du projet (INFRA-4) :
+> **Décisions de scope (Saar 2026-08-28)** — critère unique : est-ce que ça aggrade le projet ?
 > - **Module 5** (`CombatDeclareFrame`) : **annulé** — les deux familles CSS (`combat-float-*` /
 >   `combat-win-*`) diffèrent réellement (B5) ; attend une passe design qui les unifie.
 > - **Module 6** (`useHumanDeclare`) : **différé** — rouvert seulement quand une infra de test
 >   composant sur les fenêtres existe ; sans elle, l'extraction = bug de combat subtil garanti.
-> - **Modules 4 (`CombatDeclareRoster`) + 7 (`InlineChip`)** : décidés **sur leur mérite au point
->   formel**, jamais déroulés par habitude. Le 4 exige de tester l'hypothèse « 1 roster pour 3 »
->   (B4) avant tout code.
-> - **« 1 + §5bis + 2 + 3 »** est un point d'arrêt propre et défendable si 4/7 ne valent pas la friction.
+> - **Module 7** : **fait** — aggrade (famille cohérente, `nextKey` sous test, brique prête pour les
+>   sélecteurs d'état exo à venir ; faire l'extraction maintenant, isolée, plutôt que plus tard dans
+>   la feature exo).
+> - **Module 4 (`CombatDeclareRoster`)** : décidé sur mérite au point formel. Le vrai gain caché =
+>   extraire `usePersistedToggle(storageKey)` (le pattern `useState(() => localStorage.getItem(…))` +
+>   `setItem` recopié ~6× dans l'app) ; **pas** un `<CombatDeclareRoster>` unique (piège B4 : rosters
+>   MJ/joueur réellement différents, l'exo ne contrôle qu'un token).
 >
 > Raison du changement d'ordre initial : le cadrage du module 6 (voir sa section) a
 > montré que (a) le bug Tir visé se corrige sans extraire, (b) INFRA-4 déconseille le découpage
@@ -471,22 +474,56 @@ de `getAimIneligibilityReasons().join(', ')` (contraire aux gates voisins l.445/
 
 ---
 
-### Module 7 (candidat) — consolider `InlineChip` et `CombatDeclareStateSelector` — **différé au point formel post-module 3** (décidé sur mérite)
+### Module 7 — `InlineChip` → `CombatDeclareStateChip.jsx` + API `CombatDeclareState*` unifiée — **FAIT (code, 2026-08-28) — validation navigateur Saar en attente**
 
-**Problème** `[VÉRIFIÉ]` : `CombatGmDeclareWindow.jsx` a un composant **local** `InlineChip` (l. 52-69,
-puce compacte click-to-cycle : choisir un état + montrer le coût de transition) qui fait le **même
-job** que `CombatDeclareStateSelector`, en plus compact. Le MJ utilise `InlineChip` pour
-Posture/Arme/Mode de tir (l. 647, 687) et `CombatDeclareStateSelector` seulement pour Vitesse
-(l. 656 — choix délibéré Session 158 : montrer les 3 choix de délai d'un coup). → **deux composants
-pour un concept.**
+**Problème** `[VÉRIFIÉ]` : `CombatGmDeclareWindow.jsx` avait un composant **local** `InlineChip` (puce
+compacte click-to-cycle : choisir un état + montrer le coût de transition) — même concept que
+`CombatDeclareStateSelector` (module 1), présentation compacte. Le MJ l'utilisait pour Posture/Arme/
+Mode-de-tir, et `CombatDeclareStateSelector` pour Vitesse seule (Session 158 : montrer les 3 délais
+d'un coup). Deux composants pour un concept, dont un caché dans une fenêtre. **En plus** :
+`CombatDeclareStateSelector` recevait `stateKey` **mort** (passé par les 5 appelants, jamais lu) +
+`def={STATE_DEFS.X}` — chaque site passait la paire redondante.
 
-**Options** (à trancher) : (a) `InlineChip` devient un mode d'affichage de
-`CombatDeclareStateSelector` (`variant="chip" | "segmented"`) ; (b) rester séparés si la divergence
-d'ergonomie le justifie vraiment, mais alors `InlineChip` sort de `CombatGmDeclareWindow` vers son
-propre fichier `CombatDeclareStateChip.jsx` (même famille). Non conçu — à cadrer.
+**Décision (Option 2, Saar 2026-08-28)** — extraction complète, pas un `variant` : les deux
+présentations (segmented / chip) sont légitimement différentes (choix UX par champ, Session 158) ;
+un composant à prop-switch avec deux corps de rendu serait pire (odeur B4).
 
-**Risque** : faible-moyen (visuel MJ). Peut se faire juste après le module 1 (même sujet) ou plus
-tard.
+**Fait** :
+- `combatSections.js` : `+ export function nextKey(stateKey, currentKey, availableKeys)` — déplacée
+  **verbatim** depuis la fenêtre MJ (elle prend déjà `stateKey`, `STATE_DEFS[stateKey].states`).
+  `+ combatSections.test.mjs` neuf (5 cas — **premier test de ce fichier modèle**) : cycle qui boucle,
+  `currentKey` inconnu → 1ʳᵉ option, restriction `availableKeys`, **`currentKey` hors de l'ensemble
+  filtré → 1ʳᵉ option valide** (cas arme CC → arme RC-only), ensemble vide → inchangé.
+- `CombatDeclareStateChip.jsx` neuf (ex-`InlineChip`) : API `stateKey` (inchangée) ; coût via
+  `stateTransitionCost(def, initial, current)` (helper partagé) au lieu du calcul inline ; `nextKey`
+  importé de `combatSections.js` ; styles `S.chip*` transportés **verbatim** (D8).
+- `CombatDeclareStateSelector.jsx` : signature `{ def, … }` → `{ stateKey, … }` ; `+ import STATE_DEFS`
+  ; `const def = STATE_DEFS[stateKey]` en interne. La famille a **une seule API** :
+  `stateKey / current / initial / onChange` (+ extras de présentation).
+- `CombatGmDeclareWindow.jsx` : retrait `InlineChip` + `nextKey` + styles `S.chip*` + **import
+  `STATE_DEFS`** (devenu inutile) ; `+ import CombatDeclareStateChip` ; 3 sites puce → nouveau
+  composant ; 1 site selector (vitesse) → `def={…}` retiré. `S.chips` (conteneur flex) conservé.
+- `CombatActionWindow.jsx` : 4 sites selector → `def={STATE_DEFS.X}` retirés ; **import `STATE_DEFS`**
+  retiré (devenu inutile).
+
+**Framing honnête (analyse à charge)** : le gain est un **nettoyage** (une prop morte + un pass-through
+`STATE_DEFS` retirés des 2 fenêtres, cost-formula inline tuée, famille cohérente), **pas** un
+découplage profond — les fenêtres connaissent toujours les clés d'état (`'position'`… en dur dans le
+JSX et les `dispatch`). **Zéro gain de sûreté typo** (`def` comme `stateKey` plantent sur une mauvaise
+valeur). L'unification d'API est la moitié risquée : elle touche `CombatActionWindow` (INFRA-4) ×4 —
+mais **soustractif** (les 5 sites passaient déjà `stateKey`, une édition partielle ne casse rien) et
+`nextKey` est sous test.
+
+**Équivalence `[VÉRIFIÉ]`** : coût chip `current === initial ? 0 : def.cost?.[initial]?.[current] ?? 0`
+**≡** `stateTransitionCost(def, initial, current)` ; `nextKey` déplacée sans modification ; `def`
+passait de `STATE_DEFS[stateKey]` à chaque appel → fait en interne, identique.
+
+**Testé** : `combatSections.test.mjs` 5/5 ; `node --test shared/*` 335/335 ; `vite build` clean ;
+`eslint` (5 fichiers) = **baseline exact** (6 problèmes, tous pré-existants ; nouveaux fichiers 0/0).
+**Validation navigateur Saar (à faire)** : joueur — segmented posture/vitesse/arme/mode-de-tir (coûts,
+sélection, `weapon` grisé si `weaponLocked`, `drawn` highlighté, `fire_mode` limité aux modes de
+l'arme) — **le point à éplucher, 4 sites INFRA-4** ; MJ/PNJ — puces posture/arme/mode-de-tir (cycle,
+coût, `fire_mode` limité), Vitesse (segmented) intacte.
 
 ---
 

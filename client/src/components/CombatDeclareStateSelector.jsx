@@ -1,14 +1,14 @@
 import { useTranslation } from 'react-i18next'
-import { stateTransitionCost } from './combatSections.js'
+import { STATE_DEFS, stateTransitionCost } from './combatSections.js'
 
 // Segmented control pour choisir un etat de combat (posture, arme, mode de tir, couverture,
 // vitesse) avec le cout de transition d'Initiative affiche sur chaque option. Brique partagee des
-// fenetres de declaration de combat (PLAN_RW_DECLARE_WINDOWS.md).
-//
-// `stateKey` est passe par les appelants mais jamais lu ici — `def` (une entree de STATE_DEFS)
-// encode deja label, options et matrice de couts.
-export default function CombatDeclareStateSelector({ def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
+// fenetres de declaration de combat (PLAN_RW_DECLARE_WINDOWS.md). Variante compacte : voir
+// CombatDeclareStateChip (puce click-to-cycle) — meme API (stateKey/current/initial/onChange/
+// availableKeys), presentation differente.
+export default function CombatDeclareStateSelector({ stateKey, current, initial, onChange, disabled, availableKeys, highlightKey }) {
   const { t } = useTranslation('combat')
+  const def = STATE_DEFS[stateKey]
   return (
     <div style={S.row}>
       <span style={S.label}>{t(def.label)}</span>

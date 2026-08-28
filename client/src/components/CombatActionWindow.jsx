@@ -10,7 +10,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import {
-  STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS,
+  MAP_ACTIONS, QUICK_ACTIONS,
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
@@ -976,14 +976,14 @@ export default function CombatActionWindow({
             <div style={W.sectionTitle}>{t('gmDeclareWindow.tacticSection')}</div>
             {!isDrone && (
               <CombatDeclareStateSelector
-                stateKey="position" def={STATE_DEFS.position}
+                stateKey="position"
                 current={decl.position} initial={initialStates.current.position}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })}
               />
             )}
             {!isDrone && (
               <CombatDeclareStateSelector
-                stateKey="vitesse" def={STATE_DEFS.vitesse}
+                stateKey="vitesse"
                 current={decl.vitesse} initial={initialStates.current.vitesse}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
               />
@@ -1014,14 +1014,14 @@ export default function CombatActionWindow({
                 )
               })()}
               <CombatDeclareStateSelector
-                stateKey="weapon" def={STATE_DEFS.weapon}
+                stateKey="weapon"
                 current={decl.weapon} initial={initialStates.current.weapon}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'weapon', value: v })}
                 disabled={weaponLocked}
                 highlightKey={decl.weapon !== 'drawn' ? 'drawn' : undefined}
               />
               <CombatDeclareStateSelector
-                stateKey="fire_mode" def={STATE_DEFS.fire_mode}
+                stateKey="fire_mode"
                 current={decl.fire_mode} initial={initialStates.current.fire_mode}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
                 availableKeys={availableFireModes}

@@ -5,7 +5,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api'
 import {
-  STATE_DEFS, QUICK_ACTIONS, MAP_ACTIONS,
+  QUICK_ACTIONS, MAP_ACTIONS,
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
@@ -25,40 +25,9 @@ import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
+import CombatDeclareStateChip from './CombatDeclareStateChip.jsx'
 import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
-
-function nextKey(stateKey, currentKey, availableKeys) {
-  const allStates = STATE_DEFS[stateKey].states
-  const states    = availableKeys ? allStates.filter(s => availableKeys.includes(s.k)) : allStates
-  if (states.length === 0) return currentKey
-  const idx = states.findIndex(s => s.k === currentKey)
-  if (idx === -1) return states[0].k
-  return states[(idx + 1) % states.length].k
-}
-
-// ---------------------------------------------------------------------------
-// InlineChip — puce click-to-cycle compacte
-// availableKeys : restreint les états cyclables (ex: modes de tir de l'arme)
-// ---------------------------------------------------------------------------
-function InlineChip({ stateKey, initial, current, onChange, availableKeys }) {
-  const { t } = useTranslation('combat')
-  const def  = STATE_DEFS[stateKey]
-  const cur  = def.states.find(s => s.k === current)
-  const cost = current === initial ? 0 : (def.cost?.[initial]?.[current] ?? 0)
-
-  return (
-    <div onClick={() => onChange(nextKey(stateKey, current, availableKeys))} style={S.chip}>
-      <span style={S.chipLabel}>{t(def.label)}</span>
-      <span style={S.chipValue}>{cur?.l ? t(cur.l) : current}</span>
-      {cost !== 0 && (
-        <span style={{ ...S.chipCost, color: cost > 0 ? '#3aaa6a' : '#c86030' }}>
-          {cost > 0 ? `+${cost}` : cost}
-        </span>
-      )}
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Composant principal
@@ -641,7 +610,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               <div className="combat-win-section">
                 <span className="combat-win-section-title">{t('gmDeclareWindow.tacticSection')}</span>
                 <div style={S.chips}>
-                  <InlineChip stateKey="position"
+                  <CombatDeclareStateChip stateKey="position"
                     initial={initialStates.position}
                     current={decl.position}
                     onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })} />
@@ -651,7 +620,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     les 3 choix derrière des clics successifs sans repère visuel, CombatDeclareStateSelector
                     montre les 3 en même temps comme côté joueur). */}
                 <CombatDeclareStateSelector
-                  stateKey="vitesse" def={STATE_DEFS.vitesse}
+                  stateKey="vitesse"
                   current={decl.vitesse} initial={initialStates.vitesse}
                   onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
                 />
@@ -681,7 +650,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 })()}
                 <div style={S.chips}>
                   {['weapon', 'fire_mode'].map(k => (
-                    <InlineChip key={k} stateKey={k}
+                    <CombatDeclareStateChip key={k} stateKey={k}
                       initial={initialStates[k]}
                       current={decl[k]}
                       availableKeys={k === 'fire_mode' && rangedActive ? availableFireModes : undefined}
@@ -1147,10 +1116,6 @@ const S = {
   weaponInfoLine: { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   weaponInfoAmmo: { fontWeight: 700 },
   chips: { display: 'flex', gap: 5, flexWrap: 'wrap' },
-  chip: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', background: '#0a1018', border: '1px solid #1a2a38', borderRadius: 2, cursor: 'pointer', userSelect: 'none' },
-  chipLabel: { fontSize: 7, color: '#456575', letterSpacing: '0.1em', fontFamily: 'monospace' },
-  chipValue: { fontSize: 10, color: '#dde7ee', fontWeight: 600 },
-  chipCost: { fontSize: 8, fontFamily: 'monospace', fontWeight: 700 },
 
   actionGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 },
   actionBtn: { padding: '5px 8px', background: '#0a1018', border: '1px solid #15212e', borderRadius: 2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 },

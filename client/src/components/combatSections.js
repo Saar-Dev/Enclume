@@ -64,6 +64,19 @@ export function stateTransitionCost(def, fromKey, toKey) {
   return def.cost?.[fromKey]?.[toKey] ?? 0
 }
 
+// Etat suivant dans le cycle des options d'un champ (posture, arme, mode de tir...) — utilise par
+// CombatDeclareStateChip (puce click-to-cycle, ex-InlineChip de CombatGmDeclareWindow). `availableKeys`
+// restreint le cycle (ex. modes de tir reellement supportes par l'arme equipee) ; si `currentKey`
+// n'est pas dans l'ensemble filtre, on repart de la premiere option valide.
+export function nextKey(stateKey, currentKey, availableKeys) {
+  const allStates = STATE_DEFS[stateKey].states
+  const states    = availableKeys ? allStates.filter(s => availableKeys.includes(s.k)) : allStates
+  if (states.length === 0) return currentKey
+  const idx = states.findIndex(s => s.k === currentKey)
+  if (idx === -1) return states[0].k
+  return states[(idx + 1) % states.length].k
+}
+
 // Adapte les arguments des fenêtres de déclaration (prevStates/nextStates = `decl`, mapActions,
 // quick) vers la forme attendue par shared/combatIniCost.js. `nextStates.combatMode` porte le mode
 // de combat (Charge/Retraite = déplacement gratuit) — le calcul du coût de déplacement est délégué,
