@@ -1,9 +1,10 @@
 # PLAN_RW_DECLARE_WINDOWS — Rework des fenêtres de déclaration de combat
 
-> **Version** : v2 — 2026-08-27, complétée 2026-08-28 : décisions D4/D7/D8 ; **module 1 FAIT** ;
-> analyse critique intégrée aux modules 2-7 (B1-B5, C1-C2). Conception refaite depuis zéro après
-> abandon de la v1 (lecture incomplète). Suit `docs/METHODO_PLAN.md`. **Méthode : alternance** —
-> planification détaillée d'un module puis code puis validation puis module suivant.
+> **Version** : v2 — 2026-08-27, révisée 2026-08-28 : **modules 1 + §5bis + 2 FAITS et validés** ;
+> décisions de scope post-module 2 (§5 : module 5 annulé, 6 différé, 4/7 sur mérite au point formel
+> après le 3 ; « 1 + §5bis + 2 + 3 » = arrêt propre possible). Décisions D4/D7/D8/D9-D12. Conception
+> refaite depuis zéro après abandon de la v1 (lecture incomplète). Suit `docs/METHODO_PLAN.md`.
+> **Méthode : alternance** — planification détaillée d'un module puis code puis validation puis suivant.
 >
 > **Responsabilité unique** (Règle 1) : stratégie de refactoring **client** des fenêtres de
 > déclaration d'action en phase ANNONCE. **Ne décrit aucune** règle métier de combat
@@ -127,19 +128,33 @@ de montage). Docs : `COMBAT.md` (§ flux client), `COMBAT_FLUX.md`, `SERVICES_CO
 | D5 | `useHumanDeclare` = module 6, **différé**, re-décidé plus tard. |
 | D6 `[INFÉRÉ]` | Item 2 (module 2) : format `INI : {actuel} → {projeté}` dans le footer des 3 fenêtres. À confirmer au démarrage du module 2. |
 | D7 | **Nommage** (arrêté au module 1) : préfixe de famille `CombatDeclare*` ; **fichier = export par défaut = nom d'usage** (comme les panneaux frères `AssaultRangedPanel`/`DroneWeaponPanel`/`MeleeCombatPanel`/`DroneDeclareSection` : `export default function <Nom>`). Le découpage fichier≠export de `CombatDeclareLog.jsx` (→ `DeclareLogContent`) est une verrue pré-existante, **non propagée**. `CombatDeclareStateSelector`, `CombatDeclareIniWidget`, `CombatDeclareErrorBanner` (+ hook `useCombatDeclareError`), `CombatDeclareRoster`, `CombatDeclareFrame`. Jamais un préfixe par variante (`Exo…`/`Drone…`) pour une brique partagée. |
-| D8 | **Aucune couche CSS ajoutée, style réutilisé à l'identique.** Le style des fenêtres est déjà défini (fenêtres joueur/MJ + `index.css` + jetons `--combat-*`). L'extraction transporte les objets de style **verbatim** (y compris valeurs visuelles inline). Pas de refactor `style={}`→classe, pas de nouvelle classe. L'harmonisation visuelle éventuelle = passe de design dédiée, séparée, plus tard. (Saar 2026-08-28.) |
+| D8 | **Aucune couche CSS ajoutée, style réutilisé à l'identique.** Le style des fenêtres est déjà défini (fenêtres joueur/MJ + `index.css` + jetons `--combat-*`). L'extraction transporte les objets de style **verbatim** (y compris valeurs visuelles inline). Pas de refactor `style={}`→classe, pas de nouvelle classe. L'harmonisation visuelle éventuelle = passe de design dédiée, séparée, plus tard. (Saar 2026-08-28.) **Assouplie au module 2** : une règle CSS scopée est admise pour corriger un **défaut** (rognage de tooltip), jamais pour du polish. |
+| D9 | **Module 2 = périmètre « robuste »** : au-delà du widget, on extrait l'autorité unique du coût d'Initiative (`shared/combatIniCost.js`), on déduplique client/serveur — dérogation assumée au « on ne touche pas au serveur » (§8). Iso-comportement, zéro changement de payload/règle. (Saar 2026-08-28.) |
+| D10 | **`willBeLost = projected <= 0`** (INI = 0 ⇒ tour perdu, confirmé Saar). La pastille projetée est **rouge** dans ce cas — indicateur visuel, **jamais un blocage** du bouton. |
+| D11 | Pastille = **juste le chiffre projeté** ; détail au **survol** (`.has-tooltip`), pas de clic-popover. Toujours visible à côté de DÉCLARER. |
+| D12 | MJ : `→ {initiative}` du roster **retiré** (redondant avec le pied) ; INI **toujours** affichée au pied (avant : cachée si delta 0). |
 
 ---
 
 ## 5. Liste des modules
 
-> **Ordre d'exécution acté (Saar 2026-08-28, révisé après analyse à charge du cadrage module 6)** :
+> **Ordre d'exécution + scope acté (Saar 2026-08-28, révisé après analyse à charge post-module 2)** :
 > 1 ✅ → **fix Tir visé** ✅ (§5bis) → **2 ✅** (autorité partagée du coût INI + pastille projetée,
 > périmètre élargi « robuste » : a aussi extrait `shared/combatIniCost.js`, dédupliqué
 > `combatSections`/`socketCombatAnnouncement`, et branché la pastille dans les 3 pieds de fenêtre) →
-> **3** (`useCombatDeclareError`) → **4** (`CombatDeclareRoster`) → **re-décider le module 6**
-> (prérequis : vitest + tests de caractérisation + périmètre PJ-seul-ou-PJ+MJ tranché ; ou constater
-> qu'INFRA-4 a raison et ne pas le faire) → **7** (`InlineChip`) → **5** (probable annulation, B5).
+> **3** (`useCombatDeclareError` + finitions module 2) → **POINT FORMEL**.
+>
+> **Décisions de scope (Saar 2026-08-28)** — les extractions à forte valeur sont faites ; ce qui reste
+> est du DRY d'UI à ROI modéré sur les 2 fichiers les moins testés du projet (INFRA-4) :
+> - **Module 5** (`CombatDeclareFrame`) : **annulé** — les deux familles CSS (`combat-float-*` /
+>   `combat-win-*`) diffèrent réellement (B5) ; attend une passe design qui les unifie.
+> - **Module 6** (`useHumanDeclare`) : **différé** — rouvert seulement quand une infra de test
+>   composant sur les fenêtres existe ; sans elle, l'extraction = bug de combat subtil garanti.
+> - **Modules 4 (`CombatDeclareRoster`) + 7 (`InlineChip`)** : décidés **sur leur mérite au point
+>   formel**, jamais déroulés par habitude. Le 4 exige de tester l'hypothèse « 1 roster pour 3 »
+>   (B4) avant tout code.
+> - **« 1 + §5bis + 2 + 3 »** est un point d'arrêt propre et défendable si 4/7 ne valent pas la friction.
+>
 > Raison du changement d'ordre initial : le cadrage du module 6 (voir sa section) a
 > montré que (a) le bug Tir visé se corrige sans extraire, (b) INFRA-4 déconseille le découpage
 > proactif, (c) « rend 2-4 plus propres » ne tient pas, (d) module 6 sans tests de caractérisation =
@@ -254,41 +269,45 @@ et `gmDeclareWindow.iniTotalLabel` (combat.json) sont maintenant orphelins.
 
 ---
 
-### Module 3 — `useCombatDeclareError`
+### Module 3 — `useCombatDeclareError` (+ finitions module 2) — **PROCHAIN**
 
-**Problème** : `useEffect` d'écoute `COMBAT_DECLARE_ERROR` + `setDeclareError` + timeout 4 s —
-identique dans les 3 fenêtres (l'exo ajoute `setIsDeclaring(false)`, corrigé 2026-08-27). Le
-`ini-popover`/bannière markup est aussi ~identique.
+**Problème** : `COMBAT_DECLARE_ERROR` a **4 listeners** — les 3 fenêtres (`socket.on` local + `useEffect`
++ état `declareError` + timeout 4 s, l'exo ajoute `setIsDeclaring(false)`) **et** `useCombatSocket.js:186`
+`onDeclareError` (→ message de chat). Les 3 `socket.on` dans des composants feuilles violent
+`REACT.md` P57 (événement WS live → hook central + store, jamais un `socket.on` local).
 
-**Cible** : `client/src/lib/useCombatDeclareError.js` :
-- `const { error } = useCombatDeclareError(socket, { onError })` — possède l'abonnement
-  `socket.on`/`off`, l'état, le timeout **avec cleanup**. `onError` optionnel (l'exo passe
-  `() => setIsDeclaring(false)`).
-- Chaque fenêtre rend sa propre bannière à partir de `error`, **ou** on extrait aussi un
-  `<CombatDeclareErrorBanner error={error} />` minuscule (`[INFÉRÉ]` — à trancher au module), styles
-  verbatim (D8).
+**Décision de forme actée (B3, Saar 2026-08-28)** — pas un simple DRY qui garderait le `socket.on`
+local : le signal transitoire passe par le **flux central qui reçoit déjà l'événement**.
+- `combatStore` gagne `declareError: { message, ts } | null`, posé par `useCombatSocket#onDeclareError`
+  (aucun nouvel abonnement), auto-effacé.
+- `client/src/lib/useCombatDeclareError.js` = **sélecteur** au-dessus du store : `const { error } =
+  useCombatDeclareError({ onError })`. `onError` optionnel (l'exo passe `() => setIsDeclaring(false)`).
+- Les 3 fenêtres : retrait de l'`useEffect` + de l'état local ; rendent leur bannière depuis `error`
+  (markup verbatim, D8 — extraction d'un `<CombatDeclareErrorBanner>` à trancher au cadrage).
 
-**Fichiers touchés** : hook neuf ; les 3 fenêtres (retrait de l'`useEffect` local + de l'état).
+**Questions ouvertes (cadrage)** : (a) timer 4 s dans `useCombatSocket` ou dans le sélecteur ?
+(b) `isDeclaring` de l'exo — callback `onError`, ou déplacer aussi ce verrou dans le flux central ?
+(c) `<CombatDeclareErrorBanner>` extrait, ou bannière rendue par chaque fenêtre ?
+
+**Finitions module 2 bundlées dans ce commit** (5 min, dette laissée volontairement en module 2) :
+- retirer le CSS mort `.ini-popover` / `.ini-popover-line` / `.ini-popover-label` / `.ini-bd-pos` /
+  `.ini-bd-neg` (`index.css`, ~35 l.) — plus aucun consommateur ;
+- retirer la clé i18n orpheline `gmDeclareWindow.iniTotalLabel` (`combat.json`) ;
+- `CombatActionWindow.jsx` : `delta={isDrone ? 0 : iniDelta}` sur `<CombatDeclareIniWidget>` — garde
+  explicite du drone joueur (aujourd'hui juste par accident : la machinerie humanoïde est `!isDrone`).
+
+**Fichiers touchés** : `combatStore` ; `useCombatSocket.js` ; `useCombatDeclareError.js` neuf ;
+les 3 fenêtres ; `index.css` + `combat.json` (finitions).
 
 **Validation navigateur** : refus serveur (portée / PC23 / munitions) dans chaque fenêtre → bannière
-4 s, disparaît, fenêtre réutilisable ; exo : re-déclaration OK après refus (non-régression du bug
-2026-08-27).
+4 s, disparaît, fenêtre réutilisable ; exo : re-déclaration OK après refus (non-régression 2026-08-27) ;
+le message de chat `declare_error` continue d'apparaître (pas de double, pas de perte).
 
-**Risque** : faible.
-
-**Analyse critique — B3 (2026-08-28)** : ce module tel qu'écrit **conserve une violation
-d'architecture** au lieu de la corriger. `REACT.md` P57 : événement WS live → hook central + store,
-**jamais** un `socket.on` local dans un composant feuille. Les 3 fenêtres violent ça ; regrouper en
-un hook DRYise mais garde le `socket.on` local. Or `useCombatSocket.js#onDeclareError` **écoute déjà**
-`COMBAT_DECLARE_ERROR` (pour le log de chat). **Geste juste** : router le signal de bannière
-transitoire **par `useCombatSocket`** (qui expose déjà un état combat au niveau session), le module
-`useCombatDeclareError` devient un sélecteur/adaptateur au-dessus, pas un nouvel abonnement.
-**Décision à prendre au cadrage du module 3, pas « à discuter »** — sous le mandat « amélioration
-d'architecture », le DRY qui conserve la violation n'est pas suffisant.
+**Risque** : faible — client uniquement, zéro maths de combat, zéro serveur, zéro règle de jeu.
 
 ---
 
-### Module 4 — `CombatDeclareRoster.jsx`
+### Module 4 — `CombatDeclareRoster.jsx` — **différé au point formel post-module 3** (décidé sur mérite ; tester l'hypothèse B4 « 1 roster pour 3 » avant tout code)
 
 **Problème** : liste repliable des tokens contrôlés + Initiative/token — dupliquée joueur
 (`CombatActionWindow.jsx:836-876`) / MJ (`CombatGmDeclareWindow.jsx:~940-997`), **absente de l'exo**.
@@ -327,7 +346,7 @@ Fix trivial et sûr mais **dans un autre fichier**, hors de ce chantier → trai
 
 ---
 
-### Module 5 — Chrome de fenêtre partagé `CombatDeclareFrame.jsx`
+### Module 5 — Chrome de fenêtre partagé `CombatDeclareFrame.jsx` — **ANNULÉ (Saar 2026-08-28)** : les deux familles CSS diffèrent réellement (B5) ; à reprendre seulement après une passe design qui les unifie
 
 **Problème** : chrome flottant (`useDraggable`, header, footer, `opacity`/`pointerEvents` de masquage)
 réimplémenté 3×, **avec deux familles de classes CSS** (`combat-float-*` joueur/exo vs `combat-win-*`
@@ -357,7 +376,7 @@ pas à forcer.
 
 ---
 
-### Module 6 — `useHumanDeclare` — **PROCHAIN (ordre remonté, Saar 2026-08-28)** — cadrage en cours
+### Module 6 — `useHumanDeclare` — **DIFFÉRÉ (Saar 2026-08-28)** : rouvert seulement quand une infra de test composant existe (sans elle, l'extraction = bug de combat subtil garanti — cf. cadrage ci-dessous, conservé)
 
 **Pourquoi maintenant** : c'est le vrai problème d'architecture (`CombatActionWindow` = 26 `useState`
 + `useReducer` + 9 `useEffect` dans 1651 l.), il produit des bugs réels (Tir visé, voir plus bas),
@@ -430,7 +449,7 @@ de `getAimIneligibilityReasons().join(', ')` (contraire aux gates voisins l.445/
 
 ---
 
-### Module 7 (candidat) — consolider `InlineChip` et `CombatDeclareStateSelector`
+### Module 7 (candidat) — consolider `InlineChip` et `CombatDeclareStateSelector` — **différé au point formel post-module 3** (décidé sur mérite)
 
 **Problème** `[VÉRIFIÉ]` : `CombatGmDeclareWindow.jsx` a un composant **local** `InlineChip` (l. 52-69,
 puce compacte click-to-cycle : choisir un état + montrer le coût de transition) qui fait le **même
@@ -537,9 +556,14 @@ côté MJ pour un PNJ ; (4) non-régression : déclaration multi-tuiles, Charge,
 
 - On ne fusionne rien : 3 fenêtres restent, chacune orchestratrice de sa variante.
 - On ne réécrit pas `AssaultRangedPanel`/`MeleeCombatPanel`/`DroneWeaponPanel` (REWORK-05, OK).
-- On ne touche pas au serveur, au payload `COMBAT_ACTION_DECLARE`, aux règles de combat.
 - On n'ajoute pas de dépendance (pas de lib de slots, pas de vitest sans décision explicite).
-- Modules 5 (probable annulation, B5) et 6 restent optionnels/re-décidés — livrer 2-4 est déjà un
-  état stable et une vraie amélioration (exo au niveau des deux autres, item 2 clos).
+- **Module 2 a touché le serveur** (`socketCombatAnnouncement.js`) et un module partagé neuf
+  (`shared/combatIniCost.js`) — dérogation assumée au « on ne touche pas au serveur » ci-dessus :
+  périmètre « robuste » acté par Saar pour dédupliquer la dernière maths de combat client/serveur.
+  Iso-comportement, pas de changement de payload ni de règle. Le reste du chantier (3, 4, 7) reste
+  client-only.
+- Modules 5 **annulé** (B5), 6 **différé** (infra de test) — cf. §5. Livrer « 1 + §5bis + 2 + 3 »
+  est déjà un état stable et une vraie amélioration (exo au niveau des deux autres, item 2 clos,
+  dernière maths de combat dédupliquée, P57 respecté sur `COMBAT_DECLARE_ERROR`).
 - Module 1 fait le 2026-08-28 : gain réel mais cosmétique (import croisé supprimé, famille
   `CombatDeclare*` amorcée, convention de nommage fixée) — le châssis dupliqué 3× n'est pas touché.

@@ -1406,8 +1406,8 @@ export default function CombatActionWindow({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
           <CombatDeclareIniWidget
             currentInitiative={rosterEntry.initiative}
-            delta={iniDelta}
-            breakdown={iniBreakdown}
+            delta={isDrone ? 0 : iniDelta}
+            breakdown={isDrone ? [] : iniBreakdown}
           />
           <button
             className="btn-tac"

@@ -2060,37 +2060,6 @@ Convention :
 }
 .d20txt { font: 700 12px var(--font-mono); position: relative; }
 
-/* ── INI Breakdown Popover ─────────────────────────────────────────── */
-.ini-popover {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 1999;
-  background: #0d1820;
-  border: 1px solid #2a3a4a;
-  border-radius: 3px;
-  padding: 6px 8px;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  pointer-events: auto;
-}
-.ini-popover-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.ini-popover-label {
-  font-size: 10px;
-  color: #7a8fa0;
-  font-family: var(--font-mono);
-}
-.ini-bd-pos { font-size: 10px; font-family: var(--font-mono); color: #3aaa6a; font-weight: 700; flex-shrink: 0; }
-.ini-bd-neg { font-size: 10px; font-family: var(--font-mono); color: #c86030; font-weight: 700; flex-shrink: 0; }
-
 /* ── .has-tooltip ─────────────────────────────────────────────────── */
 /* usage : <el class="has-tooltip" data-tooltip="texte"> */
 .has-tooltip { position: relative; }

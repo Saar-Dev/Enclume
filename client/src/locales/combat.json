@@ -198,8 +198,7 @@
     "noRangedWeaponTag": "sans arme dist.",
     "monitorTitle": "En cours de déclaration…",
     "rangedTag": "DST",
-    "meleeTag": "CTC",
-    "iniTotalLabel": "INI TOTAL"
+    "meleeTag": "CTC"
   },
   "actionLabels": {
     "assault": "Assaut (tir)",
