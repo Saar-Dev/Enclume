@@ -232,55 +232,79 @@ analyse à charge dédiés : quels effets serveur sur un `state:{}` / `mapAction
 laisse chaque `state_*` inchangé, `[VÉRIFIÉ]` via commentaire `CombatExoActionWindow.jsx:165`) ?
 non-régression du flux normal ? Indépendant du reste — peut se faire avant ou après le module 1.
 
-### 5.3 Module 1 — Réconciliation des tokens `--combat-*` (D4)
+### 5.3 Module 1 — Tokens d'accent par famille (D3/D4) — **RE-CADRÉ round 4**
 
-Un seul jeu canonique dans `index.css` ; `--combat-accent-*` + `data-family` ; `--combat-exo-*` ;
-retrait des hex des objets `W`/`S` des `.jsx`. **Pas un quick win** (analyse à charge round 2) : passe
-large et minutieuse sur ~6 fenêtres combat + `AssaultRangedPanel` / `MeleeCombatPanel` /
-`DroneWeaponPanel`, chaque `W.xxx: { background: '#...' }` → `var(--combat-accent-*)`, **sans test
-visuel** (INFRA-4). Un commit, `git revert` = rollback. Gain réel autonome : per-family accent visible
-(drone teal, exo violet) + fin de la dette « 3 vocabulaires `--combat-*` ». À faire avec le soin d'un
-module, pas d'un quick win. Risque : moyen.
+**Analyse à charge round 4** (`[VÉRIFIÉ]` inventaire 2026-08-28) : ~**290 couleurs en dur** dans les
+9 fichiers de fenêtres (`CombatGmDeclareWindow` 108, `CombatActionWindow` 64, `MeleeCombatPanel` 36,
+`AssaultRangedPanel` 28…), ~50 valeurs distinctes — et la plupart ne sont **pas** des accents (texte,
+bordures, rouges/verts de panneau). Les convertir toutes = refonte CSS complète, churn, risque visuel
+élevé. **La dette « 3 vocabulaires » n'existe pas au runtime** : l'export DS (`temp/wizard/`) n'est
+**pas chargé** ; `index.css` a déjà un jeu `--combat-*` propre (pj/pnj/drone triplets, `--combat-ini-*`).
 
-### 5.4 EN ATTENTE — modules 2-5 (cible validée, déclencheur explicite requis)
+**Périmètre réel du module 1, réduit** :
+- `+ --combat-exo-*` (fg/bg/border, violet `#9858c8`) dans `index.css` — 3 lignes, zéro risque.
+- Introduire `--combat-accent-*` **mappé par famille**, consommé par `CombatDeclareFrame` (module 2) —
+  donc **le module 1 fusionne dans le module 2** (le `data-family` n'a de sens qu'avec le chrome
+  partagé). Pas de module 1 autonome.
+- Le remplacement des ~25 occurrences d'accent bleu parasite (`#5b8dee` / `rgba(91,141,238,*)`) se
+  fait **au fil des modules 2/4/5**, sur les fichiers qu'ils touchent déjà — pas en passe séparée.
+- La conversion complète hex → tokens des panneaux = **hors périmètre** (chantier CSS distinct, non
+  ouvert).
 
-**Analyse à charge §11 points 1 et 4** : les modules 2-5 refont la structure du **code combat le plus
-joué et le moins couvert** (INFRA-4), pour un gain UX. `PLAN_RW_DECLARE_WINDOWS` a **différé** son
-module 6 pour exactement ça. Critère `feedback_aggradation_criterion` : ils **n'aggradent pas la
-testabilité**. Ils sont **gatés sur le module 0**, et le module 0 est lui-même **un virage de
-philosophie de test transverse au projet** (`PLAN_RW_DECLARE_WINDOWS` §2.4 : Enclume teste des
-fonctions pures en `node --test`, pas de composant). **Déclencheur pour rouvrir** : (a) backlog RAW
-serveur nettement plus mince **et** (b) décision assumée d'investir dans les tests composant. D'ici là,
-la maquette est le nord, pas un engagement.
+### 5.4 Modules 0-5 — la refonte, faite avec un filet (round 4 : dé-parkée)
 
-**Module 0 — Infra de test composant.** Ajouter `vitest` + `@testing-library/react` (ou équivalent,
-recherche des pratiques pro à faire), et **des tests de caractérisation** sur `CombatActionWindow` /
-`CombatGmDeclareWindow` **avant** de les toucher (payload `COMBAT_ACTION_DECLARE` généré pour chaque
-combinaison arme × mode × cas limite). C'est un **module à part entière, décidé explicitement** — pas
-une note en bas de page. Sans lui, on ne démarre pas les modules 2-5.
+**Round 4 (rappel des priorités par Saar, 2026-08-28)** : « qualité structurelle >>> vitesse ;
+si on doit rework pour stabiliser, on le fait ; on n'est pas pressés ». → les modules 2-5 ne sont
+**plus « en attente d'un backlog plus mince »**. Ils se font, **après le filet** (module 0), qui est
+lui-même une aggradation légitime que ces priorités endossent explicitement.
 
-**Décision préalable au module 4 (à trancher au cadrage du module 0/2, PAS pendant le module 4)** :
-le partage de la logique « liste d'action » entre PJ et MJ-PNJ passe-t-il par un
-`useHumanDeclare(mode: 'pj' | 'gm-pnj')` (source équipement : inventaire par perso vs batch ;
-allures : fiche vs `DEFAULT_PNJ_ALLURES` ; slot unique vs séquentiel) — la « vraie cible » que
-`PLAN_RW_DECLARE_WINDOWS` module 6 a nommée puis différée ? Ou le module 4 ne partage-t-il que le
-**rendu** (`CombatDeclareActionList` présentationnel) et chaque fenêtre garde son état ?
+**Module 0 — Extraire la logique de déclaration en modules purs testés (PAS « ajouter vitest »).**
+`[VÉRIFIÉ]` la philo de test d'Enclume : 126 fichiers `*.test.mjs` (`node --test`, fonctions pures) +
+Playwright E2E (`tests/e2e/`, `@playwright/test` installé) ; **aucun test composant, choix assumé**.
+`client/src/lib/declarationReducer.test.mjs` + `client/src/components/combatSections.test.mjs` +
+`shared/combatIniCost.test.mjs` couvrent déjà le **calcul pur** de la déclaration. Ce qui n'est **pas**
+testé : l'**assemblage du payload** `COMBAT_ACTION_DECLARE` (aujourd'hui inline dans `handleDeclare` de
+chaque fenêtre) et les **invariants croisés** (Attaque ⊕ CaC, Tir visé ⊕ Tir Multi ⊕ dual-wield,
+Charge/Retraite → force move+cible).
 
-**Module 2 — `CombatDeclareFrame` (chrome partagé).** Débloqué par le module 1. Props : `family`,
-`storageKey`, `defaultPos`, `title`, `hidden`, `satellite?` (slot), `footer` (slot), `children` +
-gestion des **états non-déclaration** (§4). Possède `useDraggable` + le chrome + masquage + le fond
-PCB (D14). Une seule famille CSS (le module 1 lève le blocage B5 de `PLAN_RW_DECLARE_WINDOWS` :
-on unifie par token). Risque **élevé** (structure externe des 3 fenêtres).
+Méthode (golden master / characterization, pratique pro documentée — sources dans le journal de
+session) :
+1. **Extraction mécanique** (pas de changement de logique) : `handleDeclare` de chaque fenêtre →
+   `buildDeclarePayload(selections)` pur, dans `client/src/lib/` (jumeau de `declarationReducer.js`).
+   Idem `buildMapActions` drone/exo (déjà à moitié dans les hooks).
+2. **Tests de caractérisation `.mjs`** : table `(sélections réalistes) → payload attendu`, une entrée
+   par combinaison arme × mode × cas limite (§4.1), figée sur le comportement **actuel**.
+3. Le payload est verrouillé → `useHumanDeclare(mode: 'pj' | 'gm-pnj')` (PO6, la « vraie cible » de
+   `PLAN_RW_DECLARE_WINDOWS` module 6) s'extrait en petits pas, tests verts après chaque pas.
+4. Modules 2-5 (refonte visuelle) ne touchent alors **que du JSX/layout** — le golden master attrape
+   toute régression de payload.
+
+Aggradation **permanente** : le chemin de déclaration de combat devient testable pour de bon, pas
+juste pour cette refonte. Aligné sur la philo `.mjs` du projet — **pas de nouveau paradigme**.
+Playwright E2E reste possible en complément (scénario combat réel) mais n'est pas le filet principal.
+
+**Modules 2 → 5** : après le module 0. Un module = un commit, validé (tests `.mjs` verts + navigateur
+Saar) avant le suivant. Ancien code retiré dans le même commit.
+
+**Module 2 — `CombatDeclareFrame` (chrome partagé) + `--combat-accent-*` par famille (ex-module 1).**
+Props : `family`, `storageKey`, `defaultPos`, `title`, `hidden`, `satellite?` (slot), `footer` (slot),
+`children` + états non-déclaration (§4). `useDraggable` + chrome + masquage + fond PCB (D14) +
+`data-family` → `--combat-accent-*`. `+ --combat-exo-*` dans `index.css`. Une seule famille CSS.
+Risque **élevé** (structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** →
+golden master du module 0 en filet.
 
 **Module 3 — `CombatDeclareStatePanel` (satellite, D8).** Composant neuf composant
 `CombatDeclareStateChip`. **Côté exo : nécessite le serveur** (persistance `state_position` /
 `state_weapon` exo, gate de résolution) — sous-module serveur explicite (`ROADMAP.md` §1 point 4).
 Risque : moyen (client), moyen-élevé (exo + serveur).
 
-**Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur. Liste d'armes
-groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail (`Tir | Recharger`,
-`AssaultRangedPanel` / `MeleeCombatPanel` réagencés en colonne, silhouette 2 sous-colonnes). Absorbe
-§4.1. Risque **très élevé** — **ne démarre qu'après le module 0** et la décision `useHumanDeclare`.
+**Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
+d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
+(`Tir | Recharger`, `AssaultRangedPanel` / `MeleeCombatPanel` réagencés en colonne, silhouette 2
+sous-colonnes). Absorbe §4.1. Risque **élevé** — mais avec le module 0 fait, la logique de payload est
+extraite et testée : le module 4 **consomme `useHumanDeclare` et ne fait que du rendu**. Le golden
+master casse au moindre changement de payload. PO2/PO3 (mode « Défensif », faisabilité col. 2 264 px,
+satellite qui suit) éprouvés au cadrage du module 4, **avant** le code.
 
 **Module 5 — Pied unifié (D12).** `CombatDeclareFooter` : pastille + statut + `Passer le tour` (ghost)
 + `Déclarer` (primaire, raison bloquante si `!canDeclare`). Consommé par les 3 (slot `footer` du
@@ -290,8 +314,10 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 
 ## 6. Migration / rollback
 
-- **Lot B + B5 + module 1** : chaque item est un commit isolé, **`git revert` suffit** (JSON, CSS,
-  renommages, un one-liner). Aucun feature flag.
+- **Lot B + B5** : chaque item est un commit isolé, **`git revert` suffit** (JSON, un one-liner).
+  Aucun feature flag.
+- **Module 0** : extraction mécanique + tests `.mjs` neufs — additif, `git revert` trivial ; le
+  `vite build` + les tests verts couvrent l'extraction.
 - **Modules 2-5** (si rouverts) : chaque module branché retire l'ancien code dans le même commit —
   **`git revert` du commit du module** est le rollback. **Pas de feature flag** (analyse à charge
   round 2) : cohabiter deux `CombatActionWindow` de 1500 l. pendant une transition = enfer de merge et
@@ -322,8 +348,10 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 - Le dispatch serveur Tir/CaC × PJ/PNJ/Drone/Exo (`ROADMAP.md` §5).
 - La fusion des orchestrateurs (rejetée, REWORK-05 — on partage le châssis, pas le composant).
 - Le calcul métier (`combatIniCost`, `combatSections`, allures) — intact.
-- Migration TypeScript, nouvelle dépendance **hors** l'infra de test du module 0 (décidée
-  explicitement).
+- Migration TypeScript. **Aucune nouvelle dépendance** : le module 0 reste sur `node --test` +
+  fonctions pures `.mjs` (philo du projet), pas de vitest/RTL.
+- Conversion complète hex → tokens des panneaux combat (~290 occurrences) — chantier CSS distinct,
+  non ouvert (round 4).
 - La barre d'action ancrée non-couvrante (style Argon Combat HUD) — très gros chantier, contraire au
   paradigme Enclume. Nommé pour mémoire, non ouvert.
 
@@ -335,23 +363,24 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 - On ne réécrit pas `AssaultRangedPanel` / `MeleeCombatPanel` / `DroneWeaponPanel` — on les réagence
   (col. 2), sous réserve PO3.
 - On ne touche pas au calcul d'Initiative ni au dispatch serveur.
-- **Lot B (B1-B4) + module 1 + B5** est le périmètre engagé — vrais bugs, dette de tokens réelle,
-  ne préjuge pas de la refonte. **Lot B codé le 2026-08-28** (§5.1).
-- **Modules 2-5 sont en attente** (§5.4) — déclencheur explicite requis, pas juste le module 0.
+- **Lot B (B1-B4)** est codé (§5.1). **B5** = chantier isolé, cadrage + analyse à charge d'abord.
+- **La refonte (modules 0-5) se fait** (round 4) — module 0 (filet de test pur) d'abord, puis 2→5,
+  un module validé avant le suivant. Le module 1 a fusionné dans le module 2.
 
 ---
 
 ## 10. Ordre recommandé
 
-**Engagé :**
 1. **Lot B** — ✅ **codé 2026-08-28** : `combat.json` (B2 + B3 + B4) + `CombatGmDeclareWindow.jsx` (B1) +
    `socketCombatAnnouncement.js` (swap « Assaut » → « Tir »). Validation navigateur en bloc à venir.
-2. **Module 1** (tokens) — passe large et minutieuse, pas un quick win.
-3. **B5** (chantier isolé) — quand Saar veut, avec son analyse à charge.
+2. **B5** (chantier isolé) — cadrage + analyse à charge, puis code. Peut se faire en parallèle du
+   module 0 (fichiers différents).
+3. **Module 0** — extraire `buildDeclarePayload` / `useHumanDeclare` en modules purs `.mjs` + tests de
+   caractérisation (golden master). Le filet.
+4. **Module 2** (chrome partagé + accent par famille + `--combat-exo-*`) → **3** (satellite) → **4**
+   (liste d'action) → **5** (pied). Un module validé (tests verts + navigateur Saar) avant le suivant.
 
-**En attente (§5.4) :** module 0 puis modules 2-5 — seulement sur déclencheur explicite.
-
-La maquette reste la cible validée. On l'atteint quand le filet de sécurité existe.
+La maquette est la cible. Le module 0 est le filet qui rend le reste sûr.
 
 ---
 
@@ -409,3 +438,32 @@ Revue demandée par Saar juste après la première rédaction. Conclusions inté
    « Assaut » → « Tir » fait au passage (9 messages, cohérence terminologique).
 3. Commentaire stale `CombatExoActionWindow.jsx:288` (« libellé générique "Assaut (tir)" ») laissé —
    commentaire, pas du texte visible ; à nettoyer si le fichier est rouvert.
+
+### Round 4 (même jour — Saar rappelle les priorités : qualité structurelle >>> vitesse, rework pour stabiliser si besoin, pas pressés, se documenter)
+
+1. **Module 1 (tokens) `[VÉRIFIÉ]` : ~290 couleurs en dur, la plupart pas des accents ; l'export DS
+   n'est pas chargé (pas de vraie dette « 3 vocabulaires » runtime).** → module 1 réduit à `+ --combat-exo-*`
+   + `--combat-accent-*` par famille, et **fusionné dans le module 2** (le `data-family` n'a de sens
+   qu'avec le chrome partagé). La conversion complète hex → tokens = chantier CSS distinct, non ouvert.
+2. **Modules 2-5 dé-parkés.** Les priorités rappelées par Saar endossent explicitement « rework pour
+   stabiliser ». Le blocage n'est plus « attendre un backlog plus mince » — c'est « faire le filet
+   d'abord ».
+3. **Module 0 re-cadré (recherche : golden master / characterization tests, sources ci-dessous).**
+   `[VÉRIFIÉ]` Enclume = 126 tests `*.test.mjs` (`node --test`, fonctions pures) + Playwright E2E ;
+   aucun test composant, choix assumé. `declarationReducer.test.mjs` / `combatSections.test.mjs` /
+   `combatIniCost.test.mjs` couvrent déjà le **calcul pur**. Non testé = **l'assemblage du payload**
+   `COMBAT_ACTION_DECLARE` (inline dans `handleDeclare`) + les invariants croisés. → module 0 =
+   **extraire `buildDeclarePayload` / `useHumanDeclare` en `.mjs` purs + tests de caractérisation**,
+   PAS ajouter vitest. Aligné sur la philo du projet, aggradation permanente. Modules 2-5 ne touchent
+   ensuite que du JSX, le golden master casse au moindre changement de payload.
+
+**Sources recherche round 4** :
+- Golden Master / Characterization test — [Fabrizio Duroni](https://www.fabrizioduroni.it/blog/post/2018/03/20/golden-master-test-characterization-test-legacy-code),
+  [Codurance](https://www.codurance.com/publications/2012/11/11/testing-legacy-code-with-golden-master),
+  [Wikipedia](https://en.wikipedia.org/wiki/Characterization_test).
+- Refactoring React avec characterization tests (behaviour, pas state interne ; petits pas ; state
+  untangling) — [Koder.ai](https://koder.ai/blog/refactoring-react-components-claude-code),
+  [Cloudamite](https://cloudamite.com/characterization-testing/).
+- (Vitest + RTL considéré puis écarté — nouveau paradigme contraire à la philo `.mjs` d'Enclume :
+  [Incubyte](https://blog.incubyte.co/blog/vitest-react-testing-library-guide/),
+  [Makers Den](https://makersden.io/blog/guide-to-react-testing-library-vitest).)
