@@ -1,6 +1,7 @@
 # SYSTEME/COMBAT_FLUX.md — Déroulement complet d'un tour de combat
 
-> Dernière mise à jour : 2026-06-24 (vérifié code : 2026-07-19)
+> Dernière mise à jour : 2026-08-28 (audit reset fin de tour : §11/§13/§14 alignés sur INI4 +
+> PLAN_CHARACTER_STATES §0.2 — `initiative` remise à `base_ini`, `state_position` non réinitialisé)
 > Sources : `socketCombatState.js`, `socketCombatAnnouncement.js`, `socketCombatResolution.js`, `socketCombatHelpers.js`, `statusService.js`, `combatFSM.js`
 > Lire pour : comprendre le déroulement complet d'un tour de combat, de la phase ROSTER jusqu'à endTurn.
 > Voir aussi : @SERVICES_COMBAT pour les signatures des services (dégâts, choc, FSM), @BLESSURES pour les blessures et armures, @PERSONNAGE_CALCULS pour la chaîne de calcul des attributs et compétences.
@@ -560,18 +561,27 @@ applyStunWithDuration() :
 `combat_timeline_entries` (`status`, `phase_position`) — détail du mécanisme :
 `docs/SYSTEME/COMBAT.md`, pas repris ici pour ne pas dupliquer une source déjà à jour.
 
-### `endTurn`
+### `endTurn` — `socketCombatHelpers.js` (corrigé audit 2026-08-28)
+
+Bloc précédent périmé sur deux points : il affirmait `initiative` NON remise à `base_ini` (faux
+depuis INI4, `08eed26`, 2026-07-19) et listait un reset `state_position = 'standing'` (retiré depuis,
+`docs/PLANS/PLAN_CHARACTER_STATES.md §0.2` — changer de position a un coût d'Initiative dédié qui
+n'aurait pas de sens si la position était réinitialisée d'office). État réel :
+
 ```
-UPDATE combat_roster SET
-  has_announced  = false,
-  has_resolved   = false,
-  state_position    = 'standing',   [reset posture]
+UPDATE combat_roster SET (status='active')
+  has_announced     = false,
+  has_resolved      = false,
   state_cover       = 'exposed',
   state_vitesse     = 'normal',
-  state_combat_mode = 'normal'      [reset mode — LdB §6.2]
-  // ⚠️ initiative NON remise à base_ini (§6.7 LdB — dette active)
+  state_combat_mode = 'normal',        [reset mode — LdB §6.2]
+  initiative        = base_ini,        [INI4 — reset des deltas INI du tour, LdB p.213]
+  is_surprised      = false
+  // state_position PAS réinitialisé (coût INI dédié, PLAN_CHARACTER_STATES §0.2)
 
-DELETE combat_actions WHERE campaign_id
+combat_actions status='pending' → 'skipped'   (plus de DELETE inconditionnel — historique conservé,
+                                               file "en cours" filtrée par turn_number)
+combat_timeline_entries 'scheduled'/'delayed_waiting' → 'skipped'   (filet de sécurité)
 
 UPDATE combat_state SET
   phase         = 'ANNOUNCEMENT',
@@ -638,7 +648,8 @@ EMIT DRONE_INTEGRITY_UPDATED
 | Test de Choc | §4 | `resolveShockTest` : seuils FOR+CON+VOL, malus par sévérité |
 | Durée stun : D6 tours / D6×10 min | LdB | `d6 * (inconscient ? 10 : 1)` |
 | Munitions consommées sur raté | §4 | Décompte AVANT `if (isSuccess)` |
-| Reset modes/vitesse/posture fin de tour | §6.2 | `endTurn` UPDATE roster |
+| Reset modes/vitesse/cover fin de tour | §6.2 | `endTurn` UPDATE roster (posture PAS réinitialisée — coût INI dédié, PLAN_CHARACTER_STATES §0.2) |
+| Reset `initiative = base_ini` début de tour | LdB p.213 / §6.7 | INI4 — `endTurn` : `initiative = db.raw('base_ini')` (`socketCombatHelpers.js`) |
 | Purge statuts expirés fin de tour | — | `endTurn` DELETE `expires_at_turn ≤ newTurn` |
 | Guard ownership complet | — | PJ/PNJ/Drone/GM : tous les handlers |
 | Entité décor exclue du combat | PC27 | `!token.character_id` → ignoré partout |
@@ -649,11 +660,16 @@ EMIT DRONE_INTEGRITY_UPDATED
 > vérifiés contre le code réel, les deux sont résolus (détail sous chaque ligne, conservées barrées
 > pour ne pas perdre la trace de la dette d'origine, cf. `docs/RegleDocumentaire.md` — ne pas
 > supprimer un historique sans plus-value).
+>
+> **Corrigé (audit 2026-08-28)** — la dette **§6.7** (reset `initiative = base_ini`) était encore
+> listée ici comme active alors qu'INI4 l'a résolue le 2026-07-19 (`08eed26`, `endTurn` :
+> `initiative = db.raw('base_ini')`). L'audit 2026-08-26 de §6-14 avait raté cette ligne. Déplacée
+> en « ✅ Conforme », conservée barrée ci-dessous.
 
 | ID | Règle LdB | État | Gravité |
 |---|---|---|---|
 | ~~**STUN2**~~ | Stunné ne peut pas attaquer | **Résolu** — guard `is_stunned` bien présent en RESOLUTION (`socketCombatResolution.js:214`, commentaire nommant explicitement STUN2), en plus du guard PRECHECK préexistant. Voir §5 ci-dessus. | — |
-| **§6.7** | `current_initiative = base_initiative` début de tour | `endTurn` ne remet **pas** `initiative = base_ini` — les deltas INI du tour persistaient | Moyenne (documentée) |
+| ~~**§6.7**~~ | `current_initiative = base_initiative` début de tour | **Résolu (INI4, 2026-07-19)** — `endTurn` remet `initiative = base_ini` (`db.raw('base_ini')`, `socketCombatHelpers.js`). Voir §11 et « ✅ Conforme ». | — |
 | ~~**RW17-1**~~ | `calcDroneRD` disponible en résolution | **Résolu autrement que prévu** — `COMBAT_DAMAGE_CONFIRM` délègue à `confirmDamage()` (`socketCombatHelpers.js`), qui appelle `calcDroneDegatsNets` (englobe `calcDroneRD` en interne) ; l'import direct de `calcDroneRD` dans `socketCombatResolution.js` reste absent mais n'est plus le chemin réel emprunté — pas de blocage constaté. | — |
 | **RW18-1** | Ordering émissions | `woundService`/`damageService` émettent avant `flushEmissions` dans certains paths | Moyenne |
 | Surprise PNJ | Test Réaction (`roll ≤ base_ini`) | PNJ : `initiative = base_ini + roll` (toujours, sans test) — divergence volontaire ? [INCONNU] | À valider |
@@ -682,6 +698,7 @@ EMIT DRONE_INTEGRITY_UPDATED
 | **PC32** | sequences 1/2/3 attribuées serveur — jamais trustées depuis le client |
 | fire_mode_bonus_dmg | Appliqué uniquement si portée ∈ `{bout_portant, courte}` sinon 0 |
 | RD drone | Drone sain → `rd` négatif (plus vulnérable aux premiers coups) — contre-intuitif |
-| Initiative endTurn | `initiative` garde la valeur fin de tour (delta INI accumulé) — LdB dit l'inverse (§6.7) |
+| Initiative endTurn | `endTurn` remet `initiative = base_ini` (INI4) — les deltas INI du tour (Précipiter/Dégainer/S'accroupir…) ne s'accumulent PAS d'un tour à l'autre (LdB p.213 / §6.7) |
+| Posture endTurn | `state_position` n'est PAS réinitialisé en fin de tour (coût INI dédié, contrairement à `state_cover`/`state_vitesse`) — PLAN_CHARACTER_STATES §0.2 |
 | stun source | Toujours `token_statuses WHERE status_code='stunned'`, jamais `state_character.is_stunned` |
 | `COMBAT_ACTION_CONFIRM` | Charge des actions ordonnées `sequence ASC` — move (1) avant assault (3) — positions à jour pour range check |
