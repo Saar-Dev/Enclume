@@ -6,6 +6,7 @@ export const useSessionStore = create((set) => ({
   activeCampaignId: null,
   pendingEntityId: null,    // entityId dont l'action attend l'arbitrage GM (un seul à la fois)
   criticalEffect: null,     // { kind: 'critical_success'|'catastrophe_risk', id } — un seul à la fois, v1
+  declareError: null,       // { message, id } — bannière transitoire de refus de déclaration de combat (un seul à la fois)
 
   setActiveCampaign: (campaignId) => set({ activeCampaignId: campaignId }),
 
@@ -94,6 +95,13 @@ export const useSessionStore = create((set) => ({
   triggerCriticalEffect: (kind) => set({ criticalEffect: { kind, id: Date.now() } }),
   clearCriticalEffect: () => set({ criticalEffect: null }),
 
+  // Bannière transitoire « déclaration de combat refusée » (PLAN_RW_DECLARE_WINDOWS module 3) — même
+  // séparation déclenchement/rendu que criticalEffect : useCombatSocket#onDeclareError pose (sur
+  // COMBAT_DECLARE_ERROR, à côté du message de chat), un useEffect central l'auto-efface après 4 s,
+  // CombatDeclareErrorBanner.jsx affiche. Jamais un socket.on dans une fenêtre de déclaration (P57).
+  setDeclareError: (message) => set({ declareError: { message, id: Date.now() } }),
+  clearDeclareError: () => set({ declareError: null }),
+
   // Vide tout l'état de session (usage futur : logout, tests)
   resetSession: () => set({
     onlineUsers: new Set(),
@@ -101,5 +109,6 @@ export const useSessionStore = create((set) => ({
     activeCampaignId: null,
     pendingEntityId: null,
     criticalEffect: null,
+    declareError: null,
   }),
 }))

@@ -10,7 +10,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     setCombatState, resetCombat, setPhase, markTokenAnnounced, updateRoster,
     advanceSlot, setActions, addAnnouncedAction, resetAnnouncedActions, setTimelineState,
   } = useCombatStore()
-  const { addMessage } = useSessionStore()
+  const { addMessage, setDeclareError, clearDeclareError, declareError } = useSessionStore()
   const { t } = useTranslation()
 
   const [reloadResult,        setReloadResult]        = useState(null)
@@ -74,6 +74,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       setStunPayload(null)
       setPendingSurpriseRoll(null)
       setPjPreview(null)
+      clearDeclareError()
       onModeReset()
     }
     const onStateSync = ({ combatState, roster, actions }) => {
@@ -94,10 +95,12 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         currentTurn: combatState.current_turn,
         activeTokenId,
       })
+      clearDeclareError()  // reconnexion — une bannière de refus d'avant la coupure n'a plus de sens
       if (combatState.phase) setMode('combat')  // F-R9-6 : troisième callsite setMode
     }
     const onPhaseChanged = ({ phase, roster, actions }) => {
       setPjPreview(null)
+      clearDeclareError()
       onModeReset()
       setPhase(phase)
       if (roster) updateRoster(roster)
@@ -127,7 +130,7 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
     // onPhaseChanged/onStateSync l'appelaient) : useAutoMoveMode refuse de réarmer tant que
     // combatMoveMode reste non-null, donc le survol restait calé sur le token précédent — cases
     // erronées signalées par Saar 2026-07-31.
-    const onSlotAdvanced = ({ activeSlotIdx, tokenId }) => { onModeReset(); advanceSlot(activeSlotIdx, tokenId) }
+    const onSlotAdvanced = ({ activeSlotIdx, tokenId }) => { clearDeclareError(); onModeReset(); advanceSlot(activeSlotIdx, tokenId) }
     const onTurnSkipped  = ({ tokenId, tokenLabel }) => {
       markTokenAnnounced(tokenId)
       addMessage({
@@ -150,6 +153,10 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
         username,
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       })
+      // Bannière transitoire dans le pied de la fenêtre de déclaration active (module 3) — le même
+      // événement alimente le chat (ci-dessus) ET la bannière ; les fenêtres n'ouvrent plus leur
+      // propre socket.on (REACT.md P57).
+      setDeclareError(text)
     }
 
     const onResolveMoveBlocked = ({ tokenLabel, partial }) => {
@@ -211,6 +218,16 @@ export function useCombatSocket({ isGm, setMode, onModeReset }) {
       socket.off(WS.COMBAT_TIMELINE_UPDATED,     onTimelineUpdated)
     }
   }, [socket, isGm, setMode, onModeReset])
+
+  // Auto-effacement de la bannière de refus de déclaration après 4 s (sessionStore.declareError).
+  // Centralisé ici — hook monté toute la session — plutôt que dans CombatDeclareErrorBanner, monté
+  // par intermittence (un démontage en cours de compte à rebours laisserait la bannière figée dans
+  // le store). Même rôle que le setTimeout de CriticalEffectOverlay.jsx, relogé au bon niveau.
+  useEffect(() => {
+    if (!declareError) return
+    const timer = setTimeout(clearDeclareError, 4000)
+    return () => clearTimeout(timer)
+  }, [declareError, clearDeclareError])
 
   return {
     reloadResult,        setReloadResult,

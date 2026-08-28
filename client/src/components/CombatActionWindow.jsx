@@ -30,6 +30,7 @@ import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
+import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
@@ -88,7 +89,6 @@ export default function CombatActionWindow({
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour (has_announced true→false)
   const prevTokenRef           = useRef(null)   // détection changement de slot actif
-  const [declareError, setDeclareError] = useState(null)
   const [mortallyWounded, setMortallyWounded] = useState(false)
 
   // --- actions sur la carte (multi-select) ----------------------------------
@@ -332,17 +332,8 @@ export default function CombatActionWindow({
     return () => { cancelled = true }
   }, [playerToken?.character_id])
 
-  // --- écoute COMBAT_DECLARE_ERROR — message temporaire (3s) ---------------
-  useEffect(() => {
-    if (!socket) return
-    const handler = ({ message }) => {
-      setDeclareError(message)
-      setTimeout(() => setDeclareError(null), 4000)
-    }
-    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
-    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
-  }, [socket])
-
+  // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central), poussé dans sessionStore,
+  // affiché par <CombatDeclareErrorBanner> — plus de socket.on local (REACT.md P57, module 3).
   // (reset au nouveau tour : fusionné dans l'effet de reset consolidé plus haut, 2026-08-28)
 
   // --- fetch armes equipees + inventaire complet (humanoïdes uniquement) ----
@@ -1391,11 +1382,7 @@ export default function CombatActionWindow({
             ⚠ {t('droneDeclare.movementUnavailable', { reason: droneAlluresError })}
           </div>
         )}
-        {declareError && (
-          <div style={{ fontSize: 10, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 3, padding: '4px 8px', marginBottom: 4 }}>
-            ⚠ {declareError}
-          </div>
-        )}
+        <CombatDeclareErrorBanner />
         {moveSelection && (
           <div style={W.footerLeft}>
             <span style={W.destination}>

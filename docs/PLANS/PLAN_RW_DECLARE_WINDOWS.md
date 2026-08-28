@@ -142,7 +142,8 @@ de montage). Docs : `COMBAT.md` (§ flux client), `COMBAT_FLUX.md`, `SERVICES_CO
 > 1 ✅ → **fix Tir visé** ✅ (§5bis) → **2 ✅** (autorité partagée du coût INI + pastille projetée,
 > périmètre élargi « robuste » : a aussi extrait `shared/combatIniCost.js`, dédupliqué
 > `combatSections`/`socketCombatAnnouncement`, et branché la pastille dans les 3 pieds de fenêtre) →
-> **3** (`useCombatDeclareError` + finitions module 2) → **POINT FORMEL**.
+> **3 ✅** (bannière de refus de déclaration centralisée P57 + finitions module 2 — code fait, validation
+> navigateur Saar en attente) → **POINT FORMEL**.
 >
 > **Décisions de scope (Saar 2026-08-28)** — les extractions à forte valeur sont faites ; ce qui reste
 > est du DRY d'UI à ROI modéré sur les 2 fichiers les moins testés du projet (INFRA-4) :
@@ -269,41 +270,62 @@ et `gmDeclareWindow.iniTotalLabel` (combat.json) sont maintenant orphelins.
 
 ---
 
-### Module 3 — `useCombatDeclareError` (+ finitions module 2) — **PROCHAIN**
+### Module 3 — bannière de refus de déclaration centralisée (P57) — **FAIT (code, 2026-08-28) — validation navigateur Saar en attente**
 
-**Problème** : `COMBAT_DECLARE_ERROR` a **4 listeners** — les 3 fenêtres (`socket.on` local + `useEffect`
-+ état `declareError` + timeout 4 s, l'exo ajoute `setIsDeclaring(false)`) **et** `useCombatSocket.js:186`
-`onDeclareError` (→ message de chat). Les 3 `socket.on` dans des composants feuilles violent
-`REACT.md` P57 (événement WS live → hook central + store, jamais un `socket.on` local).
+**Problème** : `COMBAT_DECLARE_ERROR` avait **4 listeners** — les 3 fenêtres (`socket.on` local +
+`useEffect` + état `declareError` + `setTimeout` 4 s **sans cleanup**, l'exo ajoutait
+`setIsDeclaring(false)`) **et** `useCombatSocket.js` `onDeclareError` (→ message de chat). Les 3
+`socket.on` en composant feuille violent `REACT.md` P57.
 
-**Décision de forme actée (B3, Saar 2026-08-28)** — pas un simple DRY qui garderait le `socket.on`
-local : le signal transitoire passe par le **flux central qui reçoit déjà l'événement**.
-- `combatStore` gagne `declareError: { message, ts } | null`, posé par `useCombatSocket#onDeclareError`
-  (aucun nouvel abonnement), auto-effacé.
-- `client/src/lib/useCombatDeclareError.js` = **sélecteur** au-dessus du store : `const { error } =
-  useCombatDeclareError({ onError })`. `onError` optionnel (l'exo passe `() => setIsDeclaring(false)`).
-- Les 3 fenêtres : retrait de l'`useEffect` + de l'état local ; rendent leur bannière depuis `error`
-  (markup verbatim, D8 — extraction d'un `<CombatDeclareErrorBanner>` à trancher au cadrage).
+**Solution — patron `sessionStore.criticalEffect` copié à la lettre** (recherche : c'est le patron
+« toast/notification transitoire » standard des libs pros ; Enclume l'implémente déjà pour le popup
+Réussite critique / Catastrophe — `sessionStore.criticalEffect` + `useSessionSocket` + `CriticalEffectOverlay.jsx`) :
+- **`sessionStore.js`** : `+ declareError: { message, id } | null` + `setDeclareError(message)` +
+  `clearDeclareError()`, ajouté à `resetSession`. Jumeau exact de `criticalEffect`.
+- **`useCombatSocket.js`** : `onDeclareError` appelle aussi `setDeclareError(text)` (à côté du
+  `addMessage` chat déjà là — même événement, deux sorties) ; `+ useEffect([declareError])` d'auto-clear
+  4 s **avec cleanup** (centralisé dans le hook toujours-monté, pas dans la bannière montée par
+  intermittence) ; `clearDeclareError()` dans `onCombatEnded` / `onPhaseChanged` / `onStateSync` /
+  `onSlotAdvanced` (bannière fantôme).
+- **`CombatDeclareErrorBanner.jsx`** (neuf, D7) : dumb, lit `sessionStore.declareError`, rend
+  `<div key={id} className="combat-declare-error-banner" role="alert">`. Aucun `socket.on`, aucun
+  timer. Rendu par les 3 fenêtres dans leur pied.
+- **`index.css`** : `+ .combat-declare-error-banner` (valeurs joueur/exo — remplace 3 copies
+  inline-style identiques, violation react.md « valeur visuelle en style={} »). 3ᵉ petite dérogation D8.
+- **3 fenêtres** : retrait du `useState('declareError')` + du `useEffect` d'écoute local ; rendent
+  `<CombatDeclareErrorBanner />`. Exo : garde un `useEffect([declareError])` local qui fait
+  `setIsDeclaring(false)` (verrou d'envoi propre à l'exo, hors flux central — décision cadrage).
 
-**Questions ouvertes (cadrage)** : (a) timer 4 s dans `useCombatSocket` ou dans le sélecteur ?
-(b) `isDeclaring` de l'exo — callback `onError`, ou déplacer aussi ce verrou dans le flux central ?
-(c) `<CombatDeclareErrorBanner>` extrait, ou bannière rendue par chaque fenêtre ?
+**Écarts vs cadrage (analyse à charge de mon plan)** :
+- **B1** : `declareError` va dans **`sessionStore`** (pas `combatStore` : le combat store porte l'état
+  serveur-autoritaire, pas une notification transitoire — `criticalEffect`/`pendingEntityId` y sont
+  déjà). Pas de prop-drilling, pas de hook wrapper `useCombatDeclareError` (un `useSessionStore(s =>
+  s.declareError)` d'1 ligne suffit — le wrapper était de la cérémonie).
+- **B2** : timer 4 s dans `useCombatSocket` (hook toujours monté) et non dans la bannière (montée par
+  intermittence → minuteur orphelin au démontage).
+- Bannière MJ **converge** sur le style joueur/exo : perd le monospace, `font-size` 9→10,
+  `border-radius` 2→3. Transitoire 4 s, cohérence des 3 fenêtres = but du chantier. À valider à l'œil.
+- **`set-state-in-effect` +1** sur l'effet exo `if (declareError) setIsDeclaring(false)` — **identique
+  en nature à l'erreur pré-existante l.101** (même fichier, `setIsDeclaring(false)` dans un effet). La
+  variante dérivée (`sendLocked = isDeclaring && !declareError`) a un bug : re-verrouillage à
+  l'expiration des 4 s quand `declareError` repasse à `null`. Effet conservé, cohérent avec le fichier.
 
-**Finitions module 2 bundlées dans ce commit** (5 min, dette laissée volontairement en module 2) :
-- retirer le CSS mort `.ini-popover` / `.ini-popover-line` / `.ini-popover-label` / `.ini-bd-pos` /
-  `.ini-bd-neg` (`index.css`, ~35 l.) — plus aucun consommateur ;
-- retirer la clé i18n orpheline `gmDeclareWindow.iniTotalLabel` (`combat.json`) ;
-- `CombatActionWindow.jsx` : `delta={isDrone ? 0 : iniDelta}` sur `<CombatDeclareIniWidget>` — garde
-  explicite du drone joueur (aujourd'hui juste par accident : la machinerie humanoïde est `!isDrone`).
+**Finitions module 2** (commit A séparé `79475dd`, avant) : CSS mort `.ini-popover*`, clé
+`iniTotalLabel`, garde `delta={isDrone ? 0 : iniDelta}` / `breakdown={isDrone ? []}`.
 
-**Fichiers touchés** : `combatStore` ; `useCombatSocket.js` ; `useCombatDeclareError.js` neuf ;
-les 3 fenêtres ; `index.css` + `combat.json` (finitions).
+**Fichiers** : `sessionStore.js`, `useCombatSocket.js`, `CombatDeclareErrorBanner.jsx` (neuf),
+`index.css`, les 3 fenêtres. **Zéro serveur, zéro maths de combat, zéro dépendance.**
 
-**Validation navigateur** : refus serveur (portée / PC23 / munitions) dans chaque fenêtre → bannière
-4 s, disparaît, fenêtre réutilisable ; exo : re-déclaration OK après refus (non-régression 2026-08-27) ;
-le message de chat `declare_error` continue d'apparaître (pas de double, pas de perte).
+**Testé** : `vite build` clean ; `node --test shared/*` 335/335 ; `eslint` = baseline +1
+(`set-state-in-effect` exo, ci-dessus), nouveaux fichiers 0/0.
+**Validation navigateur Saar (à faire)** : refus serveur (portée / PC23 / munitions) dans chaque
+fenêtre → bannière 4 s, disparaît, fenêtre réutilisable ; exo : re-déclaration OK après refus
+(non-régression 2026-08-27) ; le message de chat `declare_error` apparaît toujours (pas de double) ;
+bannière disparaît immédiatement au changement de slot / phase / fin de combat.
 
-**Risque** : faible — client uniquement, zéro maths de combat, zéro serveur, zéro règle de jeu.
+**Adaptatif** : si un jour plusieurs notifications combat transitoires coexistent → promouvoir vers
+le patron `EnvironmentalResultQueue.jsx` (déjà dans le code), ne pas réécrire. Aujourd'hui l'annonce
+est séquentielle → un seul slot est correct.
 
 ---
 

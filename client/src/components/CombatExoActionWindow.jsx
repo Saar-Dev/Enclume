@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
+import { useSessionStore } from '../stores/sessionStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useExoDeclare } from '../lib/useExoDeclare.js'
@@ -9,6 +10,7 @@ import { firstFireMode } from '../../../shared/fireModes.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
 import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
+import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import api from '../lib/api.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §8.5/§9 — fenêtre dédiée exo-armure, réutilisée à l'identique côté
@@ -30,9 +32,9 @@ export default function CombatExoActionWindow({
 }) {
   const { t } = useTranslation('combat')
   const { roster, phase, activeTokenId } = useCombatStore()
+  const declareError = useSessionStore(s => s.declareError)
   const tokens = useTokenStore(s => s.tokens)
   const [isDeclaring, setIsDeclaring] = useState(false)
-  const [declareError, setDeclareError] = useState(null)
   const [allures, setAllures] = useState(null)
   const [alluresError, setAlluresError] = useState(null)
   const [moveSelection, setMoveSelection] = useState(null)
@@ -58,21 +60,14 @@ export default function CombatExoActionWindow({
   const isProne       = rosterEntry?.state_position === 'prone'
   const canDeclareNow = isAuthorized && phase === 'ANNOUNCEMENT' && !rosterEntry?.has_announced
 
-  // Écoute COMBAT_DECLARE_ERROR — même patron que CombatActionWindow/CombatGmDeclareWindow.
-  // Le serveur a refusé la déclaration : lever le verrou "ENVOI…" (isDeclaring) pour rendre la
-  // fenêtre à nouveau utilisable (changer d'arme, retenter). Sans ce reset, tout refus serveur
-  // (PC23, portée, munitions, se relever inéligible…) figeait le bouton et toute la fenêtre — la
-  // fenêtre ne se démonte que sur has_announced=true (succès), jamais sur un refus.
+  // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central) → sessionStore →
+  // <CombatDeclareErrorBanner>. Plus de socket.on local (REACT.md P57, module 3).
+  // Reste ici, spécifique à l'exo : un refus serveur doit lever le verrou "ENVOI…" (isDeclaring),
+  // sinon le bouton et toute la fenêtre restent figés — la fenêtre ne se démonte que sur
+  // has_announced=true (succès), jamais sur un refus (PC23, portée, munitions, se relever inéligible…).
   useEffect(() => {
-    if (!socket) return
-    const handler = ({ message }) => {
-      setDeclareError(message)
-      setIsDeclaring(false)
-      setTimeout(() => setDeclareError(null), 4000)
-    }
-    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
-    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
-  }, [socket])
+    if (declareError) setIsDeclaring(false)
+  }, [declareError])
 
   // fetch allures — suit l'exo actif. Le calcul VIT/3-modes (surface/sous-marine, délégation pilote,
   // milieu bloqué) reste entièrement côté serveur (getExoMovementBudget) — jamais réimplémenté ici
@@ -334,9 +329,7 @@ export default function CombatExoActionWindow({
       </div>
 
       <div className="combat-float-footer">
-        {declareError && (
-          <div style={S.errorBanner}>⚠ {declareError}</div>
-        )}
+        <CombatDeclareErrorBanner />
         {moveSelection && (
           <div style={S.footerLeft}>
             <span style={S.destination}>[{moveSelection.targetPosX}, {moveSelection.targetPosY}]</span>

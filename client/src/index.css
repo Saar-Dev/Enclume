@@ -2060,6 +2060,20 @@ Convention :
 }
 .d20txt { font: 700 12px var(--font-mono); position: relative; }
 
+/* ── .combat-declare-error-banner — bandeau transitoire « déclaration refusée » ──
+   Pied des 3 fenêtres de déclaration. Alimenté par sessionStore.declareError via
+   CombatDeclareErrorBanner.jsx (PLAN_RW_DECLARE_WINDOWS module 3). Remplace 3 copies
+   inline-style identiques (valeur visuelle en style={} = violation react.md). */
+.combat-declare-error-banner {
+  font-size: 10px;
+  color: #c83030;
+  background: rgba(200, 48, 48, 0.08);
+  border: 1px solid #c8303044;
+  border-radius: 3px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+
 /* ── .has-tooltip ─────────────────────────────────────────────────── */
 /* usage : <el class="has-tooltip" data-tooltip="texte"> */
 .has-tooltip { position: relative; }

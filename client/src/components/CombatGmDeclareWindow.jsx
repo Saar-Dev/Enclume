@@ -26,6 +26,7 @@ import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
+import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 
 function nextKey(stateKey, currentKey, availableKeys) {
   const allStates = STATE_DEFS[stateKey].states
@@ -74,7 +75,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       .sort((a, b) => a.base_ini - b.base_ini || a.token_id.localeCompare(b.token_id))[0]?.token_id ?? null
   )
 
-  const [declareError, setDeclareError] = useState(null)
   const [equipment,    setEquipment]    = useState({})   // tokenId -> { characterId, weapon, weaponMg, weaponMd, armorPieces }
   const [rosterOpen,   setRosterOpen]   = useState(
     () => localStorage.getItem('gm-roster-open') !== 'false'
@@ -199,16 +199,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setIsSelectingOnMap(false)
   }, [activeTokenId, activePnjEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Écoute COMBAT_DECLARE_ERROR ──────────────────────────────────────────
-  useEffect(() => {
-    if (!socket) return
-    const handler = ({ message }) => {
-      setDeclareError(message)
-      setTimeout(() => setDeclareError(null), 4000)
-    }
-    socket.on(WS.COMBAT_DECLARE_ERROR, handler)
-    return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
-  }, [socket])
+  // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central) → sessionStore →
+  // <CombatDeclareErrorBanner>. Plus de socket.on local (REACT.md P57, module 3).
 
   // ── Fetch équipement combat ──────────────────────────────────────────────
   useEffect(() => {
@@ -1106,11 +1098,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             ⚠ {t('droneDeclare.movementUnavailable', { reason: droneAlluresError })}
           </div>
         )}
-        {declareError && (
-          <div style={{ fontSize: 9, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 2, padding: '4px 8px', fontFamily: 'monospace' }}>
-            ⚠ {declareError}
-          </div>
-        )}
+        <CombatDeclareErrorBanner />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
           {(isActivePnj || isActiveDrone) && (
             <CombatDeclareIniWidget
