@@ -28,6 +28,7 @@ import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareStateChip from './CombatDeclareStateChip.jsx'
 import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
+import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
 
 // ---------------------------------------------------------------------------
 // Composant principal
@@ -515,49 +516,19 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       return
     }
 
-    // Combat à deux armes CaC (COM24) — jamais actif en Charge (effectiveDualWieldMelee déjà gardé
-    // par decl.combatMode !== 'charge' plus haut), même arme(s) pour toute la série meleeTargets.
-    const meleeOffhandInvIdForMelee = effectiveDualWieldMelee ? (meleeOffhandWeapon?.inv_id ?? null) : null
-    const meleeCaC = chargeSelection?.targetTokenId
-      ? [{ targetTokenId: chargeSelection.targetTokenId, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee }]
-      : meleeTargets.slice(0, effectiveMeleeCount).map(id => ({
-          targetTokenId: id, weaponInvId: weaponInvIdForMelee, naturalWeaponCharMutationId: naturalWeaponIdForMelee,
-          offhandWeaponInvId: meleeOffhandInvIdForMelee, isDualWield: effectiveDualWieldMelee,
-        }))
-    const movePayload = chargeSelection?.move ?? pendingMove ?? null
-    socket.emit(WS.COMBAT_ACTION_DECLARE, {
-      tokenId: activeTokenId,
-      state: {
-        position:    decl.position,
-        weapon:      decl.weapon,
-        fire_mode:   decl.fire_mode,
-        vitesse:     decl.vitesse,
-        combat_mode: decl.combatMode,
-      },
-      mapActions: {
-        move:     movePayload,
-        // Tir Multi (docs/PLAN_TIRMULTI.md) : array d'1 à 3 tirs, même arme pour toute la série (D9).
-        attack:   weapon && assaultTargets.length > 0
-          ? assaultTargets.slice(0, effectiveAssaultCount).map(targetTokenId => ({
-              weaponInvId:        weapon.inv_id,
-              // Main non directrice (COM29) — miroir CombatActionWindow.jsx. weaponMg = main non
-              // directrice quand hasTwoWeapons (primaryWeapon = weaponMd, cf. resolveHandWeapons).
-              offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.inv_id ?? null) : null,
-              targetTokenId,
-              bulletCount:        currentVariant?.bulletCount ?? null,
-              fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : 0,
-              fireModeBonusDmg:   currentVariant?.bonusDmg    ?? 0,
-              isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
-              dualWieldBonusComp: dualWieldBonusComp,
-              aimTranches:        aimTranches,
-              aimedLocation:      aimedLocation,
-            }))
-          : null,
-        melee:    meleeCaC.length > 0 ? meleeCaC : null,
-        reload:   mapAction === 'reload',
-      },
-      quick: { ...decl.quick },
-    })
+    // Assemblage du payload : fonction pure testée (module 0, docs/PLANS/PLAN_RW_DECLARE_DESIGN.md
+    // §5.4 M0.2). Golden master : client/src/lib/buildDeclarePayload.test.mjs.
+    socket.emit(WS.COMBAT_ACTION_DECLARE, buildGmDeclarePayload({
+      activeTokenId,
+      decl,
+      pendingMove, chargeSelection,
+      weapon, assaultTargets, effectiveAssaultCount,
+      isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
+      aimTranches, aimedLocation,
+      meleeTargets, effectiveMeleeCount, weaponInvIdForMelee, naturalWeaponIdForMelee,
+      effectiveDualWieldMelee, meleeOffhandWeapon,
+      mapAction,
+    }))
   }
 
   // ── Etat CaC actif (pour affichage panneau droit) ─────────────────────────

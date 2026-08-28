@@ -77,3 +77,63 @@ export function buildHumanDeclarePayload(sel) {
     },
   }
 }
+
+// --- MJ / PNJ — miroir exact de CombatGmDeclareWindow.jsx#handleDeclare, branche non-drone ---------
+// Différences légitimes vs l'humain PJ (préservées) : `weapon.inv_id` (équipement batch PNJ vs
+// `assaultWeaponId` déjà résolu) ; `fireModeBonusComp`/`fireModeBonusDmg` par défaut à `0` (pas
+// `null`) ; `move` = `chargeSelection?.move ?? pendingMove` passé brut (pas de forçage `ini_mod` à 0
+// côté payload — le serveur recalcule) ; CaC via `weaponInvIdForMelee` / `naturalWeaponIdForMelee`
+// (résolus par la fenêtre).
+export function buildGmDeclarePayload(sel) {
+  const meleeOffhandInvIdForMelee = sel.effectiveDualWieldMelee
+    ? (sel.meleeOffhandWeapon?.inv_id ?? null)
+    : null
+  const meleeCaC = sel.chargeSelection?.targetTokenId
+    ? [{
+        targetTokenId: sel.chargeSelection.targetTokenId,
+        weaponInvId: sel.weaponInvIdForMelee,
+        naturalWeaponCharMutationId: sel.naturalWeaponIdForMelee,
+      }]
+    : sel.meleeTargets.slice(0, sel.effectiveMeleeCount).map(id => ({
+        targetTokenId: id,
+        weaponInvId: sel.weaponInvIdForMelee,
+        naturalWeaponCharMutationId: sel.naturalWeaponIdForMelee,
+        offhandWeaponInvId: meleeOffhandInvIdForMelee,
+        isDualWield: sel.effectiveDualWieldMelee,
+      }))
+  const movePayload = sel.chargeSelection?.move ?? sel.pendingMove ?? null
+
+  return {
+    tokenId: sel.activeTokenId,
+    state: {
+      position:    sel.decl.position,
+      weapon:      sel.decl.weapon,
+      fire_mode:   sel.decl.fire_mode,
+      vitesse:     sel.decl.vitesse,
+      combat_mode: sel.decl.combatMode,
+    },
+    mapActions: {
+      move: movePayload,
+      // Tir Multi : array d'1 à 3 tirs, même arme pour toute la série (D9).
+      attack: sel.weapon && sel.assaultTargets.length > 0
+        ? sel.assaultTargets.slice(0, sel.effectiveAssaultCount).map(targetTokenId => ({
+            weaponInvId:        sel.weapon.inv_id,
+            offhandWeaponInvId: (sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode)
+              ? (sel.weaponMg?.inv_id ?? null)
+              : null,
+            targetTokenId,
+            bulletCount:        sel.currentVariant?.bulletCount ?? null,
+            fireModeBonusComp:  sel.currentVariant ? (sel.currentVariant.bonusComp + sel.dualWieldBonusComp) : 0,
+            fireModeBonusDmg:   sel.currentVariant?.bonusDmg ?? 0,
+            isDualWield:        sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode,
+            dualWieldBonusComp: sel.dualWieldBonusComp,
+            aimTranches:        sel.aimTranches,
+            aimedLocation:      sel.aimedLocation,
+          }))
+        : null,
+      melee:  meleeCaC.length > 0 ? meleeCaC : null,
+      reload: sel.mapAction === 'reload',
+    },
+    quick: { ...sel.decl.quick },
+  }
+}
