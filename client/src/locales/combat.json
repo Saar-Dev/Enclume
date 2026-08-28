@@ -18,7 +18,7 @@
     "cancelButton": "Annuler",
     "cancelMoveButton": "Annuler le déplacement",
     "targetLegend": {
-      "ranged": "Assaut — Cliquez sur la cible",
+      "ranged": "Tir — Cliquez sur la cible",
       "melee": "Corps à corps — Cliquez sur la cible"
     },
     "targetRecap": {
@@ -159,20 +159,20 @@
   },
   "actionWindow": {
     "surpriseTitle": "Surprise !",
-    "surpriseMessage": "Vous etes surpris. Lancez 1d20 pour determiner votre initiative.",
-    "rollInitiativeButton": "Lancer le de d'initiative",
-    "surprisedCannotAct": "Vous etes surpris — vous ne pouvez pas agir ce tour.",
+    "surpriseMessage": "Vous êtes surpris. Lancez 1d20 pour déterminer votre initiative.",
+    "rollInitiativeButton": "Lancer le dé d'initiative",
+    "surprisedCannotAct": "Vous êtes surpris — vous ne pouvez pas agir ce tour.",
     "mortallyWoundedBanner": "Blessure mortelle — aucune action de Test possible. Seuls Déplacement et Passer le tour restent disponibles.",
-    "resolutionPhaseShort": "Phase 2 - Resolution",
+    "resolutionPhaseShort": "Phase 2 — Résolution",
     "targetPrefix": "Cible : ",
-    "rushedTag": "Precipite (-5)",
+    "rushedTag": "Précipité (-5)",
     "declarationPhaseTitle": "Phase 1 — Déclaration d'intention",
     "awaitingPlayer": "En attente de {{name}}…",
     "resolutionPhaseTitle": "Phase 2 — Résolution",
     "tokenActing": "{{name}} agit…",
     "resolutionInProgress": "Résolution en cours…",
-    "declarationPhaseTitleAlt": "Phase 1 - Declaration d'intention",
-    "actionDeclaredWaiting": "Action declaree. En attente des autres participants…",
+    "declarationPhaseTitleAlt": "Phase 1 — Déclaration d'intention",
+    "actionDeclaredWaiting": "Action déclarée. En attente des autres participants…",
     "emptyWeaponTitle": "Arme vide — rechargez d'abord",
     "awaitingGmValidation": "En attente de validation GM…",
     "reloadAwaitingGm": "Rechargement — en attente du MJ…",
@@ -186,7 +186,7 @@
     "ammoNameFallback": "Munition",
     "qtyLabel": "Qté : {{qty}}",
     "ammoSelected": "✓ Munition sélectionnée",
-    "declareActionButton": "Declarer l'action",
+    "declareActionButton": "Déclarer l'action",
     "reloadButtonLabel": "Recharger"
   },
   "gmDeclareWindow": {
@@ -201,8 +201,8 @@
     "meleeTag": "CTC"
   },
   "actionLabels": {
-    "assault": "Assaut (tir)",
-    "melee": "Assaut (CaC)",
+    "assault": "Tir",
+    "melee": "Corps à corps",
     "reload": "Rechargement",
     "micro": "Action",
     "moveShort": "Déplacement",
@@ -260,7 +260,7 @@
       "tooltip": "Déplacement court -3 / Se jeter à terre -5 / Se relever -10 / Se précipiter +3"
     },
     "attack": {
-      "label": "Assaut (tir)",
+      "label": "Tir",
       "tooltip": "Attaque à distance. Tirer depuis une couverture -3 à -5."
     },
     "melee": {
@@ -297,7 +297,8 @@
     "shortPhrase": "Phrase courte"
   },
   "iniWidget": {
-    "aria": "Initiative projetée : {{value}}",
+    "pill": "INI = {{current}} -> {{projected}}",
+    "aria": "Initiative {{current}}, projetée après l'action déclarée : {{projected}}",
     "tooltipTotal": "Initiative projetée : {{value}}",
     "tooltipNoChange": "Initiative projetée : {{value}} — aucun changement déclaré"
   },
@@ -470,7 +471,7 @@
     "emptyWeaponTitle": "Arme vide",
     "weaponFallback": "Arme",
     "ammoCount": "{{count}} munitions",
-    "ready": "✓ Prêt à l'assaut"
+    "ready": "✓ Prêt à tirer"
   },
   "resultPanels": {
     "severity": {
@@ -531,7 +532,7 @@
     }
   },
   "modifiers": {
-    "header": "{{shooter}} — Assaut — {{target}}",
+    "header": "{{shooter}} — Tir — {{target}}",
     "impossibleShot": "Tir impossible",
     "dmgTag": "Dmg {{mod}}",
     "attackBanner": {

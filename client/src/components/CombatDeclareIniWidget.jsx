@@ -27,9 +27,9 @@ export default function CombatDeclareIniWidget({ currentInitiative, delta, break
     <span
       className={`badge has-tooltip combat-ini-widget${willBeLost ? ' badge-fail' : ''}`}
       data-tooltip={tooltip}
-      aria-label={t('iniWidget.aria', { value: projected })}
+      aria-label={t('iniWidget.aria', { current: currentInitiative, projected })}
     >
-      <span className="num">{projected}</span>
+      <span className="num">{t('iniWidget.pill', { current: currentInitiative, projected })}</span>
     </span>
   )
 }

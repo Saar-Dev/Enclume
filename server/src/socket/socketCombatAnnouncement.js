@@ -90,7 +90,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       const hasMeleeDeclared  = Array.isArray(mapActions?.melee)  && mapActions.melee.length  > 0
       if (hasAttackDeclared && hasMeleeDeclared) {
         socket.emit(WS.COMBAT_DECLARE_ERROR, {
-          message: 'Corps à corps et Assaut (tir) sont mutuellement exclusifs — une seule Action de combat par Tour',
+          message: 'Corps à corps et Tir sont mutuellement exclusifs — une seule Action de combat par Tour',
         })
         return
       }
@@ -263,7 +263,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // Drone : validation droneWeaponInvId contre drone_weapons
           const { droneWeaponInvId } = firstAttack
           if (!droneWeaponInvId) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut drone impossible — aucune arme drone sélectionnée' })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Tir drone impossible — aucune arme drone sélectionnée' })
             return
           }
           const droneWeapon = await db('drone_weapons')
@@ -272,7 +272,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             .select('drone_weapons.*', 'ref_equipment.range as ref_range')
             .first()
           if (!droneWeapon) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut drone impossible — l'arme drone sélectionnée est introuvable (désinstallée entre-temps ?)" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir drone impossible — l'arme drone sélectionnée est introuvable (désinstallée entre-temps ?)" })
             return
           }
           assaultWeaponRefRange = droneWeapon.ref_range ?? null
@@ -284,7 +284,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // bloc humanoïde.
           const { exoWeaponInvId } = firstAttack
           if (!exoWeaponInvId) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut exo impossible — aucune arme exo sélectionnée' })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Tir exo impossible — aucune arme exo sélectionnée' })
             return
           }
           const exoWeapon = await db('exo_weapons')
@@ -293,7 +293,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             .select('exo_weapons.*', 'ref_equipment.name as ref_name', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count')
             .first()
           if (!exoWeapon) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut exo impossible — l'arme exo sélectionnée est introuvable (désinstallée entre-temps ?)" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir exo impossible — l'arme exo sélectionnée est introuvable (désinstallée entre-temps ?)" })
             return
           }
           // fire_mode — bug trouvé en jeu réel (Saar, 2026-08-26) : comparer contre state.fire_mode
@@ -349,18 +349,18 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // Humanoïde : validation char_inventory + PC23
           const { weaponInvId, offhandWeaponInvId, isDualWield } = firstAttack
           if (!weaponInvId) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Assaut impossible — aucune arme sélectionnée' })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: 'Tir impossible — aucune arme sélectionnée' })
             return
           }
           const weapon = await getOwnedHandWeapon(character.id, weaponInvId, { slotCodes: WEAPON_SLOTS })
           if (!weapon) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme sélectionnée est introuvable dans l'inventaire (transférée entre-temps ?)" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir impossible — l'arme sélectionnée est introuvable dans l'inventaire (transférée entre-temps ?)" })
             return
           }
           // Lot B (docs/PLAN_INVENTORY_SLOTS.md) : lit char_inventory_slots au lieu d'une égalité
           // stricte sur char_inventory.slot — composite-safe.
           if (!weapon.inHand) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir impossible — l'arme doit être équipée en main (MG/MD/2M/Trépied) avant de tirer" })
             return
           }
           // fire_mode vient de state.fire_mode (v2) — comparaison insensible à la casse
@@ -796,7 +796,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // Idem Tir Multi (docs/PLAN_TIRMULTI.md) — au moins une cible OU une zone d'effet (AOE,
       // PLAN_AOE.md §8 étape 6b) sur la série de tirs.
       if (hasAttackDeclared && !mapActions.attack.some(a => a.targetTokenId || a.aoe)) {
-        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Assaut (tir) : sélectionner une cible ou viser une direction avant de valider.' })
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: 'Tir : sélectionner une cible ou viser une direction avant de valider.' })
         return
       }
 

@@ -1082,7 +1082,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             onClick={handleDeclare}
             disabled={!canDeclare}
           >
-            DÉCLARER
+            {t('actionWindow.declareActionButton')}
           </button>
         </div>
       </div>
