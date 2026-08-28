@@ -17,6 +17,10 @@
     "validateButton": "Valider",
     "cancelButton": "Annuler",
     "cancelMoveButton": "Annuler le déplacement",
+    "targetLegend": {
+      "ranged": "Assaut — Cliquez sur la cible",
+      "melee": "Corps à corps — Cliquez sur la cible"
+    },
     "targetRecap": {
       "losClear": "Ligne de vue dégagée",
       "losBlocked": "Ligne de vue bloquée"

@@ -421,7 +421,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           ? { ...styles.moveLegend, position: 'fixed', left: `clamp(8px, ${combatTargetMode.pendingTargetScreenPos.x - 110}px, calc(100vw - 228px))`, top: `clamp(8px, ${combatTargetMode.pendingTargetScreenPos.y + 16}px, calc(100vh - 160px))`, bottom: 'auto', right: 'auto' }
           : styles.moveLegend}>
           <div style={styles.moveLegendTitle}>
-            {combatTargetMode.mode === 'melee' ? 'Corps à corps — Cliquez sur la cible' : 'Assaut — Cliquez sur la cible'}
+            {t(`overlay.targetLegend.${combatTargetMode.mode === 'melee' ? 'melee' : 'ranged'}`)}
           </div>
 
           {combatTargetMode.pendingTargetId && (() => {

@@ -5,6 +5,7 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useExoDeclare } from '../lib/useExoDeclare.js'
+import { firstFireMode } from '../../../shared/fireModes.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import api from '../lib/api.js'
 
@@ -56,10 +57,15 @@ export default function CombatExoActionWindow({
   const canDeclareNow = isAuthorized && phase === 'ANNOUNCEMENT' && !rosterEntry?.has_announced
 
   // Écoute COMBAT_DECLARE_ERROR — même patron que CombatActionWindow/CombatGmDeclareWindow.
+  // Le serveur a refusé la déclaration : lever le verrou "ENVOI…" (isDeclaring) pour rendre la
+  // fenêtre à nouveau utilisable (changer d'arme, retenter). Sans ce reset, tout refus serveur
+  // (PC23, portée, munitions, se relever inéligible…) figeait le bouton et toute la fenêtre — la
+  // fenêtre ne se démonte que sur has_announced=true (succès), jamais sur un refus.
   useEffect(() => {
     if (!socket) return
     const handler = ({ message }) => {
       setDeclareError(message)
+      setIsDeclaring(false)
       setTimeout(() => setDeclareError(null), 4000)
     }
     socket.on(WS.COMBAT_DECLARE_ERROR, handler)
@@ -96,6 +102,7 @@ export default function CombatExoActionWindow({
   // à false) — même discipline que CombatActionWindow (reset des états tactiques sur ces deux événements).
   useEffect(() => {
     setMoveSelection(null)
+    setIsDeclaring(false)
   }, [rosterEntry?.token_id, rosterEntry?.has_announced])
 
   // Déplacement : survol/preview ambiant par défaut, même patron que CombatActionWindow (PJ)/
@@ -273,6 +280,10 @@ export default function CombatExoActionWindow({
                 // exo, Tir Multi bloqué serveur). NULL = tracking désactivé, jamais grisé (mirroir
                 // DroneWeaponPanel#isEmpty, seule fenêtre d'armement à griser une arme vide ce jour).
                 const isEmpty = !isCaC && w.ammo_remaining != null && w.ammo_remaining <= 0
+                // Mode de tir par défaut de l'arme (une exo ne bascule jamais de mode, §16.4) —
+                // affiché à la place du libellé générique "Assaut (tir)" (demande Saar 2026-08-27) ;
+                // même autorité de parsing que le gate PC23 serveur (shared/fireModes.js).
+                const fireMode = isCaC ? null : (firstFireMode(w.ref_fire_mode) ?? t('actionLabels.assault'))
                 return (
                   <div
                     key={w.id}
@@ -288,8 +299,8 @@ export default function CombatExoActionWindow({
                       {isCaC
                         ? t('actionLabels.melee')
                         : (w.ammo_remaining != null
-                            ? t('exoActionWindow.ammoCount', { count: w.ammo_remaining })
-                            : t('actionLabels.assault'))}
+                            ? `${fireMode} · ${t('exoActionWindow.ammoCount', { count: w.ammo_remaining })}`
+                            : fireMode)}
                     </span>
                   </div>
                 )

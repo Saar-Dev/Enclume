@@ -76,9 +76,8 @@ export function useExoDeclare({
     setIsSelectingTarget(true)
     // Mode dérivé de l'arme réellement sélectionnée — jamais 'ranged' en dur (le seul effet de ce
     // paramètre est la légende flottante "Corps à corps" vs "Assaut" affichée pendant la sélection,
-    // CombatOverlay.jsx#combatTargetMode.mode ; useDroneDeclare#handleChooseTarget le fige en dur à
-    // 'ranged', ce qui affiche la mauvaise légende pour un programme CaC — bug préexistant repéré en
-    // écrivant ce mirroir, non corrigé ici côté drone : hors périmètre §16.4, à signaler séparément).
+    // CombatOverlay.jsx#combatTargetMode.mode). useDroneDeclare#handleChooseTarget applique la même
+    // dérivation depuis 2026-08-27 (dette ROADMAP §5 close).
     const weapon = exoWeapons.find(w => w.id === selectedExoWeaponId)
     const targetMode = weapon?.ref_category === 'Arme de contact' ? 'melee' : 'ranged'
     onEnterTargetMode(

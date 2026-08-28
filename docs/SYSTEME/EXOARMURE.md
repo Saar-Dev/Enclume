@@ -284,12 +284,18 @@ import circulaire avec les helpers de résolution génériques qu'il réutilise)
 - **Tir vs CaC** : discriminé par `ref_equipment.category === 'Arme de contact'`, jamais par une
   absence de `fire_mode` (coïncidence du catalogue actuel, pas la règle) — même discriminant
   client (`CombatExoActionWindow.jsx`, champ `ref_category`) et serveur.
-- **Mode de tir** : dérivé directement de `exo_weapon.ref_fire_mode` (premier mode si l'arme en
-  propose plusieurs) — **jamais** de `state.fire_mode` (bug corrigé 2026-08-27 : ce champ modélise
-  le sélecteur d'un PJ humain, une arme en main dont on bascule le mode ; une exo n'a pas cette
-  notion, chaque hardpoint tire dans le(s) mode(s) fixe(s) de son arme). Compétence Tir Automatique
-  (PC23, requise côté humain pour RC/RL) **non vérifiée côté exo** — question RAW ouverte, pas
-  tranchée.
+- **Mode de tir** : dérivé directement de `exo_weapon.ref_fire_mode` via `firstFireMode`
+  (`shared/fireModes.js`, autorité unique du parsing de la liste `CC/RC/RL` — client et serveur) —
+  **jamais** de `state.fire_mode` (bug corrigé 2026-08-27 : ce champ modélise le sélecteur d'un PJ
+  humain, une arme en main dont on bascule le mode ; une exo n'a pas cette notion, chaque hardpoint
+  tire dans le mode par défaut de son arme). Ce mode est affiché sur la tuile arme de
+  `CombatExoActionWindow.jsx` à la place du libellé générique « Assaut (tir) ».
+- **Compétence Tir Automatique** (PC23 / `TIR_AUTOMATIQUES`) : **règle identique à l'humanoïde**
+  (décision Saar 2026-08-27) — une arme exo dont le mode par défaut est RC ou RL exige que le
+  **pilote** possède la Compétence, sinon la déclaration est refusée (`COMBAT_DECLARE_ERROR` avec
+  message explicite, pas un refus cryptique — même canal que le bloc humanoïde, `socketCombatAnnouncement.js`
+  branche `isExo`). Compétence lue sur la `char_sheet` du pilote via `resolveCombatantIdentity`
+  (`sheetId`).
 - **CaC** : contrairement à l'humain (repli mains nues RAW-légal), une exo-armure n'a aucun repli
   "à mains nues" — `exoWeaponInvId` obligatoire, rejet inconditionnel sinon. Défense active complète
   côté cible (Option B tranchée Saar), pas l'auto-résolution simplifiée du CaC drone.

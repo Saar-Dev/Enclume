@@ -17,6 +17,7 @@ import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
+import { firstFireMode } from '../../../shared/fireModes.js'
 
 // MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
 // "arme possédée et en main" passe désormais entièrement par getOwnedHandWeapon
@@ -289,7 +290,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const exoWeapon = await db('exo_weapons')
             .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
             .where({ 'exo_weapons.id': exoWeaponInvId, 'exo_weapons.character_id': character.id })
-            .select('exo_weapons.*', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count')
+            .select('exo_weapons.*', 'ref_equipment.name as ref_name', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count')
             .first()
           if (!exoWeapon) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Assaut exo impossible — l'arme exo sélectionnée est introuvable (désinstallée entre-temps ?)" })
@@ -306,12 +307,29 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // restriction de family, cf. char-sheet.js validateExoEquipmentSource). Mode dérivé
           // directement de l'arme (premier mode listé si plusieurs, mirroir CombatActionWindow.jsx
           // #availableFireModes/modes[0]) — jamais un état à faire correspondre.
-          // Compétence Tir Automatique (PC23, requise côté humanoïde pour RC/RL) — non vérifiée ici,
-          // question ouverte pour une exo (le pilote teste ses propres Compétences, cf.
-          // combatantContextService.js#resolveExoTestContext) : à trancher avec Saar avant d'ajouter
-          // ce gate, RAW non explicite pour une armure mécanisée (§16.2.4). Aucune résolution exo
-          // (socketCombatExo.js) ne lit le mode de tir à ce jour — rien à propager plus loin ici.
           assaultWeaponRefRange = exoWeapon.ref_range ?? null
+          // PC23 — TIR_AUTOMATIQUE requis pour RC/RL (décision Saar 2026-08-27 : règle identique à
+          // l'humanoïde, cf. bloc `else` ci-dessous). Une exo ne bascule jamais de mode : le mode
+          // appliqué est celui par défaut de l'arme (firstFireMode, shared/fireModes.js — jamais
+          // state.fire_mode, concept PJ humain, cf. commentaire fire_mode ci-dessus). La Compétence
+          // est celle du PILOTE (resolveCombatantIdentity → sheetId = char_sheet du pilote, autorité
+          // unique « retrouver le pilote d'un exo », combatantContextService.js) — jamais une
+          // char_sheet propre à l'exo, qui n'existe pas.
+          const exoFireMode = firstFireMode(exoWeapon.ref_fire_mode)
+          if (exoFireMode === 'RC' || exoFireMode === 'RL') {
+            const { sheetId } = await resolveCombatantIdentity(db, character)
+            const autoSkill = sheetId
+              ? await db('char_skills').where({ char_sheet_id: sheetId, skill_id: 'TIR_AUTOMATIQUES' }).first()
+              : null
+            if (!autoSkill) {
+              const weaponLabel = exoWeapon.label_override || exoWeapon.ref_name || 'sélectionnée'
+              socket.emit(WS.COMBAT_DECLARE_ERROR, {
+                username: character.name,
+                message: `L'arme « ${weaponLabel} » de l'exo-armure tire en rafale (${exoFireMode}) : le pilote doit posséder la compétence Tir Automatique pour l'utiliser. Installez une arme en Coup par coup sur ce hardpoint, ou ajoutez la compétence sur la fiche du pilote.`,
+              })
+              return
+            }
+          }
           // Munitions (§16.2.3) — fail-fast déclaratif, même autorité que l'arme humanoïde
           // (shared/ammoRules.js, revérifiée à la Résolution). ammo_remaining NULL = tracking désactivé
           // (aucun mécanisme de rechargement/init exo construit à ce jour, §16.2.3 — hasEnoughAmmo

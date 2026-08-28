@@ -88,14 +88,21 @@ export function useDroneDeclare({
     if (!onEnterTargetMode || !tokenId || !activeToken) return
     setAssaultTargetId(null)
     setIsSelectingTarget(true)
+    // Mode dérivé du programme réellement sélectionné (miroir resolveDroneClickAttackMode#isCaC) —
+    // jamais 'ranged' en dur : seul effet du paramètre = la légende flottante "Corps à corps" vs
+    // "Assaut" pendant la sélection (CombatOverlay.jsx#combatTargetMode.mode).
+    const selectedWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
+    const isCaC = selectedWeapon
+      ? (selectedWeapon.fire_mode ? selectedWeapon.fire_mode === 'cc' : !selectedWeapon.ref_fire_mode)
+      : false
     onEnterTargetMode(
       tokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
       (targetId) => { setAssaultTargetId(targetId); setIsSelectingTarget(false) },
       () => { setIsSelectingTarget(false) },
-      'ranged',
+      isCaC ? 'melee' : 'ranged',
     )
-  }, [tokenId, onEnterTargetMode])
+  }, [tokenId, onEnterTargetMode, droneWeapons, selectedDroneWeaponId])
 
   const clearPendingMove = useCallback(() => setPendingMove(null), [])
 
