@@ -482,3 +482,37 @@ session 2026-08-11) :
 **Statut** : 🔴 architecture décidée, exécution non commencée. Reste à écrire avant de coder : audit
 de lots détaillé (ordre des 10 tables, quel champ dans quelle table en premier — comme §2 pour le
 JSX), forme exacte du helper de résolution serveur unique.
+
+---
+
+## 8. Lot 6 — Messages `COMBAT_DECLARE_ERROR` serveur (découvert 2026-08-28)
+
+**Écart avec ce plan** : la méthode d'audit §1 ne scanne que les `.jsx` client — elle n'a jamais vu le
+texte FR émis par le **serveur**. `COMBAT_DECLARE_ERROR` (bannière de refus de déclaration, phase
+ANNONCE, + message de chat `declare_error`) est émis depuis **~70 sites** avec un `message:` FR en dur
+(`socketCombatAnnouncement.js`, `socketCombatExo.js`, `socketCombatHelpers.js`,
+`socketCombatResolution.js`, `losService.js`, `movementBudgetService.js`). Violation directe de
+`.claude/rules/i18n.md` (« le serveur n'émet jamais de FR figé »).
+
+**Chaîne actuelle** `[VÉRIFIÉ 2026-08-28]` : serveur `emit(COMBAT_DECLARE_ERROR, { message, username })`
+→ `useCombatSocket.js#onDeclareError({ message, ... })` → `setDeclareError(text)` + `addMessage` chat →
+`CombatDeclareErrorBanner` (`sessionStore.declareError.message`) + `MessageRendererRegistry.renderDeclareError`.
+Texte brut de bout en bout, aucune clé.
+
+**Ce que ça implique** (pourquoi c'est un lot dédié, pas une correction au fil de l'eau) :
+- Changement de schéma du payload `COMBAT_DECLARE_ERROR` : `{ message }` → `{ i18nKey, i18nParams }`
+  (rétrocompatibilité pendant la transition à prévoir — `message` optionnel en repli).
+- ~70 sites d'émission, dont plusieurs **dynamiques** (`Tir visé impossible : ${aimReasons.join(', ')}`,
+  `Mode de tir ${fireMode} non disponible...`) → clés paramétrées + sous-listes de raisons elles-mêmes
+  à cléer.
+- Chaîne client à adapter : `useCombatSocket`, `sessionStore`, `CombatDeclareErrorBanner`,
+  `MessageRendererRegistry`.
+- Combat-critique (phase ANNONCE) → validation transport + scénario réel par famille de refus.
+
+**Décision Saar (2026-08-28)** : différé ici. En attendant, un **swap de mot** « Assaut » → « Tir » a
+été fait sur les ~9 messages concernés de `socketCombatAnnouncement.js` (cohérence terminologique avec
+`PLAN_RW_DECLARE_DESIGN.md` lot B3 ; ne corrige **pas** la violation i18n).
+
+**Reste à écrire avant de coder** : inventaire exhaustif des sites (grep `COMBAT_DECLARE_ERROR` +
+`WS.COMBAT_DECLARE_ERROR`), regroupement par familles de message, forme du helper de résolution
+client, stratégie de transition (repli `message`).
