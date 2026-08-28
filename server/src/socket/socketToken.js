@@ -2,7 +2,7 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { checkTokenOwnership } from '../lib/socketUtils.js'
 import * as statusService from '../lib/statusService.js'
-import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 
 export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
@@ -76,10 +76,14 @@ export function registerTokenHandlers(io, socket, { campaignId, user, isGm }) {
         },
       })
     } catch (err) {
-      console.error('[WS] token:move error:', err.message)
+      // MovementBudgetError = config d'acteur incomplète (drone sans Vitesse, exo sans modèle...) :
+      // code distinct pour que le client puisse afficher « à corriger sur la fiche » plutôt qu'une
+      // erreur transitoire. Le message FR reste affichable tel quel dans les deux cas.
+      const code = err instanceof MovementBudgetError ? 'movement-unavailable' : 'movement-error'
+      console.error(`[WS] token:move ${code}:`, err.message)
       socket.emit(WS.TOKEN_MOVE_REJECTED, {
         tokenId,
-        code: 'movement-error',
+        code,
         message: err.message,
       })
     }

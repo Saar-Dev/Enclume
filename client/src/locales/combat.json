@@ -34,7 +34,8 @@
     "lente": "Lente",
     "moyenne": "Moyenne",
     "rapide": "Rapide",
-    "max": "Max"
+    "max": "Max",
+    "single": "Déplacement max"
   },
   "modes": {
     "normal": {
@@ -296,6 +297,11 @@
     "spot": "Repérer ×{{count}}",
     "shortPhrase": "Phrase courte"
   },
+  "iniWidget": {
+    "aria": "Initiative projetée : {{value}}",
+    "tooltipTotal": "Initiative projetée : {{value}}",
+    "tooltipNoChange": "Initiative projetée : {{value}} — aucun changement déclaré"
+  },
   "stunWindow": {
     "title": "Durée d'étourdissement",
     "rollPrompt": "Lancez {{desc}} pour déterminer la durée",
@@ -451,7 +457,8 @@
   },
   "droneDeclare": {
     "iniPlaceholder": "−INI",
-    "passTurn": "Passer le tour"
+    "passTurn": "Passer le tour",
+    "movementUnavailable": "Déplacement indisponible — {{reason}}"
   },
   "common": {
     "targetSection": "Cible",

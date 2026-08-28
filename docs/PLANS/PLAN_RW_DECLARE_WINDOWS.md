@@ -134,10 +134,13 @@ de montage). Docs : `COMBAT.md` (§ flux client), `COMBAT_FLUX.md`, `SERVICES_CO
 ## 5. Liste des modules
 
 > **Ordre d'exécution acté (Saar 2026-08-28, révisé après analyse à charge du cadrage module 6)** :
-> 1 ✅ → **fix Tir visé** (correctif ciblé autonome, pas un module — voir §5bis) → **2** (item 2) →
-> **3** → **4** → **re-décider le module 6** (prérequis : vitest + tests de caractérisation +
-> périmètre PJ-seul-ou-PJ+MJ tranché ; ou constater qu'INFRA-4 a raison et ne pas le faire) → **5**
-> (probable annulation, B5). Raison du changement : le cadrage du module 6 (voir sa section) a
+> 1 ✅ → **fix Tir visé** ✅ (§5bis) → **2 ✅** (autorité partagée du coût INI + pastille projetée,
+> périmètre élargi « robuste » : a aussi extrait `shared/combatIniCost.js`, dédupliqué
+> `combatSections`/`socketCombatAnnouncement`, et branché la pastille dans les 3 pieds de fenêtre) →
+> **3** (`useCombatDeclareError`) → **4** (`CombatDeclareRoster`) → **re-décider le module 6**
+> (prérequis : vitest + tests de caractérisation + périmètre PJ-seul-ou-PJ+MJ tranché ; ou constater
+> qu'INFRA-4 a raison et ne pas le faire) → **7** (`InlineChip`) → **5** (probable annulation, B5).
+> Raison du changement d'ordre initial : le cadrage du module 6 (voir sa section) a
 > montré que (a) le bug Tir visé se corrige sans extraire, (b) INFRA-4 déconseille le découpage
 > proactif, (c) « rend 2-4 plus propres » ne tient pas, (d) module 6 sans tests de caractérisation =
 > bug de combat subtil garanti. La numérotation des sections reste 1-7 (historique).
@@ -181,57 +184,73 @@ nommage pour les modules suivants (D7).
 
 ---
 
-### Module 2 — Widget Initiative partagé + initiative projetée (item 2)
+### Module 2 — Autorité partagée du coût d'Initiative + pastille « Initiative projetée » — **FAIT (2026-08-28)**
 
-**Problème** : `INI : ±delta` cliquable + popover `ini-popover` — dupliqué joueur
-(`CombatActionWindow.jsx:1436-1462`) / MJ (`CombatGmDeclareWindow.jsx:1105-1132`), **absent de
-l'exo**. Le joueur affiche seulement le delta ; le MJ affiche le delta **et** `→ initiative+delta`
-dans son roster. L'item 2 de la dette exo demande le **total projeté** près de DÉCLARER, dans les 3.
+**Périmètre élargi (acté Saar 2026-08-28 : « robuste par principe »)** : le module ne se contente pas
+d'ajouter un widget — il crée l'**autorité unique** du coût d'Initiative d'une déclaration, partagée
+client (aperçu) et serveur (calcul réel appliqué à `combat_roster.initiative`). Les matrices de coût
+de transition étaient dupliquées `combatSections.js` (`STATE_DEFS[].cost`) / `socketCombatAnnouncement.js`
+(`STATE_COSTS`, commentées « miroir de STATE_DEFS ») — c'était la dernière maths de combat non
+partagée du repo (`combatRange`/`combatMovement`/`ammoRules`/`combatExclusiveActions`/
+`combatStatePositionCost` le sont déjà).
 
-**Cible** :
-- Fonction pure `projectedInitiative(currentInitiative, delta)` → `{ projected, willBeLost }`
-  (`willBeLost = projected <= 0` — une action à Initiative ≤ 0 est perdue en Résolution,
-  `docs/SYSTEME/EXOARMURE.md` §5 ; `COMBAT_FLUX.md` §13 « §3 : non implémenté » est périmé sur ce
-  point). Emplacement : `combatSections.js`. **Node-testable** (`combatSections` n'a pas encore de
-  `.test.mjs` — en créer un pour cette fonction).
-- Composant `client/src/components/CombatDeclareIniWidget.jsx` :
-  - Props : `currentInitiative`, `delta`, `breakdown` (sortie de `calcIniBreakdown`), `label?`.
-  - Rend `INI : {currentInitiative} → {projeté}` ; couleur du projeté : vert si `delta ≥ 0`, orange
-    si négatif, **rouge si `willBeLost`**. Cliquable si `delta ≠ 0` → `ini-popover` (classes CSS
-    existantes réutilisées) listant `breakdown`.
-  - État popover (ouvert/fermé + overlay clic-extérieur) **local au widget**.
-- Câblage :
-  - Joueur : remplace le bloc inline du footer.
-  - MJ : remplace le bloc inline du footer. Le `→ initiative+delta` du roster devient redondant —
-    `[INFÉRÉ]` le retirer (à confirmer).
-  - Exo : ajout dans le footer, près de DÉCLARER. L'exo ne calcule pas encore de delta : delta exo =
-    `moveSelection?.ini_mod ?? 0` (l'exo n'a pas de changement d'état position/arme/couverture) ;
-    `breakdown` via `calcIniBreakdown({}, {}, { move: { ini_mod } }, {}, t)` (réutilisation, états
-    vides).
+**Fait** :
+- `shared/combatIniCost.js` (neuf, +`.test.mjs` 15 cas) : `STATE_TRANSITION_COST` (weapon/fire_mode/
+  cover/vitesse ; position déléguée à `combatStatePositionCost.js`, aim à `combatExclusiveActions.js`)
+  ; `iniDeltaBreakdown(params)` = **primitif** (détail poste par poste, postes nuls omis) ;
+  `computeIniDelta(params)` = **somme du breakdown** ; `projectedInitiative(current, delta)` →
+  `{ projected, willBeLost }` (`willBeLost = projected <= 0`). Test d'invariant : `computeIniDelta ===
+  somme(iniDeltaBreakdown)` → widget et popover ne peuvent pas diverger.
+- `socketCombatAnnouncement.js` : `STATE_COSTS` + boucle `iniDelta` (l.455-535) → un appel
+  `computeIniDelta(...)`. Bloc d'éligibilité Tir visé remonté avant (sans effet de bord). **Iso-comportement**
+  vérifié contre les gardes du handler (`state` toujours objet non-nul l.67, valeurs d'énum validées
+  l.78-80).
+- `combatSections.js` : `STATE_DEFS[].cost` → références `STATE_TRANSITION_COST` (plus aucune matrice
+  recopiée) ; `calcIniDelta`/`calcIniBreakdown` délèguent à `iniDeltaBreakdown`/`computeIniDelta`, seul
+  le mapping `kind → libellé i18n` reste client (`iniBreakdownLabel`). `cover_shot` (code mort) retiré.
+  `calcIniDelta` perd le param `t` inutile.
+- `CombatDeclareIniWidget.jsx` (neuf) : props `currentInitiative`, `delta`, `breakdown`. Pastille
+  `.badge` (rouge `.badge-fail` si `willBeLost`), **tooltip CSS `.has-tooltip` au survol** (pas de
+  clic-popover) listant les postes + le total. Brique présentationnelle pure, zéro règle métier.
+- Les 3 fenêtres : pastille à gauche du bouton DÉCLARER (`flex:1` sur le bouton), **toujours visible**.
+  `iniPopoverOpen` + `setIniPopoverOpen` supprimés ; styles morts retirés (`W.totalMod`,
+  `S.iniRow/iniLabel/iniValue/rosterDelta`). MJ : `→ {initiative}` du roster retiré (redondant).
+  Exo : `calcIniDelta({}, {}, { move }, null)` — extensible sans retoucher le widget quand les
+  sélecteurs d'état exo arriveront (ROADMAP §4).
+- `combat.json` : `iniWidget.aria/tooltipTotal/tooltipNoChange`.
+- `index.css` : **1 règle scopée ajoutée** (dérogation D8 assumée — correctif d'un bug, pas un
+  refactor design) : `.combat-ini-widget.has-tooltip::after { left: 0; transform: none }` — la pastille
+  est au bord gauche du pied et `.combat-win`/`.combat-float-win` ont `overflow:hidden`, un tooltip
+  centré était rogné.
 
-**Fichiers touchés** : `combatSections.js` (+ `.test.mjs` neuf) ; `CombatDeclareIniWidget.jsx` neuf ;
-`CombatActionWindow.jsx`, `CombatGmDeclareWindow.jsx`, `CombatExoActionWindow.jsx` (footers) ;
-`combat.json` (clé de libellé partagée si besoin — `gmDeclareWindow.iniTotalLabel` existe déjà, à
-généraliser). Style : `.ini-popover` et les objets de style des footers réutilisés **verbatim** (D8).
+**Décisions D9-D12 (Saar, 2026-08-28)** :
+| # | Décision |
+|---|---|
+| D9 | Périmètre **robuste** : autorité de calcul partagée client+serveur, pas juste un widget. |
+| D10 | `willBeLost` = `projected <= 0` (INI = 0 ⇒ tour perdu, confirmé Saar). Indicateur visuel (rouge), **jamais un blocage**. |
+| D11 | Tooltip **au survol** (`.has-tooltip`), pas de clic-popover. Pastille = juste le chiffre projeté. |
+| D12 | MJ : `→ {initiative}` du roster retiré ; INI **toujours** affichée au pied (avant : cachée si delta 0). |
 
-**Validation navigateur** : les 3 fenêtres, déclarer un déplacement + (pour PJ/MJ) un changement de
-posture → vérifier `INI : X → Y` cohérent avec le popover ; cas `Y ≤ 0` ; popover s'ouvre/ferme.
+**Résolutions des analyses critiques du cadrage** :
+- **B1 périmé** : `COMBAT_FLUX.md` §6.7 disait que `endTurn` ne remet pas `initiative = base_ini` —
+  **faux**, le code le fait (`socketCombatHelpers.js:1285`, correctif INI4). Doc corrigée en parallèle
+  (commit `08d8bd5`). Le projeté sur un tour frais est donc cohérent. Le widget reste un aperçu
+  (le serveur recalcule le coût de déplacement depuis le chemin réel) — jamais un blocage (D10).
+- **B2** : « se relever » exo compte volontairement la transition prone→* (-10) — vérifié non-bug,
+  documenté en parallèle (commit `0925989`). Le widget exo ne couvre que le déplacement (le bouton
+  « se relever » est séparé de DÉCLARER).
+- **Correction de bug au passage** : l'aperçu INI d'une Charge/Retraite PNJ (MJ) neutralise maintenant
+  le coût de déplacement (passait le `move` brut avant → aperçu trop pessimiste).
 
-**Risque** : faible-moyen (3 footers, changement visuel). **Clôt l'item 2 de la dette exo.**
+**Testé** : `node --test shared/*.test.mjs` (335/335) ; `vite build` clean ; `eslint` 3 fenêtres +
+widget + `combatSections` → aucun problème neuf (widget + `combatSections` = 0/0), 8 pré-existants
+inchangés. Run combat réel Saar (2 tours) : `iniDelta` serveur sains, pastille OK dans les 3 fenêtres,
+rouge à ≤ 0, tooltip corrigé.
+**Non testé automatiquement** : transport du payload `COMBAT_ACTION_DECLARE` (INFRA-4, pas d'infra) —
+Tir visé ×N et Charge+déplacement à exercer en combat réel.
 
-**Analyse critique — à traiter au cadrage du module (2026-08-28)** :
-- **B1 — le « rouge / action perdue » repose sur une estimation client.** `calcIniDelta` côté client
-  est un aperçu : le serveur recalcule (Charge/Retraite annulent le coût de déplacement, cas de
-  figure du fire_mode, etc.) et `entry.initiative` n'est **pas** remis à `base_ini` chaque tour
-  (dette `COMBAT_FLUX.md` §13 §6.7). Donc `projeté = entry.initiative + delta client` peut diverger
-  de la valeur serveur. **Le widget affiche le nombre projeté ; il n'AFFIRME pas « sera perdue »** —
-  au mieux un signe discret d'alerte, jamais un blocage. `willBeLost` devient un simple indicateur
-  visuel prudent, pas une garantie. À rediscuter : le drapeau vaut-il seulement la peine ?
-- **B2 — le delta exo est sous-spécifié.** « Tenter de se relever » (`exo_stand_up`) est un chemin
-  d'action **séparé** côté serveur (`socketCombatAnnouncement.js`, `type: 'exo_stand_up',
-  sequence: 3`) — son traitement d'Initiative n'est pas vérifié. Vérifier si se relever coûte de
-  l'INI avant de câbler le widget sur ce chemin ; `delta exo = moveSelection.ini_mod` ne couvre que
-  le chemin déplacement/tir.
+**Reste ouvert (hors périmètre, candidats nettoyage)** : `.ini-popover`/`.ini-bd-*` (index.css, ~35 l.)
+et `gmDeclareWindow.iniTotalLabel` (combat.json) sont maintenant orphelins.
 
 ---
 

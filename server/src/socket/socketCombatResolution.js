@@ -8,7 +8,7 @@ import * as statusService from '../lib/statusService.js'
 import * as damageService from '../lib/damageService.js'
 import { calcSkillTotal, calcDroneDegatsNets } from '../lib/charStats.js'
 import { getMutationEffects } from '../services/mutationService.js'
-import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { executeBattlemapTokenMovement } from '../services/worldMovementService.js'
 import { measureBattlemapTokenDistance } from '../services/worldSpatialQueryService.js'
 import { checkLOSForPrecheck } from '../lib/losService.js'
@@ -258,6 +258,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
       for (const action of simpleActions) {
         if (action.type === 'move_short' || action.type === 'move_long') {
           let outcome = null
+          let moveError = null
           try {
             if (!action.destination_world || !action.movement_gait) {
               throw new RangeError('Intention de déplacement antérieure au moteur de monde')
@@ -270,6 +271,7 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
               authorizedBudgetM: budget.budgetM,
             })
           } catch (error) {
+            moveError = error
             console.warn(`[WS] déplacement combat refusé token:${tokenId} — ${error.message}`)
           }
 
@@ -316,7 +318,16 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
             Object.assign(token, outcome.token)
           }
           const partial = outcome?.result?.status === 'budget'
-          if (!outcome?.moved || partial) {
+          if (moveError instanceof MovementBudgetError) {
+            // Config de l'acteur devenue invalide entre l'Annonce et la Résolution (ex. Vitesse d'un
+            // drone retirée de sa fiche en plein combat) : le message FR remonte jusqu'au chat via
+            // COMBAT_DECLARE_ERROR (handler onDeclareError), au lieu du « destination occupée »
+            // générique et trompeur de COMBAT_RESOLVE_MOVE_BLOCKED. Le déplacement est simplement
+            // perdu ce Tour, l'échelle continue (l'action est marquée 'resolved' plus bas comme les
+            // autres).
+            console.warn(`[WS] COMBAT_ACTION_CONFIRM — déplacement impossible (config) token:${tokenId} — ${moveError.message}`)
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: moveError.message, username: token.label })
+          } else if (!outcome?.moved || partial) {
             console.log(`[WS] COMBAT_ACTION_CONFIRM — déplacement ${partial ? 'partiel' : 'bloqué'} token:${tokenId}`)
             socket.emit(WS.COMBAT_RESOLVE_MOVE_BLOCKED, {
               tokenLabel: token.label,

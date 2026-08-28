@@ -3,7 +3,7 @@ import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase, forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getAimBonusComp, getAimIniCost, getAimIneligibilityReasons, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { getAimBonusComp, getAimIneligibilityReasons, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
@@ -14,7 +14,7 @@ import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { isTestBlockingWound, isMortalWoundImmobilized } from '../../../shared/woundConstants.js'
 import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
-import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
+import { computeIniDelta } from '../../../shared/combatIniCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 import { firstFireMode } from '../../../shared/fireModes.js'
@@ -299,7 +299,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // fire_mode — bug trouvé en jeu réel (Saar, 2026-08-26) : comparer contre state.fire_mode
           // était la mauvaise autorité. state.fire_mode modélise le sélecteur d'un PJ humain (une
           // arme en main, un mode qu'on bascule — StateSelector/CombatActionWindow.jsx, coûte de
-          // l'Initiative en changeant, STATE_COSTS.fire_mode) ; une exo n'a pas cette notion, chaque
+          // l'Initiative en changeant, combatIniCost.js STATE_TRANSITION_COST.fire_mode) ; une exo n'a
+          // pas cette notion, chaque
           // hardpoint tire dans le(s) mode(s) fixe(s) de son arme (§16.4). Le client n'envoie jamais
           // state.fire_mode pour une exo (CombatExoActionWindow.jsx) donc `state.fire_mode ?? 'cc'`
           // retombait toujours sur 'CC' — bloquant toute arme RC/RL-only montée sur un hardpoint (ex.
@@ -450,17 +451,6 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         }
       }
 
-      // Matrices de coût de transition INI (miroir de STATE_DEFS dans combatSections.js)
-      // position : shared/combatStatePositionCost.js — autorité unique client+serveur (docs/PLANS/PLAN_KNEELING_POSITION.md Lot 1)
-      const STATE_COSTS = {
-        position:  POSITION_TRANSITION_COST,
-        weapon:    { holstered: { ready: -3, drawn: -5 }, ready: { holstered: -5, drawn: -3 }, drawn: { holstered: -10, ready: -3 } },
-        fire_mode: { cc: { rc: -3, rl: -3 }, rc: { cc: -3, rl: -3 }, rl: { cc: -3, rc: -3 } },
-        cover:     {},
-        vitesse:   { delayed: { normal: 0, rushed: 3 }, normal: { delayed: 0, rushed: 3 }, rushed: { delayed: 0, normal: 0 } },
-      }
-      const transitionCost = (costs, from, to) => from === to ? 0 : (costs?.[from]?.[to] ?? 0)
-
       // Tir visé (LdB p.227-228, docs/PLAN_TIRVISE.md) — calculé une fois, réutilisé pour
       // iniDelta ci-dessous ET pour la ligne combat_actions (aim_bonus_comp) plus bas. Exclusif avec
       // Tir Multi (docs/PLAN_TIRMULTI.md D10, tranché Saar) — forcé à 0 dès que la série dépasse 1 tir,
@@ -491,25 +481,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
 
       let iniDelta = 0
       if (!isDrone) {
-        for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
-          const from = entry['state_' + key]
-          const to   = state[key] ?? from
-          iniDelta += transitionCost(STATE_COSTS[key], from, to)
-        }
-        // Exo « se relever » (isExoStandUpAttempt, défini plus bas) : le coût de transition de
-        // position (prone→standing/crouching/kneeling : -10) est compté ICI volontairement, même si
-        // `resolvedPosition` (~l.800) garde `prone` jusqu'à la Résolution du Test. Ce -10 modélise le
-        // temps physique de la *tentative*, indépendant de son issue (RAW LdB p.221 « Se relever
-        // Init. -10 » ; PLAN_EXOARMURE.md §9.2). Seule l'écriture de `state_position` est différée,
-        // pas le coût — `resolveExoStandUpAction` (socketCombatHelpers.js) ne retouche jamais
-        // `initiative`, donc le -10 n'est compté qu'une fois.
-        // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
-        const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
-        if (movementDeclaration) iniDelta += freeMove ? 0 : movementDeclaration.initiativeModifier
-        // Tir visé — validé/recalculé serveur, jamais confiance au client. getAimIneligibilityReasons
-        // bloque déjà toute combinaison avec le CaC ou une transition d'état (règle "aucune autre
-        // action ce tour"). DBG log + message = les raisons réelles (2026-08-28, remplace une chaîne
-        // fourre-tout) — sert aussi à diagnostiquer le blocage Tir visé signalé par Saar.
+        // Tir visé — éligibilité + niveau de Lunette re-dérivés serveur (peut REFUSER la déclaration,
+        // jamais confiance au client). getAimIneligibilityReasons bloque déjà toute combinaison avec
+        // le CaC ou une transition d'état (« aucune autre action ce Tour »). DBG log + message = les
+        // raisons réelles (2026-08-28, remplace une chaîne fourre-tout).
         // NOTE : `state.cover` n'est PAS envoyé par les handleDeclare humanoïdes → `state.cover`
         // undefined ≠ `entry.state_cover` → "changement de couverture" fantôme (bug à corriger par
         // le module "action exclusive" unifié, cf. PLAN_RW_DECLARE_WINDOWS / discussion Saar).
@@ -535,16 +510,41 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
               .select('re.bonus', 're.mod_slot', 're.mod_requires_aim', 're.mod_key', 'cim.state')
             lunetteNiveau = getLunetteNiveau(installedMods)
           }
-          iniDelta += getAimIniCost(aimTranches, { lunetteNiveau })
         }
-        iniDelta += (quick?.observer ?? 0) * -5
-        iniDelta += (quick?.reperer  ?? 0) * -5
-        if (quick?.phrase) iniDelta += -3
+
+        // Coût d'Initiative de la déclaration — autorité unique partagée client + serveur
+        // (shared/combatIniCost.js#computeIniDelta, PLAN_RW_DECLARE_WINDOWS module 2) : transitions
+        // d'état (position → combatStatePositionCost.js ; arme / mode de tir / vitesse ; couverture
+        // = 0, flag défensif pur), déplacement (gratuit en Charge/Retraite — override serveur, jamais
+        // l'ini_mod du client), Tir visé (getAimIniCost, écrêtage Lunette), actions rapides. Le pied
+        // des fenêtres de déclaration affiche l'aperçu de ce même calcul (CombatDeclareIniWidget) —
+        // plus aucune matrice de coût recopiée à la main entre les deux côtés.
+        //
+        // Exo « se relever » (isExoStandUpAttempt, défini plus bas) : la transition prone→* (-10) est
+        // comptée ICI volontairement, même si `resolvedPosition` (~l.800) garde `prone` jusqu'à la
+        // Résolution du Test — le -10 modélise le temps physique de la *tentative*, indépendant de son
+        // issue (RAW LdB p.221, PLAN_EXOARMURE.md §9.2). Seule l'écriture de state_position est
+        // différée, pas le coût — resolveExoStandUpAction ne retouche jamais `initiative`, donc le -10
+        // n'est compté qu'une fois.
+        iniDelta = computeIniDelta({
+          prevStates: {
+            position:  entry.state_position,
+            weapon:    entry.state_weapon,
+            fire_mode: entry.state_fire_mode,
+            cover:     entry.state_cover,
+            vitesse:   entry.state_vitesse,
+          },
+          nextStates: state,
+          move: movementDeclaration ? { ini_mod: movementDeclaration.initiativeModifier } : null,
+          combatMode: state?.combat_mode ?? null,
+          aim: aimTranches > 0 ? { aimTranches, lunetteNiveau } : null,
+          quick,
+        })
       }
 
       // PLAN_EXOARMURE.md Lot 2bis §9.2 — tentative de se relever (exo-armure, prone → autre
-      // position). Le coût d'Initiative ci-dessus s'applique déjà normalement (boucle STATE_COSTS.position
-      // dans le bloc !isDrone, inchangée) : ce qui change, c'est que la position ne sera PAS écrite
+      // position). Le coût d'Initiative ci-dessus s'applique déjà normalement (transition de position
+      // dans computeIniDelta, bloc !isDrone) : ce qui change, c'est que la position ne sera PAS écrite
       // immédiatement dans combat_roster (§ résolvedPosition plus bas) — elle attend un Test résolu en
       // Résolution, exactement comme une attaque. `entry.state_position` = position AVANT cette
       // déclaration, jamais reconstruite depuis le payload client (même garde que partout ailleurs
@@ -556,8 +556,9 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // Exclusivité tranchée par Saar (2026-08-18, analyse à charge PLAN_EXOARMURE.md §9.2) : le
         // personnage ne fait que ça ce Tour, réussite ou échec. Ne couvre que les mapActions/quick
         // actions ("Action" au sens RAW) — pas les transitions d'état annexes (arme/couverture/vitesse),
-        // catégorie distincte dans le vocabulaire de ce fichier (STATE_COSTS vs MAP_ACTIONS/QUICK_ACTIONS,
-        // combatSections.js) : RAW ne dit rien qui interdise de dégainer une arme en même temps que la
+        // catégorie distincte dans le vocabulaire du combat (transitions d'état / combatIniCost.js vs
+        // MAP_ACTIONS/QUICK_ACTIONS / combatSections.js) : RAW ne dit rien qui interdise de dégainer
+        // une arme en même temps que la
         // tentative, choix documenté plutôt qu'un silence.
         const ineligible = getExoStandUpIneligibilityReasons({ mapActions, quick })
         if (ineligible.length > 0) {
@@ -804,8 +805,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // state_position ici : elle reste 'prone' (valeur inchangée d'entry) jusqu'à la Résolution du
       // Test (resolveExoStandUpAction, socketCombatHelpers.js). La position visée par le joueur voyage
       // dans la ligne combat_actions ci-dessus (modifiers.targetPosition), pas ici.
-      // NB : `iniDelta` a en revanche DÉJÀ compté le -10 de la transition prone→* (boucle STATE_COSTS
-      // plus haut) — voulu, cf. commentaire là-bas : le coût suit la tentative, pas son issue.
+      // NB : `iniDelta` a en revanche DÉJÀ compté le -10 de la transition prone→* (computeIniDelta,
+      // bloc !isDrone) — voulu, cf. commentaire là-bas : le coût suit la tentative, pas son issue.
       const resolvedPosition = isExoStandUpAttempt ? entry.state_position : (state.position ?? entry.state_position)
       const resolvedWeapon   = state.weapon   ?? entry.state_weapon
       const [updated] = await db.transaction(async (trx) => {

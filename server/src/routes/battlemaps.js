@@ -29,7 +29,7 @@ import {
   executeBattlemapTokenMovement,
   planBattlemapTokenMovement,
 } from '../services/worldMovementService.js'
-import { getCharacterMovementBudget } from '../services/movementBudgetService.js'
+import { getCharacterMovementBudget, MovementBudgetError } from '../services/movementBudgetService.js'
 import { evaluateBattlemapVisibility } from '../services/worldVisibilityService.js'
 import {
   createCustomWorldEffectDefinition,
@@ -383,7 +383,19 @@ router.post('/:id/world-path-preview', requireAuth, async (req, res, next) => {
     let budgetM
     let budgetAuthority
     if (token.character_id) {
-      const budget = await getCharacterMovementBudget(token.character_id, 'max')
+      // MovementBudgetError = capacité de déplacement indéterminable de la config de l'acteur (drone
+      // sans Vitesse, exo sans modèle/pilote...) — 400 avec message affichable, jamais un 500 opaque.
+      // Sans ce try/catch (les routes sœurs `world-move`/`exo-movement` l'ont déjà), le survol de
+      // déplacement d'un drone/exo mal configuré rejouait un 500 à chaque `pointermove` côté client.
+      let budget
+      try {
+        budget = await getCharacterMovementBudget(token.character_id, 'max')
+      } catch (error) {
+        if (error instanceof MovementBudgetError || error instanceof RangeError || error instanceof TypeError) {
+          throw new AppError(400, error.message)
+        }
+        throw error
+      }
       budgetM = budget.budgetM
       budgetAuthority = 'character-max-server'
     } else {
@@ -458,7 +470,7 @@ router.post('/:id/world-move', requireAuth, async (req, res, next) => {
     try {
       budget = await getCharacterMovementBudget(token.character_id, gait)
     } catch (error) {
-      if (error instanceof TypeError || error instanceof RangeError) {
+      if (error instanceof MovementBudgetError || error instanceof TypeError || error instanceof RangeError) {
         throw new AppError(400, error.message)
       }
       throw error

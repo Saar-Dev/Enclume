@@ -2118,6 +2118,12 @@ Convention :
 }
 .has-tooltip:hover::after { opacity: 1; }
 
+/* Widget « Initiative projetée » (CombatDeclareIniWidget) : la pastille est au bord gauche du pied
+   des fenêtres de déclaration, et .combat-win / .combat-float-win ont overflow:hidden — un tooltip
+   centré (left:50%) est rogné par le bord gauche de la fenêtre. Ancré à gauche, il s'étend vers la
+   droite et reste dans la fenêtre. */
+.combat-ini-widget.has-tooltip::after { left: 0; transform: none; }
+
 /* =========================
 12. WIZARD CREATION — SCI-FI PREMIUM
    Familles de classes .wiz1-, .wiz2-, .wiz3- et .wiz4- : scope

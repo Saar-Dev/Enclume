@@ -1,8 +1,9 @@
-import { getAimIniCost } from '../../../shared/combatExclusiveActions.js'
-import { POSITION_TRANSITION_COST } from '../../../shared/combatStatePositionCost.js'
+import { STATE_TRANSITION_COST, iniDeltaBreakdown, computeIniDelta } from '../../../shared/combatIniCost.js'
 
-// Definitions d'etats -- matrices de transition INI
-// stateTransitionCost(def, from, to) -> delta INI (0 si from === to)
+// Definitions d'etats -- l'aperçu du coût de transition INI par option (segmented controls / chips).
+// Les matrices de coût elles-mêmes ne vivent PAS ici : autorité unique shared/combatIniCost.js
+// (STATE_TRANSITION_COST), partagée avec le serveur — STATE_DEFS ne fait que les référencer pour
+// l'affichage. stateTransitionCost(def, from, to) -> delta INI (0 si from === to).
 
 // label/l/short = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le
 // composant consommateur via t(), jamais affichee brute ici. special (vitesse.delayed) inutilise
@@ -16,8 +17,7 @@ export const STATE_DEFS = {
       { k: 'kneeling',  l: 'states.position.kneeling.label',  short: 'states.position.kneeling.short'  },
       { k: 'prone',     l: 'states.position.prone.label',     short: 'states.position.prone.short'     },
     ],
-    // shared/combatStatePositionCost.js — autorité unique client+serveur (docs/PLANS/PLAN_KNEELING_POSITION.md Lot 1)
-    cost: POSITION_TRANSITION_COST,
+    cost: STATE_TRANSITION_COST.position,
   },
   weapon: {
     label: 'states.weapon.label',
@@ -26,11 +26,7 @@ export const STATE_DEFS = {
       { k: 'ready',     l: 'states.weapon.ready.label',     short: 'states.weapon.ready.short'      },
       { k: 'drawn',     l: 'states.weapon.drawn.label',     short: 'states.weapon.drawn.short'      },
     ],
-    cost: {
-      holstered: { ready: -3, drawn:    -5  },
-      ready:     { holstered: -5, drawn: -3  },
-      drawn:     { holstered: -10, ready: -3 },
-    },
+    cost: STATE_TRANSITION_COST.weapon,
   },
   fire_mode: {
     label: 'states.fireMode.label',
@@ -39,12 +35,7 @@ export const STATE_DEFS = {
       { k: 'rc', l: 'states.fireMode.rc.label', short: 'states.fireMode.rc.short' },
       { k: 'rl', l: 'states.fireMode.rl.label', short: 'states.fireMode.rl.short' },
     ],
-    // Tout changement: -3
-    cost: {
-      cc: { rc: -3, rl: -3 },
-      rc: { cc: -3, rl: -3 },
-      rl: { cc: -3, rc: -3 },
-    },
+    cost: STATE_TRANSITION_COST.fire_mode,
   },
   cover: {
     label: 'states.cover.label',
@@ -54,7 +45,7 @@ export const STATE_DEFS = {
       { k: 'important', l: 'states.cover.important.label' },
     ],
     // Aucun cout INI -- flag defensif pur (affecte les tireurs adverses en Phase 2)
-    cost: {},
+    cost: STATE_TRANSITION_COST.cover,
   },
   vitesse: {
     label: 'states.vitesse.label',
@@ -63,11 +54,7 @@ export const STATE_DEFS = {
       { k: 'normal',   l: 'states.vitesse.normal.label'    },
       { k: 'rushed',   l: 'states.vitesse.rushed.label'   },
     ],
-    cost: {
-      delayed:  { normal: 0, rushed: +3  },
-      normal:   { delayed: 0, rushed: +3 },
-      rushed:   { delayed: 0, normal:  0 },
-    },
+    cost: STATE_TRANSITION_COST.vitesse,
   },
 }
 
@@ -77,69 +64,62 @@ export function stateTransitionCost(def, fromKey, toKey) {
   return def.cost?.[fromKey]?.[toKey] ?? 0
 }
 
-// Détail INI client — retourne { label, value }[] (indicatif -- recalcule serveur).
-// Fonction pure : ne peut pas appeler useTranslation() elle-meme (hors corps de composant, regle des
-// hooks) -- `t` est fourni explicitement par l'appelant (docs/SYSTEME/LOCALISATION.md §3.1), meme
-// convention que charStats.js (docs/SYSTEME/CONVENTIONS.md §18 : fonctions pures, le caller fournit
-// les donnees) etendue ici a `t` comme toute autre dependance externe.
-export function calcIniBreakdown(prevStates, nextStates, mapActions, quick, t) {
-  const lines = []
-
-  for (const key of ['position', 'weapon', 'fire_mode', 'cover', 'vitesse']) {
-    const def  = STATE_DEFS[key]
-    const from = prevStates[key]
-    const to   = nextStates[key]
-    if (!from || !to || from === to) continue
-    const cost = stateTransitionCost(def, from, to)
-    if (cost === 0) continue
-    const fromLabelKey = def.states.find(s => s.k === from)?.l
-    const toLabelKey   = def.states.find(s => s.k === to)?.l
-    const fromLabel = fromLabelKey ? t(fromLabelKey) : from
-    const toLabel   = toLabelKey   ? t(toLabelKey)   : to
-    lines.push({ label: t('iniBreakdown.stateTransition', { label: t(def.label), from: fromLabel, to: toLabel }), value: cost })
+// Adapte les arguments des fenêtres de déclaration (prevStates/nextStates = `decl`, mapActions,
+// quick) vers la forme attendue par shared/combatIniCost.js. `nextStates.combatMode` porte le mode
+// de combat (Charge/Retraite = déplacement gratuit) — le calcul du coût de déplacement est délégué,
+// jamais neutralisé ici par l'appelant (corrige au passage l'aperçu d'une Charge côté MJ).
+function toIniParams(prevStates, nextStates, mapActions, quick) {
+  const singleAttack = Array.isArray(mapActions?.attack) ? mapActions.attack[0] : mapActions?.attack
+  const aimTranches  = singleAttack?.aimTranches ?? 0
+  return {
+    prevStates,
+    nextStates,
+    move: mapActions?.move ?? null,
+    combatMode: nextStates?.combatMode ?? null,
+    aim: aimTranches > 0 ? { aimTranches, lunetteNiveau: singleAttack?.lunetteNiveau ?? 0 } : null,
+    quick,
   }
-
-  if (mapActions.move?.ini_mod) {
-    const zone = MOVE_ZONE_DEFS.find(z => z.ini_mod === mapActions.move.ini_mod)
-    lines.push({
-      label: zone ? t('iniBreakdown.moveZone', { zone: t(zone.label).toLowerCase() }) : t('actionLabels.move'),
-      value: mapActions.move.ini_mod,
-    })
-  }
-  // CaC (docs/BUGIDENTIFIE.md INI5, audit Session 176) : comme pour Tir Multi ci-dessous, RAW ne
-  // décrit qu'un seul coût chiffré pour les Attaques multiples — le décalage de phase (-5/-10), déjà
-  // porté par l'échelle de phases côté serveur (computeSeriesPositions). Aucun forfait Initiative de
-  // déclaration ici (l'ancien -3/-5 était un doublon sans base RAW, retiré).
-  // mapActions.attack est un array (docs/PLAN_TIRMULTI.md D1) — Tir visé/cover_shot sont mutuellement
-  // exclusifs avec Tir Multi (D10), donc jamais présents que sur le seul élément possible quand actifs.
-  const singleAttack = Array.isArray(mapActions.attack) ? mapActions.attack[0] : mapActions.attack
-  if (singleAttack?.cover_shot) {
-    lines.push({ label: t('iniBreakdown.coverShot'), value: nextStates.cover === 'important' ? -5 : -3 })
-  }
-  const aimTranches = singleAttack?.aimTranches ?? 0
-  if (aimTranches > 0) {
-    const lunetteNiveau = singleAttack?.lunetteNiveau ?? 0
-    lines.push({ label: t('iniBreakdown.aimedShot', { count: aimTranches }), value: getAimIniCost(aimTranches, { lunetteNiveau }) })
-  }
-  // Tir Multi (docs/PLAN_TIRMULTI.md D3) : RAW ne décrit qu'un seul coût chiffré pour les Attaques
-  // multiples — le décalage de phase (-5/-10), déjà porté par l'échelle de phases côté serveur
-  // (computeSeriesPositions). Aucun forfait Initiative de déclaration supplémentaire ici.
-
-  const obs = quick?.observer ?? 0
-  if (obs > 0) lines.push({ label: t('iniBreakdown.observe', { count: obs }), value: obs * -5 })
-  const rep = quick?.reperer ?? 0
-  if (rep > 0) lines.push({ label: t('iniBreakdown.spot', { count: rep }), value: rep * -5 })
-  if (quick?.phrase) lines.push({ label: t('iniBreakdown.shortPhrase'), value: -3 })
-
-  return lines
 }
 
-// Calcul INI total client (indicatif -- recalcule serveur). Fonction pure, `t` fourni par l'appelant
-// (meme convention que calcIniBreakdown ci-dessus) -- ne consomme que .value mais doit relayer `t`
-// pour que calcIniBreakdown puisse resoudre les labels qu'elle construit et jette ensuite.
-export function calcIniDelta(prevStates, nextStates, mapActions, quick, t) {
-  return calcIniBreakdown(prevStates, nextStates, mapActions, quick, t)
-    .reduce((sum, l) => sum + l.value, 0)
+// Libellé i18n d'un poste du détail (shared iniDeltaBreakdown). Fonction pure : `t` fourni par
+// l'appelant (docs/SYSTEME/LOCALISATION.md §3.1, hors corps de composant — règle des hooks). Les
+// zones de déplacement (MOVE_ZONE_DEFS) et libellés d'état (STATE_DEFS) restent côté client : ce
+// sont des chaînes d'affichage, pas de la règle métier.
+function iniBreakdownLabel(line, t) {
+  switch (line.kind) {
+    case 'state': {
+      const def = STATE_DEFS[line.key]
+      const fromKey = def?.states.find(s => s.k === line.from)?.l
+      const toKey   = def?.states.find(s => s.k === line.to)?.l
+      return t('iniBreakdown.stateTransition', {
+        label: t(def.label),
+        from: fromKey ? t(fromKey) : line.from,
+        to:   toKey   ? t(toKey)   : line.to,
+      })
+    }
+    case 'move': {
+      const zone = MOVE_ZONE_DEFS.find(z => z.ini_mod === line.value)
+      return zone ? t('iniBreakdown.moveZone', { zone: t(zone.label).toLowerCase() }) : t('actionLabels.move')
+    }
+    case 'aim':      return t('iniBreakdown.aimedShot', { count: line.count })
+    case 'observer': return t('iniBreakdown.observe', { count: line.count })
+    case 'reperer':  return t('iniBreakdown.spot', { count: line.count })
+    case 'phrase':   return t('iniBreakdown.shortPhrase')
+    default:         return ''
+  }
+}
+
+// Détail INI client — retourne { label, value }[] (indicatif -- recalculé serveur). Le calcul des
+// valeurs est délégué à l'autorité partagée (shared/combatIniCost.js) ; ici on ne fait que traduire
+// chaque poste. Total et détail viennent donc du même calcul — pas de dérive possible.
+export function calcIniBreakdown(prevStates, nextStates, mapActions, quick, t) {
+  return iniDeltaBreakdown(toIniParams(prevStates, nextStates, mapActions, quick))
+    .map(line => ({ label: iniBreakdownLabel(line, t), value: line.value }))
+}
+
+// Delta INI total client (indicatif -- recalculé serveur) = somme du détail partagé.
+export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
+  return computeIniDelta(toIniParams(prevStates, nextStates, mapActions, quick))
 }
 
 // Actions sur la carte -- multi-selection

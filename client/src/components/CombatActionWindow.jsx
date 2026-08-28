@@ -22,12 +22,14 @@ import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/comb
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
+import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
@@ -122,7 +124,6 @@ export default function CombatActionWindow({
   // déclaration, mais chacun garde son propre état pour ne pas se réinitialiser l'un l'autre).
   const [isDualWieldMelee, setIsDualWieldMelee]             = useState(false)
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
-  const [iniPopoverOpen, setIniPopoverOpen]                 = useState(false)
 
   // --- roster PJ collapsible ------------------------------------------------
   const [rosterOpen, setRosterOpen] = useState(
@@ -136,11 +137,17 @@ export default function CombatActionWindow({
     720,
   )
 
+  // Drone : allures = sa Vitesse (m/Tour) servie par le serveur, jamais le calcAllures humanoïde
+  // ci-dessous (qui reçoit des NaN pour un drone : pas de char_sheet). Vitesse absente → bannière.
+  const { allures: droneAllures, error: droneAlluresError } = useDroneMovementBudget(
+    playerToken?.character_id ?? null, isDrone,
+  )
+
   const droneDeclare = useDroneDeclare({
     charId:           playerToken?.character_id ?? null,
     tokenId:          playerToken?.id ?? null,
     tokenPos:         playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
-    allures,
+    allures:          isDrone ? droneAllures : allures,
     onEnterMoveMode,
     onEnterTargetMode,
     // CLICKATTACK-TURNGATE1 — flag partagé par le survol et le clic-attaque du drone (useDroneDeclare) :
@@ -274,13 +281,14 @@ export default function CombatActionWindow({
     setSelectedMeleeNaturalWeaponId(null)
     setIsDualWieldMelee(false)
     setInMeleeTargetMode(false)
-    setIniPopoverOpen(false)
   }, [rosterEntry?.token_id, rosterEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- fetch allures — suit le token actif du joueur -----------------------
+  // --- fetch allures — suit le token actif du joueur (humanoïdes uniquement) ---
+  // Drone : allures servies par useDroneMovementBudget ci-dessus (Vitesse serveur), jamais ce calcul
+  // COO/Athlétisme qui recevait des NaN pour un drone (GET /char-sheet/:id renvoie sheet:null).
   useEffect(() => {
     const charId = playerToken?.character_id
-    if (!charId) return
+    if (!charId || isDrone) return
     let cancelled = false
     const load = async () => {
       try {
@@ -309,7 +317,7 @@ export default function CombatActionWindow({
     }
     load()
     return () => { cancelled = true }
-  }, [playerToken?.id])
+  }, [playerToken?.id, isDrone])
 
   // --- fetch blessures — Blessure mortelle bloque Attaque/CaC/Rechargement -
   // (WNDMORT-UI, docs/BUGIDENTIFIE.md) — même garde que le serveur (isTestBlockingWound), Déplacement
@@ -611,7 +619,7 @@ export default function CombatActionWindow({
       : null,
     reload: reloadSelected ? {} : null,
   }
-  const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick, t)
+  const iniDelta = calcIniDelta(initialStates.current, decl, mapActionsObj, decl.quick)
   const iniBreakdown = calcIniBreakdown(initialStates.current, decl, mapActionsObj, decl.quick, t)
 
   // Tir visé — éligibilité recalculée à chaque rendu, source unique shared/combatExclusiveActions.js
@@ -1378,49 +1386,32 @@ export default function CombatActionWindow({
 
       {/* ---- Footer ---- */}
       <div className="combat-float-footer">
+        {isDrone && droneAlluresError && (
+          <div style={{ fontSize: 10, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 3, padding: '4px 8px', marginBottom: 4 }}>
+            ⚠ {t('droneDeclare.movementUnavailable', { reason: droneAlluresError })}
+          </div>
+        )}
         {declareError && (
           <div style={{ fontSize: 10, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 3, padding: '4px 8px', marginBottom: 4 }}>
             ⚠ {declareError}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        {moveSelection && (
           <div style={W.footerLeft}>
-            <div style={{ position: 'relative' }}>
-              <span
-                style={{
-                  ...W.totalMod,
-                  color: iniDelta >= 0 ? '#3aaa6a' : (iniDelta < -10 ? '#c83030' : '#c86030'),
-                  cursor: iniDelta !== 0 ? 'pointer' : 'default',
-                }}
-                onClick={() => iniDelta !== 0 && setIniPopoverOpen(o => !o)}
-              >
-                INI : {iniDelta >= 0 ? `+${iniDelta}` : iniDelta}
-              </span>
-              {iniPopoverOpen && iniDelta !== 0 && (
-                <>
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 1998 }} onClick={() => setIniPopoverOpen(false)} />
-                  <div className="ini-popover">
-                    {iniBreakdown.map((l, i) => (
-                      <div key={i} className="ini-popover-line">
-                        <span className="ini-popover-label">{l.label}</span>
-                        <span className={l.value >= 0 ? 'ini-bd-pos' : 'ini-bd-neg'}>
-                          {l.value > 0 ? `+${l.value}` : l.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            {moveSelection && (
-              <span style={W.destination}>
-                [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
-              </span>
-            )}
+            <span style={W.destination}>
+              [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
+            </span>
           </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+          <CombatDeclareIniWidget
+            currentInitiative={rosterEntry.initiative}
+            delta={iniDelta}
+            breakdown={iniBreakdown}
+          />
           <button
             className="btn-tac"
-            style={{ opacity: canDeclare ? 1 : 0.4, cursor: canDeclare ? 'pointer' : 'not-allowed' }}
+            style={{ flex: 1, opacity: canDeclare ? 1 : 0.4, cursor: canDeclare ? 'pointer' : 'not-allowed' }}
             onClick={handleDeclare}
             disabled={!canDeclare}
           >
@@ -1515,11 +1506,6 @@ const W = {
     flexDirection: 'column',
     gap: 2,
     minWidth: 0,
-  },
-  totalMod: {
-    fontSize: 16,
-    fontWeight: 700,
-    fontFamily: 'monospace',
   },
   destination: {
     fontSize: 10,

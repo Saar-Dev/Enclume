@@ -65,7 +65,7 @@ import { getCampaignSettings } from '../../lib/campaignSettingsService.js'
 import { isExoActorAuthorized } from '../../lib/combatantContextService.js'
 import { applyExoAvarie, removeExoAvarie } from '../../lib/exoAvarieService.js'
 import { applyExoTemplate } from '../../lib/exoTemplateService.js'
-import { getCharacterMovementBudget } from '../../services/movementBudgetService.js'
+import { getCharacterMovementBudget, MovementBudgetError } from '../../services/movementBudgetService.js'
 import {
   EXO_AVARIE_SEVERITY_ORDER, EXO_CATEGORY_ORDER, EXO_ENVIRONMENT_VALUES, EXO_MOVEMENT_MODE_VALUES,
   EXO_COMPUTER_ROLE_VALUES,
@@ -2292,12 +2292,34 @@ router.delete('/:characterId/exo/systems/:systemId', async (req, res, next) => {
 // déplacement combat (PLAN_EXOARMURE.md §16.3). Le calcul VIT/3-modes (surface/sous-marine, délégation
 // au pilote, milieu bloqué) vit uniquement dans getExoMovementBudget (movementBudgetService.js) — ne
 // jamais le réimplémenter côté client (CLAUDE.md §7), cette route expose juste son résultat.
+// MovementBudgetError (exo non configurée) → 400 + message affichable, plus 500 opaque.
 router.get('/:characterId/exo/movement', async (req, res, next) => {
   try {
     const budget = await getCharacterMovementBudget(req.params.characterId, 'lente')
     res.json({ allures: budget.allures })
   } catch (err) {
-    if (err instanceof TypeError || err instanceof RangeError) return next(new AppError(400, err.message))
+    if (err instanceof MovementBudgetError || err instanceof TypeError || err instanceof RangeError) {
+      return next(new AppError(400, err.message))
+    }
+    next(err)
+  }
+})
+
+// GET /:characterId/drone/movement — Allures du drone pour le survol de déplacement combat. Un drone
+// n'a qu'une allure : sa Vitesse (drone_sheet.vitesse, en m/Tour) répliquée sur les 4 paliers
+// (getDroneMovementBudget, movementBudgetService.js — décision Saar 2026-08-28). Même forme et même
+// contrat que /exo/movement : lecture ouverte à tout membre de la campagne (router.param), la
+// Vitesse manquante renvoie 400 + message clair (jamais 500). Sans cette route, useDroneDeclare
+// recevait des allures fausses (DEFAULT_PNJ_ALLURES en dur pour le MJ, calcAllures(NaN) pour le PJ).
+router.get('/:characterId/drone/movement', async (req, res, next) => {
+  try {
+    if (req.character.type !== 'drone') throw new AppError(400, 'Ce personnage n’est pas un drone')
+    const budget = await getCharacterMovementBudget(req.params.characterId, 'moyenne')
+    res.json({ allures: budget.allures })
+  } catch (err) {
+    if (err instanceof MovementBudgetError || err instanceof TypeError || err instanceof RangeError) {
+      return next(new AppError(400, err.message))
+    }
     next(err)
   }
 })

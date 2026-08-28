@@ -7,6 +7,8 @@ import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useExoDeclare } from '../lib/useExoDeclare.js'
 import { firstFireMode } from '../../../shared/fireModes.js'
 import { useDraggable } from '../lib/useDraggable.js'
+import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
+import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import api from '../lib/api.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §8.5/§9 — fenêtre dédiée exo-armure, réutilisée à l'identique côté
@@ -209,6 +211,13 @@ export default function CombatExoActionWindow({
   // pas encore investiguée — à reprendre séparément si le besoin de masquage revient.
   const isSelectingOnMap = combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection
 
+  // Initiative projetée (pastille du pied, PLAN_RW_DECLARE_WINDOWS module 2). Une exo ne change pas
+  // d'état en déclaration (posture/arme/couverture) — seul le déplacement pèse aujourd'hui ; quand
+  // les sélecteurs d'état exo arriveront (ROADMAP §4), il suffira de les passer ici, le widget suit.
+  const exoMapActions = { move: moveSelection ? { ini_mod: moveSelection.ini_mod ?? 0 } : null }
+  const iniDelta     = calcIniDelta({}, {}, exoMapActions, null)
+  const iniBreakdown = calcIniBreakdown({}, {}, exoMapActions, null, t)
+
   return (
     <div className="combat-float-win" style={{
       position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
@@ -328,15 +337,20 @@ export default function CombatExoActionWindow({
         {declareError && (
           <div style={S.errorBanner}>⚠ {declareError}</div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        {moveSelection && (
           <div style={S.footerLeft}>
-            {moveSelection && (
-              <span style={S.destination}>[{moveSelection.targetPosX}, {moveSelection.targetPosY}]</span>
-            )}
+            <span style={S.destination}>[{moveSelection.targetPosX}, {moveSelection.targetPosY}]</span>
           </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+          <CombatDeclareIniWidget
+            currentInitiative={rosterEntry.initiative}
+            delta={iniDelta}
+            breakdown={iniBreakdown}
+          />
           <button
             className="btn-tac"
-            style={{ opacity: exoDeclare.canDeclare ? 1 : 0.4, cursor: exoDeclare.canDeclare ? 'pointer' : 'not-allowed' }}
+            style={{ flex: 1, opacity: exoDeclare.canDeclare ? 1 : 0.4, cursor: exoDeclare.canDeclare ? 'pointer' : 'not-allowed' }}
             onClick={handleDeclare}
             disabled={isDeclaring || !exoDeclare.canDeclare}
           >

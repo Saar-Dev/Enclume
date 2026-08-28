@@ -585,18 +585,35 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
         <div style={styles.moveLegend}>
           <div style={styles.moveLegendTitle}>{t('overlay.moveLegendTitle')}</div>
 
-          {MOVE_ZONE_DEFS.map(def => {
-            const dist  = combatMoveMode.allures?.[def.allureKey]
-            const iniStr = def.ini_mod > 0 ? `+${def.ini_mod}` : def.ini_mod === 0 ? '±0' : `${def.ini_mod}`
-            return (
-              <div key={def.action_key} style={styles.moveLegendRow}>
-                <span style={{ ...styles.moveLegendDot, background: def.color }} />
-                <span style={styles.moveLegendLabel}>{t(def.label)}</span>
-                <span style={styles.moveLegendDist}>≤ {dist} m</span>
-                <span style={styles.moveLegendIni}>{iniStr}</span>
-              </div>
-            )
-          })}
+          {(() => {
+            // Acteur à allure unique (drone : sa Vitesse répliquée sur les 4 paliers,
+            // movementBudgetService.js#buildDroneAllures) → une seule ligne « Déplacement max », pas
+            // 4 lignes identiques. Heuristique type-agnostique : les 4 allures sont égales.
+            const vals = MOVE_ZONE_DEFS.map(d => combatMoveMode.allures?.[d.allureKey])
+            const singleAllure = vals.every(v => Number.isFinite(v) && v === vals[0])
+            if (singleAllure) {
+              return (
+                <div style={styles.moveLegendRow}>
+                  <span style={{ ...styles.moveLegendDot, background: '#3b82f6' }} />
+                  <span style={styles.moveLegendLabel}>{t('moveZones.single')}</span>
+                  <span style={styles.moveLegendDist}>≤ {vals[0]} m</span>
+                  <span style={styles.moveLegendIni} />
+                </div>
+              )
+            }
+            return MOVE_ZONE_DEFS.map(def => {
+              const dist  = combatMoveMode.allures?.[def.allureKey]
+              const iniStr = def.ini_mod > 0 ? `+${def.ini_mod}` : def.ini_mod === 0 ? '±0' : `${def.ini_mod}`
+              return (
+                <div key={def.action_key} style={styles.moveLegendRow}>
+                  <span style={{ ...styles.moveLegendDot, background: def.color }} />
+                  <span style={styles.moveLegendLabel}>{t(def.label)}</span>
+                  <span style={styles.moveLegendDist}>≤ {dist} m</span>
+                  <span style={styles.moveLegendIni}>{iniStr}</span>
+                </div>
+              )
+            })
+          })()}
 
           {pendingMoveSelection && (
             <div style={styles.movePending}>

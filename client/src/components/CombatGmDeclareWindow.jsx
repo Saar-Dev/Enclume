@@ -20,10 +20,12 @@ import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
+import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
+import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 
 function nextKey(stateKey, currentKey, availableKeys) {
   const allStates = STATE_DEFS[stateKey].states
@@ -103,7 +105,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Arme naturelle (mutation PNJ) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B.
   const [selectedGmMeleeNaturalWeaponId, setSelectedGmMeleeNaturalWeaponId] = useState(null)
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
-  const [iniPopoverOpen, setIniPopoverOpen] = useState(false)
 
   const tokensRef = useRef(tokens)
   useEffect(() => { tokensRef.current = tokens }, [tokens])
@@ -196,7 +197,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setSelectedGmMeleeNaturalWeaponId(null)
     setIsDualWieldMelee(false)
     setIsSelectingOnMap(false)
-    setIniPopoverOpen(false)
   }, [activeTokenId, activePnjEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Écoute COMBAT_DECLARE_ERROR ──────────────────────────────────────────
@@ -230,11 +230,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // Token courant nécessaire ici (avant le retour anticipé plus bas, règle des hooks) — recalcul
   // léger, `activeToken` (dérivé plus tard) ne peut pas être réutilisé à ce point.
   const activeTokenForHover = activeTokenId ? tokens.find(tk => tk.id === activeTokenId) : null
+
+  // Drone : allures = sa Vitesse (m/Tour) servie par le serveur, jamais DEFAULT_PNJ_ALLURES en dur
+  // (fausses valeurs 4/8/16/24). Vitesse non renseignée sur la fiche → bannière explicite.
+  const { allures: droneAllures, error: droneAlluresError } = useDroneMovementBudget(
+    activeDroneCharId, isActiveDrone,
+  )
+
   const droneDeclare = useDroneDeclare({
     charId:           activeDroneCharId,
     tokenId:          activeTokenId,
     tokenPos:         activeTokenForHover ? { x: activeTokenForHover.pos_x, z: activeTokenForHover.pos_y } : null,
-    allures:          DEFAULT_PNJ_ALLURES,
+    allures:          activeDroneCharId ? droneAllures : DEFAULT_PNJ_ALLURES,
     onEnterMoveMode,
     onEnterTargetMode,
     // CLICKATTACK-TURNGATE1 (docs/BUGIDENTIFIE.md) — `isActiveDrone` (déjà la source unique "drone
@@ -360,7 +367,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       melee: meleeTargets.length > 0 ? meleeTargets : null,
     },
     decl.quick,
-    t,
   ) : 0
   const iniBreakdown = isActivePnj ? calcIniBreakdown(
     initialStates, decl,
@@ -961,7 +967,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 const tid     = entry.token_id
                 const isAct   = tid === activeTokenId && (isActivePnj || isActiveDrone)
                 const isDone  = entry.has_announced
-                const delta   = isDone ? null : (tid === activeTokenId ? iniDelta : null)
 
                 return (
                   <div key={tid}
@@ -984,11 +989,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                       {isRanged(tid) ? t('gmDeclareWindow.rangedTag') : (equipment[tid]?.weapon ? t('gmDeclareWindow.meleeTag') : '···')}
                     </span>
                     <span style={S.rosterIni}>{t('ini')} {entry.initiative}</span>
-                    {delta !== null && delta !== 0 && (
-                      <span style={{ ...S.rosterDelta, color: delta < 0 ? '#c86030' : '#3aaa6a' }}>
-                        →{entry.initiative + delta}
-                      </span>
-                    )}
                   </div>
                 )
               })}
@@ -1101,32 +1101,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
       {/* FOOTER */}
       <div className="combat-win-footer">
-        {iniDelta !== 0 && isActivePnj && (
-          <div style={{ position: 'relative' }}>
-            <div style={S.iniRow}>
-              <span style={S.iniLabel}>{t('gmDeclareWindow.iniTotalLabel')}</span>
-              <span
-                style={{ ...S.iniValue, color: iniDelta < -10 ? '#c83030' : (iniDelta < 0 ? '#c86030' : '#3aaa6a'), cursor: 'pointer' }}
-                onClick={() => setIniPopoverOpen(o => !o)}
-              >
-                {iniDelta > 0 ? `+${iniDelta}` : iniDelta}
-              </span>
-            </div>
-            {iniPopoverOpen && (
-              <>
-                <div style={{ position: 'fixed', inset: 0, zIndex: 1998 }} onClick={() => setIniPopoverOpen(false)} />
-                <div className="ini-popover">
-                  {iniBreakdown.map((l, i) => (
-                    <div key={i} className="ini-popover-line">
-                      <span className="ini-popover-label">{l.label}</span>
-                      <span className={l.value >= 0 ? 'ini-bd-pos' : 'ini-bd-neg'}>
-                        {l.value > 0 ? `+${l.value}` : l.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+        {isActiveDrone && droneAlluresError && (
+          <div style={{ fontSize: 9, color: '#c83030', background: 'rgba(200,48,48,0.08)', border: '1px solid #c8303044', borderRadius: 2, padding: '4px 8px', fontFamily: 'monospace' }}>
+            ⚠ {t('droneDeclare.movementUnavailable', { reason: droneAlluresError })}
           </div>
         )}
         {declareError && (
@@ -1134,13 +1111,23 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
             ⚠ {declareError}
           </div>
         )}
-        <button
-          className="btn-tac-confirm"
-          onClick={handleDeclare}
-          disabled={!canDeclare}
-        >
-          DÉCLARER
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+          {(isActivePnj || isActiveDrone) && (
+            <CombatDeclareIniWidget
+              currentInitiative={activePnjEntry.initiative}
+              delta={iniDelta}
+              breakdown={iniBreakdown}
+            />
+          )}
+          <button
+            className="btn-tac-confirm"
+            style={{ flex: 1 }}
+            onClick={handleDeclare}
+            disabled={!canDeclare}
+          >
+            DÉCLARER
+          </button>
+        </div>
       </div>
 
     </div>
@@ -1223,11 +1210,7 @@ const S = {
   rosterBadgeCct: { background: '#1e1a0a', color: '#aa8a30', border: '1px solid #5a4a1a' },
   rosterBadgeNone:{ background: '#0a0e14', color: '#3a4a5a', border: '1px solid #1a2030' },
   rosterIni: { fontSize: 9, color: '#456575', flexShrink: 0, fontFamily: 'monospace' },
-  rosterDelta: { fontSize: 9, flexShrink: 0, fontFamily: 'monospace', fontWeight: 700 },
 
-  iniRow: { display: 'flex', alignItems: 'center', gap: 8 },
-  iniLabel: { fontSize: 9, color: '#456575', letterSpacing: '0.12em', fontFamily: 'monospace', flex: 1 },
-  iniValue: { fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' },
   modeChip: { padding: '2px 7px', borderRadius: 2, cursor: 'pointer', border: '1px solid #1a3a2a', background: 'rgba(255,255,255,0.02)', fontSize: 9, color: '#5a7a5a', fontFamily: 'monospace' },
   modeChipActive: { border: '1px solid #50a870', background: 'rgba(80,168,112,0.15)', color: '#70c870', fontWeight: 700 },
   modeChipDefensif: { border: '1px solid #5b8dee', background: 'rgba(91,141,238,0.15)', color: '#8ab4f0', fontWeight: 700 },
