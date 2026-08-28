@@ -97,12 +97,16 @@ export function getAimIneligibilityReasons({ mapActions, state, quick, entry, is
   // Préconditions intrinsèques : arme déjà au clair + déjà en coup par coup AVANT ce tour.
   if (entry?.state_weapon !== 'drawn') reasons.push('arme pas encore au clair')
   if (entry?.state_fire_mode !== 'cc') reasons.push('pas encore en coup par coup')
-  // Aucune transition d'état ce tour, sur aucun état.
-  if (state?.position !== entry?.state_position) reasons.push('changement de posture')
-  if (state?.weapon !== entry?.state_weapon) reasons.push('changement d\'arme')
-  if (state?.fire_mode !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
-  if (state?.cover !== entry?.state_cover) reasons.push('changement de couverture')
-  if (state?.vitesse !== entry?.state_vitesse) reasons.push('changement de vitesse')
+  // Aucune transition d'état ce tour, sur aucun état. Un champ ABSENT du payload client = "inchangé"
+  // (`?? entry.state_*`), jamais une transition fantôme — même normalisation que la boucle STATE_COSTS
+  // serveur (`to = state[key] ?? from`). Corrige le blocage Tir visé signalé par Saar 2026-08-28 :
+  // les handleDeclare humanoïdes n'envoient pas `state.cover`, ce qui faisait `undefined !== 'exposed'`
+  // → "changement de couverture" systématique.
+  if ((state?.position ?? entry?.state_position) !== entry?.state_position) reasons.push('changement de posture')
+  if ((state?.weapon ?? entry?.state_weapon) !== entry?.state_weapon) reasons.push('changement d\'arme')
+  if ((state?.fire_mode ?? entry?.state_fire_mode) !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
+  if ((state?.cover ?? entry?.state_cover) !== entry?.state_cover) reasons.push('changement de couverture')
+  if ((state?.vitesse ?? entry?.state_vitesse) !== entry?.state_vitesse) reasons.push('changement de vitesse')
   // Aucune autre mapAction / quick action ce tour.
   if (mapActions?.move) reasons.push('déplacement')
   if (mapActions?.interact) reasons.push('interaction')
@@ -168,11 +172,13 @@ export function isExclusiveDeclaration({ mapActions, weaponCategory = null, weap
 export function getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry }) {
   const reasons = []
   if (Array.isArray(mapActions?.attack) && mapActions.attack.length > 1) reasons.push('tir multiple')
-  if (state?.position !== entry?.state_position) reasons.push('changement de posture')
-  if (state?.weapon !== entry?.state_weapon) reasons.push('changement d\'arme')
-  if (state?.fire_mode !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
-  if (state?.cover !== entry?.state_cover) reasons.push('changement de couverture')
-  if (state?.vitesse !== entry?.state_vitesse) reasons.push('changement de vitesse')
+  // Champ absent du payload = "inchangé" (`?? entry.state_*`), jamais une transition fantôme — même
+  // raison que dans getAimIneligibilityReasons (les handleDeclare humanoïdes n'envoient pas `cover`).
+  if ((state?.position ?? entry?.state_position) !== entry?.state_position) reasons.push('changement de posture')
+  if ((state?.weapon ?? entry?.state_weapon) !== entry?.state_weapon) reasons.push('changement d\'arme')
+  if ((state?.fire_mode ?? entry?.state_fire_mode) !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
+  if ((state?.cover ?? entry?.state_cover) !== entry?.state_cover) reasons.push('changement de couverture')
+  if ((state?.vitesse ?? entry?.state_vitesse) !== entry?.state_vitesse) reasons.push('changement de vitesse')
   if (mapActions?.move) reasons.push('déplacement')
   if (mapActions?.interact) reasons.push('interaction')
   if (mapActions?.reload) reasons.push('rechargement')

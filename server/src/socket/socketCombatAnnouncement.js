@@ -3,7 +3,7 @@ import db from '../db/knex.js'
 import { canTransition } from '../lib/combatFSM.js'
 import { skipPlayer, startResolutionPhase, forceAdvanceResolution } from './socketCombatHelpers.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { getAimBonusComp, getAimIniCost, isAimEligible, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { getAimBonusComp, getAimIniCost, getAimIneligibilityReasons, getLunetteNiveau, getExoStandUpIneligibilityReasons, isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { combatDestinationFromPayload, selectCombatMovementForCost } from '../../../shared/combatMovement.js'
 import { worldPointToDbPosition } from '../../../shared/world/worldMetrics.js'
@@ -481,18 +481,22 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
         const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
         if (movementDeclaration) iniDelta += freeMove ? 0 : movementDeclaration.initiativeModifier
-        // Tir visé — validé/recalculé serveur, jamais confiance au client. isAimEligible bloque
-        // déjà toute combinaison avec le CaC ou une transition d'état (règle "aucune autre action
-        // ce tour", isExclusiveDeclaration/shared/combatExclusiveActions.js reste disponible pour
-        // Charge/Rafale longue le jour où leur éligibilité, plus permissive, en aura besoin).
+        // Tir visé — validé/recalculé serveur, jamais confiance au client. getAimIneligibilityReasons
+        // bloque déjà toute combinaison avec le CaC ou une transition d'état (règle "aucune autre
+        // action ce tour"). DBG log + message = les raisons réelles (2026-08-28, remplace une chaîne
+        // fourre-tout) — sert aussi à diagnostiquer le blocage Tir visé signalé par Saar.
+        // NOTE : `state.cover` n'est PAS envoyé par les handleDeclare humanoïdes → `state.cover`
+        // undefined ≠ `entry.state_cover` → "changement de couverture" fantôme (bug à corriger par
+        // le module "action exclusive" unifié, cf. PLAN_RW_DECLARE_WINDOWS / discussion Saar).
         if (aimTranches > 0) {
-          const aimOk = isAimEligible({
+          const aimReasons = getAimIneligibilityReasons({
             mapActions, state, quick, entry,
             isDualWield: !!mapActions.attack[0]?.isDualWield,
             bulletCount: mapActions.attack[0]?.bulletCount ?? null,
           })
-          if (!aimOk) {
-            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Tir visé : aucune autre action ni transition d'état ce tour, arme déjà au clair, tir simple, une seule arme requise" })
+          if (aimReasons.length > 0) {
+            console.log(`[DBG] Tir visé refusé — reasons: ${JSON.stringify(aimReasons)} state:${JSON.stringify(state)} entry.state_*:${JSON.stringify({ position: entry.state_position, weapon: entry.state_weapon, fire_mode: entry.state_fire_mode, cover: entry.state_cover, vitesse: entry.state_vitesse })}`)
+            socket.emit(WS.COMBAT_DECLARE_ERROR, { message: `Tir visé impossible : ${aimReasons.join(', ')}` })
             return
           }
           const aimWeaponInvId = mapActions.attack[0]?.weaponInvId

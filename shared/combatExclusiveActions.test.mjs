@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   getExoStandUpIneligibilityReasons, isExoStandUpEligible,
   isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons, isAoeExclusiveEligible,
+  getAimIneligibilityReasons, isAimEligible,
 } from './combatExclusiveActions.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §9.2 — exclusivité tranchée par Saar (2026-08-18) : tenter de se
@@ -131,4 +132,78 @@ test('getAoeExclusiveIneligibilityReasons — tir multiple (Tir Multi) exclu ave
     state: {}, entry: {}, quick: {},
   })
   assert.deepEqual(reasons, ['tir multiple'])
+})
+
+// ─── getAimIneligibilityReasons — Tir visé (LdB p.227-228) ────────────────────────────────────────
+// Ajouté 2026-08-28 avec le correctif du blocage signalé par Saar : les handleDeclare humanoïdes
+// n'envoient pas `state.cover` → l'ancien `state.cover !== entry.state_cover` faisait
+// `undefined !== 'exposed'` → "changement de couverture" systématique. Un champ absent = "inchangé".
+
+const PNJ_ENTRY = {  // PNJ frais : arme au clair (COMBAT_START), reste au défaut
+  state_position: 'standing', state_weapon: 'drawn', state_fire_mode: 'cc',
+  state_cover: 'exposed', state_vitesse: 'normal',
+}
+
+test('getAimIneligibilityReasons — PNJ frais, payload sans `cover`, tir simple seul : éligible', () => {
+  const reasons = getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 2 }] },
+    // handleDeclare humanoïde : envoie position/weapon/fire_mode/vitesse, PAS cover
+    state: { position: 'standing', weapon: 'drawn', fire_mode: 'cc', vitesse: 'normal' },
+    quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1,
+  })
+  assert.deepEqual(reasons, [])
+  assert.equal(isAimEligible({
+    mapActions: { attack: [{ aimTranches: 2 }] },
+    state: { position: 'standing', weapon: 'drawn', fire_mode: 'cc', vitesse: 'normal' },
+    quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1,
+  }), true)
+})
+
+test('getAimIneligibilityReasons — vrai changement de posture : bloqué', () => {
+  const reasons = getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }] },
+    state: { position: 'crouching', weapon: 'drawn', fire_mode: 'cc', vitesse: 'normal' },
+    quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1,
+  })
+  assert.deepEqual(reasons, ['changement de posture'])
+})
+
+test('getAimIneligibilityReasons — vrai changement de couverture (si un jour envoyé) : bloqué', () => {
+  const reasons = getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }] },
+    state: { position: 'standing', weapon: 'drawn', fire_mode: 'cc', cover: 'important', vitesse: 'normal' },
+    quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1,
+  })
+  assert.deepEqual(reasons, ['changement de couverture'])
+})
+
+test('getAimIneligibilityReasons — préconditions : arme pas au clair / pas en CC AVANT ce tour', () => {
+  const reasons = getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }] },
+    state: { position: 'standing', weapon: 'holstered', fire_mode: 'rc', vitesse: 'normal' },
+    quick: {}, entry: { ...PNJ_ENTRY, state_weapon: 'holstered', state_fire_mode: 'rc' },
+    isDualWield: false, bulletCount: 1,
+  })
+  assert.ok(reasons.includes('arme pas encore au clair'))
+  assert.ok(reasons.includes('pas encore en coup par coup'))
+})
+
+test('getAimIneligibilityReasons — autres actions : tir multiple / déplacement / rafale / dual-wield', () => {
+  assert.ok(getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }, { aimTranches: 1 }] },
+    state: {}, quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1,
+  }).includes('tir multiple'))
+  assert.ok(getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }], move: { targetPosX: 1 } },
+    state: { position: 'standing', weapon: 'drawn', fire_mode: 'cc', vitesse: 'normal' },
+    quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1,
+  }).includes('déplacement'))
+  assert.ok(getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }] },
+    state: {}, quick: {}, entry: PNJ_ENTRY, isDualWield: true, bulletCount: 1,
+  }).includes('deux armes'))
+  assert.ok(getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }] },
+    state: {}, quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 3,
+  }).includes('tir non simple (répétition ou rafale)'))
 })
