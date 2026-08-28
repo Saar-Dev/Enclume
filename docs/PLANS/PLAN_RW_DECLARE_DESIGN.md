@@ -222,15 +222,39 @@ inchangée) ; `vite build` propre ×2. **Non testé** : parcours navigateur (val
 `feedback_batch_tests`). Pas de script de résolution i18next dans le repo — vérif manuelle : clés
 inchangées, `grep -i assaut combat.json` = vide.
 
-### 5.2 CHANTIER ISOLÉ (changement de comportement — sa propre analyse à charge)
+### 5.2 B5 — « Passer le tour » déclarable pour un humain — **CODÉ 2026-08-28**
 
-**B5 — « Passer le tour » toujours déclarable.** `canDeclare` (humain PJ **et** MJ) n'exige plus
-`stateChanged || hasAction` : un tour vide devient déclarable. Aligner exo (implicite → explicite via
-le pied D12). **Changement de comportement combat** `[VÉRIFIÉ]` (`CombatActionWindow` `canDeclare`
-l.642, `CombatGmDeclareWindow` l.415) — pas un nettoyage de texte, donc **sorti du lot B**. Cadrage +
-analyse à charge dédiés : quels effets serveur sur un `state:{}` / `mapActions:{}` (`socketCombatAnnouncement.js`
-laisse chaque `state_*` inchangé, `[VÉRIFIÉ]` via commentaire `CombatExoActionWindow.jsx:165`) ?
-non-régression du flux normal ? Indépendant du reste — peut se faire avant ou après le module 1.
+**Cadrage `[VÉRIFIÉ]`** : le serveur accepte déjà une déclaration vide — `socketCombatAnnouncement.js`
+l.67 `if (!tokenId || !state) return` (un objet `{}` passe), l.78-79 valide chaque clé d'état
+**seulement si présente**, puis pose `has_announced`. Le drone (`useDroneDeclare#hasPassed`) et l'exo
+(déclaration vide) le font déjà. Seul le **client** bloquait : `canDeclare` exigeait
+`hasAnyAction || stateChanged` (PJ, ex-l.642-644) / `stateChanged || hasAction` (MJ, ex-l.399-415).
+
+**Question de fond (Saar)** — « autoriser une déclaration vide, ou modéliser explicitement une action
+"ne rien faire" ? » → B5 = **le mécanisme** (débloquer `canDeclare`). Le **libellé explicite**
+« Passer le tour » (le joueur *veut* passer, pas un mis-clic sur « Déclarer ») = **D12 / module 5**
+(refonte du pied). Ajouter un swap de libellé maintenant = ré-introduire le code supprimé que le
+module 5 re-supprime — churn, écarté.
+
+**Fait** :
+- `CombatActionWindow.jsx` : `hasAnyAction` + `stateChanged` supprimés (seuls usages) ;
+  `canDeclare = isDrone ? droneDeclare.canDeclare : (assaultValid && reloadValid && meleeValid)`.
+  Une action de combat *incomplète* reste bloquée — `assaultValid`/`reloadValid`/`meleeValid` valent
+  `false` tant qu'une tuile sélectionnée n'est pas configurée.
+- `CombatGmDeclareWindow.jsx` : `stateChanged` + `hasAction` supprimés ; **`meleeValid` neuf** (miroir
+  d'`assaultValid` : un CaC en cours de configuration doit avoir une cible, ou être passif
+  Défensif/Retraite, ou une Charge avec cible) ; `canDeclare = (isActivePnj && assaultValid &&
+  meleeValid) || (isActiveDrone && droneDeclare.canDeclare)`.
+- Exo : rien à faire (déjà déclarable vide).
+
+**Coût intérimaire assumé** : le bouton « DÉCLARER L'ACTION » est actif dès l'ouverture de la fenêtre
+(rien de sélectionné). Un mis-clic passe le tour. Recouvrable (combat arbitré tour par tour par le
+MJ) ; le module 5 corrige le libellé.
+
+**Testé** : `vite build` propre ; `eslint` = **baseline exacte** (6 problèmes GM pré-existants
+inchangés, `CombatActionWindow` 0/0) ; résidus `hasAnyAction`/`hasAction`/`stateChanged` = 0 (hors
+1 mention en commentaire).
+**Non testé** : parcours navigateur (validation en bloc).
 
 ### 5.3 Module 1 — Tokens d'accent par famille (D3/D4) — **RE-CADRÉ round 4**
 
@@ -373,8 +397,8 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 
 1. **Lot B** — ✅ **codé 2026-08-28** : `combat.json` (B2 + B3 + B4) + `CombatGmDeclareWindow.jsx` (B1) +
    `socketCombatAnnouncement.js` (swap « Assaut » → « Tir »). Validation navigateur en bloc à venir.
-2. **B5** (chantier isolé) — cadrage + analyse à charge, puis code. Peut se faire en parallèle du
-   module 0 (fichiers différents).
+2. **B5** — ✅ **codé 2026-08-28** : `canDeclare` débloqué (PJ + MJ), `meleeValid` neuf côté MJ.
+   Libellé explicite « Passer le tour » = module 5.
 3. **Module 0** — extraire `buildDeclarePayload` / `useHumanDeclare` en modules purs `.mjs` + tests de
    caractérisation (golden master). Le filet.
 4. **Module 2** (chrome partagé + accent par famille + `--combat-exo-*`) → **3** (satellite) → **4**

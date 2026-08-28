@@ -396,23 +396,23 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   })
 
   // ── canDeclare ───────────────────────────────────────────────────────────
-  const stateChanged = isActivePnj && Object.keys(initialStates).some(k => decl[k] !== initialStates[k])
-  const hasAction    = isActivePnj && (
-    (assaultTargets.filter(Boolean).length >= effectiveAssaultCount && assaultTargets.length > 0) ||
-    (meleeTargets.length >= effectiveMeleeCount && !meleeDefensif) ||
-    meleeDefensif ||
-    !!pendingMove ||
-    !!chargeSelection?.targetTokenId ||
-    !!mapAction ||
-    decl.combatMode !== 'normal' ||
-    decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase
-  )
   // Si cible(s) d'assaut sélectionnée(s), un variant doit être configuré (+ Tir visé éligible si utilisé)
   const assaultValid = assaultTargets.length === 0 || (
     assaultTargets.slice(0, effectiveAssaultCount).filter(Boolean).length === effectiveAssaultCount &&
     currentVariant !== null && (aimTranches === 0 || aimIneligibilityReasons.length === 0)
   )
-  const canDeclare = (isActivePnj && (stateChanged || hasAction) && assaultValid) || (isActiveDrone && droneDeclare.canDeclare)
+  // Miroir d'assaultValid pour le CaC : un CaC en cours de configuration doit avoir une cible valide,
+  // ou être un mode passif (Défensif/Retraite), ou une Charge avec cible. (isMeleeSetup est défini
+  // plus bas pour le rendu ; sa condition est inlinée ici — mêmes variables, toutes déjà disponibles.)
+  const meleeValid = !(meleePendingMode || meleeTargets.length > 0 || !!chargeSelection)
+    || meleeDefensif
+    || chargeSelection?.targetTokenId != null
+    || meleeTargets.length >= effectiveMeleeCount
+  // B5 (docs/PLANS/PLAN_RW_DECLARE_DESIGN.md §5.2) — « Passer le tour » : un PNJ peut déclarer un tour
+  // vide, comme le drone et l'exo. Plus de gate `stateChanged || hasAction` ; seules les actions
+  // *incomplètes* bloquent (assaultValid / meleeValid). Le serveur pose has_announced sans toucher
+  // aux state_*. Libellé explicite « Passer le tour » du pied = module 5 (D12).
+  const canDeclare = (isActivePnj && assaultValid && meleeValid) || (isActiveDrone && droneDeclare.canDeclare)
 
   // ── Déplacement direct ───────────────────────────────────────────────────
   // ── Assaut direct (Tir Multi, docs/PLAN_TIRMULTI.md) ──────────────────────

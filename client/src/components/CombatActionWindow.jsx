@@ -633,15 +633,15 @@ export default function CombatActionWindow({
     meleeDefensif ||
     (meleePendingTokenIds.length >= effectiveMeleeCount && (decl.combatMode !== 'charge' || moveSelection != null))
   )
-  const hasAnyAction = mapSelected.size > 0 || moveSelection !== null
-    || decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase
-    || Object.keys(initialStates.current).some(k => decl[k] !== initialStates.current[k])
-
-  // Comparer états tactiques vs initial (P-R06-11 : Object.keys(initialStates.current) — 5 clés, pas 7)
-  const stateChanged = Object.keys(initialStates.current).some(k => decl[k] !== initialStates.current[k])
+  // B5 (docs/PLANS/PLAN_RW_DECLARE_DESIGN.md §5.2) — « Passer le tour » : un humain peut déclarer un
+  // tour vide (aucune action, aucun changement d'état), comme le drone (useDroneDeclare#hasPassed) et
+  // l'exo (déclaration vide). Le serveur laisse chaque state_* inchangé et pose has_announced
+  // (socketCombatAnnouncement.js). Une action de combat *incomplète* reste bloquée : assaultValid /
+  // reloadValid / meleeValid valent false tant qu'une tuile Attaque/CaC/Rechargement sélectionnée
+  // n'est pas configurée. Le libellé explicite « Passer le tour » du pied = module 5 (D12).
   const canDeclare = isDrone
     ? droneDeclare.canDeclare
-    : ((hasAnyAction || stateChanged) && assaultValid && reloadValid && meleeValid)
+    : (assaultValid && reloadValid && meleeValid)
 
   // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
