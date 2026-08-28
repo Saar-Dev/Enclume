@@ -69,12 +69,20 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         }
         // Le pré-vol COMBAT_ACTION_PRECHECK est automatique et silencieux — le joueur n'a rien
         // déclenché. Hors des sous-états transitoires ci-dessus, une garde FSM qui échoue est presque
-        // toujours une course bénigne de fin de tour (le client interroge une fraction de seconde
-        // après que le serveur a quitté la Résolution — ANNONCE-PRECHECK-STALE1). Étape 1 : message
-        // chat compréhensible + détail technique (phase / sous-état / token / action) dans les logs
-        // pour diagnostiquer une éventuelle vraie occurrence. Étape 2 fera taire le cas bénin connu ;
-        // ceci reste le filet lisible pour un état imprévu.
-        console.warn(`[PRECHECK] garde FSM hors état — phase:${state?.phase ?? 'null'} sous-état:${state?.sub_phase ?? 'null'} token:${tokenId} action:${actionKey}`)
+        // toujours une course bénigne de fin de tour (ANNONCE-PRECHECK-STALE1).
+        //
+        // Étape 2 — cas bénin connu : le serveur a déjà quitté la Résolution (endTurn → ANNOUNCEMENT,
+        // ou combat terminé → ROSTER/null). Le client a interrogé une fraction de seconde trop tard
+        // (COMBAT_ATTACK_RESULT reçu, mais pas encore COMBAT_PHASE_CHANGED) puis se remet à jour tout
+        // seul. Aucun message chat : juste une trace de diagnostic.
+        if (state?.phase !== 'RESOLUTION') {
+          console.warn(`[PRECHECK] course fin de tour ignorée — phase:${state?.phase ?? 'null'} token:${tokenId} action:${actionKey}`)
+          return callback({ ok: false })
+        }
+        // Étape 1 — filet lisible : réellement en Résolution mais dans un sous-état inattendu
+        // (RESOLUTION|null transitoire pendant endTurn, ou incohérence à instrumenter). Détail
+        // technique dans les logs, message compréhensible en chat.
+        console.warn(`[PRECHECK] garde FSM hors état — phase:${state?.phase} sous-état:${state?.sub_phase ?? 'null'} token:${tokenId} action:${actionKey}`)
         socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Le combat a changé d'état pendant la préparation de l'action — réessaie." })
         return callback({ ok: false })
       }
