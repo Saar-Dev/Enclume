@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
-import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
+import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer'
 import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import {
@@ -11,7 +11,7 @@ import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import {
   STATE_DEFS, MAP_ACTIONS, QUICK_ACTIONS,
-  stateTransitionCost, calcIniDelta, calcIniBreakdown,
+  calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
@@ -27,52 +27,7 @@ import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
-
-// ---------------------------------------------------------------------------
-// Composant StateSelector
-// Affiche un segmented control pour un etat avec cout de transition visible.
-// ---------------------------------------------------------------------------
-// stateKey (ex. "position"/"vitesse"/"weapon") passé par tous les appelants mais jamais consommé ici
-// — def encode déjà tout ce dont le rendu a besoin (label, options). Appelants inchangés.
-export function StateSelector({ def, current, initial, onChange, disabled, availableKeys, highlightKey }) {
-  const { t } = useTranslation('combat')
-  return (
-    <div style={ss.row}>
-      <span style={ss.label}>{t(def.label)}</span>
-      <div style={ss.seg}>
-        {def.states.map(opt => {
-          const isActive      = opt.k === current
-          const isDisabled    = disabled || (availableKeys && !availableKeys.includes(opt.k))
-          const isHighlighted = !isActive && !isDisabled && opt.k === highlightKey
-          const cost          = stateTransitionCost(def, initial, opt.k)
-          const costStr       = cost === 0 ? null : cost > 0 ? `+${cost}` : `${cost}`
-          return (
-            <div
-              key={opt.k}
-              onClick={() => !isDisabled && !isActive && onChange(opt.k)}
-              style={{
-                ...ss.segOpt,
-                ...(isActive      ? ss.segOptActive   : {}),
-                ...(isDisabled    ? ss.segOptDisabled  : {}),
-                ...(isHighlighted ? { borderColor: '#5b8dee', color: '#5b8dee' } : {}),
-              }}
-            >
-              <span style={ss.segOptLabel}>{t(opt.l)}</span>
-              {costStr && !isActive && (
-                <span style={{ ...ss.segCost, color: cost > 0 ? '#3aaa6a' : '#c86030' }}>
-                  {costStr}
-                </span>
-              )}
-              {isActive && opt.k === initial && (
-                <span style={ss.segCostCurrent}>{t('stateSelector.currentBadge')}</span>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
@@ -129,7 +84,8 @@ export default function CombatActionWindow({
 
   // --- etats tactiques partagés (useReducer) --------------------------------
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
-  const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour
+  const prevHasAnnouncedRef    = useRef(false)  // détection nouveau tour (has_announced true→false)
+  const prevTokenRef           = useRef(null)   // détection changement de slot actif
   const [declareError, setDeclareError] = useState(null)
   const [mortallyWounded, setMortallyWounded] = useState(false)
 
@@ -280,30 +236,46 @@ export default function CombatActionWindow({
     cover:     'exposed',
     vitesse:   'normal',
   })
+  // Reset complet de la déclaration — au changement de slot actif (`token_id`) OU au nouveau tour
+  // (`has_announced` true→false, `endTurn` a remis state_position/cover/vitesse/combat_mode aux
+  // défauts côté serveur). Un seul effet consolidé : avant le 2026-08-28 il y en avait deux
+  // divergents (l'un sur token_id re-seedait tout, l'autre sur has_announced ne remettait que
+  // combatMode+quick et ne touchait pas `initialStates`), d'où le bug Tir visé (transition d'état
+  // fantôme au tour suivant). La liste de reset ci-dessous est désormais complète — des carry-overs
+  // latents entre tours (aimTranches, aimedLocation, meleeCount…) disparaissent aussi.
   useEffect(() => {
+    const isAnnounced = rosterEntry?.has_announced ?? false
+    const wasAnnounced = prevHasAnnouncedRef.current
+    prevHasAnnouncedRef.current = isAnnounced
+    const tokenChanged = prevTokenRef.current !== (rosterEntry?.token_id ?? null)
+    prevTokenRef.current = rosterEntry?.token_id ?? null
+
     if (!rosterEntry) return
-    const snap = {
-      position:  rosterEntry.state_position  || 'standing',
-      weapon:    rosterEntry.state_weapon    || 'holstered',
-      fire_mode: rosterEntry.state_fire_mode || 'cc',
-      cover:     rosterEntry.state_cover     || 'exposed',
-      vitesse:   rosterEntry.state_vitesse   || 'normal',
-    }
+    if (!tokenChanged && !(wasAnnounced && !isAnnounced)) return
+
+    const snap = snapFromRosterEntry(rosterEntry)
     initialStates.current = snap
-    dispatch({ type: 'RESET', payload: { ...snap } })
+    dispatch({ type: 'RESET', payload: snap })
     setMapSelected(new Set())
     setAssaultPendingTokenIds([])
     setAssaultCount(1)
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setIsDualWield(false)
+    setAimTranches(0)
+    setAimedLocation(null)
     setMoveSelection(null)
+    setInMoveMode(false)
+    setInTargetMode(false)
     setSelectedAmmoId(null)
     setMeleePendingTokenIds([])
+    setMeleeCount(1)
     setSelectedMeleeWeaponId(undefined)
+    setSelectedMeleeNaturalWeaponId(null)
+    setIsDualWieldMelee(false)
     setInMeleeTargetMode(false)
     setIniPopoverOpen(false)
-  }, [rosterEntry?.token_id])
+  }, [rosterEntry?.token_id, rosterEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- fetch allures — suit le token actif du joueur -----------------------
   useEffect(() => {
@@ -363,27 +335,7 @@ export default function CombatActionWindow({
     return () => socket.off(WS.COMBAT_DECLARE_ERROR, handler)
   }, [socket])
 
-  // --- reset sélections au nouveau tour (has_announced true → false) --------
-  useEffect(() => {
-    if (!rosterEntry) return
-    const wasAnnounced = prevHasAnnouncedRef.current
-    const isAnnounced  = rosterEntry.has_announced ?? false
-    prevHasAnnouncedRef.current = isAnnounced
-    if (wasAnnounced && !isAnnounced) {
-      dispatch({ type: 'RESET_NEW_TURN' })
-      setMapSelected(new Set())
-      setAssaultPendingTokenIds([])
-      setAssaultBulletCount(null)
-      setAssaultVariantAB('A')
-      setIsDualWield(false)
-      setMoveSelection(null)
-      setSelectedAmmoId(null)
-      setMeleePendingTokenIds([])
-      setSelectedMeleeWeaponId(undefined)
-      setIsDualWieldMelee(false)
-      setInMeleeTargetMode(false)
-    }
-  }, [rosterEntry?.has_announced])
+  // (reset au nouveau tour : fusionné dans l'effet de reset consolidé plus haut, 2026-08-28)
 
   // --- fetch armes equipees + inventaire complet (humanoïdes uniquement) ----
   useEffect(() => {
@@ -480,7 +432,7 @@ export default function CombatActionWindow({
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
 
-  // Modes disponibles pour le StateSelector fire_mode
+  // Modes disponibles pour le CombatDeclareStateSelector fire_mode
   const availableFireModes = forceCC
     ? ['cc']
     : selectedWeapon
@@ -1024,14 +976,14 @@ export default function CombatActionWindow({
           <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
             <div style={W.sectionTitle}>{t('gmDeclareWindow.tacticSection')}</div>
             {!isDrone && (
-              <StateSelector
+              <CombatDeclareStateSelector
                 stateKey="position" def={STATE_DEFS.position}
                 current={decl.position} initial={initialStates.current.position}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })}
               />
             )}
             {!isDrone && (
-              <StateSelector
+              <CombatDeclareStateSelector
                 stateKey="vitesse" def={STATE_DEFS.vitesse}
                 current={decl.vitesse} initial={initialStates.current.vitesse}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
@@ -1062,14 +1014,14 @@ export default function CombatActionWindow({
                 </div>
                 )
               })()}
-              <StateSelector
+              <CombatDeclareStateSelector
                 stateKey="weapon" def={STATE_DEFS.weapon}
                 current={decl.weapon} initial={initialStates.current.weapon}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'weapon', value: v })}
                 disabled={weaponLocked}
                 highlightKey={decl.weapon !== 'drawn' ? 'drawn' : undefined}
               />
-              <StateSelector
+              <CombatDeclareStateSelector
                 stateKey="fire_mode" def={STATE_DEFS.fire_mode}
                 current={decl.fire_mode} initial={initialStates.current.fire_mode}
                 onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
@@ -1478,65 +1430,6 @@ export default function CombatActionWindow({
       </div>
     </div>
   )
-}
-
-// ===========================================================================
-// Styles StateSelector
-// ===========================================================================
-const ss = {
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '3px 10px',
-    gap: 6,
-  },
-  label: {
-    fontSize: 8,
-    color: '#456575',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    flexShrink: 0,
-    width: 76,
-  },
-  seg: {
-    display: 'flex',
-    flex: 1,
-    background: 'var(--combat-seg-bg)',
-    border: '1px solid var(--combat-seg-border)',
-  },
-  segOpt: {
-    flex: 1,
-    padding: '4px 6px',
-    textAlign: 'center',
-    cursor: 'pointer',
-    border: '1px solid transparent',
-    transition: 'all 0.1s',
-  },
-  segOptActive: {
-    background: 'var(--combat-seg-active)',
-    borderColor: '#3a8aaa66',
-  },
-  segOptDisabled: {
-    opacity: 0.3,
-    cursor: 'not-allowed',
-  },
-  segOptLabel: {
-    fontSize: 9,
-    color: '#dde7ee',
-    display: 'block',
-    fontWeight: 500,
-  },
-  segCost: {
-    fontSize: 7,
-    display: 'block',
-    marginTop: 1,
-  },
-  segCostCurrent: {
-    fontSize: 7,
-    color: 'var(--combat-title)',
-    display: 'block',
-    marginTop: 1,
-  },
 }
 
 // ===========================================================================

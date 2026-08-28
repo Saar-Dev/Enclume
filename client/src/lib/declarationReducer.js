@@ -11,6 +11,21 @@ export const DECLARATION_INITIAL = {
   quick: { observer: 0, reperer: 0, phrase: false },
 }
 
+// Instantané de l'état tactique persisté sur `combat_roster`, utilisé comme `payload` de `RESET`
+// au changement de token ET au nouveau tour. Le serveur (`endTurn`) remet
+// `state_position/cover/vitesse/combat_mode` aux défauts entre les tours — le client doit suivre,
+// sinon une transition d'état fantôme fait rejeter le Tir visé et gonfle le coût d'Initiative.
+// `weapon`/`fire_mode` ne sont PAS reset par `endTurn` : la valeur persistée est la bonne.
+export function snapFromRosterEntry(entry) {
+  return {
+    position:  entry?.state_position  || 'standing',
+    weapon:    entry?.state_weapon    || 'holstered',
+    fire_mode: entry?.state_fire_mode || 'cc',
+    cover:     entry?.state_cover     || 'exposed',
+    vitesse:   entry?.state_vitesse   || 'normal',
+  }
+}
+
 /**
  * @param {object} state
  * @param {{ type: string, [key: string]: any }} action
@@ -35,16 +50,13 @@ export function declarationReducer(state, action) {
     case 'SELECT_ATTACK':
       return { ...state, weapon: 'drawn' }
 
-    // Reset complet sur changement de slot.
-    // action.payload = { position, weapon, fire_mode, cover, vitesse } depuis rosterEntry.
-    // Fusionne avec DECLARATION_INITIAL pour remettre combatMode et quick à zéro.
+    // Reset complet — au changement de slot ET au nouveau tour (même sémantique : re-seeder
+    // l'état tactique depuis le roster serveur). `action.payload` = `snapFromRosterEntry(entry)`.
+    // Fusionne avec DECLARATION_INITIAL pour remettre combatMode + quick à zéro.
+    // (Anciennement deux actions : `RESET_NEW_TURN` ne remettait que combatMode+quick, ce qui
+    // laissait posture/couverture/vitesse périmées après un tour — bug Tir visé, corrigé 2026-08-28.)
     case 'RESET':
       return { ...DECLARATION_INITIAL, ...action.payload }
-
-    // Reset partiel nouveau tour (has_announced → false sans changement de token_id).
-    // Remet uniquement quick + combatMode à zéro — NE touche PAS position/weapon/etc.
-    case 'RESET_NEW_TURN':
-      return { ...state, combatMode: 'normal', quick: { observer: 0, reperer: 0, phrase: false } }
 
     default:
       return state

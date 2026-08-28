@@ -18,23 +18,12 @@ import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
-import { declarationReducer, DECLARATION_INITIAL } from '../lib/declarationReducer'
+import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
-import { StateSelector } from './CombatActionWindow.jsx'
-
-// ---------------------------------------------------------------------------
-// Etat par défaut (= DEFAULT colonne DB)
-// ---------------------------------------------------------------------------
-const STATE_DEFAULTS = {
-  position:  'standing',
-  weapon:    'holstered',
-  fire_mode: 'cc',
-  cover:     'exposed',
-  vitesse:   'normal',
-}
+import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 
 function nextKey(stateKey, currentKey, availableKeys) {
   const allStates = STATE_DEFS[stateKey].states
@@ -145,27 +134,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     return () => { isMountedRef.current = false }
   }, [])
 
-  // ── Reset complet quand le slot actif change ─────────────────────────────
-  useEffect(() => {
-    dispatch({ type: 'RESET', payload: { ...initialStates } })
-    setMapAction(null)
-    setMeleeAttackCount(1)
-    setMeleePendingMode(false)
-    setPendingMove(null)
-    setAssaultTargets([])
-    setAssaultCount(1)
-    setMeleeTargets([])
-    setChargeSelection(null)
-    setAssaultBulletCount(null)
-    setAssaultVariantAB('A')
-    setIsDualWield(false)
-    setAimTranches(0)
-    setAimedLocation(null)
-    setSelectedGmMeleeWeaponId(undefined)
-    setIsDualWieldMelee(false)
-    setIsSelectingOnMap(false)
-    setIniPopoverOpen(false)
-  }, [activeTokenId])
+  const prevHasAnnouncedRef = useRef(false)  // détection nouveau tour (has_announced true→false)
+  const prevTokenRef        = useRef(null)   // détection changement de slot actif
+
+  // (reset consolidé : déclaré plus bas, après `activePnjEntry`/`initialStates`)
 
   // Sync states initiaux depuis rosterEntry
   const activePnjEntry = activeTokenId ? roster.find(r => r.token_id === activeTokenId) : null
@@ -190,15 +162,42 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const isActivePnj   = activePnjEntry && isPnj(activePnjEntry)           && !activePnjEntry.has_announced
   const isActiveDrone = activePnjEntry && isDroneGmManaged(activePnjEntry) && !activePnjEntry.has_announced
 
-  const initialStates = activePnjEntry
-    ? {
-        position:  activePnjEntry.state_position  ?? 'standing',
-        weapon:    activePnjEntry.state_weapon    ?? 'holstered',
-        fire_mode: activePnjEntry.state_fire_mode ?? 'cc',
-        cover:     activePnjEntry.state_cover     ?? 'exposed',
-        vitesse:   activePnjEntry.state_vitesse   ?? 'normal',
-      }
-    : { ...STATE_DEFAULTS }
+  const initialStates = snapFromRosterEntry(activePnjEntry)
+
+  // ── Reset complet de la déclaration — au changement de slot actif OU au nouveau tour
+  // (`has_announced` true→false : `endTurn` a remis state_position/cover/vitesse/combat_mode aux
+  // défauts côté serveur, le client doit suivre — sinon transition d'état fantôme, bug Tir visé
+  // corrigé 2026-08-28). Avant : un seul effet sur `[activeTokenId]` qui ne re-firait pas quand le
+  // 1er PNJ non déclaré du nouveau tour était le même token.
+  useEffect(() => {
+    const isAnnounced = activePnjEntry?.has_announced ?? false
+    const wasAnnounced = prevHasAnnouncedRef.current
+    prevHasAnnouncedRef.current = isAnnounced
+    const tokenChanged = prevTokenRef.current !== (activeTokenId ?? null)
+    prevTokenRef.current = activeTokenId ?? null
+
+    if (!tokenChanged && !(wasAnnounced && !isAnnounced)) return
+
+    dispatch({ type: 'RESET', payload: initialStates })
+    setMapAction(null)
+    setMeleeAttackCount(1)
+    setMeleePendingMode(false)
+    setPendingMove(null)
+    setAssaultTargets([])
+    setAssaultCount(1)
+    setMeleeTargets([])
+    setChargeSelection(null)
+    setAssaultBulletCount(null)
+    setAssaultVariantAB('A')
+    setIsDualWield(false)
+    setAimTranches(0)
+    setAimedLocation(null)
+    setSelectedGmMeleeWeaponId(undefined)
+    setSelectedGmMeleeNaturalWeaponId(null)
+    setIsDualWieldMelee(false)
+    setIsSelectingOnMap(false)
+    setIniPopoverOpen(false)
+  }, [activeTokenId, activePnjEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Écoute COMBAT_DECLARE_ERROR ──────────────────────────────────────────
   useEffect(() => {
@@ -651,9 +650,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 </div>
                 {/* Retarder/Précipiter — segmented control (pas la puce à cycle : Session 158, retour
                     Saar « pas de bouton pour Action retardée pour les PNJ » — la puce à cycle masquait
-                    les 3 choix derrière des clics successifs sans repère visuel, StateSelector montre
-                    les 3 en même temps comme côté joueur). */}
-                <StateSelector
+                    les 3 choix derrière des clics successifs sans repère visuel, CombatDeclareStateSelector
+                    montre les 3 en même temps comme côté joueur). */}
+                <CombatDeclareStateSelector
                   stateKey="vitesse" def={STATE_DEFS.vitesse}
                   current={decl.vitesse} initial={initialStates.vitesse}
                   onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
