@@ -21,6 +21,10 @@
 > sont entièrement construits et seedés. Les mécaniques d'Incident/Réparation/pression environnementale
 > (MANUEL §4.9-§4.12) sont écrites en RAW mais **non codées** — signalé explicitement à chaque section
 > concernée, jamais omis silencieusement.
+>
+> 2026-08-28 — §5 : précision sur le découplage coût d'Initiative (à la déclaration) / écriture de
+> `state_position` (à la Résolution du Test) pour `exo_stand_up` ; comportement conforme RAW +
+> PLAN_EXOARMURE.md §9.2, non un coût parasite (faux positif de triage écarté).
 
 ---
 
@@ -266,6 +270,15 @@ Manœuvre d'armure pour se relever (`state_position==='prone'`) — auto-résolu
 `forNAOverride: exf`), modificateur de catégorie depuis `EXO_PRONE_RECOVERY_TABLE`
 (`shared/exoConstants.js`). Enregistrée dans la FSM combat comme `combat_actions.type='exo_stand_up'`
 (`127_combat_actions_constraints.js`, pas "migration 249" — voir §2).
+
+**Coût d'Initiative vs écriture de position — découplés (PLAN_EXOARMURE.md §9.2).** À la déclaration
+(`socketCombatAnnouncement.js`) le -10 de la transition `prone→*` (`POSITION_TRANSITION_COST`) est
+compté immédiatement dans `iniDelta` — il modélise le temps physique de la *tentative*, indépendant
+de son issue (RAW LdB p.221 « Se relever Init. -10 »). Seule l'écriture de `combat_roster.state_position`
+attend le Test : `resolvedPosition` reste `prone` à la déclaration, puis `resolveExoStandUpAction`
+écrit la position visée **uniquement si le Test réussit** et ne retouche jamais `initiative` (donc
+le -10 n'est jamais compté deux fois). Un Test raté = l'exo reste `prone` en ayant dépensé le -10 :
+c'est voulu, pas un coût parasite.
 
 ### Tir et Corps à corps (PLAN_EXOARMURE.md §16.3/§16.4, 2026-08-26/27)
 

@@ -496,6 +496,13 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const to   = state[key] ?? from
           iniDelta += transitionCost(STATE_COSTS[key], from, to)
         }
+        // Exo « se relever » (isExoStandUpAttempt, défini plus bas) : le coût de transition de
+        // position (prone→standing/crouching/kneeling : -10) est compté ICI volontairement, même si
+        // `resolvedPosition` (~l.800) garde `prone` jusqu'à la Résolution du Test. Ce -10 modélise le
+        // temps physique de la *tentative*, indépendant de son issue (RAW LdB p.221 « Se relever
+        // Init. -10 » ; PLAN_EXOARMURE.md §9.2). Seule l'écriture de `state_position` est différée,
+        // pas le coût — `resolveExoStandUpAction` (socketCombatHelpers.js) ne retouche jamais
+        // `initiative`, donc le -10 n'est compté qu'une fois.
         // Charge/Retraite : déplacement gratuit — override ini_mod serveur (non trusté client)
         const freeMove = (state.combat_mode === 'charge' || state.combat_mode === 'retraite') && !!mapActions?.move
         if (movementDeclaration) iniDelta += freeMove ? 0 : movementDeclaration.initiativeModifier
@@ -797,6 +804,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
       // state_position ici : elle reste 'prone' (valeur inchangée d'entry) jusqu'à la Résolution du
       // Test (resolveExoStandUpAction, socketCombatHelpers.js). La position visée par le joueur voyage
       // dans la ligne combat_actions ci-dessus (modifiers.targetPosition), pas ici.
+      // NB : `iniDelta` a en revanche DÉJÀ compté le -10 de la transition prone→* (boucle STATE_COSTS
+      // plus haut) — voulu, cf. commentaire là-bas : le coût suit la tentative, pas son issue.
       const resolvedPosition = isExoStandUpAttempt ? entry.state_position : (state.position ?? entry.state_position)
       const resolvedWeapon   = state.weapon   ?? entry.state_weapon
       const [updated] = await db.transaction(async (trx) => {
