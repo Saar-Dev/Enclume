@@ -17,7 +17,13 @@ export const SETTINGS_SCHEMA = {
   skill_natural_prog:    { type: 'boolean', default: false },
   young_penalty:         { type: 'boolean', default: false },
   celebrity:             { type: 'boolean', default: false },
-  pnj_unlimited_ammo:    { type: 'boolean', default: true },
+  // Défaut passé `true` → `false` (demande Saar 2026-08-28) : les PNJ suivent leurs munitions comme
+  // un PJ par défaut. Départ assumé de la convention « garder le défaut aligné sur le comportement
+  // existant » (cf. status_effects_mode / encumbrance_enabled) : une campagne sans réglage explicite
+  // passe donc au suivi. Impact réel limité — `hasEnoughAmmo` (shared/ammoRules.js) rend `true` dès
+  // que `ammo_remaining` est NULL (arme PNJ non initialisée), seuls les PNJ à munitions explicitement
+  // renseignées sont désormais limités.
+  pnj_unlimited_ammo:    { type: 'boolean', default: false },
   reload_mode:           { type: 'string',  default: 'magazine', enum: ['magazine', 'topup'] },
   action_timer_sec:      { type: 'number',  default: 0 },
   shock_auto_stun:       { type: 'boolean', default: true },

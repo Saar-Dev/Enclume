@@ -27,9 +27,9 @@ test('mergeWithDefaults — clé parasite (schéma passé, JSONB jamais purgé) 
 })
 
 test('mergeWithDefaults — falsy valide (false) sur une clé dont le défaut est true reste false (piège ?? vs ||)', () => {
-  // shock_auto_stun/pnj_unlimited_ammo ont un défaut `true` — si le code utilisait `||` au lieu de
+  // shock_auto_stun/random_mutations ont un défaut `true` — si le code utilisait `||` au lieu de
   // `??`, ce test échouerait (false || true → true, silencieusement écrasé).
-  const merged = mergeWithDefaults({ shock_auto_stun: false, pnj_unlimited_ammo: false })
+  const merged = mergeWithDefaults({ shock_auto_stun: false, random_mutations: false })
   assert.equal(merged.shock_auto_stun, false)
-  assert.equal(merged.pnj_unlimited_ammo, false)
+  assert.equal(merged.random_mutations, false)
 })

@@ -6,7 +6,7 @@ import { sharedStyles as styles } from './sharedStyles'
 export default function SectionGameRules({ initialData, onChange }) {
   const { t } = useTranslation()
 
-  const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(initialData.pnj_unlimited_ammo ?? true)
+  const [pnjUnlimitedAmmo, setPnjUnlimitedAmmo] = useState(initialData.pnj_unlimited_ammo ?? false)
   const [reloadMode, setReloadMode] = useState(initialData.reload_mode ?? 'magazine')
   const [actionTimerSec, setActionTimerSec] = useState(initialData.action_timer_sec ?? 0)
   const [shockAutoStun, setShockAutoStun] = useState(initialData.shock_auto_stun ?? true)
