@@ -31,6 +31,7 @@ import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
+import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
 
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
@@ -658,62 +659,20 @@ export default function CombatActionWindow({
       return
     }
 
-    socket.emit(WS.COMBAT_ACTION_DECLARE, {
+    // Assemblage du payload : fonction pure testée (module 0, docs/PLANS/PLAN_RW_DECLARE_DESIGN.md
+    // §5.4). La fenêtre rassemble ses sélections dans un bag plat ; buildHumanDeclarePayload le
+    // transforme en payload COMBAT_ACTION_DECLARE. Golden master : client/src/lib/buildDeclarePayload.test.mjs.
+    socket.emit(WS.COMBAT_ACTION_DECLARE, buildHumanDeclarePayload({
       tokenId: playerToken.id,
-      state: {
-        position:    decl.position,
-        weapon:      decl.weapon,
-        fire_mode:   decl.fire_mode,
-        vitesse:     decl.vitesse,
-        combat_mode: decl.combatMode,
-      },
-      mapActions: {
-        move:   moveSelection
-          ? { targetPosX: moveSelection.targetPosX, targetPosY: moveSelection.targetPosY,
-              targetPosZ: moveSelection.targetPosZ ?? 0,
-              // Charge/Retraite : déplacement gratuit → ini_mod forcé à 0 côté client (confirmé serveur)
-              ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod,
-              action_key: moveSelection.action_key }
-          : null,
-        // Tir Multi (docs/PLAN_TIRMULTI.md) : array d'1 à 3 tirs, même arme pour toute la série (D9)
-        // — seule la cible varie par élément.
-        attack: attackSelected
-          ? assaultPendingTokenIds.slice(0, effectiveAssaultCount).map(targetTokenId => ({
-              weaponInvId:        assaultWeaponId,
-              // Main non directrice (COM29) — seulement si le dual-wield est effectivement actif
-              // (mêmes conditions que isDualWield ci-dessous) ; weaponMg = main non directrice quand
-              // hasTwoWeapons (resolveHandWeapons : primaryWeapon = weaponMd en dual-wield MG+MD).
-              offhandWeaponInvId: (isDualWield && hasTwoWeapons && sameFirMode) ? (weaponMg?.id ?? null) : null,
-              targetTokenId,
-              bulletCount:        currentVariant?.bulletCount ?? null,
-              fireModeBonusComp:  currentVariant ? (currentVariant.bonusComp + dualWieldBonusComp) : null,
-              fireModeBonusDmg:   currentVariant?.bonusDmg ?? null,
-              isDualWield:        isDualWield && hasTwoWeapons && sameFirMode,
-              dualWieldBonusComp: dualWieldBonusComp,
-              aimTranches:        aimTranches,
-              aimedLocation:      aimedLocation,
-            }))
-          : null,
-        // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode
-        melee:    (meleeSelected && !meleeDefensif)
-          ? meleePendingTokenIds.slice(0, effectiveMeleeCount).map(id => ({
-              targetTokenId: id,
-              weaponInvId:   effectiveMeleeWeaponId,
-              naturalWeaponCharMutationId: effectiveMeleeNaturalWeaponId,
-              // Combat à deux armes (COM24) — même patron que offhandWeaponInvId/isDualWield du Tir
-              // ci-dessus, jamais fait confiance sans revalidation serveur (socketCombatAnnouncement.js).
-              offhandWeaponInvId: effectiveDualWieldMelee ? (meleeOffhandWeapon?.id ?? null) : null,
-              isDualWield:        effectiveDualWieldMelee,
-            }))
-          : null,
-        reload:   reloadSelected ? { weapon_inv_id: selectedWeapon?.id ?? null, ammo_item_id: selectedAmmoId } : false,
-      },
-      quick: {
-        observer: decl.quick.observer,
-        reperer:  decl.quick.reperer,
-        phrase:   decl.quick.phrase,
-      },
-    })
+      decl,
+      moveSelection,
+      attackSelected, assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
+      isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
+      aimTranches, aimedLocation,
+      meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount,
+      effectiveMeleeWeaponId, effectiveMeleeNaturalWeaponId, effectiveDualWieldMelee, meleeOffhandWeapon,
+      reloadSelected, selectedWeapon, selectedAmmoId,
+    }))
   }
 
   // =========================================================================
