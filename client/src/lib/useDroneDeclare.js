@@ -3,6 +3,7 @@ import api from './api.js'
 import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { useAutoMoveMode } from './useAutoMoveMode.js'
 import { useCombatClickAttack } from './useCombatClickAttack.js'
+import { buildDroneMapActions } from './buildDeclarePayload.js'
 
 export function useDroneDeclare({
   charId, tokenId, tokenPos, allures, onEnterMoveMode, onEnterTargetMode,
@@ -113,32 +114,12 @@ export function useDroneDeclare({
     rearmMove()
   }, [pendingMove, rearmMove])
 
-  // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE
-  const buildMapActions = useCallback(() => {
-    const hasAttack = !!selectedDroneWeaponId && !!assaultTargetId
-    const weapon    = hasAttack ? droneWeapons.find(w => w.id === selectedDroneWeaponId) : null
-    const explicitFm    = weapon?.fire_mode
-    const isCaC         = explicitFm ? explicitFm === 'cc' : !weapon?.ref_fire_mode
-    const stateFireMode = hasAttack ? (isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()) : 'cc'
-    // mapActions.attack est toujours un array (docs/PLAN_TIRMULTI.md D1, contrat unique côté serveur)
-    // — un drone reste hors scope Tir Multi (D6), donc toujours longueur 1 ici.
-    const attackPayload = hasAttack
-      ? (isCaC
-          ? { melee: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId }] }
-          : { attack: [{ droneWeaponInvId: selectedDroneWeaponId, targetTokenId: assaultTargetId }] })
-      : {}
-    return {
-      stateFireMode,
-      mapActions: {
-        move: pendingMove
-          ? { targetPosX: pendingMove.targetPosX, targetPosY: pendingMove.targetPosY,
-              targetPosZ: pendingMove.targetPosZ ?? 0, ini_mod: pendingMove.ini_mod ?? 0,
-              action_key: pendingMove.action_key }
-          : null,
-        ...attackPayload,
-      },
-    }
-  }, [selectedDroneWeaponId, assaultTargetId, droneWeapons, pendingMove])
+  // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE — cœur pur testé
+  // (client/src/lib/buildDeclarePayload.js, module 0 M0.3).
+  const buildMapActions = useCallback(
+    () => buildDroneMapActions({ selectedDroneWeaponId, assaultTargetId, droneWeapons, pendingMove }),
+    [selectedDroneWeaponId, assaultTargetId, droneWeapons, pendingMove],
+  )
 
   // Exposé tel quel aux appelants (nom stable) — combine ciblage explicite ET sélection de
   // déplacement en attente de validation, mêmes deux raisons qui masquaient la fenêtre avant

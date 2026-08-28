@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import api from './api.js'
 import { resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { useCombatClickAttack } from './useCombatClickAttack.js'
+import { buildExoMapActions } from './buildDeclarePayload.js'
 
 // PLAN_EXOARMURE.md §16.4 — Tir/CaC exo, mirroir useDroneDeclare.js (même structure : fetch armes,
 // ciblage par clic direct + tuile "Choisir une cible" explicite, buildMapActions). Le déplacement
@@ -94,16 +95,12 @@ export function useExoDeclare({
     setAssaultTargetId(null)
   }, [])
 
-  // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE — même contrat que
-  // useDroneDeclare#buildMapActions, exoWeaponInvId à la place de droneWeaponInvId.
-  const buildMapActions = useCallback(() => {
-    if (!selectedExoWeaponId || !assaultTargetId) return {}
-    const weapon = exoWeapons.find(w => w.id === selectedExoWeaponId)
-    const isCaC = weapon?.ref_category === 'Arme de contact'
-    return isCaC
-      ? { melee: [{ exoWeaponInvId: selectedExoWeaponId, targetTokenId: assaultTargetId }] }
-      : { attack: [{ exoWeaponInvId: selectedExoWeaponId, targetTokenId: assaultTargetId }] }
-  }, [selectedExoWeaponId, assaultTargetId, exoWeapons])
+  // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE — cœur pur testé
+  // (client/src/lib/buildDeclarePayload.js, module 0 M0.3).
+  const buildMapActions = useCallback(
+    () => buildExoMapActions({ selectedExoWeaponId, assaultTargetId, exoWeapons }),
+    [selectedExoWeaponId, assaultTargetId, exoWeapons],
+  )
 
   return {
     exoWeapons, selectedExoWeaponId, selectWeapon,

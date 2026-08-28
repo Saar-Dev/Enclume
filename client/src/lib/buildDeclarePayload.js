@@ -137,3 +137,47 @@ export function buildGmDeclarePayload(sel) {
     quick: { ...sel.decl.quick },
   }
 }
+
+// --- Drone — cœur pur de useDroneDeclare#buildMapActions ------------------------------------------
+// Retourne { stateFireMode, mapActions } ; les fenêtres l'enveloppent dans state:{position:'standing',
+// weapon:'holstered', fire_mode: stateFireMode, cover:'exposed', vitesse:'normal'}. Un drone est hors
+// scope Tir Multi (D6) → attack toujours de longueur 1.
+export function buildDroneMapActions(sel) {
+  const hasAttack = !!sel.selectedDroneWeaponId && !!sel.assaultTargetId
+  const weapon    = hasAttack ? sel.droneWeapons.find(w => w.id === sel.selectedDroneWeaponId) : null
+  const explicitFm    = weapon?.fire_mode
+  const isCaC         = explicitFm ? explicitFm === 'cc' : !weapon?.ref_fire_mode
+  const stateFireMode = hasAttack ? (isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()) : 'cc'
+  const attackPayload = hasAttack
+    ? (isCaC
+        ? { melee: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] }
+        : { attack: [{ droneWeaponInvId: sel.selectedDroneWeaponId, targetTokenId: sel.assaultTargetId }] })
+    : {}
+  return {
+    stateFireMode,
+    mapActions: {
+      move: sel.pendingMove
+        ? {
+            targetPosX: sel.pendingMove.targetPosX,
+            targetPosY: sel.pendingMove.targetPosY,
+            targetPosZ: sel.pendingMove.targetPosZ ?? 0,
+            ini_mod:    sel.pendingMove.ini_mod ?? 0,
+            action_key: sel.pendingMove.action_key,
+          }
+        : null,
+      ...attackPayload,
+    },
+  }
+}
+
+// --- Exo — cœur pur de useExoDeclare#buildMapActions ---------------------------------------------
+// Une exo-armure : une seule attaque par Tour (RAW), pas de Tir Multi ni de deux armes → array de
+// longueur 1. `ref_category === 'Arme de contact'` = autorité serveur pour CaC (jamais fire_mode nul).
+export function buildExoMapActions(sel) {
+  if (!sel.selectedExoWeaponId || !sel.assaultTargetId) return {}
+  const weapon = sel.exoWeapons.find(w => w.id === sel.selectedExoWeaponId)
+  const isCaC = weapon?.ref_category === 'Arme de contact'
+  return isCaC
+    ? { melee: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: sel.assaultTargetId }] }
+    : { attack: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: sel.assaultTargetId }] }
+}

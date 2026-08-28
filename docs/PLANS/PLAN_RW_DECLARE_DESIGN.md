@@ -298,10 +298,14 @@ Méthode (golden master / characterization, pratique pro documentée — sources
 | **M0.0** | Script `npm test` (`node --test` glob `shared/` + `client/src/` + `server/src/`) — le projet a ~98 `*.test.mjs` et aucune commande pour les lancer en bloc. `package.json`. | ✅ **codé 2026-08-28** — 1001 → 1022 tests, 0 fail |
 | **M0.1** | `client/src/lib/buildDeclarePayload.js` (`buildHumanDeclarePayload`, pur) — extraction **verbatim** de `CombatActionWindow.jsx#handleDeclare` branche non-drone ; `handleDeclare` rassemble un bag plat et appelle la fonction. `+ buildDeclarePayload.test.mjs` : **21 tests de caractérisation** (tour vide, Tir simple/Multi/visé/dual-wield/sans variant, CaC/naturelle/défensif/dual-wield, rechargement, déplacement normal/Charge/Retraite/sans Z, actions rapides, état tactique). | ✅ **codé 2026-08-28** — 21/21, build propre, eslint baseline inchangée |
 | **M0.2** | `buildGmDeclarePayload` — extraction **verbatim** de `CombatGmDeclareWindow.jsx#handleDeclare` branche PNJ. Différences légitimes vs PJ préservées et testées (`fireModeBonus*` par défaut `0` vs `null` ; `move` brut sans forçage `ini_mod` ; `weapon.inv_id`). `+ 16 tests`. | ✅ **codé 2026-08-28** — 37/37 total, npm test 1038/0 fail, eslint GM 2→2 (baseline) |
-| **M0.3** | Idem drone (`useDroneDeclare#buildMapActions`) + exo (`useExoDeclare#buildMapActions`) : extraire la part pure, tests. | à faire |
-| **M0.4** | Le payload est verrouillé → `useHumanDeclare(mode: 'pj' \| 'gm-pnj')` (PO6, la « vraie cible » de `PLAN_RW_DECLARE_WINDOWS` module 6) s'extrait en petits pas, tests verts après chaque pas. | à faire (peut aussi être le cadrage du module 4) |
+| **M0.3** | `buildDroneMapActions` + `buildExoMapActions` — cœurs purs extraits verbatim de `useDroneDeclare` / `useExoDeclare` `#buildMapActions` (les hooks deviennent des wrappers `useCallback`). `+ 14 tests` (logique fire_mode drone, CaC vs Tir par `ref_category` exo, déplacement, quirks figés). | ✅ **codé 2026-08-28** — 51/51 total, npm test 1052/0 fail |
+| **M0.4** | Le payload est verrouillé (**51 tests de caractérisation, 4 familles**) → `useHumanDeclare(mode: 'pj' \| 'gm-pnj')` (PO6, la « vraie cible » de `PLAN_RW_DECLARE_WINDOWS` module 6) s'extrait en petits pas, tests verts après chaque pas. | à faire — cadrage + analyse à charge dédiés (peut se fondre dans le cadrage du module 4) |
 
-Modules 2-5 (refonte visuelle) ne touchent alors **que du JSX/layout** — le golden master attrape
+**Jalon M0.1-M0.3 (2026-08-28)** : le payload `COMBAT_ACTION_DECLARE` des 4 familles (PJ / PNJ / drone /
+exo) est extrait en `client/src/lib/buildDeclarePayload.js` et couvert par **51 tests de
+caractérisation** figés sur le comportement actuel. Les modules 2-3 (chrome, satellite) ne touchent
+que du layout → le golden master casse si le payload bouge. Modules 2-5 (refonte visuelle) ne touchent
+alors **que du JSX/layout** — le golden master attrape
    toute régression de payload.
 
 Aggradation **permanente** : le chemin de déclaration de combat devient testable pour de bon, pas

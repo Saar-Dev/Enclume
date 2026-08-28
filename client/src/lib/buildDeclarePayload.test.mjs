@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildHumanDeclarePayload, buildGmDeclarePayload } from './buildDeclarePayload.js'
+import {
+  buildHumanDeclarePayload, buildGmDeclarePayload,
+  buildDroneMapActions, buildExoMapActions,
+} from './buildDeclarePayload.js'
 
 // Golden master — fige l'assemblage du payload COMBAT_ACTION_DECLARE (humain/PJ) tel que
 // CombatActionWindow.jsx#handleDeclare le produisait avant l'extraction (module 0,
@@ -375,4 +378,121 @@ test('GM — état tactique changé PNJ', () => {
   assert.deepEqual(p.state, {
     position: 'kneeling', weapon: 'ready', fire_mode: 'rc', vitesse: 'delayed', combat_mode: 'normal',
   })
+})
+
+// ─── Drone (buildDroneMapActions) ────────────────────────────────────────────
+const droneSel = (over = {}) => ({
+  selectedDroneWeaponId: null, assaultTargetId: null, droneWeapons: [], pendingMove: null, ...over,
+})
+
+test('drone — rien : stateFireMode cc, move null', () => {
+  assert.deepEqual(buildDroneMapActions(droneSel()), {
+    stateFireMode: 'cc',
+    mapActions: { move: null },
+  })
+})
+
+test('drone — Tir (arme à feu, ref_fire_mode RC) → stateFireMode rc, attack', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
+    droneWeapons: [{ id: 'w1', ref_fire_mode: 'RC' }],
+  }))
+  assert.equal(r.stateFireMode, 'rc')
+  assert.deepEqual(r.mapActions, { move: null, attack: [{ droneWeaponInvId: 'w1', targetTokenId: 'e1' }] })
+})
+
+test('drone — CaC (arme sans ref_fire_mode) → stateFireMode cc, melee', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1', droneWeapons: [{ id: 'w1' }],
+  }))
+  assert.equal(r.stateFireMode, 'cc')
+  assert.deepEqual(r.mapActions, { move: null, melee: [{ droneWeaponInvId: 'w1', targetTokenId: 'e1' }] })
+})
+
+test('drone — fire_mode explicite "cc" → CaC même si ref_fire_mode présent', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
+    droneWeapons: [{ id: 'w1', fire_mode: 'cc', ref_fire_mode: 'RC' }],
+  }))
+  assert.equal(r.stateFireMode, 'cc')
+  assert.ok('melee' in r.mapActions)
+})
+
+test('drone — fire_mode explicite "RL" → stateFireMode rl, attack', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
+    droneWeapons: [{ id: 'w1', fire_mode: 'RL' }],
+  }))
+  assert.equal(r.stateFireMode, 'rl')
+  assert.ok('attack' in r.mapActions)
+})
+
+test('drone — déplacement (move complet, pas d\'attaque)', () => {
+  const r = buildDroneMapActions(droneSel({
+    pendingMove: { targetPosX: 2, targetPosY: 3, targetPosZ: 0, ini_mod: -5, action_key: 'move_moyenne' },
+  }))
+  assert.deepEqual(r.mapActions, {
+    move: { targetPosX: 2, targetPosY: 3, targetPosZ: 0, ini_mod: -5, action_key: 'move_moyenne' },
+  })
+})
+
+test('drone — déplacement + Tir', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1', droneWeapons: [{ id: 'w1', ref_fire_mode: 'RC' }],
+    pendingMove: { targetPosX: 1, targetPosY: 1, ini_mod: -3, action_key: 'move_lente' },
+  }))
+  assert.ok(r.mapActions.move)
+  assert.deepEqual(r.mapActions.attack, [{ droneWeaponInvId: 'w1', targetTokenId: 'e1' }])
+})
+
+test('drone — pendingMove ini_mod/targetPosZ absents → 0', () => {
+  const r = buildDroneMapActions(droneSel({
+    pendingMove: { targetPosX: 1, targetPosY: 1, action_key: 'x' },
+  }))
+  assert.equal(r.mapActions.move.ini_mod, 0)
+  assert.equal(r.mapActions.move.targetPosZ, 0)
+})
+
+test('drone — arme introuvable dans la liste → traité comme CaC (quirk figé)', () => {
+  const r = buildDroneMapActions(droneSel({
+    selectedDroneWeaponId: 'ghost', assaultTargetId: 'e1', droneWeapons: [],
+  }))
+  assert.equal(r.stateFireMode, 'cc')
+  assert.ok('melee' in r.mapActions)
+})
+
+// ─── Exo (buildExoMapActions) ────────────────────────────────────────────────
+const exoSel = (over = {}) => ({
+  selectedExoWeaponId: null, assaultTargetId: null, exoWeapons: [], ...over,
+})
+
+test('exo — rien sélectionné → {}', () => {
+  assert.deepEqual(buildExoMapActions(exoSel()), {})
+})
+
+test('exo — arme sélectionnée sans cible → {}', () => {
+  assert.deepEqual(buildExoMapActions(exoSel({ selectedExoWeaponId: 'w1' })), {})
+})
+
+test('exo — Tir (arme à distance)', () => {
+  const r = buildExoMapActions(exoSel({
+    selectedExoWeaponId: 'w1', assaultTargetId: 'e1',
+    exoWeapons: [{ id: 'w1', ref_category: 'Fusil' }],
+  }))
+  assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'w1', targetTokenId: 'e1' }] })
+})
+
+test('exo — CaC (Arme de contact)', () => {
+  const r = buildExoMapActions(exoSel({
+    selectedExoWeaponId: 'w1', assaultTargetId: 'e1',
+    exoWeapons: [{ id: 'w1', ref_category: 'Arme de contact' }],
+  }))
+  assert.deepEqual(r, { melee: [{ exoWeaponInvId: 'w1', targetTokenId: 'e1' }] })
+})
+
+test('exo — arme introuvable → Tir par défaut (isCaC false)', () => {
+  const r = buildExoMapActions(exoSel({
+    selectedExoWeaponId: 'ghost', assaultTargetId: 'e1', exoWeapons: [],
+  }))
+  assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'ghost', targetTokenId: 'e1' }] })
 })
