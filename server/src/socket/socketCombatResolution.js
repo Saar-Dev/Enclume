@@ -67,9 +67,15 @@ export function registerResolutionHandlers(io, socket, context, pendingMaps) {
         if (state?.sub_phase === 'AWAITING_DAMAGE' || state?.sub_phase === 'AWAITING_DEFENSE') {
           return callback({ awaiting: true })
         }
-        // Message précis par sous-état plutôt qu'un « non autorisé » générique (retour Saar, Session
-        // 158 — « dès qu'un truc marche pas, le système doit dire pourquoi »).
-        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: `Action non autorisée dans cet état de combat (phase:${state?.phase ?? '?'}, sous-état:${state?.sub_phase ?? '?'})` })
+        // Le pré-vol COMBAT_ACTION_PRECHECK est automatique et silencieux — le joueur n'a rien
+        // déclenché. Hors des sous-états transitoires ci-dessus, une garde FSM qui échoue est presque
+        // toujours une course bénigne de fin de tour (le client interroge une fraction de seconde
+        // après que le serveur a quitté la Résolution — ANNONCE-PRECHECK-STALE1). Étape 1 : message
+        // chat compréhensible + détail technique (phase / sous-état / token / action) dans les logs
+        // pour diagnostiquer une éventuelle vraie occurrence. Étape 2 fera taire le cas bénin connu ;
+        // ceci reste le filet lisible pour un état imprévu.
+        console.warn(`[PRECHECK] garde FSM hors état — phase:${state?.phase ?? 'null'} sous-état:${state?.sub_phase ?? 'null'} token:${tokenId} action:${actionKey}`)
+        socket.emit(WS.COMBAT_DECLARE_ERROR, { message: "Le combat a changé d'état pendant la préparation de l'action — réessaie." })
         return callback({ ok: false })
       }
       // 2. Guard stun — avant tout check LOS/range (STUN2)
