@@ -1,20 +1,27 @@
 # PLAN_RW_DECLARE_WINDOWS — Rework des fenêtres de déclaration de combat
 
-> **Version** : v2 — 2026-08-27, révisée 2026-08-28 : **modules 1 + §5bis + 2 FAITS et validés** ;
-> décisions de scope post-module 2 (§5 : module 5 annulé, 6 différé, 4/7 sur mérite au point formel
-> après le 3 ; « 1 + §5bis + 2 + 3 » = arrêt propre possible). Décisions D4/D7/D8/D9-D12. Conception
-> refaite depuis zéro après abandon de la v1 (lecture incomplète). Suit `docs/METHODO_PLAN.md`.
-> **Méthode : alternance** — planification détaillée d'un module puis code puis validation puis suivant.
+> **CLOS 2026-08-28 — archivé.** Livré : **1 + §5bis + 2 + 3 + 7**, tous validés navigateur.
+> Modules **5 annulé** (B5 — familles CSS `combat-float-*` / `combat-win-*` réellement différentes,
+> attend une passe design), **6 différé** (pas d'infra de test composant — `useHumanDeclare` sans
+> tests de caractérisation = bug de combat garanti), **4 non fait** (`usePersistedToggle` :
+> 2 consommateurs, gain de robustesse théorique pour ce déploiement — n'aggrade pas assez).
+>
+> **Définitif dans** : `docs/SYSTEME/REACT.md` **P58** (briques `CombatDeclare*`) +
+> `docs/SYSTEME/COMBAT_FLUX.md` § « Calcul delta initiative » (`shared/combatIniCost.js`) +
+> `docs/SYSTEME/COMBAT.md` § « Fenêtres de déclaration ». Index : `CONVENTIONS.md` §19 P58.
+>
+> Ce document reste comme **journal de conception** du chantier (l'alternance plan → analyse à
+> charge → code → validation, module par module) ; il ne fait plus autorité.
+>
+> ---
+>
+> **Version** : v2 — 2026-08-27, révisée 2026-08-28. Conception refaite depuis zéro après abandon de
+> la v1 (lecture incomplète). Suit `docs/METHODO_PLAN.md`.
 >
 > **Responsabilité unique** (Règle 1) : stratégie de refactoring **client** des fenêtres de
-> déclaration d'action en phase ANNONCE. **Ne décrit aucune** règle métier de combat
-> (`docs/SYSTEME/COMBAT.md`, `docs/SYSTEME/COMBAT_FLUX.md`, `docs/REGLES/REGLESYSCOMBAT.md`), aucun
-> schéma DB, aucun événement WebSocket — aucun n'est modifié par ce chantier.
->
-> **Statut courant** : `docs/ROADMAP.md` (jamais dupliqué ici, Règle 2).
->
-> **Devient définitif dans** : `docs/SYSTEME/REACT.md` (patron « briques de déclaration partagées »)
-> une fois le chantier livré ; ce PLAN est alors archivé (Règle 10).
+> déclaration d'action en phase ANNONCE. Le périmètre « robuste » du module 2 a **dérogé** à ce point
+> (extraction `shared/combatIniCost.js` + swap serveur `socketCombatAnnouncement.js`, iso-comportement,
+> zéro changement de payload/règle — décision D9).
 
 ---
 
@@ -143,8 +150,7 @@ de montage). Docs : `COMBAT.md` (§ flux client), `COMBAT_FLUX.md`, `SERVICES_CO
 > périmètre élargi « robuste » : a aussi extrait `shared/combatIniCost.js`, dédupliqué
 > `combatSections`/`socketCombatAnnouncement`, et branché la pastille dans les 3 pieds de fenêtre) →
 > **3 ✅** (bannière de refus de déclaration centralisée P57 + finitions module 2) → **POINT FORMEL**
-> → **7 ✅** (`InlineChip` → `CombatDeclareStateChip` + API `CombatDeclareState*` unifiée — code fait,
-> validation navigateur Saar en attente).
+> → **7 ✅** (`InlineChip` → `CombatDeclareStateChip` + API `CombatDeclareState*` unifiée) → **CLOS**.
 >
 > **Décisions de scope (Saar 2026-08-28)** — critère unique : est-ce que ça aggrade le projet ?
 > - **Module 5** (`CombatDeclareFrame`) : **annulé** — les deux familles CSS (`combat-float-*` /
@@ -154,9 +160,13 @@ de montage). Docs : `COMBAT.md` (§ flux client), `COMBAT_FLUX.md`, `SERVICES_CO
 > - **Module 7** : **fait** — aggrade (famille cohérente, `nextKey` sous test, brique prête pour les
 >   sélecteurs d'état exo à venir ; faire l'extraction maintenant, isolée, plutôt que plus tard dans
 >   la feature exo).
-> - **Module 4 (`CombatDeclareRoster`)** : décidé sur mérite au point formel. Le vrai gain caché =
->   extraire `usePersistedToggle(storageKey)` (le pattern `useState(() => localStorage.getItem(…))` +
->   `setItem` recopié ~6× dans l'app) ; **pas** un `<CombatDeclareRoster>` unique (piège B4 : rosters
+> - **Module 4** : **non fait**. Après recherche : le pattern « toggle persisté » n'est recopié qu'à
+>   **2 endroits** (`pj-roster-open` / `gm-roster-open`), pas ~6 — les autres usages `localStorage`
+>   (accordéon `CharacterSheet` = map JSON, `changelog_last_seen` = marqueur string, `dice-presets` =
+>   tableau) sont d'autres formes. Un `usePersistedToggle` à 2 consommateurs + un gain de robustesse
+>   (garde `try/catch`) théorique pour ce déploiement (VTT de table, personne ne joue en navigation
+>   privée) — n'aggrade sur aucun des axes qui justifiaient le 7 (pas de famille, pas de test possible,
+>   pas de feature planifiée qui en a besoin). `<CombatDeclareRoster>` unique = piège B4 (rosters
 >   MJ/joueur réellement différents, l'exo ne contrôle qu'un token).
 >
 > Raison du changement d'ordre initial : le cadrage du module 6 (voir sa section) a
@@ -332,12 +342,17 @@ est séquentielle → un seul slot est correct.
 
 ---
 
-### Module 4 — `CombatDeclareRoster.jsx` — **différé au point formel post-module 3** (décidé sur mérite ; tester l'hypothèse B4 « 1 roster pour 3 » avant tout code)
+### Module 4 — `CombatDeclareRoster.jsx` — **NON FAIT (Saar 2026-08-28)** — n'aggrade pas assez (cf. §5 : analyse à charge, 2 consommateurs, gain de robustesse théorique). Section conservée pour le raisonnement.
 
 **Problème** : liste repliable des tokens contrôlés + Initiative/token — dupliquée joueur
 (`CombatActionWindow.jsx:836-876`) / MJ (`CombatGmDeclareWindow.jsx:~940-997`), **absente de l'exo**.
 Différences : joueur = mes tokens seulement ; MJ = tous les PNJ gérés + badge arme (RC/CC/···) +
 `→ projeté` sur l'actif. Clé localStorage différente.
+
+**Verdict au point formel** : le seul morceau **sainement** partageable était le toggle repliable
+persisté (`usePersistedToggle`) — 2 consommateurs, code trivial, gain de robustesse (garde
+`try/catch` sur `localStorage`) sans impact réel pour un VTT de table. Le rendu des rosters reste
+légitimement différent (B4). Bilan : n'aggrade sur aucun axe qui justifiait le module 7. **Écarté.**
 
 **Cible** : `client/src/components/CombatDeclareRoster.jsx` :
 - Props : `entries` (pré-filtrées par l'appelant), `tokens`, `activeTokenId`, `storageKey`,

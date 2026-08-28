@@ -1428,6 +1428,22 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 { socket, user, characters, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, onEnterTargetMode }
 ```
 
+### Fenêtres de déclaration (phase ANNONCE) — briques partagées
+
+3 orchestrateurs séparés (`CombatActionWindow` PJ/drone-PJ multi-phases, `CombatGmDeclareWindow` MJ,
+`CombatExoActionWindow` exo) — fusion rejetée (REWORK-05). Détail du patron, des briques
+`CombatDeclare*` et des règles : **`REACT.md` P58**.
+
+Côté modèle / calcul (ce qui concerne ce document) :
+- `client/src/components/combatSections.js` — `STATE_DEFS`, `nextKey`, `stateTransitionCost`,
+  `calcIniDelta` / `calcIniBreakdown` (aperçu client), `MAP_ACTIONS`, `MOVE_ZONE_DEFS`,
+  `FIRE_MODE_VARIANTS`, `computeFireVariant`.
+- `shared/combatIniCost.js` — **autorité unique du coût d'Initiative d'une déclaration, client +
+  serveur** (`computeIniDelta` / `iniDeltaBreakdown` / `projectedInitiative`). Détail des postes :
+  `COMBAT_FLUX.md` § « Calcul delta initiative ». Le serveur (`socketCombatAnnouncement.js`) applique
+  cette même fonction à `combat_roster.initiative` ; le client l'affiche dans la pastille
+  « Initiative projetée » du pied (`CombatDeclareIniWidget`, rouge si projeté ≤ 0).
+
 ### PC36 — combatCameraCenter : centrage caméra sur token actif
 ```javascript
 // Shape : { x, z } coords DB (PE14) | null

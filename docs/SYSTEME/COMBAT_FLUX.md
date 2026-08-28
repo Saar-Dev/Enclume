@@ -122,24 +122,35 @@ Source : `token_statuses WHERE token_id = X AND status_code = 'stunned'`
 - `RC` ou `RL` → `TIR_AUTOMATIQUES` requis dans `char_skills` (PC23)
 - `ammo_remaining < bulletCount` → `COMBAT_DECLARE_ERROR` (sauf PNJ + `pnj_unlimited_ammo`)
 
-#### Calcul delta initiative (humanoïdes — drones ignorés)
-```
-STATE_COSTS (matrice complète) :
-  position  : standing↔crouching(-3), ↔prone(-5), crouching↔prone(-5), prone→*(-10)
-  weapon    : holstered→ready(-3), →drawn(-5) ; ready→drawn(-3), →holstered(-5) ; drawn→ready(-3), →holstered(-10)
-  fire_mode : tout changement(-3)
-  cover     : aucun coût INI
-  vitesse   : normal→rushed(+3) / tout→delayed(0)
+#### Calcul delta initiative — `shared/combatIniCost.js` (autorité unique client + serveur)
 
-Exceptions :
-  Charge/Retraite + move → déplacement gratuit (ini_mod ignoré)
-  1er CaC déclaré    → -3
-  2ème CaC déclaré   → -5 supplémentaire
-  cover_shot         → -5 (couverture importante) / -3 (partielle)
-  Observer par unité → -5
-  Repérer par unité  → -5
-  Phrase             → -3
-```
+`computeIniDelta({ prevStates, nextStates, move, combatMode, aim, quick })` = somme de
+`iniDeltaBreakdown(...)` (détail poste par poste, node-testé `shared/combatIniCost.test.mjs`). **La même
+fonction** est appelée côté serveur (`socketCombatAnnouncement.js`, appliquée à
+`combat_roster.initiative`) et côté client (`combatSections.js#calcIniDelta` / `calcIniBreakdown`,
+aperçu — pastille « Initiative projetée » du pied des 3 fenêtres de déclaration). Drones exclus
+(`base_ini = 12` immuable) : l'appelant serveur garde `if (!isDrone)`.
+
+| Poste | Source | Valeur |
+|---|---|---|
+| Transition `position` | `shared/combatStatePositionCost.js` | standing↔crouching/kneeling −3, ↔prone −5, prone→* −10 |
+| Transition `weapon` | `STATE_TRANSITION_COST.weapon` | holstered→ready −3 / →drawn −5 ; ready→drawn −3 / →holstered −5 ; drawn→ready −3 / →holstered −10 |
+| Transition `fire_mode` | `STATE_TRANSITION_COST.fire_mode` | tout changement −3 |
+| Transition `cover` | — | **0** (flag défensif pur) |
+| Transition `vitesse` | `STATE_TRANSITION_COST.vitesse` | →rushed +3 ; →delayed / rushed→normal 0 |
+| Déplacement | `mapActions.move.ini_mod` (serveur : `movementDeclaration.initiativeModifier`, non trusté) | Charge/Retraite → **0** (déplacement inclus) ; sinon lente −3 / moyenne −5 / rapide −7 / max 0 |
+| Tir visé | `getAimIniCost(aimTranches, { lunetteNiveau })` (`shared/combatExclusiveActions.js`) | 2 INI/tranche (classique) ou 1 INI/point (Lunette), le moins cher, écrêté |
+| Observer / Repérer (par unité) | `quick` | −5 chacun |
+| Phrase courte | `quick` | −3 |
+
+- **Champ d'état absent du payload = inchangé** (`nextStates[key] ?? prevStates[key]`) — jamais une
+  transition fantôme (bug Tir visé « changement de couverture », corrigé 2026-08-28,
+  `shared/combatExclusiveActions.js`).
+- **Pas** de forfait CaC (l'ancien −3/−5 sans base RAW retiré, `BUGIDENTIFIE` INI5) ni de `cover_shot`
+  dans ce calcul.
+- `projectedInitiative(currentInitiative, delta) → { projected, willBeLost }` : `willBeLost =
+  projected <= 0` (une action à Initiative ≤ 0 entre en Résolution comme `'lost'`, cf.
+  `computeSeriesPositions`). Le client l'affiche en rouge dans la pastille.
 
 #### Séquences combat_actions (PC32 — attribuées serveur)
 | Type | sequence |

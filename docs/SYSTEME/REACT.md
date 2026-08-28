@@ -105,6 +105,48 @@ if (e.code === 'AltLeft' || e.code === 'AltRight') { ... }
 // Faux : e.key === 'Alt' a des variations selon OS/layout
 ```
 
+## P58 — Briques de déclaration de combat (`CombatDeclare*`)
+
+> Chantier `PLAN_RW_DECLARE_WINDOWS.md` (clos 2026-08-28, archivé `docs/Old/`). Finit REWORK-05.
+
+Les **3 fenêtres de déclaration** (phase ANNONCE) restent des **orchestrateurs séparés** — la fusion
+GM + Joueur est rejetée (REWORK-05 : navigation de slots, multi-phases, preview temps réel) :
+
+| Fenêtre | Monte pour |
+|---|---|
+| `CombatActionWindow` | PJ + drone PJ ; **multi-phases** (ANNONCE + RÉSOLUTION + surprise + attente) |
+| `CombatGmDeclareWindow` | MJ : PNJ + drone MJ ; ANNONCE seule, navigation séquentielle multi-PNJ |
+| `CombatExoActionWindow` | exo-armure (joueur ou MJ) ; ANNONCE seule |
+
+Leurs morceaux communs sont des **briques à plat** dans `client/src/components/CombatDeclare*.jsx`
+(`export default function <Nom>` = fichier = nom d'usage) :
+
+| Brique | Rôle |
+|---|---|
+| `CombatDeclareStateSelector` | segmented control d'un champ d'état (posture/arme/mode de tir/couverture/vitesse) + coût de transition INI par option |
+| `CombatDeclareStateChip` | même concept, présentation compacte (puce click-to-cycle) — MJ, déclaration rapide multi-PNJ |
+| `CombatDeclareIniWidget` | pastille « Initiative projetée » du pied (`current + delta`, rouge si ≤ 0), tooltip du détail |
+| `CombatDeclareErrorBanner` | bannière transitoire de refus (`COMBAT_DECLARE_ERROR`) — dumb, lit `sessionStore.declareError` |
+| `CombatDeclareLog` | log des déclarations du tour (lecture seule) |
+
+**Règles** :
+- **API unique** des sélecteurs d'état : `stateKey` (string) / `current` / `initial` / `onChange`
+  (+ `disabled` / `highlightKey` / `availableKeys`). Ni `def={STATE_DEFS.X}` (le composant le dérive),
+  ni un composant d'état défini **dans** une fenêtre.
+- Le **calcul métier** vit dans le modèle, jamais dans une fenêtre : `combatSections.js` (`STATE_DEFS`,
+  `nextKey`, `stateTransitionCost`, `calcIniDelta`/`calcIniBreakdown`) + **`shared/combatIniCost.js`**
+  (autorité unique du coût d'Initiative d'une déclaration, **client + serveur** — cf. `COMBAT_FLUX.md`).
+- Un **signal transitoire** (bannière de refus) passe par `sessionStore` + `useCombatSocket`
+  (P57 — jamais un `socket.on` dans une fenêtre). Patron jumeau : `sessionStore.criticalEffect` /
+  `CriticalEffectOverlay`.
+- Une **nouvelle fenêtre de déclaration** (tourelle fixe, combattant « possédé »…) ou **section**
+  (Intégrité/Avaries exo, statuts d'état exo accroupi/genou / arme rangée-au clair) **compose ces
+  briques**, ne réécrit pas le châssis.
+- Divergences **légitimes** conservées : allures (3 sources : fiche PJ / `DEFAULT_PNJ_ALLURES` /
+  fetch serveur exo & drone) ; panneau droit 720 px (détail assaut/CaC) joueur + MJ seulement ;
+  familles CSS `combat-float-*` (joueur/exo) vs `combat-win-*` (MJ) — non unifiées (chantier design
+  séparé, module `CombatDeclareFrame` annulé).
+
 ---
 
 ## Interfaces composants majeurs

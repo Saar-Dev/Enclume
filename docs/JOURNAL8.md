@@ -4464,3 +4464,76 @@ plus jamais `reconcile`).
 
 Sujet initial (présence temps réel MJ/joueur sur un champ, double-écriture) resté en discussion,
 non implémenté cette session — voir `docs/EN_COURS.md` si repris plus tard.
+
+---
+
+## Session (Claude) — 2026-08-28 — Chantier RW fenêtres de déclaration de combat — CLOS
+
+`PLAN_RW_DECLARE_WINDOWS.md` (v2), archivé `docs/Old/`. « Finir REWORK-05 » : sortir les morceaux de
+châssis encore dupliqués entre les 3 fenêtres de déclaration (`CombatActionWindow`,
+`CombatGmDeclareWindow`, `CombatExoActionWindow`) en briques partagées, un module à la fois, chacun
+plan → analyse à charge → code → validation navigateur. **Les 3 orchestrateurs restent séparés**
+(fusion GM+Joueur rejetée, REWORK-05).
+
+**Livré (tous validés navigateur)** :
+- **Module 1** — `StateSelector` (défini dans `CombatActionWindow.jsx`, importé de là par le MJ =
+  import croisé à l'envers) → `client/src/components/CombatDeclareStateSelector.jsx`. Convention de
+  famille `CombatDeclare*` fixée (D7).
+- **§5bis** — bug de jeu : Tir visé humain rejeté à tort au tour N+1 après un changement d'état au
+  tour N. `endTurn` remet `state_position/cover/vitesse/combat_mode` aux défauts serveur mais le
+  client ne re-synchronisait `decl`/`initialStates` qu'au changement de token. `RESET_NEW_TURN`
+  supprimé du reducer (`RESET` sert les 2 cas), effets de reset consolidés dans les 2 fenêtres,
+  `snapFromRosterEntry` exporté. + sous-bug : champ d'état absent du payload = inchangé
+  (`shared/combatExclusiveActions.js`, `(state?.X ?? entry?.state_X) !== entry?.state_X`).
+- **Module 2** (périmètre « robuste », D9) — **`shared/combatIniCost.js`** : autorité **unique** du
+  coût d'Initiative d'une déclaration, **client + serveur**. `iniDeltaBreakdown` (primitif, détail
+  poste par poste) → `computeIniDelta` (somme) → `projectedInitiative`. Le serveur
+  (`socketCombatAnnouncement.js`) supprime sa matrice `STATE_COSTS` + sa boucle, appelle
+  `computeIniDelta` ; iso-comportement (vérifié contre les gardes du handler), zéro changement de
+  payload/règle. C'était la **dernière maths de combat dupliquée client/serveur** (les autres —
+  `combatRange`, `combatMovement`, `ammoRules`, `combatExclusiveActions`, `combatStatePositionCost`
+  — étaient déjà partagées). Pastille « Initiative projetée » (`CombatDeclareIniWidget`, rouge si
+  projeté ≤ 0, tooltip du détail) branchée dans les 3 pieds — clôt l'item 2 de la dette exo.
+  Bug d'aperçu Charge/Retraite MJ corrigé au passage. `combatSections.js` déduplique ses matrices
+  (référencent `STATE_TRANSITION_COST` partagé), `calc*` délèguent.
+- **Module 3** — `COMBAT_DECLARE_ERROR` avait **4 listeners** (3 `socket.on` en composant feuille =
+  violation P57 + `useCombatSocket`). Patron `sessionStore.criticalEffect` / `CriticalEffectOverlay`
+  copié : `sessionStore.declareError` posé par `useCombatSocket#onDeclareError` (aucun nouvel
+  abonnement), auto-effacé 4 s (timer centralisé dans le hook), affiché par `CombatDeclareErrorBanner`
+  (dumb, lit le store). Les 3 fenêtres perdent leur `useEffect` d'écoute local. 1 classe CSS
+  `.combat-declare-error-banner` remplace 3 copies inline-style.
+- **Module 7** — `InlineChip` (composant local à `CombatGmDeclareWindow`) → `CombatDeclareStateChip.jsx`.
+  `nextKey` → `combatSections.js` + **premier fichier de test du modèle** (`combatSections.test.mjs`,
+  5 cas). API `CombatDeclareState*` **unifiée** : `stateKey` (string) partout — le `stateKey` mort +
+  `def={STATE_DEFS.X}` redondant retirés des 5 sites ; les 2 fenêtres n'importent plus `STATE_DEFS`.
+
+**Non livré, décidé** :
+- **Module 5** (`CombatDeclareFrame`, chrome partagé) — **annulé** (B5) : les familles CSS
+  `combat-float-*` (joueur/exo) et `combat-win-*` (MJ) diffèrent réellement (poignée basse,
+  habillage de section, layout de header). Un frame partagé forcerait une régression visuelle ou une
+  prop `variant` qui réintroduit le branchement. À reprendre seulement après une passe design qui
+  unifie les 2 familles.
+- **Module 6** (`useHumanDeclare`, extraction des 26 `useState` de `CombatActionWindow`) — **différé**
+  jusqu'à ce qu'une infra de test composant (vitest/RTL) existe. Sans tests de caractérisation,
+  l'extraction du cœur de combat le plus joué = bug subtil garanti (INFRA-4). Le bug qui la motivait
+  (Tir visé) a été corrigé sans extraire (§5bis).
+- **Module 4** (`CombatDeclareRoster` / `usePersistedToggle`) — **non fait**. Après recherche : le
+  pattern « toggle persisté » n'est recopié qu'à 2 endroits (`pj-roster-open` / `gm-roster-open`),
+  pas ~6. Un `usePersistedToggle` à 2 consommateurs + une garde `try/catch` sur `localStorage`
+  théorique pour un VTT de table — n'aggrade sur aucun des axes qui justifiaient le module 7.
+  `<CombatDeclareRoster>` unique = piège B4 (rosters MJ/joueur réellement différents).
+
+**Devient définitif dans** : `docs/SYSTEME/REACT.md` **P58** (briques `CombatDeclare*`, règles) ;
+`docs/SYSTEME/COMBAT_FLUX.md` § « Calcul delta initiative » (`shared/combatIniCost.js`, postes réels —
+matrice `STATE_COSTS` stale + `cover_shot` + forfait CaC retirés du doc) ; `docs/SYSTEME/COMBAT.md`
+§ « Fenêtres de déclaration » ; index `CONVENTIONS.md` §19 P58.
+
+**Fichiers neufs** : `shared/combatIniCost.js` (+`.test.mjs`), `client/src/components/` →
+`CombatDeclareIniWidget.jsx`, `CombatDeclareErrorBanner.jsx`, `CombatDeclareStateSelector.jsx`
+(module 1), `CombatDeclareStateChip.jsx`, `combatSections.test.mjs`. `sessionStore.declareError`.
+
+**Non fait** : `docs/ASBUILT.md` (arbre de fichiers, annotations `Modifié <sprint>`) non mis à jour —
+artefact manuel, convention de numérotation propre à Saar.
+
+**Testé** (à chaque module) : `node --test shared/*` (335), `node --test` des `.test.mjs` neufs,
+`vite build`, `eslint` vs baseline. Validation navigateur Saar module par module (combats réels).
