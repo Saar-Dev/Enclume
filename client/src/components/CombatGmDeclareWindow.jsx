@@ -31,6 +31,7 @@ import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
 import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
+import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
 import { assaultCheck, meleeCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -57,10 +58,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ── États de déclaration pour le PNJ actif ───────────────────────────────
   const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
   const [mapAction,       setMapAction]       = useState(null)     // 'reload' | null
-  const [meleeAttackCount,setMeleeAttackCount]= useState(1)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
-  const [meleeTargets,    setMeleeTargets]    = useState([])       // [tokenId, ...]
   const [chargeSelection, setChargeSelection] = useState(null)     // { move, targetTokenId } | null
 
   // ── Sous-état de sélection Tir (M0.4) — reducer partagé PJ / MJ ───────────
@@ -77,14 +76,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     aimTranches,
     aimedLocation,
   } = assaultDecl.state
-  // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — état séparé du dual-wield Tir ci-dessus
-  // (même raison que côté PJ : les deux Actions sont exclusives à la déclaration mais gardent chacune
-  // leur propre état pour ne pas se réinitialiser l'une l'autre).
-  const [isDualWieldMelee,    setIsDualWieldMelee]    = useState(false)
-  // CaC GM — sélection arme (undefined = auto-dériver, null = mains nues, id = choix explicite)
-  const [selectedGmMeleeWeaponId, setSelectedGmMeleeWeaponId] = useState(undefined)
-  // Arme naturelle (mutation PNJ) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B.
-  const [selectedGmMeleeNaturalWeaponId, setSelectedGmMeleeNaturalWeaponId] = useState(null)
+
+  // ── Sous-état de sélection CaC (M0.4) — même reducer partagé que le PJ ────
+  // { weaponId (undefined=auto / null=mains nues / id), naturalWeaponId, targets, count, isDualWield }.
+  // `meleePendingMode` / `chargeSelection` restent des états MJ (M0.4-g).
+  const meleeDecl = useMeleeDeclaration()
+  const {
+    weaponId:        selectedGmMeleeWeaponId,
+    naturalWeaponId: selectedGmMeleeNaturalWeaponId,
+    targets:         meleeTargets,
+    count:           meleeAttackCount,
+    isDualWield:     isDualWieldMelee,
+  } = meleeDecl.state
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
 
   const tokensRef = useRef(tokens)
@@ -97,13 +100,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // cas) — donc currentFireMode/effectiveMeleeCount/effectiveAssaultCount doivent aussi être calculés
   // ici, avant le retour conditionnel (leurs seules dépendances, decl/meleeAttackCount/assaultCount,
   // sont déjà disponibles à ce point — jamais recalculés plus bas, réutilisés tels quels).
-  const effectiveMeleeCountRef = useRef()
   const currentFireMode = decl.fire_mode.toUpperCase()
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
   const effectiveAssaultCount = currentFireMode === 'CC' ? assaultCount : 1
-  useEffect(() => { effectiveMeleeCountRef.current = effectiveMeleeCount }, [effectiveMeleeCount])
-  // effectiveAssaultCountRef : plus nécessaire — assaultDecl.setTarget calcule la longueur de série
-  // en interne depuis son ref-miroir (M0.4-c).
+  // effectiveAssaultCountRef / effectiveMeleeCountRef : supprimés — assaultDecl.setTarget /
+  // meleeDecl.setTarget calculent la complétude de série en interne (M0.4-c/e).
 
   // StrictMode (main.jsx) double-invoque les effets de montage en dev (mount → cleanup → mount) —
   // sans ce réarmement dans le corps de l'effet, isMountedRef.current reste bloqué à false après ce
@@ -162,15 +163,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
     dispatch({ type: 'RESET', payload: initialStates })
     setMapAction(null)
-    setMeleeAttackCount(1)
     setMeleePendingMode(false)
     setPendingMove(null)
     assaultDecl.clear()
-    setMeleeTargets([])
+    meleeDecl.clear()
     setChargeSelection(null)
-    setSelectedGmMeleeWeaponId(undefined)
-    setSelectedGmMeleeNaturalWeaponId(null)
-    setIsDualWieldMelee(false)
     setIsSelectingOnMap(false)
   }, [activeTokenId, activePnjEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -274,7 +271,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     resolveMode: resolveGmClickAttackMode,
     showTargetRecap,
     registerAmbientAttackHandler,
-    onMeleeTarget:   (tid) => setMeleeTargets([tid]),
+    onMeleeTarget:   (tid) => meleeDecl.setSoleTarget(tid),
     onAssaultTarget: (tid) => assaultDecl.setSoleTarget(tid),
   })
 
@@ -469,19 +466,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // resélectionner à chaque changement, un seul bouton « Cibler » repartant toujours de zéro.
   const handleStartMelee = (startIdx = 0) => {
     if (!onEnterTargetMode || !activeTokenId || !activeToken) return
-    if (startIdx === 0) setMeleeTargets([])
+    if (startIdx === 0) meleeDecl.resetTargets()
     setIsSelectingOnMap(true)
     const selectNext = (idx) => {
       onEnterTargetMode(
         activeTokenId,
         { x: activeToken.pos_x, z: activeToken.pos_y },
         (targetId) => {
-          setMeleeTargets(prev => {
-            const next = [...prev]
-            next[idx] = targetId
-            return next
-          })
-          if (startIdx === 0 && idx + 1 < effectiveMeleeCountRef.current) {
+          // setTarget self-terminant : retourne « série complète ? » — plus besoin d'un ref sur N.
+          const complete = meleeDecl.setTarget(idx, targetId, effectiveMeleeCount)
+          if (startIdx === 0 && !complete) {
             setTimeout(() => { if (isMountedRef.current) selectNext(idx + 1) }, 0)
           } else {
             setIsSelectingOnMap(false)
@@ -688,7 +682,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                             // Tir efface un CaC en cours de configuration, jamais les deux ensemble.
                             if (isMeleeSetup) {
                               setMeleePendingMode(false)
-                              setMeleeTargets([])
+                              meleeDecl.resetTargets()
                               setChargeSelection(null)
                               dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             }
@@ -697,7 +691,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                           } else if (a.k === 'melee') {
                             if (isMeleeSetup) {
                               setMeleePendingMode(false)
-                              setMeleeTargets([])
+                              meleeDecl.resetTargets()
                               setChargeSelection(null)
                               dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             } else {
@@ -934,8 +928,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               isWeaponDrawn={true}
               hasMeleeInInventory={false}
               onWeaponChange={(id) => {
-                setSelectedGmMeleeWeaponId(id)
-                setSelectedGmMeleeNaturalWeaponId(null)
+                meleeDecl.selectWeapon(id)
                 if (id !== null && decl.weapon !== 'drawn') {
                   dispatch({ type: 'SET_FIELD', key: 'weapon', value: 'drawn' })
                 } else if (id === null && decl.weapon !== 'holstered') {
@@ -947,10 +940,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 formula: m.natural_weapon_formula, requiresGrapple: m.natural_weapon_requires_grapple,
               }))}
               selectedNaturalWeaponId={naturalWeaponIdForMelee}
-              onNaturalWeaponChange={(id) => {
-                setSelectedGmMeleeNaturalWeaponId(id)
-                setSelectedGmMeleeWeaponId(null)
-              }}
+              onNaturalWeaponChange={meleeDecl.selectNatural}
               targetIsGrappled={
                 tokens.find(tk => tk.id === meleeTargets[0])?.statuses?.includes('grappled') ?? false
               }
@@ -965,7 +955,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               chargeTargetLabel={chargeSelection?.targetTokenId ? (tokens.find(tk => tk.id === chargeSelection.targetTokenId)?.label ?? null) : null}
               meleeCount={meleeAttackCount}
               effectiveMeleeCount={effectiveMeleeCount}
-              onMeleeCountChange={(n) => { setMeleeAttackCount(n); setMeleeTargets(prev => prev.slice(0, n)) }}
+              onMeleeCountChange={meleeDecl.setCount}
               perSlotTargeting={true}
               targetIds={chargeSelection?.targetTokenId ? [chargeSelection.targetTokenId] : meleeTargets}
               isInTargetMode={combatTargetMode?.tokenId === activeTokenId && !chargeSelection?.targetTokenId}
@@ -974,7 +964,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               showReadyBadge={false}
               showDualWieldSection={showDualWieldMeleeSection}
               isDualWield={isDualWieldMelee}
-              onDualWieldChange={setIsDualWieldMelee}
+              onDualWieldChange={meleeDecl.setDualWield}
               offhandWeaponDisplay={meleeOffhandWeapon ? (meleeOffhandWeapon.name ?? t('meleeCombatPanel.weaponFallback')) : null}
             />
           </div>

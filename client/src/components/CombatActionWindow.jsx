@@ -36,6 +36,7 @@ import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
 import { buildWeaponList } from '../lib/weaponList.js'
 import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
+import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
 import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -127,18 +128,19 @@ export default function CombatActionWindow({
   const [inTargetMode, setInTargetMode]           = useState(false)
   const [moveSelection, setMoveSelection]         = useState(null)
 
-  // --- etat melee (panneau droit) -------------------------------------------
-  const [meleePendingTokenIds, setMeleePendingTokenIds]     = useState([])   // [id1, id2?, id3?]
-  const [meleeCount, setMeleeCount]                         = useState(1)    // 1|2|3
-  const [selectedMeleeWeaponId, setSelectedMeleeWeaponId]   = useState(undefined) // undefined=auto, null=mains nues, id=choix
-  // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusif avec
-  // selectedMeleeWeaponId (un seul choix radio) : sélectionner l'un remet l'autre à null.
+  // --- sous-état de sélection CaC (M0.4) — reducer partagé PJ / MJ ----------
+  // { weaponId (undefined=auto / null=mains nues / id), naturalWeaponId, targets, count, isDualWield }
+  // Alias en lecture ci-dessous. `meleeDecl.clear()` dans l'effet de reset. Le mode de combat
+  // (decl.combatMode), la Charge et le flag ciblage carte restent à la fenêtre (M0.4-g).
   const [naturalWeapons, setNaturalWeapons]                 = useState([])
-  const [selectedMeleeNaturalWeaponId, setSelectedMeleeNaturalWeaponId] = useState(null)
-  // Combat à deux armes (COM24, docs/BUGIDENTIFIE.md) — miroir isDualWield (Tir), état séparé :
-  // les deux mécaniques sont indépendantes (CaC et Assaut sont mutuellement exclusifs à la
-  // déclaration, mais chacun garde son propre état pour ne pas se réinitialiser l'un l'autre).
-  const [isDualWieldMelee, setIsDualWieldMelee]             = useState(false)
+  const meleeDecl = useMeleeDeclaration()
+  const {
+    weaponId:        selectedMeleeWeaponId,
+    naturalWeaponId: selectedMeleeNaturalWeaponId,
+    targets:         meleePendingTokenIds,
+    count:           meleeCount,
+    isDualWield:     isDualWieldMelee,
+  } = meleeDecl.state
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
 
   // --- roster PJ collapsible ------------------------------------------------
@@ -236,13 +238,12 @@ export default function CombatActionWindow({
       dispatch({ type: 'SELECT_ATTACK' })
       setMapSelected(prev => { const n = new Set(prev); n.delete('attack'); n.add('melee'); return n })
       assaultDecl.clear(); setInTargetMode(false)
-      setMeleePendingTokenIds([tid])
+      meleeDecl.setSoleTarget(tid)
     },
     onAssaultTarget: (tid) => {
       dispatch({ type: 'SELECT_ATTACK' })
       setMapSelected(prev => { const n = new Set(prev); n.delete('melee'); n.add('attack'); return n })
-      setMeleePendingTokenIds([]); setMeleeCount(1); setSelectedMeleeWeaponId(undefined)
-      setIsDualWieldMelee(false); setInMeleeTargetMode(false)
+      meleeDecl.clear(); setInMeleeTargetMode(false)
       if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
       dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
       assaultDecl.setSoleTarget(tid)
@@ -283,11 +284,7 @@ export default function CombatActionWindow({
     setInMoveMode(false)
     setInTargetMode(false)
     setSelectedAmmoId(null)
-    setMeleePendingTokenIds([])
-    setMeleeCount(1)
-    setSelectedMeleeWeaponId(undefined)
-    setSelectedMeleeNaturalWeaponId(null)
-    setIsDualWieldMelee(false)
+    meleeDecl.clear()
     setInMeleeTargetMode(false)
   }, [rosterEntry?.token_id, rosterEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -527,10 +524,7 @@ export default function CombatActionWindow({
     setInTargetMode(false)
   }
   const clearMeleeState = () => {
-    setMeleePendingTokenIds([])
-    setMeleeCount(1)
-    setSelectedMeleeWeaponId(undefined)
-    setIsDualWieldMelee(false)
+    meleeDecl.clear()   // reset aussi selectedMeleeNaturalWeaponId (l'ancien code ne le faisait pas)
     setInMeleeTargetMode(false)
     if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
     dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
@@ -601,16 +595,9 @@ export default function CombatActionWindow({
       else dispatch({ type: 'SELECT_ATTACK' })
     } else {
       if (meleeSelected && meleeSelectedRowId === row.id) { handleMapToggle('melee'); return }
-      if (row.kind === 'natural') {
-        setSelectedMeleeNaturalWeaponId(row.id.slice(4))
-        setSelectedMeleeWeaponId(null)
-      } else if (row.kind === 'bare') {
-        setSelectedMeleeWeaponId(null)
-        setSelectedMeleeNaturalWeaponId(null)
-      } else {
-        setSelectedMeleeWeaponId(row.id)
-        setSelectedMeleeNaturalWeaponId(null)
-      }
+      if (row.kind === 'natural') meleeDecl.selectNatural(row.id.slice(4))
+      else if (row.kind === 'bare') meleeDecl.selectWeapon(null)
+      else meleeDecl.selectWeapon(row.id)
       if (!meleeSelected) handleMapToggle('melee')
       dispatch({ type: 'SELECT_ATTACK' })   // auto-dégaine (D5) — SELECT_ATTACK ne fait que weapon→drawn
     }
@@ -881,11 +868,7 @@ export default function CombatActionWindow({
       playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (tokenId) => {
-        setMeleePendingTokenIds(prev => {
-          const next = [...prev]
-          next[targetIndex] = tokenId
-          return next
-        })
+        meleeDecl.setTarget(targetIndex, tokenId, effectiveMeleeCount)
         setInMeleeTargetMode(false)
       },
       () => { setInMeleeTargetMode(false) },
@@ -926,11 +909,11 @@ export default function CombatActionWindow({
         setInMoveMode(false)
         // Chaîner automatiquement la sélection de cible CaC (Charge = 1 cible toujours)
         setInMeleeTargetMode(true)
-        setMeleePendingTokenIds([])
+        meleeDecl.resetTargets()
         onEnterTargetMode(
           playerToken.id,
           { x: playerToken.pos_x, z: playerToken.pos_y },
-          (tid) => { setMeleePendingTokenIds([tid]); setInMeleeTargetMode(false) },
+          (tid) => { meleeDecl.setSoleTarget(tid); setInMeleeTargetMode(false) },
           () => { setInMeleeTargetMode(false) },
           'melee'
         )
@@ -1191,25 +1174,25 @@ export default function CombatActionWindow({
               selectedWeaponId={effectiveMeleeWeaponId}
               isWeaponDrawn={decl.weapon === 'drawn'}
               hasMeleeInInventory={hasMeleeInInventory}
-              onWeaponChange={(id) => { setSelectedMeleeWeaponId(id); setSelectedMeleeNaturalWeaponId(null) }}
+              onWeaponChange={meleeDecl.selectWeapon}
               naturalWeapons={naturalWeapons.map(m => ({
                 id: m.id, label: m.name,
                 formula: m.natural_weapon_formula, requiresGrapple: m.natural_weapon_requires_grapple,
               }))}
               selectedNaturalWeaponId={effectiveMeleeNaturalWeaponId}
-              onNaturalWeaponChange={(id) => { setSelectedMeleeNaturalWeaponId(id); setSelectedMeleeWeaponId(null) }}
+              onNaturalWeaponChange={meleeDecl.selectNatural}
               targetIsGrappled={
                 tokens.find(tk => tk.id === meleePendingTokenIds[0])?.statuses?.includes('grappled') ?? false
               }
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
+                dispatch({ type: 'SET_COMBAT_MODE', mode })
                 if (mode === 'defensif' || mode === 'retraite') {
-                  dispatch({ type: 'SET_COMBAT_MODE', mode })
-                  setMeleePendingTokenIds([])
+                  meleeDecl.resetTargets()
                   if (decl.combatMode === 'charge') setMoveSelection(null)
-                } else {
-                  dispatch({ type: 'SET_COMBAT_MODE', mode })
-                  if (decl.combatMode === 'charge') { setMoveSelection(null); setMeleePendingTokenIds([]) }
+                } else if (decl.combatMode === 'charge') {
+                  setMoveSelection(null)
+                  meleeDecl.resetTargets()
                 }
               }}
               onStartCharge={handleChargeFlow}
@@ -1218,7 +1201,7 @@ export default function CombatActionWindow({
               chargeTargetLabel={null}
               meleeCount={meleeCount}
               effectiveMeleeCount={effectiveMeleeCount}
-              onMeleeCountChange={(n) => { setMeleeCount(n); setMeleePendingTokenIds(prev => prev.slice(0, n)) }}
+              onMeleeCountChange={meleeDecl.setCount}
               perSlotTargeting={true}
               targetIds={meleePendingTokenIds}
               isInTargetMode={false}
@@ -1227,7 +1210,7 @@ export default function CombatActionWindow({
               showReadyBadge={melee.valid && !meleeDefensif}
               showDualWieldSection={showDualWieldMeleeSection}
               isDualWield={isDualWieldMelee}
-              onDualWieldChange={setIsDualWieldMelee}
+              onDualWieldChange={meleeDecl.setDualWield}
               offhandWeaponDisplay={meleeOffhandWeapon ? (meleeOffhandWeapon.custom_name || meleeOffhandWeapon.ref_name || t('actionWindow.weaponNameFallback')) : null}
             />
           </div>
