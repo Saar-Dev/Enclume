@@ -201,9 +201,9 @@ message), à inventorier au cadrage du module 2, pas à négliger.
 - **Arme mixte** (contact + distance) : présente dans **les deux** groupes.
 - **Dual-wield** : **option de la col. 2** (`showDualWieldSection` existe déjà, `AssaultRangedPanel` /
   `MeleeCombatPanel`).
-- **Modes de combat CaC** (Charge / Retraite / Défensif) : `[INFÉRÉ]` — segments en tête de col. 2
-  (`Attaque \| Défensif \| Charge \| Retraite \| Recharger`) ou sous-bloc ? Charge chaîne
-  déplacement→cible. **Point ouvert PO2.**
+- **Modes de combat CaC** (Charge / Retraite / Défensif) : **PO2 tranché §16.5 — ils NE bougent
+  pas** (déjà une section de `MeleeCombatPanel` qui fonctionne). Charge garde son chaînage
+  déplacement→cible (`onStartCharge`, window).
 
 ---
 
@@ -393,8 +393,8 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 | # | Module | Question |
 |---|---|---|
 | PO1 | 2 | **Tranché §13.5** : `data-family` en **attribut** (pas classe `.combat-fam-*`). Le `#5b8dee` parasite → `--combat-accent-*` **sur les fichiers que les modules 2/4/5 touchent déjà**, pas en passe séparée. |
-| PO2 | 4 | **Cadré §16.5 (reco : segment de tête `Attaque │ Défensif │ Charge │ Retraite │ Recharger`).** Décision Saar = PO-M4-a. |
-| PO3 | 2 / 4 | (a) faisabilité écran → **§16.7 / PO-M4-b** (test 1366 px avant 4b/4c, repli pop-out). (b) réagencement vs réécriture → **§16.2 tranché : réagencement** (panneaux `[VÉRIFIÉ]` présentationnels, aucune largeur figée). (c) satellite qui suit → **§14.5 tranché** (frère positionné depuis `pos` du frame). Col. 2 haute → pied épinglé + corps scrollable (module 2, `.combat-float-win` a déjà `overflow:hidden` + flex). Changement d'arme = reset config → **PO-M4-e**. |
+| PO2 | 4 | **TRANCHÉ §16.5 (Saar) : les modes de combat CaC ne bougent pas** — restent une section de `MeleeCombatPanel`. |
+| PO3 | 2 / 4 | (a) → **§16.7 TRANCHÉ : cible PC, côte-à-côte, pas de pop-out** (l'UI actuelle n'est pas prévue pour portable). (b) → **§16.2 TRANCHÉ : réagencement** (panneaux `[VÉRIFIÉ]` présentationnels). (c) satellite qui suit → **§14.5 TRANCHÉ** (frère positionné depuis `pos`). Col. 2 haute → `.combat-float-win` a déjà `overflow:hidden` + flex, pied épinglé par la structure du frame. Changement d'arme = reset config → **PO-M4-e**. |
 | PO4 | 0 | ~~Quelle infra de test~~ **Tranché round 4** : `node --test` + fonctions pures `.mjs` (philo projet), pas de vitest/RTL. Périmètre M0.1-M0.3 fait (51 tests). |
 | PO5 | 3 | Satellite : glyphe qui **reflète la valeur** (Saar a produit les 4 glyphes de posture → plutôt oui) ou glyphe de catégorie + texte ? |
 | PO6 | 4 | **Cadré §12.** Options : hook `useHumanDeclare(mode)` (rejeté, cf. §12.3-A) / présentationnel pur (ne fait pas le travail, §12.3-B) / **deux hooks de domaine sans `mode`** (reco, §12.3-C). Décision Saar en attente. À trancher **avant** le module 4. |
