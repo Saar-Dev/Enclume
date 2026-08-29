@@ -27,7 +27,6 @@ import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
-import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareActionList from './CombatDeclareActionList.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareHeader from './CombatDeclareHeader.jsx'
@@ -998,19 +997,6 @@ export default function CombatActionWindow({
               groups={weaponGroups}
               selectedRowId={selectedWeaponRowId}
               onPick={handleWeaponPick}
-              extras={attackSelected && (
-                /* Mode de tir — intérimaire au corps jusqu'à son intégration dans AssaultRangedPanel
-                   (col. 2 réagencée, sous-commit 3/4). Le rechargement (D7 : lié à une arme) part
-                   dans le même lot. */
-                <div className="decl-list decl-list--extra">
-                  <CombatDeclareStateSelector
-                    stateKey="fire_mode"
-                    current={decl.fire_mode} initial={initialStates.current.fire_mode}
-                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
-                    availableKeys={availableFireModes}
-                  />
-                </div>
-              )}
             />
           )}
 
@@ -1213,6 +1199,8 @@ export default function CombatActionWindow({
               showDualWieldSection={hasTwoWeapons && sameFirMode}
               isDualWield={isDualWield}
               currentFireMode={currentFireMode}
+              availableFireModes={availableFireModes}
+              onFireModeChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
               onDualWieldChange={assaultDecl.setDualWield}
               assaultBulletCount={assaultBulletCount}
               effectiveBulletCount={effectiveBulletCount ?? 1}

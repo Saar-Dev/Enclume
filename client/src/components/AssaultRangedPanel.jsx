@@ -95,6 +95,8 @@ export default function AssaultRangedPanel({
   showDualWieldSection, // bool — hasTwoWeapons && sameFirMode && effectiveAssaultCount === 1 (D10)
   isDualWield,          // bool — état réel, câblé identique PJ (CombatActionWindow) et MJ (CombatGmDeclareWindow)
   currentFireMode,      // 'CC' | 'RC' | 'RL'
+  availableFireModes,   // string[] ex ['cc','rc'] — modes que l'arme supporte (D7, sélecteur en col. 2)
+  onFireModeChange,     // (v: 'cc'|'rc'|'rl') => void
   onDualWieldChange,    // (bool) => void — setter réel des deux côtés
   assaultBulletCount,   // number | 'multi' | null
   effectiveBulletCount, // number — assaultBulletCount ?? 1 (calculé par le parent)
@@ -210,9 +212,22 @@ export default function AssaultRangedPanel({
         </div>
       )}
 
-      {/* Section mode de tir — CC / RC / RL */}
+      {/* Section mode de tir — sélecteur CC / RC / RL (D7 : au corps de la col. 2) + détail du mode */}
       {weaponDisplay && currentFireMode && (
         <div style={P.section}>
+          {Array.isArray(availableFireModes) && availableFireModes.length > 1 && (
+            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+              {['cc', 'rc', 'rl'].filter(m => availableFireModes.includes(m)).map(m => (
+                <button
+                  key={m}
+                  className="seg-opt"
+                  data-active={currentFireMode === m.toUpperCase()}
+                  style={{ flex: 1 }}
+                  onClick={() => onFireModeChange?.(m)}
+                >{t(`states.fireMode.${m}.label`)}</button>
+              ))}
+            </div>
+          )}
           <div style={P.sectionTitle}>{fireModeLabel}</div>
 
           {currentFireMode === 'CC' && (

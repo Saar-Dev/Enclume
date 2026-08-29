@@ -22,7 +22,6 @@ import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
-import CombatDeclareStateChip from './CombatDeclareStateChip.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
@@ -326,7 +325,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && w.ref_fire_mode)
     : null
   const weapon       = isActivePnj ? (pickedGmRanged ?? resolvedGmPrimary) : null
-  const rangedActive = isActivePnj && !!weapon?.ref_fire_mode
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — même source `equipment[tokenId]` que le
@@ -677,22 +675,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 groups={weaponGroups}
                 selectedRowId={gmSelectedRowId}
                 onPick={handleGmWeaponPick}
-                extras={rangedActive && attackStarted && (
-                  /* Mode de tir — intérimaire (→ AssaultRangedPanel, col. 2 réagencée, sous-commit 3/4).
-                     Le rechargement (D7 : lié à une arme) part dans le même lot. */
-                  <div className="decl-list decl-list--extra">
-                    <div style={S.chips}>
-                      <CombatDeclareStateChip stateKey="fire_mode"
-                        initial={initialStates.fire_mode}
-                        current={decl.fire_mode}
-                        availableKeys={availableFireModes}
-                        onChange={v => {
-                          dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
-                          assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
-                        }} />
-                    </div>
-                  </div>
-                )}
               />
 
               {/* ACTIONS RAPIDES */}
@@ -941,6 +923,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               showDualWieldSection={hasTwoWeapons && sameFirMode}
               isDualWield={isDualWield}
               currentFireMode={currentFireMode}
+              availableFireModes={availableFireModes}
+              onFireModeChange={v => {
+                dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
+                assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
+              }}
               onDualWieldChange={assaultDecl.setDualWield}
               assaultBulletCount={assaultBulletCount}
               effectiveBulletCount={effectiveBulletCount}
