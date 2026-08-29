@@ -306,6 +306,22 @@ et `gmDeclareWindow.iniTotalLabel` (combat.json) sont maintenant orphelins.
 
 ### Module 3 — bannière de refus de déclaration centralisée (P57) — **FAIT (code, 2026-08-28) — validation navigateur Saar en attente**
 
+> **CORRECTIF POST-CLÔTURE (2026-08-29, analyse à charge)** — le module est propre par ailleurs
+> (jumeau `criticalEffect` fidèle, timer 4 s avec cleanup dans le hook toujours-monté, `clearDeclareError`
+> sur les 4 événements, bannière rendue par les 3 pieds). Deux points :
+> 1. **La régression `set-state-in-effect` a été résorbée** (2026-08-29) : l'effet exo
+>    `if (declareError) setIsDeclaring(false)` → ajustement pendant le rendu gardé sur `declareError.id`
+>    (patron react.dev « adjusting state on prop change », déjà utilisé `SidebarChatTab.jsx` /
+>    `Step4Experience.jsx`). eslint revient à la baseline pré-module-3 du fichier. Le plan avait
+>    **copié la mauvaise exception** — accepter l'avertissement comme « la ligne 101 pré-existante » —
+>    alors que le projet a une convention pour le corriger (`PLAN_REFACTOR_SIDEBAR.md` : « même
+>    fichier, pas hors scope »). La variante `sendLocked = isDeclaring && !declareError` que le plan
+>    rejetait avait bien un bug de re-verrouillage ; l'ajustement gardé sur l'`id` ne l'a pas.
+> 2. Reste ouvert : l'exo est la **seule** des 3 fenêtres avec un verrou d'envoi `isDeclaring` — le
+>    vrai correctif serait de l'harmoniser (le lever sur `COMBAT_ACTION_DECLARED` / un événement de
+>    roster plutôt que sur `declareError`). Renvoyé au chantier `useAssaultDeclaration`/exo
+>    (`PLAN_RW_DECLARE_DESIGN` M0.4) ou à la passe de validation navigateur de Saar.
+
 **Problème** : `COMBAT_DECLARE_ERROR` avait **4 listeners** — les 3 fenêtres (`socket.on` local +
 `useEffect` + état `declareError` + `setTimeout` 4 s **sans cleanup**, l'exo ajoutait
 `setIsDeclaring(false)`) **et** `useCombatSocket.js` `onDeclareError` (→ message de chat). Les 3

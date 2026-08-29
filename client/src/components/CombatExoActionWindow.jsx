@@ -65,9 +65,15 @@ export default function CombatExoActionWindow({
   // Reste ici, spécifique à l'exo : un refus serveur doit lever le verrou "ENVOI…" (isDeclaring),
   // sinon le bouton et toute la fenêtre restent figés — la fenêtre ne se démonte que sur
   // has_announced=true (succès), jamais sur un refus (PC23, portée, munitions, se relever inéligible…).
-  useEffect(() => {
-    if (declareError) setIsDeclaring(false)
-  }, [declareError])
+  // Ajustement pendant le rendu (react.dev « adjusting state on prop change », même patron que
+  // SidebarChatTab.jsx / creation/Step4Experience.jsx) plutôt qu'un setState en corps d'effet
+  // (react-hooks/set-state-in-effect). Gardé sur `declareError.id` : ne se redéclenche pas si
+  // l'utilisateur reclique DÉCLARER pendant que la bannière du refus précédent est encore affichée.
+  const [handledDeclareErrorId, setHandledDeclareErrorId] = useState(null)
+  if (declareError && declareError.id !== handledDeclareErrorId) {
+    setHandledDeclareErrorId(declareError.id)
+    if (isDeclaring) setIsDeclaring(false)
+  }
 
   // fetch allures — suit l'exo actif. Le calcul VIT/3-modes (surface/sous-marine, délégation pilote,
   // milieu bloqué) reste entièrement côté serveur (getExoMovementBudget) — jamais réimplémenté ici
