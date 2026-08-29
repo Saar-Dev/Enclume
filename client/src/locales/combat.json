@@ -254,6 +254,9 @@
   "stateSelector": {
     "currentBadge": "actuel"
   },
+  "statePanel": {
+    "title": "STATUT"
+  },
   "mapActions": {
     "move": {
       "label": "Déplacement",

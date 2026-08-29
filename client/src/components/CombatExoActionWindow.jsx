@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
@@ -10,6 +10,8 @@ import { useDraggable } from '../lib/useDraggable.js'
 import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
+import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
+import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer.js'
 import { assaultCheck, buildBlockReason } from '../lib/declareChecks.js'
 import api from '../lib/api.js'
 
@@ -58,6 +60,16 @@ export default function CombatExoActionWindow({
   const isProne       = rosterEntry?.state_position === 'prone'
   const canDeclareNow = isAuthorized && phase === 'ANNOUNCEMENT' && !rosterEntry?.has_announced
 
+  // État tactique (posture / vitesse / arme) — satellite d'état, module 3. L'exo réutilise le
+  // reducer partagé (declarationReducer) et `snapFromRosterEntry` comme le PJ/MJ ; handleDeclare
+  // repasse `state: {position, weapon, vitesse}` (passe-plat, pas d'assemblage — pas de fonction
+  // pure neuve). Le gate « pas d'attaque avec arme rangée » côté exo est traité au module 4.
+  const [decl, dispatch] = useReducer(declarationReducer, DECLARATION_INITIAL)
+  // Snapshot de l'état persisté au début du tour. Pas de ref à figer comme le PJ : l'exo n'émet
+  // aucun aperçu et son `rosterEntry.state_*` ne bouge pas pendant la phase ANNONCE de son tour
+  // (il change à la résolution, où `has_announced` bascule et la fenêtre disparaît).
+  const initialStates = snapFromRosterEntry(rosterEntry)
+
   // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central) → sessionStore →
   // <CombatDeclareErrorBanner>. Plus de socket.on local (REACT.md P57, module 3).
   // Plus de verrou d'envoi « ENVOI… » (`isDeclaring`) — module 5 (§5.10) : l'exo était la seule
@@ -95,7 +107,8 @@ export default function CombatExoActionWindow({
   // à false) — même discipline que CombatActionWindow (reset des états tactiques sur ces deux événements).
   useEffect(() => {
     setMoveSelection(null)
-  }, [rosterEntry?.token_id, rosterEntry?.has_announced])
+    dispatch({ type: 'RESET', payload: snapFromRosterEntry(rosterEntry) })
+  }, [rosterEntry?.token_id, rosterEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Déplacement : survol/preview ambiant par défaut, même patron que CombatActionWindow (PJ)/
   // useDroneDeclare (COMBAT-DEPLACEMENT-HOVER) — désactivé à terre (§9.4, seule "Tenter de se relever"
@@ -163,7 +176,9 @@ export default function CombatExoActionWindow({
     if (!socket || !exoDeclare.canDeclare) return
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
-      state: {},
+      // Passe-plat des 3 axes du satellite (module 3). Identiques aux valeurs persistées tant que
+      // le joueur n'a rien changé → le serveur ré-écrit la même chose (state.X ?? entry.state_X).
+      state: { position: decl.position, weapon: decl.weapon, vitesse: decl.vitesse },
       mapActions: {
         move: moveSelection
           ? {
@@ -199,12 +214,11 @@ export default function CombatExoActionWindow({
   // pas encore investiguée — à reprendre séparément si le besoin de masquage revient.
   const isSelectingOnMap = combatMoveMode?.tokenId === playerToken.id && !!pendingMoveSelection
 
-  // Initiative projetée (pastille du pied, PLAN_RW_DECLARE_WINDOWS module 2). Une exo ne change pas
-  // d'état en déclaration (posture/arme/couverture) — seul le déplacement pèse aujourd'hui ; quand
-  // les sélecteurs d'état exo arriveront (ROADMAP §4), il suffira de les passer ici, le widget suit.
+  // Initiative projetée (pastille du pied). Le déplacement + les transitions d'état déclarées au
+  // satellite (posture / arme / vitesse, module 3) pèsent — `initialStates` vs `decl`.
   const exoMapActions = { move: moveSelection ? { ini_mod: moveSelection.ini_mod ?? 0 } : null }
-  const iniDelta     = calcIniDelta({}, {}, exoMapActions, null)
-  const iniBreakdown = calcIniBreakdown({}, {}, exoMapActions, null, t)
+  const iniDelta     = calcIniDelta(initialStates, decl, exoMapActions, null)
+  const iniBreakdown = calcIniBreakdown(initialStates, decl, exoMapActions, null, t)
 
   // Pied unifié (module 5). L'exo n'a qu'un seul motif de blocage : arme sélectionnée sans cible.
   const exoAttack = assaultCheck({
@@ -218,6 +232,17 @@ export default function CombatExoActionWindow({
   const hasCompleteAction = exoDeclare.canDeclareAttack || moveSelection != null
 
   return (
+    <>
+      <CombatDeclareStatePanel
+        pos={pos}
+        windowWidth={340}
+        decl={decl}
+        initial={initialStates}
+        onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
+        axes={isProne ? ['position'] : ['position', 'vitesse', 'weapon']}
+        onPositionClick={isProne ? handleStandUp : null}
+        hidden={isSelectingOnMap}
+      />
     <div className="combat-float-win" style={{
       position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
       opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto',
@@ -238,15 +263,9 @@ export default function CombatExoActionWindow({
 
         <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
           <div style={S.sectionTitle}>{t('sectionTitles.action')}</div>
+          {/* À terre : « Tenter de se relever » a migré vers la puce Posture du satellite d'état
+              (module 3) — au clic elle route vers handleStandUp (jet serveur). */}
           <div style={S.itemsGrid}>
-            {isProne && (
-              <div
-                style={{ ...S.item, gridColumn: 'span 2' }}
-                onClick={handleStandUp}
-              >
-                <span style={S.itemLabel}>{t('exoActionWindow.standUpButton')}</span>
-              </div>
-            )}
             {!isProne && (
               <div
                 style={{
@@ -347,6 +366,7 @@ export default function CombatExoActionWindow({
         />
       </div>
     </div>
+    </>
   )
 }
 

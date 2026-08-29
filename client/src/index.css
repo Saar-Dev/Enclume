@@ -1526,6 +1526,36 @@ Convention :
 .btn-tac-ghost:hover { color: var(--combat-cell); }
 .btn-tac-ghost:disabled { opacity: .35; cursor: not-allowed; }
 
+/* ── CombatDeclareStatePanel — satellite d'état des fenêtres de déclaration
+   (PLAN_RW_DECLARE_DESIGN M3, D8). Panneau frère positionné le long du bord gauche de la fenêtre
+   principale ; suit sa position via le `pos` du useDraggable. Absent pour un drone. */
+.combat-declare-state-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--combat-header);
+  border: 1px solid var(--combat-border);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--combat-shadow);
+  transition: opacity 0.15s ease;
+}
+.combat-declare-state-panel .combat-chip-glyph {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  background-color: var(--combat-accent-fg, #cfe0ee);
+  -webkit-mask: var(--chip-glyph) center / contain no-repeat;
+  mask: var(--chip-glyph) center / contain no-repeat;
+}
+.combat-declare-state-title {
+  font: 700 8px/1 var(--font-mono, monospace);
+  letter-spacing: 0.12em;
+  color: var(--combat-dim);
+  padding: 0 2px 3px;
+}
+
 /* ── .seg-opt — segmented control compact tactical (CombatActionWindow) ── */
 .seg-opt {
   flex: 1;

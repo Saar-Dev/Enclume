@@ -29,6 +29,7 @@ import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
+import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
@@ -934,6 +935,18 @@ export default function CombatActionWindow({
   // RENDU — Phase Annonce
   // =========================================================================
   return (
+    <>
+      {!isDrone && (
+        <CombatDeclareStatePanel
+          pos={pos}
+          windowWidth={(showAssault || showReload || showMelee) ? 720 : 360}
+          decl={decl}
+          initial={initialStates.current}
+          onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
+          weaponDisabled={weaponLocked}
+          hidden={isHidden}
+        />
+      )}
     <div className="combat-float-win" style={{
       position: 'fixed',
       width: (showAssault || showReload || showMelee) ? 720 : 360,
@@ -953,24 +966,7 @@ export default function CombatActionWindow({
         {/* ---- Panneau gauche ---- */}
         <div style={W.leftPanel}>
 
-          {/* TACTIQUE */}
-          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={W.sectionTitle}>{t('gmDeclareWindow.tacticSection')}</div>
-            {!isDrone && (
-              <CombatDeclareStateSelector
-                stateKey="position"
-                current={decl.position} initial={initialStates.current.position}
-                onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })}
-              />
-            )}
-            {!isDrone && (
-              <CombatDeclareStateSelector
-                stateKey="vitesse"
-                current={decl.vitesse} initial={initialStates.current.vitesse}
-                onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
-              />
-            )}
-          </div>
+          {/* Posture / Vitesse / Arme → satellite d'état (CombatDeclareStatePanel, module 3). */}
 
           {/* ARMEMENT */}
           {!isDrone && (
@@ -995,13 +991,7 @@ export default function CombatActionWindow({
                 </div>
                 )
               })()}
-              <CombatDeclareStateSelector
-                stateKey="weapon"
-                current={decl.weapon} initial={initialStates.current.weapon}
-                onChange={v => dispatch({ type: 'SET_FIELD', key: 'weapon', value: v })}
-                disabled={weaponLocked}
-                highlightKey={decl.weapon !== 'drawn' ? 'drawn' : undefined}
-              />
+              {/* Arme → satellite d'état (module 3) ; fire_mode reste au corps jusqu'au module 4. */}
               <CombatDeclareStateSelector
                 stateKey="fire_mode"
                 current={decl.fire_mode} initial={initialStates.current.fire_mode}
@@ -1378,6 +1368,7 @@ export default function CombatActionWindow({
         />
       </div>
     </div>
+    </>
   )
 }
 

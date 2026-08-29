@@ -24,8 +24,8 @@ import { useDroneMovementBudget } from '../lib/useDroneMovementBudget.js'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
-import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareStateChip from './CombatDeclareStateChip.jsx'
+import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
@@ -571,6 +571,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // RENDU
   // ─────────────────────────────────────────────────────────────────────────
   return (
+    <>
+      {isActivePnj && (
+        <CombatDeclareStatePanel
+          pos={pos}
+          windowWidth={(isMeleeSetup || isAttackActive) ? 720 : 440}
+          positionMode="absolute"
+          decl={decl}
+          initial={initialStates}
+          onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
+          hidden={isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick}
+        />
+      )}
     <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
@@ -594,25 +606,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           {isActivePnj && (
             <div style={S.controls}>
 
-              {/* TACTIQUE */}
-              <div className="combat-win-section">
-                <span className="combat-win-section-title">{t('gmDeclareWindow.tacticSection')}</span>
-                <div style={S.chips}>
-                  <CombatDeclareStateChip stateKey="position"
-                    initial={initialStates.position}
-                    current={decl.position}
-                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'position', value: v })} />
-                </div>
-                {/* Retarder/Précipiter — segmented control (pas la puce à cycle : Session 158, retour
-                    Saar « pas de bouton pour Action retardée pour les PNJ » — la puce à cycle masquait
-                    les 3 choix derrière des clics successifs sans repère visuel, CombatDeclareStateSelector
-                    montre les 3 en même temps comme côté joueur). */}
-                <CombatDeclareStateSelector
-                  stateKey="vitesse"
-                  current={decl.vitesse} initial={initialStates.vitesse}
-                  onChange={v => dispatch({ type: 'SET_FIELD', key: 'vitesse', value: v })}
-                />
-              </div>
+              {/* Posture / Vitesse / Arme → satellite d'état (CombatDeclareStatePanel, module 3).
+                  La Vitesse repasse en puce à cycle comme le PJ (D1 « fenêtre MJ = PJ », Session 158
+                  caduque). */}
 
               {/* ARMEMENT */}
               <div className="combat-win-section">
@@ -636,17 +632,16 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     </div>
                   )
                 })()}
+                {/* Arme → satellite d'état (module 3) ; fire_mode reste au corps jusqu'au module 4. */}
                 <div style={S.chips}>
-                  {['weapon', 'fire_mode'].map(k => (
-                    <CombatDeclareStateChip key={k} stateKey={k}
-                      initial={initialStates[k]}
-                      current={decl[k]}
-                      availableKeys={k === 'fire_mode' && rangedActive ? availableFireModes : undefined}
-                      onChange={v => {
-                        dispatch({ type: 'SET_FIELD', key: k, value: v })
-                        if (k === 'fire_mode') { setAssaultBulletCount(null); setAssaultVariantAB('A'); setAimTranches(0) }
-                      }} />
-                  ))}
+                  <CombatDeclareStateChip stateKey="fire_mode"
+                    initial={initialStates.fire_mode}
+                    current={decl.fire_mode}
+                    availableKeys={rangedActive ? availableFireModes : undefined}
+                    onChange={v => {
+                      dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
+                      setAssaultBulletCount(null); setAssaultVariantAB('A'); setAimTranches(0)
+                    }} />
                 </div>
               </div>
 
@@ -1070,6 +1065,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       </div>
 
     </div>
+    </>
   )
 }
 
