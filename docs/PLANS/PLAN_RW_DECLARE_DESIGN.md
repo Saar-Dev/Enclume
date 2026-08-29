@@ -1,24 +1,38 @@
-# PLAN_RW_DECLARE_DESIGN — Passe design des fenêtres de déclaration de combat
+# PLAN_RW_DECLARE_DESIGN — Refonte des fenêtres de déclaration de combat (design + technique associée)
 
-> **Statut : conception — aucun code hors lot B / B5 / module 0.** 2026-08-28, **révisé le jour même
-> après analyse à charge** (§11 : journal de la revue) puis **cadrage M0.4 / PO6** (§12).
+> **Statut : conception / planification — aucun code hors lot B / B5 / module 0.** 2026-08-28,
+> **révisé** après analyse à charge (§11) puis cadrage M0.4 / PO6 (§12), module 2 (§13).
 >
-> **Décisions Saar 2026-08-28 (post-module 0)** : validation navigateur de tout le chantier **en bloc
-> à la fin** (Q1/Q4) ; quand la maquette n'est pas réalisable telle quelle → **adapter et montrer**,
-> pas de STOP (Q3) ; satellite exo **sans migration** (Q5, confirmé §12.5) ; glyphes **jamais en dur**
-> (fichiers laissés dans `assets/status/`, rework Saar en cours).
+> **Décision de périmètre — Saar 2026-08-29 : chantier ÉLARGI, assumé.** À l'origine « passe design
+> seule » (le rework technique était `PLAN_RW_DECLARE_WINDOWS`, clos). Mais **D5 « l'arme EST
+> l'action » n'est pas un changement graphique** — c'est un changement du modèle d'interaction qui
+> touche l'état de sélection (assaut/mêlée). Plutôt que de scinder en deux chantiers, Saar assume
+> **explicitement** que ce chantier porte les deux volets :
+> - **volet design** (re-skin pur, ne touche pas la logique de déclaration) : modules 2, 3, 5 ;
+> - **volet technique** (touche l'état de sélection / la structure) : module 0 (fait), M0.4
+>   (`useAssaultDeclaration` / `useMeleeDeclaration` — c'était déjà « la vraie cible du module 6 » de
+>   `PLAN_RW_DECLARE_WINDOWS`), module 4 (D5).
 >
-> **Responsabilité unique** (Règle 1, `docs/RegleDocumentaire.md`) : le **langage visuel unifié** et la
+> Ce n'est **pas** une dérive de périmètre non maîtrisée (le risque, relevé par Saar le 2026-08-29) —
+> c'est une extension décidée, tracée ici. Le fil de conversation qui l'a établie reste en
+> **planification seule** (aucun code).
+>
+> **Autres décisions Saar 2026-08-28** : validation navigateur **en bloc à la fin** (Q1/Q4) ;
+> maquette non réalisable → **adapter et montrer**, pas de STOP (Q3) ; satellite exo **sans
+> migration** (Q5, §12.5) ; glyphes **jamais en dur** (fichiers dans `assets/status/`, rework Saar).
+>
+> **Responsabilité** (Règle 1, `docs/RegleDocumentaire.md`) : le **langage visuel unifié** + la
 > **structure commune** des trois fenêtres de déclaration d'action en phase ANNONCE
-> (`CombatActionWindow`, `CombatGmDeclareWindow`, `CombatExoActionWindow`). C'est la « passe de design
-> dédiée » que `PLAN_RW_DECLARE_WINDOWS.md` (clos, archivé `docs/Old/`) a explicitement différée en
-> annulant son module 5 (`CombatDeclareFrame`) et que `REACT.md` P58 note comme « chantier design
-> séparé ».
+> (`CombatActionWindow`, `CombatGmDeclareWindow`, `CombatExoActionWindow`), **et le refactoring
+> d'état que le modèle d'interaction cible (D5) impose**. Reprend la « passe de design dédiée » que
+> `PLAN_RW_DECLARE_WINDOWS.md` (clos, archivé `docs/Old/`) a différée en annulant son module 5
+> (`CombatDeclareFrame`) + le module 6 (`useHumanDeclare`) qu'il avait nommé sans le faire.
 >
-> **Ne traite pas** : le refactoring client des orchestrateurs (fait, `PLAN_RW_DECLARE_WINDOWS`), le
-> calcul métier (autorité `shared/combatIniCost.js` / `combatSections.js`, intact), le dispatch de
-> résolution Tir/CaC serveur (`ROADMAP.md` §5), la phase RÉSOLUTION (fenêtres `CombatModifiersWindow`
-> etc.) — **sauf la valeur i18n « Assaut » qui la traverse** (cf. lot B3).
+> **Ne traite pas** : la **fusion des orchestrateurs** (rejetée, REWORK-05 — M0.4 extrait des
+> sous-états partagés, il ne fusionne pas les 3 composants) ; le calcul métier (autorité
+> `shared/combatIniCost.js` / `combatSections.js`, intact) ; le dispatch de résolution Tir/CaC serveur
+> (`ROADMAP.md` §5) ; la phase RÉSOLUTION (`CombatModifiersWindow` etc.) — **sauf la valeur i18n
+> « Assaut » qui la traverse** (lot B3).
 >
 > **PLAN temporaire** (Règle 10) : à clôture, les invariants définitifs vont dans `docs/SYSTEME/COMBAT.md`
 > (§ Fenêtres de déclaration) + `docs/SYSTEME/REACT.md` P58 ; les tokens dans `client/src/index.css` ;
@@ -193,10 +207,12 @@ message), à inventorier au cadrage du module 2, pas à négliger.
 
 ---
 
-## 5. Séquence — périmètre engageable vs. en attente
+## 5. Séquence
 
-> **Analyse à charge round 2 (§11)** : le périmètre réellement engageable = **lot B + B5 + module 1**.
-> Les modules 2-5 sont une **cible validée en attente d'un déclencheur explicite** (§5.4).
+> **Historique** : round 2 (§11) limitait le périmètre engageable à lot B + B5 + module 1 et parquait
+> les modules 2-5. Round 4 les a dé-parkés. **2026-08-29 : chantier élargi assumé** (en-tête) — les
+> modules 2-5 + M0.4 sont **le chantier**, plus « en attente ». Ordre : §10. Rythme : cadrage →
+> analyse à charge → code, séparés (checkpoint), un module validé avant le suivant.
 
 ### 5.1 À FAIRE MAINTENANT (aggrade sans condition) — lot B — **CODÉ 2026-08-28**
 
@@ -719,11 +735,14 @@ module 0 en filet.
 | `useDraggable` clé | `combat-action-pos` | `combat-gm-declare-pos` | `combat-exo-action-pos` |
 
 **Divergences réelles à absorber :** 2 familles CSS (session vs combat), la poignée basse MJ, le
-bloc titre MJ enrichi (nom + progression), `.combat-win` en `absolute` vs `fixed`. **Choix
-proposé** : le châssis unifié adopte la **palette combat dédiée** (`--combat-*`, celle qui porte déjà
-le cyan `--combat-title` et un vrai jeu header/border/section) — pas les tokens génériques session.
+bloc titre MJ enrichi (nom + progression), `.combat-win` en `absolute` vs `fixed`. ~~Choix proposé :
+adopter la palette combat dédiée `--combat-*`.~~ **→ révisé par l'analyse à charge §13.11 point 5 :
+réutiliser `.combat-float-win` existant (2 fenêtres sur 3 déjà dessus), MJ bascule dessus — 1 fenêtre
+change de famille, pas 3.**
 
 ### 13.3 API cible `CombatDeclareFrame`
+
+> Visuel de base = `.combat-float-win` réutilisé (§13.11 pt 5), pas une classe neuve.
 
 ```
 <CombatDeclareFrame
@@ -776,21 +795,22 @@ ou reste un enfant du corps — **PO-M2-b**.
 `index.css` a déjà (l.157-165) : `--combat-pj-{fg,bg,border}` (#50c878 vert), `--combat-pnj-*`
 (#c86030 orange), `--combat-drone-*` (#30aaaa teal). **Absent** : `--combat-exo-*`, `--combat-accent-*`.
 
-Module 2 ajoute :
+Module 2 ajoute (le sélecteur = `.combat-float-win[data-family]`, pas de classe neuve — §13.11 pt 5) :
 ```
 :root {
   --combat-exo-fg: #9858c8; --combat-exo-bg: #140a1e; --combat-exo-border: #9858c8;
+  /* --combat-exo-bg : [INFÉRÉ], à valider à l'œil par Saar (§13.11 pt 5) */
 }
-.combat-declare-frame[data-family="pj"]     { --combat-accent-fg: var(--combat-pj-fg);   … }
-.combat-declare-frame[data-family="gm-pnj"] { --combat-accent-fg: var(--combat-pnj-fg);  … }
-.combat-declare-frame[data-family="drone"]  { --combat-accent-fg: var(--combat-drone-fg);… }
-.combat-declare-frame[data-family="exo"]    { --combat-accent-fg: var(--combat-exo-fg);  … }
+.combat-float-win[data-family="pj"]     { --combat-accent-fg: var(--combat-pj-fg);   … }
+.combat-float-win[data-family="gm-pnj"] { --combat-accent-fg: var(--combat-pnj-fg);  … }
+.combat-float-win[data-family="drone"]  { --combat-accent-fg: var(--combat-drone-fg);… }
+.combat-float-win[data-family="exo"]    { --combat-accent-fg: var(--combat-exo-fg);  … }
 ```
-Tout ce qui est aujourd'hui `#5b8dee` / `rgba(91,141,238,*)` (sélection « bleue parasite », D3) dans
-les fichiers que **ce module touche déjà** → `var(--combat-accent-*)`. La conversion hex→token des
-panneaux (~260 occ.) reste **hors périmètre** (§8).
-`data-family` sur l'élément racine du frame (PO1 tranché ici : attribut, pas classe `.combat-fam-*` —
-un attribut se lit mieux dans le DOM et évite une classe combinatoire).
+**Module 2 se limite à *définir* ces tokens** (+ les consommer sur le châssis : bordure de fenêtre,
+accent du header). La conversion des `#5b8dee` / `rgba(91,141,238,*)` (« bleue parasite », D3) →
+`var(--combat-accent-*)` vit dans le **corps** des fenêtres → sous-objectif des modules **3/4/5**,
+pas 2 (§13.11 pt 3). La conversion hex→token complète (~260 occ.) reste hors périmètre (§8).
+`data-family` en **attribut** (PO1 tranché : pas de classe `.combat-fam-*`).
 
 ### 13.6 Motif PCB (D14)  `[VÉRIFIÉ]` `ChangelogPanel.jsx`
 
@@ -826,9 +846,10 @@ feature flag (§6).
 - La conversion hex→token complète des panneaux (§8).
 - Le nettoyage des 4 gardes `CombatOverlay` (§13.7).
 - Toute fusion d'orchestrateurs (REWORK-05).
-- `.combat-float-win` / `.combat-win` : les autres consommateurs de ces classes (fenêtres de
-  RÉSOLUTION : `CombatModifiersWindow`, `CombatDamageWindow`…) **ne sont pas touchés** — le frame est
-  une classe neuve (`.combat-declare-frame`), les anciennes classes restent pour la résolution.
+- `.combat-win` (MJ) : le MJ bascule sur `.combat-float-win`, mais **les autres consommateurs de
+  `.combat-win`** (RÉSOLUTION : `CombatModifiersWindow`, `CombatDamageWindow`…) **ne sont pas
+  touchés** — `.combat-win` reste défini pour eux. Le frame réutilise `.combat-float-win` (+ éventuels
+  ajouts ciblés `[data-family]`), pas de classe neuve à recaler (§13.11 pt 5).
 
 ### 13.10 Points ouverts du module 2
 
@@ -839,3 +860,72 @@ feature flag (§6).
 | PO-M2-c | ~~`fixed` ou `absolute` ?~~ **Tranché `[VÉRIFIÉ]`** : `CombatOverlay` `styles.overlay` = `position: fixed; inset: 0; zIndex: 1000`. Donc `absolute` (contre l'overlay) et `fixed` (contre le viewport) rendent à l'identique. Le frame prend **`position: absolute` porté par la classe** (comme `.combat-win`), plus de `position` inline. |
 | PO-M2-d | `max-height` : `calc(100vh - 80px)` (PJ/exo) ou `- 100px` (MJ) ? Unifier à une valeur. |
 | PO-M2-e | Largeur dynamique 360/440/340 → 720 : le call site passe `width`, ou le frame prend `baseWidth` + `expanded` bool et connaît la valeur 720 ? (le 720 « panneau droit » disparaît au module 4 avec la col. 2 — anticiper ou pas ?) |
+
+### 13.11 Analyse à charge du module 2 (2026-08-29)
+
+Revue critique du cadrage §13.1-13.10, faite comme étape distincte (checkpoint).
+
+**1. `CombatDeclareFrame` possède `useDraggable` — risque des retours anticipés `[VÉRIFIÉ]`.**
+`CombatActionWindow` a **6 `return` avant son rendu principal** (§13.4). Si chacun retourne
+`<CombatDeclareFrame>`, `useDraggable` (dans le frame) tourne à chaque état. React réconcilie sur le
+type au même emplacement racine → instance préservée entre surprise → déclaration → résolution, la
+position tient. **Mais** : le frame **doit être l'élément le plus externe de *chaque* chemin de
+retour**, sans wrapper conditionnel autour. À écrire comme contrainte explicite dans le module.
+Filet : `useDraggable` retombe sur `localStorage` même à un remount — dégradation gracieuse.
+
+**2. Aucun test n'attrape une régression de module 2. `[VÉRIFIÉ]`** `tests/e2e/` = `smoke.spec.mjs`
+seul, **zéro parcours de déclaration de combat**. Le golden master (module 0) teste le **payload**,
+pas le châssis. Donc `useDraggable`, le prop `hidden` (masquage pendant ciblage), le header, les
+slots : **rien ne les couvre** jusqu'à la validation navigateur « en bloc » de Saar — qui ne peut pas
+bisecter un lot. → **un commit par fenêtre** (§13.8) devient non négociable, et le module doit
+livrer un **checklist de vérification manuelle** (drag, masquage au ciblage, chaque état
+non-déclaration, redimensionnement 360↔720) que Saar déroule à la fin, fenêtre par fenêtre.
+
+**3. Le cadrage sur-vend le nettoyage `#5b8dee` du module 2.** §13.5 : « tout ce qui est `#5b8dee`
+dans les fichiers que ce module touche déjà → `--combat-accent-*` ». Or module 2 ne touche que le
+**châssis externe** — les `#5b8dee` sont dans le **corps** (`W.itemSelected`, `S.quickRowActive`,
+roster actif, `AssaultRangedPanel`…), périmètre des modules 3/4/5. **Module 2 *définit*
+`--combat-accent-*` et n'en convertit quasiment aucun.** Corrigé : le nettoyage `#5b8dee` est un
+sous-objectif des modules **3/4/5**, pas 2.
+
+**4. Ordre : module 2 est le plus risqué ET le moins visible.** Il réécrit la structure externe des
+3 fenêtres (risque élevé, §13.8) pour un gain que Saar **ne verra presque pas** (unification de
+châssis). Modules 3 (satellite) et 5 (pied) sont plus visibles et moins risqués. **Mais** 3 et 5
+consomment les slots `satellite`/`footer` du frame → dépendance réelle. **Compromis retenu** :
+module 2 d'abord, mais **réduit au strict minimum** (cf. point 5) ; 3 et 5 apportent le visible juste
+après.
+
+**5. Le cadrage crée une classe CSS neuve (`.combat-declare-frame`) et une nouvelle valeur
+`--combat-exo-bg` inventée — sur-ingénierie pour un module « châssis ».** Reformulation :
+- Le frame **réutilise le visuel `.combat-float-win`** existant (2 des 3 fenêtres l'utilisent déjà),
+  pas une classe neuve. Le MJ **bascule dessus** (perd `.combat-win` / `--combat-header`). Une seule
+  famille, celle qui existe déjà et couvre la majorité — moins de surface de régression qu'une
+  classe neuve à recaler pixel par pixel. *(Contredit §13.2 « adopter la palette combat dédiée » —
+  arbitrage : la palette `--combat-*` est « plus juste » mais bascule les 3 fenêtres au lieu d'1, ×3
+  le risque visuel non testé. Le strict re-parentage `.combat-float-win` bascule 1 fenêtre.)*
+- `--combat-exo-fg/border` = `#9858c8` (D3, validé). `--combat-exo-bg` : **`[INFÉRÉ]` `#140a1e`**
+  (teinte violette très sombre, cohérente avec `pj-bg #0a1a0a` / `pnj-bg #1a0a08` / `drone-bg
+  #081414`) — **à valider à l'œil par Saar**, pas à figer ici.
+- `<CombatPcbBackdrop>` : garder l'idée, mais **module 2 le pose seulement sur le header** (une zone,
+  un test). Pied et satellite le reçoivent à leurs modules respectifs (5 et 3).
+
+**6. Poignée basse MJ (PO-M2-a) — `[VÉRIFIÉ]` genèse.** Ajoutée Session 118 (commit `02aee6f`,
+« poignées basses », pass d'ergonomie COM15) — délibérée, pas un accident. La retirer = régression
+UX mineure assumée. **Reco : la garder** comme `bottomHandle` optionnel du frame, activé pour les
+3 (gratuit une fois le frame en place, cohérent).
+
+**7. REACT.md P58 — pas de conflit `[VÉRIFIÉ]`.** P58 : « les 3 fenêtres restent des orchestrateurs
+séparés — la fusion GM + Joueur est rejetée ». Le frame est du **châssis**, pas du pilotage ; P58
+liste déjà les briques `CombatDeclare*` et nomme le frame comme « chantier design séparé ».
+`CombatDeclareFrame` s'ajoute à la table des briques de P58 à la clôture.
+
+**Conclusion — le module 2 se fait, révisé :**
+- Frame = **wrapper structurel minimal** réutilisant `.combat-float-win` ; MJ bascule dessus (1
+  fenêtre change de famille, pas 3).
+- `--combat-accent-*` + `--combat-exo-*` **définis** ; conversion `#5b8dee` **repoussée aux modules
+  3/4/5**.
+- PCB sur le header seulement.
+- `bottomHandle` conservé (option du frame).
+- Contrainte Rules-of-Hooks : frame = élément le plus externe de chaque `return`.
+- Livrable = code **+ checklist de vérif manuelle par fenêtre** (aucun filet automatisé, point 2).
+- PO-M2-b / d / e restent à trancher au moment du code (décisions mineures, pas bloquantes).
