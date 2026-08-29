@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { STATE_DEFS, stateTransitionCost } from './combatSections.js'
+import { STATE_DEFS } from './combatSections.js'
+import { stateTransitionCost } from '../../../shared/combatIniCost.js'
 
 // Segmented control pour choisir un etat de combat (posture, arme, mode de tir, couverture,
 // vitesse) avec le cout de transition d'Initiative affiche sur chaque option. Brique partagee des
@@ -17,7 +18,7 @@ export default function CombatDeclareStateSelector({ stateKey, current, initial,
           const isActive      = opt.k === current
           const isDisabled    = disabled || (availableKeys && !availableKeys.includes(opt.k))
           const isHighlighted = !isActive && !isDisabled && opt.k === highlightKey
-          const cost          = stateTransitionCost(def, initial, opt.k)
+          const cost          = stateTransitionCost(stateKey, initial, opt.k)
           const costStr       = cost === 0 ? null : cost > 0 ? `+${cost}` : `${cost}`
           return (
             <div

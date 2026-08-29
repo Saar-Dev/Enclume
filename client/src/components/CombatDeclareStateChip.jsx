@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { STATE_DEFS, stateTransitionCost, nextKey } from './combatSections.js'
+import { STATE_DEFS, nextKey } from './combatSections.js'
+import { stateTransitionCost } from '../../../shared/combatIniCost.js'
 
 // Puce compacte click-to-cycle : choisir un etat de combat (posture, arme, mode de tir) en cyclant
 // au clic, avec le cout de transition d'Initiative affiche. Variante compacte de
@@ -11,7 +12,7 @@ export default function CombatDeclareStateChip({ stateKey, current, initial, onC
   const { t } = useTranslation('combat')
   const def = STATE_DEFS[stateKey]
   const cur = def.states.find(s => s.k === current)
-  const cost = stateTransitionCost(def, initial, current)
+  const cost = stateTransitionCost(stateKey, initial, current)
 
   return (
     <div onClick={() => onChange(nextKey(stateKey, current, availableKeys))} style={S.chip}>

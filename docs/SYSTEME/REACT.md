@@ -134,8 +134,9 @@ Leurs morceaux communs sont des **briques à plat** dans `client/src/components/
   (+ `disabled` / `highlightKey` / `availableKeys`). Ni `def={STATE_DEFS.X}` (le composant le dérive),
   ni un composant d'état défini **dans** une fenêtre.
 - Le **calcul métier** vit dans le modèle, jamais dans une fenêtre : `combatSections.js` (`STATE_DEFS`,
-  `nextKey`, `stateTransitionCost`, `calcIniDelta`/`calcIniBreakdown`) + **`shared/combatIniCost.js`**
-  (autorité unique du coût d'Initiative d'une déclaration, **client + serveur** — cf. `COMBAT_FLUX.md`).
+  `nextKey`, `calcIniDelta`/`calcIniBreakdown`) + **`shared/combatIniCost.js`** (autorité unique du
+  coût d'Initiative d'une déclaration, **client + serveur** — `stateTransitionCost` / `computeIniDelta` /
+  `iniDeltaBreakdown` ; cf. `COMBAT_FLUX.md`).
 - Un **signal transitoire** (bannière de refus) passe par `sessionStore` + `useCombatSocket`
   (P57 — jamais un `socket.on` dans une fenêtre). Patron jumeau : `sessionStore.criticalEffect` /
   `CriticalEffectOverlay`.

@@ -3,7 +3,7 @@ import { STATE_TRANSITION_COST, iniDeltaBreakdown, computeIniDelta } from '../..
 // Definitions d'etats -- l'aperçu du coût de transition INI par option (segmented controls / chips).
 // Les matrices de coût elles-mêmes ne vivent PAS ici : autorité unique shared/combatIniCost.js
 // (STATE_TRANSITION_COST), partagée avec le serveur — STATE_DEFS ne fait que les référencer pour
-// l'affichage. stateTransitionCost(def, from, to) -> delta INI (0 si from === to).
+// l'affichage. Le coût d'une transition = shared/combatIniCost.js#stateTransitionCost(stateKey, from, to).
 
 // label/l/short = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le
 // composant consommateur via t(), jamais affichee brute ici. special (vitesse.delayed) inutilise
@@ -56,12 +56,6 @@ export const STATE_DEFS = {
     ],
     cost: STATE_TRANSITION_COST.vitesse,
   },
-}
-
-// Retourne le delta INI pour passer de fromKey a toKey dans une STATE_DEF.
-export function stateTransitionCost(def, fromKey, toKey) {
-  if (fromKey === toKey) return 0
-  return def.cost?.[fromKey]?.[toKey] ?? 0
 }
 
 // Etat suivant dans le cycle des options d'un champ (posture, arme, mode de tir...) — utilise par

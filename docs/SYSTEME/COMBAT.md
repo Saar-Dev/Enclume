@@ -1435,11 +1435,11 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 `CombatDeclare*` et des règles : **`REACT.md` P58**.
 
 Côté modèle / calcul (ce qui concerne ce document) :
-- `client/src/components/combatSections.js` — `STATE_DEFS`, `nextKey`, `stateTransitionCost`,
+- `client/src/components/combatSections.js` — `STATE_DEFS`, `nextKey`,
   `calcIniDelta` / `calcIniBreakdown` (aperçu client), `MAP_ACTIONS`, `MOVE_ZONE_DEFS`,
   `FIRE_MODE_VARIANTS`, `computeFireVariant`.
 - `shared/combatIniCost.js` — **autorité unique du coût d'Initiative d'une déclaration, client +
-  serveur** (`computeIniDelta` / `iniDeltaBreakdown` / `projectedInitiative`). Détail des postes :
+  serveur** (`computeIniDelta` / `iniDeltaBreakdown` / `projectedInitiative` / `stateTransitionCost`). Détail des postes :
   `COMBAT_FLUX.md` § « Calcul delta initiative ». Le serveur (`socketCombatAnnouncement.js`) applique
   cette même fonction à `combat_roster.initiative` ; le client l'affiche dans la pastille
   « Initiative projetée » du pied (`CombatDeclareIniWidget`, rouge si projeté ≤ 0).

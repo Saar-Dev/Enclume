@@ -533,6 +533,20 @@ de `getAimIneligibilityReasons().join(', ')` (contraire aux gates voisins l.445/
 
 ### Module 7 — `InlineChip` → `CombatDeclareStateChip.jsx` + API `CombatDeclareState*` unifiée — **FAIT (code, 2026-08-28) — validation navigateur Saar en attente**
 
+> **CORRECTIF POST-CLÔTURE (2026-08-29, analyse à charge)** — l'équivalence de coût (`current === initial
+> ? 0 : def.cost?.[initial]?.[current] ?? 0` ≡ `stateTransitionCost(...)`) et le déplacement verbatim
+> de `nextKey` sont **confirmés** (diff byte-identique, 5 tests). Mais le « helper partagé
+> `stateTransitionCost` » que le module a câblé n'était **pas** l'autorité : il existait **deux
+> fonctions exportées `stateTransitionCost`** — `combatSections.js` (`(def, from, to)`) et
+> `shared/combatIniCost.js` (`(key, from, to)`, gardée `!from||!to`, testée). Collision de nom,
+> signatures incompatibles, la mauvaise usée silencieusement renvoie `0`. Le module 2 avait extrait
+> les *matrices* dans `combatIniCost.js` mais laissé le *wrapper* dupliqué dans `combatSections.js`,
+> et le module 7 a pointé la puce dessus. **Résorbé (2026-08-29)** : `combatSections.js#stateTransitionCost`
+> supprimé ; `CombatDeclareStateSelector` / `CombatDeclareStateChip` appellent
+> `shared/combatIniCost.js#stateTransitionCost(stateKey, …)` (les deux ont déjà `stateKey`). Docs
+> `COMBAT.md` / `REACT.md` réalignées. Iso-comportement (les sites d'appel ne passent jamais de clé
+> vide).
+
 **Problème** `[VÉRIFIÉ]` : `CombatGmDeclareWindow.jsx` avait un composant **local** `InlineChip` (puce
 compacte click-to-cycle : choisir un état + montrer le coût de transition) — même concept que
 `CombatDeclareStateSelector` (module 1), présentation compacte. Le MJ l'utilisait pour Posture/Arme/
