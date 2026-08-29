@@ -28,7 +28,7 @@ test('snapFromRosterEntry — champ manquant → défaut de ce champ seulement',
   assert.equal(snap.position, 'standing')
 })
 
-test('RESET — re-seede l\'état tactique depuis le payload, combatMode+quick remis à zéro', () => {
+test('RESET — re-seede l\'état tactique depuis le payload (roster frais), combatMode+quick remis à zéro', () => {
   const dirty = {
     position: 'prone', weapon: 'drawn', fire_mode: 'rl', cover: 'important', vitesse: 'rushed',
     combatMode: 'charge', quick: { observer: 3, reperer: 1, phrase: true },
@@ -39,10 +39,27 @@ test('RESET — re-seede l\'état tactique depuis le payload, combatMode+quick r
     ...DECLARATION_INITIAL,
     position: 'standing', weapon: 'drawn', fire_mode: 'cc', cover: 'exposed', vitesse: 'normal',
   })
-  // Régression bug Tir visé : posture/couverture/vitesse NE gardent PAS la valeur "sale".
-  assert.equal(next.position, 'standing')
-  assert.equal(next.cover, 'exposed')
-  assert.equal(next.vitesse, 'normal')
+  // Régression bug Tir visé : `decl` suit le roster, il ne garde pas la valeur "sale" du tour d'avant.
+  assert.equal(next.position, 'standing') // = snap (le roster disait standing)
+  assert.equal(next.cover, 'exposed')     // = défaut du snap (endTurn a reseté state_cover)
+  assert.equal(next.vitesse, 'normal')    // = défaut du snap (endTurn a reseté state_vitesse)
+  assert.equal(next.combatMode, 'normal') // = DECLARATION_INITIAL
+})
+
+test('RESET — posture conservée entre tours : le client suit le roster, il ne force pas "standing"', () => {
+  // endTurn (socketCombatHelpers.js) réinitialise state_cover/state_vitesse/state_combat_mode +
+  // initiative, JAMAIS state_position (se relever a un coût d'Initiative dédié — COMBAT_FLUX.md
+  // § endTurn, PLAN_CHARACTER_STATES §0.2). Un personnage couché au tour N reste couché au tour N+1 :
+  // RESET doit reprendre `prone` depuis le roster, pas le remettre debout.
+  const dirty = {
+    position: 'crouching', weapon: 'drawn', fire_mode: 'cc', cover: 'important', vitesse: 'rushed',
+    combatMode: 'offensif', quick: { observer: 1, reperer: 0, phrase: false },
+  }
+  const snap = snapFromRosterEntry({ state_position: 'prone', state_weapon: 'drawn', state_fire_mode: 'cc' })
+  const next = declarationReducer(dirty, { type: 'RESET', payload: snap })
+  assert.equal(next.position, 'prone')   // suit le roster (posture gardée par le serveur)
+  assert.equal(next.cover, 'exposed')    // roster reseté → défaut
+  assert.equal(next.vitesse, 'normal')   // roster reseté → défaut
   assert.equal(next.combatMode, 'normal')
 })
 

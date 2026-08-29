@@ -485,9 +485,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
         // jamais confiance au client). getAimIneligibilityReasons bloque déjà toute combinaison avec
         // le CaC ou une transition d'état (« aucune autre action ce Tour »). DBG log + message = les
         // raisons réelles (2026-08-28, remplace une chaîne fourre-tout).
-        // NOTE : `state.cover` n'est PAS envoyé par les handleDeclare humanoïdes → `state.cover`
-        // undefined ≠ `entry.state_cover` → "changement de couverture" fantôme (bug à corriger par
-        // le module "action exclusive" unifié, cf. PLAN_RW_DECLARE_WINDOWS / discussion Saar).
+        // NOTE : les handleDeclare humanoïdes n'envoient pas `state.cover`. getAimIneligibilityReasons
+        // (comme la boucle de coût INI) normalise « champ d'état absent du payload = inchangé »
+        // (`?? entry.state_*`) — invariant documenté COMBAT_FLUX.md § « Calcul delta initiative ».
+        // Pas de transition fantôme (bug Tir visé « changement de couverture » corrigé 2026-08-28,
+        // `shared/combatExclusiveActions.js`).
         if (aimTranches > 0) {
           const aimReasons = getAimIneligibilityReasons({
             mapActions, state, quick, entry,

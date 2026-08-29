@@ -477,6 +477,11 @@ Tir Multi ⊕ dual-wield ⊕ localisation visée (D10) ; Charge/Retraite → for
 
 #### Cas concret motivant — bug Tir visé (Saar, 2026-08-28, ticketé)
 
+> **CORRECTIF 2026-08-29** — deux imprécisions ci-dessous (cf. note détaillée §5bis) : `endTurn` ne
+> réinitialise **pas** `state_position` (seulement `state_cover` / `state_vitesse` /
+> `state_combat_mode`) ; et le symptôme « changement de couverture » venait aussi d'un défaut serveur
+> distinct (`state.cover` jamais envoyé par les `handleDeclare` humanoïdes), corrigé par `d6fbd48`.
+
 Le Tir visé humain est bloqué à tort après un tour où le joueur a changé de posture/couverture/
 vitesse. Cause racine : `endTurn` (serveur) remet `combat_roster.state_position/cover/vitesse` aux
 défauts, mais côté client `RESET_NEW_TURN` (`declarationReducer.js:47`) ne re-synchronise **que**
@@ -546,6 +551,25 @@ coût, `fire_mode` limité), Vitesse (segmented) intacte.
 
 > **Pas un module de refacto** — un correctif de bug autonome, fait AVANT le module 2. Issu de
 > l'analyse à charge du cadrage module 6 : la cause racine se corrige sans rien extraire.
+
+> **CORRECTIF POST-CLÔTURE (2026-08-29, analyse à charge du présent doc)** — trois erreurs de cette
+> section, sans effet sur le code livré (`snapFromRosterEntry` lit le roster tel quel, il suit le
+> serveur quoi qu'il reset) :
+> 1. **`endTurn` ne réinitialise PAS `state_position`.** Le reset serveur
+>    (`socketCombatHelpers.js`) porte sur `state_cover` / `state_vitesse` / `state_combat_mode`
+>    (+ `initiative`, `is_surprised`) — **jamais la posture** (se relever a un coût d'Initiative
+>    dédié ; `COMBAT_FLUX.md` § endTurn, `PLAN_CHARACTER_STATES §0.2`). Un personnage couché au
+>    tour N reste couché au tour N+1.
+> 2. **Critère de validation (2) faux** : au tour N+1 la posture n'est PAS « remise à debout » —
+>    elle suit le roster. Seules couverture/vitesse reviennent aux défauts.
+> 3. **Moitié serveur du bug omise** : le symptôme « changement de couverture » venait d'un
+>    second défaut, corrigé séparément le même jour (`d6fbd48`, 2 min avant `de350fc`) —
+>    les `handleDeclare` humanoïdes n'envoient jamais `state.cover`, `getAimIneligibilityReasons`
+>    normalise désormais « champ absent = inchangé » (`?? entry.state_*`). Le « sous-bug ligne 513 »
+>    ci-dessous y a été replié.
+>
+> Test de régression étendu en conséquence (`declarationReducer.test.mjs` : cas « roster `prone`
+> → `decl.position` reste `prone` »).
 
 **Bug** : Tir visé humain rejeté à tort au tour N+1 après un tour N où le joueur/MJ a changé de
 posture/couverture/vitesse (détail complet en fin de section « Module 6 »).
