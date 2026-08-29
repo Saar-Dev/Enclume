@@ -129,16 +129,9 @@ export function calcIniDelta(prevStates, nextStates, mapActions, quick) {
   return computeIniDelta(toIniParams(prevStates, nextStates, mapActions, quick))
 }
 
-// Actions sur la carte -- multi-selection
-// l/tooltip = cle i18n namespace combat (docs/SYSTEME/LOCALISATION.md §3.1), resolue par le composant
-// consommateur via t(), jamais affichee brute ici. hint inutilise (aucun rendu trouve) -- laisse en
-// texte, pas un texte visible.
-export const MAP_ACTIONS = [
-  { k: 'move',     l: 'mapActions.move.label',     tooltip: 'mapActions.move.tooltip',     hint: 'cliquer destination',          isZoneSelect: true, span2: true },
-  { k: 'attack',   l: 'mapActions.attack.label',   tooltip: 'mapActions.attack.tooltip',   hint: 'cliquer cible',                requireWeapon: true },
-  { k: 'melee',    l: 'mapActions.melee.label',    tooltip: 'mapActions.melee.tooltip',    hint: 'cliquer adversaire'                                },
-  { k: 'reload',   l: 'mapActions.reload.label',   tooltip: 'mapActions.reload.tooltip',                                                             span2: true          },
-]
+// MAP_ACTIONS (grille de tuiles Déplacement/Tir/CaC/Rechargement) retiré 2026-08-30 — remplacé par
+// la liste d'armes groupée `CombatDeclareActionList` (D5 « l'arme EST l'action », chantier
+// RW_DECLARE_DESIGN clos, `docs/Old/`). Les clés i18n `mapActions.*` restent (move/reload tooltips).
 
 // Actions rapides -- cumulables. l/tooltip = cle i18n namespace combat, meme convention que ci-dessus.
 export const QUICK_ACTIONS = [

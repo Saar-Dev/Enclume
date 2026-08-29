@@ -13,7 +13,6 @@ import {
   QUICK_ACTIONS,
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
-  ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
