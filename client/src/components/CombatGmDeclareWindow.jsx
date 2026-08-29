@@ -30,6 +30,7 @@ import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
+import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { assaultCheck, meleeCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -59,16 +60,23 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [meleeAttackCount,setMeleeAttackCount]= useState(1)
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
-  const [assaultTargets,  setAssaultTargets]  = useState([])       // [tokenId, ...] — docs/PLAN_TIRMULTI.md
-  const [assaultCount,    setAssaultCount]    = useState(1)        // 1|2|3
   const [meleeTargets,    setMeleeTargets]    = useState([])       // [tokenId, ...]
   const [chargeSelection, setChargeSelection] = useState(null)     // { move, targetTokenId } | null
-  // Tir GM — variant mode de tir (miroir PJ)
-  const [assaultBulletCount,  setAssaultBulletCount]  = useState(null)   // number | 'multi' | null
-  const [assaultVariantAB,    setAssaultVariantAB]    = useState('A')
-  const [isDualWield,         setIsDualWield]         = useState(false)
-  const [aimTranches,         setAimTranches]         = useState(0)
-  const [aimedLocation,       setAimedLocation]       = useState(null)
+
+  // ── Sous-état de sélection Tir (M0.4) — reducer partagé PJ / MJ ───────────
+  // { weaponId, targets, count, bulletCount, variantAB, isDualWield, aimTranches, aimedLocation }.
+  // Alias en lecture pour ne pas toucher les sites de lecture existants. `assaultDecl.clear()` dans
+  // l'effet de reset (le hook ne se reset pas seul).
+  const assaultDecl = useAssaultDeclaration()
+  const {
+    targets:      assaultTargets,
+    count:        assaultCount,
+    bulletCount:  assaultBulletCount,
+    variantAB:    assaultVariantAB,
+    isDualWield,
+    aimTranches,
+    aimedLocation,
+  } = assaultDecl.state
   // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — état séparé du dual-wield Tir ci-dessus
   // (même raison que côté PJ : les deux Actions sont exclusives à la déclaration mais gardent chacune
   // leur propre état pour ne pas se réinitialiser l'une l'autre).
@@ -90,12 +98,12 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // ici, avant le retour conditionnel (leurs seules dépendances, decl/meleeAttackCount/assaultCount,
   // sont déjà disponibles à ce point — jamais recalculés plus bas, réutilisés tels quels).
   const effectiveMeleeCountRef = useRef()
-  const effectiveAssaultCountRef = useRef()
   const currentFireMode = decl.fire_mode.toUpperCase()
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeAttackCount
   const effectiveAssaultCount = currentFireMode === 'CC' ? assaultCount : 1
   useEffect(() => { effectiveMeleeCountRef.current = effectiveMeleeCount }, [effectiveMeleeCount])
-  useEffect(() => { effectiveAssaultCountRef.current = effectiveAssaultCount }, [effectiveAssaultCount])
+  // effectiveAssaultCountRef : plus nécessaire — assaultDecl.setTarget calcule la longueur de série
+  // en interne depuis son ref-miroir (M0.4-c).
 
   // StrictMode (main.jsx) double-invoque les effets de montage en dev (mount → cleanup → mount) —
   // sans ce réarmement dans le corps de l'effet, isMountedRef.current reste bloqué à false après ce
@@ -157,15 +165,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setMeleeAttackCount(1)
     setMeleePendingMode(false)
     setPendingMove(null)
-    setAssaultTargets([])
-    setAssaultCount(1)
+    assaultDecl.clear()
     setMeleeTargets([])
     setChargeSelection(null)
-    setAssaultBulletCount(null)
-    setAssaultVariantAB('A')
-    setIsDualWield(false)
-    setAimTranches(0)
-    setAimedLocation(null)
     setSelectedGmMeleeWeaponId(undefined)
     setSelectedGmMeleeNaturalWeaponId(null)
     setIsDualWieldMelee(false)
@@ -273,7 +275,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     showTargetRecap,
     registerAmbientAttackHandler,
     onMeleeTarget:   (tid) => setMeleeTargets([tid]),
-    onAssaultTarget: (tid) => setAssaultTargets([tid]),
+    onAssaultTarget: (tid) => assaultDecl.setSoleTarget(tid),
   })
 
   // Reset fire_mode au premier mode disponible si l'arme chargée ne le supporte pas
@@ -452,12 +454,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       activeTokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
       (targetId) => {
-        setAssaultTargets(prev => {
-          if (!prev.some(Boolean)) return Array(effectiveAssaultCountRef.current).fill(targetId)
-          const next = [...prev]
-          next[startIdx] = targetId
-          return next
-        })
+        assaultDecl.setTarget(startIdx, targetId, currentFireMode)
         setIsSelectingOnMap(false)
       },
       () => { setIsSelectingOnMap(false) },
@@ -640,7 +637,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                     availableKeys={rangedActive ? availableFireModes : undefined}
                     onChange={v => {
                       dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
-                      setAssaultBulletCount(null); setAssaultVariantAB('A'); setAimTranches(0)
+                      assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
                     }} />
                 </div>
               </div>
@@ -683,12 +680,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                             rearmMove()
                           } else if (a.k === 'attack') {
                             if (isAttackActive) {
-                              setAssaultTargets([])
-                              setAssaultCount(1)
-                              setAssaultBulletCount(null)
-                              setAssaultVariantAB('A')
-                              setAimTranches(0)
-                              setAimedLocation(null)
+                              assaultDecl.clear()   // désélection : reset du sous-état Tir (isDualWield inclus, cf. PJ)
                               return
                             }
                             // CaC et Tir mutuellement exclusifs à la déclaration (LdB « Types
@@ -710,14 +702,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                               dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
                             } else {
                               // Même exclusivité que ci-dessus, dans l'autre sens.
-                              if (isAttackActive) {
-                                setAssaultTargets([])
-                                setAssaultCount(1)
-                                setAssaultBulletCount(null)
-                                setAssaultVariantAB('A')
-                                setAimTranches(0)
-                                setAimedLocation(null)
-                              }
+                              if (isAttackActive) assaultDecl.clear()
                               handleStartMelee()
                             }
                           } else {
@@ -1007,32 +992,24 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               showDualWieldSection={hasTwoWeapons && sameFirMode}
               isDualWield={isDualWield}
               currentFireMode={currentFireMode}
-              onDualWieldChange={(val) => setIsDualWield(val)}
+              onDualWieldChange={assaultDecl.setDualWield}
               assaultBulletCount={assaultBulletCount}
               effectiveBulletCount={effectiveBulletCount}
               assaultVariantAB={assaultVariantAB}
               ccSliderDisplayIdx={ccSliderDisplayIdx}
               currentVariant={currentVariant}
               dualWieldBonusComp={dualWieldBonusComp}
-              onBulletCountChange={(count) => setAssaultBulletCount(count)}
-              onVariantABChange={(ab) => setAssaultVariantAB(ab)}
+              onBulletCountChange={assaultDecl.setBulletCount}
+              onVariantABChange={assaultDecl.setVariantAB}
               aimTranches={aimTranches}
-              onAimTranchesChange={(n) => setAimTranches(n)}
+              onAimTranchesChange={assaultDecl.setAimTranches}
               aimIneligibilityReasons={aimIneligibilityReasons}
               lunetteNiveau={weapon?.lunette_niveau ?? 0}
               aimedLocation={aimedLocation}
-              onAimedLocationChange={(loc) => setAimedLocation(loc)}
+              onAimedLocationChange={assaultDecl.setAimedLocation}
               assaultCount={assaultCount}
               effectiveAssaultCount={effectiveAssaultCount}
-              onAssaultCountChange={(n) => {
-                setAssaultCount(n)
-                setAssaultTargets(prev => {
-                  const truncated = prev.slice(0, n)
-                  if (truncated.length >= n) return truncated
-                  const fillValue = truncated.find(Boolean) ?? null
-                  return Array.from({ length: n }, (_, i) => truncated[i] ?? fillValue)
-                })
-              }}
+              onAssaultCountChange={assaultDecl.setCount}
               multiShotIneligibilityReasons={multiShotIneligibilityReasons}
             />
           </div>
