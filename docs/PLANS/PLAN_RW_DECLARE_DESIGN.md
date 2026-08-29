@@ -970,28 +970,27 @@ liste déjà les briques `CombatDeclare*` et nomme le frame comme « chantier de
 
 Sortir les **sélecteurs d'état tactique** (posture, vitesse, arme) du corps des fenêtres vers un
 **panneau satellite accroché au bord gauche** de la fenêtre principale, qui **suit sa position**
-(D8 : « statut, pas actions — on ne les modifie pas souvent »). Présentation **glyphe** (D8/D10),
-peu de texte. Neuf pour l'exo (aujourd'hui `state: {}`).
-**Ne touche pas** : `fire_mode` (part en col. 2 au module 4, §14.7), la liste d'armes (module 4), le
-pied (module 5), le calcul de coût INI (`STATE_TRANSITION_COST`, autorité serveur, intact).
+(D8 : « statut, pas actions »). Brique = `CombatDeclareStateChip` **existant** + un glyphe (§14.4).
+**Identique PJ / MJ / Exo** ; l'exo, qui envoie `state: {}` aujourd'hui, gagne les mêmes puces.
+**Ne touche pas** : `fire_mode` (→ col. 2, module 4, §14.7), la liste d'armes (module 4), le pied
+(module 5), le calcul de coût INI (`STATE_TRANSITION_COST`, autorité serveur, intact).
 
 ### 14.2 État des lieux `[VÉRIFIÉ]` — les axes d'état
 
 `STATE_DEFS` (`combatSections.js`) définit **5 axes** ; coûts de transition dans
 `shared/combatIniCost.js` (`STATE_TRANSITION_COST`, partagé serveur) :
 
-| Axe | Valeurs | i18n (`states.*`) | UI actuelle |
+| Axe | Valeurs | i18n (`states.*`) | Glyphe (`assets/status/`) |
 |---|---|---|---|
-| `position` | standing / crouching / kneeling / prone | Debout / Accroupi / À genou / Couché | PJ : `StateSelector` (TACTIQUE) ; MJ : `StateChip` |
-| `vitesse` | delayed / normal / rushed | Retardée / Normale / Précipitée | PJ + MJ : `StateSelector` (segmented — MJ délibérément, Session 158) |
-| `weapon` | holstered / ready / drawn | Rangée / Prête / Au clair | PJ : `StateSelector` (ARMEMENT) ; MJ : `StateChip` |
-| `fire_mode` | cc / rc / rl | — | PJ + MJ : `StateSelector`/`StateChip` (ARMEMENT) → **part au module 4** |
-| `cover` | exposed / partial / important | Exposé / Partiel / Important | **aucun sélecteur nulle part** `[VÉRIFIÉ]` — non éditable joueur, hors satellite |
+| `position` | standing / crouching / kneeling / prone | Debout / Accroupi / À genou / Couché | `stand` / `crounch` / `kneel` / `crawl` |
+| `vitesse` | delayed / normal / rushed | Retardée / Normale / Précipitée | `actionDelayed` / `actionNormal` / `actionRush` |
+| `weapon` | holstered / ready / drawn | Rangée / Prête / Au clair | `WeaponA` / `WeaponB` / `WeaponC` |
+| `fire_mode` | cc / rc / rl | — | — → **part au module 4**, pas au satellite |
+| `cover` | exposed / partial / important | Exposé / Partiel / Important | — → **aucun sélecteur nulle part** aujourd'hui `[VÉRIFIÉ]`, hors satellite |
 
-Les 2 briques (`StateSelector` segmented / `StateChip` click-to-cycle) partagent l'API
-`{stateKey, current, initial, onChange, availableKeys}` et affichent le coût vs `initial`
-(= `snapFromRosterEntry`, état en début de tour). Reversées au satellite : `initial` =
-`initialStates.current[axe]` inchangé.
+`CombatDeclareStateChip` (click-to-cycle `nextKey`, API `{stateKey, current, initial, onChange,
+availableKeys}`, coût vs `initial` = `snapFromRosterEntry`) est **la** brique du satellite, avec un
+glyphe. `initial` = `initialStates.current[axe]` inchangé.
 
 ### 14.3 Contenu du satellite par famille
 
@@ -1002,58 +1001,45 @@ Les 2 briques (`StateSelector` segmented / `StateChip` click-to-cycle) partagent
 > position accroupi/genou » pour l'exo, et que rien dans le RAW ne restreint. Même faute que le
 > round 5. Modèle correct ci-dessous.
 
-| Famille | Satellite |
-|---|---|
-| PJ | Posture (4) + Vitesse (3) + Arme (3) |
-| MJ-PNJ | idem (le MJ garde Vitesse en segmented, Session 158 — à respecter dans la présentation glyphe) |
-| Drone | **aucun** (D8 ; le drone envoie un `state` fixe) |
-| Exo | **Posture (4) + Arme (3)** ; **pas de mode de tir** (fixe, `[VÉRIFIÉ]` `EXOARMURE.md:300` « dérivé de `exo_weapon.ref_fire_mode` ») ; Vitesse `[À CONFIRMER]` (Saar ne l'a pas listée — probable, mécanique INI générique) |
+**Satellite identique PJ / MJ-PNJ / Exo** (Saar 2026-08-29 : *« la fenêtre d'action MJ = PJ »* — la
+divergence Session 158 « MJ Vitesse en segmented » est **caduque**, D1). **Drone : aucun satellite**
+(D8 — `state` fixe).
 
-**Exo — `[VÉRIFIÉ]` :**
-- **Posture** : les 4 (`debout / couché / accroupi / genou`). `POSITION_TRANSITION_COST`
-  (`shared/combatStatePositionCost.js`, source RAW `REGLESYSCOMBAT.md:929-941`) s'applique **telle
-  quelle** à l'exo — `PLAN_EXOARMURE.md` §9 : « continue de s'appliquer telle quelle à la
-  Déclaration ». Toutes les transitions = perte d'Initiative standard, **sans Test**, **sauf**
-  `prone → autre position` : coût standard (`-10`) **+ Test de Manœuvre d'armure du pilote**, avec
-  écriture de `state_position` **différée à la Résolution** (déjà codé : `isExoStandUpAttempt`
-  `socketCombatAnnouncement.js`, `resolveExoStandUpAction`, `handleStandUp` dans le corps de
-  `CombatExoActionWindow`). Micro-écart à confirmer (§11 round 6) : le code fire le Test sur
-  `prone → n'importe quelle position` ; le message Saar disait « couché vers debout » — son propre
-  plan §9.2 dit « prone → autre position », donc = n'importe laquelle.
-- **Arme** : les 3 (`arme au clair / main sur l'arme / arme rangée`). Aucune restriction RAW trouvée
-  (`REGLEARMURE.md` p.323-329 relu : les seules restrictions exo sont « une seule Attaque/Tour »,
-  milieu inadapté → allure lente, Intégrité 0 → détruite — rien sur la posture ni l'état d'arme).
-- **Mode de tir** : fixe, dérivé de l'arme. **Jamais dans le satellite.**
+| Axes du satellite | PJ | MJ-PNJ | Exo |
+|---|---|---|---|
+| **Posture** (4) + **Vitesse** (3) + **Arme** (3), en `CombatDeclareStateChip` glyphe | ✅ | ✅ | ✅ |
 
-→ **PO-M3-a — TRANCHÉ (Saar 2026-08-29)** : **même interface que HUMAN**, aucune divergence. Quand
-l'exo est `prone`, la puce Posture est un chip normal ; sélectionner une position non-`prone` déclenche
-la **tentative de se relever** (`isExoStandUpAttempt`, déjà serveur — `resolveExoStandUpAction`).
-Ajouts : (a) au clic, un **message système dans le chat** du type « Test pour tenter de se relever.
-En cas d'échec, fin de tour » ; (b) résolution du jet (déjà `DICE_RESULT` visible) → **réussite :
-bascule vers DEBOUT** (comme `handleStandUp` aujourd'hui, `state: {position:'standing'}`) ; **échec :
-fin de tour**. Le bouton dédié « Tenter de se relever » du corps (`handleStandUp`) **disparaît** — la
-puce du satellite le remplace. (Message serveur : FR en dur aujourd'hui comme les voisins,
-`PLAN_LOCALISATION` §8 ; ou `system:true`/`i18nKey` si trivial.)
+Exo : **pas** de `fire_mode` (fixe, `[VÉRIFIÉ]` `EXOARMURE.md:300`). Vitesse **incluse** (Saar
+confirmé 2026-08-29).
 
-### 14.4 Brique — **réutiliser l'existant, pas réinventer** (recadrage Saar 2026-08-29)
+**Exo — pourquoi les 3 axes s'appliquent, `[VÉRIFIÉ]` :**
+- **Posture (4)** : `POSITION_TRANSITION_COST` (`shared/combatStatePositionCost.js`, source RAW
+  `REGLESYSCOMBAT.md:929-941`) s'applique **telle quelle** à l'exo (`PLAN_EXOARMURE.md` §9). Coût
+  d'Initiative standard sur toutes les transitions.
+- **Arme (3)** : aucune restriction RAW (`REGLEARMURE.md` p.323-329 relu — seules restrictions exo :
+  1 Attaque/Tour, milieu inadapté → allure lente, Intégrité 0 → détruite).
+- **Mode de tir** : fixe, dérivé de l'arme — jamais au satellite.
 
-Signal Saar : *« tu te fourvoies en cherchant à réinventer l'interface plutôt que réutiliser les
-éléments existants »*. → Module 3 = **relocalisation** des sélecteurs d'état existants dans le
-panneau satellite, **pas une refonte des sélecteurs**.
+**Cas `prone` (se relever) — TRANCHÉ (Saar 2026-08-29)** : même puce Posture que HUMAN. Depuis
+`couché`, sélectionner une autre position = **tentative de se relever** (mécanisme serveur déjà là :
+`isExoStandUpAttempt` / `resolveExoStandUpAction` ; jet `DICE_RESULT` visible). Le bouton dédié
+« Tenter de se relever » du corps (`handleStandUp`) **disparaît**, remplacé par la puce. Ajout :
+au clic, un **message système chat** « Test pour tenter de se relever. En cas d'échec, fin de tour ».
+Résultat : **réussite → DEBOUT** (`state:{position:'standing'}`, comme aujourd'hui) ; **échec → fin
+de tour**. (Message serveur FR en dur comme les voisins, `PLAN_LOCALISATION` §8 ; ou `system:true`
+/`i18nKey` si trivial.)
 
-- **Brique** : `CombatDeclareStateChip` **tel quel** (click-to-cycle `nextKey`, affiche label +
-  valeur + coût INI — déjà utilisé par le MJ). Pas de nouveau composant. Pas de question
-  « cycle vs déplier » : le chip cycle, c'est le comportement voulu (déjà en prod côté MJ).
-  ~~PO-M3-b, PO-M3-c retirés.~~
-- **Glyphe (D8 « glyphes iconiques, peu de texte » + D10)** : décision **de skin**, pas de
-  structure. Deux options, **PO-M3-b (nouveau)** : (i) ajouter un `glyph?` optionnel à
-  `CombatDeclareStateChip` (préfixe icône `mask-image` d'un `assets/status/*.svg`, recoloré
-  `--combat-accent-fg`) — modifie 1 fichier, s'applique partout où le chip sert ; (ii) le faire dans
-  une passe D10 séparée après le module 3, le satellite livrant d'abord les chips texte tels quels.
-  Mapping valeur→glyphe direct (PO5 : glyphe reflète la valeur — Saar a produit les 4 postures →
-  oui) : `standing→stand`, `crouching→crounch`, `kneeling→kneel`, `prone→crawl` ;
-  `normal→actionNormal`, `delayed→actionDelayed`, `rushed→actionRush` ; `holstered→WeaponA`,
-  `ready→WeaponB`, `drawn→WeaponC`.
+### 14.4 Brique — réutiliser `CombatDeclareStateChip`, + le glyphe
+
+Recadrage Saar 2026-08-29 : *« tu te fourvoies à réinventer l'interface plutôt que réutiliser
+l'existant »*. → Module 3 = **relocaliser** les sélecteurs d'état dans le satellite, pas les refondre.
+
+- **Brique = `CombatDeclareStateChip` tel quel** : click-to-cycle (`nextKey`), coût INI vs `initial`.
+  Aucun nouveau composant, aucune question « cycle vs déplier ».
+- **Glyphe** : `CombatDeclareStateChip` reçoit un `glyph` (`mask-image` d'un `assets/status/*.svg`
+  déjà produit par Saar, recoloré `--combat-accent-fg`) à la place / en tête du label texte (D8
+  « peu de texte »). **Mêmes glyphes EXO et HUMAN** (Saar). Mapping = tableau §14.2, un glyphe par
+  valeur (PO5 : le glyphe reflète la valeur). 1 fichier modifié, s'applique partout où le chip sert.
 
 ### 14.5 Mécanisme « le satellite suit la fenêtre » (PO3c)  `[VÉRIFIÉ]` aucun précédent
 
@@ -1120,19 +1106,11 @@ positionnement du satellite frère, pas de test auto → **un commit par fenêtr
 
 ### 14.10 Points ouverts module 3
 
-**Tranchés (Saar 2026-08-29) :**
-- **PO-M3-a** — exo `prone` : **même interface que HUMAN**, la puce Posture **remplace** le bouton
-  « Tenter de se relever » ; clic → message système chat + jet ; réussite → DEBOUT, échec → fin de
-  tour (§14.3).
-- **PO-M3-a2** — l'exo **a** Vitesse au satellite.
-- **PO-M3-b (ancien) / PO-M3-c** — retirés : `CombatDeclareStateChip` réutilisé tel quel, il cycle
-  déjà (§14.4). Pas de nouveau composant, pas de question cycle/déplier.
-
-**Restants :**
-
-| # | Question |
-|---|---|
-| PO-M3-b | **Glyphe** (D8/D10) : maintenant (option `glyph?` sur `CombatDeclareStateChip`) ou passe D10 séparée après le module 3 (chips texte d'abord) ? (§14.4) |
-| PO-M3-d | Clamp : satellite passe à droite si pas la place à gauche du bord d'écran ? (détail d'implémentation) |
-| PO-M3-e | MJ Vitesse = aujourd'hui `CombatDeclareStateSelector` (segmented, 3 choix visibles, Session 158). Au satellite : basculer sur `CombatDeclareStateChip` (cycle, comme le PJ — cohérence) ou garder le segmented dans le satellite (plus large) ? **À débattre.** |
-| PO-M3-f | Satellite strictement collé (`pos` du frame seul), pas détachable — D8 « se déplace avec ». Confirmé, pas vraiment ouvert. |
+**Tout tranché (Saar 2026-08-29) — plus de point ouvert :**
+- Satellite **identique PJ / MJ / Exo** (« fenêtre MJ = PJ »). Drone : aucun. Session 158 caduque.
+- Brique = `CombatDeclareStateChip` tel quel + un `glyph` (glyphes `assets/status/`, mêmes pour
+  tous). Axes : Posture + Vitesse + Arme.
+- Exo `prone` : la puce Posture **remplace** le bouton « Tenter de se relever » ; clic → message
+  système chat + jet (mécanisme serveur déjà là) ; réussite → DEBOUT, échec → fin de tour.
+- Satellite strictement collé au frame (`pos` du frame, D8). Clamp bord d'écran = détail
+  d'implémentation (passe à droite si pas la place à gauche).
