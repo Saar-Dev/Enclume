@@ -4639,9 +4639,19 @@ frame ni M-E2E — filet = golden master `buildDeclarePayload` + validation navi
 
 **Testé** : `npm test` 1111/812/0 (golden masters `buildHumanDeclarePayload` 52 / `buildGmDeclarePayload` 16 verts, reducers 26) ; `vite build` client propre ; `eslint` iso-baseline (1 erreur pré-existante `react-hooks/set-state-in-effect` sur le reset effect du MJ) ; **validation navigateur Saar** : fenêtre MJ conforme maquette, liste d'armes fonctionnelle, Recharger, silhouette (« Parfait »).
 
-**Non testé** : `CombatExoActionWindow` (jamais migré — encore l'ancien corps) ; combat drone
-depuis le refactor ; le mode Recharger PJ de bout en bout (sélection munition + serveur).
-⚠️ **clos partiel** — reste : exo, MeleeCombatPanel (4c), couleurs inline (D4b), M0.4-f/g.
+**Non testé** : le mode Recharger PJ de bout en bout (sélection munition + serveur).
+
+**Suite immédiate (même session, 2026-08-30)** — les 3 points « queued » traités :
+- `CombatExoActionWindow` migré sur `CombatDeclareActionList` (`ec9b10e`) — col. 2 minimale
+  (exo = 1 attaque/Tour, pas de mode de tir, pas de dual-wield). `weaponList.js` : `displayName`
+  accepte `display_name` + grisage « chargeur vide » généralisé (`ammo_remaining ≤ 0` sans calibre).
+- `MeleeCombatPanel` : sélecteur d'arme retiré (`c37486d`, ~80 l.) — redondant avec la col. 1.
+- D4b (`cbf41de`) : couleurs de sélection d'`AssaultRangedPanel` (rouge) / `MeleeCombatPanel` (vert)
+  / `AimedLocationPicker` (doré) → `--decl-acc` + tokens neutres, fallbacks hex conservés.
+
+**État : chantier fonctionnellement clos** pour PJ / MJ / Exo. Restent seulement M0.4-f/g (différés),
+le frame structurel (module 2, non prioritaire) et M-E2E (non nécessaire). Plan à archiver sur
+confirmation Saar.
 
 **Données** : aucune. Client + un module partagé pur. Aucune migration.
 

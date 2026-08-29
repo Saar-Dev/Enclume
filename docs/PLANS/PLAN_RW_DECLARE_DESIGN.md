@@ -55,11 +55,19 @@
 | Module 2 — volet **structurel** (`CombatDeclareFrame`) | **pas commencé** (refactor, pas visuel) — P58 le juge non prioritaire | §5.6 |
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé + validé navigateur** | §5.7 |
 | **M0.4** — `assaultDeclaration.js` / `meleeDeclaration.js` + hooks + câblage PJ & MJ | ✅ **codé + committé 2026-08-30** (a→e ; f/g différés) — 26 tests reducers, golden masters 67 verts | §5.8 |
-| **Module 4** — `CombatDeclareActionList` (D5) — **PJ + MJ** | ✅ **codé + validé navigateur** 2026-08-30 : move-line + liste d'armes groupée, mode de tir en col. 2, Recharger = ↻ sur l'arme (option B), silhouette `human.svg` (D11) | §5.9 |
-| Module 4 — **exo** (`CombatExoActionWindow`) | ❌ **pas fait** — l'exo est encore sur l'ancien corps | §5.9 |
-| Module 4 — MeleeCombatPanel : sélecteur d'arme redondant à retirer (4c) + neutralisation couleurs inline (D4b) | ❌ **queued** (validé Saar « à suivre ») | §5.9 |
+| **Module 4** — `CombatDeclareActionList` (D5) — **PJ + MJ + Exo** | ✅ **codé + validé navigateur** 2026-08-30 : move-line + liste d'armes groupée, mode de tir en col. 2, Recharger = ↻ sur l'arme (option B), silhouette `human.svg` (D11). Exo migré (col. 2 minimale, 1 attaque/Tour) | §5.9 |
+| Module 4c — `MeleeCombatPanel` : sélecteur d'arme redondant retiré | ✅ **codé** 2026-08-30 | §5.9 |
+| Module 4 — D4b : couleurs de sélection col. 2 → `--decl-*` | ✅ **codé** 2026-08-30 (rouge AssaultRangedPanel / vert MeleeCombatPanel → `--decl-acc`) — la conversion des ~260 autres hex reste hors périmètre (§8) | §5.9 / §3 D4b |
 | Module 5 — `CombatDeclareFooter` (D12) | ✅ **5a-5d codés + validés navigateur** | §5.10 |
+| M0.4-f (reset consolidé) / M0.4-g (unification Charge/phase) | **différés** — non bloquants | §5.8 |
+| Module 2 structurel (`CombatDeclareFrame`) / M-E2E | **non faits** — non prioritaires (`REACT.md` P58 juge le frame secondaire ; golden master + validation Saar ont couvert le module 4) | §5.5 / §5.6 |
 | Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** | — |
+
+**État général (2026-08-30)** : le chantier est **fonctionnellement clos** pour les 3 fenêtres
+(PJ / MJ / Exo partagent `CombatDeclareActionList` + `useAssaultDeclaration` + `useMeleeDeclaration`
++ `CombatDeclareFooter` + satellite + tokens `--decl-*`). Restent seulement des éléments explicitement
+différés / jugés non prioritaires (M0.4-f/g, frame structurel, M-E2E). Plan à archiver quand Saar
+confirme qu'il ne veut pas de ces derniers.
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
 navigateur Saar **après chaque module ET sous-module** (plus « en bloc »). Un module validé avant le

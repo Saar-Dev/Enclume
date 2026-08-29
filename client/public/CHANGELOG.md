@@ -21,6 +21,9 @@
   texte, plus dessous.
 - [ux] Le MJ voit maintenant la même fenêtre que les joueurs ; choisir une arme n'envoie plus
   directement sur la carte — on configure d'abord, on cible ensuite.
+- [ux] Même fenêtre aussi pour les **exo-armures**.
+- [ux] Le détail de l'attaque (cible, mode de tir, deux armes, localisation) est teinté à la
+  couleur de la famille au lieu du rouge/vert.
 - [fix] Les armes du MJ s'affichaient toutes « Mains nues ».
 - [fix] Grand vide sous le panneau de droite quand une arme de tir était sélectionnée.
 
