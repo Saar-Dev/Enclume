@@ -749,3 +749,46 @@ côté MJ pour un PNJ ; (4) non-régression : déclaration multi-tuiles, Charge,
   dernière maths de combat dédupliquée, P57 respecté sur `COMBAT_DECLARE_ERROR`).
 - Module 1 fait le 2026-08-28 : gain réel mais cosmétique (import croisé supprimé, famille
   `CombatDeclare*` amorcée, convention de nommage fixée) — le châssis dupliqué 3× n'est pas touché.
+
+---
+
+## 20. Analyse à charge post-clôture (2026-08-29)
+
+> Relecture adverse du chantier, module par module, code + git + docs d'autorité en main. Objectif :
+> vérifier la véracité des `[VÉRIFIÉ]`, la solidité des raisonnements de scope, et la légitimité du
+> « CLOS ». 7 commits de correctifs (`7da53b1`..`17a6575`).
+
+### 20.1 Ce qui tient
+
+- **Module 2 (le plus sensible)** : le swap serveur `computeIniDelta` a été revérifié **ligne à ligne**
+  contre le code pré-swap (`freeMove`, garde `!from||!to`, ordre du bloc Tir visé, `quick` null,
+  aim) — **iso-comportement confirmé**. Le client délègue entièrement à l'autorité partagée, aucune
+  valeur recalculée. Les matrices collent à `COMBAT_FLUX.md` et au pré-swap.
+- **Module 7** : équivalence de coût exacte, `nextKey` déplacée byte-identique, 5 tests pertinents.
+- **Module 3** : jumeau `criticalEffect` fidèle, timer 4 s avec cleanup au bon niveau, `clearDeclareError`
+  sur les 4 événements. Le patron est le bon et bien appliqué.
+- **Modules 5 « annulé » et 4 « n'aggrade pas »** : verdicts **corrects** (5 l'était sous D8 ; 4 était
+  bien marginal).
+
+### 20.2 Défauts trouvés et corrigés
+
+| # | Où | Défaut | Correctif |
+|---|---|---|---|
+| 1 | §5bis | Cause racine `[VÉRIFIÉ]` **fausse** : `endTurn` ne réinitialise PAS `state_position` (le code serveur + `COMBAT_FLUX.md` corrigée le même jour le disent). Critère de validation (2) faux (« posture debout » au tour N+1). Moitié serveur du bug (`d6fbd48`, `state.cover` jamais envoyé) omise. | `7da53b1` — notes `CORRECTIF` §5bis + Module 6 ; test de régression `declarationReducer.test.mjs` (roster `prone` → reste `prone`) ; commentaire serveur réaligné sur l'invariant `COMBAT_FLUX.md`. |
+| 2 | Module 2 | « un commit isolé » (D1/§5) **faux** : le cœur (`shared/combatIniCost.js` + widget + swap serveur) est dans `430fa0c` « Drone : budget de déplacement », entremêlé. Test « d'invariant » `computeIniDelta === somme(breakdown)` **tautologique**. | `e01230f` — note `CORRECTIF` §Module 2 ; test remplacé par des cas de valeur de référence. |
+| 3 | Module 3 | Régression `react-hooks/set-state-in-effect` **introduite et acceptée** (« identique à la ligne 101 ») alors que le projet a une convention pour la corriger. | `4ccbc9e` — `CombatExoActionWindow` : ajustement pendant le rendu gardé sur `declareError.id`. eslint du fichier −1. |
+| 4 | Module 7 / Module 2 | **Collision de nom** : deux `stateTransitionCost` exportés (`combatSections.js` `(def,…)` vs `shared/combatIniCost.js` `(key,…)`), signatures incompatibles, la mauvaise renvoie `0` en silence. Module 2 avait extrait les matrices mais laissé le wrapper dupliqué. | `7eb38a7` — `combatSections.js#stateTransitionCost` supprimé, les 2 briques pointent l'autorité partagée. `COMBAT.md` / `REACT.md` réalignés. |
+| 5 | Module 6 | Déférence trop absolue (« seulement quand une infra de test **composant** existe »). Un filet de caractérisation sur la fonction pure suffit. | `25f4e8c` — note : repris par `PLAN_RW_DECLARE_DESIGN` M0.4, filet = M0.0-M0.3 golden master + M-E2E. |
+| 6 | En-tête + §2 | « **tous validés navigateur** » **faux** : 3 et 7 étaient « validation Saar en attente » à la clôture. §2 est un snapshot « avant » non marqué comme tel. | `25f4e8c` + `17a6575` — en-tête corrigé, bandeau « snapshot du avant » en tête de §2. |
+
+### 20.3 Verdict sur le « CLOS »
+
+Le chantier a **livré du code sain** — les 5 modules font ce qu'ils annoncent, le module 2 (le seul à
+toucher le serveur) est solide. Mais le « CLOS » a été prononcé **prématurément sur la partie
+validation** : modules 3 et 7 non validés navigateur, et le journal l'affirmait quand même. Et la
+**rigueur documentaire** a fléchi sur les points sensibles : une cause racine `[VÉRIFIÉ]` fausse, un
+test tautologique présenté comme garantie, une régression lint assumée par copie de la mauvaise
+exception, une collision d'autorité non vue. Aucun de ces défauts n'était visible dans le produit —
+tous le sont à la relecture du code. `PLAN_RW_DECLARE_DESIGN` hérite proprement (il a lui-même
+re-vérifié §2 par grep et corrige B1 lot B) ; les corrections ci-dessus ferment les points qu'il
+aurait pu blanchir.
