@@ -42,6 +42,11 @@
 > `https://claude.ai/code/artifact/3b8fb52d-aa6c-4905-a0d1-d6712c8c44d7` — 4 artboards : Humain/MJ-PNJ,
 > Drone, Exo, « Décisions ». Elle valide le **look** ; elle **ne prouve pas** la faisabilité de la
 > structure (footprint écran, réagencement des panneaux, satellite qui suit la fenêtre) — cf. §7 PO3.
+>
+> **Prototype d'interaction D5** (2026-08-29, jetable — valide le *geste* « l'arme EST l'action »,
+> pas le code) : `https://claude.ai/code/artifact/afcd5e28-341b-40ee-b109-30e69d9597fc`. Sortie de
+> l'analyse à charge du module 4 (§16.10 pt 5) : éprouver le modèle d'interaction **avant** de
+> s'engager dans la pile modules 2 + 3 + M0.4. En attente du retour Saar.
 
 ---
 
