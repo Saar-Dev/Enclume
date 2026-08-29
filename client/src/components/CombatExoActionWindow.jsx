@@ -5,13 +5,14 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useExoDeclare } from '../lib/useExoDeclare.js'
-import { firstFireMode } from '../../../shared/fireModes.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareHeader from './CombatDeclareHeader.jsx'
+import CombatDeclareActionList from './CombatDeclareActionList.jsx'
+import { buildWeaponList } from '../lib/weaponList.js'
 import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer.js'
 import { assaultCheck, buildBlockReason } from '../lib/declareChecks.js'
 import api from '../lib/api.js'
@@ -232,6 +233,15 @@ export default function CombatExoActionWindow({
   })
   const hasCompleteAction = exoDeclare.canDeclareAttack || moveSelection != null
 
+  // Liste d'armes groupée (module 4, D5) — une exo n'a ni mains nues ni dual-wield.
+  const exoWeaponGroups = buildWeaponList({
+    rangedWeapons: exoDeclare.exoWeapons.filter(w => w.ref_category !== 'Arme de contact'),
+    meleeWeapons:  exoDeclare.exoWeapons.filter(w => w.ref_category === 'Arme de contact'),
+    includeBareHands: false,
+  })
+  const selectedExoWeapon = exoDeclare.exoWeapons.find(w => w.id === exoDeclare.selectedExoWeaponId) ?? null
+  const exoExpanded = !isProne && !!exoDeclare.selectedExoWeaponId
+
   return (
     <>
       <CombatDeclareStatePanel
@@ -246,8 +256,10 @@ export default function CombatExoActionWindow({
         onPositionClick={isProne ? handleStandUp : null}
         hidden={isSelectingOnMap}
       />
-    <div className="combat-float-win" data-decl data-family="exo" style={{
-      position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
+    <div className="combat-float-win" data-decl data-family="exo"
+      data-narrow={!exoExpanded || undefined}
+      style={{
+      position: 'fixed', width: exoExpanded ? 560 : 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
       opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto',
     }}>
       <CombatDeclareHeader
@@ -258,103 +270,58 @@ export default function CombatExoActionWindow({
       />
 
       <div className="combat-win-body">
-        {/* .combat-win-body est display:flex sans flex-direction (row par défaut, CSS partagée avec
-            CombatActionWindow/CombatDamageWindow/CombatCacModifiersWindow/CombatModifiersWindow/
-            CombatStunWindow) — jamais surchargée en dur ici (repéré à charge, Saar 2026-08-26 : la
-            fenêtre exo était la seule à le faire). L'empilement vertical passe par ce panneau
-            interne (S.panel), mirroir exact de W.leftPanel (CombatActionWindow.jsx:1546, colonne
-            unique 360px) — même technique, jamais une deuxième façon de faire la même chose. */}
-        <div style={S.panel}>
-        <div style={S.hint}>{isProne ? t('exoActionWindow.proneHint') : t('exoActionWindow.normalHint')}</div>
+        <div className="decl-col1">
+          <div style={S.hint}>{isProne ? t('exoActionWindow.proneHint') : t('exoActionWindow.normalHint')}</div>
 
-        <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-          <div style={S.sectionTitle}>{t('sectionTitles.action')}</div>
-          {/* À terre : « Tenter de se relever » a migré vers la puce Posture du satellite d'état
-              (module 3) — au clic elle route vers handleStandUp (jet serveur). */}
-          <div style={S.itemsGrid}>
-            {!isProne && (
-              <div
-                style={{
-                  ...S.item,
-                  ...(moveSelection ? S.itemSelected : {}),
-                  gridColumn: 'span 2',
-                  ...(allures === null ? S.itemDisabled : {}),
-                }}
-                onClick={handleZoneSelectClick}
-              >
-                <span style={S.itemLabel}>{t('mapActions.move.label')}</span>
-                <span style={{ ...S.itemMod, ...(moveSelection ? { color: '#5b8dee' } : {}) }}>
-                  {moveSelection ? `${moveSelection.ini_mod}` : t('actionWindow.chooseZone')}
-                </span>
-              </div>
-            )}
-          </div>
+          {/* À terre : « Tenter de se relever » vit sur la puce Posture du satellite (module 3). Sinon :
+              move-line + liste d'armes groupée (module 4, D5) — une seule arme, pas de dual-wield exo. */}
+          {!isProne && (
+            <CombatDeclareActionList
+              move={{
+                on: !!moveSelection,
+                disabled: allures === null,
+                valueLabel: moveSelection ? `${moveSelection.ini_mod}` : t('declareList.moveDefine'),
+                tooltip: t('mapActions.move.tooltip'),
+                onToggle: handleZoneSelectClick,
+              }}
+              groups={exoWeaponGroups}
+              selectedRowId={exoDeclare.selectedExoWeaponId}
+              onPick={row => { if (!row.disabled) exoDeclare.selectWeapon(row.id) }}
+            />
+          )}
+          {!isProne && exoDeclare.exoWeapons.length === 0 && (
+            <div style={{ ...S.itemLabel, padding: '6px 12px', opacity: 0.5 }}>{t('exoActionWindow.noWeapon')}</div>
+          )}
           {alluresError && !isProne && (
             <div style={S.errorBanner}>⚠ {t('exoActionWindow.movementUnavailable', { reason: alluresError })}</div>
           )}
         </div>
 
-        {/* ARMEMENT — Tir/CaC exo (§16.4). Une seule arme sélectionnable (pas de dual-wield hardpoint),
-            jamais affiché à terre (isProne, mirroir de la tuile Déplacement ci-dessus). */}
-        {!isProne && (
-          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={S.sectionTitle}>{t('exoActionWindow.weaponSectionTitle')}</div>
-            <div style={S.itemsGrid}>
-              {exoDeclare.exoWeapons.length === 0 && (
-                <div style={{ ...S.itemLabel, gridColumn: 'span 2', padding: '5px 8px', opacity: 0.5 }}>
-                  {t('exoActionWindow.noWeapon')}
-                </div>
-              )}
-              {exoDeclare.exoWeapons.map(w => {
-                const isSelected = w.id === exoDeclare.selectedExoWeaponId
-                const isCaC = w.ref_category === 'Arme de contact'
-                // Vide = munitions suivies (ammo_remaining non NULL, §16.2.3) ET épuisées — même garde
-                // que socketCombatAnnouncement.js:314 (hasEnoughAmmo, bulletCount toujours 1 pour une
-                // exo, Tir Multi bloqué serveur). NULL = tracking désactivé, jamais grisé (mirroir
-                // DroneWeaponPanel#isEmpty, seule fenêtre d'armement à griser une arme vide ce jour).
-                const isEmpty = !isCaC && w.ammo_remaining != null && w.ammo_remaining <= 0
-                // Mode de tir par défaut de l'arme (une exo ne bascule jamais de mode, §16.4) —
-                // affiché à la place du libellé générique "Assaut (tir)" (demande Saar 2026-08-27) ;
-                // même autorité de parsing que le gate PC23 serveur (shared/fireModes.js).
-                const fireMode = isCaC ? null : (firstFireMode(w.ref_fire_mode) ?? t('actionLabels.assault'))
-                return (
-                  <div
-                    key={w.id}
-                    title={isEmpty ? t('exoActionWindow.emptyWeaponTitle') : undefined}
-                    style={{
-                      ...S.item, gridColumn: 'span 2',
-                      ...(isSelected ? S.itemSelected : {}), ...(isEmpty ? S.itemDisabled : {}),
-                    }}
-                    onClick={() => !isEmpty && exoDeclare.selectWeapon(w.id)}
-                  >
-                    <span style={S.itemLabel}>{w.display_name}</span>
-                    <span style={S.itemMod}>
-                      {isCaC
-                        ? t('actionLabels.melee')
-                        : (w.ammo_remaining != null
-                            ? `${fireMode} · ${t('exoActionWindow.ammoCount', { count: w.ammo_remaining })}`
-                            : fireMode)}
-                    </span>
-                  </div>
-                )
-              })}
+        {/* Colonne 2 — détail de l'arme choisie (D6). Minimale pour une exo : cible + rappel « 1 attaque / Tour ». */}
+        {exoExpanded && (
+          <div className="decl-col2">
+            <div className="decl-c2head">
+              <span className="decl-c2head__arw">→</span> {selectedExoWeapon?.display_name}
             </div>
-            {exoDeclare.selectedExoWeaponId && (
-              <div
-                style={{ ...S.item, margin: '1px 6px' }}
+            <div className="decl-c2sec">
+              <div className="decl-c2sec__title">
+                <span className="decl-inline-glyph" style={{ '--glyph': 'url(/assets/status/target.svg)' }} />
+                {t('common.targetSection')}
+              </div>
+              <button
+                type="button"
+                className="btn-tac-ghost"
+                style={{ alignSelf: 'flex-start' }}
                 onClick={() => exoDeclare.handleChooseTarget(playerToken)}
               >
-                <span style={{ ...S.itemLabel, ...(exoDeclare.assaultTargetId ? { color: '#5b8dee' } : {}) }}>
-                  {exoDeclare.assaultTargetId
-                    ? `→ ${tokens.find(tk => tk.id === exoDeclare.assaultTargetId)?.label ?? '?'}`
-                    : t('common.chooseTargetButton')}
-                </span>
-                {exoDeclare.assaultTargetId && <span style={S.itemMod}>{t('common.changeButton')}</span>}
-              </div>
-            )}
+                {exoDeclare.assaultTargetId
+                  ? `${tokens.find(tk => tk.id === exoDeclare.assaultTargetId)?.label ?? '?'} · ${t('common.changeButton')}`
+                  : t('common.chooseTargetButton')}
+              </button>
+            </div>
+            <div className="decl-c2note">{t('exoActionWindow.singleAttackNote')}</div>
           </div>
         )}
-        </div>
       </div>
 
       <div className="combat-float-footer">
@@ -376,88 +343,23 @@ export default function CombatExoActionWindow({
   )
 }
 
-// Mêmes valeurs que W (CombatActionWindow.jsx) — non exporté par ce module, donc redéclaré ici plutôt
-// qu'importé, mais visuellement identique (même vocabulaire de tuile ACTION partout).
 const S = {
-  // Mirroir W.leftPanel (CombatActionWindow.jsx:1546) — flex '0 0 <largeur fenêtre>' au lieu de 360,
-  // seule valeur qui diffère (fenêtre exo = colonne unique 340px, jamais de rightPanel).
-  panel: {
-    flex: '0 0 340px',
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-  },
   hint: {
-    padding: '8px 10px 2px',
+    padding: '8px 12px 2px',
     fontSize: 11,
     color: 'var(--combat-field, #8a94a6)',
   },
-  sectionTitle: {
-    padding: '7px 10px 3px',
-    fontSize: 8,
-    fontWeight: 700,
-    color: 'var(--combat-section)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.12em',
-  },
-  itemsGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    padding: '0 4px',
-  },
-  item: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '5px 8px',
-    margin: '1px 2px',
-    borderRadius: 3,
-    cursor: 'pointer',
-    background: 'rgba(255,255,255,0.02)',
-    border: '1px solid transparent',
-  },
-  itemSelected: {
-    background: 'rgba(91,141,238,0.15)',
-    borderColor: '#5b8dee',
-  },
-  itemDisabled: {
-    opacity: 0.4,
-    cursor: 'not-allowed',
-  },
   itemLabel: {
     fontSize: 11,
-    color: '#c0c0d0',
-    flex: 1,
-    marginRight: 4,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  itemMod: {
-    fontSize: 10,
-    color: '#5b5b7a',
-    flexShrink: 0,
-    minWidth: 28,
-    textAlign: 'right',
-  },
-  footerLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-    minWidth: 0,
-  },
-  destination: {
-    fontSize: 10,
-    color: '#5b8dee',
-    fontWeight: 600,
+    color: 'var(--decl-text-dim, #5b5b7a)',
   },
   errorBanner: {
     fontSize: 10,
-    color: '#c83030',
+    color: 'var(--decl-danger, #c83030)',
     background: 'rgba(200,48,48,0.08)',
     border: '1px solid #c8303044',
     borderRadius: 3,
     padding: '4px 8px',
-    marginBottom: 4,
+    margin: '4px 12px',
   },
 }

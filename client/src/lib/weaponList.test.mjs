@@ -109,6 +109,15 @@ test('déduplication — un même id slotté deux fois (MG+MD) n\'apparaît qu\'
   assert.deepEqual(contact.filter(r => r.id === 'w-congre').length, 1)
 })
 
+test('forme exo (useExoDeclare) : `display_name` + `ammo_remaining` 0 → grisé sans calibre', () => {
+  const exoGun = { id: 'x1', display_name: 'Fusil sonique', ref_fire_mode: 'CC', ammo_remaining: 0 }
+  const { distance } = buildWeaponList({ rangedWeapons: [exoGun], includeBareHands: false })
+  assert.equal(distance[0].name, 'Fusil sonique')
+  assert.equal(distance[0].ammoStatus, 'empty')
+  assert.equal(distance[0].disabled, true)
+  assert.equal(distance[0].disabledReason, 'ammoEmpty')
+})
+
 test('forme MJ (batch /combat-equipment) : `name` résolu + `inv_id` — le nom s\'affiche', () => {
   const gmScorpion = { id: 'e1', name: 'Scorpion', slot: 'MD', ref_fire_mode: 'CC', ref_caliber: '4L', ref_ammo_count: '24', ammo_remaining: 24 }
   const gmCouteau  = { id: 'e2', name: 'Couteau Congre', slot: 'MG', ref_category: 'Arme de contact', ref_range: '0' }

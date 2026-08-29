@@ -349,6 +349,7 @@
   },
   "exoActionWindow": {
     "title": "{{name}} — Exo-armure",
+    "singleAttackNote": "Une exo-armure fait une seule attaque par Tour — pas de rafale multi-cible, pas de deux armes.",
     "proneHint": "L'armure est à terre. Se relever demande un Test de Manœuvre d'armure — un échec fait passer le Tour sans autre action.",
     "normalHint": "Choisissez une destination et/ou une attaque puis Déclarer, ou Déclarer directement pour passer le Tour.",
     "standUpButton": "Tenter de se relever",

@@ -1702,6 +1702,36 @@ Convention :
 /* Segment Tir │ Recharger en tête de colonne 2 (D7). */
 [data-decl] .decl-c2seg { display: flex; gap: 4px; padding: 9px 12px 4px; }
 
+/* Colonne 2 minimale (exo) : en-tête d'arme + section cible + note. */
+[data-decl] .decl-c2head {
+  padding: 9px 12px 8px;
+  border-bottom: 1px solid var(--decl-sep);
+  font: 600 12px/1 var(--font-ui);
+  color: var(--decl-acc);
+}
+[data-decl] .decl-c2head__arw { color: var(--decl-acc); }
+[data-decl] .decl-c2sec {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--decl-sep);
+}
+[data-decl] .decl-c2sec__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 9px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--decl-label);
+}
+[data-decl] .decl-c2note {
+  padding: 10px 12px;
+  font: 400 10px/1.5 var(--font-ui);
+  color: var(--decl-text-dim);
+}
+
 /* Glyphe inline (masque SVG recoloré à currentColor) — pour les en-têtes de section de la col. 2. */
 .decl-inline-glyph {
   display: inline-block;

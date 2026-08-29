@@ -37,10 +37,10 @@ const HAND_SLOTS = ['MG', 'MD', '2M', 'Tr']
  * @property {'mortallyWounded'|'stunned'|'ammoEmpty'|null} disabledReason
  */
 
-// PJ (inventaire /char-sheet) porte `custom_name`/`ref_name` ; MJ (batch /combat-equipment) porte
-// un `name` déjà résolu. Les deux formes alimentent buildWeaponList.
+// PJ (inventaire /char-sheet) → `custom_name`/`ref_name` ; MJ (batch /combat-equipment) → `name` ;
+// exo (`useExoDeclare`) → `display_name`. Les trois formes alimentent buildWeaponList.
 function displayName(item) {
-  return item.custom_name || item.ref_name || item.name || null
+  return item.custom_name || item.ref_name || item.name || item.display_name || null
 }
 
 function slotOf(item) {
@@ -79,7 +79,11 @@ export function buildWeaponList({
   for (const w of rangedWeapons) {
     if (seenDistance.has(w.id)) continue
     seenDistance.add(w.id)
+    // Chargeur épuisé : `weaponAmmoStatus` (calibre + capacité) ne couvre pas les armes exo/drone
+    // sans ces métadonnées — un `ammo_remaining` explicitement ≤ 0 suffit alors (même garde que
+    // CombatExoActionWindow#isEmpty / DroneWeaponPanel).
     const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count, w.ref_caliber)
+      ?? (w.ammo_remaining != null && w.ammo_remaining <= 0 ? 'empty' : null)
     distance.push({
       id: w.id,
       kind: 'ranged',
