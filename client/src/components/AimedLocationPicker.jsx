@@ -4,9 +4,11 @@ import BodySilhouetteSvg from './BodySilhouetteSvg.jsx'
 import { AIMED_LOCATION_MALUS } from '../../../shared/armorConstants.js'
 import { LOCATION_I18N_KEYS } from '../lib/locationI18nKeys.js'
 
-const NEUTRAL_FILL = '#2a2a3e'
-const HOVER_FILL = '#3a3a5a'
-const SELECTED_FILL = '#f5c542'
+// D4b : sous `[data-decl]` (fenêtre de déclaration) la zone visée prend l'accent de famille ;
+// hors teinte (fiche perso, danger environnemental) → repli doré/gris.
+const NEUTRAL_FILL = 'var(--decl-row, #2a2a3e)'
+const HOVER_FILL = 'var(--decl-line, #3a3a5a)'
+const SELECTED_FILL = 'var(--decl-acc, #f5c542)'
 
 function formatMalus(n) { return n > 0 ? `+${n}` : `${n}` }
 
@@ -62,7 +64,7 @@ const s = {
   svgWrap: { flex: 'none', display: 'flex', justifyContent: 'center' },
   svg: { width: 64, maxWidth: '100%', height: 'auto' },
   info: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 },
-  infoText: { fontSize: 11, color: '#f5c542', fontWeight: 700 },
-  infoTextMuted: { fontSize: 11, color: '#5b5b7a', lineHeight: 1.5 },
+  infoText: { fontSize: 11, color: 'var(--decl-acc, #f5c542)', fontWeight: 700 },
+  infoTextMuted: { fontSize: 11, color: 'var(--decl-text-dim, #5b5b7a)', lineHeight: 1.5 },
   clearBtn: { fontSize: 10, padding: '2px 8px' },
 }

@@ -3,8 +3,8 @@ import { CC_REPS_STEPS, RL_BUTTONS } from './combatSections.js'
 import { AIM_MAX_TRANCHES, getAimBonusComp, getAimIniCost } from '../../../shared/combatExclusiveActions.js'
 import AimedLocationPicker from './AimedLocationPicker.jsx'
 
-// Chips inline pour le nombre de tirs — même motif que MeleeCombatPanel.jsx (CountChip), palette
-// rouge du panneau Assaut plutôt que le vert CaC.
+// Chips inline pour le nombre de tirs. D4b : la sélection = accent de famille (`--decl-acc`),
+// jamais un rouge (réservé à l'erreur). Fallbacks pour un rendu hors `[data-decl]`.
 function ShotCountChip({ label, tooltip, selected, disabled, onClick }) {
   return (
     <div
@@ -12,9 +12,9 @@ function ShotCountChip({ label, tooltip, selected, disabled, onClick }) {
       onClick={disabled ? undefined : onClick}
       style={{
         padding: '4px 8px', borderRadius: 3, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 10,
-        border: `1px solid ${selected ? '#e07070' : '#3a2a2a'}`,
-        background: selected ? 'rgba(224,112,112,0.15)' : 'rgba(255,255,255,0.02)',
-        color: disabled ? '#5b4a4a' : (selected ? '#e07070' : '#9a7a7a'),
+        border: `1px solid ${selected ? 'var(--decl-acc, #8aa0b8)' : 'var(--decl-line, #2a2a3e)'}`,
+        background: selected ? 'var(--decl-acc-bg, rgba(255,255,255,0.06))' : 'rgba(255,255,255,0.02)',
+        color: disabled ? 'var(--decl-text-dim, #5b5b7a)' : (selected ? 'var(--decl-acc, #c8d4e0)' : 'var(--decl-text, #9aa4b0)'),
         fontWeight: selected ? 600 : 400,
         opacity: disabled ? 0.5 : 1,
       }}
@@ -22,10 +22,12 @@ function ShotCountChip({ label, tooltip, selected, disabled, onClick }) {
   )
 }
 
+// D4b : rouge/vert réservés à erreur/succès. Ici, sélection + états actifs = accent de famille
+// (`--decl-acc`) ; libellés = tokens neutres `--decl-*`. Fallbacks = gris neutres (rendu hors teinte).
 const P = {
   section: {
     padding: '8px 14px',
-    borderBottom: '1px solid #1e1e2e',
+    borderBottom: '1px solid var(--decl-sep, #1e1e2e)',
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
@@ -33,20 +35,20 @@ const P = {
   sectionTitle: {
     fontSize: 10,
     fontWeight: 700,
-    color: '#e07070',
+    color: 'var(--decl-label, #8aa0b8)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
-  infoText: { fontSize: 12, color: '#c0c0d0' },
-  infoSub:  { fontSize: 10, color: '#5b5b7a' },
-  noWeapon: { fontSize: 11, color: '#5b5b7a', fontStyle: 'italic' },
-  targetName: { fontSize: 12, color: '#e07070', fontWeight: 600, flex: 1 },
+  infoText: { fontSize: 12, color: 'var(--decl-text, #c0c0d0)' },
+  infoSub:  { fontSize: 10, color: 'var(--decl-text-dim, #5b5b7a)' },
+  noWeapon: { fontSize: 11, color: 'var(--decl-text-dim, #5b5b7a)', fontStyle: 'italic' },
+  targetName: { fontSize: 12, color: 'var(--decl-acc, #c8d4e0)', fontWeight: 600, flex: 1 },
   chooseBtn: {
     padding: '6px 10px',
-    background: 'rgba(180,80,80,0.1)',
-    border: '1px solid #c05050',
+    background: 'var(--decl-acc-bg, rgba(255,255,255,0.05))',
+    border: '1px solid var(--decl-acc-line, #4a5568)',
     borderRadius: 4,
-    color: '#e07070',
+    color: 'var(--decl-acc, #c8d4e0)',
     fontSize: 11,
     cursor: 'pointer',
     textAlign: 'left',
@@ -55,9 +57,9 @@ const P = {
   changeBtn: {
     padding: '3px 8px',
     background: 'none',
-    border: '1px solid #3a3a5a',
+    border: '1px solid var(--decl-line, #3a3a5a)',
     borderRadius: 4,
-    color: '#7070a0',
+    color: 'var(--decl-text-dim, #7070a0)',
     fontSize: 10,
     cursor: 'pointer',
     flexShrink: 0,
@@ -70,19 +72,19 @@ const P = {
     cursor: 'pointer',
     userSelect: 'none',
   },
-  optionLabel: { fontSize: 12, color: '#c0c0d0', fontWeight: 500 },
-  optionSub:   { fontSize: 10, color: '#5b5b7a' },
+  optionLabel: { fontSize: 12, color: 'var(--decl-text, #c0c0d0)', fontWeight: 500 },
+  optionSub:   { fontSize: 10, color: 'var(--decl-text-dim, #5b5b7a)' },
   radio: {
     width: 14, height: 14,
     borderRadius: '50%',
-    border: '2px solid #3a3a5a',
+    border: '2px solid var(--decl-line, #3a3a5a)',
     flexShrink: 0,
     boxSizing: 'border-box',
     transition: 'border-color 0.1s, background 0.1s',
   },
-  radioActive: { borderColor: '#e07070', background: '#e07070' },
-  slider:      { width: '100%', accentColor: '#e07070', cursor: 'pointer' },
-  summaryText: { fontSize: 11, color: '#e07070', fontWeight: 600, fontStyle: 'italic' },
+  radioActive: { borderColor: 'var(--decl-acc, #8aa0b8)', background: 'var(--decl-acc, #8aa0b8)' },
+  slider:      { width: '100%', accentColor: 'var(--decl-acc, #8aa0b8)', cursor: 'pointer' },
+  summaryText: { fontSize: 11, color: 'var(--decl-acc, #c8d4e0)', fontWeight: 600, fontStyle: 'italic' },
   optionDisabled: { opacity: 0.4, cursor: 'not-allowed' },
 }
 
@@ -159,7 +161,7 @@ export default function AssaultRangedPanel({
                 {tgtId ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {effectiveAssaultCount > 1 && (
-                      <span style={{ fontSize: 9, color: '#705050', minWidth: 12 }}>{i + 1}.</span>
+                      <span style={{ fontSize: 9, color: 'var(--decl-text-dim, #705050)', minWidth: 12 }}>{i + 1}.</span>
                     )}
                     <span style={P.targetName}>{getLabel(tgtId)}</span>
                     <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>{t('common.changeButton')}</button>
@@ -167,7 +169,7 @@ export default function AssaultRangedPanel({
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {effectiveAssaultCount > 1 && (
-                      <span style={{ fontSize: 9, color: '#705050', minWidth: 12 }}>{i + 1}.</span>
+                      <span style={{ fontSize: 9, color: 'var(--decl-text-dim, #705050)', minWidth: 12 }}>{i + 1}.</span>
                     )}
                     <button style={P.chooseBtn} onClick={() => onChooseTarget(i)}>{t('common.chooseTargetButton')}</button>
                   </div>
@@ -356,7 +358,7 @@ export default function AssaultRangedPanel({
                 </div>
               )}
               {!assaultBulletCount && (
-                <div style={{ fontSize: 9, color: '#706050', fontStyle: 'italic' }}>{t('assaultPanel.selectVolume')}</div>
+                <div style={{ fontSize: 9, color: 'var(--decl-text-dim, #706050)', fontStyle: 'italic' }}>{t('assaultPanel.selectVolume')}</div>
               )}
             </>
           )}

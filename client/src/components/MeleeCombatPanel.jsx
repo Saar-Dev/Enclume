@@ -4,7 +4,7 @@ import { COMBAT_MODE_DEFS } from './combatSections.js'
 const P = {
   section: {
     padding: '8px 14px',
-    borderBottom: '1px solid #1e1e2e',
+    borderBottom: '1px solid var(--decl-sep, #1e1e2e)',
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
@@ -12,7 +12,7 @@ const P = {
   sectionTitle: {
     fontSize: 10,
     fontWeight: 700,
-    color: '#70c070',
+    color: 'var(--decl-acc, #8aa0b8)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
@@ -23,25 +23,25 @@ const P = {
     padding: '6px 0',
     cursor: 'pointer',
     userSelect: 'none',
-    borderBottom: '1px solid #1e1e2e',
+    borderBottom: '1px solid var(--decl-sep, #1e1e2e)',
   },
-  optionLabel: { fontSize: 12, color: '#c0c0d0', fontWeight: 500 },
-  optionSub:   { fontSize: 10, color: '#5b5b7a', marginTop: 2 },
+  optionLabel: { fontSize: 12, color: 'var(--decl-text, #c0c0d0)', fontWeight: 500 },
+  optionSub:   { fontSize: 10, color: 'var(--decl-text-dim, #5b5b7a)', marginTop: 2 },
   radio: {
     width: 14, height: 14,
     borderRadius: '50%',
-    border: '2px solid #3a3a5a',
+    border: '2px solid var(--decl-line, #3a3a5a)',
     flexShrink: 0,
     boxSizing: 'border-box',
     transition: 'border-color 0.1s, background 0.1s',
   },
-  radioActive:       { borderColor: '#70c070', background: '#70c070' },
+  radioActive:       { borderColor: 'var(--decl-acc, #8aa0b8)', background: 'var(--decl-acc, #8aa0b8)' },
   chooseBtn: {
     padding: '6px 10px',
-    background: 'rgba(80,180,80,0.1)',
-    border: '1px solid #507050',
+    background: 'var(--decl-acc-bg, rgba(255,255,255,0.05))',
+    border: '1px solid var(--decl-acc-line, #4a5568)',
     borderRadius: 4,
-    color: '#70c070',
+    color: 'var(--decl-acc, #8aa0b8)',
     fontSize: 11,
     cursor: 'pointer',
     textAlign: 'left',
@@ -50,15 +50,15 @@ const P = {
   changeBtn: {
     padding: '3px 8px',
     background: 'none',
-    border: '1px solid #3a3a5a',
+    border: '1px solid var(--decl-line, #3a3a5a)',
     borderRadius: 4,
-    color: '#7070a0',
+    color: 'var(--decl-text-dim, #7070a0)',
     fontSize: 10,
     cursor: 'pointer',
     flexShrink: 0,
   },
-  targetName: { fontSize: 12, color: '#70c070', fontWeight: 600, flex: 1 },
-  readyText:  { fontSize: 11, color: '#70c070', fontWeight: 600, fontStyle: 'italic' },
+  targetName: { fontSize: 12, color: 'var(--decl-acc, #8aa0b8)', fontWeight: 600, flex: 1 },
+  readyText:  { fontSize: 11, color: 'var(--decl-acc, #8aa0b8)', fontWeight: 600, fontStyle: 'italic' },
 }
 
 // Chips inline pour les boutons de nombre d'attaques
@@ -69,9 +69,9 @@ function CountChip({ label, tooltip, selected, onClick }) {
       onClick={onClick}
       style={{
         padding: '4px 8px', borderRadius: 3, cursor: 'pointer', fontSize: 10,
-        border: `1px solid ${selected ? '#70c070' : '#2a3a2a'}`,
-        background: selected ? 'rgba(112,192,112,0.15)' : 'rgba(255,255,255,0.02)',
-        color: selected ? '#70c070' : '#7a9a7a',
+        border: `1px solid ${selected ? 'var(--decl-acc, #8aa0b8)' : 'var(--decl-line, #2a2a3e)'}`,
+        background: selected ? 'var(--decl-acc-bg, rgba(255,255,255,0.06))' : 'rgba(255,255,255,0.02)',
+        color: selected ? 'var(--decl-acc, #8aa0b8)' : 'var(--decl-text, #9aa4b0)',
         fontWeight: selected ? 600 : 400,
       }}
     >{label}</div>
@@ -145,22 +145,22 @@ export default function MeleeCombatPanel({
           })}
         </div>
         {combatMode === 'charge' && !chargeMoveDest && (
-          <div style={{ fontSize: 9, color: '#c8a030', marginTop: 4 }}>
+          <div style={{ fontSize: 9, color: 'var(--decl-warn, #c8a030)', marginTop: 4 }}>
             {t('meleeCombatPanel.chargeNeedsMove')}
           </div>
         )}
         {combatMode === 'charge' && chargeMoveDest && !chargeTargetLabel && (
-          <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
+          <div style={{ fontSize: 9, color: 'var(--decl-acc, #8aa0b8)', marginTop: 4 }}>
             {t('meleeCombatPanel.chargeMoveSelected')}
           </div>
         )}
         {combatMode === 'defensif' && (
-          <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
+          <div style={{ fontSize: 9, color: 'var(--decl-acc, #8aa0b8)', marginTop: 4 }}>
             {t('meleeCombatPanel.defensifHint')}
           </div>
         )}
         {combatMode === 'retraite' && (
-          <div style={{ fontSize: 9, color: '#70c070', marginTop: 4 }}>
+          <div style={{ fontSize: 9, color: 'var(--decl-acc, #8aa0b8)', marginTop: 4 }}>
             {t('meleeCombatPanel.retraiteHint')}
           </div>
         )}
@@ -231,7 +231,7 @@ export default function MeleeCombatPanel({
                   {tgt ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {effectiveMeleeCount > 1 && (
-                        <span style={{ fontSize: 9, color: '#507050', minWidth: 12 }}>{i + 1}.</span>
+                        <span style={{ fontSize: 9, color: 'var(--decl-text-dim, #6a7280)', minWidth: 12 }}>{i + 1}.</span>
                       )}
                       <span style={P.targetName}>{tgt.label}</span>
                       <button style={P.changeBtn} onClick={() => onChooseTarget(i)}>{t('common.changeButton')}</button>
@@ -239,7 +239,7 @@ export default function MeleeCombatPanel({
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {effectiveMeleeCount > 1 && (
-                        <span style={{ fontSize: 9, color: '#507050', minWidth: 12 }}>{i + 1}.</span>
+                        <span style={{ fontSize: 9, color: 'var(--decl-text-dim, #6a7280)', minWidth: 12 }}>{i + 1}.</span>
                       )}
                       <button style={P.chooseBtn} onClick={() => onChooseTarget(i)}>
                         {t('meleeCombatPanel.chooseAdversaryButton')}
@@ -253,7 +253,7 @@ export default function MeleeCombatPanel({
             // Mode GM : liste cibles + bouton "Cibler" unique
             <>
               {isInTargetMode && (
-                <div style={{ fontSize: 9, color: '#70c070' }}>{t('meleeCombatPanel.targetModeHint')}</div>
+                <div style={{ fontSize: 9, color: 'var(--decl-acc, #8aa0b8)' }}>{t('meleeCombatPanel.targetModeHint')}</div>
               )}
               {targetIds.length > 0 && (
                 <div>
@@ -265,10 +265,10 @@ export default function MeleeCombatPanel({
                     return (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                         {targetIds.length > 1 && (
-                          <span style={{ fontSize: 8, color: '#3a6a3a', minWidth: 10 }}>{i + 1}.</span>
+                          <span style={{ fontSize: 8, color: 'var(--decl-text-dim, #6a7280)', minWidth: 10 }}>{i + 1}.</span>
                         )}
-                        <span style={{ fontSize: 11, color: '#70c870', fontWeight: 600 }}>{tgtToken?.label ?? '?'}</span>
-                        <span style={{ fontSize: 8, color: '#507050', fontFamily: 'monospace' }}>{weaponLabel}</span>
+                        <span style={{ fontSize: 11, color: 'var(--decl-acc, #c8d4e0)', fontWeight: 600 }}>{tgtToken?.label ?? '?'}</span>
+                        <span style={{ fontSize: 8, color: 'var(--decl-text-dim, #6a7280)', fontFamily: 'monospace' }}>{weaponLabel}</span>
                       </div>
                     )
                   })}
@@ -287,14 +287,14 @@ export default function MeleeCombatPanel({
       {/* Charge status */}
       {combatMode === 'charge' && (
         <div style={{ ...P.section, borderBottom: 'none' }}>
-          <div style={{ fontSize: 9, color: '#6a3a7a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('meleeCombatPanel.chargeSection')}</div>
-          <div style={{ fontSize: 10, color: '#c890e8' }}>
+          <div style={{ fontSize: 9, color: 'var(--decl-label, #8aa0b8)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('meleeCombatPanel.chargeSection')}</div>
+          <div style={{ fontSize: 10, color: 'var(--decl-acc, #c8d4e0)' }}>
             {chargeMoveDest ? t('meleeCombatPanel.destinationSet') : t('meleeCombatPanel.destinationPending')}
           </div>
           {chargeTargetLabel ? (
-            <div style={{ fontSize: 11, color: '#c890e8', fontWeight: 600 }}>→ {chargeTargetLabel}</div>
+            <div style={{ fontSize: 11, color: 'var(--decl-acc, #c8d4e0)', fontWeight: 600 }}>→ {chargeTargetLabel}</div>
           ) : (
-            <div style={{ fontSize: 9, color: '#705070' }}>{t('meleeCombatPanel.targetPending')}</div>
+            <div style={{ fontSize: 9, color: 'var(--decl-text-dim, #6a7280)' }}>{t('meleeCombatPanel.targetPending')}</div>
           )}
         </div>
       )}
