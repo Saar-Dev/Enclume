@@ -1,0 +1,484 @@
+<!doctype html><html><head><meta charset=utf-8><title>Maquette — fenêtres de déclaration de combat</title><style>body{margin:0;background:#05060a;font-family:Inter,system-ui,sans-serif;color:#c0c8d0}h1{font-size:16px;padding:18px 20px 4px}h2{font-size:12px;font-weight:600;color:#5a8aaa;text-transform:uppercase;letter-spacing:.1em;padding:20px 20px 0}p.note{font-size:11px;color:#7a8798;padding:2px 20px 0;max-width:900px}iframe{border:0;width:100%;height:640px;display:block}</style></head><body><h1>Maquette de référence — PLAN_RW_DECLARE_DESIGN (artifact 3b8fb52d, 4 artboards)</h1><p class=note>Rendu statique des 4 artboards du canvas de design, glyphes pointés sur <code>client/public/assets/status/</code>. Grounds en palette HUD sombre : §11 a tranché depuis pour la teinte Wizard (index.css --decl-*). Cette maquette fait autorité sur structure / disposition / glyphes / PCB / pied, pas sur les grounds.</p><h2>Main — PJ / MJ-PNJ (accent vert)</h2><iframe srcdoc="<!doctype html><html><head><meta charset=utf-8><link rel=&quot;stylesheet&quot; href=&quot;https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap&quot;><style>
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#3a4a5a;--tx-mid:#7a8798;
+ --neg:#c86030;--warn:#e0a060;--ok:#4caf77;--lost:#e06666;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+ --accent:#50c878;--accent-bg:rgba(80,200,120,.13);--accent-bd:rgba(80,200,120,.44);
+}
+body{margin:0;background:#05060a;padding:26px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+.wrap{display:flex;align-items:flex-start}
+.win{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;width:604px;position:relative;z-index:1}
+.pcb{background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px}
+.sat{width:132px;border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;margin-right:-1px;margin-top:40px;box-shadow:-8px 10px 26px rgba(0,0,0,.5);background-color:#0a0c14;background-image:url(pcb.svg);background-size:150px 150px}
+.sat .sh{padding:8px 10px 7px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);border-bottom:1px solid var(--sep)}
+.sat .sr{display:flex;align-items:center;gap:9px;padding:9px 10px;border-bottom:1px solid var(--sep);cursor:pointer}
+.sat .sr:last-child{border-bottom:none}
+.sat .sv{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sat .sk{font:400 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.07em;color:var(--field)}
+.sat .sn{font:600 11px/1.1 var(--ui);color:var(--tx-strong)}
+.gph{flex:none;background-color:var(--accent);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain}
+.g20{width:22px;height:22px}
+.g15{width:15px;height:15px}
+.hdr{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border)}
+.hx{width:22px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;font:700 9px/1 var(--mono);color:#05060a;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:var(--accent)}
+.hdr-t{font:600 12px/1 var(--ui);color:var(--tx-strong)}
+.hdr-m{margin-left:auto;font:400 10px/1 var(--mono);color:var(--tx-dim)}
+.body{display:flex;align-items:stretch}
+.col1{width:320px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.col2{flex:1;min-width:0;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+.move{display:flex;align-items:center;gap:9px;margin:8px 8px 4px;padding:8px 9px;border:1px dashed var(--border);border-radius:6px;background:rgba(255,255,255,.03)}
+.move .pl{font:700 12px/1 var(--ui);color:var(--tx-mid);flex:none}
+.move .ml{font:500 11px var(--ui);flex:1;color:var(--tx)}
+.move .mr{font:400 10px var(--mono);flex:none;color:var(--accent)}
+.alist{padding:4px 8px 8px}
+.aeb{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);padding:6px 4px 2px;display:flex;gap:6px}
+.aeb .h{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-dim);font-size:10px}
+.grp{display:flex;align-items:center;gap:7px;padding:8px 4px 4px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.11em;color:var(--field)}
+.grp .gph{background-color:var(--eyebrow)}
+.act{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.022);margin-bottom:3px}
+.act .nm{font:500 12px var(--ui);color:var(--tx);flex:1;min-width:0}
+.act .rt{font:400 10px var(--mono);color:var(--tx-mid);flex:none}
+.act.sel{border-color:var(--accent);background:var(--accent-bg)}
+.act.sel .nm{color:var(--tx-strong)}
+.ros{margin-top:auto;border-top:1px solid var(--sep);padding:7px 12px 8px}
+.rosh{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.rosh .cv{margin-left:auto;color:var(--tx-dim);font-size:9px}
+.rr{display:flex;align-items:center;gap:7px;padding:3px 2px;font:400 11px var(--ui);color:var(--tx-mid)}
+.rr.a{color:var(--tx-strong)}
+.rr .mk{width:9px;text-align:center;color:var(--accent);font-size:9px;flex:none}
+.rr .n{flex:1}
+.rr .i{font:400 10px var(--mono);color:var(--field)}
+.c2h{display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--sep);font:600 11px/1 var(--ui);color:var(--accent)}
+.c2act{display:flex;gap:4px;padding:9px 12px 4px}
+.c2act .t{flex:1;text-align:center;font:600 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px;text-transform:uppercase;letter-spacing:.05em}
+.c2act .t.on{color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+.c2b{padding:6px 12px 12px;display:flex;flex-direction:column;gap:11px}
+.xr{display:flex;flex-direction:column;gap:6px}
+.xk{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field)}
+.tgt{display:flex;align-items:center;gap:8px;font:500 11px var(--ui);color:var(--accent);border:1px solid var(--accent-bd);background:var(--accent-bg);border-radius:5px;padding:6px 8px}
+.tgt .ch{margin-left:auto;font:400 9px var(--ui);color:var(--tx-mid);border:1px solid var(--border);border-radius:3px;padding:2px 6px}
+.segs{display:flex;gap:4px}
+.seg{flex:1;text-align:center;font:500 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px}
+.seg.on{color:var(--tx-strong);border-color:var(--accent);background:var(--accent-bg)}
+.opt{display:flex;align-items:flex-start;gap:8px;padding:2px 0}
+.opt .rad{width:12px;height:12px;flex:none;border-radius:50%;border:1.5px solid var(--tx-dim);margin-top:1px;position:relative}
+.opt.on .rad{border-color:var(--accent)}
+.opt.on .rad::after{content:&quot;&quot;;position:absolute;inset:2px;border-radius:50%;background:var(--accent)}
+.opt .ol{font:500 11px var(--ui);color:var(--tx)}
+.opt .os{font:400 9px var(--ui);color:var(--tx-dim);margin-top:1px}
+.dw{display:flex;align-items:center;gap:8px;font:500 11px var(--ui);color:var(--tx-mid);border:1px solid var(--border);border-radius:5px;padding:7px 9px}
+.dw .sw{width:22px;height:13px;border-radius:7px;background:var(--border);position:relative;flex:none}
+.dw .sw::after{content:&quot;&quot;;position:absolute;width:9px;height:9px;border-radius:50%;background:var(--tx-mid);top:2px;left:2px}
+.loc{border-top:1px solid var(--sep);padding-top:9px}
+.loctog{display:flex;align-items:center;gap:6px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.08em;color:var(--field);margin-bottom:6px}
+.locrow{display:flex;gap:10px;align-items:flex-start}
+.locrow .sm{flex:1;min-width:0;font:400 10px/1.5 var(--ui);color:var(--tx-mid)}
+.locrow .sm b{font:600 10px var(--ui);color:var(--tx-strong)}
+.ft{display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid var(--border)}
+.pill{font:700 12px/1 var(--mono);color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-bd);border-radius:5px;padding:6px 8px;flex:none}
+.st{flex:1;text-align:center;font:500 11px var(--ui);color:var(--ok)}
+.bpass{font:500 11px var(--ui);color:var(--tx-mid);background:transparent;border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex:none}
+.btn{font:600 12px var(--ui);color:#05060a;background:var(--accent);border:0;border-radius:6px;padding:9px 18px;flex:none}
+a{color:var(--accent)}a:hover{color:var(--tx-strong)}
+</style></head><body>
+<div class=&quot;wrap&quot;>
+ <div class=&quot;sat&quot;>
+  <div class=&quot;sh&quot;>Statut</div>
+  <div class=&quot;sr&quot;><span class=&quot;gph g20&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/stand.svg);mask-image:url(../../../client/public/assets/status/stand.svg)&quot;></span><span class=&quot;sv&quot;><span class=&quot;sk&quot;>Posture</span><span class=&quot;sn&quot;>Debout</span></span></div>
+  <div class=&quot;sr&quot;><span class=&quot;gph g20&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/actionNormal.svg);mask-image:url(../../../client/public/assets/status/actionNormal.svg)&quot;></span><span class=&quot;sv&quot;><span class=&quot;sk&quot;>Vitesse</span><span class=&quot;sn&quot;>Normale</span></span></div>
+  <div class=&quot;sr&quot;><span class=&quot;gph g20&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/WeaponC.svg);mask-image:url(../../../client/public/assets/status/WeaponC.svg)&quot;></span><span class=&quot;sv&quot;><span class=&quot;sk&quot;>Arme</span><span class=&quot;sn&quot;>Au clair</span></span></div>
+ </div>
+ <div class=&quot;win&quot;>
+  <div class=&quot;hdr pcb&quot;><span class=&quot;hx&quot;>BA</span><span class=&quot;hdr-t&quot;>Baboulinet</span><span class=&quot;hdr-m&quot;>0 / 3 déclarés</span></div>
+  <div class=&quot;body&quot;>
+   <div class=&quot;col1&quot;>
+    <div class=&quot;move&quot;><span class=&quot;pl&quot;>+</span><span class=&quot;ml&quot;>Déplacement</span><span class=&quot;mr&quot;>8 m · −5</span></div>
+    <div class=&quot;alist&quot;>
+     <div class=&quot;aeb&quot;>Action <span class=&quot;h&quot;>un seul choix</span></div>
+     <div class=&quot;grp&quot;><span class=&quot;gph g15&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/distance.svg);mask-image:url(../../../client/public/assets/status/distance.svg)&quot;></span>Distance</div>
+     <div class=&quot;act sel&quot;><span class=&quot;nm&quot;>Scorpion</span><span class=&quot;rt&quot;>24 / 24</span></div>
+     <div class=&quot;grp&quot;><span class=&quot;gph g15&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/contact.svg);mask-image:url(../../../client/public/assets/status/contact.svg)&quot;></span>Contact</div>
+     <div class=&quot;act&quot;><span class=&quot;nm&quot;>Couteau Congre</span></div>
+     <div class=&quot;act&quot;><span class=&quot;nm&quot;>Mains nues</span></div>
+    </div>
+    <div class=&quot;ros&quot;>
+     <div class=&quot;rosh&quot;>Roster <span class=&quot;cv&quot;>▲</span></div>
+     <div class=&quot;rr a&quot;><span class=&quot;mk&quot;>▶</span><span class=&quot;n&quot;>Baboulinet</span><span class=&quot;i&quot;>INI 7</span></div>
+     <div class=&quot;rr&quot;><span class=&quot;mk&quot;>✓</span><span class=&quot;n&quot;>Jean Val-Jean</span><span class=&quot;i&quot;>INI 11</span></div>
+    </div>
+   </div>
+   <div class=&quot;col2&quot;>
+    <div class=&quot;c2h&quot;>→ Scorpion</div>
+    <div class=&quot;c2act&quot;><span class=&quot;t on&quot;>Tir</span><span class=&quot;t&quot;>Recharger</span></div>
+    <div class=&quot;c2b&quot;>
+     <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Cible</span>
+      <div class=&quot;tgt&quot;>Armure Alpha <span class=&quot;ch&quot;>Changer</span></div>
+     </div>
+     <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Mode de tir</span>
+      <div class=&quot;segs&quot;><span class=&quot;seg on&quot;>Coup par coup</span><span class=&quot;seg&quot;>Rafale ct.</span><span class=&quot;seg&quot;>Rafale lg.</span></div>
+     </div>
+     <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Coup par coup</span>
+      <div class=&quot;opt on&quot;><span class=&quot;rad&quot;></span><div><div class=&quot;ol&quot;>Tir simple</div><div class=&quot;os&quot;>1 balle · +0</div></div></div>
+      <div class=&quot;opt&quot;><span class=&quot;rad&quot;></span><div><div class=&quot;ol&quot;>Tir visé</div><div class=&quot;os&quot;>immobile · +1 test / 2 INI par tranche</div></div></div>
+      <div class=&quot;opt&quot;><span class=&quot;rad&quot;></span><div><div class=&quot;ol&quot;>Tir à répétition</div><div class=&quot;os&quot;>2 à 10 balles</div></div></div>
+     </div>
+     <div class=&quot;dw&quot;><span class=&quot;sw&quot;></span>Deux armes — Scorpion (MG) &nbsp;<span style=&quot;color:var(--tx-dim)&quot;>+3</span></div>
+     <div class=&quot;loc&quot;>
+      <div class=&quot;loctog&quot;><svg width=&quot;10&quot; height=&quot;10&quot; viewBox=&quot;0 0 16 16&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.6&quot; stroke-linecap=&quot;round&quot;><path d=&quot;M4 6l4 4 4-4&quot;></path></svg> Viser une localisation</div>
+      <div class=&quot;locrow&quot;>
+       <svg width=&quot;40&quot; height=&quot;78&quot; viewBox=&quot;0 0 46 86&quot; fill=&quot;#161c2a&quot; stroke=&quot;#3a4560&quot; stroke-width=&quot;1.3&quot;><circle cx=&quot;23&quot; cy=&quot;10&quot; r=&quot;7.5&quot;></circle><rect x=&quot;13&quot; y=&quot;20&quot; width=&quot;20&quot; height=&quot;30&quot; rx=&quot;6&quot;></rect><path d=&quot;M14 23l-8 17M32 23l8 17&quot; stroke-linecap=&quot;round&quot;></path><path d=&quot;M18 50l-4 32M28 50l4 32&quot; stroke-linecap=&quot;round&quot;></path></svg>
+       <div class=&quot;sm&quot;><b>Aucune — tirage 1D20</b><br>Clique une zone : malus au test, dégâts localisés garantis.</div>
+      </div>
+     </div>
+    </div>
+   </div>
+  </div>
+  <div class=&quot;ft pcb&quot;>
+   <span class=&quot;pill&quot;>INI 7 &rarr; 2</span>
+   <span class=&quot;st&quot;>Prêt</span>
+   <button class=&quot;bpass&quot;>Passer le tour</button>
+   <button class=&quot;btn&quot;>Déclarer</button>
+  </div>
+ </div>
+</div>
+</body></html>"></iframe><h2>Drone — Drone (accent teal, sans satellite)</h2><iframe srcdoc="<!doctype html><html><head><meta charset=utf-8><link rel=&quot;stylesheet&quot; href=&quot;https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap&quot;><style>
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#3a4a5a;--tx-mid:#7a8798;
+ --neg:#c86030;--warn:#e0a060;--ok:#4caf77;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+ --accent:#33b0b0;--accent-bg:rgba(48,170,170,.15);--accent-bd:rgba(48,170,170,.45);
+}
+body{margin:0;background:#05060a;padding:26px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+.win{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;width:552px}
+.pcb{background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px}
+.gph{flex:none;background-color:var(--eyebrow);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain;width:15px;height:15px}
+.hdr{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border)}
+.hx{width:22px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;font:700 9px/1 var(--mono);color:#05060a;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:var(--accent)}
+.hdr-t{font:600 12px/1 var(--ui);color:var(--tx-strong)}
+.hdr-m{margin-left:auto;font:400 10px/1 var(--mono);color:var(--tx-dim)}
+.body{display:flex;align-items:stretch}
+.col1{width:300px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.col2{flex:1;min-width:0;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+.move{display:flex;align-items:center;gap:9px;margin:8px 8px 4px;padding:8px 9px;border:1px dashed var(--border);border-radius:6px;background:rgba(255,255,255,.03)}
+.move .pl{font:700 12px/1 var(--ui);color:var(--tx-mid);flex:none}
+.move .ml{font:500 11px var(--ui);flex:1;color:var(--tx)}
+.move .mr{font:400 10px var(--ui);flex:none;color:var(--tx-dim)}
+.alist{padding:4px 8px 8px}
+.aeb{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);padding:6px 4px 2px;display:flex;gap:6px}
+.aeb .h{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-dim);font-size:10px}
+.grp{display:flex;align-items:center;gap:7px;padding:8px 4px 4px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.11em;color:var(--field)}
+.act{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.022);margin-bottom:3px}
+.act .nm{font:500 12px var(--ui);color:var(--tx);flex:1;min-width:0}
+.act .rt{font:400 10px var(--mono);color:var(--tx-mid);flex:none}
+.act.sel{border-color:var(--accent);background:var(--accent-bg)}
+.act.sel .nm{color:var(--tx-strong)}
+.c2h{display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--sep);font:600 11px/1 var(--ui);color:var(--accent)}
+.c2act{display:flex;gap:4px;padding:9px 12px 4px}
+.c2act .t{flex:1;text-align:center;font:600 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px;text-transform:uppercase;letter-spacing:.05em}
+.c2act .t.on{color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+.c2b{padding:6px 12px 12px;display:flex;flex-direction:column;gap:11px}
+.xr{display:flex;flex-direction:column;gap:6px}
+.xk{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field)}
+.tgt{display:flex;align-items:center;gap:8px;font:500 11px var(--ui);color:var(--tx-dim);border:1px dashed var(--border);border-radius:5px;padding:6px 8px}
+.segs{display:flex;gap:4px}
+.seg{flex:1;text-align:center;font:500 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px}
+.seg.on{color:var(--tx-strong);border-color:var(--accent);background:var(--accent-bg)}
+.c2n{font:400 10px/1.5 var(--ui);color:var(--tx-dim)}
+.ft{display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid var(--border)}
+.pill{font:700 12px/1 var(--mono);color:var(--tx-mid);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:5px;padding:6px 8px;flex:none}
+.st{flex:1;text-align:center;font:500 11px var(--ui);color:var(--warn)}
+.bpass{font:500 11px var(--ui);color:var(--tx-mid);background:transparent;border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex:none}
+.btn{font:600 12px var(--ui);color:#05060a;background:var(--accent);border:0;border-radius:6px;padding:9px 18px;flex:none}
+.btn.off{background:#121826;color:var(--tx-dim)}
+a{color:var(--accent)}a:hover{color:var(--tx-strong)}
+</style></head><body>
+<div class=&quot;win&quot;>
+ <div class=&quot;hdr pcb&quot;><span class=&quot;hx&quot;>AX</span><span class=&quot;hdr-t&quot;>Drone AX</span><span class=&quot;hdr-m&quot;>2 / 3 déclarés</span></div>
+ <div class=&quot;body&quot;>
+  <div class=&quot;col1&quot;>
+   <div class=&quot;move&quot;><span class=&quot;pl&quot;>+</span><span class=&quot;ml&quot;>Déplacement</span><span class=&quot;mr&quot;>définir la zone</span></div>
+   <div class=&quot;alist&quot;>
+    <div class=&quot;aeb&quot;>Action <span class=&quot;h&quot;>un seul choix</span></div>
+    <div class=&quot;grp&quot;><span class=&quot;gph&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/distance.svg);mask-image:url(../../../client/public/assets/status/distance.svg)&quot;></span>Distance</div>
+    <div class=&quot;act sel&quot;><span class=&quot;nm&quot;>Fusil Gauss</span><span class=&quot;rt&quot;>30</span></div>
+   </div>
+  </div>
+  <div class=&quot;col2&quot;>
+   <div class=&quot;c2h&quot;>→ Fusil Gauss</div>
+   <div class=&quot;c2act&quot;><span class=&quot;t on&quot;>Tir</span><span class=&quot;t&quot;>Recharger</span></div>
+   <div class=&quot;c2b&quot;>
+    <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Cible</span>
+     <div class=&quot;tgt&quot;>Choisir une cible</div>
+    </div>
+    <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Mode de tir</span>
+     <div class=&quot;segs&quot;><span class=&quot;seg on&quot;>Coup par coup</span><span class=&quot;seg&quot;>Rafale ct.</span><span class=&quot;seg&quot;>Rafale lg.</span></div>
+    </div>
+    <div class=&quot;c2n&quot;>CC · 7D10+2 · 30 munitions</div>
+   </div>
+  </div>
+ </div>
+ <div class=&quot;ft pcb&quot;>
+  <span class=&quot;pill&quot;>INI 12</span>
+  <span class=&quot;st&quot;>Choisis une cible</span>
+  <button class=&quot;bpass&quot;>Passer le tour</button>
+  <button class=&quot;btn off&quot;>Déclarer</button>
+ </div>
+</div>
+</body></html>"></iframe><h2>Exo — Exo (accent violet)</h2><iframe srcdoc="<!doctype html><html><head><meta charset=utf-8><link rel=&quot;stylesheet&quot; href=&quot;https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap&quot;><style>
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#3a4a5a;--tx-mid:#7a8798;
+ --neg:#c86030;--warn:#e0a060;--ok:#4caf77;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+ --accent:#9d63cc;--accent-bg:rgba(152,88,200,.17);--accent-bd:rgba(152,88,200,.46);
+}
+body{margin:0;background:#05060a;padding:26px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+.wrap{display:flex;align-items:flex-start}
+.win{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;width:588px;position:relative;z-index:1}
+.pcb{background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px}
+.sat{width:132px;border:1px solid var(--border);border-right:none;border-radius:8px 0 0 8px;margin-right:-1px;margin-top:40px;box-shadow:-8px 10px 26px rgba(0,0,0,.5);background-color:#0a0c14;background-image:url(pcb.svg);background-size:150px 150px}
+.sat .sh{padding:8px 10px 7px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);border-bottom:1px solid var(--sep);display:flex;align-items:center;gap:5px}
+.sat .nw{font:600 7px/1 var(--ui);text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border:1px solid var(--accent-bd);border-radius:3px;padding:1px 3px}
+.sat .sr{display:flex;align-items:center;gap:9px;padding:9px 10px;border-bottom:1px solid var(--sep);cursor:pointer}
+.sat .sr:last-child{border-bottom:none}
+.sat .sv{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sat .sk{font:400 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.07em;color:var(--field)}
+.sat .sn{font:600 11px/1.1 var(--ui);color:var(--tx-strong)}
+.gph{flex:none;background-color:var(--accent);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain}
+.g20{width:22px;height:22px}
+.g15{width:15px;height:15px;background-color:var(--eyebrow)}
+.hdr{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border)}
+.hx{width:22px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;font:700 9px/1 var(--mono);color:#05060a;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:var(--accent)}
+.hdr-t{font:600 12px/1 var(--ui);color:var(--tx-strong)}
+.hdr-m{margin-left:auto;font:400 10px/1 var(--mono);color:var(--tx-dim)}
+.body{display:flex;align-items:stretch}
+.col1{width:300px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.col2{flex:1;min-width:0;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+.move{display:flex;align-items:center;gap:9px;margin:8px 8px 4px;padding:8px 9px;border:1px dashed var(--border);border-radius:6px;background:rgba(255,255,255,.03)}
+.move .pl{font:700 12px/1 var(--ui);color:var(--tx-mid);flex:none}
+.move .ml{font:500 11px var(--ui);flex:1;color:var(--tx)}
+.move .mr{font:400 10px var(--mono);flex:none;color:var(--accent)}
+.alist{padding:4px 8px 8px}
+.aeb{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);padding:6px 4px 2px;display:flex;gap:6px}
+.aeb .h{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-dim);font-size:10px}
+.grp{display:flex;align-items:center;gap:7px;padding:8px 4px 4px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.11em;color:var(--field)}
+.act{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.022);margin-bottom:3px}
+.act .nm{font:500 12px var(--ui);color:var(--tx);flex:1;min-width:0}
+.act .rt{font:400 10px var(--mono);color:var(--tx-mid);flex:none}
+.act.sel{border-color:var(--accent);background:var(--accent-bg)}
+.act.sel .nm{color:var(--tx-strong)}
+.c2h{display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--sep);font:600 11px/1 var(--ui);color:var(--accent)}
+.c2b{padding:10px 12px;display:flex;flex-direction:column;gap:11px}
+.xr{display:flex;flex-direction:column;gap:6px}
+.xk{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field)}
+.tgt{display:flex;align-items:center;gap:8px;font:500 11px var(--ui);color:var(--accent);border:1px solid var(--accent-bd);background:var(--accent-bg);border-radius:5px;padding:6px 8px}
+.tgt .ch{margin-left:auto;font:400 9px var(--ui);color:var(--tx-mid);border:1px solid var(--border);border-radius:3px;padding:2px 6px}
+.segs{display:flex;gap:4px}
+.seg{flex:1;text-align:center;font:500 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px}
+.seg.on{color:var(--tx-strong);border-color:var(--accent);background:var(--accent-bg)}
+.c2n{font:400 10px/1.5 var(--ui);color:var(--tx-dim)}
+.ft{display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid var(--border)}
+.pill{font:700 12px/1 var(--mono);color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-bd);border-radius:5px;padding:6px 8px;flex:none}
+.st{flex:1;text-align:center;font:500 11px var(--ui);color:var(--ok)}
+.bpass{font:500 11px var(--ui);color:var(--tx-mid);background:transparent;border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex:none}
+.btn{font:600 12px var(--ui);color:#05060a;background:var(--accent);border:0;border-radius:6px;padding:9px 18px;flex:none}
+a{color:var(--accent)}a:hover{color:var(--tx-strong)}
+</style></head><body>
+<div class=&quot;wrap&quot;>
+ <div class=&quot;sat&quot;>
+  <div class=&quot;sh&quot;>Statut <span class=&quot;nw&quot;>Nouveau</span></div>
+  <div class=&quot;sr&quot;><span class=&quot;gph g20&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/stand.svg);mask-image:url(../../../client/public/assets/status/stand.svg)&quot;></span><span class=&quot;sv&quot;><span class=&quot;sk&quot;>Posture</span><span class=&quot;sn&quot;>Debout</span></span></div>
+  <div class=&quot;sr&quot;><span class=&quot;gph g20&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/actionNormal.svg);mask-image:url(../../../client/public/assets/status/actionNormal.svg)&quot;></span><span class=&quot;sv&quot;><span class=&quot;sk&quot;>Vitesse</span><span class=&quot;sn&quot;>Normale</span></span></div>
+  <div class=&quot;sr&quot;><span class=&quot;gph g20&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/WeaponC.svg);mask-image:url(../../../client/public/assets/status/WeaponC.svg)&quot;></span><span class=&quot;sv&quot;><span class=&quot;sk&quot;>Arme</span><span class=&quot;sn&quot;>Au clair</span></span></div>
+ </div>
+ <div class=&quot;win&quot;>
+  <div class=&quot;hdr pcb&quot;><span class=&quot;hx&quot;>AA</span><span class=&quot;hdr-t&quot;>Armure Alpha</span><span class=&quot;hdr-m&quot;>3 / 3 déclarés</span></div>
+  <div class=&quot;body&quot;>
+   <div class=&quot;col1&quot;>
+    <div class=&quot;move&quot;><span class=&quot;pl&quot;>+</span><span class=&quot;ml&quot;>Déplacement</span><span class=&quot;mr&quot;>12 m · −5</span></div>
+    <div class=&quot;alist&quot;>
+     <div class=&quot;aeb&quot;>Action <span class=&quot;h&quot;>un seul choix</span></div>
+     <div class=&quot;grp&quot;><span class=&quot;gph g15&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/contact.svg);mask-image:url(../../../client/public/assets/status/contact.svg)&quot;></span>Contact</div>
+     <div class=&quot;act&quot;><span class=&quot;nm&quot;>Dague neurale Brain</span></div>
+     <div class=&quot;act&quot;><span class=&quot;nm&quot;>Dague moléculaire Pulsar</span></div>
+     <div class=&quot;grp&quot;><span class=&quot;gph g15&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/distance.svg);mask-image:url(../../../client/public/assets/status/distance.svg)&quot;></span>Distance</div>
+     <div class=&quot;act sel&quot;><span class=&quot;nm&quot;>Fusil sonique sirène</span><span class=&quot;rt&quot;>CC</span></div>
+     <div class=&quot;act&quot;><span class=&quot;nm&quot;>F67</span><span class=&quot;rt&quot;>RL · 40</span></div>
+     <div class=&quot;act&quot;><span class=&quot;nm&quot;>Lance-flammes</span><span class=&quot;rt&quot;>RL</span></div>
+    </div>
+   </div>
+   <div class=&quot;col2&quot;>
+    <div class=&quot;c2h&quot;>→ Fusil sonique <span style=&quot;font:400 9px/1 var(--ui);color:var(--tx-mid);text-transform:uppercase;letter-spacing:.06em&quot;>Tir</span></div>
+    <div class=&quot;c2b&quot;>
+     <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Cible</span>
+      <div class=&quot;tgt&quot;>Baboulinet <span class=&quot;ch&quot;>Changer</span></div>
+     </div>
+     <div class=&quot;xr&quot;><span class=&quot;xk&quot;>Mode de tir</span>
+      <div class=&quot;segs&quot;><span class=&quot;seg on&quot;>Coup par coup</span></div>
+     </div>
+     <div class=&quot;c2n&quot;>Une exo-armure fait une seule attaque par Tour — pas de rafale multi-cible, pas de deux armes.</div>
+    </div>
+   </div>
+  </div>
+  <div class=&quot;ft pcb&quot;>
+   <span class=&quot;pill&quot;>INI 13 &rarr; 8</span>
+   <span class=&quot;st&quot;>Prêt</span>
+   <button class=&quot;bpass&quot;>Passer le tour</button>
+   <button class=&quot;btn&quot;>Déclarer</button>
+  </div>
+ </div>
+</div>
+</body></html>"></iframe><h2>Anatomie — Anatomie — spec annotée v5</h2><iframe srcdoc="<!doctype html><html><head><meta charset=utf-8><link rel=&quot;stylesheet&quot; href=&quot;https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap&quot;><style>
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#3a4a5a;--tx-mid:#7a8798;
+ --neg:#c86030;--warn:#e0a060;--ok:#4caf77;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+body{margin:0;background:#05060a;padding:26px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+.board{width:900px;display:flex;flex-direction:column;gap:14px}
+.title{font:600 15px/1.2 var(--ui);color:var(--tx-strong)}
+.sub{font:400 11px/1.5 var(--ui);color:var(--tx-mid);margin-top:3px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;padding:13px 14px}
+.card.wide{grid-column:1 / -1}
+.card h3{font:600 10px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--eyebrow);margin:0 0 10px}
+.card p{font:400 11px/1.55 var(--ui);color:var(--tx-mid);margin:9px 0 0}
+.card code{font:400 10px var(--mono);color:var(--tx);background:var(--header);border:1px solid var(--border);border-radius:3px;padding:1px 4px}
+.cols{display:flex;gap:10px;align-items:stretch}
+.cbox{flex:1;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.02);padding:9px 10px}
+.cbox .ct{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field);margin-bottom:7px}
+.cbox .ci{font:500 11px var(--ui);color:var(--tx);padding:3px 0}
+.cbox .ci.dim{color:var(--tx-mid)}
+.cbox.d2{background:rgba(80,200,120,.05);border-color:rgba(80,200,120,.28)}
+.arrow{align-self:center;color:var(--tx-dim)}
+.seg2{display:flex;gap:4px;margin-top:4px}
+.seg2 span{flex:1;text-align:center;font:600 9px var(--ui);text-transform:uppercase;letter-spacing:.05em;color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:5px 4px}
+.seg2 span.on{color:#50c878;border-color:#50c878;background:rgba(80,200,120,.12)}
+.glyrow{display:flex;flex-wrap:wrap;gap:14px;margin-top:4px}
+.gi{display:flex;align-items:center;gap:7px;font:500 10px var(--ui);color:var(--tx)}
+.gm{width:20px;height:20px;flex:none;background-color:var(--eyebrow);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain}
+.locrow{display:flex;gap:10px;align-items:flex-start;margin-top:6px;border:1px solid var(--border);border-radius:6px;padding:8px}
+.locrow .sm{font:400 10px/1.5 var(--ui);color:var(--tx-mid)}
+.foot{display:flex;align-items:center;gap:9px;background:var(--header);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-top:4px}
+.foot .p{font:700 11px/1 var(--mono);color:#50c878;background:rgba(80,200,120,.13);border:1px solid rgba(80,200,120,.4);border-radius:4px;padding:5px 7px}
+.foot .p.lost{color:#e06666;background:rgba(224,60,60,.13);border-color:#aa3030}
+.foot .m{flex:1;font:500 10px var(--ui);color:var(--ok);text-align:center}
+.foot .bp{font:500 10px var(--ui);color:var(--tx-mid);border:1px solid var(--border);border-radius:5px;padding:5px 9px}
+.foot .b{font:600 10px var(--ui);color:#05060a;background:#3a8aaa;border-radius:5px;padding:6px 12px}
+.pcbdemo{border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:6px}
+.pcbdemo .h{padding:8px 10px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--eyebrow);background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px;border-bottom:1px solid var(--border)}
+.pcbdemo .b{padding:12px 10px;font:400 10px/1.5 var(--ui);color:var(--tx-mid);background:linear-gradient(180deg,#0f1420,#0b0d15)}
+.pcbdemo .f{padding:7px 10px;background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px;border-top:1px solid var(--border);font:400 8px var(--mono);color:var(--tx-dim)}
+.vtab{width:100%;border-collapse:collapse;margin-top:2px}
+.vtab td{font:400 11px var(--ui);color:var(--tx);padding:5px 4px;border-bottom:1px solid var(--sep)}
+.vtab td:first-child{color:var(--field);font-size:10px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;width:120px}
+.vtab tr:last-child td{border-bottom:none}
+.strike{color:var(--tx-dim);text-decoration:line-through}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:5px;border:1px solid rgba(255,255,255,.14)}
+.foot3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fc{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 12px}
+.fc h4{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--eyebrow);margin:0 0 6px}
+.fc p{font:400 10px/1.5 var(--ui);color:var(--tx-mid);margin:0}
+.fc code{font:400 9px var(--mono);color:var(--tx);background:var(--header);border:1px solid var(--border);border-radius:3px;padding:1px 3px}
+a{color:#3a8aaa}a:hover{color:var(--tx-strong)}
+</style></head><body>
+<div class=&quot;board&quot;>
+ <div>
+  <div class=&quot;title&quot;>Fenêtre de déclaration — v5</div>
+  <div class=&quot;sub&quot;>Tes glyphes câblés (masque CSS, recolorés à l'accent). Fond PCB inspiré du Changelog, sur les bandeaux uniquement. Recharger en colonne 2, silhouette sur deux sous-colonnes. Même structure PJ / MJ-PNJ / Drone / Exo.</div>
+ </div>
+
+ <div class=&quot;grid&quot;>
+
+  <div class=&quot;card&quot;>
+   <h3>Deux colonnes = hiérarchie</h3>
+   <div class=&quot;cols&quot;>
+    <div class=&quot;cbox&quot;><div class=&quot;ct&quot;>Col. 1 — Armement</div><div class=&quot;ci&quot;>Scorpion</div><div class=&quot;ci dim&quot;>Couteau Congre</div><div class=&quot;ci dim&quot;>Mains nues</div></div>
+    <span class=&quot;arrow&quot;>▸</span>
+    <div class=&quot;cbox d2&quot;><div class=&quot;ct&quot;>Col. 2 — L'arme choisie</div><div class=&quot;seg2&quot;><span class=&quot;on&quot;>Tir</span><span>Recharger</span></div><div class=&quot;ci dim&quot; style=&quot;font-size:10px;margin-top:6px&quot;>cible · mode · simple/visé/répétition · deux armes · localisation</div></div>
+   </div>
+   <p><strong>Recharger vit dans la colonne 2</strong> — action liée à une arme précise. La colonne 2 n'est jamais d'autres actions, seulement le détail de la sélection.</p>
+  </div>
+
+  <div class=&quot;card&quot;>
+   <h3>Glyphes — tes SVG, recolorés à l'accent</h3>
+   <div class=&quot;glyrow&quot;>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/distance.svg);mask-image:url(../../../client/public/assets/status/distance.svg)&quot;></span>Distance</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/contact.svg);mask-image:url(../../../client/public/assets/status/contact.svg)&quot;></span>Contact</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/stand.svg);mask-image:url(../../../client/public/assets/status/stand.svg)&quot;></span>Debout</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/crounch.svg);mask-image:url(../../../client/public/assets/status/crounch.svg)&quot;></span>Accroupi</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/kneel.svg);mask-image:url(../../../client/public/assets/status/kneel.svg)&quot;></span>Genou</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/crawl.svg);mask-image:url(../../../client/public/assets/status/crawl.svg)&quot;></span>Couché</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/actionNormal.svg);mask-image:url(../../../client/public/assets/status/actionNormal.svg)&quot;></span>Vitesse</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/WeaponA.svg);mask-image:url(../../../client/public/assets/status/WeaponA.svg)&quot;></span>Rangée</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/WeaponB.svg);mask-image:url(../../../client/public/assets/status/WeaponB.svg)&quot;></span>Main dessus</span>
+    <span class=&quot;gi&quot;><span class=&quot;gm&quot; style=&quot;-webkit-mask-image:url(../../../client/public/assets/status/WeaponC.svg);mask-image:url(../../../client/public/assets/status/WeaponC.svg)&quot;></span>Au clair</span>
+   </div>
+   <p>Chargés depuis <code>assets/status/*.svg</code> via <code>mask-image</code> — l'élément prend la couleur d'accent, le SVG ne fournit que la forme. Si un glyphe apparaît rogné : sa <code>viewBox</code> Inkscape ne cadre pas la forme (à ajuster à la source). Plus de pastille verte, plus de rond radio (sélection = bordure accent).</p>
+  </div>
+
+  <div class=&quot;card&quot;>
+   <h3>État tactique — satellite iconique</h3>
+   <p>Panneau accroché à gauche, se déplace avec la fenêtre. Statut, pas actions. Un glyphe par paramètre (Posture / Vitesse / Arme), valeur en un mot, clic = cycle.</p>
+   <p>Présent PJ / MJ / Exo. <strong>Absent pour un drone.</strong> Câblé sur <code>CombatDeclareStateChip</code>. Neuf pour l'exo (dette ROADMAP §1).</p>
+  </div>
+
+  <div class=&quot;card&quot;>
+   <h3>Silhouette de visée — deux sous-colonnes</h3>
+   <div class=&quot;locrow&quot;>
+    <svg width=&quot;34&quot; height=&quot;66&quot; viewBox=&quot;0 0 46 86&quot; fill=&quot;#161c2a&quot; stroke=&quot;#3a4560&quot; stroke-width=&quot;1.3&quot;><circle cx=&quot;23&quot; cy=&quot;10&quot; r=&quot;7.5&quot;></circle><rect x=&quot;13&quot; y=&quot;20&quot; width=&quot;20&quot; height=&quot;30&quot; rx=&quot;6&quot;></rect><path d=&quot;M14 23l-8 17M32 23l8 17&quot; stroke-linecap=&quot;round&quot;></path><path d=&quot;M18 50l-4 32M28 50l4 32&quot; stroke-linecap=&quot;round&quot;></path></svg>
+    <div class=&quot;sm&quot;><b style=&quot;color:var(--tx-strong)&quot;>Aucune — tirage 1D20</b><br>Le résumé (zone, malus, effet) vit à droite de la silhouette, pas dessous. Gagne de la hauteur dans la colonne la plus chargée.</div>
+   </div>
+  </div>
+
+  <div class=&quot;card&quot;>
+   <h3>Fond — PCB, sur les bandeaux</h3>
+   <div class=&quot;pcbdemo&quot;>
+    <div class=&quot;h&quot;>Header · motif PCB</div>
+    <div class=&quot;b&quot;>Zone dense : gradient vertical seul. Pas de motif derrière la liste d'action ni la colonne 2 — lu chaque tour, flotte sur la carte 3D.</div>
+    <div class=&quot;f&quot;>FOOTER · motif PCB</div>
+   </div>
+   <p>Vrai motif de circuit (pistes + pastilles + puce), même esprit que le Changelog (<code>ChangelogPanel.jsx</code>) mais confiné au header, au pied et au satellite. Réglable — dis si tu veux plus dense ou l'étendre.</p>
+  </div>
+
+  <div class=&quot;card&quot;>
+   <h3>Pied — pastille + double bouton</h3>
+   <div class=&quot;foot&quot;><span class=&quot;p&quot;>INI 7&rarr;2</span><span class=&quot;m&quot;>Prêt</span><span class=&quot;bp&quot;>Passer le tour</span><span class=&quot;b&quot;>Déclarer</span></div>
+   <div class=&quot;foot&quot;><span class=&quot;p lost&quot;>INI 7&rarr;0</span><span class=&quot;m&quot; style=&quot;color:var(--warn)&quot;>tour perdu — déclaration permise</span><span class=&quot;bp&quot;>Passer le tour</span><span class=&quot;b&quot;>Déclarer</span></div>
+   <p>Pastille <code>actuel &rarr; projeté</code>, deux couleurs (normale / rouge si tour perdu). « Passer le tour » = second bouton plus petit.</p>
+  </div>
+
+  <div class=&quot;card wide&quot;>
+   <h3>Ce qui varie par famille — tout le reste est identique</h3>
+   <table class=&quot;vtab&quot;>
+    <tr><td>Accent</td><td><span class=&quot;sw&quot; style=&quot;background:#50c878&quot;></span>PJ &nbsp; <span class=&quot;sw&quot; style=&quot;background:#c86030&quot;></span>MJ / PNJ &nbsp; <span class=&quot;sw&quot; style=&quot;background:#33b0b0&quot;></span>Drone &nbsp; <span class=&quot;sw&quot; style=&quot;background:#9d63cc&quot;></span>Exo</td></tr>
+    <tr><td>Satellite</td><td>PJ · MJ · Exo — <span class=&quot;strike&quot;>Drone</span></td></tr>
+    <tr><td>Liste d'armes</td><td>selon l'équipement — drone 1, exo 5, PJ variable</td></tr>
+    <tr><td>Roster</td><td>si &gt; 1 acteur contrôlé. MJ : liste les PNJ gérés, cliquer = passer à sa déclaration.</td></tr>
+   </table>
+  </div>
+
+ </div>
+
+ <div class=&quot;foot3&quot;>
+  <div class=&quot;fc&quot;><h4>Terminologie</h4><p>Actions : <strong>Tir</strong> · <strong>Corps à corps</strong>. Catégories : <strong>Distance</strong> · <strong>Contact</strong>. Bannis : <span class=&quot;strike&quot;>Assaut</span> <span class=&quot;strike&quot;>Mêlée</span>.</p></div>
+  <div class=&quot;fc&quot;><h4>Tokens</h4><p>Réconcilier les 3 vocabulaires <code>--combat-*</code> en un seul jeu ; ajouter <code>--combat-exo-*</code>.</p></div>
+  <div class=&quot;fc&quot;><h4>i18n</h4><p>100 % — case de clôture de chaque lot, script <code>PLAN_LOCALISATION</code> §1. <code>DÉCLARER</code> en dur du MJ → lot B.</p></div>
+ </div>
+</div>
+</body></html>"></iframe></body></html>

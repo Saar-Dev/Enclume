@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap">
+<style>
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#3a4a5a;--tx-mid:#7a8798;
+ --neg:#c86030;--warn:#e0a060;--ok:#4caf77;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+body{margin:0;background:#05060a;padding:26px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+.board{width:900px;display:flex;flex-direction:column;gap:14px}
+.title{font:600 15px/1.2 var(--ui);color:var(--tx-strong)}
+.sub{font:400 11px/1.5 var(--ui);color:var(--tx-mid);margin-top:3px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;padding:13px 14px}
+.card.wide{grid-column:1 / -1}
+.card h3{font:600 10px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--eyebrow);margin:0 0 10px}
+.card p{font:400 11px/1.55 var(--ui);color:var(--tx-mid);margin:9px 0 0}
+.card code{font:400 10px var(--mono);color:var(--tx);background:var(--header);border:1px solid var(--border);border-radius:3px;padding:1px 4px}
+.cols{display:flex;gap:10px;align-items:stretch}
+.cbox{flex:1;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.02);padding:9px 10px}
+.cbox .ct{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field);margin-bottom:7px}
+.cbox .ci{font:500 11px var(--ui);color:var(--tx);padding:3px 0}
+.cbox .ci.dim{color:var(--tx-mid)}
+.cbox.d2{background:rgba(80,200,120,.05);border-color:rgba(80,200,120,.28)}
+.arrow{align-self:center;color:var(--tx-dim)}
+.seg2{display:flex;gap:4px;margin-top:4px}
+.seg2 span{flex:1;text-align:center;font:600 9px var(--ui);text-transform:uppercase;letter-spacing:.05em;color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:5px 4px}
+.seg2 span.on{color:#50c878;border-color:#50c878;background:rgba(80,200,120,.12)}
+.glyrow{display:flex;flex-wrap:wrap;gap:14px;margin-top:4px}
+.gi{display:flex;align-items:center;gap:7px;font:500 10px var(--ui);color:var(--tx)}
+.gm{width:20px;height:20px;flex:none;background-color:var(--eyebrow);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain}
+.locrow{display:flex;gap:10px;align-items:flex-start;margin-top:6px;border:1px solid var(--border);border-radius:6px;padding:8px}
+.locrow .sm{font:400 10px/1.5 var(--ui);color:var(--tx-mid)}
+.foot{display:flex;align-items:center;gap:9px;background:var(--header);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-top:4px}
+.foot .p{font:700 11px/1 var(--mono);color:#50c878;background:rgba(80,200,120,.13);border:1px solid rgba(80,200,120,.4);border-radius:4px;padding:5px 7px}
+.foot .p.lost{color:#e06666;background:rgba(224,60,60,.13);border-color:#aa3030}
+.foot .m{flex:1;font:500 10px var(--ui);color:var(--ok);text-align:center}
+.foot .bp{font:500 10px var(--ui);color:var(--tx-mid);border:1px solid var(--border);border-radius:5px;padding:5px 9px}
+.foot .b{font:600 10px var(--ui);color:#05060a;background:#3a8aaa;border-radius:5px;padding:6px 12px}
+.pcbdemo{border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:6px}
+.pcbdemo .h{padding:8px 10px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--eyebrow);background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px;border-bottom:1px solid var(--border)}
+.pcbdemo .b{padding:12px 10px;font:400 10px/1.5 var(--ui);color:var(--tx-mid);background:linear-gradient(180deg,#0f1420,#0b0d15)}
+.pcbdemo .f{padding:7px 10px;background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px;border-top:1px solid var(--border);font:400 8px var(--mono);color:var(--tx-dim)}
+.vtab{width:100%;border-collapse:collapse;margin-top:2px}
+.vtab td{font:400 11px var(--ui);color:var(--tx);padding:5px 4px;border-bottom:1px solid var(--sep)}
+.vtab td:first-child{color:var(--field);font-size:10px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;width:120px}
+.vtab tr:last-child td{border-bottom:none}
+.strike{color:var(--tx-dim);text-decoration:line-through}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:-2px;margin-right:5px;border:1px solid rgba(255,255,255,.14)}
+.foot3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fc{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 12px}
+.fc h4{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--eyebrow);margin:0 0 6px}
+.fc p{font:400 10px/1.5 var(--ui);color:var(--tx-mid);margin:0}
+.fc code{font:400 9px var(--mono);color:var(--tx);background:var(--header);border:1px solid var(--border);border-radius:3px;padding:1px 3px}
+a{color:#3a8aaa}a:hover{color:var(--tx-strong)}
+</style>
+</helmet>
+<div class="board">
+ <div>
+  <div class="title">Fenêtre de déclaration — v5</div>
+  <div class="sub">Tes glyphes câblés (masque CSS, recolorés à l'accent). Fond PCB inspiré du Changelog, sur les bandeaux uniquement. Recharger en colonne 2, silhouette sur deux sous-colonnes. Même structure PJ / MJ-PNJ / Drone / Exo.</div>
+ </div>
+
+ <div class="grid">
+
+  <div class="card">
+   <h3>Deux colonnes = hiérarchie</h3>
+   <div class="cols">
+    <div class="cbox"><div class="ct">Col. 1 — Armement</div><div class="ci">Scorpion</div><div class="ci dim">Couteau Congre</div><div class="ci dim">Mains nues</div></div>
+    <span class="arrow">▸</span>
+    <div class="cbox d2"><div class="ct">Col. 2 — L'arme choisie</div><div class="seg2"><span class="on">Tir</span><span>Recharger</span></div><div class="ci dim" style="font-size:10px;margin-top:6px">cible · mode · simple/visé/répétition · deux armes · localisation</div></div>
+   </div>
+   <p><strong>Recharger vit dans la colonne 2</strong> — action liée à une arme précise. La colonne 2 n'est jamais d'autres actions, seulement le détail de la sélection.</p>
+  </div>
+
+  <div class="card">
+   <h3>Glyphes — tes SVG, recolorés à l'accent</h3>
+   <div class="glyrow">
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(distance.svg);mask-image:url(distance.svg)"></span>Distance</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(contact.svg);mask-image:url(contact.svg)"></span>Contact</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(stand.svg);mask-image:url(stand.svg)"></span>Debout</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(crounch.svg);mask-image:url(crounch.svg)"></span>Accroupi</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(kneel.svg);mask-image:url(kneel.svg)"></span>Genou</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(crawl.svg);mask-image:url(crawl.svg)"></span>Couché</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(actionNormal.svg);mask-image:url(actionNormal.svg)"></span>Vitesse</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(WeaponA.svg);mask-image:url(WeaponA.svg)"></span>Rangée</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(WeaponB.svg);mask-image:url(WeaponB.svg)"></span>Main dessus</span>
+    <span class="gi"><span class="gm" style="-webkit-mask-image:url(WeaponC.svg);mask-image:url(WeaponC.svg)"></span>Au clair</span>
+   </div>
+   <p>Chargés depuis <code>assets/status/*.svg</code> via <code>mask-image</code> — l'élément prend la couleur d'accent, le SVG ne fournit que la forme. Si un glyphe apparaît rogné : sa <code>viewBox</code> Inkscape ne cadre pas la forme (à ajuster à la source). Plus de pastille verte, plus de rond radio (sélection = bordure accent).</p>
+  </div>
+
+  <div class="card">
+   <h3>État tactique — satellite iconique</h3>
+   <p>Panneau accroché à gauche, se déplace avec la fenêtre. Statut, pas actions. Un glyphe par paramètre (Posture / Vitesse / Arme), valeur en un mot, clic = cycle.</p>
+   <p>Présent PJ / MJ / Exo. <strong>Absent pour un drone.</strong> Câblé sur <code>CombatDeclareStateChip</code>. Neuf pour l'exo (dette ROADMAP §1).</p>
+  </div>
+
+  <div class="card">
+   <h3>Silhouette de visée — deux sous-colonnes</h3>
+   <div class="locrow">
+    <svg width="34" height="66" viewBox="0 0 46 86" fill="#161c2a" stroke="#3a4560" stroke-width="1.3"><circle cx="23" cy="10" r="7.5"></circle><rect x="13" y="20" width="20" height="30" rx="6"></rect><path d="M14 23l-8 17M32 23l8 17" stroke-linecap="round"></path><path d="M18 50l-4 32M28 50l4 32" stroke-linecap="round"></path></svg>
+    <div class="sm"><b style="color:var(--tx-strong)">Aucune — tirage 1D20</b><br>Le résumé (zone, malus, effet) vit à droite de la silhouette, pas dessous. Gagne de la hauteur dans la colonne la plus chargée.</div>
+   </div>
+  </div>
+
+  <div class="card">
+   <h3>Fond — PCB, sur les bandeaux</h3>
+   <div class="pcbdemo">
+    <div class="h">Header · motif PCB</div>
+    <div class="b">Zone dense : gradient vertical seul. Pas de motif derrière la liste d'action ni la colonne 2 — lu chaque tour, flotte sur la carte 3D.</div>
+    <div class="f">FOOTER · motif PCB</div>
+   </div>
+   <p>Vrai motif de circuit (pistes + pastilles + puce), même esprit que le Changelog (<code>ChangelogPanel.jsx</code>) mais confiné au header, au pied et au satellite. Réglable — dis si tu veux plus dense ou l'étendre.</p>
+  </div>
+
+  <div class="card">
+   <h3>Pied — pastille + double bouton</h3>
+   <div class="foot"><span class="p">INI 7&rarr;2</span><span class="m">Prêt</span><span class="bp">Passer le tour</span><span class="b">Déclarer</span></div>
+   <div class="foot"><span class="p lost">INI 7&rarr;0</span><span class="m" style="color:var(--warn)">tour perdu — déclaration permise</span><span class="bp">Passer le tour</span><span class="b">Déclarer</span></div>
+   <p>Pastille <code>actuel &rarr; projeté</code>, deux couleurs (normale / rouge si tour perdu). « Passer le tour » = second bouton plus petit.</p>
+  </div>
+
+  <div class="card wide">
+   <h3>Ce qui varie par famille — tout le reste est identique</h3>
+   <table class="vtab">
+    <tr><td>Accent</td><td><span class="sw" style="background:#50c878"></span>PJ &nbsp; <span class="sw" style="background:#c86030"></span>MJ / PNJ &nbsp; <span class="sw" style="background:#33b0b0"></span>Drone &nbsp; <span class="sw" style="background:#9d63cc"></span>Exo</td></tr>
+    <tr><td>Satellite</td><td>PJ · MJ · Exo — <span class="strike">Drone</span></td></tr>
+    <tr><td>Liste d'armes</td><td>selon l'équipement — drone 1, exo 5, PJ variable</td></tr>
+    <tr><td>Roster</td><td>si &gt; 1 acteur contrôlé. MJ : liste les PNJ gérés, cliquer = passer à sa déclaration.</td></tr>
+   </table>
+  </div>
+
+ </div>
+
+ <div class="foot3">
+  <div class="fc"><h4>Terminologie</h4><p>Actions : <strong>Tir</strong> · <strong>Corps à corps</strong>. Catégories : <strong>Distance</strong> · <strong>Contact</strong>. Bannis : <span class="strike">Assaut</span> <span class="strike">Mêlée</span>.</p></div>
+  <div class="fc"><h4>Tokens</h4><p>Réconcilier les 3 vocabulaires <code>--combat-*</code> en un seul jeu ; ajouter <code>--combat-exo-*</code>.</p></div>
+  <div class="fc"><h4>i18n</h4><p>100 % — case de clôture de chaque lot, script <code>PLAN_LOCALISATION</code> §1. <code>DÉCLARER</code> en dur du MJ → lot B.</p></div>
+ </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150">
+  <g fill="none" stroke="#5a8aaa" stroke-width="0.6" opacity="0.11">
+    <path d="M0 30 H46 V70 H104 M104 0 V52 M132 52 H150 M18 150 V108 H66 V136 H150 M46 70 V150 M0 112 H28"/>
+    <path d="M75 30 V10 M122 70 H150 M0 70 H14"/>
+    <rect x="94" y="60" width="24" height="14" rx="1"/>
+    <rect x="54" y="118" width="18" height="11" rx="1"/>
+  </g>
+  <g fill="#5a8aaa" opacity="0.13">
+    <circle cx="46" cy="30" r="1.4"/><circle cx="104" cy="52" r="1.4"/><circle cx="104" cy="70" r="1.4"/>
+    <circle cx="46" cy="70" r="1.4"/><circle cx="66" cy="108" r="1.4"/><circle cx="66" cy="136" r="1.4"/>
+    <circle cx="28" cy="112" r="1.1"/><circle cx="75" cy="10" r="1.1"/><circle cx="132" cy="52" r="1.1"/>
+  </g>
+  <g fill="#5a8aaa" opacity="0.05">
+    <circle cx="15" cy="15" r="0.6"/><circle cx="52" cy="15" r="0.6"/><circle cx="90" cy="15" r="0.6"/><circle cx="128" cy="15" r="0.6"/>
+    <circle cx="15" cy="52" r="0.6"/><circle cx="52" cy="52" r="0.6"/><circle cx="90" cy="52" r="0.6"/><circle cx="128" cy="52" r="0.6"/>
+    <circle cx="15" cy="90" r="0.6"/><circle cx="52" cy="90" r="0.6"/><circle cx="90" cy="90" r="0.6"/><circle cx="128" cy="90" r="0.6"/>
+    <circle cx="15" cy="128" r="0.6"/><circle cx="52" cy="128" r="0.6"/><circle cx="90" cy="128" r="0.6"/><circle cx="128" cy="128" r="0.6"/>
+  </g>
+</svg>

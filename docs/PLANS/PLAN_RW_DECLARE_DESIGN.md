@@ -32,6 +32,12 @@
 > qui suit — cf. §9).
 > **Prototype d'interaction D5** (jetable, valide le *geste* « l'arme EST l'action » + la teinte
 > Wizard) : `https://claude.ai/code/artifact/afcd5e28-341b-40ee-b109-30e69d9597fc`. **Validé Saar.**
+>
+> **Les deux artifacts sont désormais matérialisés dans le dépôt** (2026-08-29, fin de la
+> dépendance à un lien externe) : `docs/PLANS/maquette-declare/` — 4 artboards `.dc.html` + `preview.html`
+> navigable + `pcb.svg` + README qui délimite l'autorité de la maquette (structure/glyphes/pied OUI ;
+> grounds NON — palette Wizard = `index.css`). Le HTML complet du prototype `afcd5e28` a lui aussi
+> été relu intégralement à cette date.
 
 ---
 
@@ -44,6 +50,7 @@
 | Module 0 M0.0-M0.3 (`buildDeclarePayload`, 51 tests) | ✅ **codé + committé** | §5.4 |
 | **M-E2E** — filet Playwright **local** (approche tranchée) | à cadrer juste avant l'extraction du frame — pas commencé | §5.5 |
 | **Spec visuelle `--decl-*`** (teinte Wizard, extraite du prototype `afcd5e28`) | ✅ **dans `client/src/index.css`** (`1872cb4`) — manquait au plan, cf. §11 | §11 |
+| **Maquette matérialisée dans le dépôt** (`docs/PLANS/maquette-declare/` : 4 artboards + preview + pcb) | ✅ **2026-08-29** — fin de la dépendance à un artifact externe | §11 |
 | Module 2 — volet **visuel** (`data-decl`/`data-family` + re-skin CSS des 3 fenêtres) | ✅ **codé** (`6760c30`) — validation navigateur en attente | §5.6 |
 | Module 2 — volet **structurel** (`CombatDeclareFrame`, déduplication du châssis) | **pas commencé** (refactor, pas visuel) | §5.6 |
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé** (`bfce734` fonctionnel → `1872cb4` look maquette) — validation navigateur en attente | §5.7 |

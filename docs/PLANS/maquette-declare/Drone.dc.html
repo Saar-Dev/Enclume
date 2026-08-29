@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Share+Tech+Mono&display=swap">
+<style>
+*{box-sizing:border-box}
+:root{
+ --bg:#0d0f18;--header:#080a12;--border:#1e2435;--sep:#1e1e2e;
+ --eyebrow:#5a8aaa;--field:#456575;
+ --tx:#c0c8d0;--tx-strong:#dde7ee;--tx-dim:#3a4a5a;--tx-mid:#7a8798;
+ --neg:#c86030;--warn:#e0a060;--ok:#4caf77;
+ --mono:'Share Tech Mono',ui-monospace,Menlo,monospace;
+ --ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+ --accent:#33b0b0;--accent-bg:rgba(48,170,170,.15);--accent-bd:rgba(48,170,170,.45);
+}
+body{margin:0;background:#05060a;padding:26px;font-family:var(--ui);color:var(--tx);-webkit-font-smoothing:antialiased}
+.win{background:linear-gradient(180deg,#0f1420,#0b0d15);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.7);overflow:hidden;width:552px}
+.pcb{background-color:var(--header);background-image:url(pcb.svg);background-size:150px 150px}
+.gph{flex:none;background-color:var(--eyebrow);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain;width:15px;height:15px}
+.hdr{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border)}
+.hx{width:22px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;font:700 9px/1 var(--mono);color:#05060a;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:var(--accent)}
+.hdr-t{font:600 12px/1 var(--ui);color:var(--tx-strong)}
+.hdr-m{margin-left:auto;font:400 10px/1 var(--mono);color:var(--tx-dim)}
+.body{display:flex;align-items:stretch}
+.col1{width:300px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.col2{flex:1;min-width:0;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+.move{display:flex;align-items:center;gap:9px;margin:8px 8px 4px;padding:8px 9px;border:1px dashed var(--border);border-radius:6px;background:rgba(255,255,255,.03)}
+.move .pl{font:700 12px/1 var(--ui);color:var(--tx-mid);flex:none}
+.move .ml{font:500 11px var(--ui);flex:1;color:var(--tx)}
+.move .mr{font:400 10px var(--ui);flex:none;color:var(--tx-dim)}
+.alist{padding:4px 8px 8px}
+.aeb{font:600 9px/1.2 var(--ui);text-transform:uppercase;letter-spacing:.1em;color:var(--eyebrow);padding:6px 4px 2px;display:flex;gap:6px}
+.aeb .h{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx-dim);font-size:10px}
+.grp{display:flex;align-items:center;gap:7px;padding:8px 4px 4px;font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.11em;color:var(--field)}
+.act{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.022);margin-bottom:3px}
+.act .nm{font:500 12px var(--ui);color:var(--tx);flex:1;min-width:0}
+.act .rt{font:400 10px var(--mono);color:var(--tx-mid);flex:none}
+.act.sel{border-color:var(--accent);background:var(--accent-bg)}
+.act.sel .nm{color:var(--tx-strong)}
+.c2h{display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--sep);font:600 11px/1 var(--ui);color:var(--accent)}
+.c2act{display:flex;gap:4px;padding:9px 12px 4px}
+.c2act .t{flex:1;text-align:center;font:600 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px;text-transform:uppercase;letter-spacing:.05em}
+.c2act .t.on{color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+.c2b{padding:6px 12px 12px;display:flex;flex-direction:column;gap:11px}
+.xr{display:flex;flex-direction:column;gap:6px}
+.xk{font:600 8px/1 var(--ui);text-transform:uppercase;letter-spacing:.09em;color:var(--field)}
+.tgt{display:flex;align-items:center;gap:8px;font:500 11px var(--ui);color:var(--tx-dim);border:1px dashed var(--border);border-radius:5px;padding:6px 8px}
+.segs{display:flex;gap:4px}
+.seg{flex:1;text-align:center;font:500 10px var(--ui);color:var(--tx-mid);background:var(--header);border:1px solid var(--border);border-radius:4px;padding:6px 3px}
+.seg.on{color:var(--tx-strong);border-color:var(--accent);background:var(--accent-bg)}
+.c2n{font:400 10px/1.5 var(--ui);color:var(--tx-dim)}
+.ft{display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid var(--border)}
+.pill{font:700 12px/1 var(--mono);color:var(--tx-mid);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:5px;padding:6px 8px;flex:none}
+.st{flex:1;text-align:center;font:500 11px var(--ui);color:var(--warn)}
+.bpass{font:500 11px var(--ui);color:var(--tx-mid);background:transparent;border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex:none}
+.btn{font:600 12px var(--ui);color:#05060a;background:var(--accent);border:0;border-radius:6px;padding:9px 18px;flex:none}
+.btn.off{background:#121826;color:var(--tx-dim)}
+a{color:var(--accent)}a:hover{color:var(--tx-strong)}
+</style>
+</helmet>
+<div class="win">
+ <div class="hdr pcb"><span class="hx">AX</span><span class="hdr-t">Drone AX</span><span class="hdr-m">2 / 3 déclarés</span></div>
+ <div class="body">
+  <div class="col1">
+   <div class="move"><span class="pl">+</span><span class="ml">Déplacement</span><span class="mr">définir la zone</span></div>
+   <div class="alist">
+    <div class="aeb">Action <span class="h">un seul choix</span></div>
+    <div class="grp"><span class="gph" style="-webkit-mask-image:url(distance.svg);mask-image:url(distance.svg)"></span>Distance</div>
+    <div class="act sel"><span class="nm">Fusil Gauss</span><span class="rt">30</span></div>
+   </div>
+  </div>
+  <div class="col2">
+   <div class="c2h">→ Fusil Gauss</div>
+   <div class="c2act"><span class="t on">Tir</span><span class="t">Recharger</span></div>
+   <div class="c2b">
+    <div class="xr"><span class="xk">Cible</span>
+     <div class="tgt">Choisir une cible</div>
+    </div>
+    <div class="xr"><span class="xk">Mode de tir</span>
+     <div class="segs"><span class="seg on">Coup par coup</span><span class="seg">Rafale ct.</span><span class="seg">Rafale lg.</span></div>
+    </div>
+    <div class="c2n">CC · 7D10+2 · 30 munitions</div>
+   </div>
+  </div>
+ </div>
+ <div class="ft pcb">
+  <span class="pill">INI 12</span>
+  <span class="st">Choisis une cible</span>
+  <button class="bpass">Passer le tour</button>
+  <button class="btn off">Déclarer</button>
+ </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,69 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 810,
+      "h": 610,
+      "title": "Humain / MJ-PNJ"
+    },
+    {
+      "file": "Exo.dc.html",
+      "x": 900,
+      "y": 0,
+      "w": 800,
+      "h": 500,
+      "title": "Exo-armure"
+    },
+    {
+      "file": "Drone.dc.html",
+      "x": 0,
+      "y": 710,
+      "w": 630,
+      "h": 420,
+      "title": "Drone (sans satellite)"
+    },
+    {
+      "file": "Anatomie.dc.html",
+      "x": 900,
+      "y": 600,
+      "w": 980,
+      "h": 940,
+      "title": "Décisions v5"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-main",
+      "x": 0,
+      "y": -104,
+      "w": 800,
+      "text": "HUMAIN — tes glyphes câblés : Distance / Contact sur les en-têtes de groupe, Posture / Vitesse / Arme dans le satellite (recolorés à l'accent via masque CSS). Colonne 2 : Tir / Recharger en tête, puis cible / mode / options / deux armes / silhouette sur deux sous-colonnes. Fond PCB sur le header et le pied."
+    },
+    {
+      "id": "note-exo",
+      "x": 900,
+      "y": -104,
+      "w": 790,
+      "text": "EXO — 5 armes groupées Contact (2) / Distance (3). Choisir une arme = déclarer cette attaque. Colonne 2 réduite : une exo fait une seule attaque. Satellite avec les sélecteurs d'état exo (neufs)."
+    },
+    {
+      "id": "note-drone",
+      "x": 0,
+      "y": 606,
+      "w": 630,
+      "text": "DRONE — même fenêtre, sans satellite, une seule arme. Recharger en colonne 2 comme partout."
+    },
+    {
+      "id": "note-anat",
+      "x": 900,
+      "y": 496,
+      "w": 700,
+      "text": "Décisions v5. Si un glyphe apparaît rogné, c'est la viewBox de l'export Inkscape (à cadrer à la source). Nourrit le plan A."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
