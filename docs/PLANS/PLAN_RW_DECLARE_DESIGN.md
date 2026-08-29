@@ -1025,27 +1025,35 @@ Les 2 briques (`StateSelector` segmented / `StateChip` click-to-cycle) partagent
   milieu inadapté → allure lente, Intégrité 0 → détruite — rien sur la posture ni l'état d'arme).
 - **Mode de tir** : fixe, dérivé de l'arme. **Jamais dans le satellite.**
 
-→ **PO-M3-a** (reformulé) : quand l'exo est `prone`, la puce Posture du satellite **remplace-t-elle**
-le bouton « Tenter de se relever » du corps (`handleStandUp`), ou coexistent-ils ? Et : passer par la
-puce → `decl` → DÉCLARER (au lieu de l'`emit` immédiat de `handleStandUp`) préserve-t-il la propriété
-« action exclusive / immédiate » du se-relever (§9 : rejet serveur si combiné à une attaque/un
-déplacement — donc OK de passer par DÉCLARER tant que l'exclusivité tient) ?
+→ **PO-M3-a — TRANCHÉ (Saar 2026-08-29)** : **même interface que HUMAN**, aucune divergence. Quand
+l'exo est `prone`, la puce Posture est un chip normal ; sélectionner une position non-`prone` déclenche
+la **tentative de se relever** (`isExoStandUpAttempt`, déjà serveur — `resolveExoStandUpAction`).
+Ajouts : (a) au clic, un **message système dans le chat** du type « Test pour tenter de se relever.
+En cas d'échec, fin de tour » ; (b) résolution du jet (déjà `DICE_RESULT` visible) → **réussite :
+bascule vers DEBOUT** (comme `handleStandUp` aujourd'hui, `state: {position:'standing'}`) ; **échec :
+fin de tour**. Le bouton dédié « Tenter de se relever » du corps (`handleStandUp`) **disparaît** — la
+puce du satellite le remplace. (Message serveur : FR en dur aujourd'hui comme les voisins,
+`PLAN_LOCALISATION` §8 ; ou `system:true`/`i18nKey` si trivial.)
 
-### 14.4 Présentation glyphe (D8/D10)
+### 14.4 Brique — **réutiliser l'existant, pas réinventer** (recadrage Saar 2026-08-29)
 
-D8 : « glyphes iconiques, peu de texte ». Les briques actuelles restent text-heavy (label + valeur +
-coût). Le satellite veut : **glyphe** (`mask-image` d'un `assets/status/*.svg`, recoloré
-`--combat-accent-fg`) + valeur courte + coût INI si ≠ 0.
+Signal Saar : *« tu te fourvoies en cherchant à réinventer l'interface plutôt que réutiliser les
+éléments existants »*. → Module 3 = **relocalisation** des sélecteurs d'état existants dans le
+panneau satellite, **pas une refonte des sélecteurs**.
 
-Glyphes disponibles (D10, `[VÉRIFIÉ]` présents) : `stand`/`crounch`/`kneel`/`crawl` (posture),
-`actionNormal`/`actionDelayed`/`actionRush` (vitesse), `WeaponA`/`WeaponB`/`WeaponC` (arme
-rangée / main dessus / au clair). Mapping valeur→glyphe direct (PO5 : glyphe **reflète la valeur**,
-Saar a produit les 4 postures → oui).
-
-**Brique** : `[À TRANCHER]` **PO-M3-b** — nouveau composant `CombatDeclareStateGlyph`
-(présentation dédiée) OU extension de `CombatDeclareStateChip` avec un mode `glyph`. Interaction :
-clic = cycle (`nextKey`, comportement chip actuel) ? ou clic = déplie les options (4 postures =
-cycle pénible) ? → **PO-M3-c**.
+- **Brique** : `CombatDeclareStateChip` **tel quel** (click-to-cycle `nextKey`, affiche label +
+  valeur + coût INI — déjà utilisé par le MJ). Pas de nouveau composant. Pas de question
+  « cycle vs déplier » : le chip cycle, c'est le comportement voulu (déjà en prod côté MJ).
+  ~~PO-M3-b, PO-M3-c retirés.~~
+- **Glyphe (D8 « glyphes iconiques, peu de texte » + D10)** : décision **de skin**, pas de
+  structure. Deux options, **PO-M3-b (nouveau)** : (i) ajouter un `glyph?` optionnel à
+  `CombatDeclareStateChip` (préfixe icône `mask-image` d'un `assets/status/*.svg`, recoloré
+  `--combat-accent-fg`) — modifie 1 fichier, s'applique partout où le chip sert ; (ii) le faire dans
+  une passe D10 séparée après le module 3, le satellite livrant d'abord les chips texte tels quels.
+  Mapping valeur→glyphe direct (PO5 : glyphe reflète la valeur — Saar a produit les 4 postures →
+  oui) : `standing→stand`, `crouching→crounch`, `kneeling→kneel`, `prone→crawl` ;
+  `normal→actionNormal`, `delayed→actionDelayed`, `rushed→actionRush` ; `holstered→WeaponA`,
+  `ready→WeaponB`, `drawn→WeaponC`.
 
 ### 14.5 Mécanisme « le satellite suit la fenêtre » (PO3c)  `[VÉRIFIÉ]` aucun précédent
 
@@ -1093,12 +1101,14 @@ perd juste les sélecteurs qu'il n'avait pas (rien) et gagne le satellite.
 
 ### 14.8 Risque + rollback
 
-**Risque moyen (client), + point exo.** PJ + MJ : déplace 3 sélecteurs du corps → panneau frère,
-**pas de changement de forme de payload** (mêmes `decl.*` → mêmes `buildXDeclarePayload` → golden
-master 51 tests en filet). **Exo** : satellite neuf (posture 4 + arme 3) + nouveau fragment `state`
-au payload (14.6) + le fil `prone → Test` à recâbler proprement (PO-M3-a) — c'est le morceau le plus
-délicat du module. Risque **visuel** partout : positionnement du satellite frère, pas de test → **un
-commit par fenêtre + checklist manuelle** (comme module 2). Rollback : `git revert` par commit.
+**Risque moyen (client).** PJ + MJ : déplace 3 sélecteurs (`CombatDeclareStateChip` /
+`CombatDeclareStateSelector` **réutilisés tels quels**) du corps → panneau frère. **Pas de
+changement de forme de payload** (mêmes `decl.*` → mêmes `buildXDeclarePayload` → golden master 51
+tests). **Exo** : les mêmes chips (posture 4 + arme 3 + vitesse) + `state` peuplé au payload (14.6) ;
+le `prone → Test` **existe déjà serveur** (`isExoStandUpAttempt` / `resolveExoStandUpAction`) — le
+module ne fait que router la puce vers ce chemin + ajouter le message chat. Risque **visuel** :
+positionnement du satellite frère, pas de test auto → **un commit par fenêtre + checklist manuelle**
+(comme module 2). Rollback : `git revert` par commit.
 
 ### 14.9 Hors périmètre module 3
 
@@ -1110,12 +1120,19 @@ commit par fenêtre + checklist manuelle** (comme module 2). Rollback : `git rev
 
 ### 14.10 Points ouverts module 3
 
+**Tranchés (Saar 2026-08-29) :**
+- **PO-M3-a** — exo `prone` : **même interface que HUMAN**, la puce Posture **remplace** le bouton
+  « Tenter de se relever » ; clic → message système chat + jet ; réussite → DEBOUT, échec → fin de
+  tour (§14.3).
+- **PO-M3-a2** — l'exo **a** Vitesse au satellite.
+- **PO-M3-b (ancien) / PO-M3-c** — retirés : `CombatDeclareStateChip` réutilisé tel quel, il cycle
+  déjà (§14.4). Pas de nouveau composant, pas de question cycle/déplier.
+
+**Restants :**
+
 | # | Question |
 |---|---|
-| PO-M3-a | **Exo `prone` : la puce Posture du satellite remplace-t-elle le bouton « Tenter de se relever » du corps** (`handleStandUp`), ou coexistent-ils ? Passer par `decl` → DÉCLARER (au lieu de l'`emit` immédiat) : OK tant que l'exclusivité serveur du se-relever tient (§14.3). |
-| PO-M3-a2 | Vitesse pour l'exo : incluse au satellite ou non ? (Saar ne l'a pas listée — `[À CONFIRMER]`.) |
-| PO-M3-b | Brique glyphe : `CombatDeclareStateGlyph` neuf, ou mode `glyph` sur `CombatDeclareStateChip` ? |
-| PO-M3-c | Interaction : clic = cycle (`nextKey`) ou clic = déplie les options ? (4 postures = cycle long) |
-| PO-M3-d | Clamp : satellite passe à droite si pas la place à gauche du bord d'écran ? |
-| PO-M3-e | MJ Vitesse « segmented, 3 choix visibles » (Session 158) : comment le rendre en présentation glyphe sans reperdre les 3 choix d'un coup ? |
-| PO-M3-f | Le satellite est-il draggable indépendamment (détachable) ou strictement collé ? D8 dit « accroché … se déplace avec » → strictement collé, `pos` du frame seul. |
+| PO-M3-b | **Glyphe** (D8/D10) : maintenant (option `glyph?` sur `CombatDeclareStateChip`) ou passe D10 séparée après le module 3 (chips texte d'abord) ? (§14.4) |
+| PO-M3-d | Clamp : satellite passe à droite si pas la place à gauche du bord d'écran ? (détail d'implémentation) |
+| PO-M3-e | MJ Vitesse = aujourd'hui `CombatDeclareStateSelector` (segmented, 3 choix visibles, Session 158). Au satellite : basculer sur `CombatDeclareStateChip` (cycle, comme le PJ — cohérence) ou garder le segmented dans le satellite (plus large) ? **À débattre.** |
+| PO-M3-f | Satellite strictement collé (`pos` du frame seul), pas détachable — D8 « se déplace avec ». Confirmé, pas vraiment ouvert. |
