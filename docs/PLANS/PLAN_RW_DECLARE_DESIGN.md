@@ -324,11 +324,12 @@ Playwright E2E reste possible en complément (scénario combat réel) mais n'est
 Saar) avant le suivant. Ancien code retiré dans le même commit.
 
 **Module 2 — `CombatDeclareFrame` (chrome partagé) + `--combat-accent-*` par famille (ex-module 1).**
-Props : `family`, `storageKey`, `defaultPos`, `title`, `hidden`, `satellite?` (slot), `footer` (slot),
-`children` + états non-déclaration (§4). `useDraggable` + chrome + masquage + fond PCB (D14) +
-`data-family` → `--combat-accent-*`. `+ --combat-exo-*` dans `index.css`. Une seule famille CSS.
-Risque **élevé** (structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** →
-golden master du module 0 en filet.
+**Cadré en détail §13** (API, châssis actuels `[VÉRIFIÉ]`, 6 états non-déclaration, tokens, PCB,
+gardes de montage, risque, 5 points ouverts PO-M2-a..e). En bref : `CombatDeclareFrame` possède
+`useDraggable` + châssis (palette `--combat-*` dédiée) + masquage + slots `satellite`/`footer` +
+`data-family` → `--combat-accent-*` ; `+ --combat-exo-*` (#9858c8) dans `index.css`. Risque **élevé**
+(structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** → golden master du
+module 0 en filet ; un commit par fenêtre migrée.
 
 **Module 3 — `CombatDeclareStatePanel` (satellite, D8).** Composant neuf sur `CombatDeclareStateChip`.
 **Côté exo : PAS de migration serveur** (corrigé §12.5, `[VÉRIFIÉ]` `socketCombatAnnouncement.js`
@@ -371,7 +372,7 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 
 | # | Module | Question |
 |---|---|---|
-| PO1 | 1 | Iso-visuel strict au module 1, ou léger réalignement assumé des sélections (bleu `#5b8dee` → accent famille) ? `data-family` sur `CombatDeclareFrame` ou classe `.combat-fam-*` ? |
+| PO1 | 2 | **Tranché §13.5** : `data-family` en **attribut** (pas classe `.combat-fam-*`). Le `#5b8dee` parasite → `--combat-accent-*` **sur les fichiers que les modules 2/4/5 touchent déjà**, pas en passe séparée. |
 | PO2 | 4 | Col. 2 d'une arme de contact : modes de combat (Défensif / Charge / Retraite) en segments de tête ou sous-bloc ? Charge chaîne déplacement→cible — comment ? |
 | PO3 | 2 / 4 | **Faisabilité non prouvée par la maquette** : (a) footprint écran satellite + col1 + col2 + sidebar + timeline sur un écran réel ; (b) `AssaultRangedPanel`/`MeleeCombatPanel` (sections 360 px, bordures internes) « réagencés » en col. 2 de 264 px = réagencement ou réécriture ? (c) satellite « suit la fenêtre » : wrapper draggable (change la prise) ou sync de position ? Col. 2 très haute pour un Tir complet → pied épinglé + corps scrollable, à confirmer et montrer. Transition entre armes = reset de la config précédente (à assumer). Saar 2026-08-28 : quand la maquette ne passe pas, **adapter et montrer**, pas de STOP à chaque fois. |
 | PO4 | 0 | ~~Quelle infra de test~~ **Tranché round 4** : `node --test` + fonctions pures `.mjs` (philo projet), pas de vitest/RTL. Périmètre M0.1-M0.3 fait (51 tests). |
@@ -682,3 +683,159 @@ juger visuellement si la figure est bien centrée dans le `0 0 48 48` (jugement 
 Les 11 autres tiennent dans `0 0 48 48`. Deux styles de fichier coexistent (Inkscape multi-lignes vs
 compact mono-ligne) — sans impact en `mask-image` (seul l'alpha compte). Rien à intégrer en dur :
 `mask-image: url(/assets/status/x.svg)` recoloré à l'accent (D10), fichiers laissés dans le répertoire.
+
+---
+
+## 13. Cadrage Module 2 — `CombatDeclareFrame` (châssis partagé)
+
+> Cadrage 2026-08-29. Lecture faite : `useDraggable.js`, `index.css` l.1533-1658 (`.combat-win*`) +
+> l.1846-1912 (`.combat-float-*`), `ChangelogPanel.jsx` (motif PCB), `CombatOverlay.jsx` l.153-260
+> (montage des 3 fenêtres), les 3 fenêtres (déjà en §12). **Aucun code — cadrage seul.**
+> Analyse à charge dédiée = tour suivant (checkpoint : plan / analyse à charge / code séparés).
+
+### 13.1 Responsabilité du module 2
+
+Extraire **le châssis externe commun** aux 3 fenêtres de déclaration en un seul composant
+`CombatDeclareFrame` : conteneur + classe CSS unique + `useDraggable` + largeur/opacité/position +
+header (titre + poignée de drag) + emplacement satellite + emplacement pied + bannières. **Ne touche
+pas** : le contenu du corps (liste d'action = module 4), le satellite lui-même (module 3), le pied
+lui-même (module 5), aucun état de déclaration, aucun payload. JSX/CSS uniquement → golden master du
+module 0 en filet.
+
+### 13.2 État des lieux `[VÉRIFIÉ]` — les 3 châssis actuels
+
+| | `CombatActionWindow` (PJ/drone) | `CombatGmDeclareWindow` (MJ) | `CombatExoActionWindow` (exo) |
+|---|---|---|---|
+| Classe racine | `.combat-float-win` | `.combat-win` | `.combat-float-win` |
+| Tokens CSS | `--bg-session-raised` / `--border-session-2` (génériques session) | **`--combat-body/header/border/title/section`** (palette combat dédiée) | `--bg-session-raised` / `--border-session-2` |
+| Position | inline `position: fixed`, `left/top` de `useDraggable` | inline `left/top` de `useDraggable` (pas de `position` — `.combat-win` = `absolute`) | inline `position: fixed` |
+| Largeur | inline `360` → `720` (panneau droit) | inline `440` → `720` | inline `340` |
+| `max-height` | inline `calc(100vh - 80px)` | CSS `.combat-win` `calc(100vh - 100px)` | inline `calc(100vh - 80px)` |
+| Header | `.combat-float-header` (bg `--bg-session-raised`) | `.combat-win-header` (bg `--combat-header`) + **poignée basse** `S.bottomHandle` (2ᵉ zone de drag) | `.combat-float-header` |
+| Titre | enfant texte direct | `.combat-win-title` (cyan `--combat-title`) + `S.headerActiveToken` (nom PNJ) + `S.headerProgress` (`n/n`) | enfant texte `t('exoActionWindow.title', {name})` |
+| Corps | `.combat-win-body` (flex row) | `<div style={{display:flex,flex:1,minHeight:0}}>` | `.combat-win-body` + panneau interne `S.panel` |
+| Pied | `.combat-float-footer` | `.combat-win-footer` (bg `--combat-header`) | `.combat-float-footer` |
+| Masquage (ciblage) | inline `opacity` + `pointerEvents` | idem | idem |
+| `useDraggable` clé | `combat-action-pos` | `combat-gm-declare-pos` | `combat-exo-action-pos` |
+
+**Divergences réelles à absorber :** 2 familles CSS (session vs combat), la poignée basse MJ, le
+bloc titre MJ enrichi (nom + progression), `.combat-win` en `absolute` vs `fixed`. **Choix
+proposé** : le châssis unifié adopte la **palette combat dédiée** (`--combat-*`, celle qui porte déjà
+le cyan `--combat-title` et un vrai jeu header/border/section) — pas les tokens génériques session.
+
+### 13.3 API cible `CombatDeclareFrame`
+
+```
+<CombatDeclareFrame
+  family="pj" | "gm-pnj" | "drone" | "exo"   // → data-family → --combat-accent-*
+  storageKey="combat-declare-pj"              // useDraggable (clés existantes conservées)
+  defaultPos={{ left, top }}
+  width={360}                                 // largeur courante (le call site calcule 360/440/720)
+  title={<>…</>}                              // ReactNode : texte simple OU bloc enrichi MJ
+  hidden={isHidden}                           // opacity 0 + pointer-events none
+  banner={mortalWoundBanner || null}          // au-dessus du corps, sous le header
+  satellite={<CombatDeclareStatePanel …/> || null}   // module 3 ; positionné à gauche
+  footer={<CombatDeclareFooter …/> || null}   // module 5
+>
+  {corps}                                     // module 4 (ou <p>message</p> pour les états simples)
+</CombatDeclareFrame>
+```
+
+- Le frame **possède** `useDraggable` (plus dans chaque fenêtre) et rend la poignée de drag sur le
+  header. Poignée basse MJ : à conserver comme option `bottomHandle?` ou à abandonner — **PO-M2-a**.
+- `satellite={null}` → pas de boîte satellite rendue (drone, et tous les états non-déclaration).
+- `footer={null}` → pas de barre de pied rendue (états non-déclaration sans action).
+- `hidden` remplace les 3 recopies inline de `opacity/pointerEvents`.
+- Le frame ne connaît **aucun** état métier — il ne sait pas ce qu'est la surprise ou la résolution.
+
+### 13.4 États non-déclaration à héberger  `[VÉRIFIÉ]`
+
+`CombatGmDeclareWindow` et `CombatExoActionWindow` **retournent `null`** hors de leur tour → rien à
+héberger côté MJ/exo (le corps a juste 2-3 variantes internes : PNJ / drone / attente-PJ pour le MJ,
+prone / normal pour l'exo — contenu du corps, pas du châssis).
+
+`CombatActionWindow` reste montée en permanence et rend **6 états « message »** distincts, chacun =
+`<CombatDeclareFrame family="pj" title=… footer={…|null} satellite={null}><p>…</p></…>` :
+
+| # | Condition | Titre (clé i18n) | Contenu |
+|---|---|---|---|
+| 1 | `pendingSurpriseRoll` pour un de mes tokens | `actionWindow.surpriseTitle` | texte + **bouton** « lancer le dé » (→ `footer` ou corps) |
+| 2 | `is_surprised && has_announced && initiative === 0` | `actionWindow.surpriseTitle` | `surprisedCannotAct` |
+| 3 | `isMyTurnInResolution` | `actionWindow.resolutionPhaseShort` | liste d'actions + pied variable (attente MJ / recharger / bouton Agir) |
+| 4 | ANNONCE, pas mon tour, pas encore déclaré | `actionWindow.declarationPhaseTitle` | `awaitingPlayer` |
+| 5 | RÉSOLUTION, pas mon slot | `actionWindow.resolutionPhaseTitle` | `tokenActing` / `resolutionInProgress` |
+| 6 | `has_announced` (ANNONCE) | `actionWindow.declarationPhaseTitleAlt` | `actionDeclaredWaiting` |
+
+→ le frame doit rendre **proprement** avec `footer={null}` **et** avec un `footer` non trivial (cas 1
+et 3). Aucun nouveau composant pour ces 6 états — juste le frame + un enfant. Le roster PJ
+(`rosterSection`, présent « dans tous les états » selon le code) : à décider s'il passe dans le frame
+ou reste un enfant du corps — **PO-M2-b**.
+
+### 13.5 Tokens d'accent (D3/D4) — `--combat-accent-*` + `--combat-exo-*`  `[VÉRIFIÉ]`
+
+`index.css` a déjà (l.157-165) : `--combat-pj-{fg,bg,border}` (#50c878 vert), `--combat-pnj-*`
+(#c86030 orange), `--combat-drone-*` (#30aaaa teal). **Absent** : `--combat-exo-*`, `--combat-accent-*`.
+
+Module 2 ajoute :
+```
+:root {
+  --combat-exo-fg: #9858c8; --combat-exo-bg: #140a1e; --combat-exo-border: #9858c8;
+}
+.combat-declare-frame[data-family="pj"]     { --combat-accent-fg: var(--combat-pj-fg);   … }
+.combat-declare-frame[data-family="gm-pnj"] { --combat-accent-fg: var(--combat-pnj-fg);  … }
+.combat-declare-frame[data-family="drone"]  { --combat-accent-fg: var(--combat-drone-fg);… }
+.combat-declare-frame[data-family="exo"]    { --combat-accent-fg: var(--combat-exo-fg);  … }
+```
+Tout ce qui est aujourd'hui `#5b8dee` / `rgba(91,141,238,*)` (sélection « bleue parasite », D3) dans
+les fichiers que **ce module touche déjà** → `var(--combat-accent-*)`. La conversion hex→token des
+panneaux (~260 occ.) reste **hors périmètre** (§8).
+`data-family` sur l'élément racine du frame (PO1 tranché ici : attribut, pas classe `.combat-fam-*` —
+un attribut se lit mieux dans le DOM et évite une classe combinatoire).
+
+### 13.6 Motif PCB (D14)  `[VÉRIFIÉ]` `ChangelogPanel.jsx`
+
+Changelog : `<svg style={{position:absolute,inset:0,opacity:0.22}} preserveAspectRatio="slice">` avec
+`<pattern>` de pastilles + 4 `<path>` de pistes + pastilles + 2 rectangles, couleur `ACCENT`.
+Décisions D9/D14 : **discret** (opacité < 0.22, viser ~0.10), **header + pied + satellite
+uniquement** (pas le corps). → petit composant `<CombatPcbBackdrop />` (svg absolu, `pointer-events:
+none`, `currentColor` piloté par `--combat-accent-fg` ou `--combat-dim`), monté dans ces 3 zones.
+Détail d'implémentation, pas un point ouvert (D14).
+
+### 13.7 PO7 — les 4 gardes de montage `CombatOverlay.jsx`  `[VÉRIFIÉ]`
+
+Phase ANNONCE, 4 conditions (l.198/215/234/254) : GM+exo → `CombatExoActionWindow` ; GM+non-exo →
+`CombatGmDeclareWindow` ; joueur+exo actif → `CombatExoActionWindow` ; joueur sinon (+ RÉSOLUTION) →
+`CombatActionWindow`. Se lisent en escalier avec des négations croisées (`!(isActiveExoForPlayer &&
+ANNOUNCEMENT)`). **Décision : laisser tel quel pour le module 2** — le frame ne change pas *quelle*
+fenêtre monte, seulement leur châssis interne. Nettoyage en table = valeur faible, hors périmètre
+(peut se faire au module 5 si un fichier le rend trivial).
+
+### 13.8 Risque + rollback
+
+**Risque élevé** — structure externe des 3 fenêtres réécrite (leur `return (…)` de premier niveau).
+Atténuations : (1) JSX/CSS seul, payload et `handleDeclare` intacts → `npm test` (golden master 51
+tests) casse à toute régression de sortie ; (2) `vite build` + comparaison eslint baseline
+`git stash` avant/après (patron modules 0) ; (3) un commit par fenêtre migrée (`CombatDeclareFrame`
+neuf + `CombatActionWindow` d'abord, puis MJ, puis exo) — `git revert` du commit = rollback. Pas de
+feature flag (§6).
+
+### 13.9 Hors périmètre module 2
+
+- Le satellite (module 3), la liste d'action (module 4), le pied (module 5) — le frame n'expose que
+  des *slots* vides pour eux.
+- La conversion hex→token complète des panneaux (§8).
+- Le nettoyage des 4 gardes `CombatOverlay` (§13.7).
+- Toute fusion d'orchestrateurs (REWORK-05).
+- `.combat-float-win` / `.combat-win` : les autres consommateurs de ces classes (fenêtres de
+  RÉSOLUTION : `CombatModifiersWindow`, `CombatDamageWindow`…) **ne sont pas touchés** — le frame est
+  une classe neuve (`.combat-declare-frame`), les anciennes classes restent pour la résolution.
+
+### 13.10 Points ouverts du module 2
+
+| # | Question |
+|---|---|
+| PO-M2-a | Poignée de drag basse du MJ (`S.bottomHandle`) : la garder comme `bottomHandle?` du frame (pour tous ?) ou l'abandonner (header seul, comme PJ/exo) ? |
+| PO-M2-b | Roster PJ (`rosterSection`, « présent dans tous les états ») : slot dédié du frame, ou enfant du corps géré par la fenêtre ? |
+| PO-M2-c | ~~`fixed` ou `absolute` ?~~ **Tranché `[VÉRIFIÉ]`** : `CombatOverlay` `styles.overlay` = `position: fixed; inset: 0; zIndex: 1000`. Donc `absolute` (contre l'overlay) et `fixed` (contre le viewport) rendent à l'identique. Le frame prend **`position: absolute` porté par la classe** (comme `.combat-win`), plus de `position` inline. |
+| PO-M2-d | `max-height` : `calc(100vh - 80px)` (PJ/exo) ou `- 100px` (MJ) ? Unifier à une valeur. |
+| PO-M2-e | Largeur dynamique 360/440/340 → 720 : le call site passe `width`, ou le frame prend `baseWidth` + `expanded` bool et connaît la valeur 720 ? (le 720 « panneau droit » disparaît au module 4 avec la col. 2 — anticiper ou pas ?) |
