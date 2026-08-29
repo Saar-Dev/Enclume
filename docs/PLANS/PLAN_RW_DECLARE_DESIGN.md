@@ -323,7 +323,7 @@ Méthode (golden master / characterization, pratique pro documentée — sources
 | **M0.1** | `client/src/lib/buildDeclarePayload.js` (`buildHumanDeclarePayload`, pur) — extraction **verbatim** de `CombatActionWindow.jsx#handleDeclare` branche non-drone ; `handleDeclare` rassemble un bag plat et appelle la fonction. `+ buildDeclarePayload.test.mjs` : **21 tests de caractérisation** (tour vide, Tir simple/Multi/visé/dual-wield/sans variant, CaC/naturelle/défensif/dual-wield, rechargement, déplacement normal/Charge/Retraite/sans Z, actions rapides, état tactique). | ✅ **codé 2026-08-28** — 21/21, build propre, eslint baseline inchangée |
 | **M0.2** | `buildGmDeclarePayload` — extraction **verbatim** de `CombatGmDeclareWindow.jsx#handleDeclare` branche PNJ. Différences légitimes vs PJ préservées et testées (`fireModeBonus*` par défaut `0` vs `null` ; `move` brut sans forçage `ini_mod` ; `weapon.inv_id`). `+ 16 tests`. | ✅ **codé 2026-08-28** — 37/37 total, npm test 1038/0 fail, eslint GM 2→2 (baseline) |
 | **M0.3** | `buildDroneMapActions` + `buildExoMapActions` — cœurs purs extraits verbatim de `useDroneDeclare` / `useExoDeclare` `#buildMapActions` (les hooks deviennent des wrappers `useCallback`). `+ 14 tests` (logique fire_mode drone, CaC vs Tir par `ref_category` exo, déplacement, quirks figés). | ✅ **codé 2026-08-28** — 51/51 total, npm test 1052/0 fail |
-| **M0.4** | Le payload est verrouillé (**51 tests de caractérisation, 4 familles**) → extraction du sous-état de déclaration PJ ↔ MJ-PNJ en petits pas, tests verts après chaque pas. **Cadrage fait (§12)** : pas un hook `useHumanDeclare(mode)` (option rejetée) mais deux hooks de domaine sans `mode` — `useAssaultDeclaration` + `useMeleeDeclaration` + reset commun. | cadré (§12) — **décision Saar en attente** sur l'option retenue ; à placer juste avant le module 4 |
+| **M0.4** | Extraction du sous-état de déclaration PJ ↔ MJ-PNJ. **Option C actée (Saar)** : deux hooks de domaine sans `mode` — `useAssaultDeclaration` + `useMeleeDeclaration`, chacun sur un reducer pur `.mjs`. **Cadré en détail §15** (recherche pro/dépôts, état dupliqué `[VÉRIFIÉ]`, frontière hook/fenêtre, API, découpe M0.4-a..f, 4 PO). | cadré §15 — analyse à charge = tour suivant, puis code (6 pas, 1 commit/pas) |
 
 **Jalon M0.1-M0.3 (2026-08-28)** : le payload `COMBAT_ACTION_DECLARE` des 4 familles (PJ / PNJ / drone /
 exo) est extrait en `client/src/lib/buildDeclarePayload.js` et couvert par **51 tests de
@@ -1199,3 +1199,165 @@ celui au `clipPath` (centrage à valider).
 - Dépendance module 2 explicitée (point 6) + z-index (7) + repli nommé (9).
 - Livrable : 1 commit brique partagée (`CombatDeclareStatePanel` + `glyph` sur le chip) + 1 commit
   par fenêtre + checklist manuelle.
+
+---
+
+## 15. Cadrage M0.4 — `useAssaultDeclaration` + `useMeleeDeclaration` (volet technique, option C §12)
+
+> Cadrage 2026-08-29, sous rappel des priorités Saar (qualité structurelle >>> vitesse, aggradation,
+> se documenter, ne jamais coder de zéro). Lecture faite : blocs assaut/mêlée de `CombatActionWindow`
+> (l.100-127, 417-517, 522-540, 582-598, 825-887) et `CombatGmDeclareWindow` (l.55-77, 340-397,
+> 425-502), `declarationReducer.js`, `buildDeclarePayload.js`, `combatSections.js`
+> (`computeFireVariant`), `shared/combatExclusiveActions.js`. **Aucun code — cadrage seul.**
+
+### 15.1 Responsabilité
+
+Extraire le **sous-état de sélection Tir** et le **sous-état de sélection Corps à corps** —
+aujourd'hui recopiés à ~90 % entre `CombatActionWindow` (PJ) et `CombatGmDeclareWindow` (MJ) — en
+**deux hooks de domaine sans `mode`** (option C, §12.3), chacun bâti sur un **reducer pur testé
+`.mjs`** (patron `declarationReducer` + `buildDeclarePayload`). Les fenêtres gardent : leur `decl`
+tactique, leur acquisition de données, leur pilotage, **et l'orchestration du mode de ciblage carte**
+(`onEnterTargetMode` — le point divergent, §15.4).
+**Ne touche pas** : le payload (forme figée par le golden master 51 tests), le calcul métier
+(`computeFireVariant`, `getAim*` — déjà purs et testés), la fusion des orchestrateurs (rejetée).
+
+### 15.2 Recherche — pratique pro, dépôts, choix de paradigme
+
+**Problème type** : sortir de la logique *stateful* entremêlée de deux gros composants, avec un état
+lié à des callbacks asynchrones (le flux de ciblage). Sources :
+- [Kent C. Dodds — *The State Reducer Pattern with React Hooks*](https://kentcdodds.com/blog/the-state-reducer-pattern-with-react-hooks)
+  : un hook expose son `reducer` ; le consommateur peut le surcharger. **Envisagé, écarté ici** — PJ
+  et MJ veulent le *même* comportement de sous-état (la divergence est ailleurs, §15.4), pas besoin
+  de surcharge.
+- [`useReducer` comme machine à états légère](https://swizec.com/blog/reader-question-usereducer-or-xstate/)
+  (« clean up your ternary soup ») : le flux « aucune cible → cible[i] posée → série complète » **est**
+  une petite FSM. La consolider en `useReducer` est le geste idiomatique.
+- **XState** ([useMachine](https://www.typeonce.dev/course/xstate-complete-getting-started-guide/toggle-actors-states-and-context/using-state-machine-in-react-component))
+  : **rejeté** — nouvelle dépendance, contraire à §8 (« aucune nouvelle dépendance », même logique
+  que le rejet de vitest/RTL au round 4). `useReducer` = choix aligné Enclume (`declarationReducer`
+  existe déjà, pur, testé `.mjs`).
+- Dépôts de référence — **headless hooks composés par le consommateur, sans `mode`** :
+  [`downshift`](https://github.com/downshift-js/downshift) (Kent C. Dodds — select/combobox headless,
+  state-reducer, multi-select = analogue au multi-cible),
+  [`@tanstack/react-table`](https://github.com/TanStack/table) (le hook rend état + handlers, zéro
+  rendu), [`react-hook-form` `useController`](https://github.com/react-hook-form/react-hook-form)
+  (sous-hooks de champ composés). Tous valident : **petits hooks de domaine, l'appelant compose**.
+
+**Décision** : `use{Assault,Melee}Declaration` = `useReducer(pureReducer, init)` +
+sélecteurs dérivés purs (`.mjs`), aucun `mode`, aucune dépendance neuve. Le patron exact que le
+module 0 a déjà posé (M0.1-M0.3), poursuivi.
+
+### 15.3 État des lieux `[VÉRIFIÉ]` — l'état dupliqué
+
+| Concept | PJ (`CombatActionWindow`) | MJ (`CombatGmDeclareWindow`) | Identique ? |
+|---|---|---|---|
+| Cibles Tir | `assaultPendingTokenIds[]` | `assaultTargets[]` | ✅ (nom ≠) |
+| Nb de tirs | `assaultCount` (1-3) | `assaultCount` (1-3) | ✅ |
+| Variante rafale | `assaultBulletCount`, `assaultVariantAB` | idem | ✅ |
+| Deux armes Tir | `isDualWield` | `isDualWield` | ✅ |
+| Tir visé | `aimTranches`, `aimedLocation` | idem | ✅ |
+| Cibles CaC | `meleePendingTokenIds[]` | `meleeTargets[]` | ✅ (nom ≠) |
+| Nb attaques CaC | `meleeCount` | `meleeAttackCount` | ✅ (nom ≠) |
+| Arme CaC choisie | `selectedMeleeWeaponId` (`undefined`=auto) | `selectedGmMeleeWeaponId` | ✅ |
+| Arme naturelle CaC | `selectedMeleeNaturalWeaponId` | `selectedGmMeleeNaturalWeaponId` | ✅ |
+| Deux armes CaC | `isDualWieldMelee` | `isDualWieldMelee` | ✅ |
+| CaC « en cours » | *(dérivé de `mapSelected`)* | `meleePendingMode` (bool explicite) | ⚠️ modélisé ≠ |
+| Charge | `moveSelection` + `meleePendingTokenIds` chaînés (`handleChargeFlow`) | objet `chargeSelection: {move, targetTokenId}` (`handleStartCharge`) | ⚠️ forme ≠ |
+| « 1er clic remplit la série » | `handleChooseTarget` l.587-593 | `handleStartAttack` l.432-437 | ✅ **logique identique, recopiée** |
+| Dérivés (`effectiveAssaultCount`, `currentVariant`, `assaultValid`, `*IneligibilityReasons`) | l.446-479, 625-636 | l.366-411 | ✅ **mêmes appels, recopiés** |
+| Reset (~15 setters) | effet l.254-285 | effet l.143-170 | ✅ **même discipline, recopiée** |
+
+→ **partageable** : tout le sous-état Tir, tout le sous-état CaC *sauf* la forme de la Charge et le
+flag « CaC en cours ». **Ces deux-là** : à unifier dans le hook (forme canonique
+`charge: {move, targetTokenId} | null` + `phase` explicite), les 2 fenêtres s'y alignent — c'est
+l'aggradation, pas un contournement.
+
+### 15.4 La frontière — hook vs fenêtre (le point délicat, §12.3-C)
+
+Le **flux de ciblage carte** diverge et **reste à la fenêtre** :
+- PJ : `inTargetMode` / `inMeleeTargetMode` (flags locaux) + `handleChooseTarget(index)` (un slot à
+  la fois, bouton par slot).
+- MJ : `isSelectingOnMap` (flag unique, conflate) + `handleStartAttack` / `handleStartMelee` avec la
+  **chaîne récursive `selectNext`** (auto-avance sur les N cibles) + refs `isMountedRef` /
+  `*CountRef` (StrictMode).
+
+**Le hook n'orchestre PAS `onEnterTargetMode`.** Il expose des *mutations d'état* que le callback de
+la fenêtre appelle :
+```
+const assault = useAssaultDeclaration({ weapon, currentFireMode, hasTwoWeapons, sameFirMode, rosterEntry, … })
+// … état : assault.targets, assault.count, assault.effectiveCount, assault.currentVariant,
+//          assault.isValid, assault.multiShotIneligibility, assault.aimIneligibility …
+// … mutations : assault.setCount(n), assault.setTarget(index, tokenId), assault.setDualWield(b),
+//               assault.setAimTranches(n), assault.setAimedLocation(loc), assault.setBulletCount(n),
+//               assault.setVariantAB(ab), assault.reset(), assault.clear() …
+
+// dans la fenêtre, inchangé :
+onEnterTargetMode(tokenId, pos, (picked) => assault.setTarget(i, picked), onCancel, 'ranged')
+```
+`setTarget(index, tokenId)` **contient** la règle « 1er clic remplit la série, clic ultérieur touche
+le slot » (recopiée 2× aujourd'hui → 1 fois dans le reducer). La chaîne récursive `selectNext` du MJ
+reste dans la fenêtre MJ : elle appelle `melee.setTarget(i, id)` en boucle — pilotage MJ, pas
+sous-état.
+
+### 15.5 API — le reducer pur + le hook
+
+Fichier neuf `client/src/lib/assaultDeclaration.js` (pur, `+ .test.mjs`) :
+```
+export const ASSAULT_INITIAL = { targets: [], count: 1, bulletCount: null, variantAB: 'A',
+                                 isDualWield: false, aimTranches: 0, aimedLocation: null }
+export function assaultReducer(state, action) { … }   // SET_COUNT, SET_TARGET{index,tokenId},
+                                                       // SET_BULLET_COUNT, SET_VARIANT_AB,
+                                                       // SET_DUAL_WIELD, SET_AIM_TRANCHES,
+                                                       // SET_AIMED_LOCATION, RESET, CLEAR
+// sélecteurs purs (mêmes calculs qu'aujourd'hui, un seul endroit) :
+export function effectiveAssaultCount(state, currentFireMode) { … }   // CC only
+export function assaultValid(state, { currentFireMode, assaultBulletCount, … }) { … }
+```
+`client/src/lib/useAssaultDeclaration.js` : `useReducer(assaultReducer, ASSAULT_INITIAL)` + `useMemo`
+sur les sélecteurs + `computeFireVariant` / `getAim*` (déjà purs) + `useCallback` sur les mutations.
+Idem `meleeDeclaration.js` / `useMeleeDeclaration.js`.
+
+**Le payload** : `buildHumanDeclarePayload` / `buildGmDeclarePayload` (module 0) prennent toujours un
+bag plat — la fenêtre le remplit désormais depuis `assault.*` / `melee.*` au lieu de ses `useState`.
+**Forme du bag et du payload : inchangée** → golden master 51 tests = filet direct.
+
+### 15.6 Découpe en petits pas (tests verts après chaque)
+
+| Pas | Contenu | Filet |
+|---|---|---|
+| M0.4-a | `assaultDeclaration.js` (reducer + sélecteurs) `+ .test.mjs` (caractérisation : série de tirs, Tir Multi CC, visé, dual-wield, RESET/CLEAR) — **aucun câblage** | `npm test` |
+| M0.4-b | `useAssaultDeclaration.js` + câblage dans **`CombatActionWindow`** (PJ) : les 7 `useState` assaut → le hook ; `handleDeclare` remplit le bag depuis `assault.*` | golden master + `vite build` + eslint baseline |
+| M0.4-c | Câblage `useAssaultDeclaration` dans **`CombatGmDeclareWindow`** (MJ). Différences légitimes (defaults `0` vs `null`) déjà dans `buildGmDeclarePayload` | idem |
+| M0.4-d | `meleeDeclaration.js` + `.test.mjs` | `npm test` |
+| M0.4-e | `useMeleeDeclaration` câblé PJ, puis MJ (2 sous-commits) — inclut l'unification `charge` + `phase` (§15.3) | golden master |
+| M0.4-f | Reset : l'effet des 2 fenêtres appelle `assault.reset()` / `melee.reset()` (de ~15 setters → 3 appels) | golden master + relecture manuelle du reset tour/slot |
+
+Un pas = un commit. Ancien `useState` retiré dans le même commit.
+
+### 15.7 Risque + rollback
+
+**Risque moyen-élevé** (état interne de 2 gros composants), **mais le mieux filet du chantier** :
+le golden master (`buildDeclarePayload.test.mjs`, 51 tests) teste **exactement la sortie** que ce
+refactor doit préserver — comportement iso garanti à chaque pas. `+` les nouveaux `.test.mjs` des
+reducers. `+` `vite build` + eslint baseline (patron modules 0). Rollback = `git revert` par pas.
+Pas de feature flag (§6).
+**Zone sans filet** : le flux de ciblage carte (reste à la fenêtre, non testé) — mais il **ne
+change pas** (M0.4 ne le touche pas, §15.4). Vérif : parcours navigateur Tir Multi + CaC multiple
+(PJ et MJ) à la fin, checklist.
+
+### 15.8 Hors périmètre M0.4
+
+- Le flux de ciblage carte (`onEnterTargetMode`, `selectNext`, `isSelectingOnMap`) — reste fenêtre.
+- Le `decl` tactique (`declarationReducer`, déjà partagé).
+- Le drone / l'exo (`useDroneDeclare` / `useExoDeclare` — déjà des hooks de domaine, pas concernés).
+- Le rendu (module 4).
+- La fusion PJ/MJ des orchestrateurs (REWORK-05).
+
+### 15.9 Points ouverts M0.4
+
+| # | Question |
+|---|---|
+| PO-M04-a | `charge` : forme canonique `{move, targetTokenId} \| null` (celle du MJ) — le PJ s'y aligne (aujourd'hui `moveSelection` + `meleePendingTokenIds` chaînés). Confirmer que rien côté PJ ne dépend de la forme actuelle hors `handleChargeFlow` / `buildHumanDeclarePayload`. |
+| PO-M04-b | Le flag « CaC en cours » : `phase: 'idle' \| 'targeting' \| 'ready'` dans le hook, ou un simple `bool` ? (le MJ a `meleePendingMode` explicite, le PJ le dérive de `mapSelected`) |
+| PO-M04-c | `selectedMeleeWeaponId === undefined` (auto) vs `null` (mains nues) vs `id` : la sémantique tri-valuée passe telle quelle dans le reducer — vérifier qu'aucun `?? undefined` implicite ne casse. |
+| PO-M04-d | `mapSelected` (Set PJ) : reste-t-il à la fenêtre PJ (c'est de l'état de *tuile*, pas de sous-état d'attaque) ou disparaît-il au module 4 avec « l'arme EST l'action » ? → probablement module 4, noté. |
