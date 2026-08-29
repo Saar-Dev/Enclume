@@ -48,7 +48,7 @@
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
 | Module 5 — `CombatDeclareFooter` (D12) | cadré + à charge — **pas commencé** | §5.10 |
-| Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (37+ commits) | — |
+| Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
 navigateur Saar **après chaque module ET sous-module** (plus « en bloc »). Un module validé avant le
@@ -84,7 +84,7 @@ blocs, pied, tokens**. Pas le pilotage. Détail « reste spécifique MJ » : §7
 |---|---|---|---|
 | Classe racine | `.combat-float-win` (+ corps `.combat-win-body`) | `.combat-win` (+ poignée basse, habillage de section ≠) | `.combat-float-win` |
 | Largeur | 360 / 720 (panneau droit) | 440 / 720 | 340 |
-| État inline | `useReducer` + **~24 `useState`** (+ 4 `useRef`) `[VÉRIFIÉ]` grep 2026-08-29 | `useReducer` + **~19 `useState`** (+ 9 `useRef`) `[VÉRIFIÉ]` | délégué à `useExoDeclare` |
+| État inline | `useReducer` + **24 `useState`** + 3 `useRef` `[VÉRIFIÉ]` grep 2026-08-29 | `useReducer` + **19 `useState`** + 6 `useRef` `[VÉRIFIÉ]` grep 2026-08-29 | délégué à `useExoDeclare` |
 | Roster | oui (si > 1 token) | oui (**non cliquable**, `[VÉRIFIÉ]` — nav = auto-advance) + badge arme | **absent** (dette) |
 | État tactique (posture/vitesse/arme) | sections TACTIQUE + ARMEMENT dans le flux | idem | **absent** (dette) |
 | « Passer le tour » | débloqué par B5 (`canDeclare`) ; libellé explicite = module 5 | idem | implicite (déclarer vide) |
@@ -126,8 +126,12 @@ p.223) ; catégories d'arme **« Distance » / « Contact »** (colonnes du tabl
 
 ## 3. Décisions (à jour — table unique)
 
-> Fusion des tables D (§3 d'origine) + P (§18, décisions issues du prototype). Les révisions sont
-> intégrées : **P7 remplace D2**, **P1 + P4 amendent D3**. Raisonnement complet : journal §3, §18.
+> Fusion des tables D (§3 d'origine) + P1-P8 (§18, décisions issues du prototype). Traçabilité :
+> **P7 remplace D2** ; **P1 + P4 amendent D3** ; **P4 → D4b** ; **P3 → D3/D4b** (glyphes feu/lame) ;
+> **P5 → D13** (en-têtes pairs même police) ; **P2 → schéma §4** (titre `PHASE 1 · nom`) ; **P6 → D10**
+> (glyphe `movement` reçu) ; **P8** conservé tel quel. Raisonnement complet : journal §3, §18.
+> (`D4b` est un dédoublement de `D4` introduit à la réécriture pour séparer « réconciliation des
+> tokens » de « groupes non colorés » — pas une décision neuve.)
 
 | # | Décision |
 |---|---|
@@ -528,12 +532,12 @@ en place**. Sinon : garder l'ordre + checkpoint Saar ferme après le module 2.
 
 ## 7. Reste spécifique au MJ après la refonte (ne pas survendre « partagé »)
 
-Après les 5 modules, `CombatGmDeclareWindow` garde encore ~15 particularités : données batch
-(`equipment[tid]`), navigation de slots (`activeTokenId` auto-advance), émission `pjPreview` (+
-reconstruction de son champ `actions`), chaîne récursive `selectNext` + `isMountedRef` + `*CountRef`
-(StrictMode), `setHasPassed` drone, `meleeValid` neuf (B5), le cas `reloadValid` PJ-seul **absent**
-côté MJ, le message d'attente PJ + le bouton « Passer » (skip PJ), le badge d'arme du roster, le
-`mapAction` reload booléen nu (sans arme ni munition).
+Après les 5 modules, `CombatGmDeclareWindow` garde une dizaine de particularités qui **ne se
+partagent pas** : données batch (`equipment[tid]`), navigation de slots (`activeTokenId`
+auto-advance), émission `pjPreview` (+ reconstruction de son champ `actions`), chaîne récursive
+`selectNext` + `isMountedRef` + `*CountRef` (StrictMode), `setHasPassed` drone, `meleeValid` neuf
+(B5), le cas `reloadValid` PJ-seul **absent** côté MJ, le message d'attente PJ + le bouton « Passer »
+(skip PJ), le badge d'arme du roster, le `mapAction` reload booléen nu (sans arme ni munition).
 
 **Partagé** = frame + puces d'état + hooks M0.4 + `CombatDeclareFooter` + `buildWeaponList` + panneaux
 col. 2. Le MJ reste un **cousin**, pas un jumeau.
