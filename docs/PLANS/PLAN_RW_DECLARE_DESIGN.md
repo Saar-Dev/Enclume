@@ -358,14 +358,13 @@ payload PJ/MJ inchangé (golden master) ; exo : `+ buildExoDeclareState` pur + t
 par fenêtre + checklist manuelle.
 
 **Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. **Cadré
-§16** (recherche master-detail, panneaux `[VÉRIFIÉ]` présentationnels → réagencement pas réécriture,
-normalisateur pur `buildWeaponList`, découpe 4a-4e, PO2 reco = segment de tête, PO3(a) faisabilité
-1366 px à vérifier). Liste d'armes groupée Distance/Contact, sélection sans radio (D9), Déplacement
-en ligne distincte (D13), col. 2 = détail (`AssaultRangedPanel` / `MeleeCombatPanel` réagencés,
-silhouette 2 sous-col.). **Déplace `fire_mode` en col. 2 → supprime `CombatDeclareStateSelector`**
-(code mort, `[VÉRIFIÉ]`). Risque **élevé** — module 0 (payload extrait/testé) + M0.4 (hooks) en
-filet ; le module 4 **ne fait que du rendu + câblage**. Golden master casse au moindre changement de
-payload. Découpe en 5 sous-modules, 1 validé avant le suivant.
+§16** : panneaux col. 2 `[VÉRIFIÉ]` présentationnels → **réagencement pas réécriture** ; PO2 tranché
+(**modes de combat CaC ne bougent pas** — Saar « pourquoi changer d'un coup ») ; PO3(a) tranché
+(**cible PC, côte-à-côte**). Liste d'armes groupée Distance/Contact, sélection sans radio (D9),
+Déplacement en ligne distincte (D13). Neuf = **`buildWeaponList`** (normalisateur pur PJ/MJ, testé
+`.mjs`). **Déplace `fire_mode` en col. 2 → supprime `CombatDeclareStateSelector`** (code mort).
+Risque **élevé** — module 0 + M0.4 en filet ; le module 4 **ne fait que du rendu + câblage**.
+Découpe 4a-4e, 1 validé avant le suivant.
 
 **Module 5 — Pied unifié (D12).** `CombatDeclareFooter` : pastille + statut + `Passer le tour` (ghost)
 + `Déclarer` (primaire, raison bloquante si `!canDeclare`). Consommé par les 3 (slot `footer` du
@@ -1496,11 +1495,11 @@ payload. **Ne touche pas** : le payload, le calcul métier, la phase RÉSOLUTION
 │ ▸ DISTANCE                            │ → Scorpion                        │
 │    Scorpion                   24/24   │ [ Tir │ Recharger ]               │ ← D7 segment
 │    (…)                                │ …AssaultRangedPanel réagencé…     │
-│ ▸ CONTACT                             │                                  │
-│    Couteau Congre                     │  — OU si arme de contact :        │
-│    Mains nues            (permanent)  │ [ Attaque │ Défensif │ Charge │   │ ← PO2 (reco : segment tête)
-│    Griffes (mutation)                 │   Retraite │ Recharger ]          │
-│                                       │ …MeleeCombatPanel réagencé…       │
+│ ▸ CONTACT                             │  — OU si arme de contact :        │
+│    Couteau Congre                     │ → Couteau Congre                  │
+│    Mains nues            (permanent)  │ …MeleeCombatPanel réagencé…       │
+│    Griffes (mutation)                 │   (modes Charge/Défensif/Retraite │
+│                                       │    RESTENT où ils sont, PO2)      │
 └──────────────────────────────────────┴──────────────────────────────────┘
 ```
 - **Arme mixte** (contact + distance) : ligne dans **les deux** groupes (§4.1).
@@ -1518,13 +1517,16 @@ Entrée = le bag brut de chaque fenêtre → sortie = **une** liste normalisée,
 `+ weaponList.test.mjs` (arme mixte dans 2 groupes, mains nues permanente, arme naturelle inéligible,
 MJ 4 slots, inventaire PJ). **Seule vraie logique neuve du module** — le reste est du rendu.
 
-### 16.5 PO2 — modes de combat CaC (recommandation)
+### 16.5 PO2 — modes de combat CaC — **TRANCHÉ : on ne bouge pas (Saar 2026-08-29)**
 
-**Segment en tête de col. 2** quand une arme de contact est choisie :
-`[ Attaque │ Défensif │ Charge │ Retraite │ Recharger ]`. Choix mutuellement exclusifs « comment je
-combats ce Tour » = rôle d'onglet → en tête. Aujourd'hui rangée de badges au milieu du panneau
-(`MeleeCombatPanel` l.216) : la déplacer en tête = réagencement. `Charge` garde `onStartCharge`
-(chaîne déplacement→cible, window). `Défensif`/`Retraite` = passifs. **À valider Saar.**
+Saar : *« ok, pourquoi pas. mais **pourquoi changer d'un coup ?** »*. Juste — la rangée de badges
+`Mode de combat` au milieu de `MeleeCombatPanel` (l.213-257) **fonctionne**. La déplacer en tête
+était cosmétique. → **elle reste où elle est.** `Charge`/`Défensif`/`Retraite` inchangés
+(`onStartCharge`, passifs).
+D7 (`Tir │ Recharger` en tête de col. 2) s'applique donc **uniquement à une arme de distance**. Pour
+une arme de contact : en-tête = `→ Nom d'arme` seul (le rechargement d'une arme de contact est rare
+— arme de jet à munitions ; si le cas se présente, `Recharger` s'ajoute au même endroit, pas un
+segment neuf). **Principe : changement minimal, on ne restructure pas ce qui marche.**
 
 ### 16.6 Découpe — module 4 est trop gros pour un seul
 
@@ -1533,18 +1535,18 @@ combats ce Tour » = rôle d'onglet → en tête. Aujourd'hui rangée de badges 
 | **4a** | `buildWeaponList` + `.test.mjs` (aucun câblage) | faible |
 | **4b** | `CombatDeclareActionList` col. 1 : ligne Déplacement (D13) + liste groupée (D5/D9) + sélection. Câblé PJ puis MJ. Col. 2 reste temporairement l'ancien panneau droit | **élevé** (corps des 2 fenêtres) |
 | **4c** | Col. 2 : `AssaultRangedPanel` / `MeleeCombatPanel` réagencés en colonne étroite + en-tête `→ Arme` ; silhouette 2 sous-col. (D11) | moyen |
-| **4d** | Segment `Tir │ Recharger` (D7) + modes de combat en tête (PO2) ; suppression `CombatDeclareStateSelector` ; `mapSelected` / `isAttackActive` retirés | moyen |
+| **4d** | Segment `Tir │ Recharger` (D7, **distance seule** — PO2 tranché, modes CaC ne bougent pas) ; suppression `CombatDeclareStateSelector` ; `mapSelected` / `isAttackActive` retirés | moyen |
 | **4e** | Exo : `CombatExoActionWindow` bascule sur `CombatDeclareActionList` (liste d'armes exo, `useExoDeclare` déjà là) | moyen |
 
 Un sous-module validé (golden master + navigateur Saar) avant le suivant. `git revert` par
 sous-module.
 
-### 16.7 PO3(a) — faisabilité écran, **à vérifier avant 4b/4c**
+### 16.7 PO3(a) — faisabilité écran — **TRANCHÉ (Saar 2026-08-29)**
 
-720 px (col1 ~220 + col2 ~264 + paddings) **+ satellite ~90 px à gauche** + timeline + sidebar. Sur
-1920 px : cluster ~820 px, reste ~1100 px de carte — OK. Sur **1366 px** : cluster ~820 px, carte
-~540 px — **serré**. → maquette à cette largeur, ou test Saar sur son écran. Repli : col. 2 en
-**pop-out / survol** (master-detail « empilé », recherche) si le côte-à-côte ne passe pas.
+*« Principalement sur PC. L'interface actuelle n'est pas prévue pour portable. »* → cible **PC
+(1920 px+)**. Cluster satellite(~90) + fenêtre(720) = ~820 px, reste ~1100 px de carte — confortable.
+**Côte-à-côte col. 1 + col. 2 confirmé**, pas de pop-out. Le cas 1366 px n'est pas un critère de
+conception (l'interface actuelle ne le supporte déjà pas). Repli pop-out abandonné.
 
 ### 16.8 Hors périmètre module 4
 
@@ -1554,10 +1556,13 @@ sous-module.
 
 ### 16.9 Points ouverts module 4
 
+**Tranchés (Saar 2026-08-29) :** PO-M4-a — modes de combat CaC **ne bougent pas** (§16.5).
+PO-M4-b — **côte-à-côte, cible PC** (§16.7), pas de pop-out.
+
+**Restants :**
+
 | # | Question |
 |---|---|
-| PO-M4-a | PO2 : segment de tête (reco §16.5) validé ? |
-| PO-M4-b | PO3(a) : côte-à-côte tient sur 1366 px, ou col. 2 en pop-out ? (test Saar / maquette) |
-| PO-M4-c | En-tête col. 2 arme de distance sans munitions suivies : `Recharger` grisé ou absent ? |
+| PO-M4-c | En-tête col. 2 arme de distance sans munitions suivies : `Recharger` grisé ou absent ? (détail) |
 | PO-M4-d | `buildWeaponList` : appelé dans chaque fenêtre, ou dans un `useWeaponList(sel)` fin (miroir `useDroneDeclare`) ? |
 | PO-M4-e | Changement d'arme = reset config col. 2 précédente (assumé §7 PO3) — `assault.reset()` / `melee.reset()` au changement d'arme est-il le bon geste ? |
