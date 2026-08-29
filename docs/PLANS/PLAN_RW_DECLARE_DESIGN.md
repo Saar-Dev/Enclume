@@ -1021,8 +1021,14 @@ confirmé 2026-08-29).
 - **Posture (4)** : `POSITION_TRANSITION_COST` (`shared/combatStatePositionCost.js`, source RAW
   `REGLESYSCOMBAT.md:929-941`) s'applique **telle quelle** à l'exo (`PLAN_EXOARMURE.md` §9). Coût
   d'Initiative standard sur toutes les transitions.
-- **Arme (3)** : aucune restriction RAW (`REGLEARMURE.md` p.323-329 relu — seules restrictions exo :
-  1 Attaque/Tour, milieu inadapté → allure lente, Intégrité 0 → détruite).
+- **Arme (3)** : **exactement comme HUMAN** (Saar 2026-08-29) — coût d'Initiative de transition
+  (`STATE_TRANSITION_COST.weapon`, `drawn↔holstered -10`, `drawn↔ready -3`) **et** restrictions de
+  jeu (on n'attaque pas avec une arme rangée : sélectionner une arme dans la liste d'action
+  auto-dégaine, `weapon → drawn`, comme `SELECT_ATTACK` pour l'humain ; attaque grisée si
+  `weapon !== 'drawn'`). Pas de « pas de restriction » — c'était une hypothèse fausse de l'analyse à
+  charge, corrigée. À vérifier au module 4 : le serveur applique-t-il déjà ce gate pour l'`isExo`
+  (aujourd'hui l'exo envoie `state: {}`, donc jamais exercé) — si non, même règle que l'humain à
+  ajouter.
 - **Mode de tir** : fixe, dérivé de l'arme — jamais au satellite.
 
 **Cas `prone` (se relever) — TRANCHÉ (Saar 2026-08-29)** : même puce Posture que HUMAN. Depuis
@@ -1153,12 +1159,12 @@ nouvelle fonction pure, pas de nouveau test**. Le seul point qui mériterait un 
 `emitStandUp` (point 3) — c'est de la logique fenêtre, couverte par la checklist manuelle. **§14.6
 réécrit.**
 
-**5. Effet mécanique de l'axe `weapon` pour un exo : `[INCONNU]`.** Saar confirme que l'axe est
-**proposé** (aucune restriction RAW trouvée). Mais est-ce que `state_weapon: 'holstered'` **fait
-quelque chose** à la Résolution pour un exo (bloque l'attaque ? INI ?) ou est-ce **purement
-déclaratif** ? `combatRosterBroadcast.js:11` note que `state_weapon` est « lu directement ailleurs
-pour une règle de jeu » — **pas tracé**. Ne pas trancher (leçon rounds 5/6). À vérifier au moment du
-code, ou question à Saar : *l'état d'arme exo gate-t-il quelque chose, ou c'est du flavor ?*
+**5. Axe `weapon` exo — TRANCHÉ (Saar 2026-08-29) : exactement comme HUMAN.** Coût d'Initiative de
+transition (`STATE_TRANSITION_COST.weapon`) **et** restriction de jeu (« on ne peut pas utiliser une
+arme rangée ») : sélectionner une arme exo dans la liste d'action (module 4) auto-dégaine
+(`weapon → drawn`, miroir de `SELECT_ATTACK` humain) ; attaque grisée si `weapon !== 'drawn'`. Mon
+hypothèse « aucune restriction » était fausse — corrigée §14.3. **À vérifier au module 4** : le
+serveur (`isExo`) applique-t-il déjà ce gate ? (jamais exercé — l'exo envoie `state: {}` aujourd'hui.)
 
 **6. Le satellite-frère alourdit le module 2 au-delà de « wrapper minimal » (§13.11 pt 5).** Un
 `CombatDeclareFrame` qui « réutilise `.combat-float-win` » **et** possède `pos` **et** rend un panneau
@@ -1188,7 +1194,8 @@ celui au `clipPath` (centrage à valider).
 - Exo : `declarationReducer` réutilisé, `state: {position, weapon, vitesse}` ; **pas de
   `buildExoDeclareState`** (point 4). Le `onChange` de la puce Posture exo branche `prone → emit
   immédiat` (point 3).
-- `weapon` exo : `[INCONNU]` sur l'effet résolution (point 5) — à lever au code / avec Saar.
+- `weapon` exo : **comme HUMAN** (coût INI + gate « pas d'attaque arme rangée », point 5) ; vérifier
+  au module 4 que le serveur `isExo` applique le gate.
 - Dépendance module 2 explicitée (point 6) + z-index (7) + repli nommé (9).
 - Livrable : 1 commit brique partagée (`CombatDeclareStatePanel` + `glyph` sur le chip) + 1 commit
   par fenêtre + checklist manuelle.
