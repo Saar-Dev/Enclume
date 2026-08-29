@@ -1,7 +1,12 @@
 # PLAN_RW_DECLARE_DESIGN — Passe design des fenêtres de déclaration de combat
 
-> **Statut : conception — aucun code.** 2026-08-28, **révisé le jour même après analyse à charge**
-> (§11 : journal de la revue).
+> **Statut : conception — aucun code hors lot B / B5 / module 0.** 2026-08-28, **révisé le jour même
+> après analyse à charge** (§11 : journal de la revue) puis **cadrage M0.4 / PO6** (§12).
+>
+> **Décisions Saar 2026-08-28 (post-module 0)** : validation navigateur de tout le chantier **en bloc
+> à la fin** (Q1/Q4) ; quand la maquette n'est pas réalisable telle quelle → **adapter et montrer**,
+> pas de STOP (Q3) ; satellite exo **sans migration** (Q5, confirmé §12.5) ; glyphes **jamais en dur**
+> (fichiers laissés dans `assets/status/`, rework Saar en cours).
 >
 > **Responsabilité unique** (Règle 1, `docs/RegleDocumentaire.md`) : le **langage visuel unifié** et la
 > **structure commune** des trois fenêtres de déclaration d'action en phase ANNONCE
@@ -59,8 +64,8 @@ la fois, validé navigateur avant le suivant.
 | Largeur | 360 / 720 (panneau droit) | 440 | 340 |
 | Titres de section | 1 couleur (`--combat-section`, 8 px) | **1 couleur codée en dur par section** (`#aa6a30`, `#aa8a30`, `#5a8a5a`…) | 1 couleur |
 | Fond des tuiles ACTION | `rgba(255,255,255,0.02)` (≈ invisible) | `#0a1018` + bordure `#15212e` (visible) | `rgba(255,255,255,0.02)` |
-| Bouton de pied | `t('actionWindow.declareActionButton')` | `DÉCLARER` (**texte FR en dur**, `CombatGmDeclareWindow.jsx:1085`) | `t('actionWindow.declareActionButton')` — valeur `"Declarer l'action"` (sans accents) |
-| État inline | `useState`/`useReducer` : **27** (`CombatActionWindow`) `[VÉRIFIÉ]` | **21** (`CombatGmDeclareWindow`) `[VÉRIFIÉ]` | délégué à `useExoDeclare` |
+| Bouton de pied | `t('actionWindow.declareActionButton')` | `DÉCLARER` en dur → **B1 corrigé** : `t('actionWindow.declareActionButton')` (`CombatGmDeclareWindow.jsx:1056`) | `t('actionWindow.declareActionButton')` — valeur B2 corrigée `"Déclarer l'action"` |
+| État inline | `useState`/`useReducer` : **25** (1 `useReducer` + 24 `useState`, + 3 `useRef`) `[VÉRIFIÉ]` grep 2026-08-29 | **20** (1 `useReducer` + 19 `useState`, + 6 `useRef`) `[VÉRIFIÉ]` | délégué à `useExoDeclare` |
 | Roster | oui (si > 1 token) | oui (non cliquable, `[VÉRIFIÉ]` — navigation = auto-advance) + badge arme | **absent** |
 | État tactique | sections TACTIQUE + ARMEMENT dans le flux | idem | **absent** (dette) |
 | « Passer le tour » | **impossible** (`canDeclare` exige `stateChanged \|\| hasAction`) `[VÉRIFIÉ]` | **impossible** (idem, `canDeclare` l.415) `[VÉRIFIÉ]` | implicite (déclarer vide) |
@@ -127,7 +132,7 @@ maison, absente du RAW et de `VOCABULARY.md` (corrigé : V2.6). « Mêlée » = 
 | D7 | **Recharger vit dans la col. 2** — lié à une arme précise. En-tête : `Tir \| Recharger`, puis le détail correspondant. |
 | D8 | **État tactique = fenêtre satellite** accrochée au bord gauche, se déplace avec la principale (mécanique à concevoir — cf. §7 PO3). Posture / Vitesse / Arme. « Statut, pas actions » (Saar). **Présent PJ / MJ / Exo, absent Drone.** Glyphes iconiques, peu de texte. Câblé sur `CombatDeclareStateChip`. Neuf pour l'exo. |
 | D9 | **Pas de rond radio.** Sélection = bordure accent + fond teinté. |
-| D10 | **Icônes = glyphes SVG produits par Saar** dans `client/public/assets/status/` : `stand`/`crounch`/`kneel`/`crawl` (posture), `actionNormal`/`actionDelayed`/`actionRush` (vitesse), `WeaponA`/`WeaponB`/`WeaponC` (arme rangée / main dessus / au clair), `contact` / `distance`. Chargés en `mask-image`, recolorés à l'accent. Certains exports ont une `viewBox` Inkscape mal cadrée (`stand`, `crawl`) — à recadrer à la source. |
+| D10 | **Icônes = glyphes SVG produits par Saar** dans `client/public/assets/status/` : `stand`/`crounch`/`kneel`/`crawl` (posture), `actionNormal`/`actionDelayed`/`actionRush` (vitesse), `WeaponA`/`WeaponB`/`WeaponC` (arme rangée / main dessus / au clair), `contact` / `distance`. **Chargés en `mask-image: url(/assets/status/x.svg)`, jamais intégrés en dur** (Saar 2026-08-28 : garder les fichiers dans le répertoire, rework en cours), recolorés à l'accent. Vérif 2026-08-28 (§12.6) : `crawl.svg` cassé (tracé hors `viewBox`), à recadrer par Saar ; les 11 autres OK. |
 | D11 | **Silhouette « viser une localisation »** conservée, en **deux sous-colonnes** dans la col. 2 (silhouette \| résumé). Repliée par défaut. |
 | D12 | **Pied** : `[pastille INI] [message de statut] [Passer le tour] [Déclarer]`. Pastille `actuel → projeté` (ex. `INI 7 → 2`), **deux couleurs** : normale, rouge si tour perdu (INI ≤ 0) — jamais un blocage. « Passer le tour » = **second bouton ghost, plus petit, toujours disponible**. « Déclarer » = primaire, actif si l'action est valide, sinon grisé + raison au centre. |
 | D13 | **Déplacement** = ligne distincte **au-dessus** de la liste ACTION (cumulable, hors du choix exclusif) — traitement visuel propre (encadré, « + définir la zone » / « 8 m · −5 »). |
@@ -258,10 +263,12 @@ inchangés, `CombatActionWindow` 0/0) ; résidus `hasAnyAction`/`hasAction`/`sta
 
 ### 5.3 Module 1 — Tokens d'accent par famille (D3/D4) — **RE-CADRÉ round 4**
 
-**Analyse à charge round 4** (`[VÉRIFIÉ]` inventaire 2026-08-28) : ~**290 couleurs en dur** dans les
-9 fichiers de fenêtres (`CombatGmDeclareWindow` 108, `CombatActionWindow` 64, `MeleeCombatPanel` 36,
-`AssaultRangedPanel` 28…), ~50 valeurs distinctes — et la plupart ne sont **pas** des accents (texte,
-bordures, rouges/verts de panneau). Les convertir toutes = refonte CSS complète, churn, risque visuel
+**Analyse à charge round 4** (inventaire ; recompté `[VÉRIFIÉ]` 2026-08-29, `#hex` seul) : ~**260
+couleurs en dur** dans les 9 fichiers de fenêtres (`CombatGmDeclareWindow` 94, `CombatActionWindow`
+56, `MeleeCombatPanel` 33, `AssaultRangedPanel` 25, `DroneWeaponPanel` 15, `DroneDeclareSection` 13,
+`CombatExoActionWindow` 9, `CombatDeclareStateSelector` 7, `CombatDeclareStateChip` 6) — et la
+plupart ne sont **pas** des accents (texte, bordures, rouges/verts de panneau). Les convertir toutes
+= refonte CSS complète, churn, risque visuel
 élevé. **La dette « 3 vocabulaires » n'existe pas au runtime** : l'export DS (`temp/wizard/`) n'est
 **pas chargé** ; `index.css` a déjà un jeu `--combat-*` propre (pj/pnj/drone triplets, `--combat-ini-*`).
 
@@ -283,7 +290,8 @@ si on doit rework pour stabiliser, on le fait ; on n'est pas pressés ». → le
 lui-même une aggradation légitime que ces priorités endossent explicitement.
 
 **Module 0 — Extraire la logique de déclaration en modules purs testés (PAS « ajouter vitest »).**
-`[VÉRIFIÉ]` la philo de test d'Enclume : 126 fichiers `*.test.mjs` (`node --test`, fonctions pures) +
+`[VÉRIFIÉ]` la philo de test d'Enclume : 127 fichiers `*.test.mjs` (`node --test`, fonctions pures ;
+compte 2026-08-29, en croissance) +
 Playwright E2E (`tests/e2e/`, `@playwright/test` installé) ; **aucun test composant, choix assumé**.
 `client/src/lib/declarationReducer.test.mjs` + `client/src/components/combatSections.test.mjs` +
 `shared/combatIniCost.test.mjs` couvrent déjà le **calcul pur** de la déclaration. Ce qui n'est **pas**
@@ -295,11 +303,11 @@ Méthode (golden master / characterization, pratique pro documentée — sources
 
 | Sous-lot | Contenu | État |
 |---|---|---|
-| **M0.0** | Script `npm test` (`node --test` glob `shared/` + `client/src/` + `server/src/`) — le projet a ~98 `*.test.mjs` et aucune commande pour les lancer en bloc. `package.json`. | ✅ **codé 2026-08-28** — 1001 → 1022 tests, 0 fail |
+| **M0.0** | Script `npm test` (`node --test` glob `shared/` + `client/src/` + `server/src/`) — ~126 `*.test.mjs` sans commande pour les lancer en bloc. `package.json`. | ✅ **codé 2026-08-28** — 1001 → 1022 tests, 0 fail |
 | **M0.1** | `client/src/lib/buildDeclarePayload.js` (`buildHumanDeclarePayload`, pur) — extraction **verbatim** de `CombatActionWindow.jsx#handleDeclare` branche non-drone ; `handleDeclare` rassemble un bag plat et appelle la fonction. `+ buildDeclarePayload.test.mjs` : **21 tests de caractérisation** (tour vide, Tir simple/Multi/visé/dual-wield/sans variant, CaC/naturelle/défensif/dual-wield, rechargement, déplacement normal/Charge/Retraite/sans Z, actions rapides, état tactique). | ✅ **codé 2026-08-28** — 21/21, build propre, eslint baseline inchangée |
 | **M0.2** | `buildGmDeclarePayload` — extraction **verbatim** de `CombatGmDeclareWindow.jsx#handleDeclare` branche PNJ. Différences légitimes vs PJ préservées et testées (`fireModeBonus*` par défaut `0` vs `null` ; `move` brut sans forçage `ini_mod` ; `weapon.inv_id`). `+ 16 tests`. | ✅ **codé 2026-08-28** — 37/37 total, npm test 1038/0 fail, eslint GM 2→2 (baseline) |
 | **M0.3** | `buildDroneMapActions` + `buildExoMapActions` — cœurs purs extraits verbatim de `useDroneDeclare` / `useExoDeclare` `#buildMapActions` (les hooks deviennent des wrappers `useCallback`). `+ 14 tests` (logique fire_mode drone, CaC vs Tir par `ref_category` exo, déplacement, quirks figés). | ✅ **codé 2026-08-28** — 51/51 total, npm test 1052/0 fail |
-| **M0.4** | Le payload est verrouillé (**51 tests de caractérisation, 4 familles**) → `useHumanDeclare(mode: 'pj' \| 'gm-pnj')` (PO6, la « vraie cible » de `PLAN_RW_DECLARE_WINDOWS` module 6) s'extrait en petits pas, tests verts après chaque pas. | à faire — cadrage + analyse à charge dédiés (peut se fondre dans le cadrage du module 4) |
+| **M0.4** | Le payload est verrouillé (**51 tests de caractérisation, 4 familles**) → extraction du sous-état de déclaration PJ ↔ MJ-PNJ en petits pas, tests verts après chaque pas. **Cadrage fait (§12)** : pas un hook `useHumanDeclare(mode)` (option rejetée) mais deux hooks de domaine sans `mode` — `useAssaultDeclaration` + `useMeleeDeclaration` + reset commun. | cadré (§12) — **décision Saar en attente** sur l'option retenue ; à placer juste avant le module 4 |
 
 **Jalon M0.1-M0.3 (2026-08-28)** : le payload `COMBAT_ACTION_DECLARE` des 4 familles (PJ / PNJ / drone /
 exo) est extrait en `client/src/lib/buildDeclarePayload.js` et couvert par **51 tests de
@@ -322,10 +330,12 @@ Props : `family`, `storageKey`, `defaultPos`, `title`, `hidden`, `satellite?` (s
 Risque **élevé** (structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** →
 golden master du module 0 en filet.
 
-**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** Composant neuf composant
-`CombatDeclareStateChip`. **Côté exo : nécessite le serveur** (persistance `state_position` /
-`state_weapon` exo, gate de résolution) — sous-module serveur explicite (`ROADMAP.md` §1 point 4).
-Risque : moyen (client), moyen-élevé (exo + serveur).
+**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** Composant neuf sur `CombatDeclareStateChip`.
+**Côté exo : PAS de migration serveur** (corrigé §12.5, `[VÉRIFIÉ]` `socketCombatAnnouncement.js`
+:810-829 persiste `state.*` génériquement pour tout type, exo compris ; `setCharacterState` est
+agnostique au type). Reste : (a) client — câbler `CombatDeclareStateChip`, envoyer un `state` peuplé
+au lieu de `state: {}` ; (b) cadrage règles — quels axes une exo a vraiment (RAW). Risque : moyen
+(client), faible (exo, une fois le cadrage règles fait).
 
 **Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
 d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
@@ -351,8 +361,9 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
   **`git revert` du commit du module** est le rollback. **Pas de feature flag** (analyse à charge
   round 2) : cohabiter deux `CombatActionWindow` de 1500 l. pendant une transition = enfer de merge et
   double surface de bugs — remplacement franc, revert si régression.
-- Aucun de ces modules ne touche un schéma DB **sauf** le sous-module serveur du module 3 (état exo) —
-  migration rétrocompatible standard, cadrée à part.
+- **Aucun de ces modules ne touche un schéma DB.** (Correction 2026-08-29, §11 round 5 : la version
+  précédente affirmait « sauf le sous-module serveur du module 3 (état exo) — migration standard » —
+  faux, `[VÉRIFIÉ]` §12.5, la persistance `state.*` exo est déjà générique et sans migration.)
 
 ---
 
@@ -362,10 +373,10 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 |---|---|---|
 | PO1 | 1 | Iso-visuel strict au module 1, ou léger réalignement assumé des sélections (bleu `#5b8dee` → accent famille) ? `data-family` sur `CombatDeclareFrame` ou classe `.combat-fam-*` ? |
 | PO2 | 4 | Col. 2 d'une arme de contact : modes de combat (Défensif / Charge / Retraite) en segments de tête ou sous-bloc ? Charge chaîne déplacement→cible — comment ? |
-| PO3 | 2 / 4 | **Faisabilité non prouvée par la maquette** : (a) footprint écran satellite + col1 + col2 + sidebar + timeline sur un écran réel ; (b) `AssaultRangedPanel`/`MeleeCombatPanel` (sections 360 px, bordures internes) « réagencés » en col. 2 de 264 px = réagencement ou réécriture ? (c) satellite « suit la fenêtre » : wrapper draggable (change la prise) ou sync de position ? Col. 2 très haute pour un Tir complet → pied épinglé + corps scrollable, à confirmer et montrer. Transition entre armes = reset de la config précédente (à assumer). |
-| PO4 | 0 | Quelle infra de test (vitest + RTL ? autre) ? Périmètre des tests de caractérisation avant de toucher au module 4 ? |
+| PO3 | 2 / 4 | **Faisabilité non prouvée par la maquette** : (a) footprint écran satellite + col1 + col2 + sidebar + timeline sur un écran réel ; (b) `AssaultRangedPanel`/`MeleeCombatPanel` (sections 360 px, bordures internes) « réagencés » en col. 2 de 264 px = réagencement ou réécriture ? (c) satellite « suit la fenêtre » : wrapper draggable (change la prise) ou sync de position ? Col. 2 très haute pour un Tir complet → pied épinglé + corps scrollable, à confirmer et montrer. Transition entre armes = reset de la config précédente (à assumer). Saar 2026-08-28 : quand la maquette ne passe pas, **adapter et montrer**, pas de STOP à chaque fois. |
+| PO4 | 0 | ~~Quelle infra de test~~ **Tranché round 4** : `node --test` + fonctions pures `.mjs` (philo projet), pas de vitest/RTL. Périmètre M0.1-M0.3 fait (51 tests). |
 | PO5 | 3 | Satellite : glyphe qui **reflète la valeur** (Saar a produit les 4 glyphes de posture → plutôt oui) ou glyphe de catégorie + texte ? |
-| PO6 | 4 | `useHumanDeclare(mode: 'pj' \| 'gm-pnj')` (partage état PJ + MJ) ou `CombatDeclareActionList` purement présentationnel (chaque fenêtre garde son état) ? À trancher **avant** le module 4. |
+| PO6 | 4 | **Cadré §12.** Options : hook `useHumanDeclare(mode)` (rejeté, cf. §12.3-A) / présentationnel pur (ne fait pas le travail, §12.3-B) / **deux hooks de domaine sans `mode`** (reco, §12.3-C). Décision Saar en attente. À trancher **avant** le module 4. |
 | PO7 | — | `CombatOverlay.jsx` : 4 gardes de montage ANNONCE — nettoyer en une table ou laisser ? (faible valeur) |
 
 ---
@@ -379,7 +390,7 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 - Le calcul métier (`combatIniCost`, `combatSections`, allures) — intact.
 - Migration TypeScript. **Aucune nouvelle dépendance** : le module 0 reste sur `node --test` +
   fonctions pures `.mjs` (philo du projet), pas de vitest/RTL.
-- Conversion complète hex → tokens des panneaux combat (~290 occurrences) — chantier CSS distinct,
+- Conversion complète hex → tokens des panneaux combat (~260 occurrences) — chantier CSS distinct,
   non ouvert (round 4).
 - La barre d'action ancrée non-couvrante (style Argon Combat HUD) — très gros chantier, contraire au
   paradigme Enclume. Nommé pour mémoire, non ouvert.
@@ -404,10 +415,11 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
    `socketCombatAnnouncement.js` (swap « Assaut » → « Tir »). Validation navigateur en bloc à venir.
 2. **B5** — ✅ **codé 2026-08-28** : `canDeclare` débloqué (PJ + MJ), `meleeValid` neuf côté MJ.
    Libellé explicite « Passer le tour » = module 5.
-3. **Module 0** — extraire `buildDeclarePayload` / `useHumanDeclare` en modules purs `.mjs` + tests de
-   caractérisation (golden master). Le filet.
-4. **Module 2** (chrome partagé + accent par famille + `--combat-exo-*`) → **3** (satellite) → **4**
-   (liste d'action) → **5** (pied). Un module validé (tests verts + navigateur Saar) avant le suivant.
+3. **Module 0** — `buildDeclarePayload` M0.1-M0.3 ✅ (golden master, 51 tests). M0.4 (sous-état Tir/CaC)
+   cadré §12, **décision Saar en attente**, placé avant le module 4.
+4. **Module 2** (chrome partagé + accent par famille + `--combat-exo-*`) → **3** (satellite) →
+   **M0.4** (extraction sous-état, §12.4) → **4** (liste d'action) → **5** (pied). Un module validé
+   (tests verts ; navigateur Saar **en bloc à la fin**, Q1/Q4) avant le suivant.
 
 La maquette est la cible. Le module 0 est le filet qui rend le reste sûr.
 
@@ -434,8 +446,9 @@ Revue demandée par Saar juste après la première rédaction. Conclusions inté
 7. **Fond PCB sur-décidé** → D14 rétrogradé en détail d'implémentation du module 2, PO6 dédié retiré.
 8. **États non-déclaration manquants** → ajoutés au périmètre du module 2 (§4).
 9. **Pas de migration/rollback** → §6.
-10. **Chiffres non re-vérifiés** → `[VÉRIFIÉ]` : `CombatActionWindow` = 27 `useState`/`useReducer`,
-    `CombatGmDeclareWindow` = 21 ; bouton exo = `t('actionWindow.declareActionButton')`.
+10. **Chiffres non re-vérifiés** → recomptés `[VÉRIFIÉ]` (2026-08-29, cf. round 5) : `CombatActionWindow`
+    = **25** `useState`/`useReducer` (+3 `useRef`), `CombatGmDeclareWindow` = **20** (+6 `useRef`) —
+    les « 27 / 21 » annoncés ici le 28 étaient faux ; bouton exo = `t('actionWindow.declareActionButton')`.
 
 ### Round 2 (même jour, après réponse « Go implanter ? »)
 
@@ -470,7 +483,7 @@ Revue demandée par Saar juste après la première rédaction. Conclusions inté
 
 ### Round 4 (même jour — Saar rappelle les priorités : qualité structurelle >>> vitesse, rework pour stabiliser si besoin, pas pressés, se documenter)
 
-1. **Module 1 (tokens) `[VÉRIFIÉ]` : ~290 couleurs en dur, la plupart pas des accents ; l'export DS
+1. **Module 1 (tokens) `[VÉRIFIÉ]` : ~260 couleurs en dur, la plupart pas des accents ; l'export DS
    n'est pas chargé (pas de vraie dette « 3 vocabulaires » runtime).** → module 1 réduit à `+ --combat-exo-*`
    + `--combat-accent-*` par famille, et **fusionné dans le module 2** (le `data-family` n'a de sens
    qu'avec le chrome partagé). La conversion complète hex → tokens = chantier CSS distinct, non ouvert.
@@ -478,7 +491,7 @@ Revue demandée par Saar juste après la première rédaction. Conclusions inté
    stabiliser ». Le blocage n'est plus « attendre un backlog plus mince » — c'est « faire le filet
    d'abord ».
 3. **Module 0 re-cadré (recherche : golden master / characterization tests, sources ci-dessous).**
-   `[VÉRIFIÉ]` Enclume = 126 tests `*.test.mjs` (`node --test`, fonctions pures) + Playwright E2E ;
+   `[VÉRIFIÉ]` Enclume = ~127 fichiers `*.test.mjs` (`node --test`, fonctions pures) + Playwright E2E ;
    aucun test composant, choix assumé. `declarationReducer.test.mjs` / `combatSections.test.mjs` /
    `combatIniCost.test.mjs` couvrent déjà le **calcul pur**. Non testé = **l'assemblage du payload**
    `COMBAT_ACTION_DECLARE` (inline dans `handleDeclare`) + les invariants croisés. → module 0 =
@@ -496,3 +509,176 @@ Revue demandée par Saar juste après la première rédaction. Conclusions inté
 - (Vitest + RTL considéré puis écarté — nouveau paradigme contraire à la philo `.mjs` d'Enclume :
   [Incubyte](https://blog.incubyte.co/blog/vitest-react-testing-library-guide/),
   [Makers Den](https://makersden.io/blog/guide-to-react-testing-library-vitest).)
+
+### Round 5 (2026-08-29 — analyse à charge demandée par Saar : la fausse contrainte « satellite exo = migration serveur »)
+
+**Fait.** Le plan a affirmé, de sa rédaction jusqu'au 2026-08-28, que le satellite d'état exo
+(module 3) « nécessite le serveur (persistance `state_position` / `state_weapon` exo, gate de
+résolution) », avec un « sous-module serveur explicite », un risque « moyen-élevé (exo + serveur) »
+(§5.4) et une ligne dédiée en §6 (« sauf le sous-module serveur du module 3 — migration
+rétrocompatible standard »). **C'était faux** : `socketCombatAnnouncement.js:810-829` persiste
+`state.*` génériquement pour tout type y compris exo ; `setCharacterState` est agnostique au type ;
+les colonnes existent. Aucune migration. Vérifié en ~15 min, mais seulement après « ENORMES DOUTES »
+de Saar — pas par une relecture, pas par les rounds 1-4.
+
+**Chaîne de défaillance.**
+1. `ROADMAP.md` §1 point 4 (session exo antérieure) : « reste à câbler dans `CombatExoActionWindow` +
+   le serveur » — sans marqueur, sans source.
+2. Rédaction du présent plan : j'ai **importé et amplifié** cette phrase — « + le serveur » vague est
+   devenu « persistance `state_position`/`state_weapon` exo », « gate de résolution », « migration
+   rétrocompatible standard », « risque moyen-élevé ». Détail concret ajouté, jamais dans la source,
+   jamais vérifié.
+3. Rounds d'analyse à charge 1-4 : ont critiqué la **structure** du plan (périmètre, découpage,
+   ordre, risque du module 4) — **jamais rouvert `socketCombatAnnouncement.js`** pour vérifier la
+   branche `isExo`.
+4. Révélé par Saar, pas par moi.
+
+**Règles violées.** CLAUDE.md §1.1 (code observé > mémoire/conversation — ROADMAP est de la
+conversation figée, pas du code) ; §6 (« termes interdits sans preuve » — une affirmation posée là où
+il fallait `[INCONNU]`) ; §13 détecteur de dérive (« diagnostic sans lecture ni instrumentation » —
+c'est ce qu'était une analyse à charge qui ne rouvre pas les fichiers) ; `METHODO_PLAN.md` (marqueurs
+`[VÉRIFIÉ]`/`[INFÉRÉ]` obligatoires — la ligne module 3 exo n'avait **aucun** marqueur, donc se lisait
+comme un fait). Mémoire `feedback_ticket_content_not_authoritative` (« revérifier le code avant
+d'agir ») : la leçon existait, appliquée aux tickets, **pas** appliquée à ROADMAP.
+
+**Le vrai problème (pas l'instance).** Copier une contrainte d'un doc de planification vers un autre
+**blanchit l'inférence en fait**. Amplifier une affirmation héritée (ajouter « migration », « gate »,
+un niveau de risque) est une erreur composée, pire que la répéter.
+
+**Coût si non corrigé.** Module 3 séquencé avec un « sous-module serveur + migration » fantôme : soit
+une migration inutile écrite (dette de schéma pure, règles §5 lourdes), soit un cadrage jeté à
+mi-parcours. Et tout l'arbitrage de risque/ordre en aval était calibré sur un faux « exo + serveur ».
+
+**Ce qui change.**
+1. **Avant de committer ce plan** : passe de vérification sur *chaque* affirmation technique non
+   marquée `[VÉRIFIÉ]` — rouvrir le fichier, marquer `[VÉRIFIÉ]` ou rétrograder en `[INCONNU]`.
+2. **Règle permanente** : une contrainte reprise d'un autre doc / de la mémoire / d'un ticket / d'un
+   plan antérieur n'entre dans un plan **qu'avec sa propre vérification code**, jamais par copie.
+3. Les prochaines analyses à charge de ce chantier **rouvrent les fichiers cités**, pas seulement la
+   structure du plan.
+4. `[INCONNU]` explicite posé sur le seul point non vérifié restant (§12.5 : la résolution lit-elle
+   `state_position` exo).
+
+**Passe de vérification du plan (2026-08-29, avant commit) — corrections appliquées :**
+
+| Affirmation | Annoncé | `[VÉRIFIÉ]` 2026-08-29 | Action |
+|---|---|---|---|
+| État inline PJ / GM | 27 / 21 `useState` | **25 / 20** (+3 / +6 `useRef`) | corrigé §2.1, §11-r4-10, §12 |
+| Migration serveur module 3 | « oui, exo » (§6) | **aucune** (persistance générique) | §6 réécrit |
+| Couleurs en dur (9 fichiers) | ~290 (GM 108…) | **~260** (GM 94, PJ 56, Melee 33, Assault 25…) | corrigé §5.3, §8, §11-r4-1 |
+| Fichiers `*.test.mjs` | 126 / « ~98 » | **127** (en croissance) | harmonisé §5.4, §5.4-M0.0 |
+| Bouton de pied MJ « DÉCLARER » en dur | dette ouverte | **B1 corrigé** (`:1056`, `t(…)`) | §2.1 mis à jour |
+| Bouton exo « Declarer » sans accents | dette | **B2 corrigé** (`"Déclarer l'action"`) | §2.1 mis à jour |
+| `grep -i assaut combat.json` | — | **vide** | B3 confirmé complet (combat.json) |
+| Tokens `index.css` : `--combat-{pj,pnj,drone}-*` triplets, pas de `--combat-exo-*`/`--combat-accent-*` | affirmé | **confirmé** (l.157-165) | inchangé |
+| Export DS `temp/wizard/` non chargé par l'app | affirmé | **confirmé** (0 import ; `temp/` gitignoré) | inchangé |
+| Briques `CombatDeclare*` (5 fichiers) | listées | **confirmé** (ErrorBanner, IniWidget, Log, StateChip, StateSelector) | inchangé |
+| Sections `AssaultRangedPanel` (Arme / Nb tirs / Cible(s) / Type de tir / Mode CC-RC-RL / Localisation) | affirmé | **confirmé** (376 l.) ; `MeleeCombatPanel` 400 l. | inchangé |
+| Roster MJ non cliquable | `[VÉRIFIÉ]` | **confirmé** (`S.rosterRow`, aucun `onClick`) | inchangé |
+| Serveur accepte déclaration vide (`{}` passe, clés validées si présentes) | `[VÉRIFIÉ]` | **confirmé** (`socketCombatAnnouncement.js:63-79`) | inchangé |
+| Golden master 4 familles | 51 tests | **51/51 vert** ce jour | inchangé |
+
+---
+
+## 12. Cadrage M0.4 / PO6 — mutualiser l'état de déclaration PJ ↔ MJ-PNJ
+
+> Demandé par Saar (2026-08-28) : « je n'ai pas le niveau technique pour estimer les répercussions,
+> documente ce point pour un choix éclairé ». Lecture faite ce jour, intégrale : `CombatActionWindow.jsx`
+> (1580 l., 25 états), `CombatGmDeclareWindow.jsx` (1192 l., 20 états), `CombatExoActionWindow.jsx`
+> (442 l.), `declarationReducer.js`, `useDroneDeclare`/`useExoDeclare`, `socketCombatAnnouncement.js`,
+> `characterStateService.js`.
+
+### 12.1 En clair
+
+Les fenêtres joueur et MJ font le même geste (déclarer Tir / Corps à corps / Déplacement) mais
+**chacune reconstruit sa propre machinerie de sélection** — ~200 lignes quasi identiques copiées dans
+les deux fichiers. Preuves que la copie coûte : le combat à deux armes (COM24) implémenté deux fois ;
+le bug de réinitialisation entre tours corrigé deux fois le même jour (2026-08-28) ; l'éligibilité du
+Tir visé câblée deux fois.
+
+Question : au module 4, on **fusionne cette machinerie dans un module commun**, ou on **laisse chaque
+fenêtre avec la sienne** et on ne partage que l'apparence ?
+
+### 12.2 Ce qui est vraiment commun / vraiment différent  `[VÉRIFIÉ]`
+
+| | Commun (même forme, même sens) | Différent — à préserver |
+|---|---|---|
+| État tactique | `decl` + `declarationReducer` — **déjà** partagé | — |
+| Sous-état Tir | `assault*`, `isDualWield`, `aim*`, `aimedLocation` — jeu identique, mêmes calculs (`computeFireVariant`, `getAim*`) | — |
+| Sous-état CaC | `melee*Count`, `selected*MeleeWeaponId`, `*NaturalWeaponId`, `isDualWieldMelee` — jeu identique | — |
+| Assemblage payload | **déjà** extrait (`buildHumanDeclarePayload` / `buildGmDeclarePayload`, module 0) | `move` brut vs `ini_mod:0` forcé ; bonus `0` vs `null` (figés + testés) |
+| Réinitialisation tour/slot | logique quasi identique (`prevHasAnnouncedRef` + reset ~15 états) — **dupliquée** | — |
+| Acquisition des données | — | PJ : fetch par token actif (`/inventory`, `/mutations`, allures locales). MJ : **batch** `/combat-equipment` tous PNJ, indexé tokenId. Formes ≠ (`allInventoryItems[]` vs `equipment[tid].weaponMg`) |
+| Modèle de sélection | — | PJ : `Set` multi-tuiles. MJ : booléens dérivés + `mapAction` (reload seul) |
+| Flux de ciblage | — | PJ : `inTargetMode`/`inMeleeTargetMode` + `handleChooseTarget(i)`. MJ : `isSelectingOnMap` (conflate) + chaîne récursive `selectNext` + refs `isMountedRef`/`*CountRef` (StrictMode) |
+| Charge | — | PJ : `moveSelection` + cible dans `meleePendingTokenIds`. MJ : objet composite `chargeSelection:{move,targetTokenId}` |
+| Pilotage | — | PJ : multi-phases (surprise, résolution mon tour / pas mon tour, attente, déjà déclaré). MJ : navigation de slots + preview live `pjPreview` + bouton « Passer » |
+
+**Lecture** : le partageable = **sous-état Tir** + **sous-état CaC** (+ réinitialisation). Le reste
+diverge pour de bonnes raisons et doit le rester.
+
+### 12.3 Options
+
+- **A — hook `useHumanDeclare(mode: 'pj' | 'gm-pnj')`** (option d'origine du plan). Tout l'état de
+  déclaration dans un hook, `mode` bascule la source de données et quelques comportements.
+  *Contre* : la doc React officielle le déconseille — « beaucoup d'arguments = à refactorer », « Hook
+  difficile à nommer = trop couplé pour être extrait » (react.dev, *Reusing Logic with Custom Hooks*).
+  Ici PJ et MJ divergent sur l'acquisition de données, le pilotage, le flux de ciblage, la forme de
+  la Charge : le hook porterait tout ça derrière des `if (mode === …)`. ~400 lignes, testable
+  seulement via React, « le fichier que personne ne veut toucher ».
+- **B — `CombatDeclareActionList` purement présentationnel** (autre option du plan). Liste = props,
+  aucun état ; chaque fenêtre garde le sien.
+  *Contre* : la copie de ~200 lignes (Tir + CaC + reset) **reste dans les deux fenêtres** —
+  exactement la douleur actuelle. Réorganise l'affichage, n'aggrade pas la structure.
+- **C — deux hooks de domaine, sans `mode`** : `useAssaultDeclaration({ weapons, … })` +
+  `useMeleeDeclaration({ weapons, … })`. Chacun tient **une** tranche cohérente que les deux fenêtres
+  dupliquent ; on leur passe les données en paramètre (l'appelant décide batch ou par token). Cœur
+  de décision (validité, comptes effectifs, exclusivités) en fonctions pures `.mjs` — patron
+  `buildDeclarePayload`. Les fenêtres gardent `decl`, fetch, pilotage, flags de ciblage. Aucun `mode`.
+  *Pour* : direction déjà prise par le code (`useDroneDeclare`/`useExoDeclare` = hooks par domaine,
+  pas `useDeclare(mode)` ; `useAutoMoveMode`/`useCombatClickAttack` = partagés sans mode). Tue la
+  vraie duplication. Chaque hook nommable + responsabilité unique (le test react.dev de « prêt à
+  extraire »). Golden master du module 0 garde déjà la sortie.
+  *Contre* : 2 hooks au lieu d'1 ; la frontière sous-état / flux-de-ciblage doit être propre — à
+  prouver au cadrage du module 4 (la chaîne récursive `selectNext` du MJ = le point délicat).
+
+Sources : [react.dev — Reusing Logic with Custom Hooks](https://react.dev/learn/reusing-logic-with-custom-hooks)
+(« si un Hook prend beaucoup d'arguments… le refactorer » ; « difficile de nommer = pas prêt à
+extraire ») ; [patterns headless / logique découplée de l'UI, ITNEXT](https://itnext.io/decoupling-ui-and-logic-in-react-a-clean-code-approach-with-headless-components-82e46b5820c) ;
+[anti-patterns Hooks, dev.to](https://dev.to/justboris/popular-patterns-and-anti-patterns-with-react-hooks-4da2).
+
+### 12.4 Recommandation
+
+**Option C**, logique de décision non triviale sortie en fonctions pures testées `.mjs`. **Rejeter A**
+(sur la foi de la doc React). B ne fait pas le travail.
+
+Séquence proposée : **module 2 (châssis) → module 3 (satellite) → M0.4 = extraction
+`useAssaultDeclaration` + `useMeleeDeclaration` + reset commun (tests verts) → module 4 (liste — ne
+fait que consommer + rendre) → module 5 (pied)**. M0.4 juste avant son consommateur, pas avant les
+modules purement visuels (rien ne change à l'écran, validation navigateur en aveugle).
+
+### 12.5 Correctif au plan — le satellite exo ne demande PAS de migration  `[VÉRIFIÉ]`
+
+`socketCombatAnnouncement.js:810-829` persiste `state.position/weapon/fire_mode/cover/vitesse/
+combat_mode` **génériquement, pour tout type de personnage, exo compris** ; `setCharacterState`
+(`characterStateService.js`) est agnostique au type ; `combat_roster.state_*` et `character_states`
+existent déjà. Aujourd'hui `CombatExoActionWindow` envoie `state: {}` → rien n'est persisté, mais **le
+chemin d'écriture est déjà là**. Le satellite exo (module 3) est donc :
+(a) **client** : câbler `CombatDeclareStateChip`, envoyer un `state` peuplé ;
+(b) **cadrage règles** (pas migration) : quels axes une exo a vraiment (RAW — « arme rangée / au
+clair » n'a probablement aucun sens pour une exo ; accroupi/genou : ça modifie quelque chose à la
+résolution ?).
+La mention « + le serveur » de `ROADMAP.md` §1 point 4 est surévaluée. **Reste `[INCONNU]`** (non
+vérifié) : est-ce que la phase RÉSOLUTION *lit* `state_position` exo pour un malus de posture, et le
+RAW le veut-il ? Portée bornée — « lecture + éventuellement quelques lignes », **catégoriquement pas
+une migration**. Genèse de la fausse contrainte : §11 round 5.
+
+### 12.6 Glyphes (Q6, vérif demandée)  `[VÉRIFIÉ]`
+
+12 glyphes examinés (`stand/crounch/kneel/crawl`, `contact/distance`, `WeaponA/B/C`,
+`actionNormal/Delayed/Rush`). `crawl.svg` avait le tracé hors `viewBox` (démarrage `x = -25.76`) —
+**Saar a ajouté un `<clipPath>` (2026-08-29)** : l'overflow ne peint plus hors du cadre ; reste à
+juger visuellement si la figure est bien centrée dans le `0 0 48 48` (jugement Saar, il a le rendu).
+Les 11 autres tiennent dans `0 0 48 48`. Deux styles de fichier coexistent (Inkscape multi-lignes vs
+compact mono-ligne) — sans impact en `mask-image` (seul l'alpha compte). Rien à intégrer en dur :
+`mask-image: url(/assets/status/x.svg)` recoloré à l'accent (D10), fichiers laissés dans le répertoire.
