@@ -1691,6 +1691,17 @@ Convention :
 }
 [data-decl][data-narrow] .decl-col1 { width: 100%; border-right: none; }
 
+/* Colonne 2 — détail de l'arme choisie (D6) : cible, mode de tir, options, localisation. */
+[data-decl] .decl-col2 {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0,0,0,0.16);
+}
+/* Segment Tir │ Recharger en tête de colonne 2 (D7). */
+[data-decl] .decl-c2seg { display: flex; gap: 4px; padding: 9px 12px 4px; }
+
 /* Déplacement — ligne actionnable, cumulable (D13) */
 [data-decl] .decl-move {
   display: flex;

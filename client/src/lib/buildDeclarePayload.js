@@ -120,7 +120,8 @@ export function buildGmDeclarePayload(sel) {
     mapActions: {
       move: movePayload,
       // Tir Multi : array d'1 à 3 tirs, même arme pour toute la série (D9).
-      attack: sel.weapon && sel.assaultTargets.length > 0
+      // D7 : « Recharger » remplace le Tir — jamais les deux dans le même payload.
+      attack: sel.weapon && sel.assaultTargets.length > 0 && sel.mapAction !== 'reload'
         ? sel.assaultTargets.slice(0, sel.effectiveAssaultCount).map(targetTokenId => ({
             weaponInvId:        sel.weapon.inv_id,
             offhandWeaponInvId: (sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode)

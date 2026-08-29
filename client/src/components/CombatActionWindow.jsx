@@ -627,11 +627,14 @@ export default function CombatActionWindow({
 
   // --- calcul INI total client (indicatif) ---------------------------------
   const reloadSelected = mapSelected.has('reload')
+  // D7 : « Recharger » est un mode de l'arme sélectionnée, exclusif du Tir — quand il est actif,
+  // l'arme se recharge, elle ne tire pas (le segment Tir │ Recharger de la col. 2 bascule).
+  const attackActive = attackSelected && !reloadSelected
   const mapActionsObj = {
     move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
     // Tir Multi (docs/PLAN_TIRMULTI.md D1) : array systématique, comme melee ci-dessous. aimTranches
     // n'est jamais non-nul que sur un seul élément (D10 — Tir visé exclusif avec Tir Multi).
-    attack: attackSelected ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau }) : null,
+    attack: attackActive ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau }) : null,
     // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
     // Charge : toujours 1 attaque (exclusive multi-attack LdB)
     melee:  (meleeSelected && !meleeDefensif)
@@ -655,7 +658,7 @@ export default function CombatActionWindow({
   // de l'ancien `assaultValid`/`reloadValid`/`meleeValid` (iso-comportement).
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
   const assault = assaultCheck({
-    started:       attackSelected,
+    started:       attackActive,
     hasWeapon:     assaultWeaponId != null,
     targetsFilled: assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length,
     targetsNeeded: effectiveAssaultCount,
@@ -674,7 +677,7 @@ export default function CombatActionWindow({
   })
   const reload = reloadCheck({
     started:         reloadSelected,
-    coveredByAttack: attackSelected,
+    coveredByAttack: false,   // D7 : Recharger remplace le Tir (n'est plus « couvert » par lui)
     hasWeapon:       selectedWeapon !== null,
     hasAmmo:         selectedAmmoId !== null,
   })
@@ -715,7 +718,8 @@ export default function CombatActionWindow({
       tokenId: playerToken.id,
       decl,
       moveSelection,
-      attackSelected, assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
+      attackSelected: attackActive,   // D7 : Recharger exclut le Tir dans le payload
+      assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
       aimTranches, aimedLocation,
       meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount,
@@ -929,9 +933,9 @@ export default function CombatActionWindow({
   // flags restent utilisés ailleurs (gate de useCombatClickAttack/useAutoMoveMode), juste plus ici.
   const isTargeting = combatTargetMode?.tokenId === playerToken?.id
   const isHidden    = inMoveMode || isTargeting || droneDeclare.isSelectingOnMap || hasPendingOwnMove
-  const showAssault = attackSelected
-  const showReload  = reloadSelected && !showAssault
-  const showMelee   = meleeSelected  && !showAssault && !showReload
+  const showAssault = attackActive
+  const showReload  = attackSelected && reloadSelected && !!selectedWeapon
+  const showMelee   = meleeSelected  && !attackSelected
 
   // CC slider index
   const ccSliderIdx = assaultBulletCount && assaultBulletCount !== 1
@@ -1072,6 +1076,22 @@ export default function CombatActionWindow({
           {playerTokensInRoster.length > 1 && rosterSection}
 
         </div>
+
+        {(showAssault || showReload || showMelee) && (
+        <div className="decl-col2">
+        {/* Segment Tir │ Recharger — arme à feu avec chargeur suivi (D7 : Recharger lié à l'arme). */}
+        {attackSelected && selectedWeapon?.ref_caliber && (
+          <div className="decl-c2seg">
+            <button
+              className="seg-opt" data-active={!reloadSelected}
+              onClick={() => { if (reloadSelected) handleMapToggle('reload') }}
+            >{t('actionLabels.assault')}</button>
+            <button
+              className="seg-opt" data-active={reloadSelected}
+              onClick={() => { if (!reloadSelected) handleMapToggle('reload') }}
+            >{t('actionWindow.reloadButtonLabel')}</button>
+          </div>
+        )}
 
         {/* ---- Panneau droit — rechargement : sélection munitions ---- */}
         {showReload && (
@@ -1222,6 +1242,8 @@ export default function CombatActionWindow({
               multiShotIneligibilityReasons={multiShotIneligibilityReasons}
             />
           </div>
+        )}
+        </div>
         )}
       </div>
 

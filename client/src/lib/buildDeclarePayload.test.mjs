@@ -339,6 +339,17 @@ test('GM — Rechargement PNJ (mapAction reload → true)', () => {
   assert.equal(p.mapActions.reload, true)
 })
 
+test('GM — D7 : Recharger exclut le Tir même si une cible est posée', () => {
+  const p = buildGmDeclarePayload(baseGmSel({
+    mapAction: 'reload',
+    weapon: { inv_id: 'w1', ref_fire_mode: 'CC' },
+    assaultTargets: ['e1'],
+    effectiveAssaultCount: 1,
+  }))
+  assert.equal(p.mapActions.reload, true)
+  assert.equal(p.mapActions.attack, null)
+})
+
 test('GM — Déplacement PNJ (pendingMove passé brut, pas de forçage ini_mod)', () => {
   const p = buildGmDeclarePayload(baseGmSel({
     pendingMove: { targetPosX: 5, targetPosY: 3, targetPosZ: 0, ini_mod: -5, action_key: 'move_moyenne' },

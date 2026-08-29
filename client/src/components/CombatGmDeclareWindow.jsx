@@ -607,8 +607,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
   // ── Etat CaC / Tir actif (pour l'affichage) — dérivés de `meleeStarted` / `attackStarted`
   //    calculés plus haut (source unique avec `declareChecks`).
+  const isReloading   = mapAction === 'reload'
   const isMeleeSetup  = isActivePnj && meleeStarted
-  const isAttackActive = attackStarted
+  const isAttackActive = attackStarted && !isReloading   // D7 : Recharger remplace le Tir
 
   // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination PNJ a
   // été posée et attend validation — pas pendant le simple survol (option 1, décision Saar).
@@ -627,7 +628,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       {isActivePnj && (
         <CombatDeclareStatePanel
           pos={pos}
-          windowWidth={(isMeleeSetup || isAttackActive) ? 720 : 440}
+          windowWidth={(isMeleeSetup || isAttackActive || isReloading) ? 720 : 440}
           family="gm-pnj"
           positionMode="absolute"
           decl={decl}
@@ -636,7 +637,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           hidden={isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick}
         />
       )}
-    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
+    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive || isReloading) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <CombatDeclareHeader
@@ -860,6 +861,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           </div>
         </div>
 
+        {(isMeleeSetup || isAttackActive || isReloading) && (
+        <div className="decl-col2">
+        {/* Segment Tir │ Recharger (D7) — arme à feu avec chargeur suivi. */}
+        {attackStarted && weapon?.ref_caliber && (
+          <div className="decl-c2seg">
+            <button
+              className="seg-opt" data-active={!isReloading}
+              onClick={() => setMapAction(prev => prev === 'reload' ? null : prev)}
+            >{t('actionLabels.assault')}</button>
+            <button
+              className="seg-opt" data-active={isReloading}
+              onClick={() => setMapAction('reload')}
+            >{t('actionWindow.reloadButtonLabel')}</button>
+          </div>
+        )}
+
         {/* PANNEAU DROIT — Mode CaC */}
         {isMeleeSetup && isActivePnj && (
           <div style={S.meleePanelGm}>
@@ -949,6 +966,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               multiShotIneligibilityReasons={multiShotIneligibilityReasons}
             />
           </div>
+        )}
+        </div>
         )}
 
       </div>{/* fin body flex-row */}
