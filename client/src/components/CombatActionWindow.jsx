@@ -10,14 +10,13 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api.js'
 import {
-  MAP_ACTIONS, QUICK_ACTIONS,
+  QUICK_ACTIONS,
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
   ACTION_LABELS, PURE_MOVE_TYPES,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
-import { flattenItemsBySlot, resolveHandWeapons, handSlotDisplayRows } from '../../../shared/weaponSlots.js'
-import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
+import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -34,6 +33,7 @@ import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
+import { buildWeaponList } from '../lib/weaponList.js'
 import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -98,6 +98,9 @@ export default function CombatActionWindow({
 
   // --- actions sur la carte (multi-select) ----------------------------------
   const [mapSelected, setMapSelected] = useState(new Set())
+  // Arme de tir choisie dans la liste groupée (module 4, D5 « l'arme EST l'action »). null = arme
+  // primaire résolue par les slots (resolveHandWeapons) — cas courant 0/1 arme à feu équipée.
+  const [selectedRangedWeaponId, setSelectedRangedWeaponId] = useState(null)
 
   // --- etat assaut (panneau droit) ------------------------------------------
   const [allures, setAllures]                     = useState(null)
@@ -274,6 +277,7 @@ export default function CombatActionWindow({
     setAssaultBulletCount(null)
     setAssaultVariantAB('A')
     setIsDualWield(false)
+    setSelectedRangedWeaponId(null)
     setAimTranches(0)
     setAimedLocation(null)
     setMoveSelection(null)
@@ -420,18 +424,13 @@ export default function CombatActionWindow({
 
   // --- derives assaut -------------------------------------------------------
   // shared/weaponSlots.js — inclut le deux-mains (2M) dans la priorité de sélection (Session 158).
-  const { weaponMg, weaponMd, hasTwoWeapons, primaryWeapon: selectedWeapon } = resolveHandWeapons(assaultWeapons)
+  const { weaponMg, weaponMd, hasTwoWeapons, primaryWeapon: resolvedRangedPrimary } = resolveHandWeapons(assaultWeapons)
+  // D5 : la liste d'armes (module 4) peut fixer explicitement l'arme de tir ; sinon primaire résolue
+  // par les slots. Le dual-wield (weaponMg/weaponMd/hasTwoWeapons) reste piloté par l'équipement.
+  const selectedWeapon = (selectedRangedWeaponId && assaultWeapons.find(w => w.id === selectedRangedWeaponId)) || resolvedRangedPrimary
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   const forceCC       = hasTwoWeapons && !sameFirMode
   const assaultWeaponId = selectedWeapon?.id ?? null
-  // Arme(s) équipée(s) MG/MD/2M/Tr, distant ou contact — affichage ARMEMENT (COM20/COM2).
-  // weaponMg/weaponMd ci-dessus ne couvrent que le distant (filtre assaultWeapons) ; ici tout item
-  // slotté, arme ou non.
-  const equippedSlotRows = flattenItemsBySlot(allInventoryItems)
-  const equippedMg = equippedSlotRows.find(item => item.slot === 'MG') ?? null
-  const equippedMd = equippedSlotRows.find(item => item.slot === 'MD') ?? null
-  const equipped2M = equippedSlotRows.find(item => item.slot === '2M') ?? null
-  const equippedTr = equippedSlotRows.find(item => item.slot === 'Tr') ?? null
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
@@ -463,7 +462,8 @@ export default function CombatActionWindow({
   // Ammo state — ammo_remaining null = jamais chargée (traité comme vide)
   const ammoRemaining = selectedWeapon?.ammo_remaining ?? null
   const ammoCount     = selectedWeapon?.ref_ammo_count ?? null
-  const isAmmoEmpty   = !selectedWeapon || (ammoRemaining !== null && ammoRemaining <= 0)
+  // isAmmoEmpty : le grisage « arme à feu vide » de la liste d'armes est porté par buildWeaponList
+  // (weaponAmmoStatus). Ici on ne garde que isAmmoFull (masque la ligne Rechargement).
   const isAmmoFull    = !!selectedWeapon && ammoCount !== null && ammoRemaining !== null && ammoRemaining >= ammoCount
 
   const dualWieldBonusComp = (isDualWield && hasTwoWeapons && sameFirMode)
@@ -532,6 +532,7 @@ export default function CombatActionWindow({
     setAimTranches(0)
     setAimedLocation(null)
     setInTargetMode(false)
+    setSelectedRangedWeaponId(null)
   }
   const clearMeleeState = () => {
     setMeleePendingTokenIds([])
@@ -568,6 +569,59 @@ export default function CombatActionWindow({
 
       return next
     })
+  }
+
+  // --- liste d'armes groupée (module 4, D5 « l'arme EST l'action ») --------------------------------
+  // buildWeaponList est pur (client/src/lib/weaponList.js, testé) : il ne fait que grouper /
+  // normaliser / trier. L'autorité des slots reste shared/weaponSlots.js (arrays déjà filtrés).
+  const weaponBlanketDisable = mortallyWounded ? 'mortallyWounded' : (isStunned ? 'stunned' : null)
+  const weaponGroups = buildWeaponList({
+    rangedWeapons: assaultWeapons,
+    meleeWeapons,
+    naturalWeapons: naturalWeapons.map(m => ({
+      id: m.id, name: m.name,
+      natural_weapon_formula: m.natural_weapon_formula,
+      natural_weapon_requires_grapple: m.natural_weapon_requires_grapple,
+    })),
+    blanketDisable: weaponBlanketDisable,
+  })
+
+  // id de la ligne actuellement sélectionnée (surbrillance col. 1)
+  const meleeSelectedRowId = !meleeSelected
+    ? null
+    : effectiveMeleeNaturalWeaponId
+      ? `nat:${effectiveMeleeNaturalWeaponId}`
+      : selectedMeleeWeaponId === null
+        ? 'bare'
+        : (effectiveMeleeWeaponId ?? (meleeWeapons[0]?.id ?? 'bare'))
+  const selectedWeaponRowId = attackSelected
+    ? (selectedRangedWeaponId ?? resolvedRangedPrimary?.id ?? null)
+    : meleeSelectedRowId
+
+  // Choisir une arme = déclarer cette attaque (auto-dégaine). Re-cliquer la ligne sélectionnée
+  // annule l'action. CaC ⊕ Tir reste exclusif (handleMapToggle s'en charge).
+  const handleWeaponPick = (row) => {
+    if (row.disabled) return
+    if (row.group === 'distance') {
+      if (attackSelected && selectedWeaponRowId === row.id) { handleMapToggle('attack'); return }
+      setSelectedRangedWeaponId(row.id)
+      if (!attackSelected) handleMapToggle('attack')
+      else dispatch({ type: 'SELECT_ATTACK' })
+    } else {
+      if (meleeSelected && meleeSelectedRowId === row.id) { handleMapToggle('melee'); return }
+      if (row.kind === 'natural') {
+        setSelectedMeleeNaturalWeaponId(row.id.slice(4))
+        setSelectedMeleeWeaponId(null)
+      } else if (row.kind === 'bare') {
+        setSelectedMeleeWeaponId(null)
+        setSelectedMeleeNaturalWeaponId(null)
+      } else {
+        setSelectedMeleeWeaponId(row.id)
+        setSelectedMeleeNaturalWeaponId(null)
+      }
+      if (!meleeSelected) handleMapToggle('melee')
+      dispatch({ type: 'SELECT_ATTACK' })   // auto-dégaine (D5) — SELECT_ATTACK ne fait que weapon→drawn
+    }
   }
 
   // --- deplacement zone select ---------------------------------------------
@@ -769,44 +823,31 @@ export default function CombatActionWindow({
 
   // Section roster PJ — collapsible, présente dans tous les états
   const rosterSection = (
-    <div style={{ borderBottom: '1px solid #2a2a3e' }}>
+    <div className="decl-roster">
       <div
-        style={{ ...W.rosterHeader }}
+        className="decl-roster__head"
+        style={{ cursor: 'pointer' }}
         onClick={() => {
           const next = !rosterOpen
           setRosterOpen(next)
           localStorage.setItem('pj-roster-open', next ? 'true' : 'false')
         }}
       >
-        <span style={W.rosterTitle}>{t('actionWindow.myCharacters', { count: playerTokensInRoster.length })}</span>
-        <span style={{ fontSize: 10, color: '#5b5b7a', cursor: 'pointer' }}>{rosterOpen ? '▲' : '▼'}</span>
+        {t('declareList.rosterHeader')}
+        <span className="count">{playerTokensInRoster.length} · {rosterOpen ? '▲' : '▼'}</span>
       </div>
-      {rosterOpen && (
-        <div>
-          {playerTokensInRoster.map(tok => {
-            const entry    = roster.find(r => r.token_id === tok.id)
-            const isActive = tok.id === (resolveSlotTid ?? computedAnnounceTokenId)
-            const isDone   = entry?.has_announced ?? false
-            return (
-              <div key={tok.id} style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '4px 12px',
-                borderBottom: '1px solid #1e1e2e',
-                opacity: isDone ? 0.5 : 1,
-                background: isActive ? 'rgba(91,141,238,0.07)' : 'transparent',
-              }}>
-                <span style={{ fontSize: 9, color: isActive ? '#5b8dee' : '#456575', minWidth: 10 }}>
-                  {isDone ? '✓' : (isActive ? '▶' : '○')}
-                </span>
-                <span style={{ fontSize: 10, color: '#c0c0d0', flex: 1 }}>{tok.label}</span>
-                <span style={{ fontSize: 9, color: '#456575', fontFamily: 'monospace' }}>
-                  INI {entry?.initiative ?? '?'}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {rosterOpen && playerTokensInRoster.map(tok => {
+        const entry    = roster.find(r => r.token_id === tok.id)
+        const isActive = tok.id === (resolveSlotTid ?? computedAnnounceTokenId)
+        const isDone   = entry?.has_announced ?? false
+        return (
+          <div key={tok.id} className="decl-roster__row" data-active={isActive} style={{ opacity: isDone ? 0.5 : undefined }}>
+            <span className="mk">{isDone ? '✓' : (isActive ? '▶' : '○')}</span>
+            <span className="n">{tok.label}</span>
+            <span className="i">INI {entry?.initiative ?? '?'}</span>
+          </div>
+        )
+      })}
     </div>
   )
 
@@ -949,7 +990,9 @@ export default function CombatActionWindow({
           hidden={isHidden}
         />
       )}
-    <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{
+    <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'}
+      data-narrow={!(showAssault || showReload || showMelee) || undefined}
+      style={{
       position: 'fixed',
       width: (showAssault || showReload || showMelee) ? 720 : 360,
       opacity: isHidden ? 0 : 1,
@@ -971,175 +1014,123 @@ export default function CombatActionWindow({
 
       <div className="combat-win-body">
         {/* ---- Panneau gauche ---- */}
-        <div style={W.leftPanel}>
+        <div className="decl-col1">
 
           {/* Posture / Vitesse / Arme → satellite d'état (CombatDeclareStatePanel, module 3). */}
 
-          {/* ARMEMENT */}
-          {!isDrone && (
-            <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-              <div style={W.sectionTitle}>{t('gmDeclareWindow.equipmentSection')}</div>
-              {(() => {
-                const { rows, showSlotLabel } = handSlotDisplayRows({ MG: equippedMg, MD: equippedMd, '2M': equipped2M, Tr: equippedTr })
-                if (rows.length === 0) return null
-                return (
-                <div style={W.weaponInfo}>
-                  {rows.map(({ slot, weapon: w }) => {
-                    const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count, w.ref_caliber)
-                    const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
-                    return (
-                      <span key={w.id} className={cls} style={W.weaponInfoLine} title={w.skill_label ?? undefined}>
-                        <span className="combat-equip-dot" />
-                        {showSlotLabel ? `${slot} · ` : ''}{w.custom_name || w.ref_name || '?'}
-                        {status && <span style={W.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
-                      </span>
-                    )
-                  })}
+          {/* ── Corps humain : move-line + liste d'armes groupée (module 4, D5/D6/D13) ────────── */}
+          {!isDrone && (() => {
+            const moveDisabled = allures === null || decl.combatMode === 'charge' || decl.combatMode === 'retraite'
+            return (
+            <>
+              <div
+                className="decl-move"
+                data-on={!!moveSelection}
+                aria-disabled={moveDisabled || undefined}
+                title={t('mapActions.move.tooltip')}
+                onClick={() => { if (!moveDisabled) handleZoneSelectClick() }}
+              >
+                <span className="decl-move__plus">+</span>
+                <span className="decl-move__label">{t('declareList.moveLabel')}</span>
+                <span className="decl-move__val">
+                  {moveSelection ? `${moveSelection.ini_mod}` : t('declareList.moveDefine')}
+                </span>
+              </div>
+
+              <div className="decl-list">
+                <div className="decl-list__eyebrow">
+                  {t('declareList.actionEyebrow')}
+                  <span className="hint">{t('declareList.actionHint')}</span>
                 </div>
-                )
-              })()}
-              {/* Arme → satellite d'état (module 3) ; fire_mode reste au corps jusqu'au module 4. */}
-              <CombatDeclareStateSelector
-                stateKey="fire_mode"
-                current={decl.fire_mode} initial={initialStates.current.fire_mode}
-                onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
-                availableKeys={availableFireModes}
+                {[
+                  { key: 'distance', rows: weaponGroups.distance, label: t('declareList.groupDistance') },
+                  { key: 'contact',  rows: weaponGroups.contact,  label: t('declareList.groupContact') },
+                ].map(g => g.rows.length === 0 ? null : (
+                  <div key={g.key}>
+                    <div className={`decl-group decl-group--${g.key}`}>
+                      <span className="decl-group__glyph" />{g.label}
+                    </div>
+                    {g.rows.map(row => {
+                      const bits = []
+                      if (row.slotLabel) bits.push(row.slotLabel)
+                      if (row.fireMode) bits.push(row.fireMode)
+                      if (row.kind === 'melee') bits.push(t('declareList.reachAllonge', { m: row.reachM ?? 0 }))
+                      if (row.formula) bits.push(row.formula)
+                      if (row.requiresGrapple) bits.push(t('declareList.requiresGrapple'))
+                      if (row.permanent) bits.push(t('declareList.permanentTag'))
+                      const reasonKey = row.disabledReason
+                        && `declareList.disabled${row.disabledReason[0].toUpperCase()}${row.disabledReason.slice(1)}`
+                      return (
+                        <div
+                          key={row.id}
+                          className={`decl-wpn${row.permanent ? ' decl-wpn--permanent' : ''}`}
+                          data-sel={selectedWeaponRowId === row.id}
+                          aria-disabled={row.disabled || undefined}
+                          title={reasonKey ? t(reasonKey) : undefined}
+                          onClick={() => handleWeaponPick(row)}
+                        >
+                          <span className="decl-wpn__name">
+                            {row.name ?? t('declareList.bareHands')}
+                            {bits.length > 0 && <span className="decl-wpn__sub">{bits.join(' · ')}</span>}
+                          </span>
+                          {row.ammoLabel && (
+                            <span className="decl-wpn__ammo" data-status={row.ammoStatus}>{row.ammoLabel}</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Rechargement — passera dans le segment « Tir │ Recharger » de la col. 2 (sous-commit 3/4). */}
+              {selectedWeapon && !isAmmoFull && (
+                <div className="decl-list" style={{ paddingTop: 0 }}>
+                  <div
+                    className="decl-wpn"
+                    data-sel={mapSelected.has('reload')}
+                    title={t('mapActions.reload.tooltip')}
+                    onClick={() => handleMapToggle('reload')}
+                  >
+                    <span className="decl-wpn__name">{t('actionWindow.reloadButtonLabel')}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* fire_mode — interim au corps jusqu'à la col. 2 réagencée (sous-commit 3/4). */}
+              {attackSelected && (
+                <div className="decl-list" style={{ paddingTop: 0 }}>
+                  <CombatDeclareStateSelector
+                    stateKey="fire_mode"
+                    current={decl.fire_mode} initial={initialStates.current.fire_mode}
+                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
+                    availableKeys={availableFireModes}
+                  />
+                </div>
+              )}
+            </>
+            )
+          })()}
+
+          {/* ACTION — drone : DroneDeclareSection. Le PJ humain rend la move-line + la liste d'armes
+             groupée ci-dessus (module 4, D5 « l'arme EST l'action » — plus de grille de tuiles). */}
+          {isDrone && (
+            <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
+              <div style={W.sectionTitle}>{t('sectionTitles.action')}</div>
+              <DroneDeclareSection
+                pendingMove={droneDeclare.pendingMove}
+                onMoveToggle={droneDeclare.rearmDroneMove}
+                hasPassed={droneDeclare.hasPassed}
+                onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
+                droneWeapons={droneDeclare.droneWeapons}
+                selectedWeaponId={droneDeclare.selectedDroneWeaponId}
+                onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
+                assaultTargetId={droneDeclare.assaultTargetId}
+                onChooseTarget={() => droneDeclare.handleChooseTarget(playerToken)}
+                getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
               />
             </div>
           )}
-
-          {/* ACTION */}
-          <div className="combat-win-section" style={{ padding: '0 0 4px 0' }}>
-            <div style={W.sectionTitle}>{t('sectionTitles.action')}</div>
-            {isDrone
-              ? <DroneDeclareSection
-                  pendingMove={droneDeclare.pendingMove}
-                  onMoveToggle={droneDeclare.rearmDroneMove}
-                  hasPassed={droneDeclare.hasPassed}
-                  onPassToggle={() => droneDeclare.setHasPassed(p => !p)}
-                  droneWeapons={droneDeclare.droneWeapons}
-                  selectedWeaponId={droneDeclare.selectedDroneWeaponId}
-                  onWeaponSelect={droneDeclare.setSelectedDroneWeaponId}
-                  assaultTargetId={droneDeclare.assaultTargetId}
-                  onChooseTarget={() => droneDeclare.handleChooseTarget(playerToken)}
-                  getLabel={(id) => tokens.find(tk => tk.id === id)?.label ?? '?'}
-                />
-              : <div style={W.itemsGrid}>
-              {MAP_ACTIONS.map(a => {
-                const isActive = mapSelected.has(a.k)
-                const span2    = a.span2 ? { gridColumn: 'span 2' } : {}
-
-                // Blessure mortelle (WNDMORT-UI) : Attaque/CaC/Rechargement interdits — priorité sur
-                // les grisages spécifiques ci-dessous (assommé, munitions vides...).
-                if (mortallyWounded && (a.k === 'attack' || a.k === 'melee' || a.k === 'reload')) {
-                  return (
-                    <div key={a.k} title={t('actionWindow.mortallyWoundedBanner')} style={{ ...W.itemGreyed, ...span2 }}>
-                      <span style={W.itemLabel}>{t(a.l)}</span>
-                    </div>
-                  )
-                }
-
-                // Assaut/CaC grisé si assommé
-                if ((a.k === 'attack' || a.k === 'melee') && isStunned) {
-                  return (
-                    <div key={a.k} title={t('stunnedActionsTooltip')} style={W.itemGreyed}>
-                      <span style={W.itemLabel}>{t(a.l)} ☠</span>
-                    </div>
-                  )
-                }
-
-                // Assaut grisé dynamiquement si arme vide
-                if (a.k === 'attack' && isAmmoEmpty) {
-                  return (
-                    <div key={a.k} title={t('actionWindow.emptyWeaponTitle')} style={{ ...W.itemGreyed, cursor: 'pointer' }} onClick={() => handleMapToggle(a.k)}>
-                      <span style={W.itemLabel}>{t(a.l)}</span>
-                    </div>
-                  )
-                }
-
-                // Rechargement — munitions déjà visibles en permanence dans ARMEMENT (COM20),
-                // label statique ici. Grisé si plein ou sans arme.
-                if (a.k === 'reload') {
-                  const reloadLabel = t('actionWindow.reloadButtonLabel')
-                  if (isAmmoFull || !selectedWeapon) {
-                    return (
-                      <div key={a.k} title={t(a.tooltip)} style={{ ...W.itemGreyed, ...span2 }}>
-                        <span style={W.itemLabel}>{reloadLabel}</span>
-                      </div>
-                    )
-                  }
-                  return (
-                    <div key={a.k} title={t(a.tooltip)}
-                      style={{ ...W.item, ...(isActive ? W.itemSelected : {}), ...span2 }}
-                      onClick={() => handleMapToggle(a.k)}
-                    >
-                      <span style={W.itemLabel}>{reloadLabel}</span>
-                    </div>
-                  )
-                }
-
-                // Statiquement désactivé (aucune entrée MAP_ACTIONS actuelle, gardé au cas où)
-                if (a.active === false) {
-                  return (
-                    <div key={a.k} title={t(a.tooltip)} style={{ ...W.itemGreyed, ...span2 }}>
-                      <span style={W.itemLabel}>{t(a.l)}</span>
-                      {a.ini && <span style={W.itemMod}>{a.ini}</span>}
-                    </div>
-                  )
-                }
-
-                // Déplacement (zone select)
-                if (a.isZoneSelect) {
-                  const canActivate = allures !== null
-                  return (
-                    <div
-                      key={a.k}
-                      title={t(a.tooltip)}
-                      style={{
-                        ...W.item,
-                        ...(isActive ? W.itemSelected : {}),
-                        ...(moveSelection ? W.itemSelected : {}),
-                        ...span2,
-                        ...(!canActivate ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
-                      }}
-                      onClick={() => {
-                        if (!canActivate) return
-                        // Bug A : Charge/Retraite gèrent le déplacement internalement — chip 'move' inerte
-                        if (decl.combatMode === 'charge' || decl.combatMode === 'retraite') return
-                        // Survol permanent (COMBAT-DEPLACEMENT-HOVER) — ce clic n'efface plus qu'une
-                        // sélection déjà posée, il n'entre plus en mode déplacement (déjà ambiant).
-                        handleZoneSelectClick()
-                      }}
-                    >
-                      <span style={W.itemLabel}>{t(a.l)}</span>
-                      <span style={{ ...W.itemMod, ...(moveSelection ? { color: '#5b8dee' } : {}) }}>
-                        {moveSelection ? `${moveSelection.ini_mod}` : t('actionWindow.chooseZone')}
-                      </span>
-                    </div>
-                  )
-                }
-
-                // Défaut
-                return (
-                  <div
-                    key={a.k}
-                    title={t(a.tooltip)}
-                    style={{ ...W.item, ...(isActive ? W.itemSelected : {}), ...span2 }}
-                    onClick={() => handleMapToggle(a.k)}
-                  >
-                    <span style={W.itemLabel}>{t(a.l)}</span>
-                    {a.ini && (
-                      <span style={{ ...W.itemMod, ...(isActive ? { color: '#5b8dee' } : {}) }}>
-                        {a.ini}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            }
-
-          </div>
 
           {/* ACTIONS RAPIDES */}
           {!isDrone && (

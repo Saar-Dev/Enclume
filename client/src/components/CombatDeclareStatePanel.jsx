@@ -23,6 +23,7 @@ const GAP = 2
 
 export default function CombatDeclareStatePanel({
   pos,
+  windowWidth = 360,             // largeur de la fenêtre principale — sert au repli à droite
   family = 'pj',                 // pj | gm-pnj | exo → data-family → --decl-acc
   positionMode = 'fixed',        // 'fixed' pour .combat-float-win (PJ, exo) ; 'absolute' pour .combat-win (MJ)
   isNew = false,                 // badge « NOUVEAU » (exo — gagne le satellite dans cette refonte)
@@ -36,8 +37,10 @@ export default function CombatDeclareStatePanel({
 }) {
   const { t } = useTranslation('combat')
 
-  // Suit la fenêtre : toujours collé à son bord gauche (D8).
-  const left = pos.left - SAT_W - GAP
+  // Suit la fenêtre : collé à son bord gauche (D8). Repli à droite si le bord gauche sort de
+  // l'écran (§5.7 : « clamp bord gauche → passe à droite ») — évite le satellite « dans le décor ».
+  const leftAnchored = pos.left - SAT_W - GAP
+  const left = leftAnchored < 8 ? pos.left + windowWidth + GAP : leftAnchored
 
   return (
     <div
