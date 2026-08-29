@@ -44,7 +44,7 @@
 | Module 0 M0.0-M0.3 (`buildDeclarePayload`, 51 tests) | ✅ **codé + committé** | §5.4 |
 | **M-E2E** — filet Playwright **local** (approche tranchée) | à cadrer juste avant le module 2 — pas commencé | §5.5 |
 | Module 2 — `CombatDeclareFrame` (châssis + tokens famille) | cadré + à charge — **pas commencé** | §5.6 |
-| Module 3 — `CombatDeclareStatePanel` (satellite d'état) | cadré + à charge — **pas commencé** | §5.7 |
+| Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé** (`bfce734`) — validation navigateur Saar en attente | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
 | Module 5 — `CombatDeclareFooter` (D12) | ✅ **5a-5d codés + validés navigateur** (Saar, 2026-08-29) | §5.10 |
@@ -402,7 +402,16 @@ non-déclaration, redimensionnement 360↔720). Rollback : `git revert` du commi
 `calc(100vh - 80px)` ou `- 100px` ; roster PJ dans le frame ou enfant du corps ; largeur dynamique
 (`width` au call site vs `baseWidth` + `expanded`).
 
-### 5.7 Module 3 — `CombatDeclareStatePanel` (satellite d'état, D8) — **PROCHAIN** (module 5 validé 2026-08-29)
+### 5.7 Module 3 — `CombatDeclareStatePanel` (satellite d'état, D8) — ✅ **CODÉ 2026-08-29** (`bfce734`), validation navigateur en attente
+
+**Codé** : `CombatDeclareStatePanel.jsx` neuf (frère positionné depuis `pos`, clamp bord gauche,
+`positionMode` fixed/absolute) ; `CombatDeclareStateChip` + `glyph` (dégradant) + `disabled` ;
+PJ/MJ perdent position/vitesse/arme du corps (`fire_mode` reste jusqu'au module 4) ; MJ vitesse
+→ puce à cycle (Session 158 caduque) ; exo gagne `declarationReducer` + `state:{position,weapon,
+vitesse}` au payload + puce Posture `prone` → `handleStandUp`. Payload PJ/MJ inchangé. `npm test`
+= baseline (1074/775/0), build OK, eslint = baseline. **Écart iso assumé** : exo envoie désormais
+`state` non vide (passe-plat, iso tant que rien n'est touché) ; gate arme exo → module 4.
+
 
 **Ordre (B, §5.0)** : ce module se fait **en 2ᵉ** (après le pied) — `CombatDeclareStatePanel` monté
 comme frère des fenêtres actuelles (lit leur `pos` de `useDraggable`), validé à l'œil, re-slotté dans
