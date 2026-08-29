@@ -482,13 +482,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
     }
     if (row.group === 'distance') {
-      if (attackStarted && gmSelectedRowId === row.id) { assaultDecl.clear(); return }
+      if (attackStarted && gmSelectedRowId === row.id) { assaultDecl.clear(); setMapAction(p => p === 'reload' ? null : p); return }
       if (meleeStarted) clearMeleeSetup()
+      setMapAction(p => p === 'reload' ? null : p)   // changer d'arme sort du mode Recharger
       assaultDecl.selectWeapon(row.id)
       if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
     } else {
       if (meleeStarted && gmMeleeRowId === row.id) { setMeleePendingMode(false); meleeDecl.clear(); return }
-      if (attackStarted) assaultDecl.clear()
+      if (attackStarted) { assaultDecl.clear(); setMapAction(p => p === 'reload' ? null : p) }
       if (row.kind === 'natural') meleeDecl.selectNatural(row.id.slice(4))
       else if (row.kind === 'bare') meleeDecl.selectWeapon(null)
       else meleeDecl.selectWeapon(row.id)
@@ -628,7 +629,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       {isActivePnj && (
         <CombatDeclareStatePanel
           pos={pos}
-          windowWidth={(isMeleeSetup || isAttackActive || isReloading) ? 720 : 440}
+          windowWidth={(isMeleeSetup || isAttackActive) ? 720 : 440}
           family="gm-pnj"
           positionMode="absolute"
           decl={decl}
@@ -637,7 +638,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           hidden={isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick}
         />
       )}
-    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive || isReloading) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
+    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <CombatDeclareHeader
@@ -676,6 +677,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 groups={weaponGroups}
                 selectedRowId={gmSelectedRowId}
                 onPick={handleGmWeaponPick}
+                reload={{ active: isReloading, onToggle: () => setMapAction(prev => prev === 'reload' ? null : 'reload') }}
               />
 
               {/* ACTIONS RAPIDES */}
@@ -861,21 +863,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           </div>
         </div>
 
-        {(isMeleeSetup || isAttackActive || isReloading) && (
+        {(isMeleeSetup || isAttackActive) && (
         <div className="decl-col2">
-        {/* Segment Tir │ Recharger (D7) — arme à feu avec chargeur suivi. */}
-        {attackStarted && weapon?.ref_caliber && (
-          <div className="decl-c2seg">
-            <button
-              className="seg-opt" data-active={!isReloading}
-              onClick={() => setMapAction(prev => prev === 'reload' ? null : prev)}
-            >{t('actionLabels.assault')}</button>
-            <button
-              className="seg-opt" data-active={isReloading}
-              onClick={() => setMapAction('reload')}
-            >{t('actionWindow.reloadButtonLabel')}</button>
-          </div>
-        )}
+        {/* Recharger : ↻ sur la ligne d'arme (col. 1, option B). Le MJ n'a pas de sélecteur de
+            munition — le mode Recharger est un booléen, la col. 2 ne s'ouvre pas pour lui. */}
 
         {/* PANNEAU DROIT — Mode CaC */}
         {isMeleeSetup && isActivePnj && (

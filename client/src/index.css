@@ -1813,6 +1813,23 @@ Convention :
 [data-decl] .decl-wpn__ammo[data-status="low"]   { color: var(--decl-warn); }
 [data-decl] .decl-wpn__ammo[data-status="empty"] { color: var(--decl-danger); }
 [data-decl] .decl-wpn--permanent .decl-wpn__ammo { font-style: italic; }
+[data-decl] .decl-wpn__reload {
+  flex: none;
+  width: 20px; height: 20px;
+  padding: 0;
+  font-size: 13px; line-height: 1;
+  border: 1px solid var(--decl-line);
+  border-radius: 4px;
+  background: var(--decl-row);
+  color: var(--decl-text-dim);
+  cursor: pointer;
+}
+[data-decl] .decl-wpn__reload:hover { color: var(--decl-text); border-color: var(--decl-acc-line); }
+[data-decl] .decl-wpn__reload[data-active] {
+  color: var(--decl-acc);
+  border-color: var(--decl-acc);
+  background: var(--decl-acc-bg);
+}
 
 /* Roster (bas de colonne 1) */
 [data-decl] .decl-roster { margin-top: auto; border-top: 1px solid var(--decl-sep); padding: 7px 12px 8px; }

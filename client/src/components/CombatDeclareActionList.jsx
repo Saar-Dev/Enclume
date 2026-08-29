@@ -26,6 +26,7 @@ export default function CombatDeclareActionList({
   groups,               // { distance: WeaponRow[], contact: WeaponRow[] }
   selectedRowId,        // id de la ligne sélectionnée (surbrillance) | null
   onPick,               // (row) => void
+  reload = null,        // { active: bool, onToggle: () => void } — ↻ sur l'arme de tir sélectionnée (D7)
   extras = null,        // ReactNode rendu sous la liste
 }) {
   const { t } = useTranslation('combat')
@@ -54,6 +55,15 @@ export default function CombatDeclareActionList({
         </span>
         {row.ammoLabel && (
           <span className="decl-wpn__ammo" data-status={row.ammoStatus}>{row.ammoLabel}</span>
+        )}
+        {reload && row.group === 'distance' && selectedRowId === row.id && (
+          <button
+            type="button"
+            className="decl-wpn__reload"
+            data-active={reload.active || undefined}
+            title={t('actionWindow.reloadButtonLabel')}
+            onClick={e => { e.stopPropagation(); reload.onToggle() }}
+          >↻</button>
         )}
       </div>
     )

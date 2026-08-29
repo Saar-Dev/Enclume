@@ -587,6 +587,7 @@ export default function CombatActionWindow({
     if (row.group === 'distance') {
       if (attackSelected && selectedWeaponRowId === row.id) { handleMapToggle('attack'); return }
       assaultDecl.selectWeapon(row.id)   // change d'arme = reset config col. 2 (P8 / PO-M4-e)
+      if (reloadSelected) handleMapToggle('reload')   // changer d'arme sort du mode Recharger
       if (!attackSelected) handleMapToggle('attack')
       else dispatch({ type: 'SELECT_ATTACK' })
     } else {
@@ -1001,6 +1002,7 @@ export default function CombatActionWindow({
               groups={weaponGroups}
               selectedRowId={selectedWeaponRowId}
               onPick={handleWeaponPick}
+              reload={{ active: reloadSelected, onToggle: () => handleMapToggle('reload') }}
             />
           )}
 
@@ -1079,19 +1081,8 @@ export default function CombatActionWindow({
 
         {(showAssault || showReload || showMelee) && (
         <div className="decl-col2">
-        {/* Segment Tir │ Recharger — arme à feu avec chargeur suivi (D7 : Recharger lié à l'arme). */}
-        {attackSelected && selectedWeapon?.ref_caliber && (
-          <div className="decl-c2seg">
-            <button
-              className="seg-opt" data-active={!reloadSelected}
-              onClick={() => { if (reloadSelected) handleMapToggle('reload') }}
-            >{t('actionLabels.assault')}</button>
-            <button
-              className="seg-opt" data-active={reloadSelected}
-              onClick={() => { if (!reloadSelected) handleMapToggle('reload') }}
-            >{t('actionWindow.reloadButtonLabel')}</button>
-          </div>
-        )}
+        {/* Recharger : ↻ sur la ligne d'arme (col. 1, option B — Saar 2026-08-29). Ici, quand il est
+            actif, la col. 2 passe sur le sélecteur de munition. */}
 
         {/* ---- Panneau droit — rechargement : sélection munitions ---- */}
         {showReload && (
