@@ -5,13 +5,11 @@ import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
 import api from '../lib/api'
 import {
-  QUICK_ACTIONS, MAP_ACTIONS,
+  QUICK_ACTIONS,
   calcIniDelta, calcIniBreakdown,
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
-import { handSlotDisplayRows } from '../../../shared/weaponSlots.js'
-import { weaponAmmoStatus } from '../../../shared/ammoRules.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
@@ -32,6 +30,8 @@ import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
 import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
+import { buildWeaponList } from '../lib/weaponList.js'
+import CombatDeclareActionList from './CombatDeclareActionList.jsx'
 import { assaultCheck, meleeCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -308,12 +308,25 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const blockerEntry = (!isActivePnj && !isActiveDrone && activePnjEntry && !activePnjEntry.has_announced) ? activePnjEntry : null
   const blockerIsPj  = blockerEntry ? !isPnj(blockerEntry) && !isDroneGmManaged(blockerEntry) : false
 
-  const weapon       = isActivePnj ? (equipment[activeTokenId]?.weapon ?? null) : null
-  const rangedActive = isActivePnj && isRanged(activeTokenId)
-  const weaponMg      = isActivePnj ? (equipment[activeTokenId]?.weaponMg ?? null) : null
-  const weaponMd      = isActivePnj ? (equipment[activeTokenId]?.weaponMd ?? null) : null
-  const weapon2M      = isActivePnj ? (equipment[activeTokenId]?.weapon2M ?? null) : null
-  const weaponTr      = isActivePnj ? (equipment[activeTokenId]?.weaponTr ?? null) : null
+  const gmEq          = isActivePnj ? (equipment[activeTokenId] ?? null) : null
+  const weaponMg      = gmEq?.weaponMg ?? null
+  const weaponMd      = gmEq?.weaponMd ?? null
+  const weapon2M      = gmEq?.weapon2M ?? null
+  const weaponTr      = gmEq?.weaponTr ?? null
+  // Armes en main normalisées pour buildWeaponList (module 4) : les items MJ portent `inv_id`/`name`.
+  const gmHandWeapons = [
+    weaponMg && { ...weaponMg, id: weaponMg.inv_id, slot: 'MG' },
+    weaponMd && { ...weaponMd, id: weaponMd.inv_id, slot: 'MD' },
+    weapon2M && { ...weapon2M, id: weapon2M.inv_id, slot: '2M' },
+    weaponTr && { ...weaponTr, id: weaponTr.inv_id, slot: 'Tr' },
+  ].filter(Boolean)
+  const resolvedGmPrimary = gmEq?.weapon ?? null
+  // D5 : la liste d'armes peut fixer explicitement l'arme de tir (assaultDecl.weaponId) ; sinon primaire.
+  const pickedGmRanged = assaultDecl.state.weaponId
+    ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && w.ref_fire_mode)
+    : null
+  const weapon       = isActivePnj ? (pickedGmRanged ?? resolvedGmPrimary) : null
+  const rangedActive = isActivePnj && !!weapon?.ref_fire_mode
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — même source `equipment[tokenId]` que le
@@ -361,6 +374,18 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const naturalWeaponsAvailable = isActivePnj ? (equipment[activeTokenId]?.naturalWeapons ?? []) : []
   const naturalWeaponIdForMelee = selectedGmMeleeNaturalWeaponId
 
+  // ── Liste d'armes groupée (module 4, D5) — CombatDeclareActionList ────────
+  const weaponGroups = buildWeaponList({
+    rangedWeapons: gmHandWeapons.filter(w => w.ref_fire_mode),
+    meleeWeapons:  gmHandWeapons.filter(w => w.ref_category === 'Arme de contact'),
+    naturalWeapons: naturalWeaponsAvailable.map(m => ({
+      id: m.id, name: m.name,
+      natural_weapon_formula: m.natural_weapon_formula,
+      natural_weapon_requires_grapple: m.natural_weapon_requires_grapple,
+    })),
+    blanketDisable: isStunnedActivePnj ? 'stunned' : null,
+  })
+
   // Tir GM — mode de tir et variant (miroir logique CombatActionWindow)
   const availableFireModes = weapon?.ref_fire_mode
     ? weapon.ref_fire_mode.split('/').map(s => s.trim().toLowerCase())
@@ -402,7 +427,8 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   // `meleeStarted` / `attackStarted` : flags « config en cours » du MJ, réutilisés l.535/542 pour
   // `isMeleeSetup` / `isAttackActive` (byte-équivalent à l'ancien inline).
   const meleeStarted  = meleePendingMode || meleeTargets.length > 0 || !!chargeSelection
-  const attackStarted = assaultTargets.length > 0
+  const attackStarted = assaultDecl.state.weaponId != null   // D5 : arme de tir choisie = Tir en cours
+    || assaultTargets.length > 0
     || (combatTargetMode?.tokenId === activeTokenId && !(isActivePnj && meleeStarted))
   const assault = assaultCheck({
     started:       attackStarted,
@@ -436,6 +462,42 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       })
   const canDeclare = (isActivePnj && assault.valid && melee.valid) || (isActiveDrone && droneDeclare.canDeclare)
   const blockReason = isActiveDrone ? null : buildBlockReason({ assault, melee })
+
+  // ── Sélection dans la liste d'armes (module 4, D5) ───────────────────────
+  const gmMeleeRowId = !meleeStarted
+    ? null
+    : selectedGmMeleeNaturalWeaponId
+      ? `nat:${selectedGmMeleeNaturalWeaponId}`
+      : selectedGmMeleeWeaponId === null
+        ? 'bare'
+        : (effectiveGmMeleeWeaponId ?? (weaponInvIdForMelee ?? 'bare'))
+  const gmSelectedRowId = attackStarted
+    ? (assaultDecl.state.weaponId ?? weapon?.inv_id ?? null)
+    : gmMeleeRowId
+
+  // Choisir une arme = déclarer cette attaque (auto-dégaine). Re-cliquer = annuler. Tir ⊕ CaC exclusif.
+  // Le MJ ouvre la colonne 2 (panneau détail) sans sauter au ciblage — la cible se choisit dans la col. 2.
+  const handleGmWeaponPick = (row) => {
+    if (row.disabled) return
+    const clearMeleeSetup = () => {
+      setMeleePendingMode(false); meleeDecl.clear(); setChargeSelection(null)
+      dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
+    }
+    if (row.group === 'distance') {
+      if (attackStarted && gmSelectedRowId === row.id) { assaultDecl.clear(); return }
+      if (meleeStarted) clearMeleeSetup()
+      assaultDecl.selectWeapon(row.id)
+      if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
+    } else {
+      if (meleeStarted && gmMeleeRowId === row.id) { setMeleePendingMode(false); meleeDecl.clear(); return }
+      if (attackStarted) assaultDecl.clear()
+      if (row.kind === 'natural') meleeDecl.selectNatural(row.id.slice(4))
+      else if (row.kind === 'bare') meleeDecl.selectWeapon(null)
+      else meleeDecl.selectWeapon(row.id)
+      setMeleePendingMode(true)
+      if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
+    }
+  }
 
   // ── Déplacement direct ───────────────────────────────────────────────────
   // ── Assaut direct (Tir Multi, docs/PLAN_TIRMULTI.md) ──────────────────────
@@ -601,140 +663,49 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                   La Vitesse repasse en puce à cycle comme le PJ (D1 « fenêtre MJ = PJ », Session 158
                   caduque). */}
 
-              {/* ARMEMENT */}
-              <div className="combat-win-section">
-                <span className="combat-win-section-title" style={{ color: '#aa6a30' }}>{t('gmDeclareWindow.equipmentSection')}</span>
-                {(() => {
-                  const { rows, showSlotLabel } = handSlotDisplayRows({ MG: weaponMg, MD: weaponMd, '2M': weapon2M, Tr: weaponTr })
-                  if (rows.length === 0) return null
-                  return (
-                    <div style={S.weaponInfo}>
-                      {rows.map(({ slot, weapon: w }) => {
-                        const status = weaponAmmoStatus(w.ammo_remaining, w.ref_ammo_count, w.ref_caliber)
-                        const cls = status === 'empty' ? 'combat-equip-empty' : status === 'low' ? 'combat-equip-low' : 'combat-equip-ok'
-                        return (
-                          <span key={w.inv_id} className={cls} style={S.weaponInfoLine} title={w.skill_label ?? undefined}>
-                            <span className="combat-equip-dot" />
-                            {showSlotLabel ? `${slot} · ` : ''}{w.name || '?'}
-                            {status && <span style={S.weaponInfoAmmo}> {w.ammo_remaining ?? 0}/{w.ref_ammo_count}</span>}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
-                {/* Arme → satellite d'état (module 3) ; fire_mode reste au corps jusqu'au module 4. */}
-                <div style={S.chips}>
-                  <CombatDeclareStateChip stateKey="fire_mode"
-                    initial={initialStates.fire_mode}
-                    current={decl.fire_mode}
-                    availableKeys={rangedActive ? availableFireModes : undefined}
-                    onChange={v => {
-                      dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
-                      assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
-                    }} />
-                </div>
-              </div>
-
-              {/* ACTION */}
-              <div className="combat-win-section">
-                <span className="combat-win-section-title" style={{ color: '#aa8a30' }}>{t('sectionTitles.action')}</span>
-                <div style={S.actionGrid}>
-                  {MAP_ACTIONS.map(a => {
-                    const noRangedWeapon = a.k === 'attack' && !rangedActive
-                    // Rien à recharger sans arme à munitions — même garde que le panneau Joueur
-                    // (CombatActionWindow.jsx, `isAmmoFull || !selectedWeapon`) : sans elle, "Recharger"
-                    // reste cliquable pour un personnage CaC pur et ne fait rien, sans retour (Session 158,
-                    // Bourrin/Matraque Mao).
-                    const noReloadWeapon = a.k === 'reload' && !rangedActive
-                    const weaponNotDrawn = a.k === 'attack' && rangedActive && decl.weapon !== 'drawn'
-                    const stunDisabled   = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
-                    const disabled = noRangedWeapon || noReloadWeapon || stunDisabled
-                    const grayed   = weaponNotDrawn || disabled
-                    const active   = !disabled && (
-                      a.k === 'attack' ? isAttackActive :
-                      a.k === 'melee'  ? isMeleeSetup   :
-                      a.k === 'move'   ? !!pendingMove   :
-                      mapAction === a.k
-                    )
-                    const span2 = a.span2 ? { gridColumn: 'span 2' } : {}
-                    const stunTitle = isStunnedActivePnj && (a.k === 'attack' || a.k === 'melee')
-                      ? t('stunnedActionsTooltip')
-                      : null
-                    return (
-                      <div key={a.k}
-                        title={stunTitle ?? t(a.tooltip)}
-                        onClick={() => {
-                          if (disabled) return
-                          if (a.k === 'move') {
-                            // Survol permanent (COMBAT-DEPLACEMENT-HOVER) — ce clic efface une
-                            // sélection déjà posée, ET réarme le survol s'il a été désactivé par un
-                            // "Annuler" explicite (COM-MOVEUI1).
-                            if (pendingMove) setPendingMove(null)
-                            rearmMove()
-                          } else if (a.k === 'attack') {
-                            if (isAttackActive) {
-                              assaultDecl.clear()   // désélection : reset du sous-état Tir (isDualWield inclus, cf. PJ)
-                              return
-                            }
-                            // CaC et Tir mutuellement exclusifs à la déclaration (LdB « Types
-                            // d'Actions », docs/PLAN_COMBAT_TIMELINE.md §6sexies point 5) — sélectionner
-                            // Tir efface un CaC en cours de configuration, jamais les deux ensemble.
-                            if (isMeleeSetup) {
-                              setMeleePendingMode(false)
-                              meleeDecl.resetTargets()
-                              setChargeSelection(null)
-                              dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
-                            }
-                            if (decl.weapon !== 'drawn') dispatch({ type: 'SELECT_ATTACK' })
-                            handleStartAttack()
-                          } else if (a.k === 'melee') {
-                            if (isMeleeSetup) {
-                              setMeleePendingMode(false)
-                              meleeDecl.resetTargets()
-                              setChargeSelection(null)
-                              dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
-                            } else {
-                              // Même exclusivité que ci-dessus, dans l'autre sens.
-                              if (isAttackActive) assaultDecl.clear()
-                              handleStartMelee()
-                            }
-                          } else {
-                            setMapAction(prev => prev === a.k ? null : a.k)
-                          }
-                        }}
-                        style={{
-                          ...S.actionBtn,
-                          ...(active   ? S.actionBtnActive   : {}),
-                          ...(disabled ? S.actionBtnDisabled : {}),
-                          ...(weaponNotDrawn && !disabled ? { opacity: 0.5 } : {}),
-                          ...span2,
-                        }}
-                      >
-                        <span style={{ ...S.actionLabel, color: active ? '#e8c870' : (grayed ? '#2a3040' : '#aaccdd') }}>
-                          {t(a.l)}
-                        </span>
-                        {a.ini && !disabled && (
-                          <span style={{ ...S.actionIni, color: active ? '#e8c870' : '#5a6070' }}>{a.ini}</span>
-                        )}
-                        {noRangedWeapon && (
-                          <span style={S.actionDisabledTag}>{t('gmDeclareWindow.noRangedWeaponTag')}</span>
-                        )}
+              {/* ── Corps : move-line + liste d'armes groupée (CombatDeclareActionList, module 4). ── */}
+              <CombatDeclareActionList
+                move={{
+                  on: !!pendingMove,
+                  disabled: false,
+                  valueLabel: pendingMove
+                    ? `[${pendingMove.targetPosX}, ${pendingMove.targetPosY}]`
+                    : t('declareList.moveDefine'),
+                  tooltip: t('mapActions.move.tooltip'),
+                  onToggle: () => { if (pendingMove) setPendingMove(null); rearmMove() },
+                }}
+                groups={weaponGroups}
+                selectedRowId={gmSelectedRowId}
+                onPick={handleGmWeaponPick}
+                extras={<>
+                  {rangedActive && (
+                    <div className="decl-list" style={{ paddingTop: 0 }}>
+                      <div style={S.chips}>
+                        <CombatDeclareStateChip stateKey="fire_mode"
+                          initial={initialStates.fire_mode}
+                          current={decl.fire_mode}
+                          availableKeys={availableFireModes}
+                          onChange={v => {
+                            dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
+                            assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
+                          }} />
                       </div>
-                    )
-                  })}
-                </div>
-
-                {/* Déplacement sélectionné */}
-                {pendingMove && !chargeSelection && (
-                  <div style={S.attackTargetRow}>
-                    <span style={S.attackTargetLabel}>⇒</span>
-                    <span style={{ ...S.attackTargetName, color: '#5b8dee' }}>
-                      [{pendingMove.targetPosX}, {pendingMove.targetPosY}]
-                    </span>
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                  {rangedActive && (
+                    <div className="decl-list" style={{ paddingTop: 0 }}>
+                      <div
+                        className="decl-wpn"
+                        data-sel={mapAction === 'reload'}
+                        title={t('mapActions.reload.tooltip')}
+                        onClick={() => setMapAction(prev => prev === 'reload' ? null : 'reload')}
+                      >
+                        <span className="decl-wpn__name">{t('actionWindow.reloadButtonLabel')}</span>
+                      </div>
+                    </div>
+                  )}
+                </>}
+              />
 
               {/* ACTIONS RAPIDES */}
               <div className="combat-win-section" style={{ borderBottom: 'none' }}>
