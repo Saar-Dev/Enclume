@@ -1652,12 +1652,18 @@ avec 2-3 rows à retoucher, pas une réécriture.
 ni store → `buildWeaponList` s'importe dans `node --test`. Le `.test.mjs` du 4a est faisable.
 
 **3. `mapSelected` (Set PJ) est porteur, pas seulement du rendu `[VÉRIFIÉ]`.** Usages hors rendu :
-- l.395 : **l'aperçu MJ** (`COMBAT_ANNOUNCE_PREVIEW`) émet `actions: [...mapSelected]` (+`'move'`).
+- **`CombatActionWindow.jsx:395`** (fenêtre **PJ**, PAS la fenêtre MJ — `mapSelected` est **absent**
+  de `CombatGmDeclareWindow.jsx`, grep 2026-08-29) : l'effet `COMBAT_ANNOUNCE_PREVIEW` émet
+  `actions: moveSelection ? [...mapSelected, 'move'] : [...mapSelected]`. C'est le PJ qui **émet** ;
+  la fenêtre MJ ne fait que l'**afficher** via le prop `pjPreview` (`pjPreview.actions.join(' + ')`,
+  l.822-828). L'« aperçu » = *la déclaration du PJ montrée au MJ*, d'où le nom `pjPreview`.
 - l.469/470/601 : `attackSelected` / `meleeSelected` / `reloadSelected` → alimentent
   `buildHumanDeclarePayload` **et** la validité.
-→ le retrait de `mapSelected` (4d) doit **reconstruire le champ `actions` de l'aperçu MJ** depuis le
-nouvel état (arme distance sélectionnée → `'attack'`, contact → `'melee'`, move → `'move'`, reload →
-`'reload'`) — **pas juste du rendu**. À écrire dans le 4d.
+→ le retrait de `mapSelected` (4d) doit **reconstruire le champ `actions` de l'émission
+`COMBAT_ANNOUNCE_PREVIEW` dans `CombatActionWindow.jsx:395`** depuis le nouvel état (arme distance
+sélectionnée → `'attack'`, contact → `'melee'`, move → `'move'`, reload → `'reload'`) — **pas juste
+du rendu**, et **dans le fichier PJ**. À écrire dans le 4d.
+*(Correction analyse à charge 2026-08-29 : la version précédente attribuait cette émission à « l'aperçu MJ » — faux, `mapSelected` n'est pas dans le fichier MJ.)*
 
 **4. La ligne Déplacement (D13) doit respecter `combatMode`.** Charge et Retraite **possèdent** le
 déplacement (gratuit, chaîné). Le code actuel a déjà la garde (`if (combatMode === 'charge' ||
