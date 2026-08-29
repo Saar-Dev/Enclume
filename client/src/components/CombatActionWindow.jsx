@@ -28,6 +28,7 @@ import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
+import CombatDeclareActionList from './CombatDeclareActionList.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
 import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
@@ -1018,99 +1019,46 @@ export default function CombatActionWindow({
 
           {/* Posture / Vitesse / Arme → satellite d'état (CombatDeclareStatePanel, module 3). */}
 
-          {/* ── Corps humain : move-line + liste d'armes groupée (module 4, D5/D6/D13) ────────── */}
-          {!isDrone && (() => {
-            const moveDisabled = allures === null || decl.combatMode === 'charge' || decl.combatMode === 'retraite'
-            return (
-            <>
-              <div
-                className="decl-move"
-                data-on={!!moveSelection}
-                aria-disabled={moveDisabled || undefined}
-                title={t('mapActions.move.tooltip')}
-                onClick={() => { if (!moveDisabled) handleZoneSelectClick() }}
-              >
-                <span className="decl-move__plus">+</span>
-                <span className="decl-move__label">{t('declareList.moveLabel')}</span>
-                <span className="decl-move__val">
-                  {moveSelection ? `${moveSelection.ini_mod}` : t('declareList.moveDefine')}
-                </span>
-              </div>
-
-              <div className="decl-list">
-                <div className="decl-list__eyebrow">
-                  {t('declareList.actionEyebrow')}
-                  <span className="hint">{t('declareList.actionHint')}</span>
-                </div>
-                {[
-                  { key: 'distance', rows: weaponGroups.distance, label: t('declareList.groupDistance') },
-                  { key: 'contact',  rows: weaponGroups.contact,  label: t('declareList.groupContact') },
-                ].map(g => g.rows.length === 0 ? null : (
-                  <div key={g.key}>
-                    <div className={`decl-group decl-group--${g.key}`}>
-                      <span className="decl-group__glyph" />{g.label}
+          {/* ── Corps humain : move-line + liste d'armes groupée (CombatDeclareActionList, module 4). */}
+          {!isDrone && (
+            <CombatDeclareActionList
+              move={{
+                on: !!moveSelection,
+                disabled: allures === null || decl.combatMode === 'charge' || decl.combatMode === 'retraite',
+                valueLabel: moveSelection ? `${moveSelection.ini_mod}` : t('declareList.moveDefine'),
+                tooltip: t('mapActions.move.tooltip'),
+                onToggle: handleZoneSelectClick,
+              }}
+              groups={weaponGroups}
+              selectedRowId={selectedWeaponRowId}
+              onPick={handleWeaponPick}
+              extras={<>
+                {/* Rechargement + mode de tir — intérimaires au corps jusqu'à la col. 2 réagencée (3/4). */}
+                {selectedWeapon && !isAmmoFull && (
+                  <div className="decl-list" style={{ paddingTop: 0 }}>
+                    <div
+                      className="decl-wpn"
+                      data-sel={mapSelected.has('reload')}
+                      title={t('mapActions.reload.tooltip')}
+                      onClick={() => handleMapToggle('reload')}
+                    >
+                      <span className="decl-wpn__name">{t('actionWindow.reloadButtonLabel')}</span>
                     </div>
-                    {g.rows.map(row => {
-                      const bits = []
-                      if (row.slotLabel) bits.push(row.slotLabel)
-                      if (row.fireMode) bits.push(row.fireMode)
-                      if (row.kind === 'melee') bits.push(t('declareList.reachAllonge', { m: row.reachM ?? 0 }))
-                      if (row.formula) bits.push(row.formula)
-                      if (row.requiresGrapple) bits.push(t('declareList.requiresGrapple'))
-                      if (row.permanent) bits.push(t('declareList.permanentTag'))
-                      const reasonKey = row.disabledReason
-                        && `declareList.disabled${row.disabledReason[0].toUpperCase()}${row.disabledReason.slice(1)}`
-                      return (
-                        <div
-                          key={row.id}
-                          className={`decl-wpn${row.permanent ? ' decl-wpn--permanent' : ''}`}
-                          data-sel={selectedWeaponRowId === row.id}
-                          aria-disabled={row.disabled || undefined}
-                          title={reasonKey ? t(reasonKey) : undefined}
-                          onClick={() => handleWeaponPick(row)}
-                        >
-                          <span className="decl-wpn__name">
-                            {row.name ?? t('declareList.bareHands')}
-                            {bits.length > 0 && <span className="decl-wpn__sub">{bits.join(' · ')}</span>}
-                          </span>
-                          {row.ammoLabel && (
-                            <span className="decl-wpn__ammo" data-status={row.ammoStatus}>{row.ammoLabel}</span>
-                          )}
-                        </div>
-                      )
-                    })}
                   </div>
-                ))}
-              </div>
-
-              {/* Rechargement — passera dans le segment « Tir │ Recharger » de la col. 2 (sous-commit 3/4). */}
-              {selectedWeapon && !isAmmoFull && (
-                <div className="decl-list" style={{ paddingTop: 0 }}>
-                  <div
-                    className="decl-wpn"
-                    data-sel={mapSelected.has('reload')}
-                    title={t('mapActions.reload.tooltip')}
-                    onClick={() => handleMapToggle('reload')}
-                  >
-                    <span className="decl-wpn__name">{t('actionWindow.reloadButtonLabel')}</span>
+                )}
+                {attackSelected && (
+                  <div className="decl-list" style={{ paddingTop: 0 }}>
+                    <CombatDeclareStateSelector
+                      stateKey="fire_mode"
+                      current={decl.fire_mode} initial={initialStates.current.fire_mode}
+                      onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
+                      availableKeys={availableFireModes}
+                    />
                   </div>
-                </div>
-              )}
-
-              {/* fire_mode — interim au corps jusqu'à la col. 2 réagencée (sous-commit 3/4). */}
-              {attackSelected && (
-                <div className="decl-list" style={{ paddingTop: 0 }}>
-                  <CombatDeclareStateSelector
-                    stateKey="fire_mode"
-                    current={decl.fire_mode} initial={initialStates.current.fire_mode}
-                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
-                    availableKeys={availableFireModes}
-                  />
-                </div>
-              )}
-            </>
-            )
-          })()}
+                )}
+              </>}
+            />
+          )}
 
           {/* ACTION — drone : DroneDeclareSection. Le PJ humain rend la move-line + la liste d'armes
              groupée ci-dessus (module 4, D5 « l'arme EST l'action » — plus de grille de tuiles). */}
