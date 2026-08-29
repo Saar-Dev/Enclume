@@ -47,7 +47,7 @@
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | cadré + à charge — **pas commencé** | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
-| Module 5 — `CombatDeclareFooter` (D12) | **5a codé** (`a046195`) — 5b-5d à faire | §5.10 |
+| Module 5 — `CombatDeclareFooter` (D12) | **5a refait** (`0a9dfe9`, source unique valid+reason) — 5b-5d à faire | §5.10 |
 | Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
@@ -561,11 +561,18 @@ déploiement B5** : B5 + module 5 partent ensemble).
 
 | Notion | Définition | Qui la calcule |
 |---|---|---|
-| `canDeclare` | les actions **sélectionnées** sont valablement configurées | **existe déjà** dans chaque fenêtre (B5) |
-| `hasCompleteAction` | y a-t-il **quelque chose à déclarer** : arme+cible ∨ CaC+cible ∨ reload ∨ move ∨ **`hasDeliberateStateChange`** ∨ action rapide | **OU trivial calculé en fenêtre** — pas un fichier. Le vrai code extrait = `hasDeliberateStateChange(decl, initial)` (`client/src/lib/`, **testé** — posture/arme/vitesse ≠ initial ; exclut `fire_mode`/`cover`/`combat_mode`, exclusions documentées) |
-| `blockReason` | raison unique et lisible du grisage | **`buildBlockReason(bag)`** — **UNE** fonction pure partagée (`client/src/lib/`, **testée**), pas 3 « par fenêtre ». Chaque fenêtre remplit le bag (l'exo : valeurs vides). Texte FR direct (combat hors-i18n). Précédence arme→cibles→variant→Tir visé, puis CaC, puis reload. |
+| `canDeclare` | les actions **sélectionnées** sont valablement configurées | **`assaultCheck().valid && meleeCheck().valid && reloadCheck().valid`** (`declareChecks.js`) — remplace le `assaultValid`/`meleeValid`/`reloadValid` inline B5 dans les 3 fenêtres |
+| `hasCompleteAction` | y a-t-il **quelque chose à déclarer** : attaque ∨ CaC ∨ reload ∨ move ∨ `hasDeliberateStateChange` ∨ action rapide | `hasSomethingToDeclare({6 drapeaux})` — **liste canonique** partagée (pas dupliquée PJ/MJ) ; les drapeaux calculés en fenêtre |
+| `blockReason` | raison unique et lisible du grisage | **`buildBlockReason({assault, melee, reload})`** — mince : premier `.reason` non nul, précédence Tir → CaC → Rechargement. Les *raisons* viennent des mêmes `*Check` que `canDeclare` — **une seule dérivation**. |
 
-**5a codé (2026-08-29, `a046195`)** : `buildBlockReason.js` + `hasDeliberateStateChange.js` + 21 tests.
+**5a codé (2026-08-29, `0a9dfe9` — refait après analyse critique)** : `declareChecks.js`
+(`assaultCheck`/`meleeCheck`/`reloadCheck` → `{valid, reason}`, `buildBlockReason`,
+`hasSomethingToDeclare`) + `hasDeliberateStateChange.js` + 21 tests. **Source unique** : le booléen de
+validité et le texte de blocage sortent de la même évaluation (l'ancien `buildBlockReason(bag)`
+ré-encodait les conditions — dérive silencieuse possible). C'est le travail des sélecteurs M0.4, tiré
+en avant par l'ordre B → M0.4 s'allège, la validité (**zéro test aujourd'hui**) est testée maintenant.
+Écart iso-comportement **documenté** : le MJ gagne un contrôle d'arme / `chargeHasMove` côté client
+qu'il n'avait pas (le serveur les refusait déjà — jamais un blocage à tort).
 
 - **Déclarer actif ⟺ `hasCompleteAction && canDeclare`.**
 - Le chevauchement `SELECT_ATTACK` (sélectionner une attaque auto-dégaine → `decl.weapon = 'drawn'`
@@ -575,13 +582,14 @@ déploiement B5** : B5 + module 5 partent ensemble).
   orphelin (`clearAttackState` ne rerengaine pas) → « juste dégainer » se déclare par erreur.
   **Existe déjà aujourd'hui** ; le module 4 (« l'arme EST l'action », rerengaine à la désélection) le
   corrige. Module 5 ne touche pas la logique de tuiles.
-- **`onPassTurn` par famille** : PJ/MJ = `socket.emit(COMBAT_ACTION_DECLARE, { tokenId, state: {},
-  mapActions: {} })` ; drone = `droneDeclare.setHasPassed(true)` puis `handleDeclare` ; exo =
-  `handleDeclare` sans sélection. Le pied prend `onPassTurn` **en prop**. Bouton aussi gaté sur
-  `!!activeSlot` (le MJ peut avoir `activeTokenId` transitoirement nul).
-- **Drone** : la tuile « Passer le tour » de `DroneDeclareSection` sera retirée — **au module 4**
-  (quand `DroneDeclareSection` est touché) ; module 5 autonome laisse la tuile (double bénin, le MJ
-  arbitre), le bouton du pied pilote `droneDeclare.setHasPassed`.
+- **`onPassTurn` = UN handler partagé** (analyse à charge 2026-08-29) : PJ / MJ / **drone** =
+  `socket.emit(COMBAT_ACTION_DECLARE, { tokenId, state: {}, mapActions: {} })` — `[VÉRIFIÉ]` le
+  serveur l'accepte pour tout type (`mapActions: {}` → aucune logique drone-spécifique). Exo =
+  `handleDeclare()` (envoie déjà `state: {}`). Le pied prend `onPassTurn` + `tokenId` en props ;
+  bouton gaté sur `!!activeSlot`.
+- **Drone** : footer **« Passer le tour » uniforme dès le module 5** (émit direct, pas de course
+  `setState`). La tuile « Passer » de `DroneDeclareSection` reste (retirée au module 4), redondante
+  mais inoffensive. **Plus de `showPassTurn={false}`.**
 - **PO-M5-e tranché** : « Passer le tour » = bouton secondaire constant, ne se promeut jamais.
 - **PO-M5-f REJETÉ (analyse à charge 2026-08-29)** : « Passer le tour » reste **toujours cliquable**
   (D12 au pied de la lettre). L'auto-dégaine (ci-dessus) créait un piège avec « Passer grisé si
@@ -596,16 +604,30 @@ déploiement B5** : B5 + module 5 partent ensemble).
   statut) — pas replié dans `statusMessage`.
 - **PO-M5-d** : bouton primaire sur `.btn-tac` (cyan) comme base ; l'accent famille arrive au module 2.
 
-**Risque : FAIBLE-MOYEN.** Composant présentationnel. Filet : golden master (payload « Passer » =
-déclaration vide, couvert) + `buildBlockReason.test.mjs` + `hasDeliberateStateChange.test.mjs`. **Zone
-sans filet** : l'affichage `blockReason` → checklist manuelle (chaque cas).
+**`statusMessage`** : le **composant** compose (il a `t`) depuis `blockReason: string|null` +
+`moveDestination: {x,y}|null` + `hasCompleteAction: bool` — pas de string pré-rendue par la fenêtre.
+Précédence `blockReason` > destination > « Prêt » ; vide si `!hasCompleteAction && !blockReason`.
+L'**erreur allures drone** reste un **élément distinct** rendu par la fenêtre (échec dur, pas un
+statut). CSS du footer en **tokens `--combat-*`** (`--combat-dim`, `--combat-border`…), jamais de hex
+en dur.
+
+**Risque : FAIBLE-MOYEN.** Le module touche `canDeclare` des 3 fenêtres (rebranche sur `declareChecks`)
+— mais `declareChecks` est testé (21 tests) et iso-comportement documenté. Filet : golden master
+(payload « Passer » = déclaration vide, couvert) + `declareChecks.test.mjs` + `hasDeliberateStateChange.test.mjs`.
+**Zone sans filet** : le rendu du footer + l'affichage `blockReason` → checklist manuelle par cas.
 
 **Ordre (B, §5.0)** : **premier module** — `CombatDeclareFooter` construit et validé dans les pieds
 actuels (`.combat-float-footer` / `.combat-win-footer`), re-slotté dans le frame au module 2.
 
-**Découpe** : **5a** ✅ (`buildBlockReason` + `hasDeliberateStateChange` + tests) → 5b (`CombatDeclareFooter.jsx`
-+ clés `declareFooter.*` + câblage `CombatActionWindow`) → 5c (câblage `CombatGmDeclareWindow`) →
-5d (câblage `CombatExoActionWindow` + suppression du verrou `isDeclaring`). 1 commit/pas + checklist.
+**Découpe** :
+- **5a** ✅ `declareChecks.js` (`assaultCheck`/`meleeCheck`/`reloadCheck`/`buildBlockReason`/`hasSomethingToDeclare`)
+  + `hasDeliberateStateChange.js` + 21 tests.
+- **5b** : `CombatDeclareFooter.jsx` + CSS (tokens) + clés `declareFooter.*` + câblage
+  `CombatActionWindow` — **rebranche son `canDeclare` sur `declareChecks`**, l'entrée des checks = le
+  `sel` déjà assemblé pour `buildHumanDeclarePayload` (pas un 3ᵉ sac).
+- **5c** : câblage `CombatGmDeclareWindow` (rebranche `canDeclare` MJ ; le MJ ne câble pas `reloadCheck`).
+- **5d** : câblage `CombatExoActionWindow` + **suppression du verrou `isDeclaring`**.
+1 commit/pas + checklist manuelle par cas `blockReason`.
 
 ---
 
