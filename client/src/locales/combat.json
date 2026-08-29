@@ -276,6 +276,25 @@
       "tooltip": "Recharger son arme — aucun tir ni corps à corps possible ce tour. Coût INI : 0."
     }
   },
+  "declareList": {
+    "actionEyebrow": "Action",
+    "actionHint": "un seul choix",
+    "moveLabel": "Déplacement",
+    "moveDefine": "définir la zone",
+    "groupDistance": "Distance",
+    "groupContact": "Contact",
+    "bareHands": "Mains nues",
+    "permanentTag": "permanent",
+    "mixedTag": "mixte",
+    "requiresGrapple": "nécessite agrippé",
+    "reachAllonge": "+{{m}} m allonge",
+    "disabledMortallyWounded": "Blessure mortelle — aucune attaque",
+    "disabledStunned": "Assommé",
+    "disabledAmmoEmpty": "Chargeur vide",
+    "rosterHeader": "Roster",
+    "colTwoEmpty": "Choisis une arme à gauche.",
+    "colTwoEmptySub": "Elle devient ton attaque."
+  },
   "quickActions": {
     "observer": {
       "label": "Observer le combat",

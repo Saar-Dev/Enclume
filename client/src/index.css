@@ -1677,6 +1677,139 @@ Convention :
   color: var(--decl-text-dim);
 }
 
+/* ── Corps de déclaration : move-line + liste d'armes groupée (CombatDeclareActionList, module 4
+   — D5 « l'arme EST l'action », D6 deux colonnes, D9 pas de rond radio, D13 déplacement en ligne).
+   Repris de la maquette `docs/PLANS/maquette-declare/Main.dc.html`, porté sur les tokens `--decl-*`.
+   Rendu dans `.combat-win-body` sous `[data-decl]`. */
+[data-decl] .decl-col1 {
+  width: 320px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--decl-line);
+  overflow-y: auto;
+}
+[data-decl][data-narrow] .decl-col1 { width: 100%; border-right: none; }
+
+/* Déplacement — ligne actionnable, cumulable (D13) */
+[data-decl] .decl-move {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 8px 8px 4px;
+  padding: 8px 9px;
+  border: 1px dashed var(--decl-line);
+  border-radius: 6px;
+  background: var(--decl-row);
+  cursor: pointer;
+  user-select: none;
+}
+[data-decl] .decl-move:hover { background: var(--decl-acc-bg); }
+[data-decl] .decl-move[data-on="true"] {
+  border-style: solid;
+  border-color: var(--decl-acc-line);
+  background: var(--decl-acc-bg);
+}
+[data-decl] .decl-move[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+[data-decl] .decl-move__plus { font: 700 13px/1 var(--font-ui); color: var(--decl-text-dim); flex: none; }
+[data-decl] .decl-move__label { flex: 1; font: 500 11px var(--font-ui); color: var(--decl-text); }
+[data-decl] .decl-move[data-on="true"] .decl-move__label { color: var(--decl-acc); }
+[data-decl] .decl-move__val { font: 400 10px var(--font-mono); color: var(--decl-text-dim); flex: none; }
+[data-decl] .decl-move[data-on="true"] .decl-move__val { color: var(--decl-acc); }
+
+/* Liste d'actions */
+[data-decl] .decl-list { padding: 4px 8px 8px; }
+[data-decl] .decl-list__eyebrow {
+  display: flex;
+  gap: 6px;
+  padding: 6px 4px 2px;
+  font: 600 9px/1.2 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--decl-label);
+}
+[data-decl] .decl-list__eyebrow .hint {
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  color: var(--decl-text-dim);
+}
+[data-decl] .decl-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 4px 4px;
+  font: 600 8px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .11em;
+  color: var(--decl-label);
+}
+[data-decl] .decl-group__glyph {
+  width: 15px; height: 15px;
+  flex: none;
+  background-color: var(--decl-label);
+  -webkit-mask: var(--decl-group-glyph) center / contain no-repeat;
+          mask: var(--decl-group-glyph) center / contain no-repeat;
+}
+[data-decl] .decl-group--distance { --decl-group-glyph: url(/assets/status/distance.svg); }
+[data-decl] .decl-group--contact  { --decl-group-glyph: url(/assets/status/contact.svg); }
+
+/* Ligne d'arme — choisir = déclarer cette attaque (D5), sélection = bord accent (D9) */
+[data-decl] .decl-wpn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.022);
+  cursor: pointer;
+  transition: background .1s, border-color .1s, box-shadow .15s;
+}
+[data-decl] .decl-wpn:hover:not([aria-disabled="true"]) { background: var(--decl-row); }
+[data-decl] .decl-wpn[data-sel="true"] {
+  border-color: var(--decl-acc);
+  background: var(--decl-acc-bg);
+  box-shadow: var(--decl-glow);
+}
+[data-decl] .decl-wpn[aria-disabled="true"] { opacity: .32; cursor: not-allowed; }
+[data-decl] .decl-wpn__name { flex: 1; min-width: 0; font: 500 12px var(--font-ui); color: var(--decl-text); }
+[data-decl] .decl-wpn[data-sel="true"] .decl-wpn__name { color: var(--decl-text-hi); }
+[data-decl] .decl-wpn__sub { display: block; font: 400 10px var(--font-ui); color: var(--decl-text-dim); margin-top: 1px; }
+[data-decl] .decl-wpn__ammo { flex: none; font: 400 10px var(--font-mono); color: var(--decl-text-dim); }
+[data-decl] .decl-wpn__ammo[data-status="low"]   { color: var(--decl-warn); }
+[data-decl] .decl-wpn__ammo[data-status="empty"] { color: var(--decl-danger); }
+[data-decl] .decl-wpn--permanent .decl-wpn__ammo { font-style: italic; }
+
+/* Roster (bas de colonne 1) */
+[data-decl] .decl-roster { margin-top: auto; border-top: 1px solid var(--decl-sep); padding: 7px 12px 8px; }
+[data-decl] .decl-roster__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  font: 600 9px/1.2 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--decl-label);
+}
+[data-decl] .decl-roster__head .count { margin-left: auto; font-size: 9px; color: var(--decl-text-dim); }
+[data-decl] .decl-roster__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 2px;
+  font: 400 11px var(--font-ui);
+  color: var(--decl-text-dim);
+}
+[data-decl] .decl-roster__row[data-active="true"] { color: var(--decl-text-hi); }
+[data-decl] .decl-roster__row .mk { width: 9px; text-align: center; color: var(--decl-acc); font-size: 9px; flex: none; }
+[data-decl] .decl-roster__row .n { flex: 1; }
+[data-decl] .decl-roster__row .i { font: 400 10px var(--font-mono); color: var(--decl-label); }
+
 /* ═══ Re-skin des 3 fenêtres de déclaration en teinte Wizard (PLAN_RW_DECLARE_DESIGN, volet visuel
    du module 2 — mécanisme P7). `data-decl` + `data-family` sur la racine de chaque fenêtre : on
    remappe les tokens `--combat-*` (MJ, `.combat-win`) ET `--*-session*` (PJ/exo, `.combat-float-win`)
