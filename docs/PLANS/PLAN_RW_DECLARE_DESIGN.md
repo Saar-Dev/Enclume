@@ -301,6 +301,19 @@ module 5 re-supprime — churn, écarté.
 (rien de sélectionné). Un mis-clic passe le tour. Recouvrable (combat arbitré tour par tour par le
 MJ) ; le module 5 corrige le libellé.
 
+> **⚠ Contrainte de déploiement (analyse à charge 2026-08-29)** : B5 et le module 5 sont des commits
+> séparés, mais **B5 ne doit pas être poussé/déployé seul**. Sans le bouton « Passer le tour »
+> explicite (module 5) + le gate `hasCompleteAction`, un mis-clic d'un PJ à l'ouverture de sa fenêtre
+> = tour perdu, et aucun chemin d'annulation de déclaration n'a été trouvé côté serveur. Sur `dev/Saar`
+> local c'est sans effet ; au push, **B5 part avec le module 5** (ou le module 5 est avancé).
+>
+> **Vérifié à charge (2026-08-29)** : le nouveau `canDeclare` PJ (`assaultValid && reloadValid &&
+> meleeValid`) et le `meleeValid` neuf MJ sont **corrects** — chaque `*Valid` vaut `true` si rien
+> n'est sélectionné (tour vide passe) et `false` si une action commencée est incomplète. Le
+> `meleeValid` MJ pour une Charge ne teste que `chargeSelection?.targetTokenId`, ce qui est suffisant :
+> `handleStartCharge` (l.495) pose `chargeSelection` avec `move` **et** `targetTokenId` ensemble,
+> jamais l'un sans l'autre.
+
 **Testé** : `vite build` propre ; `eslint` = **baseline exacte** (6 problèmes GM pré-existants
 inchangés, `CombatActionWindow` 0/0) ; résidus `hasAnyAction`/`hasAction`/`stateChanged` = 0 (hors
 1 mention en commentaire).

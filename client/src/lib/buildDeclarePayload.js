@@ -79,11 +79,16 @@ export function buildHumanDeclarePayload(sel) {
 }
 
 // --- MJ / PNJ — miroir exact de CombatGmDeclareWindow.jsx#handleDeclare, branche non-drone ---------
-// Différences légitimes vs l'humain PJ (préservées) : `weapon.inv_id` (équipement batch PNJ vs
-// `assaultWeaponId` déjà résolu) ; `fireModeBonusComp`/`fireModeBonusDmg` par défaut à `0` (pas
-// `null`) ; `move` = `chargeSelection?.move ?? pendingMove` passé brut (pas de forçage `ini_mod` à 0
-// côté payload — le serveur recalcule) ; CaC via `weaponInvIdForMelee` / `naturalWeaponIdForMelee`
-// (résolus par la fenêtre).
+// Différences légitimes vs l'humain PJ (préservées **verbatim** — ne pas « harmoniser » sans décision) :
+//  - `weapon.inv_id` (équipement batch PNJ) vs `assaultWeaponId` déjà résolu (PJ) ;
+//  - `attack[].fireModeBonusComp` / `fireModeBonusDmg` : défaut `0` (PNJ) vs `null` (PJ) ;
+//  - `move` = `chargeSelection?.move ?? pendingMove` brut (pas de forçage `ini_mod` à 0 — serveur recalcule) ;
+//  - CaC via `weaponInvIdForMelee` / `naturalWeaponIdForMelee` (résolus par la fenêtre) ;
+//  - `mapActions.reload` : booléen nu (`sel.mapAction === 'reload'`) — PNJ n'envoie **ni arme ni
+//    munition**, alors que le PJ envoie `{ weapon_inv_id, ammo_item_id }` ou `false`. Le rechargement
+//    PNJ n'est pas configuré côté client (pas de `reloadValid` MJ — cf. PLAN §17.10 pt 5) ;
+//  - `quick: { ...sel.decl.quick }` (PNJ, spread) vs 3 champs explicites (PJ) — un 4ᵉ champ `quick`
+//    futur partirait côté PNJ, pas PJ.
 export function buildGmDeclarePayload(sel) {
   const meleeOffhandInvIdForMelee = sel.effectiveDualWieldMelee
     ? (sel.meleeOffhandWeapon?.inv_id ?? null)
