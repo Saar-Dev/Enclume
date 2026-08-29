@@ -347,13 +347,14 @@ gardes de montage, risque, 5 points ouverts PO-M2-a..e). En bref : `CombatDeclar
 (structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** → golden master du
 module 0 en filet ; un commit par fenêtre migrée.
 
-**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** **Cadré en détail §14.** En bref : sortir
-posture + vitesse + arme du corps (PJ + MJ) vers un panneau frère du frame, positionné depuis `pos`,
-présentation glyphe (`assets/status/`, `--combat-accent-fg`). `fire_mode` reste au corps jusqu'au
-module 4 (§14.7). **Exo : probablement PAS de satellite** (`[VÉRIFIÉ]` RAW §14.3 — l'exo n'a que
-`vitesse` comme axe libre, `prone→standing` est une action à Test, pas un toggle ; PO-M3-a). **PAS
-de migration serveur** (§12.5). Risque moyen (client) ; payload PJ/MJ inchangé (golden master en
-filet) ; si l'exo est inclus, `+ buildExoDeclareState` pur + test (§14.6). 6 points ouverts PO-M3-a..f.
+**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** **Cadré §14** (corrigé round 6). Sortir
+les sélecteurs d'état du corps vers un **panneau frère** du frame, positionné depuis `pos`,
+présentation glyphe (`assets/status/`, `--combat-accent-fg`). **PJ + MJ** : posture (4) + vitesse (3)
++ arme (3) ; `fire_mode` reste au corps jusqu'au module 4 (§14.7). **Exo** : posture (4) + arme (3),
+**pas** de mode de tir (fixe) ; le cas `prone → Test` (`isExoStandUpAttempt`, déjà serveur) à
+recâbler proprement = le point délicat (PO-M3-a). **PAS de migration serveur** (§12.5). Risque
+moyen ; payload PJ/MJ inchangé (golden master) ; exo : `+ buildExoDeclareState` pur + test (§14.6).
+Un commit par fenêtre + checklist manuelle. Points ouverts PO-M3-a..f.
 
 **Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
 d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
@@ -595,6 +596,30 @@ mi-parcours. Et tout l'arbitrage de risque/ordre en aval était calibré sur un 
 | Roster MJ non cliquable | `[VÉRIFIÉ]` | **confirmé** (`S.rosterRow`, aucun `onClick`) | inchangé |
 | Serveur accepte déclaration vide (`{}` passe, clés validées si présentes) | `[VÉRIFIÉ]` | **confirmé** (`socketCombatAnnouncement.js:63-79`) | inchangé |
 | Golden master 4 familles | 51 tests | **51/51 vert** ce jour | inchangé |
+
+### Round 6 (2026-08-29 — Saar corrige le cadrage du module 3 : les axes d'état exo)
+
+**Fait.** §14.3 affirmait « `[VÉRIFIÉ]` `EXOARMURE.md` : posture exo = {standing, prone} seulement,
+pas de crouch/kneel, `weapon` ne s'applique pas → l'exo n'a probablement pas de satellite ». **Faux.**
+Saar : *« l'exo-armure a un satellite : position DEBOUT/COUCHÉ/ACCROUPI/GENOU, arme AU CLAIR/MAIN
+SUR L'ARME/RANGÉE… à moins que tu me trouves le texte RAW qui dit l'inverse »*. Vérifié :
+- `POSITION_TRANSITION_COST` (RAW `REGLESYSCOMBAT.md:929-941`) = les 4 postures, et `PLAN_EXOARMURE.md`
+  §9 dit qu'elle s'applique **telle quelle** à l'exo.
+- `ROADMAP.md` §1 point 4 **listait déjà explicitement** « arme rangée/au clair, position
+  accroupi/genou » pour l'exo.
+- `REGLEARMURE.md` p.323-329 relu ligne à ligne : **aucune** restriction de posture ni d'état d'arme
+  (seules restrictions exo : 1 Attaque/Tour, milieu inadapté → allure lente, Intégrité 0 → détruite).
+
+**Mécanisme de la faute — identique au round 5.** Inférence tirée du *silence* d'un doc `SYSTEME`
+(`EXOARMURE.md` ne parle de posture exo que pour « se relever ») → conclusion « ça n'existe pas »,
+marquée `[VÉRIFIÉ]`. Et `ROADMAP.md` §1.4, qui contredisait frontalement, **pas relu** au moment
+d'écrire §14.3. Deux tours après avoir écrit la règle « ne pas blanchir une inférence », re-fait.
+
+**Ce qui change (au-delà de §14.3 corrigé).** La règle
+[[feedback_no_laundering_inherited_claims]] est renforcée : **« un doc qui ne mentionne pas X » n'est
+jamais une preuve que « X n'existe pas »** — pour une question de règle, vérifier l'extrait RAW
+(`REGLE*.md`) **et** `ROADMAP`/`VOCABULARY`, pas seulement le doc `SYSTEME` du domaine. Marqueur
+`[VÉRIFIÉ]` interdit sur une conclusion négative tirée d'une absence de mention.
 
 ---
 
@@ -968,24 +993,43 @@ Les 2 briques (`StateSelector` segmented / `StateChip` click-to-cycle) partagent
 (= `snapFromRosterEntry`, état en début de tour). Reversées au satellite : `initial` =
 `initialStates.current[axe]` inchangé.
 
-### 14.3 Contenu du satellite par famille — **et le problème exo**
+### 14.3 Contenu du satellite par famille
+
+> **Erreur corrigée (Saar, 2026-08-29 — §11 round 6).** La version précédente affirmait
+> « `[VÉRIFIÉ]` exo = {standing, prone} seulement, pas de crouch/kneel, pas de weapon ». **Faux** —
+> inférence tirée du *silence* de `EXOARMURE.md` (qui ne parle de posture exo que dans le contexte
+> « se relever »), alors que `ROADMAP.md` §1 point 4 **liste explicitement** « arme rangée/au clair,
+> position accroupi/genou » pour l'exo, et que rien dans le RAW ne restreint. Même faute que le
+> round 5. Modèle correct ci-dessous.
 
 | Famille | Satellite |
 |---|---|
-| PJ | **Posture + Vitesse + Arme** (les 3 de D8) |
-| MJ-PNJ | idem (mêmes 3 axes ; le MJ garde Vitesse en segmented, cf. Session 158 — à respecter dans la présentation glyphe) |
+| PJ | Posture (4) + Vitesse (3) + Arme (3) |
+| MJ-PNJ | idem (le MJ garde Vitesse en segmented, Session 158 — à respecter dans la présentation glyphe) |
 | Drone | **aucun** (D8 ; le drone envoie un `state` fixe) |
-| Exo | **`[À TRANCHER]` — probablement Vitesse seule, voire rien** |
+| Exo | **Posture (4) + Arme (3)** ; **pas de mode de tir** (fixe, `[VÉRIFIÉ]` `EXOARMURE.md:300` « dérivé de `exo_weapon.ref_fire_mode` ») ; Vitesse `[À CONFIRMER]` (Saar ne l'a pas listée — probable, mécanique INI générique) |
 
-**Exo `[VÉRIFIÉ]` `docs/SYSTEME/EXOARMURE.md`** : `position` exo se réduit à {standing, prone}, et
-`prone → standing` **n'est pas un toggle de posture** — c'est la « Manœuvre d'armure pour se relever »,
-une **action de combat résolue par un Test** (déjà dans le corps de `CombatExoActionWindow`,
-`handleStandUp`). Pas de crouch/kneel exo dans le RAW. `weapon` holstered/ready/drawn ne s'applique
-pas (armes hardpoint, toujours montées). Reste **`vitesse`** (delayed/normal/rushed — mécanique INI
-générique, `[INFÉRÉ]` applicable à l'exo).
-→ **PO-M3-a** : l'exo a-t-il un satellite (Vitesse seule, 1 ligne) ou **pas de satellite** (D8
-révisé en « PJ + MJ seulement », l'exo garde son corps minimal + Vitesse inline) ? La 2ᵉ option
-colle mieux au constat de Saar (2026-08-28) que le volet exo avait été surdimensionné.
+**Exo — `[VÉRIFIÉ]` :**
+- **Posture** : les 4 (`debout / couché / accroupi / genou`). `POSITION_TRANSITION_COST`
+  (`shared/combatStatePositionCost.js`, source RAW `REGLESYSCOMBAT.md:929-941`) s'applique **telle
+  quelle** à l'exo — `PLAN_EXOARMURE.md` §9 : « continue de s'appliquer telle quelle à la
+  Déclaration ». Toutes les transitions = perte d'Initiative standard, **sans Test**, **sauf**
+  `prone → autre position` : coût standard (`-10`) **+ Test de Manœuvre d'armure du pilote**, avec
+  écriture de `state_position` **différée à la Résolution** (déjà codé : `isExoStandUpAttempt`
+  `socketCombatAnnouncement.js`, `resolveExoStandUpAction`, `handleStandUp` dans le corps de
+  `CombatExoActionWindow`). Micro-écart à confirmer (§11 round 6) : le code fire le Test sur
+  `prone → n'importe quelle position` ; le message Saar disait « couché vers debout » — son propre
+  plan §9.2 dit « prone → autre position », donc = n'importe laquelle.
+- **Arme** : les 3 (`arme au clair / main sur l'arme / arme rangée`). Aucune restriction RAW trouvée
+  (`REGLEARMURE.md` p.323-329 relu : les seules restrictions exo sont « une seule Attaque/Tour »,
+  milieu inadapté → allure lente, Intégrité 0 → détruite — rien sur la posture ni l'état d'arme).
+- **Mode de tir** : fixe, dérivé de l'arme. **Jamais dans le satellite.**
+
+→ **PO-M3-a** (reformulé) : quand l'exo est `prone`, la puce Posture du satellite **remplace-t-elle**
+le bouton « Tenter de se relever » du corps (`handleStandUp`), ou coexistent-ils ? Et : passer par la
+puce → `decl` → DÉCLARER (au lieu de l'`emit` immédiat de `handleStandUp`) préserve-t-il la propriété
+« action exclusive / immédiate » du se-relever (§9 : rejet serveur si combiné à une attaque/un
+déplacement — donc OK de passer par DÉCLARER tant que l'exclusivité tient) ?
 
 ### 14.4 Présentation glyphe (D8/D10)
 
@@ -1029,30 +1073,32 @@ le satellite passe à droite (`left: pos.left + windowWidth + GAP`) — **PO-M3-
 
 ### 14.6 Exo — payload `state` + test de caractérisation
 
-Si l'exo reçoit un satellite (PO-M3-a) : `CombatExoActionWindow.handleDeclare` envoie aujourd'hui
-`state: {}`. Il passerait à `state: { vitesse }` (± `position` jamais, cf. 14.3). L'exo n'a pas de
-`declarationReducer` — un `useState` local pour l'axe suffit (ou un mini reducer si > 1 axe).
-`buildExoMapActions` ne couvre **que `mapActions`**, pas `state` → **ajouter un
-`buildExoDeclareState(sel)` pur + test de caractérisation** (patron module 0) pour figer ce nouveau
-fragment de payload. Le golden master PJ/MJ n'est pas concerné (mêmes champs `decl.*` dans les mêmes
-`buildXDeclarePayload`).
+`CombatExoActionWindow.handleDeclare` envoie aujourd'hui `state: {}`. Avec le satellite il passe à
+`state: { position, weapon, (vitesse?) }`. L'exo n'a pas de `declarationReducer` → **réutiliser
+`declarationReducer` + `snapFromRosterEntry`** (déjà partagés, pas un mini-reducer maison — Règle 2).
+`buildExoMapActions` ne couvre **que `mapActions`**, pas `state` → **ajouter `buildExoDeclareState(sel)`
+pur + test de caractérisation** (patron module 0) figeant ce fragment neuf, **y compris le cas
+`prone → autre` = `isExoStandUpAttempt`** (le client envoie `state.position`, le serveur diffère
+l'écriture — le payload client, lui, est le même qu'une transition normale). Golden master PJ/MJ
+non concerné (mêmes `decl.*`, mêmes `buildXDeclarePayload`).
 
-### 14.7 Seam `fire_mode` (reste au corps jusqu'au module 4)
+### 14.7 Seam `fire_mode` (PJ/MJ : reste au corps jusqu'au module 4)
 
-Module 3 retire **position + vitesse + weapon** du corps → satellite. `fire_mode` **reste** dans la
-section ARMEMENT du corps (elle se réduit à : liste d'armes équipées + sélecteur `fire_mode`)
-jusqu'à ce que le module 4 le déplace en col. 2 (`AssaultRangedPanel` a déjà « Section mode de tir »).
-Interim assumé — une section ARMEMENT réduite pendant un module. `decl.fire_mode` reste un champ du
-reducer tout du long (le payload le lit).
+Module 3 retire **position + vitesse + weapon** du corps → satellite, **pour PJ et MJ**.
+`fire_mode` **reste** dans la section ARMEMENT du corps (réduite à : liste d'armes équipées +
+sélecteur `fire_mode`) jusqu'à ce que le module 4 le déplace en col. 2 (`AssaultRangedPanel` a déjà
+« Section mode de tir »). Interim assumé. `decl.fire_mode` reste un champ du reducer tout du long
+(le payload le lit). **Exo** : pas de `fire_mode` du tout (fixe), donc pas de seam — son corps
+perd juste les sélecteurs qu'il n'avait pas (rien) et gagne le satellite.
 
 ### 14.8 Risque + rollback
 
-**Risque moyen (client).** Déplace 2-3 sélecteurs du corps vers un panneau frère, sur PJ + MJ ;
-neuf pour l'exo (si PO-M3-a = oui). **Pas de changement de forme de payload PJ/MJ** (mêmes `decl.*`
-→ mêmes `buildXDeclarePayload` → golden master 51 tests en filet). Exo : nouveau fragment `state`,
-couvert par 14.6. Risque **visuel** : positionnement du satellite frère (pas de test → checklist
-manuelle). Rollback : `git revert` du commit du module (un commit ; ou un par fenêtre si l'exo est
-inclus).
+**Risque moyen (client), + point exo.** PJ + MJ : déplace 3 sélecteurs du corps → panneau frère,
+**pas de changement de forme de payload** (mêmes `decl.*` → mêmes `buildXDeclarePayload` → golden
+master 51 tests en filet). **Exo** : satellite neuf (posture 4 + arme 3) + nouveau fragment `state`
+au payload (14.6) + le fil `prone → Test` à recâbler proprement (PO-M3-a) — c'est le morceau le plus
+délicat du module. Risque **visuel** partout : positionnement du satellite frère, pas de test → **un
+commit par fenêtre + checklist manuelle** (comme module 2). Rollback : `git revert` par commit.
 
 ### 14.9 Hors périmètre module 3
 
@@ -1066,7 +1112,8 @@ inclus).
 
 | # | Question |
 |---|---|
-| PO-M3-a | **Exo : satellite (Vitesse seule) ou pas de satellite** (D8 → « PJ + MJ seulement ») ? Penche pour « pas de satellite exo » (cadrage RAW §14.3 + constat surdimensionnement Saar). |
+| PO-M3-a | **Exo `prone` : la puce Posture du satellite remplace-t-elle le bouton « Tenter de se relever » du corps** (`handleStandUp`), ou coexistent-ils ? Passer par `decl` → DÉCLARER (au lieu de l'`emit` immédiat) : OK tant que l'exclusivité serveur du se-relever tient (§14.3). |
+| PO-M3-a2 | Vitesse pour l'exo : incluse au satellite ou non ? (Saar ne l'a pas listée — `[À CONFIRMER]`.) |
 | PO-M3-b | Brique glyphe : `CombatDeclareStateGlyph` neuf, ou mode `glyph` sur `CombatDeclareStateChip` ? |
 | PO-M3-c | Interaction : clic = cycle (`nextKey`) ou clic = déplie les options ? (4 postures = cycle long) |
 | PO-M3-d | Clamp : satellite passe à droite si pas la place à gauche du bord d'écran ? |
