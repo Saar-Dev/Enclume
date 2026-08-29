@@ -228,6 +228,13 @@ nommage pour les modules suivants (D7).
 >    **tautologique** — `computeIniDelta` EST défini comme cette somme. Remplacé par des cas de
 >    valeur de référence. La vraie garantie de non-divergence vient du design à chemin unique
 >    (le client ne recalcule jamais les valeurs), pas de ce test.
+> 3. `CombatDeclareIniWidget` prend `delta` **et** `breakdown` en props séparées : rien ne garantit
+>    par construction que la fenêtre les calcule avec les mêmes arguments (c'est le cas aujourd'hui,
+>    par convention). Le faire dériver `delta = Σ breakdown` fermerait la porte — **examiné, non
+>    fait** (Saar 2026-08-29) : suppose de retirer `calcIniDelta` devenu mort → 3 fenêtres +
+>    `combatSections.js` + 4 docs SYSTEME, pour un risque purement théorique (3 sites d'appel déjà
+>    cohérents). N'aggrade pas assez, même critère que le module 4. À rouvrir si un 4ᵉ consommateur
+>    du widget apparaît.
 
 **Périmètre élargi (acté Saar 2026-08-28 : « robuste par principe »)** : le module ne se contente pas
 d'ajouter un widget — il crée l'**autorité unique** du coût d'Initiative d'une déclaration, partagée
