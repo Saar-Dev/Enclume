@@ -1566,3 +1566,67 @@ PO-M4-b — **côte-à-côte, cible PC** (§16.7), pas de pop-out.
 | PO-M4-c | En-tête col. 2 arme de distance sans munitions suivies : `Recharger` grisé ou absent ? (détail) |
 | PO-M4-d | `buildWeaponList` : appelé dans chaque fenêtre, ou dans un `useWeaponList(sel)` fin (miroir `useDroneDeclare`) ? |
 | PO-M4-e | Changement d'arme = reset config col. 2 précédente (assumé §7 PO3) — `assault.reset()` / `melee.reset()` au changement d'arme est-il le bon geste ? |
+
+### 16.10 Analyse à charge module 4 (2026-08-29)
+
+**1. « Réagencement pas réécriture » — vrai à ~80 %, pas 100 %.** `AssaultRangedPanel` à ~236 px de
+contenu (264 − paddings) : le row `RL_BUTTONS` (`flex-wrap`) et les rows segmentés
+(`Simple │ Double (+3 comp)`, `A │ B`) **vont wrapper** — pas cassé, mais à retravailler (labels
+courts, ou empilé). `ShotCountChip` ×3 : OK. Sliders `width:100%` : OK. **`AimedLocationPicker`
+`[VÉRIFIÉ]` est DÉJÀ `width: 45%, maxWidth: 130px` centré** → la silhouette 2 sous-colonnes (D11)
+**passe** (130 + résumé ~90 dans 236). Point 8 de ma crainte initiale : levé. → 4c = réagencement
+avec 2-3 rows à retoucher, pas une réécriture.
+
+**2. `buildWeaponList` pur — CONFIRMÉ `[VÉRIFIÉ]`.** `shared/weaponSlots.js` (`flattenItemsBySlot`,
+`resolveHandWeapons`, `handSlotDisplayRows`) est **conçu partagé serveur+client**, pas d'import React
+ni store → `buildWeaponList` s'importe dans `node --test`. Le `.test.mjs` du 4a est faisable.
+
+**3. `mapSelected` (Set PJ) est porteur, pas seulement du rendu `[VÉRIFIÉ]`.** Usages hors rendu :
+- l.395 : **l'aperçu MJ** (`COMBAT_ANNOUNCE_PREVIEW`) émet `actions: [...mapSelected]` (+`'move'`).
+- l.469/470/601 : `attackSelected` / `meleeSelected` / `reloadSelected` → alimentent
+  `buildHumanDeclarePayload` **et** la validité.
+→ le retrait de `mapSelected` (4d) doit **reconstruire le champ `actions` de l'aperçu MJ** depuis le
+nouvel état (arme distance sélectionnée → `'attack'`, contact → `'melee'`, move → `'move'`, reload →
+`'reload'`) — **pas juste du rendu**. À écrire dans le 4d.
+
+**4. La ligne Déplacement (D13) doit respecter `combatMode`.** Charge et Retraite **possèdent** le
+déplacement (gratuit, chaîné). Le code actuel a déjà la garde (`if (combatMode === 'charge' ||
+'retraite') return`, `CombatActionWindow` l.1088). La ligne D13 en hérite — grisée / remplacée quand
+Charge/Retraite actif. À porter, pas à réinventer.
+
+**5. Profondeur de dépendance : module 4 exige 2 + 3 + M0.4 tous faits.** Long segment (3 modules
+semi-invisibles) avant la 1ʳᵉ vraie validation navigateur de Saar, avec du risque accumulé. **Option
+de dé-risquage** : prototyper le **4b (col. 1 liste groupée)** contre les fenêtres **actuelles**
+(avant 2/3/M0.4) — jetable, mais tranche tôt la question de fond « est-ce que *l'arme EST l'action*
+fonctionne à l'usage ? ». **À proposer à Saar** — coût = 1 prototype jeté, gain = ne pas découvrir un
+problème de modèle d'interaction après 2/3/M0.4.
+
+**6. Coût UX de D5, assumé mais à nommer clairement.** « Sélectionner une arme = s'engager à
+l'attaquer » + PO-M4-e (changer d'arme = reset de la config col. 2) → **on ne peut pas parcourir les
+détails d'une arme sans perdre sa config en cours**. Saar l'a assumé (§7 PO3 « transition entre armes
+= reset (à assumer) »). Ce n'est pas caché, mais c'est un vrai coût : un joueur qui hésite entre 2
+armes et configure la 1ʳᵉ perd tout en cliquant la 2ᵉ. Atténuation possible (hors périmètre M4) :
+garder la config par arme (`Map<weaponId, config>`) — **non**, over-engineering, contraire au
+principe « changement minimal ». Assumé tel quel, tracé ici.
+
+**7. 4e (exo) n'est pas une simple « bascule » `[VÉRIFIÉ]`.** `CombatExoActionWindow` est
+structurellement ≠ : panneau unique `S.panel`, pas de col. 2, `useExoDeclare` avec son propre
+ciblage, **pas de dual-wield / Tir Multi / Tir visé** (bloqués serveur). Sa col. 2 = un
+`AssaultRangedPanel` **fortement réduit** (cible + mode de tir affiché, rien d'autre) — même
+composant avec des props qui masquent des sections, ou un panneau exo dédié minimal ? **Mini-cadrage
+dans le 4e**, pas du copier-coller.
+
+**8. Suppression `CombatDeclareStateSelector` (4d) — re-vérifier « mort » au moment du 4d.** Après
+module 3 (position/vitesse/weapon) + module 4 (fire_mode), les 4 usages `CombatActionWindow`
+disparaissent. Re-grep à ce moment (un autre fichier a pu l'importer entre-temps — sessions
+parallèles).
+
+**Conclusion — module 4 se fait, révisé :**
+- 4c = réagencement avec 2-3 rows à retoucher (RL_BUTTONS, segments) — pas 100 % « CSS only ».
+- 4d **inclut** la reconstruction du champ `actions` de l'aperçu MJ (point 3), pas seulement le
+  rendu.
+- **Proposer à Saar** un prototype jetable de 4b contre les fenêtres actuelles pour valider D5 tôt
+  (point 5).
+- Coût UX D5 (pas de parcours sans engagement) : assumé, tracé (point 6).
+- 4e : mini-cadrage exo (col. 2 réduite), pas une bascule (point 7).
+- Découpe 4a-4e inchangée. 1 sous-module validé (golden master + navigateur) avant le suivant.
