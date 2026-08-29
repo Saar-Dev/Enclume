@@ -360,10 +360,11 @@ par fenêtre + checklist manuelle.
 **Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
 d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
 (`Tir | Recharger`, `AssaultRangedPanel` / `MeleeCombatPanel` réagencés en colonne, silhouette 2
-sous-colonnes). Absorbe §4.1. Risque **élevé** — mais avec le module 0 fait, la logique de payload est
-extraite et testée : le module 4 **consomme `useHumanDeclare` et ne fait que du rendu**. Le golden
-master casse au moindre changement de payload. PO2/PO3 (mode « Défensif », faisabilité col. 2 264 px,
-satellite qui suit) éprouvés au cadrage du module 4, **avant** le code.
+sous-colonnes). Absorbe §4.1. **Déplace `fire_mode` en col. 2 → supprime `CombatDeclareStateSelector`**
+(devenu code mort après ce déplacement — `[VÉRIFIÉ]` seul usage restant, §14.11 pt 1). Risque
+**élevé** — mais module 0 fait : logique de payload extraite + testée, le module 4 **consomme
+`useAssaultDeclaration` / `useMeleeDeclaration` (M0.4) et ne fait que du rendu**. Golden master casse
+au moindre changement de payload. PO2/PO3 éprouvés au cadrage du module 4, **avant** le code.
 
 **Module 5 — Pied unifié (D12).** `CombatDeclareFooter` : pastille + statut + `Passer le tour` (ghost)
 + `Déclarer` (primaire, raison bloquante si `!canDeclare`). Consommé par les 3 (slot `footer` du
@@ -790,7 +791,10 @@ change de famille, pas 3.**
 
 - Le frame **possède** `useDraggable` (plus dans chaque fenêtre) et rend la poignée de drag sur le
   header. Poignée basse MJ : à conserver comme option `bottomHandle?` ou à abandonner — **PO-M2-a**.
-- `satellite={null}` → pas de boîte satellite rendue (drone, et tous les états non-déclaration).
+- **`satellite` = rendu comme *frère positionné*** (`position: absolute`, `left = pos.left - SAT_W -
+  GAP`, `top = pos.top`, `z-index` = celui du frame), **pas enfant** (`overflow: hidden` le
+  clipperait) — le frame l'expose donc via son `pos` interne (§14.5, §14.11 pt 6-7). Masqué avec le
+  frame (`hidden`). `satellite={null}` → rien rendu (drone, états non-déclaration).
 - `footer={null}` → pas de barre de pied rendue (états non-déclaration sans action).
 - `hidden` remplace les 3 recopies inline de `opacity/pointerEvents`.
 - Le frame ne connaît **aucun** état métier — il ne sait pas ce qu'est la surprise ou la résolution.
@@ -1066,16 +1070,17 @@ frère que le frame positionne à partir de son `pos`. Le `hidden` du frame masq
 gratuit (le satellite lit `pos` à chaque rendu). Clamp bord d'écran gauche : si `pos.left - SAT_W < 8`,
 le satellite passe à droite (`left: pos.left + windowWidth + GAP`) — **PO-M3-d**.
 
-### 14.6 Exo — payload `state` + test de caractérisation
+### 14.6 Exo — payload `state` (pas de nouvelle fonction pure, cf. §14.11 pt 4)
 
-`CombatExoActionWindow.handleDeclare` envoie aujourd'hui `state: {}`. Avec le satellite il passe à
-`state: { position, weapon, (vitesse?) }`. L'exo n'a pas de `declarationReducer` → **réutiliser
-`declarationReducer` + `snapFromRosterEntry`** (déjà partagés, pas un mini-reducer maison — Règle 2).
-`buildExoMapActions` ne couvre **que `mapActions`**, pas `state` → **ajouter `buildExoDeclareState(sel)`
-pur + test de caractérisation** (patron module 0) figeant ce fragment neuf, **y compris le cas
-`prone → autre` = `isExoStandUpAttempt`** (le client envoie `state.position`, le serveur diffère
-l'écriture — le payload client, lui, est le même qu'une transition normale). Golden master PJ/MJ
-non concerné (mêmes `decl.*`, mêmes `buildXDeclarePayload`).
+`CombatExoActionWindow.handleDeclare` envoie aujourd'hui `state: {}`. Avec le satellite :
+- **réutiliser `declarationReducer` + `snapFromRosterEntry`** (déjà partagés — Règle 2, pas de
+  mini-reducer maison) ;
+- `handleDeclare` (branche « déclaration normale ») envoie `state: { position, weapon, vitesse }`
+  lus de `decl` — **passe-plat de 3 champs, pas de l'assemblage** → **aucune** `buildExoDeclareState`,
+  **aucun** test de caractérisation neuf (le patron module 0 visait le payload complexe).
+- branche « se relever » (`prone` → autre, §14.3) : `handleStandUp` existant, envoi immédiat.
+
+`buildExoMapActions` inchangé. Golden master PJ/MJ non concerné.
 
 ### 14.7 Seam `fire_mode` (PJ/MJ : reste au corps jusqu'au module 4)
 
@@ -1114,3 +1119,76 @@ fenêtre + checklist manuelle** (comme module 2). Rollback : `git revert` par co
   système chat + jet (mécanisme serveur déjà là) ; réussite → DEBOUT, échec → fin de tour.
 - Satellite strictement collé au frame (`pos` du frame, D8). Clamp bord d'écran = détail
   d'implémentation (passe à droite si pas la place à gauche).
+
+### 14.11 Analyse à charge du module 3 (2026-08-29)
+
+Revue critique du cadrage §14, étape distincte (checkpoint).
+
+**1. Réutilisation des briques — vérifiée saine, avec un décalage de timing. `[VÉRIFIÉ]`**
+`CombatDeclareStateChip` n'est utilisé **que** dans `CombatGmDeclareWindow` (position, weapon,
+fire_mode). Lui ajouter un `glyph` optionnel n'a aucun effet collatéral. `CombatDeclareStateSelector`
+n'est utilisé **que** dans `CombatActionWindow` (4 usages : position/vitesse/weapon → satellite au
+module 3 ; **fire_mode reste** jusqu'au module 4). → `CombatDeclareStateSelector` devient **du code
+mort au module 4** (quand fire_mode part en col. 2) : **le module 4 le supprime**, pas le module 3.
+À noter dans le cadrage du module 4.
+
+**2. `glyph` doit dégrader.** Un `CombatDeclareStateChip` sans `glyph` (appelant qui l'oublie, ou
+usage futur) doit rendre le label texte comme aujourd'hui. Garde triviale (`{glyph && <span
+class="chip-glyph" style={maskImage}/>}`), à écrire explicitement.
+
+**3. La puce Posture exo `prone` n'a PAS le comportement d'une puce normale — le cadrage le
+minimise.** Puce normale : `onChange` → `dispatch({type:'SET_FIELD', key:'position'})` → attend
+DÉCLARER. Exo `prone` (Saar : « **au clic**, message chat + jet ») = **envoi immédiat**, hors
+DÉCLARER, comme `handleStandUp` aujourd'hui. → le `onChange` câblé par `CombatExoActionWindow` pour
+sa puce Posture **branche** : `isProne ? emitStandUp() : dispatch(SET_FIELD)`. La brique
+`CombatDeclareStateChip` **reste générique** ; le branchement vit dans le wiring de la fenêtre exo.
+À écrire noir sur blanc dans le module (sinon on croit à tort « même puce, même comportement »).
+
+**4. `buildExoDeclareState` + test = scope creep — retiré.** §14.6 proposait une fonction pure +
+test de caractérisation pour le fragment `state` exo. Or ce fragment est un **passe-plat de 3
+champs** (`{position, weapon, vitesse}` lus de `decl`), pas de l'assemblage — le patron module 0
+visait le payload **complexe** (dual-wield, Tir Multi, Charge). → `CombatExoActionWindow` **réutilise
+`declarationReducer`** (déjà partagé) et envoie `state: { position, weapon, vitesse }` ; **pas de
+nouvelle fonction pure, pas de nouveau test**. Le seul point qui mériterait un test est la branche
+`emitStandUp` (point 3) — c'est de la logique fenêtre, couverte par la checklist manuelle. **§14.6
+réécrit.**
+
+**5. Effet mécanique de l'axe `weapon` pour un exo : `[INCONNU]`.** Saar confirme que l'axe est
+**proposé** (aucune restriction RAW trouvée). Mais est-ce que `state_weapon: 'holstered'` **fait
+quelque chose** à la Résolution pour un exo (bloque l'attaque ? INI ?) ou est-ce **purement
+déclaratif** ? `combatRosterBroadcast.js:11` note que `state_weapon` est « lu directement ailleurs
+pour une règle de jeu » — **pas tracé**. Ne pas trancher (leçon rounds 5/6). À vérifier au moment du
+code, ou question à Saar : *l'état d'arme exo gate-t-il quelque chose, ou c'est du flavor ?*
+
+**6. Le satellite-frère alourdit le module 2 au-delà de « wrapper minimal » (§13.11 pt 5).** Un
+`CombatDeclareFrame` qui « réutilise `.combat-float-win` » **et** possède `pos` **et** rend un panneau
+frère positionné, c'est plus que minimal. Pas une contradiction, mais le **livrable du module 2 doit
+lister explicitement** : « expose `pos`, rend le slot `satellite` comme frère positionné + masqué
+avec le frame ». À ajouter au §13.3 / §13.11.
+
+**7. z-index du satellite-frère.** Élément absolu séparé dans l'overlay, à côté des autres fenêtres
+de combat → besoin d'un `z-index` explicite (aligné sur celui du frame, ou frame+1). Détail, nommé.
+
+**8. Perf drag.** `setPos` par `mousemove` re-rend frame + satellite (3 puces `mask-image`). Les
+fenêtres actuelles re-rendent déjà entièrement au drag → acceptable ; les 3 SVG masqués sont un coût
+neuf négligeable. Non-sujet.
+
+**9. Repli si le positionnement du frère résiste au code.** D8 veut « suit la fenêtre ». Si la
+synchro frère se révèle fragile (clamp, multi-écran, z-index), replis gracieux **à montrer à Saar
+avant de s'entêter** : (a) satellite accroché mais **non suiveur** (position fixe à gauche) ;
+(b) section repliable « STATUT » en tête du corps. Nommés pour ne pas être une surprise.
+
+**10. Glyphe `prone → crawl`.** `crawl` évoque le **déplacement** à plat, `prone` (couché) est une
+**posture statique**. Léger décalage sémantique — jugement Saar (ses glyphes). `crawl.svg` est aussi
+celui au `clipPath` (centrage à valider).
+
+**Conclusion — module 3 se fait, révisé :**
+- Brique `CombatDeclareStateChip` + `glyph` (dégradant, point 2). `CombatDeclareStateSelector`
+  supprimé **au module 4**, pas ici (point 1).
+- Exo : `declarationReducer` réutilisé, `state: {position, weapon, vitesse}` ; **pas de
+  `buildExoDeclareState`** (point 4). Le `onChange` de la puce Posture exo branche `prone → emit
+  immédiat` (point 3).
+- `weapon` exo : `[INCONNU]` sur l'effet résolution (point 5) — à lever au code / avec Saar.
+- Dépendance module 2 explicitée (point 6) + z-index (7) + repli nommé (9).
+- Livrable : 1 commit brique partagée (`CombatDeclareStatePanel` + `glyph` sur le chip) + 1 commit
+  par fenêtre + checklist manuelle.
