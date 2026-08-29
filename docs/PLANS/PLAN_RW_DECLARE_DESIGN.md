@@ -1802,17 +1802,23 @@ rangée de boutons → pas de collision spatiale avec le message de statut (dans
 ≤ 4 s les deux coexistent (bandeau erreur + « Prêt »/`blockReason`) — acceptable. Règle : le bandeau
 garde sa ligne, le message de statut la sienne.
 
-**7. PO neuf — poids visuel de « Passer le tour » quand « Déclarer » est grisé.** D12 : « Passer le
-tour » = ghost, plus petit. Mais c'est **le** bouton dont on a besoin quand Déclarer est grisé
-(rien / action incomplète qu'on abandonne). Le bouton le plus utile est le plus discret. → soit
-D12 tient (Déclarer toujours visuellement primaire, « Passer » = choix délibéré assumé secondaire),
-soit « Passer » se promeut quand Déclarer est grisé. **PO-M5-e.**
+**7. PO-M5-e — poids visuel de « Passer le tour » quand « Déclarer » est grisé — TRANCHÉ (Saar
+délègue « l'expert UI/UX décide »).** **Hiérarchie stable : « Passer le tour » reste un bouton
+secondaire constant, il ne se promeut jamais.** Un bouton qui change de taille/poids selon l'état
+fait perdre au joueur son repère spatial (`react.md` : « un bouton ne doit pas bouger sous le
+curseur »). Quand « Déclarer » est grisé, c'est le **message de statut** (`blockReason`) qui guide —
+« Déclarer » grisé + raison claire + « Passer le tour » toujours au même endroit suffit. Pas
+d'animation de promotion.
 
-**8. PO neuf — « Passer le tour » quand un changement d'état satellite existe.** Si le joueur s'est
-accroupi (déclaration valide, `hasCompleteAction` vrai via changement d'état) puis clique « Passer le
-tour » : « Passer » = « rien faire ». Mais s'accroupir **n'est pas rien**. → « Passer le tour »
-**écrase-t-il** le changement d'état (envoie `state: {}`, perd l'accroupissement) ? Ou est-il grisé /
-absent quand `hasCompleteAction` ? Un clic réflexe perd l'accroupissement. **PO-M5-f.**
+**8. PO-M5-f — « Passer le tour » quand un changement d'état satellite existe — RECO (Saar proposait
+une pop-up de validation).** *Reco UI/UX :* **pas de pop-up.** Une confirmation en pleine déclaration
+est de la friction sur un chemin fréquent (on tripote la posture, on change d'avis). Modèle propre :
+**« Passer le tour » = « je n'ai RIEN configuré et je choisis de ne rien faire »** — donc il est
+**actif ⟺ `!hasCompleteAction`**. Un changement de posture **est** une déclaration → « Déclarer »
+s'active, « Passer » se **grise** (tooltip : « Vous avez une action en cours »). Pour passer malgré
+tout : remettre la posture à sa valeur initiale (1 geste, honnête). Rien à écraser, rien à confirmer.
+« Toujours disponible » de D12 = **toujours visible**, pas toujours cliquable. **À valider Saar** (sa
+pop-up reste l'option de repli si « toujours cliquable » est ferme).
 
 **Conclusion — module 5 se fait, révisé :**
 - `hasCompleteAction` = **helper pur `.mjs` testé** (point 1), modèle « commencé ≠ complet, canDeclare
@@ -1820,7 +1826,8 @@ absent quand `hasCompleteAction` ? Un clic réflexe perd l'accroupissement. **PO
 - `onPassTurn` **par famille** (point 3) ; la tuile « Passer » du drone **disparaît** (point 4).
 - `blockReason` assemblé **par fenêtre**, le pied affiche (point 5).
 - Bandeau erreur : ligne séparée, cohabite ≤ 4 s (point 6).
-- 2 PO neufs : poids visuel de « Passer » si Déclarer grisé (PO-M5-e) ; « Passer » + changement
-  d'état satellite (PO-M5-f).
+- PO-M5-e **tranché** : « Passer » = hiérarchie stable, pas de promotion (point 7).
+- PO-M5-f **reco** : « Passer » actif ⟺ `!hasCompleteAction` (visible toujours, grisé si action en
+  cours) — pas de pop-up (point 8), à valider Saar.
 - Livrable : 1 commit (ou 1 par fenêtre) + `.test.mjs` de `hasCompleteAction` + checklist manuelle
   (chaque `blockReason`).
