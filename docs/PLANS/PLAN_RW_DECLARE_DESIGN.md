@@ -143,7 +143,7 @@ maison, absente du RAW et de `VOCABULARY.md` (corrigé : V2.6). « Mêlée » = 
 | # | Décision |
 |---|---|
 | D1 | **Une seule structure visuelle**, PJ / MJ-PNJ / Drone / Exo. Châssis, disposition, blocs, pied, tokens = partagés. **Pilotage non partagé** : le MJ garde navigation séquentielle + preview, le PJ garde multi-phases. `[VÉRIFIÉ]` le roster MJ n'est **pas** cliquable — l'idée « clic = navigue » de la v1 du plan était une invention, retirée. |
-| D2 | **Skin HUD combat cyan conservé.** Le Wizard = référence de discipline structurelle, pas de palette. |
+| D2 | ~~Skin HUD combat cyan conservé ; le Wizard = discipline structurelle, pas de palette.~~ **RÉVISÉ 2026-08-29 (§18 P7)** : Saar tranche pour la **teinte Wizard** (navy profond opaque, cyan vif `#2FD7FF`, radius 9, halo léger) — **sans** le verre/flou/halos/type fine. Les fenêtres de déclaration s'écartent donc du `--combat-*` brut. Autres fenêtres de combat (RÉSOLUTION) : inchangées → **couture assumée** (hors périmètre §8). |
 | D3 | **Accent par famille** via `--combat-accent-*` (fg/bg/border) basculé par `data-family`. PJ vert `#50c878`, MJ-PNJ orange `#c86030`, Drone teal `#30aaaa`, **Exo violet `#9858c8`** (confirmé). Cyan `--combat-title` = chrome partagé uniquement. Retire l'accent bleu `#5b8dee` parasite des sélections. |
 | D4 | **Réconciliation des tokens `--combat-*`** (module 1) : un seul jeu canonique dans `index.css` (vocabulaire réel + export DS), `--combat-accent-*`, `--combat-drone-*` (existe) + `--combat-exo-*` (neuf), suppression des hex en dur des objets `W`/`S` des `.jsx`. Dérogation assumée à D8 de `PLAN_RW_DECLARE_WINDOWS` — c'est la passe design que ce D8 réservait. |
 | D5 | **L'arme EST l'action.** Liste d'armes groupée (Distance / Contact), choisir une arme = déclarer cette attaque. Plus de radio « Tir / Corps à corps » séparé, plus de bloc ARMEMENT redondant. Reprend la proposition exo de Saar, généralisée. |
@@ -772,10 +772,13 @@ module 0 en filet.
 | `useDraggable` clé | `combat-action-pos` | `combat-gm-declare-pos` | `combat-exo-action-pos` |
 
 **Divergences réelles à absorber :** 2 familles CSS (session vs combat), la poignée basse MJ, le
-bloc titre MJ enrichi (nom + progression), `.combat-win` en `absolute` vs `fixed`. ~~Choix proposé :
-adopter la palette combat dédiée `--combat-*`.~~ **→ révisé par l'analyse à charge §13.11 point 5 :
-réutiliser `.combat-float-win` existant (2 fenêtres sur 3 déjà dessus), MJ bascule dessus — 1 fenêtre
-change de famille, pas 3.**
+bloc titre MJ enrichi (nom + progression), `.combat-win` en `absolute` vs `fixed`. Historique du
+choix de base : ~~palette `--combat-*`~~ → ~~réutiliser `.combat-float-win` tel quel (§13.11 pt 5)~~
+→ **révisé encore (§18 P7, Saar 2026-08-29) : teinte Wizard.** Le frame porte donc **son propre jeu
+de tokens** (navy profond, cyan vif, radius 9, halo) scopé à `.combat-float-win[data-family]` — la
+classe de base `.combat-float-win` **reste intacte** pour les fenêtres de RÉSOLUTION qui la partagent.
+Le MJ bascule sur `.combat-float-win[data-family="gm-pnj"]`. Ce n'est plus un « re-parentage
+minimal » — c'est un décalage de palette assumé (§13.5, §13.11 pt 5 caduc sur ce point).
 
 ### 13.3 API cible `CombatDeclareFrame`
 
@@ -831,27 +834,41 @@ et 3). Aucun nouveau composant pour ces 6 états — juste le frame + un enfant.
 (`rosterSection`, présent « dans tous les états » selon le code) : à décider s'il passe dans le frame
 ou reste un enfant du corps — **PO-M2-b**.
 
-### 13.5 Tokens d'accent (D3/D4) — `--combat-accent-*` + `--combat-exo-*`  `[VÉRIFIÉ]`
+### 13.5 Tokens — accent famille (D3) + **teinte Wizard** (§18 P7)  `[VÉRIFIÉ]`
 
-`index.css` a déjà (l.157-165) : `--combat-pj-{fg,bg,border}` (#50c878 vert), `--combat-pnj-*`
-(#c86030 orange), `--combat-drone-*` (#30aaaa teal). **Absent** : `--combat-exo-*`, `--combat-accent-*`.
+`index.css` a déjà : `--combat-pj-*` (#50c878), `--combat-pnj-*` (#c86030), `--combat-drone-*`
+(#30aaaa), et le jeu `--wiz-*` (navy `#0a1524`/`#071019`, cyan `#2FD7FF`). **Absent** :
+`--combat-exo-*`, `--combat-accent-*`, un jeu de tokens « fenêtre de déclaration ».
 
-Module 2 ajoute (le sélecteur = `.combat-float-win[data-family]`, pas de classe neuve — §13.11 pt 5) :
+Module 2 ajoute — **scopé à `.combat-float-win[data-family]`, la classe de base reste intacte
+(fenêtres RÉSOLUTION)** :
 ```
 :root {
-  --combat-exo-fg: #9858c8; --combat-exo-bg: #140a1e; --combat-exo-border: #9858c8;
-  /* --combat-exo-bg : [INFÉRÉ], à valider à l'œil par Saar (§13.11 pt 5) */
+  --decl-bg:      #0a1524;   /* navy profond opaque (teinte Wizard, P7) */
+  --decl-head:    #071019;
+  --decl-line:    rgba(255,255,255,0.10);
+  --decl-chrome:  #2FD7FF;   /* cyan vif */
+  --decl-radius:  9px;
+  --combat-exo-fg: #9858c8; --combat-exo-bg: #1a0f28; --combat-exo-border: #9858c8;
+  /* --combat-exo-bg : [INFÉRÉ], à valider à l'œil par Saar */
 }
-.combat-float-win[data-family="pj"]     { --combat-accent-fg: var(--combat-pj-fg);   … }
-.combat-float-win[data-family="gm-pnj"] { --combat-accent-fg: var(--combat-pnj-fg);  … }
-.combat-float-win[data-family="drone"]  { --combat-accent-fg: var(--combat-drone-fg);… }
-.combat-float-win[data-family="exo"]    { --combat-accent-fg: var(--combat-exo-fg);  … }
+.combat-float-win[data-family] {           /* teinte Wizard, toutes familles de déclaration */
+  background: var(--decl-bg); border-color: var(--decl-line); border-radius: var(--decl-radius);
+}
+.combat-float-win[data-family] .combat-float-header { background: var(--decl-head); }
+.combat-float-win[data-family="pj"]     { --combat-accent-fg: var(--combat-pj-fg);    … }
+.combat-float-win[data-family="gm-pnj"] { --combat-accent-fg: var(--combat-pnj-fg);   … }
+.combat-float-win[data-family="drone"]  { --combat-accent-fg: var(--combat-drone-fg); … }
+.combat-float-win[data-family="exo"]    { --combat-accent-fg: var(--combat-exo-fg);   … }
 ```
-**Module 2 se limite à *définir* ces tokens** (+ les consommer sur le châssis : bordure de fenêtre,
-accent du header). La conversion des `#5b8dee` / `rgba(91,141,238,*)` (« bleue parasite », D3) →
-`var(--combat-accent-*)` vit dans le **corps** des fenêtres → sous-objectif des modules **3/4/5**,
-pas 2 (§13.11 pt 3). La conversion hex→token complète (~260 occ.) reste hors périmètre (§8).
-`data-family` en **attribut** (PO1 tranché : pas de classe `.combat-fam-*`).
+- **Charte de famille = couleur seule** (§18 P1) : liseré d'accent 2 px en tête + bordure header
+  teintée + accent partout. **Pas de label.**
+- Halo léger `box-shadow: 0 0 14px color-mix(in srgb, var(--combat-accent-fg) 28%, transparent)` sur
+  la sélection d'arme + le bouton Déclarer.
+- Le titre reste `--decl-chrome` (cyan vif), pas l'accent famille (chrome partagé, D3).
+- Conversion des `#5b8dee` parasites → `--combat-accent-fg` : dans le **corps**, sous-objectif des
+  modules 3/4/5 (§13.11 pt 3). Conversion hex→token complète (~260 occ.) hors périmètre (§8).
+- `data-family` en **attribut** (PO1).
 
 ### 13.6 Motif PCB (D14)  `[VÉRIFIÉ]` `ChangelogPanel.jsx`
 
@@ -960,11 +977,13 @@ séparés — la fusion GM + Joueur est rejetée ». Le frame est du **châssis*
 liste déjà les briques `CombatDeclare*` et nomme le frame comme « chantier design séparé ».
 `CombatDeclareFrame` s'ajoute à la table des briques de P58 à la clôture.
 
-**Conclusion — le module 2 se fait, révisé :**
-- Frame = **wrapper structurel minimal** réutilisant `.combat-float-win` ; MJ bascule dessus (1
-  fenêtre change de famille, pas 3).
-- `--combat-accent-*` + `--combat-exo-*` **définis** ; conversion `#5b8dee` **repoussée aux modules
-  3/4/5**.
+**Conclusion — le module 2 se fait, révisé (dont §18 P7 : plus « minimal ») :**
+- Frame = wrapper structurel réutilisant la **classe** `.combat-float-win` (MJ bascule dessus), **mais
+  avec un décalage de palette assumé** (teinte Wizard, §13.5) scopé à `[data-family]` — la classe de
+  base reste pour la RÉSOLUTION.
+- `--combat-accent-*` + `--combat-exo-*` + le jeu `--decl-*` (navy/cyan vif/radius 9/halo) **définis** ;
+  charte de famille = couleur seule, pas de label (§18 P1) ; conversion `#5b8dee` **repoussée aux
+  modules 3/4/5**.
 - PCB sur le header seulement.
 - `bottomHandle` conservé (option du frame).
 - Contrainte Rules-of-Hooks : frame = élément le plus externe de chaque `return`.
@@ -1852,5 +1871,5 @@ pop-up reste l'option de repli si « toujours cliquable » est ferme).
 | P4 | **Les groupes ne sont PAS colorés.** Le glyphe (feu / lame) + le texte suffisent à distinguer Distance de Contact. **Une seule couleur d'accent = celle de la famille** (D3), réservée à la sélection + aux états actifs. **Rouge et vert sémantiques réservés à leur sens** (erreur / succès). → neutralise aussi les rouges de `AssaultRangedPanel` et les verts de `MeleeCombatPanel` au **module 4** (mêmes que `--combat-accent-*`). | **validé Saar** (« excellent ») | **révise D3** ; élargit le module 4 |
 | P5 | **`DÉPLACEMENT` · `DISTANCE` · `CONTACT` = 3 en-têtes d'action pairs** : même police (`--font-mono`), même taille, même graisse, même tracking, **chacun son glyphe**. Ce sont des actions primordiales au même niveau — Déplacement (D13) n'est plus une « ligne » à part visuellement, c'est un pair. | **validé Saar** | révise §16.3 (structure col. 1) |
 | P6 | **Glyphe « Déplacement » à produire** (Saar, comme les autres `assets/status/`). Placeholder = double chevron dans le prototype. | à faire (Saar) | + 1 asset |
-| P7 | **Palette : HUD combat vs teinte Wizard** — en cours d'arbitrage visuel (prototype, bouton de bascule au-dessus d'une battlemap simulée). Position par défaut = HUD (grounds opaques, lisibilité au-dessus de la 3D). D2 (« Wizard = discipline structurelle, pas palette ») tient sauf décision contraire de Saar. | ouvert | D2 |
+| P7 | **Palette : TEINTE WIZARD — tranché Saar 2026-08-29 (« clairement »).** Les fenêtres de déclaration adoptent la teinte du module création de perso : grounds **navy profond opaque** (`#0a1524` / `#071019`, PAS de verre/flou), bordures `rgba(255,255,255,0.10)`, chrome cyan **vif** `#2FD7FF` (au lieu de `#3a8aaa`), radius **9 px** (au lieu de 3), léger **halo** `0 0 14px rgba(accent,0.28)` sur sélection + Déclarer. **Restent dehors** : `backdrop-filter`, transparence verre, halos radiaux pulsés, type fine (densité + lisibilité au-dessus de la 3D). | **tranché Saar** | **révise D2** ; élargit le module 2 (§13.5/§13.11) |
 | P8 | **Flash de reset col. 2** : neutre (accent de la nouvelle arme + léger glissement), **jamais rouge** — recharger le panneau n'est pas une erreur. | tranché | neuf |
