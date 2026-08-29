@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
-import { useSessionStore } from '../stores/sessionStore'
 import { useTokenStore } from '../stores/tokenStore'
 import { useAutoMoveMode } from '../lib/useAutoMoveMode.js'
 import { useExoDeclare } from '../lib/useExoDeclare.js'
 import { firstFireMode } from '../../../shared/fireModes.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
-import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
+import CombatDeclareFooter from './CombatDeclareFooter.jsx'
+import { assaultCheck, buildBlockReason } from '../lib/declareChecks.js'
 import api from '../lib/api.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §8.5/§9 — fenêtre dédiée exo-armure, réutilisée à l'identique côté
@@ -32,9 +32,7 @@ export default function CombatExoActionWindow({
 }) {
   const { t } = useTranslation('combat')
   const { roster, phase, activeTokenId } = useCombatStore()
-  const declareError = useSessionStore(s => s.declareError)
   const tokens = useTokenStore(s => s.tokens)
-  const [isDeclaring, setIsDeclaring] = useState(false)
   const [allures, setAllures] = useState(null)
   const [alluresError, setAlluresError] = useState(null)
   const [moveSelection, setMoveSelection] = useState(null)
@@ -62,18 +60,10 @@ export default function CombatExoActionWindow({
 
   // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central) → sessionStore →
   // <CombatDeclareErrorBanner>. Plus de socket.on local (REACT.md P57, module 3).
-  // Reste ici, spécifique à l'exo : un refus serveur doit lever le verrou "ENVOI…" (isDeclaring),
-  // sinon le bouton et toute la fenêtre restent figés — la fenêtre ne se démonte que sur
-  // has_announced=true (succès), jamais sur un refus (PC23, portée, munitions, se relever inéligible…).
-  // Ajustement pendant le rendu (react.dev « adjusting state on prop change », même patron que
-  // SidebarChatTab.jsx / creation/Step4Experience.jsx) plutôt qu'un setState en corps d'effet
-  // (react-hooks/set-state-in-effect). Gardé sur `declareError.id` : ne se redéclenche pas si
-  // l'utilisateur reclique DÉCLARER pendant que la bannière du refus précédent est encore affichée.
-  const [handledDeclareErrorId, setHandledDeclareErrorId] = useState(null)
-  if (declareError && declareError.id !== handledDeclareErrorId) {
-    setHandledDeclareErrorId(declareError.id)
-    if (isDeclaring) setIsDeclaring(false)
-  }
+  // Plus de verrou d'envoi « ENVOI… » (`isDeclaring`) — module 5 (§5.10) : l'exo était la seule
+  // fenêtre à en avoir un ; le garde serveur `has_announced === false` est idempotent (un
+  // double-clic sur DÉCLARER émet 2 fois, la 2ᵉ est rejetée), PJ/MJ n'en ont pas et n'ont aucun
+  // problème.
 
   // fetch allures — suit l'exo actif. Le calcul VIT/3-modes (surface/sous-marine, délégation pilote,
   // milieu bloqué) reste entièrement côté serveur (getExoMovementBudget) — jamais réimplémenté ici
@@ -105,7 +95,6 @@ export default function CombatExoActionWindow({
   // à false) — même discipline que CombatActionWindow (reset des états tactiques sur ces deux événements).
   useEffect(() => {
     setMoveSelection(null)
-    setIsDeclaring(false)
   }, [rosterEntry?.token_id, rosterEntry?.has_announced])
 
   // Déplacement : survol/preview ambiant par défaut, même patron que CombatActionWindow (PJ)/
@@ -156,8 +145,7 @@ export default function CombatExoActionWindow({
   // intermédiaire crouching/kneeling, §9.4) — jamais mise en attente derrière le bouton DÉCLARER,
   // contrairement au Déplacement.
   const handleStandUp = () => {
-    if (!socket || isDeclaring) return
-    setIsDeclaring(true)
+    if (!socket) return
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
       state: { position: 'standing' },
@@ -172,8 +160,7 @@ export default function CombatExoActionWindow({
   // inchangé quand le payload ne le fournit pas, pose seulement has_announced:true). Toujours
   // disponible, y compris à terre (alternative à "Tenter de se relever" ce Tour-là).
   const handleDeclare = () => {
-    if (!socket || isDeclaring || !exoDeclare.canDeclare) return
-    setIsDeclaring(true)
+    if (!socket || !exoDeclare.canDeclare) return
     socket.emit(WS.COMBAT_ACTION_DECLARE, {
       tokenId: playerToken.id,
       state: {},
@@ -219,6 +206,17 @@ export default function CombatExoActionWindow({
   const iniDelta     = calcIniDelta({}, {}, exoMapActions, null)
   const iniBreakdown = calcIniBreakdown({}, {}, exoMapActions, null, t)
 
+  // Pied unifié (module 5). L'exo n'a qu'un seul motif de blocage : arme sélectionnée sans cible.
+  const exoAttack = assaultCheck({
+    started:       !!exoDeclare.selectedExoWeaponId,
+    hasWeapon:     !!exoDeclare.selectedExoWeaponId,
+    targetsFilled: exoDeclare.assaultTargetId ? 1 : 0,
+    targetsNeeded: 1,
+    hasVariant:    true,   // mode de tir exo fixe, jamais à configurer
+    aimActive:     false,  // pas de Tir visé pour une exo
+  })
+  const hasCompleteAction = exoDeclare.canDeclareAttack || moveSelection != null
+
   return (
     <div className="combat-float-win" style={{
       position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
@@ -243,10 +241,10 @@ export default function CombatExoActionWindow({
           <div style={S.itemsGrid}>
             {isProne && (
               <div
-                style={{ ...S.item, gridColumn: 'span 2', ...(isDeclaring ? S.itemDisabled : {}) }}
+                style={{ ...S.item, gridColumn: 'span 2' }}
                 onClick={handleStandUp}
               >
-                <span style={S.itemLabel}>{isDeclaring ? t('exoActionWindow.sending') : t('exoActionWindow.standUpButton')}</span>
+                <span style={S.itemLabel}>{t('exoActionWindow.standUpButton')}</span>
               </div>
             )}
             {!isProne && (
@@ -336,26 +334,17 @@ export default function CombatExoActionWindow({
 
       <div className="combat-float-footer">
         <CombatDeclareErrorBanner />
-        {moveSelection && (
-          <div style={S.footerLeft}>
-            <span style={S.destination}>[{moveSelection.targetPosX}, {moveSelection.targetPosY}]</span>
-          </div>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-          <CombatDeclareIniWidget
-            currentInitiative={rosterEntry.initiative}
-            delta={iniDelta}
-            breakdown={iniBreakdown}
-          />
-          <button
-            className="btn-tac"
-            style={{ flex: 1, opacity: exoDeclare.canDeclare ? 1 : 0.4, cursor: exoDeclare.canDeclare ? 'pointer' : 'not-allowed' }}
-            onClick={handleDeclare}
-            disabled={isDeclaring || !exoDeclare.canDeclare}
-          >
-            {isDeclaring ? t('exoActionWindow.sending') : t('actionWindow.declareActionButton')}
-          </button>
-        </div>
+        <CombatDeclareFooter
+          currentInitiative={rosterEntry.initiative}
+          iniDelta={iniDelta}
+          iniBreakdown={iniBreakdown}
+          hasCompleteAction={hasCompleteAction}
+          canDeclare={exoDeclare.canDeclare}
+          blockReason={buildBlockReason({ assault: exoAttack })}
+          moveDestination={moveSelection ? { x: moveSelection.targetPosX, y: moveSelection.targetPosY } : null}
+          onDeclare={handleDeclare}
+          onPassTurn={() => socket?.emit(WS.COMBAT_ACTION_DECLARE, { tokenId: playerToken.id, state: {}, mapActions: {} })}
+        />
       </div>
     </div>
   )

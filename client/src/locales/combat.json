@@ -329,7 +329,6 @@
     "proneHint": "L'armure est à terre. Se relever demande un Test de Manœuvre d'armure — un échec fait passer le Tour sans autre action.",
     "normalHint": "Choisissez une destination et/ou une attaque puis Déclarer, ou Déclarer directement pour passer le Tour.",
     "standUpButton": "Tenter de se relever",
-    "sending": "Envoi...",
     "movementUnavailable": "Déplacement indisponible — {{reason}}",
     "weaponSectionTitle": "ARMEMENT",
     "noWeapon": "Aucune arme installée",
