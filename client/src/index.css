@@ -1711,7 +1711,14 @@ Convention :
   background: var(--decl-acc-bg);
 }
 [data-decl] .decl-move[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
-[data-decl] .decl-move__plus { font: 700 13px/1 var(--font-ui); color: var(--decl-text-dim); flex: none; }
+[data-decl] .decl-move__glyph {
+  width: 15px; height: 15px;
+  flex: none;
+  background-color: var(--decl-label);
+  -webkit-mask: url(/assets/status/movement.svg) center / contain no-repeat;
+          mask: url(/assets/status/movement.svg) center / contain no-repeat;
+}
+[data-decl] .decl-move[data-on="true"] .decl-move__glyph { background-color: var(--decl-acc); }
 [data-decl] .decl-move__label { flex: 1; font: 500 11px var(--font-ui); color: var(--decl-text); }
 [data-decl] .decl-move[data-on="true"] .decl-move__label { color: var(--decl-acc); }
 [data-decl] .decl-move__val { font: 400 10px var(--font-mono); color: var(--decl-text-dim); flex: none; }
@@ -1719,6 +1726,7 @@ Convention :
 
 /* Liste d'actions */
 [data-decl] .decl-list { padding: 4px 8px 8px; }
+[data-decl] .decl-list--extra { border-top: 1px solid var(--decl-sep); margin-top: 4px; padding-top: 8px; }
 [data-decl] .decl-list__eyebrow {
   display: flex;
   gap: 6px;

@@ -109,6 +109,15 @@ test('déduplication — un même id slotté deux fois (MG+MD) n\'apparaît qu\'
   assert.deepEqual(contact.filter(r => r.id === 'w-congre').length, 1)
 })
 
+test('forme MJ (batch /combat-equipment) : `name` résolu + `inv_id` — le nom s\'affiche', () => {
+  const gmScorpion = { id: 'e1', name: 'Scorpion', slot: 'MD', ref_fire_mode: 'CC', ref_caliber: '4L', ref_ammo_count: '24', ammo_remaining: 24 }
+  const gmCouteau  = { id: 'e2', name: 'Couteau Congre', slot: 'MG', ref_category: 'Arme de contact', ref_range: '0' }
+  const { distance, contact } = buildWeaponList({ rangedWeapons: [gmScorpion], meleeWeapons: [gmCouteau] })
+  assert.equal(distance[0].name, 'Scorpion')
+  assert.equal(contact[0].name, 'Couteau Congre')
+  assert.deepEqual(contact.map(r => r.id), ['e2', 'bare'])   // couteau puis mains nues, pas 2× mains nues
+})
+
 test('entrée vide — ne jette pas, renvoie mains nues seule', () => {
   assert.deepEqual(buildWeaponList(), { distance: [], contact: [
     { id: 'bare', kind: 'bare', group: 'contact', name: null, slotLabel: null, fireMode: null,

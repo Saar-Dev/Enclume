@@ -69,7 +69,7 @@ export default function CombatDeclareActionList({
           title={move.tooltip}
           onClick={() => { if (!move.disabled) move.onToggle() }}
         >
-          <span className="decl-move__plus">+</span>
+          <span className="decl-move__glyph" aria-hidden="true" />
           <span className="decl-move__label">{t('declareList.moveLabel')}</span>
           <span className="decl-move__val">{move.valueLabel}</span>
         </div>

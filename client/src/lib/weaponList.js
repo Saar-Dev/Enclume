@@ -37,8 +37,10 @@ const HAND_SLOTS = ['MG', 'MD', '2M', 'Tr']
  * @property {'mortallyWounded'|'stunned'|'ammoEmpty'|null} disabledReason
  */
 
+// PJ (inventaire /char-sheet) porte `custom_name`/`ref_name` ; MJ (batch /combat-equipment) porte
+// un `name` déjà résolu. Les deux formes alimentent buildWeaponList.
 function displayName(item) {
-  return item.custom_name || item.ref_name || null
+  return item.custom_name || item.ref_name || item.name || null
 }
 
 function slotOf(item) {

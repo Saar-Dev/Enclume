@@ -677,34 +677,22 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
                 groups={weaponGroups}
                 selectedRowId={gmSelectedRowId}
                 onPick={handleGmWeaponPick}
-                extras={<>
-                  {rangedActive && (
-                    <div className="decl-list" style={{ paddingTop: 0 }}>
-                      <div style={S.chips}>
-                        <CombatDeclareStateChip stateKey="fire_mode"
-                          initial={initialStates.fire_mode}
-                          current={decl.fire_mode}
-                          availableKeys={availableFireModes}
-                          onChange={v => {
-                            dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
-                            assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
-                          }} />
-                      </div>
+                extras={rangedActive && attackStarted && (
+                  /* Mode de tir — intérimaire (→ AssaultRangedPanel, col. 2 réagencée, sous-commit 3/4).
+                     Le rechargement (D7 : lié à une arme) part dans le même lot. */
+                  <div className="decl-list decl-list--extra">
+                    <div style={S.chips}>
+                      <CombatDeclareStateChip stateKey="fire_mode"
+                        initial={initialStates.fire_mode}
+                        current={decl.fire_mode}
+                        availableKeys={availableFireModes}
+                        onChange={v => {
+                          dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })
+                          assaultDecl.setBulletCount(null); assaultDecl.setVariantAB('A'); assaultDecl.setAimTranches(0)
+                        }} />
                     </div>
-                  )}
-                  {rangedActive && (
-                    <div className="decl-list" style={{ paddingTop: 0 }}>
-                      <div
-                        className="decl-wpn"
-                        data-sel={mapAction === 'reload'}
-                        title={t('mapActions.reload.tooltip')}
-                        onClick={() => setMapAction(prev => prev === 'reload' ? null : 'reload')}
-                      >
-                        <span className="decl-wpn__name">{t('actionWindow.reloadButtonLabel')}</span>
-                      </div>
-                    </div>
-                  )}
-                </>}
+                  </div>
+                )}
               />
 
               {/* ACTIONS RAPIDES */}

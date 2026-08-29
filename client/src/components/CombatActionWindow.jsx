@@ -455,12 +455,9 @@ export default function CombatActionWindow({
       )
     : []
 
-  // Ammo state — ammo_remaining null = jamais chargée (traité comme vide)
-  const ammoRemaining = selectedWeapon?.ammo_remaining ?? null
-  const ammoCount     = selectedWeapon?.ref_ammo_count ?? null
-  // isAmmoEmpty : le grisage « arme à feu vide » de la liste d'armes est porté par buildWeaponList
-  // (weaponAmmoStatus). Ici on ne garde que isAmmoFull (masque la ligne Rechargement).
-  const isAmmoFull    = !!selectedWeapon && ammoCount !== null && ammoRemaining !== null && ammoRemaining >= ammoCount
+  // Grisage « arme vide » / « chargeur plein » : porté par buildWeaponList (weaponAmmoStatus) pour la
+  // liste, et par AssaultRangedPanel pour le détail. Le déclencheur de Rechargement revient en col. 2
+  // (D7, sous-commit 3/4) — plus de calcul isAmmoFull ici.
 
   const dualWieldBonusComp = (isDualWield && hasTwoWeapons && sameFirMode)
     ? (currentFireMode === 'RL' ? 5 : 3)
@@ -1001,31 +998,19 @@ export default function CombatActionWindow({
               groups={weaponGroups}
               selectedRowId={selectedWeaponRowId}
               onPick={handleWeaponPick}
-              extras={<>
-                {/* Rechargement + mode de tir — intérimaires au corps jusqu'à la col. 2 réagencée (3/4). */}
-                {selectedWeapon && !isAmmoFull && (
-                  <div className="decl-list" style={{ paddingTop: 0 }}>
-                    <div
-                      className="decl-wpn"
-                      data-sel={mapSelected.has('reload')}
-                      title={t('mapActions.reload.tooltip')}
-                      onClick={() => handleMapToggle('reload')}
-                    >
-                      <span className="decl-wpn__name">{t('actionWindow.reloadButtonLabel')}</span>
-                    </div>
-                  </div>
-                )}
-                {attackSelected && (
-                  <div className="decl-list" style={{ paddingTop: 0 }}>
-                    <CombatDeclareStateSelector
-                      stateKey="fire_mode"
-                      current={decl.fire_mode} initial={initialStates.current.fire_mode}
-                      onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
-                      availableKeys={availableFireModes}
-                    />
-                  </div>
-                )}
-              </>}
+              extras={attackSelected && (
+                /* Mode de tir — intérimaire au corps jusqu'à son intégration dans AssaultRangedPanel
+                   (col. 2 réagencée, sous-commit 3/4). Le rechargement (D7 : lié à une arme) part
+                   dans le même lot. */
+                <div className="decl-list decl-list--extra">
+                  <CombatDeclareStateSelector
+                    stateKey="fire_mode"
+                    current={decl.fire_mode} initial={initialStates.current.fire_mode}
+                    onChange={v => dispatch({ type: 'SET_FIELD', key: 'fire_mode', value: v })}
+                    availableKeys={availableFireModes}
+                  />
+                </div>
+              )}
             />
           )}
 
