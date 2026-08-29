@@ -255,7 +255,8 @@
     "currentBadge": "actuel"
   },
   "statePanel": {
-    "title": "STATUT"
+    "title": "STATUT",
+    "newBadge": "NOUVEAU"
   },
   "mapActions": {
     "move": {

@@ -1526,34 +1526,133 @@ Convention :
 .btn-tac-ghost:hover { color: var(--combat-cell); }
 .btn-tac-ghost:disabled { opacity: .35; cursor: not-allowed; }
 
-/* ── CombatDeclareStatePanel — satellite d'état des fenêtres de déclaration
-   (PLAN_RW_DECLARE_DESIGN M3, D8). Panneau frère positionné le long du bord gauche de la fenêtre
-   principale ; suit sa position via le `pos` du useDraggable. Absent pour un drone. */
+/* ═══ Fenêtres de déclaration de combat — teinte Wizard (PLAN_RW_DECLARE_DESIGN P7 / D3).
+   Système de tokens issu du prototype validé (afcd5e28). Grounds navy OPAQUES (lisibilité
+   au-dessus de la battlemap 3D). Portés par `[data-decl]` sur le conteneur ; l'accent de famille
+   est basculé par `[data-family]`. Le jeu complet est câblé au châssis au module 2 — tiré en avant
+   ici parce que le satellite (module 3) et le pied (module 5) en ont besoin (D4). */
+[data-decl] {
+  --decl-bg:        #0a1524;
+  --decl-head:      #071019;
+  --decl-line:      rgba(255,255,255,0.10);
+  --decl-sep:       rgba(255,255,255,0.07);
+  --decl-row:       rgba(255,255,255,0.03);
+  --decl-chrome:    #2fd7ff;
+  --decl-label:     #6fb8d8;
+  --decl-text:      #c8d4e0;
+  --decl-text-hi:   #ffffff;
+  --decl-text-dim:  #5a6b7f;
+  --decl-radius:    9px;
+  --decl-ini-ok:    #3aaa6a;
+  --decl-ini-lost:  #d07a3a;
+  --decl-danger:    #e05b5b;
+  --decl-warn:      #e0a050;
+
+  --decl-acc:       #50c878;   /* défaut PJ — seule couleur d'accent, sélection + états actifs */
+  --decl-acc-bg:    color-mix(in srgb, var(--decl-acc) 16%, transparent);
+  --decl-acc-line:  color-mix(in srgb, var(--decl-acc) 55%, transparent);
+  --decl-glow:      0 0 14px color-mix(in srgb, var(--decl-acc) 28%, transparent);
+}
+[data-decl][data-family="pj"]     { --decl-acc: #50c878; }
+[data-decl][data-family="gm-pnj"] { --decl-acc: #c86030; }
+[data-decl][data-family="drone"]  { --decl-acc: #30aaaa; }
+[data-decl][data-family="exo"]    { --decl-acc: #9858c8; }
+
+/* ── Puce d'état click-to-cycle (CombatDeclareStateChip) ────────────────────
+   Base = compacte en ligne (usage corps : fire_mode MJ). Le satellite la re-agence. */
+.combat-state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-family: var(--font-ui);
+  background: #0a1018;
+  border: 1px solid #1a2a38;
+  border-radius: 2px;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+}
+.combat-state-chip:disabled { cursor: not-allowed; opacity: 0.4; }
+.combat-state-chip__glyph {
+  width: 13px; height: 13px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask: var(--chip-glyph) center / contain no-repeat;
+          mask: var(--chip-glyph) center / contain no-repeat;
+}
+.combat-state-chip__label { font-size: 7px; letter-spacing: 0.1em; font-family: var(--font-mono); color: #456575; }
+.combat-state-chip__value { font-size: 10px; font-weight: 600; color: #dde7ee; }
+.combat-state-chip__cost  { font-size: 8px; font-family: var(--font-mono); font-weight: 700; }
+.combat-state-chip__cost[data-sign="pos"] { color: #3aaa6a; }
+.combat-state-chip__cost[data-sign="neg"] { color: #c86030; }
+
+/* ── Satellite d'état (CombatDeclareStatePanel, M3 / D8) ────────────────────
+   Panneau frère collé au bord gauche de la fenêtre, suit son `pos`. Absent pour un drone. */
 .combat-declare-state-panel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  background: var(--combat-header);
-  border: 1px solid var(--combat-border);
-  border-radius: var(--radius-xs);
-  box-shadow: var(--combat-shadow);
+  gap: 5px;
+  padding: 10px 12px 12px;
+  background: var(--decl-head);
+  border: 1px solid var(--decl-line);
+  border-radius: var(--decl-radius);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.55);
   transition: opacity 0.15s ease;
 }
-.combat-declare-state-panel .combat-chip-glyph {
-  display: block;
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-  background-color: var(--combat-accent-fg, #cfe0ee);
-  -webkit-mask: var(--chip-glyph) center / contain no-repeat;
-  mask: var(--chip-glyph) center / contain no-repeat;
+.combat-declare-state-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--decl-label);
 }
-.combat-declare-state-title {
-  font: 700 8px/1 var(--font-mono, monospace);
-  letter-spacing: 0.12em;
-  color: var(--combat-dim);
-  padding: 0 2px 3px;
+.combat-declare-state-panel__badge {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--decl-acc);
+  background: var(--decl-acc-bg);
+  border: 1px solid var(--decl-acc-line);
+}
+/* Puce re-agencée : glyphe + valeur en avant, micro-label au-dessus, coût à droite */
+.combat-declare-state-panel .combat-state-chip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0 8px;
+  width: 100%;
+  padding: 6px 9px;
+  background: var(--decl-row);
+  border: 1px solid var(--decl-line);
+  border-radius: calc(var(--decl-radius) - 4px);
+  transition: border-color 0.1s, background 0.1s;
+}
+.combat-declare-state-panel .combat-state-chip:hover:not(:disabled) { border-color: var(--decl-acc-line); }
+.combat-declare-state-panel .combat-state-chip__glyph {
+  grid-row: 1 / 3;
+  width: 16px; height: 16px;
+  color: var(--decl-acc);
+}
+.combat-declare-state-panel .combat-state-chip__label {
+  grid-column: 2 / 4; grid-row: 1;
+  font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--decl-label);
+}
+.combat-declare-state-panel .combat-state-chip__value {
+  grid-column: 2; grid-row: 2;
+  font-size: 12px; font-weight: 600; color: var(--decl-text-hi);
+}
+.combat-declare-state-panel .combat-state-chip__cost {
+  grid-column: 3; grid-row: 2;
+  font-size: 9px;
 }
 
 /* ── .seg-opt — segmented control compact tactical (CombatActionWindow) ── */

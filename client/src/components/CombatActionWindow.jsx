@@ -940,6 +940,7 @@ export default function CombatActionWindow({
         <CombatDeclareStatePanel
           pos={pos}
           windowWidth={(showAssault || showReload || showMelee) ? 720 : 360}
+          family="pj"
           decl={decl}
           initial={initialStates.current}
           onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}

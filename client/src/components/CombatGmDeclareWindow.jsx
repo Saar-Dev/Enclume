@@ -576,6 +576,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         <CombatDeclareStatePanel
           pos={pos}
           windowWidth={(isMeleeSetup || isAttackActive) ? 720 : 440}
+          family="gm-pnj"
           positionMode="absolute"
           decl={decl}
           initial={initialStates}

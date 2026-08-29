@@ -236,6 +236,8 @@ export default function CombatExoActionWindow({
       <CombatDeclareStatePanel
         pos={pos}
         windowWidth={340}
+        family="exo"
+        isNew
         decl={decl}
         initial={initialStates}
         onChange={(axis, value) => dispatch({ type: 'SET_FIELD', key: axis, value })}
