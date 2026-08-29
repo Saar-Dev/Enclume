@@ -1,10 +1,25 @@
 # PLAN_RW_DECLARE_WINDOWS — Rework des fenêtres de déclaration de combat
 
-> **CLOS 2026-08-28 — archivé.** Livré : **1 + §5bis + 2 + 3 + 7**, tous validés navigateur.
+> **CLOS 2026-08-28 — archivé.** Livré : **1 + §5bis + 2 + 3 + 7**.
+> **Validé navigateur : 1 + §5bis + 2.** **3 + 7 : validation navigateur Saar restait en attente à la
+> clôture** (le « tous validés navigateur » d'origine était faux — corrigé 2026-08-29, cf. les sections
+> Module 3 / Module 7 et l'analyse à charge §20).
 > Modules **5 annulé** (B5 — familles CSS `combat-float-*` / `combat-win-*` réellement différentes,
 > attend une passe design), **6 différé** (pas d'infra de test composant — `useHumanDeclare` sans
 > tests de caractérisation = bug de combat garanti), **4 non fait** (`usePersistedToggle` :
 > 2 consommateurs, gain de robustesse théorique pour ce déploiement — n'aggrade pas assez).
+>
+> **Suite du chantier → `docs/PLANS/PLAN_RW_DECLARE_DESIGN.md`** (2026-08-29, actif) :
+> - **module 5** repris comme son **module 2 `CombatDeclareFrame`** — faisable une fois **D8 levé**
+>   (réconciliation des tokens `--combat-*` + accent par famille = la passe design que D8 réservait) ;
+> - **module 6** repris comme sa **M0.4** (`useAssaultDeclaration` / `useMeleeDeclaration`). Le filet
+>   que ce doc jugeait « absent » existe autrement : **M0.0-M0.3** a extrait `buildDeclarePayload` en
+>   `.mjs` pur + **51 tests golden master** (la partie risquée — l'assemblage du payload), et
+>   **M-E2E** (Playwright) est prérequis avant le code. La déférence « seulement quand une infra de
+>   test **composant** existe » était trop absolue — un filet de caractérisation sur la fonction pure
+>   extraite suffit ;
+> - l'écart **roster exo absent** (que le module 4 aurait partiellement comblé) reste ouvert →
+>   `PLAN_RW_DECLARE_DESIGN` PO-M2-b.
 >
 > **Définitif dans** : `docs/SYSTEME/REACT.md` **P58** (briques `CombatDeclare*`) +
 > `docs/SYSTEME/COMBAT_FLUX.md` § « Calcul delta initiative » (`shared/combatIniCost.js`) +
@@ -425,6 +440,11 @@ Fix trivial et sûr mais **dans un autre fichier**, hors de ce chantier → trai
 
 ### Module 5 — Chrome de fenêtre partagé `CombatDeclareFrame.jsx` — **ANNULÉ (Saar 2026-08-28)** : les deux familles CSS diffèrent réellement (B5) ; à reprendre seulement après une passe design qui les unifie
 
+> **REPRIS (2026-08-29) → `PLAN_RW_DECLARE_DESIGN.md` module 2** (`CombatDeclareFrame`). Le verdict
+> « annulé » tenait **sous D8** (aucune CSS neuve) ; `PLAN_RW_DECLARE_DESIGN` lève D8 explicitement
+> (réconciliation `--combat-*` + `data-family` = la passe design annoncée ici) et le châssis partagé
+> redevient faisable. Analyse B5 correcte, pas une erreur.
+
 **Problème** : chrome flottant (`useDraggable`, header, footer, `opacity`/`pointerEvents` de masquage)
 réimplémenté 3×, **avec deux familles de classes CSS** (`combat-float-*` joueur/exo vs `combat-win-*`
 MJ) — divergence déjà existante.
@@ -454,6 +474,12 @@ pas à forcer.
 ---
 
 ### Module 6 — `useHumanDeclare` — **DIFFÉRÉ (Saar 2026-08-28)** : rouvert seulement quand une infra de test composant existe (sans elle, l'extraction = bug de combat subtil garanti — cf. cadrage ci-dessous, conservé)
+
+> **REPRIS (2026-08-29) → `PLAN_RW_DECLARE_DESIGN.md` M0.4** (`useAssaultDeclaration` /
+> `useMeleeDeclaration`, sans param `mode`). La condition « infra de test **composant** » était trop
+> stricte : `PLAN_RW_DECLARE_DESIGN` M0.0-M0.3 a extrait `buildDeclarePayload` en `.mjs` pur avec
+> 51 tests golden master (couvre l'assemblage du payload, le vrai risque), + M-E2E Playwright avant le
+> code. Un filet de caractérisation sur la fonction pure ≠ une suite de tests composant, et suffit ici.
 
 **Pourquoi maintenant** : c'est le vrai problème d'architecture (`CombatActionWindow` = 26 `useState`
 + `useReducer` + 9 `useEffect` dans 1651 l.), il produit des bugs réels (Tir visé, voir plus bas),
