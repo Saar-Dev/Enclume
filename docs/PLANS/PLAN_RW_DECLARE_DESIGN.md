@@ -1760,3 +1760,67 @@ incomplète : arme sans cible, Tir visé inéligible, CaC sans cible…).
 | PO-M5-b | « Message de statut » quand Déclarer est actif : « Prêt » générique, ou résumé (« Tir sur Baboulinet », destination) ? |
 | PO-M5-c | Destination move `[x, y]` + erreur allures drone : dans `statusMessage`, ou petits blocs séparés au-dessus des boutons (comme aujourd'hui) ? |
 | PO-M5-d | Style unifié : `.btn-tac` (cyan) ou `.btn-tac-confirm` (vert) comme base du bouton primaire ? (D3 : accent par famille — le primaire prend `--combat-accent-*` ?) |
+
+### 17.10 Analyse à charge module 5 (2026-08-29)
+
+**1. `hasCompleteAction` DOIT être un helper pur testé — pas optionnel.** Mode de défaillance : trop
+strict → un joueur qui a fait une déclaration légitime (« je m'accroupis ce Tour ») a « Déclarer »
+grisé et **ne peut pas déclarer son tour** ; trop lâche → retour au mis-clic B5. Impact = bloquant
+en jeu. → `client/src/lib/hasCompleteAction.js` pur + `.test.mjs` (chaque source : attaque/CaC/
+reload/move/changement d'état/action rapide ; et les combinaisons). §17.7 renforcé.
+
+**2. La branche « changement d'état » de `hasCompleteAction` chevauche `SELECT_ATTACK` `[VÉRIFIÉ]`.**
+Sélectionner une arme (module 4) → `SELECT_ATTACK` → `decl.weapon = 'drawn'` → `decl.weapon !==
+initial` devient vrai **avant** qu'une cible soit choisie. Donc `hasCompleteAction` serait vrai pour
+une attaque incomplète (arme dégainée, pas de cible). **Modèle retenu : c'est OK** — `hasCompleteAction`
+= « tu as commencé quelque chose », `canDeclare` (= `assaultValid`…) gate → « Déclarer » grisé +
+`blockReason` « choisir une cible ». Pas de branche spéciale « changement d'état hors SELECT_ATTACK »
+(complexité inutile). À écrire noir sur blanc pour ne pas « corriger » ce chevauchement par erreur.
+
+**3. `onPassTurn` est PAR FAMILLE, pas un handler partagé `[VÉRIFIÉ]`.**
+- PJ / MJ-PNJ : `socket.emit(WS.COMBAT_ACTION_DECLARE, { tokenId, state: {}, mapActions: {} })`.
+- **Drone** : `droneDeclare.setHasPassed(true)` puis le payload drone part par `handleDeclare`
+  (le `hasPassed` rend `droneDeclare.canDeclare` vrai). Pas un emit direct « vide ».
+- Exo : `handleDeclare` sans sélection (déjà en place).
+→ le pied prend `onPassTurn` **en prop**, chaque fenêtre câble le sien.
+
+**4. Drone : le pied « Passer le tour » remplace la tuile `DroneDeclareSection` `[VÉRIFIÉ]`.**
+`DroneDeclareSection` a déjà une tuile toggle « Passer le tour » (`droneDeclare.passTurn`,
+`onPassToggle`). Deux « Passer le tour » = incohérent. → le bouton du pied pilote
+`droneDeclare.setHasPassed`, **la tuile disparaît** (module 5, ou module 4 quand `DroneDeclareSection`
+est touché). Le pied devient le seul point « passer ».
+
+**5. `blockReason` est assemblé PAR FENÊTRE (le pied ne fait que l'afficher) `[VÉRIFIÉ]`.** Les
+raisons viennent de : `aimIneligibilityReasons` / `multiShotIneligibilityReasons` (partagés),
+`assaultValid` / `meleeValid` (hooks M0.4), **`reloadValid` (PJ seulement** : `!reloadSelected ||
+attackSelected || (selectedWeapon && selectedAmmoId)` — le MJ n'a pas ce cas). → petit assembleur
+`buildBlockReason(sel)` par fenêtre, `CombatDeclareFooter` reçoit la string finale. §17.4 précisé.
+
+**6. Bandeau d'erreur serveur ↔ message de statut `[VÉRIFIÉ]`.** `CombatDeclareErrorBanner`
+**auto-efface au bout de 4 s** (`useCombatSocket`) et vit sur une **ligne séparée au-dessus** de la
+rangée de boutons → pas de collision spatiale avec le message de statut (dans la rangée). Pendant
+≤ 4 s les deux coexistent (bandeau erreur + « Prêt »/`blockReason`) — acceptable. Règle : le bandeau
+garde sa ligne, le message de statut la sienne.
+
+**7. PO neuf — poids visuel de « Passer le tour » quand « Déclarer » est grisé.** D12 : « Passer le
+tour » = ghost, plus petit. Mais c'est **le** bouton dont on a besoin quand Déclarer est grisé
+(rien / action incomplète qu'on abandonne). Le bouton le plus utile est le plus discret. → soit
+D12 tient (Déclarer toujours visuellement primaire, « Passer » = choix délibéré assumé secondaire),
+soit « Passer » se promeut quand Déclarer est grisé. **PO-M5-e.**
+
+**8. PO neuf — « Passer le tour » quand un changement d'état satellite existe.** Si le joueur s'est
+accroupi (déclaration valide, `hasCompleteAction` vrai via changement d'état) puis clique « Passer le
+tour » : « Passer » = « rien faire ». Mais s'accroupir **n'est pas rien**. → « Passer le tour »
+**écrase-t-il** le changement d'état (envoie `state: {}`, perd l'accroupissement) ? Ou est-il grisé /
+absent quand `hasCompleteAction` ? Un clic réflexe perd l'accroupissement. **PO-M5-f.**
+
+**Conclusion — module 5 se fait, révisé :**
+- `hasCompleteAction` = **helper pur `.mjs` testé** (point 1), modèle « commencé ≠ complet, canDeclare
+  gate » assumé (point 2).
+- `onPassTurn` **par famille** (point 3) ; la tuile « Passer » du drone **disparaît** (point 4).
+- `blockReason` assemblé **par fenêtre**, le pied affiche (point 5).
+- Bandeau erreur : ligne séparée, cohabite ≤ 4 s (point 6).
+- 2 PO neufs : poids visuel de « Passer » si Déclarer grisé (PO-M5-e) ; « Passer » + changement
+  d'état satellite (PO-M5-f).
+- Livrable : 1 commit (ou 1 par fenêtre) + `.test.mjs` de `hasCompleteAction` + checklist manuelle
+  (chaque `blockReason`).
