@@ -31,8 +31,9 @@ import { useEffect, useState } from 'react'
 // déplacement combat (mode='case' de base), bascule sur CIBLE : un seul curseur possible à la fois
 // (retour Saar 2026-08-07 — "curseur = SOIT curseur_cible SOIT curseur_case", jamais les deux, et
 // CASE ne doit pas garder la place sur un token survolé).
-// resolveMode() sert à la fois au rendu de l'overlay ET au masquage du curseur natif du canvas
-// (canvasEl.style.cursor) — une seule source de vérité, jamais deux décisions qui peuvent diverger.
+// resolveMode() est l'unique source de vérité — un seul appel par render, alimente à la fois le
+// masquage du curseur natif du canvas (canvasEl.style.cursor) et le choix de l'image de l'overlay,
+// jamais deux décisions qui peuvent diverger.
 function resolveMode(mode, hoveringEntityRef, hoveringTokenRef) {
   let resolved = mode
   if (resolved === 'case' && hoveringTokenRef?.current) resolved = 'cible'
@@ -49,46 +50,67 @@ const DEFAULT_CURSOR = 'url(/assets/CURSEUR.svg) 7 2, auto'
 // inCombat : combat actif (`combatStore.phase !== null`) — hors CASE/CIBLE, le curseur reste le
 // défaut système pendant un combat (retour Saar : "valable tout le temps, sauf le mode combat"),
 // CURSEUR.svg réservé à l'exploration/préparation hors combat.
-function resolveCursorStyle(resolvedMode, inCombat) {
-  if (resolvedMode) return 'none' // overlay DOM affiche CASE/CIBLE par-dessus
+// overlayVisible : l'overlay <img> CASE/CIBLE est réellement monté à cet instant. Invariant :
+// `cursor:'none'` n'est renvoyé QUE dans ce cas — le composant et cette fonction consomment la même
+// valeur, donc le curseur natif n'est jamais masqué sans que l'overlay le remplace (ticket
+// DECL-CURSOR-HIDDEN : masquage immédiat au changement de mode alors que l'overlay attendait un
+// premier pointermove canvas qui ne venait pas — le clic d'armement part d'une fenêtre de
+// déclaration, pas du canvas).
+function resolveCursorStyle(resolvedMode, inCombat, overlayVisible) {
+  if (resolvedMode && overlayVisible) return 'none' // overlay DOM affiche CASE/CIBLE par-dessus
   if (!inCombat) return DEFAULT_CURSOR
   return 'auto'
 }
 
+// Le pointeur est-il réellement au-dessus du canvas 3D ? Hit-test via elementFromPoint plutôt qu'un
+// suivi d'événements pointerenter/leave scopé au canvas : (1) elementFromPoint ignore nativement les
+// éléments `pointer-events:none` — la fenêtre de déclaration passe en pointer-events:none juste après
+// le clic qui arme le mode, sans déplacement de souris, donc aucun événement d'entrée/sortie ne
+// serait émis ; (2) il respecte l'occlusion par un panneau réel (dés, fiche) posé sur le canvas.
+function pointerIsOverCanvas(canvasEl, pointer) {
+  if (!canvasEl || !pointer) return false
+  const el = document.elementFromPoint(pointer.x, pointer.y)
+  return !!el && (el === canvasEl || canvasEl.contains(el))
+}
+
 export default function SceneCursorOverlay({ canvasEl, mode, hoveringEntityRef, hoveringTokenRef, inCombat = false }) {
-  const [pos, setPos] = useState(null)
+  // Position pointeur brute (viewport), ou null quand le pointeur a quitté la page. Suivie au niveau
+  // document — une seule source, valable que la souris soit au-dessus du canvas ou d'une fenêtre
+  // flottante posée dessus (l'ancienne écoute limitée au canvas laissait cette valeur périmée dès
+  // que le pointeur passait sur une fenêtre).
+  const [pointer, setPointer] = useState(null)
+  // L'overlay doit-il être monté : un mode est résolu ET le pointeur est au-dessus du canvas.
+  // État explicite (plus de dépendance implicite « un pointermove reçu sans pointerleave depuis »).
+  const [overlayVisible, setOverlayVisible] = useState(false)
 
-  // Masquage/bascule immédiate du curseur natif dès le changement de mode explicite (combatMoveMode/
-  // combatTargetMode/losMode) ou de phase de combat, sans attendre un pointermove — sinon le curseur
-  // natif resterait dans l'état précédent jusqu'au premier mouvement de souris.
   useEffect(() => {
-    if (!canvasEl) return
-    canvasEl.style.cursor = resolveCursorStyle(mode, inCombat)
-  }, [canvasEl, mode, inCombat])
-
-  useEffect(() => {
-    if (!canvasEl) return
-    const onMove = (e) => {
-      const resolvedMode = resolveMode(mode, hoveringEntityRef, hoveringTokenRef)
-      canvasEl.style.cursor = resolveCursorStyle(resolvedMode, inCombat)
-      setPos({ x: e.clientX, y: e.clientY })
-    }
-    const onLeave = () => {
-      canvasEl.style.cursor = 'auto'
-      setPos(null)
-    }
-    canvasEl.addEventListener('pointermove', onMove)
-    canvasEl.addEventListener('pointerleave', onLeave)
+    const onMove = (e) => setPointer({ x: e.clientX, y: e.clientY })
+    const onLeave = () => setPointer(null)
+    document.addEventListener('pointermove', onMove, { passive: true })
+    document.documentElement.addEventListener('pointerleave', onLeave)
     return () => {
-      canvasEl.removeEventListener('pointermove', onMove)
-      canvasEl.removeEventListener('pointerleave', onLeave)
+      document.removeEventListener('pointermove', onMove)
+      document.documentElement.removeEventListener('pointerleave', onLeave)
     }
-  }, [canvasEl, mode, hoveringEntityRef, hoveringTokenRef, inCombat])
-
-  if (!pos) return null
+  }, [])
 
   const resolvedMode = resolveMode(mode, hoveringEntityRef, hoveringTokenRef)
-  if (!resolvedMode) return null
+
+  // Recalcul de la visibilité à chaque déplacement du pointeur ET à chaque changement de mode : le
+  // changement de mode ne produit aucun événement pointeur, c'est ce second cas qui corrige
+  // DECL-CURSOR-HIDDEN (l'overlay se monte sans attendre un mouvement de souris).
+  useEffect(() => {
+    setOverlayVisible(!!resolvedMode && pointerIsOverCanvas(canvasEl, pointer))
+  }, [canvasEl, pointer, resolvedMode])
+
+  // Curseur natif du canvas : masqué exactement quand l'overlay le remplace, sinon repli (défaut
+  // système en combat, CURSEUR.svg hors combat). Point de décision unique.
+  useEffect(() => {
+    if (!canvasEl) return
+    canvasEl.style.cursor = resolveCursorStyle(resolvedMode, inCombat, overlayVisible)
+  }, [canvasEl, resolvedMode, inCombat, overlayVisible])
+
+  if (!overlayVisible || !pointer) return null
 
   const src = resolvedMode === 'cible' ? '/assets/CURSEUR_CIBLE.svg' : '/assets/CURSEUR_CASE.svg'
 
@@ -97,7 +119,7 @@ export default function SceneCursorOverlay({ canvasEl, mode, hoveringEntityRef, 
       src={src}
       alt=""
       className={`scene-cursor-overlay scene-cursor-overlay-${resolvedMode}`}
-      style={{ left: pos.x, top: pos.y }}
+      style={{ left: pointer.x, top: pointer.y }}
     />
   )
 }

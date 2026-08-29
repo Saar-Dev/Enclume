@@ -4537,3 +4537,56 @@ artefact manuel, convention de numérotation propre à Saar.
 
 **Testé** (à chaque module) : `node --test shared/*` (335), `node --test` des `.test.mjs` neufs,
 `vite build`, `eslint` vs baseline. Validation navigateur Saar module par module (combats réels).
+
+---
+
+## Session (Claude) — 2026-08-29 — Ticket `DECL-CURSOR-HIDDEN` : curseur invisible après un clic sur une action de déclaration
+
+**Symptôme** (signalé par Saar, test navigateur du chantier RW déclaration) : armer un mode ciblage/
+déplacement en cliquant une action dans une fenêtre de déclaration (Tir → cible, Déplacement → zone)
+rendait le pointeur invisible tant qu'on ne bougeait pas la souris.
+
+**Cause racine** (`client/src/components/SceneCursorOverlay.jsx`) — l'existence de l'overlay `<img>`
+CASE/CIBLE était dérivée d'un **état implicite** : « un `pointermove` canvas reçu sans `pointerleave`
+depuis ». La variable `pos` mélangeait deux rôles (position pointeur + « l'overlay doit-il être
+monté »). Au changement de mode, le 1er `useEffect` posait `canvasEl.style.cursor = 'none'`
+immédiatement, mais l'overlay n'était monté qu'au 1er `pointermove` **canvas** — or le clic
+d'armement part de la fenêtre de déclaration (qui passe aussitôt `pointer-events:none`), pas du
+canvas, donc aucun `pointermove` canvas ne suivait. Entre les deux : curseur natif masqué + overlay
+absent = aucun curseur.
+
+**Correctif** (refonte du composant, 1 fichier, `index.css` inchangé) :
+- `pos` (rôle double) → `pointer` (position brute seule) + `overlayVisible` (état explicite).
+- Écoute `pointermove`/`pointerleave` scopée canvas → un seul suivi au niveau `document`
+  (+ `pointerleave` sur `documentElement` pour la sortie de page).
+- Visibilité dérivée d'un hit-test `document.elementFromPoint(pointer.x, pointer.y)` recalculé **au
+  déplacement ET au changement de mode** (`useEffect` sur `[canvasEl, pointer, resolvedMode]`) — le
+  changement de mode ne produit aucun événement pointeur, c'est ce recalcul qui monte l'overlay sans
+  attendre un mouvement. `elementFromPoint` ignore nativement les éléments `pointer-events:none` (la
+  fenêtre de déclaration masquée) et respecte l'occlusion par un panneau réel (dés, fiche).
+- `resolveCursorStyle` gagne le paramètre `overlayVisible` : `cursor:'none'` n'est renvoyé que
+  lorsque l'overlay est réellement monté — le composant et la fonction consomment la même valeur.
+  **Invariant : curseur natif masqué ⟺ overlay `<img>` monté.** Le curseur invisible devient
+  structurellement impossible.
+- `resolveMode` : 1 appel par render (contre 2 avant — render + `onMove`), unique source de vérité.
+
+**Fichier touché** : `client/src/components/SceneCursorOverlay.jsx` (refonte). Props inchangées,
+aucun impact sur `Canvas3D.jsx`.
+
+**Testé** : `vite build` (client) propre ; `eslint SceneCursorOverlay.jsx` → 1 erreur
+`react-hooks/immutability` sur `canvasEl.style.cursor =`, **strictement identique à la version
+d'origine** (vérifié `git stash`) — règle RC récente, dette pré-existante à l'échelle du repo, le
+masquage du curseur natif impose cette mutation DOM en `useEffect`. Validation navigateur par Saar :
+curseur CASE/CIBLE visible immédiatement à l'armement depuis une fenêtre de déclaration, sans bouger
+la souris (« Fonctionnel »).
+
+**Non testé** : occlusion par un panneau réel pendant le ciblage et perf `elementFromPoint` par frame
+sur scène chargée — non isolés spécifiquement dans la validation, mais couverts par le combat réel
+joué.
+
+**Données** : aucune. Client pur. Ticket `DECL-CURSOR-HIDDEN` (`bug_tickets`) passé `resolved` via
+`server/src/scripts/resolve_ticket_decl_cursor_hidden.js` (à lancer en local par Saar). Le script
+d'insertion `server/src/scripts/ticket_decl_cursor_hidden.js` (commit c9c6c50) portait un en-tête
+« pas de correctif codé » désormais périmé.
+
+**Retour arrière** : `git checkout client/src/components/SceneCursorOverlay.jsx`.

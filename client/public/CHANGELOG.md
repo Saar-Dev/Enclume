@@ -1,3 +1,10 @@
+## v220 — 2026-08-29 — Fix : curseur invisible après un clic sur une action de déclaration
+
+### Combat
+- [fix] Cliquer une action qui ouvre un mode ciblage ou déplacement (Tir → choisir une cible,
+  Déplacement → choisir la zone) ne fait plus disparaître le pointeur : le curseur de visée / de
+  case s'affiche immédiatement, sans avoir à bouger la souris.
+
 ## v219 — 2026-08-22 — Fix : 5 munitions Darts 7.62/5.56mm ST avec le mauvais effet
 
 ### Combat — Munitions
