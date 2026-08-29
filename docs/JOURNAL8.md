@@ -4647,3 +4647,61 @@ depuis le refactor ; le mode Recharger PJ de bout en bout (sélection munition +
 
 **Retour arrière** : `git revert` par sous-commit (chaque module retire son ancien code dans le même
 commit ; pas de feature flag).
+
+---
+
+## Session (Claude) — 2026-08-30 — Ticket `DRONE-CC-MELEE-MISCLASS` : mode de tir « CC » confondu avec le corps à corps
+
+**Symptôme** (Saar, combat réel) : « Armement drone — programme armement_contact manquant même en cas
+de tir à distance ». Drone AX, arme « Fusil Gauss » → à la Résolution, jet remplacé par « programme
+"armement_contact" manquant », aucun dé.
+
+**Cause racine — établie sur les données réelles (accès direct `bug_tickets`/schéma, aucun ticket
+n'existait d'ailleurs, celui-ci créé dans la foulée)** : le code drone lisait `fire_mode === 'cc'`
+comme « corps à corps », à 4 endroits. Or `CC` = **Coup par Coup**, un mode de tir
+(`shared/fireModes.js` : `FIRE_MODE_ORDER = ['CC','RC','RL']`) — une arme de contact n'a **aucun**
+`fire_mode` (vérifié : les 39 « Arme de contact » du catalogue ont toutes `fire_mode` NULL ; `CC` est
+le mode de tir le plus répandu). Le Fusil Gauss (`ref_equipment` category « Arme lourde »,
+`fire_mode` « CC », portée 1400 m — donnée correcte) était donc classé CaC →
+`resolveDroneAssaultAction` exigeait `armement_contact` alors que Drone AX a `armement_distance`
+(Balistique niv. 8).
+
+**Correctif (périmètre A, validé avec Saar — miroir de l'exo, `PLAN_EXOARMURE.md §16.4`)** :
+discriminant = `ref_equipment.category === 'Arme de contact'` (autorité déjà utilisée par l'exo et
+l'humanoïde `getOwnedHandWeapon`), aux 4 sites. Le repli mort `!ref_fire_mode` (jamais atteignable —
+`drone_weapons.fire_mode` est `NOT NULL DEFAULT 'rc'`) est supprimé. Arme drone « maison » sans
+`equipment_id` (`ref_category` NULL) → distance, même choix assumé que l'exo.
+
+**Fichiers touchés** :
+- `server/src/socket/socketCombatHelpers.js` — `resolveDroneAssaultAction` : `isCaCWeapon` sur
+  `ref_category` ; `+ ref_equipment.category` dans la requête arme, `- explicit_fire_mode`,
+  `- ref_fire_mode` (devenus morts).
+- `client/src/lib/buildDeclarePayload.js` — `buildDroneMapActions` : `isCaC` sur `ref_category`
+  (garde `fire_mode` pour `stateFireMode`).
+- `client/src/lib/useDroneDeclare.js` — `resolveDroneClickAttackMode` + `handleChooseTarget`.
+- `server/src/routes/character/char-sheet.js` — `+ ref_equipment.category as ref_category` dans
+  `GET /:characterId/drone/weapons` et les réponses POST/PUT.
+- `client/src/lib/buildDeclarePayload.test.mjs` — 3 cas golden master qui encodaient la mauvaise
+  règle réécrits (« arme sans ref_fire_mode → CaC », « fire_mode cc → CaC », « arme introuvable →
+  CaC »), + 1 test de régression ajouté (mode CC sur arme à distance → Tir).
+
+**Hors périmètre — ticket `DRONE-ARMEMENT-PROGRAM-SPLIT` créé** (`suggestion`, low) : le split strict
+`armement_contact` / `armement_distance` sans repli vs le RAW (un seul « programme de contrôle
+armement » par arme, Livre de Base p.281 ; seed « Contact » = « générique contact ou distance »).
+Décision produit à trancher par Saar.
+
+**Testé** : `node --test` — `shared` 335, client `lib` 183 (dont golden master
+`buildDeclarePayload` 52), serveur `socket`+`lib` 79 (140 skip DB) — tous verts. `vite build` client
+propre. `eslint` iso-baseline (1 erreur `react-hooks/set-state-in-effect` pré-existante ligne 39 de
+`useDroneDeclare.js`, confirmée par `git stash`). Query de contrôle : Drone AX / Fusil Gauss →
+`ref_category` « Arme lourde » → `isCaCWeapon` false → `armement_distance` → Balistique niv. 8
+présent.
+
+**Non testé** : validation navigateur Saar (attaque drone à distance résolue de bout en bout ; un
+drone avec arme de contact réelle → toujours `armement_contact`). ⚠️ **clos partiel**.
+
+**Données** : aucune migration. Tickets `DRONE-CC-MELEE-MISCLASS` (créé `in_progress`) et
+`DRONE-ARMEMENT-PROGRAM-SPLIT` (créé `new`) à insérer via
+`server/src/scripts/create_ticket_drone_*.js` (lancés en local par Saar).
+
+**Retour arrière** : `git revert` du commit (5 fichiers, aucun effet runtime).

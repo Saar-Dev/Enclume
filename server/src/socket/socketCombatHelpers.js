@@ -2502,8 +2502,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
       .select(
-        'drone_weapons.fire_mode as explicit_fire_mode',
-        'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.category as ref_category',
         'ref_equipment.range as ref_range',
         db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
         db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
@@ -2523,8 +2522,14 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       return { suspend: false, emissions }
     }
 
-    // 2. Programme armement — miroir humanoïde : !ref_fire_mode → contact, sinon distance
-    const isCaCWeapon = weapon.explicit_fire_mode ? weapon.explicit_fire_mode === 'cc' : !weapon.ref_fire_mode
+    // 2. Programme armement — CaC ⟺ `ref_equipment.category === 'Arme de contact'`, autorité
+    // partagée avec l'exo (socketCombatExo.js, resolveExoMeleeAction) et l'humanoïde
+    // (getOwnedHandWeapon `category: 'Arme de contact'`). `fire_mode` NE classe PAS : `CC` = Coup par
+    // Coup, un mode de tir (shared/fireModes.js `['CC','RC','RL']`) — une arme de contact n'a AUCUN
+    // fire_mode. Une arme drone « maison » sans equipment_id (ref_category null) → distance, même
+    // choix assumé que l'exo. (Ticket DRONE-CC-MELEE-MISCLASS : le Fusil Gauss, category « Arme
+    // lourde » / fire_mode « CC », était classé CaC → programme armement_contact exigé à tort.)
+    const isCaCWeapon = weapon.ref_category === 'Arme de contact'
     let authoritativeRangeBand = null
 
     // ── Range check CaC drone (miroir resolveMeleeAction L.1674-1688, extrait en helper §16.6) ──

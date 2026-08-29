@@ -1,3 +1,11 @@
+## v222 — 2026-08-30 — Fix : attaque de drone à distance bloquée (« programme armement_contact manquant »)
+
+### Combat — drone
+- [fix] Une arme de drone à distance en mode de tir « Coup par Coup » était traitée comme une arme
+  de corps à corps : à la résolution, le jeu réclamait le programme « Contact » et l'attaque ne se
+  résolvait pas, même avec le programme « Balistique » installé. Le type d'arme (contact / distance)
+  est désormais lu sur sa catégorie, jamais sur son mode de tir.
+
 ## v221 — 2026-08-30 — Fenêtres de déclaration de combat : « l'arme est l'action »
 
 ### Combat — déclaration (joueur + MJ)

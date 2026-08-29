@@ -403,36 +403,42 @@ test('drone — rien : stateFireMode cc, move null', () => {
   })
 })
 
-test('drone — Tir (arme à feu, ref_fire_mode RC) → stateFireMode rc, attack', () => {
+// CaC ⟺ ref_category === 'Arme de contact' (ticket DRONE-CC-MELEE-MISCLASS). `fire_mode`
+// (CC/RC/RL) est un mode de tir, jamais un discriminant Tir/CaC.
+test('drone — Tir (arme à distance, ref_category "Arme lourde") → stateFireMode rc, attack', () => {
   const r = buildDroneMapActions(droneSel({
     selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
-    droneWeapons: [{ id: 'w1', ref_fire_mode: 'RC' }],
+    droneWeapons: [{ id: 'w1', ref_category: 'Arme lourde', fire_mode: 'rc', ref_fire_mode: 'RC' }],
   }))
   assert.equal(r.stateFireMode, 'rc')
   assert.deepEqual(r.mapActions, { move: null, attack: [{ droneWeaponInvId: 'w1', targetTokenId: 'e1' }] })
 })
 
-test('drone — CaC (arme sans ref_fire_mode) → stateFireMode cc, melee', () => {
+test('drone — CaC (ref_category "Arme de contact") → stateFireMode cc, melee', () => {
   const r = buildDroneMapActions(droneSel({
-    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1', droneWeapons: [{ id: 'w1' }],
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
+    droneWeapons: [{ id: 'w1', ref_category: 'Arme de contact' }],
   }))
   assert.equal(r.stateFireMode, 'cc')
   assert.deepEqual(r.mapActions, { move: null, melee: [{ droneWeaponInvId: 'w1', targetTokenId: 'e1' }] })
 })
 
-test('drone — fire_mode explicite "cc" → CaC même si ref_fire_mode présent', () => {
+// Régression DRONE-CC-MELEE-MISCLASS : le Fusil Gauss (Arme lourde, mode de tir CC) était classé CaC
+// → le serveur exigeait le programme armement_contact au lieu d'armement_distance.
+test('drone — mode de tir "cc" (Coup par Coup) sur arme à distance → Tir, jamais CaC', () => {
   const r = buildDroneMapActions(droneSel({
     selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
-    droneWeapons: [{ id: 'w1', fire_mode: 'cc', ref_fire_mode: 'RC' }],
+    droneWeapons: [{ id: 'w1', fire_mode: 'cc', ref_category: 'Arme lourde', ref_fire_mode: 'CC', ref_range: '70/350/700/1400 (2 100)' }],
   }))
   assert.equal(r.stateFireMode, 'cc')
-  assert.ok('melee' in r.mapActions)
+  assert.ok('attack' in r.mapActions)
+  assert.ok(!('melee' in r.mapActions))
 })
 
-test('drone — fire_mode explicite "RL" → stateFireMode rl, attack', () => {
+test('drone — mode de tir explicite "RL" → stateFireMode rl, attack', () => {
   const r = buildDroneMapActions(droneSel({
     selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
-    droneWeapons: [{ id: 'w1', fire_mode: 'RL' }],
+    droneWeapons: [{ id: 'w1', fire_mode: 'RL', ref_category: 'Arme lourde' }],
   }))
   assert.equal(r.stateFireMode, 'rl')
   assert.ok('attack' in r.mapActions)
@@ -449,7 +455,8 @@ test('drone — déplacement (move complet, pas d\'attaque)', () => {
 
 test('drone — déplacement + Tir', () => {
   const r = buildDroneMapActions(droneSel({
-    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1', droneWeapons: [{ id: 'w1', ref_fire_mode: 'RC' }],
+    selectedDroneWeaponId: 'w1', assaultTargetId: 'e1',
+    droneWeapons: [{ id: 'w1', ref_category: 'Arme lourde', ref_fire_mode: 'RC' }],
     pendingMove: { targetPosX: 1, targetPosY: 1, ini_mod: -3, action_key: 'move_lente' },
   }))
   assert.ok(r.mapActions.move)
@@ -464,12 +471,12 @@ test('drone — pendingMove ini_mod/targetPosZ absents → 0', () => {
   assert.equal(r.mapActions.move.targetPosZ, 0)
 })
 
-test('drone — arme introuvable dans la liste → traité comme CaC (quirk figé)', () => {
+test('drone — arme introuvable dans la liste → traité comme Tir (le serveur revalide l\'arme)', () => {
   const r = buildDroneMapActions(droneSel({
     selectedDroneWeaponId: 'ghost', assaultTargetId: 'e1', droneWeapons: [],
   }))
-  assert.equal(r.stateFireMode, 'cc')
-  assert.ok('melee' in r.mapActions)
+  assert.equal(r.stateFireMode, 'rc')
+  assert.ok('attack' in r.mapActions)
 })
 
 // ─── Exo (buildExoMapActions) ────────────────────────────────────────────────

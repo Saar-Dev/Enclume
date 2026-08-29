@@ -1794,6 +1794,8 @@ router.get('/:characterId/drone/weapons', async (req, res, next) => {
         'ref_equipment.shock as ref_shock',
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.category as ref_category', // discriminant Tir/CaC (useDroneDeclare, resolveDroneAssaultAction) — jamais fire_mode
+
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.ammo_count as ref_ammo_count',
       )
@@ -1858,6 +1860,8 @@ router.post('/:characterId/drone/weapons', async (req, res, next) => {
         'ref_equipment.shock as ref_shock',
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.category as ref_category', // discriminant Tir/CaC (useDroneDeclare, resolveDroneAssaultAction) — jamais fire_mode
+
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.ammo_count as ref_ammo_count',
       )
@@ -1901,6 +1905,8 @@ router.put('/:characterId/drone/weapons/:weaponId', async (req, res, next) => {
         'ref_equipment.shock as ref_shock',
         'ref_equipment.range as ref_range',
         'ref_equipment.fire_mode as ref_fire_mode',
+        'ref_equipment.category as ref_category', // discriminant Tir/CaC (useDroneDeclare, resolveDroneAssaultAction) — jamais fire_mode
+
         'ref_equipment.caliber as ref_caliber',
         'ref_equipment.ammo_count as ref_ammo_count',
       )

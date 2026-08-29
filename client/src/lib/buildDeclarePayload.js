@@ -148,11 +148,16 @@ export function buildGmDeclarePayload(sel) {
 // Retourne { stateFireMode, mapActions } ; les fenêtres l'enveloppent dans state:{position:'standing',
 // weapon:'holstered', fire_mode: stateFireMode, cover:'exposed', vitesse:'normal'}. Un drone est hors
 // scope Tir Multi (D6) → attack toujours de longueur 1.
+// CaC ⟺ `ref_category === 'Arme de contact'` — même autorité que l'exo (buildExoMapActions) et le
+// serveur (resolveDroneAssaultAction). `fire_mode` NE classe PAS Tir/CaC : `CC`/`RC`/`RL` sont des
+// modes de tir (shared/fireModes.js), une arme de contact n'a aucun fire_mode. Changement de règle
+// assumé vs le littéral d'origine `handleDeclare` — ticket DRONE-CC-MELEE-MISCLASS, tests golden
+// master mis à jour en conséquence.
 export function buildDroneMapActions(sel) {
   const hasAttack = !!sel.selectedDroneWeaponId && !!sel.assaultTargetId
   const weapon    = hasAttack ? sel.droneWeapons.find(w => w.id === sel.selectedDroneWeaponId) : null
+  const isCaC         = weapon?.ref_category === 'Arme de contact'
   const explicitFm    = weapon?.fire_mode
-  const isCaC         = explicitFm ? explicitFm === 'cc' : !weapon?.ref_fire_mode
   const stateFireMode = hasAttack ? (isCaC ? 'cc' : (explicitFm ?? 'rc').toLowerCase()) : 'cc'
   const attackPayload = hasAttack
     ? (isCaC

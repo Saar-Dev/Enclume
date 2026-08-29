@@ -64,8 +64,11 @@ export function useDroneDeclare({
   // COMBAT-CLICK-AUTOSOLVE) — contrairement au PJ/PNJ où la portée tranche.
   const resolveDroneClickAttackMode = useCallback((distanceM) => {
     const selectedWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
-    if (!selectedWeapon) return null  // aucun programme sélectionné — rien à proposer
-    const isCaC = selectedWeapon.fire_mode ? selectedWeapon.fire_mode === 'cc' : !selectedWeapon.ref_fire_mode
+    if (!selectedWeapon) return null  // aucune arme sélectionnée — rien à proposer
+    // CaC ⟺ `ref_category === 'Arme de contact'` — même autorité que l'exo (useExoDeclare) et le
+    // serveur (resolveDroneAssaultAction). `fire_mode` (`CC`/`RC`/`RL`) est un mode de tir, pas un
+    // discriminant Tir/CaC. Ticket DRONE-CC-MELEE-MISCLASS.
+    const isCaC = selectedWeapon.ref_category === 'Arme de contact'
     return {
       mode: isCaC ? 'melee' : 'ranged',
       band: isCaC ? null : resolveWeaponRangeBand(distanceM, selectedWeapon.ref_range).band,
@@ -89,13 +92,11 @@ export function useDroneDeclare({
     if (!onEnterTargetMode || !tokenId || !activeToken) return
     setAssaultTargetId(null)
     setIsSelectingTarget(true)
-    // Mode dérivé du programme réellement sélectionné (miroir resolveDroneClickAttackMode#isCaC) —
-    // jamais 'ranged' en dur : seul effet du paramètre = la légende flottante "Corps à corps" vs
-    // "Assaut" pendant la sélection (CombatOverlay.jsx#combatTargetMode.mode).
+    // Mode dérivé de l'arme sélectionnée (miroir resolveDroneClickAttackMode#isCaC) — jamais
+    // 'ranged' en dur : seul effet du paramètre = la légende flottante "Corps à corps" vs "Assaut"
+    // pendant la sélection (CombatOverlay.jsx#combatTargetMode.mode).
     const selectedWeapon = droneWeapons.find(w => w.id === selectedDroneWeaponId)
-    const isCaC = selectedWeapon
-      ? (selectedWeapon.fire_mode ? selectedWeapon.fire_mode === 'cc' : !selectedWeapon.ref_fire_mode)
-      : false
+    const isCaC = selectedWeapon?.ref_category === 'Arme de contact'
     onEnterTargetMode(
       tokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
