@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import { COMBAT_MODE_DEFS } from './combatSections.js'
-import { getNaturalWeaponIneligibilityReasons, isNaturalWeaponEligible } from '../../../shared/naturalWeapons.js'
 
 const P = {
   section: {
@@ -80,19 +79,10 @@ function CountChip({ label, tooltip, selected, onClick }) {
 }
 
 export default function MeleeCombatPanel({
-  // Sélection arme — normalisée par le parent
-  availableWeapons,    // [{ id, label, slot, damage, allonge }]
-  selectedWeaponId,    // string | null (mains nues)
-  isWeaponDrawn,       // bool — pour grisage (true pour GM car PNJ auto-géré)
-  hasMeleeInInventory, // bool — hint Joueur (false pour GM)
-  onWeaponChange,      // (id | null) => void
-
-  // Arme naturelle (mutation) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Exclusive avec
-  // selectedWeaponId (radio group commun), gérée séparément par le parent.
-  naturalWeapons = [],       // [{ id, label, formula, requiresGrapple }]
-  selectedNaturalWeaponId,   // uuid | null
-  onNaturalWeaponChange,     // (id | null) => void
-  targetIsGrappled = false,  // bool — statut réel de la 1ʳᵉ cible sélectionnée (indicatif client)
+  // Sélection arme — faite en col. 1 (CombatDeclareActionList, D5). Ce panneau ne reçoit plus que
+  // l'arme choisie, pour la section « deux armes » ; il n'a plus de sélecteur (retiré 2026-08-30).
+  availableWeapons,    // [{ id, label, ... }] — lookup du libellé de l'arme choisie
+  selectedWeaponId,    // string | null (null = mains nues)
 
   // Mode de combat — FIX COM5 : onModeChange seul, pas de target auto
   combatMode,          // 'normal'|'offensif'|'charge'|'defensif'|'retraite'
@@ -130,86 +120,6 @@ export default function MeleeCombatPanel({
 
   return (
     <>
-      {/* Section Arme */}
-      <div style={P.section}>
-        <div style={P.sectionTitle}>{t('meleeCombatPanel.weaponSection')}</div>
-        {/* Mains nues */}
-        <div
-          onClick={() => onWeaponChange(null)}
-          style={{ ...P.option, cursor: 'pointer' }}
-        >
-          <div style={{ flex: 1 }}>
-            <div style={P.optionLabel}>{t('meleeCombatPanel.bareHands')}</div>
-            <div style={P.optionSub}>{t('meleeCombatPanel.bareHandsFormula')}</div>
-          </div>
-          <div style={{ ...P.radio, ...(selectedWeaponId === null ? P.radioActive : {}) }} />
-        </div>
-        {/* Armes de contact */}
-        {availableWeapons.map(item => {
-          const isSelected  = item.id === selectedWeaponId
-          const weaponUsable = isWeaponDrawn
-          return (
-            <div
-              key={item.id}
-              title={weaponUsable ? undefined : t('meleeCombatPanel.weaponNotDrawnTitle')}
-              onClick={() => weaponUsable && onWeaponChange(isSelected ? null : item.id)}
-              style={{
-                ...P.option,
-                cursor: weaponUsable ? 'pointer' : 'not-allowed',
-                opacity: weaponUsable ? 1 : 0.35,
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={P.optionLabel}>{item.label}</div>
-                <div style={P.optionSub}>
-                  {item.slot}{item.damage ? ` · ${item.damage}` : ''}
-                  {item.allonge > 0 ? ` · +${item.allonge}m allonge` : ''}
-                </div>
-              </div>
-              <div style={{
-                ...P.radio,
-                ...(isSelected && weaponUsable ? P.radioActive : {}),
-              }} />
-            </div>
-          )
-        })}
-        {availableWeapons.length === 0 && (
-          <div style={{ fontSize: 11, color: '#70a070', fontStyle: 'italic', marginTop: 4 }}>
-            {hasMeleeInInventory
-              ? t('meleeCombatPanel.bareHandsOnlyStored')
-              : t('meleeCombatPanel.bareHandsOnlyNone')}
-          </div>
-        )}
-        {/* Armes naturelles (mutations) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B */}
-        {naturalWeapons.map(item => {
-          const isSelected = item.id === selectedNaturalWeaponId
-          const eligibilityArgs = { mutation: { natural_weapon_requires_grapple: item.requiresGrapple }, targetIsGrappled }
-          const reasons  = getNaturalWeaponIneligibilityReasons(eligibilityArgs)
-          const eligible = isNaturalWeaponEligible(eligibilityArgs)
-          return (
-            <div
-              key={item.id}
-              title={eligible ? undefined : t('meleeCombatPanel.actionImpossibleTitle', { reasons: reasons.join(', ') })}
-              onClick={() => eligible && onNaturalWeaponChange(isSelected ? null : item.id)}
-              style={{
-                ...P.option,
-                cursor: eligible ? 'pointer' : 'not-allowed',
-                opacity: eligible ? 1 : 0.35,
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={P.optionLabel}>{item.label}</div>
-                <div style={P.optionSub}>{item.formula}</div>
-              </div>
-              <div style={{
-                ...P.radio,
-                ...(isSelected && eligible ? P.radioActive : {}),
-              }} />
-            </div>
-          )
-        })}
-      </div>
-
       {/* Section Mode de combat — FIX COM5 : onModeChange ne déclenche PAS de target auto */}
       <div style={P.section}>
         <div style={P.sectionTitle}>{t('meleeCombatPanel.modeSectionTitle')}</div>
