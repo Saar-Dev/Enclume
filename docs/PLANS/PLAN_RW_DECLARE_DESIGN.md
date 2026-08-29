@@ -47,7 +47,7 @@
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | cadré + à charge — **pas commencé** | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
-| Module 5 — `CombatDeclareFooter` (D12) | **5a refait** (`0a9dfe9`, source unique valid+reason) — 5b-5d à faire | §5.10 |
+| Module 5 — `CombatDeclareFooter` (D12) | **5a + 5b codés** (`5682b8f` — pied + câblage PJ) — 5c (MJ) + 5d (exo) à faire | §5.10 |
 | Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
@@ -620,12 +620,16 @@ en dur.
 actuels (`.combat-float-footer` / `.combat-win-footer`), re-slotté dans le frame au module 2.
 
 **Découpe** :
-- **5a** ✅ `declareChecks.js` (`assaultCheck`/`meleeCheck`/`reloadCheck`/`buildBlockReason`/`hasSomethingToDeclare`)
-  + `hasDeliberateStateChange.js` + 21 tests.
-- **5b** : `CombatDeclareFooter.jsx` + CSS (tokens) + clés `declareFooter.*` + câblage
-  `CombatActionWindow` — **rebranche son `canDeclare` sur `declareChecks`**, l'entrée des checks = le
-  `sel` déjà assemblé pour `buildHumanDeclarePayload` (pas un 3ᵉ sac).
-- **5c** : câblage `CombatGmDeclareWindow` (rebranche `canDeclare` MJ ; le MJ ne câble pas `reloadCheck`).
+- **5a** ✅ (`0a9dfe9`, `119aa6c`) `declareChecks.js` (`assaultCheck`/`meleeCheck`/`reloadCheck` →
+  `{valid,reason}`, `buildBlockReason`, `hasSomethingToDeclare`) + `hasDeliberateStateChange.js`
+  (4 axes : position/weapon/fire_mode/vitesse) + 21 tests.
+- **5b** ✅ (`5682b8f`) `CombatDeclareFooter.jsx` + CSS (`--combat-*`) + `declareFooter.*` + câblage
+  `CombatActionWindow` : `canDeclare` rebranché sur `declareChecks` (iso vérifié ligne à ligne),
+  `hasCompleteAction` = seul changement de comportement (Déclarer exige « qqch à déclarer »).
+  `onPassTurn` = émit direct `{tokenId, state:{}, mapActions:{}}` (drone inclus). **Validation
+  navigateur Saar en attente.**
+- **5c** : câblage `CombatGmDeclareWindow` — rebranche `canDeclare` MJ sur `declareChecks` (le MJ ne
+  câble pas `reloadCheck` ; `started` assault = `assaultTargets.length > 0`), passe `hasActiveSlot`.
 - **5d** : câblage `CombatExoActionWindow` + **suppression du verrou `isDeclaring`**.
 1 commit/pas + checklist manuelle par cas `blockReason`.
 
