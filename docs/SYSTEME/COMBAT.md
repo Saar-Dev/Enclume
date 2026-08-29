@@ -1450,7 +1450,7 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 `CombatExoActionWindow` exo) — fusion rejetée (REWORK-05). Détail du patron, des briques
 `CombatDeclare*`, du sous-état de sélection partagé (M0.4) et des règles : **`REACT.md` P58**.
 
-**Modèle d'interaction — « l'arme EST l'action » (D5, `PLAN_RW_DECLARE_DESIGN.md`)** : le corps de la
+**Modèle d'interaction — « l'arme EST l'action » (D5, `docs/Old/PLAN_RW_DECLARE_DESIGN.md`, clos)** : le corps de la
 col. 1 (`CombatDeclareActionList`) rend une ligne Déplacement cumulable + une liste d'armes groupée
 Distance / Contact. Choisir une arme **arme cette attaque** (auto-dégaine, `SELECT_ATTACK`) et ouvre
 la col. 2 (détail : cible, mode de tir, options, localisation). Tir ⊕ CaC exclusifs par construction.

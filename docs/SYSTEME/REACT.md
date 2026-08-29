@@ -107,9 +107,9 @@ if (e.code === 'AltLeft' || e.code === 'AltRight') { ... }
 
 ## P58 — Briques de déclaration de combat (`CombatDeclare*`)
 
-> Chantiers `PLAN_RW_DECLARE_WINDOWS.md` (clos 2026-08-28, archivé `docs/Old/`) puis
-> `PLAN_RW_DECLARE_DESIGN.md` (module 4 « l'arme EST l'action » + M0.4 sous-état partagé —
-> PJ & MJ faits 2026-08-30 ; **exo pas encore migré**). Finit REWORK-05.
+> Chantiers `PLAN_RW_DECLARE_WINDOWS.md` (clos 2026-08-28) puis `PLAN_RW_DECLARE_DESIGN.md`
+> (clos 2026-08-30 : module 4 « l'arme EST l'action » + M0.4 sous-état partagé, PJ / MJ / Exo).
+> Les deux archivés `docs/Old/`. Finit REWORK-05.
 
 Les **3 fenêtres de déclaration** (phase ANNONCE) restent des **orchestrateurs séparés** — la fusion
 GM + Joueur est rejetée (REWORK-05 : navigation de slots, multi-phases, preview temps réel) :
@@ -166,11 +166,11 @@ un **reducer pur par domaine** + un hook wrapper, monté à l'identique par les 
 - **Silhouette « viser une localisation »** : `BodySilhouetteSvg` (autorité unique du tracé, géométrie
   `docs/PLANS/human.svg` — 6 régions), 2 sous-colonnes (silhouette │ résumé, D11).
 - Divergences **légitimes** conservées : allures (3 sources) ; familles CSS `combat-float-*`
-  (joueur/exo) vs `combat-win-*` (MJ) — non unifiées (`CombatDeclareFrame` = module 2 structurel,
-  non prioritaire). Le MJ garde sa navigation séquentielle de slots + sa preview `pjPreview`.
-- **Reste à faire** (`PLAN_RW_DECLARE_DESIGN.md` §0) : migrer `CombatExoActionWindow` sur
-  `CombatDeclareActionList` ; retirer le sélecteur d'arme redondant de `MeleeCombatPanel` ;
-  neutraliser les couleurs de sélection en style inline (`#5b8dee`/rouges/verts) → `--decl-*` (D4b).
+  (joueur/exo) vs `combat-win-*` (MJ) — non unifiées (`CombatDeclareFrame`, châssis commun, jugé
+  secondaire et non fait). Le MJ garde sa navigation séquentielle de slots + sa preview `pjPreview`.
+- **Non fait, jugé non prioritaire** : `CombatDeclareFrame` (extraction du châssis) ; harness E2E
+  Playwright. La conversion des ~260 autres hex de style inline → `--decl-*` reste un chantier CSS
+  distinct (seules les couleurs de *sélection* des panneaux col. 2 sont converties, D4b).
 
 ---
 

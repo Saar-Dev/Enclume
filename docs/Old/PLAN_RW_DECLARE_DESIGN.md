@@ -1,5 +1,14 @@
 # PLAN_RW_DECLARE_DESIGN — Refonte des fenêtres de déclaration de combat
 
+> **⛔ CHANTIER CLOS — 2026-08-30. Archivé `docs/Old/`.** Les 3 fenêtres (PJ / MJ / Exo) partagent
+> `CombatDeclareActionList` (« l'arme EST l'action ») + `useAssaultDeclaration` / `useMeleeDeclaration`
+> (reducers purs, M0.4 a→g) + `CombatDeclareFooter` + satellite `CombatDeclareStatePanel` + tokens
+> `--decl-*`. Validé navigateur par Saar. Invariants définitifs : `docs/SYSTEME/REACT.md` P58 +
+> `docs/SYSTEME/COMBAT.md` § Fenêtres de déclaration ; tokens dans `client/src/index.css`. Non faits,
+> jugés non prioritaires : module 2 structurel (`CombatDeclareFrame` — P58 le juge secondaire) et
+> M-E2E (golden master `buildDeclarePayload` 52+16 + validations Saar ont couvert). Détail de
+> session : `docs/JOURNAL8.md` (2026-08-30). Le tableau de bord ci-dessous est figé à la clôture.
+
 > **Plan de travail vivant.** Décisions à jour, séquence, points ouverts. Réécrit-synthétisé le
 > 2026-08-29 (avant : 2100 lignes de journal — 6 rounds d'analyse à charge + cadrages détaillés +
 > revue §19). Le **raisonnement complet** derrière chaque décision est archivé :

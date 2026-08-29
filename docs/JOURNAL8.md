@@ -4593,7 +4593,7 @@ d'insertion `server/src/scripts/ticket_decl_cursor_hidden.js` (commit c9c6c50) p
 
 ---
 
-## Session (Claude) — 2026-08-30 — RW déclaration : M0.4 (sous-état partagé) + module 4 (« l'arme EST l'action ») PJ & MJ
+## Session (Claude) — 2026-08-30 — RW déclaration : M0.4 (a→g) + module 4 « l'arme EST l'action » (PJ / MJ / Exo) — CHANTIER CLOS
 
 Suite de `PLAN_RW_DECLARE_DESIGN.md`. Chantier repris après constat Saar : les « modules 2v/3/5
 codés » de la session du 2026-08-29 n'étaient qu'un remap de tokens sur le châssis — **le corps des
@@ -4648,10 +4648,19 @@ frame ni M-E2E — filet = golden master `buildDeclarePayload` + validation navi
 - `MeleeCombatPanel` : sélecteur d'arme retiré (`c37486d`, ~80 l.) — redondant avec la col. 1.
 - D4b (`cbf41de`) : couleurs de sélection d'`AssaultRangedPanel` (rouge) / `MeleeCombatPanel` (vert)
   / `AimedLocationPicker` (doré) → `--decl-acc` + tokens neutres, fallbacks hex conservés.
+- **M0.4-g** (`495cec2`) : unification de la Charge. `meleeDeclarationReducer` gagne un champ
+  `charge: { move, targetTokenId } | null` + `SET_CHARGE`. Le MJ perd son `useState chargeSelection`,
+  le PJ arrête de détourner `moveSelection` + `meleeDecl.targets` — les deux lisent
+  `meleeDecl.state.charge`. `buildHumanDeclarePayload` gagne une branche Charge (miroir
+  `buildGmDeclarePayload`). Golden master : test « Déplacement en Charge » réécrit sur la nouvelle
+  forme. `mapActionsObj.melee` était de toute façon ignoré par `toIniParams` (aucun impact INI).
+  **M0.4 est complet (a→g).**
 
-**État : chantier fonctionnellement clos** pour PJ / MJ / Exo. Restent seulement M0.4-f/g (différés),
-le frame structurel (module 2, non prioritaire) et M-E2E (non nécessaire). Plan à archiver sur
-confirmation Saar.
+**CHANTIER CLOS** — `PLAN_RW_DECLARE_DESIGN.md` + son journal + `maquette-declare/` archivés
+`docs/Old/` (`495cec2`+). Les 3 fenêtres (PJ / MJ / Exo) partagent `CombatDeclareActionList` +
+`useAssaultDeclaration` / `useMeleeDeclaration` + `CombatDeclareFooter` + satellite + tokens `--decl-*`.
+Invariants durables : `REACT.md` P58 + `COMBAT.md` § Fenêtres de déclaration. Non faits, jugés non
+prioritaires (Saar) : `CombatDeclareFrame` (châssis commun, P58 le juge secondaire), harness E2E.
 
 **Données** : aucune. Client + un module partagé pur. Aucune migration.
 

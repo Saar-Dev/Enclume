@@ -511,7 +511,7 @@ Texte brut de bout en bout, aucune clé.
 
 **Décision Saar (2026-08-28)** : différé ici. En attendant, un **swap de mot** « Assaut » → « Tir » a
 été fait sur les ~9 messages concernés de `socketCombatAnnouncement.js` (cohérence terminologique avec
-`PLAN_RW_DECLARE_DESIGN.md` lot B3 ; ne corrige **pas** la violation i18n).
+`docs/Old/PLAN_RW_DECLARE_DESIGN.md` lot B3 (chantier clos) ; ne corrige **pas** la violation i18n).
 
 **Reste à écrire avant de coder** : inventaire exhaustif des sites (grep `COMBAT_DECLARE_ERROR` +
 `WS.COMBAT_DECLARE_ERROR`), regroupement par familles de message, forme du helper de résolution
