@@ -26,9 +26,11 @@ import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareStateChip from './CombatDeclareStateChip.jsx'
-import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
+import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
+import { assaultCheck, meleeCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
+import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
 // ---------------------------------------------------------------------------
 // Composant principal
@@ -396,24 +398,44 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     isDualWield, bulletCount: effectiveBulletCount ?? null,
   })
 
-  // ── canDeclare ───────────────────────────────────────────────────────────
-  // Si cible(s) d'assaut sélectionnée(s), un variant doit être configuré (+ Tir visé éligible si utilisé)
-  const assaultValid = assaultTargets.length === 0 || (
-    assaultTargets.slice(0, effectiveAssaultCount).filter(Boolean).length === effectiveAssaultCount &&
-    currentVariant !== null && (aimTranches === 0 || aimIneligibilityReasons.length === 0)
-  )
-  // Miroir d'assaultValid pour le CaC : un CaC en cours de configuration doit avoir une cible valide,
-  // ou être un mode passif (Défensif/Retraite), ou une Charge avec cible. (isMeleeSetup est défini
-  // plus bas pour le rendu ; sa condition est inlinée ici — mêmes variables, toutes déjà disponibles.)
-  const meleeValid = !(meleePendingMode || meleeTargets.length > 0 || !!chargeSelection)
-    || meleeDefensif
-    || chargeSelection?.targetTokenId != null
-    || meleeTargets.length >= effectiveMeleeCount
-  // B5 (docs/PLANS/PLAN_RW_DECLARE_DESIGN.md §5.2) — « Passer le tour » : un PNJ peut déclarer un tour
-  // vide, comme le drone et l'exo. Plus de gate `stateChanged || hasAction` ; seules les actions
-  // *incomplètes* bloquent (assaultValid / meleeValid). Le serveur pose has_announced sans toucher
-  // aux state_*. Libellé explicite « Passer le tour » du pied = module 5 (D12).
-  const canDeclare = (isActivePnj && assaultValid && meleeValid) || (isActiveDrone && droneDeclare.canDeclare)
+  // ── canDeclare / hasCompleteAction / blockReason — source unique client/src/lib/declareChecks.js ──
+  // `meleeStarted` / `attackStarted` : flags « config en cours » du MJ, réutilisés l.535/542 pour
+  // `isMeleeSetup` / `isAttackActive` (byte-équivalent à l'ancien inline).
+  const meleeStarted  = meleePendingMode || meleeTargets.length > 0 || !!chargeSelection
+  const attackStarted = assaultTargets.length > 0
+    || (combatTargetMode?.tokenId === activeTokenId && !(isActivePnj && meleeStarted))
+  const assault = assaultCheck({
+    started:       attackStarted,
+    hasWeapon:     !!weapon,
+    targetsFilled: assaultTargets.slice(0, effectiveAssaultCount).filter(Boolean).length,
+    targetsNeeded: effectiveAssaultCount,
+    hasVariant:    currentVariant !== null,
+    aimActive:     aimTranches > 0,
+    aimReasons:    aimIneligibilityReasons,
+  })
+  const melee = meleeCheck({
+    started:         meleeStarted,
+    defensif:        meleeDefensif,
+    isCharge:        !!chargeSelection,
+    chargeHasMove:   chargeSelection?.move != null,
+    chargeHasTarget: chargeSelection?.targetTokenId != null,
+    targetsFilled:   meleeTargets.length,
+    targetsNeeded:   effectiveMeleeCount,
+  })
+  // B5 (§5.2) : un PNJ peut déclarer un tour vide. Module 5 (§5.10, D12) : Déclarer actif ⟺ il y a
+  // quelque chose à déclarer ET c'est valide. Le MJ ne configure pas le rechargement (pas de reloadCheck).
+  const hasCompleteAction = isActiveDrone
+    ? droneDeclare.canDeclare
+    : hasSomethingToDeclare({
+        attackStarted,
+        meleeStarted,
+        reloadStarted:  mapAction === 'reload',
+        hasMove:        pendingMove != null,
+        hasStateChange: hasDeliberateStateChange(decl, initialStates),
+        hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
+      })
+  const canDeclare = (isActivePnj && assault.valid && melee.valid) || (isActiveDrone && droneDeclare.canDeclare)
+  const blockReason = isActiveDrone ? null : buildBlockReason({ assault, melee })
 
   // ── Déplacement direct ───────────────────────────────────────────────────
   // ── Assaut direct (Tir Multi, docs/PLAN_TIRMULTI.md) ──────────────────────
@@ -531,15 +553,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     }))
   }
 
-  // ── Etat CaC actif (pour affichage panneau droit) ─────────────────────────
-  const isMeleeSetup = isActivePnj && (
-    meleePendingMode ||
-    meleeTargets.length > 0 ||
-    !!chargeSelection
-  )
-
-  // ── Attack actif (visuellement) ───────────────────────────────────────────
-  const isAttackActive = assaultTargets.length > 0 || (combatTargetMode?.tokenId === activeTokenId && !isMeleeSetup)
+  // ── Etat CaC / Tir actif (pour l'affichage) — dérivés de `meleeStarted` / `attackStarted`
+  //    calculés plus haut (source unique avec `declareChecks`).
+  const isMeleeSetup  = isActivePnj && meleeStarted
+  const isAttackActive = attackStarted
 
   // Survol ambiant (COMBAT-DEPLACEMENT-HOVER) : ne masque la fenêtre que si une destination PNJ a
   // été posée et attend validation — pas pendant le simple survol (option 1, décision Saar).
@@ -1039,23 +1056,17 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           </div>
         )}
         <CombatDeclareErrorBanner />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-          {(isActivePnj || isActiveDrone) && (
-            <CombatDeclareIniWidget
-              currentInitiative={activePnjEntry.initiative}
-              delta={iniDelta}
-              breakdown={iniBreakdown}
-            />
-          )}
-          <button
-            className="btn-tac-confirm"
-            style={{ flex: 1 }}
-            onClick={handleDeclare}
-            disabled={!canDeclare}
-          >
-            {t('actionWindow.declareActionButton')}
-          </button>
-        </div>
+        <CombatDeclareFooter
+          currentInitiative={activePnjEntry?.initiative ?? 0}
+          iniDelta={iniDelta}
+          iniBreakdown={iniBreakdown}
+          hasCompleteAction={hasCompleteAction}
+          canDeclare={canDeclare}
+          blockReason={blockReason}
+          hasActiveSlot={isActivePnj || isActiveDrone}
+          onDeclare={handleDeclare}
+          onPassTurn={() => socket?.emit(WS.COMBAT_ACTION_DECLARE, { tokenId: activeTokenId, state: {}, mapActions: {} })}
+        />
       </div>
 
     </div>
