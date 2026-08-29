@@ -47,7 +47,7 @@
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | cadré + à charge — **pas commencé** | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
-| Module 5 — `CombatDeclareFooter` (D12) | **5a + 5b codés** (`5682b8f` — pied + câblage PJ) — 5c (MJ) + 5d (exo) à faire | §5.10 |
+| Module 5 — `CombatDeclareFooter` (D12) | **5a-5d codés** (`f199ff4`) — validation navigateur Saar en attente | §5.10 |
 | Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
@@ -628,10 +628,21 @@ actuels (`.combat-float-footer` / `.combat-win-footer`), re-slotté dans le fram
   `hasCompleteAction` = seul changement de comportement (Déclarer exige « qqch à déclarer »).
   `onPassTurn` = émit direct `{tokenId, state:{}, mapActions:{}}` (drone inclus). **Validation
   navigateur Saar en attente.**
-- **5c** : câblage `CombatGmDeclareWindow` — rebranche `canDeclare` MJ sur `declareChecks` (le MJ ne
-  câble pas `reloadCheck` ; `started` assault = `assaultTargets.length > 0`), passe `hasActiveSlot`.
-- **5d** : câblage `CombatExoActionWindow` + **suppression du verrou `isDeclaring`**.
-1 commit/pas + checklist manuelle par cas `blockReason`.
+- **5c** ✅ (`02f0aed`) câblage `CombatGmDeclareWindow` — `canDeclare` MJ rebranché en préservant
+  `(isActivePnj && …) || (isActiveDrone && …)` ; primitifs `meleeStarted`/`attackStarted` définis
+  une fois, `isMeleeSetup`/`isAttackActive` simplifiés dessus (byte-équivalent) ; pas de `reloadCheck` ;
+  bouton vert → cyan (D12) ; `hasActiveSlot = isActivePnj || isActiveDrone`.
+- **5d** ✅ (`f199ff4`) câblage `CombatExoActionWindow` + **verrou `isDeclaring` supprimé** (l'exo
+  était la seule fenêtre à en avoir un ; garde serveur idempotent). Retirés avec lui : la tuile
+  « Envoi… », l'ajustement-pendant-le-rendu `handledDeclareErrorId`, `useSessionStore(declareError)`,
+  la clé `exoActionWindow.sending`.
+
+**Module 5 codé (5a-5d). Écarts iso assumés + documentés** : PJ vérifié ligne à ligne ; MJ légèrement
+plus strict (`started` = `isAttackActive`/`isMeleeSetup` → Déclarer grisé + raison en mode ciblage
+sans cible, au lieu de dropper l'action silencieusement ; + contrôle d'arme client) — jamais un
+blocage à tort. **Validation navigateur Saar en attente** (checklist : tour vide → Déclarer grisé /
+Passer OK ; action incomplète → raison au centre ; `fire_mode` seul → Déclarer actif ; Charge sans
+cible → raison ; MJ en attente d'un PJ → 2 boutons grisés ; bouton MJ cyan ; drone/exo Passer OK).
 
 ---
 
