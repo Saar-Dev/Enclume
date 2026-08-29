@@ -347,12 +347,13 @@ gardes de montage, risque, 5 points ouverts PO-M2-a..e). En bref : `CombatDeclar
 (structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** → golden master du
 module 0 en filet ; un commit par fenêtre migrée.
 
-**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** Composant neuf sur `CombatDeclareStateChip`.
-**Côté exo : PAS de migration serveur** (corrigé §12.5, `[VÉRIFIÉ]` `socketCombatAnnouncement.js`
-:810-829 persiste `state.*` génériquement pour tout type, exo compris ; `setCharacterState` est
-agnostique au type). Reste : (a) client — câbler `CombatDeclareStateChip`, envoyer un `state` peuplé
-au lieu de `state: {}` ; (b) cadrage règles — quels axes une exo a vraiment (RAW). Risque : moyen
-(client), faible (exo, une fois le cadrage règles fait).
+**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** **Cadré en détail §14.** En bref : sortir
+posture + vitesse + arme du corps (PJ + MJ) vers un panneau frère du frame, positionné depuis `pos`,
+présentation glyphe (`assets/status/`, `--combat-accent-fg`). `fire_mode` reste au corps jusqu'au
+module 4 (§14.7). **Exo : probablement PAS de satellite** (`[VÉRIFIÉ]` RAW §14.3 — l'exo n'a que
+`vitesse` comme axe libre, `prone→standing` est une action à Test, pas un toggle ; PO-M3-a). **PAS
+de migration serveur** (§12.5). Risque moyen (client) ; payload PJ/MJ inchangé (golden master en
+filet) ; si l'exo est inclus, `+ buildExoDeclareState` pur + test (§14.6). 6 points ouverts PO-M3-a..f.
 
 **Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
 d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
@@ -753,7 +754,8 @@ change de famille, pas 3.**
   title={<>…</>}                              // ReactNode : texte simple OU bloc enrichi MJ
   hidden={isHidden}                           // opacity 0 + pointer-events none
   banner={mortalWoundBanner || null}          // au-dessus du corps, sous le header
-  satellite={<CombatDeclareStatePanel …/> || null}   // module 3 ; positionné à gauche
+  satellite={<CombatDeclareStatePanel …/> || null}   // module 3 ; RENDU COMME FRÈRE positionné à
+                                                     // partir de `pos` (pas enfant — overflow:hidden), §14.5
   footer={<CombatDeclareFooter …/> || null}   // module 5
 >
   {corps}                                     // module 4 (ou <p>message</p> pour les états simples)
@@ -929,3 +931,144 @@ liste déjà les briques `CombatDeclare*` et nomme le frame comme « chantier de
 - Contrainte Rules-of-Hooks : frame = élément le plus externe de chaque `return`.
 - Livrable = code **+ checklist de vérif manuelle par fenêtre** (aucun filet automatisé, point 2).
 - PO-M2-b / d / e restent à trancher au moment du code (décisions mineures, pas bloquantes).
+
+---
+
+## 14. Cadrage Module 3 — `CombatDeclareStatePanel` (satellite d'état, D8)
+
+> Cadrage 2026-08-29. Lecture faite : `combatSections.js` (`STATE_DEFS`, `stateTransitionCost`,
+> `nextKey`), `CombatDeclareStateSelector.jsx` + `CombatDeclareStateChip.jsx`, sections TACTIQUE /
+> ARMEMENT des 3 fenêtres, `combat.json` `states.*`, `docs/SYSTEME/EXOARMURE.md` (posture exo).
+> **Aucun code — cadrage seul.** Analyse à charge = tour suivant.
+
+### 14.1 Responsabilité
+
+Sortir les **sélecteurs d'état tactique** (posture, vitesse, arme) du corps des fenêtres vers un
+**panneau satellite accroché au bord gauche** de la fenêtre principale, qui **suit sa position**
+(D8 : « statut, pas actions — on ne les modifie pas souvent »). Présentation **glyphe** (D8/D10),
+peu de texte. Neuf pour l'exo (aujourd'hui `state: {}`).
+**Ne touche pas** : `fire_mode` (part en col. 2 au module 4, §14.7), la liste d'armes (module 4), le
+pied (module 5), le calcul de coût INI (`STATE_TRANSITION_COST`, autorité serveur, intact).
+
+### 14.2 État des lieux `[VÉRIFIÉ]` — les axes d'état
+
+`STATE_DEFS` (`combatSections.js`) définit **5 axes** ; coûts de transition dans
+`shared/combatIniCost.js` (`STATE_TRANSITION_COST`, partagé serveur) :
+
+| Axe | Valeurs | i18n (`states.*`) | UI actuelle |
+|---|---|---|---|
+| `position` | standing / crouching / kneeling / prone | Debout / Accroupi / À genou / Couché | PJ : `StateSelector` (TACTIQUE) ; MJ : `StateChip` |
+| `vitesse` | delayed / normal / rushed | Retardée / Normale / Précipitée | PJ + MJ : `StateSelector` (segmented — MJ délibérément, Session 158) |
+| `weapon` | holstered / ready / drawn | Rangée / Prête / Au clair | PJ : `StateSelector` (ARMEMENT) ; MJ : `StateChip` |
+| `fire_mode` | cc / rc / rl | — | PJ + MJ : `StateSelector`/`StateChip` (ARMEMENT) → **part au module 4** |
+| `cover` | exposed / partial / important | Exposé / Partiel / Important | **aucun sélecteur nulle part** `[VÉRIFIÉ]` — non éditable joueur, hors satellite |
+
+Les 2 briques (`StateSelector` segmented / `StateChip` click-to-cycle) partagent l'API
+`{stateKey, current, initial, onChange, availableKeys}` et affichent le coût vs `initial`
+(= `snapFromRosterEntry`, état en début de tour). Reversées au satellite : `initial` =
+`initialStates.current[axe]` inchangé.
+
+### 14.3 Contenu du satellite par famille — **et le problème exo**
+
+| Famille | Satellite |
+|---|---|
+| PJ | **Posture + Vitesse + Arme** (les 3 de D8) |
+| MJ-PNJ | idem (mêmes 3 axes ; le MJ garde Vitesse en segmented, cf. Session 158 — à respecter dans la présentation glyphe) |
+| Drone | **aucun** (D8 ; le drone envoie un `state` fixe) |
+| Exo | **`[À TRANCHER]` — probablement Vitesse seule, voire rien** |
+
+**Exo `[VÉRIFIÉ]` `docs/SYSTEME/EXOARMURE.md`** : `position` exo se réduit à {standing, prone}, et
+`prone → standing` **n'est pas un toggle de posture** — c'est la « Manœuvre d'armure pour se relever »,
+une **action de combat résolue par un Test** (déjà dans le corps de `CombatExoActionWindow`,
+`handleStandUp`). Pas de crouch/kneel exo dans le RAW. `weapon` holstered/ready/drawn ne s'applique
+pas (armes hardpoint, toujours montées). Reste **`vitesse`** (delayed/normal/rushed — mécanique INI
+générique, `[INFÉRÉ]` applicable à l'exo).
+→ **PO-M3-a** : l'exo a-t-il un satellite (Vitesse seule, 1 ligne) ou **pas de satellite** (D8
+révisé en « PJ + MJ seulement », l'exo garde son corps minimal + Vitesse inline) ? La 2ᵉ option
+colle mieux au constat de Saar (2026-08-28) que le volet exo avait été surdimensionné.
+
+### 14.4 Présentation glyphe (D8/D10)
+
+D8 : « glyphes iconiques, peu de texte ». Les briques actuelles restent text-heavy (label + valeur +
+coût). Le satellite veut : **glyphe** (`mask-image` d'un `assets/status/*.svg`, recoloré
+`--combat-accent-fg`) + valeur courte + coût INI si ≠ 0.
+
+Glyphes disponibles (D10, `[VÉRIFIÉ]` présents) : `stand`/`crounch`/`kneel`/`crawl` (posture),
+`actionNormal`/`actionDelayed`/`actionRush` (vitesse), `WeaponA`/`WeaponB`/`WeaponC` (arme
+rangée / main dessus / au clair). Mapping valeur→glyphe direct (PO5 : glyphe **reflète la valeur**,
+Saar a produit les 4 postures → oui).
+
+**Brique** : `[À TRANCHER]` **PO-M3-b** — nouveau composant `CombatDeclareStateGlyph`
+(présentation dédiée) OU extension de `CombatDeclareStateChip` avec un mode `glyph`. Interaction :
+clic = cycle (`nextKey`, comportement chip actuel) ? ou clic = déplie les options (4 postures =
+cycle pénible) ? → **PO-M3-c**.
+
+### 14.5 Mécanisme « le satellite suit la fenêtre » (PO3c)  `[VÉRIFIÉ]` aucun précédent
+
+Grep : **aucune fenêtre de combat n'est accrochée à une autre** — chacune a son `useDraggable`
+indépendant. Mécanisme neuf. Le frame (`CombatDeclareFrame`, module 2) **possède `pos`**
+(`useDraggable`, décision module 2) → il rend le satellite comme **élément frère positionné**, pas
+comme enfant (le frame a `overflow: hidden`, un enfant « à gauche » serait clippé) :
+
+```
+// dans CombatDeclareFrame :
+{satellite && (
+  <div style={{ position:'absolute', left: pos.left - SAT_W - GAP, top: pos.top }}>
+    {satellite}
+  </div>
+)}
+<div className="combat-float-win" data-family={family} style={{ left: pos.left, top: pos.top, … }}>
+  … header / body / footer …
+</div>
+```
+
+→ **raffine l'API module 2** : le prop `satellite` n'est pas un slot *dans* le châssis, c'est un
+frère que le frame positionne à partir de son `pos`. Le `hidden` du frame masque les deux. Drag :
+gratuit (le satellite lit `pos` à chaque rendu). Clamp bord d'écran gauche : si `pos.left - SAT_W < 8`,
+le satellite passe à droite (`left: pos.left + windowWidth + GAP`) — **PO-M3-d**.
+
+### 14.6 Exo — payload `state` + test de caractérisation
+
+Si l'exo reçoit un satellite (PO-M3-a) : `CombatExoActionWindow.handleDeclare` envoie aujourd'hui
+`state: {}`. Il passerait à `state: { vitesse }` (± `position` jamais, cf. 14.3). L'exo n'a pas de
+`declarationReducer` — un `useState` local pour l'axe suffit (ou un mini reducer si > 1 axe).
+`buildExoMapActions` ne couvre **que `mapActions`**, pas `state` → **ajouter un
+`buildExoDeclareState(sel)` pur + test de caractérisation** (patron module 0) pour figer ce nouveau
+fragment de payload. Le golden master PJ/MJ n'est pas concerné (mêmes champs `decl.*` dans les mêmes
+`buildXDeclarePayload`).
+
+### 14.7 Seam `fire_mode` (reste au corps jusqu'au module 4)
+
+Module 3 retire **position + vitesse + weapon** du corps → satellite. `fire_mode` **reste** dans la
+section ARMEMENT du corps (elle se réduit à : liste d'armes équipées + sélecteur `fire_mode`)
+jusqu'à ce que le module 4 le déplace en col. 2 (`AssaultRangedPanel` a déjà « Section mode de tir »).
+Interim assumé — une section ARMEMENT réduite pendant un module. `decl.fire_mode` reste un champ du
+reducer tout du long (le payload le lit).
+
+### 14.8 Risque + rollback
+
+**Risque moyen (client).** Déplace 2-3 sélecteurs du corps vers un panneau frère, sur PJ + MJ ;
+neuf pour l'exo (si PO-M3-a = oui). **Pas de changement de forme de payload PJ/MJ** (mêmes `decl.*`
+→ mêmes `buildXDeclarePayload` → golden master 51 tests en filet). Exo : nouveau fragment `state`,
+couvert par 14.6. Risque **visuel** : positionnement du satellite frère (pas de test → checklist
+manuelle). Rollback : `git revert` du commit du module (un commit ; ou un par fenêtre si l'exo est
+inclus).
+
+### 14.9 Hors périmètre module 3
+
+- `fire_mode` (module 4, §14.7), la liste d'armes (module 4), le pied (module 5).
+- `cover` : pas de sélecteur aujourd'hui, on n'en ajoute pas.
+- Le recadrage des glyphes mal cadrés (Saar, hors code).
+- La conversion hex→token générale (§8).
+- Le calcul de coût INI (`STATE_TRANSITION_COST`, serveur).
+
+### 14.10 Points ouverts module 3
+
+| # | Question |
+|---|---|
+| PO-M3-a | **Exo : satellite (Vitesse seule) ou pas de satellite** (D8 → « PJ + MJ seulement ») ? Penche pour « pas de satellite exo » (cadrage RAW §14.3 + constat surdimensionnement Saar). |
+| PO-M3-b | Brique glyphe : `CombatDeclareStateGlyph` neuf, ou mode `glyph` sur `CombatDeclareStateChip` ? |
+| PO-M3-c | Interaction : clic = cycle (`nextKey`) ou clic = déplie les options ? (4 postures = cycle long) |
+| PO-M3-d | Clamp : satellite passe à droite si pas la place à gauche du bord d'écran ? |
+| PO-M3-e | MJ Vitesse « segmented, 3 choix visibles » (Session 158) : comment le rendre en présentation glyphe sans reperdre les 3 choix d'un coup ? |
+| PO-M3-f | Le satellite est-il draggable indépendamment (détachable) ou strictement collé ? D8 dit « accroché … se déplace avec » → strictement collé, `pos` du frame seul. |
