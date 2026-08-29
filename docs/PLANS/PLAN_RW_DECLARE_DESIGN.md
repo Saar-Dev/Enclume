@@ -43,10 +43,32 @@
 > Drone, Exo, « Décisions ». Elle valide le **look** ; elle **ne prouve pas** la faisabilité de la
 > structure (footprint écran, réagencement des panneaux, satellite qui suit la fenêtre) — cf. §7 PO3.
 >
-> **Prototype d'interaction D5** (2026-08-29, jetable — valide le *geste* « l'arme EST l'action »,
-> pas le code) : `https://claude.ai/code/artifact/afcd5e28-341b-40ee-b109-30e69d9597fc`. Sortie de
-> l'analyse à charge du module 4 (§16.10 pt 5) : éprouver le modèle d'interaction **avant** de
-> s'engager dans la pile modules 2 + 3 + M0.4. En attente du retour Saar.
+> **Prototype d'interaction D5** (2026-08-29, jetable — valide le *geste* « l'arme EST l'action » +
+> la teinte Wizard, pas le code) : `https://claude.ai/code/artifact/afcd5e28-341b-40ee-b109-30e69d9597fc`.
+> **Validé Saar** (« sinon parfait »).
+
+---
+
+## 0. Tableau de bord (2026-08-29)
+
+| Élément | État | Réf |
+|---|---|---|
+| Lot B (i18n + terminologie + pastille INI) | ✅ **codé + committé** (non poussé) | §5.1 |
+| B5 (« Passer le tour » déclarable — mécanisme) | ✅ **codé + committé** | §5.2 |
+| Module 0 M0.0-M0.3 (`buildDeclarePayload`, 51 tests) | ✅ **codé + committé** | §5.4 |
+| Module 2 — `CombatDeclareFrame` (châssis) | cadré + à charge | §13 |
+| Module 3 — satellite d'état | cadré + à charge | §14 |
+| M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge | §15 |
+| Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge | §16 |
+| Module 5 — `CombatDeclareFooter` (D12) | cadré + à charge | §17 |
+| Décisions prototype P1-P8 | P1-P6 tranchées, P7 tranché (teinte Wizard), P8 tranché | §18 |
+| Analyse à charge profonde du plan | faite — R1-R4 en attente Saar, R5-R8 appliqués | §19 |
+| Glyphes `assets/status/` | `movement.svg` reçu (P6 ✅) ; `crawl.svg` re-cadré (clipPath) | D10, §12.6 |
+| **Code de la refonte (modules 2-5, M0.4)** | **pas commencé** — conversation de planification seulement | — |
+| Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (31+ commits) | — |
+
+**Décisions Saar en attente (§19.10)** : R1 (E2E avant module 2 ?), R2 (réordonner ?), R3 (satellite
+= bande repliable au lieu de panneau suiveur ?), R4 (migration résolution en suivi ROADMAP ?).
 
 ---
 
@@ -332,14 +354,15 @@ Méthode (golden master / characterization, pratique pro documentée — sources
 
 **Jalon M0.1-M0.3 (2026-08-28)** : le payload `COMBAT_ACTION_DECLARE` des 4 familles (PJ / PNJ / drone /
 exo) est extrait en `client/src/lib/buildDeclarePayload.js` et couvert par **51 tests de
-caractérisation** figés sur le comportement actuel. Les modules 2-3 (chrome, satellite) ne touchent
-que du layout → le golden master casse si le payload bouge. Modules 2-5 (refonte visuelle) ne touchent
-alors **que du JSX/layout** — le golden master attrape
-   toute régression de payload.
+caractérisation**.
 
-Aggradation **permanente** : le chemin de déclaration de combat devient testable pour de bon, pas
-juste pour cette refonte. Aligné sur la philo `.mjs` du projet — **pas de nouveau paradigme**.
-Playwright E2E reste possible en complément (scénario combat réel) mais n'est pas le filet principal.
+**⚠ Portée réelle du golden master (analyse à charge §19.1)** : il teste **la forme du payload**.
+Il protège **M0.4 et le module 4** (qui touchent le sous-état / l'assemblage). Il ne protège **PAS**
+les modules 2 / 3 / 5 (JSX/CSS/layout, payload inchangé) — pour ceux-là il n'y a **aucun filet
+automatique** aujourd'hui. → R1 §19.10 : un test Playwright E2E du parcours de déclaration, avant le
+module 2.
+
+Aggradation **permanente** : le chemin d'assemblage du payload devient testable pour de bon.
 
 **Modules 2 → 5** : après le module 0. Un module = un commit, validé (tests `.mjs` verts + navigateur
 Saar) avant le suivant. Ancien code retiré dans le même commit.
@@ -347,10 +370,10 @@ Saar) avant le suivant. Ancien code retiré dans le même commit.
 **Module 2 — `CombatDeclareFrame` (chrome partagé) + `--combat-accent-*` par famille (ex-module 1).**
 **Cadré en détail §13** (API, châssis actuels `[VÉRIFIÉ]`, 6 états non-déclaration, tokens, PCB,
 gardes de montage, risque, 5 points ouverts PO-M2-a..e). En bref : `CombatDeclareFrame` possède
-`useDraggable` + châssis (palette `--combat-*` dédiée) + masquage + slots `satellite`/`footer` +
-`data-family` → `--combat-accent-*` ; `+ --combat-exo-*` (#9858c8) dans `index.css`. Risque **élevé**
-(structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** → golden master du
-module 0 en filet ; un commit par fenêtre migrée.
+`useDraggable` + châssis (teinte Wizard, P7) + masquage + slots `satellite`/`footer` + `data-family`
+→ `--combat-accent-*` ; `+ --combat-exo-*` + jeu `--decl-*` dans `index.css`. Risque **élevé**
+(structure externe des 3 fenêtres + décalage de palette). **Le golden master ne couvre PAS ce module**
+(§19.1) → filet réel = l'E2E R1 + un commit par fenêtre + checklist manuelle.
 
 **Module 3 — `CombatDeclareStatePanel` (satellite, D8).** **Cadré §14** (simplifié 2026-08-29,
 plus de point ouvert). Relocaliser les puces d'état dans un **panneau frère** du frame (positionné
@@ -1873,3 +1896,175 @@ pop-up reste l'option de repli si « toujours cliquable » est ferme).
 | P6 | **Glyphe « Déplacement » à produire** (Saar, comme les autres `assets/status/`). Placeholder = double chevron dans le prototype. | à faire (Saar) | + 1 asset |
 | P7 | **Palette : TEINTE WIZARD — tranché Saar 2026-08-29 (« clairement »).** Les fenêtres de déclaration adoptent la teinte du module création de perso : grounds **navy profond opaque** (`#0a1524` / `#071019`, PAS de verre/flou), bordures `rgba(255,255,255,0.10)`, chrome cyan **vif** `#2FD7FF` (au lieu de `#3a8aaa`), radius **9 px** (au lieu de 3), léger **halo** `0 0 14px rgba(accent,0.28)` sur sélection + Déclarer. **Restent dehors** : `backdrop-filter`, transparence verre, halos radiaux pulsés, type fine (densité + lisibilité au-dessus de la 3D). | **tranché Saar** | **révise D2** ; élargit le module 2 (§13.5/§13.11) |
 | P8 | **Flash de reset col. 2** : neutre (accent de la nouvelle arme + léger glissement), **jamais rouge** — recharger le panneau n'est pas une erreur. | tranché | neuf |
+
+---
+
+## 19. Analyse à charge profonde du plan (2026-08-29)
+
+> Demandée par Saar, « prends ton temps ». Revue du plan **dans son ensemble** (pas module par
+> module — ces passes-là sont faites, §13.11/14.11/15.10/16.10/17.10). On cherche les faiblesses
+> **systémiques**. `movement.svg` reçu (P6 fait — 48×48, tracé unique, format Inkscape comme les
+> glyphes d'arme).
+
+### 19.1 Le filet automatique n'existe pas pour les modules 2 / 3 / 5 — **le trou le plus grave**
+
+Le refrain « golden master en filet » dans §13 / §14 / §17 est en grande partie **rassurant à
+tort**. Le golden master (`buildDeclarePayload.test.mjs`, 51 tests) teste **la forme du payload
+`COMBAT_ACTION_DECLARE`**. Or :
+- **Module 2** (châssis) : JSX/CSS, ne touche pas le payload → le golden master **ne peut rien
+  attraper**. Une régression de drag, de masquage au ciblage, de `hidden`, de header, de slot :
+  **rien** ne la voit avant le navigateur de Saar « en bloc à la fin ».
+- **Module 3** (satellite) : idem — `decl.*` passe par les mêmes `buildXDeclarePayload`, le payload
+  ne bouge pas. Positionnement du satellite frère, z-index, clamp bord d'écran, glyphes `mask-image` :
+  **non testés**.
+- **Module 5** (pied) : le payload de « Passer le tour » (déclaration vide) est déjà couvert ; celui
+  d'une déclaration complète ne bouge pas. `hasCompleteAction`, `blockReason`, le gate de Déclarer :
+  **non testés** (sauf `hasCompleteAction` si extrait en helper `.mjs`, §17.10 pt 1).
+
+Seuls **M0.4** et **module 4** ont un vrai filet (ils touchent le payload / le sous-état → golden
+master + reducers `.mjs`).
+
+→ On empile **3 modules à surface non testée** (2, 3, 5) avant la première validation réelle, avec
+la validation « en bloc » qui rend le bisect pénible.
+
+**Recommandation (la plus importante de cette revue) : un test Playwright E2E du parcours de
+déclaration, écrit AVANT le module 2.** Un seul test : PJ ouvre la fenêtre → change de posture →
+choisit une arme → cible → Déclarer → assert `has_announced` + l'état du roster. Puis chaque module
+le fait tourner. C'est **le** filet pour un refactor JSX de cette taille, et une **aggradation
+permanente** (le parcours de déclaration devient couvert E2E pour de bon) — exactement dans l'esprit
+des priorités Saar. Coût : ~1 j de mise en place E2E combat (fixtures : campagne + combat + tokens).
+`@playwright/test` est déjà installé, `tests/e2e/` existe (`smoke.spec.mjs` seul). **Nouveau
+prérequis, avant module 2** — comme le module 0 l'a été.
+
+### 19.2 Le risque est en tête, la valeur en queue
+
+Ordre §10 : module 2 → 3 → M0.4 → 4 → 5.
+- **Module 2** = le plus risqué (réécrit le `return` de premier niveau des 3 fenêtres + décalage de
+  palette P7) **et** la clé de voûte (3, 4, 5 en dépendent).
+- **Ce que Saar voit** : rien de significatif avant le **module 4**. Modules 2 (châssis ≈ invisible),
+  3 (satellite), M0.4 (invisible) d'abord.
+
+Deux options pour dé-risquer :
+1. **Construire 3 et 5 en composants autonomes contre les fenêtres ACTUELLES d'abord**, puis les
+   re-slotter dans le frame au module 2. `CombatDeclareFooter` et `CombatDeclareStatePanel` peuvent
+   vivre dans les pieds/corps actuels avant que le frame existe. Chaque pièce validée isolément avant
+   le grand échange structurel. Inverse l'ordre : 5 → 3 → 2 → M0.4 → 4.
+2. **Garder l'ordre mais insérer un checkpoint Saar ferme après le module 2** — ne pas empiler
+   3 modules sur une clé de voûte non validée navigateur.
+
+Reco : **option 1** si l'E2E (§19.1) est en place (il rend le re-slottage sûr) ; sinon option 2.
+
+### 19.3 D8 « satellite qui suit la fenêtre » — le pari structurel le plus fragile, pour le contenu le moins utilisé
+
+- `[VÉRIFIÉ]` (§14.5) : **aucun précédent** dans le code — chaque fenêtre de combat a son
+  `useDraggable` indépendant.
+- §14.11 pt 6-7-9 : alourdit le module 2 (le frame doit exposer `pos` + rendre un frère positionné +
+  gérer un z-index dédié + le halo P7 sur un élément détaché) ; **repli déjà nommé** (satellite
+  non-suiveur, ou section repliable « STATUT » en tête de corps).
+- **La justification de D8 elle-même** : « statut, pas actions — on ne les modifie pas souvent ».
+  Donc le contenu est **à faible interaction**.
+
+→ Beaucoup de mécanisme neuf et fragile (sync de drag, clamp, z-index, halo sur élément détaché)
+pour **3 puces qu'on touche rarement**.
+
+**Recommandation : basculer le repli en solution principale.** Une **section repliable « STATUT »**
+en tête de fenêtre (au-dessus de Déplacement), 3 puces glyphe, repliée par défaut, visuellement
+distincte (bande compacte). Zéro mécanisme de positionnement neuf. Reste « à part » (D8). Le
+panneau-qui-suit était l'instinct de Saar (« je garderai bien ma version », §6 du fil d'origine)
+mais c'est de la sur-ingénierie pour le gain. **À trancher avec Saar** — question directe : *le
+satellite suiveur est le mécanisme neuf le plus risqué du plan, pour le contenu le moins utilisé —
+une bande repliable en tête suffit-elle ?*
+
+### 19.4 P7 (teinte Wizard) crée une UI de combat à moitié migrée
+
+Fenêtres de **déclaration** → teinte Wizard (navy, cyan vif, radius 9, halo). Fenêtres de
+**RÉSOLUTION** (`CombatModifiersWindow`, `CombatDamageWindow`, `CombatCacModifiersWindow`,
+`CombatStunWindow`) → **HUD combat inchangé**.
+
+Pendant un même combat : le joueur passe de la fenêtre de déclaration (teinte Wizard) à la fenêtre
+de résolution (HUD) — **rupture visuelle**. Le plan dit « couture assumée, hors périmètre §8 ». Mais
+une UI de combat **durablement incohérente**, est-ce acceptable, ou P7 engage-t-il implicitement la
+migration des fenêtres de résolution (élargissement du périmètre par la bande) ?
+
+**Recommandation** : ne pas « assumer la couture » — **cadrer explicitement la migration des
+fenêtres de résolution comme chantier de suivi** (`ROADMAP.md`), pour qu'elle soit tracée et non
+subie. Ou revenir sur la teinte Wizard si la couture n'est pas tenable. Saar ayant tranché
+« clairement », c'est probablement le suivi qu'il faut acter.
+
+### 19.5 Module 0 a été sur-dimensionné pour ce dont 2 / 3 / 5 ont besoin
+
+Module 0 (fait, 5 commits, 51 tests) a été justifié comme « le filet de la refonte visuelle ». Or
+2 / 3 / 5 ne touchent pas l'assemblage du payload — **le golden master ne les protège pas** (§19.1).
+Bénéficiaires réels de module 0 : **module 4 + M0.4** uniquement.
+
+Pas un appel à défaire (c'est fait, et c'est une aggradation permanente légitime). Mais le plan doit
+être **honnête** : « golden master en filet » pour les modules 2/3/5 est de la réassurance, pas un
+filet. Le vrai filet pour eux = l'E2E de §19.1 (aujourd'hui : rien).
+
+### 19.6 Ce qui reste spécifique au MJ après la refonte — à nommer, pour ne pas survendre « partagé »
+
+Après les 5 modules, `CombatGmDeclareWindow` garde encore : données batch (`equipment[tid]`),
+navigation de slots (`activeTokenId` auto-advance), l'émission `pjPreview` (+ la reconstruction de
+son champ `actions` depuis la nouvelle sélection, §16.10 pt 3), la chaîne récursive `selectNext`
++ `isMountedRef` + `*CountRef` (§15.10 pt 3), le `setHasPassed` drone (§17.10 pt 3), `meleeValid`
+neuf (B5), le cas `reloadValid` PJ-seul absent côté MJ (§17.10 pt 5), le message d'attente PJ + le
+bouton « Passer » (skip PJ), le badge d'arme du roster.
+
+Partagé = frame + puces d'état + hooks + `CombatDeclareFooter` + `buildWeaponList` + panneaux col. 2.
+C'est réel, mais **le MJ reste un cousin à ~15 particularités**, pas un jumeau. Le plan doit porter
+une liste **« reste spécifique MJ »** explicite (celle ci-dessus) pour que personne ne code en
+croyant à une symétrie qui n'existe pas.
+
+### 19.7 Sous-planifié — deux trous concrets
+
+**(a) Les clés i18n neuves, par module.** Impératif Saar (message 2 : « TOUTE fenêtre INTÉGRALEMENT
+localisée »). Modules 2-5 ajoutent du texte visible neuf : `Passer le tour`, les `blockReason`
+(« choisir une cible », « arme non dégainée »…), le message de statut (« Prêt · Tir → X »), les
+en-têtes pairs `DÉPLACEMENT` / `DISTANCE` / `CONTACT`, l'en-tête col. 2. Le plan cite l'i18n comme
+« critère de clôture » mais **aucun module n'énumère ses clés**. → chaque cadrage de module liste
+ses clés neuves (`combat.json`), ajoutées **avant** le JSX (`i18n.md`).
+
+**(b) Les états grisés de la liste d'armes (module 4).** §16 couvre §4.1 (mains nues, armes
+naturelles, arme mixte) mais **pas** les états bloqués : `mortallyWounded` (interdit
+Attaque/CaC/Rechargement), `isStunned` (interdit Attaque/CaC), `isAmmoEmpty` (grise une arme de
+distance), `weaponNotDrawn`, pas d'arme de distance (MJ). Les fenêtres actuelles les gèrent par
+`if` par tuile. La liste groupée doit faire l'équivalent : ligne d'arme grisée + tooltip.
+→ le cadrage du module 4 ajoute un inventaire « lignes d'arme grisées » (miroir de la logique de
+grisage des tuiles actuelles).
+
+### 19.8 Navigabilité du document — 1800 lignes, 19 sections, 6 rounds, P1-P8
+
+Le plan couvre : terminologie, i18n lot B, mécanisme B5, module 0 (infra test), refonte design 2-5,
+M0.4 (refactor d'état), 8 décisions prototype, une décision de palette. C'est beaucoup pour un doc.
+Il **est** temporaire (Règle 10, archivé à la clôture) et le scinder en plein vol fragmenterait le
+contexte. Mais **pour savoir où on en est aujourd'hui, il faut lire 1800 lignes**.
+→ **Ajouter un tableau de bord d'état de ~15 lignes en tête** (fait / cadré / codé / ouvert). Pas un
+split.
+
+### 19.9 Points vérifiés SAINS (l'à charge n'est pas que du négatif)
+
+- `CombatDeclareFrame` possède `useDraggable` + retours anticipés : le raisonnement Rules-of-Hooks
+  tient (§13.11 pt 1) — React garde l'instance à travers surprise→déclaration→résolution, la
+  position persiste. Confirmé.
+- `buildWeaponList` pur : `weaponSlots.js` est `shared/` serveur+client, importable `node --test`
+  (§16.10 pt 2). Confirmé.
+- Le satellite exo **sans migration serveur** (§12.5), les axes d'état exo **comme l'humain**
+  (§14.3, round 6). Confirmés après correction.
+- Terminologie « Tir / Corps à corps » RAW-alignée (§2.5, VOCABULARY V2.6). Sain.
+- Option C pour M0.4 (deux hooks sans `mode`) vs le hook `useHumanDeclare(mode)` rejeté : le bon
+  choix, appuyé sur la doc React et 3 dépôts pro (§15.2). Sain.
+
+### 19.10 Synthèse — ce que je recommande
+
+| # | Recommandation | Décision |
+|---|---|---|
+| R1 | **Test Playwright E2E du parcours de déclaration, AVANT le module 2.** Le vrai filet pour 2/3/5 (le golden master ne les couvre pas). Nouveau prérequis. | **Saar** |
+| R2 | **Réordonner** : 5 (pied) + 3 (satellite) en composants autonomes contre les fenêtres actuelles d'abord, puis re-slottés au module 2. OU checkpoint Saar ferme après module 2. | **Saar** |
+| R3 | **Satellite D8 → bande repliable « STATUT » en tête de fenêtre** au lieu du panneau-qui-suit (mécanisme neuf le plus fragile, contenu le moins utilisé). | **Saar** |
+| R4 | **P7 : cadrer la migration des fenêtres de RÉSOLUTION en chantier de suivi** (`ROADMAP.md`), ne pas « assumer la couture ». | à acter |
+| R5 | Chaque cadrage de module **énumère ses clés i18n neuves** ; le module 4 **inventorie les lignes d'arme grisées**. | à appliquer aux §§ |
+| R6 | **Tableau de bord d'état en tête du plan** (~15 lignes). | à faire (bon marché) |
+| R7 | **Liste « reste spécifique MJ »** explicite dans le plan (§19.6). | à faire (bon marché) |
+| R8 | Le plan **assume** que « golden master en filet » ne vaut que pour M0.4 + module 4 ; corriger le refrain dans §13/14/17. | à appliquer |
+
+R6, R7, R8 : appliqués tout de suite (bon marché, sans risque). R1-R4 : décisions Saar.
