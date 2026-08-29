@@ -47,7 +47,7 @@
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | cadré + à charge — **pas commencé** | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
-| Module 5 — `CombatDeclareFooter` (D12) | cadré + à charge — **pas commencé** | §5.10 |
+| Module 5 — `CombatDeclareFooter` (D12) | **5a codé** (`a046195`) — 5b-5d à faire | §5.10 |
 | Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
@@ -146,7 +146,7 @@ p.223) ; catégories d'arme **« Distance » / « Contact »** (colonnes du tabl
 | **D9** | **Pas de rond radio.** Sélection = bordure accent + fond teinté. |
 | **D10** | **Glyphes SVG produits par Saar** dans `client/public/assets/status/` : `stand`/`crounch`/`kneel`/`crawl` (posture), `actionNormal`/`actionDelayed`/`actionRush` (vitesse), `WeaponA`/`WeaponB`/`WeaponC` (arme), `contact` / `distance`, `movement` (déplacement, reçu — P6). Chargés en **`mask-image: url(...)`, jamais intégrés en dur**, recolorés à l'accent. `crawl.svg` a reçu un `<clipPath>` (2026-08-29) ; centrage à valider à l'œil par Saar. |
 | **D11** | **Silhouette « viser une localisation »** conservée, en **deux sous-colonnes** dans la col. 2 (silhouette │ résumé). Repliée par défaut. `AimedLocationPicker` est déjà `width: 45%, maxWidth: 130px` → passe dans la colonne étroite. |
-| **D12** | **Pied** : `[pastille INI] [message de statut centré] [Passer le tour (ghost)] [Déclarer (primaire)]`. Pastille `INI = actuel → projeté` (flèche ASCII, ex. `INI = 7 -> 2`), **rouge si tour perdu** (INI ≤ 0) — jamais un blocage. « Passer le tour » = second bouton ghost, plus petit, **toujours visible** (actif ⟺ `!hasCompleteAction`, cf. §5.10 PO-M5-f). « Déclarer » = primaire, actif ⟺ `hasCompleteAction && canDeclare`, sinon grisé + raison au centre. |
+| **D12** | **Pied** : `[pastille INI] [message de statut centré] [Passer le tour (ghost)] [Déclarer (primaire)]`. Pastille `INI = actuel → projeté` (flèche ASCII, ex. `INI = 7 -> 2`), **rouge si tour perdu** (INI ≤ 0) — jamais un blocage. « Passer le tour » = second bouton ghost, plus petit, **toujours cliquable** (D12 littéral — PO-M5-f rejeté, cf. §5.10). « Déclarer » = primaire, actif ⟺ `hasCompleteAction && canDeclare`, sinon grisé + raison au centre. |
 | **D13** | **Déplacement** = 3ᵉ en-tête d'action pair avec `DISTANCE` / `CONTACT` (P5 : même police mono, même taille, chacun son glyphe), au-dessus de la liste, cumulable (hors du choix exclusif). Grisé / remplacé quand Charge ou Retraite actif (ils possèdent leur déplacement). |
 | **D14** | **Fond PCB discret** (patron `ChangelogPanel.jsx`, `<svg>` absolu `pointer-events:none`, opacité ~0.10) sur header / pied / satellite uniquement. Détail d'implémentation, posé sur le header au module 2, sur pied/satellite à leurs modules. |
 | **D15** | **Terminologie** = §2.3. « Assaut »/« Mêlée » proscrits en UI, y compris RÉSOLUTION (valeur i18n, lot B3). |
@@ -555,48 +555,57 @@ reste ~1100 px de carte. Côte-à-côte col. 1 + col. 2, **pas de pop-out**.
 calcul INI (`CombatDeclareIniWidget`, intact), le payload, `CombatDeclareErrorBanner` (reste au pied,
 ligne séparée au-dessus des boutons — cohabite ≤ 4 s avec le message de statut, acceptable).
 
-**Le vrai changement de comportement** : `hasCompleteAction` gate le bouton Déclarer (lève le coût
-intérimaire B5 « un mis-clic passe le tour »).
+**Le vrai changement de comportement** : le bouton Déclarer est grisé si `!(hasCompleteAction &&
+canDeclare)` (lève le coût intérimaire B5 « un mis-clic passe le tour » → **résout la contrainte de
+déploiement B5** : B5 + module 5 partent ensemble).
 
 | Notion | Définition | Qui la calcule |
 |---|---|---|
-| `canDeclare` | les actions **sélectionnées** sont valablement configurées (`assaultValid && reloadValid && meleeValid`) | déjà là (M0.4 sélecteurs) |
-| `hasCompleteAction` | il y a **au moins une chose à déclarer** : arme+cible, OU reload, OU move, OU changement d'état (`decl.{position,weapon,vitesse}` ≠ `initial`), OU action rapide | **la fenêtre** — **helper pur `.mjs` testé** (`client/src/lib/hasCompleteAction.js` + `.test.mjs`, chaque source + combinaisons) — **pas optionnel** : trop strict = un joueur ne peut pas déclarer « je m'accroupis » ; trop lâche = retour au mis-clic |
-| `blockReason` | pourquoi Déclarer est grisé alors que `hasCompleteAction` | **assemblé par fenêtre** (`buildBlockReason(sel)`) depuis `aimIneligibilityReasons` / `multiShotIneligibilityReasons` / `assaultValid` / `meleeValid` / `reloadValid` (**PJ seulement**) ; `CombatDeclareFooter` reçoit la string finale |
+| `canDeclare` | les actions **sélectionnées** sont valablement configurées | **existe déjà** dans chaque fenêtre (B5) |
+| `hasCompleteAction` | y a-t-il **quelque chose à déclarer** : arme+cible ∨ CaC+cible ∨ reload ∨ move ∨ **`hasDeliberateStateChange`** ∨ action rapide | **OU trivial calculé en fenêtre** — pas un fichier. Le vrai code extrait = `hasDeliberateStateChange(decl, initial)` (`client/src/lib/`, **testé** — posture/arme/vitesse ≠ initial ; exclut `fire_mode`/`cover`/`combat_mode`, exclusions documentées) |
+| `blockReason` | raison unique et lisible du grisage | **`buildBlockReason(bag)`** — **UNE** fonction pure partagée (`client/src/lib/`, **testée**), pas 3 « par fenêtre ». Chaque fenêtre remplit le bag (l'exo : valeurs vides). Texte FR direct (combat hors-i18n). Précédence arme→cibles→variant→Tir visé, puis CaC, puis reload. |
+
+**5a codé (2026-08-29, `a046195`)** : `buildBlockReason.js` + `hasDeliberateStateChange.js` + 21 tests.
 
 - **Déclarer actif ⟺ `hasCompleteAction && canDeclare`.**
-- La branche « changement d'état » de `hasCompleteAction` **chevauche `SELECT_ATTACK`** (sélectionner
-  une arme → `decl.weapon = 'drawn'` avant qu'une cible soit choisie) → **c'est OK** :
-  `hasCompleteAction` = « tu as commencé quelque chose », `canDeclare` gate → Déclarer grisé +
-  `blockReason` « choisir une cible ». **Pas de branche spéciale** — à écrire noir sur blanc pour ne
-  pas « corriger » ce chevauchement par erreur.
-- **`onPassTurn` par famille** (pas un handler partagé) : PJ/MJ = `socket.emit(COMBAT_ACTION_DECLARE,
-  { tokenId, state: {}, mapActions: {} })` ; **drone** = `droneDeclare.setHasPassed(true)` puis le
-  payload part par `handleDeclare` ; exo = `handleDeclare` sans sélection. → le pied prend `onPassTurn`
-  **en prop**.
-- **Drone** : la tuile « Passer le tour » de `DroneDeclareSection` **disparaît** (deux « Passer » =
-  incohérent) ; le bouton du pied pilote `droneDeclare.setHasPassed`.
-- **« Passer le tour » = hiérarchie stable** (PO-M5-e tranché) : bouton secondaire constant, ne se
-  promeut jamais (un bouton qui bouge = perte de repère). Quand Déclarer est grisé, c'est le
-  `blockReason` qui guide.
-- **PO-M5-f (reco, à valider Saar)** : « Passer le tour » **actif ⟺ `!hasCompleteAction`** (visible
-  toujours, **grisé** si une action est en cours, tooltip « Vous avez une action en cours »). Pour
-  passer malgré tout : remettre l'état à sa valeur initiale (1 geste honnête). **Pas de pop-up de
-  confirmation** (friction sur un chemin fréquent). *(Repli si Saar tient à « toujours cliquable » :
-  sa pop-up de validation.)*
+- Le chevauchement `SELECT_ATTACK` (sélectionner une attaque auto-dégaine → `decl.weapon = 'drawn'`
+  avant la cible) rend `hasCompleteAction` vrai avant la cible → **OK** : `canDeclare` gate,
+  `blockReason` guide (« Choisir une cible »). **Pas de branche spéciale.**
+  *Bug pré-existant lié* : explorer une attaque puis la désélectionner laisse `weapon='drawn'`
+  orphelin (`clearAttackState` ne rerengaine pas) → « juste dégainer » se déclare par erreur.
+  **Existe déjà aujourd'hui** ; le module 4 (« l'arme EST l'action », rerengaine à la désélection) le
+  corrige. Module 5 ne touche pas la logique de tuiles.
+- **`onPassTurn` par famille** : PJ/MJ = `socket.emit(COMBAT_ACTION_DECLARE, { tokenId, state: {},
+  mapActions: {} })` ; drone = `droneDeclare.setHasPassed(true)` puis `handleDeclare` ; exo =
+  `handleDeclare` sans sélection. Le pied prend `onPassTurn` **en prop**. Bouton aussi gaté sur
+  `!!activeSlot` (le MJ peut avoir `activeTokenId` transitoirement nul).
+- **Drone** : la tuile « Passer le tour » de `DroneDeclareSection` sera retirée — **au module 4**
+  (quand `DroneDeclareSection` est touché) ; module 5 autonome laisse la tuile (double bénin, le MJ
+  arbitre), le bouton du pied pilote `droneDeclare.setHasPassed`.
+- **PO-M5-e tranché** : « Passer le tour » = bouton secondaire constant, ne se promeut jamais.
+- **PO-M5-f REJETÉ (analyse à charge 2026-08-29)** : « Passer le tour » reste **toujours cliquable**
+  (D12 au pied de la lettre). L'auto-dégaine (ci-dessus) créait un piège avec « Passer grisé si
+  action en cours » (impossible de passer après un clic exploratoire). Cliquer « Passer » envoie
+  `state: {}` + `mapActions: {}`, jette la demi-config — sans conséquence dans un combat arbitré tour
+  par tour, et le bouton est explicite.
+- **`isBusy` / verrou `isDeclaring` exo** : **supprimé au 5d** (pas propagé en prop). L'exo est la
+  seule fenêtre avec un verrou d'envoi ; le garde serveur `has_announced === false` est idempotent
+  (PJ/MJ n'en ont pas et n'ont aucun problème). Changement de comportement → validation Saar au 5d.
+- **`statusMessage`** = `blockReason` ∨ destination move `[x,y]` ∨ « Prêt » (précédence dans cet
+  ordre). L'**erreur allures drone** reste un **élément distinct** (indicateur d'échec dur, pas un
+  statut) — pas replié dans `statusMessage`.
+- **PO-M5-d** : bouton primaire sur `.btn-tac` (cyan) comme base ; l'accent famille arrive au module 2.
 
-**Dépendance M0.4** : les sélecteurs `assaultValid` / `meleeValid` gagneraient à renvoyer
-`{ valid, reason }` (le patron `*IneligibilityReasons` existe) — **PO-M5-a**, petit ajout au périmètre
-M0.4, ou module 5 assemble `blockReason` de l'extérieur.
+**Risque : FAIBLE-MOYEN.** Composant présentationnel. Filet : golden master (payload « Passer » =
+déclaration vide, couvert) + `buildBlockReason.test.mjs` + `hasDeliberateStateChange.test.mjs`. **Zone
+sans filet** : l'affichage `blockReason` → checklist manuelle (chaque cas).
 
-**Risque : FAIBLE-MOYEN.** Composant petit, présentationnel. Filet : golden master (« Passer le tour »
-= déclaration vide, déjà couvert) + `.test.mjs` de `hasCompleteAction`. **Zone sans filet** :
-l'affichage `blockReason` → checklist manuelle (chaque cas d'action incomplète).
+**Ordre (B, §5.0)** : **premier module** — `CombatDeclareFooter` construit et validé dans les pieds
+actuels (`.combat-float-footer` / `.combat-win-footer`), re-slotté dans le frame au module 2.
 
-**Ordre (B, §5.0)** : ce module se fait **en premier** — `CombatDeclareFooter` construit et validé
-dans les pieds actuels (`.combat-float-footer` / `.combat-win-footer`), re-slotté dans le frame au
-module 2. `blockReason` assemblé depuis les tableaux de raisons déjà présents dans les fenêtres
-actuelles ; M0.4 nettoiera la source (PO-M5-a).
+**Découpe** : **5a** ✅ (`buildBlockReason` + `hasDeliberateStateChange` + tests) → 5b (`CombatDeclareFooter.jsx`
++ clés `declareFooter.*` + câblage `CombatActionWindow`) → 5c (câblage `CombatGmDeclareWindow`) →
+5d (câblage `CombatExoActionWindow` + suppression du verrou `isDeclaring`). 1 commit/pas + checklist.
 
 ---
 
@@ -653,8 +662,7 @@ col. 2. Le MJ reste un **cousin**, pas un jumeau.
 | PO-M3-repli | si la synchro satellite résiste | montrer les replis à Saar **avant de s'entêter** (R3 : jamais promu de sa propre initiative). |
 | PO-M4-e | au cadrage code du 4c/4d | changement d'arme = `assault.reset()` / `melee.reset()` — est-ce le bon geste ? |
 | PO-M4-4b-proto | **avant** de lancer 2/3/M0.4 | proposer à Saar un prototype jetable du 4b contre les fenêtres actuelles (valide D5 tôt). |
-| PO-M5-a | au cadrage code de M0.4 | sélecteurs M0.4 renvoient `{ valid, reason }` (penché) ou module 5 assemble `blockReason` de l'extérieur. |
-| PO-M5-f | **validation Saar** | « Passer le tour » actif ⟺ `!hasCompleteAction` (reco) vs pop-up de confirmation (repli Saar). |
+| PO-M5-a | à M0.4 | M0.4 peut simplifier le remplissage du `bag` de `buildBlockReason` (sélecteurs `{valid, reason}`) — la fonction elle-même reste. |
 | PO7 | faible valeur | `CombatOverlay.jsx` : nettoyer les 4 gardes de montage ANNONCE en une table, ou laisser (au module 5 si un fichier le rend trivial). |
 
 **Filet automatique par module** : M0.4 + module 4 = golden master (couvre la sortie) + reducers /
