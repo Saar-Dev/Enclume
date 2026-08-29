@@ -139,6 +139,7 @@ export default function CombatActionWindow({
     targets:         meleePendingTokenIds,
     count:           meleeCount,
     isDualWield:     isDualWieldMelee,
+    charge:          chargeSelection,   // { move, targetTokenId } | null — Charge (M0.4-g, forme MJ adoptée)
   } = meleeDecl.state
   const [inMeleeTargetMode, setInMeleeTargetMode]           = useState(false)
 
@@ -631,15 +632,18 @@ export default function CombatActionWindow({
   // D7 : « Recharger » est un mode de l'arme sélectionnée, exclusif du Tir — quand il est actif,
   // l'arme se recharge, elle ne tire pas (le segment Tir │ Recharger de la col. 2 bascule).
   const attackActive = attackSelected && !reloadSelected
+  // Charge : le déplacement gratuit (ini_mod 0) et la cible vivent dans `chargeSelection` (M0.4-g) ;
+  // sinon `moveSelection` (déplacement normal / Retraite). Miroir de `buildGmDeclarePayload`.
+  const iniMoveSel = chargeSelection?.move ?? moveSelection
   const mapActionsObj = {
-    move:   moveSelection ? { ini_mod: (decl.combatMode === 'charge' || decl.combatMode === 'retraite') ? 0 : moveSelection.ini_mod } : null,
+    move:   iniMoveSel ? { ini_mod: (chargeSelection?.move || decl.combatMode === 'retraite') ? 0 : iniMoveSel.ini_mod } : null,
     // Tir Multi (docs/PLAN_TIRMULTI.md D1) : array systématique, comme melee ci-dessous. aimTranches
     // n'est jamais non-nul que sur un seul élément (D10 — Tir visé exclusif avec Tir Multi).
     attack: attackActive ? Array(effectiveAssaultCount).fill({ aimTranches, lunetteNiveau }) : null,
-    // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee
-    // Charge : toujours 1 attaque (exclusive multi-attack LdB)
-    melee:  (meleeSelected && !meleeDefensif)
-      ? Array(decl.combatMode === 'charge' ? 1 : meleeCount).fill({ targetTokenId: null, weaponInvId: null })
+    // Défensif/Retraite : pas d'action d'attaque → pas de coût INI melee.
+    // Charge : le coût INI est celui du `combat_mode` (state), pas d'entrée melee ici (comme le MJ).
+    melee:  (meleeSelected && !meleeDefensif && !chargeSelection)
+      ? Array(meleeCount).fill({ targetTokenId: null, weaponInvId: null })
       : null,
     reload: reloadSelected ? {} : null,
   }
@@ -668,11 +672,11 @@ export default function CombatActionWindow({
     aimReasons:    aimIneligibilityReasons,
   })
   const melee = meleeCheck({
-    started:         meleeSelected,
+    started:         meleeSelected || !!chargeSelection,
     defensif:        meleeDefensif,
-    isCharge:        decl.combatMode === 'charge',
-    chargeHasMove:   moveSelection != null,
-    chargeHasTarget: meleePendingTokenIds.length >= 1,
+    isCharge:        !!chargeSelection,
+    chargeHasMove:   chargeSelection?.move != null,
+    chargeHasTarget: chargeSelection?.targetTokenId != null,
     targetsFilled:   meleePendingTokenIds.length,
     targetsNeeded:   effectiveMeleeCount,
   })
@@ -686,9 +690,9 @@ export default function CombatActionWindow({
   // un gate `hasCompleteAction` : Déclarer actif ⟺ il y a quelque chose à déclarer ET c'est valide.
   const hasCompleteAction = hasSomethingToDeclare({
     attackStarted:  attackSelected,
-    meleeStarted:   meleeSelected,
+    meleeStarted:   meleeSelected || !!chargeSelection,
     reloadStarted:  reloadSelected,
-    hasMove:        moveSelection != null,
+    hasMove:        moveSelection != null || chargeSelection?.move != null,
     hasStateChange: hasDeliberateStateChange(decl, initialStates.current),
     hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
   })
@@ -723,7 +727,7 @@ export default function CombatActionWindow({
       assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
       aimTranches, aimedLocation,
-      meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount,
+      meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount, chargeSelection,
       effectiveMeleeWeaponId, effectiveMeleeNaturalWeaponId, effectiveDualWieldMelee, meleeOffhandWeapon,
       reloadSelected, selectedWeapon, selectedAmmoId,
     }))
@@ -892,11 +896,13 @@ export default function CombatActionWindow({
   }
 
   // --- Charge : move_short gratuit → chaîne automatiquement la sélection cible CaC ---
+  // M0.4-g : le résultat (déplacement + cible) est stocké atomiquement dans `meleeDecl.state.charge`
+  // ({ move, targetTokenId }), même forme que le MJ — plus de `moveSelection` détourné.
   const handleChargeFlow = () => {
     dispatch({ type: 'SET_COMBAT_MODE', mode: 'charge' })
-    // Bug B : nettoyer tout déplacement normal pré-existant
-    setMoveSelection(null)
+    setMoveSelection(null)   // nettoyer tout déplacement normal pré-existant (Bug B)
     setMapSelected(prev => { const n = new Set(prev); n.delete('move'); return n })
+    meleeDecl.setCharge(null)
     if (!allures) return
     setInMoveMode(true)
     // Charge : limiter visuellement à la zone lente (déplacement court) uniquement
@@ -905,17 +911,15 @@ export default function CombatActionWindow({
       chargeAllures, playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (sel) => {
-        // Move sélectionné : ini_mod = 0 (gratuit pour Charge)
-        setMoveSelection({ ...sel, ini_mod: 0 })
+        const move = { ...sel, ini_mod: 0 }   // déplacement gratuit pour la Charge
         setInMoveMode(false)
         // Chaîner automatiquement la sélection de cible CaC (Charge = 1 cible toujours)
         setInMeleeTargetMode(true)
-        meleeDecl.resetTargets()
         onEnterTargetMode(
           playerToken.id,
           { x: playerToken.pos_x, z: playerToken.pos_y },
-          (tid) => { meleeDecl.setSoleTarget(tid); setInMeleeTargetMode(false) },
-          () => { setInMeleeTargetMode(false) },
+          (tid) => { meleeDecl.setCharge({ move, targetTokenId: tid }); setInMeleeTargetMode(false) },
+          () => { setInMeleeTargetMode(false); dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }) },
           'melee'
         )
       },
@@ -1169,23 +1173,18 @@ export default function CombatActionWindow({
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
                 dispatch({ type: 'SET_COMBAT_MODE', mode })
-                if (mode === 'defensif' || mode === 'retraite') {
-                  meleeDecl.resetTargets()
-                  if (decl.combatMode === 'charge') setMoveSelection(null)
-                } else if (decl.combatMode === 'charge') {
-                  setMoveSelection(null)
-                  meleeDecl.resetTargets()
-                }
+                meleeDecl.resetTargets()
+                if (decl.combatMode === 'charge') { setMoveSelection(null); meleeDecl.setCharge(null) }
               }}
               onStartCharge={handleChargeFlow}
               onStartRetraite={handleRetraiteMove}
-              chargeMoveDest={moveSelection ?? null}
-              chargeTargetLabel={null}
+              chargeMoveDest={chargeSelection?.move ?? null}
+              chargeTargetLabel={chargeSelection?.targetTokenId ? (tokens.find(tk => tk.id === chargeSelection.targetTokenId)?.label ?? null) : null}
               meleeCount={meleeCount}
               effectiveMeleeCount={effectiveMeleeCount}
               onMeleeCountChange={meleeDecl.setCount}
               perSlotTargeting={true}
-              targetIds={meleePendingTokenIds}
+              targetIds={chargeSelection?.targetTokenId ? [chargeSelection.targetTokenId] : meleePendingTokenIds}
               isInTargetMode={false}
               tokens={tokens}
               onChooseTarget={(i) => handleChooseMeleeTarget(i)}

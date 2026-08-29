@@ -14,6 +14,10 @@
 
 // --- Humain (PJ) — miroir exact de CombatActionWindow.jsx#handleDeclare, branche non-drone --------
 export function buildHumanDeclarePayload(sel) {
+  // Charge (M0.4-g) : le déplacement gratuit + la cible vivent dans `sel.chargeSelection`
+  // ({ move, targetTokenId }) — même forme que le MJ. Sinon `sel.moveSelection` (déplacement normal
+  // / Retraite) + `sel.meleePendingTokenIds` (CaC classique).
+  const moveSel = sel.chargeSelection?.move ?? sel.moveSelection
   return {
     tokenId: sel.tokenId,
     state: {
@@ -24,16 +28,16 @@ export function buildHumanDeclarePayload(sel) {
       combat_mode: sel.decl.combatMode,
     },
     mapActions: {
-      move: sel.moveSelection
+      move: moveSel
         ? {
-            targetPosX: sel.moveSelection.targetPosX,
-            targetPosY: sel.moveSelection.targetPosY,
-            targetPosZ: sel.moveSelection.targetPosZ ?? 0,
+            targetPosX: moveSel.targetPosX,
+            targetPosY: moveSel.targetPosY,
+            targetPosZ: moveSel.targetPosZ ?? 0,
             // Charge/Retraite : déplacement gratuit → ini_mod forcé à 0 côté client (confirmé serveur)
             ini_mod: (sel.decl.combatMode === 'charge' || sel.decl.combatMode === 'retraite')
               ? 0
-              : sel.moveSelection.ini_mod,
-            action_key: sel.moveSelection.action_key,
+              : moveSel.ini_mod,
+            action_key: moveSel.action_key,
           }
         : null,
       // Tir Multi (docs/Old/PLAN_TIRMULTI.md) : array d'1 à 3 tirs, même arme pour toute la série (D9)
@@ -55,8 +59,17 @@ export function buildHumanDeclarePayload(sel) {
             aimedLocation:      sel.aimedLocation,
           }))
         : null,
-      // Défensif/Retraite : pas de cible — mode passif, bonus appliqué via state_combat_mode.
-      melee: (sel.meleeSelected && !sel.meleeDefensif)
+      // Charge : 1 cible, jamais de dual-wield (miroir buildGmDeclarePayload). Défensif/Retraite :
+      // pas de cible — mode passif, bonus appliqué via state_combat_mode.
+      melee: sel.chargeSelection?.targetTokenId
+        ? [{
+            targetTokenId: sel.chargeSelection.targetTokenId,
+            weaponInvId:   sel.effectiveMeleeWeaponId,
+            naturalWeaponCharMutationId: sel.effectiveMeleeNaturalWeaponId,
+            offhandWeaponInvId: null,
+            isDualWield:        false,
+          }]
+        : (sel.meleeSelected && !sel.meleeDefensif)
         ? sel.meleePendingTokenIds.slice(0, sel.effectiveMeleeCount).map(id => ({
             targetTokenId: id,
             weaponInvId:   sel.effectiveMeleeWeaponId,

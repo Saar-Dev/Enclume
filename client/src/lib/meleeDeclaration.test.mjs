@@ -58,8 +58,16 @@ test('SET_DUAL_WIELD', () => {
   assert.equal(reduce(INIT, { type: 'SET_DUAL_WIELD', value: true }).isDualWield, true)
 })
 
-test('CLEAR : retour à l\'état initial (arme auto)', () => {
-  const dirty = { weaponId: 'w1', naturalWeaponId: null, targets: ['a', 'b'], count: 2, isDualWield: true }
+test('SET_CHARGE : pose { move, targetTokenId } ou efface (null)', () => {
+  const ch = { move: { targetPosX: 3, targetPosY: 4, ini_mod: 0 }, targetTokenId: 'e1' }
+  const s = reduce(INIT, { type: 'SET_CHARGE', charge: ch })
+  assert.deepEqual(s.charge, ch)
+  assert.equal(reduce(s, { type: 'SET_CHARGE', charge: null }).charge, null)
+  assert.equal(reduce(s, { type: 'SET_CHARGE' }).charge, null)
+})
+
+test('CLEAR : retour à l\'état initial (arme auto, charge effacée)', () => {
+  const dirty = { weaponId: 'w1', naturalWeaponId: null, targets: ['a', 'b'], count: 2, isDualWield: true, charge: { move: {}, targetTokenId: 'x' } }
   assert.deepEqual(reduce(dirty, { type: 'CLEAR' }), INIT)
 })
 

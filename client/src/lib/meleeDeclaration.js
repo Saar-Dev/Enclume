@@ -20,6 +20,11 @@ export const MELEE_DECLARATION_INITIAL = {
   targets:         [],     // [tokenId, tokenId?, tokenId?] — 1 par attaque (multi-CaC)
   count:           1,      // 1|2|3
   isDualWield:     false,  // Combat à deux armes de contact (COM24)
+  // Charge (déplacement court GRATUIT → 1 cible CaC) — un tout atomique, distinct d'un déplacement
+  // + d'une attaque CaC séparés (M0.4-g : le PJ utilisait `moveSelection` + `targets`, le MJ avait
+  // un `chargeSelection` dédié — unifié ici). `move` = sélection spatiale (targetPosX/Y/Z, action_key,
+  // ini_mod forcé à 0). `decl.combatMode === 'charge'` reste porté par le reducer `decl`.
+  charge:          null,   // { move, targetTokenId } | null
 }
 
 // Cibles renseignées (le mode Charge force 1 attaque — calculé par la fenêtre avec decl.combatMode).
@@ -63,6 +68,11 @@ export function meleeDeclarationReducer(state, action) {
 
     case 'SET_DUAL_WIELD':
       return { ...state, isDualWield: action.value }
+
+    // Charge posée (déplacement + cible ensemble) ou effacée (`null`). La fenêtre orchestre le
+    // double geste carte (déplacement puis cible) ; ici on ne stocke que le résultat.
+    case 'SET_CHARGE':
+      return { ...state, charge: action.charge ?? null }
 
     case 'CLEAR':
       return { ...MELEE_DECLARATION_INITIAL }

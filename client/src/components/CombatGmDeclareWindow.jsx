@@ -59,7 +59,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const [mapAction,       setMapAction]       = useState(null)     // 'reload' | null
   const [meleePendingMode,setMeleePendingMode]= useState(false)
   const [pendingMove,     setPendingMove]     = useState(null)     // sel ou null
-  const [chargeSelection, setChargeSelection] = useState(null)     // { move, targetTokenId } | null
 
   // ── Sous-état de sélection Tir (M0.4) — reducer partagé PJ / MJ ───────────
   // { weaponId, targets, count, bulletCount, variantAB, isDualWield, aimTranches, aimedLocation }.
@@ -77,8 +76,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   } = assaultDecl.state
 
   // ── Sous-état de sélection CaC (M0.4) — même reducer partagé que le PJ ────
-  // { weaponId (undefined=auto / null=mains nues / id), naturalWeaponId, targets, count, isDualWield }.
-  // `meleePendingMode` / `chargeSelection` restent des états MJ (M0.4-g).
+  // { weaponId (undefined=auto / null=mains nues / id), naturalWeaponId, targets, count, isDualWield,
+  //   charge: {move, targetTokenId}|null }. `meleePendingMode` (flag « config CaC en cours ») reste
+  //   un état MJ propre — le PJ le dérive de mapSelected.
   const meleeDecl = useMeleeDeclaration()
   const {
     weaponId:        selectedGmMeleeWeaponId,
@@ -86,6 +86,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     targets:         meleeTargets,
     count:           meleeAttackCount,
     isDualWield:     isDualWieldMelee,
+    charge:          chargeSelection,
   } = meleeDecl.state
   const [isSelectingOnMap, setIsSelectingOnMap] = useState(false)
 
@@ -166,7 +167,6 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     setPendingMove(null)
     assaultDecl.clear()
     meleeDecl.clear()
-    setChargeSelection(null)
     setIsSelectingOnMap(false)
   }, [activeTokenId, activePnjEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -478,7 +478,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const handleGmWeaponPick = (row) => {
     if (row.disabled) return
     const clearMeleeSetup = () => {
-      setMeleePendingMode(false); meleeDecl.clear(); setChargeSelection(null)
+      setMeleePendingMode(false); meleeDecl.clear()
       dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
     }
     if (row.group === 'distance') {
@@ -553,7 +553,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const handleStartCharge = () => {
     if (!activeToken) return
     dispatch({ type: 'SET_COMBAT_MODE', mode: 'charge' })
-    setChargeSelection(null)
+    meleeDecl.setCharge(null)
     setIsSelectingOnMap(true)
     const chargeAllures = {
       lente: DEFAULT_PNJ_ALLURES.lente, moyenne: DEFAULT_PNJ_ALLURES.lente,
@@ -567,7 +567,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
         onEnterTargetMode?.(
           activeTokenId,
           { x: activeToken.pos_x, z: activeToken.pos_y },
-          (targetId) => { setChargeSelection({ move, targetTokenId: targetId }); setIsSelectingOnMap(false) },
+          (targetId) => { meleeDecl.setCharge({ move, targetTokenId: targetId }); setIsSelectingOnMap(false) },
           () => { dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' }); setIsSelectingOnMap(false) },
           'melee'
         )
@@ -896,7 +896,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               combatMode={decl.combatMode}
               onModeChange={(mode) => {
                 dispatch({ type: 'SET_COMBAT_MODE', mode })
-                if (mode !== 'charge') setChargeSelection(null)
+                if (mode !== 'charge') meleeDecl.setCharge(null)
               }}
               onStartCharge={handleStartCharge}
               onStartRetraite={null}

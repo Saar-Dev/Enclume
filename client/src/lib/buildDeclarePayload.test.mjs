@@ -28,6 +28,7 @@ const baseSel = (over = {}) => ({
   effectiveMeleeWeaponId: null, effectiveMeleeNaturalWeaponId: null,
   effectiveDualWieldMelee: false, meleeOffhandWeapon: null,
   reloadSelected: false, selectedWeapon: null, selectedAmmoId: null,
+  chargeSelection: null,
   ...over,
 })
 
@@ -178,13 +179,21 @@ test('Déplacement normal — payload move complet', () => {
   })
 })
 
-test('Déplacement en Charge — ini_mod forcé à 0', () => {
+test('Charge (M0.4-g) — move + cible viennent de chargeSelection, ini_mod 0, 1 attaque sans dual-wield', () => {
   const p = buildHumanDeclarePayload(baseSel({
-    moveSelection: { targetPosX: 1, targetPosY: 1, targetPosZ: 0, ini_mod: -3, action_key: 'move_lente' },
     decl: { ...baseDecl(), combatMode: 'charge' },
+    chargeSelection: {
+      move: { targetPosX: 1, targetPosY: 1, targetPosZ: 0, ini_mod: 0, action_key: 'move_lente' },
+      targetTokenId: 'e1',
+    },
+    effectiveMeleeWeaponId: 'm1',
   }))
   assert.equal(p.mapActions.move.ini_mod, 0)
   assert.equal(p.state.combat_mode, 'charge')
+  assert.deepEqual(p.mapActions.melee, [{
+    targetTokenId: 'e1', weaponInvId: 'm1', naturalWeaponCharMutationId: null,
+    offhandWeaponInvId: null, isDualWield: false,
+  }])
 })
 
 test('Déplacement en Retraite — ini_mod forcé à 0', () => {

@@ -24,6 +24,7 @@ export function useMeleeDeclaration() {
   const selectNatural = useCallback((id) => dispatch({ type: 'SELECT_NATURAL', id }), [])
   const setCount      = useCallback((count) => dispatch({ type: 'SET_COUNT', count }), [])
   const setDualWield  = useCallback((value) => dispatch({ type: 'SET_DUAL_WIELD', value }), [])
+  const setCharge     = useCallback((charge) => dispatch({ type: 'SET_CHARGE', charge }), [])
   const clear         = useCallback(() => dispatch({ type: 'CLEAR' }), [])
   const resetTargets  = useCallback(() => {
     stateRef.current = { ...stateRef.current, targets: [] }
@@ -47,7 +48,7 @@ export function useMeleeDeclaration() {
   return {
     state,
     dispatch,
-    selectWeapon, selectNatural, setCount, setDualWield, clear,
+    selectWeapon, selectNatural, setCount, setDualWield, setCharge, clear,
     resetTargets, setSoleTarget, setTarget,
     targetsFilled: () => meleeTargetsFilled(state),
   }
