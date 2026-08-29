@@ -22,8 +22,8 @@ test('changement de vitesse → true', () => {
   assert.equal(hasDeliberateStateChange(declFrom({ vitesse: 'rushed' }), initial), true)
 })
 
-test('fire_mode seul modifié → false (exclu : effet de bord d\'un changement d\'arme)', () => {
-  assert.equal(hasDeliberateStateChange(declFrom({ fire_mode: 'rl' }), initial), false)
+test('changement de mode de tir → true (sélecteur ARMEMENT, coût INI dédié)', () => {
+  assert.equal(hasDeliberateStateChange(declFrom({ fire_mode: 'rl' }), initial), true)
 })
 
 test('cover seul modifié → false (exclu : aucun sélecteur)', () => {
