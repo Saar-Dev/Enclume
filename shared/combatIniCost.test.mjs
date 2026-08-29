@@ -107,16 +107,26 @@ test('iniDeltaBreakdown — postes à coût nul omis (move_max, couverture, vite
   assert.deepEqual(lines, [])
 })
 
-test('computeIniDelta === somme de iniDeltaBreakdown (invariant widget/popover)', () => {
-  const cases = [
-    {},
-    { prevStates: { position: 'prone' }, nextStates: { position: 'standing' } },
-    { prevStates: { weapon: 'holstered' }, nextStates: { weapon: 'drawn' }, move: { ini_mod: -7 }, combatMode: 'charge' },
-    { move: { ini_mod: -5 }, aim: { aimTranches: 3, lunetteNiveau: 2 }, quick: { observer: 2, reperer: 1, phrase: true } },
-  ]
-  for (const c of cases) {
-    assert.equal(computeIniDelta(c), iniDeltaBreakdown(c).reduce((s, l) => s + l.value, 0))
-  }
+test('computeIniDelta — valeurs de référence (widget = pied de fenêtre)', () => {
+  // computeIniDelta EST par construction `iniDeltaBreakdown(...).reduce(sum)` — asserter l'un contre
+  // l'autre ne prouve rien. Ce qu'on fige ici : le total attendu pour des déclarations concrètes,
+  // exactement ce que la pastille « Initiative projetée » affiche.
+  assert.equal(computeIniDelta({}), 0)
+  // se relever (prone → standing) : POSITION_TRANSITION_COST.prone.standing
+  assert.equal(
+    computeIniDelta({ prevStates: { position: 'prone' }, nextStates: { position: 'standing' } }),
+    STATE_TRANSITION_COST.position.prone.standing,
+  )
+  // dégainer -5 + Charge (déplacement gratuit, 0) = -5
+  assert.equal(
+    computeIniDelta({ prevStates: { weapon: 'holstered' }, nextStates: { weapon: 'drawn' }, move: { ini_mod: -7 }, combatMode: 'charge' }),
+    -5,
+  )
+  // déplacement -5 + Tir visé 2 tranches (-4, cf. test dédié) + observer×2 (-10) + reperer×1 (-5) + phrase (-3) = -27
+  assert.equal(
+    computeIniDelta({ move: { ini_mod: -5 }, aim: { aimTranches: 2 }, quick: { observer: 2, reperer: 1, phrase: true } }),
+    -27,
+  )
 })
 
 test('projectedInitiative — projeté = courant + delta', () => {

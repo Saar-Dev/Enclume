@@ -215,6 +215,20 @@ nommage pour les modules suivants (D7).
 
 ### Module 2 — Autorité partagée du coût d'Initiative + pastille « Initiative projetée » — **FAIT (2026-08-28)**
 
+> **CORRECTIF POST-CLÔTURE (2026-08-29, analyse à charge)** — deux points, aucun sur le runtime
+> (le swap serveur a été revérifié ligne à ligne : **iso-comportement confirmé**) :
+> 1. **Ce module n'a PAS « un commit isolé »** (contrairement à D1 / §5 et à la ligne « un commit
+>    isolé sur `dev/Saar` » plus bas). Son cœur — `shared/combatIniCost.js` + `.test.mjs` +
+>    `CombatDeclareIniWidget.jsx` + le swap `socketCombatAnnouncement.js` — a été committé dans
+>    **`430fa0c`, intitulé « Drone : budget de déplacement »**, entremêlé sur instruction de Saar
+>    (« commit l'ensemble tel quel ») avec un chantier drone parallèle. Le reste est réparti sur
+>    `fc0c25e` (lot B — pastille) et `79475dd` (finitions). Le module 2 n'est ni auditable ni
+>    revertable en isolation.
+> 2. Le « test d'invariant `computeIniDelta === somme(iniDeltaBreakdown)` » (ci-dessous) est
+>    **tautologique** — `computeIniDelta` EST défini comme cette somme. Remplacé par des cas de
+>    valeur de référence. La vraie garantie de non-divergence vient du design à chemin unique
+>    (le client ne recalcule jamais les valeurs), pas de ce test.
+
 **Périmètre élargi (acté Saar 2026-08-28 : « robuste par principe »)** : le module ne se contente pas
 d'ajouter un widget — il crée l'**autorité unique** du coût d'Initiative d'une déclaration, partagée
 client (aperçu) et serveur (calcul réel appliqué à `combat_roster.initiative`). Les matrices de coût
