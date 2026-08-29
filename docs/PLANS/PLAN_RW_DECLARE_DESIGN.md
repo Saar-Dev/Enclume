@@ -201,14 +201,35 @@ p.223) ; catégories d'arme **« Distance » / « Contact »** (colonnes du tabl
 
 ## 5. Séquence
 
-> **Ordre** : Lot B ✅ → B5 ✅ → Module 0 ✅ → **M-E2E** → Module 2 → 3 → M0.4 → 4 (4a-4e) → 5.
-> Validation navigateur Saar après **chaque** module ET sous-module.
->
 > **Décisions de la revue à charge §19 (journal), tranchées Saar 2026-08-29** — `R1` : M-E2E est
 > prérequis avant le module 2. `R2` : checkpoint navigateur après chaque module ET sous-module (plus
 > « en bloc »). `R3` : le satellite (D8) reste non négociable, panneau qui suit. `R4` : ce chantier =
 > déclaration seule ; fenêtres de RÉSOLUTION = passe CSS future, 1 ligne ROADMAP, pas un module.
 > `R5` : chaque module énumère ses clés i18n neuves + inventaire des lignes d'arme grisées (module 4).
+
+### 5.0 Chemin critique — l'ordre n'est PAS encore tranché
+
+Ordre nominal : Lot B ✅ → B5 ✅ → Module 0 ✅ → **M-E2E** → Module 2 → 3 → M0.4 → 4 (4a-4e) → 5.
+
+**Deux tensions non résolues** (journal §19.2) :
+
+1. **Le module 2 est le plus risqué ET le moins visible.** Il réécrit le `return` de premier niveau
+   des 3 fenêtres + décale la palette (P7) — Saar ne verra presque rien avant le module 4. On
+   empilerait 3 modules à surface non testée (2, 3, M0.4) avant la 1ʳᵉ vraie validation.
+2. **M-E2E est plus lourd que « ~1 j »** (cf. §5.5) — s'il l'est, gater tout le chantier dessus (R1)
+   est cher.
+
+**Options d'ordre** :
+- **A (nominal)** : 2 → 3 → M0.4 → 4 → 5, avec **checkpoint Saar ferme après le module 2** (ne pas
+  empiler 3/M0.4 sur une clé de voûte non validée).
+- **B (dé-risqué)** : construire `CombatDeclareStatePanel` (satellite) et `CombatDeclareFooter` (pied)
+  **en composants autonomes contre les fenêtres ACTUELLES d'abord**, puis les re-slotter dans le
+  frame au module 2. Ordre : **5 → 3 → 2 → M0.4 → 4**. Chaque pièce visible + validable isolément
+  **avant** le grand échange structurel. Demande **moins** d'E2E en amont (les pièces autonomes se
+  testent à l'œil dans les fenêtres actuelles).
+
+**Reco** : **B si M-E2E se révèle coûteux** (probable, §5.5) ; A sinon. **À trancher avec Saar juste
+après le cadrage M-E2E** — c'est la première décision réelle du chantier, pas un point ouvert mineur.
 
 ### 5.1 Lot B — i18n + terminologie + pastille INI — **CODÉ 2026-08-28** (`fc0c25e`)
 
@@ -244,13 +265,9 @@ pour une Charge (`chargeSelection` est toujours posé avec `move` + `targetToken
 > « Passer le tour » + le gate `hasCompleteAction` du **module 5** lèvent ce coût. Sur `dev/Saar`
 > local, sans effet ; **au push, B5 part avec le module 5** (ou le module 5 est avancé).
 
-### 5.3 Tokens d'accent par famille (ex-module 1) — **FUSIONNÉ dans le module 2**
+### 5.3 « Module 1 » (tokens d'accent) — **fusionné dans le module 2** (§5.6)
 
-Le `data-family` n'a de sens qu'avec le chrome partagé. Périmètre réel : `+ --combat-exo-*` +
-`--combat-accent-*` mappé par famille + jeu `--decl-*` — **définis** par le module 2, consommés par
-le `CombatDeclareFrame`. Le remplacement des `#5b8dee` parasites se fait **au fil des modules 3/4/5**,
-sur les fichiers qu'ils touchent déjà (le module 2 ne touche que le châssis externe — les `#5b8dee`
-sont dans le corps). Conversion hex → tokens complète = hors périmètre.
+Le `data-family` n'a de sens qu'avec le chrome partagé — plus de module 1 autonome.
 
 ### 5.4 Module 0 — logique de déclaration en modules purs testés — **CODÉ 2026-08-28**
 
@@ -271,12 +288,30 @@ protègent **M0.4 et le module 4**. Ils ne protègent **pas** les modules 2 / 3 
 inchangé). Extraction vérifiée verbatim ; les tests sont écrits à la main (caractérisation, pas
 snapshot) — filet réel mais pas magique.
 
-### 5.5 M-E2E — test Playwright du parcours de déclaration — **prérequis avant module 2 (R1)**
+### 5.5 M-E2E — test Playwright du parcours de déclaration — **prérequis avant module 2 (R1)** — cadrage à faire
 
-Le **seul filet automatique** pour les modules 2 / 3 / 5. Un test : PJ ouvre la fenêtre → change de
-posture → choisit une arme → cible → Déclarer → assert `has_announced` + l'état du roster. Puis chaque
-module le fait tourner. Aggradation permanente. `@playwright/test` déjà installé, `tests/e2e/` existe
-(`smoke.spec.mjs` seul). Coût : ~1 j (fixtures : campagne + combat + tokens). **Pas commencé.**
+Le **seul filet automatique** pour les modules 2 / 3 / 5. Cible : un test qui ouvre la fenêtre de
+déclaration PJ → change de posture → choisit une arme → cible → Déclarer → assert `has_announced` +
+l'état du roster. Chaque module le fait ensuite tourner. Aggradation permanente.
+
+**⚠ L'infra E2E actuelle ne couvre RIEN de ça `[VÉRIFIÉ]` :**
+- `playwright.config.mjs` : **pas de `webServer`** — le harness ne démarre aucun serveur local. Il
+  vise `ENCLUME_BASE_URL` (défaut `127.0.0.1:18293`), et le seul lanceur est
+  `tests/e2e/run-remote.ps1` = **un tunnel SSH vers le serveur de staging distant**
+  (`codex@…:8293`).
+- `smoke.spec.mjs` (seul test) : `goto('/')` + « pas d'exception JS ». **Aucun login, aucune
+  session, aucun état.**
+- **Pas de path de seed / DB de test / fixtures** pour l'E2E.
+
+Donc M-E2E n'est **pas** « écrire un `.spec.mjs` » — c'est d'abord **choisir et bâtir une cible** :
+| Option | Ce qu'il faut construire | Contre |
+|---|---|---|
+| **a. Local** : ajouter un `webServer` (client + serveur) + un helper de login + un seed « campagne + battlemap + combat en ANNONCE + tokens » | le plus de travail (seed combat, auth headless) ; mais reproductible, isolé, CI-able | ~3-5 j |
+| **b. Staging distant** : le test se log sur staging, crée/trouve un combat, joue le parcours | réutilise `run-remote.ps1` ; ~1-2 j | **mute l'état de combat de staging** ; dépend du tunnel SSH + d'un compte ; non déterministe ; c'est Saar qui lance (jamais Claude), et il faut son accord pour taper staging |
+
+**Décision Saar requise au cadrage M-E2E** (option a / b), et **révision de l'estimation** (le « ~1 j »
+d'origine supposait une infra qui n'existe pas). Ce cadrage est la première tâche du chantier. **Pas
+commencé.**
 
 ### 5.6 Module 2 — `CombatDeclareFrame` (châssis partagé + tokens famille)
 
@@ -284,6 +319,11 @@ module le fait tourner. Aggradation permanente. `@playwright/test` déjà instal
 `useDraggable` + largeur/opacité/position + header (titre + drag) + emplacement satellite + slot pied
 + bannières. **Ne touche pas** le corps (module 4), le satellite (module 3), le pied (module 5),
 aucun état, aucun payload. JSX/CSS uniquement.
+
+**Absorbe l'« ex-module 1 »** (tokens d'accent par famille — le `data-family` n'a de sens qu'avec le
+chrome partagé). Le remplacement des `#5b8dee` parasites, lui, n'est **pas** ici : le module 2 ne
+touche que le châssis externe, les `#5b8dee` sont dans le corps → repoussé au fil des modules 3/4/5,
+sur les fichiers qu'ils touchent déjà. Conversion hex → tokens complète = hors périmètre (§8).
 
 **API cible** :
 ```
@@ -510,10 +550,8 @@ M0.4, ou module 5 assemble `blockReason` de l'extérieur.
 = déclaration vide, déjà couvert) + `.test.mjs` de `hasCompleteAction`. **Zone sans filet** :
 l'affichage `blockReason` → checklist manuelle (chaque cas d'action incomplète).
 
-**Option de dé-risquage de l'ordre (journal §19.2)** : construire `CombatDeclareFooter` et
-`CombatDeclareStatePanel` **en composants autonomes contre les fenêtres actuelles d'abord**, puis les
-re-slotter dans le frame au module 2 (inverse l'ordre : 5 → 3 → 2 → M0.4 → 4). Sûr **si l'E2E R1 est
-en place**. Sinon : garder l'ordre + checkpoint Saar ferme après le module 2.
+**Ordre** : ce module peut passer **avant** le module 2 (option B, §5.0) — `CombatDeclareFooter`
+construit contre les pieds actuels, re-slotté dans le frame ensuite.
 
 ---
 
@@ -572,25 +610,17 @@ col. 2. Le MJ reste un **cousin**, pas un jumeau.
 | PO-M4-4b-proto | **avant** de lancer 2/3/M0.4 | proposer à Saar un prototype jetable du 4b contre les fenêtres actuelles (valide D5 tôt). |
 | PO-M5-a | au cadrage code de M0.4 | sélecteurs M0.4 renvoient `{ valid, reason }` (penché) ou module 5 assemble `blockReason` de l'extérieur. |
 | PO-M5-f | **validation Saar** | « Passer le tour » actif ⟺ `!hasCompleteAction` (reco) vs pop-up de confirmation (repli Saar). |
-| PO-ordre | après M-E2E | garder l'ordre 2→3→M0.4→4→5, ou inverser 5→3→2→M0.4→4 (dé-risquage journal §19.2) — dépend de si l'E2E rend le re-slottage sûr. |
+| **PO-ordre A/B** | **au cadrage M-E2E** | **§5.0** — module 2 d'abord (A) ou construire pied + satellite autonomes puis re-slotter (B). Première décision réelle du chantier. |
 | PO7 | faible valeur | `CombatOverlay.jsx` : nettoyer les 4 gardes de montage ANNONCE en une table, ou laisser (au module 5 si un fichier le rend trivial). |
 
----
-
-## 10. Filet de test — état honnête
-
-| Ce qui a un vrai filet | Ce qui n'en a PAS |
-|---|---|
-| **M0.4** — golden master (51 tests) teste exactement la sortie à préserver + reducers `.test.mjs` | **Module 2** (châssis) — JSX/CSS, payload inchangé → golden master aveugle |
-| **Module 4** — golden master + `weaponList.test.mjs` + reducers M0.4 | **Module 3** (satellite) — positionnement frère, z-index, glyphes `mask-image` : non testés |
-| **Module 5** — `hasCompleteAction.test.mjs` (si extrait) ; payload « Passer » déjà couvert | **Module 5** — l'affichage `blockReason` (texte) : checklist manuelle |
-
-→ **M-E2E (R1) est le seul filet automatique pour 2 / 3 / 5.** Sans lui : un commit par fenêtre +
-checklist de vérif manuelle + validation navigateur Saar après chaque sous-module (R2).
+**Filet automatique par module** : M0.4 + module 4 = golden master (couvre la sortie) + reducers /
+`weaponList` `.test.mjs`. **Modules 2 / 3 / 5 = aucun** (JSX/CSS, payload inchangé — golden master
+aveugle) → M-E2E (§5.5) est leur seul filet auto ; sans lui, un commit par fenêtre + checklist
+manuelle + validation Saar après chaque sous-module (R2).
 
 ---
 
-## 11. Ce qui n'est PAS fait en V1 est aussi important
+## 10. Ce qui n'est PAS fait en V1 est aussi important
 
 - On ne fusionne pas les orchestrateurs. Le MJ garde sa nav séquentielle et sa preview.
 - On ne réécrit pas `AssaultRangedPanel` / `MeleeCombatPanel` / `DroneWeaponPanel` — on les réagence.
