@@ -18,12 +18,11 @@ const GLYPHS = {
   vitesse:  { delayed: 'actionDelayed', normal: 'actionNormal', rushed: 'actionRush' },
   weapon:   { holstered: 'WeaponA', ready: 'WeaponB', drawn: 'WeaponC' },
 }
-const SAT_W = 150
-const GAP = 10
+const SAT_W = 92
+const GAP = 2
 
 export default function CombatDeclareStatePanel({
   pos,
-  windowWidth,
   family = 'pj',                 // pj | gm-pnj | exo → data-family → --decl-acc
   positionMode = 'fixed',        // 'fixed' pour .combat-float-win (PJ, exo) ; 'absolute' pour .combat-win (MJ)
   isNew = false,                 // badge « NOUVEAU » (exo — gagne le satellite dans cette refonte)
@@ -37,9 +36,8 @@ export default function CombatDeclareStatePanel({
 }) {
   const { t } = useTranslation('combat')
 
-  // Suit la fenêtre : collé à son bord gauche, bascule à droite s'il n'y a pas la place (PO-M3-d).
-  const flipRight = pos.left - SAT_W - GAP < 8
-  const left = flipRight ? pos.left + windowWidth + GAP : pos.left - SAT_W - GAP
+  // Suit la fenêtre : toujours collé à son bord gauche (D8).
+  const left = pos.left - SAT_W - GAP
 
   return (
     <div

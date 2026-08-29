@@ -1621,38 +1621,60 @@ Convention :
   background: var(--decl-acc-bg);
   border: 1px solid var(--decl-acc-line);
 }
-/* Puce re-agencée : glyphe + valeur en avant, micro-label au-dessus, coût à droite */
+/* Puce re-agencée : glyphe iconique dominant, valeur en petit dessous, pas de label
+   (D8 « glyphes iconiques, peu de texte » — retour Saar 2026-08-29). */
 .combat-declare-state-panel .combat-state-chip {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: auto auto;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0 8px;
+  gap: 4px;
   width: 100%;
-  padding: 6px 9px;
+  padding: 9px 4px 7px;
   background: var(--decl-row);
   border: 1px solid var(--decl-line);
   border-radius: calc(var(--decl-radius) - 4px);
   transition: border-color 0.1s, background 0.1s;
 }
 .combat-declare-state-panel .combat-state-chip:hover:not(:disabled) { border-color: var(--decl-acc-line); }
+.combat-declare-state-panel .combat-state-chip__label { display: none; }
 .combat-declare-state-panel .combat-state-chip__glyph {
-  grid-row: 1 / 3;
-  width: 16px; height: 16px;
+  width: 24px; height: 24px;   /* +50 % vs la base */
   color: var(--decl-acc);
 }
-.combat-declare-state-panel .combat-state-chip__label {
-  grid-column: 2 / 4; grid-row: 1;
-  font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--decl-label);
-}
 .combat-declare-state-panel .combat-state-chip__value {
-  grid-column: 2; grid-row: 2;
-  font-size: 12px; font-weight: 600; color: var(--decl-text-hi);
-}
-.combat-declare-state-panel .combat-state-chip__cost {
-  grid-column: 3; grid-row: 2;
   font-size: 9px;
+  font-weight: 600;
+  color: var(--decl-text-hi);
+  text-align: center;
+  line-height: 1.15;
+}
+.combat-declare-state-panel .combat-state-chip__cost { font-size: 9px; }
+
+/* ── Bandeau de titre (CombatDeclareHeader) — pastille initiales + nom + progression ───────── */
+.combat-declare-header { display: flex; align-items: center; gap: 9px; }
+.combat-declare-header__badge {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 9px/1 var(--font-mono);
+  letter-spacing: 0.03em;
+  color: var(--decl-acc);
+  background: var(--decl-acc-bg);
+  border: 1px solid var(--decl-acc-line);
+  border-radius: 5px;
+}
+.combat-declare-header__name {
+  flex: 1;
+  min-width: 0;
+  font: 600 14px/1.1 var(--font-ui);
+  letter-spacing: 0.01em;
+  color: var(--decl-text-hi);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.combat-declare-header__progress {
+  flex-shrink: 0;
+  font: 400 10px/1 var(--font-mono);
+  color: var(--decl-text-dim);
 }
 
 /* ═══ Re-skin des 3 fenêtres de déclaration en teinte Wizard (PLAN_RW_DECLARE_DESIGN, volet visuel

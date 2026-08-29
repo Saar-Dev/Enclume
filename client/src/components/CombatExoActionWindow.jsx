@@ -11,6 +11,7 @@ import { calcIniDelta, calcIniBreakdown } from './combatSections.js'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
+import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import { declarationReducer, DECLARATION_INITIAL, snapFromRosterEntry } from '../lib/declarationReducer.js'
 import { assaultCheck, buildBlockReason } from '../lib/declareChecks.js'
 import api from '../lib/api.js'
@@ -249,9 +250,12 @@ export default function CombatExoActionWindow({
       position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
       opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto',
     }}>
-      <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>
-        {t('exoActionWindow.title', { name: playerToken.label ?? playerChar.name })}
-      </div>
+      <CombatDeclareHeader
+        name={playerToken.label ?? playerChar.name}
+        declared={roster.filter(r => r.has_announced).length}
+        total={roster.length}
+        onMouseDown={onHeaderMouseDown}
+      />
 
       <div className="combat-win-body">
         {/* .combat-win-body est display:flex sans flex-direction (row par défaut, CSS partagée avec

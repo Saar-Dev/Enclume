@@ -26,6 +26,7 @@ import { useCombatClickAttack } from '../lib/useCombatClickAttack.js'
 import DroneDeclareSection from './DroneDeclareSection.jsx'
 import CombatDeclareStateChip from './CombatDeclareStateChip.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
+import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
@@ -587,15 +588,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
-      <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>
-        <span className="combat-win-title">{t('gmDeclareWindow.title')}</span>
-        {activeTokenId && (
-          <span style={{ ...S.headerActiveToken, ...(!isActivePnj && !isActiveDrone ? S.headerActiveTokenWait : {}) }}>
-            {getLabel(activeTokenId)}
-          </span>
-        )}
-        <span style={S.headerProgress}>{t('gmDeclareWindow.declaredProgress', { done: allGmManaged.length - unannouncedCnt, total: allGmManaged.length })}</span>
-      </div>
+      <CombatDeclareHeader
+        baseClass="combat-win-header"
+        name={activeTokenId ? getLabel(activeTokenId) : t('gmDeclareWindow.title')}
+        declared={allGmManaged.length - unannouncedCnt}
+        total={allGmManaged.length}
+        onMouseDown={onHeaderMouseDown}
+      />
 
       {/* BODY */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>

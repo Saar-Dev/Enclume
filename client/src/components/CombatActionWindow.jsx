@@ -30,6 +30,7 @@ import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
 import CombatDeclareStatePanel from './CombatDeclareStatePanel.jsx'
+import CombatDeclareHeader from './CombatDeclareHeader.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
@@ -957,7 +958,12 @@ export default function CombatActionWindow({
       top: pos.top,
       maxHeight: 'calc(100vh - 80px)',
     }}>
-      <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitle')}</div>
+      <CombatDeclareHeader
+        name={playerToken.label ?? '?'}
+        declared={roster.filter(r => r.has_announced).length}
+        total={roster.length}
+        onMouseDown={onHeaderMouseDown}
+      />
 
       {mortallyWounded && (
         <div style={W.mortalWoundBanner}>{t('actionWindow.mortallyWoundedBanner')}</div>
