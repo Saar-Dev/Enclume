@@ -45,6 +45,12 @@ Pour les mods d'armes (Lunette, ATI, Mémoire, Projecteur...), lire aussi `docs/
 - Une blessure, armure ou conséquence persistante est écrite dans la transaction prévue avant
   publication aux clients.
 - Les erreurs connues ne sont pas conservées comme compatibilité: corriger l'autorité ou la migration.
+- Le type d'une arme (Tir vs Corps à corps) vient de `ref_equipment.category === 'Arme de contact'`,
+  **jamais** de `fire_mode`: `CC`/`RC`/`RL` sont des modes de tir (`CC` = Coup par Coup), une arme de
+  contact n'a aucun `fire_mode`. Autorité partagée humanoïde (`getOwnedHandWeapon`), exo
+  (`socketCombatExo`, `PLAN_EXOARMURE.md §16.4`) et drone (`resolveDroneAssaultAction`,
+  `useDroneDeclare`). Déduire le CaC de `fire_mode` nul a été un bug côté exo puis côté drone
+  (`DRONE-CC-MELEE-MISCLASS`).
 
 ## Validation minimale
 

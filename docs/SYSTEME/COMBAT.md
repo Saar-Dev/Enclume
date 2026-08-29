@@ -686,6 +686,22 @@ Tables de valeurs partagées client/serveur (`shared/combatSituationMods.js`) : 
 `CAC_SITUATION_MODS`, `TAILLE_MODS`, `PORTEE_MOD_COMP` — plus de copie locale dupliquée côté client,
 une correction de valeur (errata LdB) devient un seul edit.
 
+### Armement drone — type d'arme et programme (`resolveDroneAssaultAction`)
+
+**Tir vs Corps à corps** : dérivé de `ref_equipment.category === 'Arme de contact'`, jamais de
+`fire_mode`. `CC`/`RC`/`RL` (`shared/fireModes.js`) sont des **modes de tir** — `CC` = Coup par
+Coup ; une arme de contact n'a **aucun** `fire_mode` (les 39 « Arme de contact » du catalogue ont
+`fire_mode` NULL). Même autorité que l'exo (`PLAN_EXOARMURE.md §16.4`) et l'humanoïde
+(`getOwnedHandWeapon`). Les 4 sites : `resolveDroneAssaultAction`, `buildDroneMapActions`,
+`useDroneDeclare` (×2). `GET /char-sheet/:id/drone/weapons` renvoie `ref_category`. Une arme drone
+« maison » sans `equipment_id` (`ref_category` NULL) → traitée en Tir. Bug historique
+`DRONE-CC-MELEE-MISCLASS` (Fusil Gauss, `fire_mode` « CC », classé CaC à tort).
+
+**Programme** : `armement_contact` pour une arme de contact, `armement_distance` pour une arme à
+distance ; `drone_programs.level` sert de Seuil (`programme.level + modificateurs`). Match **strict,
+sans repli** — ticket ouvert `DRONE-ARMEMENT-PROGRAM-SPLIT` : le RAW (LdB p.281) ne décrit qu'un
+seul « programme de contrôle armement » par arme, à trancher avec Saar.
+
 ---
 
 ## Attaques multiples — CaC 4b et Tir Multi (Session 165)
