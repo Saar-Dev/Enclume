@@ -1836,3 +1836,21 @@ pop-up reste l'option de repli si « toujours cliquable » est ferme).
   cours) — pas de pop-up (point 8), à valider Saar.
 - Livrable : 1 commit (ou 1 par fenêtre) + `.test.mjs` de `hasCompleteAction` + checklist manuelle
   (chaque `blockReason`).
+
+---
+
+## 18. Décisions de design issues du prototype D5 (2026-08-29, en cours de validation)
+
+> Retours Saar sur le prototype `afcd5e28`. Certaines **révisent D3/D10**. À figer une fois le
+> prototype convergé, puis reportées dans `docs/SYSTEME/COMBAT.md` à la clôture.
+
+| # | Décision | Statut | Impact |
+|---|---|---|---|
+| P1 | **Hexagone de topbar supprimé** → remplacé par un **label famille** (`HUMANOÏDE` / `DRONE` / `EXO-ARMURE`), teinté à l'accent de famille. « Un dispositif structurel encode quelque chose de vrai. » | proposé Saar | révise D3 (« hexa famille ») |
+| P2 | **Titre de topbar** = `PHASE 1 · DÉCLARATION : {nom du personnage}` (le nom surtout utile côté MJ qui enchaîne les PNJ). | proposé Saar | neuf |
+| P3 | **Puces Distance / Contact → les glyphes** `client/public/assets/status/distance.svg` (arme à feu) et `contact.svg` (lame), en `mask-image`. | proposé Saar | applique D10 |
+| P4 | **Les groupes ne sont PAS colorés.** Le glyphe (feu / lame) + le texte suffisent à distinguer Distance de Contact. **Une seule couleur d'accent = celle de la famille** (D3), réservée à la sélection + aux états actifs. **Rouge et vert sémantiques réservés à leur sens** (erreur / succès). → neutralise aussi les rouges de `AssaultRangedPanel` et les verts de `MeleeCombatPanel` au **module 4** (mêmes que `--combat-accent-*`). | Saar (« vert/rouge à totalement repenser ») | **révise D3** ; élargit le module 4 |
+| P5 | **`DÉPLACEMENT` · `DISTANCE` · `CONTACT` = 3 en-têtes d'action pairs** : même police (`--font-mono`), même taille, même graisse, même tracking, **chacun son glyphe**. Ce sont des actions primordiales au même niveau — Déplacement (D13) n'est plus une « ligne » à part visuellement, c'est un pair. | Saar | révise §16.3 (structure col. 1) |
+| P6 | **Glyphe « Déplacement » à produire** (Saar, comme les autres `assets/status/`). Placeholder = double chevron dans le prototype. | à faire (Saar) | + 1 asset |
+| P7 | **Palette : HUD combat vs teinte Wizard** — en cours d'arbitrage visuel (prototype, bouton de bascule au-dessus d'une battlemap simulée). Position par défaut = HUD (grounds opaques, lisibilité au-dessus de la 3D). D2 (« Wizard = discipline structurelle, pas palette ») tient sauf décision contraire de Saar. | ouvert | D2 |
+| P8 | **Flash de reset col. 2** : neutre (accent de la nouvelle arme + léger glissement), **jamais rouge** — recharger le panneau n'est pas une erreur. | tranché | neuf |
