@@ -357,14 +357,15 @@ de se relever » (mécanisme serveur déjà là). **PAS de migration serveur** (
 payload PJ/MJ inchangé (golden master) ; exo : `+ buildExoDeclareState` pur + test (§14.6). Un commit
 par fenêtre + checklist manuelle.
 
-**Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
-d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
-(`Tir | Recharger`, `AssaultRangedPanel` / `MeleeCombatPanel` réagencés en colonne, silhouette 2
-sous-colonnes). Absorbe §4.1. **Déplace `fire_mode` en col. 2 → supprime `CombatDeclareStateSelector`**
-(devenu code mort après ce déplacement — `[VÉRIFIÉ]` seul usage restant, §14.11 pt 1). Risque
-**élevé** — mais module 0 fait : logique de payload extraite + testée, le module 4 **consomme
-`useAssaultDeclaration` / `useMeleeDeclaration` (M0.4) et ne fait que du rendu**. Golden master casse
-au moindre changement de payload. PO2/PO3 éprouvés au cadrage du module 4, **avant** le code.
+**Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. **Cadré
+§16** (recherche master-detail, panneaux `[VÉRIFIÉ]` présentationnels → réagencement pas réécriture,
+normalisateur pur `buildWeaponList`, découpe 4a-4e, PO2 reco = segment de tête, PO3(a) faisabilité
+1366 px à vérifier). Liste d'armes groupée Distance/Contact, sélection sans radio (D9), Déplacement
+en ligne distincte (D13), col. 2 = détail (`AssaultRangedPanel` / `MeleeCombatPanel` réagencés,
+silhouette 2 sous-col.). **Déplace `fire_mode` en col. 2 → supprime `CombatDeclareStateSelector`**
+(code mort, `[VÉRIFIÉ]`). Risque **élevé** — module 0 (payload extrait/testé) + M0.4 (hooks) en
+filet ; le module 4 **ne fait que du rendu + câblage**. Golden master casse au moindre changement de
+payload. Découpe en 5 sous-modules, 1 validé avant le suivant.
 
 **Module 5 — Pied unifié (D12).** `CombatDeclareFooter` : pastille + statut + `Passer le tour` (ghost)
 + `Déclarer` (primaire, raison bloquante si `!canDeclare`). Consommé par les 3 (slot `footer` du
@@ -393,8 +394,8 @@ module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque :
 | # | Module | Question |
 |---|---|---|
 | PO1 | 2 | **Tranché §13.5** : `data-family` en **attribut** (pas classe `.combat-fam-*`). Le `#5b8dee` parasite → `--combat-accent-*` **sur les fichiers que les modules 2/4/5 touchent déjà**, pas en passe séparée. |
-| PO2 | 4 | Col. 2 d'une arme de contact : modes de combat (Défensif / Charge / Retraite) en segments de tête ou sous-bloc ? Charge chaîne déplacement→cible — comment ? |
-| PO3 | 2 / 4 | **Faisabilité non prouvée par la maquette** : (a) footprint écran satellite + col1 + col2 + sidebar + timeline sur un écran réel ; (b) `AssaultRangedPanel`/`MeleeCombatPanel` (sections 360 px, bordures internes) « réagencés » en col. 2 de 264 px = réagencement ou réécriture ? (c) satellite « suit la fenêtre » : wrapper draggable (change la prise) ou sync de position ? Col. 2 très haute pour un Tir complet → pied épinglé + corps scrollable, à confirmer et montrer. Transition entre armes = reset de la config précédente (à assumer). Saar 2026-08-28 : quand la maquette ne passe pas, **adapter et montrer**, pas de STOP à chaque fois. |
+| PO2 | 4 | **Cadré §16.5 (reco : segment de tête `Attaque │ Défensif │ Charge │ Retraite │ Recharger`).** Décision Saar = PO-M4-a. |
+| PO3 | 2 / 4 | (a) faisabilité écran → **§16.7 / PO-M4-b** (test 1366 px avant 4b/4c, repli pop-out). (b) réagencement vs réécriture → **§16.2 tranché : réagencement** (panneaux `[VÉRIFIÉ]` présentationnels, aucune largeur figée). (c) satellite qui suit → **§14.5 tranché** (frère positionné depuis `pos` du frame). Col. 2 haute → pied épinglé + corps scrollable (module 2, `.combat-float-win` a déjà `overflow:hidden` + flex). Changement d'arme = reset config → **PO-M4-e**. |
 | PO4 | 0 | ~~Quelle infra de test~~ **Tranché round 4** : `node --test` + fonctions pures `.mjs` (philo projet), pas de vitest/RTL. Périmètre M0.1-M0.3 fait (51 tests). |
 | PO5 | 3 | Satellite : glyphe qui **reflète la valeur** (Saar a produit les 4 glyphes de posture → plutôt oui) ou glyphe de catégorie + texte ? |
 | PO6 | 4 | **Cadré §12.** Options : hook `useHumanDeclare(mode)` (rejeté, cf. §12.3-A) / présentationnel pur (ne fait pas le travail, §12.3-B) / **deux hooks de domaine sans `mode`** (reco, §12.3-C). Décision Saar en attente. À trancher **avant** le module 4. |
@@ -1445,3 +1446,118 @@ fichiers = juste, pas de la dispersion.
 - Unification `charge` = **pas M0.4-g dédié** ou reportée (point 4) — décidé au code.
 - Découpe M0.4-a..f **+ g** (charge). Golden master mis à jour explicitement si besoin (point 8).
 - Livrable : 1 commit/pas + checklist manuelle Tir Multi / CaC multiple (PJ + MJ).
+
+---
+
+## 16. Cadrage Module 4 — `CombatDeclareActionList` (liste d'action groupée, D5/D6/D7/D9/D13)
+
+> Cadrage 2026-08-29, sous rappel des priorités Saar. Lecture faite : `AssaultRangedPanel.jsx`
+> (376 l., intégral), `MeleeCombatPanel.jsx` (400 l., intégral), `handleMapToggle` / `MAP_ACTIONS` /
+> sections ACTION+ARMEMENT des 2 fenêtres, `weaponSlots.js`, `combatSections.js` (`COMBAT_MODE_DEFS`).
+> Recherche : master-detail pattern ([Wikipedia](https://en.wikipedia.org/wiki/Master%E2%80%93detail_interface),
+> [MUI X](https://mui.com/x/react-data-grid/master-detail/) — master ~360 / detail flexible,
+> côte-à-côte pour écran large, empilé pour écran étroit). **Aucun code — cadrage seul.**
+
+### 16.1 Responsabilité
+
+Le **cœur visuel** : remplacer, dans le corps des fenêtres, le modèle « tuiles ACTION + bloc
+ARMEMENT + panneau droit » par une **liste d'armes groupée (Distance / Contact) où choisir une arme
+= déclarer cette attaque** (D5), en **deux colonnes hiérarchiques** (D6), Rechargement dans la
+col. 2 (D7), Déplacement en ligne distincte au-dessus (D13), sélection sans radio (D9).
+**Consomme** : `CombatDeclareFrame` (module 2), le satellite (module 3), `useAssaultDeclaration` /
+`useMeleeDeclaration` (M0.4). **Ne fait que du rendu + du câblage** — golden master 51 tests garde le
+payload. **Ne touche pas** : le payload, le calcul métier, la phase RÉSOLUTION.
+
+### 16.2 État des lieux `[VÉRIFIÉ]`
+
+- **`AssaultRangedPanel` (376 l.) et `MeleeCombatPanel` (400 l.) sont *présentationnels*** : props +
+  callbacks, **zéro `useState`**, sections empilées verticalement, **aucune largeur interne figée**
+  (sliders/segments en `width:100%` / `flex:1`). → **PO3(b) tranché : réagencement (resserrage CSS),
+  PAS réécriture.** Les 2 panneaux **restent**, colonne plus étroite. Seule exception :
+  `AimedLocationPicker` (silhouette) → 2 sous-colonnes (D11).
+- **Les modes de combat CaC (Charge/Défensif/Retraite) sont DÉJÀ dans `MeleeCombatPanel`** (section
+  « Mode de combat », badges `COMBAT_MODE_DEFS`, l.213-257). → PO2 = choix de *présentation*, pas de
+  logique neuve.
+- **Assemblage de la liste** : PJ a `assaultWeapons` / `meleeWeapons` / `naturalWeapons` /
+  `allInventoryItems` ; MJ a `equipment[tokenId].{weaponMg,weaponMd,weapon2M,weaponTr}` + mutations.
+  Formes ≠ → il faut un **normalisateur**.
+- **`mapSelected` (Set PJ) / `isAttackActive`+`isMeleeSetup` (MJ)** = l'état « quelle action » →
+  **remplacé** par « quelle arme sélectionnée ». L'exclusivité CaC ⊕ Tir devient **automatique**.
+- **`fire_mode`** arrive ici (retiré du corps au module 3). `AssaultRangedPanel` a déjà la « Section
+  mode de tir ». → `CombatDeclareStateSelector` devient **code mort, supprimé par ce module**
+  (§14.11 pt 1).
+
+### 16.3 Structure cible
+
+```
+┌ Corps de la fenêtre ───────────────────────────────────────────┐
+│ + Déplacement                                    8 m · −5       │ ← D13, ligne distincte, cumulable
+├ COL. 1 — ACTION (un choix) ──────────┬ COL. 2 — détail (si arme choisie) ┤
+│ ▸ DISTANCE                            │ → Scorpion                        │
+│    Scorpion                   24/24   │ [ Tir │ Recharger ]               │ ← D7 segment
+│    (…)                                │ …AssaultRangedPanel réagencé…     │
+│ ▸ CONTACT                             │                                  │
+│    Couteau Congre                     │  — OU si arme de contact :        │
+│    Mains nues            (permanent)  │ [ Attaque │ Défensif │ Charge │   │ ← PO2 (reco : segment tête)
+│    Griffes (mutation)                 │   Retraite │ Recharger ]          │
+│                                       │ …MeleeCombatPanel réagencé…       │
+└──────────────────────────────────────┴──────────────────────────────────┘
+```
+- **Arme mixte** (contact + distance) : ligne dans **les deux** groupes (§4.1).
+- **Mains nues** : ligne permanente du groupe Contact. **Armes naturelles** : lignes Contact
+  (éligibilité via `naturalWeapons.js`, déjà là).
+- Sélection = `data-active` → bordure `--combat-accent-*` + fond teinté (D9, pas de radio).
+- Col. 2 **absente** si rien de sélectionné → fenêtre 1 colonne (plus de `width: 720` en dur,
+  c'est `baseWidth` + `expanded`).
+
+### 16.4 Le normalisateur — `buildWeaponList` (pur, testé `.mjs`)
+
+`client/src/lib/weaponList.js` : `buildWeaponList(sel) → { distance: WeaponRow[], contact: WeaponRow[] }`,
+`WeaponRow = { id, invId, label, slot, group, damage, range, fireMode, ammo, isNatural, isBareHands, … }`.
+Entrée = le bag brut de chaque fenêtre → sortie = **une** liste normalisée, groupée. Pur →
+`+ weaponList.test.mjs` (arme mixte dans 2 groupes, mains nues permanente, arme naturelle inéligible,
+MJ 4 slots, inventaire PJ). **Seule vraie logique neuve du module** — le reste est du rendu.
+
+### 16.5 PO2 — modes de combat CaC (recommandation)
+
+**Segment en tête de col. 2** quand une arme de contact est choisie :
+`[ Attaque │ Défensif │ Charge │ Retraite │ Recharger ]`. Choix mutuellement exclusifs « comment je
+combats ce Tour » = rôle d'onglet → en tête. Aujourd'hui rangée de badges au milieu du panneau
+(`MeleeCombatPanel` l.216) : la déplacer en tête = réagencement. `Charge` garde `onStartCharge`
+(chaîne déplacement→cible, window). `Défensif`/`Retraite` = passifs. **À valider Saar.**
+
+### 16.6 Découpe — module 4 est trop gros pour un seul
+
+| Sous-module | Contenu | Risque |
+|---|---|---|
+| **4a** | `buildWeaponList` + `.test.mjs` (aucun câblage) | faible |
+| **4b** | `CombatDeclareActionList` col. 1 : ligne Déplacement (D13) + liste groupée (D5/D9) + sélection. Câblé PJ puis MJ. Col. 2 reste temporairement l'ancien panneau droit | **élevé** (corps des 2 fenêtres) |
+| **4c** | Col. 2 : `AssaultRangedPanel` / `MeleeCombatPanel` réagencés en colonne étroite + en-tête `→ Arme` ; silhouette 2 sous-col. (D11) | moyen |
+| **4d** | Segment `Tir │ Recharger` (D7) + modes de combat en tête (PO2) ; suppression `CombatDeclareStateSelector` ; `mapSelected` / `isAttackActive` retirés | moyen |
+| **4e** | Exo : `CombatExoActionWindow` bascule sur `CombatDeclareActionList` (liste d'armes exo, `useExoDeclare` déjà là) | moyen |
+
+Un sous-module validé (golden master + navigateur Saar) avant le suivant. `git revert` par
+sous-module.
+
+### 16.7 PO3(a) — faisabilité écran, **à vérifier avant 4b/4c**
+
+720 px (col1 ~220 + col2 ~264 + paddings) **+ satellite ~90 px à gauche** + timeline + sidebar. Sur
+1920 px : cluster ~820 px, reste ~1100 px de carte — OK. Sur **1366 px** : cluster ~820 px, carte
+~540 px — **serré**. → maquette à cette largeur, ou test Saar sur son écran. Repli : col. 2 en
+**pop-out / survol** (master-detail « empilé », recherche) si le côte-à-côte ne passe pas.
+
+### 16.8 Hors périmètre module 4
+
+- Le payload, le calcul métier, la phase RÉSOLUTION, la fusion des orchestrateurs.
+- Le flux de ciblage carte (window, inchangé depuis M0.4).
+- Le drone (`DroneDeclareSection` déjà minimal ; hors scope sauf alignement trivial).
+
+### 16.9 Points ouverts module 4
+
+| # | Question |
+|---|---|
+| PO-M4-a | PO2 : segment de tête (reco §16.5) validé ? |
+| PO-M4-b | PO3(a) : côte-à-côte tient sur 1366 px, ou col. 2 en pop-out ? (test Saar / maquette) |
+| PO-M4-c | En-tête col. 2 arme de distance sans munitions suivies : `Recharger` grisé ou absent ? |
+| PO-M4-d | `buildWeaponList` : appelé dans chaque fenêtre, ou dans un `useWeaponList(sel)` fin (miroir `useDroneDeclare`) ? |
+| PO-M4-e | Changement d'arme = reset config col. 2 précédente (assumé §7 PO3) — `assault.reset()` / `melee.reset()` au changement d'arme est-il le bon geste ? |
