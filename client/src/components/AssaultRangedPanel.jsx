@@ -87,8 +87,7 @@ const P = {
 }
 
 export default function AssaultRangedPanel({
-  weaponDisplay,        // string | null — ex: "Glock-17 (MG)"
-  weaponMdDisplay,      // string | null — dual wield 2nd weapon, null = masqué
+  weaponDisplay,        // string | null — gate d'affichage (l'arme est nommée en col. 1, plus rendue ici)
   targetIds,            // string[] — cibles sélectionnées, une par tir de la série (docs/PLAN_TIRMULTI.md)
   getLabel,             // (tokenId) => string
   onChooseTarget,       // (index) => void
@@ -127,20 +126,7 @@ export default function AssaultRangedPanel({
 
   return (
     <>
-      {/* Section Arme */}
-      <div style={P.section}>
-        <div style={P.sectionTitle}>{t('meleeCombatPanel.weaponSection')}</div>
-        {weaponDisplay ? (
-          <div style={P.infoText}>
-            {weaponDisplay}
-            {weaponMdDisplay && (
-              <span style={P.infoSub}>{' + '}{weaponMdDisplay}</span>
-            )}
-          </div>
-        ) : (
-          <div style={P.noWeapon}>{t('assaultPanel.noWeapon')}</div>
-        )}
-      </div>
+      {/* Rappel d'arme retiré (D5 : l'arme sélectionnée est déjà en tête de la col. 1). */}
 
       {/* Section Nombre de tirs — Tir Multi (docs/PLAN_TIRMULTI.md), CC uniquement (D6) */}
       {currentFireMode === 'CC' && (
@@ -159,11 +145,12 @@ export default function AssaultRangedPanel({
           par Saar — ne pas forcer N clics sur la même cible pour le cas courant). Une fois au moins une
           cible posée, chaque tir affiche son propre slot avec "Changer" pour permettre de diverger. */}
       <div style={P.section}>
-        <div style={P.sectionTitle}>
+        <div style={{ ...P.sectionTitle, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="decl-inline-glyph" style={{ '--glyph': 'url(/assets/status/target.svg)' }} />
           {effectiveAssaultCount === 1 ? t('common.targetSection') : t('meleeCombatPanel.targetsCount', { count: targetIds.filter(Boolean).length, total: effectiveAssaultCount })}
         </div>
         {targetIds.filter(Boolean).length === 0 ? (
-          <button style={P.chooseBtn} onClick={() => onChooseTarget(0)}>{t('common.chooseTargetButton')}</button>
+          <button style={{ ...P.chooseBtn, width: 'auto', alignSelf: 'flex-start' }} onClick={() => onChooseTarget(0)}>{t('common.chooseTargetButton')}</button>
         ) : (
           Array.from({ length: effectiveAssaultCount }, (_, i) => {
             const tgtId = targetIds[i] ?? null

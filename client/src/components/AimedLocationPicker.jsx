@@ -56,12 +56,13 @@ export default function AimedLocationPicker({ aimedLocation, onChange, showMalus
   )
 }
 
+// D11 : deux sous-colonnes — silhouette à gauche, résumé (zone + malus) à droite.
 const s = {
-  wrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
-  svgWrap: { width: '100%', display: 'flex', justifyContent: 'center' },
-  svg: { width: '45%', maxWidth: 130, height: 'auto' },
-  info: { display: 'flex', alignItems: 'center', gap: 8, minHeight: 18 },
+  wrapper: { display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  svgWrap: { flex: 'none', display: 'flex', justifyContent: 'center' },
+  svg: { width: 64, maxWidth: '100%', height: 'auto' },
+  info: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 },
   infoText: { fontSize: 11, color: '#f5c542', fontWeight: 700 },
-  infoTextMuted: { fontSize: 11, color: '#5b5b7a' },
+  infoTextMuted: { fontSize: 11, color: '#5b5b7a', lineHeight: 1.5 },
   clearBtn: { fontSize: 10, padding: '2px 8px' },
 }

@@ -1702,6 +1702,17 @@ Convention :
 /* Segment Tir │ Recharger en tête de colonne 2 (D7). */
 [data-decl] .decl-c2seg { display: flex; gap: 4px; padding: 9px 12px 4px; }
 
+/* Glyphe inline (masque SVG recoloré à currentColor) — pour les en-têtes de section de la col. 2. */
+.decl-inline-glyph {
+  display: inline-block;
+  width: 13px; height: 13px;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+          mask: var(--glyph) center / contain no-repeat;
+  vertical-align: -2px;
+}
+
 /* Déplacement — ligne actionnable, cumulable (D13) */
 [data-decl] .decl-move {
   display: flex;

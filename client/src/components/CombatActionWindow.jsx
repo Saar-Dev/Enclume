@@ -1095,7 +1095,7 @@ export default function CombatActionWindow({
 
         {/* ---- Panneau droit — rechargement : sélection munitions ---- */}
         {showReload && (
-          <div style={W.assaultPanel}>
+          <div style={{ ...W.assaultPanel, flex: 1, minHeight: 0 }}>
             <div style={W.assaultSection}>
               <div style={W.assaultSectionTitle}>{t('meleeCombatPanel.weaponSection')}</div>
               {selectedWeapon ? (
@@ -1153,7 +1153,7 @@ export default function CombatActionWindow({
 
         {/* ---- Panneau droit — corps à corps ---- */}
         {showMelee && (
-          <div style={{ ...W.assaultPanel, background: 'rgba(80,180,80,0.04)' }}>
+          <div style={{ ...W.assaultPanel, flex: 1, minHeight: 0, background: 'rgba(80,180,80,0.04)' }}>
             <MeleeCombatPanel
               availableWeapons={meleeWeapons.map(item => ({
                 id: item.id,
@@ -1209,7 +1209,7 @@ export default function CombatActionWindow({
 
         {/* ---- Panneau droit — assaut humanoïde ---- */}
         {showAssault && !isDrone && (
-          <div style={W.assaultPanel}>
+          <div style={{ ...W.assaultPanel, flex: 1, minHeight: 0 }}>
             <AssaultRangedPanel
               weaponDisplay={selectedWeapon ? `${selectedWeapon.custom_name || selectedWeapon.ref_name || t('actionWindow.weaponNameFallback')} (${selectedWeapon.slots?.[0]})` : null}
               weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.custom_name || weaponMd.ref_name || t('actionWindow.weaponNameFallback')} (${weaponMd.slots?.[0]})` : null}

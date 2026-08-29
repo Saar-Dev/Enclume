@@ -879,7 +879,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
         {/* PANNEAU DROIT — Mode CaC */}
         {isMeleeSetup && isActivePnj && (
-          <div style={S.meleePanelGm}>
+          <div style={{ ...S.meleePanelGm, flex: 1, minHeight: 0 }}>
             <MeleeCombatPanel
               availableWeapons={meleeWeaponAvailable ? [{ id: meleeWeaponAvailable.inv_id, label: meleeWeaponAvailable.name ?? 'Arme', slot: meleeWeaponAvailable.slot ?? '', damage: '', allonge: 0 }] : []}
               selectedWeaponId={effectiveGmMeleeWeaponId}
@@ -930,7 +930,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
 
         {/* PANNEAU DROIT — Tir */}
         {isAttackActive && isActivePnj && (
-          <div style={S.assaultPanelGm}>
+          <div style={{ ...S.assaultPanelGm, flex: 1, minHeight: 0 }}>
             <AssaultRangedPanel
               weaponDisplay={weapon ? `${weapon.name ?? 'Arme'} (${weapon.slot ?? '?'})` : null}
               weaponMdDisplay={(hasTwoWeapons && weaponMd) ? `${weaponMd.name ?? 'Arme'} (${weaponMd.slot ?? '?'})` : null}
