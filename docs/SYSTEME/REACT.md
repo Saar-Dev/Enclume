@@ -107,7 +107,9 @@ if (e.code === 'AltLeft' || e.code === 'AltRight') { ... }
 
 ## P58 — Briques de déclaration de combat (`CombatDeclare*`)
 
-> Chantier `PLAN_RW_DECLARE_WINDOWS.md` (clos 2026-08-28, archivé `docs/Old/`). Finit REWORK-05.
+> Chantiers `PLAN_RW_DECLARE_WINDOWS.md` (clos 2026-08-28, archivé `docs/Old/`) puis
+> `PLAN_RW_DECLARE_DESIGN.md` (module 4 « l'arme EST l'action » + M0.4 sous-état partagé —
+> PJ & MJ faits 2026-08-30 ; **exo pas encore migré**). Finit REWORK-05.
 
 Les **3 fenêtres de déclaration** (phase ANNONCE) restent des **orchestrateurs séparés** — la fusion
 GM + Joueur est rejetée (REWORK-05 : navigation de slots, multi-phases, preview temps réel) :
@@ -123,30 +125,52 @@ Leurs morceaux communs sont des **briques à plat** dans `client/src/components/
 
 | Brique | Rôle |
 |---|---|
-| `CombatDeclareStateSelector` | segmented control d'un champ d'état (posture/arme/mode de tir/couverture/vitesse) + coût de transition INI par option |
-| `CombatDeclareStateChip` | même concept, présentation compacte (puce click-to-cycle) — MJ, déclaration rapide multi-PNJ |
-| `CombatDeclareIniWidget` | pastille « Initiative projetée » du pied (`current + delta`, rouge si ≤ 0), tooltip du détail |
-| `CombatDeclareErrorBanner` | bannière transitoire de refus (`COMBAT_DECLARE_ERROR`) — dumb, lit `sessionStore.declareError` |
-| `CombatDeclareLog` | log des déclarations du tour (lecture seule) |
+| `CombatDeclareActionList` | **corps de la col. 1** (D5/D6/D13) : move-line cumulable + liste d'armes groupée Distance/Contact ; choisir une arme = déclarer cette attaque. Props : `move{}` / `groups` (= `buildWeaponList`) / `selectedRowId` / `onPick(row)` / `reload{active,onToggle}` (↻ sur l'arme de tir sélectionnée) / `extras`. Monté par PJ **et** MJ. |
+| `CombatDeclareStatePanel` | **satellite d'état** (D8) — posture / vitesse / arme, glyphes `assets/status/*.svg` recolorés à l'accent famille. Frère positionné depuis `pos` du `useDraggable` de la fenêtre, repli à droite si le bord gauche sort de l'écran. Absent pour un drone. |
+| `CombatDeclareHeader` | bandeau de titre : pastille initiales (accent famille) + nom acteur + `N/N déclarés`. |
+| `CombatDeclareFooter` | pied unifié (D12) : `[pastille INI] [statut centré] [Passer le tour] [Déclarer]`. `canDeclare`/`blockReason` via `declareChecks.js`. |
+| `CombatDeclareStateSelector` | segmented control d'un champ d'état + coût de transition INI par option. `fire_mode` est passé en col. 2 (dans `AssaultRangedPanel`, prop `availableFireModes`/`onFireModeChange`) — le sélecteur ne sert plus qu'en interim / exo. |
+| `CombatDeclareStateChip` | même concept, présentation compacte (puce click-to-cycle). |
+| `CombatDeclareIniWidget` | pastille « Initiative projetée » du pied (`current + delta`, rouge si ≤ 0). |
+| `CombatDeclareErrorBanner` | bannière transitoire de refus (`COMBAT_DECLARE_ERROR`) — dumb, lit `sessionStore.declareError`. |
+| `CombatDeclareLog` | log des déclarations du tour (lecture seule). |
+
+**Sous-état de sélection partagé (M0.4)** — recopié à ~90 % entre PJ et MJ avant extraction, désormais
+un **reducer pur par domaine** + un hook wrapper, monté à l'identique par les deux fenêtres :
+
+| Module pur (`client/src/lib/`) | Hook | Contenu |
+|---|---|---|
+| `assaultDeclaration.js` (`assaultDeclarationReducer`, 15 tests) | `useAssaultDeclaration` | sous-état **Tir** : `{ weaponId, targets, count, bulletCount, variantAB, isDualWield, aimTranches, aimedLocation }`. `SELECT_WEAPON` resette la config (P8) ; `setTarget` self-terminant (chaîne récursive MJ). |
+| `meleeDeclaration.js` (`meleeDeclarationReducer`, 11 tests) | `useMeleeDeclaration` | sous-état **CaC** : `{ weaponId (undefined=auto/null=mains nues/id), naturalWeaponId (exclusif), targets, count, isDualWield }`. `SET_COUNT` = troncature seule. |
+| `weaponList.js` (`buildWeaponList`, 10 tests) | — | normalise armes équipées + naturelles + mains nues permanente → `{ distance: [], contact: [] }`. `displayName` : `custom_name ‖ ref_name ‖ name` (PJ **et** MJ). |
+| `declareChecks.js` | — | `assaultCheck`/`meleeCheck`/`reloadCheck` → `{valid, reason}` ; `buildBlockReason` ; `hasSomethingToDeclare`. |
+| `buildDeclarePayload.js` (`buildHumanDeclarePayload`/`buildGmDeclarePayload`, golden master 52 tests) | — | assemble `COMBAT_ACTION_DECLARE`. **D7 : Recharger exclut le Tir** — jamais `attack` ET `reload` dans le même payload. |
 
 **Règles** :
-- **API unique** des sélecteurs d'état : `stateKey` (string) / `current` / `initial` / `onChange`
-  (+ `disabled` / `highlightKey` / `availableKeys`). Ni `def={STATE_DEFS.X}` (le composant le dérive),
-  ni un composant d'état défini **dans** une fenêtre.
-- Le **calcul métier** vit dans le modèle, jamais dans une fenêtre : `combatSections.js` (`STATE_DEFS`,
-  `nextKey`, `calcIniDelta`/`calcIniBreakdown`) + **`shared/combatIniCost.js`** (autorité unique du
-  coût d'Initiative d'une déclaration, **client + serveur** — `stateTransitionCost` / `computeIniDelta` /
-  `iniDeltaBreakdown` ; cf. `COMBAT_FLUX.md`).
-- Un **signal transitoire** (bannière de refus) passe par `sessionStore` + `useCombatSocket`
-  (P57 — jamais un `socket.on` dans une fenêtre). Patron jumeau : `sessionStore.criticalEffect` /
-  `CriticalEffectOverlay`.
-- Une **nouvelle fenêtre de déclaration** (tourelle fixe, combattant « possédé »…) ou **section**
-  (Intégrité/Avaries exo, statuts d'état exo accroupi/genou / arme rangée-au clair) **compose ces
-  briques**, ne réécrit pas le châssis.
-- Divergences **légitimes** conservées : allures (3 sources : fiche PJ / `DEFAULT_PNJ_ALLURES` /
-  fetch serveur exo & drone) ; panneau droit 720 px (détail assaut/CaC) joueur + MJ seulement ;
-  familles CSS `combat-float-*` (joueur/exo) vs `combat-win-*` (MJ) — non unifiées (chantier design
-  séparé, module `CombatDeclareFrame` annulé).
+- **L'arme EST l'action (D5)** : plus de tuiles « Attaquer/CaC », plus de bloc ARMEMENT. Choisir une
+  arme dans `CombatDeclareActionList` arme l'attaque + auto-dégaine (`SELECT_ATTACK`). Tir ⊕ CaC
+  exclusif. Le détail (cible, mode de tir, options, localisation) vit en **col. 2**
+  (`AssaultRangedPanel` / `MeleeCombatPanel`, réagencés en colonne étroite) — jamais d'autres actions.
+- **Recharger** (D7) = ↻ sur la ligne de l'arme de tir sélectionnée (col. 1), à droite du compteur de
+  munition. Clic → mode Recharger : PJ la col. 2 bascule sur le sélecteur de munition ; MJ = booléen
+  (pas de sélecteur PNJ, col. 2 ne s'ouvre pas). Changer d'arme sort du mode.
+- **API unique** des sélecteurs d'état : `stateKey` / `current` / `initial` / `onChange`
+  (+ `disabled` / `highlightKey` / `availableKeys`).
+- Le **calcul métier** vit dans le modèle, jamais dans une fenêtre : `combatSections.js` +
+  **`shared/combatIniCost.js`** (autorité unique du coût d'Initiative, client + serveur).
+- Le **sous-état de sélection** (Tir/CaC) vit dans les reducers purs M0.4, jamais recopié en `useState`
+  dispersés dans une fenêtre. Une fenêtre appelle `assaultDecl.clear()` / `meleeDecl.clear()` dans son
+  effet de reset `[tokenId, has_announced]` (le hook ne se reset pas seul).
+- Un **signal transitoire** (bannière de refus) passe par `sessionStore` + `useCombatSocket` (P57).
+- Une **nouvelle fenêtre de déclaration** ou **section** **compose ces briques**, ne réécrit pas le châssis.
+- **Silhouette « viser une localisation »** : `BodySilhouetteSvg` (autorité unique du tracé, géométrie
+  `docs/PLANS/human.svg` — 6 régions), 2 sous-colonnes (silhouette │ résumé, D11).
+- Divergences **légitimes** conservées : allures (3 sources) ; familles CSS `combat-float-*`
+  (joueur/exo) vs `combat-win-*` (MJ) — non unifiées (`CombatDeclareFrame` = module 2 structurel,
+  non prioritaire). Le MJ garde sa navigation séquentielle de slots + sa preview `pjPreview`.
+- **Reste à faire** (`PLAN_RW_DECLARE_DESIGN.md` §0) : migrer `CombatExoActionWindow` sur
+  `CombatDeclareActionList` ; retirer le sélecteur d'arme redondant de `MeleeCombatPanel` ;
+  neutraliser les couleurs de sélection en style inline (`#5b8dee`/rouges/verts) → `--decl-*` (D4b).
 
 ---
 

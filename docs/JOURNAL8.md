@@ -4590,3 +4590,60 @@ d'insertion `server/src/scripts/ticket_decl_cursor_hidden.js` (commit c9c6c50) p
 « pas de correctif codé » désormais périmé.
 
 **Retour arrière** : `git checkout client/src/components/SceneCursorOverlay.jsx`.
+
+---
+
+## Session (Claude) — 2026-08-30 — RW déclaration : M0.4 (sous-état partagé) + module 4 (« l'arme EST l'action ») PJ & MJ
+
+Suite de `PLAN_RW_DECLARE_DESIGN.md`. Chantier repris après constat Saar : les « modules 2v/3/5
+codés » de la session du 2026-08-29 n'étaient qu'un remap de tokens sur le châssis — **le corps des
+fenêtres n'avait jamais été touché**, donc « rien ne ressemble à la maquette ». Les 2 artifacts
+claude.ai ont été **matérialisés dans le dépôt** (`docs/PLANS/maquette-declare/` — 4 artboards +
+`preview.html` + `pcb.svg`), lecture via l'outil Artifact. Décision Saar : faire le module 4 + M0.4
+directement contre `CombatActionWindow` (PJ) puis `CombatGmDeclareWindow` (MJ), sans attendre le
+frame ni M-E2E — filet = golden master `buildDeclarePayload` + validation navigateur.
+
+**M0.4 (a→e)** — le sous-état de sélection Tir / CaC (recopié ~90 % entre PJ et MJ) extrait en
+**reducers purs par domaine** :
+- `client/src/lib/assaultDeclaration.js` + `useAssaultDeclaration.js` (15 tests) — `SELECT_WEAPON`
+  resette la config (P8, changement de comportement MJ documenté) ; `setTarget` self-terminant pour
+  la chaîne récursive `selectNext` du MJ (supprime `effectiveAssaultCountRef`).
+- `client/src/lib/meleeDeclaration.js` + `useMeleeDeclaration.js` (11 tests) — `weaponId`
+  undefined/null/id + `naturalWeaponId` exclusif ; `SET_COUNT` = troncature seule.
+- Câblage PJ (`CombatActionWindow`) puis MJ (`CombatGmDeclareWindow`) : les ~13 `useState` du
+  sous-état → 2 hooks + alias en lecture (sites de lecture inchangés). Écarts iso documentés :
+  reset d'`isDualWield` / d'`aimedLocation` / de l'arme naturelle au changement d'action —
+  corrections de fuites latentes, alignées PJ ↔ MJ.
+
+**Module 4** — `CombatDeclareActionList.jsx` (partagé PJ + MJ) :
+- `client/src/lib/weaponList.js` — `buildWeaponList` (10 tests) : normalise armes équipées +
+  naturelles + mains nues permanente. **Bug corrigé** : `displayName` ne testait que
+  `custom_name`/`ref_name` (forme PJ) — les items MJ portent `name`, toutes les armes du MJ
+  s'affichaient « Mains nues ».
+- move-line cumulable (glyphe `movement.svg`) + liste groupée Distance / Contact. Choisir une arme
+  arme l'attaque + auto-dégaine ; re-clic annule ; Tir ⊕ CaC exclusif. `selectedRangedWeaponId`
+  (neuf) fixe l'arme de tir quand 2+ armes à feu équipées.
+- Colonne 2 (`AssaultRangedPanel`) : sélecteur **Mode de tir** CC/RC/RL intégré (props
+  `availableFireModes`/`onFireModeChange`), rappel d'arme retiré (D5), « Cible » compacte + glyphe
+  `target.svg`, silhouette « viser une localisation » → `BodySilhouetteSvg` sur la géométrie
+  `docs/PLANS/human.svg` (2 sous-colonnes, D11).
+- **Recharger** (option B, Saar) : ↻ sur la ligne de l'arme de tir sélectionnée (à droite du
+  compteur de munition), plus de segment `Tir │ Recharger`. `buildGmDeclarePayload` : `attack` et
+  `reload` jamais ensemble (D7) + test dédié.
+- Le MJ **gagne l'état « arme sélectionnée » intermédiaire** qu'il n'avait pas (avant : saut direct
+  au ciblage carte) — `attackStarted` inclut `weaponId != null`.
+- Bug « énorme trou vide » en col. 2 corrigé : `flex: 0 0 360px` (largeur fixe) devenait une
+  **hauteur** fixe dans le wrapper `.decl-col2` en colonne → `flex: 1; minHeight: 0`.
+
+**Fichiers touchés** : `client/src/lib/{weaponList,assaultDeclaration,useAssaultDeclaration,meleeDeclaration,useMeleeDeclaration}.js` (+ `.test.mjs`), `client/src/lib/buildDeclarePayload.js` (+ test), `client/src/components/{CombatDeclareActionList,CombatActionWindow,CombatGmDeclareWindow,AssaultRangedPanel,AimedLocationPicker,BodySilhouetteSvg,CombatDeclareStatePanel}.jsx`, `client/src/index.css`, `client/src/locales/combat.json`, `client/public/assets/status/{contact,distance,movement,target}.svg`, `docs/PLANS/maquette-declare/*`, `docs/PLANS/PLAN_RW_DECLARE_DESIGN.md`, `docs/SYSTEME/{COMBAT,REACT}.md`, `docs/ROADMAP.md`. ~20 commits `dev/Saar` (non poussés).
+
+**Testé** : `npm test` 1111/812/0 (golden masters `buildHumanDeclarePayload` 52 / `buildGmDeclarePayload` 16 verts, reducers 26) ; `vite build` client propre ; `eslint` iso-baseline (1 erreur pré-existante `react-hooks/set-state-in-effect` sur le reset effect du MJ) ; **validation navigateur Saar** : fenêtre MJ conforme maquette, liste d'armes fonctionnelle, Recharger, silhouette (« Parfait »).
+
+**Non testé** : `CombatExoActionWindow` (jamais migré — encore l'ancien corps) ; combat drone
+depuis le refactor ; le mode Recharger PJ de bout en bout (sélection munition + serveur).
+⚠️ **clos partiel** — reste : exo, MeleeCombatPanel (4c), couleurs inline (D4b), M0.4-f/g.
+
+**Données** : aucune. Client + un module partagé pur. Aucune migration.
+
+**Retour arrière** : `git revert` par sous-commit (chaque module retire son ancien code dans le même
+commit ; pas de feature flag).

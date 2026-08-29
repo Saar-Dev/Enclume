@@ -1432,12 +1432,24 @@ Toute dérivation du slot actif doit trier le roster avant d'appliquer l'index.
 
 3 orchestrateurs séparés (`CombatActionWindow` PJ/drone-PJ multi-phases, `CombatGmDeclareWindow` MJ,
 `CombatExoActionWindow` exo) — fusion rejetée (REWORK-05). Détail du patron, des briques
-`CombatDeclare*` et des règles : **`REACT.md` P58**.
+`CombatDeclare*`, du sous-état de sélection partagé (M0.4) et des règles : **`REACT.md` P58**.
+
+**Modèle d'interaction — « l'arme EST l'action » (D5, `PLAN_RW_DECLARE_DESIGN.md`)** : le corps de la
+col. 1 (`CombatDeclareActionList`) rend une ligne Déplacement cumulable + une liste d'armes groupée
+Distance / Contact. Choisir une arme **arme cette attaque** (auto-dégaine, `SELECT_ATTACK`) et ouvre
+la col. 2 (détail : cible, mode de tir, options, localisation). Tir ⊕ CaC exclusifs par construction.
+« Recharger » (D7) est un mode de l'arme sélectionnée, jamais une attaque en parallèle (le payload
+n'envoie jamais `attack` ET `reload`). Le sous-état de sélection Tir / CaC est un **reducer pur par
+domaine** (`client/src/lib/assaultDeclaration.js` / `meleeDeclaration.js`), monté à l'identique par
+PJ **et** MJ (l'exo reste à migrer). Terminologie : `VOCABULARY.md` V2.6 (« Tir » / « Corps à corps » ;
+catégories d'arme « Distance » / « Contact »).
 
 Côté modèle / calcul (ce qui concerne ce document) :
 - `client/src/components/combatSections.js` — `STATE_DEFS`, `nextKey`,
-  `calcIniDelta` / `calcIniBreakdown` (aperçu client), `MAP_ACTIONS`, `MOVE_ZONE_DEFS`,
-  `FIRE_MODE_VARIANTS`, `computeFireVariant`.
+  `calcIniDelta` / `calcIniBreakdown` (aperçu client), `MAP_ACTIONS` (encore consommé par l'exo et
+  le drone), `MOVE_ZONE_DEFS`, `FIRE_MODE_VARIANTS`, `computeFireVariant`.
+- `client/src/lib/weaponList.js` — `buildWeaponList(sel)` : normalisateur pur des armes équipées +
+  naturelles + mains nues permanente en `{ distance: WeaponRow[], contact: WeaponRow[] }`.
 - `shared/combatIniCost.js` — **autorité unique du coût d'Initiative d'une déclaration, client +
   serveur** (`computeIniDelta` / `iniDeltaBreakdown` / `projectedInitiative` / `stateTransitionCost`). Détail des postes :
   `COMBAT_FLUX.md` § « Calcul delta initiative ». Le serveur (`socketCombatAnnouncement.js`) applique

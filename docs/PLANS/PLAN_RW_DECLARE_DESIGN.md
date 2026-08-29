@@ -41,23 +41,25 @@
 
 ---
 
-## 0. Tableau de bord (2026-08-29)
+## 0. Tableau de bord (2026-08-30)
 
 | Élément | État | Réf |
 |---|---|---|
-| Lot B (i18n + terminologie Tir/CaC + pastille INI) | ✅ **codé + committé** (non poussé) | §5.1 |
+| Lot B (i18n + terminologie Tir/CaC + pastille INI) | ✅ **codé + committé** | §5.1 |
 | B5 (« Passer le tour » déclarable — mécanisme) | ✅ **codé + committé** — ⚠ ne pas déployer sans module 5 | §5.2 |
 | Module 0 M0.0-M0.3 (`buildDeclarePayload`, 51 tests) | ✅ **codé + committé** | §5.4 |
-| **M-E2E** — filet Playwright **local** (approche tranchée) | à cadrer juste avant l'extraction du frame — pas commencé | §5.5 |
-| **Spec visuelle `--decl-*`** (teinte Wizard, extraite du prototype `afcd5e28`) | ✅ **dans `client/src/index.css`** (`1872cb4`) — manquait au plan, cf. §11 | §11 |
-| **Maquette matérialisée dans le dépôt** (`docs/PLANS/maquette-declare/` : 4 artboards + preview + pcb) | ✅ **2026-08-29** — fin de la dépendance à un artifact externe | §11 |
-| Module 2 — volet **visuel** (`data-decl`/`data-family` + re-skin CSS des 3 fenêtres) | ✅ **codé** (`6760c30`) — validation navigateur en attente | §5.6 |
-| Module 2 — volet **structurel** (`CombatDeclareFrame`, déduplication du châssis) | **pas commencé** (refactor, pas visuel) | §5.6 |
-| Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé** (`bfce734` fonctionnel → `1872cb4` look maquette) — validation navigateur en attente | §5.7 |
-| M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
-| Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
-| Module 5 — `CombatDeclareFooter` (D12) | ✅ **5a-5d codés + validés navigateur** (Saar, 2026-08-29) | §5.10 |
-| Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
+| **M-E2E** — filet Playwright **local** (approche tranchée) | pas commencé — le module 4 a été fait sans (golden master + validation navigateur Saar) | §5.5 |
+| **Spec visuelle `--decl-*`** (teinte Wizard, extraite du prototype `afcd5e28`) | ✅ **dans `client/src/index.css`** | §11 |
+| **Maquette matérialisée dans le dépôt** (`docs/PLANS/maquette-declare/`) | ✅ **2026-08-29** | §11 |
+| Module 2 — volet **visuel** (`data-decl`/`data-family` + re-skin CSS) | ✅ **codé + validé navigateur** | §5.6 |
+| Module 2 — volet **structurel** (`CombatDeclareFrame`) | **pas commencé** (refactor, pas visuel) — P58 le juge non prioritaire | §5.6 |
+| Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé + validé navigateur** | §5.7 |
+| **M0.4** — `assaultDeclaration.js` / `meleeDeclaration.js` + hooks + câblage PJ & MJ | ✅ **codé + committé 2026-08-30** (a→e ; f/g différés) — 26 tests reducers, golden masters 67 verts | §5.8 |
+| **Module 4** — `CombatDeclareActionList` (D5) — **PJ + MJ** | ✅ **codé + validé navigateur** 2026-08-30 : move-line + liste d'armes groupée, mode de tir en col. 2, Recharger = ↻ sur l'arme (option B), silhouette `human.svg` (D11) | §5.9 |
+| Module 4 — **exo** (`CombatExoActionWindow`) | ❌ **pas fait** — l'exo est encore sur l'ancien corps | §5.9 |
+| Module 4 — MeleeCombatPanel : sélecteur d'arme redondant à retirer (4c) + neutralisation couleurs inline (D4b) | ❌ **queued** (validé Saar « à suivre ») | §5.9 |
+| Module 5 — `CombatDeclareFooter` (D12) | ✅ **5a-5d codés + validés navigateur** | §5.10 |
+| Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
 navigateur Saar **après chaque module ET sous-module** (plus « en bloc »). Un module validé avant le

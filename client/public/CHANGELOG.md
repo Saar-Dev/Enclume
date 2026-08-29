@@ -1,3 +1,21 @@
+## v221 — 2026-08-30 — Fenêtres de déclaration de combat : « l'arme est l'action »
+
+### Combat — déclaration (joueur + MJ)
+- [ux] Plus de tuiles « Attaquer » / « Corps à corps » ni de bloc Armement : la colonne de gauche
+  liste tes armes, groupées **Distance** / **Contact**. Cliquer une arme déclare cette attaque
+  (l'arme se dégaine toute seule) ; le détail — cible, mode de tir, options, localisation — s'ouvre
+  dans la colonne de droite.
+- [ux] Le **mode de tir** (Coup par coup / Rafale) se change directement dans le panneau de droite.
+- [ux] **Recharger** : petit bouton ↻ sur la ligne de l'arme sélectionnée, à côté du compteur de
+  munitions.
+- [ux] Le **déplacement** est une ligne à part, en haut, cumulable avec une attaque.
+- [ux] La silhouette « viser une localisation » est refaite (corps anatomique) et posée à côté du
+  texte, plus dessous.
+- [ux] Le MJ voit maintenant la même fenêtre que les joueurs ; choisir une arme n'envoie plus
+  directement sur la carte — on configure d'abord, on cible ensuite.
+- [fix] Les armes du MJ s'affichaient toutes « Mains nues ».
+- [fix] Grand vide sous le panneau de droite quand une arme de tir était sélectionnée.
+
 ## v220 — 2026-08-29 — Fix : curseur invisible après un clic sur une action de déclaration
 
 ### Combat
