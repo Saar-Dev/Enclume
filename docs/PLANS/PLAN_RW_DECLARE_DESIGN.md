@@ -347,14 +347,15 @@ gardes de montage, risque, 5 points ouverts PO-M2-a..e). En bref : `CombatDeclar
 (structure externe des 3 fenêtres) — mais **JSX/CSS only, payload inchangé** → golden master du
 module 0 en filet ; un commit par fenêtre migrée.
 
-**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** **Cadré §14** (corrigé round 6). Sortir
-les sélecteurs d'état du corps vers un **panneau frère** du frame, positionné depuis `pos`,
-présentation glyphe (`assets/status/`, `--combat-accent-fg`). **PJ + MJ** : posture (4) + vitesse (3)
-+ arme (3) ; `fire_mode` reste au corps jusqu'au module 4 (§14.7). **Exo** : posture (4) + arme (3),
-**pas** de mode de tir (fixe) ; le cas `prone → Test` (`isExoStandUpAttempt`, déjà serveur) à
-recâbler proprement = le point délicat (PO-M3-a). **PAS de migration serveur** (§12.5). Risque
-moyen ; payload PJ/MJ inchangé (golden master) ; exo : `+ buildExoDeclareState` pur + test (§14.6).
-Un commit par fenêtre + checklist manuelle. Points ouverts PO-M3-a..f.
+**Module 3 — `CombatDeclareStatePanel` (satellite, D8).** **Cadré §14** (simplifié 2026-08-29,
+plus de point ouvert). Relocaliser les puces d'état dans un **panneau frère** du frame (positionné
+depuis `pos`). Brique = **`CombatDeclareStateChip` existant + un `glyph`** (glyphes `assets/status/`
+de Saar, `--combat-accent-fg`). Axes : **Posture (4) + Vitesse (3) + Arme (3)**, **identiques
+PJ / MJ / Exo** (« fenêtre MJ = PJ » ; Session 158 caduque). Drone : aucun satellite. `fire_mode`
+reste au corps jusqu'au module 4 (§14.7). Exo `prone` : la puce Posture remplace le bouton « Tenter
+de se relever » (mécanisme serveur déjà là). **PAS de migration serveur** (§12.5). Risque moyen ;
+payload PJ/MJ inchangé (golden master) ; exo : `+ buildExoDeclareState` pur + test (§14.6). Un commit
+par fenêtre + checklist manuelle.
 
 **Module 4 — `CombatDeclareActionList` (liste groupée, D5/D6/D7/D9/D13).** Le cœur visuel. Liste
 d'armes groupée, sélection = bordure accent, Déplacement en ligne distincte, col. 2 = détail
@@ -1087,14 +1088,13 @@ perd juste les sélecteurs qu'il n'avait pas (rien) et gagne le satellite.
 
 ### 14.8 Risque + rollback
 
-**Risque moyen (client).** PJ + MJ : déplace 3 sélecteurs (`CombatDeclareStateChip` /
-`CombatDeclareStateSelector` **réutilisés tels quels**) du corps → panneau frère. **Pas de
-changement de forme de payload** (mêmes `decl.*` → mêmes `buildXDeclarePayload` → golden master 51
-tests). **Exo** : les mêmes chips (posture 4 + arme 3 + vitesse) + `state` peuplé au payload (14.6) ;
-le `prone → Test` **existe déjà serveur** (`isExoStandUpAttempt` / `resolveExoStandUpAction`) — le
-module ne fait que router la puce vers ce chemin + ajouter le message chat. Risque **visuel** :
-positionnement du satellite frère, pas de test auto → **un commit par fenêtre + checklist manuelle**
-(comme module 2). Rollback : `git revert` par commit.
+**Risque moyen (client).** PJ + MJ : déplace 3 puces `CombatDeclareStateChip` (**réutilisé tel
+quel**, + un `glyph`) du corps → panneau frère. **Pas de changement de forme de payload** (mêmes
+`decl.*` → mêmes `buildXDeclarePayload` → golden master 51 tests). **Exo** : les mêmes puces +
+`state` peuplé au payload (14.6) ; le `prone → Test` **existe déjà serveur** (`isExoStandUpAttempt` /
+`resolveExoStandUpAction`) — le module ne fait que router la puce vers ce chemin + ajouter le message
+chat. Risque **visuel** : positionnement du satellite frère, pas de test auto → **un commit par
+fenêtre + checklist manuelle** (comme module 2). Rollback : `git revert` par commit.
 
 ### 14.9 Hors périmètre module 3
 
