@@ -302,6 +302,11 @@
     "tooltipTotal": "Initiative projetée : {{value}}",
     "tooltipNoChange": "Initiative projetée : {{value}} — aucun changement déclaré"
   },
+  "declareFooter": {
+    "passTurn": "Passer le tour",
+    "statusReady": "Prêt",
+    "statusDestination": "[{{x}}, {{y}}]"
+  },
   "stunWindow": {
     "title": "Durée d'étourdissement",
     "rollPrompt": "Lancez {{desc}} pour déterminer la durée",

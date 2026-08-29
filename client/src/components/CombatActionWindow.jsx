@@ -29,9 +29,11 @@ import DroneDeclareSection from './DroneDeclareSection.jsx'
 import AssaultRangedPanel from './AssaultRangedPanel.jsx'
 import MeleeCombatPanel from './MeleeCombatPanel.jsx'
 import CombatDeclareStateSelector from './CombatDeclareStateSelector.jsx'
-import CombatDeclareIniWidget from './CombatDeclareIniWidget.jsx'
 import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
+import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
+import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
+import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
 // ---------------------------------------------------------------------------
 export default function CombatActionWindow({
@@ -621,28 +623,49 @@ export default function CombatActionWindow({
     isDualWield, bulletCount: effectiveBulletCount ?? null,
   })
 
-  // --- validite declaration ------------------------------------------------
-  const assaultValid = !attackSelected || (
-    assaultWeaponId != null &&
-    assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length === effectiveAssaultCount &&
-    currentVariant != null &&
-    (aimTranches === 0 || aimIneligibilityReasons.length === 0)
-  )
-  const reloadValid    = !reloadSelected || attackSelected || (selectedWeapon !== null && selectedAmmoId !== null)
+  // --- validité déclaration — source unique client/src/lib/declareChecks.js -----------------------
+  // Le booléen (`.valid`) et le message (`.reason`) sortent de la même évaluation ; M0.4 enveloppera
+  // ces fonctions dans les hooks (PLAN_RW_DECLARE_DESIGN §5.10). Chaque entrée = l'expression exacte
+  // de l'ancien `assaultValid`/`reloadValid`/`meleeValid` (iso-comportement).
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
-  const meleeValid     = !meleeSelected  || (
-    meleeDefensif ||
-    (meleePendingTokenIds.length >= effectiveMeleeCount && (decl.combatMode !== 'charge' || moveSelection != null))
-  )
-  // B5 (docs/PLANS/PLAN_RW_DECLARE_DESIGN.md §5.2) — « Passer le tour » : un humain peut déclarer un
-  // tour vide (aucune action, aucun changement d'état), comme le drone (useDroneDeclare#hasPassed) et
-  // l'exo (déclaration vide). Le serveur laisse chaque state_* inchangé et pose has_announced
-  // (socketCombatAnnouncement.js). Une action de combat *incomplète* reste bloquée : assaultValid /
-  // reloadValid / meleeValid valent false tant qu'une tuile Attaque/CaC/Rechargement sélectionnée
-  // n'est pas configurée. Le libellé explicite « Passer le tour » du pied = module 5 (D12).
+  const assault = assaultCheck({
+    started:       attackSelected,
+    hasWeapon:     assaultWeaponId != null,
+    targetsFilled: assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length,
+    targetsNeeded: effectiveAssaultCount,
+    hasVariant:    currentVariant != null,
+    aimActive:     aimTranches > 0,
+    aimReasons:    aimIneligibilityReasons,
+  })
+  const melee = meleeCheck({
+    started:         meleeSelected,
+    defensif:        meleeDefensif,
+    isCharge:        decl.combatMode === 'charge',
+    chargeHasMove:   moveSelection != null,
+    chargeHasTarget: meleePendingTokenIds.length >= 1,
+    targetsFilled:   meleePendingTokenIds.length,
+    targetsNeeded:   effectiveMeleeCount,
+  })
+  const reload = reloadCheck({
+    started:         reloadSelected,
+    coveredByAttack: attackSelected,
+    hasWeapon:       selectedWeapon !== null,
+    hasAmmo:         selectedAmmoId !== null,
+  })
+  // B5 (§5.2) : un humain peut déclarer un tour vide (comme drone/exo). Module 5 (§5.10, D12) ré-ajoute
+  // un gate `hasCompleteAction` : Déclarer actif ⟺ il y a quelque chose à déclarer ET c'est valide.
+  const hasCompleteAction = hasSomethingToDeclare({
+    attackStarted:  attackSelected,
+    meleeStarted:   meleeSelected,
+    reloadStarted:  reloadSelected,
+    hasMove:        moveSelection != null,
+    hasStateChange: hasDeliberateStateChange(decl, initialStates.current),
+    hasQuick:       decl.quick.observer > 0 || decl.quick.reperer > 0 || decl.quick.phrase,
+  })
   const canDeclare = isDrone
     ? droneDeclare.canDeclare
-    : (assaultValid && reloadValid && meleeValid)
+    : (assault.valid && melee.valid && reload.valid)
+  const blockReason = isDrone ? null : buildBlockReason({ assault, melee, reload })
 
   // --- emit declaration ----------------------------------------------------
   const handleDeclare = () => {
@@ -1279,7 +1302,7 @@ export default function CombatActionWindow({
               isInTargetMode={false}
               tokens={tokens}
               onChooseTarget={(i) => handleChooseMeleeTarget(i)}
-              showReadyBadge={meleeValid && !meleeDefensif}
+              showReadyBadge={melee.valid && !meleeDefensif}
               showDualWieldSection={showDualWieldMeleeSection}
               isDualWield={isDualWieldMelee}
               onDualWieldChange={setIsDualWieldMelee}
@@ -1342,28 +1365,17 @@ export default function CombatActionWindow({
           </div>
         )}
         <CombatDeclareErrorBanner />
-        {moveSelection && (
-          <div style={W.footerLeft}>
-            <span style={W.destination}>
-              [{moveSelection.targetPosX}, {moveSelection.targetPosY}]
-            </span>
-          </div>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-          <CombatDeclareIniWidget
-            currentInitiative={rosterEntry.initiative}
-            delta={isDrone ? 0 : iniDelta}
-            breakdown={isDrone ? [] : iniBreakdown}
-          />
-          <button
-            className="btn-tac"
-            style={{ flex: 1, opacity: canDeclare ? 1 : 0.4, cursor: canDeclare ? 'pointer' : 'not-allowed' }}
-            onClick={handleDeclare}
-            disabled={!canDeclare}
-          >
-            {t('actionWindow.declareActionButton')}
-          </button>
-        </div>
+        <CombatDeclareFooter
+          currentInitiative={rosterEntry.initiative}
+          iniDelta={isDrone ? 0 : iniDelta}
+          iniBreakdown={isDrone ? [] : iniBreakdown}
+          hasCompleteAction={isDrone ? droneDeclare.canDeclare : hasCompleteAction}
+          canDeclare={canDeclare}
+          blockReason={blockReason}
+          moveDestination={moveSelection ? { x: moveSelection.targetPosX, y: moveSelection.targetPosY } : null}
+          onDeclare={handleDeclare}
+          onPassTurn={() => socket?.emit(WS.COMBAT_ACTION_DECLARE, { tokenId: playerToken.id, state: {}, mapActions: {} })}
+        />
       </div>
     </div>
   )

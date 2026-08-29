@@ -1489,6 +1489,42 @@ Convention :
 }
 .btn-tac:hover { background: rgba(58,138,170,0.15); filter: none; }
 .btn-tac:active { transform: none; }
+.btn-tac:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ── CombatDeclareFooter — pied unifié des fenêtres de déclaration (PLAN_RW_DECLARE_DESIGN M5, D12).
+   Rangée : pastille INI · statut centré · Passer le tour (ghost) · Déclarer (.btn-tac). Monté dans
+   .combat-float-footer / .combat-win-footer (qui fournissent le padding) jusqu'au module 2. */
+.combat-declare-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.combat-declare-status {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--combat-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-tac-ghost {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--combat-border);
+  color: var(--combat-dim);
+  font: 700 10px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: color .1s;
+}
+.btn-tac-ghost:hover { color: var(--combat-cell); }
+.btn-tac-ghost:disabled { opacity: .35; cursor: not-allowed; }
 
 /* ── .seg-opt — segmented control compact tactical (CombatActionWindow) ── */
 .seg-opt {
