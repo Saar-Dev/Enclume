@@ -42,9 +42,11 @@
 | Lot B (i18n + terminologie Tir/CaC + pastille INI) | ✅ **codé + committé** (non poussé) | §5.1 |
 | B5 (« Passer le tour » déclarable — mécanisme) | ✅ **codé + committé** — ⚠ ne pas déployer sans module 5 | §5.2 |
 | Module 0 M0.0-M0.3 (`buildDeclarePayload`, 51 tests) | ✅ **codé + committé** | §5.4 |
-| **M-E2E** — filet Playwright **local** (approche tranchée) | à cadrer juste avant le module 2 — pas commencé | §5.5 |
-| Module 2 — `CombatDeclareFrame` (châssis + tokens famille) | cadré + à charge — **pas commencé** | §5.6 |
-| Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé** (`bfce734`) — validation navigateur Saar en attente | §5.7 |
+| **M-E2E** — filet Playwright **local** (approche tranchée) | à cadrer juste avant l'extraction du frame — pas commencé | §5.5 |
+| **Spec visuelle `--decl-*`** (teinte Wizard, extraite du prototype `afcd5e28`) | ✅ **dans `client/src/index.css`** (`1872cb4`) — manquait au plan, cf. §11 | §11 |
+| Module 2 — volet **visuel** (`data-decl`/`data-family` + re-skin CSS des 3 fenêtres) | ✅ **codé** (`6760c30`) — validation navigateur en attente | §5.6 |
+| Module 2 — volet **structurel** (`CombatDeclareFrame`, déduplication du châssis) | **pas commencé** (refactor, pas visuel) | §5.6 |
+| Module 3 — `CombatDeclareStatePanel` (satellite d'état) | ✅ **codé** (`bfce734` fonctionnel → `1872cb4` look maquette) — validation navigateur en attente | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
 | Module 5 — `CombatDeclareFooter` (D12) | ✅ **5a-5d codés + validés navigateur** (Saar, 2026-08-29) | §5.10 |
@@ -726,3 +728,38 @@ checklist manuelle + validation Saar après chaque sous-module (R2).
 - On ne touche pas au calcul d'Initiative ni au dispatch serveur.
 - Lot B + B5 + module 0 sont codés (§5.1-5.4). **Ordre B (§5.0)** : pied → satellite → M-E2E → frame
   → M0.4 → liste. Un module validé avant le suivant.
+
+---
+
+## 11. Spec visuelle — la pièce qui manquait au plan (2026-08-29)
+
+**Constat (Saar).** Ce plan, rédigé *pour* un rework esthétique, ne contenait pas le rework
+esthétique : la maquette validée le 2026-08-28 vivait uniquement dans un artifact claude.ai externe
+(non accessible, non versionné) + ~15 lignes de prose en §3 (P7/D3). Rien d'implémentable. Résultat :
+premier jet du module 3 inventé au lieu d'implémenté (`bfce734`, rattrapé `1872cb4`).
+
+**Correctif.** Le **prototype d'interaction validé** (`afcd5e28`, « L'arme est l'action ») est un
+document HTML autonome avec le système de tokens complet + le CSS de chaque composant (header,
+move-line, colonnes, chips, footer). Il **est** la spec. Extraction faite dans
+`client/src/index.css` :
+
+- **`[data-decl]`** → jeu `--decl-*` : `--decl-bg #0a1524`, `--decl-head #071019`,
+  `--decl-line rgba(255,255,255,.10)`, `--decl-chrome #2fd7ff`, `--decl-label #6fb8d8`,
+  `--decl-text-hi #fff`, `--decl-radius 9px`, `--decl-glow`, `--decl-ini-ok #3aaa6a` /
+  `--decl-ini-lost #d07a3a`, `--decl-danger`, `--decl-warn`. Grounds **navy opaques** (lisibilité
+  au-dessus de la battlemap — décision Saar 2026-08-29, `backdrop-filter` écarté).
+- **`[data-family]`** → `--decl-acc` : `pj #50c878` / `gm-pnj #c86030` / `drone #30aaaa` /
+  `exo #9858c8`. Accent = sélection + états actifs + liseré 2px + Déclarer, **rien d'autre**
+  (D3). `--decl-acc-bg` / `--decl-acc-line` dérivés en `color-mix`.
+- Police : `--font-mono` (Share Tech Mono, déjà au projet) pour les eyebrows / pastilles ;
+  `--font-ui` (Inter, projet — la maquette dit Barlow Condensed, non adopté pour ne pas ajouter
+  une fonte).
+
+**Référence de rendu** = le prototype `afcd5e28` (HTML complet lu et archivé) + les 3 artboards
+(PJ vert / exo violet / drone teal) fournis par Saar. Le module 4 (`AssaultRangedPanel` /
+`MeleeCombatPanel` / grilles de tuiles) porte encore des couleurs de sélection en style inline
+(`#5b8dee`, verts, rouges) — neutralisées à ce module (D4b), pas avant.
+
+**Leçon** (mémoire `feedback_*`) : un chantier de rework/design n'est pas prêt à coder tant que la
+maquette n'est pas dans le dépôt sous forme concrète (tokens + CSS + artboard de réf). Un lien vers
+un artifact externe ne compte pas.
