@@ -64,6 +64,13 @@ chacun conçu en détail au moment où on l'attaque.
 
 ## 2. État des lieux `[VÉRIFIÉ]` — lecture intégrale 2026-08-27
 
+> **Snapshot du « avant » (2026-08-27).** Ne décrit plus l'état courant. Résorbé depuis : `StateSelector`
+> extrait (module 1), `InlineChip` extrait + `stateTransitionCost` dé-dupliqué (module 7 + correctif
+> 2026-08-29), matrices INI partagées `shared/combatIniCost.js` (module 2), bannière `COMBAT_DECLARE_ERROR`
+> centralisée (module 3), bouton DÉCLARER MJ passé i18n + tailles de fichier réduites (`PLAN_RW_DECLARE_DESIGN`
+> lot B : 1755→~1580 / 1286→~1192 / 435→442 l., ~24 `useState` dans `CombatActionWindow` et non 26).
+> État courant : `PLAN_RW_DECLARE_DESIGN.md` §2, re-vérifié par grep 2026-08-29.
+
 Fichiers lus en entier cette session : `CombatActionWindow.jsx` (1755 l.), `CombatGmDeclareWindow.jsx`
 (1286 l.), `CombatExoActionWindow.jsx` (435 l.), `DroneDeclareSection.jsx`, `useDroneDeclare.js`,
 `useExoDeclare.js`, `useCombatUIState.js`, `useDraggable.js`, `useAutoMoveMode.js`,
