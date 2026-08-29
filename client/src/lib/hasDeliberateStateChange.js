@@ -9,8 +9,11 @@
 //   - `fire_mode` : change en EFFET DE BORD d'un changement d'arme (auto-reset si la nouvelle arme
 //     ne supporte pas le mode courant, useEffect des fenêtres) — jamais un acte isolé.
 //   - `cover` : aucun sélecteur de couverture nulle part dans l'UI (`[VÉRIFIÉ]` 2026-08-29).
-//   - `combat_mode` : c'est un modificateur d'attaque (Offensif / Charge / Défensif / Retraite), pas
-//     une action autonome — le déclarer seul n'a pas de sens.
+//   - `combat_mode` : `SET_COMBAT_MODE` n'est dispatché que depuis `MeleeCombatPanel#onModeChange`
+//     (rendu si `meleeSelected`) + `handleStartCharge` + resets internes `[VÉRIFIÉ]` → un
+//     `combat_mode ≠ 'normal'` implique toujours `meleeSelected` (ou une Charge), déjà couvert par ce
+//     drapeau dans `hasSomethingToDeclare`. À re-vérifier si un sélecteur de posture de combat
+//     autonome est ajouté.
 //
 // Bug pré-existant, corrigé au module 4 (pas ici) : sélectionner puis désélectionner une attaque
 // laisse `decl.weapon = 'drawn'` (SELECT_ATTACK auto-dégaine, clearAttackState ne rerengaine pas) →
