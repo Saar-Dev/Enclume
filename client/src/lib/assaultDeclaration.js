@@ -49,7 +49,8 @@ function resizeTargets(targets, n) {
 
 // Pose une cible : tant qu'aucune cible n'est posée, le 1er choix remplit toute la série
 // (`seriesLength`) ; sinon seul `index` est touché. Miroir de l'ancien callback onEnterTargetMode.
-function placeTarget(targets, index, tokenId, seriesLength) {
+// Exporté pour que le hook puisse recalculer le résultat sans re-dispatcher (setTarget self-terminant).
+export function assaultPlaceTarget(targets, index, tokenId, seriesLength) {
   if (!targets.some(Boolean)) return Array(Math.max(1, seriesLength)).fill(tokenId)
   const next = [...targets]
   next[index] = tokenId
@@ -88,7 +89,12 @@ export function assaultDeclarationReducer(state, action) {
       return { ...state, aimedLocation: action.value }
 
     case 'SET_TARGET':
-      return { ...state, targets: placeTarget(state.targets, action.index, action.tokenId, action.seriesLength) }
+      return { ...state, targets: assaultPlaceTarget(state.targets, action.index, action.tokenId, action.seriesLength) }
+
+    // Cible unique imposée (clic direct sur un token adverse, sans passer par la liste d'armes) —
+    // miroir exact de l'ancien `setAssaultPendingTokenIds([tid])`.
+    case 'SET_SOLE_TARGET':
+      return { ...state, targets: [action.tokenId] }
 
     // Efface le sous-état Tir : nouveau tour, changement de slot actif, ou sélection d'une autre
     // action de combat (CaC) — l'exclusivité Tir ⊕ CaC est portée par la fenêtre.

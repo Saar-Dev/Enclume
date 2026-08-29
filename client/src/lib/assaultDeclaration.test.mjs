@@ -82,6 +82,13 @@ test('SET_COUNT : agrandir sans cible posée → slots null', () => {
   assert.deepEqual(s.targets, [null, null])
 })
 
+test('SET_SOLE_TARGET : impose exactement [tokenId] (clic direct)', () => {
+  assert.deepEqual(
+    reduce({ ...INIT, count: 3, targets: ['x', 'x', 'x'] }, { type: 'SET_SOLE_TARGET', tokenId: 'a' }).targets,
+    ['a'],
+  )
+})
+
 // --- CLEAR ---------------------------------------------------------------------------------------
 
 test('CLEAR : efface tout, y compris l\'arme', () => {

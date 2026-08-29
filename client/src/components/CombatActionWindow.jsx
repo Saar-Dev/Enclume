@@ -35,6 +35,7 @@ import CombatDeclareErrorBanner from './CombatDeclareErrorBanner.jsx'
 import CombatDeclareFooter from './CombatDeclareFooter.jsx'
 import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
 import { buildWeaponList } from '../lib/weaponList.js'
+import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -99,22 +100,28 @@ export default function CombatActionWindow({
 
   // --- actions sur la carte (multi-select) ----------------------------------
   const [mapSelected, setMapSelected] = useState(new Set())
-  // Arme de tir choisie dans la liste groupée (module 4, D5 « l'arme EST l'action »). null = arme
-  // primaire résolue par les slots (resolveHandWeapons) — cas courant 0/1 arme à feu équipée.
-  const [selectedRangedWeaponId, setSelectedRangedWeaponId] = useState(null)
+
+  // --- sous-état de sélection Tir (M0.4) — reducer partagé PJ / MJ ----------
+  // { weaponId, targets, count, bulletCount, variantAB, isDualWield, aimTranches, aimedLocation }
+  // + mutations nommées + setTarget self-terminant. Alias en lecture ci-dessous pour ne pas toucher
+  // les ~40 sites de lecture. Le hook ne se reset pas seul : `assaultDecl.clear()` dans l'effet de reset.
+  const assaultDecl = useAssaultDeclaration()
+  const {
+    weaponId:     selectedRangedWeaponId,
+    targets:      assaultPendingTokenIds,
+    count:        assaultCount,
+    bulletCount:  assaultBulletCount,
+    variantAB:    assaultVariantAB,
+    isDualWield,
+    aimTranches,
+    aimedLocation,
+  } = assaultDecl.state
 
   // --- etat assaut (panneau droit) ------------------------------------------
   const [allures, setAllures]                     = useState(null)
   const [assaultWeapons, setAssaultWeapons]       = useState([])
   const [allInventoryItems, setAllInventoryItems] = useState([])
   const [selectedAmmoId, setSelectedAmmoId]       = useState(null)
-  const [assaultPendingTokenIds, setAssaultPendingTokenIds] = useState([])  // [id1, id2?, id3?] — docs/PLAN_TIRMULTI.md
-  const [assaultCount, setAssaultCount]                     = useState(1)   // 1|2|3
-  const [assaultBulletCount, setAssaultBulletCount]       = useState(null)
-  const [assaultVariantAB, setAssaultVariantAB]           = useState('A')
-  const [isDualWield, setIsDualWield]             = useState(false)
-  const [aimTranches, setAimTranches]             = useState(0)
-  const [aimedLocation, setAimedLocation]         = useState(null)
   const [inMoveMode, setInMoveMode]               = useState(false)
   // --- etat assaut drone -------------------------------------------------------
   const [inTargetMode, setInTargetMode]           = useState(false)
@@ -228,9 +235,7 @@ export default function CombatActionWindow({
     onMeleeTarget: (tid) => {
       dispatch({ type: 'SELECT_ATTACK' })
       setMapSelected(prev => { const n = new Set(prev); n.delete('attack'); n.add('melee'); return n })
-      setAssaultPendingTokenIds([]); setAssaultCount(1); setAssaultBulletCount(null)
-      setAssaultVariantAB('A'); setIsDualWield(false); setAimTranches(0)
-      setAimedLocation(null); setInTargetMode(false)
+      assaultDecl.clear(); setInTargetMode(false)
       setMeleePendingTokenIds([tid])
     },
     onAssaultTarget: (tid) => {
@@ -240,7 +245,7 @@ export default function CombatActionWindow({
       setIsDualWieldMelee(false); setInMeleeTargetMode(false)
       if (decl.combatMode === 'retraite' || decl.combatMode === 'charge') setMoveSelection(null)
       dispatch({ type: 'SET_COMBAT_MODE', mode: 'normal' })
-      setAssaultPendingTokenIds([tid])
+      assaultDecl.setSoleTarget(tid)
     },
   })
 
@@ -273,14 +278,7 @@ export default function CombatActionWindow({
     initialStates.current = snap
     dispatch({ type: 'RESET', payload: snap })
     setMapSelected(new Set())
-    setAssaultPendingTokenIds([])
-    setAssaultCount(1)
-    setAssaultBulletCount(null)
-    setAssaultVariantAB('A')
-    setIsDualWield(false)
-    setSelectedRangedWeaponId(null)
-    setAimTranches(0)
-    setAimedLocation(null)
+    assaultDecl.clear()
     setMoveSelection(null)
     setInMoveMode(false)
     setInTargetMode(false)
@@ -525,15 +523,8 @@ export default function CombatActionWindow({
   // conception du Lot B mais jamais câblé — gap qui laissait déclarer les deux, provoquant un plantage
   // à la résolution, trouvé par Saar en testant le Lot B/C). Sélectionner l'un efface l'autre.
   const clearAttackState = () => {
-    setAssaultPendingTokenIds([])
-    setAssaultCount(1)
-    setAssaultBulletCount(null)
-    setAssaultVariantAB('A')
-    setIsDualWield(false)
-    setAimTranches(0)
-    setAimedLocation(null)
+    assaultDecl.clear()
     setInTargetMode(false)
-    setSelectedRangedWeaponId(null)
   }
   const clearMeleeState = () => {
     setMeleePendingTokenIds([])
@@ -605,7 +596,7 @@ export default function CombatActionWindow({
     if (row.disabled) return
     if (row.group === 'distance') {
       if (attackSelected && selectedWeaponRowId === row.id) { handleMapToggle('attack'); return }
-      setSelectedRangedWeaponId(row.id)
+      assaultDecl.selectWeapon(row.id)   // change d'arme = reset config col. 2 (P8 / PO-M4-e)
       if (!attackSelected) handleMapToggle('attack')
       else dispatch({ type: 'SELECT_ATTACK' })
     } else {
@@ -644,12 +635,7 @@ export default function CombatActionWindow({
       playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       (tokenId) => {
-        setAssaultPendingTokenIds(prev => {
-          if (!prev.some(Boolean)) return Array(effectiveAssaultCount).fill(tokenId)
-          const next = [...prev]
-          next[index] = tokenId
-          return next
-        })
+        assaultDecl.setTarget(index, tokenId, currentFireMode)
         setInTargetMode(false)
       },
       () => { setInTargetMode(false) }
@@ -1259,34 +1245,24 @@ export default function CombatActionWindow({
               showDualWieldSection={hasTwoWeapons && sameFirMode}
               isDualWield={isDualWield}
               currentFireMode={currentFireMode}
-              onDualWieldChange={(val) => setIsDualWield(val)}
+              onDualWieldChange={assaultDecl.setDualWield}
               assaultBulletCount={assaultBulletCount}
               effectiveBulletCount={effectiveBulletCount ?? 1}
               assaultVariantAB={assaultVariantAB}
               ccSliderDisplayIdx={ccSliderDisplayIdx}
               currentVariant={currentVariant}
               dualWieldBonusComp={dualWieldBonusComp}
-              onBulletCountChange={(count) => setAssaultBulletCount(count)}
-              onVariantABChange={(ab) => setAssaultVariantAB(ab)}
+              onBulletCountChange={assaultDecl.setBulletCount}
+              onVariantABChange={assaultDecl.setVariantAB}
               aimTranches={aimTranches}
-              onAimTranchesChange={(n) => setAimTranches(n)}
+              onAimTranchesChange={assaultDecl.setAimTranches}
               aimIneligibilityReasons={aimIneligibilityReasons}
               lunetteNiveau={lunetteNiveau}
               aimedLocation={aimedLocation}
-              onAimedLocationChange={(loc) => setAimedLocation(loc)}
+              onAimedLocationChange={assaultDecl.setAimedLocation}
               assaultCount={assaultCount}
               effectiveAssaultCount={effectiveAssaultCount}
-              onAssaultCountChange={(n) => {
-                setAssaultCount(n)
-                // En augmentant le nombre de tirs, propage la cible déjà choisie aux nouveaux slots
-                // (même défaut "toute la série sur la même cible" — pas de slot vide surprise).
-                setAssaultPendingTokenIds(prev => {
-                  const truncated = prev.slice(0, n)
-                  if (truncated.length >= n) return truncated
-                  const fillValue = truncated.find(Boolean) ?? null
-                  return Array.from({ length: n }, (_, i) => truncated[i] ?? fillValue)
-                })
-              }}
+              onAssaultCountChange={assaultDecl.setCount}
               multiShotIneligibilityReasons={multiShotIneligibilityReasons}
             />
           </div>
