@@ -47,7 +47,7 @@
 | Module 3 — `CombatDeclareStatePanel` (satellite d'état) | cadré + à charge — **pas commencé** | §5.7 |
 | M0.4 — hooks `useAssaultDeclaration` / `useMeleeDeclaration` | cadré + à charge — **pas commencé** | §5.8 |
 | Module 4 — `CombatDeclareActionList` (D5) | cadré + à charge — **pas commencé** | §5.9 |
-| Module 5 — `CombatDeclareFooter` (D12) | **5a-5d codés** (`f199ff4`) — validation navigateur Saar en attente | §5.10 |
+| Module 5 — `CombatDeclareFooter` (D12) | ✅ **5a-5d codés + validés navigateur** (Saar, 2026-08-29) | §5.10 |
 | Push `dev/Saar` → `origin` | **en attente confirmation locale Saar** (`git log origin/dev/Saar..dev/Saar`) | — |
 
 **Rythme (R2)** : cadrage → analyse à charge → code, **étapes séparées** (checkpoint). Validation
@@ -402,7 +402,7 @@ non-déclaration, redimensionnement 360↔720). Rollback : `git revert` du commi
 `calc(100vh - 80px)` ou `- 100px` ; roster PJ dans le frame ou enfant du corps ; largeur dynamique
 (`width` au call site vs `baseWidth` + `expanded`).
 
-### 5.7 Module 3 — `CombatDeclareStatePanel` (satellite d'état, D8)
+### 5.7 Module 3 — `CombatDeclareStatePanel` (satellite d'état, D8) — **PROCHAIN** (module 5 validé 2026-08-29)
 
 **Ordre (B, §5.0)** : ce module se fait **en 2ᵉ** (après le pied) — `CombatDeclareStatePanel` monté
 comme frère des fenêtres actuelles (lit leur `pos` de `useDraggable`), validé à l'œil, re-slotté dans
