@@ -1296,8 +1296,14 @@ onEnterTargetMode(tokenId, pos, (picked) => assault.setTarget(i, picked), onCanc
 ```
 `setTarget(index, tokenId)` **contient** la règle « 1er clic remplit la série, clic ultérieur touche
 le slot » (recopiée 2× aujourd'hui → 1 fois dans le reducer). La chaîne récursive `selectNext` du MJ
-reste dans la fenêtre MJ : elle appelle `melee.setTarget(i, id)` en boucle — pilotage MJ, pas
-sous-état.
+reste dans la fenêtre MJ, mais **`melee.setTarget` porte sa propre borne** (retourne « série
+complète ? ») pour que `selectNext` n'ait pas à lire `effectiveMeleeCount` dans un callback async
+(§15.10 pt 3).
+
+**Indépendance : state oui, validité non `[VÉRIFIÉ]` (§15.10 pt 2).** `assault.aimIneligibility`
+dépend de la *présence* CaC (Tir visé ⊕ CaC). → la **fenêtre** assemble `mapActionsObj` depuis
+`assault.*` + `melee.*` et le repasse au sélecteur d'éligibilité. Ce n'est pas un couplage de state
+(1 objet plat au call site), mais les deux hooks ne sont pas « totalement indépendants ».
 
 ### 15.5 API — le reducer pur + le hook
 
@@ -1329,10 +1335,12 @@ bag plat — la fenêtre le remplit désormais depuis `assault.*` / `melee.*` au
 | M0.4-b | `useAssaultDeclaration.js` + câblage dans **`CombatActionWindow`** (PJ) : les 7 `useState` assaut → le hook ; `handleDeclare` remplit le bag depuis `assault.*` | golden master + `vite build` + eslint baseline |
 | M0.4-c | Câblage `useAssaultDeclaration` dans **`CombatGmDeclareWindow`** (MJ). Différences légitimes (defaults `0` vs `null`) déjà dans `buildGmDeclarePayload` | idem |
 | M0.4-d | `meleeDeclaration.js` + `.test.mjs` | `npm test` |
-| M0.4-e | `useMeleeDeclaration` câblé PJ, puis MJ (2 sous-commits) — inclut l'unification `charge` + `phase` (§15.3) | golden master |
+| M0.4-e | `useMeleeDeclaration` câblé PJ, puis MJ (2 sous-commits). `phase` explicite (§15.3, PO-M04-b). **PAS la Charge** (→ M0.4-g) | golden master |
 | M0.4-f | Reset : l'effet des 2 fenêtres appelle `assault.reset()` / `melee.reset()` (de ~15 setters → 3 appels) | golden master + relecture manuelle du reset tour/slot |
+| M0.4-g | Unification de la forme `charge` (`{move, targetTokenId}`) — le PJ s'y aligne, ripple 4-5 sites (§15.10 pt 4). **Ou reportée** si trop de surface. Golden master mis à jour explicitement si le payload bouge (§15.10 pt 8) | golden master (màj délibérée possible) + checklist Charge PJ/MJ |
 
-Un pas = un commit. Ancien `useState` retiré dans le même commit.
+Un pas = un commit. Ancien `useState` retiré dans le même commit. `assault.clear()` = comportement
+PJ (reset `isDualWield`) → **correctif MJ** documenté (§15.10 pt 1), test + commit à part si besoin.
 
 ### 15.7 Risque + rollback
 
@@ -1361,3 +1369,79 @@ change pas** (M0.4 ne le touche pas, §15.4). Vérif : parcours navigateur Tir M
 | PO-M04-b | Le flag « CaC en cours » : `phase: 'idle' \| 'targeting' \| 'ready'` dans le hook, ou un simple `bool` ? (le MJ a `meleePendingMode` explicite, le PJ le dérive de `mapSelected`) |
 | PO-M04-c | `selectedMeleeWeaponId === undefined` (auto) vs `null` (mains nues) vs `id` : la sémantique tri-valuée passe telle quelle dans le reducer — vérifier qu'aucun `?? undefined` implicite ne casse. |
 | PO-M04-d | `mapSelected` (Set PJ) : reste-t-il à la fenêtre PJ (c'est de l'état de *tuile*, pas de sous-état d'attaque) ou disparaît-il au module 4 avec « l'arme EST l'action » ? → probablement module 4, noté. |
+
+### 15.10 Analyse à charge M0.4 (2026-08-29)
+
+**1. « 90 % recopié » — vrai, mais deux clears qui divergent `[VÉRIFIÉ]`.** Le clear d'attaque :
+- PJ (`clearAttackState` l.522-531) : `+ setIsDualWield(false)` `+ setInTargetMode(false)`.
+- MJ (inline l.674-679 / 702-707) : **ne remet PAS `isDualWield`**.
+→ à l'unification (`assault.clear()`), **le comportement PJ gagne** (reset `isDualWield` aussi — plus
+sûr : une valeur `true` restée en mémoire s'appliquerait sinon silencieusement après un re-choix
+d'arme, cf. la même prudence dans `effectiveDualWieldMelee`). **Changement de comportement pour le
+MJ** — le golden master l'attrape si un test exerce « MJ dual-wield → clear → re-sélection » ; sinon
+à couvrir par un test neuf. Pas « recopie iso » : à documenter comme correctif.
+
+**2. Les deux hooks NE sont PAS indépendants `[VÉRIFIÉ]`.** `getAimIneligibilityReasons` (assaut)
+prend `mapActions: { move, attack, melee, reload }` — il a besoin de la **présence CaC** (Tir visé ⊕
+CaC). Donc `assault.aimIneligibility` dépend de l'état mêlée. → **la fenêtre est le point de
+composition** : elle assemble `mapActionsObj` depuis `assault.*` **et** `melee.*` et le repasse au
+sélecteur d'éligibilité. Ce n'est pas de l'entanglement recréé (c'est 1 objet plat assemblé au call
+site, pas un couplage bidirectionnel de state) — mais le cadrage §15.4 le sous-entendait « hooks
+indépendants », c'est faux : **indépendants pour le *state*, composés pour la *validité*.** À écrire.
+
+**3. La chaîne récursive `selectNext` (MJ multi-CaC) lit `effectiveMeleeCountRef.current` dans un
+callback async `[VÉRIFIÉ]`.** Si `meleeCount` passe dans `useMeleeDeclaration`, la fenêtre MJ n'a plus
+ce ref. `melee.effectiveCount` (valeur, pas ref) serait **capturé périmé** dans la closure
+`selectNext`. → le hook doit exposer **soit un `ref`** (`melee.effectiveCountRef`) pour lecture dans
+les callbacks async, **soit** `melee.setTarget(i, id)` retourne « série complète ? » et `selectNext`
+n'a plus besoin de connaître `N`. La 2ᵉ est plus propre (le hook porte sa propre borne). **PO-M04-e
+neuf.**
+
+**4. PO-M04-a (unification de la forme `charge`) est plus qu'un renommage côté PJ `[VÉRIFIÉ]`.**
+`handleChargeFlow` (PJ) pose `moveSelection` **ET** `meleePendingTokenIds`. `moveSelection` (state
+fenêtre) alimente : l'aperçu INI (`mapActionsObj.move`), le payload `move` (`buildHumanDeclarePayload`
+lit `sel.moveSelection`), le masquage (`hasPendingOwnMove`). Si `charge` devient
+`melee.charge = {move, targetTokenId}`, `moveSelection` doit être **dérivé** de `melee.charge.move`
+quand `combatMode === 'charge'` — ripple sur 4-5 sites PJ. → **découpe** : sortir l'unification
+`charge` de M0.4-e en **pas M0.4-g dédié**, OU garder 2 formes `charge` derrière le hook pour M0.4 et
+unifier plus tard. **À trancher au moment du code** ; ne pas gonfler M0.4-e.
+
+**5. Que change le module 4 sur le sous-état assaut ? `[INFÉRÉ]` — à confirmer au cadrage du
+module 4.** M0.4 extrait `targets / count / bulletCount / variantAB / isDualWield / aimTranches /
+aimedLocation`. Avec « l'arme EST l'action » (D5) ces 7 **survivent** (ce sont des options de
+l'attaque, pas des tuiles). Ce qui meurt : `mapSelected` (Set de tuiles, **état fenêtre PJ**, pas
+sous-état) et le radio Tir/CaC séparé. → M0.4 extrait le **cœur stable** ; le module 4 ne change que
+*comment on déclenche* `setTarget` / la sélection d'arme. **Pas de churn** — sous réserve de
+confirmer au cadrage du module 4 qu'aucun de ces 7 champs n'est reshapé.
+
+**6. Le sélecteur `isValid` prend un bag de contexte fenêtre (`weapon`, `hasTwoWeapons`,
+`rosterEntry`, `lunetteNiveau`…).** Si la fenêtre en oublie un / le passe périmé, `isValid` renvoie
+faux **en silence** (le code inline actuel a tout en portée). Nouvelle surface d'erreur, non testée
+(pas de test composant). Atténuation : signature de sélecteur explicite, `.test.mjs` du sélecteur
+avec entrées connues, **checklist manuelle** (Tir simple/Multi/visé/dual-wield valides et invalides,
+PJ + MJ).
+
+**7. Le hook n'est PAS auto-resettant.** Il reste passif : la fenêtre appelle `assault.reset()` /
+`melee.reset()` dans son effet `[tokenId, has_announced]`. Le hook ne s'abonne à rien. Correct pour
+2 fenêtres ; à écrire (sinon on cherchera un `useEffect` fantôme dans le hook).
+
+**8. M0.4-e peut légitimement toucher le golden master.** Si l'unification `charge` / `phase`
+change quoi que ce soit d'observable au payload (point 1, point 4), un test `buildDeclarePayload`
+est **mis à jour explicitement** (règle de l'en-tête `buildDeclarePayload.js` : « toute évolution de
+règle passe par un test mis à jour explicitement »). Autorisé, mais **délibéré + justifié en commit**,
+jamais un `.expected` ré-enregistré à l'aveugle.
+
+**9. Granularité fichiers.** 4 sources (`assaultDeclaration.js` + `useAssaultDeclaration.js` +
+idem mêlée) + 2 `.test.mjs`. Le reducer pur **doit** être un fichier séparé (importable sans React
+pour `node --test`) — patron `buildDeclarePayload.js`. Le hook wrapper séparé aussi (React). 6
+fichiers = juste, pas de la dispersion.
+
+**Conclusion — M0.4 se fait, révisé :**
+- Hooks indépendants pour le *state*, **composés par la fenêtre pour la validité** (point 2) — §15.4
+  à préciser.
+- `assault.clear()` = comportement PJ (reset `isDualWield`), **correctif** pour le MJ (point 1),
+  test + commit dédiés.
+- `selectNext` MJ : le hook porte sa borne (`setTarget` self-terminant), pas de ref exposé (point 3).
+- Unification `charge` = **pas M0.4-g dédié** ou reportée (point 4) — décidé au code.
+- Découpe M0.4-a..f **+ g** (charge). Golden master mis à jour explicitement si besoin (point 8).
+- Livrable : 1 commit/pas + checklist manuelle Tir Multi / CaC multiple (PJ + MJ).
