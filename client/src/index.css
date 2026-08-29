@@ -1655,6 +1655,92 @@ Convention :
   font-size: 9px;
 }
 
+/* ═══ Re-skin des 3 fenêtres de déclaration en teinte Wizard (PLAN_RW_DECLARE_DESIGN, volet visuel
+   du module 2 — mécanisme P7). `data-decl` + `data-family` sur la racine de chaque fenêtre : on
+   remappe les tokens `--combat-*` (MJ, `.combat-win`) ET `--*-session*` (PJ/exo, `.combat-float-win`)
+   vers `--decl-*`. Les classes de base restent intactes pour les fenêtres de RÉSOLUTION (pas de
+   `data-decl`). Les couleurs de sélection encore en style inline dans AssaultRangedPanel /
+   MeleeCombatPanel / grilles de tuiles sont neutralisées au module 4 (D4b). */
+.combat-float-win[data-decl],
+.combat-win[data-decl] {
+  --combat-body:       var(--decl-bg);
+  --combat-header:     var(--decl-head);
+  --combat-border:     var(--decl-line);
+  --combat-sep:        var(--decl-sep);
+  --combat-row:        var(--decl-row);
+  --combat-seg-bg:     var(--decl-head);
+  --combat-seg-border: var(--decl-line);
+  --combat-title:      var(--decl-chrome);
+  --combat-section:    var(--decl-label);
+  --combat-field:      var(--decl-label);
+  --combat-cell:       var(--decl-text);
+  --combat-value:      var(--decl-text-hi);
+  --combat-dim:        var(--decl-text-dim);
+
+  --bg-session-raised: var(--decl-head);
+  --border-session:    var(--decl-sep);
+  --border-session-2:  var(--decl-line);
+
+  background: var(--decl-bg);
+  border-color: var(--decl-line);
+  border-radius: var(--decl-radius);
+  position: relative;
+}
+
+/* liseré d'accent de famille en tête (D3 : la couleur suffit, pas de label) */
+.combat-float-win[data-decl]::before,
+.combat-win[data-decl]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--decl-acc);
+  z-index: 2;
+}
+
+.combat-float-win[data-decl] .combat-float-header,
+.combat-win[data-decl] .combat-win-header {
+  background: var(--decl-head);
+  border-bottom: 1px solid color-mix(in srgb, var(--decl-acc) 30%, var(--decl-line));
+}
+.combat-float-win[data-decl] .combat-float-footer,
+.combat-win[data-decl] .combat-win-footer {
+  background: var(--decl-head);
+  border-top: 1.5px solid var(--decl-line);
+}
+
+/* pied unifié (module 5) sous teinte Wizard */
+[data-decl] .combat-declare-status { color: var(--decl-text-dim); }
+[data-decl] .btn-tac-ghost {
+  border: 1px solid var(--decl-line);
+  border-radius: var(--decl-radius);
+  color: var(--decl-text-dim);
+}
+[data-decl] .btn-tac-ghost:hover { color: var(--decl-text); }
+[data-decl] .btn-tac {
+  border: 1px solid var(--decl-acc);
+  border-radius: var(--decl-radius);
+  color: var(--decl-acc);
+  background: var(--decl-acc-bg);
+  box-shadow: var(--decl-glow);
+}
+[data-decl] .btn-tac:hover { background: color-mix(in srgb, var(--decl-acc) 22%, transparent); }
+[data-decl] .btn-tac:disabled { box-shadow: none; }
+
+/* pastille INI (maquette D12) */
+[data-decl] .combat-ini-widget {
+  font-family: var(--font-mono);
+  border: 1px solid var(--decl-ini-ok);
+  border-radius: var(--decl-radius);
+  color: var(--decl-ini-ok);
+  background: color-mix(in srgb, var(--decl-ini-ok) 12%, transparent);
+}
+[data-decl] .combat-ini-widget.badge-fail {
+  border-color: var(--decl-ini-lost);
+  color: var(--decl-ini-lost);
+  background: color-mix(in srgb, var(--decl-ini-lost) 14%, transparent);
+}
+
 /* ── .seg-opt — segmented control compact tactical (CombatActionWindow) ── */
 .seg-opt {
   flex: 1;

@@ -704,7 +704,7 @@ export default function CombatActionWindow({
   // =========================================================================
   if (pendingSurpriseRoll?.tokenId && playerTokensInRoster.some(tk => tk.id === pendingSurpriseRoll.tokenId)) {
     return (
-      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.surpriseTitle')}</div>
         <p style={W.surpriseText}>{t('actionWindow.surpriseMessage')}</p>
         <button style={W.btnRoll} onClick={onSurpriseRolled}>{t('actionWindow.rollInitiativeButton')}</button>
@@ -713,7 +713,7 @@ export default function CombatActionWindow({
   }
   if (rosterEntry.is_surprised && rosterEntry.has_announced && rosterEntry.initiative === 0) {
     return (
-      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.surpriseTitle')}</div>
         <p style={W.surpriseText}>{t('actionWindow.surprisedCannotAct')}</p>
       </div>
@@ -729,7 +729,7 @@ export default function CombatActionWindow({
     const cibleToken = myAssaultAction ? tokens.find(tk => tk.id === myAssaultAction.target_token_id) : null
     const isRushed = rosterEntry.state_vitesse === 'rushed'
     return (
-      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.resolutionPhaseShort')}</div>
         <div className="combat-win-body">
           <div style={W.leftPanel}>
@@ -813,7 +813,7 @@ export default function CombatActionWindow({
   if (phase === 'ANNOUNCEMENT' && !(rosterEntry?.has_announced) && !isMyTurnInAnnouncement) {
     const currentDeclarer = tokens.find(tk => tk.id === computedAnnounceTokenId)
     return (
-      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitle')}</div>
         <p style={W.waitText}>
           {t('actionWindow.awaitingPlayer', { name: currentDeclarer?.label ?? '…' })}
@@ -826,7 +826,7 @@ export default function CombatActionWindow({
   if (phase === 'RESOLUTION' && !isMyTurnInResolution) {
     const activeResolveToken = tokens.find(tk => tk.id === resolveSlotTid)
     return (
-      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.resolutionPhaseTitle')}</div>
         <p style={W.waitText}>
           {activeResolveToken ? t('actionWindow.tokenActing', { name: activeResolveToken.label }) : t('actionWindow.resolutionInProgress')}
@@ -838,7 +838,7 @@ export default function CombatActionWindow({
   // Déjà déclaré (ANNOUNCEMENT)
   if (rosterEntry?.has_announced) {
     return (
-      <div className="combat-float-win" style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
+      <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{ position: 'fixed', left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)' }}>
         <div className="combat-float-header" onMouseDown={onHeaderMouseDown}>{t('actionWindow.declarationPhaseTitleAlt')}</div>
         <p style={W.waitText}>{t('actionWindow.actionDeclaredWaiting')}</p>
       </div>
@@ -948,7 +948,7 @@ export default function CombatActionWindow({
           hidden={isHidden}
         />
       )}
-    <div className="combat-float-win" style={{
+    <div className="combat-float-win" data-decl data-family={isDrone ? 'drone' : 'pj'} style={{
       position: 'fixed',
       width: (showAssault || showReload || showMelee) ? 720 : 360,
       opacity: isHidden ? 0 : 1,

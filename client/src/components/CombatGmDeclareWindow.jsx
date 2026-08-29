@@ -584,7 +584,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
           hidden={isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick}
         />
       )}
-    <div className="combat-win" style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
+    <div className="combat-win" data-decl data-family={isActiveDrone ? 'drone' : 'gm-pnj'} style={{ width: (isMeleeSetup || isAttackActive) ? 720 : 440, left: pos.left, top: pos.top, opacity: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 0 : 1, pointerEvents: (isSelectingOnMap || droneDeclare.isSelectingOnMap || hasPendingPlainMove || isTargetingViaClick) ? 'none' : 'auto' }}>
 
       {/* HEADER */}
       <div className="combat-win-header" onMouseDown={onHeaderMouseDown}>

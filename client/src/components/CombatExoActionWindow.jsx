@@ -245,7 +245,7 @@ export default function CombatExoActionWindow({
         onPositionClick={isProne ? handleStandUp : null}
         hidden={isSelectingOnMap}
       />
-    <div className="combat-float-win" style={{
+    <div className="combat-float-win" data-decl data-family="exo" style={{
       position: 'fixed', width: 340, left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 80px)',
       opacity: isSelectingOnMap ? 0 : 1, pointerEvents: isSelectingOnMap ? 'none' : 'auto',
     }}>
