@@ -366,9 +366,13 @@ Déplacement en ligne distincte (D13). Neuf = **`buildWeaponList`** (normalisate
 Risque **élevé** — module 0 + M0.4 en filet ; le module 4 **ne fait que du rendu + câblage**.
 Découpe 4a-4e, 1 validé avant le suivant.
 
-**Module 5 — Pied unifié (D12).** `CombatDeclareFooter` : pastille + statut + `Passer le tour` (ghost)
-+ `Déclarer` (primaire, raison bloquante si `!canDeclare`). Consommé par les 3 (slot `footer` du
-module 2). Dépend de B5 (le « Passer le tour » toujours disponible). Risque : faible-moyen.
+**Module 5 — Pied unifié (D12).** **Cadré §17.** `CombatDeclareFooter` : pastille INI + message de
+statut centré + `Passer le tour` (ghost, toujours actif → déclaration vide, mécanisme B5) +
+`Déclarer` (primaire, actif ⟺ `hasCompleteAction && canDeclare`, sinon grisé + `blockReason`).
+**Seul vrai changement de comportement** : `hasCompleteAction` gate Déclarer (lève le coût
+intérimaire B5 « un mis-clic passe le tour »). Réintroduit la logique `hasAnyAction` que B5 avait
+retirée en attendant ce module (§5.2). Consommé par les 3 (slot `footer` du module 2). Risque
+**faible-moyen**. 4 PO (dont PO-M5-a : les sélecteurs M0.4 renvoient `{valid, reason}`).
 
 ---
 
@@ -1630,3 +1634,129 @@ parallèles).
 - Coût UX D5 (pas de parcours sans engagement) : assumé, tracé (point 6).
 - 4e : mini-cadrage exo (col. 2 réduite), pas une bascule (point 7).
 - Découpe 4a-4e inchangée. 1 sous-module validé (golden master + navigateur) avant le suivant.
+
+---
+
+## 17. Cadrage Module 5 — `CombatDeclareFooter` (pied unifié, D12)
+
+> Cadrage 2026-08-29. Lecture faite : pieds des 3 fenêtres (`CombatActionWindow` l.1338-1367,
+> `CombatGmDeclareWindow` l.1035-1059, `CombatExoActionWindow` l.331-353), `CombatDeclareIniWidget.jsx`,
+> `.btn-tac` / `.btn-tac-confirm` (`index.css`), `canDeclare` des 3 fenêtres, B5 (§5.2). **Aucun code.**
+
+### 17.1 Responsabilité
+
+Un **pied unique** `CombatDeclareFooter`, consommé via le slot `footer` du `CombatDeclareFrame`
+(module 2) : `[pastille INI] [message de statut centré] [Passer le tour (ghost)] [Déclarer (primaire)]`
+(D12). **Introduit le bouton explicite « Passer le tour »** que B5 avait renvoyé au module 5 (§5.2).
+**Ne touche pas** : le calcul INI (`CombatDeclareIniWidget`, déjà pur + B4), le payload, la bannière
+d'erreur serveur (`CombatDeclareErrorBanner`, reste au pied).
+
+### 17.2 État des lieux `[VÉRIFIÉ]` — les 3 pieds actuels
+
+| | PJ (`.combat-float-footer`) | MJ (`.combat-win-footer`) | Exo (`.combat-float-footer`) |
+|---|---|---|---|
+| Erreur serveur | `<CombatDeclareErrorBanner />` | idem | idem |
+| Erreur allures drone | bloc inline `⚠` | idem | — |
+| Destination move | `[{x}, {y}]` (bloc `W.footerLeft`) | — | `[{x}, {y}]` |
+| Pastille INI | `<CombatDeclareIniWidget>` (delta 0 si drone) | idem (si actif) | idem |
+| Bouton | `<button class="btn-tac">` DÉCLARER, `opacity: canDeclare?1:.4` | `<button class="btn-tac-confirm">` (vert), `disabled={!canDeclare}` | `<button class="btn-tac">` (`sending` / label), `disabled={isDeclaring \|\| !canDeclare}` |
+| « Passer le tour » | **aucun** — DÉCLARER envoie tout, y compris vide (coût B5) | **aucun** | implicite (déclarer vide) |
+
+→ 2 styles de bouton (`btn-tac` cyan / `btn-tac-confirm` vert), 3 dispositions de pied légèrement ≠.
+**D12 unifie** : un pied, un style, 2 boutons.
+
+### 17.3 Structure cible D12 + comportement des 2 boutons
+
+```
+┌ FOOTER ────────────────────────────────────────────────────────────┐
+│ [CombatDeclareErrorBanner]  (si erreur serveur)                     │
+│ ┌───────────┬────────────────────────┬──────────────┬────────────┐  │
+│ │ INI 7 → 2 │  « message de statut »  │ Passer le tour│  DÉCLARER  │  │
+│ │ (rouge si │  (raison bloquante OU   │   (ghost,     │ (primaire, │  │
+│ │  ≤ 0)     │   « Prêt » OU dest.)    │  plus petit) │ grisé si   │  │
+│ │           │                        │              │ incomplet) │  │
+│ └───────────┴────────────────────────┴──────────────┴────────────┘  │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+- **« Passer le tour »** (ghost, plus petit, **toujours actif**) → envoie la déclaration vide
+  (mécanisme B5 : `state: {}` accepté serveur, `has_announced` posé). Le geste explicite : *je choisis
+  de ne rien faire ce Tour*.
+- **« Déclarer »** (primaire) → actif **uniquement si** `hasCompleteAction && canDeclare` (§17.4) ;
+  sinon **grisé**, et le « message de statut » affiche la **raison** (« choisir une cible »,
+  « arme non dégainée », les `aimIneligibilityReasons`…).
+- **Message de statut** : raison bloquante si Déclarer grisé ; sinon « Prêt » / résumé court
+  (destination move, cible…). Centré (patron `Professions.dc.html`, §2.4).
+
+### 17.4 `hasCompleteAction` vs `canDeclare` vs `blockReason` — le vrai changement
+
+B5 a supprimé `hasAnyAction`/`stateChanged` (PJ) et `stateChanged`/`hasAction` (MJ) — **dead code
+après la simplification de `canDeclare`, en attendant ce module** (§5.2). Module 5 réintroduit
+l'équivalent, mieux :
+
+| Notion | Définition | Qui la calcule |
+|---|---|---|
+| `canDeclare` | les actions **sélectionnées** sont **valablement configurées** (aujourd'hui `assaultValid && reloadValid && meleeValid`) | déjà là (M0.4 sélecteurs) |
+| `hasCompleteAction` | il y a **au moins une chose à déclarer** : arme+cible (`assault.targets.some(Boolean)` / `melee.targets…`), OU reload, OU move (`moveSelection`), OU changement d'état (`decl.{position,weapon,vitesse}` ≠ `initial`), OU action rapide (`decl.quick.*`) | **la fenêtre** (span `decl` + hooks + state fenêtre) — petit helper pur possible |
+| `blockReason` | pourquoi Déclarer est grisé alors que `hasCompleteAction` | assemblé des tableaux de raisons existants (`aimIneligibilityReasons`…) + quelques checks (« arme sélectionnée sans cible ») |
+
+**Déclarer actif ⟺ `hasCompleteAction && canDeclare`.** Rien de sélectionné → Déclarer grisé,
+« Passer le tour » est le chemin (plus de mis-clic qui passe le tour — coût intérimaire B5 levé).
+
+**Dépendance M0.4** : les sélecteurs `assaultValid` / `meleeValid` gagneraient à renvoyer
+`{ valid, reason }` plutôt qu'un `bool` (le patron `*IneligibilityReasons` existe déjà). → **petit
+ajout au périmètre M0.4** (ou module 5 assemble `blockReason` depuis l'extérieur). À trancher.
+
+### 17.5 API `CombatDeclareFooter`
+
+```
+<CombatDeclareFooter
+  currentInitiative={…} iniDelta={…} iniBreakdown={…}   // → CombatDeclareIniWidget
+  canDeclare={bool}                                      // actions sélectionnées valides
+  hasCompleteAction={bool}                               // y a-t-il qqch à déclarer
+  blockReason={string | null}                            // raison si grisé
+  statusMessage={string | null}                          // « Prêt » / destination / cible
+  isBusy={bool}                                          // exo « ENVOI… »
+  onDeclare={() => void}
+  onPassTurn={() => void}                                // envoie la déclaration vide
+/>
+```
+`CombatDeclareErrorBanner` : rendu par le pied (ou juste au-dessus, dans le slot). L'erreur allures
+drone / la destination move : repliées dans `statusMessage` ou gardées en petits blocs — **détail
+d'implémentation**.
+
+### 17.6 Dépendances
+
+- **B5** ✅ (`canDeclare` débloqué, la déclaration vide passe serveur).
+- **B4** ✅ (`CombatDeclareIniWidget`, pastille `INI = 7 -> 2`, rouge si ≤ 0).
+- **Module 2** — le slot `footer` du frame.
+- **M0.4** — les sélecteurs de validité (pour `blockReason` ; sinon module 5 les assemble).
+- **`onPassTurn`** : chaque fenêtre fournit son emit « déclaration vide » (PJ/MJ : `socket.emit(WS.
+  COMBAT_ACTION_DECLARE, { tokenId, state: {}, mapActions: {} })` ; exo : déjà `handleDeclare` sans
+  sélection).
+
+### 17.7 Risque + rollback
+
+**Risque faible-moyen.** Composant petit, présentationnel. Le **seul vrai changement de comportement**
+= `hasCompleteAction` gate le bouton Déclarer (au lieu de « toujours actif »). Filet : golden master
+(le payload de « Passer le tour » = déclaration vide, déjà couvert ; le payload d'une déclaration
+complète inchangé). `+ .test.mjs` sur le helper `hasCompleteAction` si extrait. Rollback :
+`git revert` (1 commit, ou 1 par fenêtre).
+**Zone sans filet** : l'affichage `blockReason` (texte) — checklist manuelle (chaque cas d'action
+incomplète : arme sans cible, Tir visé inéligible, CaC sans cible…).
+
+### 17.8 Hors périmètre module 5
+
+- Le calcul INI (`CombatDeclareIniWidget` / `combatIniCost`, intact).
+- La bannière d'erreur serveur (`CombatDeclareErrorBanner`, réutilisée).
+- Le payload, la phase RÉSOLUTION.
+- L'i18n serveur des `COMBAT_DECLARE_ERROR` (déférée `PLAN_LOCALISATION` §8).
+
+### 17.9 Points ouverts module 5
+
+| # | Question |
+|---|---|
+| PO-M5-a | Les sélecteurs M0.4 renvoient `{ valid, reason }`, ou module 5 assemble `blockReason` de l'extérieur ? (penche pour `{ valid, reason }` — le patron `*IneligibilityReasons` existe) |
+| PO-M5-b | « Message de statut » quand Déclarer est actif : « Prêt » générique, ou résumé (« Tir sur Baboulinet », destination) ? |
+| PO-M5-c | Destination move `[x, y]` + erreur allures drone : dans `statusMessage`, ou petits blocs séparés au-dessus des boutons (comme aujourd'hui) ? |
+| PO-M5-d | Style unifié : `.btn-tac` (cyan) ou `.btn-tac-confirm` (vert) comme base du bouton primaire ? (D3 : accent par famille — le primaire prend `--combat-accent-*` ?) |
