@@ -1,5 +1,8 @@
 {
   "permissions": {
+    "deny": [
+      "AskUserQuestion"
+    ],
     "allow": [
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\Kiwi\\\\\" -Recurse -File | Select-Object Name, @{Name=\"Size\";Expression={$_.Length}}, FullName | Sort-Object Name | Format-Table -AutoSize)",
       "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Nemet\\\\Documents\\\\Enclume\\\\docs\\\\JOURNAL2.md\"\\).Count)",

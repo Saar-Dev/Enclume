@@ -1,7 +1,9 @@
 # CLAUDE.md — Contrat commun du projet Enclume
 
-> Version : 2026-07-15, mise à jour 2026-08-07 (retrait des références à la collaboration
-> Codex/Kiwi, close depuis le 2026-08-04 — voir §3).
+> Version : 2026-07-15, mise à jour 2026-08-26 (audit à charge du corpus de règles : langue de
+> travail explicitée, distinction CLAUDE.md/mémoire auto, AskUserQuestion ajouté au §13, §7 déduplié
+> vers `rules/core.md`/`rules/react.md`, §3/§4/§5/§10/§11/§12/§13 purgés des dernières mécaniques de
+> collaboration à deux devs — Codex/Kiwi partis depuis le 2026-08-04, voir §3).
 > Rédigé à l'origine pour les espaces Claude/règles et Codex/moteur monde ; s'applique aujourd'hui
 > au seul espace Claude/règles.
 
@@ -24,6 +26,14 @@
 Hiérarchie documentaire : Livre de Base Polaris > `FOUNDATION` > `VOCABULARY` > `SYSTEME` >
 règles domaine > `MANUEL` > `PLAN`.
 
+Langue de travail : français partout, y compris les descriptions d'appels d'outils — pas seulement
+les réponses visibles.
+
+Ce fichier est le seul détenteur d'une « instruction » modifiable par demande explicite de l'utilisateur.
+La mémoire auto-générée (`~/.claude/projects/.../memory/`) est un journal que Claude écrit sur lui-même,
+pas un second exemplaire des instructions : une demande de correction durable modifie ce fichier, pas
+la mémoire, sauf précision contraire.
+
 ---
 
 ## 2. Routage des règles
@@ -43,20 +53,15 @@ règles domaine > `MANUEL` > `PLAN`.
 
 ## 3. Espaces de travail
 
-| Développeur | Branche | Dépôt serveur | Client/API |
-|---|---|---|---|
-| Claude / règles | `dev/Saar` | `/home/didier/Enclume` | `8193/8194` |
-
-Depuis le départ de Codex et Kiwi (2026-08-04), `dev/Saar` est la seule branche de développement
-active. `dev/monde` et `integration` subsistent dans l'historique Git (dépôts et ports associés
-arrêtés), sans contributeur ni instance serveur actuels.
+Développement solo sur `dev/Saar` — dépôt serveur `/home/didier/Enclume`, client/API `8193/8194`.
+`dev/monde` et `integration` subsistent dans l'historique Git (dépôts et ports associés arrêtés),
+sans contributeur ni instance serveur actuels.
 
 - Ne jamais développer directement dans `master`.
 - `.env`, PostgreSQL, MinIO, caches et `node_modules` restent propres à l'instance de travail.
 - Le protocole de fusion à deux développeurs (workflow complet, retour arrière, autorités
-  combat/monde partagées) est archivé — `docs/Old/WORKFLOW_FUSION.md` et
-  `docs/Old/FUSION_PROJET_COUSIN.md` — et ne s'applique plus tant qu'un second développeur actif ne
-  rejoint pas le projet.
+  combat/monde partagées) est archivé, sans application actuelle — `docs/Old/WORKFLOW_FUSION.md`
+  et `docs/Old/FUSION_PROJET_COUSIN.md`.
 
 ---
 
@@ -76,33 +81,27 @@ git fetch origin
 - Si l'upstream n'existe pas encore, ne pas inventer de synchronisation : signaler la publication
   manquante.
 - Le protocole de fusion multi-branches (têtes, tags de restauration, sauvegardes, réalignement
-  post-validation) est archivé avec les documents cités en §3 ; il ne s'applique pas tant qu'il n'y
-  a qu'un développeur actif.
+  post-validation) est archivé avec les documents cités en §3, sans application actuelle.
 
 ---
 
-## 5. Collaboration à deux
+## 5. Workflow de commit et migrations
 
-- Une tâche active possède une ligne `🔒 En cours (Dev) : ...` dans `docs/EN_COURS.md`.
-- La ligne est posée sur la branche du développeur et retirée au commit de clôture.
 - Une correction de bug traite une cause racine atomique à la fois.
 - Plusieurs fichiers peuvent changer ensemble s'ils implémentent le même invariant.
 - Une demande regroupant plusieurs fonctionnalités est découpée en étapes vérifiables.
 - Format des journaux et commits : `Session N (Dev) — Titre`.
-- Après une tâche fonctionnellement confirmée : commit sur la branche du développeur puis push de
-  cette branche, jamais push direct vers `master` ou `integration`.
-- La publication distante manquante est un blocage de diffusion, pas une permission d'emprunter les
-  identifiants de l'autre développeur.
+- Après une tâche fonctionnellement confirmée : commit sur la branche de travail puis push de cette
+  branche, jamais push direct vers `master`.
 
 ### Migrations
 
 - Numérotation strictement séquentielle : prendre le prochain entier libre après la dernière
-  migration présente, tous devs confondus. L'alternance pair (Codex/moteur monde) / impair
-  (Claude/règles) est abolie — Codex et Kiwi ne font plus partie du projet (2026-08-04).
+  migration présente.
 - Vérifier les fichiers présents et `knex_migrations` avant de choisir un numéro.
-- Une migration doit être rétrocompatible avec le code encore déployé pendant la fusion.
+- Une migration doit être rétrocompatible avec le code encore déployé au moment où elle s'applique.
 - Migration, test et éventuel script de réparation forment un commit isolé sur la branche de travail.
-- Ne pas fusionner ni déployer ce commit avant validation de la migration et du code consommateur.
+- Ne pas pousser ni déployer ce commit avant validation de la migration et du code consommateur.
 - Ne jamais appeler manuellement `up()` deux fois ; vérifier d'abord le journal Knex.
 - Ne jamais utiliser la CLI Knex brute pour tester le rollback d'une migration précise mal triée.
 - Éviter tout fichier de test temporaire sous `server/` : un watcher peut appliquer la migration.
@@ -130,9 +129,9 @@ Termes interdits sans preuve : « probablement », « certainement », « évide
 - Modifier avec des patchs ciblés ; ne pas réécrire un fichier entier inutilement.
 - Préserver les changements utilisateur, même non liés à la tâche.
 - Réutiliser les événements, services, composants, stores et utilitaires existants avant d'en créer.
-- Aucun événement WebSocket en string libre : registre unique `shared/events.js`.
 - Pas de logique métier dupliquée entre client et serveur.
-- Le serveur reste autoritaire ; le client prévisualise et envoie une intention.
+- Événements WebSocket et autorité serveur/client : détail et invariants dans `.claude/rules/core.md`
+  et `.claude/rules/react.md`.
 - Une apparence 3D ne devient jamais une collision implicite.
 - Un test temporaire reste hors des dossiers surveillés et hors du dépôt partagé.
 - Les validations techniques automatisables n'exigent pas une pause utilisateur entre chaque étape.
@@ -162,7 +161,7 @@ périmètre est touché : `.claude/rules/combat.md` + `docs/SYSTEME/COMBAT.md`.
 
 - `docs/EN_COURS.md` est la source unique des dettes et de la prochaine étape.
 - `docs/JOURNAL6.md` conserve les décisions et validations durables, pas les notes de réflexion.
-- Le scratch analytique est local et ignoré par Git ; ne pas partager `JOURNALTEMP.md` entre devs.
+- Le scratch analytique (`JOURNALTEMP.md`) est local et ignoré par Git.
 - `docs/ASBUILT.md` décrit ce qui est réellement déployé et stable.
 - `docs/ROADMAP.md` décrit la suite, sans dupliquer les dettes.
 - `client/public/CHANGELOG.md` décrit les changements visibles par les utilisateurs.
@@ -177,7 +176,6 @@ périmètre est touché : `.claude/rules/combat.md` + `docs/SYSTEME/COMBAT.md`.
 - Exécuter les tests ciblés, puis les tests transverses proportionnés au risque.
 - Pour le monde : tests Node, test Surface, build client et scénario multi-étages.
 - Pour le combat : tests métier, transport WebSocket/REST et scénario réel concerné.
-- Pour une fusion : appliquer intégralement `WORKFLOW_FUSION.md`.
 - Vérifier `git diff --check`, le statut du worktree et l'absence de secrets.
 - Ne pas corriger automatiquement les vulnérabilités npm avec `--force`.
 
@@ -194,10 +192,7 @@ Toute clôture indique :
 
 Le détail courant vit uniquement dans `docs/EN_COURS.md`.
 
-Depuis le départ de Codex et Kiwi (2026-08-04), il n'y a plus d'instance de validation commune
-active ni de synchronisation multi-branches en cours. `dev/Saar` avance seule vers `master`, sous
-revue de Saar avant tout push. Si une collaboration reprend, repartir du protocole archivé cité en
-§3 plutôt que du tag `baseline/common-20260715`, qui n'a jamais été créé dans le dépôt.
+`dev/Saar` avance seule vers `master`, sous revue de Saar avant tout push.
 
 ---
 
@@ -217,10 +212,11 @@ STOP si l'une de ces situations apparaît :
 - migration sans audit du numéro, du journal et du redémarrage automatique ;
 - `users.role === 'admin'` réutilisé comme raccourci d'autorisation pour un besoin métier plus étroit
   (ex. « MJ hors campagne ») — détail et justification dans `.claude/rules/core.md` ;
+- usage de l'outil AskUserQuestion (questionnaire à choix multiples) sur ce projet — interdit sans
+  exception, y compris pour une question architecturale complexe ; poser la question en prose ;
 - « Je code ? » posé une deuxième fois sur le même sujet — plan complet, coder directement ;
 - plan couvrant deux bugs ou problèmes ou plus ;
-- modification du dépôt, de la base ou des assets de l'autre développeur ;
-- push direct vers `master` ou `integration` ;
+- push direct vers `master` ;
 - clôture sans « Testé / Non testé » ;
 - dette copiée dans plusieurs documents ;
 - résumé utilisé pour refaire, oublier un travail déjà terminé, ou sauter la lecture de reprise de
