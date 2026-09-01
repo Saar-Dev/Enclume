@@ -21,7 +21,7 @@ de chargement, et les conditions dans lesquelles un agent doit le lire.
 **Hiérarchie de chargement (pour IA) :**
 Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → MANUEL → PLAN
 (chaque couche peut faire référence aux suivantes, jamais l'inverse — même hiérarchie que
-`docs/RegleDocumentaire.md` §12 et `CLAUDE.md` §1, à ne pas faire diverger).
+`docs/RegleDocumentaire.md` §12 et `AGENTS.md` § Autorités & routage, à ne pas faire diverger).
 
 ---
 

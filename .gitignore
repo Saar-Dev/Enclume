@@ -26,3 +26,8 @@ npm-debug.log*
 *.sln
 *.sw?
 desktop.ini
+
+# Claude Code — config personnelle / runtime
+# (le partagé reste suivi : .claude/settings.json, .claude/rules/, .claude/hooks/)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

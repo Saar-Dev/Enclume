@@ -39,7 +39,7 @@ text
 
 □ Consulter l'index documentaire s'il existe (docs/SYSTEME/INDEX.md).
 □ S'il n'existe pas, demander à l'utilisateur la liste des documents pertinents pour le domaine.
-□ Lire EN_COURS.md, VOCABULARY.md, CLAUDE.md.
+□ Lire EN_COURS.md, VOCABULARY.md, AGENTS.md.
 □ Lire les documents système déjà produits sur le domaine concerné.
 □ Pause réflexive : périmètre clair ? documents manquants identifiés ?
 
@@ -125,7 +125,7 @@ périmètre, hors-scope, sources vérifiées.
 Phase 5 — Validation
 text
 
-□ Cohérent avec CLAUDE.md ?
+□ Cohérent avec AGENTS.md ?
 □ Décisions justifiées (pas d'arbitraire) ?
 □ Migration réversible (feature flag, rollback) ?
 □ Tests prévus à tous les niveaux ?

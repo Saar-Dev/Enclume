@@ -218,7 +218,7 @@ propre copie de ce même vocabulaire, en forme longue (`resultPanels.location.*`
 multi-namespace : nouvelle clé `charSheet.json` → `locations.*` (formes courtes, identiques à
 l'affichage actuel) + nouveau module partagé `client/src/lib/locationI18nKeys.js`
 (`LOCATION_I18N_KEYS`, code slot → clé i18n) réutilisé tel quel par les 3 fichiers concernés — entorse
-littérale à la Règle 2 (`conventions.md`), actée avec Saar avant de coder.
+littérale à la Règle 2 de `docs/RegleDocumentaire.md` (une information = un seul endroit), actée avec Saar avant de coder.
 
 **Points par fichier** :
 - `ModingWindow.jsx` : commentaire de tête retiré (« i18n : équipement hors scope actuel » — devenu

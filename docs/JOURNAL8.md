@@ -1,6 +1,6 @@
 # JOURNAL8 — Décisions et validations durables
 
-> Rôle du fichier (CLAUDE.md §10) : conserve les décisions et validations durables de chaque session
+> Rôle du fichier (AGENTS.md, § Suivi & documentation) : conserve les décisions et validations durables de chaque session
 > close, pas les notes de réflexion. Chaque entrée = un bloc `## Session N (Dev) — Date — Titre`,
 > clôturé par **Testé / Non testé / Données / Retour arrière**. Ne jamais dupliquer ce contenu dans
 > `docs/EN_COURS.md` : ce dernier retire l'entrée de ses sections actives dès qu'un chantier est clos
@@ -4724,3 +4724,53 @@ drone avec arme de contact réelle → toujours `armement_contact`). ⚠️ **cl
 `server/src/scripts/create_ticket_drone_*.js` (lancés en local par Saar).
 
 **Retour arrière** : `git revert` du commit (5 fichiers, aucun effet runtime).
+
+---
+
+## Session (Claude) — 2026-09-01 — Refonte du corpus d'instructions (noyau `AGENTS.md` + enforcement)
+
+Chantier de maintenance méta demandé par Saar (analyse à charge du corpus de règles → refonte).
+Conception, décisions et table de correspondance : `docs/Old/PLAN_CLAUDEMD_REFONTE.md`.
+
+**Décisions structurantes** : D1 `bug_tickets` = autorité du suivi bug + prochaine étape (le
+contrat rattrape `EN_COURS`/`TICKETS.md`, déjà alignés) · D6 **noyau mince** · D7 `AGENTS.md`
+devient le contrat tool-agnostique, `CLAUDE.md` = stub `@AGENTS.md` (pattern Anthropic pour un
+dépôt qui a déjà un `AGENTS.md` ; import vérifié via `/context`).
+
+**Fait** :
+- `AGENTS.md` réécrit = le noyau (125 l.) : invariants, méthode, commandes, autorités, git,
+  suivi, clôture. `CLAUDE.md` réduit à 8 l. (`@AGENTS.md` + note chargement `.claude/rules/`).
+- Contenu domaine descendu dans les règles routées : **NEW `.claude/rules/migrations.md`**
+  (pointeur vers `docs/SYSTEME/CORE.md §Migrations` + invariants courts), `react.md` (+inventaire
+  UI), `core.md` (+pointeur i18n serveur). `.claude/rules/conventions.md` supprimé (contenu
+  migré ; il chargeait sur `**/*`).
+- Enforcement : **NEW `.claude/hooks/guard-git-push.js`** (+ `.test.sh`, 23 cas) — `PreToolUse`
+  Bash, bloque tout `git push` vers `master`/`main` y compris formes implicites. Enregistré
+  dans `.claude/settings.json` ; `Bash(git push|add|commit *)` retirés de l'`allow`.
+- `.claude/settings.local.json` **dé-suivi** (`git rm --cached`) + `.gitignore` ; `deny:
+  [AskUserQuestion]` remonté dans `settings.json` ; 3 entrées `allow` à credentials (JWT
+  expirés, `vttpass`) purgées de `settings.json`. 0 secret dans les fichiers suivis (JWT
+  expirés restent dans l'historique — risque accepté, localhost).
+- `README_INSTALLATION.md` archivé `docs/Old/` (paquet installé, collab Codex finie).
+- Sweep ciblé des réfs `CLAUDE.md §N` : 7 en-têtes/instructions vivants → `AGENTS.md § …`
+  (`JOURNAL8`/`EN_COURS`/`INDEX`/`METHODO_PLAN`/`PLAN_LOCALISATION`) ; ~56 annotations datées
+  (code, plans, entrées de session) laissées, récupérables via la table du plan archivé ;
+  scratch d'autres chantiers non touchés.
+- Empreinte always-on : ~5-6k → ~3.6k tokens ; 0 règle `rules/` chargée en permanence.
+
+**Testé** : `/context` (import `@AGENTS.md` résolu — `AGENTS.md` sous *Memory files*) ;
+`.claude/hooks/guard-git-push.test.sh` 23/23 + intégration réelle (`git push --dry-run origin
+master` bloqué avant exécution) ; `git diff --check` OK ; JSON `settings.json` valide ;
+`git grep` `JOURNAL6`/`conventions.md`/ports dans le noyau → 0 ; 15/15 fichiers référencés par
+`AGENTS.md` présents.
+
+**Non testé** : adhérence LLM au nouveau noyau sur des tâches réelles (non mesurable) ; le hook
+depuis un autre worktree (`Enclume-fk2-worktree`) ; rechargement `deny`/hook au prochain
+démarrage de session. Pas un `⚠️ clos partiel` : refonte documentaire, aucun comportement de
+jeu ni runtime en jeu.
+
+**Données** : aucune migration, aucun effet runtime. `settings.local.json` reste sur disque
+(seulement dé-suivi).
+
+**Retour arrière** : `git revert` du commit. Le contrat pré-refonte est dans l'historique de
+`CLAUDE.md` ; `docs/Old/PLAN_CLAUDEMD_REFONTE.md` §7 porte la table de correspondance.

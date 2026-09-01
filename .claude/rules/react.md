@@ -8,6 +8,8 @@ paths:
 
 # React et client
 
+- Avant de modifier un composant existant : recenser boutons, champs, handlers, état de
+  sélection et persistance concernés — ne pas casser un flux adjacent.
 - Respecter les règles des hooks; aucune condition autour d'un hook et dépendances exhaustives.
 - Un listener Socket.IO est enregistré avec une fonction stable puis retiré avec la même référence.
 - Les effets libèrent listeners, timers, observers, contrôles Three.js et ressources GPU créées.

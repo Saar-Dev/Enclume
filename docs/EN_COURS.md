@@ -21,7 +21,7 @@ Rien d'épinglé ici — ce bloc pointait depuis le 2026-08-04 sur TEST_CRITIQUE
 depuis malgré plusieurs chantiers actifs entre-temps (constat Saar, 2026-08-22 : périmé). Migré en
 ticket `TEST_CRITIQUE-LOT3` (`bug_tickets`), même oubli que `CHAT-SCROLL1` ci-dessous — ni l'un ni
 l'autre n'étaient dans la liste d'exclusion volontaire de `importEnCoursDettes.js`. La prochaine étape
-réelle vit désormais uniquement dans `/admin/tickets` (Règle §10 CLAUDE.md) ; ne plus réutiliser ce
+réelle vit désormais uniquement dans `/admin/tickets` (AGENTS.md § Suivi & documentation) ; ne plus réutiliser ce
 bloc comme pointeur unique daté.
 
 ---
@@ -91,7 +91,7 @@ réseau) n'a jamais été validé et ne le sera pas dans ce cadre. Plan déplac�
 ## Roadmap
 
 Chantiers prospectifs : voir le foyer unique `docs/ROADMAP.md` (section migrée ici le 2026-08-12,
-contenu fusionné là-bas pour ne plus dupliquer les dettes entre les deux documents, §10 CLAUDE.md).
+contenu fusionné là-bas pour ne plus dupliquer les dettes entre les deux documents, AGENTS.md § Suivi & documentation).
 
 ---
 

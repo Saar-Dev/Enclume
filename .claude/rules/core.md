@@ -23,6 +23,8 @@ paths:
   écritures optimistes et les boucles d'écho.
 - Nettoyer listeners, rooms, timers, locks et ressources lors d'une déconnexion ou d'un échec.
 - REST et Socket.IO d'une même fonctionnalité partagent le même service métier autoritaire.
+- Message destiné à l'utilisateur émis côté serveur (erreur REST via `errorHandler`, message
+  système Socket.IO) : voir `rules/i18n.md`.
 - Ne pas créer de stockage spatial Redis: le moteur monde et PostgreSQL portent ces responsabilités.
 - Une migration qui cible une ligne d'une table peuplée par seed (ex. `ref_equipment`) ne référence
   jamais son `id` en dur : les seeds (`server/src/db/seeds/`) laissent PostgreSQL générer l'UUID à
