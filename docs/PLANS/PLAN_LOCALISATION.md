@@ -18,9 +18,10 @@
 > adaptativité §7.13). **Phase A codée le 2026-09-02** (migration 318 + résolveur `refI18n.js` +
 > câblage du catalogue parcouru : Wizard, marchand, panneaux d'octroi — 8 commits `8dc3ce1`→`7b25d4d`,
 > §7.5/§7.7). Testé statiquement + smoke base réelle ; parcours navigateur non fait (session beta).
-> **⚠️ Clos partiel — Phase B non commencée** : affichage des objets possédés (inventaire, combat,
-> export PDF, mods), ratée par le plan initial, découverte au ré-audit — §7.7bis, plan dédié requis
-> (code socket combat-critique).**
+> **Phase B** : affichage des objets possédés (inventaire, combat, export PDF, mods), ratée par le plan
+> initial, découverte au ré-audit — §7.7bis (relu site par site). Scindée : **B1** (projection propre,
+> ~8 sites, patron Phase A) plan rédigé §7.15, **non codée** ; **B2** (noms d'armes en combat, emmêlé
+> avec Lot 6) plan séparé à faire.**
 
 ---
 
@@ -671,34 +672,54 @@ pass-through + strip). Côté personnage (objets possédés), **non câblé** �
   `snapshot_data` **et** le retour de `grantAdvantage`). `removeAdvantage` : jointure mécanique,
   inchangé.
 
-### 7.7bis Phase B — affichage des objets possédés (non commencée)
+### 7.7bis Phase B — affichage des objets possédés
 
-Ré-audit `ref_*` sur tout `server/src` (2026-09-02, post-5.3). Sites qui exposent au client du texte
-de `ref_equipment` / `ref_skills` / `ref_mutations` / `ref_genotypes` **hors** catalogue Phase A :
+Ré-audit `ref_*` sur tout `server/src` (2026-09-02, post-5.3), **relu site par site** (le premier jet
+au `grep` sur-comptait). Deux sous-phases.
 
-| Fichier | Site | Écran |
-|---|---|---|
-| `services/inventoryService.js` | `getInventory` — join `ref_equipment` (name/description) | panneau inventaire |
-| `routes/character/char-sheet.js` | ~4 enrichissements de réponse add/update (`ref_equipment` name/description) ; join `ref_skills` l.1382 ; `ref_genotypes` l.600/1028/1443 (**vérifier** label vs modificateurs) | fiche perso |
-| `services/characterExportService.js` | join `ref_skills` l.47, `ref_genotypes` l.67 | export PDF |
-| `routes/battlemaps.js` | joins `ref_equipment` l.272/305, `ref_mutations` l.319 | jetons combat |
-| `socket/socketCombatHelpers.js` | joins `ref_equipment` (l.1574/1766/2868/2978), `ref_mutations` l.1495 | résolution / chat combat |
-| `socket/socketCombatExo.js` | joins `ref_equipment` l.319/400 | combat exo |
-| `socket/socketCombatAnnouncement.js` | join `ref_equipment as re` l.510 | annonce combat |
-| `services/modingService.js` | join `ref_equipment` l.31, lectures l.93/94 | panneau mod |
-| `services/weaponModService.js` | join `ref_equipment as re` l.119 | panneau arme/mod |
-| `services/identityService.js` | joins `ref_mutations`/`ref_advantages` l.70/75 | **vérifier** — probablement `mod_identity` (mécanique), pas de texte |
+#### B1 — projection propre (jointure/alias → client ou PDF, patron Phase A)
 
-Hors périmètre confirmé (modificateurs numériques seulement, aucun texte affiché) : les dizaines de
-`db('ref_genotypes'|'ref_skills').where({id}).first()` de `combatantContextService`, `damageService`,
-`movementBudgetService`, `fatigueService`, `fallDamageService`, `coldExposureService`,
-`environmentalHazardService`, `woundEvolutionService`, `socketDice`, `socketCombatState`,
-`socketEntity`, `gmArbitratedTestService`.
+| Fichier / site | Champs à résoudre | Champs laissés bruts (mécanique) | Écran |
+|---|---|---|---|
+| `inventoryService.getInventory` **et** `getItemWithRef` (join `ref_equipment`, alias `ref_*`) | `ref_name`, `ref_description`, `ref_family`, `ref_category` | `ref_location`, `ref_malus_cat`, `ref_caliber`, `ref_damage_h`, `ref_fire_mode`, … (~30) | inventaire PJ |
+| `char-sheet.js` `/macro-options` (join `ref_skills`) | `label`, `family` | — | picker macro |
+| `char-sheet.js` enrich programme (`ref_equipment` `.first()`, ×4 : l.1711/1749/2576/2634) | `name`, `description` (→ `program_name`/`program_description`) | — | fiche perso |
+| `characterExportService.js` (join `ref_skills` l.47) | `rs.label`, `rs.family`, `rs.description`, `parent_rs.label as parent_label` | `attr_1/2`, `marker`, `is_category` | export PDF |
+| `characterExportService.js` `ref_genotypes` l.67 | **vérifier** si `genotypeRow.label`/`description` affichés dans l'export | `mod_*` | export PDF |
+| `battlemaps.js` weaponRows l.272 | `ref_equipment.name`, sous-requête `rs.label as skill_label` | `ref_category` (logique `resolveHandWeapons` COM24), `ref_damage_h`, `ref_shock`, `ref_fire_mode`, `ref_caliber` | fenêtre combat MJ |
+| `battlemaps.js` armorRows l.305 | `ref_equipment.name` | `ref_equipment.location` (code) | fenêtre combat MJ |
+| `battlemaps.js` naturalWeaponRows l.319 | `rm.name` | `natural_weapon_formula`, `natural_weapon_requires_grapple` | fenêtre combat MJ |
+| `modingService.getModingState` — `weaponsRaw` (`q.raw`) + `installableMods` (builder) | `re.name` (des deux) | `re.family`, `re.category` (filtres de requête) | panneau mod |
 
-Patron attendu : identique à la Phase A (jointure → `SELECT` + `*_i18n` + `resolveRefField`, ou
-`localizeRef` sur ligne complète). **Points d'attention** : `char_inventory` a
-`custom_name`/`custom_desc` (interaction à cadrer) ; le code socket combat exige une analyse à charge
-dédiée (combat-critique).
+#### B2 — noms d'armes en combat (emmêlé, **plan séparé**)
+
+- `socketCombatHelpers.js` : `weapon.ref_name` dans messages de chat (l.3502) / `skillLabel` (l.3600),
+  **+ comparaison en dur `weapon.ref_name !== 'Klauss'` (l.3499)** → localiser casserait ce test en
+  langue ≠ fr. Débusquer toutes les comparaisons `ref_name === '…'` avant d'agir.
+- `socketCombatAnnouncement.js` l.293/326/439, `socketCombatExo.js` l.75/273 :
+  `COALESCE(<...>.label_override, ref_equipment.name) as display_name` — chaîne de repli custom→catalogue.
+- `socketCombatHelpers.js:2508` : `COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name)`.
+- `socketCombatHelpers.js:2868` : mod `re.name` dans `installedMods`.
+- Ces messages sont **déjà** du FR composé serveur → chevauche **Lot 6**. Analyse à charge dédiée
+  obligatoire (combat-critique).
+
+#### Confirmé HORS Phase B (laisser brut — vérifié par lecture)
+
+- Tous les `.where('ref_equipment.category'|'family', '…')` : filtres contre le texte RAW des règles.
+- Sélects mécaniques : `shield_atk_malus`, `natural_weapon_formula`, `malus_cat`, `location`,
+  `mod_key`, `bonus`, `damage_h`, `shock`, `mod_sex`, `mod_fertility`.
+- `weaponModService.js` (l.119 : `re.mod_key`/`re.bonus` seulement), `identityService.js`
+  (l.70/75 : `mod_sex`/`mod_fertility`/`mod_identity`) : **entièrement hors périmètre.**
+- `modingService.js` l.93/94 (`weaponRef`/`modRef` `.first()`) : validation `family`/`category`, aucun
+  texte affiché.
+- Les dizaines de `db('ref_genotypes'|'ref_skills').where({id}).first()` de `combatantContextService`,
+  `damageService`, `movementBudgetService`, `fatigueService`, `fallDamageService`, `coldExposureService`,
+  `environmentalHazardService`, `woundEvolutionService`, `socketDice`, `socketCombatState`,
+  `socketEntity`, `gmArbitratedTestService` : modificateurs numériques seulement.
+
+**Point d'attention B1** : `char_inventory` a `custom_name`/`custom_desc` (override joueur) — le client
+affiche `custom_name || ref_name` ; la Phase B1 ne touche que `ref_name` (côté catalogue), `custom_*`
+reste tel quel (texte joueur, hors i18n).
 
 ### 7.8 Invariant
 
@@ -789,6 +810,67 @@ L'architecture retenue est le patron dominant du contenu multilingue en base pou
   (couture unique).
 - **Repli du FR** (si un jour produit EN-first) : migration one-shot qui fait rentrer `fr` dans
   `<champ>_i18n`, `DEFAULT_LOCALE` change. Non prévu.
+
+### 7.15 Phase B1 — plan d'exécution (rédigé 2026-09-02)
+
+Périmètre : les sites B1 de §7.7bis. Aucun `.jsx`, aucune migration, aucune écriture, aucun contenu
+FR modifié — projection de lecture uniquement. FR seul → inerte (résolution = valeur brute).
+
+#### B1.0 — helper `localizeRefAliased` dans `refI18n.js` (+ tests)
+
+Les sites B1 sont tous des **jointures à colonnes aliasées** (`ref_equipment.name as ref_name`), pas
+des lignes `ref_*` complètes. Répéter le synthetic row de la Phase A (`resolveRefField(table,
+{ name: row.ref_name, name_i18n: row.ref_name_i18n }, 'name')`) ferait 4+ lignes verbeuses par site.
+Nouveau helper :
+
+```js
+// La requête doit aliaser aussi <champ>_i18n : `ref_equipment.name_i18n as ref_name_i18n`.
+// aliasMap : { <alias dans la row> : <champ ref_*> }
+export function localizeRefAliased(table, row, aliasMap, locale = DEFAULT_LOCALE) {
+  if (row == null) return row
+  const out = {}
+  for (const [k, v] of Object.entries(row)) if (!k.endsWith('_i18n')) out[k] = v
+  for (const [alias, field] of Object.entries(aliasMap)) {
+    out[alias] = resolveRefField(
+      table,
+      { [field]: row[alias], [`${field}_i18n`]: row[`${alias}_i18n`] },
+      field, locale,
+    )
+  }
+  return out
+}
+```
+
+Tests (`refI18n.test.mjs`) : fr = pass-through + strip des `*_i18n` aliasés ; `en` présent/absent ;
+`row` null ; alias sans `_i18n` correspondant (repli valeur brute).
+
+**Commit isolé** (élargit la couture, comme 5.0).
+
+#### B1.1 → B1.5 — câblage (un commit chacun, `node --check` + smoke base réelle)
+
+| Étape | Fichier | Geste |
+|---|---|---|
+| B1.1 | `inventoryService.js` | `getInventory` + `getItemWithRef` : `SELECT` ajoute `ref_equipment.{name,description,family,category}_i18n as ref_{…}_i18n` ; résultat par `localizeRefAliased('ref_equipment', row, { ref_name:'name', ref_description:'description', ref_family:'family', ref_category:'category' })` |
+| B1.2 | `routes/character/char-sheet.js` | `/macro-options` : `ref_skills.{label,family}_i18n` + `localizeRefAliased('ref_skills', …, { label:'label', family:'family' })`. Enrich programme ×4 : `.select` ajoute `name_i18n`/`description_i18n`, `resolveRefField('ref_equipment', ref, 'name'/'description')` (ou petit helper local `enrichProgramName`) |
+| B1.3 | `services/characterExportService.js` | join `ref_skills` : `_i18n` sur `rs.{label,family,description}` + `parent_rs.label_i18n` ; `localizeRefAliased`. `ref_genotypes` : **relire** — si `label`/`description` affichés → `localizeRef('ref_genotypes', genotypeRow)` ; sinon rien |
+| B1.4 | `routes/battlemaps.js` | weaponRows : `ref_equipment.name_i18n` + sous-requête `skill_label` → tirer aussi `rs.label_i18n` ; résoudre `name` + `skill_label`, **laisser `ref_category` brut**. armorRows : `name`. naturalWeaponRows : `rm.name_i18n` + `resolveRefField('ref_mutations', …)` |
+| B1.5 | `services/modingService.js` | `weaponsRaw` (`q.raw`) : ajouter `re.name_i18n` au `SELECT` + au `GROUP BY`, `.rows.map` résout `re.name`. `installableMods` (builder) : `ref_equipment.name_i18n` + `localizeRefAliased` |
+
+#### Validation B1
+
+- `node --check` + `git diff --check` par fichier.
+- `node --test refI18n.test.mjs` (B1.0).
+- Smoke base réelle par étape : résolution `== colonne brute` en fr, zéro `*_i18n` dans la sortie,
+  champs mécaniques (`ref_category`, `ref_location`, `damage_h`…) **inchangés et présents**.
+- Non testé : parcours navigateur (session beta), `characterExportService` (générer un PDF réel).
+- Retour arrière : revert de commit par étape ; B1.0 = retrait du helper (aucun appelant après revert
+  des B1.x).
+
+#### Hors périmètre B1
+
+- B2 (noms d'armes combat) — plan séparé.
+- `char_inventory.custom_name`/`custom_desc` — texte joueur, jamais i18n.
+- Les filtres `.where('ref_equipment.category', …)` et les sélects mécaniques (§7.7bis).
 
 ---
 
