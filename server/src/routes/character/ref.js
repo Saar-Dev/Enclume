@@ -14,6 +14,7 @@
 import { Router } from 'express'
 import db from '../../db/knex.js'
 import { requireAuth } from '../../middleware/auth.js'
+import { localizeRef, localizeRefRows } from '../../lib/refI18n.js'
 
 const router = Router()
 
@@ -23,7 +24,7 @@ const router = Router()
 router.get('/genotypes', requireAuth, async (req, res, next) => {
   try {
     const genotypes = await db('ref_genotypes').select('*').orderBy('id')
-    res.json({ genotypes })
+    res.json({ genotypes: localizeRefRows('ref_genotypes', genotypes) })
   } catch (err) {
     next(err)
   }
@@ -60,7 +61,7 @@ router.get('/skills', requireAuth, async (req, res, next) => {
       requirements: reqsBySkill[s.id] || [],
     }))
 
-    res.json({ skills: result })
+    res.json({ skills: localizeRefRows('ref_skills', result) })
   } catch (err) {
     next(err)
   }
@@ -86,7 +87,13 @@ router.get('/mutations', requireAuth, async (req, res, next) => {
     const mutMap = new Map(mutations.map(m => [m.mutation_id, { ...m, subtable: [] }]))
     for (const sub of subtypes) mutMap.get(sub.mutation_id)?.subtable.push(sub)
 
-    res.json({ mutations: Array.from(mutMap.values()) })
+    const result = Array.from(mutMap.values()).map(m => {
+      const loc = localizeRef('ref_mutations', m)
+      loc.subtable = localizeRefRows('ref_mutation_subtypes', m.subtable)
+      return loc
+    })
+
+    res.json({ mutations: result })
   } catch (err) {
     next(err)
   }
@@ -100,7 +107,7 @@ router.get('/mutations', requireAuth, async (req, res, next) => {
 router.get('/advantages', requireAuth, async (req, res, next) => {
   try {
     const advantages = await db('ref_advantages').select('*').orderBy(['type', 'name'])
-    res.json({ advantages })
+    res.json({ advantages: localizeRefRows('ref_advantages', advantages) })
   } catch (err) {
     next(err)
   }
