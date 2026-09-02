@@ -209,7 +209,7 @@ export async function getInventory(characterId, campaignId) {
   const forValue = calcAttributeNA(attrs, 'FOR', genotypeRow, mutationEffects)
   const multiplier = settings.encumbrance_multiplier
 
-  const items = await db('char_inventory')
+  const rawItems = await db('char_inventory')
     .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
     .where({ 'char_inventory.character_id': characterId })
     .select(
@@ -225,8 +225,11 @@ export async function getInventory(characterId, campaignId) {
       'char_inventory.notes',
       'char_inventory.custom_props',
       'ref_equipment.name as ref_name',
+      'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.family as ref_family',
+      'ref_equipment.family_i18n as ref_family_i18n',
       'ref_equipment.category as ref_category',
+      'ref_equipment.category_i18n as ref_category_i18n',
       'ref_equipment.weight as ref_weight',
       'ref_equipment.location as ref_location',
       'ref_equipment.protection as ref_protection',
@@ -248,6 +251,7 @@ export async function getInventory(characterId, campaignId) {
       'ref_equipment.fire_mode as ref_fire_mode',
       'ref_equipment.ammo_count as ref_ammo_count',
       'ref_equipment.description as ref_description',
+      'ref_equipment.description_i18n as ref_description_i18n',
       'ref_equipment.price as ref_price',
       // Export Excel (docs/PLANS/PLAN_EXPORTEXCEL.md, Lot 2 fichier 4/5) — champs `ref_equipment`
       // pas encore sélectionnés jusqu'ici, nécessaires pour les plages `InventaireObjNT`/
@@ -285,6 +289,9 @@ export async function getInventory(characterId, campaignId) {
       db.raw(`(
         SELECT name FROM ref_equipment WHERE id = char_inventory.current_ammo
       ) as current_ammo_name`),
+      db.raw(`(
+        SELECT name_i18n FROM ref_equipment WHERE id = char_inventory.current_ammo
+      ) as current_ammo_name_i18n`),
       // Compétence liée à l'arme (COM20, docs/BUGIDENTIFIE.md) — même table que
       // socketCombatHelpers.js (résolution), affichage uniquement ici (tooltip fenêtre déclaration).
       db.raw(`(
@@ -293,8 +300,24 @@ export async function getInventory(characterId, campaignId) {
         WHERE rea.item_id = char_inventory.equipment_id
         LIMIT 1
       ) as skill_label`),
+      db.raw(`(
+        SELECT rs.label_i18n FROM ref_equipment_skill_assoc rea
+        JOIN ref_skills rs ON rs.id = rea.skill_id
+        WHERE rea.item_id = char_inventory.equipment_id
+        LIMIT 1
+      ) as skill_label_i18n`),
     )
     .orderBy('char_inventory.created_at', 'asc')
+
+  // i18n (PLAN_LOCALISATION.md §7.15 B1.2) : résout les libellés ref_* aliasés, retire les *_i18n.
+  const items = rawItems.map((it) => {
+    const loc = localizeRefAliased('ref_equipment', it, {
+      ref_name: 'name', ref_description: 'description', ref_family: 'family', ref_category: 'category',
+      current_ammo_name: 'name',
+    })
+    loc.skill_label = resolveRefField('ref_skills', { label: it.skill_label, label_i18n: it.skill_label_i18n }, 'label')
+    return loc
+  })
 
   const totalWeight = computeTotalWeight(items)
 
