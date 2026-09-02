@@ -6,7 +6,7 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
-import { localizeRefRows } from '../lib/refI18n.js'
+import { localizeRefRows, resolveRefField } from '../lib/refI18n.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
@@ -195,14 +195,29 @@ export async function getStep4RefData(sheetId) {
     db('ref_setbacks').select('*').orderBy('roll_min'),
   ])
 
+  // Libellés de compétence dénormalisés dans bgSkills/careerSkills (rs.label/rs.family via jointure) :
+  // résolus par le résolveur ref_* au lieu de la valeur brute de la jointure, pour rester cohérent
+  // avec le reste du seam (PLAN_LOCALISATION.md §7.5, étape 5.2c).
+  const joinedSkillIds = [...new Set([...bgSkills, ...careerSkills].map(s => s.skill_id).filter(Boolean))]
+  const skillRef = new Map(
+    localizeRefRows('ref_skills', await db('ref_skills').whereIn('id', joinedSkillIds).select('*'))
+      .map(s => [s.id, s]),
+  )
+
   const bgMap = new Map(localizeRefRows('ref_backgrounds', backgrounds).map(b => [b.id, { ...b, skills: [] }]))
-  for (const sk of bgSkills) bgMap.get(sk.background_id)?.skills.push(sk)
+  for (const sk of bgSkills) {
+    const ref = skillRef.get(sk.skill_id)
+    bgMap.get(sk.background_id)?.skills.push({ ...sk, skill_name: ref?.label ?? sk.skill_name, family: ref?.family ?? sk.family })
+  }
   const bgsWithSkills = Array.from(bgMap.values())
 
   const careersMap = new Map(
     localizeRefRows('ref_careers', careers).map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [], education: [], randomBenefits: [] }])
   )
-  for (const sk of careerSkills) careersMap.get(sk.career_id)?.skills.push(sk)
+  for (const sk of careerSkills) {
+    const ref = skillRef.get(sk.skill_id)
+    careersMap.get(sk.career_id)?.skills.push({ ...sk, label: ref?.label ?? sk.label, family: ref?.family ?? sk.family })
+  }
   for (const t of careerTitles) careersMap.get(t.career_id)?.titles.push(t)
   for (const p of careerPrereqs) careersMap.get(p.career_id)?.prerequisites.push(p)
   for (const pc of careerPointCats) careersMap.get(pc.career_id)?.pointCategories.push(pc)
@@ -308,8 +323,8 @@ export async function getStep3State(sheetId) {
       .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
       .leftJoin('ref_mutation_subtypes as rms', 'rms.subtype_id', 'cm.subtype_id')
       .where({ 'cm.char_sheet_id': sheetId }).whereIn('cm.source', ['chosen', 'random'])
-      .select('cm.mutation_id', 'cm.subtype_id', 'cm.source', 'rm.name', 'rm.cost_pc', 'rm.subtype',
-        'rms.name as subtype_db_name'),
+      .select('cm.mutation_id', 'cm.subtype_id', 'cm.source', 'rm.name', 'rm.name_i18n', 'rm.cost_pc',
+        'rm.subtype', 'rms.name as subtype_db_name', 'rms.name_i18n as subtype_name_i18n'),
     db('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
     db('char_sheet').where({ id: sheetId }).select('wizard_progress').first(),
   ])
@@ -318,9 +333,11 @@ export async function getStep3State(sheetId) {
   const list = mutations.map(m => ({ mutation_id: m.mutation_id, subtype_id: m.subtype_id }))
   const meta = mutations.map(m => ({
     mutation_id: m.mutation_id,
-    name: m.name,
+    name: resolveRefField('ref_mutations', m, 'name'),
     subtype: m.subtype ?? null,
-    subtypeDbName: m.subtype_db_name ?? null,
+    subtypeDbName: m.subtype_db_name == null
+      ? null
+      : resolveRefField('ref_mutation_subtypes', { name: m.subtype_db_name, name_i18n: m.subtype_name_i18n }, 'name'),
     cost_pc: m.cost_pc,
   }))
   return {
