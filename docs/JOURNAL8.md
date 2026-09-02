@@ -4774,3 +4774,62 @@ jeu ni runtime en jeu.
 
 **Retour arrière** : `git revert` du commit. Le contrat pré-refonte est dans l'historique de
 `CLAUDE.md` ; `docs/Old/PLAN_CLAUDEMD_REFONTE.md` §7 porte la table de correspondance.
+
+---
+
+## Session (Claude) — 2026-09-02 — Portes (connecteurs) : interaction joueur/MJ — CHANTIER FONCTIONNELLEMENT CLOS
+
+Plan réel écrit (`docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md`, remplace la « base de travail »
+du 2026-08-25) puis suivi au fil du code (`ROADMAP.md` §1, prochain dans l'ordre de priorité
+après l'AOE). Porte : ouvrir/fermer libres (aucun Test RAW ne l'exige), crocheter une porte
+verrouillée via un Test **Systèmes de sécurité** arbitré par le MJ — `lockDifficultyDc` autoré
+par porte, fallback **-5** (malus, pas une DC classique — `defaultDifficulty` est un modificateur
+signé ajouté au Seuil, `REGLE_MUTATION.md` "Très difficile, -7") si non renseigné. Override MJ :
+tout clic MJ sur ce panneau est instantané (mirroir `ENTITY_ACTION_GM_DIRECT`, deux allers-retours
+de conception avant de retrouver ce précédent — détail en tête du plan §4).
+
+**Extraction notable** : `server/src/services/gmArbitratedTestService.js` (nouveau) — le calcul
+d'un Test arbitré par le MJ (total compétence/attribut, malus santé/encombrement, jet + critique,
+breakdown, `DICE_RESULT`, déclenchement Catastrophe) était dupliqué en substance entre
+`ENTITY_ACTION_RESOLVE` et ce que `CONNECTOR_ACTION_RESOLVE` aurait dû recoder — extrait en
+service partagé plutôt que dupliqué (~150 lignes), décision explicitement demandée par Saar
+("la qualité du correctif compte plus que le fix", "si on doit rework pour stabiliser, on le
+fait"). Refactor pur de `socketEntity.js`, comportement vérifié identique par lecture du diff —
+**pas revalidé en session réelle sur une interaction d'entité** (aucun blueprint avec
+interaction+compétence disponible pour tester).
+
+**Bug pré-existant trouvé et corrigé, partagé avec l'ascenseur** : le panneau connecteur
+(`SurfaceConnectorPanel`) se refermait instantanément au relâchement de la souris —
+`ConnectorSegment.handlePointerDown` ouvre le panneau sur *pointerdown*, `stopPropagation()`
+n'empêche jamais le "click" natif suivant sur le `<Canvas>` DOM (événement séparé) ;
+`handleCanvasClick` refermait donc systématiquement, faute du même garde `justSelectedRef` déjà
+posé pour la sélection de token. Jamais remarqué avant faute d'un test aussi poussé du clic
+connecteur — corrigé une fois dans `handleSurfaceConnectorSelect`, bénéficie donc aussi à
+l'ascenseur.
+
+**Fichiers touchés** : `shared/events.js`, `shared/world/{surfaceDocument,worldMetrics,
+connectorActions}.js` (+ tests), `server/src/services/{worldSpatialQueryService,
+gmArbitratedTestService}.js` (+ test), `server/src/socket/{socketConnector,index,socketEntity}.js`,
+`client/src/components/{SurfaceConnectorPanel,Canvas3D,MessageRendererRegistry,Sidebar,
+SidebarChatTab}.jsx`, `client/src/{stores/sessionStore,lib/useConnectorSocket,locales/{builder,
+fr}.json}`, `docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md`. Commit `10cde1e`, `dev/Saar` (poussé :
+non — en attente).
+
+**Testé** : `node --test` 27/27, `node --check` + imports réels sur tous les fichiers serveur,
+`npx eslint` propre (baselines `Canvas3D.jsx`/`SessionPage.jsx` comparées à HEAD, identiques avant/
+après), `npm run build` client propre. **Session réelle Saar** : déclarer, portée, branche libre,
+Test réussi/échoué/auto/refusé, override MJ, portes déjà implantées dans une carte existante.
+
+**Non testé** : non-régression entité (`gmArbitratedTestService.js`, voir ci-dessus) ; échelle
+(explicitement hors périmètre, `[INCONNU]` si `navigation.js` couvre déjà la traversée verticale).
+**⚠️ clos partiel** au sens strict (2 tickets ouverts, non bloquants, domaine `monde`) :
+cadre de sélection jaune déformé sur une porte (`ConnectorSelectionOutline`, cause non confirmée —
+données de la porte vérifiées saines, calcul `connectorDoorBox()` sain sur le papier pour son
+`axis`, investigation visuelle nécessaire) ; aucune représentation visuelle ouverte/fermée du
+modèle GLB (`DoorConnectorModel` ignore l'état, statique — collision/LOS corrects, seul le rendu
+3D ne suit pas ; chantier de modélisation/animation à part, pas cadré).
+
+**Données** : aucune migration — `lockDifficultyDc` est une nouvelle clé JSON dans le schéma v12
+`connectors` existant (`surface_data`), rétrocompatible.
+
+**Retour arrière** : `git revert` du commit `10cde1e` (aucun autre commit dessus à ce jour).
