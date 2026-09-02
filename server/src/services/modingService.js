@@ -6,6 +6,7 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { resolveRefField, localizeRefAliased } from '../lib/refI18n.js'
 import { WEAPON_FAMILY, MOD_CATEGORY, removeItem } from './inventoryService.js'
 
 // GET .../moding/state — armes du personnage (avec mods installés) + mods installables.
@@ -13,7 +14,7 @@ export async function getModingState(characterId, trxOrDb = db) {
   const q = trxOrDb
 
   const weaponsRaw = await q.raw(`
-    SELECT ci.id, ci.equipment_id, re.name, re.family, re.category,
+    SELECT ci.id, ci.equipment_id, re.name, re.name_i18n, re.family, re.category,
            COALESCE(
              json_agg(cim ORDER BY cim.installed_at) FILTER (WHERE cim.id IS NOT NULL),
              '[]'
@@ -24,16 +25,23 @@ export async function getModingState(characterId, trxOrDb = db) {
     WHERE ci.character_id = ?
       AND re.family = ?
       AND re.category != ?
-    GROUP BY ci.id, ci.equipment_id, re.name, re.family, re.category
+    GROUP BY ci.id, ci.equipment_id, re.name, re.name_i18n, re.family, re.category
   `, [characterId, WEAPON_FAMILY, MOD_CATEGORY])
 
-  const installableMods = await q('char_inventory')
+  const installableModsRaw = await q('char_inventory')
     .join('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
     .where({ 'char_inventory.character_id': characterId })
     .where({ 'ref_equipment.family': WEAPON_FAMILY, 'ref_equipment.category': MOD_CATEGORY })
-    .select('char_inventory.id', 'char_inventory.equipment_id', 'ref_equipment.name', 'ref_equipment.category')
+    .select('char_inventory.id', 'char_inventory.equipment_id', 'ref_equipment.name', 'ref_equipment.name_i18n', 'ref_equipment.category')
 
-  return { weapons: weaponsRaw.rows, installableMods }
+  // i18n (PLAN_LOCALISATION.md §7.15 B1.6) : résout re.name, retire les *_i18n.
+  const weapons = weaponsRaw.rows.map(({ name_i18n, ...w }) => ({
+    ...w,
+    name: resolveRefField('ref_equipment', { name: w.name, name_i18n }, 'name'),
+  }))
+  const installableMods = installableModsRaw.map((m) => localizeRefAliased('ref_equipment', m, { name: 'name' }))
+
+  return { weapons, installableMods }
 }
 
 // Retourne un mod swappé (remplacé par un nouveau du même slot) en inventaire — même logique de
