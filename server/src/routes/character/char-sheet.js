@@ -45,6 +45,7 @@
 import { Router } from 'express'
 import db from '../../db/knex.js'
 import { AppError } from '../../lib/AppError.js'
+import { resolveRefField, localizeRefAliased } from '../../lib/refI18n.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { getCoutAugmentation, getCoutDeblocageX, getCoutAttributPc, MAX_PC_MODIFIER, calcWoundPenalty, calcSkillTotal, calcAttributeNA } from '../../lib/charStats.js'
 import { calcActiveMalus } from '../../lib/activeMalusRegistry.js'
@@ -1378,12 +1379,13 @@ router.get('/:characterId/macro-options', async (req, res, next) => {
 
     let skills = []
     if (sheet) {
-      skills = await db('char_skills')
+      const skillRows = await db('char_skills')
         .join('ref_skills', 'char_skills.skill_id', 'ref_skills.id')
         .where({ 'char_skills.char_sheet_id': sheet.id })
-        .select('ref_skills.id as skill_id', 'ref_skills.label', 'ref_skills.family')
+        .select('ref_skills.id as skill_id', 'ref_skills.label', 'ref_skills.label_i18n', 'ref_skills.family', 'ref_skills.family_i18n')
         .orderBy('ref_skills.family')
         .orderBy('ref_skills.label')
+      skills = skillRows.map(s => localizeRefAliased('ref_skills', s, { label: 'label', family: 'family' }))
     }
 
     const attributes = [
@@ -1708,9 +1710,9 @@ router.post('/:characterId/drone/programs', async (req, res, next) => {
     // Enrichir avec name/description pour le client
     const enriched = { ...program }
     if (equipment_id) {
-      const ref = await db('ref_equipment').where({ id: equipment_id }).select('name', 'description').first()
-      enriched.program_name = ref?.name ?? null
-      enriched.program_description = ref?.description ?? null
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('name', 'name_i18n', 'description', 'description_i18n').first()
+      enriched.program_name = ref == null ? null : resolveRefField('ref_equipment', ref, 'name')
+      enriched.program_description = ref == null ? null : resolveRefField('ref_equipment', ref, 'description')
     }
 
     res.status(201).json({ program: enriched })
@@ -1746,9 +1748,9 @@ router.put('/:characterId/drone/programs/:programId', async (req, res, next) => 
     // Enrichir avec name/description pour le client
     const enriched = { ...updated }
     if (updated.equipment_id) {
-      const ref = await db('ref_equipment').where({ id: updated.equipment_id }).select('name', 'description').first()
-      enriched.program_name = ref?.name ?? null
-      enriched.program_description = ref?.description ?? null
+      const ref = await db('ref_equipment').where({ id: updated.equipment_id }).select('name', 'name_i18n', 'description', 'description_i18n').first()
+      enriched.program_name = ref == null ? null : resolveRefField('ref_equipment', ref, 'name')
+      enriched.program_description = ref == null ? null : resolveRefField('ref_equipment', ref, 'description')
     }
 
     res.json({ program: enriched })
@@ -2573,9 +2575,9 @@ router.post('/:characterId/exo/programs', async (req, res, next) => {
 
     const enriched = { ...program }
     if (equipment_id) {
-      const ref = await db('ref_equipment').where({ id: equipment_id }).select('name', 'description').first()
-      enriched.program_name = ref?.name ?? null
-      enriched.program_description = ref?.description ?? null
+      const ref = await db('ref_equipment').where({ id: equipment_id }).select('name', 'name_i18n', 'description', 'description_i18n').first()
+      enriched.program_name = ref == null ? null : resolveRefField('ref_equipment', ref, 'name')
+      enriched.program_description = ref == null ? null : resolveRefField('ref_equipment', ref, 'description')
     }
 
     res.status(201).json({ program: enriched })
@@ -2631,9 +2633,9 @@ router.put('/:characterId/exo/programs/:programId', async (req, res, next) => {
 
     const enriched = { ...updated }
     if (updated.equipment_id) {
-      const ref = await db('ref_equipment').where({ id: updated.equipment_id }).select('name', 'description').first()
-      enriched.program_name = ref?.name ?? null
-      enriched.program_description = ref?.description ?? null
+      const ref = await db('ref_equipment').where({ id: updated.equipment_id }).select('name', 'name_i18n', 'description', 'description_i18n').first()
+      enriched.program_name = ref == null ? null : resolveRefField('ref_equipment', ref, 'name')
+      enriched.program_description = ref == null ? null : resolveRefField('ref_equipment', ref, 'description')
     }
 
     res.json({ program: enriched })
