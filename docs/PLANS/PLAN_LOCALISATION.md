@@ -639,6 +639,10 @@ Une étape par tour (plan → analyse à charge → code — CLAUDE.md). Pas de 
   `checkCareerEligibility`/`formatEligibilityReason`, `AppError` avec `refAdv.name`, etc.) → dette
   **Lot 6**. `checkCareerEligibility` **n'a pas** été touché en 5.2 (le plan §7.7 le prévoyait à
   tort — résoudre le libellé encapsulé ne corrige pas la phrase figée).
+- **Snapshots FR gelés** (texte `ref_*` copié en base à un instant T) : `char_advantages.snapshot_data`
+  **traité** en 5.3c (localisé avant `JSON.stringify`) ; `char_inventory_mods.mod_name` (dénormalisé
+  à l'installation, affiché via `mods_installed` de `getInventory`) **non traité** — même classe, à
+  reprendre avec B2 ou une 2ᵉ langue.
 - Colonnes micro-format (`skill_bonus`, `immunity`, `caliber`, `price_modifier`, `duration`,
   `mod_slot`) → notées, décision différée.
 - Lots 1-4 (validation navigateur), Lot 6.
@@ -677,6 +681,10 @@ pass-through + strip). Côté personnage (objets possédés), **non câblé** �
 
 Ré-audit `ref_*` sur tout `server/src` (2026-09-02, post-5.3), **relu site par site** (le premier jet
 au `grep` sur-comptait). Deux sous-phases.
+
+**Ré-audit final post-B1 (2026-09-02)** : `exoTemplateService` (`ref_equipment_id` + `label_override`
+seulement), `socketEntity`, `socketCombatState`, `routes/creation.js`, `vault*` → **tous propres**
+(aucun texte `ref_*` non câblé). Reste uniquement **B2** + les snapshots FR gelés (§7.6).
 
 #### B1 — projection propre (jointure/alias → client ou PDF, patron Phase A)
 
@@ -829,8 +837,12 @@ contenu FR modifié — projection de lecture uniquement. FR seul → inerte.
 
 Testé : `node --check` + `git diff --check` par fichier ; `node --test refI18n.test.mjs` 21/21 ;
 smoke base réelle par étape (résolution `== colonne brute` fr, 0 fuite `_i18n`, champs mécaniques
-préservés). **Non testé** : parcours navigateur (session beta) ; `characterExportService` = .xlsx réel
-non généré.
+préservés). **Suite serveur contre le schéma migré (2026-09-02) : 99 tests, 0 échec**
+(`combatantContextService`, `inventoryService`, `advantageService`, `exoTemplateService`,
+`creationRoundTrip`, `creationVaultNative`, `charSheetService`, `weaponModService`,
+`movementBudgetService`, `vaultCloneRegistry`) — aucun `deepEqual` cassé par les colonnes `_i18n`.
+**Non testé** : parcours navigateur (session beta) ; `characterExportService` = .xlsx réel non généré ;
+cycle `down()`/`up()` réel de la migration 318 (`verify_318.js` fourni, non lancé).
 
 ---
 
