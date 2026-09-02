@@ -5,6 +5,7 @@ import { registerTokenHandlers } from './socketToken.js'
 import { registerBattlemapHandlers } from './socketBattlemap.js'
 import { registerDiceHandlers, registerDiceRollHandler } from './socketDice.js'
 import { registerEntityHandlers } from './socketEntity.js'
+import { registerConnectorHandlers } from './socketConnector.js'
 import { registerCombatHandlers } from './socketCombat.js'
 import { pickNextTimelineStep } from './socketCombatHelpers.js'
 import { registerTradeHandlers } from './socketTrade.js'
@@ -17,6 +18,10 @@ import { listPendingCatastrophes } from '../lib/catastropheService.js'
 // DÃ©clarÃ©e hors de initSocket â€” une seule instance, partagÃ©e entre toutes les connexions.
 // NettoyÃ©e Ã  chaque rÃ©solution (ENTITY_ACTION_RESOLVE) ou expiration (timeout 60s â€” PE12).
 const pendingEntityActions = new Map()
+
+// Map des demandes de crochetage de porte en attente d'arbitrage MJ — même patron que
+// pendingEntityActions ci-dessus (docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md §7 point 5).
+const pendingConnectorActions = new Map()
 
 // Map des timers combat actifs â€” Map<campaignId, Map<tokenId, timeoutId>>
 // DÃ©clarÃ©e hors de initSocket â€” singleton, PC16.
@@ -256,6 +261,7 @@ const initSocket = (io) => {
         registerBattlemapHandlers(io, socket, context)
         registerDiceHandlers(io, socket, context)
         registerEntityHandlers(io, socket, context, pendingEntityActions)
+        registerConnectorHandlers(io, socket, context, pendingConnectorActions)
         registerCombatHandlers(io, socket, context, { combatTimers, combatPreviews })
         registerTradeHandlers(io, socket, context)
         registerChatHandlers(io, socket, context)

@@ -5,6 +5,11 @@ export const useSessionStore = create((set) => ({
   messagesByCampaign: {},   // { [campaignId]: Message[] }
   activeCampaignId: null,
   pendingEntityId: null,    // entityId dont l'action attend l'arbitrage GM (un seul à la fois)
+  pendingConnectorId: null, // connector.worldId dont l'action de porte attend une réponse serveur
+                            // (docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md §8) — même patron que
+                            // pendingEntityId : `onCommand` n'est pas réellement attendu jusqu'à la
+                            // réponse réseau (socket, pas une promesse), un useState local dans
+                            // DoorRuntimeControls se réinitialiserait avant la vraie réponse.
   criticalEffect: null,     // { kind: 'critical_success'|'catastrophe_risk', id } — un seul à la fois, v1
   declareError: null,       // { message, id } — bannière transitoire de refus de déclaration de combat (un seul à la fois)
 
@@ -89,6 +94,9 @@ export const useSessionStore = create((set) => ({
   setPendingEntityId: (entityId) => set({ pendingEntityId: entityId }),
   clearPendingEntityId: () => set({ pendingEntityId: null }),
 
+  setPendingConnectorId: (connectorId) => set({ pendingConnectorId: connectorId }),
+  clearPendingConnectorId: () => set({ pendingConnectorId: null }),
+
   // Déclenchement/rendu séparés (docs/PLANS/PLAN_TEST_CRITIQUE.md Lot 3) : ce store ne fait que
   // porter l'état, CriticalEffectOverlay.jsx décide seul de l'apparence — remplacer le popup texte
   // par un vrai effet visuel plus tard ne touche que ce second fichier.
@@ -108,6 +116,7 @@ export const useSessionStore = create((set) => ({
     messagesByCampaign: {},
     activeCampaignId: null,
     pendingEntityId: null,
+    pendingConnectorId: null,
     criticalEffect: null,
     declareError: null,
   }),

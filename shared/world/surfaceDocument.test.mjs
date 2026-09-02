@@ -319,3 +319,26 @@ test('la v8 valide une porte ancree dans le repere parametrique d un arc', () =>
   delete surface.connectors.curvedDoor.curveOffset
   assert.equal(validateSurfaceData(surface).valid, false)
 })
+
+test('lockDifficultyDc est optionnel sur une porte mais doit être un nombre fini si présent', () => {
+  const surface = surfaceFixture()
+  surface.connectors.lockedDoor = {
+    type: 'door',
+    axis: 'x',
+    x0: 0,
+    x1: 1,
+    z0: 0,
+    z1: 0,
+    y: 0,
+  }
+  assert.equal(validateSurfaceData(surface).valid, true, 'absent = valide (fallback géré à la résolution)')
+
+  surface.connectors.lockedDoor.lockDifficultyDc = -5
+  assert.equal(validateSurfaceData(surface).valid, true, 'un malus (négatif) est une valeur normale')
+
+  surface.connectors.lockedDoor.lockDifficultyDc = 'difficile'
+  assert.equal(validateSurfaceData(surface).valid, false)
+
+  surface.connectors.lockedDoor.lockDifficultyDc = NaN
+  assert.equal(validateSurfaceData(surface).valid, false)
+})

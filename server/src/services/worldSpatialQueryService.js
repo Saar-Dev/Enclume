@@ -2,10 +2,12 @@ import db from '../db/knex.js'
 import {
   dbPositionToWorldPoint,
   distanceBetweenWorldPointsM,
+  distanceToSegmentM,
   horizontalDistanceBetweenWorldPointsM,
 } from '../../../shared/world/worldMetrics.js'
 import { pointInsideEffectBounds } from '../../../shared/world/worldEffects.js'
 import { isPointInAoeShape } from '../../../shared/world/aoeShapes.js'
+import { prepareSurfaceData } from '../../../shared/world/surfaceDocument.js'
 import { loadBattlemapRuntimeContext } from './worldEffectService.js'
 import { reconcileBattlemapElevators } from './worldElevatorService.js'
 
@@ -131,6 +133,74 @@ export async function measureBattlemapTokenEntityDistance({
       runtimeRevision: elevatorRuntime.runtimeRevision,
       passengerTokens: elevatorRuntime.passengerTokens,
     }),
+  })
+}
+
+// Charge un connecteur porte par `worldId` depuis le document statique normalisé de la battlemap.
+// Recherche par `.worldId`, PAS par clé d'objet : `prepareSurfaceData` conserve les clés legacy
+// telles quelles (ex. "door:3") et n'attache qu'un `worldId` déterministe en propriété — c'est ce
+// `worldId` que le client envoie déjà pour l'ascenseur (`Canvas3D.jsx` : `connector.worldId ||
+// connector.id`, jamais la clé), même identifiant que celui utilisé comme `feature_id` dans
+// `world_feature_states` (§3) et par `normalizeElevatorDefinition` (`elevatorRuntime.js:28`,
+// même patron). Un lookup par clé d'objet raterait silencieusement tout connecteur legacy.
+export function loadBattlemapDoorConnector(battlemap, connectorId) {
+  const surface = prepareSurfaceData(battlemap?.surface_data || {}, {
+    battlemapId: battlemap?.id || null,
+  }).surfaceData
+  const connector = Object.values(surface.connectors).find(c => c.worldId === connectorId)
+  return (connector && connector.type === 'door') ? connector : null
+}
+
+/**
+ * Mesure autoritaire joueur↔porte (docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md §2/§4). Une porte
+ * n'est jamais un point (segment x0/z0 → x1/z1 à altitude `y`) — distance au segment le plus proche,
+ * jamais point→point. Réconciliation ascenseur avant lecture, même garantie que
+ * measureBattlemapTokenDistance/measureBattlemapTokenEntityDistance : une cabine en mouvement ne doit
+ * jamais laisser une action sur une porte travailler sur une position périmée.
+ */
+export async function measureBattlemapTokenConnectorDistance({
+  tokenId,
+  connectorId,
+  battlemapId,
+  database = db,
+} = {}) {
+  const initialToken = await database('tokens').where({ id: tokenId, battlemap_id: battlemapId }).first()
+  if (!initialToken) return Object.freeze({ status: 'token-not-found', distanceM: null })
+
+  const elevatorRuntime = await reconcileBattlemapElevators({ battlemapId, database })
+  const battlemap = elevatorRuntime.battlemap
+  const [token, runtimeContext] = await Promise.all([
+    database('tokens').where({ id: tokenId, battlemap_id: battlemap.id }).first(),
+    loadBattlemapRuntimeContext(battlemap, database),
+  ])
+  if (!token) return Object.freeze({ status: 'token-not-found', distanceM: null })
+  if (token.position_space !== 'world-feet') {
+    return Object.freeze({ status: 'legacy-position', distanceM: null })
+  }
+
+  const connector = loadBattlemapDoorConnector(battlemap, connectorId)
+  if (!connector) return Object.freeze({ status: 'connector-not-found', distanceM: null })
+
+  const metrics = runtimeContext.snapshot.metrics
+  const distanceM = distanceToSegmentM(
+    dbPositionToWorldPoint(token),
+    { x: connector.x0, y: connector.y, z: connector.z0 },
+    { x: connector.x1, y: connector.y, z: connector.z1 },
+    metrics,
+  )
+
+  return Object.freeze({
+    status: 'ok',
+    distanceM,
+    token,
+    connector,
+    metrics,
+    // featureStates déjà chargé par loadBattlemapRuntimeContext ci-dessus pour calculer le snapshot
+    // — exposé ici pour que l'appelant (socketConnector.js) lise l'état runtime de la porte sans un
+    // 2e aller-retour DB identique (même philosophie que PLAN_AOE.md §2.2 : un chargement, N usages).
+    featureStates: runtimeContext.runtimeState.featureStates,
+    worldRevision: runtimeContext.snapshot.worldRevision,
+    runtimeRevision: runtimeContext.runtimeRevision,
   })
 }
 

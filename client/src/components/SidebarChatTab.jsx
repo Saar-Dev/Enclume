@@ -18,6 +18,7 @@ export default function SidebarChatTab({
   onOpenBreakdown,
   setPendingActionCount,
   onEntityActionResolve,
+  onConnectorActionResolve,
   onOpenTrade,
   onOpenExchange,
   loadOlderMessages,
@@ -143,6 +144,7 @@ export default function SidebarChatTab({
           onOpenBreakdown,
           setPendingActionCount,
           onEntityActionResolve,
+          onConnectorActionResolve,
           onOpenTrade,
           onOpenExchange,
         }))}

@@ -64,6 +64,12 @@ export const WS = {
   ENTITY_MOVE_REQUEST:      'entity:move_request',       // joueur → serveur : demande de déplacement entité (9F-B)
   ENTITY_MOVE_RESULT:       'entity:move_result',        // serveur → joueur : résultat jet + positions finales (9F-B)
 
+  // Connecteurs (portes) — docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md
+  CONNECTOR_ACTION_REQUEST: 'connector:action_request',  // joueur ou GM → serveur : ouvrir/fermer/verrouiller
+  CONNECTOR_ACTION_PENDING: 'connector:action_pending',  // serveur → GM : demande en attente d'arbitrage (Test)
+  CONNECTOR_ACTION_RESOLVE: 'connector:action_resolve',  // GM → serveur : décision d'arbitrage
+  CONNECTOR_ACTION_RESULT:  'connector:action_result',   // serveur → joueur : résultat (refus, no-op ou timeout)
+
   // Blessures (Chantier 11)
   WOUND_ADDED:   'wound:added',    // serveur → room : blessure ajoutée (+ promoted, shock_test_required)
   WOUND_UPDATED: 'wound:updated',  // serveur → room : blessure stabilisée

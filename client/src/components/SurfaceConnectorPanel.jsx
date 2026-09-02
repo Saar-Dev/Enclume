@@ -7,6 +7,7 @@ import {
   setMaterialSlotOverride,
 } from '../lib/modelMaterialSlots.js'
 import { useDraggablePanelPosition } from '../lib/floatingPanel.js'
+import { useSessionStore } from '../stores/sessionStore'
 
 const PANEL_W = 310
 const PANEL_H_EST = 620
@@ -107,6 +108,60 @@ function ElevatorRuntimeControls({ connector, runtimeState, onCommand, canAdmin 
   )
 }
 
+// Mirroir ElevatorRuntimeControls — état courant + actions Ouvrir/Fermer. Une seule action 'open'
+// couvre le cas verrouillé (le serveur décide seul libre vs Test depuis l'état réel, §4) — pas de
+// bouton "Crocheter" séparé, seul le libellé change selon l'état pour rester clair. Pas de bloc admin
+// séparé pour le MJ (mirroir ENTITY_ACTION_GM_DIRECT, docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md
+// §4/§5, analyse 2026-09-02) : le MJ utilise les MÊMES boutons — le serveur les résout instantanément
+// dès qu'il reconnaît le socket MJ, sans que le client ait besoin de le signaler. Seul `canAdmin`
+// ajoute le bouton Verrouiller, réservé au MJ (RAW : un joueur ne verrouille jamais une porte lui-même).
+function DoorRuntimeControls({ connector, runtimeState, onCommand, canAdmin }) {
+  const { t } = useTranslation('builder')
+  // pendingConnectorId (sessionStore), pas un useState local : onCommand émet un socket, pas une
+  // promesse attendue jusqu'à la réponse serveur — un state local se réinitialiserait avant que
+  // CONNECTOR_ACTION_RESULT/DICE_RESULT n'arrive (mirroir pendingEntityId/EntityMesh.jsx).
+  const pendingConnectorId = useSessionStore(s => s.pendingConnectorId)
+  const connectorWorldId = connector.worldId || connector.id
+  const pending = pendingConnectorId === connectorWorldId
+  const effectiveState = runtimeState?.state || connector.state || 'closed'
+
+  const run = (action) => {
+    if (!onCommand || pending) return
+    onCommand(connectorWorldId, action)
+  }
+
+  const stateLabelKey = effectiveState === 'open'
+    ? 'surfaceConnectorPanel.stateOpen'
+    : effectiveState === 'locked'
+      ? 'surfaceConnectorPanel.stateLocked'
+      : 'surfaceConnectorPanel.stateClosed'
+  const openLabel = effectiveState === 'locked'
+    ? t('doorRuntimeControls.pickLockButton')
+    : t('doorRuntimeControls.openButton')
+
+  return (
+    <div style={S.elevatorRuntime}>
+      <div style={S.infoGrid}>
+        <span>{t('doorRuntimeControls.stateLabel')}</span>
+        <strong>{t(stateLabelKey)}</strong>
+      </div>
+      <div style={S.runtimeActions}>
+        <button type="button" disabled={pending || !onCommand} onClick={() => run('open')} style={S.runtimeBtn}>
+          {openLabel}
+        </button>
+        <button type="button" disabled={pending || !onCommand} onClick={() => run('close')} style={S.runtimeBtn}>
+          {t('doorRuntimeControls.closeButton')}
+        </button>
+        {canAdmin && (
+          <button type="button" disabled={pending || !onCommand} onClick={() => run('lock')} style={S.adminBtn}>
+            {t('doorRuntimeControls.lockButton')}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function SurfaceConnectorPanel({
   connector,
   x,
@@ -116,8 +171,10 @@ export default function SurfaceConnectorPanel({
   onClose,
   runtimeState = null,
   onElevatorCommand = null,
+  onDoorCommand = null,
   canEdit = true,
   canAdminElevator = canEdit,
+  canAdminDoor = canEdit,
 }) {
   const { t } = useTranslation('builder')
   const { position, beginDrag, panelRef } = useDraggablePanelPosition({
@@ -186,12 +243,38 @@ export default function SurfaceConnectorPanel({
           </label>
         )}
 
+        {canEdit && connector.type === 'door' && connector.state === 'locked' && (
+          <label style={S.field}>
+            <span style={S.label}>{t('surfaceConnectorPanel.lockDifficultyLabel')}</span>
+            <input
+              type="number"
+              step="1"
+              value={connector.lockDifficultyDc ?? ''}
+              onChange={e => {
+                const raw = e.target.value
+                onPatch?.(connector.id, { lockDifficultyDc: raw === '' ? null : Number(raw) })
+              }}
+              style={S.input}
+            />
+            <span style={S.hint}>{t('surfaceConnectorPanel.lockDifficultyHint')}</span>
+          </label>
+        )}
+
         {connector.type === 'elevator' && (
           <ElevatorRuntimeControls
             connector={connector}
             runtimeState={runtimeState}
             onCommand={onElevatorCommand}
             canAdmin={canAdminElevator}
+          />
+        )}
+
+        {connector.type === 'door' && (
+          <DoorRuntimeControls
+            connector={connector}
+            runtimeState={runtimeState}
+            onCommand={onDoorCommand}
+            canAdmin={canAdminDoor}
           />
         )}
 

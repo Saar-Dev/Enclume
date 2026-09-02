@@ -363,6 +363,8 @@
     "actionAccept": "Accepter",
     "actionAuto": "Auto",
     "actionRefuse": "Refuser",
+    "connectorPickLockLabel": "crocheter une serrure",
+    "connectorDefaultLabel": "cette porte",
     "sellRequest": "{{charName}} veut vendre chez {{merchant}}",
     "sellRequestView": "Voir l'offre",
     "exchangeOffer": "{{charName}} propose un échange",

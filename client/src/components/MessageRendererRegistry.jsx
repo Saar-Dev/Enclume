@@ -15,7 +15,7 @@ import { formatMrDegreeTitle } from '../lib/mrDegreeTitle.js'
 //
 // ctx (dépendances non portées par le message lui-même, fournies par le composant appelant) :
 //   t, tCombat, isGm, animatingDiceId, breakdownPopoverMsgId, onOpenBreakdown,
-//   setPendingActionCount, onEntityActionResolve, onOpenTrade, onOpenExchange
+//   setPendingActionCount, onEntityActionResolve, onConnectorActionResolve, onOpenTrade, onOpenExchange
 
 const formatTime = (iso) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 
@@ -55,6 +55,43 @@ function renderEntityAction(msg, ctx) {
           {ctx.t('sidebar.actionAuto')}
         </button>
         <button className="btn btn-danger" style={styles.btnRefuse} onClick={() => { ctx.setPendingActionCount(p => Math.max(0, p - 1)); ctx.onEntityActionResolve?.(msg.requestId, false, false, 0) }}>
+          {ctx.t('sidebar.actionRefuse')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Mirroir renderEntityAction — même structure de carte, même bloc Compétence/DC réutilisé tel quel
+// (skillId toujours 'SYSTEMES_DE_SECURITE' pour une porte, docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md
+// §4/§8). `actionPending`/`actionOn` réutilisées avec un libellé d'action fixe (pas d'interactionLabel
+// distinct par porte, contrairement aux entités) plutôt que deux nouvelles clés dupliquant la phrase.
+function renderConnectorAction(msg, ctx) {
+  if (!ctx.isGm) return null
+  return (
+    <div key={msg.id} className="sidebar-msg-action" style={styles.messageAction}>
+      <div style={styles.actionHeader}>
+        <span style={styles.actionIcon}>🔒</span>
+        <span style={styles.actionTitle}>
+          {ctx.t('sidebar.actionPending', { playerName: msg.playerName, interactionLabel: ctx.t('sidebar.connectorPickLockLabel') })}
+        </span>
+        <span style={styles.msgTime}>{msg.time}</span>
+      </div>
+      <span style={styles.actionSub}>{ctx.t('sidebar.actionOn', { entityLabel: msg.connectorLabel || ctx.t('sidebar.connectorDefaultLabel') })}</span>
+      {msg.skillId && (
+        <div style={styles.actionMeta}>
+          <span>{ctx.t('sidebar.actionSkill')} : <strong>{msg.skillId}</strong></span>
+          <span>{ctx.t('sidebar.actionDC')} : <strong>{msg.defaultDifficulty}</strong></span>
+        </div>
+      )}
+      <div style={styles.actionBtns}>
+        <button className="btn btn-success" style={styles.btnAccept} onClick={() => { ctx.setPendingActionCount(p => Math.max(0, p - 1)); ctx.onConnectorActionResolve?.(msg.requestId, true, false, 0) }}>
+          {ctx.t('sidebar.actionAccept')}
+        </button>
+        <button className="btn" style={styles.btnAuto} onClick={() => { ctx.setPendingActionCount(p => Math.max(0, p - 1)); ctx.onConnectorActionResolve?.(msg.requestId, true, true, 0) }}>
+          {ctx.t('sidebar.actionAuto')}
+        </button>
+        <button className="btn btn-danger" style={styles.btnRefuse} onClick={() => { ctx.setPendingActionCount(p => Math.max(0, p - 1)); ctx.onConnectorActionResolve?.(msg.requestId, false, false, 0) }}>
           {ctx.t('sidebar.actionRefuse')}
         </button>
       </div>
@@ -387,6 +424,7 @@ function renderWhisper(msg) {
 
 const registry = {
   entity_action: renderEntityAction,
+  connector_action: renderConnectorAction,
   sell_request: renderSellRequest,
   exchange_offer: renderExchangeOffer,
   declare_error: renderDeclareError,

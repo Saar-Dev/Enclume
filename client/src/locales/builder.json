@@ -127,7 +127,16 @@
     "movementCostHint": "×1 normal, ×2 deux fois plus coûteux, jusqu’à ×100.",
     "colorsLabel": "Couleurs",
     "noColorSlots": "Ce modèle n’expose pas de slots couleur.",
-    "deleteObjectButton": "Supprimer l’objet 3D"
+    "deleteObjectButton": "Supprimer l’objet 3D",
+    "lockDifficultyLabel": "Difficulté de la serrure",
+    "lockDifficultyHint": "Modificateur signé (négatif = malus). Vide = malus par défaut du serveur."
+  },
+  "doorRuntimeControls": {
+    "stateLabel": "État",
+    "openButton": "Ouvrir",
+    "closeButton": "Fermer",
+    "pickLockButton": "Crocheter",
+    "lockButton": "Verrouiller"
   },
   "elevatorRuntimeControls": {
     "phaseLabels": {

@@ -2,19 +2,17 @@ import { WS } from '../../../shared/events.js'
 import db from '../db/knex.js'
 import { parseDice } from '../lib/diceParser.js'
 import { getUserColor } from '../lib/socketUtils.js'
-import { resolveTestOutcome, getCriticalSuccessBonus, applyCriticalSuccessBonus, applyCriticalFailReroll, getMrModifier } from '../../../shared/polarisTestResolution.js'
+import { resolveTestOutcome, getCriticalSuccessBonus, applyCriticalSuccessBonus, getMrModifier } from '../../../shared/polarisTestResolution.js'
 import {
-  calcSkillTotal, calcAttributeAN, calcAttributeNA,
+  calcAttributeAN,
   ATTR_LABELS,
 } from '../lib/charStats.js'
-import { calcActiveMalus } from '../lib/activeMalusRegistry.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { getMutationEffects } from '../services/mutationService.js'
-import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { measureBattlemapTokenEntityDistance } from '../services/worldSpatialQueryService.js'
 import { executeBattlemapRigidPairMovement } from '../services/worldForcedMovementService.js'
 import { bumpBattlemapRuntimeRevision } from '../services/worldRuntimeService.js'
-import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
+import { resolveGmArbitratedTest } from '../services/gmArbitratedTestService.js'
 
 // ─── Helper — résolution état entité après succès ─────────────────────────────
 // Lit target_state_id de l'interaction, met à jour current_state_id en base,
@@ -214,176 +212,26 @@ export function registerEntityHandlers(io, socket, { campaignId, user, isGm }, p
         return
       }
 
-      // ── Réussite automatique (sans jet) ───────────────────────────────
-      if (autoSuccess) {
-        const timestamp = new Date().toISOString()
-        io.to(pending.campaignId).emit(WS.DICE_RESULT, {
-          userId: pending.playerUserId,
-          username: pending.playerName,
-          color: '#5b8dee',
-          formula: pending.skillId,
-          rolls: [],
-          total: null,
-          type: 'auto',
-          isCriticalSuccess: false,
-          isCriticalFail: false,
-          timestamp,
-        })
+      // Résolution du Test (jet réel, ou succès automatique) — extrait dans un service partagé
+      // (`gmArbitratedTestService.js`, 2026-09-02) : cette mécanique est RAW générique, aucune
+      // dépendance à une entité, réutilisée telle quelle par CONNECTOR_ACTION_RESOLVE
+      // (docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md §7 point 4) plutôt que dupliquée.
+      const testOutcome = await resolveGmArbitratedTest({
+        io,
+        campaignId: pending.campaignId,
+        characterId: pending.characterId,
+        playerUserId: pending.playerUserId,
+        playerName: pending.playerName,
+        skillId: pending.skillId,
+        attributeId: pending.attributeId,
+        defaultDifficulty: pending.defaultDifficulty,
+        gmModifier,
+        autoSuccess,
+        dicePayloadType: 'entity_action',
+        catastropheSite: 'entity_action',
+      })
+      if (testOutcome?.isSuccess) {
         await resolveEntityState(pending.entityId, pending.interactionId, pending.campaignId, io)
-        return
-      }
-
-      // ── Skill absent → succès automatique sans jet (S34-2) ────────────
-      if (!pending.skillId) {
-        await resolveEntityState(pending.entityId, pending.interactionId, pending.campaignId, io)
-        return
-      }
-
-      // ── Jet de dés (1d20 + total serveur vs DC) ───────────────────────
-      try {
-        const { rolls, total: diceRoll, formula: normalizedFormula, seed } = await parseDice('1d20')
-
-        let mechanicalTotal = 0
-        let effectiveMalus = 0
-        let formulaLabel = pending.skillId || pending.attributeId || '?'
-        // Renseigné selon le type de Test (mutuellement exclusif, cf. branchement plus bas) — sert
-        // uniquement à résoudre le bonus de Réussite critique RAW p.204 (docs/PLAN_TEST_CRITIQUE.md
-        // Lot 2) via getCriticalSuccessBonus, jamais recalculé à la main ici.
-        let masteryLevel, attributeANForBonus
-
-        const sheet = pending.characterId
-          ? await db('char_sheet').where({ character_id: pending.characterId }).first()
-          : null
-
-        if (sheet) {
-          const [attrs, archetype, charSkillRow, refSkill, mutationEffects, settings] = await Promise.all([
-            db('char_attributes').where({ char_sheet_id: sheet.id }),
-            db('char_archetype').where({ char_sheet_id: sheet.id }).first(),
-            pending.skillId
-              ? db('char_skills').where({ char_sheet_id: sheet.id, skill_id: pending.skillId }).first()
-              : Promise.resolve(null),
-            pending.skillId
-              ? db('ref_skills').where({ id: pending.skillId }).first()
-              : Promise.resolve(null),
-            getMutationEffects(sheet.id),
-            getCampaignSettings(db, pending.campaignId),
-          ])
-
-          const genotypeRow = archetype?.genotype_id
-            ? await db('ref_genotypes').where({ id: archetype.genotype_id }).first()
-            : null
-
-          if (pending.skillId && refSkill) {
-            mechanicalTotal = calcSkillTotal(attrs, charSkillRow, refSkill, genotypeRow, mutationEffects)
-            masteryLevel = charSkillRow?.mastery ?? 0
-            formulaLabel = refSkill.label || pending.skillId
-          } else if (pending.attributeId) {
-            mechanicalTotal = calcAttributeAN(attrs, pending.attributeId, genotypeRow, mutationEffects)
-            attributeANForBonus = mechanicalTotal
-            formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
-          }
-
-          // ── Malus effectif (blessures + encombrement) ──────────────────────
-          try {
-            const wounds = await db('character_wounds').where({ char_sheet_id: sheet.id })
-
-            // FOR nette = calcAttributeNA (base + pc_modifier + génotype + mutations), corrige PI4
-            const forValue = calcAttributeNA(attrs, 'FOR', genotypeRow, mutationEffects)
-
-            const invItems = await db('char_inventory')
-              .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
-              .where({ 'char_inventory.character_id': pending.characterId })
-              .select('char_inventory.container', 'ref_equipment.weight as ref_weight', 'char_inventory.quantity')
-
-            const totalWeight = invItems.reduce((sum, item) => {
-              if (item.container === 'Coffre') return sum
-              if (item.ref_weight == null) return sum
-              return sum + item.ref_weight * item.quantity
-            }, 0)
-
-            // Registre de malus actifs (docs/PLAN_FATIGUE_DOMMAGES.md §10 Lot 4).
-            effectiveMalus = calcActiveMalus({
-              wounds, fatiguePoints: sheet.fatigue_points, totalWeight, forNA: forValue, settings,
-            })
-
-            if (effectiveMalus < 0) console.log(`[DBG] entity:action_resolve — malus actif ${effectiveMalus} pour character ${pending.characterId}`)
-          } catch (malusErr) {
-            console.warn('[WS] entity:action_resolve — calcul malus échoué, fallback 0:', malusErr.message)
-          }
-
-        } else {
-          console.warn(`[WS] entity:action_resolve — char_sheet introuvable pour character ${pending.characterId}, fallback total=0`)
-          if (pending.skillId) formulaLabel = pending.skillId
-          else if (pending.attributeId) formulaLabel = ATTR_LABELS[pending.attributeId] || pending.attributeId
-        }
-
-        const color = await getUserColor(db, pending.playerUserId)
-
-        const totalDiffMod = pending.defaultDifficulty + gmModifier
-        const chancesDeReussite = mechanicalTotal + totalDiffMod + effectiveMalus
-
-        // Résolution RAW complète (p.201-205, docs/PLAN_TEST_CRITIQUE.md) — ce site calculait
-        // jusqu'ici isSuccess à la main sans jamais détecter Réussite/Échec critique (hors périmètre
-        // de l'audit Lot 1, qui ne couvrait que la poussée/traction dans ce fichier). Même moteur que
-        // les autres Tests du projet, pas une variante locale.
-        let outcome = applyCriticalSuccessBonus(
-          resolveTestOutcome(diceRoll, chancesDeReussite),
-          getCriticalSuccessBonus({ masteryLevel, attributeAN: attributeANForBonus }),
-        )
-        if (outcome.isCriticalFail) {
-          const { total: reroll } = await parseDice('1d20')
-          outcome = applyCriticalFailReroll(outcome, reroll)
-        }
-        const { isSuccess, isCriticalSuccess, isCriticalFail, mr, catastropheRisk } = outcome
-        const diffLabel = totalDiffMod >= 0 ? `+${totalDiffMod}` : `${totalDiffMod}`
-
-        const breakdown = [
-          { label: formulaLabel, value: mechanicalTotal, type: 'base' },
-          ...(pending.defaultDifficulty !== 0 ? [{ label: 'Difficulté', value: pending.defaultDifficulty, type: pending.defaultDifficulty > 0 ? 'bonus' : 'malus' }] : []),
-          ...(gmModifier !== 0 ? [{ label: 'Modificateur GM', value: gmModifier, type: gmModifier > 0 ? 'bonus' : 'malus' }] : []),
-          ...(effectiveMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' }] : []),
-          { label: 'Seuil', value: chancesDeReussite, type: 'total' },
-        ]
-
-        const timestamp = new Date().toISOString()
-        io.to(pending.campaignId).emit(WS.DICE_RESULT, {
-          userId: pending.playerUserId,
-          username: pending.playerName,
-          color,
-          formula: formulaLabel,
-          rolls,
-          total: diceRoll,
-          type: 'entity_action',
-          isCriticalSuccess,
-          isCriticalFail,
-          catastropheRisk,
-          seed,
-          timestamp,
-          skillLabel: formulaLabel,
-          mechanicalTotal,
-          chancesDeReussite,
-          effectiveMalus,
-          diffLabel,
-          isSuccess,
-          mr,
-          breakdown,
-        })
-        // Catastrophe automatique (docs/PLANS/PLAN_CATASTROPHE_RISK.md Lot 1) — Poussée/Traction
-        // n'est pas scopé combat (§8 point 1), maybeTriggerCatastrophe applique lui-même la garde
-        // combat actif : aucun effet hors combat, garde jamais dupliquée ici.
-        const actorTokenForCatastrophe = await db('tokens')
-          .where({ character_id: pending.characterId }).first()
-        if (actorTokenForCatastrophe) {
-          await maybeTriggerCatastrophe(io, pending.campaignId, actorTokenForCatastrophe.id, catastropheRisk, {
-            site: 'entity_action', actorTokenId: actorTokenForCatastrophe.id, targetTokenId: null,
-          })
-        }
-
-        if (isSuccess) {
-          await resolveEntityState(pending.entityId, pending.interactionId, pending.campaignId, io)
-        }
-      } catch (err) {
-        console.error('[WS] entity:action_resolve dice error:', err.message)
       }
     } catch (err) {
       console.error('[WS] entity:action_resolve error:', err.message)

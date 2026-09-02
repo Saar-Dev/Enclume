@@ -15,6 +15,7 @@ import { useCampaignStore } from '../stores/campaignStore'
 import api from '../lib/api'
 import { useTokenSocket } from '../lib/useTokenSocket'
 import { useEntitySocket } from '../lib/useEntitySocket'
+import { useConnectorSocket } from '../lib/useConnectorSocket'
 import { useCombatSocket } from '../lib/useCombatSocket'
 import { useSessionSocket } from '../lib/useSessionSocket'
 import { useCharacterSocket } from '../lib/useCharacterSocket'
@@ -392,6 +393,7 @@ function SessionContent({ campaignId }) {
   // Hooks WS — déclarés ici, après TOUS les useState (évite TDZ sur setRadialMenu, setMoveTarget…)
   useTokenSocket()
   useEntitySocket({ setRadialMenu, setMoveTarget, setMortalWoundBanner })
+  useConnectorSocket()
   // useCombatUIState AVANT useCombatSocket — handleModeReset passé comme onModeReset (P-R14-1)
   const {
     combatMoveMode, pendingMoveSelection, combatTargetMode, targetRecap, combatCameraCenter,
@@ -560,6 +562,11 @@ function SessionContent({ campaignId }) {
   // ─── Résolution action entité (GM → serveur) ──────────────────────────────
   const handleEntityActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {
     socket?.emit(WS.ENTITY_ACTION_RESOLVE, { requestId, isApproved, autoSuccess, gmModifier })
+  }, [socket])
+
+  // ─── Résolution crochetage de porte (GM → serveur) — mirroir exact ci-dessus ──────
+  const handleConnectorActionResolve = useCallback((requestId, isApproved, autoSuccess, gmModifier) => {
+    socket?.emit(WS.CONNECTOR_ACTION_RESOLVE, { requestId, isApproved, autoSuccess, gmModifier })
   }, [socket])
 
   const handleTokenSetRotation = useCallback((tokenId, r) => {
@@ -776,6 +783,7 @@ function SessionContent({ campaignId }) {
           onReconnectSocket={() => {}}
           onOpenCharacter={openSheet}
           onEntityActionResolve={handleEntityActionResolve}
+          onConnectorActionResolve={handleConnectorActionResolve}
           onOpenTrade={(ctx) => { setTradeInitialContext(ctx ?? null); setTradeWindowOpen(true) }}
           onOpenExchange={(ctx) => { setExchangeContext(ctx ?? null); setExchangeWindowOpen(true) }}
         />

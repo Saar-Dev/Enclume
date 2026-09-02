@@ -117,6 +117,28 @@ export function horizontalDistanceBetweenWorldPointsM(from, to, metrics) {
   return worldUnitsToMeters(Math.hypot(b.x - a.x, b.z - a.z), metrics)
 }
 
+// Distance 3D (même convention que distanceBetweenWorldPointsM, altitude incluse — jamais ignorée :
+// un connecteur horizontalement aligné mais à un étage différent ne doit jamais paraître "proche" à
+// travers un plancher/plafond) d'un point au segment [segmentStart, segmentEnd] le plus proche. Un
+// connecteur porte n'est jamais un point (surfaceDocument.js: x0/x1/z0/z1) — une porte sur mur courbe
+// (axis: 'segment') a en plus un arc, approximé ici par sa corde droite (x0,z0)→(x1,z1) à altitude
+// constante, jamais par un point d'ancrage qui n'existe pas pour le cas droit (docs/PLANS/
+// PLAN_INTERACTIONS_CONNECTEURS.md §2).
+export function distanceToSegmentM(point, segmentStart, segmentEnd, metrics) {
+  const p = normalizeWorldPoint(point, 'point')
+  const a = normalizeWorldPoint(segmentStart, 'segmentStart')
+  const b = normalizeWorldPoint(segmentEnd, 'segmentEnd')
+  const ab = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }
+  const lengthSq = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z
+  let t = 0
+  if (lengthSq > 0) {
+    t = ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y + (p.z - a.z) * ab.z) / lengthSq
+    t = Math.max(0, Math.min(1, t))
+  }
+  const closest = { x: a.x + ab.x * t, y: a.y + ab.y * t, z: a.z + ab.z * t }
+  return distanceBetweenWorldPointsM(p, closest, metrics)
+}
+
 export function interpolateWorldPoint(from, to, ratio) {
   const a = normalizeWorldPoint(from, 'from')
   const b = normalizeWorldPoint(to, 'to')

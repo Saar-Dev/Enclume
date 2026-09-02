@@ -1413,7 +1413,8 @@ function Scene({
 export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
-  const { isGm } = useCharacterStore()
+  const { isGm, characters } = useCharacterStore()
+  const { user } = useAuthStore()
 
   const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, losMode })
   // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
@@ -1598,20 +1599,58 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
   }, [surfaceConnectorPanel?.connectorId, surfaceData.connectors])
 
   const handleSurfaceConnectorSelect = useCallback((connectorId, connector, event) => {
-    if (connector?.type !== 'elevator') return
+    if (connector?.type !== 'elevator' && connector?.type !== 'door') return
+    // Bug pré-existant partagé (trouvé en testant la porte, mais touche l'ascenseur à l'identique —
+    // même handler, ConnectorSegment.handlePointerDown déclenche sur POINTERDOWN, stopPropagation()
+    // n'empêche jamais le "click" natif suivant sur le <Canvas> DOM) : sans ce ref, handleCanvasClick
+    // referme le panneau à l'instant même où le clic se termine (pointerup). Mirroir exact du garde
+    // déjà posé pour la sélection de token (ligne ~989, justSelectedRef.current = true).
+    justSelectedRef.current = true
     const source = event?.nativeEvent || event?.sourceEvent || event || {}
     setSurfaceConnectorPanel({
       connectorId,
       x: Number(source.clientX) || 24,
       y: Number(source.clientY) || 24,
     })
-  }, [])
+  }, [justSelectedRef])
 
   const handleElevatorCommand = useCallback(async (elevatorId, command) => {
     if (!battlemap?.id || !elevatorId) return
     await api.post(`/battlemaps/${battlemap.id}/world-elevators/${elevatorId}/commands`, command)
     await refreshRuntimeElevators()
   }, [battlemap?.id, refreshRuntimeElevators])
+
+  // Ouvrir/Fermer/Verrouiller une porte (docs/PLANS/PLAN_INTERACTIONS_CONNECTEURS.md §5) — socket,
+  // pas REST (contrairement à l'ascenseur) : le flux joueur est MJ-arbitré, intrinsèquement
+  // asynchrone bidirectionnel. Le MJ envoie le même événement que le joueur, sans characterId — le
+  // serveur reconnaît isGm et résout instantanément (§4 point 0, mirroir ENTITY_ACTION_GM_DIRECT),
+  // jamais une décision prise ici côté client.
+  const handleDoorAction = useCallback((connectorId, action) => {
+    if (!socket || !connectorId || !battlemap?.id) return
+    const requestId = `door-${connectorId}-${Date.now()}`
+    // pendingConnectorId (sessionStore) — pas un useState local dans DoorRuntimeControls : l'émission
+    // socket n'est pas une promesse attendue jusqu'à la réponse serveur, un state local se
+    // réinitialiserait avant que CONNECTOR_ACTION_RESULT/DICE_RESULT n'arrive (useConnectorSocket.js
+    // les efface). Mirroir exact de pendingEntityId/setPendingEntityId (handleEntityAction,
+    // SessionPage.jsx).
+    useSessionStore.getState().setPendingConnectorId(connectorId)
+    if (isGm) {
+      socket.emit(WS.CONNECTOR_ACTION_REQUEST, {
+        requestId, connectorId, battlemapId: battlemap.id, action,
+      })
+      return
+    }
+    // TODO chantier /sc (même dette que handleEntityAction) : résoudre le character actif du joueur.
+    const playerChar = characters.find(c => c.user_id === user?.id)
+      ?? characters.find(c => c.visible !== false)
+    if (!playerChar) {
+      console.warn('[DoorAction] Aucun personnage disponible pour cette action')
+      return
+    }
+    socket.emit(WS.CONNECTOR_ACTION_REQUEST, {
+      requestId, characterId: playerChar.id, connectorId, battlemapId: battlemap.id, action,
+    })
+  }, [socket, isGm, characters, user?.id, battlemap?.id])
 
   const handleCanvasClick = useCallback(() => {
     if (justSelectedRef.current) { justSelectedRef.current = false; return }
@@ -1683,10 +1722,18 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
         connector={selectedSurfaceConnector}
         x={surfaceConnectorPanel.x}
         y={surfaceConnectorPanel.y}
-        runtimeState={runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null}
+        runtimeState={
+          selectedSurfaceConnector.type === 'elevator'
+            ? runtimeElevatorStates[selectedSurfaceConnector.worldId || selectedSurfaceConnector.id] || null
+            : selectedSurfaceConnector.type === 'door'
+              ? worldEffects.featureStates[selectedSurfaceConnector.worldId] || null
+              : null
+        }
         onElevatorCommand={handleElevatorCommand}
+        onDoorCommand={handleDoorAction}
         canEdit={false}
         canAdminElevator={isGm}
+        canAdminDoor={isGm}
         onClose={() => setSurfaceConnectorPanel(null)}
       />
     )}

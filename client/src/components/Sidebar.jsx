@@ -45,6 +45,7 @@ export default function Sidebar({
   onReconnectSocket,
   onOpenCharacter,
   onEntityActionResolve,
+  onConnectorActionResolve,
   onOpenTrade,
   onOpenExchange,
 }) {
@@ -275,6 +276,7 @@ export default function Sidebar({
             onOpenBreakdown={handleOpenBreakdown}
             setPendingActionCount={setPendingActionCount}
             onEntityActionResolve={onEntityActionResolve}
+            onConnectorActionResolve={onConnectorActionResolve}
             onOpenTrade={onOpenTrade}
             onOpenExchange={onOpenExchange}
             loadOlderMessages={loadOlderMessages}

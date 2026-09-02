@@ -380,6 +380,12 @@ function validateFeature(collection, id, item, errors) {
         if (typeof item.curveId !== 'string' || !item.curveId) errors.push(`${path}.curveId est obligatoire sur un mur courbe`)
         if (!Number.isFinite(Number(item.curveOffset))) errors.push(`${path}.curveOffset doit être un nombre fini`)
       }
+      // Difficulté RAW du Test Systèmes de sécurité pour crocheter cette porte si `state === 'locked'`
+      // (PLAN_INTERACTIONS_CONNECTEURS.md §1/§3) — modificateur signé (négatif = malus), optionnel :
+      // un fallback -5 est appliqué à la résolution si absent, pas une contrainte d'autorat ici.
+      if (item.lockDifficultyDc != null && !Number.isFinite(Number(item.lockDifficultyDc))) {
+        errors.push(`${path}.lockDifficultyDc doit être un nombre fini`)
+      }
     } else if (item.type === 'elevator') {
       validateFiniteFields(item, ['x', 'z', 'fromLevel', 'toLevel'], path, errors)
     }
