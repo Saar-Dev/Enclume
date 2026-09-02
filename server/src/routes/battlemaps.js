@@ -8,6 +8,7 @@ import { multerUpload, uploadToMinio } from '../middleware/upload.js'
 import { calcAttributeNA } from '../lib/charStats.js'
 import { calcREA, getAdvantageModForAttr } from '../../../shared/polarisUtils.js'
 import { resolveHandWeapons, HAND_WEAPON_SLOTS } from '../../../shared/weaponSlots.js'
+import { resolveRefField, localizeRefAliased } from '../lib/refI18n.js'
 import { removeTokens } from '../lib/tokenLifecycle.js'
 import { getAdvantages } from '../services/advantageService.js'
 import {
@@ -273,7 +274,7 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .where('char_inventory.character_id', token.character_id)
         .whereIn('cis.slot_code', HAND_WEAPON_SLOTS)
         .select(
-          'char_inventory.id as inv_id', 'ref_equipment.name', 'cis.slot_code as slot', 'ref_equipment.fire_mode as ref_fire_mode',
+          'char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.name_i18n', 'cis.slot_code as slot', 'ref_equipment.fire_mode as ref_fire_mode',
           // shared/weaponSlots.js resolveHandWeapons() a besoin de damage_h/shock pour distinguer une
           // arme (contact ou Choc pur, ex. Dague neurale) d'un objet non-arme occupant la main
           // (Bouclier) — Session 158, shock ajouté pour CHOC1 (Dague neurale jamais détectée sinon).
@@ -299,6 +300,12 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
             WHERE rea.item_id = char_inventory.equipment_id
             LIMIT 1
           ) as skill_label`),
+          db.raw(`(
+            SELECT rs.label_i18n FROM ref_equipment_skill_assoc rea
+            JOIN ref_skills rs ON rs.id = rea.skill_id
+            WHERE rea.item_id = char_inventory.equipment_id
+            LIMIT 1
+          ) as skill_label_i18n`),
         ),
 
       db('char_inventory')
@@ -310,7 +317,7 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
             .whereRaw('cis.char_inventory_id = char_inventory.id')
             .whereNotIn('cis.slot_code', ['MG', 'MD', '2M', 'Tr', 'D', 'Ce'])
         })
-        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.location'),
+        .select('char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.name_i18n', 'ref_equipment.location'),
 
       // Armes naturelles actives (mutations) — docs/PLAN_MUTATION2.md Lot 4 sous-lot B. Bridge
       // character_id → char_sheet.id, contrairement à char_inventory qui a directement character_id.
@@ -320,15 +327,25 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .where('cs.character_id', token.character_id)
         .where('cm.status', 'active')
         .whereNotNull('rm.natural_weapon_formula')
-        .select('cm.id', 'rm.name', 'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple'),
+        .select('cm.id', 'rm.name', 'rm.name_i18n', 'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple'),
     ])
+
+    // i18n (PLAN_LOCALISATION.md §7.15 B1.5) : résout les libellés ref_* aliasés/joints.
+    // ref_category reste brut (resolveHandWeapons compare === 'Bouclier' / 'Arme de contact').
+    const locWeaponRows = weaponRows.map((w) => {
+      const o = localizeRefAliased('ref_equipment', w, { name: 'name' })
+      o.skill_label = resolveRefField('ref_skills', { label: w.skill_label, label_i18n: w.skill_label_i18n }, 'label')
+      return o
+    })
+    const locArmorRows = armorRows.map((a) => localizeRefAliased('ref_equipment', a, { name: 'name' }))
+    const locNaturalWeaponRows = naturalWeaponRows.map((n) => localizeRefAliased('ref_mutations', n, { name: 'name' }))
 
     // shared/weaponSlots.js — autorité unique, partagée avec le fetch client PJ
     // (CombatActionWindow.jsx) : filtre les objets non-armes (Bouclier) occupant une main et gère le
     // deux-mains (2M), les deux gaps trouvés Session 158 (Loulou/Breather, Mr sourire/Bouclier).
     // weapon2M/weaponTr transmis en plus de primaryWeapon (COM2) — sans eux, handSlotDisplayRows côté
     // client ne peut pas afficher le statut d'une arme en 2M/Tr, seul primaryWeapon les couvrirait.
-    const { weaponMg, weaponMd, weapon2M, weaponTr, primaryWeapon } = resolveHandWeapons(weaponRows)
+    const { weaponMg, weaponMd, weapon2M, weaponTr, primaryWeapon } = resolveHandWeapons(locWeaponRows)
 
     equipment[token.id] = {
       characterId:    token.character_id,
@@ -337,8 +354,8 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
       weaponMd,
       weapon2M,
       weaponTr,
-      armorPieces:    armorRows,
-      naturalWeapons: naturalWeaponRows,
+      armorPieces:    locArmorRows,
+      naturalWeapons: locNaturalWeaponRows,
     }
   }
 
