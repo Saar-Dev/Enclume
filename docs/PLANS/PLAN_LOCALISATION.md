@@ -842,7 +842,9 @@ export function localizeRefAliased(table, row, aliasMap, locale = DEFAULT_LOCALE
 ```
 
 Tests (`refI18n.test.mjs`) : fr = pass-through + strip des `*_i18n` aliasés ; `en` présent/absent ;
-`row` null ; alias sans `_i18n` correspondant (repli valeur brute).
+`row` null ; jointure vide (`row.ref_name` null, `row.ref_name_i18n` null → `null`, cas item custom
+`equipment_id` NULL) ; **alias présent sans `_i18n` correspondant → repli valeur brute** (documente le
+mode d'échec de la convention `<alias>_i18n`).
 
 **Commit isolé** (élargit la couture, comme 5.0).
 
@@ -850,11 +852,11 @@ Tests (`refI18n.test.mjs`) : fr = pass-through + strip des `*_i18n` aliasés ; `
 
 | Étape | Fichier | Geste |
 |---|---|---|
-| B1.1 | `inventoryService.js` | `getInventory` + `getItemWithRef` : `SELECT` ajoute `ref_equipment.{name,description,family,category}_i18n as ref_{…}_i18n` ; résultat par `localizeRefAliased('ref_equipment', row, { ref_name:'name', ref_description:'description', ref_family:'family', ref_category:'category' })` |
+| B1.1 | `inventoryService.js` | `getInventory` + `getItemWithRef` : `SELECT` ajoute `ref_equipment.{name,description,family,category}_i18n as ref_{…}_i18n` ; `localizeRefAliased('ref_equipment', row, { ref_name:'name', ref_description:'description', ref_family:'family', ref_category:'category' })` **au bout** (après le calcul d'encombrement). `getItemWithRef` : appelé par ~10 sites (add/equip/move/ammo → réponses client) — le localiser dans la fonction les couvre ; vérifier qu'aucun appelant ne fait `{...item}` → `INSERT` (le strip `_i18n` protège de toute façon). |
 | B1.2 | `routes/character/char-sheet.js` | `/macro-options` : `ref_skills.{label,family}_i18n` + `localizeRefAliased('ref_skills', …, { label:'label', family:'family' })`. Enrich programme ×4 : `.select` ajoute `name_i18n`/`description_i18n`, `resolveRefField('ref_equipment', ref, 'name'/'description')` (ou petit helper local `enrichProgramName`) |
-| B1.3 | `services/characterExportService.js` | join `ref_skills` : `_i18n` sur `rs.{label,family,description}` + `parent_rs.label_i18n` ; `localizeRefAliased`. `ref_genotypes` : **relire** — si `label`/`description` affichés → `localizeRef('ref_genotypes', genotypeRow)` ; sinon rien |
-| B1.4 | `routes/battlemaps.js` | weaponRows : `ref_equipment.name_i18n` + sous-requête `skill_label` → tirer aussi `rs.label_i18n` ; résoudre `name` + `skill_label`, **laisser `ref_category` brut**. armorRows : `name`. naturalWeaponRows : `rm.name_i18n` + `resolveRefField('ref_mutations', …)` |
-| B1.5 | `services/modingService.js` | `weaponsRaw` (`q.raw`) : ajouter `re.name_i18n` au `SELECT` + au `GROUP BY`, `.rows.map` résout `re.name`. `installableMods` (builder) : `ref_equipment.name_i18n` + `localizeRefAliased` |
+| B1.3 | `services/characterExportService.js` | **uniquement** la jointure `ref_skills` : `_i18n` sur `rs.{label,family,description}` + `parent_rs.label_i18n` ; `localizeRefAliased`. `ref_genotypes` l.67 : **vérifié HORS périmètre** — `genotypeRow` sert seulement à `getGenotypeModForAttr` (l.74, mécanique) ; l'export renvoie `genotype_id` (code), jamais le libellé. |
+| B1.4 | `routes/battlemaps.js` | weaponRows : `ref_equipment.name_i18n` + sous-requête `skill_label` → tirer aussi `rs.label_i18n` ; résoudre `name` + `skill_label`. **`ref_category` reste brut** : dual-usage — alimente `resolveHandWeapons` (compare `=== 'Bouclier'` / `'Arme de contact'`), le localiser casserait la logique (landmine type `!== 'Klauss'`). S'il est *aussi* affiché dans la fenêtre MJ → même report que §7.9 (regrouper par code client), pas en B1. armorRows : `name`. naturalWeaponRows : `rm.name_i18n` + `resolveRefField('ref_mutations', …)` |
+| B1.5 | `services/modingService.js` | `weaponsRaw` (`q.raw`) : ajouter `re.name_i18n` au `SELECT` **et au `GROUP BY`** (jsonb est groupable en PG) ; `.rows.map` résout `re.name`. `installableMods` (builder) : `ref_equipment.name_i18n` + `localizeRefAliased` |
 
 #### Validation B1
 
@@ -862,7 +864,9 @@ Tests (`refI18n.test.mjs`) : fr = pass-through + strip des `*_i18n` aliasés ; `
 - `node --test refI18n.test.mjs` (B1.0).
 - Smoke base réelle par étape : résolution `== colonne brute` en fr, zéro `*_i18n` dans la sortie,
   champs mécaniques (`ref_category`, `ref_location`, `damage_h`…) **inchangés et présents**.
-- Non testé : parcours navigateur (session beta), `characterExportService` (générer un PDF réel).
+- **Non testé** : parcours navigateur (session beta) ; `characterExportService` = site le moins
+  vérifiable (`node --check` ne teste pas un .xlsx généré ; confiance reportée des tests B1.0 + smoke
+  de la requête brute) → « ⚠️ PDF réel non généré » en clôture.
 - Retour arrière : revert de commit par étape ; B1.0 = retrait du helper (aucun appelant après revert
   des B1.x).
 
