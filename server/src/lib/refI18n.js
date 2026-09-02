@@ -58,3 +58,26 @@ export function localizeRef(table, row, locale = DEFAULT_LOCALE) {
 export function localizeRefRows(table, rows, locale = DEFAULT_LOCALE) {
   return rows.map((row) => localizeRef(table, row, locale))
 }
+
+// Variante pour une ligne issue d'une JOINTURE où les colonnes ref_* sont aliasées
+// (`ref_equipment.name as ref_name`). La requête DOIT aliaser aussi `<champ>_i18n` avec le
+// suffixe `_i18n` sur l'alias : `ref_equipment.name_i18n as ref_name_i18n`.
+// aliasMap : { <alias dans row> : <champ de la table ref_*> }, ex. { ref_name: 'name' }.
+// Retire du résultat toute clé finissant par `_i18n`. Un alias sans son `<alias>_i18n`
+// correspondant retombe silencieusement sur la valeur brute (mode d'échec de la convention).
+export function localizeRefAliased(table, row, aliasMap, locale = DEFAULT_LOCALE) {
+  if (row == null) return row
+  const out = {}
+  for (const [key, value] of Object.entries(row)) {
+    if (!key.endsWith('_i18n')) out[key] = value
+  }
+  for (const [alias, field] of Object.entries(aliasMap)) {
+    out[alias] = resolveRefField(
+      table,
+      { [field]: row[alias], [`${field}_i18n`]: row[`${alias}_i18n`] },
+      field,
+      locale,
+    )
+  }
+  return out
+}

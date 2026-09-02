@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  DEFAULT_LOCALE, REF_TRANSLATABLE, resolveRefField, localizeRef, localizeRefRows,
+  DEFAULT_LOCALE, REF_TRANSLATABLE, resolveRefField, localizeRef, localizeRefRows, localizeRefAliased,
 } from './refI18n.js'
 
 // Tests purs — aucune base. Lancement : node --test server/src/lib/refI18n.test.mjs
@@ -90,4 +90,56 @@ test('localizeRefRows — applique localizeRef à chaque ligne', () => {
     { label: 'A', description: null },
     { label: 'B', description: 'd' },
   ])
+})
+
+// ─── localizeRefAliased (jointures à colonnes aliasées) ──────────────────────
+
+const ALIAS = { ref_name: 'name', ref_description: 'description', ref_family: 'family', ref_category: 'category' }
+
+test('localizeRefAliased — fr : valeurs brutes, strip des <alias>_i18n', () => {
+  const row = {
+    inv_id: 7, custom_name: null,
+    ref_name: 'Couteau', ref_name_i18n: { en: 'Knife' },
+    ref_description: 'Une lame.', ref_description_i18n: {},
+    ref_family: 'Armes', ref_family_i18n: {},
+    ref_category: 'Arme de contact', ref_category_i18n: {},
+    ref_weight: 0.2,
+  }
+  assert.deepEqual(localizeRefAliased('ref_equipment', row, ALIAS), {
+    inv_id: 7, custom_name: null,
+    ref_name: 'Couteau', ref_description: 'Une lame.', ref_family: 'Armes', ref_category: 'Arme de contact',
+    ref_weight: 0.2,
+  })
+})
+
+test('localizeRefAliased — autre langue présente sur un alias', () => {
+  const row = { ref_name: 'Couteau', ref_name_i18n: { en: 'Knife' } }
+  assert.equal(localizeRefAliased('ref_equipment', row, { ref_name: 'name' }, 'en').ref_name, 'Knife')
+})
+
+test('localizeRefAliased — autre langue absente → repli valeur brute de l\'alias', () => {
+  const row = { ref_name: 'Couteau', ref_name_i18n: {} }
+  assert.equal(localizeRefAliased('ref_equipment', row, { ref_name: 'name' }, 'de').ref_name, 'Couteau')
+})
+
+test('localizeRefAliased — jointure vide (item custom, equipment_id NULL)', () => {
+  const row = { inv_id: 3, custom_name: 'Mon truc', ref_name: null, ref_name_i18n: null, ref_description: null, ref_description_i18n: null }
+  assert.deepEqual(localizeRefAliased('ref_equipment', row, { ref_name: 'name', ref_description: 'description' }), {
+    inv_id: 3, custom_name: 'Mon truc', ref_name: null, ref_description: null,
+  })
+})
+
+test('localizeRefAliased — alias sans <alias>_i18n correspondant → repli valeur brute (convention non suivie)', () => {
+  const row = { ref_name: 'Couteau' } // la requête a oublié d'aliaser name_i18n
+  assert.equal(localizeRefAliased('ref_equipment', row, { ref_name: 'name' }).ref_name, 'Couteau')
+  assert.equal(localizeRefAliased('ref_equipment', row, { ref_name: 'name' }, 'en').ref_name, 'Couteau')
+})
+
+test('localizeRefAliased — row absent : passthrough', () => {
+  assert.equal(localizeRefAliased('ref_equipment', null, ALIAS), null)
+  assert.equal(localizeRefAliased('ref_equipment', undefined, ALIAS), undefined)
+})
+
+test('localizeRefAliased — aliasMap vide : clone + strip seulement', () => {
+  assert.deepEqual(localizeRefAliased('ref_equipment', { a: 1, a_i18n: {} }, {}), { a: 1 })
 })
