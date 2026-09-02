@@ -18,10 +18,11 @@
 > adaptativité §7.13). **Phase A codée le 2026-09-02** (migration 318 + résolveur `refI18n.js` +
 > câblage du catalogue parcouru : Wizard, marchand, panneaux d'octroi — 8 commits `8dc3ce1`→`7b25d4d`,
 > §7.5/§7.7). Testé statiquement + smoke base réelle ; parcours navigateur non fait (session beta).
-> **Phase B** : affichage des objets possédés (inventaire, combat, export PDF, mods), ratée par le plan
-> initial, découverte au ré-audit — §7.7bis (relu site par site). Scindée : **B1** (projection propre,
-> ~8 sites, patron Phase A) plan rédigé §7.15, **non codée** ; **B2** (noms d'armes en combat, emmêlé
-> avec Lot 6) plan séparé à faire.**
+> **Phase B** : affichage des objets possédés (inventaire, combat, export, mods), ratée par le plan
+> initial, découverte au ré-audit — §7.7bis (relu site par site). **B1 codée 2026-09-02** (§7.15,
+> 7 commits `93c6a88`→`3281d7c` — inventaire, `/macro-options`, enrich programme, export skills,
+> fenêtre combat MJ, moding) ; **B2** (noms d'armes en combat, emmêlé avec Lot 6, comparaison en dur
+> `ref_name !== 'Klauss'`) plan séparé à faire.**
 
 ---
 
@@ -811,10 +812,29 @@ L'architecture retenue est le patron dominant du contenu multilingue en base pou
 - **Repli du FR** (si un jour produit EN-first) : migration one-shot qui fait rentrer `fr` dans
   `<champ>_i18n`, `DEFAULT_LOCALE` change. Non prévu.
 
-### 7.15 Phase B1 — plan d'exécution (rédigé 2026-09-02)
+### 7.15 Phase B1 — codée 2026-09-02
 
-Périmètre : les sites B1 de §7.7bis. Aucun `.jsx`, aucune migration, aucune écriture, aucun contenu
-FR modifié — projection de lecture uniquement. FR seul → inerte (résolution = valeur brute).
+**Fait — 7 commits `93c6a88`→`3281d7c`.** Aucun `.jsx`, aucune migration, aucune écriture, aucun
+contenu FR modifié — projection de lecture uniquement. FR seul → inerte.
+
+| Commit | Site | Notes |
+|---|---|---|
+| B1.0 `93c6a88` | helper `localizeRefAliased` + 21 tests | jointures à colonnes aliasées |
+| B1.1 `5a9ba15` | `inventoryService.getItemWithRef` | 3 champs ; ~10 appelants |
+| B1.2 `f023ccb` | `inventoryService.getInventory` | 4 champs + sous-req. `current_ammo_name` / `skill_label` (ratées par le grep §7.7bis) ; `mods_installed` = snapshot, hors périmètre |
+| B1.3 `7ed3073` | `char-sheet.js` `/macro-options` + enrich programme ×4 | |
+| B1.4 `863bad9` | `characterExportService` jointure `ref_skills` | site le moins vérifiable (.xlsx non généré) ; `ref_genotypes` confirmé hors |
+| B1.5 `6295768` | `battlemaps.js` weapon/armor/naturalWeapon rows | `ref_category` **reste brut** (`resolveHandWeapons`) |
+| B1.6 `3281d7c` | `modingService.getModingState` | `re.name_i18n` au `GROUP BY` du `q.raw` (jsonb groupable, vérifié) |
+
+Testé : `node --check` + `git diff --check` par fichier ; `node --test refI18n.test.mjs` 21/21 ;
+smoke base réelle par étape (résolution `== colonne brute` fr, 0 fuite `_i18n`, champs mécaniques
+préservés). **Non testé** : parcours navigateur (session beta) ; `characterExportService` = .xlsx réel
+non généré.
+
+---
+
+*Plan initial (§7.15 pré-exécution) :*
 
 #### B1.0 — helper `localizeRefAliased` dans `refI18n.js` (+ tests)
 
