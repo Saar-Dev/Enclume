@@ -2,6 +2,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { isEquippableLocation } from '../lib/inventoryRules.js'
 import { removeItem } from './inventoryService.js'
+import { localizeRef } from '../lib/refI18n.js'
 
 // ─── Marchands ────────────────────────────────────────────────────────────────
 
@@ -135,8 +136,9 @@ export async function getCatalog(campaignId, merchantId, { isGm, charId } = {}) 
     if (!visible) continue
     const basePrice = item.price ?? 0
     const totalMod = modGlobal + modPct
+    // localize APRÈS evaluateItem : les règles marchand sont écrites en FR contre les valeurs brutes.
     catalog.push({
-      ...item,
+      ...localizeRef('ref_equipment', item),
       catalog_price: Math.round(basePrice * (1 + totalMod / 100)),
     })
   }
