@@ -221,7 +221,13 @@ quitte pas la colonne d'origine.
 
 Architecture décidée le 2026-08-11, **modèle de stockage révisé le 2026-09-02** (le FR reste dans la
 colonne brute ; `_i18n` ne porte que les langues ≠ fr — analyse à charge, `PLAN_LOCALISATION.md` §7).
-Exécution : `docs/PLANS/PLAN_LOCALISATION.md` §7. Périmètre court terme = poser la couture (migration
-`ADD COLUMN <champ>_i18n` sur les 10 tables + résolveur `refI18n.js` + câblage des projections de
-lecture, étapes 5.0→5.3) ; le peuplement d'une 2ᵉ langue s'ouvre quand une langue ≠ fr devient un
-objectif produit.
+
+**Phase A codée le 2026-09-02** : migration `318_ref_catalog_i18n` (27 colonnes `<champ>_i18n` sur
+10 tables) + résolveur `server/src/lib/refI18n.js` (`DEFAULT_LOCALE`, `REF_TRANSLATABLE`,
+`resolveRefField` / `localizeRef` / `localizeRefRows`) + câblage du **catalogue parcouru par
+l'utilisateur** (Wizard, marchand, panneaux d'octroi MJ). Seam inerte en FR seul.
+
+**Phase B non commencée** : affichage des objets *possédés* par le personnage (inventaire, combat,
+export PDF, panneaux mod) — `PLAN_LOCALISATION.md` §7.7bis, plan dédié requis (code socket combat).
+
+Le peuplement d'une 2ᵉ langue s'ouvre quand une langue ≠ fr devient un objectif produit.

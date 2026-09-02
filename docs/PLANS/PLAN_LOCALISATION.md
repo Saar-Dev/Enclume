@@ -13,13 +13,14 @@
 > 🟡 **Lot 4 (Outils dés, 1 fichier — `DiceCalibrationPage.jsx` exclu, décision Saar 2026-07-25) codé,
 > parcours navigateur non testé** — détail §3sexies. **Les 4 lots sont maintenant codés** ; archivage
 > de ce plan dans `docs/ASBUILT.md` différé jusqu'à validation navigateur complète.
-> 🔴 **Lot 5 (contenu de catalogue `ref_*` en base, 10 tables) découvert le 2026-08-11, hors du
-> périmètre couvert par ce plan jusqu'ici — corrigé, voir §7. Architecture = **colonne brute = FR**
-> + JSONB `<champ>_i18n` pour les langues ≠ fr (`docs/SYSTEME/LOCALISATION.md` §6 ; pratiques pro
-> §7.12 ; adaptativité §7.13). Plan + 2 analyses à charge rédigés le 2026-09-02 (§7) ; modèle de
-> stockage révisé — le FR ne bouge pas de la colonne brute → **ni backfill ni retrofit d'écriture**,
-> 5.0 = DDL additif pur. Exécution non commencée — prochain geste : 5.0 (migration `ADD COLUMN _i18n`
-> + résolveur `refI18n.js`, commit isolé), puis câblage lecture 5.1→5.3. Fin du Lot 5 à 5.3.**
+> 🟡 **Lot 5 (contenu de catalogue `ref_*` en base, 10 tables) — architecture : colonne brute = FR +
+> JSONB `<champ>_i18n` pour les langues ≠ fr (`docs/SYSTEME/LOCALISATION.md` §6 ; pratiques pro §7.12 ;
+> adaptativité §7.13). **Phase A codée le 2026-09-02** (migration 318 + résolveur `refI18n.js` +
+> câblage du catalogue parcouru : Wizard, marchand, panneaux d'octroi — 8 commits `8dc3ce1`→`7b25d4d`,
+> §7.5/§7.7). Testé statiquement + smoke base réelle ; parcours navigateur non fait (session beta).
+> **⚠️ Clos partiel — Phase B non commencée** : affichage des objets possédés (inventaire, combat,
+> export PDF, mods), ratée par le plan initial, découverte au ré-audit — §7.7bis, plan dédié requis
+> (code socket combat-critique).**
 
 ---
 
@@ -596,67 +597,108 @@ Chaque point où une ligne `ref_*` (ou une sous-liste jointe) part vers le clien
 `localizeRef` / `localizeRefRows`. Le client reçoit du texte résolu, jamais `_i18n`. Sûr par
 construction (7.4.2). **Aucun chemin d'écriture touché** (§7.4.1).
 
-### 7.5 Découpage — par fichier
+### 7.5 Découpage — deux phases
 
-Sans backfill ni dépréciation de colonne, il n'y a plus de gradient de risque par table : le découpage
-suit les **fichiers de câblage**, pas les tables.
+**Phase A — catalogue parcouru par l'utilisateur** (Wizard, marchand, panneaux d'octroi MJ). **Fait
+2026-09-02.**
 
-| Étape | Contenu | Fichiers |
+| Étape | Contenu | Commit |
 |---|---|---|
-| **5.0** | Migration `ADD COLUMN <champ>_i18n` (10 tables) + `refI18n.js` + `refI18n.test.mjs` | 1 migration · 1 lib · 1 test |
-| **5.1** | Câblage `routes/character/ref.js` (`/genotypes`, `/skills`, `/mutations`, `/advantages`) | 1 fichier |
-| **5.2** | Câblage `services/creationService.js` (getStep\*RefData + lectures du submit + `requiredGenotypeLabel` + reshape `getStep3State`) | 1 fichier |
-| **5.3** | Câblage `services/tradeService.js` + `services/advantageService.js` + `services/mutationService.js` | 3 fichiers |
+| **5.0** | migration `318_ref_catalog_i18n` (27 colonnes) + `refI18n.js` + `refI18n.test.mjs` | `8dc3ce1` |
+| **5.1** | `routes/character/ref.js` — `/genotypes`, `/skills`, `/mutations` (+ `subtable[]`), `/advantages` | `7ede3a5` |
+| **5.2a** | `creationService.getStep4RefData` (backgrounds, careers, career_random_benefits, setbacks) | `4f63f37` |
+| **5.2b** | `creationService.getStep3RefData` + `getStep5RefData` (mutations, subtypes, advantages) | `4ec29a4` |
+| **5.2c** | `creationService` jointures `ref_skills` (skill picker) + `getStep3State` (alias SQL) | `698db50` |
+| **5.3a** | `tradeService.getCatalog` (`ref_equipment`, après `evaluateItem`) | `a3a95b5` |
+| **5.3b** | `mutationService.getMutations` (jointure, alias SQL) | `c131cab` |
+| **5.3c** | `advantageService.getAdvantages` (jointure) + `add/grantAdvantage` (`allRefAdvantages` → `snapshot_data` propre) | `7b25d4d` |
 
-Une étape par tour (plan → analyse à charge → code — CLAUDE.md) ; la suivante attend validation. Pas
-de confirmation navigateur par étape (§3ter) ; scénario réel listé §7.11. **Fin du Lot 5 à 5.3**
-(§7.6).
+**Phase B — affichage des objets possédés par le personnage** (inventaire, combat, export PDF, mods).
+**Non commencée** — découverte par le ré-audit post-5.3 : le plan §7.7 initial était Wizard-centré et
+a raté cette surface (~équivalente à la Phase A, dont du code socket combat-critique). Inventaire
+§7.7bis. Nécessite son propre plan + analyse à charge.
 
-### 7.6 Ce qui n'est PAS fait maintenant (et pourquoi c'est correct)
+Une étape par tour (plan → analyse à charge → code — CLAUDE.md). Pas de confirmation navigateur par
+étape (§3ter) ; validation §7.11.
 
-- **Retrofit des chemins d'écriture** (`equipment.js`, import admin, seeds) : **rien à faire** — le FR
-  reste dans la colonne brute, déjà leur cible (§7.4.1).
+### 7.6 Ce qui n'est PAS fait (et pourquoi)
+
+- **Phase B** (§7.7bis) : inventaire / combat / export / mods. Plan dédié requis, surtout le code
+  socket combat.
+- **Retrofit des chemins d'écriture** (`equipment.js` CRUD, import admin, seeds) : **rien à faire** —
+  le FR reste dans la colonne brute, déjà leur cible (§7.4.1). *Exception traitée en 5.3c :
+  `char_advantages.snapshot_data` fait `JSON.stringify` d'une ligne `ref_advantages` → localisée en
+  amont pour ne pas persister les clés `_i18n` vides. Vérifier le même patron `snapshot`/`custom_*` en
+  Phase B (`char_inventory.custom_name`/`custom_desc`).*
 - **Peuplement d'une 2ᵉ langue** : hors sujet tant qu'aucune langue ≠ fr n'est un objectif produit. Le
-  jour venu : script `SET <champ>_i18n = <champ>_i18n || '{"en":…}'` + câbler la source de `locale`
-  (utilisateur / campagne) en **un** point + éventuel « group by code » client. Aucune migration,
-  aucun changement du résolveur.
+  jour venu : script `SET <champ>_i18n = <champ>_i18n || '{"en":…}'` + câbler la source de `locale` en
+  **un** point + éventuel « group by code » client. Aucune migration, aucun changement du résolveur.
 - **Phrases FR composées côté serveur** incorporant un libellé `ref_*` (`creationService`
-  `Cette profession nécessite le génotype : ${label}`, etc.) → dette **Lot 6**.
+  `checkCareerEligibility`/`formatEligibilityReason`, `AppError` avec `refAdv.name`, etc.) → dette
+  **Lot 6**. `checkCareerEligibility` **n'a pas** été touché en 5.2 (le plan §7.7 le prévoyait à
+  tort — résoudre le libellé encapsulé ne corrige pas la phrase figée).
 - Colonnes micro-format (`skill_bonus`, `immunity`, `caliber`, `price_modifier`, `duration`,
   `mod_slot`) → notées, décision différée.
 - Lots 1-4 (validation navigateur), Lot 6.
 
-**Conséquence assumée** : après 5.3 le seam est complet et *inerte* (FR seul → `localizeRef` =
-pass-through + strip). C'est de l'« architecture prête » — la demande de Saar (bug #16) — sans
-échafaudage no-op supplémentaire.
+**État du seam** : côté catalogue (Phase A), complet et *inerte* (FR seul → `localizeRef` =
+pass-through + strip). Côté personnage (objets possédés), **non câblé** — Phase B.
 
-### 7.7 Inventaire des consommateurs à câbler (fait 2026-09-02, à reconfirmer par lecture à l'ouverture de chaque étape)
+### 7.7 Phase A — consommateurs câblés (as-built 2026-09-02)
 
-**5.1 — `routes/character/ref.js`** (tout part au client) :
-- `/genotypes` → `localizeRefRows('ref_genotypes', genotypes)`
-- `/skills` → `localizeRefRows('ref_skills', result)` (après nesting des `requirements`)
-- `/mutations` → `localizeRefRows('ref_mutations', …)` + `localizeRef('ref_mutation_subtypes', …)` sur chaque `subtable[]`
-- `/advantages` → `localizeRefRows('ref_advantages', advantages)`
+**5.1 `routes/character/ref.js`** — `/genotypes`, `/skills`, `/mutations` (+ `subtable[]`),
+`/advantages` → `localizeRef(Rows)`.
 
-**5.2 — `creationService.js`** :
-- `getStep1RefData` (l.180-194 : `ref_backgrounds`, `ref_careers`, `ref_career_random_benefits`, `ref_setbacks`) → localiser chaque liste envoyée au client
-- `getStep3RefData` (l.227-229 : `ref_mutations` + `ref_mutation_subtypes`) → localiser
-- `getStep2State` : ne renvoie que `genotype_id` → rien
-- `checkCareerEligibility` l.146-147 `requiredGenotypeLabel` → `resolveRefField('ref_genotypes', g, 'label')`
-- `getStep3State` l.299-308 alias SQL `rms.name as subtype_db_name` → reshape : `select` sans l'alias, résoudre en JS
-- lectures internes du submit (`setbackRows` l.897, `refSkillsRows` l.1268) → passées à des fonctions pures `shared/`, inserts à champs explicites (vérifié) ; `localizeRefRows` par sûreté (strip `_i18n`)
+**5.2 `creationService.js`** :
+- `getStep4RefData` : `ref_backgrounds`, `ref_careers`, `ref_career_random_benefits`, `ref_setbacks`
+  → `localizeRefRows`. Jointures `ref_skills` (bgSkills/careerSkills `rs.label`/`rs.family`) → fetch
+  `ref_skills` localisé séparé, rattaché par id (`skillRef` Map).
+- `getStep3RefData` : `ref_mutations` + `ref_mutation_subtypes` → `localizeRefRows`.
+- `getStep5RefData` : `ref_advantages` → `localizeRefRows` (avant le filtre `polaris_latent`).
+- `getStep3State` : alias SQL `rm.name`/`rms.name` → `SELECT` tire aussi `*_i18n`, `resolveRefField`
+  sur synthetic row dans `meta`.
+- `getStep2State` : `genotype_id` seul, rien. `reconcileCreation` : lectures internes (calcul), pas
+  de texte au client, pas de `{...row}` → `INSERT` — rien.
+- `checkCareerEligibility` : **NON touché** → Lot 6 (phrase FR figée).
 
 **5.3** :
-- `tradeService.js:128` `db('ref_equipment').select('*')` → catalogue marchand au client → `localizeRefRows('ref_equipment', items)` avant la boucle `evaluateItem`
-- `advantageService.js:65,171` `trx('ref_advantages').select('*')` → `allRefAdvantages` passé au validateur pur `validateAdvantage` (**server-interne, pas au client**) → pas de fuite ; câbler quand même pour uniformité + protéger d'un futur `{...row}`
-- `mutationService.js:24,52` join `subtype_name` d'affichage → `resolveRefField`
+- `tradeService.getCatalog` : `localizeRef('ref_equipment', item)` dans `catalog.push`, **après**
+  `evaluateItem` (règles marchand écrites en FR contre les valeurs brutes).
+- `mutationService.getMutations` : jointure `rm.name`/`rm.description`/`rmst.name` → `SELECT` + `*_i18n`
+  + `resolveRefField`. `addMutation` : inchangé.
+- `advantageService` : `getAdvantages` (jointure `ra.*` → `SELECT` + `*_i18n` + `resolveRefField`) ;
+  `add/grantAdvantage` : `allRefAdvantages` → `localizeRefRows` (rend `refAdv` propre pour
+  `snapshot_data` **et** le retour de `grantAdvantage`). `removeAdvantage` : jointure mécanique,
+  inchangé.
 
-**Sites NON touchés** (lecture de colonnes numériques / codes uniquement — `ref_genotypes` pour
-`mod_*` / `pc_cost` en combat / mouvement / dégâts surtout) : `socketDice`, `socketCombatState`,
-`socketEntity`, `battlemaps`, `char-sheet` (×3), `characterExportService`, `inventoryService`,
-`combatantContextService`, `movementBudgetService`, `damageService`, `coldExposureService`,
-`environmentalHazardService`, `fallDamageService`, `fatigueService`, `woundEvolutionService`. À
-reconfirmer par lecture.
+### 7.7bis Phase B — affichage des objets possédés (non commencée)
+
+Ré-audit `ref_*` sur tout `server/src` (2026-09-02, post-5.3). Sites qui exposent au client du texte
+de `ref_equipment` / `ref_skills` / `ref_mutations` / `ref_genotypes` **hors** catalogue Phase A :
+
+| Fichier | Site | Écran |
+|---|---|---|
+| `services/inventoryService.js` | `getInventory` — join `ref_equipment` (name/description) | panneau inventaire |
+| `routes/character/char-sheet.js` | ~4 enrichissements de réponse add/update (`ref_equipment` name/description) ; join `ref_skills` l.1382 ; `ref_genotypes` l.600/1028/1443 (**vérifier** label vs modificateurs) | fiche perso |
+| `services/characterExportService.js` | join `ref_skills` l.47, `ref_genotypes` l.67 | export PDF |
+| `routes/battlemaps.js` | joins `ref_equipment` l.272/305, `ref_mutations` l.319 | jetons combat |
+| `socket/socketCombatHelpers.js` | joins `ref_equipment` (l.1574/1766/2868/2978), `ref_mutations` l.1495 | résolution / chat combat |
+| `socket/socketCombatExo.js` | joins `ref_equipment` l.319/400 | combat exo |
+| `socket/socketCombatAnnouncement.js` | join `ref_equipment as re` l.510 | annonce combat |
+| `services/modingService.js` | join `ref_equipment` l.31, lectures l.93/94 | panneau mod |
+| `services/weaponModService.js` | join `ref_equipment as re` l.119 | panneau arme/mod |
+| `services/identityService.js` | joins `ref_mutations`/`ref_advantages` l.70/75 | **vérifier** — probablement `mod_identity` (mécanique), pas de texte |
+
+Hors périmètre confirmé (modificateurs numériques seulement, aucun texte affiché) : les dizaines de
+`db('ref_genotypes'|'ref_skills').where({id}).first()` de `combatantContextService`, `damageService`,
+`movementBudgetService`, `fatigueService`, `fallDamageService`, `coldExposureService`,
+`environmentalHazardService`, `woundEvolutionService`, `socketDice`, `socketCombatState`,
+`socketEntity`, `gmArbitratedTestService`.
+
+Patron attendu : identique à la Phase A (jointure → `SELECT` + `*_i18n` + `resolveRefField`, ou
+`localizeRef` sur ligne complète). **Points d'attention** : `char_inventory` a
+`custom_name`/`custom_desc` (interaction à cadrer) ; le code socket combat exige une analyse à charge
+dédiée (combat-critique).
 
 ### 7.8 Invariant
 
@@ -685,25 +727,31 @@ client ne décide jamais de la langue) et `AGENTS.md` §3 (une propriété = une
 
 - `ref_genotypes.description` : double-encodage UTF-8 sur les 4 lignes
   (`"NÃ© avec les mutations nÃ©cessaires Ã  la survie"` au lieu de
-  `"Né avec les mutations nécessaires à la survie"`). → ticket `bug_tickets`.
+  `"Né avec les mutations nécessaires à la survie"`). → `UPDATE` de la colonne brute, hors Lot 5.
 - `ref_backgrounds.description` : `NULL` sur 22/22 lignes — colonne jamais peuplée (le contenu
-  existe-t-il dans le *Livre de Base* ?). → ticket `bug_tickets`.
+  existe-t-il dans le *Livre de Base* ?). → à peupler (colonne brute), hors Lot 5.
 
-### 7.11 Validation
+### 7.11 Validation (Phase A)
 
-- **Migration 5.0** : round-trip vérifié par **Saar via script scratchpad** (hors `server/` —
-  `rules/migrations.md` ; `naturalMigrationSource` exclut `*.test.mjs`) : import du module par chemin
-  absolu, `up()` → colonnes `_i18n` présentes, `down()` → parties. Résultat consigné au message de
-  commit. Application réelle : nodemon ; `SELECT knex_migrations` avant tout rappel manuel de `up()`.
-- **Résolveur** : `node --test server/src/lib/refI18n.test.mjs` (pur, sans base).
-- **Par étape 5.1-5.3** : `node --check` sur chaque `.js` touché ; relecture de chaque site câblé pour
-  confirmer qu'aucun ne fait `{...refRow}` → `INSERT`/`UPDATE` d'une autre table ; tests ciblés des
-  modules concernés (`combatantContextService.test.mjs`, `creationRoundTrip.test.mjs`,
-  `inventoryService.test.mjs` — vérifier qu'un `.first()` renvoyant les colonnes `_i18n` ne casse
-  aucun `deepEqual`) ; `cd client && npm run build`.
-- **Scénario réel** (session beta groupée) : catalogue Wizard (étapes 1/3), fiche perso, marchand →
-  texte identique à avant.
-- **Retour arrière** : 5.0 = `DROP COLUMN` pur (FR jamais touché) ; 5.1-5.3 = revert de commit.
+**Testé** :
+- Migration 5.0 : appliquée par nodemon (batch 10), vérifiée **en lecture** — 27 colonnes `jsonb
+  NOT NULL DEFAULT '{}'`, zéro écart sur les 10 tables. `down()` (`DROP COLUMN IF EXISTS`) non
+  exécuté (trivial) ; script `verify_318.js` (scratchpad) disponible pour le cycle complet.
+- Résolveur : `node --test server/src/lib/refI18n.test.mjs` — 14/14.
+- Chaque étape 5.1 → 5.3c : `node --check` + `git diff --check` ; smoke test sur base réelle
+  (résolution `== colonne brute` en fr, zéro fuite `*_i18n`, colonnes non traduisibles préservées) —
+  couvre `ref_genotypes`/`skills`/`advantages`/`mutations`/`equipment` (790)/`backgrounds`/`careers`/
+  `setbacks`/`career_random_benefits` + les jointures (1047 lignes bgSkills/careerSkills, subtable
+  mutations, `snapshot_data` `refAdv`).
+
+**Non testé** :
+- Tout parcours navigateur réel — session beta groupée (décision Saar §3ter).
+- Cycle `down()`/`up()` réel de la migration 318.
+- `cd client && npm run build` — Phase A ne touche aucun `.jsx` (serveur seul), non lancé.
+
+**⚠️ Clos partiel** : Phase B (§7.7bis) non faite.
+
+**Retour arrière** : 5.0 = `DROP COLUMN` pur (FR jamais touché) ; 5.1 → 5.3c = revert de commit.
 
 ### 7.12 Références (recherche pratiques pro, 2026-09-02)
 
