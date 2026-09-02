@@ -13,10 +13,12 @@
 > 🟡 **Lot 4 (Outils dés, 1 fichier — `DiceCalibrationPage.jsx` exclu, décision Saar 2026-07-25) codé,
 > parcours navigateur non testé** — détail §3sexies. **Les 4 lots sont maintenant codés** ; archivage
 > de ce plan dans `docs/ASBUILT.md` différé jusqu'à validation navigateur complète.
-> 🔴 **Lot 5 (données de référence `ref_*` en base, ~1500 lignes / 10 tables) découvert le 2026-08-11,
-> hors du périmètre couvert par ce plan jusqu'ici — corrigé, voir §7. Architecture décidée (colonnes
-> JSONB `<champ>_i18n`, `docs/SYSTEME/LOCALISATION.md` §6) — exécution (audit par table, migrations,
-> helper de résolution, retrofit consommateurs) non commencée.**
+> 🔴 **Lot 5 (contenu de catalogue `ref_*` en base, ~1630 lignes / 10 tables) découvert le 2026-08-11,
+> hors du périmètre couvert par ce plan jusqu'ici — corrigé, voir §7. Architecture = colonnes JSONB
+> `<champ>_i18n` (`docs/SYSTEME/LOCALISATION.md` §6 ; pratiques pro §7.12 ; adaptativité §7.13). Plan
+> d'exécution + analyse à charge rédigés le 2026-09-02 (§7). Exécution non commencée — prochain geste :
+> sous-lot 5.0 (migration unique + résolveur `refI18n.js` + swap des ~15 `select('*')` sur `ref_*`,
+> commit isolé préalable au retrofit fin 5a→5g).**
 
 ---
 
@@ -426,62 +428,301 @@ confirmation navigateur — la session de test groupée reste à faire avant d'a
 
 ---
 
-## 7. Lot 5 — Données de référence `ref_*` en base (découvert 2026-08-11)
+## 7. Lot 5 — Contenu de catalogue `ref_*` en base (plan rédigé 2026-09-02)
 
-**Écart avec ce plan, corrigé ici** : ce plan devait couvrir l'ensemble du texte nécessitant une
-traduction (demande Saar d'origine), mais la méthode d'audit du §1 ne scanne que les `.jsx` du client
-(`grep` sur les composants) — par construction, elle ne pouvait pas trouver le texte de jeu stocké en
-base dans les tables `ref_*` (avantages, mutations, compétences, carrières...). Ce texte est aujourd'hui
-français en dur dans les colonnes `name`/`label`/`description`, affiché directement par les composants
-consommateurs (`adv.name`, pas de `t()`) — la même catégorie de dette que ce plan traite pour le JSX,
-mais dans un autre entrepôt.
+### 7.1 Nature de la dette
 
-**Découverte** : en corrigeant `docs/BUG WIZARD.md` bug #16 (`ref_advantages.name` contenait des
-termes anglais non traduits — « Sens diminué (hearing) »), Saar a posé la question de principe : la
-norme i18n (`docs/SYSTEME/LOCALISATION.md`) vise à pouvoir ajouter EN/DE/JAP sans tout refaire — objectif
-produit toujours FR seul aujourd'hui (`LOCALISATION.md` §1/§5 inchangés), mais l'architecture doit être
-prête. Cela ne peut pas se faire lot de bug en lot de bug sur les tables `ref_*` sans risquer
-l'incohérence ; d'où ce Lot 5 dédié.
+La méthode d'audit du §1 ne scanne que les `.jsx` du client — par construction elle ne voit pas le
+texte de jeu **stocké en base** dans les tables `ref_*` (équipements, compétences, avantages, mutations,
+carrières…), seedé depuis le *Livre de Base*. Ce texte est FR en dur dans des colonnes (`name`,
+`label`, `description`, et plusieurs colonnes de prose annexes — §7.3), affiché directement par les
+composants (`equip.name`, `skill.description`, sans `t()`). Même catégorie de dette que les Lots 1-4,
+autre entrepôt.
 
-**Ampleur réelle** (comptée en base le 2026-08-11, pas estimée) :
+**Déclencheur** : correction de `docs/Old/BUG WIZARD.md` bug #16 (`ref_advantages.name` = « Sens
+diminué (hearing) », anglais non traduit). Saar a posé la question de principe : l'architecture doit
+pouvoir accueillir EN/DE/JP sans réécriture (objectif produit toujours **FR seul** —
+`LOCALISATION.md` §1/§5 inchangés). Impossible à faire bug par bug sur les `ref_*` sans incohérence →
+Lot 5 dédié.
 
-| Table | Colonnes | Lignes |
-|---|---|---|
-| `ref_equipment` | name, description | 678 |
-| `ref_career_random_benefits` | description | 370 |
-| `ref_skills` | label, description | 249 |
-| `ref_advantages` | name, description | 79 |
-| `ref_mutations` | name, description | 45 |
-| `ref_careers` | name, description | 37 |
-| `ref_setbacks` | name, description | 27 |
-| `ref_backgrounds` | name, description | 22 |
-| `ref_mutation_subtypes` | name, description | 8 |
-| `ref_genotypes` | label, description | 4 |
+### 7.2 Pourquoi un mécanisme distinct des Lots 1-4 (autorité : `LOCALISATION.md` §6)
 
-Total : **~1519 lignes, 10 tables**. Pour comparaison, les Lots 1-4 combinés traitaient 32 fichiers
-`.jsx` (quelques centaines de chaînes courtes) — un ordre de grandeur différent, et une nature de texte
-différente (`description` contient souvent des paragraphes RAW retranscrits, pas des libellés courts).
+Deux entrepôts de texte, deux outils :
 
-**Choix d'architecture — décidé le 2026-08-11**, après recherche des pratiques pro (deux options
-initialement envisagées, deux problèmes différents en réalité — sources dans `docs/JOURNAL8.md`,
-session 2026-08-11) :
+- **Texte d'interface** (JSX : boutons, titres, tooltips) → fichiers `client/src/locales/*.json` par
+  domaine (i18next). C'est les Lots 1-4. Rien à changer.
+- **Contenu de catalogue** → vit **en base**, ~1630 lignes dont des `description` de plusieurs
+  paragraphes, édité par les outils admin (`server/src/admin/ref-equipment-tool.html`), pas par un
+  commit. Ne peut pas passer par `locales/` : (a) poids du bundle — les JSON i18next sont parsés au
+  chargement navigateur, le chunk est déjà à 3,9 Mo, ×chaque langue ; (b) le **serveur** doit résoudre
+  ce texte (messages de chat, export PDF de fiche) ; (c) cycle de vie éditorial (admin live, pas
+  déploiement).
 
-- Clés `react-i18next` classiques (`client/src/locales/`) — écarté pour ce volume : ~1500 lignes,
-  dont des paragraphes entiers, alourdiraient le bundle JS à chaque langue ajoutée (le build actuel
-  avertit déjà d'un chunk de 3,9 Mo avant tout ajout). La pratique pro sépare justement texte UI
-  (i18next) et contenu de catalogue (mécanisme dédié) — les traiter par le même canal était l'erreur
-  de départ, pas un vrai dilemme A/B.
-- Table de traduction normalisée séparée — écartée aussi : jointure à chaque lecture, complexité non
-  justifiée à ce volume (recommandation pro : au-delà de plusieurs dizaines de milliers de lignes).
-- **Retenu : colonne JSONB par champ traduisible, directement sur chaque table `ref_*`**
-  (`name_i18n`, `description_i18n`, clé = code langue). Cohérent avec l'usage JSONB déjà établi dans
-  ce projet (`campaigns.settings`, `char_pc_ledger.skill_allocations`), pas de jointure, pas de
-  migration de schéma pour ajouter une langue plus tard. Détail complet du mécanisme (résolution,
-  repli `fr`, transition table par table) : `docs/SYSTEME/LOCALISATION.md` §6.
+Pratique pro du contenu multilingue en base (Django `modeltranslation`/`parler`, Rails `globalize` /
+`mobility`, Laravel `spatie/laravel-translatable`) : colonne par champ **ou** table de traduction à
+côté **ou** TMS externe — **les trois gardent la traduction dans la base, avec la donnée**. Le
+consensus documenté (§7.12) : *read-heavy + peu de langues → colonne JSONB* ; *beaucoup de langues +
+requêtes complexes → table séparée*. Enclume est read-heavy, 1 langue, dev solo, JSONB déjà en usage
+(`campaigns.settings`, `char_pc_ledger.skill_allocations`) → **colonne JSONB `<champ>_i18n` par champ
+traduisible, sur la table elle-même**. Pas de jointure, aucune migration de schéma pour ajouter une
+langue ensuite. La table de traduction séparée (jointure à chaque lecture) n'apporte rien à cette
+échelle. Mécanisme complet : `LOCALISATION.md` §6.2 ; références : §7.12 ; adaptativité : §7.13.
 
-**Statut** : 🔴 architecture décidée, exécution non commencée. Reste à écrire avant de coder : audit
-de lots détaillé (ordre des 10 tables, quel champ dans quelle table en premier — comme §2 pour le
-JSX), forme exacte du helper de résolution serveur unique.
+### 7.3 Inventaire des colonnes (audit base 2026-09-02 — les 10 tables, toutes colonnes texte lues)
+
+Colonnes de **prose** → couvertes par le Lot 5. Colonnes de **taxonomie** et micro-formats → hors
+périmètre (§7.9), pas dans la migration.
+
+| Table | Lignes | Prose → `<champ>_i18n` | Hors périmètre (taxonomie / codes / formules / noms propres) |
+|---|---|---|---|
+| `ref_equipment` | 790 | `name`, `description` | `family`, `category` (taxo) · `manufacturer`, `nation` (noms propres) · `damage_*`, `range`, `shock`, `fire_mode`, `caliber`, `rarity`, `ammo_effects`, `mod_slot`, `location`, `linked_attr`, `price_modifier`, `duration` |
+| `ref_career_random_benefits` | 370 | `description` | `effects` (jsonb) |
+| `ref_skills` | 249 | `label`, `description` | `family` (taxo) · `id`, `parent`, `attr_1/2`, `marker` |
+| `ref_advantages` | 79 | `name`, `description`, `special_rule` | `family`, `type` (taxo) · `subtype` (code, déjà traduit client via `t('step3.subtype_labels.*')`) · `mod_*`, `mod_monthly_income_formula` |
+| `ref_mutations` | 45 | `name`, `description`, `stack_effect`, `special_effect` | `subtype`, `mod_sex`, `mod_fertility`, `max_cumul_group` (codes) · `mod_*`, `natural_weapon_*_formula` |
+| `ref_careers` | 37 | `name`, `description`, `geographic_origin_details` | `code`, `illustration`, `min_attributes_logic`, `ally_type`, `enemy_rule` (codes) |
+| `ref_setbacks` | 27 | `name`, `description` | `effects` (jsonb) |
+| `ref_backgrounds` | 22 | `name`, `description` *(NULL sur 22/22 aujourd'hui — colonne ajoutée quand même, backfill vide, cf. §7.10)* | `type` (taxo) · `code`, `parent_type`, `parent_code` |
+| `ref_mutation_subtypes` | 8 | `name`, `description`, `special_trait` | `skill_bonus`, `immunity` (micro-format — §7.9) |
+| `ref_genotypes` | 4 | `label`, `description` | `illustration_url` |
+
+**Champs de prose ratés par une approche « name/description » naïve** (l'argument pour une migration
+complète, pas incrémentale) : `special_rule` (advantages), `stack_effect` + `special_effect`
+(mutations), `geographic_origin_details` (careers), `special_trait` (mutation_subtypes).
+
+### 7.4 Architecture d'exécution
+
+#### 7.4.1 Migration unique — `NNN_ref_catalog_i18n.js`  *(sous-lot 5.0)*
+
+- **Une seule migration**, les 10 tables, tous les champs de prose du §7.3.
+- Par champ : `ALTER TABLE "<table>" ADD COLUMN IF NOT EXISTS "<champ>_i18n" jsonb NOT NULL DEFAULT '{}'::jsonb`
+  (`IF NOT EXISTS` : métadonnée seule en PG 11+, aucune réécriture de table même sur `ref_equipment`).
+- **Backfill dans la même migration** : `UPDATE "<table>" SET "<champ>_i18n" = jsonb_build_object('fr', "<champ>") WHERE "<champ>" IS NOT NULL AND "<champ>" <> ''`.
+- **Idempotent** : `ADD COLUMN IF NOT EXISTS` + backfill qui réécrit la même valeur → un 2ᵉ `up()`
+  accidentel (piège nodemon P54) ne corrompt rien (le cas « 2ᵉ `up()` corrompt silencieusement » ne
+  s'applique pas ici).
+- `down()` : `DROP COLUMN` de toutes les colonnes ajoutées (retour arrière pur — les colonnes brutes
+  restent la source, aucune perte).
+- Round-trip `up()`/`down()` vérifié **hors dépôt** (§7.11) — pas de `*.test.mjs` sous `server/`.
+- **Numéro** : prochain entier libre vérifié à la fois sur `ls server/src/db/migrations/` **et**
+  `SELECT max(...) FROM knex_migrations` au moment de créer le fichier (317 au 2026-09-02 ; travail
+  parallèle possible).
+- **Écart assumé vs `rules/migrations.md` « une table = un fichier »** : cette règle vise (a) la
+  *création* d'une table et (b) l'interdiction d'empiler un correctif sur une migration antérieure.
+  Ici : un seul changement **additif transverse**, aucune migration antérieure modifiée, aucune table
+  créée. Regrouper garantit la complétude (une colonne oubliée = migration corrective, exactement ce
+  qu'on veut éviter — demande explicite de Saar 2026-09-02) et l'atomicité. Déviation actée.
+- **Avant d'écrire le fichier** : lire `docs/SYSTEME/CORE.md` § « Migrations — pièges (P52-P56) ».
+  `nodemon` applique la migration dès l'écriture du fichier sous `server/` → ne jamais rappeler
+  `up()` sans `SELECT` préalable dans `knex_migrations`.
+- **Rétrocompatible avec le code déployé** : colonnes nullable-avec-défaut, aucun consommateur ne les
+  lit encore à ce stade.
+
+#### 7.4.2 Résolveur — `server/src/lib/refI18n.js`  *(même commit que 7.4.1)*
+
+Résolution **en couche applicative** (JS au point de projection), pas en SQL — c'est le chemin de
+lecture de toutes les libs matures (Mobility, spatie, `parler`, `globalize`) : un accesseur applique
+la chaîne de repli, le blob brut n'est jamais sérialisé. Le `COALESCE` SQL est réservé au futur tri /
+recherche *par valeur traduite* (§7.13), pas au rendu.
+
+Le module porte **la seule source de vérité « quels champs sont traduisibles par table »** —
+équivalent du `translates :name, :description` de Mobility / du `$translatable` de spatie :
+
+```js
+// server/src/lib/refI18n.js
+export const REF_TRANSLATABLE = {
+  ref_genotypes:              ['label', 'description'],
+  ref_mutation_subtypes:      ['name', 'description', 'special_trait'],
+  ref_backgrounds:            ['name', 'description'],
+  ref_setbacks:               ['name', 'description'],
+  ref_careers:                ['name', 'description', 'geographic_origin_details'],
+  ref_mutations:              ['name', 'description', 'stack_effect', 'special_effect'],
+  ref_advantages:             ['name', 'description', 'special_rule'],
+  ref_skills:                 ['label', 'description'],
+  ref_career_random_benefits: ['description'],
+  ref_equipment:              ['name', 'description'],
+}
+
+export function resolveRefField(row, field, locale = 'fr') { /* locale → fr → colonne brute → null */ }
+export function localizeRef(table, row, locale = 'fr') { /* champs REF_TRANSLATABLE[table] résolus, clés *_i18n retirées */ }
+export function localizeRefRows(table, rows, locale = 'fr') { /* map de localizeRef */ }
+```
+
+- `resolveRefField` : `row?.[`${field}_i18n`]?.[locale] ?? row?.[`${field}_i18n`]?.fr ?? row?.[field] ?? null`.
+  Gère `row == null` (retour `.first()` vide) → `null`. `row.description === ''` → `''` (inchangé vs
+  aujourd'hui).
+- `localizeRef` : clone superficiel, résout les champs de `REF_TRANSLATABLE[table]`, **supprime toute
+  clé finissant par `_i18n`**. Ce strip tient l'invariant §7.8 **et** protège contre un `{...refRow}`
+  propagé dans un `INSERT` sur une autre table (colonne `*_i18n` absente de la cible → l'insert
+  casserait — spatie traite la même fuite dans `toArray()` comme un bug, §7.12).
+- `locale` : signature prête, **aucun appelant ne la passe** aujourd'hui — figé `'fr'` (§6.2). Un seul
+  point de branchement le jour d'une 2ᵉ langue.
+- Test pur `server/src/lib/refI18n.test.mjs` (aucune base) : repli locale→fr→brut, `row` null,
+  `field`/`_i18n` absent, `_i18n = {}`, strip effectif, `''` inchangé.
+- **Résolveur unique / couture unique** : jamais dupliqué par table ni par service, jamais de repli
+  côté client (`AGENTS.md` §3, `LOCALISATION.md` §4). Un futur changement de backend pour *une* table
+  (ex. `ref_equipment` → table de traduction séparée) ne touche que ce module — « backend enfichable »
+  de Mobility (§7.13).
+
+#### 7.4.3 Retrofit des consommateurs
+
+Sûr par construction : tant qu'un consommateur n'est pas retrofité, il lit la colonne brute (toujours
+peuplée) → affichage inchangé. Le retrofit se fait **au point de projection** (handler de route /
+getter de service) pour que `*_i18n` ne parte jamais au client.
+
+**Décision (analyse à charge 2026-09-02)** : le swap mécanique de **tous** les `select('*')` sur
+`ref_*` (~15 sites — `routes/character/ref.js`, `services/creationService.js`, `services/tradeService.js`,
+`services/advantageService.js`) vers `localizeRefRows('<table>', rows)` est fait **dans le sous-lot
+5.0**, pas éclaté sur 5a→5g. Raisons : (a) sinon tous les payloads catalogue portent `*_i18n` en
+double pendant des semaines (invariant §7.8 violé) ; (b) un `{...refRow}` propagé dans un `INSERT`
+casserait dès l'application de la migration ; (c) la transformation est uniforme — une ligne, valeur
+résolue == colonne brute post-backfill, aucun consommateur ne peut casser. Le retrofit **non
+uniforme** (alias SQL de jointure type `rms.name as subtype_db_name`, gabarits de message serveur,
+vérif client, scénario réel par domaine) reste éclaté par sous-lot 5a→5g.
+
+### 7.5 Découpage en sous-lots
+
+| Sous-lot | Table(s) | Lignes | Champs de prose |
+|---|---|---|---|
+| **5.0** | *(infra)* migration `NNN_ref_catalog_i18n` + résolveur `refI18n.js` + swap mécanique des ~15 `select('*')` sur `ref_*` + `refI18n.test.mjs` — **commit isolé, préalable au retrofit fin** | — | — |
+| 5a | `ref_genotypes` · `ref_mutation_subtypes` | 4 · 8 | label/description · name/description/special_trait |
+| 5b | `ref_backgrounds` · `ref_setbacks` | 22 · 27 | name · name/description |
+| 5c | `ref_careers` · `ref_mutations` | 37 · 45 | name/description/geographic_origin_details · name/description/stack_effect/special_effect |
+| 5d | `ref_advantages` | 79 | name/description/special_rule |
+| 5e | `ref_skills` | 249 | label/description |
+| 5f | `ref_career_random_benefits` | 370 | description |
+| 5g | `ref_equipment` | 790 | name/description |
+
+Un sous-lot = un plan validé + une analyse à charge + code (étapes distinctes, une par tour — CLAUDE.md).
+Le suivant attend la validation du précédent. Pas de confirmation navigateur par sous-lot (décision
+Saar §3ter — session beta groupée) ; la migration `5.0` et chaque sous-lot touchant un flux réel
+(Wizard, octroi MJ, marchand, combat) exigent un scénario réel listé pour cette session (§7.11).
+
+### 7.6 Méthode par sous-lot (à partir de 5a)
+
+1. `grep` exhaustif des consommateurs de la/les table(s) : `routes/`, `services/`, `socket/`,
+   `lib/`, `shared/`, tests — `db('<table>')`, `from('<table>')`, jointures `... as`, vues SQL.
+2. Classer chaque site **par lecture du code, pas supposé** (`AGENTS.md` §1) :
+   - affiche un champ de prose → retrofit via helper au point de projection ;
+   - lit uniquement des colonnes numériques / codes (`mod_*`, `pc_cost`, `*_formula`…) → **non
+     touché**, listé dans le plan du sous-lot avec la raison.
+3. Vérifier côté client que le `.jsx` rend la chaîne **reçue du serveur** (pas une constante client).
+4. Validation : `node --check` sur chaque `.js` serveur touché, tests ciblés du module,
+   `cd client && npm run build`, scénario réel noté pour la session beta.
+
+### 7.7 Sous-lot 5a — consommateurs (inventaire fait 2026-09-02, à reconfirmer par lecture à l'ouverture du sous-lot)
+
+**`ref_genotypes`** — sites qui exposent réellement `label` / `description` :
+- `server/src/routes/character/ref.js` `/genotypes` (`select('*')` → client Wizard / CharacterSheet)
+  → couvert par le swap 5.0 (`localizeRefRows('ref_genotypes', genotypes)`)
+- `server/src/services/creationService.js:146-147` (`requiredGenotypeLabel`) → `resolveRefField(g, 'label')` *(non-`select('*')` — retrofit fin 5a)*
+
+Lecture de modificateurs numériques seulement (`mod_for`…, `pc_cost`) — **non touchés** :
+`creationService.js:796`, `socketDice.js:152`, `socketCombatState.js` (×2), `socketEntity.js` (×2),
+`routes/battlemaps.js:234`, `routes/character/char-sheet.js` (×3), `characterExportService.js:67`,
+`inventoryService.js:200`, `combatantContextService.js:72`, `movementBudgetService.js:67`,
+`damageService.js:258`, `coldExposureService.js:206`, `environmentalHazardService.js:102`,
+`fallDamageService.js:59`, `fatigueService.js:48`, `woundEvolutionService.js:142`.
+
+**`ref_mutation_subtypes`** — sites qui exposent `name` / `description` / `special_trait` :
+- `server/src/routes/character/ref.js` `/mutations` — `ref_mutations` + `ref_mutation_subtypes` en
+  `select('*')`, `subtable[]` envoyée au client → swap 5.0 sur les deux `select('*')`, puis en 5a
+  localiser chaque élément de `subtable[]`
+- `server/src/services/creationService.js:228` (`getStep3RefData`, `select('*')`) → swap 5.0 ; en 5a,
+  localiser le tableau `subtypes`
+- `server/src/services/creationService.js:299-308` (`getStep3State`, alias SQL `rms.name as
+  subtype_db_name` — **pas** un `select('*')`) → 5a : reshape de la requête, résoudre en JS après le `select`
+- `server/src/services/mutationService.js:24,52` (`subtype_name` d'affichage) → 5a : via `resolveRefField`
+
+Note : le gabarit FR `Cette profession nécessite le génotype : ${label}` (`creationService.js:115-116`)
+et les phrases serveur analogues qui *incorporent* un libellé `ref_*` sont une dette distincte (type
+Lot 6) — **hors périmètre 5a**, à recenser.
+
+### 7.8 Invariant
+
+La résolution de la langue affichée est **exclusivement côté serveur, via `refI18n.js`, résolveur
+unique** (couture unique — §7.4.2). Jamais dupliquée par table ou par service ; jamais de repli côté
+client. Le client reçoit une chaîne déjà résolue (`equip.name`), jamais l'objet `*_i18n`. Corollaire
+de `LOCALISATION.md` §4 (le client ne décide jamais de la langue) et `AGENTS.md` §3 (une propriété =
+une autorité unique).
+
+### 7.9 Hors périmètre du Lot 5
+
+- **Colonnes de taxonomie** `family` / `category` / `type` (`ref_equipment`, `ref_skills`,
+  `ref_advantages`, `ref_backgrounds`) : vocabulaire fermé (~90 valeurs distinctes recopiées sur des
+  centaines de lignes), curé par le dev, **aussi utilisé comme clé de regroupement / filtre** en base
+  et côté client. Traitement propre = codes + clés i18next côté client (pas JSONB) — mais c'est une
+  migration de *valeurs* + le retrofit de tous les `where`/`groupBy`, blast radius distinct. →
+  **Lot 7**, non ouvert.
+- Colonnes à micro-format structuré ou mono-token : `ref_mutation_subtypes.skill_bonus`
+  (`"Acrobatie/Équilibre:+3"`) / `immunity` (`"vertige"`), `ref_equipment.caliber` / `price_modifier`
+  (`"x niv"`) / `duration` (`"16 h"`) / `mod_slot`. Notées, décision différée.
+- Toute langue ≠ `fr` ; le champ `locale` réel (utilisateur / campagne).
+- Phrases FR **composées côté serveur** qui incorporent un libellé `ref_*` (`creationService`
+  messages d'éligibilité, etc.) — dette type Lot 6.
+- Correction du **contenu FR** lui-même : fautes, anglais résiduel (bug #16), mojibake — voir §7.10.
+- Lots 1-4 (validation navigateur), Lot 6.
+
+### 7.10 Trouvailles hors i18n (routées séparément, pas corrigées dans le Lot 5)
+
+- `ref_genotypes.description` : double-encodage UTF-8 sur les 4 lignes
+  (`"NÃ© avec les mutations nÃ©cessaires Ã  la survie"` au lieu de
+  `"Né avec les mutations nécessaires à la survie"`). → ticket `bug_tickets`.
+- `ref_backgrounds.description` : `NULL` sur 22/22 lignes — colonne jamais peuplée (le contenu
+  existe-t-il dans le *Livre de Base* ?). → ticket `bug_tickets`.
+
+### 7.11 Validation
+
+- **Migration `5.0`** : round-trip vérifié par **Saar via script scratchpad** (hors `server/` —
+  `rules/migrations.md` ; `naturalMigrationSource` exclut `*.test.mjs` de toute façon) : import du
+  module par chemin absolu, `up()` puis `down()`, assert backfill `"<champ>_i18n"->>'fr' = "<champ>"`
+  par table + `DROP` effectif. Résultat consigné au message de commit. Application réelle : nodemon de
+  Saar au démarrage ; `SELECT knex_migrations` avant tout rappel manuel de `up()`.
+- **Résolveur** : `node --test server/src/lib/refI18n.test.mjs` (pur, sans base).
+- **Swap `select('*')` (5.0)** : `node --check` sur les ~15 `.js` touchés + `cd client && npm run build`
+  propre ; ré-lecture de chaque site pour confirmer qu'aucun ne fait `{...refRow}` → `INSERT`/`UPDATE`
+  sur une autre table (sinon corrigé dans 5.0, pas différé).
+- **Par sous-lot 5a→5g** : `node --check` sur les `.js` serveur touchés, tests ciblés des modules,
+  `cd client && npm run build` propre.
+- **Scénario réel** (session beta groupée, listé par sous-lot) : 5.0 → catalogue Wizard + marchand
+  s'affichent identiques ; 5a → Wizard étape génotype + octroi MJ d'une mutation à sous-table ;
+  5c → écran carrières Wizard ; 5d → panneau avantages narratif ; 5g → marchand + fiche équipement.
+- **Retour arrière** : migration `5.0` = `DROP COLUMN` pur (colonnes brutes intactes) ; swap
+  `select('*')` et chaque retrofit = revert de commit.
+
+### 7.12 Références (recherche pratiques pro, 2026-09-02)
+
+L'architecture retenue est le patron dominant du contenu multilingue en base pour un profil
+*read-heavy, peu de langues* — pas une invention locale.
+
+- **JSONB vs table séparée** : consensus « read-heavy + peu de langues → colonne JSONB ; beaucoup de
+  langues + requêtes complexes → table séparée » (IntlPull *Database Localization Patterns 2026* ;
+  dejimata *JSONify your Ruby Translations* ; *Mastering I18n with PostgreSQL JSONB*).
+- **Chaîne de repli centralisée, décidée tôt** : spatie `laravel-translatable` (`$fallbackLocale`,
+  `$fallbackAny`, `$missingKeyCallback`), Mobility (`fallbacks:`). Enclume : `locale → fr → colonne
+  brute → null`.
+- **Résolution en couche applicative + strip du blob** : Mobility, spatie, `parler`, `globalize`
+  résolvent au rendu côté application, pas en SQL ; le blob brut qui fuite dans `toArray()`/`toJSON()`
+  est traité comme un **bug** (spatie issue #47) → d'où le strip `*_i18n` de `localizeRef` (§7.4.2).
+- **Backend enfichable** : Mobility sépare l'API de traduction du stockage → changer le backend d'un
+  modèle sans toucher les consommateurs. `refI18n.js` = cette couture (§7.13).
+- **Indexation** : GIN sur la colonne jsonb *seulement si on requête dedans*. Enclume trie / filtre
+  sur la colonne brute (`orderBy('label')`, `where({family})`) → **aucun index ajouté en 5.0**.
+
+### 7.13 Pérennité & adaptativité
+
+- **Ajouter une langue** (EN/DE/JP) : `UPDATE ref_x SET name_i18n = name_i18n || jsonb_build_object('en', …)`
+  par script de données. Aucune migration de schéma, aucun changement de `refI18n.js`.
+- **Ajouter un champ traduisible** : `ADD COLUMN <champ>_i18n` (petite migration) + une entrée dans
+  `REF_TRANSLATABLE`. Rien d'autre.
+- **Locale par utilisateur / campagne** : `resolveRefField(row, field, locale)` prend déjà `locale` ;
+  un seul point câble sa source le jour venu.
+- **Tri / recherche par valeur traduite** dans une locale ≠ fr : passer ce point de lecture précis en
+  SQL `ORDER BY COALESCE(name_i18n->>:locale, name_i18n->>'fr', name)` + index d'expression si le
+  volume l'exige. Local à la requête, pas un changement d'architecture.
+- **Une table qui explose** (dizaines de milliers de lignes) : bascule de cette table seule vers une
+  table de traduction séparée en ne réécrivant que l'implémentation de `refI18n.js` pour ce cas — les
+  ~15 consommateurs restent inchangés (couture unique).
 
 ---
 
