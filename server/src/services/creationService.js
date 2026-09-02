@@ -6,6 +6,7 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { localizeRefRows } from '../lib/refI18n.js'
 import { getAgeEffects, evaluateSalaryFormula, validateStep1 } from '../../../shared/polarisUtils.js'
 import { evaluateCareerEligibility } from '../../../shared/careerEligibility.js'
 import { computeSkillAllocation, validateChoiceGroups } from '../../../shared/careerSkills.js'
@@ -194,19 +195,19 @@ export async function getStep4RefData(sheetId) {
     db('ref_setbacks').select('*').orderBy('roll_min'),
   ])
 
-  const bgMap = new Map(backgrounds.map(b => [b.id, { ...b, skills: [] }]))
+  const bgMap = new Map(localizeRefRows('ref_backgrounds', backgrounds).map(b => [b.id, { ...b, skills: [] }]))
   for (const sk of bgSkills) bgMap.get(sk.background_id)?.skills.push(sk)
   const bgsWithSkills = Array.from(bgMap.values())
 
   const careersMap = new Map(
-    careers.map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [], education: [], randomBenefits: [] }])
+    localizeRefRows('ref_careers', careers).map(c => [c.id, { ...c, skills: [], titles: [], prerequisites: [], pointCategories: [], education: [], randomBenefits: [] }])
   )
   for (const sk of careerSkills) careersMap.get(sk.career_id)?.skills.push(sk)
   for (const t of careerTitles) careersMap.get(t.career_id)?.titles.push(t)
   for (const p of careerPrereqs) careersMap.get(p.career_id)?.prerequisites.push(p)
   for (const pc of careerPointCats) careersMap.get(pc.career_id)?.pointCategories.push(pc)
   for (const e of careerEducation) careersMap.get(e.career_id)?.education.push(e)
-  for (const rb of careerRandomBenefits) careersMap.get(rb.career_id)?.randomBenefits.push(rb)
+  for (const rb of localizeRefRows('ref_career_random_benefits', careerRandomBenefits)) careersMap.get(rb.career_id)?.randomBenefits.push(rb)
 
   const byType = (type) => bgsWithSkills.filter(b => b.type === type)
 
@@ -216,7 +217,7 @@ export async function getStep4RefData(sheetId) {
     trainings: byType('training'),
     higherEds: byType('higher_ed'),
     careers: Array.from(careersMap.values()),
-    setbacks,
+    setbacks: localizeRefRows('ref_setbacks', setbacks),
   }
 }
 
