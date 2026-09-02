@@ -230,8 +230,8 @@ export async function getStep3RefData() {
     db('ref_mutation_skills').select('*'),
   ])
 
-  const mutMap = new Map(mutations.map(m => [m.mutation_id, { ...m, subtable: [], skills: [] }]))
-  for (const sub of subtypes) mutMap.get(sub.mutation_id)?.subtable.push(sub)
+  const mutMap = new Map(localizeRefRows('ref_mutations', mutations).map(m => [m.mutation_id, { ...m, subtable: [], skills: [] }]))
+  for (const sub of localizeRefRows('ref_mutation_subtypes', subtypes)) mutMap.get(sub.mutation_id)?.subtable.push(sub)
   for (const sk of skills) mutMap.get(sk.mutation_id)?.skills.push(sk)
 
   return Array.from(mutMap.values())
@@ -243,7 +243,7 @@ export async function getStep3RefData() {
 // activée pour cette campagne. adv_079 ("Force Polaris") reste toujours visible.
 export async function getStep5RefData(campaignId) {
   const settings = await getCampaignSettings(db, campaignId)
-  const rows = await db('ref_advantages').select('*').orderBy(['type', 'name'])
+  const rows = localizeRefRows('ref_advantages', await db('ref_advantages').select('*').orderBy(['type', 'name']))
   if (settings.polaris_latent) return rows
   return rows.filter(r => !['adv_077', 'adv_078'].includes(r.advantage_id))
 }
