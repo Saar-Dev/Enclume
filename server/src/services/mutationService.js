@@ -10,6 +10,7 @@
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { applyMutationIdentityGrant, recomputeIdentity } from './identityService.js'
+import { resolveRefField } from '../lib/refI18n.js'
 
 // Agrégat mod_FOR..PRE + résistances + identité de toutes les mutations actives d'un personnage —
 // char_mutation_effects_view fait déjà la somme + le stacking (migration 109). Null si aucune
@@ -19,16 +20,27 @@ export async function getMutationEffects(sheetId) {
 }
 
 export async function getMutations(sheetId) {
-  return db('char_mutations as cm')
+  const rows = await db('char_mutations as cm')
     .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
     .leftJoin('ref_mutation_subtypes as rmst', 'rmst.subtype_id', 'cm.subtype_id')
     .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active' })
     .select(
       'cm.id', 'cm.mutation_id', 'cm.subtype_id', 'cm.source', 'cm.count', 'cm.created_at',
-      'rm.name', 'rm.description', 'rmst.name as subtype_name',
+      'rm.name', 'rm.name_i18n', 'rm.description', 'rm.description_i18n',
+      'rmst.name as subtype_name', 'rmst.name_i18n as subtype_name_i18n',
       'rm.natural_weapon_formula', 'rm.natural_weapon_requires_grapple',
     )
     .orderBy('cm.created_at', 'asc')
+
+  // Libellés ref_* dénormalisés via jointure : résolus par le résolveur (PLAN_LOCALISATION.md §7.5).
+  return rows.map(({ name_i18n, description_i18n, subtype_name_i18n, ...rest }) => ({
+    ...rest,
+    name: resolveRefField('ref_mutations', { name: rest.name, name_i18n }, 'name'),
+    description: resolveRefField('ref_mutations', { description: rest.description, description_i18n }, 'description'),
+    subtype_name: rest.subtype_name == null
+      ? null
+      : resolveRefField('ref_mutation_subtypes', { name: rest.subtype_name, name_i18n: subtype_name_i18n }, 'name'),
+  }))
 }
 
 // trxOpt : permet l'appel depuis une transaction externe déjà ouverte (ex. reconcileCreation
