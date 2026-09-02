@@ -22,7 +22,11 @@
 > initial, découverte au ré-audit — §7.7bis (relu site par site). **B1 codée 2026-09-02** (§7.15,
 > 7 commits `93c6a88`→`3281d7c` — inventaire, `/macro-options`, enrich programme, export skills,
 > fenêtre combat MJ, moding) ; **B2** (noms d'armes en combat, emmêlé avec Lot 6, comparaison en dur
-> `ref_name !== 'Klauss'`) plan séparé à faire.**
+> `ref_name !== 'Klauss'`) plan séparé à faire.
+>
+> ✅ **Phase A + B1 validées en session beta le 2026-09-02** (parcours inventaire, marchand, Wizard,
+> fiche perso, combat MJ — texte identique à avant, aucune régression). Reste : B2, le snapshot
+> `char_inventory_mods.mod_name` (§7.6), le cycle `down()` de la migration 318.**
 
 ---
 
@@ -841,7 +845,8 @@ préservés). **Suite serveur contre le schéma migré (2026-09-02) : 99 tests, 
 (`combatantContextService`, `inventoryService`, `advantageService`, `exoTemplateService`,
 `creationRoundTrip`, `creationVaultNative`, `charSheetService`, `weaponModService`,
 `movementBudgetService`, `vaultCloneRegistry`) — aucun `deepEqual` cassé par les colonnes `_i18n`.
-**Non testé** : parcours navigateur (session beta) ; `characterExportService` = .xlsx réel non généré ;
+**Validé en session beta 2026-09-02** (inventaire, marchand, Wizard, fiche perso, combat MJ) — texte
+identique, aucune régression. **Non testé** : `characterExportService` = .xlsx réel non généré ;
 cycle `down()`/`up()` réel de la migration 318 (`verify_318.js` fourni, non lancé).
 
 ---
