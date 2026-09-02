@@ -6,6 +6,7 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { localizeRefAliased, resolveRefField } from '../lib/refI18n.js'
 import { calcEncumbrancePenalty, calcAttributeNA } from '../lib/charStats.js'
 import { getMutationEffects } from './mutationService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
@@ -94,7 +95,7 @@ async function _armorSlotOccupants(characterId, slotCode, excludeItemId = null) 
 }
 
 export async function getItemWithRef(itemId) {
-  return db('char_inventory')
+  const row = await db('char_inventory')
     .leftJoin('ref_equipment', 'char_inventory.equipment_id', 'ref_equipment.id')
     .where({ 'char_inventory.id': itemId })
     .select(
@@ -112,8 +113,11 @@ export async function getItemWithRef(itemId) {
       'char_inventory.notes',
       'char_inventory.custom_props',
       'ref_equipment.name as ref_name',
+      'ref_equipment.name_i18n as ref_name_i18n',
       'ref_equipment.family as ref_family',
+      'ref_equipment.family_i18n as ref_family_i18n',
       'ref_equipment.category as ref_category',
+      'ref_equipment.category_i18n as ref_category_i18n',
       'ref_equipment.weight as ref_weight',
       'ref_equipment.location as ref_location',
       'ref_equipment.protection as ref_protection',
@@ -136,6 +140,9 @@ export async function getItemWithRef(itemId) {
       'ref_equipment.ammo_count as ref_ammo_count',
     )
     .first()
+  return row == null
+    ? row
+    : localizeRefAliased('ref_equipment', row, { ref_name: 'name', ref_family: 'family', ref_category: 'category' })
 }
 
 // Résolution canonique d'une arme "possédée et en main" — autorité unique pour le combat (Tir et
