@@ -14,6 +14,7 @@
 
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
+import { resolveRefField } from '../lib/refI18n.js'
 import { getGenotypeModForAttr, getMutationModForAttr } from '../../../shared/polarisUtils.js'
 import { getAdvantages } from './advantageService.js'
 import { getMutationEffects } from './mutationService.js'
@@ -55,8 +56,9 @@ export async function getCharacterExportData(characterId, campaignId) {
       })
       .select(
         'rs.id as skill_id', 'cs.mastery', 'cs.is_learned',
-        'rs.family', 'rs.label', 'rs.parent', 'rs.attr_1', 'rs.attr_2', 'rs.marker', 'rs.description',
-        'rs.is_category', 'parent_rs.label as parent_label',
+        'rs.family', 'rs.family_i18n', 'rs.label', 'rs.label_i18n', 'rs.parent',
+        'rs.attr_1', 'rs.attr_2', 'rs.marker', 'rs.description', 'rs.description_i18n',
+        'rs.is_category', 'parent_rs.label as parent_label', 'parent_rs.label_i18n as parent_label_i18n',
       ),
     getAdvantages(sheet.id),
     getMutationEffects(sheet.id),
@@ -77,14 +79,14 @@ export async function getCharacterExportData(characterId, campaignId) {
 
   const skills = skillRows.map((s) => ({
     skill_id: s.skill_id,
-    family: s.family,
-    label: s.label,
+    family: resolveRefField('ref_skills', s, 'family'),
+    label: resolveRefField('ref_skills', s, 'label'),
     parent: s.parent,
-    parent_label: s.parent_label,
+    parent_label: resolveRefField('ref_skills', { label: s.parent_label, label_i18n: s.parent_label_i18n }, 'label'),
     attr_1: s.attr_1,
     attr_2: s.attr_2,
     marker: s.marker,
-    description: s.description,
+    description: resolveRefField('ref_skills', s, 'description'),
     is_category: s.is_category,
     mastery: s.mastery ?? 0,
     is_learned: s.is_learned ?? false,
