@@ -594,10 +594,10 @@ Enclume/
 │   │   ├── character/
 │   │   │   ├── WeaponPanel.jsx         # NOUVEAU 55 — armes équipées MG/MD, stats, munitions chargées, rechargement, équipement. Modifié 66 Sprint 7.5 — affichage ammo_remaining/ammo_count (rouge si vide), picker variantes ammo, POST /reload. Modifié 85 M4/Item11 — getSlotInfo, conflict resolution handleEquip, dropdown +armes équipées, slot picker 2M/Tr, warning Tr. Fix affichage munitions (current_ammo &&)
 │   │   │   ├── InventoryPanel.jsx      # Modifié 55 — VALID_SLOTS corrigé (migration 51 → codes BG/BD/JG/JD/MG/MD/2M/Tr)
-│   │   │   ├── ArmorWoundPanel.jsx     # NOUVEAU 54 — layout 3 colonnes : localisations armure + silhouette + conteneurs
+│   │   │   ├── ArmorWoundPanel.jsx     # NOUVEAU 54 — layout 3 colonnes : localisations armure + silhouette + conteneurs. **Modifié 2026-09-02** — `colCenter` : `contain:'size'` — la colonne centrale ne pèse plus sur la hauteur de rangée grid (sinon la hauteur du svg, indexée sur 80 % d'un `1fr` large, l'étirait) ; `alignSelf:'stretch'` réinjecte la hauteur des colonnes latérales comme bloc conteneur défini.
 │   │   │   ├── LocationPanel.jsx       # Modifié 56 — import polarisRound shared, calcMillefeuille utilise polarisRound
 │   │   │   ├── ContainerPanel.jsx      # NOUVEAU 54 — Sac/Ceinture/Coffre — équipement conteneur
-│   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures, 50% width
+│   │   │   ├── SilhouettePanel.jsx     # NOUVEAU 54 — SVG silhouette colorée par blessures. **Modifié 2026-09-02** — svg `width:'80%'` / `height:'100%'` : boîte 80 %(largeur colonne) × 100 %(hauteur colonnes latérales) ; le `preserveAspectRatio="xMidYMid meet"` par défaut du SVG contient le tracé dedans (ratio gardé, jamais plus haut que les colonnes, largeur indexée sur la fenêtre). Remplace l'ancien `height:'auto'` qui laissait la hauteur repartir de la largeur.
 │   │   │   ├── AdvantagesPanel.jsx     # Modifié 50 — rework lift-state-up, props charSkills/refSkillsPolaris/onSkillLearnedChange. Modifié 141 (suite 29) — 4ᵉ bouton "Avantage/Désavantage" (grille 2×2, MJ uniquement) + étape liste (catalogue `ref_advantages` complet via `GET /char-ref/advantages`, groupée Avantages/Désavantages) + `handleAddAdvantage` (`POST /advantages` → `grantAdvantage`, octroi narratif sans coût PC).
 │   │   │   ├── SkillsPanel.jsx         # Modifié 73 — bouton ⓘ par compétence (si description non nulle), panel position:fixed (description LdB complet, scrollable, click-outside via useEffect+ref). Modifié 141 — +prop skillPrerequisitesEnabled (settings.skill_prerequisites, OPT-07) : gate le check SKILL_MIN dans isVisible (fermé par défaut) ; MUTATION/GENOTYPE toujours actifs, hors périmètre. Modifié 141 (suite 26) — `[CS7]` corrigé : +prop `charMutations` (source réelle, remplace `charAdvantages`/`muta_numero` jamais existant en V2), +branche `ADVANTAGE` (`adv_079` "Force Polaris"). Modifié 141 (suite 27) — `isVisible` généralisé via `shared/skillRequirements.js` (MUTATION/ADVANTAGE/GENOTYPE, sémantique ET/OU par `or_group` — bug "Hybride").
 │   │   │   ├── CharacterSheet.jsx      # Modifié 61 — import calcAN/calcAllureMoy/calcAllures shared, déf locales supprimées. Modifié 141 — état campaignSettings (peuplé depuis GET /:characterId → settings), transmis à SkillsPanel via skillPrerequisitesEnabled. Modifié 141 (suite 26) — +état `charMutations` (fetch `GET .../mutations`, aussi rechargé par `handleMutationsChanged`), passé à `SkillsPanel`.
@@ -1495,6 +1495,10 @@ scripté.
   vers une section "Conteneurs portés" dans WeaponPanel, avec le bouton Customisation (moding) à sa
   suite. Empilement vertical (Blessures/Armures puis Armes) — une grille 2 colonnes a été codée puis
   annulée après test par Saar (bloc trop massif, silhouette écrasée).
+  - 2026-09-02 : la silhouette centrale débordait la hauteur des colonnes localisations quand la
+    fenêtre était large (svg `width:80%` d'un `1fr` large → `height:'auto'` proportionnelle → rangée
+    grid étirée). Corrigé par `contain:'size'` sur `colCenter` + svg `height:'100%'` (voir
+    l'arborescence, `SilhouettePanel.jsx` / `ArmorWoundPanel.jsx`).
 - Drag & drop (`@dnd-kit/core` + `@dnd-kit/utilities`, pas `sortable` — inutile pour des zones
   distinctes) : équiper une armure/arme, déplacer entre Sac/Ceinture/Coffre, déséquiper en glissant
   vers l'inventaire. `inventoryMutations.js` (nouveau) porte les mutations réseau+store partagées entre

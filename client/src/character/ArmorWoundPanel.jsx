@@ -112,9 +112,13 @@ const s = {
     flexDirection: 'column',
     gap: 8,
     minWidth: 0,
-    // Centrage vertical de la silhouette sur la hauteur des colonnes gauche/droite (demande Saar
-    // 2026-08-05) — alignSelf:'stretch' ignore le alignItems:'start' du grid parent pour cette
-    // colonne, SilhouettePanel se centre ensuite dans la hauteur ainsi obtenue.
+    // Silhouette bornée à la hauteur des colonnes gauche/droite (demande Saar 2026-08-05, révisé
+    // 2026-09-02) : `contain:'size'` dimensionne cette colonne sans regarder son contenu, donc la
+    // hauteur de rangée grid vient des seules colonnes latérales ; `alignSelf:'stretch'` réinjecte
+    // ensuite cette hauteur comme bloc conteneur défini pour SilhouettePanel (svg height:100%).
+    // Sans `contain`, la hauteur du svg (indexée sur sa largeur = 80% d'un `1fr` large) repartait
+    // dans le calcul de rangée et étirait toute la section.
     alignSelf: 'stretch',
+    contain: 'size',
   },
 }

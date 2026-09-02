@@ -50,7 +50,11 @@ const s = {
   },
 
   svg: {
+    // Boîte 80%(largeur colonne centrale) × 100%(hauteur des colonnes gauche/droite, réinjectée
+    // par `colCenter` via `contain:size` + `alignSelf:stretch` dans ArmorWoundPanel.jsx). Le tracé
+    // est contenu dans cette boîte par le `preserveAspectRatio="xMidYMid meet"` par défaut du SVG :
+    // ratio conservé, jamais plus haut que les colonnes, largeur toujours indexée sur la fenêtre.
     width: '80%',
-    height: 'auto',
+    height: '100%',
   },
 }

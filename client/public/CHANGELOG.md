@@ -1,3 +1,10 @@
+## v223 — 2026-09-02 — Fix : illustration blessures/armure trop grande
+
+### Fiche personnage — Matériel
+- [fix] Dans l'onglet Matériel, la silhouette du corps (partie Blessures / Armure) débordait vers le
+  bas quand la fenêtre était large. Elle s'adapte toujours à la largeur disponible mais ne dépasse
+  plus la hauteur des colonnes de localisations à sa gauche et à sa droite.
+
 ## v222 — 2026-08-30 — Fix : attaque de drone à distance bloquée (« programme armement_contact manquant »)
 
 ### Combat — drone
