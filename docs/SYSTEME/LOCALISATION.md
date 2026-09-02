@@ -196,25 +196,32 @@ apprendre, pas de jointure, aucune migration de schéma requise pour ajouter une
 
 ### 6.2 Mécanisme
 
-- Chaque colonne traduisible existante (`name`, `label`, `description`) est doublée d'une colonne
-  JSONB `<champ>_i18n` (ex. `name_i18n`, `description_i18n`), clé = code langue ISO (`fr`, `en`, `de`,
-  `jp`...), valeur = texte dans cette langue. Exemple : `{"fr": "Sens diminué (vue)"}`.
-- Aujourd'hui, seule la clé `fr` est peuplée (objectif produit inchangé — FR seul). Ajouter une langue
-  plus tard = peupler une nouvelle clé sur les lignes existantes (script de traduction/migration de
-  données), jamais une migration de schéma ni un changement de code de résolution.
-- Résolution : un helper serveur unique (à créer au Lot 5, pas dupliqué par table) lit
-  `row[`${champ}_i18n`][locale] ?? row[`${champ}_i18n`].fr ?? row[champ]` — repli sur `fr`, puis sur
-  l'ancienne colonne brute tant que la migration d'un `ref_*` donné n'est pas faite (transition
-  table par table, jamais un big-bang sur les 10 tables). La locale du joueur n'existe pas encore
-  comme concept dans le projet (FR seul) : au lancement du Lot 5, `locale` sera fixé à `'fr'` en dur
-  côté serveur, remplacé plus tard par un vrai champ utilisateur/campagne le jour où une deuxième
-  langue devient un objectif produit.
-- Le client continue de recevoir une chaîne déjà résolue (`adv.name`), jamais l'objet JSONB brut ni de
-  logique de repli côté client — le serveur reste la seule autorité de résolution, même principe que
-  §4 (le client ne décide jamais de la langue affichée).
+**Révisé le 2026-09-02** (analyse à charge, `docs/PLANS/PLAN_LOCALISATION.md` §7.4.1) — le FR ne
+quitte pas la colonne d'origine.
+
+- **La colonne existante (`name`, `label`, `description`, `family`…) reste l'autorité pour la langue
+  par défaut (`fr`)** — inchangée. C'est la cible des écritures (outils admin, CRUD `ref_equipment`,
+  seeds) : aucun drift possible, aucun retrofit d'écriture.
+- Chaque colonne traduisible est doublée d'une colonne JSONB `<champ>_i18n` qui **ne porte que les
+  langues supplémentaires** : `{"en": "…", "de": "…"}`. Vide `{}` aujourd'hui (FR seul). **Jamais de
+  clé `fr` dedans.**
+- Ajouter une langue = peupler des clés `_i18n` sur les lignes existantes (script de données), jamais
+  une migration de schéma ni un changement du résolveur.
+- Résolution : un helper serveur unique `server/src/lib/refI18n.js` (pas dupliqué par table) —
+  `locale === DEFAULT_LOCALE ? row[champ] : (row[`${champ}_i18n`]?.[locale] ?? row[champ])`. Repli
+  final sur la colonne brute (= fr). `DEFAULT_LOCALE = 'fr'` figé côté serveur ; le concept de locale
+  joueur/campagne n'existe pas encore et sera câblé en **un** point le jour d'une 2ᵉ langue.
+- Patron : *colonne d'origine = langue par défaut + repli* (Django `modeltranslation`, Rails
+  `globalize`). Le « tout dans une structure annexe, colonne d'origine vestigiale » (spatie) suppose
+  un accesseur ORM qu'on n'a pas sous Knex et crée un drift à l'édition — écarté.
+- Le client reçoit toujours une chaîne déjà résolue (`adv.name`), jamais l'objet JSONB ni de logique
+  de repli côté client — le serveur est la seule autorité de résolution (§4).
 
 ### 6.3 Statut
 
-Décision d'architecture prise le 2026-08-11 ; exécution (audit par table, migrations, helper de
-résolution, retrofit des consommateurs) non commencée — plan détaillé à écrire dans
-`docs/PLANS/PLAN_LOCALISATION.md` §7 (Lot 5) avant tout code.
+Architecture décidée le 2026-08-11, **modèle de stockage révisé le 2026-09-02** (le FR reste dans la
+colonne brute ; `_i18n` ne porte que les langues ≠ fr — analyse à charge, `PLAN_LOCALISATION.md` §7).
+Exécution : `docs/PLANS/PLAN_LOCALISATION.md` §7. Périmètre court terme = poser la couture (migration
+`ADD COLUMN <champ>_i18n` sur les 10 tables + résolveur `refI18n.js` + câblage des projections de
+lecture, étapes 5.0→5.3) ; le peuplement d'une 2ᵉ langue s'ouvre quand une langue ≠ fr devient un
+objectif produit.
