@@ -8,6 +8,7 @@ import { randomInt } from 'crypto'
 import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { validateAdvantage } from './advantageConstraints.js'
+import { localizeRefRows, resolveRefField } from '../lib/refI18n.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { applyIdentityGrant, recomputeIdentity, normalizeModIdentity } from './identityService.js'
 
@@ -36,16 +37,25 @@ async function grantPolarisRandomPowers(trx, sheetId) {
 }
 
 export async function getAdvantages(sheetId) {
-  return db('char_advantages as ca')
+  const rows = await db('char_advantages as ca')
     .join('ref_advantages as ra', 'ra.advantage_id', 'ca.advantage_id')
     .whereNull('ca.removed_at')
     .where('ca.char_sheet_id', sheetId)
     .select(
       'ca.id', 'ca.advantage_id', 'ca.acquired_at', 'ca.acquired_during',
-      'ra.name', 'ra.type', 'ra.description', 'ra.cost_pc', 'ra.special_rule',
+      'ra.name', 'ra.name_i18n', 'ra.type', 'ra.description', 'ra.description_i18n',
+      'ra.cost_pc', 'ra.special_rule', 'ra.special_rule_i18n',
       'ra.mod_attribute', 'ra.mod_value', 'ra.mod_resistance', 'ra.mod_res_value',
     )
     .orderBy('ca.acquired_at', 'asc')
+
+  // Libellés ref_advantages dénormalisés via jointure : résolus par le résolveur (PLAN_LOCALISATION.md §7.5).
+  return rows.map(({ name_i18n, description_i18n, special_rule_i18n, ...rest }) => ({
+    ...rest,
+    name: resolveRefField('ref_advantages', { name: rest.name, name_i18n }, 'name'),
+    description: resolveRefField('ref_advantages', { description: rest.description, description_i18n }, 'description'),
+    special_rule: resolveRefField('ref_advantages', { special_rule: rest.special_rule, special_rule_i18n }, 'special_rule'),
+  }))
 }
 
 /**
@@ -62,7 +72,7 @@ export async function addAdvantage(sheetId, advantageId, acquiredDuring, trxOpt)
 
     const [ledger, allRefAdvantages, sterileMutation, sheetCampaign] = await Promise.all([
       trx('char_pc_ledger').where({ char_sheet_id: sheetId }).first(),
-      trx('ref_advantages').select('*'),
+      trx('ref_advantages').select('*').then(rows => localizeRefRows('ref_advantages', rows)),
       trx('char_mutations as cm')
         .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
         .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
@@ -168,7 +178,7 @@ export async function grantAdvantage(sheetId, advantageId, acquiredDuring, trxOp
       .select('ca.advantage_id', 'ra.type', 'ra.cost_pc', 'ra.family', 'ra.family_limit', 'ra.is_unique', 'ra.name')
 
     const [allRefAdvantages, sterileMutation, sheetCampaign] = await Promise.all([
-      trx('ref_advantages').select('*'),
+      trx('ref_advantages').select('*').then(rows => localizeRefRows('ref_advantages', rows)),
       trx('char_mutations as cm')
         .join('ref_mutations as rm', 'rm.mutation_id', 'cm.mutation_id')
         .where({ 'cm.char_sheet_id': sheetId, 'cm.status': 'active', 'rm.mod_fertility': 'sterile' })
