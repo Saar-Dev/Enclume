@@ -46,7 +46,9 @@ const initSocket = (io) => {
     // Le client rejoint la room d'une campagne
     // Payload : { campaignId } - campaignId absent = session solo (Wizard Coffre-native, creation
     // de personnage sans campagne). Voir branche dediee juste ci-dessous.
-    socket.on(WS.SESSION_JOIN, async ({ campaignId, context = 'session' }) => {
+    // `context: joinContext` — renommé : un `const context` plus bas dans ce handler (objet passé
+    // aux registerXHandlers) shadowerait le paramètre sur tout le scope → TDZ sur toute lecture avant.
+    socket.on(WS.SESSION_JOIN, async ({ campaignId, context: joinContext = 'session' }) => {
       try {
         // Session solo (pas de campagne) : aucune room de campagne a rejoindre, aucun autre
         // utilisateur ne peut jamais y avoir acces (meme invariant que vaultService.js - "un Vault
@@ -101,7 +103,7 @@ const initSocket = (io) => {
         // Garde double-SESSION_JOIN : un socket qui ré-émettrait laisserait une ligne orpheline.
         if (!socket.presenceRowId) {
           try {
-            socket.presenceRowId = await startPresence(campaignId, socket.user.id, context === 'wizard' ? 'wizard' : 'session')
+            socket.presenceRowId = await startPresence(campaignId, socket.user.id, joinContext === 'wizard' ? 'wizard' : 'session')
           } catch (err) {
             console.error('[presence] startPresence:', err.message)
           }
