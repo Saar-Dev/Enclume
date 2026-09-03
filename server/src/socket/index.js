@@ -13,6 +13,7 @@ import { registerWizardHandlers } from './socketWizard.js'
 import { registerChatHandlers } from '../chat/socketChat.js'
 import { registerCatastropheHandlers } from './socketCatastrophe.js'
 import { listPendingCatastrophes } from '../lib/catastropheService.js'
+import { startPresence, endPresence } from '../lib/campaignActivityService.js'
 
 // Map des timers de timeout actifs â€” { requestId: { timeoutHandle, ...pendingData } }
 // DÃ©clarÃ©e hors de initSocket â€” une seule instance, partagÃ©e entre toutes les connexions.
@@ -45,7 +46,7 @@ const initSocket = (io) => {
     // Le client rejoint la room d'une campagne
     // Payload : { campaignId } - campaignId absent = session solo (Wizard Coffre-native, creation
     // de personnage sans campagne). Voir branche dediee juste ci-dessous.
-    socket.on(WS.SESSION_JOIN, async ({ campaignId }) => {
+    socket.on(WS.SESSION_JOIN, async ({ campaignId, context = 'session' }) => {
       try {
         // Session solo (pas de campagne) : aucune room de campagne a rejoindre, aucun autre
         // utilisateur ne peut jamais y avoir acces (meme invariant que vaultService.js - "un Vault
@@ -95,6 +96,16 @@ const initSocket = (io) => {
         socket.data.userId = socket.user.id
         // Stocker role dans socket.data â€” nÃ©cessaire pour ciblage GM via fetchSockets() (PE2)
         socket.data.role = member.role
+
+        // Suivi d'activité (Lot C) — non critique : un échec n'interrompt jamais la connexion.
+        // Garde double-SESSION_JOIN : un socket qui ré-émettrait laisserait une ligne orpheline.
+        if (!socket.presenceRowId) {
+          try {
+            socket.presenceRowId = await startPresence(campaignId, socket.user.id, context === 'wizard' ? 'wizard' : 'session')
+          } catch (err) {
+            console.error('[presence] startPresence:', err.message)
+          }
+        }
 
         // Enregistre ICI, avant SESSION_JOINED : le Wizard collaboratif (WizardLockSync.jsx) emet
         // WIZARD_JOIN des que useSocket() retourne un objet non-null, sans attendre le sync combat
@@ -276,6 +287,8 @@ const initSocket = (io) => {
             userId: socket.user.id,
             username: socket.user.username,
           })
+          // Suivi d'activité (Lot C) — non critique.
+          endPresence(socket.presenceRowId).catch(err => console.error('[presence] endPresence:', err.message))
         })
 
 

@@ -9,7 +9,7 @@ const SocketContext = createContext(null)
 // (socket/index.js) — voir useSocketReady() ci-dessous, motif exact dans WizardLockSync.jsx.
 const SocketReadyContext = createContext(false)
 
-export function SocketProvider({ campaignId, children }) {
+export function SocketProvider({ campaignId, context = 'session', children }) {
   const [socket, setSocket] = useState(null)
   const [ready, setReady] = useState(false)
 
@@ -17,7 +17,8 @@ export function SocketProvider({ campaignId, children }) {
     const socketEndpoint = import.meta.env.VITE_API_URL || undefined
     const s = io(socketEndpoint, { withCredentials: true })
     s.on('connect', () => {
-      s.emit(WS.SESSION_JOIN, { campaignId })
+      // `context` ('session' | 'wizard') — attribue le temps de présence côté serveur (Lot C).
+      s.emit(WS.SESSION_JOIN, { campaignId, context })
     })
     // setSocket(s) ci-dessous rend useSocket() non-null immédiatement (bien avant 'connect',
     // network réel) — un composant qui émettrait un événement de domaine dès que useSocket() existe
@@ -28,7 +29,7 @@ export function SocketProvider({ campaignId, children }) {
     s.on(WS.SESSION_JOINED, () => setReady(true))
     setSocket(s)
     return () => { s.disconnect(); setReady(false) }
-  }, [campaignId])
+  }, [campaignId, context])
 
   return (
     <SocketContext.Provider value={socket}>

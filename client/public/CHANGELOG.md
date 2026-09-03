@@ -1,3 +1,12 @@
+## v225 — 2026-09-03 — Suivi d'activité de campagne (temps de connexion, combats)
+
+### Campagne
+- [new] Le serveur enregistre désormais, par campagne, le temps de connexion de chaque joueur
+  (session de jeu et création de personnage comptés séparément), la date de dernière connexion, et
+  le journal des combats (nombre, durée). Ces informations seront visibles du MJ dans l'onglet
+  Joueurs de la Configuration (écran à venir). Aucune donnée n'est rétroactive : le décompte
+  démarre à l'installation de cette version.
+
 ## v224 — 2026-09-03 — Combat : viser une zone au fusil à pompe
 
 ### Combat — déclaration et résolution

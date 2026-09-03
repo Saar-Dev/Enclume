@@ -4949,3 +4949,69 @@ blocage documenté (§12).
 **Données** : aucune migration.
 
 **Retour arrière** : `git revert` du commit `dev/Saar` correspondant.
+
+---
+
+## Session (Claude) — 2026-09-03 — Suivi d'activité de campagne (temps de connexion + combats)
+
+Onglet Joueurs de la Configuration : ajout des statistiques par joueur (temps de connexion, dernière
+connexion, visites) et par campagne (nombre de combats, durée totale). Lot C du chantier « refonte
+onglet Joueurs » (B0 = nav Configuration + Zone dangereuse rouge ; B2 = roster ; C = stats).
+
+**Décision durable — le serveur suit désormais le temps de connexion des utilisateurs par campagne.**
+Deux tables append-only (migration 319), agrégats dérivés par requête (jamais un compteur muté :
+lost updates en concurrence, pas auditable, pas recalculable) :
+- `campaign_presence_sessions` : une ligne par période de connexion (`context` = `session` |
+  `wizard`). `ended_at` NULL = connecté. `last_seen_at` bumpé toutes les **5 min** par un heartbeat
+  serveur (`setInterval(...).unref()`) ; si le process meurt sans `disconnect`, l'agrégat prend
+  `COALESCE(ended_at, last_seen_at)` (perte ≤ 5 min). **Sweep au boot** (`sweepStalePresence`,
+  `ended_at = last_seen_at` sur les lignes ouvertes) **avant** `httpServer.listen` — un serveur qui
+  démarre n'a aucun socket vivant, sinon course avec un nouvel `INSERT`.
+- `campaign_combat_log` : une ligne par combat (`COMBAT_START` → INSERT, `COMBAT_END` → UPDATE).
+  **Pas de sweep** : le garde FSM interdit un 2ᵉ START sans END (au plus une ligne ouverte), et une
+  ligne ouverte contribue 0 s à la durée (`COALESCE(ended_at, started_at)`).
+
+**Choix assumés** :
+- `context` transmis par le client dans le payload `SESSION_JOIN` (prop `context` de `SocketProvider` :
+  `session` par défaut, `wizard` depuis `WizardCreation`). Le wizard Coffre (`/vault/creation`,
+  `campaignId` absent) n'est pas suivi — `socket/index.js` early-return avant la vérif membre.
+- « Temps de jeu » = temps en session, **jeu + édition de carte + combat confondus** (un seul socket).
+  Le split édition/jeu (`mode` client `play`/`edit`/`combat`) nécessiterait que le client signale ses
+  changements de mode au serveur — **différé**, ROI faible.
+- Fusion d'intervalles à l'agrégation : gère le multi-onglets (chevauchement compté une fois) et
+  regroupe les reconnexions socket.io rapprochées (< 10 min) en une seule « visite ».
+- `startPresence`/`endPresence`/`logCombat*` en `try/catch` interne : une écriture de métrique ratée
+  ne casse jamais une connexion ni un combat.
+- Écriture non transactionnelle (`COMBAT_START`/`END` ne le sont pas non plus).
+- Rien de rétroactif : le décompte démarre au déploiement. Multi-instance (Kiwi futur) : le sweep au
+  boot fermerait des lignes d'une autre instance vivante — limitation documentée, non traitée
+  (mono-instance aujourd'hui).
+- Disclosure utilisateur : `client/public/CHANGELOG.md` v225, comme le reste (demande Saar).
+
+**Fichiers touchés** : `server/src/db/migrations/319_campaign_activity.js` (nouveau) ;
+`server/src/lib/campaignActivityService.js` (+ test, nouveau) ;
+`server/src/lib/campaignRosterService.js` (compose `getCampaignActivity` → `player.stats` +
+`campaignStats`, + test) ; `server/src/routes/campaigns.js` (`GET /:id/roster` renvoie
+`{ roster, campaignStats }`) ; `server/src/socket/index.js` (`startPresence`/`endPresence`,
+`context`) ; `server/src/socket/socketCombatState.js` (`logCombatStart`/`End`) ;
+`server/src/index.js` (sweep + heartbeat au boot) ; `client/src/lib/SocketContext.jsx` (prop
+`context`) ; `client/src/components/creation/WizardCreation.jsx` (`context="wizard"`) ;
+`client/src/components/campaignSettings/SectionPlayers.jsx` (bloc Activité par carte + ligne combats)
+; `client/src/locales/fr.json` (12 clés `settings.roster*`, `rosterGmStatsSoon` retirée) ;
+`client/public/CHANGELOG.md`.
+
+**Testé** : `node --test` `campaignActivityService.test.mjs` 5/5 + `campaignRosterService.test.mjs`
+2/2 contre la base locale (fusion d'intervalles, split session/wizard, visites, sweep, combat
+compté/ouvert, merge stats dans le roster) ; `node --check` ×6 serveur ; import ESM des modules
+socket modifiés ; `npm run build` client ; eslint `SectionPlayers` propre (3 erreurs préexistantes
+sur `SocketContext.jsx` confirmées hors périmètre par `git stash`) ; `git diff --check`.
+**Session réelle Saar** : validation OK (présence session/wizard, combat, bloc Activité).
+
+**Non testé** : aucun test automatisé du câblage socket de bout en bout (DB + navigateur, domaine
+Saar) ; le split édition/jeu (différé) ; comportement multi-instance (non pertinent aujourd'hui).
+
+**Données** : migration `319_campaign_activity.js` — deux tables neuves, `down` propre (DROP CASCADE).
+Appliquée à la base locale partagée pendant le développement (batch 11).
+
+**Retour arrière** : `git revert` du commit `dev/Saar` correspondant + `db.migrate.down()` (une
+migration en arrière). Les tables sont additives, aucune donnée existante touchée.

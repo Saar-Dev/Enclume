@@ -6,14 +6,20 @@
 // ex-SectionPlayers : GET /vault/campaigns/:id/transfer-requests, supprimé avec ce lot).
 //
 // Décisions Saar (2026-09-03) : la carte MJ ne liste aucun personnage (tous les PNJ de la campagne,
-// « liste trop longue ») — seulement un emplacement `stats` pour un futur Lot présence/temps de jeu,
-// en pause. MJ affiché en dernier.
+// « liste trop longue ») — seulement ses stats de présence. MJ affiché en dernier.
+//
+// Les stats d'activité (temps de connexion par joueur, journal des combats — Lot C) sont produites
+// par campaignActivityService et fusionnées ici : `player.stats` par membre, `campaignStats` au
+// niveau campagne (le combat est un événement partagé, pas par joueur).
 //
 // Lecture seule via `db`, hors transaction (même raison que woundReviewService.js : jamais une
 // décision serveur, uniquement un affichage MJ). Aucune autorisation ici — la route
-// GET /api/campaigns/:id/roster porte requireRole('gm'). 4 requêtes à plat recousues par userId,
+// GET /api/campaigns/:id/roster porte requireRole('gm'). 5 requêtes à plat recousues par userId,
 // jamais une boucle par joueur.
 import db from '../db/knex.js'
+import { getCampaignActivity } from './campaignActivityService.js'
+
+const ZERO_STATS = { sessionSeconds: 0, wizardSeconds: 0, visitCount: 0, lastConnectedAt: null, online: false }
 
 // Un brouillon Wizard n'est pas une entité séparée : c'est une ligne `characters` (type 'pj') dont
 // le char_sheet n'est pas verrouillé (`wizard_locked_at IS NULL`). Tout le reste — exo/drone/pnj, ou
@@ -53,6 +59,8 @@ export async function getCampaignRoster(campaignId) {
     )
     .orderBy('vtr.created_at', 'asc')
 
+  const activity = await getCampaignActivity(campaignId)
+
   const charsByUser = {}
   for (const row of characterRows) {
     const status = characterStatus(row)
@@ -79,7 +87,7 @@ export async function getCampaignRoster(campaignId) {
     })
   }
 
-  return members
+  const roster = members
     .map(m => ({
       userId: m.userId,
       username: m.username,
@@ -87,11 +95,13 @@ export async function getCampaignRoster(campaignId) {
       joinedAt: m.joinedAt,
       characters: m.role === 'gm' ? [] : (charsByUser[m.userId] || []),
       transferRequests: transfersByUser[m.userId] || [],
-      stats: null,
+      stats: activity.presenceByUser[m.userId] || ZERO_STATS,
     }))
     .sort((a, b) => {
       // MJ en dernier, puis les joueurs par date d'arrivée dans la campagne.
       if ((a.role === 'gm') !== (b.role === 'gm')) return a.role === 'gm' ? 1 : -1
       return new Date(a.joinedAt) - new Date(b.joinedAt)
     })
+
+  return { roster, campaignStats: activity.combat }
 }

@@ -16,6 +16,7 @@ import { setCharacterState } from '../lib/characterStateService.js'
 import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { buildBroadcastRoster } from '../lib/combatRosterBroadcast.js'
 import { purgePendingCatastrophes } from '../lib/catastropheService.js'
+import { logCombatStart, logCombatEnd } from '../lib/campaignActivityService.js'
 
 export function registerStateHandlers(io, socket, context, pendingMaps) {
   const { campaignId, user, isGm } = context
@@ -195,6 +196,10 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
         current_turn: 1,
         action_timer_sec: actionTimerSec,
       })
+
+      // Journal des combats (Lot C) — non critique : un échec ne doit jamais empêcher le combat.
+      try { await logCombatStart(campaignId, battlemap_id ?? null) }
+      catch (err) { console.error('[combat-log] start:', err.message) }
       const insertedRoster = await db.transaction(async (trx) => {
         const rows = await trx('combat_roster').insert(rosterRows).returning('*')
         // Lot 1 (shadow, docs/PLANS/PLAN_CHARACTER_STATES.md §3) — state_position n'a pas de colonne
@@ -310,6 +315,10 @@ export function registerStateHandlers(io, socket, context, pendingMaps) {
       await purgePendingCatastrophes(campaignId, db)
       await db('combat_roster').where({ campaign_id: campaignId }).delete()
       await db('combat_state').where({ campaign_id: campaignId }).delete()
+
+      // Journal des combats (Lot C) — ferme la ligne ouverte (garde FSM : au plus une). Non critique.
+      try { await logCombatEnd(campaignId) }
+      catch (err) { console.error('[combat-log] end:', err.message) }
 
       pendingMaps.combatPreviews.delete(campaignId)
       io.to(campaignId).emit(WS.COMBAT_ENDED)

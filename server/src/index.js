@@ -44,6 +44,7 @@ import ticketsRouter from './routes/tickets.js'
 import adminTicketsRouter from './routes/adminTickets.js'
 import adminLogsRouter from './routes/adminLogs.js'
 import { createCorsOriginValidator, parseClientOrigins } from './lib/clientOrigins.js'
+import { sweepStalePresence, startPresenceHeartbeat } from './lib/campaignActivityService.js'
 import './lib/echeanceHandlerRegistrations.js' // effet de bord : peuple shared/echeanceTypeRegistry.js
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -163,6 +164,11 @@ const startServer = async () => {
     await syncBuiltinModels()
     console.log('Migrations à jour')
 
+    // Suivi de présence (Lot C) — ferme les lignes restées ouvertes d'avant un crash AVANT
+    // d'accepter la moindre connexion (sinon course avec un nouvel INSERT ended_at IS NULL).
+    const sweptPresence = await sweepStalePresence()
+    if (sweptPresence > 0) console.log(`Présence : ${sweptPresence} session(s) orpheline(s) fermée(s)`)
+
     // Vérification MinIO — bucket accessible
     const minio = getMinioClient()
     await minio.bucketExists(BUCKET())
@@ -171,6 +177,7 @@ const startServer = async () => {
     // Tout est prêt — on lance le serveur
     httpServer.listen(PORT, () => {
       console.log(`Serveur Enclume démarré sur le port ${PORT}`)
+      startPresenceHeartbeat() // bump last_seen_at des sessions ouvertes toutes les 5 min (unref)
     })
   } catch (err) {
     console.error('Erreur au démarrage :', err)

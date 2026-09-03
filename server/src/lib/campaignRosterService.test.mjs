@@ -52,7 +52,7 @@ test('getCampaignRoster : MJ en dernier sans personnages, joueurs par date d\'ar
     // Un PNJ appartenant au MJ — ne doit jamais apparaître (carte MJ sans persos).
     await db('characters').insert({ campaign_id: campaign.id, user_id: gm.id, name: 'Garde', type: 'pnj' })
 
-    const roster = await getCampaignRoster(campaign.id)
+    const { roster } = await getCampaignRoster(campaign.id)
 
     assert.deepEqual(roster.map(r => r.username), ['roster-bob', 'roster-alice', 'roster-gm'])
 
@@ -71,7 +71,8 @@ test('getCampaignRoster : MJ en dernier sans personnages, joueurs par date d\'ar
     assert.ok(draft.updatedAt)
 
     assert.deepEqual(roster[0].characters, [])
-    assert.equal(roster.every(r => r.stats === null), true)
+    // Aucune activité enregistrée pour ces fixtures → stats à zéro (jamais null).
+    assert.equal(roster.every(r => r.stats && r.stats.sessionSeconds === 0 && r.stats.online === false), true)
   } finally {
     await cleanup({ campaign, users: [gm, alice, bob] })
   }
@@ -96,11 +97,13 @@ test('getCampaignRoster : demandes de transfert Coffre regroupées sous le joueu
       vault_character_id: vaultChar2.id, target_campaign_id: campaign.id, requested_by: alice.id, status: 'approved',
     })
 
-    const roster = await getCampaignRoster(campaign.id)
+    const { roster, campaignStats } = await getCampaignRoster(campaign.id)
     const aliceCard = roster.find(r => r.username === 'roster-alice')
     assert.equal(aliceCard.transferRequests.length, 1)
     assert.equal(aliceCard.transferRequests[0].characterName, 'Renn')
     assert.equal(aliceCard.transferRequests[0].characterType, 'pj')
+    // campaignStats toujours présent (combat non joué ici → zéros)
+    assert.deepEqual(campaignStats, { combatCount: 0, combatSeconds: 0 })
   } finally {
     await cleanup({ campaign, vault, users: [gm, alice] })
   }

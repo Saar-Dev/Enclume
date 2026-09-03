@@ -279,7 +279,7 @@ export default function WizardCreation() {
   }
 
   return (
-    <SocketProvider campaignId={campaignId}>
+    <SocketProvider campaignId={campaignId} context="wizard">
     <WizardLockSync sheetId={sheetId} emitLiveRef={emitLiveRef} />
     <div className="wiz-shell">
       <WizardHeader

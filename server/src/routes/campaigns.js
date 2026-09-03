@@ -729,8 +729,7 @@ router.get('/:id/members', requireAuth, requireRole('gm'), async (req, res) => {
 // GET /api/campaigns/:id/roster — vue MJ de l'onglet Joueurs : membres + leurs personnages
 // (par type, prêt/création-en-cours) + demandes de transfert Coffre. Agrégation : campaignRosterService.
 router.get('/:id/roster', requireAuth, requireRole('gm'), async (req, res) => {
-  const roster = await getCampaignRoster(req.params.id)
-  res.json({ roster })
+  res.json(await getCampaignRoster(req.params.id)) // { roster, campaignStats }
 })
 
 export default router
