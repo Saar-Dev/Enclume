@@ -31,7 +31,7 @@ export default function SectionDanger({ campaignId, campaignName }) {
   }
 
   return (
-    <section className="card">
+    <section className="card card-danger">
       <h2 style={styles.sectionTitle}>{t('settings.dangerTitle')}</h2>
 
       <p style={styles.placeholderText}>{t('settings.deleteCampaignHint')}</p>

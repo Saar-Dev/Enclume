@@ -19,7 +19,7 @@ export default function CampaignSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [saveStatus, setSaveStatus] = useState(null)
-  const [activeSection, setActiveSection] = useState('dice')
+  const [activeSection, setActiveSection] = useState('players')
   const [formData, setFormData] = useState(null)
 
   useEffect(() => { document.title = 'Enclume — Paramètres campagne' }, [])
@@ -89,12 +89,12 @@ export default function CampaignSettingsPage() {
   )
 
   const sections = [
+    { key: 'players', label: t('settings.sectionPlayers'), enabled: true },
     { key: 'dice', label: t('settings.sectionDice'), enabled: true },
     { key: 'rules', label: t('settings.sectionRules'), enabled: true },
     { key: 'tokens', label: t('settings.sectionTokens'), enabled: true },
-    { key: 'players', label: t('settings.sectionPlayers'), enabled: true },
     { key: 'sheet', label: t('settings.sectionSheet'), enabled: true },
-    { key: 'danger', label: t('settings.dangerTitle'), enabled: true },
+    { key: 'danger', label: t('settings.dangerTitle'), enabled: true, danger: true },
   ]
 
   return (
@@ -113,10 +113,10 @@ export default function CampaignSettingsPage() {
 
       <div style={s.body}>
         <nav style={s.nav}>
-          {sections.map(({ key, label, enabled }) => (
+          {sections.map(({ key, label, enabled, danger }) => (
             <button
               key={key}
-              className="btn-toggle"
+              className={danger ? 'btn-toggle btn-toggle-danger' : 'btn-toggle'}
               data-active={activeSection === key}
               style={{ flex: '0 0 auto', textAlign: 'left', opacity: !enabled ? 0.5 : 1 }}
               onClick={() => enabled && setActiveSection(key)}

@@ -249,6 +249,24 @@ box-shadow: var(--shadow-md);
 backdrop-filter: blur(12px);
 }
 
+/* Variante « zone dangereuse » — cadre rouge autour d'une section aux actions destructrices
+   (standard type GitHub danger zone). Le bouton .btn-danger y prend un rouge plein, uniquement
+   dans ce contexte : les ~27 autres .btn-danger de l'app gardent leur rouge discret. */
+.card.card-danger {
+  border-color: rgba(224,91,91,.5);
+  box-shadow: 0 0 0 1px rgba(224,91,91,.15), var(--shadow-md);
+}
+.card.card-danger .btn.btn-danger {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-soft);
+  color: #fff;
+}
+.card.card-danger .btn.btn-danger:hover {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  box-shadow: 0 0 14px rgba(224,91,91,.35);
+}
+
 /* INPUTS */
 input,
 select,
@@ -927,6 +945,18 @@ Convention :
   border-color: var(--color-primary);
   color: var(--wiz-white);
 }
+/* Variante « zone dangereuse » — onglet rouge, standard des sections destructrices
+   (même palette que .btn.btn-danger). */
+.btn-toggle.btn-toggle-danger {
+  color: var(--color-danger-soft);
+  border-color: rgba(224,91,91,.35);
+}
+.btn-toggle.btn-toggle-danger[data-active="true"] {
+  background: rgba(224,91,91,.14);
+  border-color: var(--color-danger-soft);
+  color: #f0c4c4;
+}
+
 /* ── .btn-tool — outil sidebar (icon + label column) ───────────── */
 .btn-tool {
   display: flex;
