@@ -3427,15 +3427,16 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
   return { suspend: false, emissions }
 }
 
-// ─── Couche 4 AOE, phase B — fusil à pompe (docs/PLANS/PLAN_AOE.md §8 étape 8) ─────────────────────
+// ─── Couche 4 AOE, phase B — fusil à pompe (docs/PLANS/PLAN_AOE.md §8 étapes 8 + 10) ───────────────
 //
-// resolveAoeAssaultAction — tireur PNJ UNIQUEMENT dans cette tranche (résolution immédiate, aucune
-// écriture dans le pipeline PJ différé armAwaitingDamage/confirmDamage — le plus partagé/testé de ce
-// fichier). Un tireur PJ est explicitement rejeté avec un message clair : porter le modificateur de
-// dispersion (dé signé, ex. "-2D10") jusqu'au jet différé du joueur demande un petit ajout additif à
-// confirmDamage (nouveau champ optionnel dans le payload combat_pending, jamais un second pipeline),
-// volontairement laissé pour une tranche séparée plutôt que bricolé ici sous la pression du temps
-// (CLAUDE.md §1 — qualité > vitesse, un problème à la fois).
+// resolveAoeAssaultAction — résolution immédiate pour TOUT type de tireur (PNJ, PJ, exo, drone).
+// Le pipeline différé armAwaitingDamage/confirmDamage a été envisagé pour le tireur PJ puis écarté
+// (PLAN_AOE.md §5.1 révisé 2026-09-03) : ce pipeline et le hook client supposent UNE cible en attente,
+// N pending d'un seul appel corrompent la fenêtre côté client. Pour une arme de zone, le seul jet
+// joueur qui compte est le Test de tir (Phase A, « Lancer » de CombatModifiersWindow) — les dégâts
+// d'une gerbe (dés d'arme + MR + dé de dispersion par palier × N cibles) n'ont pas de « lancer unique »
+// à animer. Différence PJ vs PNJ (`isPnjResult`) : le PJ reçoit UN COMBAT_ATTACK_PLAYER_RESULT agrégé
+// (fenêtre-reçu non bloquante, `suspend:false`) au lieu d'un COMBAT_ATTACK_RESULT par cible destiné au MJ.
 //
 // Identification de l'arme par NOM ("Klauss"), pas par catégorie — "Arme d'épaule" est partagée par
 // tous les fusils du catalogue (fusils de précision inclus, vérifié 303_ref_equipment_seed.js),
@@ -3466,13 +3467,13 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     const aoe = action.modifiers?.aoe
     if (!aoe) return { suspend: false, emissions }
 
-    if (character.type === 'pj') {
-      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-        username: character.name,
-        message: 'Tir en zone (fusil à pompe) — résolution pour un tireur PJ pas encore implémentée. Prévenez le MJ.',
-      } })
-      return { suspend: false, emissions }
-    }
+    // Tireur PJ : résolution immédiate comme le PNJ (docs/PLANS/PLAN_AOE.md §5.1 révisé + §8 étape 10).
+    // Le seul jet joueur qui compte pour une arme de zone est le Test de tir (Phase A, déclenché par le
+    // « Lancer » de CombatModifiersWindow). Le pipeline différé armAwaitingDamage/confirmDamage suppose
+    // UNE cible en attente ; N pending d'un seul appel corrompent la fenêtre côté client — écarté.
+    // Différence PJ vs PNJ : les résultats par cible sont agrégés dans UN COMBAT_ATTACK_PLAYER_RESULT
+    // (fenêtre-reçu, non bloquant) au lieu d'un COMBAT_ATTACK_RESULT par cible destiné au MJ.
+    const isPnjResult = character.type !== 'pj'
 
     if (isImpossibleRangedSituation(confirmedModifiers?.situation ?? [])) {
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
@@ -3618,11 +3619,20 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     }
 
     if (hitTargets.length === 0) {
-      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-        tireurId: action.token_id, cibleId: null, isSuccess: rollResult.isSuccess, isPnj: true,
-        roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil,
-        localisation: null, degautsBruts: null, degatsNets: null, severity: null, is_lethal: false, shockResult: null,
-      } })
+      if (isPnjResult) {
+        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+          tireurId: action.token_id, cibleId: null, isSuccess: rollResult.isSuccess, isPnj: true,
+          roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil,
+          localisation: null, degautsBruts: null, degatsNets: null, severity: null, is_lethal: false, shockResult: null,
+        } })
+      } else {
+        // Tireur PJ, aucune cible dans le couloir — la gerbe est partie (RAW), personne touché.
+        emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
+          hit: false, aoeNoTargets: true,
+          roll: rollResult.rollAttaque, seuil: rollResult.seuil,
+          tireurTokenId: action.token_id, cibleTokenId: null,
+        } })
+      }
       return { suspend: false, emissions }
     }
 
@@ -3637,6 +3647,9 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       damage_modifier: JSON.stringify({ band: t.band, damageDice: t.spread.damageDice }),
     }))).returning(['id', 'target_token_id'])
     const targetRowIdByTokenId = new Map(targetRows.map(r => [r.target_token_id, r.id]))
+
+    // Tireur PJ : accumulé pour le COMBAT_ATTACK_PLAYER_RESULT agrégé émis après la boucle (§5.1).
+    const playerTargetResults = []
 
     for (const t of hitTargets) {
       const cibleToken = await db('tokens').where({ id: t.tokenId }).first()
@@ -3678,7 +3691,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
           await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, t.tokenId, droneSheet, degatsNets)
           emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
             tireurId: action.token_id, cibleId: t.tokenId, localisation: null, degautsBruts, degatsNets,
-            severity: null, is_lethal: false, isSuccess: true, isPnj: true,
+            severity: null, is_lethal: false, isSuccess: true, isPnj: isPnjResult,
             roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult: null,
           } })
           outcome = { degautsBruts, degatsNets }
@@ -3688,7 +3701,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         if (exoResult) {
           emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
             tireurId: action.token_id, cibleId: t.tokenId, localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-            severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: true,
+            severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: isPnjResult,
             roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult: null,
           } })
           outcome = { degautsBruts, degatsNets: exoResult.degatsNets, severity: exoResult.severity }
@@ -3706,7 +3719,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
           if (shockResult) statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
           emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
             tireurId: action.token_id, cibleId: t.tokenId, localisation, degautsBruts, degatsNets,
-            severity: finalSeverity, is_lethal, isSuccess: true, isPnj: true,
+            severity: finalSeverity, is_lethal, isSuccess: true, isPnj: isPnjResult,
             roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult,
           } })
           if (shockResult?.outcome && shockResult.outcome !== 'ok') {
@@ -3721,6 +3734,29 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       if (targetRowId && outcome) {
         await db('combat_action_targets').where({ id: targetRowId, outcome: null }).update({ outcome: JSON.stringify(outcome) })
       }
+      if (outcome && !isPnjResult) {
+        playerTargetResults.push({
+          name: cibleCharacter?.name ?? cibleToken?.label ?? 'Cible',
+          band: t.band,
+          localisation: outcome.localisation ?? null,
+          degautsBruts: outcome.degautsBruts,
+          degatsNets: outcome.degatsNets,
+          severity: outcome.severity ?? null,
+        })
+      }
+    }
+
+    if (!isPnjResult) {
+      // Fenêtre-reçu du tireur PJ (non bloquant — tout est déjà résolu serveur, §5.1). CombatModifiersWindow
+      // affiche la liste par cible + bouton « Fermer ». Émis to:'socket' (le PJ qui a cliqué « Lancer »).
+      emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
+        hit: playerTargetResults.length > 0,
+        roll: rollResult.rollAttaque,
+        seuil: rollResult.seuil,
+        tireurTokenId: action.token_id,
+        cibleTokenId: null,
+        targets: playerTargetResults,
+      } })
     }
 
     return { suspend: false, emissions }

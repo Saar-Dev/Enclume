@@ -163,6 +163,10 @@ invariant). Implémentation démarrée, avancement réel tenu à jour dans `PLAN
 etc.) → [Armes spéciales + Tir de suppression, débloqués par l'AOE] → Force Polaris (Lot 1 : cœur +
 pouvoirs à cible unique) → Arts martiaux/Moral.**
 
+**Avancement 2026-09-03** : AOE fusil à pompe (tireur PNJ **et PJ**), Portes et Exo Étape A/B clos.
+Suite parallèle choisie par Saar : lance-flammes (armes spéciales). Blocages restants (grenades, tir
+de suppression) dans `docs/ROADMAP.md` §2.
+
 **Corrigé (analyse à charge, 2026-08-26)** — Armes spéciales et Tir de suppression avaient été cités
 comme bénéficiaires de l'AOE dans le raisonnement, puis oubliés de la liste ordonnée elle-même lors
 d'un premier passage. Replacés ici, juste après Drones (aucune contrainte technique ne les positionne

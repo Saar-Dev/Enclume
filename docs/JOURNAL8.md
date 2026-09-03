@@ -4896,3 +4896,56 @@ rafale (Tir Multi) hors scope, aucune donnée catalogue ne permet de l'identifie
 colonne JSONB `modifiers.aoe` existaient déjà depuis les étapes 6a/6b).
 
 **Retour arrière** : `git revert` du commit `dev/Saar` correspondant (voir `git log`).
+
+---
+
+## Session (Claude) — 2026-09-03 — AOE (fusil à pompe) : tireur PJ — CHANTIER CLOS
+
+Suite immédiate de l'étape 9. Objectif : un PJ peut résoudre un Tir en zone au Klauss, pas seulement
+un PNJ.
+
+**Trois plans successifs, deux écartés après conception complète** (méthode : plan → analyse à
+charge → conception détaillée → écarté si le code le contredit) :
+1. *« Le tireur PJ attend un rework de séparation des fenêtres DRONE/HUMAN/EXO »* (bannière du plan
+   v9-v11) — **dépendance inexistante**, vérifié dans le code : le dispatch de résolution est déjà
+   séparé par type (`socketCombatResolution.js:402-406`), `CombatDamageWindow` est déjà PJ-only et
+   agnostique. Aucun « rework de fenêtres » n'a jamais été planifié ni écrit.
+2. *« Tireur PJ = armer N `armAwaitingDamage` FIFO + champ `spreadDamageDice` additif dans
+   `confirmDamage` »* — **conçu pour de bon puis écarté** : `confirmDamage` émet
+   `COMBAT_DAMAGE_PROMPT(k+1)` avant `COMBAT_DAMAGE_RESULT(k)` et le hook client (`useCombatSocket.js`)
+   n'a qu'un slot `damagePayload` + un `damageResults` — pour N cibles la fenêtre affiche le nom de
+   k+1 avec les dégâts de k et un « Fermer » qui jette le reste. Bug latent identique au CaC
+   multi-attaques sur défenseurs PJ distincts, jamais exercé.
+3. **Retenu (Saar)** — pour une arme de zone, le seul jet joueur qui a du sens est le Test de tir
+   (Phase A, le « Lancer » déjà cliqué). **Résolution immédiate** : `resolveAoeAssaultAction` traite
+   désormais tous les types de tireur par la même boucle ; un tireur PJ reçoit en plus un
+   `COMBAT_ATTACK_PLAYER_RESULT { targets: [...] }` agrégé (fenêtre-reçu non bloquante, `suspend:false`),
+   affiché en liste par cible dans `CombatModifiersWindow`. Aucune touche au pipeline différé
+   (`confirmDamage`/`armAwaitingDamage`/FSM `AWAITING_DAMAGE`/`resolveAssaultHitPj`). Les 4 helpers
+   d'aggradation envisagés à l'analyse à charge tombent : plus de 4ᵉ chemin de résolution.
+
+Le collapse du dispatch par type de cible (3 exemplaires : boucle AOE-immédiate, `resolveAssaultHitPnj*`,
+`confirmDamage`) reste une dette distincte — `ROADMAP.md` §5, hors périmètre (décision Saar 2026-08-26 :
+pas mélangé à l'ajout de fonctionnalité).
+
+**Fichiers touchés** : `server/src/socket/socketCombatHelpers.js` (`resolveAoeAssaultAction` :
+early-return `pj` retiré, `isPnjResult` paramètre `isPnj` ×4, agrégat `playerTargetResults` +
+`COMBAT_ATTACK_PLAYER_RESULT`, cas 0 cible séparé) ; `client/src/lib/combatResultLabels.js` (nouveau —
+`LOC`/`SEVERITY` extraits de `CombatResultPanels.jsx`, la règle `react-refresh/only-export-components`
+interdisant de les exporter depuis un `.jsx`) ; `client/src/components/CombatResultPanels.jsx` (importe
+le nouveau module) ; `client/src/components/CombatModifiersWindow.jsx` (liste par cible + bannière
+« aucune cible » + bouton Fermer élargi) ; `client/src/locales/combat.json` ;
+`docs/PLANS/PLAN_AOE.md` (§5.1 réécrit, §8 étape 10, §12) ; `docs/ROADMAP.md` ; `docs/SYSTEME/COUVERTURE_RAW.md`.
+
+**Testé** : `node --check` serveur, `node --test 'shared/**/*.test.mjs'` 490/490,
+`socketCombatHelpers.test.mjs` 5/5, `npx eslint` (mes hunks propres — 2 warnings pré-existants
+subsistent sur `CombatModifiersWindow` lignes 132/152), `npm run build` client, `git diff --check`
+propres. **Session réelle Saar** : validation OK.
+
+**Non testé** : aucun test automatisé sur le nouveau chemin serveur (DB requise, comme l'étape 8) ;
+tir de suppression, lance-flammes, grenades, tireur exo/drone au fusil à pompe — chacun reste un
+blocage documenté (§12).
+
+**Données** : aucune migration.
+
+**Retour arrière** : `git revert` du commit `dev/Saar` correspondant.

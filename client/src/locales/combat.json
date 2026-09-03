@@ -571,7 +571,13 @@
     "attackBanner": {
       "hit": "✓ Touché !",
       "missed": "✗ Raté",
+      "noTargets": "✗ Aucune cible dans la zone",
       "detail": "{{roll}} / {{seuil}} Seuil"
+    },
+    "aoeResult": {
+      "title_one": "{{count}} cible touchée",
+      "title_other": "{{count}} cibles touchées",
+      "net": "nets"
     },
     "fireModeLabel": "Mode de tir",
     "stateLabel": "État",

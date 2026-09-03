@@ -4,6 +4,7 @@ import { useDraggable } from '../lib/useDraggable.js'
 import { WS } from '../../../shared/events.js'
 import { useCombatStore } from '../stores/combatStore'
 import { useTokenStore } from '../stores/tokenStore'
+import { LOC, SEVERITY } from '../lib/combatResultLabels.js'
 import api from '../lib/api.js'
 import { getTailleCible } from '../../../shared/droneConstants.js'
 import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS, PORTEE_MOD_COMP } from '../../../shared/combatSituationMods.js'
@@ -288,11 +289,37 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
           color:        attackResult.hit ? '#7ba8f0' : '#e06060',
         }}>
           <span style={styles.attackBannerResult}>
-            {attackResult.hit ? t('modifiers.attackBanner.hit') : t('modifiers.attackBanner.missed')}
+            {attackResult.aoeNoTargets
+              ? t('modifiers.attackBanner.noTargets')
+              : attackResult.hit ? t('modifiers.attackBanner.hit') : t('modifiers.attackBanner.missed')}
           </span>
           <span style={styles.attackBannerDetail}>
             {t('modifiers.attackBanner.detail', { roll: attackResult.roll, seuil: attackResult.seuil })}
           </span>
+        </div>
+      )}
+
+      {/* Zone d'effet — liste par cible (PLAN_AOE.md §8 étape 10). Réutilise les tables LOC/SEVERITY
+          de CombatResultPanels (Règle 2). Résolution déjà faite serveur : c'est un reçu, pas une action. */}
+      {attackResult?.targets?.length > 0 && (
+        <div style={styles.aoeList}>
+          <div style={styles.aoeListTitle}>
+            {t('modifiers.aoeResult.title', { count: attackResult.targets.length })}
+          </div>
+          {attackResult.targets.map((tg, i) => {
+            const sev = tg.severity ? SEVERITY[tg.severity] : null
+            const locKey = tg.localisation ? LOC[tg.localisation] : null
+            return (
+              <div key={i} style={styles.aoeRow}>
+                <span style={styles.aoeName}>{tg.name}</span>
+                <span style={styles.aoeMeta}>
+                  {t(`modifiers.portees.${tg.band}`)}{locKey ? ` · ${t(locKey)}` : ''}
+                </span>
+                <span style={styles.aoeDmg}>{tg.degatsNets} {t('modifiers.aoeResult.net')}</span>
+                {sev && <span style={{ ...styles.aoeSev, color: sev.col }}>{t(sev.label)}</span>}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -449,7 +476,7 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             {isRolling ? t('cacModifiers.rolling') : t('damageWindow.rollButton')}
           </button>
         )}
-        {attackResult && !attackResult.hit && (
+        {attackResult && (!attackResult.hit || attackResult.targets) && (
           <button className="btn btn-ghost" style={{ width: '100%' }} onClick={onAttackConfirmed}>
             {t('damageWindow.closeButton')}
           </button>
@@ -503,6 +530,19 @@ const styles = {
   },
   attackBannerResult: { fontSize: 14, fontWeight: 700 },
   attackBannerDetail: { fontSize: 11, opacity: 0.75 },
+  aoeList: { margin: '0 14px 8px', display: 'flex', flexDirection: 'column', gap: 3 },
+  aoeListTitle: {
+    fontSize: 10, fontWeight: 700, color: '#5b5b7a',
+    textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2,
+  },
+  aoeRow: {
+    display: 'flex', alignItems: 'baseline', gap: 6, padding: '3px 6px',
+    background: '#0e0e1e', border: '1px solid #2a2a3e', borderRadius: 4, fontSize: 11,
+  },
+  aoeName: { color: '#c0c0d0', fontWeight: 600, flexShrink: 0 },
+  aoeMeta: { color: '#5b5b7a', fontSize: 10, flex: 1, minWidth: 0 },
+  aoeDmg: { color: '#e0e0e0', fontWeight: 700, fontVariantNumeric: 'tabular-nums', flexShrink: 0 },
+  aoeSev: { fontSize: 10, fontWeight: 700, flexShrink: 0 },
   bottomHandle: {
     height: 6, flexShrink: 0,
     background: 'rgba(90,100,120,0.12)',
