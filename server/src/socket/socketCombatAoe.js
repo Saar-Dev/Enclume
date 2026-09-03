@@ -67,6 +67,35 @@ export async function resolveAoeAttackRoll({ skillTotal, skillMastery, contribut
   return { ...outcome, rollAttaque, attackRolls, attackSeed }
 }
 
+// ─── Ciblage fusil à pompe — passe 2, PURE (segment 0d, PLAN_ARMES_SPECIALES.md §1.4) ──────────────
+//
+// Les candidats viennent d'une requête bulk sur le couloir le PLUS LARGE possible (sur-inclusif) ;
+// chacun est ici retesté contre la largeur RÉELLE de son propre palier RAW — deux passes géométriques
+// plutôt qu'une approximation d'un cône à largeur continue (PLAN_AOE.md §4/§6.2bis). Fonction pure :
+// aucune DB, aucune émission — testable avec des candidats fixtures.
+//
+// Exclusions :
+//  - le tireur lui-même : jamais une cible normale de sa propre gerbe. Auparavant exclu SEULEMENT par
+//    accident (sa distance à l'origine ≈ 0 → palier bout portant → `spread.widthM === null` →
+//    `continue` ci-dessous). Explicite ici — l'accident ne tient plus dès qu'une autre forme (cône
+//    lance-flammes) n'a pas ce filtre bout-portant (PLAN_ARMES_SPECIALES.md #3) ;
+//  - hors ligne de vue (couche 3, `evaluateAoeVisibility`) ;
+//  - bout portant (< 2 m) : RAW « le tir ne touche qu'une cible », pas de zone géométrique — une
+//    action de zone déclarée sans cible unique ne touche donc personne à cette distance en v1.
+export function filterShotgunHitTargets({ visibilityTargets, shooterTokenId, origin, directionDeg, refRange, amplitudeM, metrics }) {
+  const hitTargets = []
+  for (const candidate of visibilityTargets) {
+    if (candidate.tokenId === shooterTokenId) continue
+    if (!candidate.hasLineOfSight) continue
+    const range = resolveShotgunSpread(candidate.distanceToOriginM, refRange)
+    if (range.status !== 'ok' || range.spread.widthM === null) continue
+    const narrowShape = normalizeAoeShape({ shape: 'ray', origin, directionDeg, amplitudeM, widthM: range.spread.widthM })
+    if (!isPointInAoeShape(candidate.position, narrowShape, metrics)) continue
+    hitTargets.push({ ...candidate, band: range.band, spread: range.spread })
+  }
+  return hitTargets
+}
+
 // ─── Couche 4 AOE, phase B — fusil à pompe (docs/PLANS/PLAN_AOE.md §8 étapes 8 + 10) ───────────────
 //
 // resolveAoeAssaultAction — résolution immédiate pour TOUT type de tireur (PNJ, PJ, exo, drone).
@@ -189,19 +218,13 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     })
     if (visibility.status !== 'ok') return { suspend: false, emissions }
 
-    // Passe 2 — retest par palier réel (§4/§6.2bis). Bout portant exclu : "le tir ne touche qu'une
-    // cible" (RAW), pas de zone géométrique — une Action exclusive "Tir en zone" déclarée sans cible
-    // unique ne touche donc personne à cette distance en v1 (décision documentée, pas un oubli).
     const metrics = visibility.metrics
-    const hitTargets = []
-    for (const candidate of visibility.targets) {
-      if (!candidate.hasLineOfSight) continue
-      const range = resolveShotgunSpread(candidate.distanceToOriginM, weapon.ref_range)
-      if (range.status !== 'ok' || range.spread.widthM === null) continue
-      const narrowShape = normalizeAoeShape({ shape: 'ray', origin, directionDeg: aoe.direction, amplitudeM, widthM: range.spread.widthM })
-      if (!isPointInAoeShape(candidate.position, narrowShape, metrics)) continue
-      hitTargets.push({ ...candidate, band: range.band, spread: range.spread })
-    }
+    const hitTargets = filterShotgunHitTargets({
+      visibilityTargets: visibility.targets,
+      shooterTokenId: action.token_id,
+      origin, directionDeg: aoe.direction,
+      refRange: weapon.ref_range, amplitudeM, metrics,
+    })
 
     // ── Jet de tir unique (Phase A) — jamais de branche "raté" ici, voir commentaire de tête.
     const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()

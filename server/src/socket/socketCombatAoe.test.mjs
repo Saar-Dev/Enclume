@@ -2,9 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 // Ce fichier importe socketCombatAoe.js (transitivement db / connexion Postgres) mais ne teste que
-// resolveAoeAttackRoll — une fonction qui ne touche jamais la DB (parseDice est pur, computeAttackRoll
-// aussi). Aucune connexion réelle n'est requise : l'import du module n'exécute aucune requête.
-import { resolveAoeAttackRoll } from './socketCombatAoe.js'
+// des fonctions pures (resolveAoeAttackRoll, filterShotgunHitTargets) — aucune ne touche la DB.
+// Aucune connexion réelle n'est requise : l'import du module n'exécute aucune requête.
+import { resolveAoeAttackRoll, filterShotgunHitTargets } from './socketCombatAoe.js'
+import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
 
 // resolveAoeAttackRoll — couche 4 AOE, phase A (docs/PLANS/PLAN_AOE.md §8 étape 8). Un seul Test de
 // tir pour toute une action à zone d'effet, sans contribution propre à une cible précise (déplacées
@@ -58,4 +59,80 @@ test('resolveAoeAttackRoll — le bonus de réussite critique dépend de skillMa
     const result = await resolveAoeAttackRoll({ skillTotal: 10, skillMastery, contributions: [] })
     assert.equal(typeof result.mr, 'number')
   }
+})
+
+// ─── filterShotgunHitTargets — passe 2 pure du ciblage fusil à pompe (segment 0d) ─────────────────
+// Klauss réel : ref_range '2/7/14/28 (35)' → bp ≤2, courte 2-7, moyenne 7-14, longue 14-28, extrême 28-35.
+// Paliers RAW (SHOTGUN_SPREAD_BY_BAND) : bp widthM null, courte 1, moyenne 2, longue/extrême 3.
+// metrics 1 unité monde = 1 m (createWorldMetrics) → coordonnées = mètres directement.
+
+const M = createWorldMetrics({ metersPerCell: 1, worldUnitsPerCell: 1 })
+const KLAUSS_RANGE = '2/7/14/28 (35)'
+const BASE = { shooterTokenId: 'shooter', origin: { x: 0, y: 0, z: 0 }, directionDeg: 0, refRange: KLAUSS_RANGE, amplitudeM: 35, metrics: M }
+const cand = (over) => ({ hasLineOfSight: true, ...over })
+
+test('filterShotgunHitTargets — le tireur est exclu explicitement (plus par accident bout-portant)', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'shooter', position: { x: 0, y: 0, z: 0 }, distanceToOriginM: 0 }),
+    // même position que le tireur mais autre token : lui, c'est le bout-portant qui l'exclut
+    cand({ tokenId: 'other', position: { x: 0, y: 0, z: 0 }, distanceToOriginM: 0 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterShotgunHitTargets — hors LOS exclu', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 5, y: 0, z: 0 }, distanceToOriginM: 5, hasLineOfSight: false }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterShotgunHitTargets — bout portant (< 2 m) exclu (spread.widthM null)', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 1, y: 0, z: 0 }, distanceToOriginM: 1 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterShotgunHitTargets — hors de portée (> 35 m) exclu', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 40, y: 0, z: 0 }, distanceToOriginM: 40 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterShotgunHitTargets — derrière le tireur (x < 0) exclu par la géométrie du rayon', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: -5, y: 0, z: 0 }, distanceToOriginM: 5 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterShotgunHitTargets — dans le couloir large mais hors de la largeur de son propre palier : exclu', () => {
+  // Palier moyenne (7-14 m) : largeur RAW 2 m → demi-largeur 1 m. z = 1,5 m est dedans le couloir
+  // grossier (3 m) mais dehors le palier réel.
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 10, y: 0, z: 1.5 }, distanceToOriginM: 10 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterShotgunHitTargets — en-palier inclus, band + spread corrects', () => {
+  const out = filterShotgunHitTargets({ ...BASE, visibilityTargets: [
+    cand({ tokenId: 'c', position: { x: 5, y: 0, z: 0.4 }, distanceToOriginM: 5 }),   // courte (2-7), demi-largeur 0,5
+    cand({ tokenId: 'm', position: { x: 10, y: 0, z: 0.9 }, distanceToOriginM: 10 }), // moyenne (7-14), demi-largeur 1
+  ] })
+  assert.equal(out.length, 2)
+  const c = out.find(t => t.tokenId === 'c')
+  const m = out.find(t => t.tokenId === 'm')
+  assert.equal(c.band, 'courte')
+  assert.equal(c.spread.damageDice, '+0')
+  assert.equal(m.band, 'moyenne')
+  assert.equal(m.spread.damageDice, '-1D10')
+  // la hauteur (y) n'intervient jamais (géométrie horizontale X/Z) — sanity
+  assert.equal(typeof c.distanceToOriginM, 'number')
+})
+
+test('filterShotgunHitTargets — aucun candidat → tableau vide, jamais un throw', () => {
+  assert.deepEqual(filterShotgunHitTargets({ ...BASE, visibilityTargets: [] }), [])
 })
