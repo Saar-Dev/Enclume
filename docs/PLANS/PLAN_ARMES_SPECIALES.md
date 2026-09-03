@@ -352,8 +352,8 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 
 | Lot | Statut |
 |---|---|
-| **Segment 0 — Socle AOE** (§1.4/§1.6) | **Cadré (2026-09-03, analyse critique soutenue par Saar). Pas commencé.** 0a extraction `socketCombatAoe.js` · 0b `ref_equipment.aoe_profile` data-driven · 0c `damage_modifier` nullable · 0d tronc + résolution par arme (fonction pure) + agrégat étape 10 + tests · 0e primitive `resolveTargetLocations`. Non-régression fusil à pompe (PNJ+PJ) = sessions Saar. |
-| Lot 1 — lance-flammes | **Cadré, décisions A-G tranchées. Bloqué par le segment 0.** Après socle : ligne de seed `aoe_profile` + migration `shock_mechanism='pure'` + `exposeToHazard` param + aperçu cône + `resolveFlamethrowerTargets` (fonction pure ~40 l.). |
+| **Segment 0 — Socle AOE** (§1.4/§1.6) | **Codé (2026-09-04). ⚠️ session Saar de non-régression fusil à pompe requise.** 0a extraction `socketCombatAoe.js` (`8d86090`) · 0b-B `shared/combatAoe.js` (`5df482f`) · 0c+0b-A migrations `aoe_profile`/`damage_modifier` (`0a35245`) · 0b-C bascule identification data-driven (`b87aa1a`) · 0d-1 `filterShotgunHitTargets` pure + 9 tests (`11f6997`) · 0d-2 refactor tronc + forme `results` 1..N Loc + refonte agrégat étape 10 + `CombatModifiersWindow` imbriqué (`830f229`). **0e** (primitive `resolveTargetHit` fetch-once) = perf, non bloquant, différé. |
+| Lot 1 — lance-flammes | **Cadré, décisions A-G tranchées. Débloqué dès la validation du socle.** Reste : ligne de seed `aoe_profile` `{shape:cone,angleDeg:30,mechanic:flamethrower}` + migration `shock_mechanism='pure'` + `exposeToHazard` param `expiresAtTurn` + aperçu cône (`aoePreviewShape`/`Canvas3D`) + bloc mécanisme `flamethrower` dans `socketCombatAoe.js` (cône, 1D3 Loc, Choc 2D6, `armorReductionFactor: 0.5` branche normale, feu continu + notice B1, auto-éclaboussure B2). Petit une fois le socle posé. |
 | Lot 2 — grenades | Bloqué : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |
