@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-// Ce fichier importe socketCombatHelpers.js (qui importe db, connexion Postgres) mais ne teste que
+// Ce fichier importe socketCombatAoe.js (transitivement db / connexion Postgres) mais ne teste que
 // resolveAoeAttackRoll — une fonction qui ne touche jamais la DB (parseDice est pur, computeAttackRoll
 // aussi). Aucune connexion réelle n'est requise : l'import du module n'exécute aucune requête.
-import { resolveAoeAttackRoll } from './socketCombatHelpers.js'
+import { resolveAoeAttackRoll } from './socketCombatAoe.js'
 
 // resolveAoeAttackRoll — couche 4 AOE, phase A (docs/PLANS/PLAN_AOE.md §8 étape 8). Un seul Test de
 // tir pour toute une action à zone d'effet, sans contribution propre à une cible précise (déplacées
