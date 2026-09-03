@@ -12,7 +12,9 @@
 import { normalizeWorldPoint, metersToWorldUnits } from './worldMetrics.js'
 
 const EPSILON = 1e-9
-const SHAPES = new Set(['circle', 'cone', 'ray'])
+// Formes AOE reconnues — exporté : `shared/combatAoe.js` valide `aoe_profile.shape` contre cette
+// même liste (autorité unique, jamais un 2ᵉ Set recopié).
+export const SHAPES = new Set(['circle', 'cone', 'ray'])
 
 function finiteNumber(value, label) {
   const number = Number(value)
