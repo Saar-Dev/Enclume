@@ -127,19 +127,36 @@ résolu via `CONFIG.areaTargetTypes`), jamais un `if` dans le code de résolutio
   en doublon). Tests : `isAoeWeapon` pur ; `isExclusiveDeclaration` sur `mechanic`.
 - **0c. `combat_action_targets.damage_modifier` → nullable** (migration) — chaque mécanisme y met ce
   qui a du sens, `null` accepté. (Le fusil à pompe continue d'y écrire `{ band, damageDice }`.)
-- **0d. Refactor du corps de `resolveAoeAssaultAction`** en tronc + résolution par arme :
-  - tronc : `resolveAoePhaseA` (jet + munitions + `DICE_RESULT` + catastrophe), `insertAoeTargetRows`,
-    **exclusion explicite du tireur** des candidats (#3), `finalizeAoeResults` ;
-  - **contrat de résolution par arme = FONCTION PURE** `resolveShotgunTargets(candidates, ctx) → perTargetResults[]`
-    — `ctx` porte les données déjà fetchées (candidats, arme, metrics, settings, mr) ; **aucune
-    écriture DB ni émission dedans** (tout dans le tronc). Testable avec fixtures, sans base (#5) ;
-  - forme unifiée `perTargetResult = { tokenId, targetRowId, cibleType, band|null, results: [{ localisation|null, degautsBruts, degatsNets, severity|null, shockResult|null }] }` (décision F) ;
-  - `finalizeAoeResults` : `outcome` = JSON `results` ; un `COMBAT_ATTACK_RESULT` par entrée `results`
-    (MJ/PNJ, `isPnj: isPnjResult`) ; **un** `COMBAT_ATTACK_PLAYER_RESULT { targets: [{ name, band, results }] }`
-    (PJ) — **refonte de l'agrégat de l'étape 10** + `CombatModifiersWindow` en boucle imbriquée.
-  - **Tests unitaires `resolveShotgunTargets`** (nouveaux, fixtures). `node --test` + `eslint` +
-    `npm run build` + **session Saar de non-régression fusil à pompe (PNJ + PJ)** — dégâts + liste
-    identiques.
+- **0d. Refactor du corps de `resolveAoeAssaultAction`** (267 → ~110 l.) — tronc mince + une fonction
+  pure de ciblage par mécanisme + helpers génériques. **PAS un framework à hooks** (2 mécanismes, on
+  ne spécule pas) : le tronc garde un petit bloc `if (mechanic === 'shotgun_spread')` pour les 5 axes
+  spécifiques (forme, filtre, `degautsBruts` avec dé de dispersion, `damage_modifier` de ligne, 1 Loc,
+  facteur d'armure 1). Le lance-flammes (segment 1) ajoute son bloc frère.
+  - **`filterShotgunHitTargets({ visibilityTargets, shooterTokenId, origin, directionDeg, refRange, amplitudeM, metrics }) → hitTargets[]`**
+    — **FONCTION PURE** (le vrai livrable testable) : 2 passes géométriques (couloir large en amont,
+    largeur réelle du palier par candidat), bout portant exclu (RAW), **tireur exclu explicitement**
+    (#3, plus par accident via le filtre bout-portant). Aucune DB, aucune émission. Tests avec
+    fixtures (`createWorldMetrics({ metersPerCell: 1, worldUnitsPerCell: 1 })`, candidats mock) :
+    tireur exclu, sans-LOS exclu, bout portant exclu, dans le couloir large mais hors largeur de son
+    palier exclu, en-palier inclus avec `band`/`spread` corrects.
+  - **helpers génériques du tronc** : `runAoePhaseA({ db, character, weapon, confirmedModifiers, action })`
+    (jet + `isTestBlockingWound` + `DICE_RESULT` + catastrophe → `{ rollResult, emissions, tireur… }`
+    ou `{ blocked }`) · `decrementAoeAmmo(…)` · `insertAoeTargetRows({ db, actionId, hitTargets, modifierFn })`
+    (`modifierFn(ht) → damage_modifier | null`) · `resolveAoeTargetDamage(io, db, campaignId, { ht, degautsBruts, locationsCount, armorReductionFactor, chocDsl, ammoFx })`
+    (dispatch drone/exo/normal, garde `emitShockDiceResult`/`applyStun`, renvoie le `perTargetResult`
+    normalisé) · `finalizeAoeResults({ perTargetResults, isPnjResult, rollResult, action })`.
+  - **forme unifiée** `perTargetResult = { tokenId, targetRowId, cibleType, band|null, name, results: [{ localisation|null, degautsBruts, degatsNets, severity|null, is_lethal, shockResult|null }] }`
+    (décision F). Fusil à pompe : `results.length === 1`. Drone/exo : 1 entrée, `localisation: null`.
+  - `finalizeAoeResults` : `combat_action_targets.outcome` = JSON du tableau `results` ; **un
+    `COMBAT_ATTACK_RESULT` par entrée `results`** (`isPnj: isPnjResult`) ; **un**
+    `COMBAT_ATTACK_PLAYER_RESULT { hit, roll, seuil, tireurTokenId, cibleTokenId: null, targets: [{ name, band, results }] }`
+    (PJ) — **refonte de l'agrégat de l'étape 10**.
+  - **`CombatModifiersWindow`** : `attackResult.targets` → boucle imbriquée (nom + palier en tête,
+    sous-lignes par entrée `results` : Localisation · nets · gravité). Réutilise `LOC`/`SEVERITY`
+    (`shared/combatResultLabels.js`). Clés i18n `modifiers.aoeResult.*` adaptées.
+  - **Non-régression fusil à pompe (PNJ + PJ)** : mêmes cibles touchées, mêmes dégâts, même liste
+    affichée — **session Saar** en clôture. `node --test` (filterShotgunHitTargets + suite) + `eslint`
+    client + `npm run build`.
 - **0e. Primitive `resolveTargetLocations(ctx, n) → results[]`** — fetch du contexte cible (armure/
   mutations/avantages/NA) **une seule fois**, boucle `n` jets de Localisation (#6). Le fusil à pompe
   bascule dessus avec `n = 1` (prouvé avant que le lance-flammes l'utilise avec `n = 1D3`). `node --test`.
