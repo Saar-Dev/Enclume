@@ -1,6 +1,4 @@
 $ROOT = "C:\Users\Nemet\Documents\Enclume"
-$SERVER = "$ROOT\server"
-$CLIENT = "$ROOT\client"
 
 Write-Host ""
 Write-Host "========================================"
@@ -37,30 +35,43 @@ if ($running -match "postgres" -or $running -match "redis" -or $running -match "
 
 Write-Host ""
 
-# --- SERVEUR ---
-Write-Host "[3] Serveur Express (port 3001)..."
+# --- STACK APPLICATIVE (serveur 3001 + client 5173) ---
+# tools/dev-window.ps1 lance `npm run dev` (concurrently) sous le Job Object nomme
+# "Enclume_DevStack" (KILL_ON_JOB_CLOSE). Ce job est la source de verite : on croise
+# "process vivants dans le job" et "port en ecoute" pour classer l'etat sans deviner.
+Write-Host "[3] Stack applicative (serveur 3001 + client 5173)..."
 
-try {
-  Invoke-WebRequest -Uri "http://localhost:3001/api/health" -TimeoutSec 3 -UseBasicParsing | Out-Null
-  Write-Host "    Serveur deja en ligne : OK"
-} catch {
-  Write-Host "    Serveur arrete. Ouverture fenetre PowerShell..."
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$SERVER'; npm run dev"
-  Start-Sleep -Seconds 3
+. "$ROOT\tools\lib.JobObject.ps1"
+
+function Test-PortListening {
+  param([int]$Port)
+  return [bool](Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
 }
 
-Write-Host ""
+function Start-DevWindow {
+  Write-Host "    Ouverture de la fenetre dev supervisee..."
+  Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "$ROOT\tools\dev-window.ps1", "-Root", "$ROOT"
+  Start-Sleep -Seconds 5
+}
 
-# --- CLIENT ---
-Write-Host "[4] Client React (port 5173)..."
+$jobProcs = Get-DevStackJobActiveProcesses
+$portUp = (Test-PortListening -Port 3001) -or (Test-PortListening -Port 5173)
 
-try {
-  Invoke-WebRequest -Uri "http://localhost:5173" -TimeoutSec 3 -UseBasicParsing | Out-Null
-  Write-Host "    Client deja en ligne : OK"
-} catch {
-  Write-Host "    Client arrete. Ouverture fenetre PowerShell..."
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$CLIENT'; npm run dev"
-  Start-Sleep -Seconds 3
+if ($jobProcs -gt 0 -and $portUp) {
+  Write-Host "    Stack en ligne (job '$DevStackJobName', $jobProcs process) : OK"
+}
+elseif ($jobProcs -gt 0) {
+  Write-Host "    Job actif mais aucun port en ecoute : stack plantee ou fenetre morte. Nettoyage..."
+  & "$ROOT\tools\stop-dev.ps1"
+  Start-DevWindow
+}
+elseif ($portUp) {
+  Write-Host "    Port occupe hors job (orphelin anterieur au schema). Nettoyage..."
+  & "$ROOT\tools\stop-dev.ps1"
+  Start-DevWindow
+}
+else {
+  Start-DevWindow
 }
 
 Write-Host ""
@@ -88,5 +99,6 @@ try {
 }
 
 Write-Host ""
-Write-Host "Si un service est HORS LIGNE, verifier la fenetre PowerShell correspondante."
+Write-Host "Si un service est HORS LIGNE, verifier la fenetre dev (logs prefixes server/client)."
+Write-Host "Arret propre de la stack : tools\stop-dev.ps1"
 Write-Host ""

@@ -15,6 +15,9 @@ test-results/
 *.log
 npm-debug.log*
 
+# Runtime launcher (start.sh / stop.sh)
+.dev-stack.pid
+
 # Sauvegardes DB locales (pg_dump, jamais commit — trop volumineux, données de campagne)
 /backups/
 

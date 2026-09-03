@@ -1,8 +1,6 @@
 #!/bin/bash
 
 ROOT="$HOME/Enclume"
-SERVER="$ROOT/server"
-CLIENT="$ROOT/client"
 
 echo ""
 echo "========================================"
@@ -33,26 +31,28 @@ fi
 
 echo ""
 
-# --- SERVEUR ---
-echo "[3] Serveur Express (port 3001)..."
-if curl -s --head --request GET "http://localhost:3001/api/health" > /dev/null 2>&1; then
-    echo "    Serveur déjà en ligne : OK"
-else
-    echo "    Serveur arrêté. Lancement en arrière-plan..."
-    cd "$SERVER" && npm run dev &
-    sleep 3
-fi
+# --- STACK APPLICATIVE (serveur 3001 + client 5173) ---
+# Un seul superviseur : `npm run dev` (concurrently) lance serveur + client dans sa
+# propre session (setsid). Arrêt propre du groupe via stop.sh — jamais d'orphelin.
+echo "[3] Stack applicative (serveur 3001 + client 5173)..."
+srv_ok=false; cli_ok=false
+curl -s --head --request GET "http://localhost:3001/api/health" > /dev/null 2>&1 && srv_ok=true
+curl -s --head --request GET "http://localhost:5173" > /dev/null 2>&1 && cli_ok=true
 
-echo ""
-
-# --- CLIENT ---
-echo "[4] Client React (port 5173)..."
-if curl -s --head --request GET "http://localhost:5173" > /dev/null 2>&1; then
-    echo "    Client déjà en ligne : OK"
+if $srv_ok && $cli_ok; then
+    echo "    Stack déjà en ligne : OK"
 else
-    echo "    Client arrêté. Lancement en arrière-plan..."
-    cd "$CLIENT" && npm run dev &
-    sleep 3
+    if $srv_ok || $cli_ok; then
+        echo "    Stack partielle détectée. Arrêt avant relance..."
+        [ -x "$ROOT/stop.sh" ] && "$ROOT/stop.sh"
+    fi
+    echo "    Démarrage de la stack (session détachée, logs -> dev-stack.log)..."
+    cd "$ROOT"
+    # setsid crée une nouvelle session : le bash devient chef de groupe, `exec` garde
+    # son PID -> .dev-stack.pid contient le PGID, que stop.sh tue en bloc.
+    setsid bash -c 'echo $$ > "'"$ROOT"'/.dev-stack.pid"; exec npm run dev' \
+        > "$ROOT/dev-stack.log" 2>&1 &
+    sleep 5
 fi
 
 echo ""
@@ -78,5 +78,6 @@ else
 fi
 
 echo ""
-echo "Si un service est HORS LIGNE, vérifie les logs avec 'docker logs <nom_conteneur>' ou 'npm run dev' manuellement."
+echo "Logs de la stack : dev-stack.log   |   Arrêt propre : ./stop.sh"
+echo "Si un service est HORS LIGNE, vérifie dev-stack.log ou 'docker logs <nom_conteneur>'."
 echo ""

@@ -27,10 +27,13 @@ ce routage lit lui-même chaque règle dont les `paths` couvrent un fichier touc
 ## Ne pas lancer (sans demande explicite de Saar)
 - Le serveur (`server/` : `npm run dev`/`start`, `nodemon`) — au démarrage il applique les
   migrations Knex en attente (`.claude/rules/migrations.md`)
+- `npm run dev` à la racine — superviseur `concurrently` qui lance serveur + client
+  dans un seul terminal (Job Object sous Windows via `tools/dev-window.ps1`, session
+  `setsid` sous Linux). Arrêt : `tools/stop-dev.ps1` (Windows) / `stop.sh` (Linux)
 - `npm test` complet — inclut `server/src/db/migrations_archive/` (échecs attendus) et des
   tests serveur dont une partie touche la base locale (`--env-file` requis)
 - Client `dev`/`preview`, navigateur, `npm run test:e2e` (Playwright) — Saar teste l'UI
-- `start.ps1` / `start.sh` — lancement complet de la stack
+- `start.ps1` / `start.sh` / `tools/dev-window.ps1` — lancement complet de la stack
 
 ## Invariants non négociables
 1. Code et données observées > mémoire > conversation. Lire les fichiers concernés et leurs
