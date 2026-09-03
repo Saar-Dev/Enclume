@@ -5015,3 +5015,12 @@ Appliquée à la base locale partagée pendant le développement (batch 11).
 
 **Retour arrière** : `git revert` du commit `dev/Saar` correspondant + `db.migrate.down()` (une
 migration en arrière). Les tables sont additives, aucune donnée existante touchée.
+
+**Suivi (même jour)** : deux correctifs après première mise en service —
+(1) TDZ : `startPresence(..., context)` en tête du handler `SESSION_JOIN` alors qu'un
+`const context` plus bas dans la fonction shadow le paramètre sur tout le scope → `startPresence`
+échouait à chaque connexion, aucune ligne écrite. Paramètre renommé `context: joinContext`.
+Loupé à la vérif « 100 % » : la ligne `const context` avait été lue mais le shadowing pas repéré.
+(2) `getCampaignActivity` : une session encore ouverte comptait jusqu'à `last_seen_at` (0 min tant
+que le heartbeat 5 min n'avait pas tiqué) → désormais jusqu'à `now()` si `last_seen_at` récent
+(< 11 min), sinon `last_seen_at` (crash : pas de temps mort compté).
