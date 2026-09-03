@@ -495,6 +495,10 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             mapActions, state, quick, entry,
             isDualWield: !!mapActions.attack[0]?.isDualWield,
             bulletCount: mapActions.attack[0]?.bulletCount ?? null,
+            // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — le client neutralise déjà aimTranches
+            // en mode zone (buildDeclarePayload.js), mais le serveur reste l'autorité (`core.md`) : un
+            // client forgé pourrait sinon combiner les deux.
+            isAoeMode: !!mapActions.attack[0]?.aoe,
           })
           if (aimReasons.length > 0) {
             console.log(`[DBG] Tir visé refusé — reasons: ${JSON.stringify(aimReasons)} state:${JSON.stringify(state)} entry.state_*:${JSON.stringify({ position: entry.state_position, weapon: entry.state_weapon, fire_mode: entry.state_fire_mode, cover: entry.state_cover, vitesse: entry.state_vitesse })}`)

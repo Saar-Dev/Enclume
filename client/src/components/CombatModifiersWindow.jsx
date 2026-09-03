@@ -122,6 +122,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
   const cibleToken  = tokens.find(tk => tk.id === (assaultAction?.target_token_id ?? attackResult?.cibleTokenId))
   const tireurCharId = tireurToken?.character_id ?? null
   const cibleCharId  = cibleToken?.character_id  ?? null
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — pas de cible unique, donc pas de distance
+  // calculable ni de Portée pertinente : resolveAoeAssaultAction (serveur) ne lit jamais
+  // confirmedModifiers.portee, elle est recalculée par cible touchée (resolveShotgunSpread). La case
+  // Portée de cette fenêtre est un artefact du Tir normal, pas une donnée dont l'AOE a besoin.
+  const isAoeAction = !!assaultAction?.modifiers?.aoe
 
   // Reset quand un nouvel assaut passe en résolution
   useEffect(() => {
@@ -227,11 +232,18 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
     setObscurites(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
+  // Source unique du gate — consultée par le bouton (`disabled`) ET handleLancer, jamais deux copies
+  // de la même condition. Bug confirmé Saar (2026-09-02) : la section Portée avait bien disparu en
+  // zone, mais le bouton "LANCER LES DÉS" restait grisé — son propre `disabled` dupliquait l'ancienne
+  // condition sans `isAoeAction`, jamais mise à jour au premier correctif.
+  const canRoll = (effectivePortee || isAoeAction) && !hasTirImpossible && !isRolling
+
   const handleLancer = () => {
-    if (!effectivePortee || hasTirImpossible || isRolling) return
+    if (!canRoll) return
     setIsRolling(true)
     socket?.emit(WS.COMBAT_ACTION_CONFIRM, {
       tokenId: activeRosterEntry.token_id,
+      // portee: null en zone — champ ignoré par resolveAoeAssaultAction, jamais une valeur inventée.
       confirmedModifiers: { portee: effectivePortee, situation: currentSituation, taille },
     })
   }
@@ -242,7 +254,9 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
       {/* Header — titre + pill */}
       <div className="combat-float-header" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }} onMouseDown={onHeaderMouseDown}>
         <span style={styles.headerTitle}>
-          {t('modifiers.header', { shooter: tireurToken?.label ?? '?', target: cibleToken?.label ?? '?' })}
+          {isAoeAction
+            ? t('modifiers.headerAoe', { shooter: tireurToken?.label ?? '?' })
+            : t('modifiers.header', { shooter: tireurToken?.label ?? '?', target: cibleToken?.label ?? '?' })}
         </span>
         <div style={styles.pills}>
           <span style={{
@@ -312,20 +326,24 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             )}
           </div>
 
-          {/* Portée */}
-          <div className="combat-float-section">
-            <div style={styles.sectionTitle}>{t('modifiers.porteeSection')}</div>
-            <select
-              value={effectivePortee ?? ''}
-              onChange={e => setPorteeOverride(e.target.value || null)}
-              style={styles.select}
-            >
-              {!effectivePortee && <option value="">{t('modifiers.choosePlaceholder')}</option>}
-              {PORTEES.map(p => (
-                <option key={p.key} value={p.key}>{t(p.label)} ({fmtOpt(p.mod)})</option>
-              ))}
-            </select>
-          </div>
+          {/* Portée — masquée en zone d'effet : pas de cible unique, pas de distance calculable, et
+              resolveAoeAssaultAction ne lit de toute façon jamais confirmedModifiers.portee (recalculée
+              par cible touchée). Un sélecteur ici inviterait à choisir une valeur qui ne sert à rien. */}
+          {!isAoeAction && (
+            <div className="combat-float-section">
+              <div style={styles.sectionTitle}>{t('modifiers.porteeSection')}</div>
+              <select
+                value={effectivePortee ?? ''}
+                onChange={e => setPorteeOverride(e.target.value || null)}
+                style={styles.select}
+              >
+                {!effectivePortee && <option value="">{t('modifiers.choosePlaceholder')}</option>}
+                {PORTEES.map(p => (
+                  <option key={p.key} value={p.key}>{t(p.label)} ({fmtOpt(p.mod)})</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Allure tireur */}
           <div className="combat-float-section">
@@ -422,11 +440,11 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
             className="btn btn-gold"
             style={{
               width: '100%',
-              opacity: (effectivePortee && !hasTirImpossible && !isRolling) ? 1 : 0.4,
-              cursor:  (effectivePortee && !hasTirImpossible && !isRolling) ? 'pointer' : 'not-allowed',
+              opacity: canRoll ? 1 : 0.4,
+              cursor:  canRoll ? 'pointer' : 'not-allowed',
             }}
             onClick={handleLancer}
-            disabled={!effectivePortee || hasTirImpossible || isRolling}
+            disabled={!canRoll}
           >
             {isRolling ? t('cacModifiers.rolling') : t('damageWindow.rollButton')}
           </button>

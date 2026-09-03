@@ -22,6 +22,7 @@ import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPr
 import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
 import SceneCursorOverlay from './SceneCursorOverlay.jsx'
 import { useSceneCursor } from '../lib/useSceneCursor.js'
+import { buildShotgunSpreadSegments, projectShotgunSpreadCorners } from '../lib/aoePreviewShape.js'
 import {
   computeSurfaceGridExtent,
   hasSurfaceContent,
@@ -413,6 +414,23 @@ function ThirdPersonCamera({ token, enabled, onTokenSetRotation, updateToken }) 
   return null
 }
 
+// Cherche un point de surface "worldSupport" (face vers le haut) depuis un raycaster DÉJÀ configuré —
+// factorisée pour être appelée aussi bien depuis un clic (raycastWorldSupport, ci-dessous, configure
+// son propre raycaster depuis clientX/clientY) que depuis useFrame (state.raycaster, déjà repositionné
+// par R3F en interne à chaque déplacement de souris sur le canvas — jamais un second raycast manuel,
+// r3f.docs.pmnd.rs/tutorials/how-it-works). Une seule implémentation de la traversée de scène.
+function findWorldSupportHit(raycaster, scene) {
+  const normalMatrix = new THREE.Matrix3()
+  for (const hit of raycaster.intersectObjects(scene.children, true)) {
+    if (!hit.object?.userData?.worldSupport || !hit.face) continue
+    normalMatrix.getNormalMatrix(hit.object.matrixWorld)
+    const normal = hit.face.normal.clone().applyNormalMatrix(normalMatrix)
+    if (normal.y < 0.5) continue
+    return { x: hit.point.x, y: hit.point.y, z: hit.point.z }
+  }
+  return null
+}
+
 function Scene({
   voxels, surfaceData, textureMaterials, entityTextureMaterials, runtimeEffectRegions, runtimeFeatureStates, socket, battlemapId,
   selectedSurfaceConnectorId, onSurfaceConnectorSelect,
@@ -425,6 +443,7 @@ function Scene({
   combatMoveMode,
   pendingMoveSelection,
   combatTargetMode,
+  combatAoeTargetMode,
   onAmbientTokenClick,
   defaultTokenGlbUrl,
   defaultTokenGlbUrlDrone,
@@ -513,6 +532,47 @@ function Scene({
   const combatTargetModeRef = useRef(null)
   combatTargetModeRef.current = combatTargetMode
 
+  // ─── Mode visée zone d'effet (fusil à pompe, PLAN_AOE.md §8 étape 9) — P40 : ref miroir ──────
+  // aoePreviewDeg (state) alimente le rendu JSX de l'aperçu ; aoePreviewDegRef (ref) est la valeur
+  // relue par handlePointerUp au clic — même patron que ghostPos/ghostRef pour le mode visée entité
+  // ci-dessus : le survol calcule, le clic relit la DERNIÈRE valeur survolée, jamais un second calcul
+  // indépendant qui pourrait diverger d'un pixel entre l'aperçu affiché et la valeur réellement commise.
+  //
+  // Écrite par effet, pas pendant le rendu (contrairement au patron P40 historique de ce fichier —
+  // combatMoveModeRef/combatTargetModeRef ci-dessus, tokensRef plus bas — qui mutent directement
+  // pendant le rendu) : `react-hooks/refs` interdit désormais la mutation d'un ref pendant le rendu.
+  // Équivalent pour cet usage précis (ref relue uniquement depuis des handlers d'événement DOM bruts
+  // — handlePointerMove/Up, jamais pendant un rendu) : un effet s'exécute après le commit, donc
+  // toujours avant qu'un nouveau clic/survol utilisateur ne puisse survenir. Les ~12 refs P40
+  // préexistantes de ce fichier ne sont PAS corrigées ici (hors périmètre du chantier AOE — dette de
+  // lint déjà présente sur dev/Saar avant cette session, signalée en clôture, pas silencieusement
+  // absorbée).
+  const combatAoeTargetModeRef = useRef(null)
+  useEffect(() => { combatAoeTargetModeRef.current = combatAoeTargetMode }, [combatAoeTargetMode])
+  // Survol continu (comme combatTargetMode/pendingTargetId) — pas un clic-glisser-relâcher (essayé
+  // puis abandonné, retour Saar 2026-09-02 : "pas naturel de maintenir un clic pour sélectionner une
+  // cible"). Tant qu'aucun clic n'a figé `combatAoeTargetMode.pendingDirectionDeg`, le survol met à
+  // jour cet état local, qui alimente l'aperçu ; un clic relit sa DERNIÈRE valeur et la fige dans
+  // l'état partagé via `onPendingDirection` — le survol s'arrête alors de lui-même (cf.
+  // handlePointerMove) jusqu'à "Changer" (qui repasse pendingDirectionDeg à null côté fenêtre).
+  const [aoePreviewDeg, setAoePreviewDeg] = useState(null)
+  const aoePreviewDegRef = useRef(null)
+  useEffect(() => {
+    if (!combatAoeTargetMode) { aoePreviewDegRef.current = null; setAoePreviewDeg(null) }
+  }, [combatAoeTargetMode])
+  // Garde-fou armement : au clic sur "Viser une zone"/"Changer" (bouton du panneau, donc hors du
+  // canvas), state.raycaster de R3F n'a pas encore reçu de nouveau pointermove — il reste positionné
+  // sur le dernier survol réel du canvas, potentiellement bien avant l'ouverture du panneau. Sans ce
+  // garde-fou, useFrame (ci-dessous) affiche instantanément un aperçu figé sur cette position obsolète
+  // au lieu d'attendre que la souris revienne physiquement sur la carte — bug rapporté Saar 2026-09-02
+  // ("l'AOE est posée dès le clic sur CIBLE", "Changer sans effet"). aoeArmedMovedRef passe à `true` au
+  // premier pointermove RÉEL sur le canvas depuis cet armement précis (posé par handlePointerMove,
+  // listener déjà existant — cf. plus bas), et repasse à `false` à chaque nouvel armement (armSeq).
+  const aoeArmedMovedRef = useRef(false)
+  useEffect(() => {
+    aoeArmedMovedRef.current = false
+  }, [combatAoeTargetMode?.armSeq])
+
   // ─── Phase combat — P40 : ref miroir pour handleDragStart stable ──────────
   const combatPhaseRef = useRef(null)
   combatPhaseRef.current = phase
@@ -567,14 +627,14 @@ function Scene({
   // (survol ambiant, COMBAT-DEPLACEMENT-HOVER), sans ce garde le chemin/curseur resterait affiché
   // par-dessus le ciblage (retour Saar 2026-07-31).
   useEffect(() => {
-    if (!combatMoveMode || combatTargetMode || losMode?.active || moveTarget) {
+    if (!combatMoveMode || combatTargetMode || combatAoeTargetMode || losMode?.active || moveTarget) {
       setCombatCursorPos(null)
       setCurrentPath([])
       lastCellRef.current = null
       hoveredOccupantTokenRef.current = null
       setAmbientHoverTokenId(null)
     }
-  }, [combatMoveMode, combatTargetMode, losMode, moveTarget])
+  }, [combatMoveMode, combatTargetMode, combatAoeTargetMode, losMode, moveTarget])
 
   const dragRef = useRef({
     active: false,
@@ -642,16 +702,42 @@ function Scene({
       -((clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.setFromCamera(mouse, camera)
-    const normalMatrix = new THREE.Matrix3()
-    for (const hit of raycaster.intersectObjects(scene.children, true)) {
-      if (!hit.object?.userData?.worldSupport || !hit.face) continue
-      normalMatrix.getNormalMatrix(hit.object.matrixWorld)
-      const normal = hit.face.normal.clone().applyNormalMatrix(normalMatrix)
-      if (normal.y < 0.5) continue
-      return { x: hit.point.x, y: hit.point.y, z: hit.point.z }
-    }
-    return null
+    return findWorldSupportHit(raycaster, scene)
   }, [camera, gl, raycaster, scene, surfaceData])
+
+  // Aperçu zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — patron officiel R3F pour un suivi de
+  // souris continu (r3f.docs.pmnd.rs/tutorials/how-it-works + pmndrs/react-three-fiber discussion
+  // #3321) : `useFrame` lit `state.raycaster`, déjà repositionné par R3F à chaque déplacement de souris
+  // sur le canvas — jamais un listener DOM maison pour ce cas (deux tentatives précédentes avec un
+  // `pointermove` géré à la main, retour Saar 2026-09-02 : "stop approximation et bricolage"). Le clic
+  // pour figer reste un listener natif (handlePointerUp, déjà fiable ailleurs dans ce fichier) : cette
+  // boucle s'arrête d'elle-même dès que `pendingDirectionDeg` est posé.
+  useFrame((state) => {
+    const mode = combatAoeTargetModeRef.current
+    if (!mode) return
+    if (mode.pendingDirectionDeg != null) return
+    // Rien à afficher tant qu'aucun pointermove réel n'a eu lieu sur le canvas depuis cet armement —
+    // state.raycaster peut encore refléter un survol bien antérieur (cf. aoeArmedMovedRef ci-dessus).
+    if (!aoeArmedMovedRef.current) return
+    let destination = hasSurfaceContent(surfaceData) ? findWorldSupportHit(state.raycaster, state.scene) : null
+    if (!destination && isGm) {
+      const groundHit = new THREE.Vector3()
+      destination = state.raycaster.ray.intersectPlane(groundPlane, groundHit) ? groundHit : null
+    }
+    if (!destination) return
+    const shooter = tokensRef.current.find(t => t.id === mode.tokenId)
+    if (!shooter) return
+    const dx = destination.x - shooter.pos_x
+    const dz = destination.z - shooter.pos_y // pos_y base = Z Three.js (PE14)
+    // Visée sur soi-même : direction non définie (atan2(0,0)) — on garde la dernière valeur valide
+    // plutôt que de committer un 0° arbitraire (garde-fou, PLAN_AOE.md §8 étape 9, point 3).
+    if (Math.abs(dx) <= 1e-9 && Math.abs(dz) <= 1e-9) return
+    const deg = ((Math.atan2(dz, dx) * 180 / Math.PI) + 360) % 360
+    // Garde-fou perf : pas de re-render React à ~60 im/s si la souris est immobile (écart imperceptible).
+    if (aoePreviewDegRef.current != null && Math.abs(deg - aoePreviewDegRef.current) < 0.1) return
+    aoePreviewDegRef.current = deg
+    setAoePreviewDeg(deg)
+  })
 
   const requestWorldPathPreview = useCallback(async (mode, destination) => {
     const requestId = ++previewRequestRef.current
@@ -723,7 +809,7 @@ function Scene({
   // (sélection, drag&drop, menu radial) reprend.
   const ambientMapClickActive = useCallback(() =>
     (!!combatMoveModeRef.current || !!onAmbientTokenClickRef.current) &&
-    !combatTargetModeRef.current && !losModeRef.current?.active && !moveTarget,
+    !combatTargetModeRef.current && !combatAoeTargetModeRef.current && !losModeRef.current?.active && !moveTarget,
   [moveTarget])
 
   // Détection "case occupée par un autre token" — source unique, consultée au survol
@@ -743,6 +829,12 @@ function Scene({
   const handleDragStart = useCallback((e, token) => {
     e.stopPropagation()
     if (e.nativeEvent.button !== 0) return
+    // Zone d'effet (fusil à pompe) : le clic — sol ou token, sans distinction — est entièrement géré
+    // par handlePointerUp (calcul de direction depuis la dernière position survolée), jamais ici :
+    // sans ce garde, un pointerdown sur un token adverse démarrerait un drag (dragRef.current.active,
+    // orbitRef désactivé) avant que le pointerup ne committe la visée, provoquant un micro-déplacement
+    // visuel parasite du token pendant la durée du clic.
+    if (combatAoeTargetModeRef.current) return
     // Ciblage/LOS explicites d'abord — priorité sur le survol de déplacement ambiant (COMBAT-
     // DEPLACEMENT-HOVER, 2026-07-31) : ce dernier est désormais actif en permanence par défaut, il ne
     // doit jamais avaler un clic sur un token quand un mode explicite (Attaque/CaC/LOS) est en cours.
@@ -780,6 +872,11 @@ function Scene({
   }, [isGm, user, characters, onTokenClick, clearLine])
 
   const handlePointerMove = useCallback((e) => {
+    // Marque un mouvement RÉEL de souris sur le canvas depuis le dernier armement AOE (indépendant de
+    // tout mode actif) — lu par le useFrame de l'aperçu zone d'effet plus bas, garde-fou contre un
+    // state.raycaster R3F encore positionné sur un survol antérieur à l'armement (cf. commentaire sur
+    // aoeArmedMovedRef).
+    aoeArmedMovedRef.current = true
     // ─── Mode déplacement combat et/ou clic-attaque ambiant ────────────────────────────────────
     if (ambientMapClickActive()) {
       const destination = raycastWorldSupport(e.clientX, e.clientY)
@@ -906,6 +1003,20 @@ function Scene({
 
   // ─── Fin du drag ──────────────────────────────────────────────────────────
   const handlePointerUp = useCallback(async (e) => {
+    // ─── Mode visée zone d'effet (fusil à pompe) — prioritaire sur tout le reste ────────────────
+    // Clic = fige la DERNIÈRE direction survolée (aoePreviewDegRef), jamais un second raycast
+    // indépendant — garantit que la valeur figée est exactement celle affichée à l'écran au moment du
+    // clic (même patron que ghostRef pour le mode visée entité). Ne committe PAS directement l'action :
+    // pose `pendingDirectionDeg` côté état partagé (mirroir onPendingTarget) — Valider/Changer dans la
+    // fenêtre décident ensuite (retour Saar 2026-09-02). Un clic alors qu'une direction est déjà figée,
+    // ou sans survol valide depuis l'armement, ne fait rien.
+    if (combatAoeTargetModeRef.current) {
+      if (combatAoeTargetModeRef.current.pendingDirectionDeg == null && aoePreviewDegRef.current != null) {
+        combatAoeTargetModeRef.current.onPendingDirection(aoePreviewDegRef.current)
+      }
+      return
+    }
+
     // ─── Mode déplacement combat et/ou clic-attaque ambiant ────────────────────────────────────
     if (ambientMapClickActive()) {
       const mode = combatMoveModeRef.current
@@ -1305,6 +1416,50 @@ function Scene({
         )
       })()}
 
+      {/* ── Aperçu zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) ─────── */}
+      {/* Rectangles empilés, un par palier RAW (courte/moyenne/longue/extrême, bout_portant exclu) —   */}
+      {/* jamais un dégradé continu, la RAW est un palier discret (aoePreviewShape.js). Même formule    */}
+      {/* géométrique que le serveur (shared/world/aoeShapes.js, branche 'ray') : l'aperçu montre        */}
+      {/* exactement ce que la résolution va tester, pas une approximation séparée.                     */}
+      {combatAoeTargetMode && (() => {
+        // Direction figée (clic, Valider/Changer en attente) prioritaire sur le survol en cours —
+        // une fois `pendingDirectionDeg` posé, handlePointerMove n'écrit plus dans aoePreviewDeg (cf.
+        // bannière plus haut), donc les deux ne peuvent pas diverger, mais figée reste la source de
+        // vérité tant qu'elle existe.
+        const displayDeg = combatAoeTargetMode.pendingDirectionDeg ?? aoePreviewDeg
+        if (displayDeg == null) return null
+        const shooter = tokens.find(t => t.id === combatAoeTargetMode.tokenId)
+        if (!shooter) return null
+        const y = shooter.pos_z + 0.06
+        const segments = buildShotgunSpreadSegments(combatAoeTargetMode.weaponRange)
+        const quads = projectShotgunSpreadCorners(segments, { x: shooter.pos_x, z: shooter.pos_y }, displayDeg)
+        // Clé incluant l'angle (précision 0,1°, même granularité que le garde-fou perf de useFrame
+        // ci-dessus) : force React/Three.js à recréer bufferGeometry/bufferAttribute à chaque mise à
+        // jour réelle plutôt que de réutiliser l'instance existante. Nécessaire — vérifié en lisant
+        // `applyProps` dans le code source de @react-three/fiber installé : réaffecter la prop `array`
+        // d'un <bufferAttribute> déjà monté remplace bien `.array` en JS, mais ne pose jamais
+        // `.needsUpdate = true` sur l'attribut, donc le buffer envoyé au GPU restait celui du tout
+        // premier rendu — d'où un aperçu visuellement figé alors que l'angle recalculé (confirmé par
+        // logs `[DBG]`, Saar 2026-09-03) changeait bien à chaque frame. Un remontage complet (au lieu
+        // d'un `ref` + `needsUpdate` géré à la main par quad) est le choix le plus sûr ici : la
+        // fréquence de mise à jour est déjà cadencée par ce même garde-fou de 0,1°, jamais 60 im/s.
+        return quads.map(quad => {
+          const [a, b, c, d] = quad.corners
+          const positions = new Float32Array([
+            a.x, y, a.z,  b.x, y, b.z,  c.x, y, c.z,
+            a.x, y, a.z,  c.x, y, c.z,  d.x, y, d.z,
+          ])
+          return (
+            <mesh key={`aoe-preview-${quad.band}-${Math.round(displayDeg * 10)}`}>
+              <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={6} array={positions} itemSize={3} />
+              </bufferGeometry>
+              <meshBasicMaterial color="#ff0000" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
+            </mesh>
+          )
+        })
+      })()}
+
       {/* ── Ligne de visée assaut — joueur→cible pending (Sprint 7.1) ─────── */}
       {targetLinePoints && (
         <line>
@@ -1410,13 +1565,18 @@ function Scene({
 // moveTarget     : { entity, interaction, tokenId } | null — mode visée déplacement (9F-B2)
 // onMoveCancel   : callback stable (useCallback deps []) — annule le mode visée
 // combatMoveMode : { tokenId, allures, onMoveSelected, onCancel, onPendingMove } | null — sélection destination combat (pathfinding)
-export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
+// combatAoeTargetMode : { tokenId, weaponRange, pendingDirectionDeg, onDirectionSelected,
+//   onPendingDirection, onCancel } | null — visée zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) ;
+//   même patron que combatTargetMode/pendingTargetId (survol continu → clic fige un candidat →
+//   Valider/Changer dans la fenêtre), pas un clic-glisser-relâcher (essayé puis abandonné, retour
+//   Saar 2026-09-02)
+export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, onEntityClick, onTokenSetRotation, moveTarget, onMoveCancel, dicePayload, onDiceDone, combatCameraCenter, combatMoveMode, pendingMoveSelection, combatTargetMode, combatAoeTargetMode, onAmbientTokenClick, defaultTokenGlbUrl, defaultTokenGlbUrlDrone, defaultTokenGlbUrlExo, losMode, onLosCancel, onLosResult, displayLevel = 0, statusEffectsMode = 'enforced', onCharacterDrop }) {
   const { battlemap } = useMapStore()
   const { entities } = useEntityStore()
   const { isGm, characters } = useCharacterStore()
   const { user } = useAuthStore()
 
-  const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, losMode })
+  const sceneCursor = useSceneCursor({ combatMoveMode, combatTargetMode, combatAoeTargetMode, losMode })
   // Combat actif (roster/annonce/résolution) — hors CASE/CIBLE, le curseur par défaut (CURSEUR.svg)
   // ne s'affiche jamais pendant un combat (retour Saar 2026-08-08), même sans mode armé.
   const combatPhase = useCombatStore(s => s.phase)
@@ -1491,6 +1651,16 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [combatTargetMode])
+
+  // ─── Annulation mode visée zone d'effet sur Échap (PLAN_AOE.md §8 étape 9) ─────
+  useEffect(() => {
+    if (!combatAoeTargetMode) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') combatAoeTargetMode.onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [combatAoeTargetMode])
 
   // ─── Annulation mode LOS sur Échap ─────────────────────────────────────────
   useEffect(() => {
@@ -1694,6 +1864,7 @@ export default function Canvas3D({ mode = 'play', onTokenDoubleClick, socket, on
           combatMoveMode={combatMoveMode}
           pendingMoveSelection={pendingMoveSelection}
           combatTargetMode={combatTargetMode}
+          combatAoeTargetMode={combatAoeTargetMode}
           onAmbientTokenClick={onAmbientTokenClick}
           defaultTokenGlbUrl={defaultTokenGlbUrl}
           defaultTokenGlbUrlDrone={defaultTokenGlbUrlDrone}

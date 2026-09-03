@@ -16,7 +16,7 @@ import {
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
-import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { resolveMeleeReachM, resolveWeaponRangeBand, isShotgunSpreadWeapon } from '../../../shared/combatRange.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
@@ -42,6 +42,7 @@ import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 export default function CombatActionWindow({
   socket, user, characters, pendingSurpriseRoll, onSurpriseRolled,
   onEnterMoveMode, combatMoveMode, pendingMoveSelection, combatTargetMode, onEnterTargetMode,
+  combatAoeTargetMode, onEnterAoeTargetMode,
   battlemapId, registerAmbientAttackHandler, showTargetRecap,
 }) {
   const { t } = useTranslation('combat')
@@ -285,6 +286,12 @@ export default function CombatActionWindow({
     setSelectedAmmoId(null)
     meleeDecl.clear()
     setInMeleeTargetMode(false)
+    // Même correctif que CombatGmDeclareWindow.jsx (bug confirmé Saar 2026-09-02) : un mode de visée
+    // armé pour l'ancien token de ce slot ne peut plus être pertinent une fois qu'on bascule sur un
+    // autre — annulation sans condition, sans risque (le bouton qui l'arme n'existe que pour le token
+    // actuellement affiché par cette fenêtre).
+    combatTargetMode?.onCancel()
+    combatAoeTargetMode?.onCancel()
   }, [rosterEntry?.token_id, rosterEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- fetch allures — suit le token actif du joueur (humanoïdes uniquement) ---
@@ -429,6 +436,11 @@ export default function CombatActionWindow({
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — même autorité que la résolution serveur et
+  // la fenêtre MJ (shared/combatRange.js#isShotgunSpreadWeapon), sur l'item brut (ref_name), pas un nom
+  // d'affichage. Rejet PJ déjà géré côté serveur (message clair, résolution pas encore implémentée) —
+  // aucun garde-fou d'éligibilité supplémentaire à dupliquer ici.
+  const isAoeEligible = isShotgunSpreadWeapon(selectedWeapon?.ref_name)
 
   // Modes disponibles pour le CombatDeclareStateSelector fire_mode
   const availableFireModes = forceCC
@@ -626,6 +638,25 @@ export default function CombatActionWindow({
     )
   }
 
+  // --- zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — mirroir handleChooseTarget -----------
+  // inTargetMode reste posé (désarme les hooks ambiants move/clic-attaque pendant la visée, mêmes
+  // gardes que ci-dessus) mais ne pilote PAS le masquage de la fenêtre — isHidden plus bas dérive ça
+  // de combatAoeTargetMode (état partagé), pas d'un flag local (COMBAT-DEPLACEMENT-HOVER, cf. commentaire
+  // sur isTargeting : un flag local n'est pas toujours positionné par tous les points d'entrée).
+  const handleStartAoeDirection = () => {
+    setInTargetMode(true)
+    onEnterAoeTargetMode(
+      playerToken.id,
+      { x: playerToken.pos_x, z: playerToken.pos_y },
+      selectedWeapon?.ref_range ?? null,
+      (directionDeg) => {
+        assaultDecl.setAoeDirection(directionDeg)
+        setInTargetMode(false)
+      },
+      () => { setInTargetMode(false) },
+    )
+  }
+
   // --- calcul INI total client (indicatif) ---------------------------------
   const reloadSelected = mapSelected.has('reload')
   // D7 : « Recharger » est un mode de l'arme sélectionnée, exclusif du Tir — quand il est actif,
@@ -661,11 +692,14 @@ export default function CombatActionWindow({
   // ces fonctions dans les hooks (PLAN_RW_DECLARE_DESIGN §5.10). Chaque entrée = l'expression exacte
   // de l'ancien `assaultValid`/`reloadValid`/`meleeValid` (iso-comportement).
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
+  // Zone d'effet (PLAN_AOE.md §8 étape 9) : une direction posée compte comme un ciblage complet, sans
+  // cible unique — même règle que assaultDeclaration.js#assaultTargetsComplete (mirroir du correctif
+  // CombatGmDeclareWindow.jsx).
   const assault = assaultCheck({
     started:       attackActive,
     hasWeapon:     assaultWeaponId != null,
-    targetsFilled: assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length,
-    targetsNeeded: effectiveAssaultCount,
+    targetsFilled: assaultDecl.isAoeMode ? 1 : assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length,
+    targetsNeeded: assaultDecl.isAoeMode ? 1 : effectiveAssaultCount,
     hasVariant:    currentVariant != null,
     aimActive:     aimTranches > 0,
     aimReasons:    aimIneligibilityReasons,
@@ -725,7 +759,7 @@ export default function CombatActionWindow({
       attackSelected: attackActive,   // D7 : Recharger exclut le Tir dans le payload
       assaultPendingTokenIds, effectiveAssaultCount, assaultWeaponId,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
-      aimTranches, aimedLocation,
+      aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection,
       meleeSelected, meleeDefensif, meleePendingTokenIds, effectiveMeleeCount, chargeSelection,
       effectiveMeleeWeaponId, effectiveMeleeNaturalWeaponId, effectiveDualWieldMelee, meleeOffhandWeapon,
       reloadSelected, selectedWeapon, selectedAmmoId,
@@ -936,7 +970,10 @@ export default function CombatActionWindow({
   // toucher ces flags, donc la fenêtre restait visible pendant ce flux (retour Saar 2026-07-31). Les deux
   // flags restent utilisés ailleurs (gate de useCombatClickAttack/useAutoMoveMode), juste plus ici.
   const isTargeting = combatTargetMode?.tokenId === playerToken?.id
-  const isHidden    = inMoveMode || isTargeting || droneDeclare.isSelectingOnMap || hasPendingOwnMove
+  // Même raisonnement que isTargeting ci-dessus (état partagé, pas un flag local) — PLAN_AOE.md §8
+  // étape 9.
+  const isAoeTargeting = combatAoeTargetMode?.tokenId === playerToken?.id
+  const isHidden    = inMoveMode || isTargeting || isAoeTargeting || droneDeclare.isSelectingOnMap || hasPendingOwnMove
   const showAssault = attackActive
   const showReload  = attackSelected && reloadSelected && !!selectedWeapon
   const showMelee   = meleeSelected  && !attackSelected
@@ -1229,6 +1266,10 @@ export default function CombatActionWindow({
               effectiveAssaultCount={effectiveAssaultCount}
               onAssaultCountChange={assaultDecl.setCount}
               multiShotIneligibilityReasons={multiShotIneligibilityReasons}
+              isAoeEligible={isAoeEligible}
+              isAoeMode={assaultDecl.isAoeMode}
+              aoeDirection={assaultDecl.state.aoeDirection}
+              onStartAoeDirection={handleStartAoeDirection}
             />
           </div>
         )}

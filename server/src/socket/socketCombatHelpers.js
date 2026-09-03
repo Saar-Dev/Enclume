@@ -20,7 +20,7 @@ import { evaluateAoeVisibility } from '../services/worldVisibilityService.js'
 import { normalizeAoeShape, isPointInAoeShape } from '../../../shared/world/aoeShapes.js'
 import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
 import { getLunetteNiveau, getEffectiveAimBonus } from '../../../shared/combatExclusiveActions.js'
-import { resolveWeaponRangeBand, resolveMeleeReachM, resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND, parseWeaponRangeBands } from '../../../shared/combatRange.js'
+import { resolveWeaponRangeBand, resolveMeleeReachM, resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND, parseWeaponRangeBands, isShotgunSpreadWeapon } from '../../../shared/combatRange.js'
 import { hasEnoughAmmo } from '../../../shared/ammoRules.js'
 import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
@@ -3496,7 +3496,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       console.warn(`[WS] resolveAoeAssaultAction — arme introuvable. weapon_inv_id:${action.weapon_inv_id}`)
       return { suspend: false, emissions }
     }
-    if (weapon.ref_name !== 'Klauss') {
+    if (!isShotgunSpreadWeapon(weapon.ref_name)) {
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
         message: `${weapon.ref_name ?? 'Cette arme'} — dispersion en zone inconnue pour cette arme.`,

@@ -1,3 +1,13 @@
+## v224 — 2026-09-03 — Combat : viser une zone au fusil à pompe
+
+### Combat — déclaration et résolution
+- [new] Le fusil à pompe (Klauss) se déclare maintenant en visant une direction plutôt qu'une cible
+  unique — dispersion obligatoire, conforme aux règles. Un bouton « Viser une zone » remplace le
+  choix de cible habituel : la zone d'effet suit la souris sur la carte, un clic la fige, puis
+  Valider ou Changer confirment ou ajustent le tir avant de passer à la résolution.
+- [fix] Tous les tokens réellement présents dans la zone visée reçoivent maintenant l'attaque et ses
+  dégâts, sans blocage de la fenêtre de résolution propre au tir en zone.
+
 ## v223 — 2026-09-02 — Fix : illustration blessures/armure trop grande
 
 ### Fiche personnage — Matériel

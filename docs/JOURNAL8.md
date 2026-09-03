@@ -4833,3 +4833,66 @@ modèle GLB (`DoorConnectorModel` ignore l'état, statique — collision/LOS cor
 `connectors` existant (`surface_data`), rétrocompatible.
 
 **Retour arrière** : `git revert` du commit `10cde1e` (aucun autre commit dessus à ce jour).
+
+## Session (Claude) — 2026-09-03 — AOE (fusil à pompe) : étape 9, UI de ciblage — CHANTIER FONCTIONNELLEMENT CLOS
+
+Suite de `docs/PLANS/PLAN_AOE.md` (étapes 1-8 des sessions précédentes, résolution serveur déjà
+codée et confirmée). Cette session couvrait l'étape 9 : déclaration côté client (direction du tir
+en zone) jusqu'au rendu 3D de visée.
+
+**Chaîne validée en session réelle par Saar, de bout en bout** (Klauss/fusil à pompe, tireur PNJ) :
+armement du mode de visée → aperçu 3D suivant la souris → clic pour figer → Valider/Changer →
+déclaration (`assaultDeclaration.js#aoeDirection` → `buildDeclarePayload.js` →
+`socketCombatAnnouncement.js`) → résolution (`resolveAoeAssaultAction`) → dégâts transmis. Log
+serveur final : `PRECHECK assault ... ok:true`, résolution sans erreur, combat terminé normalement.
+
+**Trois bugs de données/logique trouvés et corrigés en cours de route** (root cause à chaque fois,
+détail complet dans `docs/PLANS/PLAN_AOE.md` §12 ligne étape 9) :
+1. `/combat-equipment` (fenêtre MJ) ne sélectionnait jamais `ref_name`/`ref_range` (colonnes SQL non
+   aliasées) — "Viser une zone" n'apparaissait jamais pour un PNJ. Effet de bord positif : répare
+   aussi la détection de palier de portée du clic-attaque ambiant PNJ, qui lisait la même donnée.
+2. `CombatModifiersWindow.jsx` bloquait "Lancer" pour une action de zone (case Portée sans cible
+   unique) — la condition de gate était en fait dupliquée 3× (`handleLancer`, `disabled`, style
+   `opacity`/`cursor`) ; un premier correctif partiel n'avait touché qu'une des trois. Unifié en une
+   seule variable `canRoll`, équivalence avec l'ancien comportement vérifiée par De Morgan.
+3. Prémisse fausse de la v9 du plan : traiter Zone d'effet comme un raffinement optionnel du tir
+   normal (exclusivité à arbitrer avec Tir Multi/Tir visé). Le Klauss n'a RAW aucun mode de tir
+   normal — retiré (pas laissé en dead code) le mécanisme d'exclusivité correspondant,
+   `AssaultRangedPanel.jsx` bascule entièrement sur la section Zone d'effet pour cette arme.
+
+**Aperçu 3D de visée — 4 itérations avant la bonne, cause racine finale hors de toute logique
+métier** : trois modèles d'interaction essayés et rejetés (survol passif, clic-glisser-relâcher à la
+Foundry VTT, survol continu avec `pointermove` DOM géré à la main) avant d'adopter le patron
+officiel React Three Fiber (`useFrame` + `state.raycaster`, cf. r3f.docs.pmnd.rs/tutorials/how-it-works
+et la discussion pmndrs/react-three-fiber#3321). Un bug résiduel après ce patron ("l'AOE est posée
+dès le clic, Changer sans effet") a nécessité des logs `[DBG]` temporaires pour confirmer que l'état
+React se mettait bien à jour en continu — le vrai bug était dans le rendu Three.js : réaffecter la
+prop `array` d'un `<bufferAttribute>` déjà monté ne pose jamais `.needsUpdate = true` (confirmé en
+lisant `applyProps` dans le code source installé de `@react-three/fiber`), donc le tampon envoyé au
+GPU restait celui du tout premier rendu. Corrigé en incluant l'angle dans la `key` du mesh, forçant
+un remontage complet de la géométrie à chaque mise à jour réelle (coût négligeable, cadence déjà
+limitée par un garde-fou perf existant).
+
+**Fichiers touchés** : `client/src/components/{Canvas3D,AssaultRangedPanel,CombatActionWindow,
+CombatGmDeclareWindow,CombatModifiersWindow,CombatOverlay}.jsx`, `client/src/lib/{assaultDeclaration,
+buildDeclarePayload,useAssaultDeclaration,useCombatUIState,useSceneCursor,aoePreviewShape}.js`
+(+ tests), `client/src/locales/combat.json`, `client/src/pages/SessionPage.jsx`,
+`server/src/routes/battlemaps.js`, `server/src/socket/{socketCombatAnnouncement,
+socketCombatHelpers}.js`, `shared/{combatExclusiveActions,combatRange}.js` (+ tests),
+`docs/PLANS/PLAN_AOE.md`.
+
+**Testé** : `node --test` 117/117 (domaine AOE/déclaration), `npx eslint` (baseline inchangée sur
+tous les fichiers touchés), `npm run build` client propre, `node --check` serveur propre,
+`git diff --check` propre. **Session réelle Saar** : combat complet au Klauss, tireur PNJ, 3 cibles
+touchées puis reconfirmé après le correctif du rendu 3D — dégâts transmis, combat terminé
+normalement côté serveur.
+
+**Non testé** : tireur PJ en résolution (séquencé après le rework de séparation des fenêtres
+DRONE/HUMAN/EXO-ARMURE, hors périmètre de cette session — cf. bannière de tête du plan) ; Test de
+Chance (longue/extrême portée) ignoré en v1, aucune colonne Chance dans le schéma ; fusil à pompe en
+rafale (Tir Multi) hors scope, aucune donnée catalogue ne permet de l'identifier.
+
+**Données** : aucune migration nouvelle cette session (le schéma `combat_action_targets` et la
+colonne JSONB `modifiers.aoe` existaient déjà depuis les étapes 6a/6b).
+
+**Retour arrière** : `git revert` du commit `dev/Saar` correspondant (voir `git log`).

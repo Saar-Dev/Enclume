@@ -42,22 +42,43 @@ export function buildHumanDeclarePayload(sel) {
         : null,
       // Tir Multi (docs/Old/PLAN_TIRMULTI.md) : array d'1 à 3 tirs, même arme pour toute la série (D9)
       // — seule la cible varie par élément.
+      // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) : une seule entrée, sans cible, avec
+      // `aoe.direction` à la place — mutuellement exclusif avec le ciblage normal ci-dessous, comme
+      // dans assaultDeclaration.js (aoeDirection/targets ne coexistent jamais). Dual-wield/Tir visé
+      // neutralisés explicitement (pas juste laissés à la valeur courante de `sel`) : ces options Tir
+      // ne s'appliquent pas conceptuellement à une action de zone (RAW), et la reducer n'efface pas
+      // ces champs en entrant en mode zone (seuls aoeDirection/targets le sont) — les envoyer tels
+      // quels enverrait un payload contradictoire au serveur.
       attack: sel.attackSelected
-        ? sel.assaultPendingTokenIds.slice(0, sel.effectiveAssaultCount).map(targetTokenId => ({
-            weaponInvId:        sel.assaultWeaponId,
-            // Main non directrice (COM29) — seulement si le dual-wield est effectivement actif.
-            offhandWeaponInvId: (sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode)
-              ? (sel.weaponMg?.id ?? null)
-              : null,
-            targetTokenId,
-            bulletCount:        sel.currentVariant?.bulletCount ?? null,
-            fireModeBonusComp:  sel.currentVariant ? (sel.currentVariant.bonusComp + sel.dualWieldBonusComp) : null,
-            fireModeBonusDmg:   sel.currentVariant?.bonusDmg ?? null,
-            isDualWield:        sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode,
-            dualWieldBonusComp: sel.dualWieldBonusComp,
-            aimTranches:        sel.aimTranches,
-            aimedLocation:      sel.aimedLocation,
-          }))
+        ? (sel.aoeDirection != null
+            ? [{
+                weaponInvId:        sel.assaultWeaponId,
+                offhandWeaponInvId: null,
+                targetTokenId:      null,
+                aoe:                { direction: sel.aoeDirection },
+                bulletCount:        null,
+                fireModeBonusComp:  null,
+                fireModeBonusDmg:   null,
+                isDualWield:        false,
+                dualWieldBonusComp: 0,
+                aimTranches:        0,
+                aimedLocation:      null,
+              }]
+            : sel.assaultPendingTokenIds.slice(0, sel.effectiveAssaultCount).map(targetTokenId => ({
+                weaponInvId:        sel.assaultWeaponId,
+                // Main non directrice (COM29) — seulement si le dual-wield est effectivement actif.
+                offhandWeaponInvId: (sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode)
+                  ? (sel.weaponMg?.id ?? null)
+                  : null,
+                targetTokenId,
+                bulletCount:        sel.currentVariant?.bulletCount ?? null,
+                fireModeBonusComp:  sel.currentVariant ? (sel.currentVariant.bonusComp + sel.dualWieldBonusComp) : null,
+                fireModeBonusDmg:   sel.currentVariant?.bonusDmg ?? null,
+                isDualWield:        sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode,
+                dualWieldBonusComp: sel.dualWieldBonusComp,
+                aimTranches:        sel.aimTranches,
+                aimedLocation:      sel.aimedLocation,
+              })))
         : null,
       // Charge : 1 cible, jamais de dual-wield (miroir buildGmDeclarePayload). Défensif/Retraite :
       // pas de cible — mode passif, bonus appliqué via state_combat_mode.
@@ -134,21 +155,38 @@ export function buildGmDeclarePayload(sel) {
       move: movePayload,
       // Tir Multi : array d'1 à 3 tirs, même arme pour toute la série (D9).
       // D7 : « Recharger » remplace le Tir — jamais les deux dans le même payload.
-      attack: sel.weapon && sel.assaultTargets.length > 0 && sel.mapAction !== 'reload'
-        ? sel.assaultTargets.slice(0, sel.effectiveAssaultCount).map(targetTokenId => ({
-            weaponInvId:        sel.weapon.inv_id,
-            offhandWeaponInvId: (sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode)
-              ? (sel.weaponMg?.inv_id ?? null)
-              : null,
-            targetTokenId,
-            bulletCount:        sel.currentVariant?.bulletCount ?? null,
-            fireModeBonusComp:  sel.currentVariant ? (sel.currentVariant.bonusComp + sel.dualWieldBonusComp) : 0,
-            fireModeBonusDmg:   sel.currentVariant?.bonusDmg ?? 0,
-            isDualWield:        sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode,
-            dualWieldBonusComp: sel.dualWieldBonusComp,
-            aimTranches:        sel.aimTranches,
-            aimedLocation:      sel.aimedLocation,
-          }))
+      // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) : une seule entrée, sans cible, avec
+      // `aoe.direction` — mirroir buildHumanDeclarePayload, différence légitime préservée (bonus à 0
+      // plutôt que null, cf. bannière de tête du fichier).
+      attack: sel.weapon && (sel.assaultTargets.length > 0 || sel.aoeDirection != null) && sel.mapAction !== 'reload'
+        ? (sel.aoeDirection != null
+            ? [{
+                weaponInvId:        sel.weapon.inv_id,
+                offhandWeaponInvId: null,
+                targetTokenId:      null,
+                aoe:                { direction: sel.aoeDirection },
+                bulletCount:        null,
+                fireModeBonusComp:  0,
+                fireModeBonusDmg:   0,
+                isDualWield:        false,
+                dualWieldBonusComp: 0,
+                aimTranches:        0,
+                aimedLocation:      null,
+              }]
+            : sel.assaultTargets.slice(0, sel.effectiveAssaultCount).map(targetTokenId => ({
+                weaponInvId:        sel.weapon.inv_id,
+                offhandWeaponInvId: (sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode)
+                  ? (sel.weaponMg?.inv_id ?? null)
+                  : null,
+                targetTokenId,
+                bulletCount:        sel.currentVariant?.bulletCount ?? null,
+                fireModeBonusComp:  sel.currentVariant ? (sel.currentVariant.bonusComp + sel.dualWieldBonusComp) : 0,
+                fireModeBonusDmg:   sel.currentVariant?.bonusDmg ?? 0,
+                isDualWield:        sel.isDualWield && sel.hasTwoWeapons && sel.sameFirMode,
+                dualWieldBonusComp: sel.dualWieldBonusComp,
+                aimTranches:        sel.aimTranches,
+                aimedLocation:      sel.aimedLocation,
+              })))
         : null,
       melee:  meleeCaC.length > 0 ? meleeCaC : null,
       reload: sel.mapAction === 'reload',

@@ -18,7 +18,7 @@ import { MOVE_ZONE_DEFS } from './combatSections.js'
 import { CombatResultGM, CombatResultPlayer, CombatResultReload, CombatResultMelee } from './CombatResultPanels'
 import CombatTargetRecapToast from './CombatTargetRecapToast.jsx'
 
-export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, targetRecap, onEnterTargetMode, onValidateTarget, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
+export default function CombatOverlay({ socket, battlemap, isGm, user, characters, actionTimerSec, pendingSurpriseRoll, onSurpriseRolled, onEnterMoveMode, combatMoveMode, pendingMoveSelection, onValidateMove, onCancelPendingMove, combatTargetMode, combatAoeTargetMode, targetRecap, onEnterTargetMode, onEnterAoeTargetMode, onValidateTarget, onValidateAoeDirection, registerAmbientAttackHandler, showTargetRecap, damagePayload, damageResults, onDamageConfirmed, attackResult, onAttackConfirmed, gmAttackResult, onGmAttackResultClose, pnjAttackResult, onPnjAttackResultClose, reloadResult, onReloadResultClose, meleeDefensePrompt, onMeleeDefenseConfirm, meleeResult, onMeleeResultClose, stunPayload, onStunConfirmed, gmSocketError, onGmSocketErrorClose, pjPreview, sidebarWidth = 0 }) {
   const { t } = useTranslation('combat')
   const { t: tStatus } = useTranslation()
   const { phase, subPhase, roster, activeTokenId, actions, currentStep, timelineEntries } = useCombatStore()
@@ -222,6 +222,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           battlemapId={battlemap?.id}
           onEnterTargetMode={onEnterTargetMode}
           combatTargetMode={combatTargetMode}
+          combatAoeTargetMode={combatAoeTargetMode}
+          onEnterAoeTargetMode={onEnterAoeTargetMode}
           pjPreview={pjPreview}
           registerAmbientAttackHandler={registerAmbientAttackHandler}
           showTargetRecap={showTargetRecap}
@@ -264,6 +266,8 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           pendingMoveSelection={pendingMoveSelection}
           combatTargetMode={combatTargetMode}
           onEnterTargetMode={onEnterTargetMode}
+          combatAoeTargetMode={combatAoeTargetMode}
+          onEnterAoeTargetMode={onEnterAoeTargetMode}
           battlemapId={battlemap?.id}
           registerAmbientAttackHandler={registerAmbientAttackHandler}
           showTargetRecap={showTargetRecap}
@@ -440,6 +444,34 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           })()}
 
           <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatTargetMode.onCancel()}>
+            {t('overlay.cancelButton')}
+          </button>
+        </div>
+      )}
+
+      {/* Panneau visée zone d'effet fusil à pompe — visible pendant combatAoeTargetMode (PLAN_AOE.md
+          §8 étape 9). Même patron que le panneau visée assaut ci-dessus : survol continu (aucun recap
+          tant que rien n'est figé), un clic sur la carte pose `pendingDirectionDeg`, Valider/Changer
+          décident ensuite (retour Saar 2026-09-02, corrige un clic-glisser-relâcher abandonné). */}
+      {combatAoeTargetMode && (
+        <div style={styles.moveLegend}>
+          <div style={styles.moveLegendTitle}>{t('overlay.targetLegend.aoe')}</div>
+
+          {combatAoeTargetMode.pendingDirectionDeg != null && (
+            <div style={styles.movePending}>
+              <div style={styles.movePendingInfo}>
+                <span style={styles.movePendingDest}>
+                  {t('assaultPanel.aoeDirectionValue', { deg: Math.round(combatAoeTargetMode.pendingDirectionDeg) })}
+                </span>
+              </div>
+              <div style={styles.movePendingBtns}>
+                <button className="btn" style={{ flex: 1 }} onClick={onValidateAoeDirection}>{t('overlay.validateButton')}</button>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => combatAoeTargetMode.onPendingDirection(null)}>{t('common.changeButton')}</button>
+              </div>
+            </div>
+          )}
+
+          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => combatAoeTargetMode.onCancel()}>
             {t('overlay.cancelButton')}
           </button>
         </div>

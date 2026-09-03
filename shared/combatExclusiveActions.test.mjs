@@ -5,6 +5,7 @@ import {
   getExoStandUpIneligibilityReasons, isExoStandUpEligible,
   isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons, isAoeExclusiveEligible,
   getAimIneligibilityReasons, isAimEligible,
+  getMultiShotIneligibilityReasons, isMultiShotEligible,
 } from './combatExclusiveActions.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §9.2 — exclusivité tranchée par Saar (2026-08-18) : tenter de se
@@ -207,3 +208,31 @@ test('getAimIneligibilityReasons — autres actions : tir multiple / déplacemen
     state: {}, quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 3,
   }).includes('tir non simple (répétition ou rafale)'))
 })
+
+test('getAimIneligibilityReasons — zone d\'effet active : Tir visé inéligible (PLAN_AOE.md §8 étape 9)', () => {
+  const reasons = getAimIneligibilityReasons({
+    mapActions: { attack: [{ aoe: { direction: 45 } }] },
+    state: {}, quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1, isAoeMode: true,
+  })
+  assert.deepEqual(reasons, ['zone d\'effet active'])
+})
+
+// ─── getMultiShotIneligibilityReasons — Tir Multi (docs/PLAN_TIRMULTI.md D6/D10) ──────────────────
+
+test('getMultiShotIneligibilityReasons — rien d\'actif : éligible', () => {
+  assert.deepEqual(getMultiShotIneligibilityReasons({ currentFireMode: 'CC' }), [])
+  assert.equal(isMultiShotEligible({ currentFireMode: 'CC' }), true)
+})
+
+test('getMultiShotIneligibilityReasons — rafale (RC/RL) / Tir visé / dual-wield / localisation : chacun exclut', () => {
+  assert.deepEqual(getMultiShotIneligibilityReasons({ currentFireMode: 'RC' }), ['rafale (RC/RL)'])
+  assert.deepEqual(getMultiShotIneligibilityReasons({ currentFireMode: 'CC', aimTranches: 2 }), ['tir visé actif'])
+  assert.deepEqual(getMultiShotIneligibilityReasons({ currentFireMode: 'CC', isDualWield: true }), ['deux armes actif'])
+  assert.deepEqual(getMultiShotIneligibilityReasons({ currentFireMode: 'CC', aimedLocation: 'head' }), ['localisation visée active'])
+})
+
+// Pas de réciproque "getAoeTargetingIneligibilityReasons" — le Klauss n'a aucun mode de tir normal
+// (RAW : dispersion obligatoire, jamais un choix), Zone d'effet n'est donc pas un raffinement optionnel
+// à arbitrer contre Tir Multi/Tir visé comme les autres : AssaultRangedPanel.jsx n'affiche même plus
+// ces sections quand l'arme équipée est éligible (retour Saar, corrigeant l'hypothèse "Zone = option"
+// de la version précédente de ce fichier).

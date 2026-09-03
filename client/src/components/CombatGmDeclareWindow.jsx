@@ -10,7 +10,7 @@ import {
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
-import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { resolveMeleeReachM, resolveWeaponRangeBand, isShotgunSpreadWeapon } from '../../../shared/combatRange.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -37,7 +37,7 @@ import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
-export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, combatMoveMode, pendingMoveSelection, battlemapId, onEnterTargetMode, combatTargetMode, pjPreview, registerAmbientAttackHandler, showTargetRecap }) {
+export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveMode, combatMoveMode, pendingMoveSelection, battlemapId, onEnterTargetMode, combatTargetMode, combatAoeTargetMode, onEnterAoeTargetMode, pjPreview, registerAmbientAttackHandler, showTargetRecap }) {
   const { t } = useTranslation('combat')
   const { roster, activeTokenId: storeActiveTokenId } = useCombatStore()
   const tokens = useTokenStore(s => s.tokens)
@@ -168,6 +168,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     assaultDecl.clear()
     meleeDecl.clear()
     setIsSelectingOnMap(false)
+    // Bug confirmé Saar (2026-09-02) : un mode de visée armé pour l'ancien PNJ actif (Cibler/Viser une
+    // zone) restait vivant après le changement de slot — un clic sur la carte pour le NOUVEAU PNJ
+    // committait alors une direction/cible calculée depuis la position de l'ANCIEN tireur. Ce mode ne
+    // peut, par construction, avoir été armé que par CE PNJ (le bouton qui l'arme n'existe que pour le
+    // PNJ actuellement affiché) — donc tout ce qui reste armé ici appartient forcément à l'ancien slot,
+    // jamais au nouveau : annulation sans condition, sans risque de couper quelque chose de légitime.
+    combatTargetMode?.onCancel()
+    combatAoeTargetMode?.onCancel()
   }, [activeTokenId, activePnjEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // COMBAT_DECLARE_ERROR : écouté par useCombatSocket (hook central) → sessionStore →
@@ -325,6 +333,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && w.ref_fire_mode)
     : null
   const weapon       = isActivePnj ? (pickedGmRanged ?? resolvedGmPrimary) : null
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — éligibilité sur `weapon.ref_name` brut
+  // (item d'équipement réel, pas le nom d'affichage post-buildWeaponList qui préfère custom_name),
+  // même autorité que la résolution serveur (shared/combatRange.js#isShotgunSpreadWeapon).
+  const isAoeEligible = isShotgunSpreadWeapon(weapon?.ref_name)
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — même source `equipment[tokenId]` que le
@@ -428,11 +440,14 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
   const attackStarted = assaultDecl.state.weaponId != null   // D5 : arme de tir choisie = Tir en cours
     || assaultTargets.length > 0
     || (combatTargetMode?.tokenId === activeTokenId && !(isActivePnj && meleeStarted))
+  // Zone d'effet (PLAN_AOE.md §8 étape 9) : une direction posée compte comme un ciblage complet, sans
+  // cible unique — même règle que assaultDeclaration.js#assaultTargetsComplete, relue ici plutôt que
+  // recalculée séparément (assaultDecl.isAoeMode est la même valeur dérivée).
   const assault = assaultCheck({
     started:       attackStarted,
     hasWeapon:     !!weapon,
-    targetsFilled: assaultTargets.slice(0, effectiveAssaultCount).filter(Boolean).length,
-    targetsNeeded: effectiveAssaultCount,
+    targetsFilled: assaultDecl.isAoeMode ? 1 : assaultTargets.slice(0, effectiveAssaultCount).filter(Boolean).length,
+    targetsNeeded: assaultDecl.isAoeMode ? 1 : effectiveAssaultCount,
     hasVariant:    currentVariant !== null,
     aimActive:     aimTranches > 0,
     aimReasons:    aimIneligibilityReasons,
@@ -520,6 +535,25 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     )
   }
 
+  // ── Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — mirroir de handleStartAttack : survol
+  // continu sur la carte, un clic fige un candidat, Valider/Changer décident ensuite (combatAoeTargetMode
+  // — pas un clic-glisser-relâcher, essayé puis abandonné, retour Saar 2026-09-02). `weapon.ref_range`
+  // traverse jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js).
+  const handleStartAoeDirection = () => {
+    if (!onEnterAoeTargetMode || !activeTokenId || !activeToken) return
+    setIsSelectingOnMap(true)
+    onEnterAoeTargetMode(
+      activeTokenId,
+      { x: activeToken.pos_x, z: activeToken.pos_y },
+      weapon?.ref_range ?? null,
+      (directionDeg) => {
+        assaultDecl.setAoeDirection(directionDeg)
+        setIsSelectingOnMap(false)
+      },
+      () => { setIsSelectingOnMap(false) },
+    )
+  }
+
   // ── Melee direct ────────────────────────────────────────────────────────
   // startIdx : emplacement à (re)cibler. Ne ré-enchaîne les N sélections que si on redémarre depuis 0
   // (premier réglage) — reciblage d'un seul emplacement (startIdx>0, bouton "Changer" par slot) ne
@@ -599,7 +633,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       pendingMove, chargeSelection,
       weapon, assaultTargets, effectiveAssaultCount,
       isDualWield, hasTwoWeapons, sameFirMode, weaponMg, currentVariant, dualWieldBonusComp,
-      aimTranches, aimedLocation,
+      aimTranches, aimedLocation, aoeDirection: assaultDecl.state.aoeDirection,
       meleeTargets, effectiveMeleeCount, weaponInvIdForMelee, naturalWeaponIdForMelee,
       effectiveDualWieldMelee, meleeOffhandWeapon,
       mapAction,
@@ -955,6 +989,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
               effectiveAssaultCount={effectiveAssaultCount}
               onAssaultCountChange={assaultDecl.setCount}
               multiShotIneligibilityReasons={multiShotIneligibilityReasons}
+              isAoeEligible={isAoeEligible}
+              isAoeMode={assaultDecl.isAoeMode}
+              aoeDirection={assaultDecl.state.aoeDirection}
+              onStartAoeDirection={handleStartAoeDirection}
             />
           </div>
         )}

@@ -119,12 +119,46 @@ export default function AssaultRangedPanel({
   effectiveAssaultCount,    // 1 | 2 | 3 — 1 si currentFireMode !== 'CC' (D6, calculé par le parent)
   onAssaultCountChange,     // (n) => void
   multiShotIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — RAW : dispersion obligatoire, jamais un choix
+  // à côté du ciblage normal (voir le early return juste après la déstructuration). `isAoeEligible` ne
+  // dépend que de l'arme équipée (shared/combatRange.js#isShotgunSpreadWeapon).
+  isAoeEligible,   // bool — calculé par le parent
+  isAoeMode,       // bool — assaultDecl.isAoeMode (aoeDirection posé)
+  aoeDirection,    // number | null — degrés, convention aoeShapes.js (0° = +X, trigo → +Z)
+  onStartAoeDirection, // () => void — arme combatAoeTargetMode (Canvas3D)
 }) {
   const { t } = useTranslation('combat')
   const aimSliderMax = Math.max(AIM_MAX_TRANCHES, lunetteNiveau ?? 0)
   const fireModeLabelKey = { CC: 'states.fireMode.cc.label', RC: 'states.fireMode.rc.label', RL: 'states.fireMode.rl.label' }[currentFireMode]
   const fireModeLabel = fireModeLabelKey ? t(fireModeLabelKey) : currentFireMode
   const multiShotDisabled = multiShotIneligibilityReasons.length > 0
+
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9, redesign 2026-09-02) — RAW : le Klauss n'a
+  // AUCUN mode de tir normal, la dispersion est obligatoire à chaque tir, jamais un choix parmi
+  // d'autres (retour Saar, corrigeant la v1 "Zone = option à côté du ciblage classique"). Une arme
+  // éligible bascule donc TOUTE la colonne Tir sur la seule section Zone d'effet ci-dessous — Tir
+  // Multi/Type de tir/détail CC-RC-RL/Localisation visée n'ont pas de sens pour elle et ne s'affichent
+  // simplement plus, ce n'est pas une exclusivité à arbitrer (pas de bouton grisé, pas de raisons).
+  if (isAoeEligible) {
+    return (
+      <div style={P.section}>
+        <div style={{ ...P.sectionTitle, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="decl-inline-glyph" style={{ '--glyph': 'url(/assets/status/target.svg)' }} />
+          {t('assaultPanel.aoeSection')}
+        </div>
+        {isAoeMode ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={P.targetName}>{t('assaultPanel.aoeDirectionValue', { deg: Math.round(aoeDirection) })}</span>
+            <button style={P.changeBtn} onClick={onStartAoeDirection}>{t('common.changeButton')}</button>
+          </div>
+        ) : (
+          <button style={{ ...P.chooseBtn, width: 'auto', alignSelf: 'flex-start' }} onClick={onStartAoeDirection}>
+            {t('assaultPanel.aimAoeButton')}
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>

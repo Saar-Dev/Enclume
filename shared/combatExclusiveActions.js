@@ -86,7 +86,7 @@ export function getEffectiveAimBonus(aimBonusComp, { lunetteNiveau = 0, portee =
 // pas de clé i18n — le domaine Combat est explicitement hors périmètre i18n dans ce projet
 // (.claude/rules/react.md : "Combat (12) + équipement (6) : hors scope — sprint dédié futur"),
 // cohérent avec les tooltips combat existants déjà en dur (ex. "Assommé — ne peut pas attaquer").
-export function getAimIneligibilityReasons({ mapActions, state, quick, entry, isDualWield, bulletCount }) {
+export function getAimIneligibilityReasons({ mapActions, state, quick, entry, isDualWield, bulletCount, isAoeMode }) {
   const reasons = []
   if (bulletCount !== 1) reasons.push('tir non simple (répétition ou rafale)')
   if (isDualWield) reasons.push('deux armes')
@@ -94,6 +94,9 @@ export function getAimIneligibilityReasons({ mapActions, state, quick, entry, is
   // « une autre action ce Tour » vis-à-vis de chacun de ses éléments — même exclusivité que le CaC
   // ci-dessous, appliquée au tir lui-même.
   if (Array.isArray(mapActions?.attack) && mapActions.attack.length > 1) reasons.push('tir multiple')
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) : une action de zone n'a pas de cible unique,
+  // « viser » (au sens Tir visé) n'a pas de sens dessus — même statut que Tir Multi ci-dessus.
+  if (isAoeMode) reasons.push('zone d\'effet active')
   // Préconditions intrinsèques : arme déjà au clair + déjà en coup par coup AVANT ce tour.
   if (entry?.state_weapon !== 'drawn') reasons.push('arme pas encore au clair')
   if (entry?.state_fire_mode !== 'cc') reasons.push('pas encore en coup par coup')

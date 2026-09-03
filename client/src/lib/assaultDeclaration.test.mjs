@@ -7,6 +7,7 @@ import {
   effectiveAssaultCount,
   assaultTargetsFilled,
   assaultTargetsComplete,
+  assaultIsAoeMode,
 } from './assaultDeclaration.js'
 
 // --- reducer : champs simples ---------------------------------------------------------------------
@@ -115,4 +116,46 @@ test('assaultTargetsFilled / assaultTargetsComplete : comptent dans la série ef
 
 test('assaultTargetsComplete : série pleine', () => {
   assert.equal(assaultTargetsComplete({ ...INIT, count: 2, targets: ['a', 'b'] }, 'CC'), true)
+})
+
+// --- SET_AOE_DIRECTION : zone d'effet, mutuellement exclusive avec targets (PLAN_AOE.md §8 étape 9) --
+
+test('SET_AOE_DIRECTION : pose la direction et vide targets', () => {
+  const s = reduce({ ...INIT, count: 3, targets: ['a', 'a', 'a'] }, { type: 'SET_AOE_DIRECTION', value: 45 })
+  assert.equal(s.aoeDirection, 45)
+  assert.deepEqual(s.targets, [])
+})
+
+test('SET_AOE_DIRECTION avec null : efface la direction sans toucher targets', () => {
+  const s = reduce({ ...INIT, aoeDirection: 90, targets: [] }, { type: 'SET_AOE_DIRECTION', value: null })
+  assert.equal(s.aoeDirection, null)
+  assert.deepEqual(s.targets, [])
+})
+
+test('SET_TARGET efface une direction de zone en cours (exclusivité dans les deux sens)', () => {
+  const s = reduce({ ...INIT, aoeDirection: 45 }, { type: 'SET_TARGET', index: 0, tokenId: 'a', seriesLength: 1 })
+  assert.equal(s.aoeDirection, null)
+  assert.deepEqual(s.targets, ['a'])
+})
+
+test('SET_SOLE_TARGET efface une direction de zone en cours', () => {
+  const s = reduce({ ...INIT, aoeDirection: 45 }, { type: 'SET_SOLE_TARGET', tokenId: 'a' })
+  assert.equal(s.aoeDirection, null)
+  assert.deepEqual(s.targets, ['a'])
+})
+
+test('assaultIsAoeMode : reflète uniquement aoeDirection', () => {
+  assert.equal(assaultIsAoeMode(INIT), false)
+  assert.equal(assaultIsAoeMode({ ...INIT, aoeDirection: 0 }), true) // 0° est une direction valide, pas "absent"
+  assert.equal(assaultIsAoeMode({ ...INIT, aoeDirection: null }), false)
+})
+
+test('assaultTargetsComplete : une direction de zone posée compte comme complet, sans cible', () => {
+  assert.equal(assaultTargetsComplete({ ...INIT, aoeDirection: 45, targets: [] }, 'CC'), true)
+})
+
+test('SELECT_WEAPON et CLEAR remettent aoeDirection à null', () => {
+  const dirty = { ...INIT, aoeDirection: 45 }
+  assert.equal(reduce(dirty, { type: 'SELECT_WEAPON', weaponId: 'w2' }).aoeDirection, null)
+  assert.equal(reduce(dirty, { type: 'CLEAR' }).aoeDirection, null)
 })

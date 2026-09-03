@@ -20,6 +20,19 @@ export const ASSAULT_DECLARATION_INITIAL = {
   isDualWield:   false,  // Tir à deux armes (COM24)
   aimTranches:   0,      // tranches de Tir visé
   aimedLocation: null,   // localisation précise visée (silhouette) | null
+  // Zone d'effet (docs/PLANS/PLAN_AOE.md §8 étape 9) — degrés, déjà dans la convention canonique
+  // d'aoeShapes.js (0° = axe +X, sens trigonométrique vers +Z). La conversion coordonnées monde →
+  // degrés se fait en amont (capture du clic, Canvas3D) ; ce module reste un conteneur d'état pur,
+  // il ne connaît que la valeur déjà résolue — jamais un point écran ni une conversion ici.
+  // Mutuellement exclusif avec `targets` (RAW : une action de zone n'a pas de cible unique) — voir
+  // SET_AOE_DIRECTION / SET_TARGET / SET_SOLE_TARGET ci-dessous.
+  aoeDirection:  null,
+}
+
+// Mode de ciblage "zone d'effet" actif ? Dérivé pur — les fichiers appelants (fenêtre, payload) n'ont
+// pas besoin de connaître le détail du champ, seulement ce booléen.
+export function assaultIsAoeMode(state) {
+  return state.aoeDirection != null
 }
 
 // Nombre de tirs effectifs : la série multiple n'existe qu'en Coup par Coup (RC/RL forcent 1).
@@ -32,8 +45,10 @@ export function assaultTargetsFilled(state, currentFireMode) {
   return state.targets.slice(0, effectiveAssaultCount(state, currentFireMode)).filter(Boolean).length
 }
 
-// Série de cibles complète ?
+// Série de cibles complète ? Une direction de zone posée compte aussi comme un ciblage complet
+// (les deux modes sont mutuellement exclusifs, jamais les deux à la fois — assaultIsAoeMode).
 export function assaultTargetsComplete(state, currentFireMode) {
+  if (assaultIsAoeMode(state)) return true
   const n = effectiveAssaultCount(state, currentFireMode)
   return n > 0 && state.targets.slice(0, n).filter(Boolean).length >= n
 }
@@ -88,13 +103,22 @@ export function assaultDeclarationReducer(state, action) {
     case 'SET_AIMED_LOCATION':
       return { ...state, aimedLocation: action.value }
 
+    // aoeDirection effacé : poser une cible unique annule une zone d'effet en cours de sélection —
+    // exclusivité dans les deux sens (voir SET_AOE_DIRECTION).
     case 'SET_TARGET':
-      return { ...state, targets: assaultPlaceTarget(state.targets, action.index, action.tokenId, action.seriesLength) }
+      return { ...state, aoeDirection: null, targets: assaultPlaceTarget(state.targets, action.index, action.tokenId, action.seriesLength) }
 
     // Cible unique imposée (clic direct sur un token adverse, sans passer par la liste d'armes) —
     // miroir exact de l'ancien `setAssaultPendingTokenIds([tid])`.
     case 'SET_SOLE_TARGET':
-      return { ...state, targets: [action.tokenId] }
+      return { ...state, aoeDirection: null, targets: [action.tokenId] }
+
+    // Zone d'effet (docs/PLANS/PLAN_AOE.md §8 étape 9) — action.value en degrés (convention
+    // aoeShapes.js, déjà résolue par l'appelant) ou `null` pour effacer la sélection en cours.
+    // Vide `targets` dès qu'une direction est posée : les deux modes sont mutuellement exclusifs,
+    // jamais une cible unique ET une zone en même temps.
+    case 'SET_AOE_DIRECTION':
+      return { ...state, aoeDirection: action.value, targets: action.value != null ? [] : state.targets }
 
     // Efface le sous-état Tir : nouveau tour, changement de slot actif, ou sélection d'une autre
     // action de combat (CaC) — l'exclusivité Tir ⊕ CaC est portée par la fenêtre.

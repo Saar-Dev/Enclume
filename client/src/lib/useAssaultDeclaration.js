@@ -16,6 +16,7 @@ import {
   effectiveAssaultCount,
   assaultTargetsFilled,
   assaultTargetsComplete,
+  assaultIsAoeMode,
 } from './assaultDeclaration.js'
 
 export function useAssaultDeclaration() {
@@ -35,8 +36,13 @@ export function useAssaultDeclaration() {
   const setDualWield    = useCallback((value) => dispatch({ type: 'SET_DUAL_WIELD', value }), [])
   const setAimTranches  = useCallback((value) => dispatch({ type: 'SET_AIM_TRANCHES', value }), [])
   const setAimedLocation = useCallback((value) => dispatch({ type: 'SET_AIMED_LOCATION', value }), [])
+  // Zone d'effet (docs/PLANS/PLAN_AOE.md §8 étape 9) — value en degrés déjà résolus par l'appelant
+  // (capture du clic dans Canvas3D), ou null pour effacer. Vide targets côté reducer (exclusivité).
+  const setAoeDirection = useCallback((value) => dispatch({ type: 'SET_AOE_DIRECTION', value }), [])
+  // aoeDirection effacé dans le miroir : même exclusivité que le reducer (SET_SOLE_TARGET côté
+  // assaultDeclaration.js), pour que stateRef reste fidèle au state qui sera réellement commité.
   const setSoleTarget   = useCallback((tokenId) => {
-    stateRef.current = { ...stateRef.current, targets: [tokenId] }
+    stateRef.current = { ...stateRef.current, targets: [tokenId], aoeDirection: null }
     dispatch({ type: 'SET_SOLE_TARGET', tokenId })
   }, [])
 
@@ -45,7 +51,7 @@ export function useAssaultDeclaration() {
     const cur = stateRef.current
     const seriesLength = effectiveAssaultCount(cur, currentFireMode)
     const nextTargets = assaultPlaceTarget(cur.targets, index, tokenId, seriesLength)
-    stateRef.current = { ...cur, targets: nextTargets }
+    stateRef.current = { ...cur, targets: nextTargets, aoeDirection: null }
     dispatch({ type: 'SET_TARGET', index, tokenId, seriesLength })
     return nextTargets.slice(0, seriesLength).filter(Boolean).length >= seriesLength
   }, [])
@@ -54,9 +60,10 @@ export function useAssaultDeclaration() {
     state,
     dispatch,
     selectWeapon, clear, setCount, setBulletCount, setVariantAB, setDualWield,
-    setAimTranches, setAimedLocation, setSoleTarget, setTarget,
+    setAimTranches, setAimedLocation, setSoleTarget, setTarget, setAoeDirection,
     effectiveCount:  (currentFireMode) => effectiveAssaultCount(state, currentFireMode),
     targetsFilled:   (currentFireMode) => assaultTargetsFilled(state, currentFireMode),
     targetsComplete: (currentFireMode) => assaultTargetsComplete(state, currentFireMode),
+    isAoeMode:       assaultIsAoeMode(state),
   }
 }

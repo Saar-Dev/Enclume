@@ -23,7 +23,7 @@ const baseSel = (over = {}) => ({
   attackSelected: false, assaultPendingTokenIds: [], effectiveAssaultCount: 1, assaultWeaponId: null,
   isDualWield: false, hasTwoWeapons: false, sameFirMode: false, weaponMg: null,
   currentVariant: null, dualWieldBonusComp: 0,
-  aimTranches: 0, aimedLocation: null,
+  aimTranches: 0, aimedLocation: null, aoeDirection: null,
   meleeSelected: false, meleeDefensif: false, meleePendingTokenIds: [], effectiveMeleeCount: 1,
   effectiveMeleeWeaponId: null, effectiveMeleeNaturalWeaponId: null,
   effectiveDualWieldMelee: false, meleeOffhandWeapon: null,
@@ -117,6 +117,33 @@ test('Tir sans variant configuré — bonus/bulletCount à null', () => {
   assert.equal(p.mapActions.attack[0].bulletCount, null)
   assert.equal(p.mapActions.attack[0].fireModeBonusComp, null)
   assert.equal(p.mapActions.attack[0].fireModeBonusDmg, null)
+})
+
+// ─── Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) ──────────────────────────────────────────
+
+test('Zone d\'effet — une entrée sans cible, aoe.direction, dual-wield/Tir visé neutralisés', () => {
+  const p = buildHumanDeclarePayload(baseSel({
+    attackSelected: true, assaultWeaponId: 'klauss-1', aoeDirection: 42,
+    // Valeurs "sales" laissées par un mode précédent — ne doivent PAS fuiter dans le payload zone :
+    // la reducer n'efface pas ces champs en entrant en mode zone, seuls aoeDirection/targets le sont.
+    isDualWield: true, hasTwoWeapons: true, sameFirMode: true, weaponMg: { id: 'mg-1' }, dualWieldBonusComp: 3,
+    aimTranches: 2, aimedLocation: 'head', currentVariant: { bulletCount: 2, bonusComp: 1, bonusDmg: 0 },
+    assaultPendingTokenIds: ['stale-target'],
+  }))
+  assert.deepEqual(p.mapActions.attack, [{
+    weaponInvId: 'klauss-1', offhandWeaponInvId: null, targetTokenId: null,
+    aoe: { direction: 42 },
+    bulletCount: null, fireModeBonusComp: null, fireModeBonusDmg: null,
+    isDualWield: false, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
+  }])
+})
+
+test('Zone d\'effet — aoeDirection à 0° (falsy) reste bien traité comme une zone posée', () => {
+  const p = buildHumanDeclarePayload(baseSel({
+    attackSelected: true, assaultWeaponId: 'klauss-1', aoeDirection: 0,
+  }))
+  assert.equal(p.mapActions.attack.length, 1)
+  assert.deepEqual(p.mapActions.attack[0].aoe, { direction: 0 })
 })
 
 test('Corps à corps — arme d\'inventaire', () => {
@@ -243,7 +270,7 @@ const baseGmSel = (over = {}) => ({
   weapon: null, assaultTargets: [], effectiveAssaultCount: 1,
   isDualWield: false, hasTwoWeapons: false, sameFirMode: false, weaponMg: null,
   currentVariant: null, dualWieldBonusComp: 0,
-  aimTranches: 0, aimedLocation: null,
+  aimTranches: 0, aimedLocation: null, aoeDirection: null,
   meleeTargets: [], effectiveMeleeCount: 1, weaponInvIdForMelee: null, naturalWeaponIdForMelee: null,
   effectiveDualWieldMelee: false, meleeOffhandWeapon: null,
   mapAction: null,
@@ -277,6 +304,34 @@ test('GM — Tir sans variant → bonus à 0 (PAS null, différence assumée vs 
   assert.equal(p.mapActions.attack[0].bulletCount, null)
   assert.equal(p.mapActions.attack[0].fireModeBonusComp, 0)
   assert.equal(p.mapActions.attack[0].fireModeBonusDmg, 0)
+})
+
+test('GM — Zone d\'effet — une entrée sans cible, aoe.direction, bonus à 0 (pas null, différence PJ)', () => {
+  const p = buildGmDeclarePayload(baseGmSel({
+    weapon: { inv_id: 'klauss-inv' }, aoeDirection: 17,
+    isDualWield: true, hasTwoWeapons: true, sameFirMode: true, weaponMg: { inv_id: 'mg-inv' }, dualWieldBonusComp: 3,
+    aimTranches: 2, aimedLocation: 'head', currentVariant: { bulletCount: 2, bonusComp: 1, bonusDmg: 0 },
+    assaultTargets: ['stale-target'],
+  }))
+  assert.deepEqual(p.mapActions.attack, [{
+    weaponInvId: 'klauss-inv', offhandWeaponInvId: null, targetTokenId: null,
+    aoe: { direction: 17 },
+    bulletCount: null, fireModeBonusComp: 0, fireModeBonusDmg: 0,
+    isDualWield: false, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
+  }])
+})
+
+test('GM — Zone d\'effet sans arme → attack null (même garde que le Tir normal)', () => {
+  const p = buildGmDeclarePayload(baseGmSel({ weapon: null, aoeDirection: 17 }))
+  assert.equal(p.mapActions.attack, null)
+})
+
+test('GM — Zone d\'effet + Recharger → attack null (D7, même exclusivité que le Tir normal)', () => {
+  const p = buildGmDeclarePayload(baseGmSel({
+    weapon: { inv_id: 'klauss-inv' }, aoeDirection: 17, mapAction: 'reload',
+  }))
+  assert.equal(p.mapActions.attack, null)
+  assert.equal(p.mapActions.reload, true)
 })
 
 test('GM — Tir avec cibles mais weapon null → attack null', () => {

@@ -4,6 +4,7 @@ export function useCombatUIState() {
   const [combatMoveMode,       setCombatMoveMode]       = useState(null)
   const [pendingMoveSelection, setPendingMoveSelection] = useState(null)
   const [combatTargetMode,     setCombatTargetMode]     = useState(null)
+  const [combatAoeTargetMode,  setCombatAoeTargetMode]  = useState(null)
   const [combatCameraCenter,   setCombatCameraCenter]   = useState(null)
 
   // Recap flottant temporaire (LOS/distance/portée) au clic direct sur un token — texte pur, aucune
@@ -49,6 +50,7 @@ export function useCombatUIState() {
   // combatCameraCenter intentionnellement NON reset — caméra reste sur la dernière position
   const handleModeReset = useCallback(() => {
     setCombatMoveMode(null); setCombatTargetMode(null); setPendingMoveSelection(null)
+    setCombatAoeTargetMode(null)
     clearTargetRecap()
   }, [clearTargetRecap])
 
@@ -111,10 +113,56 @@ export function useCombatUIState() {
     combatTargetMode.onTargetSelected(combatTargetMode.pendingTargetId)
   }, [combatTargetMode])
 
+  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — même patron que handleEnterTargetMode
+  // ci-dessus (survol continu → clic fige un candidat → Valider/Changer explicites), pas un
+  // clic-glisser-relâcher (essayé puis abandonné, retour Saar 2026-09-02 : "pas naturel de maintenir
+  // un clic pour sélectionner une cible"). `pendingDirectionDeg` est le pendant continu de
+  // `pendingTargetId` — mis à jour en survol tant qu'aucun clic n'a encore figé de valeur, gelé dès
+  // qu'un clic en pose une (Canvas3D n'écrit alors plus dedans, cf. handlePointerMove). `weaponRange`
+  // (ref_range brut) traverse jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js), en lecture seule.
+  // armSeq : identifiant unique de CET armement (incrémenté à chaque appel), distinct de
+  // pendingDirectionDeg — permet à Canvas3D de détecter un réarmement réel (clic "Viser une zone" ou
+  // "Changer" post-Valider) et de le distinguer d'une simple mise à jour de pendingDirectionDeg sur le
+  // même armement (fige/dégèle). Sert de garde-fou : au réarmement, le raycaster R3F peut encore
+  // pointer vers la dernière position de survol connue AVANT l'ouverture du panneau (le clic sur le
+  // bouton a lieu hors du canvas) — sans ce garde-fou l'aperçu apparaît instantanément figé sur cette
+  // position obsolète au lieu d'attendre un vrai mouvement de souris sur la carte (bug rapporté Saar
+  // 2026-09-02 : "l'AOE est posée dès le clic sur CIBLE").
+  const aoeArmSeqRef = useRef(0)
+  const handleEnterAoeTargetMode = useCallback((tokenId, tokenPos, weaponRange, onDirectionSelected, onCancel) => {
+    const wrappedSelected = (directionDeg) => {
+      onDirectionSelected(directionDeg)
+      setCombatAoeTargetMode(null)
+    }
+    const wrappedCancel = () => {
+      onCancel()
+      setCombatAoeTargetMode(null)
+    }
+    aoeArmSeqRef.current += 1
+    setCombatAoeTargetMode({
+      tokenId, weaponRange, pendingDirectionDeg: null, armSeq: aoeArmSeqRef.current,
+      onDirectionSelected: wrappedSelected,
+      onCancel: wrappedCancel,
+      // deg === null repasse en survol libre (bouton "Changer") — jamais un guard self-cible ici
+      // (contrairement à onPendingTarget) : une direction n'a pas de notion de "viser soi-même" à
+      // exclure au-delà de ce que Canvas3D filtre déjà (atan2(0,0) sur le tireur lui-même).
+      onPendingDirection: (deg) => {
+        setCombatAoeTargetMode(prev => prev ? { ...prev, pendingDirectionDeg: deg } : null)
+      },
+    })
+    setCombatCameraCenter(tokenPos)
+  }, [])
+
+  const handleValidateAoeDirection = useCallback(() => {
+    if (combatAoeTargetMode?.pendingDirectionDeg == null) return
+    combatAoeTargetMode.onDirectionSelected(combatAoeTargetMode.pendingDirectionDeg)
+  }, [combatAoeTargetMode])
+
   return {
     combatMoveMode,
     pendingMoveSelection,
     combatTargetMode,
+    combatAoeTargetMode,
     targetRecap,
     combatCameraCenter,
     handleModeReset,
@@ -123,6 +171,8 @@ export function useCombatUIState() {
     handleCancelPendingMove,
     handleEnterTargetMode,
     handleValidateTarget,
+    handleEnterAoeTargetMode,
+    handleValidateAoeDirection,
     registerAmbientAttackHandler,
     handleAmbientTokenClick,
     ambientAttackArmed,
