@@ -252,19 +252,33 @@ export default function DashboardPage() {
             {campaigns.map(campaign => (
               <div key={campaign.id} className="card campaign-card">
 
-                {/* COVER */}
+                {/* COVER — clic = « Jouer » pour tous les rôles ; le MJ change l'illustration via
+                    le bouton flèche posé en haut à droite (handleCoverClick). */}
                 <div
                   className="campaign-cover"
-                  onClick={campaign.role === 'gm' ? () => handleCoverClick(campaign.id) : undefined}
-                  style={campaign.role === 'gm' ? { cursor: uploadingCoverId === campaign.id ? 'wait' : 'pointer' } : undefined}
-                  title={campaign.role === 'gm'
-                    ? (uploadingCoverId === campaign.id ? t('dashboard.coverUploading') : t('dashboard.coverUpload'))
-                    : undefined}
+                  onClick={() => navigate(`/session/${campaign.id}`)}
+                  title={t('dashboard.play')}
                 >
                   {campaign.cover_url
                     ? <img src={`${import.meta.env.VITE_API_URL}/api/assets/${campaign.cover_url}`} alt={campaign.name} />
                     : <div className="campaign-cover-placeholder" />
                   }
+                  {campaign.role === 'gm' && (
+                    <button
+                      type="button"
+                      className="btn-icon campaign-cover-upload"
+                      disabled={uploadingCoverId === campaign.id}
+                      onClick={(e) => { e.stopPropagation(); handleCoverClick(campaign.id) }}
+                      title={uploadingCoverId === campaign.id ? t('dashboard.coverUploading') : t('dashboard.coverUpload')}
+                      aria-label={uploadingCoverId === campaign.id ? t('dashboard.coverUploading') : t('dashboard.coverUpload')}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 {/* HEADER */}

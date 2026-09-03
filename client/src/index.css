@@ -553,6 +553,25 @@ DASHBOARD EXTENSION
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--bg-elevated);
+  position: relative;
+}
+
+/* Bouton MJ « changer l'illustration » — posé par-dessus la vignette, coin haut-droit.
+   Le clic sur la vignette elle-même lance la session (DashboardPage.jsx). */
+.campaign-cover-upload {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.campaign-cover-upload:disabled {
+  opacity: 0.6;
 }
 
 .campaign-cover img {
@@ -908,7 +927,6 @@ Convention :
   border-color: var(--color-primary);
   color: var(--wiz-white);
 }
-
 /* ── .btn-tool — outil sidebar (icon + label column) ───────────── */
 .btn-tool {
   display: flex;
