@@ -20,6 +20,7 @@ import { applyStunWithDuration } from '../lib/statusService.js'
 import {
   declareColdExposure, clearColdExposure, getColdExposureState, applyColdDamageHits,
 } from '../lib/coldExposureService.js'
+import { getCampaignRoster } from '../lib/campaignRosterService.js'
 
 const router = Router()
 
@@ -723,6 +724,13 @@ router.get('/:id/members', requireAuth, requireRole('gm'), async (req, res) => {
       'campaign_members.character_name'
     )
   res.json({ members })
+})
+
+// GET /api/campaigns/:id/roster — vue MJ de l'onglet Joueurs : membres + leurs personnages
+// (par type, prêt/création-en-cours) + demandes de transfert Coffre. Agrégation : campaignRosterService.
+router.get('/:id/roster', requireAuth, requireRole('gm'), async (req, res) => {
+  const roster = await getCampaignRoster(req.params.id)
+  res.json({ roster })
 })
 
 export default router

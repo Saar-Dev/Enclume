@@ -13,7 +13,7 @@ import db from '../db/knex.js'
 import { AppError } from '../lib/AppError.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
-  listVaultCharacters, requestImport, approveImport, rejectImport, listPendingRequestsForCampaign,
+  listVaultCharacters, requestImport, approveImport, rejectImport,
   getOrCreateVault,
 } from '../services/vaultService.js'
 import { createCompanionSheet } from '../services/charSheetService.js'
@@ -141,14 +141,8 @@ router.post('/characters/:id/request-import', async (req, res, next) => {
 
 // ─── Décisions du MJ de la campagne cible sur une demande — pas de router.param dédié, la
 // vérification MJ + l'existence de la demande sont déjà entièrement faites dans le service. ────
-
-// GET /api/vault/campaigns/:campaignId/transfer-requests — vue MJ (PLAN_VAULT.md Étape 7 Lot 4)
-router.get('/campaigns/:campaignId/transfer-requests', async (req, res, next) => {
-  try {
-    const requests = await listPendingRequestsForCampaign(req.params.campaignId, req.user.id)
-    res.json({ requests })
-  } catch (err) { next(err) }
-})
+// La LISTE des demandes en attente est servie par GET /api/campaigns/:id/roster
+// (campaignRosterService, onglet Joueurs) — plus d'endpoint dédié ici.
 
 // POST /api/vault/transfer-requests/:requestId/approve
 router.post('/transfer-requests/:requestId/approve', async (req, res, next) => {

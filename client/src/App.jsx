@@ -16,7 +16,6 @@ import EquipmentCatalogPage from './pages/EquipmentCatalogPage'
 import MerchantsPage from './pages/MerchantsPage'
 import HealthPage from './pages/HealthPage'
 import WizardCreationPage from './pages/WizardCreationPage'
-import CharacterPoolPage from './pages/CharacterPoolPage'
 import DiceCalibrationPage from './pages/DiceCalibrationPage' // OUTIL DEV — vérification/calibration des dés
 import AdminPage from './pages/AdminPage'
 import AdminUsersPage from './pages/AdminUsersPage'
@@ -145,9 +144,6 @@ export default function App() {
 		    docs/PLAN_WIZARDCOLLAB.md §6.2) */}
 		<Route path="/campaigns/:campaignId/creation/:sheetId" element={
 			<ProtectedRoute><WizardCreationPage /></ProtectedRoute>
-		} />
-		<Route path="/campaigns/:campaignId/pool" element={
-			<ProtectedRoute><CharacterPoolPage /></ProtectedRoute>
 		} />
         {/* Redirect legacy — bookmarks /texture-packs restent fonctionnels */}
         <Route path="/texture-packs" element={<Navigate to="/workshop" replace />} />

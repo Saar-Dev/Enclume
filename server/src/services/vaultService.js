@@ -357,25 +357,6 @@ export async function rejectImport(requestId, gmUserId) {
   })
 }
 
-// ─── Vue MJ (PLAN_VAULT.md Étape 7, Lot 4) ──────────────────────────────────────────────────
-
-// Demandes en attente pour une campagne — réservé au MJ de cette campagne (même vérification
-// que approveImport/rejectImport, mais en lecture seule).
-export async function listPendingRequestsForCampaign(campaignId, gmUserId) {
-  const gmMembership = await db('campaign_members')
-    .where({ campaign_id: campaignId, user_id: gmUserId, role: 'gm' }).first()
-  if (!gmMembership) throw new AppError(403, 'Seul le MJ de cette campagne peut voir ces demandes')
-
-  return db('vault_transfer_requests as vtr')
-    .join('characters as c', 'c.id', 'vtr.vault_character_id')
-    .leftJoin('users as u', 'u.id', 'vtr.requested_by')
-    .where({ 'vtr.target_campaign_id': campaignId, 'vtr.status': 'pending' })
-    .select(
-      'vtr.id',
-      'vtr.created_at',
-      'c.name as character_name',
-      'c.type as character_type',
-      'u.username as requested_by_username',
-    )
-    .orderBy('vtr.created_at', 'asc')
-}
+// La vue MJ des demandes de transfert en attente (ex-listPendingRequestsForCampaign, PLAN_VAULT.md
+// Étape 7 Lot 4) est servie depuis 2026-09 par campaignRosterService.getCampaignRoster
+// (GET /api/campaigns/:id/roster) — regroupées par joueur demandeur dans l'onglet Joueurs.
