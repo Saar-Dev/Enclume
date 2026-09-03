@@ -18,11 +18,12 @@ import {
   advanceTimeline, endTurn, pickNextTimelineStep, forfeitToken,
   triggerActNow, triggerDelayedPass,
   resolveMeleeAction, resolveReloadAction,
-  resolveDroneAssaultAction, resolveAssaultAction, resolveAoeAssaultAction,
+  resolveDroneAssaultAction, resolveAssaultAction,
   resolveExoStandUpAction,
   confirmMeleeDefense, confirmDamage,
   COMBAT_MODE_LABELS,
 } from './socketCombatHelpers.js'
+import { resolveAoeAssaultAction } from './socketCombatAoe.js'
 import { resolveExoAssaultAction, resolveExoMeleeAction } from './socketCombatExo.js'
 
 async function flushEmissions(io, socket, campaignId, emissions, preloadedSockets = null) {
