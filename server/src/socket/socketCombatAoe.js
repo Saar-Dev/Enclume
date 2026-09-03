@@ -96,21 +96,207 @@ export function filterShotgunHitTargets({ visibilityTargets, shooterTokenId, ori
   return hitTargets
 }
 
-// ─── Couche 4 AOE, phase B — fusil à pompe (docs/PLANS/PLAN_AOE.md §8 étapes 8 + 10) ───────────────
+// ─── Helpers du tronc AOE (segment 0d) — génériques à tout mécanisme de zone ───────────────────────
+
+// runAoePhaseA — le jet unique (Phase A) + le contexte de Test du tireur. RAW : un seul Test de tir
+// par action de zone, jamais un jet par cible ; la marge module le dégât, jamais un hit/miss global.
+// Retourne `{ blocked }` (Blessure mortelle) ou `{ rollResult, diceEmission, tireurColor, tireurUsername }`.
+// La catastrophe automatique reste à l'appelant (ordre d'émission identique à l'historique).
+async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
+  const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
+  const ctxTireur = await resolveCombatantTestContext(db, character, skillAssoc?.skill_id ?? '')
+  if (ctxTireur) {
+    const woundsTireur = await db('character_wounds').where({ char_sheet_id: ctxTireur.sheetId })
+    if (isTestBlockingWound(woundsTireur)) {
+      return { blocked: { to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
+      } } }
+    }
+  }
+  const skillTotal = ctxTireur?.skillTotal ?? 0
+  const tailleModComp = TAILLE_MODS[confirmedModifiers?.taille]?.mod ?? 0
+  const situationMods = confirmedModifiers?.situation ?? []
+  const rollResult = await resolveAoeAttackRoll({
+    skillTotal, skillMastery: ctxTireur?.mastery ?? 0,
+    contributions: [
+      { label: 'Malus santé / encombrement', value: ctxTireur?.effectiveMalus ?? 0, type: 'malus' },
+      ...situationMods.reduce((acc, k) => {
+        const v = RANGED_SITUATION_MODS[k]?.mod
+        if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
+        return acc
+      }, []),
+      ...(tailleModComp !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' }] : []),
+    ],
+  })
+  const userRow = character.user_id ? await db('users').where({ id: character.user_id }).select('color', 'username').first() : null
+  const tireurColor = userRow?.color ?? '#c86030'
+  const tireurUsername = userRow?.username ?? character.name ?? 'Inconnu'
+  const diceEmission = { to: 'room', event: WS.DICE_RESULT, data: {
+    userId: character.user_id ?? null, username: tireurUsername, color: tireurColor,
+    formula: '1d20', rolls: rollResult.attackRolls, total: rollResult.rollAttaque,
+    isCriticalSuccess: rollResult.isCriticalSuccess, isCriticalFail: rollResult.isCriticalFail,
+    catastropheRisk: rollResult.catastropheRisk,
+    seed: rollResult.attackSeed, timestamp: new Date().toISOString(),
+    skillLabel: `${weapon.display_name ?? weapon.ref_name ?? 'Arme de zone'} — Tir en zone`,
+    mechanicalTotal: skillTotal,
+    diffLabel: rollResult.seuil - skillTotal >= 0 ? `+${rollResult.seuil - skillTotal}` : `${rollResult.seuil - skillTotal}`,
+    chancesDeReussite: rollResult.seuil, isSuccess: rollResult.isSuccess, mr: rollResult.mr,
+    breakdown: rollResult.breakdown,
+  } }
+  return { rollResult, diceEmission, tireurColor, tireurUsername }
+}
+
+// Décompte munitions — une seule cartouche pour toute la gerbe (RAW), pas par cible.
+async function decrementAoeAmmo(campaignId, { character, weapon, action }) {
+  const settings = await getCampaignSettings(db, campaignId)
+  const skipDecrement = character.type === 'pnj' && settings.pnj_unlimited_ammo
+  if (!skipDecrement && weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
+    const newRemaining = Math.max(0, weapon.ammo_remaining - (action.bullet_count ?? 1))
+    await db('char_inventory').where({ id: action.weapon_inv_id }).update({ ammo_remaining: newRemaining })
+  }
+}
+
+// Persistance (§3) — une ligne par cible touchée, écrite à la RÉSOLUTION. `modifierFn(ht)` fournit
+// `damage_modifier` (fusil à pompe : `{ band, damageDice }`) ou null (mécanisme sans dispersion).
+async function insertAoeTargetRows({ actionId, hitTargets, modifierFn }) {
+  const rows = await db('combat_action_targets').insert(hitTargets.map(ht => {
+    const mod = modifierFn?.(ht) ?? null
+    return {
+      action_id: actionId,
+      target_token_id: ht.tokenId,
+      distance_m: ht.distanceToOriginM,
+      has_line_of_sight: true,
+      damage_modifier: mod == null ? null : JSON.stringify(mod),
+    }
+  })).returning(['id', 'target_token_id'])
+  return new Map(rows.map(r => [r.target_token_id, r.id]))
+}
+
+// Roule un dé signé de type "+1D10" / "-2D10" / "+0" → entier signé (0 pour "+0"/absent).
+async function rollSignedDie(diceStr) {
+  if (!diceStr || diceStr === '+0') return 0
+  const sign = diceStr.startsWith('-') ? -1 : 1
+  const rolled = await parseDice(diceStr.replace(/^[+-]/, ''))
+  return sign * rolled.total
+}
+
+// resolveAoeTargetDamage — applique le dégât d'UNE cible touchée par une zone (dispatch drone/exo/
+// humanoïde). AUCUNE émission COMBAT_ATTACK_RESULT ici (finalizeAoeResults les émet depuis `results`) ;
+// les side-effects des services de dégât (EXO_AVARIE_UPDATED, WOUND_ADDED, Test de Choc, étourdissement)
+// restent. Renvoie null si la cible n'a pas de fiche exploitable — jamais un throw.
+// `locationsCount` : 1 pour le fusil à pompe, 1D3 pour le lance-flammes (humanoïde uniquement — un
+// drone/une exo prend le dégât une seule fois). `armorReductionFactor` : 1 (défaut), 0.5 lance-flammes.
+async function resolveAoeTargetDamage(io, campaignId, {
+  hitTarget, degautsBruts, effectiveDamage, locationsCount = 1, armorReductionFactor = 1, shooter,
+}) {
+  const tokenId = hitTarget.tokenId
+  const cibleToken = await db('tokens').where({ id: tokenId }).first()
+  let cibleCharacter = null, char_sheet_id_cible = null
+  let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
+  if (cibleToken?.character_id) {
+    cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
+    if (cibleCharacter) {
+      const sheetCible = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
+      if (sheetCible) {
+        char_sheet_id_cible = sheetCible.id
+        const naCible = await damageService.fetchCibleNA(db, cibleCharacter.id, sheetCible.id)
+        for_na_cible = naCible.for_na; con_na_cible = naCible.con_na; vol_na_cible = naCible.vol_na
+      }
+    }
+  }
+  const name = cibleCharacter?.name ?? cibleToken?.label ?? 'Cible'
+  const cibleType = cibleCharacter?.type ?? null
+  const band = hitTarget.band ?? null
+
+  if (cibleType === 'drone') {
+    const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
+    if (!droneSheet) return null
+    const { degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
+    await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, tokenId, droneSheet, degatsNets)
+    return { tokenId, cibleType, name, band, results: [
+      { localisation: null, degautsBruts, degatsNets, severity: null, is_lethal: false, shockResult: null },
+    ] }
+  }
+
+  if (cibleType === 'exo') {
+    const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleCharacter.id, degautsBruts })
+    if (!exoResult) return null
+    return { tokenId, cibleType, name, band, results: [
+      { localisation: null, degautsBruts, degatsNets: exoResult.degatsNets, severity: exoResult.severity, is_lethal: false, shockResult: null },
+    ] }
+  }
+
+  // Humanoïde / décor — `locationsCount` Localisations, chacune un resolveTargetHit indépendant
+  // (localisation, armure, Blessure, Test de Choc propres) — même patron que resolveEnvironmentalHazardTicks.
+  const results = []
+  for (let i = 0; i < Math.max(1, locationsCount); i += 1) {
+    const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
+      degautsBruts, characterIdCible: cibleToken?.character_id ?? null,
+      cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
+      chocDsl: effectiveDamage ? effectiveDamage.choc : null,
+      ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
+      armorReductionFactor,
+    })
+    if (!hitResult) continue
+    const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+    if (shockResult) statusService.emitShockDiceResult(io, campaignId, shockResult, shooter.userId, shooter.tireurUsername, shooter.tireurColor)
+    if (shockResult?.outcome && shockResult.outcome !== 'ok') {
+      statusService.applyStun(io, db, campaignId, {
+        targetTokenId: tokenId, outcome: shockResult.outcome,
+        userId: shooter.userId, username: shooter.tireurUsername, color: shooter.tireurColor,
+      }).catch(err => console.error('[WS] applyStun error:', err.message))
+    }
+    results.push({ localisation, degautsBruts, degatsNets, severity: finalSeverity, is_lethal, shockResult })
+  }
+  if (results.length === 0) return null
+  return { tokenId, cibleType, name, band, results }
+}
+
+// finalizeAoeResults — écrit `combat_action_targets.outcome` (JSON du tableau `results`), émet UN
+// COMBAT_ATTACK_RESULT par entrée `results` (MJ/spectateurs), et — pour un tireur PJ — UN
+// COMBAT_ATTACK_PLAYER_RESULT agrégé (fenêtre-reçu non bloquante, §5.1). Renvoie les émissions.
+async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult, action }) {
+  const emissions = []
+  for (const ptr of perTargetResults) {
+    const rowId = targetRowIdByTokenId.get(ptr.tokenId)
+    if (rowId) {
+      await db('combat_action_targets').where({ id: rowId, outcome: null })
+        .update({ outcome: JSON.stringify(ptr.results) })
+    }
+    for (const r of ptr.results) {
+      emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
+        tireurId: action.token_id, cibleId: ptr.tokenId,
+        localisation: r.localisation, degautsBruts: r.degautsBruts, degatsNets: r.degatsNets,
+        severity: r.severity, is_lethal: r.is_lethal, isSuccess: true, isPnj: isPnjResult,
+        roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult: r.shockResult,
+      } })
+    }
+  }
+  if (!isPnjResult) {
+    emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
+      hit: perTargetResults.length > 0,
+      roll: rollResult.rollAttaque,
+      seuil: rollResult.seuil,
+      tireurTokenId: action.token_id,
+      cibleTokenId: null,
+      targets: perTargetResults.map(p => ({ name: p.name, band: p.band, results: p.results })),
+    } })
+  }
+  return emissions
+}
+
+// ─── Couche 4 AOE, phase B — orchestration (docs/PLANS/PLAN_AOE.md §8 + PLAN_ARMES_SPECIALES.md §1.4) ─
 //
-// resolveAoeAssaultAction — résolution immédiate pour TOUT type de tireur (PNJ, PJ, exo, drone).
-// Le pipeline différé armAwaitingDamage/confirmDamage a été envisagé pour le tireur PJ puis écarté
-// (PLAN_AOE.md §5.1 révisé 2026-09-03) : ce pipeline et le hook client supposent UNE cible en attente,
-// N pending d'un seul appel corrompent la fenêtre côté client. Pour une arme de zone, le seul jet
-// joueur qui compte est le Test de tir (Phase A, « Lancer » de CombatModifiersWindow) — les dégâts
-// d'une gerbe (dés d'arme + MR + dé de dispersion par palier × N cibles) n'ont pas de « lancer unique »
-// à animer. Différence PJ vs PNJ (`isPnjResult`) : le PJ reçoit UN COMBAT_ATTACK_PLAYER_RESULT agrégé
-// (fenêtre-reçu non bloquante, `suspend:false`) au lieu d'un COMBAT_ATTACK_RESULT par cible destiné au MJ.
+// resolveAoeAssaultAction — tronc mince : gates → géométrie/LOS → `filterShotgunHitTargets` → Phase A
+// (`runAoePhaseA`) → munitions → bloc mécanisme `shotgun_spread` (persistance + dégât brut par cible)
+// → générique (`resolveAoeTargetDamage` × cibles + `finalizeAoeResults`). Résolution IMMÉDIATE pour
+// tout type de tireur (le différé armAwaitingDamage/confirmDamage a été envisagé pour le PJ puis
+// écarté — PLAN_AOE.md §5.1 : il suppose UNE cible en attente, N pending d'un seul appel corrompent
+// la fenêtre client). Différence PJ vs PNJ (`isPnjResult`) : le PJ reçoit UN COMBAT_ATTACK_PLAYER_RESULT
+// agrégé (fenêtre-reçu non bloquante) au lieu d'un COMBAT_ATTACK_RESULT par entrée `results`.
 //
-// Identification de l'arme par NOM ("Klauss"), pas par catégorie — "Arme d'épaule" est partagée par
-// tous les fusils du catalogue (fusils de précision inclus, vérifié 303_ref_equipment_seed.js),
-// jamais un identifiant fiable de fusil à pompe (PLAN_AOE.md §6.2bis/§12). Même patron déjà retenu
-// pour le lance-flammes (shared/combatExclusiveActions.js) — seule arme confirmée par Saar (2026-08-27).
+// Identification de l'arme par `aoe_profile.mechanic` (donnée catalogue, `shared/combatAoe.js`,
+// segment 0b) — plus par nom en dur. Le lance-flammes ajoutera son bloc mécanisme frère (segment 1).
 //
 // RAW relu intégralement avant ce code (docs/REGLES/REGLES_ARMES_SPECIALES.md:18-52) — 3 points
 // corrigent une hypothèse antérieure du plan :
@@ -227,66 +413,15 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     })
 
     // ── Jet de tir unique (Phase A) — jamais de branche "raté" ici, voir commentaire de tête.
-    const skillAssoc = await db('ref_equipment_skill_assoc').where({ item_id: weapon.equipment_id }).first()
-    const ctxTireur = await resolveCombatantTestContext(db, character, skillAssoc?.skill_id ?? '')
-    if (ctxTireur) {
-      const woundsTireur = await db('character_wounds').where({ char_sheet_id: ctxTireur.sheetId })
-      if (isTestBlockingWound(woundsTireur)) {
-        emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
-          username: character.name, message: 'Blessure mortelle — aucune action de Test possible',
-        } })
-        return { suspend: false, emissions }
-      }
-    }
-    const skillTotal = ctxTireur?.skillTotal ?? 0
-    const skillMastery = ctxTireur?.mastery ?? 0
-    const effectiveMalus = ctxTireur?.effectiveMalus ?? 0
-    const tailleModComp = TAILLE_MODS[confirmedModifiers?.taille]?.mod ?? 0
-    const situationMods = confirmedModifiers?.situation ?? []
-
-    const rollResult = await resolveAoeAttackRoll({
-      skillTotal, skillMastery,
-      contributions: [
-        { label: 'Malus santé / encombrement', value: effectiveMalus, type: 'malus' },
-        ...situationMods.reduce((acc, k) => {
-          const v = RANGED_SITUATION_MODS[k]?.mod
-          if (v !== undefined && v !== 0) acc.push({ label: SITUATION_LABELS[k] ?? k, value: v, type: v > 0 ? 'bonus' : 'malus' })
-          return acc
-        }, []),
-        ...(tailleModComp !== 0 ? [{ label: TAILLE_LABELS[confirmedModifiers.taille] ?? confirmedModifiers.taille, value: tailleModComp, type: tailleModComp > 0 ? 'bonus' : 'malus' }] : []),
-      ],
-    })
-
-    const userRow = character.user_id ? await db('users').where({ id: character.user_id }).select('color', 'username').first() : null
-    const tireurColor = userRow?.color ?? '#c86030'
-    const tireurUsername = userRow?.username ?? character.name ?? 'Inconnu'
-    const now = new Date().toISOString()
-
-    emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
-      userId: character.user_id ?? null, username: tireurUsername, color: tireurColor,
-      formula: '1d20', rolls: rollResult.attackRolls, total: rollResult.rollAttaque,
-      isCriticalSuccess: rollResult.isCriticalSuccess, isCriticalFail: rollResult.isCriticalFail,
-      catastropheRisk: rollResult.catastropheRisk,
-      seed: rollResult.attackSeed, timestamp: now,
-      skillLabel: `${weapon.display_name ?? weapon.ref_name ?? 'Fusil à pompe'} — Tir en zone`,
-      mechanicalTotal: skillTotal,
-      diffLabel: rollResult.seuil - skillTotal >= 0 ? `+${rollResult.seuil - skillTotal}` : `${rollResult.seuil - skillTotal}`,
-      chancesDeReussite: rollResult.seuil, isSuccess: rollResult.isSuccess, mr: rollResult.mr,
-      breakdown: rollResult.breakdown,
-    } })
+    const phaseA = await runAoePhaseA({ character, weapon, confirmedModifiers })
+    if (phaseA.blocked) { emissions.push(phaseA.blocked); return { suspend: false, emissions } }
+    const { rollResult, diceEmission, tireurColor, tireurUsername } = phaseA
+    emissions.push(diceEmission)
     await maybeTriggerCatastrophe(io, campaignId, action.token_id, rollResult.catastropheRisk, {
       site: 'assault_aoe', actorTokenId: action.token_id, targetTokenId: null,
     })
 
-    // Munitions — une seule cartouche pour toute la gerbe (RAW), pas un décompte par cible touchée.
-    {
-      const settings = await getCampaignSettings(db, campaignId)
-      const skipDecrement = character.type === 'pnj' && settings.pnj_unlimited_ammo
-      if (!skipDecrement && weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
-        const newRemaining = Math.max(0, weapon.ammo_remaining - (action.bullet_count ?? 1))
-        await db('char_inventory').where({ id: action.weapon_inv_id }).update({ ammo_remaining: newRemaining })
-      }
-    }
+    await decrementAoeAmmo(campaignId, { character, weapon, action })
 
     if (hitTargets.length === 0) {
       if (isPnjResult) {
@@ -306,128 +441,37 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
 
-    // Persistance (§3) — une ligne par cible réellement touchée, écrite à la RÉSOLUTION (jamais figée à
-    // l'ANNONCE). damage_modifier = le modificateur RÉELLEMENT appliqué (dé signé + palier), pas un
-    // index opaque — relisible même si la table RAW change plus tard.
-    const targetRows = await db('combat_action_targets').insert(hitTargets.map(t => ({
-      action_id: action.id,
-      target_token_id: t.tokenId,
-      distance_m: t.distanceToOriginM,
-      has_line_of_sight: true,
-      damage_modifier: JSON.stringify({ band: t.band, damageDice: t.spread.damageDice }),
-    }))).returning(['id', 'target_token_id'])
-    const targetRowIdByTokenId = new Map(targetRows.map(r => [r.target_token_id, r.id]))
+    // ── Mécanisme `shotgun_spread` : persistance + dégât brut par cible (dé de dispersion du palier RAW).
+    const targetRowIdByTokenId = await insertAoeTargetRows({
+      actionId: action.id, hitTargets,
+      modifierFn: (ht) => ({ band: ht.band, damageDice: ht.spread.damageDice }),
+    })
 
-    // Tireur PJ : accumulé pour le COMBAT_ATTACK_PLAYER_RESULT agrégé émis après la boucle (§5.1).
-    const playerTargetResults = []
-
-    for (const t of hitTargets) {
-      const cibleToken = await db('tokens').where({ id: t.tokenId }).first()
-      let cibleCharacter = null, char_sheet_id_cible = null
-      let for_na_cible = 8, con_na_cible = 8, vol_na_cible = 8
-      if (cibleToken?.character_id) {
-        cibleCharacter = await db('characters').where({ id: cibleToken.character_id }).first()
-        if (cibleCharacter) {
-          const sheetCible = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
-          if (sheetCible) {
-            char_sheet_id_cible = sheetCible.id
-            const naCible = await damageService.fetchCibleNA(db, cibleCharacter.id, sheetCible.id)
-            for_na_cible = naCible.for_na; con_na_cible = naCible.con_na; vol_na_cible = naCible.vol_na
-          }
-        }
-      }
-
-      // Dégâts — formule ammo-aware (comme resolveAssaultAction) + modificateur de dispersion du
-      // palier RAW propre à CETTE cible (dé signé, pas une simple valeur — §4).
-      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: t.band })
+    const perTargetInputs = []
+    for (const ht of hitTargets) {
+      // Formule ammo-aware (comme resolveAssaultAction) + dé de dispersion signé du palier RAW propre
+      // à CETTE cible (§4). `portee: ht.band` ne fait que gater fire_mode_bonus_dmg au contact.
+      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band })
       const baseRaw = effectiveDamage
         ? effectiveDamage.total
         : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
-      let spreadRaw = 0
-      if (t.spread.damageDice && t.spread.damageDice !== '+0') {
-        const sign = t.spread.damageDice.startsWith('-') ? -1 : 1
-        const rolled = await parseDice(t.spread.damageDice.replace(/^[+-]/, ''))
-        spreadRaw = sign * rolled.total
-      }
-      const rawDice = baseRaw + spreadRaw
-      const degautsBruts = computeAssaultRawDamage({ rawDice, mr: rollResult.mr, portee: t.band, fireModeBonusDmg: action.fire_mode_bonus_dmg })
-
-      const targetRowId = targetRowIdByTokenId.get(t.tokenId)
-      let outcome = null
-      if (cibleCharacter?.type === 'drone') {
-        const droneSheet = await db('drone_sheet').where({ character_id: cibleCharacter.id }).first()
-        if (droneSheet) {
-          const { etqDrone, rdDrone, degatsNets } = calcDroneDegatsNets(droneSheet, degautsBruts)
-          await resolveDroneIntegrityLoss(io, campaignId, cibleCharacter.id, t.tokenId, droneSheet, degatsNets)
-          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-            tireurId: action.token_id, cibleId: t.tokenId, localisation: null, degautsBruts, degatsNets,
-            severity: null, is_lethal: false, isSuccess: true, isPnj: isPnjResult,
-            roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult: null,
-          } })
-          outcome = { degautsBruts, degatsNets }
-        }
-      } else if (cibleCharacter?.type === 'exo') {
-        const exoResult = await exoAvarieService.resolveExoDamage(io, db, campaignId, { characterId: cibleCharacter.id, degautsBruts })
-        if (exoResult) {
-          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-            tireurId: action.token_id, cibleId: t.tokenId, localisation: null, degautsBruts, degatsNets: exoResult.degatsNets,
-            severity: exoResult.severity, is_lethal: false, isSuccess: true, isPnj: isPnjResult,
-            roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult: null,
-          } })
-          outcome = { degautsBruts, degatsNets: exoResult.degatsNets, severity: exoResult.severity }
-        }
-      } else {
-        const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
-          degautsBruts, characterIdCible: cibleToken?.character_id ?? null,
-          cibleType: cibleCharacter?.type ?? null, char_sheet_id_cible,
-          for_na_cible, con_na_cible, vol_na_cible,
-          chocDsl: effectiveDamage ? effectiveDamage.choc : null,
-          ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
-        })
-        if (hitResult) {
-          const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
-          if (shockResult) statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
-          emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-            tireurId: action.token_id, cibleId: t.tokenId, localisation, degautsBruts, degatsNets,
-            severity: finalSeverity, is_lethal, isSuccess: true, isPnj: isPnjResult,
-            roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil, shockResult,
-          } })
-          if (shockResult?.outcome && shockResult.outcome !== 'ok') {
-            statusService.applyStun(io, db, campaignId, {
-              targetTokenId: t.tokenId, outcome: shockResult.outcome,
-              userId: character.user_id, username: tireurUsername, color: tireurColor,
-            }).catch(err => console.error('[WS] applyStun error:', err.message))
-          }
-          outcome = { degautsBruts, degatsNets, localisation, severity: finalSeverity }
-        }
-      }
-      if (targetRowId && outcome) {
-        await db('combat_action_targets').where({ id: targetRowId, outcome: null }).update({ outcome: JSON.stringify(outcome) })
-      }
-      if (outcome && !isPnjResult) {
-        playerTargetResults.push({
-          name: cibleCharacter?.name ?? cibleToken?.label ?? 'Cible',
-          band: t.band,
-          localisation: outcome.localisation ?? null,
-          degautsBruts: outcome.degautsBruts,
-          degatsNets: outcome.degatsNets,
-          severity: outcome.severity ?? null,
-        })
-      }
+      const spreadRaw = await rollSignedDie(ht.spread.damageDice)
+      const degautsBruts = computeAssaultRawDamage({
+        rawDice: baseRaw + spreadRaw, mr: rollResult.mr, portee: ht.band, fireModeBonusDmg: action.fire_mode_bonus_dmg,
+      })
+      perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, locationsCount: 1, armorReductionFactor: 1 })
     }
 
-    if (!isPnjResult) {
-      // Fenêtre-reçu du tireur PJ (non bloquant — tout est déjà résolu serveur, §5.1). CombatModifiersWindow
-      // affiche la liste par cible + bouton « Fermer ». Émis to:'socket' (le PJ qui a cliqué « Lancer »).
-      emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
-        hit: playerTargetResults.length > 0,
-        roll: rollResult.rollAttaque,
-        seuil: rollResult.seuil,
-        tireurTokenId: action.token_id,
-        cibleTokenId: null,
-        targets: playerTargetResults,
-      } })
+    // ── Générique : application par cible + finalisation (outcome + émissions + agrégat PJ).
+    const shooter = { userId: character.user_id, tireurUsername, tireurColor }
+    const perTargetResults = []
+    for (const inp of perTargetInputs) {
+      const ptr = await resolveAoeTargetDamage(io, campaignId, { ...inp, shooter })
+      if (ptr) perTargetResults.push(ptr)
     }
+    emissions.push(...await finalizeAoeResults({
+      perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult, action,
+    }))
 
     return { suspend: false, emissions }
   } catch (err) {

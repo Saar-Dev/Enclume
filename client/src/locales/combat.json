@@ -577,7 +577,8 @@
     "aoeResult": {
       "title_one": "{{count}} cible touchée",
       "title_other": "{{count}} cibles touchées",
-      "net": "nets"
+      "net": "nets",
+      "noLoc": "Impact"
     },
     "fireModeLabel": "Mode de tir",
     "stateLabel": "État",

@@ -299,27 +299,33 @@ export default function CombatModifiersWindow({ socket, assaultAction, activeRos
         </div>
       )}
 
-      {/* Zone d'effet — liste par cible (PLAN_AOE.md §8 étape 10). Réutilise les tables LOC/SEVERITY
-          de CombatResultPanels (Règle 2). Résolution déjà faite serveur : c'est un reçu, pas une action. */}
+      {/* Zone d'effet — liste par cible, chaque cible pouvant avoir 1..N Localisations touchées
+          (fusil à pompe : 1 ; lance-flammes : 1D3 — segment 0d). Réutilise LOC/SEVERITY
+          (shared/combatResultLabels.js, Règle 2). Résolution déjà faite serveur : c'est un reçu. */}
       {attackResult?.targets?.length > 0 && (
         <div style={styles.aoeList}>
           <div style={styles.aoeListTitle}>
             {t('modifiers.aoeResult.title', { count: attackResult.targets.length })}
           </div>
-          {attackResult.targets.map((tg, i) => {
-            const sev = tg.severity ? SEVERITY[tg.severity] : null
-            const locKey = tg.localisation ? LOC[tg.localisation] : null
-            return (
-              <div key={i} style={styles.aoeRow}>
+          {attackResult.targets.map((tg, i) => (
+            <div key={i} style={styles.aoeTarget}>
+              <div style={styles.aoeTargetHead}>
                 <span style={styles.aoeName}>{tg.name}</span>
-                <span style={styles.aoeMeta}>
-                  {t(`modifiers.portees.${tg.band}`)}{locKey ? ` · ${t(locKey)}` : ''}
-                </span>
-                <span style={styles.aoeDmg}>{tg.degatsNets} {t('modifiers.aoeResult.net')}</span>
-                {sev && <span style={{ ...styles.aoeSev, color: sev.col }}>{t(sev.label)}</span>}
+                {tg.band && <span style={styles.aoeMeta}>{t(`modifiers.portees.${tg.band}`)}</span>}
               </div>
-            )
-          })}
+              {(tg.results ?? []).map((r, j) => {
+                const sev = r.severity ? SEVERITY[r.severity] : null
+                const locKey = r.localisation ? LOC[r.localisation] : null
+                return (
+                  <div key={j} style={styles.aoeRow}>
+                    <span style={styles.aoeMeta}>{locKey ? t(locKey) : t('modifiers.aoeResult.noLoc')}</span>
+                    <span style={styles.aoeDmg}>{r.degatsNets} {t('modifiers.aoeResult.net')}</span>
+                    {sev && <span style={{ ...styles.aoeSev, color: sev.col }}>{t(sev.label)}</span>}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -530,15 +536,17 @@ const styles = {
   },
   attackBannerResult: { fontSize: 14, fontWeight: 700 },
   attackBannerDetail: { fontSize: 11, opacity: 0.75 },
-  aoeList: { margin: '0 14px 8px', display: 'flex', flexDirection: 'column', gap: 3 },
+  aoeList: { margin: '0 14px 8px', display: 'flex', flexDirection: 'column', gap: 5 },
   aoeListTitle: {
     fontSize: 10, fontWeight: 700, color: '#5b5b7a',
     textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2,
   },
-  aoeRow: {
-    display: 'flex', alignItems: 'baseline', gap: 6, padding: '3px 6px',
-    background: '#0e0e1e', border: '1px solid #2a2a3e', borderRadius: 4, fontSize: 11,
+  aoeTarget: {
+    background: '#0e0e1e', border: '1px solid #2a2a3e', borderRadius: 4,
+    padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: 2,
   },
+  aoeTargetHead: { display: 'flex', alignItems: 'baseline', gap: 6 },
+  aoeRow: { display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11, paddingLeft: 8 },
   aoeName: { color: '#c0c0d0', fontWeight: 600, flexShrink: 0 },
   aoeMeta: { color: '#5b5b7a', fontSize: 10, flex: 1, minWidth: 0 },
   aoeDmg: { color: '#e0e0e0', fontWeight: 700, fontVariantNumeric: 'tabular-nums', flexShrink: 0 },
