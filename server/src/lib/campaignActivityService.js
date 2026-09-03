@@ -108,11 +108,15 @@ export async function getCampaignActivity(campaignId) {
     if (!byUser[r.user_id]) byUser[r.user_id] = { session: [], wizard: [], lastConnectedAt: null, online: false }
     const u = byUser[r.user_id]
     const start = toMs(r.started_at)
-    const end = r.ended_at != null ? toMs(r.ended_at) : toMs(r.last_seen_at)
+    // Ligne ouverte encore vivante (last_seen_at récent : le heartbeat n'a que 5 min de granularité)
+    // → fin = maintenant, la durée d'une session en cours monte en temps réel. Ligne ouverte
+    // périmée (crash serveur) → fin = last_seen_at, on ne compte pas le temps mort.
+    const isLive = r.ended_at == null && (now - toMs(r.last_seen_at)) < ONLINE_STALE_MS
+    const end = r.ended_at != null ? toMs(r.ended_at) : (isLive ? now : toMs(r.last_seen_at))
     if (r.context === 'wizard') u.wizard.push({ start, end })
     else u.session.push({ start, end })
     if (u.lastConnectedAt == null || start > u.lastConnectedAt) u.lastConnectedAt = start
-    if (r.ended_at == null && now - toMs(r.last_seen_at) < ONLINE_STALE_MS) u.online = true
+    if (isLive) u.online = true
   }
 
   const presenceByUser = {}

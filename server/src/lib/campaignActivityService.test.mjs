@@ -78,6 +78,26 @@ test('présence : deux visites distinctes quand le gap dépasse 10 min ; online 
   }
 })
 
+test('présence : une session en cours (ligne ouverte, last_seen_at récent) compte jusqu\'à maintenant', { skip }, async () => {
+  const gm = await mkUser('gm')
+  const dan = await mkUser('dan')
+  const campaign = await mkCampaign(gm.id)
+  try {
+    // Ouverte depuis 20 min, dernier heartbeat il y a 2 min (< 11 min → vivante).
+    await db('campaign_presence_sessions').insert({
+      campaign_id: campaign.id, user_id: dan.id, context: 'session',
+      started_at: ago(min(20)), last_seen_at: ago(min(2)), ended_at: null,
+    })
+    const { presenceByUser } = await getCampaignActivity(campaign.id)
+    const d = presenceByUser[dan.id]
+    // Doit approcher 20 min (fin = maintenant), pas 18 min (fin = last_seen_at).
+    assert.ok(d.sessionSeconds >= min(19) / 1000, `attendu >= 19 min, obtenu ${Math.round(d.sessionSeconds / 60)} min`)
+    assert.equal(d.online, true)
+  } finally {
+    await cleanup({ campaign, users: [gm, dan] })
+  }
+})
+
 test('sweepStalePresence : ferme les lignes ouvertes à ended_at = last_seen_at', { skip }, async () => {
   const gm = await mkUser('gm')
   const carol = await mkUser('carol')
