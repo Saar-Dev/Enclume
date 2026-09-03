@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   parseWeaponRangeBands, resolveWeaponRangeBand, resolveMeleeReachM,
-  resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND, isShotgunSpreadWeapon,
+  resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND,
 } from './combatRange.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js,
@@ -67,11 +67,5 @@ test('SHOTGUN_SPREAD_BY_BAND — une entrée par palier RAW, aucun trou', () => 
   }
 })
 
-// ─── isShotgunSpreadWeapon — autorité unique du nom, partagée serveur/déclaration (PLAN_AOE.md §8 étape 9) ─
-
-test('isShotgunSpreadWeapon : Klauss éligible, toute autre arme ou valeur absente ne l\'est pas', () => {
-  assert.equal(isShotgunSpreadWeapon('Klauss'), true)
-  assert.equal(isShotgunSpreadWeapon('Fusil de précision'), false)
-  assert.equal(isShotgunSpreadWeapon(null), false)
-  assert.equal(isShotgunSpreadWeapon(undefined), false)
-})
+// isShotgunSpreadWeapon retiré (segment 0b) — l'identification AOE est dans shared/combatAoe.js
+// (donnée `ref_equipment.aoe_profile`), testée dans shared/combatAoe.test.mjs.

@@ -276,12 +276,14 @@ router.get('/:id/combat-equipment', requireAuth, async (req, res) => {
         .select(
           'char_inventory.id as inv_id', 'ref_equipment.name', 'ref_equipment.name_i18n', 'cis.slot_code as slot', 'ref_equipment.fire_mode as ref_fire_mode',
           // ref_name/ref_range — même alias que inventoryService.js (fenêtre PJ), manquant ici jusqu'à
-          // PLAN_AOE.md §8 étape 9 : shared/combatRange.js#isShotgunSpreadWeapon(weapon.ref_name) et
-          // l'aperçu client (aoePreviewShape.js, weapon.ref_range) lisaient un champ qui n'existait tout
-          // simplement pas côté MJ/PNJ (seul `name`, sans alias, était sélectionné) — "Viser une zone"
-          // n'apparaissait donc jamais pour un PNJ, quelle que soit l'arme équipée (bug confirmé en
-          // session réelle, root cause : donnée manquante à la source, pas une logique cassée).
+          // PLAN_AOE.md §8 étape 9 : l'aperçu client (aoePreviewShape.js, weapon.ref_range) lisait un
+          // champ qui n'existait tout simplement pas côté MJ/PNJ (seul `name`, sans alias, était
+          // sélectionné) — "Viser une zone" n'apparaissait donc jamais pour un PNJ, quelle que soit
+          // l'arme équipée (bug confirmé en session réelle, root cause : donnée manquante à la source).
           'ref_equipment.name as ref_name', 'ref_equipment.range as ref_range',
+          // Profil de zone d'effet (segment 0b, shared/combatAoe.js) — éligibilité « Viser une zone »
+          // côté fenêtre MJ/PNJ (isAoeWeapon(weapon.ref_aoe_profile)). null = arme non-AOE.
+          'ref_equipment.aoe_profile as ref_aoe_profile',
           // shared/weaponSlots.js resolveHandWeapons() a besoin de damage_h/shock pour distinguer une
           // arme (contact ou Choc pur, ex. Dague neurale) d'un objet non-arme occupant la main
           // (Bouclier) — Session 158, shock ajouté pour CHOC1 (Dague neurale jamais détectée sinon).

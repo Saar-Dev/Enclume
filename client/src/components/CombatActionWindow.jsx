@@ -16,7 +16,8 @@ import {
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
 import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
-import { resolveMeleeReachM, resolveWeaponRangeBand, isShotgunSpreadWeapon } from '../../../shared/combatRange.js'
+import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { isAoeWeapon } from '../../../shared/combatAoe.js'
 import { isTestBlockingWound, SEVERITY_COLORS } from '../../../shared/woundConstants.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
 import { useDroneDeclare } from '../lib/useDroneDeclare.js'
@@ -436,11 +437,10 @@ export default function CombatActionWindow({
   // Lunette de visée (docs/PLAN_MODING_PHASEB.md Groupe 2) — preview client uniquement, le serveur
   // re-dérive sa propre valeur depuis weaponInvId à la déclaration (jamais confiance au client).
   const lunetteNiveau = selectedWeapon?.lunette_niveau ?? 0
-  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — même autorité que la résolution serveur et
-  // la fenêtre MJ (shared/combatRange.js#isShotgunSpreadWeapon), sur l'item brut (ref_name), pas un nom
-  // d'affichage. Rejet PJ déjà géré côté serveur (message clair, résolution pas encore implémentée) —
-  // aucun garde-fou d'éligibilité supplémentaire à dupliquer ici.
-  const isAoeEligible = isShotgunSpreadWeapon(selectedWeapon?.ref_name)
+  // Zone d'effet (PLAN_ARMES_SPECIALES.md §1.6 segment 0b) — l'AOE-ness est une donnée catalogue
+  // (ref_equipment.aoe_profile), même autorité client (`shared/combatAoe.js`) que la résolution
+  // serveur et la fenêtre MJ. Plus de nom d'arme en dur.
+  const isAoeEligible = isAoeWeapon(selectedWeapon?.ref_aoe_profile)
 
   // Modes disponibles pour le CombatDeclareStateSelector fire_mode
   const availableFireModes = forceCC

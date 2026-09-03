@@ -85,14 +85,8 @@ export function resolveShotgunSpread(distanceM, referenceRange) {
   return Object.freeze({ ...range, spread: SHOTGUN_SPREAD_BY_BAND[range.band] })
 }
 
-// Armes utilisant le mécanisme de dispersion ci-dessus (resolveShotgunSpread/SHOTGUN_SPREAD_BY_BAND) —
-// autorité unique du nom, consommée par la résolution serveur (socketCombatHelpers.js) ET les fenêtres
-// de déclaration (éligibilité UI « Zone d'effet », PLAN_AOE.md §8 étape 9) : sans ça, le nom se
-// retrouverait recopié tel quel à 3 endroits, avec un risque de dérive silencieuse (AGENTS.md
-// invariant #3 — pas de logique métier dupliquée client/serveur). Un seul nom à ce jour (Klauss,
-// confirmé Saar 2026-08-26/27) — un futur second fusil à pompe s'ajoute ici, nulle part ailleurs.
-const SHOTGUN_SPREAD_WEAPON_NAMES = new Set(['Klauss'])
-
-export function isShotgunSpreadWeapon(refName) {
-  return SHOTGUN_SPREAD_WEAPON_NAMES.has(refName)
-}
+// L'identification « cette arme est-elle une arme de zone (AOE) ? » a migré vers
+// `shared/combatAoe.js` (segment 0b, PLAN_ARMES_SPECIALES.md §1.6) — c'est désormais une donnée
+// catalogue (`ref_equipment.aoe_profile`), plus un Set de noms en dur ici.
+// `resolveShotgunSpread` / `SHOTGUN_SPREAD_BY_BAND` ci-dessus restent la table mécanique RAW du
+// mécanisme `shotgun_spread`, vers lequel `aoe_profile.mechanic` pointe.

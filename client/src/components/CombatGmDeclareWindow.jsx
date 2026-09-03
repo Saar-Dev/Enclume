@@ -10,7 +10,8 @@ import {
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
-import { resolveMeleeReachM, resolveWeaponRangeBand, isShotgunSpreadWeapon } from '../../../shared/combatRange.js'
+import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
+import { isAoeWeapon } from '../../../shared/combatAoe.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
 import { useDraggable } from '../lib/useDraggable.js'
 import DroneWeaponPanel from './DroneWeaponPanel.jsx'
@@ -333,10 +334,9 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     ? gmHandWeapons.find(w => w.id === assaultDecl.state.weaponId && w.ref_fire_mode)
     : null
   const weapon       = isActivePnj ? (pickedGmRanged ?? resolvedGmPrimary) : null
-  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — éligibilité sur `weapon.ref_name` brut
-  // (item d'équipement réel, pas le nom d'affichage post-buildWeaponList qui préfère custom_name),
-  // même autorité que la résolution serveur (shared/combatRange.js#isShotgunSpreadWeapon).
-  const isAoeEligible = isShotgunSpreadWeapon(weapon?.ref_name)
+  // Zone d'effet (PLAN_ARMES_SPECIALES.md §1.6 segment 0b) — l'AOE-ness est une donnée catalogue
+  // (ref_equipment.aoe_profile), même autorité (`shared/combatAoe.js`) que la résolution serveur.
+  const isAoeEligible = isAoeWeapon(weapon?.ref_aoe_profile)
   const hasTwoWeapons = !!(weaponMg && weaponMd)
   const sameFirMode   = hasTwoWeapons && weaponMg.ref_fire_mode === weaponMd.ref_fire_mode
   // Combat à deux armes CaC (COM24, docs/BUGIDENTIFIE.md) — même source `equipment[tokenId]` que le

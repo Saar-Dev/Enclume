@@ -15,7 +15,8 @@ import { RANGED_SITUATION_MODS, isImpossibleRangedSituation, TAILLE_MODS } from 
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import { normalizeAoeShape, isPointInAoeShape } from '../../../shared/world/aoeShapes.js'
 import { dbPositionToWorldPoint } from '../../../shared/world/worldMetrics.js'
-import { resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND, parseWeaponRangeBands, isShotgunSpreadWeapon } from '../../../shared/combatRange.js'
+import { resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND, parseWeaponRangeBands } from '../../../shared/combatRange.js'
+import { getAoeMechanic } from '../../../shared/combatAoe.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
 import * as damageService from '../lib/damageService.js'
 import * as statusService from '../lib/statusService.js'
@@ -136,10 +137,17 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       console.warn(`[WS] resolveAoeAssaultAction — arme introuvable. weapon_inv_id:${action.weapon_inv_id}`)
       return { suspend: false, emissions }
     }
-    if (!isShotgunSpreadWeapon(weapon.ref_name)) {
+    // Identification par la donnée catalogue `aoe_profile.mechanic` (segment 0b, shared/combatAoe.js),
+    // plus par `ref_name` en dur. Ce resolver ne gère que `shotgun_spread` pour l'instant — les autres
+    // mécanismes (flamethrower...) sont rejetés avec un message clair jusqu'à leur branche dédiée
+    // (segment 0d/1).
+    if (getAoeMechanic(weapon.ref_aoe_profile) !== 'shotgun_spread') {
+      const mech = getAoeMechanic(weapon.ref_aoe_profile)
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
-        message: `${weapon.ref_name ?? 'Cette arme'} — dispersion en zone inconnue pour cette arme.`,
+        message: mech
+          ? `${weapon.ref_name ?? 'Cette arme'} — résolution de zone « ${mech} » pas encore implémentée.`
+          : `${weapon.ref_name ?? 'Cette arme'} — dispersion en zone inconnue pour cette arme.`,
       } })
       return { suspend: false, emissions }
     }

@@ -2,6 +2,8 @@
 // Évaluateur pur, importé identique client (retour UI immédiat) et serveur (rejet autoritaire) —
 // pattern shared/careerEligibility.js. Voir docs/PLAN_TIRVISE.md pour l'architecture complète.
 
+import { getAoeMechanic } from './combatAoe.js'
+
 export const AIM_MAX_TRANCHES = 5        // bonus max +5 au Test de tir (Tir visé classique)
 export const AIM_INI_PER_TRANCHE = -2    // 2 points d'Initiative sacrifiés par tranche (classique)
 
@@ -153,13 +155,13 @@ export function isMultiShotEligible(args) {
 // - Tir de suppression n'a pas de marqueur catalogue possible (n'importe quelle arme automatique
 //   peut le faire, c'est une intention déclarée, pas une propriété de l'arme) : détecté via
 //   `mapActions.attack[0].aoe.mode === 'suppression'`, un champ que le client doit positionner.
-// - Lance-flammes est identifiable sans ambiguïté (`ref_category === 'Lanceur'`, `ref_name ===
-//   'Lance-flammes'` — vérifié sur le catalogue réel, seule arme de cette catégorie à ce jour).
-export function isExclusiveDeclaration({ mapActions, weaponCategory = null, weaponName = null }) {
+// - Lance-flammes est identifié par son `aoe_profile.mechanic === 'flamethrower'` (donnée catalogue,
+//   segment 0b — `shared/combatAoe.js`), plus par `ref_name` en dur.
+export function isExclusiveDeclaration({ mapActions, weaponAoeProfile = null }) {
   if ((mapActions?.attack?.[0]?.aimTranches ?? 0) > 0) return { exclusive: true, reason: 'tir_vise' }
   const aoe = mapActions?.attack?.[0]?.aoe
   if (aoe?.mode === 'suppression') return { exclusive: true, reason: 'tir_suppression' }
-  if (aoe && weaponCategory === 'Lanceur' && weaponName === 'Lance-flammes') {
+  if (aoe && getAoeMechanic(weaponAoeProfile) === 'flamethrower') {
     return { exclusive: true, reason: 'lance_flammes' }
   }
   return { exclusive: false, reason: null }

@@ -86,19 +86,24 @@ test('isExclusiveDeclaration — Tir de suppression (aoe.mode) déclenche l\'exc
   )
 })
 
-test('isExclusiveDeclaration — Lance-flammes : exige AOE déclarée ET catégorie/nom exacts, pas l\'un sans l\'autre', () => {
+test('isExclusiveDeclaration — Lance-flammes : exige AOE déclarée ET aoe_profile.mechanic === flamethrower, pas l\'un sans l\'autre', () => {
   const aoeAttack = { attack: [{ aoe: { direction: 10 } }] }
+  const flamethrowerProfile = { shape: 'cone', mechanic: 'flamethrower' }
   assert.deepEqual(
-    isExclusiveDeclaration({ mapActions: aoeAttack, weaponCategory: 'Lanceur', weaponName: 'Lance-flammes' }),
+    isExclusiveDeclaration({ mapActions: aoeAttack, weaponAoeProfile: flamethrowerProfile }),
     { exclusive: true, reason: 'lance_flammes' },
   )
-  // Même catégorie mais autre arme, ou aoe absente : jamais exclusif par erreur
+  // Autre mécanisme AOE (fusil à pompe), pas de profil, ou aoe absente : jamais exclusif par erreur
   assert.equal(
-    isExclusiveDeclaration({ mapActions: aoeAttack, weaponCategory: 'Lanceur', weaponName: 'Autre chose' }).exclusive,
+    isExclusiveDeclaration({ mapActions: aoeAttack, weaponAoeProfile: { shape: 'ray', mechanic: 'shotgun_spread' } }).exclusive,
     false,
   )
   assert.equal(
-    isExclusiveDeclaration({ mapActions: { attack: [{ targetTokenId: 'a' }] }, weaponCategory: 'Lanceur', weaponName: 'Lance-flammes' }).exclusive,
+    isExclusiveDeclaration({ mapActions: aoeAttack, weaponAoeProfile: null }).exclusive,
+    false,
+  )
+  assert.equal(
+    isExclusiveDeclaration({ mapActions: { attack: [{ targetTokenId: 'a' }] }, weaponAoeProfile: flamethrowerProfile }).exclusive,
     false,
   )
 })

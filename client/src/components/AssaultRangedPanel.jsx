@@ -119,9 +119,9 @@ export default function AssaultRangedPanel({
   effectiveAssaultCount,    // 1 | 2 | 3 — 1 si currentFireMode !== 'CC' (D6, calculé par le parent)
   onAssaultCountChange,     // (n) => void
   multiShotIneligibilityReasons, // string[] — vide = éligible (shared/combatExclusiveActions.js)
-  // Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — RAW : dispersion obligatoire, jamais un choix
-  // à côté du ciblage normal (voir le early return juste après la déstructuration). `isAoeEligible` ne
-  // dépend que de l'arme équipée (shared/combatRange.js#isShotgunSpreadWeapon).
+  // Zone d'effet (PLAN_ARMES_SPECIALES.md §1.6) — `isAoeEligible` ne dépend que de l'arme équipée,
+  // calculé par le parent via `shared/combatAoe.js#isAoeWeapon(weapon.ref_aoe_profile)` (donnée
+  // catalogue). Voir le early return juste après la déstructuration.
   isAoeEligible,   // bool — calculé par le parent
   isAoeMode,       // bool — assaultDecl.isAoeMode (aoeDirection posé)
   aoeDirection,    // number | null — degrés, convention aoeShapes.js (0° = +X, trigo → +Z)

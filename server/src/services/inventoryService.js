@@ -138,6 +138,9 @@ export async function getItemWithRef(itemId) {
       'ref_equipment.range as ref_range',
       'ref_equipment.fire_mode as ref_fire_mode',
       'ref_equipment.ammo_count as ref_ammo_count',
+      // Profil de zone d'effet (segment 0b, shared/combatAoe.js) — éligibilité « Viser une zone »
+      // (3 fenêtres de déclaration) + exclusivité lance-flammes + résolution AOE. null = arme non-AOE.
+      'ref_equipment.aoe_profile as ref_aoe_profile',
     )
     .first()
   return row == null
@@ -250,6 +253,8 @@ export async function getInventory(characterId, campaignId) {
       'ref_equipment.range as ref_range',
       'ref_equipment.fire_mode as ref_fire_mode',
       'ref_equipment.ammo_count as ref_ammo_count',
+      // Profil de zone d'effet (segment 0b) — éligibilité « Viser une zone » côté fenêtre PJ.
+      'ref_equipment.aoe_profile as ref_aoe_profile',
       'ref_equipment.description as ref_description',
       'ref_equipment.description_i18n as ref_description_i18n',
       'ref_equipment.price as ref_price',

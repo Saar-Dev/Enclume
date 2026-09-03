@@ -433,10 +433,11 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           }
 
           // Action exclusive AOE (Tir de suppression, Lance-flammes — PLAN_AOE.md §8 étape 7).
-          // Humanoïde uniquement pour l'instant (weapon.ref_category dispo ici) — drone/exo non
-          // couverts, pas de cas RAW identifié qui le nécessite à ce jour.
+          // Humanoïde uniquement pour l'instant — drone/exo non couverts, pas de cas RAW identifié.
+          // Lance-flammes identifié par aoe_profile.mechanic (donnée catalogue, segment 0b), plus
+          // par ref_name en dur.
           const exclusiveCheck = isExclusiveDeclaration({
-            mapActions, weaponCategory: weapon.ref_category, weaponName: weapon.ref_name,
+            mapActions, weaponAoeProfile: weapon.ref_aoe_profile,
           })
           if (exclusiveCheck.exclusive && exclusiveCheck.reason !== 'tir_vise') {
             const reasons = getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry })
