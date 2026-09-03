@@ -97,7 +97,6 @@
 
 - **Export Google Sheets (fiche personnage)** — décision Saar 2026-08-23, remplace le chantier PWA fiche hors-ligne abandonné (`docs/Old/PLAN_FICHE_HORSLIGNE.md`, code des 5 lots resté commité mais déprioritisé ; `docs/Old/PLAN_RW_EXPORT.md`, rework de cette même PWA, périmé par le même abandon, archivé le 2026-08-25). Scope exact (lecture seule vs édition, quelles données, authentification Google) à définir avant de coder
 - LOS & Raycast (replanifier — dépôt Kiwi/dev-monde arrêté depuis le 2026-08-04, voir `CLAUDE.md` §3)
-- Fenêtre d'affichage/édition pour une exo-armure custom du Coffre (`VaultCharacterPage.jsx` affiche un placeholder, l'illustration hérite déjà de `characters.portrait_url` — seul l'écran manque). Pas prioritaire (Saar, 2026-08-21)
 - Tourelles / armes lourdes fixes (entités interactives)
 - Ergonomie et pédagogie des règles (explication proactive des bonus/malus en UI — tooltips envisagés, pas cadré)
 - Chat persistant (historique), Chat MP, Chat multi-canal (backend `chat_messages.channel_id`/`whisper` déjà partiel, dépend de `docs/Old/PLAN_CHAT.md` Phase 3/4 non reprise)

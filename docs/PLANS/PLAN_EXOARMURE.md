@@ -1786,9 +1786,11 @@ Deux défauts trouvés en creusant :
   `removeExoAvarie` diffusent via `io.to(campaignId).emit(...)` — le plan prenait `req.character.campaign_id`
   sans garde. Or **une exo-armure peut vivre dans le Vault d'un joueur, hors campagne**
   (`vault.js:24`, `VAULT_CREATABLE_TYPES` inclut `'exo'` ; `characters.campaign_id` nullable depuis la
-  migration 129, Vault). `ExoSheetWindow.jsx` n'est aujourd'hui monté que par `SessionPage.jsx`
-  (vérifié — inatteignable par l'UI actuelle pour un personnage Vault), mais les routes `char-sheet.js`
-  ne sont pas cantonnées à un contexte de campagne — un appel direct à l'API sur une exo-armure de
+  migration 129, Vault). `ExoSheetWindow.jsx` n'était alors monté que par `SessionPage.jsx`
+  (inatteignable par l'UI pour un personnage Vault) — **depuis le 2026-09-03 il est aussi monté par
+  `VaultCharacterPage.jsx` et `CampaignCharacterSheetPage.jsx` sans `socket`** (prop optionnelle,
+  `if (!socket) return` sur l'écoute `EXO_AVARIE_UPDATED`). Les routes `char-sheet.js` ne sont de
+  toute façon pas cantonnées à un contexte de campagne — un appel direct à l'API sur une exo-armure de
   Vault passerait `campaignId = null`. `io.to(null).emit(...)` ne plante pas (room bidon, silencieux) —
   la réponse HTTP reste correcte, l'auteur de l'action voit son propre état se mettre à jour (porté par
   la réponse HTTP, pas seulement le WS) ; seule la diffusion aux autres clients d'une room inexistante

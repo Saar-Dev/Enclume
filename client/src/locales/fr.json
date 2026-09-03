@@ -144,8 +144,7 @@
     "createVaisseau": "Créer un navire",
     "namePlaceholder": "Nom...",
     "errorCreate": "Erreur lors de la création",
-    "equipmentCatalog": "Catalogue équipement",
-    "exoWindowMissing": "L'édition d'une exo-armure hors combat n'est pas encore construite (fenêtre dédiée manquante, projet entier — pas spécifique au Coffre). Le personnage existe et sera visible du MJ après transfert."
+    "equipmentCatalog": "Catalogue équipement"
   },
   "equipment": {
     "pageTitle": "Catalogue équipement",

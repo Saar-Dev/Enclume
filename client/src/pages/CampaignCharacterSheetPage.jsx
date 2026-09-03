@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
 import CharacterWindow from '../character/CharacterWindow'
 import DroneWindow from '../character/DroneWindow'
+import ExoSheetWindow from '../character/ExoSheetWindow'
 
 // ─── CampaignCharacterSheetPage ("fiche standalone" — personnage de campagne) ──────
 // Point d'entrée hors session VTT pour consulter/éditer un personnage de campagne — même besoin que
@@ -12,9 +13,12 @@ import DroneWindow from '../character/DroneWindow'
 // de campagne, pas du Coffre : `VaultCharacterPage.jsx` ne couvre que les personnages du Coffre,
 // aucune route légère n'existait pour un personnage de campagne — la seule voie d'accès à
 // `CharacterWindow` passait par `SessionPage.jsx`, qui embarque toute la session VTT (carte 3D,
-// WebSocket via `SocketProvider`). `CharacterWindow`/`DroneWindow` n'ont pas besoin de socket hors
-// session (listeners optionnels, dégradés gracieusement) — vérifié, même propriété déjà exploitée par
-// `VaultCharacterPage.jsx`.
+// WebSocket via `SocketProvider`). `CharacterWindow`/`DroneWindow`/`ExoSheetWindow` n'ont pas besoin
+// de socket hors session (listeners optionnels, dégradés gracieusement) — vérifié, même propriété
+// déjà exploitée par `VaultCharacterPage.jsx`.
+//
+// Dispatch par `character.type` : drone → `DroneWindow`, exo → `ExoSheetWindow` (fiche `exo_sheet`,
+// pas de `char_sheet`), pj/pnj → `CharacterWindow`. Même logique que `SessionPage.jsx`.
 //
 // Différence clé avec `VaultCharacterPage.jsx` : `isGm` n'est PAS toujours `false` ici. Au Coffre,
 // c'est sans risque car le serveur donne déjà les mêmes pouvoirs au propriétaire via
@@ -84,10 +88,7 @@ export default function CampaignCharacterSheetPage() {
       {character.type === 'drone' ? (
         <DroneWindow character={characterWithUser} isGm={isGm} onClose={backToSession} />
       ) : character.type === 'exo' ? (
-        <div style={S.placeholder}>
-          <p style={S.muted}>{t('vault.exoWindowMissing')}</p>
-          <button className="btn" onClick={backToSession}>{t('character.back')}</button>
-        </div>
+        <ExoSheetWindow character={characterWithUser} isGm={isGm} onClose={backToSession} />
       ) : (
         <CharacterWindow
           character={characterWithUser}
@@ -102,5 +103,4 @@ export default function CampaignCharacterSheetPage() {
 const S = {
   container: { minHeight: '100vh' },
   muted: { color: 'var(--text-muted)', fontSize: '13px', padding: '24px' },
-  placeholder: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px', padding: '24px' },
 }
