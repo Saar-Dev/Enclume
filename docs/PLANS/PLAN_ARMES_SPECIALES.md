@@ -48,7 +48,7 @@
 
 | Brique | Où | Réutilisation |
 |---|---|---|
-| Identification lance-flammes | `shared/combatExclusiveActions.js:162` (`ref_category === 'Lanceur' && ref_name === 'Lance-flammes'`) | Étape 7 AOE — exclusivité déjà câblée, même prédicat à réutiliser en résolution |
+| Identification lance-flammes | Aujourd'hui `combatExclusiveActions.js:162` (`ref_category === 'Lanceur' && ref_name === 'Lance-flammes'`) | **Remplacé au segment 0b** par `ref_equipment.aoe_profile.mechanic === 'flamethrower'` — plus de nom en dur (§1.6 pt 1) |
 | Géométrie `cone` | `shared/world/aoeShapes.js` (`normalizeAoeShape` shape `cone` = `amplitudeM` longueur + `angleDeg`, `isPointInAoeShape`) | Couche 1 — rien à écrire, juste paramétrer |
 | LOS couches 2+3 | `worldVisibilityService.js#evaluateAoeVisibility` | Inchangé (même appel que le fusil à pompe) |
 | Jet Phase A | `socketCombatHelpers.js#resolveAoeAttackRoll` | UN seul Test de tir pour l'action, la marge module le dégât |
@@ -90,75 +90,81 @@
   **séparé et délibéré** sur la proximité des **autres** cibles. + ajouter l'exclusion explicite du
   tireur au tronc commun (segment 0) — l'exclusion accidentelle du fusil à pompe est fragile.
 
-### 1.3 Ce qui manque
+### 1.3 Ce qui manque (synthèse — détail opératoire en §1.4)
 
-1. **Éligibilité UI** — la déclaration « Viser une zone » est gatée par `isShotgunSpreadWeapon`
-   (`shared/combatRange.js`, `name === 'Klauss'`) dans `AssaultRangedPanel.jsx` /
-   `CombatActionWindow.jsx:443` / `CombatGmDeclareWindow.jsx:339`. Le lance-flammes n'y est pas
-   éligible → un joueur ne peut pas déclarer un tir en cône. **Généraliser** : prédicat partagé
-   `isAoeWeapon(weapon)` = `isShotgunSpreadWeapon(name) || isFlamethrower(weapon)` — autorité unique,
-   consommé par les 3 fenêtres **et** la résolution serveur (invariant #3, pas de logique dupliquée).
-2. **Aperçu de ciblage cône** — `client/src/lib/aoePreviewShape.js` produit aujourd'hui un `ray`
-   (couloir). Ajouter une variante `cone` (même interaction : survol = direction, clic = fige).
-   `Canvas3D.jsx` : rendu du cône (mêmes garde-fous perf/`key` que l'aperçu ray, cf. AOE §12 étape 9).
-3. **Branche serveur `resolveAoeAssaultAction`** — à côté du gate `isShotgunSpreadWeapon` (`:3500`) :
-   - identifier le lance-flammes (même prédicat qu'étape 7) ;
-   - `normalizeAoeShape({ shape: 'cone', origin, directionDeg: aoe.direction, amplitudeM: 40, angleDeg: 30 })`
-     — **longueur = portée extrême du catalogue (40 m), non touchée** (RAW donne la portée, on ne
-     l'ajuste pas — §1.5-A) ; **angle 30° = seul paramètre libre** (RAW muet, choisi pour le réalisme) ;
-   - `evaluateAoeVisibility` (inchangé) ;
-   - **PAS** de `resolveShotgunSpread` / `distanceBands` — `degautsBruts` constant quelle que soit la portée : `computeAssaultRawDamage({ rawDice: 2D10, mr, portee: null, fireModeBonusDmg: 0 })` ;
-   - par cible : boucler **`1D3` fois** `resolveTargetHit({ degautsBruts, armorReductionFactor: <0.5 branche normal, 1 sinon>, chocDsl: <Choc 2D6, impact initial>, char_sheet_id_cible, … })` — 1D3 Localisations (même patron que `resolveEnvironmentalHazardTicks` : `for i < locationsCount`). **`armorReductionFactor: 0.5` uniquement dans la branche `normal`** ; branches exo (`resolveExoDamage`) et drone (`calcDroneDegatsNets`) **inchangées** — §1.5-D ;
-   - poser le feu : `exposeToHazard(io, db, cId, t.tokenId, 'burning', { formula: '2D10', locations: '1D3', forcedLocation: null })` avec `expiresAtTurn: currentTurn + roll('2D6') + 1` (grand feu = 1D3 Loc/Tour, `REGLEBLESSURES.md:654`) ;
-   - **message explicatif** (§1.5-B1) : un `COMBAT_SYSTEM_NOTICE` (system + i18nKey, jamais de FR figé serveur) à la cible + MJ — « X est en feu : 2D10 sur 1D3 Localisations par Tour, N Tours ou jusqu'à extinction » ;
-   - `combat_action_targets` + `outcome`, agrégat PJ `COMBAT_ATTACK_PLAYER_RESULT` / PNJ
-     `COMBAT_ATTACK_RESULT` par cible — **exactement le même code que le fusil à pompe** (le resolver
-     branche sur l'arme, jamais deux pipelines).
-4. **`exposeToHazard` — param `expiresAtTurn` optionnel** (défaut `null`, aucun appelant existant
-   changé). Généralisation propre : le feu du lance-flammes a une durée native RAW (2D6 Tours), comme
-   l'Acide a déjà une durée via le `linger` de `clearHazard`. Alternative rejetée : `UPDATE token_statuses`
-   direct depuis le resolver combat (dupliquerait la logique d'expiration hors de `environmentalHazardService`).
-5. **Choc arme `2D6`** — `resolveTargetHit` consomme le Choc arme via `chocDsl` (`PLAN_ARMES_DSL.md`
-   Lot B). Format attendu `{ formula, reducedByArmor, gateLocation? }` — **[À VÉRIFIER en codant]** :
-   construire `chocDsl` depuis `weapon.shock` (`'2D6'`). Vérifier si le fusil à pompe le passe déjà
-   (il a `shock: null` au catalogue — probablement jamais exercé pour l'AOE, à instrumenter).
+- **Éligibilité UI** : la déclaration « Viser une zone » est gatée par `isShotgunSpreadWeapon`
+  (`name === 'Klauss'`) dans `AssaultRangedPanel.jsx` / `CombatActionWindow.jsx:443` /
+  `CombatGmDeclareWindow.jsx:339`. → remplacé par `isAoeWeapon(w) = w.aoe_profile != null` (segment 0b).
+- **Aperçu de ciblage cône** : `aoePreviewShape.js` ne produit qu'un `ray` → variante `cone`
+  (segment 1 pt 4).
+- **Résolution serveur** : `resolveAoeAssaultAction` rejette tout ce qui n'est pas Klauss (`:3500`) →
+  après le socle, `resolveFlamethrowerTargets` (fonction pure, segment 1 pt 5).
+- **Feu continu** : `exposeToHazard` fixe `expiresAtTurn: null` → param optionnel (segment 1 pt 3).
+- **Choc 2D6** : non câblé (`shock_mechanism: null`) → migration `= 'pure'` (segment 1 pt 2, #2).
 
-### 1.4 Ordre de construction (Lot 1)
+### 1.4 Ordre de construction
 
-0. **Refactor tronc commun `resolveAoeAssaultAction`** (aggradation, prépare grenades — segment le plus
-   lourd). Extraire :
-   - `resolveAoePhaseA` (jet + munitions + `DICE_RESULT` + catastrophe) ;
-   - `insertAoeTargetRows` ;
-   - **exclusion explicite du tireur** des candidats (`candidate.tokenId !== action.token_id` — #3) ;
-   - **contrat de résolution par arme unifié** : `resolveShotgunTargets` (dispersion/bands, existant,
-     déplacé) / `resolveFlamethrowerTargets` (nouveau) renvoient tous deux, par cible,
-     `{ tokenId, targetRowId, cibleType, band|null, results: [{ localisation|null, degautsBruts,
-     degatsNets, severity|null, shockResult|null }] }` (décision F) ;
-   - `finalizeAoeResults` : écrit `outcome` (JSON `results`), émet un `COMBAT_ATTACK_RESULT` par entrée
-     `results` (MJ/PNJ, `isPnj: isPnjResult`), et **un** `COMBAT_ATTACK_PLAYER_RESULT
-     { targets: [{ name, band, results }] }` (PJ) — **refonte de l'agrégat de l'étape 10** vers cette
-     forme + `CombatModifiersWindow` en boucle imbriquée.
-   `node --test` + `eslint` + `npm run build` + **session Saar de non-régression fusil à pompe** (PNJ
-   + PJ, dégâts identiques, liste par cible identique). *(Ne PAS mélanger avec la dette §5 du dispatch
-   drone — c'est le tronc AOE, pas le dispatch assault.)*
-1. `isAoeWeapon` + `isFlamethrower` — dans `shared/combatRange.js` (ou nouveau `shared/combatAoe.js`
-   si `combatRange` devient hétéroclite). Bascule des 3 fenêtres (`isAoeEligible = isAoeWeapon(...)`).
-   Test : Klauss **et** Lance-flammes éligibles, toute autre arme non.
-2. **Migration `shock_mechanism = 'pure'`** sur la ligne `ref_equipment` Lance-flammes (#2). Match par
-   clé métier (`name = 'Lance-flammes'`, `category = 'Lanceur'`), jamais par `id` (core.md).
-3. `exposeToHazard` : param `expiresAtTurn` optionnel (défaut `null`). **`applyModStatus` upsert déjà
-   (`.merge()`)** — mais `exposeToHazard` doit lire l'expiry existant et poser
-   `max(existant, currentTurn + roll('2D6') + 1)` (décision G — « on ne peut que rendre le feu pire »).
-   Contenu au service danger, pas de blanket change. Test : ticke N fois puis expire à N+1 ; re-exposer
-   pendant que le feu brûle → durée = max des deux, jamais raccourcie.
-4. `aoePreviewShape.js` variante `cone` + `Canvas3D.jsx`. (Segment visuel — validation navigateur Saar.)
-5. `resolveFlamethrowerTargets` : cône 40 m / 30°, 1D3 Loc (`for i < roll('1D3')`), `chocDsl` depuis
-   `getEffectiveWeaponDamage().choc`, `armorReductionFactor: 0.5` **branche `normal` seule**, feu
-   continu `exposeToHazard('burning', { formula: '2D10', locations: '1D3', expiresAtTurn })`,
-   `COMBAT_SYSTEM_NOTICE` B1, auto-éclaboussure B2 (< 3 m d'une autre cible → le tireur subit 1 passage
-   complet). `node --check` + `node --test` + session réelle.
-6. Doc : décisions §1.5 A-D + #2 (`shock_reduced_by_armor`) dans `JOURNAL8.md` ; `docs/SYSTEME/COMBAT.md`
-   (+ vérifier si un exo peut porter un lance-flammes → EXOARMURE) ; `client/public/CHANGELOG.md`.
+**Le Lot 1 est précédé d'un socle** (§1.6, analyse critique 2026-09-03) : sans lui, chaque arme AOE
+re-paie la dette (identification par nom, god-file, agrégat trop étroit, zéro test). Référence pro :
+Foundry VTT **dnd5e** — la zone d'effet est une donnée (`target.template = { type, size, width, units }`
+résolu via `CONFIG.areaTargetTypes`), jamais un `if` dans le code de résolution.
+
+#### Segment 0 — Socle de résolution AOE (aggradation, prépare lance-flammes + grenades + suppression)
+
+- **0a. Extraction `server/src/socket/socketCombatAoe.js`** — déplacer `resolveAoeAssaultAction` +
+  `resolveAoeAttackRoll` (+ helpers AOE-only) dans un module dédié (miroir `socketCombatExo.js`).
+  **Graphe d'import vérifié acyclique** : le module importe lib/services + 3 utilitaires de
+  `socketCombatHelpers.js` (`fetchAssaultWeaponAndMods`, `resolveDroneIntegrityLoss`, …), jamais
+  l'inverse. **Pur déplacement, zéro changement de comportement.** `node --check` + `node --test` +
+  `npm run build`.
+- **0b. Colonne `ref_equipment.aoe_profile` JSONB nullable** (migration ALTER + migration data par clé
+  métier `name`, jamais `id` — core.md). Klauss `{ "shape": "ray", "mechanic": "shotgun_spread" }`.
+  Bascule : `isAoeWeapon(w) = w.aoe_profile != null` (nouveau `shared/combatAoe.js`), consommé par les
+  3 fenêtres de déclaration (remplace `isShotgunSpreadWeapon(ref_name)`) **et**
+  `combatExclusiveActions.js` (teste `aoe_profile.mechanic`, plus `ref_name ===`) **et** le resolver
+  (lit `aoe_profile.shape`/`.mechanic`). `aoe_profile` ajouté aux payloads arme (`inventoryService`,
+  `/combat-equipment`). `isShotgunSpreadWeapon` retiré une fois tous les appelants migrés (pas laissé
+  en doublon). Tests : `isAoeWeapon` pur ; `isExclusiveDeclaration` sur `mechanic`.
+- **0c. `combat_action_targets.damage_modifier` → nullable** (migration) — chaque mécanisme y met ce
+  qui a du sens, `null` accepté. (Le fusil à pompe continue d'y écrire `{ band, damageDice }`.)
+- **0d. Refactor du corps de `resolveAoeAssaultAction`** en tronc + résolution par arme :
+  - tronc : `resolveAoePhaseA` (jet + munitions + `DICE_RESULT` + catastrophe), `insertAoeTargetRows`,
+    **exclusion explicite du tireur** des candidats (#3), `finalizeAoeResults` ;
+  - **contrat de résolution par arme = FONCTION PURE** `resolveShotgunTargets(candidates, ctx) → perTargetResults[]`
+    — `ctx` porte les données déjà fetchées (candidats, arme, metrics, settings, mr) ; **aucune
+    écriture DB ni émission dedans** (tout dans le tronc). Testable avec fixtures, sans base (#5) ;
+  - forme unifiée `perTargetResult = { tokenId, targetRowId, cibleType, band|null, results: [{ localisation|null, degautsBruts, degatsNets, severity|null, shockResult|null }] }` (décision F) ;
+  - `finalizeAoeResults` : `outcome` = JSON `results` ; un `COMBAT_ATTACK_RESULT` par entrée `results`
+    (MJ/PNJ, `isPnj: isPnjResult`) ; **un** `COMBAT_ATTACK_PLAYER_RESULT { targets: [{ name, band, results }] }`
+    (PJ) — **refonte de l'agrégat de l'étape 10** + `CombatModifiersWindow` en boucle imbriquée.
+  - **Tests unitaires `resolveShotgunTargets`** (nouveaux, fixtures). `node --test` + `eslint` +
+    `npm run build` + **session Saar de non-régression fusil à pompe (PNJ + PJ)** — dégâts + liste
+    identiques.
+- **0e. Primitive `resolveTargetLocations(ctx, n) → results[]`** — fetch du contexte cible (armure/
+  mutations/avantages/NA) **une seule fois**, boucle `n` jets de Localisation (#6). Le fusil à pompe
+  bascule dessus avec `n = 1` (prouvé avant que le lance-flammes l'utilise avec `n = 1D3`). `node --test`.
+
+*(0d/0e ne touchent PAS `resolveAssaultAction`/`resolveMeleeAction` — code humain le plus testé — ni la
+dette §5 du dispatch drone. Périmètre = tronc AOE seul.)*
+
+#### Segment 1+ — Lance-flammes (petit une fois le socle posé)
+
+1. **Ligne de seed `aoe_profile`** pour Lance-flammes : `{ "shape": "cone", "angleDeg": 30, "mechanic": "flamethrower" }`
+   (longueur = portée extrême du catalogue, lue par le resolver — §1.5-A). Migration data par clé métier.
+2. **Migration `shock_mechanism = 'pure'`** sur la ligne Lance-flammes (#2).
+3. **`exposeToHazard` : param `expiresAtTurn`** optionnel (défaut `null`). `exposeToHazard` lit l'expiry
+   existant et pose `max(existant, currentTurn + roll('2D6') + 1)` (décision G). Contenu au service
+   danger. Test : ticke N fois puis expire à N+1 ; re-exposer → durée = max, jamais raccourcie.
+4. **Aperçu cône** — `aoePreviewShape.js` variante `cone` + `Canvas3D.jsx` (garde-fous perf/`key`
+   comme l'aperçu ray). Validation navigateur Saar.
+5. **`resolveFlamethrowerTargets(candidates, ctx)`** (fonction pure, ~40 lignes) : cône
+   (`aoe_profile.angleDeg`, longueur = portée catalogue), **pas de dégression par portée**,
+   `resolveTargetLocations(ctx, roll('1D3'))` par cible, `armorReductionFactor: 0.5` branche `normal`
+   seule, `chocDsl` depuis `getEffectiveWeaponDamage().choc`. Effets de bord (feu continu, notice B1,
+   auto-éclaboussure B2) posés par le tronc à partir du `perTargetResult`. `node --test` (fixtures) +
+   session réelle.
+6. Doc : décisions §1.5 A-G + E dans `JOURNAL8.md` ; `docs/SYSTEME/COMBAT.md` (nouveau § résolution
+   AOE — le socle est durable, ce PLAN ne l'est pas — Règle 10) ; `client/public/CHANGELOG.md`.
 
 *(Extinction du feu : rien à coder dans ce Lot — le MJ retire déjà le statut `burning` via la gestion
 générique des statuts. Sous-lot différé « fenêtre personnage en feu » : §1.5-B2.)*
@@ -219,6 +225,30 @@ générique des statuts. Sous-lot différé « fenêtre personnage en feu » : �
   `expires_at_turn = max(expiry_existant, currentTurn + roll('2D6') + 1)` — « on ne peut que rendre le
   feu pire ». Un vrai *stacking* (plusieurs feux → double-tick) serait une refonte du système de
   dangers — hors périmètre, chantier propre si le besoin se confirme (noté, pas fait).
+
+### 1.6 Socle de résolution AOE — analyse critique (2026-09-03, soutenue par Saar)
+
+Le chantier AOE (fusil à pompe PNJ puis PJ) a laissé 5 dettes structurelles. Sans les résorber avant
+d'ajouter la 2ᵉ arme AOE, chacune des 3 armes restantes (lance-flammes, grenades, suppression) re-paie
+la même dette.
+
+1. **L'AOE-ness est dans le code, pas dans la donnée.** `SHOTGUN_SPREAD_WEAPON_NAMES = Set(['Klauss'])`
+   + `ref_name === 'Lance-flammes'` répétés dans `combatExclusiveActions.js`, les 3 fenêtres de
+   déclaration, bientôt le resolver. Un renommage catalogue casse tout. **Foundry dnd5e** met la zone
+   d'effet en donnée (`target.template = { type, size, width, units }`, résolu via
+   `CONFIG.areaTargetTypes`). → colonne `ref_equipment.aoe_profile` JSONB nullable
+   `{ shape, mechanic, params }` (segment 0b). Ajouter une arme AOE = une ligne de seed.
+2. **`socketCombatHelpers.js` = god-file (3700+ l.).** Graphe d'import vérifié acyclique → extraire
+   `socketCombatAoe.js` (miroir `socketCombatExo.js`, segment 0a).
+3. **`combat_action_targets.damage_modifier notNullable` shotgun-shaped** → nullable (segment 0c).
+4. **Zéro test DB sur la résolution AOE.** → contrat de résolution par arme = fonction pure
+   `(candidates, ctx) → results[]`, DB/emit dans le tronc, testable avec fixtures (segment 0d).
+5. **`resolveTargetHit` re-fetch le contexte cible à chaque appel** → × 1D3 pour le lance-flammes.
+   Primitive `resolveTargetLocations(ctx, n)` : contexte fetché 1×, boucle `n` Localisations
+   (segment 0e).
+
+Le fusil à pompe (chemin le plus testé de l'AOE) est refactoré **à comportement identique** — chaque
+segment 0a/0d clôturé par une session Saar de non-régression.
 
 ---
 
@@ -305,7 +335,8 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 
 | Lot | Statut |
 |---|---|
-| Lot 1 — lance-flammes | **Cadré, analyse à charge + tour de vérif code faits, décisions A-G tranchées (2026-09-03). Pas commencé.** Périmètre confirmé : refactor tronc commun `resolveAoeAssaultAction` + contrat de résolution par arme unifié (`results: [...]` 1..N Loc) + refonte agrégat étape 10 (segment 0, non-régression fusil à pompe) + `isAoeWeapon` + migration `shock_mechanism='pure'` + `exposeToHazard` durée max + exclusion tireur du cône + aperçu cône + `resolveFlamethrowerTargets`. Ordre §1.4. |
+| **Segment 0 — Socle AOE** (§1.4/§1.6) | **Cadré (2026-09-03, analyse critique soutenue par Saar). Pas commencé.** 0a extraction `socketCombatAoe.js` · 0b `ref_equipment.aoe_profile` data-driven · 0c `damage_modifier` nullable · 0d tronc + résolution par arme (fonction pure) + agrégat étape 10 + tests · 0e primitive `resolveTargetLocations`. Non-régression fusil à pompe (PNJ+PJ) = sessions Saar. |
+| Lot 1 — lance-flammes | **Cadré, décisions A-G tranchées. Bloqué par le segment 0.** Après socle : ligne de seed `aoe_profile` + migration `shock_mechanism='pure'` + `exposeToHazard` param + aperçu cône + `resolveFlamethrowerTargets` (fonction pure ~40 l.). |
 | Lot 2 — grenades | Bloqué : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |
