@@ -253,13 +253,25 @@ async function resolveAoeTargetDamage(io, campaignId, {
   }
 
   // Humanoïde / décor — `locationsCount` Localisations, chacune un resolveTargetHit indépendant
-  // (localisation, armure, Blessure, Test de Choc propres) — même patron que resolveEnvironmentalHazardTicks.
+  // (localisation, armure, Blessure) — même patron que resolveEnvironmentalHazardTicks.
+  //
+  // Choc d'arme (`effectiveDamage.choc` — ex. 2D6 lance-flammes) : UNE SEULE FOIS par cible touchée,
+  // jamais par Localisation (décision Saar 2026-09-04, en session : « un seul choc par tir de
+  // lance-flamme, c'est déjà largement assez punitif »). `resolveTargetHit` résout une Localisation
+  // à la fois et ré-évaluerait `chocDsl` (donc son propre 2D6 + son propre Test de Choc D20) à
+  // chaque appel s'il lui était passé tel quel dans la boucle — confirmé en session : 2
+  // `applyStunWithDuration` indépendants sur la même cible pour un lance-flammes ayant touché 2
+  // Localisations. Le fusil à pompe (`locationsCount` toujours 1) n'est jamais concerné — `i === 0`
+  // y est systématiquement vrai, comportement inchangé.
+  // Le Test de Choc "naturel" déclenché par la seule sévérité d'UNE blessure (indépendant de l'arme,
+  // branche `woundResult` de `resolveTargetHit`) reste, lui, évalué à chaque Localisation — RAW
+  // normal pour toute attaque à Localisations multiples, non concerné par cette décision.
   const results = []
   for (let i = 0; i < Math.max(1, locationsCount); i += 1) {
     const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
       degautsBruts, characterIdCible: cibleToken?.character_id ?? null,
       cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
-      chocDsl: effectiveDamage ? effectiveDamage.choc : null,
+      chocDsl: i === 0 ? (effectiveDamage ? effectiveDamage.choc : null) : null,
       ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
       armorReductionFactor,
     })
