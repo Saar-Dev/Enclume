@@ -19,6 +19,7 @@ import { resolveShotgunSpread, SHOTGUN_SPREAD_BY_BAND, parseWeaponRangeBands } f
 import { getAoeMechanic } from '../../../shared/combatAoe.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
 import * as damageService from '../lib/damageService.js'
+import { exposeToHazard } from '../lib/environmentalHazardService.js'
 import * as statusService from '../lib/statusService.js'
 import * as exoAvarieService from '../lib/exoAvarieService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
@@ -92,6 +93,31 @@ export function filterShotgunHitTargets({ visibilityTargets, shooterTokenId, ori
     const narrowShape = normalizeAoeShape({ shape: 'ray', origin, directionDeg, amplitudeM, widthM: range.spread.widthM })
     if (!isPointInAoeShape(candidate.position, narrowShape, metrics)) continue
     hitTargets.push({ ...candidate, band: range.band, spread: range.spread })
+  }
+  return hitTargets
+}
+
+// ─── Ciblage lance-flammes — PURE (segment 1e, PLAN_ARMES_SPECIALES.md §1.4) ───────────────────────
+//
+// Sœur de filterShotgunHitTargets, en plus simple : le cône a un angle FIXE (aoe_profile.angleDeg),
+// pas une largeur qui croît par paliers — une seule passe géométrique, pas de largeur réelle à
+// retester par candidat, pas de dé de dispersion (`band: null` : le lance-flammes ne dégresse pas
+// avec la portée, RAW). La forme testée ici EST la forme finale (contrairement au couloir grossier
+// sur-inclusif du fusil à pompe) ; on re-teste quand même `isPointInAoeShape` pour que la fonction
+// soit auto-suffisante et testable sans faire confiance au pré-filtrage de l'appelant (même
+// discipline que la passe 2 du fusil à pompe).
+//
+// Exclusions identiques : le tireur lui-même (jamais une cible normale de son propre jet — #3 ;
+// l'auto-éclaboussure < 3 m de la décision B est un contrôle SÉPARÉ, ajouté par le tronc), et hors
+// ligne de vue (couche 3).
+export function filterFlamethrowerHitTargets({ visibilityTargets, shooterTokenId, origin, directionDeg, amplitudeM, angleDeg, metrics }) {
+  const coneShape = normalizeAoeShape({ shape: 'cone', origin, directionDeg, amplitudeM, angleDeg })
+  const hitTargets = []
+  for (const candidate of visibilityTargets) {
+    if (candidate.tokenId === shooterTokenId) continue
+    if (!candidate.hasLineOfSight) continue
+    if (!isPointInAoeShape(candidate.position, coneShape, metrics)) continue
+    hitTargets.push({ ...candidate, band: null })
   }
   return hitTargets
 }
@@ -285,18 +311,70 @@ async function finalizeAoeResults({ perTargetResults, targetRowIdByTokenId, isPn
   return emissions
 }
 
+// applyFlamethrowerContinuousFire — effets propres au lance-flammes, APRÈS finalizeAoeResults (ils ne
+// modifient pas l'agrégat de résultats déjà émis). PLAN_ARMES_SPECIALES.md §1.1/§1.5 :
+//  - feu continu : RAW « le liquide continue de brûler, 2D10/Tour pendant 2D6 Tours » recoupé au RAW
+//    « grand feu » (docs/REGLES/REGLEBLESSURES.md — 2D10/Tour sur 1D3 Localisation(s)) →
+//    exposeToHazard('burning', { formula:'2D10', locations:'1D3', durationDice:'2D6' }) sur chaque
+//    cible HUMANOÏDE touchée. Drone/exo exclus : le tick de danger ignore déjà les drones, et
+//    l'armure scellée d'une exo ne prend pas feu (décision D — cohérent avec le ÷2 réservé à la fiche) ;
+//  - UNE notice système agrégée : l'id client d'une notice = i18nKey + timestamp (useSessionSocket.js),
+//    N notices même clé/instant entreraient en collision de `key` React → une seule ligne listant les
+//    cibles en feu ;
+//  - `selfSplash` (décision B) : une notice explicative dédiée — le tireur s'est éclaboussé en tirant
+//    en cône à moins de 3 m d'une cible ; ses dégâts + son feu continu ont déjà été résolus comme
+//    pseudo-cible dans la boucle principale.
+async function applyFlamethrowerContinuousFire(io, campaignId, { perTargetResults, selfSplash, character, shooterToken }) {
+  const emissions = []
+  const timestamp = new Date().toISOString()
+  const burnedLabels = []
+  for (const ptr of perTargetResults) {
+    if (ptr.cibleType == null || ptr.cibleType === 'drone' || ptr.cibleType === 'exo') continue
+    // Résilient : le dégât d'impact est déjà résolu et persisté — un échec d'exposition au feu ne doit
+    // pas faire remonter une exception qui, via le catch du tronc, jetterait tout l'agrégat déjà émis
+    // (même philosophie que resolveEnvironmentalHazardTicks : échec silencieux > résolution cassée).
+    try {
+      await exposeToHazard(io, db, campaignId, ptr.tokenId, 'burning', {
+        formula: '2D10', locations: '1D3', durationDice: '2D6',
+      })
+      burnedLabels.push(ptr.name)
+    } catch (err) {
+      console.error(`[WS] applyFlamethrowerContinuousFire — exposeToHazard échec token:${ptr.tokenId}:`, err.message)
+    }
+  }
+  if (burnedLabels.length > 0) {
+    emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+      i18nKey: 'session.onFire', params: { labels: burnedLabels.join(', ') }, timestamp,
+    } })
+  }
+  if (selfSplash) {
+    emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+      i18nKey: 'session.flamethrowerSelfSplash',
+      params: { label: character.name ?? shooterToken.label ?? '?' }, timestamp,
+    } })
+  }
+  return emissions
+}
+
 // ─── Couche 4 AOE, phase B — orchestration (docs/PLANS/PLAN_AOE.md §8 + PLAN_ARMES_SPECIALES.md §1.4) ─
 //
-// resolveAoeAssaultAction — tronc mince : gates → géométrie/LOS → `filterShotgunHitTargets` → Phase A
-// (`runAoePhaseA`) → munitions → bloc mécanisme `shotgun_spread` (persistance + dégât brut par cible)
-// → générique (`resolveAoeTargetDamage` × cibles + `finalizeAoeResults`). Résolution IMMÉDIATE pour
-// tout type de tireur (le différé armAwaitingDamage/confirmDamage a été envisagé pour le PJ puis
-// écarté — PLAN_AOE.md §5.1 : il suppose UNE cible en attente, N pending d'un seul appel corrompent
-// la fenêtre client). Différence PJ vs PNJ (`isPnjResult`) : le PJ reçoit UN COMBAT_ATTACK_PLAYER_RESULT
-// agrégé (fenêtre-reçu non bloquante) au lieu d'un COMBAT_ATTACK_RESULT par entrée `results`.
+// resolveAoeAssaultAction — tronc mince : gates → géométrie/LOS + ciblage par mécanisme → Phase A
+// (`runAoePhaseA`) → munitions → dégât brut par cible (par mécanisme) → générique
+// (`resolveAoeTargetDamage` × cibles + `finalizeAoeResults`) → (lance-flammes) feu continu.
+// Résolution IMMÉDIATE pour tout type de tireur (le différé armAwaitingDamage/confirmDamage a été
+// envisagé pour le PJ puis écarté — PLAN_AOE.md §5.1 : il suppose UNE cible en attente, N pending d'un
+// seul appel corrompent la fenêtre client). Différence PJ vs PNJ (`isPnjResult`) : le PJ reçoit UN
+// COMBAT_ATTACK_PLAYER_RESULT agrégé (fenêtre-reçu non bloquante) au lieu d'un COMBAT_ATTACK_RESULT
+// par entrée `results`.
 //
 // Identification de l'arme par `aoe_profile.mechanic` (donnée catalogue, `shared/combatAoe.js`,
-// segment 0b) — plus par nom en dur. Le lance-flammes ajoutera son bloc mécanisme frère (segment 1).
+// segment 0b) — plus par nom en dur. Deux mécanismes câblés, chacun un petit bloc frère (jamais un
+// framework à hooks — on ne spécule pas au-delà de 2) :
+//  - `shotgun_spread` (fusil à pompe) : couloir 'ray', largeur par palier RAW retestée, dé de
+//    dispersion signé, dégression par portée, 1 Localisation, armure pleine ;
+//  - `flamethrower` (lance-flammes, segment 1) : cône 'cone' angle fixe, 2D10 sec sans dispersion ni
+//    dégression, 1D3 Localisations, armure de fiche ÷2 (décision D), Choc 2D6 (chocDsl d'arme),
+//    feu continu (exposeToHazard 'burning'), auto-éclaboussure du tireur à < 3 m (décision B).
 //
 // RAW relu intégralement avant ce code (docs/REGLES/REGLES_ARMES_SPECIALES.md:18-52) — 3 points
 // corrigent une hypothèse antérieure du plan :
@@ -353,15 +431,14 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
     // Identification par la donnée catalogue `aoe_profile.mechanic` (segment 0b, shared/combatAoe.js),
-    // plus par `ref_name` en dur. Ce resolver ne gère que `shotgun_spread` pour l'instant — les autres
-    // mécanismes (flamethrower...) sont rejetés avec un message clair jusqu'à leur branche dédiée
-    // (segment 0d/1).
-    if (getAoeMechanic(weapon.ref_aoe_profile) !== 'shotgun_spread') {
-      const mech = getAoeMechanic(weapon.ref_aoe_profile)
+    // plus par `ref_name` en dur. Deux mécanismes câblés : `shotgun_spread` (fusil à pompe, segment 0)
+    // et `flamethrower` (lance-flammes, segment 1). Tout autre → message clair jusqu'à sa branche dédiée.
+    const mechanic = getAoeMechanic(weapon.ref_aoe_profile)
+    if (mechanic !== 'shotgun_spread' && mechanic !== 'flamethrower') {
       emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
         username: character.name,
-        message: mech
-          ? `${weapon.ref_name ?? 'Cette arme'} — résolution de zone « ${mech} » pas encore implémentée.`
+        message: mechanic
+          ? `${weapon.ref_name ?? 'Cette arme'} — résolution de zone « ${mechanic} » pas encore implémentée.`
           : `${weapon.ref_name ?? 'Cette arme'} — dispersion en zone inconnue pour cette arme.`,
       } })
       return { suspend: false, emissions }
@@ -384,18 +461,27 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
     const amplitudeM = thresholds[thresholds.length - 1]
-    // Couloir géométrique le plus large possible (longue/extrême, 3m) pour la requête bulk — filtre
-    // grossier volontairement sur-inclusif, chaque candidat est retesté plus bas avec la largeur RÉELLE
-    // de son propre palier (PLAN_AOE.md §4/§6.2bis : un cône à angle fixe ne modélise pas exactement une
-    // largeur qui croît par PALIERS discrets — deux passes géométriques plutôt qu'une approximation).
-    const coarseWidthM = Math.max(...Object.values(SHOTGUN_SPREAD_BY_BAND).map(band => band.widthM || 0))
-
     const origin = dbPositionToWorldPoint(shooterToken)
+    const angleDeg = weapon.ref_aoe_profile?.angleDeg
+
+    // ── Géométrie + ciblage — spécifiques au mécanisme ────────────────────────────────────────────
+    // `shotgun_spread` : couloir 'ray' le plus large possible (sur-inclusif) pour la requête bulk,
+    //   puis retest de la largeur RÉELLE du palier par candidat (PLAN_AOE.md §4/§6.2bis — la largeur
+    //   croît par PALIERS discrets, pas un cône continu → deux passes géométriques).
+    // `flamethrower` : cône 'cone' à angle FIXE (aoe_profile.angleDeg) — la forme testée EST la forme
+    //   finale, une seule passe (PLAN_ARMES_SPECIALES.md §1.4 segment 1e).
     let aoeShape
     try {
-      aoeShape = normalizeAoeShape({ shape: 'ray', origin, directionDeg: aoe.direction, amplitudeM, widthM: coarseWidthM })
+      aoeShape = mechanic === 'flamethrower'
+        ? normalizeAoeShape({ shape: 'cone', origin, directionDeg: aoe.direction, amplitudeM, angleDeg })
+        : normalizeAoeShape({ shape: 'ray', origin, directionDeg: aoe.direction, amplitudeM,
+            widthM: Math.max(...Object.values(SHOTGUN_SPREAD_BY_BAND).map(band => band.widthM || 0)) })
     } catch (shapeErr) {
       console.warn(`[WS] resolveAoeAssaultAction — forme AOE invalide: ${shapeErr.message}`)
+      emissions.push({ to: 'room', event: WS.COMBAT_DECLARE_ERROR, data: {
+        username: character.name,
+        message: 'Tir en zone impossible — profil de zone d\'effet de l\'arme invalide',
+      } })
       return { suspend: false, emissions }
     }
 
@@ -405,12 +491,15 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     if (visibility.status !== 'ok') return { suspend: false, emissions }
 
     const metrics = visibility.metrics
-    const hitTargets = filterShotgunHitTargets({
-      visibilityTargets: visibility.targets,
-      shooterTokenId: action.token_id,
-      origin, directionDeg: aoe.direction,
-      refRange: weapon.ref_range, amplitudeM, metrics,
-    })
+    const hitTargets = mechanic === 'flamethrower'
+      ? filterFlamethrowerHitTargets({
+          visibilityTargets: visibility.targets, shooterTokenId: action.token_id,
+          origin, directionDeg: aoe.direction, amplitudeM, angleDeg, metrics,
+        })
+      : filterShotgunHitTargets({
+          visibilityTargets: visibility.targets, shooterTokenId: action.token_id,
+          origin, directionDeg: aoe.direction, refRange: weapon.ref_range, amplitudeM, metrics,
+        })
 
     // ── Jet de tir unique (Phase A) — jamais de branche "raté" ici, voir commentaire de tête.
     const phaseA = await runAoePhaseA({ character, weapon, confirmedModifiers })
@@ -424,9 +513,10 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     await decrementAoeAmmo(campaignId, { character, weapon, action })
 
     if (hitTargets.length === 0) {
-      // La gerbe est partie (RAW), personne dans le couloir. Jamais un COMBAT_ATTACK_RESULT « cible
-      // unique » ici : le panneau hit/miss afficherait « Touché » sur une cible « ? » à 0 dégât dès
-      // que le jet Phase A réussit (le Test de tir n'est pas un hit/miss d'action pour une zone).
+      // Le tir est parti (RAW), personne dans la zone d'effet (couloir de gerbe ou cône). Jamais un
+      // COMBAT_ATTACK_RESULT « cible unique » ici : le panneau hit/miss afficherait « Touché » sur une
+      // cible « ? » à 0 dégât dès que le jet Phase A réussit (le Test de tir n'est pas un hit/miss
+      // d'action pour une zone).
       // → une ligne système en chat pour tout le monde ; le tireur PJ ferme sa fenêtre via aoeNoTargets.
       const shooterLabel = character.name ?? shooterToken.label ?? '?'
       emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
@@ -442,25 +532,56 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
 
-    // ── Mécanisme `shotgun_spread` : persistance + dégât brut par cible (dé de dispersion du palier RAW).
+    // ── Cibles à résoudre = cibles touchées + (lance-flammes) l'auto-éclaboussure du tireur ────────
+    // Décision B (PLAN_ARMES_SPECIALES.md §1.5-B) : si une AUTRE cible touchée est à < 3 m du tireur,
+    // le liquide enflammé l'éclabousse → il devient une pseudo-cible de son propre cône (1 Localisation,
+    // pas un passage complet 1D3 ; armure ÷2 et Choc comme toute cible du cône). Message explicatif
+    // dédié émis plus bas — le tireur doit comprendre POURQUOI il se prend des dégâts.
+    let resolveTargets = hitTargets
+    const selfSplash = mechanic === 'flamethrower'
+      && hitTargets.some(ht => ht.tokenId !== action.token_id && ht.distanceToOriginM < 3)
+    if (selfSplash) {
+      resolveTargets = [...hitTargets, {
+        tokenId: action.token_id, distanceToOriginM: 0, position: origin, hasLineOfSight: true,
+        band: null, isSelfSplash: true,
+      }]
+    }
+
+    // ── Persistance (§3) — une ligne combat_action_targets par cible (le tireur éclaboussé inclus).
+    // `damage_modifier` : palier + dé de dispersion pour le fusil à pompe, `null` pour le lance-flammes
+    // (aucune dispersion — le dégât ne dégresse pas avec la portée, RAW).
     const targetRowIdByTokenId = await insertAoeTargetRows({
-      actionId: action.id, hitTargets,
-      modifierFn: (ht) => ({ band: ht.band, damageDice: ht.spread.damageDice }),
+      actionId: action.id, hitTargets: resolveTargets,
+      modifierFn: mechanic === 'flamethrower'
+        ? () => null
+        : (ht) => ({ band: ht.band, damageDice: ht.spread.damageDice }),
     })
 
     const perTargetInputs = []
-    for (const ht of hitTargets) {
-      // Formule ammo-aware (comme resolveAssaultAction) + dé de dispersion signé du palier RAW propre
-      // à CETTE cible (§4). `portee: ht.band` ne fait que gater fire_mode_bonus_dmg au contact.
-      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band })
+    for (const ht of resolveTargets) {
+      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band ?? null })
       const baseRaw = effectiveDamage
         ? effectiveDamage.total
         : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
-      const spreadRaw = await rollSignedDie(ht.spread.damageDice)
-      const degautsBruts = computeAssaultRawDamage({
-        rawDice: baseRaw + spreadRaw, mr: rollResult.mr, portee: ht.band, fireModeBonusDmg: action.fire_mode_bonus_dmg,
-      })
-      perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, locationsCount: 1, armorReductionFactor: 1 })
+      if (mechanic === 'flamethrower') {
+        // 2D10 sec (RAW) — PAS de dé de dispersion, PAS de dégression de portée, PAS de bonus RL
+        // (`portee: null` → computeAssaultRawDamage ne verse pas fire_mode_bonus_dmg : le RL du
+        // lance-flammes EST la mise en œuvre continue, il n'ajoute pas de dé de dégât — écart JOURNAL8).
+        // `mr` conservé : RAW « le modificateur d'échec réduit les dégâts ». 1D3 Localisations par cible
+        // (auto-éclaboussure : 1 seule) ; armure de fiche ÷2 (décision D, appliquée dans la seule
+        // branche `normal` de resolveAoeTargetDamage — exo/drone épargnés gratuitement).
+        const degautsBruts = computeAssaultRawDamage({ rawDice: baseRaw, mr: rollResult.mr, portee: null, fireModeBonusDmg: null })
+        const locationsCount = ht.isSelfSplash ? 1 : (await parseDice('1D3')).total
+        perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, locationsCount, armorReductionFactor: 0.5 })
+      } else {
+        // Formule ammo-aware (comme resolveAssaultAction) + dé de dispersion signé du palier RAW propre
+        // à CETTE cible (§4). `portee: ht.band` ne fait que gater fire_mode_bonus_dmg au contact.
+        const spreadRaw = await rollSignedDie(ht.spread.damageDice)
+        const degautsBruts = computeAssaultRawDamage({
+          rawDice: baseRaw + spreadRaw, mr: rollResult.mr, portee: ht.band, fireModeBonusDmg: action.fire_mode_bonus_dmg,
+        })
+        perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, locationsCount: 1, armorReductionFactor: 1 })
+      }
     }
 
     // ── Générique : application par cible + finalisation (outcome + émissions + agrégat PJ).
@@ -473,6 +594,14 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     emissions.push(...await finalizeAoeResults({
       perTargetResults, targetRowIdByTokenId, isPnjResult, rollResult, action,
     }))
+
+    // ── Lance-flammes : feu continu sur les cibles + message d'auto-éclaboussure (post-résolution,
+    // ne modifie pas l'agrégat déjà émis).
+    if (mechanic === 'flamethrower') {
+      emissions.push(...await applyFlamethrowerContinuousFire(io, campaignId, {
+        perTargetResults, selfSplash, character, shooterToken,
+      }))
+    }
 
     return { suspend: false, emissions }
   } catch (err) {

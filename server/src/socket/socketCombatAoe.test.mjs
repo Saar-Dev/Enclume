@@ -2,9 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 // Ce fichier importe socketCombatAoe.js (transitivement db / connexion Postgres) mais ne teste que
-// des fonctions pures (resolveAoeAttackRoll, filterShotgunHitTargets) — aucune ne touche la DB.
-// Aucune connexion réelle n'est requise : l'import du module n'exécute aucune requête.
-import { resolveAoeAttackRoll, filterShotgunHitTargets } from './socketCombatAoe.js'
+// des fonctions pures (resolveAoeAttackRoll, filterShotgunHitTargets, filterFlamethrowerHitTargets) —
+// aucune ne touche la DB. Aucune connexion réelle n'est requise : l'import n'exécute aucune requête.
+import { resolveAoeAttackRoll, filterShotgunHitTargets, filterFlamethrowerHitTargets } from './socketCombatAoe.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
 
 // resolveAoeAttackRoll — couche 4 AOE, phase A (docs/PLANS/PLAN_AOE.md §8 étape 8). Un seul Test de
@@ -135,4 +135,61 @@ test('filterShotgunHitTargets — en-palier inclus, band + spread corrects', () 
 
 test('filterShotgunHitTargets — aucun candidat → tableau vide, jamais un throw', () => {
   assert.deepEqual(filterShotgunHitTargets({ ...BASE, visibilityTargets: [] }), [])
+})
+
+// ─── filterFlamethrowerHitTargets — ciblage cône lance-flammes, PURE (segment 1e) ─────────────────
+// Lance-flammes réel : aoe_profile { shape:'cone', angleDeg:30 }, portée extrême 40 m
+// (ref_range '3/7/15/30 (40)'). Cône = bearing dans ±15° de la visée ET distance ≤ 40 m.
+// Pas de dé de dispersion, pas de palier : `band` toujours null.
+
+const CONE = { shooterTokenId: 'shooter', origin: { x: 0, y: 0, z: 0 }, directionDeg: 0, amplitudeM: 40, angleDeg: 30, metrics: M }
+
+test('filterFlamethrowerHitTargets — le tireur est exclu explicitement (l\'origine est toujours dans son propre cône)', () => {
+  const out = filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [
+    cand({ tokenId: 'shooter', position: { x: 0, y: 0, z: 0 }, distanceToOriginM: 0 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterFlamethrowerHitTargets — hors LOS exclu', () => {
+  const out = filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 10, y: 0, z: 0 }, distanceToOriginM: 10, hasLineOfSight: false }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterFlamethrowerHitTargets — au-delà de la longueur du cône (> 40 m) exclu', () => {
+  const out = filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 45, y: 0, z: 0 }, distanceToOriginM: 45 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterFlamethrowerHitTargets — hors de l\'ouverture angulaire (> ±15°) exclu', () => {
+  // (10, 0, 5) → bearing atan2(5,10) ≈ 26,6° > 15°
+  const out = filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: 10, y: 0, z: 5 }, distanceToOriginM: Math.hypot(10, 5) }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterFlamethrowerHitTargets — derrière le tireur exclu', () => {
+  const out = filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [
+    cand({ tokenId: 'a', position: { x: -10, y: 0, z: 0 }, distanceToOriginM: 10 }),
+  ] })
+  assert.equal(out.length, 0)
+})
+
+test('filterFlamethrowerHitTargets — dans le cône (angle + portée) inclus, band null', () => {
+  const out = filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [
+    cand({ tokenId: 'axe', position: { x: 10, y: 0, z: 0 }, distanceToOriginM: 10 }),      // pile sur l'axe
+    cand({ tokenId: 'bord', position: { x: 10, y: 0, z: 2 }, distanceToOriginM: Math.hypot(10, 2) }), // ≈11,3° < 15°
+  ] })
+  assert.equal(out.length, 2)
+  assert.equal(out.find(t => t.tokenId === 'axe').band, null)
+  assert.equal(out.find(t => t.tokenId === 'bord').band, null)
+})
+
+test('filterFlamethrowerHitTargets — aucun candidat → tableau vide, jamais un throw', () => {
+  assert.deepEqual(filterFlamethrowerHitTargets({ ...CONE, visibilityTargets: [] }), [])
 })
