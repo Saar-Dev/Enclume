@@ -186,6 +186,62 @@ dette §5 du dispatch drone. Périmètre = tronc AOE seul.)*
 *(Extinction du feu : rien à coder dans ce Lot — le MJ retire déjà le statut `burning` via la gestion
 générique des statuts. Sous-lot différé « fenêtre personnage en feu » : §1.5-B2.)*
 
+### 1.4bis — Segment 1 codé (2026-09-04) : état, dette introduite, suite (analyse critique)
+
+**Codé et commité (`dev/Saar`, non poussé — attente validation Saar en session réelle) :**
+`a02fffc` 1a (`aoe_profile` cône) · `11ca524` 1b (`shock_mechanism='pure'`) · `63c0ce7` 1c
+(`exposeToHazard({ durationDice })` — le param retenu est `durationDice`, pas `expiresAtTurn` : le
+service lit `combat_state` lui-même et pose `max(existant, currentTurn + roll + 1)`, seul moyen de
+contrer le `.merge()` aveugle de `applyModStatus`) · `45e69db` 1d (aperçu cône, 12 tests) · `77ca97c`
+1e (branche mécanisme `flamethrower` dans `resolveAoeAssaultAction` + `filterFlamethrowerHitTargets`
+pure + 7 fixtures + feu continu + auto-éclaboussure) · `7130303` **PC23 — armes spéciales exemptées de
+Tir Automatique** (`weaponUsesSpecialSkill`, `ref_skills.parent LIKE 'ARME_SPECIALE_%'` ; RAW
+`REGLESYSCOMBAT.md:1498` scope la limite « Tir automatique » aux armes à feu automatiques, jamais au
+lance-flammes dont `fire_mode='RL'` encode la « mise en œuvre continue »).
+
+**⚠️ Validation Saar requise avec un lance-flammes PORTÉ EN MAIN (PJ/PNJ), pas monté sur exo** — le
+chemin exo n'a aucune UI de déclaration AOE (voir Segment 2).
+
+**Dette structurelle introduite par 1e (à résorber au Segment 1.5 avant tout ajout) :**
+- `resolveAoeAssaultAction` porte **6 branches `mechanic === 'flamethrower'`** dispersées (géométrie,
+  ciblage, auto-éclaboussure, `modifierFn`, `degautsBruts`, feu continu). Le plan §1.4-0d prévoyait
+  « un petit bloc » — devenu six. Insoutenable avec grenades (`circle`) + suppression + tireur exo.
+- Hack : la pseudo-cible `isSelfSplash` injectée dans `resolveTargets` (le tireur devient une ligne
+  `combat_action_targets` de sa propre action).
+- Le `+ roll + 1` de purge de fin de Tour est maintenant **dupliqué** entre `clearHazard` (linger) et
+  `exposeToHazard` — un seul fait, deux encodages.
+
+#### Segment 1.5 — Registre de mécanismes AOE (refactor pur, AVANT grenades ET tireur exo)
+
+Modèle : **Foundry VTT dnd5e** — la résolution n'est jamais un `switch` sur le type ; une `Activity`
+est polymorphe, la forme de zone est une donnée (`CONFIG.areaTargetTypes`). Précédent maison :
+`combatantContextService.js` (Strangler Fig, `docs/Old/PLAN_COMBATANT_CONTEXT.md`) + `weaponModService`
+(registre à hooks). Un objet stratégie par mécanisme :
+`{ buildShape(ctx), filterTargets(ctx), targetRowModifier(ht), computeTargetDamage(ctx, ht),
+extraTargets(ctx, hitTargets), postResolve(io, ctx, perTargetResults) }`. Le tronc =
+`AOE_MECHANICS[mechanicId].xxx(...)`, **zéro `if mechanic`**. `shotgun_spread` + `flamethrower` =
+les 2 premières entrées. Ajouter une grenade = un objet. **Aucun changement de comportement** →
+session de non-régression fusil à pompe + lance-flammes en clôture. Résorbe aussi le hack pseudo-cible
+(`extraTargets`) et permet la primitive `turnsFromNow()` partagée pour le `+1` de purge.
+
+#### Segment 2 — AOE tireur exo (après 1.5)
+
+`resolveAoeAssaultAction` lit `action.weapon_inv_id` (inventaire humain) → `if (!weapon_inv_id) return`
+baille pour l'exo. **Déjà agnostiques au type de tireur** : persistance de l'annonce
+(`socketCombatAnnouncement.js:626-662` écrit `exo_weapon_inv_id` + `modifiers.aoe`), Phase A
+(`runAoePhaseA` → `resolveCombatantTestContext` dispatche déjà vers `resolveExoTestContext`),
+application par cible (`resolveAoeTargetDamage` dispatche drone/exo/normal). **Reste** : fetch arme +
+formule de dégâts (`getEffectiveWeaponDamage`) + décompte munitions — à rendre agnostiques via un
+adaptateur (même Strangler Fig que le contexte de Test) ; + UI `CombatExoActionWindow` /
+`useExoDeclare` (bouton « Viser une zone », `aoeDirection`, `buildExoMapActions`, `ref_aoe_profile`
+dans le payload armes exo) ; + `CombatOverlay.jsx` prop `onEnterAoeTargetMode`. **Débloque aussi le
+fusil à pompe monté sur exo** (même tronc). `SERVICES_COMBAT.md §8 F2` documente déjà la dette
+« branches Pj/Pnj/Drone jamais fusionnées » côté résolution d'attaque.
+
+#### Segment 3 — Grenades
+
+Un objet mécanisme `circle` sur le registre du Segment 1.5 (+ le reste des blocages §2 ci-dessous).
+
 ### 1.5 Décisions (tranchées avec Saar 2026-09-03 sauf mention — écart RAW = JOURNAL8)
 
 - **A. Dimensions du cône — TRANCHÉ.** Principe Saar : le RAW a toujours raison, on n'ajuste que ce
@@ -352,8 +408,10 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 
 | Lot | Statut |
 |---|---|
-| **Segment 0 — Socle AOE** (§1.4/§1.6) | **Codé (2026-09-04). ⚠️ session Saar de non-régression fusil à pompe requise.** 0a extraction `socketCombatAoe.js` (`8d86090`) · 0b-B `shared/combatAoe.js` (`5df482f`) · 0c+0b-A migrations `aoe_profile`/`damage_modifier` (`0a35245`) · 0b-C bascule identification data-driven (`b87aa1a`) · 0d-1 `filterShotgunHitTargets` pure + 9 tests (`11f6997`) · 0d-2 refactor tronc + forme `results` 1..N Loc + refonte agrégat étape 10 + `CombatModifiersWindow` imbriqué (`830f229`). **0e** (primitive `resolveTargetHit` fetch-once) = perf, non bloquant, différé. |
-| Lot 1 — lance-flammes | **Cadré, décisions A-G tranchées. Débloqué dès la validation du socle.** Reste : ligne de seed `aoe_profile` `{shape:cone,angleDeg:30,mechanic:flamethrower}` + migration `shock_mechanism='pure'` + `exposeToHazard` param `expiresAtTurn` + aperçu cône (`aoePreviewShape`/`Canvas3D`) + bloc mécanisme `flamethrower` dans `socketCombatAoe.js` (cône, 1D3 Loc, Choc 2D6, `armorReductionFactor: 0.5` branche normale, feu continu + notice B1, auto-éclaboussure B2). Petit une fois le socle posé. |
-| Lot 2 — grenades | Bloqué : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
+| **Segment 0 — Socle AOE** (§1.4/§1.6) | **Codé + validé en session (2026-09-04).** 0a extraction `socketCombatAoe.js` (`8d86090`) · 0b-B `shared/combatAoe.js` (`5df482f`) · 0c+0b-A migrations `aoe_profile`/`damage_modifier` (`0a35245`) · 0b-C bascule identification data-driven (`b87aa1a`) · 0d-1 `filterShotgunHitTargets` pure + 9 tests (`11f6997`) · 0d-2 refactor tronc + forme `results` 1..N Loc + refonte agrégat + `CombatModifiersWindow` imbriqué (`830f229`) · cas 0 cible (`1613467`). **0e** (fetch-once) = perf, différé. |
+| **Segment 1 — lance-flammes (main)** | **Codé (2026-09-04), ⚠️ non poussé, attente validation Saar (lance-flammes en main PJ/PNJ, pas exo).** Voir §1.4bis pour la liste des commits (`a02fffc`..`77ca97c`) + PC23 (`7130303`). |
+| **Segment 1.5 — registre de mécanismes AOE** | **À faire, AVANT segments 2 et 3.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Détail §1.4bis. |
+| **Segment 2 — AOE tireur exo** | **À faire après 1.5.** Adaptateur de résolution d'arme agnostique au type de tireur + UI `CombatExoActionWindow`/`useExoDeclare`. Débloque aussi le fusil à pompe exo. Détail §1.4bis. |
+| Segment 3 — grenades | Un objet mécanisme `circle` sur le registre 1.5. Reste bloqué par : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |
