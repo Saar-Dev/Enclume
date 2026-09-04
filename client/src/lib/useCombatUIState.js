@@ -119,7 +119,9 @@ export function useCombatUIState() {
   // un clic pour sélectionner une cible"). `pendingDirectionDeg` est le pendant continu de
   // `pendingTargetId` — mis à jour en survol tant qu'aucun clic n'a encore figé de valeur, gelé dès
   // qu'un clic en pose une (Canvas3D n'écrit alors plus dedans, cf. handlePointerMove). `weaponRange`
-  // (ref_range brut) traverse jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js), en lecture seule.
+  // (ref_range brut) et `weaponAoeProfile` (ref_equipment.aoe_profile : { shape, angleDeg, mechanic })
+  // traversent jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js), en lecture seule — `shape` choisit
+  // couloir ('ray', fusil à pompe) vs secteur ('cone', lance-flammes).
   // armSeq : identifiant unique de CET armement (incrémenté à chaque appel), distinct de
   // pendingDirectionDeg — permet à Canvas3D de détecter un réarmement réel (clic "Viser une zone" ou
   // "Changer" post-Valider) et de le distinguer d'une simple mise à jour de pendingDirectionDeg sur le
@@ -129,7 +131,7 @@ export function useCombatUIState() {
   // position obsolète au lieu d'attendre un vrai mouvement de souris sur la carte (bug rapporté Saar
   // 2026-09-02 : "l'AOE est posée dès le clic sur CIBLE").
   const aoeArmSeqRef = useRef(0)
-  const handleEnterAoeTargetMode = useCallback((tokenId, tokenPos, weaponRange, onDirectionSelected, onCancel) => {
+  const handleEnterAoeTargetMode = useCallback((tokenId, tokenPos, weaponRange, weaponAoeProfile, onDirectionSelected, onCancel) => {
     const wrappedSelected = (directionDeg) => {
       onDirectionSelected(directionDeg)
       setCombatAoeTargetMode(null)
@@ -140,7 +142,7 @@ export function useCombatUIState() {
     }
     aoeArmSeqRef.current += 1
     setCombatAoeTargetMode({
-      tokenId, weaponRange, pendingDirectionDeg: null, armSeq: aoeArmSeqRef.current,
+      tokenId, weaponRange, weaponAoeProfile, pendingDirectionDeg: null, armSeq: aoeArmSeqRef.current,
       onDirectionSelected: wrappedSelected,
       onCancel: wrappedCancel,
       // deg === null repasse en survol libre (bouton "Changer") — jamais un guard self-cible ici

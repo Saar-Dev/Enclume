@@ -22,7 +22,7 @@ import { FONT_URL, TokenLabel, TokenGmBadge, TokenStatusBadges } from './TokenPr
 import { TargetReticule, GroundCursorReticule } from './SceneReticules.jsx'
 import SceneCursorOverlay from './SceneCursorOverlay.jsx'
 import { useSceneCursor } from '../lib/useSceneCursor.js'
-import { buildShotgunSpreadSegments, projectShotgunSpreadCorners } from '../lib/aoePreviewShape.js'
+import { buildShotgunSpreadSegments, projectShotgunSpreadCorners, buildConeSpan, projectConeTriangles } from '../lib/aoePreviewShape.js'
 import {
   computeSurfaceGridExtent,
   hasSurfaceContent,
@@ -1416,11 +1416,14 @@ function Scene({
         )
       })()}
 
-      {/* ── Aperçu zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) ─────── */}
-      {/* Rectangles empilés, un par palier RAW (courte/moyenne/longue/extrême, bout_portant exclu) —   */}
-      {/* jamais un dégradé continu, la RAW est un palier discret (aoePreviewShape.js). Même formule    */}
-      {/* géométrique que le serveur (shared/world/aoeShapes.js, branche 'ray') : l'aperçu montre        */}
-      {/* exactement ce que la résolution va tester, pas une approximation séparée.                     */}
+      {/* ── Aperçu zone d'effet (PLAN_AOE.md §8 étape 9 ; PLAN_ARMES_SPECIALES.md §1.4) ─────── */}
+      {/* Deux formes selon `weaponAoeProfile.shape` — même géométrie que le serveur teste          */}
+      {/* (shared/world/aoeShapes.js), l'aperçu montre ce que la résolution va tester, pas une      */}
+      {/* approximation séparée :                                                                   */}
+      {/*  - 'ray' (fusil à pompe) : rectangles empilés, un par palier RAW (bout_portant exclu),    */}
+      {/*    jamais un dégradé continu — la RAW est un palier discret (aoePreviewShape.js) ;         */}
+      {/*  - 'cone' (lance-flammes) : secteur angulaire (angle fixe, rayon = portée extrême),       */}
+      {/*    tessellé en éventail de triangles.                                                     */}
       {combatAoeTargetMode && (() => {
         // Direction figée (clic, Valider/Changer en attente) prioritaire sur le survol en cours —
         // une fois `pendingDirectionDeg` posé, handlePointerMove n'écrit plus dans aoePreviewDeg (cf.
@@ -1431,8 +1434,8 @@ function Scene({
         const shooter = tokens.find(t => t.id === combatAoeTargetMode.tokenId)
         if (!shooter) return null
         const y = shooter.pos_z + 0.06
-        const segments = buildShotgunSpreadSegments(combatAoeTargetMode.weaponRange)
-        const quads = projectShotgunSpreadCorners(segments, { x: shooter.pos_x, z: shooter.pos_y }, displayDeg)
+        const origin = { x: shooter.pos_x, z: shooter.pos_y }
+        const shape = combatAoeTargetMode.weaponAoeProfile?.shape ?? 'ray'
         // Clé incluant l'angle (précision 0,1°, même granularité que le garde-fou perf de useFrame
         // ci-dessus) : force React/Three.js à recréer bufferGeometry/bufferAttribute à chaque mise à
         // jour réelle plutôt que de réutiliser l'instance existante. Nécessaire — vérifié en lisant
@@ -1441,23 +1444,37 @@ function Scene({
         // `.needsUpdate = true` sur l'attribut, donc le buffer envoyé au GPU restait celui du tout
         // premier rendu — d'où un aperçu visuellement figé alors que l'angle recalculé (confirmé par
         // logs `[DBG]`, Saar 2026-09-03) changeait bien à chaque frame. Un remontage complet (au lieu
-        // d'un `ref` + `needsUpdate` géré à la main par quad) est le choix le plus sûr ici : la
+        // d'un `ref` + `needsUpdate` géré à la main par face) est le choix le plus sûr ici : la
         // fréquence de mise à jour est déjà cadencée par ce même garde-fou de 0,1°, jamais 60 im/s.
-        return quads.map(quad => {
-          const [a, b, c, d] = quad.corners
-          const positions = new Float32Array([
-            a.x, y, a.z,  b.x, y, b.z,  c.x, y, c.z,
-            a.x, y, a.z,  c.x, y, c.z,  d.x, y, d.z,
-          ])
-          return (
-            <mesh key={`aoe-preview-${quad.band}-${Math.round(displayDeg * 10)}`}>
-              <bufferGeometry>
-                <bufferAttribute attach="attributes-position" count={6} array={positions} itemSize={3} />
-              </bufferGeometry>
-              <meshBasicMaterial color="#ff0000" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
-            </mesh>
-          )
-        })
+        const degKey = Math.round(displayDeg * 10)
+        let faces = []
+        if (shape === 'cone') {
+          const span = buildConeSpan(combatAoeTargetMode.weaponRange, combatAoeTargetMode.weaponAoeProfile?.angleDeg)
+          faces = projectConeTriangles(span, origin, displayDeg).map((tri, i) => {
+            const [a, b, c] = tri.corners
+            return { key: `aoe-cone-${i}-${degKey}`, positions: new Float32Array([a.x, y, a.z, b.x, y, b.z, c.x, y, c.z]) }
+          })
+        } else {
+          const segments = buildShotgunSpreadSegments(combatAoeTargetMode.weaponRange)
+          faces = projectShotgunSpreadCorners(segments, origin, displayDeg).map(quad => {
+            const [a, b, c, d] = quad.corners
+            return {
+              key: `aoe-preview-${quad.band}-${degKey}`,
+              positions: new Float32Array([
+                a.x, y, a.z, b.x, y, b.z, c.x, y, c.z,
+                a.x, y, a.z, c.x, y, c.z, d.x, y, d.z,
+              ]),
+            }
+          })
+        }
+        return faces.map(face => (
+          <mesh key={face.key}>
+            <bufferGeometry>
+              <bufferAttribute attach="attributes-position" count={face.positions.length / 3} array={face.positions} itemSize={3} />
+            </bufferGeometry>
+            <meshBasicMaterial color="#ff0000" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+        ))
       })()}
 
       {/* ── Ligne de visée assaut — joueur→cible pending (Sprint 7.1) ─────── */}

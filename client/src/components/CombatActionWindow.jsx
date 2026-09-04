@@ -649,6 +649,7 @@ export default function CombatActionWindow({
       playerToken.id,
       { x: playerToken.pos_x, z: playerToken.pos_y },
       selectedWeapon?.ref_range ?? null,
+      selectedWeapon?.ref_aoe_profile ?? null,
       (directionDeg) => {
         assaultDecl.setAoeDirection(directionDeg)
         setInTargetMode(false)

@@ -535,10 +535,11 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     )
   }
 
-  // ── Zone d'effet fusil à pompe (PLAN_AOE.md §8 étape 9) — mirroir de handleStartAttack : survol
-  // continu sur la carte, un clic fige un candidat, Valider/Changer décident ensuite (combatAoeTargetMode
-  // — pas un clic-glisser-relâcher, essayé puis abandonné, retour Saar 2026-09-02). `weapon.ref_range`
-  // traverse jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js).
+  // ── Zone d'effet (PLAN_AOE.md §8 étape 9 fusil à pompe ; PLAN_ARMES_SPECIALES.md §1.4 lance-flammes)
+  // — mirroir de handleStartAttack : survol continu sur la carte, un clic fige un candidat,
+  // Valider/Changer décident ensuite (combatAoeTargetMode — pas un clic-glisser-relâcher, essayé puis
+  // abandonné, retour Saar 2026-09-02). `weapon.ref_range` + `weapon.ref_aoe_profile` traversent
+  // jusqu'à Canvas3D pour l'aperçu (aoePreviewShape.js) — `shape` choisit couloir vs cône.
   const handleStartAoeDirection = () => {
     if (!onEnterAoeTargetMode || !activeTokenId || !activeToken) return
     setIsSelectingOnMap(true)
@@ -546,6 +547,7 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
       activeTokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
       weapon?.ref_range ?? null,
+      weapon?.ref_aoe_profile ?? null,
       (directionDeg) => {
         assaultDecl.setAoeDirection(directionDeg)
         setIsSelectingOnMap(false)

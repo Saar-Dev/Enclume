@@ -1,11 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildShotgunSpreadSegments, projectShotgunSpreadCorners } from './aoePreviewShape.js'
+import {
+  buildShotgunSpreadSegments, projectShotgunSpreadCorners,
+  buildConeSpan, projectConeTriangles,
+} from './aoePreviewShape.js'
 
 // ref_range réel du Klauss (seul fusil à pompe du catalogue, migrations/303_ref_equipment_seed.js) —
 // même constante que shared/combatRange.test.mjs, pas une valeur inventée.
 const KLAUSS_REF_RANGE = '2/7/14/28 (35)'
+// ref_range + angleDeg réels du Lance-flammes (migrations 303 + 322_..._aoe_profile).
+const LANCE_FLAMMES_REF_RANGE = '3/7/15/30 (40)'
+const LANCE_FLAMMES_ANGLE = 30
 
 test('Klauss : 4 segments (bout_portant exclu), largeurs et bornes RAW exactes', () => {
   const segments = buildShotgunSpreadSegments(KLAUSS_REF_RANGE)
@@ -70,4 +76,48 @@ test('projectShotgunSpreadCorners — 90° : couloir aligné sur +Z, largeur sur
 test('projectShotgunSpreadCorners — un quad par segment, même ordre', () => {
   const quads = projectShotgunSpreadCorners(buildShotgunSpreadSegments(KLAUSS_REF_RANGE), { x: 0, z: 0 }, 0)
   assert.deepEqual(quads.map(q => q.band), ['courte', 'moyenne', 'longue', 'extreme'])
+})
+
+// ─── Cône lance-flammes ───────────────────────────────────────────────────────────────────────────
+
+test('buildConeSpan — Lance-flammes : rayon = portée extrême du catalogue (40 m), angle transmis', () => {
+  assert.deepEqual(buildConeSpan(LANCE_FLAMMES_REF_RANGE, LANCE_FLAMMES_ANGLE), { lengthM: 40, angleDeg: 30 })
+})
+
+test('buildConeSpan — portée ou angle inexploitables : null, jamais une exception', () => {
+  assert.equal(buildConeSpan(null, 30), null)
+  assert.equal(buildConeSpan('', 30), null)
+  assert.equal(buildConeSpan('pas un nombre', 30), null)
+  assert.equal(buildConeSpan(LANCE_FLAMMES_REF_RANGE, 0), null)
+  assert.equal(buildConeSpan(LANCE_FLAMMES_REF_RANGE, -10), null)
+  assert.equal(buildConeSpan(LANCE_FLAMMES_REF_RANGE, 400), null)
+  assert.equal(buildConeSpan(LANCE_FLAMMES_REF_RANGE, NaN), null)
+})
+
+test('projectConeTriangles — éventail contigu : apex commun, arête partagée entre triangles voisins', () => {
+  const span = buildConeSpan(LANCE_FLAMMES_REF_RANGE, LANCE_FLAMMES_ANGLE)
+  const tris = projectConeTriangles(span, { x: 0, z: 0 }, 0)
+  assert.ok(tris.length >= 2)
+  for (let i = 0; i < tris.length; i++) {
+    assertPointClose(tris[i].corners[0], { x: 0, z: 0 }, `tri${i}.apex`)
+    // extrémités sur le cercle de rayon lengthM
+    for (const c of [tris[i].corners[1], tris[i].corners[2]]) {
+      assert.ok(Math.abs(Math.hypot(c.x, c.z) - 40) < 1e-9, `tri${i} coin sur l'arc r=40`)
+    }
+    if (i > 0) assertPointClose(tris[i].corners[1], tris[i - 1].corners[2], `tri${i} arête partagée`)
+  }
+})
+
+test('projectConeTriangles — 0° : arc centré sur +X, borné à ±15° pour un cône de 30°', () => {
+  const span = buildConeSpan(LANCE_FLAMMES_REF_RANGE, LANCE_FLAMMES_ANGLE)
+  const tris = projectConeTriangles(span, { x: 0, z: 0 }, 0)
+  const first = tris[0].corners[1]
+  const last = tris[tris.length - 1].corners[2]
+  // -15° : (40 cos(-15°), 40 sin(-15°))
+  assertPointClose(first, { x: 40 * Math.cos(-15 * Math.PI / 180), z: 40 * Math.sin(-15 * Math.PI / 180) }, 'bord -15°')
+  assertPointClose(last,  { x: 40 * Math.cos( 15 * Math.PI / 180), z: 40 * Math.sin( 15 * Math.PI / 180) }, 'bord +15°')
+})
+
+test('projectConeTriangles — span null : tableau vide, jamais une exception', () => {
+  assert.deepEqual(projectConeTriangles(null, { x: 0, z: 0 }, 0), [])
 })
