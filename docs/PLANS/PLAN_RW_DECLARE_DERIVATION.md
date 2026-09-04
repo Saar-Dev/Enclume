@@ -5,8 +5,9 @@
 > chantier clos 2026-08-30 : `JOURNAL8.md` §« RW déclaration : M0.4 + module 4 »).
 > À l'achèvement : décisions durables → `docs/SYSTEME/COMBAT.md` + `docs/SYSTEME/REACT.md`, ce PLAN supprimé.
 >
-> Statut : **cadré + analyse à charge faite (2026-09-04). Périmètre resserré vs proposition initiale.
-> En attente validation Saar avant code.**
+> Statut : **Étapes A + B codées et commitées (2026-09-04, 5 commits `dev/Saar`, non poussés).
+> Étape C vérifiée sans objet (déjà livrée par M0.4). Reste : passe navigateur consolidée complète
+> (checklist §3 Étape B) avant clôture définitive et archivage `docs/Old/`.**
 
 ---
 
@@ -149,16 +150,23 @@ dans `ctx`, pas dans le sélecteur.
 - **Risque** : MOYEN (état interne de 2 gros composants) — le mieux fileté (golden master +
   reducers `.test.mjs`).
 
-### Étape C — Reset consolidé (M0.4-f)
+### Étape C — Reset consolidé (M0.4-f) — **SANS OBJET (vérifié 2026-09-04, déjà livré par M0.4)**
 
-Les effets de reset `[tokenId, has_announced]` des 2 fenêtres : ~15 setters → `assaultDecl.clear()`
-+ `meleeDecl.clear()` + le résiduel non couvert par les reducers (identifié au grep).
+La prémisse « ~15 setters → 3 appels » était **héritée non revérifiée** de
+`PLAN_RW_DECLARE_DESIGN` §5.8 (état d'avant M0.4). Lecture du code au 2026-09-04 :
 
-- **Fichiers** : `CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx`.
-- **Filet** : eslint (le MJ a déjà 1 erreur pré-existante `react-hooks/set-state-in-effect` sur cet
-  effet — ne pas régresser au-delà) + passe navigateur (nouveau tour, changement de slot actif).
-- **Risque** : FAIBLE-MOYEN.
-- **1 commit.**
+- `CombatActionWindow.jsx` : **un seul** effet de reset consolidé sur `[token_id, has_announced]`
+  (commentaire « Un seul effet consolidé : avant le 2026-08-28 il y en avait deux divergents »),
+  qui appelle déjà `assaultDecl.clear()` + `meleeDecl.clear()`. Résiduel = `dispatch({RESET})` (le
+  reducer `decl`), `setMapSelected(new Set())`, et 5 flags UI locaux (`moveSelection`, `inMoveMode`,
+  `inTargetMode`, `inMeleeTargetMode`, `selectedAmmoId`) + `combatTargetMode/AoeTargetMode.onCancel()`.
+- `CombatGmDeclareWindow.jsx` : idem — effet consolidé, `clear()` ×2, résiduel = `dispatch({RESET})`,
+  `setMapAction`, `setMeleePendingMode`, `setPendingMove`, `setIsSelectingOnMap`, 2 `onCancel()`.
+
+Le résiduel n'est **pas** du sous-état Tir/CaC (déjà `clear()`) : c'est le reducer `decl`, la
+sélection d'action (`mapSelected`/`mapAction`), et des flags de ciblage carte propres à la fenêtre.
+Le collapser exigerait **Module 6** (`useHumanDeclare`, extraction des ~26 `useState`) — explicitement
+différé (`JOURNAL8.md` : « Module 6 — différé »). Hors périmètre. **Aucun code.**
 
 ### Étape D — Doc + non-régression
 
@@ -186,8 +194,8 @@ Les effets de reset `[tokenId, has_announced]` des 2 fenêtres : ~15 setters →
 
 ## 5. Ordre recommandé
 
-**A** (opportun pour `PLAN_ARMES_SPECIALES` grenades) → **B1→B5** (PO-M5-a) → **C** (M0.4-f) →
-**D**. Total ~7 commits `dev/Saar`. Une passe navigateur consolidée après B5 et après C.
+**A** (opportun pour `PLAN_ARMES_SPECIALES` grenades) → **B1→B5** (PO-M5-a) → ~~**C**~~ (sans objet) →
+**D**. ~5 commits `dev/Saar` + doc. Une passe navigateur consolidée après B5.
 Ce plan ne dépend pas de `PLAN_ARMES_SPECIALES` et réciproquement (sauf que faire **A** avant le
 Segment 3 grenades évite un double site `intendedOrigin`).
 
@@ -263,3 +271,15 @@ de ciblage remplit les slots dans l'ordre. Aucun câblage. `node --test` 17/17, 
   CC / RC-RL / visé / dual-wield / AOE (PJ + MJ) ; chaque `reason` de blocage (« Choisir une
   cible », « Configurer le mode de tir », « Sélectionner une arme de tir », « Définir le
   déplacement de la Charge », « Tir visé impossible : … »).
+- **Tests préliminaires navigateur OK** (Saar, 2026-09-04) — passe complète encore à faire.
+
+### Étape C — vérifiée sans objet 2026-09-04
+
+Cf. §3 Étape C : les 2 effets de reset sont déjà consolidés et appellent déjà `clear()` (livré
+par M0.4). Le résiduel relève de Module 6 (différé). Aucun code, `docs/EN_COURS.md` /
+`PLAN_RW_DECLARE_DESIGN` M0.4-f : plus rien à faire ici.
+
+### Étape D — doc + clôture — 2026-09-04
+
+`JOURNAL8.md` (session + clôture chantier), `docs/SYSTEME/COMBAT.md` (dérivation unique = invariant
+durable des fenêtres de déclaration). Passe de non-régression complète : Saar.

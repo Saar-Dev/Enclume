@@ -1460,6 +1460,17 @@ domaine** (`client/src/lib/assaultDeclaration.js` / `meleeDeclaration.js`), mont
 PJ **et** MJ (l'exo reste à migrer). Terminologie : `VOCABULARY.md` V2.6 (« Tir » / « Corps à corps » ;
 catégories d'arme « Distance » / « Contact »).
 
+**Dérivation unique validité/payload (`docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md`, 2026-09-04)** :
+la neutralisation « zone d'effet » côté validité, la dérivation Charge, et la construction des
+entrées `attack[]`/`melee[]` (branche AOE incluse) sont chacune **une seule fonction pure**,
+partagée PJ/MJ — jamais recopiées en fenêtre. `assaultCheckInputs` / `meleeCheckInputs`
+(`assaultDeclaration.js` / `meleeDeclaration.js`) alimentent `assaultCheck`/`meleeCheck`
+(`declareChecks.js`) ; `buildAttackEntries` / `buildMeleeEntries` (`buildDeclarePayload.js`)
+alimentent `buildHumanDeclarePayload`/`buildGmDeclarePayload`. Les divergences PJ/MJ légitimes
+(bonus `null`/`0`, id d'arme `.id`/`.inv_id`, sémantique de `started`…) passent par un contexte
+explicite, jamais une branche `if (profile)` dans le cœur. L'exo/drone n'y sont pas encore —
+prévu par `PLAN_ARMES_SPECIALES.md` Segment 2 (déclaration exo déjà ouverte là-bas).
+
 Côté modèle / calcul (ce qui concerne ce document) :
 - `client/src/components/combatSections.js` — `STATE_DEFS`, `nextKey`,
   `calcIniDelta` / `calcIniBreakdown` (aperçu client), `MAP_ACTIONS` (encore consommé par l'exo et

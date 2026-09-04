@@ -5024,3 +5024,62 @@ Loupé à la vérif « 100 % » : la ligne `const context` avait été lue mais 
 (2) `getCampaignActivity` : une session encore ouverte comptait jusqu'à `last_seen_at` (0 min tant
 que le heartbeat 5 min n'avait pas tiqué) → désormais jusqu'à `now()` si `last_seen_at` récent
 (< 11 min), sinon `last_seen_at` (crash : pas de temps mort compté).
+
+## Session (Claude) — 2026-09-04 — Déclaration combat : dérivation unique (PLAN_RW_DECLARE_DERIVATION) — CHANTIER CLOS
+
+Reste différé de `PLAN_RW_DECLARE_DESIGN` (clos 2026-08-30) : PO-M5-a (neutralisation zone d'effet
+recopiée entre `assaultCheck`/`meleeCheck` PJ et MJ), la branche AOE dupliquée verbatim entre
+`buildHumanDeclarePayload`/`buildGmDeclarePayload`, et M0.4-f (reset consolidé — état supposé,
+jamais revérifié).
+
+**Analyse à charge (avant code)** : le périmètre proposé (10 sous-commits, exo/drone inclus,
+couche `payloadSel` séparée) était sur-dimensionné. Resserré à 3 constats vérifiés :
+1. **Exo/drone SORTENT du périmètre** `[VÉRIFIÉ]` — `PLAN_ARMES_SPECIALES.md` §1.4bis Segment 2
+   possède déjà la refonte de la déclaration exo (`CombatExoActionWindow`/`useExoDeclare`, adaptateur
+   de résolution d'arme agnostique au type de tireur), séquencée après son Segment 1.5. Y toucher ici
+   aurait doublonné/pré-empté ce travail. La réconciliation `assaultCheck` exo/drone + un `blockReason`
+   drone (absent aujourd'hui — ajout serait un changement de comportement, pas un refactor)
+   rejoignent ce Segment 2.
+2. **Pas de couche `assaultPayloadSel` séparée** — le contexte requis (~9 champs) était à peine plus
+   petit que le `sel` existant (~15) ; l'indirection ne se justifiait pas. Le cœur commun vit
+   directement dans `buildAttackEntries`/`buildMeleeEntries`, consommées par les wrappers existants
+   (signature `buildHumanDeclarePayload(sel)` inchangée, golden master intact).
+3. **M0.4-f (reset ~15 setters) était une prémisse héritée non revérifiée** — au 2026-09-04 les 2
+   effets de reset sont **déjà** consolidés (un seul effet par fenêtre, `[token_id, has_announced]`)
+   et appellent déjà `assaultDecl.clear()`/`meleeDecl.clear()`. Le résiduel (reducer `decl`, Set
+   `mapSelected`/`mapAction`, flags de ciblage carte locaux) n'est pas du sous-état Tir/CaC — le
+   collapser exigerait Module 6 (`useHumanDeclare`, ~26 `useState`), explicitement différé. **Étape C
+   du plan abandonnée sans code.**
+
+**Codé** (`docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md` §6 détail par étape, 5 commits `dev/Saar`
+non poussés) :
+- **Étape A** — `buildAttackEntries`/`buildMeleeEntries` (`buildDeclarePayload.js`) : cœur commun
+  des entrées `attack[]`/`melee[]`, branche zone d'effet et neutralisation dual-wield/Tir visé en
+  mode zone **une seule fois** (avant : recopiées entre PJ et MJ). Divergences légitimes via
+  contexte (`weaponInvId`, `offhandWeaponId`, `targets`, `emptyBonus` = `null` PJ / `0` MJ). Entrée
+  Charge reste inline par wrapper (formes divergentes 5/3 clés, testées). `buildDroneMapActions`/
+  `buildExoMapActions` inchangés.
+- **Étape B1/B4** — `assaultCheckInputs`/`meleeCheckInputs` (`assaultDeclaration.js`/
+  `meleeDeclaration.js`) : autorité unique de la neutralisation zone d'effet et de la dérivation
+  Charge (`isCharge`/`chargeHasMove`/`chargeHasTarget` depuis `state.charge`) côté validité.
+- **Étape B2/B3/B5** — `CombatActionWindow.jsx` (PJ) et `CombatGmDeclareWindow.jsx` (MJ) consomment
+  les 2 sélecteurs ; les appels inline `assaultCheck({...})`/`meleeCheck({...})` disparaissent.
+
+**Testé** : `node --test client/src/lib` **230/230** (golden master 55 tests bout-en-bout PJ/MJ/
+drone/exo **vert sans modification** — iso-comportement confirmé, +26 tests neufs des sélecteurs/
+helpers isolés) ; `node --check` ; `vite build` propre ; `eslint` iso-baseline (MJ garde son unique
+erreur pré-existante `set-state-in-effect` sur l'effet de reset, ligne inchangée). **Tests
+préliminaires navigateur OK** (Saar, 2026-09-04).
+
+**Non testé** : passe navigateur consolidée complète (checklist dans le PLAN §3 Étape B — PJ/MJ Tir
+simple/Multi/RC-RL/visé/dual-wield/AOE, CaC simple/Multi/Défensif/Retraite/Charge, chaque raison de
+blocage). ⚠️ **clos partiel** tant que cette passe n'est pas faite.
+
+**Données** : aucune. Client + modules partagés purs, zéro migration.
+
+**Retour arrière** : `git revert` par commit (5 commits indépendants, `A` puis `B1`→`B5`, chacun
+son invariant).
+
+**Suite** : réconciliation exo/drone → `PLAN_ARMES_SPECIALES.md` Segment 2 (déclaration exo déjà
+ouverte là-bas). `PLAN_RW_DECLARE_DERIVATION.md` à archiver `docs/Old/` une fois la passe complète
+validée par Saar.
