@@ -15,6 +15,24 @@ export function getAllHazardCodes() {
   return ENVIRONMENTAL_HAZARD_REGISTRY.map(entry => entry.code)
 }
 
+// turnsFromNow — Tour futur (`current_turn` + un jet de dés + le `+1` de compensation de purge de fin
+// de Tour). Primitive partagée par exposeToHazard (durationDice) et clearHazard (linger) — même
+// formule dupliquée deux fois avant cette extraction (trouvée en résorbant la dette du Segment 1.5
+// AOE, PLAN_ARMES_SPECIALES.md §1.4bis — sans lien de mécanisme avec l'AOE elle-même, juste la même
+// session). `currentTurn` lu depuis `combat_state` ICI (jamais l'appelant — le serveur reste
+// autoritaire, CLAUDE.md §7) : le `+1` compense la purge universelle de fin de Tour
+// (`socketCombatHelpers.js`, condition `expires_at_turn <= newTurn` appliquée AVANT la résolution du
+// Tour où ils s'égalent) — sans lui, un danger ne tickerait que `roll-1` fois au lieu des `roll` Tours
+// RAW. Ne fait AUCUN max avec une expiry existante — ça reste au jugement de chaque appelant
+// (exposeToHazard : ne jamais raccourcir un danger déjà posé ; clearHazard/linger : pas de notion
+// d'expiry précédente, l'Acide vient d'être retiré).
+async function turnsFromNow(db, campaignId, diceFormula) {
+  const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+  const currentTurn = state?.current_turn ?? 1
+  const { total: roll } = await parseDice(diceFormula)
+  return currentTurn + roll + 1
+}
+
 // exposeToHazard — pose un danger environnemental (Acide/Décompression/Feu) sur un token, action MJ
 // explicite (docs/PLAN_FATIGUE_DOMMAGES.md §9 Lot 3, increment F.2). `forcedLocation` (point ouvert 10)
 // : clé LOCATION_TO_SLOT choisie par le MJ pour Acide/petite flamme/feu moyen (RAW : "la Localisation
@@ -57,14 +75,12 @@ export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { 
 
   let expiresAtTurn = null
   if (durationDice != null) {
-    const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-    const currentTurn = state?.current_turn ?? 1
-    const { total: roll } = await parseDice(durationDice)
+    const candidateTurn = await turnsFromNow(db, campaignId, durationDice)
     const existing = await db('token_statuses')
       .where({ token_id: tokenId, status_code: hazardCode })
       .select('expires_at_turn')
       .first()
-    expiresAtTurn = Math.max(existing?.expires_at_turn ?? 0, currentTurn + roll + 1)
+    expiresAtTurn = Math.max(existing?.expires_at_turn ?? 0, candidateTurn)
   }
 
   await statusService.applyModStatus(io, db, campaignId, tokenId, hazardCode, {
@@ -76,12 +92,8 @@ export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { 
 
 // clearHazard — retire un danger environnemental (§9 F.3). `linger: true` réservé à l'Acide (RAW :
 // "l'effet de l'acide peut alors persister pendant 1D6 Tour(s)" en sortie de zone) — Feu/Décompression
-// n'ont pas cette mécanique RAW, retrait toujours immédiat pour eux. `currentTurn` lu depuis
-// `combat_state` côté serveur (jamais fourni par l'appelant — le serveur reste autoritaire, CLAUDE.md
-// §7) : `+1` nécessaire (pas juste `+roll`) car la purge universelle de fin de Tour
-// (`socketCombatHelpers.js:1092-1114`, condition `expires_at_turn <= newTurn`) retire un statut
-// **avant** la phase de résolution du Tour où `newTurn === expires_at_turn` — sans le `+1`, l'Acide ne
-// tickerait que `roll-1` fois au lieu des `roll` Tours RAW.
+// n'ont pas cette mécanique RAW, retrait toujours immédiat pour eux. Expiry calculée par
+// `turnsFromNow` ci-dessus (voir son commentaire pour le `+1` de compensation de purge de fin de Tour).
 export async function clearHazard(io, db, campaignId, tokenId, hazardCode, { linger = false } = {}) {
   if (!linger) {
     await statusService.clearModStatus(io, db, campaignId, tokenId, hazardCode, { throwOnFailure: true })
@@ -90,12 +102,10 @@ export async function clearHazard(io, db, campaignId, tokenId, hazardCode, { lin
   if (hazardCode !== 'acid') {
     throw new AppError(400, `linger réservé à "acid" (RAW), pas applicable à "${hazardCode}"`)
   }
-  const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
-  const currentTurn = state?.current_turn ?? 1
-  const { total: roll } = await parseDice('1d6')
+  const expiresAtTurn = await turnsFromNow(db, campaignId, '1d6')
   await db('token_statuses')
     .where({ token_id: tokenId, status_code: hazardCode })
-    .update({ expires_at_turn: currentTurn + roll + 1 })
+    .update({ expires_at_turn: expiresAtTurn })
   await statusService.emitTokenStatusUpdated(io, db, campaignId, tokenId)
 }
 
