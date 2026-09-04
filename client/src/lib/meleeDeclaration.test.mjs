@@ -5,6 +5,7 @@ import {
   MELEE_DECLARATION_INITIAL as INIT,
   meleeDeclarationReducer as reduce,
   meleeTargetsFilled,
+  meleeCheckInputs,
 } from './meleeDeclaration.js'
 
 test('état initial : arme auto (undefined), pas d\'arme naturelle', () => {
@@ -79,4 +80,43 @@ test('action inconnue : identité', () => {
 test('meleeTargetsFilled : compte les cibles non nulles', () => {
   assert.equal(meleeTargetsFilled({ ...INIT, targets: ['a', null, 'c'] }), 2)
   assert.equal(meleeTargetsFilled(INIT), 0)
+})
+
+// --- meleeCheckInputs (PLAN_RW_DECLARE_DERIVATION Étape B) ---------------------------------------
+
+const mctx = (over = {}) => ({ started: true, defensif: false, effectiveMeleeCount: 1, ...over })
+
+test('meleeCheckInputs : CaC simple — targetsFilled = targets.length, pas de Charge', () => {
+  assert.deepEqual(meleeCheckInputs({ ...INIT, targets: ['e1', 'e2'] }, mctx({ effectiveMeleeCount: 2 })), {
+    started: true, defensif: false, isCharge: false, chargeHasMove: false, chargeHasTarget: false,
+    targetsFilled: 2, targetsNeeded: 2,
+  })
+})
+
+test('meleeCheckInputs : started / defensif passés tels quels', () => {
+  const r = meleeCheckInputs(INIT, mctx({ started: false, defensif: true }))
+  assert.equal(r.started, false)
+  assert.equal(r.defensif, true)
+})
+
+test('meleeCheckInputs : Charge avec déplacement seul (cible pas encore posée)', () => {
+  const state = { ...INIT, charge: { move: { targetPosX: 1 }, targetTokenId: null } }
+  const r = meleeCheckInputs(state, mctx())
+  assert.equal(r.isCharge, true)
+  assert.equal(r.chargeHasMove, true)
+  assert.equal(r.chargeHasTarget, false)
+})
+
+test('meleeCheckInputs : Charge complète', () => {
+  const state = { ...INIT, charge: { move: { targetPosX: 1 }, targetTokenId: 'e1' } }
+  const r = meleeCheckInputs(state, mctx())
+  assert.equal(r.chargeHasMove, true)
+  assert.equal(r.chargeHasTarget, true)
+})
+
+test('meleeCheckInputs : charge null → isCharge false, pas de crash sur ?.', () => {
+  const r = meleeCheckInputs({ ...INIT, charge: null }, mctx())
+  assert.equal(r.isCharge, false)
+  assert.equal(r.chargeHasMove, false)
+  assert.equal(r.chargeHasTarget, false)
 })

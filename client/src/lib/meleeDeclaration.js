@@ -32,6 +32,40 @@ export function meleeTargetsFilled(state) {
   return state.targets.filter(Boolean).length
 }
 
+// Args de `meleeCheck` (client/src/lib/declareChecks.js) dérivés du sous-état CaC + d'un contexte
+// fenêtre — **autorité unique** de la dérivation Charge (`isCharge` / `chargeHasMove` /
+// `chargeHasTarget` depuis `state.charge`). Avant : recopié à l'identique entre `CombatActionWindow`
+// (PJ) et `CombatGmDeclareWindow` (MJ) (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B).
+//
+// Ce que le contexte apporte :
+//  - `started`  : PJ = `meleeSelected ∨ Charge` ; MJ = `meleePendingMode ∨ cibles ∨ Charge` —
+//                 sémantiques distinctes (le MJ a un flag « CaC en cours » sans arme choisie).
+//  - `defensif` : `decl.combatMode ∈ { defensif, retraite }` (mode passif — aucune cible requise).
+//  - `effectiveMeleeCount` : déjà résolu par la fenêtre (Charge force 1 via `decl.combatMode`).
+//
+// `targetsFilled` = `state.targets.length` (comme l'ancien inline), **pas** `.filter(Boolean)` : la
+// chaîne récursive de ciblage remplit les slots dans l'ordre (0,1,2), jamais de trou — iso-comportement.
+//
+// @param {typeof MELEE_DECLARATION_INITIAL} state
+// @param {object}  ctx
+// @param {boolean} ctx.started
+// @param {boolean} ctx.defensif
+// @param {number}  ctx.effectiveMeleeCount
+// @returns {{ started: boolean, defensif: boolean, isCharge: boolean, chargeHasMove: boolean,
+//             chargeHasTarget: boolean, targetsFilled: number, targetsNeeded: number }}
+export function meleeCheckInputs(state, ctx) {
+  const charge = state.charge
+  return {
+    started:         ctx.started,
+    defensif:        ctx.defensif,
+    isCharge:        charge != null,
+    chargeHasMove:   charge?.move != null,
+    chargeHasTarget: charge?.targetTokenId != null,
+    targetsFilled:   state.targets.length,
+    targetsNeeded:   ctx.effectiveMeleeCount,
+  }
+}
+
 /**
  * @param {typeof MELEE_DECLARATION_INITIAL} state
  * @param {{ type: string, [k: string]: any }} action
