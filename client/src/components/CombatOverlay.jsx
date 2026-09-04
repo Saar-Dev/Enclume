@@ -243,6 +243,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           pendingMoveSelection={pendingMoveSelection}
           battlemapId={battlemap?.id}
           onEnterTargetMode={onEnterTargetMode}
+          onEnterAoeTargetMode={onEnterAoeTargetMode}
           registerAmbientAttackHandler={registerAmbientAttackHandler}
           showTargetRecap={showTargetRecap}
         />

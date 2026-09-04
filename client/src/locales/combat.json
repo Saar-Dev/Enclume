@@ -128,7 +128,7 @@
     "aimedLocationSection": "Viser une localisation",
     "aoeSection": "Zone d'effet",
     "aoeDirectionValue": "Direction : {{deg}}°",
-    "aimAoeButton": "Viser une zone (fusil à pompe)"
+    "aimAoeButton": "Viser une zone"
   },
   "rosterWindow": {
     "title": "ROSTER COMBAT",
