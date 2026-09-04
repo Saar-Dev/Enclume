@@ -113,20 +113,11 @@ export default function CombatExoActionWindow({
     dispatch({ type: 'RESET', payload: snapFromRosterEntry(rosterEntry) })
   }, [rosterEntry?.token_id, rosterEntry?.has_announced])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Déplacement : survol/preview ambiant par défaut, même patron que CombatActionWindow (PJ)/
-  // useDroneDeclare (COMBAT-DEPLACEMENT-HOVER) — désactivé à terre (§9.4, seule "Tenter de se relever"
-  // ou "Passer le tour" sont proposés dans ce cas).
-  const { rearm: rearmMove } = useAutoMoveMode({
-    enabled: canDeclareNow && !isProne && allures !== null,
-    allures,
-    tokenId: playerToken?.id ?? null,
-    tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
-    combatMoveMode,
-    onEnterMoveMode,
-    onMoveSelected: (sel) => setMoveSelection(sel),
-    onCancel: () => setMoveSelection(null),
-  })
-
+  // exoDeclare AVANT useAutoMoveMode (ordre d'appel de hooks inversé volontairement, 2026-09-04) —
+  // useAutoMoveMode a besoin de exoDeclare.isSelectingTarget pour se désarmer pendant la visée
+  // (ciblage normal ET zone d'effet, cf. commentaire juste en dessous). Sûr : les deux hooks restent
+  // appelés inconditionnellement à chaque rendu (règle des Hooks respectée), seul l'ORDRE change ;
+  // moveSelection (état local, pas le retour du hook) ne dépend d'aucun des deux.
   const exoDeclare = useExoDeclare({
     charId: playerChar?.id ?? null,
     tokenId: playerToken?.id ?? null,
@@ -138,6 +129,28 @@ export default function CombatExoActionWindow({
     battlemapId,
     registerAmbientAttackHandler,
     showTargetRecap,
+  })
+
+  // Déplacement : survol/preview ambiant par défaut, même patron que CombatActionWindow (PJ)/
+  // useDroneDeclare (COMBAT-DEPLACEMENT-HOVER) — désactivé à terre (§9.4, seule "Tenter de se relever"
+  // ou "Passer le tour" sont proposés dans ce cas).
+  // `!exoDeclare.isSelectingTarget` — bug trouvé en session réelle (Saar, 2026-09-04) : ce hook exige
+  // lui-même (son propre commentaire de tête, useAutoMoveMode.js) que `enabled` soit faux « tant qu'un
+  // autre mode exclusif utilise la carte (ciblage Attaque/CaC...) » — jamais respecté ici jusqu'à
+  // présent. Resté invisible pour le ciblage d'entité normal (le survol déplacement n'écoute que les
+  // clics au sol, jamais un clic sur un token) mais entrait en collision directe avec la visée de zone
+  // d'effet (Segment 2a AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — les deux répondent au même clic au
+  // sol : la fenêtre affichait bien « VISER UNE ZONE », mais le survol déplacement, toujours armé,
+  // capturait le clic avant que la visée de zone (Canvas3D#combatAoeTargetMode) ne le voie.
+  const { rearm: rearmMove } = useAutoMoveMode({
+    enabled: canDeclareNow && !isProne && allures !== null && !exoDeclare.isSelectingTarget,
+    allures,
+    tokenId: playerToken?.id ?? null,
+    tokenPos: playerToken ? { x: playerToken.pos_x, z: playerToken.pos_y } : null,
+    combatMoveMode,
+    onEnterMoveMode,
+    onMoveSelected: (sel) => setMoveSelection(sel),
+    onCancel: () => setMoveSelection(null),
   })
 
   if (!playerToken || !playerChar || !rosterEntry) return null

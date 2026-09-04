@@ -134,6 +134,12 @@ export function useExoDeclare({
     exoWeapons, selectedExoWeaponId, selectWeapon,
     assaultTargetId, handleChooseTarget, buildMapActions,
     aoeDirection, handleStartAoeDirection,
+    // Exposé pour que CombatExoActionWindow puisse désarmer useAutoMoveMode pendant la visée (ciblage
+    // normal ET zone d'effet) — bug trouvé en session réelle (Saar, 2026-09-04) : le survol de
+    // déplacement ambiant n'était jamais gaté sur ce flag, invisible pour le ciblage d'entité (surfaces
+    // de clic différentes) mais réellement en collision avec la visée de zone (les deux répondent au
+    // clic au sol). Contrat déjà documenté par useAutoMoveMode.js lui-même, jamais respecté ici.
+    isSelectingTarget,
     canDeclareAttack: !!selectedExoWeaponId && (!!assaultTargetId || aoeDirection != null),
     // Bug UI trouvé en jeu réel (Saar, 2026-08-27) : sélectionner une arme puis Déclarer sans cible
     // envoyait un payload sans attack/melee (buildMapActions() → {}) — la sélection se perdait
