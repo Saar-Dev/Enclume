@@ -209,18 +209,30 @@ Choc évalué par Localisation au lieu d'une fois par cible (`resolveAoeTargetDa
 - Le `+ roll + 1` de purge de fin de Tour est maintenant **dupliqué** entre `clearHazard` (linger) et
   `exposeToHazard` — un seul fait, deux encodages.
 
-#### Segment 1.5 — Registre de mécanismes AOE (refactor pur, AVANT grenades ET tireur exo)
+#### Segment 1.5 — Registre de mécanismes AOE — CODÉ + VALIDÉ (2026-09-04), CHANTIER FONCTIONNELLEMENT CLOS
 
 Modèle : **Foundry VTT dnd5e** — la résolution n'est jamais un `switch` sur le type ; une `Activity`
 est polymorphe, la forme de zone est une donnée (`CONFIG.areaTargetTypes`). Précédent maison :
 `combatantContextService.js` (Strangler Fig, `docs/Old/PLAN_COMBATANT_CONTEXT.md`) + `weaponModService`
-(registre à hooks). Un objet stratégie par mécanisme :
-`{ buildShape(ctx), filterTargets(ctx), targetRowModifier(ht), computeTargetDamage(ctx, ht),
-extraTargets(ctx, hitTargets), postResolve(io, ctx, perTargetResults) }`. Le tronc =
-`AOE_MECHANICS[mechanicId].xxx(...)`, **zéro `if mechanic`**. `shotgun_spread` + `flamethrower` =
-les 2 premières entrées. Ajouter une grenade = un objet. **Aucun changement de comportement** →
-session de non-régression fusil à pompe + lance-flammes en clôture. Résorbe aussi le hack pseudo-cible
-(`extraTargets`) et permet la primitive `turnsFromNow()` partagée pour le `+1` de purge.
+(registre à hooks, `shared/weaponModRegistry.js`). Objet stratégie par mécanisme, `server/src/lib/
+aoeMechanisms/{shotgunSpread,flamethrower}.js` + `registry.js` (`findAoeMechanismEntry`) :
+`{ buildShape(ctx), filterTargets(ctx, visTargets), extraTargets(ctx, hitTargets),
+targetRowModifier(ht), computeTargetDamage(ctx, ht, {effectiveDamage, baseRaw}), postResolve(io,
+campaignId, ctx, perTargetResults) }`. Le tronc (`socketCombatAoe.js`) dispatche exclusivement via
+`findAoeMechanismEntry`, **zéro `if mechanic`**. `buildShape(ctx)` décide sa propre origine (position
+tireur pour cône/rayon) plutôt que de la recevoir imposée par le tronc — élargissement délibéré du
+contrat (discuté avec Saar avant code) pour qu'un futur mécanisme `circle` lancé (grenade, Segment 3)
+s'ajoute comme une entrée de registre sans nouveau refactor du tronc, via
+`shared/world/aoeShapes.js#resolveScatter` (déjà écrit, jamais câblé). `ctx` immuable (spread à chaque
+étape, jamais muté en place — correctif trouvé en analyse à charge du plan, avant tout code). Résorbe
+aussi le hack pseudo-cible (`extraTargets`, self-splash lance-flammes) et la primitive `turnsFromNow()`
+partagée (`environmentalHazardService.js`, commit séparé — cause racine distincte) pour le `+1` de
+purge dupliqué entre `exposeToHazard`/`clearHazard`.
+
+**Commité `dev/Saar`** : `1999ab4` (registre + tronc réécrit + `registry.test.mjs` 7 tests + imports
+`socketCombatAoe.test.mjs` mis à jour, 27/27) · `9256e01` (`turnsFromNow`). **Aucun changement de
+comportement visé (refactor pur)** — non-régression confirmée en session réelle par Saar sur les deux
+armes (fusil à pompe + lance-flammes, PJ/PNJ) après le rebranchement du tronc.
 
 #### Segment 2 — AOE tireur exo/drone (après 1.5)
 
@@ -412,8 +424,8 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 |---|---|
 | **Segment 0 — Socle AOE** (§1.4/§1.6) | **Codé + validé en session (2026-09-04).** 0a extraction `socketCombatAoe.js` (`8d86090`) · 0b-B `shared/combatAoe.js` (`5df482f`) · 0c+0b-A migrations `aoe_profile`/`damage_modifier` (`0a35245`) · 0b-C bascule identification data-driven (`b87aa1a`) · 0d-1 `filterShotgunHitTargets` pure + 9 tests (`11f6997`) · 0d-2 refactor tronc + forme `results` 1..N Loc + refonte agrégat + `CombatModifiersWindow` imbriqué (`830f229`) · cas 0 cible (`1613467`). **0e** (fetch-once) = perf, différé. |
 | **Segment 1 — lance-flammes (main)** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`21fb40e`). CHANTIER FONCTIONNELLEMENT CLOS** — détail complet `JOURNAL8.md` §« Lance-flammes (main) ». 4 bugs réels trouvés et corrigés en session (`hasVariant`/`aimActive` non neutralisés en AOE, PC23 armes spéciales, « changement de mode de tir » faux positif arme à mode unique, Choc évalué par Localisation au lieu d'une fois par cible) + Catastrophe ×4 investigué (non-bug, Seuil PNJ bas). |
-| **Segment 1.5 — registre de mécanismes AOE** | **Prochain, AVANT segments 2 et 3.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Détail §1.4bis. |
-| **Segment 2 — AOE tireur exo/drone** | **Après 1.5.** Adaptateur de résolution d'arme agnostique au type de tireur + UI `CombatExoActionWindow`/`useExoDeclare` **et** `DroneWeaponPanel`/`useDroneDeclare` — confirmé en session (2026-09-04) : les deux chemins sont dans le même état (zéro référence AOE). Débloque aussi le fusil à pompe exo/drone. Détail §1.4bis. |
+| **Segment 1.5 — registre de mécanismes AOE** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`1999ab4`, `9256e01`). CHANTIER FONCTIONNELLEMENT CLOS.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Non-régression fusil à pompe + lance-flammes confirmée par Saar. Détail §1.4bis. |
+| **Segment 2 — AOE tireur exo/drone** | **Prochain.** Adaptateur de résolution d'arme agnostique au type de tireur + UI `CombatExoActionWindow`/`useExoDeclare` **et** `DroneWeaponPanel`/`useDroneDeclare` — confirmé en session (2026-09-04) : les deux chemins sont dans le même état (zéro référence AOE), reconfirmé non fonctionnel après clôture 1.5. Débloque aussi le fusil à pompe exo/drone. Détail §1.4bis. |
 | Segment 3 — grenades | Un objet mécanisme `circle` sur le registre 1.5. Reste bloqué par : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |

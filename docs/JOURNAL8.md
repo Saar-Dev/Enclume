@@ -5163,3 +5163,53 @@ Lance-flammes), additives, `down()` propre.
 **Retour arrière** : `git revert` des commits `dev/Saar` du segment (liste complète
 `PLAN_ARMES_SPECIALES.md` §1.4bis) + `db.migrate.down()` ×2 (322, 323) si nécessaire — additif,
 aucune donnée de personnage existante touchée.
+
+## Session (Claude) — 2026-09-04 — AOE Segment 1.5 (registre de mécanismes) — CHANTIER FONCTIONNELLEMENT CLOS
+
+**Contexte** : dette structurelle identifiée à la clôture du Segment 1 (lance-flammes, ci-dessus) —
+`resolveAoeAssaultAction` portait 6 branches `mechanic === 'flamethrower'` dispersées, jugée
+insoutenable avant grenades (Segment 3) et tireur exo/drone (Segment 2, qui touche le même tronc).
+
+**Codé** : `server/src/lib/aoeMechanisms/` — `shotgunSpread.js`/`flamethrower.js` (objet stratégie
+`{ buildShape, filterTargets, extraTargets, targetRowModifier, computeTargetDamage, postResolve }`,
+même patron que `shared/weaponModRegistry.js`) + `registry.js` (`findAoeMechanismEntry`, lookup par
+`mechanic`). Le tronc (`socketCombatAoe.js`) dispatche exclusivement via le registre, plus aucun
+mécanisme nommé en dur. `filterShotgunHitTargets`/`filterFlamethrowerHitTargets`/
+`applyFlamethrowerContinuousFire` déplacées verbatim (déplacement obligatoire, pas cosmétique — évite
+un import circulaire registry↔socketCombatAoe).
+
+**Décision prise avant code, avec Saar** (question : « est-ce que ça couvre les grenades, ou on
+refactor à chaque nouvel item ? ») : `buildShape(ctx)` décide sa propre origine (position tireur pour
+cône/rayon aujourd'hui) plutôt que de la recevoir imposée par le tronc — élargissement du contrat pour
+qu'un futur mécanisme `circle` lancé (grenade) s'ajoute comme une simple entrée de registre, via
+`shared/world/aoeShapes.js#resolveScatter` (primitive déjà écrite pour ça, jamais câblée nulle part —
+vérifié par grep). Le reste des blocages grenades (migration catalogue, plomberie `intendedOrigin`,
+action différée inter-tours, 2 pages RAW) reste hors périmètre, inchangé.
+
+**Analyse à charge (avant code)** a trouvé et corrigé 3 points : `ctx` immuable (spread à chaque étape
+du tronc, jamais muté en place — évite qu'un hook appelé avant qu'un champ existe reçoive `undefined`
+silencieusement) ; le déplacement des fonctions pures était nécessaire, pas optionnel (import
+circulaire sinon) ; `turnsFromNow` (dette annexe, `+1` de purge dupliqué `exposeToHazard`/
+`clearHazard`) est une cause racine différente → commit séparé (`9256e01`), pas fondu dans le
+refactor du tronc (`1999ab4`).
+
+**Exo/drone reconfirmé non fonctionnel** après clôture — attendu, c'est le Segment 2 (non touché ici),
+pas une régression.
+
+**Fichiers touchés** : `server/src/lib/aoeMechanisms/{shotgunSpread,flamethrower,registry}.js`
+(nouveaux) + `registry.test.mjs` (nouveau, 7 tests) ; `server/src/socket/socketCombatAoe.js`
+(+ `.test.mjs`, imports mis à jour) ; `server/src/lib/environmentalHazardService.js`
+(`turnsFromNow`) ; `docs/PLANS/PLAN_ARMES_SPECIALES.md` §1.4bis/§6.
+
+**Testé** : `node --check` sur les 5 fichiers serveur touchés/créés ; `node --test` sur
+`socketCombatAoe.test.mjs` + `registry.test.mjs` ensemble → 27/27 (20 inchangés + 7 nouveaux) ;
+`git diff --check` propre. **Session réelle Saar** : fusil à pompe + lance-flammes retestés après le
+rebranchement complet du tronc, « toujours fonctionnel » — non-régression confirmée sur les deux armes.
+
+**Non testé** : le rebranchement du tronc lui-même n'est pas unitairement testable
+(`resolveAoeAssaultAction` non exportée, DB-dépendante — même limite que le fix Choc du Segment 1) ;
+seule la session réelle ci-dessus en fait foi. Segment 2 (AOE tireur exo/drone) — chantier suivant.
+
+**Données** : aucune migration, aucun changement de schéma.
+
+**Retour arrière** : `git revert 1999ab4 9256e01` — refactor pur, aucune donnée touchée.
