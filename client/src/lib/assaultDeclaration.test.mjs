@@ -202,6 +202,32 @@ test('assaultCheckInputs : zone d\'effet à 0° (falsy) reste une direction pos�
   assert.equal(r.targetsFilled, 1)
 })
 
+// Bug réel trouvé en session (Saar, 2026-09-04) : une arme de zone en mode de tir RC/RL
+// (lance-flammes) ne pouvait jamais se déclarer — `hasVariant` restait `ctx.hasVariant` (donc
+// `currentVariant != null`, faux tant qu'aucun volume RL n'est choisi) alors que le panneau AOE
+// masque justement ce sélecteur. Le fusil à pompe (CC, variante toujours résolue par défaut) ne
+// l'avait jamais révélé. `hasVariant`/`aimActive` doivent être neutralisés en zone d'effet, comme
+// `targetsFilled`/`targetsNeeded` le sont déjà — même règle RAW que buildDeclarePayload.js
+// (aucun mode de tir, aucun Tir visé sur une action de zone).
+test('assaultCheckInputs : zone d\'effet — hasVariant forcé true même si ctx.hasVariant est false (lance-flammes RL sans volume choisi)', () => {
+  const state = { ...INIT, aoeDirection: 42 }
+  const r = assaultCheckInputs(state, ctx({ hasVariant: false }))
+  assert.equal(r.hasVariant, true)
+})
+
+test('assaultCheckInputs : zone d\'effet — aimActive forcé false même si aimTranches > 0 (Tir visé configuré avant de passer en zone, jamais reset par SET_AOE_DIRECTION)', () => {
+  const state = { ...INIT, aoeDirection: 42 }
+  const r = assaultCheckInputs(state, ctx({ aimTranches: 3 }))
+  assert.equal(r.aimActive, false)
+})
+
+test('assaultCheckInputs : hors zone d\'effet — hasVariant/aimActive suivent le contexte sans changement (non-régression fusil à pompe/Tir RL normal)', () => {
+  assert.equal(assaultCheckInputs(INIT, ctx({ hasVariant: false })).hasVariant, false)
+  assert.equal(assaultCheckInputs(INIT, ctx({ hasVariant: true })).hasVariant, true)
+  assert.equal(assaultCheckInputs(INIT, ctx({ aimTranches: 2 })).aimActive, true)
+  assert.equal(assaultCheckInputs(INIT, ctx({ aimTranches: 0 })).aimActive, false)
+})
+
 test('assaultCheckInputs : aimReasons absent → []', () => {
   assert.deepEqual(assaultCheckInputs(INIT, ctx({ aimReasons: undefined })).aimReasons, [])
 })

@@ -54,11 +54,23 @@ export function assaultTargetsComplete(state, currentFireMode) {
 }
 
 // Args de `assaultCheck` (client/src/lib/declareChecks.js) dérivés du sous-état Tir + d'un contexte
-// fenêtre — **autorité unique** de la neutralisation « zone d'effet » côté validité : une direction
-// posée = 1 cible attendue et 1 fournie, jamais de série (RAW : une action de zone n'a pas de cible
-// unique). Avant : ce `isAoeMode ? 1 : targets.slice(0, n).filter(Boolean).length` était recopié
-// à l'identique entre `CombatActionWindow` (PJ) et `CombatGmDeclareWindow` (MJ)
+// fenêtre — **autorité unique** de la neutralisation « zone d'effet » côté validité : une action de
+// zone n'a ni cible unique, ni mode de tir (nombre de balles/variante RAW), ni Tir visé (RAW : ce
+// sont des notions de tir ponctuel, pas de zone). Avant : `isAoeMode ? 1 : targets.slice(0, n)…`
+// était recopié à l'identique entre `CombatActionWindow` (PJ) et `CombatGmDeclareWindow` (MJ)
 // (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B, ex-PO-M5-a).
+//
+// `hasVariant`/`aimActive` : **neutralisation ajoutée après coup** (2026-09-04) — l'Étape B n'avait
+// gaté que `targetsFilled`/`targetsNeeded`, oubliant que `hasVariant` restait `ctx.hasVariant` telle
+// quelle. Bug réel trouvé en session (Saar) : une arme de zone en mode de tir RC/RL (lance-flammes)
+// ne pouvait jamais se déclarer — `computeFireVariant('RL', bulletCount:null, …)` renvoie
+// `variant: null` tant qu'aucun volume n'est choisi, et le panneau AOE (`AssaultRangedPanel`,
+// `isAoeEligible`) masque justement ce sélecteur : blocage sans issue, aucun message actionnable.
+// Le fusil à pompe (CC) ne l'avait jamais révélé — `computeFireVariant('CC', null, {defaultCcCount:1})`
+// résout toujours une variante par défaut. `buildDeclarePayload.js` neutralise déjà explicitement
+// `aimTranches`/dual-wield côté PAYLOAD pour ce même motif RAW (« ces options Tir ne s'appliquent pas
+// conceptuellement à une action de zone ») ; `hasVariant`/`aimActive` rejoignent ici la même règle
+// côté VALIDITÉ, dans l'unique fonction qui la porte déjà pour les cibles — pas un 2ᵉ endroit.
 //
 // Ce que le contexte apporte (divergences légitimes calculées par la fenêtre, jamais ici) :
 //  - `started`   : PJ = attaque sélectionnée (`attackSelected`) ; MJ = arme choisie ∨ cible posée ∨
@@ -72,8 +84,9 @@ export function assaultTargetsComplete(state, currentFireMode) {
 // @param {boolean}  ctx.started
 // @param {boolean}  ctx.hasWeapon
 // @param {number}   ctx.effectiveCount   `effectiveAssaultCount` (série Tir Multi — CC seulement)
-// @param {boolean}  ctx.hasVariant       mode de tir configuré (`currentVariant != null`)
-// @param {number}   ctx.aimTranches      tranches de Tir visé demandées
+// @param {boolean}  ctx.hasVariant       mode de tir configuré (`currentVariant != null`) — ignoré en
+//                                        zone d'effet (toujours `true`, aucun mode de tir à configurer)
+// @param {number}   ctx.aimTranches      tranches de Tir visé demandées — ignorées en zone d'effet
 // @param {string[]} ctx.aimReasons       `getAimIneligibilityReasons(...)` — `[]` si éligible
 // @returns {{ started: boolean, hasWeapon: boolean, targetsFilled: number, targetsNeeded: number,
 //             hasVariant: boolean, aimActive: boolean, aimReasons: string[] }}
@@ -84,8 +97,8 @@ export function assaultCheckInputs(state, ctx) {
     hasWeapon:     ctx.hasWeapon,
     targetsFilled: aoe ? 1 : state.targets.slice(0, ctx.effectiveCount).filter(Boolean).length,
     targetsNeeded: aoe ? 1 : ctx.effectiveCount,
-    hasVariant:    ctx.hasVariant,
-    aimActive:     ctx.aimTranches > 0,
+    hasVariant:    aoe || ctx.hasVariant,
+    aimActive:     !aoe && ctx.aimTranches > 0,
     aimReasons:    ctx.aimReasons ?? [],
   }
 }
