@@ -5083,3 +5083,83 @@ son invariant).
 **Suite** : réconciliation exo/drone → `PLAN_ARMES_SPECIALES.md` Segment 2 (déclaration exo déjà
 ouverte là-bas). `PLAN_RW_DECLARE_DERIVATION.md` à archiver `docs/Old/` une fois la passe complète
 validée par Saar.
+
+---
+
+## Session (Claude) — 2026-09-04 — Lance-flammes (main) — CHANTIER FONCTIONNELLEMENT CLOS
+
+**Contexte** : Segment 1 de `docs/PLANS/PLAN_ARMES_SPECIALES.md` — le lance-flammes porté en main
+(PJ/PNJ), au-dessus du socle AOE (Segment 0, clos le 2026-09-03). Décisions A-G détaillées dans le
+plan §1.5 (angle 30°, portée = extrême catalogue, auto-éclaboussure < 3 m, Choc 2D6 impact initial,
+protections simples ÷2 hors exo/drone, forme `results` 1..N Loc unifiée, re-brûlure = `max()`).
+
+**Codé** : `aoe_profile` cône + `shock_mechanism='pure'` (migrations 322/323) ; `exposeToHazard
+({ durationDice })` (feu continu fini, `max(existant, currentTurn+roll+1)` contre le `.merge()`
+aveugle d'`applyModStatus`) ; aperçu cône client (`aoePreviewShape.js`, `Canvas3D.jsx`) ; branche
+mécanisme `flamethrower` dans `resolveAoeAssaultAction` (`filterFlamethrowerHitTargets` pure,
+1D3 Localisations, `armorReductionFactor:0.5`, feu continu + notice, auto-éclaboussure).
+
+**3 bugs réels trouvés en session de validation Saar** (aucun dans le plan initial — le lance-flammes
+est la première arme AOE `fire_mode` RC/RL, ce que le socle fusil à pompe (CC) n'avait jamais exercé) :
+
+1. **`hasVariant`/`aimActive` jamais neutralisés en mode zone d'effet** (`assaultCheckInputs`,
+   extrait la veille par un autre agent — `PLAN_RW_DECLARE_DERIVATION.md`) : une arme `RC`/`RL`
+   sans volume choisi bloquait toute déclaration AOE (« Configurer le mode de tir »), alors que le
+   panneau masque justement ce sélecteur pour une arme AOE. Fix additif (`aoe || …`, `!aoe && …`),
+   non-régression prouvée par construction (aucun changement quand `aoe` est faux).
+2. **PC23 (Tir Automatique) exigé à tort pour une arme « spéciale »** : `REGLESYSCOMBAT.md:1498`
+   scope cette limite aux armes automatiques (Armes de poing/Fusils), pas aux armes à maniement
+   dédié. `weaponUsesSpecialSkill` exempte les armes dont la Compétence a
+   `ref_skills.parent LIKE 'ARME_SPECIALE_%'`.
+3. **`getAoeExclusiveIneligibilityReasons`/`getAimIneligibilityReasons` : « changement de mode de
+   tir » faussement détecté** pour une arme à mode unique (RL seul) — `entry.state_fire_mode` vaut
+   `'cc'` par défaut, sélectionner le lance-flammes force `'rl'` automatiquement (aucun choix du
+   joueur). Extraction `getStateTransitionReasons({ state, entry, weaponFireModes })` — une arme
+   n'offrant qu'un seul mode (`shared/fireModes.js#parseFireModes`) ne peut jamais produire un
+   « vrai » changement de mode de tir. Dette dupliquée trouvée entre les deux fonctions, corrigée
+   aux deux (dont une occurrence dormante côté Tir visé).
+4. **Choc d'arme (2D6) évalué une fois par Localisation au lieu d'une fois par cible** —
+   `resolveTargetHit` résout une Localisation et ré-évalue `chocDsl` à chaque appel ; la boucle
+   `1D3 Localisations` du lance-flammes relançait donc 1 à 3 Tests de Choc indépendants sur la
+   même cible (observé en session : 2 `applyStunWithDuration` identiques). **Décision Saar** : un
+   seul Choc par tir, « déjà largement assez punitif ». Fix : `chocDsl` seulement à `i === 0` dans
+   `resolveAoeTargetDamage` (générique, le fusil à pompe n'est pas concerné par construction).
+5. **Catastrophe ×4 en rafale — investigué, PAS un bug.** Mécanisme vérifié (`mr <= -15`, un seul
+   jet par tir déclaré, aucune boucle) : confirmé causé par un Seuil de Compétence bas du PNJ
+   testé (non entraîné à l'arme spéciale) — Saar a augmenté ses stats, résolu. Lot 1 Catastrophe
+   reste `mechanized:false` partout (aucun effet automatique, file d'attente MJ seulement).
+
+**Exo/drone** : confirmé sans aucune UI de déclaration AOE (`useExoDeclare`/`useDroneDeclare`,
+`CombatExoActionWindow`/`DroneWeaponPanel` — zéro référence à `aoeDirection`/`isAoeWeapon`). Attendu,
+reporté au Segment 2 (« AOE tireur exo/drone »), qui a aussi besoin d'un adaptateur de résolution
+d'arme agnostique au type de tireur côté `resolveAoeAssaultAction` (fetch arme/dégâts/munitions —
+le contexte de Test, lui, est déjà agnostique via `resolveCombatantTestContext`).
+
+**Dette structurelle identifiée pour le Segment 1.5** (avant grenades et Segment 2) :
+`resolveAoeAssaultAction` porte 6 branches `mechanic === 'flamethrower'` dispersées — à refondre
+en registre de mécanismes (objet stratégie par mécanisme, modèle Foundry VTT dnd5e Activities),
+détail `PLAN_ARMES_SPECIALES.md` §1.4bis.
+
+**Fichiers touchés** (au-delà du socle Segment 0, déjà clos) : migrations `322`/`323` ;
+`server/src/lib/environmentalHazardService.js` ; `client/src/lib/aoePreviewShape.js`
+(+ `.test.mjs`) ; `client/src/lib/useCombatUIState.js` ; `client/src/components/Canvas3D.jsx`,
+`CombatActionWindow.jsx`, `CombatGmDeclareWindow.jsx` ; `server/src/socket/socketCombatAoe.js`
+(+ `.test.mjs`) ; `server/src/socket/socketCombatAnnouncement.js` ; `client/src/lib/
+assaultDeclaration.js` (+ `.test.mjs`) ; `shared/combatExclusiveActions.js` (+ `.test.mjs`) ;
+`client/src/locales/fr.json` ; `docs/PLANS/PLAN_ARMES_SPECIALES.md`.
+
+**Testé** : `node --test` sur chaque module touché (shared complet 509/509, client complet 238/238
+au moment des derniers correctifs) ; `eslint` (0 régression vs baseline vérifiée par `git stash`) ;
+`npm run build` à chaque étape client. **Session réelle Saar** : déclaration, cône affiché, 1D3
+Localisations, Choc unique, armure ÷2, feu continu qui ticke, auto-éclaboussure, cas 0 cible —
+tous confirmés OK après les 4 correctifs ci-dessus.
+
+**Non testé** : Segment 1.5 (registre de mécanismes, refactor pur) et Segment 2 (AOE tireur
+exo/drone) — chantiers suivants, pas des manques de ce lot.
+
+**Données** : migrations 322/323 (`ref_equipment.aoe_profile`/`shock_mechanism` pour la ligne
+Lance-flammes), additives, `down()` propre.
+
+**Retour arrière** : `git revert` des commits `dev/Saar` du segment (liste complète
+`PLAN_ARMES_SPECIALES.md` §1.4bis) + `db.migrate.down()` ×2 (322, 323) si nécessaire — additif,
+aucune donnée de personnage existante touchée.

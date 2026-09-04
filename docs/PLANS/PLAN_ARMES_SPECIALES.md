@@ -186,21 +186,19 @@ dette §5 du dispatch drone. Périmètre = tronc AOE seul.)*
 *(Extinction du feu : rien à coder dans ce Lot — le MJ retire déjà le statut `burning` via la gestion
 générique des statuts. Sous-lot différé « fenêtre personnage en feu » : §1.5-B2.)*
 
-### 1.4bis — Segment 1 codé (2026-09-04) : état, dette introduite, suite (analyse critique)
+### 1.4bis — Segment 1 codé + validé (2026-09-04) : CHANTIER FONCTIONNELLEMENT CLOS
 
-**Codé et commité (`dev/Saar`, non poussé — attente validation Saar en session réelle) :**
-`a02fffc` 1a (`aoe_profile` cône) · `11ca524` 1b (`shock_mechanism='pure'`) · `63c0ce7` 1c
-(`exposeToHazard({ durationDice })` — le param retenu est `durationDice`, pas `expiresAtTurn` : le
-service lit `combat_state` lui-même et pose `max(existant, currentTurn + roll + 1)`, seul moyen de
-contrer le `.merge()` aveugle de `applyModStatus`) · `45e69db` 1d (aperçu cône, 12 tests) · `77ca97c`
-1e (branche mécanisme `flamethrower` dans `resolveAoeAssaultAction` + `filterFlamethrowerHitTargets`
-pure + 7 fixtures + feu continu + auto-éclaboussure) · `7130303` **PC23 — armes spéciales exemptées de
-Tir Automatique** (`weaponUsesSpecialSkill`, `ref_skills.parent LIKE 'ARME_SPECIALE_%'` ; RAW
-`REGLESYSCOMBAT.md:1498` scope la limite « Tir automatique » aux armes à feu automatiques, jamais au
-lance-flammes dont `fire_mode='RL'` encode la « mise en œuvre continue »).
+**Codé, commité et poussé `dev/Saar` (`21fb40e`), validé en session réelle** (lance-flammes en main,
+PJ/PNJ) : `a02fffc` 1a (`aoe_profile` cône) · `11ca524` 1b (`shock_mechanism='pure'`) · `63c0ce7` 1c
+(`exposeToHazard({ durationDice })`) · `45e69db` 1d (aperçu cône, 12 tests) · `77ca97c` 1e (branche
+mécanisme `flamethrower`) · `7130303` PC23 (armes spéciales exemptées de Tir Automatique) ·
+`5c8a021`/`1f77116`/`21fb40e` — 3 correctifs trouvés en session réelle, détail `JOURNAL8.md`
+§« Lance-flammes (main) » : `hasVariant`/`aimActive` non neutralisés en zone d'effet,
+« changement de mode de tir » faux positif pour une arme à mode unique (`getStateTransitionReasons`),
+Choc évalué par Localisation au lieu d'une fois par cible (`resolveAoeTargetDamage`, `i === 0`).
 
-**⚠️ Validation Saar requise avec un lance-flammes PORTÉ EN MAIN (PJ/PNJ), pas monté sur exo** — le
-chemin exo n'a aucune UI de déclaration AOE (voir Segment 2).
+**Exo/drone confirmé sans UI de déclaration AOE** (les deux, pas seulement l'exo — vérifié
+2026-09-04, voir Segment 2 ci-dessous).
 
 **Dette structurelle introduite par 1e (à résorber au Segment 1.5 avant tout ajout) :**
 - `resolveAoeAssaultAction` porte **6 branches `mechanic === 'flamethrower'`** dispersées (géométrie,
@@ -224,19 +222,23 @@ les 2 premières entrées. Ajouter une grenade = un objet. **Aucun changement de
 session de non-régression fusil à pompe + lance-flammes en clôture. Résorbe aussi le hack pseudo-cible
 (`extraTargets`) et permet la primitive `turnsFromNow()` partagée pour le `+1` de purge.
 
-#### Segment 2 — AOE tireur exo (après 1.5)
+#### Segment 2 — AOE tireur exo/drone (après 1.5)
 
 `resolveAoeAssaultAction` lit `action.weapon_inv_id` (inventaire humain) → `if (!weapon_inv_id) return`
-baille pour l'exo. **Déjà agnostiques au type de tireur** : persistance de l'annonce
-(`socketCombatAnnouncement.js:626-662` écrit `exo_weapon_inv_id` + `modifiers.aoe`), Phase A
-(`runAoePhaseA` → `resolveCombatantTestContext` dispatche déjà vers `resolveExoTestContext`),
-application par cible (`resolveAoeTargetDamage` dispatche drone/exo/normal). **Reste** : fetch arme +
-formule de dégâts (`getEffectiveWeaponDamage`) + décompte munitions — à rendre agnostiques via un
-adaptateur (même Strangler Fig que le contexte de Test) ; + UI `CombatExoActionWindow` /
-`useExoDeclare` (bouton « Viser une zone », `aoeDirection`, `buildExoMapActions`, `ref_aoe_profile`
-dans le payload armes exo) ; + `CombatOverlay.jsx` prop `onEnterAoeTargetMode`. **Débloque aussi le
-fusil à pompe monté sur exo** (même tronc). `SERVICES_COMBAT.md §8 F2` documente déjà la dette
-« branches Pj/Pnj/Drone jamais fusionnées » côté résolution d'attaque.
+baille pour l'exo **et** le drone. **Déjà agnostiques au type de tireur** : persistance de l'annonce
+(`socketCombatAnnouncement.js:626-662` écrit `exo_weapon_inv_id`/`drone_weapon_inv_id` +
+`modifiers.aoe`), Phase A (`runAoePhaseA` → `resolveCombatantTestContext` dispatche déjà vers
+`resolveExoTestContext` — le drone, lui, n'a pas de Test de Compétence, `drone_programs.level` sert
+directement de Seuil, §3.5 `PLAN_COMBATANT_CONTEXT.md`), application par cible
+(`resolveAoeTargetDamage` dispatche déjà drone/exo/normal). **Reste** : fetch arme + formule de
+dégâts (`getEffectiveWeaponDamage`) + décompte munitions — à rendre agnostiques via un adaptateur
+(même Strangler Fig que le contexte de Test) ; + UI **exo** (`CombatExoActionWindow` /
+`useExoDeclare`, bouton « Viser une zone », `aoeDirection`, `buildExoMapActions`, `ref_aoe_profile`
+dans le payload armes exo) **et** **drone** (`DroneWeaponPanel` / `useDroneDeclare`, même patron —
+confirmé en session 2026-09-04 : zéro trace AOE dans les deux fichiers, dette identique) ;
++ `CombatOverlay.jsx` prop `onEnterAoeTargetMode`. **Débloque aussi le fusil à pompe monté sur
+exo/drone** (même tronc). `SERVICES_COMBAT.md §8 F2` documente déjà la dette « branches Pj/Pnj/Drone
+jamais fusionnées » côté résolution d'attaque.
 
 #### Segment 3 — Grenades
 
@@ -409,9 +411,9 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 | Lot | Statut |
 |---|---|
 | **Segment 0 — Socle AOE** (§1.4/§1.6) | **Codé + validé en session (2026-09-04).** 0a extraction `socketCombatAoe.js` (`8d86090`) · 0b-B `shared/combatAoe.js` (`5df482f`) · 0c+0b-A migrations `aoe_profile`/`damage_modifier` (`0a35245`) · 0b-C bascule identification data-driven (`b87aa1a`) · 0d-1 `filterShotgunHitTargets` pure + 9 tests (`11f6997`) · 0d-2 refactor tronc + forme `results` 1..N Loc + refonte agrégat + `CombatModifiersWindow` imbriqué (`830f229`) · cas 0 cible (`1613467`). **0e** (fetch-once) = perf, différé. |
-| **Segment 1 — lance-flammes (main)** | **Codé (2026-09-04), ⚠️ non poussé, attente validation Saar (lance-flammes en main PJ/PNJ, pas exo).** Voir §1.4bis pour la liste des commits (`a02fffc`..`77ca97c`) + PC23 (`7130303`). |
-| **Segment 1.5 — registre de mécanismes AOE** | **À faire, AVANT segments 2 et 3.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Détail §1.4bis. |
-| **Segment 2 — AOE tireur exo** | **À faire après 1.5.** Adaptateur de résolution d'arme agnostique au type de tireur + UI `CombatExoActionWindow`/`useExoDeclare`. Débloque aussi le fusil à pompe exo. Détail §1.4bis. |
+| **Segment 1 — lance-flammes (main)** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`21fb40e`). CHANTIER FONCTIONNELLEMENT CLOS** — détail complet `JOURNAL8.md` §« Lance-flammes (main) ». 4 bugs réels trouvés et corrigés en session (`hasVariant`/`aimActive` non neutralisés en AOE, PC23 armes spéciales, « changement de mode de tir » faux positif arme à mode unique, Choc évalué par Localisation au lieu d'une fois par cible) + Catastrophe ×4 investigué (non-bug, Seuil PNJ bas). |
+| **Segment 1.5 — registre de mécanismes AOE** | **Prochain, AVANT segments 2 et 3.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Détail §1.4bis. |
+| **Segment 2 — AOE tireur exo/drone** | **Après 1.5.** Adaptateur de résolution d'arme agnostique au type de tireur + UI `CombatExoActionWindow`/`useExoDeclare` **et** `DroneWeaponPanel`/`useDroneDeclare` — confirmé en session (2026-09-04) : les deux chemins sont dans le même état (zéro référence AOE). Débloque aussi le fusil à pompe exo/drone. Détail §1.4bis. |
 | Segment 3 — grenades | Un objet mécanisme `circle` sur le registre 1.5. Reste bloqué par : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |

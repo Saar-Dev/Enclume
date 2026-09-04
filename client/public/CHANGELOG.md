@@ -1,3 +1,18 @@
+## v226 — 2026-09-04 — Combat : lance-flammes en cône
+
+### Combat — déclaration et résolution
+- [new] Le lance-flammes se déclare maintenant en visant une direction, comme le fusil à pompe :
+  un cône (30° d'ouverture, longueur = portée extrême de l'arme) suit la souris sur la carte, un
+  clic le fige, puis Valider ou Changer confirment ou ajustent le tir.
+- [new] Chaque cible touchée par le cône subit 1 à 3 Localisations de dégâts par le feu, un Choc
+  unique (indépendamment du nombre de Localisations touchées), et prend feu : elle continue de
+  brûler pendant plusieurs Tours (jusqu'à extinction) à moins d'être secourue. Les protections
+  légères sont deux fois moins efficaces contre les flammes.
+- [new] Tirer à moins de 3 m d'une cible touchée éclabousse le tireur lui-même — un message
+  explique pourquoi il subit des dégâts.
+- [fix] Une arme dont le mode de tir est fixe (comme le lance-flammes) ne bloque plus à tort la
+  déclaration d'une action exclusive en zone.
+
 ## v225 — 2026-09-03 — Suivi d'activité de campagne (temps de connexion, combats)
 
 ### Campagne
