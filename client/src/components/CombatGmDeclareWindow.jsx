@@ -10,6 +10,7 @@ import {
   CC_REPS_STEPS, computeFireVariant,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { parseFireModes } from '../../../shared/fireModes.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isAoeWeapon } from '../../../shared/combatAoe.js'
 import { DEFAULT_PNJ_ALLURES } from '../../../shared/polarisUtils.js'
@@ -433,6 +434,10 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     },
     state: decl, quick: decl.quick, entry: activePnjEntry,
     isDualWield, bulletCount: effectiveBulletCount ?? null,
+    // Une arme à mode unique (ex. lance-flammes) ne peut jamais représenter un "changement de mode
+    // de tir" délibéré — même autorité que le serveur et que CombatActionWindow.jsx PJ
+    // (shared/combatExclusiveActions.js#getStateTransitionReasons, shared/fireModes.js#parseFireModes).
+    weaponFireModes: parseFireModes(weapon?.ref_fire_mode),
   })
 
   // ── canDeclare / hasCompleteAction / blockReason — source unique client/src/lib/declareChecks.js ──

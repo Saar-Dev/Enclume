@@ -72,6 +72,40 @@ export function getEffectiveAimBonus(aimBonusComp, { lunetteNiveau = 0, portee =
   return Math.min(aimBonusComp ?? 0, cap)
 }
 
+// getStateTransitionReasons — autorité unique des 5 axes d'état (state_* sur combat_roster :
+// position/arme/mode de tir/couverture/vitesse) pour une action qui exige "aucune transition
+// d'état ce Tour" (Tir visé, actions exclusives AOE). Extrait le 2026-09-04 : ces 5 lignes étaient
+// recopiées à l'identique dans `getAimIneligibilityReasons` ET `getAoeExclusiveIneligibilityReasons`
+// (même risque de dérive silencieuse que `assaultCheck`/`assaultCheckInputs`, déjà corrigé côté
+// client ce même jour — docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md).
+// Champ absent du payload = "inchangé" (`?? entry.state_*`), jamais une transition fantôme — les
+// handleDeclare humanoïdes n'envoient pas `state.cover` (bug "changement de couverture" systématique
+// corrigé le 2026-08-28, avant l'extraction de cette fonction).
+//
+// `weaponFireModes` (bug réel trouvé en session, Saar 2026-09-04) : la comparaison brute
+// `state.fire_mode !== entry.state_fire_mode` confondait "le joueur a choisi un autre mode" et "cette
+// arme n'a qu'un seul mode, forcé automatiquement dès sa sélection" (ex. lance-flammes, `RL` seul —
+// `AssaultRangedPanel` ne propose même pas de sélecteur). `entry.state_fire_mode` vaut `'cc'` par
+// défaut (migration `32_combat_roster.js`) : la première utilisation de N'IMPORTE QUELLE arme
+// RC/RL-only déclenchait donc systématiquement un faux "changement de mode de tir", sans qu'aucune
+// transition n'ait été demandée par le joueur. `weaponFireModes` = `shared/fireModes.js#parseFireModes
+// (ref_fire_mode)` de l'arme réellement utilisée — la même autorité déjà employée ailleurs pour
+// cette question. `null`/non fourni = comportement historique conservé (strict, jamais une régression
+// silencieuse pour un appelant qui n'aurait pas encore été mis à jour) ; un tableau `.length <= 1`
+// (aucun choix réel possible) neutralise la raison, un `.length > 1` la laisse détecter un vrai choix.
+export function getStateTransitionReasons({ state, entry, weaponFireModes = null }) {
+  const reasons = []
+  if ((state?.position ?? entry?.state_position) !== entry?.state_position) reasons.push('changement de posture')
+  if ((state?.weapon ?? entry?.state_weapon) !== entry?.state_weapon) reasons.push('changement d\'arme')
+  const fireModeIsRealChoice = weaponFireModes == null || weaponFireModes.length > 1
+  if (fireModeIsRealChoice && (state?.fire_mode ?? entry?.state_fire_mode) !== entry?.state_fire_mode) {
+    reasons.push('changement de mode de tir')
+  }
+  if ((state?.cover ?? entry?.state_cover) !== entry?.state_cover) reasons.push('changement de couverture')
+  if ((state?.vitesse ?? entry?.state_vitesse) !== entry?.state_vitesse) reasons.push('changement de vitesse')
+  return reasons
+}
+
 // Tir visé éligible : "tu ne vises que si tu ne fais que ça" (règle Saar, PLAN_TIRVISE.md
 // Décision 9). Position, arme, mode de tir, couverture et vitesse sont tous des états au même
 // titre (state_* sur combat_roster) — dégainer son arme ou changer de mode de tir est une
@@ -88,7 +122,7 @@ export function getEffectiveAimBonus(aimBonusComp, { lunetteNiveau = 0, portee =
 // pas de clé i18n — le domaine Combat est explicitement hors périmètre i18n dans ce projet
 // (.claude/rules/react.md : "Combat (12) + équipement (6) : hors scope — sprint dédié futur"),
 // cohérent avec les tooltips combat existants déjà en dur (ex. "Assommé — ne peut pas attaquer").
-export function getAimIneligibilityReasons({ mapActions, state, quick, entry, isDualWield, bulletCount, isAoeMode }) {
+export function getAimIneligibilityReasons({ mapActions, state, quick, entry, isDualWield, bulletCount, isAoeMode, weaponFireModes }) {
   const reasons = []
   if (bulletCount !== 1) reasons.push('tir non simple (répétition ou rafale)')
   if (isDualWield) reasons.push('deux armes')
@@ -102,16 +136,9 @@ export function getAimIneligibilityReasons({ mapActions, state, quick, entry, is
   // Préconditions intrinsèques : arme déjà au clair + déjà en coup par coup AVANT ce tour.
   if (entry?.state_weapon !== 'drawn') reasons.push('arme pas encore au clair')
   if (entry?.state_fire_mode !== 'cc') reasons.push('pas encore en coup par coup')
-  // Aucune transition d'état ce tour, sur aucun état. Un champ ABSENT du payload client = "inchangé"
-  // (`?? entry.state_*`), jamais une transition fantôme — même normalisation que la boucle STATE_COSTS
-  // serveur (`to = state[key] ?? from`). Corrige le blocage Tir visé signalé par Saar 2026-08-28 :
-  // les handleDeclare humanoïdes n'envoient pas `state.cover`, ce qui faisait `undefined !== 'exposed'`
-  // → "changement de couverture" systématique.
-  if ((state?.position ?? entry?.state_position) !== entry?.state_position) reasons.push('changement de posture')
-  if ((state?.weapon ?? entry?.state_weapon) !== entry?.state_weapon) reasons.push('changement d\'arme')
-  if ((state?.fire_mode ?? entry?.state_fire_mode) !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
-  if ((state?.cover ?? entry?.state_cover) !== entry?.state_cover) reasons.push('changement de couverture')
-  if ((state?.vitesse ?? entry?.state_vitesse) !== entry?.state_vitesse) reasons.push('changement de vitesse')
+  // Aucune transition d'état ce tour, sur aucun état — voir getStateTransitionReasons (autorité
+  // unique, partagée avec getAoeExclusiveIneligibilityReasons).
+  reasons.push(...getStateTransitionReasons({ state, entry, weaponFireModes }))
   // Aucune autre mapAction / quick action ce tour.
   if (mapActions?.move) reasons.push('déplacement')
   if (mapActions?.interact) reasons.push('interaction')
@@ -174,16 +201,12 @@ export function isExclusiveDeclaration({ mapActions, weaponAoeProfile = null }) 
 // déjà codé (getAimIneligibilityReasons), pour la cohérence — décision produit, pas une lecture RAW
 // littérale. Même patron (liste de raisons, vide = éligible), sans les préconditions propres au Tir
 // visé (bulletCount===1, arme déjà au clair...) qui n'ont pas de fondement RAW pour ces actions-ci.
-export function getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry }) {
+export function getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry, weaponFireModes }) {
   const reasons = []
   if (Array.isArray(mapActions?.attack) && mapActions.attack.length > 1) reasons.push('tir multiple')
-  // Champ absent du payload = "inchangé" (`?? entry.state_*`), jamais une transition fantôme — même
-  // raison que dans getAimIneligibilityReasons (les handleDeclare humanoïdes n'envoient pas `cover`).
-  if ((state?.position ?? entry?.state_position) !== entry?.state_position) reasons.push('changement de posture')
-  if ((state?.weapon ?? entry?.state_weapon) !== entry?.state_weapon) reasons.push('changement d\'arme')
-  if ((state?.fire_mode ?? entry?.state_fire_mode) !== entry?.state_fire_mode) reasons.push('changement de mode de tir')
-  if ((state?.cover ?? entry?.state_cover) !== entry?.state_cover) reasons.push('changement de couverture')
-  if ((state?.vitesse ?? entry?.state_vitesse) !== entry?.state_vitesse) reasons.push('changement de vitesse')
+  // Aucune transition d'état ce tour, sur aucun état — voir getStateTransitionReasons (autorité
+  // unique, partagée avec getAimIneligibilityReasons).
+  reasons.push(...getStateTransitionReasons({ state, entry, weaponFireModes }))
   if (mapActions?.move) reasons.push('déplacement')
   if (mapActions?.interact) reasons.push('interaction')
   if (mapActions?.reload) reasons.push('rechargement')

@@ -6,6 +6,7 @@ import {
   isExclusiveDeclaration, getAoeExclusiveIneligibilityReasons, isAoeExclusiveEligible,
   getAimIneligibilityReasons, isAimEligible,
   getMultiShotIneligibilityReasons, isMultiShotEligible,
+  getStateTransitionReasons,
 } from './combatExclusiveActions.js'
 
 // PLAN_EXOARMURE.md Lot 2bis §9.2 — exclusivité tranchée par Saar (2026-08-18) : tenter de se
@@ -140,6 +141,62 @@ test('getAoeExclusiveIneligibilityReasons — tir multiple (Tir Multi) exclu ave
   assert.deepEqual(reasons, ['tir multiple'])
 })
 
+// ─── getStateTransitionReasons — autorité unique des 5 axes d'état ────────────────────────────────
+// Bug réel trouvé en session (Saar, 2026-09-04) : le lance-flammes (fire_mode 'RL' seul) ne pouvait
+// jamais se déclarer en zone d'effet — entry.state_fire_mode vaut 'cc' par défaut (toute fiche
+// fraîche), sélectionner le lance-flammes force state.fire_mode='rl' automatiquement (aucun
+// sélecteur affiché, un seul mode possible), et la comparaison brute signalait à tort un
+// "changement de mode de tir" alors qu'aucun choix n'avait été fait.
+
+test('getStateTransitionReasons — weaponFireModes non fourni (null) : comportement historique préservé, tout écart de fire_mode compte', () => {
+  const reasons = getStateTransitionReasons({
+    state: { fire_mode: 'rl' }, entry: { state_fire_mode: 'cc' },
+  })
+  assert.deepEqual(reasons, ['changement de mode de tir'])
+})
+
+test('getStateTransitionReasons — arme à un seul mode (lance-flammes, RL) : jamais un "changement de mode de tir", même écart', () => {
+  const reasons = getStateTransitionReasons({
+    state: { fire_mode: 'rl' }, entry: { state_fire_mode: 'cc' }, weaponFireModes: ['RL'],
+  })
+  assert.deepEqual(reasons, [])
+})
+
+test('getStateTransitionReasons — arme à plusieurs modes (CC/RC/RL) : un vrai écart reste détecté', () => {
+  const reasons = getStateTransitionReasons({
+    state: { fire_mode: 'rl' }, entry: { state_fire_mode: 'cc' }, weaponFireModes: ['CC', 'RC', 'RL'],
+  })
+  assert.deepEqual(reasons, ['changement de mode de tir'])
+})
+
+test('getStateTransitionReasons — arme à un seul mode : les 4 autres axes restent détectés normalement', () => {
+  const reasons = getStateTransitionReasons({
+    state: { position: 'prone', fire_mode: 'rl' },
+    entry: { state_position: 'standing', state_fire_mode: 'cc' },
+    weaponFireModes: ['RL'],
+  })
+  assert.deepEqual(reasons, ['changement de posture'])
+})
+
+test('getAoeExclusiveIneligibilityReasons — lance-flammes (RL seul), première utilisation du Tour (entry.state_fire_mode défaut \'cc\') : éligible', () => {
+  const reasons = getAoeExclusiveIneligibilityReasons({
+    mapActions: { attack: [{ aoe: { direction: 0 } }] },
+    state: { fire_mode: 'rl' },
+    entry: { state_fire_mode: 'cc' },
+    quick: {},
+    weaponFireModes: ['RL'],
+  })
+  assert.deepEqual(reasons, [])
+})
+
+test('getAoeExclusiveIneligibilityReasons — sans weaponFireModes (appelant non mis à jour) : comportement historique, fire_mode encore détecté', () => {
+  const reasons = getAoeExclusiveIneligibilityReasons({
+    mapActions: { attack: [{ aoe: { direction: 0 } }] },
+    state: { fire_mode: 'rl' }, entry: { state_fire_mode: 'cc' }, quick: {},
+  })
+  assert.deepEqual(reasons, ['changement de mode de tir'])
+})
+
 // ─── getAimIneligibilityReasons — Tir visé (LdB p.227-228) ────────────────────────────────────────
 // Ajouté 2026-08-28 avec le correctif du blocage signalé par Saar : les handleDeclare humanoïdes
 // n'envoient pas `state.cover` → l'ancien `state.cover !== entry.state_cover` faisait
@@ -220,6 +277,20 @@ test('getAimIneligibilityReasons — zone d\'effet active : Tir visé inéligibl
     state: {}, quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1, isAoeMode: true,
   })
   assert.deepEqual(reasons, ['zone d\'effet active'])
+})
+
+// weaponFireModes est dormant ici en pratique (la précondition "pas encore en coup par coup" ci-dessus
+// rend déjà tout écart de fire_mode inatteignable pour le Tir visé), mais getStateTransitionReasons
+// (autorité partagée avec getAoeExclusiveIneligibilityReasons) doit se comporter identiquement des
+// deux côtés — verrouillé ici pour ne pas laisser un bug dormant réapparaître si les préconditions
+// changent un jour.
+test('getAimIneligibilityReasons — weaponFireModes threadé correctement (dormant ici, verrouille la non-régression)', () => {
+  const reasons = getAimIneligibilityReasons({
+    mapActions: { attack: [{ aimTranches: 1 }] },
+    state: { position: 'standing', weapon: 'drawn', fire_mode: 'cc', vitesse: 'normal' },
+    quick: {}, entry: PNJ_ENTRY, isDualWield: false, bulletCount: 1, weaponFireModes: ['CC'],
+  })
+  assert.deepEqual(reasons, [])
 })
 
 // ─── getMultiShotIneligibilityReasons — Tir Multi (docs/PLAN_TIRMULTI.md D6/D10) ──────────────────

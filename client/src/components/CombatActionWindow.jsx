@@ -15,6 +15,7 @@ import {
   CC_REPS_STEPS, RL_BUTTONS, computeFireVariant,
 } from './combatSections.js'
 import { getAimIneligibilityReasons, getMultiShotIneligibilityReasons } from '../../../shared/combatExclusiveActions.js'
+import { parseFireModes } from '../../../shared/fireModes.js'
 import { flattenItemsBySlot, resolveHandWeapons } from '../../../shared/weaponSlots.js'
 import { resolveMeleeReachM, resolveWeaponRangeBand } from '../../../shared/combatRange.js'
 import { isAoeWeapon } from '../../../shared/combatAoe.js'
@@ -688,6 +689,10 @@ export default function CombatActionWindow({
   const aimIneligibilityReasons = getAimIneligibilityReasons({
     mapActions: mapActionsObj, state: decl, quick: decl.quick, entry: rosterEntry,
     isDualWield, bulletCount: effectiveBulletCount ?? null,
+    // Une arme à mode unique (ex. lance-flammes) ne peut jamais représenter un "changement de mode
+    // de tir" délibéré — même autorité que le serveur (shared/combatExclusiveActions.js
+    // #getStateTransitionReasons), même parsing (shared/fireModes.js#parseFireModes).
+    weaponFireModes: parseFireModes(selectedWeapon?.ref_fire_mode),
   })
 
   // --- validité déclaration — source unique client/src/lib/declareChecks.js -----------------------

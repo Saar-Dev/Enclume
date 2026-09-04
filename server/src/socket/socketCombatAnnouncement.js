@@ -17,7 +17,7 @@ import { shadowCheckCharacterState } from '../lib/characterStateShadowCheck.js'
 import { computeIniDelta } from '../../../shared/combatIniCost.js'
 import { getOwnedHandWeapon, WEAPON_SLOTS } from '../services/inventoryService.js'
 import { isExoActorAuthorized, resolveCombatantIdentity } from '../lib/combatantContextService.js'
-import { firstFireMode } from '../../../shared/fireModes.js'
+import { firstFireMode, parseFireModes } from '../../../shared/fireModes.js'
 
 // MELEE-INHAND / ASSAULT-INHAND-RESOLUTION (docs/BUGIDENTIFIE.md, 2026-08-05) — la résolution
 // "arme possédée et en main" passe désormais entièrement par getOwnedHandWeapon
@@ -461,7 +461,14 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             mapActions, weaponAoeProfile: weapon.ref_aoe_profile,
           })
           if (exclusiveCheck.exclusive && exclusiveCheck.reason !== 'tir_vise') {
-            const reasons = getAoeExclusiveIneligibilityReasons({ mapActions, state, quick, entry })
+            // weaponFireModes (bug réel, Saar 2026-09-04) : une arme à mode unique (lance-flammes,
+            // RL seul) force ce mode dès sa sélection — jamais un choix du joueur, donc jamais une
+            // vraie "transition d'état" au sens de l'exclusivité. shared/combatExclusiveActions.js
+            // #getStateTransitionReasons ne signale un changement de mode de tir que si l'arme en
+            // offre réellement plusieurs (shared/fireModes.js#parseFireModes, autorité unique).
+            const reasons = getAoeExclusiveIneligibilityReasons({
+              mapActions, state, quick, entry, weaponFireModes: parseFireModes(weapon.ref_fire_mode),
+            })
             if (reasons.length > 0) {
               socket.emit(WS.COMBAT_DECLARE_ERROR, {
                 username: character.name,
@@ -521,6 +528,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             // en mode zone (buildDeclarePayload.js), mais le serveur reste l'autorité (`core.md`) : un
             // client forgé pourrait sinon combiner les deux.
             isAoeMode: !!mapActions.attack[0]?.aoe,
+            // weaponFireModes — même autorité que getAoeExclusiveIneligibilityReasons ci-dessus
+            // (une arme à mode unique ne peut jamais représenter un "changement de mode de tir"
+            // délibéré). Sans effet aujourd'hui pour le Tir visé (la précondition "pas encore en coup
+            // par coup" ci-dessus rend déjà ce cas inatteignable) — ajouté pour ne pas laisser un bug
+            // dormant identique à celui corrigé côté AOE, cf. getStateTransitionReasons.
+            weaponFireModes: parseFireModes(weapon.ref_fire_mode),
           })
           if (aimReasons.length > 0) {
             console.log(`[DBG] Tir visé refusé — reasons: ${JSON.stringify(aimReasons)} state:${JSON.stringify(state)} entry.state_*:${JSON.stringify({ position: entry.state_position, weapon: entry.state_weapon, fire_mode: entry.state_fire_mode, cover: entry.state_cover, vitesse: entry.state_vitesse })}`)
