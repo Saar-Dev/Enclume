@@ -48,6 +48,30 @@ import {
 // - Arme exo "maison" (label_override sans ref_equipment_id) : `effective_formula` sera toujours null
 //   (exo_weapons n'a pas de colonne damage_formula propre, contrairement à drone_weapons) — bail-out
 //   gracieux ci-dessous, jamais un crash. Gap de schéma pré-existant (Lot C), pas introduit ici.
+// fetchExoWeapon — arme exo re-vérifiée à la Résolution (combat.md : seule la Résolution vérifie ce
+// qui est réellement possible), jamais confiance au fetch de la Déclaration (arme a pu être retirée
+// du loadout entre-temps, ownership rescopée sur character.id). Extrait de resolveExoAssaultAction
+// (Segment 2 AOE, PLAN_ARMES_SPECIALES.md §1.4bis) pour être partagé avec le tronc AOE
+// (server/src/lib/aoeShooterAdapter.js) — une seule requête, jamais une 2ᵉ copie de cette jointure.
+// `ref_aoe_profile`/`ref_name` : colonnes ajoutées pour l'AOE (getAoeMechanic + messages d'erreur),
+// jamais lues par resolveExoAssaultAction ci-dessous — additif, aucun changement de comportement Tir
+// CaC exo existant.
+export async function fetchExoWeapon(exoWeaponInvId, characterId) {
+  return db('exo_weapons')
+    .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
+    .where({ 'exo_weapons.id': exoWeaponInvId, 'exo_weapons.character_id': characterId })
+    .select(
+      'exo_weapons.ref_equipment_id as equipment_id',
+      'exo_weapons.ammo_remaining',
+      'ref_equipment.range as ref_range',
+      'ref_equipment.damage_h as effective_formula',
+      'ref_equipment.name as ref_name',
+      'ref_equipment.aoe_profile as ref_aoe_profile',
+      db.raw(`COALESCE(exo_weapons.label_override, ref_equipment.name) as display_name`),
+    )
+    .first()
+}
+
 export async function resolveExoAssaultAction(io, campaignId, action, confirmedModifiers, character, pendingMaps, options = {}) {
   console.log(`[DBG] resolveExoAssaultAction — début token:${action.token_id} exo_weapon:${action.exo_weapon_inv_id} target:${action.target_token_id}`)
   try {
@@ -61,20 +85,8 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
     }
     if (!action.exo_weapon_inv_id || !action.target_token_id) return { suspend: false, emissions }
 
-    // 1. Arme exo — re-vérifiée à la Résolution (combat.md : seule la Résolution vérifie ce qui est
-    // réellement possible), jamais confiance au fetch de la Déclaration (arme a pu être retirée du
-    // loadout entre-temps, ownership rescopée sur character.id).
-    const weapon = await db('exo_weapons')
-      .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
-      .where({ 'exo_weapons.id': action.exo_weapon_inv_id, 'exo_weapons.character_id': character.id })
-      .select(
-        'exo_weapons.ref_equipment_id as equipment_id',
-        'exo_weapons.ammo_remaining',
-        'ref_equipment.range as ref_range',
-        'ref_equipment.damage_h as effective_formula',
-        db.raw(`COALESCE(exo_weapons.label_override, ref_equipment.name) as display_name`),
-      )
-      .first()
+    // 1. Arme exo (fetchExoWeapon ci-dessus).
+    const weapon = await fetchExoWeapon(action.exo_weapon_inv_id, character.id)
 
     if (!weapon?.effective_formula) {
       console.warn(`[WS] resolveExoAssaultAction — arme sans formule. exo_weapon_inv_id:${action.exo_weapon_inv_id}`)

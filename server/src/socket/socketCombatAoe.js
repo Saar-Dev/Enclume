@@ -36,6 +36,13 @@ import {
   SITUATION_LABELS,
   TAILLE_LABELS,
 } from './socketCombatHelpers.js'
+// fetchExoWeapon — import socket→socket (socketCombatExo.js n'importe jamais socketCombatAoe.js,
+// vérifié : aucun cycle, même pattern que socketCombatResolution.js qui importe déjà les deux).
+// Volontairement PAS dans server/src/lib/ : un adaptateur générique y aurait dû importer CE module
+// (lib→socket, sens interdit partout ailleurs dans ce projet, vérifié par grep) pour réutiliser
+// fetchAssaultWeaponAndMods/fetchExoWeapon — l'adaptateur reste donc ici, dans le tronc AOE lui-même
+// (Segment 2, PLAN_ARMES_SPECIALES.md §1.4bis), pas un fichier lib/ séparé.
+import { fetchExoWeapon } from './socketCombatExo.js'
 
 // ─── Couche 4 AOE (docs/PLANS/PLAN_AOE.md §8 étape 8, phase A) ────────────────
 //
@@ -121,14 +128,65 @@ async function runAoePhaseA({ character, weapon, confirmedModifiers }) {
   return { rollResult, diceEmission, tireurColor, tireurUsername }
 }
 
-// Décompte munitions — une seule cartouche pour toute la gerbe (RAW), pas par cible.
-async function decrementAoeAmmo(campaignId, { character, weapon, action }) {
-  const settings = await getCampaignSettings(db, campaignId)
-  const skipDecrement = character.type === 'pnj' && settings.pnj_unlimited_ammo
-  if (!skipDecrement && weapon.ammo_remaining !== null && weapon.ammo_remaining !== undefined) {
-    const newRemaining = Math.max(0, weapon.ammo_remaining - (action.bullet_count ?? 1))
-    await db('char_inventory').where({ id: action.weapon_inv_id }).update({ ammo_remaining: newRemaining })
+// ─── Adaptateur d'arme AOE — agnostique au type de tireur (Segment 2, PLAN_ARMES_SPECIALES.md §1.4bis) ─
+//
+// Même patron que combatantContextService.js#resolveCombatantTestContext (guard clauses, pas de
+// table — §1 du plan, doctrine Fowler déjà en place dans ce projet, 2-3 branches réelles). Le Seuil
+// de Test a déjà son dispatcher partagé ; celui-ci fait la même chose pour « quelle est l'arme, sa
+// portée, son profil AOE, ses munitions » — une propriété différente, jamais fusionnée avec le
+// contexte de Test.
+//
+// fetchAoeShooterWeapon — arme normalisée quel que soit le type de tireur : `equipment_id`,
+// `ref_range`, `ref_damage_h`, `ref_aoe_profile`, `ref_name`, `display_name`, `ammo_remaining` — les
+// mêmes champs déjà lus par le tronc pour un tireur humanoïde (getOwnedHandWeapon les porte déjà tels
+// quels), exo normalisé vers la même forme, aucune renomination à charge du reste du tronc. `null` si
+// introuvable ou type pas encore supporté — jamais un throw (même contrat que fetchExoWeapon/
+// fetchAssaultWeaponAndMods eux-mêmes).
+//
+// Segment 2a (ce lot) : pj/pnj + exo. Drone : `null` explicite (Segment 2b, pas câblé) — le tronc
+// traite ça comme « arme introuvable », message clair, même discipline que findAoeMechanismEntry pour
+// un mécanisme inconnu.
+async function fetchAoeShooterWeapon(character, action) {
+  if (character.type === 'exo') {
+    if (!action.exo_weapon_inv_id) return null
+    const row = await fetchExoWeapon(action.exo_weapon_inv_id, character.id)
+    if (!row?.equipment_id) return null
+    return {
+      equipment_id: row.equipment_id, ref_range: row.ref_range,
+      ref_damage_h: row.effective_formula, ref_aoe_profile: row.ref_aoe_profile,
+      ref_name: row.ref_name, display_name: row.display_name, ammo_remaining: row.ammo_remaining,
+    }
   }
+  if (character.type === 'drone') return null // Segment 2b
+  if (!action.weapon_inv_id) return null
+  const { weapon } = await fetchAssaultWeaponAndMods(action.weapon_inv_id, character.id)
+  return weapon?.equipment_id ? weapon : null
+}
+
+// Décompte munitions — une seule cartouche pour toute la gerbe (RAW), pas par cible. Reproduit
+// fidèlement 2 comportements déjà en place ailleurs, PAS un nouveau comportement fusionné :
+//  - humanoïde : skip si `pnj_unlimited_ammo` (réglage de campagne, comportement historique de cette
+//    fonction, inchangé) ;
+//  - exo : `resolveExoAssaultAction` (Tir/CaC exo non-AOE) ne vérifie JAMAIS `pnj_unlimited_ammo` —
+//    ce réglage ne s'applique qu'à un tireur humanoïde, reproduit ici à l'identique (vérifié dans
+//    socketCombatExo.js avant d'écrire cette branche), pas une omission.
+// drone : no-op — `drone_weapons` n'a aucune colonne munitions (migration 39_drone_weapons.js), aucun
+// tracking possible ; Segment 2b n'y changera rien (gap de schéma, pas de ce lot).
+async function decrementAoeShooterAmmo(campaignId, { character, weapon, action }) {
+  if (weapon.ammo_remaining === null || weapon.ammo_remaining === undefined) return
+  const bulletsFired = action.bullet_count ?? 1
+
+  if (character.type === 'exo') {
+    const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
+    await db('exo_weapons').where({ id: action.exo_weapon_inv_id }).update({ ammo_remaining: newRemaining })
+    return
+  }
+  if (character.type === 'drone') return
+
+  const settings = await getCampaignSettings(db, campaignId)
+  if (character.type === 'pnj' && settings.pnj_unlimited_ammo) return
+  const newRemaining = Math.max(0, weapon.ammo_remaining - bulletsFired)
+  await db('char_inventory').where({ id: action.weapon_inv_id }).update({ ammo_remaining: newRemaining })
 }
 
 // Persistance (§3) — une ligne par cible touchée, écrite à la RÉSOLUTION. `modifierFn(ht)` fournit
@@ -333,10 +391,12 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       return { suspend: false, emissions }
     }
 
-    if (!action.weapon_inv_id) return { suspend: false, emissions }
-    const { weapon } = await fetchAssaultWeaponAndMods(action.weapon_inv_id, character.id)
-    if (!weapon?.equipment_id) {
-      console.warn(`[WS] resolveAoeAssaultAction — arme introuvable. weapon_inv_id:${action.weapon_inv_id}`)
+    // Arme normalisée quel que soit le type de tireur (pj/pnj/exo — drone : Segment 2b, pas encore
+    // câblé) — fetchAoeShooterWeapon ci-dessus, jamais action.weapon_inv_id lu en dur ici : ce champ
+    // n'existe que pour un tireur humanoïde (exo/drone portent exo_weapon_inv_id/drone_weapon_inv_id).
+    const weapon = await fetchAoeShooterWeapon(character, action)
+    if (!weapon) {
+      console.warn(`[WS] resolveAoeAssaultAction — arme introuvable. type:${character.type} weapon_inv_id:${action.weapon_inv_id} exo_weapon_inv_id:${action.exo_weapon_inv_id} drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
       return { suspend: false, emissions }
     }
     // Identification par la donnée catalogue `aoe_profile.mechanic` (segment 0b, shared/combatAoe.js) ;
@@ -410,7 +470,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
       site: 'assault_aoe', actorTokenId: action.token_id, targetTokenId: null,
     })
 
-    await decrementAoeAmmo(campaignId, { character, weapon, action })
+    await decrementAoeShooterAmmo(campaignId, { character, weapon, action })
 
     if (hitTargets.length === 0) {
       // Le tir est parti (RAW), personne dans la zone d'effet. Jamais un COMBAT_ATTACK_RESULT
@@ -451,9 +511,17 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     // (`getEffectiveWeaponDamage`/repli `ref_damage_h`, comme resolveAssaultAction), puis délégation
     // à `mech.computeTargetDamage` pour la formule propre au mécanisme (dispersion fusil à pompe,
     // 2D10 sec + Localisations lance-flammes).
+    // getEffectiveWeaponDamage (ammo/mods-aware) est strictement char_inventory-only par construction
+    // (damageService.js#_fetchWeaponAndAmmo) — jamais appelé pour exo/drone (ni l'un ni l'autre n'a de
+    // munitions/mods dans ce sens, vérifié : resolveExoAssaultAction/resolveDroneAssaultAction ne
+    // l'appellent jamais non plus). weapon.ref_damage_h (déjà résolu par fetchAoeShooterWeapon —
+    // COALESCE override/catalogue côté exo) sert alors directement de baseRaw.
+    const isHumanoidShooter = character.type === 'pj' || character.type === 'pnj'
     const perTargetInputs = []
     for (const ht of resolveTargets) {
-      const effectiveDamage = await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band ?? null })
+      const effectiveDamage = isHumanoidShooter
+        ? await damageService.getEffectiveWeaponDamage(db, action.weapon_inv_id, { rangeBand: ht.band ?? null })
+        : null
       const baseRaw = effectiveDamage
         ? effectiveDamage.total
         : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
