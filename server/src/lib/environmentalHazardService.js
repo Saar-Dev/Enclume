@@ -21,7 +21,20 @@ export function getAllHazardCodes() {
 // exposée", variable par instance) — inutile pour Décompression (déjà fixée par le registre) ou pour
 // un Feu qu'on veut aléatoire (Grand feu/Brasier, laisser `null`). Non fourni pour Acide/Feu = tirage
 // aléatoire au lieu d'une localisation fixe, décision de jeu valide, pas une erreur (§9 point 10).
-export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { formula, locations = 1, forcedLocation = null } = {}) {
+//
+// `durationDice` (PLAN_ARMES_SPECIALES.md §1.4 segment 1c, décision G) : formule de dés d'une durée
+// FINIE en Tours (lance-flammes : "2D6 Tours de combat", RAW). `null` (défaut) = danger permanent
+// jusqu'au retrait MJ (`clearHazard`), comportement historique Acide/Décompression/Feu manuel. Quand
+// fourni, on lit `combat_state.current_turn` ICI (jamais l'appelant — même autorité que `clearHazard`)
+// et on pose `expires_at_turn = max(expiry_existant, currentTurn + roll(durationDice) + 1)` :
+//  - le `+1` compense la purge universelle de fin de Tour (`socketCombatHelpers.js`, condition
+//    `expires_at_turn <= newTurn` appliquée AVANT la résolution du Tour où ils s'égalent) — sans lui
+//    le feu tickerait `roll-1` fois au lieu de `roll` (même raisonnement que `clearHazard` linger) ;
+//  - le `max(...)` : `applyModStatus` fait `.onConflict().merge()` sans argument → il ÉCRASE
+//    inconditionnellement `expires_at_turn`. Une 2ᵉ brûlure avec un `roll` faible RACCOURCIRAIT donc
+//    un feu qui avait plus longtemps à courir. On ne peut que rendre le feu pire (décision G). Un vrai
+//    stacking (double-tick) serait une refonte du système de dangers — hors périmètre.
+export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { formula, locations = 1, forcedLocation = null, durationDice = null } = {}) {
   if (!findHazardRegistryEntry(hazardCode)) {
     throw new AppError(400, `Danger environnemental "${hazardCode}" absent de shared/environmentalHazardRegistry.js`)
   }
@@ -38,8 +51,24 @@ export async function exposeToHazard(io, db, campaignId, tokenId, hazardCode, { 
   if (forcedLocation != null && !(forcedLocation in LOCATION_TO_SLOT)) {
     throw new AppError(400, `forcedLocation "${forcedLocation}" inconnu de shared/armorConstants.js:LOCATION_TO_SLOT`)
   }
+  if (durationDice != null && !isValidDiceFormula(durationDice)) {
+    throw new AppError(400, `durationDice "${durationDice}" n'est pas une formule de dés valide`)
+  }
+
+  let expiresAtTurn = null
+  if (durationDice != null) {
+    const state = await db('combat_state').where({ campaign_id: campaignId }).select('current_turn').first()
+    const currentTurn = state?.current_turn ?? 1
+    const { total: roll } = await parseDice(durationDice)
+    const existing = await db('token_statuses')
+      .where({ token_id: tokenId, status_code: hazardCode })
+      .select('expires_at_turn')
+      .first()
+    expiresAtTurn = Math.max(existing?.expires_at_turn ?? 0, currentTurn + roll + 1)
+  }
+
   await statusService.applyModStatus(io, db, campaignId, tokenId, hazardCode, {
-    expiresAtTurn: null,
+    expiresAtTurn,
     data: { formula, locations, forcedLocation },
     throwOnFailure: true,
   })
