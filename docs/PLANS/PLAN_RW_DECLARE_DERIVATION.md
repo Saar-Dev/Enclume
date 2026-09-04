@@ -212,3 +212,15 @@ hors périmètre — cf. `PLAN_ARMES_SPECIALES` Segment 2).
 - **Non testé** : rien à tester en navigateur (zéro câblage fenêtre — `handleDeclare` PJ/MJ
   inchangés, appellent les mêmes wrappers).
 - **Données** : aucune.
+
+### Étape B1 — `assaultCheckInputs` — codé 2026-09-04 (non commité)
+
+`client/src/lib/assaultDeclaration.js` : `assaultCheckInputs(state, ctx)` — autorité unique de la
+neutralisation zone d'effet côté validité (`isAoeMode ? 1 : targets.slice(0, n).filter(Boolean)`,
+avant recopié entre les 2 fenêtres). `ctx` porte les divergences PJ/MJ (`started`, `hasWeapon`,
+`effectiveCount`). Aucun câblage — l'export n'est pas encore consommé.
+
+- **Testé** : `node --check` OK ; `node --test` assault reducer + declareChecks + golden master
+  **109/109** ; `eslint` propre. 7 tests neufs (série tronquée, zone d'effet 1/1, direction 0°
+  falsy, `aimReasons` absent).
+- **Non testé** : navigateur (câblage en B2/B3).

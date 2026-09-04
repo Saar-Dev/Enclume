@@ -8,6 +8,7 @@ import {
   assaultTargetsFilled,
   assaultTargetsComplete,
   assaultIsAoeMode,
+  assaultCheckInputs,
 } from './assaultDeclaration.js'
 
 // --- reducer : champs simples ---------------------------------------------------------------------
@@ -158,4 +159,49 @@ test('SELECT_WEAPON et CLEAR remettent aoeDirection à null', () => {
   const dirty = { ...INIT, aoeDirection: 45 }
   assert.equal(reduce(dirty, { type: 'SELECT_WEAPON', weaponId: 'w2' }).aoeDirection, null)
   assert.equal(reduce(dirty, { type: 'CLEAR' }).aoeDirection, null)
+})
+
+// --- assaultCheckInputs (PLAN_RW_DECLARE_DERIVATION Étape B) --------------------------------------
+
+const ctx = (over = {}) => ({
+  started: true, hasWeapon: true, effectiveCount: 1, hasVariant: true,
+  aimTranches: 0, aimReasons: [], ...over,
+})
+
+test('assaultCheckInputs : passe started/hasWeapon/hasVariant tels quels, aimActive dérivé', () => {
+  const r = assaultCheckInputs(INIT, ctx({ started: false, hasWeapon: false, hasVariant: false, aimTranches: 2 }))
+  assert.equal(r.started, false)
+  assert.equal(r.hasWeapon, false)
+  assert.equal(r.hasVariant, false)
+  assert.equal(r.aimActive, true)
+})
+
+test('assaultCheckInputs : cible unique — compte les slots non nuls dans la série effective', () => {
+  const state = { ...INIT, targets: ['e1', null, 'e3'] }
+  assert.deepEqual(assaultCheckInputs(state, ctx({ effectiveCount: 3 })), {
+    started: true, hasWeapon: true, targetsFilled: 2, targetsNeeded: 3,
+    hasVariant: true, aimActive: false, aimReasons: [],
+  })
+})
+
+test('assaultCheckInputs : effectiveCount tronque le décompte (cibles au-delà de la série ignorées)', () => {
+  const state = { ...INIT, targets: ['e1', 'e2', 'e3'] }
+  assert.equal(assaultCheckInputs(state, ctx({ effectiveCount: 2 })).targetsFilled, 2)
+})
+
+test('assaultCheckInputs : zone d\'effet — 1 attendue / 1 fournie, quel que soit targets', () => {
+  const state = { ...INIT, aoeDirection: 42, targets: [] }
+  const r = assaultCheckInputs(state, ctx({ effectiveCount: 3 }))
+  assert.equal(r.targetsFilled, 1)
+  assert.equal(r.targetsNeeded, 1)
+})
+
+test('assaultCheckInputs : zone d\'effet à 0° (falsy) reste une direction posée', () => {
+  const r = assaultCheckInputs({ ...INIT, aoeDirection: 0 }, ctx())
+  assert.equal(r.targetsNeeded, 1)
+  assert.equal(r.targetsFilled, 1)
+})
+
+test('assaultCheckInputs : aimReasons absent → []', () => {
+  assert.deepEqual(assaultCheckInputs(INIT, ctx({ aimReasons: undefined })).aimReasons, [])
 })

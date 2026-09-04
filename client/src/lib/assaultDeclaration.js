@@ -53,6 +53,43 @@ export function assaultTargetsComplete(state, currentFireMode) {
   return n > 0 && state.targets.slice(0, n).filter(Boolean).length >= n
 }
 
+// Args de `assaultCheck` (client/src/lib/declareChecks.js) dérivés du sous-état Tir + d'un contexte
+// fenêtre — **autorité unique** de la neutralisation « zone d'effet » côté validité : une direction
+// posée = 1 cible attendue et 1 fournie, jamais de série (RAW : une action de zone n'a pas de cible
+// unique). Avant : ce `isAoeMode ? 1 : targets.slice(0, n).filter(Boolean).length` était recopié
+// à l'identique entre `CombatActionWindow` (PJ) et `CombatGmDeclareWindow` (MJ)
+// (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B, ex-PO-M5-a).
+//
+// Ce que le contexte apporte (divergences légitimes calculées par la fenêtre, jamais ici) :
+//  - `started`   : PJ = attaque sélectionnée (`attackSelected`) ; MJ = arme choisie ∨ cible posée ∨
+//                  ciblage carte en cours — sémantiques distinctes, pas unifiables sans régression.
+//  - `hasWeapon` : PJ = `assaultWeaponId != null` ; MJ = `!!weapon`.
+//  - `effectiveCount` : `effectiveAssaultCount` déjà résolu par la fenêtre (elle connaît le
+//                  `currentFireMode`, y compris le forçage CC du dual-wield d'armes hétérogènes).
+//
+// @param {typeof ASSAULT_DECLARATION_INITIAL} state
+// @param {object}   ctx
+// @param {boolean}  ctx.started
+// @param {boolean}  ctx.hasWeapon
+// @param {number}   ctx.effectiveCount   `effectiveAssaultCount` (série Tir Multi — CC seulement)
+// @param {boolean}  ctx.hasVariant       mode de tir configuré (`currentVariant != null`)
+// @param {number}   ctx.aimTranches      tranches de Tir visé demandées
+// @param {string[]} ctx.aimReasons       `getAimIneligibilityReasons(...)` — `[]` si éligible
+// @returns {{ started: boolean, hasWeapon: boolean, targetsFilled: number, targetsNeeded: number,
+//             hasVariant: boolean, aimActive: boolean, aimReasons: string[] }}
+export function assaultCheckInputs(state, ctx) {
+  const aoe = assaultIsAoeMode(state)
+  return {
+    started:       ctx.started,
+    hasWeapon:     ctx.hasWeapon,
+    targetsFilled: aoe ? 1 : state.targets.slice(0, ctx.effectiveCount).filter(Boolean).length,
+    targetsNeeded: aoe ? 1 : ctx.effectiveCount,
+    hasVariant:    ctx.hasVariant,
+    aimActive:     ctx.aimTranches > 0,
+    aimReasons:    ctx.aimReasons ?? [],
+  }
+}
+
 // Redimensionne le tableau de cibles à N en remplissant les nouveaux slots avec la 1re cible posée
 // (défaut « toute la série sur la même cible » — miroir de l'ancien onAssaultCountChange PJ/MJ).
 function resizeTargets(targets, n) {
