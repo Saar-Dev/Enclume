@@ -26,6 +26,26 @@ import { firstFireMode } from '../../../shared/fireModes.js'
 // supprimé — c'était l'une des réimplémentations divergentes qui a permis à l'arme principale CaC
 // et à la résolution du Tir de ne jamais recevoir ce contrôle.
 
+// PC23 — la limite RAW « Tir automatique » (REGLESYSCOMBAT.md:1498) vise les ARMES AUTOMATIQUES
+// utilisées avec « Armes de poing » / « Fusils-Armes d'épaule » (tir de balles en rafale, « pour
+// chaque groupe de 5 balles »). Une arme au maniement dédié — compétence « arme spéciale »
+// (ref_skills.parent ARME_SPECIALE_DISTANCE / ARME_SPECIALE_CONTACT) — n'est PAS couverte : le
+// lance-flammes est `fire_mode='RL'` mais ce code encode sa « mise en œuvre continue (action
+// exclusive) » du stat block, pas une rafale de balles ; sa Compétence spécifique gouverne déjà son
+// emploi (RAW ref_skills : « un lance-flamme par exemple. Chaque arme spéciale fait l'objet d'une
+// Compétence spécifique »). Vérifié : le lance-flammes est la seule arme `fire_mode ~ R` du catalogue
+// dont la compétence a un `parent` « arme spéciale ». Utilisé aux deux sites du contrôle PC23
+// (humanoïde + exo) pour ne jamais réintroduire la divergence.
+async function weaponUsesSpecialSkill(equipmentId) {
+  if (!equipmentId) return false
+  const row = await db('ref_equipment_skill_assoc as a')
+    .join('ref_skills as s', 'a.skill_id', 's.id')
+    .where('a.item_id', equipmentId)
+    .whereIn('s.parent', ['ARME_SPECIALE_DISTANCE', 'ARME_SPECIALE_CONTACT'])
+    .first()
+  return !!row
+}
+
 async function planCombatWorldMovement(token, character, move) {
   if (token.position_space !== 'world-feet') throw new RangeError('Le token utilise encore une position legacy')
   const battlemap = await db('battlemaps').where({ id: token.battlemap_id }).first()
@@ -317,7 +337,7 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           // unique « retrouver le pilote d'un exo », combatantContextService.js) — jamais une
           // char_sheet propre à l'exo, qui n'existe pas.
           const exoFireMode = firstFireMode(exoWeapon.ref_fire_mode)
-          if (exoFireMode === 'RC' || exoFireMode === 'RL') {
+          if ((exoFireMode === 'RC' || exoFireMode === 'RL') && !(await weaponUsesSpecialSkill(exoWeapon.ref_equipment_id))) {
             const { sheetId } = await resolveCombatantIdentity(db, character)
             const autoSkill = sheetId
               ? await db('char_skills').where({ char_sheet_id: sheetId, skill_id: 'TIR_AUTOMATIQUES' }).first()
@@ -371,8 +391,9 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           }
           assaultWeaponRefRange = weapon.ref_range ?? null
           // PC23 — TIR_AUTOMATIQUE requis pour RC/RL (contrôle unique, indépendant de la main —
-          // c'est une compétence du personnage, pas de l'arme)
-          if (fireMode === 'RC' || fireMode === 'RL') {
+          // c'est une compétence du personnage, pas de l'arme). Exception : arme « spéciale »
+          // (lance-flammes…) — voir weaponUsesSpecialSkill.
+          if ((fireMode === 'RC' || fireMode === 'RL') && !(await weaponUsesSpecialSkill(weapon.equipment_id))) {
             const sheet = await db('char_sheet').where({ character_id: character.id }).first()
             const autoSkill = sheet
               ? await db('char_skills').where({ char_sheet_id: sheet.id, skill_id: 'TIR_AUTOMATIQUES' }).first()
