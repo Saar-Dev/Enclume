@@ -424,14 +424,15 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     await decrementAoeAmmo(campaignId, { character, weapon, action })
 
     if (hitTargets.length === 0) {
-      if (isPnjResult) {
-        emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
-          tireurId: action.token_id, cibleId: null, isSuccess: rollResult.isSuccess, isPnj: true,
-          roll: rollResult.rollAttaque, chancesDeReussite: rollResult.seuil,
-          localisation: null, degautsBruts: null, degatsNets: null, severity: null, is_lethal: false, shockResult: null,
-        } })
-      } else {
-        // Tireur PJ, aucune cible dans le couloir — la gerbe est partie (RAW), personne touché.
+      // La gerbe est partie (RAW), personne dans le couloir. Jamais un COMBAT_ATTACK_RESULT « cible
+      // unique » ici : le panneau hit/miss afficherait « Touché » sur une cible « ? » à 0 dégât dès
+      // que le jet Phase A réussit (le Test de tir n'est pas un hit/miss d'action pour une zone).
+      // → une ligne système en chat pour tout le monde ; le tireur PJ ferme sa fenêtre via aoeNoTargets.
+      const shooterLabel = character.name ?? shooterToken.label ?? '?'
+      emissions.push({ to: 'room', event: WS.COMBAT_SYSTEM_NOTICE, data: {
+        i18nKey: 'session.aoeNoTargets', params: { label: shooterLabel }, timestamp: new Date().toISOString(),
+      } })
+      if (!isPnjResult) {
         emissions.push({ to: 'socket', event: WS.COMBAT_ATTACK_PLAYER_RESULT, data: {
           hit: false, aoeNoTargets: true,
           roll: rollResult.rollAttaque, seuil: rollResult.seuil,
