@@ -234,23 +234,55 @@ purge dupliqué entre `exposeToHazard`/`clearHazard`.
 comportement visé (refactor pur)** — non-régression confirmée en session réelle par Saar sur les deux
 armes (fusil à pompe + lance-flammes, PJ/PNJ) après le rebranchement du tronc.
 
-#### Segment 2 — AOE tireur exo/drone (après 1.5)
+#### Segment 2a — AOE tireur exo — CODÉ + VALIDÉ (2026-09-04), CHANTIER FONCTIONNELLEMENT CLOS
 
-`resolveAoeAssaultAction` lit `action.weapon_inv_id` (inventaire humain) → `if (!weapon_inv_id) return`
-baille pour l'exo **et** le drone. **Déjà agnostiques au type de tireur** : persistance de l'annonce
-(`socketCombatAnnouncement.js:626-662` écrit `exo_weapon_inv_id`/`drone_weapon_inv_id` +
-`modifiers.aoe`), Phase A (`runAoePhaseA` → `resolveCombatantTestContext` dispatche déjà vers
-`resolveExoTestContext` — le drone, lui, n'a pas de Test de Compétence, `drone_programs.level` sert
-directement de Seuil, §3.5 `PLAN_COMBATANT_CONTEXT.md`), application par cible
-(`resolveAoeTargetDamage` dispatche déjà drone/exo/normal). **Reste** : fetch arme + formule de
-dégâts (`getEffectiveWeaponDamage`) + décompte munitions — à rendre agnostiques via un adaptateur
-(même Strangler Fig que le contexte de Test) ; + UI **exo** (`CombatExoActionWindow` /
-`useExoDeclare`, bouton « Viser une zone », `aoeDirection`, `buildExoMapActions`, `ref_aoe_profile`
-dans le payload armes exo) **et** **drone** (`DroneWeaponPanel` / `useDroneDeclare`, même patron —
-confirmé en session 2026-09-04 : zéro trace AOE dans les deux fichiers, dette identique) ;
-+ `CombatOverlay.jsx` prop `onEnterAoeTargetMode`. **Débloque aussi le fusil à pompe monté sur
-exo/drone** (même tronc). `SERVICES_COMBAT.md §8 F2` documente déjà la dette « branches Pj/Pnj/Drone
-jamais fusionnées » côté résolution d'attaque.
+`resolveAoeAssaultAction` lisait `action.weapon_inv_id` (inventaire humain) → `if (!weapon_inv_id)
+return` baillait pour tout tireur non-humanoïde. Adaptateur direct dans le tronc
+(`fetchAoeShooterWeapon`/`decrementAoeShooterAmmo`, `socketCombatAoe.js`), même patron guard-clauses
+que `combatantContextService.js#resolveCombatantTestContext` — dispatch pj/pnj/exo, drone → `null`
+explicite (Segment 2b). `fetchExoWeapon` extraite/exportée depuis `socketCombatExo.js` (partagée avec
+`resolveExoAssaultAction`, jamais une 2ᵉ copie de la jointure `exo_weapons ⋈ ref_equipment`).
+`getEffectiveWeaponDamage` (ammo/mods-aware) reste strictement réservé à pj/pnj — `char_inventory`-only
+par construction, exo/drone n'ont ni munitions ni mods dans ce sens (déjà vrai pour leur Tir/CaC
+non-AOE). Côté client : `useExoDeclare.js` (état `aoeDirection`, pas de reducer — exclusivité
+maintenue manuellement) + `CombatExoActionWindow.jsx` (section « Zone d'effet » si
+`isAoeWeapon(selectedExoWeapon.ref_aoe_profile)`) + `buildExoMapActions` (branche `aoe.direction`) +
+`CombatOverlay.jsx` (relais `onEnterAoeTargetMode`).
+
+**3 bugs réels trouvés en session de validation Saar** (aucun dans le plan initial) :
+1. `GET /:characterId/exo/weapons` (`char-sheet.js#selectExoWeaponFields`) ne sélectionnait pas
+   `ref_equipment.aoe_profile` — sans elle le client ne peut jamais savoir qu'une arme exo est une
+   arme de zone. Colonne ajoutée.
+2. `combat.json#aimAoeButton` codait en dur « (fusil à pompe) » — déjà faux pour le lance-flammes
+   humanoïde depuis le Segment 1 (jamais remarqué), encore plus faux pour l'exo. Généralisé en
+   « Viser une zone », 3ᵉ consommateur désormais cohérent.
+3. **`useAutoMoveMode` (survol de déplacement ambiant) jamais désarmé pendant la visée** —
+   `CombatExoActionWindow.jsx` violait le contrat documenté par le hook lui-même (« `enabled` doit
+   être faux tant qu'un autre mode exclusif utilise la carte »). Invisible pour le ciblage d'entité
+   normal (surfaces de clic différentes — le survol déplacement n'écoute que le sol) mais en
+   collision directe avec la visée de zone (même surface : le clic au sol). Symptôme réel : bouton
+   « VISER UNE ZONE » affiché correctement, clic au sol sans effet, la fenêtre attendait une cible
+   d'entité. Fix : `exoDeclare.isSelectingTarget` exposé, `useAutoMoveMode` gaté dessus (ordre d'appel
+   des 2 hooks inversé pour permettre la dépendance, toujours inconditionnel — règle des Hooks
+   respectée).
+
+**Commité `dev/Saar`** : `183177e` (adaptateur serveur) · `a9cf858` (payload/endpoint/état) ·
+`e5dbd9e` (UI) · `f9484f3` (fix useAutoMoveMode). Non-régression Tir/CaC exo classique confirmée
+(chemin non-AOE inchangé, `fetchExoWeapon` partagée sans changement de comportement).
+
+#### Segment 2b — AOE tireur drone (après 2a)
+
+Même patron que 2a, à répéter pour le drone : `fetchAoeShooterWeapon` (adaptateur, `socketCombatAoe.js`)
+gagne sa branche `character.type === 'drone'` (fetch `drone_weapons ⋈ ref_equipment`, `ref_aoe_profile`
+à ajouter au SELECT — absent aujourd'hui, même gap que l'exo avant 2a) ; `decrementAoeShooterAmmo`
+reste no-op pour le drone (aucune colonne munitions, `39_drone_weapons.js` — gap de schéma, pas de ce
+segment). Côté client : `DroneWeaponPanel.jsx`/`useDroneDeclare.js` — **branche entièrement séparée**
+de l'exo, PAS un partage gratuit : vérifié en session (2026-09-04), `CombatActionWindow.jsx:1243` gate
+tout le bloc `AssaultRangedPanel` (donc l'AOE) sur `!isDrone` — le drone a son propre panneau, sans
+aucun câblage AOE, à construire de zéro comme l'exo. **Vérifier en premier, avant tout code** : le
+même bug `useAutoMoveMode` (ou son équivalent côté drone) peut exister ici aussi — chercher le hook de
+survol de déplacement ambiant du drone et son `enabled`, ne pas supposer qu'il est déjà correctement
+gaté. Débloque aussi le fusil à pompe monté sur drone (même tronc, déjà agnostique côté mécanisme).
 
 #### Segment 3 — Grenades
 
@@ -425,7 +457,8 @@ avec l'AOE** — c'est du corps à corps avancé, rejoint le chantier **Arts mar
 | **Segment 0 — Socle AOE** (§1.4/§1.6) | **Codé + validé en session (2026-09-04).** 0a extraction `socketCombatAoe.js` (`8d86090`) · 0b-B `shared/combatAoe.js` (`5df482f`) · 0c+0b-A migrations `aoe_profile`/`damage_modifier` (`0a35245`) · 0b-C bascule identification data-driven (`b87aa1a`) · 0d-1 `filterShotgunHitTargets` pure + 9 tests (`11f6997`) · 0d-2 refactor tronc + forme `results` 1..N Loc + refonte agrégat + `CombatModifiersWindow` imbriqué (`830f229`) · cas 0 cible (`1613467`). **0e** (fetch-once) = perf, différé. |
 | **Segment 1 — lance-flammes (main)** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`21fb40e`). CHANTIER FONCTIONNELLEMENT CLOS** — détail complet `JOURNAL8.md` §« Lance-flammes (main) ». 4 bugs réels trouvés et corrigés en session (`hasVariant`/`aimActive` non neutralisés en AOE, PC23 armes spéciales, « changement de mode de tir » faux positif arme à mode unique, Choc évalué par Localisation au lieu d'une fois par cible) + Catastrophe ×4 investigué (non-bug, Seuil PNJ bas). |
 | **Segment 1.5 — registre de mécanismes AOE** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`1999ab4`, `9256e01`). CHANTIER FONCTIONNELLEMENT CLOS.** Refactor pur (objet stratégie par mécanisme, zéro `if mechanic` dans le tronc) — résorbe les 6 branches + le hack pseudo-cible + le `+1` de purge dupliqué. Non-régression fusil à pompe + lance-flammes confirmée par Saar. Détail §1.4bis. |
-| **Segment 2 — AOE tireur exo/drone** | **Prochain.** Adaptateur de résolution d'arme agnostique au type de tireur + UI `CombatExoActionWindow`/`useExoDeclare` **et** `DroneWeaponPanel`/`useDroneDeclare` — confirmé en session (2026-09-04) : les deux chemins sont dans le même état (zéro référence AOE), reconfirmé non fonctionnel après clôture 1.5. Débloque aussi le fusil à pompe exo/drone. Détail §1.4bis. |
+| **Segment 2a — AOE tireur exo** | **Codé + VALIDÉ en session réelle (2026-09-04), poussé `dev/Saar` (`183177e`..`f9484f3`). CHANTIER FONCTIONNELLEMENT CLOS.** Adaptateur serveur (`fetchAoeShooterWeapon`/`decrementAoeShooterAmmo`) + UI `CombatExoActionWindow`/`useExoDeclare`. 3 bugs réels trouvés en session (colonne `ref_aoe_profile` manquante côté endpoint, libellé bouton codé en dur, `useAutoMoveMode` jamais désarmé pendant la visée — collision avec le clic au sol de l'AOE). Détail §1.4bis. |
+| **Segment 2b — AOE tireur drone** | **Prochain.** Même patron que 2a, à répéter pour `DroneWeaponPanel`/`useDroneDeclare` — confirmé en session (2026-09-04) : branche entièrement séparée de l'exo (`CombatActionWindow.jsx` gate `!isDrone` sur tout le bloc AOE), pas de réutilisation gratuite. Vérifier en premier si l'équivalent drone du bug `useAutoMoveMode` existe. Débloque aussi le fusil à pompe monté sur drone. Détail §1.4bis. |
 | Segment 3 — grenades | Un objet mécanisme `circle` sur le registre 1.5. Reste bloqué par : migration catalogue + `intendedOrigin` + action différée inter-tours + 2 pages RAW (Saar). |
 | Mines | Hors scope v1 (système entité-piège). |
 | Fouets/chaînes | Hors périmètre (→ Arts martiaux). |

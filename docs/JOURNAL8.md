@@ -5213,3 +5213,69 @@ seule la session réelle ci-dessus en fait foi. Segment 2 (AOE tireur exo/drone)
 **Données** : aucune migration, aucun changement de schéma.
 
 **Retour arrière** : `git revert 1999ab4 9256e01` — refactor pur, aucune donnée touchée.
+
+## Session (Claude) — 2026-09-04 — AOE Segment 2a (tireur exo) — CHANTIER FONCTIONNELLEMENT CLOS
+
+**Contexte** : Segment 2 de `docs/PLANS/PLAN_ARMES_SPECIALES.md`, découpé en 2a (exo, ce lot) et 2b
+(drone, différé — branche entièrement séparée, pas de réutilisation gratuite, vérifié en session :
+`CombatActionWindow.jsx:1243` gate tout le bloc AOE humanoïde sur `!isDrone`).
+
+**Codé** : adaptateur serveur agnostique au type de tireur dans le tronc AOE (`fetchAoeShooterWeapon`/
+`decrementAoeShooterAmmo`, `socketCombatAoe.js`) — dispatch pj/pnj/exo (drone → `null` explicite,
+Segment 2b), même patron guard-clauses que `resolveCombatantTestContext`. `fetchExoWeapon` extraite/
+exportée depuis `socketCombatExo.js`, partagée avec le Tir/CaC exo non-AOE existant (zéro changement
+de comportement dessus). `getEffectiveWeaponDamage` (ammo/mods-aware) réservé à pj/pnj — vérifié
+`char_inventory`-only par construction, exo n'a ni munitions ni mods dans ce sens. Client :
+`useExoDeclare.js` (état `aoeDirection`, pas de reducer — exclusivité avec la cible maintenue
+manuellement) + `CombatExoActionWindow.jsx` (section « Zone d'effet ») + `buildExoMapActions` (branche
+`aoe.direction`, 3 tests) + `CombatOverlay.jsx` (relais `onEnterAoeTargetMode`).
+
+**Une erreur de conception trouvée et corrigée avant tout commit** : premier jet de l'adaptateur placé
+dans `server/src/lib/`, important `fetchExoWeapon`/`fetchAssaultWeaponAndMods` depuis
+`server/src/socket/` — inversion du sens de dépendance que ce projet respecte partout ailleurs
+(vérifié par grep : aucun autre fichier `lib/*.js` n'importe `socket/*.js`). Refait directement dans
+`socketCombatAoe.js` (socket→socket, sans cycle, même pattern que `socketCombatResolution.js`).
+
+**3 bugs réels trouvés en session de validation Saar** (aucun dans le plan initial) :
+1. `GET /:characterId/exo/weapons` (`char-sheet.js#selectExoWeaponFields`) ne sélectionnait pas
+   `ref_equipment.aoe_profile` — trouvé en traçant la chaîne de données jusqu'au bout avant de coder
+   l'UI cliente, pas en session. Colonne ajoutée.
+2. `combat.json#aimAoeButton` codait en dur « Viser une zone (fusil à pompe) » — déjà faux pour le
+   lance-flammes humanoïde depuis le Segment 1 (jamais remarqué jusqu'ici), allait être réutilisé tel
+   quel pour l'exo. Généralisé en « Viser une zone ».
+3. **`useAutoMoveMode` (survol de déplacement ambiant) jamais désarmé pendant la visée** — trouvé en
+   session réelle : bouton « VISER UNE ZONE » affiché correctement (donc `ref_aoe_profile` bien
+   remonté), mais clic au sol sans effet, la fenêtre attendait une cible d'entité. Diagnostic écarté
+   d'abord la piste données (vérifiée directement en base : la requête corrigée renvoie bien le profil
+   AOE du lance-flammes exo), puis la piste PWA/service worker (écartée après confirmation Saar :
+   comportement identique après redémarrage serveur + F5) avant de trouver la cause réelle —
+   `CombatExoActionWindow.jsx` violait le contrat documenté par `useAutoMoveMode.js` lui-même
+   (« `enabled` doit être faux tant qu'un autre mode exclusif utilise la carte »), jamais respecté
+   pour ce hook. Resté invisible pour le ciblage d'entité normal (surfaces de clic différentes — le
+   survol déplacement n'écoute que le sol, jamais un token) mais en collision directe avec la visée de
+   zone, qui répond elle aussi au clic au sol. Fix : `exoDeclare.isSelectingTarget` exposé, hook
+   `useAutoMoveMode` gaté dessus (ordre d'appel des 2 hooks du composant inversé pour permettre la
+   dépendance — toujours inconditionnel, règle des Hooks respectée). Intuition de la cause donnée par
+   Saar lui-même (« surcouche avec le déplacement »), confirmée par la lecture du code.
+
+**Fichiers touchés** : `server/src/socket/socketCombatExo.js` (`fetchExoWeapon` extraite/exportée) ;
+`server/src/socket/socketCombatAoe.js` (adaptateur + branche `getEffectiveWeaponDamage`) ;
+`server/src/routes/character/char-sheet.js` (`ref_aoe_profile`) ; `client/src/lib/
+buildDeclarePayload.js` (+ `.test.mjs`) ; `client/src/lib/useExoDeclare.js` ; `client/src/components/
+CombatExoActionWindow.jsx` ; `client/src/components/CombatOverlay.jsx` ; `client/src/locales/
+combat.json` ; `docs/PLANS/PLAN_ARMES_SPECIALES.md`.
+
+**Testé** : `node --check`/`node --test` côté serveur (27/27 inchangés) ; `eslint` sur les fichiers
+client touchés (3 erreurs préexistantes hors-scope, vérifiées identiques sur le commit de base via
+`git stash`) ; `npm run build` ×3 (à chaque correctif) ; JSON de locale validé. **Session réelle
+Saar** : Tir/CaC exo classique non-régressé, visée de zone fonctionnelle après le fix `useAutoMoveMode`.
+
+**Non testé** : Segment 2b (drone) — chantier suivant, pas un manque de ce lot. Le rebranchement du
+tronc côté résolution n'est pas unitairement testable (fonction non exportée, DB-dépendante) — la
+session réelle ci-dessus en fait foi.
+
+**Données** : aucune migration, aucun changement de schéma (colonne `aoe_profile` déjà existante,
+seule la requête de lecture change).
+
+**Retour arrière** : `git revert f9484f3 e5dbd9e a9cf858 183177e` — dans cet ordre (du plus récent au
+plus ancien), aucune donnée touchée.
