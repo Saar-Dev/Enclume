@@ -580,6 +580,28 @@ test('exo — arme introuvable → Tir par défaut (isCaC false)', () => {
   assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'ghost', targetTokenId: 'e1' }] })
 })
 
+// ─── exo — zone d'effet (Segment 2a AOE, PLAN_ARMES_SPECIALES.md §1.4bis) ────────────────────────
+
+test('exo AOE — arme sélectionnée + aoeDirection, sans cible → attack[] avec aoe.direction, targetTokenId null', () => {
+  const r = buildExoMapActions(exoSel({
+    selectedExoWeaponId: 'w1', aoeDirection: 45,
+    exoWeapons: [{ id: 'w1', ref_category: 'Fusil' }],
+  }))
+  assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'w1', targetTokenId: null, aoe: { direction: 45 } }] })
+})
+
+test('exo AOE — aoeDirection seul (sans arme sélectionnée) → {} (même garde que Tir normal)', () => {
+  assert.deepEqual(buildExoMapActions(exoSel({ aoeDirection: 45 })), {})
+})
+
+test('exo AOE — arme de contact + aoeDirection → jamais de zone (RAW, retombe sur CaC normal)', () => {
+  const r = buildExoMapActions(exoSel({
+    selectedExoWeaponId: 'w1', aoeDirection: 45, assaultTargetId: 'e1',
+    exoWeapons: [{ id: 'w1', ref_category: 'Arme de contact' }],
+  }))
+  assert.deepEqual(r, { melee: [{ exoWeaponInvId: 'w1', targetTokenId: 'e1' }] })
+})
+
 // ─── Cœur commun buildAttackEntries / buildMeleeEntries (PLAN_RW_DECLARE_DERIVATION Étape A) ──────
 // Le golden master ci-dessus (68 tests) couvre déjà le comportement bout-en-bout via les 2 wrappers ;
 // ces tests-ci figent le cœur isolé — surtout la branche zone d'effet et le paramètre `emptyBonus`

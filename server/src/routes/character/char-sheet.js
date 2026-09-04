@@ -2193,6 +2193,10 @@ function selectExoWeaponFields(query) {
       // resolveExoMeleeAction : category !== 'Arme de contact'), jamais déduit côté client de
       // fire_mode nul (coïncidence catalogue actuelle, pas la règle) — PLAN_EXOARMURE.md §16.4.
       'ref_equipment.category as ref_category',
+      // ref_aoe_profile (Segment 2a AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — sans cette colonne,
+      // CombatExoActionWindow.jsx ne peut jamais savoir qu'une arme exo est une arme de zone
+      // (shared/combatAoe.js#isAoeWeapon, même autorité que côté humanoïde).
+      'ref_equipment.aoe_profile as ref_aoe_profile',
     )
 }
 

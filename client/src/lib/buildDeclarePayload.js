@@ -302,10 +302,19 @@ export function buildDroneMapActions(sel) {
 // --- Exo — cœur pur de useExoDeclare#buildMapActions ---------------------------------------------
 // Une exo-armure : une seule attaque par Tour (RAW), pas de Tir Multi ni de deux armes → array de
 // longueur 1. `ref_category === 'Arme de contact'` = autorité serveur pour CaC (jamais fire_mode nul).
+// `aoeDirection` (Segment 2a AOE, PLAN_ARMES_SPECIALES.md §1.4bis) : mutuellement exclusif avec
+// `assaultTargetId` — la garantie vient de useExoDeclare (pas de reducer côté exo, contrairement à
+// l'humanoïde), cette fonction fait donc confiance à l'appelant plutôt que de re-trancher elle-même
+// lequel des deux est "le bon" si les deux étaient renseignés par erreur (jamais censé arriver).
+// Jamais pour une arme de contact (RAW : aucune arme catalogue AOE n'est CaC, cohérent avec
+// isAoeWeapon côté déclaration qui ne s'affiche déjà que pour une arme à distance).
 export function buildExoMapActions(sel) {
-  if (!sel.selectedExoWeaponId || !sel.assaultTargetId) return {}
+  if (!sel.selectedExoWeaponId || (!sel.assaultTargetId && sel.aoeDirection == null)) return {}
   const weapon = sel.exoWeapons.find(w => w.id === sel.selectedExoWeaponId)
   const isCaC = weapon?.ref_category === 'Arme de contact'
+  if (sel.aoeDirection != null && !isCaC) {
+    return { attack: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: null, aoe: { direction: sel.aoeDirection } }] }
+  }
   return isCaC
     ? { melee: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: sel.assaultTargetId }] }
     : { attack: [{ exoWeaponInvId: sel.selectedExoWeaponId, targetTokenId: sel.assaultTargetId }] }

@@ -15,12 +15,17 @@ import { buildExoMapActions } from './buildDeclarePayload.js'
 // REGLEARMURE.md:206-207) — mapActions.attack/melee restent donc toujours de longueur 1.
 export function useExoDeclare({
   charId, tokenId, tokenPos, enabled, moveSelection,
-  onEnterTargetMode, battlemapId, registerAmbientAttackHandler, showTargetRecap,
+  onEnterTargetMode, onEnterAoeTargetMode, battlemapId, registerAmbientAttackHandler, showTargetRecap,
 }) {
   const [exoWeapons,          setExoWeapons]          = useState([])
   const [selectedExoWeaponId, setSelectedExoWeaponId]  = useState(null)
   const [assaultTargetId,     setAssaultTargetId]      = useState(null)
   const [isSelectingTarget,   setIsSelectingTarget]    = useState(false)
+  // Zone d'effet (Segment 2a AOE, PLAN_ARMES_SPECIALES.md §1.4bis) — mutuellement exclusif avec
+  // assaultTargetId. Pas de reducer ici (contrairement à assaultDeclaration.js côté humanoïde) : ce
+  // hook gère son état à plat depuis l'origine (une seule arme, une seule cible) — l'exclusivité est
+  // donc maintenue manuellement à chaque point qui pose l'un ou l'autre, ci-dessous.
+  const [aoeDirection,        setAoeDirection]        = useState(null)
 
   // Fetch armes exo quand le personnage change — GET /:characterId/exo/weapons (déjà existant, Lot C).
   useEffect(() => {
@@ -42,6 +47,7 @@ export function useExoDeclare({
     setAssaultTargetId(null)
     setExoWeapons([])
     setIsSelectingTarget(false)
+    setAoeDirection(null)
   }, [tokenId])
 
   // category === 'Arme de contact' est l'autorité serveur pour CaC (socketCombatExo.js,
@@ -67,8 +73,12 @@ export function useExoDeclare({
     resolveMode: resolveExoClickAttackMode,
     showTargetRecap,
     registerAmbientAttackHandler,
-    onMeleeTarget:   (tid) => setAssaultTargetId(tid),
-    onAssaultTarget: (tid) => setAssaultTargetId(tid),
+    // aoeDirection effacé ici : un clic-attaque en cours pendant qu'une direction de zone était posée
+    // (cas normalement impossible — handleStartAoeDirection désarme déjà useCombatClickAttack via
+    // isSelectingTarget — mais gardé pour la même raison que setSoleTarget côté humanoïde : rester
+    // fidèle même si un futur appelant contourne le flux attendu).
+    onMeleeTarget:   (tid) => { setAssaultTargetId(tid); setAoeDirection(null) },
+    onAssaultTarget: (tid) => { setAssaultTargetId(tid); setAoeDirection(null) },
   })
 
   const handleChooseTarget = useCallback((activeToken) => {
@@ -84,34 +94,54 @@ export function useExoDeclare({
     onEnterTargetMode(
       tokenId,
       { x: activeToken.pos_x, z: activeToken.pos_y },
-      (targetId) => { setAssaultTargetId(targetId); setIsSelectingTarget(false) },
+      (targetId) => { setAssaultTargetId(targetId); setAoeDirection(null); setIsSelectingTarget(false) },
       () => { setIsSelectingTarget(false) },
       targetMode,
     )
   }, [tokenId, onEnterTargetMode, exoWeapons, selectedExoWeaponId])
 
+  // Zone d'effet (Segment 2a AOE) — miroir de CombatActionWindow.jsx#handleStartAoeDirection (même
+  // signature onEnterAoeTargetMode : tokenId, origine {x,z}, portée catalogue, profil AOE, callback
+  // direction posée, callback annulation). `isSelectingTarget` réutilisé comme garde (pas un flag
+  // dédié) : useCombatClickAttack doit être désarmé pendant la visée de zone exactement comme pendant
+  // la sélection de cible normale — sémantiquement la même chose (« l'utilisateur pointe la carte »).
+  const handleStartAoeDirection = useCallback(() => {
+    if (!onEnterAoeTargetMode || !tokenId) return
+    const weapon = exoWeapons.find(w => w.id === selectedExoWeaponId)
+    setAssaultTargetId(null)
+    setIsSelectingTarget(true)
+    onEnterAoeTargetMode(
+      tokenId, tokenPos, weapon?.ref_range ?? null, weapon?.ref_aoe_profile ?? null,
+      (directionDeg) => { setAoeDirection(directionDeg); setIsSelectingTarget(false) },
+      () => { setIsSelectingTarget(false) },
+    )
+  }, [tokenId, tokenPos, onEnterAoeTargetMode, exoWeapons, selectedExoWeaponId])
+
   const selectWeapon = useCallback((weaponId) => {
     setSelectedExoWeaponId(prev => (prev === weaponId ? null : weaponId))
     setAssaultTargetId(null)
+    setAoeDirection(null)
   }, [])
 
   // Construit le fragment mapActions pour le payload COMBAT_ACTION_DECLARE — cœur pur testé
   // (client/src/lib/buildDeclarePayload.js, module 0 M0.3).
   const buildMapActions = useCallback(
-    () => buildExoMapActions({ selectedExoWeaponId, assaultTargetId, exoWeapons }),
-    [selectedExoWeaponId, assaultTargetId, exoWeapons],
+    () => buildExoMapActions({ selectedExoWeaponId, assaultTargetId, exoWeapons, aoeDirection }),
+    [selectedExoWeaponId, assaultTargetId, exoWeapons, aoeDirection],
   )
 
   return {
     exoWeapons, selectedExoWeaponId, selectWeapon,
     assaultTargetId, handleChooseTarget, buildMapActions,
-    canDeclareAttack: !!selectedExoWeaponId && !!assaultTargetId,
+    aoeDirection, handleStartAoeDirection,
+    canDeclareAttack: !!selectedExoWeaponId && (!!assaultTargetId || aoeDirection != null),
     // Bug UI trouvé en jeu réel (Saar, 2026-08-27) : sélectionner une arme puis Déclarer sans cible
     // envoyait un payload sans attack/melee (buildMapActions() → {}) — la sélection se perdait
     // silencieusement, rien ne l'indiquait. Mirroir exact du gate déjà en place pour PJ
     // (CombatActionWindow.jsx#canDeclare) et drone (useDroneDeclare#canDeclare) : DÉCLARER se
     // désactive tant qu'une arme est choisie sans cible — jamais bloqué si rien n'est sélectionné du
-    // tout (passer le Tour reste toujours permis, cf. exoActionWindow.normalHint).
-    canDeclare: !selectedExoWeaponId || !!assaultTargetId,
+    // tout (passer le Tour reste toujours permis, cf. exoActionWindow.normalHint). `aoeDirection`
+    // compte comme une cible valide (Segment 2a AOE) — même logique que canDeclareAttack ci-dessus.
+    canDeclare: !selectedExoWeaponId || !!assaultTargetId || aoeDirection != null,
   }
 }
