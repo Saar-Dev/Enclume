@@ -1,13 +1,13 @@
-# PLAN_RW_DECLARE_DERIVATION.md
+# PLAN_RW_DECLARE_DERIVATION.md — ARCHIVÉ
 
 > **Responsabilité** : plan temporaire (Règle 10) — finir la dérivation unique de la déclaration
 > de combat côté client, reste différé de `PLAN_RW_DECLARE_DESIGN.md` (archivé `docs/Old/`,
 > chantier clos 2026-08-30 : `JOURNAL8.md` §« RW déclaration : M0.4 + module 4 »).
-> À l'achèvement : décisions durables → `docs/SYSTEME/COMBAT.md` + `docs/SYSTEME/REACT.md`, ce PLAN supprimé.
+> Décisions durables intégrées → `docs/SYSTEME/COMBAT.md` § Fenêtres de déclaration.
 >
-> Statut : **Étapes A + B codées et commitées (2026-09-04, 5 commits `dev/Saar`, non poussés).
-> Étape C vérifiée sans objet (déjà livrée par M0.4). Reste : passe navigateur consolidée complète
-> (checklist §3 Étape B) avant clôture définitive et archivage `docs/Old/`.**
+> Statut : **CHANTIER CLOS 2026-09-04** — Étapes A + B codées, commitées, validées navigateur
+> (Saar). Étape C vérifiée sans objet (déjà livrée par M0.4). 7 commits `dev/Saar` (`e87824f`
+> à `ca9c556`). Détail : `docs/JOURNAL8.md` §« Déclaration combat : dérivation unique ».
 
 ---
 
