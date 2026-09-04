@@ -10,7 +10,7 @@ test('/help liste les commandes enregistrées via des i18nKey', async () => {
   const result = await chatCommandRegistry.execute('help', {}, [])
   assert.equal(result.reply.i18nKey, 'chat.commands.help.list')
   const names = result.reply.params.commands.map((c) => c.name)
-  assert.deepEqual(names.sort(), ['gm', 'heal', 'help', 'w'])
+  assert.deepEqual(names.sort(), ['gm', 'heal', 'help', 't', 'w'])
   for (const cmd of result.reply.params.commands) {
     assert.match(cmd.descriptionKey, /^chat\.commands\./)
   }
@@ -94,6 +94,59 @@ test('/heal est refusé pour un non-MJ (permission "gm")', async () => {
     }, []),
     /réservée au MJ/,
   )
+})
+
+test('/t sans compétence renvoie la clé d\'usage', async () => {
+  const result = await chatCommandRegistry.execute('t', {
+    rollSkillTest: async () => ({}),
+  }, [])
+  assert.equal(result.reply.i18nKey, 'chat.commands.t.usage')
+})
+
+test('/t Discrétion -2 : parsing correct (pas de cible, compétence, difficulté négative)', async () => {
+  let received = null
+  await chatCommandRegistry.execute('t', {
+    rollSkillTest: async (args) => { received = args; return {} },
+  }, ['Discrétion', '-2'])
+  assert.deepEqual(received, { targetName: null, skillName: 'Discrétion', difficulty: -2 })
+})
+
+test('/t sans modificateur : difficulty par défaut à 0', async () => {
+  let received = null
+  await chatCommandRegistry.execute('t', {
+    rollSkillTest: async (args) => { received = args; return {} },
+  }, ['Discrétion'])
+  assert.deepEqual(received, { targetName: null, skillName: 'Discrétion', difficulty: 0 })
+})
+
+test('/t compétence multi-mots (parenthèses) reste jointe correctement', async () => {
+  let received = null
+  await chatCommandRegistry.execute('t', {
+    rollSkillTest: async (args) => { received = args; return {} },
+  }, ['Pilotage', '(Terrestre)', '3'])
+  assert.deepEqual(received, { targetName: null, skillName: 'Pilotage (Terrestre)', difficulty: 3 })
+})
+
+test('/t @Jean Discrétion : fallback de désambiguïsation parsé en premier argument', async () => {
+  let received = null
+  await chatCommandRegistry.execute('t', {
+    rollSkillTest: async (args) => { received = args; return {} },
+  }, ['@Jean', 'Discrétion'])
+  assert.deepEqual(received, { targetName: 'Jean', skillName: 'Discrétion', difficulty: 0 })
+})
+
+test('/t renvoie une réponse privée si context.rollSkillTest signale une erreur', async () => {
+  const result = await chatCommandRegistry.execute('t', {
+    rollSkillTest: async () => ({ error: 'chat.commands.t.noCharacter' }),
+  }, ['Discrétion'])
+  assert.equal(result.reply.i18nKey, 'chat.commands.t.noCharacter')
+})
+
+test('/t réussi renvoie { handled: true } (le jet a déjà broadcasté DICE_RESULT)', async () => {
+  const result = await chatCommandRegistry.execute('t', {
+    rollSkillTest: async () => ({}),
+  }, ['Discrétion'])
+  assert.deepEqual(result, { handled: true })
 })
 
 test('commande inconnue lève une erreur', async () => {

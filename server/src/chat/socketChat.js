@@ -11,6 +11,7 @@ import { sendMessage } from './chatService.js'
 import { chatCommandRegistry } from './chatCommands.js'
 import { broadcastMessageCreated } from './chatBroadcast.js'
 import { healCampaignCharacters } from '../lib/woundService.js'
+import { resolveSkillTestCommand } from '../lib/skillTestService.js'
 
 async function findCampaignMemberByUsername(campaignId, username) {
   const row = await db('campaign_members')
@@ -56,6 +57,9 @@ export function registerChatHandlers(io, socket, context) {
           // /heal (docs/PLANS/PLAN_CHAT_COMMANDES.md §4) — chatCommands.js ne touche jamais la DB
           // directement, cette closure porte l'accès io/db comme findCampaignMemberByUsername ci-dessus.
           healCharacters: (scope) => healCampaignCharacters(io, db, campaignId, scope),
+          // /t (docs/PLANS/PLAN_CHAT_COMMANDES.md §6) — même patron, le jet broadcast DICE_RESULT
+          // lui-même (resolveSkillTestCommand), rien à transmettre à sendMessage en cas de succès.
+          rollSkillTest: (args) => resolveSkillTestCommand(io, db, campaignId, user, args),
         }
         const result = await chatCommandRegistry.execute(slash.name, commandContext, slash.args)
 
@@ -70,6 +74,12 @@ export function registerChatHandlers(io, socket, context) {
           })
           return
         }
+
+        // { handled: true } — effet déjà entièrement produit par la commande (ex. /t, dont le jet a
+        // déjà broadcasté DICE_RESULT) : rien de plus à envoyer, surtout pas sendMessage avec un
+        // result.send undefined (validateMessagePayload rejetterait un type/payload absents, CHAT_ERROR
+        // spurieux malgré un jet réussi — trouvé en câblant ce cas).
+        if (result.handled) return
 
         const message = await sendMessage({ campaignId, senderUserId: user.id, ...result.send })
         await broadcastMessageCreated(io, campaignId, message)

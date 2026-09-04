@@ -46,10 +46,10 @@ jeu : chaque commande orchestre des services déjà autoritaires (`woundService.
 
 | § | Sujet | Type de changement | Statut |
 |---|---|---|---|
-| 3 | Fix i18n `/help` | Client uniquement (locale + un hook) | Prêt à coder |
-| 4 | `/heal` + `/heal all` | Serveur (nouvelle commande, nouvelle colonne, nouveau service) + 1 fix client | Prêt à coder |
-| 5 | Persistance `/r`/`/roll` | Serveur (écriture) + 1 point de normalisation client | Prêt à coder |
-| 6 | `/t [compétence] [difficulté] [@personnage]` | Serveur (nouvelle commande) + UI autocomplétion client | Prêt à coder |
+| 3 | Fix i18n `/help` | Client uniquement (locale + un hook) | Codé, validé par Saar |
+| 4 | `/heal` + `/heal all` | Serveur (nouvelle commande, nouvelle colonne, nouveau service) + 1 fix client | Codé, validé par Saar |
+| 5 | Persistance `/r`/`/roll` | Serveur (écriture) + 1 point de normalisation client | Codé, validé par Saar |
+| 6 | `/t [compétence] [difficulté] [@personnage]` | Serveur (nouvelle commande) + UI autocomplétion client | Codé, non testé en navigateur |
 
 **Écarté** : un mode « invulnérabilité » MJ (`/god`) a été envisagé en cours de discussion puis
 explicitement retiré par Saar avant conception détaillée — non traité dans ce document.
@@ -265,7 +265,7 @@ Saar, non traité ici. Noté comme dette sœur pour référence future, pas oubl
 
 ---
 
-## 6. `/t [compétence] [difficulté] [@personnage]` [CIBLE]
+## 6. `/t [compétence] [difficulté] [@personnage]` [CODÉ — non testé en navigateur]
 
 ### Mécanique [VÉRIFIÉ]
 
@@ -276,11 +276,13 @@ retest automatique sur échec critique). Structurellement quasi identique au han
 existant (`socketDice.js:139-229` : calcul seuil compétence/attribut + malus actifs ; lignes 283-288 :
 vérification Catastrophe via `maybeTriggerCatastrophe`, garde combat actif).
 
-### Cible [CIBLE]
+### Cible [CIBLE], codé en `server/src/lib/characterTestContext.js` + `server/src/lib/skillTestService.js`
 
 - **Extraction** du calcul « seuil compétence/attribut pour un personnage » (`socketDice.js:139-229`)
-  dans un helper partagé (ex. `server/src/lib/skillTestContext.js`), réutilisé par `MACRO_ROLL` (inchangé
-  dans son comportement) et par `/t` — pas de duplication d'un second moteur de calcul de seuil.
+  dans `characterTestContext.js:loadCharacterTestContext` (nommé ainsi en codant, pas
+  `skillTestContext.js`), réutilisé par `MACRO_ROLL` (inchangé dans son comportement — mêmes requêtes,
+  même ordre, vérifié champ par champ) et par `/t` (`skillTestService.js:resolveSkillTestCommand`) —
+  pas de duplication d'un second moteur de calcul de seuil.
 - **Catastrophe automatique obligatoire** : `/t` doit appeler `maybeTriggerCatastrophe` sous la même
   garde combat actif que `MACRO_ROLL` (7ᵉ site RAW) — confirmé explicitement par Saar (« un test déclenché
   via cette commande doit pouvoir déclencher une Catastrophe »). Omission = écart RAW silencieux, à ne
@@ -293,10 +295,17 @@ vérification Catastrophe via `maybeTriggerCatastrophe`, garde combat actif).
   - Fallback **`@<personnage>`** en premier argument (ex. `/t @Jean Discrétion -2`) : recherche
     **exclusivement parmi les personnages du joueur qui tape la commande**, jamais parmi ceux des
     autres joueurs (sinon brèche : forcer un test sur le personnage de quelqu'un d'autre).
-- **Matching de compétence : exact, pas flou.** Correspondance insensible casse/accents contre les
-  compétences connues du personnage — pas de préfixe/flou pouvant matcher deux compétences à la fois.
-  L'autocomplétion client (ci-dessous) garantit déjà qu'un usage normal tape un nom réel ; le serveur
-  reste strict.
+- **Matching de compétence : exact, pas flou — élargi en codant.** Correspondance insensible
+  casse/accents contre **tout le référentiel `ref_skills`**, pas seulement les compétences apprises du
+  personnage : cohérent avec `MACRO_ROLL`, qui ne valide jamais qu'une source référence une compétence
+  effectivement connue (`calcSkillTotal` dégrade proprement avec `charSkill` absent — vérifié). Pas de
+  préfixe/flou pouvant matcher deux compétences à la fois. L'autocomplétion client garantit déjà qu'un
+  usage normal tape un nom réel ; le serveur reste strict.
+  **Piège trouvé en codant, corrigé avant tout test** : `ref_skills` n'a pas de colonne `name` (vérifié
+  contre le schéma réel et `refI18n.js:27`) — le champ d'affichage est `label`. Un premier jet du code
+  utilisait `.name` partout (matching serveur *et* autocomplétion client), ce qui aurait fait planter
+  `/t` à chaque appel (`undefined.normalize is not a function`) plutôt que de simplement mal fonctionner
+  — corrigé aux deux endroits avant tout test navigateur.
 - **Parsing des arguments** : dernier token matchant `^[+-]?\d+$` = modificateur de Seuil signé optionnel
   (convention RAW confirmée, `socketEntity.js:322-323` : positif = bonus, négatif = malus, ajouté
   directement au Seuil — pas une DC classique) ; tout le reste (hors préfixe `@...`) joint = nom de
@@ -306,11 +315,25 @@ vérification Catastrophe via `maybeTriggerCatastrophe`, garde combat actif).
   par frappe). Aucun composant d'autocomplétion existant dans le projet (vérifié) — nouveau composant
   minimal, pas de réutilisation possible.
 
-### Non-problème vérifié
+### Non-problèmes vérifiés
 
-Un MJ tapant `/t` n'a typiquement aucun personnage à son `user_id` (0 résultat → erreur) — cohérent avec
-le fait que `/t` est un outil de test rapide pour joueur ; le MJ dispose déjà de `MACRO_ROLL`/du flux
-arbitré pour ses PNJ.
+- Un MJ tapant `/t` n'a typiquement aucun personnage à son `user_id` (0 résultat → erreur) — cohérent
+  avec le fait que `/t` est un outil de test rapide pour joueur ; le MJ dispose déjà de
+  `MACRO_ROLL`/du flux arbitré pour ses PNJ.
+- Un exo/drone n'a pas besoin d'un filtre de type explicite pour être exclu de `/t` : `characters.
+  where({user_id, campaign_id})` ne le retourne déjà jamais, puisqu'un exo/drone est piloté via
+  `exo_sheet.pilot_character_id`, pas possédé par `characters.user_id` — vérifié dans
+  `combatantContextService.js` avant de coder plutôt que supposé.
+
+### Contrat `chatCommandRegistry` étendu en codant
+
+`/t` réussi ne produit ni `reply` ni `send` (le jet a déjà broadcasté `DICE_RESULT` lui-même dans
+`resolveSkillTestCommand`) — un cas que le contrat `execute()` ne prévoyait pas (`docs/Old/PLAN_CHAT.md`
+§5.6 ne connaissait que réponse privée ou message à envoyer). Sans extension, `socketChat.js` aurait
+appelé `sendMessage({...result.send})` avec `result.send` `undefined`, rejeté par
+`validateMessagePayload` (type/payload absents) → un `CHAT_ERROR` parasite envoyé au joueur malgré un
+jet réussi. Ajout d'un troisième cas `{ handled: true }` (effet déjà entièrement produit par une closure
+du context), géré par une garde explicite dans `socketChat.js` avant l'appel à `sendMessage`.
 
 ### Hors-scope
 
@@ -334,14 +357,18 @@ syntaxe.
   `SessionPage.jsx:287` — inclus dans le même lot plutôt que différé.
 - **§6** : `/t` sans déclenchement de Catastrophe aurait été un écart RAW silencieux — rendu obligatoire
   explicitement.
+- **§6** : `ref_skills` n'a pas de colonne `name` (c'est `label`) — un premier jet aurait fait planter
+  `/t` à chaque appel, pas seulement mal fonctionner. Corrigé serveur + client avant tout test.
+- **§6** : `/t` réussi ne rentre dans aucun des deux cas prévus par le contrat `execute()` d'origine
+  (ni `reply` ni `send`) — aurait produit un `CHAT_ERROR` parasite malgré un jet réussi. Contrat étendu
+  avec `{ handled: true }`.
 
 ---
 
-## 8. Points ouverts restants avant code
+## 8. État — tous les sujets codés
 
-Aucun point bloquant restant — tous les sujets (§3-§6) sont figés. Seuls des détails sans impact sur
-l'architecture décrite ici restent à trancher en codant (nom exact de la nouvelle fonction de service
-`/heal`, numéro de migration attribué à la création).
+§3, §4, §5, §6 sont tous codés (voir statut en tête de chaque section). Aucun point bloquant restant.
+Reste à valider en navigateur (Saar) avant de pousser.
 
 ---
 

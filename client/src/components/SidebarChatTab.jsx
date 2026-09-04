@@ -7,6 +7,22 @@ import { WS } from '../../../shared/events.js'
 import { CombatDeclareLogChatPanel } from './CombatDeclareLog.jsx'
 import { renderMessage } from './MessageRendererRegistry.jsx'
 import { styles } from './Sidebar.styles.js'
+import api from '../lib/api.js'
+
+// Insensible casse/accents — même principe que skillTestService.js côté serveur (autorité réelle sur
+// la résolution exacte de /t), ici purement une aide de suggestion côté client, jamais dupliquée comme
+// logique de validation.
+function normalizeSkillName(value) {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+
+// Extrait le fragment de compétence déjà tapé après "/t " (en ignorant un éventuel préfixe
+// @<personnage>, docs/PLANS/PLAN_CHAT_COMMANDES.md §6) — null si l'input ne commence pas par /t.
+function extractSkillTestFragment(text) {
+  const match = text.match(/^\/t\s+(.*)$/i)
+  if (!match) return null
+  return match[1].replace(/^@\S+\s*/, '')
+}
 
 // Extrait de Sidebar.jsx (PLAN_REFACTOR_SIDEBAR.md, lot 4d) — comportement inchangé.
 // breakdownPopover/onOpenBreakdown/setPendingActionCount viennent des hooks useDiceBreakdownPopover
@@ -37,6 +53,36 @@ export default function SidebarChatTab({
 
   const [chatInput, setChatInput] = useState('')
   const [cdlOpen, setCdlOpen] = useState(true)
+
+  // Autocomplétion /t (docs/PLANS/PLAN_CHAT_COMMANDES.md §6) — catalogue chargé une seule fois au
+  // montage (référentiel, ne change jamais en session), jamais un round-trip par frappe. Même
+  // référentiel que le matching exact côté serveur (skillTestService.js interroge tout ref_skills, pas
+  // seulement les compétences apprises du personnage) — la suggestion ne doit jamais proposer un nom
+  // que le serveur refuserait ensuite.
+  const [skillCatalog, setSkillCatalog] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    api.get('/char-ref/skills').then(res => {
+      if (!cancelled) setSkillCatalog(res.data.skills || [])
+    }).catch(err => console.error('[Chat] Erreur chargement catalogue compétences (/t) :', err))
+    return () => { cancelled = true }
+  }, [])
+
+  const skillFragment = extractSkillTestFragment(chatInput)
+  const skillSuggestions = useMemo(() => {
+    if (skillFragment === null) return []
+    const normalizedFragment = normalizeSkillName(skillFragment)
+    return skillCatalog
+      .filter(skill => normalizeSkillName(skill.label).startsWith(normalizedFragment))
+      .slice(0, 8)
+  }, [skillFragment, skillCatalog])
+
+  // Remplace uniquement le fragment de compétence en cours de frappe — conserve un éventuel préfixe
+  // @<personnage> déjà tapé, laisse le curseur prêt pour un modificateur de difficulté optionnel.
+  const selectSkillSuggestion = (skillName) => {
+    const targetPrefix = chatInput.match(/^\/t\s+(@\S+\s*)/i)?.[1] ?? ''
+    setChatInput(`/t ${targetPrefix}${skillName} `)
+  }
 
   // Animation dé — id du dernier message dé reçu, nettoyé après 800ms.
   // Déclenchement pendant le render (pattern React "adjusting state" — évite un setState
@@ -118,8 +164,8 @@ export default function SidebarChatTab({
       return
     }
 
-    // /help, /w, /gm sont interceptés côté serveur (socketChat.js, chatCommandRegistry) — le
-    // client envoie le texte brut, pas de parsing dupliqué ici.
+    // /help, /w, /gm, /heal, /t sont interceptés côté serveur (socketChat.js, chatCommandRegistry) —
+    // le client envoie le texte brut, pas de parsing dupliqué ici.
     socket?.emit(WS.CHAT_SEND, { channelId: 'general', type: 'TEXT', payload: { text } })
     setChatInput('')
   }
@@ -151,7 +197,21 @@ export default function SidebarChatTab({
         {/* Ancre auto-scroll — div vide en fin de liste */}
         <div ref={messagesEndRef} />
       </div>
-      <form onSubmit={sendMessage} style={styles.chatForm}>
+      <form onSubmit={sendMessage} style={{ ...styles.chatForm, position: 'relative' }}>
+        {skillSuggestions.length > 0 && (
+          <div style={autocompleteStyles.list}>
+            {skillSuggestions.map(skill => (
+              <button
+                key={skill.id}
+                type="button"
+                style={autocompleteStyles.item}
+                onMouseDown={e => { e.preventDefault(); selectSkillSuggestion(skill.label) }}
+              >
+                {skill.label}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           className="sidebar-tool-field" style={styles.chatInput}
           placeholder={t('chat.placeholder')}
@@ -162,4 +222,35 @@ export default function SidebarChatTab({
       </form>
     </>
   )
+}
+
+// Autocomplétion /t — panneau flottant ponctuel, même patron que SkillInfoPopover.jsx (objet de style
+// local propre au composant plutôt qu'une classe index.css pour un usage aussi circonscrit).
+const autocompleteStyles = {
+  list: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 0,
+    right: 0,
+    marginBottom: '4px',
+    maxHeight: '180px',
+    overflowY: 'auto',
+    background: '#0e0e1a',
+    border: '1px solid #2a2a4a',
+    borderRadius: '8px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+    zIndex: 20,
+  },
+  item: {
+    display: 'block',
+    width: '100%',
+    textAlign: 'left',
+    background: 'none',
+    border: 'none',
+    borderBottom: '1px solid #1e1e2e',
+    color: '#c0c0d0',
+    fontSize: '11px',
+    padding: '6px 10px',
+    cursor: 'pointer',
+  },
 }

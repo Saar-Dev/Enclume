@@ -3,7 +3,7 @@
 // Portée V1 réelle (§15 "Hors scope V1" : "/r migré vers le Command Registry (reste dans
 // Sidebar.jsx en attendant)") : /r et son alias /roll restent sur le flux DICE_ROLL existant, hors
 // de ce registre — l'exemple de code §5.6 qui les enregistre ici est une illustration du design
-// cible, pas la portée V1. /help, /w, /gm, /heal sont réellement enregistrés
+// cible, pas la portée V1. /help, /w, /gm, /heal, /t sont réellement enregistrés
 // (docs/PLANS/PLAN_CHAT_COMMANDES.md).
 //
 // i18n (.claude/rules/i18n.md, chargée en écrivant ce fichier) : "le serveur n'émet jamais de texte
@@ -12,10 +12,12 @@
 // i18n sous le namespace `chat.commands.*`, à créer dans client/src/locales/ en Phase 3 (rendu
 // client) — pas maintenant, ce module n'émet rien tant qu'il n'est pas branché dans socketChat.js.
 //
-// Contrat execute(context, args) : retourne soit { reply: { i18nKey, params? } } (réponse privée non
-// persistée), soit { send: { channelId, type, payload, recipientUserId } } (intention de message à
-// transmettre par l'appelant à chatService.sendMessage). Ce module ne touche jamais la DB ni
-// chatService directement — l'orchestration reste dans socketChat.js, qui construit le `context`
+// Contrat execute(context, args) : retourne { reply: { i18nKey, params? } } (réponse privée non
+// persistée), { send: { channelId, type, payload, recipientUserId } } (intention de message à
+// transmettre par l'appelant à chatService.sendMessage), ou { handled: true } (effet déjà entièrement
+// produit par une closure du context — ex. /t, dont le jet broadcast DICE_RESULT lui-même ; rien de
+// plus à faire côté socketChat.js, docs/PLANS/PLAN_CHAT_COMMANDES.md §6). Ce module ne touche jamais la
+// DB ni chatService directement — l'orchestration reste dans socketChat.js, qui construit le `context`
 // (accès campagne) et exécute le `send` retourné.
 export class CommandRegistry {
   constructor() {
@@ -129,5 +131,46 @@ chatCommandRegistry.register({
         payload: { i18nKey: 'chat.commands.heal.done', params: { count: result.count } },
       },
     }
+  },
+})
+
+// Parsing pur (aucun accès DB, cohérent avec le reste de ce module) : @<personnage> optionnel en
+// premier argument (fallback de désambiguïsation, cf. resolveSkillTestCommand), dernier argument
+// optionnel ^[+-]?\d+$ = modificateur de Seuil signé (RAW : positif = bonus, négatif = malus, ajouté
+// directement au Seuil — socketEntity.js:322-323, convention déjà vérifiée dans le projet), tout le
+// reste joint = nom de compétence (peut contenir espaces/parenthèses, ex. "Pilotage (Terrestre)").
+function parseSkillTestArgs(args) {
+  let rest = args
+  let targetName = null
+  if (rest[0]?.startsWith('@')) {
+    targetName = rest[0].slice(1)
+    rest = rest.slice(1)
+  }
+  let difficulty = 0
+  const last = rest[rest.length - 1]
+  if (last && /^[+-]?\d+$/.test(last)) {
+    difficulty = parseInt(last, 10)
+    rest = rest.slice(0, -1)
+  }
+  return { targetName, skillName: rest.join(' '), difficulty }
+}
+
+// /t <compétence> [difficulté] — jet immédiat, sans validation MJ (décision Saar 2026-09-04, écarte le
+// flux d'arbitrage existant). /t @<personnage> <compétence> [difficulté] désambiguïse si le joueur a
+// plus d'un personnage dans la campagne (techniquement possible, n'arrive jamais en pratique — Saar).
+// Cible toujours un personnage du joueur qui tape la commande, jamais un tiers.
+// context.rollSkillTest({targetName, skillName, difficulty}) -> { error?, params? } — fourni par
+// socketChat.js (orchestration DB/IO/broadcast, resolveSkillTestCommand — ce module ne touche jamais la
+// DB directement, même patron que healCharacters ci-dessus).
+chatCommandRegistry.register({
+  name: 't',
+  descriptionKey: 'chat.commands.t.description',
+  permission: 'player',
+  async execute(context, args) {
+    const { targetName, skillName, difficulty } = parseSkillTestArgs(args)
+    if (!skillName) return { reply: { i18nKey: 'chat.commands.t.usage' } }
+    const result = await context.rollSkillTest({ targetName, skillName, difficulty })
+    if (result.error) return { reply: { i18nKey: result.error, params: result.params } }
+    return { handled: true }
   },
 })

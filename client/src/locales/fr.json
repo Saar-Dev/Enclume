@@ -323,6 +323,15 @@
         "description": "Soigne les personnages (carte actuelle, ou /heal all pour toute la campagne) — MJ uniquement",
         "done": "🩹 {{count}} personnage(s) soigné(s)",
         "noActiveMap": "Aucune carte active pour cette campagne — utilisez /heal all ou ouvrez une carte"
+      },
+      "t": {
+        "description": "Jet de compétence immédiat, sans validation MJ",
+        "usage": "Usage : /t <compétence> [difficulté] — ex. /t Discrétion -2",
+        "noCharacter": "Vous n'avez aucun personnage dans cette campagne",
+        "multipleCharacters": "Plusieurs personnages trouvés ({{names}}) — précisez avec /t @<personnage> <compétence> [difficulté]",
+        "characterNotFound": "Aucun de vos personnages ne s'appelle « {{name}} »",
+        "noSheet": "Ce personnage n'a pas de fiche",
+        "skillNotFound": "Compétence « {{skillName}} » introuvable"
       }
     }
   },
