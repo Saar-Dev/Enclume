@@ -224,3 +224,19 @@ avant recopié entre les 2 fenêtres). `ctx` porte les divergences PJ/MJ (`start
   **109/109** ; `eslint` propre. 7 tests neufs (série tronquée, zone d'effet 1/1, direction 0°
   falsy, `aimReasons` absent).
 - **Non testé** : navigateur (câblage en B2/B3).
+
+### Étape B2 + B3 — câblage PJ + MJ — codé 2026-09-04 (non commité)
+
+`CombatActionWindow.jsx` (PJ) et `CombatGmDeclareWindow.jsx` (MJ) : l'appel inline
+`assaultCheck({ …, targetsFilled: isAoeMode ? 1 : … })` devient
+`assaultCheck(assaultCheckInputs(assaultDecl.state, { started, hasWeapon, effectiveCount, … }))`.
+La double copie de la neutralisation zone d'effet disparaît. `assaultDecl.isAoeMode` reste utilisé
+en rendu (prop `isAoeMode` de `AssaultRangedPanel`).
+
+- **Testé** : `node --test` 121/121 (4 modules purs) ; `vite build` **propre** ; `eslint`
+  **iso-baseline** (PJ : 0 erreur ; MJ : 1 erreur pré-existante `react-hooks/set-state-in-effect`
+  l.170, inchangée).
+- **Non testé** : ⚠️ **navigateur** — le câblage `fenêtre → ctx` n'est pas couvert par les tests
+  purs. Passe consolidée prévue après B5 (plan §3 Étape B). Iso-comportement vérifié par lecture
+  (chaque champ `ctx` = l'expression exacte de l'ancien arg ; `assaultPendingTokenIds` /
+  `assaultTargets` = `assaultDecl.state.targets`).

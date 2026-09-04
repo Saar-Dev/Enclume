@@ -36,6 +36,7 @@ import { buildHumanDeclarePayload } from '../lib/buildDeclarePayload.js'
 import { buildWeaponList } from '../lib/weaponList.js'
 import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
+import { assaultCheckInputs } from '../lib/assaultDeclaration.js'
 import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -693,18 +694,18 @@ export default function CombatActionWindow({
   // ces fonctions dans les hooks (PLAN_RW_DECLARE_DESIGN §5.10). Chaque entrée = l'expression exacte
   // de l'ancien `assaultValid`/`reloadValid`/`meleeValid` (iso-comportement).
   const effectiveMeleeCount = decl.combatMode === 'charge' ? 1 : meleeCount
-  // Zone d'effet (PLAN_AOE.md §8 étape 9) : une direction posée compte comme un ciblage complet, sans
-  // cible unique — même règle que assaultDeclaration.js#assaultTargetsComplete (mirroir du correctif
-  // CombatGmDeclareWindow.jsx).
-  const assault = assaultCheck({
-    started:       attackActive,
-    hasWeapon:     assaultWeaponId != null,
-    targetsFilled: assaultDecl.isAoeMode ? 1 : assaultPendingTokenIds.slice(0, effectiveAssaultCount).filter(Boolean).length,
-    targetsNeeded: assaultDecl.isAoeMode ? 1 : effectiveAssaultCount,
-    hasVariant:    currentVariant != null,
-    aimActive:     aimTranches > 0,
-    aimReasons:    aimIneligibilityReasons,
-  })
+  // Args de `assaultCheck` dérivés du sous-état Tir — la neutralisation zone d'effet (une direction
+  // posée = 1 cible attendue / 1 fournie) vit dans `assaultCheckInputs` (assaultDeclaration.js),
+  // partagée avec le MJ (docs/PLANS/PLAN_RW_DECLARE_DERIVATION.md Étape B). Le contexte porte les
+  // divergences PJ : `attackActive` (Recharger exclut le Tir), arme déjà résolue.
+  const assault = assaultCheck(assaultCheckInputs(assaultDecl.state, {
+    started:        attackActive,
+    hasWeapon:      assaultWeaponId != null,
+    effectiveCount: effectiveAssaultCount,
+    hasVariant:     currentVariant != null,
+    aimTranches,
+    aimReasons:     aimIneligibilityReasons,
+  }))
   const melee = meleeCheck({
     started:         meleeSelected || !!chargeSelection,
     defensif:        meleeDefensif,
