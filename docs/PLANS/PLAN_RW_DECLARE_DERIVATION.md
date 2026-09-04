@@ -283,3 +283,17 @@ par M0.4). Le résiduel relève de Module 6 (différé). Aucun code, `docs/EN_CO
 
 `JOURNAL8.md` (session + clôture chantier), `docs/SYSTEME/COMBAT.md` (dérivation unique = invariant
 durable des fenêtres de déclaration). Passe de non-régression complète : Saar.
+
+### Investigation hors chantier — double panneau CaC+Tir MJ — clos 2026-09-04, sans lien avec ce chantier
+
+Signalé par Saar en cours de validation (capture : `MeleeCombatPanel` ET `AssaultRangedPanel`
+affichés ensemble pour un PNJ, résidu de cible CaC sur une arme Tir). Diff `aab9f2b..HEAD` vérifié :
+la zone concernée (`CombatGmDeclareWindow.jsx:902-961`, les 2 blocs `{cond && <Panel/>}`
+indépendants, pas mutuellement exclusifs par construction) **n'appartient à aucun commit de ce
+chantier**. Hypothèse retenue et **confirmée par Saar** : artefact Vite Fast Refresh (état React
+conservé entre deux sauvegardes de fichier pendant la session dev), pas un bug applicatif.
+
+**Point de durcissement latent noté, pas ticketé** (pas de problème confirmé en prod, juste une
+fragilité structurelle observée en passant) : les 2 panneaux dépendent de la discipline `clear()`
+plutôt que d'une exclusion structurelle (`if/else`) — une vraie dérive de state produirait le même
+symptôme hors HMR. À proposer à Saar comme ticket `bug_tickets` si le sujet revient.
