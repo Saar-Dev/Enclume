@@ -303,7 +303,23 @@
   "chat": {
     "placeholder": "Message...",
     "send": "Envoyer",
-    "loadingOlder": "Chargement des messages précédents..."
+    "loadingOlder": "Chargement des messages précédents...",
+    "commands": {
+      "help": {
+        "description": "Affiche la liste des commandes disponibles",
+        "intro": "Commandes disponibles :"
+      },
+      "whisper": {
+        "description": "Envoie un message privé à un joueur",
+        "usage": "Usage : /w <joueur> <message>",
+        "targetNotFound": "Joueur « {{username}} » introuvable"
+      },
+      "gm": {
+        "description": "Envoie un message privé au MJ",
+        "usage": "Usage : /gm <message>",
+        "notFound": "Aucun MJ trouvé pour cette campagne"
+      }
+    }
   },
   "token": {
     "move": "Déplacer",

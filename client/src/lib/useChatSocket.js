@@ -70,11 +70,23 @@ export function useChatSocket(campaignId) {
     // Réponse de commande (/help, usage /w...) — socketChat.js l'émet aussi via
     // CHAT_MESSAGE_CREATED (system:true, i18nKey/params/timestamp bruts, jamais persistée),
     // même mécanisme de résolution que COMBAT_SYSTEM_NOTICE (useSessionSocket.js).
+    //
+    // chat.commands.help.list est un cas particulier : params.commands est une liste dynamique
+    // ({name, descriptionKey}), et i18next ne boucle pas dans une seule chaîne t() — ce texte est donc
+    // construit ici plutôt que résolu par un t() plat (PLAN_CHAT_COMMANDES.md §3). renderSystem
+    // (MessageRendererRegistry.jsx) affiche text sans white-space:pre-line, d'où une seule ligne
+    // (séparateur " · ") plutôt qu'un texte multi-lignes qui ne s'afficherait pas comme attendu.
     const onCreated = (message) => {
       if (message.system) {
+        const text = message.i18nKey === 'chat.commands.help.list'
+          ? [
+              t('chat.commands.help.intro'),
+              ...message.params.commands.map(cmd => `/${cmd.name} — ${t(cmd.descriptionKey)}`),
+            ].join(' · ')
+          : t(message.i18nKey, message.params)
         addMessage({
           id: `sys-${message.i18nKey}-${message.timestamp}`, system: true,
-          text: t(message.i18nKey, message.params),
+          text,
           time: new Date(message.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         })
         return
