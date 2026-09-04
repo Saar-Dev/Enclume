@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildHumanDeclarePayload, buildGmDeclarePayload,
   buildDroneMapActions, buildExoMapActions,
+  buildAttackEntries, buildMeleeEntries,
 } from './buildDeclarePayload.js'
 
 // Golden master — fige l'assemblage du payload COMBAT_ACTION_DECLARE (humain/PJ) tel que
@@ -577,4 +578,109 @@ test('exo — arme introuvable → Tir par défaut (isCaC false)', () => {
     selectedExoWeaponId: 'ghost', assaultTargetId: 'e1', exoWeapons: [],
   }))
   assert.deepEqual(r, { attack: [{ exoWeaponInvId: 'ghost', targetTokenId: 'e1' }] })
+})
+
+// ─── Cœur commun buildAttackEntries / buildMeleeEntries (PLAN_RW_DECLARE_DERIVATION Étape A) ──────
+// Le golden master ci-dessus (68 tests) couvre déjà le comportement bout-en-bout via les 2 wrappers ;
+// ces tests-ci figent le cœur isolé — surtout la branche zone d'effet et le paramètre `emptyBonus`
+// (null PJ / 0 MJ), seule vraie divergence de la branche AOE avant extraction.
+
+const attackCtx = (over = {}) => ({
+  aoeDirection: null, weaponInvId: 'w', targets: [], effectiveAssaultCount: 1,
+  isDualWield: false, hasTwoWeapons: false, sameFirMode: false, offhandWeaponId: undefined,
+  currentVariant: null, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
+  emptyBonus: null, ...over,
+})
+
+test('buildAttackEntries — cibles vides → array vide (iso .slice().map())', () => {
+  assert.deepEqual(buildAttackEntries(attackCtx()), [])
+})
+
+test('buildAttackEntries — Tir simple, sans variant, emptyBonus null (PJ)', () => {
+  assert.deepEqual(buildAttackEntries(attackCtx({ targets: ['e1'], weaponInvId: 'wpn-1' })), [{
+    weaponInvId: 'wpn-1', offhandWeaponInvId: null, targetTokenId: 'e1',
+    bulletCount: null, fireModeBonusComp: null, fireModeBonusDmg: null,
+    isDualWield: false, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
+  }])
+})
+
+test('buildAttackEntries — sans variant, emptyBonus 0 (MJ)', () => {
+  const [e] = buildAttackEntries(attackCtx({ targets: ['e1'], emptyBonus: 0 }))
+  assert.equal(e.bulletCount, null)
+  assert.equal(e.fireModeBonusComp, 0)
+  assert.equal(e.fireModeBonusDmg, 0)
+})
+
+test('buildAttackEntries — variant : bonusComp cumule dualWieldBonusComp, bonusDmg non', () => {
+  const [e] = buildAttackEntries(attackCtx({
+    targets: ['e1'], currentVariant: { bulletCount: 2, bonusComp: 1, bonusDmg: 4 },
+    isDualWield: true, hasTwoWeapons: true, sameFirMode: true, offhandWeaponId: 'mg', dualWieldBonusComp: 3,
+  }))
+  assert.equal(e.bulletCount, 2)
+  assert.equal(e.fireModeBonusComp, 4)   // 1 + 3
+  assert.equal(e.fireModeBonusDmg, 4)
+  assert.equal(e.offhandWeaponInvId, 'mg')
+  assert.equal(e.isDualWield, true)
+})
+
+test('buildAttackEntries — dual-wield demandé mais hasTwoWeapons false → neutralisé', () => {
+  const [e] = buildAttackEntries(attackCtx({
+    targets: ['e1'], isDualWield: true, hasTwoWeapons: false, sameFirMode: true, offhandWeaponId: 'mg',
+  }))
+  assert.equal(e.offhandWeaponInvId, null)
+  assert.equal(e.isDualWield, false)
+})
+
+test('buildAttackEntries — Tir Multi tronqué à effectiveAssaultCount', () => {
+  const r = buildAttackEntries(attackCtx({ targets: ['e1', 'e2', 'e3'], effectiveAssaultCount: 2 }))
+  assert.deepEqual(r.map(e => e.targetTokenId), ['e1', 'e2'])
+})
+
+test('buildAttackEntries — zone d\'effet : une entrée sans cible, dual-wield/visé neutralisés (PJ null)', () => {
+  assert.deepEqual(buildAttackEntries(attackCtx({
+    aoeDirection: 42, weaponInvId: 'klauss-1',
+    targets: ['stale'], isDualWield: true, hasTwoWeapons: true, sameFirMode: true, offhandWeaponId: 'mg',
+    dualWieldBonusComp: 3, aimTranches: 2, aimedLocation: 'head',
+    currentVariant: { bulletCount: 2, bonusComp: 1, bonusDmg: 0 },
+  })), [{
+    weaponInvId: 'klauss-1', offhandWeaponInvId: null, targetTokenId: null,
+    aoe: { direction: 42 },
+    bulletCount: null, fireModeBonusComp: null, fireModeBonusDmg: null,
+    isDualWield: false, dualWieldBonusComp: 0, aimTranches: 0, aimedLocation: null,
+  }])
+})
+
+test('buildAttackEntries — zone d\'effet emptyBonus 0 (MJ) + direction 0° (falsy) traitée comme posée', () => {
+  const [e] = buildAttackEntries(attackCtx({ aoeDirection: 0, weaponInvId: 'k', emptyBonus: 0 }))
+  assert.deepEqual(e.aoe, { direction: 0 })
+  assert.equal(e.fireModeBonusComp, 0)
+  assert.equal(e.fireModeBonusDmg, 0)
+})
+
+test('buildMeleeEntries — mapping simple, arme d\'inventaire', () => {
+  assert.deepEqual(buildMeleeEntries({
+    targets: ['e1'], effectiveMeleeCount: 1, weaponInvId: 'm1', naturalWeaponId: null,
+    effectiveDualWieldMelee: false, offhandWeaponId: undefined,
+  }), [{
+    targetTokenId: 'e1', weaponInvId: 'm1', naturalWeaponCharMutationId: null,
+    offhandWeaponInvId: null, isDualWield: false,
+  }])
+})
+
+test('buildMeleeEntries — dual-wield actif → offhand résolu', () => {
+  const [e] = buildMeleeEntries({
+    targets: ['e1'], effectiveMeleeCount: 1, weaponInvId: 'm1', naturalWeaponId: null,
+    effectiveDualWieldMelee: true, offhandWeaponId: 'off-1',
+  })
+  assert.equal(e.offhandWeaponInvId, 'off-1')
+  assert.equal(e.isDualWield, true)
+})
+
+test('buildMeleeEntries — troncature à effectiveMeleeCount', () => {
+  const r = buildMeleeEntries({
+    targets: ['a', 'b', 'c'], effectiveMeleeCount: 2, weaponInvId: null, naturalWeaponId: 'mut',
+    effectiveDualWieldMelee: false, offhandWeaponId: undefined,
+  })
+  assert.deepEqual(r.map(e => e.targetTokenId), ['a', 'b'])
+  assert.equal(r[0].naturalWeaponCharMutationId, 'mut')
 })
