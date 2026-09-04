@@ -17,6 +17,11 @@ export function registerBattlemapHandlers(io, socket, { campaignId, user, isGm }
       const battlemap = await db('battlemaps').where({ id: battlemapId }).first()
       if (!battlemap || battlemap.campaign_id !== campaignId) return
 
+      // docs/PLANS/PLAN_CHAT_COMMANDES.md §4 — jusqu'ici ce relais ne persistait jamais « quelle est
+      // la carte actuelle » (stateless). current_battlemap_id (migration 324) le rend durable, premier
+      // consommateur : /heal (portée « carte active »).
+      await db('campaigns').where({ id: campaignId }).update({ current_battlemap_id: battlemapId })
+
       socket.to(campaignId).emit(WS.MAP_SWITCH, { battlemapId, userIds })
     } catch (err) {
       console.error('[WS] map:switch error:', err.message)

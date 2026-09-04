@@ -3,7 +3,8 @@
 // Portée V1 réelle (§15 "Hors scope V1" : "/r migré vers le Command Registry (reste dans
 // Sidebar.jsx en attendant)") : /r et son alias /roll restent sur le flux DICE_ROLL existant, hors
 // de ce registre — l'exemple de code §5.6 qui les enregistre ici est une illustration du design
-// cible, pas la portée V1. Seuls /help, /w, /gm sont réellement enregistrés.
+// cible, pas la portée V1. /help, /w, /gm, /heal sont réellement enregistrés
+// (docs/PLANS/PLAN_CHAT_COMMANDES.md).
 //
 // i18n (.claude/rules/i18n.md, chargée en écrivant ce fichier) : "le serveur n'émet jamais de texte
 // FR figé destiné à l'utilisateur" — pattern system:true + i18nKey (socketCombatHelpers.js,
@@ -97,6 +98,35 @@ chatCommandRegistry.register({
         type: 'WHISPER',
         recipientUserId: context.gmUserId,
         payload: { text, recipientUserId: context.gmUserId },
+      },
+    }
+  },
+})
+
+// /heal (sans argument) : personnages avec un token sur la carte actuelle du groupe.
+// /heal all : tous les personnages de la campagne. Portée volontairement large — PJ + PNJ + exo + drone
+// (décision Saar 2026-09-04, docs/PLANS/PLAN_CHAT_COMMANDES.md §4). Strictement 'gm' — jamais de repli
+// sur users.role==='admin' (.claude/rules/core.md).
+// context.healCharacters(scope) -> { count, noMap? } — fourni par socketChat.js (orchestration DB/IO,
+// ce module ne touche jamais la DB directement, même patron que findCampaignMemberByUsername/gmUserId
+// ci-dessus). La réponse est un message système public (senderUserId: null), pas une réponse privée —
+// tous les joueurs voient qu'un /heal a eu lieu, décision Saar 2026-09-04.
+chatCommandRegistry.register({
+  name: 'heal',
+  descriptionKey: 'chat.commands.heal.description',
+  permission: 'gm',
+  async execute(context, args) {
+    const scope = args[0]?.toLowerCase() === 'all' ? 'campaign' : 'map'
+    const result = await context.healCharacters(scope)
+    if (result.noMap) {
+      return { reply: { i18nKey: 'chat.commands.heal.noActiveMap' } }
+    }
+    return {
+      send: {
+        channelId: 'general',
+        type: 'SYSTEM',
+        senderUserId: null,
+        payload: { i18nKey: 'chat.commands.heal.done', params: { count: result.count } },
       },
     }
   },

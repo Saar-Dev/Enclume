@@ -276,9 +276,9 @@ router.put('/:id', requireAuth, requireRole('gm'), async (req, res) => {
     .where({ id: req.params.id })
     .update(updates)
     .returning([
-      'id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'dice_config',
-      'default_token_glb_url', 'default_token_glb_url_drone', 'default_token_glb_url_exo',
-      'settings', 'created_at', 'updated_at',
+      'id', 'name', 'status', 'invite_code', 'default_battlemap_id', 'current_battlemap_id',
+      'dice_config', 'default_token_glb_url', 'default_token_glb_url_drone',
+      'default_token_glb_url_exo', 'settings', 'created_at', 'updated_at',
     ])
   req.app.get('io').to(req.params.id).emit(WS.CAMPAIGN_SETTINGS_UPDATED, { campaign })
   res.json({ campaign })

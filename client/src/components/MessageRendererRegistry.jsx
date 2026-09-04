@@ -422,6 +422,20 @@ function renderWhisper(msg) {
   )
 }
 
+// SYSTEM persisté — annonce publique générée serveur (ex. /heal, docs/PLANS/PLAN_CHAT_COMMANDES.md §4),
+// jamais une saisie utilisateur (senderUserId: null). payload.i18nKey/params résolus ici, au rendu — pas
+// à la réception comme le patron system:true éphémère de useChatSocket.js (renderSystem ci-dessus) —
+// cohérent avec un message persisté qui peut être rendu plusieurs fois (historique, scroll infini) sans
+// dépendre d'un état de résolution figé.
+function renderSystemPersisted(msg, ctx) {
+  return (
+    <div key={msg.id} style={styles.messageSystem}>
+      <span style={styles.msgSystemText}>{ctx.t(msg.payload.i18nKey, msg.payload.params)}</span>
+      <span style={styles.msgTime}>{formatTime(msg.createdAt)}</span>
+    </div>
+  )
+}
+
 const registry = {
   entity_action: renderEntityAction,
   connector_action: renderConnectorAction,
@@ -432,6 +446,7 @@ const registry = {
   dice: renderDice,
   TEXT: renderText,
   WHISPER: renderWhisper,
+  SYSTEM: renderSystemPersisted,
 }
 
 export function renderMessage(msg, ctx) {

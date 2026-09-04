@@ -10,6 +10,7 @@ import { AppError } from '../lib/AppError.js'
 import { sendMessage } from './chatService.js'
 import { chatCommandRegistry } from './chatCommands.js'
 import { broadcastMessageCreated } from './chatBroadcast.js'
+import { healCampaignCharacters } from '../lib/woundService.js'
 
 async function findCampaignMemberByUsername(campaignId, username) {
   const row = await db('campaign_members')
@@ -52,6 +53,9 @@ export function registerChatHandlers(io, socket, context) {
           isGm: socket.data.role === 'gm',
           findCampaignMemberByUsername: (username) => findCampaignMemberByUsername(campaignId, username),
           gmUserId: await findGmUserId(campaignId),
+          // /heal (docs/PLANS/PLAN_CHAT_COMMANDES.md §4) — chatCommands.js ne touche jamais la DB
+          // directement, cette closure porte l'accès io/db comme findCampaignMemberByUsername ci-dessus.
+          healCharacters: (scope) => healCampaignCharacters(io, db, campaignId, scope),
         }
         const result = await chatCommandRegistry.execute(slash.name, commandContext, slash.args)
 

@@ -283,8 +283,11 @@ function SessionContent({ campaignId }) {
       // setMembers calcule isGm en interne à partir de userId
       setMembers(members, user?.id)
 
-      // Chargement battlemap par défaut + ses tokens + ses entités
-      const mapId = campaignData.default_battlemap_id
+      // Chargement de la carte actuelle du groupe (docs/PLANS/PLAN_CHAT_COMMANDES.md §4) — repli sur
+      // la carte d'accueil si aucun MAP_SWITCH n'a encore eu lieu depuis l'ajout de la colonne (ou
+      // pour une toute nouvelle campagne). Corrige un bug latent : un joueur qui se reconnectait après
+      // un changement de carte rechargeait jusqu'ici default_battlemap_id, potentiellement périmé.
+      const mapId = campaignData.current_battlemap_id ?? campaignData.default_battlemap_id
       if (mapId) {
         const mapRes = await api.get(`/battlemaps/${mapId}`)
         setBattlemap(mapRes.data.battlemap)

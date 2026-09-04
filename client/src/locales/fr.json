@@ -318,6 +318,11 @@
         "description": "Envoie un message privé au MJ",
         "usage": "Usage : /gm <message>",
         "notFound": "Aucun MJ trouvé pour cette campagne"
+      },
+      "heal": {
+        "description": "Soigne les personnages (carte actuelle, ou /heal all pour toute la campagne) — MJ uniquement",
+        "done": "🩹 {{count}} personnage(s) soigné(s)",
+        "noActiveMap": "Aucune carte active pour cette campagne — utilisez /heal all ou ouvrez une carte"
       }
     }
   },
