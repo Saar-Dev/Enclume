@@ -31,6 +31,7 @@ import { buildGmDeclarePayload } from '../lib/buildDeclarePayload.js'
 import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
 import { assaultCheckInputs } from '../lib/assaultDeclaration.js'
+import { meleeCheckInputs } from '../lib/meleeDeclaration.js'
 import { buildWeaponList } from '../lib/weaponList.js'
 import CombatDeclareActionList from './CombatDeclareActionList.jsx'
 import { assaultCheck, meleeCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
@@ -453,15 +454,13 @@ export default function CombatGmDeclareWindow({ socket, characters, onEnterMoveM
     aimTranches,
     aimReasons:     aimIneligibilityReasons,
   }))
-  const melee = meleeCheck({
-    started:         meleeStarted,
-    defensif:        meleeDefensif,
-    isCharge:        !!chargeSelection,
-    chargeHasMove:   chargeSelection?.move != null,
-    chargeHasTarget: chargeSelection?.targetTokenId != null,
-    targetsFilled:   meleeTargets.length,
-    targetsNeeded:   effectiveMeleeCount,
-  })
+  // Dérivation Charge dans `meleeCheckInputs` (meleeDeclaration.js), partagée avec le PJ. Contexte
+  // MJ : `started` = `meleeStarted` (flag « CaC en cours » ∨ cibles ∨ Charge).
+  const melee = meleeCheck(meleeCheckInputs(meleeDecl.state, {
+    started:            meleeStarted,
+    defensif:           meleeDefensif,
+    effectiveMeleeCount,
+  }))
   // B5 (§5.2) : un PNJ peut déclarer un tour vide. Module 5 (§5.10, D12) : Déclarer actif ⟺ il y a
   // quelque chose à déclarer ET c'est valide. Le MJ ne configure pas le rechargement (pas de reloadCheck).
   const hasCompleteAction = isActiveDrone

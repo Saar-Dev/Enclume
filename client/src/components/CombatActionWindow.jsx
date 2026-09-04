@@ -37,6 +37,7 @@ import { buildWeaponList } from '../lib/weaponList.js'
 import { useAssaultDeclaration } from '../lib/useAssaultDeclaration.js'
 import { useMeleeDeclaration } from '../lib/useMeleeDeclaration.js'
 import { assaultCheckInputs } from '../lib/assaultDeclaration.js'
+import { meleeCheckInputs } from '../lib/meleeDeclaration.js'
 import { assaultCheck, meleeCheck, reloadCheck, buildBlockReason, hasSomethingToDeclare } from '../lib/declareChecks.js'
 import { hasDeliberateStateChange } from '../lib/hasDeliberateStateChange.js'
 
@@ -706,15 +707,13 @@ export default function CombatActionWindow({
     aimTranches,
     aimReasons:     aimIneligibilityReasons,
   }))
-  const melee = meleeCheck({
-    started:         meleeSelected || !!chargeSelection,
-    defensif:        meleeDefensif,
-    isCharge:        !!chargeSelection,
-    chargeHasMove:   chargeSelection?.move != null,
-    chargeHasTarget: chargeSelection?.targetTokenId != null,
-    targetsFilled:   meleePendingTokenIds.length,
-    targetsNeeded:   effectiveMeleeCount,
-  })
+  // Dérivation Charge (isCharge / chargeHasMove / chargeHasTarget) dans `meleeCheckInputs`
+  // (meleeDeclaration.js), partagée avec le MJ. Contexte PJ : `started` = CaC sélectionné ∨ Charge.
+  const melee = meleeCheck(meleeCheckInputs(meleeDecl.state, {
+    started:            meleeSelected || !!chargeSelection,
+    defensif:           meleeDefensif,
+    effectiveMeleeCount,
+  }))
   const reload = reloadCheck({
     started:         reloadSelected,
     coveredByAttack: false,   // D7 : Recharger remplace le Tir (n'est plus « couvert » par lui)

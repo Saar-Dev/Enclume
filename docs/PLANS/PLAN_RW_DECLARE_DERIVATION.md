@@ -240,3 +240,26 @@ en rendu (prop `isAoeMode` de `AssaultRangedPanel`).
   purs. Passe consolidée prévue après B5 (plan §3 Étape B). Iso-comportement vérifié par lecture
   (chaque champ `ctx` = l'expression exacte de l'ancien arg ; `assaultPendingTokenIds` /
   `assaultTargets` = `assaultDecl.state.targets`).
+
+### Étape B4 — `meleeCheckInputs` — codé 2026-09-04 (non commité)
+
+`client/src/lib/meleeDeclaration.js` : `meleeCheckInputs(state, ctx)` — autorité unique de la
+dérivation Charge (`isCharge` / `chargeHasMove` / `chargeHasTarget` depuis `state.charge`, avant
+recopié entre les 2 fenêtres). `ctx` = `started` (PJ ≠ MJ), `defensif`, `effectiveMeleeCount`.
+`targetsFilled` = `state.targets.length` conservé tel quel (pas `.filter(Boolean)`) — iso, la chaîne
+de ciblage remplit les slots dans l'ordre. Aucun câblage. `node --test` 17/17, `eslint` propre, +5 tests.
+
+### Étape B5 — câblage mêlée PJ + MJ — codé 2026-09-04 (non commité)
+
+`CombatActionWindow.jsx` + `CombatGmDeclareWindow.jsx` :
+`meleeCheck({ …, isCharge: !!chargeSelection, … })` → `meleeCheck(meleeCheckInputs(meleeDecl.state,
+{ started, defensif, effectiveMeleeCount }))`.
+
+- **Testé** : `node --test client/src/lib/*.test.mjs` **230/230** ; `vite build` **propre** ;
+  `eslint` **iso-baseline** (PJ 0 erreur / 4 warnings ; MJ 1 erreur pré-existante
+  `set-state-in-effect` l.168 / 1 warning — tous antérieurs).
+- **Non testé** : ⚠️ navigateur — **passe consolidée Étape B à faire** (Saar) : PJ CaC simple /
+  Multi / Défensif / Retraite / Charge (move seul, puis complète) ; MJ idem ; Tir simple / Multi
+  CC / RC-RL / visé / dual-wield / AOE (PJ + MJ) ; chaque `reason` de blocage (« Choisir une
+  cible », « Configurer le mode de tir », « Sélectionner une arme de tir », « Définir le
+  déplacement de la Charge », « Tir visé impossible : … »).
