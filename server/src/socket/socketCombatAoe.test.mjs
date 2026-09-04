@@ -1,10 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-// Ce fichier importe socketCombatAoe.js (transitivement db / connexion Postgres) mais ne teste que
-// des fonctions pures (resolveAoeAttackRoll, filterShotgunHitTargets, filterFlamethrowerHitTargets) —
-// aucune ne touche la DB. Aucune connexion réelle n'est requise : l'import n'exécute aucune requête.
-import { resolveAoeAttackRoll, filterShotgunHitTargets, filterFlamethrowerHitTargets } from './socketCombatAoe.js'
+// Ce fichier importe socketCombatAoe.js + les 2 mécanismes du registre AOE (Segment 1.5,
+// server/src/lib/aoeMechanisms/) — transitivement db / connexion Postgres via chacun — mais ne teste
+// que des fonctions pures (resolveAoeAttackRoll, filterShotgunHitTargets, filterFlamethrowerHitTargets)
+// — aucune ne touche la DB. Aucune connexion réelle n'est requise : l'import n'exécute aucune requête.
+// filterShotgunHitTargets/filterFlamethrowerHitTargets ont déplacé de socketCombatAoe.js vers leur
+// fichier mécanisme respectif au Segment 1.5 — signatures et comportement inchangés, seul l'import bouge.
+import { resolveAoeAttackRoll } from './socketCombatAoe.js'
+import { filterShotgunHitTargets } from '../lib/aoeMechanisms/shotgunSpread.js'
+import { filterFlamethrowerHitTargets } from '../lib/aoeMechanisms/flamethrower.js'
 import { createWorldMetrics } from '../../../shared/world/worldMetrics.js'
 
 // resolveAoeAttackRoll — couche 4 AOE, phase A (docs/PLANS/PLAN_AOE.md §8 étape 8). Un seul Test de
