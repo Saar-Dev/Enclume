@@ -238,10 +238,25 @@ majuscule (`'TEXT'`, `'WHISPER'`).
   (`recipient_user_id` singulier) ne supporte pas nativement un « whisper à plusieurs destinataires »
   (lanceur + N GM) sans changement de schéma hors scope de ce fix — **le secret reste éphémère, exactement
   comme aujourd'hui.**
-- **Point de normalisation unique** dans `useChatSocket.js` : quand un message `type === 'DICE'` arrive
-  (historique ou temps réel), aplatir `payload.*` vers la racine et forcer `type:'dice'` avant
-  `addMessage`. Zéro modification du chemin live existant, zéro modification de `renderDice` — un seul
-  endroit à faire confiance.
+- **Point de normalisation, revu en préparant le code (2026-09-04)** : le plan initial prévoyait
+  d'aplatir `payload.*` « historique ou temps réel » dans `onCreated`. **Corrigé** — `chatService.
+  sendMessage` (`chatService.js:48-80`) ne diffuse rien elle-même ; c'est l'appelant qui décide d'un
+  éventuel `broadcastMessageCreated`. Si `/r` appelait les deux (persistance + broadcast
+  `CHAT_MESSAGE_CREATED`), un jet apparaîtrait **deux fois** dans le flux d'un client déjà connecté : une
+  fois via le `DICE_RESULT` live existant (`onDiceResult`, id `dice-${userId}-${timestamp}`), une fois
+  via `onCreated` (id numérique de la ligne DB) — deux ids différents, la dédup par id de
+  `sessionStore.addMessage` ne les fusionnerait pas.
+  **Décision** : `/r` appelle uniquement `sendMessage` (persistance), **jamais**
+  `broadcastMessageCreated` — le `DICE_RESULT` live existant reste l'unique canal temps réel, inchangé.
+  La persistance ne sert que l'historique (rechargement, scroll infini, reconnexion), conformément au
+  besoin identifié (§ Constat). Conséquence : la normalisation `payload.*` → racine + `type:'DICE'` →
+  `'dice'` n'a plus sa place dans `onCreated` (jamais atteint pour un jet) mais dans les **deux** points
+  de lecture d'historique de `useChatSocket.js` (chargement initial + `loadOlderMessages`) — un helper
+  `normalizeMessage(msg)` partagé par les deux plutôt que dupliqué.
+  **Troisième champ à renommer, trouvé en vérifiant `renderDice` intégralement** : la forme live utilise
+  `msg.user` (`MessageRendererRegistry.jsx:247,273,312,361`, plusieurs branches), alors que le payload
+  serveur de `DICE_ROLL` porte `username` (`socketDice.js:73`) — la normalisation doit renommer
+  `username` → `user`, pas seulement aplatir.
 
 ### Hors-scope
 

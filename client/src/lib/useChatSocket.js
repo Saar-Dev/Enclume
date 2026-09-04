@@ -4,6 +4,7 @@ import { WS } from '../../../shared/events.js'
 import { useSocket } from './SocketContext'
 import { useSessionStore } from '../stores/sessionStore'
 import api from './api.js'
+import { normalizeMessage } from './normalizeChatMessage.js'
 
 const HISTORY_LIMIT = 50
 // Un whisper vit dans un canal séparé côté API (chatRepository.getMessages filtre par channel_id) —
@@ -52,7 +53,7 @@ export function useChatSocket(campaignId) {
             cursor: page.pagination.nextCursor,
             hasMore: page.pagination.hasMore,
           }
-          merged.push(...page.messages)
+          merged.push(...page.messages.map(normalizeMessage))
         })
         merged.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
         setHasMore(CHANNELS.some(ch => channelStateRef.current[ch].hasMore))
@@ -118,7 +119,7 @@ export function useChatSocket(campaignId) {
           cursor: page.pagination.nextCursor,
           hasMore: page.pagination.hasMore,
         }
-        merged.push(...page.messages)
+        merged.push(...page.messages.map(normalizeMessage))
       })
       merged.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
       setHasMore(CHANNELS.some(ch => channelStateRef.current[ch].hasMore))

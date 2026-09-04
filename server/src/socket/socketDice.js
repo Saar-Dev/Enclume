@@ -96,6 +96,22 @@ export function registerDiceRollHandler(io, socket, { campaignId, user, isGm }) 
         }
       } else {
         io.to(campaignId).emit(WS.DICE_RESULT, payload)
+
+        // Persistance (docs/PLANS/PLAN_CHAT_COMMANDES.md §5) — senderUserId: null (patron Message
+        // Builder, chatValidation.js:6-9 : DICE est un type système à payload structuré, pas une
+        // saisie utilisateur ; senderUserId: user.id ferait rejeter le message par
+        // validateMessagePayload, qui n'autorise que TEXT/WHISPER). payload identique à celui déjà
+        // diffusé en direct ci-dessus — même forme, une seule source de vérité pour « à quoi ressemble
+        // un jet ». Persistance seule, jamais broadcastMessageCreated : le DICE_RESULT ci-dessus reste
+        // l'unique canal temps réel, un second broadcast dupliquerait le jet chez tout client déjà
+        // connecté (deux ids différents, la dédup par id de sessionStore ne les fusionnerait pas) — la
+        // persistance ne sert que l'historique/la reconnexion. Non bloquant : un échec ne doit jamais
+        // gêner le direct, déjà parti.
+        try {
+          await sendChatMessage({ campaignId, channelId: 'general', senderUserId: null, type: 'DICE', payload })
+        } catch (err) {
+          console.error('[Chat] Persistance /r échouée (non bloquant) :', err.message)
+        }
       }
 
       console.log(`[WS] dice:roll — ${user.username} : ${normalizedFormula} = ${total}${secret ? ' [secret]' : ''}`)
