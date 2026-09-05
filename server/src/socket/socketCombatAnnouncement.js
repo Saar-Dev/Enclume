@@ -253,6 +253,12 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
 
       // PC22 — arme requise pour assaut + PC23 (TIR_AUTOMATIQUE pour RC/RL)
       let assaultWeaponRefRange = null
+      // Action exclusive AOE (C4, PLAN_ARMES_SPECIALES.md §1.4bis) — profil AOE + modes de tir de
+      // l'arme déclarée, renseignés par chacune des 3 branches (drone/exo/humanoïde) ci-dessous, puis
+      // consommés UNE fois après la branche : le garde d'exclusivité n'était historiquement câblé que
+      // pour l'humanoïde.
+      let assaultWeaponAoeProfile = null
+      let assaultWeaponFireModeRaw = null
       if (hasAttackDeclared) {
         const firstAttack = mapActions.attack[0]
         // Tir Multi (docs/PLAN_TIRMULTI.md D6) — RAW « Attaques multiples » (p.218-219) ne couvre que
@@ -289,13 +295,15 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const droneWeapon = await db('drone_weapons')
             .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
             .where({ 'drone_weapons.id': droneWeaponInvId, 'drone_weapons.character_id': character.id })
-            .select('drone_weapons.*', 'ref_equipment.range as ref_range')
+            .select('drone_weapons.*', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.aoe_profile as ref_aoe_profile')
             .first()
           if (!droneWeapon) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir drone impossible — l'arme drone sélectionnée est introuvable (désinstallée entre-temps ?)" })
             return
           }
           assaultWeaponRefRange = droneWeapon.ref_range ?? null
+          assaultWeaponAoeProfile = droneWeapon.ref_aoe_profile ?? null
+          assaultWeaponFireModeRaw = droneWeapon.ref_fire_mode ?? null
         } else if (isExo) {
           // Exo-armure (PLAN_EXOARMURE.md §16.4) : validation exoWeaponInvId contre exo_weapons —
           // jamais char_inventory (arme dans le mauvais inventaire, §16.1) ni drone_weapons (Seuil à
@@ -310,12 +318,14 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
           const exoWeapon = await db('exo_weapons')
             .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
             .where({ 'exo_weapons.id': exoWeaponInvId, 'exo_weapons.character_id': character.id })
-            .select('exo_weapons.*', 'ref_equipment.name as ref_name', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count')
+            .select('exo_weapons.*', 'ref_equipment.name as ref_name', 'ref_equipment.range as ref_range', 'ref_equipment.fire_mode as ref_fire_mode', 'ref_equipment.ammo_count as ref_ammo_count', 'ref_equipment.aoe_profile as ref_aoe_profile')
             .first()
           if (!exoWeapon) {
             socket.emit(WS.COMBAT_DECLARE_ERROR, { username: character.name, message: "Tir exo impossible — l'arme exo sélectionnée est introuvable (désinstallée entre-temps ?)" })
             return
           }
+          assaultWeaponAoeProfile = exoWeapon.ref_aoe_profile ?? null
+          assaultWeaponFireModeRaw = exoWeapon.ref_fire_mode ?? null
           // fire_mode — bug trouvé en jeu réel (Saar, 2026-08-26) : comparer contre state.fire_mode
           // était la mauvaise autorité. state.fire_mode modélise le sélecteur d'un PJ humain (une
           // arme en main, un mode qu'on bascule — StateSelector/CombatActionWindow.jsx, coûte de
@@ -390,6 +400,8 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             return
           }
           assaultWeaponRefRange = weapon.ref_range ?? null
+          assaultWeaponAoeProfile = weapon.ref_aoe_profile ?? null
+          assaultWeaponFireModeRaw = weapon.ref_fire_mode ?? null
           // PC23 — TIR_AUTOMATIQUE requis pour RC/RL (contrôle unique, indépendant de la main —
           // c'est une compétence du personnage, pas de l'arme). Exception : arme « spéciale »
           // (lance-flammes…) — voir weaponUsesSpecialSkill.
@@ -453,29 +465,29 @@ export function registerAnnouncementHandlers(io, socket, context, pendingMaps) {
             return
           }
 
-          // Action exclusive AOE (Tir de suppression, Lance-flammes — PLAN_AOE.md §8 étape 7).
-          // Humanoïde uniquement pour l'instant — drone/exo non couverts, pas de cas RAW identifié.
-          // Lance-flammes identifié par aoe_profile.mechanic (donnée catalogue, segment 0b), plus
-          // par ref_name en dur.
-          const exclusiveCheck = isExclusiveDeclaration({
-            mapActions, weaponAoeProfile: weapon.ref_aoe_profile,
+        }
+
+        // Action exclusive AOE (Lance-flammes, Tir de suppression — PLAN_AOE.md §8 étape 7 ;
+        // PLAN_ARMES_SPECIALES.md §1.4bis C4). isExclusiveDeclaration/getAoeExclusiveIneligibilityReasons
+        // (shared/combatExclusiveActions.js) sont une autorité pure agnostique au type de tireur (clé =
+        // aoe_profile.mechanic) — appelée ici pour les 3 plateformes au même endroit. Le garde n'était
+        // historiquement câblé que dans la branche humanoïde : un lance-flammes monté sur drone/exo
+        // échappait à l'exclusivité (gap). RAW muet sur les armes de zone montées → défaut sain = la
+        // règle de l'arme s'applique quel que soit le châssis (écart RAW documenté, docs/JOURNAL8.md).
+        // weaponFireModes : une arme à mode unique (lance-flammes, RL seul) force ce mode dès sa
+        // sélection — jamais une "transition d'état" (getStateTransitionReasons neutralise la raison
+        // via parseFireModes, autorité unique — bug réel Saar 2026-09-04).
+        const exclusiveCheck = isExclusiveDeclaration({ mapActions, weaponAoeProfile: assaultWeaponAoeProfile })
+        if (exclusiveCheck.exclusive && exclusiveCheck.reason !== 'tir_vise') {
+          const reasons = getAoeExclusiveIneligibilityReasons({
+            mapActions, state, quick, entry, weaponFireModes: parseFireModes(assaultWeaponFireModeRaw),
           })
-          if (exclusiveCheck.exclusive && exclusiveCheck.reason !== 'tir_vise') {
-            // weaponFireModes (bug réel, Saar 2026-09-04) : une arme à mode unique (lance-flammes,
-            // RL seul) force ce mode dès sa sélection — jamais un choix du joueur, donc jamais une
-            // vraie "transition d'état" au sens de l'exclusivité. shared/combatExclusiveActions.js
-            // #getStateTransitionReasons ne signale un changement de mode de tir que si l'arme en
-            // offre réellement plusieurs (shared/fireModes.js#parseFireModes, autorité unique).
-            const reasons = getAoeExclusiveIneligibilityReasons({
-              mapActions, state, quick, entry, weaponFireModes: parseFireModes(weapon.ref_fire_mode),
+          if (reasons.length > 0) {
+            socket.emit(WS.COMBAT_DECLARE_ERROR, {
+              username: character.name,
+              message: `Action exclusive : aucune autre action ni transition d'état ce Tour (${reasons.join(', ')})`,
             })
-            if (reasons.length > 0) {
-              socket.emit(WS.COMBAT_DECLARE_ERROR, {
-                username: character.name,
-                message: `Action exclusive : aucune autre action ni transition d'état ce Tour (${reasons.join(', ')})`,
-              })
-              return
-            }
+            return
           }
         }
       }
