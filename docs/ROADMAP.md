@@ -169,7 +169,6 @@
 - Upload screenshot éditeur → MinIO
 - Jets Favoris : drag-to-reorder macros (UI)
 - Paramètre campagne GM entity move mode (reporté)
-- Commande de chat MJ `/healall`
 - Sprint Drones 2d/2e/3 (auto-annonce, `resolveDroneAutoAction`, télépilotage). **+ 2 bugs pré-existants trouvés en test 2026-08-28, ticketés** : (1) `getCharacterMovementBudget` (`movementBudgetService.js:34-41`) sans branche `drone` → `world-path-preview` 500 en boucle pour un token drone, latent aussi dans `planCombatWorldMovement` — fix = `getDroneMovementBudget` lisant `drone_sheet.vitesse`, bloqué sur le mapping `vitesse` (entier) → allures (RAW) ; (2) bloc melee de l'annonce (`socketCombatAnnouncement.js:627-704`) sans branche `isDrone` → CaC drone sans programme `armement_contact` accepté puis dissous en silence à la résolution
 - Sprint CaC 4b — validation fonctionnelle requise avant
 - Sprint Annonce v2 — actions précédentes en lecture seule

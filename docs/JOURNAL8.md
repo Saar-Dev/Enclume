@@ -5279,3 +5279,54 @@ seule la requête de lecture change).
 
 **Retour arrière** : `git revert f9484f3 e5dbd9e a9cf858 183177e` — dans cet ordre (du plus récent au
 plus ancien), aucune donnée touchée.
+
+---
+
+## Session (Claude) — 2026-09-05 — Chat : commandes /heal, /t, persistance /r — CHANTIER CLOS
+
+Quatre sujets planifiés puis codés un par un (`docs/Old/PLAN_CHAT_COMMANDES.md`, archivé — contenu
+durable transféré dans `docs/SYSTEME/CHAT.md` v2.1, Règle 10) :
+
+1. **Fix i18n `/help`** — namespace `chat.commands.*` jamais traduit depuis la Phase 3 du chat
+   persisté ; clés ajoutées, cas spécial pour la liste dynamique (`useChatSocket.js`).
+2. **`/heal` / `/heal all`** — MJ uniquement, jamais de repli `users.role==='admin'`. Portée
+   volontairement large (PJ+PNJ+exo+drone, décision Saar). Nouvelle colonne
+   `campaigns.current_battlemap_id` (migration 324) : `MAP_SWITCH` était un relais stateless, ne
+   permettait pas de savoir "quelle est la carte actuelle" — corrige au passage un bug latent
+   (reconnexion après changement de carte, `SessionPage.jsx`).
+3. **Persistance `/r`/`/roll`** (non secret) — écriture directe (`senderUserId: null`, patron
+   Message Builder), jamais de rediffusion `CHAT_MESSAGE_CREATED` (aurait dupliqué le jet chez un
+   client déjà connecté). Nouveau `normalizeChatMessage.js` (aplatit la forme persistée vers la
+   forme attendue par `renderDice`).
+4. **`/t <compétence> [difficulté] [@personnage]`** — Test immédiat, sans validation MJ (décision
+   Saar, écarte `gmArbitratedTestService.js`). Extraction `characterTestContext.js` (contexte de
+   stats, réutilisé par `MACRO_ROLL` sans changement de comportement) + `skillTestService.js`.
+   Catastrophe automatique obligatoire (7ᵉ site RAW).
+
+**Deux corrections faites après retour de test navigateur de Saar**, les deux vraies leçons de ce
+chantier : (a) `/t` envoyait d'abord un `DICE_RESULT` de forme "jet brut" improvisée au lieu de
+reprendre celle déjà établie pour un Test compétence-vs-Seuil (`gmArbitratedTestService.js`) — ni
+Seuil ni Réussite/Échec affichés, dé 3D erroné (d6 au lieu de d20) ; corrigé en reprenant cette forme
+à l'identique (`skillLabel`/`mechanicalTotal`/`chancesDeReussite`/`diffLabel`/`mr`/`breakdown`).
+(b) Une fois corrigé, plus aucune animation de dé 3D — j'ai proposé un "chantier séparé", Saar a
+fait remarquer à raison que le mécanisme existait déjà et qu'il suffisait de l'appeler
+correctement : `useSessionSocket.js:onDiceResult` déduit `dieType` depuis `formula`, qui pour un
+payload skillcheck porte un libellé de compétence, pas une notation de dé — fix ciblé (`dieType:
+'d20'`, constante RAW). Portée assumée : les actions d'entité/connecteur (même payload skillcheck)
+bénéficient aussi de l'animation désormais.
+
+**Testé** : `node --check` sur tous les fichiers serveur touchés à chaque lot, `eslint` + `npm run
+build` client (0 erreur), suite `chatCommands.test.mjs` 19/19 (dont 11 nouveaux tests `/heal`/`/t`),
+4 tests unitaires `normalizeChatMessage.test.mjs`. Chaque lot validé fonctionnellement par Saar en
+navigateur avant le suivant.
+
+**Non testé** : rendu multi-utilisateurs simultané (plusieurs joueurs testant `/t`/`/heal` en même
+temps) — scénario de session réelle, pas un manque de ce lot.
+
+**Données** : migration 324 (`campaigns.current_battlemap_id`) appliquée en local (nodemon actif
+pendant le codage). Aucune donnée existante modifiée.
+
+**Retour arrière** : 5 commits successifs sur `dev/Saar` (§3 à §7 ci-dessus), chacun isolé —
+`git revert` un par un dans l'ordre inverse si besoin, aucun n'a de dépendance de schéma sur un
+suivant sauf la migration 324 (§2), qui n'a pas de `down()` destructeur (colonne nullable, drop
+simple).

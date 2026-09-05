@@ -1,3 +1,14 @@
+## v227 — 2026-09-05 — Chat : commandes /heal et /t
+
+### Chat
+- [new] `/heal` soigne toutes les blessures et statuts des personnages présents sur la carte
+  actuellement affichée au groupe ; `/heal all` fait de même pour toute la campagne. Réservé au MJ.
+- [new] `/t <compétence> [difficulté]` lance un Test de compétence immédiat (1d20 contre Seuil),
+  sans attendre de validation du MJ — avec autocomplétion des noms de compétence pendant la frappe.
+- [fix] `/help` affichait la clé technique de traduction au lieu du texte de l'aide.
+- [fix] Un jet `/r` ou `/roll` survit maintenant au rechargement de la page et au défilement de
+  l'historique (auparavant visible en direct seulement).
+
 ## v226 — 2026-09-04 — Combat : lance-flammes en cône
 
 ### Combat — déclaration et résolution
