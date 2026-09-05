@@ -1,5 +1,13 @@
 # PLAN_INTERACTIONS_CONNECTEURS.md — Interaction joueur avec les portes
 
+> **ARCHIVÉ 2026-09-05 (Règle 10) — chantier livré et validé en session réelle le 2026-09-02.**
+> Doc définitive : `.claude/rules/world.md` § « Interaction runtime sur une porte ». Compte-rendu de
+> clôture (décisions, fichiers, testé/non testé) : `docs/JOURNAL8.md` 2026-09-02, commits `10cde1e`
+> puis `05129fe`. Restes hors périmètre, suivis ailleurs : échelle (traversée verticale, non cadrée) ;
+> 2 points visuels non bloquants (cadre de sélection porte déformé, modèle GLB statique) ;
+> non-régression de l'interaction d'entité après extraction de `gmArbitratedTestService.js`.
+> Le contenu ci-dessous est conservé tel quel pour l'historique de conception.
+
 > Version 1 — 2026-09-01 (Claude/Saar). Remplace la « base de travail » (2026-08-25) qui précédait
 > cette version — contenu conservé, restructuré en plan réel (`ROADMAP.md` §1, prochaine étape :
 > « écrire le plan réel... puis coder »). Origine : `docs/BUGIDENTIFIE.md` ENTITYCLICK1 (porte/échelle

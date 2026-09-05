@@ -50,6 +50,28 @@ Lire `docs/SYSTEME/MOTEUR_MONDE.md` avant toute modification de ce périmètre.
 - Une passerelle fournit un support praticable et respecte l'enveloppe réelle des murs courbes/profilés.
 - Le GLB définit l'apparence seulement; collision, support, coût et occlusion viennent des capacités.
 
+## Interaction runtime sur une porte
+
+- Une porte connaît trois états: `closed`, `open`, `locked`. L'état autoré vit dans
+  `surface_data.connectors[].state`; l'état de partie vit dans `world_feature_states`
+  (`feature_id = connector.worldId`, même table que l'ascenseur). Sans ligne runtime, l'état autoré
+  fait foi; `doorGeometry` applique collision, LOS, eau et gaz selon l'état effectif.
+- Ouvrir ou refermer une porte non verrouillée est une action libre, sans Test.
+- Crocheter une porte `locked` est un Test **Systèmes de sécurité** arbitré par le MJ, sur le patron
+  d'interaction d'entité. La Difficulté est `connector.lockDifficultyDc` (modificateur signé ajouté
+  au Seuil, négatif = plus dur), autorée par porte; repli **−5** si absente.
+- Le calcul d'un Test arbitré par le MJ (total, malus, jet, critique, breakdown, Catastrophe) a une
+  autorité unique, `gmArbitratedTestService`, partagée avec l'interaction d'entité — jamais dupliquée.
+- Contrat socket `CONNECTOR_ACTION_REQUEST` / `_PENDING` / `_RESOLVE` / `_RESULT`. Le connecteur est
+  désigné par `connector.worldId`, jamais par la clé d'objet legacy de `surface_data.connectors`.
+- La portée joueur↔porte est une distance point→segment (une porte est un segment ou un arc, pas un
+  point), altitude comprise, via `worldMetrics` puis `worldSpatialQueryService`.
+- Tout clic MJ sur le panneau connecteur est instantané, sans Test ni portée (mirroir de l'action
+  directe MJ sur une entité), et peut re-verrouiller; un payload joueur ne verrouille jamais.
+- Une mutation d'état émet `WORLD_RUNTIME_UPDATED { kind: 'door-state' }` et rafraîchit `featureStates`
+  chez tous les clients. Le GLB ne reflète pas encore l'état ouvert/fermé — rendu 3D seul, la
+  collision et la LOS sont correctes.
+
 ## Résolution serveur
 
 - Le client envoie une intention ou destination; le serveur recalcule chemin, coût, position atteinte,

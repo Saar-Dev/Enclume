@@ -183,7 +183,6 @@ Livre de Base Polaris → FOUNDATION → VOCABULARY → SYSTEME → REGLES → M
 | `PLANS/PLAN_RW_MATERIAUX.md` | Rework matériaux/textures (base PBR + procédural) |
 | `PLANS/PLAN_USURE&INTEGRITE.md` | Usure/Intégrité du matériel, Tests de panne |
 | `PLANS/PLAN_MORAL.md` | Règle optionnelle du Moral |
-| `PLANS/PLAN_INTERACTIONS_CONNECTEURS.md` | Interaction joueur porte/échelle en session |
 | `PLANS/PLAN_RW_TOKEN.md` | Animations squelettiques de tokens (en-tête réel : `PLAN_ANIMATIONS.md`) |
 | `PLANS/PLAN_ADMIN_BACKUP.md` | Sauvegarde automatique de l'instance |
 | `PLANS/PLAN_BATTLEMAP2D.md` | Battlemap en illustration/tokens 2D |
