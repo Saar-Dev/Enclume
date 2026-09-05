@@ -26,7 +26,7 @@ import { resolveDualWieldFire } from '../../../shared/dualWieldRules.js'
 import { calcDroneDegatsNets } from '../lib/charStats.js'
 import * as exoAvarieService from '../lib/exoAvarieService.js'
 import {
-  resolveCombatantTestContext, resolveCombatantIdentity,
+  resolveCombatantTestContext, resolveCombatantIdentity, resolveCombatantDisplayIdentity,
   resolveExoContext, resolveManeuverSkillId, resolveHumanoidTestContext,
 } from '../lib/combatantContextService.js'
 import { computeExoStats } from '../../../shared/exoStats.js'
@@ -834,8 +834,15 @@ async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
   if (hitResult === null) return
   const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
+  // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais l'attaquant (ticket
+  // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). Pas de cibleCharacter
+  // chargé à ce point (seul characterIdCible transporté depuis la Déclaration) — re-fetch minimal,
+  // cohérent avec le reste du fichier (re-vérifier à la Résolution plutôt que faire confiance à une
+  // donnée ancienne).
   if (shockResult) {
-    statusService.emitShockDiceResult(io, campaignId, shockResult, userId, attackerUsername, attackerColor)
+    const cibleCharacter = await db('characters').where({ id: characterIdCible }).first()
+    const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter)
+    statusService.emitShockDiceResult(io, campaignId, shockResult, cibleIdentity.userId, cibleIdentity.username, cibleIdentity.color)
   }
 
   io.to(campaignId).emit(WS.COMBAT_ATTACK_RESULT, {
@@ -1090,8 +1097,13 @@ async function resolveDamageConfirmNormalTarget(io, campaignId, ctx, socket) {
           is_lethal, finalSeverity, shockResult,
           rollChance, chanceRolls, chanceSeed, chanceSuccess, chanceThreshold } = hitResult
 
+  // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
+  // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). Pas de cibleCharacter
+  // chargé à ce point — re-fetch minimal, même discipline que resolveMeleeDefenseHitAttackerPnj.
   if (shockResult) {
-    statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+    const cibleCharacter = await db('characters').where({ id: characterIdCible }).first()
+    const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter, targetName)
+    statusService.emitShockDiceResult(io, campaignId, shockResult, cibleIdentity.userId, cibleIdentity.username, cibleIdentity.color)
   }
 
   const severityColor = finalSeverity ? (SEVERITY_COLORS[finalSeverity] ?? tireurColor) : tireurColor
@@ -1927,8 +1939,13 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
       })
       if (hitResult) {
         const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
+        // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais l'attaquant (ticket
+        // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). Pas de
+        // cibleCharacter chargé à ce point — re-fetch minimal, même discipline que les 2 sites sœurs.
         if (shockResult) {
-          statusService.emitShockDiceResult(io, campaignId, shockResult, userId, attackerUsername, attackerColor)
+          const cibleCharacter = await db('characters').where({ id: characterIdCible }).first()
+          const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter)
+          statusService.emitShockDiceResult(io, campaignId, shockResult, cibleIdentity.userId, cibleIdentity.username, cibleIdentity.color)
         }
         emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
           tireurId:    attackerTokenId, cibleId: targetTokenId,
@@ -2070,8 +2087,12 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
     if (hitResult) {
       const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
+      // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais l'attaquant (ticket
+      // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ dans cette fonction (son nom est déjà
+      // connu, `defenderCharacterName`, même valeur que le jet de défense 20 lignes plus haut) —
+      // pas besoin de resolveCombatantDisplayIdentity, aucun compte utilisateur possible ici.
       if (shockResult) {
-        statusService.emitShockDiceResult(io, campaignId, shockResult, userId, attackerUsername, attackerColor)
+        statusService.emitShockDiceResult(io, campaignId, shockResult, null, defenderCharacterName ?? 'PNJ', '#808080')
       }
 
       emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {
@@ -2769,8 +2790,13 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
   const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
           is_lethal, finalSeverity, shockResult } = hitResult
 
+  // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
+  // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ/décor dans cette fonction (dispatch
+  // `!cibleCharacter || cibleCharacter.type === 'pnj'`, cf. resolveDroneAssaultAction/
+  // resolveExoAssaultAction) — nom déjà connu via `cibleCharacter`, aucun compte utilisateur
+  // possible ici, pas besoin de resolveCombatantDisplayIdentity.
   if (shockResult) {
-    statusService.emitShockDiceResult(io, campaignId, shockResult, userId, tireurUsername, tireurColor)
+    statusService.emitShockDiceResult(io, campaignId, shockResult, null, cibleCharacter?.name ?? 'PNJ', '#808080')
   }
 
   emissions.push({ to: 'room', event: WS.DICE_RESULT, data: {
@@ -3401,8 +3427,12 @@ async function resolveAssaultHitPnjNormal(io, campaignId, ctx, emissions) {
   if (hitResult === null) return { suspend: false, emissions }
   const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
 
+  // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
+  // CHOC-TEST-WRONG-ATTRIBUTION). Cible forcément PNJ/décor dans cette fonction (branche
+  // resolveAssaultHitPnjNormal, jamais atteinte pour une cible PJ) — nom déjà connu via
+  // `cibleCharacter`, aucun compte utilisateur possible ici.
   if (shockResult) {
-    statusService.emitShockDiceResult(io, campaignId, shockResult, character.user_id, tireurUsername, tireurColor)
+    statusService.emitShockDiceResult(io, campaignId, shockResult, null, cibleCharacter?.name ?? 'PNJ', '#808080')
   }
 
   emissions.push({ to: 'room', event: WS.COMBAT_ATTACK_RESULT, data: {

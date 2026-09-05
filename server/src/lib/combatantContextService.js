@@ -316,6 +316,24 @@ export async function resolveCombatantIdentity(db, character) {
   return { sheetId: sheet?.id ?? null, userId: character.user_id ?? null, effectiveType: character.type }
 }
 
+// resolveCombatantDisplayIdentity — sœur d'affichage de resolveCombatantIdentity ci-dessus : pas
+// « qui a le droit d'agir » (mécanique), mais « quel nom/quelle couleur montrer dans le chat »
+// (ticket CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). Généralisée dès le
+// départ (pas nommée d'après le Test de Choc) : le même calcul était déjà recopié 6 fois ailleurs
+// pour l'identité du TIREUR (grep confirmé, socketCombatExo.js/socketCombatAoe.js/
+// socketCombatHelpers.js) — jamais migrés vers cette fonction (refactor pur, hors périmètre de ce
+// ticket, à reprendre séparément si besoin), mais aucun nouvel appelant ne doit recopier ce calcul
+// une 7ᵉ fois. Pas de substitution pilote pour une exo (contrairement à resolveCombatantIdentity) :
+// aucun appelant connu à ce jour n'atteint cette fonction avec une exo/un drone (`resolveTargetHit`
+// s'arrête avant pour ces deux types) — si un jour ça change, traiter ce cas alors, pas en spéculant
+// ici. `character` : la ligne complète (comme resolveCombatantIdentity), jamais un id — à l'appelant
+// de la fournir (déjà chargée, ou un fetch `characters` explicite s'il n'a qu'un id).
+export async function resolveCombatantDisplayIdentity(db, character, fallbackName = 'Cible') {
+  if (!character?.user_id) return { userId: null, username: character?.name ?? fallbackName, color: '#808080' }
+  const userRow = await db('users').where({ id: character.user_id }).select('color', 'username').first()
+  return { userId: character.user_id, username: userRow?.username ?? character.name ?? fallbackName, color: userRow?.color ?? '#808080' }
+}
+
 // Permission « peut agir pour cet exo » — GM, propriétaire (`characters.user_id`) OU pilote lié
 // (`exo_sheet.pilot_character_id` → `characters.user_id`). Décision Saar 2026-07-30, tranchée à
 // l'origine pour l'édition de fiche (`char-sheet.js:exoIsGmOrOwnerOrPilot`, PLAN_EXOARMURE.md Lot 1

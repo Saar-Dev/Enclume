@@ -27,7 +27,7 @@ import * as exoAvarieService from '../lib/exoAvarieService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
 import { evaluateAoeVisibility } from '../services/worldVisibilityService.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
-import { resolveCombatantTestContext } from '../lib/combatantContextService.js'
+import { resolveCombatantTestContext, resolveCombatantDisplayIdentity } from '../lib/combatantContextService.js'
 import { findAoeMechanismEntry } from '../lib/aoeMechanisms/registry.js'
 import {
   resolveCriticalFailReroll,
@@ -286,7 +286,13 @@ async function resolveAoeTargetDamage(io, campaignId, {
     })
     if (!hitResult) continue
     const { localisation, degatsNets, is_lethal, finalSeverity, shockResult } = hitResult
-    if (shockResult) statusService.emitShockDiceResult(io, campaignId, shockResult, shooter.userId, shooter.tireurUsername, shooter.tireurColor)
+    // Test de Choc — c'est la CIBLE qui résiste (LdB p.243), jamais le tireur (ticket
+    // CHOC-TEST-WRONG-ATTRIBUTION, docs/PLANS/PLAN_CHOC_TEST_ATTRIBUTION.md). `cibleCharacter`/`name`
+    // déjà résolus plus haut dans cette fonction — aucune requête supplémentaire.
+    if (shockResult) {
+      const cibleIdentity = await resolveCombatantDisplayIdentity(db, cibleCharacter, name)
+      statusService.emitShockDiceResult(io, campaignId, shockResult, cibleIdentity.userId, cibleIdentity.username, cibleIdentity.color)
+    }
     if (shockResult?.outcome && shockResult.outcome !== 'ok') {
       statusService.applyStun(io, db, campaignId, {
         targetTokenId: tokenId, outcome: shockResult.outcome,
