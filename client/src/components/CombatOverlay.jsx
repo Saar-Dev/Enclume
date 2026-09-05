@@ -194,7 +194,13 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           quelle (prop isGm ajuste seulement la vérification de propriétaire — le serveur reste de
           toute façon l'autorité, isExoActorAuthorized, combatantContextService.js). Remplace
           CombatGmDeclareWindow pour ce seul cas plutôt que d'y ajouter un branchement isExo de plus
-          (§8.1) — même principe que le côté joueur ci-dessous. */}
+          (§8.1) — même principe que le côté joueur ci-dessous.
+          onEnterAoeTargetMode manquait ici (bug trouvé en session réelle, Saar, 2026-09-05) — présent
+          au rendu joueur ci-dessous depuis le Segment 2a mais jamais reporté sur ce second rendu MJ :
+          le bouton « Viser une zone » s'affichait, le clic était reçu, mais handleStartAoeDirection
+          (useExoDeclare.js) sortait aussitôt sur sa garde `!onEnterAoeTargetMode`, sans jamais armer
+          le mode zone — le survol de déplacement/le clic-attaque ambiant restaient donc actifs par
+          défaut, d'où l'impression d'un ciblage normal. */}
       {isGm && phase === 'ANNOUNCEMENT' && gmActiveCharacter?.type === 'exo' && (
         <CombatExoActionWindow
           socket={socket}
@@ -206,6 +212,7 @@ export default function CombatOverlay({ socket, battlemap, isGm, user, character
           pendingMoveSelection={pendingMoveSelection}
           battlemapId={battlemap?.id}
           onEnterTargetMode={onEnterTargetMode}
+          onEnterAoeTargetMode={onEnterAoeTargetMode}
           registerAmbientAttackHandler={registerAmbientAttackHandler}
           showTargetRecap={showTargetRecap}
         />
