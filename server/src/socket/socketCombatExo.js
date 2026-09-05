@@ -16,6 +16,7 @@ import { applyCriticalSuccessBonus, getCriticalSuccessBonus } from '../../../sha
 import { computeAttackRoll } from '../lib/combatAttackRoll.js'
 import { getCampaignSettings } from '../lib/campaignSettingsService.js'
 import { maybeTriggerCatastrophe } from '../lib/catastropheService.js'
+import { buildWeaponShockDsl } from '../lib/damageService.js'
 import { resolveCombatantTestContext, resolveCombatantIdentity } from '../lib/combatantContextService.js'
 import { isTestBlockingWound } from '../../../shared/woundConstants.js'
 import {
@@ -55,7 +56,10 @@ import {
 // (server/src/lib/aoeShooterAdapter.js) — une seule requête, jamais une 2ᵉ copie de cette jointure.
 // `ref_aoe_profile`/`ref_name` : colonnes ajoutées pour l'AOE (getAoeMechanic + messages d'erreur),
 // jamais lues par resolveExoAssaultAction ci-dessous — additif, aucun changement de comportement Tir
-// CaC exo existant.
+// CaC exo existant. `ref_shock`/`ref_shock_mechanism`/`ref_shock_reduced_by_armor` (docs/PLANS/
+// PLAN_CHOC_EXO_DRONE.md Palier B) : même raison — le Choc d'arme (LdB p.243, CHOC1) n'était jamais
+// sélectionné pour un tireur exo, silencieusement absent du Tir ET de l'AOE (tous deux partagent ce
+// fetch) — additif, comportement Tir/CaC existant inchangé pour tout le reste.
 export async function fetchExoWeapon(exoWeaponInvId, characterId) {
   return db('exo_weapons')
     .leftJoin('ref_equipment', 'exo_weapons.ref_equipment_id', 'ref_equipment.id')
@@ -67,6 +71,9 @@ export async function fetchExoWeapon(exoWeaponInvId, characterId) {
       'ref_equipment.damage_h as effective_formula',
       'ref_equipment.name as ref_name',
       'ref_equipment.aoe_profile as ref_aoe_profile',
+      'ref_equipment.shock as ref_shock',
+      'ref_equipment.shock_mechanism as ref_shock_mechanism',
+      'ref_equipment.shock_reduced_by_armor as ref_shock_reduced_by_armor',
       db.raw(`COALESCE(exo_weapons.label_override, ref_equipment.name) as display_name`),
     )
     .first()
@@ -87,6 +94,12 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
 
     // 1. Arme exo (fetchExoWeapon ci-dessus).
     const weapon = await fetchExoWeapon(action.exo_weapon_inv_id, character.id)
+    // Choc d'arme (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier B) — dérivé ici, une seule fois, transmis
+    // à ctx plus bas (§6) ; seule resolveAttackHitPnj/Pj (cible humanoïde) le consomme, cohérent avec
+    // resolveTargetHit qui ignore déjà chocDsl pour une cible drone/exo.
+    const chocDsl = weapon ? buildWeaponShockDsl({
+      shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
+    }) : null
 
     if (!weapon?.effective_formula) {
       console.warn(`[WS] resolveExoAssaultAction — arme sans formule. exo_weapon_inv_id:${action.exo_weapon_inv_id}`)
@@ -233,7 +246,7 @@ export async function resolveExoAssaultAction(io, campaignId, action, confirmedM
       ? await db('characters').where({ id: cibleToken.character_id }).first()
       : null
     const now = new Date().toISOString()
-    const ctx = { action, cibleCharacter, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, now }
+    const ctx = { action, cibleCharacter, formula, mr, portee: authoritativeRangeBand, tireurUsername, tireurColor, userId: character.user_id ?? null, now, chocDsl }
     if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
     if (cibleCharacter?.type === 'exo')   return await resolveAttackHitExo(io, campaignId, ctx, emissions)
     if (!cibleCharacter || cibleCharacter.type === 'pnj') return await resolveAttackHitPnj(io, campaignId, ctx, emissions)
@@ -442,6 +455,9 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
     // fonctions de branchement défenseur déjà génériques. weaponInvId/naturalWeaponCharMutationId
     // toujours null (armes exo hors char_inventory, aucune mutation) : getEffectiveMeleeDamage
     // retombe alors correctement sur damageFormula (fallbackFormula), vérifié dans damageService.js.
+    // weaponRefId (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier D) : ref_equipment.id de l'arme exo — la
+    // seule info manquante pour que getEffectiveMeleeDamage dérive aussi le Choc (branche dédiée,
+    // damageService.js), jusqu'ici jamais transmise pour un attaquant exo.
     const commonPending = {
       campaignId,
       attackerTokenId: action.token_id,
@@ -453,6 +469,7 @@ export async function resolveExoMeleeAction(io, campaignId, action, character, c
       multiMalusAttaquant: 0, multiMalusDefenseur: 0,
       damageFormula: weapon.damage_formula ?? null,
       weaponInvId: null,
+      weaponRefId: weapon.equipment_id ?? null,
       modDom,
       combatModeBonus: 0,
       characterIdCible: defenderCharacter.id,

@@ -155,6 +155,10 @@ async function fetchAoeShooterWeapon(character, action) {
       equipment_id: row.equipment_id, ref_range: row.ref_range,
       ref_damage_h: row.effective_formula, ref_aoe_profile: row.ref_aoe_profile,
       ref_name: row.ref_name, display_name: row.display_name, ammo_remaining: row.ammo_remaining,
+      // Choc d'arme (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier B) — fetchExoWeapon porte déjà ces 3
+      // colonnes (même correction que le Tir/CaC exo non-AOE), simplement absentes jusqu'ici de la
+      // forme normalisée que ce tronc consomme.
+      ref_shock: row.ref_shock, ref_shock_mechanism: row.ref_shock_mechanism, ref_shock_reduced_by_armor: row.ref_shock_reduced_by_armor,
     }
   }
   if (character.type === 'drone') return null // Segment 2b
@@ -214,7 +218,7 @@ async function insertAoeTargetRows({ actionId, hitTargets, modifierFn }) {
 // drone/une exo prend le dégât une seule fois). `armorReductionFactor` : 1 (défaut), 0.5 lance-flammes
 // — les deux viennent de `mech.computeTargetDamage`, générique ici.
 async function resolveAoeTargetDamage(io, campaignId, {
-  hitTarget, degautsBruts, effectiveDamage, locationsCount = 1, armorReductionFactor = 1, shooter,
+  hitTarget, degautsBruts, effectiveDamage, shooterChocDsl = null, locationsCount = 1, armorReductionFactor = 1, shooter,
 }) {
   const tokenId = hitTarget.tokenId
   const cibleToken = await db('tokens').where({ id: tokenId }).first()
@@ -267,12 +271,16 @@ async function resolveAoeTargetDamage(io, campaignId, {
   // Le Test de Choc "naturel" déclenché par la seule sévérité d'UNE blessure (indépendant de l'arme,
   // branche `woundResult` de `resolveTargetHit`) reste, lui, évalué à chaque Localisation — RAW
   // normal pour toute attaque à Localisations multiples, non concerné par cette décision.
+  // `shooterChocDsl` (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier B) : Choc d'un tireur exo, calculé une
+  // fois par le tronc (pas par cible, `effectiveDamage` reste `null` pour un tireur non-humanoïde,
+  // §510-518 ci-dessus) — repli seulement quand `effectiveDamage` lui-même est absent, jamais les deux
+  // sources combinées (même précédence que confirmDamage, socketCombatHelpers.js).
   const results = []
   for (let i = 0; i < Math.max(1, locationsCount); i += 1) {
     const hitResult = await damageService.resolveTargetHit(io, db, campaignId, {
       degautsBruts, characterIdCible: cibleToken?.character_id ?? null,
       cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
-      chocDsl: i === 0 ? (effectiveDamage ? effectiveDamage.choc : null) : null,
+      chocDsl: i === 0 ? (effectiveDamage ? effectiveDamage.choc : (shooterChocDsl ?? null)) : null,
       ammoFx: effectiveDamage ? (effectiveDamage.tags?.FX ?? null) : null,
       armorReductionFactor,
     })
@@ -517,6 +525,16 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
     // l'appellent jamais non plus). weapon.ref_damage_h (déjà résolu par fetchAoeShooterWeapon —
     // COALESCE override/catalogue côté exo) sert alors directement de baseRaw.
     const isHumanoidShooter = character.type === 'pj' || character.type === 'pnj'
+    // Choc d'arme pour un tireur exo (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier B) — indépendant de
+    // `effectiveDamage`/`getEffectiveWeaponDamage` (ammo/mods-aware, strictement char_inventory-only,
+    // inchangé ci-dessous) : le Choc est une propriété de l'arme elle-même, pas de la munition, donc
+    // calculé une seule fois ici plutôt que par cible. Tireur drone : jamais atteint (fetchAoeShooterWeapon
+    // renvoie déjà `null` pour un drone, `!weapon` a fait sortir la fonction plus haut, §Segment 2b
+    // PLAN_ARMES_SPECIALES.md). `weapon.equipment_id` : garde une arme exo "maison" (label_override
+    // sans ref_equipment_id, mêmes colonnes shock alors indéfinies).
+    const shooterChocDsl = !isHumanoidShooter && weapon.equipment_id ? damageService.buildWeaponShockDsl({
+      shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
+    }) : null
     const perTargetInputs = []
     for (const ht of resolveTargets) {
       const effectiveDamage = isHumanoidShooter
@@ -526,7 +544,7 @@ export async function resolveAoeAssaultAction(io, campaignId, action, confirmedM
         ? effectiveDamage.total
         : weapon.ref_damage_h ? (await parseDice(weapon.ref_damage_h.replace(/\s/g, ''))).total : 0
       const { degautsBruts, locationsCount, armorReductionFactor } = await mech.computeTargetDamage(ctx, ht, { effectiveDamage, baseRaw })
-      perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, locationsCount, armorReductionFactor })
+      perTargetInputs.push({ hitTarget: ht, degautsBruts, effectiveDamage, shooterChocDsl, locationsCount, armorReductionFactor })
     }
 
     // ── Générique : application par cible + finalisation (outcome + émissions + agrégat PJ).

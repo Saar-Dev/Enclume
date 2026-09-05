@@ -372,9 +372,9 @@ avaient été oubliés, plus un correctif de robustesse préalable (Palier 0) sa
 
 | Palier | Statut |
 |---|---|
-| 0 — correctif crash `confirmDamage` (bug indépendant, ticket `EXODRONE-CONFIRMDAMAGE-CRASH`) | Ticketé (`triaged`), pas codé — reproduction session réelle requise avant correctif |
-| A — export `buildWeaponShockDsl` (signature normalisée) | Cadré, pas codé |
-| B — Tir exo/drone (+ AOE tireur exo) | Cadré, pas codé — dépend du Palier 0 pour le sous-cas cible PJ |
+| 0 — correctif crash `confirmDamage` (bug indépendant, ticket `EXODRONE-CONFIRMDAMAGE-CRASH`) | **Codé + validé en session réelle (2026-09-05), commité `dev/Saar` (`9a981b0`).** Repro confirmée par Saar (drone + Fusil Gauss → PJ) avant correctif, re-testée après → dégâts + étourdissement appliqués normalement, plus d'erreur `confirmDamage`. |
+| A — export `buildWeaponShockDsl` (signature normalisée) | **Codé et vérifié (2026-09-05)**, pas encore committé — `damageService.js` seul, comportement humanoïde inchangé (testé manuellement sur 4 cas catalogue réels) |
+| B — Tir exo/drone (+ AOE tireur exo) | **Codé et vérifié (2026-09-05)**, pas encore committé — 3 fichiers (`socketCombatExo.js`, `socketCombatHelpers.js`, `socketCombatAoe.js`), `node --check` + `socketCombatAoe.test.mjs` (20/20) après chaque fichier. **Sous-cas Tir/CaC normal (non-AOE) validé en session réelle par Saar.** Sous-cas AOE (lance-flammes exo en zone) non validable en l'état : Saar a retrouvé en testant un problème préexistant, antérieur à ce chantier et à l'audit qui l'a précédé (l'exo ne propose pas la sélection de zone pour le lance-flammes, cause non identifiée — vérifié que ni la colonne `ref_aoe_profile` côté serveur ni le câblage client `isAoeWeapon` n'ont été touchés par ce chantier). Hors périmètre de PLAN_CHOC_EXO_DRONE.md sur décision Saar (2026-09-05) — le code Choc du Palier B pour l'AOE (§2.4 point 5) reste écrit mais non vérifiable en pratique tant que ce problème séparé n'est pas résolu. |
 | C — munitions/mods exo/drone | Non concerné (rappel de périmètre) |
-| D — CaC exo (7 points de contact, drone déjà couvert par B) | Cadré, pas codé |
-| Tests + session réelle | Non commencés |
+| D — CaC exo (drone déjà couvert par B) | **Codé, vérifié et VALIDÉ en session réelle par Saar (2026-09-05)** — exo CaC contre un PNJ et contre un PJ à défense active, les deux testés OK. **Correction en cours de route** : le plan initial listait 7 points de contact dont `confirmDamage` branche melee — relecture directe du code a montré que cette branche n'est jamais atteinte par un attaquant exo (réservée à l'attaquant PJ humain, `resolveMeleeDefenseHitAttackerPj`) — retirée du périmètre réel, 6 points de contact effectifs |
+| Tests + session réelle | **Paliers 0/A/B (Tir/CaC normal)/D tous validés en session réelle par Saar.** Palier B (AOE exo, lance-flammes en zone) reste bloqué par un problème préexistant hors périmètre (voir note ci-dessus) |

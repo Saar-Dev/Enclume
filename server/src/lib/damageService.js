@@ -25,7 +25,7 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
     // weapon_ref_id (CHOC1) : seul signal fiable de "l'arme a été trouvée" — weapon_formula peut être
     // légitimement vide pour une arme Choc pur, ne jamais l'utiliser comme test de présence de l'arme.
     // shock/shock_mechanism/shock_reduced_by_armor (CHOC1 Palier 1, migration 190) : Choc porté par
-    // l'arme elle-même, indépendant de la munition — voir _weaponShockDsl ci-dessous.
+    // l'arme elle-même, indépendant de la munition — voir buildWeaponShockDsl ci-dessous.
     .select(
       'weapon_ref.id as weapon_ref_id', 'weapon_ref.damage_h as weapon_formula', 'ammo_ref.ammo_effects as ammo_effects',
       'weapon_ref.shock as weapon_shock', 'weapon_ref.shock_mechanism as weapon_shock_mechanism',
@@ -34,20 +34,26 @@ async function _fetchWeaponAndAmmo(db, weaponInvId) {
     .first()
 }
 
-// ─── _weaponShockDsl (interne, CHOC1 Palier 1) ─────────────────────────────────────────────────────
+// ─── buildWeaponShockDsl (CHOC1 Palier 1) ──────────────────────────────────────────────────────────
 // Construit le descripteur Choc porté par l'arme elle-même (ref_equipment.shock, catégories 1/2,
 // docs/PLAN_CHOC1.md §4) — même forme que le chocDsl déjà transporté pour la munition (catégorie 3,
 // `{action:'SET', value}`), étendu de `gateLocation`/`reducedByArmor` (seule différence structurelle
-// entre catégories, voir décision d'architecture du plan). `shock_mechanism` NULL = arme non câblée
+// entre catégories, voir décision d'architecture du plan). `shockMechanism` absent = arme non câblée
 // par ce palier (comportement inchangé) : ne jamais dériver ce câblage de la seule présence de
 // `shock`, colonne encore peuplée pour des armes hors scope (Palier 2, narratif, armes à énergie...).
-function _weaponShockDsl(row) {
-  if (!row.weapon_shock_mechanism || !row.weapon_shock) return null
+// Exportée (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier A) — seule autorité pour dériver un chocDsl
+// depuis les 3 colonnes shock/shock_mechanism/shock_reduced_by_armor de ref_equipment, quel que soit
+// l'appelant (exo/drone à venir, Paliers B/D du même plan). Signature normalisée à dessein — jamais
+// une "row" avec des noms de colonnes figés (renommée depuis _weaponShockDsl, qui lisait
+// row.weapon_shock* en dur) : chaque appelant fait le mapping depuis SES propres alias de requête, un
+// mismatch devient un `undefined` visible localement plutôt qu'un `null` silencieux propagé à distance.
+export function buildWeaponShockDsl({ shock, shockMechanism, reducedByArmor }) {
+  if (!shockMechanism || !shock) return null
   return {
     action: 'SET',
-    value: row.weapon_shock,
-    gateLocation: row.weapon_shock_mechanism === 'tete_gated' ? 'tete' : null,
-    reducedByArmor: row.weapon_shock_reduced_by_armor,
+    value: shock,
+    gateLocation: shockMechanism === 'tete_gated' ? 'tete' : null,
+    reducedByArmor,
   }
 }
 
@@ -69,7 +75,9 @@ export async function getEffectiveWeaponDamage(db, weaponInvId, { rangeBand = nu
   if (!row?.weapon_ref_id) return null
 
   const parsed = parseAmmoEffects(row.ammo_effects)
-  const weaponShockDsl = _weaponShockDsl(row)
+  const weaponShockDsl = buildWeaponShockDsl({
+    shock: row.weapon_shock, shockMechanism: row.weapon_shock_mechanism, reducedByArmor: row.weapon_shock_reduced_by_armor,
+  })
   // Précédence CHOC1 Palier 1 : le Choc de munition (catégorie 3, déjà câblé Lot B) reste prioritaire
   // s'il est présent — le Choc intrinsèque de l'arme (catégories 1/2) ne comble que son absence. Les
   // deux sources simultanées seraient une anomalie catalogue (une arme ne devrait porter qu'une seule
@@ -192,7 +200,7 @@ export async function getEffectiveWeaponFormulaPreview(db, weaponInvId, { rangeB
 // `fallbackFormula` (formule résolue à la Déclaration) : utilisée si l'arme équipée n'est plus
 // trouvable au moment du jet (désequipée/transférée entre Déclaration et Confirmation — fenêtre
 // réelle côté PJ différé, même risque déjà géré côté tir) — jamais un tour de combat silencieux.
-export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalWeaponCharMutationId = null, charSheetId = null, fallbackFormula = null } = {}) {
+export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalWeaponCharMutationId = null, charSheetId = null, fallbackFormula = null, weaponRefId = null } = {}) {
   let formula, producer, weaponName = null, choc = null
 
   if (naturalWeaponCharMutationId && charSheetId) {
@@ -228,7 +236,27 @@ export async function getEffectiveMeleeDamage(db, { weaponInvId = null, naturalW
     weaponName = weapon?.weapon_name ?? null
     // CHOC1 Palier 1 : arme introuvable → pas de Choc reconstruit depuis une donnée partielle, même
     // garde que côté tir (getEffectiveWeaponDamage) pour le repli sur formule stockée.
-    choc = weapon?.weapon_ref_id ? _weaponShockDsl(weapon) : null
+    choc = weapon?.weapon_ref_id ? buildWeaponShockDsl({
+      shock: weapon.weapon_shock, shockMechanism: weapon.weapon_shock_mechanism, reducedByArmor: weapon.weapon_shock_reduced_by_armor,
+    }) : null
+  } else if (weaponRefId) {
+    // Arme exo/drone (hors char_inventory — exo_weapons/drone_weapons référencent directement
+    // ref_equipment.id, docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier D) : la formule est déjà résolue par
+    // l'appelant (fallbackFormula) — exo_weapons/drone_weapons n'ont pas de fenêtre de péremption
+    // comme char_inventory (pas d'équipement/déséquipement en cours de Résolution), seul le Choc est
+    // dérivé ici. `fallbackFormula` peut être légitimement null (arme Choc pur, ex. « Dague neurale
+    // Brain » — vérifiée en base : category 'Arme de contact', damage_h null, shock '3D10') : rester
+    // à null, jamais retomber sur '1D4' mains nues par erreur — distinct de la branche mains nues
+    // ci-dessous, qui n'a ni arme ni fallback du tout.
+    const weapon = await db('ref_equipment').where({ id: weaponRefId })
+      .select('name', 'shock', 'shock_mechanism', 'shock_reduced_by_armor')
+      .first()
+    formula = fallbackFormula ?? null
+    producer = 'arme exo/drone'
+    weaponName = weapon?.name ?? null
+    choc = weapon ? buildWeaponShockDsl({
+      shock: weapon.shock, shockMechanism: weapon.shock_mechanism, reducedByArmor: weapon.shock_reduced_by_armor,
+    }) : null
   } else {
     formula = fallbackFormula ?? '1D4'
     producer = 'mains nues'

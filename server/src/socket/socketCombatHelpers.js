@@ -607,7 +607,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     rollAttaque, chancesAttaque, mrAttaque,
     defenderSkillTotal, defenderEffectiveMalus, defenderMastery,
     multiMalusDefenseur,
-    damageFormula, weaponInvId, modDom, combatModeBonus,
+    damageFormula, weaponInvId, weaponRefId, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible,
     for_na_cible, con_na_cible, vol_na_cible,
     targetName, userId,
@@ -703,7 +703,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       const ctx = {
         attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
         rollAttaque, chancesAttaque, mrAttaque,
-        damageFormula, weaponInvId, modDom, combatModeBonus,
+        damageFormula, weaponInvId, weaponRefId, modDom, combatModeBonus,
         characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
         targetName, userId, tokenId, socket,
@@ -792,16 +792,18 @@ async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
 async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
   const {
     attackerTokenId, attackerUsername, attackerColor,
-    damageFormula, weaponInvId, modDom, mrAttaque, combatModeBonus,
+    damageFormula, weaponInvId, weaponRefId, modDom, mrAttaque, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     rollAttaque, chancesAttaque, userId, tokenId,
   } = ctx
   // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6) —
   // pas de re-fetch arme naturelle ici (appel différé, formule mutation déjà résolue et stable dans
   // damageFormula), seule l'arme équipée est re-fetchée (fenêtre de péremption réelle : désequipée
-  // entre Déclaration et confirmation de défense).
+  // entre Déclaration et confirmation de défense). weaponRefId (docs/PLANS/PLAN_CHOC_EXO_DRONE.md
+  // Palier D) : attaquant exo (jamais `type==='pj'`, cette branche est la sienne) — weaponInvId reste
+  // toujours null pour elle, weaponRefId comble le Choc manquant.
   const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-    weaponInvId, fallbackFormula: damageFormula,
+    weaponInvId, weaponRefId, fallbackFormula: damageFormula,
   })
   // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
   const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
@@ -905,7 +907,7 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
     for_na_cible, con_na_cible, vol_na_cible,
     tireurUsername, tireurColor, userId, targetName,
     type: pendingType, modDom, combatModeBonus,
-    aimedLocation, treatAsContact,
+    aimedLocation, treatAsContact, chocDsl,
   } = pending
 
   try {
@@ -950,10 +952,13 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
       dmgSeed  = effectiveDamage ? dmgRolls.reduce((a, b) => a ^ b, 0) : rolled.seed
       rawDice  = effectiveDamage ? effectiveDamage.total : rolled.total
       resolvedFormula = effectiveDamage ? effectiveDamage.formula : rolled.formula
-      // effectiveDamage null (repli formule stockée) → chocDsl null aussi : jamais reconstruire un
-      // Choc depuis une donnée partielle (docs/PLAN_ARMES_DSL.md Lot B, §4). Même garde pour l'armure
-      // (Lot C1) : ammoFx reste null dans ce repli, jamais reconstruit depuis une donnée partielle.
-      effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : null
+      // effectiveDamage null pour une arme humanoïde désequipée entre-temps (weaponInvId présent mais
+      // introuvable) → chocDsl null, jamais reconstruit depuis une donnée partielle (docs/PLAN_ARMES_DSL.md
+      // Lot B, §4). Même garde pour l'armure (Lot C1) : ammoFx reste null dans ce repli. Distinct du cas
+      // exo/drone (weaponInvId absent dès le départ, pas une désequipement) : `pending.chocDsl` y a déjà
+      // été calculé en Résolution par resolveExoAssaultAction/resolveDroneAssaultAction (docs/PLANS/
+      // PLAN_CHOC_EXO_DRONE.md Palier B) — valeur complète, pas partielle, sûre à réutiliser telle quelle.
+      effectiveChocDsl = effectiveDamage ? effectiveDamage.choc : (chocDsl ?? null)
       effectiveAmmoFx  = effectiveDamage ? effectiveDamage.tags?.FX ?? null : null
       // PLAN_RW_SYSCOMBAT.md §2.10 (Lot 8a) — noyau pur, même formule que resolveAssaultAction.
       degautsBruts = computeAssaultRawDamage({ rawDice, mr, portee, fireModeBonusDmg: fire_mode_bonus_dmg })
@@ -1868,7 +1873,7 @@ export async function resolveMeleeAction(io, campaignId, action, character, conf
 export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
   const {
     attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
-    weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
+    weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     attackerUsername, attackerColor, userId,
   } = ctx
@@ -1880,9 +1885,10 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
   } })
   if (hit) {
     // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
-    // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+    // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6). weaponRefId (docs/PLANS/
+    // PLAN_CHOC_EXO_DRONE.md Palier D) : attaquant exo, comble le Choc manquant.
     const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-      weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
+      weaponInvId, weaponRefId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
     // mrAttaque déjà résolu (bonus Réussite critique inclus) par resolveMeleeAction — jamais recalculé ici.
     const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
@@ -1947,7 +1953,7 @@ export async function resolveDefenselessTarget(io, campaignId, ctx, emissions) {
 export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
   const {
     attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
-    weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
+    weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     attackerUsername, attackerColor, userId,
     defenderSkillTotal, defenderEffectiveMalus, defenderMastery, multiMalusDefenseur, confirmedModifiers,
@@ -2028,9 +2034,10 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
     // damageService.resolveTargetHit (localisation/armure/RD/sévérité/blessure/shock), qui
     // fetch désormais aussi mutations/avantages pour RD/Choc (docs/PLAN_MUTATION2.md Lot 3).
     // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
-    // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+    // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6). weaponRefId (docs/PLANS/
+    // PLAN_CHOC_EXO_DRONE.md Palier D) : attaquant exo, comble le Choc manquant.
     const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-      weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
+      weaponInvId, weaponRefId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
     })
     // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2)
     const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
@@ -2089,7 +2096,7 @@ export async function resolveMeleeDefensePnj(io, campaignId, ctx, emissions) {
 export async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
   const {
     attackerTokenId, targetTokenId, chancesAttaque, rollAttaque, multiMalusAttaquant, mrAttaque,
-    weaponInvId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
+    weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, damageFormula, modDom, combatModeBonus,
     characterIdCible,
   } = ctx
   const hit = rollAttaque <= chancesAttaque
@@ -2102,9 +2109,13 @@ export async function resolveMeleeDefenseDrone(io, campaignId, ctx, emissions) {
     const droneSheet = await db('drone_sheet').where({ character_id: characterIdCible }).first()
     if (droneSheet) {
       // CHOC1 : point de résolution unique, plus de parseDice direct sur damageFormula (voir
-      // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+      // getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6). weaponRefId (docs/PLANS/
+      // PLAN_CHOC_EXO_DRONE.md Palier D) : Choc sans effet sur une cible drone (resolveTargetHit
+      // jamais appelé ici), mais nécessaire quand même pour la formule de dégât physique elle-même —
+      // sans lui, une arme exo Choc pur (ex. Dague neurale Brain, damage_h null) retomberait à tort
+      // sur '1D4' mains nues au lieu de 0 (même correctif que les branches sœurs ci-dessus).
       const { total: rawDice } = await damageService.getEffectiveMeleeDamage(db, {
-        weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
+        weaponInvId, weaponRefId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
       })
       // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
       // Pas de jet de défense drone ici (§7.4, pas de programme esquive) : MR = marge de l'attaquant seul,
@@ -2471,7 +2482,10 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
       } })
       return { suspend: false, emissions }
     }
-    // 1. Arme drone
+    // 1. Arme drone. shock/shock_mechanism/shock_reduced_by_armor (docs/PLANS/PLAN_CHOC_EXO_DRONE.md
+    // Palier B) : le Choc d'arme (LdB p.243, CHOC1) n'était jamais sélectionné pour un tireur drone,
+    // silencieusement absent du Tir ET du CaC (les deux passent par cette même fonction) — additif,
+    // comportement Tir/CaC drone existant inchangé pour tout le reste.
     const weapon = await db('drone_weapons')
       .leftJoin('ref_equipment', 'drone_weapons.equipment_id', 'ref_equipment.id')
       .where({ 'drone_weapons.id': action.drone_weapon_inv_id })
@@ -2480,8 +2494,17 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
         'ref_equipment.range as ref_range',
         db.raw(`COALESCE(drone_weapons.damage_formula, ref_equipment.damage_h) as effective_formula`),
         db.raw(`COALESCE(drone_weapons.label_override, drone_weapons.name, ref_equipment.name) as display_name`),
+        'ref_equipment.shock as ref_shock',
+        'ref_equipment.shock_mechanism as ref_shock_mechanism',
+        'ref_equipment.shock_reduced_by_armor as ref_shock_reduced_by_armor',
       )
       .first()
+    // Choc d'arme — dérivé ici, une seule fois, transmis à ctx plus bas ; seule resolveAttackHitPnj/Pj
+    // (cible humanoïde) le consomme, cohérent avec resolveTargetHit qui ignore déjà chocDsl pour une
+    // cible drone/exo.
+    const chocDsl = weapon ? damageService.buildWeaponShockDsl({
+      shock: weapon.ref_shock, shockMechanism: weapon.ref_shock_mechanism, reducedByArmor: weapon.ref_shock_reduced_by_armor,
+    }) : null
 
     if (!weapon?.effective_formula) {
       console.warn(`[WS] resolveDroneAssaultAction — arme sans formule. drone_weapon_inv_id:${action.drone_weapon_inv_id}`)
@@ -2636,7 +2659,7 @@ export async function resolveDroneAssaultAction(io, campaignId, action, confirme
     // Branchement cible (PLAN_RW_SYSCOMBAT.md §2.8, Lot 6) — guard clauses, même style que Lots 2/4.
     // Aucune des 3 fonctions sœurs n'a son propre try/catch : toute exception remonte à ce catch
     // unique, qui vide alors `emissions` — comportement existant préservé à l'identique.
-    const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now }
+    const ctx = { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, now, chocDsl }
     if (cibleCharacter?.type === 'drone') return await resolveAttackHitDrone(io, campaignId, ctx, emissions)
     // PLAN_EXOARMURE.md §11.4 (catégorie A, site 6) — AVANT le test 'pnj' : sans cette branche, une exo
     // (type ni 'drone' ni 'pnj') tombait par erreur dans resolveAttackHitPj (`cibleType: null`
@@ -2723,7 +2746,7 @@ export async function resolveAttackHitExo(io, campaignId, ctx, emissions) {
 
 // 8b. Cible = PNJ ou décor : auto-resolve
 export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
-  const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now } = ctx
+  const { action, cibleCharacter, formula, mr, tireurUsername, tireurColor, userId, now, chocDsl } = ctx
   const cibleSheet = cibleCharacter ? await db('char_sheet').where({ character_id: cibleCharacter.id }).first() : null
   // Attributs NA cible avec genotype + mutations — server/src/lib/damageService.js:fetchCibleNA
   // (extrait le 2026-07-30, docs/PLAN_FATIGUE_DOMMAGES.md §9 point structurel 2).
@@ -2740,6 +2763,7 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
     cibleType:        cibleCharacter?.type ?? null,
     char_sheet_id_cible: cibleSheet?.id ?? null,
     for_na_cible: for_na, con_na_cible: con_na, vol_na_cible: vol_na,
+    chocDsl,
   })
   if (hitResult === null) return { suspend: false, emissions }
   const { rollLoc, locRolls, locSeed, localisation, etq, rd, degatsNets,
@@ -2782,7 +2806,7 @@ export async function resolveAttackHitPnj(io, campaignId, ctx, emissions) {
 
 // 8c. Cible = PJ → COMBAT_DAMAGE_PROMPT (seule branche qui suspend)
 export async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
-  const { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId } = ctx
+  const { action, cibleCharacter, formula, mr, portee, tireurUsername, tireurColor, userId, chocDsl } = ctx
   const cibleSheet = await db('char_sheet').where({ character_id: cibleCharacter.id }).first()
   const { for_na, con_na, vol_na } = cibleSheet
     ? await damageService.fetchCibleNA(db, cibleCharacter.id, cibleSheet.id)
@@ -2807,6 +2831,7 @@ export async function resolveAttackHitPj(io, campaignId, ctx, emissions) {
     tireurUsername, tireurColor, userId, targetName,
     type: 'assault', modDom: null, combatModeBonus: null,
     targetUserId: cibleCharacter.user_id,
+    chocDsl,
   })
   if (pendingDamageCount === 1) {
     const damagePayload = { tokenId: action.token_id, formula, targetName }
