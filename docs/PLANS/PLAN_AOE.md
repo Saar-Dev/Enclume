@@ -1,5 +1,16 @@
 # PLAN_AOE.md — Résolution de zone d'effet (AOE)
 
+> **⚠️ Portée de ce document (2026-09-05).** Ce plan reste l'autorité pour le **socle générique** :
+> couches 1-3 (`shared/world/aoeShapes.js`, `distanceBands.js`, `worldSpatialQueryService.js#queryTokensInShape`,
+> `worldVisibilityService.js#evaluateAoeVisibility`), contrat d'entrée (§6), persistance
+> `combat_action_targets` (§3), fan-out PJ/PNJ (§5). **Pour l'avancement par arme, l'autorité est
+> désormais `PLAN_ARMES_SPECIALES.md` §1.4bis / §6** : le socle a été extrait du god-file
+> (`socketCombatAoe.js`), l'identification est passée data-driven (`ref_equipment.aoe_profile`,
+> `shared/combatAoe.js`), un registre de mécanismes remplace les `if (mechanic === …)`
+> (`server/src/lib/aoeMechanisms/`), et lance-flammes + tireur exo sont clos (2026-09-04). Le §12
+> ci-dessous décrit l'état *du fusil à pompe* au 2026-09-03 et n'a pas suivi ce refactor — s'y référer
+> pour l'intention d'architecture, pas pour « ce qui est codé ».
+>
 > Version 11 — 2026-09-03 (Claude/Saar). **Statut : étape 9 (UI de ciblage) close, confirmée par Saar
 > en session réelle.** §12 (État d'implémentation, en pied de document) tient la liste vivante de ce
 > qui est codé/testé/en attente — ne pas laisser diverger, c'est la source de vérité de l'avancement

@@ -5477,3 +5477,65 @@ créé (`new`, suggestion, non cadrée).
 
 **Retour arrière** : 1 commit `dev/Saar` (`cafb0cd`) pour le correctif + 1 commit pour cette clôture
 documentaire, aucune dépendance de schéma. `git revert` dans l'ordre inverse si besoin.
+
+## Session (Claude) — 2026-09-05 — AOE Segment 2b (tireur drone) + exclusivité 3 plateformes — ⚠️ CLOS PARTIEL (attend session Saar)
+
+**Contexte** : Segment 2b de `docs/PLANS/PLAN_ARMES_SPECIALES.md` §1.4bis — réplique du patron 2a
+(exo) pour un tireur drone d'arme de zone (lance-flammes, fusil à pompe montés). Plan détaillé +
+analyse à charge menés avant tout code (4 runs : analyse → plan → analyse critique → code). L'analyse
+critique a corrigé 2 points sous-spécifiés : le câblage client touche **DEUX** fenêtres hôtes
+(`CombatActionWindow` joueur + `CombatGmDeclareWindow` MJ, toutes deux via `useDroneDeclare`), et
+l'exclusivité d'une Action de zone était câblée à **un seul** des trois sites de l'ANNONCE.
+
+**Codé — 4 commits isolés :**
+- **C1** (`socketCombatHelpers.js`) : `fetchDroneWeapon(droneWeaponInvId)` extraite de
+  `resolveDroneAssaultAction` (mirror `fetchExoWeapon`), exportée, partagée avec le tronc AOE — une
+  seule copie de la jointure `drone_weapons ⋈ ref_equipment`. `+equipment_id`/`+ref_aoe_profile`/
+  `+ref_name` au SELECT (additifs, jamais lus par le Tir/CaC drone). 0 changement de comportement.
+- **C2** (`socketCombatAoe.js`, `char-sheet.js`) : branche `character.type === 'drone'` de
+  `fetchAoeShooterWeapon` (renvoyait `null`) ; `ammo_remaining: null` explicite — `decrementAoeShooterAmmo`
+  drone reste no-op, **cohérent** avec le Tir/CaC drone qui ne décrémente pas non plus `ammo_restant`
+  (grep exhaustif : aucun `drone_weapons … update` munitions nulle part). `ref_aoe_profile` ajouté aux
+  3 SELECT `drone_weapons` (GET/POST/PUT — réponse cohérente, précédent bug exo/drone).
+- **C3** (client, 5 fichiers) : `useDroneDeclare` gagne `onEnterAoeTargetMode` + état `aoeDirection` +
+  `handleStartAoeDirection` (mirror `useExoDeclare`) + `selectDroneWeapon` (efface cible/direction
+  périmée au changement d'arme — latent avant l'AOE). `buildDroneMapActions` branche
+  `aoe: { direction }` (4 tests golden master). `DroneWeaponPanel` bascule la section cible sur
+  « Viser une zone » si `isAoeWeapon(ref_aoe_profile)` — style local du panneau, clés i18n partagées
+  (`assaultPanel.*`). `DroneDeclareSection` propage. Les 2 fenêtres hôtes threadent
+  `onEnterAoeTargetMode` + les nouveaux props. Le nettoyage du mode de visée résiduel au changement de
+  slot est déjà fait par chaque fenêtre (`combatAoeTargetMode?.onCancel()`, agnostique au type).
+- **C4** (`socketCombatAnnouncement.js`) : le garde d'Action exclusive AOE
+  (`isExclusiveDeclaration`/`getAoeExclusiveIneligibilityReasons`, `shared/combatExclusiveActions.js`
+  — autorité pure **déjà** agnostique au type de tireur) était appelé uniquement dans la branche
+  humanoïde. Hoisté APRÈS le dispatch `if (isDrone) … else if (isExo) … else …` : chaque branche
+  renseigne `assaultWeaponAoeProfile`/`assaultWeaponFireModeRaw`, un seul appel du garde ensuite pour
+  les 3 plateformes. Requêtes d'arme drone/exo de l'ANNONCE : `+aoe_profile` (`+fire_mode` pour le
+  drone).
+
+**Écart RAW (invariant AGENTS.md #5) — décision `PLAN_ARMES_SPECIALES.md` §1.4bis, jugement délégué
+par Saar (« le plus robuste / pérenne / adaptatif »)** : le RAW lie « Action exclusive » d'un
+lance-flammes au *tir continu* (zone élargie) ; l'implémentation traite **toute** gerbe lance-flammes
+comme exclusive pour l'humanoïde depuis le Segment 1 (simplification produit tranchée Saar
+2026-08-26). C4 étend cette même simplification, cohérente, à drone + exo plutôt que d'introduire une
+3ᵉ lecture, et parce qu'une mécanique d'arme = une autorité unique qui ne doit pas dépendre du châssis
+porteur. Conséquence de jeu : un drone (ou une exo) perd son déplacement le Tour où il tire au
+lance-flammes — identique à l'humanoïde. Impact étroit : armes de zone seulement, rares sur ces
+plateformes ; arme drone/exo normale inchangée.
+
+**Testé** : `node --check` sur les 4 fichiers serveur + import ESM ; `node --test 'shared/**'`
+509/509 ; `socketCombatAoe.test.mjs` 20/20 ; `buildDeclarePayload.test.mjs` 118/118 (dont 4 nouveaux
+drone AOE) ; `eslint` sur les 6 fichiers client — baseline **inchangée** (7 problèmes préexistants,
+diff vide vs `git stash`) ; `npm run build` OK ; `git diff --check` propre.
+
+**Non testé (`⚠️ clos partiel`)** : aucune session réelle contre PostgreSQL (pas de `DATABASE_URL`).
+Reste à valider par Saar — drone joueur **et** drone MJ, lance-flammes **et** fusil à pompe montés :
+« Viser une zone », cibles à paliers, dégâts + feu continu, refus « Action exclusive » si déplacement
+déclaré en même temps. Vérifs à faire en session (plan §1.4bis) : gating effectif des hooks ambiants
+drone pendant la visée, arme drone « maison » (sans catalogue) jamais proposée en zone.
+
+**Données** : aucune migration, aucun changement de schéma (`aoe_profile` est une colonne
+`ref_equipment` existante depuis le Segment 1).
+
+**Retour arrière** : 4 commits `dev/Saar` isolés (C1→C4) + docs, non poussés. `git revert` dans
+l'ordre inverse — C4 puis C3 puis C2 puis C1 ; C1 seul est sans risque (refactor pur).
