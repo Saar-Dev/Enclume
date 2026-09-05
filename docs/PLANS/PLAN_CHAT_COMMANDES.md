@@ -355,9 +355,22 @@ syntaxe.
   `gmArbitratedTestService.js` (même mécanique RAW : Test compétence vs Seuil, déjà résolue ailleurs
   dans le projet pour les actions d'entité/connecteur) — `skillLabel`, `mechanicalTotal`,
   `chancesDeReussite`, `diffLabel`, `mr`, `breakdown` désormais tous fournis. Confirme au passage un
-  fait déjà vrai dans tout le projet, pas propre à `/t` : **aucun Test de compétence n'anime de dé 3D**,
-  seul un jet brut (`/r`) le fait — ce n'est donc pas une régression à corriger côté animation, la bonne
-  forme de payload suffit.
+  fait déjà vrai dans tout le projet, pas propre à `/t` : **aucun Test de compétence n'animait de dé
+  3D**, seul un jet brut (`/r`) le faisait.
+- **§6, suite immédiate (2026-09-05)** : présenté ci-dessus comme un compromis à accepter ou un
+  « chantier séparé » — **corrigé après que Saar a fait remarquer, à raison, que le mécanisme existe
+  déjà et qu'il suffit de l'appeler**. Vérifié avant d'agir (pas de raison documentée à l'exclusion,
+  `git log -S` sur la ligne ne remonte qu'un refactor qui préserve un comportement préexistant, jamais
+  une décision explicite) : la vraie difficulté n'était pas architecturale mais un détail de forme —
+  `formula` porte le libellé de la compétence (ex. "Discrétion") pour un payload skillcheck, pas une
+  notation de dé, donc l'extraction `formula.replace(/^\d+/,'')...` (pensée pour "1d20"/"2d6+3") ne peut
+  pas s'y appliquer. Fix ciblé dans `useSessionSocket.js:onDiceResult` : `dieType` déduit directement à
+  `'d20'` quand `skillLabel` est défini (constante RAW — un Test est toujours 1d20, jamais une
+  supposition), `rolls.length > 0` en garde (exclut la réussite auto sans jet,
+  `gmArbitratedTestService.js`, `rolls:[]`). **Portée assumée, pas cachée** : ce fix est dans le
+  mécanisme partagé `onDiceResult`, donc les actions d'entité/connecteur (`ENTITY_ACTION_RESOLVE`/
+  `CONNECTOR_ACTION_RESOLVE`, même payload skillcheck) gagnent aussi l'animation — cohérent avec le
+  reste (elles utilisent déjà exactement cette forme), pas un effet de bord isolé à `/t`.
 - **§5** : persistance `/r` avec `senderUserId: user.id` aurait échoué systématiquement
   (`chatValidation.js`) — corrigé en `senderUserId: null` + payload auto-porté.
 - **§5** : jets secrets auraient fui sur le canal public si persistés sans distinction — exclus du scope.
