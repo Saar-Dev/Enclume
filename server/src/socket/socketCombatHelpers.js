@@ -607,7 +607,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
     rollAttaque, chancesAttaque, mrAttaque,
     defenderSkillTotal, defenderEffectiveMalus, defenderMastery,
     multiMalusDefenseur,
-    damageFormula, weaponInvId, weaponRefId, modDom, combatModeBonus,
+    damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible,
     for_na_cible, con_na_cible, vol_na_cible,
     targetName, userId,
@@ -703,7 +703,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
       const ctx = {
         attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
         rollAttaque, chancesAttaque, mrAttaque,
-        damageFormula, weaponInvId, weaponRefId, modDom, combatModeBonus,
+        damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, combatModeBonus,
         characterIdCible, cibleType, char_sheet_id_cible,
         for_na_cible, con_na_cible, vol_na_cible,
         targetName, userId, tokenId, socket,
@@ -736,7 +736,7 @@ export async function confirmMeleeDefense(io, campaignId, tokenId, pendingMaps, 
 async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
   const {
     attackerTokenId, attackerCharacter, attackerUsername, attackerColor,
-    damageFormula, weaponInvId, modDom, mrAttaque, combatModeBonus,
+    damageFormula, weaponInvId, naturalWeaponCharMutationId, attackerSheetId, modDom, mrAttaque, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     targetName, userId, tokenId, socket,
   } = ctx
@@ -759,6 +759,8 @@ async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
     combatModeBonus,
     formula: damageFormula,
     weaponInvId,
+    naturalWeaponCharMutationId,
+    attackerSheetId,
     for_na_cible,
     con_na_cible,
     vol_na_cible,
@@ -792,18 +794,21 @@ async function resolveMeleeDefenseHitAttackerPj(io, campaignId, ctx) {
 async function resolveMeleeDefenseHitAttackerPnj(io, campaignId, ctx) {
   const {
     attackerTokenId, attackerUsername, attackerColor,
-    damageFormula, weaponInvId, weaponRefId, modDom, mrAttaque, combatModeBonus,
+    damageFormula, weaponInvId, weaponRefId, naturalWeaponCharMutationId, attackerSheetId, modDom, mrAttaque, combatModeBonus,
     characterIdCible, cibleType, char_sheet_id_cible, for_na_cible, con_na_cible, vol_na_cible,
     rollAttaque, chancesAttaque, userId, tokenId,
   } = ctx
-  // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6) —
-  // pas de re-fetch arme naturelle ici (appel différé, formule mutation déjà résolue et stable dans
-  // damageFormula), seule l'arme équipée est re-fetchée (fenêtre de péremption réelle : désequipée
-  // entre Déclaration et confirmation de défense). weaponRefId (docs/PLANS/PLAN_CHOC_EXO_DRONE.md
-  // Palier D) : attaquant exo (jamais `type==='pj'`, cette branche est la sienne) — weaponInvId reste
-  // toujours null pour elle, weaponRefId comble le Choc manquant.
+  // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md Étape 6).
+  // naturalWeaponCharMutationId/attackerSheetId (docs/PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md) : relayés
+  // depuis la Déclaration — sans eux le bonus de Choc d'une mutation à arme naturelle (ex. Corne) était
+  // perdu pour ce chemin. weaponRefId (docs/PLANS/PLAN_CHOC_EXO_DRONE.md Palier D) : attaquant exo
+  // (jamais `type==='pj'`, cette branche est la sienne) — weaponInvId reste toujours null pour elle,
+  // weaponRefId comble le Choc manquant. Seule l'arme équipée reste re-fetchée pour sa fenêtre de
+  // péremption réelle (désequipée entre Déclaration et confirmation de défense) ; la mutation est
+  // catalogue, la re-fetcher ici ne fait que fiabiliser le cas rare où elle serait désactivée entre
+  // temps (repli sans casse sur damageFormula/fallback, jamais une régression).
   const { total: rawDice, choc: effectiveChocDsl } = await damageService.getEffectiveMeleeDamage(db, {
-    weaponInvId, weaponRefId, fallbackFormula: damageFormula,
+    weaponInvId, weaponRefId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: damageFormula,
   })
   // MELEE-MR — Dommages_Bruts = Arme + MR + ModDom(FOR) (docs/BUGIDENTIFIE.md, MANUELSYSCOMBAT §6.2).
   const degautsBruts = computeMeleeRawDamage({ rawDice, mr: mrAttaque, modDom, combatModeBonus })
@@ -910,7 +915,7 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
 
   const {
     campaignId: pendingCampaignId, targetTokenId, characterIdCible, cibleType = null, char_sheet_id_cible,
-    mr, portee, fire_mode_bonus_dmg, formula, weaponInvId,
+    mr, portee, fire_mode_bonus_dmg, formula, weaponInvId, naturalWeaponCharMutationId, attackerSheetId,
     for_na_cible, con_na_cible, vol_na_cible,
     tireurUsername, tireurColor, userId, targetName,
     type: pendingType, modDom, combatModeBonus,
@@ -925,10 +930,15 @@ export async function confirmDamage(io, campaignId, tokenId, pendingMaps, socket
     let degautsBruts, dmgRolls, dmgSeed, rawDice, resolvedFormula, effectiveChocDsl = null, effectiveAmmoFx = null
     if (pendingType === 'melee') {
       // CHOC1 : point de résolution unique (voir getEffectiveMeleeDamage, docs/JOURNALTEMP.md
-      // Étape 6) — pas de re-fetch arme naturelle ici (appel différé, formule mutation déjà résolue
-      // et stable dans `formula`), seule l'arme équipée est re-fetchée (fenêtre de péremption réelle :
-      // désequipée entre la Déclaration et cette Confirmation, côté PJ différé).
-      const meleeRolled = await damageService.getEffectiveMeleeDamage(db, { weaponInvId, fallbackFormula: formula })
+      // Étape 6). naturalWeaponCharMutationId/attackerSheetId (docs/PLANS/PLAN_NATWEAPON_CHOC_DEFENSE.md) :
+      // relayés depuis la Déclaration via confirmMeleeDefense → resolveMeleeDefenseHitAttackerPj →
+      // armAwaitingDamage — sans eux, le bonus de Choc d'une mutation à arme naturelle (ex. Corne)
+      // était perdu pour ce chemin (défenseur PJ qui se défend activement et se fait quand même
+      // toucher). L'arme équipée reste seule re-fetchée pour sa fenêtre de péremption réelle
+      // (désequipée entre la Déclaration et cette Confirmation, côté PJ différé).
+      const meleeRolled = await damageService.getEffectiveMeleeDamage(db, {
+        weaponInvId, naturalWeaponCharMutationId, charSheetId: attackerSheetId, fallbackFormula: formula,
+      })
       dmgRolls = meleeRolled.rolls; dmgSeed = meleeRolled.seed; rawDice = meleeRolled.total
       resolvedFormula = meleeRolled.formula
       // CHOC1 Palier 1 : jamais câblé jusqu'ici côté CaC (contrairement à la branche assault ci-dessous,
