@@ -702,6 +702,13 @@ distance ; `drone_programs.level` sert de Seuil (`programme.level + modificateur
 sans repli** — ticket ouvert `DRONE-ARMEMENT-PROGRAM-SPLIT` : le RAW (LdB p.281) ne décrit qu'un
 seul « programme de contrôle armement » par arme, à trancher avec Saar.
 
+**Choc d'arme** (LdB p.243, CHOC1) : câblé pour un drone (Tir et CaC, même fonction
+`resolveDroneAssaultAction`) depuis `PLAN_CHOC_EXO_DRONE.md` (archivé, 2026-09-05) — jusque-là
+silencieusement absent, même cause que côté exo (colonnes `shock`/`shock_mechanism`/
+`shock_reduced_by_armor` jamais sélectionnées). Dérivé par `damageService.js#buildWeaponShockDsl`.
+L'AOE tireur drone reste non câblé (`DRONE-ARMEMENT-PROGRAM-SPLIT`/Segment 2b `PLAN_ARMES_SPECIALES.md`
+— autre chantier) : si/quand il sera construit, inclure ces colonnes dès la première version.
+
 ---
 
 ## Attaques multiples — CaC 4b et Tir Multi (Session 165)

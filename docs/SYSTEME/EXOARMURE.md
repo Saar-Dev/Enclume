@@ -317,6 +317,13 @@ import circulaire avec les helpers de résolution génériques qu'il réutilise)
   côté UI. Pas de dual-wield (armes hardpoint), pas de Tir visé, pas d'`aim_bonus_comp`.
 - **Munitions** : `exo_weapons.ammo_remaining` (nullable = tracking désactivé = illimité tant qu'aucun
   mécanisme de rechargement exo n'existe, §16.2.3).
+- **Choc d'arme** (LdB p.243, CHOC1) : câblé pour le Tir, le CaC et l'AOE d'un tireur/attaquant exo
+  depuis `PLAN_CHOC_EXO_DRONE.md` (archivé, 2026-09-05) — jusque-là silencieusement absent (aucune des
+  3 colonnes `shock`/`shock_mechanism`/`shock_reduced_by_armor` n'était sélectionnée pour l'exo).
+  Dérivé par `damageService.js#buildWeaponShockDsl` (autorité unique, exportée), consommé aussi bien
+  côté humanoïde (`getEffectiveWeaponDamage`/`getEffectiveMeleeDamage`) que côté exo
+  (`fetchExoWeapon`/`getEffectiveMeleeDamage({ weaponRefId })`). Validé en session réelle : Tir/CaC
+  contre PNJ et PJ (y compris défense active), lance-flammes en zone.
 - **Initiative** : `Math.min(Réaction, Manœuvre d'armure) - malus_environnement`
   (`socketCombatState.js`, calcul base_ini à `combat:start`) — un pilote sans rang dans la
   Compétence Manœuvre d'armure correspondant à l'environnement de l'exo (`environment`/

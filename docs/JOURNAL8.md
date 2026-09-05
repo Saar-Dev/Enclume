@@ -5330,3 +5330,84 @@ pendant le codage). Aucune donnée existante modifiée.
 `git revert` un par un dans l'ordre inverse si besoin, aucun n'a de dépendance de schéma sur un
 suivant sauf la migration 324 (§2), qui n'a pas de `down()` destructeur (colonne nullable, drop
 simple).
+
+## Session (Claude) — 2026-09-05 — Combat : Choc d'arme exo/drone — CHANTIER FONCTIONNELLEMENT CLOS
+
+`docs/Old/PLAN_CHOC_EXO_DRONE.md` (archivé, Règle 10 — contenu durable transféré dans
+`docs/SYSTEME/EXOARMURE.md` §5 et `docs/SYSTEME/COMBAT.md` §Armement drone). Issu d'un audit demandé
+par Saar sur la projection des colonnes `ref_equipment` en combat (« existe-t-il une autorité unique
+listant les colonnes qu'une capacité de combat peut nécessiter ? ») — l'audit a confirmé l'hypothèse
+partiellement : pas d'autorité unique, mais le seul manque réel trouvé était le Choc d'arme (LdB
+p.243, CHOC1) jamais câblé pour un tireur/attaquant exo-armure ou drone, silencieusement absent depuis
+l'introduction du combat exo/drone (aucune des 3 colonnes `shock`/`shock_mechanism`/
+`shock_reduced_by_armor` n'était jamais sélectionnée pour ces deux types).
+
+**Analyse à charge du plan initial** (avant tout code) a débusqué un bug indépendant, plus grave :
+`confirmDamage` (branche assault) interrogeait `char_inventory` avec un `weaponInvId` non défini pour
+tout tireur exo/drone visant un PJ — Knex lève une exception à la construction de la requête, avalée
+par le `try/catch` de la fonction : le PJ visé ne prenait alors **jamais** de dégât, sans aucune
+erreur visible, résolution "réussie" en apparence. Reproduit et confirmé en session réelle par Saar
+avant correctif (méthodologie `docs/SYSTEME/TICKETS.md` §4).
+
+**Codé en 5 paliers** (un problème à la fois, chaque palier vérifié — `node --check` + tests +
+session réelle — avant le suivant) :
+- **Palier 0** — garde `weaponInvId` dans `confirmDamage`, repli sur la formule stockée. Corrige le
+  crash, indépendamment du Choc.
+- **Palier A** — `damageService.js#_weaponShockDsl` (interne) exportée en `buildWeaponShockDsl`,
+  signature normalisée (`{shock, shockMechanism, reducedByArmor}` plutôt qu'une "row" à noms de
+  colonnes figés — évite qu'un futur appelant mal-aliasé reçoive un `null` silencieux au lieu d'une
+  erreur visible). Seule autorité de dérivation du Choc, désormais partagée par tous les appelants.
+- **Palier B** — Tir/CaC drone + Tir exo + AOE tireur exo (`socketCombatExo.js`, `socketCombatHelpers.js`,
+  `socketCombatAoe.js`) : les 3 colonnes sélectionnées, `chocDsl` construit et transmis jusqu'à
+  `resolveTargetHit`, y compris pour la cible PJ différée (`pending.chocDsl` en repli dans
+  `confirmDamage`, nécessaire en plus du Palier 0).
+- **Palier D** — CaC exo (`damageService.js#getEffectiveMeleeDamage` gagne `weaponRefId`, pour une
+  arme hors `char_inventory`) : le Choc CaC exo doit traverser 6 fonctions relais (round-trip défense
+  active PJ) — le plan initial en listait 7 (dont une branche `confirmDamage` en fait jamais atteinte
+  par un attaquant exo, retirée en relisant le code plutôt qu'en suivant le plan écrit à l'aveugle).
+  Corrige au passage un cas latent trouvé en base (« Dague neurale Brain », arme Choc pur, aurait
+  retombé à tort sur `1D4` mains nues au lieu de 0).
+
+**Un 2ᵉ bug indépendant trouvé en validant l'AOE** : le lance-flammes exo en zone, piloté en MJ,
+n'offrait aucune sélection de zone (« Viser une zone » affiché mais clic traité comme un ciblage
+normal). Diagnostic par instrumentation temporaire (3 `console.log`, retirés après coup) plutôt que
+par hypothèse — a montré `hasOnEnterAoeTargetMode:false` au moment du clic. Cause : `CombatOverlay.jsx`
+affiche `CombatExoActionWindow` à deux endroits selon qui pilote l'exo (joueur vs MJ) ; le rendu MJ
+ne recevait jamais la prop `onEnterAoeTargetMode` (présente côté joueur depuis Segment 2a,
+`PLAN_ARMES_SPECIALES.md`). Corrigé (1 ligne + commentaire).
+
+**Un 3ᵉ bug trouvé en revalidant l'AOE après ce correctif** (pas corrigé, ticketé) : le Test de Choc
+s'affiche dans le chat sous le nom du tireur au lieu de la cible — mécaniquement correct (les stats
+utilisées sont bien celles de la cible), seule l'étiquette `DICE_RESULT` est fausse. Confirmé présent
+à 7 endroits distincts du système de combat, tous antérieurs à ce chantier, aucun spécifique à
+l'exo/au drone — hors périmètre, cause et portée différentes.
+
+**Fichiers touchés** : `server/src/lib/damageService.js`, `server/src/socket/{socketCombatExo,
+socketCombatHelpers,socketCombatAoe}.js`, `client/src/components/CombatOverlay.jsx`,
+`docs/SYSTEME/{EXOARMURE,COMBAT}.md`, `docs/Old/PLAN_CHOC_EXO_DRONE.md` (archivé depuis
+`docs/PLANS/`).
+
+**Testé** : `node --check` après chaque fichier serveur ; `socketCombatAoe.test.mjs` 20/20 à chaque
+étape (non-régression) ; test manuel `getEffectiveMeleeDamage`/`buildWeaponShockDsl` sur cas réels du
+catalogue (Lance-flammes, Hache, Dague neurale Brain, mains nues) ; `eslint`/`npm run build` client
+propres sur les fichiers client touchés. **Session réelle Saar**, chaque palier validé avant le
+suivant : crash corrigé (drone + Fusil Gauss → PJ) ; Choc Tir/CaC exo et drone (PNJ + PJ) ; Choc CaC
+exo contre PJ à défense active ; Choc lance-flammes exo en zone (3 cibles touchées, `burning`
+appliqué, 2 Tests de Choc déclenchés et visibles au chat).
+
+**Non testé** : AOE tireur drone (Segment 2b `PLAN_ARMES_SPECIALES.md`, jamais construit — pas un
+manque de ce chantier, note ajoutée dans `docs/SYSTEME/COMBAT.md` pour ne pas répéter l'oubli des 3
+colonnes le jour où ce segment sera fait).
+
+**Données** : aucune migration — les 3 colonnes `shock`/`shock_mechanism`/`shock_reduced_by_armor`
+existaient déjà sur `ref_equipment` (CHOC1, migration 190), seules les requêtes de lecture changent.
+
+**Tickets ouverts pendant ce chantier** (tous hors périmètre, cause/portée différentes) :
+`EXODRONE-CONFIRMDAMAGE-CRASH` (résolu, corrigé en Palier 0) ; `NATWEAPON-CHOC-DEFENSE-GAP` (triaged
+— Choc de mutation à arme naturelle perdu dans le même genre de round-trip défense active, humanoïde,
+non lié à l'exo/au drone) ; `CHOC-TEST-WRONG-ATTRIBUTION` (triaged — étiquette de chat du Test de
+Choc, 7 sites, voir ci-dessus).
+
+**Retour arrière** : 4 commits `dev/Saar`, chacun isolé et sans dépendance de schéma —
+`9a981b0` (Palier 0), `073a148` (Paliers A/B/D), `9a4d4b3` (correctif AOE MJ), et le commit de
+clôture documentaire de cette entrée. `git revert` un par un dans l'ordre inverse si besoin.
