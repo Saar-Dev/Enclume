@@ -201,6 +201,18 @@ utilisateur et vers la bonne branche pj/pnj. Coût minimal pour un humain (1 req
 `char_sheet` direct qu'il remplace) ; ne pas l'utiliser quand `skillId` est déjà connu,
 `resolveCombatantTestContext` fait tout en un seul appel.
 
+**`resolveCombatantDisplayIdentity(db, character, fallbackName)`** → `{ userId, username, color }` —
+sœur d'affichage de `resolveCombatantIdentity` ci-dessus : pas « qui a le droit d'agir » (mécanique),
+mais « quel nom/quelle couleur montrer dans le chat ». PJ avec compte → vraie identité (`users`).
+PNJ/décor/`character` `null` → `userId: null`, nom du personnage (ou `fallbackName`), gris standard
+`#808080`. Pas de substitution pilote pour une exo (contrairement à `resolveCombatantIdentity`) —
+aucun appelant connu n'atteint cette fonction avec une exo/un drone. Introduite le 2026-09-05
+(`CHOC-TEST-WRONG-ATTRIBUTION`) pour que `statusService.emitShockDiceResult` affiche l'identité de la
+**cible** du Test de Choc, jamais celle du tireur (voir `docs/SYSTEME/SERVICES_COMBAT.md`). 6 autres
+sites du fichier construisent encore cette identité pour le tireur par une requête `users` recopiée à
+la main (`socketCombatExo.js`, `socketCombatAoe.js`, `socketCombatHelpers.js`) — pas migrés vers cette
+fonction (refactor pur, pas fait), mais aucun nouvel appelant ne doit recopier ce calcul une 8ᵉ fois.
+
 **Routage de la confirmation de défense pour un `type='exo'`** (`PLAN_EXOARMURE.md` Lot 2 §7.7,
 2026-08-18) — `resolveMeleeAction` branche sur `defenderEffectiveType` (issu de
 `resolveCombatantIdentity`), pas sur `defenderCharacter.type` : un exo piloté par un PNJ s'auto-résout

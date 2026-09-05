@@ -91,6 +91,13 @@ js
 emitShockDiceResult(io, campaignId, shockResult, userId, username, color)
 // → void, émet WS.DICE_RESULT avec cardType: 'shock_test'
 
+`userId`/`username`/`color` doivent être l'identité de la **CIBLE touchée**, jamais du tireur (LdB
+p.243 — c'est la cible qui résiste au Choc). Bug réel corrigé le 2026-09-05 (ticket
+`CHOC-TEST-WRONG-ATTRIBUTION`) : les 7 appelants passaient tous l'identité du tireur. Chaque
+appelant doit résoudre l'identité de la cible via `combatantContextService.js#resolveCombatantDisplayIdentity(db, cibleCharacter, fallbackName)`
+(PJ avec compte → vraie identité `users` ; PNJ/décor/sans compte → `userId: null`, nom du
+personnage, `#808080`) — jamais reconstruire ce calcul à un 8ᵉ endroit.
+
 3. damageService.js
 resolveTargetHit
 

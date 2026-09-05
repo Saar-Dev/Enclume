@@ -5411,3 +5411,69 @@ Choc, 7 sites, voir ci-dessus).
 **Retour arrière** : 4 commits `dev/Saar`, chacun isolé et sans dépendance de schéma —
 `9a981b0` (Palier 0), `073a148` (Paliers A/B/D), `9a4d4b3` (correctif AOE MJ), et le commit de
 clôture documentaire de cette entrée. `git revert` un par un dans l'ordre inverse si besoin.
+
+## Session (Claude) — 2026-09-05 — Combat : Test de Choc attribué à la cible, plus au tireur — CHANTIER FONCTIONNELLEMENT CLOS
+
+`docs/Old/PLAN_CHOC_TEST_ATTRIBUTION.md` (archivé, Règle 10 — contenu durable transféré dans
+`docs/SYSTEME/SERVICES_COMBAT.md` §`emitShockDiceResult` et `docs/SYSTEME/COMBAT.md`
+§`resolveCombatantDisplayIdentity`). Ticket `CHOC-TEST-WRONG-ATTRIBUTION`, trouvé par Saar en
+validant le chantier Choc exo/drone ci-dessus (lance-flammes exo en zone — « Armure Alpha », le
+tireur, affiché faisant le Test de Choc au lieu de la cible touchée).
+
+**Diagnostic** : `statusService.emitShockDiceResult` — pur affichage chat, `DICE_RESULT` avec
+`skillLabel: 'Test de Choc'` — recevait partout l'identité de l'**attaquant** (`userId`/`username`/
+`color`). La résolution mécanique elle-même (`statusService.resolveShockTest`, appelée par
+`damageService.js#resolveTargetHit`) était déjà correcte (stats de la **cible**) — seule
+l'étiquette de chat était fausse. **7 sites concernés** (`socketCombatAoe.js` +
+`socketCombatHelpers.js`), tous antérieurs à ce ticket, aucun spécifique à l'exo/au drone — confirmé
+présent aussi côté Tir/CaC humain classique.
+
+**Analyse à charge avant tout code** — le premier jet de la fonction correctrice
+(`resolveShockTestDisplayIdentity`) était scopée au seul Test de Choc. Vérification faite avant de
+coder : le même calcul (« PJ avec compte → identité `users`, sinon nom + gris `#808080` ») était déjà
+recopié **6 fois** ailleurs pour l'identité du **tireur** (`socketCombatExo.js` ×2,
+`socketCombatAoe.js`, `socketCombatHelpers.js` ×3). Une 7ᵉ copie aurait recréé exactement le défaut
+que l'audit à l'origine de tout ce chantier (Choc exo/drone) dénonçait. Remplacée par
+`resolveCombatantDisplayIdentity`, fonction générale dans `combatantContextService.js` (sœur
+d'affichage de `resolveCombatantIdentity` déjà présente) — les 6 sites tireur existants pourront
+l'adopter plus tard (refactor pur, non fait ici, pas mélangé avec ce correctif ponctuel).
+
+**7 sites corrigés, en 2 groupes** : 4 sites où la cible peut être PJ ou PNJ
+(`resolveAoeTargetDamage`, `resolveMeleeDefenseHitAttackerPnj`, `resolveDamageConfirmNormalTarget`,
+`resolveDefenselessTarget`) appellent `resolveCombatantDisplayIdentity` ; 3 sites où la cible est
+garantie PNJ/décor par leur propre dispatch (`resolveMeleeDefensePnj`, `resolveAttackHitPnj`,
+`resolveAssaultHitPnjNormal`) réutilisent directement un nom déjà en scope, sans requête
+supplémentaire. Vérifié avant de coder (pas supposé) : les valeurs `characterIdCible` transportées
+sont toujours `null` explicite ou un vrai id, jamais `undefined` — aucun risque du même genre que le
+crash `EXODRONE-CONFIRMDAMAGE-CRASH` du chantier précédent.
+
+**Bug annexe trouvé en session de validation, PAS corrigé (règle appliquée correctement, juste peu
+visible)** : une déclaration de tir en zone a été refusée par le serveur (« Action exclusive :
+... changement d'arme ») — vérifié : le personnage n'avait pas encore son arme au clair, un vrai
+changement d'état, la règle d'exclusivité s'applique correctement (RAW). Proposition de Saar,
+ticketée en suggestion (`WEAPON-STATE-CHANGE-VISIBILITY`, non cadrée, non codée) : surligner le
+bouton d'état concerné quand il change automatiquement (sans clic explicite du joueur), pour que le
+refus soit compris avant d'être reçu.
+
+**Fichiers touchés** : `server/src/lib/combatantContextService.js`, `server/src/socket/
+{socketCombatAoe,socketCombatHelpers}.js`, `docs/SYSTEME/{COMBAT,SERVICES_COMBAT}.md`,
+`docs/Old/PLAN_CHOC_TEST_ATTRIBUTION.md` (archivé depuis `docs/PLANS/`).
+
+**Testé** : `node --check` sur chaque fichier serveur ; `socketCombatAoe.test.mjs` 20/20 et
+`combatantContextService.test.mjs` 39/39 (non-régression) ; test manuel de
+`resolveCombatantDisplayIdentity` sur 3 cas réels (PJ avec compte, PNJ, personnage `null`).
+**Session réelle Saar** : lance-flammes exo en zone (tireur PJ) et CaC (attaquant PNJ), même cible
+PNJ (« Baboulinet ») — le Test de Choc affiche bien le nom de la cible dans les deux cas, jamais
+celui du tireur.
+
+**Non testé** : les 6 sites tireur existants n'ont pas été migrés vers `resolveCombatantDisplayIdentity`
+(refactor pur, hors périmètre, noté dans `docs/SYSTEME/COMBAT.md` pour ne pas y ajouter un 8ᵉ site
+dupliqué) ; le ticket `WEAPON-STATE-CHANGE-VISIBILITY` reste à cadrer séparément si Saar le souhaite.
+
+**Données** : aucune migration, aucun changement de schéma.
+
+**Tickets** : `CHOC-TEST-WRONG-ATTRIBUTION` résolu (ce chantier) ; `WEAPON-STATE-CHANGE-VISIBILITY`
+créé (`new`, suggestion, non cadrée).
+
+**Retour arrière** : 1 commit `dev/Saar` (`cafb0cd`) pour le correctif + 1 commit pour cette clôture
+documentaire, aucune dépendance de schéma. `git revert` dans l'ordre inverse si besoin.
