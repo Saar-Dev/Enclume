@@ -63,17 +63,42 @@ export async function resolveSkillTestCommand(io, db, campaignId, user, { target
   const skillTotal = calcSkillTotal(attrs, charSkill, refSkill, genotypeRow, mutationEffects)
   const threshold = skillTotal + activeMalus + difficulty
   const criticalSuccessBonus = getCriticalSuccessBonus({ masteryLevel: charSkill?.mastery ?? 0 })
-  const { roll, seed, isCriticalSuccess, isCriticalFail, catastropheRisk } =
+  const { roll, seed, isSuccess, isCriticalSuccess, isCriticalFail, mr, catastropheRisk } =
     await resolvePolarisTest(threshold, criticalSuccessBonus)
 
-  // 5. Broadcast — réutilise DICE_RESULT (même patron que WOUND_INFECTION_ROLL, socketDice.js), pas de
-  // nouvel événement WS pour un jet à un seul d20.
+  // 5. Broadcast — /t est mécaniquement un Test compétence-vs-Seuil, identique à ceux résolus par
+  // gmArbitratedTestService.js (ENTITY_ACTION_RESOLVE/CONNECTOR_ACTION_RESOLVE) : même forme de
+  // DICE_RESULT reprise à l'identique (skillLabel/mechanicalTotal/chancesDeReussite/diffLabel/mr/
+  // breakdown), pas une forme "jet brut" improvisée. C'est cette forme précise qui fait afficher le
+  // Seuil et le badge Réussite/Échec côté client (MessageRendererRegistry.jsx:renderDice, branche
+  // `msg.skillLabel !== undefined`) — et, par construction, cette branche ne déclenche jamais
+  // l'animation 3D d'un dé physique (useSessionSocket.js:onDiceResult ne l'anime que si `skillLabel`
+  // est absent) : aucun Test de compétence du projet n'anime de dé 3D, seul un jet brut (/r) le fait.
+  // Une première version envoyait `formula: "1d20 (Compétence — Perso)"` sans skillLabel : ça retombait
+  // dans la branche "jet brut", et cette formule non standard ne se réduisait pas à "d20" pour
+  // l'extraction de type de dé (onDiceResult), d'où l'animation visuelle d'un d6 par défaut — trouvé en
+  // rejouant le test en navigateur, corrigé en reprenant la forme exacte de l'appelant de référence.
   const color = await getUserColor(db, user.id)
+  const diffLabel = difficulty >= 0 ? `+${difficulty}` : `${difficulty}`
+  const breakdown = [
+    { label: refSkill.label, value: skillTotal, type: 'base' },
+    ...(difficulty !== 0 ? [{ label: 'Difficulté', value: difficulty, type: difficulty > 0 ? 'bonus' : 'malus' }] : []),
+    ...(activeMalus !== 0 ? [{ label: 'Malus santé / encombrement', value: activeMalus, type: 'malus' }] : []),
+    { label: 'Seuil', value: threshold, type: 'total' },
+  ]
   io.to(campaignId).emit(WS.DICE_RESULT, {
     userId: user.id, username: user.username, color,
-    formula: `1d20 (${refSkill.label} — ${character.name})`,
+    formula: refSkill.label,
     rolls: [roll], total: roll,
-    isCriticalSuccess, isCriticalFail, seed, timestamp: new Date().toISOString(), secret: false,
+    isCriticalSuccess, isCriticalFail, catastropheRisk, seed, timestamp: new Date().toISOString(),
+    skillLabel: refSkill.label,
+    mechanicalTotal: skillTotal,
+    chancesDeReussite: threshold,
+    effectiveMalus: activeMalus,
+    diffLabel,
+    isSuccess,
+    mr,
+    breakdown,
   })
 
   // 6. Catastrophe automatique obligatoire (décision Saar 2026-09-04) — même garde combat actif que

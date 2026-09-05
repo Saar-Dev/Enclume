@@ -344,6 +344,20 @@ syntaxe.
 
 ## 7. Corrections trouvées en analyse à charge (résumé, pour traçabilité)
 
+- **§6, trouvé en test navigateur par Saar (2026-09-05)** : le premier jet de code envoyait un
+  `DICE_RESULT` de forme « jet brut » (`formula: "1d20 (Compétence — Perso)"`, sans `skillLabel`) —
+  improvisé au lieu de vérifier comment le projet affiche déjà un Test compétence-vs-Seuil. Deux
+  symptômes, une seule cause : (1) aucun Seuil ni badge Réussite/Échec affiché — la branche de rendu
+  `skillLabel !== undefined` (`MessageRendererRegistry.jsx:renderDice`) n'était jamais atteinte ; (2)
+  animation 3D d'un d6 au lieu d'un d20 — `useSessionSocket.js:onDiceResult` n'anime un dé que si
+  `skillLabel` est absent, et la formule décorée ne se réduisait pas proprement à `"d20"` pour
+  l'extraction de type de dé, d'où le repli sur d6. Corrigé en reprenant **à l'identique** la forme de
+  `gmArbitratedTestService.js` (même mécanique RAW : Test compétence vs Seuil, déjà résolue ailleurs
+  dans le projet pour les actions d'entité/connecteur) — `skillLabel`, `mechanicalTotal`,
+  `chancesDeReussite`, `diffLabel`, `mr`, `breakdown` désormais tous fournis. Confirme au passage un
+  fait déjà vrai dans tout le projet, pas propre à `/t` : **aucun Test de compétence n'anime de dé 3D**,
+  seul un jet brut (`/r`) le fait — ce n'est donc pas une régression à corriger côté animation, la bonne
+  forme de payload suffit.
 - **§5** : persistance `/r` avec `senderUserId: user.id` aurait échoué systématiquement
   (`chatValidation.js`) — corrigé en `senderUserId: null` + payload auto-porté.
 - **§5** : jets secrets auraient fui sur le canal public si persistés sans distinction — exclus du scope.
